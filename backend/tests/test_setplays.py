@@ -365,3 +365,61 @@ def test_setplay_concentration_silent_with_few_attacks():
     assert rec["verdict"] is None, rec
     assert setplay_concentration(
         _spk_match(["bal", "jobb"]))["away"]["attacks"] == 0
+
+
+_SPD_PATTERNS = [[30.0, 28.0, 32.0], [26.0, 34.0, 30.0],
+                 [33.0, 25.0, 29.0], [24.0, 31.0, 35.0]]
+
+
+def _spd_match(first_goal=True, repeat_goal=False, patterns=None):
+    """Négy különböző hazai figura: előbb mind egyszer (ELSŐ
+    előfordulás), majd mind újra (ISMÉTLÉS) — sávonként a megadott
+    kimenetellel (gól vagy befejezés nélkül)."""
+    pats = patterns or _SPD_PATTERNS
+    frames = []
+    t = 0
+
+    def _attack(xs, goal):
+        nonlocal t
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, xs))
+            t += 1
+        if goal:
+            for i in range(8):
+                frames.append(Frame(
+                    t=t, players=[_pl(1, Team.HOME, 33.5, 10.0)],
+                    ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for _ in range(25):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for xs in pats:
+        _attack(xs, first_goal)
+    for xs in pats:
+        _attack(xs, repeat_goal)
+    return Match(MatchMeta(match_id="spd", home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_setplay_decay_shows_the_value_of_recognition():
+    """Ha az ismétlésre esik a figurák hozama, a fal maga megoldja a
+    felismerést."""
+    from handball.pipeline.setplays import SPD_GAP_PP, setplay_decay
+
+    rec = setplay_decay(_spd_match())["home"]
+    assert rec["first_attacks"] >= 4 and rec["repeat_attacks"] >= 4, rec
+    assert rec["gap_pp"] is not None
+    assert rec["first_pct"] - rec["repeat_pct"] >= SPD_GAP_PP, rec
+    assert rec["verdict"] and "felismerést" in rec["verdict"], rec
+
+
+def test_setplay_decay_silent_with_few_attacks():
+    """Kevés figura-támadásból nincs ítélet."""
+    from handball.pipeline.setplays import setplay_decay
+
+    rec = setplay_decay(_spd_match(patterns=_SPD_PATTERNS[:2]))["home"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None, rec

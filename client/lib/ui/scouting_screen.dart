@@ -2686,6 +2686,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "maradék edzői döntést kíván";
   }
 
+  // Figura-kopás: működik-e még a figura az ismétlésre (sávonként 4+
+  // figura-támadás, 15 százalékpontos eltérés — a backenddel azonos
+  // küszöbök: SPD_MIN_ATTACKS, SPD_GAP_PP).
+  String? _setplayDecay(Map<String, dynamic> r) {
+    final fa = (r["spd_first_attacks"] as num?)?.toInt() ?? 0;
+    final fg = (r["spd_first_goals"] as num?)?.toInt() ?? 0;
+    final ra = (r["spd_repeat_attacks"] as num?)?.toInt() ?? 0;
+    final rg = (r["spd_repeat_goals"] as num?)?.toInt() ?? 0;
+    if (fa < 4 || ra < 4) return null;
+    final fp = 100.0 * fg / fa;
+    final rp = 100.0 * rg / ra;
+    if (fp - rp >= 15.0) {
+      return "a figuráik kopnak az ismétlésre (${fp.toStringAsFixed(0)}% "
+          "→ ${rp.toStringAsFixed(0)}%) · a felismerést a fal megoldja";
+    }
+    if (rp - fp >= 15.0) {
+      return "az ismétlés nekik dolgozik (${fp.toStringAsFixed(0)}% → "
+          "${rp.toStringAsFixed(0)}%) · a befejezőre emberfogás vagy "
+          "kettőzés kell";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10472,6 +10495,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-visszaérés", _keeperReturn(r)!],
       if (_counterPlan(r) != null)
         ["Ellenszer-lap", _counterPlan(r)!],
+      if (_setplayDecay(r) != null)
+        ["Figura-kopás", _setplayDecay(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

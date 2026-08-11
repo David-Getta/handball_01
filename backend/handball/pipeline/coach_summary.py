@@ -2770,6 +2770,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "edzés-fókuszban.")
     except Exception:
         pass
+    # Figura-kopás: működik-e még a figura az ismétlésre.
+    try:
+        from .setplays import setplay_decay
+        spd = setplay_decay(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spd = spd[side]
+            if rec_spd["verdict"] is None:
+                continue
+            body += (f" A(z) {name} figurái első előfordulásra "
+                     f"{rec_spd['first_pct']:.0f}%-ban, ismétlésre "
+                     f"{rec_spd['repeat_pct']:.0f}%-ban hoznak gólt "
+                     f"— {rec_spd['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

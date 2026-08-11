@@ -1080,6 +1080,12 @@ class ScoutingReport:
     # Darabszám/összeg, meccsek közt pontosan összegződik.
     # Ellenszer-lap: a rangsor élén álló teendők és a hozzájuk
     # talált gyakorlatok darabszáma. Darabszám, összegződik.
+    # Figura-kopás: az első előfordulású és az ismételt
+    # figura-támadások, illetve a belőlük esett gólok. Darabszám.
+    spd_first_attacks: int = 0
+    spd_first_goals: int = 0
+    spd_repeat_attacks: int = 0
+    spd_repeat_goals: int = 0
     cpl_total: int = 0
     cpl_matched: int = 0
     krt_measured: int = 0
@@ -4503,6 +4509,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"{rep.cpl_matched}-hez van kész gyakorlat az "
             "edzés-fókuszban — a maradékra a vezetőedző saját "
             "megoldása kell, ezt a heti tervben külön jelöljétek.")
+
+    # Figura-kopás: mennyit ér a felismerés ellenük.
+    if (rep.spd_first_attacks >= 4 and rep.spd_repeat_attacks >= 4):
+        _spd_f = 100.0 * rep.spd_first_goals / rep.spd_first_attacks
+        _spd_r = 100.0 * rep.spd_repeat_goals / rep.spd_repeat_attacks
+        if _spd_f - _spd_r >= 15.0:
+            keys.append(
+                f"A figuráik kopnak az ismétlésre ({_spd_f:.0f}% → "
+                f"{_spd_r:.0f}% gólarány) — a fal maga megoldja a "
+                "felismerést: elég lefuttatni velük a figurát, a "
+                "második ismétlésre kész a válasz.")
+        elif _spd_r - _spd_f >= 15.0:
+            keys.append(
+                f"Az ismétlés NEKIK dolgozik ({_spd_f:.0f}% → "
+                f"{_spd_r:.0f}% gólarány) — nem a felismerés a baj, "
+                "hanem a párharc: a figura befejezőjére emberfogás "
+                "vagy kettőzés kell.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9948,6 +9971,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .setplays import setplay_decay as _spd
+        spdrec = _spd(match, config)[team.value]
+        rep.spd_first_attacks = spdrec["first_attacks"]
+        rep.spd_first_goals = spdrec["first_goals"]
+        rep.spd_repeat_attacks = spdrec["repeat_attacks"]
+        rep.spd_repeat_goals = spdrec["repeat_goals"]
         from .priorities import counter_plan as _cpl
         cplrec = _cpl(match, config)[team.value]
         rep.cpl_total = cplrec["total"]
@@ -12759,6 +12788,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 401) Az ő figura-kopásuk × a ti fal-fegyelmetek: a
+    # felismerés vagy a párharc a kérdés.
+    if (opp.spd_first_attacks >= 4 and opp.spd_repeat_attacks >= 4
+            and own.defense_main):
+        _spd401_f = (100.0 * opp.spd_first_goals
+                     / opp.spd_first_attacks)
+        _spd401_r = (100.0 * opp.spd_repeat_goals
+                     / opp.spd_repeat_attacks)
+        if _spd401_r - _spd401_f >= 15.0:
+            plan.append(
+                f"A figuráik az ismétlésre is bejönnek "
+                f"({_spd401_f:.0f}% → {_spd401_r:.0f}% gólarány), ti "
+                f"pedig {own.defense_main} falat játszotok — itt nem "
+                "a felismerés a kérdés: a figura befejezőjére "
+                "emberfogás vagy kettőzés kell.")
 
     # 400) Az ő lassan hazaérő kapusuk × a ti labdaszerzésetek: a
     # szerzés utáni azonnali dobás ingyen gól.
@@ -19670,6 +19715,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.otp_outlets_by_player for r in reports),
         dtp_frames_by_player=_merge_count_dicts(
             r.dtp_frames_by_player for r in reports),
+        spd_first_attacks=sum(r.spd_first_attacks for r in reports),
+        spd_first_goals=sum(r.spd_first_goals for r in reports),
+        spd_repeat_attacks=sum(r.spd_repeat_attacks for r in reports),
+        spd_repeat_goals=sum(r.spd_repeat_goals for r in reports),
         cpl_total=sum(r.cpl_total for r in reports),
         cpl_matched=sum(r.cpl_matched for r in reports),
         krt_measured=sum(r.krt_measured for r in reports),

@@ -329,6 +329,85 @@ def setplay_efficiency(match: Match, config: TacticsConfig | None = None,
     return out
 
 
+# Figura-kopás: sávonként ennyi mért figura-támadás kell az
+# ítélethez, és ekkora (százalékpontos) esés számít érdeminek.
+SPD_MIN_ATTACKS = 4
+SPD_GAP_PP = 15.0
+
+
+def setplay_decay(match: Match, config: TacticsConfig | None = None,
+                  threshold: float = 0.15, min_length: int = 5) -> dict:
+    """Figura-kopás: MŰKÖDIK-E MÉG a figura a második ismétlésre.
+
+    A figura-hatékonyság (setplay_efficiency) azt mondja meg, MELYIK
+    figurájuk veszélyes — ez azt, MEDDIG: minden figura első
+    előfordulását szétválasztja az ISMÉTLÉSEKTŐL, és a két sávban
+    külön számol gólarányt.
+
+    Edzőileg ez a felismerés értéke, számokban. Ha az ismétlésre
+    érdemben esik a hozamuk, a fal maga megoldja a felismerést —
+    elég lefuttatni velük a figurát, és a második-harmadik
+    ismétlésre már készen áll a válasz. Ha az ismétlés is ugyanúgy
+    gólt hoz, a baj nem a felismerés, hanem a párharc: ott
+    emberfogás vagy kettőzés kell a befejezőre, nem "figyeljetek
+    jobban".
+
+    Visszatérés csapatonként: {"first_attacks", "first_goals",
+    "repeat_attacks", "repeat_goals", "first_pct", "repeat_pct",
+    "gap_pp", "verdict"} — a pct/gap/verdict None, ha valamelyik
+    sávban kevés (SPD_MIN_ATTACKS alatti) a mért figura-támadás.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(3.0 * fps)
+    shots_ev = [e for e in detect_shots(match, config)
+                if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        labels = cluster_signatures([attack_signature(s_) for s_ in seqs],
+                                    threshold=threshold)
+        seen: set = set()
+        rec = {"first_attacks": 0, "first_goals": 0,
+               "repeat_attacks": 0, "repeat_goals": 0,
+               "first_pct": None, "repeat_pct": None,
+               "gap_pp": None, "verdict": None}
+        for seq, lab in zip(seqs, labels):
+            kulcs = "first" if lab not in seen else "repeat"
+            seen.add(lab)
+            rec[f"{kulcs}_attacks"] += 1
+            if any(e.team == team and e.type == EventType.GOAL
+                   and seq.start_t <= e.t <= seq.end_t + tail
+                   for e in shots_ev):
+                rec[f"{kulcs}_goals"] += 1
+        if (rec["first_attacks"] >= SPD_MIN_ATTACKS
+                and rec["repeat_attacks"] >= SPD_MIN_ATTACKS):
+            fp = 100.0 * rec["first_goals"] / rec["first_attacks"]
+            rp = 100.0 * rec["repeat_goals"] / rec["repeat_attacks"]
+            rec["first_pct"] = round(fp, 1)
+            rec["repeat_pct"] = round(rp, 1)
+            rec["gap_pp"] = round(rp - fp, 1)
+            if fp - rp >= SPD_GAP_PP:
+                rec["verdict"] = (
+                    f"a figuráik kopnak az ismétlésre ({fp:.0f}% → "
+                    f"{rp:.0f}% gólarány) — a fal maga megoldja a "
+                    "felismerést: elég lefuttatni velük a figurát, a "
+                    "második ismétlésre kész a válasz")
+            elif rp - fp >= SPD_GAP_PP:
+                rec["verdict"] = (
+                    f"az ismétlés NEKIK dolgozik ({fp:.0f}% → "
+                    f"{rp:.0f}% gólarány) — a baj nem a felismerés, "
+                    "hanem a párharc: a befejezőre emberfogás vagy "
+                    "kettőzés kell")
+        out[team.value] = rec
+    return out
+
+
 # Figura-befejező: egy figurához ennyi mért lövés kell az ítélethez, és
 # ekkora részarány számít kiszámíthatónak. A 60% azt jelenti, hogy öt
 # lövésből három ugyanarra a posztra fut ki — a falnak ennyiből már

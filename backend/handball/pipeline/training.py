@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 422) Figura-kopás: a figura akkor ér valamit, ha ismételve is
+    # működik (variáció, nem újabb figura).
+    try:
+        from .setplays import SPD_GAP_PP, setplay_decay
+        spd422 = setplay_decay(match, config)
+        for side in ("home", "away"):
+            rec422 = spd422[side]
+            if rec422["gap_pp"] is None:
+                continue
+            if rec422["gap_pp"] > -SPD_GAP_PP:
+                continue
+            add(side, "támadás", "Figura-variációk",
+                f"a figuráink első előfordulásra "
+                f"{rec422['first_pct']:.0f}%-ban, ismétlésre csak "
+                f"{rec422['repeat_pct']:.0f}%-ban hoznak gólt "
+                f"({SPD_GAP_PP:.0f} százalékpontos eséstől jelezzük) "
+                "— a fal a második ismétlésre megismer minket",
+                "variáció-edzés: minden figurához KÉT befejezés "
+                "(alap és ellen-olvasat), azonos indítás eltérő "
+                "folytatással, és a figura-sorrend tudatos keverése "
+                "(ne kétszer egymás után ugyanaz)",
+                )
+    except Exception:
+        pass
+
     # 421) Kapus-visszaérés: a 7 a 6 csak akkor vállalható, ha a
     # hazafutás megy.
     try:

@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Figura-kopás: működik-e még a figura a második ismétlésre.** A
+  figura-hatékonyság azt mondja meg, melyik figurájuk veszélyes — az
+  új réteg azt, meddig: minden figura ELSŐ előfordulását
+  szétválasztja az ismétlésektől, és a két sávban külön számol
+  gólarányt. Edzőileg ez a felismerés értéke számokban: ha az
+  ismétlésre érdemben esik a hozamuk, a fal maga megoldja a
+  felismerést (elég lefuttatni velük a figurát); ha az ismétlés is
+  ugyanúgy gólt hoz, nem a felismerés a baj, hanem a párharc — a
+  befejezőre emberfogás vagy kettőzés kell. Saját csapatra: minden
+  figurához két befejezés (variáció) az edzés-téma. Sávonként négy
+  figura-támadástól és 15 százalékpontos eltéréstől ítél. A
+  rangsorban a "felkészülés" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`setplay_decay`), edzői összefoglaló, felderítés
+  (`spd_*` mezők + edzői kulcs + 401. meccsterv-szabály),
+  edzés-fókusz (422. szabály), kliens-csempe.
+
 - **Ellenszer-lap: teendő → hozzá tartozó gyakorlat.** A
   teendő-rangsor megmondja, MI a baj; az edzés-fókusz azt, MIT lehet
   gyakorolni — de a kettő eddig két külön lista volt, és az edzőnek

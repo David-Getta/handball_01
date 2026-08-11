@@ -4662,6 +4662,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.setplays import setplay_decay
+            res["setplay_decay"] = setplay_decay(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5594,6 +5599,8 @@ def create_app():
                 _layer("keeper_return", lambda: keeper_return(match))
                 from ..pipeline.priorities import counter_plan
                 _layer("counter_plan", lambda: counter_plan(match))
+                from ..pipeline.setplays import setplay_decay
+                _layer("setplay_decay", lambda: setplay_decay(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning
