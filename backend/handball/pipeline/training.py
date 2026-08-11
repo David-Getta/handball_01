@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 429) Lágy passzolók: az ívelt átadás a legolcsóbb labda az
+    # ellenfélnek.
+    try:
+        from .decisions import SPP_MIN_SOFT, soft_passers
+        spp429 = soft_passers(match, config)
+        for side in ("home", "away"):
+            top429 = spp429[side].get("top")
+            if top429 is None:
+                continue
+            _ki429 = (f"a(z) {top429['jersey']}. számú"
+                      if top429.get("jersey") is not None
+                      else f"a(z) {top429['player_id']}. játékos")
+            add(side, "támadás", "Passz-élesség",
+                f"a lágy, ívelt passzaink {_ki429} kezéből jönnek "
+                f"({top429['soft']} lágy passz; {SPP_MIN_SOFT} "
+                "passztól már jelezzük) — ezekbe az ellenfél "
+                "belenyúlhat",
+                "passz-élesség gyakorlása vele: csuklós, feszes "
+                "átadás rövid távon, mellmagasságú célpont, és "
+                "passz-gyakorlat védő-árnyékkal (a labda ne ívben "
+                "menjen a védő fölött)",
+                )
+    except Exception:
+        pass
+
     # 428) Fáradt lövők: a fáradtan szétmenő lövés célzás- és
     # terhelés-kérdés.
     try:

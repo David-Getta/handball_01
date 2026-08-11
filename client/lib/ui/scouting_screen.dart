@@ -2852,6 +2852,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "($first → $topN pontatlan lövés) · rá nem kell kilépni";
   }
 
+  // Lágy passzolók: kinek a labdáiba lehet belenyúlni (4+ lágy
+  // passz, a lágy passzok fele — a backenddel azonos küszöbök:
+  // SPP_MIN_SOFT, SPP_SHARE_PCT).
+  String? _softPasser(Map<String, dynamic> r) {
+    final sp = (r["spp_soft_by_player"] as Map?)?.cast<String, dynamic>();
+    if (sp == null || sp.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    sp.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 4) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a lágy passzaik $topN/$all része a(z) $top. kezéből jön · "
+        "az ő átadásaiba nyúljatok bele";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10652,6 +10675,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Ziccerhagyó ember", _missedChancePlayer(r)!],
       if (_tiredShooter(r) != null)
         ["Fáradt lövő", _tiredShooter(r)!],
+      if (_softPasser(r) != null)
+        ["Lágy passzoló", _softPasser(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

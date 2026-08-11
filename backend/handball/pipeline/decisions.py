@@ -878,6 +878,85 @@ SPS_MIN_SOFT = 5
 SPS_SHARE_PCT = 60.0
 
 
+# Lágy passzolók: ennyi lágy passz kell a névhez, és ekkora
+# részarány fölött mondjuk ki, hogy a lágy labdák egy emberhez
+# kötődnek.
+SPP_MIN_SOFT = 4
+SPP_SHARE_PCT = 50.0
+
+
+def soft_passers(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Lágy passzolók: KINEK a labdáiba lehet belenyúlni.
+
+    A lágypassz-poszt (soft_pass_roles) a POSZTOT nevezi meg — ez az
+    EMBERT: az SPS_SOFT_MS alatti sebességű (lágy, ívelt) passzokat a
+    passzoló nevéhez írja.
+
+    Edzőileg ez a beleérő védekezés címzettje: akinek lágyak a
+    passzai, annak a labdáiba bele lehet nyúlni — kilépés és
+    passzsáv-támadás az ő sávjában azonnal termel; a letámadásnál az
+    ő átadásait kell megcélozni, nem a labdást szorítani. Saját
+    csapatra: neki a passz-élesség (csuklós, feszes átadás) az
+    edzés-témája.
+
+    Visszatérés csapatonként: {"soft", "players": [{"player_id",
+    "jersey", "soft"}], "top"} — a "top" az első játékos, ha
+    legalább SPP_MIN_SOFT lágy passza van, és ez a csapat lágy
+    passzainak legalább SPP_SHARE_PCT-a, különben None.
+    """
+    import math
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    by_t = {f.t: f for f in match.frames}
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for p in detect_passes(match, config):
+        if p.decision_frame is None:
+            continue
+        dt = p.t - p.decision_frame.t
+        if dt < 2:
+            continue
+        fr = by_t.get(p.t)
+        if fr is None:
+            continue
+        receiver = next((q for q in fr.players
+                         if q.track_id == p.receiver_id), None)
+        if receiver is None:
+            continue
+        dist = math.hypot(receiver.x - p.passer_pos.x,
+                          receiver.y - p.passer_pos.y)
+        speed = dist / (dt / fps)
+        if speed > PASS_SPEED_MAX_MS or speed >= SPS_SOFT_MS:
+            continue
+        side = p.team.value
+        if side not in tally:
+            continue
+        tally[side][p.passer_id] = tally[side].get(p.passer_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "soft": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["soft"] for r in rows)
+        top = None
+        if rows and rows[0]["soft"] >= SPP_MIN_SOFT:
+            share = 100.0 * rows[0]["soft"] / max(1, total)
+            if share >= SPP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"soft": total, "players": rows, "top": top}
+    return out
+
+
 def soft_pass_roles(match: Match,
                     config: Optional[TacticsConfig] = None) -> dict:
     """Lágypassz-poszt: MELYIK POSZTJUK passzol lágyan.

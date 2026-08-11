@@ -2879,6 +2879,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "szünet után rá lehet engedni.")
     except Exception:
         pass
+    # Lágy passzolók: kinek a labdáiba lehet belenyúlni.
+    try:
+        from .decisions import soft_passers
+        spp = soft_passers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_spp = spp[side]["top"]
+            if top_spp is None:
+                continue
+            _ki10 = (f"a(z) {top_spp['jersey']}. számú"
+                     if top_spp.get("jersey") is not None
+                     else f"a(z) {top_spp['player_id']}. játékos")
+            body += (f" A(z) {name} lágy passzai {_ki10} kezéből "
+                     f"jönnek ({top_spp['soft']} lágy passz) — az ő "
+                     "labdáiba bele lehet nyúlni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

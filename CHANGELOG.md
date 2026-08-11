@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Lágy passzolók: kinek a labdáiba lehet belenyúlni.** A
+  lágypassz-poszt a posztot nevezi meg — az új réteg az embert: a
+  lassú, ívelt passzokat a passzoló nevéhez írja. Edzőileg ez a
+  beleérő védekezés címzettje: a letámadás az ő ÁTADÁSAIT célozza,
+  ne a labdást szorítsa — ott a leggyorsabb a labdaszerzés. Saját
+  csapatra a passz-élesség (csuklós, feszes átadás) az edzés-témája.
+  Négy lágy passztól és a lágy passzok felétől emel ki nevet. A
+  rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`soft_passers`), edzői összefoglaló, felderítés
+  (`spp_soft_by_player` mező + edzői kulcs + 409. meccsterv-szabály),
+  edzés-fókusz (429. szabály), kliens-csempe.
+
 - **Fáradt lövők: kinek megy szét a lövése a második félidőre.** A
   fáradt-lövő poszt a posztot nevezi meg — az új réteg az embert: a
   kaput elkerülő (mellé/blokkolt) lövéseket félidőnként a lövő

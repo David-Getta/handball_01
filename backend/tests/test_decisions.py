@@ -664,6 +664,26 @@ def test_soft_pass_roles_names_the_soft_post():
     assert rec["verdict"] and "bele lehet nyúlni" in rec["verdict"], rec
 
 
+def test_soft_passers_names_the_loose_hand():
+    """Ha a lágy passzok egy emberhez kötődnek, az ő labdáiba lehet
+    belenyúlni."""
+    from handball.pipeline.decisions import (SPP_MIN_SOFT,
+                                             soft_passers)
+
+    rec = soft_passers(_sps_match([7] * 5 + [9]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["soft"] >= SPP_MIN_SOFT, rec
+
+
+def test_soft_passers_silent_with_few_soft_passes():
+    """Néhány lágy passzból nem nevezünk meg embert."""
+    from handball.pipeline.decisions import soft_passers
+
+    rec = soft_passers(_sps_match([7, 9]))["home"]
+    assert rec["top"] is None, rec
+
+
 def test_soft_pass_roles_silent_with_few_soft_passes():
     """Néhány lágy passzból nincs ítélet."""
     from handball.pipeline.decisions import soft_pass_roles

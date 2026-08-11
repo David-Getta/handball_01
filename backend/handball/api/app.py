@@ -4697,6 +4697,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.decisions import soft_passers
+            res["soft_passers"] = soft_passers(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5646,6 +5651,8 @@ def create_app():
                        lambda: missed_chance_players(match))
                 from ..pipeline.xg import tired_shooters
                 _layer("tired_shooters", lambda: tired_shooters(match))
+                from ..pipeline.decisions import soft_passers
+                _layer("soft_passers", lambda: soft_passers(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

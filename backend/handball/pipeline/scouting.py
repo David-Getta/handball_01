@@ -1097,6 +1097,9 @@ class ScoutingReport:
     mcp_misses_by_player: dict = field(default_factory=dict)
     # Fáradt lövők: a kaput elkerülő lövések darabszáma LÖVŐNKÉNT,
     # félidőnként. Darabszám, meccsek közt összegződik.
+    # Lágy passzolók: a lágy (belenyúlható) passzok darabszáma
+    # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
+    spp_soft_by_player: dict = field(default_factory=dict)
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4633,6 +4636,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"szét ({_fsp_fh} → {_fsp_sh} pontatlan lövés) — rá a "
                 "szünet után rá lehet engedni: a kilépés nála "
                 "fölösleges kockázat, elég a lövő-vonalba állni.")
+
+    # Lágy passzolók: kinek a labdáiba nyúljatok bele.
+    if rep.spp_soft_by_player:
+        _spp_all = sum(rep.spp_soft_by_player.values())
+        _spp_k, _spp_n = max(rep.spp_soft_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _spp_n >= 4 and _spp_n >= 0.5 * max(1, _spp_all):
+            keys.append(
+                f"A lágy passzaik {_spp_n}/{_spp_all} része a(z) "
+                f"{_spp_k}. kezéből jön — az ő átadásaiba nyúljatok "
+                "bele: kilépés és passzsáv-támadás az ő sávjában "
+                "azonnal termel.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10078,6 +10093,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .decisions import soft_passers as _spp
+        spprec = _spp(match, config)[team.value]
+        rep.spp_soft_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["soft"]
+            for r in spprec["players"]}
         from .xg import tired_shooters as _fsp
         fsprec = _fsp(match, config)[team.value]
         rep.fsp_sh_by_player = dict(fsprec["sh"])
@@ -13074,6 +13095,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 409) Az ő lágy passzolójuk × a ti letámadásotok: az ő
+    # átadásait kell megcélozni.
+    if opp.spp_soft_by_player and own.trans_steals >= 3:
+        _spp409_all = sum(opp.spp_soft_by_player.values())
+        _spp409_k, _spp409_n = max(opp.spp_soft_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _spp409_n >= 4 and _spp409_n >= 0.5 * max(1, _spp409_all):
+            plan.append(
+                f"A lágy passzaik zöme a(z) {_spp409_k}. kezéből jön "
+                f"({_spp409_n}/{_spp409_all}), ti pedig sokat "
+                f"szereztek ({own.trans_steals} szerzés) — a "
+                "letámadás az ő ÁTADÁSAIT célozza, ne a labdást "
+                "szorítsa: ott a leggyorsabb a labdaszerzés.")
 
     # 408) Az ő fáradt lövőjük × a ti falatok: a hajrában elég a
     # lövő-vonalba állni ellene.
@@ -20097,6 +20132,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.svs_sevens_by_type for r in reports),
         mcp_misses_by_player=_merge_count_dicts(
             r.mcp_misses_by_player for r in reports),
+        spp_soft_by_player=_merge_count_dicts(
+            r.spp_soft_by_player for r in reports),
         fsp_sh_by_player=_merge_count_dicts(
             r.fsp_sh_by_player for r in reports),
         fsp_fh_by_player=_merge_count_dicts(
