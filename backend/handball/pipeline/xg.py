@@ -1167,6 +1167,70 @@ MCR_MIN_MISSES = 3
 MCR_SHARE_PCT = 60.0
 
 
+# Ziccerhagyó emberek: ennyi kihagyott ziccer kell a névhez, és
+# ekkora részarány fölött mondjuk ki, hogy a kihagyások egy emberhez
+# kötődnek.
+MCP_MIN_MISSES = 2
+MCP_SHARE_PCT = 50.0
+
+
+def missed_chance_players(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Ziccerhagyó emberek: KI hagyja ki a ziccereket.
+
+    A ziccerhagyó-poszt (missed_chance_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: a BIG_CHANCE_XG feletti helyzet-értékű, gól nélkül
+    záruló lövéseket a lövő nevéhez írja.
+
+    Edzőileg ez a fal kockázat-kezelése névre szólóan: akinél a
+    ziccer rendre kimarad, annál a helyzetbe engedés a kisebbik
+    rossz — a besegítés inkább a biztos kezű társakra menjen, és a
+    kapus nyugodtan bevárhatja őt. Saját csapatra: neki
+    befejezés-gyakorlás kell (ziccer-sorozat kapussal, fáradtan is),
+    mert a kihagyott ziccer a legdrágább hiba.
+
+    Visszatérés csapatonként: {"misses", "players": [{"player_id",
+    "jersey", "misses"}], "top"} — a "top" az első játékos, ha
+    legalább MCP_MIN_MISSES kihagyott ziccere van, és ez a csapat
+    kihagyásainak legalább MCP_SHARE_PCT-a, különben None.
+    """
+    xg = match_xg(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh.get("outcome") == "goal":
+            continue
+        if (sh.get("xg") or 0.0) < BIG_CHANCE_XG:
+            continue
+        side = sh["team"]
+        if side not in tally:
+            continue
+        tally[side][pid] = tally[side].get(pid, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "misses": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["misses"] for r in rows)
+        top = None
+        if rows and rows[0]["misses"] >= MCP_MIN_MISSES:
+            share = 100.0 * rows[0]["misses"] / max(1, total)
+            if share >= MCP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"misses": total, "players": rows, "top": top}
+    return out
+
+
 def missed_chance_roles(match: Match,
                         config: Optional[TacticsConfig] = None) -> dict:
     """Ziccerhagyó-poszt: MELYIK POSZTJUK hagyja ki a ziccereket.

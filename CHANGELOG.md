@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Ziccerhagyó emberek: ki hagyja ki a ziccereket.** A
+  ziccerhagyó-poszt a posztot nevezi meg — az új réteg az embert: a
+  nagy helyzet-értékű (ziccer), gól nélkül záruló lövéseket a lövő
+  nevéhez írja. Edzőileg ez a fal kockázat-kezelése névre szólóan:
+  akinél a ziccer rendre kimarad, nála a helyzetbe engedés a kisebbik
+  rossz — a besegítés a biztos kezű társakra menjen, a kapus pedig
+  bevárhatja őt. Saját csapatra befejezés-gyakorlás jár hozzá
+  (ziccer-sorozat kapussal, fáradtan is). Két kihagyástól és a
+  kihagyások felétől emel ki nevet. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag (`missed_chance_players`), edzői
+  összefoglaló, felderítés (`mcp_misses_by_player` mező + edzői kulcs
+  + 407. meccsterv-szabály), edzés-fókusz (427. szabály),
+  kliens-csempe.
+
 - **Kontroll-idővonal: ki diktált ötpercenként.** A negyedóra-profil
   az EREDMÉNYT bontja szakaszokra — az új réteg a KONTROLLT:
   ötperces blokkonként megnézi, kié volt a birtoklás nagyobb része, és

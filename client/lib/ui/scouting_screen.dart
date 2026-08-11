@@ -2806,6 +2806,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Ziccerhagyó emberek: kihez kötődnek a kihagyott ziccerek (2+
+  // kihagyás, a kihagyások fele — a backenddel azonos küszöbök:
+  // MCP_MIN_MISSES, MCP_SHARE_PCT).
+  String? _missedChancePlayer(Map<String, dynamic> r) {
+    final ms = (r["mcp_misses_by_player"] as Map?)?.cast<String, dynamic>();
+    if (ms == null || ms.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    ms.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a kihagyott ziccerek $topN/$all része a(z) $top. kezéhez "
+        "kötődik · nála a helyzetbe engedés a kisebbik rossz";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10602,6 +10625,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hetes-forrás", _sevenSource(r)!],
       if (_controlTimeline(r) != null)
         ["Kontroll-idővonal", _controlTimeline(r)!],
+      if (_missedChancePlayer(r) != null)
+        ["Ziccerhagyó ember", _missedChancePlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 427) Ziccerhagyó emberek: a kihagyott ziccer a legdrágább
+    # hiba, és befejezés-gyakorlással javítható.
+    try:
+        from .xg import MCP_MIN_MISSES, missed_chance_players
+        mcp427 = missed_chance_players(match, config)
+        for side in ("home", "away"):
+            top427 = mcp427[side].get("top")
+            if top427 is None:
+                continue
+            _ki427 = (f"a(z) {top427['jersey']}. számú"
+                      if top427.get("jersey") is not None
+                      else f"a(z) {top427['player_id']}. játékos")
+            add(side, "támadás", "Ziccer-befejezés",
+                f"a kihagyott ziccereink {_ki427} kezéhez kötődnek "
+                f"({top427['misses']} kihagyás; {MCP_MIN_MISSES} "
+                "kihagyástól már jelezzük) — a ziccer a legdrágább "
+                "hiba, mert helyzetből maradt el a gól",
+                "befejezés-gyakorlás neki: ziccer-sorozat kapussal "
+                "(mindkét oldal, mindkét ütem), fáradtan is "
+                "(kör-edzés után), és döntés-gyakorlás — kapus "
+                "olvasása lövés előtt, nem lövés közben",
+                )
+    except Exception:
+        pass
+
     # 426) Kontroll-idővonal: a birtoklás-vesztés szakaszos, tehát
     # edzhető (felállás-fegyelem, támadás-hossz).
     try:

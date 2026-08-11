@@ -1092,6 +1092,9 @@ class ScoutingReport:
     svs_sevens_by_type: dict = field(default_factory=dict)
     # Kontroll-idővonal: hány ötperces szakaszt vittek, vesztettek,
     # illetve mennyi volt kiegyenlített. Darabszám, összegződik.
+    # Ziccerhagyó emberek: a kihagyott ziccerek darabszáma
+    # LÖVŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    mcp_misses_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
     ctl_lost: int = 0
     ctl_blocks: int = 0
@@ -4602,6 +4605,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.ctl_blocks} részét elveszítik birtoklásban — "
                 "a tempó nálatok van: hosszú, türelmes támadásokkal "
                 "és korai indításokkal tovább lehet nyújtani ezt.")
+
+    # Ziccerhagyó emberek: kinél vállalható a helyzet.
+    if rep.mcp_misses_by_player:
+        _mcp_all = sum(rep.mcp_misses_by_player.values())
+        _mcp_k, _mcp_n = max(rep.mcp_misses_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _mcp_n >= 2 and _mcp_n >= 0.5 * max(1, _mcp_all):
+            keys.append(
+                f"A kihagyott ziccereik {_mcp_n}/{_mcp_all} része a(z) "
+                f"{_mcp_k}. kezéhez kötődik — nála a helyzetbe engedés "
+                "a kisebbik rossz: a besegítés a biztos kezű társakra "
+                "menjen, a kapus pedig bevárhatja őt.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10047,6 +10062,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .xg import missed_chance_players as _mcp
+        mcprec = _mcp(match, config)[team.value]
+        rep.mcp_misses_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["misses"]
+            for r in mcprec["players"]}
         from .momentum import control_timeline as _ctl
         ctlrec = _ctl(match, config)[team.value]
         rep.ctl_won = ctlrec["won"]
@@ -13033,6 +13054,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 407) Az ő ziccerhagyójuk × a ti besegítésetek: nála a
+    # helyzetbe engedés a kisebbik rossz.
+    if opp.mcp_misses_by_player and own.dbl_doubled_frames >= 50:
+        _mcp407_all = sum(opp.mcp_misses_by_player.values())
+        _mcp407_k, _mcp407_n = max(opp.mcp_misses_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _mcp407_n >= 2 and _mcp407_n >= 0.5 * max(1, _mcp407_all):
+            plan.append(
+                f"A kihagyott ziccereik zöme a(z) {_mcp407_k}. kezéhez "
+                f"kötődik ({_mcp407_n}/{_mcp407_all}), ti pedig "
+                "tudtok besegíteni — a besegítést és a kettőzést a "
+                "biztos kezű társaikra tartsátok: az ő ziccere "
+                "vállalható kockázat.")
 
     # 406) Az ő kontroll-képük × a ti időkéréseitek: az ő
     # sorozataik ELÉ kell időzíteni a megszakítást.
@@ -20026,6 +20061,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.dtp_frames_by_player for r in reports),
         svs_sevens_by_type=_merge_count_dicts(
             r.svs_sevens_by_type for r in reports),
+        mcp_misses_by_player=_merge_count_dicts(
+            r.mcp_misses_by_player for r in reports),
         ctl_won=sum(r.ctl_won for r in reports),
         ctl_lost=sum(r.ctl_lost for r in reports),
         ctl_blocks=sum(r.ctl_blocks for r in reports),

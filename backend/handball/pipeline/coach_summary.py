@@ -2846,6 +2846,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_ctl['worst']}. perctől indul.")
     except Exception:
         pass
+    # Ziccerhagyó emberek: kinél a helyzetbe engedés a kisebbik rossz.
+    try:
+        from .xg import missed_chance_players
+        mcp = missed_chance_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top_mcp = mcp[side]["top"]
+            if top_mcp is None:
+                continue
+            _ki8 = (f"a(z) {top_mcp['jersey']}. számú"
+                    if top_mcp.get("jersey") is not None
+                    else f"a(z) {top_mcp['player_id']}. játékos")
+            body += (f" A(z) {name} kihagyott ziccerei {_ki8} kezéhez "
+                     f"kötődnek ({top_mcp['misses']} kihagyás) — nála "
+                     "a helyzetbe engedés a kisebbik rossz.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

@@ -1226,6 +1226,26 @@ def test_missed_chance_roles_names_the_wasting_post():
     assert rec["verdict"] and "kisebbik rossz" in rec["verdict"], rec
 
 
+def test_missed_chance_players_names_the_waster():
+    """Ha a kihagyott ziccerek egy emberhez kötődnek, őt nevezzük meg
+    — nála a helyzetbe engedés a kisebbik rossz."""
+    from handball.pipeline.xg import (MCP_MIN_MISSES,
+                                      missed_chance_players)
+
+    rec = missed_chance_players(_mcr_match([7, 7, 7]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["misses"] >= MCP_MIN_MISSES, rec
+
+
+def test_missed_chance_players_silent_with_one_miss():
+    """Egyetlen kihagyásból nem nevezünk meg embert."""
+    from handball.pipeline.xg import missed_chance_players
+
+    rec = missed_chance_players(_mcr_match([7]))["home"]
+    assert rec["top"] is None, rec
+
+
 def test_missed_chance_roles_silent_with_few_misses():
     """Néhány kihagyásból nincs ítélet."""
     from handball.pipeline.xg import missed_chance_roles

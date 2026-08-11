@@ -4687,6 +4687,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import missed_chance_players
+            res["missed_chance_players"] = missed_chance_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5631,6 +5636,9 @@ def create_app():
                 from ..pipeline.momentum import control_timeline
                 _layer("control_timeline",
                        lambda: control_timeline(match))
+                from ..pipeline.xg import missed_chance_players
+                _layer("missed_chance_players",
+                       lambda: missed_chance_players(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning
