@@ -2634,6 +2634,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kettőzött emberek: kire jár rá az ellenfelek kettőzése (75+
+  // kettőzött kocka, a kockák fele — a backenddel azonos küszöbök:
+  // DTG_MIN_FRAMES, DTG_SHARE_PCT).
+  String? _doubledTarget(Map<String, dynamic> r) {
+    final fr = (r["dtp_frames_by_player"] as Map?)?.cast<String, dynamic>();
+    if (fr == null || fr.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    fr.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 75) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a kettőzések a(z) $top. kezére járnak rá ($topN/$all "
+        "kettőzött kocka) · bevált recept, de zárd mögötte a passzsávot";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10414,6 +10437,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Passzív-kockázat", _passiveRisk(r)!],
       if (_substitutionYield(r) != null)
         ["Csere-hozam", _substitutionYield(r)!],
+      if (_doubledTarget(r) != null)
+        ["Kettőzött ember", _doubledTarget(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

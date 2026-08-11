@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **446 réteg**, modulonként csoportosítva; a
+Összesen **447 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (88)
@@ -125,7 +125,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `tired_turnover_players` | Fáradt-eladók: KINEK a labdái vesznek el fáradtan. |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (81)
+## defense (82)
 
 | Réteg | Mit mér |
 |---|---|
@@ -164,6 +164,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `double_punishment` | Kettőzés-büntetés: MÖGÉ BETALÁLNAK-E a kettőzésüknek. |
 | `double_teams` | Kettőzés: rálép-e a második védő is a labdásra. |
 | `doubled_target_roles` | Kettőzött-poszt: MELYIK POSZTJUKRA érkezik a kettőzés. |
+| `doubled_targets` | Kettőzött emberek: KIRE jár rá az ellenfelek kettőzése. |
 | `doubling_defender_roles` | Kettőző-poszt: MELYIK POSZTJUK lép ki kettőzni. |
 | `doubling_defenders` | Kettőző emberek: KI JÖN MÁSODIKNAK a labdásra. |
 | `doubling_pair_roles` | Kettőzőpáros-poszt: MELYIK VÉDŐ-KETTŐSÜK kettőz együtt. |

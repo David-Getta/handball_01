@@ -4647,6 +4647,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import doubled_targets
+            res["doubled_targets"] = doubled_targets(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5573,6 +5578,8 @@ def create_app():
                 from ..pipeline.substitutions import substitution_yield
                 _layer("substitution_yield",
                        lambda: substitution_yield(match))
+                from ..pipeline.defense import doubled_targets
+                _layer("doubled_targets", lambda: doubled_targets(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

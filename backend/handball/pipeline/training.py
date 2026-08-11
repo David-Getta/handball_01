@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 420) Kettőzött emberek: akit rendre kettőznek, annak
+    # lekapcsolódó társ és begyakorolt leadás kell.
+    try:
+        from .defense import DTG_MIN_FRAMES, doubled_targets
+        dtp420 = doubled_targets(match, config)
+        for side in ("home", "away"):
+            top420 = dtp420[side].get("top")
+            if top420 is None:
+                continue
+            _ki420 = (f"a(z) {top420['jersey']}. számú"
+                      if top420.get("jersey") is not None
+                      else f"a(z) {top420['player_id']}. játékos")
+            add(side, "támadás", "Kettőzés-elleni leadás",
+                f"az ellenfél kettőzései {_ki420} kezére járnak rá "
+                f"({top420['frames']} kettőzött kocka; "
+                f"{DTG_MIN_FRAMES} kockától már jelezzük) — ha nála "
+                "elakad a labda, az egész támadásunk elakad",
+                "kettőzés-elleni gyakorlás vele: azonnali leadás a "
+                "lekapcsolódó társnak (kijelölt kiút minden "
+                "oldalon), testtel védett labdatartás két védő "
+                "közt, és a kettőzés mögötti üres ember automatikus "
+                "befutása",
+                )
+    except Exception:
+        pass
+
     # 419) Csere-hozam: a csere-pillanat is játékhelyzet.
     try:
         from .substitutions import SBY_GAP_GOALS, substitution_yield

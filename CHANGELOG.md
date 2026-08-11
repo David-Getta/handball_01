@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Kettőzött emberek: kire jár rá az ellenfelek kettőzése.** A
+  kettőzött-poszt a posztot nevezi meg — az új réteg az embert: a
+  kettőzött (két védővel szorongatott) labdás kockákat a birtokos
+  nevéhez írja. Edzőileg ez kollektív felderítés névre szólóan: ha az
+  ellenfelek rendre ugyanarra az emberükre küldik a kettőzést, a
+  minta bevált recept — érdemes követni, de a kettőzés mögött kilépő
+  passzsávot is zárni kell. Saját csapatra: akit rendre kettőznek,
+  annak lekapcsolódó társ és begyakorolt kettőzés-elleni leadás kell,
+  különben minden támadásunk rajta akad el. Hetvenöt kettőzött
+  kockától és a kockák felétől emel ki nevet. A rangsorban az "ember"
+  családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé is
+  bekerült. Felületek: /analyze + meccs-csomag (`doubled_targets`),
+  edzői összefoglaló, felderítés (`dtp_frames_by_player` mező + edzői
+  kulcs + 399. meccsterv-szabály), edzés-fókusz (420. szabály),
+  kliens-csempe.
+
 - **Csere-hozam: nyernek vagy vesztenek a cseréik után.** A
   csere-büntetés a lyukas cserét árazza — az új réteg a friss emberek
   hatását: a cserék utáni másfél percben összeveti a dobott és a

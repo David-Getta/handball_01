@@ -3208,6 +3208,26 @@ def test_doubled_target_roles_names_the_doubled_post():
     assert rec["verdict"] and "bevált recept" in rec["verdict"], rec
 
 
+def test_doubled_targets_names_the_doubled_man():
+    """A kettőzött kockák dandárja a 7-esnél van → rá jár a
+    kettőzés, neki kell lekapcsolódó társ."""
+    from handball.pipeline.defense import (DTG_MIN_FRAMES,
+                                           doubled_targets)
+
+    rec = doubled_targets(_dtr_match([(7, 200), (9, 50)]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["frames"] >= DTG_MIN_FRAMES, rec
+
+
+def test_doubled_targets_silent_with_few_frames():
+    """Kevés kettőzött kockából nem nevezünk meg embert."""
+    from handball.pipeline.defense import doubled_targets
+
+    rec = doubled_targets(_dtr_match([(7, 40), (9, 30)]))["home"]
+    assert rec["top"] is None, rec
+
+
 def test_doubled_target_roles_silent_with_few_frames():
     """Kevés kettőzött kockából nincs ítélet."""
     from handball.pipeline.defense import doubled_target_roles

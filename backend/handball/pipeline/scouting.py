@@ -1072,6 +1072,9 @@ class ScoutingReport:
     # támadások darabszáma. Darabszám, összegződik.
     # Csere-hozam: a cserék utáni ablak dobott és kapott góljai.
     # Darabszám, meccsek közt pontosan összegződik.
+    # Kettőzött emberek: a kettőzött labdás kockák darabszáma
+    # BIRTOKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    dtp_frames_by_player: dict = field(default_factory=dict)
     sby_rotations: int = 0
     sby_goals_for: int = 0
     sby_goals_against: int = 0
@@ -4459,6 +4462,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "cseréből) — a friss emberek lendületét kell "
                 "megtörni: saját időkérés vagy lassított felállás a "
                 "cserehullámuk után.")
+
+    # Kettőzött emberek: kire jár rá a kettőzés (bevált recept).
+    if rep.dtp_frames_by_player:
+        _dtp_k, _dtp_n = max(rep.dtp_frames_by_player.items(),
+                             key=lambda kv: kv[1])
+        _dtp_all = sum(rep.dtp_frames_by_player.values())
+        if _dtp_n >= 75 and _dtp_n >= 0.5 * max(1, _dtp_all):
+            keys.append(
+                f"Az ellenfelek kettőzése a(z) {_dtp_k}. kezére jár "
+                f"rá ({_dtp_n}/{_dtp_all} kettőzött kocka) — a minta "
+                "bevált recept, ti is oda küldjétek; a kettőzés "
+                "mögött kilépő passzsávot pedig zárjátok.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9904,6 +9919,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .defense import doubled_targets as _dtp
+        dtprec = _dtp(match, config)[team.value]
+        rep.dtp_frames_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["frames"]
+            for r in dtprec["players"]}
         from .substitutions import substitution_yield as _sby
         sbyrec = _sby(match, config)[team.value]
         rep.sby_rotations = sbyrec["rotations"]
@@ -12699,6 +12720,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 399) Az ő kettőzött emberük × a ti kettőzésetek: a bevált
+    # receptet érdemes követni.
+    if opp.dtp_frames_by_player and own.dbl_doubled_frames >= 50:
+        _dtp399_k, _dtp399_n = max(opp.dtp_frames_by_player.items(),
+                                   key=lambda kv: kv[1])
+        _dtp399_all = sum(opp.dtp_frames_by_player.values())
+        if _dtp399_n >= 75 and _dtp399_n >= 0.5 * max(1, _dtp399_all):
+            plan.append(
+                f"Az ellenfeleik a(z) {_dtp399_k}. emberüket "
+                f"kettőzik a legtöbbet ({_dtp399_n}/{_dtp399_all} "
+                "kettőzött kocka), és ti is tudtok kettőzni — "
+                "kövessétek a bevált receptet: rá menjen a kettőzés, "
+                "és mögötte a kilépő passzsáv legyen zárva.")
 
     # 398) Az ő csere-hozamuk × a ti gyors középkezdésetek: a
     # csere-pillanat célzottan támadható.
@@ -19583,6 +19618,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.stc_susp_by_player for r in reports),
         otp_outlets_by_player=_merge_count_dicts(
             r.otp_outlets_by_player for r in reports),
+        dtp_frames_by_player=_merge_count_dicts(
+            r.dtp_frames_by_player for r in reports),
         sby_rotations=sum(r.sby_rotations for r in reports),
         sby_goals_for=sum(r.sby_goals_for for r in reports),
         sby_goals_against=sum(r.sby_goals_against for r in reports),

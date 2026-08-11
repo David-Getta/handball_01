@@ -4439,6 +4439,77 @@ def doubled_target_roles(match, config=None) -> dict:
     return out
 
 
+# Kettőzött emberek: ennyi kettőzött labdás kocka kell a névhez, és
+# ekkora részarány fölött mondjuk ki, hogy a kettőzés egy emberre
+# jár rá.
+DTG_MIN_FRAMES = 75
+DTG_SHARE_PCT = 50.0
+
+
+def doubled_targets(match, config=None) -> dict:
+    """Kettőzött emberek: KIRE jár rá az ellenfelek kettőzése.
+
+    A kettőzött-poszt (doubled_target_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: a kettőzött (két védővel szorongatott) labdás
+    kockákat a birtokos nevéhez írja a támadó oldalon.
+
+    Edzőileg ez kollektív felderítés névre szólóan: ha az ellenfelek
+    rendre ugyanarra az emberükre küldik a kettőzést, a minta bevált
+    recept — érdemes követni. A kettőzött ember mögött viszont üres
+    társ marad: a kilépő passzsáv zárása a terv másik fele. Saját
+    csapatra: akit rendre kettőznek, annak lekapcsolódó társ és
+    begyakorolt kettőzés-elleni leadás kell — különben minden
+    támadásunk rajta akad el.
+
+    Visszatérés csapatonként (a KETTŐZÖTT, támadó oldal): {"frames",
+    "players": [{"player_id", "jersey", "frames"}], "top"} — a "top"
+    az első játékos, ha legalább DTG_MIN_FRAMES kettőzött kockája
+    van, és ez az összes kettőzött kockájuk legalább DTG_SHARE_PCT-a,
+    különben None.
+    """
+    import math
+
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None \
+                or holder.role == "kapus":
+            continue
+        near = sum(1 for p in f.players
+                   if p.team is not None and p.team != holder.team
+                   and p.role != "kapus"
+                   and math.hypot(p.x - holder.x, p.y - holder.y)
+                   <= DOUBLE_TEAM_M)
+        if near < 2:
+            continue
+        side = holder.team.value
+        if holder.jersey_number is not None:
+            jersey.setdefault(holder.track_id, holder.jersey_number)
+        tally[side][holder.track_id] = (
+            tally[side].get(holder.track_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "frames": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["frames"] for r in rows)
+        top = None
+        if rows and rows[0]["frames"] >= DTG_MIN_FRAMES:
+            share = 100.0 * rows[0]["frames"] / max(1, total)
+            if share >= DTG_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"frames": total, "players": rows, "top": top}
+    return out
+
+
 # Elzárt-poszt: ennyi poszthoz kötött elakadt védés kell az
 # ítélethez, és ekkora részarány fölött mondjuk ki, hogy az
 # elzárások rendre ugyanazt a védő-posztjukat találják meg.

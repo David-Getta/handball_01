@@ -2725,6 +2725,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_sby['verdict'].split(' — ')[-1]}.")
     except Exception:
         pass
+    # Kettőzött emberek: kire jár rá az ellenfelek kettőzése.
+    try:
+        from .defense import doubled_targets
+        dtp = doubled_targets(match)
+        for side, name in (("home", home), ("away", away)):
+            top_dtp = dtp[side]["top"]
+            if top_dtp is None:
+                continue
+            _ki7 = (f"a(z) {top_dtp['jersey']}. számú"
+                    if top_dtp.get("jersey") is not None
+                    else f"a(z) {top_dtp['player_id']}. játékos")
+            body += (f" A(z) {name} ellen a kettőzések {_ki7} kezére "
+                     "járnak rá — a minta bevált recept, de mögötte "
+                     "a kilépő passzsávot is zárni kell.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles
