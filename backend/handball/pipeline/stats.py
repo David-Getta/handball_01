@@ -938,10 +938,12 @@ def distance_battle(match: Match, config=None) -> dict:
     return out
 
 
-# Futómunka-eloszlás: ennyi mért mezőnyjátékos kell az ítélethez, és
-# a három legtöbbet futó embernek ekkora hányad fölött van a
-# csapat-futás nagy része egy kis körön.
+# Futómunka-eloszlás: ennyi mért mezőnyjátékos ÉS ennyi összesen
+# futott méter kell az ítélethez (pár másodperces felvételen az
+# eloszlás semmit nem jelent), és a három legtöbbet futó embernek
+# ekkora hányad fölött van a csapat-futás nagy része egy kis körön.
 LBL_MIN_PLAYERS = 6
+LBL_MIN_DISTANCE_M = 500.0
 LBL_TOP3_PCT = 55.0
 
 
@@ -962,7 +964,8 @@ def running_load_balance(match: Match, config=None) -> dict:
 
     Visszatérés csapatonként: {"players", "distance_m", "top3_m",
     "top3_pct", "verdict"} — a pct/verdict None, ha kevés
-    (LBL_MIN_PLAYERS alatti) a mért mezőnyjátékos.
+    (LBL_MIN_PLAYERS alatti) a mért mezőnyjátékos, vagy kevés
+    (LBL_MIN_DISTANCE_M alatti) a mért futott táv.
     """
     keeper: set = set()
     team_of: dict = {}
@@ -987,7 +990,8 @@ def running_load_balance(match: Match, config=None) -> dict:
         rec = {"players": len(vals), "distance_m": round(total, 1),
                "top3_m": round(sum(vals[:3]), 1), "top3_pct": None,
                "verdict": None}
-        if len(vals) >= LBL_MIN_PLAYERS and total > 0:
+        if (len(vals) >= LBL_MIN_PLAYERS
+                and total >= LBL_MIN_DISTANCE_M):
             share = 100.0 * sum(vals[:3]) / total
             rec["top3_pct"] = round(share, 1)
             if share >= LBL_TOP3_PCT:

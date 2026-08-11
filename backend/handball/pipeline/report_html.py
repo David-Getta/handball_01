@@ -1893,6 +1893,27 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     # hetes, ki gyűjti a kétperceket, ki szedi a labdákat).
     finishers_html = ""
     defense_lens_html = ""
+
+    def _lens_rows(layers):
+        """Réteg-lista → jelentés-sorok (csak a megszólaló ítéletek).
+
+        Egy réteg hibája nem viheti el a táblát, ezért rétegenként
+        külön try/except — ugyanaz az elv, mint a /analyze-nál.
+        """
+        rows = []
+        for label, fn in layers:
+            try:
+                rec_fin = fn(match)
+            except Exception:
+                continue
+            for side, name in (("home", home), ("away", away)):
+                v = (rec_fin.get(side) or {}).get("verdict")
+                if v:
+                    rows.append(f"<tr><td>{escape(name)}</td>"
+                                f"<td>{escape(label)}</td>"
+                                f"<td>{escape(v)}</td></tr>")
+        return rows
+
     try:
         from .attack_types import (backward_pass_roles,
                                    breakthrough_roles,
@@ -1975,21 +1996,6 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         from .tactics import static_attacker_roles
         from .stoppages import (timeout_finisher, timeout_pair_roles,
                                 timeout_turnover_roles)
-
-        def _lens_rows(layers):
-            rows = []
-            for label, fn in layers:
-                try:
-                    rec_fin = fn(match)
-                except Exception:
-                    continue
-                for side, name in (("home", home), ("away", away)):
-                    v = (rec_fin.get(side) or {}).get("verdict")
-                    if v:
-                        rows.append(f"<tr><td>{escape(name)}</td>"
-                                    f"<td>{escape(label)}</td>"
-                                    f"<td>{escape(v)}</td></tr>")
-            return rows
 
         fin_rows = _lens_rows((
             ("Poszt-nyomás", role_pressure_finish),
@@ -2102,6 +2108,42 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass
 
+    # Hozam-lencse: MENNYIT ÉR nekik egy-egy játékelem (kétperc,
+    # hetes, elzárás, 7 a 6, csere, figura, türelem). Ezek nem
+    # poszt-profilok, hanem ár-kalkulációk — ezért külön táblában.
+    yield_lens_html = ""
+    try:
+        from .attack_types import screen_yield
+        from .defense import block_fade
+        from .goalkeeper import (empty_net_turnovers, keeper_return)
+        from .rules import passive_risk, powerplay_yield, seven_yield
+        from .setplays import setplay_decay
+        from .stats import running_load_balance
+        from .substitutions import substitution_yield
+
+        yld_rows = _lens_rows((
+            ("Emberelőny-hozam", powerplay_yield),
+            ("Hetes-hozam", seven_yield),
+            ("Elzárás-hozam", screen_yield),
+            ("7a6 eladás", empty_net_turnovers),
+            ("Kapus-visszaérés", keeper_return),
+            ("Blokk-fáradás", block_fade),
+            ("Csere-hozam", substitution_yield),
+            ("Figura-kopás", setplay_decay),
+            ("Passzív-kockázat", passive_risk),
+            ("Futómunka-eloszlás", running_load_balance)))
+        if yld_rows:
+            yield_lens_html = (
+                "<h2>Hozam-lencse (mit ér nekik egy-egy játékelem)</h2>"
+                "<table><tr><th>Csapat</th><th>Réteg</th>"
+                "<th>Ítélet</th></tr>" + "".join(yld_rows) + "</table>"
+                + '<p class="note">Ár-kalkuláció a védekezéshez és a '
+                  'hajrához: mennyibe kerül ellenük egy kétperc, egy '
+                  'hetes, mit hoz nekik az elzárás vagy a 7 a 6 — és '
+                  'meddig működik a figurájuk.</p>')
+    except Exception:
+        pass
+
     # A meccs gerince: a kulcs-pillanatok időrendi listája — ugyanaz a
     # réteg, mint az app kártyája és a csomag kulcs_pillanatok.txt-je.
     moments_html = ""
@@ -2120,7 +2162,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     rules_html = (moments_html + setplays_html + key_post_html
                   + key_pair_html
                   + key_player_html
-                  + finishers_html + defense_lens_html + rules_html)
+                  + finishers_html + defense_lens_html
+                  + yield_lens_html + rules_html)
 
     # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.
     xg_html = ""

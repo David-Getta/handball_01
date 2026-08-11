@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Hozam-lencse a meccs-jelentésben.** A nyomtatható meccs-jelentés
+  eddig két lencse-táblát hozott (Befejező- és Védő-lencse, mindkettő
+  poszt-profilokból). Most kapott egy harmadikat: a Hozam-lencse azt
+  gyűjti egy helyre, MENNYIT ÉR nekik egy-egy játékelem —
+  emberelőny-hozam, hetes-hozam, elzárás-hozam, 7a6 eladás,
+  kapus-visszaérés, blokk-fáradás, csere-hozam, figura-kopás,
+  passzív-kockázat és futómunka-eloszlás. Ez az ár-kalkuláció a
+  védekezéshez és a hajrához: mennyibe kerül ellenük egy kétperc vagy
+  egy hetes, és meddig működik a figurájuk. A lencse-sorokat építő
+  segédfüggvény kikerült a blokkból, így mindhárom tábla ugyanazt a
+  rétegenként izolált (try/except) építőt használja.
+
+- **Futómunka-eloszlás: rövid felvételen hallgat.** A réteg pár
+  másodperces felvételen is ítéletet mondott (ott az eloszlás semmit
+  nem jelent) — mostantól 500 mért futott méter alatt csendben marad.
+
 - **Gyorsabb csomag: a rangsor és az edzés-fókusz csak egyszer
   számolódik.** Az ellenszer-lap bevezetésével a teendő-rangsor és az
   edzés-fókusz kétszer futott le minden meccsnél (egyszer önálló
