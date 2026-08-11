@@ -2927,6 +2927,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "lövőt kell fogni, hanem a kiszolgálót.")
     except Exception:
         pass
+    # Válaszoló emberek: kapott gól után ki válaszol.
+    try:
+        from .momentum import response_scorers
+        rspp = response_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_rspp = rspp[side]["top"]
+            if top_rspp is None:
+                continue
+            _ki13 = (f"a(z) {top_rspp['jersey']}. számú"
+                     if top_rspp.get("jersey") is not None
+                     else f"a(z) {top_rspp['player_id']}. játékos")
+            body += (f" A(z) {name} válasz-góljai {_ki13} nevéhez "
+                     f"kötődnek ({top_rspp['goals']} válasz-gól) — a "
+                     "saját gólunk után rá kell váltani.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

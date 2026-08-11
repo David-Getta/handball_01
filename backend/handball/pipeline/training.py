@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 432) Válaszoló emberek: ha a válasz egy emberen áll, a
+    # bekapott gól után kiszámíthatók vagyunk.
+    try:
+        from .momentum import RSPP_MIN_GOALS, response_scorers
+        rspp432 = response_scorers(match, config)
+        for side in ("home", "away"):
+            top432 = rspp432[side].get("top")
+            if top432 is None:
+                continue
+            _ki432 = (f"a(z) {top432['jersey']}. számú"
+                      if top432.get("jersey") is not None
+                      else f"a(z) {top432['player_id']}. játékos")
+            add(side, "támadás", "Válasz több emberre osztva",
+                f"a kapott gól utáni válasz-góljaink {_ki432} nevéhez "
+                f"kötődnek ({top432['goals']} válasz-gól; "
+                f"{RSPP_MIN_GOALS} góltól már jelezzük) — a bekapott "
+                "gól után kiszámíthatók vagyunk",
+                "válasz-figurák több befejezővel: két kijelölt "
+                "megoldás a kapott gól utáni első támadásra "
+                "(gyors középkezdés és felállt figura), és a "
+                "befejező tudatos váltogatása",
+                )
+    except Exception:
+        pass
+
     # 431) Előkészítő emberek: a szervezés ne egy kézen fusson.
     try:
         from .attack_types import EPP_MIN_PASSES, last_passers

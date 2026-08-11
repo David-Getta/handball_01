@@ -2260,6 +2260,26 @@ def test_response_scorer_roles_names_the_answering_post():
     assert rec["verdict"] and "fogására" in rec["verdict"], rec
 
 
+def test_response_scorers_names_the_answer_man():
+    """Ha a válasz-gólok egy embertől jönnek, a saját gólunk után az
+    ő fogására kell váltani."""
+    from handball.pipeline.momentum import (RSPP_MIN_GOALS,
+                                            response_scorers)
+
+    rec = response_scorers(_rsp_match([7, 7, 7, 9]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["goals"] >= RSPP_MIN_GOALS, rec
+
+
+def test_response_scorers_silent_with_few_goals():
+    """Egyetlen válasz-gólból nem nevezünk meg embert."""
+    from handball.pipeline.momentum import response_scorers
+
+    rec = response_scorers(_rsp_match([7]))["home"]
+    assert rec["top"] is None, rec
+
+
 def test_response_scorer_roles_silent_with_few_goals():
     """Néhány válasz-gólból nincs ítélet."""
     from handball.pipeline.momentum import response_scorer_roles

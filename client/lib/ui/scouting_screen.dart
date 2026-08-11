@@ -2922,6 +2922,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "nem a lövőt kell fogni, hanem a kiszolgálót";
   }
 
+  // Válaszoló emberek: kapott gól után ki válaszol (2+ válasz-gól, a
+  // válasz-gólok fele — a backenddel azonos küszöbök:
+  // RSPP_MIN_GOALS, RSPP_SHARE_PCT).
+  String? _responseScorer(Map<String, dynamic> r) {
+    final rs = (r["rspp_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (rs == null || rs.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    rs.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a válasz-góljaik $topN/$all része a(z) $top. nevéhez "
+        "kötődik · a saját gólotok után rá váltsatok";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10728,6 +10751,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Passzív-birtokló", _passiveHolder(r)!],
       if (_lastPasser(r) != null)
         ["Előkészítő ember", _lastPasser(r)!],
+      if (_responseScorer(r) != null)
+        ["Válaszoló ember", _responseScorer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

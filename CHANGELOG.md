@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Válaszoló emberek: kapott gól után ki válaszol.** A válasz-poszt
+  a posztot nevezi meg — az új réteg az embert: a kapott gólt egy
+  percen belül követő saját gólokat a lövő nevéhez írja. Edzőileg ez
+  a saját gólunk utáni első védekezés terve névre szólóan: a gólunk
+  után azonnal az ő fogására kell váltani (kiemelt őrzés, korai
+  kettőzés) — a lendületük ott törik meg, ahol elindulna. Saját
+  csapatra: ha a válasz egy emberen áll, a bekapott gól után
+  kiszámíthatók vagyunk. Két válasz-góltól és a válasz-gólok felétől
+  emel ki nevet. A rangsorban az "ember" családba tartozik, és a
+  Kulcs-ember bizonyíték-rétegei közé is bekerült. Felületek:
+  /analyze + meccs-csomag (`response_scorers`), edzői összefoglaló,
+  felderítés (`rspp_goals_by_player` mező + edzői kulcs + 412.
+  meccsterv-szabály), edzés-fókusz (432. szabály), kliens-csempe.
+
 - **Előkészítő emberek: ki készíti elő a lövéseiket.** Az
   előkészítő-poszt a posztot nevezi meg — az új réteg az embert:
   minden felismert lövéshez megkeresi a lövő felé menő utolsó

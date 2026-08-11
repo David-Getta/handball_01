@@ -1106,6 +1106,9 @@ class ScoutingReport:
     # Előkészítő emberek: a lövés-előkészítő utolsó passzok
     # darabszáma PASSZOLÓNKÉNT. Darabszám, összegződik.
     epp_passes_by_player: dict = field(default_factory=dict)
+    # Válaszoló emberek: a kapott gól utáni saját gólok darabszáma
+    # LÖVŐNKÉNT. Darabszám, meccsek közt összegződik.
+    rspp_goals_by_player: dict = field(default_factory=dict)
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4678,6 +4681,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_epp_k}. készíti elő — nem a lövőt kell fogni, "
                 "hanem őt: az ő átadás-vonalait vágjátok el, és a "
                 "lövőik előkészítetlenül maradnak.")
+
+    # Válaszoló emberek: kire váltsatok a saját gólotok után.
+    if rep.rspp_goals_by_player:
+        _rspp_all = sum(rep.rspp_goals_by_player.values())
+        _rspp_k, _rspp_n = max(rep.rspp_goals_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _rspp_n >= 2 and _rspp_n >= 0.5 * max(1, _rspp_all):
+            keys.append(
+                f"A kapott gól utáni válasz-góljaik {_rspp_n}/"
+                f"{_rspp_all} része a(z) {_rspp_k}. nevéhez kötődik "
+                "— a saját gólotok után azonnal az ő fogására "
+                "váltsatok: ott törik meg a lendületük, ahol "
+                "elindulna.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10123,6 +10139,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .momentum import response_scorers as _rspp
+        rspprec = _rspp(match, config)[team.value]
+        rep.rspp_goals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["goals"]
+            for r in rspprec["players"]}
         from .attack_types import last_passers as _epp
         epprec = _epp(match, config)[team.value]
         rep.epp_passes_by_player = {
@@ -13137,6 +13159,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 412) Az ő válaszoló emberük × a ti gólerősségetek: a saját
+    # gólunk után rá kell váltani.
+    if opp.rspp_goals_by_player and own.goals >= 10:
+        _rspp412_all = sum(opp.rspp_goals_by_player.values())
+        _rspp412_k, _rspp412_n = max(opp.rspp_goals_by_player.items(),
+                                     key=lambda kv: kv[1])
+        if _rspp412_n >= 2 and _rspp412_n >= 0.5 * max(1, _rspp412_all):
+            plan.append(
+                f"A válasz-góljaik {_rspp412_n}/{_rspp412_all} része "
+                f"a(z) {_rspp412_k}. nevéhez kötődik, ti pedig sokat "
+                f"gólt szereztek ({own.goals} gól) — minden saját "
+                "gólotok UTÁN azonnal az ő kiemelt őrzésére "
+                "váltsatok.")
 
     # 411) Az ő előkészítőjük × a ti kilépésetek: a kiszolgálót
     # kell elvágni, nem a lövőt fogni.
@@ -20208,6 +20244,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.pvp_frames_by_player for r in reports),
         epp_passes_by_player=_merge_count_dicts(
             r.epp_passes_by_player for r in reports),
+        rspp_goals_by_player=_merge_count_dicts(
+            r.rspp_goals_by_player for r in reports),
         fsp_sh_by_player=_merge_count_dicts(
             r.fsp_sh_by_player for r in reports),
         fsp_fh_by_player=_merge_count_dicts(

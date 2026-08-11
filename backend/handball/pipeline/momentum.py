@@ -3107,6 +3107,74 @@ RSP_MIN_GOALS = 3
 RSP_SHARE_PCT = 60.0
 
 
+# Válaszoló emberek: ennyi válasz-gól kell a névhez, és ekkora
+# részarány fölött mondjuk ki, hogy a válasz egy emberen áll.
+RSPP_MIN_GOALS = 2
+RSPP_SHARE_PCT = 50.0
+
+
+def response_scorers(match: Match, config=None) -> dict:
+    """Válaszoló emberek: KAPOTT GÓL UTÁN ki válaszol.
+
+    A válasz-poszt (response_scorer_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: a kapott gólt RSP_WINDOW_S másodpercen belül követő
+    saját gólokat a lövő nevéhez írja.
+
+    Edzőileg ez a saját gólunk utáni első védekezés terve névre
+    szólóan: ha a válaszuk rendre ugyanattól az embertől jön, a
+    gólunk után azonnal az ő fogására kell váltani (kiemelt őrzés,
+    korai kettőzés) — a lendületük ott törik meg, ahol elindulna.
+    Saját csapatra: ha a válasz egy emberen áll, a bekapott gól után
+    kiszámíthatók vagyunk.
+
+    Visszatérés csapatonként: {"goals", "players": [{"player_id",
+    "jersey", "goals"}], "top"} — a "top" az első játékos, ha
+    legalább RSPP_MIN_GOALS válasz-gólja van, és ez a csapat
+    válasz-góljainak legalább RSPP_SHARE_PCT-a, különben None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = RSP_WINDOW_S * fps
+
+    goals = [(e.t, e.team.value, e.player_id)
+             for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for i2, (t, side, pid) in enumerate(goals):
+        if pid is None or side not in tally:
+            continue
+        kapott = any(t0 < t and t - t0 <= win and s0 != side
+                     for (t0, s0, _p) in goals[:i2])
+        if not kapott:
+            continue
+        tally[side][pid] = tally[side].get(pid, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "goals": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["goals"] for r in rows)
+        top = None
+        if rows and rows[0]["goals"] >= RSPP_MIN_GOALS:
+            share = 100.0 * rows[0]["goals"] / max(1, total)
+            if share >= RSPP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"goals": total, "players": rows, "top": top}
+    return out
+
+
 def response_scorer_roles(match: Match, config=None) -> dict:
     """Válasz-poszt: KAPOTT GÓL UTÁN melyik posztjuk válaszol.
 
