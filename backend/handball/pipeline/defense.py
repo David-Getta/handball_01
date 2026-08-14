@@ -4517,6 +4517,100 @@ SDR_MIN_SCREENS = 3
 SDR_SHARE_PCT = 60.0
 
 
+# Elzárt védők: ennyi elakadás kell a névhez, és ekkora részarány
+# fölött mondjuk ki, hogy az elzárások egy védőt találnak meg.
+SDP_MIN_SCREENS = 2
+SDP_SHARE_PCT = 50.0
+
+
+def screened_defenders(match, config=None) -> dict:
+    """Elzárt védők: KI akad el az elzárásokban.
+
+    Az elzárt-poszt (screened_defender_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: lövésenként megkeressük a lövő őrzőjét és a mellé
+    állított elzárót, és az elakadt őrző nevéhez írjuk az esetet.
+
+    Edzőileg ez az elzárás-célpont terve névre szólóan: akire az
+    elzárás rendre ráragad, oda kell vinni a figurákat — az ő
+    oldalán a zárás tisztán hagyja a lövőt. Saját csapatra: neki
+    átcsúszás- és váltás-gyakorlás kell, hangos kommunikációval —
+    az elakadás nem alkat, hanem technika kérdése.
+
+    Visszatérés csapatonként (az ELAKADT, védő oldal): {"screens",
+    "players": [{"player_id", "jersey", "screens"}], "top"} — a
+    "top" az első játékos, ha legalább SDP_MIN_SCREENS elakadása
+    van, és ez a csapat elakadásainak legalább SDP_SHARE_PCT-a,
+    különben None.
+    """
+    import math
+
+    from .attack_types import SCREEN_DIST_M, SCREEN_MARKER_MAX_M
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        i0 = idx_of.get(sh["t"])
+        if pid is None or i0 is None:
+            continue
+        f = match.frames[i0]
+        shooter = next((p for p in f.players if p.track_id == pid),
+                       None)
+        if shooter is None:
+            continue
+        marker = None
+        best = SCREEN_MARKER_MAX_M
+        for d in f.players:
+            if d.team is None or d.team == shooter.team \
+                    or d.role == "kapus":
+                continue
+            dist = math.hypot(d.x - shooter.x, d.y - shooter.y)
+            if dist <= best:
+                marker, best = d, dist
+        if marker is None:
+            continue
+        setter = None
+        best_s = SCREEN_DIST_M
+        for p in f.players:
+            if p.team != shooter.team or p.track_id == pid:
+                continue
+            d = math.hypot(p.x - marker.x, p.y - marker.y)
+            if d <= best_s:
+                setter, best_s = p, d
+        if setter is None:
+            continue
+        side = marker.team.value
+        if side not in tally:
+            continue
+        tally[side][marker.track_id] = (
+            tally[side].get(marker.track_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "screens": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["screens"] for r in rows)
+        top = None
+        if rows and rows[0]["screens"] >= SDP_MIN_SCREENS:
+            share = 100.0 * rows[0]["screens"] / max(1, total)
+            if share >= SDP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"screens": total, "players": rows, "top": top}
+    return out
+
+
 def screened_defender_roles(match, config=None) -> dict:
     """Elzárt-poszt: MELYIK VÉDŐJÜK akad el az elzárásokban.
 

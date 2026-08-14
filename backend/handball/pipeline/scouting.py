@@ -1118,6 +1118,9 @@ class ScoutingReport:
     # Előnyben-emberek: a saját vezetésnél lőtt gólok darabszáma
     # LÖVŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
     lgp_goals_by_player: dict = field(default_factory=dict)
+    # Elzárt védők: az elzárásban elakadó védő elakadásainak
+    # darabszáma VÉDŐNKÉNT. Darabszám, meccsek közt összegződik.
+    sdp_screens_by_player: dict = field(default_factory=dict)
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4741,6 +4744,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "ő kivétele (szoros fogás, kettőzés) töri meg a "
                 "lendület-tartásukat: a felzárkózásra ez a "
                 "leggyorsabb út.")
+
+    # Elzárt védők: kire vigyétek a zárásokat.
+    if rep.sdp_screens_by_player:
+        _sdp_all = sum(rep.sdp_screens_by_player.values())
+        _sdp_k, _sdp_n = max(rep.sdp_screens_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _sdp_n >= 2 and _sdp_n >= 0.5 * max(1, _sdp_all):
+            keys.append(
+                f"Az elzárások {_sdp_n}/{_sdp_all} része a(z) "
+                f"{_sdp_k}. védőjükön ragad — a figuráitok zárásait "
+                "az ő oldalára vigyétek: nála a zárás tisztán "
+                "hagyja a lövőt.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10186,6 +10201,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .defense import screened_defenders as _sdp
+        sdprec = _sdp(match, config)[team.value]
+        rep.sdp_screens_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["screens"]
+            for r in sdprec["players"]}
         from .momentum import lead_scorers as _lgp
         lgprec = _lgp(match, config)[team.value]
         rep.lgp_goals_by_player = {
@@ -13224,6 +13245,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 416) Az ő elzárt védőjük × a ti elzárás-játékotok: a zárást
+    # oda kell vinni, ahol ragad.
+    if opp.sdp_screens_by_player and own.scy_screened_shots >= 6:
+        _sdp416_all = sum(opp.sdp_screens_by_player.values())
+        _sdp416_k, _sdp416_n = max(opp.sdp_screens_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _sdp416_n >= 2 and _sdp416_n >= 0.5 * max(1, _sdp416_all):
+            plan.append(
+                f"Az elzárások {_sdp416_n}/{_sdp416_all} része a(z) "
+                f"{_sdp416_k}. védőjükön ragad, ti pedig elzárásos "
+                f"csapat vagytok ({own.scy_screened_shots} zárásból "
+                "lőtt lövés) — a figuráitok zárásait az ő oldalára "
+                "vigyétek: nála a zárás tisztán hagyja a lövőt.")
 
     # 415) Az ő előnyben-emberük × a ti felzárkózásotok: hátrányban
     # az ő kivétele a leggyorsabb út.
@@ -20364,6 +20399,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.ssp_goals_by_player for r in reports),
         lgp_goals_by_player=_merge_count_dicts(
             r.lgp_goals_by_player for r in reports),
+        sdp_screens_by_player=_merge_count_dicts(
+            r.sdp_screens_by_player for r in reports),
         fsp_sh_by_player=_merge_count_dicts(
             r.fsp_sh_by_player for r in reports),
         fsp_fh_by_player=_merge_count_dicts(

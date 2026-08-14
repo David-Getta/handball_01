@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Elzárt védők: ki akad el az elzárásokban.** Az elzárt-poszt a
+  posztot nevezi meg — az új réteg az embert: lövésenként megkeresi a
+  lövő őrzőjét és a mellé állított elzárót, és az elakadt őrző
+  nevéhez írja az esetet. Edzőileg ez az elzárás-célpont terve névre
+  szólóan: akire a zárás rendre ráragad, oda kell vinni a figurákat —
+  az ő oldalán a zárás tisztán hagyja a lövőt. Saját csapatra: neki
+  átcsúszás- és váltás-gyakorlás kell hangos kommunikációval — az
+  elakadás nem alkat, hanem technika kérdése. Két elakadástól és az
+  elakadások felétől emel ki nevet. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag (`screened_defenders`), edzői
+  összefoglaló, felderítés (`sdp_screens_by_player` mező + edzői
+  kulcs + 416. meccsterv-szabály), edzés-fókusz (436. szabály),
+  kliens-csempe.
+
 - **Előnyben-emberek: ki viszi a játékot vezetésnél.** Az
   előnyben-poszt a posztot nevezi meg — az új réteg az embert: a
   saját vezetés közben lőtt gólokat a lövő nevéhez írja. Edzőileg ez

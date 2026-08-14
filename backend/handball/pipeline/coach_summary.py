@@ -2993,6 +2993,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "felzárkózáshoz.")
     except Exception:
         pass
+    # Elzárt védők: ki akad el az elzárásokban.
+    try:
+        from .defense import screened_defenders
+        sdp = screened_defenders(match)
+        for side, name in (("home", home), ("away", away)):
+            top_sdp = sdp[side]["top"]
+            if top_sdp is None:
+                continue
+            _ki17 = (f"a(z) {top_sdp['jersey']}. számú"
+                     if top_sdp.get("jersey") is not None
+                     else f"a(z) {top_sdp['player_id']}. játékos")
+            body += (f" A(z) {name} védői közül az elzárások {_ki17} "
+                     f"emberén ragadnak ({top_sdp['screens']} "
+                     "elakadás) — az ő oldalára érdemes a zárásokat "
+                     "vinni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

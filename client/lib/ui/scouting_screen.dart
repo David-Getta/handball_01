@@ -3014,6 +3014,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "nevéhez kötődik · hátrányban őt vegyétek ki először";
   }
 
+  // Elzárt védők: ki akad el az elzárásokban (2+ elakadás, az
+  // elakadások fele — a backenddel azonos küszöbök:
+  // SDP_MIN_SCREENS, SDP_SHARE_PCT).
+  String? _screenedDefender(Map<String, dynamic> r) {
+    final sd = (r["sdp_screens_by_player"] as Map?)?.cast<String, dynamic>();
+    if (sd == null || sd.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    sd.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "az elzárások $topN/$all része a(z) $top. védőjükön ragad · "
+        "a zárásokat az ő oldalára vigyétek";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10828,6 +10851,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Újrakezdő ember", _secondStartScorer(r)!],
       if (_leadScorer(r) != null)
         ["Előnyben-ember", _leadScorer(r)!],
+      if (_screenedDefender(r) != null)
+        ["Elzárt védő", _screenedDefender(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

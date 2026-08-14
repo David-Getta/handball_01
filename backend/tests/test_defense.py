@@ -3304,6 +3304,26 @@ def test_screened_defender_roles_silent_with_few_screens():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
 
 
+def test_screened_defenders_names_the_stuck_man():
+    """Ha az elzárások rendre ugyanazt a védőt találják meg, oda kell
+    vinni a figurákat."""
+    from handball.pipeline.defense import (SDP_MIN_SCREENS,
+                                           screened_defenders)
+
+    rec = screened_defenders(_sdr_match([21, 21, 21, 22]))["away"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 21, rec
+    assert rec["top"]["screens"] >= SDP_MIN_SCREENS, rec
+
+
+def test_screened_defenders_silent_with_one_screen():
+    """Egyetlen elakadásból nem nevezünk meg embert."""
+    from handball.pipeline.defense import screened_defenders
+
+    rec = screened_defenders(_sdr_match([21]))["away"]
+    assert rec["top"] is None, rec
+
+
 # ---- Blokkolt-poszt (melyik posztjuk lövéseit blokkolják) ------------------
 
 

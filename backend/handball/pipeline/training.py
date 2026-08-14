@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 436) Elzárt védők: az elakadás nem alkat, hanem technika.
+    try:
+        from .defense import SDP_MIN_SCREENS, screened_defenders
+        sdp436 = screened_defenders(match, config)
+        for side in ("home", "away"):
+            top436 = sdp436[side].get("top")
+            if top436 is None:
+                continue
+            _ki436 = (f"a(z) {top436['jersey']}. számú"
+                      if top436.get("jersey") is not None
+                      else f"a(z) {top436['player_id']}. játékos")
+            add(side, "védekezés", "Átcsúszás az elzárás alatt",
+                f"az ellenfél elzárásai rendre {_ki436} emberünkön "
+                f"ragadnak ({top436['screens']} elakadás; "
+                f"{SDP_MIN_SCREENS} elakadástól már jelezzük) — az ő "
+                "oldalán a zárás tisztán hagyja a lövőt",
+                "átcsúszás- és váltás-gyakorlás vele: zárás-elleni "
+                "2v2 (átcsúszás elöl és hátul is), hangos "
+                "váltás-kommunikáció begyakorolt szavakkal, és a "
+                "zárás korai felismerése (a záró beálló mozgásának "
+                "olvasása)",
+                )
+    except Exception:
+        pass
+
     # 435) Előnyben-emberek: a vezetés-tartás ne egy emberen
     # álljon.
     try:
