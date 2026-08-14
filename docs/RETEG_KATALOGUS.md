@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **470 réteg**, modulonként csoportosítva; a
+Összesen **471 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (89)
+## attack_types (90)
 
 | Réteg | Mit mér |
 |---|---|
@@ -97,6 +97,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `wing_finishing` | Szélső-befejezés: a szélső (éles) szögből, közelről leadott lövések |
 | `wing_finishing_by_side` | Szélső-befejezés oldalanként: MELYIK szélsőjük veszélyes. |
 | `wing_involvement` | Szélső-bevonás: ELJUT-E a labda a szélre a támadásaikban. |
+| `wing_runners` | Futtatott szélsők: MELYIK szélső kapja lendületből a labdát. |
 | `wing_service` | Szélső-futtatás: LENDÜLETBŐL vagy ÁLLVA kapják-e a szélsők a |
 | `wing_shot_depth` | Szélső-mélység: MILYEN MÉLYRŐL lőnek a szélsőik. |
 

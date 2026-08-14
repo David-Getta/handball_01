@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 443) Futtatott szélsők: az egy szélsőre járó futtatás
+    # kiszámítható — a sávzárás ellene készen áll.
+    try:
+        from .attack_types import WRP_MIN_RUNNING, wing_runners
+        wrp443 = wing_runners(match, config)
+        for side in ("home", "away"):
+            top443 = wrp443[side].get("top")
+            if top443 is None:
+                continue
+            _ki443 = (f"a(z) {top443['jersey']}. számú"
+                      if top443.get("jersey") is not None
+                      else f"a(z) {top443['player_id']}. játékos")
+            add(side, "támadás", "Futtatás mindkét szélre",
+                f"a futó szélső-átvételeink zöme {_ki443} "
+                f"szélsőnkhöz megy ({top443['running']} futó átvétel; "
+                f"{WRP_MIN_RUNNING} átvételtől már jelezzük) — az "
+                "egy oldalra járó futtatás sávzárással kivédhető",
+                "futtatás-variálás: futópassz-gyakorlat mindkét "
+                "szélre azonos figurából, a gyenge oldali szélső "
+                "beindulás-időzítése (a védő háta mögül), és egy "
+                "átemelős futópassz-változat a sávzárás fölé",
+                )
+    except Exception:
+        pass
+
     # 442) Középkezdés-hozam: a gyors kezdés csak góllal ér valamit.
     try:
         from .momentum import RSY_MIN_RESTARTS, restart_yield

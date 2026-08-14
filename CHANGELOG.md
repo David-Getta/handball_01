@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Futtatott szélsők** (ember-réteg): MELYIK szélső kapja lendületből
+  a labdát — a szélső-futtatás (wing_service) ember-ikre, a lendületes
+  szélső-átvételeket emberre bontja. Edzői olvasat: a futtatott szélső
+  ellen nem a kifutás véd, hanem a futópassz-sáv zárása — és azt az ő
+  oldalán kell begyakorolni; a saját csapatnak: az egy szélsőre járó
+  futtatás kiszámítható, mindkét szélre kell variálni. Felületek:
+  /analyze + meccs-csomag (`wing_runners`), edzői összefoglaló,
+  felderítés (edzői kulcs + 423. meccsterv-szabály a labdaszerzéssel
+  párosítva), 443. edzés-szabály, prioritás-regiszter (ember-család +
+  Kulcs-ember lencse), kliens-csempe.
+
 ## v0.1.28 — kiadva (2026-08-14)
 
 > Kiadás-jegyzet: a v0.1.27 óta a kör vezérfonala az EMBER- és a

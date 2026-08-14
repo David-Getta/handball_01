@@ -2841,6 +2841,26 @@ def test_wing_service_needs_enough_receptions():
     assert rec["verdict"] is None
 
 
+def test_wing_runners_names_the_run_fed_wing():
+    """A futó átvételeket egy szélső (2-es) kapja → ő a címzett."""
+    from handball.pipeline.attack_types import wing_runners
+
+    rec = wing_runners(_wsv_match(True))["home"]
+    assert rec["running"] >= 2
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 2
+    assert rec["top"]["share_pct"] >= 50.0
+
+
+def test_wing_runners_needs_enough_running_receptions():
+    """Kevés futó átvételnél (vagy állva kapó szélsőnél) nincs top."""
+    from handball.pipeline.attack_types import wing_runners
+
+    rec = wing_runners(_wsv_match(False))["home"]
+    assert rec["running"] == 0
+    assert rec["top"] is None
+
+
 # ---- Keresztjáték (mennyit kereszteznek a hátsó sorban) ---------------------
 
 def _crx_match(crossing, n_attacks=8, fps=25.0):

@@ -4133,6 +4133,87 @@ def wing_service(match: Match,
     return out
 
 
+# Futtatott szélsők: ennyi lendületes átvétel kell egy szélsőtől az
+# ítélethez, és a csapat futó átvételeiből e feletti részarány teszi
+# őt a futtatás első számú címzettjévé.
+WRP_MIN_RUNNING = 2
+WRP_SHARE_PCT = 50.0
+
+
+def wing_runners(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Futtatott szélsők: MELYIK szélső kapja lendületből a labdát.
+
+    A szélső-futtatás (wing_service) azt méri, HOGYAN érkezik a labda
+    a szélre — ez azt, KIHEZ: a szélső-posztú játékosok lendületes
+    (WSV_RUN_MS feletti sebességű) átvételeit emberre bontjuk. Akinél
+    a futó átvételek zöme landol, ő a futtatás címzettje — az ő
+    beindulására épül a szélső játékuk.
+
+    Edzőileg: a futtatott szélső ellen nem a kifutás véd, hanem a
+    futópassz sávjának zárása — és ezt az ő oldalán kell begyakorolni:
+    a mellette lévő védő lép a passzvonalba, mielőtt a szélső
+    lendületet vesz.
+
+    Visszatérés csapatonként: {"running", "players": [{"player_id",
+    "jersey", "running", "share_pct"}], "top"} — a lista futó átvétel
+    szerint csökkenő; a "top" az első játékos, ha legalább
+    WRP_MIN_RUNNING futó átvétele van és a részaránya eléri a
+    WRP_SHARE_PCT-t (egyébként None).
+    """
+    import math
+
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    posts = estimate_positions(match, config)
+    wings = {side: {tid for tid, r in posts.get(side, {}).items()
+                    if r["poszt"] == "szélső"}
+             for side in ("home", "away")}
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for pe in detect_passes(match, config):
+        side = pe.team.value
+        if pe.receiver_id not in wings[side]:
+            continue
+        i0 = idx_of.get(pe.t)
+        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+            continue
+        p_before = next((p for p in match.frames[i0 - 2].players
+                         if p.track_id == pe.receiver_id), None)
+        p_after = next((p for p in match.frames[i0 + 2].players
+                        if p.track_id == pe.receiver_id), None)
+        if p_before is None or p_after is None:
+            continue
+        speed = (math.hypot(p_after.x - p_before.x,
+                            p_after.y - p_before.y) * fps / 4.0)
+        if speed < WSV_RUN_MS:
+            continue
+        if getattr(p_after, "jersey_number", None) is not None:
+            jersey.setdefault(pe.receiver_id, p_after.jersey_number)
+        tally[side][pe.receiver_id] = \
+            tally[side].get(pe.receiver_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = sum(tally[side].values())
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "running": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if players and players[0]["running"] >= WRP_MIN_RUNNING \
+                and (players[0]["share_pct"] or 0.0) >= WRP_SHARE_PCT:
+            top = players[0]
+        out[side] = {"running": n, "players": players, "top": top}
+    return out
+
+
 # Keresztjáték: a hátsó sor két játékosának oldalcseréje számít
 # keresztnek, ennyi mért támadás kell az ítélethez, és e feletti /
 # alatti kereszt-átlag a mozgásos, illetve a statikus hátsó sor jele.

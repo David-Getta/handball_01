@@ -4238,6 +4238,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "átvétel jött mozgásból).")
     except Exception:
         pass
+    # Futtatott szélsők: melyik szélső kapja lendületből a labdát.
+    try:
+        from .attack_types import wing_runners
+        wrp = wing_runners(match)
+        for side, name in (("home", home), ("away", away)):
+            top_wrp = wrp[side]["top"]
+            if top_wrp is None:
+                continue
+            _wrp_j = (top_wrp["jersey"]
+                      if top_wrp["jersey"] is not None
+                      else top_wrp["player_id"])
+            body += (f" A(z) {name} futtatásainak címzettje a(z) "
+                     f"{_wrp_j}. szélső "
+                     f"({top_wrp['running']}/{wrp[side]['running']} "
+                     "futó átvétel) — az ő oldalán a futópassz-sáv "
+                     "zárása véd, nem a kifutás.")
+    except Exception:
+        pass
     # Csere-lyukak: mennyi ideig játszanak öten csere közben.
     try:
         from .substitutions import sub_gaps

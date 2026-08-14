@@ -4737,6 +4737,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import wing_runners
+            res["wing_runners"] = wing_runners(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.goalkeeper import seven_six_finishers
             res["seven_six_finishers"] = seven_six_finishers(match)
         except Exception:
@@ -5735,6 +5740,8 @@ def create_app():
                 from ..pipeline.defense import screened_defenders
                 _layer("screened_defenders",
                        lambda: screened_defenders(match))
+                from ..pipeline.attack_types import wing_runners
+                _layer("wing_runners", lambda: wing_runners(match))
                 from ..pipeline.goalkeeper import seven_six_finishers
                 _layer("seven_six_finishers",
                        lambda: seven_six_finishers(match))

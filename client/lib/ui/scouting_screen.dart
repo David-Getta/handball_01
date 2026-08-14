@@ -3037,6 +3037,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "a zárásokat az ő oldalára vigyétek";
   }
 
+  // Futtatott szélsők: melyik szélső kapja lendületből a labdát (2+
+  // futó átvétel, a futó átvételek fele — a backenddel azonos
+  // küszöbök: WRP_MIN_RUNNING, WRP_SHARE_PCT).
+  String? _wingRunner(Map<String, dynamic> r) {
+    final wr = (r["wrp_running_by_player"] as Map?)?.cast<String, dynamic>();
+    if (wr == null || wr.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    wr.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a futó szélső-átvételeik $topN/$all része a(z) $top. "
+        "szélsőhöz megy · az ő oldalán a futópassz-sávot zárjátok";
+  }
+
   // 7a6-befejező emberek: kire fut ki a hetedik ember játéka (2+
   // 7a6-lövés, a lövések fele — a backenddel azonos küszöbök:
   // EN7P_MIN_SHOTS, EN7P_SHARE_PCT).
@@ -10970,6 +10993,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Előnyben-ember", _leadScorer(r)!],
       if (_screenedDefender(r) != null)
         ["Elzárt védő", _screenedDefender(r)!],
+      if (_wingRunner(r) != null)
+        ["Futtatott szélső", _wingRunner(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)

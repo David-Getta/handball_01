@@ -1121,6 +1121,9 @@ class ScoutingReport:
     # Elzárt védők: az elzárásban elakadó védő elakadásainak
     # darabszáma VÉDŐNKÉNT. Darabszám, meccsek közt összegződik.
     sdp_screens_by_player: dict = field(default_factory=dict)
+    # Futtatott szélsők: a lendületes szélső-átvételek darabszáma
+    # SZÉLSŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    wrp_running_by_player: dict = field(default_factory=dict)
     # 7a6-befejező emberek: a 7 a 6 alatti lövések darabszáma
     # LÖVŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
     en7p_shots_by_player: dict = field(default_factory=dict)
@@ -4778,6 +4781,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_sdp_k}. védőjükön ragad — a figuráitok zárásait "
                 "az ő oldalára vigyétek: nála a zárás tisztán "
                 "hagyja a lövőt.")
+
+    # Futtatott szélsők: kinek az oldalán kell a passzsávot zárni.
+    if rep.wrp_running_by_player:
+        _wrp_all = sum(rep.wrp_running_by_player.values())
+        _wrp_k, _wrp_n = max(rep.wrp_running_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _wrp_n >= 2 and _wrp_n >= 0.5 * max(1, _wrp_all):
+            keys.append(
+                f"A futó szélső-átvételeik {_wrp_n}/{_wrp_all} része "
+                f"a(z) {_wrp_k}. szélsőhöz megy — az ő oldalán nem a "
+                "kifutás véd, hanem a futópassz sávjának zárása: a "
+                "szomszéd védő lépjen a passzvonalba, mielőtt "
+                "lendületet vesz.")
 
     # 7a6-befejező emberek: kit kell először megtalálni.
     if rep.en7p_shots_by_player:
@@ -10344,6 +10360,12 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["screens"]
             for r in sdprec["players"]}
+        from .attack_types import wing_runners as _wrp
+        wrprec = _wrp(match, config)[team.value]
+        rep.wrp_running_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["running"]
+            for r in wrprec["players"]}
         from .momentum import lead_scorers as _lgp
         lgprec = _lgp(match, config)[team.value]
         rep.lgp_goals_by_player = {
@@ -13382,6 +13404,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 423) Az ő futtatott szélsőjük × a ti labdaszerzésetek: a
+    # futópassz sávja a legjobb szerzőhely.
+    if opp.wrp_running_by_player and own.trans_steals >= 5:
+        _wrp423_all = sum(opp.wrp_running_by_player.values())
+        _wrp423_k, _wrp423_n = max(opp.wrp_running_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _wrp423_n >= 2 and _wrp423_n >= 0.5 * max(1, _wrp423_all):
+            plan.append(
+                f"A futó szélső-átvételeik {_wrp423_n}/{_wrp423_all} "
+                f"része a(z) {_wrp423_k}. szélsőhöz megy, ti pedig jó "
+                f"labdaszerzők vagytok ({own.trans_steals} szerzés) — "
+                "az ő oldalán a futópassz sávjába lépjetek be: a "
+                "levegőben lévő futópassz a legkönnyebb szerzés, és "
+                "azonnal kontra lesz belőle.")
 
     # 422) Az ő azonnali válaszuk × a ti gól utáni fegyelmetek: az
     # ünneplő fal kapja a legolcsóbb gólokat.
@@ -20623,6 +20660,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.lgp_goals_by_player for r in reports),
         sdp_screens_by_player=_merge_count_dicts(
             r.sdp_screens_by_player for r in reports),
+        wrp_running_by_player=_merge_count_dicts(
+            r.wrp_running_by_player for r in reports),
         en7p_shots_by_player=_merge_count_dicts(
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(
