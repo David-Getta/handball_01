@@ -4256,6 +4256,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "zárása véd, nem a kifutás.")
     except Exception:
         pass
+    # Keresztjáró emberek: kin keresztül fut a keresztjáték.
+    try:
+        from .attack_types import crossing_runners
+        crp = crossing_runners(match)
+        for side, name in (("home", home), ("away", away)):
+            top_crp = crp[side]["top"]
+            if top_crp is None:
+                continue
+            _crp_j = (top_crp["jersey"]
+                      if top_crp["jersey"] is not None
+                      else top_crp["player_id"])
+            body += (f" A(z) {name} keresztjátékának motorja a(z) "
+                     f"{_crp_j}. játékos "
+                     f"({top_crp['runs']}/{crp[side]['crosses']} "
+                     "keresztben volt benne) — az ő sávjában dől el "
+                     "a váltás-fegyelem.")
+    except Exception:
+        pass
     # Csere-lyukak: mennyi ideig játszanak öten csere közben.
     try:
         from .substitutions import sub_gaps

@@ -2915,6 +2915,61 @@ def test_crossing_runs_needs_enough_attacks():
     assert rec["verdict"] is None
 
 
+def _crp_match(n_attacks=8, fps=25.0):
+    """Három hátsó ember (3, 4, 5); a 3-as jár át a sorok közt
+    (y: 5 → 10 → 15 → 10), a 4-es és 5-ös áll — minden kereszt a
+    3-ason át fut."""
+    frames = []
+    t = 0
+    for _ in range(n_attacks):
+        n = int(4.0 * fps)
+        for i in range(n):
+            phase = (i // (n // 4)) % 4
+            y3 = (5.0, 10.0, 15.0, 10.0)[phase]
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, y3),
+                _pl(4, Team.HOME, 30.0, 7.0),
+                _pl(5, Team.HOME, 30.0, 13.0),
+                _pl(21, Team.AWAY, 38.0, 10.0)],
+                ball=Ball(x=28.0, y=y3, confidence=1.0)))
+            t += 1
+        for _ in range(int(3 * fps)):            # szünet
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_crossing_runners_names_the_crossing_hub():
+    """A sorok közt járó 3-as minden keresztben benne van → ő a
+    keresztjáték motorja."""
+    from handball.pipeline.attack_types import crossing_runners
+
+    rec = crossing_runners(_crp_match())["home"]
+    assert rec["crosses"] >= 3
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 3
+    assert rec["top"]["share_pct"] >= 60.0
+
+
+def test_crossing_runners_tie_of_two_backs_gives_no_top():
+    """Két hátsó embernél minden kereszt holtverseny → nincs kiemelt
+    keresztjáró."""
+    from handball.pipeline.attack_types import crossing_runners
+
+    rec = crossing_runners(_crx_match(True))["home"]
+    assert rec["crosses"] >= 3
+    assert rec["top"] is None
+
+
+def test_crossing_runners_static_backcourt_gives_no_top():
+    """Kereszt nélkül nincs kiemelt keresztjáró."""
+    from handball.pipeline.attack_types import crossing_runners
+
+    rec = crossing_runners(_crx_match(False))["home"]
+    assert rec["crosses"] == 0
+    assert rec["top"] is None
+
+
 # ---- Beálló-futtatás (mozgásból vagy állva kapja a beálló) ------------------
 
 def _psv_match(moving, n_passes=6, fps=25.0):

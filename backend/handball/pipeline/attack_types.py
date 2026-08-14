@@ -4284,6 +4284,91 @@ def crossing_runs(match: Match,
                 rec["verdict"] = "statikus a hátsó soruk"
     return out
 
+
+# Keresztjáró emberek: ennyi keresztben-részvétel kell az ítélethez,
+# és a keresztek e feletti részében kell benne lennie ahhoz, hogy a
+# keresztjáték motorjának jelöljük.
+CRP_MIN_CROSSES = 3
+CRP_SHARE_PCT = 60.0
+
+
+def crossing_runners(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Keresztjáró emberek: KI futja a kereszteket.
+
+    A keresztjáték (crossing_runs) azt méri, MENNYIT kereszteznek —
+    ez azt, KIN keresztül: minden hátsó-sori oldalcserénél a helyet
+    cserélő játékosokat írjuk fel. Akin a keresztek zöme átfut, ő a
+    keresztjáték motorja — az ő indulása húzza be a védőt, és az ő
+    kivételével a szerkezet statikussá válik.
+
+    Edzőileg: a kereszt-motor sávjában kell a váltás-fegyelem —
+    hangos, korai átadás pont az ő keresztjeinél; a saját csapatnak:
+    ha a keresztek egy emberen át futnak, a szerkezet kiszámítható —
+    a másik átlövőnek is futnia kell keresztet.
+
+    Visszatérés csapatonként: {"crosses", "players": [{"player_id",
+    "jersey", "runs", "share_pct"}], "top"} — a "crosses" a mért
+    keresztek száma, a "runs" a játékos keresztben-részvételei, a
+    share_pct a keresztek hány részében volt benne; a "top" az első
+    játékos, ha legalább CRP_MIN_CROSSES keresztben volt benne, a
+    részaránya eléri a CRP_SHARE_PCT-t, ÉS nem holtverseny
+    (két hátsó embernél mindenki minden keresztben benne van).
+    """
+    from .roles import estimate_positions
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    posts = estimate_positions(match, config)
+    backs = {side: [tid for tid, r in posts.get(side, {}).items()
+                    if r["poszt"] in ("irányító", "átlövő")]
+             for side in ("home", "away")}
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    events = {"home": 0, "away": 0}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        ids = backs[side]
+        if len(ids) < 2:
+            continue
+        prev_order = None
+        for f in seq.frames:
+            ys = {}
+            for p in f.players:
+                if p.track_id in ids:
+                    ys[p.track_id] = p.y
+                    if getattr(p, "jersey_number", None) is not None:
+                        jersey.setdefault(p.track_id, p.jersey_number)
+            if len(ys) < 2:
+                continue
+            order = tuple(sorted(ys, key=lambda k: ys[k]))
+            if prev_order is not None and order != prev_order:
+                events[side] += 1
+                # A helyet cserélő (rangot váltó) játékosoké a kereszt.
+                prev_rank = {tid: i for i, tid in enumerate(prev_order)}
+                for i, tid in enumerate(order):
+                    if tid in prev_rank and prev_rank[tid] != i:
+                        tally[side][tid] = tally[side].get(tid, 0) + 1
+            prev_order = order
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = events[side]
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "runs": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if players and players[0]["runs"] >= CRP_MIN_CROSSES \
+                and (players[0]["share_pct"] or 0.0) >= CRP_SHARE_PCT \
+                and (len(players) < 2
+                     or players[0]["runs"] > players[1]["runs"]):
+            top = players[0]
+        out[side] = {"crosses": n, "players": players, "top": top}
+    return out
+
 # Beálló-futtatás: e feletti átvételi sebesség számít mozgásból
 # érkezésnek (a beálló az elzárásból leforduló, lassabb műfaj, ezért a
 # küszöb a szélsőnél alacsonyabb), ennyi beálló-átvétel kell az

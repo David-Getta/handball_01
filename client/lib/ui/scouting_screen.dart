@@ -3060,6 +3060,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "szélsőhöz megy · az ő oldalán a futópassz-sávot zárjátok";
   }
 
+  // Keresztjáró emberek: kin át fut a keresztjáték (3+ kereszt, a
+  // keresztek 60%-a, holtverseny nélkül — a backenddel azonos
+  // küszöbök: CRP_MIN_CROSSES, CRP_SHARE_PCT).
+  String? _crossRunner(Map<String, dynamic> r) {
+    final cr = (r["crp_runs_by_player"] as Map?)?.cast<String, dynamic>();
+    final crosses = (r["crp_crosses"] as num?)?.toInt() ?? 0;
+    if (cr == null || cr.isEmpty || crosses < 3) return null;
+    String? top;
+    var topN = 0;
+    var second = 0;
+    cr.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        if (top != null && topN > second) second = topN;
+        top = k;
+        topN = n;
+      } else if (n > second) {
+        second = n;
+      }
+    });
+    if (top == null || topN < 3 || topN <= second) return null;
+    if (topN < 0.6 * crosses) return null;
+    return "a keresztjeik $topN/$crosses része a(z) $top. játékoson át "
+        "fut · az ő sávjában hangos, korai váltás";
+  }
+
   // 7a6-befejező emberek: kire fut ki a hetedik ember játéka (2+
   // 7a6-lövés, a lövések fele — a backenddel azonos küszöbök:
   // EN7P_MIN_SHOTS, EN7P_SHARE_PCT).
@@ -10995,6 +11021,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Elzárt védő", _screenedDefender(r)!],
       if (_wingRunner(r) != null)
         ["Futtatott szélső", _wingRunner(r)!],
+      if (_crossRunner(r) != null)
+        ["Keresztjáró ember", _crossRunner(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)

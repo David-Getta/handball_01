@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Keresztjáró emberek**: KIN keresztül fut a keresztjáték — minden
+  hátsó-sori oldalcserénél a helyet cserélő játékosokat írjuk fel;
+  akin a keresztek 60%-a átfut (3+ kereszt, holtverseny nélkül), ő a
+  keresztjáték motorja. Edzői olvasat: az ő sávjában kell a hangos,
+  korai váltás; a saját csapatnak az egy emberre épülő kereszt
+  kiszámítható — variálni kell. Felületek: /analyze + meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 424. meccsterv-
+  szabály), 444. edzés-szabály, prioritások (ember-család +
+  Kulcs-ember), kliens-csempe.
 - **Nagyítható nézetek** (kliens): a pálya-nézet (meccs-képernyő és
   élő nézet) és a jelenet-videó nagyítható — touchpadon két ujjas
   csippentéssel, egérrel Ctrl+görgővel (a kurzor, illetve a

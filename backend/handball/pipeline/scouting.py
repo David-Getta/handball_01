@@ -1124,6 +1124,11 @@ class ScoutingReport:
     # Futtatott szélsők: a lendületes szélső-átvételek darabszáma
     # SZÉLSŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
     wrp_running_by_player: dict = field(default_factory=dict)
+    # Keresztjáró emberek: a keresztben-részvételek darabszáma
+    # JÁTÉKOSONKÉNT, és a mért keresztek száma. Darabszámok,
+    # meccsek közt pontosan összegződnek.
+    crp_runs_by_player: dict = field(default_factory=dict)
+    crp_crosses: int = 0
     # 7a6-befejező emberek: a 7 a 6 alatti lövések darabszáma
     # LÖVŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
     en7p_shots_by_player: dict = field(default_factory=dict)
@@ -4794,6 +4799,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "kifutás véd, hanem a futópassz sávjának zárása: a "
                 "szomszéd védő lépjen a passzvonalba, mielőtt "
                 "lendületet vesz.")
+
+    # Keresztjáró emberek: kinek a sávjában dől el a váltás.
+    if rep.crp_runs_by_player and rep.crp_crosses >= 3:
+        _crp_items = sorted(rep.crp_runs_by_player.items(),
+                            key=lambda kv: -kv[1])
+        _crp_k, _crp_n = _crp_items[0]
+        _crp_tie = len(_crp_items) > 1 and _crp_items[1][1] >= _crp_n
+        if (not _crp_tie and _crp_n >= 3
+                and _crp_n >= 0.6 * rep.crp_crosses):
+            keys.append(
+                f"A keresztjeik {_crp_n}/{rep.crp_crosses} része a(z) "
+                f"{_crp_k}. játékoson át fut — az ő sávjában legyen "
+                "hangos, korai a váltás: ha őt fegyelmezetten "
+                "átadjátok, a keresztjátékuk kifullad.")
 
     # 7a6-befejező emberek: kit kell először megtalálni.
     if rep.en7p_shots_by_player:
@@ -10366,6 +10385,13 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["running"]
             for r in wrprec["players"]}
+        from .attack_types import crossing_runners as _crp
+        crprec = _crp(match, config)[team.value]
+        rep.crp_runs_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["runs"]
+            for r in crprec["players"]}
+        rep.crp_crosses = crprec["crosses"]
         from .momentum import lead_scorers as _lgp
         lgprec = _lgp(match, config)[team.value]
         rep.lgp_goals_by_player = {
@@ -13404,6 +13430,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 424) Az ő kereszt-motorjuk × a ti blokkoló falatok: a
+    # szervezett fal a kereszt alatt is tud váltani.
+    if (opp.crp_runs_by_player and opp.crp_crosses >= 3
+            and own.blocks >= 3):
+        _crp424 = sorted(opp.crp_runs_by_player.items(),
+                         key=lambda kv: -kv[1])
+        _crp424_k, _crp424_n = _crp424[0]
+        _crp424_tie = len(_crp424) > 1 and _crp424[1][1] >= _crp424_n
+        if (not _crp424_tie and _crp424_n >= 3
+                and _crp424_n >= 0.6 * opp.crp_crosses):
+            plan.append(
+                f"A keresztjeik {_crp424_n}/{opp.crp_crosses} része "
+                f"a(z) {_crp424_k}. játékoson át fut, a falatok pedig "
+                f"szervezett ({own.blocks} blokk) — az ő sávjában "
+                "hangos, korai váltással vegyétek át: a kereszt után "
+                "senki ne fusson vele, és a blokk-fegyelem marad.")
 
     # 423) Az ő futtatott szélsőjük × a ti labdaszerzésetek: a
     # futópassz sávja a legjobb szerzőhely.
@@ -20662,6 +20705,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.sdp_screens_by_player for r in reports),
         wrp_running_by_player=_merge_count_dicts(
             r.wrp_running_by_player for r in reports),
+        crp_runs_by_player=_merge_count_dicts(
+            r.crp_runs_by_player for r in reports),
+        crp_crosses=sum(r.crp_crosses for r in reports),
         en7p_shots_by_player=_merge_count_dicts(
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(

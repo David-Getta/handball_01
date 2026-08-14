@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **471 réteg**, modulonként csoportosítva; a
+Összesen **472 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (90)
+## attack_types (91)
 
 | Réteg | Mit mér |
 |---|---|
@@ -38,6 +38,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `buildup_side` | Kihozatal-oldal: MELYIK OLDALON indítják a támadást. |
 | `buildup_time` | Felhozatal-idő: MENNYI IDŐ ALATT érnek a támadó térfélre. |
 | `circulation_direction` | Labda-forgatás iránya: MERRE JÁRATJÁK a labdát felállt támadásban. |
+| `crossing_runners` | Keresztjáró emberek: KI futja a kereszteket. |
 | `crossing_runs` | Keresztjáték: MENNYIT KERESZTEZNEK a hátsó sorban. |
 | `double_pivot_usage` | Két beállós játék: MENNYIT JÁTSZANAK két emberrel a 6 m-en. |
 | `fast_break_conversion` | Lerohanás-hatékonyság: MENNYI LESZ GÓL a kontráikból. |

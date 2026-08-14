@@ -1366,6 +1366,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 444) Keresztjáró emberek: az egy emberen át futó keresztjáték
+    # kiszámítható — a váltás ellene készen áll.
+    try:
+        from .attack_types import CRP_MIN_CROSSES, crossing_runners
+        crp444 = crossing_runners(match, config)
+        for side in ("home", "away"):
+            top444 = crp444[side].get("top")
+            if top444 is None:
+                continue
+            _ki444 = (f"a(z) {top444['jersey']}. számú"
+                      if top444.get("jersey") is not None
+                      else f"a(z) {top444['player_id']}. játékos")
+            add(side, "támadás", "Kereszt mindkét oldalra",
+                f"a keresztjeink zöme {_ki444} emberünkön át fut "
+                f"({top444['runs']}/{crp444[side]['crosses']} "
+                f"kereszt; {CRP_MIN_CROSSES} kereszttől már jelezzük) "
+                "— az egy emberre épülő keresztjáték váltással "
+                "kivédhető",
+                "kereszt-variálás: a kereszt induljon a másik "
+                "átlövőtől is (tükrözött figura), második kereszt a "
+                "visszazáráskor (dupla kereszt), és beálló-lefordulás "
+                "a kereszt mögé, hogy a váltó védő ne érjen oda",
+                )
+    except Exception:
+        pass
+
     # 443) Futtatott szélsők: az egy szélsőre járó futtatás
     # kiszámítható — a sávzárás ellene készen áll.
     try:
