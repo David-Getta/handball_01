@@ -3060,6 +3060,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "a lehozott kapusnál őt találjátok meg először";
   }
 
+  // Gólpassz-duó: melyik kettősön fut a gólgyártásuk (2+ közös gól,
+  // az asszisztos gólok 40%-a — a backenddel azonos küszöbök:
+  // ADU_MIN_GOALS, ADU_SHARE_PCT).
+  String? _assistDuo(Map<String, dynamic> r) {
+    final du = (r["adu_goals_by_duo"] as Map?)?.cast<String, dynamic>();
+    if (du == null || du.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    du.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.4 * (all < 1 ? 1 : all)) return null;
+    return "a gólgyártásuk a(z) $top kettősön fut ($topN/$all "
+        "asszisztos gól) · a duó ellen párban védekezzetek";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10878,6 +10901,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Elzárt védő", _screenedDefender(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
+      if (_assistDuo(r) != null)
+        ["Gólpassz-duó", _assistDuo(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

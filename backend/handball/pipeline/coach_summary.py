@@ -3026,6 +3026,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "felismerésekor őt kell először megtalálni.")
     except Exception:
         pass
+    # Gólpassz-duó: melyik kettősön fut a gólgyártásuk.
+    try:
+        from .event_detection import assist_duos
+        adu = assist_duos(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_adu = adu[side]
+            if rec_adu["verdict"] is None:
+                continue
+            body += (f" A(z) {name} gólgyártása a(z) "
+                     f"{rec_adu['top']} kettősön fut — a duó ellen "
+                     "párban kell védekezni: az adót testtel, a "
+                     "passzsávot beleéréssel.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

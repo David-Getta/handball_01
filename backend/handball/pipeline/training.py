@@ -1366,6 +1366,26 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 438) Gólpassz-duó: a bejáratott kettős kiszámíthatóság is.
+    try:
+        from .event_detection import ADU_MIN_GOALS, assist_duos
+        adu438 = assist_duos(match, config)
+        for side in ("home", "away"):
+            rec438 = adu438[side]
+            if rec438["verdict"] is None:
+                continue
+            add(side, "támadás", "Második gól-tengely",
+                f"a gólgyártásunk a(z) {rec438['top']} kettősön fut "
+                f"({ADU_MIN_GOALS} közös góltól már jelezzük) — ha a "
+                "duót szétvágják, elakad a gólgyártásunk",
+                "második gól-tengely építése: a figurák másik "
+                "adó-befejező párossal is fussanak, a fő duó pedig "
+                "csali-szerepben (rájuk zár a fal, a gól máshol "
+                "születik)",
+                )
+    except Exception:
+        pass
+
     # 437) 7a6-befejező emberek: a 7 a 6-nak két kifutása legyen.
     try:
         from .goalkeeper import EN7P_MIN_SHOTS, seven_six_finishers

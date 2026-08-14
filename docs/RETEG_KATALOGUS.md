@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **465 réteg**, modulonként csoportosítva; a
+Összesen **466 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (89)
@@ -215,10 +215,11 @@ leírás a réteg-függvény docstringjének első sora.
 | `wing_closeouts` | Szélső-kifutás: IDŐBEN ÉRNEK-E KI a szélső lövéseire. |
 | `wing_defense` | Szélső-védekezés: bírja-e a fal a szélső lövéseket. |
 
-## event_detection (10)
+## event_detection (11)
 
 | Réteg | Mit mér |
 |---|---|
+| `assist_duos` | Gólpassz-duó: MELYIK KETTŐSÖN fut a gólgyártásuk. |
 | `assist_network` | Gólpassz-hálózat: ki kinek készíti elő a gólokat. |
 | `assist_ranges` | Gólpassz-hossz: HOSSZÚ INDÍTÁSOKBÓL vagy RÖVID KOMBINÁCIÓKBÓL |
 | `assist_zones` | Gólpassz-zónák: HONNAN érkezik a gólpassz — edzői ítélettel. |

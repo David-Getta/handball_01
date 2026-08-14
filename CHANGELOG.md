@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Gólpassz-duó: melyik kettősön fut a gólgyártásuk.** A
+  gólpassz-hálózat minden párost felsorol — az új réteg az ítéletet:
+  ha az asszisztos gólok nagy része ugyanazon az (adó → befejező)
+  kettősön születik, a duó bejáratott gólgyár. Edzőileg a duó ellen
+  párban kell védekezni: az adót testtel, a kettejük passzsávját
+  beleéréssel — ha a sáv zárva, a gépezet áll, mert a befejező
+  magától nem teremt ugyanennyit. Saját csapatra: a bejáratott duó
+  kiszámíthatóság is, kell egy második gól-tengely. Két közös góltól
+  és az asszisztos gólok 40%-ától ítél. A rangsorban a "felkészülés"
+  családba tartozik (kettőst nevez meg, ezért se a Kulcs-ember, se a
+  Kulcs-páros poszt-lencséjébe nem való). Felületek: /analyze +
+  meccs-csomag (`assist_duos`), edzői összefoglaló, felderítés
+  (`adu_goals_by_duo` mező + edzői kulcs + 418. meccsterv-szabály),
+  edzés-fókusz (438. szabály), kliens-csempe.
+
 - **7a6-befejező emberek: kire fut ki a hetedik ember játéka.** A
   7a6-befejező poszt a posztot nevezi meg — az új réteg az embert: a
   felismert üres-kapus szakaszaik alatt leadott lövéseket a lövő

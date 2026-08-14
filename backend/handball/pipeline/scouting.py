@@ -1124,6 +1124,9 @@ class ScoutingReport:
     # 7a6-befejező emberek: a 7 a 6 alatti lövések darabszáma
     # LÖVŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
     en7p_shots_by_player: dict = field(default_factory=dict)
+    # Gólpassz-duó: az asszisztos gólok darabszáma (adó→befejező)
+    # KETTŐSÖNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    adu_goals_by_duo: dict = field(default_factory=dict)
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4772,6 +4775,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "felismerésekor őt találjátok meg először: a hetedik "
                 "ember játéka kiszámítható, és minden megvárt "
                 "másodperc nekik kockázat.")
+
+    # Gólpassz-duó: melyik kettőst kell szétvágni.
+    if rep.adu_goals_by_duo:
+        _adu_all = sum(rep.adu_goals_by_duo.values())
+        _adu_k, _adu_n = max(rep.adu_goals_by_duo.items(),
+                             key=lambda kv: kv[1])
+        if _adu_n >= 2 and _adu_n >= 0.4 * max(1, _adu_all):
+            keys.append(
+                f"A gólgyártásuk a(z) {_adu_k} kettősön fut "
+                f"({_adu_n}/{_adu_all} asszisztos gól) — a duó ellen "
+                "párban védekezzetek: az adót testtel, a kettejük "
+                "passzsávját beleéréssel, és a gépezet áll.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10217,6 +10232,14 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .event_detection import assist_duos as _adu
+        adurec = _adu(match, config)[team.value]
+        rep.adu_goals_by_duo = {
+            (f"{d['jersey_from'] if d['jersey_from'] is not None else d['from']}"
+             f"→"
+             f"{d['jersey_to'] if d['jersey_to'] is not None else d['to']}"):
+            d["goals"]
+            for d in adurec["duos"]}
         from .goalkeeper import seven_six_finishers as _en7p
         en7prec = _en7p(match, config)[team.value]
         rep.en7p_shots_by_player = {
@@ -13267,6 +13290,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 418) Az ő gólpassz-duójuk × a ti páros védekezésetek: a
+    # kettőst kell szétvágni, nem a lövőt fogni.
+    if opp.adu_goals_by_duo and own.defense_main:
+        _adu418_all = sum(opp.adu_goals_by_duo.values())
+        _adu418_k, _adu418_n = max(opp.adu_goals_by_duo.items(),
+                                   key=lambda kv: kv[1])
+        if _adu418_n >= 2 and _adu418_n >= 0.4 * max(1, _adu418_all):
+            plan.append(
+                f"A gólgyártásuk a(z) {_adu418_k} kettősön fut "
+                f"({_adu418_n}/{_adu418_all} asszisztos gól), ti "
+                f"pedig {own.defense_main} falat játszotok — a "
+                "kettőst vágjátok szét: az adót testtel, a kettejük "
+                "passzsávját beleéréssel, és a gólgépezet áll.")
 
     # 417) Az ő 7a6-befejezőjük × a ti üres-kapus készenlétetek: a
     # kiszámítható hetedik ember büntethető.
@@ -20439,6 +20476,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.sdp_screens_by_player for r in reports),
         en7p_shots_by_player=_merge_count_dicts(
             r.en7p_shots_by_player for r in reports),
+        adu_goals_by_duo=_merge_count_dicts(
+            r.adu_goals_by_duo for r in reports),
         fsp_sh_by_player=_merge_count_dicts(
             r.fsp_sh_by_player for r in reports),
         fsp_fh_by_player=_merge_count_dicts(

@@ -4742,6 +4742,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.event_detection import assist_duos
+            res["assist_duos"] = assist_duos(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5713,6 +5718,8 @@ def create_app():
                 from ..pipeline.goalkeeper import seven_six_finishers
                 _layer("seven_six_finishers",
                        lambda: seven_six_finishers(match))
+                from ..pipeline.event_detection import assist_duos
+                _layer("assist_duos", lambda: assist_duos(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

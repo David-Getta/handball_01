@@ -381,6 +381,68 @@ def assist_network(match: Match, config: Optional[TacticsConfig] = None) -> dict
     return result
 
 
+# Gólpassz-duó: ennyi közös gól kell a kettős kimondásához, és ekkora
+# részarány fölött mondjuk ki, hogy a gólgyártásuk egy duón fut.
+ADU_MIN_GOALS = 2
+ADU_SHARE_PCT = 40.0
+
+
+def assist_duos(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Gólpassz-duó: MELYIK KETTŐSÖN fut a gólgyártásuk.
+
+    A gólpassz-hálózat (assist_network) minden párost felsorol — ez
+    az ÍTÉLETET: ha az asszisztos góljaik nagy része ugyanazon az
+    (adó → befejező) kettősön születik, a duó bejáratott gólgyár.
+
+    Edzőileg a duó ellen párban kell védekezni: az adót testtel, a
+    kettejük passzsávját beleéréssel — ha a sáv zárva, a gépezet
+    áll, mert a befejező magától nem teremt ugyanennyit. Saját
+    csapatra: a bejáratott duó kiszámíthatóság is — kell egy második
+    gól-tengely.
+
+    Visszatérés csapatonként: {"assisted", "duos": [{"from", "to",
+    "jersey_from", "jersey_to", "goals"}], "top", "verdict"} — a
+    top/verdict None, ha nincs meg az ADU_MIN_GOALS, vagy a vezető
+    kettős nem éri el az asszisztos gólok ADU_SHARE_PCT-át.
+    """
+    config = config or TacticsConfig()
+    net = assist_network(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    def _nev(tid):
+        return str(jersey.get(tid, tid))
+
+    result: dict = {}
+    for side in ("home", "away"):
+        pairs = net[side]["pairs"]
+        total = sum(r["goals"] for r in pairs)
+        duos = [{"from": r["from"], "to": r["to"],
+                 "jersey_from": jersey.get(r["from"]),
+                 "jersey_to": jersey.get(r["to"]),
+                 "goals": r["goals"]} for r in pairs]
+        rec = {"assisted": total, "duos": duos, "top": None,
+               "verdict": None}
+        if duos and duos[0]["goals"] >= ADU_MIN_GOALS and total > 0:
+            share = 100.0 * duos[0]["goals"] / total
+            if share >= ADU_SHARE_PCT:
+                kulcs = f"{_nev(duos[0]['from'])}→{_nev(duos[0]['to'])}"
+                rec["top"] = kulcs
+                rec["verdict"] = (
+                    f"a gólgyártásuk a(z) {kulcs} kettősön fut "
+                    f"({duos[0]['goals']}/{total} asszisztos gól) — "
+                    "a duó ellen párban kell védekezni: az adót "
+                    "testtel, a kettejük passzsávját beleéréssel, és "
+                    "a gépezet áll")
+        result[side] = rec
+    return result
+
+
 # Passz-hossz: ennyi mért passz kell az ítélethez; e fölött "hosszú" a
 # passz, és ekkora hosszú-arány jelent direkt (kockázatos) passzjátékot.
 PLEN_MIN_PASSES = 15

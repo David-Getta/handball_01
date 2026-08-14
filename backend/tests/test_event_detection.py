@@ -252,6 +252,55 @@ def test_assist_network_pairs_and_leaders():
     assert net["leaders"][0]["player_id"] == 1 and net["leaders"][0]["assists"] == 2
 
 
+def _adu_frames(n_pairs):
+    """`n_pairs` darab 1→2 asszisztos hazai gól kockái."""
+    frames = []
+    t = 0
+    for _ in range(n_pairs):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(20):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return frames
+
+
+def test_assist_duos_names_the_goal_machine():
+    """Ha az asszisztos gólok egy kettősön születnek, a duó ellen
+    párban kell védekezni."""
+    from handball.pipeline.event_detection import (ADU_MIN_GOALS,
+                                                   assist_duos)
+
+    rec = assist_duos(Match(_meta(), _adu_frames(2)))["home"]
+    assert rec["assisted"] >= ADU_MIN_GOALS, rec
+    assert rec["top"] == "1→2", rec
+    assert rec["verdict"] and "párban kell védekezni" in rec["verdict"], rec
+
+
+def test_assist_duos_silent_with_one_goal():
+    """Egyetlen asszisztos gólból nincs ítélet."""
+    from handball.pipeline.event_detection import assist_duos
+
+    rec = assist_duos(Match(_meta(), _adu_frames(1)))["home"]
+    assert rec["top"] is None and rec["verdict"] is None, rec
+
+
 def test_goal_concentration_top_share():
     """6 hazai gólból 4-et az 1-es szerez (67%) → koncentrált gólszerzés;
     kevés gólnál (vendég: 0) nincs ítélet."""

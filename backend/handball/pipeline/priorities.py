@@ -186,6 +186,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "screen_yield"),
         ("felkészülés", "Hetes-hozam", "rules", "seven_yield"),
         ("felkészülés", "Hetes-forrás", "rules", "seven_sources"),
+        ("felkészülés", "Gólpassz-duó", "event_detection",
+         "assist_duos"),
         ("felkészülés", "Passzív-kockázat", "rules", "passive_risk"),
         ("felkészülés", "Labdaszerző-poszt", "defense",
          "role_steal_sources"),
