@@ -3,7 +3,48 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.27 óta)
+## Kiadatlan (a v0.1.28 óta)
+
+## v0.1.28 — kiadva (2026-08-14)
+
+> Kiadás-jegyzet: a v0.1.27 óta a kör vezérfonala az EMBER- és a
+> HOZAM-lencse kiteljesítése volt, két új szintézissel.
+>
+> **(1) Tizenhat néven nevező EMBER-réteg.** A poszt-lencse rétegek
+> ember-szintű párjai sorra elkészültek: Kettőzött emberek,
+> Ziccerhagyók, Fáradt lövők, Lágy passzolók, Passzív-birtoklók,
+> Előkészítő emberek, Válaszoló emberek, Rajt-emberek, Újrakezdő
+> emberek, Előnyben-emberek, Elzárt védők, 7a6-befejezők — mind a
+> Kulcs-ember bizonyíték-rétegei közé is bekerült. A Kulcs-ember
+> küszöbe közben a lencse méretével nő (a padló és a lista tizede
+> közül a nagyobbik), így a bővülő lista nem hígítja a szintézist.
+>
+> **(2) Kilenc HOZAM-mérés.** Mennyit ér egy-egy játékelem:
+> Csere-hozam, Kapus-visszaérés, Figura-kopás, Futómunka-eloszlás,
+> Kapus a kapott gól után, Hetes-forrás, Kontroll-idővonal,
+> Gólpassz-duó, Időkérés-hozam, Kapuscsere-hozam,
+> Emberhátrány-túlélés, Középkezdés-hozam — ezek árazzák be a
+> cserét, az időkérést, a kapuscserét, a kétperc-védekezést és a
+> gól utáni újraindítást.
+>
+> **(3) Két új szintézis és okosabb lapok.** Az Ellenszer-lap minden
+> teendőhöz hozzárendeli a kész edzés-gyakorlatot (és őszintén
+> jelzi, mire nincs válasz); a Stílus-távolság megmondja,
+> tükör-meccs jön-e vagy stílus-ütközés — a meccsterv-lap élére
+> került, és a kliens MECCSTERV kártyáján is látszik. A meccsterv
+> mondatai téma szerint rendeződnek (kapus → védekezés → támadás →
+> fegyelem → hajrá), a jelentés pedig három új táblát kapott:
+> Hozam-lencse, Ember-lencse és a bővített lencse-sorok.
+>
+> **(4) Gyorsabb és változatlanul őszinte.** A teendő-rangsor és az
+> edzés-fókusz meccsenként egyszer számolódik (memoizálás
+> védő-másolattal) — az ellenszer-lap ára 2,7 mp-ről 0,7 mp-re
+> esett; minden réteg kevés mintánál hallgat, és a kiadás előtt
+> lefutott a lassú sorrend-jelentés: 470 rétegből 0 sorrend-függő.
+>
+> Számokban: 470 elemző réteg, 422 meccsterv-szabály, 442
+> edzés-szabály, 443 kliens-csempe, 1674 zöld teszt.
+
 
 - **Középkezdés-hozam: gólra váltják-e a gól utáni újraindítást.** A
   középkezdés-tempó azt méri, milyen gyorsan hozzák játékba a labdát
