@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Beragadás-javítás a kockánkénti dúsítóknál** (motor): terepen
+  látott hiba — a feldolgozás úgy állt meg örökre ("X perce nincs
+  előrelépés"), hogy az elakadás-átugró sem lépett működésbe. Ok: az
+  átugró csak a videó-olvasást/fő detektálást védte, a kockánkénti
+  dúsítók (mezszám-OCR, labda-újrakeresés) beragadása ellen nem volt
+  őr — ráadásul az újrakeresés a közös modellt hívta párhuzamosan a
+  termelő szállal, ami maga is befagyást okozhat. Javítás: minden
+  dúsító hívás időkorláttal fut (beragadásnál kihagyjuk, 3 beragadás
+  után a dúsító kikapcsol és a fő feldolgozás megy tovább — a
+  felület értesül), és a labda-újrakeresés saját modell-példányt
+  kapott.
 - **Keresztjáró emberek**: KIN keresztül fut a keresztjáték — minden
   hátsó-sori oldalcserénél a helyet cserélő játékosokat írjuk fel;
   akin a keresztek 60%-a átfut (3+ kereszt, holtverseny nélkül), ő a

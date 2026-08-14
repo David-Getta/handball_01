@@ -171,6 +171,74 @@ class StallSkippingFeed:
             yield item
 
 
+# Kockánkénti dúsítás (mezszám-OCR, labda-újrakeresés) időkorlátja és
+# az egymást követő beragadások száma, ami után a dúsítót kikapcsoljuk.
+ENRICH_TIMEOUT_S = 10.0
+ENRICH_MAX_TIMEOUTS = 3
+
+
+class TimeboxedEnricher:
+    """Időkorlátos dúsító-hívás: a fő detektálást SOSEM állíthatja meg.
+
+    A StallSkippingFeed a termelő oldalt (videó-olvasás + detektálás)
+    védi — de a fogyasztó cikluson belüli natív hívások (mezszám-OCR,
+    labda-újrakereső predict) is beragadhatnak, és olyankor a sor
+    olvasása áll meg, tehát az átugró sem léphet működésbe: a haladás
+    örökre megáll, pont a "percek óta nincs előrelépés" tünettel.
+
+    Ezért minden dúsító hívás külön szálban, időkorláttal fut: ha
+    lejár, a hívást kihagyjuk (a beragadt szál árván marad — a natív
+    hívást nem lehet megszakítani), és max_timeouts beragadás után a
+    dúsítót kikapcsoljuk a hátralévő kockákra. Egy-egy kihagyott
+    OCR-minta vagy újrakeresés semmit nem ront az elemzésen; az örök
+    állás mindent elrontana.
+    """
+
+    def __init__(self, name, timeout_s=ENRICH_TIMEOUT_S,
+                 max_timeouts=ENRICH_MAX_TIMEOUTS, on_note=None):
+        import threading
+        self._threading = threading
+        self._name = name
+        self._timeout_s = timeout_s
+        self._max_timeouts = max_timeouts
+        self._on_note = on_note
+        self._timeouts = 0
+        self.disabled = False
+
+    def call(self, fn):
+        """fn() eredménye, vagy None (időtúllépés/kikapcsolt/hiba)."""
+        if self.disabled:
+            return None
+        box = {}
+
+        def run():
+            try:
+                box["out"] = fn()
+            except Exception:
+                box["out"] = None  # a dúsító hibája sosem állít meg
+
+        th = self._threading.Thread(target=run, daemon=True)
+        th.start()
+        th.join(self._timeout_s)
+        if th.is_alive():
+            self._timeouts += 1
+            msg = (f"a(z) {self._name} {int(self._timeout_s)} mp után sem "
+                   f"tért vissza — kihagyva "
+                   f"({self._timeouts}/{self._max_timeouts} beragadás)")
+            print(f"FIGYELEM: {msg}.")
+            if self._timeouts >= self._max_timeouts:
+                self.disabled = True
+                print(f"FIGYELEM: a(z) {self._name} kikapcsolva a "
+                      "hátralévő kockákra — a fő feldolgozás megy tovább.")
+            if self._on_note is not None:
+                try:
+                    self._on_note(msg)
+                except Exception:
+                    pass
+            return None
+        return box.get("out")
+
+
 def _torso_bounds(x1, y1, x2, y2):
     h = y2 - y1
     return (max(0, y1 + int(0.20 * h)), max(0, y1 + int(0.55 * h)),
@@ -490,6 +558,31 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                              # történik.
                              on_skip=on_note)
 
+    # A dúsítók (OCR, újrakeresés) időkorlátos védelme — lásd a
+    # TimeboxedEnricher docstringjét: a fogyasztó-oldali beragadás ellen
+    # az átugró nem véd, ezért itt külön őr kell.
+    ocr_guard = TimeboxedEnricher("mezszám-OCR", on_note=on_note)
+    # Bőkezűbb korlát: az első hívásban a saját modell betöltése is
+    # benne van (lassú lemezen fél perc is lehet) — az nem beragadás.
+    reacq_guard = TimeboxedEnricher("labda-újrakeresés", timeout_s=45.0,
+                                    on_note=on_note)
+    # A labda-újrakeresés SAJÁT modell-példányt kap (lustán töltve): a
+    # termelő szál a közös modellt streamelve hajtja, és az ultralytics
+    # predictor nem szál-biztos — a közös példány párhuzamos hívása
+    # összeomlást vagy befagyást okozhat. Ha a saját példány nem tölthető
+    # be, az újrakeresés kimarad; a közös modellt SOSEM hívjuk innen.
+    reacq_model_box = {}
+
+    def _reacq_model():
+        if "m" not in reacq_model_box:
+            try:
+                reacq_model_box["m"] = YOLO(resolved)
+            except Exception as e:
+                print("FIGYELEM: a labda-újrakereső modell nem tölthető "
+                      f"be ({e}) — az újrakeresés kimarad.")
+                reacq_model_box["m"] = None
+        return reacq_model_box["m"]
+
     kept = 0
     skipped_dark = 0
     for fi, r in enumerate(feed.frames()):
@@ -541,9 +634,13 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                             read_jersey_number, torso_crop)
                         crop = torso_crop(img, (x1, y1, x2, y2))
                         if crop is not None:
-                            r = read_jersey_number(crop)
-                            if r is not None:
-                                jersey_voter.add(tid, r[0], r[1])
+                            # Időkorlátos hívás: az OCR beragadása nem
+                            # állíthatja meg a detektálást.
+                            ocr_res = ocr_guard.call(
+                                lambda c=crop: read_jersey_number(c))
+                            if ocr_res is not None:
+                                jersey_voter.add(
+                                    tid, ocr_res[0], ocr_res[1])
                 elif cls in ball_ids:  # labda — a legmegbízhatóbbat tartjuk
                     if best_ball is None or bc > best_ball[0]:
                         best_ball = (bc, (x1 + x2) / 2.0, (y1 + y2) / 2.0)
@@ -554,10 +651,17 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
             roi = reacquirer.roi_for(fi * stride, img.shape[1], img.shape[0])
             if roi is not None:
                 crop = img[roi[1]:roi[3], roi[0]:roi[2]]
-                try:
-                    rr = model.predict(crop, imgsz=640, conf=0.03,
-                                       classes=ball_ids, device=device,
-                                       verbose=False)
+                # Saját modell-példány + időkorlát: a közös modellt a
+                # termelő szál hajtja, párhuzamos hívása befagyhatna;
+                # az újrakeresés beragadása sem állíthatja meg a fő
+                # detektálást (lásd TimeboxedEnricher).
+                def _reacquire(crop=crop):
+                    mdl = _reacq_model()
+                    if mdl is None:
+                        return None
+                    rr = mdl.predict(crop, imgsz=640, conf=0.03,
+                                     classes=ball_ids, device=device,
+                                     verbose=False)
                     best = None
                     for r2 in rr:
                         if r2.boxes is None:
@@ -567,11 +671,13 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                             if best is None or bc2 > best[0]:
                                 bx1, by1, bx2, by2 = \
                                     [float(v) for v in b2.xyxy[0].tolist()]
-                                best = (bc2, (bx1 + bx2) / 2, (by1 + by2) / 2)
-                    if best is not None:
-                        ball_xy = reacquirer.map_back(roi, best[1], best[2])
-                except Exception:
-                    pass  # az újrakeresés hibája sosem állítja meg a feldolgozást
+                                best = (bc2, (bx1 + bx2) / 2,
+                                        (by1 + by2) / 2)
+                    return best
+
+                best = reacq_guard.call(_reacquire)
+                if best is not None:
+                    ball_xy = reacquirer.map_back(roi, best[1], best[2])
         if reacquirer is not None:
             reacquirer.note(fi * stride, ball_xy)
         raw.append((persons, ball_xy, panH))

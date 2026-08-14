@@ -119,3 +119,57 @@ def test_sikeres_kocka_utan_visszaall_az_ugras_tav():
     # 0. jó → 1. ragad (ugrás 1) → a 2. pozíciótól jön "x" → a 3.
     # ragad be, és ott ismét a legkisebb ugrás jön (1), nem a növelt.
     assert hivasok == [2, 4], hivasok
+
+
+# --- Időkorlátos dúsító (TimeboxedEnricher) --------------------------
+#
+# A StallSkippingFeed a termelő oldalt védi; a fogyasztó cikluson
+# belüli dúsítók (mezszám-OCR, labda-újrakeresés) beragadása ellen a
+# TimeboxedEnricher véd: a hívás időkorláttal fut, beragadásnál
+# kihagyjuk, sok beragadás után a dúsítót kikapcsoljuk — a fő
+# detektálás sosem állhat meg miatta.
+
+from scripts.process_video import TimeboxedEnricher  # noqa: E402
+
+
+def test_gyors_dusito_eredmenye_atmegy():
+    """A rendben visszatérő hívás eredménye változatlanul jön vissza."""
+    guard = TimeboxedEnricher("teszt", timeout_s=1.0)
+    assert guard.call(lambda: 42) == 42
+    assert not guard.disabled
+
+
+def test_beragadt_dusito_kihagyva_majd_kikapcsolva():
+    """A beragadó hívást kihagyjuk (None), és max_timeouts beragadás
+    után a dúsító kikapcsol — a további hívások futás nélkül None-t
+    adnak."""
+    guard = TimeboxedEnricher("teszt", timeout_s=0.05, max_timeouts=2)
+    assert guard.call(lambda: time.sleep(5.0)) is None
+    assert not guard.disabled
+    assert guard.call(lambda: time.sleep(5.0)) is None
+    assert guard.disabled
+    futott = []
+    assert guard.call(lambda: futott.append(1)) is None
+    assert futott == []
+
+
+def test_dusito_hibaja_nem_szamit_beragadasnak():
+    """A kivétellel elhasaló hívás None-t ad, de nem kapcsolja ki a
+    dúsítót — a hiba nem beragadás."""
+    def _hibas():
+        raise RuntimeError("OCR-hiba")
+
+    guard = TimeboxedEnricher("teszt", timeout_s=1.0, max_timeouts=1)
+    assert guard.call(_hibas) is None
+    assert not guard.disabled
+    assert guard.call(lambda: "jo") == "jo"
+
+
+def test_beragadas_szol_a_felhasznalonak():
+    """A beragadásról a felület is értesül (on_note)."""
+    uzenetek = []
+    guard = TimeboxedEnricher("mezszám-OCR", timeout_s=0.05,
+                              on_note=uzenetek.append)
+    guard.call(lambda: time.sleep(5.0))
+    assert uzenetek and "mezszám-OCR" in uzenetek[0]
+    assert "kihagyva" in uzenetek[0]
