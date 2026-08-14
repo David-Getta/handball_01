@@ -17,6 +17,7 @@ import "package:video_player/video_player.dart";
 import "../theme/app_theme.dart";
 import "error_text.dart";
 import "waiting.dart";
+import "zoomable.dart";
 
 class VideoPanel extends StatefulWidget {
   /// Az eredeti videófájl útja (a Tracking meta.video_path mezőjéből).
@@ -121,10 +122,11 @@ class VideoPanelState extends State<VideoPanel> {
               : Row(
                   children: [
                     // Maga a videókép (a panel magasságához igazítva).
+                    // Nagyítható: csippentés vagy Ctrl+görgő.
                     AspectRatio(
                       aspectRatio:
                           c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
-                      child: VideoPlayer(c),
+                      child: ZoomPanView(child: VideoPlayer(c)),
                     ),
                     const SizedBox(width: AppSpacing.lg),
                     // Vezérlők: lejátszás/megállítás, ±5 mp, pozíció.

@@ -22,6 +22,7 @@ import "../theme/app_theme.dart";
 import "court_painter.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
+import "zoomable.dart";
 
 class LiveScreen extends StatefulWidget {
   final String matchId;
@@ -648,7 +649,9 @@ class _LiveScreenState extends State<LiveScreen> {
           child: Container(
             decoration: AppTheme.card(),
             padding: const EdgeInsets.all(AppSpacing.md),
-            child: CustomPaint(painter: CourtPainter(frame: frame)),
+            // Nagyítható élő pálya: csippentés vagy Ctrl+görgő.
+            child: ZoomPanView(
+                child: CustomPaint(painter: CourtPainter(frame: frame))),
           ),
         ),
         const SizedBox(height: AppSpacing.md),

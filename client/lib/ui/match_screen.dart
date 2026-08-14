@@ -31,6 +31,7 @@ import "shot_map_painter.dart";
 import "stats_panel.dart";
 import "story_timeline.dart";
 import "summary_panel.dart";
+import "zoomable.dart";
 import "video_panel.dart";
 import "error_text.dart";
 import "waiting.dart";
@@ -1926,7 +1927,11 @@ class _MatchScreenState extends State<MatchScreen> {
     final frame = match.frames[_frameIndex];
     return LayoutBuilder(builder: (context, c) {
       final size = Size(c.maxWidth, c.maxHeight);
-      return GestureDetector(
+      // Nagyítható pálya: touchpad-csippentés vagy Ctrl+görgő nagyít,
+      // dupla kattintás visszaáll — a koordinátákat a Transform
+      // hit-tesztje igazítja, ezért a játékos-kijelölés nagyítva is jó.
+      return ZoomPanView(
+          child: GestureDetector(
         // Kattintás egy játékosra → kijelölés + nyomvonal + egyéni adatok.
         onTapUp: (d) => _handleCourtTap(d.localPosition, size, frame),
         child: Stack(
@@ -1972,7 +1977,7 @@ class _MatchScreenState extends State<MatchScreen> {
               Positioned(left: 10, top: 10, child: _playerChip(match)),
           ],
         ),
-      );
+      ));
     });
   }
 

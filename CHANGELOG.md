@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Nagyítható nézetek** (kliens): a pálya-nézet (meccs-képernyő és
+  élő nézet) és a jelenet-videó nagyítható — touchpadon két ujjas
+  csippentéssel, egérrel Ctrl+görgővel (a kurzor, illetve a
+  csippentés középpontja körül), két ujjas húzással mozgatható,
+  dupla kattintásra visszaáll. A sima görgő viselkedése nem változik,
+  a játékos-kijelölés nagyítva is pontos marad.
 - **Futtatott szélsők** (ember-réteg): MELYIK szélső kapja lendületből
   a labdát — a szélső-futtatás (wing_service) ember-ikre, a lendületes
   szélső-átvételeket emberre bontja. Edzői olvasat: a futtatott szélső
