@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 435) Előnyben-emberek: a vezetés-tartás ne egy emberen
+    # álljon.
+    try:
+        from .momentum import LGP_MIN_GOALS, lead_scorers
+        lgp435 = lead_scorers(match, config)
+        for side in ("home", "away"):
+            top435 = lgp435[side].get("top")
+            if top435 is None:
+                continue
+            _ki435 = (f"a(z) {top435['jersey']}. számú"
+                      if top435.get("jersey") is not None
+                      else f"a(z) {top435['player_id']}. játékos")
+            add(side, "támadás", "Előny-tartás több emberrel",
+                f"a vezetésnél lőtt góljaink {_ki435} nevéhez "
+                f"kötődnek ({top435['goals']} gól; {LGP_MIN_GOALS} "
+                "góltól már jelezzük) — ha őt kiveszik, az "
+                "előny-tartásunk megáll",
+                "vezetéses játék-helyzetek gyakorlása több "
+                "befejezővel: 5-5 előny-tartás időre, tiltott "
+                "fő-befejezővel (ő csak előkészíthet), és a "
+                "vezetéses támadás-hossz tudatos nyújtása",
+                )
+    except Exception:
+        pass
+
     # 434) Újrakezdő emberek: a szünet utáni nyitás ne egy emberen
     # álljon.
     try:

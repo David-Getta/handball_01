@@ -3169,6 +3169,71 @@ LGR_MIN_GOALS = 3
 LGR_SHARE_PCT = 60.0
 
 
+# Előnyben-emberek: ennyi vezetésnél lőtt gól kell a névhez, és
+# ekkora részarány fölött mondjuk ki, hogy az előny-tartás egy
+# emberre épül.
+LGP_MIN_GOALS = 2
+LGP_SHARE_PCT = 50.0
+
+
+def lead_scorers(match: Match, config=None) -> dict:
+    """Előnyben-emberek: KI viszi a játékot vezetésnél.
+
+    Az előnyben-poszt (lead_scorer_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: a saját vezetés közben lőtt gólokat a lövő nevéhez
+    írja.
+
+    Edzőileg ez a lendület-törés terve hátrányban, névre szólóan: ha
+    vezetnek, és az előny-tartásuk rendre ugyanattól az embertől
+    jön, az ő kivételével (szoros fogás, kettőzés) törik meg a
+    lendület-tartásuk — a felzárkózásra ez a leggyorsabb út. Saját
+    csapatra: a vezetés-tartás ne egy emberen álljon.
+
+    Visszatérés csapatonként: {"goals", "players": [{"player_id",
+    "jersey", "goals"}], "top"} — a "top" az első játékos, ha
+    legalább LGP_MIN_GOALS vezetésnél lőtt gólja van, és ez a csapat
+    előnyben lőtt góljainak legalább LGP_SHARE_PCT-a, különben None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    score = {"home": 0, "away": 0}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        side = getattr(e.team, "value", e.team)
+        other = "away" if side == "home" else "home"
+        leading = score[side] > score[other]   # állás a gól ELŐTT
+        score[side] += 1
+        if not leading or e.player_id is None or side not in tally:
+            continue
+        tally[side][e.player_id] = tally[side].get(e.player_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "goals": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["goals"] for r in rows)
+        top = None
+        if rows and rows[0]["goals"] >= LGP_MIN_GOALS:
+            share = 100.0 * rows[0]["goals"] / max(1, total)
+            if share >= LGP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"goals": total, "players": rows, "top": top}
+    return out
+
+
 def lead_scorer_roles(match: Match, config=None) -> dict:
     """Előnyben-poszt: MELYIK POSZTJUK viszi a játékot vezetésnél.
 

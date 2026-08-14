@@ -2231,6 +2231,26 @@ def test_lead_scorer_roles_silent_with_few_lead_goals():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
 
 
+def test_lead_scorers_names_the_lead_man():
+    """Ha a vezetés közbeni gólok egy embertől jönnek, az ő kivétele
+    töri meg a lendület-tartást."""
+    from handball.pipeline.momentum import LGP_MIN_GOALS, lead_scorers
+
+    # Az első gól (9) még döntetlennél esik, a többi már vezetésnél.
+    rec = lead_scorers(_hhr_match([9, 7, 7, 7]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["goals"] >= LGP_MIN_GOALS, rec
+
+
+def test_lead_scorers_silent_with_few_lead_goals():
+    """Egyetlen előnyben lőtt gólból nem nevezünk meg embert."""
+    from handball.pipeline.momentum import lead_scorers
+
+    rec = lead_scorers(_hhr_match([9, 7]))["home"]
+    assert rec["top"] is None, rec
+
+
 # ---- Válasz-poszt (kapott gól után melyik posztjuk válaszol) ---------------
 
 

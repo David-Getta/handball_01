@@ -2976,6 +2976,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "második félidő elején rá kell a legjobb védő.")
     except Exception:
         pass
+    # Előnyben-emberek: ki viszi a játékot vezetésnél.
+    try:
+        from .momentum import lead_scorers
+        lgp = lead_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_lgp = lgp[side]["top"]
+            if top_lgp is None:
+                continue
+            _ki16 = (f"a(z) {top_lgp['jersey']}. számú"
+                     if top_lgp.get("jersey") is not None
+                     else f"a(z) {top_lgp['player_id']}. játékos")
+            body += (f" A(z) {name} előny-tartását {_ki16} viszi "
+                     f"({top_lgp['goals']} vezetésnél lőtt gól) — "
+                     "hátrányban az ő kivétele a leggyorsabb út a "
+                     "felzárkózáshoz.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

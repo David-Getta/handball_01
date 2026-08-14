@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Előnyben-emberek: ki viszi a játékot vezetésnél.** Az
+  előnyben-poszt a posztot nevezi meg — az új réteg az embert: a
+  saját vezetés közben lőtt gólokat a lövő nevéhez írja. Edzőileg ez
+  a lendület-törés terve hátrányban, névre szólóan: ha ők vezetnek,
+  és az előny-tartásuk egy emberen áll, az ő kivétele (szoros fogás,
+  kettőzés) töri meg a lendület-tartásukat — a felzárkózásra ez a
+  leggyorsabb út. Saját csapatra: a vezetés-tartás ne egy emberen
+  álljon. Két vezetésnél lőtt góltól és a gólok felétől emel ki
+  nevet. A rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`lead_scorers`), edzői összefoglaló, felderítés
+  (`lgp_goals_by_player` mező + edzői kulcs + 415.
+  meccsterv-szabály), edzés-fókusz (435. szabály), kliens-csempe.
+
 - **Újrakezdő emberek: ki viszi a szünet utáni rajtot.** Az
   újrakezdő-poszt a posztot nevezi meg — az új réteg az embert: a
   második félidő első tíz percének góljait a lövő nevéhez írja.

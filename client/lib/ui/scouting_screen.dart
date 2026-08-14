@@ -2991,6 +2991,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "kötődik · a második félidő elején rá a legjobb védő";
   }
 
+  // Előnyben-emberek: ki viszi a játékot vezetésnél (2+ gól, az
+  // előnyben lőtt gólok fele — a backenddel azonos küszöbök:
+  // LGP_MIN_GOALS, LGP_SHARE_PCT).
+  String? _leadScorer(Map<String, dynamic> r) {
+    final lg = (r["lgp_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (lg == null || lg.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    lg.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "az előnyben lőtt góljaik $topN/$all része a(z) $top. "
+        "nevéhez kötődik · hátrányban őt vegyétek ki először";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10803,6 +10826,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Rajt-ember", _openingScorer(r)!],
       if (_secondStartScorer(r) != null)
         ["Újrakezdő ember", _secondStartScorer(r)!],
+      if (_leadScorer(r) != null)
+        ["Előnyben-ember", _leadScorer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

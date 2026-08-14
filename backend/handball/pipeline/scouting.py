@@ -1115,6 +1115,9 @@ class ScoutingReport:
     # Újrakezdő emberek: a szünet utáni tíz perc góljai LÖVŐNKÉNT.
     # Darabszám, meccsek közt pontosan összegződik.
     ssp_goals_by_player: dict = field(default_factory=dict)
+    # Előnyben-emberek: a saját vezetésnél lőtt gólok darabszáma
+    # LÖVŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    lgp_goals_by_player: dict = field(default_factory=dict)
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4725,6 +4728,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a(z) {_ssp_k}. nevéhez kötődik — a második félidő "
                 "első tíz percére rá tegyétek a legjobb védőt: a "
                 "szünetben rá építik az újrakezdést.")
+
+    # Előnyben-emberek: kit kell kivenni, ha ők vezetnek.
+    if rep.lgp_goals_by_player:
+        _lgp_all = sum(rep.lgp_goals_by_player.values())
+        _lgp_k, _lgp_n = max(rep.lgp_goals_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _lgp_n >= 2 and _lgp_n >= 0.5 * max(1, _lgp_all):
+            keys.append(
+                f"Az előnyben lőtt góljaik {_lgp_n}/{_lgp_all} része "
+                f"a(z) {_lgp_k}. nevéhez kötődik — ha ők vezetnek, az "
+                "ő kivétele (szoros fogás, kettőzés) töri meg a "
+                "lendület-tartásukat: a felzárkózásra ez a "
+                "leggyorsabb út.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10170,6 +10186,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .momentum import lead_scorers as _lgp
+        lgprec = _lgp(match, config)[team.value]
+        rep.lgp_goals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["goals"]
+            for r in lgprec["players"]}
         from .momentum import second_start_scorers as _ssp
         ssprec = _ssp(match, config)[team.value]
         rep.ssp_goals_by_player = {
@@ -13202,6 +13224,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 415) Az ő előnyben-emberük × a ti felzárkózásotok: hátrányban
+    # az ő kivétele a leggyorsabb út.
+    _lgp415_own = sum(p_.get("trailing", 0)
+                      for p_ in (own.cbc_players or []))
+    if opp.lgp_goals_by_player and _lgp415_own >= 3:
+        _lgp415_all = sum(opp.lgp_goals_by_player.values())
+        _lgp415_k, _lgp415_n = max(opp.lgp_goals_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _lgp415_n >= 2 and _lgp415_n >= 0.5 * max(1, _lgp415_all):
+            plan.append(
+                f"Az előnyben lőtt góljaik zöme a(z) {_lgp415_k}. "
+                f"nevéhez kötődik ({_lgp415_n}/{_lgp415_all}), ti "
+                f"pedig tudtok felzárkózni ({_lgp415_own} "
+                "hátrányban hozott gól-részvétel) — ha hátrányba "
+                "kerültök, először "
+                "őt vegyétek ki: szoros fogás vagy kettőzés, és a "
+                "lendület-tartásuk megtörik.")
 
     # 414) Az ő újrakezdő emberük × a ti szünet utáni tervetek: a
     # második félidő első tíz perce.
@@ -20322,6 +20362,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.osp_goals_by_player for r in reports),
         ssp_goals_by_player=_merge_count_dicts(
             r.ssp_goals_by_player for r in reports),
+        lgp_goals_by_player=_merge_count_dicts(
+            r.lgp_goals_by_player for r in reports),
         fsp_sh_by_player=_merge_count_dicts(
             r.fsp_sh_by_player for r in reports),
         fsp_fh_by_player=_merge_count_dicts(
