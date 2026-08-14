@@ -3010,6 +3010,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "vinni.")
     except Exception:
         pass
+    # 7a6-befejező emberek: kire fut ki a hetedik ember játéka.
+    try:
+        from .goalkeeper import seven_six_finishers
+        en7p = seven_six_finishers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_en7 = en7p[side]["top"]
+            if top_en7 is None:
+                continue
+            _ki18 = (f"a(z) {top_en7['jersey']}. számú"
+                     if top_en7.get("jersey") is not None
+                     else f"a(z) {top_en7['player_id']}. játékos")
+            body += (f" A(z) {name} 7 a 6-ja {_ki18} emberre fut ki "
+                     f"({top_en7['shots']} lövés) — a lehozott kapus "
+                     "felismerésekor őt kell először megtalálni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

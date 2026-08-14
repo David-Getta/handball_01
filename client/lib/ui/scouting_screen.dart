@@ -3037,6 +3037,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "a zárásokat az ő oldalára vigyétek";
   }
 
+  // 7a6-befejező emberek: kire fut ki a hetedik ember játéka (2+
+  // 7a6-lövés, a lövések fele — a backenddel azonos küszöbök:
+  // EN7P_MIN_SHOTS, EN7P_SHARE_PCT).
+  String? _sevenSixFinisher(Map<String, dynamic> r) {
+    final e7 = (r["en7p_shots_by_player"] as Map?)?.cast<String, dynamic>();
+    if (e7 == null || e7.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    e7.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a 7 a 6-uk $topN/$all lövése a(z) $top. emberre fut ki · "
+        "a lehozott kapusnál őt találjátok meg először";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10853,6 +10876,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Előnyben-ember", _leadScorer(r)!],
       if (_screenedDefender(r) != null)
         ["Elzárt védő", _screenedDefender(r)!],
+      if (_sevenSixFinisher(r) != null)
+        ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

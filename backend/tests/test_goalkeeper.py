@@ -2452,6 +2452,26 @@ def test_seven_six_finisher_roles_silent_with_few_shots():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
 
 
+def test_seven_six_finishers_names_the_free_man():
+    """Ha a 7 a 6-lövések egy embertől jönnek, a lehozott kapus
+    felismerésekor őt kell először megtalálni."""
+    from handball.pipeline.goalkeeper import (EN7P_MIN_SHOTS,
+                                              seven_six_finishers)
+
+    rec = seven_six_finishers(_en7_match([2, 2, 2, 3]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 2, rec
+    assert rec["top"]["shots"] >= EN7P_MIN_SHOTS, rec
+
+
+def test_seven_six_finishers_silent_with_one_shot():
+    """Egyetlen 7a6-lövésből nem nevezünk meg embert."""
+    from handball.pipeline.goalkeeper import seven_six_finishers
+
+    rec = seven_six_finishers(_en7_match([2]))["home"]
+    assert rec["top"] is None, rec
+
+
 def _ohr_match(hunters):
     """`hunters` = rablásonként az a HAZAI játékos, aki a vendég kapus
     indítását elcsípi (2: beálló, 3: szélső). Első szakasz: hazai

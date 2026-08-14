@@ -2781,6 +2781,78 @@ EN7_MIN_SHOTS = 3
 EN7_SHARE_PCT = 60.0
 
 
+# 7a6-befejező emberek: ennyi 7a6-lövés kell a névhez, és ekkora
+# részarány fölött mondjuk ki, hogy a hetedik ember játéka egy
+# emberre fut ki.
+EN7P_MIN_SHOTS = 2
+EN7P_SHARE_PCT = 50.0
+
+
+def seven_six_finishers(match: Match, config=None) -> dict:
+    """7a6-befejező emberek: KIRE fut ki a hetedik ember játéka.
+
+    A 7a6-befejező poszt (seven_six_finisher_roles) a POSZTOT nevezi
+    meg — ez az EMBERT: a felismert üres-kapus szakaszaik alatt
+    leadott lövéseiket (lövés és gól egyaránt) a lövő nevéhez írja.
+
+    Edzőileg a 7 a 6 értelme a túlterhelés — a plusz mezőnyjátékos
+    valakit felszabadít. Ha ez rendre ugyanaz az ember, a lehozott
+    kapus felismerésekor a védekezés első dolga ŐT megtalálni és
+    besűríteni a sávját: a hetedik ember játéka kiszámíthatóvá vált,
+    és minden megvárt másodperc nekik kockázat (üres a kapujuk).
+    Saját csapatra: a 7 a 6-nak két kifutása legyen.
+
+    Visszatérés csapatonként (a 7 a 6-ot JÁTSZÓ oldal): {"shots",
+    "players": [{"player_id", "jersey", "shots"}], "top"} — a "top"
+    az első játékos, ha legalább EN7P_MIN_SHOTS 7a6-lövése van, és
+    ez a csapat 7a6-lövéseinek legalább EN7P_SHARE_PCT-a, különben
+    None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    windows = detect_empty_net(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    if windows:
+        for e in detect_shots(match, config):
+            if e.type not in (EventType.SHOT, EventType.GOAL):
+                continue
+            if e.player_id is None:
+                continue
+            side = getattr(e.team, "value", e.team)
+            if side not in tally:
+                continue
+            if not any(w["team"] == side
+                       and w["start_frame"] <= e.t <= w["end_frame"]
+                       for w in windows):
+                continue
+            tally[side][e.player_id] = (
+                tally[side].get(e.player_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "shots": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["shots"] for r in rows)
+        top = None
+        if rows and rows[0]["shots"] >= EN7P_MIN_SHOTS:
+            share = 100.0 * rows[0]["shots"] / max(1, total)
+            if share >= EN7P_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"shots": total, "players": rows, "top": top}
+    return out
+
+
 def seven_six_finisher_roles(match: Match, config=None) -> dict:
     """7a6-befejező poszt: KIRE FUT KI a hetedik ember játéka.
 

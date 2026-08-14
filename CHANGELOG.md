@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **7a6-befejező emberek: kire fut ki a hetedik ember játéka.** A
+  7a6-befejező poszt a posztot nevezi meg — az új réteg az embert: a
+  felismert üres-kapus szakaszaik alatt leadott lövéseket a lövő
+  nevéhez írja. Edzőileg a 7 a 6 értelme a túlterhelés — a plusz
+  mezőnyjátékos valakit felszabadít; ha ez rendre ugyanaz az ember, a
+  lehozott kapus felismerésekor a védekezés első dolga ŐT megtalálni
+  és besűríteni a sávját — a hetedik ember játéka kiszámítható, és
+  minden megvárt másodperc nekik kockázat. Saját csapatra: a 7 a
+  6-nak két kifutása legyen. Két 7a6-lövéstől és a lövések felétől
+  emel ki nevet. A rangsorban az "ember" családba tartozik, és a
+  Kulcs-ember bizonyíték-rétegei közé is bekerült. Felületek:
+  /analyze + meccs-csomag (`seven_six_finishers`), edzői
+  összefoglaló, felderítés (`en7p_shots_by_player` mező + edzői kulcs
+  + 417. meccsterv-szabály), edzés-fókusz (437. szabály),
+  kliens-csempe.
+
 - **Elzárt védők: ki akad el az elzárásokban.** Az elzárt-poszt a
   posztot nevezi meg — az új réteg az embert: lövésenként megkeresi a
   lövő őrzőjét és a mellé állított elzárót, és az elakadt őrző

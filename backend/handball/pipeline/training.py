@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 437) 7a6-befejező emberek: a 7 a 6-nak két kifutása legyen.
+    try:
+        from .goalkeeper import EN7P_MIN_SHOTS, seven_six_finishers
+        en7437 = seven_six_finishers(match, config)
+        for side in ("home", "away"):
+            top437 = en7437[side].get("top")
+            if top437 is None:
+                continue
+            _ki437 = (f"a(z) {top437['jersey']}. számú"
+                      if top437.get("jersey") is not None
+                      else f"a(z) {top437['player_id']}. játékos")
+            add(side, "támadás", "7 a 6 két kifutással",
+                f"a 7 a 6-unk {_ki437} emberre fut ki "
+                f"({top437['shots']} lövés; {EN7P_MIN_SHOTS} lövéstől "
+                "már jelezzük) — ha rá készülnek, a hetedik ember "
+                "előnye elvész",
+                "7 a 6 gyakorlása két kijelölt kifutással (második "
+                "beálló ÉS beforduló átlövő), a túloldali szélső "
+                "mint harmadik megoldás, és a bejátszás-döntés "
+                "gyakorlása a fal reakciója szerint",
+                )
+    except Exception:
+        pass
+
     # 436) Elzárt védők: az elakadás nem alkat, hanem technika.
     try:
         from .defense import SDP_MIN_SCREENS, screened_defenders
