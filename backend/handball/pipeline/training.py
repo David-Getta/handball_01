@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 439) Időkérés-hozam: a hatástalan időkérés tartalom-kérdés.
+    try:
+        from .stoppages import TOY_MIN_JUDGED, timeout_yield
+        toy439 = timeout_yield(match, config)
+        for side in ("home", "away"):
+            rec439 = toy439[side]
+            if rec439["broke_pct"] is None:
+                continue
+            if rec439["broke_pct"] > 33.0:
+                continue
+            add(side, "támadás", "Az időkérés tartalma",
+                f"az időkéréseink hatástalanok ({rec439['broke']}/"
+                f"{rec439['broke'] + rec439['failed']} megtört "
+                f"sorozat; {TOY_MIN_JUDGED} ítéletes időkéréstől "
+                "jelezzük) — a sorozatot nem a zöld karton töri meg, "
+                "hanem ami utána jön",
+                "időkérés-forgatókönyv: EGY kimondott első támadás "
+                "(figura + befejező), EGY védekezés-igazítás, és "
+                "semmi más — az egy perc ne általános buzdítás "
+                "legyen; a forgatókönyv edzésen próbálva",
+                )
+    except Exception:
+        pass
+
     # 438) Gólpassz-duó: a bejáratott kettős kiszámíthatóság is.
     try:
         from .event_detection import ADU_MIN_GOALS, assist_duos

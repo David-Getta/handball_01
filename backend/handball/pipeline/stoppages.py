@@ -176,6 +176,63 @@ def timeout_record(match: Match,
     return out
 
 
+# Időkérés-hozam: ennyi ítéletes időkérés kell a kimondáshoz, és
+# ekkora részarány fölött mondjuk ki, hogy az időkérésük rendez
+# (vagy hatástalan).
+TOY_MIN_JUDGED = 2
+TOY_SHARE_PCT = 67.0
+
+
+def timeout_yield(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Időkérés-hozam: MŰKÖDIK-E a mentő időkérésük.
+
+    Az időkérés-mérleg (timeout_record) a nyers számokat adja — ez
+    az ÍTÉLETET: a megtört sorozatok arányából mondja ki, hogy az
+    időkérésük rendez-e.
+
+    Edzőileg ez a sorozat-építés terve. Ha az időkérésük rendre
+    megtöri a sorozatot, az ő időkérésük után nem szabad kapkodni —
+    rendezett fal jön, a következő támadást ki kell dolgozni. Ha az
+    időkérésük hatástalan, a megkezdett gól-sorozat az időkérésük
+    UTÁN is tolható — nem kell tisztelni a zöld kartont. Saját
+    csapatra: a hatástalan időkérés tartalom-kérdés (mit mondunk el
+    az egy percben), nem időzítés.
+
+    Visszatérés csapatonként (a KÉRŐ oldal): {"timeouts", "broke",
+    "failed", "broke_pct", "verdict"} — a pct/verdict None, ha kevés
+    (TOY_MIN_JUDGED alatti) az ítéletes időkérés.
+    """
+    config = config or TacticsConfig()
+    rec_all = timeout_record(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        src = rec_all.get(side, {})
+        rec = {"timeouts": src.get("timeouts", 0),
+               "broke": src.get("broke", 0),
+               "failed": src.get("failed", 0),
+               "broke_pct": None, "verdict": None}
+        judged = rec["broke"] + rec["failed"]
+        if judged >= TOY_MIN_JUDGED:
+            pct = 100.0 * rec["broke"] / judged
+            rec["broke_pct"] = round(pct, 1)
+            if pct >= TOY_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az időkérésük rendez ({rec['broke']}/{judged} "
+                    "megtört sorozat) — az ő időkérésük után nem "
+                    "szabad kapkodni: rendezett fal jön, a következő "
+                    "támadást ki kell dolgozni")
+            elif pct <= 100.0 - TOY_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az időkérésük hatástalan ({rec['broke']}/"
+                    f"{judged} megtört sorozat) — a megkezdett "
+                    "gól-sorozat az időkérésük után is tolható: nem "
+                    "kell tisztelni a zöld kartont")
+        out[side] = rec
+    return out
+
+
 # Időkérés-időzítés: ennyi felismert időkéréstől ítélünk; ennyi kapott
 # gól alatti átlag a gyors fék, e felett hagyják elszaladni; és a
 # meccs utolsó ennyi másodperce a hajrá.

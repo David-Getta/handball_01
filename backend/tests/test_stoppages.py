@@ -875,3 +875,34 @@ def test_timeout_turnover_players_silent_after_one():
 
     rec = timeout_turnover_players(_toe_match([1, 2]))["home"]
     assert rec["top"] is None, rec
+
+
+def test_timeout_yield_judges_the_saving_timeout(monkeypatch):
+    """Ha az időkéréseik rendre megtörik a sorozatot, utánuk nem
+    szabad kapkodni; ha hatástalanok, a sorozat tovább tolható."""
+    from handball.pipeline import stoppages
+
+    monkeypatch.setattr(
+        stoppages, "timeout_record",
+        lambda match, config=None: {
+            "home": {"timeouts": 3, "broke": 3, "failed": 0},
+            "away": {"timeouts": 3, "broke": 0, "failed": 3}})
+    rec = stoppages.timeout_yield(None)
+    assert rec["home"]["broke_pct"] == 100.0
+    assert "rendez" in rec["home"]["verdict"], rec["home"]
+    assert rec["away"]["broke_pct"] == 0.0
+    assert "hatástalan" in rec["away"]["verdict"], rec["away"]
+
+
+def test_timeout_yield_silent_with_few_judged(monkeypatch):
+    """Egyetlen ítéletes időkérésből nincs kimondás."""
+    from handball.pipeline import stoppages
+
+    monkeypatch.setattr(
+        stoppages, "timeout_record",
+        lambda match, config=None: {
+            "home": {"timeouts": 2, "broke": 1, "failed": 0},
+            "away": {"timeouts": 0, "broke": 0, "failed": 0}})
+    rec = stoppages.timeout_yield(None)
+    assert rec["home"]["broke_pct"] is None
+    assert rec["home"]["verdict"] is None

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Időkérés-hozam: működik-e a mentő időkérésük.** Az
+  időkérés-mérleg a nyers számokat adja — az új réteg az ítéletet: a
+  megtört sorozatok arányából mondja ki, hogy az időkérésük rendez-e.
+  Edzőileg ez a sorozat-építés terve: ha az időkérésük rendre megtöri
+  a sorozatot, utána nem szabad kapkodni (rendezett fal jön); ha
+  hatástalan, a megkezdett gól-sorozat a zöld karton után is tolható.
+  Saját csapatra a hatástalan időkérés tartalom-kérdés: egy kimondott
+  első támadás, egy védekezés-igazítás — nem általános buzdítás. Két
+  ítéletes időkéréstől és 67%-os aránytól mond ítéletet. A rangsorban
+  a "felkészülés" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`timeout_yield`), edzői összefoglaló, felderítés
+  (`toy_broke` / `toy_failed` mezők + edzői kulcs + 419.
+  meccsterv-szabály), edzés-fókusz (439. szabály), kliens-csempe.
+
 - **Gólpassz-duó: melyik kettősön fut a gólgyártásuk.** A
   gólpassz-hálózat minden párost felsorol — az új réteg az ítéletet:
   ha az asszisztos gólok nagy része ugyanazon az (adó → befejező)

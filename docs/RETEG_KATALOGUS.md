@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **466 réteg**, modulonként csoportosítva; a
+Összesen **467 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (89)
@@ -484,7 +484,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `sprint_threats` | Sprint-veszély: KI VISZI A KONTRÁT — a legtöbbet sprintelő ember. |
 | `sprints_by_score` | Sprint-állás: MIKOR sprintel a csapat — vezetésnél vagy hátrányban. |
 
-## stoppages (12)
+## stoppages (13)
 
 | Réteg | Mit mér |
 |---|---|
@@ -500,6 +500,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `timeout_timing` | Időkérés-időzítés: MIKOR kérnek időt. |
 | `timeout_turnover_players` | Időkérés-hibázók: A MEGBESZÉLT FIGURA kinek a kezén hal el. |
 | `timeout_turnover_roles` | Időkérés-hiba poszt: A MEGBESZÉLT FIGURA kinek a kezén hal el. |
+| `timeout_yield` | Időkérés-hozam: MŰKÖDIK-E a mentő időkérésük. |
 
 ## substitutions (12)
 

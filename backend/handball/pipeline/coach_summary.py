@@ -3040,6 +3040,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "passzsávot beleéréssel.")
     except Exception:
         pass
+    # Időkérés-hozam: működik-e a mentő időkérésük.
+    try:
+        from .stoppages import timeout_yield
+        toy = timeout_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_toy = toy[side]
+            if rec_toy["verdict"] is None:
+                continue
+            body += (f" A(z) {name} időkérése "
+                     f"{rec_toy['broke']}/"
+                     f"{rec_toy['broke'] + rec_toy['failed']} "
+                     f"arányban töri meg a sorozatot — "
+                     f"{rec_toy['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

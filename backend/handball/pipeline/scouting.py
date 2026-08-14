@@ -1127,6 +1127,10 @@ class ScoutingReport:
     # Gólpassz-duó: az asszisztos gólok darabszáma (adó→befejező)
     # KETTŐSÖNKÉNT. Darabszám, meccsek közt pontosan összegződik.
     adu_goals_by_duo: dict = field(default_factory=dict)
+    # Időkérés-hozam: az ítéletes időkérések mérlege (megtörte /
+    # nem hozott fordulatot). Darabszám, meccsek közt összegződik.
+    toy_broke: int = 0
+    toy_failed: int = 0
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4787,6 +4791,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_adu_n}/{_adu_all} asszisztos gól) — a duó ellen "
                 "párban védekezzetek: az adót testtel, a kettejük "
                 "passzsávját beleéréssel, és a gépezet áll.")
+
+    # Időkérés-hozam: mit ér az ő zöld kartonjuk.
+    _toy_judged = rep.toy_broke + rep.toy_failed
+    if _toy_judged >= 2:
+        _toy_pct = 100.0 * rep.toy_broke / _toy_judged
+        if _toy_pct >= 67.0:
+            keys.append(
+                f"Az időkérésük rendez ({rep.toy_broke}/{_toy_judged} "
+                "megtört sorozat) — az ő időkérésük után ne "
+                "kapkodjatok: rendezett fal jön, a következő "
+                "támadást dolgozzátok ki.")
+        elif _toy_pct <= 33.0:
+            keys.append(
+                f"Az időkérésük hatástalan ({rep.toy_broke}/"
+                f"{_toy_judged} megtört sorozat) — a megkezdett "
+                "gól-sorozatotok az időkérésük után is tolható: nem "
+                "kell tisztelni a zöld kartont.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10232,6 +10253,10 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .stoppages import timeout_yield as _toy
+        toyrec = _toy(match, config)[team.value]
+        rep.toy_broke = toyrec["broke"]
+        rep.toy_failed = toyrec["failed"]
         from .event_detection import assist_duos as _adu
         adurec = _adu(match, config)[team.value]
         rep.adu_goals_by_duo = {
@@ -13290,6 +13315,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 419) Az ő hatástalan időkérésük × a ti sorozataitok: a zöld
+    # karton nem állít meg titeket.
+    _toy419_judged = opp.toy_broke + opp.toy_failed
+    if _toy419_judged >= 2 and own.goals >= 10:
+        _toy419_pct = 100.0 * opp.toy_broke / _toy419_judged
+        if _toy419_pct <= 33.0:
+            plan.append(
+                f"Az időkérésük hatástalan ({opp.toy_broke}/"
+                f"{_toy419_judged} megtört sorozat), ti pedig "
+                f"gólerősek vagytok ({own.goals} gól) — a zöld "
+                "kartonjuk után is toljátok tovább: a lendületet "
+                "nem az ő időkérésük töri meg.")
 
     # 418) Az ő gólpassz-duójuk × a ti páros védekezésetek: a
     # kettőst kell szétvágni, nem a lövőt fogni.
@@ -20478,6 +20516,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(
             r.adu_goals_by_duo for r in reports),
+        toy_broke=sum(r.toy_broke for r in reports),
+        toy_failed=sum(r.toy_failed for r in reports),
         fsp_sh_by_player=_merge_count_dicts(
             r.fsp_sh_by_player for r in reports),
         fsp_fh_by_player=_merge_count_dicts(

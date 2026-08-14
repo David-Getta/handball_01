@@ -3083,6 +3083,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "asszisztos gól) · a duó ellen párban védekezzetek";
   }
 
+  // Időkérés-hozam: működik-e a mentő időkérésük (2+ ítéletes
+  // időkérés, 67%-os arány — a backenddel azonos küszöbök:
+  // TOY_MIN_JUDGED, TOY_SHARE_PCT).
+  String? _timeoutYield(Map<String, dynamic> r) {
+    final broke = (r["toy_broke"] as num?)?.toInt() ?? 0;
+    final failed = (r["toy_failed"] as num?)?.toInt() ?? 0;
+    final judged = broke + failed;
+    if (judged < 2) return null;
+    final pct = 100.0 * broke / judged;
+    if (pct >= 67.0) {
+      return "az időkérésük rendez ($broke/$judged megtört sorozat) · "
+          "utána ne kapkodjatok, kidolgozott támadás kell";
+    }
+    if (pct <= 33.0) {
+      return "az időkérésük hatástalan ($broke/$judged megtört "
+          "sorozat) · a sorozatotok utána is tolható";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10903,6 +10923,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)
         ["Gólpassz-duó", _assistDuo(r)!],
+      if (_timeoutYield(r) != null)
+        ["Időkérés-hozam", _timeoutYield(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
