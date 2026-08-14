@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Videó-lejátszás Windowson** (kliens): a jelenet-lejátszó eddig
+  csak macOS/iOS/Android alatt működött, Windowson tájékoztató
+  szöveg volt helyette — mostantól Windowson is játszik (media_kit /
+  libmpv lejátszóval), ugyanazzal a felülettel: eseményre kattintva
+  a jelenetre ugrik, ±5 mp, lejátszás/megállítás, és a videókép itt
+  is nagyítható (csippentés / Ctrl+görgő).
 - **Beragadás-javítás a kockánkénti dúsítóknál** (motor): terepen
   látott hiba — a feldolgozás úgy állt meg örökre ("X perce nincs
   előrelépés"), hogy az elakadás-átugró sem lépett működésbe. Ok: az
