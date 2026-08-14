@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **A Hozam-lencse a mai új rétegeket is hozza.** A meccs-jelentés
+  Hozam-lencse táblája kiegészült a Hetes-forrás, a Gólpassz-duó, a
+  Kapuscsere-hozam és az Időkérés-hozam ítéleteivel — az
+  ár-kalkulációs kép így a friss rétegekkel együtt teljes.
+
 - **Kapuscsere-hozam: fordít-e a kapuscseréjük.** A kapuscsere-hatás
   a nyers védés-változást adja — az új réteg az ítéletet: a csere
   utáni védés-százalék változásából mondja ki, hogy a második kapus

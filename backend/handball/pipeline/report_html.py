@@ -2115,20 +2115,28 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     try:
         from .attack_types import screen_yield
         from .defense import block_fade
-        from .goalkeeper import (empty_net_turnovers, keeper_return)
-        from .rules import passive_risk, powerplay_yield, seven_yield
+        from .event_detection import assist_duos
+        from .goalkeeper import (empty_net_turnovers, gk_change_yield,
+                                 keeper_return)
+        from .rules import (passive_risk, powerplay_yield,
+                            seven_sources, seven_yield)
         from .setplays import setplay_decay
         from .stats import running_load_balance
+        from .stoppages import timeout_yield
         from .substitutions import substitution_yield
 
         yld_rows = _lens_rows((
             ("Emberelőny-hozam", powerplay_yield),
             ("Hetes-hozam", seven_yield),
+            ("Hetes-forrás", seven_sources),
             ("Elzárás-hozam", screen_yield),
+            ("Gólpassz-duó", assist_duos),
             ("7a6 eladás", empty_net_turnovers),
             ("Kapus-visszaérés", keeper_return),
+            ("Kapuscsere-hozam", gk_change_yield),
             ("Blokk-fáradás", block_fade),
             ("Csere-hozam", substitution_yield),
+            ("Időkérés-hozam", timeout_yield),
             ("Figura-kopás", setplay_decay),
             ("Passzív-kockázat", passive_risk),
             ("Futómunka-eloszlás", running_load_balance)))
