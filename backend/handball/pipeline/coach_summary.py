@@ -3083,6 +3083,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_shs['verdict'].split(' — ')[-1]}.")
     except Exception:
         pass
+    # Középkezdés-hozam: gólra váltják-e az újraindítást.
+    try:
+        from .momentum import restart_yield
+        rsy = restart_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rsy = rsy[side]
+            if rec_rsy["verdict"] is None:
+                continue
+            if rec_rsy["answered"] * 2 < rec_rsy["restarts"]:
+                continue
+            body += (f" A(z) {name} a kapott gólra "
+                     f"{rec_rsy['answered']}/{rec_rsy['restarts']} "
+                     "arányban azonnali góllal válaszol — a gól "
+                     "utáni ünneplés ellene tilos.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

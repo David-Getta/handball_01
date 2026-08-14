@@ -3141,6 +3141,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Középkezdés-hozam: gólra váltják-e az újraindítást (4+ mért
+  // újraindítás, 40%-os válasz-arány — a backenddel azonos küszöbök:
+  // RSY_MIN_RESTARTS, RSY_GOOD_PCT).
+  String? _restartYield(Map<String, dynamic> r) {
+    final restarts = (r["rsy_restarts"] as num?)?.toInt() ?? 0;
+    final answered = (r["rsy_answered"] as num?)?.toInt() ?? 0;
+    if (restarts < 4) return null;
+    final pct = 100.0 * answered / restarts;
+    if (pct < 40.0) return null;
+    return "a kapott gólra $answered/$restarts arányban azonnali "
+        "góllal válaszolnak · a gól utáni ünneplés ellenük tilos";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10967,6 +10980,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapuscsere-hozam", _gkChangeYield(r)!],
       if (_shorthandedSurvival(r) != null)
         ["Emberhátrány-túlélés", _shorthandedSurvival(r)!],
+      if (_restartYield(r) != null)
+        ["Középkezdés-hozam", _restartYield(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

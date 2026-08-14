@@ -194,6 +194,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "timeout_yield"),
         ("felkészülés", "Kapuscsere-hozam", "goalkeeper",
          "gk_change_yield"),
+        ("felkészülés", "Középkezdés-hozam", "momentum",
+         "restart_yield"),
         ("felkészülés", "Passzív-kockázat", "rules", "passive_risk"),
         ("felkészülés", "Labdaszerző-poszt", "defense",
          "role_steal_sources"),

@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Középkezdés-hozam: gólra váltják-e a gól utáni újraindítást.** A
+  középkezdés-tempó azt méri, milyen gyorsan hozzák játékba a labdát
+  a kapott gól után — az új réteg azt, mit ér: minden kapott góljuk
+  után megnézi, szereznek-e saját gólt 25 másodpercen belül.
+  Edzőileg: aki a kapott gólra rendre azonnali góllal válaszol, az
+  ellen a gól utáni ünneplés tilos — kijelölt fékező ember középen,
+  azonnali visszarendeződés, mert a legolcsóbb gólokat az ünneplő fal
+  kapja; akinél az újraindítás üresjárat, ott a saját gól után
+  nyugodtan rendezhető a fal. Saját csapatra a gyors középkezdés-rutin
+  az edzés-téma. Négy mért újraindítástól ítél. A rangsorban a
+  "felkészülés" családba tartozik. Felületek: /analyze + meccs-csomag
+  (`restart_yield`), edzői összefoglaló, felderítés (`rsy_restarts` /
+  `rsy_answered` mezők + edzői kulcs + 422. meccsterv-szabály),
+  edzés-fókusz (442. szabály), kliens-csempe.
+
 - **Emberhátrány-túlélés: mit ér ellenük az emberelőny.** Az
   emberelőny-hozam a nyertes oldalt nézi — az új réteg a büntetett
   oldalt: a hátrányban töltött időre vetíti a hátrányban kapott

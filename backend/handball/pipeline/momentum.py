@@ -1230,6 +1230,77 @@ RESTART_FAST_SHARE = 50.0
 RESTART_SLOW_SHARE = 20.0
 
 
+# Középkezdés-hozam: ennyi mért újraindítás kell az ítélethez,
+# ennyi másodpercen belüli saját gól számít az újraindítás
+# hozamának, és ekkora arány fölött mondjuk ki, hogy a gól utáni
+# visszarendeződés ellenük életbiztosítás.
+RSY_MIN_RESTARTS = 4
+RSY_GOAL_WINDOW_S = 25.0
+RSY_GOOD_PCT = 40.0
+
+
+def restart_yield(match: Match, config=None) -> dict:
+    """Középkezdés-hozam: GÓLRA VÁLTJÁK-E a gól utáni újraindítást.
+
+    A középkezdés-tempó (restart_speed) azt méri, MILYEN GYORSAN
+    hozzák játékba a labdát a kapott gól után — ez azt, MIT ÉR:
+    minden kapott góljuk után megnézi, szereznek-e saját gólt
+    RSY_GOAL_WINDOW_S másodpercen belül.
+
+    Edzőileg: aki a kapott gólra rendre azonnali góllal válaszol, az
+    ellen a gól utáni ünneplés tilos — kijelölt fékező ember középen,
+    azonnali visszarendeződés, mert a meccs legolcsóbb góljait az
+    ünneplő fal kapja. Akinél az újraindítás üresjárat, ott a saját
+    gól után nyugodtan lehet rendezni a falat. Saját csapatra: a
+    gyors középkezdés begyakorolható fegyver — de csak akkor ér
+    valamit, ha gól is lesz belőle.
+
+    Visszatérés csapatonként (a gólt KAPÓ, újraindító oldal):
+    {"restarts", "answered", "answer_pct", "verdict"} — a
+    pct/verdict None, ha kevés (RSY_MIN_RESTARTS alatti) a mért
+    újraindítás.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(RSY_GOAL_WINDOW_S * fps)
+    goals = sorted((e.t, getattr(e.team, "value", e.team))
+                   for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    out = {side: {"restarts": 0, "answered": 0, "answer_pct": None,
+                  "verdict": None}
+           for side in ("home", "away")}
+    for (t0, scorer) in goals:
+        side = "away" if scorer == "home" else "home"
+        rec = out[side]
+        rec["restarts"] += 1
+        if any(tm == side and t0 < t <= t0 + win
+               for (t, tm) in goals):
+            rec["answered"] += 1
+
+    for rec in out.values():
+        if rec["restarts"] >= RSY_MIN_RESTARTS:
+            pct = 100.0 * rec["answered"] / rec["restarts"]
+            rec["answer_pct"] = round(pct, 1)
+            if pct >= RSY_GOOD_PCT:
+                rec["verdict"] = (
+                    f"a kapott gólra rendre góllal válaszolnak "
+                    f"({rec['answered']}/{rec['restarts']} "
+                    "újraindítás) — a gól utáni ünneplés ellenük "
+                    "tilos: kijelölt fékező ember középen, azonnali "
+                    "visszarendeződés")
+            else:
+                rec["verdict"] = (
+                    f"az újraindításuk üresjárat ({rec['answered']}/"
+                    f"{rec['restarts']} válasz-gól) — a saját gól "
+                    "után nyugodtan rendezhetitek a falat: a "
+                    "középkezdésükből ritkán jön azonnali büntetés")
+    return out
+
+
 def restart_speed(match: Match, config=None) -> dict:
     """Középkezdés-tempó: kapott gól után mennyi idő alatt ér át a
     labda az ellenfél térfelére.

@@ -4762,6 +4762,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import restart_yield
+            res["restart_yield"] = restart_yield(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5742,6 +5747,8 @@ def create_app():
                 from ..pipeline.rules import shorthanded_survival
                 _layer("shorthanded_survival",
                        lambda: shorthanded_survival(match))
+                from ..pipeline.momentum import restart_yield
+                _layer("restart_yield", lambda: restart_yield(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

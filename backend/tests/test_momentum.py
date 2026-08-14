@@ -2575,3 +2575,24 @@ def test_control_timeline_silent_with_few_blocks():
 
     rec = control_timeline(_ctl_match([0.9, 0.9]))["home"]
     assert rec["verdict"] is None and rec["best"] is None, rec
+
+
+def test_restart_yield_flags_the_instant_answer():
+    """Ha a kapott gólra rendre góllal válaszolnak, a gól utáni
+    ünneplés ellenük tilos."""
+    from handball.pipeline.momentum import (RSY_GOOD_PCT,
+                                            restart_yield)
+
+    rec = restart_yield(_rsp_match([7, 7, 7, 7]))["away"]
+    assert rec["restarts"] >= 4, rec
+    assert rec["answer_pct"] is not None
+    assert rec["answer_pct"] >= RSY_GOOD_PCT, rec
+    assert rec["verdict"] and "ünneplés" in rec["verdict"], rec
+
+
+def test_restart_yield_silent_with_few_restarts():
+    """Kevés mért újraindításból nincs ítélet."""
+    from handball.pipeline.momentum import restart_yield
+
+    rec = restart_yield(_rsp_match([7, 7]))["away"]
+    assert rec["answer_pct"] is None and rec["verdict"] is None, rec

@@ -1366,6 +1366,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 442) Középkezdés-hozam: a gyors kezdés csak góllal ér valamit.
+    try:
+        from .momentum import RSY_MIN_RESTARTS, restart_yield
+        rsy442 = restart_yield(match, config)
+        for side in ("home", "away"):
+            rec442 = rsy442[side]
+            if rec442["answer_pct"] is None:
+                continue
+            if rec442["answer_pct"] >= 40.0:
+                continue
+            add(side, "támadás", "Középkezdés gólra váltva",
+                f"a kapott gólra csak {rec442['answered']}/"
+                f"{rec442['restarts']} arányban válaszolunk gyors "
+                f"góllal ({RSY_MIN_RESTARTS} újraindítástól "
+                "jelezzük) — az újraindításunk üresjárat",
+                "gyors középkezdés-rutin: kijelölt kezdő-kettős, a "
+                "labda 3 másodpercen belül játékban, első passz "
+                "előre (nem oldalra), és a válasz-támadás két "
+                "begyakorolt befejezése",
+                )
+    except Exception:
+        pass
+
     # 441) Emberhátrány-túlélés: a hátrány-védekezés rendszer, nem
     # hősiesség.
     try:

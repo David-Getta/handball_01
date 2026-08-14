@@ -1139,6 +1139,10 @@ class ScoutingReport:
     # kerekítve) és hátrányban kapott gól. Összeg, összegződik.
     shs_seconds: int = 0
     shs_conceded: int = 0
+    # Középkezdés-hozam: a kapott gól utáni újraindítások és a
+    # 25 mp-en belüli válasz-gólok. Darabszám, összegződik.
+    rsy_restarts: int = 0
+    rsy_answered: int = 0
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4848,6 +4852,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "két percenként) — a kettős fölény ellenük keveset "
                 "ér: emberelőnyben is az 1v1 és a betörés dolgozik, "
                 "és a gyors gól többet ér a hosszú járatásnál.")
+
+    # Középkezdés-hozam: mennyire drága ellenük az ünneplés.
+    if rep.rsy_restarts >= 4:
+        _rsy_pct = 100.0 * rep.rsy_answered / rep.rsy_restarts
+        if _rsy_pct >= 40.0:
+            keys.append(
+                f"A kapott gólra {rep.rsy_answered}/"
+                f"{rep.rsy_restarts} arányban azonnali góllal "
+                "válaszolnak — a gól utáni ünneplés ellenük tilos: "
+                "kijelölt fékező ember középen, azonnali "
+                "visszarendeződés.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10293,6 +10308,10 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .momentum import restart_yield as _rsy
+        rsyrec = _rsy(match, config)[team.value]
+        rep.rsy_restarts = rsyrec["restarts"]
+        rep.rsy_answered = rsyrec["answered"]
         from .rules import shorthanded_survival as _shs
         shsrec = _shs(match, config)[team.value]
         rep.shs_seconds = int(round(shsrec["sh_seconds"]))
@@ -13363,6 +13382,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 422) Az ő azonnali válaszuk × a ti gól utáni fegyelmetek: az
+    # ünneplő fal kapja a legolcsóbb gólokat.
+    if opp.rsy_restarts >= 4 and own.goals >= 10:
+        _rsy422_pct = 100.0 * opp.rsy_answered / opp.rsy_restarts
+        if _rsy422_pct >= 40.0:
+            plan.append(
+                f"A kapott gólra {opp.rsy_answered}/"
+                f"{opp.rsy_restarts} arányban azonnali góllal "
+                f"válaszolnak, ti pedig sok gólt szereztek "
+                f"({own.goals}) — minden gólotok után azonnali "
+                "visszarendeződés és kijelölt fékező ember középen: "
+                "az ünneplő fal kapja a legolcsóbb gólokat.")
 
     # 421) Az ő hátrány-beszakadásuk × a ti kiharcolt
     # büntetéseitek: a megszerzett emberelőnyt végig kell büntetni.
@@ -20595,6 +20627,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(
             r.adu_goals_by_duo for r in reports),
+        rsy_restarts=sum(r.rsy_restarts for r in reports),
+        rsy_answered=sum(r.rsy_answered for r in reports),
         shs_seconds=sum(r.shs_seconds for r in reports),
         shs_conceded=sum(r.shs_conceded for r in reports),
         gcy_changes=sum(r.gcy_changes for r in reports),
