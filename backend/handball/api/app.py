@@ -4752,6 +4752,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import gk_change_yield
+            res["gk_change_yield"] = gk_change_yield(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5727,6 +5732,8 @@ def create_app():
                 _layer("assist_duos", lambda: assist_duos(match))
                 from ..pipeline.stoppages import timeout_yield
                 _layer("timeout_yield", lambda: timeout_yield(match))
+                from ..pipeline.goalkeeper import gk_change_yield
+                _layer("gk_change_yield", lambda: gk_change_yield(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

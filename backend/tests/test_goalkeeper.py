@@ -2732,3 +2732,27 @@ def test_rebound_punishment_silent_without_second_chances():
     rec = rebound_punishment(_rpn_match(punished=0, clean=6))["away"]
     assert rec["saves"] >= 5 and rec["punished"] == 0, rec
     assert rec["rate_pct"] == 0.0 and rec["verdict"] is None, rec
+
+
+def test_gk_change_yield_judges_the_swap(monkeypatch):
+    """Nagy javulásnál a csere fordít, nagy romlásnál nem segít;
+    kis változásnál nincs ítélet."""
+    from handball.pipeline import goalkeeper
+
+    monkeypatch.setattr(
+        goalkeeper, "gk_change_effect",
+        lambda match, config=None: {
+            "home": {"changes": 1, "delta_pp": 25.0},
+            "away": {"changes": 1, "delta_pp": -20.0}})
+    rec = goalkeeper.gk_change_yield(None)
+    assert rec["home"]["verdict"] and "fordít" in rec["home"]["verdict"]
+    assert rec["away"]["verdict"] and "sem segít" in rec["away"]["verdict"]
+
+    monkeypatch.setattr(
+        goalkeeper, "gk_change_effect",
+        lambda match, config=None: {
+            "home": {"changes": 1, "delta_pp": 5.0},
+            "away": {"changes": 0, "delta_pp": None}})
+    rec = goalkeeper.gk_change_yield(None)
+    assert rec["home"]["verdict"] is None
+    assert rec["away"]["verdict"] is None

@@ -1131,6 +1131,10 @@ class ScoutingReport:
     # nem hozott fordulatot). Darabszám, meccsek közt összegződik.
     toy_broke: int = 0
     toy_failed: int = 0
+    # Kapuscsere-hozam: a cserék száma és a védés-változás összege
+    # tized-százalékpontban (meccsek közt átlagolható). Összeg.
+    gcy_changes: int = 0
+    gcy_delta_dpp: int = 0
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4808,6 +4812,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_toy_judged} megtört sorozat) — a megkezdett "
                 "gól-sorozatotok az időkérésük után is tolható: nem "
                 "kell tisztelni a zöld kartont.")
+
+    # Kapuscsere-hozam: készüljetek-e a második kapusra.
+    if rep.gcy_changes >= 1:
+        _gcy_avg = rep.gcy_delta_dpp / 10.0 / rep.gcy_changes
+        if _gcy_avg >= 15.0:
+            keys.append(
+                f"A kapuscseréjük fordít ({_gcy_avg:+.0f} "
+                "százalékpont védés-változás) — a lövő-tervet a "
+                "második kapusra is készítsétek el, és a beállása "
+                "utáni első percekben büntessetek, amíg hideg.")
+        elif _gcy_avg <= -15.0:
+            keys.append(
+                f"A kapuscseréjük sem segít ({_gcy_avg:+.0f} "
+                "százalékpont) — az első kapusuk megingása után "
+                "nincs mentőövük: nyomjátok tovább ugyanazt, ami "
+                "addig bement.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10253,6 +10273,10 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .goalkeeper import gk_change_yield as _gcy
+        gcyrec = _gcy(match, config)[team.value]
+        rep.gcy_changes = (1 if gcyrec["delta_pp"] is not None else 0)
+        rep.gcy_delta_dpp = int(round(10.0 * (gcyrec["delta_pp"] or 0.0)))
         from .stoppages import timeout_yield as _toy
         toyrec = _toy(match, config)[team.value]
         rep.toy_broke = toyrec["broke"]
@@ -13315,6 +13339,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 420) Az ő kapuscseréjük × a ti lövő-tervetek: a B-lap.
+    if opp.gcy_changes >= 1 and own.shots >= 10:
+        _gcy420_avg = opp.gcy_delta_dpp / 10.0 / opp.gcy_changes
+        if _gcy420_avg >= 15.0:
+            plan.append(
+                f"A kapuscseréjük fordít ({_gcy420_avg:+.0f} "
+                f"százalékpont), ti pedig sokat lőtök ({own.shots} "
+                "lövés) — a lövő-tervet a második kapusukra is "
+                "készítsétek el: az ő beállása utáni első percekben "
+                "kell büntetni, amíg hideg.")
+        elif _gcy420_avg <= -15.0:
+            plan.append(
+                f"A kapuscseréjük sem segít ({_gcy420_avg:+.0f} "
+                "százalékpont), ti pedig sokat lőtök "
+                f"({own.shots} lövés) — az első kapusuk megingása "
+                "után nincs mentőövük: nyomjátok tovább ugyanazt.")
 
     # 419) Az ő hatástalan időkérésük × a ti sorozataitok: a zöld
     # karton nem állít meg titeket.
@@ -20516,6 +20557,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(
             r.adu_goals_by_duo for r in reports),
+        gcy_changes=sum(r.gcy_changes for r in reports),
+        gcy_delta_dpp=sum(r.gcy_delta_dpp for r in reports),
         toy_broke=sum(r.toy_broke for r in reports),
         toy_failed=sum(r.toy_failed for r in reports),
         fsp_sh_by_player=_merge_count_dicts(

@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 440) Kapuscsere-hozam: a második kapus beállás-rutinja
+    # edzhető.
+    try:
+        from .goalkeeper import GCY_GAP_PP, gk_change_yield
+        gcy440 = gk_change_yield(match, config)
+        for side in ("home", "away"):
+            rec440 = gcy440[side]
+            if rec440["delta_pp"] is None:
+                continue
+            if rec440["delta_pp"] > -GCY_GAP_PP:
+                continue
+            add(side, "kapus", "A második kapus beállása",
+                f"a kapuscserénk után romlik a védés "
+                f"({rec440['delta_pp']:+.0f} százalékpont; "
+                f"{GCY_GAP_PP:.0f} pont romlástól már jelezzük) — a "
+                "csere így nem mentőöv, hanem újabb kockázat",
+                "beállás-rutin a második kapusnak: bemelegítő "
+                "protokoll a padon (folyamatos labdás készenlét), "
+                "az első védés forgatókönyve (mély beállás, biztos "
+                "sarok), és éles csere-helyzet gyakorlása edzésen",
+                )
+    except Exception:
+        pass
+
     # 439) Időkérés-hozam: a hatástalan időkérés tartalom-kérdés.
     try:
         from .stoppages import TOY_MIN_JUDGED, timeout_yield

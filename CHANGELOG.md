@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Kapuscsere-hozam: fordít-e a kapuscseréjük.** A kapuscsere-hatás
+  a nyers védés-változást adja — az új réteg az ítéletet: a csere
+  utáni védés-százalék változásából mondja ki, hogy a második kapus
+  mentőöv-e. Edzőileg ez a lövő-terv B-lapja: ha a cseréjük rendre
+  fordít, a lövő-tervet a második kapusra is el kell készíteni, és a
+  beállása utáni első percekben kell büntetni, amíg hideg; ha a csere
+  sem segít, az első kapus megingása után nincs mentőövük — nyomni
+  kell tovább ugyanazt. Saját csapatra a második kapus beállás-rutinja
+  az edzés-téma. Tizenöt százalékpontos változástól ítél. A rangsorban
+  a "felkészülés" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`gk_change_yield`), edzői összefoglaló, felderítés
+  (`gcy_changes` / `gcy_delta_dpp` mezők + edzői kulcs + 420.
+  meccsterv-szabály), edzés-fókusz (440. szabály), kliens-csempe.
+
 - **Időkérés-hozam: működik-e a mentő időkérésük.** Az
   időkérés-mérleg a nyers számokat adja — az új réteg az ítéletet: a
   megtört sorozatok arányából mondja ki, hogy az időkérésük rendez-e.

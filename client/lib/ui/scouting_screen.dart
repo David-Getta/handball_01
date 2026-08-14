@@ -3103,6 +3103,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kapuscsere-hozam: fordít-e a kapuscseréjük (15 százalékpontos
+  // változástól — a backenddel azonos küszöb: GCY_GAP_PP).
+  String? _gkChangeYield(Map<String, dynamic> r) {
+    final changes = (r["gcy_changes"] as num?)?.toInt() ?? 0;
+    final dpp = (r["gcy_delta_dpp"] as num?)?.toInt() ?? 0;
+    if (changes < 1) return null;
+    final avg = dpp / 10.0 / changes;
+    if (avg >= 15.0) {
+      return "a kapuscseréjük fordít (${avg.toStringAsFixed(0)} "
+          "százalékpont javulás) · a lövő-terv a második kapusra is "
+          "készüljön";
+    }
+    if (avg <= -15.0) {
+      return "a kapuscseréjük sem segít (${avg.toStringAsFixed(0)} "
+          "százalékpont) · nyomjátok tovább ugyanazt";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10925,6 +10944,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gólpassz-duó", _assistDuo(r)!],
       if (_timeoutYield(r) != null)
         ["Időkérés-hozam", _timeoutYield(r)!],
+      if (_gkChangeYield(r) != null)
+        ["Kapuscsere-hozam", _gkChangeYield(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

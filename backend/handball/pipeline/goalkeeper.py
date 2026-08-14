@@ -1133,6 +1133,55 @@ def gk_change_effect(match: Match, config=None) -> dict:
     return out
 
 
+# Kapuscsere-hozam: ekkora (százalékpontos) védés-változás fölött
+# mondjuk ki, hogy a csere fordított (vagy nem segített).
+GCY_GAP_PP = 15.0
+
+
+def gk_change_yield(match: Match, config=None) -> dict:
+    """Kapuscsere-hozam: FORDÍT-E a kapuscseréjük.
+
+    A kapuscsere-hatás (gk_change_effect) a nyers védés-változást
+    adja — ez az ÍTÉLETET: a csere utáni védés-százalék változásából
+    mondja ki, hogy a második kapus mentőöv-e.
+
+    Edzőileg ez a lövő-terv B-lapja. Ha a cseréjük rendre fordít, a
+    lövő-tervet a MÁSODIK kapusra is el kell készíteni — az első
+    megingása után más minőség jön, és a bemelegedés nélkül beálló
+    kapus első perceiben kell büntetni. Ha a csere sem segít, az
+    első kapus megingása után nincs mentőövük: nyomni kell tovább
+    ugyanazt, ami addig bement. Saját csapatra: a második kapus
+    beállás-rutinja (első labda, első védés) edzés-téma.
+
+    Visszatérés csapatonként: {"changes", "delta_pp", "verdict"} —
+    a verdict None, ha nem volt csere, kevés a minta, vagy a
+    változás nem éri el a GCY_GAP_PP-t.
+    """
+    eff = gk_change_effect(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        src = eff.get(side, {})
+        rec = {"changes": src.get("changes", 0),
+               "delta_pp": src.get("delta_pp"), "verdict": None}
+        d = rec["delta_pp"]
+        if d is not None:
+            if d >= GCY_GAP_PP:
+                rec["verdict"] = (
+                    f"a kapuscseréjük fordít ({d:+.0f} százalékpont "
+                    "védés-változás) — a lövő-tervet a második "
+                    "kapusra is el kell készíteni, és a beállása "
+                    "utáni első percekben kell büntetni, amíg hideg")
+            elif d <= -GCY_GAP_PP:
+                rec["verdict"] = (
+                    f"a kapuscseréjük sem segít ({d:+.0f} "
+                    "százalékpont védés-változás) — az első kapus "
+                    "megingása után nincs mentőövük: nyomni kell "
+                    "tovább ugyanazt, ami addig bement")
+        out[side] = rec
+    return out
+
+
 # Kapus-gyengeoldal: ennyi bekapott góltól ítélünk, és e részarány
 # felett számít gyengének a kapu egy oldala (a kapus szemszögéből).
 GK_SIDE_MIN_GOALS = 6

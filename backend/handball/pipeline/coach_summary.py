@@ -3055,6 +3055,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_toy['verdict'].split(' — ')[-1]}.")
     except Exception:
         pass
+    # Kapuscsere-hozam: fordít-e a kapuscseréjük.
+    try:
+        from .goalkeeper import gk_change_yield
+        gcy = gk_change_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gcy = gcy[side]
+            if rec_gcy["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapuscseréje "
+                     f"{rec_gcy['delta_pp']:+.0f} százalékpontot "
+                     f"változtat a védésen — "
+                     f"{rec_gcy['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles
