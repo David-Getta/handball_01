@@ -2700,3 +2700,29 @@ def test_seven_taker_players_silent_after_one():
 
     rec = seven_taker_players(_svm_match(1))["home"]
     assert rec["sevens"] == 1 and rec["top"] is None, rec
+
+
+def test_shorthanded_survival_judges_the_penalty_kill(monkeypatch):
+    """Sok hátrányban kapott gólnál beszakadnak, kevésnél állják a
+    hátrányt; kevés hátrány-időnél nincs ítélet."""
+    from handball.pipeline import rules
+
+    monkeypatch.setattr(
+        rules, "powerplay_efficiency",
+        lambda match, config=None: {
+            "home": {"sh_seconds": 240.0, "sh_conceded": 4},
+            "away": {"sh_seconds": 240.0, "sh_conceded": 0}})
+    rec = rules.shorthanded_survival(None)
+    assert rec["home"]["per_2min"] == 2.0
+    assert "beszakadnak" in rec["home"]["verdict"], rec["home"]
+    assert rec["away"]["per_2min"] == 0.0
+    assert "állnak" in rec["away"]["verdict"], rec["away"]
+
+    monkeypatch.setattr(
+        rules, "powerplay_efficiency",
+        lambda match, config=None: {
+            "home": {"sh_seconds": 60.0, "sh_conceded": 2},
+            "away": {}})
+    rec = rules.shorthanded_survival(None)
+    assert rec["home"]["per_2min"] is None
+    assert rec["home"]["verdict"] is None

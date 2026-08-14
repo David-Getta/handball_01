@@ -1403,6 +1403,66 @@ def seven_conceder_roles(match: Match,
     return out
 
 
+# Emberhátrány-túlélés: ennyi hátrányban töltött másodperc kell az
+# ítélethez, és a KÉT PERCRE vetített kapott gól e küszöbei döntik
+# el, beszakadnak-e vagy állják a hátrányt.
+SHS_MIN_S = 90.0
+SHS_BAD_PER_2MIN = 1.5
+SHS_GOOD_PER_2MIN = 0.5
+
+
+def shorthanded_survival(match: Match,
+                         config: Optional[TacticsConfig] = None
+                         ) -> dict:
+    """Emberhátrány-túlélés: MIT ÉR ellenük az emberelőny.
+
+    Az emberelőny-hozam (powerplay_yield) a NYERTES oldalt nézi — ez
+    a BÜNTETETT oldalt: a hátrányban töltött időre vetíti a
+    hátrányban kapott gólokat (gól / két perc hátrány).
+
+    Edzőileg ez az emberelőny-terv címzettje. Ha hátrányban
+    beszakadnak, a kiállításukat végig kell büntetni: türelmes,
+    zárt emberelőny-figurák, semmi kapkodás — az idő nekik fáj. Ha
+    hátrányban is állnak, a kettős fölény ellenük keveset ér: az
+    emberelőnyben is az egyenlő létszámú fegyverek (1v1, betörés)
+    dolgoznak, és a kiállításuk alatt a gyors gól többet ér, mint a
+    hosszú járatás. Saját csapatra: a hátrány-védekezés (4+1 fal,
+    labdatartás) edzés-téma.
+
+    Visszatérés csapatonként (a BÜNTETETT oldal): {"sh_seconds",
+    "sh_conceded", "per_2min", "verdict"} — a per_2min/verdict None,
+    ha kevés (SHS_MIN_S alatti) a hátrányban töltött idő.
+    """
+    config = config or TacticsConfig()
+    eff = powerplay_efficiency(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        src = (eff or {}).get(side, {})
+        rec = {"sh_seconds": round(src.get("sh_seconds", 0.0), 1),
+               "sh_conceded": int(src.get("sh_conceded", 0)),
+               "per_2min": None, "verdict": None}
+        if rec["sh_seconds"] >= SHS_MIN_S:
+            per2 = 120.0 * rec["sh_conceded"] / rec["sh_seconds"]
+            rec["per_2min"] = round(per2, 2)
+            if per2 >= SHS_BAD_PER_2MIN:
+                rec["verdict"] = (
+                    f"hátrányban beszakadnak ({rec['per_2min']:.1f} "
+                    f"kapott gól két percenként, {rec['sh_seconds']:.0f}"
+                    " mp hátrányból) — a kiállításukat végig kell "
+                    "büntetni: türelmes, zárt emberelőny-figurák, az "
+                    "idő nekik fáj")
+            elif per2 <= SHS_GOOD_PER_2MIN:
+                rec["verdict"] = (
+                    f"hátrányban is állnak ({rec['per_2min']:.1f} "
+                    "kapott gól két percenként) — a kettős fölény "
+                    "ellenük keveset ér: emberelőnyben is az 1v1 és "
+                    "a betörés dolgozik, és a gyors gól többet ér a "
+                    "hosszú járatásnál")
+        out[side] = rec
+    return out
+
+
 # Emberelőny-hozam: sávonként ennyi kaputra tartó lövés kell az
 # ítélethez, és ekkora (százalékpontos) különbség számít érdeminek.
 PPY_MIN_SHOTS = 4

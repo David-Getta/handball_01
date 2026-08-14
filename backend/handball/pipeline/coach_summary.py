@@ -3069,6 +3069,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_gcy['verdict'].split(' — ')[-1]}.")
     except Exception:
         pass
+    # Emberhátrány-túlélés: mit ér ellenük az emberelőny.
+    try:
+        from .rules import shorthanded_survival
+        shs = shorthanded_survival(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_shs = shs[side]
+            if rec_shs["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hátrányban "
+                     f"{rec_shs['per_2min']:.1f} gólt kap két "
+                     f"percenként — "
+                     f"{rec_shs['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

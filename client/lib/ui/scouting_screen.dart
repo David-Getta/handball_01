@@ -3122,6 +3122,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Emberhátrány-túlélés: mit ér ellenük az emberelőny (90+ mp
+  // hátrány — a backenddel azonos küszöbök: SHS_MIN_S,
+  // SHS_BAD_PER_2MIN, SHS_GOOD_PER_2MIN).
+  String? _shorthandedSurvival(Map<String, dynamic> r) {
+    final secs = (r["shs_seconds"] as num?)?.toInt() ?? 0;
+    final conceded = (r["shs_conceded"] as num?)?.toInt() ?? 0;
+    if (secs < 90) return null;
+    final per2 = 120.0 * conceded / secs;
+    if (per2 >= 1.5) {
+      return "hátrányban beszakadnak (${per2.toStringAsFixed(1)} "
+          "kapott gól/2 perc) · a kiállításukat végig büntessétek";
+    }
+    if (per2 <= 0.5) {
+      return "hátrányban is állnak (${per2.toStringAsFixed(1)} "
+          "kapott gól/2 perc) · emberelőnyben is az 1v1 dolgozik";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10946,6 +10965,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Időkérés-hozam", _timeoutYield(r)!],
       if (_gkChangeYield(r) != null)
         ["Kapuscsere-hozam", _gkChangeYield(r)!],
+      if (_shorthandedSurvival(r) != null)
+        ["Emberhátrány-túlélés", _shorthandedSurvival(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

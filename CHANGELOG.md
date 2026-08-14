@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Emberhátrány-túlélés: mit ér ellenük az emberelőny.** Az
+  emberelőny-hozam a nyertes oldalt nézi — az új réteg a büntetett
+  oldalt: a hátrányban töltött időre vetíti a hátrányban kapott
+  gólokat (gól / két perc hátrány). Edzőileg ez az emberelőny-terv
+  címzettje: ha hátrányban beszakadnak, a kiállításukat végig kell
+  büntetni (türelmes, zárt figurák — az idő nekik fáj); ha hátrányban
+  is állnak, a kettős fölény ellenük keveset ér — emberelőnyben is az
+  1v1 és a betörés dolgozik. Saját csapatra a hátrány-védekezés
+  (zárt 5-ös fal, időhúzás) az edzés-téma. Kilencven másodperc mért
+  hátránytól ítél. A rangsorban az "ár" családba tartozik, és a
+  jelentés Hozam-lencséjébe is bekerült. Felületek: /analyze +
+  meccs-csomag (`shorthanded_survival`), edzői összefoglaló,
+  felderítés (`shs_seconds` / `shs_conceded` mezők + edzői kulcs +
+  421. meccsterv-szabály), edzés-fókusz (441. szabály),
+  kliens-csempe.
+
 - **A Hozam-lencse a mai új rétegeket is hozza.** A meccs-jelentés
   Hozam-lencse táblája kiegészült a Hetes-forrás, a Gólpassz-duó, a
   Kapuscsere-hozam és az Időkérés-hozam ítéleteivel — az

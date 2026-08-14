@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 441) Emberhátrány-túlélés: a hátrány-védekezés rendszer, nem
+    # hősiesség.
+    try:
+        from .rules import SHS_BAD_PER_2MIN, shorthanded_survival
+        shs441 = shorthanded_survival(match, config)
+        for side in ("home", "away"):
+            rec441 = shs441[side]
+            if rec441["per_2min"] is None:
+                continue
+            if rec441["per_2min"] < SHS_BAD_PER_2MIN:
+                continue
+            add(side, "védekezés", "Hátrány-védekezés",
+                f"emberhátrányban {rec441['per_2min']:.1f} gólt "
+                f"kapunk két percenként ({rec441['sh_seconds']:.0f} "
+                f"mp hátrányból; {SHS_BAD_PER_2MIN:.1f} gól/2 perc "
+                "fölött jelezzük) — a kiállításaink duplán fájnak",
+                "hátrány-védekezés edzése: 5-6 elleni zárt fal "
+                "(mély, keskeny), a szélső lövők vállalása a beálló "
+                "helyett, tudatos időhúzás támadásban, és a "
+                "kiállítás utáni első védekezés forgatókönyve",
+                )
+    except Exception:
+        pass
+
     # 440) Kapuscsere-hozam: a második kapus beállás-rutinja
     # edzhető.
     try:

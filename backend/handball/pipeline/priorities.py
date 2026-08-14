@@ -68,6 +68,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "empty_net_turnovers"),
         ("ár", "Kétperc ára", "rules", "suspension_cost"),
         ("ár", "Emberelőny-hozam", "rules", "powerplay_yield"),
+        ("ár", "Emberhátrány-túlélés", "rules",
+         "shorthanded_survival"),
         ("ár", "Eladás-ár posztonként", "roles", "role_turnover_cost"),
         # --- ember: néven nevezett minta -----------------------------
         ("ember", "Tüzes kéz", "momentum", "hot_hands"),

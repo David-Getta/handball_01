@@ -2119,7 +2119,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         from .goalkeeper import (empty_net_turnovers, gk_change_yield,
                                  keeper_return)
         from .rules import (passive_risk, powerplay_yield,
-                            seven_sources, seven_yield)
+                            seven_sources, seven_yield,
+                            shorthanded_survival)
         from .setplays import setplay_decay
         from .stats import running_load_balance
         from .stoppages import timeout_yield
@@ -2127,6 +2128,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
 
         yld_rows = _lens_rows((
             ("Emberelőny-hozam", powerplay_yield),
+            ("Emberhátrány-túlélés", shorthanded_survival),
             ("Hetes-hozam", seven_yield),
             ("Hetes-forrás", seven_sources),
             ("Elzárás-hozam", screen_yield),

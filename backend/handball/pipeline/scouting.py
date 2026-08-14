@@ -1135,6 +1135,10 @@ class ScoutingReport:
     # tized-százalékpontban (meccsek közt átlagolható). Összeg.
     gcy_changes: int = 0
     gcy_delta_dpp: int = 0
+    # Emberhátrány-túlélés: hátrányban töltött idő (mp, egészre
+    # kerekítve) és hátrányban kapott gól. Összeg, összegződik.
+    shs_seconds: int = 0
+    shs_conceded: int = 0
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4828,6 +4832,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "százalékpont) — az első kapusuk megingása után "
                 "nincs mentőövük: nyomjátok tovább ugyanazt, ami "
                 "addig bement.")
+
+    # Emberhátrány-túlélés: mit ér ellenük a megszerzett kétperc.
+    if rep.shs_seconds >= 90:
+        _shs_per2 = 120.0 * rep.shs_conceded / rep.shs_seconds
+        if _shs_per2 >= 1.5:
+            keys.append(
+                f"Hátrányban beszakadnak ({_shs_per2:.1f} kapott gól "
+                "két percenként) — a kiállításukat végig büntessétek: "
+                "türelmes, zárt emberelőny-figurák, az idő nekik "
+                "fáj.")
+        elif _shs_per2 <= 0.5:
+            keys.append(
+                f"Hátrányban is állnak ({_shs_per2:.1f} kapott gól "
+                "két percenként) — a kettős fölény ellenük keveset "
+                "ér: emberelőnyben is az 1v1 és a betörés dolgozik, "
+                "és a gyors gól többet ér a hosszú járatásnál.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10273,6 +10293,10 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .rules import shorthanded_survival as _shs
+        shsrec = _shs(match, config)[team.value]
+        rep.shs_seconds = int(round(shsrec["sh_seconds"]))
+        rep.shs_conceded = shsrec["sh_conceded"]
         from .goalkeeper import gk_change_yield as _gcy
         gcyrec = _gcy(match, config)[team.value]
         rep.gcy_changes = (1 if gcyrec["delta_pp"] is not None else 0)
@@ -13339,6 +13363,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 421) Az ő hátrány-beszakadásuk × a ti kiharcolt
+    # büntetéseitek: a megszerzett emberelőnyt végig kell büntetni.
+    if opp.shs_seconds >= 90:
+        _shs421_per2 = 120.0 * opp.shs_conceded / opp.shs_seconds
+        _shs421_earned = sum(
+            p_.get("earned", 0) for p_ in (own.seven_earners or []))
+        if (_shs421_per2 >= 1.5
+                and own.agr_sevens + _shs421_earned >= 2):
+            plan.append(
+                f"Hátrányban beszakadnak ({_shs421_per2:.1f} kapott "
+                "gól két percenként), ti pedig ki tudjátok harcolni "
+                "a büntetést — a kiállításaikat végig büntessétek: "
+                "türelmes, zárt emberelőny-figurák, semmi kapkodás.")
 
     # 420) Az ő kapuscseréjük × a ti lövő-tervetek: a B-lap.
     if opp.gcy_changes >= 1 and own.shots >= 10:
@@ -20557,6 +20595,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(
             r.adu_goals_by_duo for r in reports),
+        shs_seconds=sum(r.shs_seconds for r in reports),
+        shs_conceded=sum(r.shs_conceded for r in reports),
         gcy_changes=sum(r.gcy_changes for r in reports),
         gcy_delta_dpp=sum(r.gcy_delta_dpp for r in reports),
         toy_broke=sum(r.toy_broke for r in reports),
