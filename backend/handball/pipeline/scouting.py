@@ -1127,6 +1127,9 @@ class ScoutingReport:
     # Leforduló beállók: a mozgásból hozott beálló-átvételek darabszáma
     # JÁTÉKOSONKÉNT. Darabszám, meccsek közt pontosan összegződik.
     lfb_running_by_player: dict = field(default_factory=dict)
+    # Befutó emberek: a második hullámos kontra-befejezések darabszáma
+    # JÁTÉKOSONKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    bfw_shots_by_player: dict = field(default_factory=dict)
     # Keresztjáró emberek: a keresztben-részvételek darabszáma
     # JÁTÉKOSONKÉNT, és a mért keresztek száma. Darabszámok,
     # meccsek közt pontosan összegződnek.
@@ -4829,6 +4832,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "bejátszás ELŐTT lépjetek elé (hangos váltás, "
                 "passzsáv-zárás a lefordulás előtt): az átvétel "
                 "utáni birkózás nála mindig késő.")
+
+    # Befutó emberek: kit kell a visszafutásnál megtalálni.
+    if rep.bfw_shots_by_player:
+        _bfw_all = sum(rep.bfw_shots_by_player.values())
+        _bfw_k, _bfw_n = max(rep.bfw_shots_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _bfw_n >= 2 and _bfw_n >= 0.5 * max(1, _bfw_all):
+            keys.append(
+                f"A kontráik befutó embere a(z) {_bfw_k}. játékos "
+                f"({_bfw_n}/{_bfw_all} második hullámos befejezés) — "
+                "a visszafutásnál az első ember felvétele után NE "
+                "álljatok meg: a középső sávban hátra, és őt kell "
+                "megtalálni, mielőtt labdát kap.")
 
     # 7a6-befejező emberek: kit kell először megtalálni.
     if rep.en7p_shots_by_player:
@@ -10414,6 +10430,12 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["running"]
             for r in lfbrec["players"]}
+        from .attack_types import second_wave_finishers as _bfw
+        bfwrec = _bfw(match, config)[team.value]
+        rep.bfw_shots_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["shots"]
+            for r in bfwrec["players"]}
         from .momentum import lead_scorers as _lgp
         lgprec = _lgp(match, config)[team.value]
         rep.lgp_goals_by_player = {
@@ -13452,6 +13474,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 426) Az ő befutó emberük × a ti gyors visszafutásotok: a
+    # második hullámot a középső sáv feltöltése öli meg.
+    if opp.bfw_shots_by_player and own.trans_steals >= 5:
+        _bfw426_all = sum(opp.bfw_shots_by_player.values())
+        _bfw426_k, _bfw426_n = max(opp.bfw_shots_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _bfw426_n >= 2 and _bfw426_n >= 0.5 * max(1, _bfw426_all):
+            plan.append(
+                f"A kontráik gólja a befutótól jön — {_bfw426_n}/"
+                f"{_bfw426_all} második hullámos befejezés a(z) "
+                f"{_bfw426_k}. emberüktől —, ti pedig jól olvassátok "
+                f"a játékot ({own.trans_steals} szerzés) — a "
+                "visszafutásnál a középső sávot töltsétek fel, és a "
+                "befutó passzát csípjétek el: az ő labdája a "
+                "legkönnyebb szerzés, és belőle visszakontra lesz.")
 
     # 425) Az ő leforduló beállójuk × a ti labdaszerzésetek: a
     # bejátszás-sáv a lefordulás előtt nyitva áll.
@@ -20748,6 +20786,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         crp_crosses=sum(r.crp_crosses for r in reports),
         lfb_running_by_player=_merge_count_dicts(
             r.lfb_running_by_player for r in reports),
+        bfw_shots_by_player=_merge_count_dicts(
+            r.bfw_shots_by_player for r in reports),
         en7p_shots_by_player=_merge_count_dicts(
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(

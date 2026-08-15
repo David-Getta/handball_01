@@ -3109,6 +3109,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "beállóhoz megy · nála a bejátszás előtt lépjetek elé";
   }
 
+  // Befutó emberek: ki a második hullám embere a kontrákban (2+
+  // második hullámos befejezés, a befejezések fele — a backenddel
+  // azonos küszöbök: BFW_MIN_SECOND, BFW_SHARE_PCT).
+  String? _secondWaveFinisher(Map<String, dynamic> r) {
+    final bf = (r["bfw_shots_by_player"] as Map?)?.cast<String, dynamic>();
+    if (bf == null || bf.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    bf.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a kontráik befutó embere a(z) $top. játékos ($topN/$all "
+        "második hullámos befejezés) · a visszafutásnál őt találjátok meg";
+  }
+
   // 7a6-befejező emberek: kire fut ki a hetedik ember játéka (2+
   // 7a6-lövés, a lövések fele — a backenddel azonos küszöbök:
   // EN7P_MIN_SHOTS, EN7P_SHARE_PCT).
@@ -11048,6 +11071,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Keresztjáró ember", _crossRunner(r)!],
       if (_pivotRunner(r) != null)
         ["Leforduló beálló", _pivotRunner(r)!],
+      if (_secondWaveFinisher(r) != null)
+        ["Befutó ember", _secondWaveFinisher(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)

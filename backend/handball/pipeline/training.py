@@ -1366,6 +1366,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 446) Befutó emberek: az egy befutóra épülő második hullám
+    # kiszámítható — a visszafutás megtanulja őt.
+    try:
+        from .attack_types import BFW_MIN_SECOND, second_wave_finishers
+        bfw446 = second_wave_finishers(match, config)
+        for side in ("home", "away"):
+            top446 = bfw446[side].get("top")
+            if top446 is None:
+                continue
+            _ki446 = (f"a(z) {top446['jersey']}. számú"
+                      if top446.get("jersey") is not None
+                      else f"a(z) {top446['player_id']}. játékos")
+            add(side, "támadás", "Második hullám több emberrel",
+                f"a kontráink második hullámos befejezéseinek zöme "
+                f"{_ki446} emberünktől jön ({top446['shots']} "
+                f"befejezés; {BFW_MIN_SECOND} befejezéstől már "
+                "jelezzük) — az egy befutóra épülő kontra ellen a "
+                "visszafutás gyorsan megtanulja, kit kell fogni",
+                "befutó-variálás: a kontra-figurákban a második "
+                "hullám két sávból érkezzen (szélső ÉS átlövő "
+                "befutás), az első ember tanuljon visszatett labdát "
+                "mindkét irányba, és a befutó időzítése változzon "
+                "(korai és megkésett hullám vegyesen)",
+                )
+    except Exception:
+        pass
+
     # 445) Leforduló beállók: az egy beállóra épülő lefordulós játék
     # kiszámítható — az elé lépés ellene készen áll.
     try:

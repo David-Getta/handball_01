@@ -4292,6 +4292,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "elé lépni, az átvétel után már késő.")
     except Exception:
         pass
+    # Befutó emberek: ki a második hullám embere a kontrákban.
+    try:
+        from .attack_types import second_wave_finishers
+        bfw = second_wave_finishers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_bfw = bfw[side]["top"]
+            if top_bfw is None:
+                continue
+            _bfw_j = (top_bfw["jersey"]
+                      if top_bfw["jersey"] is not None
+                      else top_bfw["player_id"])
+            body += (f" A(z) {name} kontráinak befutó embere a(z) "
+                     f"{_bfw_j}. játékos "
+                     f"({top_bfw['shots']}/{bfw[side]['second']} "
+                     "második hullámos befejezés) — a visszafutásnál "
+                     "őt kell megtalálni, nem elég az első embert "
+                     "felvenni.")
+    except Exception:
+        pass
     # Csere-lyukak: mennyi ideig játszanak öten csere közben.
     try:
         from .substitutions import sub_gaps

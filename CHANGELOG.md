@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Befutó emberek**: KI a második hullám embere a kontráikban — a
+  kontra-hullámok ember-ikre: a második hullámos (nem a legelöl futó
+  által lőtt) kontra-befejezéseket emberre bontja; akinél a zömük
+  landol (2+, 50%+), ő a befutó ember. Edzői olvasat: a visszafutásnál
+  őt kell megtalálni — az első ember felvétele után nem szabad
+  megállni, a középső sávot kell feltölteni; a saját csapatnak az egy
+  befutóra épülő kontra kiszámítható — két sávból, változó időzítéssel
+  kell befutni. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (edzői kulcs + 426. meccsterv-szabály),
+  446. edzés-szabály, prioritások (ember-család + Kulcs-ember),
+  kliens-csempe.
 - **Az azonnali indítás tényleg azonnal indul** (motor): a "kezdje
   most" választásnál az új elemzés eddig a soros munkáson várta végig
   a félretett munka utómunkáját/mentését (ami perceket — beragadt

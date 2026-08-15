@@ -4607,6 +4607,94 @@ def fast_break_waves(match: Match,
                 rec["verdict"] = "az első ember fejezi be a kontrát"
     return out
 
+
+# Befutó emberek: ennyi második hullámos kontra-befejezés kell egy
+# játékostól az ítélethez, és a csapat befutós befejezéseiből e
+# feletti részarány teszi őt a kontra befutó emberévé.
+BFW_MIN_SECOND = 2
+BFW_SHARE_PCT = 50.0
+
+
+def second_wave_finishers(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Befutó emberek: KI a második hullám embere a kontráikban.
+
+    A kontra-hullámok (fast_break_waves) azt méri, az első ember vagy
+    a második hullám fejezi-e be a lerohanást — ez azt, KI a befutó:
+    a második hullámos (nem a legelöl lévő által lőtt) kontra-
+    befejezéseket emberre bontjuk. Akinél a zömük landol, ő a befutó
+    ember — a kontrájuk gólja nem az első embertől, hanem tőle jön.
+
+    Edzőileg: az ő felvétele a visszafutás kulcsa — az első ember
+    felvétele után NEM szabad megállni: a középső sávban hátra kell
+    lépni, és a befutót megtalálni, mielőtt labdát kap. A
+    visszafutó szélső dolga az ő keresztezése, nem az első emberé.
+
+    Visszatérés csapatonként: {"second", "players": [{"player_id",
+    "jersey", "shots", "share_pct"}], "top"} — a lista befejezés
+    szerint csökkenő; a "top" az első játékos, ha legalább
+    BFW_MIN_SECOND befutós befejezése van és a részaránya eléri a
+    BFW_SHARE_PCT-t (egyébként None).
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)
+             and e.player_id is not None]
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        side = a["team"]
+        shot = next((e for e in shots if e.team.value == side
+                     and a["start_frame"] <= e.t
+                     <= a["end_frame"] + tail), None)
+        if shot is None:
+            continue
+        i0 = idx_of.get(a["start_frame"])
+        if i0 is None:
+            continue
+        goal_x = config.attacks_toward_x(Team(side))
+        runners = [p for p in match.frames[i0].players
+                   if p.team.value == side and p.role != "kapus"]
+        if len(runners) < 2:
+            continue
+        first_id = min(runners,
+                       key=lambda p: abs(p.x - goal_x)).track_id
+        if shot.player_id == first_id:
+            continue
+        si = idx_of.get(shot.t)
+        if si is not None:
+            sp = next((p for p in match.frames[si].players
+                       if p.track_id == shot.player_id), None)
+            if sp is not None \
+                    and getattr(sp, "jersey_number", None) is not None:
+                jersey.setdefault(shot.player_id, sp.jersey_number)
+        tally[side][shot.player_id] = \
+            tally[side].get(shot.player_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = sum(tally[side].values())
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "shots": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if players and players[0]["shots"] >= BFW_MIN_SECOND \
+                and (players[0]["share_pct"] or 0.0) >= BFW_SHARE_PCT:
+            top = players[0]
+        out[side] = {"second": n, "players": players, "top": top}
+    return out
+
 # Kontra-elszökés: a labdánál legalább ennyivel előrébb álló ember
 # számít elszököttnek a kontra indulásakor; ennyi lerohanás kell az
 # ítélethez, és e feletti / alatti elszökött arány a szökős, illetve

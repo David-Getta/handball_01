@@ -3127,6 +3127,27 @@ def test_fast_break_waves_needs_enough_breaks():
     assert rec["verdict"] is None
 
 
+def test_second_wave_finishers_names_the_runner():
+    """A befutó (2-es) adja le a második hullámos befejezéseket → ő a
+    kontra befutó embere."""
+    from handball.pipeline.attack_types import second_wave_finishers
+
+    rec = second_wave_finishers(_fbw_match(True))["home"]
+    assert rec["second"] >= 2
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 2
+    assert rec["top"]["share_pct"] >= 50.0
+
+
+def test_second_wave_finishers_first_man_gives_no_top():
+    """Ha az első ember fejezi be a kontrákat, nincs befutó ember."""
+    from handball.pipeline.attack_types import second_wave_finishers
+
+    rec = second_wave_finishers(_fbw_match(False))["home"]
+    assert rec["second"] == 0
+    assert rec["top"] is None
+
+
 # ---- Kontra-elszökés (előre szökött ember vagy együtt felfutás) -------------
 
 def _fbh_match(ahead, n_breaks=6, fps=25.0):
