@@ -3132,6 +3132,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "második hullámos befejezés) · a visszafutásnál őt találjátok meg";
   }
 
+  // Egálbontó emberek: ki viszi el góllal a holtpontokat (2+ egálbontó
+  // gól, a gólok fele — a backenddel azonos küszöbök: PBP_MIN_BREAKS,
+  // PBP_SHARE_PCT).
+  String? _parityBreakScorer(Map<String, dynamic> r) {
+    final pb = (r["pbp_breaks_by_player"] as Map?)?.cast<String, dynamic>();
+    if (pb == null || pb.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    pb.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a holtpontjaikat a(z) $top. játékos viszi el ($topN/$all "
+        "egálbontó gól) · egálnál őt vegyétek ki először";
+  }
+
   // 7a6-befejező emberek: kire fut ki a hetedik ember játéka (2+
   // 7a6-lövés, a lövések fele — a backenddel azonos küszöbök:
   // EN7P_MIN_SHOTS, EN7P_SHARE_PCT).
@@ -11073,6 +11096,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Leforduló beálló", _pivotRunner(r)!],
       if (_secondWaveFinisher(r) != null)
         ["Befutó ember", _secondWaveFinisher(r)!],
+      if (_parityBreakScorer(r) != null)
+        ["Egálbontó ember", _parityBreakScorer(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)
@@ -11381,7 +11406,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                             "előny-", "hátrány-", "kettős ember"]),
     ("Idő, állás, forma", ["-állás", "állás szerint", "félidő", "félidei",
                            "szünet", "hajrá", "negyedóra", "ötperc",
-                           "-esés", "fáradás", "holtpont", "ritmus",
+                           "-esés", "fáradás", "holtpont", "egálbont",
+                           "ritmus",
                            "sorozat", "lendület", "elalvás", "gólcsend",
                            "csend-", "hidegedés", "bemelegedés",
                            "utolsó labda", "meccsek", "percek", "forró",

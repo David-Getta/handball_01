@@ -1130,6 +1130,9 @@ class ScoutingReport:
     # Befutó emberek: a második hullámos kontra-befejezések darabszáma
     # JÁTÉKOSONKÉNT. Darabszám, meccsek közt pontosan összegződik.
     bfw_shots_by_player: dict = field(default_factory=dict)
+    # Egálbontó emberek: a döntetlenről szerzett (egált bontó) gólok
+    # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    pbp_breaks_by_player: dict = field(default_factory=dict)
     # Keresztjáró emberek: a keresztben-részvételek darabszáma
     # JÁTÉKOSONKÉNT, és a mért keresztek száma. Darabszámok,
     # meccsek közt pontosan összegződnek.
@@ -4845,6 +4848,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "a visszafutásnál az első ember felvétele után NE "
                 "álljatok meg: a középső sávban hátra, és őt kell "
                 "megtalálni, mielőtt labdát kap.")
+
+    # Egálbontó emberek: egálnál kit kell először kivenni.
+    if rep.pbp_breaks_by_player:
+        _pbp_all = sum(rep.pbp_breaks_by_player.values())
+        _pbp_k, _pbp_n = max(rep.pbp_breaks_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _pbp_n >= 2 and _pbp_n >= 0.5 * max(1, _pbp_all):
+            keys.append(
+                f"A holtpontjaikat a(z) {_pbp_k}. játékos viszi el "
+                f"({_pbp_n}/{_pbp_all} egálbontó gól) — egálnál az ő "
+                "kivétele az első dolog: szoros fogás, korai "
+                "kettőzés, a kedvenc befejezése letiltva.")
 
     # 7a6-befejező emberek: kit kell először megtalálni.
     if rep.en7p_shots_by_player:
@@ -10436,6 +10451,12 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["shots"]
             for r in bfwrec["players"]}
+        from .momentum import parity_break_scorers as _pbp
+        pbprec = _pbp(match, config)[team.value]
+        rep.pbp_breaks_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["breaks"]
+            for r in pbprec["players"]}
         from .momentum import lead_scorers as _lgp
         lgprec = _lgp(match, config)[team.value]
         rep.lgp_goals_by_player = {
@@ -13474,6 +13495,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 427) Az ő holtpont-emberük × a ti hajrá-erőtök: az egál a ti
+    # műfajotok legyen, ne az övé.
+    if opp.pbp_breaks_by_player and own.clutch_goals_for >= 3:
+        _pbp427_all = sum(opp.pbp_breaks_by_player.values())
+        _pbp427_k, _pbp427_n = max(opp.pbp_breaks_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _pbp427_n >= 2 and _pbp427_n >= 0.5 * max(1, _pbp427_all):
+            plan.append(
+                f"A holtpontjaikat a(z) {_pbp427_k}. játékos viszi el "
+                f"({_pbp427_n}/{_pbp427_all} egálbontó gól), ti "
+                f"pedig erősek vagytok a feszült szakaszokban "
+                f"({own.clutch_goals_for} hajrá-gól) — egálnál őt "
+                "vegyétek ki (szoros fogás, korai kettőzés), és "
+                "kényszerítsétek másra a döntést: a holtpont így a "
+                "ti műfajotok marad.")
 
     # 426) Az ő befutó emberük × a ti gyors visszafutásotok: a
     # második hullámot a középső sáv feltöltése öli meg.
@@ -20788,6 +20825,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.lfb_running_by_player for r in reports),
         bfw_shots_by_player=_merge_count_dicts(
             r.bfw_shots_by_player for r in reports),
+        pbp_breaks_by_player=_merge_count_dicts(
+            r.pbp_breaks_by_player for r in reports),
         en7p_shots_by_player=_merge_count_dicts(
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(

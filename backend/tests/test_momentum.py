@@ -2596,3 +2596,66 @@ def test_restart_yield_silent_with_few_restarts():
 
     rec = restart_yield(_rsp_match([7, 7]))["away"]
     assert rec["answer_pct"] is None and rec["verdict"] is None, rec
+
+
+# --- Egálbontó emberek (parity_break_scorers) ------------------------
+
+
+def _goal_with_shooter(t0, pid, toward_home_goal=False):
+    """Gól-kockák LÖVŐVEL: a támadó csapat játékosa a labda indulási
+    helyén áll már a lövés ELŐTT is (elő-kockák), így a detektor hozzá
+    tudja rendelni a gólt."""
+    if toward_home_goal:
+        shooter = _pl(pid, Team.AWAY, 6.4, 10.0)
+    else:
+        shooter = _pl(pid, Team.HOME, 33.6, 10.0)
+    frames = []
+    for i in range(5):              # elő-kockák: a lövő a labdánál áll
+        frames.append(Frame(t=t0 + i, players=[shooter],
+                            ball=Ball(x=shooter.x, y=10.0,
+                                      confidence=1.0)))
+    for i in range(8):
+        x = (max(6.4 - i, 0.0) if toward_home_goal
+             else min(33.6 + i, 40.0))
+        frames.append(Frame(t=t0 + 5 + i, players=[shooter],
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    return frames
+
+
+def _pbp_match(seq):
+    """seq: (irány, mez) párok időrendben — 'H'/'A' + a lövő track_id."""
+    frames = []
+    t = 0
+    for ch, pid in seq:
+        frames += _goal_with_shooter(t, pid, toward_home_goal=(ch == "A"))
+        t += 13
+        frames.append(Frame(t=t, players=[], ball=Ball(x=20.0, y=10.0,
+                                                       confidence=1.0)))
+        t += 20
+    return Match(_meta(), frames)
+
+
+def test_parity_break_scorers_names_the_tie_breaker():
+    """HAHAHH, minden hazai egálbontó gólt a 7-es lövi → ő a
+    holtpont-ember."""
+    from handball.pipeline.momentum import parity_break_scorers
+
+    m = _pbp_match([("H", 7), ("A", 21), ("H", 7), ("A", 21),
+                    ("H", 7), ("H", 8)])
+    rec = parity_break_scorers(m)["home"]
+    assert rec["breaks"] == 3
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 7
+    assert rec["top"]["share_pct"] == 100.0
+
+
+def test_parity_break_scorers_spread_gives_no_top():
+    """Ha az egálbontó gólok megoszlanak (mind más embertől), nincs
+    kiemelt holtpont-ember."""
+    from handball.pipeline.momentum import parity_break_scorers
+
+    m = _pbp_match([("H", 7), ("A", 21), ("H", 8), ("A", 21),
+                    ("H", 9), ("H", 7)])
+    rec = parity_break_scorers(m)["home"]
+    assert rec["breaks"] == 3
+    assert rec["top"] is None

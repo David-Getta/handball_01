@@ -718,6 +718,76 @@ def parity_breaks(match: Match, config=None) -> dict:
     return out
 
 
+# Egálbontó emberek: ennyi elvitt holtpont kell egy játékostól az
+# ítélethez, és a csapat egálbontó góljaiból e feletti részarány
+# teszi őt a holtpontok emberévé.
+PBP_MIN_BREAKS = 2
+PBP_SHARE_PCT = 50.0
+
+
+def parity_break_scorers(match: Match, config=None) -> dict:
+    """Egálbontó emberek: KI viszi el góllal a holtpontokat.
+
+    A holtpont-mérleg (parity_breaks) azt méri, a csapat elviszi-e a
+    döntetlen-állásokat — ez azt, KI: a döntetlenről szerzett (egált
+    bontó) gólokat emberre bontjuk. A holtpont a legtisztább
+    nyomás-teszt — akinél az egálbontó gólok zöme landol, ő az, aki a
+    feszült pillanatban is vállal és betalál.
+
+    Edzőileg: egálnál az ő kivétele az első dolog — szoros fogás,
+    korai kettőzés, a kedvenc befejezése letiltva; a saját csapatnak:
+    ha az egálbontás egy emberen áll, a holtpont-figurát több
+    befejezésre kell tanítani.
+
+    Visszatérés csapatonként: {"breaks", "players": [{"player_id",
+    "jersey", "breaks", "share_pct"}], "top"} — a lista elvitt
+    holtpont szerint csökkenő; a "top" az első játékos, ha legalább
+    PBP_MIN_BREAKS egálbontó gólja van és a részaránya eléri a
+    PBP_SHARE_PCT-t (egyébként None).
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    goals = sorted(
+        ((e.t, e.team.value, e.player_id) for e in
+         detect_shots(match, config or TacticsConfig())
+         if e.type == EventType.GOAL),
+        key=lambda g: g[0])
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    score = {"home": 0, "away": 0}
+    tied = True  # a 0-0 is holtpont
+    for t, side, pid in goals:
+        if tied and pid is not None:
+            i0 = idx_of.get(t)
+            if i0 is not None:
+                sp = next((p for p in match.frames[i0].players
+                           if p.track_id == pid), None)
+                if sp is not None \
+                        and getattr(sp, "jersey_number", None) is not None:
+                    jersey.setdefault(pid, sp.jersey_number)
+            tally[side][pid] = tally[side].get(pid, 0) + 1
+        score[side] += 1
+        tied = score["home"] == score["away"]
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = sum(tally[side].values())
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "breaks": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if players and players[0]["breaks"] >= PBP_MIN_BREAKS \
+                and (players[0]["share_pct"] or 0.0) >= PBP_SHARE_PCT:
+            top = players[0]
+        out[side] = {"breaks": n, "players": players, "top": top}
+    return out
+
+
 # Félidei hátrányból fordítás: ennyi felismert gól kell az ítélethez
 # (részleges felvételen a hamis "0-0" nem ítélet).
 HT_COMEBACK_MIN_GOALS = 6

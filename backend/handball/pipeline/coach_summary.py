@@ -4311,6 +4311,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "felvenni.")
     except Exception:
         pass
+    # Egálbontó emberek: ki viszi el góllal a holtpontokat.
+    try:
+        from .momentum import parity_break_scorers
+        pbp = parity_break_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_pbp = pbp[side]["top"]
+            if top_pbp is None:
+                continue
+            _pbp_j = (top_pbp["jersey"]
+                      if top_pbp["jersey"] is not None
+                      else top_pbp["player_id"])
+            body += (f" A(z) {name} holtpont-embere a(z) "
+                     f"{_pbp_j}. játékos "
+                     f"({top_pbp['breaks']}/{pbp[side]['breaks']} "
+                     "egálbontó gól) — egálnál az ő kivétele az "
+                     "első dolog.")
+    except Exception:
+        pass
     # Csere-lyukak: mennyi ideig játszanak öten csere közben.
     try:
         from .substitutions import sub_gaps

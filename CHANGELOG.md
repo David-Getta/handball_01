@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Egálbontó emberek**: KI viszi el góllal a holtpontjaikat — a
+  holtpont-mérleg ember-ikre: a döntetlen állásról szerzett (egált
+  bontó) gólokat emberre bontja; akinél a zömük landol (2+, 50%+), ő
+  a holtpont-ember. Edzői olvasat: egálnál az ő kivétele az első
+  dolog — szoros fogás, korai kettőzés, a kedvenc befejezése
+  letiltva; a saját csapatnak a holtpont ne egy emberen álljon — a
+  második és harmadik opció is merje vállalni a döntést. Felületek:
+  /analyze + meccs-csomag, edzői összefoglaló, felderítés (edzői
+  kulcs + 427. meccsterv-szabály), 447. edzés-szabály, prioritások
+  (ember-család + Kulcs-ember), kliens-csempe.
 - **Befutó emberek**: KI a második hullám embere a kontráikban — a
   kontra-hullámok ember-ikre: a második hullámos (nem a legelöl futó
   által lőtt) kontra-befejezéseket emberre bontja; akinél a zömük

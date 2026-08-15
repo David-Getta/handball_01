@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 447) Egálbontó emberek: a holtpont ne egy emberen álljon.
+    try:
+        from .momentum import PBP_MIN_BREAKS, parity_break_scorers
+        pbp447 = parity_break_scorers(match, config)
+        for side in ("home", "away"):
+            top447 = pbp447[side].get("top")
+            if top447 is None:
+                continue
+            _ki447 = (f"a(z) {top447['jersey']}. számú"
+                      if top447.get("jersey") is not None
+                      else f"a(z) {top447['player_id']}. játékos")
+            add(side, "támadás", "Holtpont-figura több emberre",
+                f"az egálbontó góljaink zöme {_ki447} emberünktől jön "
+                f"({top447['breaks']} elvitt holtpont; "
+                f"{PBP_MIN_BREAKS} góltól már jelezzük) — ha őt "
+                "kiveszik, a holtpontjaink elakadnak",
+                "holtpont-gyakorlás több befejezővel: az egál-figura "
+                "második és harmadik opciója is kapjon célzott "
+                "ismétlést (beálló-bejátszás, gyenge oldali átlövés), "
+                "és nyomás alatti 5-5 döntetlenről indítva — a "
+                "döntést más is merje vállalni",
+                )
+    except Exception:
+        pass
+
     # 446) Befutó emberek: az egy befutóra épülő második hullám
     # kiszámítható — a visszafutás megtanulja őt.
     try:

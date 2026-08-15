@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **474 réteg**, modulonként csoportosítva; a
+Összesen **475 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (93)
@@ -290,7 +290,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `first_half_close` | A félidő-zárás mérlege: ki üt utoljára a szünet előtt. |
 | `second_half_start` | A szünet utáni kezdés mérlege: ki üt először a 2. félidőben. |
 
-## momentum (56)
+## momentum (57)
 
 | Réteg | Mit mér |
 |---|---|
@@ -332,6 +332,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `opening_lineup` | Kezdő hatos: KIKKEL KEZDENEK. |
 | `opening_scorer_roles` | Rajt-poszt: MELYIK POSZTJUK viszi a meccs elejét. |
 | `opening_scorers` | Rajt-emberek: KI viszi a meccs elejét. |
+| `parity_break_scorers` | Egálbontó emberek: KI viszi el góllal a holtpontokat. |
 | `parity_breaks` | Holtpont-mérleg: döntetlen állásról ki lép el góllal. |
 | `post_goal_lapses` | Gól utáni elalvás: a saját gól után azonnal visszakapott gólok. |
 | `progression` | Vezetés-alakulás: az állás menete a felismert gólokból. |
