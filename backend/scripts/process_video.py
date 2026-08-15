@@ -983,6 +983,19 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         if stitched:
             say(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
 
+        # Meccs-ablak: a bemelegítés / meccs előtti rész / lefújás utáni
+        # szakasz levágása — ezek nem a meccs részei (a bemelegítő kapura
+        # lövés gólnak látszana, az üres percek felhígítanák az idő-alapú
+        # mutatókat). A félidő-felismerés ELŐTT fut (annak a "felvétel
+        # középső része" feltevését is javítja). Részleges (folytatható)
+        # feldolgozásnál a VÉGÉT nem vágjuk — a folytatás oda fűz vissza.
+        from handball.pipeline.game_window import trim_to_game
+        gw = trim_to_game(match, tail=not partial)
+        if gw is not None:
+            say(f"meccs-ablak: eleje {gw['head_cut_s']:.0f}s, vége "
+                f"{gw['tail_cut_s']:.0f}s levágva (bemelegítés / meccs "
+                "előtti-utáni rész)")
+
         # Félidő-érzékelés + térfélcsere-normalizálás: teljes meccset egyben
         # tartalmazó felvételnél a 2. félidő koordinátáit tükrözi, hogy a
         # támadás-irányok egységesek legyenek. A kapus-azonosítás ELŐTT fut.

@@ -43,6 +43,23 @@ def detect_halftime(match: Match) -> Optional[int]:
     felvétel középső 20–80%-ában keresi a leghosszabb alacsony-aktivitású
     összefüggő szakaszt, és csak BREAK_MIN_S felett fogadja el.
     """
+    span = detect_break_span(match)
+    if span is None:
+        return None
+    total = len(match.frames)
+    mid_idx = min(total - 1, (span[0] + span[1]) // 2)
+    return match.frames[mid_idx].t
+
+
+@memoize_primitive("detect_break_span")
+def detect_break_span(match: Match) -> Optional[tuple[int, int]]:
+    """A félidei szünet SÁVJA frame-INDEXEKBEN: (első, utolsó), zárt.
+
+    Ugyanaz a mérés, mint a `detect_halftime`-é (annak ez a magja), de a
+    szünet teljes kiterjedését adja vissza — a szünet-sávba eső "kapura
+    lövések" (bemelegítés, labdaszedők) kiszűréséhez kell. None, ha
+    nincs felismert szünet.
+    """
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     total = len(match.frames)
     if total < 2:
@@ -75,8 +92,46 @@ def detect_halftime(match: Match) -> Optional[int]:
             run_start = None
     if best is None or best[0] * win / fps < BREAK_MIN_S:
         return None
-    mid_idx = min(total - 1, starts[best[1]] + (best[0] * win) // 2)
-    return match.frames[mid_idx].t
+    first = starts[best[1]]
+    last = min(total - 1, starts[best[1]] + best[0] * win - 1)
+    return (first, last)
+
+
+# A szünet-sáv esemény-szűréshez csak akkor hihető, ha a felvétel a
+# sávon KÍVÜL legalább ekkora arányban aktív (követett játékosokkal
+# teli) — különben a ritkás követésű felvétel közepét néznénk szünetnek,
+# és valódi gólok esnének ki.
+BREAK_CONTRAST_SHARE = 0.5
+
+
+@memoize_primitive("credible_break_span")
+def credible_break_span(match: Match) -> Optional[tuple[int, int]]:
+    """A szünet-sáv (`detect_break_span`), HA a felvétel többi része
+    jellemzően aktív — ez különbözteti meg a valódi félidei szünetet a
+    végig ritkás követéstől. Esemény-szűréshez EZT kell használni;
+    None, ha nincs szünet vagy nincs elég kontraszt.
+    """
+    span = detect_break_span(match)
+    if span is None:
+        return None
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    total = len(match.frames)
+    win = max(1, round(BREAK_WINDOW_S * fps))
+    outside = 0
+    active = 0
+    for w0 in range(0, total, win):
+        if span[0] <= w0 <= span[1]:
+            continue
+        frames = match.frames[w0:w0 + win]
+        measured = sum(
+            sum(1 for p in f.players if p.source == PositionSource.MEASURED)
+            for f in frames)
+        outside += 1
+        if measured / max(1, len(frames)) >= LOW_PLAYERS:
+            active += 1
+    if outside == 0 or active / outside < BREAK_CONTRAST_SHARE:
+        return None
+    return span
 
 
 def _centroid_x(match: Match, team: Team, t_from: int, t_to: int) -> Optional[float]:

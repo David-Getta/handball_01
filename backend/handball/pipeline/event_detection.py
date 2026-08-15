@@ -209,6 +209,19 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
             if dxg > APPROACH_X_M + 1.0:
                 in_zone[goal_x] = False
         prev = (b.x, b.y)
+    # A félidei szünet-sávba eső "lövés/gól" nem meccs-esemény (szünetben
+    # nincs játék — az ilyen jel bemelegítés vagy labdaszedő), kimarad.
+    # Csak HIHETŐ szünetnél (a felvétel többi része aktív) — a ritkás
+    # követésű felvétel közepe nem szünet.
+    try:
+        from .halftime import credible_break_span
+        span = credible_break_span(match)
+        if span is not None:
+            lo = match.frames[span[0]].t
+            hi = match.frames[span[1]].t
+            events = [e for e in events if not (lo <= e.t <= hi)]
+    except Exception:
+        pass
     return events
 
 

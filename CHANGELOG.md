@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Meccs-ablak: a bemelegítés és a nem-meccs részek kimaradnak**
+  (motor): a feltöltött felvételben gyakran benne van a bemelegítés, a
+  meccs előtti ceremónia és a lefújás utáni rész is — eddig ezek is
+  "meccsnek" számítottak (a bemelegítő kapura lövés gólnak látszott,
+  az üres percek felhígították az idő-alapú mutatókat). A feldolgozás
+  mostantól megkeresi a tényleges játék első és utolsó jelét (elég
+  játékos a pályán, a két csapat EGY kapu körül — bemelegítésnél
+  ki-ki a sajátjánál —, és tényleges mozgás), és a felvétel nem-meccs
+  éleit levágja; a félidei szünet-sávba eső "lövéseket/gólokat"
+  (kapus-bemelegítés, labdaszedők) pedig az eseménydetektor szűri ki.
+  A videó-időzítés (jelenet-lejátszás, klipek) változatlanul pontos, a
+  félidő-felismerés és a térfélcsere-normalizálás érintetlen.
 - **Egálbontó emberek**: KI viszi el góllal a holtpontjaikat — a
   holtpont-mérleg ember-ikre: a döntetlen állásról szerzett (egált
   bontó) gólokat emberre bontja; akinél a zömük landol (2+, 50%+), ő
