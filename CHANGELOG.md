@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Az azonnali indítás tényleg azonnal indul** (motor): a "kezdje
+  most" választásnál az új elemzés eddig a soros munkáson várta végig
+  a félretett munka utómunkáját/mentését (ami perceket — beragadt
+  feldolgozásnál korábban akár örökké — tartott). Mostantól az új
+  elemzés saját szálon AZONNAL indul, a félretett munka a háttérben
+  menti az addig kész részt (félbehagyott elemzésként a könyvtárba
+  kerül); a "megvárja az előzőt" választás viselkedése változatlan.
+- **Elemzés-könyvtár a meccs-elemzőben** (kliens): új gomb a
+  meccs-képernyő eszközsorában — fülekkel (Mind · Befejezett ·
+  Félbehagyott), megnyitással és törléssel; a félbehagyott elemzés
+  jelölést kap, és innen is megnyitható vagy törölhető, nem csak a
+  dashboardról.
 - **Leforduló beállók**: MELYIK beálló kapja mozgásból a labdát — a
   beálló-futtatás ember-ikre: a mozgásból (elzárásból lefordulva)
   hozott beálló-átvételeket emberre bontja; akinél a zömük landol

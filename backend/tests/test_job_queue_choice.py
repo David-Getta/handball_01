@@ -125,3 +125,36 @@ def test_azonnali_elemzes_felreteszi_a_futot(tmp_path):
     assert jobs["fut"]["cancel"] is True
     assert jobs["fut"]["preempted"] is True
     assert jobs[job_id]["queue_behind"] is False
+
+
+def test_azonnali_elemzes_nem_varja_meg_a_regi_menteset(tmp_path):
+    """A "kezdje most" választásnál az új munka SAJÁT szálon azonnal
+    elindul — akkor is, ha a félretett (akár beragadt) munka sosem
+    fejezi be a mentését. Korábban a soros munkás a régi munka teljes
+    utómunkáját végigvárta, beragadt munkánál pedig örökre állt."""
+    import tempfile
+
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = tempfile.mkdtemp(prefix="hb_qb3_")
+    video = tmp_path / "q3.mp4"
+    _tiny_video(video)
+    app = create_app()
+    client = TestClient(app)
+    jobs = _jobs_of(app)
+    assert jobs is not None
+
+    # A "régi" munka örökre fut (mint egy beragadt feldolgozás) —
+    # sosem ér a mentése végére.
+    jobs["fut"] = {"job_id": "fut", "match_id": "m", "status": "running",
+                   "stage": "B", "progress": 0.4, "message": "feldolgozás…",
+                   "error": None, "created": time.time(), "video": "elso.mp4"}
+
+    job_id = _start(client, video)
+    # Az új munka pár másodpercen belül elindul (running/error/done —
+    # a lényeg: NEM ragad "queued"-ban a régi mögött).
+    deadline = time.time() + 10.0
+    while time.time() < deadline and jobs[job_id]["status"] == "queued":
+        time.sleep(0.1)
+    assert jobs[job_id]["status"] != "queued", jobs[job_id]
+    assert jobs["fut"]["status"] == "running"  # a régi közben is "fut"

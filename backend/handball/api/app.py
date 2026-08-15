@@ -525,11 +525,19 @@ def create_app():
         # tovább. Ha viszont a felhasználó a várakozást választotta
         # (queue_behind), a futó munkához NEM nyúlunk: az új elemzés
         # megvárja, míg az előző befejeződik.
-        for other in preemptable_jobs(list(_jobs.values()), job_id, behind):
+        preempted_now = preemptable_jobs(list(_jobs.values()), job_id, behind)
+        for other in preempted_now:
             other["cancel"] = True
             other["preempted"] = True
-        _job_queue.put(job_id)
-        _ensure_worker()
+        if preempted_now:
+            # AZONNALI indítás saját szálon: az új elemzés NEM várja meg,
+            # míg a félretett munka utómunkája/mentése lefut (az akár
+            # percekig tarthat, beragadt munkánál korábban örökre tartott
+            # volna) — a régi a háttérben menti magát, az új már megy.
+            _start_job_now(job_id)
+        else:
+            _job_queue.put(job_id)
+            _ensure_worker()
         return {"job_id": job_id, "match_id": match_id}
 
     # A feldolgozási SOR: a munkák egyesével futnak (egy nehéz ML-feldolgozás
@@ -550,12 +558,38 @@ def create_app():
         _worker_flag["started"] = True
         _threading.Thread(target=_job_worker, daemon=True).start()
 
+    def _start_job_now(job_id):
+        """Egy sorba tett munka AZONNALI indítása saját szálon.
+
+        Előzésnél (a felhasználó a "kezdje most"-ot választotta) az új
+        elemzés nem mehet a soros munkásra: az a félretett munka
+        mentését (rosszabb esetben egy beragadt feldolgozást) várná
+        végig. Saját szálon indítva a régi és az új röviden átfedésben
+        fut — a régi már csak az utómunkáját menti, az új a detektálást
+        kezdi."""
+        job = _jobs.get(job_id)
+        if job is None or job["status"] != "queued":
+            return  # időközben megszakították
+        job["status"] = "running"
+        job["message"] = "indítás"
+        body = _job_params.pop(job_id, {})
+        _threading.Thread(target=_run_job, args=(job, body),
+                          daemon=True).start()
+
     def _job_worker():
+        import time as _t
         while True:
             job_id = _job_queue.get()
             job = _jobs.get(job_id)
             if job is None or job["status"] != "queued":
                 continue  # időközben megszakították
+            # Ha épp fut egy munka (pl. előzéssel, saját szálon indított),
+            # a sorban álló megvárja — ez a "megvárja az előzőt" ígérete.
+            while any(j.get("status") == "running"
+                      for j in _jobs.values()):
+                _t.sleep(2.0)
+            if job["status"] != "queued":
+                continue  # várakozás közben szakították meg
             job["status"] = "running"
             job["message"] = "indítás"
             _run_job(job, _job_params.pop(job_id, {}))

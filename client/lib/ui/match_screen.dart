@@ -1421,12 +1421,189 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.table_chart_outlined, color: AppColors.textSecondary),
           tooltip: "Statisztika mentése (Excel/CSV)",
         ),
+        // Elemzés-könyvtár: befejezett és félbehagyott elemzések egy
+        // helyen — megnyitás és törlés (a dashboardra lépés nélkül).
+        IconButton(
+            onPressed: _openLibrary,
+            tooltip: "Elemzés-könyvtár (befejezett és félbehagyott)",
+            icon: const Icon(Icons.folder_open,
+                color: AppColors.textSecondary)),
         IconButton(
               onPressed: _load,
               tooltip: "Meccs újratöltése",
               icon: const Icon(Icons.refresh,
                   color: AppColors.textSecondary)),
       ],
+    );
+  }
+
+  /// Elemzés-könyvtár párbeszéd: fülekkel (mind/befejezett/félbehagyott),
+  /// megnyitással és törléssel. A félbehagyott elemzés is teljes értékű
+  /// nézetet kap (az addig feldolgozott részből), és innen törölhető is.
+  Future<void> _openLibrary() async {
+    List<Map<String, dynamic>> items;
+    try {
+      items = await _api.listMatches();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("A könyvtár nem érhető el: ${humanError(e)}")));
+      return;
+    }
+    if (!mounted) return;
+    var filter = "all";
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) {
+          final shown = [
+            for (final m in items)
+              if (filter == "all" ||
+                  (filter == "partial") == ((m["partial"] as bool?) ?? false))
+                m,
+          ];
+          final doneN =
+              items.where((m) => !((m["partial"] as bool?) ?? false)).length;
+          final partN = items.length - doneN;
+          return AlertDialog(
+            backgroundColor: AppColors.surface,
+            title: const Text("Elemzés-könyvtár"),
+            content: SizedBox(
+              width: 560,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    style: const ButtonStyle(
+                        visualDensity: VisualDensity.compact),
+                    segments: [
+                      ButtonSegment(
+                          value: "all",
+                          label: Text("Mind (${items.length})")),
+                      ButtonSegment(
+                          value: "done",
+                          label: Text("Befejezett ($doneN)")),
+                      ButtonSegment(
+                          value: "partial",
+                          label: Text("Félbehagyott ($partN)")),
+                    ],
+                    selected: {filter},
+                    onSelectionChanged: (s) =>
+                        setDlg(() => filter = s.first),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  if (shown.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Text(
+                          filter == "partial"
+                              ? "Nincs félbehagyott elemzés."
+                              : "Nincs ilyen elemzés a könyvtárban.",
+                          style: AppText.label),
+                    )
+                  else
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Column(children: [
+                          for (final m in shown)
+                            _libraryRow(ctx, m, items, setDlg),
+                        ]),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text("Bezár"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Egy könyvtár-sor: megnyitás (koppintásra) + törlés (kuka ikon).
+  Widget _libraryRow(BuildContext ctx, Map<String, dynamic> m,
+      List<Map<String, dynamic>> items, StateSetter setDlg) {
+    final id = m["match_id"] as String;
+    final partial = (m["partial"] as bool?) ?? false;
+    final durS = ((m["duration_s"] as num?) ?? 0).toDouble();
+    final mins = (durS / 60).floor();
+    final secs = (durS % 60).round();
+    return ListTile(
+      dense: true,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      title: Row(children: [
+        Flexible(
+          child: Text("${m["home_team"] ?? "?"} – ${m["away_team"] ?? "?"}",
+              overflow: TextOverflow.ellipsis,
+              style: AppText.value.copyWith(fontSize: 14)),
+        ),
+        if (partial) ...[
+          const SizedBox(width: AppSpacing.sm),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.away.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text("FÉLBEHAGYOTT",
+                style: AppText.label
+                    .copyWith(fontSize: 10, color: AppColors.away)),
+          ),
+        ],
+      ]),
+      subtitle: Text(
+          "$id · ${m["num_frames"]} kocka · $mins:${secs.toString().padLeft(2, '0')}",
+          style: AppText.label.copyWith(fontSize: 11)),
+      trailing: IconButton(
+        tooltip: "Törlés",
+        icon: const Icon(Icons.delete_outline,
+            color: AppColors.textSecondary, size: 20),
+        onPressed: () async {
+          final ok = await showDialog<bool>(
+            context: ctx,
+            builder: (c2) => AlertDialog(
+              backgroundColor: AppColors.surface,
+              title: const Text("Elemzés törlése"),
+              content: Text(
+                  "${m["home_team"] ?? "?"} – ${m["away_team"] ?? "?"} "
+                  "($id) végleg törlődik a könyvtárból."),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(c2).pop(false),
+                    child: const Text("Mégse")),
+                TextButton(
+                    onPressed: () => Navigator.of(c2).pop(true),
+                    child: const Text("Törlés",
+                        style: TextStyle(color: AppColors.away))),
+              ],
+            ),
+          );
+          if (ok != true) return;
+          try {
+            await _api.deleteMatch(id);
+            setDlg(() => items.removeWhere((x) => x["match_id"] == id));
+          } catch (e) {
+            if (!ctx.mounted) return;
+            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                content: Text("Törlési hiba: ${humanError(e)}")));
+          }
+        },
+      ),
+      onTap: () {
+        Navigator.of(ctx).pop();
+        if (id == widget.matchId) return; // már ez van nyitva
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+            builder: (_) => MatchScreen(matchId: id)));
+      },
     );
   }
 
