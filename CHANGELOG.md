@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Leforduló beállók**: MELYIK beálló kapja mozgásból a labdát — a
+  beálló-futtatás ember-ikre: a mozgásból (elzárásból lefordulva)
+  hozott beálló-átvételeket emberre bontja; akinél a zömük landol
+  (2+, 50%+), ő a lefordulós játék címzettje. Edzői olvasat: nála a
+  bejátszás ELŐTT kell elé lépni (hangos váltás, passzsáv-zárás a
+  lefordulás előtt) — az átvétel utáni birkózás késő; a saját
+  csapatnak az egy beállóra épülő lefordulás kiszámítható — több
+  vállra, több emberre kell variálni. Felületek: /analyze +
+  meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs + 425.
+  meccsterv-szabály), 445. edzés-szabály, prioritások (ember-család
+  + Kulcs-ember), kliens-csempe.
 - **Videó-lejátszás Windowson** (kliens): a jelenet-lejátszó eddig
   csak macOS/iOS/Android alatt működött, Windowson tájékoztató
   szöveg volt helyette — mostantól Windowson is játszik (media_kit /

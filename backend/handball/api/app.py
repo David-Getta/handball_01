@@ -4747,6 +4747,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import pivot_runners
+            res["pivot_runners"] = pivot_runners(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.goalkeeper import seven_six_finishers
             res["seven_six_finishers"] = seven_six_finishers(match)
         except Exception:
@@ -5750,6 +5755,8 @@ def create_app():
                 from ..pipeline.attack_types import crossing_runners
                 _layer("crossing_runners",
                        lambda: crossing_runners(match))
+                from ..pipeline.attack_types import pivot_runners
+                _layer("pivot_runners", lambda: pivot_runners(match))
                 from ..pipeline.goalkeeper import seven_six_finishers
                 _layer("seven_six_finishers",
                        lambda: seven_six_finishers(match))

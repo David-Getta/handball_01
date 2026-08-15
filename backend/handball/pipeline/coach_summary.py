@@ -4274,6 +4274,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "a váltás-fegyelem.")
     except Exception:
         pass
+    # Leforduló beállók: melyik beálló kapja mozgásból a labdát.
+    try:
+        from .attack_types import pivot_runners
+        lfb = pivot_runners(match)
+        for side, name in (("home", home), ("away", away)):
+            top_lfb = lfb[side]["top"]
+            if top_lfb is None:
+                continue
+            _lfb_j = (top_lfb["jersey"]
+                      if top_lfb["jersey"] is not None
+                      else top_lfb["player_id"])
+            body += (f" A(z) {name} lefordulós beálló-játékának "
+                     f"címzettje a(z) {_lfb_j}. beálló "
+                     f"({top_lfb['running']}/{lfb[side]['running']} "
+                     "mozgásos átvétel) — nála a bejátszás ELŐTT kell "
+                     "elé lépni, az átvétel után már késő.")
+    except Exception:
+        pass
     # Csere-lyukak: mennyi ideig játszanak öten csere közben.
     try:
         from .substitutions import sub_gaps

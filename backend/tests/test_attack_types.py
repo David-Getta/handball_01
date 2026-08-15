@@ -3043,6 +3043,26 @@ def test_pivot_service_needs_enough_receptions():
     assert rec["verdict"] is None
 
 
+def test_pivot_runners_names_the_turning_pivot():
+    """A mozgásos átvételeket egy beálló (4-es) hozza → ő a címzett."""
+    from handball.pipeline.attack_types import pivot_runners
+
+    rec = pivot_runners(_psv_match(True))["home"]
+    assert rec["running"] >= 2
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 4
+    assert rec["top"]["share_pct"] >= 50.0
+
+
+def test_pivot_runners_static_pivot_gives_no_top():
+    """Beragadva (állva) átvevő beállónál nincs lefordulós címzett."""
+    from handball.pipeline.attack_types import pivot_runners
+
+    rec = pivot_runners(_psv_match(False))["home"]
+    assert rec["running"] == 0
+    assert rec["top"] is None
+
+
 # ---- Kontra-hullámok (az első ember vagy a befutó fejezi be) ----------------
 
 def _fbw_match(second_wave, n_breaks=6, fps=25.0):

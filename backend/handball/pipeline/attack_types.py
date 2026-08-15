@@ -4448,6 +4448,88 @@ def pivot_service(match: Match,
                 rec["verdict"] = "állva kapja a beálló"
     return out
 
+
+# Leforduló beállók: ennyi mozgásból hozott átvétel kell egy beállótól
+# az ítélethez, és a csapat mozgásos beálló-átvételeiből e feletti
+# részarány teszi őt a lefordulós játék címzettjévé.
+LFB_MIN_RUNNING = 2
+LFB_SHARE_PCT = 50.0
+
+
+def pivot_runners(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Leforduló beállók: MELYIK beálló kapja mozgásból a labdát.
+
+    A beálló-futtatás (pivot_service) azt méri, HOGYAN érkezik a
+    labda a beállóra — ez azt, KIHEZ: a beálló-posztú játékosok
+    mozgásból (PSV_RUN_MS feletti sebességgel) hozott átvételeit
+    emberre bontjuk. Akinél a lefordulós átvételek zöme landol, ő a
+    beálló-játék motorja — az ő elzárás-lefordulására épül a
+    bejátszás.
+
+    Edzőileg: a lefordulós beálló ellen a bejátszás ELŐTT kell elé
+    lépni — és ezt az ő emberénél kell begyakorolni: hangos váltás,
+    a passzsáv zárása még a lefordulás előtt; az átvétel utáni
+    birkózás nála mindig késő.
+
+    Visszatérés csapatonként: {"running", "players": [{"player_id",
+    "jersey", "running", "share_pct"}], "top"} — a lista mozgásos
+    átvétel szerint csökkenő; a "top" az első játékos, ha legalább
+    LFB_MIN_RUNNING mozgásos átvétele van és a részaránya eléri az
+    LFB_SHARE_PCT-t (egyébként None).
+    """
+    import math
+
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    posts = estimate_positions(match, config)
+    pivots = {side: {tid for tid, r in posts.get(side, {}).items()
+                     if r["poszt"] == "beálló"}
+              for side in ("home", "away")}
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for pe in detect_passes(match, config):
+        side = pe.team.value
+        if pe.receiver_id not in pivots[side]:
+            continue
+        i0 = idx_of.get(pe.t)
+        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+            continue
+        p_before = next((p for p in match.frames[i0 - 2].players
+                         if p.track_id == pe.receiver_id), None)
+        p_after = next((p for p in match.frames[i0 + 2].players
+                        if p.track_id == pe.receiver_id), None)
+        if p_before is None or p_after is None:
+            continue
+        speed = (math.hypot(p_after.x - p_before.x,
+                            p_after.y - p_before.y) * fps / 4.0)
+        if speed < PSV_RUN_MS:
+            continue
+        if getattr(p_after, "jersey_number", None) is not None:
+            jersey.setdefault(pe.receiver_id, p_after.jersey_number)
+        tally[side][pe.receiver_id] = \
+            tally[side].get(pe.receiver_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = sum(tally[side].values())
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "running": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if players and players[0]["running"] >= LFB_MIN_RUNNING \
+                and (players[0]["share_pct"] or 0.0) >= LFB_SHARE_PCT:
+            top = players[0]
+        out[side] = {"running": n, "players": players, "top": top}
+    return out
+
 # Kontra-hullámok: ennyi lövésig jutó lerohanás kell az ítélethez, és
 # e feletti / alatti második-hullám arány jelenti, hogy a befutó,
 # illetve az első ember fejezi be a kontráikat.

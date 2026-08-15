@@ -3086,6 +3086,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "fut · az ő sávjában hangos, korai váltás";
   }
 
+  // Leforduló beállók: melyik beálló kapja mozgásból a labdát (2+
+  // mozgásos átvétel, a mozgásos átvételek fele — a backenddel azonos
+  // küszöbök: LFB_MIN_RUNNING, LFB_SHARE_PCT).
+  String? _pivotRunner(Map<String, dynamic> r) {
+    final lf = (r["lfb_running_by_player"] as Map?)?.cast<String, dynamic>();
+    if (lf == null || lf.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    lf.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a mozgásos beálló-átvételeik $topN/$all része a(z) $top. "
+        "beállóhoz megy · nála a bejátszás előtt lépjetek elé";
+  }
+
   // 7a6-befejező emberek: kire fut ki a hetedik ember játéka (2+
   // 7a6-lövés, a lövések fele — a backenddel azonos küszöbök:
   // EN7P_MIN_SHOTS, EN7P_SHARE_PCT).
@@ -11023,6 +11046,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Futtatott szélső", _wingRunner(r)!],
       if (_crossRunner(r) != null)
         ["Keresztjáró ember", _crossRunner(r)!],
+      if (_pivotRunner(r) != null)
+        ["Leforduló beálló", _pivotRunner(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)

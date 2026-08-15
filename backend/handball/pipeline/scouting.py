@@ -1124,6 +1124,9 @@ class ScoutingReport:
     # Futtatott szélsők: a lendületes szélső-átvételek darabszáma
     # SZÉLSŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
     wrp_running_by_player: dict = field(default_factory=dict)
+    # Leforduló beállók: a mozgásból hozott beálló-átvételek darabszáma
+    # JÁTÉKOSONKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    lfb_running_by_player: dict = field(default_factory=dict)
     # Keresztjáró emberek: a keresztben-részvételek darabszáma
     # JÁTÉKOSONKÉNT, és a mért keresztek száma. Darabszámok,
     # meccsek közt pontosan összegződnek.
@@ -4813,6 +4816,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_crp_k}. játékoson át fut — az ő sávjában legyen "
                 "hangos, korai a váltás: ha őt fegyelmezetten "
                 "átadjátok, a keresztjátékuk kifullad.")
+
+    # Leforduló beállók: kinél kell a bejátszás előtt elé lépni.
+    if rep.lfb_running_by_player:
+        _lfb_all = sum(rep.lfb_running_by_player.values())
+        _lfb_k, _lfb_n = max(rep.lfb_running_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _lfb_n >= 2 and _lfb_n >= 0.5 * max(1, _lfb_all):
+            keys.append(
+                f"A mozgásos beálló-átvételeik {_lfb_n}/{_lfb_all} "
+                f"része a(z) {_lfb_k}. beállóhoz megy — nála a "
+                "bejátszás ELŐTT lépjetek elé (hangos váltás, "
+                "passzsáv-zárás a lefordulás előtt): az átvétel "
+                "utáni birkózás nála mindig késő.")
 
     # 7a6-befejező emberek: kit kell először megtalálni.
     if rep.en7p_shots_by_player:
@@ -10392,6 +10408,12 @@ def _scout_team_cached(match: Match, team: Team,
                 else r["player_id"]): r["runs"]
             for r in crprec["players"]}
         rep.crp_crosses = crprec["crosses"]
+        from .attack_types import pivot_runners as _lfb
+        lfbrec = _lfb(match, config)[team.value]
+        rep.lfb_running_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["running"]
+            for r in lfbrec["players"]}
         from .momentum import lead_scorers as _lgp
         lgprec = _lgp(match, config)[team.value]
         rep.lgp_goals_by_player = {
@@ -13430,6 +13452,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 425) Az ő leforduló beállójuk × a ti labdaszerzésetek: a
+    # bejátszás-sáv a lefordulás előtt nyitva áll.
+    if opp.lfb_running_by_player and own.trans_steals >= 5:
+        _lfb425_all = sum(opp.lfb_running_by_player.values())
+        _lfb425_k, _lfb425_n = max(opp.lfb_running_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _lfb425_n >= 2 and _lfb425_n >= 0.5 * max(1, _lfb425_all):
+            plan.append(
+                f"A mozgásos beálló-átvételeik {_lfb425_n}/"
+                f"{_lfb425_all} része a(z) {_lfb425_k}. beállóhoz "
+                f"megy, ti pedig jó labdaszerzők vagytok "
+                f"({own.trans_steals} szerzés) — az ő bejátszás-"
+                "sávjába lépjetek be még a lefordulása előtt: az "
+                "elcsípett bejátszás azonnal kontra, és a beálló-"
+                "játékuk elbizonytalanodik.")
 
     # 424) Az ő kereszt-motorjuk × a ti blokkoló falatok: a
     # szervezett fal a kereszt alatt is tud váltani.
@@ -20708,6 +20746,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         crp_runs_by_player=_merge_count_dicts(
             r.crp_runs_by_player for r in reports),
         crp_crosses=sum(r.crp_crosses for r in reports),
+        lfb_running_by_player=_merge_count_dicts(
+            r.lfb_running_by_player for r in reports),
         en7p_shots_by_player=_merge_count_dicts(
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(

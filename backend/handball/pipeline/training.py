@@ -1366,6 +1366,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 445) Leforduló beállók: az egy beállóra épülő lefordulós játék
+    # kiszámítható — az elé lépés ellene készen áll.
+    try:
+        from .attack_types import LFB_MIN_RUNNING, pivot_runners
+        lfb445 = pivot_runners(match, config)
+        for side in ("home", "away"):
+            top445 = lfb445[side].get("top")
+            if top445 is None:
+                continue
+            _ki445 = (f"a(z) {top445['jersey']}. számú"
+                      if top445.get("jersey") is not None
+                      else f"a(z) {top445['player_id']}. játékos")
+            add(side, "támadás", "Lefordulás több vállra",
+                f"a mozgásos beálló-átvételeink zöme {_ki445} "
+                f"beállónkhoz megy ({top445['running']} mozgásos "
+                f"átvétel; {LFB_MIN_RUNNING} átvételtől már "
+                "jelezzük) — az egy emberre épülő lefordulós játék "
+                "korai elé lépéssel kivédhető",
+                "lefordulás-variálás: a második beálló(-szerep) is "
+                "kapjon lefordulós bejátszást, elzárás-lefordulás "
+                "mindkét vállra, és egy visszatett labdás változat "
+                "arra az esetre, ha a védő korán elé lép",
+                )
+    except Exception:
+        pass
+
     # 444) Keresztjáró emberek: az egy emberen át futó keresztjáték
     # kiszámítható — a váltás ellene készen áll.
     try:
