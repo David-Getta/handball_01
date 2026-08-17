@@ -781,6 +781,96 @@ def shooter_power(match: Match,
     return out
 
 
+# Kezesség-becslés: ennyi értékelhető lövés kell egy játékos ítéletéhez,
+# és e feletti egyoldalúság (bal- vagy jobb-jel aránya) adja a kezességet.
+HANDED_MIN_SHOTS = 4
+HANDED_SHARE_PCT = 70.0
+# A labda-eltolás értékelhető sávja a lövő testétől (méter): ez alatt
+# zaj (a labda "a testben" van), e felett már nem a kézben van a labda.
+HANDED_OFF_MIN_M = 0.1
+HANDED_OFF_MAX_M = 1.5
+
+
+def shooting_hand(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Kezesség-becslés: MELYIK KÉZZEL lőnek a lövőik.
+
+    A lövés elengedése előtti kockán a labda a lövő testéhez képest a
+    dobó kéz oldalán van — a kapu-irányhoz mért oldal-eltolás előjele
+    lövésenként megmondja a kezet, játékosonként összesítve pedig a
+    kezességet. A balkezes lövő a védelemnek tükör-feladat: a sánc
+    kezét és a kapus alapállását át kell állítani ellene (a jobb
+    oldalról befelé jövő balkezes a szokott sánc mellett lő el);
+    saját olvasatban a balkezes a jobbszélső/jobbátlövő poszt igazi
+    fegyvere.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "shots", "left", "right", "goals", "hand", "share_pct"}], "lefty"}
+    — a "hand" "bal"/"jobb" ítélet legalább HANDED_MIN_SHOTS
+    értékelhető lövéstől és HANDED_SHARE_PCT egyoldalúságtól
+    (egyébként None); a "lefty" a legtöbbet lövő balkezes-ítéletű
+    játékos, ha van.
+    """
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    goal_y = COURT_WIDTH_M / 2.0
+
+    tally: dict = {"home": {}, "away": {}}
+    jersey: dict = {}
+    for e in detect_shots(match, config):
+        if e.player_id is None:
+            continue
+        i = idx_of.get(e.t)
+        if i is None or i < 1:
+            continue
+        f0, f1 = match.frames[i - 1], match.frames[i]
+        if f0.ball is None or f1.ball is None:
+            continue
+        sp = next((p for p in f0.players if p.track_id == e.player_id), None)
+        if sp is None:
+            continue
+        if getattr(sp, "jersey_number", None) is not None:
+            jersey.setdefault(e.player_id, sp.jersey_number)
+        # Labda-eltolás a testtől az elengedés előtti kockán.
+        ox, oy = f0.ball.x - sp.x, f0.ball.y - sp.y
+        off = math.hypot(ox, oy)
+        if not (HANDED_OFF_MIN_M <= off <= HANDED_OFF_MAX_M):
+            continue
+        # A megtámadott kapu a labda mozgás-irányából; kapu-irány a lövőtől.
+        goal_x = COURT_LENGTH_M if f1.ball.x > f0.ball.x else 0.0
+        gx, gy = goal_x - sp.x, goal_y - sp.y
+        if math.hypot(gx, gy) < 1e-6:
+            continue
+        cross = gx * oy - gy * ox
+        rec = tally[e.team.value].setdefault(
+            e.player_id, {"left": 0, "right": 0, "goals": 0})
+        # cross > 0: a labda a kapu-irány BAL oldalán (felülnézetben) —
+        # a kapu felé néző lövő bal keze felől.
+        rec["left" if cross > 0 else "right"] += 1
+        if e.type == EventType.GOAL:
+            rec["goals"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        players = []
+        for pid, rec in tally[side].items():
+            shots = rec["left"] + rec["right"]
+            major = max(rec["left"], rec["right"])
+            share = round(100.0 * major / shots, 1) if shots else None
+            hand = None
+            if shots >= HANDED_MIN_SHOTS and share is not None \
+                    and share >= HANDED_SHARE_PCT:
+                hand = "bal" if rec["left"] > rec["right"] else "jobb"
+            players.append({"player_id": pid, "jersey": jersey.get(pid),
+                            "shots": shots, "left": rec["left"],
+                            "right": rec["right"], "goals": rec["goals"],
+                            "hand": hand, "share_pct": share})
+        players.sort(key=lambda p: -p["shots"])
+        lefty = next((p for p in players if p["hand"] == "bal"), None)
+        out[side] = {"players": players, "lefty": lefty}
+    return out
+
+
 # Gólpassz-zónák: ennyi zónázott gólpassztól ítélünk, és e feletti
 # részarány jelenti, hogy egy vonalról jönnek az előkészítések.
 ASSIST_ZONE_MIN = 4

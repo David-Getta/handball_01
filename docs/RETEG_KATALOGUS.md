@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **475 réteg**, modulonként csoportosítva; a
+Összesen **476 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (93)
@@ -219,7 +219,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `wing_closeouts` | Szélső-kifutás: IDŐBEN ÉRNEK-E KI a szélső lövéseire. |
 | `wing_defense` | Szélső-védekezés: bírja-e a fal a szélső lövéseket. |
 
-## event_detection (11)
+## event_detection (12)
 
 | Réteg | Mit mér |
 |---|---|
@@ -232,6 +232,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `pass_length_by_score` | Passz-hossz-állás: MIKOR váltanak hosszú labdákra. |
 | `pass_network` | Passz-hálózat: ki kinek adogat — a játékszervezés fő tengelye. |
 | `shooter_power` | Lövő-erő: kinek a legkeményebb a lövése. |
+| `shooting_hand` | Kezesség-becslés: MELYIK KÉZZEL lőnek a lövőik. |
 | `shot_speed_fade` | Lövőerő-esés: a lövés-sebesség változása az 1. és a 2. félidő között — |
 | `shot_speeds` | Lövés-sebességek a labda-kinematikából. |
 

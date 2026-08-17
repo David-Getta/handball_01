@@ -4329,6 +4329,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "első dolog.")
     except Exception:
         pass
+    # Kezesség: van-e balkezes lövőjük — a sánc és a kapus tükör-feladata.
+    try:
+        from .event_detection import shooting_hand
+        sh = shooting_hand(match)
+        for side, name in (("home", home), ("away", away)):
+            lefty = sh[side]["lefty"]
+            if lefty is None:
+                continue
+            _sh_j = (lefty["jersey"] if lefty["jersey"] is not None
+                     else lefty["player_id"])
+            body += (f" A(z) {name} lövője, a(z) {_sh_j}. játékos "
+                     f"balkezes-jelű ({lefty['shots']} lövésből "
+                     f"{lefty['left']} bal-jel) — a sánc kezét és a "
+                     "kapus alapállását ellene át kell állítani.")
+    except Exception:
+        pass
     # Csere-lyukak: mennyi ideig játszanak öten csere közben.
     try:
         from .substitutions import sub_gaps

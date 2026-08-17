@@ -754,3 +754,62 @@ def test_shooter_is_the_releasing_player_not_the_nearest_to_goal():
     assert goals[0].player_id == 3, (
         "a lövés a kapuhoz közeli játékoshoz került — visszatért a "
         "kapu-felé torzítás")
+
+
+# --- Kezesség-becslés (shooting_hand) --------------------------------
+
+
+def _hand_shot(t0, pid, ball_dy, goals_x=40.0):
+    """Egy hazai lövés kockái, a lövő a labdához képest ball_dy-nal:
+    a labda a lövő testétől y-ban ennyivel eltolva indul (a dobó kéz
+    oldala). A +x kapu felé tart, a kapufák között → gól."""
+    frames = []
+    sx, sy = 33.0, 10.0
+    for i in range(4):
+        # Az elengedés ELŐTTI kockán a labda a lövő kezében (eltolva),
+        # utána a kapu felé gyorsul.
+        bx = sx + (0.0 if i == 0 else 2.0 + 2.0 * i)
+        by = sy + (ball_dy if i == 0 else 0.0)
+        frames.append(Frame(
+            t=t0 + i, players=[_pl(pid, Team.HOME, sx, sy)],
+            ball=Ball(x=min(bx, goals_x), y=by, confidence=1.0)))
+    return frames
+
+
+def _hand_match(pid, ball_dy, n):
+    """n darab egyforma kezességű lövés egy játékostól, szünetekkel."""
+    frames = []
+    t = 0
+    for _ in range(n):
+        frames += _hand_shot(t, pid, ball_dy)
+        t += 4
+        frames.append(Frame(t=t, players=[_pl(pid, Team.HOME, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    return Match(_meta(fps=25.0), frames)
+
+
+def test_shooting_hand_flags_the_lefty():
+    """A kapu felé nézve a labda következetesen a bal kéz oldalán indul
+    → balkezes ítélet, és ő a csapat 'lefty'-je."""
+    from handball.pipeline.event_detection import shooting_hand
+
+    # Felülnézetben a +x kapu felé forduló lövő bal keze a NAGYOBB y felé
+    # esik (mint a térképen kelet felé nézve a bal kéz észak felé).
+    m = _hand_match(7, ball_dy=0.5, n=5)
+    rec = shooting_hand(m)["home"]
+    assert rec["lefty"] is not None
+    assert rec["lefty"]["player_id"] == 7
+    assert rec["lefty"]["hand"] == "bal"
+    assert rec["lefty"]["left"] >= 4
+
+
+def test_shooting_hand_needs_enough_shots():
+    """Kevés lövésből (2) nincs kezesség-ítélet — a jel megvan, de a
+    minta kevés (nincs hallgatólagos 'balkezes')."""
+    from handball.pipeline.event_detection import shooting_hand
+
+    m = _hand_match(7, ball_dy=0.5, n=2)
+    rec = shooting_hand(m)["home"]
+    assert rec["lefty"] is None
+    assert all(p["hand"] is None for p in rec["players"])

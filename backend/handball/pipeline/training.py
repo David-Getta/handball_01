@@ -1366,6 +1366,34 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 448) Kezesség: a balkezes lövő a saját csapatban is tükör-feladat —
+    # a hozzá tartozó posztot és a beadásokat rá kell szabni.
+    try:
+        from .event_detection import HANDED_MIN_SHOTS, shooting_hand
+        hnd448 = shooting_hand(match, config)
+        for side in ("home", "away"):
+            lefty448 = hnd448[side].get("lefty")
+            if lefty448 is None:
+                continue
+            _ki448 = (f"a(z) {lefty448['jersey']}. számú"
+                      if lefty448.get("jersey") is not None
+                      else f"a(z) {lefty448['player_id']}. játékos")
+            add(side, "támadás", "Balkezes fegyver kihasználása",
+                f"{_ki448} emberünk balkezes-jelű "
+                f"({lefty448['left']}/{lefty448['shots']} bal-jelű "
+                f"lövés; {HANDED_MIN_SHOTS} lövéstől ítélünk) — a "
+                "balkezes a jobb oldalról befelé jövet a legveszélyesebb, "
+                "mert a megszokott sánc-kéz mellett lő el",
+                "jobb oldali befejezések célzott ismétlése neki "
+                "(jobbszélső-szög, jobbátlövő betörés), és a "
+                "beadás-oldal beállítása: a hozzá menő passz a bal "
+                "kezéhez érkezzen, hogy ne kelljen igazítania — "
+                "sáncolt helyzetből is dobasson, hogy megszokja a "
+                "tükrözött falat",
+                )
+    except Exception:
+        pass
+
     # 447) Egálbontó emberek: a holtpont ne egy emberen álljon.
     try:
         from .momentum import PBP_MIN_BREAKS, parity_break_scorers

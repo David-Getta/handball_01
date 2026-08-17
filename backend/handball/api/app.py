@@ -4796,6 +4796,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.event_detection import shooting_hand
+            res["shooting_hand"] = shooting_hand(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.goalkeeper import seven_six_finishers
             res["seven_six_finishers"] = seven_six_finishers(match)
         except Exception:
@@ -5807,6 +5812,8 @@ def create_app():
                 from ..pipeline.momentum import parity_break_scorers
                 _layer("parity_break_scorers",
                        lambda: parity_break_scorers(match))
+                from ..pipeline.event_detection import shooting_hand
+                _layer("shooting_hand", lambda: shooting_hand(match))
                 from ..pipeline.goalkeeper import seven_six_finishers
                 _layer("seven_six_finishers",
                        lambda: seven_six_finishers(match))

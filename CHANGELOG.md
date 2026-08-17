@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Kezesség-becslés**: MELYIK KÉZZEL lőnek a lövőik — az elengedés
+  előtti kockán a labda a lövő testéhez képest a dobó kéz oldalán van;
+  a kapu-irányhoz mért oldal-eltolás előjele lövésenként megmondja a
+  kezet, játékosonként összesítve a kezességet (4+ értékelhető lövés,
+  70%+ egyoldalúság). Edzői olvasat: a balkezes lövő a védelemnek
+  tükör-feladat — a sánc a másik kezét emelje, a kapus alapállása a
+  túlsó sarokra álljon, és a jobb oldalról befelé jövő útját kell
+  elzárni; saját olvasatban a balkezes a jobbszélső/jobbátlövő poszt
+  fegyvere, a hozzá menő passz a bal kezéhez érkezzen. Felületek:
+  /analyze + meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs
+  + 428. meccsterv-szabály), 448. edzés-szabály, prioritások
+  (ember-család + Kulcs-ember), kliens-csempe.
 - **Meccs-ablak: a bemelegítés és a nem-meccs részek kimaradnak**
   (motor): a feltöltött felvételben gyakran benne van a bemelegítés, a
   meccs előtti ceremónia és a lefújás utáni rész is — eddig ezek is

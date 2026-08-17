@@ -1133,6 +1133,10 @@ class ScoutingReport:
     # Egálbontó emberek: a döntetlenről szerzett (egált bontó) gólok
     # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
     pbp_breaks_by_player: dict = field(default_factory=dict)
+    # Kezesség-becslés: bal-jelű és összes értékelhető lövés
+    # JÁTÉKOSONKÉNT (két count-dict — arány sose, pontos összegzésért).
+    hand_left_by_player: dict = field(default_factory=dict)
+    hand_shots_by_player: dict = field(default_factory=dict)
     # Keresztjáró emberek: a keresztben-részvételek darabszáma
     # JÁTÉKOSONKÉNT, és a mért keresztek száma. Darabszámok,
     # meccsek közt pontosan összegződnek.
@@ -4848,6 +4852,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "a visszafutásnál az első ember felvétele után NE "
                 "álljatok meg: a középső sávban hátra, és őt kell "
                 "megtalálni, mielőtt labdát kap.")
+
+    # Kezesség: balkezes lövőjük — tükör-feladat a sáncnak és a kapusnak.
+    if rep.hand_shots_by_player:
+        for _hnd_k, _hnd_n in sorted(rep.hand_shots_by_player.items(),
+                                     key=lambda kv: -kv[1]):
+            _hnd_l = rep.hand_left_by_player.get(_hnd_k, 0)
+            if _hnd_n >= 4 and _hnd_l >= 0.7 * _hnd_n:
+                keys.append(
+                    f"A(z) {_hnd_k}. játékosuk BALKEZES ({_hnd_n} "
+                    f"lövésből {_hnd_l} bal-jel) — ellene tükrözni "
+                    "kell: a sánc a másik kezét emelje, a kapus "
+                    "alapállása a túloldalra álljon, és a jobb "
+                    "oldalról befelé jövő útját kell elzárni.")
+                break
 
     # Egálbontó emberek: egálnál kit kell először kivenni.
     if rep.pbp_breaks_by_player:
@@ -10457,6 +10475,13 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["breaks"]
             for r in pbprec["players"]}
+        from .event_detection import shooting_hand as _hnd
+        hndrec = _hnd(match, config)[team.value]
+        for r in hndrec["players"]:
+            _k = str(r["jersey"] if r["jersey"] is not None
+                     else r["player_id"])
+            rep.hand_shots_by_player[_k] = r["shots"]
+            rep.hand_left_by_player[_k] = r["left"]
         from .momentum import lead_scorers as _lgp
         lgprec = _lgp(match, config)[team.value]
         rep.lgp_goals_by_player = {
@@ -13495,6 +13520,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 428) Az ő balkezes lövőjük × a ti sáncotok: a sánc kezét tükrözni
+    # kell, különben a jó blokkoló csapat is mellé emel.
+    if opp.hand_shots_by_player and own.blocks >= 3:
+        for _h428_k, _h428_n in sorted(opp.hand_shots_by_player.items(),
+                                       key=lambda kv: -kv[1]):
+            _h428_l = opp.hand_left_by_player.get(_h428_k, 0)
+            if _h428_n >= 4 and _h428_l >= 0.7 * _h428_n:
+                plan.append(
+                    f"A(z) {_h428_k}. játékosuk balkezes ({_h428_n} "
+                    f"lövésből {_h428_l} bal-jel), ti pedig sokat "
+                    f"blokkoltok ({own.blocks} blokk) — ellene "
+                    "TÜKRÖZZÉTEK a sáncot: a másik kéz emelkedjen, a "
+                    "kapus a túlsó sarkat vegye alapba, és a jobb "
+                    "oldalról befelé induló útját zárjátok el; a jó "
+                    "blokkoló csapat is mellé emel, ha a megszokott "
+                    "kezét teszi fel.")
+                break
 
     # 427) Az ő holtpont-emberük × a ti hajrá-erőtök: az egál a ti
     # műfajotok legyen, ne az övé.
@@ -20827,6 +20870,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.bfw_shots_by_player for r in reports),
         pbp_breaks_by_player=_merge_count_dicts(
             r.pbp_breaks_by_player for r in reports),
+        hand_left_by_player=_merge_count_dicts(
+            r.hand_left_by_player for r in reports),
+        hand_shots_by_player=_merge_count_dicts(
+            r.hand_shots_by_player for r in reports),
         en7p_shots_by_player=_merge_count_dicts(
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(

@@ -3155,6 +3155,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "egálbontó gól) · egálnál őt vegyétek ki először";
   }
 
+  // Kezesség: van-e balkezes lövőjük (4+ értékelhető lövés, 70%+ bal-jel
+  // — a backenddel azonos küszöbök: HANDED_MIN_SHOTS, HANDED_SHARE_PCT).
+  String? _leftHandedShooter(Map<String, dynamic> r) {
+    final shots = (r["hand_shots_by_player"] as Map?)?.cast<String, dynamic>();
+    final left = (r["hand_left_by_player"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty || left == null) return null;
+    final keys = shots.keys.toList()
+      ..sort((a, b) =>
+          (shots[b] as num).toInt().compareTo((shots[a] as num).toInt()));
+    for (final k in keys) {
+      final n = (shots[k] as num).toInt();
+      final l = ((left[k] ?? 0) as num).toInt();
+      if (n >= 4 && l >= 0.7 * n) {
+        return "a(z) $k. játékosuk BALKEZES ($n lövésből $l bal-jel) · "
+            "tükrözzétek a sáncot és a kapus alapállását";
+      }
+    }
+    return null;
+  }
+
   // 7a6-befejező emberek: kire fut ki a hetedik ember játéka (2+
   // 7a6-lövés, a lövések fele — a backenddel azonos küszöbök:
   // EN7P_MIN_SHOTS, EN7P_SHARE_PCT).
@@ -11098,6 +11118,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befutó ember", _secondWaveFinisher(r)!],
       if (_parityBreakScorer(r) != null)
         ["Egálbontó ember", _parityBreakScorer(r)!],
+      if (_leftHandedShooter(r) != null)
+        ["Balkezes lövő", _leftHandedShooter(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)
