@@ -1366,6 +1366,35 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 449) Védekezési formáció: ha egyetlen fal-alakot tartunk, az a
+    # kiszámíthatóság — a második formációt is be kell gyakorolni.
+    try:
+        from .defense import DFORM_SHARE_PCT, defensive_formation
+        dfm449 = defensive_formation(match, config)
+        for side in ("home", "away"):
+            rec449 = dfm449[side]
+            if not rec449["formation"] or rec449["share_pct"] is None:
+                continue
+            if rec449["share_pct"] < 80.0:
+                continue
+            _alt449 = ("5-1 (a kitolt védő zavarja a lövés-előkészítést)"
+                       if rec449["formation"].startswith("6-0")
+                       else "6-0 (lapos fal a beálló-játék ellen)")
+            add(side, "védekezés", "Váltott fal-alak begyakorlása",
+                f"a falunk a felállt védekezés "
+                f"{rec449['share_pct']:.0f}%-ában ugyanazt a "
+                f"{rec449['formation']} alakot tartja "
+                f"({DFORM_SHARE_PCT:.0f}% felett már meghatározó) — egy "
+                "formáció kiszámítható, a bejáratott figurájuk mindig "
+                "ugyanazt a rést találja meg",
+                f"váltott fal-alak edzése: {_alt449} — 10 perc "
+                "sípszóra váltás (támadás közben, jelre), hogy a "
+                "kilépés-rendek és az átadások mindkét alakban "
+                "ülepedjenek; a váltást a kapus vagy a középső védő "
+                "hangos jelére indítsátok")
+    except Exception:
+        pass
+
     # 448) Kezesség: a balkezes lövő a saját csapatban is tükör-feladat —
     # a hozzá tartozó posztot és a beadásokat rá kell szabni.
     try:

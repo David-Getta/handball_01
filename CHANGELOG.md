@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Védekezési formáció**: milyen ALAKOT tart a faluk — a vonal-magasság
+  az átlagos mélységet méri, ez az alakot: felállt védekezésnél a
+  mezőnyvédők saját kaputól mért mélységeit szintekre bontja (1,5 m-nél
+  nagyobb rés = új szint), és kockánként megnevezi az alakot (egy szint
+  = 6-0 lapos fal, két szint egyetlen kitolt védővel = 5-1, három vagy
+  több szint = 3-2-1 lépcsős). Ítélet 100+ értékelhető kockától, ha a
+  leggyakoribb alak részaránya eléri az 50%-ot. Edzői olvasat: más-más
+  fegyver nyitja őket — a 6-0 ellen a távoli lövés és a gyors
+  oldalváltás (a fal nem lép ki), az 5-1 ellen a kitolt védő MÖGÖTTI
+  tér (kettős elzárás mellette, a beálló a háta mögé), a 3-2-1 ellen a
+  szélek és a gyors keresztmozgás (a lépcsős fal arra lassú); saját
+  olvasatban a 80% feletti egy-alakúság kiszámíthatóság — a második
+  fal-alakot is be kell gyakorolni. Felületek: /analyze + meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 429. meccsterv-szabály),
+  449. edzés-szabály, kliens-csempe.
 - **Kezesség-becslés**: MELYIK KÉZZEL lőnek a lövőik — az elengedés
   előtti kockán a labda a lövő testéhez képest a dobó kéz oldalán van;
   a kapu-irányhoz mért oldal-eltolás előjele lövésenként megmondja a

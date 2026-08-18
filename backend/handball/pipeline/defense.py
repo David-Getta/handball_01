@@ -689,6 +689,93 @@ def defensive_line_height(match, config=None) -> dict:
     return out
 
 
+# Védekezési formáció: a fal ALAKJA a mélység-eloszlásból. Ennyi mért védő
+# kell egy kocka megítéléséhez, ekkora rés választ el két védő-szintet,
+# ennyi értékelhető kocka kell az ítélethez, és e feletti részarány teszi a
+# leggyakoribb alakot a csapat formációjává.
+DFORM_MIN_DEFENDERS = 5
+DFORM_LEVEL_GAP_M = 1.5
+DFORM_MIN_FRAMES = 100
+DFORM_SHARE_PCT = 50.0
+
+
+def defensive_formation(match, config=None) -> dict:
+    """Védekezési formáció: 6-0, 5-1 vagy 3-2-1 jellegű-e a faluk.
+
+    A vonal-magasság az ÁTLAGOS mélységet méri, ez az ALAKOT: felállt
+    védekezésnél a mezőnyvédők saját kaputól mért mélységeit szintekre
+    bontjuk (DFORM_LEVEL_GAP_M-nél nagyobb rés = új szint). Egy szint =
+    lapos fal (6-0); két szint egyetlen kitolt védővel = 5-1; három vagy
+    több szint = 3-2-1 jelleg.
+
+    Edzőileg más-más nyitja őket: a 6-0 ellen a távoli lövés és az
+    átadás-ritmus a fegyver (a fal nem lép ki, be kell húzni); az 5-1 ellen
+    a kitolt védő MÖGÖTTI tér — mellette indított kettős elzárás, a beálló
+    az ő háta mögé; a 3-2-1 ellen a szélek és a gyors oldalváltás (a
+    lépcsős fal keresztmozgásra lassú).
+
+    Visszatérés csapatonként (a védekező csapaté):
+      {"frames", "counts": {alak: kocka}, "formation", "share_pct"} — a
+    "formation" a leggyakoribb alak, ha legalább DFORM_MIN_FRAMES
+    értékelhető kocka van és a részaránya eléri a DFORM_SHARE_PCT-t
+    (egyébként None).
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    counts = {Team.HOME: {}, Team.AWAY: {}}
+    frames = {Team.HOME: 0, Team.AWAY: 0}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        # Csak felállt védekezés: a labdás a védekező csapat térfelén van.
+        if abs(holder.x - own_x) > half:
+            continue
+        depths = sorted(abs(p.x - own_x) for p in f.players
+                        if p.team == deff and p.role != "kapus"
+                        and abs(p.x - own_x) <= half)
+        if len(depths) < DFORM_MIN_DEFENDERS:
+            continue
+        # Szintekre bontás: a rendezett mélységekben a nagy rés új szintet
+        # nyit; a legutolsó szint a legelöl álló (kitolt) védőké.
+        levels = [[depths[0]]]
+        for d in depths[1:]:
+            if d - levels[-1][-1] >= DFORM_LEVEL_GAP_M:
+                levels.append([d])
+            else:
+                levels[-1].append(d)
+        if len(levels) == 1:
+            shape = "6-0 (lapos fal)"
+        elif len(levels) >= 3:
+            shape = "3-2-1 (lépcsős)"
+        elif len(levels[-1]) == 1:
+            shape = "5-1 (kitolt védő)"
+        else:
+            shape = "kétszintű (vegyes)"
+        counts[deff][shape] = counts[deff].get(shape, 0) + 1
+        frames[deff] += 1
+
+    out = {}
+    for team in (Team.HOME, Team.AWAY):
+        n = frames[team]
+        tally = dict(sorted(counts[team].items(), key=lambda kv: -kv[1]))
+        formation, share = None, None
+        if n >= DFORM_MIN_FRAMES and tally:
+            top_shape, top_n = next(iter(tally.items()))
+            share = round(100.0 * top_n / n, 1)
+            if share >= DFORM_SHARE_PCT:
+                formation = top_shape
+        out[team.value] = {"frames": n, "counts": tally,
+                           "formation": formation, "share_pct": share}
+    return out
+
+
 # Védelmi tömörség: ennyi mért kocka és ennyi mért védő kell; a fal e alatt
 # tömör (a szélek nyílnak), e fölött széthúzott (a közép nyílik).
 DEF_WIDTH_MIN_FRAMES = 100

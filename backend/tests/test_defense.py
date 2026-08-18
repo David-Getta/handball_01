@@ -4349,3 +4349,43 @@ def test_marking_shift_silent_without_change():
 
     rec = marking_shift(_msh_match(2.0, 2.0))["away"]
     assert rec["fh_dist_m"] is not None and rec["verdict"] is None, rec
+
+
+def _dform_match(depths, n_frames=150):
+    """Felállt védekezés-jelenet: a HAZAI véd a saját kapujánál (x=0), a
+    VENDÉG 1-es birtokol a hazai térfélen; a hazai mezőnyvédők a megadott
+    (kaputól mért) mélységekben állnak."""
+    frames = []
+    for t in range(n_frames):
+        players = [_pl(1, Team.AWAY, 8.0, 10.0)]
+        for i, d in enumerate(depths):
+            players.append(_pl(10 + i, Team.HOME, d, 4.0 + 2.0 * i))
+        players.append(_pl(9, Team.HOME, 0.5, 10.0, role="kapus"))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+    return Match(_meta(), frames)
+
+
+def test_defensive_formation_tells_the_wall_shapes_apart():
+    """Egy szint = lapos 6-0; egy kitolt védő = 5-1; három szint = 3-2-1."""
+    from handball.pipeline.defense import defensive_formation
+
+    flat = defensive_formation(_dform_match([6.0] * 6))["home"]
+    assert flat["formation"] == "6-0 (lapos fal)", flat
+    assert flat["frames"] == 150 and flat["share_pct"] == 100.0
+
+    five_one = defensive_formation(
+        _dform_match([6.0] * 5 + [9.0]))["home"]
+    assert five_one["formation"] == "5-1 (kitolt védő)", five_one
+
+    stepped = defensive_formation(
+        _dform_match([5.0, 5.0, 5.0, 7.5, 7.5, 10.0]))["home"]
+    assert stepped["formation"] == "3-2-1 (lépcsős)", stepped
+
+
+def test_defensive_formation_silent_on_few_frames():
+    """Kevés értékelhető kockánál nincs ítélet (sose hallgatólagos alak)."""
+    from handball.pipeline.defense import defensive_formation
+
+    rec = defensive_formation(_dform_match([6.0] * 6, n_frames=20))["home"]
+    assert rec["frames"] == 20 and rec["formation"] is None, rec

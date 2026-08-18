@@ -3175,6 +3175,37 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Védekezési formáció: milyen ALAKOT tart a faluk (100+ értékelhető
+  // kocka, 50%+ részarány — a backenddel azonos küszöbök:
+  // DFORM_MIN_FRAMES, DFORM_SHARE_PCT).
+  String? _defensiveFormation(Map<String, dynamic> r) {
+    final n = ((r["dform_frames"] ?? 0) as num).toInt();
+    final counts = (r["dform_counts"] as Map?)?.cast<String, dynamic>();
+    if (n < 100 || counts == null || counts.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    counts.forEach((k, v) {
+      final c = (v as num).toInt();
+      if (top == null || c > topN) {
+        top = k;
+        topN = c;
+      }
+    });
+    if (top == null) return null;
+    final share = 100.0 * topN / n;
+    if (share < 50.0) return null;
+    final tipp = top!.startsWith("6-0")
+        ? "nem lépnek ki: távoli lövés és gyors oldalváltás ellenük"
+        : top!.startsWith("5-1")
+            ? "a kitolt védő MÖGÖTTI tér a cél: kettős elzárás, "
+                "a beálló a háta mögé"
+            : top!.startsWith("3-2-1")
+                ? "keresztmozgásra lassú: gyors oldalváltás és szélső"
+                : "vegyes fal — nézzétek vissza, mikor váltanak";
+    return "$top alakot tartanak (a felállt védekezés "
+        "${share.toStringAsFixed(0)}%-ában) · $tipp";
+  }
+
   // 7a6-befejező emberek: kire fut ki a hetedik ember játéka (2+
   // 7a6-lövés, a lövések fele — a backenddel azonos küszöbök:
   // EN7P_MIN_SHOTS, EN7P_SHARE_PCT).
@@ -11120,6 +11151,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Egálbontó ember", _parityBreakScorer(r)!],
       if (_leftHandedShooter(r) != null)
         ["Balkezes lövő", _leftHandedShooter(r)!],
+      if (_defensiveFormation(r) != null)
+        ["Védekezési formáció", _defensiveFormation(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)

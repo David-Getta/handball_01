@@ -271,6 +271,19 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
     except Exception:
         pass
 
+    # Védekezési formáció: a fal ALAKJA (6-0 lapos, 5-1 kitolt, 3-2-1).
+    try:
+        from .defense import defensive_formation
+        dfm = defensive_formation(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dfm = dfm[side]
+            if rec_dfm["formation"]:
+                parts.append(
+                    f"a(z) {name} fala {rec_dfm['formation']} alakot tart "
+                    f"(a felállt védekezés {rec_dfm['share_pct']:.0f}%-ában)")
+    except Exception:
+        pass
+
     # Átmenet-védekezés: gyors kapott gólok labdavesztés után (visszazárás).
     try:
         from .defense import transition_defense

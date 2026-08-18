@@ -309,6 +309,11 @@ class ScoutingReport:
     # összeg / kockák). Tömör fal = szélek nyitva; széthúzott = közép nyitva.
     defw_sum_m: float = 0.0
     defw_frames: int = 0
+    # Védekezési formáció (a fal ALAKJA): értékelhető kockák + alakonkénti
+    # kocka-darabszám (6-0 / 5-1 / 3-2-1 / kétszintű). Darabszámok, meccsek
+    # közt pontosan összegződnek (részarány = alak / összes).
+    dform_frames: int = 0
+    dform_counts: dict = field(default_factory=dict)
     # Passz-tempó (labdajáratás): passzok + mért birtoklás-idő (mp) —
     # meccsek közt pontosan összegződik (passz/perc = 60·passz/idő).
     pt_passes: int = 0
@@ -8988,6 +8993,30 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "közép nyílik: betörés a réseken, beálló-játék és "
                 "elzárás-leválás középen.")
 
+    # Védekezési formáció: az ALAK mondja meg, mivel kell támadni ellenük.
+    if rep.dform_frames >= 100 and rep.dform_counts:
+        from .defense import DFORM_SHARE_PCT
+        _df_shape, _df_n = max(rep.dform_counts.items(), key=lambda kv: kv[1])
+        _df_share = 100.0 * _df_n / rep.dform_frames
+        if _df_share >= DFORM_SHARE_PCT:
+            if _df_shape.startswith("6-0"):
+                keys.append(
+                    f"Lapos 6-0 falat tartanak (a felállt védekezés "
+                    f"{_df_share:.0f}%-ában) — nem lépnek ki: távoli "
+                    "lövéssel és gyors labdajáratással kell kihúzni őket, "
+                    "aztán a megnyílt résbe betörni.")
+            elif _df_shape.startswith("5-1"):
+                keys.append(
+                    f"5-1-et védekeznek, egy kitolt védővel (a felállt "
+                    f"védekezés {_df_share:.0f}%-ában) — a kitolt védő "
+                    "MÖGÖTTI tér a cél: mellette kettős elzárás, a beálló "
+                    "a háta mögé lépjen le.")
+            elif _df_shape.startswith("3-2-1"):
+                keys.append(
+                    f"Lépcsős 3-2-1-et védekeznek (a felállt védekezés "
+                    f"{_df_share:.0f}%-ában) — keresztmozgásra lassú: gyors "
+                    "oldalváltás és szélső-befejezés bontja meg őket.")
+
     # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
     # maradó ellen a lepattanóra kell menni.
     if rep.gk_depth_frames >= 100:
@@ -9613,6 +9642,10 @@ def _scout_team_cached(match: Match, team: Team,
             rep.defw_sum_m = round(
                 dwrec["avg_width_m"] * dwrec["frames"], 1)
             rep.defw_frames = dwrec["frames"]
+        from .defense import defensive_formation
+        dfmrec = defensive_formation(match, config)[team.value]
+        rep.dform_frames = dfmrec["frames"]
+        rep.dform_counts = dict(dfmrec["counts"])
         from .tactics import pass_tempo
         ptrec = pass_tempo(match, config)[team.value]
         rep.pt_passes = ptrec["passes"]
@@ -13520,6 +13553,46 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 429) Az ő fal-ALAKJUK × a ti támadó-fegyveretek: a formáció dönti el,
+    # melyik fegyvert kell elővenni ellenük (5-1 → beálló a kitolt mögé,
+    # 6-0 → szélső-oldalváltás, 3-2-1 → gyors keresztmozgás).
+    if opp.dform_frames >= 100 and opp.dform_counts:
+        _d429_shape, _d429_n = max(opp.dform_counts.items(),
+                                   key=lambda kv: kv[1])
+        _d429_share = 100.0 * _d429_n / opp.dform_frames
+        if _d429_share >= 50.0:
+            if (_d429_shape.startswith("5-1")
+                    and own.pivot_attacks >= 8
+                    and own.pivot_goals * 2 >= own.pivot_attacks):
+                plan.append(
+                    f"Ők 5-1-et védekeznek (a felállt védekezés "
+                    f"{_d429_share:.0f}%-ában), ti pedig erősek vagytok "
+                    f"beállóval ({own.pivot_goals}/{own.pivot_attacks} "
+                    "gólos beállós támadás) — a kitolt védő MÖGÖTTI teret "
+                    "vegyétek célba: mellette kettős elzárás, a beálló a "
+                    "háta mögé lépjen le, és onnan érkezzen a labda.")
+            elif (_d429_shape.startswith("6-0")
+                  and own.wing_total_goals >= 5
+                  and own.wing_goals * 3 >= own.wing_total_goals):
+                plan.append(
+                    f"Ők lapos 6-0-t tartanak (a felállt védekezés "
+                    f"{_d429_share:.0f}%-ában), ti pedig sokat szereztek "
+                    f"szélről ({own.wing_goals}/{own.wing_total_goals} "
+                    "gól) — nem lépnek ki, ezért a gyors oldalváltás a "
+                    "fegyver: húzzátok át a falat egyik szélről a "
+                    "másikra, és a záró szélső fejezze be.")
+            elif (_d429_shape.startswith("3-2-1")
+                  and own.pt_poss_s > 0
+                  and 60.0 * own.pt_passes / own.pt_poss_s >= 12.0):
+                plan.append(
+                    f"Ők lépcsős 3-2-1-et védekeznek (a felállt védekezés "
+                    f"{_d429_share:.0f}%-ában), ti pedig gyorsan "
+                    f"járatjátok a labdát "
+                    f"({60.0 * own.pt_passes / own.pt_poss_s:.0f} "
+                    "passz/perc) — a lépcsős fal keresztmozgásra lassú: "
+                    "tartsátok a tempót, két gyors oldalváltás után nyílik "
+                    "a rés a második szint mellett.")
 
     # 428) Az ő balkezes lövőjük × a ti sáncotok: a sánc kezét tükrözni
     # kell, különben a jó blokkoló csapat is mellé emel.
@@ -20343,6 +20416,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         tilt_opp=sum(r.tilt_opp for r in reports),
         defw_sum_m=round(sum(r.defw_sum_m for r in reports), 1),
         defw_frames=sum(r.defw_frames for r in reports),
+        dform_frames=sum(r.dform_frames for r in reports),
+        dform_counts=_merge_count_dicts(r.dform_counts for r in reports),
         pt_passes=sum(r.pt_passes for r in reports),
         pt_poss_s=round(sum(r.pt_poss_s for r in reports), 1),
         blk_for=sum(r.blk_for for r in reports),
