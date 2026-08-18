@@ -1366,6 +1366,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 450) Formáció-váltás: ha a szünetben fal-alakot váltunk, a váltást
+    # magát is gyakorolni kell — különben az első percek rendezetlenek.
+    try:
+        from .defense import formation_shift
+        fsh450 = formation_shift(match, config)
+        for side in ("home", "away"):
+            rec450 = fsh450[side]
+            if not rec450["verdict"]:
+                continue
+            add(side, "védekezés", "Fal-váltás begyakorlása",
+                f"a szünet után más alakot tartunk "
+                f"({rec450['fh_formation']} → {rec450['sh_formation']}) — "
+                "a váltás jó eszköz, de az első percekben a kilépés-rendek "
+                "és az átadások keverednek, ha csak a táblán született meg",
+                "váltás-gyakorlás sípszóra: 6-6 játékban a védekezés "
+                "menet közben vált alakot (a kapus vagy a középső védő "
+                "jelére), és a váltás UTÁNI két támadást is végig kell "
+                "védeni — külön kérd számon, ki kire lép ki az új "
+                "alakban, és hol a beálló átadása")
+    except Exception:
+        pass
+
     # 449) Védekezési formáció: ha egyetlen fal-alakot tartunk, az a
     # kiszámíthatóság — a második formációt is be kell gyakorolni.
     try:

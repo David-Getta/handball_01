@@ -4389,3 +4389,54 @@ def test_defensive_formation_silent_on_few_frames():
 
     rec = defensive_formation(_dform_match([6.0] * 6, n_frames=20))["home"]
     assert rec["frames"] == 20 and rec["formation"] is None, rec
+
+
+def _fshift_match(fh_depths, sh_depths, fps=25.0, seconds=20.0):
+    """Két félidő szünettel: a HAZAI véd a saját kapujánál (x=0), a
+    mezőnyvédői az első félidőben `fh_depths`, a másodikban `sh_depths`
+    mélységekben állnak."""
+    frames = []
+    t = 0
+
+    def _play(depths):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            players = [_pl(1, Team.AWAY, 8.0, 10.0)]
+            for i, d in enumerate(depths):
+                players.append(_pl(10 + i, Team.HOME, d, 4.0 + 2.0 * i))
+            players.append(_pl(9, Team.HOME, 0.5, 10.0, role="kapus"))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def _break(sec):
+        nonlocal t
+        for _ in range(int(sec * fps)):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    _play(fh_depths)
+    _break(90.0)
+    _play(sh_depths)
+    return Match(_meta(fps), frames)
+
+
+def test_formation_shift_flags_the_second_half_switch():
+    """Ha az első félidei lapos falból a szünet után kitolt védős lesz,
+    fal-alakot váltottak."""
+    from handball.pipeline.defense import formation_shift
+
+    rec = formation_shift(
+        _fshift_match([6.0] * 6, [6.0] * 5 + [9.0]))["home"]
+    assert rec["fh_formation"] == "6-0 (lapos fal)", rec
+    assert rec["sh_formation"] == "5-1 (kitolt védő)", rec
+    assert rec["verdict"] and "fal-alakot váltottak" in rec["verdict"]
+
+
+def test_formation_shift_silent_without_change():
+    """Változatlan fal-alaknál nincs ítélet (sose hallgatólagos váltás)."""
+    from handball.pipeline.defense import formation_shift
+
+    rec = formation_shift(_fshift_match([6.0] * 6, [6.0] * 6))["home"]
+    assert rec["fh_formation"] == rec["sh_formation"], rec
+    assert rec["verdict"] is None, rec

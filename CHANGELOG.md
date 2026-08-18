@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Formáció-váltás**: a szünet után MÁS FAL-ALAKOT tartanak-e — a
+  formáció-réteg a meccs egészére mondja meg a fal alakját, ez a
+  váltást: félidőnként külön számolja a kockánkénti alakokat (60+
+  kocka, 50%+ részarány félidőnként), és összeveti a két félidő
+  meghatározó formációját. Edzői olvasat: a szünetben hozott fal-váltás
+  (6-0-ról 5-1-re, 5-1-ről 3-2-1-re) az emberfogás után a leggyakoribb
+  meccs közbeni tervmódosítás — az első félidőben bevált figura a
+  szünet után üres falba fut; KÉT támadó forgatókönyvvel kell érkezni,
+  és a második félidő első támadásainál a felhozónak hangosan jeleznie
+  kell, melyik alakot kapják. Saját olvasatban: ha mi váltunk, magát a
+  váltást is gyakorolni kell (sípszóra, menet közben), különben az új
+  alak első percei rendezetlenek. Felületek: /analyze + meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 430.
+  meccsterv-szabály), 450. edzés-szabály, kliens-csempe.
 - **Védekezési formáció**: milyen ALAKOT tart a faluk — a vonal-magasság
   az átlagos mélységet méri, ez az alakot: felállt védekezésnél a
   mezőnyvédők saját kaputól mért mélységeit szintekre bontja (1,5 m-nél

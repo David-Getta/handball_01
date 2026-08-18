@@ -3206,6 +3206,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "${share.toStringAsFixed(0)}%-ában) · $tipp";
   }
 
+  // Formáció-váltás: a szünet után más fal-alakot tartanak-e
+  // (félidőnként 60+ kocka, 50%+ részarány — a backenddel azonos
+  // küszöbök: FSHIFT_MIN_FRAMES, FSHIFT_SHARE_PCT).
+  String? _formationShift(Map<String, dynamic> r) {
+    String? top(String cKey, String nKey) {
+      final n = ((r[nKey] ?? 0) as num).toInt();
+      final counts = (r[cKey] as Map?)?.cast<String, dynamic>();
+      if (n < 60 || counts == null || counts.isEmpty) return null;
+      String? best;
+      var bestN = 0;
+      counts.forEach((k, v) {
+        final c = (v as num).toInt();
+        if (best == null || c > bestN) {
+          best = k;
+          bestN = c;
+        }
+      });
+      if (best == null || 100.0 * bestN / n < 50.0) return null;
+      return best;
+    }
+
+    final fh = top("fshift_fh_counts", "fshift_fh_frames");
+    final sh = top("fshift_sh_counts", "fshift_sh_frames");
+    if (fh == null || sh == null || fh == sh) return null;
+    return "a szünet után fal-alakot váltanak ($fh → $sh) · két támadó "
+        "forgatókönyvvel érkezzetek, és a felhozó jelezze az alakot";
+  }
+
   // 7a6-befejező emberek: kire fut ki a hetedik ember játéka (2+
   // 7a6-lövés, a lövések fele — a backenddel azonos küszöbök:
   // EN7P_MIN_SHOTS, EN7P_SHARE_PCT).
@@ -11153,6 +11181,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Balkezes lövő", _leftHandedShooter(r)!],
       if (_defensiveFormation(r) != null)
         ["Védekezési formáció", _defensiveFormation(r)!],
+      if (_formationShift(r) != null)
+        ["Formáció-váltás", _formationShift(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)
@@ -11468,7 +11498,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                            "utolsó labda", "meccsek", "percek", "forró",
                            "hosszú áll", "kapkodás", "óra",
                            "idővonal", "szakasz"]),
-    ("Védekezés", ["véd", "fal", "kettőz", "emberfog", "blokk", "szerz",
+    ("Védekezés", ["véd", "fal", "formáció", "kettőz", "emberfog", "blokk",
+                   "szerz",
                    "betörés", "kilép", "átvert", "lefogott", "őr",
                    "kifutás", "visszaérés", "visszaállás", "visszafutás",
                    "vadász", "press",
