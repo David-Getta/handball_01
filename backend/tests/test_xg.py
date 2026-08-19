@@ -1456,3 +1456,46 @@ def test_big_chance_feeders_silent_after_one():
 
     rec = big_chance_feeders(_bcfeed_match([5]))["home"]
     assert rec["top"] is None, rec
+
+
+def _many_shots(n, x, y, goal, step=40):
+    """`n` hazai lövés ugyanarról a helyről, mind gól vagy mind mellé."""
+    frames = []
+    for k in range(n):
+        t0 = 10 + k * step
+        frames += _shot_frames(t0, x, y, goal=goal)
+        frames.append(Frame(t=t0 + 9, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    return frames
+
+
+def test_finishing_balance_flags_the_overperformer():
+    """Sok TÁVOLI lövés, mind gól → a gólszám a helyzetek felett van
+    (nem fenntartható)."""
+    from handball.pipeline.xg import finishing_balance
+
+    m = Match(_meta(), _many_shots(14, 25.0, 10.0, goal=True))
+    rec = finishing_balance(m)["home"]
+    assert rec["shots"] >= 12, rec
+    assert rec["diff"] >= 2.5, rec
+    assert rec["verdict"] == "a helyzetei FELETT teljesít (nem fenntartható)"
+
+
+def test_finishing_balance_flags_the_underperformer():
+    """Sok KÖZELI helyzet gól nélkül → a helyzetei alatt teljesít."""
+    from handball.pipeline.xg import finishing_balance
+
+    m = Match(_meta(), _many_shots(14, 34.0, 10.0, goal=False))
+    rec = finishing_balance(m)["home"]
+    assert rec["goals"] == 0 and rec["diff"] <= -2.5, rec
+    assert rec["verdict"] == ("a helyzetei ALATT teljesít "
+                              "(a befejezés a gond, nem a játék)")
+
+
+def test_finishing_balance_silent_on_few_shots():
+    """Kevés lövésnél nincs ítélet (sose hallgatólagos mérleg)."""
+    from handball.pipeline.xg import finishing_balance
+
+    m = Match(_meta(), _many_shots(5, 34.0, 10.0, goal=False))
+    rec = finishing_balance(m)["home"]
+    assert rec["shots"] == 5 and rec["verdict"] is None, rec

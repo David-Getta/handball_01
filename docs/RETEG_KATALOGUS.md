@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **478 réteg**, modulonként csoportosítva; a
+Összesen **479 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (93)
@@ -561,7 +561,7 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `training` | Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...}). |
 
-## xg (28)
+## xg (29)
 
 | Réteg | Mit mér |
 |---|---|
@@ -576,6 +576,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `defense_by_score` | Előny-védekezés: LEÜL-E A FALUK, amikor vezetnek. |
 | `finish_fade` | Befejezés-esés: a gólra váltás az 1. vs 2. félidőben. |
 | `finisher_rotation` | Befejező-váltás: UGYANAZ fejez-e be a következő támadásban is. |
+| `finishing_balance` | Befejezés-mérleg: FENNTARTHATÓ-E a gólterméskük (gól − xG). |
 | `goal_patterns` | Gól-minta: UGYANAZT a gólt lövik-e újra és újra. |
 | `miss_punishment` | Kihagyott ziccer ára: a kihagyott nagy helyzet utáni gyors kapott gól. |
 | `missed_big_chances` | A kihagyott nagy helyzetek: xG >= BIG_CHANCE_XG, de nem gól. |

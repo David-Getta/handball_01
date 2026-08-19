@@ -2947,6 +2947,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import finishing_balance
+            res["finishing_balance"] = finishing_balance(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.xg import shot_accuracy
             res["shot_accuracy"] = shot_accuracy(match)
         except Exception:
@@ -5239,6 +5244,9 @@ def create_app():
                        lambda: big_save_momentum(match))
                 from ..pipeline.xg import finish_fade
                 _layer("finish_fade", lambda: finish_fade(match))
+                from ..pipeline.xg import finishing_balance
+                _layer("finishing_balance",
+                       lambda: finishing_balance(match))
                 from ..pipeline.xg import shot_accuracy
                 _layer("shot_accuracy", lambda: shot_accuracy(match))
                 from ..pipeline.attack_types import attack_side_bias

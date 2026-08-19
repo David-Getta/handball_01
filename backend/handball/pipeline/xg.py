@@ -427,6 +427,59 @@ def shot_concentration(match: Match,
     return out
 
 
+# Befejezés-mérleg: ennyi lövés kell az ítélethez, és ennyi gólnyi
+# eltérés (gól − várható gól) számít érdeminek — ez alatt a különbség
+# még belefér a véletlenbe.
+FBAL_MIN_SHOTS = 12
+FBAL_DIFF_GOALS = 2.5
+
+
+def finishing_balance(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Befejezés-mérleg: FENNTARTHATÓ-E a gólterméskük (gól − xG).
+
+    A meccs-xG (match_xg) kiszámolja a különbséget, de nem ítél — ez a
+    réteg teszi hozzá az edzői olvasatot. Aki érdemben a helyzetei
+    FELETT teljesít, annak a gólszáma szebb a játékánál: ugyanezekből a
+    helyzetekből legközelebb kevesebb gól lesz. Aki a helyzetei ALATT,
+    annál a játék jó, csak a befejezés nem ült — ő a veszélyesebb
+    ellenfél, mint amit az eredmény mutat.
+
+    Edzőileg felderítésben: a felülteljesítő ellen NEM kell átszabni a
+    védekezést — ugyanazokat a lövéseket kell rájuk kényszeríteni, és a
+    kapus alapállását a bejáratott sarkukra állítani; ha egy emberen
+    múlik a többlet (lásd a lövőnkénti diff-et a match_xg-ben), ŐT kell
+    kivenni. Az alulteljesítő ellen fordítva: a helyzet-teremtésüket
+    kell megfogni, mert a befejezésük magától rendbe jön.
+
+    Visszatérés csapatonként: {"shots", "goals", "xg", "diff",
+    "diff_per_shot", "verdict"} — a verdict None FBAL_MIN_SHOTS alatt
+    vagy FBAL_DIFF_GOALS-nál kisebb eltérésnél; egyébként "a helyzetei
+    FELETT teljesít (nem fenntartható)" / "a helyzetei ALATT teljesít
+    (a befejezés a gond, nem a játék)".
+    """
+    teams = match_xg(match, config or TacticsConfig())["teams"]
+    out = {}
+    for side in ("home", "away"):
+        rec = teams[side]
+        n = rec["shots"]
+        diff = rec["diff"]
+        verdict = None
+        if n >= FBAL_MIN_SHOTS:
+            if diff >= FBAL_DIFF_GOALS:
+                verdict = "a helyzetei FELETT teljesít (nem fenntartható)"
+            elif diff <= -FBAL_DIFF_GOALS:
+                verdict = ("a helyzetei ALATT teljesít "
+                           "(a befejezés a gond, nem a játék)")
+        out[side] = {
+            "shots": n, "goals": rec["goals"], "xg": rec["xg"],
+            "diff": diff,
+            "diff_per_shot": round(diff / n, 3) if n else None,
+            "verdict": verdict,
+        }
+    return out
+
+
 # Befejezés-esés: félidőnként ennyi lövés-kísérlet kell az ítélethez,
 # és ekkora gólarány-esés (százalékpont) számít érdeminek.
 FINISH_FADE_MIN_SHOTS = 6

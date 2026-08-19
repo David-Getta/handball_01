@@ -1676,6 +1676,12 @@ class ScoutingReport:
     # összegződnek (arány = sph_opp_ball / sph_subs).
     sph_subs: int = 0
     sph_opp_ball: int = 0
+    # Befejezés-mérlegük: lövések, gólok és a várható gól ÖSSZEGE —
+    # darabszámok és összeg, meccsek közt pontosan összegződnek
+    # (eltérés = fbal_goals − fbal_xg_sum).
+    fbal_shots: int = 0
+    fbal_goals: int = 0
+    fbal_xg_sum: float = 0.0
     # Falépítés-idejük: a mért birtokváltások és a rendezett falig
     # eltelt idő összege (mp) — összegek, meccsek közt pontosan
     # összegződnek (átlag = összeg / eset).
@@ -7159,6 +7165,27 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "a csere-pillanatra nem lehet játszani ellenük, marad "
                 "a felállt támadás minősége.")
 
+    # Befejezés-mérleg: fenntartható-e a gólterméskük (gól − várható gól).
+    if rep.fbal_shots >= 12:
+        from .xg import FBAL_DIFF_GOALS
+        _fb_diff = rep.fbal_goals - rep.fbal_xg_sum
+        if _fb_diff >= FBAL_DIFF_GOALS:
+            keys.append(
+                f"A gólszámuk szebb a játékuknál ({rep.fbal_goals} gól "
+                f"{rep.fbal_xg_sum:.1f} várható gólra, +{_fb_diff:.1f}) — "
+                "ne szabjátok át miatta a védekezést: ugyanezeket a "
+                "lövéseket kell rájuk kényszeríteni, a kapus a bejáratott "
+                "sarkukra álljon, és ha egy emberen múlik a többlet, ŐT "
+                "kell kivenni.")
+        elif _fb_diff <= -FBAL_DIFF_GOALS:
+            keys.append(
+                f"A játékuknál kevesebbet szereztek ({rep.fbal_goals} gól "
+                f"{rep.fbal_xg_sum:.1f} várható gólra, {_fb_diff:.1f}) — "
+                "veszélyesebbek, mint amit az eredmény mutat: a "
+                "HELYZET-TEREMTÉSÜKET kell megfogni (a bejátszásokat és a "
+                "ziccer-forrásokat), mert a befejezésük magától rendbe "
+                "jön.")
+
     # Falépítés-idő: mennyi idő alatt áll fel a faluk.
     if rep.dst_cases >= 4 and rep.dst_sum_s > 0:
         _dst_avg = rep.dst_sum_s / rep.dst_cases
@@ -11274,6 +11301,11 @@ def _scout_team_cached(match: Match, team: Team,
         sphrec = _sph(match, config)[team.value]
         rep.sph_subs = sphrec["subs"]
         rep.sph_opp_ball = sphrec["opp_ball"]
+        from .xg import finishing_balance as _fbal
+        fbalrec = _fbal(match, config)[team.value]
+        rep.fbal_shots = fbalrec["shots"]
+        rep.fbal_goals = fbalrec["goals"]
+        rep.fbal_xg_sum = round(fbalrec["xg"], 2)
         from .defense import defense_setup_time as _dst
         dstrec = _dst(match, config)[team.value]
         rep.dst_cases = dstrec["cases"]
@@ -13595,6 +13627,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 432) Az ő felülteljesítő befejezésük × a ti kapusotok: a többlet
+    # nagy része a kapun múlik — az alapállást a bejáratott sarkukra kell
+    # állítani, nem az egész védekezést átszabni.
+    if opp.fbal_shots >= 12 and own.gk_saves >= 5:
+        _fb432 = opp.fbal_goals - opp.fbal_xg_sum
+        if _fb432 >= 2.5:
+            plan.append(
+                f"Ők a helyzeteik felett teljesítenek ({opp.fbal_goals} "
+                f"gól {opp.fbal_xg_sum:.1f} várható gólra, +{_fb432:.1f}), "
+                f"nektek pedig van fogó kapusotok ({own.gk_saves} védés) — "
+                "ne a falat szabjátok át: ugyanezeket a lövéseket kell "
+                "rájuk kényszeríteni, a kapus alapállása pedig a "
+                "bejáratott sarkukra álljon; a mérleg magától visszatér.")
 
     # 431) Az ő védekezés közbeni cseréjük × a ti átmeneti játékotok: a
     # csere-pillanat egy emberrel kevesebb falat jelent — pont az
@@ -20476,6 +20522,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         dform_counts=_merge_count_dicts(r.dform_counts for r in reports),
         sph_subs=sum(r.sph_subs for r in reports),
         sph_opp_ball=sum(r.sph_opp_ball for r in reports),
+        fbal_shots=sum(r.fbal_shots for r in reports),
+        fbal_goals=sum(r.fbal_goals for r in reports),
+        fbal_xg_sum=round(sum(r.fbal_xg_sum for r in reports), 2),
         pt_passes=sum(r.pt_passes for r in reports),
         pt_poss_s=round(sum(r.pt_poss_s for r in reports), 1),
         blk_for=sum(r.blk_for for r in reports),

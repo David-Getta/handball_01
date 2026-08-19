@@ -181,6 +181,26 @@ def _xg_section(match: Match, home: str, away: str) -> dict | None:
         elif rec["diff"] <= -0.8:
             body += (f" A(z) {name} elpuskázott helyzeteket "
                      f"({rec['diff']:.1f}) — a befejezésen érdemes dolgozni.")
+    # Befejezés-mérleg: fenntartható-e a gólterméskük (nagy eltérésnél).
+    try:
+        from .xg import finishing_balance
+        fbal = finishing_balance(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fb = fbal[side]
+            if rec_fb["verdict"] is None:
+                continue
+            if rec_fb["diff"] > 0:
+                body += (f" A(z) {name} gólszáma szebb a játékánál "
+                         f"({rec_fb['goals']} gól {rec_fb['xg']:.1f} "
+                         "várható gólra) — ugyanezekből a helyzetekből "
+                         "legközelebb kevesebb gól lesz.")
+            else:
+                body += (f" A(z) {name} a játékánál kevesebbet szerzett "
+                         f"({rec_fb['goals']} gól {rec_fb['xg']:.1f} "
+                         "várható gólra) — a helyzet-teremtés rendben van, "
+                         "a befejezés nem ült.")
+    except Exception:
+        pass
     verdict = _xg_verdict(th, ta, home, away)
     if verdict:
         body += verdict

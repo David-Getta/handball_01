@@ -3213,6 +3213,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "${share.toStringAsFixed(0)}%-ában) · $tipp";
   }
 
+  // Befejezés-mérleg: fenntartható-e a gólterméskük (12+ lövés, 2,5
+  // gólnyi eltérés — a backenddel azonos küszöbök: FBAL_MIN_SHOTS,
+  // FBAL_DIFF_GOALS).
+  String? _finishingBalance(Map<String, dynamic> r) {
+    final n = ((r["fbal_shots"] ?? 0) as num).toInt();
+    if (n < 12) return null;
+    final goals = ((r["fbal_goals"] ?? 0) as num).toInt();
+    final xg = ((r["fbal_xg_sum"] ?? 0) as num).toDouble();
+    final diff = goals - xg;
+    if (diff >= 2.5) {
+      return "a gólszámuk szebb a játékuknál ($goals gól "
+          "${xg.toStringAsFixed(1)} várható gólra, "
+          "+${diff.toStringAsFixed(1)}) · ne szabjátok át a falat, "
+          "ugyanezeket a lövéseket kényszerítsétek rájuk";
+    }
+    if (diff <= -2.5) {
+      return "a játékuknál kevesebbet szereztek ($goals gól "
+          "${xg.toStringAsFixed(1)} várható gólra, "
+          "${diff.toStringAsFixed(1)}) · veszélyesebbek az eredménynél: "
+          "a helyzet-teremtésüket kell megfogni";
+    }
+    return null;
+  }
+
   // Csere-fázis: mikor indul a cseréjük — birtokláskor vagy védekezés
   // közben (4+ csere, 40%+ kockázatos / 15%- fegyelmezett — a backenddel
   // azonos küszöbök: SUBPH_MIN_SUBS, SUBPH_RISKY_PCT, SUBPH_SAFE_PCT).
@@ -11182,6 +11206,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_defensiveFormation(r) != null)
         ["Védekezési formáció", _defensiveFormation(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
+      if (_finishingBalance(r) != null)
+        ["Befejezés-mérleg", _finishingBalance(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)

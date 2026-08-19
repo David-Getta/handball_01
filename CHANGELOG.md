@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Befejezés-mérleg**: FENNTARTHATÓ-E a gólterméskük — a gól és a
+  várható gól (xG) különbsége edzői ítélettel. A meccs-xG eddig is
+  kiszámolta a különbséget, de nem mondta meg, mit kezdjen vele az edző.
+  Ítélet 12+ lövéstől, 2,5 gólnyi eltéréstől: aki a helyzetei FELETT
+  teljesít, annak a gólszáma szebb a játékánál — ugyanezekből a
+  helyzetekből legközelebb kevesebb gól lesz; aki ALATT, annál a játék
+  jó, csak a befejezés nem ült, ő veszélyesebb, mint amit az eredmény
+  mutat. Edzői olvasat felderítésben: a felülteljesítő ellen NEM kell
+  átszabni a védekezést — ugyanazokat a lövéseket kell rájuk
+  kényszeríteni, és a kapus alapállását a bejáratott sarkukra állítani;
+  az alulteljesítő ellen a helyzet-teremtést kell megfogni. Saját
+  oldalon az alulteljesítés befejezés-edzést jelent a MEGLÉVŐ
+  helyzet-típusokra. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (edzői kulcs + 432. meccsterv-szabály), 452.
+  edzés-szabály, kliens-csempe.
 - **Csere-fázis**: MIKOR indul a cseréjük — a cserehullám pillanatában
   kinél volt a labda. A csere-kiváltók azt mondják meg, mire cserélnek, a
   csere-lyukak azt, meddig vannak öten; ez azt, hogy saját birtoklásban

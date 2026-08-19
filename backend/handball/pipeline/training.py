@@ -1366,6 +1366,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 452) Befejezés-mérleg: ha a helyzeteink ALATT teljesítünk, a
+    # befejezés a hiány — a helyzet-teremtés már megvan.
+    try:
+        from .xg import FBAL_DIFF_GOALS, finishing_balance
+        fbal452 = finishing_balance(match, config)
+        for side in ("home", "away"):
+            rec452 = fbal452[side]
+            if rec452["verdict"] is None or rec452["diff"] > 0:
+                continue
+            add(side, "támadás", "Befejezés-edzés a meglévő helyzetekre",
+                f"{rec452['goals']} gólt szereztünk {rec452['xg']:.1f} "
+                f"várható gólnyi helyzetből ({rec452['diff']:.1f}; "
+                f"{FBAL_DIFF_GOALS:.1f} gólnyi eltéréstől jelezzük) — a "
+                "helyzet-teremtés rendben van, a befejezés nem ült",
+                "befejezés-blokk a SAJÁT helyzet-típusainkra: a meccsen "
+                "leggyakoribb lövés-helyekről (szél, beálló, átlövés) "
+                "10-10 ismétlés kapussal, fáradtan is; a kapus a "
+                "bejáratott sarkunkat védje, hogy más befejezést is "
+                "kelljen keresni — és minden sorozat végén élethelyzet: "
+                "sáncoló védővel, egy passzal indítva")
+    except Exception:
+        pass
+
     # 451) Csere-fázis: ha az ellenfél birtoklása közben cserélünk, a
     # csere-fegyelmet kell építeni — a fal különben emberhátrányban áll fel.
     try:
