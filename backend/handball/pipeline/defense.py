@@ -689,83 +689,36 @@ def defensive_line_height(match, config=None) -> dict:
     return out
 
 
-# Védekezési formáció: a fal ALAKJA a mélység-eloszlásból. Ennyi mért védő
-# kell egy kocka megítéléséhez, ekkora rés választ el két védő-szintet,
-# ennyi értékelhető kocka kell az ítélethez, és e feletti részarány teszi a
-# leggyakoribb alakot a csapat formációjává.
+# Védekezési formáció-BIZTOSSÁG: a fal alakját a projekt EGYETLEN
+# osztályozója adja (tactics.detect_formation, 6-0 / 5-1 / 4-2 / 3-2-1 /
+# 3-3), ez a réteg pedig azt teszi hozzá, amit a leggyakoribb forma
+# (most_common_formations) nem mond meg: mennyire ÁLLANDÓ. Ennyi mért
+# védő kell egy kocka megítéléséhez, ennyi értékelhető kocka az
+# ítélethez, és e feletti részarány teszi a leggyakoribb alakot a csapat
+# formációjává.
 DFORM_MIN_DEFENDERS = 5
-DFORM_LEVEL_GAP_M = 1.5
 DFORM_MIN_FRAMES = 100
 DFORM_SHARE_PCT = 50.0
 
 
-def _dform_tally(match, config, from_t=None, until_t=None) -> tuple:
-    """A fal-alakok kockánkénti számlálása csapatonként (belső segéd).
-
-    A megadott kocka-ablakra (from_t ≤ t < until_t, None = nyitott vég)
-    adja vissza a ({csapat: {alak: kocka}}, {csapat: kocka}) párost — a
-    formáció-réteg és a félidei formáció-váltás közös motorja.
-    """
-    from ..models.tracking import Team
-    from .decisions import ball_holder
-    from .tactics import COURT_LENGTH_M
-
-    half = COURT_LENGTH_M / 2.0
-    counts = {Team.HOME: {}, Team.AWAY: {}}
-    frames = {Team.HOME: 0, Team.AWAY: 0}
-    for f in match.frames:
-        if from_t is not None and f.t < from_t:
-            continue
-        if until_t is not None and f.t >= until_t:
-            continue
-        holder = ball_holder(f, config)
-        if holder is None:
-            continue
-        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
-        own_x = config.own_goal_x(deff)
-        # Csak felállt védekezés: a labdás a védekező csapat térfelén van.
-        if abs(holder.x - own_x) > half:
-            continue
-        depths = sorted(abs(p.x - own_x) for p in f.players
-                        if p.team == deff and p.role != "kapus"
-                        and abs(p.x - own_x) <= half)
-        if len(depths) < DFORM_MIN_DEFENDERS:
-            continue
-        # Szintekre bontás: a rendezett mélységekben a nagy rés új szintet
-        # nyit; a legutolsó szint a legelöl álló (kitolt) védőké.
-        levels = [[depths[0]]]
-        for d in depths[1:]:
-            if d - levels[-1][-1] >= DFORM_LEVEL_GAP_M:
-                levels.append([d])
-            else:
-                levels[-1].append(d)
-        if len(levels) == 1:
-            shape = "6-0 (lapos fal)"
-        elif len(levels) >= 3:
-            shape = "3-2-1 (lépcsős)"
-        elif len(levels[-1]) == 1:
-            shape = "5-1 (kitolt védő)"
-        else:
-            shape = "kétszintű (vegyes)"
-        counts[deff][shape] = counts[deff].get(shape, 0) + 1
-        frames[deff] += 1
-    return counts, frames
-
-
 def defensive_formation(match, config=None) -> dict:
-    """Védekezési formáció: 6-0, 5-1 vagy 3-2-1 jellegű-e a faluk.
+    """Védekezési formáció: MENNYIRE ÁLLANDÓ a faluk alakja.
 
-    A vonal-magasság az ÁTLAGOS mélységet méri, ez az ALAKOT: felállt
-    védekezésnél a mezőnyvédők saját kaputól mért mélységeit szintekre
-    bontjuk (DFORM_LEVEL_GAP_M-nél nagyobb rés = új szint). Egy szint =
-    lapos fal (6-0); két szint egyetlen kitolt védővel = 5-1; három vagy
-    több szint = 3-2-1 jelleg.
+    A leggyakoribb forma (tactics.most_common_formations) megnevezi a
+    falat, de nem mondja meg, mennyire tartják — pedig egy 95%-ban
+    tartott 6-0 és egy 40%-ban tartott 6-0 két különböző ellenfél. Ez a
+    réteg a felállt védekezés kockáit a projekt egyetlen forma-
+    osztályozójával (tactics.detect_formation) címkézi, és a
+    részarányból ítél: csak akkor nevez meg formációt, ha a
+    leggyakoribb alak eléri a DFORM_SHARE_PCT-t.
 
     Edzőileg más-más nyitja őket: a 6-0 ellen a távoli lövés és az
-    átadás-ritmus a fegyver (a fal nem lép ki, be kell húzni); az 5-1 ellen
-    a kitolt védő MÖGÖTTI tér — mellette indított kettős elzárás, a beálló
-    az ő háta mögé; a 3-2-1 ellen a szélek és a gyors oldalváltás (a
-    lépcsős fal keresztmozgásra lassú).
+    átadás-ritmus a fegyver (a fal nem lép ki, be kell húzni); az 5-1
+    ellen a kitolt védő MÖGÖTTI tér — mellette indított kettős elzárás,
+    a beálló az ő háta mögé; a 3-2-1 ellen a szélek és a gyors
+    oldalváltás (a lépcsős fal keresztmozgásra lassú). Ha egyik alak
+    sem éri el a küszöböt, a faluk váltogatós — ott a felismerés a
+    feladat (lásd tactics.formation_switching).
 
     Visszatérés csapatonként (a védekező csapaté):
       {"frames", "counts": {alak: kocka}, "formation", "share_pct"} — a
@@ -774,10 +727,27 @@ def defensive_formation(match, config=None) -> dict:
     (egyébként None).
     """
     from ..models.tracking import Team
-    from .tactics import TacticsConfig
+    from .decisions import ball_holder
+    from .tactics import COURT_LENGTH_M, TacticsConfig, detect_formation
 
     config = config or TacticsConfig()
-    counts, frames = _dform_tally(match, config)
+    half = COURT_LENGTH_M / 2.0
+    counts = {Team.HOME: {}, Team.AWAY: {}}
+    frames = {Team.HOME: 0, Team.AWAY: 0}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        # Csak felállt védekezés: a labdás a védekező csapat térfelén van.
+        if abs(holder.x - own_x) > half:
+            continue
+        rec = detect_formation(f, deff, config)
+        if rec.defenders < DFORM_MIN_DEFENDERS:
+            continue
+        counts[deff][rec.label] = counts[deff].get(rec.label, 0) + 1
+        frames[deff] += 1
 
     out = {}
     for team in (Team.HOME, Team.AWAY):
@@ -791,81 +761,6 @@ def defensive_formation(match, config=None) -> dict:
                 formation = top_shape
         out[team.value] = {"frames": n, "counts": tally,
                            "formation": formation, "share_pct": share}
-    return out
-
-
-# Formáció-váltás: félidőnként ennyi értékelhető kocka kell az ítélethez, és
-# a félidő fal-alakja csak e feletti részaránynál nevezhető meg.
-FSHIFT_MIN_FRAMES = 60
-FSHIFT_SHARE_PCT = 50.0
-
-
-def formation_shift(match, config=None) -> dict:
-    """Formáció-váltás: A SZÜNET UTÁN más fal-alakot tartanak-e.
-
-    A formáció-réteg a meccs egészére mondja meg a fal alakját — ez a
-    VÁLTÁST: félidőnként külön számolja a kockánkénti alakokat, és
-    összeveti a két félidő meghatározó formációját. A szünetben hozott
-    fal-váltás (6-0-ról 5-1-re, 5-1-ről 3-2-1-re) a második
-    leggyakoribb meccs közbeni tervmódosítás az emberfogás után, és a
-    felkészülésben pont ez a meglepetés: az első félidőben bevált
-    figura a szünet után üres falba fut.
-
-    Edzőileg: ha váltanak, KÉT támadó forgatókönyvvel kell érkezni — a
-    lapos fal ellen távoli lövés és oldalváltás, a kitolt védős fal
-    ellen a kilépő mögötti tér, a lépcsős ellen a gyors keresztmozgás
-    —, és a szünet utáni első két támadásban a játékosoknak fel kell
-    ismerniük (hangos jelzés a felhozataltól), melyik alakot kapják.
-
-    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"fh_formation",
-    "fh_frames", "fh_counts", "sh_formation", "sh_frames", "sh_counts",
-    "verdict"} — az ítélet None félidő-jel nélkül, kevés kockánál
-    (FSHIFT_MIN_FRAMES), ha valamelyik félidő alakja nem nevezhető meg,
-    vagy ha ugyanaz.
-    """
-    from ..models.tracking import Team
-    from .halftime import detect_halftime
-    from .tactics import TacticsConfig
-
-    config = config or TacticsConfig()
-    empty = {"fh_formation": None, "fh_frames": 0, "fh_counts": {},
-             "sh_formation": None, "sh_frames": 0, "sh_counts": {},
-             "verdict": None}
-    out = {side: dict(empty) for side in ("home", "away")}
-    ht = detect_halftime(match)
-    if ht is None or not match.frames:
-        return out
-
-    fh_counts, fh_frames = _dform_tally(match, config, until_t=ht)
-    sh_counts, sh_frames = _dform_tally(match, config, from_t=ht)
-
-    def _top(counts, n):
-        """A félidő meghatározó alakja (None, ha kevés a kocka vagy szórt)."""
-        if n < FSHIFT_MIN_FRAMES or not counts:
-            return None
-        shape, top_n = max(counts.items(), key=lambda kv: kv[1])
-        if 100.0 * top_n / n < FSHIFT_SHARE_PCT:
-            return None
-        return shape
-
-    for team in (Team.HOME, Team.AWAY):
-        rec = out[team.value]
-        rec["fh_frames"] = fh_frames[team]
-        rec["sh_frames"] = sh_frames[team]
-        rec["fh_counts"] = dict(sorted(fh_counts[team].items(),
-                                       key=lambda kv: -kv[1]))
-        rec["sh_counts"] = dict(sorted(sh_counts[team].items(),
-                                       key=lambda kv: -kv[1]))
-        fh = _top(fh_counts[team], fh_frames[team])
-        sh = _top(sh_counts[team], sh_frames[team])
-        rec["fh_formation"] = fh
-        rec["sh_formation"] = sh
-        if fh is None or sh is None or fh == sh:
-            continue
-        rec["verdict"] = (
-            f"a szünet után fal-alakot váltottak: {fh} helyett {sh} — "
-            "két támadó forgatókönyvvel kell érkezni, és a szünet utáni "
-            "első támadásoknál hangosan jelezni, melyik alakot kapjuk")
     return out
 
 

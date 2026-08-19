@@ -284,17 +284,6 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
     except Exception:
         pass
 
-    # Formáció-váltás: a szünet után más fal-alakot tartanak-e.
-    try:
-        from .defense import formation_shift
-        fsh = formation_shift(match)
-        for side, name in (("home", home), ("away", away)):
-            rec_fsh = fsh[side]
-            if rec_fsh["verdict"]:
-                parts.append(f"a(z) {name} {rec_fsh['verdict']}")
-    except Exception:
-        pass
-
     # Átmenet-védekezés: gyors kapott gólok labdavesztés után (visszazárás).
     try:
         from .defense import transition_defense

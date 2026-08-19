@@ -314,13 +314,6 @@ class ScoutingReport:
     # közt pontosan összegződnek (részarány = alak / összes).
     dform_frames: int = 0
     dform_counts: dict = field(default_factory=dict)
-    # Formáció-váltás: félidőnkénti alak-kockák (első/második félidő) —
-    # darabszámok, meccsek közt pontosan összegződnek; a váltás abból
-    # látszik, hogy a két félidő meghatározó alakja más.
-    fshift_fh_frames: int = 0
-    fshift_fh_counts: dict = field(default_factory=dict)
-    fshift_sh_frames: int = 0
-    fshift_sh_counts: dict = field(default_factory=dict)
     # Passz-tempó (labdajáratás): passzok + mért birtoklás-idő (mp) —
     # meccsek közt pontosan összegződik (passz/perc = 60·passz/idő).
     pt_passes: int = 0
@@ -9047,26 +9040,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                     f"Lépcsős 3-2-1-et védekeznek (a felállt védekezés "
                     f"{_df_share:.0f}%-ában) — keresztmozgásra lassú: gyors "
                     "oldalváltás és szélső-befejezés bontja meg őket.")
-
-    # Formáció-váltás: a szünet után más fal-alakot tartanak — két
-    # támadó forgatókönyvvel kell érkezni.
-    if rep.fshift_fh_frames and rep.fshift_sh_frames:
-        from .defense import FSHIFT_MIN_FRAMES, FSHIFT_SHARE_PCT
-
-        def _fsh_top(counts, n):
-            if n < FSHIFT_MIN_FRAMES or not counts:
-                return None
-            shape, top_n = max(counts.items(), key=lambda kv: kv[1])
-            return shape if 100.0 * top_n / n >= FSHIFT_SHARE_PCT else None
-
-        _fsh_fh = _fsh_top(rep.fshift_fh_counts, rep.fshift_fh_frames)
-        _fsh_sh = _fsh_top(rep.fshift_sh_counts, rep.fshift_sh_frames)
-        if _fsh_fh and _fsh_sh and _fsh_fh != _fsh_sh:
+            elif _df_shape.startswith("4-2"):
+                keys.append(
+                    f"4-2-t védekeznek, két kitolt védővel (a felállt "
+                    f"védekezés {_df_share:.0f}%-ában) — a két kilépő "
+                    "MÖGÖTT és KÖZÖTT van a tér: a beálló a hátuk mögé "
+                    "lépjen le, és gyors bejátszás a két kitolt ember "
+                    "közti résbe.")
+        else:
             keys.append(
-                f"A szünet után fal-alakot váltanak: {_fsh_fh} helyett "
-                f"{_fsh_sh} — KÉT támadó forgatókönyvvel érkezzetek, és a "
-                "második félidő első támadásainál hangosan jelezze a "
-                "felhozó, melyik alakot kapjuk.")
+                f"Nincs állandó fal-alakjuk (a leggyakoribb {_df_shape} "
+                f"is csak a felállt védekezés {_df_share:.0f}%-a) — "
+                "váltogatnak: a felismerés a feladat, a felhozó hangosan "
+                "mondja be a formát, és két kész figurasorral kell "
+                "érkezni.")
 
     # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
     # maradó ellen a lepattanóra kell menni.
@@ -9697,12 +9684,6 @@ def _scout_team_cached(match: Match, team: Team,
         dfmrec = defensive_formation(match, config)[team.value]
         rep.dform_frames = dfmrec["frames"]
         rep.dform_counts = dict(dfmrec["counts"])
-        from .defense import formation_shift
-        fshrec = formation_shift(match, config)[team.value]
-        rep.fshift_fh_frames = fshrec["fh_frames"]
-        rep.fshift_fh_counts = dict(fshrec["fh_counts"])
-        rep.fshift_sh_frames = fshrec["sh_frames"]
-        rep.fshift_sh_counts = dict(fshrec["sh_counts"])
         from .tactics import pass_tempo
         ptrec = pass_tempo(match, config)[team.value]
         rep.pt_passes = ptrec["passes"]
@@ -13628,31 +13609,6 @@ def matchup_plan(own: "ScoutingReport",
                 "— a csere-pillanat a ti időtök: aki látja a cserezónában "
                 "a mozgást, azonnal indítson előre a csere OLDALÁRA, és a "
                 "szélső fejezzen be, mielőtt a fal összeáll.")
-
-    # 430) Az ő szünet utáni fal-váltásuk × a ti második félidei
-    # termelésetek: a váltás pont a jó félidőtöket akasztja meg, ha nem
-    # ismeritek fel időben.
-    if opp.fshift_fh_frames and opp.fshift_sh_frames:
-        from .defense import FSHIFT_MIN_FRAMES as _F430_MIN
-
-        def _f430_top(counts, n):
-            if n < _F430_MIN or not counts:
-                return None
-            shape, top_n = max(counts.items(), key=lambda kv: kv[1])
-            return shape if 100.0 * top_n / n >= 50.0 else None
-
-        _f430_fh = _f430_top(opp.fshift_fh_counts, opp.fshift_fh_frames)
-        _f430_sh = _f430_top(opp.fshift_sh_counts, opp.fshift_sh_frames)
-        if (_f430_fh and _f430_sh and _f430_fh != _f430_sh
-                and own.sh_goals_for >= 5):
-            plan.append(
-                f"Ők a szünet után fal-alakot váltanak ({_f430_fh} helyett "
-                f"{_f430_sh}), ti pedig a második félidőben termelitek a "
-                f"gólokat ({own.sh_goals_for} gól) — ne az első félidei "
-                "figurákkal induljatok újra: a szünetben beszéljétek meg a "
-                "MÁSODIK forgatókönyvet is, a felhozó hangosan jelezze az "
-                "alakot, és az első két támadás legyen felderítő "
-                "(lassabb járatás, a fal alakjának kiolvasása).")
 
     # 429) Az ő fal-ALAKJUK × a ti támadó-fegyveretek: a formáció dönti el,
     # melyik fegyvert kell elővenni ellenük (5-1 → beálló a kitolt mögé,
@@ -20518,12 +20474,6 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         defw_frames=sum(r.defw_frames for r in reports),
         dform_frames=sum(r.dform_frames for r in reports),
         dform_counts=_merge_count_dicts(r.dform_counts for r in reports),
-        fshift_fh_frames=sum(r.fshift_fh_frames for r in reports),
-        fshift_fh_counts=_merge_count_dicts(
-            r.fshift_fh_counts for r in reports),
-        fshift_sh_frames=sum(r.fshift_sh_frames for r in reports),
-        fshift_sh_counts=_merge_count_dicts(
-            r.fshift_sh_counts for r in reports),
         sph_subs=sum(r.sph_subs for r in reports),
         sph_opp_ball=sum(r.sph_opp_ball for r in reports),
         pt_passes=sum(r.pt_passes for r in reports),

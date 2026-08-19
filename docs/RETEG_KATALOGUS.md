@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **479 réteg**, modulonként csoportosítva; a
+Összesen **478 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (93)
@@ -131,7 +131,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `tired_turnover_players` | Fáradt-eladók: KINEK a labdái vesznek el fáradtan. |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (85)
+## defense (84)
 
 | Réteg | Mit mér |
 |---|---|
@@ -162,7 +162,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `defense` | Mindkét csapat VÉDEKEZÉSÉNEK képe a kapott lövésekből. |
 | `defense_setup_time` | Falépítés-idő: MENNYI IDŐ ALATT ÁLL FEL a faluk. |
 | `defensive_aggression` | Védekezés-keménység: MENNYI BÜNTETÉST hoz a faluk. |
-| `defensive_formation` | Védekezési formáció: 6-0, 5-1 vagy 3-2-1 jellegű-e a faluk. |
+| `defensive_formation` | Védekezési formáció: MENNYIRE ÁLLANDÓ a faluk alakja. |
 | `defensive_line_height` | Védekezési vonal magassága: milyen mélyen vagy magasan áll a fal. |
 | `defensive_rebound_players` | Kipattanó-szedők: KI SZEDI ÖSSZE a kipattanót védés után. |
 | `defensive_rebound_roles` | Lepattanó-szedő poszt: VÉDÉS UTÁN kinél marad a labda. |
@@ -177,7 +177,6 @@ leírás a réteg-függvény docstringjének első sora.
 | `doubling_pair_roles` | Kettőzőpáros-poszt: MELYIK VÉDŐ-KETTŐSÜK kettőz együtt. |
 | `fading_defender_roles` | Védőmotor-poszt: MELYIK POSZTJUK védő-motorja áll le. |
 | `fading_defenders` | Eltűnő védő: KI viszi a védekezést az első félidőben — és áll le. |
-| `formation_shift` | Formáció-váltás: A SZÜNET UTÁN más fal-alakot tartanak-e. |
 | `high_steal_players` | Elöl szerző védők: KI SZED LABDÁT a támadó térfélen. |
 | `high_steal_roles` | Letámadó-poszt: MELYIK POSZTJUK szed labdát elöl. |
 | `line_height_by_score` | Védekezési mélység állás szerint: ELŐNYBEN vagy HÁTRÁNYBAN |
