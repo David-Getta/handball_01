@@ -12,15 +12,18 @@ library;
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 
+import "../../services/api_client.dart";
 import "../../sim/demo_data.dart";
 import "../../theme/app_theme.dart";
 import "../../version.dart";
+import "../account_gate.dart";
 import "../dashboard_screen.dart";
 import "../designer_screen.dart";
 import "../live_screen.dart";
 import "../match_screen.dart";
 import "../player_trend_screen.dart";
 import "../scouting_picker_screen.dart";
+import "../terms_screen.dart";
 import "../upload_screen.dart";
 
 /// A navigáció elemei. (A `matches` a meccs-elemző: menüből demóval nyílik,
@@ -273,8 +276,88 @@ class _TopBar extends StatelessWidget {
             icon: const Icon(Icons.keyboard_outlined,
                 color: AppColors.textFaint),
           ),
+          // Fiók: ki van belépve, a feltételek megnyitása és a kilépés.
+          const _AccountMenu(),
         ],
       ),
+    );
+  }
+}
+
+/// Fiók-menü a felső sávban: a belépett fiók, a felhasználási feltételek
+/// és a kilépés. A kilépés a munkamenet-kulcsot a motoron ÉS a gépen is
+/// érvényteleníti, és visszavisz a belépő képernyőre.
+class _AccountMenu extends StatefulWidget {
+  const _AccountMenu();
+
+  @override
+  State<_AccountMenu> createState() => _AccountMenuState();
+}
+
+class _AccountMenuState extends State<_AccountMenu> {
+  Map<String, dynamic>? _me;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final me = await ApiClient().fetchMe();
+    if (!mounted) return;
+    setState(() => _me = me);
+  }
+
+  Future<void> _logout() async {
+    await ApiClient().logoutAccount();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AccountGate()),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final me = _me;
+    final who = me == null
+        ? "Nincs bejelentkezve"
+        : ((me["name"] as String?)?.isNotEmpty == true
+            ? me["name"] as String
+            : me["email"] as String? ?? "Fiók");
+    return PopupMenuButton<String>(
+      tooltip: "Fiók",
+      iconSize: 16,
+      splashRadius: 16,
+      color: AppColors.surface,
+      icon: const Icon(Icons.account_circle_outlined,
+          color: AppColors.textFaint),
+      onSelected: (v) {
+        if (v == "logout") {
+          _logout();
+        } else if (v == "terms") {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => const TermsScreen(readOnly: true),
+          ));
+        }
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem<String>(
+          enabled: false,
+          child: Text(who, style: AppText.label),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(
+          value: "terms",
+          child: Text("Felhasználási feltételek", style: AppText.value),
+        ),
+        if (me != null)
+          const PopupMenuItem<String>(
+            value: "logout",
+            child: Text("Kilépés a fiókból", style: AppText.value),
+          ),
+      ],
     );
   }
 }

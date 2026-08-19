@@ -11,6 +11,7 @@ import "dart:typed_data";
 import "package:http/http.dart" as http;
 
 import "../models/tracking.dart";
+import "session_store.dart";
 
 class ApiClient {
   /// A backend alap-URL-je. Lokális teszthez a laptopon ez a localhost.
@@ -1197,6 +1198,164 @@ class ApiClient {
       throw Exception("Nem sikerült megszakítani: HTTP ${resp.statusCode}");
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  // --- Fiókok és felhasználási feltételek --------------------------------
+  // A program a Tulajdonos szellemi és fizikai tulajdona; a használat
+  // fiókhoz kötött, a fiók létrehozásához a feltételek elfogadása kell. A
+  // munkamenet-kulcsot a SessionStore tartja (services/session_store.dart).
+
+  Map<String, String> _authHeaders() {
+    final t = SessionStore.token;
+    return {
+      "Content-Type": "application/json",
+      if (t != null) "Authorization": "Bearer $t",
+    };
+  }
+
+  /// A szerver magyar hibaüzenete, ha van — különben a HTTP-kód.
+  String _errorText(http.Response resp, String fallback) {
+    try {
+      final body = jsonDecode(utf8.decode(resp.bodyBytes));
+      if (body is Map && body["detail"] is String) {
+        return body["detail"] as String;
+      }
+    } catch (_) {}
+    return "$fallback (HTTP ${resp.statusCode})";
+  }
+
+  /// A felhasználási feltételek szövege és verziója (GET /legal/terms).
+  Future<Map<String, dynamic>> fetchTerms() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/legal/terms"))
+        .timeout(const Duration(seconds: 5));
+    if (resp.statusCode != 200) {
+      throw Exception(_errorText(resp, "Nem sikerült lekérni a feltételeket"));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Van-e már fiók a gépen (GET /accounts/status).
+  Future<Map<String, dynamic>> fetchAccountsStatus() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/accounts/status"))
+        .timeout(const Duration(seconds: 5));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          _errorText(resp, "Nem sikerült lekérni a fiók-állapotot"));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Fiók létrehozása (POST /accounts/register). A feltételek elfogadása
+  /// KÖTELEZŐ — `acceptTerms: false` esetén a szerver elutasítja. Sikernél
+  /// eltárolja a munkamenet-kulcsot, és visszaadja a fiókot.
+  Future<Map<String, dynamic>> registerAccount({
+    required String email,
+    required String password,
+    String name = "",
+    String team = "",
+    required bool acceptTerms,
+  }) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/accounts/register"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "email": email,
+        "password": password,
+        "name": name,
+        "team": team,
+        "accept_terms": acceptTerms,
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_errorText(resp, "Nem sikerült a fiók létrehozása"));
+    }
+    final json =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    await SessionStore.setToken(json["token"] as String?);
+    return Map<String, dynamic>.from(json["account"] as Map);
+  }
+
+  /// Belépés (POST /accounts/login) — sikernél eltárolja a kulcsot.
+  Future<Map<String, dynamic>> loginAccount(
+      String email, String password) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/accounts/login"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email, "password": password}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_errorText(resp, "Nem sikerült a belépés"));
+    }
+    final json =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    await SessionStore.setToken(json["token"] as String?);
+    return Map<String, dynamic>.from(json["account"] as Map);
+  }
+
+  /// A belépett fiók (GET /accounts/me) — null, ha nincs érvényes kulcs.
+  Future<Map<String, dynamic>?> fetchMe() async {
+    if (SessionStore.token == null) return null;
+    try {
+      final resp = await http
+          .get(Uri.parse("$baseUrl/accounts/me"), headers: _authHeaders())
+          .timeout(const Duration(seconds: 5));
+      if (resp.statusCode != 200) return null;
+      return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// A megújult feltételek elfogadása (POST /accounts/accept-terms).
+  Future<Map<String, dynamic>> acceptTerms() async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/accounts/accept-terms"),
+      headers: _authHeaders(),
+      body: jsonEncode({"token": SessionStore.token}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(
+          _errorText(resp, "Nem sikerült elfogadni a feltételeket"));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Kilépés (POST /accounts/logout) — a kulcs a szerveren és itt is elszáll.
+  Future<void> logoutAccount() async {
+    try {
+      await http
+          .post(Uri.parse("$baseUrl/accounts/logout"),
+              headers: _authHeaders(),
+              body: jsonEncode({"token": SessionStore.token}))
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // A motor már nem válaszol — a helyi kulcsot akkor is eldobjuk.
+    }
+    await SessionStore.clear();
+  }
+
+  /// Jelszócsere (POST /accounts/change-password) — új kulcsot ad, a
+  /// korábbi munkamenetek érvénytelenné válnak.
+  Future<Map<String, dynamic>> changePassword(
+      String oldPassword, String newPassword) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/accounts/change-password"),
+      headers: _authHeaders(),
+      body: jsonEncode({
+        "token": SessionStore.token,
+        "old_password": oldPassword,
+        "new_password": newPassword,
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_errorText(resp, "Nem sikerült a jelszócsere"));
+    }
+    final json =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    await SessionStore.setToken(json["token"] as String?);
+    return Map<String, dynamic>.from(json["account"] as Map);
   }
 
   /// A kalibráló képernyő referencia-képkockájának URL-je (GET /reference-frame).

@@ -1,0 +1,315 @@
+/// Belépés és fiók létrehozása.
+///
+/// A fiókok a saját gépen, a motor adatmappájában élnek (nincs felhő) — a
+/// jelszó sose tárolódik nyíltan, csak lenyomatként (lásd
+/// backend/handball/accounts.py). A fiók létrehozásához a felhasználási
+/// feltételeket EL KELL FOGADNI: a jelölőnégyzet nélkül a "Fiók létrehozása"
+/// gomb nem aktív, és a szerver is elutasítja a kérést.
+library;
+
+import "package:flutter/material.dart";
+
+import "../services/api_client.dart";
+import "../theme/app_theme.dart";
+import "error_text.dart";
+import "terms_screen.dart";
+
+class AccountScreen extends StatefulWidget {
+  const AccountScreen({super.key, required this.onSignedIn});
+
+  /// Sikeres belépés vagy fiók-létrehozás után hívjuk (a kapu lép tovább).
+  final VoidCallback onSignedIn;
+
+  @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends State<AccountScreen> {
+  final ApiClient _api = ApiClient();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  final _name = TextEditingController();
+  final _team = TextEditingController();
+
+  /// Igaz: fiók létrehozása; hamis: belépés meglévő fiókkal.
+  bool _registerMode = false;
+  bool _acceptTerms = false;
+  bool _busy = false;
+  bool _obscure = true;
+  String? _error;
+  String? _owner;
+  int? _termsVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    _name.dispose();
+    _team.dispose();
+    super.dispose();
+  }
+
+  /// Az első indításnál nincs fiók — ilyenkor egyből a létrehozás nyílik.
+  Future<void> _loadStatus() async {
+    try {
+      final st = await _api.fetchAccountsStatus();
+      if (!mounted) return;
+      setState(() {
+        _registerMode = st["has_accounts"] != true;
+        _owner = st["owner"] as String?;
+        _termsVersion = st["terms_version"] as int?;
+      });
+    } catch (_) {
+      // A motor még nem válaszol — a képernyő ilyenkor is használható,
+      // a hiba a beküldéskor derül ki, beszélő üzenettel.
+    }
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (_registerMode) {
+        await _api.registerAccount(
+          email: _email.text.trim(),
+          password: _password.text,
+          name: _name.text.trim(),
+          team: _team.text.trim(),
+          acceptTerms: _acceptTerms,
+        );
+      } else {
+        await _api.loginAccount(_email.text.trim(), _password.text);
+      }
+      if (!mounted) return;
+      widget.onSignedIn();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = humanError(e);
+        _busy = false;
+      });
+    }
+  }
+
+  void _openTerms() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => const TermsScreen(readOnly: true),
+    ));
+  }
+
+  InputDecoration _dec(String label, {String? hint}) => InputDecoration(
+        labelText: label,
+        hintText: hint,
+        labelStyle: AppText.label,
+        filled: true,
+        fillColor: AppColors.surfaceAlt,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.accent),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final canSubmit = !_busy &&
+        _email.text.trim().isNotEmpty &&
+        _password.text.isNotEmpty &&
+        (!_registerMode || _acceptTerms);
+
+    return Scaffold(
+      body: Center(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                          colors: [AppColors.accent, Color(0xFF1B8F82)]),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(Icons.change_history_rounded,
+                        color: AppColors.onAccent, size: 30),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const Text("SPORT MACHINE", style: AppText.brand),
+                  const SizedBox(height: 4),
+                  Text(
+                    _registerMode ? "Fiók létrehozása" : "Belépés",
+                    style: AppText.title,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _registerMode
+                        ? "A fiók a saját gépeden készül el — a jelszavad "
+                            "nem hagyja el a laptopot."
+                        : "Lépj be a gépen létrehozott fiókoddal.",
+                    style: AppText.subtitle,
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+
+                  TextField(
+                    controller: _email,
+                    decoration: _dec("E-mail cím", hint: "edzo@egyesulet.hu"),
+                    keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.email],
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: _password,
+                    decoration: _dec(
+                      _registerMode ? "Jelszó (legalább 8 karakter)" : "Jelszó",
+                    ).copyWith(
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                            _obscure
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            size: 18,
+                            color: AppColors.textFaint),
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                      ),
+                    ),
+                    obscureText: _obscure,
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) => canSubmit ? _submit() : null,
+                  ),
+
+                  if (_registerMode) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    TextField(
+                      controller: _name,
+                      decoration: _dec("Neved (nem kötelező)"),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    TextField(
+                      controller: _team,
+                      decoration: _dec("Csapat / egyesület (nem kötelező)"),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    CheckboxListTile(
+                      value: _acceptTerms,
+                      onChanged: (v) =>
+                          setState(() => _acceptTerms = v ?? false),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      activeColor: AppColors.accent,
+                      checkColor: AppColors.onAccent,
+                      title: Text(
+                        "Elfogadom a felhasználási feltételeket, és "
+                        "tudomásul veszem, hogy a Sport Machine szoftver "
+                        "${_owner ?? "a Tulajdonos"} szellemi és fizikai "
+                        "tulajdona.",
+                        style: AppText.label,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 40),
+                      child: TextButton.icon(
+                        onPressed: _openTerms,
+                        style: TextButton.styleFrom(
+                            foregroundColor: AppColors.accent,
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(0, 32),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                        icon: const Icon(Icons.description_outlined, size: 16),
+                        label: Text(
+                          _termsVersion == null
+                              ? "A feltételek elolvasása"
+                              : "A feltételek elolvasása (v$_termsVersion)",
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  if (_error != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        border: Border.all(color: AppColors.away),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Text(_error!,
+                          style:
+                              AppText.label.copyWith(color: AppColors.away)),
+                    ),
+                  ],
+
+                  const SizedBox(height: AppSpacing.lg),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: canSubmit ? _submit : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: AppColors.onAccent,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      icon: _busy
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: AppColors.onAccent),
+                            )
+                          : Icon(
+                              _registerMode
+                                  ? Icons.person_add_alt_1
+                                  : Icons.login,
+                              size: 18),
+                      label: Text(_registerMode
+                          ? "Fiók létrehozása"
+                          : "Belépés"),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Center(
+                    child: TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() {
+                                _registerMode = !_registerMode;
+                                _error = null;
+                              }),
+                      style: TextButton.styleFrom(
+                          foregroundColor: AppColors.textSecondary),
+                      child: Text(_registerMode
+                          ? "Van már fiókom — belépés"
+                          : "Nincs még fiókom — létrehozom"),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

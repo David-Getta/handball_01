@@ -11,6 +11,14 @@ szervert a `create_app()`-ből indítjuk (lásd scripts/serve.py vagy uvicorn).
 
 Végpontok (MVP):
 - GET  /health                     → életjel.
+- GET  /legal/terms                → a felhasználási feltételek szövege + verzió.
+- GET  /accounts/status            → van-e már fiók a gépen.
+- POST /accounts/register          → fiók létrehozása (a feltételek elfogadásával).
+- POST /accounts/login             → belépés → munkamenet-kulcs (token).
+- GET  /accounts/me                → a belépett fiók.
+- POST /accounts/accept-terms      → a megújult feltételek elfogadása.
+- POST /accounts/logout            → kilépés (a kulcs érvénytelenítése).
+- POST /accounts/change-password   → jelszócsere.
 - POST /matches/process            → videó-feldolgozás indítása (háttérszál) → job_id.
 - GET  /jobs/{job_id}              → a feldolgozás állapota (stage/progress/message).
 - GET  /matches                     → a tárolt meccsek listája (könyvtár nézet).
@@ -124,6 +132,109 @@ def create_app():
     def health():
         """Életjel — a kliens ezzel ellenőrzi, hogy a backend elérhető."""
         return {"status": "ok"}
+
+    # --- Fiókok és felhasználási feltételek -------------------------------
+    # A program a Tulajdonos szellemi és fizikai tulajdona; a használat
+    # fiókhoz kötött, a fiók létrehozásához pedig a feltételek elfogadása
+    # kell (lásd handball/accounts.py). A végpontok vékonyak: a logika és a
+    # jelszó-kezelés az accounts modulban van, hogy FastAPI nélkül is
+    # tesztelhető legyen.
+
+    def _bearer(request: Request, body: dict | None = None) -> str:
+        """A munkamenet-kulcs: Authorization: Bearer <token> vagy törzs/query."""
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            return auth[7:].strip()
+        if body and body.get("token"):
+            return str(body["token"])
+        return str(request.query_params.get("token") or "")
+
+    @app.get("/legal/terms")
+    def legal_terms():
+        """A felhasználási feltételek teljes szövege és verziója.
+
+        A kliens a fiók-készítő képernyőn ezt mutatja meg — elfogadás
+        (jelölőnégyzet) nélkül nem lehet fiókot létrehozni.
+        """
+        from ..accounts import terms_document
+        return terms_document()
+
+    @app.get("/accounts/status")
+    def accounts_status_ep():
+        """Van-e már fiók a gépen (első indításnál nincs) + a feltétel-verzió."""
+        from ..accounts import accounts_status
+        return accounts_status()
+
+    @app.post("/accounts/register")
+    def accounts_register(body: dict):
+        """Fiók létrehozása. Törzs: {"email", "password", "name", "team",
+        "accept_terms": true}. A feltételek elfogadása KÖTELEZŐ."""
+        from ..accounts import AccountError, register
+        try:
+            return register(
+                email=str(body.get("email") or ""),
+                password=str(body.get("password") or ""),
+                name=str(body.get("name") or ""),
+                team=str(body.get("team") or ""),
+                accept_terms=bool(body.get("accept_terms")),
+            )
+        except AccountError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.post("/accounts/login")
+    def accounts_login(body: dict):
+        """Belépés. Törzs: {"email", "password"} → {"account", "token"}.
+        Ha az account "terms_ok" mezője hamis, a megújult feltételeket
+        el kell fogadni (POST /accounts/accept-terms)."""
+        from ..accounts import AccountError, login
+        try:
+            return login(str(body.get("email") or ""),
+                         str(body.get("password") or ""))
+        except AccountError as e:
+            raise HTTPException(status_code=401, detail=str(e))
+
+    def accounts_me(request):
+        """A belépett fiók (Authorization: Bearer <token> vagy ?token=)."""
+        from ..accounts import me
+        acc = me(_bearer(request))
+        if acc is None:
+            raise HTTPException(status_code=401, detail="nincs bejelentkezés")
+        return acc
+
+    def accounts_accept_terms(request, body: dict | None = None):
+        """A jelenlegi feltétel-verzió elfogadása a belépett fiókkal."""
+        from ..accounts import AccountError, accept_terms
+        try:
+            return accept_terms(_bearer(request, body))
+        except AccountError as e:
+            raise HTTPException(status_code=401, detail=str(e))
+
+    def accounts_logout(request, body: dict | None = None):
+        """Kilépés: a munkamenet-kulcs érvénytelenítése."""
+        from ..accounts import logout
+        return {"logged_out": logout(_bearer(request, body))}
+
+    def accounts_change_password(request, body: dict):
+        """Jelszócsere. Törzs: {"old_password", "new_password"} — a csere
+        minden korábbi munkamenetet érvénytelenít, és új kulcsot ad."""
+        from ..accounts import AccountError, change_password
+        try:
+            return change_password(_bearer(request, body),
+                                   str(body.get("old_password") or ""),
+                                   str(body.get("new_password") or ""))
+        except AccountError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    # A `request` paraméter típusát KÉZZEL állítjuk be (a modul `from
+    # __future__ import annotations` miatt a sztring-annotáció nem oldódna
+    # fel a függvényen belüli névtérben), majd regisztráljuk az útvonalakat.
+    for _fn in (accounts_me, accounts_accept_terms, accounts_logout,
+                accounts_change_password):
+        _fn.__annotations__["request"] = Request
+    app.get("/accounts/me")(accounts_me)
+    app.post("/accounts/accept-terms")(accounts_accept_terms)
+    app.post("/accounts/logout")(accounts_logout)
+    app.post("/accounts/change-password")(accounts_change_password)
 
     @app.get("/health/full")
     def health_full():

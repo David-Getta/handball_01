@@ -466,3 +466,56 @@ def test_minden_posztonkenti_mezo_a_kliensben_is():
     assert len(fields) >= 60, fields   # az olvasás elromlott
     arva = [f for f in fields if f'"{f}"' not in src]
     assert not arva, f"kliens-csempe nélküli posztonkénti mezők: {arva}"
+
+
+def _client_lib() -> "Path":
+    from pathlib import Path
+    return Path(__file__).resolve().parents[2] / "client" / "lib"
+
+
+def test_fiok_kapu_a_dashboard_ele_kerul():
+    """ŐR: a motor elindulása után a FIÓK-KAPU jön, nem egyből a
+    dashboard — különben a feltétel-elfogadás megkerülhető lenne."""
+    import pytest
+
+    boot = _client_lib() / "ui" / "bootstrap_screen.dart"
+    if not boot.exists():
+        pytest.skip("nincs kliens a fában")
+    src = boot.read_text(encoding="utf-8")
+    assert "AccountGate(" in src, "a bootstrap nem a fiók-kapuba lép be"
+    assert "DashboardScreen()" not in src, (
+        "a bootstrap megkerüli a fiók-kaput, és egyből a dashboardra lép")
+
+
+def test_fiok_letrehozas_csak_elfogadassal():
+    """ŐR: a "Fiók létrehozása" gomb csak a feltételek elfogadásával
+    aktív, és a kérésbe is bekerül az elfogadás."""
+    import pytest
+
+    scr = _client_lib() / "ui" / "account_screen.dart"
+    if not scr.exists():
+        pytest.skip("nincs kliens a fában")
+    src = scr.read_text(encoding="utf-8")
+    assert "(!_registerMode || _acceptTerms)" in src, (
+        "a létrehozó gomb elfogadás nélkül is aktív lehet")
+    assert "acceptTerms: _acceptTerms" in src, (
+        "az elfogadás nem megy át a szervernek")
+
+
+def test_a_feltetel_szoveg_a_motortol_jon():
+    """ŐR: a teljes jogi szöveget a motor adja (GET /legal/terms) — a
+    kliensben nincs második, elsodródó másolat."""
+    import pytest
+
+    ui = _client_lib() / "ui"
+    if not ui.exists():
+        pytest.skip("nincs kliens a fában")
+    terms = (ui / "terms_screen.dart").read_text(encoding="utf-8")
+    assert "fetchTerms()" in terms, "a képernyő nem a motortól kéri a szöveget"
+    # A demó (motor nélküli) mód RÖVID tudomásulvétele a kivétel — az is
+    # csak egy helyen, a kapuban él, és jelzi, hogy a teljes szöveg a
+    # motorral jön.
+    gate = (ui / "account_gate.dart").read_text(encoding="utf-8")
+    assert gate.count("kOfflineTermsSummary") == 2, (
+        "a demó-szöveg nem egy helyen van definiálva és felhasználva")
+    assert "szellemi tulajdona" in gate and "fizikai tulajdon" in gate

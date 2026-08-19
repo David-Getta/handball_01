@@ -71,7 +71,10 @@ const List<(List<String>, String)> kErrorPatterns = [
 /// nyers üzenet — magabiztosan mondana valótlant. A kliens kivételei
 /// mind "HTTP 404" alakúak, a külső könyvtáraké "404 Not Found".
 String humanError(Object e) {
-  final raw = "$e";
+  // A Dart alap-kivételei "Exception: " előtaggal írják ki magukat — ez a
+  // felhasználónak semmit nem mond, a mögötte lévő (nálunk magyar) mondat
+  // viszont igen. Az előtagot ezért levágjuk.
+  final raw = "$e".replaceFirst(RegExp(r"^Exception:\s*"), "");
   final low = raw.toLowerCase();
   for (final (keys, message) in kErrorPatterns) {
     for (final k in keys) {

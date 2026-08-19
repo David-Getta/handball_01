@@ -12,7 +12,7 @@ import "package:flutter/material.dart";
 
 import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
-import "dashboard_screen.dart";
+import "account_gate.dart";
 
 class BootstrapScreen extends StatefulWidget {
   const BootstrapScreen({super.key});
@@ -67,10 +67,16 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
     }
   }
 
+  // A motor után a FIÓK-KAPU jön: belépés (vagy fiók létrehozása a
+  // feltételek elfogadásával), és csak utána a dashboard. Motor nélküli
+  // (demó) módban a kapu a rövid tulajdonjogi tudomásulvételt kéri.
   void _enterApp() {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      MaterialPageRoute(
+        builder: (_) =>
+            AccountGate(engineReady: _phase == BackendPhase.ready),
+      ),
     );
   }
 

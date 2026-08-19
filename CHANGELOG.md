@@ -5,6 +5,26 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Fiókok és felhasználási feltételek**: a program mostantól fiókhoz
+  kötött, és az első használat előtt el kell fogadni a felhasználási
+  feltételeket. A feltételek kimondják, hogy a Sport Machine szoftver — a
+  forráskód, az elemző eljárások és modellek, a felület, a nevek és a
+  megjelenés — a Tulajdonos kizárólagos **szellemi tulajdona**, a program
+  példányai és a hozzá adott eszközök pedig a **fizikai tulajdonát**
+  képezik; a felhasználó csak korlátozott, át nem ruházható, bármikor
+  visszavonható használati engedélyt kap (másolás, terjesztés,
+  továbbadás, visszafejtés, származékos mű tilos). A fiókok a saját gépen,
+  a program adatmappájában készülnek (nincs felhő), a jelszó sose
+  tárolódik nyíltan — csak PBKDF2-HMAC-SHA256 lenyomatként, egyedi sóval;
+  a belépés 90 napig érvényes munkamenet-kulcsot ad, így nem kell minden
+  indításnál újra belépni. A feltételek verziózottak: ha a szöveg
+  megújul, a belépés után újra el kell fogadni, és az elfogadás verziója
+  + időpontja a fiókban marad. Felületek: fiók-kapu a motor indulása után
+  (belépés / fiók létrehozása a feltételek elfogadásával), teljes jogi
+  szöveg olvasó nézetben, fiók-menü a felső sávban (feltételek, kilépés),
+  motor nélküli demó módban rövid tulajdonjogi tudomásulvétel. Végpontok:
+  `/legal/terms`, `/accounts/status|register|login|me|accept-terms|
+  logout|change-password`.
 - **Formáció-váltás**: a szünet után MÁS FAL-ALAKOT tartanak-e — a
   formáció-réteg a meccs egészére mondja meg a fal alakját, ez a
   váltást: félidőnként külön számolja a kockánkénti alakokat (60+
