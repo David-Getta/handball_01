@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Csere-fázis**: MIKOR indul a cseréjük — a cserehullám pillanatában
+  kinél volt a labda. A csere-kiváltók azt mondják meg, mire cserélnek, a
+  csere-lyukak azt, meddig vannak öten; ez azt, hogy saját birtoklásban
+  (olcsó), az ellenfél támadása alatt (drága) vagy megszakításban
+  váltanak-e. Ítélet 4+ cseréről: 40% felett kockázatos csere-rend, 15%
+  alatt fegyelmezett. Edzői olvasat: aki az ellenfél birtoklása közben is
+  forgat, annál a fal egy emberrel kevesebbel áll fel — a csere
+  pillanatában azonnal indítani kell a csere OLDALÁRA, és a rövid ideig
+  nyitva lévő szélen befejezni; saját oldalon a szabály egyszerű:
+  cserélni birtoklásban vagy megszakításban lehet, az ellenfél támadása
+  alatt nem. Felületek: /analyze + meccs-csomag, edzői összefoglaló,
+  felderítés (edzői kulcs + 431. meccsterv-szabály), 451. edzés-szabály,
+  kliens-csempe.
 - **Fiókok és felhasználási feltételek**: a program mostantól fiókhoz
   kötött, és az első használat előtt el kell fogadni a felhasználási
   feltételeket. A feltételek kimondják, hogy a Sport Machine szoftver — a

@@ -1678,6 +1678,11 @@ class ScoutingReport:
     # (arány = stg_after / stg_subs).
     stg_subs: int = 0
     stg_after: int = 0
+    # Csere-fázisuk: a mért cserék, és azok száma, amelyek AZ ELLENFÉL
+    # birtoklása közben indultak — darabszámok, meccsek közt pontosan
+    # összegződnek (arány = sph_opp_ball / sph_subs).
+    sph_subs: int = 0
+    sph_opp_ball: int = 0
     # Falépítés-idejük: a mért birtokváltások és a rendezett falig
     # eltelt idő összege (mp) — összegek, meccsek közt pontosan
     # összegződnek (átlag = összeg / eset).
@@ -7142,6 +7147,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "ahhoz lehet igazítani, és a friss emberük ellen "
                 "időzíteni a támadást.")
 
+    # Csere-fázis: mikor indul a csere — birtokláskor vagy védekezés közben.
+    if rep.sph_subs >= 4:
+        from .substitutions import SUBPH_RISKY_PCT, SUBPH_SAFE_PCT
+        _sph_pct = 100.0 * rep.sph_opp_ball / rep.sph_subs
+        if _sph_pct >= SUBPH_RISKY_PCT:
+            keys.append(
+                f"Védekezés közben is cserélnek (a cseréik "
+                f"{_sph_pct:.0f}%-a a TI birtoklásotok alatt indul, "
+                f"{rep.sph_opp_ball}/{rep.sph_subs}) — ilyenkor egy "
+                "emberrel kevesebbel áll fel a faluk: a csere "
+                "pillanatában gyors indítás a csere-oldalra, és a "
+                "rövid ideig nyitva lévő szélen kell befejezni.")
+        elif _sph_pct <= SUBPH_SAFE_PCT:
+            keys.append(
+                f"Fegyelmezett a csere-rendjük (a cseréiknek csak "
+                f"{_sph_pct:.0f}%-a indul a ti birtoklásotok alatt) — "
+                "a csere-pillanatra nem lehet játszani ellenük, marad "
+                "a felállt támadás minősége.")
+
     # Falépítés-idő: mennyi idő alatt áll fel a faluk.
     if rep.dst_cases >= 4 and rep.dst_sum_s > 0:
         _dst_avg = rep.dst_sum_s / rep.dst_cases
@@ -11265,6 +11289,10 @@ def _scout_team_cached(match: Match, team: Team,
         stgrec = _stg(match, config)[team.value]
         rep.stg_subs = stgrec["subs"]
         rep.stg_after = stgrec["after_conceded"]
+        from .substitutions import substitution_phase as _sph
+        sphrec = _sph(match, config)[team.value]
+        rep.sph_subs = sphrec["subs"]
+        rep.sph_opp_ball = sphrec["opp_ball"]
         from .defense import defense_setup_time as _dst
         dstrec = _dst(match, config)[team.value]
         rep.dst_cases = dstrec["cases"]
@@ -13586,6 +13614,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 431) Az ő védekezés közbeni cseréjük × a ti átmeneti játékotok: a
+    # csere-pillanat egy emberrel kevesebb falat jelent — pont az
+    # indításra kell játszani.
+    if opp.sph_subs >= 4 and own.trans_steals >= 4:
+        _s431 = 100.0 * opp.sph_opp_ball / opp.sph_subs
+        if _s431 >= 40.0:
+            plan.append(
+                f"Ők a ti birtoklásotok alatt is cserélnek (a cseréik "
+                f"{_s431:.0f}%-a, {opp.sph_opp_ball}/{opp.sph_subs}), ti "
+                f"pedig sok labdát szereztek ({own.trans_steals} szerzés) "
+                "— a csere-pillanat a ti időtök: aki látja a cserezónában "
+                "a mozgást, azonnal indítson előre a csere OLDALÁRA, és a "
+                "szélső fejezzen be, mielőtt a fal összeáll.")
 
     # 430) Az ő szünet utáni fal-váltásuk × a ti második félidei
     # termelésetek: a váltás pont a jó félidőtöket akasztja meg, ha nem
@@ -20482,6 +20524,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         fshift_sh_frames=sum(r.fshift_sh_frames for r in reports),
         fshift_sh_counts=_merge_count_dicts(
             r.fshift_sh_counts for r in reports),
+        sph_subs=sum(r.sph_subs for r in reports),
+        sph_opp_ball=sum(r.sph_opp_ball for r in reports),
         pt_passes=sum(r.pt_passes for r in reports),
         pt_poss_s=round(sum(r.pt_poss_s for r in reports), 1),
         blk_for=sum(r.blk_for for r in reports),

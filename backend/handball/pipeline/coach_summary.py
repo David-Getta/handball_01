@@ -5243,6 +5243,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_stg['subs']}).")
     except Exception:
         pass
+    # Csere-fázis: az ellenfél birtoklása közben is cseréltek-e.
+    try:
+        from .substitutions import substitution_phase
+        sph = substitution_phase(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sph = sph[side]
+            if rec_sph["verdict"] != ("védekezés közben is cserélnek "
+                                      "(kockázatos)"):
+                continue
+            body += (f" A(z) {name} kockázatosan forgatott: a cseréik "
+                     f"{rec_sph['risky_pct']:.0f}%-a az ellenfél "
+                     f"birtoklása közben indult "
+                     f"({rec_sph['opp_ball']}/{rec_sph['subs']}) — "
+                     "ilyenkor egy emberrel kevesebbel áll fel a fal.")
+    except Exception:
+        pass
     # Falépítés-idő: mennyi idő alatt állt fel a fal.
     try:
         from .defense import defense_setup_time

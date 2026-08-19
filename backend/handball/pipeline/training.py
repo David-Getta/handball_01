@@ -1366,6 +1366,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 451) Csere-fázis: ha az ellenfél birtoklása közben cserélünk, a
+    # csere-fegyelmet kell építeni — a fal különben emberhátrányban áll fel.
+    try:
+        from .substitutions import SUBPH_RISKY_PCT, substitution_phase
+        sph451 = substitution_phase(match, config)
+        for side in ("home", "away"):
+            rec451 = sph451[side]
+            if rec451["risky_pct"] is None:
+                continue
+            if rec451["risky_pct"] < SUBPH_RISKY_PCT:
+                continue
+            add(side, "védekezés", "Csere-fegyelem: mikor váltunk",
+                f"a cseréink {rec451['risky_pct']:.0f}%-a az ELLENFÉL "
+                f"birtoklása közben indult "
+                f"({rec451['opp_ball']}/{rec451['subs']}) — ilyenkor a "
+                "fal egy emberrel kevesebbel áll fel, és pont a "
+                "csere-oldalon nyílik a rés",
+                "csere-szabály és gyakorlás: váltani BIRTOKLÁSBAN vagy "
+                "megszakításban lehet, az ellenfél támadása alatt nem; "
+                "edzésen 6-6 játékban sípszóra kell cserélni, de csak "
+                "akkor, ha nálunk a labda — a lecserélt ember addig "
+                "nem léphet le, amíg a beérkező be nem ért; a "
+                "csere-oldali szélső védője külön kapjon feladatot a "
+                "rés zárására")
+    except Exception:
+        pass
+
     # 450) Formáció-váltás: ha a szünetben fal-alakot váltunk, a váltást
     # magát is gyakorolni kell — különben az első percek rendezetlenek.
     try:

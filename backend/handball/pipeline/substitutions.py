@@ -327,6 +327,79 @@ def substitution_triggers(match: Match,
     return out
 
 
+# Csere-fázis: ennyi cserehullám kell az ítélethez; e feletti "ellenfél
+# birtokolt" arány kockázatos csere-rend, e alatti fegyelmezett.
+SUBPH_MIN_SUBS = 4
+SUBPH_RISKY_PCT = 40.0
+SUBPH_SAFE_PCT = 15.0
+
+
+def substitution_phase(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-fázis: TÁMADÁSBAN vagy VÉDEKEZÉSBEN cserélnek.
+
+    A csere-kiváltók (substitution_triggers) azt mondják meg, MIRE
+    cserélnek (kapott gólra vagy terv szerint), a csere-lyukak
+    (sub_gaps) azt, MEDDIG vannak öten — ez azt, MIKOR indul a csere: a
+    cserehullám pillanatában KINÉL volt a labda. Saját birtokláskor
+    cserélni olcsó (a védekezés még nem hiányzik); az ELLENFÉL
+    birtoklása közben cserélni viszont drága — a fal egy emberrel
+    kevesebbel áll fel, és pont ott nyílik a rés, ahonnan a csere jön.
+
+    Edzőileg: aki az ellenfél birtoklása közben is forgat, azt a
+    csere-pillanatban kell megtámadni — gyors indítás a csere-oldalra,
+    és a rövid ideig nyitva lévő szélre kell fejezni; saját oldalon a
+    szabály egyszerű: cserélni birtoklásban vagy megszakításban lehet,
+    az ellenfél támadása alatt nem.
+
+    Visszatérés csapatonként: {"subs", "own_ball", "opp_ball",
+    "dead_ball", "risky_pct", "verdict"} — a risky_pct/verdict None
+    SUBPH_MIN_SUBS alatt; a verdict "védekezés közben is cserélnek
+    (kockázatos)" / "fegyelmezett csere-rend (birtokláskor váltanak)"
+    vagy None.
+    """
+    from .decisions import ball_holder
+
+    config = config or TacticsConfig()
+    subs = detect_substitutions(match, config)
+    out: dict = {side: {"subs": 0, "own_ball": 0, "opp_ball": 0,
+                        "dead_ball": 0, "risky_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not subs:
+        return out
+
+    # A cserék időpontjainál KINÉL volt a labda — egyetlen kocka-menetben.
+    want = {ev["t"] for ev in subs}
+    holder_at: dict = {}
+    for f in match.frames:
+        if f.t in want:
+            holder = ball_holder(f, config)
+            holder_at[f.t] = holder.team.value if holder is not None else None
+
+    for ev in subs:
+        rec = out[ev["team"]]
+        rec["subs"] += 1
+        who = holder_at.get(ev["t"])
+        if who is None:
+            rec["dead_ball"] += 1
+        elif who == ev["team"]:
+            rec["own_ball"] += 1
+        else:
+            rec["opp_ball"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["subs"] >= SUBPH_MIN_SUBS:
+            share = 100.0 * rec["opp_ball"] / rec["subs"]
+            rec["risky_pct"] = round(share, 1)
+            if share >= SUBPH_RISKY_PCT:
+                rec["verdict"] = "védekezés közben is cserélnek (kockázatos)"
+            elif share <= SUBPH_SAFE_PCT:
+                rec["verdict"] = ("fegyelmezett csere-rend "
+                                  "(birtokláskor váltanak)")
+    return out
+
+
 # Váltópárok: ennyi egy-az-egyben csere kell az ítélethez, és ennyi
 # ismétlődés tesz egy párost kiszámíthatóvá.
 SWP_MIN_SWAPS = 4

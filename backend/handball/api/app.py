@@ -3392,6 +3392,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.substitutions import substitution_phase
+            res["substitution_phase"] = substitution_phase(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.momentum import clutch_turnover_players
             res["clutch_turnover_players"] = clutch_turnover_players(match)
         except Exception:
@@ -5475,6 +5480,9 @@ def create_app():
                     substitution_triggers)
                 _layer("substitution_triggers",
                        lambda: substitution_triggers(match))
+                from ..pipeline.substitutions import substitution_phase
+                _layer("substitution_phase",
+                       lambda: substitution_phase(match))
                 from ..pipeline.momentum import clutch_turnover_players
                 _layer("clutch_turnover_players",
                        lambda: clutch_turnover_players(match))

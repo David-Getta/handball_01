@@ -3206,6 +3206,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "${share.toStringAsFixed(0)}%-ában) · $tipp";
   }
 
+  // Csere-fázis: mikor indul a cseréjük — birtokláskor vagy védekezés
+  // közben (4+ csere, 40%+ kockázatos / 15%- fegyelmezett — a backenddel
+  // azonos küszöbök: SUBPH_MIN_SUBS, SUBPH_RISKY_PCT, SUBPH_SAFE_PCT).
+  String? _subPhase(Map<String, dynamic> r) {
+    final n = ((r["sph_subs"] ?? 0) as num).toInt();
+    if (n < 4) return null;
+    final opp = ((r["sph_opp_ball"] ?? 0) as num).toInt();
+    final pct = 100.0 * opp / n;
+    if (pct >= 40.0) {
+      return "védekezés közben is cserélnek "
+          "(${pct.toStringAsFixed(0)}%, $opp/$n) · a csere-pillanatban "
+          "azonnal indítás a csere-oldalra";
+    }
+    if (pct <= 15.0) {
+      return "fegyelmezett csere-rend (csak "
+          "${pct.toStringAsFixed(0)}% indul a ti birtoklásotok alatt) · "
+          "a csere-pillanatra nem lehet játszani";
+    }
+    return null;
+  }
+
   // Formáció-váltás: a szünet után más fal-alakot tartanak-e
   // (félidőnként 60+ kocka, 50%+ részarány — a backenddel azonos
   // küszöbök: FSHIFT_MIN_FRAMES, FSHIFT_SHARE_PCT).
@@ -11183,6 +11204,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Védekezési formáció", _defensiveFormation(r)!],
       if (_formationShift(r) != null)
         ["Formáció-váltás", _formationShift(r)!],
+      if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)

@@ -788,3 +788,67 @@ def test_swap_style_silent_with_few_pairs():
     rec = swap_style(_sws_match(
         [(7, 107, None), (9, 119, None)]))["home"]
     assert rec["same_pct"] is None and rec["verdict"] is None, rec
+
+
+def _phase_match(holder: Team, n_waves=4, fps=25.0):
+    """`n_waves` egyfős HAZAI cserehullám; a labdát végig a megadott
+    csapat 1-es játékosa tartja (a csere-fázis ebből dől el)."""
+    frames = []
+    plan = []
+    tid = 500
+    for k in range(n_waves):
+        plan.append((400 + k * 900, tid, tid + 1))
+        tid += 2
+    total = 400 + n_waves * 900 + 300
+
+    for t in range(total):
+        players = [_pl(1, holder, 25.0, 10.0)]
+        # A másik csapat egy embere távolabb áll (ne ő legyen a labdás).
+        players.append(_pl(2, Team.AWAY if holder == Team.HOME else Team.HOME,
+                           12.0, 4.0))
+        for (t_wave, out_id, in_id) in plan:
+            if t_wave - 150 <= t <= t_wave:
+                frac = (t - (t_wave - 150)) / 150.0
+                players.append(_pl(out_id, Team.HOME,
+                                   28.0 + (20.0 - 28.0) * frac,
+                                   8.0 + (1.0 - 8.0) * frac))
+            if t_wave + 10 <= t <= t_wave + 150:
+                frac = (t - (t_wave + 10)) / 140.0
+                players.append(_pl(in_id, Team.HOME,
+                                   20.0 + 10.0 * frac,
+                                   1.0 + 11.0 * frac))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_substitution_phase_flags_the_risky_rotation():
+    """Ha a cserék az ELLENFÉL birtoklása közben indulnak, kockázatos
+    csere-rend (a fal egy emberrel kevesebbel áll fel)."""
+    from handball.pipeline.substitutions import substitution_phase
+
+    rec = substitution_phase(_phase_match(Team.AWAY))["home"]
+    assert rec["subs"] == 4, rec
+    assert rec["opp_ball"] == 4 and rec["own_ball"] == 0, rec
+    assert rec["risky_pct"] == 100.0
+    assert rec["verdict"] == "védekezés közben is cserélnek (kockázatos)"
+
+
+def test_substitution_phase_flags_the_disciplined_rotation():
+    """Saját birtoklás közbeni cserék → fegyelmezett csere-rend."""
+    from handball.pipeline.substitutions import substitution_phase
+
+    rec = substitution_phase(_phase_match(Team.HOME))["home"]
+    assert rec["own_ball"] == 4 and rec["opp_ball"] == 0, rec
+    assert rec["risky_pct"] == 0.0
+    assert rec["verdict"] == ("fegyelmezett csere-rend "
+                              "(birtokláskor váltanak)")
+
+
+def test_substitution_phase_silent_on_few_subs():
+    """Kevés cserénél nincs ítélet (sose hallgatólagos csere-rend)."""
+    from handball.pipeline.substitutions import substitution_phase
+
+    rec = substitution_phase(_phase_match(Team.AWAY, n_waves=2))["home"]
+    assert rec["subs"] == 2 and rec["verdict"] is None, rec
+    assert rec["risky_pct"] is None, rec
