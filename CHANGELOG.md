@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Színes pályavonalak: a piros kézilabda-vonal is pálya**: a
+  vonal-felismerés eddig FEHÉR vonalat keresett (a padlónál világosabb
+  pixelt). A több sportot kiszolgáló csarnokokban viszont a padlón
+  egymáson futnak a kosár-, futsal- és röplabda-vonalak, és a
+  kézilabda-pályát gyakran PIROS vonal jelöli — nagy festett mezőkkel
+  együtt (sárga kapuelőtér, színes pályafelület). Mostantól van
+  szín-alapú vonalmaszk (piros/kék/zöld/sárga), és az "auto" mód a
+  képből dönti el, melyik szín vonalait kövesse: a fehér csak akkor
+  veszít, ha egy szín érdemben több vonal-pixelt hoz. A festett mezők
+  BELSEJE nem vonal — csak a szélük —, így a sárga kapuelőtér nem
+  árasztja el a felismerést. A /broadcast/lines végpont új `line_color`
+  paramétert kapott (alap: "auto"), és visszaadja, melyik színt
+  használta; a kliens közvetítés-ellenőrzője ki is írja ("… piros
+  vonalak alapján"), hogy látszódjon, mit követ a rendszer.
+- **Bevonulás/köszöntés a meccs-ablakon kívül** (őr-teszt): a
+  meccs-ablak eddig is a MOZGÁSBÓL ismerte fel a ceremóniát — mostantól
+  ezt teszt is rögzíti: a felezővonalnál sorban álló két csapat (elég
+  ember a pályán, közeli súlypontok, de nincs mozgás) nem játék, és a
+  csak ceremóniát tartalmazó felvételre nincs meccs-ablak.
 - **Befejezés-mérleg**: FENNTARTHATÓ-E a gólterméskük — a gól és a
   várható gól (xG) különbsége edzői ítélettel. A meccs-xG eddig is
   kiszámolta a különbséget, de nem mondta meg, mit kezdjen vele az edző.

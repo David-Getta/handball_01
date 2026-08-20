@@ -48,6 +48,15 @@ def _seg(t0, seconds, kind):
                        for k in range(6)]
             players += [_pl(10 + k, Team.AWAY, 32.0 + wig + k * 0.5,
                             3.0 + 2 * k) for k in range(6)]
+        elif kind == "lineup":
+            # Bevonulás / köszöntés: a két csapat SORBAN áll a
+            # felezővonal két oldalán, mozdulatlanul (a felhasználó
+            # felvételén ez a "0:00" előtti ceremónia). A súlypontok
+            # közel vannak — a mozgás hiánya árulja el, hogy nem játék.
+            players = [_pl(k, Team.HOME, 19.0, 3.0 + 1.2 * k)
+                       for k in range(7)]
+            players += [_pl(10 + k, Team.AWAY, 21.0, 3.0 + 1.2 * k)
+                        for k in range(7)]
         else:
             players = []
         frames.append(Frame(t=t0 + i, players=players,
@@ -135,3 +144,23 @@ def test_break_span_shots_are_filtered():
     goals = [e for e in events if e.type == EventType.GOAL]
     assert len(goals) == 1
     assert goals[0].t == 51  # a játékbeli gól; a szünetbeli (t=141) kimaradt
+
+
+def test_lineup_ceremony_is_not_game():
+    """Bevonulás/köszöntés: a két csapat sorban áll a felezővonalnál,
+    elég ember a pályán, a súlypontok is közel — de MOZGÁS nincs, tehát
+    nem játék: a ceremónia a meccs-ablakon kívülre esik."""
+    frames = (_seg(0, 90, "lineup")
+              + _seg(int(90 * FPS), 120, "game"))
+    m = Match(_meta(), frames)
+    info = trim_to_game(m)
+    assert info is not None, "a ceremónia után van játék, kell ablak"
+    assert info["head_cut_s"] == 75.0, info
+    assert m.frames[0].t == int(75.0 * FPS)
+
+
+def test_lineup_only_recording_has_no_game_window():
+    """Csak ceremónia (nincs játék) → nincs meccs-ablak: a rendszer nem
+    talál ki meccset ott, ahol nem volt."""
+    m = Match(_meta(), _seg(0, 200, "lineup"))
+    assert detect_game_window(m) is None

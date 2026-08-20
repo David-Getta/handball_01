@@ -750,11 +750,22 @@ class ApiClient {
 
   /// Pályavonal-jelöltek egy képkockából (GET /broadcast/lines):
   /// vonalak + sarok-jelöltek + javasolt kalibrációs négyszög.
+  ///
+  /// `lineColor`: a KÖVETENDŐ vonalszín. Több sportot kiszolgáló
+  /// csarnokban a kézilabda-pálya vonala gyakran nem fehér, hanem piros
+  /// (mellette a kosár/futsal kék-zöld vonalai) — az "auto" a képből
+  /// dönti el, melyiket kövesse, és a válasz "line_color" mezője
+  /// megmondja, mire jutott. Kézi felülbírálás: "feher", "piros",
+  /// "kek", "zold", "sarga".
   Future<Map<String, dynamic>> fetchBroadcastLines(String path,
-      {int frame = 0}) async {
+      {int frame = 0, String lineColor = "auto"}) async {
     final resp = await http
         .get(Uri.parse("$baseUrl/broadcast/lines").replace(
-            queryParameters: {"path": path, "frame": "$frame"}))
+            queryParameters: {
+              "path": path,
+              "frame": "$frame",
+              "line_color": lineColor,
+            }))
         .timeout(const Duration(seconds: 60));
     if (resp.statusCode != 200) {
       throw Exception("Nem sikerült a vonal-felismerés: HTTP ${resp.statusCode}");

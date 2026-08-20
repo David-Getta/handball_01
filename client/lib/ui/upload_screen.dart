@@ -515,8 +515,20 @@ class _UploadScreenState extends State<UploadScreen> {
           final nLines = ((lr["lines"] as List?) ?? const []).length;
           final nCorners = ((lr["corners"] as List?) ?? const []).length;
           final hasQuad = lr["suggested_quad"] != null;
+          // Több sportot kiszolgáló csarnokban a kézilabda-pálya vonala
+          // gyakran nem fehér (pl. PIROS) — kiírjuk, melyik szín vonalait
+          // követte a felismerés, hogy a felhasználó lássa és hihesse.
+          final colorName = switch (lr["line_color"] as String?) {
+            "piros" => "piros",
+            "kek" => "kék",
+            "zold" => "zöld",
+            "sarga" => "sárga",
+            "feher" => "fehér",
+            _ => null,
+          };
           lineInfo = "Vonal-felismerés az első totálképen: $nLines vonal, "
               "$nCorners sarok-jelölt"
+              "${colorName == null ? "" : " ($colorName vonalak alapján)"}"
               "${hasQuad ? " — van kalibrációs négyszög-javaslat." : "."}";
         } catch (_) {
           lineInfo = null; // vonal-infó nélkül is teljes az ellenőrzés

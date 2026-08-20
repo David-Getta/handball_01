@@ -394,7 +394,8 @@ def create_app():
                                 detail=f"a közvetítés-elemzés nem sikerült: {e}")
 
     @app.get("/broadcast/lines")
-    def broadcast_lines(path: str, frame: int = 0):
+    def broadcast_lines(path: str, frame: int = 0,
+                        line_color: str = "auto"):
         """Pályavonal-jelöltek egy közvetítés-képkockából.
 
         A vonal-alapú auto-kalibráció első fele: a megadott képkockán
@@ -418,12 +419,20 @@ def create_app():
                                     detail="frame not readable")
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             from ..pipeline.broadcast_lines import (
-                detect_court_lines, line_intersections,
+                detect_court_lines_color, line_intersections,
                 suggest_calibration_quad)
-            lines = detect_court_lines(gray)
+            # A több sportot kiszolgáló csarnokokban a kézilabda-pálya
+            # vonala gyakran NEM fehér (pl. piros, a kosár/futsal kék-zöld
+            # vonalai mellett) — az "auto" a képből dönti el, melyiket
+            # kövesse; a kliens felül is bírálhatja (line_color).
+            rgb = img[:, :, ::-1]          # OpenCV BGR → RGB
+            found = detect_court_lines_color(rgb, line_color)
+            lines = found["lines"]
             h, w = gray.shape[:2]
             corners = line_intersections(lines, w, h)
             return {"frame": int(frame), "width": w, "height": h,
+                    "line_color": found["color"],
+                    "line_pixels": found["pixels"],
                     "lines": lines, "corners": corners,
                     "suggested_quad": suggest_calibration_quad(corners,
                                                                w, h)}
