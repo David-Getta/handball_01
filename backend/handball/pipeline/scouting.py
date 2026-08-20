@@ -1682,6 +1682,13 @@ class ScoutingReport:
     fbal_shots: int = 0
     fbal_goals: int = 0
     fbal_xg_sum: float = 0.0
+    # Kapusuk a lövő KEZESSÉGE szerint: kezenként a rá kaputra tartó
+    # lövések és a védések darabszáma — meccsek közt pontosan
+    # összegződnek (védés-arány = védés / kapura tartó).
+    gkh_left_faced: int = 0
+    gkh_left_saves: int = 0
+    gkh_right_faced: int = 0
+    gkh_right_saves: int = 0
     # Falépítés-idejük: a mért birtokváltások és a rendezett falig
     # eltelt idő összege (mp) — összegek, meccsek közt pontosan
     # összegződnek (átlag = összeg / eset).
@@ -7165,6 +7172,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "a csere-pillanatra nem lehet játszani ellenük, marad "
                 "a felállt támadás minősége.")
 
+    # Kapus-védés a lövő kezessége szerint: bírja-e a balkezeseket.
+    if (rep.gkh_left_faced >= 4 and rep.gkh_right_faced >= 4):
+        from .goalkeeper import GKH_GAP_PP
+        _gkh_l = 100.0 * rep.gkh_left_saves / rep.gkh_left_faced
+        _gkh_r = 100.0 * rep.gkh_right_saves / rep.gkh_right_faced
+        if _gkh_r - _gkh_l >= GKH_GAP_PP:
+            keys.append(
+                f"A kapusuk a BALKEZES lövők ellen gyengébb "
+                f"({_gkh_l:.0f}% vs {_gkh_r:.0f}% a jobbkezesek ellen, "
+                f"{rep.gkh_left_faced} kapura tartó lövésből) — a "
+                "balkezes emberünket kell rá szervezni: az ő oldaláról "
+                "indított figurák, és hetes helyett is ő vállalja.")
+        elif _gkh_l - _gkh_r >= GKH_GAP_PP:
+            keys.append(
+                f"A kapusuk a balkezesekre fel van készülve "
+                f"({_gkh_l:.0f}%), a JOBBKEZES lövők ellen gyengébb "
+                f"({_gkh_r:.0f}%, {rep.gkh_right_faced} kapura tartó "
+                "lövésből) — a szokásos befejezőinket kell rá "
+                "engedni, ne a tükrözött figurát erőltessük.")
+
     # Befejezés-mérleg: fenntartható-e a gólterméskük (gól − várható gól).
     if rep.fbal_shots >= 12:
         from .xg import FBAL_DIFF_GOALS
@@ -11306,6 +11333,12 @@ def _scout_team_cached(match: Match, team: Team,
         rep.fbal_shots = fbalrec["shots"]
         rep.fbal_goals = fbalrec["goals"]
         rep.fbal_xg_sum = round(fbalrec["xg"], 2)
+        from .goalkeeper import gk_saves_by_hand as _gkh
+        gkhrec = _gkh(match, config)[team.value]
+        rep.gkh_left_faced = gkhrec["hands"]["bal"]["faced"]
+        rep.gkh_left_saves = gkhrec["hands"]["bal"]["saves"]
+        rep.gkh_right_faced = gkhrec["hands"]["jobb"]["faced"]
+        rep.gkh_right_saves = gkhrec["hands"]["jobb"]["saves"]
         from .defense import defense_setup_time as _dst
         dstrec = _dst(match, config)[team.value]
         rep.dst_cases = dstrec["cases"]
@@ -13627,6 +13660,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 433) Az ő balkezesekre sebezhető kapusuk × a ti balkezes lövőtök: a
+    # tükör-feladat a kapusnak, ha van kire szervezni.
+    if (opp.gkh_left_faced >= 4 and opp.gkh_right_faced >= 4
+            and own.hand_shots_by_player):
+        _g433_l = 100.0 * opp.gkh_left_saves / opp.gkh_left_faced
+        _g433_r = 100.0 * opp.gkh_right_saves / opp.gkh_right_faced
+        if _g433_r - _g433_l >= 15.0:
+            for _g433_k, _g433_n in sorted(own.hand_shots_by_player.items(),
+                                           key=lambda kv: -kv[1]):
+                _g433_left = own.hand_left_by_player.get(_g433_k, 0)
+                if _g433_n >= 4 and _g433_left >= 0.7 * _g433_n:
+                    plan.append(
+                        f"Az ő kapusuk a balkezesek ellen gyengébb "
+                        f"({_g433_l:.0f}% vs {_g433_r:.0f}%), nektek "
+                        f"pedig van balkezes lövőtök (a(z) {_g433_k}. "
+                        f"játékos, {_g433_n} lövésből {_g433_left} "
+                        "bal-jel) — rá kell szervezni a befejezést: az "
+                        "ő oldaláról induló figurák, és hetesnél is ő "
+                        "álljon oda.")
+                    break
 
     # 432) Az ő felülteljesítő befejezésük × a ti kapusotok: a többlet
     # nagy része a kapun múlik — az alapállást a bejáratott sarkukra kell
@@ -20525,6 +20579,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         fbal_shots=sum(r.fbal_shots for r in reports),
         fbal_goals=sum(r.fbal_goals for r in reports),
         fbal_xg_sum=round(sum(r.fbal_xg_sum for r in reports), 2),
+        gkh_left_faced=sum(r.gkh_left_faced for r in reports),
+        gkh_left_saves=sum(r.gkh_left_saves for r in reports),
+        gkh_right_faced=sum(r.gkh_right_faced for r in reports),
+        gkh_right_saves=sum(r.gkh_right_saves for r in reports),
         pt_passes=sum(r.pt_passes for r in reports),
         pt_poss_s=round(sum(r.pt_poss_s for r in reports), 1),
         blk_for=sum(r.blk_for for r in reports),

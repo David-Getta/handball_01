@@ -5752,6 +5752,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"({weak_gsr['faced']} kapura tartó lövés).")
     except Exception:
         pass
+    # Kapus-védés a lövő kezessége szerint: bírja-e a balkezeseket.
+    try:
+        from .goalkeeper import gk_saves_by_hand
+        gsh = gk_saves_by_hand(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gsh = gsh[side]
+            if rec_gsh["weak_hand"] is None:
+                continue
+            weak = rec_gsh["hands"][rec_gsh["weak_hand"]]
+            body += (f" A(z) {name} kapusa a "
+                     f"{rec_gsh['weak_hand']}kezes lövők ellen volt "
+                     f"gyengébb: {weak['save_pct']:.0f}%-ot fogott "
+                     f"({weak['faced']} kapura tartó lövés).")
+    except Exception:
+        pass
     # Hiba-sorozatok: egymás után jöttek-e az eladások.
     try:
         from .defense import turnover_clusters

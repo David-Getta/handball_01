@@ -2756,3 +2756,88 @@ def test_gk_change_yield_judges_the_swap(monkeypatch):
     rec = goalkeeper.gk_change_yield(None)
     assert rec["home"]["verdict"] is None
     assert rec["away"]["verdict"] is None
+
+
+# --- Kapus-védés a lövő KEZESSÉGE szerint (gk_saves_by_hand) ------------
+
+def _hand_gk_match(left_saves=1, left_goals=3, right_saves=4,
+                   right_goals=0, fps=25.0):
+    """Hazai lövések a VENDÉG kapusára, két lövőtől: a 7-es BAL, a 8-as
+    JOBB kezes (a labda az elengedés előtti kockán a dobó kéz oldalán
+    van). A `save=True` lövés a kapuson elakad, a False gól."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def _idle(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    def _players(pid):
+        return [
+            PlayerPosition(track_id=pid, team=Team.HOME, x=33.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+            PlayerPosition(track_id=99, team=Team.AWAY, x=39.2, y=10.0,
+                           role="kapus", source=PositionSource.MEASURED,
+                           confidence=1.0),
+        ]
+
+    def _shot(pid, ball_dy, save):
+        nonlocal t
+        # Előbb a labda a lövő KEZÉBEN, a dobó kéz oldalára tolva — az
+        # elengedés előtti kockából becsli a motor a kezességet; utána
+        # egy kockán belül elszáll (a védésnél a kapuson akad el).
+        for _ in range(3):
+            frames.append(Frame(t=t, players=_players(pid),
+                                ball=Ball(x=33.0, y=10.0 + ball_dy,
+                                          confidence=1.0)))
+            t += 1
+        stop = 38.6 if save else 40.4
+        for bx in (36.0, stop, stop, stop):
+            frames.append(Frame(t=t, players=_players(pid),
+                                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+        _idle(2.0)
+
+    _idle(5.0)
+    for _ in range(left_saves):
+        _shot(7, 0.5, save=True)
+    for _ in range(left_goals):
+        _shot(7, 0.5, save=False)
+    for _ in range(right_saves):
+        _shot(8, -0.5, save=True)
+    for _ in range(right_goals):
+        _shot(8, -0.5, save=False)
+    return Match(MatchMeta(match_id="gkh", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_gk_saves_by_hand_flags_the_weak_side():
+    """Ha a kapus a balkezes lövők ellen érdemben rosszabb, a bal kéz a
+    gyenge oldala — oda kell szervezni a befejezést."""
+    from handball.pipeline.goalkeeper import gk_saves_by_hand
+
+    rec = gk_saves_by_hand(_hand_gk_match())["away"]
+    assert rec["hands"]["bal"]["faced"] == 4, rec
+    assert rec["hands"]["jobb"]["faced"] == 4, rec
+    assert rec["hands"]["bal"]["save_pct"] == 25.0, rec
+    assert rec["hands"]["jobb"]["save_pct"] == 100.0, rec
+    assert rec["weak_hand"] == "bal" and rec["gap_pp"] == 75.0, rec
+
+
+def test_gk_saves_by_hand_silent_without_enough_shots():
+    """Kevés lövés az egyik kézből → nincs ítélet (sose hallgatólagos
+    gyenge oldal)."""
+    from handball.pipeline.goalkeeper import gk_saves_by_hand
+
+    rec = gk_saves_by_hand(
+        _hand_gk_match(right_saves=2, right_goals=0))["away"]
+    assert rec["hands"]["bal"]["faced"] == 4, rec
+    # A 8-as csak 2 lövést adott le, ezért a KEZESSÉGE sincs eldöntve
+    # (shooting_hand: 4 lövéstől ítél) — a lövései így nem is
+    # sorolódnak be. Ez a szándék: bizonytalan kéz → nincs adat.
+    assert rec["hands"]["jobb"]["faced"] == 0, rec
+    assert rec["weak_hand"] is None and rec["gap_pp"] is None, rec

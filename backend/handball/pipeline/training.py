@@ -1366,6 +1366,34 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 453) Kapus a kezesség szerint: ha a kapusunk a balkezesek ellen
+    # esik vissza, tükrözött dobó-gyakorlat kell.
+    try:
+        from .goalkeeper import GKH_GAP_PP, gk_saves_by_hand
+        gkh453 = gk_saves_by_hand(match, config)
+        for side in ("home", "away"):
+            rec453 = gkh453[side]
+            if rec453["weak_hand"] is None:
+                continue
+            weak453 = rec453["hands"][rec453["weak_hand"]]
+            strong453 = rec453["hands"][
+                "jobb" if rec453["weak_hand"] == "bal" else "bal"]
+            add(side, "kapus", "Kapus-felkészítés a másik kézre",
+                f"a kapusunk a {rec453['weak_hand']}kezes lövők ellen "
+                f"{weak453['save_pct']:.0f}%-ot fogott, a másik kéz ellen "
+                f"{strong453['save_pct']:.0f}%-ot "
+                f"({weak453['faced']} kapura tartó lövésből; "
+                f"{GKH_GAP_PP:.0f} százalékpont különbségtől jelezzük) — "
+                "az alapállás és a láb-munka az egyik kézre van bejáratva",
+                f"kapus-blokk {rec453['weak_hand']}kezes dobókkal: ha "
+                "nincs ilyen a keretben, tükrözött gyakorlat (a lövő a "
+                "másik oldalról, befelé jövet lő), sarok-sorozatok "
+                "lassítva, majd élesben; a kapus HANGOSAN mondja be "
+                "minden dobás előtt, melyik kéz jön — a felismerés a "
+                "fél védés")
+    except Exception:
+        pass
+
     # 452) Befejezés-mérleg: ha a helyzeteink ALATT teljesítünk, a
     # befejezés a hiány — a helyzet-teremtés már megvan.
     try:

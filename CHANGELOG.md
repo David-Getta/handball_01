@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Kapus-védés a lövő kezessége szerint**: bírja-e a kapusuk a
+  BALKEZESEKET. A posztonkénti és a távolság-sávos kapus-kép után a
+  harmadik tengely a lövő KEZE: a balkezes lövő tükör-feladat a
+  kapusnak (az alapállás, a láb-munka és a sarok-olvasás a
+  jobbkezesekre van bejáratva), és sok kapus mérhetően gyengébb
+  ellenük. Ítélet kezenként 4+ kapura tartó lövéstől, 15
+  százalékpontos különbségtől. Edzői olvasat: ha a kapusuk a
+  balkezesek ellen gyengébb, a balkezes emberünket kell rá szervezni —
+  az ő oldaláról indított figurákkal, és hetesnél is ő álljon oda; ha
+  a saját kapusunk esik vissza, balkezes dobókkal (vagy tükrözött
+  gyakorlattal) kell edzeni. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (edzői kulcs + 433. meccsterv-szabály),
+  453. edzés-szabály, kliens-csempe.
 - **Színes pályavonalak: a piros kézilabda-vonal is pálya**: a
   vonal-felismerés eddig FEHÉR vonalat keresett (a padlónál világosabb
   pixelt). A több sportot kiszolgáló csarnokokban viszont a padlón

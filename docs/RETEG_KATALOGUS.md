@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **479 réteg**, modulonként csoportosítva; a
+Összesen **480 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (93)
@@ -237,7 +237,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `shot_speed_fade` | Lövőerő-esés: a lövés-sebesség változása az 1. és a 2. félidő között — |
 | `shot_speeds` | Lövés-sebességek a labda-kinematikából. |
 
-## goalkeeper (43)
+## goalkeeper (44)
 
 | Réteg | Mit mér |
 |---|---|
@@ -263,6 +263,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `gk_save_fade` | Kapus-forma félidőnként: a védés-hatékonyság változása az 1. és a |
 | `gk_save_ranges` | Kapus védés-hatékonyság lövés-távolság szerint: melyik távolságból |
 | `gk_save_streaks` | Kapus-sorozat: ha rákap, SOROZATBAN véd-e a kapus. |
+| `gk_saves_by_hand` | Kapus-védés a lövő KEZESSÉGE szerint: bírja-e a balkezeseket. |
 | `gk_saves_by_role` | Kapus-védés posztonként: MELYIK POSZT lövéseit fogja a kapusuk. |
 | `gk_saves_by_score` | Kapus állás szerint: HÁTRÁNYBAN FELJAVUL vagy ÖSSZEESIK-E. |
 | `gk_saves_by_speed` | Kapus-védés lövés-sebesség szerint: a BOMBÁKAT vagy a HELYEZETT |

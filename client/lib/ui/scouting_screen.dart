@@ -3213,6 +3213,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "${share.toStringAsFixed(0)}%-ában) · $tipp";
   }
 
+  // Kapus-védés a lövő kezessége szerint: bírja-e a balkezeseket
+  // (kezenként 4+ kapura tartó lövés, 15 százalékpont különbség — a
+  // backenddel azonos küszöbök: GKH_MIN_FACED, GKH_GAP_PP).
+  String? _gkByHand(Map<String, dynamic> r) {
+    final lf = ((r["gkh_left_faced"] ?? 0) as num).toInt();
+    final rf = ((r["gkh_right_faced"] ?? 0) as num).toInt();
+    if (lf < 4 || rf < 4) return null;
+    final ls = ((r["gkh_left_saves"] ?? 0) as num).toInt();
+    final rs = ((r["gkh_right_saves"] ?? 0) as num).toInt();
+    final lp = 100.0 * ls / lf;
+    final rp = 100.0 * rs / rf;
+    if (rp - lp >= 15.0) {
+      return "a kapusuk a BALKEZESEK ellen gyengébb "
+          "(${lp.toStringAsFixed(0)}% vs ${rp.toStringAsFixed(0)}%) · "
+          "a balkezes emberünket kell rá szervezni, hetesnél is";
+    }
+    if (lp - rp >= 15.0) {
+      return "a kapusuk a jobbkezesek ellen gyengébb "
+          "(${rp.toStringAsFixed(0)}% vs ${lp.toStringAsFixed(0)}%) · "
+          "a szokásos befejezőinket engedjük rá, ne tükrözzünk";
+    }
+    return null;
+  }
+
   // Befejezés-mérleg: fenntartható-e a gólterméskük (12+ lövés, 2,5
   // gólnyi eltérés — a backenddel azonos küszöbök: FBAL_MIN_SHOTS,
   // FBAL_DIFF_GOALS).
@@ -11208,6 +11232,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
       if (_finishingBalance(r) != null)
         ["Befejezés-mérleg", _finishingBalance(r)!],
+      if (_gkByHand(r) != null) ["Kapus a kezesség ellen", _gkByHand(r)!],
       if (_sevenSixFinisher(r) != null)
         ["7a6-befejező ember", _sevenSixFinisher(r)!],
       if (_assistDuo(r) != null)

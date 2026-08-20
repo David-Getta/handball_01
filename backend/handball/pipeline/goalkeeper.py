@@ -1658,6 +1658,83 @@ def gk_saves_by_role(match: Match, config=None) -> dict:
     return out
 
 
+# Kapus-védés a lövő KEZESSÉGE szerint: kezenként ennyi kapura tartó
+# lövés kell az ítélethez, és ekkora (százalékpontos) különbség számít
+# érdeminek a két kéz között.
+GKH_MIN_FACED = 4
+GKH_GAP_PP = 15.0
+
+
+def gk_saves_by_hand(match: Match, config=None) -> dict:
+    """Kapus-védés a lövő KEZESSÉGE szerint: bírja-e a balkezeseket.
+
+    A posztonkénti (gk_saves_by_role) és a távolság-sávos
+    (gk_save_ranges) kép után a harmadik tengely: a lövő KEZE. A
+    balkezes lövő tükör-feladat a kapusnak — az alapállás, a láb-munka
+    és a sarok-olvasás mind a jobbkezesekre van bejáratva, ezért sok
+    kapus mérhetően gyengébb ellenük (a kezességet a
+    event_detection.shooting_hand becsli).
+
+    Edzőileg felderítésben: ha a kapusuk a balkezesek ellen gyengébb, a
+    balkezes lövőtöket kell rá szervezni — az ő oldaláról indított
+    figurákkal, és hetes helyett is neki érdemes vállalni a lövést.
+    Saját oldalon: ha a mi kapusunk esik vissza a balkezesek ellen, az
+    edzésen balkezes dobókkal (vagy tükrözött gyakorlattal) kell
+    dolgoztatni.
+
+    Visszatérés csapatonként (a VÉDŐ oldal = akinek a kapusa a kapuban
+    van): {"on_target", "hands": {"bal"/"jobb": {"faced", "saves",
+    "save_pct"}}, "weak_hand", "gap_pp"} — a "weak_hand" a gyengébb
+    kéz, ha MINDKÉT kézből legalább GKH_MIN_FACED lövés érkezett, és a
+    különbség eléri a GKH_GAP_PP-t (egyébként None).
+    """
+    from .event_detection import shooting_hand
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    xg = match_xg(match, config)
+    hands = shooting_hand(match, config)
+    # Lövő → kéz ("bal"/"jobb"), csak ott, ahol van ítélet.
+    hand_of: dict = {}
+    for side in ("home", "away"):
+        for rec_p in hands[side]["players"]:
+            if rec_p.get("hand"):
+                hand_of[rec_p["player_id"]] = rec_p["hand"]
+
+    out: dict = {}
+    for side in ("home", "away"):
+        tally = {"bal": {"faced": 0, "saves": 0},
+                 "jobb": {"faced": 0, "saves": 0}}
+        for sh in xg["shots"]:
+            # A VÉDŐ oldal kapusát a MÁSIK csapat lövése terheli.
+            if sh["team"] == side or sh["player_id"] is None:
+                continue
+            if sh["outcome"] not in ("goal", "save"):
+                continue  # mellé/blokk: nem kaputra érkezett
+            hand = hand_of.get(sh["player_id"])
+            if hand not in tally:
+                continue
+            tally[hand]["faced"] += 1
+            if sh["outcome"] == "save":
+                tally[hand]["saves"] += 1
+
+        for r in tally.values():
+            r["save_pct"] = (round(100.0 * r["saves"] / r["faced"], 1)
+                             if r["faced"] else None)
+        weak_hand, gap = None, None
+        if all(tally[h]["faced"] >= GKH_MIN_FACED for h in ("bal", "jobb")):
+            gap = round(tally["jobb"]["save_pct"] - tally["bal"]["save_pct"],
+                        1)
+            if abs(gap) >= GKH_GAP_PP:
+                weak_hand = "bal" if gap > 0 else "jobb"
+        out[side] = {
+            "on_target": sum(r["faced"] for r in tally.values()),
+            "hands": tally, "weak_hand": weak_hand, "gap_pp": gap,
+        }
+    return out
+
+
 # Kapus-védés lövés-sebesség szerint: sávonként ennyi kapura tartó lövés
 # kell, a sáv-határ (km/h) a kemény és a helyezett lövés közt, és ekkora
 # (százalékpontos) különbség számít érdemi eltérésnek.

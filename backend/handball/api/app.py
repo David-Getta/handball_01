@@ -3231,6 +3231,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import gk_saves_by_hand
+            res["gk_saves_by_hand"] = gk_saves_by_hand(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import attack_outcomes
             res["attack_outcomes"] = attack_outcomes(match)
         except Exception:
@@ -5394,6 +5399,9 @@ def create_app():
                 from ..pipeline.goalkeeper import gk_saves_by_role
                 _layer("gk_saves_by_role",
                        lambda: gk_saves_by_role(match))
+                from ..pipeline.goalkeeper import gk_saves_by_hand
+                _layer("gk_saves_by_hand",
+                       lambda: gk_saves_by_hand(match))
                 from ..pipeline.attack_types import attack_outcomes
                 _layer("attack_outcomes", lambda: attack_outcomes(match))
                 from ..pipeline.defense import line_height_by_score
