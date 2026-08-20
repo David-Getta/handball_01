@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.29 óta)
 
+- **A fiók-kapu megmondja, ha nem fut a motor** (kliens): a fiókok a
+  motorban élnek, a fiók-lekérdezés viszont hálózati hibára is
+  "nincs bejelentkezve"-t adott — a felhasználó ezért egy űrlapot
+  kapott, ami csak a BEKÜLDÉSNÉL bukott el ("Nem érem el a
+  háttérmotort"). A kapu mostantól előbb megnézi, él-e a motor, és ha
+  nem, beszélő képernyőt mutat: mit tegyen (teljes újraindítás), hol a
+  motor naplója (engine-app.log, platformonkénti útvonallal), plusz egy
+  Újrapróbálom gomb és a demó módba lépés. A motor menet közben is
+  leállhat (pl. frissítés után), ezért az újrapróbálás ugyanazt a
+  teljes ellenőrzést futtatja le.
+
 ## v0.1.29 — kiadva (2026-08-20)
 
 > Kiadás-jegyzet: a v0.1.28 óta a kör három szálon futott — a program

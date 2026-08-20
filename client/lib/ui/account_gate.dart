@@ -58,7 +58,7 @@ class AccountGate extends StatefulWidget {
   State<AccountGate> createState() => _AccountGateState();
 }
 
-enum _GateStep { checking, offline, account, terms, done }
+enum _GateStep { checking, engineDown, offline, account, terms, done }
 
 class _AccountGateState extends State<AccountGate> {
   final ApiClient _api = ApiClient();
@@ -88,6 +88,16 @@ class _AccountGateState extends State<AccountGate> {
             : _GateStep.offline;
       });
       if (_step == _GateStep.done) _enterApp();
+      return;
+    }
+    // A motor ÉL-E MOST? A fiók-lekérdezés hálózati hibára is null-t ad,
+    // tehát önmagában nem különbözteti meg a "nincs bejelentkezve" és a
+    // "nem fut a motor" esetet — a felhasználó pedig különben egy űrlapot
+    // kapna, ami csak beküldéskor bukik el (a motor menet közben is
+    // leállhat, pl. frissítés után).
+    if (!await _api.isHealthy()) {
+      if (!mounted) return;
+      setState(() => _step = _GateStep.engineDown);
       return;
     }
     final me = await _api.fetchMe();
@@ -144,7 +154,75 @@ class _AccountGateState extends State<AccountGate> {
         );
       case _GateStep.offline:
         return _offlineNotice();
+      case _GateStep.engineDown:
+        return _engineDownNotice();
     }
+  }
+
+  /// A motor nem válaszol: beszélő képernyő ÚJRAPRÓBÁLÁSSAL — nem egy
+  /// űrlap, ami csak a beküldésnél bukik el. A napló helyét is kiírjuk,
+  /// mert a motor indulási hibája ott olvasható.
+  Widget _engineDownNotice() {
+    return Scaffold(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.error_outline,
+                    color: AppColors.away, size: 34),
+                const SizedBox(height: AppSpacing.md),
+                const Text("A motor nem válaszol", style: AppText.title),
+                const SizedBox(height: AppSpacing.sm),
+                const Text(
+                  "A fiókod a saját gépeden, a motorban él — amíg a motor "
+                  "nem fut, belépni és fiókot létrehozni sem lehet.\n\n"
+                  "Amit tehetsz: zárd be teljesen a programot (Cmd+Q, "
+                  "illetve Alt+F4), és indítsd újra — az indítás magával "
+                  "hozza a motort. Ha marad a hiba, a motor naplója "
+                  "megmondja, min akadt el:\n"
+                  "macOS: ~/Library/Application Support/SportMachine/"
+                  "engine-app.log\n"
+                  "Windows: %LOCALAPPDATA%\\SportMachine\\engine-app.log",
+                  style: AppText.label,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Row(
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _decide,
+                      style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          foregroundColor: AppColors.onAccent),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text("Újrapróbálom"),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    OutlinedButton.icon(
+                      // Ha a tulajdonjogi tudomásulvétel már megvolt, nem
+                      // kérdezzük újra — egyenesen a demó módba lép.
+                      onPressed: () => SessionStore.offlineTermsVersion >=
+                              kOfflineTermsVersion
+                          ? _enterApp()
+                          : setState(() => _step = _GateStep.offline),
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textSecondary,
+                          side: const BorderSide(color: AppColors.border)),
+                      icon: const Icon(Icons.play_arrow, size: 18),
+                      label: const Text("Tovább demó módban"),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Motor nélküli mód: rövid tudomásulvétel, utána demó.
