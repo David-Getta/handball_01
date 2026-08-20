@@ -4390,3 +4390,52 @@ def test_defensive_formation_silent_on_few_frames():
 
     rec = defensive_formation(_dform_match([6.0] * 6, n_frames=20))["home"]
     assert rec["frames"] == 20 and rec["formation"] is None, rec
+
+
+def _dgap_match(ys, n_frames=150):
+    """Felállt védekezés: a HAZAI véd a saját kapujánál (x=0), a VENDÉG
+    1-es birtokol; a hazai mezőnyvédők a megadott y-okon állnak."""
+    frames = []
+    for t in range(n_frames):
+        players = [_pl(1, Team.AWAY, 8.0, 10.0)]
+        for i, y in enumerate(ys):
+            players.append(_pl(10 + i, Team.HOME, 6.0, y))
+        players.append(_pl(9, Team.HOME, 0.5, 10.0, role="kapus"))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+    return Match(_meta(), frames)
+
+
+def test_defensive_gaps_finds_the_biggest_hole_and_its_zone():
+    """A legnagyobb köz méretét és SÁVJÁT is megmondja: itt a jobb
+    szélen (nagy y) tátong 5 m."""
+    from handball.pipeline.defense import defensive_gaps
+
+    # Öt védő: sűrűn a bal oldalon, majd egy 5 m-es lyuk a jobb szélig.
+    rec = defensive_gaps(_dgap_match([3.0, 5.0, 7.0, 9.0, 14.0]))["home"]
+    assert rec["frames"] == 150
+    assert abs(rec["avg_max_gap_m"] - 5.0) < 0.01, rec
+    assert rec["verdict"] == "rés-veszélyes fal"
+    # A rés közepe y=11,5 → a pálya (20 m) felső harmada 13,33 m felett
+    # kezdődik, tehát ez még a KÖZÉP sáv.
+    assert rec["worst_zone"] == "közép", rec
+    assert rec["zone_share_pct"] == 100.0
+
+
+def test_defensive_gaps_quiet_wall_has_no_verdict():
+    """Egyenletesen elosztott fal: nincs rés-ítélet."""
+    from handball.pipeline.defense import defensive_gaps
+
+    rec = defensive_gaps(_dgap_match([4.0, 6.5, 9.0, 11.5, 14.0]))["home"]
+    assert rec["avg_max_gap_m"] == 2.5, rec
+    assert rec["verdict"] is None, rec
+
+
+def test_defensive_gaps_silent_on_few_frames():
+    """Kevés értékelhető kockánál nincs érték (sose hallgatólagos rés)."""
+    from handball.pipeline.defense import defensive_gaps
+
+    rec = defensive_gaps(_dgap_match([3.0, 5.0, 7.0, 9.0, 14.0],
+                                     n_frames=20))["home"]
+    assert rec["frames"] == 20 and rec["avg_max_gap_m"] is None, rec
+    assert rec["verdict"] is None and rec["worst_zone"] is None, rec

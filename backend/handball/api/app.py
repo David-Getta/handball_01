@@ -2834,6 +2834,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import defensive_gaps
+            res["defensive_gaps"] = defensive_gaps(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_formation
             res["defensive_formation"] = defensive_formation(match)
         except Exception:
@@ -5202,6 +5207,8 @@ def create_app():
                 _layer("field_tilt", lambda: field_tilt(match))
                 from ..pipeline.defense import defensive_width
                 _layer("defensive_width", lambda: defensive_width(match))
+                from ..pipeline.defense import defensive_gaps
+                _layer("defensive_gaps", lambda: defensive_gaps(match))
                 from ..pipeline.defense import defensive_formation
                 _layer("defensive_formation",
                        lambda: defensive_formation(match))

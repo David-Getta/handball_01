@@ -825,6 +825,98 @@ def defensive_width(match, config=None) -> dict:
     return out
 
 
+# Fal-rés térkép: ennyi mért védő kell egy kocka megítéléséhez, ennyi
+# értékelhető kocka az ítélethez, e feletti átlagos legnagyobb rés a
+# rés-veszélyes fal, és e feletti részarány teszi a rést egy sávra
+# jellemzővé.
+DGAP_MIN_DEFENDERS = 4
+DGAP_MIN_FRAMES = 100
+DGAP_WIDE_M = 3.5
+DGAP_ZONE_SHARE_PCT = 40.0
+# A rés helyét a pálya SZÉLESSÉGE szerint három sávba soroljuk (a
+# szélső harmadok és a közép) — a fal ugyanis így is beszél róla.
+DGAP_ZONES = ("bal szél", "közép", "jobb szél")
+
+
+def defensive_gaps(match, config=None) -> dict:
+    """Fal-rés térkép: HOL és MEKKORA a legnagyobb rés a falban.
+
+    A fal-szélesség (defensive_width) a fal teljes terjedelmét méri, a
+    formáció (defensive_formation) az alakját — ez a KÖZÖKET: felállt
+    védekezésnél a mezőnyvédőket kereszt-irányban (y) sorba rakjuk, és
+    megnézzük a SZOMSZÉDOS védők közti legnagyobb hézagot: mekkora, és
+    a pálya melyik sávjában van (a rés közepe szerint).
+
+    Edzőileg ez a betörés címe: egy 4 m-es rés két védő között annyit
+    jelent, hogy oda befér egy lendületből érkező ember — az elzárást
+    is oda kell tenni, hogy a rés ne záródjon. Ha a rés jellemzően
+    ugyanabban a sávban nyílik, az bejáratott gyengeség (rendszerint a
+    kilépő védő mellett), és a figurát arra kell építeni. Saját
+    olvasatban: ha a MI falunkban van állandó rés, a szomszédok
+    átadás-rendjét kell gyakorolni.
+
+    Visszatérés csapatonként (a védekező csapaté): {"frames",
+    "avg_max_gap_m", "zones": {sáv: kocka}, "worst_zone",
+    "zone_share_pct", "verdict"} — az értékek None DGAP_MIN_FRAMES
+    alatt; a verdict "rés-veszélyes fal" DGAP_WIDE_M feletti átlagos
+    legnagyobb résnél, egyébként None. A "worst_zone" csak akkor kap
+    értéket, ha a részaránya eléri a DGAP_ZONE_SHARE_PCT-t.
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .calibration import COURT_WIDTH_M
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    third = COURT_WIDTH_M / 3.0
+    acc = {Team.HOME: [0.0, 0], Team.AWAY: [0.0, 0]}
+    zones = {Team.HOME: {}, Team.AWAY: {}}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        # Csak felállt védekezés: a labdás a védekező csapat térfelén van.
+        if abs(holder.x - own_x) > half:
+            continue
+        ys = sorted(p.y for p in f.players
+                    if p.team == deff and p.role != "kapus"
+                    and abs(p.x - own_x) <= half)
+        if len(ys) < DGAP_MIN_DEFENDERS:
+            continue
+        gaps = [(ys[i + 1] - ys[i], 0.5 * (ys[i] + ys[i + 1]))
+                for i in range(len(ys) - 1)]
+        gap, mid = max(gaps, key=lambda g: g[0])
+        acc[deff][0] += gap
+        acc[deff][1] += 1
+        zone = (DGAP_ZONES[0] if mid < third
+                else DGAP_ZONES[2] if mid > 2 * third
+                else DGAP_ZONES[1])
+        zones[deff][zone] = zones[deff].get(zone, 0) + 1
+
+    out = {}
+    for team in (Team.HOME, Team.AWAY):
+        total, n = acc[team]
+        tally = dict(sorted(zones[team].items(), key=lambda kv: -kv[1]))
+        rec = {"frames": n, "avg_max_gap_m": None, "zones": tally,
+               "worst_zone": None, "zone_share_pct": None, "verdict": None}
+        if n >= DGAP_MIN_FRAMES:
+            avg = round(total / n, 2)
+            rec["avg_max_gap_m"] = avg
+            if avg >= DGAP_WIDE_M:
+                rec["verdict"] = "rés-veszélyes fal"
+            if tally:
+                zone, zn = next(iter(tally.items()))
+                share = round(100.0 * zn / n, 1)
+                rec["zone_share_pct"] = share
+                if share >= DGAP_ZONE_SHARE_PCT:
+                    rec["worst_zone"] = zone
+        out[team.value] = rec
+    return out
+
+
 # Visszarendeződés: ennyi védőnek kell a saját térfélen lennie, hogy a
 # védelmet "visszaértnek" tekintsük; a mérést ennyi mp-nél levágjuk.
 RECOVERY_DEFENDERS = 4

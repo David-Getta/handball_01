@@ -1366,6 +1366,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 454) Fal-rés: ha a saját falunkban állandó nagy köz nyílik, a
+    # szomszédok átadás-rendjét kell gyakorolni.
+    try:
+        from .defense import DGAP_WIDE_M, defensive_gaps
+        dgp454 = defensive_gaps(match, config)
+        for side in ("home", "away"):
+            rec454 = dgp454[side]
+            if rec454["verdict"] is None:
+                continue
+            _hol454 = (f" — jellemzően a {rec454['worst_zone']} sávban "
+                       f"({rec454['zone_share_pct']:.0f}%)"
+                       if rec454["worst_zone"] else "")
+            add(side, "védekezés", "Fal-közök zárása",
+                f"a falunkban átlag {rec454['avg_max_gap_m']:.1f} m a "
+                f"legnagyobb köz két szomszédos védő között "
+                f"({DGAP_WIDE_M:.1f} m felett jelezzük){_hol454} — ekkora "
+                "résbe lendületből befér egy ember",
+                "szomszéd-munka gyakorlása: 6-0 falban párokban "
+                "csúszás sípszóra (a labda oldalra jár, a falnak együtt "
+                "kell mozdulnia), majd elzárás elleni átadás-gyakorlat — "
+                "a kilépő védő mellett a szomszéd ZÁR, nem néz utána; "
+                "videón mutasd meg a legnagyobb rést, és mondjátok ki, "
+                "kinek kellett volna zárnia")
+    except Exception:
+        pass
+
     # 453) Kapus a kezesség szerint: ha a kapusunk a balkezesek ellen
     # esik vissza, tükrözött dobó-gyakorlat kell.
     try:

@@ -314,6 +314,12 @@ class ScoutingReport:
     # közt pontosan összegződnek (részarány = alak / összes).
     dform_frames: int = 0
     dform_counts: dict = field(default_factory=dict)
+    # Fal-rés térképük: a mért kockák, a legnagyobb rések ÖSSZEGE (m) és
+    # sávonkénti kocka-darabszám — összeg és darabszámok, meccsek közt
+    # pontosan összegződnek (átlag = összeg / kocka).
+    dgap_frames: int = 0
+    dgap_sum_m: float = 0.0
+    dgap_zones: dict = field(default_factory=dict)
     # Passz-tempó (labdajáratás): passzok + mért birtoklás-idő (mp) —
     # meccsek közt pontosan összegződik (passz/perc = 60·passz/idő).
     pt_passes: int = 0
@@ -9071,6 +9077,32 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "közép nyílik: betörés a réseken, beálló-játék és "
                 "elzárás-leválás középen.")
 
+    # Fal-rés térkép: hol a legnagyobb köz a falukban — oda kell betörni.
+    if rep.dgap_frames >= 100 and rep.dgap_sum_m > 0:
+        from .defense import DGAP_WIDE_M, DGAP_ZONE_SHARE_PCT
+        _dgp_avg = rep.dgap_sum_m / rep.dgap_frames
+        _dgp_zone, _dgp_share = None, None
+        if rep.dgap_zones:
+            _dgp_zone, _dgp_n = max(rep.dgap_zones.items(),
+                                    key=lambda kv: kv[1])
+            _dgp_share = 100.0 * _dgp_n / rep.dgap_frames
+            if _dgp_share < DGAP_ZONE_SHARE_PCT:
+                _dgp_zone = None
+        if _dgp_avg >= DGAP_WIDE_M:
+            _hol = (f", és jellemzően a {_dgp_zone} sávban nyílik "
+                    f"({_dgp_share:.0f}%)" if _dgp_zone else "")
+            keys.append(
+                f"Nagy közök vannak a falukban (átlag {_dgp_avg:.1f} m a "
+                f"legnagyobb rés két szomszédos védő között{_hol}) — oda "
+                "kell betörni lendületből, és az elzárást is oda tenni, "
+                "hogy a rés ne záródjon.")
+        elif _dgp_zone:
+            keys.append(
+                f"A faluk zárt (átlag {_dgp_avg:.1f} m a legnagyobb köz), "
+                f"de a rés a(z) {_dgp_zone} sávban nyílik "
+                f"({_dgp_share:.0f}%) — a figurát arra az oldalra kell "
+                "építeni, elzárással a rés mellé.")
+
     # Védekezési formáció: az ALAK mondja meg, mivel kell támadni ellenük.
     if rep.dform_frames >= 100 and rep.dform_counts:
         from .defense import DFORM_SHARE_PCT
@@ -9738,6 +9770,13 @@ def _scout_team_cached(match: Match, team: Team,
         dfmrec = defensive_formation(match, config)[team.value]
         rep.dform_frames = dfmrec["frames"]
         rep.dform_counts = dict(dfmrec["counts"])
+        from .defense import defensive_gaps
+        dgprec = defensive_gaps(match, config)[team.value]
+        rep.dgap_frames = dgprec["frames"]
+        if dgprec["avg_max_gap_m"] is not None:
+            rep.dgap_sum_m = round(
+                dgprec["avg_max_gap_m"] * dgprec["frames"], 1)
+        rep.dgap_zones = dict(dgprec["zones"])
         from .tactics import pass_tempo
         ptrec = pass_tempo(match, config)[team.value]
         rep.pt_passes = ptrec["passes"]
@@ -13660,6 +13699,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 434) Az ő fal-résük × a ti betörő emberetek: a rés csak akkor ér
+    # valamit, ha van, aki lendületből bemegy oda.
+    if (opp.dgap_frames >= 100 and opp.dgap_sum_m > 0
+            and own.break_entries >= 5):
+        _d434 = opp.dgap_sum_m / opp.dgap_frames
+        if _d434 >= 3.5:
+            _z434 = None
+            if opp.dgap_zones:
+                _z434, _zn434 = max(opp.dgap_zones.items(),
+                                    key=lambda kv: kv[1])
+                if 100.0 * _zn434 / opp.dgap_frames < 40.0:
+                    _z434 = None
+            plan.append(
+                f"Nagy közök vannak a falukban (átlag {_d434:.1f} m)"
+                + (f", jellemzően a {_z434} sávban" if _z434 else "")
+                + f", ti pedig sokat törtök be ({own.break_entries} "
+                "betörés) — erre kell építeni a támadást: elzárás a rés "
+                "MELLÉ, hogy ne záródjon, és lendületből induló "
+                "betörés a közepébe; ha a védő kilép, a kiosztás jön a "
+                "beállóra.")
 
     # 433) Az ő balkezesekre sebezhető kapusuk × a ti balkezes lövőtök: a
     # tükör-feladat a kapusnak, ha van kire szervezni.
@@ -20574,6 +20634,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         defw_frames=sum(r.defw_frames for r in reports),
         dform_frames=sum(r.dform_frames for r in reports),
         dform_counts=_merge_count_dicts(r.dform_counts for r in reports),
+        dgap_frames=sum(r.dgap_frames for r in reports),
+        dgap_sum_m=round(sum(r.dgap_sum_m for r in reports), 1),
+        dgap_zones=_merge_count_dicts(r.dgap_zones for r in reports),
         sph_subs=sum(r.sph_subs for r in reports),
         sph_opp_ball=sum(r.sph_opp_ball for r in reports),
         fbal_shots=sum(r.fbal_shots for r in reports),

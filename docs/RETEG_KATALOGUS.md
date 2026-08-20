@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **480 réteg**, modulonként csoportosítva; a
+Összesen **481 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (93)
@@ -131,7 +131,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `tired_turnover_players` | Fáradt-eladók: KINEK a labdái vesznek el fáradtan. |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (84)
+## defense (85)
 
 | Réteg | Mit mér |
 |---|---|
@@ -163,6 +163,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `defense_setup_time` | Falépítés-idő: MENNYI IDŐ ALATT ÁLL FEL a faluk. |
 | `defensive_aggression` | Védekezés-keménység: MENNYI BÜNTETÉST hoz a faluk. |
 | `defensive_formation` | Védekezési formáció: MENNYIRE ÁLLANDÓ a faluk alakja. |
+| `defensive_gaps` | Fal-rés térkép: HOL és MEKKORA a legnagyobb rés a falban. |
 | `defensive_line_height` | Védekezési vonal magassága: milyen mélyen vagy magasan áll a fal. |
 | `defensive_rebound_players` | Kipattanó-szedők: KI SZEDI ÖSSZE a kipattanót védés után. |
 | `defensive_rebound_roles` | Lepattanó-szedő poszt: VÉDÉS UTÁN kinél marad a labda. |

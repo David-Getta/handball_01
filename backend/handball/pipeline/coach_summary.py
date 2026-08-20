@@ -291,6 +291,23 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
     except Exception:
         pass
 
+    # Fal-rés térkép: hol és mekkora a legnagyobb rés a falban.
+    try:
+        from .defense import defensive_gaps
+        dgp = defensive_gaps(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dgp = dgp[side]
+            if rec_dgp["verdict"] is None:
+                continue
+            hol = (f", jellemzően a {rec_dgp['worst_zone']} sávban"
+                   if rec_dgp["worst_zone"] else "")
+            parts.append(
+                f"a(z) {name} falában nagy közök nyíltak "
+                f"(átlag {rec_dgp['avg_max_gap_m']:.1f} m a legnagyobb "
+                f"rés két szomszédos védő között{hol})")
+    except Exception:
+        pass
+
     # Védekezési formáció: a fal ALAKJA (6-0 lapos, 5-1 kitolt, 3-2-1).
     try:
         from .defense import defensive_formation

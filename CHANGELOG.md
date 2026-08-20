@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Fal-rés térkép**: HOL és MEKKORA a legnagyobb köz a falukban. A
+  fal-szélesség a fal teljes terjedelmét méri, a formáció az alakját —
+  ez a KÖZÖKET: felállt védekezésnél a mezőnyvédőket keresztirányban
+  sorba rakja, és megnézi a szomszédos védők közti legnagyobb hézagot,
+  a méretét és a sávját (bal szél / közép / jobb szél). Ítélet 100+
+  kockától: 3,5 m feletti átlagos legnagyobb rés = rés-veszélyes fal, és
+  40% feletti részaránynál a sáv is nevesül. Edzői olvasat: ez a betörés
+  címe — egy 4 m-es résbe lendületből befér egy ember, az elzárást a rés
+  MELLÉ kell tenni, hogy ne záródjon; ha a rés mindig ugyanabban a
+  sávban nyílik, az bejáratott gyengeség (rendszerint a kilépő védő
+  mellett), és a figurát arra kell építeni. Saját oldalon a szomszédok
+  átadás-rendjét kell gyakorolni. Felületek: /analyze + meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 434. meccsterv-szabály),
+  454. edzés-szabály, kliens-csempe.
 - **Kapus-védés a lövő kezessége szerint**: bírja-e a kapusuk a
   BALKEZESEKET. A posztonkénti és a távolság-sávos kapus-kép után a
   harmadik tengely a lövő KEZE: a balkezes lövő tükör-feladat a

@@ -3175,6 +3175,46 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Fal-rés térkép: hol és mekkora a legnagyobb köz a falukban (100+
+  // kocka, 3,5 m-től rés-veszélyes, 40%-tól jellemző sáv — a backenddel
+  // azonos küszöbök: DGAP_MIN_FRAMES, DGAP_WIDE_M, DGAP_ZONE_SHARE_PCT).
+  String? _defensiveGaps(Map<String, dynamic> r) {
+    final n = ((r["dgap_frames"] ?? 0) as num).toInt();
+    final sum = ((r["dgap_sum_m"] ?? 0) as num).toDouble();
+    if (n < 100 || sum <= 0) return null;
+    final avg = sum / n;
+    final zones = (r["dgap_zones"] as Map?)?.cast<String, dynamic>();
+    String? zone;
+    double share = 0;
+    if (zones != null && zones.isNotEmpty) {
+      String? top;
+      var topN = 0;
+      zones.forEach((k, v) {
+        final c = (v as num).toInt();
+        if (top == null || c > topN) {
+          top = k;
+          topN = c;
+        }
+      });
+      share = 100.0 * topN / n;
+      if (share >= 40.0) zone = top;
+    }
+    final hol = zone == null
+        ? ""
+        : ", jellemzően a $zone sávban (${share.toStringAsFixed(0)}%)";
+    if (avg >= 3.5) {
+      return "nagy közök a falukban (átlag "
+          "${avg.toStringAsFixed(1)} m a legnagyobb rés$hol) · oda "
+          "lendületből betörni, elzárás a rés mellé";
+    }
+    if (zone != null) {
+      return "zárt fal (átlag ${avg.toStringAsFixed(1)} m a legnagyobb "
+          "köz), de a rés a(z) $zone sávban nyílik "
+          "(${share.toStringAsFixed(0)}%) · a figurát arra az oldalra";
+    }
+    return null;
+  }
+
   // Védekezési formáció: milyen ALAKOT tart a faluk (100+ értékelhető
   // kocka, 50%+ részarány — a backenddel azonos küszöbök:
   // DFORM_MIN_FRAMES, DFORM_SHARE_PCT).
@@ -11229,6 +11269,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Balkezes lövő", _leftHandedShooter(r)!],
       if (_defensiveFormation(r) != null)
         ["Védekezési formáció", _defensiveFormation(r)!],
+      if (_defensiveGaps(r) != null) ["Fal-rés térkép", _defensiveGaps(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
       if (_finishingBalance(r) != null)
         ["Befejezés-mérleg", _finishingBalance(r)!],
