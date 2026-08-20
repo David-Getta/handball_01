@@ -76,7 +76,7 @@ class _AccountScreenState extends State<AccountScreen> {
       _busy = true;
       _error = null;
     });
-    try {
+    Future<void> send() async {
       if (_registerMode) {
         await _api.registerAccount(
           email: _email.text.trim(),
@@ -87,6 +87,20 @@ class _AccountScreenState extends State<AccountScreen> {
         );
       } else {
         await _api.loginAccount(_email.text.trim(), _password.text);
+      }
+    }
+
+    try {
+      try {
+        await send();
+      } catch (e) {
+        // Hálózati hiba: a motor menet közben ELMOZDULHATOTT (újraindult,
+        // tartalék portra kötött, vagy két példányból az egyik kilépett).
+        // Megkeressük újra, és EGYSZER újrapróbáljuk — ez a leggyakoribb
+        // ok, amikor a képernyő betöltése még ment, a beküldés már nem.
+        if (!looksLikeConnectionIssue(e)) rethrow;
+        if (!await ApiClient.rediscoverEngine()) rethrow;
+        await send();
       }
       if (!mounted) return;
       widget.onSignedIn();

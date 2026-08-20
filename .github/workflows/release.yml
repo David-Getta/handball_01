@@ -94,8 +94,12 @@ jobs:
           $w = Get-ChildItem -Recurse dist\handball_backend -Filter yolov8n.pt | Select-Object -First 1
           if (-not $w) { throw "nincs sulyfajl a csomagban" }
           python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]); print('sulyfajl OK:', sys.argv[1])" $w.FullName
-      - name: Motor füstteszt (elindul és válaszol a /health-en)
+      - name: Motor füstteszt (elindul, és a FIÓK-folyamat is megy)
+        # Lásd a macOS-ág megjegyzését: a /health kevés, a fiók-végpontok
+        # futásidejű importjai csak a végigjátszott belépő-úton bukhatnak ki.
         shell: pwsh
+        env:
+          HANDBALL_DATA_DIR: ${{ runner.temp }}\smoke-data
         run: |
           $p = Start-Process -FilePath "dist\handball_backend\handball_backend.exe" -PassThru
           $ok = $false
@@ -106,7 +110,32 @@ jobs:
               if ($r.StatusCode -eq 200) { $ok = $true; break }
             } catch {}
           }
+          if (-not $ok) {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            throw "A motor nem válaszolt a /health-en"
+          }
+          function Post-Json($url, $body) {
+            try {
+              $r = Invoke-WebRequest -Uri $url -Method POST -UseBasicParsing `
+                -ContentType "application/json" -Body $body -TimeoutSec 10
+              return [int]$r.StatusCode
+            } catch {
+              if ($_.Exception.Response) { return [int]$_.Exception.Response.StatusCode }
+              return 0
+            }
+          }
+          $terms = (Invoke-WebRequest -Uri http://127.0.0.1:8000/legal/terms -UseBasicParsing -TimeoutSec 10).Content
+          $status = (Invoke-WebRequest -Uri http://127.0.0.1:8000/accounts/status -UseBasicParsing -TimeoutSec 10).Content
+          $reg  = Post-Json "http://127.0.0.1:8000/accounts/register" '{"email":"smoke@teszt.hu","password":"jelszo12345","accept_terms":true}'
+          $nope = Post-Json "http://127.0.0.1:8000/accounts/register" '{"email":"mas@teszt.hu","password":"jelszo12345","accept_terms":false}'
+          $log  = Post-Json "http://127.0.0.1:8000/accounts/login" '{"email":"smoke@teszt.hu","password":"jelszo12345"}'
           Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Write-Host "regisztráció=$reg elfogadás-nélkül=$nope belépés=$log"
+          if ($terms -notmatch '"version"') { throw "a /legal/terms nem adott verziót" }
+          if ($status -notmatch "has_accounts") { throw "a /accounts/status válasza hiányos" }
+          if ($reg -ne 200) { throw "a fiók-létrehozás nem ment (HTTP $reg)" }
+          if ($nope -ne 400) { throw "elfogadás nélkül is létrejött volna a fiók (HTTP $nope)" }
+          if ($log -ne 200) { throw "a belépés nem ment (HTTP $log)" }
           if (-not $ok) { throw "A motor nem valaszolt a /health vegponton" }
 
       # ---- Flutter desktop app ----
@@ -222,16 +251,44 @@ jobs:
           W=$(find dist/handball_backend -name yolov8n.pt | head -1)
           test -n "$W"
           python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]); print('sulyfajl OK:', sys.argv[1])" "$W"
-      - name: Motor füstteszt (elindul és válaszol a /health-en)
+      - name: Motor füstteszt (elindul, és a FIÓK-folyamat is megy)
+        # Nem elég a /health: a fiók-végpontok a becsomagolt motorban
+        # futásidőben importálnak (handball.accounts), és egy hiányzó modul
+        # csak ITT bukna ki — a felhasználónál pedig a fiók-készítésnél.
+        # Ezért a füstteszt végigjátssza a teljes belépő-utat.
+        env:
+          HANDBALL_DATA_DIR: ${{ runner.temp }}/smoke-data
         run: |
           ./dist/handball_backend/handball_backend & echo $! > engine.pid
           ok=0
           for i in $(seq 1 30); do
             sleep 2
-            if curl -sf http://127.0.0.1:8000/health; then ok=1; break; fi
+            if curl -sf http://127.0.0.1:8000/health >/dev/null; then ok=1; break; fi
           done
+          if [ "$ok" != "1" ]; then
+            kill "$(cat engine.pid)" 2>/dev/null || true
+            echo "A motor nem válaszolt a /health-en"; exit 1
+          fi
+          set +e
+          curl -sf http://127.0.0.1:8000/legal/terms | grep -q '"version"'      && t=1 || t=0
+          curl -sf http://127.0.0.1:8000/accounts/status | grep -q 'has_accounts' && s=1 || s=0
+          reg=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://127.0.0.1:8000/accounts/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"smoke@teszt.hu","password":"jelszo12345","accept_terms":true}')
+          nope=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://127.0.0.1:8000/accounts/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"mas@teszt.hu","password":"jelszo12345","accept_terms":false}')
+          log=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://127.0.0.1:8000/accounts/login \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"smoke@teszt.hu","password":"jelszo12345"}')
+          set -e
           kill "$(cat engine.pid)" 2>/dev/null || true
-          [ "$ok" = "1" ]
+          echo "feltételek=$t állapot=$s regisztráció=$reg elfogadás-nélkül=$nope belépés=$log"
+          [ "$t" = "1" ] && [ "$s" = "1" ] && [ "$reg" = "200" ] \
+            && [ "$nope" = "400" ] && [ "$log" = "200" ]
 
       # ---- Flutter desktop app ----
       - uses: subosito/flutter-action@v2

@@ -5,6 +5,26 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.29 óta)
 
+- **A motor elmozdulása nem dobja el a kérést** (kliens): a kliens
+  eddig a példány létrehozásakor BEFAGYASZTOTTA a motor címét — ha a
+  motor közben másik portra költözött (újraindult, tartalék portra
+  kötött, vagy két app-példányból az egyik kilépett a motorjával
+  együtt), a régóta nyitva lévő képernyők a halott címre beszéltek.
+  Ettől fordulhatott elő, hogy a fiók-képernyő BETÖLTÉSE még ment (a
+  feltételek és a tulajdonos neve megjött), a "Fiók létrehozása" viszont
+  már "Nem érem el a háttérmotort" hibát adott. Mostantól a cím mindig
+  az éppen érvényes alapértelmezés, a fiók-kapu és a fiók-készítő pedig
+  hálózati hibánál MEGKERESI a motort újra (8000-től felfelé), és
+  egyszer újrapróbálja a kérést.
+- **A kiadás füsttesztje a fiók-folyamatot is végigjátssza** (CI): eddig
+  csak a /health-et hívta a becsomagolt motoron. A fiók-végpontok
+  futásidőben importálnak, ezért egy csomagolási hiány csak a
+  felhasználónál bukott volna ki — az első képernyőn. A build mostantól
+  lekéri a feltételeket és a fiók-állapotot, létrehoz egy próba-fiókot,
+  ellenőrzi, hogy elfogadás NÉLKÜL elutasít (400), és belép — izolált
+  adatmappában, mindkét platformon. Emellé a csomagoló a `handball` és a
+  `scripts` MINDEN almodulját beveszi (a projekt sok modult a függvény
+  testéből importál), és őr-tesztek rögzítik mindkettőt.
 - **A fiók-kapu megmondja, ha nem fut a motor** (kliens): a fiókok a
   motorban élnek, a fiók-lekérdezés viszont hálózati hibára is
   "nincs bejelentkezve"-t adott — a felhasználó ezért egy űrlapot

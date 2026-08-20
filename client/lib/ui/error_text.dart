@@ -30,8 +30,7 @@ const List<String> kForbiddenKeys = [
 /// általános felé.
 const List<(List<String>, String)> kErrorPatterns = [
   (
-    ["connection refused", "socketexception", "failed host lookup",
-     "connection closed", "os error: connection"],
+    kConnectionKeys,
     "Nem érem el a háttérmotort. Fut a Sport Machine motor? "
         "A program újraindítása magától elindítja.",
   ),
@@ -82,6 +81,25 @@ String humanError(Object e) {
     }
   }
   return raw;
+}
+
+/// Kapcsolódási hibára utal-e a kivétel (nem érjük el a motort)?
+///
+/// A hívó ilyenkor tud okosat tenni: megkeresni a motort újra (másik
+/// porton is indulhatott), és egyszer újrapróbálni. A minták ugyanabból
+/// a nevesített listából jönnek, mint a hibafordító első szabálya — a
+/// két hely nem tud széttartani.
+const List<String> kConnectionKeys = [
+  "connection refused", "socketexception", "failed host lookup",
+  "connection closed", "os error: connection", "connection reset",
+];
+
+bool looksLikeConnectionIssue(Object e) {
+  final low = "$e".toLowerCase();
+  for (final k in kConnectionKeys) {
+    if (low.contains(k)) return true;
+  }
+  return false;
 }
 
 /// Hozzáférési hibára utal-e a kivétel (nem megtalált VAGY nem

@@ -14,15 +14,48 @@ import "../models/tracking.dart";
 import "session_store.dart";
 
 class ApiClient {
+  /// Kimondott cím-felülbírálás (port-próbákhoz). Ha null, a kliens az
+  /// ÉPPEN érvényes alapértelmezést használja — lásd `baseUrl`.
+  final String? _baseUrlOverride;
+
   /// A backend alap-URL-je. Lokális teszthez a laptopon ez a localhost.
-  final String baseUrl;
+  ///
+  /// Szándékosan getter, nem a példány létrehozásakor befagyasztott érték:
+  /// a motor menet közben is költözhet másik portra (újraindítás, tartalék
+  /// port), és a régóta nyitva lévő képernyők addig a HALOTT címre
+  /// beszéltek volna.
+  String get baseUrl => _baseUrlOverride ?? defaultBaseUrl;
 
   /// Az alapértelmezett cím — a motor-indító ÁTÁLLÍTJA, ha a motor tartalék
   /// porton indult (a 8000-es foglalt volt). Az ezután létrejövő kliensek
   /// automatikusan a jó címet használják.
   static String defaultBaseUrl = "http://127.0.0.1:8000";
 
-  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? defaultBaseUrl;
+  /// Hány portot fésülünk át a 8000-estől felfelé, ha keressük a motort
+  /// (a motor ugyanekkora tartományban keres szabad portot).
+  static const int portRange = 11;
+
+  ApiClient({String? baseUrl}) : _baseUrlOverride = baseUrl;
+
+  /// Megkeresi ÚJRA, melyik porton válaszol a motor, és átállítja az
+  /// alapértelmezett címet. Akkor kell, ha egy hívás hálózati hibára
+  /// futott: a motor közben újraindulhatott másik porton (pl. két
+  /// példány közül az egyik kilépett). Igaz, ha talált motort.
+  static Future<bool> rediscoverEngine() async {
+    final probes = [
+      for (var p = 8000; p < 8000 + portRange; p++)
+        ApiClient(baseUrl: "http://127.0.0.1:$p")
+            .isHealthy()
+            .then((ok) => ok ? p : null)
+    ];
+    for (final p in await Future.wait(probes)) {
+      if (p != null) {
+        defaultBaseUrl = "http://127.0.0.1:$p";
+        return true;
+      }
+    }
+    return false;
+  }
 
   /// Életjel: igaz, ha a backend elérhető (GET /health).
   Future<bool> isHealthy() async {

@@ -96,9 +96,13 @@ class _AccountGateState extends State<AccountGate> {
     // kapna, ami csak beküldéskor bukik el (a motor menet közben is
     // leállhat, pl. frissítés után).
     if (!await _api.isHealthy()) {
-      if (!mounted) return;
-      setState(() => _step = _GateStep.engineDown);
-      return;
+      // Lehet, hogy csak ELMOZDULT: a motor tartalék portra köthetett,
+      // vagy újraindult. Mielőtt hibát mondanánk, megkeressük újra.
+      if (!await ApiClient.rediscoverEngine()) {
+        if (!mounted) return;
+        setState(() => _step = _GateStep.engineDown);
+        return;
+      }
     }
     final me = await _api.fetchMe();
     if (!mounted) return;
