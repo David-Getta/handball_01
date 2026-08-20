@@ -1033,6 +1033,16 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 say(f"mezszám-OCR: {n_ocr} track kapott számot "
                       f"({jersey_voter.decisions()})")
 
+        # Kispad- és néző-szűrés: a pálya-régió tűréssávjában ÜL a
+        # cserepad és a nézők első sora — az egy helyben ülő, végig a
+        # vonalon kívüli track nem játékos. A kilépő (mozgó) játékost nem
+        # érinti.
+        from handball.pipeline.track_filter import drop_bench_tracks
+        bench = drop_bench_tracks(match)
+        if bench["tracks"]:
+            say(f"kispad-szűrés: {len(bench['tracks'])} álló, pályán "
+                f"kívüli track eldobva ({bench['removed']} pozíció)")
+
         # Játékos-pálya simítás: a detektálási remegés (jitter) csökkentése — a
         # táv/sebesség statisztika ne a dobozok ugrálását mérje. Csak a mért
         # pozíciókat érinti, az éles irányváltást a kis ablak megőrzi.

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Kispad- és néző-szűrés a követésben**: a pálya-régió szándékosan
+  hagy tűréssávot a vonalon kívül (a játékos néha kilép: partdobás,
+  cserezóna) — a csarnokban viszont pont ebben a sávban ül a CSEREPAD és
+  a nézők első sora. A felhasználó felvételén a padok székei
+  közvetlenül az oldalvonal mellett vannak, tehát a rajtuk ülők eddig
+  "játékosnak" számítottak (felfelé húzva a létszámot, és a fal-, a
+  formáció- és a rés-mérésbe is beleszólva). Mostantól a feldolgozás
+  eldobja azt a track-et, amelyik a mért kockái legalább 80%-ában a
+  vonalakon kívül van, ÉS a mozgása belefér egy 3 m-es dobozba (ül vagy
+  áll) — legalább 50 mért kockából. A kilépő, de MOZGÓ játékos
+  (partdobás, csere) megmarad, és a rövid track-ekről nem ítélünk. A
+  napló kiírja, hány álló, pályán kívüli track esett ki.
 - **Fal-rés térkép**: HOL és MEKKORA a legnagyobb köz a falukban. A
   fal-szélesség a fal teljes terjedelmét méri, a formáció az alakját —
   ez a KÖZÖKET: felállt védekezésnél a mezőnyvédőket keresztirányban
