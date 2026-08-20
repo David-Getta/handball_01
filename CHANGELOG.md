@@ -3,7 +3,49 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.28 óta)
+## Kiadatlan (a v0.1.29 óta)
+
+## v0.1.29 — kiadva (2026-08-20)
+
+> Kiadás-jegyzet: a v0.1.28 óta a kör három szálon futott — a program
+> JOGI és FIÓK-kerete, a valódi csarnok-felvételekhez igazított
+> felismerés, és tizenegy új elemző réteg.
+>
+> **(1) Fiókok és felhasználási feltételek.** A program mostantól
+> fiókhoz kötött, és az első használat előtt el kell fogadni a
+> feltételeket: a Sport Machine a Tulajdonos kizárólagos SZELLEMI
+> tulajdona, a példányai és a hozzá adott eszközök a FIZIKAI
+> tulajdonát képezik, a felhasználó pedig korlátozott, át nem
+> ruházható, bármikor visszavonható használati engedélyt kap. A fiók a
+> saját gépen készül el (nincs felhő), a jelszó sose tárolódik
+> nyíltan, a belépés 90 napig érvényes, a feltételek verziózottak — ha
+> a szöveg megújul, a belépés újra elfogadásra kínálja, és az
+> elfogadás verzióját + időpontját a fiók őrzi.
+>
+> **(2) Valódi csarnok, valódi felvétel.** A vonal-felismerés eddig
+> FEHÉR vonalat keresett — a több sportot kiszolgáló csarnokokban
+> viszont a kézilabda-pályát gyakran PIROS vonal jelöli, a kosár- és
+> futsal-vonalak meg keresztezik. Mostantól van szín-alapú vonalmaszk
+> (piros/kék/zöld/sárga) és "auto" mód, ami a képből dönti el, melyik
+> szín vonalait kövesse; a festett mezők belseje nem vonal, csak a
+> szélük. Emellé jött a kispad- és néző-szűrés: a vonal mellett VÉGIG
+> EGY HELYBEN ülő track nem játékos — eddig felfelé húzta a létszámot
+> és beleszólt a fal-mérésekbe. A bevonulás/köszöntés meccs-ablakon
+> kívül tartását őr-teszt rögzíti.
+>
+> **(3) Tizenegy új elemző réteg.** Kezesség-becslés (melyik kézzel
+> lőnek) és a poszt-párja; a kapus-védés kezesség szerint (bírja-e a
+> balkezeseket); a fal geometriája — védekezési formáció-biztosság
+> (mennyire ÁLLANDÓ a fal alakja) és fal-rés térkép (hol és mekkora a
+> legnagyobb köz); befejezés-mérleg (fenntartható-e a gólterméskük);
+> csere-fázis (támadásban vagy védekezésben cserélnek); meccs-ablak,
+> egálbontó, befutó, leforduló és keresztjáró emberek, futtatott
+> szélsők.
+>
+> A csomag 480 elemző réteget, 435 meccsterv-szabályt és 455
+> edzés-szabályt tartalmaz; a teljes backend csomag zöld (1732 teszt),
+> és a sorrend-függés lista üres (482 rétegből 0).
+
 
 - **Poszt-kezesség**: MELYIK POSZTJUKON lő balkezes. A kezesség-becslés
   névre mondja meg, ki balkezes — ez posztra: a név meccsről meccsre
