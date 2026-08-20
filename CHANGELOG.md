@@ -3,7 +3,28 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.29 óta)
+## Kiadatlan (a v0.1.30 óta)
+
+## v0.1.30 — kiadva (2026-08-20)
+
+> Kiadás-jegyzet: javító kiadás a v0.1.29 fiók-kapujához.
+>
+> A fiók-képernyő betöltése ment (a feltételek és a tulajdonos neve
+> megjött a motortól), a "Fiók létrehozása" viszont "Nem érem el a
+> háttérmotort" hibát adhatott: a kliens a képernyő létrehozásakor
+> BEFAGYASZTOTTA a motor címét, így ha a motor közben másik portra
+> költözött (újraindulás, tartalék port, vagy két app-példányból az
+> egyik kilépett a motorjával együtt), a képernyő a halott címre
+> beszélt. Mostantól a cím mindig az éppen érvényes, a fiók-kapu és a
+> fiók-készítő pedig hálózati hibánál MEGKERESI a motort újra, és
+> egyszer újrapróbálja a kérést. Ha tényleg nem fut motor, a kapu
+> beszélő képernyőt mutat — teendővel, a napló helyével és
+> Újrapróbálom gombbal — nem egy űrlapot, ami csak beküldéskor bukik el.
+>
+> Megelőzésként a kiadás füsttesztje már nem áll meg a /health-nél: a
+> becsomagolt motoron végigjátssza a teljes belépő-utat, és a csomagoló
+> a saját csomagok minden almodulját beveszi.
+
 
 - **A motor elmozdulása nem dobja el a kérést** (kliens): a kliens
   eddig a példány létrehozásakor BEFAGYASZTOTTA a motor címét — ha a
