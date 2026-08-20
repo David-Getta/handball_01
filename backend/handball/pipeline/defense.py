@@ -833,9 +833,18 @@ DGAP_MIN_DEFENDERS = 4
 DGAP_MIN_FRAMES = 100
 DGAP_WIDE_M = 3.5
 DGAP_ZONE_SHARE_PCT = 40.0
-# A rés helyét a pálya SZÉLESSÉGE szerint három sávba soroljuk (a
-# szélső harmadok és a közép) — a fal ugyanis így is beszél róla.
+# A rés helyét három sávba soroljuk (a szélső harmadok és a közép), és a
+# sávot a VÉDEKEZŐ FAL SAJÁT nézőpontjából nevezzük meg — ahogy az
+# engedett-oldal réteg (conceded_side_bias) is teszi. A két csapat
+# szemben áll: ugyanaz a pálya-sáv az egyik falnak a bal, a másiknak a
+# jobb oldala. A saját kapujától a pálya felé néző védő bal keze a
+# NAGYOBB y felé esik.
 DGAP_ZONES = ("bal szél", "közép", "jobb szél")
+# A kaputól ennél közelebb álló játékost kapusnak vesszük akkor is, ha a
+# szerep-jelölés hiányzik — enélkül a kapus egy hamis, több méteres
+# "rést" nyitna a fal és a kapu között. (Ugyanaz a küszöb, mint a
+# formáció-osztályozóé: tactics._GK_MAX.)
+DGAP_GK_MAX_M = 2.0
 
 
 def defensive_gaps(match, config=None) -> dict:
@@ -845,7 +854,9 @@ def defensive_gaps(match, config=None) -> dict:
     formáció (defensive_formation) az alakját — ez a KÖZÖKET: felállt
     védekezésnél a mezőnyvédőket kereszt-irányban (y) sorba rakjuk, és
     megnézzük a SZOMSZÉDOS védők közti legnagyobb hézagot: mekkora, és
-    a pálya melyik sávjában van (a rés közepe szerint).
+    melyik sávban van (a rés közepe szerint). A sávot a FAL SAJÁT
+    nézőpontjából nevezzük meg — a két csapat szemben áll, ugyanaz a
+    pálya-sáv az egyiknek a bal, a másiknak a jobb oldala.
 
     Edzőileg ez a betörés címe: egy 4 m-es rés két védő között annyit
     jelent, hogy oda befér egy lendületből érkező ember — az elzárást
@@ -883,7 +894,8 @@ def defensive_gaps(match, config=None) -> dict:
             continue
         ys = sorted(p.y for p in f.players
                     if p.team == deff and p.role != "kapus"
-                    and abs(p.x - own_x) <= half)
+                    and abs(p.x - own_x) <= half
+                    and abs(p.x - own_x) > DGAP_GK_MAX_M)
         if len(ys) < DGAP_MIN_DEFENDERS:
             continue
         gaps = [(ys[i + 1] - ys[i], 0.5 * (ys[i] + ys[i + 1]))
@@ -891,8 +903,14 @@ def defensive_gaps(match, config=None) -> dict:
         gap, mid = max(gaps, key=lambda g: g[0])
         acc[deff][0] += gap
         acc[deff][1] += 1
-        zone = (DGAP_ZONES[0] if mid < third
-                else DGAP_ZONES[2] if mid > 2 * third
+        # A sáv a FAL saját nézőpontjából: a 0-s kapuját védő csapat a
+        # +x felé néz, neki a nagyobb y a bal keze; a másik kapunál
+        # fordítva. (Az y a félidő-normalizálás után egységes.)
+        wing_low, wing_high = ((DGAP_ZONES[2], DGAP_ZONES[0])
+                               if own_x < half
+                               else (DGAP_ZONES[0], DGAP_ZONES[2]))
+        zone = (wing_low if mid < third
+                else wing_high if mid > 2 * third
                 else DGAP_ZONES[1])
         zones[deff][zone] = zones[deff].get(zone, 0) + 1
 

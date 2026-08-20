@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.30 óta)
 
+- **Fal-rés térkép: javítás az oldal-megnevezésben és a jelöletlen
+  kapusnál**. Két félrevezető állítást javít az előző kiadásban
+  bemutatott rétegen: (1) a rés sávját eddig a pálya nyers y-koordinátája
+  szerint nevezte meg, holott a két csapat SZEMBEN áll — ugyanaz a
+  pálya-sáv az egyik falnak a bal, a másiknak a jobb oldala, tehát az
+  egyik csapatról fordított oldalt mondtunk (a saját kapujától a pálya
+  felé néző védő bal keze a nagyobb y felé esik; ugyanez a konvenció,
+  mint az engedett-oldal rétegben); (2) a kapust eddig csak a
+  szerep-jelölés alapján hagyta ki, így egy jelöletlen kapus több
+  méteres HAMIS rést nyitott a fal és a kapu között — mostantól a
+  kaputól 2 m-en belül álló játékos akkor is kimarad, ha nincs
+  szerepe. Mindkettőre őr-teszt került.
+
 ## v0.1.30 — kiadva (2026-08-20)
 
 > Kiadás-jegyzet: javító kiadás a v0.1.29 fiók-kapujához.

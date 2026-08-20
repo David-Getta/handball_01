@@ -4439,3 +4439,58 @@ def test_defensive_gaps_silent_on_few_frames():
                                      n_frames=20))["home"]
     assert rec["frames"] == 20 and rec["avg_max_gap_m"] is None, rec
     assert rec["verdict"] is None and rec["worst_zone"] is None, rec
+
+
+def _dgap_away_match(ys, n_frames=150):
+    """Ugyanaz tükrözve: a VENDÉG véd a saját kapujánál (x=40), a HAZAI
+    1-es birtokol a vendég térfelén."""
+    frames = []
+    for t in range(n_frames):
+        players = [_pl(1, Team.HOME, 32.0, 10.0)]
+        for i, y in enumerate(ys):
+            players.append(_pl(10 + i, Team.AWAY, 34.0, y))
+        players.append(_pl(9, Team.AWAY, 39.5, 10.0, role="kapus"))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=32.0, y=10.0, confidence=1.0)))
+    return Match(_meta(), frames)
+
+
+def test_defensive_gaps_names_the_zone_from_the_walls_own_side():
+    """A sáv a FAL saját nézőpontjából kap nevet: ugyanaz a pálya-sáv az
+    egyik falnak a bal, a másiknak a jobb oldala (a két csapat szemben
+    áll). Enélkül az egyik csapatról fordított oldalt állítanánk."""
+    from handball.pipeline.defense import defensive_gaps
+
+    # A rés a NAGY y-nál (16,5 közepű) tátong.
+    ys = [2.0, 4.0, 6.0, 8.0, 10.0, 23.0]
+    home = defensive_gaps(_dgap_match(ys))["home"]
+    away = defensive_gaps(_dgap_away_match(ys))["away"]
+    # A 0-s kapuját védő HAZAI a +x felé néz: a nagy y az ő BAL keze.
+    assert home["worst_zone"] == "bal szél", home
+    # A 40-es kapuját védő VENDÉG szemben áll: ugyanott JOBB szél.
+    assert away["worst_zone"] == "jobb szél", away
+
+
+def test_defensive_gaps_ignores_a_keeper_without_a_role_label():
+    """A szerep-jelölés nélküli kapus nem nyithat hamis rést: a kaputól
+    2 m-en belül álló játékost kapusnak vesszük akkor is, ha a
+    role mezője üres."""
+    from handball.pipeline.defense import defensive_gaps
+
+    ys = [4.0, 6.5, 9.0, 11.5, 14.0]
+    tiszta = defensive_gaps(_dgap_match(ys))["home"]
+
+    # Ugyanaz a fal, de a kapus role NÉLKÜL, a kapu előtt (x=0,5) áll,
+    # y-ban a fal fölött — role-szűrés nélkül 6 m-es hamis rést adna.
+    frames = []
+    for t in range(150):
+        players = [_pl(1, Team.AWAY, 8.0, 10.0)]
+        for i, y in enumerate(ys):
+            players.append(_pl(10 + i, Team.HOME, 6.0, y))
+        players.append(_pl(9, Team.HOME, 0.5, 20.0))   # kapus, jelölés nélkül
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+    jeloletlen = defensive_gaps(Match(_meta(), frames))["home"]
+
+    assert jeloletlen["avg_max_gap_m"] == tiszta["avg_max_gap_m"], jeloletlen
+    assert jeloletlen["verdict"] is None, jeloletlen
