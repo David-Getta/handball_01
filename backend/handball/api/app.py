@@ -2669,6 +2669,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.roles import role_shooting_hand
+            res["role_shooting_hand"] = role_shooting_hand(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import role_goal_placement
             res["role_goal_placement"] = role_goal_placement(match)
         except Exception:
@@ -6409,6 +6414,9 @@ def create_app():
                 from ..pipeline.roles import role_shot_power
                 _layer("role_shot_power",
                        lambda: role_shot_power(match))
+                from ..pipeline.roles import role_shooting_hand
+                _layer("role_shooting_hand",
+                       lambda: role_shooting_hand(match))
                 from ..pipeline.roles import role_goal_placement
                 _layer("role_goal_placement",
                        lambda: role_goal_placement(match))

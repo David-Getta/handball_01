@@ -3349,6 +3349,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "kapus korábban induljon, a fal szöget zárjon.")
     except Exception:
         pass
+    # Poszt-kezesség: melyik posztjukon lő balkezes.
+    try:
+        from .roles import role_shooting_hand
+        rsh = role_shooting_hand(match)
+        for side, name in (("home", home), ("away", away)):
+            lefty_role = rsh[side]["lefty_role"]
+            if not lefty_role:
+                continue
+            rec_rsh = rsh[side]["roles"][lefty_role]
+            body += (f" A(z) {name} {lefty_role} posztján BALKEZES lő "
+                     f"({rec_rsh['left']}/{rec_rsh['shots']} bal-jelű "
+                     "lövés) — ellene tükrözni kell a sáncot és a kapus "
+                     "alapállását.")
+    except Exception:
+        pass
     # Poszt-lövésidőzítés: ki lő korán, ki vár ki.
     try:
         from .roles import role_shot_timing

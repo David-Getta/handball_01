@@ -1570,3 +1570,67 @@ def test_specialist_roles_silent_without_platooning():
                         away_team="A", fps=25.0), frames)
     rec = specialist_roles(m)["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Poszt-kezesség (melyik posztjukon lő balkezes) -------------------------
+
+def _rsh_match(shooter, ball_dy, n=5, warmup=200):
+    """`n` lövés ugyanattól a játékostól, a labda az elengedés előtti
+    kockán y-ban `ball_dy`-nal eltolva (a dobó kéz oldala)."""
+    frames = []
+    t = 0
+
+    def _cast():
+        return [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _RSD.items()] + \
+            [_pl(20, Team.AWAY, 5.0, 10.0)]
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_cast(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for _ in range(warmup):      # poszt-minta: legyen mit átlagolni
+        _add(34.0, 10.0)
+    sx, sy = _RSD[shooter]
+    for _ in range(n):
+        for _ in range(6):       # a labda a lövő KEZÉBEN, a kéz oldalán
+            _add(sx, sy + ball_dy)
+        # Egy kockán belül elszáll: így az elengedés-kocka ELŐTTI kockán
+        # még a lövő kezében van a labda (abból jön a kezesség).
+        for bx in (sx + 3.0, sx + 6.0, sx + 9.0, 40.5, 40.5):
+            _add(min(bx, 40.5), 10.0)
+        for _ in range(40):
+            _add(5.0, 10.0)
+    return Match(MatchMeta(match_id="rsh", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_shooting_hand_finds_the_lefty_post():
+    """Ha egy poszt lövései következetesen bal-jelűek, a poszt balkezes
+    — a védekezés-tervet erre kell építeni (a név cserélődhet)."""
+    from handball.pipeline.roles import RSH_MIN_SHOTS, role_shooting_hand
+
+    rec = role_shooting_hand(_rsh_match(1, ball_dy=0.5))["home"]
+    assert rec["lefty_role"] is not None, rec
+    row = rec["roles"][rec["lefty_role"]]
+    assert row["shots"] >= RSH_MIN_SHOTS and row["hand"] == "bal", rec
+    assert row["left"] >= 0.7 * row["shots"], rec
+
+
+def test_role_shooting_hand_right_handed_post_is_not_flagged():
+    """A jobbkezes poszt nem kap balkezes-jelölést."""
+    from handball.pipeline.roles import role_shooting_hand
+
+    rec = role_shooting_hand(_rsh_match(1, ball_dy=-0.5))["home"]
+    assert rec["lefty_role"] is None, rec
+    assert any(r["hand"] == "jobb" for r in rec["roles"].values()), rec
+
+
+def test_role_shooting_hand_silent_with_few_shots():
+    """Kevés lövésnél nincs kezesség-ítélet a posztra."""
+    from handball.pipeline.roles import role_shooting_hand
+
+    rec = role_shooting_hand(_rsh_match(1, ball_dy=0.5, n=2))["home"]
+    assert rec["lefty_role"] is None, rec
+    assert all(r["hand"] is None for r in rec["roles"].values()), rec

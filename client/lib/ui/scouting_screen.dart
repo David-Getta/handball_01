@@ -3175,6 +3175,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Poszt-kezesség: melyik posztjukon lő balkezes (4+ értékelhető lövés,
+  // 70%+ bal-jel — a backenddel azonos küszöbök: RSH_MIN_SHOTS,
+  // RSH_SHARE_PCT).
+  String? _leftHandedRole(Map<String, dynamic> r) {
+    final shots = (r["rsh_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final left = (r["rsh_left_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty || left == null) return null;
+    final keys = shots.keys.toList()
+      ..sort((a, b) =>
+          (shots[b] as num).toInt().compareTo((shots[a] as num).toInt()));
+    for (final k in keys) {
+      final n = (shots[k] as num).toInt();
+      final l = ((left[k] ?? 0) as num).toInt();
+      if (n >= 4 && l >= 0.7 * n) {
+        return "a(z) $k posztjukon BALKEZES lő ($n lövésből $l bal-jel) · "
+            "tükrözzétek a sáncot és a kapus alapállását — a poszt akkor "
+            "is marad, ha az ember cserélődik";
+      }
+    }
+    return null;
+  }
+
   // Fal-rés térkép: hol és mekkora a legnagyobb köz a falukban (100+
   // kocka, 3,5 m-től rés-veszélyes, 40%-tól jellemző sáv — a backenddel
   // azonos küszöbök: DGAP_MIN_FRAMES, DGAP_WIDE_M, DGAP_ZONE_SHARE_PCT).
@@ -11270,6 +11292,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_defensiveFormation(r) != null)
         ["Védekezési formáció", _defensiveFormation(r)!],
       if (_defensiveGaps(r) != null) ["Fal-rés térkép", _defensiveGaps(r)!],
+      if (_leftHandedRole(r) != null)
+        ["Balkezes poszt", _leftHandedRole(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
       if (_finishingBalance(r) != null)
         ["Befejezés-mérleg", _finishingBalance(r)!],

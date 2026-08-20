@@ -757,6 +757,10 @@ class ScoutingReport:
     rst_time_sum_by_role: dict = field(default_factory=dict)
     rsp_shots_by_role: dict = field(default_factory=dict)
     rsp_kmh_sum_by_role: dict = field(default_factory=dict)
+    # Poszt-kezesség: posztonként a bal-jelű és az összes értékelhető
+    # lövés — darabszámok, meccsek közt pontosan összegződnek.
+    rsh_left_by_role: dict = field(default_factory=dict)
+    rsh_shots_by_role: dict = field(default_factory=dict)
     # Poszt-kapuoldal: "poszt|oldal" → gólszám. Darabszám, meccsek közt
     # pontosan összegződik (részarány = oldal / a poszt összes gólja).
     rgp_goals_by_role_side: dict = field(default_factory=dict)
@@ -9077,6 +9081,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "közép nyílik: betörés a réseken, beálló-játék és "
                 "elzárás-leválás középen.")
 
+    # Poszt-kezesség: melyik posztjukon lő balkezes — tükör-feladat.
+    if rep.rsh_shots_by_role:
+        from .roles import RSH_MIN_SHOTS, RSH_SHARE_PCT
+        for _rsh_p, _rsh_n in sorted(rep.rsh_shots_by_role.items(),
+                                     key=lambda kv: -kv[1]):
+            _rsh_l = rep.rsh_left_by_role.get(_rsh_p, 0)
+            if _rsh_n >= RSH_MIN_SHOTS and _rsh_l >= (
+                    RSH_SHARE_PCT / 100.0) * _rsh_n:
+                keys.append(
+                    f"A(z) {_rsh_p} posztjukon BALKEZES lő "
+                    f"({_rsh_l}/{_rsh_n} bal-jelű lövés) — ellene "
+                    "tükrözni kell: a sánc a másik kezét emelje, a kapus "
+                    "alapállása a túlsó sarokra álljon, és a befelé "
+                    "vezető utat kell elzárni.")
+                break
+
     # Fal-rés térkép: hol a legnagyobb köz a falukban — oda kell betörni.
     if rep.dgap_frames >= 100 and rep.dgap_sum_m > 0:
         from .defense import DGAP_WIDE_M, DGAP_ZONE_SHARE_PCT
@@ -10996,6 +11016,12 @@ def _scout_team_cached(match: Match, team: Team,
         # KM/H-ÖSSZEG (nem átlag): meccsek közt pontosan összegződik.
         rep.rsp_kmh_sum_by_role = {p: round(r["shots"] * r["avg_kmh"], 1)
                                    for p, r in rsprec["roles"].items()}
+        from .roles import role_shooting_hand as _rsh
+        rshrec = _rsh(match, config)[team.value]
+        rep.rsh_shots_by_role = {p: r["shots"]
+                                 for p, r in rshrec["roles"].items()}
+        rep.rsh_left_by_role = {p: r["left"]
+                                for p, r in rshrec["roles"].items()}
         from .roles import role_shot_timing as _rst
         rstrec = _rst(match, config)[team.value]
         rep.rst_shots_by_role = {p: r["shots"]
@@ -13699,6 +13725,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 435) Az ő balkezes POSZTJUK × a ti sáncotok: a poszt akkor is
+    # marad, ha az ember cserélődik — a sánc-tervet erre kell építeni.
+    if opp.rsh_shots_by_role and own.blocks >= 3:
+        for _r435_p, _r435_n in sorted(opp.rsh_shots_by_role.items(),
+                                       key=lambda kv: -kv[1]):
+            _r435_l = opp.rsh_left_by_role.get(_r435_p, 0)
+            if _r435_n >= 4 and _r435_l >= 0.7 * _r435_n:
+                plan.append(
+                    f"A(z) {_r435_p} posztjukról balkezes lő "
+                    f"({_r435_l}/{_r435_n} bal-jel), ti pedig sokat "
+                    f"blokkoltok ({own.blocks} blokk) — a sánc-tervet "
+                    "POSZTRA építsétek, ne névre: azon az oldalon "
+                    "mindig a másik kéz emelkedjen, a kapus a túlsó "
+                    "sarkat vegye alapba, és a befelé vezető utat "
+                    "zárjátok el — így a cserélt ember sem hoz "
+                    "meglepetést.")
+                break
 
     # 434) Az ő fal-résük × a ti betörő emberetek: a rés csak akkor ér
     # valamit, ha van, aki lendületből bemegy oda.
@@ -21320,6 +21364,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rpf_covered_goals_by_role for r in reports),
         rsp_shots_by_role=_merge_count_dicts(
             r.rsp_shots_by_role for r in reports),
+        rsh_shots_by_role=_merge_count_dicts(
+            r.rsh_shots_by_role for r in reports),
+        rsh_left_by_role=_merge_count_dicts(
+            r.rsh_left_by_role for r in reports),
         rsp_kmh_sum_by_role=_merge_count_dicts(
             r.rsp_kmh_sum_by_role for r in reports),
         rst_shots_by_role=_merge_count_dicts(

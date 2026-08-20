@@ -2270,3 +2270,71 @@ def specialist_roles(match: Match,
                      "main_role": main_role, "def_pct": def_pct,
                      "verdict": verdict}
     return out
+
+
+# Poszt-kezesség: posztonként ennyi értékelhető lövés kell az ítélethez,
+# és ekkora egyoldalúság nevezi a posztot balkezesnek/jobbkezesnek.
+RSH_MIN_SHOTS = 4
+RSH_SHARE_PCT = 70.0
+
+
+def role_shooting_hand(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-kezesség: MELYIK POSZTJUKON lő balkezes.
+
+    A kezesség-becslés (event_detection.shooting_hand) NÉVRE mondja meg,
+    ki balkezes — ez POSZTRA. A név meccsről meccsre cserélődhet, a
+    poszt marad: a védekezés-terv és a kapus-felkészítés poszt-alapon
+    tart ki. A kézilabdában ez különösen fontos, mert a balkezes a JOBB
+    oldali posztok (jobbszélső, jobbátlövő) igazi fegyvere — onnan
+    befelé jövet a megszokott sánc-kéz mellett lő el.
+
+    Edzőileg: a balkezes posztjuk ellen tükrözni kell — a sánc a másik
+    kezét emelje, a kapus alapállása a túlsó sarokra álljon, és a
+    befelé vezető utat kell elzárni. Ha a jobb oldali posztjuk
+    JOBBkezes, az fordítva jó hír: az ő szöge zártabb, a szélső
+    befejezését a kapus a rövid sarokra állva veheti el.
+
+    Visszatérés csapatonként: {"shots", "roles": {poszt: {"shots",
+    "left", "right", "hand", "share_pct"}}, "lefty_role"} — a "hand"
+    "bal"/"jobb" ítélet legalább RSH_MIN_SHOTS lövéstől és
+    RSH_SHARE_PCT egyoldalúságtól (egyébként None); a "lefty_role" a
+    legtöbbet lövő balkezes-ítéletű poszt, ha van.
+    """
+    from .event_detection import shooting_hand
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    hands = shooting_hand(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        tally: dict = {}
+        for rec_p in hands[side]["players"]:
+            rec_role = roles[side].get(rec_p["player_id"])
+            if rec_role is None:
+                continue
+            rec = tally.setdefault(rec_role["poszt"], {"left": 0, "right": 0})
+            rec["left"] += rec_p["left"]
+            rec["right"] += rec_p["right"]
+
+        rows: dict = {}
+        for poszt, rec in sorted(tally.items(),
+                                 key=lambda kv: -(kv[1]["left"]
+                                                  + kv[1]["right"])):
+            shots = rec["left"] + rec["right"]
+            if not shots:
+                continue
+            major = max(rec["left"], rec["right"])
+            share = round(100.0 * major / shots, 1)
+            hand = None
+            if shots >= RSH_MIN_SHOTS and share >= RSH_SHARE_PCT:
+                hand = "bal" if rec["left"] > rec["right"] else "jobb"
+            rows[poszt] = {"shots": shots, "left": rec["left"],
+                           "right": rec["right"], "hand": hand,
+                           "share_pct": share}
+        lefty_role = next((p for p, r in rows.items() if r["hand"] == "bal"),
+                          None)
+        out[side] = {"shots": sum(r["shots"] for r in rows.values()),
+                     "roles": rows, "lefty_role": lefty_role}
+    return out

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.28 óta)
 
+- **Poszt-kezesség**: MELYIK POSZTJUKON lő balkezes. A kezesség-becslés
+  névre mondja meg, ki balkezes — ez posztra: a név meccsről meccsre
+  cserélődhet, a poszt marad, ezért a védekezés-terv és a
+  kapus-felkészítés poszt-alapon tart ki. Ítélet posztonként 4+
+  értékelhető lövéstől, 70%+ egyoldalúságtól. Edzői olvasat: a balkezes
+  a JOBB oldali posztok (jobbszélső, jobbátlövő) fegyvere — befelé jövet
+  a megszokott sánc-kéz mellett lő el, ezért azon az oldalon tükrözni
+  kell (a sánc a másik kezét emelje, a kapus a túlsó sarkat vegye
+  alapba, a befelé vezető utat elzárni); saját oldalon a balkezes
+  posztra külön figurát érdemes építeni. Felületek: /analyze +
+  meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs + 435.
+  meccsterv-szabály), 455. edzés-szabály, kliens-csempe.
 - **Kispad- és néző-szűrés a követésben**: a pálya-régió szándékosan
   hagy tűréssávot a vonalon kívül (a játékos néha kilép: partdobás,
   cserezóna) — a csarnokban viszont pont ebben a sávban ül a CSEREPAD és

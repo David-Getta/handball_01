@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 455) Poszt-kezesség: a balkezes posztunkra külön figurát kell
+    # építeni — a bal kéz a jobb oldali posztokon fegyver.
+    try:
+        from .roles import RSH_MIN_SHOTS, role_shooting_hand
+        rsh455 = role_shooting_hand(match, config)
+        for side in ("home", "away"):
+            lefty455 = rsh455[side]["lefty_role"]
+            if not lefty455:
+                continue
+            rec455 = rsh455[side]["roles"][lefty455]
+            add(side, "támadás", "Balkezes poszt kihasználása",
+                f"a(z) {lefty455} posztunkon balkezes lő "
+                f"({rec455['left']}/{rec455['shots']} bal-jelű lövés; "
+                f"{RSH_MIN_SHOTS} lövéstől ítélünk) — a balkezes a JOBB "
+                "oldali posztokon a legveszélyesebb, mert befelé jövet a "
+                "megszokott sánc-kéz mellett lő el",
+                "figura-építés a posztra: jobb oldali befejezések "
+                "célzott ismétlése (szög és betörés), a hozzá menő passz "
+                "a BAL kezéhez érkezzen, és a keresztjáték is arra az "
+                "oldalra záruljon; a védekező oldalon a párja tanulja "
+                "meg, milyen tükrözött sáncot kap majd az ellenfél")
+    except Exception:
+        pass
+
     # 454) Fal-rés: ha a saját falunkban állandó nagy köz nyílik, a
     # szomszédok átadás-rendjét kell gyakorolni.
     try:

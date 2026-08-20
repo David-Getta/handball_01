@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **481 réteg**, modulonként csoportosítva; a
+Összesen **482 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (93)
@@ -378,7 +378,7 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `confidence` | Réteg-megbízhatóság: mely elemzési rétegeknek van elég mintája |
 
-## roles (27)
+## roles (28)
 
 | Réteg | Mit mér |
 |---|---|
@@ -401,6 +401,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `role_receive_zones` | Poszt-átvételi zóna: MILYEN MESSZE a kaputól veszi át a labdát |
 | `role_share_by_score` | Poszt-állás: MELYIK POSZTON keresztül fejeznek be HÁTRÁNYBAN. |
 | `role_share_shift` | Poszt-váltás a szünetre: MELYIK POSZTRA épül a befejezésük a |
+| `role_shooting_hand` | Poszt-kezesség: MELYIK POSZTJUKON lő balkezes. |
 | `role_shot_distance` | Poszt-lövéstávolság: MELYIK POSZTJUK MILYEN MESSZIRŐL lő. |
 | `role_shot_power` | Poszt-lövéserő: MELYIK POSZTJUK LŐ KEMÉNYEN. |
 | `role_shot_timing` | Poszt-lövésidőzítés: MELYIK POSZTJUK MIKOR fejez be a támadáson |
