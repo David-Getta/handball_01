@@ -36,6 +36,29 @@ másodpercig — ez normális. Utána megnyílik a program.
 
 ---
 
+## Első indítás: fiók és feltételek
+
+Az első indításnál a program **fiókot kér**:
+
+1. Add meg az e-mail címed és egy legalább 8 karakteres jelszót (a neved és a
+   csapatod nem kötelező).
+2. Olvasd el a **felhasználási feltételeket** (a linkre kattintva a teljes
+   szöveg megnyílik), és pipáld ki az elfogadást — enélkül a fiók nem jön létre.
+3. **Fiók létrehozása** → és már bent is vagy.
+
+Tudnivalók:
+
+- A fiók a **saját gépeden** készül el, a program adatmappájában — nincs felhő,
+  a jelszavad nem hagyja el a laptopot (és nem is tárolódik nyíltan, csak
+  visszafejthetetlen lenyomatként).
+- A belépés **90 napig** érvényes: nem kell minden indításkor újra belépni.
+- Kilépni a jobb felső **fiók-ikonra** kattintva tudsz; ugyanott bármikor újra
+  elolvashatod a feltételeket.
+- Ha a feltételek szövege később megújul, a program belépéskor felkínálja
+  elfogadásra — az elfogadás időpontját a fiókod őrzi.
+
+---
+
 ## Mit tudsz csinálni a programban?
 
 1. **Feltöltés** fül → kattints a mezőre, és válaszd ki a meccsvideót. Feltölti.
@@ -95,4 +118,9 @@ Erősebb (videokártyás) gépen gyorsabb. Hagyd a háttérben dolgozni.
 az **Áttekintés** fülön később is ott lesznek.
 
 **Kell hozzá internet?** A telepítéshez igen (letöltés). Utána a program a saját
-gépeden fut, internet nélkül is elemez.
+gépeden fut, internet nélkül is elemez — a fiók és a belépés is a saját gépeden
+működik.
+
+**Elfelejtettem a jelszavamat.** A fiókok csak a te gépeden vannak, ezért nincs
+e-mailes visszaállítás. Ilyenkor hozz létre új fiókot — a korábbi meccseid és
+elemzéseid megmaradnak, azok nem a fiókhoz, hanem a géphez tartoznak.
