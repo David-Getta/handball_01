@@ -46,9 +46,9 @@ from .storage import data_root
 # A program tulajdonosa. A feltételek szövege és a fiók-elfogadás erre a
 # névre szól; másik tulajdonos-névhez elég a SPORTMACHINE_OWNER környezeti
 # változót beállítani (a telepítő/csomagoló is átállíthatja).
-OWNER_NAME = os.environ.get("SPORTMACHINE_OWNER", "Getta Dávid")
+OWNER_NAME = os.environ.get("SPORTMACHINE_OWNER", "Barta Dávid Arnold")
 OWNER_CONTACT = os.environ.get("SPORTMACHINE_OWNER_CONTACT",
-                               "davidesgyula@gmail.com")
+                               "bartada22@gmail.com")
 PRODUCT_NAME = "Sport Machine"
 
 # A feltételek verziója. HA A SZÖVEG VÁLTOZIK, EZT IS NÖVELNI KELL — a
