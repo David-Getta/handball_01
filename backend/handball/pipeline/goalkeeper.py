@@ -160,7 +160,8 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
         # pozíciójából) — minden kapura tartó lövésnél, hogy a zóna-
         # bontásból védés-hatékonyságot is tudjunk számolni.
         z = None
-        frame = frames_by_t.get(e.t)
+        frame = (frames_by_t.get((e.detail or {}).get("release_t"))
+                 or frames_by_t.get(e.t))
         if frame is not None and frame.ball is not None:
             goal_x = config.attacks_toward_x(e.team)
             z = _shot_zone(frame.ball.x, frame.ball.y, goal_x)
@@ -1546,7 +1547,8 @@ def gk_free_shot_saves(match: Match, config=None) -> dict:
         outcome = (e.detail or {}).get("outcome")
         if outcome not in ("goal", "save"):
             continue  # a mellé menő lövésből nem mérünk kapus-formát
-        f = by_t.get(e.t)
+        # A fedezettség az elengedés pillanatából (release_t) mérve.
+        f = by_t.get((e.detail or {}).get("release_t")) or by_t.get(e.t)
         if f is None or e.player_id is None:
             continue
         shooter = next((p for p in f.players

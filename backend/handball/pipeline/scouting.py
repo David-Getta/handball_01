@@ -2204,7 +2204,10 @@ def _shot_zones(match: Match, team: Team, config: TacticsConfig) -> dict:
     for e in detect_events(match, config):
         if e.team != team or e.type not in (EventType.SHOT, EventType.GOAL):
             continue
-        frame = frames_by_t.get(e.t)
+        # A lövés zónája az ELENGEDÉS kockájából (release_t) — az
+        # esemény kockáján a labda már métereket repült a kapu felé.
+        frame = (frames_by_t.get((e.detail or {}).get("release_t"))
+                 or frames_by_t.get(e.t))
         if frame is None or frame.ball is None:
             continue
         z = _shot_zone(frame.ball.x, frame.ball.y, goal_x)

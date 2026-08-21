@@ -687,7 +687,10 @@ def shot_choice_quality(match: Match,
             continue
         if e.player_id is None:
             continue
-        f = by_t.get(e.t)
+        # A lövés-döntés az ELENGEDÉS pillanatában született — a lövőt,
+        # a védőket és a jobb passz-opciókat is onnan mérjük (release_t;
+        # az esemény kockáján mindenki elmozdult már).
+        f = by_t.get((e.detail or {}).get("release_t")) or by_t.get(e.t)
         if f is None:
             continue
         shooter = next((p for p in f.players

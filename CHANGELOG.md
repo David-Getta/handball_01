@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.33 óta)
 
+- **Zónák és kapus-mérések is az elengedés kockájáról** (motor): a
+  lövés-zóna (felderítés), a kapus zóna-bontása, a kapus-forma
+  fedezettség-szűrése és a lövés-döntés minősége (jobb passz-opciók) is
+  az elengedés kockájáról (release_t) mér — az esemény kockáján a labda
+  már métereket repült, a játékosok elmozdultak. Tartalék mindenhol a
+  régi viselkedés.
+
 - **A fedezettség is az elengedés pillanatából** (motor): a védekezés
   képe (defense), a fedezetten lövők (covered_shooters) és a
   szélső-kifutás (wing_closeout) a lövő és a védők távolságát eddig az
