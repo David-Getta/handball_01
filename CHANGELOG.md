@@ -3,7 +3,21 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.32 óta)
+## Kiadatlan (a v0.1.33 óta)
+
+*(még semmi)*
+
+## v0.1.33 — kiadva (2026-08-21)
+
+> Kiadás-jegyzet: a v0.1.32 aznapi folytatása két szálon. Egyrészt a
+> motor-elérés végleges megerősítése: őrkutya (az elhalt motort a
+> program magától újraindítja), a motor-napló a hiba-képernyőn, és az
+> elveszett válaszú regisztráció belépésbe futtatása. Másrészt a
+> stride-őr leleteinek mélyjavítása: a lövés helye és a kezesség az
+> elengedés kockájáról mérve, az együtemű lövés lövője a röppálya
+> töréspontjából — ritkítva is 24/24 lövő-egyezés, az xG-torzítás
+> eltűnt, a stride-eltéréslista 38-ról 27-re rövidült. Új réteg a
+> Szuper-csere poszt (a tegnapi névre szóló réteg poszt-párja).
 
 - **A kezesség az elengedés kockájáról mérve** (motor): a
   kezesség-becslés a labda test-melletti oldal-eltolását eddig az
