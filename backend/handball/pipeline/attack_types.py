@@ -4703,6 +4703,68 @@ FBH_AHEAD_PCT = 40.0
 FBH_TOGETHER_PCT = 10.0
 
 
+# Befutó poszt: ennyi poszthoz kötött második hullámos befejezés kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# befutójuk posztról olvasható.
+SWR_MIN_SECOND = 3
+SWR_SHARE_PCT = 60.0
+
+
+def second_wave_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Befutó poszt: MELYIK POSZT a második hullám a kontráikban.
+
+    A befutó emberek rétege (second_wave_finishers) az embert nevezi
+    meg — ez a posztot: a második hullámos kontra-befejezéseket a lövő
+    posztjához írja. Így a minta akkor is látszik, ha a nevek meccsről
+    meccsre cserélődnek — a "mindig az átlövő fut be másodikként"
+    típusú kontra-szokás posztról ismerszik meg.
+
+    Edzőileg: a visszafutás-parancs posztra szól — az első ember
+    felvétele után a középső sávban hátralépve a POSZT befutóját kell
+    keresni, akárki játssza éppen. Saját oldalon: az egy posztra épülő
+    második hullám kiszámítható — a befutót variálni kell.
+
+    Visszatérés csapatonként: {"second" (poszthoz kötött második
+    hullámos befejezés), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    SWR_MIN_SECOND, vagy egyik poszt sem éri el az SWR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    swf = second_wave_finishers(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = {"second": 0, "roles": {}, "main_role": None,
+               "share_pct": None, "verdict": None}
+        for row in swf[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["shots"])
+            rec["second"] += row["shots"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["second"] >= SWR_MIN_SECOND:
+            poszt = max(rec["roles"], key=lambda k: rec["roles"][k])
+            share = 100.0 * rec["roles"][poszt] / rec["second"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SWR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kontráik második hulláma a(z) {poszt} poszt "
+                    f"({share:.0f}%, {rec['second']} befutós "
+                    "befejezésből) — a visszafutásnál az első ember "
+                    "után az ő sávját kell felvenni, akárki játssza")
+        out[side] = rec
+    return out
+
+
 def fast_break_headstart(match: Match,
                          config: Optional[TacticsConfig] = None) -> dict:
     """Kontra-elszökés: ELŐRE SZÖKÖTT emberrel kontráznak-e.

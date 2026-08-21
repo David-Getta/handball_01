@@ -1164,6 +1164,9 @@ class ScoutingReport:
     # Befutó emberek: a második hullámos kontra-befejezések darabszáma
     # JÁTÉKOSONKÉNT. Darabszám, meccsek közt pontosan összegződik.
     bfw_shots_by_player: dict = field(default_factory=dict)
+    # Befutó poszt: a második hullámos kontra-befejezések POSZTONKÉNT.
+    # Darabszámok, meccsek közt pontosan összegződnek.
+    swr_shots_by_role: dict = field(default_factory=dict)
     # Egálbontó emberek: a döntetlenről szerzett (egált bontó) gólok
     # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
     pbp_breaks_by_player: dict = field(default_factory=dict)
@@ -4921,6 +4924,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "a visszafutásnál az első ember felvétele után NE "
                 "álljatok meg: a középső sávban hátra, és őt kell "
                 "megtalálni, mielőtt labdát kap.")
+
+    # Befutó poszt: posztról olvasható második hullám.
+    _swr_n = sum(rep.swr_shots_by_role.values())
+    if _swr_n >= 3:
+        _swr_p, _swr_c = max(rep.swr_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _swr_pct = 100.0 * _swr_c / _swr_n
+        if _swr_pct >= 60.0:
+            keys.append(
+                f"A kontráik második hulláma a(z) {_swr_p} poszt "
+                f"({_swr_pct:.0f}%, {_swr_n} befutós befejezésből) — a "
+                "visszafutás-parancs posztra szóljon: az első ember "
+                "után az ő sávját vegyétek fel, akárki játssza.")
 
     # Kezesség: balkezes lövőjük — tükör-feladat a sáncnak és a kapusnak.
     if rep.hand_shots_by_player:
@@ -10857,6 +10873,9 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["shots"]
             for r in bfwrec["players"]}
+        from .attack_types import second_wave_roles as _swr
+        swrrec = _swr(match, config)[team.value]
+        rep.swr_shots_by_role = dict(swrrec["roles"])
         from .momentum import parity_break_scorers as _pbp
         pbprec = _pbp(match, config)[team.value]
         rep.pbp_breaks_by_player = {
@@ -13932,6 +13951,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 444) Az ő posztról olvasható befutójuk × a ti gyors
+    # visszafutásotok: a második hullám sávja posztra szólóan zárható.
+    _p444_fast = own.rtt_shots - own.rtt_slow
+    if opp.swr_shots_by_role and own.rtt_shots >= 4 and _p444_fast >= 3:
+        _p444_n = sum(opp.swr_shots_by_role.values())
+        _p444_p, _p444_c = max(opp.swr_shots_by_role.items(),
+                               key=lambda kv: kv[1])
+        if _p444_n >= 3 and 100.0 * _p444_c / _p444_n >= 60.0:
+            plan.append(
+                f"A kontráik második hulláma a(z) {_p444_p} poszt "
+                f"({_p444_c}/{_p444_n} befutós befejezés), ti pedig "
+                f"gyorsan futtok vissza ({_p444_fast} időben záró "
+                "visszarendeződés) — a visszafutás-parancs posztra "
+                "szóljon: az első embert az első visszaérő veszi, a "
+                "második visszaérő automatikusan a(z) "
+                f"{_p444_p} sávjába lép hátra, mielőtt a befutó labdát "
+                "kap.")
 
     # 443) Az ő posztról olvasható holtpont-tervük × a ti kettőzésetek:
     # egálnál a poszt sávjára kell a korai kettőzés, akárki játssza.
@@ -21570,6 +21607,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.lfb_running_by_player for r in reports),
         bfw_shots_by_player=_merge_count_dicts(
             r.bfw_shots_by_player for r in reports),
+        swr_shots_by_role=_merge_count_dicts(
+            r.swr_shots_by_role for r in reports),
         pbp_breaks_by_player=_merge_count_dicts(
             r.pbp_breaks_by_player for r in reports),
         pbr_breaks_by_role=_merge_count_dicts(

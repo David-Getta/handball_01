@@ -3137,6 +3137,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "zárást nála kell kezdeni, nem a gólpasszolónál.")
     except Exception:
         pass
+    # Befutó poszt: melyik poszt a második hullám a kontráikban.
+    try:
+        from .attack_types import second_wave_roles
+        swr = second_wave_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_swr = swr[side]
+            if rec_swr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kontráinak második hulláma a(z) "
+                     f"{rec_swr['main_role']} poszt "
+                     f"({rec_swr['share_pct']:.0f}%) — a visszafutásnál "
+                     "az első ember után az ő sávját kell felvenni, "
+                     "akárki játssza.")
+    except Exception:
+        pass
     # Egálbontó poszt: melyik posztjuk viszi el a holtpontokat.
     try:
         from .momentum import parity_break_roles

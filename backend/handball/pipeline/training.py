@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 464) Befutó poszt: ha a kontráink második hulláma egy poszton áll,
+    # a felkészült ellenfél a sávot zárja — a befutót variálni kell.
+    try:
+        from .attack_types import SWR_SHARE_PCT, second_wave_roles
+        swr464 = second_wave_roles(match, config)
+        for side in ("home", "away"):
+            rec464 = swr464[side]
+            if rec464["verdict"] is None:
+                continue
+            add(side, "támadás", "A befutó variálása a kontrában",
+                f"a kontráink második hulláma a(z) "
+                f"{rec464['main_role']} poszt "
+                f"({rec464['share_pct']:.0f}%; {SWR_SHARE_PCT:.0f}% "
+                "felett jelezzük) — a felkészült ellenfél a második "
+                "visszaérőjét pont ebbe a sávba lépteti, és a "
+                "kontránk második hulláma elhal",
+                "variáld a befutót: a lerohanás-figurában két "
+                "különböző poszt is tanulja meg a második hullám "
+                "szerepét, és a sáv a helyzet szerint dőljön el (ha a "
+                "fő sáv zárva, a labda a másik oldali befutóra megy); "
+                "edzésen 3-a-2 és 4-a-3 kontra-gyakorlat, ahol a "
+                "második hullám sávját az edző menet közben jelöli ki")
+    except Exception:
+        pass
+
     # 463) Egálbontó poszt: ha a holtpont-tervünk egy poszton áll, a
     # felkészült ellenfél egálnál pont azt zárja — második ág kell.
     try:

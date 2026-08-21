@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **490 réteg**, modulonként csoportosítva; a
+Összesen **491 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (93)
+## attack_types (94)
 
 | Réteg | Mit mér |
 |---|---|
@@ -87,6 +87,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `second_chance_fade` | Lepattanó-esés: MELYIK FÉLIDŐBEN él a második roham. |
 | `second_chance_roles` | Lepattanó-poszt: KI LŐ MÁSODSZOR — melyik posztjuk viszi a |
 | `second_wave_finishers` | Befutó emberek: KI a második hullám embere a kontráikban. |
+| `second_wave_roles` | Befutó poszt: MELYIK POSZT a második hullám a kontráikban. |
 | `shooter_placement` | Lövő-kapuoldal: ki melyik sarokba lő. |
 | `shooter_ranges` | Lövő-távolság profil: KI LŐ TÁVOLRÓL és ki közelről. |
 | `shot_distance_fade` | Lövés-távolság esése: KIFELÉ SZORULNAK-E a hajrára. |

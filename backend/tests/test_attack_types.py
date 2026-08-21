@@ -3127,6 +3127,26 @@ def test_fast_break_waves_needs_enough_breaks():
     assert rec["verdict"] is None
 
 
+def test_second_wave_roles_names_the_running_post():
+    """Ha a befutós befejezések zöme egy posztról jön, a második hullám
+    posztról olvasható — a visszafutás-parancs posztra szól."""
+    from handball.pipeline.attack_types import second_wave_roles
+
+    rec = second_wave_roles(_fbw_match(True))["home"]
+    assert rec["second"] >= 3, rec
+    assert rec["main_role"] == "irányító", rec
+    assert rec["share_pct"] == 100.0, rec
+    assert rec["verdict"] and "második hulláma" in rec["verdict"], rec
+
+
+def test_second_wave_roles_silent_with_few_finishes():
+    """Kevés poszthoz kötött befutós befejezésnél nincs ítélet."""
+    from handball.pipeline.attack_types import second_wave_roles
+
+    rec = second_wave_roles(_fbw_match(True, n_breaks=2))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
 def test_second_wave_finishers_names_the_runner():
     """A befutó (2-es) adja le a második hullámos befejezéseket → ő a
     kontra befutó embere."""

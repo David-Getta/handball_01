@@ -3242,6 +3242,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "gólpasszolónál";
   }
 
+  // Befutó poszt: melyik poszt a második hullám a kontráikban (3+
+  // befutós befejezés, 60% egy poszté — a backenddel azonos küszöbök:
+  // SWR_MIN_SECOND, SWR_SHARE_PCT).
+  String? _secondWaveRole(Map<String, dynamic> r) {
+    final byR = (r["swr_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byR == null || byR.isEmpty) return null;
+    var all = 0;
+    String? top;
+    var topN = 0;
+    byR.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || all < 3 || topN < 0.6 * all) return null;
+    return "a kontráik második hulláma a(z) $top poszt ($topN/$all "
+        "befutós befejezés) · a visszafutásnál az első ember után az ő "
+        "sávját vegyétek fel, akárki játssza";
+  }
+
   // Egálbontó poszt: melyik posztjuk viszi el a holtpontokat (3+
   // egálbontó gól, 60% egy poszté — a backenddel azonos küszöbök:
   // PBR_MIN_BREAKS, PBR_SHARE_PCT).
@@ -11496,6 +11519,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Rejtett szervező poszt", _preAssistRole(r)!],
       if (_parityBreakRole(r) != null)
         ["Egálbontó poszt", _parityBreakRole(r)!],
+      if (_secondWaveRole(r) != null)
+        ["Befutó poszt", _secondWaveRole(r)!],
       if (_superSub(r) != null) ["Szuper-csere", _superSub(r)!],
       if (_superSubRole(r) != null)
         ["Szuper-csere poszt", _superSubRole(r)!],

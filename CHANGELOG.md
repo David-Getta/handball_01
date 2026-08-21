@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.34 óta)
 
+- **Befutó poszt** (új réteg): MELYIK POSZT a második hullám a
+  kontráikban — a befutó emberek poszt-szintű párja. A második
+  hullámos kontra-befejezéseket a lövő posztjához írja: a "mindig az
+  átlövő fut be másodikként" típusú kontra-szokás posztról ismerszik
+  meg, a minta a cserék után is él. Edzői olvasat: a
+  visszafutás-parancs posztra szól — az első ember felvétele után a
+  poszt sávjába kell hátralépni, akárki játssza; a saját, egy posztra
+  épülő második hullám kiszámítható — a befutót variálni kell.
+  Felületek: /analyze + meccs-csomag, edzői összefoglaló, felderítés
+  (posztonkénti darabszámok, edzői kulcs, 444. meccsterv-szabály),
+  464. edzés-szabály, kliens-csempe, Kulcs-poszt regisztráció +
+  riport-lencse sor.
+
 - **Egálbontó poszt** (új réteg): MELYIK POSZTJUK viszi el a
   holtpontokat — az egálbontó emberek poszt-szintű párja. A
   döntetlenről szerzett gólokat a lövő posztjához írja: a "feszült
