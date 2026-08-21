@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 459) Fal-rés fáradás: ha a saját közeink a 2. félidőre nyílnak, a
+    # belső védőket kell forgatni — ez frissesség-kérdés, nem technika.
+    try:
+        from .defense import GFD_RISE_M, gap_fade
+        gfd459 = gap_fade(match, config)
+        for side in ("home", "away"):
+            rec459 = gfd459[side]
+            if rec459["verdict"] is None:
+                continue
+            add(side, "védekezés", "Fal-frissesség a második félidőre",
+                f"a falunkban a 2. félidőre szétnyílnak a közök "
+                f"({rec459['fh_gap_m']:.1f} m → {rec459['sh_gap_m']:.1f} "
+                f"m a legnagyobb rés átlaga; {GFD_RISE_M:.1f} m "
+                "növekedéstől jelezzük) — a fáradt fal nem lassabban "
+                "fut, hanem később zár",
+                "a rés frissesség-kérdés, nem technika: a belső "
+                "védőpárt tervezetten forgasd (a 40. perc körül friss "
+                "láb középre), és a szünet utáni első öt percre külön "
+                "zárás-parancs — a szomszéd akkor is csússzon, ha "
+                "fáradt; edzésen kör-edzés UTÁN gyakorolt fal-csúszás "
+                "szoktatja a testet a fáradt záráshoz")
+    except Exception:
+        pass
+
     # 458) Hetes-sarok: ha a dobónk kiszámítható, a kapusok olvasni
     # fogják — variálni kell, vagy második dobót építeni.
     try:

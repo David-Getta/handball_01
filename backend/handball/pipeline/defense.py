@@ -879,11 +879,50 @@ def defensive_gaps(match, config=None) -> dict:
     from .tactics import COURT_LENGTH_M, TacticsConfig
 
     config = config or TacticsConfig()
+    acc, zones = _dgap_tally(match, config)
+
+    out = {}
+    for team in (Team.HOME, Team.AWAY):
+        total, n = acc[team]
+        tally = dict(sorted(zones[team].items(), key=lambda kv: -kv[1]))
+        rec = {"frames": n, "avg_max_gap_m": None, "zones": tally,
+               "worst_zone": None, "zone_share_pct": None, "verdict": None}
+        if n >= DGAP_MIN_FRAMES:
+            avg = round(total / n, 2)
+            rec["avg_max_gap_m"] = avg
+            if avg >= DGAP_WIDE_M:
+                rec["verdict"] = "rés-veszélyes fal"
+            if tally:
+                zone, zn = next(iter(tally.items()))
+                share = round(100.0 * zn / n, 1)
+                rec["zone_share_pct"] = share
+                if share >= DGAP_ZONE_SHARE_PCT:
+                    rec["worst_zone"] = zone
+        out[team.value] = rec
+    return out
+
+
+def _dgap_tally(match, config, from_t=None, until_t=None) -> tuple:
+    """A legnagyobb fal-közök kockánkénti gyűjtése (belső segéd).
+
+    A megadott kocka-ablakra (from_t ≤ t < until_t, None = nyitott vég)
+    adja a ({csapat: [rés-összeg, kocka]}, {csapat: {sáv: kocka}})
+    párost — a fal-rés réteg és a rés-fáradás közös motorja.
+    """
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .decisions import ball_holder
+    from .tactics import COURT_LENGTH_M
+
     half = COURT_LENGTH_M / 2.0
     third = COURT_WIDTH_M / 3.0
     acc = {Team.HOME: [0.0, 0], Team.AWAY: [0.0, 0]}
     zones = {Team.HOME: {}, Team.AWAY: {}}
     for f in match.frames:
+        if from_t is not None and f.t < from_t:
+            continue
+        if until_t is not None and f.t >= until_t:
+            continue
         holder = ball_holder(f, config)
         if holder is None:
             continue
@@ -913,25 +952,68 @@ def defensive_gaps(match, config=None) -> dict:
                 else wing_high if mid > 2 * third
                 else DGAP_ZONES[1])
         zones[deff][zone] = zones[deff].get(zone, 0) + 1
+    return acc, zones
 
-    out = {}
+
+# Fal-rés fáradás: félidőnként ennyi értékelhető kocka kell az
+# ítélethez, és ekkora (méteres) rés-növekedés számít érdeminek.
+GFD_MIN_FRAMES = 60
+GFD_RISE_M = 0.8
+
+
+def gap_fade(match, config=None) -> dict:
+    """Fal-rés fáradás: SZÉTNYÍLNAK-E a közök a második félidőre.
+
+    A fal-fáradás (xg.wall_fade) a KÖVETKEZMÉNYT méri — jobb helyzeteket
+    engednek a 2. félidőben; ez az OKOT: a szomszédos védők közti
+    legnagyobb köz átlagát félidőnként. A fáradt fal nem lassabban fut,
+    hanem később zár — a közök centiről centire nőnek, és a hajrára már
+    befér a betörés.
+
+    Edzőileg: aki ellen a 2. félidőben nyílnak a közök, ott a betörős
+    figurákat a MÁSODIK félidőre kell tartogatni — az első félidei
+    "nem ment" nem ítélet, a hajrában ugyanaz a figura működni fog.
+    Saját oldalon ez a csere-terv: a rés nem edzés-kérdés, hanem
+    frissesség-kérdés — a belső védőket kell forgatni, mielőtt a köz
+    kinyílik.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"fh_gap_m",
+    "fh_frames", "sh_gap_m", "sh_frames", "rise_m", "verdict"} — minden
+    None/0, ha nincs félidő-jel vagy kevés a kocka (félidőnként
+    GFD_MIN_FRAMES); a verdict a GFD_RISE_M feletti növekedésnél
+    szólal meg.
+    """
+    from ..models.tracking import Team
+    from .halftime import detect_halftime
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    empty = {"fh_gap_m": None, "fh_frames": 0, "sh_gap_m": None,
+             "sh_frames": 0, "rise_m": None, "verdict": None}
+    out = {side: dict(empty) for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None or not match.frames:
+        return out
+
+    fh_acc, _ = _dgap_tally(match, config, until_t=ht)
+    sh_acc, _ = _dgap_tally(match, config, from_t=ht)
     for team in (Team.HOME, Team.AWAY):
-        total, n = acc[team]
-        tally = dict(sorted(zones[team].items(), key=lambda kv: -kv[1]))
-        rec = {"frames": n, "avg_max_gap_m": None, "zones": tally,
-               "worst_zone": None, "zone_share_pct": None, "verdict": None}
-        if n >= DGAP_MIN_FRAMES:
-            avg = round(total / n, 2)
-            rec["avg_max_gap_m"] = avg
-            if avg >= DGAP_WIDE_M:
-                rec["verdict"] = "rés-veszélyes fal"
-            if tally:
-                zone, zn = next(iter(tally.items()))
-                share = round(100.0 * zn / n, 1)
-                rec["zone_share_pct"] = share
-                if share >= DGAP_ZONE_SHARE_PCT:
-                    rec["worst_zone"] = zone
-        out[team.value] = rec
+        rec = out[team.value]
+        fh_sum, fh_n = fh_acc[team]
+        sh_sum, sh_n = sh_acc[team]
+        rec["fh_frames"], rec["sh_frames"] = fh_n, sh_n
+        if fh_n < GFD_MIN_FRAMES or sh_n < GFD_MIN_FRAMES:
+            continue
+        fh = fh_sum / fh_n
+        sh = sh_sum / sh_n
+        rec["fh_gap_m"] = round(fh, 2)
+        rec["sh_gap_m"] = round(sh, 2)
+        rec["rise_m"] = round(sh - fh, 2)
+        if sh - fh >= GFD_RISE_M:
+            rec["verdict"] = (
+                f"a második félidőre szétnyílnak a közök a falban "
+                f"({fh:.1f} m → {sh:.1f} m a legnagyobb rés átlaga) — a "
+                "betörős figurákat a második félidőre kell tartogatni")
     return out
 
 

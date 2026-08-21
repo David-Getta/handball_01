@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.30 óta)
 
+- **Fal-rés fáradás**: SZÉTNYÍLNAK-E a közök a második félidőre. A
+  fal-fáradás (wall_fade) a következményt méri — jobb helyzeteket
+  engednek a 2. félidőben; ez az okot: a szomszédos védők közti
+  legnagyobb köz átlagát félidőnként (a fal-rés térkép közös
+  motorjával). Ítélet félidőnként 60+ értékelhető kockától, 0,8 m
+  növekedéstől. Edzői olvasat: a fáradt fal nem lassabban fut, hanem
+  később zár — aki ellen a 2. félidőben nyílnak a közök, ott a betörős
+  figurákat a MÁSODIK félidőre kell tartogatni (az első félidei "nem
+  ment" nem ítélet); saját oldalon ez csere-terv: a belső védőket kell
+  forgatni, mielőtt a köz kinyílik. Felületek: /analyze + meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 439. meccsterv-szabály
+  a betörő emberrel párosítva), 459. edzés-szabály, kliens-csempe.
 - **Jelszócsere a fiók-menüből + elfelejtett-jelszó útmutató**
   (kliens): a jelszócsere-végpont eddig felület nélkül állt — mostantól
   a jobb felső fiók-menü "Jelszócsere" pontja nyitja (jelenlegi + új

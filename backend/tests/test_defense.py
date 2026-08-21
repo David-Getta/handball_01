@@ -4494,3 +4494,57 @@ def test_defensive_gaps_ignores_a_keeper_without_a_role_label():
 
     assert jeloletlen["avg_max_gap_m"] == tiszta["avg_max_gap_m"], jeloletlen
     assert jeloletlen["verdict"] is None, jeloletlen
+
+
+def _gfd_match(fh_ys, sh_ys, fps=25.0, seconds=20.0):
+    """Két félidő szünettel: a HAZAI véd a saját kapujánál (x=0), a
+    mezőnyvédői az első félidőben `fh_ys`, a másodikban `sh_ys`
+    y-pozíciókban állnak."""
+    frames = []
+    t = 0
+
+    def _play(ys):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            players = [_pl(1, Team.AWAY, 8.0, 10.0)]
+            for i, y in enumerate(ys):
+                players.append(_pl(10 + i, Team.HOME, 6.0, y))
+            players.append(_pl(9, Team.HOME, 0.5, 10.0, role="kapus"))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def _break(sec):
+        nonlocal t
+        for _ in range(int(sec * fps)):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    _play(fh_ys)
+    _break(90.0)
+    _play(sh_ys)
+    return Match(_meta(fps), frames)
+
+
+def test_gap_fade_flags_the_widening_wall():
+    """Az első félidő zárt fala (max 2,5 m köz) a másodikra 5 m-es
+    közt enged → a betörős figurákat a 2. félidőre kell tenni."""
+    from handball.pipeline.defense import gap_fade
+
+    rec = gap_fade(_gfd_match([4.0, 6.5, 9.0, 11.5, 14.0],
+                              [3.0, 5.0, 7.0, 9.0, 14.0]))["home"]
+    assert rec["fh_gap_m"] == 2.5 and rec["sh_gap_m"] == 5.0, rec
+    assert rec["rise_m"] == 2.5, rec
+    assert rec["verdict"] and "szétnyílnak" in rec["verdict"], rec
+
+
+def test_gap_fade_silent_without_change_or_halftime():
+    """Változatlan fal → nincs ítélet; félidő-jel nélkül semmi sincs."""
+    from handball.pipeline.defense import gap_fade
+
+    same = gap_fade(_gfd_match([4.0, 6.5, 9.0, 11.5, 14.0],
+                               [4.0, 6.5, 9.0, 11.5, 14.0]))["home"]
+    assert same["rise_m"] == 0.0 and same["verdict"] is None, same
+
+    rec = gap_fade(_dgap_match([4.0, 6.5, 9.0, 11.5, 14.0]))["home"]
+    assert rec["fh_gap_m"] is None and rec["verdict"] is None, rec

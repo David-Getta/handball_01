@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **485 réteg**, modulonként csoportosítva; a
+Összesen **486 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (93)
@@ -131,7 +131,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `tired_turnover_players` | Fáradt-eladók: KINEK a labdái vesznek el fáradtan. |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (85)
+## defense (86)
 
 | Réteg | Mit mér |
 |---|---|
@@ -178,6 +178,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `doubling_pair_roles` | Kettőzőpáros-poszt: MELYIK VÉDŐ-KETTŐSÜK kettőz együtt. |
 | `fading_defender_roles` | Védőmotor-poszt: MELYIK POSZTJUK védő-motorja áll le. |
 | `fading_defenders` | Eltűnő védő: KI viszi a védekezést az első félidőben — és áll le. |
+| `gap_fade` | Fal-rés fáradás: SZÉTNYÍLNAK-E a közök a második félidőre. |
 | `high_steal_players` | Elöl szerző védők: KI SZED LABDÁT a támadó térfélen. |
 | `high_steal_roles` | Letámadó-poszt: MELYIK POSZTJUK szed labdát elöl. |
 | `line_height_by_score` | Védekezési mélység állás szerint: ELŐNYBEN vagy HÁTRÁNYBAN |

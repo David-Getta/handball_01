@@ -308,6 +308,21 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
     except Exception:
         pass
 
+    # Fal-rés fáradás: szétnyílnak-e a közök a második félidőre.
+    try:
+        from .defense import gap_fade
+        gfd = gap_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gfd = gfd[side]
+            if rec_gfd["verdict"] is None:
+                continue
+            parts.append(
+                f"a(z) {name} falában a 2. félidőre szétnyíltak a közök "
+                f"({rec_gfd['fh_gap_m']:.1f} m → {rec_gfd['sh_gap_m']:.1f} "
+                "m a legnagyobb rés átlaga)")
+    except Exception:
+        pass
+
     # Védekezési formáció: a fal ALAKJA (6-0 lapos, 5-1 kitolt, 3-2-1).
     try:
         from .defense import defensive_formation

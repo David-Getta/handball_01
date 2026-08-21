@@ -2844,6 +2844,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import gap_fade
+            res["gap_fade"] = gap_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_formation
             res["defensive_formation"] = defensive_formation(match)
         except Exception:
@@ -5229,6 +5234,8 @@ def create_app():
                 _layer("defensive_width", lambda: defensive_width(match))
                 from ..pipeline.defense import defensive_gaps
                 _layer("defensive_gaps", lambda: defensive_gaps(match))
+                from ..pipeline.defense import gap_fade
+                _layer("gap_fade", lambda: gap_fade(match))
                 from ..pipeline.defense import defensive_formation
                 _layer("defensive_formation",
                        lambda: defensive_formation(match))

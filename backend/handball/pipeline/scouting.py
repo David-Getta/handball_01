@@ -325,6 +325,12 @@ class ScoutingReport:
     dgap_frames: int = 0
     dgap_sum_m: float = 0.0
     dgap_zones: dict = field(default_factory=dict)
+    # Fal-rés fáradásuk: félidőnkénti rés-összeg (m) + kocka — meccsek
+    # közt pontosan összegződik (átlag = összeg / kocka félidőnként).
+    gfd_fh_sum_m: float = 0.0
+    gfd_fh_frames: int = 0
+    gfd_sh_sum_m: float = 0.0
+    gfd_sh_frames: int = 0
     # Passz-tempó (labdajáratás): passzok + mért birtoklás-idő (mp) —
     # meccsek közt pontosan összegződik (passz/perc = 60·passz/idő).
     pt_passes: int = 0
@@ -9152,6 +9158,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "közép nyílik: betörés a réseken, beálló-játék és "
                 "elzárás-leválás középen.")
 
+    # Fal-rés fáradás: a betörős figurákat a 2. félidőre kell tenni.
+    if rep.gfd_fh_frames >= 60 and rep.gfd_sh_frames >= 60:
+        from .defense import GFD_RISE_M
+        _gfd_fh = rep.gfd_fh_sum_m / rep.gfd_fh_frames
+        _gfd_sh = rep.gfd_sh_sum_m / rep.gfd_sh_frames
+        if _gfd_sh - _gfd_fh >= GFD_RISE_M:
+            keys.append(
+                f"A 2. félidőre szétnyílnak a közök a falukban "
+                f"({_gfd_fh:.1f} m → {_gfd_sh:.1f} m a legnagyobb rés "
+                "átlaga) — a betörős figurákat a MÁSODIK félidőre "
+                "tartogassátok: az első félidei \"nem ment\" nem "
+                "ítélet, a hajrában ugyanaz a figura működni fog.")
+
     # Poszt-kezesség: melyik posztjukon lő balkezes — tükör-feladat.
     if rep.rsh_shots_by_role:
         from .roles import RSH_MIN_SHOTS, RSH_SHARE_PCT
@@ -9874,6 +9893,15 @@ def _scout_team_cached(match: Match, team: Team,
             rep.dgap_sum_m = round(
                 dgprec["avg_max_gap_m"] * dgprec["frames"], 1)
         rep.dgap_zones = dict(dgprec["zones"])
+        from .defense import gap_fade
+        gfdrec = gap_fade(match, config)[team.value]
+        if gfdrec["fh_gap_m"] is not None:
+            rep.gfd_fh_sum_m = round(
+                gfdrec["fh_gap_m"] * gfdrec["fh_frames"], 1)
+            rep.gfd_fh_frames = gfdrec["fh_frames"]
+            rep.gfd_sh_sum_m = round(
+                gfdrec["sh_gap_m"] * gfdrec["sh_frames"], 1)
+            rep.gfd_sh_frames = gfdrec["sh_frames"]
         from .tactics import pass_tempo
         ptrec = pass_tempo(match, config)[team.value]
         rep.pt_passes = ptrec["passes"]
@@ -13819,6 +13847,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 439) Az ő fáradó faluk × a ti betörő emberetek: a rés a második
+    # félidőben nyílik — akkor kell a betörős kártyát kijátszani.
+    if (opp.gfd_fh_frames >= 60 and opp.gfd_sh_frames >= 60
+            and own.break_entries >= 5):
+        _g439_fh = opp.gfd_fh_sum_m / opp.gfd_fh_frames
+        _g439_sh = opp.gfd_sh_sum_m / opp.gfd_sh_frames
+        if _g439_sh - _g439_fh >= 0.8:
+            plan.append(
+                f"Az ő falukban a 2. félidőre szétnyílnak a közök "
+                f"({_g439_fh:.1f} m → {_g439_sh:.1f} m), ti pedig sokat "
+                f"törtök be ({own.break_entries} betörés) — a betörős "
+                "figurákat a MÁSODIK félidőre tartogassátok: az első "
+                "félidőben járassátok a labdát és fárasszátok a falat, "
+                "a szünet után jöhet a lendületből érkező ember.")
 
     # 438) Az ő kiszámítható hetesdobójuk × a ti fogó kapusotok: a
     # hetes az egyetlen helyzet, ahol a kapus előre dönthet.
@@ -20840,6 +20883,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         dgap_frames=sum(r.dgap_frames for r in reports),
         dgap_sum_m=round(sum(r.dgap_sum_m for r in reports), 1),
         dgap_zones=_merge_count_dicts(r.dgap_zones for r in reports),
+        gfd_fh_sum_m=round(sum(r.gfd_fh_sum_m for r in reports), 1),
+        gfd_fh_frames=sum(r.gfd_fh_frames for r in reports),
+        gfd_sh_sum_m=round(sum(r.gfd_sh_sum_m for r in reports), 1),
+        gfd_sh_frames=sum(r.gfd_sh_frames for r in reports),
         sph_subs=sum(r.sph_subs for r in reports),
         sph_opp_ball=sum(r.sph_opp_ball for r in reports),
         fbal_shots=sum(r.fbal_shots for r in reports),

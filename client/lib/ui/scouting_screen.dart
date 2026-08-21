@@ -3242,6 +3242,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "gólpasszolónál";
   }
 
+  // Fal-rés fáradás: szétnyílnak-e a közök a 2. félidőre (félidőnként
+  // 60+ kocka, 0,8 m növekedés — a backenddel azonos küszöbök:
+  // GFD_MIN_FRAMES, GFD_RISE_M).
+  String? _gapFade(Map<String, dynamic> r) {
+    final fhN = ((r["gfd_fh_frames"] ?? 0) as num).toInt();
+    final shN = ((r["gfd_sh_frames"] ?? 0) as num).toInt();
+    if (fhN < 60 || shN < 60) return null;
+    final fh = ((r["gfd_fh_sum_m"] ?? 0) as num).toDouble() / fhN;
+    final sh = ((r["gfd_sh_sum_m"] ?? 0) as num).toDouble() / shN;
+    if (sh - fh < 0.8) return null;
+    return "a 2. félidőre szétnyílnak a közök a falukban "
+        "(${fh.toStringAsFixed(1)} m → ${sh.toStringAsFixed(1)} m a "
+        "legnagyobb rés átlaga) · a betörős figurákat a második "
+        "félidőre tartogassátok";
+  }
+
   // Vasemberek: ki játssza végig a meccseket csere nélkül (10+ perc
   // felvétel, 85%+ jelenlét, legfeljebb 3 név — a backenddel azonos
   // küszöbök: IRONMEN_MIN_MATCH_MIN, IRONMEN_SHARE_PCT,
@@ -11381,6 +11397,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_defensiveFormation(r) != null)
         ["Védekezési formáció", _defensiveFormation(r)!],
       if (_defensiveGaps(r) != null) ["Fal-rés térkép", _defensiveGaps(r)!],
+      if (_gapFade(r) != null) ["Fal-rés fáradás", _gapFade(r)!],
       if (_leftHandedRole(r) != null)
         ["Balkezes poszt", _leftHandedRole(r)!],
       if (_ironMen(r) != null) ["Vasemberek", _ironMen(r)!],
