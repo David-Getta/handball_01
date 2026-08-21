@@ -18,6 +18,7 @@ library;
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
+import "../services/backend_launcher.dart";
 import "../services/session_store.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
@@ -67,6 +68,10 @@ class _AccountGateState extends State<AccountGate> {
   String? _error;
   bool _offlineAccepted = false;
 
+  /// A motor-napló utolsó sorai a hiba-képernyőn — a kiváltó ok így
+  /// egyetlen képernyőképen elfér.
+  String? _engineLog;
+
   @override
   void initState() {
     super.initState();
@@ -101,8 +106,12 @@ class _AccountGateState extends State<AccountGate> {
       // folyamata halt el — a revive megkeresi, és ha kell, ÚJRA IS
       // INDÍTJA a motort, mielőtt hibát mondanánk.
       if (!await ApiClient.reviveEngine()) {
+        final tail = await BackendLauncher.logTail();
         if (!mounted) return;
-        setState(() => _step = _GateStep.engineDown);
+        setState(() {
+          _engineLog = tail;
+          _step = _GateStep.engineDown;
+        });
         return;
       }
     }
@@ -199,6 +208,32 @@ class _AccountGateState extends State<AccountGate> {
                   "A futó kiadás: v$appVersion",
                   style: AppText.label,
                 ),
+                if (_engineLog != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  const Text("A MOTOR NAPLÓJA (UTOLSÓ SOROK)",
+                      style: AppText.sectionLabel),
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        _engineLog!,
+                        style: const TextStyle(
+                            fontSize: 11,
+                            height: 1.4,
+                            fontFamily: "monospace",
+                            color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.xl),
                 Row(
                   children: [

@@ -5,7 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.32 óta)
 
-*(még semmi)*
+- **A motor naplója a hiba-képernyőn** (kliens): ha a motor az
+  újraélesztés után sem válaszol, a hiba-képernyő a motor-napló utolsó
+  sorait is megmutatja (kijelölhető szövegként) — a kiváltó ok így
+  egyetlen hibajelentő képernyőképen elfér, a felhasználónak nem kell
+  fájlok közt keresgélnie. Őr-teszt védi.
 
 ## v0.1.32 — kiadva (2026-08-21)
 

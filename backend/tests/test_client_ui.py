@@ -589,3 +589,21 @@ def test_hibajelentes_lathato_verzioval():
     gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
     assert "appVersion" in scr, "a fiók-képernyőn nincs verziószám"
     assert "appVersion" in gate, "a motor-hiba képernyőn nincs verziószám"
+
+
+def test_motor_hiba_kepernyo_mutatja_a_naplot():
+    """ŐR: a motor-hiba képernyő a motor-napló utolsó sorait is
+    megmutatja — a kiváltó ok így egyetlen hibajelentő képernyőképen
+    elfér, a felhasználónak nem kell fájlok közt keresgélnie."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    launcher = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    assert "logTail" in launcher, "nincs napló-farok olvasó a motor-indítóban"
+    assert "logTail" in gate, "a hiba-képernyő nem mutatja a naplót"
+    assert "SelectableText" in gate, (
+        "a napló nem kijelölhető szöveg — másolni sem lehetne")

@@ -88,6 +88,20 @@ class BackendLauncher {
 
   IOSink? _log;
 
+  /// A motor-napló utolsó sorai — a hiba-képernyő mutatja meg, hogy a
+  /// kiváltó ok egy képernyőképen elférjen (a felhasználónak ne kelljen
+  /// fájlok közt keresgélnie). Hibánál null (pl. még nincs napló).
+  static Future<String?> logTail({int lines = 40}) async {
+    try {
+      final all = await _logFile().readAsLines();
+      if (all.isEmpty) return null;
+      final from = all.length > lines ? all.length - lines : 0;
+      return all.sublist(from).join("\n");
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Naplósor a fájlba ÉS a kezdőképernyőre (ha van hallgató). A naplózás
   /// hibája sosem akadályozhatja az indítást.
   void _logLine(String s, void Function(String)? onLog) {
