@@ -9,7 +9,7 @@ rétegek ugyanarról a meccsről ritkítva másképp — jellemzően
 óvatosabban — ítélhetnek. Ez a lista a döntés alapja, hol
 érdemes a kockaszám-küszöböt másodperc-alapúra váltani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **488 réteg** összevetve, ebből **25 eltérő ítéletű**.
+Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **491 réteg** összevetve, ebből **26 eltérő ítéletű**.
 
 ## Fontos: mit jelent az eltérés
 
@@ -74,7 +74,7 @@ háromszor annyi valós időt követelnek.
 
 ### `key_post`
 
-- `home.verdict`: sűrűn `a kulcs-posztjuk a(z) irányító: 9 réteg ítélete fut ki rá (a 16 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja` → ritkítva `a kulcs-posztjuk a(z) irányító: 10 réteg ítélete fut ki rá (a 17 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja`
+- `home.verdict`: sűrűn `a kulcs-posztjuk a(z) irányító: 10 réteg ítélete fut ki rá (a 17 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja` → ritkítva `a kulcs-posztjuk a(z) irányító: 11 réteg ítélete fut ki rá (a 18 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja`
 
 ### `last_pass_roles`
 
@@ -91,6 +91,10 @@ háromszor annyi valós időt követelnek.
 ### `pivot_runners`
 
 - `home.top`: sűrűn `6` → ritkítva `None`
+
+### `pre_assist_roles`
+
+- `home.verdict`: sűrűn `a másod-előkészítésük a(z) irányító poszton fut (100%, 23 másod-előkészítésből) — a passzsáv-zárást a poszt sávjában kell kezdeni, akárki játssza éppen` → ritkítva `a másod-előkészítésük a(z) irányító poszton fut (100%, 24 másod-előkészítésből) — a passzsáv-zárást a poszt sávjában kell kezdeni, akárki játssza éppen`
 
 ### `role_assist_sources`
 
