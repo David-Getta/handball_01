@@ -2036,6 +2036,69 @@ def super_sub(match: Match, config=None) -> dict:
     return out
 
 
+# Szuper-csere poszt: ennyi poszthoz kötött pad-gól kell az ítélethez,
+# és ekkora részarány fölött mondjuk ki, hogy a paduk egy posztról
+# termel. (SSPR_ előtag: az SSR_ a szünet utáni rajté, az SSP_ az
+# újrakezdő embereké.)
+SSPR_MIN_GOALS = 3
+SSPR_SHARE_PCT = 60.0
+
+
+def super_sub_roles(match: Match, config=None) -> dict:
+    """Szuper-csere poszt: MELYIK POSZTRÓL termel a paduk.
+
+    A szuper-csere rétege (super_sub) az embert nevezi meg — ez a
+    posztot: a padról beállók góljait a lövő posztjához írja. Így a
+    minta akkor is látszik, ha a nevek meccsről meccsre cserélődnek —
+    a "mindig a beküldött beálló szerez" típusú pad-fegyver posztról
+    ismerszik meg, nem emberről.
+
+    Edzőileg: ha a pad-góljaik rendre ugyanarról a posztról esnek, a
+    cseréjük olvasható — az arra a posztra érkező friss embert kell
+    azonnal felvenni, mielőtt az első helyzetéig jut. Saját csapatra:
+    az egy posztra épülő pad kiszámítható — második pad-megoldás kell.
+
+    Visszatérés csapatonként: {"goals" (poszthoz kötött pad-gól),
+    "roles": {poszt: gól}, "main_role", "share_pct", "verdict"} — az
+    ítélet None, ha nincs meg az SSPR_MIN_GOALS, vagy egyik poszt sem
+    éri el az SSPR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    ssu = super_sub(match, config)
+
+    out: dict = {side: {"goals": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in ssu[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["goals"])
+            rec["goals"] += row["goals"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["goals"] >= SSPR_MIN_GOALS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["goals"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SSPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a paduk a(z) {poszt} posztról termel "
+                    f"({share:.0f}%, {rec['goals']} pad-gólból) — az "
+                    "erre a posztra érkező friss embert azonnal fel "
+                    "kell venni, mielőtt az első helyzetéig jut")
+    return out
+
+
 # Középkezdés-átvevő: ekkora ablakban és a felezőtől ekkora sávban
 # keressük a kapott gól utáni első birtokost, ennyi mért újraindítás
 # kell az ítélethez, és e feletti arány jelenti a fix átvevőt.

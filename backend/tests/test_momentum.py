@@ -1106,6 +1106,72 @@ def test_bench_scoring_needs_enough_goals():
     assert rec["verdict"] is None
 
 
+def _ssr_match(scorers):
+    """Poszt-olvasható pad: a kezdő mag (1-es) az első percekben, majd
+    t=7600-tól (a kezdő-ablakon túl) a padról beálló 7-es (vonal, beálló)
+    és 9-es (szél) játszik; a `scorers` a pad-gólok lövői sorban."""
+    spos = {1: (30.0, 14.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    def cast():
+        return [pl(tid, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    for t in range(150):     # nyitány: csak a kezdő 1-es (és a vendég)
+        frames.append(Frame(t=t, players=[
+            _clo_pl(1, Team.HOME, 10.0, 10.0),
+            _clo_pl(21, Team.AWAY, 30.0, 16.0)],
+            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    t = 7600                 # a kezdő-ablakon (300 s) túl: a pad játszik
+    for _ in range(160):     # poszt-becsléshez elég mért kocka
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in scorers:
+        sx, sy = spos[tid]
+        for _ in range(3):   # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(9):   # gól a +x kapura
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(sx + 1.6 * (i + 1),
+                                                40.0),
+                                          y=sy, confidence=1.0)))
+            t += 1
+        for _ in range(30):  # vissza középre
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_super_sub_roles_names_the_bench_post():
+    """Ha a pad-gólok zöme egy posztról esik, a paduk posztról
+    olvasható — az oda érkező frisset azonnal fel kell venni."""
+    from handball.pipeline.momentum import super_sub_roles
+
+    rec = super_sub_roles(_ssr_match([7, 7, 7, 9]))["home"]
+    assert rec["goals"] >= 3, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "posztról termel" in rec["verdict"], rec
+
+
+def test_super_sub_roles_silent_with_few_goals():
+    """Kevés poszthoz kötött pad-gólnál nincs ítélet."""
+    from handball.pipeline.momentum import super_sub_roles
+
+    rec = super_sub_roles(_ssr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
 def test_super_sub_names_the_bench_scorer():
     """A pad-gólok zöme a 7-esé → ő a szuper-csere, névre szólóan."""
     from handball.pipeline.momentum import super_sub

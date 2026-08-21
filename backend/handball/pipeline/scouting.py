@@ -865,6 +865,10 @@ class ScoutingReport:
     # Hajrá-poszt: a hajrá-gólok darabszáma posztonként. Darabszám,
     # meccsek közt pontosan összegződik.
     csr_goals_by_role: dict = field(default_factory=dict)
+    # Szuper-csere poszt: a padról szerzett gólok POSZTONKÉNT.
+    # Darabszámok, meccsek közt pontosan összegződnek. (sspr_ előtag:
+    # az ssr_ a szünet utáni rajté — second_start_roles.)
+    sspr_goals_by_role: dict = field(default_factory=dict)
     # Felzárkózás-poszt: a hátrányban szerzett gól-részvételek
     # darabszáma posztonként. Darabszám, pontosan összegződik.
     cbr_trailing_by_role: dict = field(default_factory=dict)
@@ -4988,6 +4992,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_ssu_n}/{_ssu_all} pad-gól) — a beállása jelzés: "
                 "onnantól rá külön figyelő, és vele szemben mindig "
                 "friss láb legyen a falban.")
+
+    # Szuper-csere poszt: posztról olvasható paduk.
+    _ssp_n = sum(rep.sspr_goals_by_role.values())
+    if _ssp_n >= 3:
+        _ssp_p, _ssp_c = max(rep.sspr_goals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ssp_pct = 100.0 * _ssp_c / _ssp_n
+        if _ssp_pct >= 60.0:
+            keys.append(
+                f"A paduk a(z) {_ssp_p} posztról termel "
+                f"({_ssp_pct:.0f}%, {_ssp_n} pad-gólból) — a cseréjük "
+                "olvasható: az erre a posztra érkező friss embert "
+                "azonnal vegyétek fel, mielőtt az első helyzetéig jut.")
 
     # Időkérés-hozam: mit ér az ő zöld kartonjuk.
     _toy_judged = rep.toy_broke + rep.toy_failed
@@ -10504,6 +10521,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .momentum import clutch_scorer_roles as _csr
         csrrec = _csr(match, config)[team.value]
         rep.csr_goals_by_role = dict(csrrec["roles"])
+        from .momentum import super_sub_roles as _ssp
+        ssprec = _ssp(match, config)[team.value]
+        rep.sspr_goals_by_role = dict(ssprec["roles"])
         from .momentum import comeback_carrier_roles as _cbr
         cbrrec = _cbr(match, config)[team.value]
         rep.cbr_trailing_by_role = dict(cbrrec["roles"])
@@ -13871,6 +13891,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 441) Az ő posztról olvasható paduk × a ti aktív falatok: a posztra
+    # érkező friss embert az érkezése pillanatában kell felvenni.
+    if opp.sspr_goals_by_role and own.blocks >= 3:
+        _s441_n = sum(opp.sspr_goals_by_role.values())
+        _s441_p, _s441_c = max(opp.sspr_goals_by_role.items(),
+                               key=lambda kv: kv[1])
+        if _s441_n >= 3 and 100.0 * _s441_c / _s441_n >= 60.0:
+            plan.append(
+                f"A paduk a(z) {_s441_p} posztról termel "
+                f"({_s441_c}/{_s441_n} pad-gól), a ti falatok pedig "
+                f"aktívan zár ({own.blocks} blokk) — tegyétek "
+                "szabállyá: amikor erre a "
+                "posztra friss ember érkezik, a sáv védője azonnal "
+                "vegye fel, és az első két támadásban kettőzzetek rá "
+                "— a pad-fegyverük az első helyzete előtt hal el.")
 
     # 440) Az ő szuper-cseréjük × a ti mély padotok: a padról termelő
     # emberük beállása jelzés — friss védő várja, ne fáradt.
@@ -21477,6 +21513,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prea_chained=sum(r.prea_chained for r in reports),
         ssu_goals_by_player=_merge_count_dicts(
             r.ssu_goals_by_player for r in reports),
+        sspr_goals_by_role=_merge_count_dicts(
+            r.sspr_goals_by_role for r in reports),
         stc_dir_by_taker=_merge_count_dicts(
             r.stc_dir_by_taker for r in reports),
         rsy_restarts=sum(r.rsy_restarts for r in reports),

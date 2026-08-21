@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 461) Szuper-csere poszt: ha a padunk egy posztról termel, a
+    # cserénk olvasható — második pad-megoldást kell építeni.
+    try:
+        from .momentum import SSPR_SHARE_PCT, super_sub_roles
+        ssr461 = super_sub_roles(match, config)
+        for side in ("home", "away"):
+            rec461 = ssr461[side]
+            if rec461["verdict"] is None:
+                continue
+            add(side, "támadás", "Második pad-megoldás",
+                f"a padunk a(z) {rec461['main_role']} posztról termel "
+                f"({rec461['share_pct']:.0f}%, {rec461['goals']} "
+                f"pad-gól; {SSPR_SHARE_PCT:.0f}% felett jelezzük) — a "
+                "felkészült ellenfél a posztra érkező frisset azonnal "
+                "felveszi, és a pad-fegyverünk kilövve",
+                "építs második pad-megoldást MÁSIK posztra: a "
+                "cserepárokat úgy állítsd össze, hogy két különböző "
+                "poszton is legyen gólképes beálló ember, és a "
+                "kispadról beugró éles szituációkban mindkettő kapjon "
+                "befejezést — ha az elsőt felveszik, a másodikra "
+                "forduljon a figura")
+    except Exception:
+        pass
+
     # 460) Szuper-csere: ha a padról egy emberünk termel, a beállása
     # tudatos fegyver legyen — időzítve, ne csak pihentetésként.
     try:

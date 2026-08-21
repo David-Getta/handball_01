@@ -4986,6 +4986,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import super_sub_roles
+            res["super_sub_roles"] = super_sub_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.momentum import super_sub
             res["super_sub"] = super_sub(match)
         except Exception:
@@ -6024,6 +6029,8 @@ def create_app():
                 _layer("pre_assists", lambda: pre_assists(match))
                 from ..pipeline.momentum import super_sub
                 _layer("super_sub", lambda: super_sub(match))
+                from ..pipeline.momentum import super_sub_roles
+                _layer("super_sub_roles", lambda: super_sub_roles(match))
                 from ..pipeline.stoppages import timeout_yield
                 _layer("timeout_yield", lambda: timeout_yield(match))
                 from ..pipeline.goalkeeper import gk_change_yield

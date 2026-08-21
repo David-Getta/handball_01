@@ -3264,6 +3264,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "jelzés — onnantól rá külön figyelő, vele szemben friss láb";
   }
 
+  // Szuper-csere poszt: melyik posztról termel a paduk (3+ pad-gól,
+  // 60% egy poszté — a backenddel azonos küszöbök: SSPR_MIN_GOALS,
+  // SSPR_SHARE_PCT).
+  String? _superSubRole(Map<String, dynamic> r) {
+    final byR = (r["sspr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byR == null || byR.isEmpty) return null;
+    var all = 0;
+    String? top;
+    var topN = 0;
+    byR.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || all < 3 || topN < 0.6 * all) return null;
+    return "a paduk a(z) $top posztról termel ($topN/$all pad-gól) · a "
+        "posztra érkező friss embert azonnal vegyétek fel, mielőtt az "
+        "első helyzetéig jut";
+  }
+
   // Fal-rés fáradás: szétnyílnak-e a közök a 2. félidőre (félidőnként
   // 60+ kocka, 0,8 m növekedés — a backenddel azonos küszöbök:
   // GFD_MIN_FRAMES, GFD_RISE_M).
@@ -11425,6 +11448,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_ironMen(r) != null) ["Vasemberek", _ironMen(r)!],
       if (_preAssist(r) != null) ["Rejtett szervező", _preAssist(r)!],
       if (_superSub(r) != null) ["Szuper-csere", _superSub(r)!],
+      if (_superSubRole(r) != null)
+        ["Szuper-csere poszt", _superSubRole(r)!],
       if (_sevenTakerCorner(r) != null)
         ["Hetes-sarok emberre", _sevenTakerCorner(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],

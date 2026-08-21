@@ -3154,6 +3154,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "védekezést.")
     except Exception:
         pass
+    # Szuper-csere poszt: melyik posztról termel a paduk.
+    try:
+        from .momentum import super_sub_roles
+        ssr = super_sub_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ssr = ssr[side]
+            if rec_ssr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} padja a(z) {rec_ssr['main_role']} "
+                     f"posztról termel ({rec_ssr['share_pct']:.0f}%, "
+                     f"{rec_ssr['goals']} pad-gól) — az erre a posztra "
+                     "érkező friss embert azonnal fel kell venni.")
+    except Exception:
+        pass
     # Időkérés-hozam: működik-e a mentő időkérésük.
     try:
         from .stoppages import timeout_yield

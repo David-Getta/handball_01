@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.32 óta)
 
+- **Szuper-csere poszt** (új réteg): MELYIK POSZTRÓL termel a paduk —
+  a névre szóló Szuper-csere poszt-szintű párja (a kódbázis bevett
+  emberek/poszt réteg-pár mintája szerint). A padról beállók góljait a
+  lövő posztjához írja: a minta akkor is látszik, ha a nevek meccsről
+  meccsre cserélődnek. Edzői olvasat: a posztról olvasható pad ellen az
+  arra a posztra érkező friss embert az érkezése pillanatában kell
+  felvenni; a saját, egy posztra épülő pad kiszámítható — második
+  pad-megoldás kell. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (posztonkénti pad-gól számok, edzői kulcs,
+  441. meccsterv-szabály), 461. edzés-szabály, kliens-csempe,
+  Kulcs-poszt regisztráció + riport-lencse sor.
+
 - **Elveszett válaszú regisztráció → belépés** (kliens): ha az első
   fiók-létrehozó kérés célba ért, de a válasz elveszett (a motor épp
   elhalt), az újraélesztett ismétlés "már van fiók" hibát adna — pedig
