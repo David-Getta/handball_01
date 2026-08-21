@@ -1170,7 +1170,12 @@ def role_turnover_zones(match: Match,
         rec_role = roles[side].get(e.player_id)
         if rec_role is None:
             continue
-        frame = by_frame.get(e.t)
+        # A lövő helye az ELENGEDÉS kockájáról (release_t): az esemény
+        # kockáján — ritkított felvételen különösen — a lövő már
+        # elmozdult a lövése óta, és a távolság lefelé torzulna.
+        frame = by_frame.get((e.detail or {}).get("release_t"))
+        if frame is None:
+            frame = by_frame.get(e.t)
         if frame is None:
             continue
         who = next((p for p in frame.players

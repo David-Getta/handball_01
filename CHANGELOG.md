@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.33 óta)
 
+- **A poszt-távolság is az elengedés kockájáról** (motor): a
+  lövés-távolság poszt-bontása (role_shot_distance) a lövő helyét
+  eddig az esemény kockáján olvasta — ritkított felvételen a lövő ott
+  már elmozdult a lövése óta, és a távolság lefelé torzult. A mérés a
+  release_t kockára áll (tartalék a régi viselkedés).
+
 - **A kapu-sarok a tényleges beérkezési pontból** (motor): a
   gól-felismerés és az elhelyezés-rétegek közös metszéspont-logikát
   kaptak (goal_crossing_y). A lövő-kapuoldal réteg eddig a gólvonal
