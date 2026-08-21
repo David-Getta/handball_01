@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.30 óta)
 
+- **Vasemberek**: KI játssza végig a meccset csere nélkül — a
+  vasember-poszt ember-ikre. A poszt a tervhez kell (hova vigyük a
+  tempót), a név a padhoz: a mezszám szerint összevont
+  jelenlét-időkből kigyűjti, ki van a pályán a meccs 85%-a felett
+  (10+ perces felvételtől; háromnál több végigjátszó már csapat-stílus,
+  nem célpont — ott a rotáció-mélység beszél). Edzői olvasat: a
+  végigjátszó ember a hajrában a legfáradtabb a pályán — az utolsó tíz
+  percben ŐT kell futtatni (elzárások hozzá, betörés az ő sávjában), és
+  vele szemben mindig friss láb jöjjön; saját oldalon a hajrá-hibái nem
+  formahanyatlás, hanem terhelés — tervezett pihentetés vagy tudatos
+  tempóváltás kell. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (edzői kulcs + 436. meccsterv-szabály a mély
+  paddal párosítva), 456. edzés-szabály, kliens-csempe.
 - **Tükrözés-őr** (minőség-eszköz): új jelentés-szkript
   (`scripts.mirror_sides` → `docs/TUKROZES.md`), amely a pálya
   hossztengelyére tükrözött meccsen ellenőrzi, hogy minden

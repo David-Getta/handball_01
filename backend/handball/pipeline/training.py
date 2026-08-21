@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 456) Vasemberek: a csere nélkül végigjátszó emberünk hajrá-hibái
+    # nem formahanyatlás, hanem terhelés — tervezett pihentetés kell.
+    try:
+        from .stats import IRONMEN_SHARE_PCT, iron_men
+        imn456 = iron_men(match, config)
+        for side in ("home", "away"):
+            rec456 = imn456[side]
+            if not rec456["players"]:
+                continue
+            nevek456 = ", ".join(p["label"] for p in rec456["players"])
+            add(side, "erőnlét", "Vasember-pihentetés a hajrára",
+                f"csere nélkül végig a pályán: {nevek456} "
+                f"({rec456['players'][0]['share_pct']:.0f}% jelenlét; "
+                f"{IRONMEN_SHARE_PCT:.0f}% felett jelezzük) — az "
+                "ellenfél a hajrában pont őt fogja futtatni",
+                "tervezett terhelés-kezelés: a meccs 40–50. perce közé "
+                "beépített 3-5 perces pihenő (a cseréje EZT a sávot "
+                "tanulja meg edzésen, nem a teljes meccset), a hajrára "
+                "pedig tudatos tempóváltás — az ő poszta kapjon "
+                "labdajáratós, nem futós szerepet; edzésen a fáradt "
+                "állapotot szimuláld: kör-edzés UTÁN jöjjön a figura")
+    except Exception:
+        pass
+
     # 455) Poszt-kezesség: a balkezes posztunkra külön figurát kell
     # építeni — a bal kéz a jobb oldali posztokon fegyver.
     try:

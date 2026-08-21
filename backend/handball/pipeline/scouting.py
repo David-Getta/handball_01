@@ -280,6 +280,11 @@ class ScoutingReport:
     rotation_used_sum: int = 0
     rotation_regulars_sum: int = 0
     rotation_matches: int = 0
+    # Vasembereik: játékosonkénti játékperc-ÖSSZEG + a felvétel-percek
+    # összege — meccsek közt pontosan összegződik (jelenlét-arány =
+    # játékos-perc / felvétel-perc).
+    imn_minutes_by_player: dict = field(default_factory=dict)
+    imn_match_min: float = 0.0
     # Labdaszerzőik: [{"player_id", "steals"}] — ki szerzi a labdákat;
     # játékosonként meccsek közt pontosan összegezhető.
     ball_winners: list = field(default_factory=list)
@@ -5541,6 +5546,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "cserélik) — a hajrában oda kell vinni a tempót: őt "
                 "kell futtatni, és vele szemben friss ember jöjjön.")
 
+    # Vasemberek: KI játssza végig a meccseket — a hajrá név szerinti
+    # célpontja.
+    if rep.imn_match_min >= 10.0 and rep.imn_minutes_by_player:
+        from .stats import IRONMEN_MAX_TARGETS, IRONMEN_SHARE_PCT
+        _imn_men = sorted(
+            ((k, v) for k, v in rep.imn_minutes_by_player.items()
+             if 100.0 * v / rep.imn_match_min >= IRONMEN_SHARE_PCT),
+            key=lambda kv: -kv[1])
+        if _imn_men and len(_imn_men) <= IRONMEN_MAX_TARGETS:
+            _imn_nevek = ", ".join(k for k, _ in _imn_men)
+            _imn_pct = 100.0 * _imn_men[0][1] / rep.imn_match_min
+            keys.append(
+                f"Csere nélkül végig a pályán: {_imn_nevek} "
+                f"({_imn_pct:.0f}% jelenlét) — a hajrában ő a "
+                "legfáradtabb ember: az utolsó tíz percben ŐT "
+                "futtassátok (elzárások hozzá, betörés az ő sávjában), "
+                "és vele szemben mindig friss láb jöjjön.")
+
     # Bejátszó-poszt: kinek a kezén kell a beálló-vonalba lépni.
     _pfr_n = sum(rep.pfr_feeds_by_role.values())
     if _pfr_n >= 4:
@@ -9749,6 +9772,12 @@ def _scout_team_cached(match: Match, team: Team,
             rep.rotation_used_sum = rd["used"]
             rep.rotation_regulars_sum = rd["regulars"]
             rep.rotation_matches = 1
+        # Vasemberek: MINDEN bevetett játékos perce (nem csak a
+        # végigjátszóké) — a küszöb az összesített mintán dől el.
+        fps_imn = match.meta.fps if match.meta.fps > 0 else 25.0
+        rep.imn_match_min = round(len(match.frames) / fps_imn / 60.0, 1)
+        rep.imn_minutes_by_player = {
+            p["label"]: p["minutes"] for p in rd["players"]}
         from .defense import ball_winners
         rep.ball_winners = [
             {"player_id": (w["jersey"] if w["jersey"] is not None
@@ -13725,6 +13754,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 436) Az ő vasemberük × a ti mély padotok: a név szerinti
+    # hajrá-célpont — a poszt-szabály (286) párja emberre.
+    if (opp.imn_match_min >= 10.0 and opp.imn_minutes_by_player
+            and own.rotation_matches > 0):
+        _i436_men = sorted(
+            ((k, v) for k, v in opp.imn_minutes_by_player.items()
+             if 100.0 * v / opp.imn_match_min >= 85.0),
+            key=lambda kv: -kv[1])
+        _i436_rot = own.rotation_used_sum / max(1, own.rotation_matches)
+        if _i436_men and len(_i436_men) <= 3 and _i436_rot >= 9.0:
+            _i436_k, _i436_v = _i436_men[0]
+            plan.append(
+                f"A(z) {_i436_k} csere nélkül végigjátssza a meccseiket "
+                f"({100.0 * _i436_v / opp.imn_match_min:.0f}% jelenlét), "
+                f"ti pedig mély paddal forogtok (átlag {_i436_rot:.0f} "
+                "bevetett játékos) — a hajrá a tiétek: az utolsó tíz "
+                "percben ŐT futtassátok, az ő emberével szemben mindig "
+                "friss láb jöjjön, és az ő sávjában jöjjön a betörés.")
 
     # 435) Az ő balkezes POSZTJUK × a ti sáncotok: a poszt akkor is
     # marad, ha az ember cserélődik — a sánc-tervet erre kell építeni.
@@ -20665,6 +20713,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rotation_regulars_sum=sum(r.rotation_regulars_sum
                                   for r in reports),
         rotation_matches=sum(r.rotation_matches for r in reports),
+        imn_minutes_by_player=_merge_count_dicts(
+            r.imn_minutes_by_player for r in reports),
+        imn_match_min=round(sum(r.imn_match_min for r in reports), 1),
         ball_winners=_merge_ball_winners(reports),
         turnover_players=_merge_turnover_players(reports),
         clutch_scorers=_merge_clutch_scorers(reports),

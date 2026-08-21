@@ -2482,6 +2482,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hajrában oda kell vinni a tempót.")
     except Exception:
         pass
+    # Vasemberek: ki játssza végig a meccset csere nélkül (név szerint).
+    try:
+        from .stats import iron_men
+        imn = iron_men(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_imn = imn[side]
+            if not rec_imn["players"]:
+                continue
+            nevek = ", ".join(p["label"] for p in rec_imn["players"])
+            body += (f" A(z) {name} csapatából csere nélkül végig a "
+                     f"pályán: {nevek} "
+                     f"({rec_imn['players'][0]['share_pct']:.0f}% "
+                     "jelenlét) — a hajrában ő a legfáradtabb ember.")
+    except Exception:
+        pass
     # Bejátszó-poszt: melyik posztjuk játssza be a beállót.
     try:
         from .attack_types import pivot_feeder_roles

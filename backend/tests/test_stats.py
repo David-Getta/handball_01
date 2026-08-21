@@ -48,6 +48,40 @@ def test_iron_man_roles_silent_when_everyone_plays_through():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
 
 
+# ---- Vasemberek (KI játssza végig csere nélkül) ----------------------------
+
+
+def test_iron_men_names_the_player_who_never_rests():
+    """A végig pályán lévő ember név szerint kerül a listába; aki a
+    felvétel 55%-án játszik, nem vasember."""
+    from handball.pipeline.stats import IRONMEN_SHARE_PCT, iron_men
+
+    rec = iron_men(_irm_match(deep_bench=True))["away"]
+    labels = [p["label"] for p in rec["players"]]
+    assert "id 21" in labels, rec
+    assert all("23" not in l for l in labels), rec
+    assert rec["players"][0]["share_pct"] >= IRONMEN_SHARE_PCT, rec
+    assert rec["verdict"] and "friss ember" in rec["verdict"], rec
+
+
+def test_iron_men_silent_on_a_short_recording():
+    """Rövid felvételen nincs ítélet (sose hallgatólagos vasember)."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition,
+                                          PositionSource, Team)
+    from handball.pipeline.stats import iron_men
+
+    frames = [Frame(t=t, players=[PlayerPosition(
+        track_id=5, team=Team.HOME, x=20.0, y=10.0,
+        source=PositionSource.MEASURED, confidence=1.0)],
+        ball=Ball(x=20.0, y=10.0, confidence=1.0))
+        for t in range(300)]
+    m = Match(MatchMeta(match_id="imn", home_team="H", away_team="A",
+                        fps=1.0), frames)   # 5 perc — a küszöb alatt
+    rec = iron_men(m)["home"]
+    assert rec["players"] == [] and rec["verdict"] is None, rec
+
+
 # ---- Sprint-esés (megfogy-e a láb a második félidőre) ----------------------
 
 

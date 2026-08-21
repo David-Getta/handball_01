@@ -1097,6 +1097,63 @@ def iron_man_roles(match, config=None) -> dict:
     return out
 
 
+# Vasemberek (ember-réteg): legalább ennyi perces felvételtől ítélünk;
+# e feletti jelenlét-arány a végigjátszó ember; ennél több végigjátszó
+# már nem célpont, hanem csapat-stílus (mindenki bent marad).
+IRONMEN_MIN_MATCH_MIN = 10.0
+IRONMEN_SHARE_PCT = 85.0
+IRONMEN_MAX_TARGETS = 3
+
+
+def iron_men(match, config=None) -> dict:
+    """Vasemberek: KI játssza végig a meccset csere nélkül.
+
+    A vasember-poszt (iron_man_roles) POSZTRA mondja meg, hol nincs
+    váltás — ez NÉVRE: a mezszám szerint összevont jelenlét-időkből
+    (rotation_depth) kigyűjti, ki van a pályán a meccs döntő részében
+    (IRONMEN_SHARE_PCT felett). A kettő együtt kerek: a poszt a
+    tervhez kell (hova vigyük a tempót), a név a padhoz (kivel
+    szemben jöjjön a friss ember).
+
+    Edzőileg: a végigjátszó ember a hajrában a legfáradtabb a pályán —
+    az utolsó tíz percben ŐT kell futtatni (elzárások hozzá, betörés az
+    ő sávjában), és vele szemben mindig friss láb jöjjön. Saját
+    oldalon ugyanez figyelmeztetés: ha valakink csere nélkül megy
+    végig, a hajrá-hibái nem formahanyatlás, hanem terhelés — pihentetni
+    kell, vagy a hajrára tudatosan tempót váltani.
+
+    Ha háromnál több ember játszik végig, az nem célpont, hanem
+    csapat-stílus (szűk keret) — ilyenkor nincs név szerinti ítélet, a
+    rotáció-mélység rétege mondja el a képet.
+
+    Visszatérés csapatonként: {"minutes", "players":
+    [{"label", "minutes", "share_pct"}] (a végigjátszók, jelenlét
+    szerint csökkenően), "verdict"} — a players üres és a verdict None,
+    ha a felvétel rövidebb az IRONMEN_MIN_MATCH_MIN-nél, nincs
+    végigjátszó, vagy IRONMEN_MAX_TARGETS-nél többen vannak.
+    """
+    rot = rotation_depth(match, config)
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    minutes = len(match.frames) / fps / 60.0
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = {"minutes": round(minutes, 1), "players": [], "verdict": None}
+        men = [p for p in rot[side]["players"]
+               if p["share_pct"] >= IRONMEN_SHARE_PCT]
+        if (minutes >= IRONMEN_MIN_MATCH_MIN and men
+                and len(men) <= IRONMEN_MAX_TARGETS):
+            rec["players"] = men
+            nevek = ", ".join(p["label"] for p in men)
+            rec["verdict"] = (
+                f"csere nélkül végigjátssza a meccset: {nevek} "
+                f"({men[0]['share_pct']:.0f}% jelenlét) — a hajrában őt "
+                "kell futtatni, és vele szemben mindig friss ember "
+                "jöjjön")
+        out[side] = rec
+    return out
+
+
 # Sprint-poszt: ennyi poszthoz kötött sprint kell az ítélethez, és
 # ekkora részarány fölött mondjuk ki, hogy a kontrájukat egy poszt
 # futja.

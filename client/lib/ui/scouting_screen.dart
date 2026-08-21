@@ -3175,6 +3175,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Vasemberek: ki játssza végig a meccseket csere nélkül (10+ perc
+  // felvétel, 85%+ jelenlét, legfeljebb 3 név — a backenddel azonos
+  // küszöbök: IRONMEN_MIN_MATCH_MIN, IRONMEN_SHARE_PCT,
+  // IRONMEN_MAX_TARGETS).
+  String? _ironMen(Map<String, dynamic> r) {
+    final matchMin = ((r["imn_match_min"] ?? 0) as num).toDouble();
+    final mins = (r["imn_minutes_by_player"] as Map?)?.cast<String, dynamic>();
+    if (matchMin < 10.0 || mins == null || mins.isEmpty) return null;
+    final men = <MapEntry<String, double>>[];
+    mins.forEach((k, v) {
+      final m = (v as num).toDouble();
+      if (100.0 * m / matchMin >= 85.0) men.add(MapEntry(k, m));
+    });
+    if (men.isEmpty || men.length > 3) return null;
+    men.sort((a, b) => b.value.compareTo(a.value));
+    final pct = 100.0 * men.first.value / matchMin;
+    final nevek = men.map((e) => e.key).join(", ");
+    return "csere nélkül végig a pályán: $nevek "
+        "(${pct.toStringAsFixed(0)}% jelenlét) · a hajrában őt "
+        "futtassátok, vele szemben mindig friss láb";
+  }
+
   // Poszt-kezesség: melyik posztjukon lő balkezes (4+ értékelhető lövés,
   // 70%+ bal-jel — a backenddel azonos küszöbök: RSH_MIN_SHOTS,
   // RSH_SHARE_PCT).
@@ -11294,6 +11316,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_defensiveGaps(r) != null) ["Fal-rés térkép", _defensiveGaps(r)!],
       if (_leftHandedRole(r) != null)
         ["Balkezes poszt", _leftHandedRole(r)!],
+      if (_ironMen(r) != null) ["Vasemberek", _ironMen(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
       if (_finishingBalance(r) != null)
         ["Befejezés-mérleg", _finishingBalance(r)!],
