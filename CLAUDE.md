@@ -109,6 +109,18 @@ a két csapat szemben áll. Ha új réteged oldal-címkét ad, a védekező
 oldal nézőpontjából nevezd (minta: defensive_gaps, conceded_side_bias),
 és futtasd le ezt kiadás előtt. A hibás-lista ÜRES, maradjon is az.
 
+A stride-érzékenység jelentése (`docs/STRIDE_ERZEKENYSEG.md`) szintén
+jelentés-szintű (~1,5 perc):
+
+```bash
+cd backend && python3 -m scripts.stride_sensitivity
+```
+
+Amit néz: ugyanaz a meccs a termék alap-ritkításával (stride=3,
+effektív fps = fps/3) másképp ítél-e. Az eltérés nem feltétlenül hiba
+(kevesebb minta → óvatosabb ítélet), de kocka-küszöbű új rétegnél
+tudd: a küszöböd valós időben HÁROMSZOROSÁT követeli a termékben.
+
 ## Commit-stílus
 
 - Cím: `<Réteg magyar neve>: egy réteg, sok felület`.

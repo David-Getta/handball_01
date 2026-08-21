@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.30 óta)
 
+- **Stride-érzékenység őr** (minőség-eszköz): új jelentés-szkript
+  (`scripts.stride_sensitivity` → `docs/STRIDE_ERZEKENYSEG.md`). A
+  feldolgozó alapból minden harmadik képkockát dolgozza fel (stride=3,
+  effektív fps = fps/3) — a kockaszám-küszöbbel ítélő rétegek ugyanarról
+  a meccsről ritkítva másképp (jellemzően óvatosabban) ítélhetnek. Az őr
+  ugyanazt a szimulált meccset sűrűn és ritkítva futtatja, és csak az
+  ÍTÉLET-mezőket veti össze (verdict, top, main_role, …) — a nyers
+  számok ritkítva jogosan térnek el. Az első teljes futás: 486 rétegből
+  53 ítél másképp — ez a lista a küszöb-kalibrálás leltára, a CLAUDE.md
+  recepthez hozzáadva. Gyors tesztek rögzítik a mechanikát (a ritkítás
+  a termék modelljét követi: t újraszámozva, fps harmadolva — az
+  időzítés pontos marad).
 - **Fal-rés fáradás**: SZÉTNYÍLNAK-E a közök a második félidőre. A
   fal-fáradás (wall_fade) a következményt méri — jobb helyzeteket
   engednek a 2. félidőben; ez az okot: a szomszédos védők közti
