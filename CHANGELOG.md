@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.32 óta)
 
+- **Az együtemű lövés lövője ritkítva is a lövő** (motor): a
+  röppálya-töréspont szabálya. Ritkított felvételen az elkapásból
+  azonnal (együtemben) leadott lövésnél a labda kézben-tartott kockája
+  eltűnhet a minták közül — a lövő-kereső ilyenkor a PASSZOLÓT nevezte
+  lövőnek (a szimulált meccsen ritkítva 4/24 gól csúszott át a
+  passzolóra). Ritka felvételen (15 fps alatt) a felismerés mostantól a
+  röppálya töréspontját keresi meg (ahol a passz-szár lövés-szárba
+  vált), és a mellette álló saját mezőnyjátékost nevezi lövőnek — sűrű
+  felvételen nem szólal meg. Az elengedés-hely javítással együtt a
+  szimulált meccsen ritkítva is 24/24 a lövő-egyezés, az átlag xG
+  0,141 vs 0,140 (a torzítás eltűnt), a stride-őr eltéréslistája 38-ról
+  27 rétegre rövidült. Egység-teszt: együtemű szélső gól ritkítva.
+
 - **A lövés helye az elengedés kockája** (motor): a stride-őr második
   lelete. A lövés-esemény a labda KAPU-MEGKÖZELÍTÉSEKOR jelölődik —
   ekkor a labda már úton van, és ritkított felvételen kockánként

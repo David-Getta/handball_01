@@ -41,6 +41,14 @@ SHOOTER_LOOKBACK_S = 1.2  # a lövés előtt ennyi időn belülről keressük a 
 # lövés viszont 15–30 m/s. E fölött tehát a labda úton van, és a
 # közelében álló beálló csak "útközben" van a röppályán.
 SHOOTER_HELD_MAX_MS = 9.0
+# Ritkított felvételen (ez alatti fps-nél) az EGYÜTEMŰ lövésnél a labda
+# lassú (kézben tartott) kockája el is tűnhet a minták közül — ilyenkor
+# a röppálya TÖRÉSPONTJA (passz-szár → lövés-szár irányváltás) mellett
+# álló játékos a lövő. A törésponthoz ennyire közel kell állnia, és az
+# irányváltást ekkora koszinusz-eltéréstől fogadjuk el.
+SHOOTER_KINK_MAX_FPS = 15.0
+SHOOTER_KINK_NEAR_M = 2.5
+SHOOTER_KINK_COS = 0.9
 ASSIST_WINDOW_S = 4.0     # a gól előtt ennyi időn belüli utolsó passz = gólpassz
 SAVE_RADIUS_M = 1.6       # a labda ennyire a kapushoz érve = védés
 _GK_NEAR_GOAL_M = 9.0     # a kapus csak a SAJÁT kapujánál "véd"
@@ -113,6 +121,15 @@ def _shooter_release_before(match: Match, idx: int, team: Team,
     a kapuhoz közelebbről mér, és az xG felfelé torzul."""
     frames = match.frames
     back = max(0, idx - round(SHOOTER_LOOKBACK_S * fps))
+    # Ritkított felvételen az együtemű (elkapás után azonnali) lövésnél
+    # a labda kézben-tartott kockája hiányozhat — a röppálya töréspontja
+    # (ahol a passz-szár lövés-szárba vált) pontosabb, mint az utolsó
+    # lassú birtokos (az a PASSZOLÓ lenne). Sűrű felvételen nem szólal
+    # meg: ott az elengedés kockája megvan, a régi út pontos.
+    if fps < SHOOTER_KINK_MAX_FPS:
+        kink = _shooter_at_flight_kink(match, idx, back, team, fps)
+        if kink is not None:
+            return kink
     for j in range(idx, back - 1, -1):
         if _ball_speed_ms(frames, j, fps) > SHOOTER_HELD_MAX_MS:
             continue  # a labda repül — aki mellette áll, nem birtokos
@@ -120,6 +137,68 @@ def _shooter_release_before(match: Match, idx: int, team: Team,
         if holder is not None and holder.team == team:
             return holder.track_id, frames[j].t
     return None, None
+
+
+def _shooter_at_flight_kink(match: Match, idx: int, back: int,
+                            team: Team, fps: float):
+    """A röppálya töréspontja melletti játékos (ritkított felvételre).
+
+    Az együtemű lövés röppályája két gyors szár: a passz-szár és a
+    lövés-szár — köztük a töréspont, ahol az elkapó azonnal lőtt. A
+    lövés-esemény kockája a passz-szárra is eshet (a szélső passz
+    x-ben már "kapu-közelítés"), ezért a gyors szakaszokat ELŐRE is
+    követjük, amíg a labda a kapu felé tart; a szárak végétől
+    visszafelé keressük az első irányváltást (koszinusz <
+    SHOOTER_KINK_COS). A töréspont kockáján a hozzá legközelebb álló
+    saját-csapatbeli mezőnyjátékos a lövő — ha ilyen nincs
+    SHOOTER_KINK_NEAR_M-en belül, nem találgatunk (None).
+
+    Visszatérés: (track_id, release_t) vagy None.
+    """
+    frames = match.frames
+    goal_x = 0.0 if frames[idx].ball.x < COURT_LENGTH_M / 2.0 \
+        else COURT_LENGTH_M
+    # A gyors, kapu felé tartó szakaszok vége az eseménytől előre.
+    end = idx
+    while end + 1 < len(frames):
+        a, b = frames[end].ball, frames[end + 1].ball
+        if a is None or b is None:
+            break
+        dx = b.x - a.x
+        toward = (dx < 0 and goal_x == 0.0) or (dx > 0 and goal_x > 0.0)
+        if not toward or math.hypot(dx, b.y - a.y) * fps <= SHOOTER_HELD_MAX_MS:
+            break
+        end += 1
+    shot_dir = None
+    for j2 in range(end, back, -1):
+        a, b = frames[j2 - 1].ball, frames[j2].ball
+        if a is None or b is None:
+            return None
+        dx, dy = b.x - a.x, b.y - a.y
+        n = math.hypot(dx, dy)
+        if n * fps <= SHOOTER_HELD_MAX_MS:
+            return None  # lassú (kézben tartott) kocka — a régi út dönt
+        if shot_dir is None:
+            shot_dir = (dx / n, dy / n)
+            continue
+        cos = (dx / n) * shot_dir[0] + (dy / n) * shot_dir[1]
+        if cos >= SHOOTER_KINK_COS:
+            continue  # még a lövés-szár
+        # Irányváltás: a töréspont a j2. kocka labda-helye (oda érkezett
+        # a passz, onnan indult a lövés).
+        kx, ky = frames[j2].ball.x, frames[j2].ball.y
+        best = None
+        best_d = SHOOTER_KINK_NEAR_M
+        for pl in frames[j2].players:
+            if pl.team != team or pl.role == "kapus":
+                continue
+            d = math.hypot(pl.x - kx, pl.y - ky)
+            if d <= best_d:
+                best, best_d = pl, d
+        if best is None:
+            return None
+        return best.track_id, frames[j2].t
+    return None
 
 
 def _ball_speed_ms(frames, j: int, fps: float) -> float:

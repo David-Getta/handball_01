@@ -956,3 +956,40 @@ def test_dense_sampling_keeps_the_old_stopping_shot_a_miss():
     evs = detect_shots(Match(_meta(), frames))
     assert [e.type for e in evs] == [EventType.SHOT], evs
     assert (evs[0].detail or {}).get("outcome") != "goal"
+
+
+def test_sparse_one_timer_shooter_is_the_kink_player():
+    """Ritkított felvételen az EGYÜTEMŰ (elkapásból azonnali) lövésnél a
+    labda kézben-tartott kockája eltűnhet a minták közül — a régi
+    szabály ilyenkor a PASSZOLÓT nevezné lövőnek. A röppálya
+    töréspontja (passz-szár → lövés-szár) melletti játékos a lövő."""
+    from handball.pipeline.event_detection import EventType, detect_shots
+
+    fps = 8.33
+    frames = []
+    t = 0
+    # A 6-os (passzoló) középen tartja a labdát, a 2-es szélső lent áll.
+    for _ in range(4):
+        frames.append(Frame(t=t, players=[
+            _pl(6, Team.HOME, 28.0, 10.0), _pl(2, Team.HOME, 36.0, 3.0)],
+            ball=Ball(x=28.2, y=10.0, confidence=1.0)))
+        t += 1
+    # Passz-szár: a labda a szélső felé repül (két gyors minta), majd
+    # lövés-szár: a szélsőtől a kapuba — kézben-tartott kocka NINCS.
+    path = [(31.0, 7.5), (34.0, 4.5), (36.0, 3.0),   # passz a 2-eshez
+            (38.0, 6.5), (40.0, 10.0)]               # együtemű lövés
+    for x, y in path:
+        frames.append(Frame(t=t, players=[
+            _pl(6, Team.HOME, 28.0, 10.0), _pl(2, Team.HOME, 36.0, 3.0)],
+            ball=Ball(x=x, y=y, confidence=1.0)))
+        t += 1
+    for _ in range(6):    # középkezdés
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="kink", home_team="H", away_team="A",
+                        fps=fps), frames)
+    evs = [e for e in detect_shots(m)
+           if e.type in (EventType.SHOT, EventType.GOAL)]
+    assert len(evs) == 1, evs
+    assert evs[0].player_id == 2, evs[0]  # a szélső, nem a passzoló
