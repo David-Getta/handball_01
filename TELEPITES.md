@@ -108,8 +108,14 @@ repóhoz. Ezután az automatikus frissítés privát repóval is ugyanúgy műk�
 
 ## Gyakori kérdések
 
-**Nem indul el / „A motor nem indult el" üzenet.** Zárd be, és indítsd újra a
-programot. Ha marad, kattints az **Újrapróbálom** gombra a kezdőképernyőn.
+**Nem indul el / „A motor nem válaszol" üzenet.** A v0.1.33-tól a program az
+elhalt motort magától újraindítja, az **Újrapróbálom** gomb pedig keresés
+mellett újra is indítja (ez fél percig is tarthat) — a legtöbb esetben ennyi
+elég. Ha a hiba marad, a hiba-képernyő megmutatja a motor naplójának utolsó
+sorait és a futó verziót: erről készíts képernyőképet, és küldd el a
+fejlesztőnek — a napló teljes fájlja a képernyőn kiírt helyen van
+(macOS: `~/Library/Application Support/SportMachine/engine-app.log`,
+Windows: `%LOCALAPPDATA%\SportMachine\engine-app.log`).
 
 **Lassú a feldolgozás.** Az elemzés a videó hosszától és a géped erejétől függ.
 Erősebb (videokártyás) gépen gyorsabb. Hagyd a háttérben dolgozni.
