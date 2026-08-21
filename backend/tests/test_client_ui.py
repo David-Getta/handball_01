@@ -519,3 +519,33 @@ def test_a_feltetel_szoveg_a_motortol_jon():
     assert gate.count("kOfflineTermsSummary") == 2, (
         "a demó-szöveg nem egy helyen van definiálva és felhasználva")
     assert "szellemi tulajdona" in gate and "fizikai tulajdon" in gate
+
+
+def test_jelszocsere_elerheto_a_kliensbol():
+    """ŐR: a jelszócsere-végpontnak van FELÜLETE is — a fiók-menüből
+    nyílik, és a kliens-hívás (changePassword) be van kötve. Backend-
+    képesség kliens nélkül = nem létező képesség a felhasználónak."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "changePassword(" in shell, (
+        "a jelszócsere API-hívás nincs bekötve a felületről")
+    assert "Jelszócsere" in shell, "nincs Jelszócsere menüpont"
+
+
+def test_elfelejtett_jelszo_utmutato_a_belepon():
+    """ŐR: sikertelen belépésnél a képernyő elmondja az elfelejtett
+    jelszó őszinte útját (nincs e-mailes visszaállítás — új fiók, a
+    meccsek megmaradnak), ne csak a telepítési útmutató tudja."""
+    import pytest
+
+    scr = _client_lib() / "ui" / "account_screen.dart"
+    if not scr.exists():
+        pytest.skip("nincs kliens a fában")
+    src = scr.read_text(encoding="utf-8")
+    assert "Elfelejtetted a jelszavad?" in src
+    assert "megmaradnak" in src

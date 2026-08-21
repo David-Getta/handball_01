@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.30 óta)
 
+- **Jelszócsere a fiók-menüből + elfelejtett-jelszó útmutató**
+  (kliens): a jelszócsere-végpont eddig felület nélkül állt — mostantól
+  a jobb felső fiók-menü "Jelszócsere" pontja nyitja (jelenlegi + új
+  jelszó; a csere a máshol nyitva maradt belépéseket érvényteleníti, az
+  itteni munkamenet új kulcsot kap, tehát nem dob ki). A belépő
+  képernyő sikertelen belépésnél elmondja az elfelejtett jelszó őszinte
+  útját is: a fiókok csak ezen a gépen élnek, nincs e-mailes
+  visszaállítás — új fiókkal a meccsek és elemzések megmaradnak (a
+  géphez tartoznak, nem a fiókhoz). Őr-teszt rögzíti, hogy a
+  jelszócsere elérhető a felületről, és az útmutató ott van a belépőn.
 - **Hetes-sarok emberre**: MELYIK SARKÁT keresi a hetesdobójuk. A
   hetes-oldal réteg csapatra mondja meg, merre mennek a hetesek — a
   kapusnak viszont a DOBÓ kell: a hetesnél ő az egyetlen, akinek van

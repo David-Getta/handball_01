@@ -19,6 +19,7 @@ import "../../version.dart";
 import "../account_gate.dart";
 import "../dashboard_screen.dart";
 import "../designer_screen.dart";
+import "../error_text.dart";
 import "../live_screen.dart";
 import "../match_screen.dart";
 import "../player_trend_screen.dart";
@@ -309,6 +310,88 @@ class _AccountMenuState extends State<_AccountMenu> {
     setState(() => _me = me);
   }
 
+  /// Jelszócsere-párbeszéd: a régi jelszó megadásával — a csere minden
+  /// korábbi munkamenetet érvénytelenít, de az ittenit a motor új
+  /// kulccsal pótolja, tehát a felhasználó bent marad.
+  Future<void> _changePassword() async {
+    final oldCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    String? error;
+    var busy = false;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Jelszócsere"),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: oldCtrl,
+                  obscureText: true,
+                  decoration:
+                      const InputDecoration(labelText: "Jelenlegi jelszó"),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: newCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                      labelText: "Új jelszó (legalább 8 karakter)"),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Text(error!,
+                      style: AppText.label.copyWith(color: AppColors.away)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: busy ? null : () => Navigator.of(ctx).pop(false),
+              child: const Text("Mégse"),
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      setDlg(() {
+                        busy = true;
+                        error = null;
+                      });
+                      try {
+                        await ApiClient()
+                            .changePassword(oldCtrl.text, newCtrl.text);
+                        if (ctx.mounted) Navigator.of(ctx).pop(true);
+                      } catch (e) {
+                        setDlg(() {
+                          busy = false;
+                          error = humanError(e);
+                        });
+                      }
+                    },
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent),
+              child: const Text("Csere"),
+            ),
+          ],
+        ),
+      ),
+    );
+    oldCtrl.dispose();
+    newCtrl.dispose();
+    if (ok == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("A jelszó lecserélve — a többi gépen/ablakban "
+              "nyitott belépések érvénytelenek lettek.")));
+    }
+  }
+
   Future<void> _logout() async {
     await ApiClient().logoutAccount();
     if (!mounted) return;
@@ -340,6 +423,8 @@ class _AccountMenuState extends State<_AccountMenu> {
           Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => const TermsScreen(readOnly: true),
           ));
+        } else if (v == "password") {
+          _changePassword();
         }
       },
       itemBuilder: (_) => [
@@ -352,6 +437,11 @@ class _AccountMenuState extends State<_AccountMenu> {
           value: "terms",
           child: Text("Felhasználási feltételek", style: AppText.value),
         ),
+        if (me != null)
+          const PopupMenuItem<String>(
+            value: "password",
+            child: Text("Jelszócsere", style: AppText.value),
+          ),
         if (me != null)
           const PopupMenuItem<String>(
             value: "logout",

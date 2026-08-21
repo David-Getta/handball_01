@@ -273,6 +273,20 @@ class _AccountScreenState extends State<AccountScreen> {
                           style:
                               AppText.label.copyWith(color: AppColors.away)),
                     ),
+                    // Elfelejtett jelszó: nincs e-mailes visszaállítás (a
+                    // fiókok csak ezen a gépen élnek) — az őszinte út az
+                    // új fiók, és ezt itt mondjuk el, nem egy súgóban.
+                    if (!_registerMode) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        "Elfelejtetted a jelszavad? A fiókok csak ezen a "
+                        "gépen élnek, ezért nincs e-mailes visszaállítás — "
+                        "hozz létre új fiókot: a meccseid és elemzéseid "
+                        "megmaradnak (azok a géphez tartoznak, nem a "
+                        "fiókhoz).",
+                        style: AppText.label.copyWith(fontSize: 12),
+                      ),
+                    ],
                   ],
 
                   const SizedBox(height: AppSpacing.lg),
