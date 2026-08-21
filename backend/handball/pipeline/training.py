@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 462) Rejtett szervező poszt: ha a szervezésünk egy poszton fut, a
+    # felkészült ellenfél a sávot zárja — második indító-forrás kell.
+    try:
+        from .event_detection import PREAR_SHARE_PCT, pre_assist_roles
+        prr462 = pre_assist_roles(match, config)
+        for side in ("home", "away"):
+            rec462 = prr462[side]
+            if rec462["verdict"] is None:
+                continue
+            add(side, "támadás", "Második indító-forrás",
+                f"a másod-előkészítésünk a(z) {rec462['main_role']} "
+                f"poszton fut ({rec462['share_pct']:.0f}%; "
+                f"{PREAR_SHARE_PCT:.0f}% felett jelezzük) — a "
+                "felkészült ellenfél a poszt sávját zárja, és a "
+                "gólgyárunk el sem indul",
+                "építs második indító-forrást MÁSIK posztra: a "
+                "fal-mozdító passz (oldalváltás, betörés utáni "
+                "kiosztás) legalább két posztról jöjjön; edzésen 6-6 "
+                "figura, ahol az első sáv zárva van, és a szervezést "
+                "a másik oldal veszi át — a játékosok tanulják meg "
+                "felismerni, mikor kell átadni a szervező-szerepet")
+    except Exception:
+        pass
+
     # 461) Szuper-csere poszt: ha a padunk egy posztról termel, a
     # cserénk olvasható — második pad-megoldást kell építeni.
     try:

@@ -4981,6 +4981,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.event_detection import pre_assist_roles
+            res["pre_assist_roles"] = pre_assist_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.momentum import super_sub
             res["super_sub"] = super_sub(match)
         except Exception:
@@ -6027,6 +6032,9 @@ def create_app():
                 _layer("assist_duos", lambda: assist_duos(match))
                 from ..pipeline.event_detection import pre_assists
                 _layer("pre_assists", lambda: pre_assists(match))
+                from ..pipeline.event_detection import pre_assist_roles
+                _layer("pre_assist_roles",
+                       lambda: pre_assist_roles(match))
                 from ..pipeline.momentum import super_sub
                 _layer("super_sub", lambda: super_sub(match))
                 from ..pipeline.momentum import super_sub_roles

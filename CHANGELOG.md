@@ -5,7 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.34 óta)
 
-*(még semmi)*
+- **Rejtett szervező poszt** (új réteg): MELYIK POSZTON fut a
+  másod-előkészítés — a hoki-assziszt (rejtett szervező) poszt-szintű
+  párja. A gólpassz előtti passzokat az adó posztjához írja: a
+  "mindig az irányító fordítja meg a falat" típusú szervezés posztról
+  ismerszik meg, nem emberről — a minta a cserék után is él. Edzői
+  olvasat: a passzsáv-zárást a poszt sávjában kell kezdeni, akárki
+  játssza; a saját, egy posztra épülő szervezés kiszámítható — második
+  indító-forrás kell. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (posztonkénti darabszámok, edzői kulcs,
+  442. meccsterv-szabály), 462. edzés-szabály, kliens-csempe,
+  Kulcs-poszt regisztráció + riport-lencse sor.
 
 ## v0.1.34 — kiadva (2026-08-22)
 

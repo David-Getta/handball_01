@@ -682,6 +682,69 @@ def pre_assists(match: Match,
     return out
 
 
+# Rejtett szervező poszt: ennyi poszthoz kötött másod-előkészítés kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# szervezésük egy poszton fut.
+PREAR_MIN_CHAINED = 3
+PREAR_SHARE_PCT = 60.0
+
+
+def pre_assist_roles(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Rejtett szervező poszt: MELYIK POSZTON fut a másod-előkészítés.
+
+    A hoki-assziszt (pre_assists) az embert nevezi meg — ez a posztot:
+    a gólpassz előtti passzokat az adó posztjához írja. Így a minta
+    akkor is látszik, ha a nevek meccsről meccsre cserélődnek — a
+    "mindig az irányító fordítja meg a falat" típusú szervezés
+    posztról ismerszik meg, nem emberről.
+
+    Edzőileg: ha a másod-előkészítésük rendre ugyanarról a posztról
+    jön, a passzsáv-zárást a POSZT sávjában kell kezdeni, akárki
+    játssza éppen — a cseréjük nem véd meg tőle. Saját oldalon: az egy
+    posztra épülő szervezés kiszámítható, második indító-forrás kell.
+
+    Visszatérés csapatonként: {"chained" (láncolt gólok), "roles":
+    {poszt: darab}, "main_role", "share_pct", "verdict"} — az ítélet
+    None, ha nincs meg a PREAR_MIN_CHAINED, vagy egyik poszt sem éri
+    el a PREAR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    prea = pre_assists(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = {"chained": prea[side]["chained"], "roles": {},
+               "main_role": None, "share_pct": None, "verdict": None}
+        bound = 0
+        for row in prea[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["pre_assists"])
+            bound += row["pre_assists"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if bound >= PREAR_MIN_CHAINED and rec["roles"]:
+            poszt = max(rec["roles"], key=lambda k: rec["roles"][k])
+            share = 100.0 * rec["roles"][poszt] / bound
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PREAR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a másod-előkészítésük a(z) {poszt} poszton fut "
+                    f"({share:.0f}%, {bound} másod-előkészítésből) — a "
+                    "passzsáv-zárást a poszt sávjában kell kezdeni, "
+                    "akárki játssza éppen")
+        out[side] = rec
+    return out
+
+
 # Gólpassz-duó: ennyi közös gól kell a kettős kimondásához, és ekkora
 # részarány fölött mondjuk ki, hogy a gólgyártásuk egy duón fut.
 ADU_MIN_GOALS = 2

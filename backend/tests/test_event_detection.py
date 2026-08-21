@@ -300,6 +300,44 @@ def _prea_frames(n, with_pre=True):
     return frames
 
 
+def _prear_match(n):
+    """Mint a _prea_frames, de a 3-as (másod-előkészítő) poszt-becsléshez
+    elegendő mért kockát kap a beálló helyén (34, 10) — a réteg így
+    posztra tudja írni a másod-előkészítéseit."""
+    frames = []
+    t = 0
+    for _ in range(160):     # poszt-minta: a 3-as a vonalon, labda nála
+        frames.append(Frame(t=t, players=[
+            _pl(3, Team.HOME, 34.0, 10.0),
+            _pl(1, Team.HOME, 30.0, 14.0),
+            _pl(2, Team.HOME, 30.0, 6.0)],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    tail = _prea_frames(n)
+    for f in tail:
+        f.t += t
+    return Match(_meta(), frames + tail)
+
+
+def test_pre_assist_roles_names_the_organizing_post():
+    """Ha a másod-előkészítések zöme egy posztról jön, a szervezésük
+    posztról olvasható — a sáv-zárás a posztra megy, akárki játssza."""
+    from handball.pipeline.event_detection import pre_assist_roles
+
+    rec = pre_assist_roles(_prear_match(3))["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "poszton fut" in rec["verdict"], rec
+
+
+def test_pre_assist_roles_silent_with_few_chains():
+    """Kevés poszthoz kötött másod-előkészítésnél nincs ítélet."""
+    from handball.pipeline.event_detection import pre_assist_roles
+
+    rec = pre_assist_roles(_prear_match(2))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
 def test_pre_assists_names_the_hidden_organizer():
     """A 3→1→2→gól láncban a 3-as a rejtett szervező: ő adja a gólpassz
     előtti passzt."""

@@ -1946,6 +1946,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                               screened_defender_roles,
                               role_block_sources, role_steal_sources,
                               slow_retreat_roles)
+        from .event_detection import pre_assist_roles
         from .goalkeeper import (outlet_hunter_roles,
                                  seven_six_finisher_roles)
         from .roles import (assist_pair_roles,
@@ -2015,6 +2016,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Emberhátrány-poszt", shorthanded_shooter_roles),
             ("Hajrá-poszt", clutch_scorer_roles),
             ("Szuper-csere poszt", super_sub_roles),
+            ("Rejtett szervező poszt", pre_assist_roles),
             ("Felzárkózás-poszt", comeback_carrier_roles),
             ("Pazarló-poszt", wasteful_shooter_roles),
             ("Ziccer-poszt", big_chance_roles),

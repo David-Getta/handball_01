@@ -9,11 +9,11 @@ legyenek. A teszt-csomag őre nem engedi elavulni.
 
 | Mérték | Érték | Miből számolva |
 |---|---:|---|
-| Elemző réteg (meccs-csomag) | **488** | `_layer("...")` regisztrációk az `api/app.py`-ban |
-| Automata teszt | **1769** | `def test_*` függvények a `backend/tests/`-ben |
-| Meccsterv-szabály | **441** | a legnagyobb sorszámozott szabály a `pipeline/scouting.py`-ban |
-| Edzés-szabály | **461** | a legnagyobb sorszámozott szabály a `pipeline/training.py`-ban |
-| Kliens-csempe (felderítés) | **461** | csempe-sorok a `client/lib/ui/scouting_screen.dart`-ban |
+| Elemző réteg (meccs-csomag) | **489** | `_layer("...")` regisztrációk az `api/app.py`-ban |
+| Automata teszt | **1771** | `def test_*` függvények a `backend/tests/`-ben |
+| Meccsterv-szabály | **442** | a legnagyobb sorszámozott szabály a `pipeline/scouting.py`-ban |
+| Edzés-szabály | **462** | a legnagyobb sorszámozott szabály a `pipeline/training.py`-ban |
+| Kliens-csempe (felderítés) | **462** | csempe-sorok a `client/lib/ui/scouting_screen.dart`-ban |
 | Pipeline-modul | **57** | `.py` fájlok a `backend/handball/pipeline/`-ban |
 
 A rétegek tételes listája (mit mér melyik):

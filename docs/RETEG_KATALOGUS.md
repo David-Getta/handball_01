@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **488 réteg**, modulonként csoportosítva; a
+Összesen **489 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (93)
@@ -222,7 +222,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `wing_closeouts` | Szélső-kifutás: IDŐBEN ÉRNEK-E KI a szélső lövéseire. |
 | `wing_defense` | Szélső-védekezés: bírja-e a fal a szélső lövéseket. |
 
-## event_detection (13)
+## event_detection (14)
 
 | Réteg | Mit mér |
 |---|---|
@@ -234,6 +234,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `pass_length` | Passz-hossz profil: rövid kombinációs vagy hosszú, direkt passzjáték. |
 | `pass_length_by_score` | Passz-hossz-állás: MIKOR váltanak hosszú labdákra. |
 | `pass_network` | Passz-hálózat: ki kinek adogat — a játékszervezés fő tengelye. |
+| `pre_assist_roles` | Rejtett szervező poszt: MELYIK POSZTON fut a másod-előkészítés. |
 | `pre_assists` | Hoki-assziszt: KI adja a gólpassz ELŐTTI passzt. |
 | `shooter_power` | Lövő-erő: kinek a legkeményebb a lövése. |
 | `shooting_hand` | Kezesség-becslés: MELYIK KÉZZEL lőnek a lövőik. |

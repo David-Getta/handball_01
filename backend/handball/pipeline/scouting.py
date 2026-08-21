@@ -1187,6 +1187,9 @@ class ScoutingReport:
     # pontosan összegződnek.
     prea_by_player: dict = field(default_factory=dict)
     prea_chained: int = 0
+    # Rejtett szervező poszt: a másod-előkészítések POSZTONKÉNT.
+    # Darabszámok, meccsek közt pontosan összegződnek.
+    prear_by_role: dict = field(default_factory=dict)
     # Szuper-csere: a padról (nem a kezdő magból) szerzett gólok
     # JÁTÉKOSONKÉNT. Darabszámok, meccsek közt pontosan összegződnek.
     ssu_goals_by_player: dict = field(default_factory=dict)
@@ -4980,6 +4983,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "másod-előkészítés) — a passzsáv-zárást nála kezdjétek, "
                 "ne a gólpasszolónál: ha ő nem tudja megjátszani a "
                 "beadót, a gólgyáruk el sem indul.")
+
+    # Rejtett szervező poszt: posztról olvasható szervezés.
+    _prr_n = sum(rep.prear_by_role.values())
+    if _prr_n >= 3:
+        _prr_p, _prr_c = max(rep.prear_by_role.items(),
+                             key=lambda kv: kv[1])
+        _prr_pct = 100.0 * _prr_c / _prr_n
+        if _prr_pct >= 60.0:
+            keys.append(
+                f"A másod-előkészítésük a(z) {_prr_p} poszton fut "
+                f"({_prr_pct:.0f}%, {_prr_n} másod-előkészítésből) — a "
+                "passzsáv-zárást a poszt sávjában kezdjétek, akárki "
+                "játssza éppen: a cseréjük nem véd meg tőle.")
 
     # Szuper-csere: a padról termelő emberük — a beállása a jelzés.
     if rep.ssu_goals_by_player:
@@ -10779,6 +10795,9 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["pre_assists"]
             for r in prearec["players"]}
+        from .event_detection import pre_assist_roles as _prr
+        prrrec = _prr(match, config)[team.value]
+        rep.prear_by_role = dict(prrrec["roles"])
         from .momentum import super_sub as _ssu
         ssurec = _ssu(match, config)[team.value]
         rep.ssu_goals_by_player = {
@@ -13894,6 +13913,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 442) Az ő posztról futó szervezésük × a ti labdaszerzésetek: a
+    # sáv-zárást a posztra kell tenni, akárki játssza — az ott csípett
+    # labda a legkorábbi töréspont.
+    if opp.prear_by_role and own.trans_steals >= 4:
+        _p442_n = sum(opp.prear_by_role.values())
+        _p442_p, _p442_c = max(opp.prear_by_role.items(),
+                               key=lambda kv: kv[1])
+        if _p442_n >= 3 and 100.0 * _p442_c / _p442_n >= 60.0:
+            plan.append(
+                f"A másod-előkészítésük a(z) {_p442_p} poszton fut "
+                f"({_p442_c}/{_p442_n}), ti pedig jó labdaszerzők "
+                f"vagytok ({own.trans_steals} szerzés) — a beleérős "
+                "présnyomást a poszt sávjára tegyétek, akárki játssza "
+                "éppen: az ott elcsípett labda a támadásukat a "
+                "legkorábbi pontján töri meg, és kontrát ad.")
 
     # 441) Az ő posztról olvasható paduk × a ti aktív falatok: a posztra
     # érkező friss embert az érkezése pillanatában kell felvenni.
@@ -21514,6 +21549,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prea_by_player=_merge_count_dicts(
             r.prea_by_player for r in reports),
         prea_chained=sum(r.prea_chained for r in reports),
+        prear_by_role=_merge_count_dicts(
+            r.prear_by_role for r in reports),
         ssu_goals_by_player=_merge_count_dicts(
             r.ssu_goals_by_player for r in reports),
         sspr_goals_by_role=_merge_count_dicts(

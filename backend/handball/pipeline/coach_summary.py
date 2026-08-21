@@ -3137,6 +3137,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "zárást nála kell kezdeni, nem a gólpasszolónál.")
     except Exception:
         pass
+    # Rejtett szervező poszt: melyik poszton fut a másod-előkészítés.
+    try:
+        from .event_detection import pre_assist_roles
+        prr = pre_assist_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_prr = prr[side]
+            if rec_prr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} másod-előkészítése a(z) "
+                     f"{rec_prr['main_role']} poszton fut "
+                     f"({rec_prr['share_pct']:.0f}%) — a passzsáv-zárást "
+                     "a poszt sávjában kell kezdeni, akárki játssza.")
+    except Exception:
+        pass
     # Szuper-csere: ki termel a padról — névre szólóan.
     try:
         from .momentum import super_sub
