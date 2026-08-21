@@ -1167,6 +1167,9 @@ class ScoutingReport:
     # Egálbontó emberek: a döntetlenről szerzett (egált bontó) gólok
     # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
     pbp_breaks_by_player: dict = field(default_factory=dict)
+    # Egálbontó poszt: az egálbontó gólok POSZTONKÉNT. Darabszámok,
+    # meccsek közt pontosan összegződnek.
+    pbr_breaks_by_role: dict = field(default_factory=dict)
     # Kezesség-becslés: bal-jelű és összes értékelhető lövés
     # JÁTÉKOSONKÉNT (két count-dict — arány sose, pontos összegzésért).
     hand_left_by_player: dict = field(default_factory=dict)
@@ -4944,6 +4947,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_pbp_n}/{_pbp_all} egálbontó gól) — egálnál az ő "
                 "kivétele az első dolog: szoros fogás, korai "
                 "kettőzés, a kedvenc befejezése letiltva.")
+
+    # Egálbontó poszt: posztról olvasható holtpont-terv.
+    _pbr_n = sum(rep.pbr_breaks_by_role.values())
+    if _pbr_n >= 3:
+        _pbr_p, _pbr_c = max(rep.pbr_breaks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _pbr_pct = 100.0 * _pbr_c / _pbr_n
+        if _pbr_pct >= 60.0:
+            keys.append(
+                f"A holtpontjaikat a(z) {_pbr_p} posztjuk viszi el "
+                f"({_pbr_pct:.0f}%, {_pbr_n} egálbontó gólból) — "
+                "egálnál arra a sávra korai kettőzés és a kedvenc "
+                "befejezés letiltása, akárki játssza éppen.")
 
     # 7a6-befejező emberek: kit kell először megtalálni.
     if rep.en7p_shots_by_player:
@@ -10847,6 +10863,9 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["breaks"]
             for r in pbprec["players"]}
+        from .momentum import parity_break_roles as _pbr
+        pbrrec = _pbr(match, config)[team.value]
+        rep.pbr_breaks_by_role = dict(pbrrec["roles"])
         from .event_detection import shooting_hand as _hnd
         hndrec = _hnd(match, config)[team.value]
         for r in hndrec["players"]:
@@ -13913,6 +13932,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 443) Az ő posztról olvasható holtpont-tervük × a ti kettőzésetek:
+    # egálnál a poszt sávjára kell a korai kettőzés, akárki játssza.
+    if opp.pbr_breaks_by_role and own.blocks >= 3:
+        _p443_n = sum(opp.pbr_breaks_by_role.values())
+        _p443_p, _p443_c = max(opp.pbr_breaks_by_role.items(),
+                               key=lambda kv: kv[1])
+        if _p443_n >= 3 and 100.0 * _p443_c / _p443_n >= 60.0:
+            plan.append(
+                f"A holtpontjaikat a(z) {_p443_p} posztjuk viszi el "
+                f"({_p443_c}/{_p443_n} egálbontó gól), ti pedig "
+                f"aktívan záró fal vagytok ({own.blocks} blokk) "
+                "— egál-állásnál álljon készen a jel: a poszt sávjára "
+                "korai kettőzés megy, akárki játssza éppen, és a "
+                "holtpont-figurájuk fő ága zárva van.")
 
     # 442) Az ő posztról futó szervezésük × a ti labdaszerzésetek: a
     # sáv-zárást a posztra kell tenni, akárki játssza — az ott csípett
@@ -21538,6 +21572,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.bfw_shots_by_player for r in reports),
         pbp_breaks_by_player=_merge_count_dicts(
             r.pbp_breaks_by_player for r in reports),
+        pbr_breaks_by_role=_merge_count_dicts(
+            r.pbr_breaks_by_role for r in reports),
         hand_left_by_player=_merge_count_dicts(
             r.hand_left_by_player for r in reports),
         hand_shots_by_player=_merge_count_dicts(

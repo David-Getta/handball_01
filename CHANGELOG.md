@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.34 óta)
 
+- **Egálbontó poszt** (új réteg): MELYIK POSZTJUK viszi el a
+  holtpontokat — az egálbontó emberek poszt-szintű párja. A
+  döntetlenről szerzett gólokat a lövő posztjához írja: a "feszült
+  pillanatban a beállóra megy a labda" típusú holtpont-terv posztról
+  ismerszik meg, és a minta a cserék után is él. Edzői olvasat:
+  egálnál a poszt sávjára korai kettőzés, akárki játssza; a saját, egy
+  posztra épülő holtpont-tervnek második befejezési ág kell másik
+  poszton. Felületek: /analyze + meccs-csomag, edzői összefoglaló,
+  felderítés (posztonkénti darabszámok, edzői kulcs, 443.
+  meccsterv-szabály), 463. edzés-szabály, kliens-csempe, Kulcs-poszt
+  regisztráció + riport-lencse sor.
+
 - **Rejtett szervező poszt** (új réteg): MELYIK POSZTON fut a
   másod-előkészítés — a hoki-assziszt (rejtett szervező) poszt-szintű
   párja. A gólpassz előtti passzokat az adó posztjához írja: a

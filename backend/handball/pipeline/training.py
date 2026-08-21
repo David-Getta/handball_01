@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 463) Egálbontó poszt: ha a holtpont-tervünk egy poszton áll, a
+    # felkészült ellenfél egálnál pont azt zárja — második ág kell.
+    try:
+        from .momentum import PBR_SHARE_PCT, parity_break_roles
+        pbr463 = parity_break_roles(match, config)
+        for side in ("home", "away"):
+            rec463 = pbr463[side]
+            if rec463["verdict"] is None:
+                continue
+            add(side, "támadás", "Holtpont-figura második ága",
+                f"a holtpontjainkat a(z) {rec463['main_role']} "
+                f"posztunk viszi el ({rec463['share_pct']:.0f}%; "
+                f"{PBR_SHARE_PCT:.0f}% felett jelezzük) — a felkészült "
+                "ellenfél egálnál pont ezt a sávot zárja, és a "
+                "holtpont-tervünk elakad",
+                "adj a holtpont-figurának MÁSODIK befejezési ágat "
+                "másik poszton: ugyanabból az indításból két különböző "
+                "sávban legyen éles befejezés, és a jel a pályán "
+                "dőljön el (ha a fő sávra kettőznek, automatikusan a "
+                "második ág jön); edzésen egál-szituációs 6-6, ahol a "
+                "védelem tudottan a fő sávot zárja")
+    except Exception:
+        pass
+
     # 462) Rejtett szervező poszt: ha a szervezésünk egy poszton fut, a
     # felkészült ellenfél a sávot zárja — második indító-forrás kell.
     try:

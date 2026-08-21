@@ -502,6 +502,7 @@ KP_LAYERS: tuple = (
     ("Hajrá-poszt", "momentum", "clutch_scorer_roles"),
     ("Szuper-csere poszt", "momentum", "super_sub_roles"),
     ("Rejtett szervező poszt", "event_detection", "pre_assist_roles"),
+    ("Egálbontó poszt", "momentum", "parity_break_roles"),
     ("Felzárkózás-poszt", "momentum", "comeback_carrier_roles"),
     ("Pazarló-poszt", "xg", "wasteful_shooter_roles"),
     ("Ziccer-poszt", "xg", "big_chance_roles"),

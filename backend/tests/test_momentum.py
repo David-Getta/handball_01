@@ -2730,6 +2730,47 @@ def _pbp_match(seq):
     return Match(_meta(), frames)
 
 
+def _pbr_match(seq):
+    """Mint a _pbp_match, de a 7-es (egálbontó) poszt-becsléshez elegendő
+    mért kockát kap a beálló helyén (34, 10) — a réteg így posztra
+    tudja írni az egálbontó góljait."""
+    frames = []
+    t = 0
+    for _ in range(160):     # poszt-minta: a 7-es a vonalon, labda nála
+        frames.append(Frame(t=t, players=[
+            _pl(7, Team.HOME, 34.0, 10.0),
+            _pl(8, Team.HOME, 30.0, 14.0)],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    tail = _pbp_match(seq).frames
+    for f in tail:
+        f.t += t
+    return Match(_meta(), frames + tail)
+
+
+def test_parity_break_roles_names_the_tie_breaking_post():
+    """Ha az egálbontó gólok zöme egy posztról jön, a holtpont-tervük
+    posztról olvasható — egálnál arra a sávra megy a korai kettőzés."""
+    from handball.pipeline.momentum import parity_break_roles
+
+    m = _pbr_match([("H", 7), ("A", 21), ("H", 7), ("A", 21),
+                    ("H", 7), ("H", 8)])
+    rec = parity_break_roles(m)["home"]
+    assert rec["breaks"] == 3, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "posztjuk viszi el" in rec["verdict"], rec
+
+
+def test_parity_break_roles_silent_with_few_breaks():
+    """Kevés poszthoz kötött egálbontó gólnál nincs ítélet."""
+    from handball.pipeline.momentum import parity_break_roles
+
+    m = _pbr_match([("H", 7), ("A", 21), ("H", 8)])
+    rec = parity_break_roles(m)["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
 def test_parity_break_scorers_names_the_tie_breaker():
     """HAHAHH, minden hazai egálbontó gólt a 7-es lövi → ő a
     holtpont-ember."""

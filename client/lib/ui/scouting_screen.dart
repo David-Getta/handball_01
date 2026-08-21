@@ -3242,6 +3242,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "gólpasszolónál";
   }
 
+  // Egálbontó poszt: melyik posztjuk viszi el a holtpontokat (3+
+  // egálbontó gól, 60% egy poszté — a backenddel azonos küszöbök:
+  // PBR_MIN_BREAKS, PBR_SHARE_PCT).
+  String? _parityBreakRole(Map<String, dynamic> r) {
+    final byR = (r["pbr_breaks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byR == null || byR.isEmpty) return null;
+    var all = 0;
+    String? top;
+    var topN = 0;
+    byR.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || all < 3 || topN < 0.6 * all) return null;
+    return "a holtpontjaikat a(z) $top posztjuk viszi el ($topN/$all "
+        "egálbontó gól) · egálnál arra a sávra korai kettőzés, akárki "
+        "játssza";
+  }
+
   // Rejtett szervező poszt: melyik poszton fut a másod-előkészítés
   // (3+ másod-előkészítés, 60% egy poszté — a backenddel azonos
   // küszöbök: PREAR_MIN_CHAINED, PREAR_SHARE_PCT).
@@ -11471,6 +11494,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_preAssist(r) != null) ["Rejtett szervező", _preAssist(r)!],
       if (_preAssistRole(r) != null)
         ["Rejtett szervező poszt", _preAssistRole(r)!],
+      if (_parityBreakRole(r) != null)
+        ["Egálbontó poszt", _parityBreakRole(r)!],
       if (_superSub(r) != null) ["Szuper-csere", _superSub(r)!],
       if (_superSubRole(r) != null)
         ["Szuper-csere poszt", _superSubRole(r)!],

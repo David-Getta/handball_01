@@ -788,6 +788,68 @@ def parity_break_scorers(match: Match, config=None) -> dict:
     return out
 
 
+# Egálbontó poszt: ennyi poszthoz kötött egálbontó gól kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# holtpontjaikat egy poszt viszi el.
+PBR_MIN_BREAKS = 3
+PBR_SHARE_PCT = 60.0
+
+
+def parity_break_roles(match: Match, config=None) -> dict:
+    """Egálbontó poszt: MELYIK POSZTJUK viszi el a holtpontokat.
+
+    Az egálbontó emberek rétege (parity_break_scorers) az embert
+    nevezi meg — ez a posztot: a döntetlenről szerzett gólokat a lövő
+    posztjához írja. Így a minta akkor is látszik, ha a nevek meccsről
+    meccsre cserélődnek — a "feszült pillanatban a beállóra megy a
+    labda" típusú holtpont-terv posztról ismerszik meg.
+
+    Edzőileg: egálnál a posztra kell állni — arra a sávra korai
+    kettőzés, a kedvenc befejezés letiltva, akárki játssza éppen.
+    Saját oldalon: az egy posztra épülő holtpont-terv kiszámítható —
+    a figurának második befejezési ága kell másik poszton.
+
+    Visszatérés csapatonként: {"breaks" (poszthoz kötött egálbontó
+    gól), "roles": {poszt: gól}, "main_role", "share_pct", "verdict"}
+    — az ítélet None, ha nincs meg a PBR_MIN_BREAKS, vagy egyik poszt
+    sem éri el a PBR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    pbs = parity_break_scorers(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = {"breaks": 0, "roles": {}, "main_role": None,
+               "share_pct": None, "verdict": None}
+        for row in pbs[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["breaks"])
+            rec["breaks"] += row["breaks"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["breaks"] >= PBR_MIN_BREAKS:
+            poszt = max(rec["roles"], key=lambda k: rec["roles"][k])
+            share = 100.0 * rec["roles"][poszt] / rec["breaks"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PBR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a holtpontjaikat a(z) {poszt} posztjuk viszi el "
+                    f"({share:.0f}%, {rec['breaks']} egálbontó gólból) "
+                    "— egálnál arra a sávra korai kettőzés, akárki "
+                    "játssza éppen")
+        out[side] = rec
+    return out
+
+
 # Félidei hátrányból fordítás: ennyi felismert gól kell az ítélethez
 # (részleges felvételen a hamis "0-0" nem ítélet).
 HT_COMEBACK_MIN_GOALS = 6

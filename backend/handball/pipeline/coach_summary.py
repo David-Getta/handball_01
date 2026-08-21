@@ -3137,6 +3137,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "zárást nála kell kezdeni, nem a gólpasszolónál.")
     except Exception:
         pass
+    # Egálbontó poszt: melyik posztjuk viszi el a holtpontokat.
+    try:
+        from .momentum import parity_break_roles
+        pbr = parity_break_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pbr = pbr[side]
+            if rec_pbr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} holtpontjait a(z) "
+                     f"{rec_pbr['main_role']} posztjuk viszi el "
+                     f"({rec_pbr['share_pct']:.0f}%) — egálnál arra a "
+                     "sávra korai kettőzés, akárki játssza.")
+    except Exception:
+        pass
     # Rejtett szervező poszt: melyik poszton fut a másod-előkészítés.
     try:
         from .event_detection import pre_assist_roles

@@ -4996,6 +4996,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import parity_break_roles
+            res["parity_break_roles"] = parity_break_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.momentum import super_sub
             res["super_sub"] = super_sub(match)
         except Exception:
@@ -6039,6 +6044,9 @@ def create_app():
                 _layer("super_sub", lambda: super_sub(match))
                 from ..pipeline.momentum import super_sub_roles
                 _layer("super_sub_roles", lambda: super_sub_roles(match))
+                from ..pipeline.momentum import parity_break_roles
+                _layer("parity_break_roles",
+                       lambda: parity_break_roles(match))
                 from ..pipeline.stoppages import timeout_yield
                 _layer("timeout_yield", lambda: timeout_yield(match))
                 from ..pipeline.goalkeeper import gk_change_yield
