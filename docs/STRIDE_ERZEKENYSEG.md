@@ -9,7 +9,7 @@ rétegek ugyanarról a meccsről ritkítva másképp — jellemzően
 óvatosabban — ítélhetnek. Ez a lista a döntés alapja, hol
 érdemes a kockaszám-küszöböt másodperc-alapúra váltani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **488 réteg** összevetve, ebből **27 eltérő ítéletű**.
+Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **488 réteg** összevetve, ebből **25 eltérő ítéletű**.
 
 ## Fontos: mit jelent az eltérés
 
@@ -96,11 +96,6 @@ háromszor annyi valós időt követelnek.
 
 - `home.verdict`: sűrűn `a góljaik a(z) beálló kezéből indulnak (87%, 23 gólpasszból) — nem a lövést kell zárni, hanem TŐLE a passzt elvenni: egy ember feljebb lép rá, a többiek posztot tartanak` → ritkítva `a góljaik a(z) beálló kezéből indulnak (83%, 24 gólpasszból) — nem a lövést kell zárni, hanem TŐLE a passzt elvenni: egy ember feljebb lép rá, a többiek posztot tartanak`
 
-### `role_goal_placement`
-
-- `home.roles.beálló.dominant`: sűrűn `közép` → ritkítva `None`
-- `home.roles.szélső.dominant`: sűrűn `közép` → ritkítva `None`
-
 ### `role_shooting_hand`
 
 - `home.lefty_role`: sűrűn `beálló` → ritkítva `None`
@@ -123,13 +118,6 @@ háromszor annyi valós időt követelnek.
 - `home.figures[2].main_role`: sűrűn `beálló` → ritkítva `None`
 - `home.figures[3].main_role`: sűrűn `szélső` → ritkítva `None`
 - `home.verdict`: sűrűn `a(z) 1. figurájuk lövéseinek 61%-a a(z) irányító posztra fut ki — a figura INDULÁSAKOR arra az oldalra kell csúszni, nem a lövésnél` → ritkítva `None`
-
-### `shooter_placement`
-
-- `home.players[2].dominant`: sűrűn `közép` → ritkítva `None`
-- `home.players[3].dominant`: sűrűn `közép` → ritkítva `None`
-- `home.players[4].dominant`: sűrűn `közép` → ritkítva `None`
-- `home.players[5].dominant`: sűrűn `közép` → ritkítva `None`
 
 ### `shooting_hand`
 

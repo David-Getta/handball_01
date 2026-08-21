@@ -5,7 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.33 óta)
 
-*(még semmi)*
+- **A kapu-sarok a tényleges beérkezési pontból** (motor): a
+  gól-felismerés és az elhelyezés-rétegek közös metszéspont-logikát
+  kaptak (goal_crossing_y). A lövő-kapuoldal réteg eddig a gólvonal
+  0,7 m-es sávjába eső mintát követelt — ritkított felvételen ilyen
+  sokszor nincs, az ítélet üresen maradt; mostantól a szakasz-metszés
+  (vagy törésnél az extrapolált pont) y-ja adja a sarkot. A gól-minták
+  rétege a lövő helyét az elengedés kockájáról olvassa. A stride-őr
+  listája 27-ről 25-re rövidült; a maradék eltérés mintavételi
+  természetű (kevesebb minta → óvatosabb ítélet), a jelentés
+  dokumentálja.
+
 
 ## v0.1.33 — kiadva (2026-08-21)
 

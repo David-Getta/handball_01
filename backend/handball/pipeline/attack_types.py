@@ -2110,8 +2110,8 @@ def shooter_placement(match: Match,
     """
     from ..models.tracking import Team
     from .calibration import COURT_LENGTH_M
-    from .event_detection import (GOAL_LOOKAHEAD, GOAL_TOL_M, EventType,
-                                  _GOAL_Y_HIGH, _GOAL_Y_LOW, detect_shots)
+    from .event_detection import (EventType, _GOAL_Y_HIGH, _GOAL_Y_LOW,
+                                  detect_shots, goal_crossing_y)
 
     config = config or TacticsConfig()
     lo, hi = _GOAL_Y_LOW, _GOAL_Y_HIGH
@@ -2123,22 +2123,20 @@ def shooter_placement(match: Match,
         i0 = idx_of.get(e.t)
         if i0 is None:
             return None
-        end = min(len(match.frames), i0 + GOAL_LOOKAHEAD)
-        for j in range(i0, end):
-            b = match.frames[j].ball
-            if b is None:
-                continue
-            if abs(b.x - goal_x) <= GOAL_TOL_M and lo <= b.y <= hi:
-                rel = (b.y - lo) / span
-                # A lövő szemszögéhez igazítva (a két kaput tükrözzük).
-                leftness = (rel if goal_x >= COURT_LENGTH_M / 2
-                            else 1.0 - rel)
-                if leftness >= 2.0 / 3.0:
-                    return "bal"
-                if leftness <= 1.0 / 3.0:
-                    return "jobb"
-                return "közép"
-        return None
+        # A beérkezés y-ja a közös metszéspont-logikából: ritkított
+        # felvételen is a TÉNYLEGES gólvonal-átlépést kapjuk (a sávba
+        # eső minta híján a szakasz-metszés vagy az extrapolált pont).
+        yc = goal_crossing_y(match, i0, goal_x)
+        if yc is None:
+            return None
+        rel = (yc - lo) / span
+        # A lövő szemszögéhez igazítva (a két kaput tükrözzük).
+        leftness = rel if goal_x >= COURT_LENGTH_M / 2 else 1.0 - rel
+        if leftness >= 2.0 / 3.0:
+            return "bal"
+        if leftness <= 1.0 / 3.0:
+            return "jobb"
+        return "közép"
 
     tally: dict = {"home": {}, "away": {}}
     for e in detect_shots(match, config):

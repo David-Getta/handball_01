@@ -368,8 +368,15 @@ def goal_patterns(match: Match,
         f = by_t.get(e.t)
         if f is None:
             continue
-        shooter = next((p for p in f.players
-                        if p.track_id == e.player_id), None)
+        # A lövő helye az elengedés kockájáról (release_t) — az esemény
+        # kockáján (ritkítva különösen) már elmozdult a lövése óta.
+        rf = by_t.get((e.detail or {}).get("release_t"))
+        shooter = None
+        for src in (rf, f):
+            if src is None or shooter is not None:
+                continue
+            shooter = next((p for p in src.players
+                            if p.track_id == e.player_id), None)
         if shooter is None:
             continue
         side = getattr(e.team, "value", e.team)

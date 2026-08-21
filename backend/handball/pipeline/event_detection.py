@@ -246,7 +246,18 @@ GOAL_EXTRAP_MAX_FPS = 15.0
 
 
 def _reaches_goal_line(match: Match, idx: int, goal_x: float) -> bool:
-    """Előrenézve eléri-e a labda a gólvonalat a kapufák között (= gól).
+    """Előrenézve eléri-e a labda a gólvonalat a kapufák között (= gól)."""
+    return goal_crossing_y(match, idx, goal_x) is not None
+
+
+def goal_crossing_y(match: Match, idx: int, goal_x: float):
+    """A gólvonal-átlépés y-ja a kapufák között (None, ha nincs átlépés).
+
+    A gól-felismerés és a kapu-sarok (elhelyezés) rétegek KÖZÖS
+    metszéspont-logikája — az elhelyezés így ritkított felvételen is
+    a TÉNYLEGES beérkezési pontot kapja, nem a vonalon túli (métereket
+    ugrott) minta y-ját, és nem is marad üresen, ha a sávba nem esik
+    minta.
 
     Három, egymást kiegészítő jel — ritkított felvételen (stride) a
     labda kockánként métereket léphet, és az 1. jel sávja fölött
@@ -275,7 +286,7 @@ def _reaches_goal_line(match: Match, idx: int, goal_x: float) -> bool:
             continue
         # 1) minta a gólvonal-sávban, a kapufák között.
         if abs(b.x - goal_x) <= GOAL_TOL_M and _GOAL_Y_LOW <= b.y <= _GOAL_Y_HIGH:
-            return True
+            return b.y
         prev = balls[k - 1] if k > 0 else None
         if prev is None:
             continue
@@ -287,7 +298,7 @@ def _reaches_goal_line(match: Match, idx: int, goal_x: float) -> bool:
         if (prev.x - goal_x) * (b.x - goal_x) < 0:
             yc = prev.y + dy * (goal_x - prev.x) / dx
             if _GOAL_Y_LOW <= yc <= _GOAL_Y_HIGH:
-                return True
+                return yc
         # 3) extrapolált átlépés folytonosság-törésnél: a labda a kapu
         # felé tart, a vonal egy lépésen belül — és a következő minta
         # hiányzik vagy teleport (a folytonos követés kizárja).
@@ -305,8 +316,8 @@ def _reaches_goal_line(match: Match, idx: int, goal_x: float) -> bool:
             if broken:
                 yc = b.y + dy * (goal_x - b.x) / dx
                 if _GOAL_Y_LOW <= yc <= _GOAL_Y_HIGH:
-                    return True
-    return False
+                    return yc
+    return None
 
 
 @memoize_primitive("detect_shots", copy=copy_events)
