@@ -890,3 +890,69 @@ def test_shooting_hand_needs_enough_shots():
     rec = shooting_hand(m)["home"]
     assert rec["lefty"] is None
     assert all(p["hand"] is None for p in rec["players"])
+
+
+# ---- Gól-felismerés ritkított felvételen (stride) ---------------------------
+
+
+def _sparse_goal_frames(fps, behind_line=False):
+    """Egy hazai lövés RITKA mintavétellel: a labda kockánként ~2,4 m-t
+    lép, és a gólvonal 0,7 m-es sávját ÁTUGORJA. `behind_line`: van-e
+    minta a vonalon túlról (ha nincs, a követés a vonal előtt szakad
+    meg — élesben a hálóba érő labdát a háló kitakarja)."""
+    frames = []
+    xs = [30.0, 32.4, 34.8, 37.2, 39.6]
+    if behind_line:
+        xs.append(42.0)
+    t = 0
+    for _ in range(3):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 29.8, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+    for x in xs:
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 29.8, 10.0)],
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(10):   # középkezdés (teleport)
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames
+
+
+def test_sparse_sampling_goal_is_still_a_goal():
+    """A termék alap-ritkításánál (effektív ~8 fps) a labda átugorja a
+    gólvonal-sávot — a két minta közti átlépés (vonalon túli mintával)
+    és a megszakadó követés előtti extrapoláció (anélkül) is gól."""
+    meta = MatchMeta(match_id="sg", home_team="H", away_team="A",
+                     fps=8.33)
+    crossed = detect_shots(Match(meta, _sparse_goal_frames(
+        8.33, behind_line=True)))
+    assert [e.type for e in crossed] == [EventType.GOAL], crossed
+
+    vanished = detect_shots(Match(meta, _sparse_goal_frames(
+        8.33, behind_line=False)))
+    assert [e.type for e in vanished] == [EventType.GOAL], vanished
+
+
+def test_dense_sampling_keeps_the_old_stopping_shot_a_miss():
+    """SŰRŰ (25 fps) felvételen az extrapoláció nem él: a vonal előtt
+    megálló, majd eltűnő labda továbbra sem gól — a sűrű mintavételnél
+    a valódi gólt a sáv- vagy az átlépés-jel úgyis megfogja."""
+    frames = []
+    t = 0
+    for _ in range(3):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+        t += 1
+    for x in (34.0, 35.0, 36.0, 37.0, 38.0, 39.0):  # megáll a vonal előtt
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(10):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    evs = detect_shots(Match(_meta(), frames))
+    assert [e.type for e in evs] == [EventType.SHOT], evs
+    assert (evs[0].detail or {}).get("outcome") != "goal"

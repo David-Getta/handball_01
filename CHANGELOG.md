@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.31 óta)
 
+- **A gól ritkított felvételen is gól** (motor): a stride-érzékenység
+  őr első komoly lelete. A gól-felismerés eddig azt követelte, hogy a
+  labda egy MINTÁN a gólvonal 0,7 m-es sávjában legyen — a termék
+  alap-ritkításánál (minden 3. kocka, effektív ~8 fps) viszont a labda
+  kockánként métereket lép, és a sávot ÁTUGORJA: a szimulált meccsen a
+  gólok kétharmada sima lövésnek minősült. A felismerés mostantól három,
+  egymást kiegészítő jelre épül: (1) minta a sávban (a hálóban megülő
+  labda), (2) a két egymást követő minta közti útvonal átlépi a
+  gólvonalat a kapufák között, (3) ritkított felvételen (15 fps alatt) a
+  vonal egy lépésén belül járó, kapu felé tartó labda extrapolált
+  átlépése, ha a követés ott megszakad (élesben a hálóba érő labdát a
+  háló kitakarja, és a középkezdésnél bukkan fel) — folytonos követésnél
+  az extrapoláció nem szólal meg, sűrű felvételen a viselkedés
+  változatlan. A szimulált meccsen stride 1/2/3 mellett most mind a 24
+  gól megvan (korábban 24/4/8); a stride-őr eltérés-listája 53-ról 37
+  rétegre rövidült. Regressziós tesztek mindhárom jelre.
+
 ## v0.1.31 — kiadva (2026-08-21)
 
 > Kiadás-jegyzet: a v0.1.30 óta a kör három szálon futott — egy

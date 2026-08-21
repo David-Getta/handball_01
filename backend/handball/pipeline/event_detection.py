@@ -143,15 +143,78 @@ def _save_by_goalkeeper(match: Match, idx: int, goal_x: float) -> Optional[int]:
     return None
 
 
+# A gólvonal-átlépés két minta KÖZÖTT is megtörténhet: ritkított
+# feldolgozásnál (stride) a labda kockánként métereket lép, és
+# átugorhatja a GOL_TOL_M sávot. Ekkora (m/s) labdasebességig hisszük
+# el a két minta közti átlépést — e fölött detektálási ugrás (zaj).
+GOAL_CROSS_MAX_SPEED_MS = 45.0
+# Az extrapolált (3.) gól-jel csak RITKÍTOTT felvételen él: e feletti
+# fps-nél a sáv- és az átlépés-jel lefedi a valódi gólokat, az
+# extrapoláció ott csak a téves találat kockázatát hozná.
+GOAL_EXTRAP_MAX_FPS = 15.0
+
+
 def _reaches_goal_line(match: Match, idx: int, goal_x: float) -> bool:
-    """Előrenézve eléri-e a labda a gólvonalat a kapufák között (= gól)."""
+    """Előrenézve eléri-e a labda a gólvonalat a kapufák között (= gól).
+
+    Három, egymást kiegészítő jel — ritkított felvételen (stride) a
+    labda kockánként métereket léphet, és az 1. jel sávja fölött
+    "átrepülne":
+
+    1. a labda egy MINTÁN a gólvonal GOAL_TOL_M sávjában, a kapufák
+       között van (a hálóban megülő labda);
+    2. a labda két EGYMÁST KÖVETŐ minta között átlépi a gólvonalat, és
+       a metszéspont y-ja a kapufák közé esik;
+    3. a kapu felé tartó labda a vonal előtt EGY LÉPÉSNYIRE jár, és a
+       követés ott MEGSZAKAD (nincs következő minta, vagy
+       teleport-ugrás jön — élesben a hálóba érő labdát a háló
+       kitakarja, majd a középkezdésnél bukkan fel): az utolsó ismert
+       sebességgel extrapolált metszéspont dönt. Ha a követés
+       FOLYTONOSAN megy tovább (tehát láttuk volna a gólt vagy a
+       védést), az extrapoláció nem szólal meg.
+    """
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    max_step = GOAL_CROSS_MAX_SPEED_MS / fps
     end = min(len(match.frames), idx + GOAL_LOOKAHEAD)
-    for j in range(idx, end):
-        b = match.frames[j].ball
+    lo = max(0, idx - 1)
+    balls = [match.frames[j].ball for j in range(lo, end)]
+
+    for k, b in enumerate(balls):
         if b is None:
             continue
+        # 1) minta a gólvonal-sávban, a kapufák között.
         if abs(b.x - goal_x) <= GOAL_TOL_M and _GOAL_Y_LOW <= b.y <= _GOAL_Y_HIGH:
             return True
+        prev = balls[k - 1] if k > 0 else None
+        if prev is None:
+            continue
+        dx, dy = b.x - prev.x, b.y - prev.y
+        step = math.hypot(dx, dy)
+        if step > max_step or abs(dx) < 1e-9:
+            continue
+        # 2) a két minta közti szakasz átlépi a gólvonalat.
+        if (prev.x - goal_x) * (b.x - goal_x) < 0:
+            yc = prev.y + dy * (goal_x - prev.x) / dx
+            if _GOAL_Y_LOW <= yc <= _GOAL_Y_HIGH:
+                return True
+        # 3) extrapolált átlépés folytonosság-törésnél: a labda a kapu
+        # felé tart, a vonal egy lépésen belül — és a következő minta
+        # hiányzik vagy teleport (a folytonos követés kizárja).
+        toward = dx > 0 if goal_x > 0 else dx < 0
+        remaining = abs(goal_x - b.x)
+        if fps < GOAL_EXTRAP_MAX_FPS and toward \
+                and remaining <= 1.25 * step:
+            # A törést a MECCS következő kockáján nézzük, nem az ablak
+            # szélén — az ablak vége nem a követés vége.
+            j_next = lo + k + 1
+            nxt = (match.frames[j_next].ball
+                   if j_next < len(match.frames) else None)
+            broken = (nxt is None
+                      or math.hypot(nxt.x - b.x, nxt.y - b.y) > max_step)
+            if broken:
+                yc = b.y + dy * (goal_x - b.x) / dx
+                if _GOAL_Y_LOW <= yc <= _GOAL_Y_HIGH:
+                    return True
     return False
 
 

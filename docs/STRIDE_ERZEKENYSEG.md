@@ -9,7 +9,7 @@ rétegek ugyanarról a meccsről ritkítva másképp — jellemzően
 óvatosabban — ítélhetnek. Ez a lista a döntés alapja, hol
 érdemes a kockaszám-küszöböt másodperc-alapúra váltani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **486 réteg** összevetve, ebből **53 eltérő ítéletű**.
+Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **486 réteg** összevetve, ebből **37 eltérő ítéletű**.
 
 ## Fontos: mit jelent az eltérés
 
@@ -21,18 +21,9 @@ háromszor annyi valós időt követelnek.
 
 ## Eltérő ítéletű rétegek
 
-### `assist_duos`
+### `assisted_scorers`
 
-- `home.top`: sűrűn `None` → ritkítva `13→10`
-- `home.verdict`: sűrűn `None` → ritkítva `a gólgyártásuk a(z) 13→10 kettősön fut (4/8 asszisztos gól) — a duó ellen párban kell védekezni: az adót testtel, a kettejük passzsávját beleéréssel, és a gépezet áll`
-
-### `assist_pair_roles`
-
-- `home.verdict`: sűrűn `None` → ritkítva `a góljaik a(z) beálló→irányító tengelyen születnek (100%, 8 asszisztos gólból) — a kettős közti passzsáv a fal első számú zárnivalója: az adót testtel, a sávot beleéréssel`
-
-### `assisted_scorer_roles`
-
-- `home.verdict`: sűrűn `None` → ritkítva `a kiszolgált góljaik 100%-át a(z) irányító posztjuk fejezi be (8 asszisztos gólból) — őt nem fogni kell, hanem éheztetni: a felé futó passz elvágásával magától elhal`
+- `home.top`: sűrűn `3` → ritkítva `6`
 
 ### `attack_motion`
 
@@ -50,10 +41,6 @@ háromszor annyi valós időt követelnek.
 
 - `home.verdict`: sűrűn `a térnyerésük a(z) irányító poszt lábán van (72%-a a labdával megtett 279 előre-méternek) — őt a felezőtől hátrálva kell fogadni: lendületbe engedni tilos` → ritkítva `a térnyerésük a(z) irányító poszt lábán van (74%-a a labdával megtett 91 előre-méternek) — őt a felezőtől hátrálva kell fogadni: lendületbe engedni tilos`
 
-### `beaten_defenders`
-
-- `away.top`: sűrűn `13` → ritkítva `None`
-
 ### `big_chance_feeder_roles`
 
 - `home.main_role`: sűrűn `None` → ritkítva `irányító`
@@ -69,21 +56,9 @@ háromszor annyi valós időt követelnek.
 - `home.main_role`: sűrűn `None` → ritkítva `beálló`
 - `home.verdict`: sűrűn `None` → ritkítva `a ziccereik 100%-a a(z) beálló posztnál alakul ki (3 nagy helyzetből) — a helyzetet a kialakulása előtt kell megfogni: korábbi besegítés és szűkítés az ő sávjában`
 
-### `black_window`
-
-- `away.verdict`: sűrűn `a 0–5. perc a fekete ötpercük (0-24)` → ritkítva `a 0–5. perc a fekete ötpercük (0-8)`
-
 ### `blocked_shooter_roles`
 
 - `home.verdict`: sűrűn `a blokkolt lövéseik 100%-a a(z) beálló posztról jön (8 blokkból) — a fal ellene bátran zárhat: az ő előkészítetlen lövése falba megy, és onnan kontra indul` → ritkítva `a blokkolt lövéseik 100%-a a(z) beálló posztról jön (4 blokkból) — a fal ellene bátran zárhat: az ő előkészítetlen lövése falba megy, és onnan kontra indul`
-
-### `breakthrough_yield`
-
-- `home.verdict`: sűrűn `a betöréseik 100%-a gólba fut (24 gól 24 betörésből) — bejutnak ÉS büntetnek is: a falat előbb kell zárni, kilépéssel a lövő elé, mert a hatoson belül már késő` → ritkítva `None`
-
-### `closing_attacks`
-
-- `home.verdict`: sűrűn `jól kezelik a záró labdát` → ritkítva `None`
 
 ### `conceded_side_bias`
 
@@ -91,13 +66,9 @@ háromszor annyi valós időt követelnek.
 
 ### `counter_plan`
 
-- `away.pairs[2].verdict`: sűrűn `a futómunkájuk egyenletesen oszlik (a három legtöbbet futó a táv 50%-a) — tempóval nem lehet szétszedni őket: a lövés-választás és a fal minősége dönt` → ritkítva `a kapusuk felébred a kapott góltól (93% védés a következő két lövésen, egyébként 0%) — gól után ne kapkodjatok: a következő támadást ki kell dolgozni`
-- `away.pairs[3].verdict`: sűrűn `az újraindításuk üresjárat (0/24 válasz-gól) — a saját gól után nyugodtan rendezhetitek a falat: a középkezdésükből ritkán jön azonnali büntetés` → ritkítva `a futómunkájuk egyenletesen oszlik (a három legtöbbet futó a táv 50%-a) — tempóval nem lehet szétszedni őket: a lövés-választás és a fal minősége dönt`
-- `away.pairs[4].verdict`: sűrűn `None` → ritkítva `az újraindításuk üresjárat (0/8 válasz-gól) — a saját gól után nyugodtan rendezhetitek a falat: a középkezdésükből ritkán jön azonnali büntetés`
-- `away.verdict`: sűrűn `a(z) 4 teendőhöz nincs illeszkedő gyakorlat a fókusz-listán — ezekre a vezetőedző saját megoldása kell` → ritkítva `a(z) 5 teendőből 1-hez van kész gyakorlat; a maradék 4 edzői döntést kíván`
-- `home.pairs[0].verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 10 réteg ítélete mutat rá (a 19 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
+- `home.pairs[0].verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 8 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
 - `home.pairs[4].verdict`: sűrűn `a(z) 1. figurájuk lövéseinek 61%-a a(z) irányító posztra fut ki — a figura INDULÁSAKOR arra az oldalra kell csúszni, nem a lövésnél` → ritkítva `a lerohanásaik a(z) beálló poszton záródnak (100%, 3 kontra-lövésből) — visszafutásnál őt kell először felvenni, a többiek egy ütemmel ráérnek`
-- … és még 1 eltérés
+- `home.verdict`: sűrűn `a(z) 5 teendőből 2-hez van kész gyakorlat; a maradék 3 edzői döntést kíván` → ritkítva `a(z) 5 teendőből 3-hez van kész gyakorlat; a maradék 2 edzői döntést kíván`
 
 ### `covered_shooter_roles`
 
@@ -107,26 +78,17 @@ háromszor annyi valós időt követelnek.
 
 - `home.top`: sűrűn `None` → ritkítva `6`
 
+### `defense`
+
+- `away.worst_zone`: sűrűn `átlövés közép` → ritkítva `beálló (6 m)`
+
 ### `defensive_shift_lag`
 
 - `away.verdict`: sűrűn `None` → ritkítva `gyorsan igazodnak`
 
-### `gk_after_goal`
-
-- `away.verdict`: sűrűn `None` → ritkítva `a kapusuk felébred a kapott góltól (93% védés a következő két lövésen, egyébként 0%) — gól után ne kapkodjatok: a következő támadást ki kell dolgozni`
-
-### `gk_free_shot_saves`
-
-- `away.verdict`: sűrűn `None` → ritkítva `falfüggő`
-
-### `gk_rebound_control`
-
-- `away.verdict`: sűrűn `None` → ritkítva `kiüti a labdát a kapusuk`
-
 ### `goal_patterns`
 
-- `home.top`: sűrűn `bal-távoli` → ritkítva `közép-távoli`
-- `home.verdict`: sűrűn `None` → ritkítva `a góljaik mintázata: közép-távoli (5/8)`
+- `home.top`: sűrűn `bal-távoli` → ritkítva `közép-közeli`
 
 ### `high_steal_roles`
 
@@ -142,40 +104,15 @@ háromszor annyi valós időt követelnek.
 
 ### `key_player`
 
-- `home.verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 10 réteg ítélete mutat rá (a 19 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
+- `home.verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 8 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
 
 ### `key_post`
 
-- `home.verdict`: sűrűn `a kulcs-posztjuk a(z) irányító: 9 réteg ítélete fut ki rá (a 16 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja` → ritkítva `a kulcs-posztjuk a(z) irányító: 14 réteg ítélete fut ki rá (a 23 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja`
+- `home.verdict`: sűrűn `a kulcs-posztjuk a(z) irányító: 9 réteg ítélete fut ki rá (a 16 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja` → ritkítva `a kulcs-posztjuk a(z) irányító: 11 réteg ítélete fut ki rá (a 19 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja`
 
 ### `last_pass_roles`
 
 - `home.verdict`: sűrűn `a lövéseik előkészítése 87%-ban a(z) beálló posztról jön (23 előkészítő passzból) — az ő sávjának zárásával a lövéseik előkészítetlenné válnak, és a lövők maguktól elhalnak` → ritkítva `a lövéseik előkészítése 67%-ban a(z) beálló posztról jön (24 előkészítő passzból) — az ő sávjának zárásával a lövéseik előkészítetlenné válnak, és a lövők maguktól elhalnak`
-
-### `lead_scorer_roles`
-
-- `home.verdict`: sűrűn `None` → ritkítva `vezetésnél a(z) irányító posztjuk viszi a játékot (100%, 7 előnyben lőtt gólból) — ha ők vezetnek, az ő kivétele (szoros fogás, kettőzés) töri meg a lendület-tartásukat`
-
-### `lead_scorers`
-
-- `home.top`: sűrűn `None` → ritkítva `4`
-
-### `missed_chance_players`
-
-- `home.top`: sűrűn `None` → ritkítva `6`
-
-### `missed_chance_roles`
-
-- `home.main_role`: sűrűn `None` → ritkítva `beálló`
-- `home.verdict`: sűrűn `None` → ritkítva `a kihagyott ziccereik 100%-a a(z) beálló posztnál esik (3 kihagyásból) — az ő helyzetbe engedése a kisebbik rossz: a besegítés a biztos kezű társakra menjen`
-
-### `opening_scorer_roles`
-
-- `home.verdict`: sűrűn `None` → ritkítva `a rajtjuk a(z) irányító posztra épül (100%, 8 gól a meccs első tíz percében) — az első tíz percben őt kell a legjobb védővel megfogni, és a nyitásuk kiegyenlített marad`
-
-### `opening_scorers`
-
-- `home.top`: sűrűn `None` → ritkítva `3`
 
 ### `outlet_hunter_roles`
 
@@ -189,17 +126,9 @@ háromszor annyi valós időt követelnek.
 
 - `home.top`: sűrűn `6` → ritkítva `None`
 
-### `reading_keeper`
-
-- `away.verdict`: sűrűn `None` → ritkítva `reflexből véd`
-
-### `restart_yield`
-
-- `away.verdict`: sűrűn `az újraindításuk üresjárat (0/24 válasz-gól) — a saját gól után nyugodtan rendezhetitek a falat: a középkezdésükből ritkán jön azonnali büntetés` → ritkítva `az újraindításuk üresjárat (0/8 válasz-gól) — a saját gól után nyugodtan rendezhetitek a falat: a középkezdésükből ritkán jön azonnali büntetés`
-
 ### `role_assist_sources`
 
-- `home.verdict`: sűrűn `a góljaik a(z) beálló kezéből indulnak (87%, 23 gólpasszból) — nem a lövést kell zárni, hanem TŐLE a passzt elvenni: egy ember feljebb lép rá, a többiek posztot tartanak` → ritkítva `a góljaik a(z) beálló kezéből indulnak (100%, 8 gólpasszból) — nem a lövést kell zárni, hanem TŐLE a passzt elvenni: egy ember feljebb lép rá, a többiek posztot tartanak`
+- `home.verdict`: sűrűn `a góljaik a(z) beálló kezéből indulnak (87%, 23 gólpasszból) — nem a lövést kell zárni, hanem TŐLE a passzt elvenni: egy ember feljebb lép rá, a többiek posztot tartanak` → ritkítva `a góljaik a(z) beálló kezéből indulnak (67%, 24 gólpasszból) — nem a lövést kell zárni, hanem TŐLE a passzt elvenni: egy ember feljebb lép rá, a többiek posztot tartanak`
 
 ### `role_goal_placement`
 
@@ -240,9 +169,9 @@ háromszor annyi valós időt követelnek.
 
 - `home.lefty`: sűrűn `None` → ritkítva `6`
 
-### `shot_efficiency_by_role`
+### `unpressured_assists`
 
-- `home.verdict`: sűrűn `None` → ritkítva `a(z) beálló posztjukról alig megy be a lövés`
+- `away.verdict`: sűrűn `az előkészítőre rálépnek` → ritkítva `None`
 
 ### `wing_shot_depth`
 
