@@ -793,6 +793,10 @@ class ScoutingReport:
     # Hetes-oldal: az irány-mérhető hetesek darabszáma oldalanként
     # ("bal"/"közép"/"jobb"). Darabszám, meccsek közt összegződik.
     svd_dirs: dict = field(default_factory=dict)
+    # Hetes-sarok emberre: dobónkénti irány-darabszámok LAPOS kulccsal
+    # ("játékos·irány" → dobás). Darabszám, meccsek közt pontosan
+    # összegződik.
+    stc_dir_by_taker: dict = field(default_factory=dict)
     # Gólpassz-poszt: a poszthoz kötött gólpasszok darabszáma
     # posztonként. Darabszám, meccsek közt pontosan összegződik.
     ras_assists_by_role: dict = field(default_factory=dict)
@@ -5752,6 +5756,31 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_svd_n} mérhető dobásból) — hetesnél a kapus "
                 "tudatosan arra az oldalra vetődhet.")
 
+    # Hetes-sarok emberre: a bejáratott sarkú dobó a kapus-lap első sora.
+    if rep.stc_dir_by_taker:
+        from .rules import STC_MIN_ATTEMPTS, STC_SHARE_PCT
+        _stc_tak: dict = {}
+        for _stc_key, _stc_n in rep.stc_dir_by_taker.items():
+            _stc_k, _, _stc_d = _stc_key.partition("·")
+            _stc_tak.setdefault(_stc_k, {})[_stc_d] = _stc_n
+        _stc_best = None
+        for _stc_k, _stc_dirs in _stc_tak.items():
+            _stc_att = sum(_stc_dirs.values())
+            if _stc_att < STC_MIN_ATTEMPTS:
+                continue
+            _stc_d = max(_stc_dirs, key=lambda d: _stc_dirs[d])
+            _stc_pct = 100.0 * _stc_dirs[_stc_d] / _stc_att
+            if _stc_pct >= STC_SHARE_PCT and (
+                    _stc_best is None or _stc_att > _stc_best[1]):
+                _stc_best = (_stc_k, _stc_att, _stc_d, _stc_pct)
+        if _stc_best:
+            _stc_k, _stc_att, _stc_d, _stc_pct = _stc_best
+            keys.append(
+                f"A hetesdobójuk, a(z) {_stc_k}. játékos a {_stc_d} "
+                f"sarkot keresi ({_stc_pct:.0f}%, {_stc_att} dobásból) — "
+                "a kapus nála ne olvasson, hanem KÉSZÜLJÖN: tudatosan "
+                "arra a sarokra vetődjön.")
+
     # Kontra-poszt: visszafutásnál kit kell először felvenni.
     _rfb_n = sum(rep.rfb_shots_by_role.values())
     if _rfb_n >= 3:
@@ -10362,6 +10391,16 @@ def _scout_team_cached(match: Match, team: Team,
         from .rules import seven_shot_directions as _svd
         svdrec = _svd(match, config)[team.value]
         rep.svd_dirs = {d: n for d, n in svdrec["dirs"].items() if n}
+        from .rules import seven_taker_corners as _stc
+        stcrec = _stc(match, config)[team.value]
+        for r in stcrec["players"]:
+            _stc_k = str(r["jersey"] if r["jersey"] is not None
+                         else r["player_id"])
+            for _stc_d, _stc_n in r["dirs"].items():
+                if _stc_n:
+                    key = f"{_stc_k}·{_stc_d}"
+                    rep.stc_dir_by_taker[key] = (
+                        rep.stc_dir_by_taker.get(key, 0) + _stc_n)
         from .roles import role_assist_sources as _ras
         rasrec = _ras(match, config)[team.value]
         rep.ras_assists_by_role = dict(rasrec["roles"])
@@ -13780,6 +13819,33 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 438) Az ő kiszámítható hetesdobójuk × a ti fogó kapusotok: a
+    # hetes az egyetlen helyzet, ahol a kapus előre dönthet.
+    if opp.stc_dir_by_taker and own.gk_saves >= 5:
+        _s438_tak: dict = {}
+        for _s438_key, _s438_n in opp.stc_dir_by_taker.items():
+            _s438_k, _, _s438_d = _s438_key.partition("·")
+            _s438_tak.setdefault(_s438_k, {})[_s438_d] = _s438_n
+        _s438_best = None
+        for _s438_k, _s438_dirs in _s438_tak.items():
+            _s438_att = sum(_s438_dirs.values())
+            if _s438_att < 3:
+                continue
+            _s438_d = max(_s438_dirs, key=lambda d: _s438_dirs[d])
+            _s438_pct = 100.0 * _s438_dirs[_s438_d] / _s438_att
+            if _s438_pct >= 60.0 and (
+                    _s438_best is None or _s438_att > _s438_best[1]):
+                _s438_best = (_s438_k, _s438_att, _s438_d, _s438_pct)
+        if _s438_best:
+            _s438_k, _s438_att, _s438_d, _s438_pct = _s438_best
+            plan.append(
+                f"A hetesdobójuk, a(z) {_s438_k}. játékos a {_s438_d} "
+                f"sarkot keresi ({_s438_pct:.0f}%, {_s438_att} dobásból), "
+                f"nektek pedig fogó kapusotok van ({own.gk_saves} védés) "
+                "— hetesnél a kapus NE olvasson, hanem előre döntsön: "
+                "tudatosan a bejáratott sarokra vetődjön; a hetes az "
+                "egyetlen helyzet, ahol ezt megteheti.")
 
     # 437) Az ő rejtett szervezőjük × a ti labdaszerzésetek: a
     # másod-előkészítőnél elcsípett labda a leggyorsabb kontra-forrás.
@@ -21321,6 +21387,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prea_by_player=_merge_count_dicts(
             r.prea_by_player for r in reports),
         prea_chained=sum(r.prea_chained for r in reports),
+        stc_dir_by_taker=_merge_count_dicts(
+            r.stc_dir_by_taker for r in reports),
         rsy_restarts=sum(r.rsy_restarts for r in reports),
         rsy_answered=sum(r.rsy_answered for r in reports),
         shs_seconds=sum(r.shs_seconds for r in reports),

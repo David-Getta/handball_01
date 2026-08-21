@@ -4421,6 +4421,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import seven_taker_corners
+            res["seven_taker_corners"] = seven_taker_corners(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import breaks_by_score
             res["breaks_by_score"] = breaks_by_score(match)
         except Exception:
@@ -5807,6 +5812,9 @@ def create_app():
                 from ..pipeline.rules import seven_shot_directions
                 _layer("seven_shot_directions",
                        lambda: seven_shot_directions(match))
+                from ..pipeline.rules import seven_taker_corners
+                _layer("seven_taker_corners",
+                       lambda: seven_taker_corners(match))
                 from ..pipeline.attack_types import breaks_by_score
                 _layer("breaks_by_score",
                        lambda: breaks_by_score(match))

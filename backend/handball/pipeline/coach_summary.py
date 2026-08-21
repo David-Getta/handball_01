@@ -3270,6 +3270,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hetesnél a kapus tudatosan arra vetődhet.")
     except Exception:
         pass
+    # Hetes-sarok emberre: melyik sarkát keresi a dobójuk.
+    try:
+        from .rules import seven_taker_corners
+        stc = seven_taker_corners(match)
+        for side, name in (("home", home), ("away", away)):
+            top_stc = stc[side]["top"]
+            if top_stc is None:
+                continue
+            ki_stc = (f"a(z) {top_stc['jersey']}. számú"
+                      if top_stc.get("jersey") is not None
+                      else f"a(z) {top_stc['player_id']}. játékos")
+            body += (f" A(z) {name} hetesdobója, {ki_stc}, a "
+                     f"{top_stc['favorite']} sarkot keresi "
+                     f"({top_stc['share_pct']:.0f}%, "
+                     f"{top_stc['attempts']} dobásból) — a kapus nála "
+                     "tudatosan arra vetődhet.")
+    except Exception:
+        pass
     # Kontra-poszt: kit kell először felvenni visszafutásnál.
     try:
         from .roles import role_fast_breaks

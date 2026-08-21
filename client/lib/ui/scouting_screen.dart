@@ -3175,6 +3175,51 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hetes-sarok emberre: melyik sarkát keresi a dobójuk (dobónként 3+
+  // irány-mérhető hetes, 60%+ részarány — a backenddel azonos küszöbök:
+  // STC_MIN_ATTEMPTS, STC_SHARE_PCT). A kulcs alakja "játékos·irány".
+  String? _sevenTakerCorner(Map<String, dynamic> r) {
+    final flat = (r["stc_dir_by_taker"] as Map?)?.cast<String, dynamic>();
+    if (flat == null || flat.isEmpty) return null;
+    final byTaker = <String, Map<String, int>>{};
+    flat.forEach((key, v) {
+      final i = key.indexOf("·");
+      if (i <= 0) return;
+      final taker = key.substring(0, i);
+      final dir = key.substring(i + 1);
+      (byTaker[taker] ??= {})[dir] =
+          ((byTaker[taker]![dir] ?? 0) + (v as num).toInt());
+    });
+    String? bestK;
+    var bestAtt = 0;
+    String bestDir = "";
+    double bestPct = 0;
+    byTaker.forEach((taker, dirs) {
+      var att = 0;
+      dirs.forEach((_, n) => att += n);
+      if (att < 3) return;
+      String dom = "";
+      var domN = 0;
+      dirs.forEach((d, n) {
+        if (n > domN) {
+          dom = d;
+          domN = n;
+        }
+      });
+      final pct = 100.0 * domN / att;
+      if (pct >= 60.0 && att > bestAtt) {
+        bestK = taker;
+        bestAtt = att;
+        bestDir = dom;
+        bestPct = pct;
+      }
+    });
+    if (bestK == null) return null;
+    return "a hetesdobójuk, a(z) $bestK. játékos a $bestDir sarkot "
+        "keresi (${bestPct.toStringAsFixed(0)}%, $bestAtt dobásból) · "
+        "a kapus nála előre döntsön, ne olvasson";
+  }
+
   // Hoki-assziszt: ki a rejtett szervező a gólpassz mögött (2+
   // másod-előkészítés, a láncolt gólok fele — a backenddel azonos
   // küszöbök: PREA_MIN, PREA_SHARE_PCT).
@@ -11340,6 +11385,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Balkezes poszt", _leftHandedRole(r)!],
       if (_ironMen(r) != null) ["Vasemberek", _ironMen(r)!],
       if (_preAssist(r) != null) ["Rejtett szervező", _preAssist(r)!],
+      if (_sevenTakerCorner(r) != null)
+        ["Hetes-sarok emberre", _sevenTakerCorner(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
       if (_finishingBalance(r) != null)
         ["Befejezés-mérleg", _finishingBalance(r)!],

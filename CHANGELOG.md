@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.30 óta)
 
+- **Hetes-sarok emberre**: MELYIK SARKÁT keresi a hetesdobójuk. A
+  hetes-oldal réteg csapatra mondja meg, merre mennek a hetesek — a
+  kapusnak viszont a DOBÓ kell: a hetesnél ő az egyetlen, akinek van
+  ideje dönteni, és a dobók szokás-állatok — nyomás alatt a begyakorolt
+  sarkukat keresik. A réteg a hétméterek irány-jelét dobóra bontja;
+  ítélet dobónként 3+ irány-mérhető hetestől, 60%+ részaránytól. Edzői
+  olvasat: a bejáratott sarkú dobónál a kapus NE olvasson, hanem előre
+  döntsön — tudatosan arra a sarokra vetődjön; a szórónál a mozdulatból
+  kell olvasnia. Saját oldalon: a kiszámítható dobónk sarkát variálni
+  kell, és második dobót építeni. Felületek: /analyze + meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 438. meccsterv-szabály
+  a fogó kapussal párosítva), 458. edzés-szabály, Kulcs-ember lencse,
+  kliens-csempe.
 - **Hoki-assziszt (rejtett szervező)**: KI adja a gólpassz ELŐTTI
   passzt. A gólpasszos mindig látszik — a valódi szervező sokszor
   eggyel korábban van: ő adja azt a passzt, ami elmozdítja a falat

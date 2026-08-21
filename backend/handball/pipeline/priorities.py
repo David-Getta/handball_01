@@ -752,6 +752,7 @@ KPL_LAYERS: tuple = (
     ("Indítás-vadász", "goalkeeper", "outlet_hunters"),
     ("Kiszolgált befejező", "roles", "assisted_scorers"),
     ("Rejtett szervező", "event_detection", "pre_assists"),
+    ("Hetes-dobó", "rules", "seven_taker_corners"),
     ("Kétperc-gyűjtő", "rules", "suspension_collectors"),
     ("Felhozatal-ember", "goalkeeper", "outlet_targets"),
     ("Kettőzött ember", "defense", "doubled_targets"),

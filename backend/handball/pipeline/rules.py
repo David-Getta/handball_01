@@ -2213,6 +2213,71 @@ def seven_shot_directions(match: Match,
     return out
 
 
+# Hetes-sarok emberre: dobónként ennyi irány-mérhető hetes kell az
+# ítélethez, és ekkora részarány teszi a sarkot bejáratott szokássá.
+STC_MIN_ATTEMPTS = 3
+STC_SHARE_PCT = 60.0
+
+
+def seven_taker_corners(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-sarok emberre: MELYIK SARKÁT keresi a hetesdobójuk.
+
+    A hetes-oldal (seven_shot_directions) CSAPATRA mondja meg, merre
+    mennek a hetesek — a kapusnak viszont a DOBÓ kell: a hetesnél ő az
+    egyetlen, akinek van ideje dönteni, és a dobók szokás-állatok —
+    nyomás alatt a begyakorolt sarkukat keresik. Ez a réteg a
+    hétméterek irány-jelét a dobóra bontja.
+
+    Edzőileg ez a kapus-lap: dobónként egy sor — ki áll oda, és hova
+    dobja. A bejáratott sarkú dobónál a kapus tudatosan arra vetődhet;
+    a szórónál a mozdulatból kell olvasnia. Saját oldalon fordítva: ha
+    a dobónk kiszámítható, a sarkot variálni kell — vagy a hetes-lista
+    következő embere kapja a labdát.
+
+    Visszatérés csapatonként: {"attempts" (irány- ÉS dobó-mérhető
+    hetes), "players": [{"player_id", "jersey", "attempts", "dirs":
+    {"bal","közép","jobb"}, "favorite", "share_pct"}] dobás szerint
+    csökkenően, "top"} — a "favorite" STC_MIN_ATTEMPTS dobástól és
+    STC_SHARE_PCT részaránytól nevesül; a "top" a legtöbbet dobó
+    bejáratott sarkú ember (egyébként None).
+    """
+    config = config or TacticsConfig()
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if getattr(p, "jersey_number", None) is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sm in seven_meter_outcomes(match, config):
+        if sm["irany"] is None or sm["shooter_id"] is None:
+            continue
+        rec = tally[sm["team"]].setdefault(
+            sm["shooter_id"], {"bal": 0, "közép": 0, "jobb": 0})
+        rec[sm["irany"]] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        players = []
+        for pid, dirs in tally[side].items():
+            attempts = sum(dirs.values())
+            fav, share = None, None
+            if attempts >= STC_MIN_ATTEMPTS:
+                d = max(dirs, key=lambda k: dirs[k])
+                pct = 100.0 * dirs[d] / attempts
+                if pct >= STC_SHARE_PCT:
+                    fav, share = d, round(pct, 1)
+            players.append({"player_id": pid, "jersey": jersey.get(pid),
+                            "attempts": attempts, "dirs": dict(dirs),
+                            "favorite": fav, "share_pct": share})
+        players.sort(key=lambda r: -r["attempts"])
+        top = next((p for p in players if p["favorite"]), None)
+        out[side] = {"attempts": sum(p["attempts"] for p in players),
+                     "players": players, "top": top}
+    return out
+
+
 # Emberelőny-poszt: ennyi poszthoz kötött emberelőny-lövés kell az
 # ítélethez, és ekkora részarány fölött mondjuk ki, hogy az
 # emberelőnyük egy posztra fut ki.

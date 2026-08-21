@@ -1366,6 +1366,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 458) Hetes-sarok: ha a dobónk kiszámítható, a kapusok olvasni
+    # fogják — variálni kell, vagy második dobót építeni.
+    try:
+        from .rules import STC_MIN_ATTEMPTS, STC_SHARE_PCT, \
+            seven_taker_corners
+        stc458 = seven_taker_corners(match, config)
+        for side in ("home", "away"):
+            top458 = stc458[side]["top"]
+            if top458 is None:
+                continue
+            ki458 = (f"a(z) {top458['jersey']}. számú"
+                     if top458.get("jersey") is not None
+                     else f"a(z) {top458['player_id']}. játékos")
+            add(side, "támadás", "Hetes-variálás",
+                f"{ki458} emberünk a heteseit a {top458['favorite']} "
+                f"sarokba dobja ({top458['share_pct']:.0f}%, "
+                f"{top458['attempts']} dobásból; {STC_MIN_ATTEMPTS} "
+                f"dobástól és {STC_SHARE_PCT:.0f}%-tól jelezzük) — a "
+                "felkészült kapus nála előre dönthet",
+                "hetes-blokk: sarok-sorozatok VÁLTOTT parancsra (az edző "
+                "mutatja, hova), kivárás-gyakorlat (a kapus mozdulatára "
+                "dobott hetes), és épüljön második dobó — éles meccsen "
+                "kétszer kihagyott hetes után automatikusan ő "
+                "következik")
+    except Exception:
+        pass
+
     # 457) Hoki-assziszt: ha a támadás-szervezés egy rejtett emberen
     # fordul, az ő kiiktatása a gólgyárat állítja le — variálni kell.
     try:

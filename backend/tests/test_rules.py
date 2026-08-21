@@ -2726,3 +2726,60 @@ def test_shorthanded_survival_judges_the_penalty_kill(monkeypatch):
     rec = rules.shorthanded_survival(None)
     assert rec["home"]["per_2min"] is None
     assert rec["home"]["verdict"] is None
+
+
+# ---- Hetes-sarok emberre (seven_taker_corners) ------------------------------
+
+
+def _stc_match(cases, fps=25.0):
+    """Hetes-sorozat dobónként: a `cases` elemei (dobó-track, y) párok —
+    az y adja az irányt (8,8 = bal, 10 = közép, 11,2 = jobb)."""
+    frames = []
+    t = 0
+    for (tid, y) in cases:
+        for _ in range(30):    # álló labda a 7 m-es ponton
+            frames.append(Frame(t=t,
+                                players=[_pl(tid, Team.HOME, 32.0, 10.0)],
+                                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):     # a lövés a kapuba
+            frames.append(Frame(t=t,
+                                players=[_pl(tid, Team.HOME, 32.0, 10.0)],
+                                ball=Ball(x=min(34.0 + i, 40.0), y=y,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(300):   # 12 mp szünet (10 mp hetes-debounce)
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 300
+    return Match(_meta(fps), frames)
+
+
+def test_seven_taker_corners_names_the_habitual_corner():
+    """A 7-es dobó négyből hármat a bal sarokba tesz → bejáratott sarok;
+    a kétdobásos 9-esről nincs ítélet."""
+    from handball.pipeline.rules import (STC_MIN_ATTEMPTS, STC_SHARE_PCT,
+                                         seven_taker_corners)
+
+    rec = seven_taker_corners(_stc_match(
+        [(7, 8.8), (7, 8.8), (7, 8.8), (7, 11.2),
+         (9, 10.0), (9, 11.2)]))["home"]
+    assert rec["attempts"] == 6, rec
+    top = rec["top"]
+    assert top is not None and top["player_id"] == 7, rec
+    assert top["favorite"] == "bal", rec
+    assert top["attempts"] >= STC_MIN_ATTEMPTS
+    assert top["share_pct"] >= STC_SHARE_PCT
+    masik = next(p for p in rec["players"] if p["player_id"] == 9)
+    assert masik["favorite"] is None, rec
+
+
+def test_seven_taker_corners_silent_when_the_taker_varies():
+    """A szóró dobóra nincs sarok-ítélet (sose hallgatólagos szokás)."""
+    from handball.pipeline.rules import seven_taker_corners
+
+    rec = seven_taker_corners(_stc_match(
+        [(7, 8.8), (7, 10.0), (7, 11.2), (7, 10.0),
+         (7, 8.8), (7, 11.2)]))["home"]
+    assert rec["attempts"] == 6, rec
+    assert rec["top"] is None, rec
