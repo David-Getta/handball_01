@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.33 óta)
+## Kiadatlan (a v0.1.34 óta)
+
+*(még semmi)*
+
+## v0.1.34 — kiadva (2026-08-22)
+
+> Kiadás-jegyzet: az elengedés-kocka (release_t) elvének végigvitele a
+> teljes motoron. A v0.1.33 a lövés helyét és a kezességet állította az
+> elengedés pillanatára — ez a kör a maradék hely-olvasót is: zónák,
+> kapu-sarok (közös metszéspont-logikából), poszt-távolság,
+> fedezettség, kapus-mérések és a lövés-döntés minősége. A release_t
+> emellett idő-korlátot kapott (követés-lyukon át nem mutat régi
+> kockára). Ritkított felvételen minden hely-alapú ítélet a tényleges
+> elengedési pontból születik.
 
 - **Zónák és kapus-mérések is az elengedés kockájáról** (motor): a
   lövés-zóna (felderítés), a kapus zóna-bontása, a kapus-forma

@@ -41,7 +41,7 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
   demóval is fut). Lásd [`client/README.md`](client/README.md).
 
 ## Hol tartunk
-A rendszer **működő, telepíthető alkalmazás** (v0.1.33 kiadva Windows- és
+A rendszer **működő, telepíthető alkalmazás** (v0.1.34 kiadva Windows- és
 macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
 
 - **Feldolgozás**: YOLO + ByteTrack követés, kézi 4-sarkos kalibráció
