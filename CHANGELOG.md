@@ -3,7 +3,41 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.30 óta)
+## Kiadatlan (a v0.1.31 óta)
+
+## v0.1.31 — kiadva (2026-08-21)
+
+> Kiadás-jegyzet: a v0.1.30 óta a kör három szálon futott — egy
+> JAVÍTÁS a kiadott fal-rés réteghez, négy új elemző réteg és a fiók
+> felületének kerekítése, valamint két új minőség-őr.
+>
+> **(1) Fal-rés javítás.** A v0.1.29–30-ban kiadott fal-rés térkép két
+> helyen félrevezethetett: az oldal-nevet a pálya nyers
+> koordinátájából adta (a két csapat szemben áll — az egyik falról
+> fordított oldalt mondott), és a szerep-jelölés nélküli kapus hamis,
+> több méteres "rést" nyithatott. Mindkettő javítva, őr-tesztekkel; a
+> sáv mostantól a FAL saját nézőpontjából kap nevet, mint az
+> engedett-oldal rétegben.
+>
+> **(2) Négy új réteg.** Vasemberek (KI játssza végig csere nélkül — a
+> hajrá név szerinti célpontja), Hoki-assziszt (a gólpassz ELŐTTI
+> passz — a rejtett szervező), Hetes-sarok emberre (melyik sarkát
+> keresi a dobó — a kapus előre dönthet), Fal-rés fáradás (szétnyílnak-e
+> a közök a 2. félidőre — a betörős figurákat akkorra kell tenni).
+> Mind a teljes felület-sorral: /analyze + meccs-csomag, edzői
+> összefoglaló, felderítés + meccsterv-szabály, edzés-szabály,
+> kliens-csempe; a névre szóló rétegek a Kulcs-ember lencsébe is.
+>
+> **(3) Fiók-felület és minőség-őrök.** Jelszócsere a fiók-menüből,
+> elfelejtett-jelszó útmutató a belépőn. Két új jelentés-szintű őr:
+> tükrözés-őr (a bal/jobb oldal-nevek helyessége — 11 oldal-címkés
+> réteg, mind helyes) és stride-érzékenység őr (a kocka-ritkítás
+> hatása az ítéletekre — 486 rétegből 53 érintett, dokumentálva).
+>
+> A csomag 486 elemző réteget, 439 meccsterv- és 459 edzés-szabályt
+> tartalmaz; a teljes backend csomag zöld (1755 teszt), a
+> sorrend-függés lista üres.
+
 
 - **Stride-érzékenység őr** (minőség-eszköz): új jelentés-szkript
   (`scripts.stride_sensitivity` → `docs/STRIDE_ERZEKENYSEG.md`). A
