@@ -252,6 +252,83 @@ def test_assist_network_pairs_and_leaders():
     assert net["leaders"][0]["player_id"] == 1 and net["leaders"][0]["assists"] == 2
 
 
+# ---- Hoki-assziszt (a gólpassz előtti passz) --------------------------------
+
+
+def _prea_frames(n, with_pre=True):
+    """`n` hazai gól: passz 3→1 (másod-előkészítés, ha `with_pre`),
+    majd passz 1→2, és a 2-es gólja a +x kapura."""
+    frames = []
+    t = 0
+    for _ in range(n):
+        cast = [_pl(3, Team.HOME, 20.0, 10.0),
+                _pl(1, Team.HOME, 25.0, 10.0),
+                _pl(2, Team.HOME, 30.0, 10.0)]
+        if with_pre:
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=cast,
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        frames.append(Frame(t=t, players=cast,
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        frames.append(Frame(t=t, players=cast,
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # Középkezdés: a labda az ELLENFÉLHEZ kerül (mint élesben) — a
+        # két hazai támadás közt így nincs hamis csapaton belüli passz.
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[_pl(30, Team.AWAY,
+                                                  20.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=15.0, y=10.0, confidence=1.0)))
+            t += 1
+    return frames
+
+
+def test_pre_assists_names_the_hidden_organizer():
+    """A 3→1→2→gól láncban a 3-as a rejtett szervező: ő adja a gólpassz
+    előtti passzt."""
+    from handball.pipeline.event_detection import PREA_MIN, pre_assists
+
+    rec = pre_assists(Match(_meta(), _prea_frames(2)))["home"]
+    assert rec["assisted_goals"] == 2 and rec["chained"] == 2, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 3, rec
+    assert rec["top"]["pre_assists"] >= PREA_MIN
+
+    # A gólpasszoló (1-es) és a lövő (2-es) NEM másod-előkészítő.
+    pids = [p["player_id"] for p in rec["players"]]
+    assert 1 not in pids and 2 not in pids, rec
+
+
+def test_pre_assists_silent_without_a_chain():
+    """Ha a gólpassz előtt nincs korábbi passz (kétszemélyes akció),
+    nincs lánc — és kevés mintánál nincs ítélet."""
+    from handball.pipeline.event_detection import pre_assists
+
+    rec = pre_assists(Match(_meta(), _prea_frames(2,
+                                                  with_pre=False)))["home"]
+    assert rec["assisted_goals"] == 2, rec
+    assert rec["chained"] == 0 and rec["top"] is None, rec
+
+    egy = pre_assists(Match(_meta(), _prea_frames(1)))["home"]
+    assert egy["chained"] == 1 and egy["top"] is None, egy
+
+
 def _adu_frames(n_pairs):
     """`n_pairs` darab 1→2 asszisztos hazai gól kockái."""
     frames = []

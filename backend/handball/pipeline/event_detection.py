@@ -394,6 +394,117 @@ def assist_network(match: Match, config: Optional[TacticsConfig] = None) -> dict
     return result
 
 
+# Hoki-assziszt (másod-előkészítés): a gólpassz ELŐTTI passz ennyi
+# másodpercen belül érjen a gólpasszolóhoz; ennyi másod-előkészítés kell
+# az ítélethez, és ekkora részarány teszi az embert rejtett szervezővé.
+PREA_WINDOW_S = 6.0
+PREA_MIN = 2
+PREA_SHARE_PCT = 50.0
+
+
+def pre_assists(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Hoki-assziszt: KI adja a gólpassz ELŐTTI passzt.
+
+    A gólpasszos (last_passers, assist_network) mindig látszik — a
+    VALÓDI szervező viszont sokszor eggyel korábban van: ő adja azt a
+    passzt, ami elmozdítja a falat (oldalváltás, betörés utáni
+    kiosztás), a gólpassz utána már csak végrehajtás. Ez a réteg a
+    gólokhoz a gólpassz előtti utolsó, a gólpasszolóhoz érkező saját
+    passzt köti (PREA_WINDOW_S-en belül), és emberre összesíti.
+
+    Edzőileg: a rejtett szervező ellen a passzsáv-zárást EGGYEL
+    korábban kell kezdeni — nem a gólpasszolónál, hanem nála: ha ő nem
+    tudja megjátszani a beadót, a gólgyáruk el sem indul. Saját oldalon
+    ez a láthatatlan munka kimutatása: a hoki-asszisztos embert a
+    statisztika (gól, gólpassz) alulméri, pedig a támadás rajta fordul.
+
+    Visszatérés csapatonként: {"assisted_goals" (asszisztos gólok),
+    "chained" (amelyikhez másod-előkészítés is köthető), "players":
+    [{"player_id", "jersey", "pre_assists"}] csökkenően, "top"} — a
+    "top" a vezető ember, ha legalább PREA_MIN másod-előkészítése van
+    és eléri a "chained" PREA_SHARE_PCT-át (egyébként None).
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = PREA_WINDOW_S * fps
+    events = detect_events(match, config)
+    passes = [e for e in events if e.type == EventType.PASS]
+    # Támadás-határok: a lánc nem nyúlhat át az előző lövésen/gólon —
+    # ami a lövés előtt történt, az egy MÁSIK támadás passza volt.
+    shot_ts = sorted(e.t for e in events
+                     if e.type in (EventType.SHOT, EventType.GOAL))
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if getattr(p, "jersey_number", None) is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    counts = {"home": [0, 0], "away": [0, 0]}   # [asszisztos, láncolt]
+    for g in events:
+        if g.type != EventType.GOAL:
+            continue
+        aid = (g.detail or {}).get("assist_id")
+        if aid is None:
+            continue
+        side = g.team.value
+        counts[side][0] += 1
+        # A gólpassz maga: az utolsó passz, aminek a fogadója a lövő.
+        assist_pass = None
+        for p in passes:
+            if p.team != g.team or p.t > g.t:
+                continue
+            if (p.detail or {}).get("receiver_id") != g.player_id:
+                continue
+            if p.player_id != aid:
+                continue
+            if assist_pass is None or p.t > assist_pass.t:
+                assist_pass = p
+        if assist_pass is None:
+            continue
+        # A másod-előkészítés: az utolsó passz ELŐTTE, aminek a fogadója
+        # a gólpasszoló — és nem ő maga adta (track-zaj). Az előző
+        # lövés/gól előtti passz nem számít (az más támadás volt).
+        boundary = max((t_ for t_ in shot_ts if t_ < assist_pass.t),
+                       default=-1)
+        best = None
+        for p in passes:
+            if p.team != g.team or not (0 <= assist_pass.t - p.t <= win):
+                continue
+            if p.t <= boundary:
+                continue
+            if (p.detail or {}).get("receiver_id") != aid:
+                continue
+            if p.player_id is None or p.player_id == aid:
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        counts[side][1] += 1
+        tally[side][best.player_id] = tally[side].get(best.player_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "pre_assists": n}
+                   for pid, n in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        chained = counts[side][1]
+        if players and chained:
+            lead = players[0]
+            if (lead["pre_assists"] >= PREA_MIN
+                    and 100.0 * lead["pre_assists"] / chained
+                    >= PREA_SHARE_PCT):
+                top = lead
+        out[side] = {"assisted_goals": counts[side][0], "chained": chained,
+                     "players": players, "top": top}
+    return out
+
+
 # Gólpassz-duó: ennyi közös gól kell a kettős kimondásához, és ekkora
 # részarány fölött mondjuk ki, hogy a gólgyártásuk egy duón fut.
 ADU_MIN_GOALS = 2

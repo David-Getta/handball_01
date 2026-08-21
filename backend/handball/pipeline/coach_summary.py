@@ -3105,6 +3105,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "passzsávot beleéréssel.")
     except Exception:
         pass
+    # Hoki-assziszt: ki a rejtett szervező a gólpassz mögött.
+    try:
+        from .event_detection import pre_assists
+        pra = pre_assists(match)
+        for side, name in (("home", home), ("away", away)):
+            top_pra = pra[side]["top"]
+            if top_pra is None:
+                continue
+            ki_pra = (f"a(z) {top_pra['jersey']}. számú"
+                      if top_pra.get("jersey") is not None
+                      else f"a(z) {top_pra['player_id']}. játékos")
+            body += (f" A(z) {name} góljai mögött a rejtett szervező "
+                     f"{ki_pra}: ő adja a gólpassz ELŐTTI passzt "
+                     f"({top_pra['pre_assists']} másod-előkészítés) — a "
+                     "zárást nála kell kezdeni, nem a gólpasszolónál.")
+    except Exception:
+        pass
     # Időkérés-hozam: működik-e a mentő időkérésük.
     try:
         from .stoppages import timeout_yield

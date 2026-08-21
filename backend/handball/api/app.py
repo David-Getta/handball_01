@@ -4966,6 +4966,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.event_detection import pre_assists
+            res["pre_assists"] = pre_assists(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import timeout_yield
             res["timeout_yield"] = timeout_yield(match)
         except Exception:
@@ -5990,6 +5995,8 @@ def create_app():
                        lambda: seven_six_finishers(match))
                 from ..pipeline.event_detection import assist_duos
                 _layer("assist_duos", lambda: assist_duos(match))
+                from ..pipeline.event_detection import pre_assists
+                _layer("pre_assists", lambda: pre_assists(match))
                 from ..pipeline.stoppages import timeout_yield
                 _layer("timeout_yield", lambda: timeout_yield(match))
                 from ..pipeline.goalkeeper import gk_change_yield

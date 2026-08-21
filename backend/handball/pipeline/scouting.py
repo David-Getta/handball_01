@@ -1168,6 +1168,11 @@ class ScoutingReport:
     # Gólpassz-duó: az asszisztos gólok darabszáma (adó→befejező)
     # KETTŐSÖNKÉNT. Darabszám, meccsek közt pontosan összegződik.
     adu_goals_by_duo: dict = field(default_factory=dict)
+    # Hoki-assziszt: a másod-előkészítések darabszáma JÁTÉKOSONKÉNT, és
+    # a láncolható asszisztos gólok száma. Darabszámok, meccsek közt
+    # pontosan összegződnek.
+    prea_by_player: dict = field(default_factory=dict)
+    prea_chained: int = 0
     # Időkérés-hozam: az ítéletes időkérések mérlege (megtörte /
     # nem hozott fordulatot). Darabszám, meccsek közt összegződik.
     toy_broke: int = 0
@@ -4941,6 +4946,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_adu_n}/{_adu_all} asszisztos gól) — a duó ellen "
                 "párban védekezzetek: az adót testtel, a kettejük "
                 "passzsávját beleéréssel, és a gépezet áll.")
+
+    # Hoki-assziszt: a rejtett szervező — a zárás nála kezdődjön.
+    if rep.prea_chained >= 2 and rep.prea_by_player:
+        from .event_detection import PREA_MIN, PREA_SHARE_PCT
+        _prea_k, _prea_n = max(rep.prea_by_player.items(),
+                               key=lambda kv: kv[1])
+        if (_prea_n >= PREA_MIN
+                and 100.0 * _prea_n / rep.prea_chained >= PREA_SHARE_PCT):
+            keys.append(
+                f"A rejtett szervezőjük a(z) {_prea_k}. játékos: ő adja "
+                f"a gólpassz ELŐTTI passzt ({_prea_n}/{rep.prea_chained} "
+                "másod-előkészítés) — a passzsáv-zárást nála kezdjétek, "
+                "ne a gólpasszolónál: ha ő nem tudja megjátszani a "
+                "beadót, a gólgyáruk el sem indul.")
 
     # Időkérés-hozam: mit ér az ő zöld kartonjuk.
     _toy_judged = rep.toy_broke + rep.toy_failed
@@ -10645,6 +10664,13 @@ def _scout_team_cached(match: Match, team: Team,
              f"{d['jersey_to'] if d['jersey_to'] is not None else d['to']}"):
             d["goals"]
             for d in adurec["duos"]}
+        from .event_detection import pre_assists as _prea
+        prearec = _prea(match, config)[team.value]
+        rep.prea_chained = prearec["chained"]
+        rep.prea_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["pre_assists"]
+            for r in prearec["players"]}
         from .goalkeeper import seven_six_finishers as _en7p
         en7prec = _en7p(match, config)[team.value]
         rep.en7p_shots_by_player = {
@@ -13754,6 +13780,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 437) Az ő rejtett szervezőjük × a ti labdaszerzésetek: a
+    # másod-előkészítőnél elcsípett labda a leggyorsabb kontra-forrás.
+    if (opp.prea_chained >= 2 and opp.prea_by_player
+            and own.trans_steals >= 4):
+        _p437_k, _p437_n = max(opp.prea_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _p437_n >= 2 and 100.0 * _p437_n / opp.prea_chained >= 50.0:
+            plan.append(
+                f"A góljaik mögött a(z) {_p437_k}. játékos a rejtett "
+                f"szervező ({_p437_n}/{opp.prea_chained} "
+                f"másod-előkészítés), ti pedig jó labdaszerzők vagytok "
+                f"({own.trans_steals} szerzés) — a présnyomás nála "
+                "kezdődjön: az ő passzsávjába érjetek bele, mert az ott "
+                "elcsípett labda a legkorábbi pillanatban töri meg a "
+                "támadásukat, és a leggyorsabb kontrát adja.")
 
     # 436) Az ő vasemberük × a ti mély padotok: a név szerinti
     # hajrá-célpont — a poszt-szabály (286) párja emberre.
@@ -21276,6 +21318,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.en7p_shots_by_player for r in reports),
         adu_goals_by_duo=_merge_count_dicts(
             r.adu_goals_by_duo for r in reports),
+        prea_by_player=_merge_count_dicts(
+            r.prea_by_player for r in reports),
+        prea_chained=sum(r.prea_chained for r in reports),
         rsy_restarts=sum(r.rsy_restarts for r in reports),
         rsy_answered=sum(r.rsy_answered for r in reports),
         shs_seconds=sum(r.shs_seconds for r in reports),

@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.30 óta)
 
+- **Hoki-assziszt (rejtett szervező)**: KI adja a gólpassz ELŐTTI
+  passzt. A gólpasszos mindig látszik — a valódi szervező sokszor
+  eggyel korábban van: ő adja azt a passzt, ami elmozdítja a falat
+  (oldalváltás, betörés utáni kiosztás), a gólpassz utána már csak
+  végrehajtás. A réteg a gólokhoz a gólpassz előtti utolsó, a
+  gólpasszolóhoz érkező saját passzt köti (6 mp-en belül, és nem
+  átnyúlva az előző lövésen — az más támadás volt), emberre összesítve;
+  ítélet 2+ másod-előkészítéstől, a láncolt gólok felétől. Edzői
+  olvasat: a rejtett szervező ellen a passzsáv-zárást EGGYEL korábban
+  kell kezdeni — ha ő nem tudja megjátszani a beadót, a gólgyár el sem
+  indul; saját oldalon ez a láthatatlan munka kimutatása (a
+  hoki-asszisztos embert a gól/gólpassz statisztika alulméri), és
+  figyelmeztetés: a szervezés ne egy rejtett kézen fusson. Felületek:
+  /analyze + meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs
+  + 437. meccsterv-szabály a labdaszerzéssel párosítva), 457.
+  edzés-szabály, Kulcs-ember lencse, kliens-csempe.
 - **Vasemberek**: KI játssza végig a meccset csere nélkül — a
   vasember-poszt ember-ikre. A poszt a tervhez kell (hova vigyük a
   tempót), a név a padhoz: a mezszám szerint összevont

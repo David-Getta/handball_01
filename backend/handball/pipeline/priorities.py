@@ -751,6 +751,7 @@ KPL_LAYERS: tuple = (
     ("Fáradt-fal ember", "defense", "tired_conceder_players"),
     ("Indítás-vadász", "goalkeeper", "outlet_hunters"),
     ("Kiszolgált befejező", "roles", "assisted_scorers"),
+    ("Rejtett szervező", "event_detection", "pre_assists"),
     ("Kétperc-gyűjtő", "rules", "suspension_collectors"),
     ("Felhozatal-ember", "goalkeeper", "outlet_targets"),
     ("Kettőzött ember", "defense", "doubled_targets"),

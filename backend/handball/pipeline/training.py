@@ -1366,6 +1366,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 457) Hoki-assziszt: ha a támadás-szervezés egy rejtett emberen
+    # fordul, az ő kiiktatása a gólgyárat állítja le — variálni kell.
+    try:
+        from .event_detection import PREA_MIN, pre_assists
+        pra457 = pre_assists(match, config)
+        for side in ("home", "away"):
+            top457 = pra457[side]["top"]
+            if top457 is None:
+                continue
+            ki457 = (f"a(z) {top457['jersey']}. számú"
+                     if top457.get("jersey") is not None
+                     else f"a(z) {top457['player_id']}. játékos")
+            add(side, "támadás", "Másod-előkészítés több kézre",
+                f"a góljaink mögött {ki457} emberünk a rejtett szervező "
+                f"({top457['pre_assists']} másod-előkészítés; "
+                f"{PREA_MIN}-tól jelezzük) — az okos ellenfél nála "
+                "kezdi a zárást, és a gólgyár el sem indul",
+                "szervezés-variálás: a bejáratott figurák induljanak a "
+                "MÁSIK oldalról is (a tükör-változatot külön kell "
+                "járatni), és legyen második indító-út — a beálló-beadás "
+                "előtti oldalváltást két különböző ember is tudja "
+                "elindítani; 5-5 elleni játékban időnként tiltsd le az "
+                "első számú szervezőt, hogy a többiek is merjenek")
+    except Exception:
+        pass
+
     # 456) Vasemberek: a csere nélkül végigjátszó emberünk hajrá-hibái
     # nem formahanyatlás, hanem terhelés — tervezett pihentetés kell.
     try:

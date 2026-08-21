@@ -3175,6 +3175,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hoki-assziszt: ki a rejtett szervező a gólpassz mögött (2+
+  // másod-előkészítés, a láncolt gólok fele — a backenddel azonos
+  // küszöbök: PREA_MIN, PREA_SHARE_PCT).
+  String? _preAssist(Map<String, dynamic> r) {
+    final chained = ((r["prea_chained"] ?? 0) as num).toInt();
+    final byP = (r["prea_by_player"] as Map?)?.cast<String, dynamic>();
+    if (chained < 2 || byP == null || byP.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byP.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2 || topN < 0.5 * chained) return null;
+    return "a rejtett szervezőjük a(z) $top. játékos: ő adja a gólpassz "
+        "ELŐTTI passzt ($topN/$chained) · a zárást nála kezdjétek, ne a "
+        "gólpasszolónál";
+  }
+
   // Vasemberek: ki játssza végig a meccseket csere nélkül (10+ perc
   // felvétel, 85%+ jelenlét, legfeljebb 3 név — a backenddel azonos
   // küszöbök: IRONMEN_MIN_MATCH_MIN, IRONMEN_SHARE_PCT,
@@ -11317,6 +11339,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_leftHandedRole(r) != null)
         ["Balkezes poszt", _leftHandedRole(r)!],
       if (_ironMen(r) != null) ["Vasemberek", _ironMen(r)!],
+      if (_preAssist(r) != null) ["Rejtett szervező", _preAssist(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
       if (_finishingBalance(r) != null)
         ["Befejezés-mérleg", _finishingBalance(r)!],
@@ -11651,7 +11674,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                               "xg", "tempó", "birtoklás", "figur",
                               "keresztjáték", "roham", "áttörő", "áttörés",
                               "kivárás", "bontó", "kiosztás",
-                              "előkészít", "asszist", "elsütés",
+                              "előkészít", "szervez", "asszist", "elsütés",
                               "középkezdés", "labda", "elad", "hiba",
                               "kockázatos", "pontatlan", "fedezett",
                               "kihagy"]),
