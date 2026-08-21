@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **486 réteg**, modulonként csoportosítva; a
+Összesen **487 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (93)
@@ -296,7 +296,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `first_half_close` | A félidő-zárás mérlege: ki üt utoljára a szünet előtt. |
 | `second_half_start` | A szünet utáni kezdés mérlege: ki üt először a 2. félidőben. |
 
-## momentum (57)
+## momentum (58)
 
 | Réteg | Mit mér |
 |---|---|
@@ -356,6 +356,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `run_containment` | Sorozat-törés: az ellenfél sorozatait ki meddig hagyja elfutni. |
 | `second_start_roles` | Újrakezdő-poszt: MELYIK POSZTJUK viszi a szünet utáni rajtot. |
 | `second_start_scorers` | Újrakezdő emberek: KI viszi a szünet utáni rajtot. |
+| `super_sub` | Szuper-csere: KI termel a padról — névre szólóan. |
 | `win_prob` | Meccs-esély görbe: P(hazai győzelem) a felismert gólok mentén. |
 
 ## playmaker (1)

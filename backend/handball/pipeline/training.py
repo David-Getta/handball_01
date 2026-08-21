@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 460) Szuper-csere: ha a padról egy emberünk termel, a beállása
+    # tudatos fegyver legyen — időzítve, ne csak pihentetésként.
+    try:
+        from .momentum import super_sub
+        ssu460 = super_sub(match, config)
+        for side in ("home", "away"):
+            rec460 = ssu460[side]
+            if rec460["verdict"] is None:
+                continue
+            top460 = rec460["top"]
+            ki460 = (f"a(z) {top460['jersey']}. számú"
+                     if top460.get("jersey") is not None
+                     else f"a(z) {top460['player_id']}. játékos")
+            add(side, "támadás", "A szuper-csere időzítése",
+                f"a padról {ki460} termel ({top460['goals']}/"
+                f"{rec460['bench_goals']} pad-gól) — a beállása most "
+                "inkább véletlen pihentetés, mint kijátszott kártya",
+                "a szuper-cserét IDŐZÍTSD, ne csak pihentetésül hozd: "
+                "a 40-45. perc között, a fáradó fal ellen álljon be, "
+                "és az első három támadásban ő kapja a befejezést; "
+                "edzésen a kispadról beugró 2 perces éles szituációk "
+                "(hidegből azonnal éles lövés) szoktatják a szerephez")
+    except Exception:
+        pass
+
     # 459) Fal-rés fáradás: ha a saját közeink a 2. félidőre nyílnak, a
     # belső védőket kell forgatni — ez frissesség-kérdés, nem technika.
     try:

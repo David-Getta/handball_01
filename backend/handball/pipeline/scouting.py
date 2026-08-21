@@ -1183,6 +1183,9 @@ class ScoutingReport:
     # pontosan összegződnek.
     prea_by_player: dict = field(default_factory=dict)
     prea_chained: int = 0
+    # Szuper-csere: a padról (nem a kezdő magból) szerzett gólok
+    # JÁTÉKOSONKÉNT. Darabszámok, meccsek közt pontosan összegződnek.
+    ssu_goals_by_player: dict = field(default_factory=dict)
     # Időkérés-hozam: az ítéletes időkérések mérlege (megtörte /
     # nem hozott fordulatot). Darabszám, meccsek közt összegződik.
     toy_broke: int = 0
@@ -4970,6 +4973,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "másod-előkészítés) — a passzsáv-zárást nála kezdjétek, "
                 "ne a gólpasszolónál: ha ő nem tudja megjátszani a "
                 "beadót, a gólgyáruk el sem indul.")
+
+    # Szuper-csere: a padról termelő emberük — a beállása a jelzés.
+    if rep.ssu_goals_by_player:
+        from .momentum import SSUB_MIN_BENCH_GOALS, SSUB_TOP_PCT
+        _ssu_all = sum(rep.ssu_goals_by_player.values())
+        _ssu_k, _ssu_n = max(rep.ssu_goals_by_player.items(),
+                             key=lambda kv: kv[1])
+        if (_ssu_all >= SSUB_MIN_BENCH_GOALS
+                and 100.0 * _ssu_n / _ssu_all >= SSUB_TOP_PCT):
+            keys.append(
+                f"A szuper-cseréjük a(z) {_ssu_k}. játékos: a padról "
+                f"beállva ő szerzi a csere-góljaik zömét "
+                f"({_ssu_n}/{_ssu_all} pad-gól) — a beállása jelzés: "
+                "onnantól rá külön figyelő, és vele szemben mindig "
+                "friss láb legyen a falban.")
 
     # Időkérés-hozam: mit ér az ő zöld kartonjuk.
     _toy_judged = rep.toy_broke + rep.toy_failed
@@ -10738,6 +10756,12 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["pre_assists"]
             for r in prearec["players"]}
+        from .momentum import super_sub as _ssu
+        ssurec = _ssu(match, config)[team.value]
+        rep.ssu_goals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["goals"]
+            for r in ssurec["players"]}
         from .goalkeeper import seven_six_finishers as _en7p
         en7prec = _en7p(match, config)[team.value]
         rep.en7p_shots_by_player = {
@@ -13847,6 +13871,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 440) Az ő szuper-cseréjük × a ti mély padotok: a padról termelő
+    # emberük beállása jelzés — friss védő várja, ne fáradt.
+    if opp.ssu_goals_by_player and own.rotation_matches > 0:
+        _s440_all = sum(opp.ssu_goals_by_player.values())
+        _s440_k, _s440_n = max(opp.ssu_goals_by_player.items(),
+                               key=lambda kv: kv[1])
+        _s440_rot = own.rotation_used_sum / max(1, own.rotation_matches)
+        if (_s440_all >= 3 and 100.0 * _s440_n / _s440_all >= 50.0
+                and _s440_rot >= 9.0):
+            plan.append(
+                f"A padjukról a(z) {_s440_k}. játékos termel "
+                f"({_s440_n}/{_s440_all} pad-gól — szuper-csere), ti "
+                f"pedig mély paddal forogtok (átlag {_s440_rot:.0f} "
+                "bevetett játékos) — a beállása legyen a jelzésetek: "
+                "amikor beáll, azonnal friss belső védő jöjjön vele "
+                "szembe, és a figyelő mindig érintés-közelben kísérje.")
 
     # 439) Az ő fáradó faluk × a ti betörő emberetek: a rés a második
     # félidőben nyílik — akkor kell a betörős kártyát kijátszani.
@@ -21434,6 +21475,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prea_by_player=_merge_count_dicts(
             r.prea_by_player for r in reports),
         prea_chained=sum(r.prea_chained for r in reports),
+        ssu_goals_by_player=_merge_count_dicts(
+            r.ssu_goals_by_player for r in reports),
         stc_dir_by_taker=_merge_count_dicts(
             r.stc_dir_by_taker for r in reports),
         rsy_restarts=sum(r.rsy_restarts for r in reports),

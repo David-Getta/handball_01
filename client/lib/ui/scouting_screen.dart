@@ -3242,6 +3242,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "gólpasszolónál";
   }
 
+  // Szuper-csere: ki termel a padról (3+ pad-gól, a fele egy emberé —
+  // a backenddel azonos küszöbök: SSUB_MIN_BENCH_GOALS, SSUB_TOP_PCT).
+  String? _superSub(Map<String, dynamic> r) {
+    final byP = (r["ssu_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (byP == null || byP.isEmpty) return null;
+    var all = 0;
+    String? top;
+    var topN = 0;
+    byP.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || all < 3 || topN < 0.5 * all) return null;
+    return "a szuper-cseréjük a(z) $top. játékos: a padról beállva ő "
+        "szerzi a csere-góljaik zömét ($topN/$all pad-gól) · a beállása "
+        "jelzés — onnantól rá külön figyelő, vele szemben friss láb";
+  }
+
   // Fal-rés fáradás: szétnyílnak-e a közök a 2. félidőre (félidőnként
   // 60+ kocka, 0,8 m növekedés — a backenddel azonos küszöbök:
   // GFD_MIN_FRAMES, GFD_RISE_M).
@@ -11402,6 +11424,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Balkezes poszt", _leftHandedRole(r)!],
       if (_ironMen(r) != null) ["Vasemberek", _ironMen(r)!],
       if (_preAssist(r) != null) ["Rejtett szervező", _preAssist(r)!],
+      if (_superSub(r) != null) ["Szuper-csere", _superSub(r)!],
       if (_sevenTakerCorner(r) != null)
         ["Hetes-sarok emberre", _sevenTakerCorner(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],

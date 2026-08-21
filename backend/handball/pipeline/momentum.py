@@ -1969,6 +1969,73 @@ def bench_scoring(match: Match, config=None) -> dict:
     return out
 
 
+# Szuper-csere: legalább ennyi padról szerzett gól kell az ítélethez,
+# és a pad-gólok e feletti részesedése jelenti a kiemelt beállót.
+SSUB_MIN_BENCH_GOALS = 3
+SSUB_TOP_PCT = 50.0
+
+
+def super_sub(match: Match, config=None) -> dict:
+    """Szuper-csere: KI termel a padról — névre szólóan.
+
+    A pad-gólok (bench_scoring) azt mondják meg, termel-e a kispad
+    EGYÁLTALÁN — ez azt, KI: a kezdő maghoz (opening_lineup) nem
+    tartozó gólszerzők név szerinti listája. Ha a pad-gólok fele
+    egy emberhez köthető, az a csapat szuper-cseréje: nem "friss
+    láb", hanem begyakorolt gólforrás a második hullámban.
+
+    Edzőileg: a szuper-cserés csapat ellen a beállása a jelzés — ott
+    kell szorosabbra fogni a védekezést, és érdemes rá pihent védőt
+    tartogatni; a saját szuper-cserénk pedig akkor ér a legtöbbet,
+    ha a fáradó ellenfélre időzítjük a beállását.
+
+    Visszatérés csapatonként: {"bench_goals", "players":
+    [{"player_id", "jersey", "goals"}] csökkenően, "top", "verdict"}
+    — a top/verdict None SSUB_MIN_BENCH_GOALS alatt vagy SSUB_TOP_PCT
+    alatti részesedésnél; a verdict "szuper-cseréjük van" / None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    core = {side: {r["player_id"]
+                   for r in opening_lineup(match, config)[side]["core"]}
+            for side in ("home", "away")}
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        side = e.team.value
+        if e.player_id in core[side]:
+            continue
+        tally[side][e.player_id] = tally[side].get(e.player_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "goals": n}
+                   for pid, n in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        bench_goals = sum(p["goals"] for p in players)
+        top = None
+        verdict = None
+        if bench_goals >= SSUB_MIN_BENCH_GOALS and players:
+            share = 100.0 * players[0]["goals"] / bench_goals
+            if share >= SSUB_TOP_PCT:
+                top = players[0]
+                verdict = "szuper-cseréjük van"
+        out[side] = {"bench_goals": bench_goals, "players": players,
+                     "top": top, "verdict": verdict}
+    return out
+
+
 # Középkezdés-átvevő: ekkora ablakban és a felezőtől ekkora sávban
 # keressük a kapott gól utáni első birtokost, ennyi mért újraindítás
 # kell az ítélethez, és e feletti arány jelenti a fix átvevőt.

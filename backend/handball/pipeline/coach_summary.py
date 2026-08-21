@@ -3137,6 +3137,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "zárást nála kell kezdeni, nem a gólpasszolónál.")
     except Exception:
         pass
+    # Szuper-csere: ki termel a padról — névre szólóan.
+    try:
+        from .momentum import super_sub
+        ssu = super_sub(match)
+        for side, name in (("home", home), ("away", away)):
+            top_ssu = ssu[side]["top"]
+            if top_ssu is None:
+                continue
+            ki_ssu = (f"a(z) {top_ssu['jersey']}. számú"
+                      if top_ssu.get("jersey") is not None
+                      else f"a(z) {top_ssu['player_id']}. játékos")
+            body += (f" A(z) {name} szuper-cseréje {ki_ssu}: a padról "
+                     f"beállva {top_ssu['goals']} gólt szerzett — a "
+                     "beállása jelzés, ott kell szorosabbra fogni a "
+                     "védekezést.")
+    except Exception:
+        pass
     # Időkérés-hozam: működik-e a mentő időkérésük.
     try:
         from .stoppages import timeout_yield

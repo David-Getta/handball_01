@@ -5,6 +5,32 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.31 óta)
 
+- **Szuper-csere** (új réteg): KI termel a padról — névre szólóan. A
+  pad-gólok réteg azt mondja meg, termel-e a kispad egyáltalán; ez azt,
+  ki: a kezdő maghoz nem tartozó gólszerzők név szerint, és ha a
+  pad-gólok legalább fele (3+ gólból) egy emberé, ő a csapat
+  szuper-cseréje. Edzői olvasat: a szuper-cserés csapat ellen a
+  beállása a jelzés — onnantól rá külön figyelő és friss védő; a saját
+  szuper-cserénk pedig időzítve ér a legtöbbet (a fáradó fal ellen
+  álljon be, ne csak pihentetésként). Felületek: /analyze +
+  meccs-csomag, edzői összefoglaló, felderítés (játékosonkénti
+  pad-gól számok, edzői kulcs, 440. meccsterv-szabály), 460.
+  edzés-szabály, kliens-csempe, kulcs-ember regisztráció.
+
+- **A motor-újraélesztés mostantól újra is INDÍT** (kliens-javítás): a
+  fiók-képernyő ismételt "Nem érem el a háttérmotort" hibája nyomán. A
+  v0.1.30-as öngyógyítás hálózati hibánál újra MEGKERESTE a motort a
+  port-tartományban — de ha a motor-folyamat közben elhalt (frissítés
+  utáni fájlcsere, a gép altatása, belső hiba), a keresés kevés volt,
+  és csak a program teljes újraindítása segített. A kliens mostantól
+  ilyenkor ÚJRA IS INDÍTJA a motort (reviveEngine → BackendLauncher),
+  a fiók-kapun és a beküldésnél is; a motor-hiba képernyő elmondja,
+  hogy az Újrapróbálom gomb ezt megteszi, és hova kell nyúlni a
+  naplóért. A fiók-képernyő és a hiba-képernyő ezentúl a futó kiadás
+  számát is kiírja — egy hibajelentő képernyőképből azonnal látszik,
+  melyik verzió adta a hibát. Őr-tesztek: a mély öngyógyítás és a
+  látható verziószám is védve.
+
 - **A gól ritkított felvételen is gól** (motor): a stride-érzékenység
   őr első komoly lelete. A gól-felismerés eddig azt követelte, hogy a
   labda egy MINTÁN a gólvonal 0,7 m-es sávjában legyen — a termék

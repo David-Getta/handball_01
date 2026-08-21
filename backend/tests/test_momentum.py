@@ -1106,6 +1106,35 @@ def test_bench_scoring_needs_enough_goals():
     assert rec["verdict"] is None
 
 
+def test_super_sub_names_the_bench_scorer():
+    """A pad-gólok zöme a 7-esé → ő a szuper-csere, névre szólóan."""
+    from handball.pipeline.momentum import super_sub
+
+    rec = super_sub(_bench_match([7, 7, 1, 7, 8]))["home"]
+    assert rec["bench_goals"] == 4
+    assert rec["top"]["player_id"] == 7 and rec["top"]["goals"] == 3
+    assert rec["verdict"] == "szuper-cseréjük van"
+
+
+def test_super_sub_needs_enough_bench_goals():
+    """Kevés (SSUB_MIN_BENCH_GOALS alatti) pad-gólnál nincs ítélet."""
+    from handball.pipeline.momentum import super_sub
+
+    rec = super_sub(_bench_match([7, 1, 1]))["home"]
+    assert rec["bench_goals"] == 1
+    assert rec["top"] is None and rec["verdict"] is None
+
+
+def test_super_sub_spread_bench_is_not_a_super_sub():
+    """Ha a pad-gólok szétoszlanak (nincs 50%-os ember), nincs
+    szuper-csere — a mély pad nem ugyanaz, mint az egy kiemelt ember."""
+    from handball.pipeline.momentum import super_sub
+
+    rec = super_sub(_bench_match([7, 8, 9]))["home"]
+    assert rec["bench_goals"] == 3
+    assert rec["top"] is None and rec["verdict"] is None
+
+
 # ---- Középkezdés-átvevő (kinél indul újra a játék) --------------------------
 
 def _restart_match(receivers, fps=25.0):
