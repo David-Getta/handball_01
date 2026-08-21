@@ -3281,11 +3281,14 @@ def _wsd_match(deep, n_shots=6, fps=25.0):
     _emit(34.0, 3.0, 150)           # poszt-minta: a szélsőnél a labda
     for _ in range(n_shots):
         _emit(34.0, 3.0, 10)        # birtoklás a szélső sávban
-        for i in range(5):          # a szélső a lövő-helyre viszi
+        # A szélső a lövő-helyre viszi a labdát — emberi tempóban
+        # (9 m/s alatt), hogy a labda végig birtokoltnak számítson,
+        # és az elengedés helye tényleg a lövő-hely legyen.
+        for i in range(10):
             frames.append(Frame(t=t, players=[
-                _pl(2, Team.HOME, 34.0 + (sx - 34.0) * (i + 1) / 5.0,
+                _pl(2, Team.HOME, 34.0 + (sx - 34.0) * (i + 1) / 10.0,
                     3.0)],
-                ball=Ball(x=34.0 + (sx - 34.0) * (i + 1) / 5.0,
+                ball=Ball(x=34.0 + (sx - 34.0) * (i + 1) / 10.0,
                           y=3.0, confidence=1.0)))
             t += 1
         steps = max(3, int(round(40.5 - sx)))

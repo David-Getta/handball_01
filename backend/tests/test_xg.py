@@ -1499,3 +1499,33 @@ def test_finishing_balance_silent_on_few_shots():
     m = Match(_meta(), _many_shots(5, 34.0, 10.0, goal=False))
     rec = finishing_balance(m)["home"]
     assert rec["shots"] == 5 and rec["verdict"] is None, rec
+
+
+def test_xg_meri_az_elengedes_helyet_nem_a_kapu_kozeliteset():
+    """ŐR a ritkított felvétel torzítására: az esemény t-jén a labda már
+    úton van (ritkítva métereket ugrik), és ha a lövő a lövés után
+    besétál a kapu elé, a kapu-megközelítés kockáján mérve az xG
+    felfelé torzulna. A lövés helye az ELENGEDÉS kockája (release_t):
+    a 12 m-es átlövés akkor is 12 m-es marad."""
+    frames = []
+    t = 0
+    # A lövő a 28-as x-en (12 m-re a kaputól) tartja a labdát.
+    for _ in range(4):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 28.0, 10.0)],
+                            ball=Ball(x=28.2, y=10.0, confidence=1.0)))
+        t += 1
+    # Elengedés: a labda kockánként 2,4 m-t lép (ritkított felvétel), a
+    # lövő pedig a lövése után előre sétál a hatosig.
+    ball_xs = [30.4, 32.8, 35.2, 37.6, 40.0]
+    shooter_xs = [29.5, 31.0, 32.5, 33.5, 34.0]
+    for bx, sx in zip(ball_xs, shooter_xs):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, sx, 10.0)],
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(_meta(fps=8.33), frames)
+    shots = match_xg(m)["shots"]
+    assert len(shots) == 1, shots
+    sh = shots[0]
+    # Az elengedés helyéről (28 m) mérünk, nem a besétált hatosról.
+    assert sh["x"] <= 28.5, sh
+    assert sh["xg"] == xg_of_position(28.0, 10.0, 40.0), sh

@@ -99,6 +99,18 @@ def _shooter_before(match: Match, idx: int, team: Team,
     Ha ilyen kocka nincs az ablakban, `None`-t adunk: a "nem tudjuk"
     jobb, mint a magabiztosan rossz név.
     """
+    return _shooter_release_before(match, idx, team, config, fps)[0]
+
+
+def _shooter_release_before(match: Match, idx: int, team: Team,
+                            config: TacticsConfig, fps: float):
+    """Mint a `_shooter_before`, de az ELENGEDÉS kockáját is visszaadja.
+
+    Visszatérés: (track_id, release_t) — mindkettő None, ha nincs
+    találat. A release_t a lövés HELYÉNEK a kulcsa: az esemény t-je a
+    kapu-megközelítés kockája, ahol a labda (ritkított felvételen
+    különösen) már métereket repült — aki ott méri a lövés helyét, az
+    a kapuhoz közelebbről mér, és az xG felfelé torzul."""
     frames = match.frames
     back = max(0, idx - round(SHOOTER_LOOKBACK_S * fps))
     for j in range(idx, back - 1, -1):
@@ -106,8 +118,8 @@ def _shooter_before(match: Match, idx: int, team: Team,
             continue  # a labda repül — aki mellette áll, nem birtokos
         holder = ball_holder(frames[j], config)
         if holder is not None and holder.team == team:
-            return holder.track_id
-    return None
+            return holder.track_id, frames[j].t
+    return None, None
 
 
 def _ball_speed_ms(frames, j: int, fps: float) -> float:
@@ -254,7 +266,8 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
                 in_zone[goal_x] = True
                 is_goal = _reaches_goal_line(match, i, goal_x)
                 attacking = _attacking_team_for_goal(goal_x, config)
-                shooter = _shooter_before(match, i, attacking, config, fps)
+                shooter, release_t = _shooter_release_before(
+                    match, i, attacking, config, fps)
                 # Kimenetel: gól / védés (a kapus-jel alapján) / mellé-blokk.
                 if is_goal:
                     detail: dict = {"outcome": "goal"}
@@ -262,6 +275,10 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
                     gk = _save_by_goalkeeper(match, i, goal_x)
                     detail = ({"outcome": "save", "goalkeeper_id": gk}
                               if gk is not None else {"outcome": "miss"})
+                if release_t is not None:
+                    # Az elengedés kockája: a hely-alapú rétegek (xG,
+                    # zónák) innen mérjenek, ne a kapu-megközelítésről.
+                    detail["release_t"] = release_t
                 events.append(MatchEvent(
                     t=f.t,
                     type=EventType.GOAL if is_goal else EventType.SHOT,

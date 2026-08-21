@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.32 óta)
 
+- **A lövés helye az elengedés kockája** (motor): a stride-őr második
+  lelete. A lövés-esemény a labda KAPU-MEGKÖZELÍTÉSEKOR jelölődik —
+  ekkor a labda már úton van, és ritkított felvételen kockánként
+  métereket ugrik: aki ott méri a lövés helyét, az a kapuhoz
+  közelebbről mér, és az xG felfelé torzul (mérve: 0,14 → 0,20 átlag
+  ritkítva). Az esemény mostantól az ELENGEDÉS kockáját is rögzíti
+  (release_t: az utolsó kocka, ahol a lövő még birtokolta a labdát), és
+  az xG onnan mér — az egyező lövőjű lövések helye ritkítva is kockára
+  azonos. Ami marad: a nagyon gyors (szélső) lövések lövő-hozzárendelése
+  ritkítva néha a passzolóra csúszik — ez mintavételi korlát, a
+  stride-jelentés dokumentálja. Regressziós teszt: a 12 m-es átlövés
+  akkor is 12 m-esként mérődik, ha a lövő utána besétál a hatosig.
+
 - **Motor-őrkutya** (kliens): ha a motor-folyamat magától elhal, a
   program azonnal, magától újraindítja (munkamenetenként legfeljebb 3
   próbával — a hibás motort nem pörgeti örökké), a szándékos

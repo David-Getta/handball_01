@@ -9,7 +9,7 @@ rétegek ugyanarról a meccsről ritkítva másképp — jellemzően
 óvatosabban — ítélhetnek. Ez a lista a döntés alapja, hol
 érdemes a kockaszám-küszöböt másodperc-alapúra váltani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **487 réteg** összevetve, ebből **37 eltérő ítéletű**.
+Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **488 réteg** összevetve, ebből **38 eltérő ítéletű**.
 
 ## Fontos: mit jelent az eltérés
 
@@ -40,6 +40,10 @@ háromszor annyi valós időt követelnek.
 ### `ball_carrier_roles`
 
 - `home.verdict`: sűrűn `a térnyerésük a(z) irányító poszt lábán van (72%-a a labdával megtett 279 előre-méternek) — őt a felezőtől hátrálva kell fogadni: lendületbe engedni tilos` → ritkítva `a térnyerésük a(z) irányító poszt lábán van (74%-a a labdával megtett 91 előre-méternek) — őt a felezőtől hátrálva kell fogadni: lendületbe engedni tilos`
+
+### `beaten_defenders`
+
+- `away.top`: sűrűn `None` → ritkítva `13`
 
 ### `big_chance_feeder_roles`
 

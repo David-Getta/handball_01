@@ -76,12 +76,22 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
         f = by_t.get(e.t)
         if f is None:
             continue
+        # A lövés HELYE az elengedés kockája (release_t), nem a
+        # kapu-megközelítésé: az esemény t-jén a labda már úton van, és
+        # ritkított felvételen métereket ugrik — aki ott mér, a kapuhoz
+        # közelebbről mér, és az xG felfelé torzul.
+        rf = by_t.get((e.detail or {}).get("release_t"))
         x = y = None
         if e.player_id is not None:
-            for p in f.players:
-                if p.track_id == e.player_id:
-                    x, y = p.x, p.y
-                    break
+            for src in (rf, f):
+                if src is None or x is not None:
+                    continue
+                for p in src.players:
+                    if p.track_id == e.player_id:
+                        x, y = p.x, p.y
+                        break
+        if x is None and rf is not None and rf.ball is not None:
+            x, y = rf.ball.x, rf.ball.y
         if x is None and f.ball is not None:
             x, y = f.ball.x, f.ball.y
         if x is None:
