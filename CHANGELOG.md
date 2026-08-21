@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.32 óta)
 
+- **A kezesség az elengedés kockájáról mérve** (motor): a
+  kezesség-becslés a labda test-melletti oldal-eltolását eddig az
+  esemény-kocka előtti kockán mérte — ott a labda (ritkított felvételen
+  különösen) már repül, és a röppálya oldal-eltolása hamis
+  kezesség-jelet adhatott. A mérés mostantól az elengedés kockájára
+  (release_t) áll: ott a labda még a lövő kezében van — a docstring
+  eredeti szándéka szerint.
+
 - **Az együtemű lövés lövője ritkítva is a lövő** (motor): a
   röppálya-töréspont szabálya. Ritkított felvételen az elkapásból
   azonnal (együtemben) leadott lövésnél a labda kézben-tartott kockája

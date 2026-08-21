@@ -1093,7 +1093,16 @@ def shooting_hand(match: Match,
         i = idx_of.get(e.t)
         if i is None or i < 1:
             continue
-        f0, f1 = match.frames[i - 1], match.frames[i]
+        # Az elengedés kockájáról mérünk (release_t): ott a labda még a
+        # kézben van. Az esemény-kocka előtti kockán — ritkított
+        # felvételen különösen — a labda már repül, és a röppálya
+        # oldal-eltolása hamis kezesség-jelet adna.
+        i0 = idx_of.get((e.detail or {}).get("release_t"))
+        if i0 is None:
+            i0 = i - 1
+        if i0 + 1 >= len(match.frames):
+            continue
+        f0, f1 = match.frames[i0], match.frames[i0 + 1]
         if f0.ball is None or f1.ball is None:
             continue
         sp = next((p for p in f0.players if p.track_id == e.player_id), None)

@@ -103,7 +103,7 @@ háromszor annyi valós időt követelnek.
 
 ### `role_shooting_hand`
 
-- `home.lefty_role`: sűrűn `None` → ritkítva `beálló`
+- `home.lefty_role`: sűrűn `beálló` → ritkítva `None`
 
 ### `role_shot_distance`
 
@@ -133,7 +133,7 @@ háromszor annyi valós időt követelnek.
 
 ### `shooting_hand`
 
-- `home.lefty`: sűrűn `None` → ritkítva `6`
+- `home.lefty`: sűrűn `6` → ritkítva `4`
 
 ### `wrongfooted_keeper`
 
