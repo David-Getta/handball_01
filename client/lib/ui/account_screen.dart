@@ -11,6 +11,7 @@ import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
+import "../version.dart";
 import "error_text.dart";
 import "terms_screen.dart";
 
@@ -95,11 +96,13 @@ class _AccountScreenState extends State<AccountScreen> {
         await send();
       } catch (e) {
         // Hálózati hiba: a motor menet közben ELMOZDULHATOTT (újraindult,
-        // tartalék portra kötött, vagy két példányból az egyik kilépett).
-        // Megkeressük újra, és EGYSZER újrapróbáljuk — ez a leggyakoribb
-        // ok, amikor a képernyő betöltése még ment, a beküldés már nem.
+        // tartalék portra kötött), vagy MEGHALT a folyamata. A revive
+        // előbb újra megkeresi, és ha sehol sem válaszol, újra is
+        // indítja — utána EGYSZER újrapróbáljuk a beküldést. Ez fedi le
+        // azt az esetet, amikor a képernyő betöltése még ment, a
+        // beküldés már nem.
         if (!looksLikeConnectionIssue(e)) rethrow;
-        if (!await ApiClient.rediscoverEngine()) rethrow;
+        if (!await ApiClient.reviveEngine()) rethrow;
         await send();
       }
       if (!mounted) return;
@@ -331,6 +334,14 @@ class _AccountScreenState extends State<AccountScreen> {
                           ? "Van már fiókom — belépés"
                           : "Nincs még fiókom — létrehozom"),
                     ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  // A futó kiadás száma: egy hibajelentő képernyőképből
+                  // így azonnal látszik, melyik verzió ad hibát.
+                  Center(
+                    child: Text("Sport Machine · v$appVersion",
+                        style: AppText.label
+                            .copyWith(fontSize: 11, color: AppColors.textFaint)),
                   ),
                 ],
               ),

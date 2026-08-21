@@ -549,3 +549,43 @@ def test_elfelejtett_jelszo_utmutato_a_belepon():
     src = scr.read_text(encoding="utf-8")
     assert "Elfelejtetted a jelszavad?" in src
     assert "megmaradnak" in src
+
+
+def test_motor_ujraelesztes_ujra_is_indit():
+    """ŐR: hálózati hibánál a kliens nem csak KERESI a motort (portok),
+    hanem ÚJRA IS INDÍTJA (reviveEngine → BackendLauncher.ensureRunning)
+    — a motor-folyamat el is halhat (frissítés, altatás), olyankor a
+    port-keresés kevés, és a felhasználót csak a program teljes
+    újraindítása mentené meg."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "reviveEngine" in api, "nincs mély öngyógyítás (reviveEngine)"
+    assert "ensureRunning" in api, (
+        "a revive nem indítja újra a motort, csak portot keres")
+    # Mindkét fiók-felület a MÉLY öngyógyítást hívja, nem a puszta
+    # port-keresést.
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    scr = (lib / "ui" / "account_screen.dart").read_text(encoding="utf-8")
+    assert "ApiClient.reviveEngine()" in gate
+    assert "ApiClient.reviveEngine()" in scr
+    assert "rediscoverEngine()" not in gate
+    assert "rediscoverEngine()" not in scr
+
+
+def test_hibajelentes_lathato_verzioval():
+    """ŐR: a fiók-képernyő és a motor-hiba képernyő kiírja a futó kiadás
+    számát — egy hibajelentő képernyőképből így azonnal látszik, MELYIK
+    verzió adta a hibát (enélkül a támogatás találgat)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    scr = (lib / "ui" / "account_screen.dart").read_text(encoding="utf-8")
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    assert "appVersion" in scr, "a fiók-képernyőn nincs verziószám"
+    assert "appVersion" in gate, "a motor-hiba képernyőn nincs verziószám"

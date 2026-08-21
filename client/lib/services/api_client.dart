@@ -11,6 +11,7 @@ import "dart:typed_data";
 import "package:http/http.dart" as http;
 
 import "../models/tracking.dart";
+import "backend_launcher.dart";
 import "session_store.dart";
 
 class ApiClient {
@@ -55,6 +56,22 @@ class ApiClient {
       }
     }
     return false;
+  }
+
+  /// Mélyebb öngyógyítás hálózati hibánál: előbb ÚJRA MEGKERESSÜK a
+  /// motort a port-tartományban (elmozdulhatott), és ha SEHOL nem
+  /// válaszol, ÚJRA IS INDÍTJUK a motor-indítón keresztül — a
+  /// motor-folyamat el is halhatott (frissítés utáni fájlcsere, a gép
+  /// altatása, belső hiba), olyankor a port-keresés önmagában kevés,
+  /// és a felhasználót eddig csak a program teljes újraindítása
+  /// mentette meg. Igaz, ha a végén válaszol a motor.
+  static Future<bool> reviveEngine() async {
+    if (await rediscoverEngine()) return true;
+    final launcher = BackendLauncher.instance;
+    if (launcher == null) return false; // web/teszt: nincs mit indítani
+    launcher.stop(); // a félholt (élő, de nem válaszoló) példány elengedése
+    final st = await launcher.ensureRunning();
+    return st.phase == BackendPhase.ready;
   }
 
   /// Életjel: igaz, ha a backend elérhető (GET /health).

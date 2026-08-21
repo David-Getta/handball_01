@@ -20,6 +20,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../services/session_store.dart";
 import "../theme/app_theme.dart";
+import "../version.dart";
 import "account_screen.dart";
 import "dashboard_screen.dart";
 import "terms_screen.dart";
@@ -96,9 +97,10 @@ class _AccountGateState extends State<AccountGate> {
     // kapna, ami csak beküldéskor bukik el (a motor menet közben is
     // leállhat, pl. frissítés után).
     if (!await _api.isHealthy()) {
-      // Lehet, hogy csak ELMOZDULT: a motor tartalék portra köthetett,
-      // vagy újraindult. Mielőtt hibát mondanánk, megkeressük újra.
-      if (!await ApiClient.rediscoverEngine()) {
+      // Lehet, hogy csak ELMOZDULT (tartalék port), de az is, hogy a
+      // folyamata halt el — a revive megkeresi, és ha kell, ÚJRA IS
+      // INDÍTJA a motort, mielőtt hibát mondanánk.
+      if (!await ApiClient.reviveEngine()) {
         if (!mounted) return;
         setState(() => _step = _GateStep.engineDown);
         return;
@@ -185,13 +187,16 @@ class _AccountGateState extends State<AccountGate> {
                 const Text(
                   "A fiókod a saját gépeden, a motorban él — amíg a motor "
                   "nem fut, belépni és fiókot létrehozni sem lehet.\n\n"
-                  "Amit tehetsz: zárd be teljesen a programot (Cmd+Q, "
-                  "illetve Alt+F4), és indítsd újra — az indítás magával "
-                  "hozza a motort. Ha marad a hiba, a motor naplója "
-                  "megmondja, min akadt el:\n"
+                  "Az Újrapróbálom gomb megkeresi, és ha kell, ÚJRA IS "
+                  "INDÍTJA a motort (ez eltarthat fél percig). Ha ez sem "
+                  "segít, zárd be teljesen a programot (Cmd+Q, illetve "
+                  "Alt+F4), és indítsd újra. Ha marad a hiba, a motor "
+                  "naplója megmondja, min akadt el — ezt küldd el a "
+                  "fejlesztőnek:\n"
                   "macOS: ~/Library/Application Support/SportMachine/"
                   "engine-app.log\n"
-                  "Windows: %LOCALAPPDATA%\\SportMachine\\engine-app.log",
+                  "Windows: %LOCALAPPDATA%\\SportMachine\\engine-app.log\n\n"
+                  "A futó kiadás: v$appVersion",
                   style: AppText.label,
                 ),
                 const SizedBox(height: AppSpacing.xl),
