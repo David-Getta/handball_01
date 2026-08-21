@@ -623,3 +623,24 @@ def test_elveszett_valaszu_regisztracio_belepesbe_fut():
     assert "már van fiók" in src, "nincs belépés-tartalék a duplikált fiókra"
     assert src.index("már van fiók") > src.index("reviveEngine"), (
         "a tartalék nem az újraélesztett ismétlés ágában van")
+
+
+def test_motor_orkutya_ujraindit_es_korlatoz():
+    """ŐR: a motor-indítónak van őrkutyája — a magától elhalt motort
+    újraindítja (a felhasználó észre sem veszi), de korlátozott számú
+    próbával (a hibás motort nem pörgeti örökké), és a SZÁNDÉKOS
+    leállítást (kilépés, frissítés előtti fájlcsere) békén hagyja."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    assert "_watchdog" in src, "nincs őrkutya a motor-indítóban"
+    assert "watchdogMaxRestarts" in src, "az őrkutya korlát nélkül pörgetne"
+    assert "_stoppedByUs" in src, (
+        "az őrkutya nem különbözteti meg a szándékos leállítást")
+    # A szándékos leállítás jelzi magát, az őrkutya pedig tiszteli.
+    assert src.index("_stoppedByUs = true") > 0
+    assert "if (_stoppedByUs) return;" in src

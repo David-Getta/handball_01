@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.32 óta)
 
+- **Motor-őrkutya** (kliens): ha a motor-folyamat magától elhal, a
+  program azonnal, magától újraindítja (munkamenetenként legfeljebb 3
+  próbával — a hibás motort nem pörgeti örökké), a szándékos
+  leállítást (kilépés, frissítés előtti fájlcsere) pedig békén hagyja.
+  A felhasználó így a legtöbb motor-elhalást észre sem veszi: a
+  következő kattintás már az új példányhoz ér. Őr-teszt védi.
+
 - **Szuper-csere poszt** (új réteg): MELYIK POSZTRÓL termel a paduk —
   a névre szóló Szuper-csere poszt-szintű párja (a kódbázis bevett
   emberek/poszt réteg-pár mintája szerint). A padról beállók góljait a

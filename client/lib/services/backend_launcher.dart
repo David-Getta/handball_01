@@ -48,6 +48,15 @@ class BackendLauncher {
 
   Process? _process;
 
+  /// Igaz, ha a leállítást MI kértük (kilépés, frissítés előtti csere) —
+  /// ilyenkor az őrkutya nem indítja újra a motort.
+  bool _stoppedByUs = false;
+
+  /// Hányszor indította újra az őrkutya a magától elhalt motort ebben a
+  /// munkamenetben — a korlát a hibás motor végtelen pörgetését állítja meg.
+  int _watchdogRestarts = 0;
+  static const int watchdogMaxRestarts = 3;
+
   /// Megkeresi, melyik porton válaszol a motor (a kezdőtől felfelé), és
   /// TALÁLATKOR átállítja az alapértelmezett kliens-címet is — az ezután
   /// létrejövő ApiClient-ek automatikusan a jó portra beszélnek.
@@ -113,7 +122,10 @@ class BackendLauncher {
 
   /// Elindítja (ha kell) a backendet, és visszaadja a végállapotot.
   /// `onLog`: a motor kimenete/állapot-üzenetek a kezdőképernyőnek.
+  /// Az indítási szándék a leállítási szándékot is törli (revive után
+  /// az őrkutya újra élesedik).
   Future<BackendStatus> ensureRunning({void Function(String)? onLog}) async {
+    _stoppedByUs = false;
     // 1) Már fut valamelyik porton? (A 8000-es foglaltsága esetén a motor
     // tartalék portra köt — ugyanazt a tartományt fésüljük át.)
     final running = await _findHealthyPort();
@@ -177,6 +189,7 @@ class BackendLauncher {
       _process!.exitCode.then((c) {
         exited = true;
         _logLine("A motor-folyamat leállt, kilépési kód: $c", onLog);
+        _watchdog(onLog);
       });
     } catch (e) {
       _logLine("A motort nem sikerült elindítani: $e", onLog);
@@ -196,6 +209,25 @@ class BackendLauncher {
     _logLine(why, onLog);
     stop();
     return BackendStatus(BackendPhase.failed, why);
+  }
+
+  /// Őrkutya: ha a motor MAGÁTÓL halt el (nem mi állítottuk le), rövid
+  /// várakozás után újraindítja — a felhasználó így észre sem veszi, a
+  /// következő kérés már az új példányhoz ér. Korlátozott számú próba:
+  /// az induláskor azonnal elhaló (hibás) motort nem pörgetjük örökké.
+  Future<void> _watchdog(void Function(String)? onLog) async {
+    if (_stoppedByUs) return;
+    if (_watchdogRestarts >= watchdogMaxRestarts) {
+      _logLine("Őrkutya: elértük az újraindítás-korlátot "
+          "($watchdogMaxRestarts) — kézi újraindítás kell.", onLog);
+      return;
+    }
+    _watchdogRestarts += 1;
+    _logLine("Őrkutya: a motor magától leállt — újraindítás "
+        "($_watchdogRestarts/$watchdogMaxRestarts)…", onLog);
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (_stoppedByUs) return; // közben kilépett a program
+    await ensureRunning(onLog: onLog);
   }
 
   /// Megvárja, míg a /health elérhető a port-tartomány VALAMELYIK portján
@@ -241,6 +273,7 @@ class BackendLauncher {
 
   /// Leállítja a motrot (ha mi indítottuk). Az app bezárásakor hívjuk.
   void stop() {
+    _stoppedByUs = true;
     _process?.kill();
     _process = null;
     try {
