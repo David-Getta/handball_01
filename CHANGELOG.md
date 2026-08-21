@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.33 óta)
 
+- **A fedezettség is az elengedés pillanatából** (motor): a védekezés
+  képe (defense), a fedezetten lövők (covered_shooters) és a
+  szélső-kifutás (wing_closeout) a lövő és a védők távolságát eddig az
+  esemény kockáján mérte — ott a labda már úton van, a lövő és a fal
+  is elmozdult (ritkítva métereket). A mérés az elengedés kockájára
+  (release_t) áll; a release_t pedig idő-korlátot kapott: követés-lyuk
+  esetén a lövő NEVE megmarad, de a hely nem állítódik túl régi
+  kockából.
+
 - **A poszt-távolság is az elengedés kockájáról** (motor): a
   lövés-távolság poszt-bontása (role_shot_distance) a lövő helyét
   eddig az esemény kockáján olvasta — ritkított felvételen a lövő ott

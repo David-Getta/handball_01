@@ -135,7 +135,14 @@ def _shooter_release_before(match: Match, idx: int, team: Team,
             continue  # a labda repül — aki mellette áll, nem birtokos
         holder = ball_holder(frames[j], config)
         if holder is not None and holder.team == team:
-            return holder.track_id, frames[j].t
+            rt = frames[j].t
+            # Követés-lyuknál a lista-szomszédság IDŐBEN messzire
+            # mutathat: az elengedés-kocka csak akkor hiteles, ha az
+            # eseményhez időben is közel van — különben a lövő nevét
+            # megtartjuk, de a helyét nem állítjuk.
+            if frames[idx].t - rt > round(SHOOTER_LOOKBACK_S * fps):
+                rt = None
+            return holder.track_id, rt
     return None, None
 
 

@@ -50,7 +50,10 @@ def defense_analysis(match: Match,
     for e in detect_shots(match, config):
         if e.type not in (EventType.SHOT, EventType.GOAL):
             continue
-        f = by_t.get(e.t)
+        # Az ELENGEDÉS kockájáról mérünk (release_t): az esemény kockáján
+        # a labda már úton van, a lövő és a fal is elmozdult — ritkított
+        # felvételen métereket. Tartalék: az esemény kockája.
+        f = by_t.get((e.detail or {}).get("release_t")) or by_t.get(e.t)
         if f is None:
             continue
         defender_team = Team.AWAY if e.team == Team.HOME else Team.HOME
@@ -2903,7 +2906,9 @@ def covered_shooters(match, config=None) -> dict:
         if e.type not in (EventType.SHOT, EventType.GOAL) \
                 or e.player_id is None:
             continue
-        f = by_t.get(e.t)
+        # A fedezettség az ELENGEDÉS pillanatában érdekes (release_t) —
+        # az esemény kockáján a lövő és a védők már elmozdultak.
+        f = by_t.get((e.detail or {}).get("release_t")) or by_t.get(e.t)
         if f is None:
             continue
         shooter = next((p for p in f.players
@@ -3383,7 +3388,8 @@ def wing_closeouts(match, config=None) -> dict:
             continue
         if e.player_id is None or e.player_id not in wings[e.team.value]:
             continue
-        f = by_t.get(e.t)
+        # A kifutás az ELENGEDÉS pillanatában mérendő (release_t).
+        f = by_t.get((e.detail or {}).get("release_t")) or by_t.get(e.t)
         if f is None:
             continue
         shooter = next((p for p in f.players
