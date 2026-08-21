@@ -81,7 +81,8 @@ a README) — őr-teszt ellenőrzi, hogy egyeznek a tény-lappal. A README
 "Hol tartunk" számát tehát nem kell külön kézzel frissíteni.
 
 A sorrend-függés jelentése (`docs/SORREND_FUGGES.md`) lassú (percek),
-ezért NINCS őr-tesztje — kiadás előtt futtasd:
+ezért NINCS őr-tesztje — kiadás előtt futtasd (a tükrözés-őrrel
+együtt, lásd lejjebb):
 
 ```bash
 cd backend && python3 -m scripts.order_sensitivity
@@ -94,6 +95,19 @@ felismerés pedig holtversenynél a kaputól mért távolság alapján dönt
 (korábban a beolvasás sorrendje szerint, ami a fal védőjét jelölte
 kapusnak). Ha a jelentésben mégis megjelenik egy réteg, az REGRESSZIÓ
 — ne a listát fogadd el, hanem keresd meg, mi írja felül a szerepeket.
+
+A tükrözés-őr (`docs/TUKROZES.md`) ugyanígy jelentés-szintű (fél perc):
+
+```bash
+cd backend && python3 -m scripts.mirror_sides
+```
+
+Amit néz: a pálya hossztengelyére tükrözött meccsen minden
+oldal-megnevezésnek ("bal szél" → "jobb szél") meg kell fordulnia. Aki
+a nyers y-ból nevez oldalt, az a VÉDEKEZŐ csapatról fordítva állít —
+a két csapat szemben áll. Ha új réteged oldal-címkét ad, a védekező
+oldal nézőpontjából nevezd (minta: defensive_gaps, conceded_side_bias),
+és futtasd le ezt kiadás előtt. A hibás-lista ÜRES, maradjon is az.
 
 ## Commit-stílus
 

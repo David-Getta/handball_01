@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.30 óta)
 
+- **Tükrözés-őr** (minőség-eszköz): új jelentés-szkript
+  (`scripts.mirror_sides` → `docs/TUKROZES.md`), amely a pálya
+  hossztengelyére tükrözött meccsen ellenőrzi, hogy minden
+  oldal-megnevezés ("bal szél" → "jobb szél") helyesen megfordul-e. A
+  fal-rés hibája ihlette: aki a nyers y-koordinátából nevez oldalt, az
+  a védekező csapatról fordítva állít, mert a két csapat szemben áll. A
+  mérés a magyar nyelv csapdáját is kezeli (a "jobb" better-t is
+  jelent: csak a pontos oldal-címkék cserélődnek, a próza soha). Az első
+  futás eredménye: 11 oldal-címkés réteg, mind helyesen tükröződik.
+  Gyors tesztek rögzítik a mechanikát (test_mirror_sides.py); a teljes
+  söprés kiadás előtti feladat, a CLAUDE.md recepthez hozzáadva.
 - **Fal-rés térkép: javítás az oldal-megnevezésben és a jelöletlen
   kapusnál**. Két félrevezető állítást javít az előző kiadásban
   bemutatott rétegen: (1) a rés sávját eddig a pálya nyers y-koordinátája
