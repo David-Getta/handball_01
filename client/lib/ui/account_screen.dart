@@ -103,7 +103,16 @@ class _AccountScreenState extends State<AccountScreen> {
         // beküldés már nem.
         if (!looksLikeConnectionIssue(e)) rethrow;
         if (!await ApiClient.reviveEngine()) rethrow;
-        await send();
+        try {
+          await send();
+        } catch (e2) {
+          // Ha az ELSŐ kísérlet valójában célba ért (a fiók létrejött,
+          // csak a válasz veszett el), az ismétlés "már van fiók"
+          // hibát ad — pedig a fiók él. Ilyenkor a belépés a helyes
+          // folytatás, ugyanazokkal az adatokkal.
+          if (!_registerMode || !"$e2".contains("már van fiók")) rethrow;
+          await _api.loginAccount(_email.text.trim(), _password.text);
+        }
       }
       if (!mounted) return;
       widget.onSignedIn();

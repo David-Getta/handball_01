@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.32 óta)
 
+- **Elveszett válaszú regisztráció → belépés** (kliens): ha az első
+  fiók-létrehozó kérés célba ért, de a válasz elveszett (a motor épp
+  elhalt), az újraélesztett ismétlés "már van fiók" hibát adna — pedig
+  a fiók él. A kliens ilyenkor belépéssel folytatja ugyanazokkal az
+  adatokkal. Őr-teszt védi.
+
 - **A motor naplója a hiba-képernyőn** (kliens): ha a motor az
   újraélesztés után sem válaszol, a hiba-képernyő a motor-napló utolsó
   sorait is megmutatja (kijelölhető szövegként) — a kiváltó ok így

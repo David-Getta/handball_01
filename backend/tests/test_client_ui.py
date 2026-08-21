@@ -607,3 +607,19 @@ def test_motor_hiba_kepernyo_mutatja_a_naplot():
     assert "logTail" in gate, "a hiba-képernyő nem mutatja a naplót"
     assert "SelectableText" in gate, (
         "a napló nem kijelölhető szöveg — másolni sem lehetne")
+
+
+def test_elveszett_valaszu_regisztracio_belepesbe_fut():
+    """ŐR: ha az első regisztráció célba ért, de a válasz elveszett (a
+    motor épp elhalt), az ismétlés "már van fiók" hibát ad — a kliens
+    ilyenkor BELÉPÉSSEL folytatja ugyanazokkal az adatokkal, nem
+    hibaüzenettel ijesztget egy élő fiók mellett."""
+    import pytest
+
+    scr = _client_lib() / "ui" / "account_screen.dart"
+    if not scr.exists():
+        pytest.skip("nincs kliens a fában")
+    src = scr.read_text(encoding="utf-8")
+    assert "már van fiók" in src, "nincs belépés-tartalék a duplikált fiókra"
+    assert src.index("már van fiók") > src.index("reviveEngine"), (
+        "a tartalék nem az újraélesztett ismétlés ágában van")
