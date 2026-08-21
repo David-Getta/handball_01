@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.31 óta)
+## Kiadatlan (a v0.1.32 óta)
+
+*(még semmi)*
+
+## v0.1.32 — kiadva (2026-08-21)
+
+> Kiadás-jegyzet: gyors javító+bővítő kör a v0.1.31 után. A fő ok a
+> fiók-képernyő ismételt "Nem érem el a háttérmotort" hibája: a kliens
+> mostantól nem csak keresi, hanem újra is INDÍTJA az elhalt motort, és
+> a képernyők kiírják a futó verziót. Mellé a stride-őr első komoly
+> leletének javítása (ritkított felvételen elveszett gólok) és egy új
+> névre szóló réteg (Szuper-csere).
 
 - **Szuper-csere** (új réteg): KI termel a padról — névre szólóan. A
   pad-gólok réteg azt mondja meg, termel-e a kispad egyáltalán; ez azt,
