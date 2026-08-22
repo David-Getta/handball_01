@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.35 óta)
+## Kiadatlan (a v0.1.36 óta)
+
+*(még semmi)*
+
+## v0.1.36 — kiadva (2026-08-22)
+
+> Kiadás-jegyzet: a belépésnél elakadt felhasználó kiszabadítása, két
+> úton. Egy: vendég-belépés — az app fiók nélkül is használható (a
+> tulajdonjogi tudomásulvétellel), a vendég-munka a következő
+> induláskor törlődik, KIVÉVE ha a fejlesztői mód be van kapcsolva.
+> Kettő: a frissítés-keresés és -telepítés a belépő képernyőről is
+> elérhető — a frissítő eddig a fiók-kapu mögött volt, így aki a
+> belépésnél akadt el, régi verzión ragadt, és a javítások sosem értek
+> el hozzá.
 
 - **Frissítés a kapu előtt** (kliens): a frissítés-keresés és
   -telepítés mostantól a BELÉPŐ képernyőről is elérhető — eddig csak a
