@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.36 óta)
+## Kiadatlan (a v0.1.37 óta)
+
+*(még semmi)*
+
+## v0.1.37 — kiadva (2026-08-22)
+
+> Kiadás-jegyzet: a vendég-mód kerekítése és egy új fáradás-réteg. A
+> vendég-munkamenet mostantól látható (sáv a dashboardon, egy-
+> kattintásos védelemmel), és van belőle út a fiókba a munka
+> megtartásával. Az Elzárás-fáradás a fáradás-család kiegészítése a
+> legfizikálisabb támadó-munkával; mellé a lövés-jelenetet mérő 13
+> réteg az elengedés kockájára állt (a ritkított felvétel pontossága).
 
 - **A jelenet-mérő rétegek is az elengedés kockájáról** (motor): a
   lövés-jelenetet mérő rétegek (elzárás-használat/-hozam/-fáradás,
