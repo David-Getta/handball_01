@@ -13,6 +13,26 @@ on:
     branches: ["claude/**", "main"]
 
 jobs:
+  # A gyors backend-őrök: réteg-regisztrációk, tény-lap frissesség,
+  # kiadás-jegyzet és kliens-forrás őr-tesztek (~2 perc). A teljes
+  # 1700+ tesztes csomag a kiadási munkafolyamatban fut.
+  backend-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Teszt-függőségek
+        run: pip install -q pytest numpy opencv-python-headless
+      - name: Őr-tesztek
+        working-directory: backend
+        run: >
+          python -m pytest -q tests/test_layer_registry.py
+          tests/test_release_notes.py tests/test_client_ui.py
+          tests/test_priorities.py
+
   dart-analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 15
