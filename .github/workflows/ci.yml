@@ -1,0 +1,30 @@
+# Gyors ellenőrzés minden push-ra: a Dart-hibát NE a (drága, ~20 perces)
+# kiadási build fogja meg, hanem ez a ~2 perces kör. Tanulság a
+# v0.1.36-ból: egy típushiba az első kiadási buildet buktatta el — az
+# analyze itt már a pusholáskor jelzett volna.
+#
+# Szándékosan csak az elemzést futtatja (a backend 1700+ tesztje a
+# kiadási munkafolyamatban fut): az itteni hiba = fordítást blokkoló
+# Dart-hiba; a figyelmeztetés és az info nem bukik.
+name: ci
+
+on:
+  push:
+    branches: ["claude/**", "main"]
+
+jobs:
+  dart-analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Függőségek
+        working-directory: client
+        run: flutter pub get
+      - name: Dart-elemzés (csak a hibák buknak)
+        working-directory: client
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings

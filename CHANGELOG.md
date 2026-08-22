@@ -5,7 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.37 óta)
 
-*(még semmi)*
+- **Push-CI Dart-elemzéssel** (infrastruktúra): minden push-ra lefut
+  egy ~2 perces `flutter analyze` — a fordítást blokkoló Dart-hibát
+  nem a drága (~20 perces) kiadási build fogja meg, hanem már a
+  pusholás. Tanulság a v0.1.36-ból: egy típushiba az első kiadási
+  buildet buktatta el.
 
 ## v0.1.37 — kiadva (2026-08-22)
 
