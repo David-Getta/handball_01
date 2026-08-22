@@ -3,7 +3,21 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.34 óta)
+## Kiadatlan (a v0.1.35 óta)
+
+*(még semmi)*
+
+## v0.1.35 — kiadva (2026-08-22)
+
+> Kiadás-jegyzet: három új poszt-réteg egy éjszaka alatt — a
+> réteg-térkép ember/poszt pár-auditjának terméke (mindkét irányban
+> végigfésülve; ezzel a pár-tér lefedett). A Rejtett szervező poszt, az
+> Egálbontó poszt és a Befutó poszt közös elve: a minta posztról
+> ismerszik meg, nem emberről — a felderítési kép a cserék és a
+> meccsek közt is összeadódik. Mellé a poszt-távolság mérés
+> elengedés-kockás pontosítása került még a v0.1.34-be; itt a
+> stride-jelentés frissítése zárja a kört (26 dokumentált, mintavételi
+> természetű eltérés).
 
 - **Befutó poszt** (új réteg): MELYIK POSZT a második hullám a
   kontráikban — a befutó emberek poszt-szintű párja. A második
