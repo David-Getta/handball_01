@@ -29,14 +29,25 @@ class PassNetworkPainter extends CustomPainter {
     };
     final maxCount = network.edges.isEmpty ? 1 : network.edges.first.count;
 
-    // Élek (a csomópontok alatt): vastagság és fedettség a passz-számmal.
+    // Élek (a csomópontok alatt): finoman ÍVELT vonalak — a sűrű háló
+    // egyenes vonalakkal "drótkerítés", ívekkel olvasható szövet lesz.
+    // Vastagság és fedettség a passz-számmal.
     for (final e in network.edges) {
       final a = pos[e.a], b = pos[e.b];
       if (a == null || b == null) continue;
       final frac = e.count / maxCount;
-      canvas.drawLine(a, b, Paint()
+      final mid = Offset((a.dx + b.dx) / 2, (a.dy + b.dy) / 2);
+      final d = b - a;
+      final norm = d.distance == 0 ? Offset.zero
+          : Offset(-d.dy, d.dx) / d.distance;
+      final ctrl = mid + norm * (d.distance * 0.08);
+      final path = Path()
+        ..moveTo(a.dx, a.dy)
+        ..quadraticBezierTo(ctrl.dx, ctrl.dy, b.dx, b.dy);
+      canvas.drawPath(path, Paint()
         ..color = color.withOpacity(0.25 + 0.55 * frac)
         ..strokeWidth = 1.5 + 4.5 * frac
+        ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round);
     }
 
@@ -48,8 +59,26 @@ class PassNetworkPainter extends CustomPainter {
     for (final n in network.nodes) {
       final p = pos[n.trackId]!;
       final r = 8.0 + 5.0 * (n.involvement / maxInv);
+      // A legaktívabb ember puha ragyogást kap: a játék "gerince"
+      // ránézésre kiugrik.
+      if (n.involvement == maxInv) {
+        canvas.drawCircle(
+            p,
+            r + 8,
+            Paint()
+              ..color = color.withOpacity(0.30)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8));
+      }
       canvas.drawCircle(p, r + 2, Paint()..color = AppColors.surface);
-      canvas.drawCircle(p, r, Paint()..color = color);
+      // Enyhe sugaras átmenet: a korong nem "matrica", hanem gomb.
+      canvas.drawCircle(
+          p,
+          r,
+          Paint()
+            ..shader = RadialGradient(colors: [
+              Color.lerp(color, Colors.white, 0.22)!,
+              color,
+            ]).createShader(Rect.fromCircle(center: p, radius: r)));
       final label = n.jerseyNumber?.toString() ?? "${n.trackId}";
       final tp = TextPainter(
         text: TextSpan(text: label, style: TextStyle(

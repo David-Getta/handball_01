@@ -35,18 +35,35 @@ class HeatmapPainter extends CustomPainter {
     final cellW = courtLength / heatmap.binsX; // cella szélessége méterben
     final cellH = courtWidth / heatmap.binsY;
 
+    // PUHA hőfoltok éles rácstéglák helyett: minden cella egy elmosott
+    // korong a cella közepén — a szomszédos foltok összemosódnak, és a
+    // kép tényleg hőtérképnek néz ki, nem mozaiknak. A legforróbb cellák
+    // magja világosabb (fehér felé húzott) — a gócpont ránézésre kiugrik.
+    final blur = MaskFilter.blur(
+        BlurStyle.normal, (cellW * scale) * 0.45);
     for (int iy = 0; iy < heatmap.binsY; iy++) {
       for (int ix = 0; ix < heatmap.binsX; ix++) {
         final value = heatmap.grid[iy][ix];
         if (value <= 0) continue;
-        // Normált intenzitás 0..1 → átlátszatlanság (kis alapszinttel, hogy látszódjon).
         final intensity = value / heatmap.maxCell;
-        final alpha = 0.15 + 0.65 * intensity;
-        final rect = Rect.fromPoints(
-          p(ix * cellW, iy * cellH),
-          p((ix + 1) * cellW, (iy + 1) * cellH),
-        );
-        canvas.drawRect(rect, Paint()..color = color.withOpacity(alpha));
+        final center = p((ix + 0.5) * cellW, (iy + 0.5) * cellH);
+        final radius = (cellW * scale) * (0.55 + 0.35 * intensity);
+        canvas.drawCircle(
+            center,
+            radius,
+            Paint()
+              ..color = color.withOpacity(0.10 + 0.50 * intensity)
+              ..maskFilter = blur);
+        if (intensity > 0.7) {
+          canvas.drawCircle(
+              center,
+              radius * 0.45,
+              Paint()
+                ..color = Color.lerp(color, Colors.white,
+                        0.35 * (intensity - 0.7) / 0.3)!
+                    .withOpacity(0.35)
+                ..maskFilter = blur);
+        }
       }
     }
   }

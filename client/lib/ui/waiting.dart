@@ -45,10 +45,16 @@ class WaitingView extends StatefulWidget {
   State<WaitingView> createState() => _WaitingViewState();
 }
 
-class _WaitingViewState extends State<WaitingView> {
+class _WaitingViewState extends State<WaitingView>
+    with SingleTickerProviderStateMixin {
   final Stopwatch _watch = Stopwatch()..start();
   Timer? _tick;
   int _seconds = 0;
+
+  /// Lélegző pulzus a pörgettyű közepén: a mozgás maga a "dolgozom" jel.
+  late final AnimationController _pulse = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1400))
+    ..repeat(reverse: true);
 
   @override
   void initState() {
@@ -62,6 +68,7 @@ class _WaitingViewState extends State<WaitingView> {
   @override
   void dispose() {
     _tick?.cancel();
+    _pulse.dispose();
     super.dispose();
   }
 
@@ -77,12 +84,38 @@ class _WaitingViewState extends State<WaitingView> {
     return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         SizedBox(
-          width: 44, height: 44,
+          width: 52, height: 52,
           child: Stack(alignment: Alignment.center, children: [
-            const CircularProgressIndicator(
-                strokeWidth: 3, color: AppColors.accent),
+            // Puha akcentus-ragyogás a pörgettyű mögött, lélegző ütemben.
+            FadeTransition(
+              opacity: Tween<double>(begin: 0.10, end: 0.30).animate(
+                  CurvedAnimation(
+                      parent: _pulse, curve: Curves.easeInOut)),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                        color: AppColors.accent.withOpacity(0.8),
+                        blurRadius: 26,
+                        spreadRadius: 2),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(
+              width: 44, height: 44,
+              child: CircularProgressIndicator(
+                  strokeWidth: 3, color: AppColors.accent),
+            ),
             if (widget.icon != null)
-              Icon(widget.icon, size: 18, color: AppColors.textFaint),
+              ScaleTransition(
+                scale: Tween<double>(begin: 0.92, end: 1.06).animate(
+                    CurvedAnimation(
+                        parent: _pulse, curve: Curves.easeInOut)),
+                child: Icon(widget.icon, size: 18,
+                    color: AppColors.textSecondary),
+              ),
           ]),
         ),
         const SizedBox(height: AppSpacing.lg),
