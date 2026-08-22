@@ -74,13 +74,25 @@ class ApiClient {
     return st.phase == BackendPhase.ready;
   }
 
+  /// A motor /health-ből olvasott verziója — a kliens a sajátjával
+  /// összevetve veszi észre a FÉL-FRISSÜLT telepítést (új app + régi
+  /// motor, vagy fordítva). Null, amíg nem válaszolt a motor, vagy ha
+  /// régi motor fut, amelyik még nem adja ki.
+  static String? engineVersion;
+
   /// Életjel: igaz, ha a backend elérhető (GET /health).
   Future<bool> isHealthy() async {
     try {
       final resp = await http
           .get(Uri.parse("$baseUrl/health"))
           .timeout(const Duration(seconds: 2));
-      return resp.statusCode == 200;
+      if (resp.statusCode != 200) return false;
+      try {
+        final body = jsonDecode(utf8.decode(resp.bodyBytes));
+        final v = body is Map ? body["version"] : null;
+        if (v is String && v.isNotEmpty) engineVersion = v;
+      } catch (_) {}
+      return true;
     } catch (_) {
       return false; // nincs backend → a hívó a beágyazott demóra eshet vissza
     }

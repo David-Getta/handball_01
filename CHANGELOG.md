@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.37 óta)
 
+- **Fél-frissült telepítés felismerése** (motor + kliens): a kiadás
+  mostantól a MOTORBA is belepecsételi a verziószámot, a /health
+  kiadja, a kliens pedig összeveti a sajátjával — ha az app és a motor
+  verziója eltér (a fájlcsere félbe maradt, vagy a régi app-példány
+  indult el), a dashboard piros sávban kimondja, és a megoldást is
+  adja (teljes újratelepítés a Releases-ről). A rejtélyes "néha
+  furcsán viselkedik" hibaosztály így néven nevezhető. Őr-tesztek a
+  /health-verzióra és a kliens-sávra.
+
 - **A CI-k tényleg futtatják az API-őröket** (infrastruktúra): a
   teszt-függőségek közül hiányzott a fastapi+httpx, ezért az összes
   API-teszt (fiókok, réteg-regisztry, könyvtár, csomag) modul-szinten,

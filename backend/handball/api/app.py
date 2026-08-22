@@ -130,8 +130,13 @@ def create_app():
 
     @app.get("/health")
     def health():
-        """Életjel — a kliens ezzel ellenőrzi, hogy a backend elérhető."""
-        return {"status": "ok"}
+        """Életjel — a kliens ezzel ellenőrzi, hogy a backend elérhető.
+
+        A verziót is kiadja: a kliens összeveti a sajátjával, és a
+        FÉL-FRISSÜLT telepítés (új app + régi motor, vagy fordítva) így
+        azonnal látszik, nem rejtélyes hibákként."""
+        from .. import __version__
+        return {"status": "ok", "version": __version__}
 
     # --- Fiókok és felhasználási feltételek -------------------------------
     # A program a Tulajdonos szellemi és fizikai tulajdona; a használat

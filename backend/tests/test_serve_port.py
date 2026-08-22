@@ -94,3 +94,19 @@ def test_health_full_checklist():
     assert by_name["Adatmappa írható"]["ok"] is True
     assert by_name["OpenCV (videó-kezelés)"]["ok"] is True
     assert by_name["Meccskönyvtár"]["ok"] is True
+
+
+def test_health_kiadja_a_motor_verziot():
+    """ŐR: a /health a motor verzióját is kiadja — a kliens ebből veszi
+    észre a fél-frissült telepítést (új app + régi motor)."""
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball import __version__
+    from handball.api.app import create_app
+
+    client = TestClient(create_app())
+    body = client.get("/health").json()
+    assert body["status"] == "ok"
+    assert body["version"] == __version__

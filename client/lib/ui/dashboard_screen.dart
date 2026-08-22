@@ -377,6 +377,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Igaz, ha az app és a motor verziója is ismert, kiadott, és eltér —
+  /// tipikusan fél-frissült telepítés (a fájlcsere félbe maradt, vagy a
+  /// régi app-példány indult el).
+  bool _versionMismatch() {
+    final ev = ApiClient.engineVersion;
+    return ev != null &&
+        ev.isNotEmpty &&
+        !appVersion.contains("-dev") &&
+        ev != appVersion;
+  }
+
+  /// Figyelmeztető sáv: az app és a motor verziója eltér — a rejtélyes
+  /// hibák helyett kimondjuk, és a megoldást is adjuk (teljes
+  /// újratelepítés a Releases-ről).
+  Widget _versionMismatchBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.away.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.away),
+      ),
+      child: Row(children: [
+        const Icon(Icons.warning_amber_rounded,
+            color: AppColors.away, size: 18),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Text(
+            "Az app (v$appVersion) és a motor "
+            "(v${ApiClient.engineVersion}) verziója eltér — a telepítés "
+            "fél-frissült. Töltsd le és telepítsd újra a teljes "
+            "csomagot a GitHub Releases oldalról, hogy a kettő együtt "
+            "frissüljön.",
+            style: AppText.label,
+          ),
+        ),
+      ]),
+    );
+  }
+
   /// Vendég-sáv: fiók nélküli munkamenetben a munka a következő
   /// indításkor törlődik — kivéve, ha a fejlesztői mód be van kapcsolva.
   Widget _guestBanner() {
@@ -1392,6 +1433,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Vendég-sáv: a fiók nélküli munkamenet munkája múlandó —
             // itt egy kattintással védhetővé tehető (fejlesztői mód).
             if (SessionStore.guestMode) _guestBanner(),
+            // Fél-frissült telepítés: az app és a motor verziója eltér.
+            if (_versionMismatch()) _versionMismatchBanner(),
             Row(
               children: [
                 Expanded(

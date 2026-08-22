@@ -744,3 +744,21 @@ def test_belepes_vendegbol_megtartja_a_munkat():
     i = gate.index('if (me == null)')
     assert "endGuest" in gate[i:], (
         "belépés után a vendég-munkamenet nem zárul le")
+
+
+def test_fel_frissult_telepites_lathato():
+    """ŐR: a kliens a /health-ből olvassa a motor verzióját, és a
+    dashboard kimondja, ha az app és a motor verziója eltér — a
+    fél-frissült telepítés ne rejtélyes hibaként jelentkezzen."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    dash = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "engineVersion" in api, "a kliens nem olvassa a motor verzióját"
+    assert "engineVersion" in dash and "eltér" in dash, (
+        "a dashboard nem jelzi a verzió-eltérést")
+    assert "Releases" in dash, "a sáv nem adja meg a megoldást"
