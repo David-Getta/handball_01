@@ -174,13 +174,14 @@ class _AccountScreenState extends State<AccountScreen> {
       ),
     );
     if (go != true || !mounted) return;
-    final progress = ValueNotifier<double>(0);
+    final chosen = info!; // a closure-be zárt "info" null-promóciója elvész
+    final progress = ValueNotifier<double?>(0);
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface,
-        content: ValueListenableBuilder<double>(
+        content: ValueListenableBuilder<double?>(
           valueListenable: progress,
           builder: (_, v, __) => Row(children: [
             const SizedBox(
@@ -190,16 +191,18 @@ class _AccountScreenState extends State<AccountScreen> {
             const SizedBox(width: AppSpacing.md),
             Expanded(
                 child: Text(
-                    v < 1
-                        ? "Letöltés: ${(v * 100).toStringAsFixed(0)}%"
-                        : "Telepítés — az app mindjárt újraindul…",
+                    v == null
+                        ? "Letöltés…"
+                        : v < 1
+                            ? "Letöltés: ${(v * 100).toStringAsFixed(0)}%"
+                            : "Telepítés — az app mindjárt újraindul…",
                     style: AppText.label)),
           ]),
         ),
       ),
     );
     try {
-      await UpdateService().downloadAndInstall(info, onProgress: (v) {
+      await UpdateService().downloadAndInstall(chosen, onProgress: (v) {
         progress.value = v;
       });
     } catch (e) {
