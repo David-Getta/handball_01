@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.35 óta)
 
+- **Frissítés a kapu előtt** (kliens): a frissítés-keresés és
+  -telepítés mostantól a BELÉPŐ képernyőről is elérhető — eddig csak a
+  dashboardon (a fiók-kapu mögött) élt, így a belépésnél elakadt
+  felhasználó régi verzión ragadt, és a javítások sosem értek el
+  hozzá. A frissítéshez se fiók, se futó motor nem kell. Őr-teszt
+  védi.
+
 - **Vendég-belépés + fejlesztői mód** (kliens): az appba mostantól
   fiók nélkül is be lehet lépni ("Folytatás fiók nélkül (vendég)" a
   belépő képernyőn). A vendég-út nem kerüli meg a tulajdonjogi

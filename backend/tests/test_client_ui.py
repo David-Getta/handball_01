@@ -688,3 +688,20 @@ def test_fejlesztoi_mod_vedi_a_vendeg_munkat():
     # A takarítás tiszteli a fejlesztői módot: előbb kérdez, aztán töröl.
     assert gate.index("SessionStore.devMode") < gate.index("deleteMatch"), (
         "a takarítás nem a fejlesztői mód ellenőrzésével kezdődik")
+
+
+def test_frissites_a_kapu_elott_is_elerheto():
+    """ŐR: a frissítés-keresés a BELÉPŐ képernyőről is elérhető — ha a
+    frissítő csak a dashboardon (a fiók-kapu mögött) él, a belépésnél
+    elakadt felhasználó régi, hibás verzión ragad, és a javítás sosem
+    ér el hozzá."""
+    import pytest
+
+    scr = _client_lib() / "ui" / "account_screen.dart"
+    if not scr.exists():
+        pytest.skip("nincs kliens a fában")
+    src = scr.read_text(encoding="utf-8")
+    assert "UpdateService" in src, "a belépő képernyő nem ismeri a frissítőt"
+    assert "downloadAndInstall" in src, (
+        "a belépő képernyőről csak keresni lehet, telepíteni nem")
+    assert "Frissítés keresése" in src, "nincs frissítés-kereső gomb"
