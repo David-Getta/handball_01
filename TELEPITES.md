@@ -127,6 +127,19 @@ az **Áttekintés** fülön később is ott lesznek.
 gépeden fut, internet nélkül is elemez — a fiók és a belépés is a saját gépeden
 működik.
 
+**Nem tudok belépni / nem akarok most fiókot.** A belépő képernyőn a
+**„Folytatás fiók nélkül (vendég)"** gombbal fiók nélkül is beléphetsz (a
+tulajdonjogi tudomásulvétel elfogadásával). Fontos: a vendégként végzett
+munka az app következő indításakor törlődik — kivéve, ha a **fejlesztői
+mód** be van kapcsolva (a belépő képernyőn vagy bent a fiók-menüben
+kapcsolható); akkor minden megmarad.
+
+**Régi verzión ragadtam, és a belépés nem megy.** A belépő képernyő alján
+ott a **„Frissítés keresése"** — fiók és futó motor nélkül is letölti és
+telepíti a legújabb kiadást. Ha az appot elindítani sem tudod, a frissítés
+böngészőből is megy: a projekt GitHub Releases oldaláról töltsd le a
+gépednek való csomagot, és telepítsd a régi fölé.
+
 **Elfelejtettem a jelszavamat.** A fiókok csak a te gépeden vannak, ezért nincs
 e-mailes visszaállítás. Ilyenkor hozz létre új fiókot — a korábbi meccseid és
 elemzéseid megmaradnak, azok nem a fiókhoz, hanem a géphez tartoznak.

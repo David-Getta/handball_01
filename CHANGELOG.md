@@ -5,7 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.36 óta)
 
-*(még semmi)*
+- **Vendég-sáv a dashboardon** (kliens): fiók nélküli munkamenetben a
+  meccs-lista tetején sáv jelzi, hogy a most készülő munka az app
+  következő indításakor törlődik — és egy kattintással védhetővé
+  tehető ("Megőrzöm a munkám" = fejlesztői mód). Csendben elveszett
+  munka így nem lehet. A telepítési útmutató a vendég-belépést és a
+  kapu előtti frissítést is leírja. Őr-teszt védi.
 
 ## v0.1.36 — kiadva (2026-08-22)
 

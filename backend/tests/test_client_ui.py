@@ -705,3 +705,18 @@ def test_frissites_a_kapu_elott_is_elerheto():
     assert "downloadAndInstall" in src, (
         "a belépő képernyőről csak keresni lehet, telepíteni nem")
     assert "Frissítés keresése" in src, "nincs frissítés-kereső gomb"
+
+
+def test_vendeg_sav_a_dashboardon():
+    """ŐR: vendég-munkamenetben a dashboard sávban jelzi, hogy a munka
+    múlandó, és egy kattintással védhetővé tehető (fejlesztői mód) —
+    csendben elveszett munka nem lehet."""
+    import pytest
+
+    dash = _client_lib() / "ui" / "dashboard_screen.dart"
+    if not dash.exists():
+        pytest.skip("nincs kliens a fában")
+    src = dash.read_text(encoding="utf-8")
+    assert "guestMode" in src, "a dashboard nem tud a vendég-munkamenetről"
+    assert "törlődik" in src, "a sáv nem mondja ki a múlandóságot"
+    assert "setDevMode" in src, "a sávból nem védhető a munka egy kattintással"

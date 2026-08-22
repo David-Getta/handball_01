@@ -12,6 +12,7 @@ import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
+import "../services/session_store.dart";
 import "../services/update_service.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
@@ -374,6 +375,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Frissítési hiba: ${humanError(e)}")));
     }
+  }
+
+  /// Vendég-sáv: fiók nélküli munkamenetben a munka a következő
+  /// indításkor törlődik — kivéve, ha a fejlesztői mód be van kapcsolva.
+  Widget _guestBanner() {
+    final dev = SessionStore.devMode;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(children: [
+        const Icon(Icons.person_outline,
+            color: AppColors.textFaint, size: 18),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Text(
+            dev
+                ? "Vendég-munkamenet · fejlesztői mód BE — a munkád "
+                    "kilépés után is megmarad."
+                : "Vendég-munkamenet — a most készülő munka az app "
+                    "következő indításakor törlődik.",
+            style: AppText.label,
+          ),
+        ),
+        TextButton(
+          onPressed: () async {
+            await SessionStore.setDevMode(!SessionStore.devMode);
+            if (mounted) setState(() {});
+          },
+          style: TextButton.styleFrom(
+              foregroundColor: AppColors.accent,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          child: Text(dev
+              ? "Fejlesztői mód kikapcsolása"
+              : "Megőrzöm a munkám (fejlesztői mód)"),
+        ),
+      ]),
+    );
   }
 
   /// Arany figyelmeztető sáv a lista tetején: új verzió érhető el.
@@ -1346,6 +1389,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             // Új verzió sáv — csak ha találtunk frissítést és nem rejtették el.
             if (_update != null && !_updateDismissed) _updateBanner(_update!),
+            // Vendég-sáv: a fiók nélküli munkamenet munkája múlandó —
+            // itt egy kattintással védhetővé tehető (fejlesztői mód).
+            if (SessionStore.guestMode) _guestBanner(),
             Row(
               children: [
                 Expanded(
