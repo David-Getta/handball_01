@@ -103,6 +103,65 @@ class AppTheme {
         color: AppColors.accent,
         linearTrackColor: AppColors.border,
       ),
+      // Dialógusok: kártya-nyelven (lekerekítés, felület-szín, finom
+      // keret) — ne a Material szürke doboza ugorjon be.
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        titleTextStyle: AppText.valueBig,
+        contentTextStyle: AppText.label,
+      ),
+      // Snackbar: lebegő, lekerekített, felület-színű — a jelzés is az
+      // app nyelvén szól.
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.surfaceAlt,
+        contentTextStyle: AppText.value.copyWith(fontSize: 13),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border),
+        ),
+      ),
+      // Súgóbuborék: sötét, lekerekített, olvasható — sok van belőle.
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: AppColors.bgSidebar.withOpacity(0.97),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.borderStrong),
+        ),
+        textStyle: AppText.label.copyWith(color: AppColors.textPrimary),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        waitDuration: const Duration(milliseconds: 350),
+      ),
+      // Chipek (ugró-sáv, szűrők): felület-szín, kerek forma, finom keret.
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.surfaceAlt,
+        side: const BorderSide(color: AppColors.border),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10)),
+        labelStyle: AppText.label.copyWith(color: AppColors.textPrimary),
+      ),
+      // Görgetősáv: vékony, halvány — látszik, de nem kiabál.
+      scrollbarTheme: ScrollbarThemeData(
+        thickness: const WidgetStatePropertyAll(6),
+        radius: const Radius.circular(3),
+        thumbColor: WidgetStatePropertyAll(
+            AppColors.textFaint.withOpacity(0.35)),
+      ),
+      // Felugró menük (fiók-menü, gyűjtő-menük): kártya-nyelven.
+      popupMenuTheme: PopupMenuThemeData(
+        color: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        textStyle: AppText.value,
+      ),
       // macOS-stílusú lapváltás MINDEN platformon: gyors áttűnés + alig
       // észrevehető nagyítás — az Apple-felületek "levegős" érzete.
       pageTransitionsTheme: const PageTransitionsTheme(builders: {
