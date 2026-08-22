@@ -420,6 +420,13 @@ class _AccountMenuState extends State<_AccountMenu> {
       onSelected: (v) {
         if (v == "logout") {
           _logout();
+        } else if (v == "login") {
+          // Vendégből fiókba: a kapu belépője jön; sikeres belépésnél a
+          // vendég-munkamenet lezárul, és a munka MEGMARAD (a kapu
+          // intézi).
+          Navigator.of(context).pushReplacement(MaterialPageRoute(
+              builder: (_) =>
+                  const AccountGate(preserveGuestWork: true)));
         } else if (v == "devmode") {
           // Fejlesztői mód: a vendég-munkamenet munkája az app
           // bezárásakor is megmarad. Fejlesztési fázisra való.
@@ -443,6 +450,11 @@ class _AccountMenuState extends State<_AccountMenu> {
           value: "terms",
           child: Text("Felhasználási feltételek", style: AppText.value),
         ),
+        if (me == null)
+          const PopupMenuItem<String>(
+            value: "login",
+            child: Text("Belépés / fiók létrehozása", style: AppText.value),
+          ),
         if (me != null)
           const PopupMenuItem<String>(
             value: "password",

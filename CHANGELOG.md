@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.36 óta)
 
+- **Vendégből fiókba — a munka megtartásával** (kliens): a vendég a
+  fiók-menüből egy kattintással eljut a belépéshez ("Belépés / fiók
+  létrehozása"), a belépési szándékkal nyitott kapu nem takarít, és
+  sikeres belépésnél a vendég-munkamenet úgy zárul le, hogy a munka
+  MEGMARAD — aki fiókot csinált, magáénak vallotta. Ha mégsem lép be,
+  a következő hideg indulás takarít a szokott módon. Őr-teszt védi.
+
 - **Elzárás-fáradás** (új réteg): ELFOGY-E az elzárás-munka a második
   félidőre — a fáradás-család (blokk-, fal-rés-, láb-fáradás)
   kiegészítése a legfizikálisabb támadó-munkával. Félidőnként méri, az

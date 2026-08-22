@@ -720,3 +720,27 @@ def test_vendeg_sav_a_dashboardon():
     assert "guestMode" in src, "a dashboard nem tud a vendég-munkamenetről"
     assert "törlődik" in src, "a sáv nem mondja ki a múlandóságot"
     assert "setDevMode" in src, "a sávból nem védhető a munka egy kattintással"
+
+
+def test_belepes_vendegbol_megtartja_a_munkat():
+    """ŐR: a vendég a fiók-menüből el tud jutni a belépéshez, a belépési
+    szándékú kapu nem takarít, sikeres belépésnél pedig a
+    vendég-munkamenet úgy zárul le, hogy a munka MEGMARAD (fiókot
+    csinált — magáénak vallotta)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "Belépés / fiók létrehozása" in shell, (
+        "a vendég nem jut el a belépéshez a fiók-menüből")
+    assert "preserveGuestWork: true" in shell, (
+        "a belépési szándékú kapu takarítana")
+    assert "preserveGuestWork" in gate
+    # Sikeres belépésnél a vendég-jelző lezárul takarítás NÉLKÜL.
+    i = gate.index('if (me == null)')
+    assert "endGuest" in gate[i:], (
+        "belépés után a vendég-munkamenet nem zárul le")

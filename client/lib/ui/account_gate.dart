@@ -51,10 +51,17 @@ mutatja meg — a demó mód csak kipróbálásra szolgál.
 const int kOfflineTermsVersion = 1;
 
 class AccountGate extends StatefulWidget {
-  const AccountGate({super.key, this.engineReady = true});
+  const AccountGate({super.key, this.engineReady = true,
+      this.preserveGuestWork = false});
 
   /// Fut-e a motor. Ha nem (demó mód), a kapu az offline tudomásulvételt kéri.
   final bool engineReady;
+
+  /// Igaz, ha a kaput egy FUTÓ vendég-munkamenetből nyitották (belépési
+  /// szándékkal) — ilyenkor az induló takarítás kimarad: a belépés célja
+  /// éppen a munka megtartása. Ha mégsem lépnek be, a következő hideg
+  /// indulás takarít.
+  final bool preserveGuestWork;
 
   @override
   State<AccountGate> createState() => _AccountGateState();
@@ -128,6 +135,9 @@ class _AccountGateState extends State<AccountGate> {
       setState(() => _step = _GateStep.account);
       return;
     }
+    // Belépett felhasználó: a futó vendég-munkamenet ezzel lezárul, és
+    // a munkája MEGMARAD — fiókot csinált, magáénak vallotta.
+    if (SessionStore.guestMode) await SessionStore.endGuest();
     if (me["terms_ok"] != true) {
       setState(() => _step = _GateStep.terms);
       return;
@@ -142,6 +152,7 @@ class _AccountGateState extends State<AccountGate> {
   Future<void> _cleanupGuestWork() async {
     if (_guestCleanupDone) return;
     _guestCleanupDone = true;
+    if (widget.preserveGuestWork) return; // belépési szándék: nem takarítunk
     if (!SessionStore.guestMode) return;
     if (SessionStore.devMode) {
       // Fejlesztői mód: a vendég-munka marad, csak a jelzőt zárjuk le.
