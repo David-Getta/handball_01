@@ -670,9 +670,23 @@ class _NavItemState extends State<_NavItem> {
           margin: const EdgeInsets.symmetric(vertical: 2),
           padding:
               EdgeInsets.symmetric(horizontal: w.open ? 10 : 0, vertical: 9),
+          // A kijelölt elem "világító pill": enyhe színátmenet + puha
+          // akcentus-ragyogás — a szem egyből tudja, hol van.
           decoration: BoxDecoration(
-            color: bg,
+            color: w.selected ? null : bg,
+            gradient: w.selected
+                ? const LinearGradient(
+                    colors: [AppColors.accent, Color(0xFF25BFAC)])
+                : null,
             borderRadius: BorderRadius.circular(8),
+            boxShadow: w.selected
+                ? [
+                    BoxShadow(
+                        color: AppColors.accent.withOpacity(0.28),
+                        blurRadius: 14,
+                        offset: const Offset(0, 3)),
+                  ]
+                : const [],
           ),
           child: row,
         ),
