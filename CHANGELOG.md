@@ -5,7 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.35 óta)
 
-*(még semmi)*
+- **Vendég-belépés + fejlesztői mód** (kliens): az appba mostantól
+  fiók nélkül is be lehet lépni ("Folytatás fiók nélkül (vendég)" a
+  belépő képernyőn). A vendég-út nem kerüli meg a tulajdonjogi
+  tudomásulvételt (első alkalommal a rövid elfogadó képernyő jön), és
+  a vendégként végzett munka az app következő indulásakor törlődik — a
+  takarítás alapvonal-alapú: csak a vendég-belépés UTÁN készült
+  meccseket törli, a korábbiakat nem, és ha a motor nem érhető el,
+  inkább nem töröl semmit. KIVÉTEL a fejlesztői mód: bekapcsolva a
+  vendég-munka megmarad — a belépő képernyőről és a fiók-menüből is
+  kapcsolható (fejlesztési fázisra való). Őr-tesztek: a
+  tudomásulvétel megkerülhetetlensége, az alapvonal-alapú takarítás
+  és a fejlesztői mód elsőbbsége is védve.
 
 ## v0.1.35 — kiadva (2026-08-22)
 

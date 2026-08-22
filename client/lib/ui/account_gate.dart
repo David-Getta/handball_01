@@ -60,7 +60,9 @@ class AccountGate extends StatefulWidget {
   State<AccountGate> createState() => _AccountGateState();
 }
 
-enum _GateStep { checking, engineDown, offline, account, terms, done }
+enum _GateStep {
+  checking, engineDown, offline, account, terms, done, guestTerms,
+}
 
 class _AccountGateState extends State<AccountGate> {
   final ApiClient _api = ApiClient();
@@ -71,6 +73,10 @@ class _AccountGateState extends State<AccountGate> {
   /// A motor-napló utolsó sorai a hiba-képernyőn — a kiváltó ok így
   /// egyetlen képernyőképen elfér.
   String? _engineLog;
+
+  /// Igaz, ha az induláskori vendég-takarítás már lefutott — a kapu
+  /// újra-döntései (belépés után) nem takarítanak még egyszer.
+  bool _guestCleanupDone = false;
 
   @override
   void initState() {
@@ -115,6 +121,7 @@ class _AccountGateState extends State<AccountGate> {
         return;
       }
     }
+    await _cleanupGuestWork();
     final me = await _api.fetchMe();
     if (!mounted) return;
     if (me == null) {
@@ -126,6 +133,55 @@ class _AccountGateState extends State<AccountGate> {
       return;
     }
     setState(() => _step = _GateStep.done);
+    _enterApp();
+  }
+
+  /// Az előző futás vendég-munkamenetének takarítása: a vendég-belépés
+  /// UTÁN készült meccsek törlése — kivéve fejlesztői módban, ott a
+  /// munka megmarad. Csak egyszer, az app indulásakor fut.
+  Future<void> _cleanupGuestWork() async {
+    if (_guestCleanupDone) return;
+    _guestCleanupDone = true;
+    if (!SessionStore.guestMode) return;
+    if (SessionStore.devMode) {
+      // Fejlesztői mód: a vendég-munka marad, csak a jelzőt zárjuk le.
+      await SessionStore.endGuest();
+      return;
+    }
+    try {
+      final baseline = SessionStore.guestBaseline.toSet();
+      for (final m in await _api.listMatches()) {
+        final id = m["match_id"] as String? ?? m["id"] as String?;
+        if (id != null && !baseline.contains(id)) {
+          try {
+            await _api.deleteMatch(id);
+          } catch (_) {}
+        }
+      }
+    } catch (_) {
+      // A takarítás legjobb szándékú: ha a motor épp nem érhető el, a
+      // meccsek megmaradnak — adatvesztésnél ez a jó irány.
+    }
+    await SessionStore.endGuest();
+  }
+
+  /// Vendég-belépés: fiók nélkül, a tulajdonjogi tudomásulvétellel. A
+  /// meglévő meccsek listáját eltesszük — kilépés után (fejlesztői mód
+  /// híján) csak a vendégként készült munka törlődik.
+  Future<void> _enterAsGuest() async {
+    if (SessionStore.offlineTermsVersion < kOfflineTermsVersion) {
+      setState(() => _step = _GateStep.guestTerms);
+      return;
+    }
+    var baseline = <String>[];
+    try {
+      baseline = [
+        for (final m in await _api.listMatches())
+          if ((m["match_id"] ?? m["id"]) is String)
+            (m["match_id"] ?? m["id"]) as String
+      ];
+    } catch (_) {}
+    await SessionStore.startGuest(baseline);
     _enterApp();
   }
 
@@ -157,7 +213,7 @@ class _AccountGateState extends State<AccountGate> {
           ),
         );
       case _GateStep.account:
-        return AccountScreen(onSignedIn: _decide);
+        return AccountScreen(onSignedIn: _decide, onGuest: _enterAsGuest);
       case _GateStep.terms:
         // Belépve, de a feltételek megújultak: elfogadás nélkül nincs tovább.
         return TermsScreen(
@@ -169,6 +225,8 @@ class _AccountGateState extends State<AccountGate> {
         );
       case _GateStep.offline:
         return _offlineNotice();
+      case _GateStep.guestTerms:
+        return _offlineNotice(forGuest: true);
       case _GateStep.engineDown:
         return _engineDownNotice();
     }
@@ -269,8 +327,10 @@ class _AccountGateState extends State<AccountGate> {
     );
   }
 
-  /// Motor nélküli mód: rövid tudomásulvétel, utána demó.
-  Widget _offlineNotice() {
+  /// Motor nélküli mód: rövid tudomásulvétel, utána demó — `forGuest`
+  /// esetén a vendég-belépés folytatódik vele (a motor fut, csak fiók
+  /// nincs; a tulajdonjogi tudomásulvétel akkor is kell).
+  Widget _offlineNotice({bool forGuest = false}) {
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -327,12 +387,22 @@ class _AccountGateState extends State<AccountGate> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     FilledButton.icon(
-                      onPressed: _offlineAccepted ? _acceptOffline : null,
+                      onPressed: !_offlineAccepted
+                          ? null
+                          : (forGuest
+                              ? () async {
+                                  await SessionStore.setOfflineTerms(
+                                      kOfflineTermsVersion);
+                                  await _enterAsGuest();
+                                }
+                              : _acceptOffline),
                       style: FilledButton.styleFrom(
                           backgroundColor: AppColors.accent,
                           foregroundColor: AppColors.onAccent),
                       icon: const Icon(Icons.play_arrow, size: 18),
-                      label: const Text("Belépés demó módban"),
+                      label: Text(forGuest
+                          ? "Belépés vendégként"
+                          : "Belépés demó módban"),
                     ),
                   ],
                 ),

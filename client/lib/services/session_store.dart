@@ -23,6 +23,19 @@ class SessionStore {
   /// még nem fogadták el.
   static int offlineTermsVersion = 0;
 
+  /// Fejlesztői mód: a vendég-munkamenet munkája NEM vész el kilépéskor.
+  /// A fiók-menüből és a belépő képernyőről kapcsolható.
+  static bool devMode = false;
+
+  /// Vendég-munkamenet fut-e (fiók nélküli belépés). Ha az app úgy zárul
+  /// be, hogy ez igaz, a következő indulás — fejlesztői mód híján —
+  /// eltakarítja a vendég-munkamenetben készült meccseket.
+  static bool guestMode = false;
+
+  /// A vendég-belépéskor MÁR MEGLÉVŐ meccsek azonosítói — a takarítás
+  /// csak az ezután készülteket törli.
+  static List<String> guestBaseline = [];
+
   static File _file() {
     Directory base;
     if (Platform.isWindows) {
@@ -52,9 +65,18 @@ class SessionStore {
       token = (t is String && t.isNotEmpty) ? t : null;
       final v = data["offline_terms_version"];
       offlineTermsVersion = v is int ? v : 0;
+      devMode = data["dev_mode"] == true;
+      guestMode = data["guest_mode"] == true;
+      final gb = data["guest_baseline"];
+      guestBaseline = gb is List
+          ? gb.whereType<String>().toList()
+          : <String>[];
     } catch (_) {
       token = null;
       offlineTermsVersion = 0;
+      devMode = false;
+      guestMode = false;
+      guestBaseline = [];
     }
   }
 
@@ -67,6 +89,9 @@ class SessionStore {
       await f.writeAsString(jsonEncode({
         "token": token,
         "offline_terms_version": offlineTermsVersion,
+        "dev_mode": devMode,
+        "guest_mode": guestMode,
+        "guest_baseline": guestBaseline,
       }));
     } catch (_) {}
   }
@@ -86,6 +111,26 @@ class SessionStore {
   /// Kilépés: a kulcs törlése (az offline elfogadás megmarad).
   static Future<void> clear() async {
     token = null;
+    await save();
+  }
+
+  /// Fejlesztői mód kapcsolása (a vendég-munka megőrzése).
+  static Future<void> setDevMode(bool value) async {
+    devMode = value;
+    await save();
+  }
+
+  /// Vendég-munkamenet indítása: a meglévő meccsek listájával.
+  static Future<void> startGuest(List<String> baseline) async {
+    guestMode = true;
+    guestBaseline = baseline;
+    await save();
+  }
+
+  /// A vendég-munkamenet lezárása (takarítás után vagy belépéskor).
+  static Future<void> endGuest() async {
+    guestMode = false;
+    guestBaseline = [];
     await save();
   }
 }

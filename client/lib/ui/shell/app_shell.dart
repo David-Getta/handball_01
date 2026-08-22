@@ -13,6 +13,7 @@ import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 
 import "../../services/api_client.dart";
+import "../../services/session_store.dart";
 import "../../sim/demo_data.dart";
 import "../../theme/app_theme.dart";
 import "../../version.dart";
@@ -405,7 +406,7 @@ class _AccountMenuState extends State<_AccountMenu> {
   Widget build(BuildContext context) {
     final me = _me;
     final who = me == null
-        ? "Nincs bejelentkezve"
+        ? (SessionStore.guestMode ? "Vendég-munkamenet" : "Nincs bejelentkezve")
         : ((me["name"] as String?)?.isNotEmpty == true
             ? me["name"] as String
             : me["email"] as String? ?? "Fiók");
@@ -419,6 +420,11 @@ class _AccountMenuState extends State<_AccountMenu> {
       onSelected: (v) {
         if (v == "logout") {
           _logout();
+        } else if (v == "devmode") {
+          // Fejlesztői mód: a vendég-munkamenet munkája az app
+          // bezárásakor is megmarad. Fejlesztési fázisra való.
+          SessionStore.setDevMode(!SessionStore.devMode)
+              .then((_) => mounted ? setState(() {}) : null);
         } else if (v == "terms") {
           Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => const TermsScreen(readOnly: true),
@@ -447,6 +453,14 @@ class _AccountMenuState extends State<_AccountMenu> {
             value: "logout",
             child: Text("Kilépés a fiókból", style: AppText.value),
           ),
+        PopupMenuItem<String>(
+          value: "devmode",
+          child: Text(
+              SessionStore.devMode
+                  ? "Fejlesztői mód: BE (vendég-munka megmarad)"
+                  : "Fejlesztői mód: KI (vendég-munka elvész)",
+              style: AppText.value),
+        ),
       ],
     );
   }

@@ -644,3 +644,47 @@ def test_motor_orkutya_ujraindit_es_korlatoz():
     # A szándékos leállítás jelzi magát, az őrkutya pedig tiszteli.
     assert src.index("_stoppedByUs = true") > 0
     assert "if (_stoppedByUs) return;" in src
+
+
+def test_vendeg_belepes_tudomasulvetellel_es_takaritassal():
+    """ŐR: van vendég-belépés (fiók nélkül), de NEM kerüli meg a
+    tulajdonjogi tudomásulvételt, és a vendég-munka a következő
+    induláskor takarítódik — csak a vendég-belépés UTÁN készült
+    meccsek, a korábbiak nem."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    scr = (lib / "ui" / "account_screen.dart").read_text(encoding="utf-8")
+    assert "onGuest" in scr, "nincs vendég-belépés gomb a fiók-képernyőn"
+    assert "_enterAsGuest" in gate, "a kapu nem ismeri a vendég-utat"
+    # A tudomásulvétel nem kerülhető meg: a vendég-út ellenőrzi.
+    assert "offlineTermsVersion < kOfflineTermsVersion" in gate, (
+        "a vendég-belépés megkerüli a tulajdonjogi tudomásulvételt")
+    # A takarítás alapvonal-alapú: csak az újat törli.
+    assert "guestBaseline" in gate and "deleteMatch" in gate, (
+        "a vendég-takarítás hiányzik vagy nem alapvonal-alapú")
+
+
+def test_fejlesztoi_mod_vedi_a_vendeg_munkat():
+    """ŐR: a fejlesztői mód kapcsolható (fiók-képernyő ÉS fiók-menü), és
+    bekapcsolva a vendég-takarítás NEM töröl."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    scr = (lib / "ui" / "account_screen.dart").read_text(encoding="utf-8")
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    store = (lib / "services" / "session_store.dart").read_text(
+        encoding="utf-8")
+    assert "setDevMode" in store, "nincs fejlesztői mód a munkamenet-tárban"
+    assert "setDevMode" in scr, "a fiók-képernyőről nem kapcsolható"
+    assert "setDevMode" in shell, "a fiók-menüből nem kapcsolható"
+    # A takarítás tiszteli a fejlesztői módot: előbb kérdez, aztán töröl.
+    assert gate.index("SessionStore.devMode") < gate.index("deleteMatch"), (
+        "a takarítás nem a fejlesztői mód ellenőrzésével kezdődik")

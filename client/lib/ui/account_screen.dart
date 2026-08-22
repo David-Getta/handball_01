@@ -10,16 +10,21 @@ library;
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
+import "../services/session_store.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
 import "error_text.dart";
 import "terms_screen.dart";
 
 class AccountScreen extends StatefulWidget {
-  const AccountScreen({super.key, required this.onSignedIn});
+  const AccountScreen({super.key, required this.onSignedIn, this.onGuest});
 
   /// Sikeres belépés vagy fiók-létrehozás után hívjuk (a kapu lép tovább).
   final VoidCallback onSignedIn;
+
+  /// Vendég-belépés fiók nélkül (a kapu intézi a tudomásulvételt és a
+  /// vendég-munkamenet indítását). Null, ha a vendég-út nem elérhető.
+  final VoidCallback? onGuest;
 
   @override
   State<AccountScreen> createState() => _AccountScreenState();
@@ -344,6 +349,54 @@ class _AccountScreenState extends State<AccountScreen> {
                           : "Nincs még fiókom — létrehozom"),
                     ),
                   ),
+                  if (widget.onGuest != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    const Divider(color: AppColors.border, height: 1),
+                    const SizedBox(height: AppSpacing.sm),
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: _busy ? null : widget.onGuest,
+                        style: TextButton.styleFrom(
+                            foregroundColor: AppColors.textSecondary),
+                        icon: const Icon(Icons.person_outline, size: 16),
+                        label: const Text(
+                            "Folytatás fiók nélkül (vendég)"),
+                      ),
+                    ),
+                    Center(
+                      child: Text(
+                        SessionStore.devMode
+                            ? "Fejlesztői mód BE: a vendég-munka "
+                                "kilépés után is megmarad."
+                            : "A vendégként végzett munka az app "
+                                "bezárásakor elvész.",
+                        style: AppText.label.copyWith(fontSize: 11),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    // Fejlesztői mód: fejlesztés alatt a vendég-munka
+                    // megőrzése — a fiók-menüből is kapcsolható.
+                    Center(
+                      child: TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                await SessionStore.setDevMode(
+                                    !SessionStore.devMode);
+                                if (mounted) setState(() {});
+                              },
+                        style: TextButton.styleFrom(
+                            foregroundColor: AppColors.textFaint,
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(0, 28),
+                            tapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap),
+                        child: Text(SessionStore.devMode
+                            ? "Fejlesztői mód kikapcsolása"
+                            : "Fejlesztői mód bekapcsolása"),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.sm),
                   // A futó kiadás száma: egy hibajelentő képernyőképből
                   // így azonnal látszik, melyik verzió ad hibát.
