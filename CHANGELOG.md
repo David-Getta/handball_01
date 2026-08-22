@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.37 óta)
 
+- **A CI-k tényleg futtatják az API-őröket** (infrastruktúra): a
+  teszt-függőségek közül hiányzott a fastapi+httpx, ezért az összes
+  API-teszt (fiókok, réteg-regisztry, könyvtár, csomag) modul-szinten,
+  NÉMÁN kimaradt a gépi futásokból — helyben zöld volt, a CI-ben
+  láthatatlan. A push-CI és a kiadási teszt-kör is pótolta; a push-CI
+  emellett gyors backend-őr kört is kapott a Dart-elemzés mellé.
+
 - **Push-CI Dart-elemzéssel** (infrastruktúra): minden push-ra lefut
   egy ~2 perces `flutter analyze` — a fordítást blokkoló Dart-hibát
   nem a drága (~20 perces) kiadási build fogja meg, hanem már a

@@ -51,7 +51,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Teszt-függőségek
-        run: pip install pytest numpy opencv-python-headless
+        # A fastapi+httpx nélkül az API-őrök (fiókok, réteg-regisztry,
+        # könyvtár, csomag) modul-szinten, NÉMÁN kimaradnának.
+        run: pip install pytest numpy opencv-python-headless fastapi httpx
       - name: Backend tesztek
         working-directory: backend
         run: python -m pytest -q
