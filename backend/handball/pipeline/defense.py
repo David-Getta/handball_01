@@ -1821,7 +1821,7 @@ def screen_defense(match, config=None) -> dict:
               for s in ("home", "away")}
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]
@@ -2177,7 +2177,8 @@ def targeted_defenders(match, config=None) -> dict:
     totals = {"home": [0, 0], "away": [0, 0]}  # lövés, gól
 
     for sh in match_xg(match, config).get("shots", []):
-        f = by_t.get(sh["t"])
+        # A célba vett védő az ELENGEDÉS pillanatában áll a lövő előtt.
+        f = by_t.get(sh.get("release_t")) or by_t.get(sh["t"])
         if f is None:
             continue
         attacker = Team.HOME if sh["team"] == "home" else Team.AWAY
@@ -3752,7 +3753,7 @@ def beaten_defenders(match, config=None) -> dict:
         if sh.get("outcome") != "goal":
             continue
         deff = "away" if sh["team"] == "home" else "home"
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if i0 is None:
             continue
         best = None
@@ -3927,7 +3928,7 @@ def corridor_goals(match, config=None) -> dict:
         if sh.get("outcome") != "goal":
             continue
         deff = "away" if sh["team"] == "home" else "home"
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if i0 is None:
             continue
         goal_x = config.attacks_toward_x(Team(sh["team"]))
@@ -4061,7 +4062,7 @@ def conceded_momentum(match, config=None) -> dict:
         if sh.get("outcome") != "goal" or sh.get("player_id") is None:
             continue
         deff = "away" if sh["team"] == "home" else "home"
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
             continue
         p_before = next((p for p in match.frames[i0 - 2].players
@@ -4204,7 +4205,7 @@ def stepout_punishment(match, config=None) -> dict:
         if sh.get("outcome") != "goal":
             continue
         deff = "away" if sh["team"] == "home" else "home"
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if i0 is None:
             continue
         own_goal_x = config.own_goal_x(
@@ -4833,7 +4834,7 @@ def screened_defenders(match, config=None) -> dict:
     tally: dict = {"home": {}, "away": {}}
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]
@@ -4922,7 +4923,7 @@ def screened_defender_roles(match, config=None) -> dict:
                  for side in ("home", "away")}
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]

@@ -102,6 +102,10 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
             ("goal" if e.type == EventType.GOAL else "miss")
         side = e.team.value
         shots.append({"t": e.t, "team": side, "player_id": e.player_id,
+                      # Az elengedés kockája: a jelenet-mérő rétegek
+                      # (elzárás, fal, kilépés) ebből olvassák a lövés
+                      # PILLANATÁT — az esemény t-jén a kép már szétmozgott.
+                      "release_t": (e.detail or {}).get("release_t"),
                       "x": round(x, 2), "y": round(y, 2),
                       "xg": xg, "outcome": outcome})
         teams[side]["xg"] += xg

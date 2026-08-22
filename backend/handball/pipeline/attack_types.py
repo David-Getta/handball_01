@@ -1778,7 +1778,7 @@ def screen_usage(match: Match,
               "away": {"shots": 0, "screened": 0}}
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]
@@ -1866,7 +1866,7 @@ def screen_fade(match: Match,
     idx_of = {f.t: i for i, f in enumerate(match.frames)}
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]
@@ -1957,7 +1957,7 @@ def screen_yield(match: Match,
 
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]
@@ -3285,7 +3285,7 @@ def screen_setters(match: Match,
     tally: dict = {"home": {}, "away": {}}
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]
@@ -3920,7 +3920,7 @@ def screen_pairs(match: Match,
     tally: dict = {"home": {}, "away": {}}
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]

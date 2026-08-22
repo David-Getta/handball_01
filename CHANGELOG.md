@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.36 óta)
 
+- **A jelenet-mérő rétegek is az elengedés kockájáról** (motor): a
+  lövés-jelenetet mérő rétegek (elzárás-használat/-hozam/-fáradás,
+  elzárók és elzárás-párosok, elzárás-védekezés, átvert védők,
+  folyosó-gólok, kapott-lendület, kilépés-büntetés, célba vett védők)
+  a képet eddig az esemény kockáján olvasták — ritkított felvételen
+  ott már mindenki elmozdult. A match_xg lövés-rekordja mostantól a
+  release_t-t is hordozza, és mind a 13 jelenet-mérő az elengedés
+  kockájából mér (tartalék a régi viselkedés).
+
 - **Vendégből fiókba — a munka megtartásával** (kliens): a vendég a
   fiók-menüből egy kattintással eljut a belépéshez ("Belépés / fiók
   létrehozása"), a belépési szándékkal nyitott kapu nem takarít, és
