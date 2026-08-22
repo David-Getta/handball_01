@@ -12,6 +12,7 @@ import "package:file_picker/file_picker.dart";
 import "package:flutter/foundation.dart" show kIsWeb;
 import "package:flutter/material.dart";
 
+import "anim.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
@@ -12041,7 +12042,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           Wrap(
             spacing: AppSpacing.lg,
             runSpacing: AppSpacing.md,
-            children: [for (final t in shown) _metricTile(t[0], t[1])],
+            // Lépcsőzött belépés: a csempe-fal nem "bevágódik", hanem
+            // felépül — a szem követi, hol kezdődik a lista.
+            children: [
+              for (final (i, t) in shown.indexed)
+                FadeSlideIn(index: i, child: _metricTile(t[0], t[1]))
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
         ],

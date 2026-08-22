@@ -45,10 +45,17 @@ class IntensityChart extends StatelessWidget {
         child: LayoutBuilder(builder: (context, constraints) {
           return GestureDetector(
             onTapUp: (d) => _handleTap(d.localPosition, constraints.biggest),
-            child: CustomPaint(
-              size: Size(constraints.maxWidth, 110),
-              painter: _IntensityPainter(
-                  windows: windows, totalFrames: totalFrames, fps: fps),
+            // Berajzolás betöltéskor: a tempó-görbék balról jobbra épülnek.
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 900),
+              curve: Curves.easeInOutCubic,
+              builder: (context, t, _) => CustomPaint(
+                size: Size(constraints.maxWidth, 110),
+                painter: _IntensityPainter(
+                    windows: windows, totalFrames: totalFrames, fps: fps,
+                    progress: t),
+              ),
             ),
           );
         }),
@@ -119,13 +126,21 @@ class _IntensityPainter extends CustomPainter {
   final List<IntensityWindow> windows;
   final int totalFrames;
   final double fps;
+
+  /// Berajzolás-állapot (0..1) — a betöltő animáció hajtja.
+  final double progress;
+
   _IntensityPainter(
-      {required this.windows, required this.totalFrames, required this.fps});
+      {required this.windows, required this.totalFrames, required this.fps,
+       this.progress = 1.0});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (totalFrames <= 1 || windows.length < 2) return;
     final geom = _IntensityGeom(size, windows, totalFrames);
+    if (progress < 1.0) {
+      canvas.clipRect(Rect.fromLTRB(0, 0, size.width * progress, size.height));
+    }
 
     // Visszafogott rács: 3 vízszintes vonal kerek m/s értékeknél.
     final grid = Paint()..color = AppColors.border.withOpacity(0.5)..strokeWidth = 1;
@@ -151,22 +166,44 @@ class _IntensityPainter extends CustomPainter {
     ]) {
       final line = Paint()
         ..color = color
-        ..strokeWidth = 2
+        ..strokeWidth = 2.2
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round
         ..style = PaintingStyle.stroke;
-      final path = Path();
-      var first = true;
-      for (final w in windows) {
-        final p = Offset(geom.x(geom.centerFrame(w)), geom.y(sel(w)));
-        if (first) {
-          path.moveTo(p.dx, p.dy);
-          first = false;
-        } else {
-          path.lineTo(p.dx, p.dy);
-        }
+      // SIMA görbe a pontokon át (Catmull-Rom → Bézier): a tempó nem
+      // szögletes lépcső, hanem hullámzás — a szemnek is az.
+      final pts = [
+        for (final w in windows)
+          Offset(geom.x(geom.centerFrame(w)), geom.y(sel(w)))
+      ];
+      final path = Path()..moveTo(pts.first.dx, pts.first.dy);
+      for (var i = 0; i < pts.length - 1; i++) {
+        final p0 = i == 0 ? pts[0] : pts[i - 1];
+        final p1 = pts[i];
+        final p2 = pts[i + 1];
+        final p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+        final c1 = p1 + (p2 - p0) / 6.0;
+        final c2 = p2 - (p3 - p1) / 6.0;
+        path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p2.dx, p2.dy);
       }
+
+      // Terület-kitöltés a görbe alatt: lefelé elhalványuló csapatszín.
+      final base = size.height - _IntensityGeom.padB;
+      final fill = Path.from(path)
+        ..lineTo(pts.last.dx, base)
+        ..lineTo(pts.first.dx, base)
+        ..close();
+      canvas.drawPath(
+          fill,
+          Paint()
+            ..shader = LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [color.withOpacity(0.14), color.withOpacity(0.0)],
+            ).createShader(
+                Rect.fromLTRB(0, _IntensityGeom.padT, size.width, base)));
       canvas.drawPath(path, line);
-      for (final w in windows) {
-        final p = Offset(geom.x(geom.centerFrame(w)), geom.y(sel(w)));
+      for (final p in pts) {
         canvas.drawCircle(p, 4.5, Paint()..color = AppColors.surface);
         canvas.drawCircle(p, 3.0, Paint()..color = color);
       }
@@ -183,5 +220,6 @@ class _IntensityPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _IntensityPainter old) =>
-      old.windows != windows || old.totalFrames != totalFrames;
+      old.windows != windows || old.totalFrames != totalFrames ||
+      old.progress != progress;
 }

@@ -14,6 +14,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../services/session_store.dart";
 import "../services/update_service.dart";
+import "anim.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
 import "match_screen.dart";
@@ -1721,8 +1722,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ? "Még nincs befejezett elemzés."
                               : "Nincs elemzés a könyvtárban.")
             else
-              for (final m in _filteredMatches) ...[
-                _matchCard(m),
+              for (final (i, m) in _filteredMatches.indexed) ...[
+                // Lépcsőzött belépő animáció + hover-emelés: a könyvtár
+                // "él", a kártya megfoghatónak érződik.
+                FadeSlideIn(
+                  key: ValueKey("mc-${m["match_id"]}"),
+                  index: i,
+                  child: HoverLift(child: _matchCard(m)),
+                ),
                 const SizedBox(height: AppSpacing.md),
               ],
           ],
@@ -2256,7 +2263,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Text(label, style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.md),
-          Text(value, style: AppText.statBig),
+          // Szám-felpörgetés, ha a érték tisztán szám — különben sima
+          // szöveg (pl. "12:9" eredmény-formátum).
+          if (double.tryParse(value.replaceAll(",", ".")) != null)
+            CountUp(
+                value: double.parse(value.replaceAll(",", ".")),
+                style: AppText.statBig,
+                format: (v) => value.contains(",") || value.contains(".")
+                    ? v.toStringAsFixed(1).replaceAll(".", ",")
+                    : v.round().toString())
+          else
+            Text(value, style: AppText.statBig),
           const SizedBox(height: AppSpacing.sm),
           Text(note, style: AppText.label.copyWith(color: accent ? AppColors.accent : AppColors.textFaint)),
         ],

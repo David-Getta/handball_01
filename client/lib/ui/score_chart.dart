@@ -53,10 +53,18 @@ class ScoreChart extends StatelessWidget {
         child: LayoutBuilder(builder: (context, constraints) {
           return GestureDetector(
             onTapUp: (d) => _handleTap(d.localPosition, constraints.biggest),
-            child: CustomPaint(
-              size: Size(constraints.maxWidth, 120),
-              painter: _ScoreChartPainter(
-                  goals: goals, totalFrames: totalFrames, fps: fps, runs: runs),
+            // Berajzolás-animáció: a vonalak balról jobbra "íródnak ki"
+            // (mint egy élő közvetítés idővonala) — egyszer, betöltéskor.
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 900),
+              curve: Curves.easeInOutCubic,
+              builder: (context, t, _) => CustomPaint(
+                size: Size(constraints.maxWidth, 120),
+                painter: _ScoreChartPainter(
+                    goals: goals, totalFrames: totalFrames, fps: fps,
+                    runs: runs, progress: t),
+              ),
             ),
           );
         }),
@@ -139,14 +147,24 @@ class _ScoreChartPainter extends CustomPainter {
   final int totalFrames;
   final double fps;
   final List<Map<String, dynamic>> runs;
+
+  /// Berajzolás-állapot (0..1): ekkora hányadáig látszik a grafikon
+  /// balról — a betöltő animáció hajtja.
+  final double progress;
+
   _ScoreChartPainter(
       {required this.goals, required this.totalFrames, required this.fps,
-       this.runs = const []});
+       this.runs = const [], this.progress = 1.0});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (totalFrames <= 1) return;
     final geom = _ChartGeom(size, goals, totalFrames);
+
+    // A berajzolás-animáció: a vászon jobb széle még "üres".
+    if (progress < 1.0) {
+      canvas.clipRect(Rect.fromLTRB(0, 0, size.width * progress, size.height));
+    }
 
     // Gól-sorozatok: halvány csapatszínű sáv a teljes magasságban, a rács
     // és a vonalak MÖGÉ. Így a fordulópontok ránézésre kirajzolódnak.
@@ -191,7 +209,9 @@ class _ScoreChartPainter extends CustomPainter {
     for (final (team, color) in [("home", AppColors.home), ("away", AppColors.away)]) {
       final line = Paint()
         ..color = color
-        ..strokeWidth = 2
+        ..strokeWidth = 2.2
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round
         ..style = PaintingStyle.stroke;
       final path = Path()..moveTo(geom.x(0), geom.y(0));
       var count = 0;
@@ -205,11 +225,32 @@ class _ScoreChartPainter extends CustomPainter {
         markers.add(geom.point(t, count));
       }
       path.lineTo(geom.x(totalFrames - 1), geom.y(count)); // kifutás a végéig
+
+      // Terület-kitöltés a vonal alatt: csapatszínű, lefelé elhalványuló
+      // színátmenet — a "ki uralta a meccset" ránézésre is látszik.
+      final fill = Path.from(path)
+        ..lineTo(geom.x(totalFrames - 1), geom.y(0))
+        ..lineTo(geom.x(0), geom.y(0))
+        ..close();
+      canvas.drawPath(
+          fill,
+          Paint()
+            ..shader = LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [color.withOpacity(0.16), color.withOpacity(0.0)],
+            ).createShader(Rect.fromLTRB(0, _ChartGeom.padT, size.width,
+                size.height - _ChartGeom.padB)));
       canvas.drawPath(path, line);
-      // Gól-pontok: felület-színű gyűrűvel, hogy metszésnél is elváljanak.
-      // (A végállást a jelmagyarázat mutatja — a vonalvégi felirat egyenlő
-      // állásnál ütközne, ezért nem duplikáljuk ide.)
+      // Gól-pontok: puha ragyogással és felület-színű gyűrűvel, hogy
+      // metszésnél is elváljanak. (A végállást a jelmagyarázat mutatja.)
       for (final m in markers) {
+        canvas.drawCircle(
+            m,
+            9,
+            Paint()
+              ..color = color.withOpacity(0.28)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
         canvas.drawCircle(m, 5.5, Paint()..color = AppColors.surface);
         canvas.drawCircle(m, 3.5, Paint()..color = color);
       }
@@ -227,5 +268,5 @@ class _ScoreChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ScoreChartPainter old) =>
       old.goals != goals || old.totalFrames != totalFrames ||
-      old.fps != fps || old.runs != runs;
+      old.fps != fps || old.runs != runs || old.progress != progress;
 }

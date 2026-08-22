@@ -51,6 +51,16 @@ class ShotMapPainter extends CustomPainter {
       final base =
           s.xg == null ? 6.0 : 4.0 + 5.0 * (s.xg!.clamp(0.0, 0.9) / 0.9);
       final r = active ? base + 2.5 : base;
+      // Gól: puha csapatszínű ragyogás a jelölő mögött — a térkép
+      // "forró pontjai" ránézésre kiugranak.
+      if (s.goal) {
+        canvas.drawCircle(
+            p,
+            r + 7,
+            Paint()
+              ..color = teamColor.withOpacity(0.30)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7));
+      }
       // Felület-színű alap: sűrű helyeken is elválnak a jelölők.
       canvas.drawCircle(p, r + 2, Paint()..color = AppColors.surface);
       canvas.drawCircle(p, r, Paint()..color = teamColor.withOpacity(s.goal ? 1.0 : 0.55));
