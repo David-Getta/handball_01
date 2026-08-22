@@ -3,7 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.37 óta)
+## Kiadatlan (a v0.1.38 óta)
+
+*(még semmi)*
+
+## v0.1.38 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: megbízhatósági kör. A kiadás mostantól a motorba is
+> belepecsételi a verziót, a /health kiadja, a kliens összeveti — a
+> fél-frissült telepítés (új app + régi motor) piros sávként jelenik
+> meg, megoldással, nem rejtélyes hibaként. Mellé a gépi ellenőrzés
+> erősödött: push-CI (Dart-elemzés + gyors backend-őr kör), és a
+> hiányzó fastapi pótlása, ami miatt az API-őrök eddig némán kimaradtak
+> a CI-futásokból; a csomagolás-füstteszt a verzió-pecsétet is állítja.
 
 - **Fél-frissült telepítés felismerése** (motor + kliens): a kiadás
   mostantól a MOTORBA is belepecsételi a verziószámot, a /health
