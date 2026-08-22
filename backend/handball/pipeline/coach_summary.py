@@ -3137,6 +3137,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "zárást nála kell kezdeni, nem a gólpasszolónál.")
     except Exception:
         pass
+    # Elzárás-fáradás: elfogy-e az elzárás-munka a 2. félidőre.
+    try:
+        from .attack_types import screen_fade
+        scrf = screen_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_scrf = scrf[side]
+            if rec_scrf["verdict"] is None:
+                continue
+            body += (f" A(z) {name} elzárás-munkája a 2. félidőre "
+                     f"{'elfogy' if rec_scrf['sh_pct'] < rec_scrf['fh_pct'] else 'erősödik'} "
+                     f"({rec_scrf['fh_pct']:.0f}% → "
+                     f"{rec_scrf['sh_pct']:.0f}% elzárásos lövés).")
+    except Exception:
+        pass
     # Befutó poszt: melyik poszt a második hullám a kontráikban.
     try:
         from .attack_types import second_wave_roles

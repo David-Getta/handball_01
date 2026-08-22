@@ -4821,6 +4821,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import screen_fade
+            res["screen_fade"] = screen_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import block_fade
             res["block_fade"] = block_fade(match)
         except Exception:
@@ -5967,6 +5972,8 @@ def create_app():
                 _layer("outlet_targets", lambda: outlet_targets(match))
                 from ..pipeline.attack_types import screen_yield
                 _layer("screen_yield", lambda: screen_yield(match))
+                from ..pipeline.attack_types import screen_fade
+                _layer("screen_fade", lambda: screen_fade(match))
                 from ..pipeline.defense import block_fade
                 _layer("block_fade", lambda: block_fade(match))
                 from ..pipeline.rules import powerplay_yield

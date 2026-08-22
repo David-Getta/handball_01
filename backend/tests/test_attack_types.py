@@ -4943,3 +4943,74 @@ def test_backward_passers_silent_with_few_passes():
 
     rec = backward_passers(_bpr_match([7, 9]))["home"]
     assert rec["top"] is None, rec
+
+
+def _scrf_match(fh_screened, sh_screened, n=5):
+    """Két félidő 90 mp-es szünettel: félidőnként `n` hazai őrzött
+    lövés, az elzárás a paraméterek szerint van vagy nincs."""
+    frames = []
+    t = 0
+
+    def _shot(screened):
+        nonlocal t
+        players = [_pl(1, Team.HOME, 30.0, 10.0),
+                   _pl(20, Team.AWAY, 31.5, 10.0)]
+        if screened:
+            players.append(_pl(2, Team.HOME, 31.5, 11.0))
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(14):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(30.0 + 0.8 * (i + 1),
+                                                40.0),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=40.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(n):
+        _shot(fh_screened)
+    for _ in range(int(90.0 * 25)):     # félidei szünet
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for _ in range(n):
+        _shot(sh_screened)
+    return Match(_meta(), frames)
+
+
+def test_screen_fade_flags_the_fading_screens():
+    """Az 1. félidőben elzárásból lőnek, a 2.-ban a lövő magára marad
+    → elfogy az elzárás-munka."""
+    from handball.pipeline.attack_types import screen_fade
+
+    rec = screen_fade(_scrf_match(True, False))["home"]
+    assert rec["fh_shots"] >= 4 and rec["sh_shots"] >= 4, rec
+    assert rec["fh_pct"] == 100.0 and rec["sh_pct"] == 0.0, rec
+    assert rec["verdict"] and "elfogy az elzárás" in rec["verdict"], rec
+
+
+def test_screen_fade_flags_the_strengthening_screens():
+    """Fordítva: a 2. félidőre erősödik az elzárás-játék."""
+    from handball.pipeline.attack_types import screen_fade
+
+    rec = screen_fade(_scrf_match(False, True))["home"]
+    assert rec["verdict"] and "erősödik" in rec["verdict"], rec
+
+
+def test_screen_fade_silent_without_halftime_or_change():
+    """Félidő-jel nélkül, illetve változatlan elzárás-aránynál nincs
+    ítélet."""
+    from handball.pipeline.attack_types import screen_fade
+
+    m = _scrf_match(True, True)
+    rec = screen_fade(m)["home"]
+    assert rec["verdict"] is None and rec["gap_pp"] == 0.0, rec
+    # Szünet nélkül (csak az 1. félidő kockái) nincs félidő-jel.
+    half = Match(_meta(), m.frames[:2100])
+    assert screen_fade(half)["home"]["fh_pct"] is None

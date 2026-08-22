@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.36 óta)
 
+- **Elzárás-fáradás** (új réteg): ELFOGY-E az elzárás-munka a második
+  félidőre — a fáradás-család (blokk-, fal-rés-, láb-fáradás)
+  kiegészítése a legfizikálisabb támadó-munkával. Félidőnként méri, az
+  őrzött lövéseik mekkora hányada elé érkezett elzárás. Edzői olvasat:
+  az elfogyó elzárású csapat ellen a hajrában bátrabban léphet ki a
+  fal (a lövő fedetlenül érkezik); a saját elfogyó elzárás kondíció-
+  kérdés — az elzárók forgatása és a fáradt elzárás-gyakorlat az
+  edzés-téma. Felületek: /analyze + meccs-csomag, edzői összefoglaló,
+  felderítés (félidőnkénti darabszámok, edzői kulcs, 445.
+  meccsterv-szabály), 465. edzés-szabály, kliens-csempe.
+
 - **Vendég-sáv a dashboardon** (kliens): fiók nélküli munkamenetben a
   meccs-lista tetején sáv jelzi, hogy a most készülő munka az app
   következő indításakor törlődik — és egy kattintással védhetővé

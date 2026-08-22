@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **491 réteg**, modulonként csoportosítva; a
+Összesen **492 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (94)
+## attack_types (95)
 
 | Réteg | Mit mér |
 |---|---|
@@ -77,6 +77,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `rebound_winners` | Lepattanó-szerzők: KI NYERI a kipattanókat. |
 | `risky_passer_roles` | Kockáztató-poszt: MELYIK POSZTJUK szórja el a hosszú labdákat. |
 | `risky_passers` | Kockázatos passzolók: KINEK a hosszú labdái foghatók el. |
+| `screen_fade` | Elzárás-fáradás: ELFOGY-E az elzárás-munka a második félidőre. |
 | `screen_pair_roles` | Elzárópáros-poszt: MELYIK POSZTPÁRRA jár az elzárás-játékuk. |
 | `screen_pairs` | Elzárás-páros: KI ZÁR KINEK — a bejáratott elzáró-lövő kettős. |
 | `screen_setter_roles` | Elzáró-poszt: MELYIK POSZTJUK áll elzárásba. |

@@ -1251,6 +1251,12 @@ class ScoutingReport:
     blf_fh_shots: int = 0
     blf_sh_blocks: int = 0
     blf_sh_shots: int = 0
+    # Elzárás-fáradás: félidőnkénti őrzött és elzárásos lövések.
+    # Darabszámok, meccsek közt pontosan összegződnek.
+    scrf_fh_shots: int = 0
+    scrf_fh_screened: int = 0
+    scrf_sh_shots: int = 0
+    scrf_sh_screened: int = 0
     scy_screened_shots: int = 0
     scy_screened_goals: int = 0
     scy_clean_shots: int = 0
@@ -4579,6 +4585,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A hajrára nő a blokk-munkájuk ({_blf_f:.0f}% → "
                 f"{_blf_s:.0f}%) — a végén ne az átlövés legyen a "
                 "megoldás, hanem a bejátszás és a kiugratás.")
+
+    # Elzárás-fáradás: mit tehet a fal a hajrában.
+    if rep.scrf_fh_shots >= 4 and rep.scrf_sh_shots >= 4:
+        _scrf_f = 100.0 * rep.scrf_fh_screened / rep.scrf_fh_shots
+        _scrf_s = 100.0 * rep.scrf_sh_screened / rep.scrf_sh_shots
+        if _scrf_f - _scrf_s >= 15.0:
+            keys.append(
+                f"Elfogy az elzárás-munkájuk ({_scrf_f:.0f}% → "
+                f"{_scrf_s:.0f}% elzárásos lövés) — a hajrában a "
+                "lövőik magukra maradnak: a fal bátrabban kiléphet, "
+                "a kilépés és a blokk szinte ingyen van.")
+        elif _scrf_s - _scrf_f >= 15.0:
+            keys.append(
+                f"A hajrára erősödik az elzárás-játékuk "
+                f"({_scrf_f:.0f}% → {_scrf_s:.0f}%) — a végjátékra a "
+                "váltás-kommunikációt élesítsétek: hangos váltás vagy "
+                "átcsúszás az elzárás alatt.")
 
     # Emberelőny-hozam: mennyibe kerül ellenük egy kétperc.
     if rep.ppy_pp_shots >= 4 and rep.ppy_eq_shots >= 4:
@@ -11010,6 +11033,12 @@ def _scout_team_cached(match: Match, team: Team,
         rep.blf_fh_shots = blfrec["fh_shots"]
         rep.blf_sh_blocks = blfrec["sh_blocks"]
         rep.blf_sh_shots = blfrec["sh_shots"]
+        from .attack_types import screen_fade as _scrf
+        scrfrec = _scrf(match, config)[team.value]
+        rep.scrf_fh_shots = int(scrfrec["fh_shots"])
+        rep.scrf_fh_screened = int(scrfrec["fh_screened"])
+        rep.scrf_sh_shots = int(scrfrec["sh_shots"])
+        rep.scrf_sh_screened = int(scrfrec["sh_screened"])
         from .attack_types import screen_yield as _scy
         scyrec = _scy(match, config)[team.value]
         rep.scy_screened_shots = scyrec["screened_shots"]
@@ -13951,6 +13980,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 445) Az ő elfogyó elzárásuk × a ti blokk-játékotok: a hajrában a
+    # fedetlen lövő a blokk-kéz prédája — kilépni, blokkolni.
+    if (opp.scrf_fh_shots >= 4 and opp.scrf_sh_shots >= 4
+            and own.blocks >= 3):
+        _s445_f = 100.0 * opp.scrf_fh_screened / opp.scrf_fh_shots
+        _s445_s = 100.0 * opp.scrf_sh_screened / opp.scrf_sh_shots
+        if _s445_f - _s445_s >= 15.0:
+            plan.append(
+                f"A 2. félidőre elfogy az elzárás-munkájuk "
+                f"({_s445_f:.0f}% → {_s445_s:.0f}% elzárásos lövés), "
+                f"ti pedig aktívan zártok ({own.blocks} blokk) — a "
+                "hajrában váltsatok bátor falra: elzárás nélkül érkező "
+                "lövőre azonnali kilépés és blokk-kéz, a hosszú "
+                "kísérleteiket pedig a kapus a blokk mögül olvassa.")
 
     # 444) Az ő posztról olvasható befutójuk × a ti gyors
     # visszafutásotok: a második hullám sávja posztra szólóan zárható.
@@ -21678,6 +21722,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         blf_fh_shots=sum(r.blf_fh_shots for r in reports),
         blf_sh_blocks=sum(r.blf_sh_blocks for r in reports),
         blf_sh_shots=sum(r.blf_sh_shots for r in reports),
+        scrf_fh_shots=sum(r.scrf_fh_shots for r in reports),
+        scrf_fh_screened=sum(r.scrf_fh_screened for r in reports),
+        scrf_sh_shots=sum(r.scrf_sh_shots for r in reports),
+        scrf_sh_screened=sum(r.scrf_sh_screened for r in reports),
         scy_screened_shots=sum(r.scy_screened_shots for r in reports),
         scy_screened_goals=sum(r.scy_screened_goals for r in reports),
         scy_clean_shots=sum(r.scy_clean_shots for r in reports),

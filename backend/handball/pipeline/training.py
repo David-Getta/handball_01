@@ -1366,6 +1366,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 465) Elzárás-fáradás: ha az elzárás-munkánk a 2. félidőre elfogy,
+    # az elzárók forgatása és a törzs-állóképesség az edzés-téma.
+    try:
+        from .attack_types import SCRF_GAP_PP, screen_fade
+        scrf465 = screen_fade(match, config)
+        for side in ("home", "away"):
+            rec465 = scrf465[side]
+            if rec465["verdict"] is None:
+                continue
+            if rec465["sh_pct"] >= rec465["fh_pct"]:
+                continue  # az erősödő elzárás nem edzés-hiány
+            add(side, "támadás", "Elzárás-állóképesség",
+                f"az elzárás-munkánk a 2. félidőre elfogy "
+                f"({rec465['fh_pct']:.0f}% → {rec465['sh_pct']:.0f}% "
+                f"elzárásos lövés; {SCRF_GAP_PP:.0f} százalékpont "
+                "eséstől jelezzük) — a lövőink a hajrában magukra "
+                "maradnak, és a fal ingyen blokkol ellenünk",
+                "az elzárás elfogyása kondíció, nem taktika: forgasd "
+                "az elzáró embereket (a beálló-csere a 40. perc körül "
+                "tervezett legyen), és az edzésben a törzs-erő + "
+                "ütközés-tűrés kapjon kör-edzés UTÁNI (fáradt) "
+                "elzárás-gyakorlatot — fáradtan is fel kell állnia a "
+                "második elzárásnak")
+    except Exception:
+        pass
+
     # 464) Befutó poszt: ha a kontráink második hulláma egy poszton áll,
     # a felkészült ellenfél a sávot zárja — a befutót variálni kell.
     try:

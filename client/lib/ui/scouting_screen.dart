@@ -3242,6 +3242,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "gólpasszolónál";
   }
 
+  // Elzárás-fáradás: elfogy-e az elzárás-munka a 2. félidőre
+  // (félidőnként 4+ őrzött lövés, 15 százalékpont esés — a backenddel
+  // azonos küszöbök: SCRF_MIN_SHOTS, SCRF_GAP_PP).
+  String? _screenFade(Map<String, dynamic> r) {
+    final fhN = ((r["scrf_fh_shots"] ?? 0) as num).toInt();
+    final shN = ((r["scrf_sh_shots"] ?? 0) as num).toInt();
+    if (fhN < 4 || shN < 4) return null;
+    final fh = 100.0 * ((r["scrf_fh_screened"] ?? 0) as num) / fhN;
+    final sh = 100.0 * ((r["scrf_sh_screened"] ?? 0) as num) / shN;
+    if (fh - sh >= 15.0) {
+      return "a 2. félidőre elfogy az elzárás-munkájuk "
+          "(${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "elzárásos lövés) · a hajrában bátor fal: kilépés és "
+          "blokk-kéz a fedetlen lövőre";
+    }
+    if (sh - fh >= 15.0) {
+      return "a hajrára erősödik az elzárás-játékuk "
+          "(${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}%) · "
+          "a végjátékra a váltás-kommunikációt élesítsétek";
+    }
+    return null;
+  }
+
   // Befutó poszt: melyik poszt a második hullám a kontráikban (3+
   // befutós befejezés, 60% egy poszté — a backenddel azonos küszöbök:
   // SWR_MIN_SECOND, SWR_SHARE_PCT).
@@ -11521,6 +11544,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Egálbontó poszt", _parityBreakRole(r)!],
       if (_secondWaveRole(r) != null)
         ["Befutó poszt", _secondWaveRole(r)!],
+      if (_screenFade(r) != null) ["Elzárás-fáradás", _screenFade(r)!],
       if (_superSub(r) != null) ["Szuper-csere", _superSub(r)!],
       if (_superSubRole(r) != null)
         ["Szuper-csere poszt", _superSubRole(r)!],

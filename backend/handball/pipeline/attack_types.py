@@ -1820,6 +1820,103 @@ def screen_usage(match: Match,
     return out
 
 
+# Elzárás-fáradás: félidőnként ennyi őrzött (védővel fedett) lövés
+# kell az ítélethez, és ekkora (százalékpontos) elzárás-arány változás
+# számít érdeminek.
+SCRF_MIN_SHOTS = 4
+SCRF_GAP_PP = 15.0
+
+
+def screen_fade(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Elzárás-fáradás: ELFOGY-E az elzárás-munka a második félidőre.
+
+    Az elzárás-használat (screen_usage) a meccs-szintű stílust adja —
+    ez a KITARTÁST: félidőnként megnézzük, az őrzött lövéseik mekkora
+    hányada elé érkezett elzárás. Az elzárás a legfizikálisabb támadó
+    munka (ütközés, tartás, újra felállás) — ha a második félidőre
+    érdemben visszaesik, a lövőik magukra maradnak.
+
+    Edzőileg: az elfogyó elzárású csapat ellen a hajrában bátrabban
+    léphet ki a fal — a lövő már fedetlen elzárás nélkül érkezik, a
+    kilépés és a blokk szinte ingyen van. Saját oldalon az elzárók
+    forgatása és a törzs-állóképesség az edzés-téma: az elzárás
+    elfogyása nem taktika, hanem kondíció kérdése.
+
+    Visszatérés csapatonként: {"fh_shots", "fh_screened", "sh_shots",
+    "sh_screened", "fh_pct", "sh_pct", "gap_pp", "verdict"} — a pct az
+    elzárásos lövések aránya a félidő őrzött lövéseihez képest; a
+    pct/gap/verdict None, ha nincs félidő-jel, vagy valamelyik
+    félidőben kevés (SCRF_MIN_SHOTS alatti) az őrzött lövés.
+    """
+    import math
+
+    from .halftime import detect_halftime
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    empty = {"fh_shots": 0, "fh_screened": 0, "sh_shots": 0,
+             "sh_screened": 0, "fh_pct": None, "sh_pct": None,
+             "gap_pp": None, "verdict": None}
+    out = {side: dict(empty) for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        i0 = idx_of.get(sh["t"])
+        if pid is None or i0 is None:
+            continue
+        f = match.frames[i0]
+        shooter = next((p for p in f.players if p.track_id == pid),
+                       None)
+        if shooter is None:
+            continue
+        defenders = [p for p in f.players
+                     if p.team is not None and p.team != shooter.team]
+        marker = None
+        best = SCREEN_MARKER_MAX_M
+        for d in defenders:
+            dist = math.hypot(d.x - shooter.x, d.y - shooter.y)
+            if dist <= best:
+                marker, best = d, dist
+        if marker is None:
+            continue  # szabad lövés: nincs kit elzárni
+        half = "fh" if sh["t"] <= ht else "sh"
+        rec = out[sh["team"]]
+        rec[f"{half}_shots"] += 1
+        screened = any(
+            p.track_id != pid and p.team == shooter.team
+            and math.hypot(p.x - marker.x, p.y - marker.y)
+            <= SCREEN_DIST_M
+            for p in f.players)
+        if screened:
+            rec[f"{half}_screened"] += 1
+
+    for rec in out.values():
+        if rec["fh_shots"] >= SCRF_MIN_SHOTS                 and rec["sh_shots"] >= SCRF_MIN_SHOTS:
+            fh = 100.0 * rec["fh_screened"] / rec["fh_shots"]
+            sh_ = 100.0 * rec["sh_screened"] / rec["sh_shots"]
+            rec["fh_pct"] = round(fh, 1)
+            rec["sh_pct"] = round(sh_, 1)
+            rec["gap_pp"] = round(sh_ - fh, 1)
+            if fh - sh_ >= SCRF_GAP_PP:
+                rec["verdict"] = (
+                    f"elfogy az elzárás-munkájuk ({fh:.0f}% → "
+                    f"{sh_:.0f}% elzárásos lövés) — a hajrában a "
+                    "lövőik magukra maradnak: a fal bátrabban "
+                    "kiléphet, a kilépés és a blokk szinte ingyen van")
+            elif sh_ - fh >= SCRF_GAP_PP:
+                rec["verdict"] = (
+                    f"a hajrára erősödik az elzárás-játékuk "
+                    f"({fh:.0f}% → {sh_:.0f}% elzárásos lövés) — a "
+                    "végjátékra a váltás-kommunikációt kell élesíteni: "
+                    "hangos váltás vagy átcsúszás az elzárás alatt")
+    return out
+
+
 # Elzárás-hozam: sávonként ennyi őrzött lövés kell az ítélethez, és
 # ekkora (százalékpontos) különbség számít érdemi hozamnak.
 SCY_MIN_SHOTS = 4
