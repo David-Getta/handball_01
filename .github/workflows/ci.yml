@@ -25,7 +25,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Teszt-függőségek
-        run: pip install -q pytest numpy opencv-python-headless
+        # A fastapi+httpx a réteg-regisztry őrhöz kell (TestClient) —
+        # nélküle a legfontosabb őr modul-szinten kimaradna.
+        run: pip install -q pytest numpy opencv-python-headless fastapi httpx
       - name: Őr-tesztek
         working-directory: backend
         run: >
