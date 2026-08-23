@@ -56,6 +56,25 @@ class JobsMonitor {
   /// újratölti a könyvtárat. A hallgató a leolvasás után nullázza.
   final ValueNotifier<int> finishedTick = ValueNotifier<int>(0);
 
+  /// Az ÉPP MOST befejeződött munka rekordja — vagy null, ha nincs
+  /// bejelentenivaló.
+  ///
+  /// Ez az értesítés lelke: a feldolgozás percekig fut, a felhasználó
+  /// közben máshol dolgozik az appban, és eddig CSAK úgy tudta meg, hogy
+  /// kész, ha visszament megnézni. Innentől a burok bárhol szól neki.
+  /// A megszakított munkát szándékosan nem jelentjük be: azt ő maga
+  /// állította le, nem hír.
+  final ValueNotifier<Map<String, dynamic>?> lastFinished =
+      ValueNotifier<Map<String, dynamic>?>(null);
+
+  /// Az értesítés elrejtése (elolvasta, vagy továbblépett rajta).
+  void dismissFinished() => lastFinished.value = null;
+
+  /// A legutóbb LÁTOTT állapotok munkánként — ebből derül ki, melyik
+  /// munka lépett át futóból késszé (a puszta "nincs több aktív" ezt
+  /// nem mondja meg, márpedig a felhasználót az érdekli, MELYIK).
+  final Map<String, String> _elozoAllapot = <String, String>{};
+
   Timer? _timer;
   bool _running = false;
 
@@ -89,6 +108,7 @@ class JobsMonitor {
     final friss = await _api.fetchJobs();
     final voltAktiv = jobs.value.any(isActive);
     final vanAktiv = friss.any(isActive);
+    _jeloldMegAzUjonnanKeszet(friss);
     jobs.value = friss;
     if (voltAktiv && !vanAktiv) {
       // Épp most futott ki az utolsó munka: a könyvtárat frissíteni kell.
@@ -97,5 +117,28 @@ class JobsMonitor {
     _timer?.cancel();
     _timer = Timer(
         Duration(seconds: vanAktiv ? 2 : 30), () => unawaited(_poll()));
+  }
+
+  /// Megkeresi, melyik munka lépett át AKTÍVBÓL lezártba, és azt teszi
+  /// be bejelentésre.
+  ///
+  /// Az első kör szándékosan néma: ott minden munka "új" a figyelőnek,
+  /// és a tegnapi kész elemzést ma reggel bejelenteni értelmetlen.
+  void _jeloldMegAzUjonnanKeszet(List<Map<String, dynamic>> friss) {
+    final elsoKor = _elozoAllapot.isEmpty;
+    for (final j in friss) {
+      final id = j["job_id"] as String?;
+      if (id == null) continue;
+      final most = (j["status"] as String?) ?? "";
+      final elozo = _elozoAllapot[id];
+      _elozoAllapot[id] = most;
+      if (elsoKor || elozo == null) continue;
+      final voltAktiv = elozo == "running" || elozo == "queued";
+      final mostAktiv = most == "running" || most == "queued";
+      // A megszakítást nem jelentjük be: azt a felhasználó kérte.
+      if (voltAktiv && !mostAktiv && most != "cancelled") {
+        lastFinished.value = j;
+      }
+    }
   }
 }

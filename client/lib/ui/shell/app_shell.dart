@@ -200,6 +200,10 @@ class AppShell extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _TopBar(active: active, path: crumbPath),
+                // "Kész!" bejelentés BÁRHOL: a burok minden képernyőn
+                // ott van, tehát a percekig futó feldolgozás vége akkor
+                // is megtalálja a felhasználót, ha közben máshol dolgozik.
+                const _FinishedBanner(),
                 Expanded(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -221,6 +225,97 @@ class AppShell extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// "Kész!" — a most befejeződött feldolgozás bejelentése, bárhonnan.
+///
+/// A feldolgozás percekig fut, a felhasználó közben más képernyőn
+/// dolgozik (vagy egészen máshol jár a gép mellől). Eddig CSAK úgy
+/// tudta meg, hogy kész, ha visszament megnézni: a menü-jelvény
+/// eltűnése néma. Ez a sáv szól neki — és rögtön ad egy gombot a
+/// leggyakoribb következő lépésre (a kész meccs megnyitása), illetve
+/// hiba esetén a részletekre.
+///
+/// Egyszer szól, aztán elrejthető: nem az a dolga, hogy ott maradjon.
+class _FinishedBanner extends StatelessWidget {
+  const _FinishedBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Map<String, dynamic>?>(
+      valueListenable: JobsMonitor.instance.lastFinished,
+      builder: (context, job, _) {
+        if (job == null) return const SizedBox.shrink();
+        final status = (job["status"] as String?) ?? "";
+        final hiba = status != "done" && status != "finished";
+        final matchId = job["match_id"] as String?;
+        final err = (job["error"] as String?) ?? "";
+        final szin = hiba ? AppColors.away : AppColors.accent;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.md),
+          child: Container(
+            decoration: BoxDecoration(
+              color: szin.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: szin.withOpacity(0.45)),
+            ),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+            child: Row(children: [
+              Icon(hiba ? Icons.error_outline : Icons.check_circle_outline,
+                  size: 18, color: szin),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                    hiba
+                        ? (err.isNotEmpty
+                            ? "A feldolgozás megállt: $err"
+                            : "A feldolgozás hibával állt meg.")
+                        : "Kész a feldolgozás"
+                            "${matchId != null ? " — $matchId" : ""}.",
+                    style: AppText.value.copyWith(fontSize: 13),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              if (!hiba && matchId != null)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    JobsMonitor.instance.dismissFinished();
+                    Navigator.of(context).pushReplacement(MaterialPageRoute(
+                        builder: (_) => MatchScreen(matchId: matchId)));
+                  },
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.accent,
+                      side: const BorderSide(color: AppColors.accent)),
+                  icon: const Icon(Icons.play_circle_outline, size: 16),
+                  label: const Text("Megnyitás"),
+                )
+              else
+                OutlinedButton.icon(
+                  onPressed: () {
+                    JobsMonitor.instance.dismissFinished();
+                    navTo(context, NavId.jobs);
+                  },
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.away,
+                      side: const BorderSide(color: AppColors.away)),
+                  icon: const Icon(Icons.list_alt, size: 16),
+                  label: const Text("Részletek"),
+                ),
+              IconButton(
+                tooltip: "Elrejtés",
+                onPressed: JobsMonitor.instance.dismissFinished,
+                icon: const Icon(Icons.close,
+                    size: 16, color: AppColors.textFaint),
+              ),
+            ]),
+          ),
+        );
+      },
     );
   }
 }

@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.47 óta)
 
+- **"Kész!" — a feldolgozás vége megtalál bárhol** (kliens): a
+  Feldolgozások menüpont után maradt egy rés: ha a felhasználó közben
+  máshol dolgozik az appban, a munka befejezéséről CSAK úgy értesült,
+  ha visszament megnézni — a menü-jelvény eltűnése néma. Mostantól a
+  burokban (tehát minden képernyőn) megjelenik egy sáv: kész a
+  feldolgozás, itt a meccs, egy kattintás a megnyitás; hiba esetén a
+  motor magyar indoklása és a részletek gomb. A megszakított munkát
+  szándékosan NEM jelenti be — azt a felhasználó maga állította le. Az
+  app indulása utáni első kör is néma: a tegnapi kész elemzést ma
+  reggel bejelenteni értelmetlen lenne.
+
 - **Hátralévő idő a feldolgozásnál** (motor + kliens): percekig futó
   munkánál ez volt a leghiányzóbb adat — a százalék önmagában nem
   mondja meg, hogy megvárd-e, vagy elmenj a gép mellől. A motor
