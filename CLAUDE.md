@@ -30,6 +30,20 @@ awk 'BEGIN{b=0} {n=gsub(/\{/,"x"); m=gsub(/\}/,"x"); b+=n-m} \
 Egy réteg = egy commit. A commit-üzenet mintája a git-történetben.
 Sorrendben (kb. 200–280 sor összesen):
 
+0. **Van-e már ilyen?** — MIELŐTT bármit írnál, keresd meg a kérdést a
+   katalógusban (493 réteg van, fejből nem tudod):
+
+   ```bash
+   grep -i "<a kérdés kulcsszava>" docs/RETEG_KATALOGUS.md
+   ```
+
+   Ez nem formalitás: a `substitutions.phase_specialists` réteg egyszer
+   végig is készült (motor, API, összefoglaló, felderítés, edzés-szabály,
+   kliens-csempe, három teszt), mire kiderült, hogy a `roles.py`-ban már
+   ott volt UGYANAZ a réteg ugyanazon a néven. A duplán regisztrált
+   nevet az őr (`test_package_reteg_nevek_egyediek`) elkapja, de csak a
+   teljes futásnál — a katalógus-keresés harminc másodperc.
+
 1. **Motor** — új függvény a témába vágó pipeline-modulban
    (`xg.py`, `attack_types.py`, `defense.py`, `goalkeeper.py`, …).
    - Küszöbök modul-szintű NAGYBETŰS konstansban, magyar kommenttel.
