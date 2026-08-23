@@ -1918,6 +1918,11 @@ class ScoutingReport:
     # tc_clustered / tc_turnovers).
     tc_turnovers: int = 0
     tc_clustered: int = 0
+    # Kényszerített vs. magától jött eladás: a mérhető eladások és
+    # azok száma, amelyeknél NEM volt védő 2,5 m-en belül. Darabszámok,
+    # meccsek közt pontosan összegződnek (arány = pto_unforced / pto_total).
+    pto_total: int = 0
+    pto_unforced: int = 0
     tc_clusters: int = 0
     # Kapott góljaik posztonként: {poszt: gólok} — melyik poszt ellen
     # szivárog a faluk; darabszámok, meccsek közt pontosan
@@ -8029,6 +8034,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                     "szervezni a befejezést, és onnan bátran kell "
                     "lőni rá, mert azt a szöget nem zárja.")
 
+    # Kényszerített vagy magától jött eladás: érdemes-e letámadni.
+    from .defense import PTO_MIN_TURNOVERS, PTO_UNFORCED_PCT
+    if rep.pto_total >= PTO_MIN_TURNOVERS:
+        _pto_pct = 100.0 * rep.pto_unforced / rep.pto_total
+        if _pto_pct >= PTO_UNFORCED_PCT:
+            keys.append(
+                f"Az eladásaik {_pto_pct:.0f}%-a MAGÁTÓL jön (nem volt "
+                f"védő 2,5 m-en belül: {rep.pto_unforced}/"
+                f"{rep.pto_total}) — a letámadás keveset ad hozzá, a "
+                "kockázata viszont megvan: maradjatok zárt falban, és "
+                "várjátok meg a hibát. Ők maguktól odaadják.")
+        elif _pto_pct <= 100.0 - PTO_UNFORCED_PCT:
+            keys.append(
+                f"Az eladásaik {100.0 - _pto_pct:.0f}%-át KIPRÉSELIK "
+                f"belőlük (védő volt a labdásukon: "
+                f"{rep.pto_total - rep.pto_unforced}/{rep.pto_total}) — "
+                "a prés működik ellenük: a kettőzést tartani kell, mert "
+                "nyomás nélkül nem hibáznak.")
+
     # Hiba-sorozatok: egymás után jönnek-e az eladásaik.
     if rep.tc_turnovers >= 5:
         _tc_pct = 100.0 * rep.tc_clustered / rep.tc_turnovers
@@ -11874,6 +11898,10 @@ def _scout_team_cached(match: Match, team: Team,
             for poszt, r in _gsr(match, config)[team.value]["roles"].items()}
         from .defense import turnover_clusters as _tcl
         tclrec = _tcl(match, config)[team.value]
+        from .defense import pressured_turnovers as _pto
+        ptorec = _pto(match, config)[team.value]
+        rep.pto_total = ptorec["total"]
+        rep.pto_unforced = ptorec["unforced"]
         rep.tc_turnovers = tclrec["turnovers"]
         rep.tc_clustered = tclrec["clustered"]
         rep.tc_clusters = tclrec["clusters"]
@@ -14035,6 +14063,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    from .defense import PTO_MIN_TURNOVERS, PTO_UNFORCED_PCT
+    # 448) Az ő magától jövő eladásaik × a ti fegyelmezett falatok:
+    # akinek magától elszáll a labdája, azt nem kell megtámadni.
+    if opp.pto_total >= PTO_MIN_TURNOVERS and own.blocks >= 4:
+        _p448_pct = 100.0 * opp.pto_unforced / opp.pto_total
+        if _p448_pct >= PTO_UNFORCED_PCT:
+            plan.append(
+                f"Az eladásaik {_p448_pct:.0f}%-a MAGÁTÓL jön (nem volt "
+                f"védő 2,5 m-en belül: {opp.pto_unforced}/"
+                f"{opp.pto_total}), ti pedig fegyelmezetten zártok "
+                f"({own.blocks} blokk) — NE menjetek ki rájuk: a "
+                "letámadás csak rést nyitna, a hibát úgyis megkapjátok. "
+                "Zárt 6-0, kezek fent, és a megszerzett labdát azonnal "
+                "indítsátok — a kockázat nélküli labdaszerzés a "
+                "leggyorsabb kontra.")
 
     # 447) Az ő indításnál olvasható figurájuk × a ti aktív falatok:
     # a passzsáv zárása a figurát INDULÁS ELŐTT megöli.
@@ -22162,6 +22206,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         lhs_trail_sum_m=round(sum(r.lhs_trail_sum_m for r in reports), 1),
         attack_outcomes=_merge_attack_outcomes(reports),
         gk_role_saves=_merge_gk_role_saves(reports),
+        pto_total=sum(r.pto_total for r in reports),
+        pto_unforced=sum(r.pto_unforced for r in reports),
         tc_turnovers=sum(r.tc_turnovers for r in reports),
         tc_clustered=sum(r.tc_clustered for r in reports),
         tc_clusters=sum(r.tc_clusters for r in reports),

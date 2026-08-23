@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **494 réteg**, modulonként csoportosítva; a
+Összesen **495 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (95)
@@ -133,7 +133,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `tired_turnover_players` | Fáradt-eladók: KINEK a labdái vesznek el fáradtan. |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (86)
+## defense (87)
 
 | Réteg | Mit mér |
 |---|---|
@@ -192,6 +192,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `press_after_goal` | Gól utáni letámadás: SAJÁT GÓL UTÁN feljebb megy-e a fal. |
 | `pressure_fade` | Védekezés-fellazulás: a védekezési nyomás változása az 1. és a 2. |
 | `pressure_finishing` | Nyomás alatti befejezés: szabad vs fedezett lövések gólaránya. |
+| `pressured_turnovers` | Kényszerített vagy magától jött eladás: KIPRÉSELIK belőlük, vagy |
 | `recovery` | Visszarendeződés-idő: labdavesztés után mennyi idő alatt ér |
 | `recovery_discipline` | Visszaérés-fegyelem: KI nem fut vissza védekezni. |
 | `recovery_roles` | Elöl lógó poszt: MELYIK POSZTJUK nem ér haza védekezni. |

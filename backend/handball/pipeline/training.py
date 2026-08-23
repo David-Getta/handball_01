@@ -1366,6 +1366,36 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 468) Magától jövő eladás: ha a labdáink NYOMÁS NÉLKÜL vesznek el,
+    # az technika- és döntés-kérdés, nem taktikai.
+    try:
+        from .defense import (PTO_PRESSURE_M, PTO_UNFORCED_PCT,
+                              pressured_turnovers)
+        pto468 = pressured_turnovers(match, config)
+        for side in ("home", "away"):
+            rec468 = pto468[side]
+            if rec468["verdict"] is None:
+                continue
+            if rec468["unforced_pct"] < PTO_UNFORCED_PCT:
+                continue  # a kipréselt eladás az ellenfél érdeme
+            add(side, "átmenet", "Labdabiztonság nyomás nélkül",
+                f"az eladásaink {rec468['unforced_pct']:.0f}%-a úgy "
+                f"történt, hogy NEM volt védő {PTO_PRESSURE_M:.1f} m-en "
+                f"belül ({rec468['unforced']}/{rec468['total']}; "
+                f"{PTO_UNFORCED_PCT:.0f}% fölött jelezzük) — ezeket nem "
+                "az ellenfél vette el, ezeket elszórtuk: rossz passz, "
+                "elrontott átvétel, kapkodó döntés üres térben",
+                "ez nem taktika, hanem alapok: az edzésen a "
+                "NYOMÁSMENTES passz-pontosság a téma — párokban, "
+                "növekvő távolságon, mozgásból (nem állva), és minden "
+                "elrontott átvétel után azonnali ismétlés. A "
+                "figura-gyakorlásban a labdának KÖTELEZŐEN meg kell "
+                "járnia a teljes láncot: aki siet, azt vissza kell "
+                "hívni. Mérd: egy edzésen hány passz megy földre "
+                "védő nélkül — ezt a számot kell hétről hétre csökkenteni")
+    except Exception:
+        pass
+
     # 467) Figura-indító: ha a saját figuránk mindig ugyanarról a
     # posztról indul, az ellenfél ugyanezt látja a felvételen.
     try:

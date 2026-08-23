@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.46 óta)
 
+- **Eladás-kényszer** (új réteg): az eladás-rétegek eddig azt mondták
+  meg, KI veszíti el a labdát, HOL, MIKOR és mennyibe kerül — azt nem,
+  hogy KI TEHET RÓLA. Pedig a kétféle eladás két különböző teendő: ha
+  az ellenfél VESZI el (védő volt a labdás emberen), az a fal érdeme;
+  ha üres térben szórják el, az a saját technikájuk hibája. Az új réteg
+  minden eladás pillanatában megméri, milyen messze volt a legközelebbi
+  ellenfél (2,5 m-en belül = kényszerített). Edzői olvasat: ha az
+  ellenfél eladásai MAGUKTÓL jönnek, a letámadás keveset ad hozzá, a
+  kockázata viszont megvan — maradjatok zárt falban. Ha kipréseltek, a
+  prés működik: a kettőzést tartani kell. Saját oldalon a magától jött
+  eladás edzés-téma, nem taktika. Felületek: /analyze, meccs-csomag,
+  edzői összefoglaló, felderítő kulcs (mindkét irányra) + meccsterv
+  (448.), edzés-fókusz (468.), kliens-csempe, 3 teszt.
+
 - **Az indító képernyő mutatja, mennyi ideje vár** (kliens): az ELSŐ
   indítás percekig is tarthat (a víruskereső egyszer végigolvassa a
   programot), és eddig ilyenkor csak egy néma pörgettyű forgott. A

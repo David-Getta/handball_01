@@ -4548,3 +4548,73 @@ def test_gap_fade_silent_without_change_or_halftime():
 
     rec = gap_fade(_dgap_match([4.0, 6.5, 9.0, 11.5, 14.0]))["home"]
     assert rec["fh_gap_m"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kényszerített vs. magától jött eladás (pressured_turnovers) ------------
+
+
+def _pto_match(cases):
+    """`cases` = eladásonként a legközelebbi VÉDŐ távolsága méterben.
+
+    Minden eladás azonos módon készül: a hazai 1-es viszi a labdát, majd
+    a labda átkerül a vendég 2-eshez (ez a labdaeladás). A vendég 9-es a
+    megadott távolságra áll a labdát elvesztő embertől — ő dönti el,
+    hogy nyomás alatt volt-e.
+    """
+    frames = []
+    t = 0
+    for tav in cases:
+        # a) a hazai 1-esnél a labda
+        for _ in range(10):
+            frames.append(Frame(
+                t=t,
+                players=[_pl(1, Team.HOME, 30.0, 10.0),
+                         _pl(9, Team.AWAY, 30.0 + tav, 10.0),
+                         _pl(2, Team.AWAY, 50.0, 10.0)],
+                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        # b) a labda a vendég 2-eshez kerül → labdaeladás
+        for _ in range(10):
+            frames.append(Frame(
+                t=t,
+                players=[_pl(1, Team.HOME, 30.0, 10.0),
+                         _pl(9, Team.AWAY, 30.0 + tav, 10.0),
+                         _pl(2, Team.AWAY, 50.0, 10.0)],
+                ball=Ball(x=50.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_pressured_turnovers_names_the_unforced_giveaway():
+    """Ha az eladásoknál nem volt védő a közelben, a labdát ELSZÓRTÁK —
+    a letámadás ilyenkor keveset ad hozzá."""
+    from handball.pipeline.defense import (PTO_UNFORCED_PCT,
+                                           pressured_turnovers)
+
+    rec = pressured_turnovers(_pto_match([8.0] * 6))["home"]
+    assert rec["total"] == 6, rec
+    assert rec["unforced"] == 6 and rec["pressured"] == 0, rec
+    assert rec["unforced_pct"] >= PTO_UNFORCED_PCT, rec
+    assert rec["verdict"] and "magától" in rec["verdict"], rec
+
+
+def test_pressured_turnovers_names_the_forced_giveaway():
+    """Ha védő volt a labdás emberen, az eladás a fal érdeme — a prés
+    működik, tehát tartani kell."""
+    from handball.pipeline.defense import (PTO_PRESSURE_M,
+                                           pressured_turnovers)
+
+    rec = pressured_turnovers(_pto_match([PTO_PRESSURE_M - 0.5] * 6))["home"]
+    assert rec["total"] == 6, rec
+    assert rec["pressured"] == 6 and rec["unforced"] == 0, rec
+    assert rec["unforced_pct"] == 0.0, rec
+    assert rec["verdict"] and "kipréselt" in rec["verdict"], rec
+
+
+def test_pressured_turnovers_is_silent_on_thin_samples():
+    """Kevés mért eladásból nincs ítélet — két hiba nem mintázat."""
+    from handball.pipeline.defense import pressured_turnovers
+
+    rec = pressured_turnovers(_pto_match([8.0, 8.0]))["home"]
+    assert rec["total"] == 2, rec
+    assert rec["unforced_pct"] is None and rec["verdict"] is None, rec

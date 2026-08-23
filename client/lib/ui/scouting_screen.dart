@@ -3221,6 +3221,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "a kapus nála előre döntsön, ne olvasson";
   }
 
+  // Kényszerített vagy magától jött eladás: kipréselik belőlük, vagy
+  // maguktól szórják el (5+ mért eladás, 60% küszöb — a backenddel
+  // azonos küszöbök: PTO_MIN_TURNOVERS, PTO_UNFORCED_PCT).
+  String? _pressuredTurnovers(Map<String, dynamic> r) {
+    final total = ((r["pto_total"] ?? 0) as num).toInt();
+    final unforced = ((r["pto_unforced"] ?? 0) as num).toInt();
+    if (total < 5) return null;
+    final pct = 100.0 * unforced / total;
+    if (pct >= 60.0) {
+      return "az eladásaik ${pct.toStringAsFixed(0)}%-a MAGÁTÓL jön "
+          "($unforced/$total, védő nélkül 2,5 m-en belül) · a letámadás "
+          "keveset ad hozzá — zárt falban is hibáznak";
+    }
+    if (pct <= 40.0) {
+      return "az eladásaik ${(100.0 - pct).toStringAsFixed(0)}%-át "
+          "KIPRÉSELIK belőlük (${total - unforced}/$total) · a prés "
+          "működik ellenük, a kettőzést tartani kell";
+    }
+    return null;
+  }
+
   // Hetes-ismétlés: másodszorra is ugyanoda megy-e a hetesük — a
   // SORREND, nem az eloszlás (3+ egymást követő hetes-pár, 60%+
   // ismétlés — a backenddel azonos küszöbök: SREP_MIN_PAIRS,
@@ -11594,6 +11615,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_sevenTakerCorner(r) != null)
         ["Hetes-sarok emberre", _sevenTakerCorner(r)!],
       if (_sevenRepeat(r) != null) ["Hetes-ismétlés", _sevenRepeat(r)!],
+      if (_pressuredTurnovers(r) != null)
+        ["Eladás-kényszer", _pressuredTurnovers(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
       if (_finishingBalance(r) != null)
         ["Befejezés-mérleg", _finishingBalance(r)!],

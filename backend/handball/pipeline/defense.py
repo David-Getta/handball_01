@@ -238,6 +238,102 @@ def turnover_zones(match, config=None) -> dict:
     return out
 
 
+# Kényszerített eladás: ennyi méteren belüli védő számít NYOMÁSNAK az
+# eladás pillanatában; ennyi mért eladás kell az ítélethez; és ekkora
+# részarány fölött mondjuk ki, hogy az eladásaik magukból fakadnak.
+PTO_PRESSURE_M = 2.5
+PTO_MIN_TURNOVERS = 5
+PTO_UNFORCED_PCT = 60.0
+
+
+def pressured_turnovers(match, config=None) -> dict:
+    """Kényszerített vagy magától jött eladás: KIPRÉSELIK belőlük, vagy
+    MAGUKTÓL szórják el.
+
+    A labdaeladás-rétegek eddig azt mondták meg, KI veszíti el a labdát,
+    HOL, MIKOR és mennyibe kerül — azt nem, hogy KI TEHET RÓLA. Pedig a
+    kétféle eladás két különböző teendő: ha az ellenfél VESZI el (védő
+    volt a labdás emberen), az a fal érdeme, és nyomás alatt tovább
+    törik; ha viszont üres térben szórják el (rossz passz, lépéshiba),
+    az a saját technikájuk-döntésük hibája, és a présnek semmi köze
+    hozzá.
+
+    A mérés: minden eladás pillanatában megnézzük, milyen messze volt a
+    labdát elvesztő játékostól a LEGKÖZELEBBI ellenfél. PTO_PRESSURE_M-en
+    belül kényszerítettnek számít, azon túl magától jöttnek.
+
+    Edzőileg — az ellenfélről: ha az eladásaik túlnyomórészt MAGUKTÓL
+    jönnek, a letámadás nem hoz sokat (úgyis hibáznak), viszont a
+    kockázata megvan — érdemesebb zárt falban maradni és megvárni a
+    hibát. Ha viszont kényszerítettek, a prés MŰKÖDIK ellenük: a
+    kettőzést tartani kell. Saját oldalon fordítva: a magától jött
+    eladás edzés-téma (átvétel, passz-döntés), nem taktikai kérdés.
+
+    Visszatérés csapatonként: {"total" (mérhető eladás), "pressured",
+    "unforced", "unforced_pct", "verdict"} — az arány és az ítélet
+    None PTO_MIN_TURNOVERS alatt (sose hallgatólagos 0).
+    """
+    import math
+
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    gk_tracks: set = set()
+    for f in match.frames:
+        for p in f.players:
+            if p.role == "kapus":
+                gk_tracks.add(p.track_id)
+
+    # Az eladás-pillanatok kockái egyetlen menetben (a kocka-keresés
+    # eladásonkénti végigjárása négyzetes lenne hosszú meccsen).
+    events = [e for e in detect_events(match, config)
+              if e.type == EventType.TURNOVER and e.player_id is not None
+              and e.player_id not in gk_tracks]
+    want = {e.t for e in events}
+    frames_at: dict = {f.t: f for f in match.frames if f.t in want}
+
+    out: dict = {}
+    tally = {"home": [0, 0], "away": [0, 0]}  # [kényszerített, magától]
+    for e in events:
+        f = frames_at.get(e.t)
+        if f is None:
+            continue
+        vesztő = next((p for p in f.players if p.track_id == e.player_id),
+                      None)
+        if vesztő is None:
+            continue
+        # A legközelebbi ELLENFÉL távolsága (a kapusuk nem számít
+        # nyomásnak: ő a saját kapuja előtt áll).
+        tavok = [math.hypot(p.x - vesztő.x, p.y - vesztő.y)
+                 for p in f.players
+                 if p.team != vesztő.team and p.track_id not in gk_tracks]
+        if not tavok:
+            continue  # nem mérhető: nincs látott ellenfél a kockán
+        rec = tally[e.team.value]
+        if min(tavok) <= PTO_PRESSURE_M:
+            rec[0] += 1
+        else:
+            rec[1] += 1
+
+    for side in ("home", "away"):
+        pressed, unforced = tally[side]
+        total = pressed + unforced
+        pct = None
+        verdict = None
+        if total >= PTO_MIN_TURNOVERS:
+            pct = round(100.0 * unforced / total, 1)
+            if pct >= PTO_UNFORCED_PCT:
+                verdict = ("magától jön az eladásaik zöme — a letámadás "
+                           "keveset ad hozzá, zárt falban is hibáznak")
+            else:
+                verdict = ("kipréselt eladások — a prés működik ellenük, "
+                           "a kettőzést tartani kell")
+        out[side] = {"total": total, "pressured": pressed,
+                     "unforced": unforced, "unforced_pct": pct,
+                     "verdict": verdict}
+    return out
+
+
 def turnover_players(match, config=None) -> dict:
     """Labdaeladók: KI veszíti el a legtöbbször a labdát — a labdabiztonság
     egyéni mutatója.

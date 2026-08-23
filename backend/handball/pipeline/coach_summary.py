@@ -6000,6 +6000,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_tc['clusters']} sorozat).")
     except Exception:
         pass
+    # Kényszerített vagy magától jött eladás: ki tehet róla.
+    try:
+        from .defense import pressured_turnovers
+        pto = pressured_turnovers(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pto = pto[side]
+            if rec_pto["verdict"] is None:
+                continue
+            body += (f" A(z) {name} eladásainak "
+                     f"{rec_pto['unforced_pct']:.0f}%-a MAGÁTÓL jött "
+                     f"(nem volt védő 2,5 m-en belül: "
+                     f"{rec_pto['unforced']}/{rec_pto['total']}) — "
+                     f"{rec_pto['verdict']}.")
+    except Exception:
+        pass
     # Kapott gólok posztonként: melyik poszt ellen szivárgott a faluk.
     try:
         from .defense import conceded_by_role
