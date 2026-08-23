@@ -13,7 +13,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   jelzés áll: alaphelyzetben azt mondja, hogyan lehet nagyítani,
   nagyítva pedig a szorzót és a visszaállás módját ("×2,3 · dupla
   kattintás: vissza"). Mind a négy nagyítható felület egyszerre
-  kapta meg, mert a jelzés magában a nagyítható nézetben ül.
+  kapta meg, mert a jelzés magában a nagyítható nézetben ül. A
+  "hogyan nagyíts" súgó CSAK rámutatásra jelenik meg — állandóan
+  kiírva zaj lenne, főleg a videó fölött —, a nagyítás-szorzó
+  viszont mindig látszik: az állapot, nem tipp.
 
 - **A passzháló is megmondja, mit jelentenek a jelei** (kliens): a
   hőtérkép és a lövéstérkép már kimondja, mit kódol méretbe és színbe

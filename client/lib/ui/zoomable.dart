@@ -41,6 +41,13 @@ class ZoomPanView extends StatefulWidget {
 
 class _ZoomPanViewState extends State<ZoomPanView> {
   double _scale = 1.0;
+
+  /// Az egér a nézet fölött van-e. A "hogyan nagyíts" súgó CSAK ilyenkor
+  /// látszik: állandóan kiírva zaj lenne (a videó-panelen különösen),
+  /// rámutatáskor viszont pont akkor jelenik meg, amikor a felhasználó
+  /// már a képpel foglalkozik. A nagyítás-szorzó ettől függetlenül
+  /// mindig látszik — az állapot, nem tipp.
+  bool _hover = false;
   Offset _offset = Offset.zero; // a tartalom eltolása képpontban
 
   // A csippentés kezdetekor rögzített állapot — a d.scale mindig a
@@ -89,7 +96,9 @@ class _ZoomPanViewState extends State<ZoomPanView> {
         : "csippentés vagy Ctrl+görgő: nagyítás";
     return IgnorePointer(
       child: AnimatedOpacity(
-        opacity: zoomed ? 0.85 : 0.45,
+        opacity: zoomed
+            ? 0.85
+            : (_hover ? 0.55 : 0.0),
         duration: reduceMotion(context)
             ? Duration.zero
             : const Duration(milliseconds: 180),
@@ -117,53 +126,57 @@ class _ZoomPanViewState extends State<ZoomPanView> {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, c) {
       final size = Size(c.maxWidth, c.maxHeight);
-      return Listener(
-        onPointerSignal: (e) {
-          // Csak a Ctrl+görgő nagyít — a sima görgőt nem fogjuk el.
-          if (e is! PointerScrollEvent ||
-              !HardwareKeyboard.instance.isControlPressed) {
-            return;
-          }
-          // Görgő felfelé (negatív dy) = közelítés; a exp() adja a
-          // finom, sebesség-arányos lépésközt.
-          final factor = math.exp(-e.scrollDelta.dy / 240.0);
-          _zoomAt(e.localPosition, factor, size);
-        },
-        child: GestureDetector(
-          // A scale-gesztus a touchpad csippentését és két ujjas
-          // húzását is megkapja (Flutter 3.3+ trackpad-események).
-          onScaleStart: (d) {
-            _startScale = _scale;
-            _startOffset = _offset;
-            _startFocal = d.localFocalPoint;
+      return MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: Listener(
+          onPointerSignal: (e) {
+            // Csak a Ctrl+görgő nagyít — a sima görgőt nem fogjuk el.
+            if (e is! PointerScrollEvent ||
+                !HardwareKeyboard.instance.isControlPressed) {
+              return;
+            }
+            // Görgő felfelé (negatív dy) = közelítés; a exp() adja a
+            // finom, sebesség-arányos lépésközt.
+            final factor = math.exp(-e.scrollDelta.dy / 240.0);
+            _zoomAt(e.localPosition, factor, size);
           },
-          onScaleUpdate: (d) {
-            final ns =
-                (_startScale * d.scale).clamp(1.0, widget.maxScale);
-            final f = ns / _startScale;
-            final no = _startFocal -
-                (_startFocal - _startOffset) * f +
-                (d.localFocalPoint - _startFocal);
-            setState(() {
-              _scale = ns;
-              _offset = _clamp(no, size);
-            });
-          },
-          onDoubleTap: _reset,
-          child: ClipRect(
-            child: Stack(children: [
-              Transform(
-                transform: Matrix4.identity()
-                  ..translate(_offset.dx, _offset.dy)
-                  ..scale(_scale),
-                child: SizedBox(
-                  width: size.width,
-                  height: size.height,
-                  child: widget.child,
+          child: GestureDetector(
+            // A scale-gesztus a touchpad csippentését és két ujjas
+            // húzását is megkapja (Flutter 3.3+ trackpad-események).
+            onScaleStart: (d) {
+              _startScale = _scale;
+              _startOffset = _offset;
+              _startFocal = d.localFocalPoint;
+            },
+            onScaleUpdate: (d) {
+              final ns =
+                  (_startScale * d.scale).clamp(1.0, widget.maxScale);
+              final f = ns / _startScale;
+              final no = _startFocal -
+                  (_startFocal - _startOffset) * f +
+                  (d.localFocalPoint - _startFocal);
+              setState(() {
+                _scale = ns;
+                _offset = _clamp(no, size);
+              });
+            },
+            onDoubleTap: _reset,
+            child: ClipRect(
+              child: Stack(children: [
+                Transform(
+                  transform: Matrix4.identity()
+                    ..translate(_offset.dx, _offset.dy)
+                    ..scale(_scale),
+                  child: SizedBox(
+                    width: size.width,
+                    height: size.height,
+                    child: widget.child,
+                  ),
                 ),
-              ),
-              Positioned(right: 8, bottom: 8, child: _hint(context)),
-            ]),
+                Positioned(right: 8, bottom: 8, child: _hint(context)),
+              ]),
+            ),
           ),
         ),
       );
