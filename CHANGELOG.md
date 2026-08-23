@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.43 óta)
 
+- **Látszik, hogy a pálya nagyítható** (kliens): a felülnézeti pálya, az
+  élő nézet és a videó-panel régóta nagyítható (touchpad-csippentés,
+  Ctrl+görgő, dupla kattintás = vissza) — de ez SEHOL nem volt
+  kiírva, csak a forráskód kommentjében. Egy pályarajzon senki nem
+  próbál csippenteni magától. Mostantól a nézet sarkában halvány
+  jelzés áll: alaphelyzetben azt mondja, hogyan lehet nagyítani,
+  nagyítva pedig a szorzót és a visszaállás módját ("×2,3 · dupla
+  kattintás: vissza"). Mind a négy nagyítható felület egyszerre
+  kapta meg, mert a jelzés magában a nagyítható nézetben ül.
+
 - **A passzháló is megmondja, mit jelentenek a jelei** (kliens): a
   hőtérkép és a lövéstérkép már kimondja, mit kódol méretbe és színbe
   — a passzháló volt az utolsó térkép-réteg magyarázat nélkül.

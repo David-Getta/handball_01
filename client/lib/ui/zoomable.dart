@@ -11,6 +11,11 @@
 ///
 /// A tartalom sosem szakad el a szélektől (a nagyított kép széle nem
 /// úszhat beljebb a keretnél), és 1x alá nem kicsinyíthető.
+///
+/// A nézet a saríkában JELZI is, hogy nagyítható — a csippentés és a
+/// Ctrl+görgő rejtett funkció, amit magától senki nem próbál ki egy
+/// pályarajzon. Nagyítás közben ugyanez a jelzés a szorzót és a
+/// visszaállás módját mutatja.
 library;
 
 import "dart:math" as math;
@@ -18,6 +23,9 @@ import "dart:math" as math;
 import "package:flutter/gestures.dart";
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
+
+import "../theme/app_theme.dart";
+import "anim.dart";
 
 class ZoomPanView extends StatefulWidget {
   final Widget child;
@@ -71,6 +79,40 @@ class _ZoomPanViewState extends State<ZoomPanView> {
     });
   }
 
+  /// Sarok-jelzés: alaphelyzetben azt mondja meg, hogy a kép
+  /// nagyítható (különben ez rejtett funkció marad), nagyítva pedig a
+  /// szorzót és a visszaállás módját. Halvány, kicsi, nem takar.
+  Widget _hint(BuildContext context) {
+    final zoomed = _scale > 1.01;
+    final text = zoomed
+        ? "×${_scale.toStringAsFixed(1)} · dupla kattintás: vissza"
+        : "csippentés vagy Ctrl+görgő: nagyítás";
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        opacity: zoomed ? 0.85 : 0.45,
+        duration: reduceMotion(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppColors.surface.withOpacity(0.80),
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(zoomed ? Icons.zoom_out_map : Icons.zoom_in,
+                size: 11, color: AppColors.textFaint),
+            const SizedBox(width: 4),
+            Text(text,
+                style: AppText.label
+                    .copyWith(fontSize: 10, color: AppColors.textFaint)),
+          ]),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, c) {
@@ -109,16 +151,19 @@ class _ZoomPanViewState extends State<ZoomPanView> {
           },
           onDoubleTap: _reset,
           child: ClipRect(
-            child: Transform(
-              transform: Matrix4.identity()
-                ..translate(_offset.dx, _offset.dy)
-                ..scale(_scale),
-              child: SizedBox(
-                width: size.width,
-                height: size.height,
-                child: widget.child,
+            child: Stack(children: [
+              Transform(
+                transform: Matrix4.identity()
+                  ..translate(_offset.dx, _offset.dy)
+                  ..scale(_scale),
+                child: SizedBox(
+                  width: size.width,
+                  height: size.height,
+                  child: widget.child,
+                ),
               ),
-            ),
+              Positioned(right: 8, bottom: 8, child: _hint(context)),
+            ]),
           ),
         ),
       );
