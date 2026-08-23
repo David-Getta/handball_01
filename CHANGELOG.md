@@ -3,7 +3,21 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.42 óta)
+## Kiadatlan (a v0.1.43 óta)
+
+## v0.1.43 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ez a kör a GRAFIKÁKRÓL és a sima futásról szól. A
+> lejátszás alatt másodpercenként 25-ször újrarajzolt felületekről
+> (pálya, meccs-sztori sáv) eltűnt az elmosás — gyengébb gépen ettől
+> akadozott volna a kép —, a labdás ember pedig visszakapta a
+> csapatszínét: a korong marad kék vagy piros, csak a holdudvara
+> arany. A hőtérkép mostantól megmondja, mit jelent a szín; a
+> felderítés keresője kiemeli, HOL talált a 467 mutató közt; a
+> döntés-panel kimondja, mihez képest "optimális" egy passz; az első
+> lépések kártya pedig sorozatnak látszik, nem négy külön tippnek.
+> Új elemző réteg: figura-indító — melyik posztról indul a figurájuk,
+> mert azt a fal már az ELSŐ passznál olvashatja.
 
 - **Figura-indító** (új réteg): a figura-befejező réteg megmondja, KIRE
   FUT KI a figurájuk — ez azt, HONNAN INDUL. A kettő nem ugyanaz a
