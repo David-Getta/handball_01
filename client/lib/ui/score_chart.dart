@@ -277,16 +277,26 @@ class _ScoreChartPainter extends CustomPainter {
       // Gól-pontok: puha ragyogással és felület-színű gyűrűvel, hogy
       // metszésnél is elváljanak. (A végállást a jelmagyarázat mutatja.)
       for (final m in markers) {
-        canvas.drawCircle(
-            m,
-            9,
-            Paint()
-              ..color = color.withOpacity(0.28)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+        _softGlow(canvas, m, 9.5, color.withOpacity(0.32));
         canvas.drawCircle(m, 5.5, Paint()..color = AppColors.surface);
         canvas.drawCircle(m, 3.5, Paint()..color = color);
       }
     }
+  }
+
+  /// Puha kör-ragyogás elmosás nélkül. A grafikon a berajzolás-animáció
+  /// alatt képkockánként újrarajzolódik, és gólonként egy-egy elmosás
+  /// külön rajz-menetet kényszerítene ki — gólgazdag meccsen ez
+  /// képkockánként több tucat menet.
+  void _softGlow(Canvas canvas, Offset center, double radius, Color color) {
+    canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [color, color.withOpacity(0)],
+            stops: const [0.40, 1.0],
+          ).createShader(Rect.fromCircle(center: center, radius: radius)));
   }
 
   void _text(Canvas canvas, String s, Offset pos, TextStyle style) {

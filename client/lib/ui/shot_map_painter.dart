@@ -72,12 +72,7 @@ class ShotMapPainter extends CustomPainter {
       // Gól: puha csapatszínű ragyogás a jelölő mögött — a térkép
       // "forró pontjai" ránézésre kiugranak.
       if (s.goal) {
-        canvas.drawCircle(
-            p,
-            r + 7,
-            Paint()
-              ..color = teamColor.withOpacity(0.30)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7));
+        _softGlow(canvas, p, r + 8, teamColor.withOpacity(0.34));
       }
       // Felület-színű alap: sűrű helyeken is elválnak a jelölők.
       canvas.drawCircle(p, r + 2, Paint()..color = AppColors.surface);
@@ -107,6 +102,20 @@ class ShotMapPainter extends CustomPainter {
           ..strokeWidth = 1.5);
       }
     }
+  }
+
+  /// Puha kör-ragyogás elmosás nélkül. A térkép a bepattanás-animáció
+  /// alatt képkockánként újrarajzolódik, és gólonként egy-egy elmosás
+  /// külön rajz-menetet kényszerítene ki.
+  void _softGlow(Canvas canvas, Offset center, double radius, Color color) {
+    canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [color, color.withOpacity(0)],
+            stops: const [0.40, 1.0],
+          ).createShader(Rect.fromCircle(center: center, radius: radius)));
   }
 
   @override

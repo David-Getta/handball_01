@@ -856,7 +856,10 @@ def test_a_kepkockankent_ujrarajzolt_feluletek_nem_elmosnak():
     lib = _client_lib()
     if not lib.exists():
         pytest.skip("nincs kliens a fában")
-    for name in ("court_painter.dart", "story_timeline.dart"):
+    # A pálya és a sztori-sáv a lejátszófejjel, a két grafikon pedig a
+    # betöltő berajzolás-animáció alatt rajzolódik újra képkockánként.
+    for name in ("court_painter.dart", "story_timeline.dart",
+                 "score_chart.dart", "shot_map_painter.dart"):
         src = (lib / "ui" / name).read_text(encoding="utf-8")
         assert "maskFilter" not in src, (
             f"{name}: elmosás a képkockánként újrarajzolt felületen")

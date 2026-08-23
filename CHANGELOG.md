@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.43 óta)
 
+- **A két grafikon is elmosás nélkül ragyog** (kliens, teljesítmény):
+  az eredmény-alakulás és a lövéstérkép betöltéskor BERAJZOLÓDIK, és
+  az animáció alatt képkockánként újrarajzolódnak — gólonként egy-egy
+  elmosott ragyogással. Gólgazdag meccsen ez képkockánként több tucat
+  külön rajz-menet. Mindkettő átállt a sugaras színátmenetre (a pálya
+  és a sztori-sáv mintájára); az őr-teszt mostantól mind a négy
+  képkockánként újrarajzolt felületet védi.
+
 ## v0.1.43 — kiadva (2026-08-23)
 
 > Kiadás-jegyzet: ez a kör a GRAFIKÁKRÓL és a sima futásról szól. A
