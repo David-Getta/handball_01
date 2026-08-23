@@ -6,6 +6,7 @@
 /// kiadás), akkor is tovább lehet lépni demó módban.
 library;
 
+import "dart:async";
 import "dart:ui" show AppExitResponse;
 
 import "package:flutter/material.dart";
@@ -35,6 +36,15 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
   /// nem tudott mit elküldeni.
   String? _log;
 
+  /// Eltelt másodpercek az indítás kezdete óta.
+  ///
+  /// Az első indulás — víruskereső-átvizsgálással — PERCEKIG tarthat. Egy
+  /// néma pörgettyű mellett ilyenkor a felhasználó azt hiszi, lefagyott,
+  /// és bezárja a programot: pont azt a folyamatot lövi ki, amelyik
+  /// mindjárt kész lenne. A látható számláló a bizonyíték, hogy megy.
+  int _elapsed = 0;
+  Timer? _tick;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +54,7 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
 
   @override
   void dispose() {
+    _tick?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _launcher.stop(); // az app bezárásakor a motort is leállítjuk
     super.dispose();
@@ -56,9 +67,17 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
   }
 
   Future<void> _start() async {
+    // A számláló minden indítási kísérletnél nulláról indul (az
+    // Újrapróbálom is ide jön vissza), és a kísérlet végén megáll.
+    _tick?.cancel();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _elapsed += 1);
+    });
     setState(() {
       _message = "Motor indítása…";
       _phase = BackendPhase.starting;
+      _elapsed = 0;
+      _log = null;
     });
     final status = await _launcher.ensureRunning(
       onLog: (line) {
@@ -66,6 +85,7 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
         setState(() => _message = line);
       },
     );
+    _tick?.cancel();
     if (!mounted) return;
     setState(() {
       _phase = status.phase;
@@ -152,6 +172,26 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
                 ),
                 const SizedBox(height: 8),
                 Text(_message, style: AppText.label, textAlign: TextAlign.center),
+
+                if (busy && _elapsed >= 3) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Text("fut: ${_elapsed < 60 ? "$_elapsed mp" : "${_elapsed ~/ 60}:${(_elapsed % 60).toString().padLeft(2, "0")}"}",
+                      style: AppText.label
+                          .copyWith(color: AppColors.textFaint)),
+                ],
+                if (busy && _elapsed >= 30) ...[
+                  const SizedBox(height: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    child: Text(
+                        "Az ELSŐ indítás percekig is tarthat: a víruskereső "
+                        "egyszer végigolvassa a programot. Ne zárd be — a "
+                        "következő indítás már gyors lesz.",
+                        style: AppText.label
+                            .copyWith(color: AppColors.textFaint),
+                        textAlign: TextAlign.center),
+                  ),
+                ],
 
                 if (failed && _log != null && _log!.trim().isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.lg),

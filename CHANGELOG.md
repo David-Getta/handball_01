@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.46 óta)
 
+- **Az indító képernyő mutatja, mennyi ideje vár** (kliens): az ELSŐ
+  indítás percekig is tarthat (a víruskereső egyszer végigolvassa a
+  programot), és eddig ilyenkor csak egy néma pörgettyű forgott. A
+  felhasználó ebből azt hiszi, lefagyott, és bezárja a programot —
+  pont azt a folyamatot lőve ki, amelyik mindjárt kész lenne.
+  Mostantól három másodperc után látszik az eltelt idő (a bizonyíték,
+  hogy megy), fél perc után pedig egy mondat is: az első indítás
+  lassú, ne zárja be, a következő már gyors lesz. A számláló minden
+  indítási kísérletnél nulláról indul, és a kísérlet végén megáll.
+
 ## v0.1.46 — kiadva (2026-08-23)
 
 > Kiadás-jegyzet: ha eddig azt láttad, hogy "nem érem el a
