@@ -891,9 +891,12 @@ def test_az_animaciok_tiszteletben_tartjak_a_csokkentett_mozgast():
     assert anim.count("reduceMotion(context)") >= 4, (
         "nem mindegyik közös animációs elem nézi a mozgás-csökkentést")
 
-    # A betöltő berajzolás-animációk (grafikonok) is nézzék.
+    # A betöltő berajzolás-animációk (grafikonok) és a FOLYAMATOS,
+    # sosem álló mozgások (forgó lépés-ikon, lélegző pörgettyű) is
+    # nézzék — a végtelen mozgás a legrosszabb fajta.
     for name in ("score_chart.dart", "intensity_chart.dart",
-                 "trend_screen.dart", "match_screen.dart"):
+                 "trend_screen.dart", "match_screen.dart",
+                 "upload_screen.dart", "waiting.dart"):
         src = (lib / "ui" / name).read_text(encoding="utf-8")
         assert "reduceMotion(context)" in src, (
             f"{name}: a berajzolás-animáció nem nézi a mozgás-csökkentést")

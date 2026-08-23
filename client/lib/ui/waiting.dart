@@ -18,6 +18,7 @@ import "dart:async";
 import "package:flutter/material.dart";
 
 import "../theme/app_theme.dart";
+import "anim.dart";
 
 /// Ennyi másodperc után jelenik meg az eltelt idő.
 ///
@@ -53,8 +54,21 @@ class _WaitingViewState extends State<WaitingView>
 
   /// Lélegző pulzus a pörgettyű közepén: a mozgás maga a "dolgozom" jel.
   late final AnimationController _pulse = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1400))
-    ..repeat(reverse: true);
+      vsync: this, duration: const Duration(milliseconds: 1400));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Csökkentett mozgásnál a lélegző ragyogás megáll egy középső
+    // állapotban: a pörgettyű és az élő másodperc-számláló továbbra is
+    // elmondja, hogy a program dolgozik.
+    if (reduceMotion(context)) {
+      _pulse.stop();
+      _pulse.value = 0.5;
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    }
+  }
 
   @override
   void initState() {

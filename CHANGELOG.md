@@ -13,8 +13,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   díszítés, hanem rosszullét. Mostantól a közös animációs elemek
   (belépő úszás, szám-felpörgetés, hover-emelés, mérő-sáv) és a
   grafikonok berajzolása is lekérdezi a beállítást, és mozgás nélkül,
-  AZONNAL a végállapotot mutatja — a tartalom ugyanaz marad. Őr-teszt
-  védi.
+  AZONNAL a végállapotot mutatja — a tartalom ugyanaz marad. A
+  FOLYAMATOS mozgások is megállnak (a feldolgozás-lista forgó
+  lépés-ikonja és a várakozó nézet lélegző ragyogása): a sosem
+  álló mozgás a legzavaróbb fajta, és a haladást a kiemelt sáv, a
+  "folyamatban…" felirat meg az élő másodperc-számláló úgyis
+  elmondja. Őr-teszt védi.
 
 - **A két grafikon is elmosás nélkül ragyog** (kliens, teljesítmény):
   az eredmény-alakulás és a lövéstérkép betöltéskor BERAJZOLÓDIK, és

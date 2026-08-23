@@ -17,6 +17,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
+import "anim.dart";
 import "calibration_screen.dart";
 import "match_screen.dart";
 import "shell/app_shell.dart";
@@ -1416,8 +1417,21 @@ class _SpinningIcon extends StatefulWidget {
 class _SpinningIconState extends State<_SpinningIcon>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1600))
-    ..repeat();
+      vsync: this, duration: const Duration(milliseconds: 1600));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // A FOLYAMATOS forgás a mozgás-érzékeny felhasználónak a
+    // legrosszabb fajta mozgás: sosem áll meg. Ilyenkor az ikon
+    // mozdulatlan marad — hogy a lépés fut, a kiemelt sáv és a
+    // "folyamatban…" felirat úgyis megmondja.
+    if (reduceMotion(context)) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
 
   @override
   void dispose() {
