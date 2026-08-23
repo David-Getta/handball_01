@@ -115,6 +115,14 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   int? _drag;
   bool _saved = false;
 
+  // Sarok-JAVASLAT a felismert pályavonalakból: a motor a hosszú, egyenes
+  // vonalak metszéspontjaiból a legnagyobb konvex négyszöget adja vissza.
+  // Ez nem váltja ki a kézi igazítást — de nulláról jelölni sokkal
+  // nehezebb, és a rosszul jelölt sarok az egész elemzést elviszi (a
+  // lelátó a pályára vetül, a pozíciók félremennek).
+  bool _suggesting = false;
+  String? _suggestNote;
+
   // Melyik területet jelöljük be: teljes pálya vagy csak az egyik térfél
   // (pásztázó kameránál az induló képen sokszor csak egy térfél látszik).
   String _region = "full"; // full | left | right
@@ -610,6 +618,31 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
               label: const Text("Vissza a térfelekhez"),
             ),
           ] else ...[
+            // Sarok-javaslat: a motor a felismert pályavonalakból ajánl
+            // négyszöget. Nulláról jelölni sokkal nehezebb, a rosszul
+            // jelölt sarok pedig az egész elemzést elviszi.
+            if (widget.videoPath != null) ...[
+              OutlinedButton.icon(
+                onPressed: _suggesting ? null : _suggestCorners,
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.gold,
+                    side: const BorderSide(color: AppColors.gold)),
+                icon: _suggesting
+                    ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.auto_fix_high, size: 18),
+                label: Text(_suggesting
+                    ? "Vonal-felismerés fut…"
+                    : "Sarkok javaslata a pályavonalakból"),
+              ),
+              if (_suggestNote != null) ...[
+                const SizedBox(height: 6),
+                Text(_suggestNote!,
+                    style: AppText.label.copyWith(fontSize: 11.5)),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+            ],
             FilledButton.icon(
               style: FilledButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
               onPressed: _save,
@@ -652,6 +685,63 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   }
 
   /// Az aktuális beállítás (sarkok + terület + forgatás + képkocka) egy
+  /// Sarok-javaslat betöltése a felismert pályavonalakból.
+  ///
+  /// Csendes kudarc: ha nincs javaslat (kevés vonal, takart pálya), a
+  /// felhasználó ezt szövegben megtudja, de a kézi jelölés érintetlen
+  /// marad — a javaslat segítség, nem kapu.
+  Future<void> _suggestCorners() async {
+    final path = widget.videoPath;
+    if (path == null || _suggesting) return;
+    setState(() {
+      _suggesting = true;
+      _suggestNote = null;
+    });
+    try {
+      final api = ApiClient(baseUrl: widget.baseUrl);
+      final r = await api.fetchBroadcastLines(path, frame: _frameIdx);
+      final quad = r["suggested_quad"] as List?;
+      final w = (r["width"] as num?)?.toDouble() ??
+          _frameSize?.width ?? 1920.0;
+      final h = (r["height"] as num?)?.toDouble() ??
+          _frameSize?.height ?? 1080.0;
+      if (quad == null || quad.length != 4) {
+        if (!mounted) return;
+        setState(() => _suggestNote =
+            "Ezen a képkockán nem találtam elég pályavonalat a "
+            "javaslathoz. Léptess olyan kockára, ahol a pálya vonalai "
+            "tisztán látszanak (nincs rajta tömeg, felirat), vagy jelöld "
+            "be kézzel a 4 sarkot.");
+        return;
+      }
+      final ujak = <Offset>[];
+      for (final p in quad) {
+        final pt = (p as List);
+        final x = (pt[0] as num).toDouble();
+        final y = (pt[1] as num).toDouble();
+        // Képpont → vászon-arány (a kép körüli sávot is beleszámítva).
+        ujak.add(Offset(_margin + x / w * (1 - 2 * _margin),
+            _margin + y / h * (1 - 2 * _margin)));
+      }
+      if (!mounted) return;
+      final nLines = ((r["lines"] as List?) ?? const []).length;
+      setState(() {
+        _corners = ujak;
+        _saved = false;
+        _suggestNote =
+            "Javaslat betöltve ($nLines felismert vonalból). ELLENŐRIZD: "
+            "a négyszög a JÁTÉKTÉR négy sarkán álljon — húzd a pontokat "
+            "a helyükre, mielőtt mentesz.";
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _suggestNote =
+          "A vonal-felismerés nem sikerült: ${humanError(e)}");
+    } finally {
+      if (mounted) setState(() => _suggesting = false);
+    }
+  }
+
   /// CalibrationResult-tá alakítva, képpont-koordinátákkal.
   CalibrationResult _currentResult() {
     final w = _frameSize?.width ?? 1920.0;

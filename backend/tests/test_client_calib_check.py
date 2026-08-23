@@ -48,3 +48,28 @@ def test_kezi_meccsablak_mezoi_leteznek():
     assert "Meccs kezdete" in src
     assert "startS:" in src and "endS:" in src, (
         "a megadott ablak nem jut el a motorhoz")
+
+
+def _calib_src() -> str:
+    return (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "ui" / "calibration_screen.dart").read_text(encoding="utf-8")
+
+
+def test_sarok_javaslat_elerheto_a_kalibralo_kepernyon():
+    """A motor ad négyszög-javaslatot — legyen mivel betölteni.
+
+    A javaslat (`suggested_quad`) régóta megvolt a `/broadcast/lines`
+    válaszában, de a kliens csak SZÖVEGBEN említette ("van javaslat"),
+    használni nem lehetett. Nulláról jelölni a 4 sarkot sokkal
+    nehezebb, a rosszul jelölt sarok pedig az egész elemzést elviszi.
+    """
+    src = _calib_src()
+    assert "_suggestCorners" in src
+    assert "suggested_quad" in src, "a javaslat nem jut el a sarkokhoz"
+    assert "Sarkok javaslata" in src, "nincs gomb, amivel betölthető"
+
+
+def test_a_javaslat_ellenorzesre_szolit():
+    """A javaslat segítség, nem garancia — ezt ki kell mondani."""
+    src = _calib_src()
+    assert "ELLENŐRIZD" in src

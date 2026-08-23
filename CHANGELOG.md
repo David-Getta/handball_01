@@ -3,7 +3,31 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.47 óta)
+## Kiadatlan (a v0.1.48 óta)
+
+- **Sarok-javaslat a kalibráló képernyőn** (kliens): a motor RÉGÓTA
+  adott négyszög-javaslatot a felismert pályavonalakból
+  (`/broadcast/lines` → `suggested_quad`), de a felület csak említette
+  ("van javaslat") — használni nem lehetett. Mostantól egy gomb
+  betölti a 4 sarkot, és a szöveg kimondja, hogy ELLENŐRIZNI kell:
+  a javaslat segítség, nem garancia. Ez a legfontosabb kényelmi lépés
+  a legdrágább hiba ellen — a rosszul jelölt sarok az egész elemzést
+  elviszi (a lelátó a pályára vetül, a pozíciók félremennek).
+
+## v0.1.48 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ez a kör az ELSŐ éles meccs tanulságairól szól. A
+> legfontosabb egy javítás: a minőség-jelentés eddig a TÖBBLET
+> észlelést jutalmazta, ezért egy olyan feldolgozás, amiben a lelátó is
+> a pályára került (27 "játékos" kockánként), 70/100-at kapott. Most a
+> többlet ugyanúgy ront, mint a hiány, a lehetetlen létszám plafont ad,
+> és a detektálás-próba már az INDÍTÁS ELŐTT kimondja, ha a kalibráció
+> a nézőteret is a játéktérre vetíti. A bemelegítés és a
+> csapatbemutatás ellen kézi meccs-időablak jött (perc:másodperc), a
+> "csak az első félidőt elemezte ki" élményre pedig lefedettség-jelzés.
+> Emellett: hátralévő idő a feldolgozásoknál, "kész" bejelentés
+> bárhonnan, indítás előtti hely-ellenőrzés, és új elemző réteg
+> (támadás-ritmus).
 
 - **Minőség-jelentés: a TÖBBLET is hiba** (motor + kliens) — JAVÍTÁS:
   egy éles meccsen a rendszer 27,4 játékost mért kockánként (a pályán
