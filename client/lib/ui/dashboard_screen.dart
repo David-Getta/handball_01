@@ -2621,7 +2621,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final frames = (m["num_frames"] as num?)?.toInt() ?? 0;
     final durS = (m["duration_s"] as num?)?.toDouble() ?? 0.0;
     final fps = (m["fps"] as num?)?.toDouble() ?? 25.0;
-    final meta = "$id · $frames képkocka · ${durS.toStringAsFixed(1)} s · ${fps.toStringAsFixed(0)} fps";
+    // A kártya alsó sora eddig gépi adat volt ("1234 képkocka · 240.0 s ·
+    // 25 fps"). Az edzőt a HOSSZ érdekli, percben; a képkocka-szám és a
+    // pontos azonosító diagnosztika — azok a rámutatásra jönnek elő.
+    final totalS = durS.round();
+    final durLabel = totalS >= 60
+        ? "${totalS ~/ 60}:${(totalS % 60).toString().padLeft(2, "0")} perc"
+        : "$totalS másodperc";
+    final meta = "$durLabel · ${fps.toStringAsFixed(0)} kép/mp";
+    final metaTip = "Azonosító: $id\n"
+        "$frames képkocka · ${durS.toStringAsFixed(1)} s · "
+        "${fps.toStringAsFixed(0)} kép/mp";
     // Az összkép-kivonat kiegészítése, ha már megjött: eredmény + dátum.
     final sum = _perMatch[id];
     final date = (sum?["date"] as String?) ?? "";
@@ -2692,7 +2702,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 4),
                   ],
-                  Text(meta, style: AppText.label.copyWith(fontSize: 12)),
+                  Tooltip(
+                    message: metaTip,
+                    child: Text(meta,
+                        style: AppText.label.copyWith(fontSize: 12)),
+                  ),
                   if (sum != null) ...[
                     const SizedBox(height: 4),
                     Text(

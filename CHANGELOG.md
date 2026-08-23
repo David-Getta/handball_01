@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **A meccs-kártya emberi adatokat mutat** (kliens): a könyvtár
+  kártyáinak alsó sora eddig gépi adat volt ("d3f1a · 6000 képkocka ·
+  240.0 s · 25 fps"). Az edzőt a HOSSZ érdekli, percben — mostantól
+  "4:00 perc · 25 kép/mp" áll ott, az azonosító és a képkocka-szám
+  pedig rámutatásra (Tooltip) jön elő, ahol a hibakereséshez kell.
+
 - **Egy néven nevezzük a motort** (kliens, nyelv): a felületen hol
   "backend", hol "motor", hol "lokális szerver (uvicorn)" szerepelt —
   ugyanarra a dologra három név, közülük kettő fejlesztői zsargon.
