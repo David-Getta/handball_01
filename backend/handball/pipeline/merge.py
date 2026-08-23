@@ -58,6 +58,11 @@ def merge_matches(parts: list[Match], match_id: str,
         # a fájl — ebből számol a minőség-jelentés lefedettséget, és két
         # külön videó összefűzésénél az szám félrevezető lenne.
         video_seconds=(first.meta.video_seconds if same_video else None),
+        # Kalibráltság: csak akkor állítjuk, ha MINDEN szakasz egyetért
+        # (különben nem tudjuk, mire vonatkozna az állítás).
+        calibrated=(first.meta.calibrated
+                    if all(p.meta.calibrated == first.meta.calibrated
+                           for p in parts) else None),
     )
 
     frames: list[Frame] = []

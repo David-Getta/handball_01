@@ -950,7 +950,10 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                          # A FORRÁSVIDEÓ hossza: ebből derül ki, hogy a
                          # feldolgozás a felvétel mekkora részét fedte le.
                          video_seconds=((n_total / fps)
-                                        if n_total > 0 and fps > 0 else None))
+                                        if n_total > 0 and fps > 0 else None),
+                         # Volt-e kalibráció: enélkül a koordináta arányos
+                         # becslés, és a pályán kívüliek nem szűrhetők.
+                         calibrated=bool(calib_list))
         if rec_date:
             say(f"meccs-dátum a videóból: {rec_date}")
         frames = []

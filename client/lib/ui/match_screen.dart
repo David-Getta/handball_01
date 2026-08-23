@@ -1913,6 +1913,9 @@ class _MatchScreenState extends State<MatchScreen> {
             // A felvétel mekkora részét dolgoztuk fel: enélkül a
             // "csak az első félidőt elemezte ki" élmény megmagyarázatlan
             // marad (megvágott feltöltés, hossz-beállítás, megszakadás).
+            if (q["calibrated"] == false)
+              Text("Pálya-kalibráció: NEM volt",
+                  style: AppText.label.copyWith(color: AppColors.away)),
             if (q["processed_pct"] != null)
               Text(
                   "A felvétel feldolgozott része: ${q["processed_pct"]}%"

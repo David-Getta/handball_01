@@ -247,6 +247,25 @@ def compute_quality_report(match: Match) -> dict:
             "volt, a 2. félidő irány-érzékeny elemzései (támadás-irány, "
             "kapus-oldal) pontatlanok lehetnek.")
 
+    # --- Volt-e pálya-kalibráció? ---
+    # Kalibráció nélkül a koordináta csak arányos becslés (a képet
+    # nyújtjuk a pályára), és a pályán kívüli embereket — kispad, edző,
+    # NÉZŐTÉR — nem lehet kiszűrni: mindenki "a pályán" lesz. Ez nem
+    # apró pontatlanság, hanem az elemzés alapja, ezért ki kell mondani.
+    # A None a RÉGI mentések állapota (a mező előttről): arról nem
+    # állítunk semmit — csak a biztosan kalibráció nélküli futásról.
+    calibrated = getattr(match.meta, "calibrated", None)
+    if calibrated is False:
+        warnings.append(
+            "A feldolgozás pálya-kalibráció NÉLKÜL futott — a pozíciók "
+            "csak arányos becslések (a kép széle a pálya széle), és a "
+            "pályán kívüli embereket (kispad, edző, nézőtér) nem lehet "
+            "kiszűrni: mindenki „a pályára” kerül. A távolság-, "
+            "fal-forma- és birtoklás-alapú elemzések emiatt "
+            "megbízhatatlanok. Az Új elemzés lapon jelöld be a 4 "
+            "pályasarkot (a Sarkok javaslata gomb elő is tölti), és "
+            "futtasd újra.")
+
     # --- A felvétel mekkora részét dolgoztuk fel? ---
     # "Az egész meccs helyett csak az első félidőt elemezte ki" — a
     # felhasználó ezt a számokból nem tudja kikövetkeztetni. A
@@ -297,6 +316,7 @@ def compute_quality_report(match: Match) -> dict:
         "fragmentation": round(fragmentation, 2),
         "home_share_pct": round(home_share, 1),
         "out_of_court_pct": round(out_pct, 1),
+        "calibrated": calibrated,
         "video_seconds": round(video_s, 1) if video_s else None,
         "processed_pct": (round(processed_pct, 1)
                           if processed_pct is not None else None),

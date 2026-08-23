@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.48 óta)
 
+- **"Kalibráció nélkül futott" — kimondva** (motor + kliens): eddig
+  semmi nem jelezte, ha egy feldolgozás pálya-kalibráció NÉLKÜL futott.
+  Pedig ilyenkor a koordináta csak arányos becslés (a kép széle a pálya
+  széle), és a pályán kívüli embereket — kispad, edző, NÉZŐTÉR — nem
+  lehet kiszűrni: mindenki „a pályára" kerül, tehát a távolság-,
+  fal-forma- és birtoklás-alapú elemzések megbízhatatlanok. A meccs
+  mostantól viszi ezt a tényt, a minőség-jelentés kimondja a teendővel
+  együtt, és a kliens is mutatja. A RÉGI mentésekről (ahol nincs adat)
+  szándékosan nem állítunk semmit.
+
 - **Sarok-javaslat a kalibráló képernyőn** (kliens): a motor RÉGÓTA
   adott négyszög-javaslatot a felismert pályavonalakból
   (`/broadcast/lines` → `suggested_quad`), de a felület csak említette

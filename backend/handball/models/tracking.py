@@ -137,6 +137,14 @@ class MatchMeta:
     # egy megvágott/félbeszakadt feltöltésnél a felhasználó egyébként
     # csak annyit lát, hogy "csak az első félidőt elemezte ki".
     video_seconds: Optional[float] = None
+    # Volt-e PÁLYA-KALIBRÁCIÓ a feldolgozáskor. Enélkül a koordináták
+    # csak arányos becslések (a képet nyújtjuk a pályára), és a pályán
+    # kívüli embereket — kispad, edző, NÉZŐTÉR — nem lehet kiszűrni.
+    # A jelentésnek ezt ki kell mondania, különben a felhasználó a
+    # számokból nem tudja, mennyire bízhat bennük.
+    # None = nem tudjuk (RÉGI mentés, a mező előtti időkből) — ilyenkor
+    # nem állítunk semmit; False = biztosan nem volt kalibráció.
+    calibrated: Optional[bool] = None
 
 
 @dataclass

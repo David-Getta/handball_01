@@ -18,8 +18,10 @@ from handball.pipeline.quality import compute_quality_report
 
 
 def _meta(fps=25.0):
+    # A tiszta alapeset KALIBRÁLT feldolgozás — enélkül minden mérés
+    # csak arányos becslés lenne, és a jelentés joggal figyelmeztetne.
     return MatchMeta(match_id="q", home_team="A", away_team="B", fps=fps,
-                     frame_width=1920, frame_height=1080)
+                     frame_width=1920, frame_height=1080, calibrated=True)
 
 
 def _pl(i, source=PositionSource.MEASURED):

@@ -106,3 +106,21 @@ def test_regi_meccs_video_hossz_nelkul_nem_szall_el():
     m.meta.video_seconds = None
     rep = compute_quality_report(m)
     assert rep["processed_pct"] is None
+
+
+def test_kalibracio_nelkul_figyelmeztetunk():
+    """Kalibráció nélkül a nézőtér is "a pályára" kerül — mondjuk ki."""
+    m = _match(EXPECTED_PLAYERS, frames=100)
+    m.meta.calibrated = False
+    rep = compute_quality_report(m)
+    assert rep["calibrated"] is False
+    assert any("kalibráció NÉLKÜL" in w for w in rep["warnings"])
+
+
+def test_regi_meccsnel_nem_allitunk_semmit_a_kalibraciorol():
+    """A mező előtti mentésekben nincs adat — abból nem vádolunk."""
+    m = _match(EXPECTED_PLAYERS, frames=100)
+    m.meta.calibrated = None
+    rep = compute_quality_report(m)
+    assert rep["calibrated"] is None
+    assert not any("kalibráció NÉLKÜL" in w for w in rep["warnings"])
