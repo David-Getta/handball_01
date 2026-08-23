@@ -1366,6 +1366,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 466) Hetes-ismétlés: ha a saját hetesdobóink másodszorra is
+    # ugyanoda dobnak, kiszámíthatók — a sarok-váltás edzés-téma.
+    try:
+        from .rules import SREP_REPEAT_PCT, seven_taker_repeat
+        srep466 = seven_taker_repeat(match, config)
+        for side in ("home", "away"):
+            rec466 = srep466[side]
+            if rec466["verdict"] is None:
+                continue
+            if rec466["repeat_pct"] < SREP_REPEAT_PCT:
+                continue  # a váltogató dobó nem edzés-hiány
+            add(side, "támadás", "Hetes: sarok-váltás",
+                f"az egymást követő heteseink "
+                f"{rec466['repeat_pct']:.0f}%-a ugyanabba a sávba ment "
+                f"({rec466['repeats']}/{rec466['pairs']} pár; "
+                f"{SREP_REPEAT_PCT:.0f}% fölött jelezzük) — a dobóink "
+                "szokásból ismételnek, és az ellenfél kapusa ezt "
+                "ugyanígy látja a felvételen",
+                "a hetes nem rutin, hanem döntés: az edzésen minden "
+                "hetes-sorozatban TILOS kétszer egymás után ugyanoda "
+                "dobni (a kapus előre tudja, melyik sarkot védi), és "
+                "a kispadon legyen hetes-lista — ha a dobónk beragadt "
+                "egy sarokba, a következő hetest a lista második "
+                "embere dobja")
+    except Exception:
+        pass
+
     # 465) Elzárás-fáradás: ha az elzárás-munkánk a 2. félidőre elfogy,
     # az elzárók forgatása és a törzs-állóképesség az edzés-téma.
     try:

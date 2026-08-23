@@ -758,6 +758,7 @@ KPL_LAYERS: tuple = (
     ("Rejtett szervező", "event_detection", "pre_assists"),
     ("Szuper-csere", "momentum", "super_sub"),
     ("Hetes-dobó", "rules", "seven_taker_corners"),
+    ("Hetes-ismétlő", "rules", "seven_taker_repeat"),
     ("Kétperc-gyűjtő", "rules", "suspension_collectors"),
     ("Felhozatal-ember", "goalkeeper", "outlet_targets"),
     ("Kettőzött ember", "defense", "doubled_targets"),

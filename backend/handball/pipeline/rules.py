@@ -2278,6 +2278,88 @@ def seven_taker_corners(match: Match,
     return out
 
 
+
+# Hetes-ismétlés: ennyi EGYMÁST KÖVETŐ, ugyanattól a dobótól jövő
+# hetes-pár kell az ítélethez, és ekkora ismétlés-arány fölött
+# mondjuk ki, hogy a dobójuk másodszorra is ugyanoda megy.
+SREP_MIN_PAIRS = 3
+SREP_REPEAT_PCT = 60.0
+
+
+def seven_taker_repeat(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-ismétlés: MÁSODSZORRA IS UGYANODA megy-e a hetesük.
+
+    A hetes-sarok (seven_taker_corners) a dobó ELOSZLÁSÁT adja: hova
+    megy a hetesei többsége. A kapusnak viszont a SORREND a fontos —
+    az a kérdés, hogy a MOST következő hetes hova megy. Két dobó
+    ugyanazzal a 60%-os bal-aránnyal teljesen mást jelent: aki
+    egymás után kétszer is ugyanoda dobja, az kiszámítható; aki
+    váltogat, arra az eloszlás nem használható előrejelzésnek.
+
+    Ez a réteg a dobónkénti hetes-sorozatot nézi: az EGYMÁST KÖVETŐ
+    párokból hány ment ugyanabba a sávba (bal/közép/jobb).
+
+    Edzőileg: ha az ellenfél dobója ismétlő, a kapusnak a LEGUTÓBB
+    látott sarok az esély — ezt a hetes előtt kell bekiabálni neki.
+    Saját oldalon fordítva: ha a mi dobónk ismétlő, a következő
+    hetesnél tudatosan váltani kell (vagy más álljon oda), mert az
+    ellenfél kapusa is látja ugyanezt.
+
+    Visszatérés csapatonként: {"pairs" (egymást követő, irány-mérhető
+    hetes-párok száma), "repeats", "repeat_pct", "verdict"
+    ("ismétlő"/"váltogató"), "players": [{"player_id", "jersey",
+    "pairs", "repeats", "last_dir"}] pár szerint csökkenően, "top"} —
+    az ítélet SREP_MIN_PAIRS pártól nevesül, alatta None (sose
+    hallgatólagos 0); a "top" a legtöbb párral rendelkező ismétlő
+    dobó (egyébként None).
+    """
+    config = config or TacticsConfig()
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if getattr(p, "jersey_number", None) is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    # Dobónkénti irány-SOROZAT, a meccs időrendjében.
+    seq: dict = {"home": {}, "away": {}}
+    for sm in seven_meter_outcomes(match, config):
+        if sm["irany"] is None or sm["shooter_id"] is None:
+            continue
+        seq[sm["team"]].setdefault(sm["shooter_id"], []).append(sm["irany"])
+
+    out: dict = {}
+    for side in ("home", "away"):
+        players = []
+        pairs_total = 0
+        repeats_total = 0
+        for pid, dirs in seq[side].items():
+            pairs = len(dirs) - 1
+            if pairs <= 0:
+                continue  # egyetlen hetesből nincs "másodszorra"
+            repeats = sum(1 for i in range(pairs) if dirs[i] == dirs[i + 1])
+            pairs_total += pairs
+            repeats_total += repeats
+            players.append({"player_id": pid, "jersey": jersey.get(pid),
+                            "pairs": pairs, "repeats": repeats,
+                            "last_dir": dirs[-1]})
+        players.sort(key=lambda r: (-r["pairs"], -r["repeats"]))
+        pct = None
+        verdict = None
+        if pairs_total >= SREP_MIN_PAIRS:
+            pct = round(100.0 * repeats_total / pairs_total, 1)
+            verdict = "ismétlő" if pct >= SREP_REPEAT_PCT else "váltogató"
+        top = next((p for p in players
+                    if p["pairs"] >= 2
+                    and 100.0 * p["repeats"] / p["pairs"] >= SREP_REPEAT_PCT),
+                   None)
+        out[side] = {"pairs": pairs_total, "repeats": repeats_total,
+                     "repeat_pct": pct, "verdict": verdict,
+                     "players": players, "top": top}
+    return out
+
+
+
 # Emberelőny-poszt: ennyi poszthoz kötött emberelőny-lövés kell az
 # ítélethez, és ekkora részarány fölött mondjuk ki, hogy az
 # emberelőnyük egy posztra fut ki.

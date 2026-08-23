@@ -3221,6 +3221,21 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "a kapus nála előre döntsön, ne olvasson";
   }
 
+  // Hetes-ismétlés: másodszorra is ugyanoda megy-e a hetesük — a
+  // SORREND, nem az eloszlás (3+ egymást követő hetes-pár, 60%+
+  // ismétlés — a backenddel azonos küszöbök: SREP_MIN_PAIRS,
+  // SREP_REPEAT_PCT).
+  String? _sevenRepeat(Map<String, dynamic> r) {
+    final pairs = ((r["srep_pairs"] ?? 0) as num).toInt();
+    final repeats = ((r["srep_repeats"] ?? 0) as num).toInt();
+    if (pairs < 3) return null;
+    final pct = 100.0 * repeats / pairs;
+    if (pct < 60.0) return null;
+    return "az egymást követő heteseik ${pct.toStringAsFixed(0)}%-a "
+        "ugyanabba a sávba ment ($repeats/$pairs pár) · a kapusnak a "
+        "LEGUTÓBB látott sarkot kiabáljátok be a következő hetes előtt";
+  }
+
   // Hoki-assziszt: ki a rejtett szervező a gólpassz mögött (2+
   // másod-előkészítés, a láncolt gólok fele — a backenddel azonos
   // küszöbök: PREA_MIN, PREA_SHARE_PCT).
@@ -11551,6 +11566,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szuper-csere poszt", _superSubRole(r)!],
       if (_sevenTakerCorner(r) != null)
         ["Hetes-sarok emberre", _sevenTakerCorner(r)!],
+      if (_sevenRepeat(r) != null) ["Hetes-ismétlés", _sevenRepeat(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
       if (_finishingBalance(r) != null)
         ["Befejezés-mérleg", _finishingBalance(r)!],

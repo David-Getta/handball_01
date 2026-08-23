@@ -803,6 +803,11 @@ class ScoutingReport:
     # ("játékos·irány" → dobás). Darabszám, meccsek közt pontosan
     # összegződik.
     stc_dir_by_taker: dict = field(default_factory=dict)
+    # Hetes-ismétlés: az egymást követő hetes-PÁROK darabszáma és
+    # közülük az ismétlők (ugyanabba a sávba menők) darabszáma.
+    # Darabszám, meccsek közt pontosan összegződik.
+    srep_pairs: int = 0
+    srep_repeats: int = 0
     # Gólpassz-poszt: a poszthoz kötött gólpasszok darabszáma
     # posztonként. Darabszám, meccsek közt pontosan összegződik.
     ras_assists_by_role: dict = field(default_factory=dict)
@@ -5896,6 +5901,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "a kapus nála ne olvasson, hanem KÉSZÜLJÖN: tudatosan "
                 "arra a sarokra vetődjön.")
 
+    # Hetes-ismétlés: a SORREND, nem az eloszlás — mire készüljön a
+    # kapus a MOST következő hetesnél.
+    from .rules import SREP_MIN_PAIRS, SREP_REPEAT_PCT
+    if rep.srep_pairs >= SREP_MIN_PAIRS:
+        _srep_pct = 100.0 * rep.srep_repeats / rep.srep_pairs
+        if _srep_pct >= SREP_REPEAT_PCT:
+            keys.append(
+                f"A hetesdobóik ISMÉTLŐK: az egymást követő heteseik "
+                f"{_srep_pct:.0f}%-a ugyanabba a sávba ment "
+                f"({rep.srep_repeats}/{rep.srep_pairs} pár) — a "
+                "kapusnak a LEGUTÓBB látott sarkot kell bekiabálni a "
+                "következő hetes előtt.")
+
     # Kontra-poszt: visszafutásnál kit kell először felvenni.
     _rfb_n = sum(rep.rfb_shots_by_role.values())
     if _rfb_n >= 3:
@@ -10538,6 +10556,10 @@ def _scout_team_cached(match: Match, team: Team,
                     key = f"{_stc_k}·{_stc_d}"
                     rep.stc_dir_by_taker[key] = (
                         rep.stc_dir_by_taker.get(key, 0) + _stc_n)
+        from .rules import seven_taker_repeat as _srep
+        sreprec = _srep(match, config)[team.value]
+        rep.srep_pairs = sreprec["pairs"]
+        rep.srep_repeats = sreprec["repeats"]
         from .roles import role_assist_sources as _ras
         rasrec = _ras(match, config)[team.value]
         rep.ras_assists_by_role = dict(rasrec["roles"])
@@ -13980,6 +14002,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    from .rules import SREP_MIN_PAIRS, SREP_REPEAT_PCT
+    # 446) Az ő ismétlő hetesdobójuk × a ti védő kapusotok: a
+    # legutóbb látott sarok maga az esély — a kapus KÉSZÜLHET.
+    if opp.srep_pairs >= SREP_MIN_PAIRS and own.gk_saves >= 5:
+        _s446_pct = 100.0 * opp.srep_repeats / opp.srep_pairs
+        if _s446_pct >= SREP_REPEAT_PCT:
+            plan.append(
+                f"A hetesdobóik ismétlők: az egymást követő heteseik "
+                f"{_s446_pct:.0f}%-a ugyanabba a sávba ment "
+                f"({opp.srep_repeats}/{opp.srep_pairs} pár), a ti "
+                f"kapusotok pedig fog ({own.gk_saves} védés) — vezessetek "
+                "hetes-naplót a kispadon: minden hetesüknél kiabáljátok "
+                "be a kapusnak, hova ment az ELŐZŐ, mert nagy eséllyel "
+                "oda megy a következő is.")
 
     # 445) Az ő elfogyó elzárásuk × a ti blokk-játékotok: a hajrában a
     # fedetlen lövő a blokk-kéz prédája — kilépni, blokkolni.
@@ -21676,6 +21713,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.sspr_goals_by_role for r in reports),
         stc_dir_by_taker=_merge_count_dicts(
             r.stc_dir_by_taker for r in reports),
+        srep_pairs=sum(r.srep_pairs for r in reports),
+        srep_repeats=sum(r.srep_repeats for r in reports),
         rsy_restarts=sum(r.rsy_restarts for r in reports),
         rsy_answered=sum(r.rsy_answered for r in reports),
         shs_seconds=sum(r.shs_seconds for r in reports),

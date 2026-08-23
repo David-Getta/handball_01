@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **Hetes-ismétlés** (új réteg): a hetes-sarok réteg eddig a dobó
+  ELOSZLÁSÁT adta ("a heteseinek 60%-a balra megy") — a kapusnak
+  viszont a SORREND kell: hova megy a MOST következő. Két dobó
+  ugyanazzal a 60%-kal teljesen mást jelent. Az új réteg a dobónkénti
+  hetes-sorozat egymást követő párjait nézi: hány ment ugyanabba a
+  sávba. Edzői olvasat: ismétlő dobónál a kapusnak a LEGUTÓBB látott
+  sarkot kell bekiabálni; saját oldalon a dobó kiszámítható, tehát
+  váltani kell. Felületek: /analyze, meccs-csomag, edzői összefoglaló,
+  felderítő kulcs + meccsterv (446.), edzés-fókusz (466.),
+  kulcsember-lista, kliens-csempe, 3 teszt.
+
 - **UI 11. kör: a fejlődés-képernyő mutatja a nagyságrendet** (kliens):
   a "korábbi → újabb" sorok eddig csak két szám voltak egy nyíllal —
   abból nem derült ki, hogy a mutató SOKAT vagy alig mozdult.

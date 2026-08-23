@@ -2783,3 +2783,49 @@ def test_seven_taker_corners_silent_when_the_taker_varies():
          (7, 8.8), (7, 11.2)]))["home"]
     assert rec["attempts"] == 6, rec
     assert rec["top"] is None, rec
+
+
+# ---- Hetes-ismétlés (seven_taker_repeat) ------------------------------------
+
+
+def test_seven_taker_repeat_names_the_repeating_taker():
+    """A dobó egymás után kétszer is ugyanoda tesz → ismétlő; a
+    kapusnak a legutóbb látott sarok az esély."""
+    from handball.pipeline.rules import (SREP_MIN_PAIRS, SREP_REPEAT_PCT,
+                                         seven_taker_repeat)
+
+    # bal, bal, bal, jobb → 3 pár, ebből 2 ismétlés (67%).
+    rec = seven_taker_repeat(_stc_match(
+        [(7, 8.8), (7, 8.8), (7, 8.8), (7, 11.2)]))["home"]
+    assert rec["pairs"] == 3 >= SREP_MIN_PAIRS, rec
+    assert rec["repeats"] == 2, rec
+    assert rec["repeat_pct"] >= SREP_REPEAT_PCT, rec
+    assert rec["verdict"] == "ismétlő", rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["last_dir"] == "jobb", rec
+
+
+def test_seven_taker_repeat_calls_the_alternating_taker_a_switcher():
+    """A sarkot váltogató dobóra nem mondjuk ki az ismétlést — az
+    eloszlása lehet féloldalas, a SORRENDJE mégsem olvasható."""
+    from handball.pipeline.rules import seven_taker_repeat
+
+    # bal, jobb, bal, jobb → 3 pár, 0 ismétlés.
+    rec = seven_taker_repeat(_stc_match(
+        [(7, 8.8), (7, 11.2), (7, 8.8), (7, 11.2)]))["home"]
+    assert rec["pairs"] == 3, rec
+    assert rec["repeats"] == 0, rec
+    assert rec["verdict"] == "váltogató", rec
+    assert rec["top"] is None, rec
+
+
+def test_seven_taker_repeat_is_silent_on_thin_samples():
+    """Két hetesből egy pár lesz — az ítélet None, sose hallgatólagos 0.
+    Külön dobók hetesei nem alkotnak párt: a szokás EMBERHEZ tapad."""
+    from handball.pipeline.rules import seven_taker_repeat
+
+    rec = seven_taker_repeat(_stc_match(
+        [(7, 8.8), (7, 8.8), (9, 10.0), (9, 10.0)]))["home"]
+    assert rec["pairs"] == 2, rec          # dobónként 1-1 pár
+    assert rec["verdict"] is None, rec
+    assert rec["repeat_pct"] is None, rec

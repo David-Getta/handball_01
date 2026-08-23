@@ -3391,6 +3391,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "tudatosan arra vetődhet.")
     except Exception:
         pass
+    # Hetes-ismétlés: másodszorra is ugyanoda megy-e a dobójuk.
+    try:
+        from .rules import seven_taker_repeat, SREP_REPEAT_PCT
+        srep = seven_taker_repeat(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_srep = srep[side]
+            if rec_srep["verdict"] is None:
+                continue
+            if rec_srep["repeat_pct"] < SREP_REPEAT_PCT:
+                continue
+            body += (f" A(z) {name} hetesdobói ISMÉTLŐK: az egymást "
+                     f"követő heteseik {rec_srep['repeat_pct']:.0f}%-a "
+                     f"ugyanabba a sávba ment "
+                     f"({rec_srep['repeats']}/{rec_srep['pairs']} pár) — "
+                     "a kapusnak a LEGUTÓBB látott sarok az esély.")
+    except Exception:
+        pass
     # Kontra-poszt: kit kell először felvenni visszafutásnál.
     try:
         from .roles import role_fast_breaks
