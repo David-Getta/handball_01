@@ -583,6 +583,18 @@ def create_app():
     # Memóriabeli, mint a _store; a szerver újraindításáig él.
     _jobs: dict[str, dict] = {}
 
+    def _video_seconds_safe(path) -> float | None:
+        """A videó hossza másodpercben — hiba esetén None.
+
+        Csak a fejlécet olvassa, tehát gyors. Ha nem megy, a feldolgozás
+        attól még elindul: ez csak a becslés alapanyaga.
+        """
+        try:
+            from ..video_io import video_seconds
+            return video_seconds(path)
+        except Exception:
+            return None
+
     @app.post("/matches/process")
     def start_processing(body: dict):
         """Elindítja egy videó feldolgozását HÁTTÉRSZÁLON, és job_id-t ad vissza.
@@ -602,6 +614,14 @@ def create_app():
         if not Path(path).exists():
             raise HTTPException(status_code=400,
                                 detail=f"a videó nem található: {path}")
+
+        # ELŐZETES ELLENŐRZÉS: a fél-egy órás feldolgozás legrosszabb
+        # vége az, amikor a végén derül ki, hogy nincs hova írni. Inkább
+        # itt utasítjuk el, amíg egy perc sem veszett el.
+        from ..preflight import disk_space_error
+        hely_hiba = disk_space_error(path, data_root())
+        if hely_hiba:
+            raise HTTPException(status_code=400, detail=hely_hiba)
 
         # Kalibráció-épség: elfajzott (apró/önmetsző) négyszöggel a teljes
         # feldolgozás rossz koordinátákat adna — inkább itt utasítjuk el.
@@ -656,7 +676,11 @@ def create_app():
                            if behind else "sorban áll"),
                "error": None, "created": time.time(),
                "queue_behind": behind,
-               "video": Path(path).name}
+               "video": Path(path).name,
+               # A videó hossza a KÉSŐBBI becslésekhez kell: ebből és a
+               # tényleges munkaidőből tanulja meg a motor, milyen gyors
+               # EZ a gép (lásd preflight.speed_from_history).
+               "video_seconds": _video_seconds_safe(path)}
         _jobs[job_id] = job
         _job_params[job_id] = body
         # Alapesetben az új elemzés AZONNAL indul: a jelenleg FUTÓ (korábbi)
@@ -872,7 +896,11 @@ def create_app():
             import time as _t
             rec = {k: job.get(k) for k in
                    ("job_id", "match_id", "status", "message", "error",
-                    "created", "video", "stage")}
+                    "created", "video", "stage",
+                    # Az ütem-tanuláshoz: a TÉNYLEGES munkaidő (started →
+                    # finished) és a videó hossza. A sorban töltött idő
+                    # nem munka, ezért nem a "created" a kezdet.
+                    "started", "video_seconds")}
             rec["finished"] = _t.time()
             _jobs_log_path.parent.mkdir(parents=True, exist_ok=True)
             with open(_jobs_log_path, "a", encoding="utf-8") as f:
@@ -880,10 +908,8 @@ def create_app():
         except Exception:
             pass  # a naplózás hibája nem érinti a feldolgozást
 
-    @app.get("/jobs/history")
-    def job_history(limit: int = 20):
-        """A lezárt feldolgozások naplója (legutóbbi elöl) — újraindítás
-        után is megvan; hibakereséshez és "mi futott le" áttekintéshez."""
+    def _job_log_rows() -> list:
+        """A feldolgozás-napló sorai (legrégebbi elöl), hibatűrően."""
         rows = []
         try:
             with open(_jobs_log_path, encoding="utf-8") as f:
@@ -896,8 +922,42 @@ def create_app():
                             pass
         except FileNotFoundError:
             pass
+        return rows
+
+    @app.get("/jobs/history")
+    def job_history(limit: int = 20):
+        """A lezárt feldolgozások naplója (legutóbbi elöl) — újraindítás
+        után is megvan; hibakereséshez és "mi futott le" áttekintéshez."""
+        rows = _job_log_rows()
         rows.reverse()
         return {"jobs": rows[:max(1, min(int(limit), 100))]}
+
+    @app.post("/preflight")
+    def preflight(body: dict):
+        """Indítás ELŐTTI ellenőrzés egy videóra: hely és várható idő.
+
+        Fél-egy órás feldolgozásnál két kérdés fáj utólag: elfogyott a
+        hely a végén, illetve "nem tudtam, hogy ilyen sokáig tart". Ezt
+        a kettőt teszi fel előre. A becslés EZEN a gépen mért adatból
+        jön (a korábbi kész feldolgozások videó-ideje és munkaideje) —
+        kevés mérésnél inkább nincs becslés, mint egy téves szám.
+        """
+        from ..preflight import (disk_space_error, estimate_seconds,
+                                 free_gb, human_duration)
+
+        path = body.get("path")
+        letezik = bool(path) and Path(path).exists()
+        hossz = _video_seconds_safe(path) if letezik else None
+        becsult = estimate_seconds(hossz, _job_log_rows())
+        return {
+            "path_ok": letezik,
+            "free_gb": free_gb(data_root()),
+            "space_error": disk_space_error(path if letezik else None,
+                                            data_root()),
+            "video_seconds": hossz,
+            "estimate_s": becsult,
+            "estimate_label": human_duration(becsult),
+        }
 
     # Hátralévő idő becslése: ennyi haladás alatt még nem becslünk. Az
     # első pár százalék félrevezető (modell-betöltés, videó-megnyitás),

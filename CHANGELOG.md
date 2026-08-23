@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.47 óta)
 
+- **Indítás előtti ellenőrzés: hely és várható idő** (motor + kliens):
+  egy meccs feldolgozása fél-egy óra. A legrosszabb vég az, amikor ez
+  az óra elmegy, és UTÁNA derül ki, hogy nem volt hova írni az
+  eredményt. Mostantól a motor az indításkor megnézi a szabad helyet,
+  és kevésnél el sem indítja a munkát — magyar indoklással, számokkal
+  (mennyi van, mennyi kellene). A második kérdés a "meddig tart": az
+  új `POST /preflight` a videó hosszából és a gépen KORÁBBAN mért
+  ütemből ad becslést, tehát nem laborszám, hanem az adott gép saját
+  tempója. Az első pár feldolgozásnál nincs becslés — inkább semmi,
+  mint egy téves szám. Az Új elemzés lapon mindkettő ott van az
+  indítás gomb mellett.
+
 - **"Kész!" — a feldolgozás vége megtalál bárhol** (kliens): a
   Feldolgozások menüpont után maradt egy rés: ha a felhasználó közben
   máshol dolgozik az appban, a munka befejezéséről CSAK úgy értesült,

@@ -94,9 +94,100 @@ class _UploadScreenState extends State<UploadScreen> {
     "precise": (2, 1920, "Pontos"),
   };
 
+  // Indítás előtti ellenőrzés (POST /preflight): szabad hely és — ha a
+  // gépen már futott pár feldolgozás — a várható idő. Enélkül a
+  // felhasználó vakon indít el egy fél-egy órás munkát.
+  Map<String, dynamic> _preflight = const {};
+  Timer? _preflightDebounce;
+  String _preflightPath = "";
+
+  @override
+  void initState() {
+    super.initState();
+    // A mező kézzel is átírható (nem csak fájlválasztóval), ezért a
+    // figyelő az út MINDEN forrását lefedi. A késleltetés azért kell,
+    // hogy gépelés közben ne kérdezgessük a motort karakterenként.
+    _pathCtrl.addListener(() {
+      _preflightDebounce?.cancel();
+      _preflightDebounce =
+          Timer(const Duration(milliseconds: 600), _runPreflight);
+    });
+  }
+
+  /// Az indítás előtti ellenőrzés kártyája — röviden, a gomb mellett.
+  ///
+  /// Két dolgot mond meg, amit utólag már nem érdemes megtudni: elég-e
+  /// a hely (kevésnél a motor amúgy is elutasítja, de itt előbb
+  /// látszik), és kb. meddig tart. Az idő-becslés EZEN a gépen mért
+  /// adatból jön, ezért az első pár feldolgozásnál nincs — ilyenkor a
+  /// kártya inkább hallgat, mint hogy tévesen nyugtasson meg.
+  Widget _preflightCard() {
+    if (_preflight.isEmpty || _preflight["path_ok"] != true) {
+      return const SizedBox.shrink();
+    }
+    final hely = _preflight["space_error"] as String?;
+    final becsles = _preflight["estimate_label"] as String?;
+    final szabad = (_preflight["free_gb"] as num?)?.toDouble();
+    if (hely == null && becsles == null) return const SizedBox.shrink();
+    final baj = hely != null;
+    final szin = baj ? AppColors.away : AppColors.gold;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Container(
+        decoration: BoxDecoration(
+          color: szin.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: szin.withOpacity(0.35)),
+        ),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        child: Row(children: [
+          Icon(baj ? Icons.warning_amber_rounded : Icons.schedule,
+              size: 16, color: szin),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+                baj
+                    ? hely
+                    : "A gépeden eddig mért ütem alapján ez kb. $becsles "
+                        "lesz."
+                        "${szabad != null ? " (Szabad hely: "
+                            "${szabad.toStringAsFixed(1)} GB.)" : ""}",
+                style: AppText.label.copyWith(fontSize: 12, color: szin)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// Lekéri az indítás előtti ellenőrzést az aktuális útra.
+  ///
+  /// Csendes: a hibája nem üzenet, csak nincs kártya — az ellenőrzés
+  /// kényelem, nem kapu (a valódi hely-elutasítás a motorban van).
+  Future<void> _runPreflight() async {
+    final path = _pathCtrl.text.trim();
+    if (path.isEmpty) {
+      if (mounted && _preflight.isNotEmpty) {
+        setState(() {
+          _preflight = const {};
+          _preflightPath = "";
+        });
+      }
+      return;
+    }
+    if (path == _preflightPath) return; // ugyanarra nem kérdezünk újra
+    final r = await _api.fetchPreflight(path);
+    if (!mounted) return;
+    setState(() {
+      _preflight = r;
+      _preflightPath = path;
+    });
+  }
+
   @override
   void dispose() {
     _poll?.cancel();
+    _preflightDebounce?.cancel();
     _pathCtrl.dispose();
     _homeCtrl.dispose();
     _awayCtrl.dispose();
@@ -1056,6 +1147,7 @@ class _UploadScreenState extends State<UploadScreen> {
               : "Közvetítés-ellenőrzés (vágott-e a felvétel?)"),
         ),
       ),
+      _preflightCard(),
       const SizedBox(height: AppSpacing.md),
       Row(children: [
         if (_wstep > 0) ...[

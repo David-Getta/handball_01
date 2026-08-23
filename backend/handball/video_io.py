@@ -76,6 +76,34 @@ def explain_unopenable(path: str) -> str:
             "— próbáld MP4 (H.264) formátumban.")
 
 
+def video_seconds(path: Union[str, Path]) -> Union[float, None]:
+    """A videó hossza másodpercben — vagy None, ha nem olvasható ki.
+
+    Csak a fejlécet kérdezzük meg (kockaszám / fps), tehát ez gyors:
+    az indítás előtti becsléshez kell, nem szabad megvárakoztatnia a
+    felhasználót. A hibás/hiányzó metaadat itt NEM hiba: ilyenkor
+    egyszerűen nincs becslés.
+    """
+    import cv2
+
+    cap = None
+    try:
+        cap = open_capture(path)
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        kockak = float(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0)
+        if fps <= 0 or kockak <= 0:
+            return None
+        return kockak / fps
+    except Exception:
+        return None
+    finally:
+        try:
+            if cap is not None:
+                cap.release()
+        except Exception:
+            pass
+
+
 def open_capture(path: Union[str, Path]):
     """Videó megnyitása `cv2.VideoCapture`-rel, ékezet-tűrően.
 

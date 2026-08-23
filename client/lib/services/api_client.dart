@@ -1211,6 +1211,26 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Indítás ELŐTTI ellenőrzés egy videóra (POST /preflight): van-e elég
+  /// hely, és a gép eddigi ütemét ismerve kb. meddig fog tartani.
+  ///
+  /// Hibánál üres térkép: az ellenőrzés kényelem, nem kapu — a
+  /// feldolgozás indítását nem akadályozhatja meg egy megbicsakló
+  /// kérés. (A tényleges hely-elutasítás a motorban van.)
+  Future<Map<String, dynamic>> fetchPreflight(String path) async {
+    try {
+      final resp = await http
+          .post(Uri.parse("$baseUrl/preflight"),
+              headers: {"Content-Type": "application/json"},
+              body: jsonEncode({"path": path}))
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return const {};
+      return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    } catch (_) {
+      return const {};
+    }
+  }
+
   /// A feldolgozási munkák listája (GET /jobs) — legújabb elöl. A kezdőlap
   /// "folyamatban" kártyája ebből épül; hibánál üres listát adunk.
   /// A lezárt feldolgozások naplója (GET /jobs/history) — újraindítás
