@@ -11,6 +11,7 @@
 /// Weben (kIsWeb) nincs alfolyamat: ilyenkor csak a /health-et ellenőrzi.
 library;
 
+import "dart:convert";
 import "dart:io";
 
 import "package:flutter/foundation.dart";
@@ -141,6 +142,14 @@ class BackendLauncher {
     }
 
     // Napló nyitása (csonkolva — mindig a legutóbbi indítás látszik benne).
+    // Az ELŐZŐ sinket le kell zárni: az őrkutyás újraindítás ide is
+    // visszatér, és nyitva hagyott sinkkel fájl-leírók szivárognának —
+    // Windowson ráadásul a még fogott fájl csonkoló megnyitása el is
+    // bukhat, azaz pont az újraindításnál veszne el a napló.
+    try {
+      await _log?.close();
+    } catch (_) {}
+    _log = null;
     try {
       final f = _logFile();
       await f.parent.create(recursive: true);
@@ -184,8 +193,18 @@ class BackendLauncher {
         workingDirectory: exe.parent.path,
         environment: {"HANDBALL_HOST": "127.0.0.1", "HANDBALL_PORT": "$port"},
       );
-      _process!.stdout.listen((d) => _logLine(String.fromCharCodes(d).trimRight(), onLog));
-      _process!.stderr.listen((d) => _logLine(String.fromCharCodes(d).trimRight(), onLog));
+      // A motor UTF-8-ban ír, és a sorai MAGYARUL szólnak. A
+      // String.fromCharCodes bájtonként képez karaktert, tehát az
+      // ékezeteket összetörte ("Ã¡") — pont a naplót, amit a
+      // felhasználótól hibakereséshez kérünk. Az allowMalformed azért
+      // kell, mert egy darabhatár félbevághat egy több bájtos karaktert:
+      // egy sérült jel elfogadható, a kivétel miatt elveszett napló nem.
+      _process!.stdout.listen(
+          (d) => _logLine(utf8.decode(d, allowMalformed: true).trimRight(),
+              onLog));
+      _process!.stderr.listen(
+          (d) => _logLine(utf8.decode(d, allowMalformed: true).trimRight(),
+              onLog));
       _process!.exitCode.then((c) {
         exited = true;
         _logLine("A motor-folyamat leállt, kilépési kód: $c", onLog);
@@ -200,6 +219,10 @@ class BackendLauncher {
     // percig is (a rendszer első futáskor átvizsgálja a nagy programfájlt).
     final ok = await _waitForHealth(const Duration(seconds: 90), isExited: () => exited);
     if (ok) {
+      // Sikeres indulás után az őrkutya kvótája újratöltődik: a korlát a
+      // BEINDULNI SEM TUDÓ motor pörgetése ellen véd, nem az ellen, hogy
+      // egy hosszú munkamenetben többször is kelljen újraéleszteni.
+      _watchdogRestarts = 0;
       _logLine("A motor elindult és válaszol.", onLog);
       return const BackendStatus(BackendPhase.ready, "A motor elindult.");
     }
@@ -243,18 +266,13 @@ class BackendLauncher {
     return false;
   }
 
-  /// Megkeresi a beépített motor futtatható fájlját az app mellett.
-  /// Sorrend: HANDBALL_ENGINE env → az app melletti "engine/"/"backend/" mappa.
-  File? _findEngineExecutable() {
+  /// Azok az útvonalak, ahol a beépített motort keressük — sorrendben.
+  /// Statikus, mert a DIAGNOSZTIKA is kiírja: ha a motor nincs meg, a
+  /// felhasználó (és mi) csak ebből látjuk, hol kerestük.
+  static List<String> engineCandidates() {
     final name = Platform.isWindows ? "handball_backend.exe" : "handball_backend";
-
-    // a) Kifejezett felülbírálás környezeti változóval (fejlesztéshez/haladóknak).
-    final override = Platform.environment["HANDBALL_ENGINE"];
-    if (override != null && File(override).existsSync()) return File(override);
-
-    // b) Az app futtatható fájlja melletti szokásos helyek.
     final appDir = File(Platform.resolvedExecutable).parent;
-    final candidates = <String>[
+    return <String>[
       _join([appDir.path, "engine", name]),
       _join([appDir.path, "backend", name]),
       _join([appDir.path, "data", "engine", name]),
@@ -262,14 +280,95 @@ class BackendLauncher {
       // macOS .app csomag: a Contents/MacOS mellett a Resources/engine.
       _join([appDir.parent.path, "Resources", "engine", name]),
     ];
-    for (final c in candidates) {
+  }
+
+  /// Megkeresi a beépített motor futtatható fájlját az app mellett.
+  /// Sorrend: HANDBALL_ENGINE env → az app melletti "engine/"/"backend/" mappa.
+  static File? findEngine() {
+    // a) Kifejezett felülbírálás környezeti változóval (fejlesztéshez/haladóknak).
+    final override = Platform.environment["HANDBALL_ENGINE"];
+    if (override != null && File(override).existsSync()) return File(override);
+    for (final c in engineCandidates()) {
       final f = File(c);
       if (f.existsSync()) return f;
     }
     return null;
   }
 
-  String _join(List<String> parts) => parts.join(Platform.pathSeparator);
+  File? _findEngineExecutable() => findEngine();
+
+  static String _join(List<String> parts) => parts.join(Platform.pathSeparator);
+
+  /// Egy oldalnyi TÉNY arról, miért nem indul a motor — kimásolható
+  /// szövegként.
+  ///
+  /// A "nem indul el a motor" a leggyakoribb élő hiba, és a napló
+  /// önmagában kevés: ha a motor-program meg sem található, vagy az
+  /// adatmappa nem írható, a naplóban ennek nyoma sincs (nem is jött
+  /// létre). Ez a jelentés a hiányzó feltételeket is kimondja.
+  static Future<String> diagnostics({String appVersion = "?"}) async {
+    final b = StringBuffer();
+    b.writeln("SPORT MACHINE — DIAGNOSZTIKA");
+    b.writeln("app verzió: $appVersion");
+    b.writeln("rendszer:   ${Platform.operatingSystem} "
+        "${Platform.operatingSystemVersion}");
+    b.writeln("app helye:  ${Platform.resolvedExecutable}");
+
+    // 1) Megvan-e a motor-program?
+    final exe = findEngine();
+    if (exe == null) {
+      b.writeln("motor:      NINCS MEG — ezeken a helyeken kerestem:");
+      for (final c in engineCandidates()) {
+        b.writeln("            - $c");
+      }
+      b.writeln("            (ilyenkor csak a demó mód működik; a teljes,");
+      b.writeln("             motorral csomagolt kiadás kell)");
+    } else {
+      var size = -1;
+      try {
+        size = await exe.length();
+      } catch (_) {}
+      b.writeln("motor:      ${exe.path}");
+      b.writeln("            méret: ${size < 0 ? "?" : "${size ~/ (1024 * 1024)} MB"}");
+    }
+
+    // 2) Írható-e az adatmappa? (Ide megy a napló és ide kerülnek a
+    // fiókok — ha nem írható, a motor elindul, de azonnal elhasal.)
+    final dir = _logFile().parent;
+    try {
+      await dir.create(recursive: true);
+      final probe = File("${dir.path}${Platform.pathSeparator}.iras-proba");
+      await probe.writeAsString("ok");
+      await probe.delete();
+      b.writeln("adatmappa:  ${dir.path} (írható)");
+    } catch (e) {
+      b.writeln("adatmappa:  ${dir.path}");
+      b.writeln("            NEM ÍRHATÓ: $e");
+    }
+
+    // 3) Válaszol-e valamelyik porton?
+    final answering = <int>[];
+    final probes = [
+      for (var p = 8000; p < 8000 + portRange; p++)
+        ApiClient(baseUrl: "http://127.0.0.1:$p")
+            .isHealthy()
+            .then((ok) => ok ? p : null)
+    ];
+    for (final p in await Future.wait(probes)) {
+      if (p != null) answering.add(p);
+    }
+    b.writeln("portok:     ${answering.isEmpty ? "egyik sem válaszol "
+        "(8000–${8000 + portRange - 1})" : answering.join(", ")}");
+
+    // 4) A napló vége.
+    final tail = await logTail(lines: 40);
+    b.writeln("");
+    b.writeln("--- a motor naplójának vége ---");
+    b.writeln((tail == null || tail.trim().isEmpty)
+        ? "(nincs napló — úgy tűnik, a motor el sem indult)"
+        : tail);
+    return b.toString();
+  }
 
   /// Leállítja a motrot (ha mi indítottuk). Az app bezárásakor hívjuk.
   void stop() {

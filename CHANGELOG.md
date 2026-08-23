@@ -5,6 +5,33 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.44 óta)
 
+- **"Diagnosztika másolása" gomb a motor-hibáknál** (kliens): a
+  naplófájl önmagában kevés. Ha a motor-program meg sem található,
+  vagy az adatmappa nem írható, akkor NAPLÓ SINCS — a felhasználó
+  pedig csak annyit tud mondani, hogy "nem megy". Az új gomb egy
+  kattintással a vágólapra teszi a hiányzó feltételeket is: app- és
+  rendszer-verzió, hol kerestük a motor-programot (ha nincs meg,
+  MINDEN keresett útvonalat felsorolva) és mekkora, írható-e az
+  adatmappa, válaszol-e bármelyik port a 8000–8010 tartományban, és a
+  napló utolsó 40 sora. Ott van mind a három elakadási ponton: az
+  indító képernyőn, a motor-hiba képernyőn és a nyitóképernyő
+  offline-értesítésén. Őr-teszt védi.
+
+- **A motor naplója már olvasható magyarul** (kliens, javítás): a
+  motor kimenetét a kliens bájtonként dekódolta
+  (`String.fromCharCodes`), ami az ékezeteket összetörte ("Ã¡"
+  az "á" helyett) — pont azt a naplót, amit hibakereséshez kérünk. A
+  dekódolás mostantól UTF-8 (sérült darabhatárt is tűrve). Őr-teszt
+  védi.
+
+- **Nem szivárog a napló-fájlleíró** (kliens, javítás): az őrkutyás
+  újraindítás új napló-sinket nyitott a régi lezárása nélkül.
+  Windowson a még fogott fájl csonkoló megnyitása el is bukhat — azaz
+  pont az újraindításnál veszett volna el a napló. Emellett a sikeres
+  indulás mostantól nullázza az őrkutya újraindítás-kvótáját: a korlát
+  a beindulni SEM tudó motor pörgetése ellen véd, nem az ellen, hogy
+  egy hosszú munkamenetben többször kelljen újraéleszteni.
+
 ## v0.1.44 — kiadva (2026-08-23)
 
 > Kiadás-jegyzet: ez a kiadás egyetlen dolog miatt fontos — feloldja

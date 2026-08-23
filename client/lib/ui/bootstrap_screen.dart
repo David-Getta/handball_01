@@ -13,6 +13,7 @@ import "package:flutter/material.dart";
 import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
 import "account_gate.dart";
+import "diagnostics_button.dart";
 import "update_flow.dart";
 
 class BootstrapScreen extends StatefulWidget {
@@ -202,6 +203,7 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
                       ),
                     ],
                   ),
+                  if (failed) const DiagnosticsButton(),
                 ],
               ],
             ),

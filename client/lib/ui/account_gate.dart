@@ -25,6 +25,7 @@ import "../version.dart";
 import "account_screen.dart";
 import "dashboard_screen.dart";
 import "terms_screen.dart";
+import "diagnostics_button.dart";
 import "update_flow.dart";
 
 /// A motor nélküli (demó) mód rövid tudomásulvétele. A TELJES szöveget a
@@ -348,6 +349,8 @@ class _AccountGateState extends State<AccountGate> {
                     ),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                const DiagnosticsButton(),
               ],
             ),
           ),

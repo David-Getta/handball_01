@@ -939,3 +939,59 @@ def test_a_frissito_motor_es_fiok_nelkul_is_elerheto():
         assert "checkAndInstallUpdate" in src, (
             f"{name}: innen nem érhető el a frissítő — a régi verzión "
             "ragadt felhasználó nem tud kiszabadulni")
+
+
+def test_a_diagnosztika_minden_elakadasi_ponton_ott_van():
+    """ŐR: a "Diagnosztika másolása" gomb ott van minden képernyőn, ahol
+    a motor hiánya megállítja a felhasználót.
+
+    A naplófájl önmagában kevés: ha a motor-program meg sem található,
+    vagy az adatmappa nem írható, akkor NAPLÓ SINCS — a felhasználó
+    pedig csak annyit tud mondani, hogy "nem megy". A jelentésnek ezért
+    a hiányzó FELTÉTELEKET is ki kell mondania.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    launcher = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    assert "static Future<String> diagnostics(" in launcher, (
+        "nincs diagnosztika-jelentés a motor-indítóban")
+    for kell in ("engineCandidates",   # hol kerestük a motort
+                 "adatmappa",          # írható-e
+                 "portok",             # válaszol-e bármelyik
+                 "logTail"):           # a napló vége
+        assert kell in launcher, f"a diagnosztikából hiányzik: {kell}"
+
+    for name in ("account_gate.dart",       # motor-hiba képernyő
+                 "bootstrap_screen.dart",   # a motor el sem indult
+                 "dashboard_screen.dart"):  # a motor menet közben halt el
+        src = (lib / "ui" / name).read_text(encoding="utf-8")
+        assert "DiagnosticsButton" in src, (
+            f"{name}: innen nem lehet diagnosztikát másolni")
+
+
+def test_a_motor_naplo_utf8_kent_olvasodik():
+    """ŐR: a motor kimenetét UTF-8-ként dekódoljuk.
+
+    A motor MAGYARUL naplóz. A String.fromCharCodes bájtonként képez
+    karaktert, tehát az ékezeteket összetöri ("Ã¡") — pont azt a naplót,
+    amit a felhasználótól hibakereséshez kérünk.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    assert "utf8.decode" in src, "a motor-napló nem UTF-8-ként olvasódik"
+    # Csak a VÉGREHAJTOTT sorok számítanak: a kommentben magyarázatként
+    # szerepelhet a régi, hibás hívás neve.
+    kod = [ln for ln in src.splitlines()
+           if not ln.lstrip().startswith("//")]
+    assert not any("String.fromCharCodes" in ln for ln in kod), (
+        "bájtonkénti dekódolás a motor kimenetén — összetöri az ékezeteket")

@@ -13,6 +13,7 @@ import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
 import "../services/backend_launcher.dart";
+import "diagnostics_button.dart";
 import "../services/session_store.dart";
 import "../services/update_service.dart";
 import "anim.dart";
@@ -1715,10 +1716,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   "A Sport Machine motorja nem válaszol. A gomb megpróbálja "
                       "újraindítani — ez néhány másodperc. Addig is: a demó "
                       "meccs a motor nélkül is megnyitható.",
-                  action: Row(mainAxisSize: MainAxisSize.min, children: [
-                    _reviveButton(),
-                    const SizedBox(width: AppSpacing.md),
-                    _demoButton(),
+                  action: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      _reviveButton(),
+                      const SizedBox(width: AppSpacing.md),
+                      _demoButton(),
+                    ]),
+                    const SizedBox(height: AppSpacing.sm),
+                    const DiagnosticsButton(),
                   ]))
             else if (_matches.isEmpty)
               _firstStepsCard()
