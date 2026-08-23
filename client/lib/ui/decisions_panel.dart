@@ -3,6 +3,7 @@ library;
 
 import "package:flutter/material.dart";
 
+import "anim.dart";
 import "../analytics/decisions.dart";
 import "../models/tracking.dart";
 import "../theme/app_theme.dart";
@@ -128,15 +129,7 @@ class _DecisionsPanelState extends State<DecisionsPanel> {
             ],
           ),
           const SizedBox(height: 5),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: frac.clamp(0.0, 1.0),
-              minHeight: 6,
-              backgroundColor: AppColors.surfaceAlt,
-              valueColor: const AlwaysStoppedAnimation(AppColors.accent),
-            ),
-          ),
+          AnimatedBar(value: frac, minHeight: 6),
         ],
       ),
     );

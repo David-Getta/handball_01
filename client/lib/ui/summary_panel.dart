@@ -3,6 +3,7 @@ library;
 
 import "package:flutter/material.dart";
 
+import "anim.dart";
 import "../analytics/court_analytics.dart";
 import "../analytics/match_summary.dart";
 import "../analytics/tactics.dart";
@@ -814,15 +815,7 @@ class SummaryPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 5),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: (pct / 100).clamp(0.0, 1.0),
-              minHeight: 6,
-              backgroundColor: AppColors.surfaceAlt,
-              valueColor: AlwaysStoppedAnimation(color),
-            ),
-          ),
+          AnimatedBar(value: pct / 100, minHeight: 6, color: color),
         ],
       ),
     );

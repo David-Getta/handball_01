@@ -145,3 +145,40 @@ class _HoverLiftState extends State<HoverLift> {
     );
   }
 }
+
+
+/// Animált kitöltésű mérő-sáv: a csík 0-ról (vagy az előző értékről)
+/// úszik az új értékre — a "mennyi?" kérdésre a mozgás maga is felel.
+/// A statikus LinearProgressIndicator + ClipRRect párost váltja ki.
+class AnimatedBar extends StatelessWidget {
+  final double value;
+  final double minHeight;
+  final Color color;
+  final BorderRadius borderRadius;
+
+  const AnimatedBar({
+    super.key,
+    required this.value,
+    this.minHeight = 6,
+    this.color = AppColors.accent,
+    this.borderRadius = const BorderRadius.all(Radius.circular(4)),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: value.clamp(0.0, 1.0)),
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeOutCubic,
+        builder: (context, v, _) => LinearProgressIndicator(
+          value: v,
+          minHeight: minHeight,
+          backgroundColor: AppColors.surfaceAlt,
+          valueColor: AlwaysStoppedAnimation(color),
+        ),
+      ),
+    );
+  }
+}

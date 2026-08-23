@@ -7,6 +7,7 @@ library;
 
 import "package:flutter/material.dart";
 
+import "anim.dart";
 import "../analytics/court_analytics.dart";
 import "../models/tracking.dart";
 import "../theme/app_theme.dart";
@@ -167,15 +168,10 @@ class _StatsPanelState extends State<StatsPanel> {
                   style: AppText.label.copyWith(color: AppColors.textPrimary))),
           // Vizuális táv-csík: ránézésre látszik, ki dolgozott a legtöbbet.
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
+            child: AnimatedBar(
                 value: frac,
                 minHeight: 5,
-                backgroundColor: AppColors.surfaceAlt,
-                valueColor: const AlwaysStoppedAnimation(AppColors.accent),
-              ),
-            ),
+                borderRadius: BorderRadius.circular(3)),
           ),
           SizedBox(
               width: 64,

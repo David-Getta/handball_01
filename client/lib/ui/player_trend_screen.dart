@@ -11,6 +11,7 @@ import "dart:io";
 import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
+import "anim.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
@@ -331,15 +332,10 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                 overflow: TextOverflow.ellipsis,
                 style: AppText.label.copyWith(color: AppColors.textPrimary))),
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
+          child: AnimatedBar(
               value: frac,
               minHeight: 5,
-              backgroundColor: AppColors.surfaceAlt,
-              valueColor: const AlwaysStoppedAnimation(AppColors.accent),
-            ),
-          ),
+              borderRadius: BorderRadius.circular(3)),
         ),
         SizedBox(
             width: 64,

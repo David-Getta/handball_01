@@ -5,7 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.39 óta)
 
-*(még semmi)*
+- **Animált mérő-sávok** (kliens): a játékos-táv, döntés-, összegző-,
+  felderítő- és fejlődés-nézetek kitöltés-csíkjai animálva úsznak az
+  értékükre (közös AnimatedBar elem) — a "mennyi?" kérdésre a mozgás
+  maga is felel.
 
 ## v0.1.39 — kiadva (2026-08-23)
 

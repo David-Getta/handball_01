@@ -12177,15 +12177,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         SizedBox(width: 110, child: Text(zone, style: AppText.value.copyWith(fontSize: 13))),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: frac.clamp(0.0, 1.0),
-              minHeight: 8,
-              backgroundColor: AppColors.surfaceAlt,
-              valueColor: const AlwaysStoppedAnimation(AppColors.gold),
-            ),
-          ),
+          child: AnimatedBar(
+              value: frac, minHeight: 8, color: AppColors.gold),
         ),
         const SizedBox(width: AppSpacing.sm),
         SizedBox(
@@ -12273,15 +12266,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         SizedBox(width: 56, child: Text(label, style: AppText.value.copyWith(fontSize: 13))),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: (pct / 100).clamp(0.0, 1.0),
-              minHeight: 8,
-              backgroundColor: AppColors.surfaceAlt,
-              valueColor: const AlwaysStoppedAnimation(AppColors.accent),
-            ),
-          ),
+          child: AnimatedBar(value: pct / 100, minHeight: 8),
         ),
         const SizedBox(width: AppSpacing.sm),
         SizedBox(width: 44, child: Text("${pct.toStringAsFixed(0)}%",
