@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.42 óta)
 
+- **A döntés-panel megmondja, mit mér** (kliens): a passz-döntéseknél
+  eddig ott állt egy szám ("62% optimális") anélkül, hogy bárhol
+  kiderült volna, MIHEZ képest optimális. Mostantól egy mondat
+  megmondja: a mezőny akkori állásából számolva hányszor választotta a
+  legjobb elérhető opciót — és hogy a 100% nem reális cél, mert a
+  kényszerpasszok is beleszámítanak. A két nagy szám felpörög
+  (játékos-váltásnál eddig némán ugrott át, és könnyű volt a régit
+  olvasni az újnak), a cél-lista pedig lépcsőzve épül fel.
+
 ## v0.1.42 — kiadva (2026-08-23)
 
 > Kiadás-jegyzet: ez a kör arról szól, hogy a program a FELHASZNÁLÓ
