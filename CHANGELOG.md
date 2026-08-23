@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.42 óta)
 
+- **A felderítés keresője megmutatja, HOL talált** (kliens): 467
+  mérőszám közt a puszta szűrés kevés — a szem újra végigolvassa a
+  címeket, hogy megtalálja a keresett szót. Mostantól a találat
+  akcentus-színnel, félkövéren kiemelve látszik a csempe címében. A
+  csoport-nyitó nyíl pedig FORDUL (nem kicserélődik), így látszik,
+  hogy ugyanaz a csoport nyílt ki.
+
 - **Sima lejátszás gyengébb gépen is** (kliens, teljesítmény): a
   felülnézeti pálya és a meccs-sztori sávja a lejátszófej MINDEN
   lépésénél újrarajzolódik — másodpercenként 25-ször. Mindkettő

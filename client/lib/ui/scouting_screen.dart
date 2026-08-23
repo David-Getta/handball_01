@@ -12044,8 +12044,15 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
             child: Row(children: [
-              Icon(open ? Icons.expand_less : Icons.expand_more,
-                  size: 18, color: AppColors.textSecondary),
+              // A nyíl FORDUL, nem kicserélődik: a mozgás mondja meg,
+              // hogy ugyanaz a csoport nyílt ki, nem másik lap jött.
+              AnimatedRotation(
+                turns: open ? 0.5 : 0.0,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                child: const Icon(Icons.expand_more,
+                    size: 18, color: AppColors.textSecondary),
+              ),
               const SizedBox(width: 6),
               Text(name.toUpperCase(), style: AppText.sectionLabel),
               const SizedBox(width: AppSpacing.sm),
@@ -12062,7 +12069,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
             // felépül — a szem követi, hol kezdődik a lista.
             children: [
               for (final (i, t) in shown.indexed)
-                FadeSlideIn(index: i, child: _metricTile(t[0], t[1]))
+                FadeSlideIn(
+                    index: i,
+                    child: _metricTile(t[0], t[1], highlight: query))
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -12095,7 +12104,10 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   ///     után elvágva; a teljes szöveg a súgóbuborékban.
   /// A címke KERÜL ELŐRE: a fal átfutásakor azt keresi az edző, nem az
   /// értéket.
-  Widget _metricTile(String label, String value) {
+  /// Egy mérőszám-csempe. A [highlight] a keresés kisbetűs szövege:
+  /// négyszázhatvan mutató közt a puszta szűrés kevés — látni kell, HOL
+  /// talált a keresés, különben a szem újra végigolvassa a címet.
+  Widget _metricTile(String label, String value, {String highlight = ""}) {
     final short = value.length <= _shortValueChars;
     return SizedBox(
       width: short ? 150 : 240,
@@ -12105,11 +12117,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label,
-                style: AppText.label
-                    .copyWith(fontSize: 11, color: AppColors.textFaint),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            _highlighted(label, highlight),
             const SizedBox(height: 3),
             Text(value,
                 style: AppText.value.copyWith(
@@ -12121,6 +12129,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// A cím kiemelt találattal: a [query]-nek megfelelő rész akcentus-
+  /// színű és félkövér. Üres keresésnél sima cím.
+  Widget _highlighted(String label, String query) {
+    final base = AppText.label
+        .copyWith(fontSize: 11, color: AppColors.textFaint);
+    final i = query.isEmpty
+        ? -1
+        : label.toLowerCase().indexOf(query.toLowerCase());
+    if (i < 0) {
+      return Text(label,
+          style: base, maxLines: 1, overflow: TextOverflow.ellipsis);
+    }
+    return Text.rich(
+      TextSpan(children: [
+        TextSpan(text: label.substring(0, i), style: base),
+        TextSpan(
+            text: label.substring(i, i + query.length),
+            style: base.copyWith(
+                color: AppColors.accent, fontWeight: FontWeight.w700)),
+        TextSpan(text: label.substring(i + query.length), style: base),
+      ]),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 

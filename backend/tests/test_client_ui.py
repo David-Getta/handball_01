@@ -384,7 +384,10 @@ def test_kliens_mutato_csempe_birja_a_mondatot():
         pytest.skip("nincs kliens a fában")
     src = path.read_text(encoding="utf-8")
 
-    m = re.search(r"Widget _metricTile\(String label, String value\) \{"
+    # A szignatúra kaphat további NEVESÍTETT paramétert (pl. a keresés
+    # kiemeléséhez) — a csempe belsejére vonatkozó elvárás ettől nem
+    # változik, ezért a minta a záró zárójelig szabadon illeszkedik.
+    m = re.search(r"Widget _metricTile\(String label, String value[^)]*\) \{"
                   r"(.*?)\n  \}", src, flags=re.S)
     assert m, "nem találom a _metricTile-t"
     body = m.group(1)
