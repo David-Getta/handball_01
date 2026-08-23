@@ -1051,6 +1051,21 @@ class _CalibPainter extends CustomPainter {
         if (prev != null) canvas.drawLine(prev, cur, gold);
         prev = cur;
       }
+      // 9 m-es szaggatott vonal — MÁSODIK ellenőrző jel a kalibrációhoz:
+      // ha a 6 m-es ráül a valódi vonalra, de a 9 m-es elcsúszik, a
+      // sarokpontok rosszul állnak (a hiba a képen azonnal látszik).
+      final dash = Paint()
+        ..color = AppColors.gold.withOpacity(0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..strokeCap = StrokeCap.round;
+      final fpts = [
+        for (final b in freeThrowBoundary(leftSide: gx == 0.0, segments: 22))
+          p(b.dx, b.dy)
+      ];
+      for (var i = 0; i + 1 < fpts.length; i += 2) {
+        canvas.drawLine(fpts[i], fpts[i + 1], dash);
+      }
     }
   }
 
