@@ -11,6 +11,7 @@ import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
 import "../services/session_store.dart";
+import "anim.dart";
 import "../services/update_service.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
@@ -253,9 +254,12 @@ class _AccountScreenState extends State<AccountScreen> {
             constraints: const BoxConstraints(maxWidth: 480),
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Column(
+              // Az első benyomás: a belépő kártya finoman úszik be.
+              child: FadeSlideIn(
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // A logó puha akcentus-ragyogással — prémium első kép.
                   Container(
                     width: 56,
                     height: 56,
@@ -263,6 +267,12 @@ class _AccountScreenState extends State<AccountScreen> {
                       gradient: const LinearGradient(
                           colors: [AppColors.accent, Color(0xFF1B8F82)]),
                       borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                            color: AppColors.accent.withOpacity(0.35),
+                            blurRadius: 28,
+                            offset: const Offset(0, 6)),
+                      ],
                     ),
                     child: const Icon(Icons.change_history_rounded,
                         color: AppColors.onAccent, size: 30),
@@ -502,7 +512,7 @@ class _AccountScreenState extends State<AccountScreen> {
                             .copyWith(fontSize: 11, color: AppColors.textFaint)),
                   ),
                 ],
-              ),
+              )),
             ),
           ),
         ),

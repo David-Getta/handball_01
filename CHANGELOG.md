@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.39 óta)
 
+- **Belépő képernyő és márka-ragyogás** (kliens): a belépő kártya
+  finoman úszik be (az első benyomás animált), a logó a belépőn és az
+  oldalsávban puha akcentus-ragyogást kapott.
+
 - **Animált mérő-sávok** (kliens): a játékos-táv, döntés-, összegző-,
   felderítő- és fejlődés-nézetek kitöltés-csíkjai animálva úsznak az
   értékükre (közös AnimatedBar elem) — a "mennyi?" kérdésre a mozgás

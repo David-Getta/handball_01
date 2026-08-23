@@ -550,6 +550,13 @@ class _SideNavState extends State<_SideNav> {
         gradient: const LinearGradient(
             colors: [AppColors.accent, Color(0xFF1B8F82)]),
         borderRadius: BorderRadius.circular(10),
+        // Puha márka-ragyogás — összhangban a belépő képernyő logójával.
+        boxShadow: [
+          BoxShadow(
+              color: AppColors.accent.withOpacity(0.30),
+              blurRadius: 18,
+              offset: const Offset(0, 4)),
+        ],
       ),
       child: const Icon(Icons.change_history_rounded,
           color: AppColors.onAccent, size: 18),
