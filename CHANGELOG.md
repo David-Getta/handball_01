@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.42 óta)
 
+- **Sima lejátszás gyengébb gépen is** (kliens, teljesítmény): a
+  felülnézeti pálya és a meccs-sztori sávja a lejátszófej MINDEN
+  lépésénél újrarajzolódik — másodpercenként 25-ször. Mindkettő
+  elmosással (MaskFilter.blur) lágyította a puha árnyékokat és
+  ragyogásokat: a pályán tizennégy játékos árnyéka + a labdás ember
+  fénye + a labda izzása, a sávon gólonként egy-egy pötty. Ez
+  képkockánként tucatnyi (gólgazdag meccsen több tucat) külön
+  rajz-menetet jelent. A lágyságot mostantól sugaras/lineáris
+  színátmenet adja — a látvány ugyanaz, a költség töredéke, és a
+  pálya árnyéka a motor saját (olcsó) árnyék-útján megy. Őr-teszt
+  védi mindkét felületet.
+
 - **A döntés-panel megmondja, mit mér** (kliens): a passz-döntéseknél
   eddig ott állt egy szám ("62% optimális") anélkül, hogy bárhol
   kiderült volna, MIHEZ képest optimális. Mostantól egy mondat

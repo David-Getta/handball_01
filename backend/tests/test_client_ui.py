@@ -835,3 +835,27 @@ def test_a_felhasznaloi_szoveg_nem_beszel_fejlesztoi_nyelven():
                     rossz.append(f"{f.name}: {lit}")
     assert not rossz, (
         "fejlesztői zsargon a felhasználói szövegben: " + "; ".join(rossz))
+
+
+def test_a_kepkockankent_ujrarajzolt_feluletek_nem_elmosnak():
+    """ŐR (teljesítmény): a LEJÁTSZÁS ALATT minden képkockán újrarajzolt
+    felületeken nincs MaskFilter.blur.
+
+    A hőtérkép-őr a statikus rajzot védi; ez a kettő ennél rosszabb eset:
+    a felülnézeti pálya és a meccs-sztori sávja a lejátszófej minden
+    lépésénél újrarajzolódik. Tizennégy játékos árnyéka, illetve
+    gólonként egy-egy elmosott pötty képkockánként tucatnyi külön
+    rajz-menetet jelentene — a lágyságot ezért sugaras/lineáris
+    színátmenet adja.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    for name in ("court_painter.dart", "story_timeline.dart"):
+        src = (lib / "ui" / name).read_text(encoding="utf-8")
+        assert "maskFilter" not in src, (
+            f"{name}: elmosás a képkockánként újrarajzolt felületen")
+        assert "_softGlow" in src, (
+            f"{name}: nincs meg az elmosás-mentes ragyogás-segéd")

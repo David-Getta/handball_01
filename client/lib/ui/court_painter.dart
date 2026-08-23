@@ -102,11 +102,8 @@ class CourtPainter extends CustomPainter {
     // alatta puha árnyékkal, hogy a pálya "ráüljön" a felületre.
     final court = Rect.fromPoints(p(0, 0), p(courtLength, courtWidth));
     final rrect = RRect.fromRectAndRadius(court, const Radius.circular(12));
-    canvas.drawRRect(
-        rrect.shift(const Offset(0, 4)),
-        Paint()
-          ..color = Colors.black.withOpacity(0.35)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+    canvas.drawShadow(
+        Path()..addRRect(rrect), Colors.black.withOpacity(0.6), 10, false);
     fill.shader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
@@ -238,12 +235,8 @@ class CourtPainter extends CustomPainter {
         _drawDashedRing(canvas, center, radius + 2, base.withOpacity(0.55));
       } else {
         // Vetett árnyék: a token "a pálya fölött" ül, nem rá van festve.
-        canvas.drawCircle(
-            center + const Offset(0, 2),
-            radius,
-            Paint()
-              ..color = Colors.black.withOpacity(0.45)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
+        _softGlow(canvas, center + const Offset(0, 2), radius + 3,
+            Colors.black.withOpacity(0.45));
         // Finom külső "halo" + gömbölyű (sugaras átmenetű) token.
         canvas.drawCircle(center, radius + 3, Paint()..color = base.withOpacity(0.16));
         canvas.drawCircle(
@@ -263,12 +256,8 @@ class CourtPainter extends CustomPainter {
         if (isCarrier) {
           // A labdás ember arany ragyogást is kap — a szem rögtön a
           // labda körüli eseményre néz.
-          canvas.drawCircle(
-              center,
-              radius + 6,
-              Paint()
-                ..color = AppColors.gold.withOpacity(0.28)
-                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+          _softGlow(canvas, center, radius + 9,
+              AppColors.gold.withOpacity(0.34));
         }
         canvas.drawCircle(
             center, radius + (isCarrier ? 2 : 0),
@@ -294,12 +283,7 @@ class CourtPainter extends CustomPainter {
     // Labda — meleg szín, finom izzással. (A `ball` fentebb már deklarálva.)
     if (ball != null) {
       final c = p(ball.x, ball.y);
-      canvas.drawCircle(
-          c,
-          0.9 * scale,
-          Paint()
-            ..color = AppColors.ball.withOpacity(0.35)
-            ..maskFilter = MaskFilter.blur(BlurStyle.normal, 0.5 * scale));
+      _softGlow(canvas, c, 1.0 * scale, AppColors.ball.withOpacity(0.38));
       canvas.drawCircle(c, 0.6 * scale,
           Paint()..color = AppColors.ball.withOpacity(0.22));
       canvas.drawCircle(
@@ -328,6 +312,26 @@ class CourtPainter extends CustomPainter {
       final a1 = (2 * math.pi) * ((i + 1) / dashes);
       canvas.drawArc(Rect.fromCircle(center: center, radius: radius), a0, a1 - a0, false, paint);
     }
+  }
+
+  /// Puha, kör alakú ragyogás vagy árnyék — ELMOSÁS NÉLKÜL, sugaras
+  /// színátmenettel.
+  ///
+  /// A pálya MINDEN képkockán újrarajzolódik (lejátszás közben 25-ször
+  /// másodpercenként), és a MaskFilter.blur rajzonként külön rajz-menetet
+  /// kényszerít ki. Tizennégy játékos árnyéka + a labdás ember ragyogása
+  /// + a labda izzása képkockánként tucatnyi ilyen menetet jelentene —
+  /// gyengébb gépen ettől akadozik a lejátszás. A színátmenet ugyanezt a
+  /// lágyságot adja egyetlen kitöltésből.
+  void _softGlow(Canvas canvas, Offset center, double radius, Color color) {
+    canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [color, color.withOpacity(0)],
+            stops: const [0.42, 1.0],
+          ).createShader(Rect.fromCircle(center: center, radius: radius)));
   }
 
   void _drawLabel(Canvas canvas, Offset center, String text, double radius) {

@@ -251,12 +251,7 @@ class _StoryPainter extends CustomPainter {
       if (e["type"] != "goal") continue;
       final x = _x((e["t"] as num?) ?? 0, size);
       final color = e["team"] == "home" ? AppColors.home : AppColors.away;
-      canvas.drawCircle(
-          Offset(x, midY),
-          8,
-          Paint()
-            ..color = color.withOpacity(0.30)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+      _softGlow(canvas, Offset(x, midY), 9, color.withOpacity(0.34));
       canvas.drawCircle(Offset(x, midY), 4.4, Paint()..color = AppColors.surface);
       canvas.drawCircle(Offset(x, midY), 3.2, Paint()..color = color);
       canvas.drawCircle(
@@ -310,13 +305,19 @@ class _StoryPainter extends CustomPainter {
     // Lejátszófej: fehér függőleges vonal az aktuális kockánál, finom
     // ragyogással és felső fogantyúval — messziről is megtalálható.
     final px = _x(currentFrame, size);
-    canvas.drawLine(
-        Offset(px, 0),
-        Offset(px, size.height),
+    // A lejátszófej ragyogása: vízszintesen elhalványuló sáv (nem
+    // elmosás) — a sáv a lejátszás alatt MINDEN képkockán újrarajzolódik.
+    canvas.drawRect(
+        Rect.fromLTRB(px - 4, 0, px + 4, size.height),
         Paint()
-          ..color = Colors.white.withOpacity(0.35)
-          ..strokeWidth = 3.5
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5));
+          ..shader = LinearGradient(
+            colors: [
+              Colors.white.withOpacity(0),
+              Colors.white.withOpacity(0.35),
+              Colors.white.withOpacity(0),
+            ],
+          ).createShader(
+              Rect.fromLTRB(px - 4, 0, px + 4, size.height)));
     canvas.drawLine(
         Offset(px, 0),
         Offset(px, size.height),
@@ -330,6 +331,21 @@ class _StoryPainter extends CustomPainter {
           ..lineTo(px, 4.5)
           ..close(),
         Paint()..color = Colors.white.withOpacity(0.9));
+  }
+
+  /// Puha kör-ragyogás elmosás nélkül (sugaras színátmenet). A sáv a
+  /// lejátszófej mozgásával MINDEN képkockán újrarajzolódik, és minden
+  /// gól-pötty egy-egy elmosása külön rajz-menetet kényszerítene ki —
+  /// negyven gólnál ez képkockánként negyven extra menet.
+  void _softGlow(Canvas canvas, Offset center, double radius, Color color) {
+    canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [color, color.withOpacity(0)],
+            stops: const [0.40, 1.0],
+          ).createShader(Rect.fromCircle(center: center, radius: radius)));
   }
 
   @override
