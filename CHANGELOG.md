@@ -3,7 +3,23 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.43 óta)
+## Kiadatlan (a v0.1.44 óta)
+
+## v0.1.44 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ez a kiadás egyetlen dolog miatt fontos — feloldja
+> azt a ZÁRT KÖRT, ami a régi verzión ragadt felhasználókat kizárta a
+> javításokból. Ha a motor nem indult el, a program a motor-hiba
+> képernyőn állt meg, és onnan nem vezetett út a frissítőhöz; a
+> frissítéshez viszont se fiók, se motor nem kell. Mostantól a
+> "Frissítés keresése" gomb ott van mindhárom elakadási ponton.
+> (Aki még a régi, hibás verziót futtatja, annak EGYSZER kézzel kell
+> letöltenie a telepítőt a Releases oldalról — utána a program már
+> magától tud frissülni. A fiókokat és a meccseket ez nem érinti: azok
+> külön adatmappában élnek.)
+> Mellette: sima lejátszás gyengébb gépen (a mozgó felületekről eltűnt
+> az elmosás), mozgás-csökkentés támogatása, beszélő jelmagyarázatok,
+> és látszik, hogy a pálya nagyítható.
 
 - **A frissítő motor nélkül is elérhető — a zárt kör feloldása**
   (kliens, KRITIKUS): a legsúlyosabb hibánk volt, és pont azokat
