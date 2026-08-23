@@ -783,3 +783,19 @@ def test_palya_szabalykonyvi_elemei_a_rajzolon():
         "a 9 m-es szabaddobási vonal nincs kirajzolva")
     assert "sevenMeterX" in painter, "a hetes-vonal nincs kirajzolva"
     assert "keeperLineX" in painter, "a 4 m-es kapus-vonal nincs kirajzolva"
+
+
+def test_hotérkep_nem_cellankent_elmosott():
+    """ŐR (teljesítmény): a hőtérkép 200 cellája NEM cellánkénti
+    elmosással (MaskFilter.blur) lágyul, hanem sugaras színátmenettel —
+    a cellánkénti elmosás külön rajz-réteget kényszerítene ki, és
+    gyengébb gépen akadozna a kép."""
+    import pytest
+
+    hp = _client_lib() / "ui" / "heatmap_painter.dart"
+    if not hp.exists():
+        pytest.skip("nincs kliens a fában")
+    src = hp.read_text(encoding="utf-8")
+    assert "RadialGradient" in src, "a lágy hőfolt nem gradienssel készül"
+    assert "maskFilter" not in src, (
+        "cellánkénti elmosás a hőtérképen — ez akadozó rajzolást okoz")

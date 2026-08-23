@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **Gyorsabb hőtérkép** (kliens, teljesítmény): a puha hőfoltok
+  mostantól sugaras színátmenettel készülnek, nem cellánkénti
+  elmosással — a rácson 200 cella van, és cellánként egy-egy elmosás
+  külön rajz-réteget kényszerített volna ki (gyengébb gépen akadozó
+  kép). A látvány ugyanaz, a költség töredéke. Őr-teszt védi.
+
 - **Élő feldolgozás-képernyő** (kliens): itt tölti a felhasználó a
   legtöbb várakozási időt, ezért a folyamat mostantól él — a
   kör-jelző simán úszik az új állásra (nem ugrik), a százalék
