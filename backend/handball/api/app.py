@@ -367,7 +367,14 @@ def create_app():
         képernyő ezt tölti be, hogy a felhasználó a valódi képre húzza a sarkokat."""
         import cv2
         from fastapi import Response
-        cap = cv2.VideoCapture(path)
+
+        from ..video_io import VideoOpenError, open_capture
+        try:
+            cap = open_capture(path)
+        except VideoOpenError as e:
+            # A MIÉRT-et a felhasználó is látja: ékezetes útvonal,
+            # hiányzó fájl vagy ismeretlen kodek — teendővel együtt.
+            raise HTTPException(status_code=400, detail=str(e))
         cap.set(cv2.CAP_PROP_POS_FRAMES, t)
         ok, frame = cap.read()
         cap.release()
@@ -415,7 +422,12 @@ def create_app():
             raise HTTPException(status_code=404, detail="video not found")
         try:
             import cv2
-            cap = cv2.VideoCapture(path)
+
+            from ..video_io import VideoOpenError, open_capture
+            try:
+                cap = open_capture(path)
+            except VideoOpenError as e:
+                raise HTTPException(status_code=400, detail=str(e))
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame))
             ok, img = cap.read()
             cap.release()
@@ -476,7 +488,11 @@ def create_app():
 
         if not os.path.exists(path):
             raise HTTPException(status_code=404, detail="video not found")
-        cap = cv2.VideoCapture(path)
+        from ..video_io import VideoOpenError, open_capture
+        try:
+            cap = open_capture(path)
+        except VideoOpenError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         cap.set(cv2.CAP_PROP_POS_FRAMES, t)
         ok, frame = cap.read()
         cap.release()

@@ -5,6 +5,28 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.46 óta)
 
+- **Ékezetes útvonalon is megnyílik a videó** (motor, javítás): az
+  OpenCV Windowson a rendszer kódlapján át nyitja a fájlt, ezért az
+  ÉKEZETES útvonalon (magyar felhasználónál a mindennapi eset:
+  `C:\Users\Dávid\Videók\meccs.mp4`) egyszerűen nem nyílt meg — és
+  NEM is dobott hibát, csak "nem sikerült képkockát olvasni" lett
+  belőle. A kódbázisban kilenc helyen nyitottunk videót, egyik sem
+  nézte meg, sikerült-e. Mostantól egy közös megnyitó (`video_io.py`)
+  csinálja: ha az ékezet miatt bukna, MÁSODIK próbálkozás a Windows
+  rövid (8.3-as, csak ASCII) útvonalával, és ha úgy sem megy, EMBERI
+  mondat jön a teendővel ("tedd a fájlt ékezet nélküli mappába"),
+  megkülönböztetve a hiányzó fájltól és az ismeretlen kodektől. Öt
+  teszt védi.
+
+- **A szerver magyarázata eljut a felhasználóig** (kliens, javítás): a
+  motor sok hibára pontos, magyar mondatot ad — például hogy az
+  útvonalban ékezet van, és mit tegyen ellene. A kliensben ez
+  ELVESZETT: 72 hívóhely csak "HTTP 400"-at dobott, tehát a legjobb
+  magyarázatunk sosem jutott el odáig, ahol elolvassák. Mostantól
+  minden hívás a szerver `detail` mezőjét mutatja, ha van; a
+  státuszkód csak akkor marad, ha nincs jobb. Őr-teszt védi, hogy ne
+  csússzon vissza.
+
 - **Eladás-kényszer** (új réteg): az eladás-rétegek eddig azt mondták
   meg, KI veszíti el a labdát, HOL, MIKOR és mennyibe kerül — azt nem,
   hogy KI TEHET RÓLA. Pedig a kétféle eladás két különböző teendő: ha

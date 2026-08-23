@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from ..models.tracking import Match
+from ..video_io import open_capture
 
 # A jelenet-ablak: ennyivel a lövés/gól ELŐTT kezdjük (látszódjon a
 # felépítés), és ennyivel utána zárjuk (látszódjon a befejezés).
@@ -82,7 +83,7 @@ def export_event_clips(match: Match, events: list, types: set[str],
             f"({video_path or 'nincs útvonal mentve'}) — a klipvágáshoz a "
             "feldolgozáskor használt videó kell.")
 
-    cap = cv2.VideoCapture(video_path)
+    cap = open_capture(video_path)
     native_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))

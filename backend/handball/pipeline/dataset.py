@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
+from ..video_io import open_capture
 
 # A finomhangolt modell osztályai. A sorrend számít: a label-fájlok ezekre
 # az indexekre hivatkoznak, és a dataset.yaml ezt rögzíti.
@@ -117,7 +118,7 @@ def collect_dataset(video_path: str | Path,
     out_dir = Path(out_dir)
     stats = DatasetStats()
 
-    cap = cv2.VideoCapture(str(video_path))
+    cap = open_capture(video_path)
     n_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     if n_total <= 0:
         cap.release()

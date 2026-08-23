@@ -1059,3 +1059,32 @@ def test_a_motor_sajat_naploja_is_latszik():
     torzs = src[start:end]
     assert "_engineOwnLogFile" in torzs and "_logFile" in torzs, (
         "a logTail nem fűzi össze a motor és az indító naplóját")
+
+
+def test_a_szerver_magyarazata_eljut_a_felhasznaloig():
+    """ŐR: a kliens a szerver EMBERI hibaüzenetét mutassa, ne a kódot.
+
+    A motor sok hibára pontos, magyar mondatot ad — például hogy a videó
+    útvonalában ékezet van, és mit tegyen a felhasználó. Ez a kliensben
+    elveszett: minden hiba "HTTP 400" alakban csapódott le, tehát a
+    legjobb magyarázatunk sosem jutott el odáig, ahol elolvassák.
+    """
+    import re
+
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+
+    assert "static String serverDetail(" in src, (
+        "nincs segéd a szerver magyarázatának kibontására")
+    # Csupasz státuszkód-dobás nem maradhat: minden hibaüzenetnek a
+    # közös segéden kell átmennie.
+    csupasz = re.findall(
+        r'throw Exception\(\s*"[^"]*HTTP \$\{(?:resp|r)\.statusCode\}',
+        src)
+    assert not csupasz, (
+        f"{len(csupasz)} helyen csak a státuszkódot dobjuk — a szerver "
+        "magyarázata elveszik")

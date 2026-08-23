@@ -80,6 +80,34 @@ class ApiClient {
   /// régi motor fut, amelyik még nem adja ki.
   static String? engineVersion;
 
+  /// A szerver EMBERI hibaüzenete a válaszból (FastAPI `detail`).
+  ///
+  /// A motor sok hibára pontos, magyar mondatot ad — például hogy a
+  /// videó útvonalában ékezet van, és mit tegyen a felhasználó. Ez a
+  /// kliensben eddig ELVESZETT: minden hiba "HTTP 400" alakban
+  /// csapódott le, tehát a legjobb magyarázatunk sosem jutott el
+  /// odáig, ahol elolvassák.
+  ///
+  /// Üres sztringet ad, ha a válaszban nincs használható magyarázat.
+  static String serverDetail(http.Response r) {
+    try {
+      final j = jsonDecode(utf8.decode(r.bodyBytes));
+      if (j is Map && j["detail"] is String) {
+        final d = (j["detail"] as String).trim();
+        // A FastAPI alap-üzenetei angol kulcsszavak (pl. "Not Found") —
+        // azokat ne mutassuk emberi magyarázatként.
+        if (d.isNotEmpty && d.length > 3) return d;
+      }
+    } catch (_) {}
+    return "";
+  }
+
+  /// Hibaszöveg: a szerver magyarázata, ha van; különben a státuszkód.
+  static String _hiba(String mit, http.Response r) {
+    final d = serverDetail(r);
+    return d.isEmpty ? "$mit: HTTP ${r.statusCode}" : d;
+  }
+
   /// Életjel: igaz, ha a backend elérhető (GET /health).
   Future<bool> isHealthy() async {
     try {
@@ -107,7 +135,7 @@ class ApiClient {
       body: jsonEncode({"seconds": seconds}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a demó létrehozása: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a demó létrehozása", resp));
     }
     return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["match_id"] as String;
   }
@@ -119,7 +147,7 @@ class ApiClient {
         .replace(queryParameters: {"team": team});
     final resp = await http.get(uri);
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a figura-egyeztetés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a figura-egyeztetés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -129,7 +157,7 @@ class ApiClient {
     final resp = await http.get(Uri.parse("$baseUrl/playbook"))
         .timeout(const Duration(seconds: 4));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a figurákat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a figurákat", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["plays"] as List).cast<Map<String, dynamic>>();
@@ -139,7 +167,7 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchPlay(String playId) async {
     final resp = await http.get(Uri.parse("$baseUrl/playbook/$playId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült betölteni a figurát: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült betölteni a figurát", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -152,7 +180,7 @@ class ApiClient {
       body: jsonEncode({"name": name, "attackers": attackers}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült menteni a figurát: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült menteni a figurát", resp));
     }
     return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["id"] as String;
   }
@@ -161,7 +189,7 @@ class ApiClient {
   Future<void> deletePlay(String playId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/playbook/$playId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült törölni a figurát: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült törölni a figurát", resp));
     }
   }
 
@@ -188,7 +216,7 @@ class ApiClient {
       body: jsonEncode({"path": videoPath, "calibs": calibs}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a kalibráció mentése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a kalibráció mentése", resp));
     }
   }
 
@@ -210,7 +238,7 @@ class ApiClient {
       body: jsonEncode({"attackers": attackers, "ball_carrier": ballCarrier}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a szimuláció: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a szimuláció", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -220,7 +248,7 @@ class ApiClient {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/stats/export"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a statisztika-export: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a statisztika-export", resp));
     }
     return resp.bodyBytes;
   }
@@ -230,7 +258,7 @@ class ApiClient {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/report/export"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a jelentés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a jelentés", resp));
     }
     return resp.bodyBytes;
   }
@@ -240,7 +268,7 @@ class ApiClient {
   Future<void> swapTeams(String matchId) async {
     final resp = await http.post(Uri.parse("$baseUrl/matches/$matchId/swap-teams"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a csapatok cseréje: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a csapatok cseréje", resp));
     }
   }
 
@@ -260,7 +288,7 @@ class ApiClient {
       }),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült az összefűzés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az összefűzés", resp));
     }
     final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return data["match_id"] as String;
@@ -273,8 +301,7 @@ class ApiClient {
     final resp = await http.get(Uri.parse(
         "$baseUrl/season/report?team=${Uri.encodeQueryComponent(team)}"));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a szezon-riport: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a szezon-riport", resp));
     }
     return resp.bodyBytes;
   }
@@ -287,8 +314,7 @@ class ApiClient {
         "?team_a=${Uri.encodeQueryComponent(teamA)}"
         "&team_b=${Uri.encodeQueryComponent(teamB)}"));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült az egymás elleni riport: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az egymás elleni riport", resp));
     }
     return resp.bodyBytes;
   }
@@ -300,7 +326,7 @@ class ApiClient {
         "$baseUrl/players/season-report?team=${Uri.encodeQueryComponent(team)}"
         "&jersey=$jersey"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a szezon-lap: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a szezon-lap", resp));
     }
     return resp.bodyBytes;
   }
@@ -311,7 +337,7 @@ class ApiClient {
     final resp = await http.get(Uri.parse(
         "$baseUrl/matches/$matchId/players/$trackId/report"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a játékos-lap: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a játékos-lap", resp));
     }
     return resp.bodyBytes;
   }
@@ -322,8 +348,7 @@ class ApiClient {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/setplays"));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a figura-elemzés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a figura-elemzés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -334,8 +359,7 @@ class ApiClient {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/key-moments"));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a kulcs-pillanat lista: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a kulcs-pillanat lista", resp));
     }
     final json =
         jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
@@ -346,7 +370,7 @@ class ApiClient {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/key-players"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a kulcsember-lista: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a kulcsember-lista", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -355,7 +379,7 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchQuality(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/quality"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a minőség-jelentés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a minőség-jelentés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -364,7 +388,7 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchRoster(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/roster"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a kiállításokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a kiállításokat", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -379,7 +403,7 @@ class ApiClient {
       body: jsonEncode({"suspensions": suspensions}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült menteni a kiállításokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült menteni a kiállításokat", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -389,7 +413,7 @@ class ApiClient {
   Future<List<Map<String, dynamic>>> fetchEvents(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/events"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni az eseményeket: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni az eseményeket", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["events"] as List).cast<Map<String, dynamic>>();
@@ -440,7 +464,7 @@ class ApiClient {
       body: jsonEncode({"types": types}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem indult el a klipvágás: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem indult el a klipvágás", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return json["job_id"] as String;
@@ -451,7 +475,7 @@ class ApiClient {
     final resp = await http
         .get(Uri.parse("$baseUrl/matches/$matchId/clips/download"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a klipek letöltése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a klipek letöltése", resp));
     }
     return resp.bodyBytes;
   }
@@ -460,7 +484,7 @@ class ApiClient {
   Future<List<int>> exportLibrary() async {
     final resp = await http.get(Uri.parse("$baseUrl/library/export"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a könyvtár mentése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a könyvtár mentése", resp));
     }
     return resp.bodyBytes;
   }
@@ -473,8 +497,7 @@ class ApiClient {
       body: zipBytes,
     );
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a könyvtár visszaállítása: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a könyvtár visszaállítása", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -487,8 +510,7 @@ class ApiClient {
         queryParameters: {"team": team, "jersey": "$jersey"});
     final resp = await http.get(uri);
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a játékos-fejlődés lekérése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a játékos-fejlődés lekérése", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -502,7 +524,7 @@ class ApiClient {
       body: jsonEncode({"track_id": trackId, "jersey": jersey}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a mezszám mentése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a mezszám mentése", resp));
     }
   }
 
@@ -515,7 +537,7 @@ class ApiClient {
       body: jsonEncode({"clip_types": clipTypes}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem indult el a csomag-készítés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem indult el a csomag-készítés", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return json["job_id"] as String;
@@ -526,7 +548,7 @@ class ApiClient {
     final resp = await http
         .get(Uri.parse("$baseUrl/matches/$matchId/package/download"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a csomag letöltése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a csomag letöltése", resp));
     }
     return resp.bodyBytes;
   }
@@ -535,7 +557,7 @@ class ApiClient {
   Future<List<Map<String, dynamic>>> fetchNotes(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/notes"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a jegyzeteket: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a jegyzeteket", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["notes"] as List).cast<Map<String, dynamic>>();
@@ -550,7 +572,7 @@ class ApiClient {
       body: jsonEncode({"frame": frame, "text": text}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült menteni a jegyzetet: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült menteni a jegyzetet", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -560,7 +582,7 @@ class ApiClient {
     final resp = await http
         .delete(Uri.parse("$baseUrl/matches/$matchId/notes/$noteId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült törölni a jegyzetet: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült törölni a jegyzetet", resp));
     }
   }
 
@@ -570,7 +592,7 @@ class ApiClient {
         .replace(queryParameters: {"team": team});
     final resp = await http.get(uri);
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a felderítés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a felderítés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -586,7 +608,7 @@ class ApiClient {
       body: jsonEncode({"items": items}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült az egyesített felderítés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az egyesített felderítés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -600,7 +622,7 @@ class ApiClient {
       body: jsonEncode({"older": {"items": older}, "newer": {"items": newer}}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a fejlődés-elemzés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a fejlődés-elemzés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -616,8 +638,7 @@ class ApiClient {
           {"older": {"items": older}, "newer": {"items": newer}}),
     );
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a fejlődés-riport: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a fejlődés-riport", resp));
     }
     return resp.bodyBytes;
   }
@@ -636,7 +657,7 @@ class ApiClient {
       }),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a meccsterv: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a meccsterv", resp));
     }
     final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return ((data["plan"] as List?) ?? const []).cast<String>();
@@ -657,7 +678,7 @@ class ApiClient {
       }),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a meccsterv: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a meccsterv", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -683,7 +704,7 @@ class ApiClient {
       }),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült az export: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az export", resp));
     }
     return resp.bodyBytes;
   }
@@ -695,7 +716,7 @@ class ApiClient {
         .replace(queryParameters: {"team": team});
     final resp = await http.get(uri);
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült az export: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az export", resp));
     }
     return resp.bodyBytes;
   }
@@ -716,8 +737,7 @@ class ApiClient {
           final resp = await http.get(Uri.parse("$base/matches"))
               .timeout(const Duration(seconds: 4));
           if (resp.statusCode != 200) {
-            throw Exception(
-                "Nem sikerült lekérni a meccslistát: HTTP ${resp.statusCode}");
+            throw Exception(_hiba("Nem sikerült lekérni a meccslistát", resp));
           }
           final json =
               jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
@@ -748,12 +768,7 @@ class ApiClient {
         .post(Uri.parse("$baseUrl/matches/$matchId/reprocess"))
         .timeout(const Duration(seconds: 10));
     if (resp.statusCode != 200) {
-      String msg = "HTTP ${resp.statusCode}";
-      try {
-        msg = (jsonDecode(utf8.decode(resp.bodyBytes))
-                as Map<String, dynamic>)["detail"] as String? ?? msg;
-      } catch (_) {}
-      throw Exception("Nem sikerült az újra-feldolgozás: $msg");
+      throw Exception(_hiba("Nem sikerült az újra-feldolgozás", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -766,12 +781,7 @@ class ApiClient {
         .post(Uri.parse("$baseUrl/matches/$matchId/resume"))
         .timeout(const Duration(seconds: 10));
     if (resp.statusCode != 200) {
-      String msg = "HTTP ${resp.statusCode}";
-      try {
-        msg = (jsonDecode(utf8.decode(resp.bodyBytes))
-                as Map<String, dynamic>)["detail"] as String? ?? msg;
-      } catch (_) {}
-      throw Exception("Nem sikerült a folytatás: $msg");
+      throw Exception(_hiba("Nem sikerült a folytatás", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -785,7 +795,7 @@ class ApiClient {
             queryParameters: {"path": path, "stride": "$stride"}))
         .timeout(const Duration(seconds: 120));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a közvetítés-elemzés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a közvetítés-elemzés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -805,7 +815,7 @@ class ApiClient {
             }))
         .timeout(const Duration(seconds: 60));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a nézet-egyesítés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a nézet-egyesítés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -830,7 +840,7 @@ class ApiClient {
             }))
         .timeout(const Duration(seconds: 60));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a vonal-felismerés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a vonal-felismerés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -855,8 +865,7 @@ class ApiClient {
     }))
         .timeout(const Duration(seconds: 90));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a detektálás-próba: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a detektálás-próba", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -868,7 +877,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/momentum"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a sorozatokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a sorozatokat", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["runs"] as List).cast<Map<String, dynamic>>();
@@ -881,8 +890,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/momentum"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni az állás-menetet: "
-          "HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni az állás-menetet", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     final prog = (json["progression"] as Map?)?.cast<String, dynamic>() ?? {};
@@ -919,8 +927,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/xg"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a helyzetminőséget: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a helyzetminőséget", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -932,8 +939,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/substitutions"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a cseréket: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a cseréket", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -945,8 +951,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/library/training-focus"))
         .timeout(const Duration(seconds: 20));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a szezon-fókuszt: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a szezon-fókuszt", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -958,8 +963,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/training"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni az edzés-fókuszt: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni az edzés-fókuszt", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -971,8 +975,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/stoppages"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a megszakításokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a megszakításokat", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["stoppages"] as List).cast<Map<String, dynamic>>();
@@ -985,8 +988,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/defense"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a védekezés-elemzést: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a védekezés-elemzést", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -997,8 +999,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/empty-net"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a 7a6-szakaszokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a 7a6-szakaszokat", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["windows"] as List).cast<Map<String, dynamic>>();
@@ -1011,8 +1012,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/rules"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a szabály-elemzést: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a szabály-elemzést", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1025,8 +1025,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/attacks"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a támadásokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a támadásokat", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1038,8 +1037,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/coach-summary"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni az összefoglalót: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni az összefoglalót", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1060,7 +1058,7 @@ class ApiClient {
     final resp = await http.get(Uri.parse("$baseUrl/library/summary"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni az összképet: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni az összképet", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1081,7 +1079,7 @@ class ApiClient {
       body: jsonEncode(body),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült átnevezni: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült átnevezni", resp));
     }
   }
 
@@ -1089,7 +1087,7 @@ class ApiClient {
   Future<void> deleteMatch(String matchId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/matches/$matchId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült törölni: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült törölni", resp));
     }
   }
 
@@ -1097,7 +1095,7 @@ class ApiClient {
   Future<Match> fetchMatch(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a meccset: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a meccset", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return Match.fromJson(json);
@@ -1131,7 +1129,7 @@ class ApiClient {
     );
     final resp = await http.Response.fromStream(await req.send());
     if (resp.statusCode != 200) {
-      throw Exception("Feltöltés sikertelen: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Feltöltés sikertelen", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1145,7 +1143,7 @@ class ApiClient {
       body: bytes,
     );
     if (resp.statusCode != 200) {
-      throw Exception("Feltöltés sikertelen: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Feltöltés sikertelen", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1198,7 +1196,7 @@ class ApiClient {
       body: jsonEncode(body),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült elindítani a feldolgozást: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült elindítani a feldolgozást", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1208,7 +1206,7 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchJob(String jobId) async {
     final resp = await http.get(Uri.parse("$baseUrl/jobs/$jobId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a munka állapotát: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a munka állapotát", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1242,7 +1240,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/health/full"))
         .timeout(const Duration(seconds: 15));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült az ellenőrzés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az ellenőrzés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1268,7 +1266,7 @@ class ApiClient {
   Future<Map<String, dynamic>> cancelJob(String jobId) async {
     final resp = await http.post(Uri.parse("$baseUrl/jobs/$jobId/cancel"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült megszakítani: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült megszakítani", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1442,7 +1440,7 @@ class ApiClient {
   Future<Uint8List> fetchReferenceFrame(String videoPath, {int t = 100}) async {
     final resp = await http.get(referenceFrameUri(videoPath, t: t));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a képkockát: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a képkockát", resp));
     }
     return resp.bodyBytes;
   }
