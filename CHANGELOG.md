@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **A motor-hiba üzenete a MEGOLDÁSRA mutat** (kliens): a kapcsolódási
+  hiba eddig azt mondta, hogy "a program újraindítása magától
+  elindítja" — csakhogy ha a motor egy mélyebb okból nem indul, az
+  újraindítás sem segít, és a felhasználó zsákutcába jut. Mostantól az
+  üzenet a nyitóképernyő új "Motor újraindítása" gombjára mutat (ami
+  port-újrakeresést IS csinál), és csak másodsorban javasolja a
+  program bezárását.
+
 - **UI 16. kör: a terhelés-tábla a csapat nyelvén beszél** (kliens): a
   játékosonkénti táv-csíkok eddig mind akcentus-színűek voltak, pedig
   a pályán, a grafikonokon és a jelmagyarázatban minden a csapat

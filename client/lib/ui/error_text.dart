@@ -31,8 +31,9 @@ const List<String> kForbiddenKeys = [
 const List<(List<String>, String)> kErrorPatterns = [
   (
     kConnectionKeys,
-    "Nem érem el a háttérmotort. Fut a Sport Machine motor? "
-        "A program újraindítása magától elindítja.",
+    "Nem érem el a háttérmotort. A nyitóképernyőn a "
+        "\"Motor újraindítása\" gomb megpróbálja újraindítani; ha az sem "
+        "segít, zárd be és nyisd meg újra a programot.",
   ),
   (
     ["timeout", "timed out"],
