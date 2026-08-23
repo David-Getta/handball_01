@@ -26,6 +26,13 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
   String _message = "Motor indítása…";
   BackendPhase? _phase;
 
+  /// A motor naplójának utolsó sorai — CSAK sikertelen indításnál
+  /// töltjük be. Ez az első képernyő, ahol az indulási hiba
+  /// megjelenhet; a fiók-kapu és a nyitóképernyő is megmutatja a
+  /// naplót, itt viszont eddig csak egy mondat állt, és a felhasználó
+  /// nem tudott mit elküldeni.
+  String? _log;
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +71,12 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
     });
     if (status.phase == BackendPhase.ready) {
       _enterApp();
+      return;
+    }
+    if (status.phase == BackendPhase.failed) {
+      final tail = await BackendLauncher.logTail();
+      if (!mounted) return;
+      setState(() => _log = tail);
     }
   }
 
@@ -129,6 +142,28 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
                 ),
                 const SizedBox(height: 8),
                 Text(_message, style: AppText.label, textAlign: TextAlign.center),
+
+                if (failed && _log != null && _log!.trim().isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Text("A MOTOR NAPLÓJA (UTOLSÓ SOROK)",
+                      style: AppText.sectionLabel),
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(maxHeight: 160),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceAlt,
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: SingleChildScrollView(
+                      child: SelectableText(_log!,
+                          style: AppText.label.copyWith(
+                              fontSize: 11, color: AppColors.textPrimary)),
+                    ),
+                  ),
+                ],
 
                 if (failed || noEngine) ...[
                   const SizedBox(height: AppSpacing.xl),

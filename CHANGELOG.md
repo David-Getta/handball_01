@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.43 óta)
 
+- **Az indító képernyő is megmutatja a motor naplóját** (kliens): a
+  motor indulási hibája ELŐSZÖR itt jelenik meg — a fiók-kapu és a
+  nyitóképernyő már eddig is kiírta a napló végét, ez a képernyő
+  viszont egyetlen mondattal elintézte, és a felhasználónak nem volt
+  mit elküldenie. Sikertelen indításnál mostantól itt is ott a napló
+  utolsó sorai, kijelölhető szöveggel, az "Újrapróbálom" gomb fölött.
+
 - **Az animációk tiszteletben tartják a csökkentett mozgást** (kliens,
   hozzáférhetőség): az app az elmúlt körökben tele lett úszó, pörgő és
   növekvő elemekkel. Akinél a rendszerben be van kapcsolva a
