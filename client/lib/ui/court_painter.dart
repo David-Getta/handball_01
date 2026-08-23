@@ -234,9 +234,18 @@ class CourtPainter extends CustomPainter {
         canvas.drawCircle(center, radius, Paint()..color = base.withOpacity(0.22));
         _drawDashedRing(canvas, center, radius + 2, base.withOpacity(0.55));
       } else {
+        final isCarrier = pl.trackId == carrierId;
         // Vetett árnyék: a token "a pálya fölött" ül, nem rá van festve.
         _softGlow(canvas, center + const Offset(0, 2), radius + 3,
             Colors.black.withOpacity(0.45));
+        if (isCarrier) {
+          // A labdás ember arany ragyogása a token ALÁ kerül: a korong
+          // így megtartja a csapatszínét, és csak a HOLDUDVARA arany.
+          // (Fölé rajzolva a ragyogás rámosódna a tokenre, és a két
+          // csapat labdás embere egyforma sárgás foltnak látszana.)
+          _softGlow(canvas, center, radius + 9,
+              AppColors.gold.withOpacity(0.40));
+        }
         // Finom külső "halo" + gömbölyű (sugaras átmenetű) token.
         canvas.drawCircle(center, radius + 3, Paint()..color = base.withOpacity(0.16));
         canvas.drawCircle(
@@ -252,13 +261,6 @@ class CourtPainter extends CustomPainter {
                 ],
                 stops: const [0.0, 0.55, 1.0],
               ).createShader(Rect.fromCircle(center: center, radius: radius)));
-        final isCarrier = pl.trackId == carrierId;
-        if (isCarrier) {
-          // A labdás ember arany ragyogást is kap — a szem rögtön a
-          // labda körüli eseményre néz.
-          _softGlow(canvas, center, radius + 9,
-              AppColors.gold.withOpacity(0.34));
-        }
         canvas.drawCircle(
             center, radius + (isCarrier ? 2 : 0),
             Paint()

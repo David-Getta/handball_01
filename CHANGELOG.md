@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.42 óta)
 
+- **A labdás ember megtartja a csapatszínét** (kliens): a labdát vivő
+  játékos arany ragyogása eddig a korong FÖLÉ került, és rámosódott —
+  a két csapat labdás embere egyforma sárgás foltnak látszott, pont
+  amikor a legfontosabb tudni, KI van a labdánál. A ragyogás mostantól
+  a korong alá kerül: a token marad kék vagy piros, és csak a
+  holdudvara arany.
+
 - **A hőtérkép megmondja, mit jelent a szín** (kliens): a lövés- és a
   passz-nézetnek volt magyarázó csipetje, a hőtérképnek nem — pedig
   ott a SZÍN maga az adat, magyarázat nélkül viszont csak "valami
