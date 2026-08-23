@@ -152,6 +152,77 @@ class AppTheme {
         thumbColor: WidgetStatePropertyAll(
             AppColors.textFaint.withOpacity(0.35)),
       ),
+      // Beviteli mezők: kitöltött, lekerekített doboz, akcentus-fókusszal
+      // — eddig csak a fiók-képernyő csinálta ezt kézzel, minden más a
+      // Material aláhúzott alapértelmezését kapta.
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surfaceAlt,
+        labelStyle: AppText.label,
+        hintStyle: AppText.label.copyWith(color: AppColors.textFaint),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+        ),
+      ),
+      // Gombok: egységes lekerekítés és tapintható méret. A képernyők
+      // egyedi stílusai (szín-felülbírálások) ezután is érvényesülnek.
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.accent,
+          foregroundColor: AppColors.onAccent,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+          textStyle: const TextStyle(
+              fontWeight: FontWeight.w600, fontSize: 13.5),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textPrimary,
+          side: const BorderSide(color: AppColors.border),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.accent,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+      // Fül-sáv: a vékony alsó vonal helyett lekerekített akcentus-pill
+      // a kijelölt fül alatt — messziről is látszik, melyik lap aktív.
+      tabBarTheme: TabBarThemeData(
+        labelColor: AppColors.textPrimary,
+        unselectedLabelColor: AppColors.textFaint,
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: Colors.transparent,
+        overlayColor: WidgetStatePropertyAll(
+            AppColors.accent.withOpacity(0.06)),
+        indicator: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: AppColors.accent.withOpacity(0.14),
+          border: Border.all(color: AppColors.accent.withOpacity(0.45)),
+        ),
+        labelStyle: const TextStyle(
+            fontWeight: FontWeight.w600, fontSize: 12),
+        unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w500, fontSize: 12),
+      ),
       // Felugró menük (fiók-menü, gyűjtő-menük): kártya-nyelven.
       popupMenuTheme: PopupMenuThemeData(
         color: AppColors.surface,

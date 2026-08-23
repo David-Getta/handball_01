@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.40 óta)
 
+- **Egységes gombok, mezők és fülek** (kliens): a beviteli mezők
+  mostantól kitöltött, lekerekített dobozok akcentus-fókusszal (eddig
+  csak a fiók-képernyő csinálta ezt kézzel, minden más a Material
+  aláhúzott alapját kapta); a gombok egységes lekerekítést és tapintható
+  méretet; a meccs-nézet fülei a vékony alsó vonal helyett lekerekített
+  akcentus-pill kijelölést.
+
 - **Idővonalak: hover-előnézet és megfogható szakaszok** (kliens): a
   meccs-sztori sávján az egér alatt megjelenik a CÉL-IDŐPONT egy kis
   buborékban (koppintás előtt látszik, hova ugrik a lejátszó), a

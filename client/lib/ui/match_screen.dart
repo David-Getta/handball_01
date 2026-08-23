@@ -2754,13 +2754,12 @@ class _MatchScreenState extends State<MatchScreen> {
         length: 5,
         child: Column(
           children: [
+            // A fül-stílust (pill-indikátor, színek) a téma adja —
+            // lásd AppTheme.dark tabBarTheme.
             const TabBar(
               isScrollable: true,
               tabAlignment: TabAlignment.start,
-              labelColor: AppColors.textPrimary,
-              unselectedLabelColor: AppColors.textFaint,
-              indicatorColor: AppColors.accent,
-              labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               tabs: [
                 Tab(text: "Statisztika"),
                 Tab(text: "Összegzés"),
