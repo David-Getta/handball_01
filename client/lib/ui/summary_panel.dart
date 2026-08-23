@@ -679,35 +679,59 @@ class SummaryPanel extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
         if (sections.isNotEmpty) ...[
-          Text("EDZŐI ÖSSZEFOGLALÓ", style: AppText.sectionLabel),
+          Row(children: [
+            const Icon(Icons.auto_awesome, size: 14, color: AppColors.gold),
+            const SizedBox(width: 6),
+            Text("EDZŐI ÖSSZEFOGLALÓ",
+                style: AppText.sectionLabel.copyWith(color: AppColors.gold)),
+          ]),
           const SizedBox(height: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceAlt,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final s in sections) _CoachSection(section: s),
-                for (final h in highlights)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.tips_and_updates_outlined,
-                              size: 14, color: AppColors.gold),
-                          const SizedBox(width: 6),
-                          Expanded(
-                              child: Text(h,
-                                  style: AppText.label.copyWith(
-                                      fontSize: 12, color: AppColors.gold))),
-                        ]),
-                  ),
-              ],
+          // Ez a panel LEGFONTOSABB doboza: az egész elemzés emberi
+          // nyelvű kivonata. Eddig ugyanolyan szürke csempe volt, mint
+          // az alatta futó tucatnyi kártya — most arany bal-sín és halk
+          // arany fény emeli ki, hogy a szem itt kezdjen.
+          FadeSlideIn(
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.gold.withOpacity(0.09),
+                    AppColors.surfaceAlt,
+                  ],
+                  stops: const [0.0, 0.6],
+                ),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.gold.withOpacity(0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final (i, s) in sections.indexed)
+                    FadeSlideIn(index: i, child: _CoachSection(section: s)),
+                  for (final (i, h) in highlights.indexed)
+                    FadeSlideIn(
+                      index: sections.length + i,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.tips_and_updates_outlined,
+                                  size: 14, color: AppColors.gold),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                  child: Text(h,
+                                      style: AppText.label.copyWith(
+                                          fontSize: 12,
+                                          color: AppColors.gold))),
+                            ]),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -872,7 +896,13 @@ class _CoachSectionState extends State<_CoachSection> {
     final shown = _all ? lines : lines.take(_preview).toList();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
+      // A kinyitás/becsukás nem ugrik, hanem NŐ: a szem követni tudja,
+      // hogy ugyanaz a szakasz lett hosszabb (nem másik lap jött).
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
@@ -917,6 +947,7 @@ class _CoachSectionState extends State<_CoachSection> {
                 : "Mind a ${lines.length} megállapítás"),
           ),
         ],
+        ),
       ),
     );
   }

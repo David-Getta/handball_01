@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **UI 14. kör: az edzői összefoglaló lett a lap hőse** (kliens): az
+  összefoglaló az egész elemzés emberi nyelvű kivonata, mégis
+  ugyanolyan szürke csempe volt, mint az alatta futó tucatnyi kártya.
+  Mostantól arany keretet és halk arany fényt kap, a címe is aranyra
+  vált ikonnal, a szakaszai és a kiemelések lépcsőzve úsznak be. A
+  hosszú szakaszok kinyitása pedig már nem ugrik: a doboz simán
+  megnő (AnimatedSize), így látszik, hogy ugyanaz a szakasz lett
+  hosszabb.
+
 - **UI 13. kör: a lövéstérkép sorra rakja ki a lövéseket** (kliens):
   eddig a nézetre váltáskor az egész pontfelhő egyszerre jelent meg —
   a szem ilyenkor egyben látja, és nem tudja, hol kezdje. Mostantól a
