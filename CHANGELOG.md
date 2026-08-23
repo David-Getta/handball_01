@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **UI 12. kör: az eredmény-grafikon megmutatja a VEZETÉST** (kliens):
+  eddig két lépcsős vonal futott egymás mellett, és a "ki vezetett,
+  mennyivel" kérdést a néző fejben vonta ki belőlük. Mostantól a két
+  vonal KÖZÖTTI mező a vezető csapat színét viseli, a fedettsége
+  pedig a különbséggel nő — ránézésre látszik, meddig tartott a
+  vezetés és mikor fordult a meccs. A csapat-területek halványabbak
+  lettek, hogy a vezetés-mező olvasható maradjon.
+
 - **Hetes-ismétlés** (új réteg): a hetes-sarok réteg eddig a dobó
   ELOSZLÁSÁT adta ("a heteseinek 60%-a balra megy") — a kapusnak
   viszont a SORREND kell: hova megy a MOST következő. Két dobó

@@ -72,8 +72,10 @@ class ScoreChart extends StatelessWidget {
       const SizedBox(height: 2),
       Text(
           runs.isEmpty
-              ? "koppints egy gólra — a lejátszó odaugrik"
-              : "a sávok gól-sorozatok — koppints egy gólra vagy sávra",
+              ? "a színes mező a vezetés (szín = ki vezet, vastagság = "
+                  "mennyivel) · koppints egy gólra — a lejátszó odaugrik"
+              : "a színes mező a vezetés, a függőleges sávok gól-sorozatok "
+                  "· koppints egy gólra vagy sávra",
           style: AppText.label.copyWith(fontSize: 10, color: AppColors.textFaint)),
     ]);
   }
@@ -189,6 +191,36 @@ class _ScoreChartPainter extends CustomPainter {
       }
     }
 
+    // Vezetés-sáv: a két lépcső KÖZÖTTI terület a VEZETŐ színével, a
+    // fedettség a különbséggel nő. Eddig a "ki vezetett és mennyivel"
+    // kérdést a néző fejben vonta ki a két vonalból — most a szem
+    // szintjén dől el: ahol kék a mező, a hazai vezetett, és minél
+    // vastagabb, annál nagyobb volt az előny.
+    {
+      var h = 0, a = 0;
+      var prevX = geom.x(0);
+      void band(double x0, double x1, int hh, int aa) {
+        if (hh == aa || x1 <= x0) return;
+        final leader = hh > aa ? AppColors.home : AppColors.away;
+        final gap = (hh - aa).abs();
+        canvas.drawRect(
+            Rect.fromLTRB(x0, geom.y(hh > aa ? hh : aa), x1,
+                geom.y(hh > aa ? aa : hh)),
+            Paint()
+              ..color = leader
+                  .withOpacity((0.09 + 0.04 * gap).clamp(0.09, 0.32)));
+      }
+
+      for (final g in goals) {
+        final gx = geom.x(((g["t"] as num?)?.toInt() ?? 0)
+            .clamp(0, totalFrames - 1));
+        band(prevX, gx, h, a);
+        if (g["team"] == "home") { h++; } else { a++; }
+        prevX = gx;
+      }
+      band(prevX, geom.x(totalFrames - 1), h, a);
+    }
+
     // Visszafogott rács: legfeljebb 4 vízszintes vonal, egész gól-értékeknél.
     final grid = Paint()..color = AppColors.border.withOpacity(0.5)..strokeWidth = 1;
     final step = (geom.maxGoals / 4).ceil().clamp(1, 1 << 30);
@@ -238,7 +270,7 @@ class _ScoreChartPainter extends CustomPainter {
             ..shader = LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [color.withOpacity(0.16), color.withOpacity(0.0)],
+              colors: [color.withOpacity(0.07), color.withOpacity(0.0)],
             ).createShader(Rect.fromLTRB(0, _ChartGeom.padT, size.width,
                 size.height - _ChartGeom.padB)));
       canvas.drawPath(path, line);
