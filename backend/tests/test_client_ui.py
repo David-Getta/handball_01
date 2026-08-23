@@ -1031,3 +1031,31 @@ def test_a_lejart_var_ido_nem_oli_meg_az_indulo_motort():
     assert int(m.group(1)) >= 150, (
         "túl rövid indulási várakozás — az első futás víruskereső-"
         f"átvizsgálással ennél tovább tart ({m.group(1)} mp)")
+
+
+def test_a_motor_sajat_naploja_is_latszik():
+    """ŐR: a hiba-képernyők a motor SAJÁT naplóját is megmutatják.
+
+    A becsomagolt motor ablak nélküli programként fut (console=False a
+    PyInstaller-recepetben). Windowson ilyenkor a Pythonnak nincs
+    stdout/stderr-je, tehát a kliens csövébe SEMMI nem érkezik — a motor
+    a saját üzeneteit egy KÜLÖN fájlba írja (engine.log), az indító
+    naplója (engine-app.log) mellé. Ha a kliens csak a sajátját olvassa,
+    a felhasználó pont a MIÉRT-et nem látja: csak azt, hogy
+    "elindítottam" és "leállt".
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    assert "engine.log" in src, (
+        "a kliens nem olvassa a motor saját naplóját (engine.log)")
+    # És tényleg a logTail fűzze össze — ne csak valahol szerepeljen.
+    start = src.index("static Future<String?> logTail(")
+    end = src.index("\n  }", start)
+    torzs = src[start:end]
+    assert "_engineOwnLogFile" in torzs and "_logFile" in torzs, (
+        "a logTail nem fűzi össze a motor és az indító naplóját")

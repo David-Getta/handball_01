@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.45 óta)
 
+- **Windowson végre látszik, mit mond a motor** (kliens, javítás): a
+  becsomagolt motor ABLAK NÉLKÜLI programként fut, és Windowson
+  ilyenkor a Pythonnak nincs stdout/stderr-je — vagyis a kliens
+  csövébe SEMMI nem érkezik. A motor a saját üzeneteit ezért egy KÜLÖN
+  fájlba írja (`engine.log`), az indító naplója (`engine-app.log`)
+  mellé. A kliens viszont eddig csak a sajátját olvasta: a
+  hiba-képernyőn ott állt, hogy "elindítottam" és "leállt", de a
+  MIÉRT — ami a másik fájlban volt — soha nem látszott. Ez a
+  legvalószínűbb oka annak, hogy a hibajelentések üresnek tűntek.
+  Mostantól a napló-kivonat MINDKÉT fájlt összefűzi, külön
+  fejlécekkel. Őr-teszt védi.
+
 - **A motor elmondja, MEDDIG jutott az indulásban** (motor): a nehéz
   részek betöltése (torch, OpenCV) másodpercekig — becsomagolt
   kiadásban, víruskereső-átvizsgálással percekig — tart, és eddig az

@@ -98,18 +98,50 @@ class BackendLauncher {
 
   IOSink? _log;
 
-  /// A motor-napló utolsó sorai — a hiba-képernyő mutatja meg, hogy a
-  /// kiváltó ok egy képernyőképen elférjen (a felhasználónak ne kelljen
-  /// fájlok közt keresgélnie). Hibánál null (pl. még nincs napló).
-  static Future<String?> logTail({int lines = 40}) async {
+  /// A motor SAJÁT naplója (`engine.log`) a felhasználói adatmappában.
+  ///
+  /// KÜLÖN fájl az engine-app.log-tól, és Windowson EZ a fontos: a
+  /// becsomagolt motor ablak nélküli (console=False) programként fut,
+  /// ilyenkor a Pythonnak nincs stdout/stderr-je, tehát a kliens
+  /// csövébe SEMMI nem érkezik — a motor a saját üzeneteit ide írja.
+  /// A kliens naplója enélkül csak azt mutatta, hogy "elindítottam" és
+  /// "leállt", a MIÉRT-et nem.
+  static File _engineOwnLogFile() =>
+      File("${_logFile().parent.path}${Platform.pathSeparator}engine.log");
+
+  static Future<String?> _tailOf(File f, int lines) async {
     try {
-      final all = await _logFile().readAsLines();
+      if (!await f.exists()) return null;
+      final all = await f.readAsLines();
       if (all.isEmpty) return null;
       final from = all.length > lines ? all.length - lines : 0;
       return all.sublist(from).join("\n");
     } catch (_) {
       return null;
     }
+  }
+
+  /// A napló utolsó sorai — a hiba-képernyő mutatja meg, hogy a kiváltó
+  /// ok egy képernyőképen elférjen (a felhasználónak ne kelljen fájlok
+  /// közt keresgélnie).
+  ///
+  /// MINDKÉT naplót összefűzi: a motor sajátját (ott van a MIÉRT) és a
+  /// kliensét (ott van, hogy mit próbáltunk). Null, ha egyik sincs.
+  static Future<String?> logTail({int lines = 40}) async {
+    final engine = await _tailOf(_engineOwnLogFile(), lines);
+    final client = await _tailOf(_logFile(), lines);
+    if (engine == null && client == null) return null;
+    final b = StringBuffer();
+    if (engine != null) {
+      b.writeln("--- a motor saját naplója (engine.log) ---");
+      b.writeln(engine);
+    }
+    if (client != null) {
+      if (engine != null) b.writeln("");
+      b.writeln("--- az indító naplója (engine-app.log) ---");
+      b.writeln(client);
+    }
+    return b.toString().trimRight();
   }
 
   /// Naplósor a fájlba ÉS a kezdőképernyőre (ha van hallgató). A naplózás
@@ -398,7 +430,7 @@ class BackendLauncher {
     // 5) A napló vége.
     final tail = await logTail(lines: 40);
     b.writeln("");
-    b.writeln("--- a motor naplójának vége ---");
+    b.writeln("--- naplók vége ---");
     b.writeln((tail == null || tail.trim().isEmpty)
         ? "(nincs napló — úgy tűnik, a motor el sem indult)"
         : tail);
