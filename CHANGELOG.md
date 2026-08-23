@@ -3,9 +3,39 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.38 óta)
+## Kiadatlan (a v0.1.39 óta)
 
 *(még semmi)*
+
+## v0.1.39 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: vizuális kör — az app "megmozdult". Animációs
+> eszköztár (belépő animációk, szám-felpörgetés, hover-emelés), élő
+> grafikonok (berajzolás, terület-kitöltés, sima görbék, ragyogó
+> gól-pontok), puha hőtérkép és ívelt passzháló, világító navigáció, és
+> egységes téma-nyelv a Material szürke alapértelmezései helyett —
+> külső csomag nélkül, csupa beépített Flutter-primitívvel.
+
+- **UI-szépítés: animációk és élő grafikák** (kliens, 4 kör):
+  - Új animációs eszköztár (anim.dart): lépcsőzött belépés
+    (FadeSlideIn), szám-felpörgetés (CountUp), asztali hover-emelés
+    (HoverLift) — csupa beépített primitív, külső csomag nélkül.
+  - Eredmény-grafikon: berajzolás-animáció, csapatszínű
+    terület-kitöltés, ragyogó gól-pontok; intenzitás-grafikon: sima
+    görbék (Catmull-Rom), terület-kitöltés, berajzolás.
+  - Lövéstérkép: a gólok puha csapatszínű ragyogást kapnak; passzháló:
+    ívelt élek, sugaras átmenetű csomópontok, a legaktívabb ember
+    ragyogással; hőtérkép: éles rácstéglák helyett puha, elmosott
+    hőfoltok világosodó maggal.
+  - Dashboard: a meccs-kártyák lépcsőzve úsznak be, hoverre
+    megemelkednek; a statisztika-nagyszámok felpörögnek; a felderítés
+    csempe-fala lépcsőzve épül fel; az oldalsáv kijelölt eleme
+    világító pill.
+  - Globális téma-nyelv: kártya-formájú dialógusok és felugró menük,
+    lebegő lekerekített snackbar, olvasható sötét súgóbuborék,
+    egységes chipek, vékony görgetősáv; a várakozó nézet lélegző
+    ragyogást, az üres állapot belépő animációt és korong-hátteres
+    ikont kapott.
 
 ## v0.1.38 — kiadva (2026-08-23)
 
