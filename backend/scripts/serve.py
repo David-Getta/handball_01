@@ -49,6 +49,45 @@ def _ensure_streams() -> None:
             sys.stderr = f
 
 
+def _stage(msg: str) -> None:
+    """Indulási mérföldkő a naplóba.
+
+    Miért kell: a nehéz importok (torch, OpenCV) MÁSODPERCEKIG —
+    becsomagolt kiadásban, víruskereső-átvizsgálással PERCEKIG — tartanak,
+    és eddig az ELSŐ naplósor is csak utánuk jött. Ha a motor közben halt
+    el (hiányzó rendszerkönyvtár, OpenMP-ütközés), a felhasználó ÜRES
+    naplót látott, és nem lehetett megmondani, meddig jutott el. Ezek a
+    sorok pontosan ezt mondják meg.
+    """
+    print(f"[indulás] {msg}", flush=True)
+
+
+def _crash_report(exc: BaseException) -> None:
+    """A halálos kivétel kiírása a felhasználói adatmappába is.
+
+    A kliens a csővön keresztül olvassa a kimenetünket, de ha a kliens
+    előbb áll le (vagy a cső eltörik), a hiba oka nyomtalanul elvész. Ez
+    a fájl az utolsó mentsvár — a diagnosztika is beolvassa.
+    """
+    import traceback
+    # A LÉNYEG külön sorban, a nyomkövetés elé: a felhasználó ezt az egy
+    # sort tudja továbbadni, ha a hosszú traceback elriasztja.
+    fej = f"{type(exc).__name__}: {exc}"
+    print(fej, flush=True)
+    traceback.print_exc()
+    try:
+        from handball.storage import data_root
+        root = data_root()
+        root.mkdir(parents=True, exist_ok=True)
+        import datetime
+        with open(root / "engine-crash.log", "a", encoding="utf-8") as f:
+            f.write(f"\n=== {datetime.datetime.now().isoformat()} ===\n")
+            f.write(fej + "\n")
+            traceback.print_exc(file=f)
+    except Exception:
+        pass  # a hibajelentés hibája nem takarhatja el az eredeti hibát
+
+
 def pick_free_port(host: str, start_port: int, tries: int = 11) -> int:
     """Az első SZABAD port a start_porttól felfelé (max `tries` próbálkozás).
 
@@ -70,22 +109,41 @@ def pick_free_port(host: str, start_port: int, tries: int = 11) -> int:
 
 def main() -> int:
     _ensure_streams()
-    import uvicorn
-    from handball.api.app import create_app
+    # Az ELSŐ sor még a nehéz importok előtt megy ki: ebből tudjuk, hogy a
+    # program egyáltalán elindult (a becsomagolt indító lefutott).
+    _stage(f"az indító elindult (python {sys.version.split()[0]})")
+    try:
+        _stage("webszerver betöltése…")
+        import uvicorn
 
-    host = os.environ.get("HANDBALL_HOST", "127.0.0.1")
-    want = int(os.environ.get("HANDBALL_PORT", "8000"))
-    port = pick_free_port(host, want)
-    if port != want:
-        print(f"FIGYELEM: a {want}-es port foglalt — tartalék port: {port}",
-              flush=True)
+        _stage("elemző motor betöltése — az első futásnál ez a leglassabb "
+               "lépés (a víruskereső átvizsgálja a programot)…")
+        from handball.api.app import create_app
 
-    # A frozen (PyInstaller) kiadásban NEM adhatunk import-sztringet a uvicornnak
-    # (nincs reload/worker), ezért közvetlenül a kész app-objektumot indítjuk.
-    app = create_app()
-    print(f"Sport Machine backend indul: http://{host}:{port}", flush=True)
-    uvicorn.run(app, host=host, port=port, log_level="info")
-    return 0
+        _stage("a motor betöltve")
+
+        host = os.environ.get("HANDBALL_HOST", "127.0.0.1")
+        want = int(os.environ.get("HANDBALL_PORT", "8000"))
+        port = pick_free_port(host, want)
+        if port != want:
+            print(f"FIGYELEM: a {want}-es port foglalt — tartalék port: {port}",
+                  flush=True)
+
+        # A frozen (PyInstaller) kiadásban NEM adhatunk import-sztringet a
+        # uvicornnak (nincs reload/worker), ezért közvetlenül a kész
+        # app-objektumot indítjuk.
+        app = create_app()
+        print(f"Sport Machine backend indul: http://{host}:{port}", flush=True)
+        uvicorn.run(app, host=host, port=port, log_level="info")
+        return 0
+    except BaseException as exc:  # noqa: BLE001 — a MIÉRT-et meg kell őrizni
+        # Ide a becsomagolt kiadás legcsúnyább hibái esnek: hiányzó
+        # rendszerkönyvtár, OpenMP-ütközés, jogosultsági hiba az
+        # adatmappán. Enélkül a folyamat némán meghalt, és a felhasználó
+        # csak "Connection refused"-öt látott.
+        _stage("VÉGZETES HIBA az indulás közben — a részletek alább")
+        _crash_report(exc)
+        return 1
 
 
 if __name__ == "__main__":

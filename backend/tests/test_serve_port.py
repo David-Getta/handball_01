@@ -110,3 +110,42 @@ def test_health_kiadja_a_motor_verziot():
     body = client.get("/health").json()
     assert body["status"] == "ok"
     assert body["version"] == __version__
+
+
+def test_az_indulas_merfoldkovei_a_nehez_importok_elott_szolalnak_meg():
+    """ŐR: a motor indulási sorai a NEHÉZ IMPORTOK ELŐTT kezdődnek.
+
+    A torch/OpenCV betöltése másodpercekig — becsomagolt kiadásban,
+    víruskereső-átvizsgálással percekig — tart. Ha az első naplósor csak
+    utánuk jönne, akkor az ott elhaló motor ÜRES naplót hagyna, és nem
+    lehetne megmondani, meddig jutott el. A felhasználó ilyenkor csak
+    "Connection refused"-öt lát.
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent
+           / "scripts" / "serve.py").read_text(encoding="utf-8")
+    fo = src.index("def main(")
+    elso_sor = src.index("_stage(", fo)
+    elso_import = src.index("import uvicorn", fo)
+    assert elso_sor < elso_import, (
+        "az első indulási naplósor a nehéz importok UTÁN jön — az ott "
+        "elhaló motor üres naplót hagyna")
+
+
+def test_az_indulasi_kivetel_nem_vesz_el():
+    """ŐR: a végzetes indulási kivétel jelentést kap.
+
+    A becsomagolt kiadás legcsúnyább hibái (hiányzó rendszerkönyvtár,
+    OpenMP-ütközés, nem írható adatmappa) itt csapódnak le. Kezeletlenül
+    a folyamat NÉMÁN meghal, és a felhasználónak nincs mit elküldenie.
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent
+           / "scripts" / "serve.py").read_text(encoding="utf-8")
+    assert "except BaseException" in src, (
+        "a main() nem fogja meg a végzetes indulási kivételt")
+    assert "_crash_report" in src, "nincs összeomlás-jelentés"
+    assert "engine-crash.log" in src, (
+        "az összeomlás nem kerül tartós fájlba — a cső eltörésével elvész")

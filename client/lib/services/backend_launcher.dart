@@ -380,7 +380,22 @@ class BackendLauncher {
     b.writeln("portok:     ${answering.isEmpty ? "egyik sem válaszol "
         "(8000–${8000 + portRange - 1})" : answering.join(", ")}");
 
-    // 4) A napló vége.
+    // 4) Az ÖSSZEOMLÁS-napló, ha van. A motor ide írja a végzetes
+    // indulási kivételt (hiányzó rendszerkönyvtár, OpenMP-ütközés,
+    // jogosultsági hiba) — ez a legbeszédesebb egyetlen forrás.
+    try {
+      final crash = File("${dir.path}${Platform.pathSeparator}"
+          "engine-crash.log");
+      if (await crash.exists()) {
+        final lines = await crash.readAsLines();
+        final from = lines.length > 30 ? lines.length - 30 : 0;
+        b.writeln("");
+        b.writeln("--- a motor ÖSSZEOMLÁS-naplója (vége) ---");
+        b.writeln(lines.sublist(from).join("\n"));
+      }
+    } catch (_) {}
+
+    // 5) A napló vége.
     final tail = await logTail(lines: 40);
     b.writeln("");
     b.writeln("--- a motor naplójának vége ---");

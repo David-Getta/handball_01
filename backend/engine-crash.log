@@ -1,0 +1,6 @@
+
+=== 2026-08-23T13:36:58.009015 ===
+ValueError: teszt-hiba
+Traceback (most recent call last):
+  File "<string>", line 6, in <module>
+ValueError: teszt-hiba

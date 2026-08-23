@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.45 óta)
 
+- **A motor elmondja, MEDDIG jutott az indulásban** (motor): a nehéz
+  részek betöltése (torch, OpenCV) másodpercekig — becsomagolt
+  kiadásban, víruskereső-átvizsgálással percekig — tart, és eddig az
+  ELSŐ naplósor is csak utánuk jött. Ha a motor közben halt el
+  (hiányzó rendszerkönyvtár, OpenMP-ütközés), a felhasználó ÜRES
+  naplót látott, és nem lehetett megmondani, hol akadt el. Mostantól
+  mérföldkövek jelzik az utat: "az indító elindult", "webszerver
+  betöltése", "elemző motor betöltése", "a motor betöltve".
+
+- **A végzetes indulási hiba nem vész el** (motor): a `main()`
+  mostantól elkapja a halálos kivételt, kiírja a LÉNYEGET egyetlen
+  sorban (típus + üzenet), és a teljes nyomkövetést tartós fájlba is
+  menti (`engine-crash.log` a felhasználói adatmappában). Eddig a
+  folyamat némán meghalt, és ha a kliens csöve közben eltört, a
+  hibaüzenet nyomtalanul elveszett. A "Diagnosztika másolása" gomb
+  ezt a fájlt is beolvassa. Két őr-teszt védi.
+
 ## v0.1.45 — kiadva (2026-08-23)
 
 > Kiadás-jegyzet: ez a kiadás arról szól, MIÉRT nem indul el a motor —
