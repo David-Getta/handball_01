@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **UI 11. kör: a fejlődés-képernyő mutatja a nagyságrendet** (kliens):
+  a "korábbi → újabb" sorok eddig csak két szám voltak egy nyíllal —
+  abból nem derült ki, hogy a mutató SOKAT vagy alig mozdult.
+  Mostantól minden mutató alatt változás-sáv fut: a hossza a
+  nagyságrend, a halvány rész a közös alap, a színes farok maga a
+  változás. Mellé relatív jelvény kerül ("+23%"), az új érték
+  felpörög, a sorok lépcsőzve úsznak be, az összegzés doboza pedig
+  halk arany fényt kap.
+
 - **A minőség-csipet kimondja, ha van mit javítani** (kliens): a
   fejlécben ülő minőség-csipet eddig csak SZÍNNEL utalt a bajra, a
   figyelmeztetések (pl. az elcsúszott kalibráció) a párbeszéd
