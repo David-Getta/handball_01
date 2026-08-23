@@ -2454,7 +2454,20 @@ class _MatchScreenState extends State<MatchScreen> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
-      child: Text(text, style: AppText.value.copyWith(fontSize: 12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(text, style: AppText.value.copyWith(fontSize: 12)),
+        if (net != null && net.totalPasses > 0) ...[
+          const SizedBox(height: 3),
+          // A rajz két dolgot kódol méretbe/vastagságba; enélkül a háló
+          // csak "valami pókháló" — a lövéstérkép és a hőtérkép is
+          // kimondja, mit jelentenek a jelei.
+          Text(
+              "a korong mérete a passz-részvétel · a vonal vastagsága a "
+              "két ember közti passzok száma",
+              style: AppText.label
+                  .copyWith(fontSize: 10.5, color: AppColors.textFaint)),
+        ],
+      ]),
     );
   }
 

@@ -61,6 +61,11 @@ class PassNetworkPainter extends CustomPainter {
       final r = 8.0 + 5.0 * (n.involvement / maxInv);
       // A legaktívabb ember puha ragyogást kap: a játék "gerince"
       // ránézésre kiugrik.
+      //
+      // Itt az elmosás MEGENGEDETT (máshol őr-teszt tiltja): a
+      // passzháló nem rajzolódik újra képkockánként — a shouldRepaint
+      // csak a hálóra és a csapatra néz, a lejátszófej mozgására nem —,
+      // és csapatonként EGYETLEN ilyen ragyogás van.
       if (n.involvement == maxInv) {
         canvas.drawCircle(
             p,

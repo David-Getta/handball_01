@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.43 óta)
 
+- **A passzháló is megmondja, mit jelentenek a jelei** (kliens): a
+  hőtérkép és a lövéstérkép már kimondja, mit kódol méretbe és színbe
+  — a passzháló volt az utolsó térkép-réteg magyarázat nélkül.
+  Mostantól a csipeten ott áll, hogy a korong mérete a
+  passz-részvétel, a vonal vastagsága pedig a két ember közti passzok
+  száma. (A rajzolóban maradó egyetlen elmosás mellé komment került
+  arról, miért megengedett: a passzháló nem rajzolódik újra
+  képkockánként, és csapatonként egyetlen ilyen ragyogás van.)
+
 - **Az indító képernyő is megmutatja a motor naplóját** (kliens): a
   motor indulási hibája ELŐSZÖR itt jelenik meg — a fiók-kapu és a
   nyitóképernyő már eddig is kiírta a napló végét, ez a képernyő
