@@ -3,7 +3,21 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.45 óta)
+## Kiadatlan (a v0.1.46 óta)
+
+## v0.1.46 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ha eddig azt láttad, hogy "nem érem el a
+> háttérmotort", és a napló semmit nem árult el — ez a kiadás pont
+> ezért készült. Kiderült, hogy a motor üzenetei Windowson EGY MÁSIK
+> FÁJLBA mentek (a becsomagolt motor ablak nélkül fut, ilyenkor a
+> Pythonnak nincs kimenete), és a program ezt a fájlt meg sem nézte:
+> a hiba-képernyőn ezért csak az állt, hogy "elindítottam" és
+> "leállt". Mostantól mindkét naplót mutatja. A motor emellett
+> elmondja, MEDDIG jutott az indulásban (a nehéz részek betöltése
+> előtt is naplóz), a végzetes hibát tartós fájlba menti, és akkor
+> sem hal meg némán, ha az adatmappa nem írható. A "Diagnosztika
+> másolása" gomb mindezt egy kattintással a vágólapra teszi.
 
 - **A nem írható adatmappa sem öl némán** (motor, javítás): a
   napló-átirányítás MAGA is elhasalhat, ha az adatmappa nem írható
