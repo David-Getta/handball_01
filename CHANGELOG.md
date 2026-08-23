@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **UI 15. kör: beszédesebb szezon-összkép a nyitóképernyőn** (kliens):
+  a négy nagy szám eddig négy egyforma szürke dobozban ült, felirat
+  nélkül nem lehetett őket ránézésre megkülönböztetni. Mostantól
+  mindegyik saját ikont kap puha korongon, a kiemelt kártya
+  akcentus-keretet és halk fényt, a sor pedig balról jobbra úszik be —
+  a nyitókép "felépül", nem egyszerre csapódik oda.
+
 - **UI 14. kör: az edzői összefoglaló lett a lap hőse** (kliens): az
   összefoglaló az egész elemzés emberi nyelvű kivonata, mégis
   ugyanolyan szürke csempe volt, mint az alatta futó tucatnyi kártya.

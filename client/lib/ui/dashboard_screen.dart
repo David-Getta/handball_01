@@ -2025,22 +2025,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
         : (_totalDurationS / 60);
     final cards = <Widget>[
       _statCard("ELEMZETT MECCS", "${s?["matches"] ?? _matches.length}",
-          _offline ? "backend offline" : "a tárolt könyvtárból", accent: true),
+          _offline ? "backend offline" : "a tárolt könyvtárból",
+          accent: true, icon: Icons.sports_handball),
       _statCard("ÖSSZ. JÁTÉKIDŐ", "${durMin.toStringAsFixed(1)} perc",
           s != null ? "${(s["teams"] as List).length} csapat a könyvtárban"
-                    : "${_matches.length} meccs feldolgozva"),
+                    : "${_matches.length} meccs feldolgozva",
+          icon: Icons.schedule),
       if (s != null)
-        _statCard("GÓL-ESEMÉNY", "${s["goals"]}", _goalNote(s)),
+        _statCard("GÓL-ESEMÉNY", "${s["goals"]}", _goalNote(s),
+            icon: Icons.gps_fixed),
       if (s != null)
         _statCard("FUTOTT TÁV", "${s["distance_km"]} km",
-            "${s["sprints"]} sprint összesen"),
+            "${s["sprints"]} sprint összesen",
+            icon: Icons.directions_run),
     ];
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < cards.length; i++) ...[
           if (i > 0) const SizedBox(width: AppSpacing.lg),
-          Expanded(child: cards[i]),
+          // A kártyák balról jobbra úsznak be — a szezon-összkép így
+          // "felépül", nem egyszerre csapódik oda.
+          Expanded(child: FadeSlideIn(index: i, child: cards[i])),
         ],
       ],
     );
@@ -2254,14 +2260,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return note;
   }
 
-  Widget _statCard(String label, String value, String note, {bool accent = false}) {
+  Widget _statCard(String label, String value, String note,
+      {bool accent = false, IconData? icon}) {
+    final tint = accent ? AppColors.accent : AppColors.textSecondary;
     return Container(
-      decoration: AppTheme.card(),
+      decoration: BoxDecoration(
+        // A kiemelt kártya halk akcentus-fényt kap a sarkából — a
+        // szezon-összkép sorában van hierarchia, ne legyen négy egyforma
+        // szürke doboz.
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent
+                ? AppColors.accent.withOpacity(0.10)
+                : AppColors.surface,
+            AppColors.surface,
+          ],
+          stops: const [0.0, 0.6],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: accent
+                ? AppColors.accent.withOpacity(0.35)
+                : AppColors.border),
+      ),
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppText.sectionLabel),
+          Row(children: [
+            if (icon != null) ...[
+              // Ikon puha korongon: a négy kártya ránézésre is
+              // megkülönböztethető, nem csak a feliratából.
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tint.withOpacity(0.13),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 13, color: tint),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(child: Text(label, style: AppText.sectionLabel)),
+          ]),
           const SizedBox(height: AppSpacing.md),
           // Szám-felpörgetés, ha a érték tisztán szám — különben sima
           // szöveg (pl. "12:9" eredmény-formátum).
