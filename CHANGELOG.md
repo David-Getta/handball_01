@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.42 óta)
 
+- **Figura-indító** (új réteg): a figura-befejező réteg megmondja, KIRE
+  FUT KI a figurájuk — ez azt, HONNAN INDUL. A kettő nem ugyanaz a
+  védekező szempontjából: a befejezőt a fal a lövés előtt egy-két
+  másodperccel ismeri fel, az indítót viszont AZONNAL, az első
+  passznál. A réteg minden figura-klaszterben megnézi, kinél volt a
+  labda a támadás első mért pillanatában, és a poszthoz írja. Edzői
+  olvasat: ha a figura mindig ugyanarról a posztról indul, elég a
+  kiinduló passzsávot zárni — a figura el sem indul. Saját oldalon az
+  indítást variálni kell. Felületek: /analyze, meccs-csomag, edzői
+  összefoglaló, felderítő kulcs + meccsterv (447.), edzés-fókusz
+  (467.), kulcs-poszt lista és jelentés-lencse, kliens-csempe,
+  3 teszt.
+
 - **A labdás ember megtartja a csapatszínét** (kliens): a labdát vivő
   játékos arany ragyogása eddig a korong FÖLÉ került, és rámosódott —
   a két csapat labdás embere egyforma sárgás foltnak látszott, pont

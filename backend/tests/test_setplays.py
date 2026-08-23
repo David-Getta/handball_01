@@ -423,3 +423,71 @@ def test_setplay_decay_silent_with_few_attacks():
 
     rec = setplay_decay(_spd_match(patterns=_SPD_PATTERNS[:2]))["home"]
     assert rec["gap_pp"] is None and rec["verdict"] is None, rec
+
+
+# ---- Figura-indító (setplay_openers) ---------------------------------------
+
+
+def _spo_match(openers, ys=None):
+    """`openers` = támadásonként az a hazai játékos, AKINÉL a labda van
+    a szakasz elején.
+
+    A mozgás-mintázat minden támadásban UGYANAZ (a három játékos
+    ugyanott áll), tehát egyetlen figura-klaszter jön létre — csak az
+    INDÍTÓ ember más. Pont ezt méri a réteg.
+    """
+    xs = [30.0, 28.0, 32.0]
+    ys = ys or [10.0, 4.0, 16.0]
+    pos = {i + 1: (xs[i], ys[i]) for i in range(3)}
+    frames = []
+    t = 0
+    for tid in openers:
+        ox, oy = pos[tid]
+        cast = [_pl(i + 1, Team.HOME, xs[i], ys[i]) for i in range(3)]
+        for _ in range(20):      # a figura: a labda az INDÍTÓ kezében
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=ox + 0.2, y=oy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(30):      # átmenet a következő támadásig
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=5.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="spo", home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_setplay_openers_finds_the_readable_start():
+    """Ha a figura indításainak négyötöde ugyanarról a posztról jön, a
+    fal már az ELSŐ passznál tudja, mi következik."""
+    from handball.pipeline.setplays import (SPO_MIN_STARTS,
+                                            setplay_openers)
+
+    rec = setplay_openers(_spo_match([1, 1, 1, 1, 2]))["home"]
+    assert rec["figures"], rec
+    top = rec["figures"][0]
+    assert sum(top["roles"].values()) >= SPO_MIN_STARTS, rec
+    assert rec["telegraphed"] is not None, rec
+    assert rec["telegraphed"]["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "passzsávot" in rec["verdict"], rec
+
+
+def test_setplay_openers_silent_when_the_start_varies():
+    """Váltogatott indítással nincs előjel — a figurát nem lehet az
+    első passzból felismerni (sose hallgatólagos előjel)."""
+    from handball.pipeline.setplays import setplay_openers
+
+    # A 2-es és a 3-as ugyanazt a posztot (szélső) kapja a becsléstől,
+    # ezért a váltogatást az 1-es (átlövő) és a 2-es között mérjük.
+    rec = setplay_openers(_spo_match([1, 2, 1, 2, 1, 2]))["home"]
+    assert rec["figures"][0]["roles"] == {"átlövő": 3, "szélső": 3}, rec
+    assert rec["telegraphed"] is None and rec["verdict"] is None, rec
+
+
+def test_setplay_openers_silent_on_thin_samples():
+    """Két indításból még nem minta — a figura ítélete None."""
+    from handball.pipeline.setplays import setplay_openers
+
+    rec = setplay_openers(_spo_match([1, 2]))["home"]
+    assert rec["telegraphed"] is None and rec["verdict"] is None, rec
+    assert all(r["main_role"] is None for r in rec["figures"]), rec

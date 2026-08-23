@@ -3470,6 +3470,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "figura indulásakor arra az oldalra kell csúsznia.")
     except Exception:
         pass
+    # Figura-indító: melyik posztról indul a figurájuk (az ELŐJEL).
+    try:
+        from .setplays import setplay_openers
+        spo = setplay_openers(match)
+        for side, name in (("home", home), ("away", away)):
+            tel_spo = spo[side]["telegraphed"]
+            if tel_spo is None:
+                continue
+            body += (f" A(z) {name} {tel_spo['figure']}. figurája már az "
+                     f"INDÍTÁSNÁL olvasható: az indításainak "
+                     f"{tel_spo['share_pct']:.0f}%-a a(z) "
+                     f"{tel_spo['poszt']} posztról jön "
+                     f"({tel_spo['starts']} támadásból) — amint a labda "
+                     "odaér, zárni kell a kiinduló passzsávot.")
+    except Exception:
+        pass
     # Poszt-nyomás: kire kell kilépni, kit kell kizárni.
     try:
         from .roles import role_pressure_finish

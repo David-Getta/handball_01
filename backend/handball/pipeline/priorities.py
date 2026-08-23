@@ -188,6 +188,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("felkészülés", "Poszt-nyomás", "roles", "role_pressure_finish"),
         ("felkészülés", "Figura-befejező", "setplays",
          "setplay_finishers"),
+        ("felkészülés", "Figura-indító", "setplays",
+         "setplay_openers"),
         ("felkészülés", "Figura-kopás", "setplays", "setplay_decay"),
         ("felkészülés", "Időkérés-befejező", "stoppages",
          "timeout_finisher"),
@@ -479,6 +481,7 @@ KP_MIN_LAYERS = 3
 # "main_role" és "verdict" kulccsal ("egy réteg, sok felület" minta).
 KP_LAYERS: tuple = (
     ("Figura-befejező", "setplays", "setplay_finishers"),
+    ("Figura-indító", "setplays", "setplay_openers"),
     ("Időkérés-befejező", "stoppages", "timeout_finisher"),
     ("Kontra-poszt", "roles", "role_fast_breaks"),
     ("Gólpassz-poszt", "roles", "role_assist_sources"),

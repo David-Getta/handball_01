@@ -1408,6 +1408,12 @@ class ScoutingReport:
     spf_figures: int = 0
     spf_telegraphed: int = 0
     spf_telegraphed_by_role: dict = field(default_factory=dict)
+    # Figura-indító: hány figurájuk INDÍTÁSA olvasható egy posztról,
+    # és melyik posztról hány ilyen figura indul. Darabszámok, meccsek
+    # közt pontosan összegződnek.
+    spo_figures: int = 0
+    spo_telegraphed: int = 0
+    spo_telegraphed_by_role: dict = field(default_factory=dict)
     rht_holds_by_role: dict = field(default_factory=dict)
     rht_frames_by_role: dict = field(default_factory=dict)
     rrz_recv_by_role: dict = field(default_factory=dict)
@@ -5968,6 +5974,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"legtöbb ({_spf_n}) a(z) {_spf_p} posztra fut ki — a "
                 "figura FELISMERÉSEKOR kell arra az oldalra csúszni, "
                 "nem a lövésnél reagálni.")
+
+    # Figura-indító: melyik figurájuk olvasható már az INDÍTÁSNÁL.
+    if rep.spo_figures >= 2 and rep.spo_telegraphed >= 1:
+        _spo_top = sorted(rep.spo_telegraphed_by_role.items(),
+                          key=lambda kv: -kv[1])
+        if _spo_top:
+            _spo_p, _spo_n = _spo_top[0]
+            keys.append(
+                f"A figuráik {rep.spo_figures}-ból "
+                f"{rep.spo_telegraphed} már az INDÍTÁSNÁL olvasható, és "
+                f"a legtöbb ({_spo_n}) a(z) {_spo_p} posztról indul — "
+                "amint a labda odaér felállt támadásban, zárni kell a "
+                "kiinduló passzsávot: a figura így el sem indul, nem a "
+                "befejezésénél kell megfogni.")
 
     # Poszt-nyomás: kire lépjen ki a falunk, kit kell kizárni.
     _rpf_cs = rep.rpf_covered_shots_by_role
@@ -11278,6 +11298,19 @@ def _scout_team_cached(match: Match, team: Team,
                 _spf_hits[r["main_role"]] = _spf_hits.get(
                     r["main_role"], 0) + 1
         rep.spf_telegraphed_by_role = _spf_hits
+        from .setplays import setplay_openers as _spo
+        sporec = _spo(match, config)[team.value]
+        _spo_rows = [r for r in sporec["figures"]
+                     if r["share_pct"] is not None]
+        rep.spo_figures = len(_spo_rows)
+        rep.spo_telegraphed = sum(1 for r in _spo_rows
+                                  if r["share_pct"] >= 60.0)
+        _spo_hits: dict = {}
+        for r in _spo_rows:
+            if r["share_pct"] >= 60.0:
+                _spo_hits[r["main_role"]] = _spo_hits.get(
+                    r["main_role"], 0) + 1
+        rep.spo_telegraphed_by_role = _spo_hits
         from .roles import role_pressure_finish as _rpf
         rpfrec = _rpf(match, config)[team.value]
         rep.rpf_covered_shots_by_role = {
@@ -14002,6 +14035,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 447) Az ő indításnál olvasható figurájuk × a ti aktív falatok:
+    # a passzsáv zárása a figurát INDULÁS ELŐTT megöli.
+    if (opp.spo_telegraphed >= 1 and opp.spo_telegraphed_by_role
+            and own.trans_steals >= 4):
+        _p447_p, _p447_n = max(opp.spo_telegraphed_by_role.items(),
+                               key=lambda kv: kv[1])
+        plan.append(
+            f"A figuráik közül {opp.spo_telegraphed} már az INDÍTÁSNÁL "
+            f"olvasható, a legtöbb ({_p447_n}) a(z) {_p447_p} posztról "
+            f"indul, ti pedig aktívan szereztek labdát "
+            f"({own.trans_steals} szerzés) — felállt támadásban a(z) "
+            f"{_p447_p} posztra menő ELSŐ passz sávját zárjátok: "
+            "kilépés a passzvonalra, nem az emberre. A figura így el "
+            "sem indul, és a megszerzett labda azonnal kontra.")
 
     from .rules import SREP_MIN_PAIRS, SREP_REPEAT_PCT
     # 446) Az ő ismétlő hetesdobójuk × a ti védő kapusotok: a
@@ -21852,6 +21900,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         spf_telegraphed=sum(r.spf_telegraphed for r in reports),
         spf_telegraphed_by_role=_merge_count_dicts(
             r.spf_telegraphed_by_role for r in reports),
+        spo_figures=sum(r.spo_figures for r in reports),
+        spo_telegraphed=sum(r.spo_telegraphed for r in reports),
+        spo_telegraphed_by_role=_merge_count_dicts(
+            r.spo_telegraphed_by_role for r in reports),
         rpf_covered_shots_by_role=_merge_count_dicts(
             r.rpf_covered_shots_by_role for r in reports),
         rpf_covered_goals_by_role=_merge_count_dicts(

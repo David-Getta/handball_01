@@ -6470,6 +6470,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "felismerésekor kell odacsúszni, nem a lövésnél";
   }
 
+  // Figura-indító: hány figurájuk INDÍTÁSA olvasható egy posztról (2+
+  // mérhető figura, 60% részarány — a backenddel azonos küszöb:
+  // SPO_SHARE_PCT). A befejező a lövés előtt derül ki, ez az ELSŐ
+  // passznál.
+  String? _setplayOpener(Map<String, dynamic> r) {
+    final figures = (r["spo_figures"] as num?)?.toInt() ?? 0;
+    final tel = (r["spo_telegraphed"] as num?)?.toInt() ?? 0;
+    final byRole =
+        (r["spo_telegraphed_by_role"] as Map?)?.cast<String, dynamic>();
+    if (figures < 2 || tel < 1 || byRole == null || byRole.isEmpty) {
+      return null;
+    }
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    return "a figuráik $figures-ból $tel már az INDÍTÁSNÁL olvasható, a "
+        "legtöbb ($topN) a(z) $top posztról indul · zárjátok a kiinduló "
+        "passzsávot, és a figura el sem indul";
+  }
+
   // Poszt-nyomás: melyik posztjuk fejez be fedezetten is (8+ fedezett
   // lövés, posztonként 4+, 20 százalékpont eltérés — a backenddel
   // azonos küszöbök: RPF_MIN_SHOTS, RPF_GAP_PCT).
@@ -11765,6 +11792,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Időkérés-befejező", _timeoutFinisher(r)!],
       if (_setplayFinisher(r) != null)
         ["Figura-befejező", _setplayFinisher(r)!],
+      if (_setplayOpener(r) != null)
+        ["Figura-indító", _setplayOpener(r)!],
       if (_pressureFinishRole(r) != null)
         ["Poszt-nyomás", _pressureFinishRole(r)!],
       if (_goalPlacementRole(r) != null)

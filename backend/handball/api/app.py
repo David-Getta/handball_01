@@ -2694,6 +2694,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.setplays import setplay_openers
+            res["setplay_openers"] = setplay_openers(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import role_fast_breaks
             res["role_fast_breaks"] = role_fast_breaks(match)
         except Exception:
@@ -6518,6 +6523,9 @@ def create_app():
                 from ..pipeline.setplays import setplay_finishers
                 _layer("setplay_finishers",
                        lambda: setplay_finishers(match))
+                from ..pipeline.setplays import setplay_openers
+                _layer("setplay_openers",
+                       lambda: setplay_openers(match))
                 from ..pipeline.roles import role_fast_breaks
                 _layer("role_fast_breaks",
                        lambda: role_fast_breaks(match))

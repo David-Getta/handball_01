@@ -1366,6 +1366,34 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 467) Figura-indító: ha a saját figuránk mindig ugyanarról a
+    # posztról indul, az ellenfél ugyanezt látja a felvételen.
+    try:
+        from .setplays import SPO_SHARE_PCT, setplay_openers
+        spo467 = setplay_openers(match, config)
+        for side in ("home", "away"):
+            tel467 = spo467[side]["telegraphed"]
+            if tel467 is None:
+                continue
+            add(side, "támadás", "Figura-indítás variálása",
+                f"a(z) {tel467['figure']}. figuránk indításainak "
+                f"{tel467['share_pct']:.0f}%-a a(z) {tel467['poszt']} "
+                f"posztról jön ({tel467['starts']} támadásból; "
+                f"{SPO_SHARE_PCT:.0f}% fölött jelezzük) — a figura nem a "
+                "befejezésénél lesz olvasható, hanem már az ELSŐ "
+                "passznál, és a felkészült fal a kiinduló passzsávot "
+                "zárja, mielőtt a figura elindulna",
+                "ugyanazt a figurát KÉT-HÁROM különböző indítással kell "
+                "begyakorolni: azonos végkifejlet, más kiinduló ember "
+                "(pl. átlövő helyett szélről vagy beállótól indítva). "
+                "Az edzésen a figurát mindig más posztról hívd — a "
+                "játékosoknak a MOZDULAT-sort kell tudniuk, nem a "
+                "kiinduló pozíciót. Ellenőrzés: a védekező ötös "
+                "mondja meg, felismerte-e az első passzból; amíg igen, "
+                "az indítás még nem elég változatos")
+    except Exception:
+        pass
+
     # 466) Hetes-ismétlés: ha a saját hetesdobóink másodszorra is
     # ugyanoda dobnak, kiszámíthatók — a sarok-váltás edzés-téma.
     try:

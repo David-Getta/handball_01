@@ -514,6 +514,110 @@ def setplay_finishers(match: Match, config: TacticsConfig | None = None,
     return out
 
 
+# Figura-indító küszöbei: ennyi poszthoz kötött INDÍTÁS kell a figura
+# ítéletéhez, és ekkora részarány fölött mondjuk ki, hogy a figura
+# indítása egy posztról olvasható.
+SPO_MIN_STARTS = 4
+SPO_SHARE_PCT = 60.0
+
+
+def setplay_openers(match: Match, config: TacticsConfig | None = None,
+                    threshold: float = 0.15, min_length: int = 5,
+                    min_attacks: int = 2) -> dict:
+    """Figura-indító: MELYIK POSZTRÓL INDUL a figurájuk.
+
+    A figura-befejező (`setplay_finishers`) azt mondja meg, KIRE FUT KI
+    a figura — ez azt, HONNAN INDUL. A kettő nem ugyanaz a védekező
+    szempontjából: a befejezőt a fal a lövés előtt egy-két másodperccel
+    ismeri fel, az indítót viszont AZONNAL, az első passznál.
+
+    Minden figura-klaszter minden támadásában megnézzük, kinél volt a
+    labda a szakasz ELSŐ mért pillanatában (a birtoklás-eldöntött első
+    kockán), és azt a játékos posztjához írjuk.
+
+    Edzőileg ez az ELŐJEL. Ha egy figura a támadásaik nagy részében
+    ugyanarról a posztról indul, akkor abban a pillanatban, ahogy a
+    labda odaér, a fal már tudja, mi jön — nem a felismerésre kell
+    várni, hanem a kiinduló passzsávot lehet zárni, és a figura el sem
+    indul. Saját oldalon fordítva: ha a mi figuránk mindig ugyanonnan
+    indul, az ellenfél ugyanezt látja — az indítót variálni kell,
+    különben a figura a harmadik ismétléstől nem ér semmit.
+
+    Visszatérés csapatonként: {"figures": [{"figure", "attacks",
+    "starts", "roles": {poszt: indítás}, "main_role", "share_pct"}],
+    "telegraphed": {"figure", "starts", "poszt", "share_pct"} | None,
+    "verdict": str | None} — a main_role/share_pct None, ha a figura
+    nem érte el az SPO_MIN_STARTS poszthoz kötött indítást; a
+    telegraphed/verdict None, ha egyik figura sem éri el az
+    SPO_SHARE_PCT részarányt (sose hallgatólagos előjel).
+    """
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        labels = cluster_signatures([attack_signature(s_) for s_ in seqs],
+                                    threshold=threshold)
+        agg: dict = {}
+        for seq, lab in zip(seqs, labels):
+            rec = agg.setdefault(lab, {"attacks": 0, "starts": 0,
+                                       "roles": {}})
+            rec["attacks"] += 1
+            # A szakasz ELSŐ kockája, ahol a labda a támadó csapat
+            # egyik emberénél van — ő indítja a figurát.
+            for f in seq.frames:
+                holder = ball_holder(f, config)
+                if holder is None or holder.team != team:
+                    continue
+                rec["starts"] += 1
+                rec_role = roles[team.value].get(holder.track_id)
+                if rec_role is not None:
+                    poszt = rec_role["poszt"]
+                    rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+                break
+
+        rows = []
+        for lab, rec in agg.items():
+            if rec["attacks"] < min_attacks:
+                continue
+            named = sum(rec["roles"].values())
+            main = share = None
+            if named >= SPO_MIN_STARTS:
+                poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+                main = poszt
+                share = round(100.0 * rec["roles"][poszt] / named, 1)
+            rows.append({"figure": int(lab), "attacks": rec["attacks"],
+                         "starts": rec["starts"],
+                         "roles": dict(sorted(rec["roles"].items(),
+                                              key=lambda kv: -kv[1])),
+                         "main_role": main, "share_pct": share})
+        rows.sort(key=lambda r: (-r["attacks"], -r["starts"]))
+
+        telegraphed = verdict = None
+        best = [r for r in rows
+                if r["share_pct"] is not None
+                and r["share_pct"] >= SPO_SHARE_PCT]
+        if best:
+            r = max(best, key=lambda r_: (r_["share_pct"], r_["starts"]))
+            telegraphed = {"figure": r["figure"],
+                           "starts": sum(r["roles"].values()),
+                           "poszt": r["main_role"],
+                           "share_pct": r["share_pct"]}
+            verdict = (f"a(z) {r['figure']}. figurájuk indításainak "
+                       f"{r['share_pct']:.0f}%-a a(z) {r['main_role']} "
+                       "posztról jön — amint a labda odaér, zárni kell a "
+                       "kiinduló passzsávot, és a figura el sem indul")
+        out[team.value] = {"figures": rows, "telegraphed": telegraphed,
+                           "verdict": verdict}
+    return out
+
+
 # Figura-koncentráció küszöbei: ennyi mért támadás kell az ítélethez,
 # ekkora részarány számít "egy figurára épülő" játéknak, ennyi
 # részarány alatt viszont változatosnak, és ennyi figurát nézünk a
