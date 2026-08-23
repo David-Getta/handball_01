@@ -1088,3 +1088,62 @@ def test_a_szerver_magyarazata_eljut_a_felhasznaloig():
     assert not csupasz, (
         f"{len(csupasz)} helyen csak a státuszkódot dobjuk — a szerver "
         "magyarázata elveszik")
+
+
+def test_a_futo_feldolgozasok_barhonnan_visszatalalhatok():
+    """ŐR: van külön Feldolgozások képernyő, és a menü ÉLŐ jelvénnyel
+    mutatja, hány elemzés fut.
+
+    Egy meccs feldolgozása percekig fut. A haladás korábban csak a
+    kezdőlapon látszott, és csak amíg a felhasználó ott állt: aki közben
+    átment a felderítésre vagy a figura-tervezőbe, elvesztette szem elől
+    — és nem volt hová visszamennie.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.jobs" in shell, "nincs Feldolgozások menüpont"
+    assert "Feldolgozások" in shell, "a menüpontnak nincs neve"
+    assert "_JobsBadge" in shell, (
+        "a menüpont nem mutat élő darabszámot — a futó munka nem "
+        "látszik más képernyőkről")
+
+    assert (lib / "ui" / "jobs_screen.dart").exists(), (
+        "nincs Feldolgozások képernyő")
+
+    # A figyelő KÖZÖS: egyetlen kérdezgető járjon, ne képernyőnként külön.
+    monitor = (lib / "services" / "jobs_monitor.dart").read_text(
+        encoding="utf-8")
+    assert "static final JobsMonitor instance" in monitor, (
+        "a feldolgozás-figyelő nem közös példány")
+    for name in ("jobs_screen.dart", "dashboard_screen.dart"):
+        src = (lib / "ui" / name).read_text(encoding="utf-8")
+        assert "JobsMonitor" in src, f"{name}: nem a közös figyelőt használja"
+
+
+def test_az_alvas_gatlas_a_feldolgozas_ideje_alatt_el():
+    """ŐR: a motor alvás-gátló zárat fog a feldolgozás idejére, és
+    MINDIG feloldja.
+
+    A feldolgozás percekig-órákig tart, és közben a felhasználó nem a
+    képernyőt nézi. Zár nélkül a rendszer tétlenségi alvásra vált, és a
+    számítás megáll. Feloldás nélkül viszont a gép a munka után is ébren
+    maradna, és enné az akkumulátort.
+    """
+    from pathlib import Path
+
+    app = (Path(__file__).resolve().parent.parent
+           / "handball" / "api" / "app.py").read_text(encoding="utf-8")
+    fo = app.index("def _run_job(")
+    veg = app.index("_log_job(job)", fo)
+    torzs = app[fo:veg]
+    assert "KeepAwake" in torzs, (
+        "a feldolgozás nem fog alvás-gátló zárat")
+    assert "finally:" in torzs and "_awake.stop()" in torzs, (
+        "a zár nem oldódik fel minden ágon — a gép a munka után is "
+        "ébren maradna")

@@ -738,7 +738,16 @@ def create_app():
     def _run_job(job, body):
         match_id = job["match_id"]
         path = body.get("path")
-        if True:  # (behúzás-megőrző blokk a korábbi törzsnek)
+        # ALVÁS-GÁTLÁS a munka idejére: a feldolgozás percekig-órákig
+        # tart, és közben a felhasználó nem a képernyőt nézi (lehajtja a
+        # laptop tetejét, elmegy). Zár nélkül a rendszer tétlenségi
+        # alvásra vált, és a számítás megáll vagy lelassul. A zár a
+        # folyamatunkhoz kötődik, és a `finally` ágon MINDIG feloldódik.
+        from ..power import KeepAwake
+        _awake = KeepAwake()
+        _awake.start()
+        job["keep_awake"] = _awake.active
+        try:  # (behúzás-megőrző blokk a korábbi törzsnek)
             # A nehéz feldolgozó a scripts.process_video-ban van; a backend/ mappát
             # biztosítjuk a sys.path-en, hogy a szerver bárhonnan indítva megtalálja.
             import sys
@@ -839,7 +848,13 @@ def create_app():
                 job["status"] = "error"
                 job["error"] = msg
                 job["message"] = f"hiba: {msg}"
-            _log_job(job)
+        finally:
+            # A zár feloldása MINDIG megtörténik — kész, hiba és
+            # megszakítás után is. Enélkül a gép a feldolgozás után is
+            # ébren maradna, ami a felhasználó akkumulátorát enné.
+            _awake.stop()
+            job.pop("keep_awake", None)
+        _log_job(job)
 
     # Feldolgozás-napló: a LEZÁRT job-ok (kész/hiba/megszakítva) egy sora
     # a lemezre kerül — újraindítás után is visszanézhető, mi történt.

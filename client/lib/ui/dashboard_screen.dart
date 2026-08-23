@@ -5,7 +5,6 @@
 /// match_id-vel. Backend nélkül/üres tárnál barátságos állapotot mutat.
 library;
 
-import "dart:async";
 import "dart:io";
 
 import "package:file_picker/file_picker.dart";
@@ -13,6 +12,7 @@ import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
 import "../services/backend_launcher.dart";
+import "../services/jobs_monitor.dart";
 import "diagnostics_button.dart";
 import "../services/session_store.dart";
 import "../services/update_service.dart";
@@ -58,31 +58,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // egy koppintással külön a kész és a folytatásra/törlésre váró elemzések.
   String _libFilter = "all";
 
-  // Feldolgozási sor: a futó/sorban álló munkák a kezdőlapon is látszanak,
-  // és amíg van aktív munka, pár másodpercenként frissülnek.
-  List<Map<String, dynamic>> _jobs = [];
+  // Feldolgozási sor: a futó/sorban álló munkák a kezdőlapon is
+  // látszanak. A kérdezgetést a KÖZÖS figyelő végzi (JobsMonitor) — a
+  // menü-jelvény és a Feldolgozások képernyő ugyanabból az állapotból
+  // dolgozik, tehát egyetlen kérés jár, nem képernyőnként külön.
   List<Map<String, dynamic>> _jobHistory = [];
-  Timer? _jobsTimer;
 
-  bool _isActiveJob(Map<String, dynamic> j) =>
-      j["status"] == "running" || j["status"] == "queued";
+  List<Map<String, dynamic>> get _jobs => JobsMonitor.instance.jobs.value;
 
-  Future<void> _refreshJobs() async {
-    final jobs = await _api.fetchJobs();
-    if (!mounted) return;
-    final hadActive = _jobs.any(_isActiveJob);
-    final hasActive = jobs.any(_isActiveJob);
-    setState(() => _jobs = jobs);
-    if (hasActive) {
-      _jobsTimer ??= Timer.periodic(
-          const Duration(seconds: 2), (_) => _refreshJobs());
-    } else {
-      _jobsTimer?.cancel();
-      _jobsTimer = null;
-      // Ha épp most fejeződött be egy munka, a könyvtár is frissül.
-      if (hadActive) _load();
-    }
+  bool _isActiveJob(Map<String, dynamic> j) => JobsMonitor.isActive(j);
+
+  /// A közös figyelő jelzi, ha KIFUTOTT az utolsó munka — ilyenkor a
+  /// könyvtárat újra kell tölteni, hogy a kész meccs megjelenjen.
+  void _onJobsFinished() {
+    if (mounted) _load();
   }
+
+  Future<void> _refreshJobs() => JobsMonitor.instance.refreshNow();
 
   // Automatikus frissítés: az elérhető új verzió (ha van) és az elrejtés.
   UpdateInfo? _update;
@@ -93,11 +85,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _load();
     _checkUpdatesSilently();
+    // A közös figyelő állapotára hangolódunk: a kártyák frissülnek, és
+    // ha kifutott az utolsó munka, a könyvtár is újratöltődik.
+    JobsMonitor.instance.start();
+    JobsMonitor.instance.jobs.addListener(_onJobsChanged);
+    JobsMonitor.instance.finishedTick.addListener(_onJobsFinished);
+  }
+
+  void _onJobsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _jobsTimer?.cancel();
+    JobsMonitor.instance.jobs.removeListener(_onJobsChanged);
+    JobsMonitor.instance.finishedTick.removeListener(_onJobsFinished);
     _searchCtrl.dispose();
     super.dispose();
   }

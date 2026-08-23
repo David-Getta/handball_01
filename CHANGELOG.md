@@ -5,6 +5,33 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.46 óta)
 
+- **Feldolgozások: külön menüpont, élő jelvénnyel** (kliens): egy meccs
+  feldolgozása percekig fut, de a haladás eddig CSAK a kezdőlapon
+  látszott, és csak amíg a felhasználó ott állt. Aki közben átment a
+  felderítésre vagy a figura-tervezőbe, elvesztette szem elől, és nem
+  volt hová visszamennie. Mostantól saját menüpont van rá, a menüben
+  ÉLŐ szám mutatja, hány elemzés dolgozik (bárhonnan látszik), a lapon
+  pedig ott a szakasz, a százalék, a megszakítás, az "ami eddig kész"
+  gomb (a részleges eredmény menet közben is megnyitható), és alatta a
+  LEZÁRT feldolgozások naplója a hibaüzenetekkel. A kérdezgetést egy
+  KÖZÖS figyelő végzi, tehát a kezdőlap és az új lap együtt sem
+  terheli jobban a motort, mint eddig a kezdőlap egyedül. Őr-teszt
+  védi.
+
+- **A gép nem alszik el feldolgozás közben** (motor): a feldolgozás
+  percekig-órákig tart, és közben a felhasználó nem a képernyőt nézi —
+  elmegy, lehajtja a laptop tetejét. A rendszer ilyenkor tétlenségi
+  alvásra vált, és a számítás megáll vagy lelassul. Mostantól a motor a
+  MUNKA IDEJÉRE alvás-gátló zárat fog (macOS: caffeinate a saját
+  folyamatunkhoz kötve; Windows: SetThreadExecutionState), és a végén —
+  kész, hiba és megszakítás után is — MINDIG elengedi, hogy a gép ne
+  maradjon ébren fölöslegesen. A Feldolgozások lap ki is írja, hogy a
+  gép ébren marad. Őszintén a határról: MacBookon a LEHAJTOTT tető
+  külső kijelző nélkül a macOS-t akkor is elaltatja — ezt alkalmazásból
+  nem lehet felülbírálni; a zár a képernyő-elalvás utáni tétlenségi
+  alvást és a lemez-alvást oldja meg. Három teszt védi, köztük az,
+  hogy a zár hibája sosem akadályozhatja a feldolgozást.
+
 - **Ékezetes útvonalon is megnyílik a videó** (motor, javítás): az
   OpenCV Windowson a rendszer kódlapján át nyitja a fájlt, ezért az
   ÉKEZETES útvonalon (magyar felhasználónál a mindennapi eset:

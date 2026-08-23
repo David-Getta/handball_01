@@ -5,7 +5,7 @@
 ///   ELEMZÉS:       Meccs-elemző · Ellenfél-felderítés · Játékos-fejlődés ·
 ///                  Figura-tervező
 /// Minden eszköz a menüből érhető el (nem képernyők mélyéről), a kijelölés
-/// mindig mutatja, hol jársz. Gyors váltás billentyűzetről: Cmd/Ctrl+1..7.
+/// mindig mutatja, hol jársz. Gyors váltás billentyűzetről: Cmd/Ctrl+1..8.
 /// Szűk nézetben a sáv keskeny, rámutatásra kinyílik a feliratokkal.
 library;
 
@@ -13,6 +13,7 @@ import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 
 import "../../services/api_client.dart";
+import "../../services/jobs_monitor.dart";
 import "../../services/session_store.dart";
 import "../../sim/demo_data.dart";
 import "../../theme/app_theme.dart";
@@ -21,6 +22,7 @@ import "../account_gate.dart";
 import "../dashboard_screen.dart";
 import "../designer_screen.dart";
 import "../error_text.dart";
+import "../jobs_screen.dart";
 import "../live_screen.dart";
 import "../match_screen.dart";
 import "../player_trend_screen.dart";
@@ -30,7 +32,9 @@ import "../upload_screen.dart";
 
 /// A navigáció elemei. (A `matches` a meccs-elemző: menüből demóval nyílik,
 /// a könyvtárból a kiválasztott meccsel — a kijelölés ilyenkor is ezt jelöli.)
-enum NavId { dashboard, upload, live, matches, scouting, playerTrend, designer }
+enum NavId {
+  dashboard, upload, jobs, live, matches, scouting, playerTrend, designer
+}
 
 /// A menü csoportjai és elemei — EGY helyen, a sáv és a billentyű-kiosztás
 /// is ebből épül (a sorrend adja a Cmd/Ctrl+1..N kiosztást).
@@ -38,6 +42,7 @@ const List<(String, List<(NavId, IconData, String)>)> kNavGroups = [
   ("MUNKAFOLYAMAT", [
     (NavId.dashboard, Icons.home_outlined, "Kezdőlap"),
     (NavId.upload, Icons.add_circle_outline, "Új elemzés"),
+    (NavId.jobs, Icons.hourglass_bottom, "Feldolgozások"),
     (NavId.live, Icons.sensors, "Élő követés"),
   ]),
   ("ELEMZÉS", [
@@ -54,6 +59,7 @@ void navTo(BuildContext context, NavId id) {
   final Widget page = switch (id) {
     NavId.dashboard => const DashboardScreen(),
     NavId.upload => const UploadScreen(),
+    NavId.jobs => const JobsScreen(),
     NavId.live => const LiveScreen(),
     NavId.matches => const MatchScreen(),
     NavId.scouting => const ScoutingPickerScreen(),
@@ -72,7 +78,7 @@ void navTo(BuildContext context, NavId id) {
 /// előbb-utóbb széttart; ez a közös.
 const List<(String, List<(String, String)>)> kShortcutGroups = [
   ("Bárhol", [
-    ("Cmd/Ctrl + 1..7", "váltás a menü elemei közt (a menü sorrendjében)"),
+    ("Cmd/Ctrl + 1..8", "váltás a menü elemei közt (a menü sorrendjében)"),
     ("? vagy F1", "ez a súgó"),
   ]),
   ("Meccs-elemzőben", [
@@ -303,6 +309,10 @@ class _AccountMenuState extends State<_AccountMenu> {
   void initState() {
     super.initState();
     _load();
+    // A feldolgozás-figyelő minden képernyőn fut (a burok mindenhol ott
+    // van), így a menü jelvénye BÁRHOL mutatja, hány elemzés dolgozik —
+    // ez teszi visszatalálhatóvá a futó munkát.
+    JobsMonitor.instance.start();
   }
 
   Future<void> _load() async {
@@ -525,6 +535,10 @@ class _SideNavState extends State<_SideNav> {
                   selected: id == widget.active,
                   open: _open,
                   live: id == NavId.live,
+                  // A futó feldolgozások száma BÁRHONNAN látszik: ez
+                  // teszi visszatalálhatóvá az elemzést, ha a
+                  // felhasználó közben mást néz az appban.
+                  badge: id == NavId.jobs,
                 ),
               const SizedBox(height: AppSpacing.lg),
             ],
@@ -597,6 +611,9 @@ class _NavItem extends StatefulWidget {
   final bool open;
   final bool live;
 
+  /// Mutasson-e ÉLŐ darabszám-jelvényt a futó feldolgozásokról.
+  final bool badge;
+
   const _NavItem({
     required this.id,
     required this.icon,
@@ -605,6 +622,7 @@ class _NavItem extends StatefulWidget {
     required this.selected,
     required this.open,
     this.live = false,
+    this.badge = false,
   });
 
   @override
@@ -652,6 +670,7 @@ class _NavItemState extends State<_NavItem> {
             ),
           ),
           if (w.live) const _RedDot(),
+          if (w.badge) const _JobsBadge(),
           if (!w.live && w.shortcut > 0 && (_hover || w.selected))
             Text("⌘${w.shortcut}",
                 style: TextStyle(
@@ -661,7 +680,10 @@ class _NavItemState extends State<_NavItem> {
                         : AppColors.textFaint)),
         ] else if (w.live)
           const Padding(
-              padding: EdgeInsets.only(left: 2), child: _RedDot()),
+              padding: EdgeInsets.only(left: 2), child: _RedDot())
+        else if (w.badge)
+          const Padding(
+              padding: EdgeInsets.only(left: 2), child: _JobsBadge()),
       ],
     );
 
@@ -707,6 +729,39 @@ class _NavItemState extends State<_NavItem> {
                 ? "${w.label} (Cmd/Ctrl+${w.shortcut})"
                 : w.label,
             child: item);
+  }
+}
+
+/// A futó feldolgozások száma a menüponton — ÉLŐ.
+///
+/// Ez a kis szám a lényeg: egy meccs feldolgozása percekig fut, és
+/// eddig a haladás csak a kezdőlapon látszott. Aki közben átment másik
+/// képernyőre, elvesztette szem elől, és nem volt hová visszamennie.
+/// Innen egy kattintás a Feldolgozások lap.
+class _JobsBadge extends StatelessWidget {
+  const _JobsBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<Map<String, dynamic>>>(
+      valueListenable: JobsMonitor.instance.jobs,
+      builder: (context, jobs, _) {
+        final n = jobs.where(JobsMonitor.isActive).length;
+        if (n == 0) return const SizedBox.shrink();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          decoration: BoxDecoration(
+            color: AppColors.accent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text("$n",
+              style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.onAccent)),
+        );
+      },
+    );
   }
 }
 
