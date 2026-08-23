@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **A minőség-csipet kimondja, ha van mit javítani** (kliens): a
+  fejlécben ülő minőség-csipet eddig csak SZÍNNEL utalt a bajra, a
+  figyelmeztetések (pl. az elcsúszott kalibráció) a párbeszéd
+  megnyitásáig rejtve maradtak — így a leggyakoribb hiba észrevétlen
+  maradhatott. Mostantól a csipeten arany jelvény mutatja a
+  figyelmeztetések DARABSZÁMÁT, a rámutatás megmondja, mit tegyünk, a
+  részletek pedig a pályán kívülre eső mérés arányát is kiírják.
+
 - **Elcsúszott kalibráció felismerése** (motor): a minőség-jelentés
   mostantól méri, a mért pozíciók hány százaléka vetül a pályán KÍVÜLRE
   (2 m tűréssel — a kifutó szélső és a mérés zaja belefér). 12% fölött

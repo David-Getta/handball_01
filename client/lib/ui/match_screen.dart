@@ -1831,27 +1831,60 @@ class _MatchScreenState extends State<MatchScreen> {
   /// Minőség-jelvény: pontszám színnel (jó/közepes/gyenge), kattintásra részletek.
   Widget _qualityChip(Map<String, dynamic> q) {
     final score = (q["score"] as num?)?.toInt() ?? 0;
+    final warnCount = ((q["warnings"] as List?) ?? const []).length;
     final color = score >= 70
         ? AppColors.accent
         : score >= 40
             ? AppColors.gold
             : AppColors.away;
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => _showQualityDetails(q),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color),
+    return Tooltip(
+      message: warnCount == 0
+          ? "A feldolgozás minősége — koppints a részletekért"
+          : "$warnCount figyelmeztetés — koppints, hogy lásd, mit érdemes "
+              "javítani",
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => _showQualityDetails(q),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.verified_outlined, size: 13, color: color),
+            const SizedBox(width: 5),
+            Text("minőség $score/100",
+                style: AppText.label.copyWith(fontSize: 11, color: color)),
+            // Ha VAN mit megnézni, a csipet ki is mondja — eddig csak a
+            // pontszám színe utalt rá, és a figyelmeztetések (pl. az
+            // elcsúszott kalibráció) rejtve maradtak a párbeszédben.
+            if (warnCount > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(8),
+                  border:
+                      Border.all(color: AppColors.gold.withOpacity(0.6)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      size: 11, color: AppColors.gold),
+                  const SizedBox(width: 3),
+                  Text("$warnCount",
+                      style: AppText.label.copyWith(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.gold)),
+                ]),
+              ),
+            ],
+          ]),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.verified_outlined, size: 13, color: color),
-          const SizedBox(width: 5),
-          Text("minőség $score/100",
-              style: AppText.label.copyWith(fontSize: 11, color: color)),
-        ]),
       ),
     );
   }
@@ -1871,6 +1904,11 @@ class _MatchScreenState extends State<MatchScreen> {
             Text("Labda-lefedettség: ${q["ball_coverage_pct"]}%", style: AppText.label),
             Text("Becsült pozíciók: ${q["estimated_ratio_pct"]}%", style: AppText.label),
             Text("Leghosszabb labda-kiesés: ${q["longest_ball_gap_s"]} mp", style: AppText.label),
+            // A pályán kívülre vetülő mérések aránya: ez az elcsúszott
+            // kalibráció ujjlenyomata (a motor ebből ad figyelmeztetést).
+            if (q["out_of_court_pct"] != null)
+              Text("Pályán kívülre eső mérés: ${q["out_of_court_pct"]}%",
+                  style: AppText.label),
             if (warnings.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               for (final w in warnings)
