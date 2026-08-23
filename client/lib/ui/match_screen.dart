@@ -174,7 +174,7 @@ class _MatchScreenState extends State<MatchScreen> {
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
-        label = "backend · ${match.meta.matchId}";
+        label = "motor · ${match.meta.matchId}";
         try {
           events = await _api.fetchEvents(widget.matchId);
         } catch (_) {
@@ -531,7 +531,7 @@ class _MatchScreenState extends State<MatchScreen> {
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Text(
             _sourceLabel == "demó"
-                ? "Az események a backend feldolgozásból jönnek — demó módban nem elérhetők."
+                ? "Az események a motor feldolgozásából jönnek — demó módban nem elérhetők."
                 : "Nincs felismert esemény (ehhez labda-detektálás kell a felvételen).",
             style: AppText.label,
             textAlign: TextAlign.center,
@@ -1202,7 +1202,7 @@ class _MatchScreenState extends State<MatchScreen> {
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   child: Text(
                     demo
-                        ? "A jegyzetek a backenden tárolódnak — demó módban nem elérhetők."
+                        ? "A jegyzeteket a motor tárolja — demó módban nem elérhetők."
                         : "Állítsd a lejátszót a kívánt pillanatra, és írd be a megjegyzést — "
                             "a jegyzet a jelentésbe is bekerül.",
                     style: AppText.label,

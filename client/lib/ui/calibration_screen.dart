@@ -298,7 +298,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         _loading
             ? "referencia képkocka betöltése…"
             : _loadError != null
-                ? "nincs képkocka (backend/videó nélkül) — helyőrző"
+                ? "nincs képkocka (motor vagy videó nélkül) — helyőrző"
                 : "referencia képkocka (helyőrző)",
         style: AppText.label.copyWith(color: AppColors.textFaint),
       ),

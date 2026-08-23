@@ -2113,7 +2113,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         : (_totalDurationS / 60);
     final cards = <Widget>[
       _statCard("ELEMZETT MECCS", "${s?["matches"] ?? _matches.length}",
-          _offline ? "backend offline" : "a tárolt könyvtárból",
+          _offline ? "a motor nem válaszol" : "a tárolt könyvtárból",
           accent: true, icon: Icons.sports_handball),
       _statCard("ÖSSZ. JÁTÉKIDŐ", "${durMin.toStringAsFixed(1)} perc",
           s != null ? "${(s["teams"] as List).length} csapat a könyvtárban"

@@ -799,3 +799,39 @@ def test_hotérkep_nem_cellankent_elmosott():
     assert "RadialGradient" in src, "a lágy hőfolt nem gradienssel készül"
     assert "maskFilter" not in src, (
         "cellánkénti elmosás a hőtérképen — ez akadozó rajzolást okoz")
+
+
+def test_a_felhasznaloi_szoveg_nem_beszel_fejlesztoi_nyelven():
+    """ŐR (nyelv): a felhasználónak MOTORT mondunk, nem "backendet" és
+    végképp nem "uvicornt".
+
+    A motor-elérhetetlenség a leggyakoribb élő hiba; a képernyő eddig
+    azt mondta rá, hogy "indítsd el a lokális szervert (uvicorn)". Ez
+    egy edzőnek, aki asztali alkalmazást telepített, nem utasítás,
+    hanem zsargon. A kódban a "backend" szó maradhat (fájlnév, import,
+    komment) — a MEGJELENÍTETT szövegekben nem.
+    """
+    import re
+
+    import pytest
+
+    ui = _client_lib() / "ui"
+    if not ui.exists():
+        pytest.skip("nincs kliens a fában")
+
+    # Csak a magyar mondatokat nézzük: legalább 12 karakter és van
+    # benne szóköz — az import-utak és az azonosítók így kiesnek.
+    rossz = []
+    for f in sorted(ui.glob("*.dart")):
+        src = f.read_text(encoding="utf-8")
+        for line in src.splitlines():
+            if line.lstrip().startswith("//"):
+                continue  # komment: ott szabad
+            for lit in re.findall(r'"([^"\\]{12,})"', line):
+                if " " not in lit:
+                    continue
+                low = lit.lower()
+                if "uvicorn" in low or "backend" in low:
+                    rossz.append(f"{f.name}: {lit}")
+    assert not rossz, (
+        "fejlesztői zsargon a felhasználói szövegben: " + "; ".join(rossz))

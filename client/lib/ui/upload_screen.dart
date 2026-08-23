@@ -298,7 +298,9 @@ class _UploadScreenState extends State<UploadScreen> {
     final path = _pathCtrl.text.trim();
     if (path.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Adj meg egy backend-oldali videó-utat.")),
+        const SnackBar(
+            content: Text("Adj meg egy videó-útvonalat azon a gépen, "
+                "ahol a motor fut.")),
       );
       return;
     }
@@ -843,7 +845,7 @@ class _UploadScreenState extends State<UploadScreen> {
         onChanged: (_) => setState(() {}),
         decoration: InputDecoration(
           isDense: true,
-          hintText: "Backend-oldali videó útja (pl. /home/.../match.mp4)",
+          hintText: "Videó útja a motor gépén (pl. /home/.../meccs.mp4)",
           hintStyle: AppText.label.copyWith(fontSize: 12),
           prefixIcon: const Icon(Icons.folder_open, size: 18, color: AppColors.textSecondary),
           enabledBorder: OutlineInputBorder(

@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **Egy néven nevezzük a motort** (kliens, nyelv): a felületen hol
+  "backend", hol "motor", hol "lokális szerver (uvicorn)" szerepelt —
+  ugyanarra a dologra három név, közülük kettő fejlesztői zsargon.
+  Mostantól mindenhol MOTOR: a nyitóképernyő állapotsorán, a
+  meccs-forrás címkéjén, a demó-korlátozásoknál, a kalibráció
+  helyőrzőjén és a videó-út mezőn. Őr-teszt védi: a megjelenített
+  szövegekben nem lehet "backend" vagy "uvicorn" (a kódban, importban,
+  kommentben persze maradhat).
+
 - **"Motor újraindítása" gomb a nyitóképernyőn** (kliens): ha a motor
   nem válaszol, az értesítés eddig azt mondta, hogy "indítsd el a
   lokális szervert (uvicorn)" — fejlesztői mondat egy edzőnek, aki

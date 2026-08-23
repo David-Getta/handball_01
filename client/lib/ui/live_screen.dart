@@ -91,7 +91,7 @@ class _LiveScreenState extends State<LiveScreen> {
       if (selected != null) {
         try {
           match = await _api.fetchMatch(selected);
-          label = "backend · $selected";
+          label = "motor · $selected";
         } catch (_) {
           match = buildDemoMatch();
           label = "demó";
