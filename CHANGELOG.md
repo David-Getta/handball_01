@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.40 óta)
 
+- **Idővonalak: hover-előnézet és megfogható szakaszok** (kliens): a
+  meccs-sztori sávján az egér alatt megjelenik a CÉL-IDŐPONT egy kis
+  buborékban (koppintás előtt látszik, hova ugrik a lejátszó), a
+  lejátszófej ragyogó vonalat és felső fogantyút kapott, a gólok
+  pöttyei ragyognak. A védekezés-idővonal szakaszai rámutatásra
+  felfénylenek és megnyúlnak — látszik, melyikre lehet ugrani.
+
 - **Igazi kézilabda-pálya a felülnézeti képen** (kliens): a rajz eddig
   a 6 m-es kapuelőteret és a középvonalat ismerte; mostantól ott a
   szabálykönyvi **9 m-es szaggatott szabaddobási vonal**, a **7 m-es**
