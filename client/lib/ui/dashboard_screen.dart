@@ -12,6 +12,7 @@ import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
+import "../services/backend_launcher.dart";
 import "../services/session_store.dart";
 import "../services/update_service.dart";
 import "anim.dart";
@@ -38,6 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   bool _loading = true;
   bool _offline = false; // a backend nem elérhető
+  bool _reviving = false; // épp fut a motor-újraindítás
   List<Map<String, dynamic>> _matches = [];
 
   // Szezon-összkép (GET /library/summary) — hibánál null, a kártyák a
@@ -1707,9 +1709,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     icon: Icons.list_alt_outlined),
               )
             else if (_offline)
-              _notice(Icons.cloud_off, "A backend nem elérhető",
-                  "Indítsd el a lokális szervert (uvicorn), majd frissíts. Addig a demó megnyitható.",
-                  action: _demoButton())
+              _notice(
+                  Icons.cloud_off,
+                  "Nem érem el a háttérmotort",
+                  "A Sport Machine motorja nem válaszol. A gomb megpróbálja "
+                      "újraindítani — ez néhány másodperc. Addig is: a demó "
+                      "meccs a motor nélkül is megnyitható.",
+                  action: Row(mainAxisSize: MainAxisSize.min, children: [
+                    _reviveButton(),
+                    const SizedBox(width: AppSpacing.md),
+                    _demoButton(),
+                  ]))
             else if (_matches.isEmpty)
               _firstStepsCard()
             else if (_filteredMatches.isEmpty)
@@ -1859,6 +1869,84 @@ class _DashboardScreenState extends State<DashboardScreen> {
         foregroundColor: AppColors.accent, side: const BorderSide(color: AppColors.accent)),
       icon: const Icon(Icons.play_arrow, size: 18),
       label: const Text("Demó megnyitása"),
+    );
+  }
+
+  /// Motor-újraindító gomb: a kliens előbb ÚJRA MEGKERESI a motort a
+  /// port-tartományban, és ha sehol nem válaszol, újra is indítja
+  /// (ApiClient.reviveEngine). Eddig a felhasználót itt csak a program
+  /// teljes újraindítása mentette meg — pedig a kliens tud magától is.
+  Widget _reviveButton() {
+    return FilledButton.icon(
+      onPressed: _reviving ? null : _reviveEngine,
+      style: FilledButton.styleFrom(
+          backgroundColor: AppColors.accent,
+          foregroundColor: AppColors.onAccent),
+      icon: _reviving
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.onAccent))
+          : const Icon(Icons.restart_alt, size: 18),
+      label: Text(_reviving ? "Indítom…" : "Motor újraindítása"),
+    );
+  }
+
+  Future<void> _reviveEngine() async {
+    setState(() => _reviving = true);
+    final ok = await ApiClient.reviveEngine();
+    if (!mounted) return;
+    setState(() => _reviving = false);
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("A motor válaszol — betöltöm a könyvtárat.")));
+      await _load();
+      return;
+    }
+    // Nem sikerült: a napló VÉGE a leggyorsabb út a diagnózishoz —
+    // enélkül a felhasználónak nincs mit elküldenie.
+    final log = await BackendLauncher.logTail();
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("A motor továbbra sem válaszol"),
+        content: SizedBox(
+          width: 560,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text(
+                "Próbáld meg a programot teljesen bezárni és újraindítani. "
+                "Ha ez sem segít, a napló utolsó sorai megmondják, min "
+                "akadt el:",
+                style: AppText.label),
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(maxHeight: 220),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                    log == null || log.trim().isEmpty
+                        ? "Nincs napló — úgy tűnik, a motor el sem indult."
+                        : log,
+                    style: AppText.label.copyWith(
+                        fontSize: 11, color: AppColors.textPrimary)),
+              ),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Bezár")),
+        ],
+      ),
     );
   }
 

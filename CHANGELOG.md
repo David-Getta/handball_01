@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **"Motor újraindítása" gomb a nyitóképernyőn** (kliens): ha a motor
+  nem válaszol, az értesítés eddig azt mondta, hogy "indítsd el a
+  lokális szervert (uvicorn)" — fejlesztői mondat egy edzőnek, aki
+  asztali alkalmazást telepített, és pont ezt a hibát látta. Mostantól
+  emberi nyelven szól, és van benne EGY GOMB, ami tényleg megcsinálja:
+  előbb újra megkeresi a motort a port-tartományban, és ha sehol nem
+  válaszol, újra is indítja. Ha ez sem sikerül, felugrik a motor
+  naplójának a vége (kijelölhető szöveggel) — enélkül a felhasználónak
+  nincs mit elküldenie a hibáról.
+
 - **UI 15. kör: beszédesebb szezon-összkép a nyitóképernyőn** (kliens):
   a négy nagy szám eddig négy egyforma szürke dobozban ült, felirat
   nélkül nem lehetett őket ránézésre megkülönböztetni. Mostantól
