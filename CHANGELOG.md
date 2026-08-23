@@ -3,7 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.39 óta)
+## Kiadatlan (a v0.1.40 óta)
+
+*(még semmi)*
+
+## v0.1.40 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: a vizuális kör lezárása. Animált kitöltésű mérő-sávok
+> minden mutató-felületen (közös AnimatedBar elem), animált belépő
+> képernyő és egységes márka-ragyogás a logón — a v0.1.39-es animációs
+> alapokra építve.
 
 - **Belépő képernyő és márka-ragyogás** (kliens): a belépő kártya
   finoman úszik be (az első benyomás animált), a logó a belépőn és az
