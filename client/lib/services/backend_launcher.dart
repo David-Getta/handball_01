@@ -215,9 +215,12 @@ class BackendLauncher {
       return BackendStatus(BackendPhase.failed, "A motort nem sikerült elindítani: $e");
     }
 
-    // A motor indulása (különösen az első alkalommal) eltarthat akár egy
-    // percig is (a rendszer első futáskor átvizsgálja a nagy programfájlt).
-    final ok = await _waitForHealth(const Duration(seconds: 90), isExited: () => exited);
+    // A motor indulása — KÜLÖNÖSEN az első alkalommal — sokáig tarthat: a
+    // becsomagolt motor negyedmilliárd bájt, és a Windows Defender (vagy
+    // más víruskereső) az ELSŐ futásnál végigolvassa, mielőtt a program
+    // egyáltalán elindulna. Lassú lemezen ez simán túlmegy két percen.
+    final ok = await _waitForHealth(const Duration(seconds: 180),
+        isExited: () => exited);
     if (ok) {
       // Sikeres indulás után az őrkutya kvótája újratöltődik: a korlát a
       // BEINDULNI SEM TUDÓ motor pörgetése ellen véd, nem az ellen, hogy
@@ -226,11 +229,28 @@ class BackendLauncher {
       _logLine("A motor elindult és válaszol.", onLog);
       return const BackendStatus(BackendPhase.ready, "A motor elindult.");
     }
-    final why = exited
-        ? "A motor idő előtt leállt — részletek: ${_logFile().path}"
-        : "A motor nem válaszolt időben — részletek: ${_logFile().path}";
+    // FONTOS: itt NEM állítjuk le a motrot.
+    //
+    // Korábban a lejárt idő stop()-ot hívott — vagyis pont azt a
+    // folyamatot lőttük ki, amelyik talán másodpercekre volt attól, hogy
+    // válaszoljon (első futás, víruskereső-átvizsgálás). A felhasználó
+    // ilyenkor újrapróbált, és az egész átvizsgálás elölről kezdődött:
+    // a hiba önmagát tartotta életben. Ráadásul a stop() a
+    // `_stoppedByUs` jelzőt is beállítja, ami az őrkutyát is kikapcsolja.
+    //
+    // Ha a folyamat még ÉL, hagyjuk indulni: az Újrapróbálom (és a
+    // motor-újraélesztés) a port-tartomány végigfésülésével úgyis
+    // megtalálja, amint válaszol.
+    final String why;
+    if (exited) {
+      why = "A motor idő előtt leállt — részletek: ${_logFile().path}";
+    } else {
+      why = "A motor még mindig indul (első indításnál a víruskereső "
+          "átvizsgálja a programot — ez percekig tarthat). NE zárd be a "
+          "programot: várj egy kicsit, és nyomd meg az Újrapróbálom "
+          "gombot — amint válaszol, megtalálja.";
+    }
     _logLine(why, onLog);
-    stop();
     return BackendStatus(BackendPhase.failed, why);
   }
 

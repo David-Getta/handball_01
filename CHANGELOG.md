@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.44 óta)
 
+- **Az időtúllépés többé nem öli meg az induló motrot** (kliens,
+  KRITIKUS javítás): a becsomagolt motor negyedmilliárd bájt, és a
+  víruskereső az ELSŐ futásnál végigolvassa, mielőtt a program
+  egyáltalán elindulna — lassú lemezen ez simán túlmegy két percen. A
+  kliens 90 másodperc után feladta, és — ez volt a baj — le is ÁLLÍTOTTA
+  a folyamatot. Vagyis pont azt lőttük ki, amelyik talán másodpercekre
+  volt attól, hogy válaszoljon; a felhasználó újrapróbált, és az egész
+  átvizsgálás elölről kezdődött. A hiba önmagát tartotta életben.
+  Mostantól a várakozás 180 másodperc, és ha a folyamat még ÉL, futni
+  hagyjuk: az Újrapróbálom a port-tartomány végigfésülésével megtalálja,
+  amint válaszol. A képernyő ezt ki is mondja ("ne zárd be a
+  programot"). A leállítás a `_stoppedByUs` jelzőn át az őrkutyát is
+  kikapcsolta — az is megszűnt. Őr-teszt védi.
+
 - **"Diagnosztika másolása" gomb a motor-hibáknál** (kliens): a
   naplófájl önmagában kevés. Ha a motor-program meg sem található,
   vagy az adatmappa nem írható, akkor NAPLÓ SINCS — a felhasználó

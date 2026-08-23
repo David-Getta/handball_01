@@ -995,3 +995,39 @@ def test_a_motor_naplo_utf8_kent_olvasodik():
            if not ln.lstrip().startswith("//")]
     assert not any("String.fromCharCodes" in ln for ln in kod), (
         "bájtonkénti dekódolás a motor kimenetén — összetöri az ékezeteket")
+
+
+def test_a_lejart_var_ido_nem_oli_meg_az_indulo_motort():
+    """ŐR: az indulási időtúllépés NEM állíthatja le a még élő motrot.
+
+    A becsomagolt motor negyedmilliárd bájt, és a víruskereső az első
+    futásnál végigolvassa. Ha ilyenkor a lejárt idő kilövi a
+    folyamatot, a felhasználó újrapróbál — és az átvizsgálás elölről
+    kezdődik: a hiba önmagát tartja életben. A még élő folyamatot ezért
+    futni kell hagyni; a port-tartomány végigfésülése úgyis megtalálja,
+    amint válaszol.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+
+    # A várakozó ág (az ensureRunning vége) a health-várakozástól a
+    # visszatérésig: ebben nem lehet stop() hívás.
+    start = src.index("final ok = await _waitForHealth(")
+    end = src.index("return BackendStatus(BackendPhase.failed, why);", start)
+    ag = [ln for ln in src[start:end].splitlines()
+          if not ln.lstrip().startswith("//")]
+    assert not any("stop();" in ln for ln in ag), (
+        "az időtúllépés leállítja a még induló motrot — a felhasználó "
+        "újrapróbálásakor az egész átvizsgálás elölről kezdődik")
+
+    # És legyen bőven idő az első, átvizsgált indulásra.
+    m = re.search(r"_waitForHealth\(const Duration\(seconds: (\d+)\)", src)
+    assert m, "nem találom az indulási várakozás hosszát"
+    assert int(m.group(1)) >= 150, (
+        "túl rövid indulási várakozás — az első futás víruskereső-"
+        f"átvizsgálással ennél tovább tart ({m.group(1)} mp)")
