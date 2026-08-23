@@ -1268,11 +1268,30 @@ class _UploadScreenState extends State<UploadScreen> {
             : active
                 ? Icons.autorenew
                 : Icons.circle_outlined;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      // Az ÉPPEN FUTÓ lépés kiemelt sávot kap — a hosszú listában a
+      // szem azonnal megtalálja, hol tart a feldolgozás.
+      decoration: BoxDecoration(
+        color: active
+            ? AppColors.gold.withOpacity(0.07)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: active
+                ? AppColors.gold.withOpacity(0.35)
+                : Colors.transparent),
+      ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: c),
+          // A "folyamatban" ikon FOROG — eddig statikus autorenew volt,
+          // ami mozdulatlanul pont a mozgás hiányát sugallta.
+          active
+              ? _SpinningIcon(icon: icon, color: c)
+              : Icon(icon, size: 18, color: c),
           const SizedBox(width: AppSpacing.md),
           Text(name, style: AppText.value.copyWith(
               color: (done || active || error) ? AppColors.textPrimary : AppColors.textFaint,
@@ -1326,28 +1345,87 @@ class _DashedRectPainter extends CustomPainter {
 }
 
 /// Kör alakú folyamatjelző százalékkal.
+///
+/// A feldolgozás percekig tart — itt tölti a felhasználó a legtöbb
+/// várakozási időt. Ezért a gyűrű ÉL: az állás simán úszik az új
+/// értékre (nem ugrik), a szám felpörög, és a gyűrű mögött halk
+/// akcentus-ragyogás lélegzik, amíg dolgozunk.
 class _RingProgress extends StatelessWidget {
   final double value;
   const _RingProgress({required this.value});
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 78, height: 78,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 78, height: 78,
-            child: CircularProgressIndicator(
-              value: value,
-              strokeWidth: 6,
-              backgroundColor: AppColors.surfaceAlt,
-              valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: value.clamp(0.0, 1.0)),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, _) => SizedBox(
+        width: 82,
+        height: 82,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Halk ragyogás a gyűrű mögött — jelzi, hogy folyik a munka.
+            Container(
+              width: 62,
+              height: 62,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                      color: AppColors.accent.withOpacity(0.16 + 0.12 * v),
+                      blurRadius: 22,
+                      spreadRadius: 1),
+                ],
+              ),
             ),
-          ),
-          Text("${(value * 100).round()}%", style: AppText.value.copyWith(fontSize: 16)),
-        ],
+            SizedBox(
+              width: 78,
+              height: 78,
+              child: CircularProgressIndicator(
+                value: v,
+                strokeWidth: 6,
+                strokeCap: StrokeCap.round,
+                backgroundColor: AppColors.surfaceAlt,
+                valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+              ),
+            ),
+            Text("${(v * 100).round()}%",
+                style: AppText.value.copyWith(fontSize: 16)),
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Folyamatosan forgó ikon — az "épp dolgozom" jelzés a folyamat-
+/// listában (a statikus autorenew-ikon pont a mozgás hiányát sugallta).
+class _SpinningIcon extends StatefulWidget {
+  const _SpinningIcon({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  State<_SpinningIcon> createState() => _SpinningIconState();
+}
+
+class _SpinningIconState extends State<_SpinningIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1600))
+    ..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RotationTransition(
+        turns: _c,
+        child: Icon(widget.icon, size: 18, color: widget.color),
+      );
 }

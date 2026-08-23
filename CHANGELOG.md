@@ -5,7 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
-*(még semmi)*
+- **Élő feldolgozás-képernyő** (kliens): itt tölti a felhasználó a
+  legtöbb várakozási időt, ezért a folyamat mostantól él — a
+  kör-jelző simán úszik az új állásra (nem ugrik), a százalék
+  felpörög, a gyűrű mögött halk akcentus-ragyogás lélegzik; az ÉPPEN
+  FUTÓ lépés kiemelt sávot kap, és az ikonja tényleg FOROG (eddig
+  mozdulatlan "autorenew" volt, ami pont a mozgás hiányát sugallta).
 
 ## v0.1.41 — kiadva (2026-08-23)
 
