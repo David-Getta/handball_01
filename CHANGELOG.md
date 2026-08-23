@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **UI 16. kör: a terhelés-tábla a csapat nyelvén beszél** (kliens): a
+  játékosonkénti táv-csíkok eddig mind akcentus-színűek voltak, pedig
+  a pályán, a grafikonokon és a jelmagyarázatban minden a csapat
+  színét viseli. Mostantól a csík is a csapaté, az aktuális rendezés
+  ÉLÉN álló ember arany jelet és félkövér mezszámot kap (nem kell a
+  lista tetejét külön keresni), a sorok pedig lépcsőzve úsznak be.
+
 - **A meccs-kártya emberi adatokat mutat** (kliens): a könyvtár
   kártyáinak alsó sora eddig gépi adat volt ("d3f1a · 6000 képkocka ·
   240.0 s · 25 fps"). Az edzőt a HOSSZ érdekli, percben — mostantól
