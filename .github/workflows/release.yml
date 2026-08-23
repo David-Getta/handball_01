@@ -164,10 +164,16 @@ jobs:
           if (Test-Path $engineLog) {
             $txt = Get-Content $engineLog -Raw
             $hasStages = $txt -match "\[indul"
-            Write-Host "DIAGNÓZIS-ELLENŐRZÉS: engine.log megvan; indulási mérföldkövek: $hasStages"
+            $diag = "engine.log MEGVAN; indulási mérföldkövek: $hasStages"
           } else {
-            Write-Host "DIAGNÓZIS-ELLENŐRZÉS: engine.log NINCS ($engineLog) — a motor kimenete a csövön ment"
+            $diag = "engine.log NINCS ($engineLog) — a motor kimenete a csövön ment"
           }
+          Write-Host "DIAGNÓZIS-ELLENŐRZÉS: $diag"
+          # Fájlba is: a telepítő fordítása ezután PERCEKIG ontja a
+          # kimenetet, és ez a sor a napló közepén elveszne. Az utolsó
+          # lépés újra kiírja, hogy egy rövid napló-vég is mutassa.
+          Set-Content -Path (Join-Path $env:RUNNER_TEMP "diag-check.txt") `
+            -Value $diag -Encoding utf8
 
       # ---- Flutter desktop app ----
       - uses: subosito/flutter-action@v2
@@ -249,6 +255,20 @@ jobs:
   # A teljes macOS-alkalmazás legyártása (app + beágyazott motor, zip-ben).
   # FIGYELEM: a macOS futtató 10x szorzóval fogyasztja az Actions-percet —
   # ez viszi a kiadási költség ~85%-át; iterálás közben hagyd ki (platforms).
+      # A füstteszt diagnózis-eredményének MEGISMÉTLÉSE a job végén: a
+      # telepítő fordítása percekig ontja a kimenetet, és az eredeti sor
+      # a napló közepén elveszne. Így egy rövid napló-vég is mutatja.
+      - name: Diagnózis-lánc jelentés
+        if: always()
+        shell: pwsh
+        run: |
+          $f = Join-Path $env:RUNNER_TEMP "diag-check.txt"
+          if (Test-Path $f) {
+            Write-Host "DIAGNÓZIS-ELLENŐRZÉS (ismétlés): $(Get-Content $f -Raw)"
+          } else {
+            Write-Host "DIAGNÓZIS-ELLENŐRZÉS (ismétlés): nem futott le a füstteszt"
+          }
+
   macos-app:
     needs: tests
     # Csak ha kérték (platforms: all/macos); címke-indításnál mindig.
@@ -264,6 +284,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Backend + ML függőségek + PyInstaller
         run: |
           python -m pip install --upgrade pip

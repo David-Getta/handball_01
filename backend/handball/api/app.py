@@ -713,6 +713,12 @@ def create_app():
             return  # időközben megszakították
         job["status"] = "running"
         job["message"] = "indítás"
+        # A becsléshez a TÉNYLEGES indulás kell: a sorban töltött idő
+        # nem munka, és beleszámítva a hátralévő idő reménytelenül
+        # túlbecsült lenne.
+        import time as _t
+
+        job["started"] = _t.time()
         body = _job_params.pop(job_id, {})
         _threading.Thread(target=_run_job, args=(job, body),
                           daemon=True).start()
@@ -733,6 +739,7 @@ def create_app():
                 continue  # várakozás közben szakították meg
             job["status"] = "running"
             job["message"] = "indítás"
+            job["started"] = _t.time()
             _run_job(job, _job_params.pop(job_id, {}))
 
     def _run_job(job, body):
@@ -892,14 +899,44 @@ def create_app():
         rows.reverse()
         return {"jobs": rows[:max(1, min(int(limit), 100))]}
 
+    # Hátralévő idő becslése: ennyi haladás alatt még nem becslünk. Az
+    # első pár százalék félrevezető (modell-betöltés, videó-megnyitás),
+    # és egy vadul téves "kb. 3 óra" rosszabb, mint a semmi.
+    ETA_MIN_PROGRESS = 0.05
+
+    def _with_eta(job: dict) -> dict:
+        """A munka rekordja HÁTRALÉVŐ IDŐ becsléssel (eta_s, másodperc).
+
+        Percekig futó feldolgozásnál ez a leghiányzóbb adat: enélkül a
+        felhasználó nem tudja eldönteni, megvárja-e, vagy elmegy. A
+        becslés a TÉNYLEGES munkaidő és a haladás arányából jön (a
+        sorban töltött idő nem számít bele), és csak akkor jelenik meg,
+        ha már van mire alapozni.
+        """
+        import time as _t
+
+        out = {k: v for k, v in job.items() if k != "cancel"}
+        out["eta_s"] = None
+        if job.get("status") != "running":
+            return out
+        started = job.get("started")
+        prog = float(job.get("progress") or 0.0)
+        if not started or prog < ETA_MIN_PROGRESS:
+            return out
+        eltelt = _t.time() - started
+        if eltelt <= 0:
+            return out
+        # Egyszerű, STABIL becslés: az eddigi átlagos ütem tartását
+        # feltételezzük. A pillanatnyi ütemből számolt becslés ugrálna.
+        out["eta_s"] = int(round(eltelt / prog * (1.0 - prog)))
+        return out
+
     @app.get("/jobs")
     def list_jobs():
         """A feldolgozási munkák listája (legújabb elöl) — a kezdőképernyő
         "folyamatban" kártyája ebből épül. A belső mezőket nem adjuk ki."""
         jobs = sorted(_jobs.values(), key=lambda j: j.get("created", 0), reverse=True)
-        return {"jobs": [
-            {k: v for k, v in j.items() if k != "cancel"} for j in jobs[:20]
-        ]}
+        return {"jobs": [_with_eta(j) for j in jobs[:20]]}
 
     @app.get("/jobs/{job_id}")
     def job_status(job_id: str):
@@ -928,7 +965,7 @@ def create_app():
                     "lépésben, egyre nagyobb ugrásokkal történik, ezért "
                     "akár pár percig is tarthat (az átugrásokat itt "
                     "kiírjuk). A Megszakítás menti az addig kész részt.")
-        return job
+        return _with_eta(job)
 
     @app.post("/jobs/{job_id}/cancel")
     def cancel_job(job_id: str):

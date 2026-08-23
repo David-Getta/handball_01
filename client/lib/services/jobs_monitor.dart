@@ -22,6 +22,22 @@ import "package:flutter/foundation.dart";
 
 import "api_client.dart";
 
+/// A hátralévő idő emberi feliratként — vagy null, ha nincs becslés.
+///
+/// A motor csak akkor ad becslést, ha már van mire alapozni (az első pár
+/// százalék félrevezető: ott a modell-betöltés és a videó-megnyitás
+/// torzít). Az "kb." szó szándékos: becslés, nem ígéret.
+String? etaLabel(Map<String, dynamic> job) {
+  final s = (job["eta_s"] as num?)?.toInt();
+  if (s == null || s <= 0) return null;
+  if (s < 60) return "kb. $s másodperc van hátra";
+  final perc = (s / 60).round();
+  if (perc < 60) return "kb. $perc perc van hátra";
+  final ora = s ~/ 3600;
+  final maradek = ((s % 3600) / 60).round();
+  return "kb. $ora óra ${maradek} perc van hátra";
+}
+
 class JobsMonitor {
   JobsMonitor._();
 

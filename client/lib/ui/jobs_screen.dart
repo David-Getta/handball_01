@@ -154,6 +154,18 @@ class _JobsScreenState extends State<JobsScreen> {
                 style: AppText.value
                     .copyWith(fontSize: 15, color: AppColors.accent)),
           ]),
+          // Hátralévő idő: percekig futó munkánál ez dönti el, hogy a
+          // felhasználó megvárja-e, vagy elmegy a gép mellől.
+          if (etaLabel(j) != null) ...[
+            const SizedBox(height: 4),
+            Row(children: [
+              const Icon(Icons.schedule, size: 13, color: AppColors.gold),
+              const SizedBox(width: 6),
+              Text(etaLabel(j)!,
+                  style: AppText.label
+                      .copyWith(fontSize: 12, color: AppColors.gold)),
+            ]),
+          ],
           const SizedBox(height: AppSpacing.sm),
           AnimatedBar(value: p, minHeight: 7),
           const SizedBox(height: AppSpacing.sm),

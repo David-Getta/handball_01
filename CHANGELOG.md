@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.47 óta)
 
+- **Hátralévő idő a feldolgozásnál** (motor + kliens): percekig futó
+  munkánál ez volt a leghiányzóbb adat — a százalék önmagában nem
+  mondja meg, hogy megvárd-e, vagy elmenj a gép mellől. A motor
+  mostantól minden futó munkához ad becslést (`eta_s`): a TÉNYLEGES
+  munkaidő és a haladás arányából, tehát a sorban töltött idő nem
+  számít bele (különben a második munka becslése reménytelenül
+  túllőne). Az első öt százalékban nincs becslés: ott a modell-betöltés
+  és a videó-megnyitás torzít, és egy vadul téves "kb. 3 óra" rosszabb,
+  mint a semmi. A felület emberi mondatként mutatja ("kb. 12 perc van
+  hátra") a Feldolgozások lapon és a kezdőlapon is.
+- **Windowsos telepítő: a diagnózis-lánc jelentése a napló végén**
+  (kiadás): a füstteszt eddig is megnézte, hogy a becsomagolt motor
+  hibája végigfut-e a diagnózis-láncon, de a válasza a hosszú napló
+  közepén veszett el. Mostantól a windowsos munka UTOLSÓ lépése újra
+  kiírja a verdiktet, tehát a napló rövid végéből is látszik.
+
 ## v0.1.47 — kiadva (2026-08-23)
 
 > Kiadás-jegyzet: ebben a körben a hosszú feldolgozás körüli élet lett

@@ -2112,6 +2112,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text(running ? message : "sorban áll — előtte másik feldolgozás fut",
                 style: AppText.label.copyWith(fontSize: 11),
                 overflow: TextOverflow.ellipsis),
+            // Hátralévő idő: ebből dől el, hogy a felhasználó megvárja-e.
+            if (etaLabel(j) != null)
+              Text(etaLabel(j)!,
+                  style: AppText.label
+                      .copyWith(fontSize: 11, color: AppColors.gold)),
           ]),
         ),
         IconButton(
