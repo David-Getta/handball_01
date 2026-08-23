@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.41 óta)
+## Kiadatlan (a v0.1.42 óta)
+
+## v0.1.42 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ez a kör arról szól, hogy a program a FELHASZNÁLÓ
+> nyelvén beszéljen, és hogy a grafikák magukban is válaszoljanak.
+> Ha a motor nem válaszol, mostantól van EGY GOMB, ami tényleg
+> újraindítja (és port-újrakeresést is végez), a hibaüzenet pedig
+> odamutat; a felületen pedig egységesen "motor" szerepel a
+> "backend"/"uvicorn" helyett — őr-teszt védi. Az eredmény-grafikonon
+> színes mező mutatja, ki vezetett és mennyivel; a fejlődés-lapon
+> változás-sáv a mutatók nagyságrendjét; a lövéstérkép a meccs
+> sorrendjében rakja ki a lövéseket. Új elemző réteg: hetes-ismétlés
+> — másodszorra is ugyanoda megy-e a hetesük.
 
 - **A motor-hiba üzenete a MEGOLDÁSRA mutat** (kliens): a kapcsolódási
   hiba eddig azt mondta, hogy "a program újraindítása magától
