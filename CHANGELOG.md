@@ -3,7 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.44 óta)
+## Kiadatlan (a v0.1.45 óta)
+
+## v0.1.45 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ez a kiadás arról szól, MIÉRT nem indul el a motor —
+> és a legvalószínűbb okot meg is javítja. A becsomagolt motor ~244 MB,
+> és a víruskereső az ELSŐ futásnál végigolvassa; a kliens viszont 90
+> másodperc után nemcsak feladta, hanem LE IS ÁLLÍTOTTA a folyamatot —
+> vagyis pont azt lőtte ki, amelyik talán másodpercekre volt attól,
+> hogy válaszoljon. Újrapróbálásnál az átvizsgálás elölről kezdődött: a
+> hiba fenntartotta önmagát. Mostantól 180 másodperc a türelem, és a
+> még ÉLŐ motrot futni hagyjuk. Mellé egy "Diagnosztika másolása"
+> gomb került mindhárom elakadási pontra: egy kattintás, és a
+> vágólapon ott van minden tény (hol kerestük a motort, írható-e az
+> adatmappa, válaszol-e bármelyik port, a napló vége). A motor naplója
+> ráadásul eddig összetörte a magyar ékezeteket — az is javítva.
 
 - **Az időtúllépés többé nem öli meg az induló motrot** (kliens,
   KRITIKUS javítás): a becsomagolt motor negyedmilliárd bájt, és a

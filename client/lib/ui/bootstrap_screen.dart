@@ -138,7 +138,15 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
                   ),
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  busy ? "Az elemző motor indítása…" : (failed ? "A motor nem indult el" : "Motor nélküli (demó) mód"),
+                  // "Nem indult el" helyett "még nem válaszol": az
+                  // időtúllépés óta a folyamat ilyenkor gyakran ÉL, csak
+                  // a víruskereső még olvassa. Az alatta lévő üzenet
+                  // mondja meg, melyik esetről van szó.
+                  busy
+                      ? "Az elemző motor indítása…"
+                      : (failed
+                          ? "A motor még nem válaszol"
+                          : "Motor nélküli (demó) mód"),
                   style: AppText.value.copyWith(fontSize: 16),
                   textAlign: TextAlign.center,
                 ),
