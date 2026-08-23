@@ -31,7 +31,8 @@ Egy réteg = egy commit. A commit-üzenet mintája a git-történetben.
 Sorrendben (kb. 200–280 sor összesen):
 
 0. **Van-e már ilyen?** — MIELŐTT bármit írnál, keresd meg a kérdést a
-   katalógusban (493 réteg van, fejből nem tudod):
+   katalógusban (közel ÖTSZÁZ réteg van — a pontos szám a
+   `docs/SZAMOK.md`-ben; fejből egyik sem tudható):
 
    ```bash
    grep -i "<a kérdés kulcsszava>" docs/RETEG_KATALOGUS.md
