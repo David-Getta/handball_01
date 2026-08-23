@@ -59,7 +59,12 @@ def _stage(msg: str) -> None:
     naplót látott, és nem lehetett megmondani, meddig jutott el. Ezek a
     sorok pontosan ezt mondják meg.
     """
-    print(f"[indulás] {msg}", flush=True)
+    try:
+        print(f"[indulás] {msg}", flush=True)
+    except Exception:
+        # Ablak nélküli futásnál a stdout hiányozhat (vagy a cső eltörhet).
+        # A naplózás hibája SOSEM állíthatja meg az indulást.
+        pass
 
 
 def _crash_report(exc: BaseException) -> None:
@@ -73,8 +78,14 @@ def _crash_report(exc: BaseException) -> None:
     # A LÉNYEG külön sorban, a nyomkövetés elé: a felhasználó ezt az egy
     # sort tudja továbbadni, ha a hosszú traceback elriasztja.
     fej = f"{type(exc).__name__}: {exc}"
-    print(fej, flush=True)
-    traceback.print_exc()
+    # A képernyőre írás maga is elhasalhat (nincs stdout — pont az az
+    # eset, amikor a stream-átirányítás bukott el). A FÁJLBA írás ettől
+    # függetlenül próbálkozzon: az a fontosabb.
+    try:
+        print(fej, flush=True)
+        traceback.print_exc()
+    except Exception:
+        pass
     try:
         from handball.storage import data_root
         root = data_root()
@@ -108,11 +119,17 @@ def pick_free_port(host: str, start_port: int, tries: int = 11) -> int:
 
 
 def main() -> int:
-    _ensure_streams()
-    # Az ELSŐ sor még a nehéz importok előtt megy ki: ebből tudjuk, hogy a
-    # program egyáltalán elindult (a becsomagolt indító lefutott).
-    _stage(f"az indító elindult (python {sys.version.split()[0]})")
     try:
+        # A stream-átirányítás MAGA is elhasalhat: ha az adatmappa nem
+        # írható (vállalati gép, OneDrive-ra terelt AppData), a nyitás
+        # kivételt dob. Eddig ez a try-n KÍVÜL volt, tehát a motor nyom
+        # nélkül halt meg — a hibajelentő maga sem futott le.
+        _ensure_streams()
+        # Az ELSŐ sor még a nehéz importok előtt megy ki: ebből tudjuk,
+        # hogy a program egyáltalán elindult (a becsomagolt indító
+        # lefutott).
+        _stage(f"az indító elindult (python {sys.version.split()[0]})")
+
         _stage("webszerver betöltése…")
         import uvicorn
 

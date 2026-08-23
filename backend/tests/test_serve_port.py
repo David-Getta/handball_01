@@ -149,3 +149,48 @@ def test_az_indulasi_kivetel_nem_vesz_el():
     assert "_crash_report" in src, "nincs összeomlás-jelentés"
     assert "engine-crash.log" in src, (
         "az összeomlás nem kerül tartós fájlba — a cső eltörésével elvész")
+
+
+def test_az_osszeomlas_jelentes_stdout_nelkul_is_ir(tmp_path, monkeypatch):
+    """ŐR: a hibajelentő akkor is fájlba ír, ha NINCS stdout.
+
+    Pont az az eset a legfontosabb, amikor a stream-átirányítás maga
+    bukott el (nem írható adatmappa, ablak nélküli futás): ilyenkor a
+    print() kivételt dob, és ha a jelentő azon elhasal, a hiba oka
+    nyomtalanul elvész — a felhasználó csak "Connection refused"-öt lát.
+    """
+    import sys
+
+    from scripts.serve import _crash_report
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(sys, "stdout", None)
+    try:
+        raise RuntimeError("szimulált indulási hiba")
+    except BaseException as exc:  # noqa: BLE001 — ezt teszteljük
+        _crash_report(exc)  # nem dobhat
+
+    naplo = tmp_path / "engine-crash.log"
+    assert naplo.exists(), "stdout nélkül nem készült összeomlás-napló"
+    szoveg = naplo.read_text(encoding="utf-8")
+    assert "RuntimeError: szimulált indulási hiba" in szoveg, (
+        "a napló nem tartalmazza a hiba lényegét")
+
+
+def test_a_stream_atiranyitas_a_hibakezelesen_belul_fut():
+    """ŐR: az _ensure_streams a try-n BELÜL fut.
+
+    Ha az adatmappa nem írható, a napló megnyitása kivételt dob. A
+    try-n kívülről ez azt jelentette, hogy a motor nyom nélkül halt meg
+    — a hibajelentő maga sem futott le.
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent
+           / "scripts" / "serve.py").read_text(encoding="utf-8")
+    fo = src.index("def main(")
+    try_poz = src.index("try:", fo)
+    ensure_poz = src.index("_ensure_streams()", fo)
+    assert try_poz < ensure_poz, (
+        "az _ensure_streams a hibakezelésen KÍVÜL fut — nem írható "
+        "adatmappánál a motor nyom nélkül hal meg")

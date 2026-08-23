@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.45 óta)
 
+- **A nem írható adatmappa sem öl némán** (motor, javítás): a
+  napló-átirányítás MAGA is elhasalhat, ha az adatmappa nem írható
+  (vállalati gép, OneDrive-ra terelt AppData) — és eddig ez a
+  hibakezelésen KÍVÜL futott, tehát a motor nyom nélkül halt meg: a
+  hibajelentő maga sem futott le. Mostantól a hibakezelésen belül van,
+  és a hibajelentő stdout nélkül is fájlba ír. Három őr-teszt védi (az
+  egyik ténylegesen elveszi a stdout-ot, és ellenőrzi, hogy a napló
+  így is elkészül).
+
 - **Windowson végre látszik, mit mond a motor** (kliens, javítás): a
   becsomagolt motor ABLAK NÉLKÜLI programként fut, és Windowson
   ilyenkor a Pythonnak nincs stdout/stderr-je — vagyis a kliens
