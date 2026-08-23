@@ -3,7 +3,23 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.46 óta)
+## Kiadatlan (a v0.1.47 óta)
+
+## v0.1.47 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ebben a körben a hosszú feldolgozás körüli élet lett
+> rendben. Új **Feldolgozások** menüpont: a menüben élő szám mutatja,
+> hány elemzés fut, tehát nyugodtan átmehetsz máshova az appban, és egy
+> kattintással visszatalálsz — a részleges eredmény menet közben is
+> megnyitható. A motor emellett **ébren tartja a gépet** a munka
+> idejére, hogy a tétlenségi alvás ne állítsa meg a számítást (a
+> lehajtott MacBook-tető külső kijelző nélkül továbbra is alvás — ezt
+> alkalmazásból nem lehet felülbírálni, és a felület ezt ki is mondja).
+> Két régi, néma hiba is javult: az ÉKEZETES útvonalon lévő videó
+> Windowson nem nyílt meg (magyar felhasználónál mindennapi eset), és a
+> motor pontos magyar hibaüzenetei sosem jutottak el a képernyőig — 72
+> hívóhely csak "HTTP 400"-at mutatott. Új elemző réteg:
+> eladás-kényszer (kipréselik belőlük, vagy maguktól szórják el).
 
 - **Feldolgozások: külön menüpont, élő jelvénnyel** (kliens): egy meccs
   feldolgozása percekig fut, de a haladás eddig CSAK a kezdőlapon
