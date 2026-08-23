@@ -3242,6 +3242,41 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Támadás-ritmus: egy tempóban játszanak-e, vagy váltogatják (8+
+  // mért támadás; 60% egy sávban = egy tempó, mindhárom sáv 20% fölött
+  // = váltogatás — a backenddel azonos küszöbök: ATV_MIN_ATTACKS,
+  // ATV_ONE_TEMPO_PCT, ATV_MIXED_MIN_PCT).
+  String? _attackTempo(Map<String, dynamic> r) {
+    final n = ((r["atv_attacks"] ?? 0) as num).toInt();
+    if (n < 8) return null;
+    final fast = ((r["atv_fast"] ?? 0) as num).toInt();
+    final mid = ((r["atv_mid"] ?? 0) as num).toInt();
+    final slow = ((r["atv_slow"] ?? 0) as num).toInt();
+    final pf = 100.0 * fast / n;
+    final pm = 100.0 * mid / n;
+    final ps = 100.0 * slow / n;
+    if (ps >= 60.0) {
+      return "a támadásaik ${ps.toStringAsFixed(0)}%-a HOSSZÚ "
+          "($slow/$n akció 30 mp fölött) · türelmes, hibátlan fal — a "
+          "passzív jel nektek dolgozik, ne ugorjatok ki";
+    }
+    if (pf >= 60.0) {
+      return "a támadásaik ${pf.toStringAsFixed(0)}%-a 12 mp-en belül "
+          "zárul ($fast/$n) · a visszarendeződés a meccsterv első "
+          "pontja: a labdavesztéskor már álljon a fal";
+    }
+    if (pm >= 60.0) {
+      return "közepes ritmusban játszanak ($mid/$n támadás) · a fal "
+          "beállhat erre az egy tempóra";
+    }
+    if (pf >= 20.0 && pm >= 20.0 && ps >= 20.0) {
+      return "váltogatják a tempót ($fast gyors, $mid közepes, $slow "
+          "hosszú) · a fal nem állhat rá egy ritmusra — a JELZÉSEKRE "
+          "edzetek felismerést";
+    }
+    return null;
+  }
+
   // Hetes-ismétlés: másodszorra is ugyanoda megy-e a hetesük — a
   // SORREND, nem az eloszlás (3+ egymást követő hetes-pár, 60%+
   // ismétlés — a backenddel azonos küszöbök: SREP_MIN_PAIRS,
@@ -11617,6 +11652,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_sevenRepeat(r) != null) ["Hetes-ismétlés", _sevenRepeat(r)!],
       if (_pressuredTurnovers(r) != null)
         ["Eladás-kényszer", _pressuredTurnovers(r)!],
+      if (_attackTempo(r) != null) ["Támadás-ritmus", _attackTempo(r)!],
       if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
       if (_finishingBalance(r) != null)
         ["Befejezés-mérleg", _finishingBalance(r)!],

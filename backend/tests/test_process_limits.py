@@ -48,8 +48,14 @@ def test_hog_cap_still_limits(tmp_path):
     assert len(raw) == 3  # a kifejezett plafon továbbra is érvényesül
 
 
-def test_progress_cb_exception_aborts_processing():
-    """A cb-ből dobott kivétel kifelé terjed — így működik a megszakítás."""
+def test_progress_cb_exception_aborts_processing(tmp_path):
+    """A cb-ből dobott kivétel kifelé terjed — így működik a megszakítás.
+
+    VALÓDI (pár kockás) videóval: a hiányzó fájl ma már korábban, saját
+    hibával elszáll (lásd a következő tesztet), tehát azon nem lehetne
+    a haladás-jelzést kipróbálni. Az első jelzés a videó-adatok
+    beolvasása után, de a tényleges feldolgozás ELŐTT történik.
+    """
 
     class Stop(Exception):
         pass
@@ -57,10 +63,26 @@ def test_progress_cb_exception_aborts_processing():
     def cb(stage, prog, msg):
         raise Stop()
 
+    v = tmp_path / "t.avi"
+    _tiny_video(v, frames=4)
     with pytest.raises(Stop):
-        # Nem létező fájl is jó: az első haladás-jelzés a videó-adatok
-        # beolvasása után, de a tényleges feldolgozás ELŐTT történik.
-        process("/nonexistent/video.mp4", None, progress_cb=cb)
+        process(str(v), None, progress_cb=cb)
+
+
+def test_hianyzo_video_azonnal_magyarul_szall_el():
+    """A nem létező videó NE fusson bele a feldolgozásba.
+
+    Korábban a nyers `cv2.VideoCapture` némán elbukott: az fps és a
+    felbontás a tartalék értékekre esett vissza, és a feldolgozás
+    elindult egy olyan videón, ami nincs is. A közös megnyitó ehelyett
+    emberi magyar üzenettel áll meg — ez az üzenet jut el a
+    felhasználóig.
+    """
+    from handball.video_io import VideoOpenError
+
+    with pytest.raises(VideoOpenError) as exc:
+        process("/nonexistent/video.mp4", None)
+    assert "videó" in str(exc.value)
 
 
 def test_yolo_stall_guard_saves_partial(tmp_path, monkeypatch):

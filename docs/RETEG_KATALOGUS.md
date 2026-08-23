@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **495 réteg**, modulonként csoportosítva; a
+Összesen **496 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (95)
@@ -553,13 +553,14 @@ leírás a réteg-függvény docstringjének első sora.
 | `match_card_en` | English match card: compact, English-language match summary. |
 | `scouting_cards_en` | English scouting card: a one-page opponent brief per team. |
 
-## tactics (13)
+## tactics (14)
 
 | Réteg | Mit mér |
 |---|---|
 | `attack_motion` | Támadó-mozgás: álló vagy mozgásos a szervezett támadás. |
 | `attack_side_shift` | Oldal-váltás a szünetre: MÁSIK SZÁRNYRA teszik-e át a játékot. |
 | `attack_sides` | Melyik oldalon folyik a támadójáték — bal/közép/jobb sáv szerint. |
+| `attack_tempo_variety` | Támadás-ritmus: EGY tempóban játszanak-e, vagy váltogatják. |
 | `defense_form_shift` | Fal-váltás a szünetre: MÁS FALAT hoznak-e a második félidőre. |
 | `field_tilt` | Területi fölény (field tilt): a csapat labdabirtoklásának mekkora |
 | `formation_switching` | Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak. |

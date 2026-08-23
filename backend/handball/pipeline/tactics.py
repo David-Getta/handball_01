@@ -259,6 +259,102 @@ def slow_attacks(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     return out
 
 
+# Támadás-ritmus: mennyire változatos a tempójuk.
+ATV_MIN_SPAN_S = 3.0     # ennél rövidebb szakasz zaj (fázis-váltás), nem támadás
+ATV_FAST_S = 12.0        # ez alatt "gyors" (kontra, korai befejezés)
+ATV_SLOW_S = 30.0        # e felett "hosszú" (kijátszott, passzív-közeli)
+ATV_MIN_ATTACKS = 8      # ennyi támadás alatt nincs ítélet
+ATV_ONE_TEMPO_PCT = 60.0  # egy sáv ekkora többsége: EGY tempó
+ATV_MIXED_MIN_PCT = 20.0  # mindhárom sáv ekkora fölött: váltogatják
+
+
+def attack_tempo_variety(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Támadás-ritmus: EGY tempóban játszanak-e, vagy váltogatják.
+
+    A támadó-fázis szakaszok HOSSZÁT soroljuk három sávba: gyors
+    (ATV_FAST_S alatt — kontra, korai befejezés), közepes, hosszú
+    (ATV_SLOW_S felett — kijátszott, passzív-közeli akció). Nem az a
+    kérdés, melyik a jobb: az, hogy egyfélék-e.
+
+    Edzőileg ez a felkészülés RITMUSA. Aki egy tempóban játszik,
+    kiszámítható: ha mindig gyorsan fejeznek be, a védekezés a
+    labdavesztés pillanatában már álljon készen, és a visszarendeződés
+    a mérkőzés-terv első pontja; ha mindig hosszan járatják, türelmes,
+    hibátlan fal kell, a passzív jel a védőnek dolgozik, és nem szabad
+    beleugrani a csali-mozgásokba. Aki VÁLTOGAT, az ellen a fal nem
+    állhat rá egy ritmusra — ott a jelzésekre (ki hozza fel a labdát,
+    milyen gyorsan indul az első keresztmozgás) kell edzeni a
+    felismerést.
+
+    Visszatérés csapatonként: {"attacks", "fast", "mid", "slow",
+    "top_share_pct", "verdict"} — a verdict "egy tempóban játszanak"
+    (ha egy sáv ATV_ONE_TEMPO_PCT fölött van, a sáv nevével),
+    "váltogatják a tempót" (ha mindhárom sáv ATV_MIXED_MIN_PCT
+    fölött van); kevés mintánál (ATV_MIN_ATTACKS alatt) és a köztes
+    esetben None.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    out = {side: {"attacks": 0, "fast": 0, "mid": 0, "slow": 0,
+                  "top_share_pct": None, "verdict": None}
+           for side in ("home", "away")}
+
+    current = 0
+    current_phase: Optional[Phase] = None
+
+    def close_run():
+        nonlocal current, current_phase
+        if current > 0 and current_phase is not None:
+            dur = current / fps
+            # A nagyon rövid szakasz nem támadás, hanem fázis-billegés
+            # (a labda-átadás körüli bizonytalanság) — beszámítva
+            # mindenkit "gyorsnak" mutatna.
+            if dur >= ATV_MIN_SPAN_S:
+                side = ("home" if current_phase == Phase.HOME_ATTACK
+                        else "away")
+                rec = out[side]
+                rec["attacks"] += 1
+                if dur < ATV_FAST_S:
+                    rec["fast"] += 1
+                elif dur > ATV_SLOW_S:
+                    rec["slow"] += 1
+                else:
+                    rec["mid"] += 1
+        current = 0
+        current_phase = None
+
+    attack_phases = {Phase.HOME_ATTACK, Phase.AWAY_ATTACK}
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        if ph in attack_phases:
+            if ph == current_phase:
+                current += 1
+            else:
+                close_run()
+                current = 1
+                current_phase = ph
+        else:
+            close_run()
+    close_run()
+
+    nevek = {"fast": "gyorsan fejeznek be",
+             "mid": "közepes tempóban játszanak",
+             "slow": "hosszan járatják a támadást"}
+    for rec in out.values():
+        if rec["attacks"] < ATV_MIN_ATTACKS:
+            continue
+        aranyok = {k: 100.0 * rec[k] / rec["attacks"]
+                   for k in ("fast", "mid", "slow")}
+        top = max(aranyok, key=lambda k: aranyok[k])
+        rec["top_share_pct"] = round(aranyok[top], 1)
+        if aranyok[top] >= ATV_ONE_TEMPO_PCT:
+            rec["verdict"] = f"egy tempóban játszanak — {nevek[top]}"
+        elif all(v >= ATV_MIXED_MIN_PCT for v in aranyok.values()):
+            rec["verdict"] = "váltogatják a tempót"
+    return out
+
+
 # Elhúzódó támadás ára: megéri-e a passzív-veszélyes hosszú akció.
 SAC_TAIL_S = 4.0      # a szakasz vége után ennyin belüli gól még az akcióé
 SAC_MIN_SLOW = 3      # ennyi elhúzódó támadás alatt nincs ítélet

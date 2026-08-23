@@ -4132,6 +4132,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_sac['slow']} elhúzódó támadás ért gólt).")
     except Exception:
         pass
+    # Támadás-ritmus: egy tempóban játszanak-e, vagy váltogatják.
+    try:
+        from .tactics import attack_tempo_variety
+        atv = attack_tempo_variety(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_atv = atv[side]
+            if rec_atv["verdict"] is None:
+                continue
+            body += (f" Ritmus: a(z) {name} támadásainál "
+                     f"{rec_atv['verdict']} ({rec_atv['fast']} gyors, "
+                     f"{rec_atv['mid']} közepes, {rec_atv['slow']} hosszú "
+                     f"támadás).")
+    except Exception:
+        pass
     # Indítás-hiba ára: gólba kerülnek-e az elszórt indítások.
     try:
         from .goalkeeper import outlet_punishment

@@ -54,6 +54,10 @@ def merge_matches(parts: list[Match], match_id: str,
         # megszakadt, az összefűzött meccs is folytatható marad.
         partial=parts[-1].meta.partial,
         next_start_frame=parts[-1].meta.next_start_frame,
+        # A forrásvideó hossza csak akkor öröklődik, ha tényleg ugyanaz
+        # a fájl — ebből számol a minőség-jelentés lefedettséget, és két
+        # külön videó összefűzésénél az szám félrevezető lenne.
+        video_seconds=(first.meta.video_seconds if same_video else None),
     )
 
     frames: list[Frame] = []

@@ -76,6 +76,29 @@ def explain_unopenable(path: str) -> str:
             "— próbáld MP4 (H.264) formátumban.")
 
 
+def video_fps(path: Union[str, Path]) -> Union[float, None]:
+    """A videó képkocka-sebessége — vagy None, ha nem olvasható ki.
+
+    A kézi meccs-ablakhoz kell: a felhasználó MÁSODPERCBEN mondja meg,
+    hol kezdődik a meccs, a feldolgozó viszont kockákban számol.
+    """
+    import cv2
+
+    cap = None
+    try:
+        cap = open_capture(path)
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        return fps if fps > 0 else None
+    except Exception:
+        return None
+    finally:
+        try:
+            if cap is not None:
+                cap.release()
+        except Exception:
+            pass
+
+
 def video_seconds(path: Union[str, Path]) -> Union[float, None]:
     """A videó hossza másodpercben — vagy None, ha nem olvasható ki.
 

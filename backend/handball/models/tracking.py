@@ -132,6 +132,11 @@ class MatchMeta:
     # videóbeli kép-index, ahonnan a feldolgozás FOLYTATHATÓ.
     partial: bool = False
     next_start_frame: int = 0
+    # A FORRÁSVIDEÓ teljes hossza másodpercben (ha kiolvasható). Ebből
+    # derül ki, hogy a feldolgozás a felvétel mekkora részét fedte le —
+    # egy megvágott/félbeszakadt feltöltésnél a felhasználó egyébként
+    # csak annyit lát, hogy "csak az első félidőt elemezte ki".
+    video_seconds: Optional[float] = None
 
 
 @dataclass

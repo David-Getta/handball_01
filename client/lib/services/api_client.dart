@@ -1172,6 +1172,13 @@ class ApiClient {
     // false (alap) = azonnal indul, a futót a szerver félreteszi (az
     // addig feldolgozott része elmentve marad, később folytatható).
     bool queueBehind = false,
+    // KÉZI meccs-ablak másodpercben: hol kezdődik és hol ér véget a
+    // MECCS a felvételen. A feltöltött videóban rendszerint benne van a
+    // bemelegítés és a csapatbemutatás; ezekből a felismerő lövést és
+    // eladott labdát csinálna. Ha meg van adva, felülír minden
+    // automatikus meccs-ablak-felismerést.
+    double? startS,
+    double? endS,
   }) async {
     final body = <String, dynamic>{
       "path": path,
@@ -1179,6 +1186,8 @@ class ApiClient {
       "max": max,
       "imgsz": imgsz,
       "start": start,
+      if (startS != null) "start_s": startS,
+      if (endS != null) "end_s": endS,
       if (weights != null) "weights": weights,
       if (calib != null) "calib": calib,
       if (calib != null && calibRegion != null) "calib_region": calibRegion,

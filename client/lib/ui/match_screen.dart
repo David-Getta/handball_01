@@ -1910,6 +1910,16 @@ class _MatchScreenState extends State<MatchScreen> {
             if (q["out_of_court_pct"] != null)
               Text("Pályán kívülre eső mérés: ${q["out_of_court_pct"]}%",
                   style: AppText.label),
+            // A felvétel mekkora részét dolgoztuk fel: enélkül a
+            // "csak az első félidőt elemezte ki" élmény megmagyarázatlan
+            // marad (megvágott feltöltés, hossz-beállítás, megszakadás).
+            if (q["processed_pct"] != null)
+              Text(
+                  "A felvétel feldolgozott része: ${q["processed_pct"]}%"
+                  "${q["video_seconds"] != null ? " (a videó "
+                      "${((q["video_seconds"] as num) / 60).round()} perc)"
+                      : ""}",
+                  style: AppText.label),
             if (warnings.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               for (final w in warnings)

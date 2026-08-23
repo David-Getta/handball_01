@@ -583,6 +583,47 @@ def create_app():
     # Memóriabeli, mint a _store; a szerver újraindításáig él.
     _jobs: dict[str, dict] = {}
 
+    def _apply_manual_window(body: dict, path: str) -> None:
+        """A KÉZI meccs-ablak (start_s / end_s) átváltása kockákra.
+
+        A feltöltött felvételben rendszerint benne van a bemelegítés, a
+        csapatbemutatás és a lefújás utáni rész. Az automatikus
+        meccs-ablak ezt megpróbálja levágni, de rossz kalibrációnál
+        (amikor a lelátó is a pályára vetül) becsapható — a
+        bemelegítő kapura lövésekből "lövés", az álldogálásból "eladott
+        labda" lesz. A felhasználó ezért MEGMONDHATJA másodpercben, hol
+        kezdődik és hol ér véget a meccs; ez felülír minden felismerést.
+
+        A törzset helyben írjuk át (start = nyers kockaszám, max = a
+        ritkítás UTÁNI, feldolgozandó kockák száma), hogy a mentett
+        paraméter-fájl és a Folytatás is ugyanezt lássa.
+        """
+        kezd = body.get("start_s")
+        veg = body.get("end_s")
+        if kezd is None and veg is None:
+            return
+        try:
+            from ..video_io import video_fps
+            fps = video_fps(path)
+        except Exception:
+            fps = None
+        if not fps or fps <= 0:
+            return  # nem tudjuk átváltani — marad a régi viselkedés
+        stride = max(1, int(body.get("stride", 3) or 3))
+        if kezd is not None:
+            try:
+                body["start"] = max(0, int(round(float(kezd) * fps)))
+            except (TypeError, ValueError):
+                return
+        if veg is not None:
+            try:
+                start_f = int(body.get("start", 0) or 0)
+                kockak = int(round((float(veg) * fps - start_f) / stride))
+            except (TypeError, ValueError):
+                return
+            if kockak > 0:
+                body["max"] = kockak
+
     def _video_seconds_safe(path) -> float | None:
         """A videó hossza másodpercben — hiba esetén None.
 
@@ -657,6 +698,10 @@ def create_app():
             err = _calib_error(c)
             if err:
                 raise HTTPException(status_code=400, detail=err)
+
+        # Kézi meccs-ablak: a mentés ELŐTT váltjuk kockákra, hogy a
+        # paraméter-fájl (és így a Folytatás) is ezt vigye.
+        _apply_manual_window(body, path)
 
         job_id = uuid.uuid4().hex[:12]
         match_id = body.get("match_id") or f"video-{job_id}"
@@ -4544,6 +4589,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.tactics import attack_tempo_variety
+            res["attack_tempo_variety"] = attack_tempo_variety(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import balls_out
             res["balls_out"] = balls_out(match)
         except Exception:
@@ -5991,6 +6041,9 @@ def create_app():
                 from ..pipeline.tactics import slow_attack_cost
                 _layer("slow_attack_cost",
                        lambda: slow_attack_cost(match))
+                from ..pipeline.tactics import attack_tempo_variety
+                _layer("attack_tempo_variety",
+                       lambda: attack_tempo_variety(match))
                 from ..pipeline.attack_types import balls_out
                 _layer("balls_out", lambda: balls_out(match))
                 from ..pipeline.rules import suspensions_by_score

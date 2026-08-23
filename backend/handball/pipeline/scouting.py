@@ -691,6 +691,13 @@ class ScoutingReport:
     olp_punished: int = 0
     sac_slow: int = 0
     sac_scored: int = 0
+    # Támadás-ritmus: hány támadásuk esett a három tempó-sávba. Csak
+    # darabszám, hogy több meccsen pontosan összegződjön (az arányt a
+    # felhasználás helyén számoljuk).
+    atv_attacks: int = 0
+    atv_fast: int = 0
+    atv_mid: int = 0
+    atv_slow: int = 0
     obt_out: int = 0
     sps_tr: int = 0
     sps_lead: int = 0
@@ -3373,6 +3380,45 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A hosszú akcióikat is gólra váltják ({rep.sac_scored}"
                 f"/{rep.sac_slow}) — a 35. másodpercben is teljes "
                 "koncentráció: a falban senki nem kapcsolhat ki.")
+
+    # Támadás-ritmus: egy tempóban játszanak-e, vagy váltogatják.
+    # (A küszöbök a motorból jönnek, hogy ne csússzanak szét.)
+    from .tactics import (ATV_MIN_ATTACKS, ATV_MIXED_MIN_PCT,
+                          ATV_ONE_TEMPO_PCT)
+    if rep.atv_attacks >= ATV_MIN_ATTACKS:
+        _atv = {"fast": 100.0 * rep.atv_fast / rep.atv_attacks,
+                "mid": 100.0 * rep.atv_mid / rep.atv_attacks,
+                "slow": 100.0 * rep.atv_slow / rep.atv_attacks}
+        _atv_top = max(_atv, key=lambda k: _atv[k])
+        if _atv[_atv_top] >= ATV_ONE_TEMPO_PCT:
+            if _atv_top == "fast":
+                keys.append(
+                    f"Egy tempóban játszanak: gyorsan fejeznek be "
+                    f"({rep.atv_fast}/{rep.atv_attacks} támadásuk 12 "
+                    "másodpercen belül zárul) — a visszarendeződés a "
+                    "meccsterv első pontja: a labdavesztés pillanatában "
+                    "álljon a fal, különben az első hullám eldönti a "
+                    "meccset.")
+            elif _atv_top == "slow":
+                keys.append(
+                    f"Egy tempóban játszanak: hosszan járatják a "
+                    f"támadást ({rep.atv_slow}/{rep.atv_attacks} akciójuk "
+                    "30 másodperc fölött) — türelmes, hibátlan fal kell: "
+                    "a passzív jel nektek dolgozik, ne ugorjatok bele a "
+                    "csali-mozgásokba.")
+            else:
+                keys.append(
+                    f"Egy tempóban játszanak: közepes ritmusban "
+                    f"({rep.atv_mid}/{rep.atv_attacks} támadásuk) — a fal "
+                    "beállhat erre a ritmusra, és a lövés-kényszert a "
+                    "megszokott idejükben lehet rájuk erőltetni.")
+        elif all(v >= ATV_MIXED_MIN_PCT for v in _atv.values()):
+            keys.append(
+                f"Váltogatják a tempót ({rep.atv_fast} gyors, "
+                f"{rep.atv_mid} közepes, {rep.atv_slow} hosszú támadás) — "
+                "a fal nem állhat rá egy ritmusra: a JELZÉSEKRE kell "
+                "edzeni a felismerést (ki hozza fel a labdát, mikor "
+                "indul az első keresztmozgás).")
 
     # Kidobott labda: olcsó eladások — oldalvonalra szorítás.
     if rep.obt_out >= 3:
@@ -10451,6 +10497,12 @@ def _scout_team_cached(match: Match, team: Team,
         sacrec = _sac(match, config)[team.value]
         rep.sac_slow = sacrec["slow"]
         rep.sac_scored = sacrec["scored"]
+        from .tactics import attack_tempo_variety as _atvf
+        atvrec = _atvf(match, config)[team.value]
+        rep.atv_attacks = atvrec["attacks"]
+        rep.atv_fast = atvrec["fast"]
+        rep.atv_mid = atvrec["mid"]
+        rep.atv_slow = atvrec["slow"]
         from .attack_types import balls_out as _obt
         rep.obt_out = _obt(match, config)[team.value]["out"]
         from .rules import suspensions_by_score as _sps
@@ -14063,6 +14115,36 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    from .tactics import ATV_MIN_ATTACKS as _A449
+    from .tactics import ATV_ONE_TEMPO_PCT as _A449P
+    # 449) Az ő EGY tempójuk × a ti gyors kontrátok: a kiszámítható
+    # ritmusra a fal be tud állni, és a nyereség a másik végén jön.
+    if opp.atv_attacks >= _A449 and own.fbc_breaks >= 3:
+        _p449 = {"fast": 100.0 * opp.atv_fast / opp.atv_attacks,
+                 "mid": 100.0 * opp.atv_mid / opp.atv_attacks,
+                 "slow": 100.0 * opp.atv_slow / opp.atv_attacks}
+        _p449top = max(_p449, key=lambda k: _p449[k])
+        if _p449[_p449top] >= _A449P:
+            if _p449top == "slow":
+                plan.append(
+                    f"A támadásaik {_p449[_p449top]:.0f}%-a HOSSZÚ "
+                    f"({opp.atv_slow}/{opp.atv_attacks} akció 30 mp "
+                    f"fölött), ti pedig futtok kontrát "
+                    f"({own.fbc_breaks} lerohanás) — ez ajándék: "
+                    "türelmes, hibátlan 6-0, semmi kilépés, és amikor a "
+                    "passzív jel megjön, a kényszerű lövés után MINDEN "
+                    "labdával azonnal induljatok. Az ő 30 másodpercük "
+                    "után a faluk rendezetlen.")
+            elif _p449top == "fast":
+                plan.append(
+                    f"A támadásaik {_p449[_p449top]:.0f}%-a 12 mp-en "
+                    f"belül zárul ({opp.atv_fast}/{opp.atv_attacks}), ti "
+                    f"pedig magatok is kontráztok ({own.fbc_breaks} "
+                    "lerohanás) — a meccs a VISSZARENDEZŐDÉSEN dől el: "
+                    "saját támadásnál egy ember már a lövés pillanatában "
+                    "hátrafelé indul, és a lövés-választásotokban is "
+                    "kerüljétek a kipattanós, hosszú távolit.")
 
     from .defense import PTO_MIN_TURNOVERS, PTO_UNFORCED_PCT
     # 448) Az ő magától jövő eladásaik × a ti fegyelmezett falatok:
@@ -21464,6 +21546,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         olp_punished=sum(r.olp_punished for r in reports),
         sac_slow=sum(r.sac_slow for r in reports),
         sac_scored=sum(r.sac_scored for r in reports),
+        atv_attacks=sum(r.atv_attacks for r in reports),
+        atv_fast=sum(r.atv_fast for r in reports),
+        atv_mid=sum(r.atv_mid for r in reports),
+        atv_slow=sum(r.atv_slow for r in reports),
         obt_out=sum(r.obt_out for r in reports),
         sps_tr=sum(r.sps_tr for r in reports),
         sps_lead=sum(r.sps_lead for r in reports),

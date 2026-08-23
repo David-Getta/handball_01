@@ -49,6 +49,13 @@ class _UploadScreenState extends State<UploadScreen> {
   // ezeket használja (utólag is átírhatók a könyvtárban).
   final _homeCtrl = TextEditingController();
   final _awayCtrl = TextEditingController();
+  // KÉZI meccs-ablak (perc:mp): hol kezdődik és hol ér véget a MECCS a
+  // felvételen. A feltöltött videóban rendszerint benne van a
+  // bemelegítés és a csapatbemutatás — abból a felismerő lövést és
+  // eladott labdát csinálna. Üresen hagyva marad az automatikus
+  // meccs-ablak-felismerés.
+  final _startSCtrl = TextEditingController();
+  final _endSCtrl = TextEditingController();
   final _api = ApiClient();
 
   // Aktuális feldolgozási munka állapota (a backendtől, GET /jobs/{id}).
@@ -112,6 +119,106 @@ class _UploadScreenState extends State<UploadScreen> {
       _preflightDebounce =
           Timer(const Duration(milliseconds: 600), _runPreflight);
     });
+  }
+
+  /// "12:30" vagy "750" → másodperc. Üresnél/értelmezhetetlennél null.
+  ///
+  /// Két alak megy: perc:másodperc (ahogy a lejátszóban látszik) és
+  /// puszta másodperc. Aki elgépeli, ne kapjon hibát — csak nem lesz
+  /// kézi ablak (marad az automatikus felismerés).
+  static double? _idoMasodpercben(String szoveg) {
+    final t = szoveg.trim();
+    if (t.isEmpty) return null;
+    if (t.contains(":")) {
+      final reszek = t.split(":");
+      if (reszek.length != 2) return null;
+      final perc = int.tryParse(reszek[0].trim());
+      final mp = int.tryParse(reszek[1].trim());
+      if (perc == null || mp == null || perc < 0 || mp < 0 || mp > 59) {
+        return null;
+      }
+      return perc * 60.0 + mp;
+    }
+    final mp = double.tryParse(t);
+    if (mp == null || mp < 0) return null;
+    return mp;
+  }
+
+  /// A kézi ablak kezdete másodpercben (vagy null: marad az automatika).
+  double? _ablakKezdet() {
+    final kezd = _idoMasodpercben(_startSCtrl.text);
+    final veg = _idoMasodpercben(_endSCtrl.text);
+    if (kezd != null && veg != null && veg <= kezd) return null;
+    return kezd;
+  }
+
+  /// A kézi ablak vége másodpercben (vagy null: a videó végéig).
+  double? _ablakVeg() {
+    final kezd = _idoMasodpercben(_startSCtrl.text);
+    final veg = _idoMasodpercben(_endSCtrl.text);
+    if (kezd != null && veg != null && veg <= kezd) return null;
+    return veg;
+  }
+
+  /// A kézi meccs-ablak mezői — a bemelegítés és a ceremónia levágása.
+  Widget _matchWindowFields() {
+    final kezd = _idoMasodpercben(_startSCtrl.text);
+    final veg = _idoMasodpercben(_endSCtrl.text);
+    final rossz = (_startSCtrl.text.trim().isNotEmpty && kezd == null) ||
+        (_endSCtrl.text.trim().isNotEmpty && veg == null);
+    final sorrendBaj = kezd != null && veg != null && veg <= kezd;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("A MECCS IDŐABLAKA A FELVÉTELEN", style: AppText.sectionLabel),
+        const SizedBox(height: 4),
+        Text(
+            "Ha a videóban benne van a bemelegítés vagy a csapatbemutatás, "
+            "add meg, hol kezdődik az első kezdődobás — enélkül a "
+            "bemelegítő lövésekből is „lövés”, az álldogálásból „eladott "
+            "labda” lesz. Üresen hagyva a rendszer maga próbálja "
+            "megtalálni. Alak: perc:másodperc (pl. 4:30).",
+            style: AppText.label.copyWith(fontSize: 12)),
+        const SizedBox(height: AppSpacing.sm),
+        Row(children: [
+          SizedBox(
+            width: 190,
+            child: TextField(
+              controller: _startSCtrl,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: "Meccs kezdete (pl. 4:30)",
+                isDense: true,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          SizedBox(
+            width: 190,
+            child: TextField(
+              controller: _endSCtrl,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: "Meccs vége (üres = végig)",
+                isDense: true,
+              ),
+            ),
+          ),
+        ]),
+        if (rossz || sorrendBaj) ...[
+          const SizedBox(height: 6),
+          Text(
+              sorrendBaj
+                  ? "A vége korábban van, mint a kezdet — így nem indul el a "
+                      "kézi ablak."
+                  : "Nem értelmezhető időpont — használd a perc:másodperc "
+                      "alakot (pl. 4:30). Amíg így marad, az automatikus "
+                      "meccs-ablak dönt.",
+              style: AppText.label
+                  .copyWith(fontSize: 11.5, color: AppColors.away)),
+        ],
+      ],
+    );
   }
 
   /// Az indítás előtti ellenőrzés kártyája — röviden, a gomb mellett.
@@ -188,6 +295,8 @@ class _UploadScreenState extends State<UploadScreen> {
   void dispose() {
     _poll?.cancel();
     _preflightDebounce?.cancel();
+    _startSCtrl.dispose();
+    _endSCtrl.dispose();
     _pathCtrl.dispose();
     _homeCtrl.dispose();
     _awayCtrl.dispose();
@@ -446,6 +555,10 @@ class _UploadScreenState extends State<UploadScreen> {
         // szerver a pásztázás-mátrixszal vezeti vissza az alap-kockára).
         calibs: _calib == null ? null : _calibMaps(_calib!),
         start: _calib?.startFrame ?? 0,
+        // Kézi meccs-ablak: ha meg van adva, ez dönt (a bemelegítés és a
+        // ceremónia levágása) — az értelmetlen párost eldobjuk.
+        startS: _ablakKezdet(),
+        endS: _ablakVeg(),
         jerseyOcr: _jerseyOcr,
         // A felhasználó döntése: megvárja-e a már futó feldolgozást.
         queueBehind: queueBehind,
@@ -483,6 +596,8 @@ class _UploadScreenState extends State<UploadScreen> {
               awayTeam: _awayCtrl.text.trim(),
               calibs: calibs,
               start: startFrame,
+              startS: _ablakKezdet(),
+              endS: _ablakVeg(),
               jerseyOcr: _jerseyOcr,
               // A köteg többi videója mindig SORBAN vár a sorára.
               queueBehind: true,
@@ -705,7 +820,13 @@ class _UploadScreenState extends State<UploadScreen> {
       final balls = (r["balls"] as num?)?.toInt() ?? 0;
       final refs = (r["referees"] as num?)?.toInt() ?? 0;
       final onCourt = (r["on_court"] as num?)?.toInt();
-      final ok = persons >= 8;
+      // A pályán legfeljebb 14 játékos lehet (2x7). Ha a kalibrált
+      // pálya-modellbe ennél sokkal több ember esik, a homográfia a
+      // LELÁTÓT is a pályára vetíti — ez a leggyakoribb hiba, és
+      // órákat visz el, ha csak a feldolgozás után derül ki. Ugyanaz a
+      // küszöb, mint a motorban: TOO_MANY_PLAYERS.
+      final tulSok = onCourt != null && onCourt > 18;
+      final ok = !tulSok && persons >= 8;
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -741,12 +862,23 @@ class _UploadScreenState extends State<UploadScreen> {
                   ok
                       ? "Jól néz ki — a dobozok színe mutatja, melyik "
                           "csapathoz sorolná a rendszer a játékost."
-                      : "Kevés játékos látszik — léptess olyan kockára, ahol "
-                          "a pálya jól látszik (kalibráció), vagy válassz "
-                          "tisztább felvételt.",
+                      : tulSok
+                          ? "TÚL sok ember esik a pályára ($onCourt — a "
+                              "pályán legfeljebb 14 lehet): a kalibráció a "
+                              "lelátót is a játéktérre vetíti. Így a "
+                              "pozíciók, a birtoklás és minden "
+                              "távolság-alapú elemzés félremegy. Jelöld "
+                              "újra a 4 sarkot a JÁTÉKTÉR sarkain (ne a "
+                              "lelátón), és ha csak az egyik térfél "
+                              "látszik, válaszd a fél-pálya kalibrációt."
+                          : "Kevés játékos látszik — léptess olyan kockára, "
+                              "ahol a pálya jól látszik (kalibráció), vagy "
+                              "válassz tisztább felvételt.",
                   style: AppText.label.copyWith(
                       fontSize: 12,
-                      color: ok ? AppColors.accent : AppColors.gold),
+                      color: ok
+                          ? AppColors.accent
+                          : tulSok ? AppColors.away : AppColors.gold),
                 ),
               ],
             ),
@@ -1147,6 +1279,8 @@ class _UploadScreenState extends State<UploadScreen> {
               : "Közvetítés-ellenőrzés (vágott-e a felvétel?)"),
         ),
       ),
+      const SizedBox(height: AppSpacing.md),
+      _matchWindowFields(),
       _preflightCard(),
       const SizedBox(height: AppSpacing.md),
       Row(children: [

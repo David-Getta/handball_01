@@ -523,7 +523,8 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                 print("FIGYELEM: a folytató modell nem tölthető be "
                       f"({e}) — a közös példánnyal próbáljuk.")
                 mdl = model
-            cap = cv2.VideoCapture(video_path)
+            from handball.video_io import open_capture
+            cap = open_capture(video_path)
             try:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
                 pos = start_frame
@@ -720,7 +721,9 @@ class _SimpleTracker:
 def _process_hog(video_path, stride, max_frames, stop_check=None,
                  raw_out=None, colors_out=None, on_frame=None, start=0):
     import cv2
-    cap = cv2.VideoCapture(video_path)
+
+    from handball.video_io import open_capture
+    cap = open_capture(video_path)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
     scale = PROC_WIDTH / W if W > PROC_WIDTH else 1.0
     # Az OpenCV 5-ből kikerült a HOG személydetektor — nélküle a tartalék mód
@@ -792,7 +795,12 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         if progress_cb is not None:
             progress_cb(stage, prog, msg)
 
-    cap = cv2.VideoCapture(video_path)
+    # A megnyitást a közös segéd végzi: ÉKEZETES windowsos útvonalon a
+    # nyers VideoCapture némán elbukik, és akkor a fps/felbontás a
+    # tartalék értékekre esne vissza — vagyis minden idő-alapú mutató
+    # (sebesség, támadás-hossz, ütem) csendben elcsúszna.
+    from handball.video_io import open_capture
+    cap = open_capture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
     H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 720
@@ -938,7 +946,11 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                          stride=int(stride), date=rec_date,
                          # Részleges eredménynél innen folytatható a feldolgozás.
                          partial=bool(partial),
-                         next_start_frame=int(start) + len(raw) * int(stride))
+                         next_start_frame=int(start) + len(raw) * int(stride),
+                         # A FORRÁSVIDEÓ hossza: ebből derül ki, hogy a
+                         # feldolgozás a felvétel mekkora részét fedte le.
+                         video_seconds=((n_total / fps)
+                                        if n_total > 0 and fps > 0 else None))
         if rec_date:
             say(f"meccs-dátum a videóból: {rec_date}")
         frames = []

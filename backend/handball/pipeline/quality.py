@@ -23,6 +23,26 @@ EXPECTED_PLAYERS = 14
 # "Elég játékos látszik" küszöb egy kockára (pásztázó kamerán sosem látszik mind).
 GOOD_FRAME_MIN_PLAYERS = 8
 
+# TÚL sok mért játékos: a pályán 14 lehet; a kispad, a bíró és a
+# partjelző még belefér a mérés zajába, de e fölött az észlelések már
+# biztosan nem a pályán lévő játékosok (nézőtér, kispad, vagy — a
+# leggyakoribb ok — hibás pálya-kalibráció, ami a lelátót is a pályára
+# vetíti). Ez NEM apró pontatlanság: ilyenkor a birtoklás, a fal-forma
+# és a távolság-alapú rétegek mind mást mérnek, mint amit mondanak.
+TOO_MANY_PLAYERS = 18.0
+# Ha ennyinél több játékost mérünk kockánként, a feldolgozás egésze
+# megkérdőjelezhető — hiába jó a labda-lefedettség. A birtoklás, a
+# fal-forma és minden távolság-alapú réteg téves alapokon áll, tehát az
+# összpontszám ezt a plafont nem lépheti át.
+TOO_MANY_SCORE_CAP = 35
+
+# A felvétel LEFEDETTSÉGE: a feldolgozott szakasz ekkora aránya alatt
+# szólunk, hogy a videónak csak egy részét elemeztük. Egy meccs-videó
+# elején-végén van holt idő, és a kézi meccs-ablak is vág — a jelzés
+# nem hiba, hanem tájékoztatás: aki azt hiszi, a teljes meccset
+# elemezte, ne a számokból jöjjön rá, hogy nem.
+VIDEO_COVERAGE_WARN_PCT = 60.0
+
 # Kalibráció-drift: a pálya téglalapján ENNYIVEL kívülre eső mért pozíció
 # még belefér (a kifutó szélső, a csereember és a mérés zaja), és a mért
 # pozíciók ekkora aránya fölött mondjuk ki, hogy a kalibráció elcsúszott.
@@ -82,15 +102,44 @@ def compute_quality_report(match: Match) -> dict:
 
     # Összpontszám: a játékos-lefedettség és a labda-lefedettség súlyozva.
     # (A becsült arány a játékos-részt rontja: a becslés hasznos, de nem mérés.)
-    player_score = min(1.0, avg_measured / EXPECTED_PLAYERS) * (1.0 - est_ratio / 200.0)
+    #
+    # A TÖBBLET ugyanúgy hiba, mint a hiány. Korábban a lefedettséget
+    # 1.0-ra vágtuk, tehát a 27 játékos/kocka (nézőtér a pályára vetítve)
+    # TÖKÉLETES lefedettségnek számított, és a jelentés 70/100-at
+    # mutatott egy használhatatlan feldolgozásra. Innentől a 14 fölötti
+    # rész ugyanolyan meredeken ront, ahogy a hiány.
+    if avg_measured <= EXPECTED_PLAYERS:
+        coverage = avg_measured / EXPECTED_PLAYERS
+    else:
+        coverage = max(0.0,
+                       1.0 - (avg_measured - EXPECTED_PLAYERS)
+                       / EXPECTED_PLAYERS)
+    player_score = coverage * (1.0 - est_ratio / 200.0)
     ball_score = ball_pct / 100.0
     score = round(100.0 * (0.6 * player_score + 0.4 * ball_score))
+    # A lehetetlen létszám PLAFONT ad: jó labda-lefedettséggel se
+    # mutathat "közepes" pontszámot egy olyan feldolgozás, amiben a
+    # nézőtér is a pályán van.
+    if avg_measured > TOO_MANY_PLAYERS:
+        score = min(score, TOO_MANY_SCORE_CAP)
 
     warnings = []
     if avg_measured < GOOD_FRAME_MIN_PLAYERS:
         warnings.append(
             f"Kevés játékos látszik (átlag {avg_measured:.1f}/kocka) — ellenőrizd a "
             "kalibrációt (4 sarok) és hogy a kamera a játékteret mutatja-e.")
+    if avg_measured > TOO_MANY_PLAYERS:
+        warnings.append(
+            f"TÚL sok játékos látszik (átlag {avg_measured:.1f}/kocka — a "
+            f"pályán legfeljebb {EXPECTED_PLAYERS} lehet). A rendszer a "
+            "nézőteret / kispadot is játékosnak méri, és emiatt a "
+            "birtoklás, a fal-forma és MINDEN távolság-alapú elemzés "
+            "félremegy. A leggyakoribb ok a pálya-kalibráció: a 4 "
+            "sarokpont a JÁTÉKTÉR sarkait jelölje (ne a lelátót vagy a "
+            "teljes képet), és ha a kezdőképen csak az egyik térfél "
+            "látszik, a fél-pálya kalibrációt válaszd. Ellenőrzés: a "
+            "kalibráló képen a rajzolt 6 m-es és 9 m-es vonalnak rá kell "
+            "ülnie a valódi vonalakra.")
     if ball_pct < 30.0:
         warnings.append(
             f"Kevés labda-észlelés ({ball_pct:.0f}%) — a birtoklás/passz elemzés "
@@ -198,6 +247,28 @@ def compute_quality_report(match: Match) -> dict:
             "volt, a 2. félidő irány-érzékeny elemzései (támadás-irány, "
             "kapus-oldal) pontatlanok lehetnek.")
 
+    # --- A felvétel mekkora részét dolgoztuk fel? ---
+    # "Az egész meccs helyett csak az első félidőt elemezte ki" — a
+    # felhasználó ezt a számokból nem tudja kikövetkeztetni. A
+    # feldolgozott szakasz a NYERS videó idejében: start_frame-től
+    # ennyi ritkított kockán át.
+    video_s = getattr(match.meta, "video_seconds", None)
+    processed_pct = None
+    if video_s and video_s > 0:
+        stride = max(1, int(match.meta.stride or 1))
+        raw_fps = fps * stride
+        processed_s = n * stride / raw_fps if raw_fps > 0 else 0.0
+        processed_pct = 100.0 * processed_s / video_s
+        if processed_pct < VIDEO_COVERAGE_WARN_PCT:
+            warnings.append(
+                f"A felvételnek csak a {processed_pct:.0f}%-át dolgoztuk "
+                f"fel ({processed_s / 60.0:.0f} perc a "
+                f"{video_s / 60.0:.0f} percből) — ha a TELJES meccset "
+                "várnád, nézd meg a meccs-időablak mezőit és a "
+                "hossz-beállítást (rövid próba / félidő / teljes videó); "
+                "ha a feldolgozás megszakadt, a könyvtárban a "
+                "Folytatás onnan viszi tovább, ahol abbamaradt.")
+
     seven_meters = 0
     try:
         from .rules import detect_seven_meters
@@ -226,6 +297,9 @@ def compute_quality_report(match: Match) -> dict:
         "fragmentation": round(fragmentation, 2),
         "home_share_pct": round(home_share, 1),
         "out_of_court_pct": round(out_pct, 1),
+        "video_seconds": round(video_s, 1) if video_s else None,
+        "processed_pct": (round(processed_pct, 1)
+                          if processed_pct is not None else None),
         "jersey_coverage_pct": round(jersey_pct, 1),
         "goalkeepers": goalkeepers,
         "halftime_frame": halftime_frame,

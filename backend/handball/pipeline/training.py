@@ -1366,6 +1366,40 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 469) Kiszámítható ritmus: ha a SAJÁT támadásaink mind egy
+    # tempóban futnak, az ellenfél fala rá tud állni.
+    try:
+        from .tactics import (ATV_MIN_ATTACKS, ATV_ONE_TEMPO_PCT,
+                              attack_tempo_variety)
+        atv469 = attack_tempo_variety(match, config)
+        for side in ("home", "away"):
+            rec469 = atv469[side]
+            if rec469["attacks"] < ATV_MIN_ATTACKS:
+                continue
+            ar469 = {"fast": 100.0 * rec469["fast"] / rec469["attacks"],
+                     "mid": 100.0 * rec469["mid"] / rec469["attacks"],
+                     "slow": 100.0 * rec469["slow"] / rec469["attacks"]}
+            top469 = max(ar469, key=lambda k: ar469[k])
+            if ar469[top469] < ATV_ONE_TEMPO_PCT:
+                continue  # váltogatunk — ez most nem hiányosság
+            nev469 = {"fast": "12 mp-en belül lezárt",
+                      "mid": "közepes hosszú",
+                      "slow": "30 mp fölötti"}[top469]
+            add(side, "támadás", "Ritmus-váltás",
+                f"a támadásaink {ar469[top469]:.0f}%-a {nev469} "
+                f"({rec469[top469]}/{rec469['attacks']}; "
+                f"{ATV_ONE_TEMPO_PCT:.0f}% fölött jelezzük) — egy "
+                "tempóban játszunk, és a felkészült ellenfél fala erre "
+                "az egy ritmusra beáll",
+                "ritmus-váltás az edzésen: ugyanaz a figura KÉT "
+                "sebességgel (korai befejezés a 8. mp-ig, illetve "
+                "kijátszott változat a 25. mp-re), és a jel a "
+                "felállásból jöjjön — a játékosok tanulják meg a váltást "
+                "ugyanabból a kezdőképből indítani; edzőmeccsen a "
+                "támadások felére órát adunk, a másik felére nem")
+    except Exception:
+        pass
+
     # 468) Magától jövő eladás: ha a labdáink NYOMÁS NÉLKÜL vesznek el,
     # az technika- és döntés-kérdés, nem taktikai.
     try:

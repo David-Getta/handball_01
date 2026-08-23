@@ -1,0 +1,50 @@
+"""
+Kliens-őrzés: a detektálás-próba a TÚL SOK embert is kimondja.
+
+Miért: az éles meccsen a kalibráció a lelátót is a játéktérre
+vetítette, és emiatt 27 "játékos" került a pályára. A próbakockán ez
+egy pillanat alatt látszott volna — de a felület csak a KEVÉS
+észlelést ismerte hibaként ("persons >= 8"), a sokat nem. Így az
+egyórás feldolgozás után derült ki, hogy semmi sem használható.
+
+Futtatás:
+    python -m pytest tests/test_client_calib_check.py
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _upload_src() -> str:
+    return (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+
+
+def test_probakocka_jelzi_a_tul_sok_embert():
+    """A pályára eső 14+ ember a kalibráció hibája — mondjuk ki ott."""
+    src = _upload_src()
+    assert "tulSok" in src, "a próbakocka nem nézi a felső határt"
+    assert "onCourt != null && onCourt > 18" in src, (
+        "a küszöbnek a motoréval kell egyeznie (TOO_MANY_PLAYERS = 18)")
+    assert "fél-pálya kalibrációt" in src, (
+        "a figyelmeztetés mondja meg a teendőt is")
+
+
+def test_a_verdikt_nem_lehet_jo_tul_sok_embernel():
+    """A régi 'persons >= 8' önmagában a hibás esetet is átengedte."""
+    src = _upload_src()
+    assert "final ok = !tulSok && persons >= 8;" in src
+
+
+def test_kezi_meccsablak_mezoi_leteznek():
+    """A bemelegítés levágásának végső menekülőútja a kézi ablak."""
+    src = _upload_src()
+    assert "_matchWindowFields" in src
+    assert "Meccs kezdete" in src
+    assert "startS:" in src and "endS:" in src, (
+        "a megadott ablak nem jut el a motorhoz")

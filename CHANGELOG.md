@@ -5,6 +5,45 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.47 óta)
 
+- **Minőség-jelentés: a TÖBBLET is hiba** (motor + kliens) — JAVÍTÁS:
+  egy éles meccsen a rendszer 27,4 játékost mért kockánként (a pályán
+  14 lehet: a nézőteret és a kispadot is játékosnak mérte), a jelentés
+  mégis 70/100-at mutatott. A képlet a játékos-lefedettséget 1.0-ra
+  vágta, tehát a hibás feldolgozást TÖKÉLETESNEK látta. Innentől a 14
+  fölötti rész ugyanolyan meredeken ront, ahogy a hiány, a lehetetlen
+  létszám pedig PLAFONT ad az összpontszámra (jó labda-lefedettséggel
+  se lehet "közepes" egy olyan feldolgozás, amiben a lelátó is a
+  pályán van). Külön figyelmeztetés is jár hozzá, a leggyakoribb okkal
+  és a teendővel: a 4 sarokpont a JÁTÉKTÉR sarkait jelölje, fél pálya
+  esetén a fél-pálya kalibrációt kell választani, és a rajzolt 6/9
+  m-es vonalnak rá kell ülnie a valódira.
+- **Kézi meccs-időablak** (motor + kliens): a feltöltött felvételben
+  rendszerint benne van a bemelegítés és a csapatbemutatás — ezekből a
+  felismerő lövést és eladott labdát csinál. Az automatikus meccs-ablak
+  eddig is vágott, de rossz kalibrációnál becsapható (ha a lelátó is a
+  pályára vetül, a bemelegítés is "játéknak" látszik). Mostantól az Új
+  elemzés lapon megadható perc:másodperc alakban, hol kezdődik és hol
+  ér véget a MECCS; ez felülír minden felismerést, bekerül a mentett
+  paraméterekbe (tehát a Folytatás is ezt viszi), és a köteg többi
+  videójára is érvényes.
+- **"A felvétel mekkora részét dolgoztuk fel"** (motor + kliens): a
+  meccs mostantól viszi a FORRÁSVIDEÓ hosszát, és a minőség-jelentés
+  kimondja, ha a feldolgozott szakasz a felvétel 60%-a alatt maradt.
+  Enélkül a "csak az első félidőt elemezte ki" élmény
+  megmagyarázhatatlan: nem derül ki, hogy megvágott feltöltésről, a
+  hossz-beállításról vagy megszakadt feldolgozásról van-e szó.
+
+- **Új elemző réteg: támadás-ritmus** (`attack_tempo_variety`): a
+  támadó-szakaszok HOSSZÁT három sávba soroljuk (12 mp alatt gyors, 30
+  mp fölött hosszú). Nem az a kérdés, melyik a jobb, hanem hogy
+  egyfélék-e: aki egy tempóban játszik, kiszámítható. Edzőileg ez a
+  felkészülés ritmusa — gyors befejezőknél a visszarendeződés a
+  meccsterv első pontja, hosszan járatóknál türelmes, hibátlan fal kell
+  (a passzív jel a védőnek dolgozik), váltogatóknál pedig a JELZÉSEKRE
+  kell edzeni a felismerést. Felületek: /analyze, meccs-csomag, edzői
+  összefoglaló, felderítés (kulcs + 449. meccsterv-szabály), edzés-fókusz
+  (469. szabály), kliens-csempe.
+
 - **Indítás előtti ellenőrzés: hely és várható idő** (motor + kliens):
   egy meccs feldolgozása fél-egy óra. A legrosszabb vég az, amikor ez
   az óra elmegy, és UTÁNA derül ki, hogy nem volt hova írni az
