@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.40 óta)
+## Kiadatlan (a v0.1.41 óta)
+
+*(még semmi)*
+
+## v0.1.41 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: a felülnézeti pálya mostantól IGAZI kézilabda-pálya —
+> 9 m-es szaggatott vonal, hetes- és kapus-vonal, kapuháló, mélység és
+> gömbölyű játékos-tokenek; a labdás embert arany ragyogás emeli ki. A
+> vezérlők is megfoghatóbbak: a meccs-sztori sávján hover-előnézet
+> mutatja a cél-időpontot, a védekezés-sáv szakaszai felfénylenek, a
+> mezők/gombok/fülek pedig egységes téma-nyelvet kaptak.
 
 - **Egységes gombok, mezők és fülek** (kliens): a beviteli mezők
   mostantól kitöltött, lekerekített dobozok akcentus-fókusszal (eddig
