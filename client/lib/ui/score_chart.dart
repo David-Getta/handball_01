@@ -10,6 +10,7 @@ library;
 import "package:flutter/material.dart";
 
 import "../theme/app_theme.dart";
+import "anim.dart";
 
 class ScoreChart extends StatelessWidget {
   /// A gól-események: {"t": képkocka, "team": "home"|"away"} (időrendben).
@@ -57,7 +58,9 @@ class ScoreChart extends StatelessWidget {
             // (mint egy élő közvetítés idővonala) — egyszer, betöltéskor.
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: 1),
-              duration: const Duration(milliseconds: 900),
+              duration: reduceMotion(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 900),
               curve: Curves.easeInOutCubic,
               builder: (context, t, _) => CustomPaint(
                 size: Size(constraints.maxWidth, 120),

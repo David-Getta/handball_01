@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.43 óta)
 
+- **Az animációk tiszteletben tartják a csökkentett mozgást** (kliens,
+  hozzáférhetőség): az app az elmúlt körökben tele lett úszó, pörgő és
+  növekvő elemekkel. Akinél a rendszerben be van kapcsolva a
+  mozgás-csökkentés (macOS: Kisegítő lehetőségek → Kijelző → Mozgás
+  csökkentése; Windows: Animációk kikapcsolása), annál ez nem
+  díszítés, hanem rosszullét. Mostantól a közös animációs elemek
+  (belépő úszás, szám-felpörgetés, hover-emelés, mérő-sáv) és a
+  grafikonok berajzolása is lekérdezi a beállítást, és mozgás nélkül,
+  AZONNAL a végállapotot mutatja — a tartalom ugyanaz marad. Őr-teszt
+  védi.
+
 - **A két grafikon is elmosás nélkül ragyog** (kliens, teljesítmény):
   az eredmény-alakulás és a lövéstérkép betöltéskor BERAJZOLÓDIK, és
   az animáció alatt képkockánként újrarajzolódnak — gólonként egy-egy

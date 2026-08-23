@@ -11,11 +11,24 @@
 ///
 /// Mindhárom beépített Flutter-primitívekre épül (TweenAnimationBuilder,
 /// AnimatedContainer) — nincs külső csomag, nincs vezérlő-életciklus.
+///
+/// MOZGÁS-CSÖKKENTÉS: mindegyik elem tiszteletben tartja a rendszer
+/// "csökkentett mozgás" beállítását ([reduceMotion]). Aki bekapcsolja,
+/// annak a mozgás nem díszítés, hanem rosszullét — az app tele van
+/// úszó, pörgő és növekvő elemekkel, ezért ezt egy helyen kell
+/// elintézni, nem elemenként.
 library;
 
 import "package:flutter/material.dart";
 
 import "../theme/app_theme.dart";
+
+/// Igaz, ha a felhasználó a rendszerben CSÖKKENTETT MOZGÁST kért.
+///
+/// A `maybeOf` szándékos: MediaQuery nélküli környezetben (teszt,
+/// korai build) ne dobjon — ott egyszerűen animálunk.
+bool reduceMotion(BuildContext context) =>
+    MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
 /// Belépő animáció: áttűnés + 12 px felfelé úszás. Listákban az `index`
 /// lépcsőzteti (30 ms/elem, legfeljebb 12 lépcső — a hosszú lista vége ne
@@ -34,6 +47,7 @@ class FadeSlideIn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (reduceMotion(context)) return child;
     final delayMs = 30 * (index > 12 ? 12 : index);
     final total = duration + Duration(milliseconds: delayMs);
     return TweenAnimationBuilder<double>(
@@ -76,7 +90,7 @@ class CountUp extends StatelessWidget {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: value),
-      duration: duration,
+      duration: reduceMotion(context) ? Duration.zero : duration,
       curve: Curves.easeOutCubic,
       builder: (context, v, _) => Text(
         format != null ? format!(v) : v.round().toString(),
@@ -108,11 +122,14 @@ class _HoverLiftState extends State<HoverLift> {
 
   @override
   Widget build(BuildContext context) {
+    final still = reduceMotion(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedScale(
-        scale: _hover ? 1.012 : 1.0,
+        // Csökkentett mozgásnál a keret és az árnyék marad (az a
+        // "kattintható" jel), csak a skálázás áll le.
+        scale: _hover && !still ? 1.012 : 1.0,
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOutCubic,
         child: AnimatedContainer(
@@ -170,7 +187,9 @@ class AnimatedBar extends StatelessWidget {
       borderRadius: borderRadius,
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: value.clamp(0.0, 1.0)),
-        duration: const Duration(milliseconds: 700),
+        duration: reduceMotion(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 700),
         curve: Curves.easeOutCubic,
         builder: (context, v, _) => LinearProgressIndicator(
           value: v,

@@ -19,6 +19,7 @@ import "../models/tracking.dart";
 import "../services/api_client.dart";
 import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
+import "anim.dart";
 import "court_geometry.dart";
 import "court_painter.dart";
 import "decisions_panel.dart";
@@ -2177,7 +2178,9 @@ class _MatchScreenState extends State<MatchScreen> {
                 // (a widget ilyenkor épül fel, tehát egyszer játszik le).
                 child: TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0, end: 1),
-                  duration: const Duration(milliseconds: 900),
+                  duration: reduceMotion(context)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 900),
                   curve: Curves.easeOutCubic,
                   builder: (context, t, _) => CustomPaint(
                     painter: ShotMapPainter(

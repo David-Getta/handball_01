@@ -331,7 +331,9 @@ class _DeltaBar extends StatelessWidget {
       height: 6,
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 750),
+        duration: reduceMotion(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 750),
         curve: Curves.easeOutCubic,
         builder: (context, t, _) => CustomPaint(
           painter: _DeltaBarPainter(

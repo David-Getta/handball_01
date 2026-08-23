@@ -11,6 +11,7 @@ import "package:flutter/material.dart";
 
 import "../analytics/court_analytics.dart";
 import "../theme/app_theme.dart";
+import "anim.dart";
 
 class IntensityChart extends StatelessWidget {
   final List<IntensityWindow> windows;
@@ -48,7 +49,9 @@ class IntensityChart extends StatelessWidget {
             // Berajzolás betöltéskor: a tempó-görbék balról jobbra épülnek.
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: 1),
-              duration: const Duration(milliseconds: 900),
+              duration: reduceMotion(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 900),
               curve: Curves.easeInOutCubic,
               builder: (context, t, _) => CustomPaint(
                 size: Size(constraints.maxWidth, 110),

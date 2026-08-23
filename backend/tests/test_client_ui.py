@@ -865,3 +865,35 @@ def test_a_kepkockankent_ujrarajzolt_feluletek_nem_elmosnak():
             f"{name}: elmosás a képkockánként újrarajzolt felületen")
         assert "_softGlow" in src, (
             f"{name}: nincs meg az elmosás-mentes ragyogás-segéd")
+
+
+def test_az_animaciok_tiszteletben_tartjak_a_csokkentett_mozgast():
+    """ŐR (hozzáférhetőség): a közös animációs elemek megnézik, kért-e
+    a felhasználó CSÖKKENTETT MOZGÁST.
+
+    Az app tele van úszó, pörgő és növekvő elemekkel. Akinél a
+    rendszerben be van kapcsolva a mozgás-csökkentés, annál ez nem
+    díszítés, hanem rosszullét — és mivel a kapcsoló egy helyről
+    kiszolgálható, elemenként elfelejteni is egy helyen lehet.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    anim = (lib / "ui" / "anim.dart").read_text(encoding="utf-8")
+    assert "disableAnimations" in anim, (
+        "az anim.dart nem kérdezi le a rendszer mozgás-beállítását")
+    assert "bool reduceMotion(" in anim, "nincs közös reduceMotion segéd"
+    # A négy közös elem mindegyikének hivatkoznia kell rá.
+    for elem in ("FadeSlideIn", "CountUp", "HoverLift", "AnimatedBar"):
+        assert elem in anim, f"hiányzó animációs elem: {elem}"
+    assert anim.count("reduceMotion(context)") >= 4, (
+        "nem mindegyik közös animációs elem nézi a mozgás-csökkentést")
+
+    # A betöltő berajzolás-animációk (grafikonok) is nézzék.
+    for name in ("score_chart.dart", "intensity_chart.dart",
+                 "trend_screen.dart", "match_screen.dart"):
+        src = (lib / "ui" / name).read_text(encoding="utf-8")
+        assert "reduceMotion(context)" in src, (
+            f"{name}: a berajzolás-animáció nem nézi a mozgás-csökkentést")
