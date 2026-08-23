@@ -154,6 +154,20 @@ jobs:
           if ($nope -ne 400) { throw "elfogadás nélkül is létrejött volna a fiók (HTTP $nope)" }
           if ($log -ne 200) { throw "a belépés nem ment (HTTP $log)" }
           if (-not $ok) { throw "A motor nem valaszolt a /health vegponton" }
+          # A DIAGNÓZIS-LÁNC ellenőrzése a VALÓDI csomagolt motoron: ha
+          # egyszer baj lesz, a felhasználónak legyen mit elküldenie. A
+          # becsomagolt motor ablak nélküli, ilyenkor a Pythonnak nincs
+          # stdout-ja, és a saját üzeneteit engine.log-ba írja. Egyelőre
+          # CSAK JELZÉS (nem bukik el rajta a kiadás), amíg a futtató
+          # tényleges viselkedését meg nem erősítjük a naplóból.
+          $engineLog = Join-Path $env:HANDBALL_DATA_DIR "engine.log"
+          if (Test-Path $engineLog) {
+            $txt = Get-Content $engineLog -Raw
+            $hasStages = $txt -match "\[indul"
+            Write-Host "DIAGNÓZIS-ELLENŐRZÉS: engine.log megvan; indulási mérföldkövek: $hasStages"
+          } else {
+            Write-Host "DIAGNÓZIS-ELLENŐRZÉS: engine.log NINCS ($engineLog) — a motor kimenete a csövön ment"
+          }
 
       # ---- Flutter desktop app ----
       - uses: subosito/flutter-action@v2
