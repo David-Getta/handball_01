@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **Elcsúszott kalibráció felismerése** (motor): a minőség-jelentés
+  mostantól méri, a mért pozíciók hány százaléka vetül a pályán KÍVÜLRE
+  (2 m tűréssel — a kifutó szélső és a mérés zaja belefér). 12% fölött
+  kimondja, hogy a kalibráció valószínűleg elcsúszott (rossz sarokpont,
+  vagy a kamera elmozdult felvétel közben), és megmondja a teendőt:
+  a Pálya-kalibrációban ellenőrizni kell, hogy a rajzolt 6 m-es ÉS az
+  új 9 m-es vonal ráül-e a valódiakra. Eddig ez a hiba csak
+  "furcsán néznek ki a pozíciók" élményként jelentkezett.
+
 - **Gyorsabb hőtérkép** (kliens, teljesítmény): a puha hőfoltok
   mostantól sugaras színátmenettel készülnek, nem cellánkénti
   elmosással — a rácson 200 cella van, és cellánként egy-egy elmosás

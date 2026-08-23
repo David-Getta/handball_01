@@ -23,6 +23,17 @@ EXPECTED_PLAYERS = 14
 # "Elég játékos látszik" küszöb egy kockára (pásztázó kamerán sosem látszik mind).
 GOOD_FRAME_MIN_PLAYERS = 8
 
+# Kalibráció-drift: a pálya téglalapján ENNYIVEL kívülre eső mért pozíció
+# még belefér (a kifutó szélső, a csereember és a mérés zaja), és a mért
+# pozíciók ekkora aránya fölött mondjuk ki, hogy a kalibráció elcsúszott.
+#
+# Miért ez a jel? A pálya-vetítés EGY kalibrációra épül. Ha a sarokpontok
+# rosszul állnak (vagy a kamera elmozdult a rögzítés óta), a játékosok
+# rendre a pályán KÍVÜLRE vetülnek — a felhasználó ezt a felülnézeten
+# látja is, de nem tudja, mit jelent. Ez a mérés kimondja.
+OUT_OF_COURT_TOL_M = 2.0
+OUT_OF_COURT_WARN_PCT = 12.0
+
 
 def compute_quality_report(match: Match) -> dict:
     """A feldolgozás minőség-jelentése a kész Tracking-ből.
@@ -121,6 +132,31 @@ def compute_quality_report(match: Match) -> dict:
             "track-összefűzés segít, a maradékot a mezszám-hozzárendeléssel "
             "kötheted össze a meccs-nézetben.")
 
+    # --- Kalibráció-drift: a pályán kívülre vetülő mért pozíciók aránya ---
+    from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+
+    out_of_court = 0
+    for f in match.frames:
+        for p in f.players:
+            if p.source != PositionSource.MEASURED:
+                continue
+            if (p.x < -OUT_OF_COURT_TOL_M
+                    or p.x > COURT_LENGTH_M + OUT_OF_COURT_TOL_M
+                    or p.y < -OUT_OF_COURT_TOL_M
+                    or p.y > COURT_WIDTH_M + OUT_OF_COURT_TOL_M):
+                out_of_court += 1
+    measured_total = sum(track_meas.values())
+    out_pct = (100.0 * out_of_court / measured_total
+               if measured_total else 0.0)
+    if out_pct >= OUT_OF_COURT_WARN_PCT:
+        warnings.append(
+            f"A mért pozíciók {out_pct:.0f}%-a a pályán KÍVÜLRE esik — a "
+            "kalibráció valószínűleg elcsúszott (rossz sarokpont, vagy a "
+            "kamera elmozdult a felvétel közben). Nyisd meg a "
+            "Pálya-kalibrációt, és nézd meg, ráül-e a rajzolt 6 m-es ÉS "
+            "9 m-es vonal a valódi vonalakra; ha nem, igazíts a "
+            "sarokpontokon és futtasd újra.")
+
     total_team = team_meas["home"] + team_meas["away"]
     home_share = 100.0 * team_meas["home"] / total_team if total_team else 50.0
     if total_team and not (35.0 <= home_share <= 65.0):
@@ -189,6 +225,7 @@ def compute_quality_report(match: Match) -> dict:
         "avg_track_length_s": round(avg_track_s, 1),
         "fragmentation": round(fragmentation, 2),
         "home_share_pct": round(home_share, 1),
+        "out_of_court_pct": round(out_pct, 1),
         "jersey_coverage_pct": round(jersey_pct, 1),
         "goalkeepers": goalkeepers,
         "halftime_frame": halftime_frame,

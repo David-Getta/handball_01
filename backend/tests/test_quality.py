@@ -261,3 +261,35 @@ def test_confidence_includes_jersey_layer():
                if r["layer"] == "jerseys")
     assert jr2["available"] is False
     assert "rendelj" in jr2["reason"]
+
+
+def test_elcsuszott_kalibracio_figyelmeztetes():
+    """Ha a mért pozíciók jelentős része a pályán KÍVÜLRE vetül, a
+    jelentés kimondja: elcsúszott kalibráció — és megmondja, mit
+    ellenőrizzen a felhasználó (6 m-es ÉS 9 m-es vonal)."""
+    def _out(i):
+        # Minden negyedik játékos jóval a pályán kívülre vetül.
+        team = Team.HOME if i % 2 == 0 else Team.AWAY
+        x, y = (20.0, 10.0) if i % 4 else (48.0, 27.0)
+        return PlayerPosition(track_id=i, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = [Frame(t=t, players=[_out(i) for i in range(12)],
+                    ball=Ball(x=20.0, y=10.0, confidence=1.0))
+              for t in range(30)]
+    r = compute_quality_report(Match(_meta(), frames))
+    assert r["out_of_court_pct"] >= 12.0
+    assert any("kívülre" in w.lower() for w in r["warnings"])
+    assert any("9 m-es" in w for w in r["warnings"])
+
+
+def test_jo_kalibracional_nincs_kivulre_figyelmeztetes():
+    """A pályán belüli mérésekre nincs kalibráció-figyelmeztetés (a
+    kifutó szélsőt és a mérés zaját a tűrés elnyeli)."""
+    frames = [Frame(t=t, players=[_pl(i) for i in range(14)],
+                    ball=Ball(x=20.0, y=10.0, confidence=1.0))
+              for t in range(20)]
+    r = compute_quality_report(Match(_meta(), frames))
+    assert r["out_of_court_pct"] == 0.0
+    assert not any("kívülre" in w.lower() for w in r["warnings"])
