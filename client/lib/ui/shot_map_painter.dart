@@ -36,13 +36,31 @@ class ShotMarker {
 class ShotMapPainter extends CustomPainter {
   final List<ShotMarker> shots;
   final int currentFrame;
-  ShotMapPainter({required this.shots, required this.currentFrame});
+
+  /// Megjelenés-állapot (0..1): a jelölők LÉPCSŐZVE pattannak be, amikor
+  /// a nézet lövéstérképre vált. Egy csapásra megjelenő pontfelhőt a
+  /// szem egyben lát; a sorban érkező jelölőket egyenként veszi észre —
+  /// és mellékesen a lövések SORRENDJE is látszik.
+  final double progress;
+
+  ShotMapPainter({required this.shots, required this.currentFrame,
+                  this.progress = 1.0});
 
   @override
   void paint(Canvas canvas, Size size) {
     final (scale, origin) = CourtPainter.transformFor(size);
     if (scale <= 0) return;
-    for (final s in shots) {
+    for (final (i, s) in shots.indexed) {
+      // Lépcsőzött bepattanás: az i-edik jelölő a saját kis ablakában
+      // nő teljes méretre (a lista végére is jut idő).
+      final span = 1.0 / (shots.length + 3);
+      final local =
+          ((progress - i * span) / (4 * span)).clamp(0.0, 1.0).toDouble();
+      if (local <= 0) continue;
+      // Enyhe túllövés a végén: a jelölő "leül" a helyére.
+      final grow = local < 1.0
+          ? 1.0 - math.pow(1.0 - local, 3).toDouble() * (1.0 - 0.08)
+          : 1.0;
       final p = Offset(origin.dx + s.x * scale, origin.dy + s.y * scale);
       final teamColor = s.team == Team.home ? AppColors.home : AppColors.away;
       final active = s.t == currentFrame;
@@ -50,7 +68,7 @@ class ShotMapPainter extends CustomPainter {
       // helyzetek — ránézésre látszik, hol puskáztunk el ziccert.
       final base =
           s.xg == null ? 6.0 : 4.0 + 5.0 * (s.xg!.clamp(0.0, 0.9) / 0.9);
-      final r = active ? base + 2.5 : base;
+      final r = (active ? base + 2.5 : base) * grow;
       // Gól: puha csapatszínű ragyogás a jelölő mögött — a térkép
       // "forró pontjai" ránézésre kiugranak.
       if (s.goal) {
@@ -93,5 +111,6 @@ class ShotMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant ShotMapPainter old) =>
-      old.shots != shots || old.currentFrame != currentFrame;
+      old.shots != shots || old.currentFrame != currentFrame ||
+      old.progress != progress;
 }

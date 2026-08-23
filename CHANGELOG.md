@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.41 óta)
 
+- **UI 13. kör: a lövéstérkép sorra rakja ki a lövéseket** (kliens):
+  eddig a nézetre váltáskor az egész pontfelhő egyszerre jelent meg —
+  a szem ilyenkor egyben látja, és nem tudja, hol kezdje. Mostantól a
+  jelölők a meccs SORRENDJÉBEN pattannak be (900 ms alatt), így a
+  lövés-történet is olvasható belőle. A térkép-csipet ráadásul
+  kimondja, hogy a jelölő MÉRETE a helyzet értéke (xG) — eddig a nagy
+  körök magyarázat nélkül voltak nagyok.
+
 - **UI 12. kör: az eredmény-grafikon megmutatja a VEZETÉST** (kliens):
   eddig két lépcsős vonal futott egymás mellett, és a "ki vezetett,
   mennyivel" kérdést a néző fejben vonta ki belőlük. Mostantól a két

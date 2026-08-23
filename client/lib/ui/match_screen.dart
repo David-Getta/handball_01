@@ -2171,9 +2171,17 @@ class _MatchScreenState extends State<MatchScreen> {
               ),
             if (_viewMode == ViewMode.shots)
               Positioned.fill(
-                child: CustomPaint(
-                  painter: ShotMapPainter(
-                      shots: _filteredShots(), currentFrame: _frameIndex),
+                // A nézetre váltáskor a jelölők lépcsőzve pattannak be
+                // (a widget ilyenkor épül fel, tehát egyszer játszik le).
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 900),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, t, _) => CustomPaint(
+                    painter: ShotMapPainter(
+                        shots: _filteredShots(), currentFrame: _frameIndex,
+                        progress: t),
+                  ),
                 ),
               ),
             if (_viewMode == ViewMode.shots)
@@ -2259,6 +2267,16 @@ class _MatchScreenState extends State<MatchScreen> {
           // Várható gól (xG): a helyzetek összesített értéke — a tényleges
           // gólszámmal összevetve látszik a befejezés hatékonysága.
           // Szabad lövések a szűrt lövések közt (fedezés-hiba a védőnél).
+          // A jelölő MÉRETE a helyzet értéke — enélkül a nagy körök
+          // csak "valamiért nagyobbak".
+          if (shots.any((s) => s.xg != null))
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                  "a jelölő MÉRETE a helyzet értéke (xG): a nagy körök a "
+                  "nagy helyzetek",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            ),
           if (shots.any((s) => s.free == true))
             Padding(
               padding: const EdgeInsets.only(top: 4),
