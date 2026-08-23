@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.42 óta)
 
+- **Az "első lépések" kártya sorozatnak látszik** (kliens): az üres
+  könyvtárnál megjelenő négy lépés eddig négy egymás alá tett tippnek
+  tűnt, pedig SORRENDBEN kell elvégezni őket (videó → kalibráció →
+  indítás → elemzés). Mostantól a sorszámokat összekötő vonal fűzi
+  össze, és a lépések lépcsőzve úsznak be — az első benyomás is
+  megmutatja, hogy van egy út.
+
 - **A felderítés keresője megmutatja, HOL talált** (kliens): 467
   mérőszám közt a puszta szűrés kevés — a szem újra végigolvassa a
   címeket, hogy megtalálja a keresett szót. Mostantól a találat

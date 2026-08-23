@@ -1776,36 +1776,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
               style: AppText.label.copyWith(fontSize: 11, letterSpacing: 0.6)),
           const SizedBox(height: AppSpacing.lg),
           for (var i = 0; i < steps.length; i++) ...[
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 26,
-                height: 26,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.accent),
-                ),
-                child: Text("${i + 1}",
-                    style: AppText.value.copyWith(
-                        fontSize: 12, color: AppColors.accent)),
+            FadeSlideIn(
+              index: i,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 26,
+                    height: 26,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.accent),
+                    ),
+                    child: Text("${i + 1}",
+                        style: AppText.value.copyWith(
+                            fontSize: 12, color: AppColors.accent)),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Icon(steps[i].$1, size: 18, color: AppColors.textSecondary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(steps[i].$2,
+                              style: AppText.value.copyWith(fontSize: 13.5)),
+                          Text(steps[i].$3,
+                              style: AppText.label.copyWith(
+                                  fontSize: 12,
+                                  color: AppColors.textPrimary)),
+                        ]),
+                  ),
+                ],
               ),
-              const SizedBox(width: AppSpacing.md),
-              Icon(steps[i].$1, size: 18, color: AppColors.textSecondary),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(steps[i].$2,
-                          style: AppText.value.copyWith(fontSize: 13.5)),
-                      Text(steps[i].$3,
-                          style: AppText.label.copyWith(
-                              fontSize: 12, color: AppColors.textPrimary)),
-                    ]),
+            ),
+            // Összekötő vonal a sorszámok között: a négy lépés így
+            // SOROZATNAK látszik, nem négy egymás mellé tett tippnek —
+            // pedig sorrendben kell megcsinálni őket.
+            if (i < steps.length - 1)
+              Padding(
+                padding: const EdgeInsets.only(left: 12.5),
+                child: Container(
+                    width: 1,
+                    height: AppSpacing.md + 4,
+                    color: AppColors.accent.withOpacity(0.35)),
               ),
-            ]),
-            if (i < steps.length - 1) const SizedBox(height: AppSpacing.md),
           ],
           const SizedBox(height: AppSpacing.lg),
           Row(children: [
