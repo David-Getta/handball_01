@@ -12,10 +12,10 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../services/session_store.dart";
 import "anim.dart";
-import "../services/update_service.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
 import "error_text.dart";
+import "update_flow.dart";
 import "terms_screen.dart";
 
 class AccountScreen extends StatefulWidget {
@@ -135,83 +135,14 @@ class _AccountScreenState extends State<AccountScreen> {
   /// Frissítés-keresés a kapu ELŐTT: régi verzión ragadva a felhasználó
   /// eddig nem ért el a frissítőhöz (az a dashboardon volt, a fiók-kapu
   /// mögött) — pedig a frissítéshez se fiók, se motor nem kell.
+  ///
+  /// A folyamat maga a közös `update_flow.dart`-ban él, mert a
+  /// MOTOR-HIBA képernyőnek is kell (ott ragad meg az, akinél a motor
+  /// el sem indul).
   Future<void> _checkUpdates() async {
-    final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
-    UpdateInfo? info;
-    try {
-      info = await UpdateService().check();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      messenger.showSnackBar(
-          SnackBar(content: Text("Frissítési hiba: ${humanError(e)}")));
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (info == null) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text("A legújabb verziót használod ($appVersion).")));
-      return;
-    }
-    final go = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text("Új verzió: ${info!.version}"),
-        content: const Text(
-            "Letöltsem és telepítsem most? A program a végén magától "
-            "újraindul.",
-            style: AppText.label),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text("Később")),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text("Frissítés most")),
-        ],
-      ),
-    );
-    if (go != true || !mounted) return;
-    final chosen = info!; // a closure-be zárt "info" null-promóciója elvész
-    final progress = ValueNotifier<double?>(0);
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        content: ValueListenableBuilder<double?>(
-          valueListenable: progress,
-          builder: (_, v, __) => Row(children: [
-            const SizedBox(
-                width: 22, height: 22,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: AppColors.accent)),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-                child: Text(
-                    v == null
-                        ? "Letöltés…"
-                        : v < 1
-                            ? "Letöltés: ${(v * 100).toStringAsFixed(0)}%"
-                            : "Telepítés — az app mindjárt újraindul…",
-                    style: AppText.label)),
-          ]),
-        ),
-      ),
-    );
-    try {
-      await UpdateService().downloadAndInstall(chosen, onProgress: (v) {
-        progress.value = v;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
-      messenger.showSnackBar(
-          SnackBar(content: Text("Frissítési hiba: ${humanError(e)}")));
-    }
+    await checkAndInstallUpdate(context);
+    if (mounted) setState(() => _busy = false);
   }
 
   void _openTerms() {

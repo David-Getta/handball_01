@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.43 óta)
 
+- **A frissítő motor nélkül is elérhető — a zárt kör feloldása**
+  (kliens, KRITIKUS): a legsúlyosabb hibánk volt, és pont azokat
+  zárta ki, akik régi verzión ragadtak. A lánc: régi verzió → a motor
+  el sem indul → a fiók-kapu a MOTOR-HIBA képernyőn áll meg → onnan
+  NEM vezetett út a frissítőhöz (az a fiók-képernyőn ült, ami motor
+  nélkül el sem érhető) → a felhasználó soha nem jut olyan verzióra,
+  amelyikben a hiba javítva van. Csak kézi újratelepítéssel lehetett
+  kiszabadulni. A frissítéshez viszont SE FIÓK, SE MOTOR nem kell (a
+  kiadásokat a GitHub adja), ezért a folyamat közös helyre került
+  (`update_flow.dart`), és mostantól ott a "Frissítés keresése" gomb
+  MINDHÁROM elakadási ponton: az indító képernyőn (ha a motor el sem
+  indult), a motor-hiba képernyőn és a belépőn. A motor-hiba
+  képernyő szövege ki is mondja, hogy ez a gomb motor nélkül is
+  működik. Őr-teszt védi mind a hármat.
+
 - **Látszik, hogy a pálya nagyítható** (kliens): a felülnézeti pálya, az
   élő nézet és a videó-panel régóta nagyítható (touchpad-csippentés,
   Ctrl+görgő, dupla kattintás = vissza) — de ez SEHOL nem volt

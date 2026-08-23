@@ -25,6 +25,7 @@ import "../version.dart";
 import "account_screen.dart";
 import "dashboard_screen.dart";
 import "terms_screen.dart";
+import "update_flow.dart";
 
 /// A motor nélküli (demó) mód rövid tudomásulvétele. A TELJES szöveget a
 /// motor adja (/legal/terms) — demó módban az sem érhető el, ezért itt a
@@ -266,7 +267,10 @@ class _AccountGateState extends State<AccountGate> {
                   "A fiókod a saját gépeden, a motorban él — amíg a motor "
                   "nem fut, belépni és fiókot létrehozni sem lehet.\n\n"
                   "Az Újrapróbálom gomb megkeresi, és ha kell, ÚJRA IS "
-                  "INDÍTJA a motort (ez eltarthat fél percig). Ha ez sem "
+                  "INDÍTJA a motort (ez eltarthat fél percig). Ha régi "
+                  "verziót használsz, a Frissítés keresése gomb akkor is "
+                  "működik, ha a motor nem fut — a frissítéshez se fiók, "
+                  "se motor nem kell. Ha ez sem "
                   "segít, zárd be teljesen a programot (Cmd+Q, illetve "
                   "Alt+F4), és indítsd újra. Ha marad a hiba, a motor "
                   "naplója megmondja, min akadt el — ezt küldd el a "
@@ -313,6 +317,20 @@ class _AccountGateState extends State<AccountGate> {
                           foregroundColor: AppColors.onAccent),
                       icon: const Icon(Icons.refresh, size: 18),
                       label: const Text("Újrapróbálom"),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    // A ZÁRT KÖR feloldása: régi verzión a motor el sem
+                    // indul, a fiók-képernyő (ahol a frissítő van) el sem
+                    // érhető, tehát a felhasználó nem tud arra a verzióra
+                    // jutni, amelyikben a hiba javítva van. A frissítéshez
+                    // se fiók, se motor nem kell — ezért ITT is ott a gomb.
+                    OutlinedButton.icon(
+                      onPressed: () => checkAndInstallUpdate(context),
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.accent,
+                          side: const BorderSide(color: AppColors.accent)),
+                      icon: const Icon(Icons.system_update, size: 18),
+                      label: const Text("Frissítés keresése"),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     OutlinedButton.icon(

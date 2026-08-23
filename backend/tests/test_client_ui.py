@@ -704,10 +704,16 @@ def test_frissites_a_kapu_elott_is_elerheto():
     if not scr.exists():
         pytest.skip("nincs kliens a fában")
     src = scr.read_text(encoding="utf-8")
-    assert "UpdateService" in src, "a belépő képernyő nem ismeri a frissítőt"
-    assert "downloadAndInstall" in src, (
-        "a belépő képernyőről csak keresni lehet, telepíteni nem")
+    # A folyamat maga a közös update_flow.dart-ba került (a motor-hiba
+    # képernyőnek is kell) — az ELVÁRÁS változatlan: a belépő képernyőről
+    # keresni ÉS telepíteni is lehessen.
+    assert "checkAndInstallUpdate" in src, (
+        "a belépő képernyő nem ismeri a frissítőt")
     assert "Frissítés keresése" in src, "nincs frissítés-kereső gomb"
+    flow = (_client_lib() / "ui" / "update_flow.dart").read_text(
+        encoding="utf-8")
+    assert "downloadAndInstall" in flow, (
+        "a frissítés-folyamatból csak keresni lehet, telepíteni nem")
 
 
 def test_vendeg_sav_a_dashboardon():
@@ -900,3 +906,36 @@ def test_az_animaciok_tiszteletben_tartjak_a_csokkentett_mozgast():
         src = (lib / "ui" / name).read_text(encoding="utf-8")
         assert "reduceMotion(context)" in src, (
             f"{name}: a berajzolás-animáció nem nézi a mozgás-csökkentést")
+
+
+def test_a_frissito_motor_es_fiok_nelkul_is_elerheto():
+    """ŐR: a frissítés-gomb ott van MINDEN olyan képernyőn, ahol a
+    felhasználó a motor hiánya miatt elakadhat.
+
+    Ez a termék legsúlyosabb zárt köre volt: régi verzió → a motor el
+    sem indul → a fiók-kapu a MOTOR-HIBA képernyőn áll meg → onnan nem
+    vezetett út a frissítőhöz (az a fiók-képernyőn ült, ami a motor
+    nélkül el sem érhető) → a felhasználó SOHA nem jut olyan verzióra,
+    amelyikben a hiba javítva van. Csak kézi újratelepítéssel lehetett
+    kiszabadulni.
+
+    A frissítéshez se fiók, se motor nem kell (a kiadásokat a GitHub
+    adja), ezért mindhárom elakadási ponton ott kell lennie.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    flow = lib / "ui" / "update_flow.dart"
+    assert flow.exists(), "nincs közös frissítés-folyamat (update_flow.dart)"
+    assert "checkAndInstallUpdate" in flow.read_text(encoding="utf-8")
+
+    for name in ("account_gate.dart",      # motor-hiba képernyő
+                 "bootstrap_screen.dart",  # a motor el sem indult
+                 "account_screen.dart"):   # a kapu (fiók nélkül)
+        src = (lib / "ui" / name).read_text(encoding="utf-8")
+        assert "checkAndInstallUpdate" in src, (
+            f"{name}: innen nem érhető el a frissítő — a régi verzión "
+            "ragadt felhasználó nem tud kiszabadulni")

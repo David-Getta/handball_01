@@ -13,6 +13,7 @@ import "package:flutter/material.dart";
 import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
 import "account_gate.dart";
+import "update_flow.dart";
 
 class BootstrapScreen extends StatefulWidget {
   const BootstrapScreen({super.key});
@@ -177,6 +178,19 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
                             foregroundColor: AppColors.accent, side: const BorderSide(color: AppColors.accent)),
                           icon: const Icon(Icons.refresh, size: 18),
                           label: const Text("Újrapróbálom"),
+                        ),
+                      if (failed) const SizedBox(width: AppSpacing.md),
+                      // A frissítéshez se fiók, se motor nem kell — és
+                      // pont az akad itt el, aki olyan régi verziót
+                      // futtat, amelyikben a motor még el sem indul.
+                      if (failed)
+                        OutlinedButton.icon(
+                          onPressed: () => checkAndInstallUpdate(context),
+                          style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.accent,
+                              side: const BorderSide(color: AppColors.accent)),
+                          icon: const Icon(Icons.system_update, size: 18),
+                          label: const Text("Frissítés keresése"),
                         ),
                       if (failed) const SizedBox(width: AppSpacing.md),
                       FilledButton.icon(
