@@ -70,22 +70,24 @@ class CourtPainter extends CustomPainter {
   void _drawTrail(Canvas canvas, Offset Function(double, double) p, double scale) {
     final tr = trail;
     if (tr == null || tr.length < 2) return;
-    final path = Path()..moveTo(p(tr.first.dx, tr.first.dy).dx, p(tr.first.dx, tr.first.dy).dy);
-    for (final o in tr.skip(1)) {
-      final pt = p(o.dx, o.dy);
-      path.lineTo(pt.dx, pt.dy);
+    // ELHALVÁNYULÓ farok: a régi szakaszok halványak és vékonyak, a
+    // frissek erősek — így a nyomvonalon LÁTSZIK a mozgás iránya, nem
+    // csak az útvonal alakja.
+    final pts = [for (final o in tr) p(o.dx, o.dy)];
+    for (var i = 0; i + 1 < pts.length; i++) {
+      final t = (i + 1) / (pts.length - 1); // 0 (régi) .. 1 (friss)
+      canvas.drawLine(
+          pts[i],
+          pts[i + 1],
+          Paint()
+            ..color = AppColors.gold.withOpacity(0.10 + 0.70 * t)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.0 + 1.6 * t
+            ..strokeCap = StrokeCap.round);
     }
-    canvas.drawPath(
-        path,
-        Paint()
-          ..color = AppColors.gold.withOpacity(0.75)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.2
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round);
-    // A nyomvonal kezdőpontja: kis pötty, hogy látszódjon az irány.
-    canvas.drawCircle(p(tr.first.dx, tr.first.dy), 3,
-        Paint()..color = AppColors.gold.withOpacity(0.5));
+    // A nyomvonal kezdőpontja: kis pötty, hogy látszódjon, honnan indult.
+    canvas.drawCircle(pts.first, 3,
+        Paint()..color = AppColors.gold.withOpacity(0.35));
   }
 
   void _drawCourt(Canvas canvas, Offset Function(double, double) p, double scale) {
@@ -95,9 +97,25 @@ class CourtPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
 
-    // Pálya háttér (lekerekített) + finom keret.
+    // Pálya háttér: finom függőleges színátmenet (a lapos folt helyett
+    // mélység — mint a jól világított csarnok parkettája), lekerekítve,
+    // alatta puha árnyékkal, hogy a pálya "ráüljön" a felületre.
     final court = Rect.fromPoints(p(0, 0), p(courtLength, courtWidth));
-    final rrect = RRect.fromRectAndRadius(court, const Radius.circular(10));
+    final rrect = RRect.fromRectAndRadius(court, const Radius.circular(12));
+    canvas.drawRRect(
+        rrect.shift(const Offset(0, 4)),
+        Paint()
+          ..color = Colors.black.withOpacity(0.35)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+    fill.shader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Color.lerp(AppColors.courtFill, Colors.white, 0.045)!,
+        AppColors.courtFill,
+        Color.lerp(AppColors.courtFill, Colors.black, 0.25)!,
+      ],
+    ).createShader(court);
     canvas.drawRRect(rrect, fill);
     canvas.drawRRect(rrect, line);
 
@@ -117,14 +135,65 @@ class CourtPainter extends CustomPainter {
       canvas.drawPath(path, line);
     }
 
-    // Kapuk (a gólvonal közepén, 3 m szélesen).
+    // 9 m-es SZABADDOBÁSI vonal — szabálykönyv szerint szaggatott. Ettől
+    // olvasható a kép igazi kézilabda-pályaként (és a fal helyzete is
+    // ehhez viszonyítva értelmezhető).
+    final dashLine = Paint()
+      ..color = AppColors.courtLine.withOpacity(0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+    for (final leftSide in [true, false]) {
+      final pts = freeThrowBoundary(leftSide: leftSide, segments: 22)
+          .map((o) => p(o.dx, o.dy))
+          .toList();
+      // Minden második szakaszt húzzuk meg — ez adja a szaggatást.
+      for (var i = 0; i + 1 < pts.length; i += 2) {
+        canvas.drawLine(pts[i], pts[i + 1], dashLine);
+      }
+    }
+
+    // 7 m-es (hetes) vonal és 4 m-es kapus-vonal mindkét kapunál.
+    final markPaint = Paint()
+      ..color = AppColors.courtLine
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    final cy = courtWidth / 2;
+    for (final gx in [0.0, courtLength]) {
+      final sx = gx == 0.0 ? sevenMeterX : courtLength - sevenMeterX;
+      canvas.drawLine(p(sx, cy - sevenMeterHalfLen),
+          p(sx, cy + sevenMeterHalfLen), markPaint);
+      final kx = gx == 0.0 ? keeperLineX : courtLength - keeperLineX;
+      canvas.drawLine(p(kx, cy - keeperLineHalfLen),
+          p(kx, cy + keeperLineHalfLen), markPaint);
+    }
+
+    // Kapuk (a gólvonal közepén, 3 m szélesen) — a kapufák között finom
+    // háló-rács, hogy a kapu kapunak nézzen ki, ne puszta vastag vonalnak.
     final goalPaint = Paint()
       ..color = AppColors.textSecondary
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-    final cy = courtWidth / 2;
-    canvas.drawLine(p(0, cy - 1.5), p(0, cy + 1.5), goalPaint);
-    canvas.drawLine(p(courtLength, cy - 1.5), p(courtLength, cy + 1.5), goalPaint);
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    final netPaint = Paint()
+      ..color = AppColors.textFaint.withOpacity(0.45)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.7;
+    for (final gx in [0.0, courtLength]) {
+      final depth = (gx == 0.0 ? -1 : 1) * 1.0; // 1 m mély háló kifelé
+      canvas.drawLine(p(gx, cy - 1.5), p(gx, cy + 1.5), goalPaint);
+      // Háló: néhány párhuzamos és merőleges szál a kapu mögött.
+      for (var i = 1; i <= 3; i++) {
+        final t = i / 4.0;
+        canvas.drawLine(p(gx + depth * t, cy - 1.5), p(gx + depth * t, cy + 1.5),
+            netPaint);
+      }
+      for (var i = 0; i <= 4; i++) {
+        final y = cy - 1.5 + 3.0 * (i / 4.0);
+        canvas.drawLine(p(gx, y), p(gx + depth, y), netPaint);
+      }
+    }
   }
 
   void _drawFrame(Canvas canvas, Offset Function(double, double) p, double scale) {
@@ -168,10 +237,39 @@ class CourtPainter extends CustomPainter {
         canvas.drawCircle(center, radius, Paint()..color = base.withOpacity(0.22));
         _drawDashedRing(canvas, center, radius + 2, base.withOpacity(0.55));
       } else {
-        // Finom külső "halo" + tele token + perem (labdásnál arany, egyébként világos).
+        // Vetett árnyék: a token "a pálya fölött" ül, nem rá van festve.
+        canvas.drawCircle(
+            center + const Offset(0, 2),
+            radius,
+            Paint()
+              ..color = Colors.black.withOpacity(0.45)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
+        // Finom külső "halo" + gömbölyű (sugaras átmenetű) token.
         canvas.drawCircle(center, radius + 3, Paint()..color = base.withOpacity(0.16));
-        canvas.drawCircle(center, radius, Paint()..color = base);
+        canvas.drawCircle(
+            center,
+            radius,
+            Paint()
+              ..shader = RadialGradient(
+                center: const Alignment(-0.35, -0.4),
+                colors: [
+                  Color.lerp(base, Colors.white, 0.34)!,
+                  base,
+                  Color.lerp(base, Colors.black, 0.22)!,
+                ],
+                stops: const [0.0, 0.55, 1.0],
+              ).createShader(Rect.fromCircle(center: center, radius: radius)));
         final isCarrier = pl.trackId == carrierId;
+        if (isCarrier) {
+          // A labdás ember arany ragyogást is kap — a szem rögtön a
+          // labda körüli eseményre néz.
+          canvas.drawCircle(
+              center,
+              radius + 6,
+              Paint()
+                ..color = AppColors.gold.withOpacity(0.28)
+                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+        }
         canvas.drawCircle(
             center, radius + (isCarrier ? 2 : 0),
             Paint()
@@ -196,8 +294,25 @@ class CourtPainter extends CustomPainter {
     // Labda — meleg szín, finom izzással. (A `ball` fentebb már deklarálva.)
     if (ball != null) {
       final c = p(ball.x, ball.y);
-      canvas.drawCircle(c, 0.6 * scale, Paint()..color = AppColors.ball.withOpacity(0.25));
-      canvas.drawCircle(c, 0.34 * scale, Paint()..color = AppColors.ball);
+      canvas.drawCircle(
+          c,
+          0.9 * scale,
+          Paint()
+            ..color = AppColors.ball.withOpacity(0.35)
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, 0.5 * scale));
+      canvas.drawCircle(c, 0.6 * scale,
+          Paint()..color = AppColors.ball.withOpacity(0.22));
+      canvas.drawCircle(
+          c,
+          0.34 * scale,
+          Paint()
+            ..shader = RadialGradient(
+              center: const Alignment(-0.3, -0.4),
+              colors: [
+                Color.lerp(AppColors.ball, Colors.white, 0.45)!,
+                AppColors.ball,
+              ],
+            ).createShader(Rect.fromCircle(center: c, radius: 0.34 * scale)));
     }
   }
 

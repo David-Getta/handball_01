@@ -762,3 +762,24 @@ def test_fel_frissult_telepites_lathato():
     assert "engineVersion" in dash and "eltér" in dash, (
         "a dashboard nem jelzi a verzió-eltérést")
     assert "Releases" in dash, "a sáv nem adja meg a megoldást"
+
+
+def test_palya_szabalykonyvi_elemei_a_rajzolon():
+    """ŐR: a felülnézeti pálya a SZABÁLYKÖNYVI elemeket rajzolja — 6 m-es
+    kapuelőtér, 9 m-es (szaggatott) szabaddobási vonal, 7 m-es és 4 m-es
+    vonal, kapu. Ezek nélkül a kép "sematikus doboz", és az edző nem
+    tudja hova tenni a látottakat."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    geom = (lib / "ui" / "court_geometry.dart").read_text(encoding="utf-8")
+    painter = (lib / "ui" / "court_painter.dart").read_text(encoding="utf-8")
+    for name in ("goalAreaRadius", "freeThrowRadius", "sevenMeterX",
+                 "keeperLineX"):
+        assert name in geom, f"hiányzó pálya-méret: {name}"
+    assert "freeThrowBoundary" in geom and "freeThrowBoundary" in painter, (
+        "a 9 m-es szabaddobási vonal nincs kirajzolva")
+    assert "sevenMeterX" in painter, "a hetes-vonal nincs kirajzolva"
+    assert "keeperLineX" in painter, "a 4 m-es kapus-vonal nincs kirajzolva"

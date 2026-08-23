@@ -5,7 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.40 óta)
 
-*(még semmi)*
+- **Igazi kézilabda-pálya a felülnézeti képen** (kliens): a rajz eddig
+  a 6 m-es kapuelőteret és a középvonalat ismerte; mostantól ott a
+  szabálykönyvi **9 m-es szaggatott szabaddobási vonal**, a **7 m-es**
+  (hetes) és a **4 m-es kapus-vonal**, és a kapuk mögött finom
+  háló-rács. Mellé mélység: a pálya színátmenetes felületet és vetett
+  árnyékot kapott, a játékos-tokenek gömbölyűek (sugaras átmenet +
+  árnyék), a labdás ember arany ragyogást kap, a labda izzik, a
+  kijelölt játékos nyomvonala pedig elhalványuló farokká vált — így a
+  MOZGÁS IRÁNYA is látszik rajta. Őr-teszt védi a pályaelemeket.
 
 ## v0.1.40 — kiadva (2026-08-23)
 
