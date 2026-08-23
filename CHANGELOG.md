@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.42 óta)
 
+- **A hőtérkép megmondja, mit jelent a szín** (kliens): a lövés- és a
+  passz-nézetnek volt magyarázó csipetje, a hőtérképnek nem — pedig
+  ott a SZÍN maga az adat, magyarázat nélkül viszont csak "valami
+  piros folt". Mostantól a bal felső sarokban ott a skála (ritkán →
+  sokat), a csapat neve és a rács mérete. A skála-sáv pontosan azt a
+  fedettség-tartományt mutatja, amit a rajzoló használ — nem ígér
+  többet, mint amit a kép ad.
+
 - **Az "első lépések" kártya sorozatnak látszik** (kliens): az üres
   könyvtárnál megjelenő négy lépés eddig négy egymás alá tett tippnek
   tűnt, pedig SORRENDBEN kell elvégezni őket (videó → kalibráció →

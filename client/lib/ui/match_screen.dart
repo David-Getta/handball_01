@@ -2169,6 +2169,8 @@ class _MatchScreenState extends State<MatchScreen> {
                   ),
                 ),
               ),
+            if (_viewMode == ViewMode.heatmap && _heatmap != null)
+              Positioned(left: 10, top: 10, child: _heatmapChip(match)),
             if (_viewMode == ViewMode.shots)
               Positioned.fill(
                 // A nézetre váltáskor a jelölők lépcsőzve pattannak be
@@ -2229,6 +2231,58 @@ class _MatchScreenState extends State<MatchScreen> {
   /// hatékonyság + zóna-bontás (irány és távolság szerint). A csapat-
   /// szűrővel nézőpontot váltasz: a saját csapat = honnan lövünk; az
   /// ellenfél = honnan kapjuk (védekezés-elemzés).
+  /// Hőtérkép-csipet: MIT JELENT a szín. A lövés- és passz-nézetnek van
+  /// magyarázó csipetje, a hőtérképnek eddig nem volt — pedig itt a szín
+  /// maga az adat, és magyarázat nélkül csak "valami piros folt".
+  Widget _heatmapChip(Match match) {
+    final hm = _heatmap!;
+    final color =
+        _heatmapTeam == Team.home ? AppColors.home : AppColors.away;
+    final name = _heatmapTeam == Team.home
+        ? match.meta.homeTeam
+        : match.meta.awayTeam;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text("$name — hol tölti az időt",
+            style: AppText.value.copyWith(fontSize: 12)),
+        const SizedBox(height: 6),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Text("ritkán", style: AppText.label.copyWith(fontSize: 10.5)),
+          const SizedBox(width: 6),
+          // Skála-sáv: pontosan az a színátmenet, amit a rajzoló használ.
+          Container(
+            width: 84,
+            height: 8,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              // A rajzoló VALÓDI tartománya (heatmap_painter): a folt
+              // magja 0,18-tól 0,63-ig sötétedik, és a legforróbb
+              // cellák magja világosodik is. A skála ne ígérjen többet.
+              gradient: LinearGradient(colors: [
+                color.withOpacity(0.18),
+                Color.lerp(color, Colors.white, 0.35)!.withOpacity(0.63),
+              ]),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text("sokat", style: AppText.label.copyWith(fontSize: 10.5)),
+        ]),
+        const SizedBox(height: 4),
+        Text(
+            "a folt SŰRŰSÉGE a cellában töltött idő · "
+            "${hm.binsX}×${hm.binsY}-es rács",
+            style: AppText.label
+                .copyWith(fontSize: 10.5, color: AppColors.textFaint)),
+      ]),
+    );
+  }
+
   Widget _shotMapChip() {
     final shots = _filteredShots();
     final goals = shots.where((s) => s.goal).length;
