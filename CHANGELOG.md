@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.55 óta)
 
+- **A jelentés megmondja, MELYIK szakaszt dolgozta fel** (motor +
+  kliens): eddig csak a százalékot mondta ("a felvétel 60%-át"). Az a
+  szám viszont nem árulja el, hogy az eleje vagy a vége maradt ki —
+  pedig a felhasználó pont ezt akarja tudni, amikor azt látja, hogy
+  "csak az első félidőt elemezte ki". A jelentés mostantól a
+  forrásvideó órája szerint mondja meg a szakaszt (pl. "1:00–2:40 a
+  10:00 hosszú videóból"), tehát a lejátszóban azonnal ellenőrizhető.
+  A minőség-ablakban külön sorban is látszik.
+
 - **Fal-mélység a hajrában** (új réteg, `line_height_fade`): a
   védekezési vonal magasságát eddig egy átlagszám írta le az egész
   meccsre. Ez a réteg azt teszi hozzá, hogy VÁLTOZIK-E: a felismert

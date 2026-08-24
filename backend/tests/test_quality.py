@@ -343,3 +343,31 @@ def test_regi_mentesrol_nem_allitunk_semmit():
     assert r["game_window_found"] is None
     assert not any("meccs tényleges kezdetét" in w for w in r["warnings"])
     assert r["warnings"] == []
+
+
+def test_a_feldolgozott_szakasz_ora_szerint():
+    """"Csak az első félidőt elemezte ki" — a százalék ezt nem mondja el.
+
+    A jelentésnek meg kell mondania, MELYIK szakaszt dolgoztuk fel a
+    forrásvideó órája szerint, mert a felhasználó a videót
+    perc:másodpercben keresi vissza. A "60%" nem árulja el, hogy az
+    eleje vagy a vége maradt ki.
+    """
+    from handball.pipeline.quality import _ora
+
+    meta = _meta(fps=12.5)          # 25 fps forrás, stride=2
+    meta.stride = 2
+    meta.start_frame = 1500         # 60 mp a videó elejétől (25 fps-sel)
+    meta.video_seconds = 600.0
+    frames = [Frame(t=t, players=[_pl(i) for i in range(14)],
+                    ball=Ball(x=20.0, y=10.0, confidence=1.0))
+              for t in range(1250)]   # 1250 / 12.5 = 100 mp játék
+    r = compute_quality_report(Match(meta, frames))
+    assert r["processed_from_s"] == 60.0
+    assert r["processed_to_s"] == 160.0
+    # A figyelmeztetés a konkrét szakaszt mondja, nem csak a százalékot.
+    assert any("1:00–2:40" in w for w in r["warnings"])
+    assert _ora(0) == "0:00"
+    assert _ora(2054) == "34:14"
+    assert _ora(3725) == "1:02:05"
+    assert _ora(None) == "?"

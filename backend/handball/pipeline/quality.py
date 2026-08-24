@@ -116,6 +116,23 @@ NEXT_ACTION_ORDER: tuple = (
 )
 
 
+def _ora(seconds: float | None) -> str:
+    """Másodperc → "óra:perc:mp" (egy óra alatt "perc:mp").
+
+    A felhasználó a videót ebben az alakban keresi vissza — a "2054
+    másodperc" használhatatlan információ, a "34:14" azonnal
+    ellenőrizhető a lejátszóban.
+    """
+    if seconds is None or seconds < 0:
+        return "?"
+    ossz = int(round(seconds))
+    ora, maradek = divmod(ossz, 3600)
+    perc, mp = divmod(maradek, 60)
+    if ora:
+        return f"{ora}:{perc:02d}:{mp:02d}"
+    return f"{perc}:{mp:02d}"
+
+
 def next_action(warnings: list) -> str | None:
     """A legfontosabb EGY teendő a figyelmeztetések közül (vagy None).
 
@@ -392,16 +409,24 @@ def compute_quality_report(match: Match) -> dict:
     # ennyi ritkított kockán át.
     video_s = getattr(match.meta, "video_seconds", None)
     processed_pct = None
+    # A feldolgozott szakasz KEZDETE és VÉGE a forrásvideó órája szerint.
+    # A százalék önmagában nem elég: "60%" nem mondja meg, hogy az eleje
+    # vagy a vége maradt ki. A felhasználó a videót perc:másodpercben
+    # keresi vissza, tehát abban kell megmondani.
+    processed_from_s = processed_to_s = None
+    stride = max(1, int(match.meta.stride or 1))
+    raw_fps = fps * stride
+    if raw_fps > 0 and n > 0:
+        processed_from_s = float(match.meta.start_frame or 0) / raw_fps
+        processed_to_s = processed_from_s + n * stride / raw_fps
     if video_s and video_s > 0:
-        stride = max(1, int(match.meta.stride or 1))
-        raw_fps = fps * stride
         processed_s = n * stride / raw_fps if raw_fps > 0 else 0.0
         processed_pct = 100.0 * processed_s / video_s
         if processed_pct < VIDEO_COVERAGE_WARN_PCT:
             warnings.append(
                 f"A felvételnek csak a {processed_pct:.0f}%-át dolgoztuk "
-                f"fel ({processed_s / 60.0:.0f} perc a "
-                f"{video_s / 60.0:.0f} percből) — ha a TELJES meccset "
+                f"fel ({_ora(processed_from_s)}–{_ora(processed_to_s)} a "
+                f"{_ora(video_s)} hosszú videóból) — ha a TELJES meccset "
                 "várnád, nézd meg a meccs-időablak mezőit és a "
                 "hossz-beállítást (rövid próba / félidő / teljes videó); "
                 "ha a feldolgozás megszakadt, a könyvtárban a "
@@ -465,6 +490,12 @@ def compute_quality_report(match: Match) -> dict:
         "video_seconds": round(video_s, 1) if video_s else None,
         "processed_pct": (round(processed_pct, 1)
                           if processed_pct is not None else None),
+        # A feldolgozott szakasz a forrásvideó órája szerint (másodperc):
+        # ebből mondja meg a kliens, hogy 0:00-tól 34:12-ig tart.
+        "processed_from_s": (round(processed_from_s, 1)
+                             if processed_from_s is not None else None),
+        "processed_to_s": (round(processed_to_s, 1)
+                           if processed_to_s is not None else None),
         "jersey_coverage_pct": round(jersey_pct, 1),
         "goalkeepers": goalkeepers,
         "halftime_frame": halftime_frame,

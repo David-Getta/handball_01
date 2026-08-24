@@ -1890,6 +1890,21 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
+  /// Másodperc → "óra:perc:mp" (egy óra alatt "perc:mp") — a videó
+  /// lejátszójában ebben az alakban kereshető vissza a szakasz.
+  /// A backend `_ora` segédjének tükre.
+  String _ora(Object? seconds) {
+    final mp = (seconds as num?)?.toDouble();
+    if (mp == null || mp < 0) return "?";
+    final ossz = mp.round();
+    final ora = ossz ~/ 3600;
+    final perc = (ossz % 3600) ~/ 60;
+    final masodperc = ossz % 60;
+    final mm = masodperc.toString().padLeft(2, "0");
+    if (ora > 0) return "$ora:${perc.toString().padLeft(2, "0")}:$mm";
+    return "$perc:$mm";
+  }
+
   /// Mit vágott le a motor a felvétel elejéből/végéből (meccs-ablak).
   ///
   /// A backend másodpercben adja; itt percre kerekítünk, mert a
@@ -1946,6 +1961,15 @@ class _MatchScreenState extends State<MatchScreen> {
                   "${q["video_seconds"] != null ? " (a videó "
                       "${((q["video_seconds"] as num) / 60).round()} perc)"
                       : ""}",
+                  style: AppText.label),
+            // MELYIK szakasz: a százalék nem mondja meg, hogy az eleje
+            // vagy a vége maradt ki. A felhasználó a videót
+            // perc:másodpercben keresi vissza — ez azonnal ellenőrizhető.
+            if (q["processed_from_s"] != null && q["processed_to_s"] != null)
+              Text(
+                  "Feldolgozott szakasz: "
+                  "${_ora(q["processed_from_s"])}–${_ora(q["processed_to_s"])}"
+                  " (a videó órája szerint)",
                   style: AppText.label),
             // MECCS-ABLAK: levágta-e a motor a bemelegítést és a
             // csapatbemutatást. Ha nem sikerült megtalálni a játék
