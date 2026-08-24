@@ -6977,6 +6977,14 @@ def create_app():
                 if cs.get("highlights"):
                     lines += ["Mire nézz rá:"]
                     lines += [f"- {h}" for h in cs["highlights"]]
+                # Ha egy réteg elhasalt, a szöveges lap is mondja ki: ezt
+                # nyitja meg elsőként, aki a csomagot megkapja, és a
+                # hiányzó elemzés máskülönben nyom nélkül maradna el.
+                if hibas_retegek:
+                    lines += ["", f"FIGYELEM: {len(hibas_retegek)} elemzés "
+                              "nem készült el ezen a meccsen "
+                              "(a nevük az elemzesek.json fájlban, a "
+                              "_hibas_retegek kulcs alatt)."]
                 summary_txt = "\n".join(lines)
                 # 3) Klipek (ha kérték és van videó) — a hiba nem végzetes.
                 clips_zip = None

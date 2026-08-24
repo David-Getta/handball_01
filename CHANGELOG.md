@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.61 óta)
 
+- **A csomag szöveges lapja is szól a kimaradt elemzésekről** (motor):
+  az elhasalt rétegek listája a v0.1.61 óta bekerül a csomag
+  JSON-jába — de a ZIP-et megkapó edző jellemzően az
+  `osszefoglalo.txt`-et nyitja meg elsőként. Ha ott nincs jelzés, a
+  hiányzó elemzés ugyanúgy nyom nélkül marad el. Mostantól a szöveges
+  lap végén ott a figyelmeztetés a darabszámmal és azzal, hol találja
+  a neveket.
+
 ## v0.1.61 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: a "néma kód" elleni kör. A motor minden rétegét és
