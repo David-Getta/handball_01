@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.49 óta)
+## Kiadatlan (a v0.1.50 óta)
+
+## v0.1.50 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ez a kör bezárja a hurkot az első éles meccs
+> tanulságai körül. A minőség-jelentés eddig felsorolt négy-hat
+> figyelmeztetést; most kiemel EGY teendőt, amivel kezdeni kell —
+> és rögtön mellette ott a gomb, amivel a javított kalibrációval
+> újrafuttatható ugyanaz a meccs (eddig az újrafeldolgozás a régi,
+> rossz kalibrációt vitte volna). Emellett egy tényleges
+> felismerés-javítás: egy lövésből nem lesz négy esemény.
 
 - **Lövés-csendidő: egy lövésből ne legyen négy** (motor) — JAVÍTÁS: az
   éles meccsen az eseménylistában négy „lövés" állt 1264,6 – 1267,1 mp
