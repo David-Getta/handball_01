@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.60 óta)
 
+- **Új őr: definiálatlan nevek a motorban** (teszt): a v0.1.60-ban
+  javított öt néma edzés-szabály gyökere egy elgépelt változónév volt.
+  A rétegeket és szabályokat `try/except Exception: pass` védi —
+  helyesen, hogy egy elromló réteg ne vigye el a többit —, így a
+  `NameError` elveszik, a kód némán semmit nem csinál, és a tesztek
+  zöldek maradnak. Futtatással ez nem elkapható; statikus elemzéssel
+  harminc másodperc. Az új őr a Python hatókör-szabályait követve
+  (függvény-, lambda- és osztály-hatókör külön) végigolvassa a motort
+  és a szkripteket, és jelzi, ami sehol nincs kötve. Külső függősége
+  nincs. A teljes kódbázis tisztán jött ki; az őr elbukását és a
+  téves riasztás hiányát is teszt rögzíti.
+
 ## v0.1.60 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: javító kiadás. A v0.1.56–57-ben bevezetett öt
