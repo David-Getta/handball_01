@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.49 óta)
 
+- **"Első teendő" a minőség-jelentésben** (motor + kliens): egy gyenge
+  feldolgozás négy-hat figyelmeztetést kap egyszerre, és a felhasználó
+  nem tudja, mivel kezdje — pedig a lista eleje és a vége nem
+  egyenrangú: a rossz kalibrációt kijavítva a jelzések fele magától
+  eltűnik, míg a mezszám-hozzárendelés a rossz alapokon semmit nem ér.
+  A jelentés mostantól rangsorol, és kiemel EGY mondatnyi teendőt,
+  amivel kezdeni kell. Őr-teszt vigyáz rá, hogy minden figyelmeztetéshez
+  tartozzon teendő.
+
 ## v0.1.49 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: ez a kör a KALIBRÁCIÓRÓL szól — az első éles

@@ -124,3 +124,59 @@ def test_regi_meccsnel_nem_allitunk_semmit_a_kalibraciorol():
     rep = compute_quality_report(m)
     assert rep["calibrated"] is None
     assert not any("kalibráció NÉLKÜL" in w for w in rep["warnings"])
+
+
+def test_elso_teendo_a_kalibraciot_teszi_elore():
+    """Négy-hat figyelmeztetésnél a sorrend számít.
+
+    A rossz kalibrációt kijavítva a jelzések fele magától eltűnik; a
+    mezszám-hozzárendelés viszont a rossz alapokon semmit nem ér. Az
+    "első teendő" ezért NEM a lista első eleme, hanem a rangsor szerinti
+    legfontosabb.
+    """
+    from handball.pipeline.quality import next_action
+
+    # A töredezettség előbb kerül a listába, a kalibráció mégis nyer.
+    w = ["A követés töredezett (2891 track ...)",
+         "Kevés labda-észlelés (26%) ...",
+         "TÚL sok játékos látszik (átlag 27.4/kocka ...)"]
+    teendo = next_action(w)
+    assert teendo is not None and "Kalibrálj újra" in teendo
+
+
+def test_elso_teendo_figyelmeztetes_nelkul_nincs():
+    """Tiszta feldolgozásnál nincs mit tenni."""
+    from handball.pipeline.quality import next_action
+
+    assert next_action([]) is None
+
+
+def test_elso_teendo_a_jelentesben_is_ott_van():
+    """A kliens ebből emeli ki — a jelentésnek vinnie kell."""
+    rep = compute_quality_report(_match(27))
+    assert rep["next_action"] is not None
+    assert "Kalibrálj újra" in rep["next_action"]
+
+
+def test_minden_figyelmeztetesnek_van_teendoje():
+    """ŐR: új figyelmeztetéshez tartozzon teendő is.
+
+    Egy figyelmeztetés, amihez nem tudunk teendőt mondani, csak
+    rossz érzést kelt. Ez a teszt a modul saját üzeneteit veti össze a
+    rangsorral — a listából kimaradó jelzés itt bukik el.
+    """
+    import re
+    from pathlib import Path
+
+    from handball.pipeline.quality import NEXT_ACTION_ORDER
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+           / "quality.py").read_text(encoding="utf-8")
+    # A rangsorban keresett részleteknek tényleg szerepelniük kell a
+    # modul üzeneteiben (elgépelés esetén a teendő sosem sülne el).
+    for reszlet, _teendo in NEXT_ACTION_ORDER:
+        assert src.count(reszlet) >= 2, (
+            f"a rangsor részlete nem szerepel figyelmeztetésben: {reszlet}")
+    assert len(NEXT_ACTION_ORDER) >= 8
+    assert len({r for r, _ in NEXT_ACTION_ORDER}) == len(NEXT_ACTION_ORDER)
+    del re

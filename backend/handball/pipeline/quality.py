@@ -43,6 +43,60 @@ TOO_MANY_SCORE_CAP = 35
 # elemezte, ne a számokból jöjjön rá, hogy nem.
 VIDEO_COVERAGE_WARN_PCT = 60.0
 
+# ELSŐ TEENDŐ: a figyelmeztetések fontossági SORRENDJE. Egy gyenge
+# feldolgozás jellemzően négy-hat figyelmeztetést kap egyszerre, és a
+# felhasználó ilyenkor nem tudja, mivel kezdje — pedig a lista eleje és
+# a vége nem egyenrangú: a rossz kalibrációt kijavítva a többi jelzés
+# fele magától eltűnik, míg a mezszám-hozzárendelés a rossz alapokon
+# semmit nem ér.
+#
+# A párok: (a figyelmeztetésben KERESETT részlet, az EGY mondatos
+# teendő). Az első találat nyer.
+NEXT_ACTION_ORDER: tuple = (
+    ("TÚL sok játékos",
+     "Kalibrálj újra: a 4 sarokpont a JÁTÉKTÉR sarkain álljon. Amíg a "
+     "nézőtér is a pályára esik, egyik szám sem használható."),
+    ("kalibráció NÉLKÜL futott",
+     "Jelöld be a 4 pályasarkot az Új elemzés lapon (a Sarkok javaslata "
+     "gomb elő is tölti), és futtasd újra."),
+    ("a pályán KÍVÜLRE esik",
+     "Nyisd meg a Pálya-kalibrációt, és igazíts a sarokpontokon: a "
+     "rajzolt 6 m-es és 9 m-es vonalnak rá kell ülnie a valódira."),
+    ("Kevés játékos látszik",
+     "Ellenőrizd, hogy a kamera a játékteret mutatja-e, és hogy a "
+     "kalibráció a látható térfélre készült-e."),
+    ("Gyanúsan sok hétméteres-jel",
+     "Add meg a meccs időablakát (perc:másodperc), hogy a bemelegítés "
+     "és a ceremónia kimaradjon."),
+    # (A forrásban f-string töréspont van a "dolgoztuk" után — a
+    # részlet szándékosan addig tart, hogy a forrás-őr is megtalálja.)
+    ("%-át dolgoztuk",
+     "Nézd meg a hossz-beállítást és a meccs-időablakot; megszakadt "
+     "feldolgozásnál a könyvtárban a Folytatás viszi tovább."),
+    ("Nem sikerült kapust azonosítani",
+     "Ellenőrizd a kalibrációt: a kapuelőtérnek a pályán BELÜLRE kell "
+     "esnie."),
+    ("Kevés labda-észlelés",
+     "Tisztább (közelebbi, élesebb) felvétel segít; a birtoklás- és "
+     "passz-alapú számokat addig fenntartással kezeld."),
+    ("A követés töredezett",
+     "Rendelj mezszámokat a játékosokhoz a meccs-nézetben — a "
+     "szétesett track-eket ez köti össze."),
+)
+
+
+def next_action(warnings: list) -> str | None:
+    """A legfontosabb EGY teendő a figyelmeztetések közül (vagy None).
+
+    Nem a lista első eleme: a `NEXT_ACTION_ORDER` sorrendje szerint az
+    első olyan teendő, amihez tartozik figyelmeztetés. Így a
+    felhasználó azzal kezdi, ami a többit is megoldja.
+    """
+    for reszlet, teendo in NEXT_ACTION_ORDER:
+        if any(reszlet in w for w in warnings):
+            return teendo
+    return None
+
 # Kalibráció-drift: a pálya téglalapján ENNYIVEL kívülre eső mért pozíció
 # még belefér (a kifutó szélső, a csereember és a mérés zaja), és a mért
 # pozíciók ekkora aránya fölött mondjuk ki, hogy a kalibráció elcsúszott.
@@ -325,6 +379,9 @@ def compute_quality_report(match: Match) -> dict:
         "halftime_frame": halftime_frame,
         "seven_meters": seven_meters,
         "warnings": warnings,
+        # A legfontosabb EGY teendő: négy-hat figyelmeztetés mellett a
+        # felhasználó egyébként nem tudja, mivel kezdje.
+        "next_action": next_action(warnings),
     }
 
 

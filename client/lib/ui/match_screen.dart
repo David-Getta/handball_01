@@ -1923,6 +1923,40 @@ class _MatchScreenState extends State<MatchScreen> {
                       "${((q["video_seconds"] as num) / 60).round()} perc)"
                       : ""}",
                   style: AppText.label),
+            // ELSŐ TEENDŐ: négy-hat figyelmeztetés mellett a
+            // felhasználó nem tudja, mivel kezdje — pedig a lista eleje
+            // és a vége nem egyenrangú. A motor rangsorol; itt csak
+            // kiemeljük, hogy ne vesszen el a felsorolásban.
+            if (q["next_action"] != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.gold.withOpacity(0.4)),
+                ),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const Icon(Icons.flag_outlined,
+                      size: 16, color: AppColors.gold),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("ELSŐ TEENDŐ", style: AppText.sectionLabel),
+                          const SizedBox(height: 2),
+                          Text("${q["next_action"]}",
+                              style: AppText.label.copyWith(
+                                  fontSize: 12.5,
+                                  color: AppColors.textPrimary)),
+                        ]),
+                  ),
+                ]),
+              ),
+            ],
             if (warnings.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               for (final w in warnings)
