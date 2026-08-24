@@ -96,3 +96,42 @@ def test_a_munka_rekordja_viszi_a_video_hosszat(tmp_path):
     job_id = r.json()["job_id"]
     j = client.get(f"/jobs/{job_id}").json()
     assert j.get("video_seconds") == pytest.approx(1.0, abs=0.2)
+
+
+def test_preflight_a_meccsablakra_szamol(tmp_path):
+    """A becslés a FELDOLGOZANDÓ szakaszra szóljon, ne a teljes videóra.
+
+    Ha a felhasználó megadja a meccs időablakát, csak annak a részét
+    dolgozzuk fel — a teljes hosszal számolt becslés ugyanúgy téves
+    lenne, mint a rossz profillal számolt.
+    """
+    video = tmp_path / "meccs.mp4"
+    _tiny_video(video, frames=250)          # 10 másodperc @ 25 fps
+    client = _client()
+
+    teljes = client.post("/preflight", json={"path": str(video)}).json()
+    assert teljes["video_seconds"] == pytest.approx(10.0, abs=0.3)
+    assert teljes["processed_seconds"] == pytest.approx(10.0, abs=0.3)
+
+    ablakos = client.post("/preflight", json={
+        "path": str(video), "start_s": 2.0, "end_s": 6.0}).json()
+    # A videó hossza változatlan, a feldolgozandó szakasz viszont 4 mp.
+    assert ablakos["video_seconds"] == pytest.approx(10.0, abs=0.3)
+    assert ablakos["processed_seconds"] == pytest.approx(4.0, abs=0.3)
+
+
+def test_preflight_ertelmetlen_ablakot_nem_fogad_el(tmp_path):
+    """A fordított (vagy videón kívüli) ablak ne csonkítsa a becslést."""
+    video = tmp_path / "meccs.mp4"
+    _tiny_video(video, frames=250)
+    client = _client()
+
+    # A vége korábban van, mint a kezdet → marad a teljes hossz.
+    r = client.post("/preflight", json={
+        "path": str(video), "start_s": 8.0, "end_s": 3.0}).json()
+    assert r["processed_seconds"] == pytest.approx(10.0, abs=0.3)
+
+    # A videón túlnyúló vég a videó végére vágódik.
+    r2 = client.post("/preflight", json={
+        "path": str(video), "start_s": 2.0, "end_s": 999.0}).json()
+    assert r2["processed_seconds"] == pytest.approx(8.0, abs=0.3)

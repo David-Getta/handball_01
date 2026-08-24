@@ -15,6 +15,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   AZONOS beállítású korábbi futásokból számol. Ismeretlen profilnál
   inkább nincs becslés, mint egy másikból vett szám. Az Új elemzés
   lapon a profil váltása azonnal újraszámolja a becslést.
+- **A becslés a MECCS-ABLAKRA szól, nem a teljes videóra** (motor +
+  kliens): ugyanaz a hibaosztály — ha megadod, hogy a meccs a 4. perctől
+  a 40.-ig tart, csak azt a 36 percet dolgozzuk fel, a becslés viszont a
+  teljes felvétellel számolt. Mostantól a `/preflight` a szűkített
+  szakaszra becsül (a fordított vagy a videón túlnyúló ablakot
+  értelemszerűen kezelve), és a kártya ki is írja: "kb. 1 óra 10 perc
+  lesz (a 95 percből 36 perc feldolgozásával)".
 
 ## v0.1.52 — kiadva (2026-08-24)
 

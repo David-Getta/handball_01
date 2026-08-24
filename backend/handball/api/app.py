@@ -1037,7 +1037,26 @@ def create_app():
             imgsz = int(body["imgsz"]) if body.get("imgsz") else None
         except (TypeError, ValueError):
             imgsz = None
-        becsult = estimate_seconds(hossz, _job_log_rows(),
+        # A FELDOLGOZANDÓ szakasz hossza, nem a teljes videóé: ha a
+        # felhasználó megadta a meccs időablakát, csak annak a részét
+        # dolgozzuk fel — a teljes hosszal számolt becslés ugyanúgy
+        # téves lenne, mint a rossz profillal számolt.
+        feldolgozando = hossz
+        if hossz:
+            try:
+                kezd = float(body["start_s"]) if body.get("start_s") is not None else 0.0
+            except (TypeError, ValueError):
+                kezd = 0.0
+            try:
+                veg = (float(body["end_s"]) if body.get("end_s") is not None
+                       else hossz)
+            except (TypeError, ValueError):
+                veg = hossz
+            kezd = max(0.0, min(kezd, hossz))
+            veg = max(0.0, min(veg, hossz))
+            if veg > kezd:
+                feldolgozando = veg - kezd
+        becsult = estimate_seconds(feldolgozando, _job_log_rows(),
                                    stride=stride, imgsz=imgsz)
         return {
             "path_ok": letezik,
@@ -1045,6 +1064,8 @@ def create_app():
             "space_error": disk_space_error(path if letezik else None,
                                             data_root()),
             "video_seconds": hossz,
+            # A feldolgozandó szakasz (a meccs-időablakkal szűkítve).
+            "processed_seconds": feldolgozando,
             "estimate_s": becsult,
             "estimate_label": human_duration(becsult),
             "stride": stride,

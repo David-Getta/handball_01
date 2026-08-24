@@ -185,7 +185,12 @@ class _UploadScreenState extends State<UploadScreen> {
             width: 190,
             child: TextField(
               controller: _startSCtrl,
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                setState(() {});
+                _preflightDebounce?.cancel();
+                _preflightDebounce = Timer(
+                    const Duration(milliseconds: 600), _runPreflight);
+              },
               decoration: const InputDecoration(
                 labelText: "Meccs kezdete (pl. 4:30)",
                 isDense: true,
@@ -197,7 +202,12 @@ class _UploadScreenState extends State<UploadScreen> {
             width: 190,
             child: TextField(
               controller: _endSCtrl,
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                setState(() {});
+                _preflightDebounce?.cancel();
+                _preflightDebounce = Timer(
+                    const Duration(milliseconds: 600), _runPreflight);
+              },
               decoration: const InputDecoration(
                 labelText: "Meccs vége (üres = végig)",
                 isDense: true,
@@ -295,6 +305,18 @@ class _UploadScreenState extends State<UploadScreen> {
     );
   }
 
+  /// " (a 95 percből 40 perc feldolgozásával)" — csak ha a meccs
+  /// időablaka tényleg szűkít. Enélkül nem derülne ki, hogy a becslés
+  /// nem a teljes videóra szól.
+  String get _feldolgozandoSzoveg {
+    final teljes = (_preflight["video_seconds"] as num?)?.toDouble();
+    final resz = (_preflight["processed_seconds"] as num?)?.toDouble();
+    if (teljes == null || resz == null) return "";
+    if (resz >= teljes - 1.0) return "";   // nincs érdemi szűkítés
+    return " (a ${(teljes / 60).round()} percből "
+        "${(resz / 60).round()} perc feldolgozásával)";
+  }
+
   /// Az indítás előtti ellenőrzés kártyája — röviden, a gomb mellett.
   ///
   /// Két dolgot mond meg, amit utólag már nem érdemes megtudni: elég-e
@@ -331,7 +353,7 @@ class _UploadScreenState extends State<UploadScreen> {
                 baj
                     ? hely
                     : "A gépeden eddig mért ütem alapján ez kb. $becsles "
-                        "lesz."
+                        "lesz$_feldolgozandoSzoveg."
                         "${szabad != null ? " (Szabad hely: "
                             "${szabad.toStringAsFixed(1)} GB.)" : ""}",
                 style: AppText.label.copyWith(fontSize: 12, color: szin)),
@@ -360,9 +382,12 @@ class _UploadScreenState extends State<UploadScreen> {
     // azért része a kulcsnak, mert az idő-becslés profil-függő: a
     // "Pontos" ugyanarra a videóra többszörös időt kér.
     final (stride, imgsz, _) = _qualityPresets[_quality]!;
-    final kulcs = "$path|$stride|$imgsz";
+    final kezd = _ablakKezdet();
+    final veg = _ablakVeg();
+    final kulcs = "$path|$stride|$imgsz|$kezd|$veg";
     if (kulcs == _preflightPath) return;
-    final r = await _api.fetchPreflight(path, stride: stride, imgsz: imgsz);
+    final r = await _api.fetchPreflight(path,
+        stride: stride, imgsz: imgsz, startS: kezd, endS: veg);
     if (!mounted) return;
     setState(() {
       _preflight = r;

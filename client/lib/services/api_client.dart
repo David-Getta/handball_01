@@ -1227,7 +1227,7 @@ class ApiClient {
   /// feldolgozás indítását nem akadályozhatja meg egy megbicsakló
   /// kérés. (A tényleges hely-elutasítás a motorban van.)
   Future<Map<String, dynamic>> fetchPreflight(String path,
-      {int? stride, int? imgsz}) async {
+      {int? stride, int? imgsz, double? startS, double? endS}) async {
     try {
       final resp = await http
           .post(Uri.parse("$baseUrl/preflight"),
@@ -1239,6 +1239,10 @@ class ApiClient {
                 // "Pontos" többszörös időt kér ugyanarra a videóra).
                 if (stride != null) "stride": stride,
                 if (imgsz != null) "imgsz": imgsz,
+                // A meccs időablaka: a becslés a FELDOLGOZANDÓ szakaszra
+                // szóljon, ne a teljes videóra.
+                if (startS != null) "start_s": startS,
+                if (endS != null) "end_s": endS,
               }))
           .timeout(const Duration(seconds: 8));
       if (resp.statusCode != 200) return const {};
