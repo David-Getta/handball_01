@@ -28,10 +28,22 @@ from ..models.tracking import Match, PlayerPosition, PositionSource, Team
 from ..models.events import RosterTimeline
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
 
-# Hangolható paraméterek (frame-ben, ill. arányban):
-CONFIDENCE_HALFLIFE_FRAMES = 25.0   # ennyi frame után FELEZŐDIK a becslés megbízhatósága
-VELOCITY_FADE_FRAMES = 50.0         # a sebesség eddig hat; utána "megáll" a becsült játékos
-MIN_CONFIDENCE = 0.05               # ennél kisebb megbízhatóságot már nem közlünk
+# Hangolható paraméterek. MÁSODPERCBEN, nem kockában: a feldolgozás
+# ritkít (a termék alapja minden 3. kocka), tehát ugyanaz a KOCKASZÁM a
+# profiltól függően más valós időt jelent. Ezek pedig valódi
+# IDŐTARTAMOK: meddig hihető még egy egyenes vonalú mozgásmodell.
+# Kockában rögzítve a termék alapbeállításán a sebesség 2 helyett 6
+# másodpercig hatott volna — egy 7 m/s-mal sprintelő játékost ez a
+# pálya túlsó végébe visz, ami rosszabb, mint ha ott "megállna", ahol
+# utoljára láttuk.
+CONFIDENCE_HALFLIFE_S = 1.0   # ennyi másodperc után FELEZŐDIK a megbízhatóság
+VELOCITY_FADE_S = 2.0         # a sebesség eddig hat; utána "megáll" a becsült játékos
+MIN_CONFIDENCE = 0.05         # ennél kisebb megbízhatóságot már nem közlünk
+# Visszafelé kompatibilis kocka-alapértékek a képrátát nem ismerő
+# hívóknak (25 fps-en pontosan a fenti másodpercek — ez volt az eredeti
+# szándék is).
+CONFIDENCE_HALFLIFE_FRAMES = CONFIDENCE_HALFLIFE_S * 25.0
+VELOCITY_FADE_FRAMES = VELOCITY_FADE_S * 25.0
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -70,11 +82,16 @@ class OffScreenEstimator:
     hogy a képen kívüli időszakra extrapolálni tudjon.
     """
 
-    def __init__(self, roster: RosterTimeline):
+    def __init__(self, roster: RosterTimeline, fps: float = 25.0):
         # A létszám-állapot (kiállítások, kapus nélküli játék) forrása.
         self.roster = roster
         # track_id -> utoljára látott adat.
         self._last_seen: dict[int, _SeenRecord] = {}
+        # A TRACKING képrátája (a forrásé osztva a ritkítással) — ebből
+        # jön, hány kocka a másodpercben megadott két időtartam.
+        fps = float(fps) if fps and fps > 0 else 25.0
+        self.halflife_frames = max(1.0, CONFIDENCE_HALFLIFE_S * fps)
+        self.velocity_fade_frames = max(1.0, VELOCITY_FADE_S * fps)
 
     def update_seen(self, t: int, measured: list[PlayerPosition]) -> None:
         """Frissíti a "utoljára látott" nyilvántartást a mért játékosokkal.
@@ -135,17 +152,17 @@ class OffScreenEstimator:
         """Egy korábban látott játékos becsült pozíciója a `t` frame-en.
 
         - a sebességgel előrevetítünk, de a sebesség hatása legfeljebb
-          VELOCITY_FADE_FRAMES frame-ig tart (utána a játékos "megáll"),
+          VELOCITY_FADE_S másodpercig tart (utána a játékos "megáll"),
         - a pozíciót a pálya (40 x 20 m) határaira vágjuk,
         - a confidence felezési idővel csökken az eltelt idő arányában.
         """
         elapsed = t - rec.t
         # A sebesség csak korlátozott ideig hat (nem mozoghat örökké egyenesen).
-        eff = min(float(elapsed), VELOCITY_FADE_FRAMES)
+        eff = min(float(elapsed), self.velocity_fade_frames)
         ex = _clamp(rec.x + rec.vx * eff, 0.0, COURT_LENGTH_M)
         ey = _clamp(rec.y + rec.vy * eff, 0.0, COURT_WIDTH_M)
-        # Exponenciális csökkenés: minden CONFIDENCE_HALFLIFE_FRAMES alatt feleződik.
-        conf = rec.confidence * (0.5 ** (elapsed / CONFIDENCE_HALFLIFE_FRAMES))
+        # Exponenciális csökkenés: minden CONFIDENCE_HALFLIFE_S alatt feleződik.
+        conf = rec.confidence * (0.5 ** (elapsed / self.halflife_frames))
         conf = max(MIN_CONFIDENCE, conf)
         return PlayerPosition(
             track_id=rec.track_id,
@@ -171,7 +188,7 @@ def augment_match_with_estimates(match: Match,
     került be összesen (napló/diagnosztika).
     """
     roster = roster or RosterTimeline()
-    estimator = OffScreenEstimator(roster)
+    estimator = OffScreenEstimator(roster, fps=match.meta.fps)
     added = 0
     for frame in match.frames:
         measured = [p for p in frame.players if p.source == PositionSource.MEASURED]

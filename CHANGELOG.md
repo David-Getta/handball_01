@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.56 óta)
 
+- **A képen kívüli játékosok becslése nem szalad el** (motor): a
+  pásztázó kamerából kicsúszott játékosokat az utolsó látott
+  sebességükből vetítjük előre, és a sebesség hatása egy idő után
+  "elfogy" (a játékos nem mozoghat örökké egyenesen). Ez az idő
+  KOCKÁBAN volt megadva (50 kocka), a feldolgozás pedig ritkít: a
+  termék alapbeállításán 2 helyett 6 másodpercig hatott. Egy 7 m/s-mal
+  sprintelő játékost hat másodperc egyenes vonalú vetítés a pálya
+  túlsó végébe visz — ami rosszabb, mint ha ott "megállna", ahol
+  utoljára láttuk. Ugyanez állt a megbízhatóság felezési idejére is (1
+  helyett 3 másodperc), vagyis a becsült pozíciók a kelleténél tovább
+  látszottak magabiztosnak. Mindkettő mostantól VALÓS másodpercben
+  értendő, a meccs saját képrátájából számolva — 25 fps-en pontosan a
+  régi értékek, tehát ez az EREDETI szándék helyreállítása.
+
 - **A labda-hézagpótlás nem gyárt többé nem létező passzokat** (motor):
   a felvételen a labda időnként eltűnik (takarás, motion blur), és a
   rövid hézagokat egyenes vonallal pótoljuk — mert a birtoklás-, passz-
