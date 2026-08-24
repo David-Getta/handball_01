@@ -19,7 +19,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   a három dolgot, ami számít. A kliens ezt a szakaszt nem csukja
   össze (a többi hosszú szakaszt öt mondat után igen): ha a nyolc
   tételéből ötöt mutatna, a rangsor vége és a "mennyi maradt" sor
-  eltűnne — pont az, ami miatt a szakasz létezik.
+  eltűnne — pont az, ami miatt a szakasz létezik. A nyomtatható
+  meccsjelentésen kiemelt dobozba kerül: ha ugyanolyan felsorolás
+  lenne, mint a többi tizennégy szakasz, elveszne bennük — pedig pont
+  attól hasznos, hogy az olvasó ott megállhat.
 
 ## v0.1.58 — kiadva (2026-08-24)
 

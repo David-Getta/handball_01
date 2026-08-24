@@ -1797,3 +1797,21 @@ def test_szakasz_nelkul_nem_talalunk_ki_semmit():
     q["processed_to_s"] = None
     html = match_report_html(m, team_style_profile(m), detect_events(m), q)
     assert "Feldolgozott szakasz" not in html
+
+
+def test_a_lenyeg_kiemelt_dobozt_kap_a_nyomtatott_lapon():
+    """Nyomtatott lapon "A lényeg" a vezetői összefoglaló.
+
+    Ha ugyanolyan felsorolás, mint a többi tizennégy szakasz, akkor
+    elvész bennük — pedig pont attól hasznos, hogy az olvasó ott
+    megállhat. A motor megjelöli (show_all), a lap pedig kiemelt
+    dobozba teszi.
+    """
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    html = match_report_html(m, team_style_profile(m), detect_events(m),
+                             compute_quality_report(m))
+    assert '<div class="leadbox">' in html
+    # A doboz a lényeg-szakaszt tartalmazza, nem valami mást.
+    i = html.index('<div class="leadbox">')
+    assert "A lényeg" in html[i:i + 400]

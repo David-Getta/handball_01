@@ -1167,9 +1167,16 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 lines = sec.get("lines") or []
                 head = f'<p class="cs"><b>{escape(sec["title"])}.</b>'
                 if len(lines) <= 2:
-                    return head + f' {escape(sec["body"])}</p>'
-                items = "".join(f"<li>{escape(x)}</li>" for x in lines)
-                return head + "</p><ul>" + items + "</ul>"
+                    torzs = head + f' {escape(sec["body"])}</p>'
+                else:
+                    items = "".join(f"<li>{escape(x)}</li>" for x in lines)
+                    torzs = head + "</p><ul>" + items + "</ul>"
+                # "A lényeg" a rangsor teteje — nyomtatott lapon ez a
+                # vezetői összefoglaló, tehát ne folyjon egybe a többi
+                # szakasszal. A motor jelöli meg (show_all).
+                if sec.get("show_all"):
+                    return f'<div class="leadbox">{torzs}</div>'
+                return torzs
 
             paras = "".join(_cs_block(s) for s in cs["sections"])
             hl = ""
@@ -3220,6 +3227,9 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   .warnbox {{ border: 1px solid #C0392B; background: #FDECEA; color: #6E2018;
               border-radius: 8px; padding: 10px 12px; margin: 0 0 18px;
               font-size: 13px; line-height: 1.45; }}
+  .leadbox {{ border: 1.5px solid #9d7526; background: #fdf9f0;
+              border-radius: 10px; padding: 10px 16px 12px; margin: 8px 0 16px; }}
+  .leadbox li {{ margin: 5px 0; }}
   p.cs {{ font-size: 13.5px; margin: 8px 0; }}
   .cols {{ display: flex; gap: 22px; }}
   .col {{ flex: 1; }}
