@@ -38,6 +38,17 @@ Sorrendben (kb. 200–280 sor összesen):
    grep -i "<a kérdés kulcsszava>" docs/RETEG_KATALOGUS.md
    ```
 
+   EGY kulcsszó KEVÉS. A katalógus magyar címekkel dolgozik, és
+   ugyanarra a dologra több szó is jár: a "futómennyiség" nem találja
+   meg a `running_load_balance` réteget, mert a címében "futómunka"
+   áll. Keress a fogalom 3-4 rokon szavára ÉS az angol
+   függvénynév-töredékre is:
+
+   ```bash
+   grep -rn "def .*<angol töredék>" handball/pipeline/*.py
+   grep -rn "_<rövidítés>_" client/lib/ui/scouting_screen.dart
+   ```
+
    Ez nem formalitás: a `substitutions.phase_specialists` réteg egyszer
    végig is készült (motor, API, összefoglaló, felderítés, edzés-szabály,
    kliens-csempe, három teszt), mire kiderült, hogy a `roles.py`-ban már
