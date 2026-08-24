@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.57 óta)
 
+- **A jelentés megmondja, hogy JAVULT-E** (motor + kliens): a
+  minőség-pontszám eddig egy szám volt a semmiben. Aki a gyenge
+  feldolgozás után újrakalibrál és újrafuttat, pont azt a választ
+  keresi, hogy jó irányba ment-e — és a puszta "72/100" ezt nem mondja
+  meg. A minőség-jelentés mostantól viszi a KORÁBBI feldolgozások
+  pontszámát is (legfeljebb hármat, dátum szerint a legfrissebbel
+  elöl), és a különbséget: "Javult: a legutóbbi feldolgozásod 41/100
+  volt (+31 pont)." Az első feldolgozásnál üres a lista — nem találunk
+  ki összehasonlítást. A pontszámok gyorsítótárazva vannak (a kulcsban
+  a kockaszám is benne van, tehát egy újrafeldolgozott meccs friss
+  pontszámot kap).
+
 - **Új őr: nincs néma felderítés-mező** (teszt): a felderítés-jelentésnek
   több mint EZER mezője van, és a csempék meg a meccsterv-szabályok
   ezekből olvasnak. Ha egy mezőt senki nem tölt ki, az alapértéke

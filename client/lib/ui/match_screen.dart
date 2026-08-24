@@ -1890,6 +1890,27 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
+  /// "Javult-e?" — a mostani pontszám a legutóbbi feldolgozáshoz mérve.
+  ///
+  /// Az első feldolgozásnál (nincs mihez viszonyítani) null: nem
+  /// találunk ki összehasonlítást.
+  String? _javulasSzoveg(Map<String, dynamic> q) {
+    final elozoek = (q["previous"] as List?) ?? const [];
+    if (elozoek.isEmpty) return null;
+    final delta = (q["score_delta"] as num?)?.toInt();
+    if (delta == null) return null;
+    final elozo = (elozoek.first as Map)["score"];
+    if (delta > 0) {
+      return "Javult: a legutóbbi feldolgozásod $elozo/100 volt "
+          "(+$delta pont).";
+    }
+    if (delta < 0) {
+      return "Romlott: a legutóbbi feldolgozásod $elozo/100 volt "
+          "($delta pont).";
+    }
+    return "Ugyanannyi, mint a legutóbbi feldolgozásod ($elozo/100).";
+  }
+
   /// Másodperc → "óra:perc:mp" (egy óra alatt "perc:mp") — a videó
   /// lejátszójában ebben az alakban kereshető vissza a szakasz.
   /// A backend `_ora` segédjének tükre.
@@ -1988,6 +2009,19 @@ class _MatchScreenState extends State<MatchScreen> {
                   style: AppText.label.copyWith(color: AppColors.away))
             else if (q["game_window_found"] == true)
               Text(_meccsAblakSzoveg(q), style: AppText.label),
+            // JAVULT-E? Aki újrakalibrál és újrafuttat, pont ezt a
+            // választ keresi — a puszta "72/100" nem mondja meg, hogy
+            // jó irányba ment-e. A motor a korábbi feldolgozások
+            // pontszámát is kiadja.
+            if (_javulasSzoveg(q) != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(_javulasSzoveg(q)!,
+                  style: AppText.value.copyWith(
+                      fontSize: 13,
+                      color: ((q["score_delta"] as num?) ?? 0) >= 0
+                          ? AppColors.accent
+                          : AppColors.away)),
+            ],
             // ELSŐ TEENDŐ: négy-hat figyelmeztetés mellett a
             // felhasználó nem tudja, mivel kezdje — pedig a lista eleje
             // és a vége nem egyenrangú. A motor rangsorol; itt csak

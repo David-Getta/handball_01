@@ -91,6 +91,11 @@ def create_app():
     # újraindítása ne veszítse el a feldolgozott meccseket (data/matches/{id}.json).
     # Ez az MVP-perzisztencia; később adatbázis + objektumtár.
     _store: dict[str, Match] = {}
+    # A minőség-pontszám kiszámítása végigjárja a meccs összes kockáját,
+    # a "korábbi feldolgozásaid" listát viszont minden jelentés-nyitás
+    # kéri. Kulcs: (match_id, kockaszám) — egy újrafeldolgozott meccs
+    # így friss pontszámot kap, a változatlan pedig nem számolódik újra.
+    _quality_score_cache: dict[tuple, int] = {}
     # Írható adat-gyökér: telepítve felhasználói mappa, fejlesztésben a backend/
     # (lásd handball/storage.py) — a telepített app a saját mappájába nem írhat.
     _data_dir = data_root() / "data" / "matches"
@@ -1579,6 +1584,42 @@ def create_app():
             encoding="utf-8")
         return {"deleted": note_id}
 
+    def _korabbi_pontszamok(match_id: str, limit: int = 3) -> list:
+        """A MÁSIK meccsek minőség-pontszáma, legfrissebb elöl.
+
+        A pontszám kiszámítása végigjárja a meccs összes kockáját,
+        ezért gyorsítótárazzuk (a kulcsban a kockaszám is benne van:
+        egy újrafeldolgozott meccs friss pontszámot kap).
+
+        Legfeljebb `limit` meccset nézünk: a kérdés nem az, hogy mi
+        volt fél éve, hanem hogy a LEGUTÓBBI próbálkozáshoz képest
+        javult-e.
+        """
+        from ..pipeline.quality import compute_quality_report
+
+        sorrend = sorted(
+            (m for mid, m in _store.items() if mid != match_id),
+            key=lambda m: (m.meta.date or "", m.meta.match_id),
+            reverse=True)
+        ki = []
+        for m in sorrend[:limit]:
+            kulcs = (m.meta.match_id, len(m.frames))
+            pont = _quality_score_cache.get(kulcs)
+            if pont is None:
+                try:
+                    pont = compute_quality_report(m).get("score")
+                except Exception:
+                    continue
+                if pont is None:
+                    continue
+                _quality_score_cache[kulcs] = pont
+            ki.append({"match_id": m.meta.match_id,
+                       "home_team": m.meta.home_team,
+                       "away_team": m.meta.away_team,
+                       "date": m.meta.date,
+                       "score": pont})
+        return ki
+
     @app.get("/matches/{match_id}/quality")
     def get_quality(match_id: str):
         """A feldolgozás minőség-jelentése: mennyire megbízható az elemzés
@@ -1588,12 +1629,32 @@ def create_app():
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        res = compute_quality_report(match)
+        # A változó neve szándékosan NEM `res`: ez minőség-jelentés,
+        # nem elemzés-eredmény. Az /analyze `res["..."]` kulcsait
+        # őr-teszt köti a meccs-csomaghoz, és a minőség-mezőknek ott
+        # nincs helyük — a névválasztás tartja tisztán a határt.
+        jelentes = compute_quality_report(match)
         try:
-            res["confidence"] = analysis_confidence(match)
+            jelentes["confidence"] = analysis_confidence(match)
         except Exception:
             pass
-        return res
+        # KORÁBBI feldolgozások pontszáma: enélkül a felhasználó nem
+        # tudja, JAVÍTOTT-E, amit csinált. Aki újrakalibrál és újrafuttat,
+        # pont ezt a választ keresi — a puszta "72/100" önmagában nem
+        # mondja meg, hogy ez jó irány volt-e.
+        # A kulcsok MINDIG ott vannak (a delta None, ha nincs mihez
+        # viszonyítani) — a projekt szabálya: None ítélet, sose
+        # hallgatólagos hiány.
+        jelentes["previous"] = []
+        jelentes["score_delta"] = None
+        try:
+            jelentes["previous"] = _korabbi_pontszamok(match_id)
+            if jelentes["previous"] and jelentes.get("score") is not None:
+                jelentes["score_delta"] = (
+                    jelentes["score"] - jelentes["previous"][0]["score"])
+        except Exception:
+            pass
+        return jelentes
 
     @app.get("/matches/{match_id}/stats")
     def get_stats(match_id: str):
