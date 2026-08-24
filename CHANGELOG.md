@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.58 óta)
 
+- **Az edzői összefoglaló "A lényeg" szakasszal nyit** (motor): az
+  ötszáz réteggel az összefoglaló HÁROMEZER szavassá nőtt — a
+  "Játékkép és tempó" szakasz egymaga tizenhatezer karakter. Ezt
+  végigolvasni nem reális, és a mondatokra bontás sem segít, ha
+  negyven felsorolás-pont lesz belőle: a hiányzó darab a FONTOSSÁGI
+  SORREND. A teendő-rangsor ezt már kiszámolja, csak eddig a jelentés
+  belsejében lapult. Mostantól a meccs története (rövid, kontextust
+  adó) után rögtön "A lényeg" jön: csapatonként a rangsor első három
+  tétele, és hogy hány további jelzés maradt a részletes szakaszokra.
+  Ez BEVEZETŐ, nem rövidítés — a hosszú szakaszok változatlanul ott
+  vannak mögötte. Aki két percet szán a jelentésre, most is megkapja
+  a három dolgot, ami számít.
+
 ## v0.1.58 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: a visszacsatolás kiadása. Aki a gyenge feldolgozás

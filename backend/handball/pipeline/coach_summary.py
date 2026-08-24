@@ -8263,13 +8263,61 @@ def _coach_summary_cached(match: Match) -> dict:
     except Exception:
         pass
 
+    # A LÉNYEG: a rangsor teteje a jelentés ELEJÉRE.
+    #
+    # Az összefoglaló az ötszáz réteggel háromezer szavassá nőtt — a
+    # "Játékkép és tempó" szakasz egymaga tizenhatezer karakter. Ezt
+    # végigolvasni nem reális, és a mondatokra bontás sem segít, ha
+    # negyven felsorolás-pont lesz belőle: a hiányzó darab a
+    # FONTOSSÁGI SORREND. A teendő-rangsor (priority_findings) ezt már
+    # kiszámolja — itt csak elé tesszük, hogy aki két percet szán a
+    # jelentésre, a három legfontosabb dolgot mégis megkapja.
+    #
+    # A hosszú szakaszok változatlanul megmaradnak utána: ez nem
+    # rövidítés, hanem BEVEZETŐ.
+    try:
+        from .priorities import priority_findings
+        _prf = priority_findings(match)
+        _lenyeg: list[str] = []
+        for _side, _nev in (("home", match.meta.home_team),
+                            ("away", match.meta.away_team)):
+            _rec = _prf.get(_side) or {}
+            _top = (_rec.get("top") or [])[:3]
+            if not _top:
+                continue
+            for _i, _f in enumerate(_top, 1):
+                _lenyeg.append(f"{_nev} / {_i}. {_f['label']}: "
+                               f"{_f['verdict']}")
+            _ossz = _rec.get("total") or 0
+            if _ossz > len(_top):
+                _lenyeg.append(
+                    f"{_nev}: további {_ossz - len(_top)} megszólaló jelzés "
+                    "a részletes szakaszokban és a Mutatók lapon.")
+        if _lenyeg:
+            # A MECCS TÖRTÉNETE marad a nyitó szakasz (rövid, és
+            # kontextust ad: mi történt a pályán); a rangsor tüstént
+            # utána jön, jóval a hosszú szakaszok ELŐTT.
+            _hova = 1 if (sections and sections[0].get("title")
+                          == "A meccs története") else 0
+            sections.insert(_hova, {
+                "title": "A lényeg",
+                "body": " ".join(_lenyeg),
+                # A rangsor SORRENDJE a lényeg, ezért a mondatokra
+                # bontást itt nem a szöveg-vágó adja: a tételek már
+                # külön elemek.
+                "lines": list(_lenyeg),
+            })
+    except Exception:
+        pass
+
     # A szakaszok MONDATOKRA bontva is elmennek. A "Játékkép és tempó"
     # szakasz a rétegekkel négyezer karakteres, negyvenmondatos
     # bekezdéssé nőtt — úgy olvashatatlan. A `body` változatlan marad
     # (a meglévő fogyasztók miatt), a felületek a `lines`-ból tudnak
     # felsorolást építeni.
     for sec in sections:
-        sec["lines"] = split_sentences(sec.get("body", ""))
+        if not sec.get("lines"):
+            sec["lines"] = split_sentences(sec.get("body", ""))
     return {"sections": sections, "highlights": highlights,
             # None, ha a feldolgozás rendben volt; különben egy mondat
             # arról, mennyire hihetők az alábbi állítások.
