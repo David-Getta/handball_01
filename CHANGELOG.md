@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.63 óta)
 
+- **A támadás-mélység esése bekerült a hajrá-profilba** (motor): az új
+  réteg a saját csempéjén megszólalt, de az ÖSSZKÉPBŐL kimaradt — ami
+  rosszabb a semminél, mert az edző azt hiszi, mindent lát. (A
+  hajrá-profil saját tesztje pontosan ezt mondja ki.) A rangsorban a
+  beálló-esés UTÁN áll — az elárvult hatos vonal konkrétabb tét, mint
+  a felállás hátrébb csúszása —, de a szélső-esés ELŐTT.
+
 ## v0.1.63 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: az 502. elemző réteg, és a gyorsítótár

@@ -664,6 +664,8 @@ def test_az_elfogyo_beallo_is_bekerul_a_hajra_profilba(monkeypatch):
     for nev in ("retreat_fade", "line_height_fade", "pressure_fade"):
         monkeypatch.setattr(f"handball.pipeline.defense.{nev}",
                             lambda m, c=None: ures)
+    monkeypatch.setattr("handball.pipeline.attack_types.attack_depth_fade",
+                        lambda m, c=None: ures)
     monkeypatch.setattr("handball.pipeline.stats.sprint_fade",
                         lambda m, c=None: ures)
 
@@ -671,3 +673,37 @@ def test_az_elfogyo_beallo_is_bekerul_a_hajra_profilba(monkeypatch):
     nevek = [j["layer"] for j in rec["signals"]]
     assert nevek == ["pivot_usage_fade", "wing_involvement_fade"], nevek
     assert rec["top"] == "Elfogyó beálló"
+
+
+def test_a_hatrebb_kerulo_tamadas_is_bekerul_a_hajra_profilba(monkeypatch):
+    """Minden esés-rétegnek látszania kell az ÖSSZKÉPBEN.
+
+    Egy fáradás-jel, ami a saját csempéjén megszólal, de a
+    hajrá-profilból kimarad, rosszabb a semminél: az edző azt hiszi,
+    mindent lát. A támadás-mélység esése a beálló-esés UTÁN áll (az
+    elárvult hatos vonal konkrétabb tét, mint a felállás hátrébb
+    csúszása), de a szélső-esés ELŐTT.
+    """
+    from handball.pipeline import priorities as pr
+
+    ures = {"home": {}, "away": {}}
+    monkeypatch.setattr(
+        "handball.pipeline.attack_types.attack_depth_fade",
+        lambda m, c=None: {"home": {"fh_m": 9.0, "sh_m": 11.5,
+                                    "drop_m": 2.5}, "away": {}})
+    monkeypatch.setattr(
+        "handball.pipeline.attack_types.wing_involvement_fade",
+        lambda m, c=None: {"home": {"fh_pct": 70.0, "sh_pct": 40.0,
+                                    "drop_pct": 30.0}, "away": {}})
+    monkeypatch.setattr("handball.pipeline.attack_types.pivot_usage_fade",
+                        lambda m, c=None: ures)
+    for nev in ("retreat_fade", "line_height_fade", "pressure_fade"):
+        monkeypatch.setattr(f"handball.pipeline.defense.{nev}",
+                            lambda m, c=None: ures)
+    monkeypatch.setattr("handball.pipeline.stats.sprint_fade",
+                        lambda m, c=None: ures)
+
+    rec = pr.fatigue_profile(Match(_meta(), []))["home"]
+    nevek = [j["layer"] for j in rec["signals"]]
+    assert nevek == ["attack_depth_fade", "wing_involvement_fade"], nevek
+    assert rec["top"] == "Hátrébb kerülő támadás"
