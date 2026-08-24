@@ -2372,7 +2372,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Kétperc-páros: ki harcolja ki és ki fejezi be a kétpercüket (3+
   // lánc, 55% részarány — a backenddel azonos küszöbök:
-  // SUP_MIN_PAIRS, SUP_SHARE_PCT).
+  // SCH_MIN_PAIRS, SCH_SHARE_PCT). (A SUP_* a KIÜLŐ-POSZT rétegé, más
+  // küszöbökkel — a kettőt nem szabad összekeverni.)
   String? _suspensionChain(Map<String, dynamic> r) {
     final byPair =
         (r["sup_chains_by_pair"] as Map?)?.cast<String, dynamic>();
@@ -6534,8 +6535,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   }
 
   // Figura-befejező: hány figurájuk fut ki ugyanarra a posztra (2+
-  // mérhető figura, 60% részarány — a backenddel azonos küszöb:
-  // SPF_SHARE_PCT).
+  // mérhető figura). A 60%-os részarány-szűrést (SPF_SHARE_PCT) MÁR A
+  // MOTOR elvégzi: a spf_telegraphed csak a küszöböt elért figurákat
+  // számolja, itt tehát nincs mit újra ellenőrizni.
   String? _setplayFinisher(Map<String, dynamic> r) {
     final figures = (r["spf_figures"] as num?)?.toInt() ?? 0;
     final tel = (r["spf_telegraphed"] as num?)?.toInt() ?? 0;
@@ -6560,9 +6562,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   }
 
   // Figura-indító: hány figurájuk INDÍTÁSA olvasható egy posztról (2+
-  // mérhető figura, 60% részarány — a backenddel azonos küszöb:
-  // SPO_SHARE_PCT). A befejező a lövés előtt derül ki, ez az ELSŐ
-  // passznál.
+  // mérhető figura). A 60%-os részarány-szűrést (SPO_SHARE_PCT) MÁR A
+  // MOTOR elvégzi, ahogy a figura-befejezőnél is. A befejező a lövés
+  // előtt derül ki, ez az ELSŐ passznál.
   String? _setplayOpener(Map<String, dynamic> r) {
     final figures = (r["spo_figures"] as num?)?.toInt() ?? 0;
     final tel = (r["spo_telegraphed"] as num?)?.toInt() ?? 0;

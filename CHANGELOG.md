@@ -5,6 +5,28 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.56 óta)
 
+- **Új őr: a kliens küszöbei nem csúszhatnak el a motortól** (teszt):
+  a felderítő képernyő közel ötszáz csempéje KÉZZEL másolt számokkal
+  dolgozik ("8+ mért támadás", "60% részarány"), és minden helper
+  kommentje megnevezi, melyik motor-konstanst tükrözi. Eddig semmi nem
+  ellenőrizte, hogy a szám tényleg ugyanaz — egy elcsúszás azt
+  jelentené, hogy a csempe olyat állít, amit a motor nem mondana ki
+  (vagy hallgat ott, ahol a motor beszél), és ez a fajta hiba némán él
+  évekig. Az új őr 363 küszöböt vet össze: megengedő az ÁBRÁZOLÁSSAL
+  szemben (a Dart néha törtet használ százalék helyett, vagy kockát
+  perc helyett), de szigorú a NÉVVEL: nem létező konstansra hivatkozni
+  tilos, mert akkor a következő olvasó rossz helyen módosít. Az első
+  futás egy rossz hivatkozást talált (a kétperc-páros csempe a
+  KIÜLŐ-POSZT réteg konstansaira hivatkozott, más küszöbökkel — az
+  értékek jók voltak, a név nem) és két félrevezető kommentet, ahol a
+  szűrést valójában már a motor elvégzi. Mindhárom javítva.
+- **Új őr: azonos nevű konstans két modulban** (teszt): ugyanaz a név
+  eltérő értékkel két pipeline-modulban csapda, mert a kliens- és
+  doksi-kommentek NÉVRE hivatkoznak. A hat meglévő ütközés dokumentálva
+  (mind szándékos, pl. a kapuelőtér sugara a kapus-jelölésnél 6,8 m —
+  a 6 m-es vonal plusz ráhagyás —, a szimulációban a valódi 6,0 m);
+  újat csak tudatosan, a lista bővítésével lehet bevezetni.
+
 - **Hajrá-profil** (új réteg, `fatigue_profile`): a csomagban egy tucat
   "esés"-réteg méri, mi változik a 2. félidőre (visszaállás,
   fal-mélység, védekezési nyomás, szélső-bevonás, sprint). Külön-külön

@@ -1151,3 +1151,220 @@ def test_az_alvas_gatlas_a_feldolgozas_ideje_alatt_el():
     assert "finally:" in torzs and "_awake.stop()" in torzs, (
         "a zár nem oldódik fel minden ágon — a gép a munka után is "
         "ébren maradna")
+
+
+# ---- Küszöb-egyezés: a kliens kézzel másolt számai és a motor --------------
+
+# Kivételek: olyan helper-blokkok, ahol a hivatkozott konstans SZÁMA
+# szándékosan nem jelenik meg a Dart-törzsben. Mindegyikhez tartozik
+# indoklás — kivételt csak ezzel együtt szabad felvenni.
+_KUSZOB_KIVETELEK = {
+    # A figura-szűrést MÁR A MOTOR elvégzi: a spf_telegraphed /
+    # spo_telegraphed csak a részarány-küszöböt elért figurákat
+    # számolja, a kliensnek nincs mit újra ellenőriznie.
+    ("_setplayFinisher", "SPF_SHARE_PCT"),
+    ("_setplayOpener", "SPO_SHARE_PCT"),
+}
+
+
+def _motor_konstansok():
+    """A pipeline modul-szintű NAGYBETŰS szám-konstansai.
+
+    Egy név TÖBB modulban is előfordulhat eltérő értékkel (pl. a
+    PSR_SHARE_PCT a rules.py-ban 20.0, a decisions.py-ban 60.0), ezért
+    névhez az ÖSSZES előforduló értéket gyűjtjük — a kliens bármelyiket
+    tükrözheti. Az `X = Y` alakú aliasokat feloldjuk.
+    """
+    import ast
+    import re as _re
+
+    ertekek: dict[str, set] = {}
+    aliasok: list[tuple[str, str]] = []
+    pipeline = Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+    for py in sorted(pipeline.glob("*.py")):
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for t in node.targets:
+                if not isinstance(t, ast.Name):
+                    continue
+                if not _re.fullmatch(r"[A-Z][A-Z0-9_]{3,}", t.id):
+                    continue
+                try:
+                    val = ast.literal_eval(node.value)
+                except Exception:
+                    if isinstance(node.value, ast.Name):
+                        aliasok.append((t.id, node.value.id))
+                    continue
+                if isinstance(val, bool) or not isinstance(val, (int, float)):
+                    continue
+                ertekek.setdefault(t.id, set()).add(float(val))
+    for _ in range(3):          # láncolt aliasok feloldása
+        for nev, cel in aliasok:
+            if cel in ertekek:
+                ertekek.setdefault(nev, set()).update(ertekek[cel])
+    return ertekek
+
+
+def _dart_helper_blokkok(dart_szoveg: str):
+    """(helper-név, komment-blokk, törzs) hármasok a Dart-fájlból."""
+    sorok = dart_szoveg.split("\n")
+    ki = []
+    i = 0
+    fej = re.compile(
+        r"\s*(?:String\?|Widget|List<[^>]*>\??|Map<[^>]*>\??|double\?|int\?"
+        r"|bool)\s+(_\w+)\(")
+    while i < len(sorok):
+        m = fej.match(sorok[i])
+        if not m:
+            i += 1
+            continue
+        j = i - 1
+        komment = []
+        while j >= 0 and sorok[j].strip().startswith("//"):
+            komment.insert(0, sorok[j])
+            j -= 1
+        melyseg = 0
+        torzs = []
+        k = i
+        while k < len(sorok):
+            torzs.append(sorok[k])
+            melyseg += sorok[k].count("{") - sorok[k].count("}")
+            if melyseg <= 0 and k > i:
+                break
+            k += 1
+        ki.append((m.group(1), "\n".join(komment), "\n".join(torzs)))
+        i = k + 1
+    return ki
+
+
+def test_kliens_kuszobok_egyeznek_a_motorral():
+    """A kliens-csempék küszöbei KÉZZEL másolt számok a motorból.
+
+    Minden helper kommentje megnevezi, melyik motor-konstansokat
+    tükrözi ("a backenddel azonos küszöbök: ATV_MIN_ATTACKS, …") — de
+    eddig semmi nem ellenőrizte, hogy a szám tényleg ugyanaz. Egy
+    elcsúszás azt jelentené, hogy a csempe olyat állít, amit a motor
+    nem mondana ki (vagy hallgat ott, ahol a motor beszél), és ez a
+    fajta hiba némán él évekig.
+
+    Az ellenőrzés megengedő az ÁBRÁZOLÁSSAL szemben (a Dart néha törtet
+    használ a százalék helyett, vagy kockát a perc helyett), de szigorú
+    a NÉVVEL szemben: nem létező konstansra hivatkozni tilos, mert
+    akkor a következő olvasó rossz helyen módosít.
+    """
+    dart = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if not dart.exists():
+        pytest.skip("nincs kliens a fában")
+    konst = _motor_konstansok()
+    assert len(konst) > 500, "a konstans-olvasás elromlott"
+
+    blokkok = _dart_helper_blokkok(dart.read_text(encoding="utf-8"))
+    assert len(blokkok) > 300, "a helper-olvasás elromlott"
+
+    ismeretlen: list = []
+    elteres: list = []
+    ellenorzott = 0
+    for nev, komment, torzs in blokkok:
+        hivatkozott = set(re.findall(r"\b([A-Z][A-Z0-9]{2,}_[A-Z0-9_]+)\b",
+                                     komment))
+        if not hivatkozott:
+            continue
+        szamok = {float(x) for x in re.findall(r"\d+(?:\.\d+)?", torzs)}
+        for c in sorted(hivatkozott):
+            if (nev, c) in _KUSZOB_KIVETELEK:
+                continue
+            if c not in konst:
+                ismeretlen.append(f"{nev}: {c}")
+                continue
+            varhato = set()
+            for v in konst[c]:
+                # Ugyanaz a szám; százalék↔tört; perc↔kocka (25 fps).
+                varhato.update({v, v / 100.0, v * 100.0, v * 60.0 * 25.0})
+            if not any(any(abs(w - s) < 1e-6 for s in szamok)
+                       for w in varhato):
+                elteres.append(f"{nev}: {c}={sorted(konst[c])} "
+                               f"nincs a törzs számai közt")
+            ellenorzott += 1
+
+    assert not ismeretlen, (
+        "a kliens NEM LÉTEZŐ motor-konstansra hivatkozik (a következő "
+        "olvasó rossz helyen módosítana): " + "; ".join(ismeretlen))
+    assert not elteres, (
+        "a kliens küszöbe eltér a motorétól — a csempe mást állítana, "
+        "mint a motor: " + "; ".join(elteres))
+    assert ellenorzott > 300, (
+        f"csak {ellenorzott} küszöböt ellenőriztünk — az olvasás elromlott")
+
+
+# A pipeline-ban TÖBB modulban is előforduló, AZONOS nevű konstansok.
+# Nem hiba önmagában (a nevek modulonként külön névtérben élnek), de
+# csapda: a kliens- és doksi-kommentek NÉVRE hivatkoznak, és a
+# következő olvasó a rossz modulban módosít. Új ütközést ezért csak
+# tudatosan, ide felvéve szabad bevezetni.
+_ISMERT_UTKOZO_KONSTANSOK = {
+    # rules.py: 20.0 (pressz-poszt kiállításnál) · decisions.py: 60.0
+    "PSR_SHARE_PCT",
+    "PSR_MIN_TO",
+    # attack_types.py: 60.0 (elzáró-páros) · decisions.py: 50.0 (lágy passz)
+    "SPP_SHARE_PCT",
+    "SPP_MIN_SHOTS",
+    # event_detection.py: 5 (gólpassz-hossz) · roles.py: 3 (kiszolgált poszt)
+    "ASR_MIN_ASSISTED",
+    # goalkeeper.py: 6.8 (a 6 m-es vonal + ráhagyás, mert a kapus kilép)
+    # · play_simulation.py: 6.0 (a VALÓDI szabálykönyvi hatos)
+    "GOAL_AREA_RADIUS_M",
+}
+
+
+def test_nem_no_a_duplan_hasznalt_konstansnevek_szama():
+    """Ugyanaz a konstansnév két modulban, ELTÉRŐ értékkel: csapda.
+
+    A kliens-csempék és a doksik NÉVRE hivatkoznak a küszöbökre ("a
+    backenddel azonos küszöb: PSR_SHARE_PCT"), és ha ugyanaz a név két
+    helyen mást jelent, a következő olvasó a rossz modulban módosít —
+    a hiba pedig némán él tovább, mert mindkét szám "helyes valahol".
+
+    A meglévő négy ütközés dokumentálva van; újat csak tudatosan, a
+    lista bővítésével szabad bevezetni.
+    """
+    import ast
+    import re as _re
+    from collections import defaultdict
+
+    hol = defaultdict(dict)
+    pipeline = Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+    for py in sorted(pipeline.glob("*.py")):
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for t in node.targets:
+                if not isinstance(t, ast.Name):
+                    continue
+                if not _re.fullmatch(r"[A-Z][A-Z0-9_]{3,}", t.id):
+                    continue
+                try:
+                    val = ast.literal_eval(node.value)
+                except Exception:
+                    continue
+                if isinstance(val, bool) or not isinstance(val, (int, float)):
+                    continue
+                hol[t.id][py.name] = float(val)
+
+    utkozo = {nev: modulok for nev, modulok in hol.items()
+              if len(set(modulok.values())) > 1}
+    ujak = sorted(set(utkozo) - _ISMERT_UTKOZO_KONSTANSOK)
+    assert not ujak, (
+        "új, KÉTSZER definiált konstansnév eltérő értékkel — a "
+        "kliens/doksi kommentek névre hivatkoznak, tehát a következő "
+        "olvasó a rossz modulban módosítana: "
+        + "; ".join(f"{n} ({utkozo[n]})" for n in ujak))
