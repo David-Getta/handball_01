@@ -9,7 +9,7 @@ rétegek ugyanarról a meccsről ritkítva másképp — jellemzően
 óvatosabban — ítélhetnek. Ez a lista a döntés alapja, hol
 érdemes a kockaszám-küszöböt másodperc-alapúra váltani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **496 réteg** összevetve, ebből **27 eltérő ítéletű**.
+Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **496 réteg** összevetve, ebből **26 eltérő ítéletű**.
 
 ## Fontos: mit jelent az eltérés
 
@@ -50,7 +50,6 @@ háromszor annyi valós időt követelnek.
 - `home.pairs[0].verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 15 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
 - `home.pairs[2].verdict`: sűrűn `a(z) beálló közelről fejez be (átl. 6.0 m) — őt ki kell zárni` → ritkítva `a(z) beálló közelről fejez be (átl. 5.9 m) — őt ki kell zárni`
 - `home.pairs[4].verdict`: sűrűn `a(z) 1. figurájuk lövéseinek 61%-a a(z) irányító posztra fut ki — a figura INDULÁSAKOR arra az oldalra kell csúszni, nem a lövésnél` → ritkítva `a(z) 1. figurájuk indításainak 100%-a a(z) beálló posztról jön — amint a labda odaér, zárni kell a kiinduló passzsávot, és a figura el sem indul`
-- `home.verdict`: sűrűn `a(z) 5 teendőből 1-hez van kész gyakorlat; a maradék 4 edzői döntést kíván` → ritkítva `a(z) 5 teendőből 2-hez van kész gyakorlat; a maradék 3 edzői döntést kíván`
 
 ### `defensive_shift_lag`
 
@@ -92,13 +91,9 @@ háromszor annyi valós időt követelnek.
 
 - `home.top`: sűrűn `6` → ritkítva `None`
 
-### `pre_assist_roles`
+### `role_pass_map`
 
-- `home.verdict`: sűrűn `a másod-előkészítésük a(z) irányító poszton fut (100%, 23 másod-előkészítésből) — a passzsáv-zárást a poszt sávjában kell kezdeni, akárki játssza éppen` → ritkítva `a másod-előkészítésük a(z) irányító poszton fut (100%, 24 másod-előkészítésből) — a passzsáv-zárást a poszt sávjában kell kezdeni, akárki játssza éppen`
-
-### `role_assist_sources`
-
-- `home.verdict`: sűrűn `a góljaik a(z) beálló kezéből indulnak (87%, 23 gólpasszból) — nem a lövést kell zárni, hanem TŐLE a passzt elvenni: egy ember feljebb lép rá, a többiek posztot tartanak` → ritkítva `a góljaik a(z) beálló kezéből indulnak (83%, 24 gólpasszból) — nem a lövést kell zárni, hanem TŐLE a passzt elvenni: egy ember feljebb lép rá, a többiek posztot tartanak`
+- `home.verdict`: sűrűn `a passzaik 39%-a a(z) irányító → irányító vonalon megy` → ritkítva `a passzaik 40%-a a(z) irányító → irányító vonalon megy`
 
 ### `role_shooting_hand`
 
