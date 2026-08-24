@@ -1226,12 +1226,20 @@ class ApiClient {
   /// Hibánál üres térkép: az ellenőrzés kényelem, nem kapu — a
   /// feldolgozás indítását nem akadályozhatja meg egy megbicsakló
   /// kérés. (A tényleges hely-elutasítás a motorban van.)
-  Future<Map<String, dynamic>> fetchPreflight(String path) async {
+  Future<Map<String, dynamic>> fetchPreflight(String path,
+      {int? stride, int? imgsz}) async {
     try {
       final resp = await http
           .post(Uri.parse("$baseUrl/preflight"),
               headers: {"Content-Type": "application/json"},
-              body: jsonEncode({"path": path}))
+              body: jsonEncode({
+                "path": path,
+                // A MOST választott minőségi profil: a becslés csak az
+                // ugyanilyen beállítású korábbi futásokból számol (a
+                // "Pontos" többszörös időt kér ugyanarra a videóra).
+                if (stride != null) "stride": stride,
+                if (imgsz != null) "imgsz": imgsz,
+              }))
           .timeout(const Duration(seconds: 8));
       if (resp.statusCode != 200) return const {};
       return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;

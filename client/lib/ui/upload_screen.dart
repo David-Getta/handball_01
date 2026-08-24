@@ -356,12 +356,17 @@ class _UploadScreenState extends State<UploadScreen> {
       }
       return;
     }
-    if (path == _preflightPath) return; // ugyanarra nem kérdezünk újra
-    final r = await _api.fetchPreflight(path);
+    // Ugyanarra az ÚT + PROFIL párosra nem kérdezünk újra. A profil
+    // azért része a kulcsnak, mert az idő-becslés profil-függő: a
+    // "Pontos" ugyanarra a videóra többszörös időt kér.
+    final (stride, imgsz, _) = _qualityPresets[_quality]!;
+    final kulcs = "$path|$stride|$imgsz";
+    if (kulcs == _preflightPath) return;
+    final r = await _api.fetchPreflight(path, stride: stride, imgsz: imgsz);
     if (!mounted) return;
     setState(() {
       _preflight = r;
-      _preflightPath = path;
+      _preflightPath = kulcs;
     });
   }
 
@@ -1337,7 +1342,12 @@ class _UploadScreenState extends State<UploadScreen> {
             selected: {_quality},
             onSelectionChanged: _status == "running"
                 ? null
-                : (s) => setState(() => _quality = s.first),
+                // Profilváltásnál az idő-becslés is újraszámol: a
+                // "Pontos" ugyanarra a videóra többszörös időt kér.
+                : (s) {
+                    setState(() => _quality = s.first);
+                    unawaited(_runPreflight());
+                  },
           ),
           SegmentedButton<String>(
             showSelectedIcon: false,

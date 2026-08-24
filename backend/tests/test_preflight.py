@@ -95,3 +95,45 @@ def test_emberi_felirat():
     assert human_duration(600) == "10 perc"
     assert human_duration(3600) == "1 óra"
     assert human_duration(5400) == "1 óra 30 perc"
+
+
+def _futas_profillal(video_s, munka_s, stride, imgsz, status="done"):
+    return {"status": status, "video_seconds": video_s,
+            "started": 1000.0, "finished": 1000.0 + munka_s,
+            "stride": stride, "imgsz": imgsz}
+
+
+def test_a_becsles_csak_azonos_profilbol_szamol():
+    """A "Pontos" profil többszörös időt kér ugyanarra a videóra.
+
+    Ha a profilokat összekevernénk, a becslés menthetetlenül téves
+    lenne: a felhasználó "kb. 20 perc"-et olvasna egy másfél órás
+    munkára — pont akkor, amikor a döntése (megvárja-e) ezen múlik.
+    """
+    rows = [
+        _futas_profillal(600, 1200, stride=3, imgsz=1280),   # 2x
+        _futas_profillal(600, 1200, stride=3, imgsz=1280),
+        _futas_profillal(600, 3600, stride=2, imgsz=1920),   # 6x
+        _futas_profillal(600, 3600, stride=2, imgsz=1920),
+    ]
+    assert speed_from_history(rows, stride=3, imgsz=1280) == 2.0
+    assert speed_from_history(rows, stride=2, imgsz=1920) == 6.0
+    assert estimate_seconds(300, rows, stride=2, imgsz=1920) == 1800
+
+
+def test_ismeretlen_profilnal_nincs_becsles():
+    """Olyan profilra, amivel még nem futott semmi, nem találunk ki
+    számot: inkább nincs becslés, mint egy másikból vett."""
+    rows = [
+        _futas_profillal(600, 1200, stride=3, imgsz=1280),
+        _futas_profillal(600, 1200, stride=3, imgsz=1280),
+    ]
+    assert speed_from_history(rows, stride=5, imgsz=960) is None
+    assert estimate_seconds(300, rows, stride=5, imgsz=960) is None
+
+
+def test_profil_nelkul_a_regi_viselkedes():
+    """Profil megadása nélkül minden kész futás számít (visszafelé
+    kompatibilis: a régi naplósorokban nincs stride/imgsz)."""
+    rows = [_futas(600, 1200), _futas(600, 1200)]
+    assert speed_from_history(rows) == 2.0

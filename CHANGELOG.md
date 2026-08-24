@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.52 óta)
 
+- **A hátralévő idő becslése PROFIL-FÜGGŐ lett** (motor + kliens) —
+  JAVÍTÁS: a becslés eddig a gépen mért ütemet a minőségi profiltól
+  függetlenül használta. Csakhogy a "Pontos" profil sűrűbben mintavesz
+  és nagyobb képen keres, tehát UGYANARRA a videóra többszörös időt
+  kér: aki profilt váltott, "kb. 20 percet" olvasott egy másfél órás
+  munkára — pont akkor, amikor a döntése (megvárja-e) ezen múlik.
+  Mostantól a feldolgozás-napló viszi a profilt, és a becslés csak az
+  AZONOS beállítású korábbi futásokból számol. Ismeretlen profilnál
+  inkább nincs becslés, mint egy másikból vett szám. Az Új elemzés
+  lapon a profil váltása azonnal újraszámolja a becslést.
+
 ## v0.1.52 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: ez a kör az első éles meccs utolsó nyitott

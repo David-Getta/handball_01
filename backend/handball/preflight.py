@@ -68,15 +68,25 @@ def disk_space_error(video_path: str | None, root: Path | str) -> str | None:
             f"indítsd újra — így a feldolgozás nem áll meg a közepén.")
 
 
-def _sikeres_futasok(rows: list[dict]) -> list[tuple[float, float]]:
+def _sikeres_futasok(rows: list[dict], stride=None,
+                     imgsz=None) -> list[tuple[float, float]]:
     """(videó-másodperc, feldolgozás-másodperc) párok a naplóból.
 
     Csak a KÉSZ munkák számítanak: a megszakított és a hibára futott
     munkák ideje nem a teljes videóé, tehát az ütemet elrontaná.
+
+    Ha `stride`/`imgsz` meg van adva, CSAK az azonos beállítású futások
+    számítanak. Ez nem finomkodás: a "Pontos" profil sűrűbben mintavesz
+    és nagyobb képen keres, tehát ugyanarra a videóra többszörös időt
+    kér — a profilok összekeverése a becslést menthetetlenül elrontaná.
     """
     ki: list[tuple[float, float]] = []
     for r in rows:
         if r.get("status") != "done":
+            continue
+        if stride is not None and r.get("stride") != stride:
+            continue
+        if imgsz is not None and r.get("imgsz") != imgsz:
             continue
         vid = r.get("video_seconds")
         start = r.get("started")
@@ -91,14 +101,19 @@ def _sikeres_futasok(rows: list[dict]) -> list[tuple[float, float]]:
     return ki
 
 
-def speed_from_history(rows: list[dict]) -> float | None:
+def speed_from_history(rows: list[dict], stride=None,
+                       imgsz=None) -> float | None:
     """Hány másodperc feldolgozás jut EGY másodperc videóra ezen a gépen.
 
     A napló legutóbbi futásaiból, a teljes videó-idő és a teljes
     munkaidő hányadosaként (a hosszabb futások így nagyobb súlyt
     kapnak, ami helyes: az ütem rájuk jellemzőbb). Kevés mérésnél None.
+
+    A `stride`/`imgsz` szűkíti a mintát az AZONOS beállítású futásokra
+    (lásd `_sikeres_futasok`). Ha ilyenből nincs elég, inkább nincs
+    becslés: egy másik profilból számolt szám nem óvatos, hanem téves.
     """
-    parok = _sikeres_futasok(rows)
+    parok = _sikeres_futasok(rows, stride=stride, imgsz=imgsz)
     if len(parok) < MIN_HISTORY_RUNS:
         return None
     ossz_video = sum(v for v, _ in parok)
@@ -109,11 +124,16 @@ def speed_from_history(rows: list[dict]) -> float | None:
 
 
 def estimate_seconds(video_seconds: float | None,
-                     rows: list[dict]) -> int | None:
-    """A videó feldolgozásának becsült ideje másodpercben (vagy None)."""
+                     rows: list[dict], stride=None,
+                     imgsz=None) -> int | None:
+    """A videó feldolgozásának becsült ideje másodpercben (vagy None).
+
+    A `stride`/`imgsz` a MOST választott minőségi profilt jelenti: a
+    becslés csak az ugyanilyen beállítású korábbi futásokból számol.
+    """
     if not video_seconds or video_seconds <= 0:
         return None
-    utem = speed_from_history(rows)
+    utem = speed_from_history(rows, stride=stride, imgsz=imgsz)
     if utem is None:
         return None
     return int(round(video_seconds * utem))

@@ -725,7 +725,10 @@ def create_app():
                # A videó hossza a KÉSŐBBI becslésekhez kell: ebből és a
                # tényleges munkaidőből tanulja meg a motor, milyen gyors
                # EZ a gép (lásd preflight.speed_from_history).
-               "video_seconds": _video_seconds_safe(path)}
+               "video_seconds": _video_seconds_safe(path),
+               # A minőségi profil — az idő-becslés ebből tanul.
+               "stride": int(body.get("stride", 3) or 3),
+               "imgsz": int(body.get("imgsz", 1280) or 1280)}
         _jobs[job_id] = job
         _job_params[job_id] = body
         # Alapesetben az új elemzés AZONNAL indul: a jelenleg FUTÓ (korábbi)
@@ -971,7 +974,11 @@ def create_app():
                     # Az ütem-tanuláshoz: a TÉNYLEGES munkaidő (started →
                     # finished) és a videó hossza. A sorban töltött idő
                     # nem munka, ezért nem a "created" a kezdet.
-                    "started", "video_seconds")}
+                    "started", "video_seconds",
+                    # A minőségi profil: a "Pontos" ugyanarra a videóra
+                    # többszörös időt kér, tehát a becslés csak AZONOS
+                    # beállítású futásokból számolhat.
+                    "stride", "imgsz")}
             rec["finished"] = _t.time()
             _jobs_log_path.parent.mkdir(parents=True, exist_ok=True)
             with open(_jobs_log_path, "a", encoding="utf-8") as f:
@@ -1019,7 +1026,19 @@ def create_app():
         path = body.get("path")
         letezik = bool(path) and Path(path).exists()
         hossz = _video_seconds_safe(path) if letezik else None
-        becsult = estimate_seconds(hossz, _job_log_rows())
+        # A MOST választott profil: a becslés csak az ugyanilyen
+        # beállítású korábbi futásokból számol (a "Pontos" profil
+        # többszörös időt kér ugyanarra a videóra).
+        try:
+            stride = int(body["stride"]) if body.get("stride") else None
+        except (TypeError, ValueError):
+            stride = None
+        try:
+            imgsz = int(body["imgsz"]) if body.get("imgsz") else None
+        except (TypeError, ValueError):
+            imgsz = None
+        becsult = estimate_seconds(hossz, _job_log_rows(),
+                                   stride=stride, imgsz=imgsz)
         return {
             "path_ok": letezik,
             "free_gb": free_gb(data_root()),
@@ -1028,6 +1047,8 @@ def create_app():
             "video_seconds": hossz,
             "estimate_s": becsult,
             "estimate_label": human_duration(becsult),
+            "stride": stride,
+            "imgsz": imgsz,
         }
 
     # Hátralévő idő becslése: ennyi haladás alatt még nem becslünk. Az
