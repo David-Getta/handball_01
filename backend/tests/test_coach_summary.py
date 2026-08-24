@@ -226,9 +226,11 @@ def test_goalkeeper_change_verdict_sentence():
             frames.append(Frame(t=t, players=players,
                                 ball=Ball(x=x, y=10.0, confidence=1.0)))
             t += 1
-        frames.append(Frame(t=t, players=[gk(9)],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        # Lövés-csendidő: valós szünet kell két kapu-megközelítés közé.
+        for _i in range(20):
+            frames.append(Frame(t=t, players=[gk(9)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
     # ...csere után három kapott gól a 8-asra.
     for _ in range(600):
         frames.append(Frame(t=t, players=[gk(8)],
@@ -241,9 +243,10 @@ def test_goalkeeper_change_verdict_sentence():
                                 ball=Ball(x=33.6 + i, y=10.0,
                                           confidence=1.0)))
             t += 1
-        frames.append(Frame(t=t, players=[gk(8)],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        for _i in range(20):
+            frames.append(Frame(t=t, players=[gk(8)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
     m = Match(MatchMeta(match_id="gkv", home_team="H", away_team="A",
                         fps=25.0), frames)
     sec = _goalkeepers_section(m, "H", "A")

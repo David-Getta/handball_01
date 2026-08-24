@@ -95,6 +95,21 @@ def test_estimated_positions_ignored():
     assert detect_goalkeepers(m) == {}
 
 
+# A lövés-csendidő (SHOT_COOLDOWN_S) miatt két kapu-megközelítés közé
+# valós szünet kell: fél másodpercen belül a felismerés — helyesen — egy
+# lövésnek veszi a jelet. A fixture-ök ezért ennyi kockát hagynak
+# közöttük (25 fps-en bőven a csendidő fölött).
+_SHOT_GAP_FRAMES = 20
+
+
+def _gap_frames(t0, n=_SHOT_GAP_FRAMES):
+    """Üres kockák a kapu-zónán kívüli labdával — két lövés közé."""
+    from handball.models.tracking import Ball
+    return [Frame(t=t0 + i, players=[],
+                  ball=Ball(x=20.0, y=10.0, confidence=1.0))
+            for i in range(n)]
+
+
 def _shot_sequence(t0, gk_track, save=True):
     """Vendég kapu (x=40) felé tartó hazai lövés kockái t0-tól: a kapus a
     kapuban áll; védésnél a labda nála áll meg, gólnál eléri a vonalat."""
@@ -121,9 +136,9 @@ def test_goalkeeper_stats_counts_saves_and_conceded():
     # (a debounce miatt külön kapu-megközelítés kell).
     from handball.models.tracking import Ball
     frames = _shot_sequence(0, gk_track=9, save=True)
-    frames.append(Frame(t=8, players=[], ball=Ball(x=20.0, y=10.0,
-                                                   confidence=1.0)))
-    frames += _shot_sequence(9, gk_track=9, save=False)
+    frames += _gap_frames(8)
+    frames += _shot_sequence(8 + _SHOT_GAP_FRAMES, gk_track=9, save=False)
+    del Ball  # a szünetet a segéd rakja ki
     m = _match(frames)
     stats = goalkeeper_stats(m)
     away = stats["away"]
@@ -695,9 +710,12 @@ def test_gk_save_fade_drop_second_half():
         for _ in range(n):
             frames.extend(_shot_sequence(t, gk_track=9, save=save))
             t = frames[-1].t + 1
-            frames.append(Frame(t=t, players=[],
-                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-            t += 1
+            # A lövés-csendidő miatt valós szünet kell két lövés közé.
+            for _i in range(_SHOT_GAP_FRAMES):
+                frames.append(Frame(t=t, players=[],
+                                    ball=Ball(x=20.0, y=10.0,
+                                              confidence=1.0)))
+                t += 1
 
     def active(seconds):
         # Aktív játék 12 mért játékossal — a félidő-érzékelő ezt nem
@@ -757,9 +775,11 @@ def test_gk_change_effect_improvement():
     for _ in range(3):
         frames += _shot_sequence(t, gk_track=9, save=False)
         t = frames[-1].t + 1
-        frames.append(Frame(t=t, players=[gk(9)],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        # A lövés-csendidő miatt valós szünet kell két lövés közé.
+        for _i in range(_SHOT_GAP_FRAMES):
+            frames.append(Frame(t=t, players=[gk(9)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
     # 2. szakasz: 8-as kapus, 3 védés.
     for _ in range(600):
         frames.append(Frame(t=t, players=[gk(8)],
@@ -768,9 +788,10 @@ def test_gk_change_effect_improvement():
     for _ in range(3):
         frames += _shot_sequence(t, gk_track=8, save=True)
         t = frames[-1].t + 1
-        frames.append(Frame(t=t, players=[gk(8)],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        for _i in range(_SHOT_GAP_FRAMES):
+            frames.append(Frame(t=t, players=[gk(8)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
 
     eff = gk_change_effect(_match(frames))["away"]
     assert eff["changes"] == 1

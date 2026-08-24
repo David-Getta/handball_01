@@ -970,9 +970,13 @@ def test_player_report_goalkeeper_block():
                                 ball=Ball(x=min(33.6 + i, 38.8), y=10.0,
                                           confidence=1.0)))
             t += 1
-        frames.append(Frame(t=t, players=[gk()],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        # A lövés-csendidő (SHOT_COOLDOWN_S) miatt valós szünet kell két
+        # kapu-megközelítés közé: fél másodpercen belül a felismerés —
+        # helyesen — egy lövésnek veszi a jelet.
+        for _i in range(20):
+            frames.append(Frame(t=t, players=[gk()],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
     m = Match(MatchMeta(match_id="gkp", home_team="H", away_team="A",
                         fps=25.0), frames)
     html = player_report_html(m, 9)
@@ -1013,9 +1017,11 @@ def test_player_report_goalkeeper_tips():
                                 ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
                                           confidence=1.0)))
             t += 1
-        frames.append(Frame(t=t, players=[gk()],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        # Lövés-csendidő: valós szünet kell két kapu-megközelítés közé.
+        for _i in range(20):
+            frames.append(Frame(t=t, players=[gk()],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
     m = Match(MatchMeta(match_id="gkt", home_team="H", away_team="A",
                         fps=25.0), frames)
     html = player_report_html(m, 9)

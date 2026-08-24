@@ -28,6 +28,23 @@ from .primitive_cache import copy_events, memoize_primitive
 # Heurisztikus küszöbök:
 SHOT_SPEED_MS = 8.0      # a labda ennél gyorsabban a kapu felé tartva = lövés
 APPROACH_X_M = 4.0       # a kaputól (x-ben) ekkora közelségben "kapu-megközelítés"
+# Lövés-CSENDIDŐ ugyanarra a kapura. A hely-alapú debounce (a labdának ki
+# kell lépnie a kapu-zónából) zajos labda-észlelésnél nem elég: a labda
+# ki-be billeg a zóna szélén, és EGY lövésből négy esemény lesz — éles
+# meccsen pontosan ez történt (1264,6 / 1265,9 / 1266,3 / 1267,1 mp).
+#
+# A szabály: ezen belül nem indul újabb esemény ugyanarra a kapura, és a
+# csendidő minden elnyomott jelöltnél ÚJRAINDUL. Így egy zaj-sorozat egy
+# eseménnyé olvad — ez az őszinte olvasat: másfél másodpercen belül a
+# felismerés nem tud két lövést szétválasztani, tehát egyet mond.
+#
+# A küszöb SZÁNDÉKOSAN óvatos: fél másodpercen belül ugyanarra a kapura
+# két KÜLÖN lövés fizikailag sem hihető (a kipattanó összeszedése és az
+# újabb elengedés ennél tovább tart), tehát itt nem dobunk el valódi
+# eseményt. A ritkább, 1-1,5 másodperces ismétléseket ez nem szűri —
+# azokat a kalibráció rendbetétele oldja meg, nem a csendidő: a
+# zaj-sorozat oka a hibás pálya-vetítés, nem a küszöb.
+SHOT_COOLDOWN_S = 0.5
 GOAL_TOL_M = 0.7         # a gólvonalat ennyire megközelítve számít elértnek
 GOAL_LOOKAHEAD = 12      # a góldöntéshez ennyi frame-et nézünk előre
 TURNOVER_SUPPRESS = 12   # lövés után ennyi frame-en belüli labdaeladást elnyomunk
@@ -343,6 +360,10 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     events: list[MatchEvent] = []
     in_zone = {0.0: False, COURT_LENGTH_M: False}
+    # Kapunként az utolsó (elfogadott VAGY elnyomott) lövés-jelölt ideje —
+    # a csendidő ehhez képest telik.
+    last_shot_t: dict = {0.0: None, COURT_LENGTH_M: None}
+    cooldown = SHOT_COOLDOWN_S * fps
     prev = None
 
     for i, f in enumerate(match.frames):
@@ -361,6 +382,12 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
 
             if dxg <= APPROACH_X_M and toward and speed >= SHOT_SPEED_MS and not in_zone[goal_x]:
                 in_zone[goal_x] = True
+                elozo = last_shot_t[goal_x]
+                if elozo is not None and f.t - elozo < cooldown:
+                    # Zaj-sorozat: a csendidő újraindul, esemény nem lesz.
+                    last_shot_t[goal_x] = f.t
+                    continue
+                last_shot_t[goal_x] = f.t
                 is_goal = _reaches_goal_line(match, i, goal_x)
                 attacking = _attacking_team_for_goal(goal_x, config)
                 shooter, release_t = _shooter_release_before(

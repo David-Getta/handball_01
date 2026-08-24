@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.49 óta)
 
+- **Lövés-csendidő: egy lövésből ne legyen négy** (motor) — JAVÍTÁS: az
+  éles meccsen az eseménylistában négy „lövés" állt 1264,6 – 1267,1 mp
+  között, vagyis EGY lövésből négy esemény lett. A hely-alapú
+  ismétlés-szűrő (a labdának ki kell lépnie a kapu-zónából) zajos
+  labda-észlelésnél nem elég: a labda ki-be billeg a zóna szélén.
+  Mostantól ugyanarra a kapura fél másodpercen belül nem indul újabb
+  esemény, és a csendidő minden elnyomott jelöltnél újraindul (a
+  zaj-sorozat így egy eseménnyé olvad). A küszöb szándékosan óvatos:
+  ennél gyorsabban két KÜLÖN lövés fizikailag sem hihető, tehát valódi
+  eseményt nem dobunk el. A ritkább, 1–1,5 másodperces ismétléseket ez
+  nem szűri — azok oka a hibás pálya-vetítés, és a kalibráció
+  rendbetétele oldja meg.
+
 - **Újrafeldolgozás a JAVÍTOTT kalibrációval** (motor + kliens): az
   újrafeldolgozás leggyakoribb oka éppen az, hogy a kalibráció rossz
   volt — a felhasználó ilyenkor újrakalibrál a varázslóban (az a

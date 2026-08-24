@@ -1031,3 +1031,67 @@ def test_sparse_one_timer_shooter_is_the_kink_player():
            if e.type in (EventType.SHOT, EventType.GOAL)]
     assert len(evs) == 1, evs
     assert evs[0].player_id == 2, evs[0]  # a szélső, nem a passzoló
+
+
+def test_lovest_nem_ismetel_a_csendidon_belul():
+    """Zaj-sorozatból EGY lövés lesz, nem négy.
+
+    Éles meccsen a hibás pálya-vetítés miatt a labda ki-be billegett a
+    kapu-zóna szélén, és egyetlen lövésből négy esemény lett (1264,6 /
+    1265,9 / 1266,3 / 1267,1 mp). A hely-alapú debounce ezt nem fogja
+    meg — a csendidő igen.
+    """
+    from handball.pipeline.event_detection import (EventType,
+                                                   SHOT_COOLDOWN_S,
+                                                   detect_shots)
+
+    fps = 25.0
+    frames = []
+    t = 0
+    # Négy egymást követő "kapu-megközelítés", köztük rövid kilépéssel a
+    # zónából — tehát a hely-alapú debounce mindegyiket átengedné.
+    for _ in range(4):
+        for i in range(4):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(2):   # kilépés a zónából (x < 35 m), rövid ideig
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    ev = [e for e in detect_shots(Match(_meta(fps=fps), frames))
+          if e.type in (EventType.SHOT, EventType.GOAL)]
+    # A négy jelölt összesen ~1 másodpercen belül van: egy eseménnyé olvad.
+    assert len(ev) == 1, [e.t for e in ev]
+    assert SHOT_COOLDOWN_S > 0
+
+
+def test_a_csendido_utan_uj_loves_johet():
+    """A csendidő nem nyeli el a KÉSŐBBI, valódi lövést."""
+    from handball.pipeline.event_detection import (EventType,
+                                                   SHOT_COOLDOWN_S,
+                                                   detect_shots)
+
+    fps = 25.0
+
+    def megkozelites(t0):
+        fr = []
+        for i in range(4):
+            fr.append(Frame(t=t0 + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = megkozelites(0)
+    t = len(frames)
+    # Bőven a csendidőn túl (és a zónán kívül) — ez külön lövés.
+    varakozas = int(SHOT_COOLDOWN_S * fps) + 20
+    for i in range(varakozas):
+        frames.append(Frame(t=t + i, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += megkozelites(t + varakozas)
+
+    ev = [e for e in detect_shots(Match(_meta(fps=fps), frames))
+          if e.type in (EventType.SHOT, EventType.GOAL)]
+    assert len(ev) == 2, [e.t for e in ev]
