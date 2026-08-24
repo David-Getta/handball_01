@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.55 óta)
 
+- **A kézi meccs-időablak tényleg felülír mindent** (motor): a kézi
+  ablak leírása azt ígérte, hogy "felülír minden felismerést" — de nem
+  ez történt. A megadott szakasz beolvasása UTÁN az automatikus
+  meccs-ablak-felismerés még lefutott, és lecsíphetett a megadott
+  szakasz elejéből-végéből. Aki perc:másodpercre megmondta, hol a
+  meccs, nem erre számít; ráadásul pont azok a felvételek hívják elő a
+  kézi ablakot, ahol a felismerés amúgy is téved. Kézi ablaknál
+  mostantól a felismerés le sem fut, és a mentés meccs-ablak mezői
+  ismeretlenek maradnak: a jelentés nem állít semmit olyasmiről, amit
+  meg sem vizsgáltunk.
+
 - **A "Félidő (~35 p)" tényleg 35 perc** (motor + kliens): a
   hossz-beállítás korlátját a kliens KOCKÁBAN küldte el, és 25 fps-sel
   számolt — mert a videó valódi képrátáját ott nem ismeri. Egy 30

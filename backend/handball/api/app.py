@@ -933,6 +933,11 @@ def create_app():
                     # elmentjük a részeredményt, így áramszünet/összeomlás után
                     # sem vész el minden — a könyvtárban ott a legutóbbi állapot.
                     checkpoint_save=_checkpoint(job),
+                    # A felhasználó megadta a meccs időablakát: az ő
+                    # állítása erősebb, mint az automatikus felismerésé —
+                    # az nem csíphet le többet a megadott szakaszból.
+                    manual_window=(body.get("start_s") is not None
+                                   or body.get("end_s") is not None),
                 )
                 cancelled = bool(job.pop("cancel", False))
                 preempted = bool(job.pop("preempted", False))

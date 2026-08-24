@@ -776,7 +776,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             home_team="Csapat A", away_team="Csapat B", ball_smooth=True,
             track_smooth=True, calib_region="full", calib_rotate=False,
             calibs=None, jersey_ocr=False, stop_check=None,
-            checkpoint_save=None, checkpoint_every_s=180.0):
+            checkpoint_save=None, checkpoint_every_s=180.0,
+            manual_window=False):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -787,6 +788,12 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     SZELÍDEN leáll — az addig feldolgozott kockákra az utómunka lefut, és
     a (részleges) Match visszaadódik. Órákig tartó feldolgozásnál ez azt
     jelenti, hogy a Megszakítás nem dobja el az elvégzett munkát.
+
+    `manual_window`: a felhasználó MEGMONDTA a meccs időablakát
+    (perc:másodperc). Ilyenkor az automatikus meccs-ablak-felismerés nem
+    vág tovább — az ő állítása erősebb, mint a felismerésé. Enélkül a
+    kézi ablak ígérete ("felülír minden felismerést") nem lenne igaz:
+    a felismerés a megadott szakasz elejéből-végéből még lecsíphetne.
     """
     import cv2
     import numpy as np
@@ -1006,11 +1013,23 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         # feldolgozásnál a VÉGÉT nem vágjuk — a folytatás oda fűz vissza.
         from handball.pipeline.game_window import trim_to_game
         _gw_info: dict = {}
-        gw = trim_to_game(match, tail=not partial, window_out=_gw_info)
+        if manual_window:
+            # A felhasználó megmondta, hol a meccs — az ő állítása
+            # erősebb, mint a felismerésé. Vágni nem vágunk, de a
+            # felismerés eredményét kiírjuk: ha ő is és a motor is
+            # ugyanoda teszi a meccs kezdetét, az megerősítés.
+            gw = None
+            _gw_info["manual"] = True
+            say("meccs-ablak: a KÉZI időablak érvényes, automatikus "
+                "vágás nincs")
+        else:
+            gw = trim_to_game(match, tail=not partial, window_out=_gw_info)
         if gw is not None:
             say(f"meccs-ablak: eleje {gw['head_cut_s']:.0f}s, vége "
                 f"{gw['tail_cut_s']:.0f}s levágva (bemelegítés / meccs "
                 "előtti-utáni rész)")
+        elif _gw_info.get("manual"):
+            pass  # már kimondtuk fentebb
         elif _gw_info.get("found"):
             say("meccs-ablak: a felvétel eleje-vége is meccs, nincs mit "
                 "levágni")
@@ -1025,9 +1044,12 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 "időablakát")
         # A felismerés eredménye a mentésbe is: enélkül a minőség-jelentés
         # nem tudná megmondani, kimaradt-e a bemelegítés.
-        match.meta.game_window_found = bool(_gw_info.get("found"))
-        match.meta.game_trim_head_s = float(_gw_info.get("head_cut_s") or 0.0)
-        match.meta.game_trim_tail_s = float(_gw_info.get("tail_cut_s") or 0.0)
+        if not manual_window:
+            match.meta.game_window_found = bool(_gw_info.get("found"))
+            match.meta.game_trim_head_s = float(
+                _gw_info.get("head_cut_s") or 0.0)
+            match.meta.game_trim_tail_s = float(
+                _gw_info.get("tail_cut_s") or 0.0)
 
         # Félidő-érzékelés + térfélcsere-normalizálás: teljes meccset egyben
         # tartalmazó felvételnél a 2. félidő koordinátáit tükrözi, hogy a

@@ -94,3 +94,39 @@ def test_ablak_nelkul_nem_nyul_a_parameterekhez(tmp_path):
     par = _params(root, r.json()["match_id"])
     assert par["start"] == 5
     assert par["max"] == 3
+
+
+def test_kezi_ablaknal_nincs_automatikus_vagas(tmp_path):
+    """A kézi ablak ígérete: "felülír minden felismerést".
+
+    Eddig ez nem volt igaz — a megadott szakasz beolvasása UTÁN az
+    automatikus meccs-ablak még lecsíphetett az elejéből-végéből. Aki
+    perc:másodpercre megmondta, hol a meccs, nem erre számít.
+
+    Kézi ablaknál a felismerés le sem fut, tehát a mentés meccs-ablak
+    mezői ismeretlenek (None) maradnak: a jelentés így sem
+    figyelmeztetést, sem megnyugtatást nem ad olyasmiről, amit meg sem
+    vizsgáltunk.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from scripts.process_video import process
+
+    video = tmp_path / "meccs.mp4"
+    _video(video, frames=120)
+    m = process(str(video), None, stride=2, max_frames=20,
+                match_id="kezi", manual_window=True)
+    assert m.meta.game_window_found is None
+    assert m.meta.game_trim_head_s is None
+
+
+def test_kezi_ablak_nelkul_lefut_a_felismeres(tmp_path):
+    """Ablak nélkül viszont MEGVIZSGÁLJUK, és a mentés meg is mondja az
+    eredményt — enélkül a jelentés nem tudná, kimaradt-e a bemelegítés."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from scripts.process_video import process
+
+    video = tmp_path / "meccs.mp4"
+    _video(video, frames=120)
+    m = process(str(video), None, stride=2, max_frames=20, match_id="auto")
+    assert m.meta.game_window_found is not None
+    assert m.meta.game_trim_head_s is not None
