@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.53 óta)
+## Kiadatlan (a v0.1.54 óta)
+
+## v0.1.54 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: a jelentések mostantól MAGUK mondják meg,
+> mennyire hihetők. Az edzői összefoglaló és a nyomtatható
+> meccsjelentés is ELÖL visz egy figyelmeztetést, ha a
+> feldolgozás gyenge volt — a pontszámmal, a kifejezetten
+> bizonytalan réteg-családokkal és az első teendővel. Eddig ezt
+> csak egy külön ablakban lehetett megtudni, illetve a nyomtatott
+> lap legalján. Emellett az újrafeldolgozás gombja megmondja, mit
+> visz és mit nem.
 
 - **Az edzői összefoglaló megmondja, mennyire hihető** (motor +
   kliens): a jelentés minden mondata magabiztosan fogalmaz — így is
