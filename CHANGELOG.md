@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.54 óta)
+## Kiadatlan (a v0.1.55 óta)
+
+## v0.1.55 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ebben a kiadásban nincs új elemzés — a
+> VÁRAKOZÁS lett rövidebb. A detektálás utáni számolás (az
+> ~500 réteg kiértékelése) feleannyi idő alatt fut le, mint
+> eddig. Az ítéletek egy betűt sem változtak: az őr-jelentések
+> (sorrend-függés, tükrözés, stride) szám szerint ugyanazok,
+> mint a gyorsítás előtt.
+
 
 - **A feldolgozás utáni számolás 40%-kal gyorsabb** (motor): a
   detektálás után a ~500 elemző réteg kiszámítása is percekbe telik egy
