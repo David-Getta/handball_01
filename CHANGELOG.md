@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.48 óta)
+## Kiadatlan (a v0.1.49 óta)
+
+## v0.1.49 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ez a kör a KALIBRÁCIÓRÓL szól — az első éles
+> meccs tanulsága az volt, hogy a rosszul bejelölt pálya minden
+> további számot elvisz. Mostantól a kalibráló képernyőn egy
+> gombbal betölthető a sarok-javaslat a felismert pályavonalakból,
+> az indítás rákérdez, ha nincs kalibráció, a futó feldolgozás
+> pedig már pár perc után szól, ha az eredmény használhatatlan
+> lesz — így nem megy el rá egy óra. A kész meccs jelentése
+> kimondja, ha kalibráció nélkül futott.
 
 - **Korai riasztás a futó feldolgozáson** (motor + kliens): egy meccs
   feldolgozása fél-egy óra, és eddig CSAK a végén derült ki, ha az
