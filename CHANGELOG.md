@@ -3,7 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.52 óta)
+## Kiadatlan (a v0.1.53 óta)
+
+## v0.1.53 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: két javítás ugyanabból a hibaosztályból — a
+> hátralévő idő becslése olyankor tévedett, amikor a döntésed
+> (megvárod-e, vagy elmész a gép mellől) éppen rajta múlik. A
+> becslés eddig a minőségi profiltól függetlenül és a TELJES
+> videóval számolt; mostantól csak azonos profilú korábbi
+> futásokból, és a megadott meccs-időablakra.
 
 - **A hátralévő idő becslése PROFIL-FÜGGŐ lett** (motor + kliens) —
   JAVÍTÁS: a becslés eddig a gépen mért ütemet a minőségi profiltól
