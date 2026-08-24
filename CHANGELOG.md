@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.61 óta)
 
+- **Új teszt: a TELJES lánc egy futásban** (teszt): a modul-tesztek
+  darabonként őrzik a motort, a réteg-regiszter őrei pedig szimulált
+  meccsen néznek mindent — a kettő közt maradt egy rés: a valódi
+  útvonal, ahol egy VIDEÓBÓL indulunk, a detektálás és az utómunka
+  lefut, és a végén a felhasználó jelentést meg csomagot kap. Egy nap
+  alatt hét idő-küszöböt és több némán kimaradó ágat javítottunk —
+  pont az ilyen kör mutatja meg, ha valamelyik javítás elrontotta a
+  valódi utat. Az új teszt végigmegy rajta: előellenőrzés →
+  feldolgozás (másodperces hossz-korláttal) → a mentés meccs-ablak
+  mezői → minőség-jelentés (feldolgozott szakasz, pótolt labda,
+  korábbi pontszámok) → meccs-csomag (minden réteg elkészül) →
+  nyomtatható jelentés.
+
 - **A csomag szöveges lapja is szól a kimaradt elemzésekről** (motor):
   az elhasalt rétegek listája a v0.1.61 óta bekerül a csomag
   JSON-jába — de a ZIP-et megkapó edző jellemzően az
