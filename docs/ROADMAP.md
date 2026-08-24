@@ -119,5 +119,19 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   épít az egy-kockás váltásra. Ezért ez külön, szándékos lépés legyen, valódi
   meccsen validálva — nem egy mellékesen betett küszöb.
 
+  **Második próbálkozás: pattanás-szűrő** — a rövid, UGYANODA visszatérő
+  kitérőt (A → B → A) néztük zajnak, hogy a szemantikát ne kelljen
+  bántani. Ez sem járható: a fixture-ök szerint az 1 → 2 → 1 → 2 minta
+  legitim oda-vissza passzolás is lehet, és a kettőt CSAK az időtartam
+  különbözteti meg — vagyis ugyanoda jutunk vissza. A tanulság: a
+  megkülönböztető jel a birtoklás HOSSZA, és a jelenlegi fixture-ök
+  kockánként váltó birtokost modelleznek, ami valódi meccsen nem fordul
+  elő. A rendes lépés tehát: (1) a fixture-ök átírása valósághű
+  birtoklás-hosszra, (2) a minimális tartás bevezetése, (3) valódi
+  meccsen való összevetés a régi számokkal.
+
   Amíg nincs meg: a felállás/bemelegítés okozta hamis eladásokat a KÉZI
-  meccs-időablak vágja ki (a felvétel eleje nem kerül be az elemzésbe).
+  meccs-időablak vágja ki (a felvétel eleje nem kerül be az elemzésbe),
+  a minőség-jelentés pedig kimondja, ha az eladás-ütem hihetetlen
+  (`TURNOVER_RATE_MAX_PER_MIN`) — tehát a felhasználó legalább tudja,
+  mikor ne higgyen a számnak.
