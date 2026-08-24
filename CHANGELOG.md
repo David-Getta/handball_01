@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.57 óta)
 
+- **Új őrök: a rossz feldolgozáson sem tűnhet el réteg nyom nélkül**
+  (teszt): a meccs-csomag minden elemző rétegét `try/except` védi, hogy
+  egy réteg hibája ne vigye el a többit — a hátulütő, hogy egy elhasaló
+  réteg NÉMÁN eltűnik, és a felhasználó azt hiszi, az az elemzés nem is
+  létezik. Eddig egy őr nézte ezt, a JÓ mintameccsen. Most a rossz eset
+  párja is: (1) labda nélküli feldolgozás (távoli, széles felvételen
+  reális), (2) két másodperces töredék (a megszakadt feldolgozás
+  részleges mentése). Mindkettőn minden réteg-kulcsnak meg kell
+  jelennie — a rétegnek nem kell mondania semmit (üres ítélet a helyes
+  válasz kevés mintára), de a jelentés nem lehet némán hiányos. Épp
+  ezeken a futásokon a legfontosabb, hogy a jelentés elmondja, mi
+  történt.
+
 ## v0.1.57 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: a "kocka vagy másodperc" kiadás. A feldolgozás

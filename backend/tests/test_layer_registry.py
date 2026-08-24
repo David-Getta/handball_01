@@ -626,3 +626,100 @@ def test_az_ido_kuszobok_nem_esnek_vissza_kockara():
         "IDŐTARTAM-küszöb kocka-alakja futó kódban — a ritkítás miatt ez "
         "profilonként mást jelent; a másodperces párt kell használni: "
         + "; ".join(visszaeses))
+
+
+def _client_with_sovany_match():
+    """Kliens egy SZÁNDÉKOSAN sovány meccsel: mozgás van, labda nincs.
+
+    Ez nem elméleti eset: pont ez történik, ha a labda-észlelés nem
+    működik (távoli, széles felvétel, rossz megvilágítás). A
+    felhasználó ilyenkor is megnyitja a jelentést — és ha egy réteg
+    ezen elhasal, a `_layer` lenyeli a hibát, a szakasz pedig NYOM
+    NÉLKÜL eltűnik. Épp akkor, amikor a legnagyobb szükség lenne rá,
+    hogy a jelentés elmondja, mi történt.
+    """
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
+    m = simulate_ground_truth(duration_s=40, fps=25.0, seed=5,
+                              shots_per_min=12.0)
+    m.meta.match_id = f"{m.meta.match_id}-sovany"
+    for fr in m.frames:
+        fr.ball = None                       # a labda sehol nem látszik
+    matches_dir = Path(_tmp) / "data" / "matches"
+    matches_dir.mkdir(parents=True, exist_ok=True)
+    (matches_dir / f"{m.meta.match_id}.json").write_text(
+        json.dumps(m.to_dict()), encoding="utf-8")
+    return TestClient(create_app()), m.meta.match_id
+
+
+@pytest.fixture(scope="module")
+def sovany_package_analyses():
+    """A sovány meccs elemzés-JSON-ja — egyszer exportálva."""
+    client, mid = _client_with_sovany_match()
+    r = client.post(f"/matches/{mid}/package/export", json={"clip_types": []})
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    pkg = client.get(f"/matches/{mid}/package/download")
+    assert pkg.status_code == 200
+    z = zipfile.ZipFile(io.BytesIO(pkg.content))
+    return json.loads(z.read("elemzesek.json").decode("utf-8"))
+
+
+def _client_with_toredek_match():
+    """Kliens egy TÖREDÉK meccsel: két másodpercnyi felvétel.
+
+    Ez a "a feldolgozás pár másodperc után megszakadt" eset — a
+    részleges mentés a könyvtárba kerül, és a felhasználó megnyitja.
+    Egy nullával osztó vagy üres listát indexelő réteg itt bukna el.
+    """
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
+    m = simulate_ground_truth(duration_s=2, fps=25.0, seed=7)
+    m.meta.match_id = f"{m.meta.match_id}-toredek"
+    matches_dir = Path(_tmp) / "data" / "matches"
+    matches_dir.mkdir(parents=True, exist_ok=True)
+    (matches_dir / f"{m.meta.match_id}.json").write_text(
+        json.dumps(m.to_dict()), encoding="utf-8")
+    return TestClient(create_app()), m.meta.match_id
+
+
+@pytest.fixture(scope="module")
+def toredek_package_analyses():
+    """A töredék meccs elemzés-JSON-ja — egyszer exportálva."""
+    client, mid = _client_with_toredek_match()
+    r = client.post(f"/matches/{mid}/package/export", json={"clip_types": []})
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    pkg = client.get(f"/matches/{mid}/package/download")
+    assert pkg.status_code == 200
+    z = zipfile.ZipFile(io.BytesIO(pkg.content))
+    return json.loads(z.read("elemzesek.json").decode("utf-8"))
+
+
+def test_egy_reteg_sem_hasal_el_a_toredek_meccsen(toredek_package_analyses):
+    """Két másodpercnyi felvételen SEM tűnhet el réteg nyom nélkül.
+
+    A megszakadt feldolgozás részleges mentése a könyvtárba kerül, és
+    a felhasználó megnyitja. A rétegnek itt sincs mit mondania — de a
+    kulcsnak ott kell lennie, hogy a jelentés ne legyen NÉMÁN hiányos.
+    """
+    names = _registered_package_layers()
+    missing = sorted(set(names) - set(toredek_package_analyses))
+    assert not missing, (
+        "két másodperces meccsen NÉMÁN elbukó rétegek: "
+        + ", ".join(missing))
+
+
+def test_egy_reteg_sem_hasal_el_a_labda_nelkuli_meccsen(
+        sovany_package_analyses):
+    """Labda nélküli feldolgozáson SEM tűnhet el réteg nyom nélkül.
+
+    A meglévő őr a jó mintameccsre néz; ez a rossz eset párja. A
+    rétegnek nem kell mondania semmit (üres/None ítélet a helyes
+    válasz kevés mintára), de a KULCSNAK ott kell lennie — különben a
+    jelentés némán hiányos, és a felhasználó azt hiszi, az adott
+    elemzés nem is létezik.
+    """
+    names = _registered_package_layers()
+    assert len(names) > 200, "a regisztry-olvasás elromlott"
+    missing = sorted(set(names) - set(sovany_package_analyses))
+    assert not missing, (
+        "labda nélküli meccsen NÉMÁN elbukó rétegek: " + ", ".join(missing))
