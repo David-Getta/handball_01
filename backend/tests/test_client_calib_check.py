@@ -139,3 +139,20 @@ def test_az_ujrafeldolgozas_megmondja_mit_visz_es_mit_nem():
     assert "meccs időablakát" in src
     assert "EREDETI indításból" in src
     assert "Indítás így" in src and "Mégse" in src
+
+
+def test_a_megbizhatosag_a_jelentes_folott_latszik():
+    """A figyelmeztetés az összefoglaló FÖLÖTT áll, más formában.
+
+    Az edzői jelentés minden mondata magabiztosan fogalmaz — így is kell
+    írni. De ha a feldolgozás gyenge volt, ezek a mondatok zajról
+    szólnak, és ezt az edzőnek az első pillantásra tudnia kell, nem egy
+    külön ablakban, amit nem biztos, hogy megnyit.
+    """
+    src = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+           / "ui" / "summary_panel.dart").read_text(encoding="utf-8")
+    assert '"caveat"' in src
+    assert "MENNYIRE BÍZHATSZ EBBEN" in src
+    # A figyelmeztetés a szekciók ELŐTT álljon a listában.
+    assert src.index("MENNYIRE BÍZHATSZ EBBEN") < src.index(
+        "EDZŐI ÖSSZEFOGLALÓ")

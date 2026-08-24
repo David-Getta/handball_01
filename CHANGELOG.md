@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.53 óta)
 
+- **Az edzői összefoglaló megmondja, mennyire hihető** (motor +
+  kliens): a jelentés minden mondata magabiztosan fogalmaz — így is
+  kell írni egy edzői jelentést. De ha a feldolgozás gyenge volt (a
+  nézőtér is a pályára került, kevés a labda-észlelés), akkor ezek a
+  mondatok zajról szólnak, és eddig ezt csak egy külön ablakban lehetett
+  megtudni, amit nem biztos, hogy bárki megnyit. Az összefoglaló
+  mostantól 50/100 alatt (vagy ha van rangsorolt teendő) visz egy
+  figyelmeztetést: a pontszámot, a kifejezetten bizonytalan
+  réteg-családokat (labda- és pálya-alapú) és az első teendőt. A
+  felületen a jelentés FÖLÖTT áll, más formában; a szöveges alakban is
+  elöl. A szekciók szerkezete változatlan (külön mezőn megy), és üres
+  meccsre továbbra sem mondunk semmit.
+
 - **A "gyanúsan sok eladott labda" magyarázata frissült** (motor): a
   jelzés szövege még a JAVÍTÁS ELŐTTI működést írta le ("a
   birtokos-váltás egyetlen képkockából eldől, és kockánként átugrik a

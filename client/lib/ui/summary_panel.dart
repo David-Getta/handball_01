@@ -675,9 +675,46 @@ class SummaryPanel extends StatelessWidget {
         ((coach?["sections"] as List?) ?? const []).cast<Map<String, dynamic>>();
     final highlights =
         ((coach?["highlights"] as List?) ?? const []).cast<String>();
+    final caveat = coach?["caveat"] as String?;
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
+        // MEGBÍZHATÓSÁG: az összefoglaló minden mondata magabiztosan
+        // fogalmaz — így is kell írni egy edzői jelentést. De ha a
+        // feldolgozás gyenge volt, ezek a mondatok zajról szólnak, és
+        // ezt az edzőnek AZ ELSŐ pillantásra tudnia kell, nem egy külön
+        // ablakban, amit nem biztos, hogy megnyit.
+        if (caveat != null && caveat.isNotEmpty) ...[
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.away.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.away.withOpacity(0.45)),
+            ),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+              const Icon(Icons.report_problem_outlined,
+                  size: 16, color: AppColors.away),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("MENNYIRE BÍZHATSZ EBBEN",
+                          style: AppText.sectionLabel
+                              .copyWith(color: AppColors.away)),
+                      const SizedBox(height: 2),
+                      Text(caveat,
+                          style: AppText.label.copyWith(
+                              fontSize: 12.5,
+                              color: AppColors.textPrimary)),
+                    ]),
+              ),
+            ]),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         if (sections.isNotEmpty) ...[
           Row(children: [
             const Icon(Icons.auto_awesome, size: 14, color: AppColors.gold),

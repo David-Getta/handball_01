@@ -7751,11 +7751,67 @@ def coach_summary(match: Match) -> dict:
         return _coach_summary_cached(match)
 
 
+# Az összefoglaló ELÉ kerülő megbízhatóság-figyelmeztetés küszöbe. E
+# pontszám alatt az elemzés állításai bizonytalan alapokon állnak, és
+# ezt az edzőnek AZ ELSŐ mondatban tudnia kell — nem a hetedik szekció
+# után, és nem egy külön ablakban, amit nem biztos, hogy megnyit.
+SUMMARY_QUALITY_WARN = 50
+
+
+def _quality_caveat(match: Match) -> str | None:
+    """Megbízhatóság-figyelmeztetés gyenge feldolgozásnál (vagy None).
+
+    Az összefoglaló minden szekciója magabiztosan fogalmaz — így is kell
+    írni egy edzői jelentést. De ha a feldolgozás gyenge volt (a
+    nézőtér is a pályára került, kevés a labda-észlelés), akkor ezek a
+    mondatok zajról szólnak. A jelentésnek magának kell kimondania,
+    mielőtt bárki tervet épít rá.
+    """
+    from .quality import analysis_confidence, compute_quality_report
+
+    # ÜRES meccsre nincs mit mondani — sem állítás, sem figyelmeztetés.
+    # (A hívó szerződése: üres meccs → üres összefoglaló.)
+    if not match.frames:
+        return None
+
+    q = compute_quality_report(match)
+    pont = q.get("score")
+    teendo = q.get("next_action")
+    if pont is None or (pont >= SUMMARY_QUALITY_WARN and not teendo):
+        return None
+    # A labda- és a pálya-alapú réteg-családok külön sora: ezek adják a
+    # jelentés állításainak nagy részét, tehát ha ők bizonytalanok, azt
+    # nevesíteni kell.
+    try:
+        sorok = analysis_confidence(match)
+    except Exception:
+        sorok = []
+    gyenge = [r["label"] for r in sorok
+              if r.get("available") is False
+              and r.get("layer") in ("ball", "court")]
+    body = (f"A feldolgozás minősége {pont}/100 — az alábbi "
+            "megállapítások ennyire megbízhatóak.")
+    if gyenge:
+        body += (" Ezek a réteg-családok kifejezetten bizonytalanok: "
+                 + ", ".join(gyenge) + ".")
+    if teendo:
+        body += f" Első teendő: {teendo}"
+    return body
+
+
 def _coach_summary_cached(match: Match) -> dict:
     """Az összefoglaló tényleges felépítése (lásd `coach_summary`)."""
     home, away = _team_names(match)
     sections: list[dict] = []
     highlights: list[str] = []
+
+    # A megbízhatóság-figyelmeztetés KÜLÖN mezőn megy (nem szekció): a
+    # felület a jelentés fölé teheti, más formában — és a szekciók
+    # szerkezete (az első a meccs története) érintetlen marad.
+    try:
+        caveat = _quality_caveat(match)
+    except Exception:
+        caveat = None  # a figyelmeztetés hibája ne vigye el az összefoglalót
 
     for build in (_story_section, _events_section, _xg_section,
                   _style_section):
@@ -8118,7 +8174,10 @@ def _coach_summary_cached(match: Match) -> dict:
     # felsorolást építeni.
     for sec in sections:
         sec["lines"] = split_sentences(sec.get("body", ""))
-    return {"sections": sections, "highlights": highlights}
+    return {"sections": sections, "highlights": highlights,
+            # None, ha a feldolgozás rendben volt; különben egy mondat
+            # arról, mennyire hihetők az alábbi állítások.
+            "caveat": caveat}
 
 
 # Mondathatár: pont/felkiáltó/kérdőjel UTÁN álló szóköz, amit nagybetű
@@ -8147,6 +8206,9 @@ def coach_summary_text(match: Match) -> str:
     """Az összefoglaló sima szövegként (jelentésbe/vágólapra)."""
     data = coach_summary(match)
     lines: list[str] = []
+    if data.get("caveat"):
+        # A figyelmeztetés a szöveges alakban is ELÖL áll.
+        lines.append(f"Mennyire bízhatsz ebben: {data['caveat']}")
     for s in data["sections"]:
         lines.append(f"{s['title']}: {s['body']}")
     if data["highlights"]:
