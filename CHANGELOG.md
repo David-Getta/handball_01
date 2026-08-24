@@ -15,6 +15,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   fade-rétegek a mintameccsen nem szólalnak meg. Mind az öt javítva a
   közös `add(...)` alakra, ami a tétel szerkezetét (terület, cím,
   miért, gyakorlat) és a darabszám-korlátot is garantálja.
+- **A hajrá-rétegek felderítés-oldali szabályai tesztet kaptak**
+  (teszt): a réteg és a felület megléte nem elég — a kulcsnak MEG IS
+  kell szólalnia a megfelelő adatra. Egy elgépelt mezőnév vagy egy
+  rossz irányú összehasonlítás néma szabályt ad, és semmi nem hasal
+  el. Az öt új edzői kulcs és az öt párosított meccsterv-szabály
+  mostantól mind ellenőrzött (a beálló-szabály szándékosan más
+  falformára szól, mint a szélső-szabály — ezt is rögzíti a teszt).
 - **Új őr: az edzés-tételek csak a közös segéden át jöhetnek** (teszt):
   a fenti hiba a "némán eltűnő" fajtából való, amit futtatással nem
   lehet elkapni (a szabály amúgy sem szólalt volna meg). Az őr ezért a

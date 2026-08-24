@@ -2599,3 +2599,68 @@ def test_a_figyelmeztetes_a_kliensnek_kuldott_szotarban_is_ott_van():
     assert d["caveat"] and "FIGYELEM" in d["caveat"]
     assert report_to_dict(ScoutingReport(team="home",
                                          team_name="A"))["caveat"] is None
+
+
+def _hajra_opp():
+    """Ellenfél-jelentés, amiben MINDEN hajrá-jel megszólal."""
+    from handball.pipeline.scouting import ScoutingReport
+
+    opp = ScoutingReport(team="away", team_name="Ellen")
+    opp.lhf_fh_sum_m, opp.lhf_fh_n = 850.0, 100     # fal 8,5 → 6,5 m
+    opp.lhf_sh_sum_m, opp.lhf_sh_n = 650.0, 100
+    opp.rtf_fh_sum_s, opp.rtf_fh_n = 16.0, 4        # hazaérés 4 → 10 mp
+    opp.rtf_sh_sum_s, opp.rtf_sh_n = 40.0, 4
+    opp.wif_fh_wing, opp.wif_fh_n = 6, 8            # szél 75% → 12%
+    opp.wif_sh_wing, opp.wif_sh_n = 1, 8
+    opp.puf_fh_pivot, opp.puf_fh_n = 6, 8           # beálló 75% → 12%
+    opp.puf_sh_pivot, opp.puf_sh_n = 1, 8
+    opp.fpr_signals, opp.fpr_matches = 4, 1         # 4 jel egy meccsen
+    return opp
+
+
+def test_a_hajra_retegek_edzoi_kulcsai_tenyleg_megszolalnak():
+    """A réteg + a felület megléte nem elég: a kulcsnak MEG IS kell
+    szólalnia a megfelelő adatra.
+
+    Egy elgépelt mezőnév vagy egy rossz irányú összehasonlítás néma
+    kulcsot ad — semmi nem hasal el, a felhasználó pedig sosem tudja
+    meg, hogy az elemzés létezik. (Az edzés-fókusz oldalán pontosan
+    ez történt öt szabállyal.)
+    """
+    from handball.pipeline.scouting import _coach_keys
+
+    _s, _w, keys = _coach_keys(_hajra_opp())
+    vart = ("faluk a 2. félidőre visszahúzódik",
+            "visszaállásuk a 2. félidőre lassul",
+            "támadásuk a 2. félidőre beszűkül",
+            "beállójuk a 2. félidőre elfogy",
+            "fáradás-jel szólal meg náluk")
+    nema = [v for v in vart if not any(v in k for k in keys)]
+    assert not nema, f"néma edzői kulcsok: {nema}"
+
+
+def test_a_hajra_retegek_meccsterv_szabalyai_tenyleg_megszolalnak():
+    """A párosított szabályok ugyanígy: a saját oldal erősségével
+    együtt meg kell szólalniuk."""
+    from handball.pipeline.scouting import ScoutingReport, matchup_plan
+
+    opp = _hajra_opp()
+    own = ScoutingReport(team="home", team_name="Mi")
+    own.sr_far_shots, own.sr_far_goals = 12, 5        # 450: távoli lövés
+    own.fbc_breaks = 5                                # 451: kontra
+    own.defense_main = "6-0"                          # 452: tömör fal
+    own.clutch_matches = 2                            # 453: hajrá-erő
+    own.clutch_goals_for, own.clutch_goals_against = 9, 4
+    plan = matchup_plan(own, opp) or []
+    vart = ("faluk a 2. félidőre visszahúzódik",
+            "visszaállásuk a 2. félidőre lassul",
+            "támadásuk a 2. félidőre beszűkül",
+            "fáradás-jel szólal meg náluk")
+    nema = [v for v in vart if not any(v in p for p in plan)]
+    assert not nema, f"néma meccsterv-szabályok: {nema}"
+
+    # A beálló-szabály KILÉPŐS falat kíván (a tömör 6-0 a szélső-szabályé):
+    # a kettő szándékosan más falformára szól.
+    own.defense_main = "3-2-1"
+    plan2 = matchup_plan(own, opp) or []
+    assert any("beállójuk a 2. félidőre elfogy" in p for p in plan2)
