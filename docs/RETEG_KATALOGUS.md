@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **500 réteg**, modulonként csoportosítva; a
+Összesen **501 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (96)
+## attack_types (97)
 
 | Réteg | Mit mér |
 |---|---|
@@ -71,6 +71,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `pivot_service` | Beálló-futtatás: MOZGÁSBÓL vagy ÁLLVA kapja-e a beálló a labdát. |
 | `pivot_side` | Beálló-oldal: MELYIK OLDALON dolgozik a beállójuk. |
 | `pivot_usage` | Beálló-terhelés: a támadások mekkora része megy át a beállón, és |
+| `pivot_usage_fade` | Beálló-bevonás esése: ELJUT-E MÉG A LABDA a beállóhoz a hajrában. |
 | `post_goal_rush` | Kapkodás-index: KAPOTT GÓL UTÁN rövidül vagy nyúlik a támadásuk. |
 | `pullback_rate` | Visszahozott támadások: LEZÁRJÁK vagy ÚJRAJÁRATJÁK a betörést. |
 | `rebound_pair_roles` | Lepattanópáros-poszt: MELYIK LÖVÉSRE KI érkezik a lepattanóra. |

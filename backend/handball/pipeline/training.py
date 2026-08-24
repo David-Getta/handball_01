@@ -1366,6 +1366,27 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 474) Elfogyó beálló: ha a SAJÁT labdánk a 2. félidőre nem megy be
+    # a hatosra, a fal nyugodtan dolgozhat kifelé ellenünk.
+    try:
+        from .attack_types import PIVOT_FADE_DROP_PCT, pivot_usage_fade
+        puf474 = pivot_usage_fade(match, config)
+        for side in ("home", "away"):
+            r474 = puf474[side]
+            if (r474["drop_pct"] is None
+                    or r474["drop_pct"] < PIVOT_FADE_DROP_PCT):
+                continue
+            focus[side].append(
+                f"beálló-bejátszás a hajrában: a beállós támadásaink "
+                f"aránya a 2. félidőre {r474['fh_pct']:.0f}% → "
+                f"{r474['sh_pct']:.0f}%-ra esett — fáradtan nem a beálló "
+                "mozgása hiányzik, hanem a BÁTOR PASSZ a kiszolgálótól "
+                "(takarásba, testek közé). 3x6 perc bejátszás-gyakorlat "
+                "FÁRADTAN, két passzív védővel a passzsávban, és a "
+                "hajrára nevezz meg egy felelős kiszolgáló-posztot")
+    except Exception:
+        pass
+
     # 473) Halmozott fáradás: ha egy meccsen HÁROM fáradás-jel is
     # megszólal, az nem egy-egy szám, hanem a hatvan perc kérdése.
     try:

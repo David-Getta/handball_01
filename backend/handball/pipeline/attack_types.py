@@ -2473,6 +2473,75 @@ def wing_involvement(match: Match,
     return out
 
 
+# Beálló-bevonás esése: félidőnként ennyi mért támadás kell az
+# ítélethez, és ennyi százalékponttal kell esnie a beállós támadások
+# arányának. Ugyanaz a küszöb-logika, mint a szélső-bevonásnál: húsz
+# támadásból kettő különbség még a mintavétel zaja.
+PIVOT_FADE_MIN_ATTACKS = 6
+PIVOT_FADE_DROP_PCT = 10.0
+
+
+def pivot_usage_fade(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Beálló-bevonás esése: ELJUT-E MÉG A LABDA a beállóhoz a hajrában.
+
+    A beálló-terhelés (`pivot_usage`) megmondja, a támadásaik mekkora
+    része megy át a beállón; ez a réteg azt teszi hozzá, hogy
+    ELFOGY-E a meccs alatt. A felismert félidő mentén kettébontva.
+
+    Edzőileg: a beállóba adott labda a kézilabda legnehezebb passza —
+    takarásba, testek közé, pontos időzítéssel kell érkeznie. Fáradtan
+    ez fogy el először, és nem azért, mert a beálló nem dolgozik,
+    hanem mert a KISZOLGÁLÓ nem meri (vagy nem látja) beadni. A
+    következmény: a hatos vonal elárvul, a fal nyugodtan kifelé
+    dolgozhat, és a támadás átlövésekbe szorul.
+
+    Ez más kérdés, mint a szélső-bevonás esése
+    (`wing_involvement_fade`): az a labda SZÉLES ívű járatásáról szól
+    (lábmunka), ez a MÉLYSÉGI bejátszásról (bátorság és időzítés). Egy
+    csapat elveszítheti a beállóját úgy is, hogy közben végig
+    széthúzva játszik.
+
+    Ellenfélként a hajrára a fal középső hármasa kifelé segíthet;
+    saját csapatra a teendő a kiszolgáló-poszt kijelölése a hajrára —
+    fáradtan nem a beálló mozgása hiányzik, hanem a bátor passz.
+
+    Visszatérés csapatonként: {"fh_pct", "fh_attacks", "sh_pct",
+    "sh_attacks", "drop_pct"} — az 1./2. félidei beállós arány és a
+    mért támadások száma; drop_pct az esés százalékpontban (POZITÍV =
+    elfogy a beálló), None, ha nincs félidő-jel vagy kevés a támadás.
+    """
+    from ..models.tracking import Match as _M
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_pct": None, "fh_attacks": 0, "sh_pct": None,
+             "sh_attacks": 0, "drop_pct": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out          # félidő-jel nélkül nincs mihez viszonyítani
+    for elotag, felido in (("fh", True), ("sh", False)):
+        resz = _M(match.meta, [f for f in match.frames
+                               if (f.t <= ht) == felido])
+        pu = pivot_usage(resz, config)
+        for side in ("home", "away"):
+            rec = pu[side]
+            out[side][f"{elotag}_attacks"] = rec["attacks"]
+            if rec["attacks"] > 0:
+                out[side][f"{elotag}_pct"] = round(
+                    100.0 * rec["pivot_attacks"] / rec["attacks"], 1)
+    for side in ("home", "away"):
+        rec = out[side]
+        if (rec["fh_pct"] is not None and rec["sh_pct"] is not None
+                and rec["fh_attacks"] >= PIVOT_FADE_MIN_ATTACKS
+                and rec["sh_attacks"] >= PIVOT_FADE_MIN_ATTACKS):
+            # Pozitív = elfogy a beálló (a 2. félidőben KEVESEBB
+            # támadás megy át rajta).
+            rec["drop_pct"] = round(rec["fh_pct"] - rec["sh_pct"], 1)
+    return out
+
+
 # Szélső-bevonás esése: félidőnként ennyi mért támadás kell az
 # ítélethez (kevesebb, mint az alap-rétegé — egy félidőben nincs is
 # annyi), és ennyi százalékponttal kell esnie a szél-bevonásnak, hogy

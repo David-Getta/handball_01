@@ -10714,6 +10714,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Beálló-bevonás esése: elfogy-e a beállójuk a 2. félidőre
+  // (félidőnként 6+ mért támadásnál, 10 százalékpontos küszöbbel — a
+  // backend PIVOT_FADE_MIN_ATTACKS / PIVOT_FADE_DROP_PCT tükre).
+  String? _pivotUsageFade(Map<String, dynamic> r) {
+    final fhN = ((r["puf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["puf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 6 || shN < 6) return null;
+    final fh = 100.0 * (((r["puf_fh_pivot"] as num?) ?? 0).toInt()) / fhN;
+    final sh = 100.0 * (((r["puf_sh_pivot"] as num?) ?? 0).toInt()) / shN;
+    final d = fh - sh; // pozitív = elfogy a beálló
+    if (d >= 10.0) {
+      return "${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "· elfogy a beálló · a fal kifelé dolgozhat";
+    }
+    if (d <= -10.0) {
+      return "${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "· többet játsszák · a középső hármas zárjon befelé";
+    }
+    return null;
+  }
+
   // Hajrá-profil: hány fáradás-jel szólal meg náluk meccsenként. Nem
   // új mérés, hanem az ÖSSZKÉP — a backend FATIGUE_PATTERN_MIN = 3
   // küszöbének tükre.
@@ -11229,6 +11250,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Visszaállás a hajrában", _retreatFade(r)!],
       if (_wingInvolvementFade(r) != null)
         ["Szélső-bevonás a hajrában", _wingInvolvementFade(r)!],
+      if (_pivotUsageFade(r) != null)
+        ["Beálló-bevonás a hajrában", _pivotUsageFade(r)!],
       if (_fatigueProfile(r) != null)
         ["Hajrá-profil (fáradás-jelek)", _fatigueProfile(r)!],
       if (_timeoutRecord(r) != null)

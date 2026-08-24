@@ -391,6 +391,12 @@ class ScoutingReport:
     wif_fh_n: int = 0
     wif_sh_wing: int = 0
     wif_sh_n: int = 0
+    # Beálló-bevonás félidőnként (beállós támadás / összes támadás
+    # darabszáma). Darab + darab, hogy több meccs pontosan összegződjön.
+    puf_fh_pivot: int = 0
+    puf_fh_n: int = 0
+    puf_sh_pivot: int = 0
+    puf_sh_n: int = 0
     # Hajrá-profil: hány fáradás-jel szólalt meg összesen, és hány
     # meccsen mértük. Darab + darab, hogy több meccs pontosan
     # összegződjön (átlag = jel/meccs a teljes mintán).
@@ -9107,6 +9113,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "megkezdett sorozatot az időkérésük után is tolhatod, ne "
                 "állj le tőle.")
 
+    # Beálló-bevonás esése: elfogy-e a beálló a hajrára. Más kérdés,
+    # mint a szélső-bevonás (az a labda SZÉLES ívű járatása, ez a
+    # MÉLYSÉGI bejátszás — bátorság és időzítés, nem lábmunka).
+    if rep.puf_fh_n >= 6 and rep.puf_sh_n >= 6:
+        _puf_fh = 100.0 * rep.puf_fh_pivot / rep.puf_fh_n
+        _puf_sh = 100.0 * rep.puf_sh_pivot / rep.puf_sh_n
+        _puf_d = _puf_fh - _puf_sh          # pozitív = elfogy a beálló
+        if _puf_d >= 10.0:
+            keys.append(
+                f"A beállójuk a 2. félidőre elfogy ({_puf_fh:.0f}% → "
+                f"{_puf_sh:.0f}% a beállós támadás) — a hajrában elárvul a "
+                "hatos vonal: a fal középső hármasa nyugodtan dolgozhat "
+                "KIFELÉ, az átlövőre.")
+        elif _puf_d <= -10.0:
+            keys.append(
+                f"A 2. félidőre TÖBBET játszanak a beállóra "
+                f"({_puf_fh:.0f}% → {_puf_sh:.0f}%) — a hajrában a fal "
+                "középső hármasának befelé kell zárnia, és a bejátszó "
+                "passzsávot kell elvenni.")
+
     # Hajrá-profil: hány fáradás-jel szólal meg náluk egy meccsen. Ez
     # nem új mérés, hanem az ÖSSZKÉP — egy tucat esés-szám mellett az
     # edző nem tudja, mivel kezdje.
@@ -10271,6 +10297,16 @@ def _scout_team_cached(match: Match, team: Team,
         if lhfrec["sh_m"] is not None:
             rep.lhf_sh_sum_m = round(lhfrec["sh_m"] * lhfrec["sh_frames"], 1)
             rep.lhf_sh_n = lhfrec["sh_frames"]
+        from .attack_types import pivot_usage_fade
+        pufrec = pivot_usage_fade(match, config)[team.value]
+        rep.puf_fh_n = pufrec["fh_attacks"]
+        rep.puf_sh_n = pufrec["sh_attacks"]
+        if pufrec["fh_pct"] is not None:
+            rep.puf_fh_pivot = round(
+                pufrec["fh_pct"] * pufrec["fh_attacks"] / 100.0)
+        if pufrec["sh_pct"] is not None:
+            rep.puf_sh_pivot = round(
+                pufrec["sh_pct"] * pufrec["sh_attacks"] / 100.0)
         try:
             from .priorities import fatigue_profile
             fprrec = fatigue_profile(match, config)[team.value]
@@ -14275,6 +14311,21 @@ def matchup_plan(own: "ScoutingReport",
 
     from .tactics import ATV_MIN_ATTACKS as _A449
     from .tactics import ATV_ONE_TEMPO_PCT as _A449P
+    # 454) Az ő elfogyó beállójuk × a ti magas falatok: ha a hajrában
+    # nem megy be a labda a hatosra, a fal kifelé dolgozhat.
+    if (opp.puf_fh_n >= 6 and opp.puf_sh_n >= 6
+            and 100.0 * opp.puf_fh_pivot / opp.puf_fh_n
+            - 100.0 * opp.puf_sh_pivot / opp.puf_sh_n >= 10.0
+            and own.defense_main in ("5-1", "3-2-1", "4-2")):
+        _p454_fh = 100.0 * opp.puf_fh_pivot / opp.puf_fh_n
+        _p454_sh = 100.0 * opp.puf_sh_pivot / opp.puf_sh_n
+        plan.append(
+            f"A beállójuk a 2. félidőre elfogy ({_p454_fh:.0f}% → "
+            f"{_p454_sh:.0f}% a beállós támadás), ti pedig "
+            f"{own.defense_main}-ben védekeztek — a hajrában a kilépő "
+            "védőtök bátran mehet KI az átlövőre: a hatoson már nincs "
+            "kit büntetni a kilépés mögött.")
+
     # 453) Az ő halmozott fáradásuk × a ti hajrá-erőtök: a meccs vége
     # a ti ablakotok — a friss lábakat oda kell időzíteni.
     if (opp.fpr_matches >= 1
@@ -21584,6 +21635,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         wif_fh_n=sum(r.wif_fh_n for r in reports),
         wif_sh_wing=sum(r.wif_sh_wing for r in reports),
         wif_sh_n=sum(r.wif_sh_n for r in reports),
+        puf_fh_pivot=sum(r.puf_fh_pivot for r in reports),
+        puf_fh_n=sum(r.puf_fh_n for r in reports),
+        puf_sh_pivot=sum(r.puf_sh_pivot for r in reports),
+        puf_sh_n=sum(r.puf_sh_n for r in reports),
         fpr_signals=sum(r.fpr_signals for r in reports),
         fpr_matches=sum(r.fpr_matches for r in reports),
         q_score_sum=round(sum(r.q_score_sum for r in reports), 1),

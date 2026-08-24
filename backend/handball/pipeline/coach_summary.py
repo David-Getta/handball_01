@@ -7022,6 +7022,26 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "védekezés a feladat.")
     except Exception:
         pass
+    # Beálló-bevonás esése: elfogy-e a beálló a hajrára.
+    try:
+        from .attack_types import PIVOT_FADE_DROP_PCT, pivot_usage_fade
+        pufc = pivot_usage_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pu = pufc[side]
+            if rec_pu["drop_pct"] is None:
+                continue
+            if rec_pu["drop_pct"] >= PIVOT_FADE_DROP_PCT:
+                body += (f" A(z) {name} beállója a 2. félidőre elfogy "
+                         f"({rec_pu['fh_pct']:.0f}% → "
+                         f"{rec_pu['sh_pct']:.0f}% a beállós támadás) — a "
+                         "hajrában elárvul a hatos vonal.")
+            elif rec_pu["drop_pct"] <= -PIVOT_FADE_DROP_PCT:
+                body += (f" A(z) {name} a 2. félidőre TÖBBET játszik a "
+                         f"beállóra ({rec_pu['fh_pct']:.0f}% → "
+                         f"{rec_pu['sh_pct']:.0f}%) — a hajrában a fal "
+                         "középső hármasának kell befelé zárnia.")
+    except Exception:
+        pass
     # Hajrá-profil: a fáradás-jelek ÖSSZKÉPE — mivel kezdje az edző.
     try:
         from .priorities import FATIGUE_PATTERN_MIN, fatigue_profile

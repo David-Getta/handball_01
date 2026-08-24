@@ -5086,3 +5086,64 @@ def test_wing_involvement_fade_keves_tamadasnal_nincs_itelet():
     wf = wing_involvement_fade(Match(_meta(25.0), _wif_frames(0, [True] * 3)))
     assert wf["home"]["drop_pct"] is None
     assert wf["away"]["drop_pct"] is None
+
+
+def _puf_frames(t0, beallosok):
+    """Hazai támadás-sorozat: a `beallosok` elemenként megadja, a labda
+    a BEÁLLÓNÁL (5-ös, x=34) időzik-e, vagy végig az irányítónál."""
+    frames = []
+    t = t0
+    for beallos in beallosok:
+        for _ in range(200):                # 8 mp hazai támadás
+            bx = 34.0 if beallos else 28.0
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 27.0, 10.0),
+                _pl(5, Team.HOME, 34.0, 10.0),
+                _pl(20, Team.AWAY, 36.0, 8.0)],
+                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(50):                 # vendég-birtoklás: szakasz-vég
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 20.0, 10.0),
+                _pl(5, Team.HOME, 20.0, 12.0),
+                _pl(20, Team.AWAY, 19.0, 10.0)],
+                ball=Ball(x=19.0, y=10.0, confidence=1.0)))
+            t += 1
+    return frames
+
+
+def test_pivot_usage_fade_elfogyo_beallo():
+    """Az 1. félidőben minden támadás a beállón megy át, a 2.-ban egy
+    sem → érdemi esés.
+
+    Edzőileg: a beállóba adott labda a legnehezebb passz (takarásba,
+    testek közé, pontos időzítéssel). Fáradtan nem a beálló mozgása
+    hiányzik, hanem a bátor passz a kiszolgálótól.
+    """
+    from handball.pipeline.attack_types import (PIVOT_FADE_DROP_PCT,
+                                                pivot_usage_fade)
+
+    fps = 25.0
+    frames = _puf_frames(0, [True] * 7)                  # 1. félidő
+    t = frames[-1].t + 1
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * fps))]            # szünet
+    t = frames[-1].t + 1
+    frames += _puf_frames(t, [False] * 7)                # 2. félidő
+
+    pf = pivot_usage_fade(Match(_meta(fps), frames))
+    h = pf["home"]
+    assert h["fh_attacks"] >= 6 and h["sh_attacks"] >= 6, h
+    assert h["fh_pct"] is not None and h["sh_pct"] is not None, h
+    assert h["fh_pct"] > h["sh_pct"], h
+    assert h["drop_pct"] is not None, h
+    assert h["drop_pct"] >= PIVOT_FADE_DROP_PCT, h
+
+
+def test_pivot_usage_fade_felido_jel_nelkul_nincs_itelet():
+    """Félidő-jel nélkül nincs mihez viszonyítani — inkább None."""
+    from handball.pipeline.attack_types import pivot_usage_fade
+
+    pf = pivot_usage_fade(Match(_meta(25.0), _puf_frames(0, [True] * 3)))
+    assert pf["home"]["drop_pct"] is None
+    assert pf["away"]["drop_pct"] is None

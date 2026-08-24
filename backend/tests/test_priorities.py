@@ -639,3 +639,35 @@ def test_ures_hajra_profil_ertekes_informacio():
     assert rec["signals"] == []
     assert rec["count"] == 0
     assert rec["top"] is None and rec["verdict"] is None
+
+
+def test_az_elfogyo_beallo_is_bekerul_a_hajra_profilba(monkeypatch):
+    """Az új esés-rétegeknek be kell kerülniük a szintézisbe.
+
+    Egy fáradás-jel, ami a saját csempéjén megszólal, de az összképből
+    kimarad, rosszabb a semminél: az edző azt hiszi, mindent lát.
+    A beálló-esés a szélső-esés ELŐTT áll (elárvult hatos vonal mellett
+    a fal kifelé dolgozhat — ez nagyobb tét, mint a középen ragadt
+    labda).
+    """
+    from handball.pipeline import priorities as pr
+
+    ures = {"home": {}, "away": {}}
+    monkeypatch.setattr(
+        "handball.pipeline.attack_types.pivot_usage_fade",
+        lambda m, c=None: {"home": {"fh_pct": 40.0, "sh_pct": 15.0,
+                                    "drop_pct": 25.0}, "away": {}})
+    monkeypatch.setattr(
+        "handball.pipeline.attack_types.wing_involvement_fade",
+        lambda m, c=None: {"home": {"fh_pct": 70.0, "sh_pct": 40.0,
+                                    "drop_pct": 30.0}, "away": {}})
+    for nev in ("retreat_fade", "line_height_fade", "pressure_fade"):
+        monkeypatch.setattr(f"handball.pipeline.defense.{nev}",
+                            lambda m, c=None: ures)
+    monkeypatch.setattr("handball.pipeline.stats.sprint_fade",
+                        lambda m, c=None: ures)
+
+    rec = pr.fatigue_profile(Match(_meta(), []))["home"]
+    nevek = [j["layer"] for j in rec["signals"]]
+    assert nevek == ["pivot_usage_fade", "wing_involvement_fade"], nevek
+    assert rec["top"] == "Elfogyó beálló"

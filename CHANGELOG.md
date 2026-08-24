@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.56 óta)
 
+- **Beálló-bevonás a hajrában** (új réteg, `pivot_usage_fade`): a
+  beálló-terhelés megmondja, a támadásaik mekkora része megy át a
+  beállón; ez a réteg azt teszi hozzá, hogy ELFOGY-E a meccs alatt. A
+  beállóba adott labda a kézilabda legnehezebb passza — takarásba,
+  testek közé, pontos időzítéssel. Fáradtan ez fogy el először, és nem
+  azért, mert a beálló nem dolgozik, hanem mert a KISZOLGÁLÓ nem meri
+  (vagy nem látja) beadni. A következmény: a hatos vonal elárvul, a
+  fal nyugodtan dolgozhat kifelé, és a támadás átlövésekbe szorul.
+  Más kérdés, mint a szélső-bevonás esése: az a labda SZÉLES ívű
+  járatásáról szól (lábmunka), ez a MÉLYSÉGI bejátszásról (bátorság és
+  időzítés) — egy csapat elveszítheti a beállóját úgy is, hogy közben
+  végig széthúzva játszik. Bekerült a hajrá-profil rangsorába is (a
+  szélső-esés elé: elárvult hatos vonal mellett a fal kifelé dolgozhat,
+  ami nagyobb tét, mint a középen ragadt labda). Felületek: /analyze,
+  meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs + 454.
+  meccsterv-szabály), edzés-fókusz (474. szabály), kliens-csempe.
+
 - **Új őr: a kliens küszöbei nem csúszhatnak el a motortól** (teszt):
   a felderítő képernyő közel ötszáz csempéje KÉZZEL másolt számokkal
   dolgozik ("8+ mért támadás", "60% részarány"), és minden helper

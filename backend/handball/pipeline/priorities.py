@@ -1011,8 +1011,8 @@ def fatigue_profile(match: Match, config=None) -> dict:
     jel címkéje, a verdict a hozzá tartozó edzői mondat; mindkettő
     None, ha egyetlen esés sem szólalt meg.
     """
-    from .attack_types import (WING_INV_FADE_DROP_PCT,
-                               wing_involvement_fade)
+    from .attack_types import (PIVOT_FADE_DROP_PCT, WING_INV_FADE_DROP_PCT,
+                               pivot_usage_fade, wing_involvement_fade)
     from .defense import (LINE_FADE_DROP_M, PRESSURE_FADE_LOOSEN_M,
                           RETREAT_FADE_SLOW_S, line_height_fade,
                           pressure_fade, retreat_fade)
@@ -1042,6 +1042,16 @@ def fatigue_profile(match: Match, config=None) -> dict:
                 "a hajrában lazul a fal: a szabad lövő a másik oldal első "
                 "számú fegyvere lesz")
 
+    def _pivot(rec):
+        if (rec.get("drop_pct") is None
+                or rec["drop_pct"] < PIVOT_FADE_DROP_PCT):
+            return None
+        return (f"{rec['fh_pct']:.0f}% → {rec['sh_pct']:.0f}% a beállós "
+                "támadás",
+                "a hajrában elárvul a hatos vonal, és a fal nyugodtan "
+                "dolgozhat kifelé — nem a beálló mozgása hiányzik, hanem "
+                "a bátor bejátszás")
+
     def _wing(rec):
         if (rec.get("drop_pct") is None
                 or rec["drop_pct"] < WING_INV_FADE_DROP_PCT):
@@ -1065,6 +1075,7 @@ def fatigue_profile(match: Match, config=None) -> dict:
         ("retreat_fade", "Lassuló visszaállás", retreat_fade, _retreat),
         ("line_height_fade", "Visszahúzódó fal", line_height_fade, _line),
         ("pressure_fade", "Lazuló fal", pressure_fade, _pressure),
+        ("pivot_usage_fade", "Elfogyó beálló", pivot_usage_fade, _pivot),
         ("wing_involvement_fade", "Beszűkülő támadás",
          wing_involvement_fade, _wing),
         ("sprint_fade", "Fogyó sprint", sprint_fade, _sprint),
