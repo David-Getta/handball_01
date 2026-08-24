@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.50 óta)
 
+- **A diagnózis-lánc ellenőrzése ÉLES lett** (kiadás): a windowsos
+  füstteszt eddig csak JELEZTE, hogy a becsomagolt motor ír-e
+  `engine.log`-ot — mert a futtató tényleges viselkedését még nem
+  erősítettük meg. A v0.1.50 naplója megerősítette ("engine.log
+  MEGVAN; indulási mérföldkövek: True"), ezért az ellenőrzés innentől
+  megbuktatja a kiadást, ha a napló eltűnik vagy üres marad. Pontosan
+  ez a hiba küldte úgy útjára a korábbi kiadást, hogy a felhasználó
+  üres naplót látott, és nem volt mit elküldenie.
+
 - **A labda-figyelmeztetés mostantól TEENDŐT mond** (motor): a kevés
   labda-észlelésre eddig annyi volt a válasz, hogy "tisztább felvétel
   segít" — ami igaz, de a már meglévő felvételen nem lehet vele mit

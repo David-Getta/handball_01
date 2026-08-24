@@ -157,9 +157,14 @@ jobs:
           # A DIAGNÓZIS-LÁNC ellenőrzése a VALÓDI csomagolt motoron: ha
           # egyszer baj lesz, a felhasználónak legyen mit elküldenie. A
           # becsomagolt motor ablak nélküli, ilyenkor a Pythonnak nincs
-          # stdout-ja, és a saját üzeneteit engine.log-ba írja. Egyelőre
-          # CSAK JELZÉS (nem bukik el rajta a kiadás), amíg a futtató
-          # tényleges viselkedését meg nem erősítjük a naplóból.
+          # stdout-ja, és a saját üzeneteit engine.log-ba írja.
+          #
+          # A v0.1.50 kiadás naplója megerősítette, hogy ez a valódi
+          # csomagolt motoron működik ("engine.log MEGVAN; indulási
+          # mérföldkövek: True"), ezért az ellenőrzés innentől ÉLES: ha
+          # a napló eltűnik vagy üres marad, a kiadás elbukik. Pontosan
+          # ez a hiba küldte úgy útjára a korábbi kiadást, hogy a
+          # felhasználó üres naplót látott, és nem volt mit elküldenie.
           $engineLog = Join-Path $env:HANDBALL_DATA_DIR "engine.log"
           if (Test-Path $engineLog) {
             $txt = Get-Content $engineLog -Raw
@@ -167,8 +172,15 @@ jobs:
             $diag = "engine.log MEGVAN; indulási mérföldkövek: $hasStages"
           } else {
             $diag = "engine.log NINCS ($engineLog) — a motor kimenete a csövön ment"
+            $hasStages = $false
           }
           Write-Host "DIAGNÓZIS-ELLENŐRZÉS: $diag"
+          if (-not (Test-Path $engineLog)) {
+            throw "a csomagolt motor nem irt engine.log-ot — a hibakereses-lanc elszakadt"
+          }
+          if (-not $hasStages) {
+            throw "az engine.log-bol hianyoznak az indulasi merfoldkovek — a hibakereses-lanc elszakadt"
+          }
           # Fájlba is: a telepítő fordítása ezután PERCEKIG ontja a
           # kimenetet, és ez a sor a napló közepén elveszne. Az utolsó
           # lépés újra kiírja, hogy egy rövid napló-vég is mutassa.
