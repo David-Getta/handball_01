@@ -16,7 +16,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   tétele, és hogy hány további jelzés maradt a részletes szakaszokra.
   Ez BEVEZETŐ, nem rövidítés — a hosszú szakaszok változatlanul ott
   vannak mögötte. Aki két percet szán a jelentésre, most is megkapja
-  a három dolgot, ami számít.
+  a három dolgot, ami számít. A kliens ezt a szakaszt nem csukja
+  össze (a többi hosszú szakaszt öt mondat után igen): ha a nyolc
+  tételéből ötöt mutatna, a rangsor vége és a "mennyi maradt" sor
+  eltűnne — pont az, ami miatt a szakasz létezik.
 
 ## v0.1.58 — kiadva (2026-08-24)
 

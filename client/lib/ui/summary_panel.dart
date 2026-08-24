@@ -914,6 +914,11 @@ class _CoachSectionState extends State<_CoachSection> {
         ((widget.section["lines"] as List?) ?? const []).cast<String>();
     final body = (widget.section["body"] as String?) ?? "";
 
+    // A motor megjelölheti, hogy a szakaszt NE csukjuk össze (a
+    // "A lényeg" a rangsor teteje — pont az a dolga, hogy egyben
+    // olvasható legyen).
+    final showAll = widget.section["show_all"] == true;
+
     // Rövid szakasz (vagy régi backend): marad az egybefüggő bekezdés.
     if (lines.length <= 2) {
       return Padding(
@@ -930,7 +935,8 @@ class _CoachSectionState extends State<_CoachSection> {
       );
     }
 
-    final shown = _all ? lines : lines.take(_preview).toList();
+    final shown =
+        (_all || showAll) ? lines : lines.take(_preview).toList();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       // A kinyitás/becsukás nem ugrik, hanem NŐ: a szem követni tudja,
@@ -975,14 +981,17 @@ class _CoachSectionState extends State<_CoachSection> {
                 ],
               ),
             ),
-          TextButton.icon(
-            onPressed: () => setState(() => _all = !_all),
-            icon: Icon(_all ? Icons.expand_less : Icons.expand_more,
-                size: 18),
-            label: Text(_all
-                ? "Rövidítve (az első $_preview)"
-                : "Mind a ${lines.length} megállapítás"),
-          ),
+          // A megjelölt szakasz (A lényeg) teljes egészében látszik —
+          // ott nincs mit kinyitni.
+          if (!showAll)
+            TextButton.icon(
+              onPressed: () => setState(() => _all = !_all),
+              icon: Icon(_all ? Icons.expand_less : Icons.expand_more,
+                  size: 18),
+              label: Text(_all
+                  ? "Rövidítve (az első $_preview)"
+                  : "Mind a ${lines.length} megállapítás"),
+            ),
         ],
         ),
       ),

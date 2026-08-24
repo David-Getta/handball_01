@@ -8306,6 +8306,10 @@ def _coach_summary_cached(match: Match) -> dict:
                 # bontást itt nem a szöveg-vágó adja: a tételek már
                 # külön elemek.
                 "lines": list(_lenyeg),
+                # A kliens a hosszú szakaszokat öt mondat után
+                # összecsukja — EZT a szakaszt viszont nem szabad:
+                # pont az a dolga, hogy egyben olvasható legyen.
+                "show_all": True,
             })
     except Exception:
         pass

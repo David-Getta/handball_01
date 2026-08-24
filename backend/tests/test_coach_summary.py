@@ -434,3 +434,21 @@ def test_ures_meccsen_nincs_lenyeg_szakasz():
     cs = coach_summary(Match(meta, []))
     cimek = [s["title"] for s in cs.get("sections", [])]
     assert "A lényeg" not in cimek
+
+
+def test_a_lenyeg_szakaszt_a_kliens_nem_csukja_ossze():
+    """A kliens a hosszú szakaszokat öt mondat után összecsukja.
+
+    "A lényeg" viszont pont attól lényeg, hogy EGYBEN olvasható — ha
+    a nyolc tételéből ötöt mutatnánk, a rangsor vége (és a "mennyi
+    maradt" sor) eltűnne. A motor ezért megjelöli a szakaszt.
+    """
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    cs = coach_summary(m)
+    lenyeg = next(s for s in cs["sections"] if s["title"] == "A lényeg")
+    assert lenyeg.get("show_all") is True
+    # A többi szakasz NEM kap ilyen jelölést (különben az egész
+    # összecsukás értelmét vesztené).
+    tobbi = [s for s in cs["sections"] if s["title"] != "A lényeg"]
+    assert not any(s.get("show_all") for s in tobbi)
