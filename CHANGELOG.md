@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.57 óta)
+## Kiadatlan (a v0.1.58 óta)
+
+## v0.1.58 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: a visszacsatolás kiadása. Aki a gyenge feldolgozás
+> után újrakalibrál és újrafuttat, eddig egy számot kapott a
+> semmiben ("72/100") — most azt is megtudja, hogy JAVULT-E a
+> legutóbbihoz képest. Emellett a labda-lefedettség többé nem hízik a
+> saját hézagpótlásunktól: a szám azt méri, milyen gyakran LÁTTUK a
+> labdát, a pótolt kockák külön jelennek meg. A háttérben négy új őr
+> azokra a hibafajtákra, amiket nem lehet észrevenni: néma
+> felderítés-mező, rossz feldolgozáson eltűnő réteg, elcsúszott
+> kliens-küszöb.
+
 
 - **A jelentés megmondja, hogy JAVULT-E** (motor + kliens): a
   minőség-pontszám eddig egy szám volt a semmiben. Aki a gyenge
