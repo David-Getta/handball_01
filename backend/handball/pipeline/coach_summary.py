@@ -6982,6 +6982,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "a hajrában a kilépő védő mögé kell játszani.")
     except Exception:
         pass
+    # Visszaállás-fáradás: lassul-e a hazaérés a 2. félidőre.
+    try:
+        from .defense import RETREAT_FADE_SLOW_S, retreat_fade
+        rfc = retreat_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rf = rfc[side]
+            if rec_rf["slow_s"] is None:
+                continue
+            if rec_rf["slow_s"] >= RETREAT_FADE_SLOW_S:
+                body += (f" A(z) {name} visszaállása a 2. félidőre lassult "
+                         f"({rec_rf['fh_s']:.1f} → {rec_rf['sh_s']:.1f} mp a "
+                         "lövésük után) — a hajrában az első hullám üres "
+                         "pályát talál ellenük.")
+            elif rec_rf["slow_s"] <= -RETREAT_FADE_SLOW_S:
+                body += (f" A(z) {name} a 2. félidőre GYORSABBAN áll vissza "
+                         f"({rec_rf['fh_s']:.1f} → {rec_rf['sh_s']:.1f} mp) — "
+                         "a hajrában nem kontrázhatók.")
+    except Exception:
+        pass
     # Lövés-időzítés: első hullámból lövő vagy kiváró csapat.
     try:
         from .attack_types import (SHTIM_EARLY_PCT, SHTIM_LATE_AVG_S,

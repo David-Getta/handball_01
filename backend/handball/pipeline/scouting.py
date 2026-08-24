@@ -372,6 +372,13 @@ class ScoutingReport:
     lhf_fh_n: int = 0
     lhf_sh_sum_m: float = 0.0
     lhf_sh_n: int = 0
+    # Visszaállás-idő félidőnként (a lövéseik utáni hazaérés
+    # másodperc-összege és a mért lövések száma). Összeg + darab, hogy
+    # több meccs pontosan összegződjön.
+    rtf_fh_sum_s: float = 0.0
+    rtf_fh_n: int = 0
+    rtf_sh_sum_s: float = 0.0
+    rtf_sh_n: int = 0
     # Időkérés-mérleg: felismert időkéréseik + ebből a sorozatot megtörő
     # (broke) és a fordulatot nem hozó (failed) — meccsek közt összegződik.
     to_n: int = 0
@@ -9080,6 +9087,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "megkezdett sorozatot az időkérésük után is tolhatod, ne "
                 "állj le tőle.")
 
+    # Visszaállás-fáradás: lassul-e a hazaérésük a hajrára. Ez a késői
+    # összeomlás leggyakoribb mechanizmusa, és a gólszámban nem látszik.
+    if rep.rtf_fh_n >= 4 and rep.rtf_sh_n >= 4 \
+            and rep.rtf_fh_sum_s > 0 and rep.rtf_sh_sum_s > 0:
+        _rtf_fh = rep.rtf_fh_sum_s / rep.rtf_fh_n
+        _rtf_sh = rep.rtf_sh_sum_s / rep.rtf_sh_n
+        _rtf_d = _rtf_sh - _rtf_fh          # pozitív = lassult
+        if _rtf_d >= 1.0:
+            keys.append(
+                f"A visszaállásuk a 2. félidőre lassul ({_rtf_fh:.1f} → "
+                f"{_rtf_sh:.1f} mp a lövésük után) — a hajrában a "
+                "kapusotoknak AZONNAL indítania kell: az első hullám üres "
+                "pályát talál.")
+        elif _rtf_d <= -1.0:
+            keys.append(
+                f"A visszaállásuk a 2. félidőre gyorsul ({_rtf_fh:.1f} → "
+                f"{_rtf_sh:.1f} mp) — a hajrában ne a kontrára építsetek, "
+                "hanem a felállt támadásra.")
+
     # Fal-MÉLYSÉG esése: hova áll a faluk a hajrában. Ez más kérdés,
     # mint a fellazulás (az a labdástól mért távolság) — visszahúzódó
     # fal ellen a 9 méteres lövés a válasz, feljebb jövő fal ellen a
@@ -10189,6 +10215,14 @@ def _scout_team_cached(match: Match, team: Team,
         if lhfrec["sh_m"] is not None:
             rep.lhf_sh_sum_m = round(lhfrec["sh_m"] * lhfrec["sh_frames"], 1)
             rep.lhf_sh_n = lhfrec["sh_frames"]
+        from .defense import retreat_fade
+        rtfrec = retreat_fade(match, config)[team.value]
+        if rtfrec["fh_s"] is not None:
+            rep.rtf_fh_sum_s = round(rtfrec["fh_s"] * rtfrec["fh_shots"], 1)
+            rep.rtf_fh_n = rtfrec["fh_shots"]
+        if rtfrec["sh_s"] is not None:
+            rep.rtf_sh_sum_s = round(rtfrec["sh_s"] * rtfrec["sh_shots"], 1)
+            rep.rtf_sh_n = rtfrec["sh_shots"]
         from .stoppages import timeout_record
         torec = timeout_record(match, config)[team.value]
         rep.to_n = torec["timeouts"]
@@ -14156,6 +14190,22 @@ def matchup_plan(own: "ScoutingReport",
 
     from .tactics import ATV_MIN_ATTACKS as _A449
     from .tactics import ATV_ONE_TEMPO_PCT as _A449P
+    # 451) Az ő lassuló visszaállásuk × a ti kontrátok: a hajrában
+    # minden lövésük után nyílik egy kontra-ablak — azt kell kihasználni.
+    if (opp.rtf_fh_n >= 4 and opp.rtf_sh_n >= 4
+            and opp.rtf_fh_sum_s > 0 and opp.rtf_sh_sum_s > 0
+            and opp.rtf_sh_sum_s / opp.rtf_sh_n
+            - opp.rtf_fh_sum_s / opp.rtf_fh_n >= 1.0
+            and own.fbc_breaks >= 3):
+        _p451_fh = opp.rtf_fh_sum_s / opp.rtf_fh_n
+        _p451_sh = opp.rtf_sh_sum_s / opp.rtf_sh_n
+        plan.append(
+            f"A visszaállásuk a 2. félidőre lassul ({_p451_fh:.1f} → "
+            f"{_p451_sh:.1f} mp a lövésük után), ti pedig tudtok kontrázni "
+            f"({own.fbc_breaks} indított kontra) — a hajrában a kapus "
+            "MINDEN védés és kapott gól után azonnal indítson: a "
+            "különbség pont egy kontra-lépés.")
+
     # 450) Az ő visszahúzódó faluk × a ti külső lövőitek: a hajrában a
     # 9 méteres lövés zavartalan lesz — oda kell időzíteni a lövőt.
     if (opp.lhf_fh_n >= 100 and opp.lhf_sh_n >= 100
@@ -21412,6 +21462,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         lhf_fh_n=sum(r.lhf_fh_n for r in reports),
         lhf_sh_sum_m=round(sum(r.lhf_sh_sum_m for r in reports), 1),
         lhf_sh_n=sum(r.lhf_sh_n for r in reports),
+        rtf_fh_sum_s=round(sum(r.rtf_fh_sum_s for r in reports), 1),
+        rtf_fh_n=sum(r.rtf_fh_n for r in reports),
+        rtf_sh_sum_s=round(sum(r.rtf_sh_sum_s for r in reports), 1),
+        rtf_sh_n=sum(r.rtf_sh_n for r in reports),
         to_n=sum(r.to_n for r in reports),
         to_broke=sum(r.to_broke for r in reports),
         to_failed=sum(r.to_failed for r in reports),

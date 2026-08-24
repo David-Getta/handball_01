@@ -6107,6 +6107,65 @@ def retreat_time(match, config=None) -> dict:
     return out
 
 
+# Visszaállás-fáradás: félidőnként ennyi mért lövés kell az ítélethez
+# (ugyanaz, mint az alap-rétegé), és ennyi másodperccel kell lassulnia
+# a hazaérésnek, hogy fáradásról beszéljünk. Az egy másodperc nem
+# önkényes: a felállt fal összeállása lövésenként fél-egy másodpercet
+# ingadozik (ki honnan indul), ennél kisebb eltérés a minta zaja —
+# egy másodperc viszont már egy TELJES kontra-lépés.
+RETREAT_FADE_MIN_SHOTS = RTT_MIN_SHOTS
+RETREAT_FADE_SLOW_S = 1.0
+
+
+def retreat_fade(match, config=None) -> dict:
+    """Visszaállás-fáradás: LASSUL-E a hazaérés a második félidőre.
+
+    A `retreat_time` megmondja, hány másodperc alatt áll össze a faluk
+    a saját lövésük után; ez a réteg azt teszi hozzá, hogy ROMLIK-E a
+    meccs alatt. A felismert félidő mentén kettébontva mérjük ugyanazt.
+
+    Edzőileg ez a késői összeomlás leggyakoribb mechanizmusa, és a
+    számokban máshogy nem látszik: a csapat ugyanannyi gólt lő a 2.
+    félidőben, csak közben minden lövése után egy másodperccel később
+    ér haza — és ez a másodperc pont egy kontra-lépés. Ellenfélként ez
+    a hajrá kontra-terve: a kapusnak azonnal indítania kell, mert a
+    meccs végén az első hullám már üres pályát talál. Saját csapatra a
+    teendő nem futóedzés, hanem a lövés PILLANATÁBAN kijelölt első
+    visszafutó — fáradtan a fejben dől el, ki fordul meg.
+
+    Visszatérés csapatonként: {"fh_s", "fh_shots", "sh_s", "sh_shots",
+    "slow_s"} — az 1./2. félidei átlagos visszaállási idő és a mért
+    lövések száma; slow_s a lassulás másodpercben (POZITÍV = lassult),
+    None, ha nincs félidő-jel vagy kevés a lövés valamelyik félidőben.
+    """
+    from ..models.tracking import Match as _M
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_s": None, "fh_shots": 0, "sh_s": None, "sh_shots": 0,
+             "slow_s": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out          # félidő-jel nélkül nincs mihez viszonyítani
+    fh = retreat_time(
+        _M(match.meta, [f for f in match.frames if f.t <= ht]), config)
+    sh = retreat_time(
+        _M(match.meta, [f for f in match.frames if f.t > ht]), config)
+    for oldal in ("home", "away"):
+        rec = out[oldal]
+        rec["fh_s"] = fh[oldal]["avg_s"]
+        rec["fh_shots"] = fh[oldal]["shots"]
+        rec["sh_s"] = sh[oldal]["avg_s"]
+        rec["sh_shots"] = sh[oldal]["shots"]
+        if (rec["fh_s"] is not None and rec["sh_s"] is not None
+                and rec["fh_shots"] >= RETREAT_FADE_MIN_SHOTS
+                and rec["sh_shots"] >= RETREAT_FADE_MIN_SHOTS):
+            # Pozitív = lassult (a 2. félidőben TOVÁBB tart hazaérni).
+            rec["slow_s"] = round(rec["sh_s"] - rec["fh_s"], 1)
+    return out
+
+
 # Lepattanó-szedő poszt küszöbei: a védés utáni ablak, ennyi
 # poszthoz kötött megszerzett kipattanó kell az ítélethez, és ekkora
 # részarány a vezető posztnak.

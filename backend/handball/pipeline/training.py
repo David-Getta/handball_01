@@ -1366,6 +1366,27 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 471) Lassuló visszaállás: ha a SAJÁT hazaérésünk a 2. félidőre
+    # lassul, a hajrában minden lövésünk után kontra-ablakot nyitunk.
+    try:
+        from .defense import RETREAT_FADE_SLOW_S, retreat_fade
+        rtf471 = retreat_fade(match, config)
+        for side in ("home", "away"):
+            r471 = rtf471[side]
+            if r471["slow_s"] is None or r471["slow_s"] < RETREAT_FADE_SLOW_S:
+                continue
+            focus[side].append(
+                f"visszaállás a hajrában: a lövéseink után a 2. félidőre "
+                f"{r471['fh_s']:.1f} → {r471['sh_s']:.1f} mp lett a "
+                "hazaérés, vagyis minden lövésünk után nyitunk egy "
+                "kontra-lépésnyi ablakot — a teendő NEM futóedzés, hanem "
+                "a lövés PILLANATÁBAN kijelölt első visszafutó: 10x "
+                "támadás-befejezés úgy, hogy a kijelölt ember már a "
+                "kar-lendítéskor fordul (fáradtan a fejben dől el, ki "
+                "fordul meg)")
+    except Exception:
+        pass
+
     # 470) Visszahúzódó fal: ha a SAJÁT falunk a 2. félidőre beszorul a
     # 6-os köré, a hajrában zavartalanul lőnek ránk 9 méterről.
     try:

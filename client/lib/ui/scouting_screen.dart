@@ -10655,6 +10655,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Visszaállás-fáradás: lassul-e a hazaérésük a 2. félidőre
+  // (félidőnként 4+ mért lövésnél, 1,0 mp küszöbbel — a backend
+  // RETREAT_FADE_MIN_SHOTS / RETREAT_FADE_SLOW_S tükre).
+  String? _retreatFade(Map<String, dynamic> r) {
+    final fhN = ((r["rtf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["rtf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 4 || shN < 4) return null;
+    final fhSum = ((r["rtf_fh_sum_s"] as num?) ?? 0).toDouble();
+    final shSum = ((r["rtf_sh_sum_s"] as num?) ?? 0).toDouble();
+    if (fhSum <= 0 || shSum <= 0) return null;
+    final fh = fhSum / fhN;
+    final sh = shSum / shN;
+    final d = sh - fh; // pozitív = lassult
+    if (d >= 1.0) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} mp "
+          "· lassul · a hajrában kontrázhatók";
+    }
+    if (d <= -1.0) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} mp "
+          "· gyorsul · a hajrában nem kontrázhatók";
+    }
+    return null;
+  }
+
   // Lövés-időzítés: az első hullámból lövők vs kivárók (5+ lőtt
   // támadásnál; a backend-kulcsokkal azonos küszöbök).
   String? _shotTiming(Map<String, dynamic> r) {
@@ -11128,6 +11152,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Védekezés-fellazulás", _pressureFade(r)!],
       if (_lineHeightFade(r) != null)
         ["Fal-mélység a hajrában", _lineHeightFade(r)!],
+      if (_retreatFade(r) != null)
+        ["Visszaállás a hajrában", _retreatFade(r)!],
       if (_timeoutRecord(r) != null)
         ["Időkérés-mérleg", _timeoutRecord(r)!],
       if (_turnoverFade(r) != null)

@@ -4696,3 +4696,77 @@ def test_line_height_fade_keves_mintanal_nincs_itelet():
     lf = line_height_fade(Match(_meta(), frames))
     assert lf["home"]["drop_m"] is None
     assert lf["away"]["drop_m"] is None
+
+
+# ---- Visszaállás-fáradás (lassul-e a hazaérés a 2. félidőre) ---------------
+
+
+def _rtf_frames(t0, delays_s, fps=25.0):
+    """A `_rtt_match` kockái adott kezdő-időtől — hogy két félidőt egy
+    felvételbe lehessen fűzni."""
+    frames = []
+    t = t0
+
+    def _cast(x_home):
+        out = [_pl(10 + k, Team.HOME, x_home + 0.4 * k, 6.0 + 2.0 * k)
+               for k in range(4)]
+        out += [_pl(20 + k, Team.AWAY, 8.0 + k, 5.0 + 2.0 * k)
+                for k in range(4)]
+        return out
+
+    for delay in delays_s:
+        for _ in range(10):                 # a labda a lövőnél
+            frames.append(Frame(t=t, players=_cast(30.0),
+                                ball=Ball(x=30.2, y=6.0, confidence=1.0)))
+            t += 1
+        for i in range(10):                 # a lövés a +x kapuba
+            frames.append(Frame(t=t, players=_cast(30.0),
+                                ball=Ball(x=min(31.0 + i, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(int(delay * fps)):   # még kint a támadók
+            frames.append(Frame(t=t, players=_cast(30.0),
+                                ball=Ball(x=20.0, y=16.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(5 * fps)):       # hazaértek (x < 20)
+            frames.append(Frame(t=t, players=_cast(12.0),
+                                ball=Ball(x=20.0, y=16.0, confidence=1.0)))
+            t += 1
+    return frames
+
+
+def test_retreat_fade_lassulo_hazaeres():
+    """Az 1. félidőben 2 mp, a 2.-ban 10 mp alatt ér haza a fal →
+    érdemi lassulás.
+
+    Edzőileg ez a késői összeomlás leggyakoribb mechanizmusa: a csapat
+    ugyanannyi gólt lő, csak minden lövése után egy-egy kontra-lépéssel
+    később ér haza.
+    """
+    from handball.pipeline.defense import RETREAT_FADE_SLOW_S, retreat_fade
+
+    fps = 25.0
+    frames = _rtf_frames(0, [2.0, 2.0, 2.0, 2.0], fps)   # 1. félidő: gyors
+    t = frames[-1].t + 1
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * fps))]            # szünet
+    t = frames[-1].t + 1
+    frames += _rtf_frames(t, [10.0, 10.0, 10.0, 10.0], fps)  # 2. félidő: lassú
+
+    rf = retreat_fade(Match(_meta(fps), frames))
+    h = rf["home"]
+    assert h["fh_s"] is not None and h["sh_s"] is not None, h
+    assert h["fh_shots"] >= 4 and h["sh_shots"] >= 4, h
+    # POZITÍV = lassult.
+    assert h["slow_s"] is not None and h["slow_s"] >= RETREAT_FADE_SLOW_S, h
+    assert h["sh_s"] > h["fh_s"], h
+
+
+def test_retreat_fade_felido_jel_nelkul_nincs_itelet():
+    """Félidő-jel nélkül nincs mihez viszonyítani — inkább None, mint
+    egy fél felvételből vett szám."""
+    from handball.pipeline.defense import retreat_fade
+
+    rf = retreat_fade(Match(_meta(25.0), _rtf_frames(0, [2.0, 2.0])))
+    assert rf["home"]["slow_s"] is None
+    assert rf["away"]["slow_s"] is None

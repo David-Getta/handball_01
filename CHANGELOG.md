@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.55 óta)
 
+- **Visszaállás a hajrában** (új réteg, `retreat_fade`): a
+  visszaállás-idő (`retreat_time`) megmondja, hány másodperc alatt áll
+  össze a fal a saját lövés után; ez a réteg azt teszi hozzá, hogy
+  ROMLIK-E a meccs alatt. Ez a késői összeomlás leggyakoribb
+  mechanizmusa, és a gólszámban NEM látszik: a csapat ugyanannyit lő a
+  2. félidőben, csak minden lövése után egy másodperccel később ér
+  haza — és az az egy másodperc pont egy kontra-lépés. Ellenfélként ez
+  a hajrá kontra-terve (a kapusnak azonnal indítania kell); saját
+  csapatra a teendő nem futóedzés, hanem a lövés PILLANATÁBAN kijelölt
+  első visszafutó — fáradtan a fejben dől el, ki fordul meg.
+  Felületek: /analyze, meccs-csomag, edzői összefoglaló, felderítés
+  (edzői kulcs + 451. meccsterv-szabály), edzés-fókusz (471. szabály),
+  kliens-csempe.
+
 - **A jelentés megmondja, MELYIK szakaszt dolgozta fel** (motor +
   kliens): eddig csak a százalékot mondta ("a felvétel 60%-át"). Az a
   szám viszont nem árulja el, hogy az eleje vagy a vége maradt ki —
