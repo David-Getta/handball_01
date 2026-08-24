@@ -1179,6 +1179,12 @@ class ApiClient {
     // automatikus meccs-ablak-felismerést.
     double? startS,
     double? endS,
+    // HOSSZ-korlát MÁSODPERCBEN ("Próba ~2 perc", "Félidő ~35 perc").
+    // A `max` kockában ugyanezt mondja, de a kliens csak 25 fps-sel tud
+    // számolni — egy 30 fps-es telefonvideón a "35 perc" valójában 29
+    // perc lenne. A motor a VALÓDI fps-sel váltja át; a `max` marad a
+    // tartalék, ha az fps nem olvasható ki.
+    double? maxS,
   }) async {
     final body = <String, dynamic>{
       "path": path,
@@ -1188,6 +1194,7 @@ class ApiClient {
       "start": start,
       if (startS != null) "start_s": startS,
       if (endS != null) "end_s": endS,
+      if (maxS != null) "max_s": maxS,
       if (weights != null) "weights": weights,
       if (calib != null) "calib": calib,
       if (calib != null && calibRegion != null) "calib_region": calibRegion,
@@ -1227,7 +1234,8 @@ class ApiClient {
   /// feldolgozás indítását nem akadályozhatja meg egy megbicsakló
   /// kérés. (A tényleges hely-elutasítás a motorban van.)
   Future<Map<String, dynamic>> fetchPreflight(String path,
-      {int? stride, int? imgsz, double? startS, double? endS}) async {
+      {int? stride, int? imgsz, double? startS, double? endS,
+      double? maxS}) async {
     try {
       final resp = await http
           .post(Uri.parse("$baseUrl/preflight"),
@@ -1243,6 +1251,9 @@ class ApiClient {
                 // szóljon, ne a teljes videóra.
                 if (startS != null) "start_s": startS,
                 if (endS != null) "end_s": endS,
+                // A hossz-korlát is: a "Próba (~2 p)" becslése két
+                // percre szóljon, ne a teljes videóra.
+                if (maxS != null) "max_s": maxS,
               }))
           .timeout(const Duration(seconds: 8));
       if (resp.statusCode != 200) return const {};

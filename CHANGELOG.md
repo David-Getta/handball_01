@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.55 óta)
 
+- **A "Félidő (~35 p)" tényleg 35 perc** (motor + kliens): a
+  hossz-beállítás korlátját a kliens KOCKÁBAN küldte el, és 25 fps-sel
+  számolt — mert a videó valódi képrátáját ott nem ismeri. Egy 30
+  fps-es telefonvideón ez azt jelentette, hogy a "Félidő (~35 p)"
+  valójában 29 percet dolgozott fel, egy 50 fps-esen 17,5-et; a "Próba
+  (~2 p)" ugyanígy rövidült. A felhasználó a feliratot hiszi el, nem a
+  kockaszámot — és utána azt látja, hogy "csak az első félidőt elemezte
+  ki". A korlát mostantól MÁSODPERCBEN megy a motornak, ami a videó
+  valódi fps-ével váltja kockára; a régi, kockában számolt érték
+  tartalékként megmarad arra az esetre, ha az fps nem olvasható ki.
+  Ugyanez az indítás előtti idő-becslésre is áll: a "Próba (~2 p)"
+  becslése két percre szól, nem a teljes videóra. Ha időablak ÉS
+  hossz-korlát is meg van adva, a szigorúbb nyer.
+
 - **A jelentés megmondja, kimaradt-e a bemelegítés** (motor + kliens):
   a motor eddig is levágta a felvétel nem-meccs széleit (bemelegítés,
   csapatbemutatás, lefújás utáni rész), de az eredményét SEHOL nem

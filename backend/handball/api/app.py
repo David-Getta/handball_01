@@ -600,7 +600,8 @@ def create_app():
         """
         kezd = body.get("start_s")
         veg = body.get("end_s")
-        if kezd is None and veg is None:
+        hossz = body.get("max_s")
+        if kezd is None and veg is None and hossz is None:
             return
         try:
             from ..video_io import video_fps
@@ -608,21 +609,39 @@ def create_app():
         except Exception:
             fps = None
         if not fps or fps <= 0:
-            return  # nem tudjuk átváltani — marad a régi viselkedés
+            return  # nem tudjuk átváltani — marad a kliens tartalék `max`-ja
         stride = max(1, int(body.get("stride", 3) or 3))
         if kezd is not None:
             try:
                 body["start"] = max(0, int(round(float(kezd) * fps)))
             except (TypeError, ValueError):
                 return
+        # A feldolgozandó kockaszám KÉT forrásból jöhet, és a szigorúbb
+        # nyer: a kifejezett végpont (end_s) és a hossz-korlát (max_s,
+        # "Próba ~2 perc" / "Félidő ~35 perc"). Aki 0–60 perces ablakot
+        # ad meg, de próbát indít, két percet vár — nem hatvanat.
+        #
+        # A hossz-korlátot a kliens kockában is elküldi (`max`), de ott
+        # csak 25 fps-sel tud számolni: egy 30 fps-es telefonvideón a
+        # "35 perc" valójában 29 perc lenne, egy 50 fps-esen 17,5. A
+        # felhasználó a feliratot hiszi el, nem a kockaszámot, ezért itt
+        # a VALÓDI fps dönt.
+        jeloltek: list[int] = []
         if veg is not None:
             try:
                 start_f = int(body.get("start", 0) or 0)
-                kockak = int(round((float(veg) * fps - start_f) / stride))
+                jeloltek.append(
+                    int(round((float(veg) * fps - start_f) / stride)))
             except (TypeError, ValueError):
                 return
-            if kockak > 0:
-                body["max"] = kockak
+        if hossz is not None:
+            try:
+                jeloltek.append(int(round(float(hossz) * fps / stride)))
+            except (TypeError, ValueError):
+                return
+        jeloltek = [k for k in jeloltek if k > 0]
+        if jeloltek:
+            body["max"] = min(jeloltek)
 
     def _video_seconds_safe(path) -> float | None:
         """A videó hossza másodpercben — hiba esetén None.
@@ -1056,6 +1075,17 @@ def create_app():
             veg = max(0.0, min(veg, hossz))
             if veg > kezd:
                 feldolgozando = veg - kezd
+            # HOSSZ-korlát ("Próba ~2 perc", "Félidő ~35 perc"): ennél
+            # többet akkor sem dolgozunk fel, ha a videó hosszabb — a
+            # becslés is erre szóljon, különben a próba-futásra a teljes
+            # videó idejét mondanánk.
+            try:
+                korlat = (float(body["max_s"])
+                          if body.get("max_s") is not None else None)
+            except (TypeError, ValueError):
+                korlat = None
+            if korlat and korlat > 0:
+                feldolgozando = min(feldolgozando, korlat)
         becsult = estimate_seconds(feldolgozando, _job_log_rows(),
                                    stride=stride, imgsz=imgsz)
         return {

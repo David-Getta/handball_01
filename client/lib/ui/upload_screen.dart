@@ -95,6 +95,20 @@ class _UploadScreenState extends State<UploadScreen> {
   // képkockán) — ezzel lesz PONTOS a pálya-koordináta és a szűrés.
   CalibrationSet? _calib;
 
+  /// A hossz-beállítás korlátja MÁSODPERCBEN — a feliratokkal azonos
+  /// szám ("Próba (~2 p)", "Félidő (~35 p)"), null = a teljes videó.
+  ///
+  /// Ez megy a motornak; a kockában számolt `max` csak tartalék. A
+  /// kettő azért nem ugyanaz: kockára váltani csak a videó VALÓDI
+  /// fps-ével lehet, azt pedig itt nem ismerjük — 25-tel számolva egy
+  /// 30 fps-es telefonvideón a "35 perc" 29 perc lenne, egy 50 fps-esen
+  /// 17,5. A felhasználó a feliratot hiszi el, nem a kockaszámot.
+  double? get _hosszKorlatMp => switch (_length) {
+        "trial" => 120.0,
+        "half" => 2100.0,
+        _ => null,
+      };
+
   static const Map<String, (int, int, String)> _qualityPresets = {
     "fast": (5, 960, "Gyors"),
     "balanced": (3, 1280, "Kiegyensúlyozott"),
@@ -384,10 +398,11 @@ class _UploadScreenState extends State<UploadScreen> {
     final (stride, imgsz, _) = _qualityPresets[_quality]!;
     final kezd = _ablakKezdet();
     final veg = _ablakVeg();
-    final kulcs = "$path|$stride|$imgsz|$kezd|$veg";
+    final korlat = _hosszKorlatMp;
+    final kulcs = "$path|$stride|$imgsz|$kezd|$veg|$korlat";
     if (kulcs == _preflightPath) return;
     final r = await _api.fetchPreflight(path,
-        stride: stride, imgsz: imgsz, startS: kezd, endS: veg);
+        stride: stride, imgsz: imgsz, startS: kezd, endS: veg, maxS: korlat);
     if (!mounted) return;
     setState(() {
       _preflight = r;
@@ -692,13 +707,12 @@ class _UploadScreenState extends State<UploadScreen> {
     // A kiválasztott profil paraméterei; próba módban csak a videó eleje
     // (~2 percnyi feldolgozott kocka) készül el — gyors ellenőrzéshez.
     final (stride, imgsz, _) = _qualityPresets[_quality]!;
-    // A hossz-korlát FELDOLGOZOTT kockában értendő (25 fps-sel számolva):
-    // próba ~2 perc, félidő ~35 perc, 0 = a videó vége.
-    final max = switch (_length) {
-      "trial" => (3000 / stride).round(),
-      "half" => (52500 / stride).round(),
-      _ => 0,
-    };
+    // A hossz-korlát TARTALÉK alakja: feldolgozott kockában, 25 fps-t
+    // feltételezve. A mérvadó a másodperces `maxS` — a motor a videó
+    // VALÓDI fps-ével váltja kockára; ez a szám csak akkor számít, ha
+    // az fps nem olvasható ki a fájlból.
+    final korlatMp = _hosszKorlatMp;
+    final max = korlatMp == null ? 0 : (korlatMp * 25 / stride).round();
     try {
       final r = await _api.startProcessing(
         path,
@@ -718,6 +732,9 @@ class _UploadScreenState extends State<UploadScreen> {
         // ceremónia levágása) — az értelmetlen párost eldobjuk.
         startS: _ablakKezdet(),
         endS: _ablakVeg(),
+        // A hossz-korlát másodpercben: a motor a valódi fps-sel váltja
+        // kockára, tehát a "Félidő (~35 p)" tényleg 35 perc lesz.
+        maxS: korlatMp,
         jerseyOcr: _jerseyOcr,
         // A felhasználó döntése: megvárja-e a már futó feldolgozást.
         queueBehind: queueBehind,

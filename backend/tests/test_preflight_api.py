@@ -43,6 +43,21 @@ def _client():
     return TestClient(create_app())
 
 
+def _mentett_params(match_id):
+    """A feldolgozás mentett paraméterei (ebből indul a Folytatás is).
+
+    A motor ide írja ki a TÉNYLEGESEN használt kockaszámokat — a
+    másodpercből átváltott értékeket is —, tehát a hossz-korlát
+    helyességét itt lehet ellenőrizni.
+    """
+    import json
+    import re
+    root = Path(os.environ["HANDBALL_DATA_DIR"]) / "data" / "matches"
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+    return json.loads((root / f"{safe}.params.json").read_text(
+        encoding="utf-8"))
+
+
 def test_preflight_megmondja_a_video_hosszat(tmp_path):
     """A 25 kockás, 25 fps-es videó egy másodperc — ezt kell látni."""
     video = tmp_path / "meccs.mp4"
@@ -135,3 +150,71 @@ def test_preflight_ertelmetlen_ablakot_nem_fogad_el(tmp_path):
     r2 = client.post("/preflight", json={
         "path": str(video), "start_s": 2.0, "end_s": 999.0}).json()
     assert r2["processed_seconds"] == pytest.approx(8.0, abs=0.3)
+
+
+def _tiny_video_fps(path, frames, fps, w=96, h=64):
+    vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"),
+                         float(fps), (w, h))
+    rng = np.random.default_rng(7)
+    for _ in range(frames):
+        vw.write(rng.integers(90, 200, size=(h, w, 3), dtype=np.uint8))
+    vw.release()
+
+
+def test_a_hossz_korlat_a_valodi_fps_szerint_szamol(tmp_path):
+    """A "Félidő (~35 p)" 30 fps-es videón is 35 perc legyen.
+
+    A kliens a korlátot kockában is elküldi, de ott csak 25 fps-sel tud
+    számolni — 30 fps-es telefonvideón ugyanaz a kockaszám 29 percet
+    jelentene. A felhasználó a FELIRATOT hiszi el, ezért a motornak a
+    valódi fps-sel kell átváltania.
+    """
+    video = tmp_path / "meccs.mp4"
+    _tiny_video_fps(video, frames=300, fps=30.0)   # 10 másodperc @ 30 fps
+    client = _client()
+    # 4 másodperces korlát, stride=2 → 4 * 30 / 2 = 60 feldolgozott kocka.
+    # A kliens tartalék száma (25 fps-sel) 50 lenne — azt kell felülírni.
+    r = client.post("/matches/process", json={
+        "path": str(video), "stride": 2, "max": 50, "max_s": 4.0,
+        "match_id": "fps30"})
+    assert r.status_code == 200, r.text
+    assert _mentett_params("fps30")["max"] == 60
+
+
+def test_olvashatatlan_fps_nel_marad_a_kliens_szama(tmp_path):
+    """Ha az fps nem olvasható ki, a kliens kockában megadott tartalék
+    száma marad érvényben — a próba-futás nem eshet szét teljes videóvá."""
+    hianyzo = tmp_path / "nincs.mp4"
+    client = _client()
+    r = client.post("/matches/process", json={
+        "path": str(hianyzo), "stride": 2, "max": 50, "max_s": 4.0,
+        "match_id": "nofps"})
+    # A hiányzó fájlt a motor utasítja el — a lényeg, hogy a `max` nem
+    # veszett el útközben (nem lett 0 = teljes videó).
+    if r.status_code == 200:
+        assert _mentett_params("nofps")["max"] == 50
+    else:
+        assert r.status_code == 400
+
+
+def test_a_szigorubb_korlat_nyer(tmp_path):
+    """Aki 0–8 mp-es ablakot ad meg, de 4 mp-es hosszt választ, négyet
+    kap — a két korlát közül a szigorúbb érvényes."""
+    video = tmp_path / "meccs.mp4"
+    _tiny_video_fps(video, frames=250, fps=25.0)   # 10 másodperc
+    client = _client()
+    r = client.post("/matches/process", json={
+        "path": str(video), "stride": 1, "max": 0, "match_id": "szigoru",
+        "start_s": 0.0, "end_s": 8.0, "max_s": 4.0})
+    assert r.status_code == 200, r.text
+    assert _mentett_params("szigoru")["max"] == 100   # 4 mp * 25 fps / 1
+
+
+def test_preflight_a_hossz_korlatra_becsul(tmp_path):
+    """A "Próba (~2 p)" becslése két percre szóljon, ne a teljes videóra."""
+    video = tmp_path / "meccs.mp4"
+    _tiny_video_fps(video, frames=250, fps=25.0)   # 10 másodperc
+    client = _client()
+    r = client.post("/preflight", json={"path": str(video), "max_s": 4.0}).json()
+    assert r["video_seconds"] == pytest.approx(10.0, abs=0.3)
+    assert r["processed_seconds"] == pytest.approx(4.0, abs=0.3)
