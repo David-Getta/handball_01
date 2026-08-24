@@ -10712,6 +10712,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Szélső-bevonás esése: beszűkül-e a támadásuk a 2. félidőre
+  // (félidőnként 6+ mért támadásnál, 10 százalékpontos küszöbbel — a
+  // backend WING_INV_FADE_MIN_ATTACKS / WING_INV_FADE_DROP_PCT tükre).
+  String? _wingInvolvementFade(Map<String, dynamic> r) {
+    final fhN = ((r["wif_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["wif_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 6 || shN < 6) return null;
+    final fh = 100.0 * (((r["wif_fh_wing"] as num?) ?? 0).toInt()) / fhN;
+    final sh = 100.0 * (((r["wif_sh_wing"] as num?) ?? 0).toInt()) / shN;
+    final d = fh - sh; // pozitív = beszűkültek
+    if (d >= 10.0) {
+      return "${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "· beszűkül · húzd beljebb a szélső-védőket";
+    }
+    if (d <= -10.0) {
+      return "${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "· széthúzódik · a szélső-védekezés a feladat";
+    }
+    return null;
+  }
+
   // Lövés-időzítés: az első hullámból lövők vs kivárók (5+ lőtt
   // támadásnál; a backend-kulcsokkal azonos küszöbök).
   String? _shotTiming(Map<String, dynamic> r) {
@@ -11187,6 +11208,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fal-mélység a hajrában", _lineHeightFade(r)!],
       if (_retreatFade(r) != null)
         ["Visszaállás a hajrában", _retreatFade(r)!],
+      if (_wingInvolvementFade(r) != null)
+        ["Szélső-bevonás a hajrában", _wingInvolvementFade(r)!],
       if (_timeoutRecord(r) != null)
         ["Időkérés-mérleg", _timeoutRecord(r)!],
       if (_turnoverFade(r) != null)

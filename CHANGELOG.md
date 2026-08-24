@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.56 óta)
 
+- **Szélső-bevonás a hajrában** (új réteg, `wing_involvement_fade`): a
+  szélső-bevonás megmondja, a támadásaik hány százalékában jár a labda
+  a szél-sávban; ez a réteg azt teszi hozzá, hogy BESZŰKÜLNEK-E a
+  meccs alatt. Ez a fáradás egyik legkorábbi jele, és a lövés-távolság
+  esésének (`shot_distance_fade`) az OKA: a fáradó csapatban a lábmunka
+  fogy el először, a labda nem megy át a széles ívben, minden támadás
+  középen ragad — és onnan már csak a nehéz átlövés marad.
+  Ellenfélként a hajrára a szélső-védők beljebb húzhatók; saját
+  csapatra a teendő a hajrá-támadások első passzának kikötése a szélre
+  (a labda gyorsabb, mint a láb). Felületek: /analyze, meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 452. meccsterv-szabály),
+  edzés-fókusz (472. szabály), kliens-csempe.
+
 ## v0.1.56 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: az első éles meccs jelentésének utolsó nyitott

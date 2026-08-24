@@ -1366,6 +1366,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 472) Beszűkülő támadás: ha a SAJÁT labdánk a 2. félidőre nem megy
+    # ki a szélre, a hajrában csak a nehéz átlövés marad.
+    try:
+        from .attack_types import (WING_INV_FADE_DROP_PCT,
+                                   wing_involvement_fade)
+        wif472 = wing_involvement_fade(match, config)
+        for side in ("home", "away"):
+            r472 = wif472[side]
+            if (r472["drop_pct"] is None
+                    or r472["drop_pct"] < WING_INV_FADE_DROP_PCT):
+                continue
+            focus[side].append(
+                f"széles játék a hajrában: a szélre eljutó támadásaink "
+                f"aránya a 2. félidőre {r472['fh_pct']:.0f}% → "
+                f"{r472['sh_pct']:.0f}%-ra esett, vagyis fáradtan középen "
+                "ragad a labda, és onnan csak a nehéz átlövés marad — "
+                "4x5 perces kötött játék FÁRADTAN azzal a szabállyal, "
+                "hogy a támadás ELSŐ passza a szélre megy (a labda "
+                "gyorsabb, mint a láb)")
+    except Exception:
+        pass
+
     # 471) Lassuló visszaállás: ha a SAJÁT hazaérésünk a 2. félidőre
     # lassul, a hajrában minden lövésünk után kontra-ablakot nyitunk.
     try:

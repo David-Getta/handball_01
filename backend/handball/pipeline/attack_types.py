@@ -2473,6 +2473,73 @@ def wing_involvement(match: Match,
     return out
 
 
+# Szélső-bevonás esése: félidőnként ennyi mért támadás kell az
+# ítélethez (kevesebb, mint az alap-rétegé — egy félidőben nincs is
+# annyi), és ennyi százalékponttal kell esnie a szél-bevonásnak, hogy
+# beszűkülésről beszéljünk. A tíz pont nem véletlen: húsz támadásból
+# kettő különbség még a mintavétel zaja, a harmadik már mintázat.
+WING_INV_FADE_MIN_ATTACKS = 6
+WING_INV_FADE_DROP_PCT = 10.0
+
+
+def wing_involvement_fade(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Szélső-bevonás esése: ELJUT-E MÉG A LABDA a szélre a hajrában.
+
+    A szélső-bevonás (`wing_involvement`) megmondja, a támadásaik hány
+    százalékában jár a labda a szél-sávban; ez a réteg azt teszi hozzá,
+    hogy BESZŰKÜLNEK-E a meccs alatt. A felismert félidő mentén
+    kettébontva mérjük ugyanazt.
+
+    Edzőileg ez a fáradás egyik legkorábbi jele, és a lövés-távolság
+    esésének (`shot_distance_fade`) az OKA: a fáradó csapatban a
+    lábmunka fogy el először, a labda nem megy át a széles ívben,
+    minden támadás középen ragad — és onnan már csak a nehéz átlövés
+    marad. Ellenfélként a hajrára a szélső-védők beljebb húzhatók
+    (tömör fallal a beállót és az átlövést kell elzárni, mert a szélt
+    úgysem játsszák meg); saját csapatra a teendő a hajrá-támadások
+    ELSŐ passzának kikötése a szélre — a labda gyorsabb, mint a láb.
+
+    Visszatérés csapatonként: {"fh_pct", "fh_attacks", "sh_pct",
+    "sh_attacks", "drop_pct"} — az 1./2. félidei szél-arány és a mért
+    támadások száma; drop_pct az esés százalékpontban (POZITÍV =
+    beszűkültek), None, ha nincs félidő-jel vagy kevés a támadás
+    valamelyik félidőben.
+    """
+    from ..models.tracking import Match as _M
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_pct": None, "fh_attacks": 0, "sh_pct": None,
+             "sh_attacks": 0, "drop_pct": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out          # félidő-jel nélkül nincs mihez viszonyítani
+    for oldal, felido in (("fh", True), ("sh", False)):
+        resz = _M(match.meta, [f for f in match.frames
+                               if (f.t <= ht) == felido])
+        wi = wing_involvement(resz, config)
+        for side in ("home", "away"):
+            rec = wi[side]
+            out[side][f"{oldal}_attacks"] = rec["attacks"]
+            # Az alap-réteg a saját (magasabb) küszöbe alatt None-t ad;
+            # itt félidőnként kevesebb támadás is elég, ezért magunk
+            # számoljuk az arányt a darabszámokból.
+            if rec["attacks"] > 0:
+                out[side][f"{oldal}_pct"] = round(
+                    100.0 * rec["with_wing"] / rec["attacks"], 1)
+    for side in ("home", "away"):
+        rec = out[side]
+        if (rec["fh_pct"] is not None and rec["sh_pct"] is not None
+                and rec["fh_attacks"] >= WING_INV_FADE_MIN_ATTACKS
+                and rec["sh_attacks"] >= WING_INV_FADE_MIN_ATTACKS):
+            # Pozitív = beszűkültek (a 2. félidőben KEVESEBBSZER ér ki
+            # a labda a szélre).
+            rec["drop_pct"] = round(rec["fh_pct"] - rec["sh_pct"], 1)
+    return out
+
+
 # Támadás-mélység: ennyi mérhető kocka kell az átlaghoz; e alatt
 # rátapadnak a 9 m-es vonalra, e fölött mélyen, hátrahúzódva játszanak.
 ATTACK_DEPTH_MIN_FRAMES = 100

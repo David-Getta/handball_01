@@ -7001,6 +7001,27 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "a hajrában nem kontrázhatók.")
     except Exception:
         pass
+    # Szélső-bevonás esése: beszűkül-e a támadás a hajrára.
+    try:
+        from .attack_types import (WING_INV_FADE_DROP_PCT,
+                                   wing_involvement_fade)
+        wifc = wing_involvement_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wf = wifc[side]
+            if rec_wf["drop_pct"] is None:
+                continue
+            if rec_wf["drop_pct"] >= WING_INV_FADE_DROP_PCT:
+                body += (f" A(z) {name} támadása a 2. félidőre beszűkült "
+                         f"({rec_wf['fh_pct']:.0f}% → {rec_wf['sh_pct']:.0f}% "
+                         "a szélre eljutó támadás) — a hajrában középen "
+                         "ragad a labda.")
+            elif rec_wf["drop_pct"] <= -WING_INV_FADE_DROP_PCT:
+                body += (f" A(z) {name} a 2. félidőre jobban széthúzta a "
+                         f"támadást ({rec_wf['fh_pct']:.0f}% → "
+                         f"{rec_wf['sh_pct']:.0f}%) — a hajrában a szélső "
+                         "védekezés a feladat.")
+    except Exception:
+        pass
     # Lövés-időzítés: első hullámból lövő vagy kiváró csapat.
     try:
         from .attack_types import (SHTIM_EARLY_PCT, SHTIM_LATE_AVG_S,

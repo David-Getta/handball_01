@@ -384,6 +384,13 @@ class ScoutingReport:
     # (a nézőtér is a pályára került, kevés a labda-észlelés), akkor a
     # terv zajról szól, és ezt ki kell mondani. Darab + összeg, hogy
     # több meccs pontosan összegződjön.
+    # Szélső-bevonás félidőnként (a szélre eljutó támadások és az összes
+    # támadás darabszáma). Darab + darab, hogy több meccs pontosan
+    # összegződjön — az arány a teljes mintán számolódik.
+    wif_fh_wing: int = 0
+    wif_fh_n: int = 0
+    wif_sh_wing: int = 0
+    wif_sh_n: int = 0
     q_score_sum: float = 0.0
     q_matches: int = 0
     q_weak_matches: int = 0
@@ -9095,6 +9102,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "megkezdett sorozatot az időkérésük után is tolhatod, ne "
                 "állj le tőle.")
 
+    # Szélső-bevonás esése: beszűkül-e a támadásuk a hajrára. Ez a
+    # lövés-távolság esésének az OKA — a fáradó csapatban a lábmunka
+    # fogy el először, és a labda középen ragad.
+    if rep.wif_fh_n >= 6 and rep.wif_sh_n >= 6:
+        _wif_fh = 100.0 * rep.wif_fh_wing / rep.wif_fh_n
+        _wif_sh = 100.0 * rep.wif_sh_wing / rep.wif_sh_n
+        _wif_d = _wif_fh - _wif_sh          # pozitív = beszűkültek
+        if _wif_d >= 10.0:
+            keys.append(
+                f"A támadásuk a 2. félidőre beszűkül ({_wif_fh:.0f}% → "
+                f"{_wif_sh:.0f}% jut el a szélre) — a hajrában húzzátok "
+                "beljebb a szélső-védőket: tömör fallal a beállót és az "
+                "átlövést kell elzárni, a szélt úgysem játsszák meg.")
+        elif _wif_d <= -10.0:
+            keys.append(
+                f"A támadásuk a 2. félidőre jobban széthúzódik "
+                f"({_wif_fh:.0f}% → {_wif_sh:.0f}% jut el a szélre) — a "
+                "hajrában a szélső-védekezés és a kifutás a feladat.")
+
     # Visszaállás-fáradás: lassul-e a hazaérésük a hajrára. Ez a késői
     # összeomlás leggyakoribb mechanizmusa, és a gólszámban nem látszik.
     if rep.rtf_fh_n >= 4 and rep.rtf_sh_n >= 4 \
@@ -10223,6 +10249,16 @@ def _scout_team_cached(match: Match, team: Team,
         if lhfrec["sh_m"] is not None:
             rep.lhf_sh_sum_m = round(lhfrec["sh_m"] * lhfrec["sh_frames"], 1)
             rep.lhf_sh_n = lhfrec["sh_frames"]
+        from .attack_types import wing_involvement_fade
+        wifrec = wing_involvement_fade(match, config)[team.value]
+        rep.wif_fh_n = wifrec["fh_attacks"]
+        rep.wif_sh_n = wifrec["sh_attacks"]
+        if wifrec["fh_pct"] is not None:
+            rep.wif_fh_wing = round(
+                wifrec["fh_pct"] * wifrec["fh_attacks"] / 100.0)
+        if wifrec["sh_pct"] is not None:
+            rep.wif_sh_wing = round(
+                wifrec["sh_pct"] * wifrec["sh_attacks"] / 100.0)
         # A feldolgozás minősége: a jelentésnek meg kell tudnia
         # mondani, mennyire hihető a saját alapanyaga.
         try:
@@ -14210,6 +14246,21 @@ def matchup_plan(own: "ScoutingReport",
 
     from .tactics import ATV_MIN_ATTACKS as _A449
     from .tactics import ATV_ONE_TEMPO_PCT as _A449P
+    # 452) Az ő beszűkülő támadásuk × a ti tömör falatok: a hajrában a
+    # szélső-védők beljebb húzhatók, mert a szélt úgysem játsszák meg.
+    if (opp.wif_fh_n >= 6 and opp.wif_sh_n >= 6
+            and 100.0 * opp.wif_fh_wing / opp.wif_fh_n
+            - 100.0 * opp.wif_sh_wing / opp.wif_sh_n >= 10.0
+            and own.defense_main in ("6-0", "5-1")):
+        _p452_fh = 100.0 * opp.wif_fh_wing / opp.wif_fh_n
+        _p452_sh = 100.0 * opp.wif_sh_wing / opp.wif_sh_n
+        plan.append(
+            f"A támadásuk a 2. félidőre beszűkül ({_p452_fh:.0f}% → "
+            f"{_p452_sh:.0f}% jut el a szélre), ti pedig "
+            f"{own.defense_main}-ban védekeztek — a hajrára húzzátok "
+            "beljebb a szélső-védőket: középen fognak keresgélni, és "
+            "onnan csak a nehéz átlövés marad nekik.")
+
     # 451) Az ő lassuló visszaállásuk × a ti kontrátok: a hajrában
     # minden lövésük után nyílik egy kontra-ablak — azt kell kihasználni.
     if (opp.rtf_fh_n >= 4 and opp.rtf_sh_n >= 4
@@ -21486,6 +21537,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rtf_fh_n=sum(r.rtf_fh_n for r in reports),
         rtf_sh_sum_s=round(sum(r.rtf_sh_sum_s for r in reports), 1),
         rtf_sh_n=sum(r.rtf_sh_n for r in reports),
+        wif_fh_wing=sum(r.wif_fh_wing for r in reports),
+        wif_fh_n=sum(r.wif_fh_n for r in reports),
+        wif_sh_wing=sum(r.wif_sh_wing for r in reports),
+        wif_sh_n=sum(r.wif_sh_n for r in reports),
         q_score_sum=round(sum(r.q_score_sum for r in reports), 1),
         q_matches=sum(r.q_matches for r in reports),
         q_weak_matches=sum(r.q_weak_matches for r in reports),

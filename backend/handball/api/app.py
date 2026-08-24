@@ -3209,6 +3209,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import wing_involvement_fade
+            res["wing_involvement_fade"] = wing_involvement_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import timeout_record
             res["timeout_record"] = timeout_record(match)
         except Exception:
@@ -5631,6 +5636,9 @@ def create_app():
                 _layer("line_height_fade", lambda: line_height_fade(match))
                 from ..pipeline.defense import retreat_fade
                 _layer("retreat_fade", lambda: retreat_fade(match))
+                from ..pipeline.attack_types import wing_involvement_fade
+                _layer("wing_involvement_fade",
+                       lambda: wing_involvement_fade(match))
                 from ..pipeline.stoppages import timeout_record
                 _layer("timeout_record", lambda: timeout_record(match))
                 from ..pipeline.defense import turnover_fade

@@ -5021,3 +5021,68 @@ def test_screen_fade_silent_without_halftime_or_change():
     # Szünet nélkül (csak az 1. félidő kockái) nincs félidő-jel.
     half = Match(_meta(), m.frames[:2100])
     assert screen_fade(half)["home"]["fh_pct"] is None
+
+
+def _wif_frames(t0, wings, fps=25.0):
+    """A `_wing_match` kockái adott kezdő-időtől — hogy két félidő egy
+    felvételbe fűzhető legyen."""
+    frames = []
+    t = t0
+    for to_wing in wings:
+        for i in range(int(3.0 * fps)):        # hazai támadás
+            y = 2.0 if (to_wing and i >= 25) else 10.0
+            players = [_pl(1, Team.HOME, 26.0, y),
+                       _pl(2, Team.HOME, 24.0, 12.0),
+                       _pl(9, Team.HOME, 1.5, 10.0, role="kapus"),
+                       _pl(21, Team.AWAY, 37.0, 8.0),
+                       _pl(22, Team.AWAY, 37.0, 12.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=26.0, y=y, confidence=1.0)))
+            t += 1
+        for i in range(int(1.5 * fps)):        # vendég-birtoklás közte
+            players = [_pl(1, Team.HOME, 5.0, 10.0),
+                       _pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0),
+                       _pl(22, Team.AWAY, 15.0, 14.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=18.0 - 0.05 * i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return frames
+
+
+def test_wing_involvement_fade_beszukulo_tamadas():
+    """Az 1. félidőben minden támadásban kimegy a labda a szélre, a
+    2.-ban egyben sem → érdemi beszűkülés.
+
+    Edzőileg ez a fáradás legkorábbi jele: a lábmunka fogy el először,
+    a labda középen ragad, és onnan már csak a nehéz átlövés marad.
+    """
+    from handball.pipeline.attack_types import (WING_INV_FADE_DROP_PCT,
+                                                wing_involvement_fade)
+
+    fps = 25.0
+    frames = _wif_frames(0, [True] * 7, fps)              # 1. félidő: széles
+    t = frames[-1].t + 1
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * fps))]             # szünet
+    t = frames[-1].t + 1
+    frames += _wif_frames(t, [False] * 7, fps)            # 2. félidő: szűk
+
+    wf = wing_involvement_fade(Match(_meta(fps), frames))
+    h = wf["home"]
+    assert h["fh_attacks"] >= 6 and h["sh_attacks"] >= 6, h
+    assert h["fh_pct"] is not None and h["sh_pct"] is not None, h
+    assert h["fh_pct"] > h["sh_pct"], h
+    # POZITÍV = beszűkültek.
+    assert h["drop_pct"] is not None, h
+    assert h["drop_pct"] >= WING_INV_FADE_DROP_PCT, h
+
+
+def test_wing_involvement_fade_keves_tamadasnal_nincs_itelet():
+    """Félidő-jel nélkül (rövid felvétel) nincs mihez viszonyítani —
+    inkább None, mint egy fél felvételből vett szám."""
+    from handball.pipeline.attack_types import wing_involvement_fade
+
+    wf = wing_involvement_fade(Match(_meta(25.0), _wif_frames(0, [True] * 3)))
+    assert wf["home"]["drop_pct"] is None
+    assert wf["away"]["drop_pct"] is None
