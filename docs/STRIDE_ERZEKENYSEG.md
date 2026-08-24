@@ -9,7 +9,7 @@ rétegek ugyanarról a meccsről ritkítva másképp — jellemzően
 óvatosabban — ítélhetnek. Ez a lista a döntés alapja, hol
 érdemes a kockaszám-küszöböt másodperc-alapúra váltani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **501 réteg** összevetve, ebből **25 eltérő ítéletű**.
+Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **501 réteg** összevetve, ebből **24 eltérő ítéletű**.
 
 ## Fontos: mit jelent az eltérés
 
@@ -59,10 +59,6 @@ háromszor annyi valós időt követelnek.
 ### `high_steal_roles`
 
 - `home.verdict`: sűrűn `az elöl-szerzéseik 92%-a a(z) irányító posztjuknál születik (25 letámadás-szerzésből) — az ő oldalán tilos a kihozatalt vezetni: a kapus a másik oldalra indítson` → ritkítva `az elöl-szerzéseik 100%-a a(z) irányító posztjuknál születik (23 letámadás-szerzésből) — az ő oldalán tilos a kihozatalt vezetni: a kapus a másik oldalra indítson`
-
-### `hold_time_roles`
-
-- `home.verdict`: sűrűn `a labda a(z) irányító posztjuknál áll meg: a mért labdatartásuk 72%-a nála telik (230 mp-ből) — a kettőzést rá kell időzíteni, nála lassul a támadásuk` → ritkítva `a labda a(z) irányító posztjuknál áll meg: a mért labdatartásuk 73%-a nála telik (223 mp-ből) — a kettőzést rá kell időzíteni, nála lassul a támadásuk`
 
 ### `keeper_involvement`
 

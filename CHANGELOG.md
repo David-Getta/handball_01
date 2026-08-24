@@ -3,7 +3,27 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.56 óta)
+## Kiadatlan (a v0.1.57 óta)
+
+## v0.1.57 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: a "kocka vagy másodperc" kiadás. A feldolgozás
+> ritkít (a termék alapja minden 3. kocka), és kiderült, hogy HÉT
+> olyan küszöb volt a motorban, ami kockában szerepelt, pedig
+> IDŐTARTAMOT jelent — vagyis a termék alapbeállításán mindegyik
+> HÁROMSZOROS valós időt követelt. A leglátványosabb: a labda rövid
+> eltűnéseit egyenes vonallal pótoljuk, de a "rövid" fél másodperc
+> helyett közel másfél lett — annyi idő alatt kétszer is
+> passzolhatnak, tehát a pótlás nem létező birtoklást és passzokat
+> gyártott. A képen kívüli játékosokat pedig 2 helyett 6 másodpercig
+> vetítettük előre egyenes vonalban, ami egy sprintelőt a pálya túlsó
+> végébe visz. Mind a hét javítva, 25 fps-en pontosan az eredeti
+> értékekre — ez nem hangolás, hanem a szándék helyreállítása.
+> Mérhető hatás: a stride-érzékenységi jelentésből eltűnt a
+> labdatartás-poszt réteg. Mellette két új őr, hogy ez a hibafajta ne
+> jöjjön vissza, egy őr a kliens-küszöbök elcsúszására, és egy új
+> elemzés (beálló-bevonás a hajrában).
+
 
 - **Új őr: az idő-küszöbök nem eshetnek vissza kockára** (teszt +
   fejlesztési szabály): egyetlen nap alatt HÉT olyan küszöböt
