@@ -3,7 +3,23 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.55 óta)
+## Kiadatlan (a v0.1.56 óta)
+
+## v0.1.56 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: az első éles meccs jelentésének utolsó nyitott
+> pontjai. A hossz-beállítás mostantól TÉNYLEG annyi, amennyit ír
+> (a régi számolás 25 fps-t feltételezett, egy 30 fps-es
+> telefonvideón a "Félidő (~35 p)" 29 percet dolgozott fel — ez
+> önmagában megmagyarázza a "csak az első félidőt elemezte ki"
+> élményt). A jelentés megmondja, MELYIK szakaszt dolgozta fel a
+> videó órája szerint, és hogy kimaradt-e a bemelegítés. A kézi
+> időablak végre tényleg felülír minden felismerést. A meccsterv
+> pedig — a legveszélyesebb hely, mert ez alapján dönt az edző —
+> mostantól szintén elöl mondja meg, ha gyenge alapanyagból épült.
+> Mellette két új elemzés a hajráról: hova áll a fal és milyen
+> gyorsan ér haza a meccs végén.
+
 
 - **A meccsterv is megmondja, mennyire hihető** (motor + kliens): az
   edzői összefoglaló és a nyomtatható meccsjelentés a v0.1.54 óta elöl
