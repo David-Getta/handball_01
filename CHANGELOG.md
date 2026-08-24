@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.50 óta)
 
+- **"Gyanúsan sok eladott labda" — kimondva** (motor): a birtokos a
+  labdához LEGKÖZELEBBI játékos, és a váltás egyetlen képkockából
+  eldől. Tömörülésnél (és ritka labda-észlelésnél) ez ide-oda billeg, és
+  minden billenésből eladott labda lesz — az éles meccsen ez a meccs
+  ELŐTTI felállásnál is termelt eladásokat. A számot most nem javítjuk
+  ki (az a birtoklás-felismerés dolga, és külön, validált lépést
+  érdemel — lásd az útitervet), de a jelentés kimondja, ha az ütem nem
+  a játékról szól: valódi meccsen fél-másfél eladás jut egy percre
+  csapatonként, négy fölött a jelzés bejön, teendővel együtt.
+
 - **Réteg-megbízhatóság: külön szó a labda- és a pálya-alapú
   számokról** (motor): az első éles meccsen a felhasználó ugyanolyan
   magabiztosan olvasta a birtoklás- és passz-számokat, mint a

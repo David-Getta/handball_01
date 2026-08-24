@@ -228,3 +228,51 @@ def test_megbizhatosag_kulon_szol_a_palya_alapu_retegekrol():
     sor2 = {r["layer"]: r for r in analysis_confidence(nincs)}["court"]
     assert sor2["available"] is False
     assert "kalibráció" in sor2["reason"]
+
+
+def _flicker_match(frames: int = 4000, fps: float = 25.0):
+    """A birtokos kockánként átugrik a két csapat közt — pontosan az a
+    billegés, ami a valódi meccsen a meccs ELŐTTI felállásnál is
+    eladott labdákat gyártott."""
+    fs = []
+    for t in range(frames):
+        # A labda középen áll; két játékos váltakozva a legközelebbi.
+        kozel, tavol = (10.6, 13.0) if t % 2 == 0 else (13.0, 10.6)
+        fs.append(Frame(
+            t=t,
+            players=[
+                PlayerPosition(track_id=1, team=Team.HOME, x=kozel, y=10.0,
+                               source=PositionSource.MEASURED,
+                               confidence=1.0),
+                PlayerPosition(track_id=2, team=Team.AWAY, x=tavol, y=10.0,
+                               source=PositionSource.MEASURED,
+                               confidence=1.0),
+            ],
+            ball=Ball(x=11.0, y=10.0, confidence=1.0)))
+    meta = MatchMeta(match_id="fl", home_team="H", away_team="A", fps=fps,
+                     calibrated=True)
+    return Match(meta, fs)
+
+
+def test_hihetetlen_eladas_szam_jelzest_kap():
+    """Négy eladás/perc/csapat fölött a szám nem a játékról szól."""
+    from handball.pipeline.quality import TURNOVER_RATE_MAX_PER_MIN
+
+    rep = compute_quality_report(_flicker_match())
+    assert rep["turnover_rate_per_min"] is not None
+    assert rep["turnover_rate_per_min"] > TURNOVER_RATE_MAX_PER_MIN
+    assert any("Gyanúsan sok eladott labda" in w for w in rep["warnings"])
+
+
+def test_hihetetlen_eladas_szamhoz_is_van_teendo():
+    """A figyelmeztetés önmagában kevés — teendő is jár hozzá."""
+    from handball.pipeline.quality import next_action
+
+    teendo = next_action(["Gyanúsan sok eladott labda (12.0/perc/csapat) …"])
+    assert teendo is not None and "időablak" in teendo
+
+
+def test_rovid_felvetelen_nem_becslunk_eladas_utemet():
+    """Egy percnél rövidebb felvételből az ütem félrevezető lenne."""
+    rep = compute_quality_report(_flicker_match(frames=200))
+    assert rep["turnover_rate_per_min"] is None

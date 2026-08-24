@@ -50,6 +50,14 @@ VIDEO_COVERAGE_WARN_PCT = 60.0
 # meccstervet építeni — a kettő nem ugyanaz.
 BALL_CONFIDENCE_PCT = 40.0
 
+# Eladott labda / perc: e FÖLÖTT a szám már nem a játékról szól. Egy
+# kézilabda-meccsen csapatonként nagyjából fél-másfél labdaeladás jut
+# egy percre; négy fölött a birtokos-váltás BILLEG (a birtokos a
+# labdához legközelebbi játékos, és tömörülésnél vagy zajos
+# labda-észlelésnél ez kockánként ide-oda ugrik). Ilyenkor az
+# eladás-alapú rétegek nem a csapatról állítanak valamit.
+TURNOVER_RATE_MAX_PER_MIN = 4.0
+
 # ELSŐ TEENDŐ: a figyelmeztetések fontossági SORRENDJE. Egy gyenge
 # feldolgozás jellemzően négy-hat figyelmeztetést kap egyszerre, és a
 # felhasználó ilyenkor nem tudja, mivel kezdje — pedig a lista eleje és
@@ -83,6 +91,11 @@ NEXT_ACTION_ORDER: tuple = (
     ("Nem sikerült kapust azonosítani",
      "Ellenőrizd a kalibrációt: a kapuelőtérnek a pályán BELÜLRE kell "
      "esnie."),
+    ("Gyanúsan sok eladott labda",
+     "Nézd meg, hogy a felvétel eleje (bemelegítés, csapatbemutatás) "
+     "kimaradt-e: add meg a meccs időablakát. Ha a meccs alatt is így "
+     "van, a labda-észlelés a szűk keresztmetszet — futtasd újra a "
+     "\"Pontos\" profillal."),
     ("Kevés labda-észlelés",
      "Futtasd újra a \"Pontos\" minőségi profillal (nagyobb felbontáson "
      "keresi a labdát) — távoli, széles felvételen ez a leggyorsabb "
@@ -313,6 +326,34 @@ def compute_quality_report(match: Match) -> dict:
             "volt, a 2. félidő irány-érzékeny elemzései (támadás-irány, "
             "kapus-oldal) pontatlanok lehetnek.")
 
+    # --- Hihető-e a labdaeladás-szám? ---
+    # A birtokos a labdához LEGKÖZELEBBI játékos, és a váltás egyetlen
+    # képkockából eldől. Tömörülésnél (és zajos labda-észlelésnél) ez
+    # ide-oda billeg, és minden billenésből eladott labda lesz — éles
+    # meccsen ez a meccs ELŐTTI felállásnál is termelt eladásokat. A
+    # számot nem javítjuk ki (az a birtoklás-felismerés dolga), de a
+    # felhasználónak tudnia kell, ha nem a játékról szól.
+    turnover_rate = None
+    try:
+        from .event_detection import EventType, detect_possession_changes
+        perc = (n / fps / 60.0) if fps > 0 else 0.0
+        if perc >= 1.0:
+            eladas = sum(1 for e in detect_possession_changes(match)
+                         if e.type == EventType.TURNOVER)
+            # Csapatonként: a két oldal együtt adja a listát.
+            turnover_rate = eladas / perc / 2.0
+            if turnover_rate > TURNOVER_RATE_MAX_PER_MIN:
+                warnings.append(
+                    f"Gyanúsan sok eladott labda "
+                    f"({turnover_rate:.1f}/perc/csapat) — valódi meccsen "
+                    "ez fél-másfél szokott lenni. A birtokos-váltás "
+                    "billeg: tömörülésnél vagy ritka labda-észlelésnél a "
+                    "„legközelebbi játékos” kockánként átugrik a másik "
+                    "csapatra. Az eladás- és passz-alapú számokat ezen a "
+                    "feldolgozáson ne vedd készpénznek.")
+    except Exception:
+        pass
+
     # --- Volt-e pálya-kalibráció? ---
     # Kalibráció nélkül a koordináta csak arányos becslés (a képet
     # nyújtjuk a pályára), és a pályán kívüli embereket — kispad, edző,
@@ -383,6 +424,8 @@ def compute_quality_report(match: Match) -> dict:
         "home_share_pct": round(home_share, 1),
         "out_of_court_pct": round(out_pct, 1),
         "calibrated": calibrated,
+        "turnover_rate_per_min": (round(turnover_rate, 2)
+                                  if turnover_rate is not None else None),
         "video_seconds": round(video_s, 1) if video_s else None,
         "processed_pct": (round(processed_pct, 1)
                           if processed_pct is not None else None),
