@@ -321,10 +321,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                       child: _narrativeCard(r)),
                   const SizedBox(height: AppSpacing.lg),
                 ],
+                // A PÁROSÍTOTT meccsterv megy elöl: az "ő gyengéjük x a
+                // ti erősségetek" szabályok kifejezetten ERRE a
+                // párosításra szólnak, míg a lenti kulcsok általános,
+                // száz fölötti listát adnak. Aki két percet szán a
+                // felkészülésre, a konkrétat kell hogy elsőként lássa.
+                if (_matchup.isNotEmpty) ...[
+                  _matchupCard(),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 KeyedSubtree(
                     key: _sectionKey("Hogyan játssz ellenük"),
                     child: _keysCard(r)),
-                if (_matchup.isNotEmpty) _matchupCard(),
                 const SizedBox(height: AppSpacing.lg),
                 KeyedSubtree(
                   key: _sectionKey("Erősségek / gyengeségek"),

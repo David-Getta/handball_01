@@ -592,6 +592,10 @@ def scouting_report_html(rep: ScoutingReport,
 
   {narrative_html}
 
+  {("<h2>Meccsterv (a kettőnk párosítása)</h2><ul>"
+     + "".join(f"<li>{escape(p_)}</li>" for p_ in matchup) + "</ul>")
+    if matchup else ""}
+
   <div class="keys">
     <h2>Hogyan játssz ellenük</h2>
     <ul>{_rows(rep.keys_to_game, "Kevés a minta — több meccs felderítése pontosít.")}</ul>
@@ -627,10 +631,6 @@ def scouting_report_html(rep: ScoutingReport,
   {_defense_bars(rep.defense_distribution)}
 
   {roles_html}
-
-  {("<h2>Meccsterv (a kettőnk párosítása)</h2><ul>"
-     + "".join(f"<li>{escape(p_)}</li>" for p_ in matchup) + "</ul>")
-    if matchup else ""}
 
   <h2>Kulcsjátékosaik</h2>
   {_players(rep.key_players)}

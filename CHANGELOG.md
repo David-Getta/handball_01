@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.58 óta)
 
+- **A párosított meccsterv megelőzi az általános kulcsokat** (kliens +
+  motor): a felderítés két listát ad. A "Hogyan játssz ellenük" kulcsok
+  általánosak és SOKAN vannak — egy hatszáz másodperces mintameccsen
+  123 kulcs, közel húszezer karakter. A meccsterv-szabályok viszont
+  kifejezetten ERRE a párosításra szólnak ("az ő lassuló visszaállásuk
+  × a ti kontrátok"), tehát azok a konkrétak. Eddig mégis a százas
+  lista jött előbb — a felderítő képernyőn és a nyomtatható lapon is,
+  ahol a meccsterv a támadás-mix és a védekezés-eloszlás MÖGÉ került.
+  Mostantól mindkettőn a párosított terv áll elöl: aki két percet szán
+  a felkészülésre, a konkrétat lássa elsőként.
+
 - **Az edzői összefoglaló "A lényeg" szakasszal nyit** (motor): az
   ötszáz réteggel az összefoglaló HÁROMEZER szavassá nőtt — a
   "Játékkép és tempó" szakasz egymaga tizenhatezer karakter. Ezt

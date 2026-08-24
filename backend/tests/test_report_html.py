@@ -410,3 +410,21 @@ def test_jo_alapanyagnal_nincs_doboz_a_felderito_lapon():
     assert '<div class="warnbox">' not in scouting_report_html(jo)
     assert '<div class="warnbox">' not in scouting_report_html(
         ScoutingReport(team="home", team_name="Alfa"))
+
+
+def test_a_meccsterv_megelozi_az_altalanos_kulcsokat():
+    """A PÁROSÍTOTT meccsterv menjen elöl.
+
+    Az "ő gyengéjük × a ti erősségetek" szabályok kifejezetten ERRE a
+    párosításra szólnak, míg a "Hogyan játssz ellenük" kulcsok
+    általános, SZÁZ FÖLÖTTI listát adnak (mérve: 123 kulcs, közel
+    húszezer karakter). Aki két percet szán a felkészülésre, a
+    konkrétat kell hogy elsőként lássa — ezért a nyomtatott lapon is
+    a meccsterv áll előbb.
+    """
+    rep = ScoutingReport(team="home", team_name="Alfa")
+    html = scouting_report_html(
+        rep, matchup=["Az ő lassuló visszaállásuk × a ti kontrátok."])
+    assert "Meccsterv (a kettőnk párosítása)" in html
+    assert (html.index("Meccsterv (a kettőnk párosítása)")
+            < html.index("Hogyan játssz ellenük</h2>"))
