@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.59 óta)
 
+- **JAVÍTÁS: öt új edzés-szabály soha nem futott le** (motor): a
+  v0.1.56–57-ben bevezetett hajrá-rétegekhez tartozó öt edzés-fókusz
+  szabály (fal-mélység, visszaállás, széles játék, halmozott fáradás,
+  beálló-bejátszás) egy NEM LÉTEZŐ változóra hivatkozott. A szabályokat
+  `try/except Exception: pass` védi — helyesen, hogy egy elromló réteg
+  ne vigye el az egész listát —, így a `NameError` elveszett, és a
+  szabályok némán semmit nem csináltak. A tesztek zöldek voltak, mert a
+  fade-rétegek a mintameccsen nem szólalnak meg. Mind az öt javítva a
+  közös `add(...)` alakra, ami a tétel szerkezetét (terület, cím,
+  miért, gyakorlat) és a darabszám-korlátot is garantálja.
+- **Új őr: az edzés-tételek csak a közös segéden át jöhetnek** (teszt):
+  a fenti hiba a "némán eltűnő" fajtából való, amit futtatással nem
+  lehet elkapni (a szabály amúgy sem szólalt volna meg). Az őr ezért a
+  FORRÁST nézi: nyers `append` az edzés-listára tilos. Plusz egy párja,
+  ami a tényleges kimenet alakját ellenőrzi a mintameccsen.
+
 ## v0.1.59 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: az olvashatóság kiadása. Az ötszáz elemző réteg

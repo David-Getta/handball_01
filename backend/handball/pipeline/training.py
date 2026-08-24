@@ -1376,14 +1376,15 @@ def _training_focus_cached(match: Match,
             if (r474["drop_pct"] is None
                     or r474["drop_pct"] < PIVOT_FADE_DROP_PCT):
                 continue
-            focus[side].append(
-                f"beálló-bejátszás a hajrában: a beállós támadásaink "
-                f"aránya a 2. félidőre {r474['fh_pct']:.0f}% → "
-                f"{r474['sh_pct']:.0f}%-ra esett — fáradtan nem a beálló "
-                "mozgása hiányzik, hanem a BÁTOR PASSZ a kiszolgálótól "
-                "(takarásba, testek közé). 3x6 perc bejátszás-gyakorlat "
-                "FÁRADTAN, két passzív védővel a passzsávban, és a "
-                "hajrára nevezz meg egy felelős kiszolgáló-posztot")
+            add(side, "támadás", "Beálló-bejátszás a hajrában",
+                f"a beállós támadásaink aránya a 2. félidőre "
+                f"{r474['fh_pct']:.0f}% → {r474['sh_pct']:.0f}%-ra esett "
+                "— fáradtan nem a beálló mozgása hiányzik, hanem a BÁTOR "
+                "PASSZ a kiszolgálótól (takarásba, testek közé), és a "
+                "hatos vonal elárvulásával a faluk kifelé dolgozhat",
+                "3x6 perc bejátszás-gyakorlat FÁRADTAN (a kondi-blokk "
+                "után), két passzív védővel a passzsávban; a hajrára "
+                "nevezz meg egy felelős kiszolgáló-posztot")
     except Exception:
         pass
 
@@ -1397,13 +1398,13 @@ def _training_focus_cached(match: Match,
             if r473["count"] < FATIGUE_PATTERN_MIN:
                 continue
             _jelek = ", ".join(j["label"].lower() for j in r473["signals"])
-            focus[side].append(
-                f"hatvan perc: egy meccsen {r473['count']} fáradás-jel "
-                f"szólalt meg egyszerre ({_jelek}) — ez nem egy-egy "
-                "gyakorlat kérdése, hanem a heti terhelésé: a technikai "
-                "blokkokat a hét második felében FÁRADT állapotba kell "
-                "tenni (a kondi UTÁN, ne előtte), mert a hibák ott jönnek "
-                "elő; kezdd a legnagyobb tétűvel: "
+            add(side, "kondíció", "A hatvan perc kérdése",
+                f"egy meccsen {r473['count']} fáradás-jel szólalt meg "
+                f"egyszerre ({_jelek}) — ez már nem egy-egy gyakorlat "
+                "kérdése, hanem a heti terhelésé",
+                "a technikai blokkokat a hét második felében FÁRADT "
+                "állapotba kell tenni (a kondi UTÁN, ne előtte), mert a "
+                "hibák ott jönnek elő; kezdd a legnagyobb tétűvel: "
                 f"{r473['top'].lower()}")
     except Exception:
         pass
@@ -1419,11 +1420,11 @@ def _training_focus_cached(match: Match,
             if (r472["drop_pct"] is None
                     or r472["drop_pct"] < WING_INV_FADE_DROP_PCT):
                 continue
-            focus[side].append(
-                f"széles játék a hajrában: a szélre eljutó támadásaink "
-                f"aránya a 2. félidőre {r472['fh_pct']:.0f}% → "
-                f"{r472['sh_pct']:.0f}%-ra esett, vagyis fáradtan középen "
-                "ragad a labda, és onnan csak a nehéz átlövés marad — "
+            add(side, "támadás", "Széles játék a hajrában",
+                f"a szélre eljutó támadásaink aránya a 2. félidőre "
+                f"{r472['fh_pct']:.0f}% → {r472['sh_pct']:.0f}%-ra esett "
+                "— fáradtan középen ragad a labda, és onnan csak a nehéz "
+                "átlövés marad",
                 "4x5 perces kötött játék FÁRADTAN azzal a szabállyal, "
                 "hogy a támadás ELSŐ passza a szélre megy (a labda "
                 "gyorsabb, mint a láb)")
@@ -1439,15 +1440,14 @@ def _training_focus_cached(match: Match,
             r471 = rtf471[side]
             if r471["slow_s"] is None or r471["slow_s"] < RETREAT_FADE_SLOW_S:
                 continue
-            focus[side].append(
-                f"visszaállás a hajrában: a lövéseink után a 2. félidőre "
-                f"{r471['fh_s']:.1f} → {r471['sh_s']:.1f} mp lett a "
-                "hazaérés, vagyis minden lövésünk után nyitunk egy "
-                "kontra-lépésnyi ablakot — a teendő NEM futóedzés, hanem "
-                "a lövés PILLANATÁBAN kijelölt első visszafutó: 10x "
-                "támadás-befejezés úgy, hogy a kijelölt ember már a "
-                "kar-lendítéskor fordul (fáradtan a fejben dől el, ki "
-                "fordul meg)")
+            add(side, "átmenet", "Visszaállás a hajrában",
+                f"a lövéseink után a 2. félidőre {r471['fh_s']:.1f} → "
+                f"{r471['sh_s']:.1f} mp lett a hazaérés — minden "
+                "lövésünk után nyitunk egy kontra-lépésnyi ablakot",
+                "a teendő NEM futóedzés, hanem a lövés PILLANATÁBAN "
+                "kijelölt első visszafutó: 10x támadás-befejezés úgy, "
+                "hogy a kijelölt ember már a kar-lendítéskor fordul "
+                "(fáradtan a fejben dől el, ki fordul meg)")
     except Exception:
         pass
 
@@ -1460,13 +1460,14 @@ def _training_focus_cached(match: Match,
             r470 = lhf470[side]
             if r470["drop_m"] is None or r470["drop_m"] < LINE_FADE_DROP_M:
                 continue
-            focus[side].append(
-                f"fal-mélység a hajrában: a falatok a 2. félidőre "
-                f"visszahúzódik ({r470['fh_m']:.1f} → {r470['sh_m']:.1f} m "
-                "a saját kaputól), tehát a meccs végén senki nem lép ki az "
-                "átlövőre — 3x4 perces kilépés-gyakorlat FÁRADTAN, a "
-                "kondi-blokk UTÁN (frissen mindenki kilép; a kérdés az, "
-                "hogy a 50. percben is)")
+            add(side, "védekezés", "Fal-mélység a hajrában",
+                f"a falunk a 2. félidőre visszahúzódik "
+                f"({r470['fh_m']:.1f} → {r470['sh_m']:.1f} m a saját "
+                "kaputól) — a meccs végén senki nem lép ki az átlövőre, "
+                "és a 9 méteres lövés zavartalan lesz",
+                "3x4 perces kilépés-gyakorlat FÁRADTAN, a kondi-blokk "
+                "UTÁN — frissen mindenki kilép; a kérdés az, hogy az 50. "
+                "percben is")
     except Exception:
         pass
 
