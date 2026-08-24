@@ -2117,6 +2117,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text(etaLabel(j)!,
                   style: AppText.label
                       .copyWith(fontSize: 11, color: AppColors.gold)),
+            // KORAI riasztás: a részeredményből már látszik, ha a
+            // feldolgozás használhatatlan lesz — itt még van értelme
+            // megszakítani, egy óra múlva már nincs.
+            for (final w in ((j["early_warnings"] as List?) ?? const []))
+              Text("$w",
+                  style: AppText.label
+                      .copyWith(fontSize: 11, color: AppColors.away),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis),
           ]),
         ),
         IconButton(

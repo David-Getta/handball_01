@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.48 óta)
 
+- **Korai riasztás a futó feldolgozáson** (motor + kliens): egy meccs
+  feldolgozása fél-egy óra, és eddig CSAK a végén derült ki, ha az
+  egész használhatatlan lett (a nézőtér is a pályán, hiányzó
+  kalibráció). Pedig a motor amúgy is ment részeredményt pár
+  percenként — mostantól ugyanabból kiolvassa azt a két jelet, ami már
+  a legelején eldönti a sorsát, és ráteszi a munkára. A Feldolgozások
+  lapon és a kezdőlapon is látszik, tehát három perc után meg lehet
+  szakítani, ahelyett hogy egy óra menne el rá. A riasztás hibája nem
+  érintheti a részeredmény mentését: az fut le előbb.
+- **Kalibráció nélkül rákérdez az indítás** (kliens): nem tiltás — van,
+  amikor egy hozzávetőleges kép is ér valamit —, de a fél-egy órás
+  munka nem indulhat el némán úgy, hogy a végén a nézőtér is a pályán
+  lesz. A párbeszéd elmondja, mit veszít a felhasználó, és felkínálja
+  mindkét utat.
+
 - **"Kalibráció nélkül futott" — kimondva** (motor + kliens): eddig
   semmi nem jelezte, ha egy feldolgozás pálya-kalibráció NÉLKÜL futott.
   Pedig ilyenkor a koordináta csak arányos becslés (a kép széle a pálya

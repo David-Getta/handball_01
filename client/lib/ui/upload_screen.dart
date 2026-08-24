@@ -437,6 +437,50 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
+  /// Rákérdez, ha KALIBRÁCIÓ NÉLKÜL indulna a feldolgozás.
+  ///
+  /// Nem tiltás: van, amikor egy gyors, hozzávetőleges kép is ér
+  /// valamit. De a fél-egy órás munka végén szembesülni azzal, hogy a
+  /// nézőtér is a pályán van, sokkal rosszabb, mint most tíz másodpercet
+  /// szánni a négy sarokra.
+  Future<bool?> _askNoCalibration() async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Row(children: [
+          Icon(Icons.warning_amber_rounded, color: AppColors.gold, size: 20),
+          SizedBox(width: 8),
+          Text("Nincs pálya-kalibráció"),
+        ]),
+        content: SizedBox(
+          width: 470,
+          child: Text(
+            "Kalibráció nélkül a pozíciók csak arányos becslések (a kép "
+            "széle a pálya széle), és a pályán kívüli embereket — "
+            "kispad, edző, NÉZŐTÉR — nem lehet kiszűrni: mindenki „a "
+            "pályára” kerül. Emiatt a távolság-, fal-forma- és "
+            "birtoklás-alapú elemzések megbízhatatlanok lesznek.\n\n"
+            "A kalibrálás egy perc: jelöld be a játéktér 4 sarkát. Ha "
+            "csak egy hozzávetőleges képre van szükséged, indíthatod "
+            "így is.",
+            style: AppText.label.copyWith(fontSize: 12.5),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text("Mégse — előbb kalibrálok"),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text("Indítás kalibráció nélkül"),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Megkérdezi, mi legyen a MÁR FUTÓ feldolgozással, ha közben új
   /// elemzést indítunk. Visszatérés: true = megvárja az előzőt (sorba
   /// áll mögé), false = azonnal kezdje az újat (az előzőt a szerver
@@ -505,6 +549,17 @@ class _UploadScreenState extends State<UploadScreen> {
       );
       return;
     }
+    // KALIBRÁCIÓ NÉLKÜL nem indítunk el némán egy fél-egy órás munkát:
+    // ilyenkor a koordináta csak arányos becslés, és a pályán kívüli
+    // embereket (kispad, edző, NÉZŐTÉR) nem lehet kiszűrni — mindenki
+    // "a pályára" kerül, tehát a távolság-, fal-forma- és
+    // birtoklás-alapú elemzések megbízhatatlanok. Ezt az órát a
+    // felhasználó tudatosan áldozza fel, vagy sehogy.
+    if (_calib == null) {
+      final megis = await _askNoCalibration();
+      if (megis != true) return;
+    }
+    if (!mounted) return;
     // Ha épp fut egy másik feldolgozás, a felhasználó dönt: megvárja,
     // vagy azonnal kezdje az újat (a régit a szerver félreteszi).
     var queueBehind = false;

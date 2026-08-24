@@ -73,3 +73,12 @@ def test_a_javaslat_ellenorzesre_szolit():
     """A javaslat segítség, nem garancia — ezt ki kell mondani."""
     src = _calib_src()
     assert "ELLENŐRIZD" in src
+
+
+def test_kalibracio_nelkul_rakerdez_az_inditas():
+    """Fél-egy órás munka nem indulhat el némán kalibráció nélkül."""
+    src = _upload_src()
+    assert "_askNoCalibration" in src
+    assert "Nincs pálya-kalibráció" in src
+    # Nem tiltás: a felhasználó dönthet úgy, hogy így is elindítja.
+    assert "Indítás kalibráció nélkül" in src

@@ -166,6 +166,26 @@ class _JobsScreenState extends State<JobsScreen> {
                       .copyWith(fontSize: 12, color: AppColors.gold)),
             ]),
           ],
+          // KORAI riasztás: a motor pár percenként lementi a
+          // részeredményt, és abból már látszik, ha a feldolgozás
+          // használhatatlan lesz (a nézőtér a pályán, hiányzó
+          // kalibráció). Órákig futtatni ilyet értelmetlen — itt még
+          // van értelme megszakítani.
+          for (final w in ((j["early_warnings"] as List?) ?? const []))
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                const Icon(Icons.report_problem_outlined,
+                    size: 14, color: AppColors.away),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text("$w",
+                      style: AppText.label
+                          .copyWith(fontSize: 11.5, color: AppColors.away)),
+                ),
+              ]),
+            ),
           const SizedBox(height: AppSpacing.sm),
           AnimatedBar(value: p, minHeight: 7),
           const SizedBox(height: AppSpacing.sm),

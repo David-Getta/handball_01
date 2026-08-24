@@ -70,3 +70,35 @@ def test_a_jobs_vegpont_kiadja_az_eta_mezot(tmp_path):
     r = c.get("/jobs")
     assert r.status_code == 200
     assert "jobs" in r.json()
+
+
+def test_a_korai_riasztas_a_munkara_kerul():
+    """A részeredményből kiolvasott jel a MUNKÁN jelenjen meg.
+
+    A checkpoint pár percenként úgyis lefuttatja az utómunkát az addig
+    feldolgozott kockákra. Ugyanabból kiolvasható az a két jel, ami már
+    a legelején eldönti, használható lesz-e a feldolgozás — és ilyenkor
+    még van értelme megszakítani, egy óra múlva már nincs.
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert "_EARLY_MARKERS" in src
+    assert "TÚL sok játékos" in src and "kalibráció NÉLKÜL" in src
+    assert 'job["early_warnings"]' in src
+    assert "checkpoint_save=_checkpoint(job)" in src, (
+        "a riasztás csak akkor él, ha a checkpoint tényleg ezt hívja")
+
+
+def test_a_korai_riasztas_hibaja_nem_viszi_el_a_mentest():
+    """A részeredmény mentése FONTOSABB, mint a riasztás."""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    i = src.index("def _checkpoint(job)")
+    blokk = src[i:i + 1600]
+    assert "app.state.put_match(m)" in blokk
+    # A mentés a try ELŐTT fut le: a riasztás hibája nem érintheti.
+    assert blokk.index("app.state.put_match(m)") < blokk.index("try:")

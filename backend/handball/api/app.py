@@ -811,6 +811,32 @@ def create_app():
             job["started"] = _t.time()
             _run_job(job, _job_params.pop(job_id, {}))
 
+    # A KORAI figyelmeztetésre érdemes jelek: ezek a feldolgozás elején
+    # is látszanak, és ha igazak, az egész óra kárba vész. Jobb három
+    # perc után megtudni, mint a végén.
+    _EARLY_MARKERS = ("TÚL sok játékos", "kalibráció NÉLKÜL")
+
+    def _checkpoint(job):
+        """A részeredmény mentése + KORAI minőség-riasztás a munkára.
+
+        A checkpoint pár percenként úgyis lefuttatja az utómunkát a
+        addig feldolgozott kockákra. Ugyanabból a részeredményből
+        kiolvassuk azt a két jelet, ami már a legelején eldönti, hogy
+        használható lesz-e a feldolgozás — és rátesszük a munkára, hogy
+        a felület kimondhassa, amíg még van értelme megszakítani.
+        """
+        def ment(m):
+            app.state.put_match(m)
+            try:
+                from ..pipeline.quality import compute_quality_report
+                q = compute_quality_report(m)
+                job["early_warnings"] = [
+                    w for w in q.get("warnings", [])
+                    if any(mark in w for mark in _EARLY_MARKERS)]
+            except Exception:
+                pass  # a riasztás hibája nem érintheti a mentést
+        return ment
+
     def _run_job(job, body):
         match_id = job["match_id"]
         path = body.get("path")
@@ -884,7 +910,7 @@ def create_app():
                     # Időszakos checkpoint: hosszú feldolgozásnál pár percenként
                     # elmentjük a részeredményt, így áramszünet/összeomlás után
                     # sem vész el minden — a könyvtárban ott a legutóbbi állapot.
-                    checkpoint_save=lambda m: app.state.put_match(m),
+                    checkpoint_save=_checkpoint(job),
                 )
                 cancelled = bool(job.pop("cancel", False))
                 preempted = bool(job.pop("preempted", False))
