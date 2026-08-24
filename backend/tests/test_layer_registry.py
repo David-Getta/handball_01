@@ -833,3 +833,19 @@ def test_nincs_olvasott_de_soha_ki_nem_toltott_felderites_mezo():
     assert not felesleges, (
         "kiszámolt, de SEHOL nem olvasott felderítés-mezők — vagy hiányzik "
         "a felület, vagy fölösleges a számolás: " + ", ".join(felesleges))
+
+    # Elgépelt MEZŐNÉV: a `rep.wif_fh_wingg` AttributeError-t dobna, amit
+    # a védő try/except elnyel — a szabály némán kimarad. (A fenti két
+    # halmaz-művelet ezt nem fogja meg: a nem létező név egyszerűen
+    # kiesik a mezők metszetéből.)
+    # CSAK a jelentés-változókról (`rep`/`own`/`opp`): az `r` a
+    # kódban sor-szótárakat és más objektumokat is jelöl, azok
+    # attribútumai nem felderítés-mezők.
+    jelentes_olvasas = set(re.findall(r"\b(?:rep|own|opp)\.([a-z0-9_]+)\b",
+                                      sc))
+    ismeretlen = sorted(n for n in (jelentes_olvasas - mezok)
+                        if not n.startswith("__"))
+    assert not ismeretlen, (
+        "NEM LÉTEZŐ felderítés-mezőt olvasunk (a try/except elnyelné az "
+        "AttributeError-t, a szabály némán kimaradna): "
+        + ", ".join(ismeretlen))

@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.60 óta)
 
+- **Az őr párja: elgépelt felderítés-mezőnév** (teszt): a
+  `rep.wif_fh_wingg` `AttributeError`-t dobna, amit a védő try/except
+  ugyanúgy elnyel — a szabály némán kimarad. A meglévő "néma mező" őr
+  ezt nem fogta meg (a nem létező név egyszerűen kiesett a mezők
+  metszetéből), most külön ellenőrzés nézi. A kódbázis tisztán jött
+  ki; az őr elbukását szándékos elgépeléssel ellenőriztem.
 - **Új őr: definiálatlan nevek a motorban** (teszt): a v0.1.60-ban
   javított öt néma edzés-szabály gyökere egy elgépelt változónév volt.
   A rétegeket és szabályokat `try/except Exception: pass` védi —
