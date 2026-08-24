@@ -24,7 +24,7 @@ from typing import Optional
 from ..models.tracking import Match
 from .setplays import segment_attacks
 from .tactics import TacticsConfig
-from .primitive_cache import copy_rows, memoize_primitive
+from .primitive_cache import copy_rows, copy_sides, memoize_primitive
 
 # Küszöbök (magyarázható, mért szabályok):
 FAST_BREAK_MAX_S = 6.0     # lerohanás: legfeljebb ennyi ideig tart
@@ -2489,6 +2489,7 @@ PIVOT_FADE_MIN_ATTACKS = 6
 PIVOT_FADE_DROP_PCT = 10.0
 
 
+@memoize_primitive("pivot_usage_fade", copy=copy_sides)
 def pivot_usage_fade(match: Match,
                      config: Optional[TacticsConfig] = None) -> dict:
     """Beálló-bevonás esése: ELJUT-E MÉG A LABDA a beállóhoz a hajrában.
@@ -2559,6 +2560,7 @@ WING_INV_FADE_MIN_ATTACKS = 6
 WING_INV_FADE_DROP_PCT = 10.0
 
 
+@memoize_primitive("wing_involvement_fade", copy=copy_sides)
 def wing_involvement_fade(match: Match,
                           config: Optional[TacticsConfig] = None) -> dict:
     """Szélső-bevonás esése: ELJUT-E MÉG A LABDA a szélre a hajrában.

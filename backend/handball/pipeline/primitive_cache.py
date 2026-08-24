@@ -63,6 +63,17 @@ def _arg_key(value):
         return tuple(sorted((k, _arg_key(v)) for k, v in value.items()))
     data = getattr(value, "__dict__", None)
     if isinstance(data, dict):
+        # Az ALAPÉRTELMEZETT beállítás kulcsa ugyanaz, mint a None-é.
+        # A rétegek `config=None` esetén maguk állítanak elő egy
+        # alapértelmezett TacticsConfig-ot, tehát a két hívás
+        # SZÓ SZERINT ugyanazt számolja — külön kulccsal viszont
+        # kétszer futna le. Mérve: az edzői összefoglalóban a
+        # teendő-rangsor emiatt számolódott újra.
+        try:
+            if data == getattr(type(value)(), "__dict__", None):
+                return None
+        except Exception:
+            pass                       # kötelező mezős osztály: marad a régi
         return (type(value).__name__,
                 tuple(sorted((k, repr(v)) for k, v in data.items())))
     return repr(value)
@@ -86,6 +97,16 @@ def copy_by_id(data: dict) -> dict:
     return {k: (replace(v) if is_dataclass(v) and not isinstance(v, type)
                 else v)
             for k, v in (data or {}).items()}
+
+
+def copy_sides(data: dict) -> dict:
+    """{oldal: {kulcs: szám/szöveg}} másolata — a rétegek leggyakoribb
+    alakja (csapatonkénti mérés-szótár).
+
+    A `copy_nested` ennél egy szinttel mélyebbre megy; itt a belső
+    értékek skalárok, nem szótárak.
+    """
+    return {side: dict(rec or {}) for side, rec in (data or {}).items()}
 
 
 def copy_nested(data: dict) -> dict:

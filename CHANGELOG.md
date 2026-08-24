@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.61 óta)
 
+- **Gyorsítás: az alapértelmezett beállítás nem számol újra** (motor):
+  a gyorsítótár kulcsába a hívás argumentumai is beleszámítanak — és
+  kiderült, hogy a `réteg(meccs)` és a `réteg(meccs, TacticsConfig())`
+  KÜLÖN kulcsot kapott, pedig a `None` épp egy alapértelmezett
+  beállítást jelent. Ugyanaz a mérés így kétszer futott le. A kulcs
+  mostantól az alapértelmezett beállítást a `None`-nal azonosnak veszi
+  (csak akkor, ha a mezői tényleg az alapértékek). Mérve, 15 perces
+  meccsen: edzői összefoglaló 44,2 → 37,1 mp (−16%), ellenszer-lap
+  30,5 → 22,2 mp (−27%). Az őr-hármas változatlan: sorrend-függés 0,
+  tükrözés 0 hibás.
+- **Gyorsítás: a hajrá-rétegek a hatókörbe** (motor): a mai öt
+  esés-réteg és a hajrá-profil is memoizált lett. Ezeket az edzői
+  összefoglaló és a hajrá-profil is kéri, és mindegyik a saját
+  alap-mérését KÉTSZER számolja (a két félidőre külön) — valódi
+  meccsen ez rétegenként tized-másodpercek, összeadva másodpercek.
+
 - **Új teszt: a TELJES lánc egy futásban** (teszt): a modul-tesztek
   darabonként őrzik a motort, a réteg-regiszter őrei pedig szimulált
   meccsen néznek mindent — a kettő közt maradt egy rés: a valódi

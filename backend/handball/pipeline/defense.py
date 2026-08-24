@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ..models.tracking import Match, Team
+from .primitive_cache import copy_sides, memoize_primitive
 from .tactics import TacticsConfig
 
 # Ha a lövés pillanatában ennél messzebb van a legközelebbi védő a lövőtől,
@@ -798,6 +799,7 @@ LINE_FADE_MIN_FRAMES = 100
 LINE_FADE_DROP_M = 0.5
 
 
+@memoize_primitive("line_height_fade", copy=copy_sides)
 def line_height_fade(match, config=None) -> dict:
     """Fal-mélység esése: VISSZAHÚZÓDIK-E a fal a második félidőre.
 
@@ -6137,6 +6139,7 @@ RETREAT_FADE_MIN_SHOTS = RTT_MIN_SHOTS
 RETREAT_FADE_SLOW_S = 1.0
 
 
+@memoize_primitive("retreat_fade", copy=copy_sides)
 def retreat_fade(match, config=None) -> dict:
     """Visszaállás-fáradás: LASSUL-E a hazaérés a második félidőre.
 

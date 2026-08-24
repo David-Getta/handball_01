@@ -986,6 +986,18 @@ def counter_plan(match: Match, config=None) -> dict:
 FATIGUE_PATTERN_MIN = 3
 
 
+def _copy_fatigue(data: dict) -> dict:
+    """A hajrá-profil másolata: a jel-listát elemenként is másoljuk,
+    hogy a gyorsítótár értékét a hívó ne írhassa át."""
+    ki = {}
+    for side, rec in (data or {}).items():
+        uj = dict(rec or {})
+        uj["signals"] = [dict(j) for j in (uj.get("signals") or [])]
+        ki[side] = uj
+    return ki
+
+
+@memoize_primitive("fatigue_profile", copy=_copy_fatigue)
 def fatigue_profile(match: Match, config=None) -> dict:
     """Hajrá-profil: MI romlik a leginkább a meccs végére — egy lapon.
 
