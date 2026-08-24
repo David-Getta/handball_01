@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.53 óta)
 
+- **A "gyanúsan sok eladott labda" magyarázata frissült** (motor): a
+  jelzés szövege még a JAVÍTÁS ELŐTTI működést írta le ("a
+  birtokos-váltás egyetlen képkockából eldől, és kockánként átugrik a
+  másik csapatra") — ez a kitartás-követelmény óta nem igaz. Az app nem
+  mondhat valótlant a saját működéséről. Az új szöveg a két valódi okot
+  nevezi meg, teendővel: vagy a labda-észlelés annyira szakadozott,
+  hogy a kitartást is zaj elégíti ki ("Pontos" profil), vagy a
+  feldolgozott szakasz nem is meccs (meccs-időablak).
+
 - **Az újrafeldolgozás megmondja, mit visz és mit nem** (kliens): a
   gomb a KALIBRÁCIÓT frissíti, a többi beállítást — a meccs időablakát,
   a minőségi profilt és a hosszt — viszont az EREDETI indításból viszi.

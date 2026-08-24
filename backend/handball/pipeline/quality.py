@@ -327,12 +327,12 @@ def compute_quality_report(match: Match) -> dict:
             "kapus-oldal) pontatlanok lehetnek.")
 
     # --- Hihető-e a labdaeladás-szám? ---
-    # A birtokos a labdához LEGKÖZELEBBI játékos, és a váltás egyetlen
-    # képkockából eldől. Tömörülésnél (és zajos labda-észlelésnél) ez
-    # ide-oda billeg, és minden billenésből eladott labda lesz — éles
-    # meccsen ez a meccs ELŐTTI felállásnál is termelt eladásokat. A
-    # számot nem javítjuk ki (az a birtoklás-felismerés dolga), de a
-    # felhasználónak tudnia kell, ha nem a játékról szól.
+    # A felismerés az eladott labdához KITARTÁST vár (lásd
+    # event_detection.TURNOVER_MIN_HOLD_S), tehát a kockánkénti billegés
+    # már nem termel eladásokat. Ez a jelzés a HÁTSÓ VÉDVONAL: ha az
+    # ütem így is hihetetlen, akkor vagy a labda-észlelés annyira
+    # szakadozott, hogy a kitartást is zaj elégíti ki, vagy a
+    # feldolgozott szakasz nem is meccs (bemelegítés, bemutatás).
     turnover_rate = None
     try:
         from .event_detection import EventType, detect_possession_changes
@@ -346,11 +346,14 @@ def compute_quality_report(match: Match) -> dict:
                 warnings.append(
                     f"Gyanúsan sok eladott labda "
                     f"({turnover_rate:.1f}/perc/csapat) — valódi meccsen "
-                    "ez fél-másfél szokott lenni. A birtokos-váltás "
-                    "billeg: tömörülésnél vagy ritka labda-észlelésnél a "
-                    "„legközelebbi játékos” kockánként átugrik a másik "
-                    "csapatra. Az eladás- és passz-alapú számokat ezen a "
-                    "feldolgozáson ne vedd készpénznek.")
+                    "ez fél-másfél szokott lenni. Két oka lehet: a "
+                    "labda-észlelés annyira szakadozott, hogy a birtokos "
+                    "hol az egyik, hol a másik csapatnál látszik "
+                    "(ilyenkor a \"Pontos\" profil segít), vagy a "
+                    "feldolgozott szakasz nem is meccs — bemelegítés, "
+                    "csapatbemutatás (ilyenkor add meg a meccs "
+                    "időablakát). Az eladás- és passz-alapú számokat "
+                    "ezen a feldolgozáson ne vedd készpénznek.")
     except Exception:
         pass
 
