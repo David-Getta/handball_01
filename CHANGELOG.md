@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.59 óta)
+## Kiadatlan (a v0.1.60 óta)
+
+## v0.1.60 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: javító kiadás. A v0.1.56–57-ben bevezetett öt
+> hajrá-edzésszabály (fal-mélység, visszaállás, széles játék,
+> halmozott fáradás, beálló-bejátszás) NÉMÁN nem futott le: egy nem
+> létező változóra hivatkoztak, a hibát pedig elnyelte a védő
+> try/except, ami arra való, hogy egy elromló réteg ne vigye el a
+> többit. A tesztek zöldek voltak, mert ezek a szabályok a
+> mintameccsen amúgy sem szólaltak volna meg — a hibát csak MÉRÉSSEL
+> lehetett megtalálni. Mind az öt javítva, és három új őr gondoskodik
+> róla, hogy a "némán semmit nem csináló szabály" ne térhessen vissza.
+
 
 - **JAVÍTÁS: öt új edzés-szabály soha nem futott le** (motor): a
   v0.1.56–57-ben bevezetett hajrá-rétegekhez tartozó öt edzés-fókusz
