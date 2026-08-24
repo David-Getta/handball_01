@@ -1723,3 +1723,50 @@ def test_kulcs_poszt_indoklassal_a_jelentesben():
     html = match_report_html(_kp_match(), {}, [], None)
     assert "Kulcs-poszt" in html
     assert "rétegek:" in html and "Blokk-poszt" in html
+
+
+def test_meccsjelentes_elejen_all_a_megbizhatosag_figyelmeztetes():
+    """Gyenge feldolgozásnál a jelentés TETEJÉN szól, ne csak a végén.
+
+    A részletes megbízhatóság-szakasz a lap alján van — egy nyomtatott
+    jelentést viszont fentről lefelé olvasnak: aki a végén tudja meg,
+    hogy az adat gyenge, addig már döntött.
+    """
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.quality import compute_quality_report
+    from handball.pipeline.report_html import match_report_html
+
+    # 27 "játékos" kockánként: a pályán legfeljebb 14 lehet.
+    frames = []
+    for t in range(300):
+        pl = [PlayerPosition(track_id=i,
+                             team=Team.HOME if i % 2 == 0 else Team.AWAY,
+                             x=5.0 + (i % 10) * 3.0, y=3.0 + (i % 5) * 3.0,
+                             source=PositionSource.MEASURED, confidence=1.0)
+              for i in range(27)]
+        frames.append(Frame(t=t, players=pl,
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="rossz", home_team="H", away_team="A",
+                        fps=25.0, calibrated=True), frames)
+
+    html = match_report_html(m, {}, [], compute_quality_report(m))
+    assert '<div class="warnbox">' in html
+    # A figyelmeztetés az ELSŐ tartalmi szakasz előtt álljon (a
+    # tartalomjegyzék után, de a jelentés állításai előtt).
+    assert (html.index('<div class="warnbox">')
+            < html.index('<h2 id="sz1">'))
+
+
+def test_jo_feldolgozasnal_nincs_figyelmeztetes_a_jelentes_tetejen():
+    """Rendben lévő feldolgozásnál a lap teteje maradjon tiszta."""
+    from handball.pipeline.quality import compute_quality_report
+    from handball.pipeline.report_html import match_report_html
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=90, fps=10.0, seed=5)
+    m.meta.calibrated = True
+    html = match_report_html(m, {}, [], compute_quality_report(m))
+    # A stíluslap mindig tartalmazza az osztályt; a DOBOZ nem lehet ott.
+    assert '<div class="warnbox">' not in html

@@ -36,6 +36,12 @@ TOO_MANY_PLAYERS = 18.0
 # összpontszám ezt a plafont nem lépheti át.
 TOO_MANY_SCORE_CAP = 35
 
+# E pontszám alatt a feldolgozás állításai bizonytalan alapokon állnak,
+# és ezt a JELENTÉSEK ELEJÉN kell kimondani — nem a végén, és nem egy
+# külön ablakban. A küszöböt az edzői összefoglaló és a nyomtatható
+# meccsjelentés is innen veszi, hogy ne csússzanak szét.
+LOW_SCORE_WARN = 50
+
 # A felvétel LEFEDETTSÉGE: a feldolgozott szakasz ekkora aránya alatt
 # szólunk, hogy a videónak csak egy részét elemeztük. Egy meccs-videó
 # elején-végén van holt idő, és a kézi meccs-ablak is vág — a jelzés

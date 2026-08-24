@@ -17,6 +17,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   felületen a jelentés FÖLÖTT áll, más formában; a szöveges alakban is
   elöl. A szekciók szerkezete változatlan (külön mezőn megy), és üres
   meccsre továbbra sem mondunk semmit.
+- **A nyomtatható meccsjelentés is elöl szól** (motor): a részletes
+  "Elemzés megbízhatósága" szakasz eddig a lap ALJÁN volt — egy
+  nyomtatott jelentést viszont fentről lefelé olvasnak: aki a végén
+  tudja meg, hogy az adat gyenge, addig már döntött. Gyenge
+  feldolgozásnál mostantól a tartalomjegyzék után, az első tartalmi
+  szakasz ELŐTT áll egy rövid, kiemelt doboz a pontszámmal és az első
+  teendővel. A részletes szakasz a helyén marad.
 
 - **A "gyanúsan sok eladott labda" magyarázata frissült** (motor): a
   jelzés szövege még a JAVÍTÁS ELŐTTI működést írta le ("a

@@ -7755,7 +7755,10 @@ def coach_summary(match: Match) -> dict:
 # pontszám alatt az elemzés állításai bizonytalan alapokon állnak, és
 # ezt az edzőnek AZ ELSŐ mondatban tudnia kell — nem a hetedik szekció
 # után, és nem egy külön ablakban, amit nem biztos, hogy megnyit.
-SUMMARY_QUALITY_WARN = 50
+#
+# A küszöb a quality modulból jön: a nyomtatható meccsjelentés
+# ugyanezt használja, és a kettő nem csúszhat szét.
+from .quality import LOW_SCORE_WARN as SUMMARY_QUALITY_WARN  # noqa: E402
 
 
 def _quality_caveat(match: Match) -> str | None:

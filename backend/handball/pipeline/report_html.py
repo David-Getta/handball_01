@@ -15,6 +15,8 @@ from __future__ import annotations
 import re
 from html import escape
 
+from .quality import LOW_SCORE_WARN
+
 from .scouting import ScoutingReport
 
 # Ennyi szekció alatt nincs tartalomjegyzék: két-három címhez nem kell
@@ -3135,6 +3137,22 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass  # a jelentés e blokk nélkül is teljes
 
+    # A megbízhatóság FIGYELMEZTETÉSE a lap TETEJÉRE. A részletes
+    # szakasz a lap alján marad, de egy nyomtatott jelentést fentről
+    # lefelé olvasnak: aki a végén tudja meg, hogy az adat gyenge, addig
+    # már döntött. Csak gyenge feldolgozásnál jelenik meg.
+    q_top = ""
+    if quality:
+        _pont = quality.get("score")
+        _teendo = quality.get("next_action")
+        if _pont is not None and (_pont < LOW_SCORE_WARN or _teendo):
+            _sor = (f"A feldolgozás minősége {_pont}/100 — az alábbi "
+                    "megállapítások ennyire megbízhatóak.")
+            if _teendo:
+                _sor += f" Első teendő: {escape(str(_teendo))}"
+            q_top = ('<div class="warnbox"><b>Mennyire bízhatsz ebben</b>'
+                     f'<br>{_sor}</div>')
+
     # Minőség-önellenőrzés (ha van): pontszám + figyelmeztetések.
     q_html = ""
     if quality:
@@ -3169,6 +3187,9 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   li {{ margin: 4px 0; font-size: 13.5px; }}
   p.empty {{ color: #8492A6; font-size: 12.5px; }}
   p.note {{ color: #4A5768; font-size: 12px; margin: 8px 0 0; }}
+  .warnbox {{ border: 1px solid #C0392B; background: #FDECEA; color: #6E2018;
+              border-radius: 8px; padding: 10px 12px; margin: 0 0 18px;
+              font-size: 13px; line-height: 1.45; }}
   p.cs {{ font-size: 13.5px; margin: 8px 0; }}
   .cols {{ display: flex; gap: 22px; }}
   .col {{ flex: 1; }}
@@ -3197,6 +3218,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     <div class="sub">Elemzett szakasz: {dur_s / 60:.1f} perc · felismert gólok: {goals_h}–{goals_a}</div>
     {header_extra}
   </header>
+
+  {q_top}
 
   {summary_html}
 
