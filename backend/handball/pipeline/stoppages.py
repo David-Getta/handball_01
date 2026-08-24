@@ -22,6 +22,7 @@ import math
 from typing import Optional
 
 from ..models.tracking import Match
+from .primitive_cache import copy_rows, memoize_primitive
 from .tactics import TacticsConfig
 
 STOP_SPEED_MS = 0.4     # ez alatt "állnak" a játékosok
@@ -33,6 +34,11 @@ JOIN_S = 1.5            # ennél rövidebb "megmozdulást" összevonunk
 PRE_WINDOW_S = 3.0      # a leállás előtti birtoklás-ablak (ki kérhette)
 
 
+# A megszakítás-felismerés a TELJES felvételt végigjárja, és egy
+# összeállítás alatt tucatnyi réteg kéri (időkérés-mérleg, -időzítés,
+# -hozam, effektív játékidő, hosszú állás utáni játék...). Hatókörön
+# belül egyszer szabad lefutnia.
+@memoize_primitive("detect_stoppages", copy=copy_rows)
 def detect_stoppages(match: Match,
                      config: Optional[TacticsConfig] = None) -> list[dict]:
     """Játékmegszakítások időrendben.

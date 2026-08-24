@@ -25,6 +25,10 @@ from typing import Optional
 from ..models.tracking import Match, Frame, PlayerPosition, Team
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
 from .tactics import TacticsConfig
+# A kocka-szintű gyorsítótár a LEGFORRÓBB úton hívódik (a
+# birtoklás-mérés kockánként, egy összeállítás alatt milliószor): a
+# függvényen belüli import ennyi hívásnál már mérhető költség.
+from .primitive_cache import cached_frame
 
 GOAL_Y = COURT_WIDTH_M / 2.0  # a kapu közepe y-ban (10 m)
 
@@ -92,7 +96,6 @@ class Option:
 
 def ball_holder(frame: Frame, config: TacticsConfig) -> Optional[PlayerPosition]:
     """A labdát épp birtokló JÁTÉKOS (a labdához legközelebbi, sugáron belül)."""
-    from .primitive_cache import cached_frame
     return cached_frame("ball_holder", frame, config,
                         lambda: _ball_holder(frame, config))
 

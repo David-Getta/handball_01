@@ -36,6 +36,13 @@ MIN_SECONDS = 8.0
 ROLE_GOALKEEPER = "kapus"
 
 
+# A kapus-jelölés a mérések KÖZÖS bemenete: a rétegek tucatjai kérik
+# újra és újra ugyanarra a meccsre. Az egész felvételt végigjárja, ezért
+# hatókörön belül egyszer szabad lefutnia. A visszaadott szótár másolat,
+# hogy a hívó ne írhassa felül a gyorsítótár tartalmát. (Idempotens: a
+# szerep-jelölés ismételve is ugyanaz, és a második futásnál már nincs
+# változás — a hatókörön belül a meccset senki nem írja át.)
+@memoize_primitive("detect_goalkeepers", copy=dict)
 def detect_goalkeepers(match: Match,
                        radius_m: float = GOAL_AREA_RADIUS_M,
                        min_share: float = MIN_SHARE,

@@ -20,6 +20,7 @@ from typing import Optional
 
 from ..models.tracking import Match, Team
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+from .primitive_cache import copy_rows, memoize_primitive
 from .tactics import TacticsConfig
 
 # A cserezóna: a felezővonal ±4,5 m-e, az oldalvonalak melletti sáv.
@@ -40,6 +41,9 @@ def _in_sub_zone(x: float, y: float) -> bool:
     return near_mid and near_side
 
 
+# A csere-felismerés a TELJES felvételt végigjárja, és egy összeállítás
+# alatt a csere-rétegek tucatja kéri. Hatókörön belül egyszer fut.
+@memoize_primitive("detect_substitutions", copy=copy_rows)
 def detect_substitutions(match: Match,
                          config: Optional[TacticsConfig] = None) -> list[dict]:
     """Cserehullámok: [{"team", "t", "out_ids", "in_ids"}] időrendben.

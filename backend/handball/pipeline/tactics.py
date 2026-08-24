@@ -24,6 +24,10 @@ from typing import Optional
 
 from ..models.tracking import Match, Frame, Team
 from .calibration import COURT_LENGTH_M
+# A kocka-szintű gyorsítótár a LEGFORRÓBB úton hívódik (a birtoklás- és
+# fázis-mérés kockánként, egy összeállítás alatt milliószor): a
+# függvényen belüli import ennyi hívásnál már mérhető költség.
+from .primitive_cache import cached_frame
 
 
 # ---- Konfiguráció ----------------------------------------------------------
@@ -59,7 +63,6 @@ def possession_team(frame: Frame, config: TacticsConfig) -> Optional[Team]:
     Ha nincs labda, vagy a legközelebbi játékos is távolabb van a sugárnál,
     None ("szabad labda" / nincs egyértelmű birtokos).
     """
-    from .primitive_cache import cached_frame
     return cached_frame("possession_team", frame, config,
                         lambda: _possession_team(frame, config))
 
@@ -96,7 +99,6 @@ def classify_phase(frame: Frame, config: TacticsConfig) -> Phase:
     labda az ő TÁMADÓ térfelén van. Minden más (szabad labda, saját térfélen
     felépítés) ÁTMENET. Labda nélkül UNKNOWN.
     """
-    from .primitive_cache import cached_frame
     return cached_frame("classify_phase", frame, config,
                         lambda: _classify_phase(frame, config))
 

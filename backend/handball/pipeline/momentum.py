@@ -18,6 +18,7 @@ import math
 from typing import Optional
 
 from ..models.tracking import Match, Team
+from .primitive_cache import memoize_primitive
 
 # Ennyi válasz nélküli gól már említésre méltó sorozat.
 RUN_MIN = 3
@@ -1785,6 +1786,9 @@ OPENING_LINEUP_WINDOW_S = 300.0
 OPENING_LINEUP_MIN_FRAMES = 100
 
 
+# A kezdő hatos a felvétel elejét járja végig, és több réteg kéri
+# (kezdő hatos, nyitány-profil, csere-rétegek). Hatókörön belül egyszer.
+@memoize_primitive("opening_lineup", copy=dict)
 def opening_lineup(match: Match, config=None) -> dict:
     """Kezdő hatos: KIKKEL KEZDENEK.
 

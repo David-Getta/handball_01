@@ -377,6 +377,9 @@ def discipline_fade(match: Match, config=None) -> dict:
     return out
 
 
+# A hetes-felismerés a TELJES felvételt végigjárja, és a hetes-rétegek
+# (dobó, sarok, kapus-mérleg, ismétlés, fáradás...) mind ezt kérik.
+@memoize_primitive("detect_seven_meters", copy=copy_rows)
 def detect_seven_meters(match: Match,
                         config: Optional[TacticsConfig] = None) -> list[dict]:
     """Hétméteres (büntetődobás) felismerése.

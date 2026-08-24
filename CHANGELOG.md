@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.54 óta)
 
+- **A feldolgozás utáni számolás 40%-kal gyorsabb** (motor): a
+  detektálás után a ~500 elemző réteg kiszámítása is percekbe telik egy
+  teljes meccsen — ez a felhasználó szempontjából ugyanolyan várakozás,
+  mint maga a feldolgozás. Profilozás négy szűk keresztmetszetet
+  mutatott, mind ugyanabból a családból: olyan mérések, amelyek a
+  TELJES felvételt végigjárják, és amelyeket egy összeállítás alatt
+  tucatnyi réteg kér újra és újra (kapus-jelölés, megszakítás-,
+  csere- és hetes-felismerés, kezdő hatos) — ezek mostantól
+  hatókörönként egyszer futnak. Emellett a legforróbb úton (a
+  birtoklás-mérés kockánként, összeállításonként milliószor) a
+  függvényen belüli import is mérhető költség volt: kiemelve.
+  Mérve, 15 perces meccsen: edzői összefoglaló 27,2 → 15,6 mp,
+  felderítés 22,9 → 13,3 mp. A teljes teszt-csomag 8:18 → 4:56.
+
 ## v0.1.54 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: a jelentések mostantól MAGUK mondják meg,
