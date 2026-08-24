@@ -28,7 +28,7 @@ from .tactics import TacticsConfig
 # A kocka-szintű gyorsítótár a LEGFORRÓBB úton hívódik (a
 # birtoklás-mérés kockánként, egy összeállítás alatt milliószor): a
 # függvényen belüli import ennyi hívásnál már mérhető költség.
-from .primitive_cache import cached_frame
+from .primitive_cache import cached_frame, copy_events, memoize_primitive
 
 GOAL_Y = COURT_WIDTH_M / 2.0  # a kapu közepe y-ban (10 m)
 
@@ -205,6 +205,9 @@ class PassEvent:
     passer_pos: PlayerPosition
 
 
+# A passz-felismerés a TELJES felvételt végigjárja, és egy összeállítás
+# alatt a passz-, gólpassz- és szervezés-rétegek tucatja kéri.
+@memoize_primitive("detect_passes", copy=copy_events)
 def detect_passes(match: Match, config: Optional[TacticsConfig] = None) -> list[PassEvent]:
     """Passzok felismerése: a labdabirtokos csapaton belüli VÁLTÁSA egy passz.
 

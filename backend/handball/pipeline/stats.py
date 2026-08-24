@@ -18,7 +18,7 @@ import math
 from dataclasses import dataclass, field
 
 from ..models.tracking import Match, PositionSource, Team
-from .primitive_cache import copy_by_id, memoize_primitive
+from .primitive_cache import copy_by_id, memoize_primitive, copy_rows
 
 
 @dataclass
@@ -410,6 +410,9 @@ def sprints_by_score(match: Match, config=None) -> dict:
     return out
 
 
+# A fáradás-mérés a teljes felvételt végigjárja, és több réteg kéri
+# (fáradó-poszt, késő cserék, edzés-fókusz, felderítés).
+@memoize_primitive("player_fatigue", copy=copy_rows)
 def player_fatigue(match: Match, config=None,
                    half_t: int | None = None) -> list[dict]:
     """Játékosonkénti tempó-visszaesés: első vs második félidő átlag-
