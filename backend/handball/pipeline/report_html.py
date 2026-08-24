@@ -282,6 +282,20 @@ def scouting_report_html(rep: ScoutingReport,
     name = escape(rep.team_name)
     matches = f"{rep.matches} meccs alapján" if rep.matches > 1 else "1 meccs alapján"
 
+    # Mennyire hihető a jelentés ALAPANYAGA. A meccsterv az, ami alapján
+    # az edző dönt — ha a mögötte lévő feldolgozás gyenge volt, azt a lap
+    # ELEJÉN kell kimondani, nem az alján: egy nyomtatott jelentést
+    # fentről lefelé olvasnak, és aki a végén tudja meg, addig már
+    # eldöntötte, kit állít a beállóra.
+    from .scouting import scouting_caveat
+    caveat_html = ""
+    try:
+        _cav = scouting_caveat(rep)
+        if _cav:
+            caveat_html = f'<div class="warnbox">{escape(_cav)}</div>'
+    except Exception:
+        pass
+
     # Szöveges bevezető: hogyan játszanak — mondatokban, a számok elé.
     from .scouting import scouting_narrative
     narrative_html = ""
@@ -543,6 +557,9 @@ def scouting_report_html(rep: ScoutingReport,
   li.empty, p.empty {{ color: #8492A6; list-style: none; margin-left: -20px; font-size: 12.5px; }}
   p.note {{ color: #4A5768; font-size: 12px; margin: 8px 0 0; }}
   p.cs {{ font-size: 13.5px; margin: 8px 0; }}
+  .warnbox {{ border: 1px solid #C0392B; background: #FDECEA; color: #6E2018;
+              border-radius: 8px; padding: 10px 12px; margin: 0 0 18px;
+              font-size: 13px; line-height: 1.45; }}
   .cols {{ display: flex; gap: 22px; }}
   .col {{ flex: 1; }}
   .metrics {{ display: flex; flex-wrap: wrap; gap: 14px 26px; }}
@@ -570,6 +587,8 @@ def scouting_report_html(rep: ScoutingReport,
     <h1>{name}</h1>
     <div class="sub">{escape(matches)} · fő védekezés: <b>{escape(rep.defense_main)}</b></div>
   </header>
+
+  {caveat_html}
 
   {narrative_html}
 

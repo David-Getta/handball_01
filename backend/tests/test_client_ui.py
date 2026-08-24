@@ -31,8 +31,12 @@ import pytest  # noqa: E402
 # mezők, hanem lista-elemek belső kulcsai (player_id, frames, ...)
 # vagy más térképből olvasott értékek. Zárt lista — új felső szintű
 # kulcs ide nem kerülhet.
+# Kulcsok, amiket NEM a ScoutingReport mezői adnak: a beágyazott
+# sor-szótárak kulcsai, és a `report_to_dict` által számolt, származtatott
+# mezők (narrative = a szöveges bevezető, caveat = mennyire hihető a
+# jelentés alapanyaga).
 _DART_ROW_KEYS = {
-    "breaks", "chances", "count", "def_frames", "depth_sum_m",
+    "breaks", "caveat", "chances", "count", "def_frames", "depth_sum_m",
     "frames", "jersey", "narrative", "player_id", "setter_id",
     "shooter_id", "sprints", "takes",
 }

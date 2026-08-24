@@ -2536,3 +2536,66 @@ def test_matchup_plan_starts_with_match_character():
     plan = matchup_plan(_sty_rep(), _sty_rep())
     assert plan, plan
     assert plan[0].startswith("Tükör-meccs"), plan[0]
+
+
+def test_a_meccsterv_kimondja_ha_gyenge_az_alapanyag():
+    """A meccsterv az, ami alapján az edző dönt.
+
+    Ha a mögötte lévő feldolgozás gyenge volt, a terv nem a másik
+    csapatról szól, hanem a mérés zajáról — és ezt nem szabad
+    elhallgatni, mert a jelentés minden mondata magabiztosan fogalmaz.
+    """
+    from handball.pipeline.scouting import ScoutingReport, scouting_caveat
+
+    rep = ScoutingReport(team="home", team_name="A")
+    rep.q_matches = 1
+    rep.q_score_sum = 31.0
+    rep.q_weak_matches = 1
+    cav = scouting_caveat(rep)
+    assert cav is not None
+    assert "31/100" in cav
+    assert "zaj" in cav
+
+
+def test_tobb_meccsnel_a_gyengek_szamat_is_kimondja():
+    """5 meccsből 1 gyenge más helyzet, mint 5-ből 5 — a számot is
+    meg kell mondani, hogy az edző mérlegelhessen."""
+    from handball.pipeline.scouting import ScoutingReport, scouting_caveat
+
+    rep = ScoutingReport(team="home", team_name="A", matches=5)
+    rep.q_matches = 5
+    rep.q_score_sum = 5 * 40.0
+    rep.q_weak_matches = 2
+    cav = scouting_caveat(rep)
+    assert cav is not None
+    assert "5 meccsből" in cav and "2 feldolgozása" in cav
+
+
+def test_jo_feldolgozasnal_es_regi_jelentesnel_nincs_figyelmeztetes():
+    """Jó feldolgozásnál nincs miről szólni; adat nélküli (régi)
+    jelentésről pedig nem állítunk semmit."""
+    from handball.pipeline.scouting import ScoutingReport, scouting_caveat
+
+    jo = ScoutingReport(team="home", team_name="A")
+    jo.q_matches = 3
+    jo.q_score_sum = 3 * 85.0
+    jo.q_weak_matches = 0
+    assert scouting_caveat(jo) is None
+
+    regi = ScoutingReport(team="home", team_name="A")
+    assert scouting_caveat(regi) is None
+
+
+def test_a_figyelmeztetes_a_kliensnek_kuldott_szotarban_is_ott_van():
+    """A kliens ebből rajzolja a dobozt — enélkül a mondat a motorban
+    ragadna."""
+    from handball.pipeline.scouting import ScoutingReport, report_to_dict
+
+    rep = ScoutingReport(team="home", team_name="A")
+    rep.q_matches = 1
+    rep.q_score_sum = 20.0
+    rep.q_weak_matches = 1
+    d = report_to_dict(rep)
+    assert d["caveat"] and "FIGYELEM" in d["caveat"]
+    assert report_to_dict(ScoutingReport(team="home",
+                                         team_name="A"))["caveat"] is None

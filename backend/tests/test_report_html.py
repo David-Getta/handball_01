@@ -381,3 +381,32 @@ def test_kapus_tabla_elmarad_ha_nincs_adat():
     """Adat nélkül nincs tábla — üres fejléc rosszabb, mint a hiánya."""
     assert "Kapus-felkészítés posztonként" not in scouting_report_html(_rep())
 
+
+
+def test_a_felderito_lap_elol_szol_a_gyenge_alapanyagrol():
+    """Egy nyomtatott meccstervet fentről lefelé olvasnak: aki a végén
+    tudja meg, hogy az adat gyenge, addig már eldöntötte, kit állít a
+    beállóra. A figyelmeztetés ezért a narratíva ELŐTT áll."""
+    rep = ScoutingReport(team="home", team_name="Alfa")
+    rep.q_matches = 1
+    rep.q_score_sum = 28.0
+    rep.q_weak_matches = 1
+    html = scouting_report_html(rep)
+    assert '<div class="warnbox">' in html
+    assert "28/100" in html
+    # A doboz az első TARTALMI szakasz előtt áll (a tartalomjegyzék
+    # után — ugyanott, ahol a meccsjelentésben).
+    assert html.index('<div class="warnbox">') < html.index(
+        '<h2 id="sz1">')
+
+
+def test_jo_alapanyagnal_nincs_doboz_a_felderito_lapon():
+    """Jó feldolgozásnál (és régi, adat nélküli jelentésnél) a lap
+    tiszta marad — nem riogatunk ok nélkül."""
+    jo = ScoutingReport(team="home", team_name="Alfa")
+    jo.q_matches = 2
+    jo.q_score_sum = 2 * 90.0
+    jo.q_weak_matches = 0
+    assert '<div class="warnbox">' not in scouting_report_html(jo)
+    assert '<div class="warnbox">' not in scouting_report_html(
+        ScoutingReport(team="home", team_name="Alfa"))

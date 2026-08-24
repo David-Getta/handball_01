@@ -379,6 +379,14 @@ class ScoutingReport:
     rtf_fh_n: int = 0
     rtf_sh_sum_s: float = 0.0
     rtf_sh_n: int = 0
+    # A jelentés MÖGÖTTI feldolgozások minősége. A meccsterv az, ami
+    # alapján az edző dönt — ha a mögötte lévő feldolgozás gyenge volt
+    # (a nézőtér is a pályára került, kevés a labda-észlelés), akkor a
+    # terv zajról szól, és ezt ki kell mondani. Darab + összeg, hogy
+    # több meccs pontosan összegződjön.
+    q_score_sum: float = 0.0
+    q_matches: int = 0
+    q_weak_matches: int = 0
     # Időkérés-mérleg: felismert időkéréseik + ebből a sorozatot megtörő
     # (broke) és a fordulatot nem hozó (failed) — meccsek közt összegződik.
     to_n: int = 0
@@ -10215,6 +10223,18 @@ def _scout_team_cached(match: Match, team: Team,
         if lhfrec["sh_m"] is not None:
             rep.lhf_sh_sum_m = round(lhfrec["sh_m"] * lhfrec["sh_frames"], 1)
             rep.lhf_sh_n = lhfrec["sh_frames"]
+        # A feldolgozás minősége: a jelentésnek meg kell tudnia
+        # mondani, mennyire hihető a saját alapanyaga.
+        try:
+            from .quality import LOW_SCORE_WARN, compute_quality_report
+            _q = compute_quality_report(match)
+            _qs = _q.get("score")
+            if _qs is not None:
+                rep.q_score_sum = float(_qs)
+                rep.q_matches = 1
+                rep.q_weak_matches = 1 if _qs < LOW_SCORE_WARN else 0
+        except Exception:
+            pass
         from .defense import retreat_fade
         rtfrec = retreat_fade(match, config)[team.value]
         if rtfrec["fh_s"] is not None:
@@ -21466,6 +21486,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rtf_fh_n=sum(r.rtf_fh_n for r in reports),
         rtf_sh_sum_s=round(sum(r.rtf_sh_sum_s for r in reports), 1),
         rtf_sh_n=sum(r.rtf_sh_n for r in reports),
+        q_score_sum=round(sum(r.q_score_sum for r in reports), 1),
+        q_matches=sum(r.q_matches for r in reports),
+        q_weak_matches=sum(r.q_weak_matches for r in reports),
         to_n=sum(r.to_n for r in reports),
         to_broke=sum(r.to_broke for r in reports),
         to_failed=sum(r.to_failed for r in reports),
@@ -22949,11 +22972,49 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
     return out
 
 
+def scouting_caveat(rep: ScoutingReport) -> Optional[str]:
+    """Egy mondat arról, mennyire hihető a jelentés ALAPANYAGA (vagy None).
+
+    A meccsterv az, ami alapján az edző dönt: kit állít a beállóra, hol
+    fogja a legjobb lövőt, mikor kér időt. Ha a mögötte lévő
+    feldolgozás gyenge volt (a nézőtér is a pályára került, kevés a
+    labda-észlelés), akkor a terv NEM a másik csapatról szól, hanem a
+    zajról — és ezt nem szabad elhallgatni, mert a jelentés minden
+    mondata magabiztosan fogalmaz (így is kell egy edzői jelentést
+    írni).
+
+    A több meccsből álló jelentésnél a gyenge feldolgozások SZÁMÁT is
+    kimondjuk: 5 meccsből 1 gyenge más helyzet, mint 5-ből 5.
+    None, ha nincs adat (régi jelentés) vagy minden feldolgozás jó.
+    """
+    from .quality import LOW_SCORE_WARN
+    if rep.q_matches <= 0:
+        return None                      # régi jelentés: nem állítunk semmit
+    if rep.q_weak_matches <= 0:
+        return None                      # minden feldolgozás rendben volt
+    atlag = rep.q_score_sum / rep.q_matches
+    if rep.q_matches == 1:
+        return (f"FIGYELEM: a jelentés mögötti feldolgozás gyenge volt "
+                f"({atlag:.0f}/100 — a küszöb {LOW_SCORE_WARN}). A lenti "
+                "megállapítások ezért nem a csapatról szólnak, hanem a "
+                "mérés zajáról. Nézd meg a meccs minőség-jelentését (mi a "
+                "teendő), javítsd a kalibrációt, és futtasd újra — csak "
+                "azután építs erre meccstervet.")
+    return (f"FIGYELEM: a jelentés {rep.q_matches} meccsből épült, ebből "
+            f"{rep.q_weak_matches} feldolgozása gyenge volt (átlag "
+            f"{atlag:.0f}/100, a küszöb {LOW_SCORE_WARN}). A gyenge "
+            "meccsek számai a mérés zajáról szólnak, és ugyanúgy "
+            "beleszámítanak az összegzésbe — a lenti megállapításokat "
+            "ennek tudatában olvasd.")
+
+
 def report_to_dict(rep: ScoutingReport) -> dict:
     """A jelentés JSON-barát szótárrá alakítása (az API-hoz) — a szöveges
-    narratívával kiegészítve."""
+    narratívával és a minőség-figyelmeztetéssel kiegészítve."""
     d = asdict(rep)
     d["narrative"] = scouting_narrative(rep)
+    # Mennyire hihető a jelentés alapanyaga (None = nincs mit mondani).
+    d["caveat"] = scouting_caveat(rep)
     return d
 
 

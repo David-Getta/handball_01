@@ -307,6 +307,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // MENNYIRE BÍZHATSZ EBBEN: a meccsterv az, ami alapján
+                // az edző dönt — ha a mögötte lévő feldolgozás gyenge
+                // volt, azt a lap ELEJÉN kell kimondani, mert a
+                // jelentés minden mondata magabiztosan fogalmaz.
+                if ((r["caveat"] as String?)?.isNotEmpty ?? false) ...[
+                  _caveatCard(r["caveat"] as String),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 if (hasNarrative) ...[
                   KeyedSubtree(
                       key: _sectionKey("Így játszanak"),
@@ -413,6 +421,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   }
 
   /// Szöveges bevezető: hogyan játszanak — mondatokban, a számok elé.
+  /// Figyelmeztető doboz a jelentés ALAPANYAGÁRÓL (motor: scouting_caveat).
+  ///
+  /// Szándékosan a narratíva FÖLÖTT és más formában: egy meccstervet
+  /// fentről lefelé olvasnak, és aki a végén tudja meg, hogy az adat
+  /// gyenge, addig már eldöntötte, kit állít a beállóra.
+  Widget _caveatCard(String szoveg) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.away.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.away.withOpacity(0.45)),
+      ),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.md),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.warning_amber_rounded,
+            size: 18, color: AppColors.away),
+        const SizedBox(width: 10),
+        Expanded(
+            child: Text(szoveg,
+                style: AppText.label.copyWith(height: 1.45))),
+      ]),
+    );
+  }
+
   Widget _narrativeCard(Map<String, dynamic> r) {
     final sections =
         ((r["narrative"] as List?) ?? const []).cast<Map<String, dynamic>>();

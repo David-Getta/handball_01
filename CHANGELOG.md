@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.55 óta)
 
+- **A meccsterv is megmondja, mennyire hihető** (motor + kliens): az
+  edzői összefoglaló és a nyomtatható meccsjelentés a v0.1.54 óta elöl
+  visz egy figyelmeztetést gyenge feldolgozásnál — a FELDERÍTŐ jelentés
+  viszont nem. Pedig ez a legveszélyesebb hely: a meccsterv az, ami
+  alapján az edző dönt (kit állít a beállóra, hol fogja a legjobb
+  lövőt, mikor kér időt), és minden mondata magabiztosan fogalmaz. Ha a
+  mögötte lévő feldolgozás gyenge volt, a terv nem a másik csapatról
+  szól, hanem a mérés zajáról. A jelentés mostantól viszi a mögötte
+  lévő feldolgozások minőségét, és gyenge alapanyagnál a felderítő
+  képernyő és a nyomtatható lap is ELÖL szól — a nyomtatott lapon a
+  tartalomjegyzék után, az első szakasz előtt, ahogy a meccsjelentésben
+  is. Több meccsből épült jelentésnél a gyenge feldolgozások SZÁMÁT is
+  kimondja (5 meccsből 1 gyenge más helyzet, mint 5-ből 5). Régi
+  jelentésről (nincs adat) továbbra sem állítunk semmit.
+
 - **A nyomtatható jelentés is megmondja, melyik szakaszról szól**
   (motor): a lapot napokkal később olvassák vissza, és akkor már semmi
   nem árulja el, hogy a teljes meccsről szól-e vagy csak az első
