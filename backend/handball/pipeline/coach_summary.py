@@ -7022,6 +7022,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "védekezés a feladat.")
     except Exception:
         pass
+    # Hajrá-profil: a fáradás-jelek ÖSSZKÉPE — mivel kezdje az edző.
+    try:
+        from .priorities import FATIGUE_PATTERN_MIN, fatigue_profile
+        fpc = fatigue_profile(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fp = fpc[side]
+            if rec_fp["count"] < FATIGUE_PATTERN_MIN:
+                continue          # egy-két jel: a saját rétegük már szólt
+            body += (f" A(z) {name} hajrája {rec_fp['count']} fáradás-jelet "
+                     f"mutat egyszerre (a legnagyobb tétű: "
+                     f"{rec_fp['top'].lower()}) — ez már nem egy-egy szám, "
+                     "hanem a hatvan perc kérdése.")
+    except Exception:
+        pass
     # Lövés-időzítés: első hullámból lövő vagy kiváró csapat.
     try:
         from .attack_types import (SHTIM_EARLY_PCT, SHTIM_LATE_AVG_S,

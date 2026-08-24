@@ -10712,6 +10712,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hajrá-profil: hány fáradás-jel szólal meg náluk meccsenként. Nem
+  // új mérés, hanem az ÖSSZKÉP — a backend FATIGUE_PATTERN_MIN = 3
+  // küszöbének tükre.
+  String? _fatigueProfile(Map<String, dynamic> r) {
+    final n = ((r["fpr_matches"] as num?) ?? 0).toInt();
+    if (n < 1) return null;
+    final jel = ((r["fpr_signals"] as num?) ?? 0).toInt() / n;
+    if (jel >= 3.0) {
+      return "${jel.toStringAsFixed(1)} jel/meccs "
+          "· a hajrá az ő gyenge pontjuk";
+    }
+    if (jel <= 0.0 && n >= 2) {
+      return "0 jel $n meccsen · hatvan percig bírják";
+    }
+    return null;
+  }
+
   // Szélső-bevonás esése: beszűkül-e a támadásuk a 2. félidőre
   // (félidőnként 6+ mért támadásnál, 10 százalékpontos küszöbbel — a
   // backend WING_INV_FADE_MIN_ATTACKS / WING_INV_FADE_DROP_PCT tükre).
@@ -11210,6 +11227,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Visszaállás a hajrában", _retreatFade(r)!],
       if (_wingInvolvementFade(r) != null)
         ["Szélső-bevonás a hajrában", _wingInvolvementFade(r)!],
+      if (_fatigueProfile(r) != null)
+        ["Hajrá-profil (fáradás-jelek)", _fatigueProfile(r)!],
       if (_timeoutRecord(r) != null)
         ["Időkérés-mérleg", _timeoutRecord(r)!],
       if (_turnoverFade(r) != null)

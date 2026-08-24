@@ -561,3 +561,81 @@ def test_kulcs_ember_kuszob_a_lencse_meretevel_no(monkeypatch):
     # (a többi réteg hallgat, tehát nincs más jelölt sem).
     prio = _kpl_stub(monkeypatch, [egy] * 4 + [None] * 56)
     assert prio.key_player(_kp_match())["home"]["top"] is None
+
+
+# ---- Hajrá-profil (mi romlik a leginkább a meccs végére) --------------------
+
+
+def test_hajra_profil_rangsorol_es_kimondja_a_kezdopontot(monkeypatch):
+    """Két jel közül a NAGYOBB tétű áll elöl.
+
+    A rangsor kimondott edzői döntés: elöl az, ami közvetlenül gólt ér
+    (a lassuló visszaállás minden lövés után kontra-ablakot nyit), és
+    csak utána a támadó-oldali beszűkülés.
+    """
+    from handball.pipeline import priorities as pr
+
+    ures = {"home": {}, "away": {}}
+    monkeypatch.setattr(
+        "handball.pipeline.defense.retreat_fade",
+        lambda m, c=None: {"home": {"fh_s": 4.0, "sh_s": 7.0, "slow_s": 3.0},
+                           "away": {}})
+    monkeypatch.setattr(
+        "handball.pipeline.attack_types.wing_involvement_fade",
+        lambda m, c=None: {"home": {"fh_pct": 70.0, "sh_pct": 40.0,
+                                    "drop_pct": 30.0}, "away": {}})
+    monkeypatch.setattr("handball.pipeline.defense.line_height_fade",
+                        lambda m, c=None: ures)
+    monkeypatch.setattr("handball.pipeline.defense.pressure_fade",
+                        lambda m, c=None: ures)
+    monkeypatch.setattr("handball.pipeline.stats.sprint_fade",
+                        lambda m, c=None: ures)
+
+    rec = pr.fatigue_profile(Match(_meta(), []))["home"]
+    assert rec["count"] == 2
+    assert rec["top"] == "Lassuló visszaállás"
+    assert rec["signals"][0]["layer"] == "retreat_fade"
+    assert rec["signals"][1]["layer"] == "wing_involvement_fade"
+    assert rec["verdict"] and "kontra-ablak" in rec["verdict"]
+    # Két jel még nem MINTÁZAT — a "már nem véletlen" mondat nem jár.
+    assert "nem véletlen" not in rec["verdict"]
+
+
+def test_harom_jel_mar_mintazat(monkeypatch):
+    """Három azonos irányú jel egy meccsen a hatvan perc kérdése — ezt
+    ki kell mondani, mert máshogy hangzik, mint egyetlen szám."""
+    from handball.pipeline import priorities as pr
+
+    monkeypatch.setattr(
+        "handball.pipeline.defense.retreat_fade",
+        lambda m, c=None: {"home": {"fh_s": 4.0, "sh_s": 7.0, "slow_s": 3.0},
+                           "away": {}})
+    monkeypatch.setattr(
+        "handball.pipeline.defense.line_height_fade",
+        lambda m, c=None: {"home": {"fh_m": 8.5, "sh_m": 6.5, "drop_m": 2.0},
+                           "away": {}})
+    monkeypatch.setattr(
+        "handball.pipeline.defense.pressure_fade",
+        lambda m, c=None: {"home": {"fh_m": 1.0, "sh_m": 2.5,
+                                    "loosen_m": 1.5}, "away": {}})
+    monkeypatch.setattr("handball.pipeline.attack_types.wing_involvement_fade",
+                        lambda m, c=None: {"home": {}, "away": {}})
+    monkeypatch.setattr("handball.pipeline.stats.sprint_fade",
+                        lambda m, c=None: {"home": {}, "away": {}})
+
+    rec = pr.fatigue_profile(Match(_meta(), []))["home"]
+    assert rec["count"] >= pr.FATIGUE_PATTERN_MIN
+    assert "nem véletlen" in rec["verdict"]
+    assert rec["verdict"].startswith(f"{rec['count']} fáradás-jel")
+
+
+def test_ures_hajra_profil_ertekes_informacio():
+    """Ha egyetlen esés sem szólal meg, a csapat kibírja a hatvan
+    percet — ez nem hiányzó adat, hanem eredmény. Üres jelentés, None
+    ítélet, hallgatás."""
+    from handball.pipeline.priorities import fatigue_profile
+
+    rec = fatigue_profile(Match(_meta(), []))["home"]
+    assert rec["signals"] == []
+    assert rec["count"] == 0
+    assert rec["top"] is None and rec["verdict"] is None

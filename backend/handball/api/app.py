@@ -3214,6 +3214,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.priorities import fatigue_profile
+            res["fatigue_profile"] = fatigue_profile(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import timeout_record
             res["timeout_record"] = timeout_record(match)
         except Exception:
@@ -5639,6 +5644,8 @@ def create_app():
                 from ..pipeline.attack_types import wing_involvement_fade
                 _layer("wing_involvement_fade",
                        lambda: wing_involvement_fade(match))
+                from ..pipeline.priorities import fatigue_profile
+                _layer("fatigue_profile", lambda: fatigue_profile(match))
                 from ..pipeline.stoppages import timeout_record
                 _layer("timeout_record", lambda: timeout_record(match))
                 from ..pipeline.defense import turnover_fade

@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **499 réteg**, modulonként csoportosítva; a
+Összesen **500 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (96)
@@ -374,11 +374,12 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `playmaker` | Mindkét csapat irányító-függése. |
 
-## priorities (5)
+## priorities (6)
 
 | Réteg | Mit mér |
 |---|---|
 | `counter_plan` | Ellenszer-lap: a teendő-rangsor mellé a HOZZÁ TARTOZÓ gyakorlat. |
+| `fatigue_profile` | Hajrá-profil: MI romlik a leginkább a meccs végére — egy lapon. |
 | `key_pair` | Kulcs-páros: HÁNY RÉTEG mutat ugyanarra a POSZTPÁRRA. |
 | `key_player` | Kulcs-ember: HÁNY RÉTEG mutat ugyanarra a JÁTÉKOSRA. |
 | `key_post` | Kulcs-poszt: HÁNY RÉTEG mutat ugyanarra a posztra. |

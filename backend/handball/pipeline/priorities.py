@@ -977,3 +977,134 @@ def counter_plan(match: Match, config=None) -> dict:
                     "saját megoldása kell")
         out[side] = rec
     return out
+
+
+# Hajrá-profil: ennyi fáradás-jel fölött már nem egy-egy szám, hanem
+# MINTÁZAT — a csapat egészében kifogy a meccs végére. Kettő még lehet
+# a mintavétel szeszélye; három azonos irányú jel egy meccsen már a
+# felkészülés kérdése.
+FATIGUE_PATTERN_MIN = 3
+
+
+def fatigue_profile(match: Match, config=None) -> dict:
+    """Hajrá-profil: MI romlik a leginkább a meccs végére — egy lapon.
+
+    A csomagban egy tucat "esés"-réteg méri, mi változik a 2. félidőre
+    (visszaállás, fal-mélység, védekezési nyomás, szélső-bevonás,
+    sprint, labdabiztonság, befejezés). Külön-külön mindegyik egy szám;
+    együtt viszont az edző nem tudja, MIVEL kezdje — pontosan az a
+    gond, amit a minőség-jelentésben az "első teendő" old meg.
+
+    Ez a réteg összegyűjti a MEGSZÓLALÓ eséseket, és edzői leverage
+    szerint rangsorolja őket. A sorrend nem tanult súlyozás, hanem
+    kimondott, vitatható edzői döntés: elöl az áll, ami KÖZVETLENÜL
+    gólt ér (a lassuló visszaállás minden lövés után kontra-ablakot
+    nyit), utána a fal helye (a visszahúzódó fal elé zavartalanul
+    beáll az átlövő), és csak azután a támadó-oldali beszűkülés és a
+    láb.
+
+    Edzőileg ez a hajrá egy lapja: ha a lista üres, a csapat kibírja a
+    hatvan percet — ez önmagában értékes információ, nem hiányzó adat.
+
+    Visszatérés csapatonként: {"signals": [{"layer", "label",
+    "detail"}], "top", "count", "verdict"} — a top a legfontosabb EGY
+    jel címkéje, a verdict a hozzá tartozó edzői mondat; mindkettő
+    None, ha egyetlen esés sem szólalt meg.
+    """
+    from .attack_types import (WING_INV_FADE_DROP_PCT,
+                               wing_involvement_fade)
+    from .defense import (LINE_FADE_DROP_M, PRESSURE_FADE_LOOSEN_M,
+                          RETREAT_FADE_SLOW_S, line_height_fade,
+                          pressure_fade, retreat_fade)
+    from .stats import SFD_DROP_RATIO, sprint_fade
+
+    # (réteg, magyar címke, betöltő, a "romlott" irány kiolvasása,
+    #  edzői mondat-sablon). A SORREND a rangsor.
+    def _retreat(rec):
+        if rec.get("slow_s") is None or rec["slow_s"] < RETREAT_FADE_SLOW_S:
+            return None
+        return (f"{rec['fh_s']:.1f} → {rec['sh_s']:.1f} mp a hazaérés",
+                "a hajrában minden lövésetek után kontra-ablak nyílik — a "
+                "lövés PILLANATÁBAN kijelölt első visszafutó a teendő")
+
+    def _line(rec):
+        if rec.get("drop_m") is None or rec["drop_m"] < LINE_FADE_DROP_M:
+            return None
+        return (f"{rec['fh_m']:.1f} → {rec['sh_m']:.1f} m a fal helye",
+                "a hajrában nem lép ki senki az átlövőre — kilépés-gyakorlat "
+                "FÁRADTAN, a kondi-blokk után")
+
+    def _pressure(rec):
+        if (rec.get("loosen_m") is None
+                or rec["loosen_m"] < PRESSURE_FADE_LOOSEN_M):
+            return None
+        return (f"{rec['fh_m']:.1f} → {rec['sh_m']:.1f} m a labdástól",
+                "a hajrában lazul a fal: a szabad lövő a másik oldal első "
+                "számú fegyvere lesz")
+
+    def _wing(rec):
+        if (rec.get("drop_pct") is None
+                or rec["drop_pct"] < WING_INV_FADE_DROP_PCT):
+            return None
+        return (f"{rec['fh_pct']:.0f}% → {rec['sh_pct']:.0f}% jut el a szélre",
+                "a hajrában középen ragad a labda, és onnan csak a nehéz "
+                "átlövés marad — kösd ki, hogy az első passz a szélre megy")
+
+    def _sprint(rec):
+        # A saját rétege ÜTEMET (sprint/perc) hasonlít, nem darabszámot:
+        # a két félidő hossza eltérhet, a nyers darab félrevezetne.
+        ratio = rec.get("ratio")
+        if ratio is None or ratio > SFD_DROP_RATIO:
+            return None
+        return (f"{rec['fh_per_min']:.1f} → {rec['sh_per_min']:.1f} "
+                "sprint/perc",
+                "a láb fogy el a meccs végére — a cserék időzítése és a "
+                "hajrá-blokk edzésen is fáradtan gyakorlandó")
+
+    rangsor = (
+        ("retreat_fade", "Lassuló visszaállás", retreat_fade, _retreat),
+        ("line_height_fade", "Visszahúzódó fal", line_height_fade, _line),
+        ("pressure_fade", "Lazuló fal", pressure_fade, _pressure),
+        ("wing_involvement_fade", "Beszűkülő támadás",
+         wing_involvement_fade, _wing),
+        ("sprint_fade", "Fogyó sprint", sprint_fade, _sprint),
+    )
+
+    # A rétegeket EGYSZER kérdezzük le (mindegyiket külön try/except-tel:
+    # egy réteg hibája nem viheti el a profilt).
+    eredmenyek: list = []
+    for nev, cimke, fn, olvaso in rangsor:
+        try:
+            eredmenyek.append((nev, cimke, fn(match, config), olvaso))
+        except Exception:
+            continue
+
+    out: dict = {}
+    for side in ("home", "away"):
+        jelek: list = []
+        mondatok: list = []
+        for nev, cimke, adat, olvaso in eredmenyek:
+            try:
+                rec = (adat or {}).get(side) or {}
+                kiolvasott = olvaso(rec)
+            except Exception:
+                continue
+            if kiolvasott is None:
+                continue
+            reszlet, mondat = kiolvasott
+            jelek.append({"layer": nev, "label": cimke, "detail": reszlet})
+            mondatok.append(mondat)
+        rec_out = {"signals": jelek, "count": len(jelek),
+                   "top": None, "verdict": None}
+        if jelek:
+            rec_out["top"] = jelek[0]["label"]
+            elso = f"{jelek[0]['label'].lower()} ({jelek[0]['detail']}): "
+            if len(jelek) >= FATIGUE_PATTERN_MIN:
+                rec_out["verdict"] = (
+                    f"{len(jelek)} fáradás-jel egy meccsen — ez már nem "
+                    f"véletlen, hanem a hatvan perc kérdése. Kezdd itt: "
+                    f"{elso}{mondatok[0]}")
+            else:
+                rec_out["verdict"] = f"{elso}{mondatok[0]}"
+        out[side] = rec_out
+    return out

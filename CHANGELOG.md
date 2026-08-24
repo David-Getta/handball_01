@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.56 óta)
 
+- **Hajrá-profil** (új réteg, `fatigue_profile`): a csomagban egy tucat
+  "esés"-réteg méri, mi változik a 2. félidőre (visszaállás,
+  fal-mélység, védekezési nyomás, szélső-bevonás, sprint). Külön-külön
+  mindegyik egy szám; együtt viszont az edző nem tudja, MIVEL kezdje —
+  pontosan az a gond, amit a minőség-jelentésben az "első teendő" old
+  meg. Ez a réteg összegyűjti a MEGSZÓLALÓ eséseket, és edzői leverage
+  szerint rangsorolja: elöl az áll, ami közvetlenül gólt ér (a lassuló
+  visszaállás minden lövés után kontra-ablakot nyit), utána a fal
+  helye, és csak azután a támadó-oldali beszűkülés és a láb. Három
+  egyidejű jel fölött külön kimondja, hogy ez már nem egy-egy szám,
+  hanem a hatvan perc kérdése. Ha a lista ÜRES, az önmagában értékes
+  információ: a csapat kibírja a hatvan percet, tehát ellene a meccset
+  korábban kell eldönteni. Felületek: /analyze, meccs-csomag, edzői
+  összefoglaló, felderítés (edzői kulcs + 453. meccsterv-szabály),
+  edzés-fókusz (473. szabály), kliens-csempe.
+
 - **Szélső-bevonás a hajrában** (új réteg, `wing_involvement_fade`): a
   szélső-bevonás megmondja, a támadásaik hány százalékában jár a labda
   a szél-sávban; ez a réteg azt teszi hozzá, hogy BESZŰKÜLNEK-E a

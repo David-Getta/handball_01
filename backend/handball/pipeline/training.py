@@ -1366,6 +1366,27 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 473) Halmozott fáradás: ha egy meccsen HÁROM fáradás-jel is
+    # megszólal, az nem egy-egy szám, hanem a hatvan perc kérdése.
+    try:
+        from .priorities import FATIGUE_PATTERN_MIN, fatigue_profile
+        fpr473 = fatigue_profile(match, config)
+        for side in ("home", "away"):
+            r473 = fpr473[side]
+            if r473["count"] < FATIGUE_PATTERN_MIN:
+                continue
+            _jelek = ", ".join(j["label"].lower() for j in r473["signals"])
+            focus[side].append(
+                f"hatvan perc: egy meccsen {r473['count']} fáradás-jel "
+                f"szólalt meg egyszerre ({_jelek}) — ez nem egy-egy "
+                "gyakorlat kérdése, hanem a heti terhelésé: a technikai "
+                "blokkokat a hét második felében FÁRADT állapotba kell "
+                "tenni (a kondi UTÁN, ne előtte), mert a hibák ott jönnek "
+                "elő; kezdd a legnagyobb tétűvel: "
+                f"{r473['top'].lower()}")
+    except Exception:
+        pass
+
     # 472) Beszűkülő támadás: ha a SAJÁT labdánk a 2. félidőre nem megy
     # ki a szélre, a hajrában csak a nehéz átlövés marad.
     try:

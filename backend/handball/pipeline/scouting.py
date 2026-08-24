@@ -391,6 +391,11 @@ class ScoutingReport:
     wif_fh_n: int = 0
     wif_sh_wing: int = 0
     wif_sh_n: int = 0
+    # Hajrá-profil: hány fáradás-jel szólalt meg összesen, és hány
+    # meccsen mértük. Darab + darab, hogy több meccs pontosan
+    # összegződjön (átlag = jel/meccs a teljes mintán).
+    fpr_signals: int = 0
+    fpr_matches: int = 0
     q_score_sum: float = 0.0
     q_matches: int = 0
     q_weak_matches: int = 0
@@ -9102,6 +9107,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "megkezdett sorozatot az időkérésük után is tolhatod, ne "
                 "állj le tőle.")
 
+    # Hajrá-profil: hány fáradás-jel szólal meg náluk egy meccsen. Ez
+    # nem új mérés, hanem az ÖSSZKÉP — egy tucat esés-szám mellett az
+    # edző nem tudja, mivel kezdje.
+    if rep.fpr_matches >= 1:
+        _fpr = rep.fpr_signals / rep.fpr_matches
+        if _fpr >= 3.0:
+            keys.append(
+                f"Meccsenként átlag {_fpr:.1f} fáradás-jel szólal meg náluk "
+                "(visszaállás, fal-mélység, nyomás, szélső-bevonás, sprint) "
+                "— a hajrá az ő gyenge pontjuk: az utolsó tizenöt percre "
+                "tartogassátok a friss lábakat és a tempót.")
+        elif _fpr <= 0.0 and rep.fpr_matches >= 2:
+            keys.append(
+                f"{rep.fpr_matches} meccsen EGYETLEN fáradás-jel sem "
+                "szólalt meg náluk — hatvan percig bírják, tehát a hajrára "
+                "számítani nem terv: a meccset korábban kell eldönteni.")
+
     # Szélső-bevonás esése: beszűkül-e a támadásuk a hajrára. Ez a
     # lövés-távolság esésének az OKA — a fáradó csapatban a lábmunka
     # fogy el először, és a labda középen ragad.
@@ -10249,6 +10271,13 @@ def _scout_team_cached(match: Match, team: Team,
         if lhfrec["sh_m"] is not None:
             rep.lhf_sh_sum_m = round(lhfrec["sh_m"] * lhfrec["sh_frames"], 1)
             rep.lhf_sh_n = lhfrec["sh_frames"]
+        try:
+            from .priorities import fatigue_profile
+            fprrec = fatigue_profile(match, config)[team.value]
+            rep.fpr_signals = int(fprrec["count"])
+            rep.fpr_matches = 1
+        except Exception:
+            pass
         from .attack_types import wing_involvement_fade
         wifrec = wing_involvement_fade(match, config)[team.value]
         rep.wif_fh_n = wifrec["fh_attacks"]
@@ -14246,6 +14275,20 @@ def matchup_plan(own: "ScoutingReport",
 
     from .tactics import ATV_MIN_ATTACKS as _A449
     from .tactics import ATV_ONE_TEMPO_PCT as _A449P
+    # 453) Az ő halmozott fáradásuk × a ti hajrá-erőtök: a meccs vége
+    # a ti ablakotok — a friss lábakat oda kell időzíteni.
+    if (opp.fpr_matches >= 1
+            and opp.fpr_signals / opp.fpr_matches >= 3.0
+            and own.clutch_matches >= 1
+            and own.clutch_goals_for > own.clutch_goals_against):
+        _p453 = opp.fpr_signals / opp.fpr_matches
+        plan.append(
+            f"Meccsenként átlag {_p453:.1f} fáradás-jel szólal meg náluk, ti "
+            f"pedig jók vagytok a hajrában ({own.clutch_goals_for}–"
+            f"{own.clutch_goals_against} a meccsek végén) — a friss átlövőt "
+            "és a tempó-váltást a második félidő közepére időzítsd: az ő "
+            "elfogyó hatvan percük + a ti hajrátok döntheti el a meccset.")
+
     # 452) Az ő beszűkülő támadásuk × a ti tömör falatok: a hajrában a
     # szélső-védők beljebb húzhatók, mert a szélt úgysem játsszák meg.
     if (opp.wif_fh_n >= 6 and opp.wif_sh_n >= 6
@@ -21541,6 +21584,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         wif_fh_n=sum(r.wif_fh_n for r in reports),
         wif_sh_wing=sum(r.wif_sh_wing for r in reports),
         wif_sh_n=sum(r.wif_sh_n for r in reports),
+        fpr_signals=sum(r.fpr_signals for r in reports),
+        fpr_matches=sum(r.fpr_matches for r in reports),
         q_score_sum=round(sum(r.q_score_sum for r in reports), 1),
         q_matches=sum(r.q_matches for r in reports),
         q_weak_matches=sum(r.q_weak_matches for r in reports),
