@@ -3,7 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.50 óta)
+## Kiadatlan (a v0.1.51 óta)
+
+## v0.1.51 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ez a kör arról szól, hogy MELYIK SZÁMOT hidd el.
+> A jelentés mostantól külön szól a labda-alapú (birtoklás, passz,
+> eladás, lövés) és a pálya-alapú (távolság, fal-forma, zónák)
+> rétegekről, és kimondja, ha a labdaeladás-szám nem a játékról
+> szól, hanem a billegő birtokos-váltásról. Az Új elemzés lapon
+> pedig ott a három pont ÉLŐ állapottal, MIELŐTT az óra elindulna:
+> kalibráció, detektálás-próba, meccs-időablak. A kiadás-lánc
+> saját őre is élessé vált: ha a becsomagolt motor nem ír naplót,
+> a kiadás elbukik.
 
 - **"Gyanúsan sok eladott labda" — kimondva** (motor): a birtokos a
   labdához LEGKÖZELEBBI játékos, és a váltás egyetlen képkockából
