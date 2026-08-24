@@ -383,6 +383,14 @@ def pass_security_under_pressure(match: Match,
 # Labdatartás-idő: ennél rövidebb birtoklás csak érintés (zaj), ennyi
 # labdás szakasztól ítélünk egy játékost, és ennyi másodperccel a
 # csapatátlag felett labdatartó a játékos.
+#
+# Az érintés-küszöb MÁSODPERCBEN: a feldolgozás ritkít (a termék alapja
+# minden 3. kocka), tehát 5 kocka a profiltól függően 0,2 és 0,6
+# másodperc között bármit jelentene. Ez valódi időtartam: mennyi az,
+# ami "csak érintés". Két tized másodperc alatt tényleg nem lehet
+# birtokolni a labdát.
+HOLD_MIN_S = 0.2
+# Visszafelé kompatibilis kocka-alapérték (25 fps-en pontosan 0,2 mp).
 HOLD_MIN_FRAMES = 5
 HOLD_MIN_HOLDS = 5
 HOLD_GAP_S = 0.8
@@ -411,6 +419,8 @@ def hold_time_players(match: Match,
     """
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    # Az érintés-küszöb a meccs SAJÁT képrátájából (lásd HOLD_MIN_S).
+    hold_min = max(1, int(round(HOLD_MIN_S * fps)))
     jersey: dict[int, int] = {}
     tally: dict[str, dict[int, list]] = {"home": {}, "away": {}}
     run_id = run_team = None
@@ -420,7 +430,7 @@ def hold_time_players(match: Match,
         """A lezáruló labdás szakasz jóváírása a birtokosnál."""
         if run_id is None or run_team is None:
             return
-        if run_len < HOLD_MIN_FRAMES:
+        if run_len < hold_min:
             return
         rec = tally[run_team].setdefault(run_id, [0, 0])
         rec[0] += 1

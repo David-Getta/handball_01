@@ -5,6 +5,26 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.56 óta)
 
+- **Négy további idő-küszöb a valódi másodperchez igazítva** (motor):
+  ugyanaz a hibafajta, mint a hossz-korlátnál, a labda-hézagpótlásnál
+  és a becslésnél — kockában rögzített szám, ami valójában
+  IDŐTARTAMOT jelent. Mivel a feldolgozás ritkít (a termék alapja
+  minden 3. kocka), ezek a küszöbök a minőségi profiltól függően
+  háromszoros valós időt követeltek:
+  - **őrzési párok**: a kommentje eredetileg is "1 mp @ 25 fps"-t
+    mondott, a termékben mégis HÁROM másodperces követést követelt —
+    a rövid, de valódi őrzések kimaradtak a listából,
+  - **blokkolt-poszt**: a lövőt a blokk előtti egy másodpercben
+    keressük; ritkítva ez három másodperc visszanézés lett, és három
+    másodperccel a blokk előtt rendszerint már MÁS volt a labdánál —
+    vagyis a falba lőtt labdát a rossz posztra írhattuk,
+  - **labdatartás**: az "ez csak érintés, nem birtoklás" küszöb 0,2
+    helyett 0,6 másodperc lett,
+  - **beálló-terhelés**: a villanás-szűrő szigora sem függhet a
+    profiltól.
+  Mind a négy 25 fps-en pontosan a régi érték, tehát ez az EREDETI
+  szándék helyreállítása, nem hangolás.
+
 - **A képen kívüli játékosok becslése nem szalad el** (motor): a
   pásztázó kamerából kicsúszott játékosokat az utolsó látott
   sebességükből vetítjük előre, és a sebesség hatása egy idő után

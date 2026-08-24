@@ -606,7 +606,13 @@ def attack_width(match, config=None) -> dict:
 
 
 # Beálló-terhelés: a támadás akkor "beállós", ha a labda legalább ennyi
-# kockán át a becsült beállónál járt a szakasz alatt (villanás ellen).
+# ideig a becsült beállónál járt a szakasz alatt (villanás ellen).
+#
+# MÁSODPERCBEN: a feldolgozás ritkít, tehát 3 kocka a profiltól függően
+# 0,12 és 0,36 másodperc között bármit jelentene — a villanás-szűrő
+# szigora nem függhet a minőségi profiltól.
+PIVOT_TOUCH_MIN_S = 0.12
+# Visszafelé kompatibilis kocka-alapérték (25 fps-en ~3 kocka).
 PIVOT_TOUCH_MIN_FRAMES = 3
 
 
@@ -634,6 +640,8 @@ def pivot_usage(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     tail = round(ATTACK_TAIL_S * fps)
+    # A villanás-szűrő a meccs SAJÁT képrátájából (lásd PIVOT_TOUCH_MIN_S).
+    _pivot_touch_min = max(1, int(round(PIVOT_TOUCH_MIN_S * fps)))
     posts = estimate_positions(match, config)
     pivots = {side: {tid for tid, r in posts.get(side, {}).items()
                      if r["poszt"] == "beálló"}
@@ -655,7 +663,7 @@ def pivot_usage(match: Match, config: Optional[TacticsConfig] = None) -> dict:
             h = ball_holder(fr, config)
             if h is not None and h.track_id in pivots[side]:
                 touch += 1
-        is_pivot = touch >= PIVOT_TOUCH_MIN_FRAMES
+        is_pivot = touch >= _pivot_touch_min
         goal_t = next((t for (t, tm, g) in shots
                        if tm == side and g
                        and seq.start_t <= t <= seq.end_t + tail), None)

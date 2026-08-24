@@ -1259,8 +1259,16 @@ def transition_recovery(match, config=None) -> dict:
 
 # Őrzési párok: kockánként a labdás csapat mezőnyjátékosaihoz rendeljük a
 # legközelebbi védőt; MARK_MAX_DIST_M-en túl nem számít őrzésnek, a páros
-# pedig csak MARK_MIN_FRAMES kockától kerül a listába (1 mp @ 25 fps).
+# pedig csak MARK_MIN_S valós másodperctől kerül a listába.
+#
+# MÁSODPERCBEN, nem kockában: a feldolgozás ritkít (a termék alapja
+# minden 3. kocka), tehát 25 kocka a profiltól függően 1 és 3 másodperc
+# között bármit jelentene. Ez pedig valódi időtartam: mennyi ideig kell
+# követnie a védőnek a támadót, hogy őrzésnek nevezzük. Három
+# másodperces küszöbbel a rövid, de valódi őrzések kimaradnának.
 MARK_MAX_DIST_M = 3.5
+MARK_MIN_S = 1.0
+# Visszafelé kompatibilis kocka-alapérték (25 fps-en pontosan 1 mp).
 MARK_MIN_FRAMES = 25
 MARK_LOOSE_M = 2.5
 MARK_TIGHT_M = 1.5
@@ -1334,6 +1342,10 @@ def marking_pairs(match, config=None, until_t=None) -> dict:
             def_dist[side][best.track_id] = (
                 def_dist[side].get(best.track_id, 0.0) + dist)
 
+    # Az őrzés-küszöb a meccs SAJÁT képrátájából (lásd MARK_MIN_S).
+    _mfps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    mark_min = max(1, int(round(MARK_MIN_S * _mfps)))
+
     out = {}
     for side in ("home", "away"):
         # Védőnként a leggyakoribb őrzöttje adja a párt.
@@ -1344,7 +1356,7 @@ def marking_pairs(match, config=None, until_t=None) -> dict:
                 best_of[key[0]] = (key, rec)
         pairs = []
         for dt, (key, rec) in best_of.items():
-            if rec[0] < MARK_MIN_FRAMES:
+            if rec[0] < mark_min:
                 continue
             total = def_frames[side].get(dt, 0)
             pairs.append({
@@ -1366,7 +1378,7 @@ def marking_pairs(match, config=None, until_t=None) -> dict:
              "avg_dist_m": round(def_dist[side][dt] / n, 2)}
             for dt, n in sorted(def_frames[side].items(),
                                 key=lambda kv: -kv[1])
-            if n >= MARK_MIN_FRAMES]
+            if n >= mark_min]
         out[side] = {
             "pairs": pairs,
             "loosest": (max(pairs, key=lambda p_: p_["avg_dist_m"])
@@ -5149,7 +5161,12 @@ def screened_defender_roles(match, config=None) -> dict:
 # lőtt labdáik egy posztról jönnek.
 BSR_MIN_BLOCKS = 3
 BSR_SHARE_PCT = 60.0
-BSR_LOOKBACK_FRAMES = 25   # a lövő keresése a blokk előtti kockákon
+# A lövő keresése a blokk ELŐTTI kockákon. MÁSODPERCBEN: ritkítva 25
+# kocka három másodperc visszanézést jelentene, és három másodperccel a
+# blokk előtt már rendszerint MÁS volt a labdánál — a réteg a rossz
+# posztra írná a falba lőtt labdát.
+BSR_LOOKBACK_S = 1.0
+BSR_LOOKBACK_FRAMES = 25   # visszafelé kompatibilis alapérték (25 fps)
 
 
 def blocked_shooter_roles(match, config=None) -> dict:
@@ -5181,6 +5198,9 @@ def blocked_shooter_roles(match, config=None) -> dict:
     roles = estimate_positions(match, config)
     blk = detect_blocks(match, config)
     idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    # Visszanézés a lövőért, a meccs SAJÁT képrátájából (lásd BSR_LOOKBACK_S).
+    _bfps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    _bsr_look = max(1, int(round(BSR_LOOKBACK_S * _bfps)))
 
     out: dict = {side: {"blocks": 0, "roles": {}, "main_role": None,
                         "share_pct": None, "verdict": None}
@@ -5193,7 +5213,7 @@ def blocked_shooter_roles(match, config=None) -> dict:
             if i0 is None:
                 continue
             shooter = None
-            for j in range(i0, max(-1, i0 - BSR_LOOKBACK_FRAMES), -1):
+            for j in range(i0, max(-1, i0 - _bsr_look), -1):
                 h = ball_holder(match.frames[j], config)
                 if h is not None and h.team == atk_team \
                         and h.role != "kapus":

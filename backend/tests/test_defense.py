@@ -4770,3 +4770,32 @@ def test_retreat_fade_felido_jel_nelkul_nincs_itelet():
     rf = retreat_fade(Match(_meta(25.0), _rtf_frames(0, [2.0, 2.0])))
     assert rf["home"]["slow_s"] is None
     assert rf["away"]["slow_s"] is None
+
+
+def test_az_orzes_kuszob_valos_masodpercben_ertendo():
+    """Az őrzési párok küszöbe IDŐTARTAM, nem mintaszám.
+
+    A kommentje eredetileg is "1 mp @ 25 fps"-t mondott — de kockában
+    volt rögzítve, tehát a termék alapbeállításán (minden 3. kocka)
+    HÁROM másodperces követést követelt volna, és a rövid, de valódi
+    őrzések kimaradtak volna a listából.
+    """
+    from handball.pipeline.defense import MARK_MIN_S, marking_pairs
+
+    fps = 25.0 / 3.0                       # a termék ritkítása
+    kockak = max(1, int(round(MARK_MIN_S * fps)))   # ~8 kocka = 1 valós mp
+    assert kockak < 25, kockak
+
+    # A hazai 1-es végig a vendég 21-est őrzi, pont a küszöb hosszáig.
+    frames = []
+    for i in range(kockak + 2):
+        frames.append(Frame(t=i, players=[
+            _pl(21, Team.AWAY, 20.0, 10.0),
+            _pl(22, Team.AWAY, 24.0, 6.0),
+            _pl(1, Team.HOME, 21.0, 10.0),
+            _pl(2, Team.HOME, 27.0, 14.0),
+        ], ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    rec = marking_pairs(Match(_meta(fps), frames))
+    parok = rec["home"]["pairs"]
+    assert parok, "a valós egy másodperces őrzésnek meg kell jelennie"
+    assert parok[0]["defender"] == 1 and parok[0]["attacker"] == 21
