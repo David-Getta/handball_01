@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.62 óta)
+## Kiadatlan (a v0.1.63 óta)
+
+## v0.1.63 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: az 502. elemző réteg, és a gyorsítótár
+> szemantikájának lezárása. Az új réteg a fáradás legőszintébb jelét
+> méri: hátrébb áll-e a támadás a hajrában. A hatos elleni munka
+> (betörés, beugrás, elzárás utáni leválás) lábat kíván, és aki
+> elfárad, egy lépéssel hátrébb marad — onnan viszont már csak a
+> kényelmes, de nehéz átlövés jön. Ez hamarabb látszik, mint a
+> lövés-távolság esése, mert nem kell hozzá lövés.
+
 
 - **Támadás-mélység a hajrában** (új réteg, `attack_depth_fade`): a
   támadás-mélység megmondja, milyen messze állnak a kaputól felállt
