@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.51 óta)
+## Kiadatlan (a v0.1.52 óta)
+
+## v0.1.52 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ez a kör az első éles meccs utolsó nyitott
+> tünetét zárja le. A rendszer a meccs ELŐTTI felállásnál is
+> eladott labdákat írt — az ok az volt, hogy a birtokos-váltás
+> egyetlen képkockából eldőlt, és tömörülésnél a jel kockánként
+> ide-oda billegett. Mostantól az eladott labdához kitartás kell:
+> az ellenfélnek tényleg nála kell lennie a labdának. A csapaton
+> belüli passz változatlan.
 
 - **Az eladott labda BILLEGÉSE megoldva** (motor) — JAVÍTÁS: a birtokos
   a labdához LEGKÖZELEBBI játékos, és a váltás eddig egyetlen
