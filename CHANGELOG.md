@@ -5,6 +5,27 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.64 óta)
 
+- **CSAPAT menücsoport: Edzésterv és Szezon** (felület): a bal oldali
+  menü eddig két csoportot ismert (MUNKAFOLYAMAT, ELEMZÉS), és minden
+  csapat-szintű munka a kezdőlap mélyén lakott. Aki nem görgetett
+  odáig, nem is tudott róluk — pedig készen voltak a motorban.
+  - **Edzésterv** (új képernyő): edzői szemmel a heti munkalap.
+    SZEZON nézet = ami legalább KÉT meccsen előjött ugyanannál a
+    csapatnál (`/library/training-focus`) — ez nem egyszeri kisiklás,
+    hanem edzhető gyengeség; EGY MECCS nézet = a kiválasztott meccs
+    fókuszai. Minden tétel: terület, fókusz, INDOK és konkrét
+    gyakorlat.
+  - **Szezon** (új képernyő): edzői szemmel az összkép (meccsek, mért
+    játékidő, gól, lövés, védés, sprint, táv) és a nyomtatható
+    szezon-/egymás elleni riport; JÁTÉKOS szemmel a toplisták (gól,
+    gólpassz, blokk, labdaszerzés, védés) mezszám szerint. A lap
+    kimondja, hogy a mezszám nélküli játékos KIMARAD a listából —
+    különben hiányzó teljesítménynek olvasná.
+  - A Játékos-fejlődés átkerült ide (nem egy meccsről szól), a menü
+    tíz elemű lett, és a tizedikhez is jár gyorsbillentyű
+    (Cmd/Ctrl+0).
+
+
 - **Tíz esés-réteg a hajrá-profilban** (motor): a hajrá-profil eddig
   hét esés-jelet nézett, pedig a csomagban ennél több van — így az
   "egy lapon" ígéret hiányos volt. Bekötve az **elszálló labdák**

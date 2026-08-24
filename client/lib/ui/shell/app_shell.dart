@@ -1,11 +1,17 @@
 /// Alkalmazás-shell — a MUNKAFOLYAMAT szerint csoportosított navigáció.
 ///
 /// A menü az edző munkarendjét követi, nem a fejlesztését:
-///   MUNKAFOLYAMAT: Kezdőlap → Új elemzés → Élő követés
-///   ELEMZÉS:       Meccs-elemző · Ellenfél-felderítés · Játékos-fejlődés ·
-///                  Figura-tervező
+///   MUNKAFOLYAMAT: Kezdőlap → Új elemzés → Feldolgozások → Élő követés
+///   ELEMZÉS:       Meccs-elemző · Ellenfél-felderítés · Figura-tervező
+///   CSAPAT:        Edzésterv · Szezon · Játékos-fejlődés
 /// Minden eszköz a menüből érhető el (nem képernyők mélyéről), a kijelölés
-/// mindig mutatja, hol jársz. Gyors váltás billentyűzetről: Cmd/Ctrl+1..8.
+/// mindig mutatja, hol jársz. Gyors váltás billentyűzetről: Cmd/Ctrl+1..9
+/// és Cmd/Ctrl+0 a tizedik elemre.
+///
+/// A CSAPAT csoport azért külön: az edzésterv, a szezon-toplisták és a
+/// játékos-fejlődés nem EGY meccsről szól, hanem a csapat egészéről — és
+/// eddig mindhárom a kezdőlap, illetve egy meccs mélyén lakott, tehát aki
+/// nem görgetett odáig, nem is tudott róluk.
 /// Szűk nézetben a sáv keskeny, rámutatásra kinyílik a feliratokkal.
 library;
 
@@ -27,13 +33,16 @@ import "../live_screen.dart";
 import "../match_screen.dart";
 import "../player_trend_screen.dart";
 import "../scouting_picker_screen.dart";
+import "../season_screen.dart";
 import "../terms_screen.dart";
+import "../training_plan_screen.dart";
 import "../upload_screen.dart";
 
 /// A navigáció elemei. (A `matches` a meccs-elemző: menüből demóval nyílik,
 /// a könyvtárból a kiválasztott meccsel — a kijelölés ilyenkor is ezt jelöli.)
 enum NavId {
-  dashboard, upload, jobs, live, matches, scouting, playerTrend, designer
+  dashboard, upload, jobs, live, matches, scouting, designer,
+  training, season, playerTrend
 }
 
 /// A menü csoportjai és elemei — EGY helyen, a sáv és a billentyű-kiosztás
@@ -48,8 +57,12 @@ const List<(String, List<(NavId, IconData, String)>)> kNavGroups = [
   ("ELEMZÉS", [
     (NavId.matches, Icons.play_circle_outline, "Meccs-elemző"),
     (NavId.scouting, Icons.travel_explore, "Ellenfél-felderítés"),
-    (NavId.playerTrend, Icons.timeline, "Játékos-fejlődés"),
     (NavId.designer, Icons.edit_outlined, "Figura-tervező"),
+  ]),
+  ("CSAPAT", [
+    (NavId.training, Icons.fitness_center, "Edzésterv"),
+    (NavId.season, Icons.calendar_month_outlined, "Szezon"),
+    (NavId.playerTrend, Icons.timeline, "Játékos-fejlődés"),
   ]),
 ];
 
@@ -63,8 +76,10 @@ void navTo(BuildContext context, NavId id) {
     NavId.live => const LiveScreen(),
     NavId.matches => const MatchScreen(),
     NavId.scouting => const ScoutingPickerScreen(),
-    NavId.playerTrend => const PlayerTrendScreen(),
     NavId.designer => DesignerScreen(match: buildDemoMatch()),
+    NavId.training => const TrainingPlanScreen(),
+    NavId.season => const SeasonScreen(),
+    NavId.playerTrend => const PlayerTrendScreen(),
   };
   Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => page));
@@ -78,7 +93,8 @@ void navTo(BuildContext context, NavId id) {
 /// előbb-utóbb széttart; ez a közös.
 const List<(String, List<(String, String)>)> kShortcutGroups = [
   ("Bárhol", [
-    ("Cmd/Ctrl + 1..8", "váltás a menü elemei közt (a menü sorrendjében)"),
+    ("Cmd/Ctrl + 1..9, 0",
+     "váltás a menü elemei közt (a menü sorrendjében; a 0 a tizedik)"),
     ("? vagy F1", "ez a súgó"),
   ]),
   ("Meccs-elemzőben", [
@@ -176,6 +192,9 @@ class AppShell extends StatelessWidget {
       LogicalKeyboardKey.digit5, LogicalKeyboardKey.digit6,
       LogicalKeyboardKey.digit7, LogicalKeyboardKey.digit8,
       LogicalKeyboardKey.digit9,
+      // A tizedik menüpont a 0-ra esik (a számsor végén) — így a
+      // billentyű-kiosztás nem szakad meg a menü bővülésekor.
+      LogicalKeyboardKey.digit0,
     ];
     final bindings = <ShortcutActivator, VoidCallback>{};
     for (var i = 0; i < items.length && i < digits.length; i++) {

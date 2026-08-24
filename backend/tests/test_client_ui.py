@@ -1417,3 +1417,57 @@ def test_nem_no_a_duplan_hasznalt_konstansnevek_szama():
         "kliens/doksi kommentek névre hivatkoznak, tehát a következő "
         "olvasó a rossz modulban módosítana: "
         + "; ".join(f"{n} ({utkozo[n]})" for n in ujak))
+
+
+def test_a_csapat_menucsoport_hazat_ad_az_egesz_szezonnak():
+    """A csapat-szintű munkának SAJÁT menüpont jár.
+
+    Az edzésterv, a szezon-toplisták és a nyomtatható szezon-riportok
+    mind készen voltak a motorban, a felületen viszont a kezdőlap
+    mélyén (illetve egy meccs összefoglalójában) laktak: aki nem
+    görgetett odáig, nem is tudott róluk. Az edző munkarendjében ez
+    önálló feladat ("mit gyakorolunk a héten", "hol tartunk a
+    szezonban"), a játékos pedig a toplistán keresi magát.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert '"CSAPAT"' in shell, "nincs CSAPAT menücsoport"
+    for nav, nev, fajl in (("NavId.training", "Edzésterv",
+                            "training_plan_screen.dart"),
+                           ("NavId.season", "Szezon", "season_screen.dart")):
+        assert nav in shell, f"nincs {nev} menüpont"
+        assert f'"{nev}"' in shell, f"a {nav} menüpontnak nincs neve"
+        assert (lib / "ui" / fajl).exists(), f"nincs {nev} képernyő"
+
+    # A menü minden elemének jár gyorsbillentyű: tíz elemnél a 0 a
+    # tizedik. Ha a menü bővül, ez a sor mondja meg, hogy a kiosztás
+    # elfogyott — némán ne szakadjon meg.
+    elemek = shell.count("(NavId.")
+    # (a navTo switch-ágai nem "(NavId." alakúak, csak a menü-lista)
+    assert elemek >= 10, elemek
+    assert "LogicalKeyboardKey.digit0" in shell, (
+        "a tizedik menüpontnak nincs gyorsbillentyűje")
+
+    # A két új képernyő a KÖNYVTÁR-szintű végpontokat használja (nem egy
+    # meccsét): ez a különbség köztük és a meccs-elemző között.
+    terv = (lib / "ui" / "training_plan_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchLibraryTrainingFocus" in terv, (
+        "az edzésterv nem a visszatérő (szezon-szintű) fókuszokat kéri")
+    assert "fetchTraining" in terv, (
+        "az edzéstervből nem kérhető le EGY meccs fókusza")
+
+    szezon = (lib / "ui" / "season_screen.dart").read_text(encoding="utf-8")
+    for hivas in ("fetchLibrarySummary", "fetchLibraryLeaders",
+                  "fetchSeasonReport", "fetchHeadToHead"):
+        assert hivas in szezon, f"a szezon-lapról hiányzik: {hivas}"
+    # A toplista mezszám-alapú: aki nincs beszámozva, kimarad — ezt ki
+    # kell mondani, különben hiányzó teljesítménynek olvassa a játékos.
+    assert "MEZSZÁM" in szezon or "mezszám" in szezon, (
+        "a toplista nem mondja meg, miért maradhat ki valaki")
