@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.57 óta)
 
+- **Új őr: nincs néma felderítés-mező** (teszt): a felderítés-jelentésnek
+  több mint EZER mezője van, és a csempék meg a meccsterv-szabályok
+  ezekből olvasnak. Ha egy mezőt senki nem tölt ki, az alapértéke
+  (0 / üres) marad — a csempe pedig ÖRÖKRE néma, vagy ami rosszabb, a
+  szabály hamis feltevéssel dolgozik. Semmi nem hasal el, semmi nem
+  jelez: a réteg egyszerűen nincs ott, és senki nem tudja meg, hogy
+  hiányzik. Az őr mindkét irányt nézi (olvasott-de-nem-töltött, és
+  kiszámolt-de-sehol-nem-olvasott). Az első futás tisztán jött ki: az
+  1052 mezőből egy sem néma.
+
 - **Az őrök kiterjesztése** (teszt): (1) a réteg-eltűnés őre egy
   harmadik elfajzási esetet is néz — amikor a mezszín-klaszterezés
   összeomlik, és MINDEN játékos egy csapatba kerül (azonos színű mezek,

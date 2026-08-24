@@ -774,3 +774,62 @@ def test_egy_reteg_sem_hasal_el_a_labda_nelkuli_meccsen(
     missing = sorted(set(names) - set(sovany_package_analyses))
     assert not missing, (
         "labda nélküli meccsen NÉMÁN elbukó rétegek: " + ", ".join(missing))
+
+
+# Felderítés-mezők, amiket a motor kiszámol, de SEHOL nem olvasunk —
+# mindegyikhez indoklás. Új ilyen mező felvétele előtt gondold végig:
+# ha senki nem olvassa, minek számoljuk?
+_NEM_OLVASOTT_MEZOK = {
+    "team",                 # a jelentés kulcsa ("home"/"away"), nem tartalom
+    "attack_centroid_x",    # a támadó súlypont a kliens hőtérképéhez
+    "attack_centroid_y",    # készült; ma a hőtérkép a nyers kockákból dolgozik
+}
+
+
+def test_nincs_olvasott_de_soha_ki_nem_toltott_felderites_mezo():
+    """Egy OLVASOTT, de sosem KITÖLTÖTT mező néma hiba.
+
+    A felderítés-jelentésnek több mint ezer mezője van, és a
+    csempék/szabályok ezekből olvasnak. Ha egy mezőt senki nem tölt ki,
+    az alapértéke (0 / üres) marad — a csempe pedig ÖRÖKRE néma, vagy
+    ami rosszabb, a szabály hamis feltevéssel dolgozik. Semmi nem hasal
+    el, semmi nem jelez: a réteg egyszerűen nincs ott, és senki nem
+    tudja meg, hogy hiányzik.
+    """
+    import ast
+    import re
+
+    sc_path = (Path(__file__).resolve().parent.parent
+               / "handball" / "pipeline" / "scouting.py")
+    sc = sc_path.read_text(encoding="utf-8")
+
+    mezok = set()
+    for node in ast.walk(ast.parse(sc)):
+        if isinstance(node, ast.ClassDef) and node.name == "ScoutingReport":
+            for st in node.body:
+                if (isinstance(st, ast.AnnAssign)
+                        and isinstance(st.target, ast.Name)):
+                    mezok.add(st.target.id)
+    assert len(mezok) > 500, "a mező-olvasás elromlott"
+
+    # Kitöltés: `rep.<mezo> = ...`, sorozat-kirendelés (`rep.a, rep.b = ...`),
+    # és a combine_reports kulcsszavas építése (`<mezo>=...`).
+    kitoltott = set(re.findall(r"\brep\.([a-z0-9_]+)\s*(?:,|=)", sc))
+    kitoltott |= set(re.findall(r"^\s{8}([a-z0-9_]+)=", sc, re.M))
+
+    olvasott = set(re.findall(r"\b(?:rep|own|opp|r)\.([a-z0-9_]+)\b", sc))
+    dart = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if dart.exists():
+        olvasott |= set(re.findall(r'r\["([a-z0-9_]+)"\]',
+                                   dart.read_text(encoding="utf-8")))
+
+    nema = sorted((olvasott & mezok) - kitoltott)
+    assert not nema, (
+        "olvasott, de SOHA ki nem töltött felderítés-mezők (a rájuk "
+        "épülő csempe/szabály örökre néma): " + ", ".join(nema))
+
+    felesleges = sorted((kitoltott & mezok) - olvasott - _NEM_OLVASOTT_MEZOK)
+    assert not felesleges, (
+        "kiszámolt, de SEHOL nem olvasott felderítés-mezők — vagy hiányzik "
+        "a felület, vagy fölösleges a számolás: " + ", ".join(felesleges))
