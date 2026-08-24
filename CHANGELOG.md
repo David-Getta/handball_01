@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.61 óta)
+## Kiadatlan (a v0.1.62 óta)
+
+## v0.1.62 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: rövidebb várakozás és őszintébb csomag. A
+> gyorsítótár egy régi hiányossága miatt ugyanaz a mérés kétszer
+> futott le, ha az egyik hívó kifejezetten átadta az alapértelmezett
+> beállítást — javítva: az edzői összefoglaló 16, az ellenszer-lap 27
+> százalékkal gyorsabb. Emellett a meccs-csomag mostantól megnevezi,
+> ha egy elemzés mégsem készült el (a szöveges lapon is), és egy új
+> teszt a TELJES láncot végigjárja egy videótól a csomagig.
+
 
 - **Gyorsítás: az alapértelmezett beállítás nem számol újra** (motor):
   a gyorsítótár kulcsába a hívás argumentumai is beleszámítanak — és
