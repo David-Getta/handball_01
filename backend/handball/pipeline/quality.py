@@ -43,6 +43,13 @@ TOO_MANY_SCORE_CAP = 35
 # elemezte, ne a számokból jöjjön rá, hogy nem.
 VIDEO_COVERAGE_WARN_PCT = 60.0
 
+# Réteg-megbízhatóság: a LABDA-alapú rétegek (birtoklás, passz, eladott
+# labda, lövés) ekkora labda-lefedettség alatt nem megbízhatók. A 40%
+# nem szigorúbb a figyelmeztetés 30%-os küszöbénél véletlenül: ott azt
+# mondjuk ki, hogy BAJ VAN, itt azt, hogy ezekre a számokra nem érdemes
+# meccstervet építeni — a kettő nem ugyanaz.
+BALL_CONFIDENCE_PCT = 40.0
+
 # ELSŐ TEENDŐ: a figyelmeztetések fontossági SORRENDJE. Egy gyenge
 # feldolgozás jellemzően négy-hat figyelmeztetést kap egyszerre, és a
 # felhasználó ilyenkor nem tudja, mivel kezdje — pedig a lista eleje és
@@ -443,6 +450,33 @@ def analysis_confidence(match: Match) -> list[dict]:
                 n_jersey += 1
     jersey_cov = (100.0 * n_jersey / n_field) if n_field else 0.0
 
+    # Labda-lefedettség (a labda-alapú rétegek közös alapja).
+    n_frames = len(match.frames)
+    ball_frames = sum(1 for f in match.frames if f.ball is not None)
+    ball_pct = (100.0 * ball_frames / n_frames) if n_frames else 0.0
+
+    # Pálya-vetítés épsége: lehetetlen létszám VAGY hiányzó kalibráció.
+    measured = sum(1 for f in match.frames for p in f.players
+                   if p.source == PositionSource.MEASURED)
+    avg_meas = (measured / n_frames) if n_frames else 0.0
+    calibrated = getattr(match.meta, "calibrated", None)
+    if calibrated is False:
+        court_ok = False
+        court_ok_reason = ""
+        court_fail_reason = ("nincs pálya-kalibráció — a pozíciók csak "
+                             "arányos becslések, és a pályán kívüliek "
+                             "nem szűrhetők")
+    elif avg_meas > TOO_MANY_PLAYERS:
+        court_ok = False
+        court_ok_reason = ""
+        court_fail_reason = (f"lehetetlen létszám ({avg_meas:.1f}/kocka, "
+                             f"a pályán legfeljebb {EXPECTED_PLAYERS}) — a "
+                             "kalibráció a pályán kívülieket is beveszi")
+    else:
+        court_ok = True
+        court_ok_reason = f"hihető létszám ({avg_meas:.1f}/kocka)"
+        court_fail_reason = ""
+
     def row(layer, label, ok, ok_reason, fail_reason):
         return {"layer": layer, "label": label, "available": bool(ok),
                 "reason": ok_reason if ok else fail_reason}
@@ -475,4 +509,19 @@ def analysis_confidence(match: Match) -> list[dict]:
             f"{n_positions} játékos posztja becsülhető",
             f"kevés poszt-minta ({n_positions} < 6 játékos) — a "
             "felállás-kép hiányos"),
+        # A labda a birtoklás, a passz, az eladott labda és a lövés
+        # KÖZÖS alapja: ha ritkán látjuk, ezek a számok együtt gyengék.
+        # A felhasználó ezt eddig sehol nem látta rétegre bontva —
+        # ugyanolyan magabiztosan olvasta őket, mint a pozíció-alapúakat.
+        row("ball", "Labda-alapú rétegek (birtoklás, passz, eladás, lövés)",
+            ball_pct >= BALL_CONFIDENCE_PCT,
+            f"{ball_pct:.0f}% labda-lefedettség",
+            f"kevés labda-észlelés ({ball_pct:.0f}% < "
+            f"{BALL_CONFIDENCE_PCT:.0f}%) — a birtoklás, a passz- és az "
+            "eladás-számok nem megbízhatók; a \"Pontos\" profil javíthat"),
+        # A pálya-vetítés minden TÁVOLSÁG-alapú réteg alapja. Ha a
+        # nézőtér is a pályára esik (vagy nincs kalibráció), ezek a
+        # számok mást mérnek, mint amit mondanak.
+        row("court", "Pálya-alapú rétegek (távolság, fal-forma, zónák)",
+            court_ok, court_ok_reason, court_fail_reason),
     ]

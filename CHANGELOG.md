@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.50 óta)
 
+- **Réteg-megbízhatóság: külön szó a labda- és a pálya-alapú
+  számokról** (motor): az első éles meccsen a felhasználó ugyanolyan
+  magabiztosan olvasta a birtoklás- és passz-számokat, mint a
+  pozíció-alapúakat — pedig a labdát a kockák negyedén láttuk, és a
+  pálya-vetítés is hibás volt. A megbízhatósági lista (amit a
+  minőség-ablak amúgy is mutat) mostantól két új sort visz: a
+  LABDA-alapú rétegeket (birtoklás, passz, eladás, lövés) 40%-os
+  labda-lefedettség alatt megjelöli, a PÁLYA-alapúakat (távolság,
+  fal-forma, zónák) pedig akkor, ha lehetetlen a létszám vagy nincs
+  kalibráció — mindkettőnél megmondva, MIÉRT.
+
 - **A diagnózis-lánc ellenőrzése ÉLES lett** (kiadás): a windowsos
   füstteszt eddig csak JELEZTE, hogy a becsomagolt motor ír-e
   `engine.log`-ot — mert a futtató tényleges viselkedését még nem

@@ -180,3 +180,51 @@ def test_minden_figyelmeztetesnek_van_teendoje():
     assert len(NEXT_ACTION_ORDER) >= 8
     assert len({r for r, _ in NEXT_ACTION_ORDER}) == len(NEXT_ACTION_ORDER)
     del re
+
+
+def test_megbizhatosag_kulon_szol_a_labda_alapu_retegekrol():
+    """26% labda-lefedettségnél a birtoklás-számokra nem lehet építeni.
+
+    Az éles meccsen a felhasználó ugyanolyan magabiztosan olvasta a
+    birtoklás- és passz-számokat, mint a pozíció-alapúakat — pedig a
+    labdát a kockák negyedén láttuk. Ezt rétegre bontva kell kimondani.
+    """
+    from handball.pipeline.quality import (BALL_CONFIDENCE_PCT,
+                                           analysis_confidence)
+
+    m = _match(EXPECTED_PLAYERS, frames=200)     # minden kockán van labda
+    m.meta.calibrated = True
+    sorok = {r["layer"]: r for r in analysis_confidence(m)}
+    assert sorok["ball"]["available"] is True
+
+    # Most vegyük el a labdát a kockák nagy részéről.
+    for i, f in enumerate(m.frames):
+        if i % 4 != 0:
+            f.ball = None
+    sorok = {r["layer"]: r for r in analysis_confidence(m)}
+    assert sorok["ball"]["available"] is False
+    assert "birtoklás" in sorok["ball"]["reason"]
+    assert BALL_CONFIDENCE_PCT > 30.0
+
+
+def test_megbizhatosag_kulon_szol_a_palya_alapu_retegekrol():
+    """Lehetetlen létszámnál a távolság-alapú rétegek nem hihetők."""
+    from handball.pipeline.quality import analysis_confidence
+
+    jo = _match(EXPECTED_PLAYERS, frames=200)
+    jo.meta.calibrated = True
+    assert {r["layer"]: r for r in analysis_confidence(jo)}[
+        "court"]["available"] is True
+
+    rossz = _match(27, frames=200)
+    rossz.meta.calibrated = True
+    sor = {r["layer"]: r for r in analysis_confidence(rossz)}["court"]
+    assert sor["available"] is False
+    assert "lehetetlen létszám" in sor["reason"]
+
+    # Kalibráció nélkül szintén — más indokkal.
+    nincs = _match(EXPECTED_PLAYERS, frames=200)
+    nincs.meta.calibrated = False
+    sor2 = {r["layer"]: r for r in analysis_confidence(nincs)}["court"]
+    assert sor2["available"] is False
+    assert "kalibráció" in sor2["reason"]
