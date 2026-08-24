@@ -1217,3 +1217,26 @@ def test_a_masik_csapat_passzai_nem_nyelik_el_a_szerzest():
     passzok = [e for e in evs if e.type == EventType.PASS]
     assert len(eladas) == 1 and eladas[0].team == Team.HOME
     assert len(passzok) == 2      # 11→12 és 12→13
+
+
+def test_a_felvetel_elejen_allo_villanasbol_nincs_eladas():
+    """Egy-kockás nyitó villanásból ne írjunk labdavesztést senki nevére.
+
+    A felvétel SZÉLEIN álló rövid futam sosem igazolja magát: nincs
+    mellette mindkét oldalon szomszéd, ami megerősítené. A végén álló
+    villanásból labdaSZERZÉST, az elején állóból labdaVESZTÉST nem
+    csinálunk.
+    """
+    frames = []
+    t = 0
+    # Egyetlen kocka a hazaié...
+    frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    t += 1
+    # ...aztán tartósan a vendégé.
+    for _ in range(30):
+        frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    evs = detect_possession_changes(Match(_meta(), frames))
+    assert [e for e in evs if e.type == EventType.TURNOVER] == []

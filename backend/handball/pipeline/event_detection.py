@@ -485,7 +485,8 @@ def detect_possession_changes(match: Match,
         i = 1
         while i < len(futamok) - 1:
             elozo, kozep, kov = futamok[i - 1], futamok[i], futamok[i + 1]
-            if elozo[1] == kov[1] and (kozep[3] - kozep[2]) < min_hold:
+            # A futam HOSSZA kockában: a záró kocka is beleszámít.
+            if elozo[1] == kov[1] and (kozep[3] - kozep[2] + 1) < min_hold:
                 elozo[0].extend(kov[0])
                 elozo[3] = kov[3]
                 del futamok[i:i + 2]
@@ -493,11 +494,15 @@ def detect_possession_changes(match: Match,
                 continue
             i += 1
 
-    # 3/b) A felvétel VÉGÉN álló rövid futam sosem igazolja magát: nincs
-    #      utána semmi, ami megerősítené. Az ilyen "az utolsó pillanatban
-    #      átbillent" jelből nem csinálunk labdaszerzést.
-    while len(futamok) >= 2 and (futamok[-1][3] - futamok[-1][2]) < min_hold:
+    # 3/b) A felvétel SZÉLEIN álló rövid futam sosem igazolja magát:
+    #      nincs mellette mindkét oldalon szomszéd, ami megerősítené.
+    #      A végén álló villanásból nem csinálunk labdaszerzést; az
+    #      elején állóból pedig nem csinálunk labdaVESZTÉST (a rá
+    #      következő váltást különben az ő nevére írnánk).
+    while len(futamok) >= 2 and (futamok[-1][3] - futamok[-1][2] + 1) < min_hold:
         futamok.pop()
+    while len(futamok) >= 2 and (futamok[0][3] - futamok[0][2] + 1) < min_hold:
+        del futamok[0]
 
     # 4) Események: a futamon BELÜL passz, a futamok KÖZT eladott labda.
     events: list[MatchEvent] = []

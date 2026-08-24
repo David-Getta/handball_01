@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.53 óta)
 
+- **Az eladott labda kitartás-szabálya: két javítás önellenőrzésből**
+  (motor): (1) a futam hosszát egy kockával rövidebbnek számoltuk (a
+  záró kocka kimaradt), tehát a szabály a szándékoltnál egy hajszállal
+  szigorúbb volt; (2) a felvétel ELEJÉN álló, meg nem erősített
+  villanásból labdaVESZTÉST írtunk valakinek a nevére — pedig a széleken
+  álló rövid futam sosem igazolja magát (nincs mellette mindkét oldalon
+  szomszéd). A végén állóra ez már eddig is így volt; most szimmetrikus.
+
 ## v0.1.53 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: két javítás ugyanabból a hibaosztályból — a

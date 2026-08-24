@@ -90,9 +90,13 @@ def test_transition_defense_counts_fast_goals():
     frames = []
     t = 0
     # A hazai birtokol, majd a vendég szerzi meg (labdaeladás a hazainak).
-    frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0)],
-                        ball=Ball(x=25.0, y=10.0, confidence=1.0)))
-    t += 1
+    # A birtoklás KITART (10 kocka @ 25 fps): a felvétel elején álló
+    # egy-kockás villanásból nem csinálunk labdavesztést — a rá
+    # következő váltást különben annak a nevére írnánk.
+    for _ in range(10):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0)],
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
     frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 20.0, 10.0)],
                         ball=Ball(x=20.0, y=10.0, confidence=1.0)))
     t += 1
