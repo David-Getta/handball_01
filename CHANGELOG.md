@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.53 óta)
 
+- **Az újrafeldolgozás megmondja, mit visz és mit nem** (kliens): a
+  gomb a KALIBRÁCIÓT frissíti, a többi beállítást — a meccs időablakát,
+  a minőségi profilt és a hosszt — viszont az EREDETI indításból viszi.
+  Ha a baj éppen az volt, hogy a bemelegítés bekerült az elemzésbe, ez
+  a gomb nem oldja meg. A megerősítő párbeszéd ezt kimondja, és
+  odaküld, ahol megadható (Új elemzés lap) — egy fél-egy órás munkát
+  nem indítunk el ilyen félreértéssel.
+
 - **Az eladott labda kitartás-szabálya: két javítás önellenőrzésből**
   (motor): (1) a futam hosszát egy kockával rövidebbnek számoltuk (a
   záró kocka kimaradt), tehát a szabály a szándékoltnál egy hajszállal

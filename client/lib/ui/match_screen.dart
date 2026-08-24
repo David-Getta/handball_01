@@ -2025,7 +2025,48 @@ class _MatchScreenState extends State<MatchScreen> {
 
   /// Ezt a meccset dolgoztatja fel újra — a videóhoz MENTETT (tehát a
   /// javított) kalibrációval, a régi meccs helyére.
+  ///
+  /// A megerősítés nem formalitás: a gomb a KALIBRÁCIÓT frissíti, a
+  /// többi beállítást (meccs-időablak, minőségi profil, hossz) viszont
+  /// az eredeti indításból viszi. Ha a baj éppen az volt, hogy a
+  /// bemelegítés bekerült az elemzésbe, ez a gomb nem oldja meg — azt
+  /// az Új elemzés lapon kell megadni. Egy fél-egy órás munkát nem
+  /// indítunk el ilyen félreértéssel.
   Future<void> _reprocessThisMatch() async {
+    final rendben = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Újrafeldolgozás"),
+        content: SizedBox(
+          width: 470,
+          child: Text(
+            "A feldolgozás a videóhoz MENTETT (tehát a frissen javított) "
+            "kalibrációval indul újra, és a régi meccs helyére dolgozik.\n\n"
+            "A többi beállítást — a meccs időablakát, a minőségi profilt "
+            "és a hosszt — az EREDETI indításból viszi. Ha a baj az volt, "
+            "hogy a bemelegítés vagy a csapatbemutatás bekerült az "
+            "elemzésbe, azt itt nem lehet megadni: indítsd inkább az Új "
+            "elemzés lapról, ahol a meccs időablaka is beállítható.",
+            style: AppText.label.copyWith(fontSize: 12.5),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text("Mégse"),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text("Indítás így"),
+          ),
+        ],
+      ),
+    );
+    if (rendben != true) return;
     try {
       await _api.reprocessMatch(widget.matchId);
       if (!mounted) return;

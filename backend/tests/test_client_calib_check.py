@@ -126,3 +126,16 @@ def test_inditas_elotti_ellenorzo_lista():
     assert "Meccs időablaka" in src
     # A próba eredménye eltárolódik — enélkül a lista nem tudná, futott-e.
     assert "_previewOk" in src and "_previewOnCourt" in src
+
+
+def test_az_ujrafeldolgozas_megmondja_mit_visz_es_mit_nem():
+    """A gomb a KALIBRÁCIÓT frissíti — a többit az eredetiből viszi.
+
+    Ha a baj éppen az volt, hogy a bemelegítés bekerült az elemzésbe,
+    ez a gomb nem oldja meg: azt az Új elemzés lapon kell megadni. Egy
+    fél-egy órás munkát nem indítunk el ilyen félreértéssel.
+    """
+    src = _match_src()
+    assert "meccs időablakát" in src
+    assert "EREDETI indításból" in src
+    assert "Indítás így" in src and "Mégse" in src
