@@ -82,3 +82,28 @@ def test_kalibracio_nelkul_rakerdez_az_inditas():
     assert "Nincs pálya-kalibráció" in src
     # Nem tiltás: a felhasználó dönthet úgy, hogy így is elindítja.
     assert "Indítás kalibráció nélkül" in src
+
+
+def _match_src() -> str:
+    return (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+
+
+def test_a_jelentesbol_inditható_az_ujrafeldolgozas():
+    """A jelentés megmondja a bajt — legyen ott a javítás gombja is.
+
+    Az újrafeldolgozás gombja eddig CSAK a hibára futott munkákon
+    látszott a kezdőlapon. A felhasználó esete viszont az volt, hogy a
+    feldolgozás LEFUTOTT, csak használhatatlan lett — ott nem volt
+    honnan újraindítani a javított kalibrációval.
+    """
+    src = _match_src()
+    assert "_reprocessThisMatch" in src
+    assert "Újrafeldolgozás a friss kalibrációval" in src
+
+
+def test_elso_teendo_kiemelve_a_jelentesben():
+    """Négy-hat figyelmeztetésnél az EGY teendő ne vesszen el."""
+    src = _match_src()
+    assert "next_action" in src
+    assert "ELSŐ TEENDŐ" in src

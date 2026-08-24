@@ -2003,10 +2003,41 @@ class _MatchScreenState extends State<MatchScreen> {
           ],
         ),
         actions: [
+          // ÚJRAFELDOLGOZÁS: a jelentés megmondja, mi a baj (jellemzően
+          // a kalibráció) — a javítás után itt lehet egy kattintással
+          // újrafuttatni ugyanarra a meccsre. A motor a videóhoz
+          // MENTETT (tehát a frissen javított) kalibrációval indul, nem
+          // a régi job-beállítással: különben ugyanazt a rossz
+          // eredményt adná még egyszer, egy újabb óra árán.
+          if (q["next_action"] != null && !widget.matchId.startsWith("sim-"))
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _reprocessThisMatch();
+              },
+              child: const Text("Újrafeldolgozás a friss kalibrációval"),
+            ),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Rendben")),
         ],
       ),
     );
+  }
+
+  /// Ezt a meccset dolgoztatja fel újra — a videóhoz MENTETT (tehát a
+  /// javított) kalibrációval, a régi meccs helyére.
+  Future<void> _reprocessThisMatch() async {
+    try {
+      await _api.reprocessMatch(widget.matchId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              "Újrafeldolgozás elindítva a videóhoz mentett kalibrációval "
+              "— a haladást a Feldolgozások lapon követheted.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
   }
 
   Widget _chip(String text) => Container(

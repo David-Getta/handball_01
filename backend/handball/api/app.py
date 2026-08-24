@@ -1370,6 +1370,35 @@ def create_app():
                 status_code=400,
                 detail=f"az eredeti videó nem található: {path}")
         body["match_id"] = match_id  # ugyanarra a helyre dolgozunk
+
+        # FRISS KALIBRÁCIÓ: az újrafeldolgozás leggyakoribb oka éppen az,
+        # hogy a kalibráció rossz volt (a lelátó a pályára vetült, a
+        # pozíciók félrementek). A felhasználó ilyenkor újrakalibrál a
+        # varázslóban — az a VIDEÓHOZ mentődik —, majd itt indít
+        # újrafeldolgozást. Ha ilyenkor a job-paraméterek RÉGI
+        # kalibrációjával futnánk, pontosan ugyanazt a rossz eredményt
+        # kapná még egyszer, egy újabb óra árán. Ezért a videóhoz
+        # mentett kalibráció ELSŐBBSÉGET élvez.
+        try:
+            cf = _calibration_path(path)
+            if cf.exists():
+                friss = json.loads(cf.read_text(encoding="utf-8"))
+                calibs = friss.get("calibs")
+                if isinstance(calibs, list) and calibs:
+                    body["calibs"] = calibs
+                    # A régi egy-kalibrációs mezők félrevezetnének a
+                    # `calibs` mellett — a feldolgozó azokat is nézi.
+                    body.pop("calib", None)
+                    body.pop("calib_region", None)
+                    body.pop("calib_rotate", None)
+                    # A feldolgozás a legkorábbi kalibrált kockától indul.
+                    kockak = [int(c.get("frame", 0)) for c in calibs
+                              if isinstance(c, dict)]
+                    if kockak:
+                        body["start"] = min(kockak)
+        except Exception:
+            pass  # olvashatatlan kalibráció-fájl: marad a mentett beállítás
+
         return start_processing(body)
 
     @app.post("/matches/{match_id}/resume")

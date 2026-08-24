@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.49 óta)
 
+- **Újrafeldolgozás a JAVÍTOTT kalibrációval** (motor + kliens): az
+  újrafeldolgozás leggyakoribb oka éppen az, hogy a kalibráció rossz
+  volt — a felhasználó ilyenkor újrakalibrál a varázslóban (az a
+  videóhoz mentődik), és újraindítja a feldolgozást. Eddig viszont az
+  újrafeldolgozás a JOB régi beállításait vitte, tehát pontosan ugyanazt
+  a rossz eredményt adta volna még egyszer, egy újabb óra árán.
+  Mostantól a videóhoz mentett (frissen javított) kalibráció élvez
+  elsőbbséget, és a feldolgozás a legkorábbi kalibrált kockától indul.
+  A gomb is a helyére került: eddig CSAK a hibára futott munkákon
+  látszott a kezdőlapon — most ott van a meccs minőség-jelentésében is,
+  ahol a baj kiderül.
+
 - **"Első teendő" a minőség-jelentésben** (motor + kliens): egy gyenge
   feldolgozás négy-hat figyelmeztetést kap egyszerre, és a felhasználó
   nem tudja, mivel kezdje — pedig a lista eleje és a vége nem
