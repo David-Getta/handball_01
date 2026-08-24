@@ -1471,3 +1471,37 @@ def test_a_csapat_menucsoport_hazat_ad_az_egesz_szezonnak():
     # kell mondani, különben hiányzó teljesítménynek olvassa a játékos.
     assert "MEZSZÁM" in szezon or "mezszám" in szezon, (
         "a toplista nem mondja meg, miért maradhat ki valaki")
+
+
+def test_a_meccsterv_sajat_menupontot_kap():
+    """A meccs előtti este EGY kérdése: hogyan verjük meg ŐKET.
+
+    A meccsterv-illesztés (a mi profilunk × az ő profiljuk) készen volt,
+    de csak a felderítő jelentés egyik kártyájaként: hozzá kézzel kellett
+    kijelölni MINDEN meccset, amelyiken az ellenfél játszott, és külön a
+    sajátjainkat is. Saját menüpontból két csapatnév elég — a meccseket
+    a képernyő gyűjti össze a könyvtárból.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.matchup" in shell, "nincs Meccsterv menüpont"
+    assert '"Meccsterv"' in shell, "a menüpontnak nincs neve"
+    assert (lib / "ui" / "matchup_screen.dart").exists(), (
+        "nincs Meccsterv képernyő")
+
+    kepernyo = (lib / "ui" / "matchup_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchMatchup" in kepernyo, (
+        "a Meccsterv nem a meccsterv-illesztést kéri")
+    # A lényeg, amiért saját képernyőt kapott: a meccseket NEM a
+    # felhasználó kattintja össze, hanem a csapatnévből épülnek.
+    assert "_itemsOf" in kepernyo, (
+        "a képernyő nem gyűjti össze magától a csapat meccseit")
+    assert "listMatches" in kepernyo, (
+        "a képernyő nem a könyvtárból dolgozik")

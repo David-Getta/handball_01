@@ -2,7 +2,8 @@
 ///
 /// A menü az edző munkarendjét követi, nem a fejlesztését:
 ///   MUNKAFOLYAMAT: Kezdőlap → Új elemzés → Feldolgozások → Élő követés
-///   ELEMZÉS:       Meccs-elemző · Ellenfél-felderítés · Figura-tervező
+///   ELEMZÉS:       Meccs-elemző · Ellenfél-felderítés · Meccsterv ·
+///                  Figura-tervező
 ///   CSAPAT:        Edzésterv · Szezon · Játékos-fejlődés
 /// Minden eszköz a menüből érhető el (nem képernyők mélyéről), a kijelölés
 /// mindig mutatja, hol jársz. Gyors váltás billentyűzetről: Cmd/Ctrl+1..9
@@ -31,6 +32,7 @@ import "../error_text.dart";
 import "../jobs_screen.dart";
 import "../live_screen.dart";
 import "../match_screen.dart";
+import "../matchup_screen.dart";
 import "../player_trend_screen.dart";
 import "../scouting_picker_screen.dart";
 import "../season_screen.dart";
@@ -41,7 +43,7 @@ import "../upload_screen.dart";
 /// A navigáció elemei. (A `matches` a meccs-elemző: menüből demóval nyílik,
 /// a könyvtárból a kiválasztott meccsel — a kijelölés ilyenkor is ezt jelöli.)
 enum NavId {
-  dashboard, upload, jobs, live, matches, scouting, designer,
+  dashboard, upload, jobs, live, matches, scouting, matchup, designer,
   training, season, playerTrend
 }
 
@@ -57,6 +59,7 @@ const List<(String, List<(NavId, IconData, String)>)> kNavGroups = [
   ("ELEMZÉS", [
     (NavId.matches, Icons.play_circle_outline, "Meccs-elemző"),
     (NavId.scouting, Icons.travel_explore, "Ellenfél-felderítés"),
+    (NavId.matchup, Icons.fact_check_outlined, "Meccsterv"),
     (NavId.designer, Icons.edit_outlined, "Figura-tervező"),
   ]),
   ("CSAPAT", [
@@ -76,6 +79,7 @@ void navTo(BuildContext context, NavId id) {
     NavId.live => const LiveScreen(),
     NavId.matches => const MatchScreen(),
     NavId.scouting => const ScoutingPickerScreen(),
+    NavId.matchup => const MatchupScreen(),
     NavId.designer => DesignerScreen(match: buildDemoMatch()),
     NavId.training => const TrainingPlanScreen(),
     NavId.season => const SeasonScreen(),
@@ -94,7 +98,8 @@ void navTo(BuildContext context, NavId id) {
 const List<(String, List<(String, String)>)> kShortcutGroups = [
   ("Bárhol", [
     ("Cmd/Ctrl + 1..9, 0",
-     "váltás a menü elemei közt (a menü sorrendjében; a 0 a tizedik)"),
+     "váltás a menü első tíz eleme közt (a menü sorrendjében; a 0 a "
+     "tizedik) — a további elemek egérrel érhetők el"),
     ("? vagy F1", "ez a súgó"),
   ]),
   ("Meccs-elemzőben", [

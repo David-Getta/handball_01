@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.64 óta)
 
+- **Meccsterv saját menüponttal** (felület): a meccs előtti este EGY
+  kérdése — hogyan verjük meg ŐKET. A meccsterv-illesztés (a mi
+  profilunk × az ő profiljuk) készen volt, de csak a felderítő
+  jelentés egyik kártyájaként: hozzá kézzel kellett kijelölni minden
+  meccset, amelyiken az ellenfél játszott, és külön a sajátjainkat is.
+  Az új képernyőn két csapatnév elég (MI · ŐK) — a meccseket a
+  könyvtárból maga gyűjti össze, oldallal együtt. Két rész: a
+  sorszámozott, páros-specifikus TERV, és a STÍLUS-hasonlóság
+  (0–100) a három legnagyobb eltérésű tengellyel — tükör-meccsen a
+  részletek döntenek, ellentétes stílusnál az, ki kényszeríti rá a
+  sajátját.
+
 - **CSAPAT menücsoport: Edzésterv és Szezon** (felület): a bal oldali
   menü eddig két csoportot ismert (MUNKAFOLYAMAT, ELEMZÉS), és minden
   csapat-szintű munka a kezdőlap mélyén lakott. Aki nem görgetett
