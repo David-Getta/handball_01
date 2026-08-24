@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.56 óta)
 
+- **Új őr: az idő-küszöbök nem eshetnek vissza kockára** (teszt +
+  fejlesztési szabály): egyetlen nap alatt HÉT olyan küszöböt
+  találtunk, ami kockában volt megadva, pedig IDŐTARTAMOT jelent — és
+  mivel a feldolgozás ritkít, mindegyik háromszoros valós időt
+  követelt a termék alapbeállításán. A visszaesés reális, ezért az
+  átállított küszöbök kocka-alakja mostantól nem jelenhet meg futó
+  kódban (csak visszafelé kompatibilis alapértékként, a saját
+  definíciójában). A CLAUDE.md is kimondja a szabályt: MINTASZÁM
+  maradhat kockában (100 minta tényleg 100 minta), IDŐTARTAM
+  kötelezően másodpercben, a `match.meta.fps`-ből számolva.
+
 - **Négy további idő-küszöb a valódi másodperchez igazítva** (motor):
   ugyanaz a hibafajta, mint a hossz-korlátnál, a labda-hézagpótlásnál
   és a becslésnél — kockában rögzített szám, ami valójában

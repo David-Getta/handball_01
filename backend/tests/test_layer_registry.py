@@ -560,3 +560,69 @@ def test_nincs_ketszer_definialt_fuggveny():
                 hibak.append(f"{mod.name}: {sorted(dupla)}")
     assert not hibak, ("kétszer definiált függvények: "
                        + "; ".join(hibak))
+
+
+# Idő-küszöbök, amiket MÁSODPERCBEN tartunk (a kocka-alakjuk már csak
+# visszafelé kompatibilis alapérték a képrátát nem ismerő hívóknak).
+# A pár: (kocka-konstans, a másodperces párja).
+_IDO_KUSZOB_PAROK = (
+    ("CONFIDENCE_HALFLIFE_FRAMES", "CONFIDENCE_HALFLIFE_S"),
+    ("VELOCITY_FADE_FRAMES", "VELOCITY_FADE_S"),
+    ("DEFAULT_MAX_GAP_FRAMES", "MAX_GAP_S"),
+    ("BSR_LOOKBACK_FRAMES", "BSR_LOOKBACK_S"),
+    ("MARK_MIN_FRAMES", "MARK_MIN_S"),
+    ("HOLD_MIN_FRAMES", "HOLD_MIN_S"),
+    ("PIVOT_TOUCH_MIN_FRAMES", "PIVOT_TOUCH_MIN_S"),
+)
+
+
+def test_az_ido_kuszobok_nem_esnek_vissza_kockara():
+    """Az IDŐTARTAM-jelentésű küszöböket másodpercben kell tartani.
+
+    A feldolgozás ritkít (a termék alapja minden 3. kocka), tehát egy
+    kockában rögzített időtartam a minőségi profiltól függően
+    háromszoros valós időt jelent. Ebből a hibafajtából egy nap alatt
+    HÉT darabot találtunk (hossz-korlát, labda-hézagpótlás, becslés
+    sebesség-elhalása és felezési ideje, őrzési párok, blokkolt-poszt
+    visszanézés, labdatartás, beálló-villanás) — a visszaesés reális.
+
+    A kocka-alak megmarad visszafelé kompatibilis alapértéknek, de a
+    MOTORNAK a másodperces párt kell használnia: ha egy kocha-konstans
+    újra megjelenik futó kódban (nem a saját definíciójában és nem
+    kommentben), az regresszió.
+
+    Fontos, ami NEM tartozik ide: a MINTASZÁM-küszöbök (pl. a
+    "legalább 100 mért kocka kell az átlaghoz") jogosan kockában
+    vannak — ott 100 minta tényleg 100 minta.
+    """
+    import re
+
+    pipeline = Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+    forrasok = {py.name: py.read_text(encoding="utf-8")
+                for py in sorted(pipeline.glob("*.py"))}
+
+    hianyzo_par: list = []
+    visszaeses: list = []
+    for kocka, masodperc in _IDO_KUSZOB_PAROK:
+        hol = [n for n, t in forrasok.items()
+               if re.search(rf"^{kocka} = ", t, re.M)]
+        assert hol, f"eltűnt a kocka-konstans: {kocka}"
+        for modul in hol:
+            szoveg = forrasok[modul]
+            if not re.search(rf"^{masodperc} = ", szoveg, re.M):
+                hianyzo_par.append(f"{modul}: {kocka} → nincs {masodperc}")
+                continue
+            for i, sor in enumerate(szoveg.split("\n"), 1):
+                csupasz = sor.split("#", 1)[0]
+                if kocka not in csupasz:
+                    continue
+                if re.match(rf"\s*{kocka} = ", csupasz):
+                    continue          # a saját definíciója
+                visszaeses.append(f"{modul}:{i}: {kocka} ({sor.strip()})")
+
+    assert not hianyzo_par, (
+        "idő-küszöb másodperces párja nélkül: " + "; ".join(hianyzo_par))
+    assert not visszaeses, (
+        "IDŐTARTAM-küszöb kocka-alakja futó kódban — a ritkítás miatt ez "
+        "profilonként mást jelent; a másodperces párt kell használni: "
+        + "; ".join(visszaeses))

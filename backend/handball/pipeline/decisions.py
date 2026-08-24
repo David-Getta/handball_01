@@ -403,7 +403,7 @@ def hold_time_players(match: Match,
     A passz-tempó (pass_tempo) és a támadás-ritmus csapatszinten mondja
     meg, pörög-e a játék — ez a névre szóló olvasata: minden labdás
     szakasz hosszát a birtokoshoz írjuk, és nézzük, kinél áll meg a
-    labda. Az érintésnyi (HOLD_MIN_FRAMES alatti) birtoklás zaj, azt
+    labda. Az érintésnyi (HOLD_MIN_S alatti) birtoklás zaj, azt
     nem számoljuk.
 
     Edzőileg két irányba szól: ellenfélnél a hosszan tartó labdás a

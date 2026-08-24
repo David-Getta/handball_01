@@ -90,6 +90,28 @@ A helyi importok (`from .xg import ...` a függvényen belül) és a
 `try/except`-tel izolált felületek szándékosak: egy réteg hibája nem
 viheti el a többit. Tartsd ezt a stílust.
 
+### Kocka vagy másodperc? (a leggyakoribb csendes hiba)
+
+A feldolgozás RITKÍT: a termék alapja minden 3. kocka, tehát a
+`match.meta.fps` a forrás fps-ének a harmada. Egy kockában megadott
+küszöb ezért a minőségi profiltól függően HÁROMSZOROS valós időt
+jelenthet. Két külön eset, két külön szabály:
+
+- **MINTASZÁM** ("legalább 100 mért kocka kell az átlaghoz") — maradhat
+  kockában: 100 minta tényleg 100 minta, akárhogy ritkítunk.
+- **IDŐTARTAM** ("ennél rövidebb birtoklás csak érintés", "a sebesség
+  eddig hat", "ekkora hézagot pótolunk", "ennyit nézünk vissza a
+  lövőért") — KÖTELEZŐEN másodpercben, `X_S` néven, és a kockaszámot a
+  `match.meta.fps`-ből számold. A kocka-alak maradhat visszafelé
+  kompatibilis alapértéknek.
+
+Ebből a hibafajtából egy nap alatt hetet találtunk (hossz-korlát,
+labda-hézagpótlás, becslés sebesség-elhalása és felezési ideje,
+őrzési párok, blokkolt-poszt visszanézés, labdatartás,
+beálló-villanás). Az őr-teszt
+(`test_az_ido_kuszobok_nem_esnek_vissza_kockara`) elkapja, ha egy
+átállított küszöb kocka-alakja újra futó kódba kerül.
+
 ## Számláló-frissítés (recept végén)
 
 Réteg-commit után frissítsd ITT: meccsterv-szabály következő száma,
