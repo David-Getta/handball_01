@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.62 óta)
 
+- **Támadás-mélység a hajrában** (új réteg, `attack_depth_fade`): a
+  támadás-mélység megmondja, milyen messze állnak a kaputól felállt
+  támadásban; ez a réteg azt teszi hozzá, hogy VÁLTOZIK-E a meccs
+  alatt. A fáradás egyik legőszintébb jele: a hatos elleni munka
+  (betörés, beugrás, elzárás utáni leválás) lábat kíván, és aki
+  elfárad, egy lépéssel hátrébb marad — onnan viszont már csak a
+  kényelmes, de nehéz átlövés jön. A `shot_distance_fade` a LÖVÉS
+  helyét méri, ez a FELÁLLÁSÉT: a kettő oka ugyanaz, de a második
+  hamarabb látszik, mert nem kell hozzá lövés. Ellenfélként a hajrára
+  a fal beljebb tömörülhet (kilépésre nincs szükség, ha úgysem jönnek
+  be); saját csapatra a teendő a hajrá-támadások első mozdulatának
+  kikötése: valakinek BE kell indulnia. Felületek: /analyze,
+  meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs + 455.
+  meccsterv-szabály), edzés-fókusz (475. szabály), kliens-csempe.
+
 - **A gyorsítótár-kulcs szemantikája rögzítve** (motor + teszt): a
   v0.1.62-es javítás után a záró "nincs megadva" jelentésű
   argumentumok is kimaradnak a kulcsból, tehát a `réteg(meccs)`, a

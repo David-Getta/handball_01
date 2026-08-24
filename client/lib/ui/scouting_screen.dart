@@ -10722,6 +10722,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Támadás-mélység esése: hátrébb állnak-e a 2. félidőre
+  // (félidőnként 100+ mért kockánál, 0,5 m küszöbbel — a backend
+  // ADEPTH_FADE_MIN_FRAMES / ADEPTH_FADE_DROP_M tükre).
+  String? _attackDepthFade(Map<String, dynamic> r) {
+    final fhN = ((r["adf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["adf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 100 || shN < 100) return null;
+    final fhSum = ((r["adf_fh_sum_m"] as num?) ?? 0).toDouble();
+    final shSum = ((r["adf_sh_sum_m"] as num?) ?? 0).toDouble();
+    if (fhSum <= 0 || shSum <= 0) return null;
+    final fh = fhSum / fhN;
+    final sh = shSum / shN;
+    final d = sh - fh; // pozitív = hátrébb álltak
+    if (d >= 0.5) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+          "· hátrébb kerülnek · a fal tömörülhet beljebb";
+    }
+    if (d <= -0.5) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+          "· közelebb nyomulnak · hatos elleni munka a téma";
+    }
+    return null;
+  }
+
   // Beálló-bevonás esése: elfogy-e a beállójuk a 2. félidőre
   // (félidőnként 6+ mért támadásnál, 10 százalékpontos küszöbbel — a
   // backend PIVOT_FADE_MIN_ATTACKS / PIVOT_FADE_DROP_PCT tükre).
@@ -11260,6 +11284,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szélső-bevonás a hajrában", _wingInvolvementFade(r)!],
       if (_pivotUsageFade(r) != null)
         ["Beálló-bevonás a hajrában", _pivotUsageFade(r)!],
+      if (_attackDepthFade(r) != null)
+        ["Támadás-mélység a hajrában", _attackDepthFade(r)!],
       if (_fatigueProfile(r) != null)
         ["Hajrá-profil (fáradás-jelek)", _fatigueProfile(r)!],
       if (_timeoutRecord(r) != null)

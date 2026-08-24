@@ -1366,6 +1366,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 475) Hátrébb kerülő támadás: ha a SAJÁT felállásunk a 2. félidőre
+    # eltávolodik a kaputól, a hajrában csak a nehéz átlövés marad.
+    try:
+        from .attack_types import ADEPTH_FADE_DROP_M, attack_depth_fade
+        adf475 = attack_depth_fade(match, config)
+        for side in ("home", "away"):
+            r475 = adf475[side]
+            if (r475["drop_m"] is None
+                    or r475["drop_m"] < ADEPTH_FADE_DROP_M):
+                continue
+            add(side, "támadás", "Hatos elleni munka a hajrában",
+                f"a felállásunk a 2. félidőre {r475['fh_m']:.1f} → "
+                f"{r475['sh_m']:.1f} m-re került a kaputól — fáradtan "
+                "senki nem megy be, és onnan már csak a kényelmes, de "
+                "nehéz átlövés jön",
+                "a teendő nem futóedzés, hanem a hajrá-támadások ELSŐ "
+                "mozdulatának kikötése: nevezz meg támadásonként egy "
+                "embert, akinek BE kell indulnia (betörés vagy beugrás) "
+                "— 4x5 perc kötött játék FÁRADTAN, a kondi-blokk után")
+    except Exception:
+        pass
+
     # 474) Elfogyó beálló: ha a SAJÁT labdánk a 2. félidőre nem megy be
     # a hatosra, a fal nyugodtan dolgozhat kifelé ellenünk.
     try:

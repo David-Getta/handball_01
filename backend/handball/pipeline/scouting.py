@@ -391,6 +391,12 @@ class ScoutingReport:
     wif_fh_n: int = 0
     wif_sh_wing: int = 0
     wif_sh_n: int = 0
+    # Támadás-mélység félidőnként (a kapu-távolság összege és a mért
+    # kockaszám). Összeg + darab, hogy több meccs pontosan összegződjön.
+    adf_fh_sum_m: float = 0.0
+    adf_fh_n: int = 0
+    adf_sh_sum_m: float = 0.0
+    adf_sh_n: int = 0
     # Beálló-bevonás félidőnként (beállós támadás / összes támadás
     # darabszáma). Darab + darab, hogy több meccs pontosan összegződjön.
     puf_fh_pivot: int = 0
@@ -9116,6 +9122,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "megkezdett sorozatot az időkérésük után is tolhatod, ne "
                 "állj le tőle.")
 
+    # Támadás-mélység esése: hátrébb állnak-e a hajrára. Ez a
+    # lövés-távolság esésének a FELÁLLÁS-oldali párja, és hamarabb
+    # látszik, mert nem kell hozzá lövés.
+    if rep.adf_fh_n >= 100 and rep.adf_sh_n >= 100 \
+            and rep.adf_fh_sum_m > 0 and rep.adf_sh_sum_m > 0:
+        _adf_fh = rep.adf_fh_sum_m / rep.adf_fh_n
+        _adf_sh = rep.adf_sh_sum_m / rep.adf_sh_n
+        _adf_d = _adf_sh - _adf_fh          # pozitív = hátrébb álltak
+        if _adf_d >= 0.5:
+            keys.append(
+                f"A támadásuk a 2. félidőre hátrébb kerül ({_adf_fh:.1f} → "
+                f"{_adf_sh:.1f} m a kaputól) — a hajrában már nem mennek be "
+                "a hatosra: a falatok nyugodtan tömörülhet beljebb, "
+                "kilépésre nincs szükség.")
+        elif _adf_d <= -0.5:
+            keys.append(
+                f"A 2. félidőre KÖZELEBB nyomulnak a kapuhoz "
+                f"({_adf_fh:.1f} → {_adf_sh:.1f} m) — a hajrában a hatos "
+                "elleni munka a téma: testes fogadás és segítő-csúszás.")
+
     # Beálló-bevonás esése: elfogy-e a beálló a hajrára. Más kérdés,
     # mint a szélső-bevonás (az a labda SZÉLES ívű járatása, ez a
     # MÉLYSÉGI bejátszás — bátorság és időzítés, nem lábmunka).
@@ -10300,6 +10326,14 @@ def _scout_team_cached(match: Match, team: Team,
         if lhfrec["sh_m"] is not None:
             rep.lhf_sh_sum_m = round(lhfrec["sh_m"] * lhfrec["sh_frames"], 1)
             rep.lhf_sh_n = lhfrec["sh_frames"]
+        from .attack_types import attack_depth_fade
+        adfrec = attack_depth_fade(match, config)[team.value]
+        rep.adf_fh_n = adfrec["fh_frames"]
+        rep.adf_sh_n = adfrec["sh_frames"]
+        if adfrec["fh_m"] is not None:
+            rep.adf_fh_sum_m = round(adfrec["fh_m"] * adfrec["fh_frames"], 1)
+        if adfrec["sh_m"] is not None:
+            rep.adf_sh_sum_m = round(adfrec["sh_m"] * adfrec["sh_frames"], 1)
         from .attack_types import pivot_usage_fade
         pufrec = pivot_usage_fade(match, config)[team.value]
         rep.puf_fh_n = pufrec["fh_attacks"]
@@ -14314,6 +14348,22 @@ def matchup_plan(own: "ScoutingReport",
 
     from .tactics import ATV_MIN_ATTACKS as _A449
     from .tactics import ATV_ONE_TEMPO_PCT as _A449P
+    # 455) Az ő hátrébb kerülő támadásuk × a ti tömör falatok: ha a
+    # hajrában nem jönnek be a hatosra, a fal beljebb tömörülhet.
+    if (opp.adf_fh_n >= 100 and opp.adf_sh_n >= 100
+            and opp.adf_fh_sum_m > 0 and opp.adf_sh_sum_m > 0
+            and opp.adf_sh_sum_m / opp.adf_sh_n
+            - opp.adf_fh_sum_m / opp.adf_fh_n >= 0.5
+            and own.defense_main in ("6-0", "5-1")):
+        _p455_fh = opp.adf_fh_sum_m / opp.adf_fh_n
+        _p455_sh = opp.adf_sh_sum_m / opp.adf_sh_n
+        plan.append(
+            f"A támadásuk a 2. félidőre hátrébb kerül ({_p455_fh:.1f} → "
+            f"{_p455_sh:.1f} m a kaputól), ti pedig {own.defense_main}-ban "
+            "védekeztek — a hajrában a falatok nyugodtan tömörülhet "
+            "beljebb: kilépésre nincs szükség, ha úgysem jönnek be, és "
+            "a beálló-vonal így mindig fedve marad.")
+
     # 454) Az ő elfogyó beállójuk × a ti magas falatok: ha a hajrában
     # nem megy be a labda a hatosra, a fal kifelé dolgozhat.
     if (opp.puf_fh_n >= 6 and opp.puf_sh_n >= 6
@@ -21638,6 +21688,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         wif_fh_n=sum(r.wif_fh_n for r in reports),
         wif_sh_wing=sum(r.wif_sh_wing for r in reports),
         wif_sh_n=sum(r.wif_sh_n for r in reports),
+        adf_fh_sum_m=round(sum(r.adf_fh_sum_m for r in reports), 1),
+        adf_fh_n=sum(r.adf_fh_n for r in reports),
+        adf_sh_sum_m=round(sum(r.adf_sh_sum_m for r in reports), 1),
+        adf_sh_n=sum(r.adf_sh_n for r in reports),
         puf_fh_pivot=sum(r.puf_fh_pivot for r in reports),
         puf_fh_n=sum(r.puf_fh_n for r in reports),
         puf_sh_pivot=sum(r.puf_sh_pivot for r in reports),

@@ -7022,6 +7022,26 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "védekezés a feladat.")
     except Exception:
         pass
+    # Támadás-mélység esése: hátrébb állnak-e a hajrára.
+    try:
+        from .attack_types import ADEPTH_FADE_DROP_M, attack_depth_fade
+        adfc = attack_depth_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ad = adfc[side]
+            if rec_ad["drop_m"] is None:
+                continue
+            if rec_ad["drop_m"] >= ADEPTH_FADE_DROP_M:
+                body += (f" A(z) {name} támadása a 2. félidőre hátrébb "
+                         f"került ({rec_ad['fh_m']:.1f} → "
+                         f"{rec_ad['sh_m']:.1f} m a kaputól) — a hajrában "
+                         "már nem mennek be a hatosra.")
+            elif rec_ad["drop_m"] <= -ADEPTH_FADE_DROP_M:
+                body += (f" A(z) {name} a 2. félidőre KÖZELEBB nyomult a "
+                         f"kapuhoz ({rec_ad['fh_m']:.1f} → "
+                         f"{rec_ad['sh_m']:.1f} m) — a hajrában a hatos "
+                         "elleni munka a téma ellenük.")
+    except Exception:
+        pass
     # Beálló-bevonás esése: elfogy-e a beálló a hajrára.
     try:
         from .attack_types import PIVOT_FADE_DROP_PCT, pivot_usage_fade

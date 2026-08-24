@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **501 réteg**, modulonként csoportosítva; a
+Összesen **502 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (97)
+## attack_types (98)
 
 | Réteg | Mit mér |
 |---|---|
@@ -15,6 +15,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `assist_reliance` | Asszist-függés: a gólok mekkora része előkészített (gólpasszos). |
 | `assist_sources` | Gólpassz-forrás: honnan készítik elő a gólokat — szélről (beadás), |
 | `attack_depth` | Támadás-mélység: MILYEN MESSZE állnak a kaputól felállt |
+| `attack_depth_fade` | Támadás-mélység esése: HÁTRÉBB ÁLLNAK-E a hajrában. |
 | `attack_duration_efficiency` | Befejezés-hatékonyság a támadás HOSSZA szerint. |
 | `attack_efficiency` | Támadás-típusonkénti befejezés-hatékonyság csapatonként. |
 | `attack_headcount` | Felfutási létszám: HÁNY EMBERREL támadnak. |

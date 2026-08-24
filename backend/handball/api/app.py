@@ -3280,6 +3280,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import attack_depth_fade
+            res["attack_depth_fade"] = attack_depth_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.priorities import fatigue_profile
             res["fatigue_profile"] = fatigue_profile(match)
         except Exception:
@@ -5718,6 +5723,8 @@ def create_app():
                        lambda: wing_involvement_fade(match))
                 from ..pipeline.attack_types import pivot_usage_fade
                 _layer("pivot_usage_fade", lambda: pivot_usage_fade(match))
+                from ..pipeline.attack_types import attack_depth_fade
+                _layer("attack_depth_fade", lambda: attack_depth_fade(match))
                 from ..pipeline.priorities import fatigue_profile
                 _layer("fatigue_profile", lambda: fatigue_profile(match))
                 from ..pipeline.stoppages import timeout_record

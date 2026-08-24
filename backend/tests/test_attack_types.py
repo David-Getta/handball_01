@@ -5147,3 +5147,56 @@ def test_pivot_usage_fade_felido_jel_nelkul_nincs_itelet():
     pf = pivot_usage_fade(Match(_meta(25.0), _puf_frames(0, [True] * 3)))
     assert pf["home"]["drop_pct"] is None
     assert pf["away"]["drop_pct"] is None
+
+
+def _adf_frames(t0, dist_m, fps=25.0, seconds=6.0):
+    """A `_depth_match` kockái adott kezdő-időtől — két félidő egybe."""
+    frames = []
+    x = 40.0 - dist_m
+    for i in range(int(seconds * fps)):
+        players = [_pl(1, Team.HOME, x, 10.0),
+                   _pl(2, Team.HOME, x, 6.0),
+                   _pl(3, Team.HOME, x, 14.0),
+                   _pl(9, Team.HOME, 1.5, 10.0, role="kapus"),
+                   _pl(21, Team.AWAY, 38.0, 8.0),
+                   _pl(22, Team.AWAY, 38.0, 12.0)]
+        frames.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    return frames
+
+
+def test_attack_depth_fade_hatrebb_allo_tamadas():
+    """Az 1. félidőben 8 m-en, a 2.-ban 13 m-en álló támadás → érdemi
+    hátrébb kerülés.
+
+    Edzőileg ez a fáradás legőszintébb jele: a hatos elleni munka
+    lábat kíván, és aki elfárad, egy lépéssel hátrébb marad — onnan
+    viszont már csak a kényelmes, de nehéz átlövés jön.
+    """
+    from handball.pipeline.attack_types import (ADEPTH_FADE_DROP_M,
+                                                attack_depth_fade)
+
+    fps = 25.0
+    frames = _adf_frames(0, 8.0, fps, seconds=6.0)          # 1. félidő
+    t = frames[-1].t + 1
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * fps))]               # szünet
+    t = frames[-1].t + 1
+    frames += _adf_frames(t, 13.0, fps, seconds=6.0)        # 2. félidő
+
+    af = attack_depth_fade(Match(_meta(fps), frames))
+    h = af["home"]
+    assert h["fh_frames"] >= 100 and h["sh_frames"] >= 100, h
+    assert h["fh_m"] is not None and h["sh_m"] is not None, h
+    assert h["sh_m"] > h["fh_m"], h
+    # POZITÍV = hátrébb álltak.
+    assert h["drop_m"] is not None and h["drop_m"] >= ADEPTH_FADE_DROP_M, h
+
+
+def test_attack_depth_fade_felido_jel_nelkul_nincs_itelet():
+    """Félidő-jel nélkül nincs mihez viszonyítani — inkább None."""
+    from handball.pipeline.attack_types import attack_depth_fade
+
+    af = attack_depth_fade(Match(_meta(25.0), _adf_frames(0, 10.0)))
+    assert af["home"]["drop_m"] is None
+    assert af["away"]["drop_m"] is None

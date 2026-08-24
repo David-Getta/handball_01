@@ -2481,6 +2481,70 @@ def wing_involvement(match: Match,
     return out
 
 
+# Támadás-mélység esése: félidőnként ennyi mért kocka kell az
+# ítélethez, és ennyi méterrel kell hátrébb kerülnie a támadásnak,
+# hogy visszahúzódásról beszéljünk. A fél méter a felállt támadás
+# kockánkénti ingadozásának a nagyságrendje — ennél kisebb eltérés a
+# mérés zaja.
+ADEPTH_FADE_MIN_FRAMES = 100
+ADEPTH_FADE_DROP_M = 0.5
+
+
+@memoize_primitive("attack_depth_fade", copy=copy_sides)
+def attack_depth_fade(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Támadás-mélység esése: HÁTRÉBB ÁLLNAK-E a hajrában.
+
+    A támadás-mélység (`attack_depth`) megmondja, milyen messze állnak
+    a kaputól felállt támadásban; ez a réteg azt teszi hozzá, hogy
+    VÁLTOZIK-E a meccs alatt. A felismert félidő mentén kettébontva.
+
+    Edzőileg ez a fáradás egyik legőszintébb jele: a hatos elleni
+    munka (betörés, beugrás, elzárás után leválás) lábat kíván, és aki
+    elfárad, az egy lépéssel hátrébb marad — onnan viszont már csak a
+    kényelmes, de nehéz átlövés jön. A `shot_distance_fade` a LÖVÉS
+    helyét méri, ez a FELÁLLÁSÉT: a kettő oka ugyanaz, de a második
+    hamarabb látszik, mert nem kell hozzá lövés.
+
+    Ellenfélként a hajrára a fal nyugodtan beljebb tömörülhet
+    (kilépésre nincs szükség, ha úgysem jönnek be); saját csapatra a
+    teendő nem futóedzés, hanem a hajrá-támadások első mozdulatának
+    kikötése: valakinek BE kell indulnia, különben mindenki hátra
+    marad.
+
+    Visszatérés csapatonként: {"fh_m", "fh_frames", "sh_m",
+    "sh_frames", "drop_m"} — az 1./2. félidei átlagos kapu-távolság és
+    a mért kockaszám; drop_m a hátrébb kerülés méterben (POZITÍV =
+    hátrébb álltak), None, ha nincs félidő-jel vagy kevés a minta.
+    """
+    from ..models.tracking import Match as _M
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_m": None, "fh_frames": 0, "sh_m": None, "sh_frames": 0,
+             "drop_m": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out          # félidő-jel nélkül nincs mihez viszonyítani
+    for elotag, felido in (("fh", True), ("sh", False)):
+        resz = _M(match.meta, [f for f in match.frames
+                               if (f.t <= ht) == felido])
+        ad = attack_depth(resz, config)
+        for side in ("home", "away"):
+            rec = ad[side]
+            out[side][f"{elotag}_frames"] = rec["frames"]
+            out[side][f"{elotag}_m"] = rec["avg_depth_m"]
+    for side in ("home", "away"):
+        rec = out[side]
+        if (rec["fh_m"] is not None and rec["sh_m"] is not None
+                and rec["fh_frames"] >= ADEPTH_FADE_MIN_FRAMES
+                and rec["sh_frames"] >= ADEPTH_FADE_MIN_FRAMES):
+            # Pozitív = hátrébb álltak (nagyobb kapu-távolság).
+            rec["drop_m"] = round(rec["sh_m"] - rec["fh_m"], 2)
+    return out
+
+
 # Beálló-bevonás esése: félidőnként ennyi mért támadás kell az
 # ítélethez, és ennyi százalékponttal kell esnie a beállós támadások
 # arányának. Ugyanaz a küszöb-logika, mint a szélső-bevonásnál: húsz
