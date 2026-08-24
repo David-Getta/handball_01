@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from html import escape
 
-from .quality import LOW_SCORE_WARN
+from .quality import LOW_SCORE_WARN, clock_label
 
 from .scouting import ScoutingReport
 
@@ -3161,10 +3161,21 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             if warns else '<p class="note">Nincs figyelmeztetés — az elemzés megbízható.</p>'
         ball_cov = "{:.0f}%".format(quality.get("ball_coverage_pct", 0))
         measured = "{:.1f}".format(quality.get("avg_measured_players", 0))
+        # A feldolgozott SZAKASZ a forrásvideó órája szerint. Egy
+        # nyomtatott jelentést napokkal később olvasnak vissza: akkor
+        # már semmi nem árulja el, hogy a lap a teljes meccsről szól-e
+        # vagy csak az első félidőről. Ez az egy sor elárulja.
+        szakasz = ""
+        _tol = quality.get("processed_from_s")
+        _ig = quality.get("processed_to_s")
+        if _tol is not None and _ig is not None:
+            szakasz = _metric("Feldolgozott szakasz",
+                              f"{clock_label(_tol)}–{clock_label(_ig)}")
         q_html = ('<h2>Elemzés megbízhatósága</h2><div class="metrics">'
                   + _metric("Minőség-pontszám", str(quality.get("score", "—")) + "/100")
                   + _metric("Labda-lefedettség", ball_cov)
                   + _metric("Mért játékos/kocka", measured)
+                  + szakasz
                   + "</div>" + w_html)
 
     return finish_report(f"""<!DOCTYPE html>

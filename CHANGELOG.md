@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.55 óta)
 
+- **A nyomtatható jelentés is megmondja, melyik szakaszról szól**
+  (motor): a lapot napokkal később olvassák vissza, és akkor már semmi
+  nem árulja el, hogy a teljes meccsről szól-e vagy csak az első
+  félidőről. A megbízhatóság-szakasz mostantól viszi a feldolgozott
+  szakaszt a videó órája szerint (pl. "1:00–34:14"). Régi mentésnél
+  (nincs adat) a sor egyszerűen kimarad — nem írunk oda kitalált
+  értéket.
+
 - **Visszaállás a hajrában** (új réteg, `retreat_fade`): a
   visszaállás-idő (`retreat_time`) megmondja, hány másodperc alatt áll
   össze a fal a saját lövés után; ez a réteg azt teszi hozzá, hogy

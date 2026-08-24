@@ -380,3 +380,4 @@ def test_kapus_felkeszites_tabla():
 def test_kapus_tabla_elmarad_ha_nincs_adat():
     """Adat nélkül nincs tábla — üres fejléc rosszabb, mint a hiánya."""
     assert "Kapus-felkészítés posztonként" not in scouting_report_html(_rep())
+

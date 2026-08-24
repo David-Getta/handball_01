@@ -1770,3 +1770,30 @@ def test_jo_feldolgozasnal_nincs_figyelmeztetes_a_jelentes_tetejen():
     html = match_report_html(m, {}, [], compute_quality_report(m))
     # A stíluslap mindig tartalmazza az osztályt; a DOBOZ nem lehet ott.
     assert '<div class="warnbox">' not in html
+
+
+def test_a_jelentes_kimondja_a_feldolgozott_szakaszt():
+    """Egy nyomtatott jelentést napokkal később olvasnak vissza.
+
+    Akkor már semmi nem árulja el, hogy a lap a TELJES meccsről szól-e
+    vagy csak az első félidőről — ezért a megbízhatóság-szakaszban ott
+    a feldolgozott szakasz a videó órája szerint.
+    """
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=3)
+    q = compute_quality_report(m)
+    q["processed_from_s"] = 60.0
+    q["processed_to_s"] = 2054.0
+    html = match_report_html(m, team_style_profile(m), detect_events(m), q)
+    assert "Feldolgozott szakasz" in html
+    assert "1:00" in html and "34:14" in html
+
+
+def test_szakasz_nelkul_nem_talalunk_ki_semmit():
+    """Régi mentésnél (nincs adat) a sor egyszerűen kimarad — nem
+    írunk oda kitalált vagy "?" értéket."""
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=3)
+    q = compute_quality_report(m)
+    q["processed_from_s"] = None
+    q["processed_to_s"] = None
+    html = match_report_html(m, team_style_profile(m), detect_events(m), q)
+    assert "Feldolgozott szakasz" not in html

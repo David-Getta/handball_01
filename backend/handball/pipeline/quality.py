@@ -116,7 +116,7 @@ NEXT_ACTION_ORDER: tuple = (
 )
 
 
-def _ora(seconds: float | None) -> str:
+def clock_label(seconds: float | None) -> str:
     """Másodperc → "óra:perc:mp" (egy óra alatt "perc:mp").
 
     A felhasználó a videót ebben az alakban keresi vissza — a "2054
@@ -423,10 +423,12 @@ def compute_quality_report(match: Match) -> dict:
         processed_s = n * stride / raw_fps if raw_fps > 0 else 0.0
         processed_pct = 100.0 * processed_s / video_s
         if processed_pct < VIDEO_COVERAGE_WARN_PCT:
+            _tol = clock_label(processed_from_s)
+            _ig = clock_label(processed_to_s)
             warnings.append(
                 f"A felvételnek csak a {processed_pct:.0f}%-át dolgoztuk "
-                f"fel ({_ora(processed_from_s)}–{_ora(processed_to_s)} a "
-                f"{_ora(video_s)} hosszú videóból) — ha a TELJES meccset "
+                f"fel ({_tol}–{_ig} a "
+                f"{clock_label(video_s)} hosszú videóból) — ha a TELJES meccset "
                 "várnád, nézd meg a meccs-időablak mezőit és a "
                 "hossz-beállítást (rövid próba / félidő / teljes videó); "
                 "ha a feldolgozás megszakadt, a könyvtárban a "

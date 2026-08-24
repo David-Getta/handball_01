@@ -10,7 +10,7 @@ lefutnak — egy nagy összeállításban tehát a kiértékelés
 sorrendjétől. Ez a lista a döntés alapja: hol érdemes kimondott,
 determinisztikus szerep-jelöléssel indítani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7); **497 réteg** összevetve, ebből **0 sorrend-függő**.
+Mérés: 240 mp-es szimulált meccs (mag: 7); **498 réteg** összevetve, ebből **0 sorrend-függő**.
 
 ## A mérés köre
 

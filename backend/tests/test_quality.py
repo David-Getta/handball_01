@@ -345,7 +345,7 @@ def test_regi_mentesrol_nem_allitunk_semmit():
     assert r["warnings"] == []
 
 
-def test_a_feldolgozott_szakasz_ora_szerint():
+def test_a_feldolgozott_szakaszclock_label_szerint():
     """"Csak az első félidőt elemezte ki" — a százalék ezt nem mondja el.
 
     A jelentésnek meg kell mondania, MELYIK szakaszt dolgoztuk fel a
@@ -353,7 +353,7 @@ def test_a_feldolgozott_szakasz_ora_szerint():
     perc:másodpercben keresi vissza. A "60%" nem árulja el, hogy az
     eleje vagy a vége maradt ki.
     """
-    from handball.pipeline.quality import _ora
+    from handball.pipeline.quality import clock_label
 
     meta = _meta(fps=12.5)          # 25 fps forrás, stride=2
     meta.stride = 2
@@ -367,7 +367,7 @@ def test_a_feldolgozott_szakasz_ora_szerint():
     assert r["processed_to_s"] == 160.0
     # A figyelmeztetés a konkrét szakaszt mondja, nem csak a százalékot.
     assert any("1:00–2:40" in w for w in r["warnings"])
-    assert _ora(0) == "0:00"
-    assert _ora(2054) == "34:14"
-    assert _ora(3725) == "1:02:05"
-    assert _ora(None) == "?"
+    assert clock_label(0) == "0:00"
+    assert clock_label(2054) == "34:14"
+    assert clock_label(3725) == "1:02:05"
+    assert clock_label(None) == "?"
