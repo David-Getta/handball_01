@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.60 óta)
 
+- **A meccs-csomag megnevezi az elhasalt rétegeket** (motor): a
+  csomagban minden elemző réteget `try/except` véd, hogy egy réteg
+  hibája ne vigye el a többit. Az ára eddig az volt, hogy egy elhasaló
+  réteg NYOM NÉLKÜL eltűnt: a kulcs nem került be, a felhasználó pedig
+  azt hitte, az az elemzés nem is létezik. Mostantól a csomag mindig
+  visz egy `_hibas_retegek` listát a réteg nevével és a hiba
+  típusával — üresen is, mert a "nem hasalt el semmi" is állítás —, és
+  ha volt hiba, a feldolgozás állapotüzenete is kimondja. A
+  mintameccsen a lista üres, és ezt őr-teszt rögzíti.
+
 - **Az őr párja: elgépelt felderítés-mezőnév** (teszt): a
   `rep.wif_fh_wingg` `AttributeError`-t dobna, amit a védő try/except
   ugyanúgy elnyel — a szabály némán kimarad. A meglévő "néma mező" őr

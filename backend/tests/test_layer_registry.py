@@ -186,6 +186,24 @@ def test_loves_retegek_valodi_adatot_kapnak(package_analyses):
         f"lövései nem érnek el hozzájuk: {empty}")
 
 
+def test_a_csomag_megnevezi_az_elhasalt_retegeket(package_analyses):
+    """Ha egy réteg mégis elhasal, a NEVE kerüljön a csomagba.
+
+    A védelem (try/except) helyes: egy réteg hibája nem viheti el a
+    többit. Az ára viszont az, hogy a kulcs NYOM NÉLKÜL eltűnik, és a
+    felhasználó azt hiszi, az az elemzés nem is létezik. A csomag
+    ezért mindig visz egy listát az elhasalt rétegekről — üresen is,
+    mert a "nem hasalt el semmi" is állítás.
+    """
+    assert "_hibas_retegek" in package_analyses, (
+        "a csomag nem mondja meg, mely rétegek nem készültek el")
+    assert isinstance(package_analyses["_hibas_retegek"], list)
+    # A mintameccsen egyetlen rétegnek sem szabad elhasalnia.
+    assert package_analyses["_hibas_retegek"] == [], (
+        "elhasalt rétegek a mintameccsen: "
+        + ", ".join(package_analyses["_hibas_retegek"]))
+
+
 def test_package_reteg_nevek_egyediek():
     """Két azonos nevű `_layer(...)` regisztráció némán felülírná
     egymást a csomagban — a neveknek egyedieknek kell lenniük."""

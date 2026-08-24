@@ -5611,12 +5611,18 @@ def create_app():
                 # edzői összefoglaló sima szövegként — rétegenként hibatűrően.
                 job["message"] = "elemzések (JSON)"
                 analyses: dict = {}
+                # Ha egy réteg mégis elhasal, a védelem elnyeli a hibát
+                # (helyesen: egy réteg nem viheti el a többit) — de a
+                # kulcs NYOM NÉLKÜL eltűnik, és a felhasználó azt hiszi,
+                # az az elemzés nem is létezik. Jegyezzük fel, hogy
+                # legyen mit megnézni.
+                hibas_retegek: list = []
 
                 def _layer(name, fn):
                     try:
                         analyses[name] = fn()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        hibas_retegek.append(f"{name}: {type(e).__name__}")
 
                 from ..pipeline.coach_summary import coach_summary
                 from ..pipeline.defense import defense_analysis
@@ -6950,6 +6956,15 @@ def create_app():
                 from ..pipeline.roles import role_assist_sources
                 _layer("role_assist_sources",
                        lambda: role_assist_sources(match))
+                # Az elhasalt rétegek NEVE bekerül a csomagba és a
+                # munka-naplóba. Aláhúzás-prefixszel, hogy ne
+                # keveredjen az elemzés-kulcsokkal; üres listánál is
+                # kiírjuk, mert a "nem hasalt el semmi" is állítás.
+                analyses["_hibas_retegek"] = sorted(hibas_retegek)
+                if hibas_retegek:
+                    job["message"] = (
+                        f"elemzések (JSON) — {len(hibas_retegek)} réteg "
+                        "nem készült el, a nevük a csomagban")
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""
