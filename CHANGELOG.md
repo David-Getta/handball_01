@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.57 óta)
 
+- **A labda-lefedettség nem hízik a saját pótlásunktól** (motor +
+  kliens): a mutató eddig minden olyan kockát megszámolt, ahol volt
+  labda-pozíció — beleértve azokat is, amiket MI pótoltunk a rövid
+  hézagokba. Vagyis az őszinteség-mutató a saját találgatásunktól
+  tűnt jobbnak, és a "kevés labda-észlelés" figyelmeztetés épp azokon
+  a felvételeken hallgathatott, ahol a legnagyobb szükség lett volna
+  rá. Mostantól a lefedettség azt méri, milyen gyakran LÁTTUK a
+  labdát; a pótolt kockák külön számként jelennek meg (a kliens is
+  így mutatja: "42% (+9% pótolt)"). A réteg-megbízhatóság
+  labda-családja is a mért számot nézi.
+
 - **Új őrök: a rossz feldolgozáson sem tűnhet el réteg nyom nélkül**
   (teszt): a meccs-csomag minden elemző rétegét `try/except` védi, hogy
   egy réteg hibája ne vigye el a többit — a hátulütő, hogy egy elhasaló

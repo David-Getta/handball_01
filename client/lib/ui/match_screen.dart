@@ -1941,7 +1941,14 @@ class _MatchScreenState extends State<MatchScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text("Mért játékos/kocka: ${q["avg_measured_players"]}", style: AppText.label),
-            Text("Labda-lefedettség: ${q["ball_coverage_pct"]}%", style: AppText.label),
+            // A lefedettség csak a LÁTOTT labdát számolja; a rövid
+            // hézagok pótlása külön szám, hogy a mutató ne tűnjön
+            // jobbnak a saját találgatásunktól.
+            Text(
+                "Labda-lefedettség: ${q["ball_coverage_pct"]}%"
+                "${q["ball_filled_pct"] != null
+                    ? " (+${q["ball_filled_pct"]}% pótolt)" : ""}",
+                style: AppText.label),
             Text("Becsült pozíciók: ${q["estimated_ratio_pct"]}%", style: AppText.label),
             Text("Leghosszabb labda-kiesés: ${q["longest_ball_gap_s"]} mp", style: AppText.label),
             // A pályán kívülre vetülő mérések aránya: ez az elcsúszott

@@ -180,8 +180,10 @@ def compute_quality_report(match: Match) -> dict:
     estimated_total = 0
     good_frames = 0
     ball_frames = 0
+    ball_filled = 0
     longest_gap = 0
     gap = 0
+    from .ball_filter import INTERPOLATED_CONFIDENCE as _INTERP
     for f in match.frames:
         meas = sum(1 for p in f.players if p.source == PositionSource.MEASURED)
         est = len(f.players) - meas
@@ -190,7 +192,15 @@ def compute_quality_report(match: Match) -> dict:
         if meas >= GOOD_FRAME_MIN_PLAYERS:
             good_frames += 1
         if f.ball is not None:
-            ball_frames += 1
+            # A labda-lefedettség azt méri, milyen gyakran LÁTTUK a
+            # labdát — a saját hézagpótlásunk nem számít bele. Egy
+            # őszinteség-mutató nem hízhat a saját találgatásunkkal:
+            # az interpolált pozíciókat épp azért jelöljük csökkentett
+            # megbízhatósággal, hogy megkülönböztethetők legyenek.
+            if f.ball.confidence > _INTERP:
+                ball_frames += 1
+            else:
+                ball_filled += 1
             gap = 0
         else:
             gap += 1
@@ -477,6 +487,9 @@ def compute_quality_report(match: Match) -> dict:
         "good_player_frames_pct": round(good_pct, 1),
         "estimated_ratio_pct": round(est_ratio, 1),
         "ball_coverage_pct": round(ball_pct, 1),
+        # Amit nem láttunk, csak PÓTOLTUNK (rövid hézagok lineáris
+        # kitöltése) — külön szám, hogy a lefedettség ne tűnjön jobbnak.
+        "ball_filled_pct": round(100.0 * ball_filled / n, 1),
         "longest_ball_gap_s": round(longest_gap / fps, 1),
         "track_count": track_count,
         "avg_track_length_s": round(avg_track_s, 1),
@@ -564,7 +577,11 @@ def analysis_confidence(match: Match) -> list[dict]:
 
     # Labda-lefedettség (a labda-alapú rétegek közös alapja).
     n_frames = len(match.frames)
-    ball_frames = sum(1 for f in match.frames if f.ball is not None)
+    # Csak a MÉRT labda számít (a hézagpótlás a saját találgatásunk).
+    from .ball_filter import INTERPOLATED_CONFIDENCE as _INTERP2
+    ball_frames = sum(1 for f in match.frames
+                      if f.ball is not None
+                      and f.ball.confidence > _INTERP2)
     ball_pct = (100.0 * ball_frames / n_frames) if n_frames else 0.0
 
     # Pálya-vetítés épsége: lehetetlen létszám VAGY hiányzó kalibráció.

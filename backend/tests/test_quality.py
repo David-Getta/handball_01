@@ -371,3 +371,36 @@ def test_a_feldolgozott_szakaszclock_label_szerint():
     assert clock_label(2054) == "34:14"
     assert clock_label(3725) == "1:02:05"
     assert clock_label(None) == "?"
+
+
+def test_a_labda_lefedettseg_nem_hizik_a_sajat_potlasunkkal():
+    """A lefedettség azt méri, milyen gyakran LÁTTUK a labdát.
+
+    A rövid hézagokat egyenes vonallal pótoljuk, hogy a birtoklás- és
+    passz-felismerés folytonos pályát kapjon — de ezek a pozíciók a mi
+    találgatásaink, csökkentett megbízhatósággal jelölve. Ha
+    beleszámítanának a lefedettségbe, az őszinteség-mutató a saját
+    kitalációnktól tűnne jobbnak, és a "kevés labda-észlelés"
+    figyelmeztetés épp azokon a felvételeken hallgatna, ahol kellene.
+    """
+    from handball.pipeline.ball_filter import INTERPOLATED_CONFIDENCE
+    from handball.pipeline.quality import analysis_confidence
+
+    def _fr(t, conf):
+        return Frame(t=t, players=[_pl(i) for i in range(14)],
+                     ball=(None if conf is None
+                           else Ball(x=20.0, y=10.0, confidence=conf)))
+
+    # 10 kockából 2 MÉRT labda, 8 PÓTOLT → 20% lefedettség, 80% pótolt.
+    frames = [_fr(t, 1.0) for t in range(2)]
+    frames += [_fr(t, INTERPOLATED_CONFIDENCE) for t in range(2, 10)]
+    r = compute_quality_report(Match(_meta(), frames))
+    assert r["ball_coverage_pct"] == 20.0
+    assert r["ball_filled_pct"] == 80.0
+    assert any("Kevés labda-észlelés" in w for w in r["warnings"])
+
+    # A réteg-megbízhatóság ugyanezt a MÉRT számot nézi.
+    sorok = {row["layer"]: row for row in analysis_confidence(
+        Match(_meta(), frames))}
+    assert sorok["ball"]["available"] is False
+    assert "20%" in sorok["ball"]["reason"]
