@@ -67,6 +67,22 @@ SHOOTER_KINK_MAX_FPS = 15.0
 SHOOTER_KINK_NEAR_M = 2.5
 SHOOTER_KINK_COS = 0.9
 ASSIST_WINDOW_S = 4.0     # a gól előtt ennyi időn belüli utolsó passz = gólpassz
+# ELADOTT LABDA minimális tartása. A birtokos a labdához LEGKÖZELEBBI
+# játékos; tömörülésnél (elzárás, beállós harc) és ritka
+# labda-észlelésnél két SZEMBEN álló ember távolsága a labdától
+# kockánként átbillen, és a jel átugrik a másik csapatra — ebből a
+# felismerés eladott labdát gyárt. Éles meccsen ez a meccs ELŐTTI
+# felállásnál is termelt eladásokat, miközben senki nem játszott.
+#
+# Csak a CSAPATVÁLTÁSRA követeljük meg a tartást, a csapaton belüli
+# passzra NEM: az, hogy a labda átment az ELLENFÉLHEZ, nagyobb állítás,
+# és fizikailag is tovább tart (a labdának oda kell érnie, és az
+# ellenfélnek uralnia kell). Egy kockányi átbillenés nem ez.
+#
+# A küszöb óvatos: a termék alap-ritkításával (stride=3) ez ~0,36
+# másodpercnyi valós idő — ennél gyorsabban valódi labdaszerzés sem
+# stabilizálódik, tehát igazi eladást nem veszítünk el.
+TURNOVER_MIN_HOLD_S = 0.3
 SAVE_RADIUS_M = 1.6       # a labda ennyire a kapushoz érve = védés
 _GK_NEAR_GOAL_M = 9.0     # a kapus csak a SAJÁT kapujánál "véd"
 
@@ -434,24 +450,74 @@ def detect_possession_changes(match: Match,
                               config: Optional[TacticsConfig] = None) -> list[MatchEvent]:
     """Passzok (csapaton belül) és labdaeladások (az ellenfélhez) felismerése."""
     config = config or TacticsConfig()
-    events: list[MatchEvent] = []
-    prev_holder = None
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    # A ritkított feldolgozás miatt legalább két kocka.
+    min_hold = max(2, round(TURNOVER_MIN_HOLD_S * fps))
+
+    # 1) A birtokos-jel EGYBEFÜGGŐ szakaszokra bontva.
+    szakaszok: list = []          # [track_id, team, kezdet_t, vege_t]
     for f in match.frames:
         holder = ball_holder(f, config)
-        if holder is not None and prev_holder is not None and holder.track_id != prev_holder.track_id:
-            if holder.team == prev_holder.team:
-                events.append(MatchEvent(
-                    t=f.t, type=EventType.PASS, team=prev_holder.team,
-                    player_id=prev_holder.track_id,
-                    detail={"receiver_id": holder.track_id},
-                ))
-            else:
-                events.append(MatchEvent(
-                    t=f.t, type=EventType.TURNOVER, team=prev_holder.team,
-                    player_id=prev_holder.track_id,
-                ))
-        if holder is not None:
-            prev_holder = holder
+        if holder is None:
+            continue
+        if szakaszok and szakaszok[-1][0] == holder.track_id:
+            szakaszok[-1][3] = f.t
+        else:
+            szakaszok.append([holder.track_id, holder.team, f.t, f.t])
+
+    # 2) CSAPAT-futamok: az egymást követő, azonos csapatú szakaszok.
+    #    A kitartást a CSAPATRA mérjük, nem az egyes játékosra — a másik
+    #    csapaton belüli passzok különben elnyelnék a jelöltet.
+    futamok: list = []            # [[szakasz, ...], team, kezdet_t, vege_t]
+    for sz in szakaszok:
+        if futamok and futamok[-1][1] == sz[1]:
+            futamok[-1][0].append(sz)
+            futamok[-1][3] = sz[3]
+        else:
+            futamok.append([[sz], sz[1], sz[2], sz[3]])
+
+    # 3) A túl rövid ELLENFÉL-futam nem labdaszerzés, hanem billegés: a
+    #    körülötte lévő (azonos csapatú) futamokba olvad. Ismételve,
+    #    mert egy összevonás újabb rövid futamot hozhat felszínre.
+    valtozott = True
+    while valtozott and len(futamok) >= 3:
+        valtozott = False
+        i = 1
+        while i < len(futamok) - 1:
+            elozo, kozep, kov = futamok[i - 1], futamok[i], futamok[i + 1]
+            if elozo[1] == kov[1] and (kozep[3] - kozep[2]) < min_hold:
+                elozo[0].extend(kov[0])
+                elozo[3] = kov[3]
+                del futamok[i:i + 2]
+                valtozott = True
+                continue
+            i += 1
+
+    # 3/b) A felvétel VÉGÉN álló rövid futam sosem igazolja magát: nincs
+    #      utána semmi, ami megerősítené. Az ilyen "az utolsó pillanatban
+    #      átbillent" jelből nem csinálunk labdaszerzést.
+    while len(futamok) >= 2 and (futamok[-1][3] - futamok[-1][2]) < min_hold:
+        futamok.pop()
+
+    # 4) Események: a futamon BELÜL passz, a futamok KÖZT eladott labda.
+    events: list[MatchEvent] = []
+    elozo_szakasz = None
+    for futam in futamok:
+        for sz in futam[0]:
+            if elozo_szakasz is not None and sz[0] != elozo_szakasz[0]:
+                if sz[1] == elozo_szakasz[1]:
+                    events.append(MatchEvent(
+                        t=sz[2], type=EventType.PASS, team=elozo_szakasz[1],
+                        player_id=elozo_szakasz[0],
+                        detail={"receiver_id": sz[0]},
+                    ))
+                else:
+                    events.append(MatchEvent(
+                        t=sz[2], type=EventType.TURNOVER,
+                        team=elozo_szakasz[1],
+                        player_id=elozo_szakasz[0],
+                    ))
+            elozo_szakasz = sz
     return events
 
 

@@ -127,11 +127,14 @@ def test_turnover_zones_classifies_front_loss():
     t = 0
     # A hazai birtokolja a labdát a vendég kapuja közelében (x=35, a +x
     # kapu felé támad), majd a vendég szerzi meg → labdaeladás itt.
-    for _ in range(3):
+    # A birtoklás KITART (10 kocka @ 25 fps = 0,4 mp): az eladott labda
+    # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S), mert a
+    # kockánként átbillenő birtokos zaj, nem labdaszerzés.
+    for _ in range(10):
         frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 35.0, 10.0)],
                             ball=Ball(x=35.0, y=10.0, confidence=1.0)))
         t += 1
-    for _ in range(3):
+    for _ in range(10):
         frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 35.0, 10.0)],
                             ball=Ball(x=35.0, y=10.0, confidence=1.0)))
         t += 1
@@ -473,12 +476,14 @@ def test_turnover_players_credits_the_loser():
     t = 0
     # HAZAI 7-es birtokol középen, majd a VENDÉG 11-es szerzi meg → a 7-es
     # eladása (lövéstől távol, hogy ne szűrődjön ki).
-    for _ in range(4):
+    # A birtoklás KITART (10 kocka @ 25 fps): az eladott labda
+    # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S).
+    for _ in range(10):
         frames.append(Frame(t=t, players=[_pl(7, Team.HOME, 20.0, 10.0),
                                           _pl(11, Team.AWAY, 20.5, 10.0)],
                             ball=Ball(x=20.0, y=10.0, confidence=1.0)))
         t += 1
-    for _ in range(4):
+    for _ in range(10):
         frames.append(Frame(t=t, players=[_pl(7, Team.HOME, 20.0, 10.0),
                                           _pl(11, Team.AWAY, 20.5, 10.0)],
                             ball=Ball(x=20.5, y=10.0, confidence=1.0)))
@@ -502,20 +507,22 @@ def test_steal_height_front_vs_back():
         # A HAZAI 1-es birtokol x-nél, majd a VENDÉG 20-as szerzi meg
         # (labda átkerül hozzá) → vendég szerzés az x pozíción.
         nonlocal t
-        for _ in range(5):
+        # A birtoklás KITART (10 kocka @ 25 fps): az eladott labda
+        # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S).
+        for _ in range(10):
             frames.append(Frame(t=t, players=[
                 _pl(1, Team.HOME, x, 10.0),
                 _pl(20, Team.AWAY, x + 0.5, 10.0)],
                 ball=Ball(x=x, y=10.0, confidence=1.0)))
             t += 1
-        for _ in range(5):
+        for _ in range(10):
             frames.append(Frame(t=t, players=[
                 _pl(1, Team.HOME, x, 10.0),
                 _pl(20, Team.AWAY, x + 0.5, 10.0)],
                 ball=Ball(x=x + 0.5, y=10.0, confidence=1.0)))
             t += 1
         # Vissza az 1-eshez, hogy új szerzés jöhessen.
-        for _ in range(5):
+        for _ in range(10):
             frames.append(Frame(t=t, players=[
                 _pl(1, Team.HOME, x, 10.0),
                 _pl(20, Team.AWAY, x + 0.5, 10.0)],
@@ -607,7 +614,9 @@ def test_turnover_fade_rate_rises_second_half():
             players = [_pl(1, Team.HOME, hx, 10.0),
                        _pl(20, Team.AWAY, hx + 0.6, 10.0)]
             bx = hx + (0.6 if holder_away else 0.0)
-            for _ in range(6 if steal else 1):
+            # A szerzésnek KI KELL TARTANIA (TURNOVER_MIN_HOLD_S): a
+            # kockánként átbillenő birtokos zaj, nem labdaszerzés.
+            for _ in range(12 if steal else 1):
                 frames.append(Frame(t=t, players=players,
                                     ball=Ball(x=bx, y=10.0,
                                               confidence=1.0)))
@@ -1234,11 +1243,15 @@ def _turnover_match(gaps_s, fps=25.0):
                                           confidence=1.0)))
             t += 1
 
+    # A birtoklás KITART: az eladott labda felismerése ezt megköveteli
+    # (TURNOVER_MIN_HOLD_S) — a kockánként átbillenő birtokos zaj, nem
+    # labdaszerzés. 10 kocka @ 25 fps = 0,4 mp.
+    tart = max(10, int(0.5 * fps))
     for k, gap in enumerate([0.0] + list(gaps_s)):
         # A szünetet a hazai birtoklás hossza adja; a végén a vendéghez
         # kerül a labda = eladás.
-        _hold(1, Team.HOME, max(2, int(gap * fps)))
-        _hold(11, Team.AWAY, 2)
+        _hold(1, Team.HOME, max(tart, int(gap * fps)))
+        _hold(11, Team.AWAY, tart)
     return Match(_meta(fps), frames)
 
 

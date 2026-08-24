@@ -122,12 +122,15 @@ def test_front_turnovers_trigger_safe_finishing_focus():
     'Biztonságos befejezés' fókusz a hazaiaknak."""
     frames = []
     t = 0
+    # A birtoklás KITART (10 kocka @ 25 fps = 0,4 mp): az eladott labda
+    # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S), mert a
+    # kockánként átbillenő birtokos zaj, nem labdaszerzés.
     for _ in range(6):
-        for _ in range(3):
+        for _ in range(10):
             frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 35.0, 10.0)],
                                 ball=Ball(x=35.0, y=10.0, confidence=1.0)))
             t += 1
-        for _ in range(3):
+        for _ in range(10):
             frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 35.0, 10.0)],
                                 ball=Ball(x=35.0, y=10.0, confidence=1.0)))
             t += 1

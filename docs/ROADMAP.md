@@ -2,7 +2,7 @@
 
 > ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (1881 automata teszt zöld; élő számok:
+> **Kész és tesztelt (1885 automata teszt zöld; élő számok:
 > `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
@@ -105,59 +105,34 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 - **Kamera**: fix taktikai kamera (felülről) sokkal könnyebb, mint broadcast vágás.
 - **Kalibráció**: kézi keypoint az MVP-hez elég; automatikus vonalfelismerés később.
 - **EPV-modell**: kevés nyilvános kézilabda-adat van — ez a legkutatás-igényesebb rész.
-- **Birtoklás-váltás billegése (megvizsgálva, elhalasztva).** A birtokos a
-  labdához LEGKÖZELEBBI játékos, és a váltás EGYETLEN képkockából eldől.
-  Tömörülésnél (és zajos labda-észlelésnél) ez kockánként ide-oda billeg két
-  ember közt, és minden billenésből passz vagy ELADOTT LABDA lesz. Az első
-  éles meccsen ez a meccs ELŐTTI felállásnál is eladott labdákat gyártott.
+- **Birtoklás-váltás billegése — MEGOLDVA.** A birtokos a labdához
+  LEGKÖZELEBBI játékos, és a váltás egyetlen képkockából eldőlt.
+  Tömörülésnél (és zajos labda-észlelésnél) ez kockánként ide-oda
+  billegett, és minden billenésből passz vagy ELADOTT LABDA lett — az
+  első éles meccsen ez a meccs ELŐTTI felállásnál is eladásokat
+  gyártott.
 
-  A javítás kipróbálva: az új birtokost csak akkor fogadjuk el, ha legalább
-  ~0,24 másodpercig ő a legközelebbi (a valódi átadás ennél tovább tart, a
-  billegés nem). Működik, de a birtoklás-váltás szemantikáját GLOBÁLISAN
-  megváltoztatja: a labdaeladás-szám sok tucat rétegbe táplál be, a korábban
-  feldolgozott meccsekkel való összevethetőség megszűnik, és 16 teszt-fixture
-  épít az egy-kockás váltásra. Ezért ez külön, szándékos lépés legyen, valódi
-  meccsen validálva — nem egy mellékesen betett küszöb.
+  A megoldás három nekifutásból állt össze. (1) Minimális tartás
+  MINDEN birtoklás-váltásra: működik, de globálisan megváltoztatja a
+  szemantikát, és 16+ fixture épít az egy-kockás váltásra. (2)
+  Pattanás-szűrő (A → B → A): nem járható, mert a fixture-ök szerint
+  ugyanez legitim oda-vissza passzolás is lehet — a kettőt CSAK az
+  időtartam különbözteti meg. (3) **A járható út: a kitartást csak az
+  ELADOTT LABDÁRA követeljük meg**, a csapaton belüli passzra nem. A
+  passz kisebb állítás (a labda nem hagyta el a csapatot); az eladott
+  labdához viszont a labdának oda kell érnie az ellenfélhez, és neki
+  uralnia is kell.
 
-  **Harmadik próbálkozás — ez a járható út: CSAK az eladott labdára.**
-  A csapaton belüli passz kisebb állítás (a labda nem hagyta el a
-  csapatot), az ELADOTT LABDA viszont nagyobb: ahhoz a labdának oda kell
-  érnie az ellenfélhez, és neki uralnia is kell — ez fizikailag tovább
-  tart, mint egy kockányi átbillenés. Ha a minimális tartást (0,3 mp)
-  CSAK a csapatváltásra követeljük meg, a hatókör "minden fixture"
-  helyett **18 nevesített fixture** lesz, hat fájlban:
+  A megvalósítás CSAPAT-futamokon dolgozik, nem játékosonként: ha az
+  ellenfél megszerzi a labdát és rögtön tovább is passzolja, az attól
+  még valódi szerzés — játékosonkénti méréssel az ő passzaik elnyelnék
+  a jelöltet. A `TURNOVER_MIN_HOLD_S = 0,3` a termék alap-ritkításával
+  (stride=3) ~0,36 másodpercnyi valós idő; ennél gyorsabban valódi
+  labdaszerzés sem stabilizálódik. A felvétel VÉGÉN álló, meg nem
+  erősített futam nem ad eseményt.
 
-  - `test_attack_types.py`: side_switching, pass_risk, risky_passers,
-    risky_passer_roles
-  - `test_decisions.py`: pass_security, pressure_sensitive_players,
-    press_sensitive_roles
-  - `test_defense.py`: turnover_zones, turnover_players, steal_height,
-    turnover_fade, turnover_clusters (×3)
-  - `test_match_report.py`: player_report_shows_turnovers
-  - `test_training.py`: front_turnovers_trigger_safe_finishing_focus
-  - `test_quality_too_many.py`: a billegés-fixture (ott a jelzés
-    szándékosan szűnne meg)
-
-  Mindegyik egy-kockás csapatváltást modellez; a teendő ugyanaz: a
-  birtoklást ki kell tartatni (a `_hold` segéd a
-  `test_event_detection.py`-ban erre való — LÖVÉS-fixture-re nem
-  alkalmazható, mert az ismételt kocka a labda sebességét is elveszi).
-  A motor-oldali változtatás maga kicsi és jól tesztelhető; a
-  fixture-átírás és a valódi meccsen való összevetés a munka.
-
-  **Második próbálkozás: pattanás-szűrő** — a rövid, UGYANODA visszatérő
-  kitérőt (A → B → A) néztük zajnak, hogy a szemantikát ne kelljen
-  bántani. Ez sem járható: a fixture-ök szerint az 1 → 2 → 1 → 2 minta
-  legitim oda-vissza passzolás is lehet, és a kettőt CSAK az időtartam
-  különbözteti meg — vagyis ugyanoda jutunk vissza. A tanulság: a
-  megkülönböztető jel a birtoklás HOSSZA, és a jelenlegi fixture-ök
-  kockánként váltó birtokost modelleznek, ami valódi meccsen nem fordul
-  elő. A rendes lépés tehát: (1) a fixture-ök átírása valósághű
-  birtoklás-hosszra, (2) a minimális tartás bevezetése, (3) valódi
-  meccsen való összevetés a régi számokkal.
-
-  Amíg nincs meg: a felállás/bemelegítés okozta hamis eladásokat a KÉZI
-  meccs-időablak vágja ki (a felvétel eleje nem kerül be az elemzésbe),
-  a minőség-jelentés pedig kimondja, ha az eladás-ütem hihetetlen
-  (`TURNOVER_RATE_MAX_PER_MIN`) — tehát a felhasználó legalább tudja,
-  mikor ne higgyen a számnak.
+  A 18 érintett fixture átírva valósághű birtoklás-hosszra (a
+  kockánként váltó birtokos valódi meccsen nem fordul elő); a teljes
+  csomag zöld. A minőség-jelentés `TURNOVER_RATE_MAX_PER_MIN` jelzése
+  megmarad hátsó védvonalnak: ha az eladás-ütem így is hihetetlen, azt
+  kimondja.

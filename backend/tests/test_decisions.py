@@ -194,7 +194,10 @@ def test_pass_security_flags_press_sensitive_team():
         "d1": (11, Team.AWAY, 31.5, 10.0),
     }
 
-    def _frames(t0, holder_key, n=5):
+    # A birtoklás KITART (10 kocka @ 25 fps = 0,4 mp): az eladott labda
+    # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S) — a kockánként
+    # átbillenő birtokos zaj, nem labdaszerzés.
+    def _frames(t0, holder_key, n=10):
         players = [_pl(tid, team, x, y)
                    for (tid, team, x, y) in spots.values()]
         hx, hy = spots[holder_key][2], spots[holder_key][3]
@@ -210,7 +213,7 @@ def test_pass_security_flags_press_sensitive_team():
     t = 0
     for key in holds:
         frames += _frames(t, key)
-        t += 5
+        t += 10
     meta = MatchMeta(match_id="ps", home_team="H", away_team="A", fps=25.0)
     ps = pass_security_under_pressure(Match(meta, frames))
     h = ps["home"]
@@ -222,7 +225,7 @@ def test_pass_security_flags_press_sensitive_team():
     assert h["rise_pp"] is not None and h["rise_pp"] >= 15.0
 
     # Kevés minta: nincs ítélet.
-    few = pass_security_under_pressure(Match(meta, frames[:60]))
+    few = pass_security_under_pressure(Match(meta, frames[:120]))
     assert few["home"]["press_to_pct"] is None
 
 
@@ -337,12 +340,16 @@ def test_pass_speed_needs_enough_passes():
 
 def _pressure_match(cases, fps=25.0):
     """Nyomott labdás döntések: a `cases` elemei (játékos id,
-    elveszett?) párok — a labdás mellett végig ott a védő."""
+    elveszett?) párok — a labdás mellett végig ott a védő.
+
+    A birtoklás KITART (10 kocka @ 25 fps = 0,4 mp): az eladott labda
+    felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S), mert a
+    kockánként átbillenő birtokos zaj, nem labdaszerzés."""
     frames = []
     t = 0
     for (pid, lost) in cases:
         # A labdás és a rászorító védő (1 m-re).
-        for _ in range(6):
+        for _ in range(10):
             frames.append(Frame(
                 t=t, players=[_pl(pid, Team.HOME, 25.0, 10.0),
                               _pl(30, Team.AWAY, 26.0, 10.0),
@@ -351,7 +358,7 @@ def _pressure_match(cases, fps=25.0):
             t += 1
         if lost:
             # A labda az ellenfélhez kerül: nyomott eladás.
-            for _ in range(6):
+            for _ in range(10):
                 frames.append(Frame(
                     t=t, players=[_pl(pid, Team.HOME, 25.0, 10.0),
                                   _pl(30, Team.AWAY, 26.0, 10.0)],
@@ -359,14 +366,14 @@ def _pressure_match(cases, fps=25.0):
                 t += 1
         else:
             # A labda a szabadon álló társhoz megy: nyomott, de sikeres.
-            for _ in range(6):
+            for _ in range(10):
                 frames.append(Frame(
                     t=t, players=[_pl(pid, Team.HOME, 25.0, 10.0),
                                   _pl(30, Team.AWAY, 26.0, 10.0),
                                   _pl(9, Team.HOME, 20.0, 16.0)],
                     ball=Ball(x=20.0, y=16.0, confidence=1.0)))
                 t += 1
-            for _ in range(6):   # a labda visszakerül a vizsgált emberhez
+            for _ in range(10):   # a labda visszakerül a vizsgált emberhez
                 frames.append(Frame(
                     t=t, players=[_pl(pid, Team.HOME, 25.0, 10.0),
                                   _pl(30, Team.AWAY, 26.0, 10.0),
@@ -534,7 +541,10 @@ def test_hold_time_roles_silent_with_little_holding():
 
 def _psr_match(losers, fps=25.0):
     """Poszt-minta (7: beálló, 9: szélső) + nyomott eladások: a
-    `losers` elemei a labdát szorításban elvesztő hazai játékosok."""
+    `losers` elemei a labdát szorításban elvesztő hazai játékosok.
+
+    A birtoklás KITART (10 kocka @ 25 fps): az eladott labda felismerése
+    ezt megköveteli (TURNOVER_MIN_HOLD_S)."""
     spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
 
     def cast(extra=()):
@@ -560,11 +570,11 @@ def _psr_match(losers, fps=25.0):
         holder_cast = [_pl(pid, Team.HOME, lx, ly), deff] + [
             _pl(tid, Team.HOME, *xy)
             for tid, xy in spos.items() if tid != pid]
-        for _ in range(6):
+        for _ in range(10):
             frames.append(Frame(t=t, players=holder_cast,
                                 ball=Ball(x=lx, y=ly, confidence=1.0)))
             t += 1
-        for _ in range(6):           # a labda a védőhöz kerül: eladás
+        for _ in range(10):           # a labda a védőhöz kerül: eladás
             frames.append(Frame(t=t, players=holder_cast,
                                 ball=Ball(x=lx + 0.9, y=ly,
                                           confidence=1.0)))

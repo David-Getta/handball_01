@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.51 óta)
 
+- **Az eladott labda BILLEGÉSE megoldva** (motor) — JAVÍTÁS: a birtokos
+  a labdához LEGKÖZELEBBI játékos, és a váltás eddig egyetlen
+  képkockából eldőlt. Tömörülésnél (elzárás, beállós harc) és zajos
+  labda-észlelésnél ez kockánként ide-oda billegett, és minden
+  billenésből ELADOTT LABDA lett — az első éles meccsen ez a meccs
+  ELŐTTI felállásnál is eladásokat gyártott, miközben senki nem
+  játszott. Mostantól az eladott labdához KITARTÁS kell: az ellenfélnek
+  legalább 0,3 másodpercig nála kell lennie a labdának. A csapaton
+  belüli passzra ez NEM vonatkozik — az kisebb állítás (a labda nem
+  hagyta el a csapatot), és a passz-alapú rétegek a régi viselkedésre
+  épülnek.
+
+  A kitartást a CSAPATRA mérjük, nem az egyes játékosra: ha az ellenfél
+  megszerzi a labdát és rögtön tovább is passzolja a társának, az attól
+  még valódi szerzés. A küszöb óvatos — a termék alap-ritkításával ez
+  ~0,36 másodpercnyi valós idő, ennél gyorsabban valódi labdaszerzés
+  sem stabilizálódik —, tehát igazi eladást nem veszítünk el. A
+  felvétel legvégén álló, meg nem erősített váltásból sem lesz esemény.
+
 ## v0.1.51 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: ez a kör arról szól, hogy MELYIK SZÁMOT hidd el.

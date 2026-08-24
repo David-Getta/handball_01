@@ -230,14 +230,19 @@ def test_megbizhatosag_kulon_szol_a_palya_alapu_retegekrol():
     assert "kalibráció" in sor2["reason"]
 
 
-def _flicker_match(frames: int = 4000, fps: float = 25.0):
-    """A birtokos kockánként átugrik a két csapat közt — pontosan az a
-    billegés, ami a valódi meccsen a meccs ELŐTTI felállásnál is
-    eladott labdákat gyártott."""
+def _flicker_match(frames: int = 4000, fps: float = 25.0, blokk: int = 10):
+    """A birtokos `blokk` kockánként átugrik a két csapat közt.
+
+    A KOCKÁNKÉNTI billegést a felismerés azóta kiszűri
+    (`TURNOVER_MIN_HOLD_S`), ezért itt a kitartás fölötti, de irreálisan
+    SŰRŰ váltást modellezünk: valódi meccsen csapatonként fél-másfél
+    eladás jut egy percre, itt sokszorosa. A jelentésnek ezt akkor is ki
+    kell mondania, ha az egyes váltások külön-külön hihetőek."""
     fs = []
     for t in range(frames):
-        # A labda középen áll; két játékos váltakozva a legközelebbi.
-        kozel, tavol = (10.6, 13.0) if t % 2 == 0 else (13.0, 10.6)
+        # A labda középen áll; a két játékos blokkonként cserél helyet.
+        kozel, tavol = ((10.6, 13.0) if (t // blokk) % 2 == 0
+                        else (13.0, 10.6))
         fs.append(Frame(
             t=t,
             players=[

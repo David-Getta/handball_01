@@ -1127,3 +1127,93 @@ def test_a_csendido_utan_uj_loves_johet():
     ev = [e for e in detect_shots(Match(_meta(fps=fps), frames))
           if e.type in (EventType.SHOT, EventType.GOAL)]
     assert len(ev) == 2, [e.t for e in ev]
+
+
+def test_eladott_labda_nem_szuletik_billegesbol():
+    """Kockánként átbillenő birtokos NEM eladott labda.
+
+    A birtokos a labdához legközelebbi játékos. Tömörülésnél (elzárás,
+    beállós harc) és ritka labda-észlelésnél két SZEMBEN álló ember
+    távolsága kockánként átbillen — éles meccsen ez a meccs ELŐTTI
+    felállásnál is eladásokat termelt, miközben senki nem játszott.
+    """
+    frames = []
+    for t in range(200):
+        # A labda áll; a két játékos felváltva a legközelebbi hozzá.
+        kozel, tavol = ((10.6, 13.0) if t % 2 == 0 else (13.0, 10.6))
+        frames.append(Frame(
+            t=t,
+            players=[_pl(1, Team.HOME, kozel, 10.0),
+                     _pl(11, Team.AWAY, tavol, 10.0)],
+            ball=Ball(x=11.0, y=10.0, confidence=1.0)))
+    evs = detect_possession_changes(Match(_meta(), frames))
+    eladas = [e for e in evs if e.type == EventType.TURNOVER]
+    assert eladas == [], [e.t for e in eladas]
+
+
+def test_valodi_eladott_labda_megmarad():
+    """A kitartó csapatváltás továbbra is eladott labda."""
+    from handball.pipeline.event_detection import TURNOVER_MIN_HOLD_S
+
+    fps = 25.0
+    tart = int(TURNOVER_MIN_HOLD_S * fps) + 5
+    frames = []
+    t = 0
+    for _ in range(tart):   # a hazai birtokolja
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 10.6, 10.0),
+                                          _pl(11, Team.AWAY, 13.0, 10.0)],
+                            ball=Ball(x=11.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(tart):   # majd tartósan a vendég
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 13.0, 10.0),
+                                          _pl(11, Team.AWAY, 10.6, 10.0)],
+                            ball=Ball(x=11.0, y=10.0, confidence=1.0)))
+        t += 1
+    evs = detect_possession_changes(Match(_meta(fps=fps), frames))
+    eladas = [e for e in evs if e.type == EventType.TURNOVER]
+    assert len(eladas) == 1, [e.t for e in eladas]
+    assert eladas[0].team == Team.HOME       # a HAZAI vesztette el
+    assert eladas[0].player_id == 1
+
+
+def test_csapaton_beluli_passz_valtozatlan():
+    """A passzra NEM vonatkozik a kitartás-követelmény.
+
+    A csapaton belüli birtokosváltás kisebb állítás (a labda nem hagyta
+    el a csapatot), és a passz-alapú rétegek a régi viselkedésre
+    épülnek — ezt szándékosan nem bántjuk.
+    """
+    frames = [
+        Frame(t=0, players=[_pl(1, Team.HOME, 25.0, 10.0)],
+              ball=Ball(x=25.0, y=10.0, confidence=1.0)),
+        Frame(t=1, players=[_pl(2, Team.HOME, 28.0, 10.0)],
+              ball=Ball(x=28.0, y=10.0, confidence=1.0)),
+    ]
+    evs = detect_possession_changes(Match(_meta(), frames))
+    assert [e.type for e in evs] == [EventType.PASS]
+
+
+def test_a_masik_csapat_passzai_nem_nyelik_el_a_szerzest():
+    """A kitartást a CSAPATRA mérjük, nem az egyes játékosra.
+
+    Ha az ellenfél megszerzi a labdát, és rögtön TOVÁBB is passzolja a
+    társának, a labda attól még náluk van: a szerzés valódi. Ha a
+    kitartást játékosonként néznénk, az ő passzaik elnyelnék a
+    jelöltet, és a labdaszerzés sosem születne meg.
+    """
+    frames = []
+    t = 0
+    for _ in range(12):     # a hazai birtokol
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for pid in (11, 12, 13):   # a vendégek egymásnak adogatnak, 5-5 kocka
+        for _ in range(5):
+            frames.append(Frame(t=t, players=[_pl(pid, Team.AWAY, 20.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    evs = detect_possession_changes(Match(_meta(), frames))
+    eladas = [e for e in evs if e.type == EventType.TURNOVER]
+    passzok = [e for e in evs if e.type == EventType.PASS]
+    assert len(eladas) == 1 and eladas[0].team == Team.HOME
+    assert len(passzok) == 2      # 11→12 és 12→13

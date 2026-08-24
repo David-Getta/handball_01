@@ -1282,12 +1282,14 @@ def test_player_report_shows_turnovers():
     frames = []
     t = 0
     # HAZAI 1-es birtokol, majd a VENDÉG 20-as szerzi meg → 1-es eladása.
-    for _ in range(6):
+    # A birtoklás KITART (10 kocka @ 25 fps): az eladott labda
+    # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S).
+    for _ in range(10):
         frames.append(Frame(t=t, players=[pl(1, Team.HOME, 20.0, 10.0),
                                           pl(20, Team.AWAY, 20.5, 10.0)],
                             ball=Ball(x=20.0, y=10.0, confidence=1.0)))
         t += 1
-    for _ in range(6):
+    for _ in range(10):
         frames.append(Frame(t=t, players=[pl(1, Team.HOME, 20.0, 10.0),
                                           pl(20, Team.AWAY, 20.5, 10.0)],
                             ball=Ball(x=20.5, y=10.0, confidence=1.0)))

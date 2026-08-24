@@ -1186,19 +1186,22 @@ def test_pass_risk_flags_lost_long_balls():
         taker = (_pl(20, Team.AWAY, 30.0, 10.0 + dist_y) if lost
                  else _pl(2, Team.HOME, 30.0, 10.0 + dist_y))
         pls = [_pl(1, Team.HOME, 30.0, 10.0), taker]
-        for _ in range(5):
+        # A birtoklás KITART (10 kocka @ 25 fps = 0,4 mp): az eladott
+        # labda felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S), mert
+        # a kockánként átbillenő birtokos zaj, nem labdaszerzés.
+        for _ in range(10):
             frames.append(Frame(t=t, players=pls,
                                 ball=Ball(x=30.0, y=10.0,
                                           confidence=1.0)))
             t += 1
-        for _ in range(5):
+        for _ in range(10):
             frames.append(Frame(t=t, players=pls,
                                 ball=Ball(x=30.0, y=10.0 + dist_y,
                                           confidence=1.0)))
             t += 1
         # A labda visszakerül az 1-eshez: a következő kísérlet innen
         # indul (eladás után "visszaszerzés").
-        for _ in range(5):
+        for _ in range(10):
             frames.append(Frame(t=t, players=[
                 _pl(1, Team.HOME, 30.0, 10.0)],
                 ball=Ball(x=30.0, y=10.0, confidence=1.0)))
@@ -2205,17 +2208,19 @@ def _risky_passer_match(cases, fps=25.0):
         taker = (_pl(20, Team.AWAY, 30.0, 22.0) if lost
                  else _pl(2, Team.HOME, 30.0, 22.0))
         pls = [_pl(pid, Team.HOME, 30.0, 10.0), taker]
-        for _ in range(5):
+        # A birtoklás KITART (10 kocka @ 25 fps): az eladott labda
+        # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S).
+        for _ in range(10):
             frames.append(Frame(t=t, players=pls,
                                 ball=Ball(x=30.0, y=10.0,
                                           confidence=1.0)))
             t += 1
-        for _ in range(5):
+        for _ in range(10):
             frames.append(Frame(t=t, players=pls,
                                 ball=Ball(x=30.0, y=22.0,
                                           confidence=1.0)))
             t += 1
-        for _ in range(5):    # a labda visszakerül a passzolóhoz
+        for _ in range(10):   # a labda visszakerül a passzolóhoz
             frames.append(Frame(
                 t=t, players=[_pl(pid, Team.HOME, 30.0, 10.0)],
                 ball=Ball(x=30.0, y=10.0, confidence=1.0)))
@@ -4144,17 +4149,19 @@ def _rpr_match(cases, fps=25.0):
         taker = (_pl(20, Team.AWAY, 30.0, 22.0) if lost
                  else _pl(2, Team.HOME, 30.0, 22.0))
         pls = [_pl(pid, Team.HOME, 30.0, 10.0), taker]
-        for _ in range(5):
+        # A birtoklás KITART (10 kocka @ 25 fps): az eladott labda
+        # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S).
+        for _ in range(10):
             frames.append(Frame(t=t, players=pls,
                                 ball=Ball(x=30.0, y=10.0,
                                           confidence=1.0)))
             t += 1
-        for _ in range(5):
+        for _ in range(10):
             frames.append(Frame(t=t, players=pls,
                                 ball=Ball(x=30.0, y=22.0,
                                           confidence=1.0)))
             t += 1
-        for _ in range(5):
+        for _ in range(10):
             frames.append(Frame(
                 t=t, players=[_pl(pid, Team.HOME, 30.0, 10.0)],
                 ball=Ball(x=30.0, y=10.0, confidence=1.0)))
