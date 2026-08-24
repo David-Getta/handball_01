@@ -30,6 +30,36 @@ def _pl(track_id, team, x, y):
                           source=PositionSource.MEASURED, confidence=1.0)
 
 
+def _hold(frames, n=3):
+    """Minden kockát n-szer ismétel, ÚJRA-IDŐZÍTVE (t = 0, 1, 2, ...).
+
+    Miért kell: a birtoklás-fixture-ök kockánként váltó birtokost
+    modelleznek (1 → 2 → 11, kockánként egy). Valódi meccsen ez nem
+    fordul elő: aki megkapja a labdát, legalább néhány tized
+    másodpercig tartja is. A kockánkénti váltás azért fontos
+    különbség, mert éppen ez a KÜLÖNBSÉG választja el a valódi
+    passz-sorozatot a "legközelebbi játékos" szabály zajától
+    (tömörülésnél a jel kockánként ide-oda billeg) — lásd
+    docs/ROADMAP.md, "Birtoklás-váltás billegése".
+
+    A segéd a fixture-ök szemantikáját nem érinti: ugyanaz a
+    birtokos-SORREND, csak valósághű tartással. A jelenlegi
+    felismeréssel az események száma változatlan — ezt a zöld
+    teszt-csomag igazolja.
+
+    KORLÁT: LÖVÉS-fixture-re nem alkalmazható. A lövés-felismerés a
+    labda SEBESSÉGÉBŐL dolgozik, az ismételt kocka pedig álló labdát
+    jelent — a 25 m/s-os röppályából 8,3 m/s lenne, épp a
+    lövés-küszöb környékén. Csak TISZTA birtoklás-fixture-höz."""
+    ki = []
+    t = 0
+    for f in frames:
+        for _ in range(n):
+            ki.append(Frame(t=t, players=list(f.players), ball=f.ball))
+            t += 1
+    return ki
+
+
 def test_detect_goal():
     """A labda gyorsan a +x kapuhoz tart és a kapufák között eléri → GÓL (hazai)."""
     # x = 34..40 (1 m/frame = 25 m/s), y=10 (kapu közepe).
@@ -57,7 +87,9 @@ def test_pass_vs_turnover():
         Frame(t=1, players=[_pl(2, Team.HOME, 28.0, 10.0)], ball=Ball(x=28.0, y=10.0, confidence=1.0)),  # passz 1->2
         Frame(t=2, players=[_pl(11, Team.AWAY, 20.0, 10.0)], ball=Ball(x=20.0, y=10.0, confidence=1.0)),  # eladás
     ]
-    evs = detect_possession_changes(Match(_meta(), frames))
+    # Tartás: 10 kocka @ 25 fps = 0,4 mp birtoklásonként — valódi
+    # meccsen a birtokos nem kockánként vált (lásd _hold).
+    evs = detect_possession_changes(Match(_meta(), _hold(frames, 10)))
     assert [e.type for e in evs] == [EventType.PASS, EventType.TURNOVER]
     assert evs[0].detail == {"receiver_id": 2}
     assert evs[1].team == Team.HOME   # a HAZAI vesztette el
@@ -86,7 +118,7 @@ def test_event_counts():
         Frame(t=0, players=[_pl(1, Team.HOME, 25.0, 10.0)], ball=Ball(x=25.0, y=10.0, confidence=1.0)),
         Frame(t=1, players=[_pl(2, Team.HOME, 28.0, 10.0)], ball=Ball(x=28.0, y=10.0, confidence=1.0)),
     ]
-    c = event_counts(Match(_meta(), frames))
+    c = event_counts(Match(_meta(), _hold(frames)))
     assert c["total"] == 1
     assert c["by_type"]["pass"] == 1
 
@@ -585,7 +617,7 @@ def test_pass_network_pairs_and_hubs():
                                           _pl(2, Team.HOME, 30.0, 10.0)],
                             ball=Ball(x=25.0, y=10.0, confidence=1.0)))
         t += 1
-    net = pass_network(Match(_meta(), frames))["home"]
+    net = pass_network(Match(_meta(), _hold(frames)))["home"]
     assert net["total_passes"] >= 4
     assert net["pairs"][0]["from"] == 1 and net["pairs"][0]["to"] == 2
     assert net["pairs"][0]["passes"] == 3

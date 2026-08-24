@@ -119,6 +119,32 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   épít az egy-kockás váltásra. Ezért ez külön, szándékos lépés legyen, valódi
   meccsen validálva — nem egy mellékesen betett küszöb.
 
+  **Harmadik próbálkozás — ez a járható út: CSAK az eladott labdára.**
+  A csapaton belüli passz kisebb állítás (a labda nem hagyta el a
+  csapatot), az ELADOTT LABDA viszont nagyobb: ahhoz a labdának oda kell
+  érnie az ellenfélhez, és neki uralnia is kell — ez fizikailag tovább
+  tart, mint egy kockányi átbillenés. Ha a minimális tartást (0,3 mp)
+  CSAK a csapatváltásra követeljük meg, a hatókör "minden fixture"
+  helyett **18 nevesített fixture** lesz, hat fájlban:
+
+  - `test_attack_types.py`: side_switching, pass_risk, risky_passers,
+    risky_passer_roles
+  - `test_decisions.py`: pass_security, pressure_sensitive_players,
+    press_sensitive_roles
+  - `test_defense.py`: turnover_zones, turnover_players, steal_height,
+    turnover_fade, turnover_clusters (×3)
+  - `test_match_report.py`: player_report_shows_turnovers
+  - `test_training.py`: front_turnovers_trigger_safe_finishing_focus
+  - `test_quality_too_many.py`: a billegés-fixture (ott a jelzés
+    szándékosan szűnne meg)
+
+  Mindegyik egy-kockás csapatváltást modellez; a teendő ugyanaz: a
+  birtoklást ki kell tartatni (a `_hold` segéd a
+  `test_event_detection.py`-ban erre való — LÖVÉS-fixture-re nem
+  alkalmazható, mert az ismételt kocka a labda sebességét is elveszi).
+  A motor-oldali változtatás maga kicsi és jól tesztelhető; a
+  fixture-átírás és a valódi meccsen való összevetés a munka.
+
   **Második próbálkozás: pattanás-szűrő** — a rövid, UGYANODA visszatérő
   kitérőt (A → B → A) néztük zajnak, hogy a szemantikát ne kelljen
   bántani. Ez sem járható: a fixture-ök szerint az 1 → 2 → 1 → 2 minta
