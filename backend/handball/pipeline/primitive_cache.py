@@ -209,8 +209,21 @@ def memoize_primitive(name: str, copy: Optional[Callable] = None):
     def deco(fn):
         @functools.wraps(fn)
         def wrapper(match, *args, **kwargs):
+            # A KULCS normalizálása: a záró "nincs megadva" jelentésű
+            # argumentumokat elhagyjuk, hogy a `réteg(meccs)`, a
+            # `réteg(meccs, None)` és a `réteg(meccs, alapbeállítás)`
+            # UGYANAZT az eredményt olvassa — mindhárom szó szerint
+            # ugyanazt számolja, külön kulccsal viszont többször futna
+            # le. A HÍVÁS maga változatlan marad (az eredeti
+            # argumentumokkal megy tovább), csak a kulcs rövidül.
+            kulcs_args = list(args)
+            while kulcs_args and _arg_key(kulcs_args[-1]) is None:
+                kulcs_args.pop()
+            kulcs_kw = {k: v for k, v in kwargs.items()
+                        if _arg_key(v) is not None}
             return cached(
-                name, match, (args, tuple(sorted(kwargs.items()))),
+                name, match,
+                (tuple(kulcs_args), tuple(sorted(kulcs_kw.items()))),
                 lambda: fn(match, *args, **kwargs), copy=copy)
         wrapper.uncached = fn  # méréshez/teszthez: a nyers függvény
         return wrapper

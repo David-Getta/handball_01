@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.62 óta)
 
+- **A gyorsítótár-kulcs szemantikája rögzítve** (motor + teszt): a
+  v0.1.62-es javítás után a záró "nincs megadva" jelentésű
+  argumentumok is kimaradnak a kulcsból, tehát a `réteg(meccs)`, a
+  `réteg(meccs, None)` és a `réteg(meccs, alapbeállítás)` mind
+  UGYANAZT az eredményt olvassa — mindhárom szó szerint ugyanazt
+  számolja. A hívás maga változatlan (az eredeti argumentumokkal megy
+  tovább), csak a kulcs rövidül. Teszt rögzíti, hogy a MÓDOSÍTOTT
+  beállítás továbbra is külön kulcsot kap: a normalizálás nem moshatja
+  össze a különböző beállításokat, mert az azt jelentené, hogy egy
+  réteg más beállítás eredményét olvassa.
+
 ## v0.1.62 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: rövidebb várakozás és őszintébb csomag. A
