@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.57 óta)
 
+- **Az őrök kiterjesztése** (teszt): (1) a réteg-eltűnés őre egy
+  harmadik elfajzási esetet is néz — amikor a mezszín-klaszterezés
+  összeomlik, és MINDEN játékos egy csapatba kerül (azonos színű mezek,
+  rossz megvilágítás). Ilyenkor a legtöbb réteg jogosan hallgat, de a
+  kulcsnak ott kell lennie. (2) A kliens-küszöb őre az indítás előtti
+  detektálás-próbára is kiterjed: az a jelzés, ami elrontott
+  kalibrációnál egy órát megspórol, a motoréval AZONOS küszöbnél kell
+  megszólaljon. Az ellenőrzés a hivatkozás KÖRNYEZETÉBEN keresi az
+  értéket — a fájl egésze túl laza lenne, mert egy véletlen tördelési
+  szám "igazolna" egy elcsúszott küszöböt.
+
 - **A labda-lefedettség nem hízik a saját pótlásunktól** (motor +
   kliens): a mutató eddig minden olyan kockát megszámolt, ahol volt
   labda-pozíció — beleértve azokat is, amiket MI pótoltunk a rövid

@@ -664,6 +664,57 @@ def sovany_package_analyses():
     return json.loads(z.read("elemzesek.json").decode("utf-8"))
 
 
+def _client_with_egycsapatos_match():
+    """Kliens egy meccsel, ahol MINDENKI ugyanabba a csapatba került.
+
+    Valós hibamód: ha a mezszín-klaszterezés összeomlik (azonos színű
+    mezek, rossz megvilágítás), minden játékos egy oldalra kerül. A
+    minőség-jelentés ezt ki is mondja ("a csapat-besorolás egyoldalú"),
+    de a rétegeknek addig sem szabad NÉMÁN elhasalniuk — a felhasználó
+    különben azt hiszi, azok az elemzések nem is léteznek.
+    """
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
+    from handball.models.tracking import Team
+    m = simulate_ground_truth(duration_s=40, fps=25.0, seed=11,
+                              shots_per_min=12.0)
+    m.meta.match_id = f"{m.meta.match_id}-egycsapat"
+    for fr in m.frames:
+        for pl in fr.players:
+            pl.team = Team.HOME
+    matches_dir = Path(_tmp) / "data" / "matches"
+    matches_dir.mkdir(parents=True, exist_ok=True)
+    (matches_dir / f"{m.meta.match_id}.json").write_text(
+        json.dumps(m.to_dict()), encoding="utf-8")
+    return TestClient(create_app()), m.meta.match_id
+
+
+@pytest.fixture(scope="module")
+def egycsapatos_package_analyses():
+    """Az egycsapatos meccs elemzés-JSON-ja — egyszer exportálva."""
+    client, mid = _client_with_egycsapatos_match()
+    r = client.post(f"/matches/{mid}/package/export", json={"clip_types": []})
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    pkg = client.get(f"/matches/{mid}/package/download")
+    assert pkg.status_code == 200
+    z = zipfile.ZipFile(io.BytesIO(pkg.content))
+    return json.loads(z.read("elemzesek.json").decode("utf-8"))
+
+
+def test_egy_reteg_sem_hasal_el_az_egycsapatos_meccsen(
+        egycsapatos_package_analyses):
+    """Összeomlott csapat-besorolásnál SEM tűnhet el réteg nyom nélkül.
+
+    Ilyenkor a legtöbb réteg jogosan hallgat (nincs kivel szembeállítani
+    a csapatot), de a kulcsnak ott kell lennie — a jelentés nem lehet
+    NÉMÁN hiányos épp azon a futáson, ahol magyarázatra volna szükség.
+    """
+    names = _registered_package_layers()
+    missing = sorted(set(names) - set(egycsapatos_package_analyses))
+    assert not missing, (
+        "egycsapatos meccsen NÉMÁN elbukó rétegek: " + ", ".join(missing))
+
+
 def _client_with_toredek_match():
     """Kliens egy TÖREDÉK meccsel: két másodpercnyi felvétel.
 

@@ -1302,6 +1302,55 @@ def test_kliens_kuszobok_egyeznek_a_motorral():
         f"csak {ellenorzott} küszöböt ellenőriztünk — az olvasás elromlott")
 
 
+def test_a_tobbi_kliens_kepernyo_kuszobei_is_egyeznek():
+    """A felderítő képernyőn kívül is vannak kézzel másolt küszöbök.
+
+    Kevés, de fontos: az indítás előtti detektálás-próba a motoréval
+    AZONOS küszöbnél mondja ki, hogy túl sok ember esik a pályára
+    (TOO_MANY_PLAYERS) — ez az a jelzés, ami egy elrontott kalibráció
+    esetén megspórol egy órát. Ha a két szám elcsúszik, a próba
+    átengedi azt a feldolgozást, amit a motor utólag használhatatlannak
+    minősít.
+
+    Ezek a képernyők nem csempe-helperekből állnak, ezért itt
+    FÁJL-szinten ellenőrzünk: a hivatkozott konstansnak léteznie kell,
+    és az értékének elő kell fordulnia a fájlban.
+    """
+    konst = _motor_konstansok()
+    gyoker = (Path(__file__).resolve().parent.parent.parent
+              / "client" / "lib" / "ui")
+    baj: list = []
+    ellenorzott = 0
+    for nev in ("upload_screen.dart", "match_screen.dart",
+                "summary_panel.dart", "calibration_screen.dart"):
+        f = gyoker / nev
+        if not f.exists():
+            continue
+        sorok = f.read_text(encoding="utf-8").split("\n")
+        for i, sor in enumerate(sorok):
+            for c in sorted(set(re.findall(
+                    r"\b([A-Z][A-Z0-9]{2,}_[A-Z0-9_]+)\b", sor))):
+                if c not in konst:
+                    baj.append(f"{nev}:{i + 1}: nem létező konstans — {c}")
+                    continue
+                # A hivatkozás KÖRNYEZETÉBEN keressük az értéket (a
+                # fájl egésze túl laza lenne: egy 18-as tördelési szám
+                # véletlenül "igazolna" egy elcsúszott küszöböt).
+                ablak = "\n".join(sorok[max(0, i - 3):i + 12])
+                szamok = {float(x) for x in
+                          re.findall(r"\d+(?:\.\d+)?", ablak)}
+                varhato = set()
+                for v in konst[c]:
+                    varhato.update({v, v / 100.0, v * 100.0})
+                if not any(any(abs(w - s) < 1e-6 for s in szamok)
+                           for w in varhato):
+                    baj.append(f"{nev}:{i + 1}: {c}={sorted(konst[c])} "
+                               "nincs a hivatkozás környezetében")
+                ellenorzott += 1
+    assert not baj, "kliens-küszöb eltérés: " + "; ".join(baj)
+    assert ellenorzott >= 1, "a konstans-hivatkozások olvasása elromlott"
+
+
 # A pipeline-ban TÖBB modulban is előforduló, AZONOS nevű konstansok.
 # Nem hiba önmagában (a nevek modulonként külön névtérben élnek), de
 # csapda: a kliens- és doksi-kommentek NÉVRE hivatkoznak, és a
