@@ -136,3 +136,42 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   csomag zöld. A minőség-jelentés `TURNOVER_RATE_MAX_PER_MIN` jelzése
   megmarad hátsó védvonalnak: ha az eladás-ütem így is hihetetlen, azt
   kimondja.
+
+- **Kocka vagy másodperc — MEGOLDVA, de visszatérhet.** Egyetlen nap
+  alatt HÉT olyan küszöböt találtunk, ami kockában volt megadva, pedig
+  IDŐTARTAMOT jelent. Mivel a feldolgozás ritkít (a termék alapja
+  minden 3. kocka, tehát `match.meta.fps` a forrás harmada), mindegyik
+  háromszoros valós időt követelt a termékben:
+
+  hossz-korlát ("Félidő ~35 p" → 29 perc egy 30 fps-es telefonvideón),
+  labda-hézagpótlás (fél helyett közel másfél másodpercnyi hézagot
+  töltöttünk ki egyenessel — annyi idő alatt kétszer is passzolhatnak,
+  vagyis NEM LÉTEZŐ birtoklást és passzokat gyártottunk), a képen
+  kívüli becslés sebesség-elhalása (2 helyett 6 másodperc egyenes
+  vonalú vetítés: egy sprintelőt a pálya túlsó végébe visz) és
+  felezési ideje, az őrzési párok küszöbe (a kommentje maga mondta,
+  hogy "1 mp @ 25 fps"), a blokkolt-poszt visszanézése (három
+  másodperccel a blokk előtt már MÁS volt a labdánál), a labdatartás
+  érintés-küszöbe és a beálló-villanás szűrője.
+
+  A szabály: **MINTASZÁM maradhat kockában** (100 minta tényleg 100
+  minta), **IDŐTARTAM kötelezően másodpercben**, `X_S` néven, a
+  `match.meta.fps`-ből számolva. Az őr
+  (`test_az_ido_kuszobok_nem_esnek_vissza_kockara`) elkapja, ha egy
+  átállított küszöb kocka-alakja újra futó kódba kerül. Mérhető hatás:
+  a stride-érzékenységi jelentésből kiesett a `hold_time_roles`.
+
+- **A néma kód — a védelem ára.** Minden réteget és szabályt
+  `try/except Exception: pass` véd, hogy egy elromló réteg ne vigye el
+  a többit. Ez helyes — de az ára, hogy egy ELGÉPELT NÉV vagy egy
+  rossz alakú tétel NÉMÁN semmit nem csinál, és a tesztek zöldek
+  maradnak, különösen ha az adott ág a mintameccsen amúgy sem futna
+  le. Öt hajrá-edzésszabállyal pontosan ez történt: `focus[side]`-ra
+  írtak az `out[side]` helyett, és soha nem futottak le.
+
+  Futtatással ez nem elkapható. Az ellenszer STATIKUS:
+  `test_nincs_definialatlan_nev_a_motorban` (hatókör-helyes AST-elemzés,
+  külső függőség nélkül), `test_minden_edzes_tetel_a_kozos_alakot_koveti`
+  (nyers `append` tilalma), a felderítés-mezők két őre (néma mező,
+  elgépelt mezőnév), és a meccs-csomag `_hibas_retegek` listája, ami
+  megnevezi, ha valami mégis elhasalt.
