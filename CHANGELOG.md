@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.56 óta)
 
+- **A labda-hézagpótlás nem gyárt többé nem létező passzokat** (motor):
+  a felvételen a labda időnként eltűnik (takarás, motion blur), és a
+  rövid hézagokat egyenes vonallal pótoljuk — mert a birtoklás-, passz-
+  és lövés-felismerés folytonos labda-pályát igényel. A korlát viszont
+  KOCKÁBAN volt megadva (12 kocka), a feldolgozás pedig ritkít: a
+  termék alapbeállításán (minden 3. kocka) ez nem fél, hanem közel
+  MÁSFÉL másodpercet jelentett. Másfél másodperc alatt kétszer is
+  passzolhatnak — az odaképzelt egyenes vonal tehát nem létező
+  birtoklást és passzokat gyártott, és pont a birtoklás-, passz- és
+  eladás-alapú rétegek épülnek erre. A korlát mostantól VALÓS
+  másodpercben értendő (fél másodperc — a takarás és a motion blur
+  tipikus hossza, és pontosan ez volt az eredeti szándék is: 12 kocka
+  25 fps-en). A hosszabb hézag marad üres: ott tényleg nincs adat, és
+  ezt a labda-lefedettség száma is őszintén mutatja.
+- **A kétperc-páros edzői kulcs a motor konstansait használja**
+  (motor): eddig kézzel másolt számokkal (3 és 55%) dolgozott, most a
+  réteg saját küszöbeit importálja — így egy küszöb-változás nem
+  csúsztathatja szét a kulcsot és a réteget.
+
 - **Beálló-bevonás a hajrában** (új réteg, `pivot_usage_fade`): a
   beálló-terhelés megmondja, a támadásaik mekkora része megy át a
   beállón; ez a réteg azt teszi hozzá, hogy ELFOGY-E a meccs alatt. A

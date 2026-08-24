@@ -5441,13 +5441,16 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "őt kell blokkolni (test, elzárás a "
                 "kipattanó-zónában).")
 
-    # Kétperc-páros: a kiállítás-lánc két végpontja.
+    # Kétperc-páros: a kiállítás-lánc két végpontja. A küszöböket a
+    # motor rétegétől vesszük (nem másolt szám): így egy küszöb-változás
+    # nem csúsztathatja szét a kulcsot és a réteget.
+    from .rules import SCH_MIN_PAIRS as _SCH_N, SCH_SHARE_PCT as _SCH_P
     _sup_n = sum(rep.sup_chains_by_pair.values())
-    if _sup_n >= 3:
+    if _sup_n >= _SCH_N:
         _sup_p, _sup_c = max(rep.sup_chains_by_pair.items(),
                              key=lambda kv: kv[1])
         _sup_pct = 100.0 * _sup_c / _sup_n
-        if _sup_pct >= 55.0:
+        if _sup_pct >= _SCH_P:
             keys.append(
                 f"A kétperceik {_sup_pct:.0f}%-a ugyanazt a láncot "
                 f"futja ({_sup_p}, {_sup_n} emberelőny-lövés) — a "
