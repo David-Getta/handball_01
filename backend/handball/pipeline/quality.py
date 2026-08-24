@@ -77,8 +77,10 @@ NEXT_ACTION_ORDER: tuple = (
      "Ellenőrizd a kalibrációt: a kapuelőtérnek a pályán BELÜLRE kell "
      "esnie."),
     ("Kevés labda-észlelés",
-     "Tisztább (közelebbi, élesebb) felvétel segít; a birtoklás- és "
-     "passz-alapú számokat addig fenntartással kezeld."),
+     "Futtasd újra a \"Pontos\" minőségi profillal (nagyobb felbontáson "
+     "keresi a labdát) — távoli, széles felvételen ez a leggyorsabb "
+     "javulás. A birtoklás- és passz-alapú számokat addig fenntartással "
+     "kezeld."),
     ("A követés töredezett",
      "Rendelj mezszámokat a játékosokhoz a meccs-nézetben — a "
      "szétesett track-eket ez köti össze."),
@@ -196,8 +198,11 @@ def compute_quality_report(match: Match) -> dict:
             "ülnie a valódi vonalakra.")
     if ball_pct < 30.0:
         warnings.append(
-            f"Kevés labda-észlelés ({ball_pct:.0f}%) — a birtoklás/passz elemzés "
-            "megbízhatatlan lehet. Tisztább (közelebbi, élesebb) felvétel segít.")
+            f"Kevés labda-észlelés ({ball_pct:.0f}%) — a birtoklás/passz "
+            "elemzés megbízhatatlan lehet. Széles, távoli felvételen a "
+            "labda alig pár képpont: a \"Pontos\" minőségi profil "
+            "(nagyobb felbontás) sokat javíthat rajta, és tisztább "
+            "(közelebbi, élesebb) felvétel is segít.")
     if est_ratio > 40.0:
         warnings.append(
             f"Sok a becsült pozíció ({est_ratio:.0f}%) — a kamera sokat pásztáz; "

@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.50 óta)
 
+- **A labda-figyelmeztetés mostantól TEENDŐT mond** (motor): a kevés
+  labda-észlelésre eddig annyi volt a válasz, hogy "tisztább felvétel
+  segít" — ami igaz, de a már meglévő felvételen nem lehet vele mit
+  kezdeni. Széles, távoli felvételen a labda alig pár képpont, ezért a
+  "Pontos" minőségi profil (nagyobb felbontáson keres) a leggyorsabb
+  javulás ugyanazon a videón. Ez most a figyelmeztetésben és az "első
+  teendő" rangsorban is szerepel.
+
 - **Indítás előtti ellenőrző lista** (kliens): az első éles meccs úgy
   ment el, hogy a felhasználó mindhárom buktatóba belelépett egyszerre
   — rossz kalibrációval indult, a bemelegítés és a csapatbemutatás
