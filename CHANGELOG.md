@@ -3,7 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.63 óta)
+## v0.1.64 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: egy hiány javítása a saját munkánkban. Az új réteg
+> megszólalt a saját csempéjén, de az összképből kimaradt — az edző
+> pedig az összképet olvassa. Egy réteg akkor kész, ha a szintézisben
+> is ott van.
+
 
 - **A támadás-mélység esése bekerült a hajrá-profilba** (motor): az új
   réteg a saját csempéjén megszólalt, de az ÖSSZKÉPBŐL kimaradt — ami
