@@ -105,3 +105,19 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 - **Kamera**: fix taktikai kamera (felülről) sokkal könnyebb, mint broadcast vágás.
 - **Kalibráció**: kézi keypoint az MVP-hez elég; automatikus vonalfelismerés később.
 - **EPV-modell**: kevés nyilvános kézilabda-adat van — ez a legkutatás-igényesebb rész.
+- **Birtoklás-váltás billegése (megvizsgálva, elhalasztva).** A birtokos a
+  labdához LEGKÖZELEBBI játékos, és a váltás EGYETLEN képkockából eldől.
+  Tömörülésnél (és zajos labda-észlelésnél) ez kockánként ide-oda billeg két
+  ember közt, és minden billenésből passz vagy ELADOTT LABDA lesz. Az első
+  éles meccsen ez a meccs ELŐTTI felállásnál is eladott labdákat gyártott.
+
+  A javítás kipróbálva: az új birtokost csak akkor fogadjuk el, ha legalább
+  ~0,24 másodpercig ő a legközelebbi (a valódi átadás ennél tovább tart, a
+  billegés nem). Működik, de a birtoklás-váltás szemantikáját GLOBÁLISAN
+  megváltoztatja: a labdaeladás-szám sok tucat rétegbe táplál be, a korábban
+  feldolgozott meccsekkel való összevethetőség megszűnik, és 16 teszt-fixture
+  épít az egy-kockás váltásra. Ezért ez külön, szándékos lépés legyen, valódi
+  meccsen validálva — nem egy mellékesen betett küszöb.
+
+  Amíg nincs meg: a felállás/bemelegítés okozta hamis eladásokat a KÉZI
+  meccs-időablak vágja ki (a felvétel eleje nem kerül be az elemzésbe).
