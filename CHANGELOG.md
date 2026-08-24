@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.60 óta)
+## Kiadatlan (a v0.1.61 óta)
+
+## v0.1.61 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: a "néma kód" elleni kör. A motor minden rétegét és
+> szabályát `try/except` védi, hogy egy elromló darab ne vigye el a
+> többit — ez helyes, de az ára, hogy egy elgépelt név NÉMÁN semmit
+> nem csinál, és a tesztek zöldek maradnak. Ma öt ilyen szabályt
+> találtunk (a v0.1.60 javította őket); most a HIBAFAJTA kapott
+> ellenszert: statikus őr a definiálatlan nevekre, az elgépelt
+> felderítés-mezőnevekre és a rossz alakú edzés-tételekre — plusz a
+> meccs-csomag mostantól megnevezi, ha egy réteg mégis elhasalt,
+> ahelyett hogy nyom nélkül eltűnne.
+
 
 - **A meccs-csomag megnevezi az elhasalt rétegeket** (motor): a
   csomagban minden elemző réteget `try/except` véd, hogy egy réteg
