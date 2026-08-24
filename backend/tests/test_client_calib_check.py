@@ -107,3 +107,22 @@ def test_elso_teendo_kiemelve_a_jelentesben():
     src = _match_src()
     assert "next_action" in src
     assert "ELSŐ TEENDŐ" in src
+
+
+def test_inditas_elotti_ellenorzo_lista():
+    """A három buktató EGY helyen, MIELŐTT az óra elindulna.
+
+    Az első éles meccs úgy ment el, hogy a felhasználó mindháromba
+    belelépett egyszerre: kalibráció nélkül/rosszul indult, a
+    bemelegítés bekerült az elemzésbe, és mindez csak egy óra múlva
+    derült ki.
+    """
+    src = _upload_src()
+    assert "_preStartChecklist" in src
+    assert "INDÍTÁS ELŐTT" in src
+    # Mindhárom pont szerepel, élő állapottal.
+    assert "Pálya-kalibráció" in src
+    assert "Detektálás-próba" in src
+    assert "Meccs időablaka" in src
+    # A próba eredménye eltárolódik — enélkül a lista nem tudná, futott-e.
+    assert "_previewOk" in src and "_previewOnCourt" in src

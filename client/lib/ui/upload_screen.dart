@@ -221,6 +221,80 @@ class _UploadScreenState extends State<UploadScreen> {
     );
   }
 
+  /// Indítás előtti ELLENŐRZŐ LISTA — élő állapottal.
+  ///
+  /// Az első éles meccs úgy ment el, hogy a felhasználó minden buktatóba
+  /// belelépett egyszerre: kalibráció nélkül/rosszul indult, a
+  /// bemelegítés és a csapatbemutatás bekerült az elemzésbe, és mindez
+  /// csak egy óra múlva derült ki. Ez a lista a hármat egy helyen
+  /// mutatja, MIELŐTT az óra elindulna. Nem tilt semmit: aki tudja, mit
+  /// csinál, sárga pipákkal is elindíthatja.
+  Widget _preStartChecklist() {
+    if (!_hasVideo) return const SizedBox.shrink();
+    final kalib = _calib != null;
+    final ablak = _ablakKezdet() != null || _ablakVeg() != null;
+    final probaFutott = _previewOk != null;
+    final probaJo = _previewOk == true;
+
+    Widget sor(bool jo, bool figyelmeztet, String cim, String mit) {
+      final szin = jo
+          ? AppColors.accent
+          : (figyelmeztet ? AppColors.away : AppColors.gold);
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(
+              jo
+                  ? Icons.check_circle_outline
+                  : (figyelmeztet
+                      ? Icons.error_outline
+                      : Icons.radio_button_unchecked),
+              size: 15, color: szin),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              text: TextSpan(children: [
+                TextSpan(text: "$cim — ",
+                    style: AppText.value.copyWith(fontSize: 12)),
+                TextSpan(text: mit,
+                    style: AppText.label
+                        .copyWith(fontSize: 12, color: szin)),
+              ]),
+            ),
+          ),
+        ]),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("INDÍTÁS ELŐTT", style: AppText.sectionLabel),
+          const SizedBox(height: 4),
+          sor(kalib, false, "Pálya-kalibráció",
+              kalib
+                  ? "bejelölve (${_calib!.label})"
+                  : "nincs — enélkül a nézőtér is a pályára kerül"),
+          sor(probaJo, probaFutott && !probaJo, "Detektálás-próba",
+              !probaFutott
+                  ? "még nem futott — egy kockán megmutatja, mit lát a "
+                      "rendszer"
+                  : (probaJo
+                      ? "rendben"
+                      : "${_previewOnCourt ?? "?"} ember esik a pályára "
+                          "(legfeljebb 14 lehet) — a kalibráció hibás")),
+          sor(ablak, false, "Meccs időablaka",
+              ablak
+                  ? "megadva"
+                  : "nincs megadva — ha a videóban benne van a "
+                      "bemelegítés, add meg a kezdést"),
+        ],
+      ),
+    );
+  }
+
   /// Az indítás előtti ellenőrzés kártyája — röviden, a gomb mellett.
   ///
   /// Két dolgot mond meg, amit utólag már nem érdemes megtudni: elég-e
@@ -743,6 +817,11 @@ class _UploadScreenState extends State<UploadScreen> {
 
   // Detektálás-próba folyamatban?
   bool _previewing = false;
+  // A detektálás-próba EREDMÉNYE (null = még nem futott). Ebből épül az
+  // indítás előtti ellenőrző lista: a próba az egyetlen pont, ahol a
+  // rossz kalibráció a feldolgozás ELŐTT kiderül.
+  int? _previewOnCourt;
+  bool? _previewOk;
   // Közvetítés-ellenőrzés folyamatban?
   bool _checkingBroadcast = false;
 
@@ -882,6 +961,10 @@ class _UploadScreenState extends State<UploadScreen> {
       // küszöb, mint a motorban: TOO_MANY_PLAYERS.
       final tulSok = onCourt != null && onCourt > 18;
       final ok = !tulSok && persons >= 8;
+      setState(() {
+        _previewOnCourt = onCourt;
+        _previewOk = ok;
+      });
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -1336,6 +1419,7 @@ class _UploadScreenState extends State<UploadScreen> {
       ),
       const SizedBox(height: AppSpacing.md),
       _matchWindowFields(),
+      _preStartChecklist(),
       _preflightCard(),
       const SizedBox(height: AppSpacing.md),
       Row(children: [

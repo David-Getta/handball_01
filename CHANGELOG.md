@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.50 óta)
 
+- **Indítás előtti ellenőrző lista** (kliens): az első éles meccs úgy
+  ment el, hogy a felhasználó mindhárom buktatóba belelépett egyszerre
+  — rossz kalibrációval indult, a bemelegítés és a csapatbemutatás
+  bekerült az elemzésbe, és mindez csak egy óra múlva derült ki. Az Új
+  elemzés lapon mostantól ott a három pont ÉLŐ állapottal, közvetlenül
+  az indítás gomb fölött: bejelölted-e a pályát, lefuttattad-e a
+  detektálás-próbát (és mit mutatott: hány ember esik a pályára), és
+  megadtad-e a meccs időablakát. Nem tilt semmit — aki tudja, mit
+  csinál, sárga pipákkal is indíthat.
+
 ## v0.1.50 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: ez a kör bezárja a hurkot az első éles meccs
