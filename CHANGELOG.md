@@ -3,7 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.64 óta)
+## v0.1.65 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: a bal oldali menü kiegészítése edzői és játékos
+> szemmel. A motor sok mindent tudott, aminek a felületen nem volt
+> HELYE: az edzésterv, a szezon-toplisták és a meccsterv a kezdőlap,
+> illetve a felderítés mélyén lakott. Egy funkció, amit nem találnak
+> meg, nem létezik.
 
 - **Meccsterv saját menüponttal** (felület): a meccs előtti este EGY
   kérdése — hogyan verjük meg ŐKET. A meccsterv-illesztés (a mi
