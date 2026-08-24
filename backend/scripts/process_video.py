@@ -1005,11 +1005,29 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         # középső része" feltevését is javítja). Részleges (folytatható)
         # feldolgozásnál a VÉGÉT nem vágjuk — a folytatás oda fűz vissza.
         from handball.pipeline.game_window import trim_to_game
-        gw = trim_to_game(match, tail=not partial)
+        _gw_info: dict = {}
+        gw = trim_to_game(match, tail=not partial, window_out=_gw_info)
         if gw is not None:
             say(f"meccs-ablak: eleje {gw['head_cut_s']:.0f}s, vége "
                 f"{gw['tail_cut_s']:.0f}s levágva (bemelegítés / meccs "
                 "előtti-utáni rész)")
+        elif _gw_info.get("found"):
+            say("meccs-ablak: a felvétel eleje-vége is meccs, nincs mit "
+                "levágni")
+        else:
+            # NEM sikerült: a bemelegítés és a ceremónia bennmaradhatott.
+            # Ezt ki kell mondani — a felhasználó különben csak a kész
+            # elemzésben látja a következményét ("eladott labda", miközben
+            # a csapatok álltak), és nem tudja, mit tegyen ellene.
+            say("meccs-ablak: NEM sikerült megtalálni a tényleges játék "
+                "kezdetét — ha a felvételen bemelegítés vagy "
+                "csapatbemutatás is van, add meg kézzel a meccs "
+                "időablakát")
+        # A felismerés eredménye a mentésbe is: enélkül a minőség-jelentés
+        # nem tudná megmondani, kimaradt-e a bemelegítés.
+        match.meta.game_window_found = bool(_gw_info.get("found"))
+        match.meta.game_trim_head_s = float(_gw_info.get("head_cut_s") or 0.0)
+        match.meta.game_trim_tail_s = float(_gw_info.get("tail_cut_s") or 0.0)
 
         # Félidő-érzékelés + térfélcsere-normalizálás: teljes meccset egyben
         # tartalmazó felvételnél a 2. félidő koordinátáit tükrözi, hogy a

@@ -145,6 +145,16 @@ class MatchMeta:
     # None = nem tudjuk (RÉGI mentés, a mező előtti időkből) — ilyenkor
     # nem állítunk semmit; False = biztosan nem volt kalibráció.
     calibrated: Optional[bool] = None
+    # AUTOMATIKUS meccs-ablak (game_window.trim_to_game): talált-e a
+    # felismerés összefüggő JÁTÉKOT a felvételen, és mennyit vágott le
+    # az elejéből/végéből másodpercben. Enélkül a felhasználó nem tudja
+    # meg, hogy a bemelegítés és a csapatbemutatás kimaradt-e — pedig
+    # ha bennmaradt, az álldogálást a motor eladott labdának látja.
+    # None = nem tudjuk (RÉGI mentés, a mezők előttről); False = a
+    # felismerés NEM talált elég hosszú összefüggő játékot.
+    game_window_found: Optional[bool] = None
+    game_trim_head_s: Optional[float] = None
+    game_trim_tail_s: Optional[float] = None
 
 
 @dataclass

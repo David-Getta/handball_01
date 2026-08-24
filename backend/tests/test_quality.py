@@ -295,3 +295,51 @@ def test_jo_kalibracional_nincs_kivulre_figyelmeztetes():
     r = compute_quality_report(Match(_meta(), frames))
     assert r["out_of_court_pct"] == 0.0
     assert not any("kívülre" in w.lower() for w in r["warnings"])
+
+
+def _jo_frames(n=20):
+    return [Frame(t=t, players=[_pl(i) for i in range(14)],
+                  ball=Ball(x=20.0, y=10.0, confidence=1.0))
+            for t in range(n)]
+
+
+def test_meccs_ablak_sikertelenseget_kimondja():
+    """"Amikor ott álltak a csapatok, akkor is írta, hogy eladott labda."
+
+    Ha a meccs-ablak felismerése NEM talált összefüggő játékot, akkor a
+    bemelegítés és a csapatbemutatás bennmaradt az elemzésben. A
+    jelentésnek ezt ki kell mondania — a felhasználó a számokból nem
+    tudja kitalálni —, és az ELSŐ TEENDŐ-nek a kézi időablakot kell
+    ajánlania.
+    """
+    meta = _meta()
+    meta.game_window_found = False
+    r = compute_quality_report(Match(meta, _jo_frames()))
+    assert r["game_window_found"] is False
+    assert any("meccs tényleges kezdetét" in w for w in r["warnings"])
+    assert any("bemelegítés" in w for w in r["warnings"])
+    assert r["next_action"] is not None
+    assert "időablak" in r["next_action"]
+
+
+def test_sikeres_meccs_ablak_nem_figyelmeztet():
+    """Ha megtaláltuk a játékot, nincs miről szólni — a levágott
+    szakaszok hossza viszont a jelentésbe kerül (a kliens ezt mutatja
+    meg: TÉNYLEG kimaradt a bemelegítés)."""
+    meta = _meta()
+    meta.game_window_found = True
+    meta.game_trim_head_s = 180.0
+    meta.game_trim_tail_s = 0.0
+    r = compute_quality_report(Match(meta, _jo_frames()))
+    assert r["game_window_found"] is True
+    assert r["game_trim_head_s"] == 180.0
+    assert not any("meccs tényleges kezdetét" in w for w in r["warnings"])
+
+
+def test_regi_mentesrol_nem_allitunk_semmit():
+    """A mező előtti mentésekben nincs adat (None) — arra sem
+    figyelmeztetést, sem megnyugtatást nem adunk."""
+    r = compute_quality_report(Match(_meta(), _jo_frames()))
+    assert r["game_window_found"] is None
+    assert not any("meccs tényleges kezdetét" in w for w in r["warnings"])
+    assert r["warnings"] == []

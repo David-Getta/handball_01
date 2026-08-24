@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.55 óta)
 
+- **A jelentés megmondja, kimaradt-e a bemelegítés** (motor + kliens):
+  a motor eddig is levágta a felvétel nem-meccs széleit (bemelegítés,
+  csapatbemutatás, lefújás utáni rész), de az eredményét SEHOL nem
+  mondta meg — pedig ha a vágás nem sikerült, az álldogálást eladott
+  labdának, a bemelegítő kapura lövést lövésnek látja. A felismerés
+  eredménye mostantól a mentésbe kerül (talált-e összefüggő játékot,
+  és mennyit vágott az elejéből/végéből), a minőség-jelentés pedig
+  kimondja. Három eset, három üzenet: (1) nem találta meg a játék
+  kezdetét → figyelmeztetés + ELSŐ TEENDŐ a kézi időablakra, (2)
+  vágott → megmondja, mennyit (percben), (3) nem volt mit vágni → ezt
+  is kimondja, mert ez ELLENŐRIZHETŐ állítás: aki tudja, hogy a
+  videóban benne volt a bemelegítés, azonnal látja, hogy a felismerés
+  tévedett — nem a kész elemzés furcsaságaiból kell rájönnie.
+  A régi mentésekről (nincs adat) továbbra sem állítunk semmit.
+
 ## v0.1.55 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: ebben a kiadásban nincs új elemzés — a

@@ -164,3 +164,41 @@ def test_lineup_only_recording_has_no_game_window():
     talál ki meccset ott, ahol nem volt."""
     m = Match(_meta(), _seg(0, 200, "lineup"))
     assert detect_game_window(m) is None
+
+
+def test_window_out_megkulonbozteti_a_ket_None_esetet():
+    """A None visszatérés KÉT dolgot jelenthet — a hívónak tudnia kell,
+    melyiket.
+
+    (1) A felismerés nem talált összefüggő játékot: ilyenkor a
+        bemelegítés BENNMARADT, és a felhasználót figyelmeztetni kell.
+    (2) Talált, csak nem volt mit vágni: a felvétel eleve csak meccs —
+        ez jó hír, nem figyelmeztetés.
+
+    A `trim_to_game` mindkét esetben None-t ad; e nélkül a kimeneti
+    dict nélkül a jelentés nem tudná őket szétválasztani.
+    """
+    # (1) csak ceremónia — nincs játék-futam
+    csak_ceremonia = Match(_meta(), _seg(0, 200, "lineup"))
+    out1: dict = {}
+    assert trim_to_game(csak_ceremonia, window_out=out1) is None
+    assert out1["found"] is False
+
+    # (2) végig játék — van futam, de nincs levágandó él
+    csak_meccs = Match(_meta(), _seg(0, 200, "game"))
+    out2: dict = {}
+    assert trim_to_game(csak_meccs, window_out=out2) is None
+    assert out2["found"] is True
+
+
+def test_window_out_a_tenyleges_vagast_is_kiadja():
+    """Vágásnál a kimeneti dict ugyanazt mondja, mint a visszatérés —
+    a hívó egyetlen helyről tudja kitölteni a mentés mezőit."""
+    frames = _seg(0, 90, "warmup") + _seg(int(90 * FPS), 120, "game")
+    m = Match(_meta(), frames)
+    out: dict = {}
+    info = trim_to_game(m, window_out=out)
+    assert info is not None
+    assert out["found"] is True
+    assert out["head_cut_s"] == info["head_cut_s"] == 75.0
+    assert out["tail_cut_s"] == info["tail_cut_s"] == 0.0

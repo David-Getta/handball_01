@@ -1890,6 +1890,30 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
+  /// Mit vágott le a motor a felvétel elejéből/végéből (meccs-ablak).
+  ///
+  /// A backend másodpercben adja; itt percre kerekítünk, mert a
+  /// felhasználó a videót percben keresi vissza. Ha nem vágott semmit,
+  /// azt is kimondjuk — az a jó hír, hogy a felvétel eleve csak meccs.
+  String _meccsAblakSzoveg(Map<String, dynamic> q) {
+    final eleje = (q["game_trim_head_s"] as num?)?.toDouble() ?? 0.0;
+    final vege = (q["game_trim_tail_s"] as num?)?.toDouble() ?? 0.0;
+    if (eleje <= 0 && vege <= 0) {
+      // Ezt a mondatot a felhasználó ELLENŐRIZNI tudja: ha tudja, hogy
+      // a videóban benne volt a bemelegítés, akkor a felismerés
+      // tévedett, és a kézi időablak a megoldás. Enélkül csak a kész
+      // elemzés furcsaságaiból jönne rá — sokkal később.
+      return "Meccs-ablak: a motor szerint a felvétel eleje-vége is "
+          "meccs, ezért nem vágott. Ha volt rajta bemelegítés vagy "
+          "csapatbemutatás, add meg kézzel a meccs időablakát.";
+    }
+    final reszek = <String>[];
+    if (eleje > 0) reszek.add("elejéről ${(eleje / 60).round()} perc");
+    if (vege > 0) reszek.add("végéről ${(vege / 60).round()} perc");
+    return "Meccs-ablak: ${reszek.join(", ")} levágva "
+        "(bemelegítés / meccs előtti-utáni rész)";
+  }
+
   void _showQualityDetails(Map<String, dynamic> q) {
     final warnings = (q["warnings"] as List?) ?? const [];
     showDialog<void>(
@@ -1923,6 +1947,16 @@ class _MatchScreenState extends State<MatchScreen> {
                       "${((q["video_seconds"] as num) / 60).round()} perc)"
                       : ""}",
                   style: AppText.label),
+            // MECCS-ABLAK: levágta-e a motor a bemelegítést és a
+            // csapatbemutatást. Ha nem sikerült megtalálni a játék
+            // kezdetét, azok BENNMARADTAK — és az álldogálás eladott
+            // labdának látszik. (A null a régi mentések állapota:
+            // arról nem állítunk semmit.)
+            if (q["game_window_found"] == false)
+              Text("Meccs-ablak: NEM sikerült megtalálni a játék kezdetét",
+                  style: AppText.label.copyWith(color: AppColors.away))
+            else if (q["game_window_found"] == true)
+              Text(_meccsAblakSzoveg(q), style: AppText.label),
             // ELSŐ TEENDŐ: négy-hat figyelmeztetés mellett a
             // felhasználó nem tudja, mivel kezdje — pedig a lista eleje
             // és a vége nem egyenrangú. A motor rangsorol; itt csak

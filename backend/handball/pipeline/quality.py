@@ -83,6 +83,9 @@ NEXT_ACTION_ORDER: tuple = (
     ("a pályán KÍVÜLRE esik",
      "Nyisd meg a Pálya-kalibrációt, és igazíts a sarokpontokon: a "
      "rajzolt 6 m-es és 9 m-es vonalnak rá kell ülnie a valódira."),
+    ("meccs tényleges kezdetét nem sikerült",
+     "Add meg a meccs időablakát (perc:másodperc) az Új elemzés lapon: "
+     "a bemelegítés és a csapatbemutatás enélkül meccsnek számít."),
     ("Kevés játékos látszik",
      "Ellenőrizd, hogy a kamera a játékteret mutatja-e, és hogy a "
      "kalibráció a látható térfélre készült-e."),
@@ -404,6 +407,27 @@ def compute_quality_report(match: Match) -> dict:
                 "ha a feldolgozás megszakadt, a könyvtárban a "
                 "Folytatás onnan viszi tovább, ahol abbamaradt.")
 
+    # --- Megtaláltuk-e a MECCS tényleges kezdetét? ---
+    # A felvételben rendszerint benne van a bemelegítés és a
+    # csapatbemutatás. Ezeket a meccs-ablak felismerése levágja — de ha
+    # NEM talált összefüggő játékot, akkor bennmaradtak, és a motor az
+    # álldogálást is meccsnek látja (eladott labda, miközben a csapatok
+    # csak állnak). A felhasználó ezt a számokból nem tudja kitalálni,
+    # ezért ki kell mondani. A None a RÉGI mentések állapota — arról
+    # nem állítunk semmit.
+    gw_found = getattr(match.meta, "game_window_found", None)
+    gw_head = getattr(match.meta, "game_trim_head_s", None)
+    gw_tail = getattr(match.meta, "game_trim_tail_s", None)
+    if gw_found is False:
+        warnings.append(
+            "A meccs tényleges kezdetét nem sikerült automatikusan "
+            "megtalálni — a felismerés nem látott elég hosszú "
+            "összefüggő játékot. Ha a felvételen bemelegítés vagy "
+            "csapatbemutatás is van, az BENNMARADT az elemzésben: az "
+            "álldogálást a motor eladott labdának, a bemelegítő kapura "
+            "lövéseket lövésnek látja. Add meg a meccs időablakát "
+            "(perc:másodperc) az Új elemzés lapon, és futtasd újra.")
+
     seven_meters = 0
     try:
         from .rules import detect_seven_meters
@@ -433,6 +457,9 @@ def compute_quality_report(match: Match) -> dict:
         "home_share_pct": round(home_share, 1),
         "out_of_court_pct": round(out_pct, 1),
         "calibrated": calibrated,
+        "game_window_found": gw_found,
+        "game_trim_head_s": gw_head,
+        "game_trim_tail_s": gw_tail,
         "turnover_rate_per_min": (round(turnover_rate, 2)
                                   if turnover_rate is not None else None),
         "video_seconds": round(video_s, 1) if video_s else None,

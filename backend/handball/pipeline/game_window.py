@@ -120,7 +120,8 @@ def detect_game_window(match: Match) -> Optional[dict]:
     }
 
 
-def trim_to_game(match: Match, tail: bool = True) -> Optional[dict]:
+def trim_to_game(match: Match, tail: bool = True,
+                 window_out: Optional[dict] = None) -> Optional[dict]:
     """A nem-meccs élek levágása HELYBEN (a frame-lista szűkítése).
 
     A kockák `t` idejét NEM írja át — a videó-időzítés (jelenet-lejátszás,
@@ -129,8 +130,21 @@ def trim_to_game(match: Match, tail: bool = True) -> Optional[dict]:
     feldolgozásnál a folytatás a végéhez fűzne vissza). Visszatérés:
     {"head_cut_s", "tail_cut_s", "kept_frames"}, vagy None, ha nem
     vágott semmit.
+
+    A `window_out` dict (ha meg van adva) a FELISMERÉS eredményét kapja
+    meg — akkor is, ha nem vágtunk: {"found": bool, "head_s", "tail_s"}.
+    Erre azért van szükség, mert a None visszatérés KÉT, gyökeresen
+    eltérő esetet takar: (1) a felismerés nem talált összefüggő játékot
+    (ilyenkor a bemelegítés bennmaradhatott, és ezt a felhasználónak
+    tudnia kell), (2) talált, de nem volt mit vágni (a felvétel eleve
+    csak a meccs). A hívó e nélkül a kettőt nem tudná megkülönböztetni.
     """
     gw = detect_game_window(match)
+    if window_out is not None:
+        window_out["found"] = gw is not None
+        if gw is not None:
+            window_out["head_s"] = gw["head_s"]
+            window_out["tail_s"] = gw["tail_s"]
     if gw is None:
         return None
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
@@ -141,8 +155,12 @@ def trim_to_game(match: Match, tail: bool = True) -> Optional[dict]:
     if start_idx == 0 and end_idx == total - 1:
         return None
     match.frames[:] = match.frames[start_idx:end_idx + 1]
-    return {
+    info = {
         "head_cut_s": round(start_idx / fps, 1),
         "tail_cut_s": round((total - 1 - end_idx) / fps, 1),
         "kept_frames": len(match.frames),
     }
+    if window_out is not None:
+        window_out["head_cut_s"] = info["head_cut_s"]
+        window_out["tail_cut_s"] = info["tail_cut_s"]
+    return info
