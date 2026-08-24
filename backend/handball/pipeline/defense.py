@@ -788,6 +788,74 @@ def defensive_line_height(match, config=None) -> dict:
     return out
 
 
+# Fal-mélység esése: ennyi mért kocka kell FÉLIDŐNKÉNT az ítélethez, és
+# ennyi méterrel kell közelebb kerülnie a falnak a saját kapuhoz, hogy
+# visszahúzódásról beszéljünk. A fél méter nem véletlen: a felállt fal
+# helye kockáról kockára fél méteren belül ingadozik, ennél kisebb
+# eltérés a mérés zaja. (A nyomás-esés küszöbe ugyanennyi — ott is a
+# "még belefér a zajba" határ szabta meg.)
+LINE_FADE_MIN_FRAMES = 100
+LINE_FADE_DROP_M = 0.5
+
+
+def line_height_fade(match, config=None) -> dict:
+    """Fal-mélység esése: VISSZAHÚZÓDIK-E a fal a második félidőre.
+
+    A `defensive_line_height` megmondja, milyen mélyen áll a fal; ez a
+    réteg azt teszi hozzá, hogy VÁLTOZIK-E a meccs alatt. A felismert
+    félidő mentén kettébontva mérjük a védők átlagos távolságát a saját
+    gólvonaltól. Ha a 2. félidei átlag érdemben (LINE_FADE_DROP_M)
+    KISEBB, a fal visszahúzódott: a fáradó láb nem lép ki, a fal
+    beszorul a 6-os köré.
+
+    Edzőileg ez a legkonkrétabb hajrá-információ a támadó csapatnak:
+    visszahúzódó fal ellen a hajrában a 9 méteres lövés és a távoli
+    befejezés nyílik meg (kilépő nélkül nincs, aki zavarja), ezért a
+    meccs végére a külső lövőket kell helyzetbe hozni. Ha viszont a fal
+    a 2. félidőre FELJEBB jön (negatív esés), akkor a hajrában
+    agresszívebbé válnak — ott az elzárás utáni beállós és az áthúzás a
+    válasz, mert a kilépő védő mögött nyílik a tér.
+
+    Ez MÁS, mint a védekezés-fellazulás (`pressure_fade`): az a labdás
+    támadótól mért távolságot méri (mennyire szorítják), ez pedig a fal
+    HELYÉT a saját kapuhoz képest. Egy fal fellazulhat úgy is, hogy a
+    helye nem változik — és visszahúzódhat úgy, hogy közben szorosan
+    fogja a labdást.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ csapaté):
+      {"fh_m", "fh_frames", "sh_m", "sh_frames", "drop_m"} — az 1./2.
+    félidei átlagos fal-mélység és kockaszám; drop_m a visszahúzódás
+    méterben (POZITÍV = visszahúzódott), None, ha nincs félidő-jel vagy
+    kevés a mért kocka valamelyik félidőben.
+    """
+    from ..models.tracking import Match as _M
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_m": None, "fh_frames": 0, "sh_m": None, "sh_frames": 0,
+             "drop_m": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out          # félidő-jel nélkül nincs mihez viszonyítani
+    fh = defensive_line_height(
+        _M(match.meta, [f for f in match.frames if f.t <= ht]), config)
+    sh = defensive_line_height(
+        _M(match.meta, [f for f in match.frames if f.t > ht]), config)
+    for oldal in ("home", "away"):
+        rec = out[oldal]
+        rec["fh_m"] = fh[oldal]["avg_height_m"]
+        rec["fh_frames"] = fh[oldal]["frames"]
+        rec["sh_m"] = sh[oldal]["avg_height_m"]
+        rec["sh_frames"] = sh[oldal]["frames"]
+        if (rec["fh_m"] is not None and rec["sh_m"] is not None
+                and rec["fh_frames"] >= LINE_FADE_MIN_FRAMES
+                and rec["sh_frames"] >= LINE_FADE_MIN_FRAMES):
+            # Pozitív = visszahúzódott (a 2. félidőben KÖZELEBB a kapuhoz).
+            rec["drop_m"] = round(rec["fh_m"] - rec["sh_m"], 2)
+    return out
+
+
 # Védekezési formáció-BIZTOSSÁG: a fal alakját a projekt EGYETLEN
 # osztályozója adja (tactics.detect_formation, 6-0 / 5-1 / 4-2 / 3-2-1 /
 # 3-3), ez a réteg pedig azt teszi hozzá, amit a leggyakoribb forma

@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.55 óta)
 
+- **Fal-mélység a hajrában** (új réteg, `line_height_fade`): a
+  védekezési vonal magasságát eddig egy átlagszám írta le az egész
+  meccsre. Ez a réteg azt teszi hozzá, hogy VÁLTOZIK-E: a felismert
+  félidő mentén kettébontva méri, milyen messze áll a fal a saját
+  gólvonaltól. Ha a 2. félidőre közelebb kerül, a fal visszahúzódott —
+  a fáradó láb nem lép ki, a fal beszorul a 6-os köré. Edzőileg ez a
+  legkonkrétabb hajrá-információ a támadónak: visszahúzódó fal ellen a
+  meccs végére a külső lövőket kell helyzetbe hozni (kilépő védő
+  nélkül a 9 méteres lövés zavartalan), feljebb jövő fal ellen viszont
+  a kilépő MÖGÉ kell játszani. Más kérdés, mint a védekezés-fellazulás
+  (`pressure_fade`): az a labdástól mért távolságot méri, ez a fal
+  HELYÉT — egy fal fellazulhat úgy is, hogy a helye nem változik.
+  Felületek: /analyze, meccs-csomag, edzői összefoglaló, felderítés
+  (edzői kulcs + 450. meccsterv-szabály), edzés-fókusz (470. szabály),
+  kliens-csempe.
+
 - **A kézi meccs-időablak tényleg felülír mindent** (motor): a kézi
   ablak leírása azt ígérte, hogy "felülír minden felismerést" — de nem
   ez történt. A megadott szakasz beolvasása UTÁN az automatikus

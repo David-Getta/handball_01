@@ -1366,6 +1366,25 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 470) Visszahúzódó fal: ha a SAJÁT falunk a 2. félidőre beszorul a
+    # 6-os köré, a hajrában zavartalanul lőnek ránk 9 méterről.
+    try:
+        from .defense import LINE_FADE_DROP_M, line_height_fade
+        lhf470 = line_height_fade(match, config)
+        for side in ("home", "away"):
+            r470 = lhf470[side]
+            if r470["drop_m"] is None or r470["drop_m"] < LINE_FADE_DROP_M:
+                continue
+            focus[side].append(
+                f"fal-mélység a hajrában: a falatok a 2. félidőre "
+                f"visszahúzódik ({r470['fh_m']:.1f} → {r470['sh_m']:.1f} m "
+                "a saját kaputól), tehát a meccs végén senki nem lép ki az "
+                "átlövőre — 3x4 perces kilépés-gyakorlat FÁRADTAN, a "
+                "kondi-blokk UTÁN (frissen mindenki kilép; a kérdés az, "
+                "hogy a 50. percben is)")
+    except Exception:
+        pass
+
     # 469) Kiszámítható ritmus: ha a SAJÁT támadásaink mind egy
     # tempóban futnak, az ellenfél fala rá tud állni.
     try:

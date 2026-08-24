@@ -3199,6 +3199,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import line_height_fade
+            res["line_height_fade"] = line_height_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import timeout_record
             res["timeout_record"] = timeout_record(match)
         except Exception:
@@ -5617,6 +5622,8 @@ def create_app():
                 _layer("shot_timing", lambda: shot_timing(match))
                 from ..pipeline.defense import pressure_fade
                 _layer("pressure_fade", lambda: pressure_fade(match))
+                from ..pipeline.defense import line_height_fade
+                _layer("line_height_fade", lambda: line_height_fade(match))
                 from ..pipeline.stoppages import timeout_record
                 _layer("timeout_record", lambda: timeout_record(match))
                 from ..pipeline.defense import turnover_fade

@@ -364,6 +364,14 @@ class ScoutingReport:
     prf_fh_n: int = 0
     prf_sh_sum_m: float = 0.0
     prf_sh_n: int = 0
+    # Fal-MÉLYSÉG félidőnként (a saját gólvonaltól mért távolság összege
+    # és kockaszáma). Nem az átlagot tároljuk, hogy több meccs pontosan
+    # összegződjön; a fellazulástól (prf_*) függetlenül mérve: az a
+    # labdástól mért távolság, ez a fal HELYE.
+    lhf_fh_sum_m: float = 0.0
+    lhf_fh_n: int = 0
+    lhf_sh_sum_m: float = 0.0
+    lhf_sh_n: int = 0
     # Időkérés-mérleg: felismert időkéréseik + ebből a sorozatot megtörő
     # (broke) és a fordulatot nem hozó (failed) — meccsek közt összegződik.
     to_n: int = 0
@@ -9072,6 +9080,28 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "megkezdett sorozatot az időkérésük után is tolhatod, ne "
                 "állj le tőle.")
 
+    # Fal-MÉLYSÉG esése: hova áll a faluk a hajrában. Ez más kérdés,
+    # mint a fellazulás (az a labdástól mért távolság) — visszahúzódó
+    # fal ellen a 9 méteres lövés a válasz, feljebb jövő fal ellen a
+    # kilépő mögé játszás.
+    if rep.lhf_fh_n >= 100 and rep.lhf_sh_n >= 100 \
+            and rep.lhf_fh_sum_m > 0 and rep.lhf_sh_sum_m > 0:
+        _lhf_fh = rep.lhf_fh_sum_m / rep.lhf_fh_n
+        _lhf_sh = rep.lhf_sh_sum_m / rep.lhf_sh_n
+        _lhf_d = _lhf_fh - _lhf_sh          # pozitív = visszahúzódott
+        if _lhf_d >= 0.5:
+            keys.append(
+                f"A faluk a 2. félidőre visszahúzódik ({_lhf_fh:.1f} → "
+                f"{_lhf_sh:.1f} m a saját kaputól) — a hajrában nem lép ki "
+                "senki: a külső lövőiteket akkor hozzátok helyzetbe, a 9 "
+                "méteres lövés zavartalan lesz.")
+        elif _lhf_d <= -0.5:
+            keys.append(
+                f"A faluk a 2. félidőre feljebb jön ({_lhf_fh:.1f} → "
+                f"{_lhf_sh:.1f} m a saját kaputól) — a hajrában "
+                "agresszívebbek: a kilépő védő MÖGÉ kell játszani "
+                "(elzárás utáni beállós, áthúzás).")
+
     # Védekezés-fellazulás: ha a faluk a 2. félidőre lazul, a hajrát kell
     # megtolni ellenük; ha szorosabbra vált, az elején kell előnyt szerezni.
     if rep.prf_fh_n >= 100 and rep.prf_sh_n >= 100 \
@@ -10151,6 +10181,14 @@ def _scout_team_cached(match: Match, team: Team,
         if prfrec["sh_m"] is not None:
             rep.prf_sh_sum_m = round(prfrec["sh_m"] * prfrec["sh_frames"], 1)
             rep.prf_sh_n = prfrec["sh_frames"]
+        from .defense import line_height_fade
+        lhfrec = line_height_fade(match, config)[team.value]
+        if lhfrec["fh_m"] is not None:
+            rep.lhf_fh_sum_m = round(lhfrec["fh_m"] * lhfrec["fh_frames"], 1)
+            rep.lhf_fh_n = lhfrec["fh_frames"]
+        if lhfrec["sh_m"] is not None:
+            rep.lhf_sh_sum_m = round(lhfrec["sh_m"] * lhfrec["sh_frames"], 1)
+            rep.lhf_sh_n = lhfrec["sh_frames"]
         from .stoppages import timeout_record
         torec = timeout_record(match, config)[team.value]
         rep.to_n = torec["timeouts"]
@@ -14118,6 +14156,23 @@ def matchup_plan(own: "ScoutingReport",
 
     from .tactics import ATV_MIN_ATTACKS as _A449
     from .tactics import ATV_ONE_TEMPO_PCT as _A449P
+    # 450) Az ő visszahúzódó faluk × a ti külső lövőitek: a hajrában a
+    # 9 méteres lövés zavartalan lesz — oda kell időzíteni a lövőt.
+    if (opp.lhf_fh_n >= 100 and opp.lhf_sh_n >= 100
+            and opp.lhf_fh_sum_m > 0 and opp.lhf_sh_sum_m > 0
+            and opp.lhf_fh_sum_m / opp.lhf_fh_n
+            - opp.lhf_sh_sum_m / opp.lhf_sh_n >= 0.5
+            and own.sr_far_shots >= 8
+            and own.sr_far_goals * 100.0 / max(1, own.sr_far_shots) >= 25.0):
+        _p450_fh = opp.lhf_fh_sum_m / opp.lhf_fh_n
+        _p450_sh = opp.lhf_sh_sum_m / opp.lhf_sh_n
+        plan.append(
+            f"A faluk a 2. félidőre visszahúzódik ({_p450_fh:.1f} → "
+            f"{_p450_sh:.1f} m a saját kaputól), ti pedig eltaláljátok a "
+            f"távoli lövést ({own.sr_far_goals}/{own.sr_far_shots} a 9 "
+            "méteres körből) — a hajrára tartogasd a friss átlövőt: "
+            "kilépő védő nélkül zavartalanul tud elengedni.")
+
     # 449) Az ő EGY tempójuk × a ti gyors kontrátok: a kiszámítható
     # ritmusra a fal be tud állni, és a nyereség a másik végén jön.
     if opp.atv_attacks >= _A449 and own.fbc_breaks >= 3:
@@ -21353,6 +21408,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_fh_n=sum(r.prf_fh_n for r in reports),
         prf_sh_sum_m=round(sum(r.prf_sh_sum_m for r in reports), 1),
         prf_sh_n=sum(r.prf_sh_n for r in reports),
+        lhf_fh_sum_m=round(sum(r.lhf_fh_sum_m for r in reports), 1),
+        lhf_fh_n=sum(r.lhf_fh_n for r in reports),
+        lhf_sh_sum_m=round(sum(r.lhf_sh_sum_m for r in reports), 1),
+        lhf_sh_n=sum(r.lhf_sh_n for r in reports),
         to_n=sum(r.to_n for r in reports),
         to_broke=sum(r.to_broke for r in reports),
         to_failed=sum(r.to_failed for r in reports),

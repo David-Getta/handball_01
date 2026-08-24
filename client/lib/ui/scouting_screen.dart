@@ -10630,6 +10630,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Fal-mélység esése: a fal HELYE (a saját kaputól mért távolság) a 2.
+  // félidőre — más kérdés, mint a fellazulás (az a labdástól mért
+  // távolság). Félidőnként 100+ mért kockánál, 0,5 m küszöbbel: a
+  // backend LINE_FADE_MIN_FRAMES / LINE_FADE_DROP_M tükre.
+  String? _lineHeightFade(Map<String, dynamic> r) {
+    final fhN = ((r["lhf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["lhf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 100 || shN < 100) return null;
+    final fhSum = ((r["lhf_fh_sum_m"] as num?) ?? 0).toDouble();
+    final shSum = ((r["lhf_sh_sum_m"] as num?) ?? 0).toDouble();
+    if (fhSum <= 0 || shSum <= 0) return null;
+    final fh = fhSum / fhN;
+    final sh = shSum / shN;
+    final d = fh - sh; // pozitív = visszahúzódott
+    if (d >= 0.5) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+          "· visszahúzódik · a 9 méteres nyílik";
+    }
+    if (d <= -0.5) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+          "· feljebb jön · a kilépő mögé kell játszani";
+    }
+    return null;
+  }
+
   // Lövés-időzítés: az első hullámból lövők vs kivárók (5+ lőtt
   // támadásnál; a backend-kulcsokkal azonos küszöbök).
   String? _shotTiming(Map<String, dynamic> r) {
@@ -11101,6 +11126,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_shotTiming(r) != null) ["Lövés-időzítés", _shotTiming(r)!],
       if (_pressureFade(r) != null)
         ["Védekezés-fellazulás", _pressureFade(r)!],
+      if (_lineHeightFade(r) != null)
+        ["Fal-mélység a hajrában", _lineHeightFade(r)!],
       if (_timeoutRecord(r) != null)
         ["Időkérés-mérleg", _timeoutRecord(r)!],
       if (_turnoverFade(r) != null)

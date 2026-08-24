@@ -6963,6 +6963,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_pf['sh_m']:.1f} m).")
     except Exception:
         pass
+    # Fal-mélység esése: a fal HELYE (nem a szorossága) a 2. félidőre.
+    try:
+        from .defense import LINE_FADE_DROP_M, line_height_fade
+        lhc = line_height_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lh = lhc[side]
+            if rec_lh["drop_m"] is None:
+                continue
+            if rec_lh["drop_m"] >= LINE_FADE_DROP_M:
+                body += (f" A(z) {name} fala a 2. félidőre visszahúzódott "
+                         f"({rec_lh['fh_m']:.1f} → {rec_lh['sh_m']:.1f} m a "
+                         "saját kaputól) — a hajrában a 9 méteres lövés "
+                         "nyílik meg ellenük.")
+            elif rec_lh["drop_m"] <= -LINE_FADE_DROP_M:
+                body += (f" A(z) {name} fala a 2. félidőre feljebb jött "
+                         f"({rec_lh['fh_m']:.1f} → {rec_lh['sh_m']:.1f} m) — "
+                         "a hajrában a kilépő védő mögé kell játszani.")
+    except Exception:
+        pass
     # Lövés-időzítés: első hullámból lövő vagy kiváró csapat.
     try:
         from .attack_types import (SHTIM_EARLY_PCT, SHTIM_LATE_AVG_S,

@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **496 réteg**, modulonként csoportosítva; a
+Összesen **497 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (95)
@@ -133,7 +133,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `tired_turnover_players` | Fáradt-eladók: KINEK a labdái vesznek el fáradtan. |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (87)
+## defense (88)
 
 | Réteg | Mit mér |
 |---|---|
@@ -184,6 +184,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `high_steal_players` | Elöl szerző védők: KI SZED LABDÁT a támadó térfélen. |
 | `high_steal_roles` | Letámadó-poszt: MELYIK POSZTJUK szed labdát elöl. |
 | `line_height_by_score` | Védekezési mélység állás szerint: ELŐNYBEN vagy HÁTRÁNYBAN |
+| `line_height_fade` | Fal-mélység esése: VISSZAHÚZÓDIK-E a fal a második félidőre. |
 | `marking` | Őrzési párok: ki kit fogott a védekezésben. |
 | `marking_shift` | Emberfogás-váltás: A SZÜNET UTÁN emberfogásra váltanak-e. |
 | `pivot_defense` | Beálló-védekezés: mennyire bírja a fal az ellenfél beállóját. |

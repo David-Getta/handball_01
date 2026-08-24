@@ -4635,3 +4635,64 @@ def test_pressured_turnovers_is_silent_on_thin_samples():
     rec = pressured_turnovers(_pto_match([8.0, 8.0]))["home"]
     assert rec["total"] == 2, rec
     assert rec["unforced_pct"] is None and rec["verdict"] is None, rec
+
+
+def test_line_height_fade_visszahuzodo_fal():
+    """A HAZAI fal az 1. félidőben 9 m-en áll, a 2.-ban 6 m-en → ~3 m
+    visszahúzódás; félidő-jel nélkül nincs ítélet.
+
+    Edzőileg ez a hajrá üzenete: a visszahúzódó fal elé a meccs végére
+    a külső lövőket kell hozni, mert kilépő védő nélkül a 9 méteres
+    lövés zavartalan.
+    """
+    from handball.pipeline.defense import line_height_fade
+
+    fps = 25.0
+
+    def line_frames(t0, seconds, melyseg):
+        # A VENDÉG birtokol a HAZAI térfélen (felállt védekezés), a hazai
+        # mezőnyvédők `melyseg` méterre állnak a saját (bal) gólvonaltól.
+        fr = []
+        for i in range(int(seconds * fps)):
+            players = [
+                _pl(11, Team.AWAY, 12.0, 10.0),
+                _pl(12, Team.AWAY, 14.0, 6.0),
+                _pl(13, Team.AWAY, 14.0, 14.0),
+                _pl(1, Team.HOME, melyseg, 6.0),
+                _pl(2, Team.HOME, melyseg, 10.0),
+                _pl(3, Team.HOME, melyseg, 14.0),
+            ]
+            fr.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=12.0, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = line_frames(0, 60, 9.0)                       # 1. félidő: felfutó
+    t = len(frames)
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * fps))]              # szünet
+    t = len(frames)
+    frames += line_frames(t, 60, 6.0)                      # 2. félidő: mély
+
+    lf = line_height_fade(Match(_meta(), frames))
+    h = lf["home"]
+    assert h["fh_m"] is not None and h["sh_m"] is not None
+    assert h["fh_m"] > h["sh_m"]
+    # POZITÍV = visszahúzódott.
+    assert h["drop_m"] is not None and h["drop_m"] >= 2.0
+
+
+def test_line_height_fade_keves_mintanal_nincs_itelet():
+    """Rövid felvételen nincs félidő-jel — inkább None, mint egy
+    kitalált szám (a fal mélysége kockáról kockára ingadozik)."""
+    from handball.pipeline.defense import line_height_fade
+
+    fps = 25.0
+    frames = []
+    for i in range(int(10 * fps)):
+        frames.append(Frame(t=i, players=[
+            _pl(11, Team.AWAY, 12.0, 10.0),
+            _pl(1, Team.HOME, 7.0, 10.0),
+        ], ball=Ball(x=12.0, y=10.0, confidence=1.0)))
+    lf = line_height_fade(Match(_meta(), frames))
+    assert lf["home"]["drop_m"] is None
+    assert lf["away"]["drop_m"] is None
