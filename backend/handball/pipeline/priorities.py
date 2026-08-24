@@ -1002,18 +1002,22 @@ def fatigue_profile(match: Match, config=None) -> dict:
     """Hajrá-profil: MI romlik a leginkább a meccs végére — egy lapon.
 
     A csomagban egy tucat "esés"-réteg méri, mi változik a 2. félidőre
-    (visszaállás, fal-mélység, védekezési nyomás, szélső-bevonás,
-    sprint, labdabiztonság, befejezés). Külön-külön mindegyik egy szám;
-    együtt viszont az edző nem tudja, MIVEL kezdje — pontosan az a
-    gond, amit a minőség-jelentésben az "első teendő" old meg.
+    (visszaállás, labdabiztonság, fal-mélység, védekezési nyomás,
+    blokk, beálló- és szélső-bevonás, támadás-mélység, befejezés,
+    sprint). Külön-külön mindegyik egy szám; együtt viszont az edző nem
+    tudja, MIVEL kezdje — pontosan az a gond, amit a minőség-
+    jelentésben az "első teendő" old meg.
 
     Ez a réteg összegyűjti a MEGSZÓLALÓ eséseket, és edzői leverage
     szerint rangsorolja őket. A sorrend nem tanult súlyozás, hanem
-    kimondott, vitatható edzői döntés: elöl az áll, ami KÖZVETLENÜL
-    gólt ér (a lassuló visszaállás minden lövés után kontra-ablakot
-    nyit), utána a fal helye (a visszahúzódó fal elé zavartalanul
-    beáll az átlövő), és csak azután a támadó-oldali beszűkülés és a
-    láb.
+    kimondott, vitatható edzői döntés, két elv mentén:
+
+    - előre kerül, ami KÖZVETLENÜL gólt ér (a lassuló visszaállás
+      minden lövés után kontra-ablakot nyit, az eladott labda pedig
+      azonnali kontra), utána a fal munkája (hely, nyomás, blokk),
+      és csak azután a támadó-oldali beszűkülés;
+    - hátra kerül, ami INKÁBB TÜNET, mint ok: a beragadó befejezés és
+      a fogyó sprint a fentiek következménye, nem önálló teendő.
 
     Edzőileg ez a hajrá egy lapja: ha a lista üres, a csapat kibírja a
     hatvan percet — ez önmagában értékes információ, nem hiányzó adat.
@@ -1026,10 +1030,13 @@ def fatigue_profile(match: Match, config=None) -> dict:
     from .attack_types import (ADEPTH_FADE_DROP_M, PIVOT_FADE_DROP_PCT,
                                WING_INV_FADE_DROP_PCT, attack_depth_fade,
                                pivot_usage_fade, wing_involvement_fade)
-    from .defense import (LINE_FADE_DROP_M, PRESSURE_FADE_LOOSEN_M,
-                          RETREAT_FADE_SLOW_S, line_height_fade,
-                          pressure_fade, retreat_fade)
+    from .defense import (BLF_GAP_PP, LINE_FADE_DROP_M,
+                          PRESSURE_FADE_LOOSEN_M, RETREAT_FADE_SLOW_S,
+                          TURNOVER_FADE_RISE_PER_MIN, block_fade,
+                          line_height_fade, pressure_fade, retreat_fade,
+                          turnover_fade)
     from .stats import SFD_DROP_RATIO, sprint_fade
+    from .xg import FINISH_FADE_DROP_PP, finish_fade
 
     # (réteg, magyar címke, betöltő, a "romlott" irány kiolvasása,
     #  edzői mondat-sablon). A SORREND a rangsor.
@@ -1081,6 +1088,40 @@ def fatigue_profile(match: Match, config=None) -> dict:
                 "a hajrában középen ragad a labda, és onnan csak a nehéz "
                 "átlövés marad — kösd ki, hogy az első passz a szélre megy")
 
+    def _turnover(rec):
+        # A saját rétege ÜTEMET (eladás/perc a SAJÁT birtoklás-időre)
+        # hasonlít: a két félidőben eltérő birtoklás mellett a nyers
+        # darabszám félrevezetne.
+        rise = rec.get("rise_per_min")
+        if rise is None or rise < TURNOVER_FADE_RISE_PER_MIN:
+            return None
+        return (f"{rec['fh_per_min']:.1f} → {rec['sh_per_min']:.1f} "
+                "eladás/perc",
+                "a hajrában elszáll a labda a kezükből, és az eladás "
+                "azonnali kontra — nem a taktika, hanem a döntés-"
+                "kényszer gyorsul: fáradtan gyakorlandó befejezés-"
+                "helyzetek a teendő")
+
+    def _block(rec):
+        fh, sh = rec.get("fh_pct"), rec.get("sh_pct")
+        if fh is None or sh is None or fh - sh < BLF_GAP_PP:
+            return None
+        return (f"{fh:.0f}% → {sh:.0f}% blokk-arány",
+                "a hajrára elfogy a blokk-munka, és a távoli lövés "
+                "ellenük szinte ingyen lesz — a blokkoló emberek "
+                "pihentetése és a fáradt lábmunka az edzés-téma")
+
+    def _finish(rec):
+        drop = rec.get("drop_pp")
+        if drop is None or drop < FINISH_FADE_DROP_PP:
+            return None
+        fh = 100.0 * rec["fh_goals"] / rec["fh_shots"]
+        sh = 100.0 * rec["sh_goals"] / rec["sh_shots"]
+        return (f"{fh:.0f}% → {sh:.0f}% a gólra váltás",
+                "a hajrában már nem ül a befejezés — a végén a "
+                "kidolgozott ziccerig kell játszani, a félkész helyzet "
+                "fáradtan nem megy be")
+
     def _sprint(rec):
         # A saját rétege ÜTEMET (sprint/perc) hasonlít, nem darabszámot:
         # a két félidő hossza eltérhet, a nyers darab félrevezetne.
@@ -1094,13 +1135,16 @@ def fatigue_profile(match: Match, config=None) -> dict:
 
     rangsor = (
         ("retreat_fade", "Lassuló visszaállás", retreat_fade, _retreat),
+        ("turnover_fade", "Elszálló labdák", turnover_fade, _turnover),
         ("line_height_fade", "Visszahúzódó fal", line_height_fade, _line),
         ("pressure_fade", "Lazuló fal", pressure_fade, _pressure),
+        ("block_fade", "Elfogyó blokk", block_fade, _block),
         ("pivot_usage_fade", "Elfogyó beálló", pivot_usage_fade, _pivot),
         ("attack_depth_fade", "Hátrébb kerülő támadás",
          attack_depth_fade, _depth),
         ("wing_involvement_fade", "Beszűkülő támadás",
          wing_involvement_fade, _wing),
+        ("finish_fade", "Beragadó befejezés", finish_fade, _finish),
         ("sprint_fade", "Fogyó sprint", sprint_fade, _sprint),
     )
 

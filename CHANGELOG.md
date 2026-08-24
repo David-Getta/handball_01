@@ -3,6 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.64 óta)
+
+- **Tíz esés-réteg a hajrá-profilban** (motor): a hajrá-profil eddig
+  hét esés-jelet nézett, pedig a csomagban ennél több van — így az
+  "egy lapon" ígéret hiányos volt. Bekötve az **elszálló labdák**
+  (`turnover_fade`), az **elfogyó blokk** (`block_fade`) és a
+  **beragadó befejezés** (`finish_fade`). A rangsor két kimondott elve
+  most már a docstringben is ott áll: elöl, ami KÖZVETLENÜL gólt ér
+  (kontra-ablak, eladott labda), utána a fal munkája (hely, nyomás,
+  blokk), majd a támadó-oldali beszűkülés; hátul, ami inkább TÜNET
+  (befejezés, sprint). Új őr-teszt mind a tíz olvasót megszólaltatja
+  egyszerre — egy jel, amit felveszünk a listára, de az olvasója
+  sosem fut le, némán hiányzik.
+
 ## v0.1.64 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: egy hiány javítása a saját munkánkban. Az új réteg

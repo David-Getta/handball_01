@@ -707,3 +707,121 @@ def test_a_hatrebb_kerulo_tamadas_is_bekerul_a_hajra_profilba(monkeypatch):
     nevek = [j["layer"] for j in rec["signals"]]
     assert nevek == ["attack_depth_fade", "wing_involvement_fade"], nevek
     assert rec["top"] == "Hátrébb kerülő támadás"
+
+
+def test_tiz_eses_reteg_teljes_rangsora(monkeypatch):
+    """A hajrá-profil TELJES rangsora — minden olvasó megszólal.
+
+    A szintézis legcsendesebb hibája, ha egy jel bekerül a listába, de
+    az olvasója sosem fut le (elgépelt kulcs, rossz irány): a réteg
+    ilyenkor néma marad, a profil pedig hiánytalannak látszik. Ezért
+    itt MIND a tíz esés-réteg beszél, és a sorrendet is rögzítjük.
+
+    A sorrend két elve: elöl a KÖZVETLENÜL gólt érő esés (kontra-ablak,
+    eladott labda), utána a fal munkája, majd a támadó-oldali
+    beszűkülés; hátul, ami inkább TÜNET (befejezés, sprint).
+    """
+    from handball.pipeline import priorities as pr
+
+    ertekek = {
+        ("defense", "retreat_fade"): {"fh_s": 4.0, "sh_s": 7.0,
+                                      "slow_s": 3.0},
+        ("defense", "turnover_fade"): {"fh_per_min": 0.8, "sh_per_min": 1.6,
+                                       "rise_per_min": 0.8},
+        ("defense", "line_height_fade"): {"fh_m": 8.5, "sh_m": 6.5,
+                                          "drop_m": 2.0},
+        ("defense", "pressure_fade"): {"fh_m": 1.0, "sh_m": 2.5,
+                                       "loosen_m": 1.5},
+        ("defense", "block_fade"): {"fh_pct": 30.0, "sh_pct": 5.0,
+                                    "gap_pp": -25.0},
+        ("attack_types", "pivot_usage_fade"): {"fh_pct": 40.0,
+                                               "sh_pct": 15.0,
+                                               "drop_pct": 25.0},
+        ("attack_types", "attack_depth_fade"): {"fh_m": 9.0, "sh_m": 11.5,
+                                                "drop_m": 2.5},
+        ("attack_types", "wing_involvement_fade"): {"fh_pct": 70.0,
+                                                    "sh_pct": 40.0,
+                                                    "drop_pct": 30.0},
+        ("xg", "finish_fade"): {"fh_shots": 10, "fh_goals": 6,
+                                "sh_shots": 10, "sh_goals": 2,
+                                "drop_pp": 40.0},
+        ("stats", "sprint_fade"): {"fh_per_min": 4.0, "sh_per_min": 1.0,
+                                   "ratio": 0.25},
+    }
+    for (modul, nev), rec in ertekek.items():
+        monkeypatch.setattr(f"handball.pipeline.{modul}.{nev}",
+                            lambda m, c=None, _r=rec: {"home": dict(_r),
+                                                       "away": {}})
+
+    rec = pr.fatigue_profile(Match(_meta(), []))["home"]
+    assert [j["layer"] for j in rec["signals"]] == [
+        "retreat_fade", "turnover_fade", "line_height_fade",
+        "pressure_fade", "block_fade", "pivot_usage_fade",
+        "attack_depth_fade", "wing_involvement_fade", "finish_fade",
+        "sprint_fade"], [j["layer"] for j in rec["signals"]]
+    # Minden jelnek van kiolvasott RÉSZLETE is — üres detail annyi,
+    # mintha a réteg meg sem szólalt volna.
+    assert all(j["detail"] for j in rec["signals"])
+    assert rec["top"] == "Lassuló visszaállás"
+    assert "nem véletlen" in rec["verdict"]
+
+
+def test_az_uj_esesek_a_helyukon_szolalnak_meg(monkeypatch):
+    """A három később bekötött esés a rangsor SAJÁT helyén áll.
+
+    Az elszálló labda a fal helye ELŐTT (az eladás azonnali kontra), a
+    blokk a nyomás UTÁN (mindkettő a fal munkája), a beragadó befejezés
+    pedig a támadó-oldali okok UTÁN — mert az tünet, nem ok.
+    """
+    from handball.pipeline import priorities as pr
+
+    ures = {"home": {}, "away": {}}
+    beszelo = {
+        ("defense", "turnover_fade"): {"fh_per_min": 0.8, "sh_per_min": 1.6,
+                                       "rise_per_min": 0.8},
+        ("defense", "line_height_fade"): {"fh_m": 8.5, "sh_m": 6.5,
+                                          "drop_m": 2.0},
+        ("defense", "block_fade"): {"fh_pct": 30.0, "sh_pct": 5.0,
+                                    "gap_pp": -25.0},
+        ("attack_types", "wing_involvement_fade"): {"fh_pct": 70.0,
+                                                    "sh_pct": 40.0,
+                                                    "drop_pct": 30.0},
+        ("xg", "finish_fade"): {"fh_shots": 10, "fh_goals": 6,
+                                "sh_shots": 10, "sh_goals": 2,
+                                "drop_pp": 40.0},
+    }
+    for (modul, nev), rec in beszelo.items():
+        monkeypatch.setattr(f"handball.pipeline.{modul}.{nev}",
+                            lambda m, c=None, _r=rec: {"home": dict(_r),
+                                                       "away": {}})
+    for modul, nev in (("defense", "retreat_fade"),
+                       ("defense", "pressure_fade"),
+                       ("attack_types", "pivot_usage_fade"),
+                       ("attack_types", "attack_depth_fade"),
+                       ("stats", "sprint_fade")):
+        monkeypatch.setattr(f"handball.pipeline.{modul}.{nev}",
+                            lambda m, c=None: ures)
+
+    rec = pr.fatigue_profile(Match(_meta(), []))["home"]
+    assert [j["layer"] for j in rec["signals"]] == [
+        "turnover_fade", "line_height_fade", "block_fade",
+        "wing_involvement_fade", "finish_fade"]
+    assert rec["top"] == "Elszálló labdák"
+    assert "kontra" in rec["verdict"]
+
+
+def test_a_javulo_blokk_nem_faradas_jel(monkeypatch):
+    """Az irány számít: a NÖVEKVŐ blokk-arány nem fáradás.
+
+    A blokk-réteg gap_pp mezője előjeles (pozitív = javulás); ha az
+    olvasó csak a nagyságát nézné, a hajrára feljavuló csapatot is
+    fáradtnak mondanánk.
+    """
+    from handball.pipeline import priorities as pr
+
+    monkeypatch.setattr(
+        "handball.pipeline.defense.block_fade",
+        lambda m, c=None: {"home": {"fh_pct": 5.0, "sh_pct": 30.0,
+                                    "gap_pp": 25.0}, "away": {}})
+    rec = pr.fatigue_profile(Match(_meta(), []))["home"]
+    assert [j["layer"] for j in rec["signals"]] == []
