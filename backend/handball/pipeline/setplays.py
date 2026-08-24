@@ -278,6 +278,15 @@ def discover_setplays(match: Match, config: TacticsConfig | None = None,
     )
 
 
+def _copy_side_rows(data: dict) -> dict:
+    """{oldal: [sor-dict, ...]} védő-másolata a gyorsítótárhoz."""
+    return {side: [dict(r) for r in (rows or [])]
+            for side, rows in (data or {}).items()}
+
+
+# A figura-hatékonyság a támadásokat ÚJRA ujjlenyomatozza és
+# klaszterezi — egy összeállítás alatt öt figura-réteg kéri.
+@memoize_primitive("setplay_efficiency", copy=_copy_side_rows)
 def setplay_efficiency(match: Match, config: TacticsConfig | None = None,
                        threshold: float = 0.15, min_length: int = 5,
                        min_attacks: int = 2) -> dict:

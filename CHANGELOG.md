@@ -16,10 +16,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   hatókörönként egyszer futnak. Emellett a legforróbb úton (a
   birtoklás-mérés kockánként, összeállításonként milliószor) a
   függvényen belüli import is mérhető költség volt: kiemelve.
-  A második körben a passz-felismerés (168 hívás/összeállítás) és a
-  fáradás-mérés is a hatókörbe került.
-  Mérve, 15 perces meccsen: edzői összefoglaló 27,2 → 13,9 mp (−49%),
-  felderítés 22,9 → 12,3 mp (−46%). A teljes teszt-csomag 8:18 → 4:31.
+  A további körökben a passz-felismerés (168 hívás/összeállítás), a
+  fáradás-mérés és a figura-hatékonyság (öt figura-réteg közös, drága
+  bemenete) is a hatókörbe került.
+  Mérve, 15 perces meccsen: edzői összefoglaló 27,2 → 13,0 mp (−52%),
+  felderítés 22,9 → 12,3 mp (−46%). A teljes teszt-csomag 8:18 → 4:38.
 
 ## v0.1.54 — kiadva (2026-08-24)
 
