@@ -3,7 +3,21 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.58 óta)
+## Kiadatlan (a v0.1.59 óta)
+
+## v0.1.59 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: az olvashatóság kiadása. Az ötszáz elemző réteg
+> mellékhatása, hogy a jelentések MEGNŐTTEK: az edzői összefoglaló
+> háromezer szavas lett (a "Játékkép és tempó" szakasz egymaga
+> tizenhatezer karakter), a felderítés "Hogyan játssz ellenük"
+> listája pedig 123 tételre. Egyik sem hibás — csak olvashatatlan.
+> Hiányzott a FONTOSSÁGI SORREND, pedig a rendszer már kiszámolja.
+> Mostantól az összefoglaló "A lényeg" szakasszal nyit (a rangsor
+> első három tétele csapatonként, plusz hogy mennyi maradt), és a
+> felderítésben a párosított meccsterv megelőzi a százas általános
+> listát. Semmi nem veszett el: minden szakasz ott van mögötte.
+
 
 - **A párosított meccsterv megelőzi az általános kulcsokat** (kliens +
   motor): a felderítés két listát ad. A "Hogyan játssz ellenük" kulcsok
