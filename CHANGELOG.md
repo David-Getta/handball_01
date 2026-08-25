@@ -3,7 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.65 óta)
+## v0.1.66 — kiadva (2026-08-25)
+
+> Kiadás-jegyzet: a bal oldali menü kiegészítésének második köre, és
+> egy régi adósság törlesztése. A játékosok mostantól NEVET kapnak, nem
+> csak mezszámot — az edző nem számokban gondolkodik, a játékos pedig a
+> saját nevét keresi a lapon. Mellette négy új menüpont (Klipek, Keret,
+> Csapat-fejlődés, Jegyzetek), és a klipvágás két néma hibájának
+> javítása.
 
 - **A játékosok nevet kapnak, nem csak számot** (motor + felület): az
   egész termék "#7"-et mondott — az edző viszont nem számokban
