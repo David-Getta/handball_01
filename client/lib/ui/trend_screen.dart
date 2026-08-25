@@ -64,7 +64,9 @@ class _TrendScreenState extends State<TrendScreen> {
   @override
   Widget build(BuildContext context) {
     return AppShell(
-      active: NavId.dashboard,
+      // A fejlődés-követésnek saját menüpontja van (Csapat-fejlődés) —
+      // a kijelölés ott maradjon, akárhonnan nyílt meg a nézet.
+      active: NavId.teamTrend,
       crumbTag: "1g",
       crumbPath: "FEJLŐDÉS · KÉT IDŐSZAK ÖSSZEVETÉSE",
       collapsed: true,

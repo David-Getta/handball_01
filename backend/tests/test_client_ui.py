@@ -1550,3 +1550,91 @@ def test_a_klipek_menupont_szabadon_kombinalhato_csomagokat_ad():
     kinalt = set(_re.findall(r'\("(\w+)", "', kepernyo))
     hianyzo = kinalt - ismert
     assert not hianyzo, f"a kliens nem létező klip-típust kínál: {hianyzo}"
+
+
+def test_a_csapat_fejlodes_egy_csapatnevbol_indul():
+    """A "fejlődünk-e?" kérdést nem szabad húsz kattintással kérdezni.
+
+    A fejlődés-követés (két időszak összevetése) eddig csak a kezdőlap
+    egyik gombja volt, és két párbeszéd-ablakon át KÉZZEL kellett
+    kijelölni, melyik meccs melyik időszakba tartozik — meccsenként azt
+    is, hogy a figyelt csapat melyik oldalon játszott. Saját
+    menüpontból egy csapatnév elég: a meccseket a képernyő szedi össze
+    és vágja ketté, a vágópont húzható.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.teamTrend" in shell, "nincs Csapat-fejlődés menüpont"
+    assert '"Csapat-fejlődés"' in shell, "a menüpontnak nincs neve"
+    assert (lib / "ui" / "team_trend_screen.dart").exists(), (
+        "nincs Csapat-fejlődés képernyő")
+
+    kepernyo = (lib / "ui" / "team_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_ofTeam" in kepernyo, (
+        "a képernyő nem szedi össze magától a csapat meccseit")
+    assert "Slider(" in kepernyo, "a vágópont nem húzható"
+    # Az összevetést a MEGLÉVŐ fejlődés-nézet rajzolja — ne szülessen
+    # belőle második, széttartó megjelenítés.
+    assert "TrendScreen(" in kepernyo, (
+        "a képernyő nem a meglévő fejlődés-nézetet használja")
+
+    # A fejlődés-nézet kijelölése a saját menüpontján álljon, akárhonnan
+    # nyílt meg (korábban a kezdőlapot jelölte).
+    trend = (lib / "ui" / "trend_screen.dart").read_text(encoding="utf-8")
+    assert "NavId.teamTrend" in trend, (
+        "a fejlődés-nézet még mindig más menüpontot jelöl aktívnak")
+
+
+def test_a_keret_lap_mindenkit_mutat_nem_csak_a_top_otot():
+    """A játékos a SAJÁT sorát keresi, nem a gólkirályt.
+
+    A szezon-toplisták az öt legjobbat adják; a mezszám-alapú összegek
+    viszont mindenkire megvannak a motorban, csak nem jutottak ki a
+    felületre. A keret-lap ezt a metszetet adja: a csapat minden
+    mezszáma egy táblában, meccs-darabszámmal — enélkül egy alacsony
+    gólszám félrevezet (kevés játék vagy gyenge forma?).
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.roster" in shell, "nincs Keret menüpont"
+    assert '"Keret"' in shell, "a menüpontnak nincs neve"
+    assert (lib / "ui" / "roster_screen.dart").exists(), (
+        "nincs Keret képernyő")
+
+    kepernyo = (lib / "ui" / "roster_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchTeamRoster" in kepernyo, "a keret-lap nem a keretet kéri"
+    # A meccs-darabszám oszlop nem elhagyható: ez adja a többi szám
+    # olvasatát.
+    assert '("matches", "Meccs")' in kepernyo, (
+        "a keret-lapról hiányzik a meccs-darabszám oszlop")
+    # Egy sorra koppintva a játékos görbéje nyíljon — ELŐRE KITÖLTVE,
+    # ne egy üres űrlap (különben a kattintás semmit nem takarít meg).
+    assert "initialJersey" in kepernyo, (
+        "a keret-lap nem tölti ki előre a játékos-görbét")
+
+    trend = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "initialJersey" in trend and "initialTeam" in trend, (
+        "a játékos-görbe nem fogad előre kitöltött játékost")
+
+    # A kliens által kért végpontnak léteznie kell a motorban.
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/library/roster")' in app, (
+        "a kliens olyan végpontot hív, ami nincs a motorban")

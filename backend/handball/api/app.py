@@ -2772,17 +2772,24 @@ def create_app():
             "per_match": per,
         }
 
-    @app.get("/library/leaders")
-    def library_leaders():
-        """Szezon-toplisták a teljes könyvtárból: gól, blokk,
-        labdaszerzés és védés vezérei — mezszám alapján összegezve
-        (a mezszám nélküli trackek kimaradnak: meccsek közt nincs
-        stabil azonosítójuk). Minden lista a top 5-öt adja."""
+    def _library_player_tallies() -> dict:
+        """Játékosonkénti szezon-összegek a teljes könyvtárból.
+
+        Kulcs: (csapatnév, mezszám) — a mezszám nélküli trackek
+        kimaradnak, mert meccsek közt nincs stabil azonosítójuk.
+        Visszatérés: {"goals", "assists", "blocks", "steals", "saves",
+        "matches"} — mind {(csapat, mez): darab} alakú.
+
+        Két végpont eszi: a toplisták (top 5) és a keret-lap (a csapat
+        TELJES sora). Egy helyen számoljuk, hogy a kettő ne tudjon
+        széttartani.
+        """
         goals_t: dict = {}
         blocks_t: dict = {}
         steals_t: dict = {}
         saves_t: dict = {}
         assists_t: dict = {}
+        matches_t: dict = {}
         for m in _store.values():
             jersey_of: dict = {}
             team_name = {"home": m.meta.home_team,
@@ -2806,6 +2813,15 @@ def create_app():
                 if not tname:
                     return None
                 return (tname, j)
+
+            # Hány meccsen szerepelt: a keret-lapon ez mondja meg, hogy
+            # egy alacsony gólszám kevés játékot vagy gyenge formát
+            # takar-e. (Meccsenként egyszer, akkor is, ha a követés
+            # megszakadt és több track viselte ugyanazt a számot.)
+            for _tid in set(jersey_of):
+                k_m = _key(_tid)
+                if k_m:
+                    matches_t[k_m] = matches_t.get(k_m, 0) + 1
 
             try:
                 from ..pipeline.xg import match_xg
@@ -2861,14 +2877,68 @@ def create_app():
             except Exception:
                 pass
 
+        return {"goals": goals_t, "assists": assists_t,
+                "blocks": blocks_t, "steals": steals_t,
+                "saves": saves_t, "matches": matches_t}
+
+    @app.get("/library/leaders")
+    def library_leaders():
+        """Szezon-toplisták a teljes könyvtárból: gól, blokk,
+        labdaszerzés és védés vezérei — mezszám alapján összegezve
+        (a mezszám nélküli trackek kimaradnak: meccsek közt nincs
+        stabil azonosítójuk). Minden lista a top 5-öt adja."""
+        t = _library_player_tallies()
+
         def _top(tally):
             return [{"team": k[0], "jersey": k[1], "value": v}
                     for k, v in sorted(tally.items(),
                                        key=lambda kv: -kv[1])[:5]]
 
-        return {"goals": _top(goals_t), "blocks": _top(blocks_t),
-                "steals": _top(steals_t), "saves": _top(saves_t),
-                "assists": _top(assists_t)}
+        return {"goals": _top(t["goals"]), "blocks": _top(t["blocks"]),
+                "steals": _top(t["steals"]), "saves": _top(t["saves"]),
+                "assists": _top(t["assists"])}
+
+    @app.get("/library/roster")
+    def library_roster(team: str):
+        """Keret-lap: a csapat ÖSSZES ismert mezszáma egy táblában.
+
+        A toplisták az öt legjobbat adják — a keret-lap MINDENKIT, aki
+        a könyvtárban mezszámmal szerepel. Ez a játékos szemszöge: nem
+        az, hogy ki a szezon gólkirálya, hanem hogy a SAJÁT sora hol
+        tart; és az edzőé, amikor a teljes keretet nézi végig, nem a
+        kiugró neveket.
+
+        A "matches" a meccsek száma, amelyeken a szám szerepelt: enélkül
+        egy alacsony gólszám félrevezet (kevés játék vagy gyenge forma?
+        — két külön kérdés, két külön teendő).
+
+        Visszatérés: {"team", "players": [{"jersey", "matches",
+        "goals", "assists", "blocks", "steals", "saves"}]} — mezszám
+        szerint növekvő sorrendben. A mezszám nélkül játszókról nem
+        tudunk sort adni, ezt a "note" mondja ki.
+        """
+        t = _library_player_tallies()
+        mezek = sorted({k[1] for k in t["matches"] if k[0] == team})
+        sorok = []
+        for j in mezek:
+            k = (team, j)
+            sorok.append({
+                "jersey": j,
+                "matches": t["matches"].get(k, 0),
+                "goals": t["goals"].get(k, 0),
+                "assists": t["assists"].get(k, 0),
+                "blocks": t["blocks"].get(k, 0),
+                "steals": t["steals"].get(k, 0),
+                "saves": t["saves"].get(k, 0),
+            })
+        return {
+            "team": team,
+            "players": sorok,
+            "note": ("A lista MEZSZÁM alapján épül: akihez egyetlen "
+                     "meccsen sem rendeltek számot, nem szerepel benne "
+                     "— a számokat a meccs-elemzőben lehet kiosztani, "
+                     "és onnantól a korábbi meccsek is beszámítanak."),
+        }
 
     # Edzés-fókusz kivonat-gyorsítótár (match_id → (kulcs, eredmény)) — a
     # könyvtár-szintű összesítés ne számolja újra a változatlan meccseket.

@@ -4,7 +4,8 @@
 ///   MUNKAFOLYAMAT: Kezdőlap → Új elemzés → Feldolgozások → Élő követés
 ///   ELEMZÉS:       Meccs-elemző · Ellenfél-felderítés · Meccsterv ·
 ///                  Klipek · Figura-tervező
-///   CSAPAT:        Edzésterv · Szezon · Játékos-fejlődés
+///   CSAPAT:        Edzésterv · Szezon · Keret · Csapat-fejlődés ·
+///                  Játékos-fejlődés
 /// Minden eszköz a menüből érhető el (nem képernyők mélyéről), a kijelölés
 /// mindig mutatja, hol jársz. Gyors váltás billentyűzetről: Cmd/Ctrl+1..9
 /// és Cmd/Ctrl+0 a tizedik elemre.
@@ -35,8 +36,10 @@ import "../live_screen.dart";
 import "../match_screen.dart";
 import "../matchup_screen.dart";
 import "../player_trend_screen.dart";
+import "../roster_screen.dart";
 import "../scouting_picker_screen.dart";
 import "../season_screen.dart";
+import "../team_trend_screen.dart";
 import "../terms_screen.dart";
 import "../training_plan_screen.dart";
 import "../upload_screen.dart";
@@ -45,7 +48,7 @@ import "../upload_screen.dart";
 /// a könyvtárból a kiválasztott meccsel — a kijelölés ilyenkor is ezt jelöli.)
 enum NavId {
   dashboard, upload, jobs, live, matches, scouting, matchup, clips,
-  designer, training, season, playerTrend
+  designer, training, season, roster, teamTrend, playerTrend
 }
 
 /// A menü csoportjai és elemei — EGY helyen, a sáv és a billentyű-kiosztás
@@ -67,6 +70,8 @@ const List<(String, List<(NavId, IconData, String)>)> kNavGroups = [
   ("CSAPAT", [
     (NavId.training, Icons.fitness_center, "Edzésterv"),
     (NavId.season, Icons.calendar_month_outlined, "Szezon"),
+    (NavId.roster, Icons.groups_outlined, "Keret"),
+    (NavId.teamTrend, Icons.trending_up, "Csapat-fejlődés"),
     (NavId.playerTrend, Icons.timeline, "Játékos-fejlődés"),
   ]),
 ];
@@ -86,6 +91,8 @@ void navTo(BuildContext context, NavId id) {
     NavId.designer => DesignerScreen(match: buildDemoMatch()),
     NavId.training => const TrainingPlanScreen(),
     NavId.season => const SeasonScreen(),
+    NavId.roster => const RosterScreen(),
+    NavId.teamTrend => const TeamTrendScreen(),
     NavId.playerTrend => const PlayerTrendScreen(),
   };
   Navigator.of(context).pushReplacement(

@@ -22,7 +22,17 @@ class PlayerTrendScreen extends StatefulWidget {
   /// képernyő maga tölti be — így a menüből közvetlenül is nyitható.
   final List<String> teams;
 
-  const PlayerTrendScreen({super.key, this.teams = const []});
+  /// Előre kitöltött csapat és mezszám: a keret-lapról egy sorra
+  /// koppintva EGYBŐL a játékos görbéje jöjjön, ne egy üres űrlap.
+  final String? initialTeam;
+  final int? initialJersey;
+
+  const PlayerTrendScreen({
+    super.key,
+    this.teams = const [],
+    this.initialTeam,
+    this.initialJersey,
+  });
 
   @override
   State<PlayerTrendScreen> createState() => _PlayerTrendScreenState();
@@ -42,10 +52,18 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
   void initState() {
     super.initState();
     _teams = List.of(widget.teams);
-    if (_teams.isNotEmpty) {
-      _team = _teams.first;
-    } else {
+    if (widget.initialTeam != null && !_teams.contains(widget.initialTeam)) {
+      _teams.insert(0, widget.initialTeam!);
+    }
+    _team = widget.initialTeam ?? (_teams.isNotEmpty ? _teams.first : null);
+    if (widget.teams.isEmpty) {
       _loadTeams(); // menüből nyitva: csapatnevek a könyvtárból
+    }
+    if (widget.initialJersey != null) {
+      _jerseyCtrl.text = "${widget.initialJersey}";
+      // A keret-lapról érkezve a görbe azonnal töltsön: a kattintás
+      // maga volt a kérés, nincs mit még egyszer megerősíteni.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     }
   }
 

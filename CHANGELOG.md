@@ -5,6 +5,27 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.65 óta)
 
+- **Keret menüpont: a csapat MINDEN mezszáma egy táblában** (motor +
+  felület): a szezon-toplisták az öt legjobbat adják — a játékos
+  viszont nem a gólkirályt keresi, hanem a SAJÁT sorát, az edző pedig
+  a teljes keretet nézi végig. Új végpont (`/library/roster`) a csapat
+  minden mezszámával: meccs-darabszám, gól, gólpassz, blokk,
+  labdaszerzés, védés. A meccs-oszlop szándékosan az első: enélkül egy
+  alacsony gólszám félrevezet (kevés játék vagy gyenge forma? — két
+  külön teendő). A tábla rendezhető, egy sorra koppintva a játékos
+  fejlődés-görbéje nyílik ELŐRE KITÖLTVE. A toplista és a keret-lap
+  ugyanabból a számolásból él, hogy ne tudjanak széttartani — teszt is
+  méri az egyezést.
+- **Csapat-fejlődés menüpont** (felület): a "fejlődünk-e?" kérdést
+  eddig két párbeszéd-ablakon át, meccsenként kézzel kellett
+  összekattintani (melyik időszak, melyik oldal) — annyi kattintás,
+  hogy a gyakorlatban senki nem tette fel. Most egy csapatnév elég: a
+  képernyő a könyvtárból összeszedi a csapat összes meccsét dátum
+  szerint, és kettévágja korábbi/újabb időszakra; a vágópont húzható
+  (szünet előtt vs után, régi vs új felállás). Az összevetést a
+  meglévő fejlődés-nézet rajzolja — nem született belőle második,
+  széttartó megjelenítés.
+
 - **Klipek menüpont: szabadon kombinálható videó-csomagok** (felület):
   a klipvágás eddig csak a meccs-elemző eszköztárában élt, és ott is
   EGY csomag egyszerre — aki a gólokat és a kihagyott ziccereket is

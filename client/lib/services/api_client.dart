@@ -1051,6 +1051,21 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Keret-lap (GET /library/roster?team=...): a csapat ÖSSZES ismert
+  /// mezszáma egy táblában — meccs-darabszámmal és szezon-összegekkel.
+  /// A toplisták az öt legjobbat adják, ez MINDENKIT, aki mezszámmal
+  /// szerepel a könyvtárban.
+  Future<Map<String, dynamic>> fetchTeamRoster(String team) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/roster"
+            "?team=${Uri.encodeQueryComponent(team)}"))
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a keretet", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Szezon-összkép a kezdőlapnak (GET /library/summary): összesített
   /// mutatók (meccsek, játékidő, gólok, táv, sprintek) + meccsenkénti
   /// kivonat a "per_match" kulcs alatt.
