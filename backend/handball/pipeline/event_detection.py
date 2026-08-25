@@ -360,6 +360,107 @@ def goal_crossing_y(match: Match, idx: int, goal_x: float):
     return None
 
 
+# Kézi esemény-javítás: ekkora IDŐ-ablakon belül tekintünk egy javítást
+# és egy felismert eseményt ugyanannak a pillanatnak. Másodpercben, mert
+# a kockaszám a minőségi profiltól függ (a ritkítás miatt a termékben
+# egy kocka a forrás három kockája).
+OVERRIDE_MATCH_S = 1.5
+
+
+def _apply_event_overrides(match: Match,
+                           events: list[MatchEvent]) -> list[MatchEvent]:
+    """A KÉZI javítások ráolvasása a felismert lövés/gól listára.
+
+    A felismerés téved: gólt lövésnek lát, lövést nem vesz észre, vagy a
+    kapu mögé pattanó labdát gólnak számolja. Eddig ezt semmivel nem
+    lehetett javítani — az edző pedig egy rossz eredményű jelentésnek
+    egyetlen számát sem hiszi el, akkor sem, ha a többi jó.
+
+    Három művelet (a `match.meta.event_overrides` listából):
+      - "set_type": a pillanathoz legközelebbi lövés TÍPUSA lesz a
+        megadott (a leggyakoribb eset: a gól lövésként jött ki),
+      - "remove":   a pillanathoz legközelebbi lövés/gól törlése,
+      - "add":      új lövés/gól felvétele a megadott pillanatra.
+
+    A "legközelebbi" OVERRIDE_MATCH_S másodpercen belül keres; ha nincs
+    ott semmi, a javítás csendben elmarad (a felismerés közben
+    megváltozhatott — pl. újrafeldolgozás után —, és egy régi javítás
+    nem tehet kárt egy MÁSIK esemény típusában).
+
+    A javítás itt, a lövés-felismerésben ül, nem följebb: így minden
+    rétegen átüt, ami lövésből dolgozik (eredmény, xG, lövő-listák,
+    hajrá-elemzés, felderítés) — egyetlen helyen javítunk, nem
+    ötszázon.
+    """
+    ov = getattr(match.meta, "event_overrides", None) or []
+    if not ov:
+        return events
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    ablak = max(1, int(round(OVERRIDE_MATCH_S * fps)))
+    out = list(events)
+
+    def _kozelebbi(t: int) -> Optional[int]:
+        """A t-hez legközelebbi lövés/gól INDEXE az out listában."""
+        jeloltek = [(abs(e.t - t), i) for i, e in enumerate(out)
+                    if e.type in (EventType.SHOT, EventType.GOAL)
+                    and abs(e.t - t) <= ablak]
+        if not jeloltek:
+            return None
+        return min(jeloltek)[1]
+
+    for j in ov:
+        try:
+            op = str(j.get("op") or "")
+            t = int(j.get("t") or 0)
+            tipus = str(j.get("type") or "goal")
+            if tipus not in ("goal", "shot"):
+                continue
+            uj_tipus = (EventType.GOAL if tipus == "goal"
+                        else EventType.SHOT)
+            if op == "add":
+                csapat = (Team.HOME if str(j.get("team")) == "home"
+                          else Team.AWAY)
+                out.append(MatchEvent(
+                    t=t, type=uj_tipus, team=csapat,
+                    player_id=j.get("player_id"),
+                    # A kézi eredetet MEGJELÖLJÜK: a minőség-jelentés és
+                    # a klip-vágás így meg tudja különböztetni a mért
+                    # eseménytől. Az outcome a típussal egyezik — a
+                    # lövés-táblák abból dolgoznak.
+                    detail={"manual": True,
+                            "outcome": ("goal" if uj_tipus is EventType.GOAL
+                                        else "miss")}))
+                continue
+            i = _kozelebbi(t)
+            if i is None:
+                continue
+            if op == "remove":
+                out.pop(i)
+            elif op == "set_type":
+                regi = out[i]
+                reszlet = dict(regi.detail or {})
+                reszlet["manual"] = True
+                # A KIMENETELT is igazítani kell, nem csak a típust: sok
+                # réteg a detail["outcome"] mezőből dolgozik, és egy
+                # "gól" típusú, de "miss" kimenetelű esemény néma
+                # ellentmondás lenne (a típus szerint gól, a
+                # lövés-táblákban kihagyott helyzet).
+                if uj_tipus is EventType.GOAL:
+                    reszlet["outcome"] = "goal"
+                elif reszlet.get("outcome") == "goal":
+                    # Gólból lövés: a kapus-érdem nem állapítható meg
+                    # utólag, ezért a semleges "miss" jár.
+                    reszlet["outcome"] = "miss"
+                out[i] = MatchEvent(t=regi.t, type=uj_tipus,
+                                    team=regi.team,
+                                    player_id=regi.player_id,
+                                    detail=reszlet)
+        except Exception:
+            continue  # egy hibás javítás ne vigye el a többit
+    out.sort(key=lambda e: e.t)
+    return out
+
+
 @memoize_primitive("detect_shots", copy=copy_events)
 def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[MatchEvent]:
     """Lövések és gólok felismerése a labda kinematikájából.
@@ -442,6 +543,8 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
             events = [e for e in events if not (lo <= e.t <= hi)]
     except Exception:
         pass
+    # Az edző kézi javításai — a felismerés UTOLSÓ szava.
+    events = _apply_event_overrides(match, events)
     return events
 
 

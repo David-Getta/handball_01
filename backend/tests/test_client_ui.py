@@ -1722,3 +1722,43 @@ def test_a_jatekosok_nevet_kapnak_nem_csak_szamot():
     # *.json-t meccsnek próbál olvasni.
     assert '_data_dir.parent / "players.json"' in app, (
         "a névjegyzék a meccs-mappában landolna")
+
+
+def test_a_felismeres_kezzel_javithato_a_meccs_elemzoben():
+    """A felismerés téved — és javíthatatlan hibából nincs bizalom.
+
+    Az edző egy rossz eredményű jelentésnek EGYETLEN számát sem hiszi
+    el, akkor sem, ha a többi jó. A javításnak ezért ott kell lennie,
+    ahol a hibát meglátja (az eseménysoron), és át kell ütnie az egész
+    elemzésen — nem elég az esemény-listát átfesteni.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "saveEventOverrides" in meccs, "nincs kézi javítás a felületen"
+    for muvelet in ('"set_type"', '"remove"', '"add"'):
+        assert muvelet in meccs, f"hiányzó javítás-művelet: {muvelet}"
+    # A javítás után ÚJRA kell tölteni: a javítás minden rétegen átüt,
+    # a fél nézet frissítése ellentmondó képet adna.
+    assert "await _load();" in meccs, (
+        "a javítás után nem tölt újra a nézet")
+    # Az edző lássa, mit írt felül ő maga, és tudja visszavonni.
+    assert '"manual"' in meccs, "a kézi javítás nincs megjelölve a listán"
+    assert "_clearCorrections" in meccs, (
+        "a javítások nem vonhatók vissza")
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.post("/matches/{match_id}/event-overrides")' in app
+
+    # A javítás a LÖVÉS-FELISMERÉSBEN ül, nem a végponton: csak így üt
+    # át az xG-n, a lövő-listákon és a felderítésen is.
+    ed = (_Path(__file__).resolve().parents[1] / "handball" / "pipeline"
+          / "event_detection.py").read_text(encoding="utf-8")
+    assert "_apply_event_overrides(match, events)" in ed

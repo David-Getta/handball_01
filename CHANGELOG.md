@@ -3,6 +3,24 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.66 óta)
+
+- **A felismerés kézzel javítható** (motor + felület): a felismerés
+  téved — gólt lövésnek lát, lövést nem vesz észre —, és eddig ezt
+  semmivel nem lehetett javítani. Az edző pedig egy rossz eredményű
+  jelentésnek EGYETLEN számát sem hiszi el, akkor sem, ha a többi jó.
+  Az eseménysoron mostantól három javítás érhető el ("ez GÓL volt",
+  "ez csak lövés volt", "nem volt ilyen esemény"), a hiányzó gól pedig
+  felvehető a jelenlegi pillanatra. A javítás a LÖVÉS-FELISMERÉSBE
+  épül be, tehát minden rétegen átüt (eredmény, xG, lövő-listák,
+  hajrá-elemzés, felderítés) — egyetlen helyen javítunk, nem
+  ötszázon; a kézi eredetet a lista meg is jelöli, és minden javítás
+  visszavonható. A javítás a MECCS tulajdonsága: külön fájlban él a
+  meccs mellett, túléli a program újraindítását, és a
+  könyvtár-mentésbe is bekerül. Az egyeztetés-ablak másodpercben van
+  (`OVERRIDE_MATCH_S`), és egy régi, elcsúszott javítás csendben
+  elmarad ahelyett, hogy egy MÁSIK esemény típusát írná át.
+
 ## v0.1.66 — kiadva (2026-08-25)
 
 > Kiadás-jegyzet: a bal oldali menü kiegészítésének második köre, és

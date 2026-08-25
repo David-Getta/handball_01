@@ -553,6 +553,43 @@ class ApiClient {
     return resp.bodyBytes;
   }
 
+  /// A meccshez felvitt KÉZI esemény-javítások
+  /// (GET /matches/{id}/event-overrides).
+  Future<List<Map<String, dynamic>>> fetchEventOverrides(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/event-overrides"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a javításokat", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["overrides"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  /// A kézi esemény-javítások mentése (POST /matches/{id}/event-overrides)
+  /// — a TELJES lista cseréje. A javítás a lövés-felismerésbe épül be,
+  /// tehát minden rétegen átüt (eredmény, xG, lövő-listák, felderítés).
+  Future<List<Map<String, dynamic>>> saveEventOverrides(
+      String matchId, List<Map<String, dynamic>> overrides) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/$matchId/event-overrides"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"overrides": overrides}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült menteni a javítást", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["overrides"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   /// Edzői jegyzetek a meccshez (GET /matches/{id}/notes) — idő szerint.
   Future<List<Map<String, dynamic>>> fetchNotes(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/notes"));

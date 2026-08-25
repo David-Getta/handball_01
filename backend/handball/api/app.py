@@ -114,6 +114,28 @@ def create_app():
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
         return _data_dir / f"{safe}.params.json"
 
+    def _overrides_path(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.events.json"
+
+    def _load_overrides(match_id: str) -> list:
+        """A meccshez tárolt KÉZI esemény-javítások (üres, ha nincs).
+
+        A javítás a felismerés hibáját írja felül; hibás fájlra üres
+        listát adunk, mert a javítás hiánya rosszabb ugyan, de a
+        meccs elvesztésénél sokkal kevésbé rossz.
+        """
+        p = _overrides_path(match_id)
+        if p.exists():
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(d.get("overrides"), list):
+                    return d["overrides"]
+            except Exception:
+                pass
+        return []
+
     def _load_store_from_disk() -> int:
         """A lemezen lévő meccsek betöltése a memóriába (indulás + könyvtár-
         visszaállítás után). A jegyzet/mezszám/roster kísérőfájlokat a nevük
@@ -122,10 +144,14 @@ def create_app():
         for f in sorted(_data_dir.glob("*.json")):
             if any(f.name.endswith(s) for s in
                    (".notes.json", ".jerseys.json", ".roster.json",
-                    ".params.json")):
+                    ".params.json", ".events.json")):
                 continue
             try:
                 m = Match.from_json(f.read_text(encoding="utf-8"))
+                # A kézi esemény-javítások a meccs mellett, külön
+                # fájlban élnek — a felismerés a meta-ból olvassa őket,
+                # tehát betöltéskor ide kell tenni.
+                m.meta.event_overrides = _load_overrides(m.meta.match_id)
                 _store[m.meta.match_id] = m
                 loaded += 1
             except Exception:
@@ -1624,6 +1650,83 @@ def create_app():
         notes = _load_notes(match_id)
         notes.sort(key=lambda n: n.get("frame", 0))
         return {"notes": notes}
+
+    # --- Kézi esemény-javítások (a felismerés edzői korrekciója) ------
+
+    def _apply_overrides_to_match(match_id: str) -> None:
+        """A lemezen tárolt javítások ráolvasása a memóriabeli meccsre.
+
+        A felismerés a `match.meta.event_overrides` listát nézi, tehát a
+        javítás csak akkor él, ha ide betöltjük — indításkor és minden
+        módosításnál.
+        """
+        m = _store.get(match_id)
+        if m is not None:
+            m.meta.event_overrides = _load_overrides(match_id)
+            # A meccsből származtatott kivonatok elavulnak: az eredmény,
+            # a lövésszám és az edzés-fókusz is a javított eseményekből
+            # jön. A kulcsuk a kockaszám, ami NEM változik — ezért itt
+            # kézzel dobjuk el őket.
+            _summary_cache.pop(match_id, None)
+            _training_cache.pop(match_id, None)
+            # A minőség-pontszám kulcsa (match_id, kockaszám) — a
+            # kockaszám nem változik a javítástól, ezért NÉV szerint
+            # keressük ki a bejegyzést.
+            for k in [k for k in _quality_score_cache if k[0] == match_id]:
+                _quality_score_cache.pop(k, None)
+
+    @app.get("/matches/{match_id}/event-overrides")
+    def get_event_overrides(match_id: str):
+        """A meccshez felvitt KÉZI esemény-javítások."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {"overrides": _load_overrides(match_id)}
+
+    @app.post("/matches/{match_id}/event-overrides")
+    def set_event_overrides(match_id: str, body: dict):
+        """A kézi esemény-javítások mentése (a TELJES lista cseréje).
+
+        Törzs: {"overrides": [{"op": "add"|"remove"|"set_type",
+        "t": kocka, "type": "goal"|"shot", "team": "home"|"away"}]}.
+
+        Miért kell: a felismerés téved — gólt lövésnek lát, lövést nem
+        vesz észre. Az edző egy rossz eredményű jelentésnek EGYETLEN
+        számát sem hiszi el, akkor sem, ha a többi jó. A javítás a
+        lövés-felismerésbe épül be, tehát minden rétegen átüt
+        (eredmény, xG, lövő-listák, felderítés) — újrafeldolgozás
+        nélkül.
+        """
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        nyers = body.get("overrides")
+        if not isinstance(nyers, list):
+            raise HTTPException(status_code=400,
+                                detail="overrides list required")
+        tisztitott = []
+        for j in nyers[:200]:  # ésszerű plafon
+            if not isinstance(j, dict):
+                continue
+            op = str(j.get("op") or "")
+            if op not in ("add", "remove", "set_type"):
+                continue
+            tipus = str(j.get("type") or "goal")
+            if tipus not in ("goal", "shot"):
+                continue
+            try:
+                t = max(0, int(j.get("t") or 0))
+            except (TypeError, ValueError):
+                continue
+            rec = {"op": op, "t": t, "type": tipus}
+            if op == "add":
+                rec["team"] = ("home" if str(j.get("team")) == "home"
+                               else "away")
+            tisztitott.append(rec)
+        _overrides_path(match_id).write_text(
+            json.dumps({"overrides": tisztitott}, ensure_ascii=False,
+                       indent=2),
+            encoding="utf-8")
+        _apply_overrides_to_match(match_id)
+        return {"overrides": tisztitott}
 
     @app.get("/library/notes")
     def library_notes():

@@ -67,6 +67,11 @@ class _MatchScreenState extends State<MatchScreen> {
   // Felismert események a backendből (passz/lövés/gól/labdaeladás) — kattintásra
   // a lejátszó az esemény képkockájára ugrik. Demó módban üres.
   List<Map<String, dynamic>> _events = [];
+  // KÉZI esemény-javítások: amit az edző a felismerésen kijavít. A
+  // felismerés téved (gólt lövésnek lát, lövést nem vesz észre), az edző
+  // pedig egy rossz eredményű jelentésnek EGYETLEN számát sem hiszi el.
+  List<Map<String, dynamic>> _overrides = [];
+  bool _correcting = false;
   // A feldolgozás minőség-önellenőrzése (score + figyelmeztetések) — a
   // felhasználó lássa, mennyire megbízható az elemzés. Demó módban null.
   Map<String, dynamic>? _quality;
@@ -162,6 +167,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<dynamic> keyMoments = const [];
     Map<String, dynamic>? setplayEff;
     List<Map<String, dynamic>> notes = [];
+    List<Map<String, dynamic>> overrides = [];
     Map<String, dynamic>? coach;
     List<Map<String, dynamic>> attacks = [];
     Map<String, dynamic> attackEff = {};
@@ -189,6 +195,11 @@ class _MatchScreenState extends State<MatchScreen> {
           events = await _api.fetchEvents(widget.matchId);
         } catch (_) {
           events = []; // esemény nélkül is működik a nézet
+        }
+        try {
+          overrides = await _api.fetchEventOverrides(widget.matchId);
+        } catch (_) {
+          overrides = []; // javítás nélkül is működik a nézet
         }
         try {
           shotSpeeds = await _api.fetchShotSpeeds(widget.matchId);
@@ -339,6 +350,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _intensity = computeIntensityTimeline(match);
       _formations = computeFormationTimeline(match);
       _events = events;
+      _overrides = overrides;
       _shots = _computeShotMarkers(match, events, xgByT, freeByT);
       _xgShooters = xgShooters;
       _passNetwork = computePassNetwork(match, events, _passTeam);
@@ -598,6 +610,55 @@ class _MatchScreenState extends State<MatchScreen> {
               if (_stoppages.any((s) => s["kind"] == "időkérés"))
                 _filterChip("rule:timeout", "Időkérés"),
             ]),
+          ),
+          // Kézi javítás: a felismerés téved, és egy rossz eredményű
+          // jelentésnek az edző EGYETLEN számát sem hiszi el. Itt lehet
+          // hiányzó gólt felvenni és az összes javítást visszavonni; a
+          // meglévő események javítása a soruk menüjében van.
+          PopupMenuButton<String>(
+            enabled: !_correcting && _sourceLabel != "demó",
+            tooltip: _overrides.isEmpty
+                ? "Javítások"
+                : "Javítások (${_overrides.length})",
+            icon: Icon(Icons.fact_check_outlined,
+                color: _overrides.isEmpty
+                    ? AppColors.textFaint
+                    : AppColors.gold),
+            color: AppColors.surface,
+            onSelected: (v) {
+              if (v == "clear") {
+                _clearCorrections();
+              } else {
+                // A jelenlegi képkockára veszünk fel gólt — az edző
+                // épp azt a pillanatot nézi.
+                _correct("add", _frameIndex, "goal", team: v);
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                  value: "home",
+                  child: ListTile(
+                      leading: const Icon(Icons.add, size: 17),
+                      title: Text("Hiányzó gól: ${match.meta.homeTeam}"),
+                      subtitle: const Text("a jelenlegi pillanatra"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "away",
+                  child: ListTile(
+                      leading: const Icon(Icons.add, size: 17),
+                      title: Text("Hiányzó gól: ${match.meta.awayTeam}"),
+                      subtitle: const Text("a jelenlegi pillanatra"),
+                      dense: true)),
+              if (_overrides.isNotEmpty)
+                PopupMenuItem(
+                    value: "clear",
+                    child: ListTile(
+                        leading: const Icon(Icons.undo, size: 17),
+                        title: Text("Minden javítás visszavonása "
+                            "(${_overrides.length})"),
+                        subtitle: const Text("a felismerés eredeti képe"),
+                        dense: true)),
+            ],
           ),
           // Klip-export: a SZŰRT eseménytípusok jelenetei MP4-ekben, zip-ben.
           IconButton(
@@ -1147,10 +1208,115 @@ class _MatchScreenState extends State<MatchScreen> {
                   : "$team · gólpassz: ${_playerShort(match, assistId)}",
               style: AppText.label.copyWith(fontSize: 11.5),
               overflow: TextOverflow.ellipsis)),
+          // Kézi eredet jelölése: az edző lássa, mit írt felül ő maga.
+          if (((e["detail"] as Map?)?["manual"]) == true)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Tooltip(
+                message: "kézzel javított",
+                child: Icon(Icons.edit_outlined,
+                    size: 13, color: AppColors.gold),
+              ),
+            ),
           Text("${(t / fps).toStringAsFixed(1)} s", style: AppText.label.copyWith(fontSize: 11.5)),
+          // Javítás: a felismerés téved, és az edző egy rossz eredményű
+          // jelentésnek egyetlen számát sem hiszi el. Csak lövés/gól
+          // sorokon — a passzt és a labdaeladást nem javítjuk kézzel.
+          if (type == "goal" || type == "shot")
+            PopupMenuButton<String>(
+              tooltip: "Javítás",
+              enabled: !_correcting && _sourceLabel != "demó",
+              iconSize: 15,
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.more_vert,
+                  color: AppColors.textFaint),
+              color: AppColors.surface,
+              onSelected: (v) {
+                if (v == "goal" || v == "shot") {
+                  _correct("set_type", t, v);
+                } else if (v == "remove") {
+                  _correct("remove", t, type);
+                }
+              },
+              itemBuilder: (_) => [
+                if (type != "goal")
+                  const PopupMenuItem(
+                      value: "goal",
+                      child: ListTile(
+                          leading: Icon(Icons.sports_score, size: 17),
+                          title: Text("Ez GÓL volt"),
+                          dense: true)),
+                if (type != "shot")
+                  const PopupMenuItem(
+                      value: "shot",
+                      child: ListTile(
+                          leading: Icon(Icons.sports_handball, size: 17),
+                          title: Text("Ez csak lövés volt"),
+                          dense: true)),
+                const PopupMenuItem(
+                    value: "remove",
+                    child: ListTile(
+                        leading: Icon(Icons.delete_outline, size: 17),
+                        title: Text("Nem volt ilyen esemény"),
+                        dense: true)),
+              ],
+            ),
         ]),
       ),
     );
+  }
+
+  /// KÉZI javítás felvétele és mentése, majd a nézet újratöltése.
+  ///
+  /// Miért a teljes újratöltés: a javítás a lövés-felismerésbe épül be,
+  /// tehát MINDEN rétegen átüt (eredmény, xG, lövő-listák, edzés-fókusz)
+  /// — a fél nézet frissítése ellentmondó képet adna, ami rosszabb,
+  /// mint a másodperces várakozás.
+  Future<void> _correct(String op, int t, String type,
+      {String? team}) async {
+    if (_correcting) return;
+    setState(() => _correcting = true);
+    try {
+      final uj = <Map<String, dynamic>>[
+        ..._overrides,
+        {
+          "op": op,
+          "t": t,
+          "type": type,
+          if (team != null) "team": team,
+        },
+      ];
+      await _api.saveEventOverrides(widget.matchId, uj);
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Javítás mentve — az elemzés újraszámolt "
+              "(eredmény, xG, listák).")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A javítás nem sikerült: ${humanError(e)}")));
+    } finally {
+      if (mounted) setState(() => _correcting = false);
+    }
+  }
+
+  /// Az ÖSSZES kézi javítás visszavonása (a felismerés eredeti képe).
+  Future<void> _clearCorrections() async {
+    if (_correcting) return;
+    setState(() => _correcting = true);
+    try {
+      await _api.saveEventOverrides(widget.matchId, const []);
+      if (!mounted) return;
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A visszavonás nem sikerült: ${humanError(e)}")));
+    } finally {
+      if (mounted) setState(() => _correcting = false);
+    }
   }
 
   /// Rövid játékos-címke az eseménysorhoz: mezszám, ha ismert ("#7"),

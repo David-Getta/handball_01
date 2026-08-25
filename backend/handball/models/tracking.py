@@ -155,6 +155,16 @@ class MatchMeta:
     game_window_found: Optional[bool] = None
     game_trim_head_s: Optional[float] = None
     game_trim_tail_s: Optional[float] = None
+    # KÉZI esemény-javítások: amit az edző a felismerésen kijavít.
+    # Elemenként {"op": "add"|"remove"|"set_type", "t": kocka,
+    # "type": "goal"|"shot", "team": "home"|"away"}. A lövés-felismerés
+    # a lista alapján javítja a saját eredményét, tehát a javítás MINDEN
+    # rétegen átüt (eredmény, xG, lövő-listák, felderítés).
+    #
+    # Miért a meta-ban: a felismerés hibája nem a videó hibája — a
+    # javítás a MECCS tulajdonsága, nem egy képernyőé, és
+    # újrafeldolgozás nélkül is meg kell maradnia.
+    event_overrides: list = field(default_factory=list)
 
 
 @dataclass
