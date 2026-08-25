@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.66 óta)
+## v0.1.67 — kiadva (2026-08-25)
+
+> Kiadás-jegyzet: a BIZALOM kiadása. A felismerés téved — eddig ezt
+> semmivel nem lehetett javítani, az edző pedig egy rossz eredményű
+> jelentésnek egyetlen számát sem hiszi el, akkor sem, ha a többi jó.
+> Mostantól a gólok kézzel javíthatók, a javítás az egész elemzésen
+> átüt, az állás ott van a lista tetején, és a motor maga szól, ha az
+> eredmény hihetetlenül kevés. Mellette a mezszám-kiosztás egy
+> menetben — ez a kapuőr minden szezon-szintű lap előtt.
 
 - **Mezszámok kiosztása egy menetben** (felület): a mezszám kapuőr —
   meccsek között csak ez köti össze a játékost, tehát nélküle a Keret,
