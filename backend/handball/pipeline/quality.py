@@ -64,6 +64,14 @@ BALL_CONFIDENCE_PCT = 40.0
 # eladás-alapú rétegek nem a csapatról állítanak valamit.
 TURNOVER_RATE_MAX_PER_MIN = 4.0
 
+# Gól / perc: e ALATT a felismerés nyilvánvalóan gólokat HAGYOTT KI.
+# Felnőtt kézilabdában a két csapat együtt nagyjából 0,8–1,0 gólt szerez
+# percenként (55–60 gól hatvan perc alatt); ennek a HARMADA már nem
+# szoros meccs, hanem hiányzó felismerés. Csak ennél hosszabb
+# felvételre nézzük — pár perces próbán a szórás önmagában eldönti.
+GOALS_PER_MIN_LOW = 0.30
+GOALS_RATE_MIN_MINUTES = 10.0
+
 # ELSŐ TEENDŐ: a figyelmeztetések fontossági SORRENDJE. Egy gyenge
 # feldolgozás jellemzően négy-hat figyelmeztetést kap egyszerre, és a
 # felhasználó ilyenkor nem tudja, mivel kezdje — pedig a lista eleje és
@@ -89,6 +97,10 @@ NEXT_ACTION_ORDER: tuple = (
     ("Kevés játékos látszik",
      "Ellenőrizd, hogy a kamera a játékteret mutatja-e, és hogy a "
      "kalibráció a látható térfélre készült-e."),
+    ("Gyanúsan kevés gól",
+     "Nézd végig az Események listát: a lövésként jelölt gólokat a sor "
+     "⋮ menüjében egy kattintással gólra javíthatod (a javítás az "
+     "egész elemzésen átüt)."),
     ("Gyanúsan sok hétméteres-jel",
      "Add meg a meccs időablakát (perc:másodperc), hogy a bemelegítés "
      "és a ceremónia kimaradjon."),
@@ -464,6 +476,30 @@ def compute_quality_report(match: Match) -> dict:
             "álldogálást a motor eladott labdának, a bemelegítő kapura "
             "lövéseket lövésnek látja. Add meg a meccs időablakát "
             "(perc:másodperc) az Új elemzés lapon, és futtasd újra.")
+
+    # --- Hihető-e a felismert EREDMÉNY? ---
+    # Az edző az eredményből dönti el, hogy hisz-e a jelentésnek: ha az
+    # állás nyilvánvalóan kevés, a többi szám sem ér semmit a szemében
+    # — akkor sem, ha egyébként pontos. Mostantól javítható is, ezért a
+    # figyelmeztetés nem zsákutca: megmondjuk, hol.
+    goals = 0
+    try:
+        from .event_detection import EventType as _ET, detect_shots as _ds
+        goals = sum(1 for e in _ds(match) if e.type is _ET.GOAL)
+    except Exception:
+        pass
+    if duration_s / 60.0 >= GOALS_RATE_MIN_MINUTES:
+        gol_perc = goals / (duration_s / 60.0)
+        if gol_perc < GOALS_PER_MIN_LOW:
+            warnings.append(
+                f"Gyanúsan kevés gól ({goals} db {duration_s / 60:.0f} "
+                f"perc alatt = {gol_perc:.2f} gól/perc) — kézilabdában a "
+                "két csapat együtt percenként nagyjából egy gólt szerez, "
+                "tehát a felismerés valószínűleg KIHAGYOTT gólokat "
+                "(gyakran lövésként jelöli őket). Az Események listán a "
+                "sorok ⋮ menüjében javítható: \"Ez GÓL volt\" — a "
+                "javítás az egész elemzésen átüt (eredmény, xG, "
+                "lövő-listák).")
 
     seven_meters = 0
     try:

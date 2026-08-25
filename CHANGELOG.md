@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.66 óta)
 
+- **Eredmény-sáv az Események lapon** (felület): az edző az
+  EREDMÉNYBŐL dönti el, hogy hisz-e a jelentésnek — ha a felismerés
+  21–19-et mond a valós 24–22 helyett, a többi szám sem ér semmit a
+  szemében. Az állás mostantól ott van a lista tetején, és mellette a
+  mondat, hogy javítható (különben a javítás-eszközök rejtve
+  maradnának); kézi javítás után a sáv a javítások számát mutatja.
+- **"Gyanúsan kevés gól" figyelmeztetés** (motor): kézilabdában a két
+  csapat együtt percenként nagyjából egy gólt szerez. Ha a felismerés
+  ennek a töredékét látja (0,30 gól/perc alatt, legalább 10 perces
+  felvételen), nem szoros meccset mért, hanem gólokat hagyott ki —
+  jellemzően lövésként jelölte őket. A figyelmeztetés ezt kimondja, és
+  megmondja, hol javítható: nem zsákutca, hanem teendő.
+
 - **A felismerés kézzel javítható** (motor + felület): a felismerés
   téved — gólt lövésnek lát, lövést nem vesz észre —, és eddig ezt
   semmivel nem lehetett javítani. Az edző pedig egy rossz eredményű

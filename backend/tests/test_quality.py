@@ -404,3 +404,39 @@ def test_a_labda_lefedettseg_nem_hizik_a_sajat_potlasunkkal():
         Match(_meta(), frames))}
     assert sorok["ball"]["available"] is False
     assert "20%" in sorok["ball"]["reason"]
+
+
+def test_gyanusan_keves_gol_figyelmeztetes_es_teendo():
+    """Az edző az EREDMÉNYBŐL dönti el, hogy hisz-e a jelentésnek.
+
+    Kézilabdában a két csapat együtt percenként nagyjából egy gólt
+    szerez. Ha a felismerés ennek a töredékét látja, nem szoros meccset
+    mért, hanem gólokat hagyott ki — és ha ezt nem mondjuk ki, az edző
+    a JÓ számokat is elveti. A teendő nem zsákutca: a javítás helyét is
+    megmondjuk.
+    """
+    from handball.pipeline.quality import (GOALS_RATE_MIN_MINUTES,
+                                           next_action)
+
+    fps = 25.0
+    percek = GOALS_RATE_MIN_MINUTES + 2
+    frames = [Frame(t=t, players=[_pl(i) for i in range(14)],
+                    ball=Ball(x=20.0, y=10.0, confidence=1.0))
+              for t in range(int(percek * 60 * fps))]
+    r = compute_quality_report(Match(_meta(fps), frames))
+    kevés = [w for w in r["warnings"] if "kevés gól" in w]
+    assert kevés, r["warnings"]
+    assert "GÓL volt" in kevés[0], "a figyelmeztetés nem mondja meg, hol javítható"
+    # A teendő-lista is ismeri (különben a rangsorolás átugorná).
+    assert next_action(kevés) is not None
+
+
+def test_rovid_felvetelre_nem_szol_a_gol_arany():
+    """Pár perces próbán a szórás önmagában eldönti a gólarányt —
+    ilyenkor a figyelmeztetés csak zaj lenne."""
+    fps = 25.0
+    frames = [Frame(t=t, players=[_pl(i) for i in range(14)],
+                    ball=Ball(x=20.0, y=10.0, confidence=1.0))
+              for t in range(int(60 * fps))]  # 1 perc
+    r = compute_quality_report(Match(_meta(fps), frames))
+    assert not [w for w in r["warnings"] if "kevés gól" in w]

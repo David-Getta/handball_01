@@ -582,6 +582,7 @@ class _MatchScreenState extends State<MatchScreen> {
         ? const <Map<String, dynamic>>[]
         : _filteredEvents();
     return Column(children: [
+      _scoreBar(match),
       // Típus-szűrő: az edző pl. csak a gólokat nézi végig, gólról gólra.
       // A támadás-címkék (atk:) a szakasz-listára váltanak.
       Padding(
@@ -811,6 +812,68 @@ class _MatchScreenState extends State<MatchScreen> {
                   ),
       ),
     ]);
+  }
+
+  /// EREDMÉNY-SÁV: a felismert állás, kimondva, hogy javítható.
+  ///
+  /// Az edző az eredményből dönti el, hogy hisz-e a jelentésnek. Ha a
+  /// felismerés 21–19-et mond a valós 24–22 helyett, a többi szám sem
+  /// ér semmit a szemében — akkor sem, ha egyébként pontos. Ezért az
+  /// állás LÁTSZIK, és mellette ott a mondat, hogy javítható: a
+  /// javítás-eszközök máshogy rejtve maradnának.
+  Widget _scoreBar(Match match) {
+    var hazai = 0;
+    var vendeg = 0;
+    for (final e in _events) {
+      if (e["type"] != "goal") continue;
+      if (e["team"] == "home") {
+        hazai++;
+      } else {
+        vendeg++;
+      }
+    }
+    final demo = _sourceLabel == "demó";
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: AppTheme.card(
+          borderColor: _overrides.isEmpty ? null : AppColors.gold),
+      child: Row(children: [
+        Expanded(
+          child: Text(match.meta.homeTeam,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.value.copyWith(fontSize: 13)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          child: Text("$hazai – $vendeg", style: AppText.statBig),
+        ),
+        Expanded(
+          child: Text(match.meta.awayTeam,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.value.copyWith(fontSize: 13)),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Flexible(
+          flex: 2,
+          child: Text(
+              demo
+                  ? "demó adat"
+                  : _overrides.isEmpty
+                      ? "a felismerés szerint — ha nem stimmel, a "
+                          "sorok ⋮ menüjében javítható"
+                      : "${_overrides.length} kézi javítással",
+              style: AppText.label.copyWith(
+                  fontSize: 11.5,
+                  color: _overrides.isEmpty
+                      ? AppColors.textFaint
+                      : AppColors.gold)),
+        ),
+      ]),
+    );
   }
 
   /// A kiválasztott szabály-szűrő (rule:...) sorai egységes alakban:
