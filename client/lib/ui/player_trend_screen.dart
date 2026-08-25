@@ -47,6 +47,9 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
   bool _loading = false;
   String? _error;
   List<Map<String, dynamic>> _points = [];
+  // A mezszámhoz felvitt játékos-név (a Keret-lapon adható meg). Ha van,
+  // a cím a NEVET mutatja: a lapot a játékos kapja a kezébe.
+  String? _name;
 
   @override
   void initState() {
@@ -109,6 +112,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
       if (!mounted) return;
       setState(() {
         _points = (r["points"] as List).cast<Map<String, dynamic>>();
+        _name = r["name"] as String?;
         _loading = false;
       });
     } catch (e) {
@@ -153,10 +157,14 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
   Widget build(BuildContext context) {
     return AppShell(
       active: NavId.playerTrend,
-      crumbPath: "DASHBOARD · JÁTÉKOS-FEJLŐDÉS",
+      crumbPath: "CSAPAT · JÁTÉKOS-FEJLŐDÉS",
       child: ListView(
         children: [
-          Text("Játékos-fejlődés", style: AppText.title),
+          Text(
+              _name != null && _name!.isNotEmpty
+                  ? "$_name — játékos-fejlődés"
+                  : "Játékos-fejlődés",
+              style: AppText.title),
           const SizedBox(height: 4),
           Text("egy játékos terhelése meccsről meccsre — mezszám alapján "
               "(a meccs-nézetben rendelj számot a játékoshoz)",

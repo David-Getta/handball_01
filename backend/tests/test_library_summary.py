@@ -186,3 +186,59 @@ def test_ismeretlen_csapat_keret_lapja_ures_de_nem_hiba():
     r = client.get("/library/roster", params={"team": "Nincs Ilyen SE"})
     assert r.status_code == 200
     assert r.json()["players"] == []
+
+
+def test_jatekos_nevek_mezszamhoz_es_a_lapokon():
+    """Mezszám → NÉV, csapat-szinten — és minden lapon ott is van.
+
+    Az egész termék "#7"-et mondott. Az edző nem számokban gondolkodik,
+    a játékos pedig a saját nevét keresi. A név a CSAPATHOZ és a
+    mezszámhoz tartozik, nem egy meccshez: a mezszám a szezonban
+    stabil, a track-azonosító nem — egy helyen felvitt név minden
+    korábbi és későbbi meccsen is látszik.
+    """
+    client, ids = _client_with_matches(1)
+    teams = client.get("/library/summary").json()["teams"]
+    csapat = teams[0]
+    keret = client.get("/library/roster", params={"team": csapat}).json()
+    assert keret["players"], "a szimulált meccsen egyetlen mezszám sincs"
+    mez = keret["players"][0]["jersey"]
+    # Kezdetben névtelen — de a mező LÉTEZIK (nem hiányzó kulcs).
+    assert keret["players"][0]["name"] is None
+
+    r = client.post("/library/players",
+                    json={"team": csapat, "jersey": mez, "name": "Kovács"})
+    assert r.status_code == 200 and r.json()["name"] == "Kovács"
+
+    # A keret-lapon látszik…
+    keret2 = client.get("/library/roster", params={"team": csapat}).json()
+    sor = [p for p in keret2["players"] if p["jersey"] == mez][0]
+    assert sor["name"] == "Kovács"
+    # …és a játékos-görbén is (ebből lesz a szezon-lap címe).
+    trend = client.get("/players/trend",
+                       params={"team": csapat, "jersey": mez}).json()
+    assert trend["name"] == "Kovács"
+
+    # Üres név TÖRLI a hozzárendelést (a szám marad, névtelen lesz).
+    client.post("/library/players",
+                json={"team": csapat, "jersey": mez, "name": "   "})
+    keret3 = client.get("/library/roster", params={"team": csapat}).json()
+    sor3 = [p for p in keret3["players"] if p["jersey"] == mez][0]
+    assert sor3["name"] is None
+
+
+def test_a_nev_kenyelem_nem_adat():
+    """Hiányzó vagy sérült név-fájl nem viheti el a keretet.
+
+    A név KÉNYELEM: nélküle a program a mezszámokkal ugyanúgy működik.
+    Ha a tárolt fájl sérült, a lapoknak akkor is meg kell jelenniük —
+    egy elrontott név-fájl miatt nem veszhet el a szezon-statisztika.
+    """
+    client, ids = _client_with_matches(1)
+    teams = client.get("/library/summary").json()["teams"]
+    (Path(_tmp) / "data" / "players.json").write_text(
+        "{ ez nem json", encoding="utf-8")
+    r = client.get("/library/roster", params={"team": teams[0]})
+    assert r.status_code == 200
+    assert r.json()["players"], "a sérült név-fájl elvitte a keretet"
+    assert all(p["name"] is None for p in r.json()["players"])

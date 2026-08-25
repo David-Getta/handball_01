@@ -9,6 +9,11 @@
 /// A tábla rendezhető (koppints az oszlopfejre), és egy sorra koppintva
 /// a játékos fejlődés-görbéje nyílik — előre kitöltve, nem üres űrlap.
 ///
+/// Itt lehet NEVET adni a mezszámoknak (ceruza-ikon). A név
+/// csapat-szintű, nem meccsenkénti: a mezszám a szezonban stabil, a
+/// track-azonosító nem — egy helyen felvitt név minden korábbi és
+/// későbbi meccsen is látszik (toplisták, szezon-lap).
+///
 /// A "meccs" oszlop szándékosan az első szám: enélkül egy alacsony
 /// gólszám félrevezet — kevés játék vagy gyenge forma? Két külön
 /// kérdés, két külön teendő.
@@ -119,12 +124,92 @@ class _RosterScreenState extends State<RosterScreen> {
   List<Map<String, dynamic>> get _sorted {
     final rows = List<Map<String, dynamic>>.of(_players);
     rows.sort((a, b) {
+      int c;
+      if (_sortKey == "name") {
+        // Névsor: a névtelenek a lista VÉGÉRE kerülnek (növekvő
+        // rendezésnél), mert ott nem zavarnak — nem hiányzó
+        // teljesítmény, csak hiányzó név.
+        final x = (a["name"] as String?) ?? "";
+        final y = (b["name"] as String?) ?? "";
+        if (x.isEmpty && y.isEmpty) {
+          c = 0;
+        } else if (x.isEmpty) {
+          c = 1;
+        } else if (y.isEmpty) {
+          c = -1;
+        } else {
+          c = x.toLowerCase().compareTo(y.toLowerCase());
+        }
+        return _desc ? -c : c;
+      }
       final x = (a[_sortKey] as num?) ?? 0;
       final y = (b[_sortKey] as num?) ?? 0;
-      final c = x.compareTo(y);
+      c = x.compareTo(y);
       return _desc ? -c : c;
     });
     return rows;
+  }
+
+  /// Név felvitele / módosítása egy mezszámhoz.
+  Future<void> _editName(Map<String, dynamic> p) async {
+    final team = _team;
+    if (team == null) return;
+    final jersey = (p["jersey"] as num?)?.toInt() ?? 0;
+    final ctrl = TextEditingController(text: (p["name"] as String?) ?? "");
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text("#$jersey neve"),
+        content: SizedBox(
+          width: 320,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              style: AppText.value.copyWith(fontSize: 14),
+              decoration: const InputDecoration(
+                  hintText: "pl. Kovács Bence",
+                  border: OutlineInputBorder()),
+              onSubmitted: (_) => Navigator.pop(ctx, true),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+                "A név a CSAPATHOZ és a mezszámhoz tartozik, nem egy "
+                "meccshez: minden korábbi és későbbi meccsen is "
+                "látszik. Üresen hagyva törlöd.",
+                style: AppText.label.copyWith(fontSize: 11.5)),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Mentés"),
+          ),
+        ],
+      ),
+    );
+    final nev = ctrl.text.trim();
+    ctrl.dispose();
+    if (ok != true || !mounted) return;
+    try {
+      await _api.setPlayerName(team, jersey, nev);
+      if (!mounted) return;
+      // A helyi sor azonnal frissül — ne kelljen újratölteni az egész
+      // keretet egy név miatt.
+      setState(() => p["name"] = nev.isEmpty ? null : nev);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("A név mentése nem sikerült: "
+              "${humanError(e)}")));
+    }
   }
 
   void _sortBy(String key) {
@@ -133,9 +218,9 @@ class _RosterScreenState extends State<RosterScreen> {
         _desc = !_desc;
       } else {
         _sortKey = key;
-        // Teljesítmény-oszlopnál a nagy szám érdekes elöl; a mezszám
-        // viszont névsor-szerű, ott a növekvő a természetes.
-        _desc = key != "jersey";
+        // Teljesítmény-oszlopnál a nagy szám érdekes elöl; a mezszám és
+        // a név viszont névsor-szerű, ott a növekvő a természetes.
+        _desc = key != "jersey" && key != "name";
       }
     });
   }
@@ -269,6 +354,7 @@ class _RosterScreenState extends State<RosterScreen> {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       child: Row(children: [
         head("jersey", "MEZ", flex: 2),
+        head("name", "NÉV", flex: 4),
         for (final (key, label) in kRosterColumns)
           head(key, label.toUpperCase()),
       ]),
@@ -309,6 +395,33 @@ class _RosterScreenState extends State<RosterScreen> {
                   ),
                   child: Text("#$jersey",
                       style: AppText.value.copyWith(fontSize: 13)),
+                ),
+              ]),
+            ),
+            Expanded(
+              flex: 4,
+              child: Row(children: [
+                Flexible(
+                  child: Text(
+                      (p["name"] as String?)?.isNotEmpty == true
+                          ? p["name"] as String
+                          : "névtelen",
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.value.copyWith(
+                          fontSize: 13,
+                          color: (p["name"] as String?)?.isNotEmpty == true
+                              ? AppColors.textPrimary
+                              : AppColors.textFaint)),
+                ),
+                IconButton(
+                  tooltip: "Név megadása",
+                  iconSize: 15,
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.only(left: 6),
+                  icon: const Icon(Icons.edit_outlined,
+                      color: AppColors.textFaint),
+                  onPressed: () => _editName(p),
                 ),
               ]),
             ),

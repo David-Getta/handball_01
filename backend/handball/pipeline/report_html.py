@@ -3897,10 +3897,19 @@ időszakok mutatói kimaradnak, hogy ne látsszanak hamis változásnak.
 </div></body></html>""")
 
 
-def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
+def player_season_html(team: str, jersey: int, points: list[dict],
+                       name: str | None = None) -> str:
     """Szezon játékos-lap: egy játékos meccsről meccsre, nyomtatható
     HTML-ben — a /players/trend pontjaiból (összesítő + meccs-tábla).
+
+    A `name` a mezszámhoz felvitt játékos-név (ha van): a lapot a
+    játékos kapja a kezébe, és a saját NEVÉT keresi rajta, nem a
+    számát. Név nélkül a szám marad a cím — visszafelé kompatibilis.
     """
+    # A címben a szám ELŐL marad (a mezszám az azonosító, a név a
+    # kényelem): "#7 Kovács" — így a névtelen és a nevesített lap
+    # ugyanúgy olvasható.
+    ki = f"#{jersey}" + (f" {name}" if name else "")
     n = len(points)
     goals = sum(p_.get("goals", 0) for p_ in points)
     shots = sum(p_.get("shots", 0) for p_ in points)
@@ -4005,7 +4014,7 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
 <html lang="hu">
 <head>
 <meta charset="utf-8">
-<title>Szezon-lap — #{jersey} ({escape(team)})</title>
+<title>Szezon-lap — {escape(ki)} ({escape(team)})</title>
 <style>
   * {{ box-sizing: border-box; }}
   body {{ margin: 0; font-family: system-ui, -apple-system, "Segoe UI",
@@ -4035,7 +4044,7 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
 <body><div class="page">
 <header>
   <div class="brand">SPORT MACHINE · SZEZON-LAP</div>
-  <h1>#{jersey} — {escape(team)}</h1>
+  <h1>{escape(ki)} — {escape(team)}</h1>
   <div class="sub">{n} elemzett meccs, időrendben.</div>
 </header>
 <h2>Szezon-összesítő</h2>

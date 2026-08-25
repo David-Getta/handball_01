@@ -1683,3 +1683,42 @@ def test_a_jegyzetek_egy_listat_alkotnak_es_visszanezhetok():
            / "app.py").read_text(encoding="utf-8")
     assert '@app.get("/library/notes")' in app, (
         "a kliens olyan végpontot hív, ami nincs a motorban")
+
+
+def test_a_jatekosok_nevet_kapnak_nem_csak_szamot():
+    """Az egész termék "#7"-et mondott.
+
+    Az edző nem számokban gondolkodik, a játékos pedig a saját nevét
+    keresi. A név a CSAPATHOZ és a mezszámhoz tartozik (a mezszám a
+    szezonban stabil, a track-azonosító nem), ezért egy helyen kell
+    tudni megadni — és ott kell látszania, ahol a játékosról szó van.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    keret = (lib / "ui" / "roster_screen.dart").read_text(encoding="utf-8")
+    assert "setPlayerName" in keret, "a keret-lapon nem adható meg név"
+    assert '"NÉV"' in keret, "a keret-lapon nincs név-oszlop"
+
+    # Ahol a játékosról szó van, ott a névnek is látszania kell —
+    # különben az egyik lapon Kovács, a másikon #7 szerepel.
+    szezon = (lib / "ui" / "season_screen.dart").read_text(encoding="utf-8")
+    assert '"name"' in szezon, (
+        "a toplistákon nem látszik a felvitt név")
+    trend = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert '"name"' in trend, (
+        "a játékos-görbén nem látszik a felvitt név")
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.post("/library/players")' in app
+    # A névjegyzék NEM a meccs-mappába való: a betöltő minden ottani
+    # *.json-t meccsnek próbál olvasni.
+    assert '_data_dir.parent / "players.json"' in app, (
+        "a névjegyzék a meccs-mappában landolna")

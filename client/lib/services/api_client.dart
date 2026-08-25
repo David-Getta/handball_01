@@ -1084,6 +1084,21 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Játékos-név hozzárendelése egy csapat mezszámához
+  /// (POST /library/players). ÜRES név törli a hozzárendelést.
+  /// A név csapat-szintű (nem meccsenkénti): a mezszám a szezonban
+  /// stabil, a track-azonosító nem.
+  Future<void> setPlayerName(String team, int jersey, String name) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/library/players"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"team": team, "jersey": jersey, "name": name}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült menteni a nevet", resp));
+    }
+  }
+
   /// Szezon-összkép a kezdőlapnak (GET /library/summary): összesített
   /// mutatók (meccsek, játékidő, gólok, táv, sprintek) + meccsenkénti
   /// kivonat a "per_match" kulcs alatt.

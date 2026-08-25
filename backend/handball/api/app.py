@@ -40,6 +40,8 @@ Az adattárolás itt egyelőre memóriában/placeholder; később Postgres + obj
 
 from __future__ import annotations
 
+from typing import Optional
+
 from ..models.tracking import Match, MatchMeta, Team
 from ..storage import data_root
 from ..pipeline.pipeline import summarize
@@ -1345,6 +1347,81 @@ def create_app():
             encoding="utf-8")
         return {"saved": len(calibs)}
 
+    # --- Játékos-nevek (mezszám → név), KÖNYVTÁR-szinten -------------
+    #
+    # A mezszám a szezonban stabil, a track-azonosító nem — a neveket
+    # ezért nem meccsenként, hanem csapatonként tároljuk. Egy helyen
+    # felvitt név minden korábbi és későbbi meccsen is látszik.
+
+    def _players_path() -> Path:
+        # A meccs-mappa MELLÉ, nem bele: a betöltő minden ottani *.json-t
+        # meccsnek próbál olvasni (a kísérőfájlokat a nevük végéről
+        # ismeri fel), egy csapat-szintű névjegyzék pedig nem meccs.
+        # A könyvtár-mentés a data/ egészét viszi, tehát így is bekerül.
+        return _data_dir.parent / "players.json"
+
+    def _load_players() -> dict:
+        """{csapatnév: {mezszám(str): név}} — hibás fájlra üres szótár.
+
+        A név KÉNYELEM, nem adat: ha a fájl sérült, a program a
+        mezszámokkal ugyanúgy működik, ezért itt nem dobunk hibát.
+        """
+        p = _players_path()
+        if p.exists():
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(d.get("players"), dict):
+                    return d["players"]
+            except Exception:
+                pass
+        return {}
+
+    def _player_name(team: str, jersey: int) -> Optional[str]:
+        return (_load_players().get(team) or {}).get(str(jersey))
+
+    @app.get("/library/players")
+    def get_library_players(team: Optional[str] = None):
+        """A felvitt játékos-nevek: {"players": {csapat: {mez: név}}}.
+
+        `team` megadásával csak az adott csapaté. A minden riportban
+        látszó "#7" helyett így "7 — Kovács" írható: az edző nem
+        számokban gondolkodik, a játékos pedig a saját nevét keresi.
+        """
+        mind = _load_players()
+        if team is None:
+            return {"players": mind}
+        return {"players": {team: mind.get(team) or {}}}
+
+    @app.post("/library/players")
+    def set_library_player(body: dict):
+        """Név hozzárendelése egy csapat mezszámához.
+
+        Törzs: {"team": ..., "jersey": 7, "name": "Kovács"} — ÜRES név
+        törli a hozzárendelést (a szám marad, csak névtelen lesz).
+        """
+        team = str(body.get("team") or "").strip()
+        if not team:
+            raise HTTPException(status_code=400, detail="team required")
+        try:
+            jersey = int(body.get("jersey"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="jersey required")
+        name = str(body.get("name") or "").strip()[:60]
+        mind = _load_players()
+        csapat = dict(mind.get(team) or {})
+        if name:
+            csapat[str(jersey)] = name
+        else:
+            csapat.pop(str(jersey), None)
+        if csapat:
+            mind[team] = csapat
+        else:
+            mind.pop(team, None)
+        _players_path().write_text(
+            json.dumps({"players": mind}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        return {"team": team, "jersey": jersey, "name": name or None}
+
     def _roster_path(match_id: str) -> Path:
         import re
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
@@ -2334,7 +2411,8 @@ def create_app():
                 "xg_diff": round(goals - xg, 2) if xg is not None else None,
             })
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
-        return {"team": team, "jersey": jersey, "points": points}
+        return {"team": team, "jersey": jersey,
+                "name": _player_name(team, jersey), "points": points}
 
     @app.get("/head-to-head/report")
     def get_h2h_report(team_a: str, team_b: str):
@@ -2566,7 +2644,7 @@ def create_app():
                                 detail="no data for player")
         from ..pipeline.report_html import player_season_html
         return HTMLResponse(content=player_season_html(
-            team, jersey, data["points"]))
+            team, jersey, data["points"], data.get("name")))
 
     # Szezon-összkép gyorsítótár: meccsenkénti kivonat, a frame-szám a
     # kulcs érvényessége — újrafeldolgozásnál magától frissül.
@@ -2926,7 +3004,8 @@ def create_app():
         t = _library_player_tallies()
 
         def _top(tally):
-            return [{"team": k[0], "jersey": k[1], "value": v}
+            return [{"team": k[0], "jersey": k[1],
+                     "name": _player_name(k[0], k[1]), "value": v}
                     for k, v in sorted(tally.items(),
                                        key=lambda kv: -kv[1])[:5]]
 
@@ -2960,6 +3039,7 @@ def create_app():
             k = (team, j)
             sorok.append({
                 "jersey": j,
+                "name": _player_name(team, j),
                 "matches": t["matches"].get(k, 0),
                 "goals": t["goals"].get(k, 0),
                 "assists": t["assists"].get(k, 0),

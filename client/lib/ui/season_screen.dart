@@ -206,7 +206,13 @@ class _SeasonScreenState extends State<SeasonScreen> {
                 ),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text("${(rows[i] as Map)["team"]}",
+                  // Ha van felvitt NÉV, az kerül előre — az edző nem
+                  // számokban gondolkodik. Név nélkül marad a csapat.
+                  child: Text(
+                      ((rows[i] as Map)["name"] as String?)?.isNotEmpty ==
+                              true
+                          ? "${(rows[i] as Map)["name"]}"
+                          : "${(rows[i] as Map)["team"]}",
                       overflow: TextOverflow.ellipsis,
                       style: AppText.label.copyWith(fontSize: 11.5)),
                 ),

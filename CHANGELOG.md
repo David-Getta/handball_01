@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.65 óta)
 
+- **A játékosok nevet kapnak, nem csak számot** (motor + felület): az
+  egész termék "#7"-et mondott — az edző viszont nem számokban
+  gondolkodik, a játékos pedig a saját nevét keresi. A név a
+  CSAPATHOZ és a mezszámhoz tartozik, nem egy meccshez (a mezszám a
+  szezonban stabil, a track-azonosító nem), ezért egy helyen kell
+  megadni: a Keret-lapon, ceruza-ikonnal. Onnantól minden korábbi és
+  későbbi meccsen látszik — keret, toplisták, játékos-fejlődés,
+  nyomtatható szezon-lap. Új végpontok: `GET/POST /library/players`;
+  a névjegyzék a meccs-mappa MELLETT él (a betöltő minden ottani
+  *.json-t meccsnek próbál olvasni), és a könyvtár-mentésbe így is
+  bekerül. A név kényelem, nem adat: sérült névjegyzék mellett a
+  lapok a mezszámokkal ugyanúgy működnek.
+
 - **Jegyzetek menüpont: egy lista, meccsektől függetlenül** (motor +
   felület): a jegyzetelés eddig egyirányú volt — a meccs közben meg
   lehetett jelölni egy pillanatot, de utána csak ANNAK a meccsnek a
