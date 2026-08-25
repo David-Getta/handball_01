@@ -1505,3 +1505,48 @@ def test_a_meccsterv_sajat_menupontot_kap():
         "a képernyő nem gyűjti össze magától a csapat meccseit")
     assert "listMatches" in kepernyo, (
         "a képernyő nem a könyvtárból dolgozik")
+
+
+def test_a_klipek_menupont_szabadon_kombinalhato_csomagokat_ad():
+    """A videó-dosszié összeállítása önálló munka.
+
+    A klipvágás eddig csak a meccs-elemző eszköztárában élt, és ott is
+    EGY csomag egyszerre: aki a gólokat ÉS a kihagyott ziccereket is
+    akarta, kétszer vágatott, két zip-be. Az edzés előtt viszont pont
+    az a kérdés, mit viszünk le a pályára — a csomagokat szabadon kell
+    tudni kombinálni, és nem kell hozzá megnyitni a meccset.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.clips" in shell, "nincs Klipek menüpont"
+    assert '"Klipek"' in shell, "a menüpontnak nincs neve"
+    assert (lib / "ui" / "clips_screen.dart").exists(), (
+        "nincs Klipek képernyő")
+
+    kepernyo = (lib / "ui" / "clips_screen.dart").read_text(
+        encoding="utf-8")
+    assert "startClipExport" in kepernyo and "fetchClipsZip" in kepernyo
+    # A lényeg: TÖBB típus egyszerre, egy exportban.
+    assert "_selected.toList()" in kepernyo, (
+        "a képernyő nem több kijelölt csomagot ad át")
+
+    # A felkínált klip-típusoknak LÉTEZNIÜK kell a motorban: egy
+    # elgépelt kulcs némán üres csomagot adna (a backend ismeretlen
+    # típusra egyszerűen nem vág semmit).
+    import re as _re
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    esemeny = {"goal", "shot", "turnover"}  # a detect_events alap-típusai
+    ismert = esemeny | set(_re.findall(r'if "(\w+)" in types', app))
+    kinalt = set(_re.findall(r'\("(\w+)", "', kepernyo))
+    hianyzo = kinalt - ismert
+    assert not hianyzo, f"a kliens nem létező klip-típust kínál: {hianyzo}"

@@ -3,6 +3,30 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.65 óta)
+
+- **Klipek menüpont: szabadon kombinálható videó-csomagok** (felület):
+  a klipvágás eddig csak a meccs-elemző eszköztárában élt, és ott is
+  EGY csomag egyszerre — aki a gólokat és a kihagyott ziccereket is
+  akarta, kétszer vágatott, két zip-be. Az új képernyőn a 19 csomag
+  témák szerint csoportosítva áll (támadás · védekezés · kapus és
+  helyzetek · a meccs gerince · egyéb), tetszőlegesen kijelölhető, és
+  mind EGY zip-be kerül; négy gyors-összeállítás (teljes dosszié,
+  támadás, védekezés, csak gólok) egy kattintás. A vágás haladása
+  látszik — a néma várakozás megakadásnak látszik.
+- **A klip-plafon típusonként igazságos** (motor, javítás): a hatvan
+  klipes plafon eddig IDŐRENDBEN csonkolt, tehát aki sok csomagot kért
+  egyszerre, a meccs első harmadát kapta meg, és a ritka csomagok
+  (fordulópont, 7 a 6) simán kimaradtak, mert a gólok elvitték a
+  keretet. Ez néma hiba: a zip tele van klippel, csak épp nem arról,
+  amit az edző keresett. Mostantól minden kért típus kap kvótát (a
+  szűkösek teljes anyaga befér, a maradék a bővebbeké), és a típuson
+  belül a meccs TELJES idősávjából mintázunk.
+- **A klip-zip típus-mappákba rendez** (motor): egy tizenhárom
+  csomagos dosszié hatvan fájlja egy lapos mappában kezelhetetlen, az
+  edzésen pedig témánként kell levetíteni. Egyetlen típusnál marad a
+  lapos alak.
+
 ## v0.1.65 — kiadva (2026-08-24)
 
 > Kiadás-jegyzet: a bal oldali menü kiegészítése edzői és játékos

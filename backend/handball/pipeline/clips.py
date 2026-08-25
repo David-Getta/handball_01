@@ -59,6 +59,50 @@ def _clock(seconds: float) -> str:
     return f"{m:02d}-{s:02d}"
 
 
+def _fair_cap(picked: list, field) -> list:
+    """A MAX_CLIPS plafon TÍPUSONKÉNT igazságosan, nem az elejéről.
+
+    A korábbi `picked[:MAX_CLIPS]` időrendben vágott: aki tizenhárom
+    csomagot kért egyszerre, a meccs ELSŐ harmadát kapta meg, a
+    hajrából semmit — és a ritkább csomagok (fordulópont, 7 a 6) simán
+    kimaradtak, mert a gólok elvitték a keretet. Ez néma hiba: a zip
+    tele van klippel, csak épp nem arról, amit az edző keresett.
+
+    Ezért a keretet a TÍPUSOK között osztjuk el: minden kért típus
+    kap egy alap-kvótát (a plafon osztva a típusok számával), a
+    maradékot pedig a bővebb típusok kapják — a típuson belül időben
+    egyenletesen mintázunk, hogy a meccs egésze látsszon, ne csak az
+    eleje. A visszaadott lista időrendben marad.
+    """
+    if len(picked) <= MAX_CLIPS:
+        return picked
+    szerint: dict = {}
+    for e in picked:
+        szerint.setdefault(str(field(e, "type")), []).append(e)
+    kivalasztott: list = []
+    maradek = MAX_CLIPS
+    # Előbb a SZŰKÖS típusok: az ő teljes anyaguk befér, a fel nem
+    # használt kvóta pedig azonnal felszabadul a bővebbeknek (a kvótát
+    # ezért számoljuk újra minden lépésben).
+    tipusok = sorted(szerint.items(), key=lambda kv: len(kv[1]))
+    hatra = len(tipusok)
+    for _typ, sor in tipusok:
+        kvota = max(1, maradek // max(1, hatra))
+        hanyat = min(len(sor), kvota)
+        if hanyat >= len(sor):
+            kivalasztott.extend(sor)
+        else:
+            # Egyenletes mintavétel a típus TELJES idősávjából.
+            lepes = len(sor) / float(hanyat)
+            kivalasztott.extend(sor[int(i * lepes)] for i in range(hanyat))
+        maradek -= hanyat
+        hatra -= 1
+        if maradek <= 0:
+            break
+    kivalasztott.sort(key=lambda e: field(e, "t") or 0)
+    return kivalasztott
+
+
 def export_event_clips(match: Match, events: list, types: set[str],
                        out_dir: str | Path,
                        progress_cb: Optional[Callable] = None) -> ClipResult:
@@ -114,12 +158,13 @@ def export_event_clips(match: Match, events: list, types: set[str],
             continue
         dedup.append(e)
         last_t = t_e
-    picked = dedup[:MAX_CLIPS]
+    picked = _fair_cap(dedup, _field)
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    made: list[Path] = []
+    # (fájl, típus magyar mappaneve) — a zip ebből rendez mappákba.
+    made: list[tuple[Path, str]] = []
 
     for i, e in enumerate(picked):
         t = int(_field(e, "t") or 0)
@@ -160,7 +205,7 @@ def export_event_clips(match: Match, events: list, types: set[str],
             ok_frames += 1
         writer.release()
         if ok_frames > 0:
-            made.append(dest)
+            made.append((dest, _TYPE_HU.get(typ, typ)))
         else:
             dest.unlink(missing_ok=True)  # üres klip nem kell
 
@@ -171,10 +216,17 @@ def export_event_clips(match: Match, events: list, types: set[str],
                            "esemény, vagy a videó nem olvasható.")
 
     # Zip-be csomagolás (tömörítés nélkül — a videó már tömörített).
+    #
+    # TÖBB típusnál a klipek TÍPUS-MAPPÁKBA kerülnek: egy tizenhárom
+    # csomagos dosszié hatvan fájlja egy lapos mappában kezelhetetlen,
+    # az edzésen pedig témánként kell levetíteni. Egyetlen típusnál
+    # marad a lapos alak (a mappa ott csak egy fölösleges kattintás).
     zip_path = out_dir / "klipek.zip"
+    tobb_tipus = len({t for _f, t in made}) > 1
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as z:
-        for f in made:
-            z.write(f, f.name)
+        for f, typ_of in made:
+            arcname = f"{typ_of}/{f.name}" if tobb_tipus else f.name
+            z.write(f, arcname)
     if progress_cb:
         progress_cb(len(picked), len(picked), f"kész: {len(made)} klip")
     return ClipResult(zip_path=str(zip_path), count=len(made),

@@ -265,3 +265,76 @@ def test_steal_clip_gets_hungarian_name(tmp_path):
     with zipfile.ZipFile(res.zip_path) as z:
         names = " ".join(z.namelist())
     assert "labdaszerzes" in names
+
+
+def test_tobb_tipusnal_a_zip_mappakba_rendez(tmp_path):
+    """Több csomagnál TÍPUS-MAPPÁK, egynél lapos a zip.
+
+    A klip-képernyőn az edző egyszerre tizenhárom csomagot is kérhet;
+    hatvan fájl egy lapos mappában kezelhetetlen, az edzésen pedig
+    témánként kell levetíteni. Egyetlen típusnál viszont a mappa csak
+    egy fölösleges kattintás lenne.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [
+        {"t": 60, "type": "goal", "team": "home"},
+        {"t": 120, "type": "block", "team": "away"},
+    ]
+    res = export_event_clips(m, events, {"goal", "block"}, tmp_path / "ki")
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = z.namelist()
+    assert sorted(n.split("/")[0] for n in names) == ["blokk", "gol"], names
+    assert all("/" in n for n in names)
+
+    # Egyetlen típus: marad a lapos alak.
+    res1 = export_event_clips(m, events, {"goal"}, tmp_path / "ki1")
+    with zipfile.ZipFile(res1.zip_path) as z:
+        names1 = z.namelist()
+    assert names1 and all("/" not in n for n in names1), names1
+
+
+def test_a_plafon_tipusonkent_igazsagos_es_a_meccs_egeszet_lefedi():
+    """A MAX_CLIPS plafon nem az elejéről vág.
+
+    A korábbi `picked[:MAX_CLIPS]` időrendben csonkolt: aki sok
+    csomagot kért egyszerre, a meccs ELSŐ harmadát kapta meg, és a
+    ritka csomagok (fordulópont) simán kimaradtak, mert a gólok
+    elvitték a keretet. Ez néma hiba: a zip tele van klippel, csak épp
+    nem arról, amit az edző keresett.
+    """
+    from handball.pipeline.clips import MAX_CLIPS, _fair_cap
+
+    def field(e, name):
+        return e[name]
+
+    events = ([{"t": i, "type": "goal"} for i in range(100)]
+              + [{"t": i * 40, "type": "turning_point"} for i in range(3)]
+              + [{"t": i * 5, "type": "block"} for i in range(20)])
+    events.sort(key=lambda e: e["t"])
+    out = _fair_cap(events, field)
+
+    assert len(out) == MAX_CLIPS
+    tipusok = {e["type"] for e in out}
+    # A ritka típus TELJES egészében benne van — ez a lényeg.
+    assert tipusok == {"goal", "turning_point", "block"}
+    assert sum(1 for e in out if e["type"] == "turning_point") == 3
+    assert sum(1 for e in out if e["type"] == "block") == 20
+    # A gólok a meccs EGÉSZÉBŐL jönnek, nem az első hatvanból.
+    golok = [e["t"] for e in out if e["type"] == "goal"]
+    assert max(golok) > 90, golok
+    # Időrendben marad (a fájlnevek sorszáma így követi a meccset).
+    assert [e["t"] for e in out] == sorted(e["t"] for e in out)
+
+
+def test_a_plafon_alatt_semmi_nem_valtozik():
+    """Plafon alatt a lista érintetlen — a mintavétel csak akkor lép be,
+    ha tényleg nem fér bele minden."""
+    from handball.pipeline.clips import _fair_cap
+
+    def field(e, name):
+        return e[name]
+
+    events = [{"t": i, "type": "goal"} for i in range(10)]
+    assert _fair_cap(events, field) == events

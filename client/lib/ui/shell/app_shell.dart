@@ -3,7 +3,7 @@
 /// A menü az edző munkarendjét követi, nem a fejlesztését:
 ///   MUNKAFOLYAMAT: Kezdőlap → Új elemzés → Feldolgozások → Élő követés
 ///   ELEMZÉS:       Meccs-elemző · Ellenfél-felderítés · Meccsterv ·
-///                  Figura-tervező
+///                  Klipek · Figura-tervező
 ///   CSAPAT:        Edzésterv · Szezon · Játékos-fejlődés
 /// Minden eszköz a menüből érhető el (nem képernyők mélyéről), a kijelölés
 /// mindig mutatja, hol jársz. Gyors váltás billentyűzetről: Cmd/Ctrl+1..9
@@ -26,6 +26,7 @@ import "../../sim/demo_data.dart";
 import "../../theme/app_theme.dart";
 import "../../version.dart";
 import "../account_gate.dart";
+import "../clips_screen.dart";
 import "../dashboard_screen.dart";
 import "../designer_screen.dart";
 import "../error_text.dart";
@@ -43,8 +44,8 @@ import "../upload_screen.dart";
 /// A navigáció elemei. (A `matches` a meccs-elemző: menüből demóval nyílik,
 /// a könyvtárból a kiválasztott meccsel — a kijelölés ilyenkor is ezt jelöli.)
 enum NavId {
-  dashboard, upload, jobs, live, matches, scouting, matchup, designer,
-  training, season, playerTrend
+  dashboard, upload, jobs, live, matches, scouting, matchup, clips,
+  designer, training, season, playerTrend
 }
 
 /// A menü csoportjai és elemei — EGY helyen, a sáv és a billentyű-kiosztás
@@ -60,6 +61,7 @@ const List<(String, List<(NavId, IconData, String)>)> kNavGroups = [
     (NavId.matches, Icons.play_circle_outline, "Meccs-elemző"),
     (NavId.scouting, Icons.travel_explore, "Ellenfél-felderítés"),
     (NavId.matchup, Icons.fact_check_outlined, "Meccsterv"),
+    (NavId.clips, Icons.video_library_outlined, "Klipek"),
     (NavId.designer, Icons.edit_outlined, "Figura-tervező"),
   ]),
   ("CSAPAT", [
@@ -80,6 +82,7 @@ void navTo(BuildContext context, NavId id) {
     NavId.matches => const MatchScreen(),
     NavId.scouting => const ScoutingPickerScreen(),
     NavId.matchup => const MatchupScreen(),
+    NavId.clips => const ClipsScreen(),
     NavId.designer => DesignerScreen(match: buildDemoMatch()),
     NavId.training => const TrainingPlanScreen(),
     NavId.season => const SeasonScreen(),
