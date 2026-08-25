@@ -42,7 +42,13 @@ enum ViewMode { players, heatmap, shots, passes }
 
 class MatchScreen extends StatefulWidget {
   final String matchId;
-  const MatchScreen({super.key, this.matchId = "sim-0"});
+
+  /// Melyik képkockánál nyíljon meg a lejátszó. A jegyzet-listából
+  /// érkezve a MEGJELÖLT pillanatra kell ugrani — különben az edző a
+  /// saját jegyzetét keresgélheti végig a meccsen.
+  final int? initialFrame;
+
+  const MatchScreen({super.key, this.matchId = "sim-0", this.initialFrame});
 
   @override
   State<MatchScreen> createState() => _MatchScreenState();
@@ -103,6 +109,9 @@ class _MatchScreenState extends State<MatchScreen> {
   final TextEditingController _noteCtrl = TextEditingController();
   bool _savingNote = false;
   int _frameIndex = 0;
+  // Egyszer használatos: a hívó által kért kezdő-képkocka, amint a
+  // meccs betöltött (előtte nincs mihez képest határt szabni).
+  bool _initialFrameApplied = false;
   bool _playing = false;
   String _sourceLabel = "betöltés…";
   Timer? _timer;
@@ -318,6 +327,13 @@ class _MatchScreenState extends State<MatchScreen> {
     }
     setState(() {
       _match = match;
+      // A hívó által kért kezdő-képkocka (jegyzet-lista, kulcs-pillanat)
+      // — csak most, a hossz ismeretében tudjuk határok közé szorítani.
+      if (!_initialFrameApplied && widget.initialFrame != null) {
+        _initialFrameApplied = true;
+        final utolso = match.frames.isEmpty ? 0 : match.frames.length - 1;
+        _frameIndex = widget.initialFrame!.clamp(0, utolso);
+      }
       _stats = computePlayerStats(match);
       _summary = computeMatchSummary(match);
       _intensity = computeIntensityTimeline(match);

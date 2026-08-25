@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.65 óta)
 
+- **Jegyzetek menüpont: egy lista, meccsektől függetlenül** (motor +
+  felület): a jegyzetelés eddig egyirányú volt — a meccs közben meg
+  lehetett jelölni egy pillanatot, de utána csak ANNAK a meccsnek a
+  lejátszójában lehetett megtalálni. Az edző fejében viszont a
+  jegyzetek egyetlen listát alkotnak ("amit vissza akarok nézni"), és
+  a hét közbeni munka ebből indul. Új végpont (`/library/notes`) az
+  összes jegyzettel, meccs-környezettel és JÁTÉKIDŐVEL (a
+  képkocka-index az edzőnek semmit nem mond); a képernyő kereshető, és
+  egy sorra koppintva a meccs-elemző a MEGJELÖLT pillanatnál nyílik.
+
 - **Keret menüpont: a csapat MINDEN mezszáma egy táblában** (motor +
   felület): a szezon-toplisták az öt legjobbat adják — a játékos
   viszont nem a gólkirályt keresi, hanem a SAJÁT sorát, az edző pedig

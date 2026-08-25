@@ -1548,6 +1548,42 @@ def create_app():
         notes.sort(key=lambda n: n.get("frame", 0))
         return {"notes": notes}
 
+    @app.get("/library/notes")
+    def library_notes():
+        """Az ÖSSZES edzői jegyzet a könyvtárból, meccs-környezettel.
+
+        A jegyzetelés eddig egyirányú volt: a meccs közben meg lehetett
+        jelölni egy pillanatot, de utána csak ANNAK a meccsnek a
+        lejátszójában lehetett megtalálni. Az edző fejében viszont a
+        jegyzetek egyetlen listát alkotnak ("amit vissza akarok
+        nézni"), meccsektől függetlenül — a hét közbeni munka ebből
+        indul.
+
+        Visszatérés: {"notes": [{"match_id", "home_team", "away_team",
+        "date", "id", "frame", "t_s", "text"}]} — meccsenként
+        képkocka-sorrendben, a meccsek a könyvtár sorrendjében. A t_s a
+        jegyzet játékideje másodpercben (a meccs fps-éből), hogy a
+        lista órát tudjon mutatni.
+        """
+        out = []
+        for m in _store.values():
+            fps = m.meta.fps if m.meta.fps > 0 else 25.0
+            jegyzetek = _load_notes(m.meta.match_id)
+            jegyzetek.sort(key=lambda n: n.get("frame", 0))
+            for n in jegyzetek:
+                frame = int(n.get("frame") or 0)
+                out.append({
+                    "match_id": m.meta.match_id,
+                    "home_team": m.meta.home_team,
+                    "away_team": m.meta.away_team,
+                    "date": getattr(m.meta, "date", None),
+                    "id": n.get("id"),
+                    "frame": frame,
+                    "t_s": round(frame / fps, 1),
+                    "text": n.get("text") or "",
+                })
+        return {"notes": out}
+
     @app.post("/matches/{match_id}/notes")
     def add_note(match_id: str, body: dict):
         """Új edzői jegyzet. Törzs: {"frame": képkocka-index, "text": "..."}.

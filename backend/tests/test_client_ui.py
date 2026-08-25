@@ -1638,3 +1638,48 @@ def test_a_keret_lap_mindenkit_mutat_nem_csak_a_top_otot():
            / "app.py").read_text(encoding="utf-8")
     assert '@app.get("/library/roster")' in app, (
         "a kliens olyan végpontot hív, ami nincs a motorban")
+
+
+def test_a_jegyzetek_egy_listat_alkotnak_es_visszanezhetok():
+    """A jegyzetelés eddig egyirányú volt.
+
+    A meccs közben meg lehetett jelölni egy pillanatot, de utána csak
+    ANNAK a meccsnek a lejátszójában lehetett megtalálni. Az edző
+    fejében viszont a jegyzetek egyetlen listát alkotnak — "amit vissza
+    akarok nézni" —, és a hét közbeni munka ebből indul.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.notes" in shell, "nincs Jegyzetek menüpont"
+    assert '"Jegyzetek"' in shell, "a menüpontnak nincs neve"
+    assert (lib / "ui" / "notes_screen.dart").exists(), (
+        "nincs Jegyzetek képernyő")
+
+    kepernyo = (lib / "ui" / "notes_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchLibraryNotes" in kepernyo, (
+        "a lap nem a könyvtár-szintű jegyzeteket kéri")
+    # A visszanézés a lényeg: a meccs A MEGJELÖLT pillanatnál nyíljon.
+    assert "initialFrame" in kepernyo, (
+        "a jegyzetre koppintva nem a megjelölt pillanat nyílik")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "initialFrame" in meccs, (
+        "a meccs-elemző nem fogad kezdő-képkockát")
+    # A kért képkockát HATÁROK KÖZÉ kell szorítani: egy régi jegyzet
+    # mutathat a meccs hosszán túlra (újravágott videó).
+    assert "clamp(0, utolso)" in meccs, (
+        "a kezdő-képkocka nincs a meccs hosszához igazítva")
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/library/notes")' in app, (
+        "a kliens olyan végpontot hív, ami nincs a motorban")

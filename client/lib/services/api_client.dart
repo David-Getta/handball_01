@@ -563,6 +563,24 @@ class ApiClient {
     return (json["notes"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// MINDEN edzői jegyzet a könyvtárból (GET /library/notes), meccs-
+  /// környezettel: {"match_id", "home_team", "away_team", "date", "id",
+  /// "frame", "t_s", "text"}. A jegyzetek az edző fejében egyetlen
+  /// listát alkotnak, meccsektől függetlenül.
+  Future<List<Map<String, dynamic>>> fetchLibraryNotes() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/notes"))
+        .timeout(const Duration(seconds: 20));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a jegyzeteket", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["notes"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   /// Új edzői jegyzet az adott képkockához (POST /matches/{id}/notes).
   Future<Map<String, dynamic>> addNote(
       String matchId, int frame, String text) async {

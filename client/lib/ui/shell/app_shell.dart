@@ -5,7 +5,7 @@
 ///   ELEMZÉS:       Meccs-elemző · Ellenfél-felderítés · Meccsterv ·
 ///                  Klipek · Figura-tervező
 ///   CSAPAT:        Edzésterv · Szezon · Keret · Csapat-fejlődés ·
-///                  Játékos-fejlődés
+///                  Játékos-fejlődés · Jegyzetek
 /// Minden eszköz a menüből érhető el (nem képernyők mélyéről), a kijelölés
 /// mindig mutatja, hol jársz. Gyors váltás billentyűzetről: Cmd/Ctrl+1..9
 /// és Cmd/Ctrl+0 a tizedik elemre.
@@ -35,6 +35,7 @@ import "../jobs_screen.dart";
 import "../live_screen.dart";
 import "../match_screen.dart";
 import "../matchup_screen.dart";
+import "../notes_screen.dart";
 import "../player_trend_screen.dart";
 import "../roster_screen.dart";
 import "../scouting_picker_screen.dart";
@@ -48,7 +49,7 @@ import "../upload_screen.dart";
 /// a könyvtárból a kiválasztott meccsel — a kijelölés ilyenkor is ezt jelöli.)
 enum NavId {
   dashboard, upload, jobs, live, matches, scouting, matchup, clips,
-  designer, training, season, roster, teamTrend, playerTrend
+  designer, training, season, roster, teamTrend, playerTrend, notes
 }
 
 /// A menü csoportjai és elemei — EGY helyen, a sáv és a billentyű-kiosztás
@@ -73,6 +74,7 @@ const List<(String, List<(NavId, IconData, String)>)> kNavGroups = [
     (NavId.roster, Icons.groups_outlined, "Keret"),
     (NavId.teamTrend, Icons.trending_up, "Csapat-fejlődés"),
     (NavId.playerTrend, Icons.timeline, "Játékos-fejlődés"),
+    (NavId.notes, Icons.sticky_note_2_outlined, "Jegyzetek"),
   ]),
 ];
 
@@ -94,6 +96,7 @@ void navTo(BuildContext context, NavId id) {
     NavId.roster => const RosterScreen(),
     NavId.teamTrend => const TeamTrendScreen(),
     NavId.playerTrend => const PlayerTrendScreen(),
+    NavId.notes => const NotesScreen(),
   };
   Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => page));
