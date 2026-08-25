@@ -1633,6 +1633,19 @@ class _MatchScreenState extends State<MatchScreen> {
                 color: _showVideo ? AppColors.accent : AppColors.textSecondary),
             tooltip: _showVideo ? "Videó elrejtése" : "Videó megjelenítése",
           ),
+        // Mezszámok EGY menetben: enélkül minden szezon-szintű lap
+        // (keret, toplisták, játékos-fejlődés) néma marad, a
+        // pályára-kattintós szerkesztő pedig játékosonként külön
+        // párbeszéd — tizennégy emberre az már nem munka, hanem
+        // elrettentés.
+        IconButton(
+          onPressed: _sourceLabel == "demó"
+              ? null
+              : () => _bulkJerseys(match),
+          icon: const Icon(Icons.badge_outlined,
+              color: AppColors.textSecondary),
+          tooltip: "Mezszámok kiosztása (egy listában)",
+        ),
         IconButton(
           onPressed: _sourceLabel == "demó" ? null : _editSuspensions,
           icon: const Icon(Icons.timer_outlined, color: AppColors.textSecondary),
@@ -3120,6 +3133,150 @@ class _MatchScreenState extends State<MatchScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Mezszám-mentés hiba: ${humanError(e)}")));
     }
+  }
+
+  /// TÖMEGES mezszám-kiosztás: minden követett játékos egy listában.
+  ///
+  /// Miért kell: a mezszám kapuőr — nélküle a keret-lap, a toplisták és
+  /// a játékos-fejlődés néma marad, mert meccsek közt csak a szám köti
+  /// össze a játékost. A pályára-kattintós szerkesztő játékosonként egy
+  /// külön párbeszéd; tizennégy emberre az már nem munka, hanem
+  /// elrettentés — és ezért marad el.
+  ///
+  /// A lista JÁTÉKIDŐ szerint csökken: elöl a sokat játszó (valódi)
+  /// trackek, hátul a másodperces töredékek, amiket úgysem érdemes
+  /// beszámozni. Csapatonként csoportosítva, mert az edző a saját
+  /// keretét egyben tartja fejben.
+  Future<void> _bulkJerseys(Match match) async {
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    final sorok = _stats.values.toList()
+      ..sort((a, b) {
+        if (a.team != b.team) return a.team == Team.home ? -1 : 1;
+        return b.measuredFrames.compareTo(a.measuredFrames);
+      });
+    final ctrls = {
+      for (final st in sorok)
+        st.trackId: TextEditingController(
+            text: st.jerseyNumber?.toString() ?? "")
+    };
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Mezszámok kiosztása"),
+        content: SizedBox(
+          width: 460,
+          height: 460,
+          child: Column(children: [
+            Text(
+                "A mezszám köti össze a játékost a meccsek között: enélkül "
+                "a Keret, a toplisták és a Játékos-fejlődés üres marad. "
+                "Elöl a legtöbbet játszó trackek — a másodperces "
+                "töredékeket nyugodtan hagyd üresen.",
+                style: AppText.label.copyWith(fontSize: 11.5)),
+            const SizedBox(height: AppSpacing.sm),
+            Expanded(
+              child: ListView.builder(
+                itemCount: sorok.length,
+                itemBuilder: (_, i) {
+                  final st = sorok[i];
+                  final perc = st.measuredFrames / fps / 60.0;
+                  final hazai = st.team == Team.home;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(children: [
+                      Container(width: 8, height: 8,
+                          decoration: BoxDecoration(
+                              color: hazai
+                                  ? AppColors.home
+                                  : AppColors.away,
+                              shape: BoxShape.circle)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                            "${hazai ? match.meta.homeTeam : match.meta.awayTeam}"
+                            " · ${st.trackId}. track · "
+                            "${perc.toStringAsFixed(1)} perc",
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.label.copyWith(fontSize: 12)),
+                      ),
+                      SizedBox(
+                        width: 70,
+                        child: TextField(
+                          controller: ctrls[st.trackId],
+                          keyboardType: TextInputType.number,
+                          style: AppText.value.copyWith(fontSize: 13),
+                          decoration: const InputDecoration(
+                              isDense: true,
+                              hintText: "szám",
+                              border: OutlineInputBorder()),
+                        ),
+                      ),
+                    ]),
+                  );
+                },
+              ),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Mentés"),
+          ),
+        ],
+      ),
+    );
+    // A beírt értékeket a párbeszéd bezárása UTÁN olvassuk ki, mielőtt
+    // a vezérlőket eldobjuk.
+    final beirt = {
+      for (final e in ctrls.entries) e.key: e.value.text.trim()
+    };
+    for (final c in ctrls.values) {
+      c.dispose();
+    }
+    if (ok != true || !mounted) return;
+
+    // Csak a VÁLTOZOTT sorokat küldjük el — egy meccsen tizennégy
+    // felesleges kérés is elég ahhoz, hogy lassúnak érződjön.
+    var mentve = 0;
+    var hibas = 0;
+    for (final st in sorok) {
+      final szoveg = beirt[st.trackId] ?? "";
+      final uj = szoveg.isEmpty ? null : int.tryParse(szoveg);
+      if (szoveg.isNotEmpty && (uj == null || uj < 0 || uj > 99)) {
+        hibas++;
+        continue;
+      }
+      if (uj == st.jerseyNumber) continue;
+      try {
+        await _api.setJersey(widget.matchId, st.trackId, uj);
+        for (final f in match.frames) {
+          for (final p in f.players) {
+            if (p.trackId == st.trackId) p.jerseyNumber = uj;
+          }
+        }
+        mentve++;
+      } catch (_) {
+        hibas++;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _stats = computePlayerStats(match);
+      _passNetwork = computePassNetwork(match, _events, _passTeam);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(hibas == 0
+            ? "$mentve mezszám mentve."
+            : "$mentve mezszám mentve, $hibas sor kimaradt "
+                "(a szám 0 és 99 közötti lehet).")));
   }
 
   Widget _tacticalCaption(Match match) {

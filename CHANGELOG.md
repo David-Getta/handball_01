@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.66 óta)
 
+- **Mezszámok kiosztása egy menetben** (felület): a mezszám kapuőr —
+  meccsek között csak ez köti össze a játékost, tehát nélküle a Keret,
+  a toplisták és a Játékos-fejlődés néma marad. Eddig a szerkesztés
+  játékosonként külön párbeszéd volt (pályára kattintás → ikon →
+  ablak); tizennégy emberre ez nem munka, hanem elrettentés — és ezért
+  maradt el. Az új listában minden követett játékos egy sor, JÁTÉKIDŐ
+  szerint csökkenő sorrendben (elöl a valódi trackek, hátul a
+  másodperces töredékek), csapatonként csoportosítva; mentéskor csak a
+  változott sorok mennek el.
+
 - **Eredmény-sáv az Események lapon** (felület): az edző az
   EREDMÉNYBŐL dönti el, hogy hisz-e a jelentésnek — ha a felismerés
   21–19-et mond a valós 24–22 helyett, a többi szám sem ér semmit a

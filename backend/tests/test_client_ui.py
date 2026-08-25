@@ -1762,3 +1762,31 @@ def test_a_felismeres_kezzel_javithato_a_meccs_elemzoben():
     ed = (_Path(__file__).resolve().parents[1] / "handball" / "pipeline"
           / "event_detection.py").read_text(encoding="utf-8")
     assert "_apply_event_overrides(match, events)" in ed
+
+
+def test_a_mezszamok_egy_menetben_kioszthatok():
+    """A mezszám kapuőr — és a kiosztása eddig elrettentés volt.
+
+    Meccsek között csak a mezszám köti össze a játékost: enélkül a
+    Keret, a toplisták és a Játékos-fejlődés néma marad. A
+    pályára-kattintós szerkesztő viszont játékosonként külön párbeszéd,
+    tizennégy emberre az már nem munka — és ezért marad el.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "_bulkJerseys" in meccs, "nincs tömeges mezszám-kiosztó"
+    # JÁTÉKIDŐ szerint: elöl a valódi trackek, hátul a másodperces
+    # töredékek — különben a lista használhatatlanul hosszú.
+    assert "b.measuredFrames.compareTo(a.measuredFrames)" in meccs, (
+        "a lista nem játékidő szerint rendez")
+    # Csak a VÁLTOZOTT sorokat küldjük el.
+    assert "if (uj == st.jerseyNumber) continue;" in meccs, (
+        "minden sort elküld, a változatlanokat is")
+    # A vezérlőket a párbeszéd után el kell dobni (memória-szivárgás).
+    assert "c.dispose();" in meccs, (
+        "a tömeges szerkesztő vezérlői nincsenek eldobva")
