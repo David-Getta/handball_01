@@ -112,6 +112,22 @@ beálló-villanás). Az őr-teszt
 (`test_az_ido_kuszobok_nem_esnek_vissza_kockara`) elkapja, ha egy
 átállított küszöb kocka-alakja újra futó kódba kerül.
 
+### A try/except és a néma mezőnév
+
+A recept szerint minden felület `try/except`-ben ül, hogy egy réteg
+hibája ne vigye el a többit. Ez helyes — de van egy ára: az elgépelt
+vagy elavult MEZŐNEVET is elnyeli. A szabály ilyenkor némán semmit sem
+csinál, a teszt pedig zöld marad, mert a monkeypatch-es tesztek a SAJÁT
+kitalált alakjukat adják be, nem a valódit.
+
+Ezért: ha az új réteg MÁSIK réteg mezőit olvassa (szintézis-réteg,
+edzés-szabály, összefoglaló-mondat), írj MELLÉ egy tesztet, ami a
+VALÓDI forrás-rétegeket futtatja egy kis fixture-ön, és megnézi, hogy
+a szabály tényleg megszólal. A `tests/test_player_training.py`
+`test_a_kondicio_szabaly_valodi_retegbol_is_megszolal` a minta — ez
+menet közben el is kapott egy ilyet (a `match_xg` lövő-sorai nem
+tartalmaznak `jersey` mezőt, a `player_fatigue` sorai sem).
+
 ## Számláló-frissítés (recept végén)
 
 Réteg-commit után frissítsd ITT: meccsterv-szabály következő száma,
