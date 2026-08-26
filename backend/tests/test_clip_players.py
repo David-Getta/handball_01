@@ -97,9 +97,10 @@ def test_a_klip_munkas_atadja_a_mezszamot_a_motornak():
     latott: dict = {}
 
     def _fake(match, events, types, out_dir, progress_cb=None,
-              jerseys=None):
+              jerseys=None, **kw):
         latott["events"] = events
         latott["jerseys"] = jerseys
+        latott.update(kw)
         raise RuntimeError("teszt: itt megállunk")
 
     import handball.pipeline.clips as clips_mod
@@ -139,7 +140,7 @@ def test_az_elgepelt_mezszam_nem_szukiti_a_csomagot():
     latott: dict = {}
 
     def _fake(match, events, types, out_dir, progress_cb=None,
-              jerseys=None):
+              jerseys=None, **kw):
         latott["jerseys"] = jerseys
         raise RuntimeError("teszt: itt megállunk")
 
@@ -190,3 +191,73 @@ def test_a_teljes_darabszam_a_mezszam_nelkulieket_is_viszi():
             jatekosonkent[tip] = jatekosonkent.get(tip, 0) + db
     for tip, db in jatekosonkent.items():
         assert r["totals"].get(tip, 0) >= db, tip
+def test_a_jatekos_lapja_a_klipek_melle_kerul():
+    """Az edző EGY fájlt visz a beszélgetésre, nem kettőt.
+
+    A videó megmutatja, mi történt; a lap azt, mit jelent. Külön
+    letöltve a kettő szétesik: a klipek a letöltések közt, a lap egy
+    másik mappában, és a beszélgetés előtt öt perc keresgélés.
+    """
+    import handball.pipeline.clips as clips_mod
+
+    client, mid = _client()
+    sorok = client.get(f"/matches/{mid}/clip-players").json()["players"]
+    assert sorok
+    mez = sorok[0]["jersey"]
+
+    latott: dict = {}
+
+    def _fake(match, events, types, out_dir, progress_cb=None,
+              jerseys=None, extra_files=None, **kw):
+        latott["extra"] = extra_files
+        raise RuntimeError("teszt: itt megállunk")
+
+    valodi = clips_mod.export_event_clips
+    clips_mod.export_event_clips = _fake
+    try:
+        r = client.post(f"/matches/{mid}/clips/export",
+                        json={"types": ["goal"], "jerseys": [mez]})
+        job_id = r.json()["job_id"]
+        for _ in range(200):
+            if client.get(f"/jobs/{job_id}").json()["status"] in (
+                    "done", "error"):
+                break
+    finally:
+        clips_mod.export_event_clips = valodi
+
+    lapok = latott.get("extra") or {}
+    assert lapok, "a játékos lapja nem került a csomagba"
+    nev = next(iter(lapok))
+    assert nev.endswith(f"jatekos_lap_{mez}.html"), nev
+    # EGY játékosnál nincs mappa — ott is a zip gyökerében a lap.
+    assert "/" not in nev, nev
+    assert "<html" in lapok[nev].lower()
+
+
+def test_mezszam_nelkul_nincs_jatekos_lap():
+    """Csapat-szintű csomagba NE kerüljön véletlenszerű játékos-lap:
+    ott nincs kihez tenni, és egy odatévedt lap félrevezetne."""
+    import handball.pipeline.clips as clips_mod
+
+    client, mid = _client()
+    latott: dict = {}
+
+    def _fake(match, events, types, out_dir, progress_cb=None,
+              jerseys=None, extra_files=None, **kw):
+        latott["extra"] = extra_files
+        raise RuntimeError("teszt: itt megállunk")
+
+    valodi = clips_mod.export_event_clips
+    clips_mod.export_event_clips = _fake
+    try:
+        r = client.post(f"/matches/{mid}/clips/export",
+                        json={"types": ["goal"]})
+        job_id = r.json()["job_id"]
+        for _ in range(200):
+            if client.get(f"/jobs/{job_id}").json()["status"] in (
+                    "done", "error"):
+                break
+    finally:
+        clips_mod.export_event_clips = valodi
+
+    assert not (latott.get("extra") or {})

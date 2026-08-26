@@ -545,3 +545,33 @@ def test_a_plafon_a_jatekosok_kozt_is_igazsagosan_oszlik(tmp_path):
     # Nagyjából fele-fele: a bővebb ember legfeljebb kétszer annyit
     # vihet, mint a szűkebb (nem húszszor).
     assert len(hetes) <= 2 * len(kilences), (len(hetes), len(kilences))
+def test_a_klipek_melle_tett_lap_bekerul_a_zipbe(tmp_path):
+    """A hívó tehet lapokat a klipek mellé — a motor nem ismeri a
+    jelentéseket, csak beteszi, amit kap."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7},
+                             extra_files={"lap.html": "<html>szia</html>"})
+    with zipfile.ZipFile(res.zip_path) as z:
+        assert "lap.html" in z.namelist()
+        assert z.read("lap.html").decode("utf-8") == "<html>szia</html>"
+    # A KLIP is megvan: a lap nem lép a videó helyébe.
+    assert res.count == 1
+
+
+def test_a_rossz_lap_nem_viszi_el_a_videot(tmp_path):
+    """Egy lap hiánya vagy hibája nem viheti el a klipeket: az edző a
+    VIDEÓÉRT vágatott, a lap ráadás."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7},
+                             extra_files={"rossz.html": object()})
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        assert "rossz.html" not in z.namelist()

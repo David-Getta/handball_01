@@ -140,7 +140,8 @@ def _fair_cap(picked: list, field, csoport=None) -> list:
 def export_event_clips(match: Match, events: list, types: set[str],
                        out_dir: str | Path,
                        progress_cb: Optional[Callable] = None,
-                       jerseys: Optional[set] = None) -> ClipResult:
+                       jerseys: Optional[set] = None,
+                       extra_files: Optional[dict] = None) -> ClipResult:
     """A kiválasztott típusú események jeleneteit MP4 klipekbe vágja.
 
     - match:   a kész Match (meta.video_path mutat az eredeti videóra).
@@ -152,6 +153,11 @@ def export_event_clips(match: Match, events: list, types: set[str],
     - jerseys: ha meg van adva, CSAK az ezekhez a mezszámokhoz kötött
       események kerülnek klipre (a játékos saját válogatása). Üres vagy
       None esetén az egész csapat jelenetei jönnek.
+    - extra_files: {útvonal a zipben: szöveg} — a klipek MELLÉ tett
+      lapok (pl. a játékos meccs-lapja a saját mappájába). A hívó
+      dönti el, mit tesz be: a klip-motor nem ismeri a jelentéseket.
+      A hiányzó vagy hibás bejegyzés csendben kimarad — egy lap
+      hiánya nem viheti el a videót.
 
     Kivételt dob érthető magyar üzenettel, ha az eredeti videó nem érhető el
     (pl. másik gépen dolgozták fel, vagy elmozdították a fájlt).
@@ -303,6 +309,13 @@ def export_event_clips(match: Match, events: list, types: set[str],
             if tobb_jatekos:
                 arcname = f"#{mez}/{arcname}" if mez is not None else arcname
             z.write(f, arcname)
+        # A klipek MELLÉ tett lapok (pl. a játékos meccs-lapja): az
+        # edző így EGY fájlt visz a beszélgetésre, nem kettőt.
+        for utvonal, tartalom in (extra_files or {}).items():
+            try:
+                z.writestr(str(utvonal), tartalom)
+            except Exception:
+                continue
     if progress_cb:
         progress_cb(len(picked), len(picked), f"kész: {len(made)} klip")
     # Típusonkénti darabszám és a NÉMÁN üres csomagok: a hívó ebből

@@ -3,6 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.73 óta)
+
+- **A játékos lapja a klipek mellé kerül** (motor + API): az edző EGY
+  fájlt visz a beszélgetésre, nem kettőt. Ha a klipcsomag mezszámra
+  van szűkítve, a zip a játékos meccs-lapját (HTML) is viszi — több
+  kijelölt játékosnál mindenki a saját mappájába. A videó megmutatja,
+  MI történt, a lap azt, mit jelent; külön letöltve a kettő szétesik.
+  Csapat-szintű csomagba nem kerül lap (ott nincs kihez tenni), és egy
+  lap hibája nem viheti el a videót — az edző a felvételért vágatott.
+
 ## v0.1.73 — kiadva (2026-08-26)
 
 > Kiadás-jegyzet: a klip mint MUNKAESZKÖZ. A v0.1.72 megnyitotta az

@@ -2281,8 +2281,33 @@ def create_app():
                     job["progress"] = round(done / max(1, total), 3)
                     job["message"] = msg
 
+                # A klipek MELLÉ a játékos SAJÁT meccs-lapja: az edző
+                # egy fájlt visz a beszélgetésre, nem kettőt — a videó
+                # és a "mit gyakorolj" ugyanabban a mappában van.
+                # Hibatűrően: egy lap hiánya nem viheti el a videót.
+                lapok: dict = {}
+                if jerseys:
+                    try:
+                        from ..pipeline.clips import _jersey_of_track
+                        from ..pipeline.report_html import player_report_html
+                        mez_of = _jersey_of_track(match)
+                        elso: dict = {}
+                        for track, mez_ in mez_of.items():
+                            if mez_ in jerseys and mez_ not in elso:
+                                elso[mez_] = track
+                        for mez_, track in elso.items():
+                            try:
+                                mappa = f"#{mez_}/" if len(jerseys) > 1 else ""
+                                lapok[f"{mappa}jatekos_lap_{mez_}.html"] = (
+                                    player_report_html(match, track))
+                            except Exception:
+                                continue
+                    except Exception:
+                        lapok = {}
+
                 res = export_event_clips(match, ev, types, out_dir,
-                                         progress_cb=cb, jerseys=jerseys)
+                                         progress_cb=cb, jerseys=jerseys,
+                                         extra_files=lapok)
                 job["status"] = "done"
                 job["progress"] = 1.0
                 # A NÉMÁN üres csomagokat is megnevezzük: aki hat
