@@ -3,7 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.69 óta)
+## v0.1.70 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: a papír és a célpont. A két új munkalap
+> (Edzésterv, Meccsterv) mostantól nyomtatható — a pályán és a meccs
+> előtti estén nincs képernyő. Az egyéni gyengeség pedig átmegy a
+> meccstervre: nem "figyeljetek a labdabiztonságukra", hanem "a
+> 7-esükre kettőzz". Mellette a motor szól, ha a felismert eredmény
+> aránytalan — az egyik kapu felismerése külön is elromolhat.
 
 - **"Aránytalan eredmény" figyelmeztetés** (motor): a két kapu
   felismerése KÜLÖN romolhat el (féloldalas kalibráció, takart kapu).
