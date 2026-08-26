@@ -51,6 +51,12 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
   // SZEZON-szintű egyéni edzés-fókusz: mit gyakoroljon. Ez az a rész,
   // amiért a játékos elteszi a lapot — a görbe mellett a teendő.
   List<Map<String, dynamic>> _focus = [];
+
+  // Forma-irány: mutatónként {recent, before, change_pct, verdict}.
+  // A verdict None is lehet (kevés meccs vagy zajsávon belüli
+  // változás) — akkor SZÁMOT mutatunk, ítéletet nem.
+  Map<String, dynamic> _trend = {};
+  int _trendWindow = 3;
   // A mezszámhoz felvitt játékos-név (a Keret-lapon adható meg). Ha van,
   // a cím a NEVET mutatja: a lapot a játékos kapja a kezébe.
   String? _name;
@@ -117,6 +123,9 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
       setState(() {
         _points = (r["points"] as List).cast<Map<String, dynamic>>();
         _name = r["name"] as String?;
+        _trend = ((r["trend"] as Map?) ?? const {})
+            .cast<String, dynamic>();
+        _trendWindow = (r["trend_window"] as num?)?.toInt() ?? _trendWindow;
         _loading = false;
       });
       // A fókusz külön kérés: hosszabb (minden meccset átnéz), és a
@@ -414,6 +423,9 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
       // HOL TARTOK A KERETEN BELÜL — a nyers "4,2 km" magában semmit
       // nem mond, a keret-átlaghoz mérve viszont döntés lesz belőle.
       ..._squadCompare(),
+      // JAVULOK VAGY ROMLOK — a pontsorból ezt kinézni nem lehet,
+      // mert minden második meccs jobb az előzőnél.
+      ..._formCard(),
       const SizedBox(height: AppSpacing.lg),
       // Fejléc + meccsenkénti sorok (táv-csíkkal — a forma ránézésre látszik).
       Padding(
@@ -493,6 +505,71 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
             ]),
       ),
     ];
+  }
+
+  /// Forma-irány: az utolsó N meccs az azt megelőző N-hez mérve.
+  /// Csak akkor jelenik meg, ha a backend adott irányt — kevés
+  /// meccsnél nem mondunk semmit, mert egy jó meccs bármikor jön.
+  List<Widget> _formCard() {
+    const nevek = {
+      "shot_pct": "gólarány",
+      "xg_diff": "befejezés a helyzetekhez képest",
+      "goals": "gól",
+    };
+    final sorok = [
+      for (final e in _trend.entries)
+        if (nevek.containsKey(e.key) && e.value is Map) e
+    ];
+    if (sorok.isEmpty) return const [];
+    return [
+      const SizedBox(height: AppSpacing.md),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: AppTheme.card(),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("JAVULOK VAGY ROMLOK", style: AppText.sectionLabel),
+              const SizedBox(height: 3),
+              Text(
+                  "az utolsó $_trendWindow meccs az azt megelőző "
+                  "$_trendWindow-hoz mérve",
+                  style: AppText.label.copyWith(fontSize: 11.5)),
+              const SizedBox(height: AppSpacing.sm),
+              for (final e in sorok) _formRow(nevek[e.key]!, e.value as Map),
+            ]),
+      ),
+    ];
+  }
+
+  Widget _formRow(String nev, Map rec) {
+    final valtozas = (rec["change_pct"] as num?)?.toDouble() ?? 0.0;
+    final iteles = rec["verdict"] as String?;
+    // Ítélet NÉLKÜL is kiírjuk a számokat: a játékos maga eldöntheti,
+    // számít-e neki — de mi nem nevezzük iránynak a zajt.
+    final szin = iteles == "javul"
+        ? AppColors.home
+        : iteles == "romlik"
+            ? AppColors.away
+            : AppColors.textFaint;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(children: [
+        SizedBox(
+            width: 230,
+            child: Text(nev,
+                style: AppText.label.copyWith(fontSize: 12))),
+        Text("${rec["before"]} → ${rec["recent"]}",
+            style: AppText.value.copyWith(fontSize: 12.5)),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+            iteles == null
+                ? "(${valtozas >= 0 ? "+" : ""}"
+                    "${valtozas.toStringAsFixed(0)}% — nem irány, zaj)"
+                : "$iteles (${valtozas >= 0 ? "+" : ""}"
+                    "${valtozas.toStringAsFixed(0)}%)",
+            style: AppText.label.copyWith(fontSize: 11.5, color: szin)),
+      ]),
+    );
   }
 
   Widget _chip(String text) => Container(

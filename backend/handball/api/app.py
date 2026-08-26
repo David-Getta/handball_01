@@ -2555,6 +2555,54 @@ def create_app():
     SQUAD_MIN_PLAY_S = 120.0
     SQUAD_MIN_PLAYERS = 5
 
+    # A FORMA-IRÁNY küszöbei: ennyi meccs kell az utolsó és az azt
+    # megelőző szakasz összevetéséhez (szakaszonként), és ennyi
+    # százalék alatt a változás nem irány, hanem zaj. Két-két meccsből
+    # nem szabad "javulsz"-t mondani: egy jó meccs bármikor jön.
+    TREND_WINDOW = 3
+    TREND_MIN_PCT = 10.0
+
+    def _forma_irany(points: list) -> dict:
+        """Javul vagy romlik? Az utolsó TREND_WINDOW meccs az azt
+        megelőző TREND_WINDOW-hoz mérve.
+
+        A görbe eddig SZÁMOKAT mutatott meccsről meccsre — a játékos
+        viszont egyetlen dolgot akar tudni: jó irányba megy-e. Azt
+        pedig egy pontsorból kinézni nem lehet, mert minden második
+        meccs jobb az előzőnél.
+
+        Mutatónként {"recent", "before", "change_pct", "verdict"};
+        verdict None, ha kevés a meccs vagy a változás a zajsávon
+        belül van. Sose hallgatólagos "változatlan": ha nem tudjuk,
+        nem mondunk semmit.
+        """
+        # (mezőnév, magasabb-a-jobb?) — az irány jelentése mutatónként
+        # más: a méter/percnél a több nem "jobb", csak több, ezért a
+        # futómunka szándékosan NINCS a listán.
+        mutatok = [("shot_pct", True), ("xg_diff", True),
+                   ("goals", True)]
+        ki: dict = {}
+        for mezo, tobb_jobb in mutatok:
+            ertekek = [p[mezo] for p in points if p.get(mezo) is not None]
+            if len(ertekek) < 2 * TREND_WINDOW:
+                continue
+            uj = ertekek[-TREND_WINDOW:]
+            regi = ertekek[-2 * TREND_WINDOW:-TREND_WINDOW]
+            a_uj = sum(uj) / len(uj)
+            a_regi = sum(regi) / len(regi)
+            if a_regi == 0:
+                continue
+            valtozas = 100.0 * (a_uj - a_regi) / abs(a_regi)
+            iteles = None
+            if abs(valtozas) >= TREND_MIN_PCT:
+                jobb = (valtozas > 0) == tobb_jobb
+                iteles = "javul" if jobb else "romlik"
+            ki[mezo] = {"recent": round(a_uj, 2),
+                        "before": round(a_regi, 2),
+                        "change_pct": round(valtozas, 1),
+                        "verdict": iteles}
+        return ki
+
     @app.get("/players/trend")
     def get_player_trend(team: str, jersey: int):
         """Egy játékos fejlődése MECCSRŐL MECCSRE, mezszám alapján.
@@ -2716,7 +2764,10 @@ def create_app():
             })
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
         return {"team": team, "jersey": jersey,
-                "name": _player_name(team, jersey), "points": points}
+                "name": _player_name(team, jersey), "points": points,
+                # Javul vagy romlik — a görbe magától nem mondja meg.
+                "trend": _forma_irany(points),
+                "trend_window": TREND_WINDOW}
 
     @app.get("/head-to-head/report")
     def get_h2h_report(team_a: str, team_b: str):
@@ -8387,4 +8438,10 @@ def create_app():
             pass  # a memóriabeli tár akkor is működik, ha a lemezre írás elakad
 
     app.state.put_match = _put_match  # elérhetővé tesszük indítás után
+    # A forma-irány számolója: a küszöbei ÍTÉLETET hoznak a játékosról
+    # ("javulsz"/"romlasz"), ezért közvetlenül is tesztelhetőnek kell
+    # lennie — hat meccsnyi valódi lövés-adatot előállítani ehhez
+    # aránytalan lenne, és a lényeget (mikor NEM mondunk ítéletet)
+    # úgysem az adat dönti el, hanem ez a függvény.
+    app.state.forma_irany = _forma_irany
     return app

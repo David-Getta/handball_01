@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.73 óta)
 
+- **"Javulok vagy romlok?"** (API + felület): a játékos-görbe eddig
+  számokat mutatott meccsről meccsre — az irányt viszont egy
+  pontsorból kinézni nem lehet, mert minden második meccs jobb az
+  előzőnél. Az utolsó három meccs mostantól az azt megelőző háromhoz
+  van mérve (gólarány, befejezés a helyzetekhez képest, gól). Két
+  szándékos korlát: **kevés meccsből nincs ítélet** (egy jó meccs
+  bármikor jön, és a játékos elhiszi), és a **10% alatti változás nem
+  irány, hanem zaj** — a lap ilyenkor kiírja a számokat, de kimondja,
+  hogy ez nem irány. A futómunka szándékosan kimarad: ott a több nem
+  "jobb", csak több — a poszt dönti el, mennyi kell belőle. A
+  kihagyott meccs (None) nem nullaként számít, különben egy sérülés
+  romlásnak látszana.
+
 - **A játékos lapja a klipek mellé kerül** (motor + API): az edző EGY
   fájlt visz a beszélgetésre, nem kettőt. Ha a klipcsomag mezszámra
   van szűkítve, a zip a játékos meccs-lapját (HTML) is viszi — több

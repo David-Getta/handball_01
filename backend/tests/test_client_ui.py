@@ -2198,3 +2198,23 @@ def test_a_klipvagas_elore_megmondja_mennyi_lesz():
 
     api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
     assert "max_clips" in api or "fetchClipPlayers" in api
+def test_a_jatekos_latja_javul_e_vagy_romlik():
+    """A görbe SZÁMOKAT mutat — a játékos IRÁNYT akar tudni.
+
+    Egy pontsorból ezt kinézni nem lehet, mert minden második meccs
+    jobb az előzőnél. És ahol nincs irány (kevés meccs vagy zajsávon
+    belüli mozgás), ott a lapnak KI KELL MONDANIA, hogy az zaj — a
+    néma szám ítéletnek látszana.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_formCard" in jatekos and "JAVULOK VAGY ROMLOK" in jatekos
+    assert "trend_window" in jatekos, "a lap nem mondja meg, mihez méri"
+    assert "nem irány, zaj" in jatekos, (
+        "az ítélet nélküli eset némán számot mutatna")
