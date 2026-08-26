@@ -51,6 +51,8 @@ def _csend(monkeypatch):
                         _ures)
     monkeypatch.setattr(
         "handball.pipeline.momentum.clutch_turnover_players", _ures)
+    monkeypatch.setattr("handball.pipeline.defense.beaten_defenders",
+                        _ures)
 
 
 # ---- A négy forrás egyenként megszólal -------------------------------
@@ -186,6 +188,26 @@ def test_dontes_a_hajraban(monkeypatch):
     assert rec[0]["jersey"] == 8
 
 
+def test_egy_az_egy_elleni_vedekezes(monkeypatch):
+    """A lap ne csak a támadó-oldali hibákat sorolja.
+
+    E nélkül a védekező munkát végző emberek úgy néznék, hogy nincs mit
+    gyakorolniuk — pedig a kapott gólok náluk esnek.
+    """
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.defense.beaten_defenders",
+        lambda m, c=None: {
+            "home": {"defenders": [],
+                     "top": {"player_id": 4, "jersey": 6,
+                             "beaten": 5, "share_pct": 38.0}},
+            "away": {"defenders": [], "top": None}})
+    rec = player_training_focus(_match())["home"]["players"]
+    assert rec and rec[0]["items"][0]["area"] == "védekezés"
+    assert "38%" in rec[0]["items"][0]["why"], rec[0]["items"][0]["why"]
+    assert rec[0]["jersey"] == 6
+
+
 # ---- A forrás-rétegek ALAKJA: a néma kód elleni őr --------------------
 
 
@@ -246,12 +268,15 @@ def test_a_forras_retegek_mezonevei_leteznek():
                                              tired_turnover_players)
     from handball.pipeline.momentum import clutch_turnover_players
 
+    from handball.pipeline.defense import beaten_defenders
+
     for fn, kulcsok in (
             (pressure_sensitive_players,
              ("player_id", "press_events", "press_to")),
             (tired_turnover_players, ("player_id", "fh", "sh")),
             (risky_passers, ("player_id", "tries", "turnovers")),
             (clutch_turnover_players, ("player_id", "turnovers")),
+            (beaten_defenders, ("player_id", "beaten", "share_pct")),
     ):
         ki = fn(m)
         for side in ("home", "away"):

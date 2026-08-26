@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **Az egyéni edzés-fókusz védekezést is ad** (motor): a réteg hét
+  forrásból dolgozik — bekerült az **egy az egy elleni védekezés** (a
+  hozzá rendelhető kapott gólok mekkora része esett nála). E nélkül a
+  lap csak a támadó-oldali hibákat sorolta, és a védekező munkát végző
+  emberek úgy nézték, hogy nincs mit gyakorolniuk.
+
 - **Az egyéni feladatok a képernyőn is, nem csak a nyomtatványon**
   (motor + felület): az edzésterv-lap viszi az egyéni feladatokat — a
   képernyő eddig nem, tehát a program kevesebbet mondott, mint a saját

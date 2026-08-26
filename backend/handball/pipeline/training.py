@@ -11453,14 +11453,19 @@ def player_training_focus(match: Match,
     fókuszokat, ugyanabban az alakban, mint a csapat-lista (terület,
     fókusz, indok, gyakorlat).
 
-    Hat forrás, mind a maga küszöbével (egy forrás hibája nem viheti
+    Hét forrás, mind a maga küszöbével (egy forrás hibája nem viheti
     el a többit):
       - nyomás alatti labdakezelés (pressure_sensitive_players),
       - fáradt eladás (tired_turnover_players),
       - befejezés: gól ELMARADÁSA a helyzetminőségtől (match_xg),
       - hosszú labda kockázata (risky_passers),
       - döntés a hajrában (clutch_turnover_players),
+      - egy az egy elleni védekezés (beaten_defenders),
       - kondíció: második félidei tempó-esés (player_fatigue).
+
+    A védekezés szándékosan benne van: e nélkül a lap csak a
+    támadó-oldali hibákat sorolná, és a védekező munkát végző emberek
+    úgy néznék, hogy nincs mit gyakorolniuk.
 
     Edzőileg ez az egyéni beszélgetés lapja: nem "a csapat rosszul
     fejez be", hanem "neked ez a kettő". Emberenként legfeljebb
@@ -11621,6 +11626,25 @@ def _player_training_focus_cached(match: Match,
                 "hajrá-szituációk gyakorlása fáradtan és zajban: "
                 "kimondott első opció, és megbeszélt kiút, ha az zárt "
                 "— a hajrában nem a technika, hanem a döntés akad meg")
+    except Exception:
+        pass
+
+    # (c4) Védekezés — rajta mennek át a góljaik.
+    try:
+        from .defense import beaten_defenders
+        bd = beaten_defenders(match, config)
+        for side in ("home", "away"):
+            top = (bd.get(side) or {}).get("top")
+            if not top:
+                continue
+            add(side, top["player_id"],
+                top.get("jersey") or mez.get(top["player_id"]),
+                "védekezés", "Egy az egy elleni védekezés",
+                f"a hozzá rendelhető kapott gólok {top['share_pct']:.0f}%-a "
+                f"nála esett ({top['beaten']} gól)",
+                "lábmunka és testhelyzet 1v1-ben: oldalazó lecsúszás "
+                "kar-kontaktussal, a lövő KEZE felőli oldal zárása; "
+                "párban, váltott szerepben, sorozatban")
     except Exception:
         pass
 
