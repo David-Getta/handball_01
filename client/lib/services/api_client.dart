@@ -460,15 +460,17 @@ class ApiClient {
   /// Kihez köthető jelenet ezen a meccsen — mezszám szerint, a
   /// jelenetek darabszámával. A klip-válogatás ebből tudja felkínálni
   /// a MŰKÖDŐ mezszámokat (a kiosztatlan szám némán üres zip-et adna).
-  Future<List<Map<String, dynamic>>> fetchClipPlayers(String matchId) async {
+  /// A nyers válasz: {"players": [...], "totals": {típus: db},
+  /// "max_clips": N}. A `totals` és a plafon a BECSLÉSHEZ kell — a
+  /// vágás percekbe telik, és a rossz kijelölés csak a végén derülne
+  /// ki.
+  Future<Map<String, dynamic>> fetchClipPlayers(String matchId) async {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/clip-players"));
     if (resp.statusCode != 200) {
       throw Exception(_hiba("A játékos-lista nem érhető el", resp));
     }
-    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
-    return ((json["players"] as List?) ?? const [])
-        .cast<Map<String, dynamic>>();
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
   /// [jerseys] megadásával a csomag EGY (vagy néhány) játékos

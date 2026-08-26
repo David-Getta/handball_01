@@ -2353,7 +2353,7 @@ def create_app():
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        from ..pipeline.clips import _jersey_of_track
+        from ..pipeline.clips import MAX_CLIPS, _jersey_of_track
 
         mez_of = _jersey_of_track(match)
         # track → csapat (az első ismert érték), hogy a névjegyzékből a
@@ -2365,8 +2365,14 @@ def create_app():
                     team_of[pl.track_id] = getattr(pl.team, "value", pl.team)
 
         soronkent: dict = {}
+        osszesen: dict = {}
         try:
             for e in detect_events(match):
+                tip_ = getattr(e.type, "value", e.type)
+                # A TELJES darabszám a mezszám-nélküli jeleneteket is
+                # viszi: a csapat-szintű becslés különben alábecsülne,
+                # és az edző azt hinné, kevesebb klipet kap.
+                osszesen[tip_] = osszesen.get(tip_, 0) + 1
                 mez = mez_of.get(e.player_id)
                 if mez is None:
                     continue
@@ -2376,11 +2382,10 @@ def create_app():
                 rec = soronkent.setdefault(
                     kulcs, {"jersey": int(mez), "team": str(oldal),
                             "counts": {}, "total": 0})
-                tip = getattr(e.type, "value", e.type)
-                rec["counts"][tip] = rec["counts"].get(tip, 0) + 1
+                rec["counts"][tip_] = rec["counts"].get(tip_, 0) + 1
                 rec["total"] += 1
         except Exception:
-            return {"players": []}
+            return {"players": [], "totals": {}, "max_clips": MAX_CLIPS}
 
         out = []
         for rec in soronkent.values():
@@ -2390,7 +2395,9 @@ def create_app():
             rec["name"] = _player_name(csapat, rec["jersey"])
             out.append(rec)
         out.sort(key=lambda r: (-r["total"], r["jersey"]))
-        return {"players": out}
+        # A `totals` és a plafon a BECSLÉSHEZ kell: a vágás percekbe
+        # telik, és a rossz kijelölés csak a végén derülne ki.
+        return {"players": out, "totals": osszesen, "max_clips": MAX_CLIPS}
 
     @app.get("/matches/{match_id}/jerseys")
     def get_jerseys(match_id: str):

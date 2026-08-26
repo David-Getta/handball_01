@@ -129,6 +129,12 @@ class _ClipsScreenState extends State<ClipsScreen> {
   List<Map<String, dynamic>> _clipPlayers = [];
   final Set<int> _jerseys = {};
 
+  // A BECSLÉSHEZ: típusonkénti darabszám az egész meccsre, és a
+  // motor klip-plafonja. A vágás percekbe telik — a rossz kijelölés
+  // enélkül csak a végén derülne ki.
+  Map<String, int> _totals = {};
+  int _maxClips = 60;
+
   // Vágás közben: a job üzenete és haladása — a néma várakozás
   // megakadásnak látszik.
   bool _working = false;
@@ -181,10 +187,17 @@ class _ClipsScreenState extends State<ClipsScreen> {
     final id = _matchId;
     if (id == null) return;
     try {
-      final ps = await _api.fetchClipPlayers(id);
+      final r = await _api.fetchClipPlayers(id);
+      final ps = ((r["players"] as List?) ?? const [])
+          .cast<Map<String, dynamic>>();
       if (!mounted) return;
       setState(() {
         _clipPlayers = ps;
+        _totals = {
+          for (final e in ((r["totals"] as Map?) ?? const {}).entries)
+            "${e.key}": (e.value as num).toInt()
+        };
+        _maxClips = (r["max_clips"] as num?)?.toInt() ?? _maxClips;
         _jerseys.clear(); // másik meccs = másik keret
         // Az előre kért mezszám CSAK akkor marad kijelölve, ha ezen a
         // meccsen tényleg van jelenete — különben néma üres zip lenne.
@@ -198,6 +211,7 @@ class _ClipsScreenState extends State<ClipsScreen> {
       if (mounted) {
         setState(() {
           _clipPlayers = [];
+          _totals = {};
           _jerseys.clear();
         });
       }
@@ -543,8 +557,36 @@ class _ClipsScreenState extends State<ClipsScreen> {
     );
   }
 
+  /// Hány klip lesz a jelenlegi kijelölésből. A vágás percekbe telik,
+  /// és a hibás kijelölés (üres csomagok, vagy épp a plafont sokszorosan
+  /// meghaladó anyag) csak a végén derülne ki.
+  ///
+  /// A becslés FELSŐ korlát: az azonos pillanatra eső ismétléseket a
+  /// motor kiszűri, tehát a valóságban ennyi vagy kevesebb lesz.
+  /// Ezért nem ígérünk pontos számot.
+  int _becsultKlipek() {
+    if (_totals.isEmpty) return 0;
+    var db = 0;
+    if (_jerseys.isEmpty) {
+      for (final t in _selected) {
+        db += _totals[t] ?? 0;
+      }
+    } else {
+      for (final pl in _clipPlayers) {
+        final jersey = (pl["jersey"] as num?)?.toInt();
+        if (jersey == null || !_jerseys.contains(jersey)) continue;
+        final counts = (pl["counts"] as Map?) ?? const {};
+        for (final t in _selected) {
+          db += ((counts["$t"] as num?) ?? 0).toInt();
+        }
+      }
+    }
+    return db;
+  }
+
   Widget _footer() {
     final n = _selected.length;
+    final becsult = _becsultKlipek();
     return Row(children: [
       Expanded(
         child: Text(
@@ -560,6 +602,26 @@ class _ClipsScreenState extends State<ClipsScreen> {
                                 "emberenként készül." : ""}",
             style: AppText.label.copyWith(fontSize: 12)),
       ),
+      // A becslés csak akkor ér valamit, ha VAN mihez mérni: a
+      // darabszám hiányában (hibás lekérés) inkább hallgatunk, mint
+      // hogy nullát ígérjünk.
+      if (_totals.isNotEmpty && n > 0)
+        Padding(
+          padding: const EdgeInsets.only(right: AppSpacing.md),
+          child: Text(
+              becsult == 0
+                  ? "Ehhez a kijelöléshez nincs jelenet — a vágás üres "
+                      "csomagot adna."
+                  : becsult > _maxClips
+                      ? "kb. $becsult jelenet — a csomag $_maxClips klipnél "
+                          "megáll, arányosan elosztva"
+                      : "kb. $becsult klip lesz",
+              style: AppText.label.copyWith(
+                  fontSize: 11.5,
+                  color: becsult == 0
+                      ? AppColors.away
+                      : AppColors.textFaint)),
+        ),
       TextButton(
         onPressed: _working || n == 0
             ? null

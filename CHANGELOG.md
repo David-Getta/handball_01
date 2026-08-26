@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.72 óta)
 
+- **A klipvágás előre megmondja, mennyi lesz** (API + felület): a
+  vágás percekbe telik, és eddig csak a VÉGÉN derült ki, hogy három
+  kijelölt csomaghoz nem volt jelenet — az edző addig várt a semmire.
+  A Klipek lap mostantól a kijelölés mellett mutatja a becsült
+  klipszámot, külön kiemelve a nullát ("a vágás üres csomagot adna"),
+  és jelzi, ha a kijelölés a motor plafonja fölé megy (a csomag ott
+  arányosan elosztva áll meg). A becslés FELSŐ korlát, ezért "kb."-t
+  mond: az azonos pillanatra eső ismétléseket a motor kiszűri. A
+  csapat-szintű darabszám a mezszám nélküli jeleneteket is viszi —
+  őr-teszt köti ki, különben a becslés alábecsülne.
+
 - **A gyakorlandótól egy kattintás a felvételig** (motor + API +
   felület): a "Mit gyakorolj" tételei eddig szövegek voltak — a
   játékos elolvasta, hogy nyomás alatt eladja a labdát, és nem tudta,

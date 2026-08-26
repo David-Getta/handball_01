@@ -2174,3 +2174,27 @@ def test_a_gyakorlandotol_egy_kattintas_a_felvetelig():
     klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
     assert "initialTypes" in klip, (
         "a Klipek lap nem fogadja az előre kért csomagokat")
+def test_a_klipvagas_elore_megmondja_mennyi_lesz():
+    """A vágás PERCEKBE telik — a rossz kijelölés a végén derülne ki.
+
+    Az edző kijelöl tizenhárom csomagot, elindítja, és öt perc múlva
+    látja, hogy háromhoz nem volt jelenet. A becslés ezt előre
+    megmondja, és a plafonra is figyelmeztet — de FELSŐ korlátként,
+    mert az ismétléseket a motor kiszűri.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "_becsultKlipek" in klip
+    assert "_maxClips" in klip and "_totals" in klip
+    # A NULLA eset a legfontosabb: az üres csomag néma pazarlás lenne.
+    assert "nincs jelenet" in klip
+    # És a becslés nem ígér pontos számot.
+    assert "kb." in klip
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "max_clips" in api or "fetchClipPlayers" in api

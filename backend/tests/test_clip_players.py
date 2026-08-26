@@ -158,3 +158,35 @@ def test_az_elgepelt_mezszam_nem_szukiti_a_csomagot():
         clips_mod.export_event_clips = valodi
 
     assert latott.get("jerseys") == {9, 11}
+def test_a_becsleshez_a_teljes_darabszam_is_megvan():
+    """A vágás PERCEKBE telik — a rossz kijelölés a végén derülne ki.
+
+    A képernyő ezért előre megbecsüli, hány klip lesz. Ehhez a
+    csapat-szintű darabszám is kell, és a plafon is: a becslés
+    különben a plafon fölött hazudna.
+    """
+    from handball.pipeline.clips import MAX_CLIPS
+
+    client, mid = _client()
+    r = client.get(f"/matches/{mid}/clip-players").json()
+    assert r["max_clips"] == MAX_CLIPS
+    assert r["totals"], "nincs csapat-szintű darabszám"
+    assert all(isinstance(v, int) and v > 0 for v in r["totals"].values())
+
+
+def test_a_teljes_darabszam_a_mezszam_nelkulieket_is_viszi():
+    """ŐR: a csapat-szintű becslés NE a mezszámos jelenetekből jöjjön.
+
+    A klipvágás mezszám nélkül is vág (az egész csapatra), tehát a
+    becslésnek minden jelenetet számolnia kell. Ha csak a mezszámhoz
+    kötötteket vinné, az edző kevesebb klipet várna, mint amennyit
+    kap — és a plafon-üzenet is elmaradna.
+    """
+    client, mid = _client()
+    r = client.get(f"/matches/{mid}/clip-players").json()
+    jatekosonkent: dict = {}
+    for p_ in r["players"]:
+        for tip, db in p_["counts"].items():
+            jatekosonkent[tip] = jatekosonkent.get(tip, 0) + db
+    for tip, db in jatekosonkent.items():
+        assert r["totals"].get(tip, 0) >= db, tip
