@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.69 óta)
 
+- **"Aránytalan eredmény" figyelmeztetés** (motor): a két kapu
+  felismerése KÜLÖN romolhat el (féloldalas kalibráció, takart kapu).
+  Kézilabdában a nagy különbség is jellemzően kétszeres arány körül
+  van; ötszörös eltérés (legalább 12 gól mellett) inkább azt jelenti,
+  hogy az egyik oldalon nem látjuk a gólokat. A figyelmeztetés ezt
+  kimondja, és a teendő-rangsorban a MINDKÉT térfél kalibrációjának
+  ellenőrzésére küld.
+- **Az egyéni feladatok a meccs-csomag edzéstervében is** (felület): a
+  zip `edzesterv.txt` fájlja eddig csak a csapat-szintű fókuszokat
+  hozta — az edző viszont emberre bontva osztja ki a hét munkáját, és
+  a csomagot sokszor épp ezért nyitja meg.
+
 - **Az egyéni gyengeség átmegy a MECCSTERVRE** (motor + felület): az
   általános felderítő-kulcsok a CSAPATRÓL szólnak — a meccsterv viszont
   attól lesz konkrét, hogy KIRE mit kell csinálni. A jelentés

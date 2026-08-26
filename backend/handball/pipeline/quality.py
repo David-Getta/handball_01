@@ -72,6 +72,14 @@ TURNOVER_RATE_MAX_PER_MIN = 4.0
 GOALS_PER_MIN_LOW = 0.30
 GOALS_RATE_MIN_MINUTES = 10.0
 
+# Aránytalan eredmény: ennyi összes gól fölött nézzük, és ekkora
+# szorzó fölött szólunk. Kézilabdában a nagy különbség is jellemzően
+# kétszeres arány körül van (35-20); ötszörös arány (25-5) inkább azt
+# jelenti, hogy az EGYIK KAPU felismerése hibás — például a kalibráció
+# csak az egyik térfélre sikerült.
+GOALS_LOPSIDED_MIN_TOTAL = 12
+GOALS_LOPSIDED_FACTOR = 5.0
+
 # ELSŐ TEENDŐ: a figyelmeztetések fontossági SORRENDJE. Egy gyenge
 # feldolgozás jellemzően négy-hat figyelmeztetést kap egyszerre, és a
 # felhasználó ilyenkor nem tudja, mivel kezdje — pedig a lista eleje és
@@ -97,6 +105,11 @@ NEXT_ACTION_ORDER: tuple = (
     ("Kevés játékos látszik",
      "Ellenőrizd, hogy a kamera a játékteret mutatja-e, és hogy a "
      "kalibráció a látható térfélre készült-e."),
+    ("Aránytalan eredmény",
+     "Nyisd meg a Pálya-kalibrációt, és ellenőrizd MINDKÉT térfelet: a "
+     "rajzolt 6 m-es és 9 m-es vonalnak mindkét oldalon rá kell ülnie a "
+     "valódira. Ha a kalibráció jó, az Események listán a hiányzó "
+     "gólokat kézzel is felveheted."),
     ("Gyanúsan kevés gól",
      "Nézd végig az Események listát: a lövésként jelölt gólokat a sor "
      "⋮ menüjében egy kattintással gólra javíthatod (a javítás az "
@@ -500,6 +513,33 @@ def compute_quality_report(match: Match) -> dict:
                 "sorok ⋮ menüjében javítható: \"Ez GÓL volt\" — a "
                 "javítás az egész elemzésen átüt (eredmény, xG, "
                 "lövő-listák).")
+
+    # --- Aránytalan-e az eredmény? ---
+    # A két kapu felismerése külön-külön romolhat el (rossz kalibráció
+    # az egyik térfélen, takarás, egyoldalú kameraállás). Ilyenkor a
+    # végeredmény nem szoros vagy egyoldalú meccsről szól, hanem arról,
+    # hogy az egyik oldalon nem látjuk a gólokat.
+    try:
+        from .event_detection import EventType as _ET2, detect_shots as _ds2
+        _oldal = {"home": 0, "away": 0}
+        for e in _ds2(match):
+            if e.type is _ET2.GOAL:
+                _oldal[getattr(e.team, "value", e.team)] += 1
+        _ossz = _oldal["home"] + _oldal["away"]
+        _kicsi = min(_oldal.values())
+        _nagy = max(_oldal.values())
+        if (_ossz >= GOALS_LOPSIDED_MIN_TOTAL
+                and _nagy >= GOALS_LOPSIDED_FACTOR * max(1, _kicsi)):
+            warnings.append(
+                f"Aránytalan eredmény ({_oldal['home']}–{_oldal['away']}) "
+                "— kézilabdában a nagy különbség is jellemzően kétszeres "
+                "arány körül van. Ilyen eltérés inkább azt jelenti, hogy "
+                "az EGYIK KAPU felismerése hibás: nézd meg, hogy a "
+                "kalibráció mindkét térfélre ráül-e (a rajzolt 6 és 9 "
+                "m-es vonalnak mindkét oldalon a valódin kell lennie), "
+                "és hogy a felvétel nem takarja-e az egyik kaput.")
+    except Exception:
+        pass
 
     seven_meters = 0
     try:

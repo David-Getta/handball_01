@@ -440,3 +440,56 @@ def test_rovid_felvetelre_nem_szol_a_gol_arany():
               for t in range(int(60 * fps))]  # 1 perc
     r = compute_quality_report(Match(_meta(fps), frames))
     assert not [w for w in r["warnings"] if "kevés gól" in w]
+
+
+def _golos_match(hazai: int, vendeg: int, percek: float = 12.0,
+                 fps: float = 25.0):
+    """Szintetikus meccs adott gólaránnyal (a labda a kapukba fut be)."""
+    frames = []
+    t = 0
+
+    def _gol(t, plusz_x):
+        for i in range(7):
+            x = (34.0 + i) if plusz_x else (6.0 - i)
+            frames.append(Frame(t=t, players=[_pl(i2) for i2 in range(14)],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(60):  # szünet a lövések közt (csendidő)
+            frames.append(Frame(t=t, players=[_pl(i2) for i2 in range(14)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        return t
+
+    for _ in range(hazai):
+        t = _gol(t, True)
+    for _ in range(vendeg):
+        t = _gol(t, False)
+    while t < int(percek * 60 * fps):
+        frames.append(Frame(t=t, players=[_pl(i2) for i2 in range(14)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_aranytalan_eredmeny_figyelmeztetes():
+    """A két kapu felismerése KÜLÖN romolhat el.
+
+    Kézilabdában a nagy különbség is jellemzően kétszeres arány körül
+    van; ötszörös eltérés inkább azt jelenti, hogy az egyik oldalon nem
+    látjuk a gólokat (féloldalas kalibráció, takart kapu). Ha ezt nem
+    mondjuk ki, az edző egyoldalú meccsnek olvassa a mérési hibát.
+    """
+    from handball.pipeline.quality import next_action
+
+    r = compute_quality_report(_golos_match(15, 1))
+    aran = [w for w in r["warnings"] if "Aránytalan eredmény" in w]
+    assert aran, r["warnings"]
+    assert "kalibráció" in aran[0]
+    assert next_action(aran) is not None
+
+
+def test_kiegyensulyozott_eredmenyre_nem_szol():
+    """Szoros meccsre nincs mit mondani — a figyelmeztetés csak akkor
+    ér valamit, ha ritka."""
+    r = compute_quality_report(_golos_match(8, 7))
+    assert not [w for w in r["warnings"] if "Aránytalan eredmény" in w]

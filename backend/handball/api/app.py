@@ -7540,6 +7540,31 @@ def create_app():
                             tl_lines.append(
                                 f"  gyakorlat: {it.get('drill', '')}")
                         tl_lines.append("")
+                    # Az EGYÉNI feladatok is a lapra: az edző emberre
+                    # bontva osztja ki a hét munkáját, és a csomagot
+                    # sokszor épp ezért nyitja meg.
+                    ptf_pkg = analyses.get("player_training_focus") or {}
+                    for side, name in (("home", match.meta.home_team),
+                                       ("away", match.meta.away_team)):
+                        sorok = (ptf_pkg.get(side) or {}).get("players") or []
+                        if not sorok:
+                            continue
+                        cim = f"{name} — egyéni feladatok"
+                        tl_lines += [cim, "=" * len(cim)]
+                        for p_ in sorok:
+                            ki = (f"#{p_['jersey']}"
+                                  if p_.get("jersey") is not None
+                                  else f"{p_.get('player_id')}. játékos")
+                            tl_lines.append(ki)
+                            for it in p_.get("items") or []:
+                                tl_lines.append(
+                                    f"- {it.get('title', '')} "
+                                    f"({it.get('area', '')})")
+                                tl_lines.append(
+                                    f"  miért: {it.get('why', '')}")
+                                tl_lines.append(
+                                    f"  gyakorlat: {it.get('drill', '')}")
+                        tl_lines.append("")
                     if tl_lines:
                         z.writestr("edzesterv.txt",
                                    "\n".join(tl_lines).encode("utf-8"))

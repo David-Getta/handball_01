@@ -87,13 +87,22 @@ def test_package_without_video_contains_report_and_csv():
                 "pass_direction", "assist_sources",
                 "turnover_players", "clutch_scorers"):
         assert key in analyses, key
-    # Az edzésterv pontosan akkor van a csomagban, ha van fókusz.
+    # Az edzésterv pontosan akkor van a csomagban, ha van fókusz —
+    # csapat-szintű VAGY egyéni. (Az egyéni feladatok is a lapra
+    # kerülnek: az edző emberre bontva osztja ki a hét munkáját, és a
+    # csomagot sokszor épp ezért nyitja meg.)
     tf_pkg = analyses.get("training") or {}
-    has_focus = any((tf_pkg.get(s_) or []) for s_ in ("home", "away"))
+    ptf_pkg = analyses.get("player_training_focus") or {}
+    has_focus = (any((tf_pkg.get(s_) or []) for s_ in ("home", "away"))
+                 or any((ptf_pkg.get(s_) or {}).get("players")
+                        for s_ in ("home", "away")))
     assert ("edzesterv.txt" in names) == has_focus
     if has_focus:
         etxt = z.read("edzesterv.txt").decode("utf-8")
         assert "gyakorlat:" in etxt
+        if any((ptf_pkg.get(s_) or {}).get("players")
+               for s_ in ("home", "away")):
+            assert "egyéni feladatok" in etxt
     # Kulcs-pillanatok: ha van ilyen fájl, időbélyeges sorokat hoz.
     if "kulcs_pillanatok.txt" in names:
         kp = z.read("kulcs_pillanatok.txt").decode("utf-8")
