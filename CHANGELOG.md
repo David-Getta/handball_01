@@ -3,7 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.73 óta)
+## v0.1.74 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: EGY fájl a beszélgetéshez, és egy mondat a görbe
+> helyett. A klipcsomag mostantól viszi a hozzá tartozó lapot is — a
+> játékoséba az ő meccs-lapja, a csapatéba az edzői összefoglaló:
+> a videó megmutatja, MI történt, a lap azt, mit jelent. A
+> játékos-görbe pedig végre irányt is mond ("javulok vagy romlok"),
+> úgy, hogy kevés meccsből és zajsávon belüli mozgásból KIMONDOTTAN
+> nem mond ítéletet.
+
 
 - **"Javulok vagy romlok?"** (API + felület): a játékos-görbe eddig
   számokat mutatott meccsről meccsre — az irányt viszont egy
