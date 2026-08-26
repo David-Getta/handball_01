@@ -2304,6 +2304,19 @@ def create_app():
                                 continue
                     except Exception:
                         lapok = {}
+                else:
+                    # CSAPAT-szintű csomag: az edzői összefoglaló megy
+                    # a klipek mellé. A videó megmutatja, MI történt;
+                    # az összefoglaló azt, mit jelent — az edzés előtt
+                    # a kettő együtt ér valamit. Hibatűrően: az
+                    # összefoglaló hiánya nem viheti el a videót.
+                    try:
+                        from ..pipeline.coach_summary import (
+                            coach_summary_text)
+                        lapok["edzoi_osszefoglalo.txt"] = (
+                            coach_summary_text(match))
+                    except Exception:
+                        lapok = {}
 
                 res = export_event_clips(match, ev, types, out_dir,
                                          progress_cb=cb, jerseys=jerseys,

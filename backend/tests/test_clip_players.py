@@ -236,7 +236,12 @@ def test_a_jatekos_lapja_a_klipek_melle_kerul():
 
 def test_mezszam_nelkul_nincs_jatekos_lap():
     """Csapat-szintű csomagba NE kerüljön véletlenszerű játékos-lap:
-    ott nincs kihez tenni, és egy odatévedt lap félrevezetne."""
+    ott nincs kihez tenni, és egy odatévedt lap félrevezetne.
+
+    Helyette az EDZŐI ÖSSZEFOGLALÓ megy a klipek mellé — ugyanaz a
+    gondolat egy szinttel feljebb: a videó megmutatja, mi történt, a
+    lap azt, mit jelent.
+    """
     import handball.pipeline.clips as clips_mod
 
     client, mid = _client()
@@ -260,4 +265,7 @@ def test_mezszam_nelkul_nincs_jatekos_lap():
     finally:
         clips_mod.export_event_clips = valodi
 
-    assert not (latott.get("extra") or {})
+    lapok = latott.get("extra") or {}
+    assert not [n for n in lapok if "jatekos_lap" in n], lapok
+    assert "edzoi_osszefoglalo.txt" in lapok, lapok
+    assert lapok["edzoi_osszefoglalo.txt"].strip()

@@ -10,8 +10,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   van szűkítve, a zip a játékos meccs-lapját (HTML) is viszi — több
   kijelölt játékosnál mindenki a saját mappájába. A videó megmutatja,
   MI történt, a lap azt, mit jelent; külön letöltve a kettő szétesik.
-  Csapat-szintű csomagba nem kerül lap (ott nincs kihez tenni), és egy
-  lap hibája nem viheti el a videót — az edző a felvételért vágatott.
+  Csapat-szintű csomagba nem kerül játékos-lap (ott nincs kihez
+  tenni) — helyette az **edzői összefoglaló** megy a klipek mellé,
+  ugyanaz a gondolat egy szinttel feljebb. Egy lap hibája nem viheti
+  el a videót: az edző a felvételért vágatott.
 
 ## v0.1.73 — kiadva (2026-08-26)
 
