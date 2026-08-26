@@ -3229,11 +3229,21 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         if _tol is not None and _ig is not None:
             szakasz = _metric("Feldolgozott szakasz",
                               f"{clock_label(_tol)}–{clock_label(_ig)}")
+        # KÉZI javítások: ha az edző javította a felismerést, a lap
+        # mondja ki. A jelentés így is a mérésről szól, de az olvasó
+        # (más edző, vezetőség) lássa, hogy egy része emberi döntés.
+        kezi = ""
+        try:
+            _ov = len(getattr(match.meta, "event_overrides", None) or [])
+            if _ov:
+                kezi = _metric("Kézi javítás", f"{_ov} db")
+        except Exception:
+            pass
         q_html = ('<h2>Elemzés megbízhatósága</h2><div class="metrics">'
                   + _metric("Minőség-pontszám", str(quality.get("score", "—")) + "/100")
                   + _metric("Labda-lefedettség", ball_cov)
                   + _metric("Mért játékos/kocka", measured)
-                  + szakasz
+                  + szakasz + kezi
                   + "</div>" + w_html)
 
     return finish_report(f"""<!DOCTYPE html>

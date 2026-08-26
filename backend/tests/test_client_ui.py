@@ -1962,3 +1962,22 @@ def test_a_jegyzet_torolheto_es_az_ures_csomag_megszolal():
     klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
     assert "nem volt jelenet" in klip, (
         "a néma üres csomagok nem jutnak el a felhasználóhoz")
+
+
+def test_az_edzesterv_ket_nezete_ugyanazt_mondja():
+    """Az \"Egy meccs\" nézet is mutassa az egyéni feladatokat.
+
+    A végpont a csapat-lista mellett ezt is adja, és a szezon-nézet
+    mutatja — ha itt kimaradna, a két nézet mást mondana ugyanarról a
+    meccsről.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    terv = (lib / "ui" / "training_plan_screen.dart").read_text(
+        encoding="utf-8")
+    assert '_matchFocus?["players"]' in terv, (
+        "az egy-meccs nézet nem mutatja az egyéni feladatokat")

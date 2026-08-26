@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **Az egyéni feladatok az Edzésterv EGY MECCS nézetében is**
+  (felület): a végpont a csapat-lista mellett ezt is adja, és a
+  szezon-nézet mutatja — ha itt kimaradna, a két nézet mást mondana
+  ugyanarról a meccsről.
+- **A jelentés kimondja a kézi javítást** (motor): ha az edző javította
+  a felismerést, a nyomtatott lap megbízhatóság-szakasza megmutatja,
+  hány javítás van benne. A jelentés így is a mérésről szól — de az
+  olvasó (másik edző, vezetőség) lássa, hogy egy része emberi döntés.
+
 - **A klip-export megnevezi az üres csomagokat** (motor + felület):
   aki hat csomagot kért és egy zip-et kapott, eddig nem tudta, hogy
   kettőhöz nem volt jelenet, vagy elromlott valami. A vágás eredménye

@@ -1849,3 +1849,23 @@ def test_report_contains_player_training_focus():
     html = match_report_html(m, {}, [], None)
     assert "Egyéni edzés-fókusz" in html, "a papíron nincs egyéni fókusz"
     assert "#9" in html, "a játékost nem lehet azonosítani a lapon"
+
+
+def test_report_kimondja_a_kezi_javitast():
+    """Ha az edző javította a felismerést, a lap mondja ki.
+
+    A jelentés így is a mérésről szól — de az olvasó (másik edző,
+    vezetőség) lássa, hogy egy része emberi döntés.
+    """
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=3)
+    q = compute_quality_report(m)
+
+    sima = match_report_html(m, {}, [], q)
+    assert "Kézi javítás" not in sima
+
+    m.meta.event_overrides = [{"op": "set_type", "t": 10, "type": "goal"},
+                              {"op": "add", "t": 40, "type": "goal",
+                               "team": "home"}]
+    javitott = match_report_html(m, {}, [], q)
+    assert "Kézi javítás" in javitott
+    assert "2 db" in javitott

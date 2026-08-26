@@ -399,6 +399,31 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
           child: _focusCard(Map<String, dynamic>.from(it as Map)),
         ));
       }
+      // EGYÉNI feladatok ebből a meccsből: a végpont a csapat-lista
+      // mellett ezt is adja, és a szezon-nézet is mutatja — ha itt
+      // kimaradna, a két nézet mást mondana ugyanarról.
+      final egyeni = (((_matchFocus?["players"] as Map?) ?? const {})[side]
+              as Map?)?["players"] as List? ??
+          const [];
+      for (final p in egyeni) {
+        final pm = Map<String, dynamic>.from(p as Map);
+        rows.add(Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 2),
+          child: Text(
+              pm["jersey"] != null
+                  ? "#${pm["jersey"]}"
+                  : "${pm["player_id"]}. játékos",
+              style: AppText.value
+                  .copyWith(fontSize: 12.5, color: AppColors.gold)),
+        ));
+        for (final it in (pm["items"] as List)) {
+          rows.add(Padding(
+            padding: const EdgeInsets.only(
+                left: 8, bottom: AppSpacing.sm),
+            child: _focusCard(Map<String, dynamic>.from(it as Map)),
+          ));
+        }
+      }
     }
     return ListView(children: rows);
   }
