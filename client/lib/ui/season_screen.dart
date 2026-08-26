@@ -24,6 +24,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "error_text.dart";
+import "player_trend_screen.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
 
@@ -187,41 +188,63 @@ class _SeasonScreenState extends State<SeasonScreen> {
           Text("nincs adat", style: AppText.label.copyWith(fontSize: 11.5))
         else
           for (var i = 0; i < rows.length; i++)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(children: [
-                SizedBox(
-                    width: 18,
-                    child: Text("${i + 1}.",
-                        style: AppText.label.copyWith(fontSize: 11.5))),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceAlt,
-                    borderRadius: BorderRadius.circular(4),
+            // A játékos megkeresi magát a listán — és onnan a saját
+            // lapjára akar jutni, nem egy másik menüpontba.
+            InkWell(
+              onTap: () => _openPlayer(rows[i] as Map),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(children: [
+                  SizedBox(
+                      width: 18,
+                      child: Text("${i + 1}.",
+                          style: AppText.label.copyWith(fontSize: 11.5))),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceAlt,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text("#${(rows[i] as Map)["jersey"]}",
+                        style: AppText.value.copyWith(fontSize: 11.5)),
                   ),
-                  child: Text("#${(rows[i] as Map)["jersey"]}",
-                      style: AppText.value.copyWith(fontSize: 11.5)),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  // Ha van felvitt NÉV, az kerül előre — az edző nem
-                  // számokban gondolkodik. Név nélkül marad a csapat.
-                  child: Text(
-                      ((rows[i] as Map)["name"] as String?)?.isNotEmpty ==
-                              true
-                          ? "${(rows[i] as Map)["name"]}"
-                          : "${(rows[i] as Map)["team"]}",
-                      overflow: TextOverflow.ellipsis,
-                      style: AppText.label.copyWith(fontSize: 11.5)),
-                ),
-                Text("${(rows[i] as Map)["value"]}",
-                    style: AppText.value.copyWith(fontSize: 12.5)),
-              ]),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    // Ha van felvitt NÉV, az kerül előre — az edző nem
+                    // számokban gondolkodik. Név nélkül marad a csapat.
+                    child: Text(
+                        ((rows[i] as Map)["name"] as String?)?.isNotEmpty ==
+                                true
+                            ? "${(rows[i] as Map)["name"]}"
+                            : "${(rows[i] as Map)["team"]}",
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.label.copyWith(fontSize: 11.5)),
+                  ),
+                  Text("${(rows[i] as Map)["value"]}",
+                      style: AppText.value.copyWith(fontSize: 12.5)),
+                  const Icon(Icons.chevron_right,
+                      size: 14, color: AppColors.textFaint),
+                ]),
+              ),
             ),
       ]),
     );
+  }
+
+  /// A toplista sorából a játékos saját lapjára (görbe + "mit
+  /// gyakorolj"), előre kitöltve.
+  void _openPlayer(Map row) {
+    final team = row["team"] as String?;
+    final jersey = (row["jersey"] as num?)?.toInt();
+    if (team == null || jersey == null) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PlayerTrendScreen(
+        teams: _teams,
+        initialTeam: team,
+        initialJersey: jersey,
+      ),
+    ));
   }
 
   // ---- Riportok ------------------------------------------------------

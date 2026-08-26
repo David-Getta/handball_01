@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.71 óta)
+
+- **A toplista sorából a játékos saját lapjára** (felület): a Szezon
+  képernyő toplistái zsákutcák voltak — a játékos megtalálta magát a
+  góllövők közt, de a saját görbéjéhez és a "Mit gyakorolj" listájához
+  vissza kellett mennie a menübe, és kézzel begépelnie a csapatot meg
+  a mezszámot. A sor mostantól koppintható (nyíl jelzi), és a
+  játékos-lapot ELŐRE KITÖLTVE nyitja meg.
+
 ## v0.1.71 — kiadva (2026-08-26)
 
 > Kiadás-jegyzet: az EMBER a lapon. A kézzel felvett gólnak mostantól

@@ -2057,3 +2057,33 @@ def test_a_jegyzet_csomag_nem_kinal_mukodeskeptelen_kapcsolot():
     assert "_noteCount" in klip and "fetchNotes" in klip
     assert "nincs jegyzet" in klip, (
         "a letiltott csomag nem mondja meg, miért nem elérhető")
+def test_a_toplista_soraibol_a_jatekos_sajat_lapjara_lehet_jutni():
+    """A játékos a toplistán megtalálja magát — és ott meg is akad.
+
+    A szezon-képernyő toplistái eddig zsákutcák voltak: a #7-es
+    kiolvasta, hogy ő a második góllövő, de a saját görbéjéhez és a
+    "mit gyakorolj" listájához vissza kellett mennie a menübe, és
+    kézzel begépelnie a csapatot meg a mezszámot. A sor mostantól
+    koppintható, és a játékos-lapot ELŐRE KITÖLTVE nyitja.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    szezon = (lib / "ui" / "season_screen.dart").read_text(encoding="utf-8")
+    assert "_openPlayer" in szezon, "a toplista sora nem visz sehova"
+    assert "InkWell" in szezon and "onTap: () => _openPlayer" in szezon, (
+        "a sor nem koppintható")
+    # Az ELŐRE KITÖLTÉS a lényeg: enélkül a játékos ugyanúgy gépelne.
+    assert "initialTeam:" in szezon and "initialJersey:" in szezon, (
+        "a játékos-lap nem előre kitöltve nyílik")
+    # És a sor LÁTSZÓDJON is koppinthatónak — a rejtett kattinthatóság
+    # ugyanolyan használhatatlan, mint a hiányzó.
+    assert "Icons.chevron_right" in szezon, (
+        "semmi nem jelzi, hogy a sor koppintható")
+
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "this.initialTeam" in jatekos and "this.initialJersey" in jatekos
