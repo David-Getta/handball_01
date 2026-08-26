@@ -36,6 +36,8 @@ class _NotesScreenState extends State<NotesScreen> {
   String? _error;
   List<Map<String, dynamic>> _notes = [];
   String _query = "";
+  // Épp törlés alatt álló jegyzet azonosítója — kétszer ne induljon.
+  String? _deleting;
 
   @override
   void initState() {
@@ -76,6 +78,54 @@ class _NotesScreenState extends State<NotesScreen> {
             .contains(q))
           n
     ];
+  }
+
+  /// Jegyzet törlése — a lista az edző TEENDŐ-listája, tehát a kipipált
+  /// tételnek le kell tudnia kerülni róla. Megerősítés nélkül nem
+  /// törlünk: a jegyzet gépelt szöveg, nem újratermelhető adat.
+  Future<void> _delete(Map<String, dynamic> n) async {
+    final id = n["id"] as String?;
+    final matchId = n["match_id"] as String?;
+    if (id == null || matchId == null || _deleting != null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Jegyzet törlése"),
+        content: SizedBox(
+          width: 360,
+          child: Text("„${n["text"]}”\n\nA törlés nem vonható vissza.",
+              style: AppText.label.copyWith(fontSize: 12.5)),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.away,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Törlés"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _deleting = id);
+    try {
+      await _api.deleteNote(matchId, id);
+      if (!mounted) return;
+      setState(() {
+        _notes = [for (final e in _notes) if (e["id"] != id) e];
+        _deleting = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _deleting = null);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A törlés nem sikerült: ${humanError(e)}")));
+    }
   }
 
   /// Játékidő óra-alakban (mm:ss) — a képkocka-index az edzőnek semmit
@@ -199,6 +249,16 @@ class _NotesScreenState extends State<NotesScreen> {
             ),
             const Icon(Icons.play_circle_outline,
                 size: 18, color: AppColors.accent),
+            IconButton(
+              tooltip: "Jegyzet törlése",
+              iconSize: 15,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(),
+              padding: const EdgeInsets.only(left: 8),
+              icon: const Icon(Icons.delete_outline,
+                  color: AppColors.textFaint),
+              onPressed: _deleting != null ? null : () => _delete(n),
+            ),
           ]),
         ),
       ),

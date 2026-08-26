@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 import re
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -48,10 +48,18 @@ class ClipResult:
     A skipped az azonos pillanatra eső ismétlések és a MAX_CLIPS fölé
     eső jelenetek száma — a hívó ebből tudja jelezni, hogy a csomag
     nem teljes.
+
+    A `by_type` típusonként mondja meg, hány klip készült, az `empty`
+    pedig azokat a KÉRT típusokat sorolja, amelyekhez egyetlen jelenet
+    sem volt. Enélkül a néma semmi félrevezet: az edző hat csomagot
+    kér, kap egy zip-et, és nem tudja, hogy kettő üresen maradt-e
+    (nem volt ilyen jelenet), vagy elromlott valami.
     """
     zip_path: str
     count: int
     skipped: int = 0
+    by_type: dict = field(default_factory=dict)
+    empty: list = field(default_factory=list)
 
 
 def _clock(seconds: float) -> str:
@@ -229,5 +237,13 @@ def export_event_clips(match: Match, events: list, types: set[str],
             z.write(f, arcname)
     if progress_cb:
         progress_cb(len(picked), len(picked), f"kész: {len(made)} klip")
+    # Típusonkénti darabszám és a NÉMÁN üres csomagok: a hívó ebből
+    # tudja megmondani, mihez nem volt jelenet.
+    by_type: dict = {}
+    for _f, typ_hu in made:
+        by_type[typ_hu] = by_type.get(typ_hu, 0) + 1
+    empty = sorted(_TYPE_HU.get(t, t) for t in types
+                   if _TYPE_HU.get(t, t) not in by_type)
     return ClipResult(zip_path=str(zip_path), count=len(made),
-                      skipped=max(0, n_requested - len(made)))
+                      skipped=max(0, n_requested - len(made)),
+                      by_type=by_type, empty=empty)

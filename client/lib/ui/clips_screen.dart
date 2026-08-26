@@ -180,10 +180,16 @@ class _ClipsScreenState extends State<ClipsScreen> {
       if (path != null) {
         await File(path).writeAsBytes(bytes);
         if (!mounted) return;
+        // A motor záró üzenete megnevezi a NÉMÁN üres csomagokat és a
+        // kimaradt jeleneteket — ezt tovább kell adni, különben az edző
+        // nem tudja, mihez nem volt jelenet.
+        final extra = (doneMsg.contains("kimaradt") ||
+                doneMsg.contains("nem volt jelenet"))
+            ? " · ${doneMsg.replaceFirst(RegExp(r"^kész: \d+ klip"), "").trim()}"
+            : "";
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text("Klipek mentve: $path — kicsomagolás után "
-                "lejátszhatók"
-                "${doneMsg.contains("kimaradt") ? " · $doneMsg" : ""}")));
+                "lejátszhatók$extra")));
       }
     } catch (e) {
       if (!mounted) return;

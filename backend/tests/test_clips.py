@@ -338,3 +338,35 @@ def test_a_plafon_alatt_semmi_nem_valtozik():
 
     events = [{"t": i, "type": "goal"} for i in range(10)]
     assert _fair_cap(events, field) == events
+
+
+def test_a_neman_ures_csomagokat_megnevezzuk(tmp_path):
+    """Aki hat csomagot kér és egy zip-et kap, tudja meg, mihez nem
+    volt jelenet.
+
+    A néma semmi félrevezet: az edző nem tudja eldönteni, hogy az adott
+    csomaghoz tényleg nem volt jelenet, vagy elromlott valami.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "goal", "team": "home"}]
+    res = export_event_clips(m, events, {"goal", "block", "big_save"},
+                             tmp_path / "ki")
+    assert res.count == 1
+    assert res.by_type == {"gol": 1}
+    # A két kért, de üres csomag MAGYAR néven jelenik meg.
+    assert res.empty == ["blokk", "nagy-vedes"], res.empty
+
+
+def test_minden_csomag_adott_jelenetet(tmp_path):
+    """Ha mindegyik kért típushoz volt jelenet, az `empty` üres —
+    a jelzés csak akkor ér valamit, ha ritka."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "goal", "team": "home"},
+              {"t": 120, "type": "block", "team": "away"}]
+    res = export_event_clips(m, events, {"goal", "block"}, tmp_path / "ki")
+    assert res.empty == []
+    assert res.by_type == {"gol": 1, "blokk": 1}

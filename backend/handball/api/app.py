@@ -2253,10 +2253,15 @@ def create_app():
                                          progress_cb=cb)
                 job["status"] = "done"
                 job["progress"] = 1.0
-                job["message"] = (f"kész: {res.count} klip"
-                                  + (f" ({res.skipped} jelenet kimaradt "
-                                     "— ismétlés vagy limit)"
-                                     if res.skipped else ""))
+                # A NÉMÁN üres csomagokat is megnevezzük: aki hat
+                # csomagot kér és egy zip-et kap, nem tudja, hogy
+                # kettőhöz nem volt jelenet, vagy elromlott valami.
+                job["message"] = (
+                    f"kész: {res.count} klip"
+                    + (f" ({res.skipped} jelenet kimaradt "
+                       "— ismétlés vagy limit)" if res.skipped else "")
+                    + (f" · nem volt jelenet: {', '.join(res.empty)}"
+                       if res.empty else ""))
             except Exception as e:
                 job["status"] = "error"
                 job["error"] = str(e)

@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **A klip-export megnevezi az üres csomagokat** (motor + felület):
+  aki hat csomagot kért és egy zip-et kapott, eddig nem tudta, hogy
+  kettőhöz nem volt jelenet, vagy elromlott valami. A vágás eredménye
+  mostantól típusonkénti darabszámot és a NÉMÁN üres csomagok listáját
+  is viszi, és ez a záró üzenetben is megjelenik.
+- **A jegyzet törölhető a Jegyzetek lapról** (felület): a lista az edző
+  teendő-listája — a kipipált tételnek le kell tudnia kerülni róla.
+  Megerősítéssel, mert a jegyzet gépelt szöveg, nem újratermelhető
+  adat.
+
 - **A Keret-lap megmutatja, kivel van dolga az edzőnek** (felület): a
   tábla eddig azt mutatta, ki mit teljesített — az edző viszont azért
   nézi végig a keretet, hogy eldöntse, kivel kell foglalkoznia. Az új

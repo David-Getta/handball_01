@@ -1938,3 +1938,27 @@ def test_a_keret_lap_mutatja_kivel_van_dolga_az_edzonek():
     assert "_focusCount" in keret
     # EGY kérés az egész keretre — nem mezszámonként.
     assert keret.count("fetchTeamPlayerPlan") == 1
+
+
+def test_a_jegyzet_torolheto_es_az_ures_csomag_megszolal():
+    """Két néma pont javítása a felületen.
+
+    (1) A jegyzet-lista az edző TEENDŐ-listája: a kipipált tételnek le
+    kell tudnia kerülni róla — megerősítéssel, mert gépelt szöveg, nem
+    újratermelhető adat. (2) Aki hat klip-csomagot kér és egy zip-et
+    kap, tudja meg, mihez nem volt jelenet.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jegyzet = (lib / "ui" / "notes_screen.dart").read_text(encoding="utf-8")
+    assert "deleteNote" in jegyzet, "a jegyzet nem törölhető"
+    assert "A törlés nem vonható vissza" in jegyzet, (
+        "a törlés megerősítés nélkül megy")
+
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "nem volt jelenet" in klip, (
+        "a néma üres csomagok nem jutnak el a felhasználóhoz")
