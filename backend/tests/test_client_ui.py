@@ -2037,3 +2037,23 @@ def test_a_kezi_golnak_lehet_lovoje_a_feluleten():
     # A menü meg is mondja, KI lesz a lövő — különben az edző nem
     # tudja, hogy a kijelölés számít.
     assert "lövő: " in meccs
+
+
+def test_a_jegyzet_csomag_nem_kinal_mukodeskeptelen_kapcsolot():
+    """Felajánlani egy működésképtelen kapcsolót rosszabb, mint
+    elmondani, miért nem elérhető.
+
+    A "jegyzetelt pillanatok" klip-csomag jegyzet nélkül némán üres
+    zip-et adna — a képernyő ezért megnézi, hány jegyzet van, és
+    kiírja a darabszámot (vagy azt, hol lehet jegyzetet írni).
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "_noteCount" in klip and "fetchNotes" in klip
+    assert "nincs jegyzet" in klip, (
+        "a letiltott csomag nem mondja meg, miért nem elérhető")

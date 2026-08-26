@@ -101,6 +101,11 @@ class _ClipsScreenState extends State<ClipsScreen> {
 
   final Set<String> _selected = {"goal"};
 
+  // Hány edzői jegyzet van a kiválasztott meccshez. A "jegyzetelt
+  // pillanatok" csomag enélkül némán üres zip-et adna — a felajánlott,
+  // de működésképtelen kapcsoló rosszabb, mint a hiánya.
+  int _noteCount = 0;
+
   // Vágás közben: a job üzenete és haladása — a néma várakozás
   // megakadásnak látszik.
   bool _working = false;
@@ -122,12 +127,27 @@ class _ClipsScreenState extends State<ClipsScreen> {
         _matchId = ms.isNotEmpty ? ms.first["match_id"] as String : null;
         _loading = false;
       });
+      _loadNoteCount();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = "A meccs-könyvtár nem érhető el: ${humanError(e)}";
         _loading = false;
       });
+    }
+  }
+
+  /// A kiválasztott meccs jegyzeteinek száma (hibánál 0 — a lista
+  /// enélkül is használható).
+  Future<void> _loadNoteCount() async {
+    final id = _matchId;
+    if (id == null) return;
+    try {
+      final n = await _api.fetchNotes(id);
+      if (!mounted) return;
+      setState(() => _noteCount = n.length);
+    } catch (_) {
+      if (mounted) setState(() => _noteCount = 0);
     }
   }
 
@@ -262,7 +282,12 @@ class _ClipsScreenState extends State<ClipsScreen> {
                       overflow: TextOverflow.ellipsis),
                 ),
             ],
-            onChanged: _working ? null : (v) => setState(() => _matchId = v),
+            onChanged: _working
+                ? null
+                : (v) {
+                    setState(() => _matchId = v);
+                    _loadNoteCount();
+                  },
           ),
         ]),
         for (final (name, types) in kClipPresets)
@@ -327,10 +352,17 @@ class _ClipsScreenState extends State<ClipsScreen> {
   Widget _kindTile(ClipKind kind) {
     final (key, name, why) = kind;
     final on = _selected.contains(key);
+    // A jegyzet-csomag csak akkor működik, ha VAN jegyzet ehhez a
+    // meccshez: felajánlani egy működésképtelen kapcsolót rosszabb,
+    // mint elmondani, miért nem elérhető.
+    final tiltva = key == "note" && _noteCount == 0;
+    final magyarazat = tiltva
+        ? "ehhez a meccshez nincs jegyzet — a meccs-elemzőben írhatsz"
+        : (key == "note" ? "$why ($_noteCount db)" : why);
     return SizedBox(
       width: 280,
       child: InkWell(
-        onTap: _working
+        onTap: _working || tiltva
             ? null
             : () => setState(() {
                   if (on) {
@@ -346,15 +378,22 @@ class _ClipsScreenState extends State<ClipsScreen> {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Icon(on ? Icons.check_box : Icons.check_box_outline_blank,
                 size: 18,
-                color: on ? AppColors.accent : AppColors.textFaint),
+                color: tiltva
+                    ? AppColors.border
+                    : (on ? AppColors.accent : AppColors.textFaint)),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: AppText.value.copyWith(fontSize: 13)),
+                    Text(name,
+                        style: AppText.value.copyWith(
+                            fontSize: 13,
+                            color: tiltva
+                                ? AppColors.textFaint
+                                : AppColors.textPrimary)),
                     const SizedBox(height: 2),
-                    Text(why,
+                    Text(magyarazat,
                         style: AppText.label.copyWith(fontSize: 11.5)),
                   ]),
             ),

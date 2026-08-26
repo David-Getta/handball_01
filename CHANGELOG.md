@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **A jegyzet-klipcsomag nem kínál működésképtelen kapcsolót**
+  (felület): a "jegyzetelt pillanatok" csomag jegyzet nélkül némán
+  üres zip-et adott volna. A Klipek lap mostantól kiírja, hány jegyzet
+  van a meccshez, és ha nincs, letiltva megmondja, hol lehet írni.
+
 - **A jegyzet-lista a legújabb meccsel kezd** (motor): a hét közbeni
   munka a legutóbbi meccsből indul; húsz meccs jegyzetei közt a
   felvételi sorrend semmit nem mondott. Meccsen belül marad az
