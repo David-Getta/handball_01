@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.72 óta)
+## v0.1.73 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: a klip mint MUNKAESZKÖZ. A v0.1.72 megnyitotta az
+> utat a játékos saját videójához; ez a kiadás használhatóvá teszi.
+> Három emberrel külön-külön ülsz le — mindenki külön mappát kap, és a
+> plafon is emberenként oszlik, hogy senki mappájában ne maradjon két
+> klip. A "Mit gyakorolj" tételeitől egy kattintás a felvételig: a
+> gyakorlat elmondja, MIT kell csinálni, a klip azt, MIÉRT. És a vágás
+> előtt megtudod, mennyi lesz — a percekig tartó vágás után derülne ki
+> különben, hogy három csomaghoz nem volt jelenet.
+
 
 - **A klipvágás előre megmondja, mennyi lesz** (API + felület): a
   vágás percekbe telik, és eddig csak a VÉGÉN derült ki, hogy három
