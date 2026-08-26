@@ -3,7 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.70 óta)
+## v0.1.71 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: az EMBER a lapon. A kézzel felvett gólnak mostantól
+> lövője van (különben a góllövő-listákból kimaradt volna), a
+> "Mit gyakorolj" ott van a meccs utáni játékos-lapon is, a Keret
+> megmutatja, kivel van dolga az edzőnek, és a program sehol nem mond
+> kevesebbet, mint a saját nyomtatványa. Az őr-hármas az 503 rétegre
+> tiszta: sorrend-függés 0, tükrözés 0 hibás, stride 24 (változatlan).
 
 - **A jegyzet-klipcsomag nem kínál működésképtelen kapcsolót**
   (felület): a "jegyzetelt pillanatok" csomag jegyzet nélkül némán
