@@ -14,6 +14,9 @@
 /// ellenfélre "mit fognak ellenünk gyakorolni" olvasatnak jó.
 library;
 
+import "dart:io";
+
+import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
@@ -141,6 +144,34 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
+  /// A heti edzésterv nyomtatható lapja — a pályán nincs képernyő.
+  Future<void> _exportPlan() async {
+    final team = _team;
+    if (team == null) return;
+    try {
+      final bytes = await _api.fetchTrainingPlanExport(team);
+      if (!mounted) return;
+      final safe = team.replaceAll(
+          RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Edzésterv mentése (HTML)",
+        fileName: "edzesterv_$safe.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Edzésterv mentve: $path — böngészőből "
+              "nyomtatható")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Edzésterv-lap hiba: ${humanError(e)}")));
+    }
+  }
+
   Widget _viewSwitch() {
     Widget tab(String label, bool season, IconData icon) {
       final on = _seasonView == season;
@@ -166,6 +197,15 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       tab("Szezon (visszatérő)", true, Icons.repeat),
       const SizedBox(width: AppSpacing.sm),
       tab("Egy meccs", false, Icons.play_circle_outline),
+      const Spacer(),
+      // A lapot le lehet vinni az edzésre, ki lehet tenni az öltözőben
+      // — a csapat gyakorlandói ÉS az egyéni feladatok egy oldalon.
+      if (_seasonView && _team != null)
+        OutlinedButton.icon(
+          onPressed: _exportPlan,
+          icon: const Icon(Icons.print_outlined, size: 16),
+          label: const Text("Nyomtatható edzésterv"),
+        ),
     ]);
   }
 

@@ -3,6 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.69 óta)
+
+- **Nyomtatható Edzésterv és Meccsterv** (motor + felület): a pályán
+  és a meccs előtti estén nincs képernyő — az edző a papírt viszi. A
+  két ma született munkalap eddig csak a képernyőn élt. Az
+  **edzésterv-lap** (új végpont, `/library/training-focus/export`) egy
+  oldalon hozza a csapat visszatérő gyakorlandóit ÉS az egyéni
+  feladatokat mezszám (és név) szerint; üres listánál kimondja, hogy
+  ez eredmény, nem hiányzó adat. A **meccsterv-lap** az ellenfél
+  felderítését és a páros-specifikus tervet adja — a saját oldal a
+  SAJÁT csapat saját meccseiből épül, nem abból a feltevésből, hogy mi
+  voltunk az ellenfelük.
+
 ## v0.1.69 — kiadva (2026-08-26)
 
 > Kiadás-jegyzet: a játékos lapjának lezárása. A "Mit gyakorolj"

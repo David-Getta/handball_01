@@ -758,6 +758,29 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A MECCSTERV nyomtatható lapja (POST /scouting/export): az
+  /// ellenfél felderítése + a páros-specifikus meccsterv szakasz.
+  ///
+  /// A tükrözős változattól (fetchCombinedScoutingExport) az különíti
+  /// el, hogy itt a SAJÁT oldal a saját csapat saját meccseiből jön —
+  /// nem abból a feltevésből, hogy mi voltunk az ellenfelük.
+  Future<Uint8List> fetchMatchupExport(
+      List<Map<String, dynamic>> ownItems,
+      List<Map<String, dynamic>> oppItems) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting/export"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "items": oppItems,
+        "own": {"items": ownItems},
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a meccsterv-lap", resp));
+    }
+    return resp.bodyBytes;
+  }
+
   /// Az egyesített felderítés nyomtatható HTML-je (POST /scouting/export).
   Future<Uint8List> fetchCombinedScoutingExport(
       List<Map<String, String>> items) async {
@@ -1029,6 +1052,19 @@ class ApiClient {
       throw Exception(_hiba("Nem sikerült lekérni a szezon-fókuszt", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A heti EDZÉSTERV nyomtatható HTML-je egy csapatra
+  /// (GET /library/training-focus/export) — a pályán nincs képernyő.
+  Future<List<int>> fetchTrainingPlanExport(String team) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/training-focus/export"
+            "?team=${Uri.encodeQueryComponent(team)}"))
+        .timeout(const Duration(seconds: 120));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az edzésterv-lap", resp));
+    }
+    return resp.bodyBytes;
   }
 
   /// Edzés-fókusz javaslatok (GET /matches/{id}/training): csapatonként

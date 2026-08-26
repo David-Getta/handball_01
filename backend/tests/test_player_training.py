@@ -294,3 +294,37 @@ def test_player_focus_vegpont():
     ures = client.get("/players/focus",
                       params={"team": "A", "jersey": 77}).json()
     assert ures["focus"] == []
+
+
+def test_edzesterv_nyomtathato_lap():
+    """Az edzésterv lapja a csapat ÉS az egyéni feladatokat is viszi.
+
+    Ezt a lapot az edző leviszi az edzésre, kiteszi az öltözőben —
+    ott nincs képernyő, tehát ami lemarad róla, az nem létezik.
+    """
+    from handball.pipeline.report_html import training_plan_html
+
+    html = training_plan_html(
+        "Sport SE", 5,
+        [{"title": "Fedezés-fegyelem", "area": "védekezés", "count": 3,
+          "why": "a kapott lövések 45%-ánál nem volt védő",
+          "drill": "kilépés-gyakorlat"}],
+        [{"jersey": 9, "name": "Kovács",
+          "items": [{"title": "Kiadás nyomás alatt",
+                     "area": "labdabiztonság",
+                     "why": "10 nyomott döntésből 6 eladás",
+                     "drill": "kettőzés elleni kiadás", "count": 2}]}])
+    assert "Edzésterv" in html and "Sport SE" in html
+    assert "Fedezés-fegyelem" in html and "3 meccsen" in html
+    assert "#9 Kovács" in html and "Kiadás nyomás alatt" in html
+    assert "5 elemzett meccs" in html
+
+
+def test_edzesterv_ures_eredmenyt_is_kimond():
+    """Üres lista nem hiányzó adat: ha nincs visszatérő gyengeség, azt
+    ki kell mondani — különben az edző hibának nézi az üres lapot."""
+    from handball.pipeline.report_html import training_plan_html
+
+    html = training_plan_html("Sport SE", 4, [], [])
+    assert "Nincs olyan gyengeség" in html
+    assert "Egyéni feladatok" not in html

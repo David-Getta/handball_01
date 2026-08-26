@@ -4107,6 +4107,98 @@ számai; a "—" azt jelzi, az adott meccsen nem volt mérhető adat.
 </div></body></html>""")
 
 
+def training_plan_html(team: str, n_matches: int,
+                       team_focuses: list[dict],
+                       player_focuses: list[dict] | None = None) -> str:
+    """Edzésterv: a heti munkalap egy nyomtatható oldalon.
+
+    Az edző a hét első edzésére viszi le: MIT gyakoroljon a csapat, és
+    KINEK mi a személyes feladata. A képernyőn ugyanez él, de a pályán
+    nincs képernyő — a lapot ki lehet tenni az öltözőben.
+
+    - team_focuses: a VISSZATÉRŐ csapat-fókuszok ({"title", "area",
+      "count", "why", "drill"}), csökkenő visszatérés szerint;
+    - player_focuses: emberenként ({"jersey", "name", "items":
+      [{"title", "area", "why", "drill", "count"}]}).
+
+    Mindkettő lehet üres: az azt jelenti, hogy a mért területeken nincs
+    kilógó gyengeség — ez EREDMÉNY, nem hiányzó adat, és a lap ezt ki
+    is mondja.
+    """
+    def _items(lista):
+        return "".join(
+            f"<li><b>{escape(f_['title'])}</b> "
+            f"({escape(f_.get('area') or '')}"
+            + (f" · {f_['count']} meccsen" if f_.get("count") else "")
+            + f") — {escape(f_.get('why') or '')}.<br>"
+            f"<span class='note'>Gyakorlat: "
+            f"{escape(f_.get('drill') or '')}.</span></li>"
+            for f_ in lista)
+
+    csapat_html = (
+        f"<h2>A csapat gyakorlandói</h2><ul>{_items(team_focuses)}</ul>"
+        if team_focuses else
+        "<h2>A csapat gyakorlandói</h2>"
+        '<p class="note">Nincs olyan gyengeség, ami legalább két meccsen '
+        "visszatért volna. Ez eredmény, nem hiányzó adat — az egyszeri "
+        "kisiklásokat a meccs-jelentések tartalmazzák.</p>")
+
+    emberek = ""
+    for p_ in (player_focuses or []):
+        ki = f"#{p_['jersey']}" if p_.get("jersey") is not None else "?"
+        if p_.get("name"):
+            ki += f" {p_['name']}"
+        emberek += (f"<li><b>{escape(ki)}</b>"
+                    f"<ul>{_items(p_.get('items') or [])}</ul></li>")
+    egyeni_html = (
+        f"<h2>Egyéni feladatok</h2><ul>{emberek}</ul>"
+        '<p class="note">Emberenként legfeljebb két tétel — a fókusz '
+        "attól fókusz, hogy kevés. A mezszám nélkül játszók nem "
+        "szerepelnek: meccsek közt csak a szám köti össze a játékost."
+        "</p>"
+        if emberek else "")
+
+    return finish_report(f"""<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Edzésterv — {escape(team)}</title>
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; font-family: system-ui, -apple-system, "Segoe UI",
+         Arial, sans-serif; color: #101722; background: #fff;
+         line-height: 1.5; }}
+  .page {{ max-width: 760px; margin: 0 auto; padding: 36px 32px 48px; }}
+  header {{ border-bottom: 3px solid #12988a; padding-bottom: 14px;
+           margin-bottom: 22px; }}
+  .brand {{ font-size: 11px; letter-spacing: .22em;
+           text-transform: uppercase; color: #8492A6; }}
+  h1 {{ margin: 6px 0 2px; font-size: 26px; }}
+  .sub {{ color: #4A5768; font-size: 13px; }}
+  h2 {{ font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+       color: #12988a; margin: 26px 0 10px; }}
+  ul {{ margin: 0 0 0 18px; padding: 0; }}
+  li {{ margin-bottom: 10px; }}
+  .note {{ color: #6B7889; font-size: 12px; }}
+  footer {{ margin-top: 30px; border-top: 1px solid #E3E8EF;
+           padding-top: 12px; color: #8492A6; font-size: 11.5px; }}
+  @media print {{ .page {{ padding: 0; }} }}
+</style>
+</head>
+<body><div class="page">
+<header>
+  <div class="brand">SPORT MACHINE · EDZÉSTERV</div>
+  <h1>{escape(team)}</h1>
+  <div class="sub">{n_matches} elemzett meccs alapján.</div>
+</header>
+{csapat_html}
+{egyeni_html}
+<footer>Szabály-alapú javaslatok: minden pont mögött a meccsek
+kiszámolt adata áll. Ami több meccsen visszatér, az nem napi forma.
+</footer>
+</div></body></html>""")
+
+
 def season_report_html(team: str, tr: dict, focuses: list[dict],
                        n_matches: int,
                        timeline: list[dict] | None = None,

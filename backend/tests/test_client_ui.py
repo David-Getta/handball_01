@@ -1851,3 +1851,35 @@ def test_a_mit_gyakorolj_a_jatekos_kepernyojen_is_ott_van():
     # A képernyő és a nyomtatott lap UGYANABBÓL a számolásból él.
     assert app.count("_season_player_focus(") >= 2, (
         "a képernyő és a nyomtatott lap külön számolna")
+
+
+def test_az_edzesterv_es_a_meccsterv_nyomtathato():
+    """A pályán és a meccs előtti estén nincs képernyő.
+
+    A két új munkalap (Edzésterv, Meccsterv) eddig csak a képernyőn
+    élt — az edző viszont a papírt viszi le az edzésre és a
+    meccs-helyszínre. A nyomtatható lap nem külön adat, ugyanaz a
+    számolás.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    terv = (lib / "ui" / "training_plan_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchTrainingPlanExport" in terv, (
+        "az edzésterv nem nyomtatható")
+    meccs = (lib / "ui" / "matchup_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchMatchupExport" in meccs, "a meccsterv nem nyomtatható"
+    # A meccsterv-lap a SAJÁT csapat saját meccseiből épül, nem abból a
+    # feltevésből, hogy mi voltunk az ellenfelük.
+    assert "_itemsOf(own), _itemsOf(opp)" in meccs
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/library/training-focus/export")' in app

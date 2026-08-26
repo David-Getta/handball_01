@@ -19,6 +19,9 @@
 ///         sajátját.
 library;
 
+import "dart:io";
+
+import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
@@ -123,6 +126,41 @@ class _MatchupScreenState extends State<MatchupScreen> {
     }
   }
 
+  /// A meccsterv nyomtatható lapja — a meccs előtti este a papírt
+  /// viszi az edző, nem a laptopot.
+  Future<void> _exportPlan() async {
+    final own = _own;
+    final opp = _opp;
+    if (own == null || opp == null || _working) return;
+    setState(() => _working = true);
+    try {
+      final bytes =
+          await _api.fetchMatchupExport(_itemsOf(own), _itemsOf(opp));
+      if (!mounted) return;
+      String safe(String s) =>
+          s.replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Meccsterv mentése (HTML)",
+        fileName: "meccsterv_${safe(own)}_vs_${safe(opp)}.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path != null) {
+        await File(path).writeAsBytes(bytes);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Meccsterv mentve: $path — böngészőből "
+                "nyomtatható")));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = "A meccsterv-lap nem készült el: "
+          "${humanError(e)}");
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppShell(
@@ -212,6 +250,14 @@ class _MatchupScreenState extends State<MatchupScreen> {
           icon: const Icon(Icons.fact_check_outlined, size: 18),
           label: const Text("Meccsterv"),
         ),
+        // A nyomtatható lap az elkészült terv MELLETT jár: a meccs
+        // előtti este a papírt viszi az edző, nem a laptopot.
+        if (_result != null)
+          OutlinedButton.icon(
+            onPressed: _working ? null : _exportPlan,
+            icon: const Icon(Icons.print_outlined, size: 16),
+            label: const Text("Nyomtatható meccsterv"),
+          ),
         if (_own != null && _opp != null && _own == _opp)
           Text("ugyanaz a csapat — válassz másik ellenfelet",
               style: AppText.label.copyWith(color: AppColors.away)),
