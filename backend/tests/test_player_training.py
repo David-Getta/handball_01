@@ -476,3 +476,49 @@ def test_a_szezon_fokusz_meccsenkent_egyszer_szamol(monkeypatch):
     assert elso <= 2, f"két meccsnél kettőnél többször futott: {elso}"
     assert hivasok["n"] == elso, (
         "a második kérés újraszámolta a rétegeket")
+
+
+def test_a_csapat_egyeni_terve_vegpont():
+    """A csapat egyéni terve: minden ismert mezszámra a szezon-fókusz.
+
+    Elöl, akinek több gyakorlandója van — az edző ott kezdi a hetet.
+    """
+    import json
+    import os
+    import tempfile
+    from pathlib import Path
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+
+    tmp = tempfile.mkdtemp(prefix="handball_team_plan_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True, exist_ok=True)
+    for i in range(2):
+        m = _terheles_match()
+        m.meta.match_id = f"tp{i}"
+        (d / f"tp{i}.json").write_text(json.dumps(m.to_dict()),
+                                       encoding="utf-8")
+
+    from handball.api.app import create_app
+    client = TestClient(create_app())
+    client.post("/library/players",
+                json={"team": "A", "jersey": 9, "name": "Kovács"})
+    r = client.get("/library/training-focus/players",
+                   params={"team": "A"})
+    assert r.status_code == 200
+    sorok = r.json()["players"]
+    assert sorok, "a fixture-játékosnak van gyakorlandója"
+    assert sorok[0]["jersey"] == 9
+    assert sorok[0]["name"] == "Kovács"
+    assert sorok[0]["items"]
+    # A tételek szám szerint is elárulják, hány meccsen tértek vissza.
+    assert sorok[0]["items"][0]["count"] >= 1
+
+    # Ismeretlen csapatra üres lista, nem hiba.
+    ures = client.get("/library/training-focus/players",
+                      params={"team": "Nincs Ilyen SE"}).json()
+    assert ures["players"] == []

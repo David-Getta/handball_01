@@ -1054,6 +1054,24 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A csapat EGYÉNI edzés-terve (GET /library/training-focus/players)
+  /// — a nyomtatható lap képernyős párja, ugyanabból a számolásból.
+  Future<List<Map<String, dynamic>>> fetchTeamPlayerPlan(
+      String team) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/training-focus/players"
+            "?team=${Uri.encodeQueryComponent(team)}"))
+        .timeout(const Duration(seconds: 120));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az egyéni edzés-terv", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["players"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   /// A heti EDZÉSTERV nyomtatható HTML-je egy csapatra
   /// (GET /library/training-focus/export) — a pályán nincs képernyő.
   Future<List<int>> fetchTrainingPlanExport(String team) async {

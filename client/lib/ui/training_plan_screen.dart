@@ -51,6 +51,12 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
 
   bool _seasonView = true;
 
+  // A csapat EGYÉNI terve (mezszámonként) — a nyomtatható lap ezt is
+  // viszi, tehát a képernyőnek is mutatnia kell, különben a papír
+  // többet mond, mint a program.
+  List<Map<String, dynamic>> _playerPlan = [];
+  bool _planLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -77,16 +83,44 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         _teams = teams;
         _matchCounts = counts;
         _matches = ms;
-        _team = teams.keys.isNotEmpty ? teams.keys.first : null;
+        // A csapat-választó MINDEN csapatot kínál, nem csak azokat,
+        // akiknek van visszatérő csapat-fókusza: egyéni feladat akkor
+        // is lehet, ha csapat-szinten nincs kilógó gyengeség.
+        _team = teams.keys.isNotEmpty
+            ? teams.keys.first
+            : (counts.keys.isNotEmpty ? counts.keys.first : null);
         _matchId = ms.isNotEmpty ? ms.first["match_id"] as String : null;
         _loading = false;
       });
+      if (_team != null) _loadPlayerPlan();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = "Az edzésterv nem érhető el: ${humanError(e)}";
         _loading = false;
       });
+    }
+  }
+
+  /// A csapat egyéni terve — KÜLÖN kérés: minden meccset átnéz, a
+  /// csapat-lista pedig nélküle is teljes.
+  Future<void> _loadPlayerPlan() async {
+    final team = _team;
+    if (team == null) return;
+    setState(() {
+      _planLoading = true;
+      _playerPlan = [];
+    });
+    try {
+      final p = await _api.fetchTeamPlayerPlan(team);
+      if (!mounted) return;
+      setState(() {
+        _playerPlan = p;
+        _planLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _planLoading = false);
     }
   }
 
@@ -212,11 +246,10 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
   // ---- Szezon-nézet --------------------------------------------------
 
   Widget _seasonBody() {
-    if (_teams.isEmpty) {
+    if (_matchCounts.isEmpty) {
       return Text(
-          "Még nincs VISSZATÉRŐ fókusz. Ide az kerül, ami legalább két "
-          "meccsen előjött ugyanannál a csapatnál — egyetlen meccs "
-          "fókuszait az \"Egy meccs\" nézetben látod.",
+          "Még nincs elemzett meccs — előbb dolgozz fel egy videót az "
+          "Új elemzés menüben.",
           style: AppText.label);
     }
     final items = _teams[_team] ?? const [];
@@ -225,10 +258,13 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         spacing: AppSpacing.sm,
         runSpacing: AppSpacing.sm,
         children: [
-          for (final name in _teams.keys)
+          for (final name in _matchCounts.keys)
             ChoiceChip(
               selected: name == _team,
-              onSelected: (_) => setState(() => _team = name),
+              onSelected: (_) {
+                setState(() => _team = name);
+                _loadPlayerPlan();
+              },
               label: Text("$name (${_matchCounts[name] ?? 0} meccs)"),
               selectedColor: AppColors.accentSoft,
               backgroundColor: AppColors.surfaceAlt,
@@ -238,14 +274,57 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       ),
       const SizedBox(height: AppSpacing.md),
       Expanded(
-        child: ListView.separated(
-          itemCount: items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-          itemBuilder: (_, i) => _focusCard(items[i],
-              badge: "${items[i]["count"]} meccsen"),
-        ),
+        child: ListView(children: [
+          if (items.isEmpty)
+            Text(
+                "Ennél a csapatnál nincs VISSZATÉRŐ csapat-gyengeség — "
+                "ide az kerül, ami legalább két meccsen előjött. Egy "
+                "meccs fókuszait az \"Egy meccs\" nézetben látod.",
+                style: AppText.label),
+          for (final it in items) ...[
+            _focusCard(it, badge: "${it["count"]} meccsen"),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          ..._playerPlanSection(),
+        ]),
       ),
     ]);
+  }
+
+  /// EGYÉNI feladatok a szezonból — ugyanaz, ami a nyomtatható lapon
+  /// van. Ha csak a papíron lenne rajta, a program kevesebbet mondana,
+  /// mint a saját nyomtatványa.
+  List<Widget> _playerPlanSection() {
+    if (_planLoading) {
+      return [
+        const SizedBox(height: AppSpacing.md),
+        Text("Egyéni feladatok készülnek…",
+            style: AppText.label.copyWith(fontSize: 12)),
+      ];
+    }
+    if (_playerPlan.isEmpty) return const [];
+    return [
+      const SizedBox(height: AppSpacing.lg),
+      Text("EGYÉNI FELADATOK", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      for (final p in _playerPlan) ...[
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Text(
+              p["name"] != null && "${p["name"]}".isNotEmpty
+                  ? "#${p["jersey"]} ${p["name"]}"
+                  : "#${p["jersey"]}",
+              style: AppText.value.copyWith(
+                  fontSize: 13, color: AppColors.gold)),
+        ),
+        for (final it in ((p["items"] as List)
+            .cast<Map<String, dynamic>>())) ...[
+          _focusCard(it,
+              badge: it["count"] != null ? "${it["count"]} meccsen" : null),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ],
+    ];
   }
 
   // ---- Egy meccs nézet -----------------------------------------------

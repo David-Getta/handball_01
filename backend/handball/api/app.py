@@ -3293,11 +3293,17 @@ def create_app():
         lib = library_training_focus()
         csapat_fokusz = (lib.get("teams") or {}).get(team) or []
         meccsek = (lib.get("matches") or {}).get(team) or 0
+        return HTMLResponse(content=training_plan_html(
+            team, meccsek, csapat_fokusz, _team_player_plan(team)))
 
-        # Az egyéni fókuszok: a csapat MINDEN ismert mezszámára, a
-        # szezon-szintű összegzésből (ami több meccsen visszatér, az
-        # kerül előre). A mezszám nélkül játszókról nem tudunk sort
-        # adni — meccsek közt csak a szám köti össze a játékost.
+    def _team_player_plan(team: str) -> list:
+        """A csapat EGYÉNI edzés-terve: minden ismert mezszámra a
+        szezon-szintű fókusz (ami több meccsen visszatér, elöl).
+
+        A mezszám nélkül játszókról nem tudunk sort adni — meccsek közt
+        csak a szám köti össze a játékost. Elöl, akinek több
+        gyakorlandója van: az edző ott kezdi a hetet.
+        """
         mezek: set = set()
         for m_ in _store.values():
             if m_.meta.home_team == team:
@@ -3317,10 +3323,19 @@ def create_app():
                 emberek.append({"jersey": j,
                                 "name": _player_name(team, j),
                                 "items": tetelek})
-        # Elöl, akinek több gyakorlandója van.
         emberek.sort(key=lambda r: (-len(r["items"]), r["jersey"]))
-        return HTMLResponse(content=training_plan_html(
-            team, meccsek, csapat_fokusz, emberek))
+        return emberek
+
+    @app.get("/library/training-focus/players")
+    def library_player_training_plan(team: str):
+        """A csapat EGYÉNI edzés-terve (a nyomtatható lap képernyős
+        párja): {"team", "players": [{"jersey", "name", "items"}]}.
+
+        Ugyanabból a számolásból él, mint a nyomtatható edzésterv —
+        ha a kettő széttartana, az edző azt venné észre, hogy a papír
+        mást mond, mint a képernyő.
+        """
+        return {"team": team, "players": _team_player_plan(team)}
 
     @app.get("/matches/{match_id}/positions")
     def get_positions(match_id: str):

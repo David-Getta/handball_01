@@ -1883,3 +1883,37 @@ def test_az_edzesterv_es_a_meccsterv_nyomtathato():
     app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
            / "app.py").read_text(encoding="utf-8")
     assert '@app.get("/library/training-focus/export")' in app
+
+
+def test_a_kepernyo_nem_mond_kevesebbet_a_sajat_nyomtatvanyanal():
+    """Az edzésterv-lap az EGYÉNI feladatokat is viszi — a képernyőnek
+    is mutatnia kell.
+
+    Ha csak a papíron lenne rajta, a program kevesebbet mondana, mint a
+    saját nyomtatványa: az edző azt venné észre, hogy a nyomtatás
+    "többet tud". A kettő ugyanabból a számolásból él.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    terv = (lib / "ui" / "training_plan_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchTeamPlayerPlan" in terv, (
+        "a képernyő nem kéri le az egyéni tervet")
+    assert '"EGYÉNI FELADATOK"' in terv
+    # A csapat-választó MINDEN csapatot kínál: egyéni feladat akkor is
+    # lehet, ha csapat-szinten nincs kilógó gyengeség.
+    assert "for (final name in _matchCounts.keys)" in terv, (
+        "a választó csak a csapat-fókuszos csapatokat kínálja")
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/library/training-focus/players")' in app
+    # A képernyő és a nyomtatott lap KÖZÖS számolásból él.
+    assert app.count("_team_player_plan(") >= 2, (
+        "a képernyő és a nyomtatott lap külön számolna")

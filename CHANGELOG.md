@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **Az egyéni feladatok a képernyőn is, nem csak a nyomtatványon**
+  (motor + felület): az edzésterv-lap viszi az egyéni feladatokat — a
+  képernyő eddig nem, tehát a program kevesebbet mondott, mint a saját
+  nyomtatványa. Új végpont (`/library/training-focus/players`), és a
+  két felület KÖZÖS számolásból él. A csapat-választó mostantól minden
+  csapatot kínál, nem csak azokat, akiknek van visszatérő
+  csapat-gyengeségük: egyéni feladat akkor is lehet, ha csapat-szinten
+  nincs kilógó hiba.
+
 - **Az egyéni fókusz meccsenként egyszer számol** (motor): a
   szezon-szintű összegzés (a "Mit gyakorolj" és az edzésterv-lap)
   minden mezszámra újrafuttatta a réteget, az pedig minden
