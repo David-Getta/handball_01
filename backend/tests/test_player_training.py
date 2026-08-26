@@ -565,3 +565,20 @@ def test_a_csapat_egyeni_terve_vegpont():
     ures = client.get("/library/training-focus/players",
                       params={"team": "Nincs Ilyen SE"}).json()
     assert ures["players"] == []
+
+
+def test_a_meccs_jatekos_lapjan_is_ott_a_mit_gyakorolj():
+    """A meccs utáni játékos-lap is mondja meg, mit gyakoroljon.
+
+    A szezon-lapon a VISSZATÉRŐ tételek állnak; itt a mai meccsé. A
+    játékos ezért a részért teszi el a lapot — ha csak a számok
+    lennének rajta, egyszer nézné meg.
+    """
+    from handball.pipeline.report_html import player_report_html
+
+    m = _terheles_match()
+    html = player_report_html(m, 1)
+    assert "Mit gyakorolj" in html, "a lapon nincs egyéni fókusz"
+    assert "Második félidei tempó" in html
+    # A gyakorlat is rajta van, nem csak a hiba megnevezése.
+    assert "Gyakorlat:" in html

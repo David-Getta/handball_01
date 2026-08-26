@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **"Mit gyakorolj" a meccs utáni játékos-lapon is** (motor): a
+  szezon-lapon a VISSZATÉRŐ tételek állnak, itt a mai meccsé. A
+  játékos ezért a részért teszi el a lapot — ha csak a számok lennének
+  rajta, egyszer nézné meg. (A meccs-csomag `jatekos_lapok/` mappája
+  is ezt a lapot viszi.)
+
 - **A teljes lánc a mai újdonságokat is végigjárja** (teszt): a
   videó → feldolgozás → jelentés → csomag kör kiegészült a kézi
   javítással (a felvett gól átüt az esemény-listán, és a jelentés ki

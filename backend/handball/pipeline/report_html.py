@@ -3800,6 +3800,32 @@ def player_report_html(match, track_id: int) -> str:
         tips_html = ("<h2>Mire figyelj</h2><ul>"
                      + "".join(f"<li>{escape(t_)}</li>"
                                for t_ in tips[:3]) + "</ul>")
+
+    # MIT GYAKOROLJ: az egyéni edzés-fókusz ebből a meccsből. A
+    # szezon-lapon ugyanez a szakasz a visszatérő tételeket hozza —
+    # itt a mai meccsét. A játékos ezért a részért teszi el a lapot.
+    focus_html = ""
+    try:
+        from .training import player_training_focus
+        _ptf = player_training_focus(match)
+        _side = team_of.get(track_id)
+        _sajat = None
+        for _p in ((_ptf.get(_side) or {}).get("players") or []):
+            if (_p.get("player_id") in (row.get("track_ids") or ())
+                    or (_p.get("jersey") is not None
+                        and _p.get("jersey") == row.get("jersey"))):
+                _sajat = _p
+                break
+        if _sajat and _sajat.get("items"):
+            _lis = "".join(
+                f"<li><b>{escape(i_['title'])}</b> "
+                f"({escape(i_['area'])}) — {escape(i_['why'])}.<br>"
+                f"<span class='note'>Gyakorlat: {escape(i_['drill'])}."
+                "</span></li>"
+                for i_ in _sajat["items"])
+            focus_html = f"<h2>Mit gyakorolj</h2><ul>{_lis}</ul>"
+    except Exception:
+        pass  # a lap e blokk nélkül is teljes
     sub = f"{meta.home_team} vs {meta.away_team}"
     if meta.date:
         sub += f" · {meta.date}"
@@ -3834,6 +3860,7 @@ def player_report_html(match, track_id: int) -> str:
   .mv {{ font-size: 20px; font-weight: 700; }}
   .ml {{ font-size: 11px; color: #8492A6; }}
   .empty {{ color: #8492A6; font-size: 13px; }}
+  .note {{ color: #6B7889; font-size: 12px; }}
   ul {{ margin: 8px 0 0; padding-left: 20px; }}
   li {{ font-size: 13px; margin-bottom: 6px; }}
   footer {{ margin-top: 30px; font-size: 11px; color: #8492A6; }}
@@ -3851,6 +3878,7 @@ def player_report_html(match, track_id: int) -> str:
 <h2>Fizikai mutatók</h2>
 <div class="metrics">{"".join(phys_items)}</div>
 {tips_html}
+{focus_html}
 <footer>A számok a pálya-koordinátás követésből és a magyarázható
 elemzési rétegekből jönnek — azonos küszöbökkel, mint a
 meccsjelentésben.</footer>
