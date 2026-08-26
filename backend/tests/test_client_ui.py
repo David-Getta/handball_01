@@ -2087,3 +2087,62 @@ def test_a_toplista_soraibol_a_jatekos_sajat_lapjara_lehet_jutni():
     jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
         encoding="utf-8")
     assert "this.initialTeam" in jatekos and "this.initialJersey" in jatekos
+def test_a_klipcsomag_egy_jatekosra_szukitheto_a_feluleten():
+    """A játékos a SAJÁT videóját kéri — a felületen is.
+
+    A motor tud mezszámra szűrni, de ha a képernyő nem kínálja fel, a
+    funkció nem létezik. És csak a MŰKÖDŐ mezszámok kínálhatók: a
+    kiosztatlan szám némán üres zip-et adna, ezért a lista a
+    backendtől jön, jelenet-darabszámmal.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "fetchClipPlayers" in klip, (
+        "a képernyő nem kérdezi meg, kihez van jelenet")
+    assert "_jerseys" in klip and "jerseys: _jerseys.toList()" in klip, (
+        "a kijelölt mezszámok nem jutnak el a vágásig")
+    # A darabszám ott van a csempén: ne kelljen kipróbálni.
+    assert "jelenet" in klip
+    # Az ÜRES kijelölés az egész csapatot jelenti — és ezt ki is
+    # mondja, különben az edző nem meri elengedni a szűrőt.
+    assert "az egész csapat" in klip
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "clip-players" in api
+    assert "jerseys" in api, "a kliens nem küldi a mezszámokat"
+
+    # A játékos a SAJÁT lapjáról egy kattintással eljut a klipjeihez —
+    # különben a Klipek menüben újra ki kellene keresnie magát.
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_openMyClips" in jatekos and "ClipsScreen(initialJersey:" in jatekos
+    assert "initialJersey" in klip, (
+        "a Klipek lap nem fogadja az előre kért mezszámot")
+def test_a_jatekos_latja_hol_tart_a_kereten_belul():
+    """A játékos első kérdése: sokat futottam vagy keveset?
+
+    A nyers "4,2 km" magában nem válasz. A lapnak a keret-átlagot és a
+    helyezést is mutatnia kell — és ki kell mondania, hogy PERCRE
+    VETÍTVE hasonlít, különben a tizenöt percet kapó szélső azt hiszi,
+    lemaradt.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_squadCompare" in jatekos
+    for mezo in ("team_distance_per_min", "distance_per_min",
+                 "distance_rank", "squad_size"):
+        assert mezo in jatekos, f"a lap nem olvassa a(z) {mezo} mezőt"
+    assert "m/perc" in jatekos, "a mértékegység nem derül ki"
+    # A LÉNYEG kimondva: a több futómunka önmagában nem jobb.
+    assert "önmagában nem jobb" in jatekos

@@ -370,3 +370,98 @@ def test_minden_csomag_adott_jelenetet(tmp_path):
     res = export_event_clips(m, events, {"goal", "block"}, tmp_path / "ki")
     assert res.empty == []
     assert res.by_type == {"gol": 1, "blokk": 1}
+# ---- Mezszám-szűrés: a játékos SAJÁT válogatása -----------------------
+
+
+def _match_mezekkel(video_path):
+    """Meccs két emberrel: a 7-es (track 1) és a 9-es (track 2).
+
+    A klip-motor a track_id-ből (esemény player_id) számol mezszámot,
+    tehát a keretek KELLENEK — mezszám nélküli meccsen a szűrés némán
+    mindent kidobna.
+    """
+    from handball.models.tracking import Frame, PlayerPosition, Team
+
+    m = _match(video_path)
+    m.frames = [
+        Frame(t=i, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=10.0, y=10.0,
+                   jersey_number=7),
+            PlayerPosition(track_id=2, team=Team.HOME, x=20.0, y=10.0,
+                   jersey_number=9),
+        ], ball=None)
+        for i in range(3)
+    ]
+    return m
+
+
+def test_a_klip_egy_jatekosra_szukitheto(tmp_path):
+    """A #7 a SAJÁT gólvideóját kéri.
+
+    Klip-válogatás mezszám nélkül azt jelenti, hogy a játékos a
+    tizennyolc emberes csapatvideóból keresi ki magát — az edzés előtti
+    öt percben ez nem történik meg.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [
+        {"t": 60, "type": "goal", "team": "home", "player_id": 1},
+        {"t": 120, "type": "goal", "team": "home", "player_id": 2},
+    ]
+    mind = export_event_clips(m, events, {"goal"}, tmp_path / "mind")
+    assert mind.count == 2
+    assert mind.jerseys == []
+
+    hetes = export_event_clips(m, events, {"goal"}, tmp_path / "hetes",
+                               jerseys={7})
+    assert hetes.count == 1
+    assert hetes.jerseys == [7]
+
+
+def test_tobb_mezszam_egyszerre_kerheto(tmp_path):
+    """A szélső páros két embere egy csomagban — az edző így ül le
+    velük négyszemközt."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1},
+              {"t": 120, "type": "goal", "team": "home", "player_id": 2}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7, 9})
+    assert res.count == 2 and res.jerseys == [7, 9]
+
+
+def test_az_ures_mezszam_lista_az_egesz_csapatot_jelenti(tmp_path):
+    """ŐR: a szűrés HIÁNYA nem szűkíthet.
+
+    Ha az üres lista véletlenül "senki"-t jelentene, a képernyő minden
+    vágása üres zip lenne — és ez pont az a hibafajta, ami némán megy
+    át a teszteken, mert a hívók külön adják meg a mezszámot.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1}]
+    for ures in (None, set(), []):
+        res = export_event_clips(m, events, {"goal"},
+                                 tmp_path / f"ki{ures}", jerseys=ures)
+        assert res.count == 1, ures
+
+
+def test_az_ismeretlen_mezszam_megmondja_miert_nincs_klip(tmp_path):
+    """A #23-hoz nincs jelenet — ez NEM hiba, de ki kell mondani.
+
+    A néma "nem készült klip" itt elromlott programnak látszana, pedig
+    csak a mezszám nincs kiosztva vagy nincs ilyen eseménye.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1}]
+    with pytest.raises(RuntimeError) as hiba:
+        export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                           jerseys={23})
+    uzenet = str(hiba.value)
+    assert "#23" in uzenet
+    assert "mezszám" in uzenet

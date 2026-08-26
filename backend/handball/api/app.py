@@ -2024,8 +2024,10 @@ def create_app():
         GET /jobs/{job_id} végponton követhető; a kész zip a
         GET /matches/{id}/clips/download címen tölthető le.
 
-        Törzs: {"types": ["goal", "shot", "turnover"]} — üres/hiányzó
-        lista esetén csak a gólok."""
+        Törzs: {"types": ["goal", "shot", "turnover"],
+                "jerseys": [7, 9]} — üres/hiányzó típuslista esetén
+        csak a gólok; a `jerseys` megadásával a csomag EGY (vagy
+        néhány) játékos jeleneteire szűkül."""
         import time
         import uuid
         from ..pipeline.clips import export_event_clips
@@ -2034,6 +2036,15 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         types = set(body.get("types") or ["goal"])
+        # Mezszám-szűrés: a játékos SAJÁT válogatása. A szemetet itt
+        # szűrjük ki, hogy egy elgépelt érték ne némán ürítse a
+        # csomagot.
+        jerseys = set()
+        for j in (body.get("jerseys") or []):
+            try:
+                jerseys.add(int(j))
+            except (TypeError, ValueError):
+                continue
 
         job_id = uuid.uuid4().hex[:12]
         job = {"job_id": job_id, "match_id": match_id, "status": "running",
@@ -2047,7 +2058,11 @@ def create_app():
         def _work():
             try:
                 events = detect_events(match)
-                ev = [{"t": e.t, "type": e.type.value, "team": e.team.value}
+                # A player_id KELL: enélkül a mezszám-szűrés némán
+                # üres csomagot adna (az esemény nem tudná, kihez
+                # tartozik).
+                ev = [{"t": e.t, "type": e.type.value,
+                       "team": e.team.value, "player_id": e.player_id}
                       for e in events]
                 # Az új elemző rétegek jelenetei is kérhetők klipnek:
                 # hétméteres, időkérés (a leálláshoz vezető jelenet) és
@@ -2267,7 +2282,7 @@ def create_app():
                     job["message"] = msg
 
                 res = export_event_clips(match, ev, types, out_dir,
-                                         progress_cb=cb)
+                                         progress_cb=cb, jerseys=jerseys)
                 job["status"] = "done"
                 job["progress"] = 1.0
                 # A NÉMÁN üres csomagokat is megnevezzük: aki hat
@@ -2275,6 +2290,9 @@ def create_app():
                 # kettőhöz nem volt jelenet, vagy elromlott valami.
                 job["message"] = (
                     f"kész: {res.count} klip"
+                    + (" · mezszám: "
+                       + ", ".join(f"#{j}" for j in res.jerseys)
+                       if res.jerseys else "")
                     + (f" ({res.skipped} jelenet kimaradt "
                        "— ismétlés vagy limit)" if res.skipped else "")
                     + (f" · nem volt jelenet: {', '.join(res.empty)}"
@@ -2318,6 +2336,61 @@ def create_app():
                 key = str(p.track_id)
                 if key in mapping:
                     p.jersey_number = mapping[key]
+
+    @app.get("/matches/{match_id}/clip-players")
+    def clip_players(match_id: str):
+        """KIHEZ köthető jelenet ezen a meccsen — mezszám szerint.
+
+        A klip-válogatás mezszámra szűkíthető ("a #7 saját gólvideója"),
+        de a képernyő nem találgathat: ha egy mezszám nincs kiosztva,
+        vagy nincs hozzá esemény, a szűrés némán üres csomagot adna. Ez
+        a végpont ezért megmondja, kihez hány jelenet tartozik — a
+        felület csak a MŰKÖDŐ választásokat kínálja fel.
+
+        Válasz: {"players": [{"jersey", "team", "team_name", "name",
+        "counts": {típus: db}, "total"}]} — csökkenő darabszám szerint.
+        """
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.clips import _jersey_of_track
+
+        mez_of = _jersey_of_track(match)
+        # track → csapat (az első ismert érték), hogy a névjegyzékből a
+        # helyes csapat nevét kereshessük ki.
+        team_of: dict = {}
+        for f in match.frames:
+            for pl in f.players:
+                if pl.track_id not in team_of:
+                    team_of[pl.track_id] = getattr(pl.team, "value", pl.team)
+
+        soronkent: dict = {}
+        try:
+            for e in detect_events(match):
+                mez = mez_of.get(e.player_id)
+                if mez is None:
+                    continue
+                oldal = team_of.get(e.player_id) or getattr(
+                    e.team, "value", e.team)
+                kulcs = (int(mez), str(oldal))
+                rec = soronkent.setdefault(
+                    kulcs, {"jersey": int(mez), "team": str(oldal),
+                            "counts": {}, "total": 0})
+                tip = getattr(e.type, "value", e.type)
+                rec["counts"][tip] = rec["counts"].get(tip, 0) + 1
+                rec["total"] += 1
+        except Exception:
+            return {"players": []}
+
+        out = []
+        for rec in soronkent.values():
+            csapat = (match.meta.home_team if rec["team"] == "home"
+                      else match.meta.away_team)
+            rec["team_name"] = csapat
+            rec["name"] = _player_name(csapat, rec["jersey"])
+            out.append(rec)
+        out.sort(key=lambda r: (-r["total"], r["jersey"]))
+        return {"players": out}
 
     @app.get("/matches/{match_id}/jerseys")
     def get_jerseys(match_id: str):
@@ -2431,6 +2504,12 @@ def create_app():
     import_library.__annotations__["request"] = Request
     app.post("/library/import")(import_library)
 
+    # A keret-viszonyítás küszöbei: ennyi játékidő alatt valaki nem
+    # "játszott" (a fél percre beálló csere lehúzná az átlagot), és
+    # ennyi ember alatt nincs értelmes keret-átlag.
+    SQUAD_MIN_PLAY_S = 120.0
+    SQUAD_MIN_PLAYERS = 5
+
     @app.get("/players/trend")
     def get_player_trend(team: str, jersey: int):
         """Egy játékos fejlődése MECCSRŐL MECCSRE, mezszám alapján.
@@ -2516,9 +2595,63 @@ def create_app():
                     mark_dist = round(ds_tr / fr_tr, 2)
             except Exception:
                 pass
+            # HOL TARTOK A CSAPATON BELÜL — a játékos legelső kérdése.
+            # A nyers "4,2 km" magában semmit nem mond: sokat futott
+            # vagy keveset? A keret-átlaghoz és a helyezéshez viszonyítva
+            # már döntés lesz belőle. MEZSZÁM szerint összegzünk (nem
+            # trackenként), különben a megszakadt követés két embernek
+            # látszana, és lenyomná az átlagot.
+            csapat_tav: dict = {}
+            csapat_perc: dict = {}
+            csapat_sprint: dict = {}
+            for fr in match.frames:
+                for pl in fr.players:
+                    if pl.team != side or pl.jersey_number is None:
+                        continue
+                    csapat_tav.setdefault(pl.jersey_number, set()).add(
+                        pl.track_id)
+            for mez, trs in csapat_tav.items():
+                csapat_perc[mez] = sum(
+                    stats[t].measured_frames for t in trs if t in stats)
+                csapat_sprint[mez] = sum(
+                    stats[t].sprint_count for t in trs if t in stats)
+                csapat_tav[mez] = sum(
+                    stats[t].distance_m for t in trs if t in stats)
+            # Csak az ÉRDEMBEN játszott emberek: a fél percet pályán
+            # töltő csere lehúzná az átlagot, és a helyezés is hazudna.
+            jatszott = [m_ for m_, f_ in csapat_perc.items()
+                        if f_ / fps >= SQUAD_MIN_PLAY_S]
+            team_dist = team_sprint = None
+            dist_rank = squad_size = None
+            if len(jatszott) >= SQUAD_MIN_PLAYERS:
+                squad_size = len(jatszott)
+                # Percre vetítve hasonlítunk: a 60 percet játszó irányító
+                # és a 15 percet játszó szélső nyers métere nem
+                # összemérhető.
+                percre = {m_: csapat_tav[m_] / max(1e-9,
+                                                   csapat_perc[m_] / fps / 60.0)
+                          for m_ in jatszott}
+                team_dist = round(
+                    sum(percre.values()) / len(percre), 1)
+                team_sprint = round(
+                    sum(csapat_sprint[m_] for m_ in jatszott)
+                    / len(jatszott), 1)
+                if jersey in percre:
+                    dist_rank = 1 + sum(1 for m_ in jatszott
+                                        if percre[m_] > percre[jersey])
+            sajat_percre = (round(distance / max(1e-9, frames / fps / 60.0), 1)
+                            if frames else None)
+
             points.append({
                 "match_id": match.meta.match_id,
                 "date": match.meta.date,
+                # A keret-viszonyítás: saját méter/perc, keret-átlag,
+                # helyezés és keret-létszám. None, ha kevés a mezszám.
+                "distance_per_min": sajat_percre,
+                "team_distance_per_min": team_dist,
+                "team_sprint_avg": team_sprint,
+                "distance_rank": dist_rank,
+                "squad_size": squad_size,
                 "opponent": (match.meta.away_team if side == Team.HOME
                              else match.meta.home_team),
                 "gk_on_target": gk_on,

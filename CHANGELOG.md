@@ -5,6 +5,35 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.71 óta)
 
+- **"Hol tartok a kereten belül"** (motor + felület): a játékos-lap
+  eddig nyers számokat mutatott — a "4,2 kilométer" magában nem
+  válasz arra, hogy sokat futott-e vagy keveset. A görbe mostantól a
+  keret-átlagot és a helyezést is viszi: futómunka **percre vetítve**
+  (a végig játszó irányító és a tizenöt percet kapó szélső nyers
+  métere nem összemérhető), a keret átlagához mérve, és hogy a
+  legutóbbi meccsen hányadik volt a játszó emberek közt. Mezszám
+  szerint összegzünk, nem trackenként: a megszakadt követés különben
+  két embernek látszana, és lehúzná az átlagot. Kevés mintánál (rövid
+  játékidő, öt játszó ember alatt) nincs ítélet — a lap el sem kezdi
+  mutatni. A szöveg kimondja, hogy a több futómunka önmagában nem
+  jobb: a poszt dönti el, mennyi kell belőle.
+
+- **A klipcsomag egy játékosra szűkíthető** (motor + API + felület): a
+  klipvágás eddig csapat-szintű volt — a #7 a tizennyolc emberes
+  gólvideóból kereste ki magát, ami az edzés előtti öt percben nem
+  történik meg. A Klipek lapon mostantól ki lehet jelölni, KINEK
+  vágjuk: a felkínált mezszámok a backendtől jönnek, jelenet-
+  darabszámmal (kiosztatlan szám nem is jelenik meg), a kijelölés a
+  fájlnévbe is bekerül, és üres kijelölés továbbra is az egész
+  csapatot jelenti. Ha egy mezszámhoz nincs kért jelenet, a program
+  megmondja, miért — nem néma "nem készült klip".
+
+- **"Klipjeim" a játékos saját lapján** (felület): a játékos a számok
+  után a videót akarja látni. A játékos-fejlődés lapról egy gomb a
+  Klipek képernyőre visz, az ő mezszámával ELŐRE KIJELÖLVE — nem kell
+  újra kikeresnie magát a keretből. Ha az adott meccsen nincs
+  jelenete, a kijelölés magától elmarad.
+
 - **A toplista sorából a játékos saját lapjára** (felület): a Szezon
   képernyő toplistái zsákutcák voltak — a játékos megtalálta magát a
   góllövők közt, de a saját görbéjéhez és a "Mit gyakorolj" listájához

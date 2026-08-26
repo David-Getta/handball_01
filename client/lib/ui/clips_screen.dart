@@ -13,6 +13,11 @@
 /// gyors-összeállítás (dosszié, támadás, védekezés, csak gólok) a
 /// leggyakoribb eseteket egy kattintásra adja.
 ///
+/// A csomag MEZSZÁMRA is szűkíthető: a játékos a saját gólvideóját
+/// kéri, az edző pedig egy emberrel négyszemközt ül le. Csak azok a
+/// mezszámok kínálhatók fel, amelyekhez tényleg tartozik jelenet —
+/// egy kiosztatlan szám némán üres zip-et adna.
+///
 /// A haladás LÁTSZIK: a vágás percekig tarthat, és a néma várakozás
 /// olyan, mintha megakadt volna.
 library;
@@ -85,7 +90,13 @@ const List<(String, List<String>)> kClipPresets = [
 ];
 
 class ClipsScreen extends StatefulWidget {
-  const ClipsScreen({super.key});
+  /// A játékos SAJÁT lapjáról érkezve előre kijelölt mezszám: a
+  /// "kérem a klipjeimet" út egy kattintás legyen, ne az egész
+  /// képernyő újbóli beállítása. Ha az adott meccsen nincs jelenete,
+  /// a kijelölés magától elmarad (a lista a backendtől jön).
+  const ClipsScreen({super.key, this.initialJersey});
+
+  final int? initialJersey;
 
   @override
   State<ClipsScreen> createState() => _ClipsScreenState();
@@ -105,6 +116,11 @@ class _ClipsScreenState extends State<ClipsScreen> {
   // pillanatok" csomag enélkül némán üres zip-et adna — a felajánlott,
   // de működésképtelen kapcsoló rosszabb, mint a hiánya.
   int _noteCount = 0;
+
+  // Kihez köthető jelenet ezen a meccsen (mezszám + darabszám), és
+  // amit a felhasználó kiválasztott. Üres kijelölés = az egész csapat.
+  List<Map<String, dynamic>> _clipPlayers = [];
+  final Set<int> _jerseys = {};
 
   // Vágás közben: a job üzenete és haladása — a néma várakozás
   // megakadásnak látszik.
@@ -128,6 +144,7 @@ class _ClipsScreenState extends State<ClipsScreen> {
         _loading = false;
       });
       _loadNoteCount();
+      _loadClipPlayers();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -151,6 +168,35 @@ class _ClipsScreenState extends State<ClipsScreen> {
     }
   }
 
+  /// Kihez köthető jelenet (hibánál üres lista — a mezszám-szűrő
+  /// ilyenkor egyszerűen nem jelenik meg, a vágás működik tovább).
+  Future<void> _loadClipPlayers() async {
+    final id = _matchId;
+    if (id == null) return;
+    try {
+      final ps = await _api.fetchClipPlayers(id);
+      if (!mounted) return;
+      setState(() {
+        _clipPlayers = ps;
+        _jerseys.clear(); // másik meccs = másik keret
+        // Az előre kért mezszám CSAK akkor marad kijelölve, ha ezen a
+        // meccsen tényleg van jelenete — különben néma üres zip lenne.
+        final kert = widget.initialJersey;
+        if (kert != null &&
+            ps.any((e) => (e["jersey"] as num?)?.toInt() == kert)) {
+          _jerseys.add(kert);
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _clipPlayers = [];
+          _jerseys.clear();
+        });
+      }
+    }
+  }
+
   String _matchName() {
     final m = _matches.firstWhere((e) => e["match_id"] == _matchId,
         orElse: () => const <String, dynamic>{});
@@ -170,7 +216,8 @@ class _ClipsScreenState extends State<ClipsScreen> {
       _error = null;
     });
     try {
-      final jobId = await _api.startClipExport(id, _selected.toList());
+      final jobId = await _api.startClipExport(id, _selected.toList(),
+          jerseys: _jerseys.toList());
       String doneMsg = "";
       while (true) {
         await Future.delayed(const Duration(seconds: 1));
@@ -193,7 +240,12 @@ class _ClipsScreenState extends State<ClipsScreen> {
       if (!mounted) return;
       final path = await FilePicker.platform.saveFile(
         dialogTitle: "Videóklipek mentése (zip)",
-        fileName: "klipek_${_matchName()}.zip",
+        // A mezszám a FÁJLNÉVBEN is ott van: három játékosnak vágott
+        // csomag közül a "klipek_A_B.zip" nevűek megkülönböztethetetlenek.
+        fileName: _jerseys.isEmpty
+            ? "klipek_${_matchName()}.zip"
+            : "klipek_${(_jerseys.toList()..sort()).map((j) => "#$j").join("_")}"
+                "_${_matchName()}.zip",
         type: FileType.custom,
         allowedExtensions: const ["zip"],
       );
@@ -242,6 +294,10 @@ class _ClipsScreenState extends State<ClipsScreen> {
                     style: AppText.label)
               else ...[
                 _head(),
+                if (_clipPlayers.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _playerFilter(),
+                ],
                 const SizedBox(height: AppSpacing.md),
                 if (_error != null)
                   Padding(
@@ -287,6 +343,7 @@ class _ClipsScreenState extends State<ClipsScreen> {
                 : (v) {
                     setState(() => _matchId = v);
                     _loadNoteCount();
+                    _loadClipPlayers();
                   },
           ),
         ]),
@@ -302,6 +359,79 @@ class _ClipsScreenState extends State<ClipsScreen> {
             child: Text(name),
           ),
       ],
+    );
+  }
+
+  /// Mezszám-szűrő: "kinek vágjuk". Csak azok a számok jelennek meg,
+  /// amelyekhez tényleg tartozik jelenet — a darabszám ott van a
+  /// csempén, hogy ne kelljen kipróbálni.
+  Widget _playerFilter() {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: AppTheme.card(),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text("KINEK VÁGJUK", style: AppText.sectionLabel),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+                _jerseys.isEmpty
+                    ? "az egész csapat — vagy jelölj ki játékosokat a "
+                        "saját válogatásukhoz"
+                    : "${_jerseys.length} játékos kijelölve — csak az ő "
+                        "jeleneteik kerülnek a zip-be",
+                style: AppText.label.copyWith(fontSize: 11.5)),
+          ),
+          if (_jerseys.isNotEmpty)
+            TextButton(
+              onPressed: _working ? null : () => setState(_jerseys.clear),
+              child: const Text("Mindenki"),
+            ),
+        ]),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [for (final pl in _clipPlayers) _playerChip(pl)],
+        ),
+      ]),
+    );
+  }
+
+  Widget _playerChip(Map<String, dynamic> pl) {
+    final jersey = (pl["jersey"] as num?)?.toInt();
+    if (jersey == null) return const SizedBox.shrink();
+    final on = _jerseys.contains(jersey);
+    final name = (pl["name"] as String?) ?? "";
+    final total = (pl["total"] as num?)?.toInt() ?? 0;
+    // Név, ha van — az edző nem számokban gondolkodik; a szám marad
+    // mögötte, mert a videón az látszik.
+    final cimke = name.isEmpty ? "#$jersey" : "#$jersey $name";
+    return InkWell(
+      onTap: _working
+          ? null
+          : () => setState(() {
+                if (on) {
+                  _jerseys.remove(jersey);
+                } else {
+                  _jerseys.add(jersey);
+                }
+              }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: AppTheme.card(
+            borderColor: on ? AppColors.accent : null),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(on ? Icons.check_circle : Icons.circle_outlined,
+              size: 15,
+              color: on ? AppColors.accent : AppColors.textFaint),
+          const SizedBox(width: 6),
+          Text(cimke, style: AppText.value.copyWith(fontSize: 12.5)),
+          const SizedBox(width: 6),
+          Text("$total jelenet",
+              style: AppText.label.copyWith(fontSize: 11)),
+        ]),
+      ),
     );
   }
 
@@ -413,7 +543,9 @@ class _ClipsScreenState extends State<ClipsScreen> {
                 : n == 1
                     ? "1 csomag kijelölve."
                     : "$n csomag kijelölve — egy zip-be kerülnek, "
-                        "csomagonként külön mappába.",
+                        "csomagonként külön mappába."
+                        "${_jerseys.isEmpty ? "" : " Csak a kijelölt "
+                            "játékosok jelenetei."}",
             style: AppText.label.copyWith(fontSize: 12)),
       ),
       TextButton(

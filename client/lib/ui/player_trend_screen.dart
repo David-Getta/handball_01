@@ -12,6 +12,7 @@ import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "anim.dart";
+import "clips_screen.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
@@ -165,6 +166,16 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
     }
   }
 
+  /// A Klipek lap a JÁTÉKOS mezszámával előre kijelölve. Ha a beírt
+  /// mezszám még üres, a képernyő a szokásos (csapat-szintű) alakban
+  /// nyílik — nem hibázunk, csak nem szűkítünk.
+  void _openMyClips() {
+    final jersey = int.tryParse(_jerseyCtrl.text.trim());
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ClipsScreen(initialJersey: jersey),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppShell(
@@ -225,6 +236,15 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.timeline, size: 18),
               label: const Text("Lekérdezés"),
+            ),
+            // A SAJÁT klipek: a játékos a számok után a videót akarja
+            // látni. Enélkül a Klipek menüben újra ki kellene keresnie
+            // magát a keretből.
+            const SizedBox(width: AppSpacing.md),
+            OutlinedButton.icon(
+              onPressed: _openMyClips,
+              icon: const Icon(Icons.movie_creation_outlined, size: 17),
+              label: const Text("Klipjeim"),
             ),
             // Szezon-lap mentése (HTML) — csak ha van megjelenített adat.
             if (_points.isNotEmpty) ...[
@@ -363,6 +383,9 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           _chip("őrzés: ${markS.toStringAsFixed(0)} mp · átl. "
               "${(markWeighted / markS).toStringAsFixed(1)} m"),
       ]),
+      // HOL TARTOK A KERETEN BELÜL — a nyers "4,2 km" magában semmit
+      // nem mond, a keret-átlaghoz mérve viszont döntés lesz belőle.
+      ..._squadCompare(),
       const SizedBox(height: AppSpacing.lg),
       // Fejléc + meccsenkénti sorok (táv-csíkkal — a forma ránézésre látszik).
       Padding(
@@ -382,6 +405,65 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
         ]),
       ),
       ..._points.map((p) => _row(p, maxDist, isGk, hasMark)),
+    ];
+  }
+
+  /// Keret-viszonyítás: futómunka perc-re vetítve a keret átlagához
+  /// mérve, plusz a helyezés. Csak akkor jelenik meg, ha a backend
+  /// adott viszonyítást (kevés mezszámnál / rövid játékidőnél nem).
+  ///
+  /// PERCRE VETÍTVE hasonlítunk (a backend is így számol): a 60 percet
+  /// játszó irányító és a 15 percet játszó szélső nyers métere nem
+  /// összemérhető.
+  List<Widget> _squadCompare() {
+    final velem = [
+      for (final p in _points)
+        if (p["team_distance_per_min"] != null &&
+            p["distance_per_min"] != null)
+          p
+    ];
+    if (velem.isEmpty) return const [];
+    double sajat = 0, keret = 0;
+    for (final p in velem) {
+      sajat += (p["distance_per_min"] as num).toDouble();
+      keret += (p["team_distance_per_min"] as num).toDouble();
+    }
+    sajat /= velem.length;
+    keret /= velem.length;
+    final elteres = keret > 0 ? 100.0 * (sajat - keret) / keret : 0.0;
+    // Az utolsó meccs helyezése — a szezon-átlagnál frissebb kép.
+    final utolso = velem.last;
+    final hely = (utolso["distance_rank"] as num?)?.toInt();
+    final letszam = (utolso["squad_size"] as num?)?.toInt();
+    final tobb = elteres >= 0;
+    return [
+      const SizedBox(height: AppSpacing.md),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: AppTheme.card(),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("HOL TARTOK A KERETEN BELÜL", style: AppText.sectionLabel),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.sm,
+                  children: [
+                    _chip("futómunka: ${sajat.toStringAsFixed(0)} m/perc"),
+                    _chip("keret-átlag: ${keret.toStringAsFixed(0)} m/perc"),
+                    _chip("${tobb ? "+" : ""}"
+                        "${elteres.toStringAsFixed(0)}% a kerethez képest"),
+                    if (hely != null && letszam != null)
+                      _chip("a legutóbbi meccsen a $letszam játszó ember "
+                          "közül a $hely."),
+                  ]),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                  "Percre vetítve hasonlítunk: a végig játszó irányító és "
+                  "a tizenöt percet kapó szélső nyers métere nem "
+                  "összemérhető. A több futómunka önmagában nem jobb — a "
+                  "poszt dönti el, mennyi kell belőle.",
+                  style: AppText.label.copyWith(fontSize: 11.5)),
+            ]),
+      ),
     ];
   }
 

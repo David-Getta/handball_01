@@ -457,11 +457,28 @@ class ApiClient {
   }
 
   /// Videóklip-export indítása (POST /matches/{id}/clips/export) — job_id-t ad.
-  Future<String> startClipExport(String matchId, List<String> types) async {
+  /// Kihez köthető jelenet ezen a meccsen — mezszám szerint, a
+  /// jelenetek darabszámával. A klip-válogatás ebből tudja felkínálni
+  /// a MŰKÖDŐ mezszámokat (a kiosztatlan szám némán üres zip-et adna).
+  Future<List<Map<String, dynamic>>> fetchClipPlayers(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/clip-players"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("A játékos-lista nem érhető el", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((json["players"] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+  }
+
+  /// [jerseys] megadásával a csomag EGY (vagy néhány) játékos
+  /// jeleneteire szűkül — a játékos saját válogatása.
+  Future<String> startClipExport(String matchId, List<String> types,
+      {List<int> jerseys = const []}) async {
     final resp = await http.post(
       Uri.parse("$baseUrl/matches/$matchId/clips/export"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"types": types}),
+      body: jsonEncode({"types": types, "jerseys": jerseys}),
     );
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem indult el a klipvágás", resp));

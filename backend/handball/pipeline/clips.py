@@ -60,11 +60,28 @@ class ClipResult:
     skipped: int = 0
     by_type: dict = field(default_factory=dict)
     empty: list = field(default_factory=list)
+    # Mely mezszámokra szűkítettünk (üres lista = az egész csapatra).
+    jerseys: list = field(default_factory=list)
 
 
 def _clock(seconds: float) -> str:
     m, s = int(seconds // 60), int(seconds % 60)
     return f"{m:02d}-{s:02d}"
+
+
+def _jersey_of_track(match: Match) -> dict:
+    """track_id → mezszám (trackenként az ELSŐ ismert érték).
+
+    Ugyanaz a szabály, mint az edzői összefoglalóban: a mezszám a
+    felismerés során ingadozhat, de egy trackhez egy embert rendelünk,
+    tehát az első biztos leolvasás dönt.
+    """
+    out: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in out:
+                out[p.track_id] = p.jersey_number
+    return out
 
 
 def _fair_cap(picked: list, field) -> list:
@@ -113,7 +130,8 @@ def _fair_cap(picked: list, field) -> list:
 
 def export_event_clips(match: Match, events: list, types: set[str],
                        out_dir: str | Path,
-                       progress_cb: Optional[Callable] = None) -> ClipResult:
+                       progress_cb: Optional[Callable] = None,
+                       jerseys: Optional[set] = None) -> ClipResult:
     """A kiválasztott típusú események jeleneteit MP4 klipekbe vágja.
 
     - match:   a kész Match (meta.video_path mutat az eredeti videóra).
@@ -122,6 +140,9 @@ def export_event_clips(match: Match, events: list, types: set[str],
     - types:   mely esemény-típusokból készüljön klip (pl. {"goal"}).
     - out_dir: ide kerülnek a klipek + a zip.
     - progress_cb(done, total, message): haladás-jelzés a hívónak.
+    - jerseys: ha meg van adva, CSAK az ezekhez a mezszámokhoz kötött
+      események kerülnek klipre (a játékos saját válogatása). Üres vagy
+      None esetén az egész csapat jelenetei jönnek.
 
     Kivételt dob érthető magyar üzenettel, ha az eredeti videó nem érhető el
     (pl. másik gépen dolgozták fel, vagy elmozdították a fájlt).
@@ -154,6 +175,14 @@ def export_event_clips(match: Match, events: list, types: set[str],
         return getattr(v, "value", v)  # Enum → érték
 
     picked = [e for e in events if _field(e, "type") in types]
+    # MEZSZÁM-szűrés: az események a track_id-t őrzik (player_id), az
+    # edző és a játékos viszont mezszámban gondolkodik — a leképezést
+    # itt csináljuk meg, hogy a hívónak ne kelljen track_id-t ismernie.
+    kert_mezek = {int(j) for j in (jerseys or []) if j is not None}
+    if kert_mezek:
+        mez_of = _jersey_of_track(match)
+        picked = [e for e in picked
+                  if mez_of.get(_field(e, "player_id")) in kert_mezek]
     picked.sort(key=lambda e: _field(e, "t") or 0)
     n_requested = len(picked)
     # Azonos pillanatra eső ismétlések ki (több csomagban is szereplő
@@ -220,6 +249,16 @@ def export_event_clips(match: Match, events: list, types: set[str],
     cap.release()
 
     if not made:
+        # A mezszám-szűrés a leggyakoribb ok: a #7-es kér magának
+        # gólvideót, de a felismerés egyetlen gólt sem kötött hozzá.
+        # A néma "nincs klip" itt hibának látszana, pedig nem az.
+        if kert_mezek:
+            mezek = ", ".join(f"#{j}" for j in sorted(kert_mezek))
+            raise RuntimeError(
+                f"Nem készült klip: a(z) {mezek} mezszámhoz egyetlen "
+                "kért jelenet sem tartozik ezen a meccsen. Vagy nincs "
+                "ilyen eseménye, vagy a mezszám nincs kiosztva — ez "
+                "utóbbi a meccs-elemzőben pótolható.")
         raise RuntimeError("Nem készült klip — nincs a szűrőnek megfelelő "
                            "esemény, vagy a videó nem olvasható.")
 
@@ -246,4 +285,5 @@ def export_event_clips(match: Match, events: list, types: set[str],
                    if _TYPE_HU.get(t, t) not in by_type)
     return ClipResult(zip_path=str(zip_path), count=len(made),
                       skipped=max(0, n_requested - len(made)),
-                      by_type=by_type, empty=empty)
+                      by_type=by_type, empty=empty,
+                      jerseys=sorted(kert_mezek))
