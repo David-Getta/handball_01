@@ -94,9 +94,15 @@ class ClipsScreen extends StatefulWidget {
   /// "kérem a klipjeimet" út egy kattintás legyen, ne az egész
   /// képernyő újbóli beállítása. Ha az adott meccsen nincs jelenete,
   /// a kijelölés magától elmarad (a lista a backendtől jön).
-  const ClipsScreen({super.key, this.initialJersey});
+  ///
+  /// Az `initialTypes` a "Mit gyakorolj" egy tételéhez tartozó
+  /// csomagok: a játékos nem találgat, melyik csomag mutatja meg a
+  /// hibát, amit épp elolvasott.
+  const ClipsScreen({super.key, this.initialJersey,
+                     this.initialTypes = const []});
 
   final int? initialJersey;
+  final List<String> initialTypes;
 
   @override
   State<ClipsScreen> createState() => _ClipsScreenState();
@@ -110,7 +116,8 @@ class _ClipsScreenState extends State<ClipsScreen> {
   List<Map<String, dynamic>> _matches = [];
   String? _matchId;
 
-  final Set<String> _selected = {"goal"};
+  late final Set<String> _selected =
+      widget.initialTypes.isNotEmpty ? {...widget.initialTypes} : {"goal"};
 
   // Hány edzői jegyzet van a kiválasztott meccshez. A "jegyzetelt
   // pillanatok" csomag enélkül némán üres zip-et adna — a felajánlott,

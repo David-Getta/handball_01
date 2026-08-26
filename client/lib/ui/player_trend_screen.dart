@@ -169,11 +169,23 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
   /// A Klipek lap a JÁTÉKOS mezszámával előre kijelölve. Ha a beírt
   /// mezszám még üres, a képernyő a szokásos (csapat-szintű) alakban
   /// nyílik — nem hibázunk, csak nem szűkítünk.
-  void _openMyClips() {
+  void _openMyClips({List<String> types = const []}) {
     final jersey = int.tryParse(_jerseyCtrl.text.trim());
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ClipsScreen(initialJersey: jersey),
+      builder: (_) => ClipsScreen(
+        initialJersey: jersey,
+        initialTypes: types,
+      ),
     ));
+  }
+
+  /// Egy fókusz-tétel klip-típusai. A backend üres listát is adhat (az
+  /// erőnlétet egyetlen jelenet sem mutatja meg), és régebbi
+  /// kiszolgálón a mező hiányozhat — mindkettő "nincs ajánlás".
+  List<String> _clipsOf(Map<String, dynamic> f) {
+    final raw = f["clips"];
+    if (raw is! List) return const [];
+    return [for (final e in raw) if (e is String) e];
   }
 
   @override
@@ -314,6 +326,22 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                     Text("gyakorlat: ${f["drill"]}",
                         style: AppText.label.copyWith(
                             fontSize: 11.5, color: AppColors.accent)),
+                    // A gyakorlat elmondja, MIT kell csinálni — a
+                    // felvétel azt, MIÉRT. A gomb a Klipek lapot
+                    // ehhez a hibához illő csomagokkal nyitja.
+                    if (_clipsOf(f).isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              visualDensity: VisualDensity.compact),
+                          onPressed: () => _openMyClips(types: _clipsOf(f)),
+                          icon: const Icon(Icons.play_circle_outline,
+                              size: 15),
+                          label: const Text("Nézd meg a felvételen"),
+                        ),
+                      ),
                   ],
                 ),
               ),

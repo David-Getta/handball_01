@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.72 óta)
 
+- **A gyakorlandótól egy kattintás a felvételig** (motor + API +
+  felület): a "Mit gyakorolj" tételei eddig szövegek voltak — a
+  játékos elolvasta, hogy nyomás alatt eladja a labdát, és nem tudta,
+  melyik pillanatról van szó; a klip-válogatáshoz pedig ki kellett
+  volna találnia, melyik csomagot kérje. Minden tétel mostantól viszi
+  azokat a klip-típusokat, amelyeken a hiba LÁTSZIK, és a lapon egy
+  "Nézd meg a felvételen" gomb nyitja a Klipek képernyőt a saját
+  mezszámmal ÉS a megfelelő csomagokkal. Az erőnlét-tétel üres listát
+  ad — azt egyetlen jelenet sem mutatja meg —, de a mező ott van
+  minden tételen (a hiányzó kulcs try/except-ben némán elvinné az
+  egész lapot). Új őr méri a rétegből jövő típusokat a klip-motor
+  jegyzékéhez: egy elgépelt típus működő gombot és üres zip-et adna.
+
 - **Több kijelölt játékosnál mindenki külön mappát kap** (motor +
   felület): az edző három emberrel KÜLÖN-KÜLÖN ül le, egy összekevert
   zip-ből viszont minden beszélgetés előtt újra kellene válogatnia. A

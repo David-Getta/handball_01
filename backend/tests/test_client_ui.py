@@ -2120,7 +2120,8 @@ def test_a_klipcsomag_egy_jatekosra_szukitheto_a_feluleten():
     # különben a Klipek menüben újra ki kellene keresnie magát.
     jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
         encoding="utf-8")
-    assert "_openMyClips" in jatekos and "ClipsScreen(initialJersey:" in jatekos
+    assert "_openMyClips" in jatekos
+    assert "ClipsScreen(" in jatekos and "initialJersey: jersey" in jatekos
     assert "initialJersey" in klip, (
         "a Klipek lap nem fogadja az előre kért mezszámot")
     # Több játékosnál a zip mappákra bomlik — a lap MONDJA MEG
@@ -2149,3 +2150,27 @@ def test_a_jatekos_latja_hol_tart_a_kereten_belul():
     assert "m/perc" in jatekos, "a mértékegység nem derül ki"
     # A LÉNYEG kimondva: a több futómunka önmagában nem jobb.
     assert "önmagában nem jobb" in jatekos
+def test_a_gyakorlandotol_egy_kattintas_a_felvetelig():
+    """A gyakorlat elmondja, MIT kell csinálni — a felvétel azt, MIÉRT.
+
+    A "Mit gyakorolj" tételei eddig szövegek voltak: a játékos
+    elolvasta, hogy nyomás alatt eladja a labdát, és nem tudta, melyik
+    pillanatról van szó. A klip-válogatáshoz pedig ki kellett volna
+    találnia, melyik csomagot kérje.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_clipsOf" in jatekos, "a lap nem olvassa a tétel klip-típusait"
+    assert "Nézd meg a felvételen" in jatekos
+    assert "_openMyClips(types:" in jatekos, (
+        "a gomb nem adja tovább a tételhez illő csomagokat")
+
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "initialTypes" in klip, (
+        "a Klipek lap nem fogadja az előre kért csomagokat")

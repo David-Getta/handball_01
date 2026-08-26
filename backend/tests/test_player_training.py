@@ -582,3 +582,102 @@ def test_a_meccs_jatekos_lapjan_is_ott_a_mit_gyakorolj():
     assert "Második félidei tempó" in html
     # A gyakorlat is rajta van, nem csak a hiba megnevezése.
     assert "Gyakorlat:" in html
+# ---- A klip-ajánlás: MELYIK FELVÉTELEN látszik a hiba ----------------
+
+
+def test_minden_tetel_mondja_meg_melyik_klipen_latszik(monkeypatch):
+    """A gyakorlat elmondja, mit kell csinálni — a klip azt, MIÉRT.
+
+    Enélkül a játékos elolvassa, hogy "nyomás alatt eladod", és nem
+    tudja, melyik pillanatról van szó; a klip-válogatáshoz pedig ki
+    kellene találnia, melyik csomagot kérje.
+    """
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.decisions.pressure_sensitive_players",
+        lambda m, c=None: {
+            "home": {"players": [],
+                     "top": {"player_id": 7, "jersey": 9,
+                             "press_events": 10, "press_to": 6}},
+            "away": {"players": [], "top": None}})
+    tetel = player_training_focus(_match())["home"]["players"][0]["items"][0]
+    assert tetel["clips"] == ["turnover"]
+
+
+def test_a_klip_tipusok_letezo_csomagok(monkeypatch):
+    """ŐR a NÉMA MEZŐNÉV ellen: egy elgépelt típus üres zip-et adna.
+
+    A felület a `clips` listát adja tovább a klipvágásnak. Ha egy
+    tétel "labdaelado"-t írna "turnover" helyett, a gomb működne, a
+    csomag üres lenne, és senki nem tudná, miért — a hívások
+    try/except-ben ülnek, tehát a hiba NÉMA.
+
+    Ezért itt a VALÓDI rétegből jövő minden típust a klip-motor
+    típus-jegyzékéhez mérjük.
+    """
+    from handball.pipeline.clips import _TYPE_HU
+
+    _csend(monkeypatch)
+    # Minden forrás megszólal, hogy a lista teljes legyen.
+    monkeypatch.setattr(
+        "handball.pipeline.decisions.pressure_sensitive_players",
+        lambda m, c=None: {
+            "home": {"players": [],
+                     "top": {"player_id": 1, "jersey": 1,
+                             "press_events": 10, "press_to": 6}},
+            "away": {"players": [], "top": None}})
+    monkeypatch.setattr(
+        "handball.pipeline.decisions.tired_turnover_players",
+        lambda m, c=None: {
+            "home": {"players": [],
+                     "top": {"player_id": 2, "jersey": 2,
+                             "late_turnovers": 4, "early_turnovers": 1}},
+            "away": {"players": [], "top": None}})
+    monkeypatch.setattr(
+        "handball.pipeline.attack_types.risky_passers",
+        lambda m, c=None: {
+            "home": {"players": [],
+                     "top": {"player_id": 3, "jersey": 3,
+                             "long_passes": 10, "lost": 6}},
+            "away": {"players": [], "top": None}})
+    monkeypatch.setattr(
+        "handball.pipeline.momentum.clutch_turnover_players",
+        lambda m, c=None: {
+            "home": {"players": [],
+                     "top": {"player_id": 4, "jersey": 4,
+                             "clutch_turnovers": 3, "clutch_touches": 8}},
+            "away": {"players": [], "top": None}})
+    monkeypatch.setattr(
+        "handball.pipeline.defense.beaten_defenders",
+        lambda m, c=None: {
+            "home": {"players": [],
+                     "top": {"player_id": 5, "jersey": 5,
+                             "beaten": 6, "conceded": 12}},
+            "away": {"players": [], "top": None}})
+
+    ki = player_training_focus(_match())
+    tipusok = {t for oldal in ki.values() for pl in oldal["players"]
+               for it in pl["items"] for t in it["clips"]}
+    assert tipusok, "egyetlen tétel sem ajánl klipet"
+    ismeretlen = tipusok - set(_TYPE_HU)
+    assert not ismeretlen, (
+        f"a klip-motor nem ismeri: {sorted(ismeretlen)} — az ilyen "
+        "csomag NÉMÁN üres zip-et adna")
+
+
+def test_minden_tetelnek_van_clips_mezoje(monkeypatch):
+    """A mező LÉTEZZEN mindenhol, akkor is, ha üres.
+
+    Ha csak a tételek egy részén lenne ott, a felületnek találgatnia
+    kellene, és a hiányzó kulcs kivételként ütne ki egy try/except-ben
+    — vagyis némán elvinné az egész lapot.
+    """
+    _csend(monkeypatch)
+    monkeypatch.setattr("handball.pipeline.stats.player_fatigue",
+                        lambda m, c=None: [
+                            {"track_id": 8, "team": "home",
+                             "drop_pct": 40.0}])
+    tetel = player_training_focus(_match())["home"]["players"][0]["items"][0]
+    assert "clips" in tetel
+    # Az erőnlétet egyetlen jelenet sem mutatja meg — üres, nem hiányzó.
+    assert tetel["clips"] == []

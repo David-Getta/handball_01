@@ -2968,8 +2968,11 @@ def create_app():
         játékos ott nézi meg a saját görbéjét.
 
         Visszatérés: {"team", "jersey", "name", "focus": [{"title",
-        "area", "why", "drill", "count"}]} — a count azt mondja meg,
-        hány meccsen jött elő ugyanaz.
+        "area", "why", "drill", "count", "clips"}]} — a count azt
+        mondja meg, hány meccsen jött elő ugyanaz, a "clips" pedig
+        azokat a klip-típusokat, amelyeken a hiba LÁTSZIK (üres, ha a
+        területet egyetlen jelenet sem mutatja meg). A gyakorlat
+        elmondja, mit kell csinálni; a felvétel azt, miért.
         """
         return {"team": team, "jersey": jersey,
                 "name": _player_name(team, jersey),

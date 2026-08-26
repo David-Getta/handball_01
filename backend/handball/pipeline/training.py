@@ -11472,7 +11472,9 @@ def player_training_focus(match: Match,
     PLAYER_MAX_ITEMS tétel — a fókusz attól fókusz, hogy kevés.
 
     Visszatérés csapatonként: {"players": [{"player_id", "jersey",
-    "items": [{"area", "title", "why", "drill"}]}]} — a lista a
+    "items": [{"area", "title", "why", "drill", "clips"}]}]} — a
+    "clips" azok a klip-típusok, amelyeken a hiba LÁTSZIK (üres, ha a
+    területet egyetlen jelenet sem mutatja meg). A lista a
     tételek száma szerint csökkenő. Üres lista érvényes eredmény: ez
     azt jelenti, hogy a mért területeken senkinél nincs kilógó
     gyengeség, nem azt, hogy nincs adat.
@@ -11483,7 +11485,8 @@ def player_training_focus(match: Match,
 
 
 def _ptf_copy(val: dict) -> dict:
-    return {side: {"players": [{**p, "items": [dict(i) for i in p["items"]]}
+    return {side: {"players": [{**p, "items": [
+        {**i, "clips": list(i.get("clips") or [])} for i in p["items"]]}
                                for p in rec["players"]]}
             for side, rec in val.items()}
 
@@ -11511,7 +11514,16 @@ def _player_training_focus_cached(match: Match,
         v = getattr(ertek, "value", ertek)
         return v if v in ("home", "away") else None
 
-    def add(side, pid, jersey, area, title, why, drill):
+    def add(side, pid, jersey, area, title, why, drill, clips=()):
+        """A `clips` az a klip-típus-lista, amelyen a hiba LÁTSZIK.
+
+        A gyakorlat leírása elmondja, mit kell csinálni — a felvétel
+        viszont megmutatja, MIÉRT. Enélkül a játékos elolvassa, hogy
+        "nyomás alatt eladod", és nem tudja, melyik pillanatról van
+        szó; a klip-válogatáshoz pedig ki kellene találnia, melyik
+        csomagot kérje. Üres lista érvényes: az erőnlétet egyetlen
+        jelenet sem mutatja meg.
+        """
         if pid is None:
             return
         rec = tar[side].setdefault(pid, {"jersey": jersey, "items": []})
@@ -11519,7 +11531,8 @@ def _player_training_focus_cached(match: Match,
             rec["jersey"] = jersey
         if len(rec["items"]) < PLAYER_MAX_ITEMS:
             rec["items"].append({"area": area, "title": title,
-                                 "why": why, "drill": drill})
+                                 "why": why, "drill": drill,
+                                 "clips": list(clips)})
 
     # (a) Nyomás alatti labdakezelés — az ő szorítása az ellenfélnek
     #    labdaszerzés, tehát neki a kiadás a gyakorlandó.
@@ -11540,7 +11553,8 @@ def _player_training_focus_cached(match: Match,
                 f"({arany:.0f}%)",
                 "kettőzés elleni kiadás: háttal-felvétel + azonnali "
                 "kipasszolás, két védő közé zárva; testcsel után "
-                "gyors átadás, gyakorlás fáradtan is")
+                "gyors átadás, gyakorlás fáradtan is",
+                clips=["turnover"])
     except Exception:
         pass
 
@@ -11559,7 +11573,8 @@ def _player_training_focus_cached(match: Match,
                 "értékre nőttek",
                 "labdakezelés-sorozat a kondi-blokk UTÁN: a technikát "
                 "fáradt állapotban kell rögzíteni, mert a hajrában is "
-                "úgy kell működnie")
+                "úgy kell működnie",
+                clips=["turnover"])
     except Exception:
         pass
 
@@ -11585,7 +11600,8 @@ def _player_training_focus_cached(match: Match,
                 f"(−{hiany:.1f})",
                 "befejezés-sorozat ugyanabból a pozícióból: helyezett "
                 "lövés a kapus mozdulása UTÁN, és ziccer-befejezés "
-                "fáradtan (a hiány jellemzően ott keletkezik)")
+                "fáradtan (a hiány jellemzően ott keletkezik)",
+                clips=["missed_chance", "shot"])
     except Exception:
         pass
 
@@ -11606,7 +11622,8 @@ def _player_training_focus_cached(match: Match,
                 f"elveszett ({arany:.0f}%)",
                 "döntés-gyakorlat: a hosszú indítás CSAK szabad "
                 "futóra megy; zárt kép esetén rövid kiadás — "
-                "kényszerítő gyakorlat két lehetőséggel")
+                "kényszerítő gyakorlat két lehetőséggel",
+                clips=["turnover"])
     except Exception:
         pass
 
@@ -11625,7 +11642,8 @@ def _player_training_focus_cached(match: Match,
                 "szakaszában",
                 "hajrá-szituációk gyakorlása fáradtan és zajban: "
                 "kimondott első opció, és megbeszélt kiút, ha az zárt "
-                "— a hajrában nem a technika, hanem a döntés akad meg")
+                "— a hajrában nem a technika, hanem a döntés akad meg",
+                clips=["turnover", "key_moment"])
     except Exception:
         pass
 
@@ -11644,7 +11662,8 @@ def _player_training_focus_cached(match: Match,
                 f"nála esett ({top['beaten']} gól)",
                 "lábmunka és testhelyzet 1v1-ben: oldalazó lecsúszás "
                 "kar-kontaktussal, a lövő KEZE felőli oldal zárása; "
-                "párban, váltott szerepben, sorozatban")
+                "párban, váltott szerepben, sorozatban",
+                clips=["breakthrough", "free_shot"])
     except Exception:
         pass
 
