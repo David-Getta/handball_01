@@ -465,3 +465,83 @@ def test_az_ismeretlen_mezszam_megmondja_miert_nincs_klip(tmp_path):
     uzenet = str(hiba.value)
     assert "#23" in uzenet
     assert "mezszám" in uzenet
+def test_tobb_jatekosnal_mindenki_sajat_mappat_kap(tmp_path):
+    """Az edző három emberrel KÜLÖN-KÜLÖN ül le.
+
+    Egy összekevert zip-ből minden beszélgetés előtt újra kellene
+    válogatnia — a mappa itt nem díszítés, hanem a munkamenet.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1},
+              {"t": 120, "type": "goal", "team": "home", "player_id": 2}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7, 9})
+    with zipfile.ZipFile(res.zip_path) as z:
+        nevek = z.namelist()
+    assert len(nevek) == 2
+    assert sorted(n.split("/")[0] for n in nevek) == ["#7", "#9"]
+
+
+def test_egy_jatekosnal_nincs_folosleges_mappa(tmp_path):
+    """EGY kijelölt embernél a mappa csak egy kattintás lenne — a zip
+    marad lapos, ahogy szűrés nélkül is."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7})
+    with zipfile.ZipFile(res.zip_path) as z:
+        nevek = z.namelist()
+    assert nevek and "/" not in nevek[0], nevek
+
+
+def test_a_jatekos_es_a_tipus_mappa_egymasba_ep(tmp_path):
+    """Két játékos × két csomag: a játékos a KÜLSŐ mappa.
+
+    Az edző emberenként készül, nem témánként — a "#7/gol" úton a
+    beszélgetés anyaga egyben van, a "gol/#7" úton szét.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 40, "type": "goal", "team": "home", "player_id": 1},
+              {"t": 90, "type": "block", "team": "home", "player_id": 2}]
+    res = export_event_clips(m, events, {"goal", "block"}, tmp_path / "ki",
+                             jerseys={7, 9})
+    with zipfile.ZipFile(res.zip_path) as z:
+        nevek = sorted(z.namelist())
+    assert nevek[0].startswith("#7/gol/"), nevek
+    assert nevek[1].startswith("#9/blokk/"), nevek
+def test_a_plafon_a_jatekosok_kozt_is_igazsagosan_oszlik(tmp_path):
+    """A sokat szereplő ember NE vigye el a másik keretét.
+
+    Ez ugyanaz a néma igazságtalanság, mint a típusoknál, egy szinttel
+    feljebb: a zip tele van klippel, csak épp a #9 mappájában kettő
+    van, mert a #7-nek nyolcvan jelenete volt. Az edző így pont azzal
+    a játékossal nem tud leülni, akiről a legkevesebb anyaga van.
+    """
+    from handball.pipeline.clips import MAX_CLIPS
+
+    video = tmp_path / "meccs.mp4"
+    _make_video(video, n_frames=4000)
+    m = _match_mezekkel(video)
+    # A #7-nek sokkal több jelenete van, mint a #9-nek — de a plafon
+    # fölött mindkettőnek jutnia kell.
+    events = [{"t": 20 + i, "type": "goal", "team": "home", "player_id": 1}
+              for i in range(0, MAX_CLIPS * 4, 2)]
+    events += [{"t": 2000 + i, "type": "goal", "team": "home",
+                "player_id": 2} for i in range(0, MAX_CLIPS * 2, 2)]
+
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7, 9})
+    with zipfile.ZipFile(res.zip_path) as z:
+        nevek = z.namelist()
+    hetes = [n for n in nevek if n.startswith("#7/")]
+    kilences = [n for n in nevek if n.startswith("#9/")]
+    assert hetes and kilences, nevek[:5]
+    # Nagyjából fele-fele: a bővebb ember legfeljebb kétszer annyit
+    # vihet, mint a szűkebb (nem húszszor).
+    assert len(hetes) <= 2 * len(kilences), (len(hetes), len(kilences))

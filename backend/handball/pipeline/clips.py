@@ -84,8 +84,8 @@ def _jersey_of_track(match: Match) -> dict:
     return out
 
 
-def _fair_cap(picked: list, field) -> list:
-    """A MAX_CLIPS plafon TÍPUSONKÉNT igazságosan, nem az elejéről.
+def _fair_cap(picked: list, field, csoport=None) -> list:
+    """A MAX_CLIPS plafon CSOPORTONKÉNT igazságosan, nem az elejéről.
 
     A korábbi `picked[:MAX_CLIPS]` időrendben vágott: aki tizenhárom
     csomagot kért egyszerre, a meccs ELSŐ harmadát kapta meg, a
@@ -93,23 +93,32 @@ def _fair_cap(picked: list, field) -> list:
     kimaradtak, mert a gólok elvitték a keretet. Ez néma hiba: a zip
     tele van klippel, csak épp nem arról, amit az edző keresett.
 
-    Ezért a keretet a TÍPUSOK között osztjuk el: minden kért típus
-    kap egy alap-kvótát (a plafon osztva a típusok számával), a
-    maradékot pedig a bővebb típusok kapják — a típuson belül időben
+    Ezért a keretet a CSOPORTOK között osztjuk el: minden csoport kap
+    egy alap-kvótát (a plafon osztva a csoportok számával), a maradékot
+    pedig a bővebb csoportok kapják — a csoporton belül időben
     egyenletesen mintázunk, hogy a meccs egésze látsszon, ne csak az
     eleje. A visszaadott lista időrendben marad.
+
+    A csoport alapban a TÍPUS. Több kijelölt JÁTÉKOSNÁL viszont a
+    (mezszám, típus) páros a csoport: különben ugyanez a néma
+    igazságtalanság térne vissza egy szinttel feljebb — a sokat
+    szereplő ember elvinné a keretet, és a másik két játékos mappája
+    két klippel maradna.
     """
     if len(picked) <= MAX_CLIPS:
         return picked
+    if csoport is None:
+        def csoport(e):
+            return str(field(e, "type"))
     szerint: dict = {}
     for e in picked:
-        szerint.setdefault(str(field(e, "type")), []).append(e)
+        szerint.setdefault(csoport(e), []).append(e)
     kivalasztott: list = []
     maradek = MAX_CLIPS
     # Előbb a SZŰKÖS típusok: az ő teljes anyaguk befér, a fel nem
     # használt kvóta pedig azonnal felszabadul a bővebbeknek (a kvótát
     # ezért számoljuk újra minden lépésben).
-    tipusok = sorted(szerint.items(), key=lambda kv: len(kv[1]))
+    tipusok = sorted(szerint.items(), key=lambda kv: (len(kv[1]), str(kv[0])))
     hatra = len(tipusok)
     for _typ, sor in tipusok:
         kvota = max(1, maradek // max(1, hatra))
@@ -179,10 +188,12 @@ def export_event_clips(match: Match, events: list, types: set[str],
     # edző és a játékos viszont mezszámban gondolkodik — a leképezést
     # itt csináljuk meg, hogy a hívónak ne kelljen track_id-t ismernie.
     kert_mezek = {int(j) for j in (jerseys or []) if j is not None}
+    # A leképezés a MAPPÁZÁSHOZ is kell, nem csak a szűréshez: több
+    # kijelölt játékosnál mindenki külön mappát kap.
+    mez_of_ev = _jersey_of_track(match) if kert_mezek else {}
     if kert_mezek:
-        mez_of = _jersey_of_track(match)
         picked = [e for e in picked
-                  if mez_of.get(_field(e, "player_id")) in kert_mezek]
+                  if mez_of_ev.get(_field(e, "player_id")) in kert_mezek]
     picked.sort(key=lambda e: _field(e, "t") or 0)
     n_requested = len(picked)
     # Azonos pillanatra eső ismétlések ki (több csomagban is szereplő
@@ -195,13 +206,22 @@ def export_event_clips(match: Match, events: list, types: set[str],
             continue
         dedup.append(e)
         last_t = t_e
-    picked = _fair_cap(dedup, _field)
+    # Több kijelölt játékosnál a keret JÁTÉKOSONKÉNT ÉS típusonként
+    # oszlik, hogy senki mappája ne maradjon két klippel.
+    if len(kert_mezek) > 1:
+        picked = _fair_cap(
+            dedup, _field,
+            csoport=lambda e: (mez_of_ev.get(_field(e, "player_id")),
+                               str(_field(e, "type"))))
+    else:
+        picked = _fair_cap(dedup, _field)
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    # (fájl, típus magyar mappaneve) — a zip ebből rendez mappákba.
-    made: list[tuple[Path, str]] = []
+    # (fájl, típus magyar mappaneve, mezszám vagy None) — a zip ebből
+    # rendez mappákba.
+    made: list[tuple[Path, str, Optional[int]]] = []
 
     for i, e in enumerate(picked):
         t = int(_field(e, "t") or 0)
@@ -242,7 +262,8 @@ def export_event_clips(match: Match, events: list, types: set[str],
             ok_frames += 1
         writer.release()
         if ok_frames > 0:
-            made.append((dest, _TYPE_HU.get(typ, typ)))
+            made.append((dest, _TYPE_HU.get(typ, typ),
+                         mez_of_ev.get(_field(e, "player_id"))))
         else:
             dest.unlink(missing_ok=True)  # üres klip nem kell
 
@@ -268,18 +289,26 @@ def export_event_clips(match: Match, events: list, types: set[str],
     # csomagos dosszié hatvan fájlja egy lapos mappában kezelhetetlen,
     # az edzésen pedig témánként kell levetíteni. Egyetlen típusnál
     # marad a lapos alak (a mappa ott csak egy fölösleges kattintás).
+    #
+    # TÖBB KIJELÖLT JÁTÉKOSNÁL mindenki a SAJÁT mappáját kapja: az edző
+    # három emberrel külön-külön ül le, és egy összekevert zip-ből
+    # minden beszélgetés előtt újra kellene válogatnia. Egy játékosnál
+    # nincs mappa (ott csak fölösleges kattintás lenne).
     zip_path = out_dir / "klipek.zip"
-    tobb_tipus = len({t for _f, t in made}) > 1
+    tobb_tipus = len({t for _f, t, _j in made}) > 1
+    tobb_jatekos = len(kert_mezek) > 1
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as z:
-        for f, typ_of in made:
+        for f, typ_of, mez in made:
             arcname = f"{typ_of}/{f.name}" if tobb_tipus else f.name
+            if tobb_jatekos:
+                arcname = f"#{mez}/{arcname}" if mez is not None else arcname
             z.write(f, arcname)
     if progress_cb:
         progress_cb(len(picked), len(picked), f"kész: {len(made)} klip")
     # Típusonkénti darabszám és a NÉMÁN üres csomagok: a hívó ebből
     # tudja megmondani, mihez nem volt jelenet.
     by_type: dict = {}
-    for _f, typ_hu in made:
+    for _f, typ_hu, _mez in made:
         by_type[typ_hu] = by_type.get(typ_hu, 0) + 1
     empty = sorted(_TYPE_HU.get(t, t) for t in types
                    if _TYPE_HU.get(t, t) not in by_type)

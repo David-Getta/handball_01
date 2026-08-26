@@ -2123,6 +2123,9 @@ def test_a_klipcsomag_egy_jatekosra_szukitheto_a_feluleten():
     assert "_openMyClips" in jatekos and "ClipsScreen(initialJersey:" in jatekos
     assert "initialJersey" in klip, (
         "a Klipek lap nem fogadja az előre kért mezszámot")
+    # Több játékosnál a zip mappákra bomlik — a lap MONDJA MEG
+    # előre, mit fog kapni, különben a mappák meglepetésként érik.
+    assert "külön mappát kap" in klip
 def test_a_jatekos_latja_hol_tart_a_kereten_belul():
     """A játékos első kérdése: sokat futottam vagy keveset?
 

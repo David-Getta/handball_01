@@ -378,8 +378,11 @@ class _ClipsScreenState extends State<ClipsScreen> {
                 _jerseys.isEmpty
                     ? "az egész csapat — vagy jelölj ki játékosokat a "
                         "saját válogatásukhoz"
-                    : "${_jerseys.length} játékos kijelölve — csak az ő "
-                        "jeleneteik kerülnek a zip-be",
+                    : _jerseys.length == 1
+                        ? "1 játékos kijelölve — csak az ő jelenetei "
+                            "kerülnek a zip-be"
+                        : "${_jerseys.length} játékos kijelölve — "
+                            "mindenki külön mappát kap a zip-ben",
                 style: AppText.label.copyWith(fontSize: 11.5)),
           ),
           if (_jerseys.isNotEmpty)
@@ -544,8 +547,10 @@ class _ClipsScreenState extends State<ClipsScreen> {
                     ? "1 csomag kijelölve."
                     : "$n csomag kijelölve — egy zip-be kerülnek, "
                         "csomagonként külön mappába."
-                        "${_jerseys.isEmpty ? "" : " Csak a kijelölt "
-                            "játékosok jelenetei."}",
+                        "${_jerseys.length == 1 ? " Csak a kijelölt "
+                            "játékos jelenetei." : _jerseys.length > 1
+                            ? " Játékosonként külön mappába — az edző "
+                                "emberenként készül." : ""}",
             style: AppText.label.copyWith(fontSize: 12)),
       ),
       TextButton(

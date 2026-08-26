@@ -3,6 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.72 óta)
+
+- **Több kijelölt játékosnál mindenki külön mappát kap** (motor +
+  felület): az edző három emberrel KÜLÖN-KÜLÖN ül le, egy összekevert
+  zip-ből viszont minden beszélgetés előtt újra kellene válogatnia. A
+  játékos-mappa a KÜLSŐ (`#7/gol/…`), mert az edző emberenként készül,
+  nem témánként. Egy kijelölt játékosnál nincs mappa — ott csak
+  fölösleges kattintás lenne. A Klipek lap előre megmondja, mit fog
+  kapni.
+
+  A klip-plafon is JÁTÉKOSONKÉNT oszlik ilyenkor: enélkül ugyanaz a
+  néma igazságtalanság tért volna vissza egy szinttel feljebb — a
+  sokat szereplő ember elvitte volna a keretet, és a másik két
+  játékos mappájában két klip maradt volna. Az edző pont azzal nem
+  tudna leülni, akiről a legkevesebb anyaga van.
+
 ## v0.1.72 — kiadva (2026-08-26)
 
 > Kiadás-jegyzet: a JÁTÉKOS lapja. Eddig mindenki a csapatnak készült
