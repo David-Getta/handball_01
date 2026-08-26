@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.68 óta)
+
+- **"Mit gyakorolj" a játékos szezon-lapján** (motor): a nyomtatható
+  játékos-lap eddig azt mutatta, hány kilométert futott és hány gólt
+  szerzett — ez az a rész, amiért a JÁTÉKOS elteszi a lapot: min kell
+  dolgoznia. Az egyéni edzés-fókusz minden meccsből összegyűlik erre a
+  mezszámra, és ami több meccsen visszatér, az kerül előre: az nem
+  napi forma, hanem fejlesztendő terület.
+
 ## v0.1.68 — kiadva (2026-08-26)
 
 > Kiadás-jegyzet: a JÁTÉKOS kiadása. Eddig minden elemzés a csapatról

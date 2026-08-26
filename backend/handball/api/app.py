@@ -2746,8 +2746,39 @@ def create_app():
             raise HTTPException(status_code=404,
                                 detail="no data for player")
         from ..pipeline.report_html import player_season_html
+        # Egyéni edzés-fókusz a SZEZONBÓL: minden meccs fókuszait
+        # összegyűjtjük erre a mezszámra, és a többször visszatérőt
+        # tesszük előre — ami több meccsen előjön, az nem napi forma,
+        # hanem fejlesztendő terület. (Rétegenként hibatűrően: egy
+        # rossz meccs ne vigye el a lapot.)
+        fokusz: dict = {}
+        try:
+            from ..pipeline.training import player_training_focus
+            for m_ in _store.values():
+                if m_.meta.home_team == team:
+                    oldal = "home"
+                elif m_.meta.away_team == team:
+                    oldal = "away"
+                else:
+                    continue
+                try:
+                    ptf = player_training_focus(m_)
+                except Exception:
+                    continue
+                for p_ in (ptf.get(oldal) or {}).get("players") or []:
+                    if p_.get("jersey") != jersey:
+                        continue
+                    for it in p_["items"]:
+                        rec = fokusz.setdefault(
+                            it["title"], {**it, "count": 0})
+                        rec["count"] += 1
+                        rec["why"] = it["why"]  # a legutóbbi meccs indoka
+        except Exception:
+            fokusz = {}
+        top_fokusz = sorted(fokusz.values(),
+                            key=lambda r: -r["count"])[:3]
         return HTMLResponse(content=player_season_html(
-            team, jersey, data["points"], data.get("name")))
+            team, jersey, data["points"], data.get("name"), top_fokusz))
 
     # Szezon-összkép gyorsítótár: meccsenkénti kivonat, a frame-szám a
     # kulcs érvényessége — újrafeldolgozásnál magától frissül.

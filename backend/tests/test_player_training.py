@@ -219,3 +219,36 @@ def test_a_kondicio_szabaly_valodi_retegbol_is_megszolal():
     tetelek = [i for side in ("home", "away")
                for p in rec[side]["players"] for i in p["items"]]
     assert any(i["area"] == "kondíció" for i in tetelek), tetelek
+
+
+def test_a_szezon_lapon_ott_van_a_mit_gyakorolj():
+    """A játékos szezon-lapján ott a "Mit gyakorolj" szakasz.
+
+    Ez az a rész, amiért a játékos elteszi a lapot: nem az, hogy hány
+    kilométert futott, hanem hogy MIN kell dolgoznia. Ami több meccsen
+    visszatér, az nem napi forma.
+    """
+    from handball.pipeline.report_html import player_season_html
+
+    html = player_season_html(
+        "A", 9, [{"date": "2026-01-01", "opponent": "B", "minutes": 30,
+                  "shots": 5, "goals": 1, "distance_m": 3000,
+                  "sprint_count": 12}],
+        "Kovács",
+        [{"title": "Második félidei tempó", "area": "kondíció",
+          "why": "az átlagtempója 40%-kal esik a 2. félidőre",
+          "drill": "intervallum-futás", "count": 3}])
+    assert "Mit gyakorolj" in html
+    assert "Második félidei tempó" in html
+    assert "3 meccsen" in html, "nem látszik, hányszor tért vissza"
+    # A név a címben van (a lapot a játékos kapja a kezébe).
+    assert "Kovács" in html
+
+
+def test_a_szezon_lap_fokusz_nelkul_is_teljes():
+    """Fókusz nélkül a szakasz elmarad — üres lista nem hiba."""
+    from handball.pipeline.report_html import player_season_html
+
+    html = player_season_html("A", 9, [], None, [])
+    assert "<!DOCTYPE html>" in html
+    assert "Mit gyakorolj" not in html

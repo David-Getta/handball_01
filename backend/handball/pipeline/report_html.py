@@ -3931,7 +3931,8 @@ időszakok mutatói kimaradnak, hogy ne látsszanak hamis változásnak.
 
 
 def player_season_html(team: str, jersey: int, points: list[dict],
-                       name: str | None = None) -> str:
+                       name: str | None = None,
+                       focus: list[dict] | None = None) -> str:
     """Szezon játékos-lap: egy játékos meccsről meccsre, nyomtatható
     HTML-ben — a /players/trend pontjaiból (összesítő + meccs-tábla).
 
@@ -3943,6 +3944,21 @@ def player_season_html(team: str, jersey: int, points: list[dict],
     # kényelem): "#7 Kovács" — így a névtelen és a nevesített lap
     # ugyanúgy olvasható.
     ki = f"#{jersey}" + (f" {name}" if name else "")
+    # Egyéni edzés-fókusz a SZEZONBÓL: ami több meccsen visszatért, az
+    # nem napi forma, hanem fejlesztendő terület. Ez az a rész, amiért
+    # a játékos elteszi a lapot.
+    focus_html = ""
+    if focus:
+        lis = "".join(
+            f"<li><b>{escape(f_['title'])}</b> ({escape(f_['area'])})"
+            f" — {f_['count']} meccsen<br>"
+            f"<span class='note'>{escape(f_['why'])}<br>"
+            f"Gyakorlat: {escape(f_['drill'])}.</span></li>"
+            for f_ in focus)
+        focus_html = (f"<h2>Mit gyakorolj</h2><ul>{lis}</ul>"
+                      '<p class="note">A meccsek mért adataiból — '
+                      'ami több meccsen visszatér, az nem napi forma.'
+                      '</p>')
     n = len(points)
     goals = sum(p_.get("goals", 0) for p_ in points)
     shots = sum(p_.get("shots", 0) for p_ in points)
@@ -4082,6 +4098,7 @@ def player_season_html(team: str, jersey: int, points: list[dict],
 </header>
 <h2>Szezon-összesítő</h2>
 <div class="metrics">{"".join(totals)}</div>
+{focus_html}
 <h2>Meccsről meccsre</h2>
 {table}
 <footer>A mezszám-hozzárendelés utáni track-csoportok összegzett
