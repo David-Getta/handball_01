@@ -427,3 +427,52 @@ def test_a_meccsterv_ranevez_a_nyomas_erzekeny_emberre():
     # ilyenkor a szabály hallgat.
     gyenge = ScoutingReport(team="home", team_name="A", trans_steals=1)
     assert not any("#7" in p for p in matchup_plan(gyenge, opp))
+
+
+def test_a_szezon_fokusz_meccsenkent_egyszer_szamol(monkeypatch):
+    """A szezon-szintű összegzés ne futtassa újra a réteget mezszámonként.
+
+    Az edzésterv-lap MINDEN mezszámra kéri a szezon-fókuszt; a réteg
+    pedig minden forrás-mérését újraszámolná. Egy húsz meccses
+    könyvtárnál ez percekben mérhető — ezért meccsenként
+    gyorsítótárazunk.
+    """
+    import json
+    import os
+    import tempfile
+    from pathlib import Path
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+
+    tmp = tempfile.mkdtemp(prefix="handball_ptf_cache_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True, exist_ok=True)
+    for i in range(2):
+        m = _terheles_match()
+        m.meta.match_id = f"c{i}"
+        (d / f"c{i}.json").write_text(json.dumps(m.to_dict()),
+                                      encoding="utf-8")
+
+    hivasok = {"n": 0}
+    valodi = player_training_focus
+
+    def szamlalo(match, config=None):
+        hivasok["n"] += 1
+        return valodi(match, config)
+
+    monkeypatch.setattr("handball.pipeline.training.player_training_focus",
+                        szamlalo)
+
+    from handball.api.app import create_app
+    client = TestClient(create_app())
+    # Két külön mezszámra kérünk fókuszt (a másodikra nincs adat).
+    client.get("/players/focus", params={"team": "A", "jersey": 9})
+    elso = hivasok["n"]
+    client.get("/players/focus", params={"team": "A", "jersey": 4})
+    assert elso <= 2, f"két meccsnél kettőnél többször futott: {elso}"
+    assert hivasok["n"] == elso, (
+        "a második kérés újraszámolta a rétegeket")

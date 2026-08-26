@@ -3,6 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.70 óta)
+
+- **Az egyéni fókusz meccsenként egyszer számol** (motor): a
+  szezon-szintű összegzés (a "Mit gyakorolj" és az edzésterv-lap)
+  minden mezszámra újrafuttatta a réteget, az pedig minden
+  forrás-mérését újraszámolta — húsz meccses könyvtárnál ez percekben
+  mérhető. Mostantól meccsenként gyorsítótárazunk (a kulcs a kockaszám
+  és a csapatnevek); a kézi esemény-javítás kifejezetten dobja a
+  bejegyzést, mert a javítás a fókuszt is átírja.
+- **A ROADMAP feljegyzi a javíthatatlan felismerés hibafajtáját** — a
+  megoldással és a hihetőség-ellenőrzésekkel együtt.
+
 ## v0.1.70 — kiadva (2026-08-26)
 
 > Kiadás-jegyzet: a papír és a célpont. A két új munkalap

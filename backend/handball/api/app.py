@@ -1669,6 +1669,7 @@ def create_app():
             # kézzel dobjuk el őket.
             _summary_cache.pop(match_id, None)
             _training_cache.pop(match_id, None)
+            _ptf_cache.pop(match_id, None)
             # A minőség-pontszám kulcsa (match_id, kockaszám) — a
             # kockaszám nem változik a javítástól, ezért NÉV szerint
             # keressük ki a bejegyzést.
@@ -2750,6 +2751,29 @@ def create_app():
             team, jersey, data["points"], data.get("name"),
             _season_player_focus(team, jersey)))
 
+    # Egyéni edzés-fókusz gyorsítótár (match_id → (kulcs, eredmény)).
+    # A szezon-szintű összegzés MINDEN meccsre lefuttatja a réteget, és
+    # az minden forrás-mérését újraszámolná: egy húsz meccses
+    # könyvtárnál ez percekben mérhető. A kulcs a kockaszám és a
+    # csapatnevek — újrafeldolgozásnál és átnevezésnél magától frissül,
+    # a kézi esemény-javítás pedig kifejezetten dobja (lásd
+    # _apply_overrides_to_match).
+    _ptf_cache: dict = {}
+
+    def _player_focus_of(m) -> dict:
+        """Egy meccs egyéni edzés-fókusza, gyorsítótárazva."""
+        from ..pipeline.training import player_training_focus
+        kulcs = (len(m.frames), m.meta.home_team, m.meta.away_team)
+        cached = _ptf_cache.get(m.meta.match_id)
+        if cached is not None and cached[0] == kulcs:
+            return cached[1]
+        try:
+            rec = player_training_focus(m)
+        except Exception:
+            rec = {"home": {"players": []}, "away": {"players": []}}
+        _ptf_cache[m.meta.match_id] = (kulcs, rec)
+        return rec
+
     def _season_player_focus(team: str, jersey: int) -> list:
         """Egyéni edzés-fókusz a SZEZONBÓL, egy mezszámra.
 
@@ -2760,7 +2784,6 @@ def create_app():
         """
         fokusz: dict = {}
         try:
-            from ..pipeline.training import player_training_focus
             for m_ in _store.values():
                 if m_.meta.home_team == team:
                     oldal = "home"
@@ -2768,10 +2791,7 @@ def create_app():
                     oldal = "away"
                 else:
                     continue
-                try:
-                    ptf = player_training_focus(m_)
-                except Exception:
-                    continue
+                ptf = _player_focus_of(m_)
                 for p_ in (ptf.get(oldal) or {}).get("players") or []:
                     if p_.get("jersey") != jersey:
                         continue

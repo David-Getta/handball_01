@@ -2,7 +2,7 @@
 
 > ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (2023 automata teszt zöld; élő számok:
+> **Kész és tesztelt (2024 automata teszt zöld; élő számok:
 > `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
@@ -136,6 +136,29 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   csomag zöld. A minőség-jelentés `TURNOVER_RATE_MAX_PER_MIN` jelzése
   megmarad hátsó védvonalnak: ha az eladás-ütem így is hihetetlen, azt
   kimondja.
+
+- **A javíthatatlan felismerés — MEGOLDVA.** A felismerés téved:
+  gólt lövésnek lát, lövést nem vesz észre. Eddig ezt SEMMIVEL nem
+  lehetett javítani, és ez nem részlet-kérdés volt: az edző egy rossz
+  eredményű jelentésnek EGYETLEN számát sem hiszi el, akkor sem, ha a
+  többi pontos. A javítás ezért nem a felületre került, hanem a
+  LÖVÉS-FELISMERÉSBE (`_apply_event_overrides`): onnan minden rétegen
+  átüt (eredmény, xG, lövő-listák, hajrá-elemzés, felderítés) —
+  egyetlen helyen javítunk, nem ötszázon.
+
+  Három művelet (típus-váltás, törlés, felvétel), a meccs mellett
+  külön fájlban tárolva; az egyeztetés-ablak IDŐTARTAM
+  (`OVERRIDE_MATCH_S`), és egy régi, elcsúszott javítás csendben
+  elmarad ahelyett, hogy egy MÁSIK esemény típusát írná át. A
+  meccsből származtatott kivonat-gyorsítótárakat a javítás
+  kifejezetten dobja: a kulcsuk a kockaszám, ami nem változik.
+
+  Mellé HIHETŐSÉG-ellenőrzések kerültek, hogy a hibát ne csak az
+  vegye észre, aki már gyanakszik: "gyanúsan kevés gól" (kézilabdában
+  a két csapat együtt percenként nagyjából egy gólt szerez) és
+  "aránytalan eredmény" (a két kapu felismerése KÜLÖN romolhat el —
+  féloldalas kalibráció, takart kapu). Mindkettő megmondja, HOL
+  javítható: a figyelmeztetés nem zsákutca, hanem teendő.
 
 - **Kocka vagy másodperc — MEGOLDVA, de visszatérhet.** Egyetlen nap
   alatt HÉT olyan küszöböt találtunk, ami kockában volt megadva, pedig
