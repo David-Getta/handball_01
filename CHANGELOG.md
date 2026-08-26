@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.71 óta)
+## v0.1.72 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: a JÁTÉKOS lapja. Eddig mindenki a csapatnak készült
+> termékből próbálta kiolvasni magát: a klipcsomag tizennyolc emberé
+> volt, a toplista zsákutca, a futómunka pedig egy nyers szám, amihez
+> nem volt mihez viszonyítani. Mostantól a klip mezszámra szűkíthető
+> (és a saját lapról egy kattintás), a toplista sora a játékos lapjára
+> visz, és a lap megmondja, hol tart a kereten belül. Az őr-hármas az
+> 503 rétegre tiszta: sorrend-függés 0, tükrözés 0 hibás, stride 24
+> (változatlan).
+
 
 - **"Hol tartok a kereten belül"** (motor + felület): a játékos-lap
   eddig nyers számokat mutatott — a "4,2 kilométer" magában nem
