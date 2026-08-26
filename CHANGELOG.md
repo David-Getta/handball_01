@@ -3,7 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.68 óta)
+## v0.1.69 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: a játékos lapjának lezárása. A "Mit gyakorolj"
+> mostantól nem csak a nyomtatott szezon-lapon van rajta, hanem a
+> képernyőn is, a saját görbe mellett — és a kettő ugyanabból a
+> számolásból él. Plusz a recept egy új szabállyal: ha egy réteg
+> MÁSIK réteg mezőit olvassa, kell mellé teszt, ami a valódi
+> rétegeket futtatja (a try/except az elgépelt mezőnevet is elnyeli).
 
 - **"Mit gyakorolj" a játékos KÉPERNYŐJÉN is** (motor + felület): a
   játékos a saját görbéjét nézi meg — a teendő legyen mellette, ne egy
