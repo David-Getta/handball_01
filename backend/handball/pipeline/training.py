@@ -25,6 +25,18 @@ from .tactics import TacticsConfig
 
 MAX_ITEMS = 5
 
+# Egyéni edzés-fókusz: emberenként legfeljebb ennyi tétel (a fókusz
+# attól fókusz, hogy kevés), és a befejezés-szabály küszöbei.
+PLAYER_MAX_ITEMS = 2
+# Befejezés: ennyi mért lövés kell az ítélethez, és ekkora gól−xG
+# hiány számít érdeminek. A 0,8 nagyjából egy elmaradt gól — ennél
+# kisebb elmaradás egy meccsen belül a szórás.
+PTF_MIN_SHOTS = 5
+PTF_XG_GAP = 0.8
+# Kondíció: ekkora (százalékos) második félidei tempó-esés fölött
+# beszélünk a LÁBRÓL, nem a napi formáról.
+PTF_FATIGUE_DROP_PCT = 25.0
+
 
 def training_focus(match: Match,
                    config: Optional[TacticsConfig] = None) -> dict:
@@ -11398,4 +11410,176 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    return out
+
+
+def player_training_focus(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Egyéni edzés-fókusz: KINEK MIT kell gyakorolnia.
+
+    A csapat-szintű edzés-fókusz (`training_focus`) megmondja, mit
+    gyakoroljon a CSAPAT — a játékos viszont a saját nevét keresi, és
+    az edző is emberre bontva osztja ki a hét feladatait. Ez a réteg a
+    már meglévő JÁTÉKOS-szintű mérésekből állít össze személyes
+    fókuszokat, ugyanabban az alakban, mint a csapat-lista (terület,
+    fókusz, indok, gyakorlat).
+
+    Négy forrás, mind a maga küszöbével (egy forrás hibája nem viheti
+    el a többit):
+      - nyomás alatti labdakezelés (pressure_sensitive_players),
+      - fáradt eladás (tired_turnover_players),
+      - befejezés: gól ELMARADÁSA a helyzetminőségtől (match_xg),
+      - kondíció: második félidei tempó-esés (player_fatigue).
+
+    Edzőileg ez az egyéni beszélgetés lapja: nem "a csapat rosszul
+    fejez be", hanem "neked ez a kettő". Emberenként legfeljebb
+    PLAYER_MAX_ITEMS tétel — a fókusz attól fókusz, hogy kevés.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "items": [{"area", "title", "why", "drill"}]}]} — a lista a
+    tételek száma szerint csökkenő. Üres lista érvényes eredmény: ez
+    azt jelenti, hogy a mért területeken senkinél nincs kilógó
+    gyengeség, nem azt, hogy nincs adat.
+    """
+    from .primitive_cache import primitive_cache
+    with primitive_cache(match):
+        return _player_training_focus_cached(match, config)
+
+
+def _ptf_copy(val: dict) -> dict:
+    return {side: {"players": [{**p, "items": [dict(i) for i in p["items"]]}
+                               for p in rec["players"]]}
+            for side, rec in val.items()}
+
+
+@memoize_primitive("player_training_focus", copy=_ptf_copy)
+def _player_training_focus_cached(match: Match,
+                                  config: Optional[TacticsConfig] = None
+                                  ) -> dict:
+    """Az egyéni fókusz tényleges felépítése (lásd
+    `player_training_focus`)."""
+    config = config or TacticsConfig()
+    # {oldal: {játékos-azonosító: {"jersey": ..., "items": [...]}}}
+    tar: dict = {"home": {}, "away": {}}
+
+    # Mezszám track-enként: több forrás-réteg csak a track-azonosítót
+    # adja, a JÁTÉKOS viszont a saját számát keresi a lapon.
+    mez: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                mez.setdefault(p.track_id, p.jersey_number)
+
+    def _oldal(ertek):
+        """"home"/"away" a nyers mezőből (Enum és sztring is jöhet)."""
+        v = getattr(ertek, "value", ertek)
+        return v if v in ("home", "away") else None
+
+    def add(side, pid, jersey, area, title, why, drill):
+        if pid is None:
+            return
+        rec = tar[side].setdefault(pid, {"jersey": jersey, "items": []})
+        if jersey is not None:
+            rec["jersey"] = jersey
+        if len(rec["items"]) < PLAYER_MAX_ITEMS:
+            rec["items"].append({"area": area, "title": title,
+                                 "why": why, "drill": drill})
+
+    # (a) Nyomás alatti labdakezelés — az ő szorítása az ellenfélnek
+    #    labdaszerzés, tehát neki a kiadás a gyakorlandó.
+    try:
+        from .decisions import pressure_sensitive_players
+        psp = pressure_sensitive_players(match, config)
+        for side in ("home", "away"):
+            top = (psp.get(side) or {}).get("top")
+            if not top:
+                continue
+            arany = (100.0 * top["press_to"] / top["press_events"]
+                     if top["press_events"] else 0.0)
+            add(side, top["player_id"],
+                top.get("jersey") or mez.get(top["player_id"]),
+                "labdabiztonság", "Kiadás nyomás alatt",
+                f"a testközeli védő mellett hozott {top['press_events']} "
+                f"döntéséből {top['press_to']} eladás lett "
+                f"({arany:.0f}%)",
+                "kettőzés elleni kiadás: háttal-felvétel + azonnali "
+                "kipasszolás, két védő közé zárva; testcsel után "
+                "gyors átadás, gyakorlás fáradtan is")
+    except Exception:
+        pass
+
+    # (b) Fáradt eladás — nem a technika, hanem a hatvan perc kérdése.
+    try:
+        from .decisions import tired_turnover_players
+        ttp = tired_turnover_players(match, config)
+        for side in ("home", "away"):
+            top = (ttp.get(side) or {}).get("top")
+            if not top:
+                continue
+            add(side, top["player_id"],
+                top.get("jersey") or mez.get(top["player_id"]),
+                "labdabiztonság", "Fáradt labdakezelés",
+                f"a labdaeladásai a 2. félidőre {top['fh']} → {top['sh']} "
+                "értékre nőttek",
+                "labdakezelés-sorozat a kondi-blokk UTÁN: a technikát "
+                "fáradt állapotban kell rögzíteni, mert a hajrában is "
+                "úgy kell működnie")
+    except Exception:
+        pass
+
+    # (c) Befejezés — a helyzetei jobbak, mint amennyi gólt szerez.
+    try:
+        from .xg import match_xg
+        xg = match_xg(match, config)
+        for row in xg.get("shooters") or []:
+            pid = row.get("player_id")
+            shots = row.get("shots") or 0
+            if pid is None or shots < PTF_MIN_SHOTS:
+                continue
+            hiany = (row.get("xg") or 0.0) - (row.get("goals") or 0)
+            if hiany < PTF_XG_GAP:
+                continue
+            side = _oldal(row.get("team"))
+            if side is None:
+                continue
+            add(side, pid, mez.get(pid), "befejezés",
+                "Befejezés a helyzeteihez képest",
+                f"{shots} lövésből {row.get('goals', 0)} gól, miközben a "
+                f"helyzetei {row.get('xg', 0.0):.1f} várható gólt értek "
+                f"(−{hiany:.1f})",
+                "befejezés-sorozat ugyanabból a pozícióból: helyezett "
+                "lövés a kapus mozdulása UTÁN, és ziccer-befejezés "
+                "fáradtan (a hiány jellemzően ott keletkezik)")
+    except Exception:
+        pass
+
+    # (d) Kondíció — a második félidei tempó-esés.
+    try:
+        from .stats import player_fatigue
+        for row in player_fatigue(match) or []:
+            esés = row.get("drop_pct")
+            if esés is None or esés < PTF_FATIGUE_DROP_PCT:
+                continue
+            side = _oldal(row.get("team"))
+            if side is None:
+                continue
+            add(side, row.get("track_id"), mez.get(row.get("track_id")),
+                "kondíció",
+                "Második félidei tempó",
+                f"az átlagtempója {esés:.0f}%-kal esik a 2. félidőre",
+                "intervallum-futás a hajrá ritmusában (30/30), és "
+                "cserével tervezett terhelés a meccsen — a lábat nem "
+                "meccsen kell megszerezni")
+    except Exception:
+        pass
+
+    out: dict = {}
+    for side in ("home", "away"):
+        sorok = [{"player_id": pid, "jersey": rec["jersey"],
+                  "items": rec["items"]}
+                 for pid, rec in tar[side].items() if rec["items"]]
+        sorok.sort(key=lambda r: (-len(r["items"]),
+                                  r["jersey"] if r["jersey"] is not None
+                                  else 999))
+        out[side] = {"players": sorok}
     return out

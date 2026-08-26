@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **502 réteg**, modulonként csoportosítva; a
+Összesen **503 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (98)
@@ -578,10 +578,11 @@ leírás a réteg-függvény docstringjének első sora.
 | `tilt_fade` | Területi-fölény-esés: a field tilt az 1. vs a 2. félidőben. |
 | `vs_formation` | Támadó-hatékonyság a VÉDŐFORMA szerint: melyik fal ellen megy. |
 
-## training (1)
+## training (2)
 
 | Réteg | Mit mér |
 |---|---|
+| `player_training_focus` | Egyéni edzés-fókusz: KINEK MIT kell gyakorolnia. |
 | `training` | Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...}). |
 
 ## xg (29)

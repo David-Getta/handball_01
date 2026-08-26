@@ -3,6 +3,25 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.67 óta)
+
+- **Egyéni edzés-fókusz** (új réteg, `player_training_focus`): a
+  csapat-szintű fókusz megmondja, mit gyakoroljon a CSAPAT — a játékos
+  viszont a saját nevét keresi, és az edző is emberre bontva osztja ki
+  a hét feladatait. Az új réteg a már meglévő játékos-szintű
+  mérésekből állít össze személyes fókuszokat, ugyanabban az alakban,
+  mint a csapat-lista (terület, fókusz, indok, gyakorlat). Négy forrás,
+  mind a maga küszöbével: nyomás alatti labdakezelés, fáradt eladás,
+  befejezés a helyzetminőséghez képest (gól − xG), és második félidei
+  tempó-esés. Emberenként legfeljebb két tétel — a fókusz attól fókusz,
+  hogy kevés; üres lista érvényes eredmény (a mért területeken senkinél
+  nincs kilógó gyengeség). Felületek: `/analyze` és a meccs-csomag, az
+  edzés-végpont `players` kulcsa, az edzői összefoglaló új szakasza és
+  az összegző panel EGYÉNI EDZÉS-FÓKUSZ csempéje. A tesztek közt egy
+  őr, ami a VALÓDI forrás-rétegekkel fut: a szabályok `try/except`-ben
+  ülnek, ami egy elgépelt mezőnevet is elnyelne — a szabály némán
+  semmit sem csinálna, a teszt pedig zöld maradna.
+
 ## v0.1.67 — kiadva (2026-08-25)
 
 > Kiadás-jegyzet: a BIZALOM kiadása. A felismerés téved — eddig ezt

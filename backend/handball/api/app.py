@@ -3579,6 +3579,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.training import player_training_focus
+            res["player_training_focus"] = player_training_focus(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import timeout_record
             res["timeout_record"] = timeout_record(match)
         except Exception:
@@ -5807,11 +5812,22 @@ def create_app():
     def get_training(match_id: str):
         """Edzés-fókusz javaslatok a meccs gyengeségeiből, csapatonként
         rangsorolva (terület, fókusz, indoklás, gyakorlat-típus)."""
-        from ..pipeline.training import training_focus
+        from ..pipeline.training import (player_training_focus,
+                                         training_focus)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return training_focus(match)
+        # A csapat-lista mellett az EGYÉNI fókusz is: az edző emberre
+        # bontva osztja ki a hét feladatait, a játékos pedig a saját
+        # nevét keresi. (Külön kulcs, hogy a csapat-oldalak alakja ne
+        # változzon.)
+        ki = dict(training_focus(match))
+        try:
+            ki["players"] = player_training_focus(match)
+        except Exception:
+            ki["players"] = {"home": {"players": []},
+                             "away": {"players": []}}
+        return ki
 
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
@@ -7136,6 +7152,9 @@ def create_app():
                 _layer("substitutions", lambda: substitution_impact(match))
                 _layer("stoppages", lambda: timeout_effects(match))
                 _layer("training", lambda: training_focus(match))
+                from ..pipeline.training import player_training_focus
+                _layer("player_training_focus",
+                       lambda: player_training_focus(match))
                 # Újabb rétegek: kapus-indítás, 7 a 6 mérleg/időzítés,
                 # kontra-befejezők, kulcsemberek, tempó, késő cserék.
                 from ..pipeline.attack_types import (fast_break_finishers,

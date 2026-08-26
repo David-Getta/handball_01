@@ -8036,6 +8036,26 @@ def _coach_summary_cached(match: Match) -> dict:
     except Exception:
         pass
 
+    # Egyéni edzés-fókusz: KINEK mit — az edző emberre bontva osztja ki
+    # a hét feladatait, és az egyéni beszélgetés ebből indul.
+    try:
+        from .training import player_training_focus
+        ptf = player_training_focus(match)
+        egyeni = []
+        for side, name in (("home", home), ("away", away)):
+            sorok = (ptf.get(side) or {}).get("players") or []
+            for p in sorok[:3]:
+                ki = (f"#{p['jersey']}" if p.get("jersey") is not None
+                      else f"{p['player_id']}. játékos")
+                temak = ", ".join(i["title"].lower() for i in p["items"])
+                egyeni.append(f"{name} {ki}: {temak}")
+        if egyeni:
+            sections.append({
+                "title": "Egyéni edzés-fókusz",
+                "body": "; ".join(egyeni) + "."})
+    except Exception:
+        pass
+
     try:
         s = _players_section(match, home, away)
         if s:

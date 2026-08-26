@@ -1790,3 +1790,34 @@ def test_a_mezszamok_egy_menetben_kioszthatok():
     # A vezérlőket a párbeszéd után el kell dobni (memória-szivárgás).
     assert "c.dispose();" in meccs, (
         "a tömeges szerkesztő vezérlői nincsenek eldobva")
+
+
+def test_az_egyeni_edzes_fokusz_a_feluleten_is_ott_van():
+    """Az egyéni fókusz a JÁTÉKOS lapja — ha csak a motorban él, nincs.
+
+    A csapat-lista megmondja, mit gyakoroljon a csapat; a játékos
+    viszont a saját nevét keresi, és az edző emberre bontva osztja ki a
+    hét feladatait.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    panel = (lib / "ui" / "summary_panel.dart").read_text(encoding="utf-8")
+    assert "_playerTrainingCard" in panel, "nincs egyéni edzés-fókusz csempe"
+    assert '"EGYÉNI EDZÉS-FÓKUSZ"' in panel
+    # KÜLÖN hívás: az egyéni fókusz akkor is megszólalhat, ha
+    # csapat-szinten nincs kilógó gyengeség (a csapat-kártya olyankor
+    # üres listát ad vissza, és magával vinné az egyénit is).
+    assert panel.count("..._playerTrainingCard()") == 1
+    assert panel.index("..._trainingCard()") < panel.index(
+        "..._playerTrainingCard()")
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert 'ki["players"] = player_training_focus(match)' in app, (
+        "az edzés-végpont nem adja ki az egyéni fókuszt")

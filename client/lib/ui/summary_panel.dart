@@ -669,6 +669,99 @@ class SummaryPanel extends StatelessWidget {
     ];
   }
 
+  /// EGYÉNI edzés-fókusz: KINEK mit kell gyakorolnia.
+  ///
+  /// A csapat-lista megmondja, mit gyakoroljon a csapat — a játékos
+  /// viszont a saját nevét keresi, és az edző is emberre bontva osztja
+  /// ki a hét feladatait. Emberenként legfeljebb két tétel: a fókusz
+  /// attól fókusz, hogy kevés.
+  List<Widget> _playerTrainingCard() {
+    final t = training;
+    final ptf = (t?["players"] as Map?) ?? const {};
+    final sides = [
+      ("home", homeName, AppColors.home),
+      ("away", awayName, AppColors.away),
+    ];
+    List<Map<String, dynamic>> sorok(String key) => [
+          for (final p in (((ptf[key] as Map?)?["players"] as List?) ??
+              const []))
+            Map<String, dynamic>.from(p as Map)
+        ];
+    final hasAny = sides.any((s) => sorok(s.$1).isNotEmpty);
+    if (!hasAny) return const [];
+    return [
+      Text("EGYÉNI EDZÉS-FÓKUSZ", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (key, name, color) in sides)
+              if (sorok(key).isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 4),
+                  child: Text(name,
+                      style: AppText.value.copyWith(
+                          fontSize: 12.5, color: color)),
+                ),
+                for (final p in sorok(key))
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            p["jersey"] != null
+                                ? "#${p["jersey"]}"
+                                : "${p["player_id"]}. játékos",
+                            style: AppText.value.copyWith(
+                                fontSize: 12, color: AppColors.gold)),
+                        for (final it in ((p["items"] as List)
+                            .cast<Map<String, dynamic>>()))
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, top: 2),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text.rich(TextSpan(children: [
+                                  TextSpan(
+                                      text: "${it["title"]}",
+                                      style: AppText.value
+                                          .copyWith(fontSize: 12)),
+                                  TextSpan(
+                                      text: "  ·  ${it["area"]}",
+                                      style: AppText.label.copyWith(
+                                          fontSize: 11,
+                                          color: AppColors.textFaint)),
+                                ])),
+                                Text("miért: ${it["why"]}",
+                                    style: AppText.label.copyWith(
+                                        fontSize: 11.5,
+                                        color: AppColors.textPrimary)),
+                                Text("gyakorlat: ${it["drill"]}",
+                                    style: AppText.label.copyWith(
+                                        fontSize: 11.5,
+                                        color: AppColors.accent)),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xl),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final sections =
@@ -779,6 +872,10 @@ class SummaryPanel extends StatelessWidget {
         ..._defenseMotorCard(),
         ..._keyPlayersCard(),
         ..._trainingCard(),
+        // KÜLÖN hívás, nem a csapat-kártya végén: az egyéni fókusz
+        // akkor is megszólalhat, ha csapat-szinten nincs kilógó
+        // gyengeség (a csapat-kártya olyankor üres listát ad vissza).
+        ..._playerTrainingCard(),
         if (goals.isNotEmpty) ...[
           Text("EREDMÉNY-ALAKULÁS", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),

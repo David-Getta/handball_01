@@ -1,0 +1,221 @@
+"""
+Tesztek az EGYÉNI edzés-fókuszra (training.player_training_focus).
+
+A csapat-szintű fókusz megmondja, mit gyakoroljon a csapat — a játékos
+viszont a saját nevét keresi, és az edző is emberre bontva osztja ki a
+hét feladatait.
+
+Futtatás:
+    python -m pytest tests/test_player_training.py
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from handball.models.tracking import (  # noqa: E402
+    Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+)
+from handball.pipeline.training import (  # noqa: E402
+    PLAYER_MAX_ITEMS, player_training_focus,
+)
+
+
+def _meta(fps=25.0):
+    return MatchMeta(match_id="ptf", home_team="A", away_team="B", fps=fps)
+
+
+def _match(frames=None):
+    return Match(_meta(), frames or [])
+
+
+def _ures(_m, _c=None):
+    return {"home": {"top": None, "players": []},
+            "away": {"top": None, "players": []}}
+
+
+def _csend(monkeypatch):
+    """Minden forrás-réteg hallgat — a tesztek egyesével szólaltatják meg."""
+    monkeypatch.setattr(
+        "handball.pipeline.decisions.pressure_sensitive_players", _ures)
+    monkeypatch.setattr(
+        "handball.pipeline.decisions.tired_turnover_players", _ures)
+    monkeypatch.setattr("handball.pipeline.xg.match_xg",
+                        lambda m, c=None: {"shooters": []})
+    monkeypatch.setattr("handball.pipeline.stats.player_fatigue",
+                        lambda m, c=None: [])
+
+
+# ---- A négy forrás egyenként megszólal -------------------------------
+
+
+def test_nyomas_alatti_kiadas(monkeypatch):
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.decisions.pressure_sensitive_players",
+        lambda m, c=None: {
+            "home": {"players": [],
+                     "top": {"player_id": 7, "jersey": 9,
+                             "press_events": 10, "press_to": 6}},
+            "away": {"players": [], "top": None}})
+    rec = player_training_focus(_match())["home"]["players"]
+    assert len(rec) == 1
+    assert rec[0]["player_id"] == 7 and rec[0]["jersey"] == 9
+    assert rec[0]["items"][0]["area"] == "labdabiztonság"
+    assert "60%" in rec[0]["items"][0]["why"], rec[0]["items"][0]["why"]
+
+
+def test_faradt_labdakezeles(monkeypatch):
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.decisions.tired_turnover_players",
+        lambda m, c=None: {
+            "home": {"fh": {}, "sh": {},
+                     "top": {"player_id": 3, "jersey": 4,
+                             "fh": 1, "sh": 5}},
+            "away": {"fh": {}, "sh": {}, "top": None}})
+    rec = player_training_focus(_match())["home"]["players"]
+    assert rec and rec[0]["items"][0]["title"] == "Fáradt labdakezelés"
+    assert "1 → 5" in rec[0]["items"][0]["why"]
+
+
+def test_befejezes_a_helyzeteihez_kepest(monkeypatch):
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.xg.match_xg",
+        lambda m, c=None: {"shooters": [
+            # Elmarad a helyzeteitől → jár neki tétel.
+            {"player_id": 11, "team": "away", "shots": 8, "goals": 1,
+             "xg": 3.2},
+            # Kevés lövés → a szórás dönt, nem szólunk.
+            {"player_id": 12, "team": "away", "shots": 2, "goals": 0,
+             "xg": 1.5},
+            # A helyzetei FÖLÖTT teljesít → nem edzés-fókusz.
+            {"player_id": 13, "team": "away", "shots": 9, "goals": 6,
+             "xg": 3.0},
+        ]})
+    rec = player_training_focus(_match())["away"]["players"]
+    assert [r["player_id"] for r in rec] == [11], rec
+    assert rec[0]["items"][0]["area"] == "befejezés"
+    assert "−2.2" in rec[0]["items"][0]["why"], rec[0]["items"][0]["why"]
+
+
+def test_kondicio(monkeypatch):
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.stats.player_fatigue",
+        lambda m, c=None: [
+            {"track_id": 5, "team": "home", "drop_pct": 40.0},
+            {"track_id": 6, "team": "home", "drop_pct": 5.0},
+        ])
+    rec = player_training_focus(_match())["home"]["players"]
+    assert [r["player_id"] for r in rec] == [5]
+    assert rec[0]["items"][0]["area"] == "kondíció"
+
+
+def test_emberenkent_legfeljebb_ket_tetel(monkeypatch):
+    """A fókusz attól fókusz, hogy kevés: négy jel esetén is legfeljebb
+    PLAYER_MAX_ITEMS tétel jut egy emberre."""
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.decisions.pressure_sensitive_players",
+        lambda m, c=None: {
+            "home": {"players": [],
+                     "top": {"player_id": 7, "jersey": 9,
+                             "press_events": 10, "press_to": 6}},
+            "away": {"players": [], "top": None}})
+    monkeypatch.setattr(
+        "handball.pipeline.decisions.tired_turnover_players",
+        lambda m, c=None: {
+            "home": {"fh": {}, "sh": {},
+                     "top": {"player_id": 7, "jersey": 9, "fh": 1, "sh": 5}},
+            "away": {"fh": {}, "sh": {}, "top": None}})
+    monkeypatch.setattr(
+        "handball.pipeline.xg.match_xg",
+        lambda m, c=None: {"shooters": [
+            {"player_id": 7, "team": "home", "shots": 8, "goals": 1,
+             "xg": 3.2}]})
+    monkeypatch.setattr(
+        "handball.pipeline.stats.player_fatigue",
+        lambda m, c=None: [{"track_id": 7, "team": "home",
+                            "drop_pct": 40.0}])
+    rec = player_training_focus(_match())["home"]["players"]
+    assert len(rec) == 1
+    assert len(rec[0]["items"]) == PLAYER_MAX_ITEMS
+
+
+def test_ures_lista_ervenyes_eredmeny():
+    """Ha egyetlen mért területen sincs kilógó gyengeség, a lista üres —
+    ez EREDMÉNY, nem hiányzó adat."""
+    rec = player_training_focus(_match())
+    assert rec["home"]["players"] == [] and rec["away"]["players"] == []
+
+
+# ---- A forrás-rétegek ALAKJA: a néma kód elleni őr --------------------
+
+
+def _terheles_match(fps=25.0, perc=4):
+    """Két játékos, végig mérve — a fáradás-réteg ebből tud számolni."""
+    import math
+
+    n = int(perc * 60 * fps)
+    frames = []
+    for t in range(n):
+        # Az 1-es sokat mozog az első félidőben, alig a másodikban.
+        # Sima (szinuszos) mozgás: a fűrészfog egy kocka alatti hatalmas
+        # ugrást jelentene, amit a sebesség-szűrő kidobna.
+        gyors = t < n // 2
+        x = 15.0 + (5.0 if gyors else 0.4) * math.sin(t / 20.0)
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=x, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           jersey_number=9),
+            PlayerPosition(track_id=2, team=Team.AWAY, x=30.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+        ], ball=None))
+    return Match(_meta(fps), frames)
+
+
+def test_a_forras_retegek_mezonevei_leteznek():
+    """ŐR: a réteg a VALÓDI mezőneveket olvassa.
+
+    Minden szabály `try/except`-ben ül (egy forrás hibája ne vigye el a
+    többit) — csakhogy ez az elgépelt mezőnevet is elnyeli: a szabály
+    némán semmit sem csinálna, a teszt pedig zöld maradna. Ezért itt a
+    valódi rétegeket futtatjuk, és a mezőneveket ellenőrizzük.
+    """
+    from handball.pipeline.stats import player_fatigue
+    from handball.pipeline.xg import match_xg
+
+    m = _terheles_match()
+    sorok = player_fatigue(m)
+    assert sorok, "a fáradás-réteg nem adott sort — a próba nem mérne semmit"
+    for r in sorok:
+        assert "track_id" in r and "team" in r and "drop_pct" in r
+        # A csapat-mező sztring vagy Enum is lehet — a réteg mindkettőt
+        # kezeli, de valamelyiknek "home"/"away" értéket kell adnia.
+        assert getattr(r["team"], "value", r["team"]) in ("home", "away")
+
+    # A lövő-bontás mezőnevei (üres lövés-listán is a szerződés a
+    # lényeg: a kulcsok neve, nem a darabszám).
+    xg = match_xg(m)
+    assert "shooters" in xg
+    for r in xg["shooters"]:
+        for k in ("player_id", "team", "shots", "goals", "xg"):
+            assert k in r, k
+
+
+def test_a_kondicio_szabaly_valodi_retegbol_is_megszolal():
+    """A kondíció-szabály a VALÓDI fáradás-rétegből is ad tételt.
+
+    Ez a próba nem monkeypatch-el: ha a mezőnév vagy a csapat-alak
+    elromlik, itt derül ki — a monkeypatch-es tesztek nem vennék észre.
+    """
+    m = _terheles_match()
+    rec = player_training_focus(m)
+    tetelek = [i for side in ("home", "away")
+               for p in rec[side]["players"] for i in p["items"]]
+    assert any(i["area"] == "kondíció" for i in tetelek), tetelek
