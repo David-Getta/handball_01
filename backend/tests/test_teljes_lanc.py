@@ -121,3 +121,46 @@ def test_videotol_a_csomagig_ep_a_lanc(tmp_path):
     html = z.read("jelentes.html").decode("utf-8")
     assert "<!DOCTYPE html>" in html
     assert "Elemzés megbízhatósága" in html
+
+    # 7) KÉZI javítás a valódi láncon: a felvett gól átüt az
+    #    esemény-listán, és a jelentés ki is mondja, hogy javítás van
+    #    benne (a javítás a lövés-felismerésbe épül be, nem a
+    #    végpontba).
+    ov = client.post("/matches/lanc/event-overrides", json={"overrides": [
+        {"op": "add", "t": 5, "type": "goal", "team": "home"}]})
+    assert ov.status_code == 200, ov.text
+    esemenyek = client.get("/matches/lanc/events").json()["events"]
+    assert any(e["type"] == "goal" and e["t"] == 5 for e in esemenyek), \
+        esemenyek
+    rep2 = client.get("/matches/lanc/report/export")
+    assert rep2.status_code == 200
+    assert "Kézi javítás" in rep2.text
+
+    # 8) Mezszám + név → a szezon-lapok megszólalnak. (Rövid videón
+    #    kevés a mérés; itt az a kérdés, hogy a lánc ÉP-e, nem az,
+    #    hogy mit mond.)
+    trackek = {p["track_id"] for fr in client.get("/matches/lanc").json()
+               ["frames"] for p in fr["players"]}
+    if trackek:
+        tid = sorted(trackek)[0]
+        client.post("/matches/lanc/jerseys",
+                    json={"track_id": tid, "jersey": 7})
+        client.post("/library/players",
+                    json={"team": "Hazai", "jersey": 7, "name": "Kovács"})
+        keret = client.get("/library/roster",
+                           params={"team": "Hazai"}).json()
+        assert any(p["jersey"] == 7 and p["name"] == "Kovács"
+                   for p in keret["players"]), keret
+        fokusz = client.get("/players/focus",
+                            params={"team": "Hazai", "jersey": 7})
+        assert fokusz.status_code == 200
+        assert isinstance(fokusz.json()["focus"], list)
+
+    # 9) A heti munkalap: az edzésterv nyomtatható lapja elkészül és
+    #    magyar. (Üres fókusznál is: az üres eredményt is ki kell
+    #    mondani.)
+    terv = client.get("/library/training-focus/export",
+                      params={"team": "Hazai"})
+    assert terv.status_code == 200
+    assert "<!DOCTYPE html>" in terv.text
+    assert "Edzésterv" in terv.text and "Hazai" in terv.text

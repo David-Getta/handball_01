@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **A teljes lánc a mai újdonságokat is végigjárja** (teszt): a
+  videó → feldolgozás → jelentés → csomag kör kiegészült a kézi
+  javítással (a felvett gól átüt az esemény-listán, és a jelentés ki
+  is mondja), a mezszám–név–keret–egyéni fókusz úttal, és az
+  edzésterv nyomtatható lapjával. A modul-tesztek darabonként őrzik a
+  motort; ez a kör azt mutatja meg, ha a VALÓDI úton szakad meg
+  valami.
+
 - **457. meccsterv-szabály: a hajrá-célpont** (motor): az ő
   hajrá-hibázójuk × a mi hajrá-mérlegünk — az utolsó percekben tudjuk,
   kit kell döntés-kényszerbe hozni. Csak akkor szólal meg, ha MI
