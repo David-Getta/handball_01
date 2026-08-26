@@ -252,3 +252,45 @@ def test_a_szezon_lap_fokusz_nelkul_is_teljes():
     html = player_season_html("A", 9, [], None, [])
     assert "<!DOCTYPE html>" in html
     assert "Mit gyakorolj" not in html
+
+
+def test_player_focus_vegpont():
+    """A "Mit gyakorolj" a KÉPERNYŐN is elérhető, nem csak nyomtatva.
+
+    A játékos a görbéjét nézi meg — a teendőnek ott kell lennie
+    mellette, nem egy külön letöltött HTML-ben.
+    """
+    import json
+    import os
+    import tempfile
+    from pathlib import Path
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+
+    tmp = tempfile.mkdtemp(prefix="handball_focus_ep_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True, exist_ok=True)
+    m = _terheles_match()
+    m.meta.match_id = "f1"
+    (d / "f1.json").write_text(json.dumps(m.to_dict()), encoding="utf-8")
+
+    from handball.api.app import create_app
+    client = TestClient(create_app())
+    r = client.get("/players/focus", params={"team": "A", "jersey": 9})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["team"] == "A" and data["jersey"] == 9
+    # A fixture-játékos a 2. félidőre lelassul → kondíció-tétel jár.
+    cimek = [f["title"] for f in data["focus"]]
+    assert "Második félidei tempó" in cimek, data["focus"]
+    # A count nélkül nem lehet eldönteni, hogy visszatérő-e.
+    assert all(f["count"] >= 1 for f in data["focus"])
+
+    # Ismeretlen játékosra üres lista, nem hiba.
+    ures = client.get("/players/focus",
+                      params={"team": "A", "jersey": 77}).json()
+    assert ures["focus"] == []

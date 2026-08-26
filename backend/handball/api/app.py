@@ -2746,11 +2746,18 @@ def create_app():
             raise HTTPException(status_code=404,
                                 detail="no data for player")
         from ..pipeline.report_html import player_season_html
-        # Egyéni edzés-fókusz a SZEZONBÓL: minden meccs fókuszait
-        # összegyűjtjük erre a mezszámra, és a többször visszatérőt
-        # tesszük előre — ami több meccsen előjön, az nem napi forma,
-        # hanem fejlesztendő terület. (Rétegenként hibatűrően: egy
-        # rossz meccs ne vigye el a lapot.)
+        return HTMLResponse(content=player_season_html(
+            team, jersey, data["points"], data.get("name"),
+            _season_player_focus(team, jersey)))
+
+    def _season_player_focus(team: str, jersey: int) -> list:
+        """Egyéni edzés-fókusz a SZEZONBÓL, egy mezszámra.
+
+        Minden meccs fókuszait összegyűjtjük, és a többször visszatérőt
+        tesszük előre: ami több meccsen előjön, az nem napi forma,
+        hanem fejlesztendő terület. Meccsenként hibatűrően — egy rossz
+        meccs nem viheti el a listát.
+        """
         fokusz: dict = {}
         try:
             from ..pipeline.training import player_training_focus
@@ -2774,11 +2781,24 @@ def create_app():
                         rec["count"] += 1
                         rec["why"] = it["why"]  # a legutóbbi meccs indoka
         except Exception:
-            fokusz = {}
-        top_fokusz = sorted(fokusz.values(),
-                            key=lambda r: -r["count"])[:3]
-        return HTMLResponse(content=player_season_html(
-            team, jersey, data["points"], data.get("name"), top_fokusz))
+            return []
+        return sorted(fokusz.values(), key=lambda r: -r["count"])[:3]
+
+    @app.get("/players/focus")
+    def get_player_focus(team: str, jersey: int):
+        """Egy játékos SZEZON-szintű edzés-fókusza (mit gyakoroljon).
+
+        Ugyanaz, ami a nyomtatható szezon-lap "Mit gyakorolj"
+        szakaszában áll — a képernyőn is látszania kell, mert a
+        játékos ott nézi meg a saját görbéjét.
+
+        Visszatérés: {"team", "jersey", "name", "focus": [{"title",
+        "area", "why", "drill", "count"}]} — a count azt mondja meg,
+        hány meccsen jött elő ugyanaz.
+        """
+        return {"team": team, "jersey": jersey,
+                "name": _player_name(team, jersey),
+                "focus": _season_player_focus(team, jersey)}
 
     # Szezon-összkép gyorsítótár: meccsenkénti kivonat, a frame-szám a
     # kulcs érvényessége — újrafeldolgozásnál magától frissül.

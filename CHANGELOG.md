@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.68 óta)
 
+- **"Mit gyakorolj" a játékos KÉPERNYŐJÉN is** (motor + felület): a
+  játékos a saját görbéjét nézi meg — a teendő legyen mellette, ne egy
+  külön letöltött HTML-ben. Új végpont (`/players/focus`); a képernyő
+  és a nyomtatott lap ugyanabból a számolásból él.
 - **"Mit gyakorolj" a játékos szezon-lapján** (motor): a nyomtatható
   játékos-lap eddig azt mutatta, hány kilométert futott és hány gólt
   szerzett — ez az a rész, amiért a JÁTÉKOS elteszi a lapot: min kell

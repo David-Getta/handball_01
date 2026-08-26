@@ -1821,3 +1821,33 @@ def test_az_egyeni_edzes_fokusz_a_feluleten_is_ott_van():
            / "app.py").read_text(encoding="utf-8")
     assert 'ki["players"] = player_training_focus(match)' in app, (
         "az edzés-végpont nem adja ki az egyéni fókuszt")
+
+
+def test_a_mit_gyakorolj_a_jatekos_kepernyojen_is_ott_van():
+    """A játékos a görbéjét nézi meg — a teendő legyen mellette.
+
+    A "Mit gyakorolj" eddig csak a letöltött szezon-lapon szerepelt;
+    a képernyőn ez az a rész, amiért a játékos egyáltalán megnyitja a
+    saját lapját.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    trend = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchPlayerFocus" in trend, "a képernyő nem kéri le a fókuszt"
+    assert '"MIT GYAKOROLJ"' in trend
+    # A meccs-darabszám nélkül nem derül ki, hogy visszatérő-e.
+    assert 'meccsen"' in trend
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/players/focus")' in app
+    # A képernyő és a nyomtatott lap UGYANABBÓL a számolásból él.
+    assert app.count("_season_player_focus(") >= 2, (
+        "a képernyő és a nyomtatott lap külön számolna")

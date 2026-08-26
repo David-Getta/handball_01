@@ -47,6 +47,9 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
   bool _loading = false;
   String? _error;
   List<Map<String, dynamic>> _points = [];
+  // SZEZON-szintű egyéni edzés-fókusz: mit gyakoroljon. Ez az a rész,
+  // amiért a játékos elteszi a lapot — a görbe mellett a teendő.
+  List<Map<String, dynamic>> _focus = [];
   // A mezszámhoz felvitt játékos-név (a Keret-lapon adható meg). Ha van,
   // a cím a NEVET mutatja: a lapot a játékos kapja a kezébe.
   String? _name;
@@ -115,6 +118,15 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
         _name = r["name"] as String?;
         _loading = false;
       });
+      // A fókusz külön kérés: hosszabb (minden meccset átnéz), és a
+      // görbe nélküle is teljes — ne várakoztassa meg.
+      try {
+        final f = await _api.fetchPlayerFocus(team, jersey);
+        if (!mounted) return;
+        setState(() => _focus = f);
+      } catch (_) {
+        if (mounted) setState(() => _focus = []);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -237,10 +249,58 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                 style: AppText.label,
               ),
             ),
+          if (_focus.isNotEmpty) ..._focusCard(),
           if (_points.isNotEmpty) ..._results(),
         ],
       ),
     );
+  }
+
+  /// MIT GYAKOROLJ — a szezon egyéni edzés-fókusza.
+  ///
+  /// A görbe megmutatja, hol tart a játékos; ez azt, hogy min kell
+  /// dolgoznia. Ami több meccsen visszatér, az nem napi forma —
+  /// ezért a meccs-darabszám ott van minden tétel mellett.
+  List<Widget> _focusCard() {
+    return [
+      const SizedBox(height: AppSpacing.xl),
+      Text("MIT GYAKOROLJ", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: AppTheme.card(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final f in _focus)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                        child: Text("${f["title"]}",
+                            style: AppText.value.copyWith(fontSize: 13)),
+                      ),
+                      Text("${f["count"]} meccsen",
+                          style: AppText.label.copyWith(
+                              fontSize: 11, color: AppColors.gold)),
+                    ]),
+                    Text("miért: ${f["why"]}",
+                        style: AppText.label.copyWith(
+                            fontSize: 11.5,
+                            color: AppColors.textPrimary)),
+                    Text("gyakorlat: ${f["drill"]}",
+                        style: AppText.label.copyWith(
+                            fontSize: 11.5, color: AppColors.accent)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    ];
   }
 
   List<Widget> _results() {

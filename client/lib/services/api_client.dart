@@ -515,6 +515,26 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Egy játékos SZEZON-szintű edzés-fókusza (GET /players/focus):
+  /// mit gyakoroljon. Ugyanaz, ami a nyomtatható szezon-lap "Mit
+  /// gyakorolj" szakaszában áll — a count azt mondja meg, hány meccsen
+  /// jött elő ugyanaz.
+  Future<List<Map<String, dynamic>>> fetchPlayerFocus(
+      String team, int jersey) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/players/focus"
+            "?team=${Uri.encodeQueryComponent(team)}&jersey=$jersey"))
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a fókuszt", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["focus"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   /// Mezszám hozzárendelése egy játékoshoz (POST /matches/{id}/jerseys).
   /// jersey = null törli a hozzárendelést.
   Future<void> setJersey(String matchId, int trackId, int? jersey) async {
