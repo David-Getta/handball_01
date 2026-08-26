@@ -47,6 +47,10 @@ def _csend(monkeypatch):
                         lambda m, c=None: {"shooters": []})
     monkeypatch.setattr("handball.pipeline.stats.player_fatigue",
                         lambda m, c=None: [])
+    monkeypatch.setattr("handball.pipeline.attack_types.risky_passers",
+                        _ures)
+    monkeypatch.setattr(
+        "handball.pipeline.momentum.clutch_turnover_players", _ures)
 
 
 # ---- A négy forrás egyenként megszólal -------------------------------
@@ -154,6 +158,34 @@ def test_ures_lista_ervenyes_eredmeny():
     assert rec["home"]["players"] == [] and rec["away"]["players"] == []
 
 
+def test_hosszu_labda_dontese(monkeypatch):
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.attack_types.risky_passers",
+        lambda m, c=None: {
+            "home": {"players": [],
+                     "top": {"player_id": 2, "jersey": 5,
+                             "tries": 12, "turnovers": 5}},
+            "away": {"players": [], "top": None}})
+    rec = player_training_focus(_match())["home"]["players"]
+    assert rec and rec[0]["items"][0]["title"] == "Hosszú labda döntése"
+    assert "42%" in rec[0]["items"][0]["why"], rec[0]["items"][0]["why"]
+
+
+def test_dontes_a_hajraban(monkeypatch):
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.momentum.clutch_turnover_players",
+        lambda m, c=None: {
+            "home": {"players": [], "top": None},
+            "away": {"players": [],
+                     "top": {"player_id": 21, "jersey": 8,
+                             "turnovers": 3}}})
+    rec = player_training_focus(_match())["away"]["players"]
+    assert rec and rec[0]["items"][0]["area"] == "hajrá"
+    assert rec[0]["jersey"] == 8
+
+
 # ---- A forrás-rétegek ALAKJA: a néma kód elleni őr --------------------
 
 
@@ -206,6 +238,30 @@ def test_a_forras_retegek_mezonevei_leteznek():
     for r in xg["shooters"]:
         for k in ("player_id", "team", "shots", "goals", "xg"):
             assert k in r, k
+
+    # A "top"-ot adó rétegek szerződése: a réteg a top szótár MEZŐIT
+    # olvassa, tehát a kulcsok neve itt is számít.
+    from handball.pipeline.attack_types import risky_passers
+    from handball.pipeline.decisions import (pressure_sensitive_players,
+                                             tired_turnover_players)
+    from handball.pipeline.momentum import clutch_turnover_players
+
+    for fn, kulcsok in (
+            (pressure_sensitive_players,
+             ("player_id", "press_events", "press_to")),
+            (tired_turnover_players, ("player_id", "fh", "sh")),
+            (risky_passers, ("player_id", "tries", "turnovers")),
+            (clutch_turnover_players, ("player_id", "turnovers")),
+    ):
+        ki = fn(m)
+        for side in ("home", "away"):
+            assert side in ki, (fn.__name__, side)
+            assert "top" in ki[side], fn.__name__
+            top = ki[side]["top"]
+            if top is None:
+                continue
+            for k in kulcsok:
+                assert k in top, (fn.__name__, k)
 
 
 def test_a_kondicio_szabaly_valodi_retegbol_is_megszolal():

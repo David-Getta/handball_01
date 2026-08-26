@@ -11424,11 +11424,13 @@ def player_training_focus(match: Match,
     fókuszokat, ugyanabban az alakban, mint a csapat-lista (terület,
     fókusz, indok, gyakorlat).
 
-    Négy forrás, mind a maga küszöbével (egy forrás hibája nem viheti
+    Hat forrás, mind a maga küszöbével (egy forrás hibája nem viheti
     el a többit):
       - nyomás alatti labdakezelés (pressure_sensitive_players),
       - fáradt eladás (tired_turnover_players),
       - befejezés: gól ELMARADÁSA a helyzetminőségtől (match_xg),
+      - hosszú labda kockázata (risky_passers),
+      - döntés a hajrában (clutch_turnover_players),
       - kondíció: második félidei tempó-esés (player_fatigue).
 
     Edzőileg ez az egyéni beszélgetés lapja: nem "a csapat rosszul
@@ -11550,6 +11552,46 @@ def _player_training_focus_cached(match: Match,
                 "befejezés-sorozat ugyanabból a pozícióból: helyezett "
                 "lövés a kapus mozdulása UTÁN, és ziccer-befejezés "
                 "fáradtan (a hiány jellemzően ott keletkezik)")
+    except Exception:
+        pass
+
+    # (c2) Hosszú labda — az ő indításai foghatók el.
+    try:
+        from .attack_types import risky_passers
+        rp = risky_passers(match, config)
+        for side in ("home", "away"):
+            top = (rp.get(side) or {}).get("top")
+            if not top:
+                continue
+            arany = (100.0 * top["turnovers"] / top["tries"]
+                     if top.get("tries") else 0.0)
+            add(side, top["player_id"],
+                top.get("jersey") or mez.get(top["player_id"]),
+                "labdabiztonság", "Hosszú labda döntése",
+                f"{top['tries']} hosszú kísérletéből {top['turnovers']} "
+                f"elveszett ({arany:.0f}%)",
+                "döntés-gyakorlat: a hosszú indítás CSAK szabad "
+                "futóra megy; zárt kép esetén rövid kiadás — "
+                "kényszerítő gyakorlat két lehetőséggel")
+    except Exception:
+        pass
+
+    # (c3) Hajrá-döntés — a döntő szakaszban nála szakad el a labda.
+    try:
+        from .momentum import clutch_turnover_players
+        ctp = clutch_turnover_players(match, config)
+        for side in ("home", "away"):
+            top = (ctp.get(side) or {}).get("top")
+            if not top:
+                continue
+            add(side, top["player_id"],
+                top.get("jersey") or mez.get(top["player_id"]),
+                "hajrá", "Döntés a hajrában",
+                f"{top['turnovers']} labdaeladás a meccs döntő "
+                "szakaszában",
+                "hajrá-szituációk gyakorlása fáradtan és zajban: "
+                "kimondott első opció, és megbeszélt kiút, ha az zárt "
+                "— a hajrában nem a technika, hanem a döntés akad meg")
     except Exception:
         pass
 

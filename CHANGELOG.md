@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.69 óta)
 
+- **Az egyéni edzés-fókusz két új forrása** (motor): a réteg négy
+  helyett hat mérésből dolgozik — bekerült a **hosszú labda döntése**
+  (kinek az indításai foghatók el) és a **döntés a hajrában** (kinél
+  szakad el a labda a döntő szakaszban). Az őr-teszt is bővült: a
+  "top"-ot adó rétegek MEZŐNEVEIT is ellenőrzi a valódi kimeneten,
+  mert a szabályok try/except-je egy elgépelt kulcsot némán elnyelne.
+
 - **Nyomtatható Edzésterv és Meccsterv** (motor + felület): a pályán
   és a meccs előtti estén nincs képernyő — az edző a papírt viszi. A
   két ma született munkalap eddig csak a képernyőn élt. Az
