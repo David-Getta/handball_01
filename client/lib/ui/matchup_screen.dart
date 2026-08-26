@@ -311,6 +311,35 @@ class _MatchupScreenState extends State<MatchupScreen> {
     ]);
   }
 
+  /// A 0..1 skálájú tengely-érték olvasható alakja.
+  String _pct(dynamic v) {
+    final n = (v as num?)?.toDouble();
+    if (n == null) return "—";
+    return "${(n * 100).round()}%";
+  }
+
+  /// Mit jelent a MAGASABB érték az adott tengelyen. A puszta szám
+  /// önmagában nem tanács: az edzőnek azt kell tudnia, melyik irány
+  /// mit jelent a pályán. (A tengely-nevek a motorból jönnek.)
+  String? _axisHint(String axis) {
+    switch (axis) {
+      case "lövés-távolság":
+        return "magasabb = többet lő távolról";
+      case "tempó":
+        return "magasabb = több támadás percenként";
+      case "lerohanás":
+        return "magasabb = többet kontrázik";
+      case "elzárás":
+        return "magasabb = többet játszik elzárásból";
+      case "beállós játék":
+        return "magasabb = többet játszik a beállóval";
+      case "keménység":
+        return "magasabb = több kiállítás és okozott hetes";
+      default:
+        return null;
+    }
+  }
+
   Widget _styleCard(Map style) {
     final score = style["score_pct"];
     final verdict = style["verdict"] as String?;
@@ -351,14 +380,27 @@ class _MatchupScreenState extends State<MatchupScreen> {
           const SizedBox(height: 4),
           for (final row in axes.reversed.take(3))
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(children: [
-                Expanded(
-                    child: Text("${(row as Map)["axis"]}",
-                        style: AppText.label.copyWith(fontSize: 12))),
-                Text("mi ${(row)["own"]} · ők ${(row)["opp"]}",
-                    style: AppText.value.copyWith(fontSize: 12)),
-              ]),
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Expanded(
+                        child: Text("${(row as Map)["axis"]}",
+                            style:
+                                AppText.label.copyWith(fontSize: 12))),
+                    // Százalékban: a 0..1 nyers szám nem mond semmit
+                    // annak, aki nem a képletet nézi.
+                    Text("mi ${_pct((row)["own"])} · "
+                        "ők ${_pct((row)["opp"])}",
+                        style: AppText.value.copyWith(fontSize: 12)),
+                  ]),
+                  if (_axisHint("${(row)["axis"]}") != null)
+                    Text(_axisHint("${(row)["axis"]}")!,
+                        style: AppText.label.copyWith(
+                            fontSize: 10.5, color: AppColors.textFaint)),
+                ],
+              ),
             ),
         ],
       ]),

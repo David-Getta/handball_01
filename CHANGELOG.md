@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **A meccsterv stílus-kártyája olvasható lett** (felület): a 0..1
+  nyers szám nem tanács — csak az érti, aki a képletet ismeri.
+  Mostantól százalék áll ott, és minden tengely alatt egy mondat
+  arról, mit jelent a MAGASABB érték (pl. "magasabb = többet lő
+  távolról"). Új őr-teszt köti össze a motor tengely-neveit a
+  kliens-magyarázatokkal: átnevezésnél a magyarázat nem maradhat
+  némán el.
+
 - **"Mit gyakorolj" a meccs utáni játékos-lapon is** (motor): a
   szezon-lapon a VISSZATÉRŐ tételek állnak, itt a mai meccsé. A
   játékos ezért a részért teszi el a lapot — ha csak a számok lennének

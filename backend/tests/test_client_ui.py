@@ -1981,3 +1981,38 @@ def test_az_edzesterv_ket_nezete_ugyanazt_mondja():
         encoding="utf-8")
     assert '_matchFocus?["players"]' in terv, (
         "az egy-meccs nézet nem mutatja az egyéni feladatokat")
+
+
+def test_a_stilus_tengelyek_olvashatoak():
+    """A 0..1 nyers szám nem tanács.
+
+    A meccsterv stílus-kártyája a tengely-értékeket mutatja; ha
+    "0.42"-t ír, azt csak az érti, aki a képletet ismeri. Százalék +
+    egy mondat arról, mit jelent a MAGASABB érték — ettől lesz belőle
+    edzői információ.
+
+    A tengely-nevek a motorból jönnek: ha ott átnevezik őket, a
+    magyarázat némán elmarad. Ezért itt összevetjük a kettőt.
+    """
+    import re
+
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kep = (lib / "ui" / "matchup_screen.dart").read_text(encoding="utf-8")
+    assert "_axisHint" in kep and "_pct(" in kep
+
+    from pathlib import Path as _Path
+    sc = (_Path(__file__).resolve().parents[1] / "handball" / "pipeline"
+          / "scouting.py").read_text(encoding="utf-8")
+    kezdet = sc.index("def _sty_axes")
+    vege = sc.index("def style_distance")
+    motor = set(re.findall(r'ax\["([^"]+)"\]', sc[kezdet:vege]))
+    assert len(motor) >= 5, motor
+    kliens = set(re.findall(r'case "([^"]+)":', kep))
+    hianyzo = motor - kliens
+    assert not hianyzo, (
+        f"a stílus-tengelyekhez nincs magyarázat a kliensen: {hianyzo}")
