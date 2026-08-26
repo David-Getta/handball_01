@@ -14419,6 +14419,19 @@ def matchup_plan(own: "ScoutingReport",
             "időzítsétek: nála a szorítás nem kockázat, hanem "
             "labdaszerzés, és onnan indul a kontrátok.")
 
+    # 457) Az ő HAJRÁ-hibázójuk × a mi hajrá-mérlegünk: a döntő
+    # szakaszban tudjuk, kit kell döntés-kényszerbe hozni.
+    _p457 = sorted(opp.ptf_clutch.items(), key=lambda kv: -kv[1])
+    if (_p457 and own.clutch_matches >= 1
+            and own.clutch_goals_for >= own.clutch_goals_against):
+        _p457_mez, _p457_db = _p457[0]
+        plan.append(
+            f"A hajrában a #{_p457_mez} kezén szakad el a labda "
+            f"({_p457_db} meccsen), ti pedig bírjátok a végjátékot "
+            f"({own.clutch_goals_for}–{own.clutch_goals_against} a "
+            "döntő szakaszban) — az utolsó percekben rá kell terhelni: "
+            "az ő döntés-kényszere a ti kontrátok.")
+
     from .tactics import ATV_MIN_ATTACKS as _A449
     from .tactics import ATV_ONE_TEMPO_PCT as _A449P
     # 455) Az ő hátrébb kerülő támadásuk × a ti tömör falatok: ha a

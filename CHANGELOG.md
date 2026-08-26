@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **457. meccsterv-szabály: a hajrá-célpont** (motor): az ő
+  hajrá-hibázójuk × a mi hajrá-mérlegünk — az utolsó percekben tudjuk,
+  kit kell döntés-kényszerbe hozni. Csak akkor szólal meg, ha MI
+  bírjuk a végjátékot: különben nem a mi fegyverünk, hanem üres
+  jótanács.
+- **A mentés viszi az EMBERI munkát** (teszt): a mezszám-nevek és a
+  kézi esemény-javítások nem a videóból jönnek — valaki beírta őket.
+  Új teszt bizonyítja, hogy a gépváltás (mentés → visszaállítás új
+  gépen) mindkettőt megőrzi, és a javítás az új gépen is ÉL.
+
 - **Az egyéni feladatok az Edzésterv EGY MECCS nézetében is**
   (felület): a végpont a csapat-lista mellett ezt is adja, és a
   szezon-nézet mutatja — ha itt kimaradna, a két nézet mást mondana

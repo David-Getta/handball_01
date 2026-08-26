@@ -454,6 +454,24 @@ def test_a_meccsterv_ranevez_a_nyomas_erzekeny_emberre():
     assert not any("#7" in p for p in matchup_plan(gyenge, opp))
 
 
+def test_a_meccsterv_a_hajra_hibazojukra_is_ranevez():
+    """457. szabály: a végjátékban tudjuk, kit kell terhelni.
+
+    Csak akkor, ha MI bírjuk a hajrát — különben a tanács nem a mi
+    fegyverünk, hanem üres jótanács.
+    """
+    from handball.pipeline.scouting import ScoutingReport, matchup_plan
+
+    opp = ScoutingReport(team="away", team_name="B", ptf_clutch={"8": 2})
+    eros = ScoutingReport(team="home", team_name="A", clutch_matches=3,
+                          clutch_goals_for=9, clutch_goals_against=6)
+    assert any("#8" in p for p in matchup_plan(eros, opp))
+
+    gyenge = ScoutingReport(team="home", team_name="A", clutch_matches=3,
+                            clutch_goals_for=4, clutch_goals_against=9)
+    assert not any("#8" in p for p in matchup_plan(gyenge, opp))
+
+
 def test_a_szezon_fokusz_meccsenkent_egyszer_szamol(monkeypatch):
     """A szezon-szintű összegzés ne futtassa újra a réteget mezszámonként.
 
