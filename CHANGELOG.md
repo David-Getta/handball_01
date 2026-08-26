@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **A Keret-lap megmutatja, kivel van dolga az edzőnek** (felület): a
+  tábla eddig azt mutatta, ki mit teljesített — az edző viszont azért
+  nézi végig a keretet, hogy eldöntse, kivel kell foglalkoznia. Az új
+  oszlop a gyakorolnivalók számát hozza az egyéni edzés-tervből (egy
+  kérés az egész keretre); a részletes lista a játékos görbéjén van.
+
 - **Az egyéni edzés-fókusz védekezést is ad** (motor): a réteg hét
   forrásból dolgozik — bekerült az **egy az egy elleni védekezés** (a
   hozzá rendelhető kapott gólok mekkora része esett nála). E nélkül a

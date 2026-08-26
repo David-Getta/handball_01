@@ -1917,3 +1917,24 @@ def test_a_kepernyo_nem_mond_kevesebbet_a_sajat_nyomtatvanyanal():
     # A képernyő és a nyomtatott lap KÖZÖS számolásból él.
     assert app.count("_team_player_plan(") >= 2, (
         "a képernyő és a nyomtatott lap külön számolna")
+
+
+def test_a_keret_lap_mutatja_kivel_van_dolga_az_edzonek():
+    """A keret-lap ne csak azt mutassa, ki mit teljesített.
+
+    Az edző a keretet azért nézi végig, hogy eldöntse, kivel kell
+    foglalkoznia — a gyakorolnivalók száma pont ezt mondja meg. Egy
+    kérés az egész keretre (a részletes lista a játékos görbéjén van).
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    keret = (lib / "ui" / "roster_screen.dart").read_text(encoding="utf-8")
+    assert "fetchTeamPlayerPlan" in keret, (
+        "a keret-lap nem kéri le az egyéni tervet")
+    assert "_focusCount" in keret
+    # EGY kérés az egész keretre — nem mezszámonként.
+    assert keret.count("fetchTeamPlayerPlan") == 1

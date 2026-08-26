@@ -55,6 +55,10 @@ class _RosterScreenState extends State<RosterScreen> {
   String? _team;
   List<Map<String, dynamic>> _players = [];
   String _note = "";
+  // Mezszám → hány gyakorlandója van a szezonban (az egyéni
+  // edzés-tervből). A keret-lap így nem csak azt mutatja, ki mit
+  // teljesített, hanem azt is, kivel van dolga az edzőnek.
+  Map<int, int> _focusCount = {};
 
   /// Rendezés: melyik oszlop szerint, és csökkenő-e. A mezszám az
   /// alapértelmezés (a keret-lap "névsora"), az teljesítmény-semleges.
@@ -84,7 +88,10 @@ class _RosterScreenState extends State<RosterScreen> {
         _team = sorted.isNotEmpty ? sorted.first : null;
         _loading = false;
       });
-      if (_team != null) _loadRoster();
+      if (_team != null) {
+        _loadRoster();
+        _loadFocus();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -118,6 +125,30 @@ class _RosterScreenState extends State<RosterScreen> {
         _rowsLoading = false;
         _error = "A keret nem érhető el: ${humanError(e)}";
       });
+    }
+  }
+
+  /// A csapat egyéni edzés-terve — EGY kérés az egész keretre.
+  ///
+  /// Külön hívás: minden meccset átnéz, a keret-tábla pedig nélküle is
+  /// teljes. Hibánál csendben elmarad (a szám-oszlopok érvényesek
+  /// maradnak).
+  Future<void> _loadFocus() async {
+    final team = _team;
+    if (team == null) return;
+    setState(() => _focusCount = {});
+    try {
+      final terv = await _api.fetchTeamPlayerPlan(team);
+      if (!mounted) return;
+      final map = <int, int>{};
+      for (final p in terv) {
+        final j = (p["jersey"] as num?)?.toInt();
+        final n = ((p["items"] as List?) ?? const []).length;
+        if (j != null && n > 0) map[j] = n;
+      }
+      setState(() => _focusCount = map);
+    } catch (_) {
+      // a keret enélkül is teljes
     }
   }
 
@@ -296,6 +327,7 @@ class _RosterScreenState extends State<RosterScreen> {
             : (v) {
                 setState(() => _team = v);
                 _loadRoster();
+                _loadFocus();
               },
       ),
     ]);
@@ -357,6 +389,15 @@ class _RosterScreenState extends State<RosterScreen> {
         head("name", "NÉV", flex: 4),
         for (final (key, label) in kRosterColumns)
           head(key, label.toUpperCase()),
+        SizedBox(
+          width: 34,
+          child: Tooltip(
+            message: "Gyakorolnivaló az egyéni edzés-tervből",
+            child: Text("EDZ",
+                textAlign: TextAlign.right,
+                style: AppText.sectionLabel),
+          ),
+        ),
       ]),
     );
   }
@@ -427,6 +468,26 @@ class _RosterScreenState extends State<RosterScreen> {
             ),
             for (final (key, _) in kRosterColumns)
               _cell("${(p[key] as num?)?.toInt() ?? 0}"),
+            // Gyakorolnivaló: hány tétel áll a nevén az egyéni
+            // edzés-tervben. A sorra koppintva a görbéjén ott a
+            // részletes "Mit gyakorolj".
+            SizedBox(
+              width: 34,
+              // Üres cella, ha nincs gyakorolnivaló — táblázatban ez a
+              // helyes "semmi": a sor többi száma hordozza a jelentést.
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if ((_focusCount[jersey] ?? 0) > 0) ...[
+                      const Icon(Icons.fitness_center,
+                          size: 13, color: AppColors.gold),
+                      const SizedBox(width: 3),
+                      Text("${_focusCount[jersey]}",
+                          style: AppText.value.copyWith(
+                              fontSize: 12, color: AppColors.gold)),
+                    ],
+                  ]),
+            ),
           ]),
         ),
       ),

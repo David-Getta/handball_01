@@ -96,7 +96,7 @@ macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
   (vágás/totálkép-szűrő, pályavonal-felismerés), több-nézetes fúzió
   (`POST /matches/fuse`) és lidar-finomítás — részletek a
   [`docs/BROADCAST_AND_SENSORS.md`](docs/BROADCAST_AND_SENSORS.md)-ben.
-- **Minőség**: 2027 automata teszt; pontosság-validáció kézi eseménylista
+- **Minőség**: 2028 automata teszt; pontosság-validáció kézi eseménylista
   ellen (API + parancssori eszköz); réteg-megbízhatósági önjelentés
   (mihez van elég minta az adott meccsen).
 
