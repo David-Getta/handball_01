@@ -3,7 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.67 óta)
+## v0.1.68 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: a JÁTÉKOS kiadása. Eddig minden elemzés a csapatról
+> szólt; az 503. réteg emberre bontja a hét feladatait — nem "a csapat
+> rosszul fejez be", hanem "neked ez a kettő". Ott van a képernyőn, az
+> edzői összefoglalóban és a nyomtatott jelentésen is, mert az egyéni
+> beszélgetés a papírból indul.
 
 - **Az egyéni edzés-fókusz a nyomtatott jelentésben is** (felület): a
   papír az, amit az edző a kezébe vesz a hét első edzésén — az egyéni
