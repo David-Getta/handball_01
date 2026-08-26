@@ -631,8 +631,10 @@ class _MatchScreenState extends State<MatchScreen> {
                 _clearCorrections();
               } else {
                 // A jelenlegi képkockára veszünk fel gólt — az edző
-                // épp azt a pillanatot nézi.
-                _correct("add", _frameIndex, "goal", team: v);
+                // épp azt a pillanatot nézi —, és ha ki van jelölve
+                // játékos, ő lesz a lövő.
+                _correct("add", _frameIndex, "goal",
+                    team: v, playerId: _selectedTrack);
               }
             },
             itemBuilder: (_) => [
@@ -641,14 +643,20 @@ class _MatchScreenState extends State<MatchScreen> {
                   child: ListTile(
                       leading: const Icon(Icons.add, size: 17),
                       title: Text("Hiányzó gól: ${match.meta.homeTeam}"),
-                      subtitle: const Text("a jelenlegi pillanatra"),
+                      subtitle: Text(_selectedTrack == null
+                          ? "a jelenlegi pillanatra"
+                          : "a jelenlegi pillanatra · lövő: "
+                              "${_playerShort(match, _selectedTrack!)}"),
                       dense: true)),
               PopupMenuItem(
                   value: "away",
                   child: ListTile(
                       leading: const Icon(Icons.add, size: 17),
                       title: Text("Hiányzó gól: ${match.meta.awayTeam}"),
-                      subtitle: const Text("a jelenlegi pillanatra"),
+                      subtitle: Text(_selectedTrack == null
+                          ? "a jelenlegi pillanatra"
+                          : "a jelenlegi pillanatra · lövő: "
+                              "${_playerShort(match, _selectedTrack!)}"),
                       dense: true)),
               if (_overrides.isNotEmpty)
                 PopupMenuItem(
@@ -1336,7 +1344,7 @@ class _MatchScreenState extends State<MatchScreen> {
   /// — a fél nézet frissítése ellentmondó képet adna, ami rosszabb,
   /// mint a másodperces várakozás.
   Future<void> _correct(String op, int t, String type,
-      {String? team}) async {
+      {String? team, int? playerId}) async {
     if (_correcting) return;
     setState(() => _correcting = true);
     try {
@@ -1347,6 +1355,10 @@ class _MatchScreenState extends State<MatchScreen> {
           "t": t,
           "type": type,
           if (team != null) "team": team,
+          // A LÖVŐ: ha ki van jelölve játékos a pályán, a kézzel
+          // felvett gól hozzá tartozik — enélkül a gól ott lenne az
+          // eredményben, de a góllövő-listákból kimaradna.
+          if (playerId != null) "player_id": playerId,
         },
       ];
       await _api.saveEventOverrides(widget.matchId, uj);

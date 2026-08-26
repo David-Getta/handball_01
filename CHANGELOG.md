@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **A kézzel felvett gólnak lehet LÖVŐJE** (motor + felület): eddig a
+  javítás a gólt felvette az eredménybe, de a góllövő-listákból
+  kimaradt — pedig az edző pont azt a gólt vette fel, amit a
+  felismerés kihagyott, és pont annak a játékosnak nem számított. Ha
+  ki van jelölve játékos a pályán, ő lesz a lövő; a menü meg is
+  mondja, kiről van szó. Lövő nélkül is érvényes a javítás: nem
+  mindig tudjuk, ki volt.
+
 - **A meccsterv stílus-kártyája olvasható lett** (felület): a 0..1
   nyers szám nem tanács — csak az érti, aki a képletet ismeri.
   Mostantól százalék áll ott, és minden tengely alatt egy mondat

@@ -2016,3 +2016,24 @@ def test_a_stilus_tengelyek_olvashatoak():
     hianyzo = motor - kliens
     assert not hianyzo, (
         f"a stílus-tengelyekhez nincs magyarázat a kliensen: {hianyzo}")
+
+
+def test_a_kezi_golnak_lehet_lovoje_a_feluleten():
+    """A kézzel felvett gól a kijelölt játékoshoz tartozzon.
+
+    Enélkül a gól ott van az eredményben, de a góllövő-listákból
+    kimarad — az edző pont azt a gólt vette fel, amit a felismerés
+    kihagyott, és pont annak a játékosnak nem számítana.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "playerId: _selectedTrack" in meccs, (
+        "a kézi gól nem a kijelölt játékoshoz kerül")
+    # A menü meg is mondja, KI lesz a lövő — különben az edző nem
+    # tudja, hogy a kijelölés számít.
+    assert "lövő: " in meccs

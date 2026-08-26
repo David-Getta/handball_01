@@ -1721,6 +1721,15 @@ def create_app():
             if op == "add":
                 rec["team"] = ("home" if str(j.get("team")) == "home"
                                else "away")
+                # A LÖVŐ opcionális: ha az edző kijelölt egy játékost,
+                # a kézzel felvett gól hozzá tartozik — enélkül a gól
+                # ott van az eredményben, de a lövő-listákból (góllövő,
+                # toplista) kimaradna.
+                try:
+                    if j.get("player_id") is not None:
+                        rec["player_id"] = int(j["player_id"])
+                except (TypeError, ValueError):
+                    pass
             tisztitott.append(rec)
         _overrides_path(match_id).write_text(
             json.dumps({"overrides": tisztitott}, ensure_ascii=False,

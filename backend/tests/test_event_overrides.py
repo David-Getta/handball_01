@@ -176,6 +176,32 @@ def test_a_javitas_tullel_egy_ujraindulast():
     assert ujra.get(f"/matches/{mid}/event-overrides").json()["overrides"]
 
 
+def test_a_kezi_gol_lovoje_is_megadhato():
+    """A kézzel felvett gólnak lehet LÖVŐJE.
+
+    Enélkül a gól ott lenne az eredményben, de a lövő-listákból
+    (góllövő, szezon-toplista) kimaradna — az edző pont azt a gólt
+    vette fel, amit a felismerés kihagyott, és pont annak a
+    játékosnak nem számítana.
+    """
+    client, mid = _client()
+    r = client.post(f"/matches/{mid}/event-overrides", json={"overrides": [
+        {"op": "add", "t": 3, "type": "goal", "team": "home",
+         "player_id": 12}]})
+    assert r.json()["overrides"][0]["player_id"] == 12
+
+    m = _shot_match()
+    m.meta.event_overrides = [{"op": "add", "t": 3, "type": "goal",
+                               "team": "home", "player_id": 12}]
+    kezi = [e for e in detect_shots(m) if (e.detail or {}).get("manual")]
+    assert kezi and kezi[0].player_id == 12
+
+    # Lövő NÉLKÜL is érvényes: nem mindig tudjuk, ki volt.
+    r2 = client.post(f"/matches/{mid}/event-overrides", json={"overrides": [
+        {"op": "add", "t": 3, "type": "goal", "team": "home"}]})
+    assert "player_id" not in r2.json()["overrides"][0]
+
+
 def test_a_vegpont_kiszuri_a_szemetet():
     """Ismeretlen művelet és típus nem kerül a tárolt listába — egy
     elgépelt kulcs némán semmit sem csinálna, de ott ülne a fájlban."""
