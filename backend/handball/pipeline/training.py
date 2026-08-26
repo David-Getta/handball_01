@@ -1378,6 +1378,35 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 476) Egyéni fókusz a csapat-tervben: ha ugyanaz a terület TÖBB
+    # emberünknél jön elő, az már nem egyéni ügy, hanem edzés-téma.
+    try:
+        # Ugyanebben a modulban van — a hatókör újra-belépő, tehát a
+        # mérések nem futnak le még egyszer.
+        p476 = player_training_focus(match, config)
+        for side in ("home", "away"):
+            teruletek: dict = {}
+            for p_ in (p476.get(side) or {}).get("players") or []:
+                for it in p_.get("items") or []:
+                    teruletek.setdefault(it["title"], []).append(
+                        p_.get("jersey"))
+            for cim, kik in sorted(teruletek.items(),
+                                   key=lambda kv: -len(kv[1])):
+                if len(kik) < 2:
+                    continue
+                nevek = ", ".join(
+                    f"#{j}" if j is not None else "?" for j in kik[:4])
+                add(side, "csoportos", f"Közös gyengeség: {cim.lower()}",
+                    f"ugyanaz a hiba {len(kik)} emberünknél jött elő "
+                    f"({nevek}) — ez már nem egyéni ügy",
+                    "csoportos blokk a hét elején: ugyanaz a gyakorlat "
+                    "az érintetteknek EGYÜTT, a többieknek a saját "
+                    "fókuszuk — így a blokk nem viszi el a teljes "
+                    "edzést, de a hiba egyszerre javul")
+                break  # a legtöbb embert érintő terület elég
+    except Exception:
+        pass
+
     # 475) Hátrébb kerülő támadás: ha a SAJÁT felállásunk a 2. félidőre
     # eltávolodik a kaputól, a hajrában csak a nehéz átlövés marad.
     try:

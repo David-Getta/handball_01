@@ -1698,6 +1698,17 @@ class ScoutingReport:
     # pontosan összegződnek (átlag = ccq_sum_xga / ccq_shots).
     ccq_shots: int = 0
     ccq_sum_xga: float = 0.0
+    # Egyéni gyengeségeik (az egyéni edzés-fókuszból): MEZSZÁM →
+    # hány meccsen jött elő ugyanaz. Darabszám-alapú tárolás, tehát
+    # meccsek közt pontosan összegződik; a mezszám nélkül játszókról
+    # nem tudunk sort adni (meccsek közt csak a szám köti össze őket).
+    #
+    # Miért éri meg: az általános kulcsok a CSAPATRÓL szólnak, a
+    # meccsterv viszont attól lesz konkrét, hogy KIRE mit kell
+    # csinálni — "a 7-esük nyomás alatt elveszti a labdát" egy
+    # kettőzés-utasítás, nem egy megfigyelés.
+    ptf_press: dict = field(default_factory=dict)
+    ptf_clutch: dict = field(default_factory=dict)
     # Félidő-zárásuk: a félidők utolsó percében indult támadásaik és
     # a gólig jutók száma — darabszámok, meccsek közt pontosan
     # összegződnek (arány = clo_goals / clo_attacks).
@@ -7132,6 +7143,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "megérkezik, és a keresztpassz nyugodtan vállalható.")
 
     # Kapott helyzetek minősége: befelé vagy kívülről támadjunk.
+    # Egyéni gyengeségeik: ez a legkonkrétabb utasítás, amit egy
+    # felderítés adhat — nem "figyeljetek a labdabiztonságukra", hanem
+    # "a 7-esükre kettőzz".
+    _ptf_p = sorted(rep.ptf_press.items(), key=lambda kv: -kv[1])
+    if _ptf_p and _ptf_p[0][1] >= 1:
+        _mez, _db = _ptf_p[0]
+        keys.append(
+            f"A #{_mez} nyomás alatt elveszti a labdát "
+            f"({_db} meccsen jött elő) — RÁ kettőzzetek: az ő "
+            "szorítása nem kockázat, hanem labdaszerzés.")
+    _ptf_c = sorted(rep.ptf_clutch.items(), key=lambda kv: -kv[1])
+    if _ptf_c and _ptf_c[0][1] >= 1:
+        _mezc, _dbc = _ptf_c[0]
+        keys.append(
+            f"A #{_mezc} kezén szakad el a labda a HAJRÁBAN "
+            f"({_dbc} meccsen) — a döntő szakaszban rá kell terhelni, "
+            "a védekezésben őt kell döntés-kényszerbe hozni.")
+
     if rep.ccq_shots >= 8:
         _ccq_avg = rep.ccq_sum_xga / rep.ccq_shots
         if _ccq_avg >= 0.35:
@@ -11923,6 +11952,22 @@ def _scout_team_cached(match: Match, team: Team,
         ccqrec = _ccq(match, config)[team.value]
         rep.ccq_shots = ccqrec["shots"]
         rep.ccq_sum_xga = (ccqrec["avg_xga"] or 0.0) * ccqrec["shots"]
+        # Egyéni gyengeségeik: a KETTŐ legkonkrétabb (nyomás alatti
+        # kiadás, hajrá-döntés) mezszám szerint. Egy meccs egy szavazat
+        # — a meccsek közti összegzés mondja meg, mi a visszatérő.
+        from .training import player_training_focus as _ptf
+        ptfrec = (_ptf(match, config) or {}).get(team.value) or {}
+        for _p in ptfrec.get("players") or []:
+            _j = _p.get("jersey")
+            if _j is None:
+                continue
+            for _it in _p.get("items") or []:
+                if _it.get("title") == "Kiadás nyomás alatt":
+                    rep.ptf_press[str(_j)] = rep.ptf_press.get(
+                        str(_j), 0) + 1
+                elif _it.get("title") == "Döntés a hajrában":
+                    rep.ptf_clutch[str(_j)] = rep.ptf_clutch.get(
+                        str(_j), 0) + 1
         from .momentum import closing_attacks as _clo
         clorec = _clo(match, config)[team.value]
         rep.clo_attacks = clorec["attacks"]
@@ -13736,6 +13781,22 @@ def style_distance(own: "ScoutingReport",
     return out
 
 
+def _merge_counts(reports: list, mezo: str) -> dict:
+    """{kulcs: darab} szótárak összeadása több jelentésből.
+
+    A jelentés-mezők darabszám-alapúak, hogy meccsek közt PONTOSAN
+    összegződjenek; ez a segéd ugyanezt teszi a szótár-alakúakkal.
+    """
+    ki: dict = {}
+    for r in reports:
+        for k, v in (getattr(r, mezo, None) or {}).items():
+            try:
+                ki[k] = ki.get(k, 0) + int(v)
+            except (TypeError, ValueError):
+                continue
+    return ki
+
+
 def matchup_plan(own: "ScoutingReport",
                  opp: "ScoutingReport") -> list[str]:
     """Meccsterv-illesztés: a SAJÁT és az ELLENFÉL profiljának
@@ -14345,6 +14406,18 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 456) Az ő NYOMÁS-ÉRZÉKENY emberük × a ti labdaszerző
+    # védekezésetek: a kettőzésnek célpontja van, nem iránya.
+    _p456 = sorted(opp.ptf_press.items(), key=lambda kv: -kv[1])
+    if _p456 and own.trans_steals >= 5:
+        _p456_mez, _p456_db = _p456[0]
+        plan.append(
+            f"A #{_p456_mez} nyomás alatt elveszti a labdát "
+            f"({_p456_db} meccsen jött elő), ti pedig jó labdaszerzők "
+            f"vagytok ({own.trans_steals} szerzés) — a kettőzést RÁ "
+            "időzítsétek: nála a szorítás nem kockázat, hanem "
+            "labdaszerzés, és onnan indul a kontrátok.")
 
     from .tactics import ATV_MIN_ATTACKS as _A449
     from .tactics import ATV_ONE_TEMPO_PCT as _A449P
@@ -22539,6 +22612,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         stt_int=sum(r.stt_int for r in reports),
         ccq_shots=sum(r.ccq_shots for r in reports),
         ccq_sum_xga=sum(r.ccq_sum_xga for r in reports),
+        # Mezszámonként ÖSSZEADJUK a meccs-szavazatokat: ami több
+        # meccsen visszatér, az nem napi forma.
+        ptf_press=_merge_counts(reports, "ptf_press"),
+        ptf_clutch=_merge_counts(reports, "ptf_clutch"),
         clo_attacks=sum(r.clo_attacks for r in reports),
         clo_goals=sum(r.clo_goals for r in reports),
         fbc_breaks=sum(r.fbc_breaks for r in reports),

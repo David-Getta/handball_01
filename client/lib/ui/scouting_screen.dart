@@ -2490,6 +2490,45 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "($topN elcsípett indítás) · ne az ő térfelére nyisson a kapus";
   }
 
+  // Nyomás-érzékeny emberük: kire kell kettőzni. A jelentés-mező
+  // mezszám → hány meccsen jött elő ugyanaz (a backendben az egyéni
+  // edzés-fókuszból gyűlik).
+  String? _pressTarget(Map<String, dynamic> r) {
+    final m = (r["ptf_press"] as Map?)?.cast<String, dynamic>();
+    if (m == null || m.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    m.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 1) return null;
+    return "a #$top nyomás alatt elveszti a labdát ($topN meccsen "
+        "jött elő) · RÁ kettőzzetek — nála a szorítás nem kockázat, "
+        "hanem labdaszerzés";
+  }
+
+  // Hajrá-hibázójuk: kit kell döntés-kényszerbe hozni a végén.
+  String? _clutchTarget(Map<String, dynamic> r) {
+    final m = (r["ptf_clutch"] as Map?)?.cast<String, dynamic>();
+    if (m == null || m.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    m.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 1) return null;
+    return "a #$top kezén szakad el a labda a hajrában ($topN "
+        "meccsen) · a döntő szakaszban őt kell döntés-kényszerbe hozni";
+  }
+
   // 7a6 eladás: mennyibe kerül a lehozott kapus melletti hiba (2+
   // eladás, 50%+ büntetés — a backenddel azonos küszöbök:
   // ENT_MIN_TURNOVERS, ENT_PUNISH_PCT).
@@ -11748,6 +11787,10 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fáradt-fal ember", _tiredConcederPlayer(r)!],
       if (_outletHunter(r) != null)
         ["Indítás-vadász ember", _outletHunter(r)!],
+      if (_pressTarget(r) != null)
+        ["Kettőzés-célpont", _pressTarget(r)!],
+      if (_clutchTarget(r) != null)
+        ["Hajrá-célpont", _clutchTarget(r)!],
       if (_emptyNetTurnovers(r) != null)
         ["7a6 eladás ára", _emptyNetTurnovers(r)!],
       if (_assistedScorer(r) != null)

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.69 óta)
 
+- **Az egyéni gyengeség átmegy a MECCSTERVRE** (motor + felület): az
+  általános felderítő-kulcsok a CSAPATRÓL szólnak — a meccsterv viszont
+  attól lesz konkrét, hogy KIRE mit kell csinálni. A jelentés
+  mostantól viszi, hogy melyik MEZSZÁM veszti el a labdát nyomás
+  alatt, és kinek a kezén szakad el a hajrában (mezszámonkénti
+  darabszám, tehát meccsek közt pontosan összegződik: ami több
+  meccsen visszatér, az nem napi forma). Ebből lett két új edzői
+  kulcs, a **456. meccsterv-szabály** (az ő nyomás-érzékeny emberük ×
+  a ti labdaszerző védekezésetek — a kettőzésnek célpontja van, nem
+  iránya) és két kliens-csempe (Kettőzés-célpont, Hajrá-célpont).
+- **476. edzés-szabály: közös gyengeség** (motor): ha ugyanaz a hiba
+  KÉT vagy több emberünknél jön elő, az már nem egyéni ügy, hanem
+  csoportos edzés-blokk — a szabály meg is nevezi, kiknek.
+
 - **Az egyéni edzés-fókusz két új forrása** (motor): a réteg négy
   helyett hat mérésből dolgozik — bekerült a **hosszú labda döntése**
   (kinek az indításai foghatók el) és a **döntés a hajrában** (kinél

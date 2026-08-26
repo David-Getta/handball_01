@@ -384,3 +384,46 @@ def test_edzesterv_ures_eredmenyt_is_kimond():
     html = training_plan_html("Sport SE", 4, [], [])
     assert "Nincs olyan gyengeség" in html
     assert "Egyéni feladatok" not in html
+
+
+# ---- Felderítés-oldal: KIRE mit csináljunk --------------------------
+
+
+def test_a_felderites_atviszi_az_egyeni_gyengeseget():
+    """Az általános kulcsok a CSAPATRÓL szólnak.
+
+    A meccsterv viszont attól lesz konkrét, hogy KIRE mit kell
+    csinálni: "a 7-esük nyomás alatt elveszti a labdát" egy
+    kettőzés-utasítás, nem megfigyelés. A jelentés-mező darabszám
+    alapú, hogy meccsek közt pontosan összegződjön.
+    """
+    from handball.pipeline.scouting import (ScoutingReport, _coach_keys,
+                                            combine_reports)
+
+    rep = ScoutingReport(team="home", team_name="A",
+                         ptf_press={"7": 2}, ptf_clutch={"9": 1})
+    _s, _w, kulcsok = _coach_keys(rep)
+    assert any("#7" in k and "kettőz" in k for k in kulcsok), kulcsok
+    assert any("#9" in k and "HAJRÁ" in k for k in kulcsok), kulcsok
+
+    # Meccsek közt ÖSSZEADÓDIK — mezszámonként.
+    a = ScoutingReport(team="home", team_name="A", ptf_press={"7": 2})
+    b = ScoutingReport(team="home", team_name="A",
+                       ptf_press={"7": 1, "3": 1})
+    egy = combine_reports([a, b])
+    assert egy.ptf_press == {"7": 3, "3": 1}
+
+
+def test_a_meccsterv_ranevez_a_nyomas_erzekeny_emberre():
+    """456. szabály: a kettőzésnek CÉLPONTJA van, nem iránya."""
+    from handball.pipeline.scouting import ScoutingReport, matchup_plan
+
+    opp = ScoutingReport(team="away", team_name="B", ptf_press={"7": 2})
+    own = ScoutingReport(team="home", team_name="A", trans_steals=6)
+    terv = matchup_plan(own, opp)
+    assert any("#7" in p and "kettőz" in p for p in terv), terv
+
+    # Ha MI nem szerzünk labdát, a tanács nem a mi fegyverünk —
+    # ilyenkor a szabály hallgat.
+    gyenge = ScoutingReport(team="home", team_name="A", trans_steals=1)
+    assert not any("#7" in p for p in matchup_plan(gyenge, opp))
