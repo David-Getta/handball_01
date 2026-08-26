@@ -3000,7 +3000,12 @@ def create_app():
         from ..pipeline.report_html import player_season_html
         return HTMLResponse(content=player_season_html(
             team, jersey, data["points"], data.get("name"),
-            _season_player_focus(team, jersey)))
+            _season_player_focus(team, jersey),
+            # A lapot a játékos TESZI EL: ha a képernyő megmondja, hogy
+            # javul, a nyomtatvány pedig nem, a papír kevesebbet ér,
+            # mint a program.
+            trend=data.get("trend"),
+            trend_window=data.get("trend_window", TREND_WINDOW)))
 
     # Egyéni edzés-fókusz gyorsítótár (match_id → (kulcs, eredmény)).
     # A szezon-szintű összegzés MINDEN meccsre lefuttatja a réteget, és

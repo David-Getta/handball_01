@@ -97,3 +97,57 @@ def test_a_hiányzo_ertekek_nem_szamitanak_nullanak():
     ertekek = [50.0, None, 52.0, 51.0, 55.0, None, 58.0, 56.0]
     ki = _irany(_sor(ertekek))
     assert ki["shot_pct"]["before"] == pytest.approx(51.0, abs=0.01)
+# ---- A NYOMTATVÁNY sem mondhat kevesebbet ----------------------------
+
+
+def test_a_szezon_lap_is_viszi_a_forma_iranyt():
+    """A lapot a játékos TESZI EL.
+
+    Ha a képernyő megmondja, hogy javul, a nyomtatvány pedig nem, a
+    papír kevesebbet ér, mint a program — és pont az marad ki, amiért
+    elteszi.
+    """
+    from handball.pipeline.report_html import player_season_html
+
+    pontok = [{"match_id": f"m{i}", "date": f"2026-01-{i + 1:02d}",
+               "opponent": "X", "goals": 3, "shots": 6, "minutes": 40.0,
+               "distance_m": 4000.0, "top_speed_ms": 7.0,
+               "sprint_count": 5}
+              for i in range(6)]
+    trend = {"shot_pct": {"recent": 55.0, "before": 31.0,
+                          "change_pct": 77.4, "verdict": "javul"}}
+    html = player_season_html("A", 7, pontok, "Kovács", None,
+                              trend=trend, trend_window=3)
+    assert "Javulok vagy romlok" in html
+    assert "javul" in html
+    assert "utolsó 3 meccs" in html
+
+
+def test_a_nyomtatvany_az_iteles_nelkuli_esetet_is_kimondja():
+    """Ítélet nélkül a SZÁMOK kimennek, de a lap kiírja, hogy zaj —
+    a néma szám ítéletnek látszana a papíron is."""
+    from handball.pipeline.report_html import player_season_html
+
+    pontok = [{"match_id": "m1", "date": "2026-01-01", "opponent": "X",
+               "goals": 3, "shots": 6, "minutes": 40.0,
+               "distance_m": 4000.0, "top_speed_ms": 7.0,
+               "sprint_count": 5}]
+    html = player_season_html("A", 7, pontok, None, None,
+                              trend={"goals": {"recent": 3.0,
+                                               "before": 2.9,
+                                               "change_pct": 3.4,
+                                               "verdict": None}})
+    assert "nem irány, zaj" in html
+
+
+def test_trend_nelkul_a_lap_valtozatlan():
+    """Visszafelé kompatibilis: trend nélkül nincs szakasz — nem üres
+    címsor, hanem semmi."""
+    from handball.pipeline.report_html import player_season_html
+
+    pontok = [{"match_id": "m1", "date": "2026-01-01", "opponent": "X",
+               "goals": 1, "shots": 2, "minutes": 30.0,
+               "distance_m": 3000.0, "top_speed_ms": 7.0,
+               "sprint_count": 3}]
+    html = player_season_html("A", 7, pontok)
+    assert "Javulok vagy romlok" not in html

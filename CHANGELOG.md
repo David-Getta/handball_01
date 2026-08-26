@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.74 óta)
+
+- **A "Javulok vagy romlok" a nyomtatott szezon-lapon is** (motor):
+  a lapot a játékos TESZI EL — ha a képernyő megmondja, hogy javul, a
+  nyomtatvány pedig nem, akkor a papír kevesebbet ér, mint a program,
+  és pont az marad ki, amiért elteszi. Az ítélet nélküli esetet a lap
+  is kimondja ("nem irány, zaj"), és a viszonyítási ablakot is leírja.
+  Forma-irány nélkül a lap változatlan — nem üres címsor, hanem semmi.
+
 ## v0.1.74 — kiadva (2026-08-26)
 
 > Kiadás-jegyzet: EGY fájl a beszélgetéshez, és egy mondat a görbe

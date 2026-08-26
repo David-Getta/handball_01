@@ -3970,13 +3970,21 @@ időszakok mutatói kimaradnak, hogy ne látsszanak hamis változásnak.
 
 def player_season_html(team: str, jersey: int, points: list[dict],
                        name: str | None = None,
-                       focus: list[dict] | None = None) -> str:
+                       focus: list[dict] | None = None,
+                       trend: dict | None = None,
+                       trend_window: int = 3) -> str:
     """Szezon játékos-lap: egy játékos meccsről meccsre, nyomtatható
     HTML-ben — a /players/trend pontjaiból (összesítő + meccs-tábla).
 
     A `name` a mezszámhoz felvitt játékos-név (ha van): a lapot a
     játékos kapja a kezébe, és a saját NEVÉT keresi rajta, nem a
     számát. Név nélkül a szám marad a cím — visszafelé kompatibilis.
+
+    A `trend` a forma-irány (mutatónként recent/before/change_pct/
+    verdict) és a `trend_window` az összevetett meccsek száma. A lapot
+    a játékos TESZI EL — ha a képernyő megmondja, hogy javul, a
+    nyomtatvány pedig nem, akkor a papír kevesebbet ér, mint a program,
+    és pont az marad ki, amiért elteszi.
     """
     # A címben a szám ELŐL marad (a mezszám az azonosító, a név a
     # kényelem): "#7 Kovács" — így a névtelen és a nevesített lap
@@ -3997,6 +4005,34 @@ def player_season_html(team: str, jersey: int, points: list[dict],
                       '<p class="note">A meccsek mért adataiból — '
                       'ami több meccsen visszatér, az nem napi forma.'
                       '</p>')
+    # Forma-irány a lapra. Ítélet NÉLKÜL is kiírjuk a számokat, de
+    # akkor kimondjuk, hogy az zaj — a néma szám ítéletnek látszana.
+    trend_html = ""
+    _TREND_NEV = {"shot_pct": "gólarány",
+                  "xg_diff": "befejezés a helyzetekhez képest",
+                  "goals": "gól"}
+    sorok = [(nev, (trend or {}).get(kulcs))
+             for kulcs, nev in _TREND_NEV.items()
+             if isinstance((trend or {}).get(kulcs), dict)]
+    if sorok:
+        lis = []
+        for nev, rec in sorok:
+            valt = rec.get("change_pct", 0.0)
+            iteles = rec.get("verdict")
+            vege = (f"<b>{escape(str(iteles))}</b> ({valt:+.0f}%)"
+                    if iteles else f"{valt:+.0f}% — nem irány, zaj")
+            lis.append(
+                f"<li>{escape(nev)}: {rec.get('before')} → "
+                f"{rec.get('recent')} — {vege}</li>")
+        trend_html = (
+            "<h2>Javulok vagy romlok</h2><ul>" + "".join(lis) + "</ul>"
+            f'<p class="note">Az utolsó {trend_window} meccs az azt '
+            f'megelőző {trend_window}-hoz mérve. Kevés meccsből és a '
+            "tíz százalék alatti mozgásból szándékosan nem mondunk "
+            "irányt: egy jó meccs bármikor jön. A futómunka kimarad — "
+            "ott a több nem jobb, csak több, és a poszt dönti el, "
+            "mennyi kell belőle.</p>")
+
     n = len(points)
     goals = sum(p_.get("goals", 0) for p_ in points)
     shots = sum(p_.get("shots", 0) for p_ in points)
@@ -4136,6 +4172,7 @@ def player_season_html(team: str, jersey: int, points: list[dict],
 </header>
 <h2>Szezon-összesítő</h2>
 <div class="metrics">{"".join(totals)}</div>
+{trend_html}
 {focus_html}
 <h2>Meccsről meccsre</h2>
 {table}
