@@ -1815,3 +1815,37 @@ def test_a_lenyeg_kiemelt_dobozt_kap_a_nyomtatott_lapon():
     # A doboz a lényeg-szakaszt tartalmazza, nem valami mást.
     i = html.index('<div class="leadbox">')
     assert "A lényeg" in html[i:i + 400]
+
+
+def test_report_contains_player_training_focus():
+    """Az EGYÉNI edzés-fókusz a nyomtatott jelentésben is ott van.
+
+    A nyomtatott lap az, amit az edző a kezébe vesz a hét első
+    edzésén — az egyéni beszélgetés ebből indul, nem a
+    csapat-listából. Ha a réteg csak a képernyőn él, a papíron
+    hiányzik.
+    """
+    import math
+
+    from handball.models.tracking import (
+        Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    # Egy játékos, aki a 2. félidőre láthatóan lelassul — ebből a
+    # kondíció-szabály tételt ad.
+    fps = 25.0
+    n = int(4 * 60 * fps)
+    frames = []
+    for t_ in range(n):
+        gyors = t_ < n // 2
+        x = 15.0 + (5.0 if gyors else 0.4) * math.sin(t_ / 20.0)
+        frames.append(Frame(t=t_, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=x, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           jersey_number=9),
+        ], ball=None))
+    m = Match(MatchMeta(match_id="r", home_team="A", away_team="B",
+                        fps=fps), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Egyéni edzés-fókusz" in html, "a papíron nincs egyéni fókusz"
+    assert "#9" in html, "a játékost nem lehet azonosítani a lapon"

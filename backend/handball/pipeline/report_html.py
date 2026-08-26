@@ -3163,6 +3163,38 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass  # a jelentés e blokk nélkül is teljes
 
+    # EGYÉNI edzés-fókusz: kinek mit. A nyomtatott jelentés az, amit az
+    # edző a kezébe vesz a hét első edzésén — az egyéni beszélgetés
+    # ebből indul, nem a csapat-listából.
+    player_training_html = ""
+    try:
+        from .training import player_training_focus
+        ptf = player_training_focus(match)
+        pparts = []
+        for side, name in (("home", home), ("away", away)):
+            sorok = (ptf.get(side) or {}).get("players") or []
+            if not sorok:
+                continue
+            lis = ""
+            for p_ in sorok:
+                ki = (f"#{p_['jersey']}" if p_.get("jersey") is not None
+                      else f"{p_['player_id']}. játékos")
+                temak = "".join(
+                    f"<li>{escape(it['title'])} ({escape(it['area'])}) — "
+                    f"{escape(it['why'])}.<br>"
+                    f"<span class='note'>Gyakorlat: "
+                    f"{escape(it['drill'])}.</span></li>"
+                    for it in p_["items"])
+                lis += f"<li><b>{escape(ki)}</b><ul>{temak}</ul></li>"
+            pparts.append(f"<h3>{escape(name)}</h3><ul>{lis}</ul>")
+        if pparts:
+            player_training_html = (
+                "<h2>Egyéni edzés-fókusz</h2>" + "".join(pparts)
+                + '<p class="note">Emberenként legfeljebb két tétel — a '
+                  'fókusz attól fókusz, hogy kevés.</p>')
+    except Exception:
+        pass  # a jelentés e blokk nélkül is teljes
+
     # A megbízhatóság FIGYELMEZTETÉSE a lap TETEJÉRE. A részletes
     # szakasz a lap alján marad, de egy nyomtatott jelentést fentről
     # lefelé olvasnak: aki a végén tudja meg, hogy az adat gyenge, addig
@@ -3296,6 +3328,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   {team_metrics_html}
 
   {training_html}
+  {player_training_html}
 
   {gk_html}
 

@@ -5,6 +5,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.67 óta)
 
+- **Az egyéni edzés-fókusz a nyomtatott jelentésben is** (felület): a
+  papír az, amit az edző a kezébe vesz a hét első edzésén — az egyéni
+  beszélgetés abból indul, nem a csapat-listából.
 - **Egyéni edzés-fókusz** (új réteg, `player_training_focus`): a
   csapat-szintű fókusz megmondja, mit gyakoroljon a CSAPAT — a játékos
   viszont a saját nevét keresi, és az edző is emberre bontva osztja ki
