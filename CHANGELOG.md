@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.70 óta)
 
+- **A jegyzet-lista a legújabb meccsel kezd** (motor): a hét közbeni
+  munka a legutóbbi meccsből indul; húsz meccs jegyzetei közt a
+  felvételi sorrend semmit nem mondott. Meccsen belül marad az
+  időrend, mert a jegyzetek a meccs menetét követik.
+
 - **A kézzel felvett gólnak lehet LÖVŐJE** (motor + felület): eddig a
   javítás a gólt felvette az eredménybe, de a góllövő-listákból
   kimaradt — pedig az edző pont azt a gólt vette fel, amit a

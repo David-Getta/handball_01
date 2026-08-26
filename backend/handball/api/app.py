@@ -1756,7 +1756,15 @@ def create_app():
         lista órát tudjon mutatni.
         """
         out = []
-        for m in _store.values():
+        # A LEGÚJABB meccs jegyzetei elöl: a hét közbeni munka a
+        # legutóbbi meccsből indul, és húsz meccs jegyzetei közt a
+        # felvételi sorrend semmit nem mond. Meccsen belül marad az
+        # időrend (a jegyzetek a meccs menetét követik).
+        meccsek = sorted(_store.values(),
+                         key=lambda m: ((m.meta.date or ""),
+                                        m.meta.match_id),
+                         reverse=True)
+        for m in meccsek:
             fps = m.meta.fps if m.meta.fps > 0 else 25.0
             jegyzetek = _load_notes(m.meta.match_id)
             jegyzetek.sort(key=lambda n: n.get("frame", 0))

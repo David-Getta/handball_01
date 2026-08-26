@@ -135,3 +135,33 @@ def test_library_notes_ures_ha_nincs_jegyzet():
     tudja kiírni, hogy még nincs mit visszanézni."""
     client, mid = _client_with_match()
     assert client.get("/library/notes").json() == {"notes": []}
+
+
+def test_a_legujabb_meccs_jegyzetei_elol():
+    """A hét közbeni munka a LEGUTÓBBI meccsből indul.
+
+    Húsz meccs jegyzetei közt a felvételi sorrend semmit nem mond;
+    meccsen belül viszont marad az időrend, mert a jegyzetek a meccs
+    menetét követik.
+    """
+    import json
+    from pathlib import Path
+
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
+    matches_dir = Path(_tmp) / "data" / "matches"
+    matches_dir.mkdir(parents=True, exist_ok=True)
+    for old in matches_dir.glob("*"):
+        old.unlink()
+    for mid, datum in (("regi", "2026-01-05"), ("uj", "2026-03-20")):
+        m = simulate_ground_truth(duration_s=3, fps=25.0, seed=1)
+        m.meta.match_id = mid
+        m.meta.date = datum
+        (matches_dir / f"{mid}.json").write_text(
+            json.dumps(m.to_dict()), encoding="utf-8")
+    client = TestClient(create_app())
+    client.post("/matches/regi/notes", json={"frame": 5, "text": "régi"})
+    client.post("/matches/uj/notes", json={"frame": 30, "text": "új-2"})
+    client.post("/matches/uj/notes", json={"frame": 10, "text": "új-1"})
+
+    notes = client.get("/library/notes").json()["notes"]
+    assert [n["text"] for n in notes] == ["új-1", "új-2", "régi"]
