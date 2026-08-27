@@ -33,6 +33,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   összeolvasztaná őket — a jegyzet ettől még ott lenne, csak rossz
   időn. Erre külön őr van.
 
+- **A kiállítások is túlélik az összefűzést** (API): a kiállítás
+  kézzel felvitt adat, és az **emberelőny-rétegek** (emberelőny-hozam,
+  hátrány-támadás, kiállítás-kiharcolás, 6-5 játék) ezen állnak.
+  Összefűzéskor eddig elveszett, ezek a rétegek pedig némán
+  elhallgattak — az edző azt hitte, nincs mit mérni. Az idő
+  másodpercben tolódik (a roster is másodpercben tárol), és az átvétel
+  a SAJÁT végpontunkon megy át, tehát a becslés-újraszámítás pontosan
+  ugyanaz, mint kézi felvitelnél.
+
+  A kapus-hiány jelzése egész meccsre szól, tehát szakaszonként
+  ellentmondhat: csak akkor öröklődik, ha MINDEN szakasz egyetért —
+  ugyanaz az elv, mint a kalibráltságnál (amiről nem tudunk, arról nem
+  állítunk semmit).
+
 - **Az összefűzött meccsből is vágható klip** (motor): a most
   engedélyezett N-szakaszos összefűzésnek volt egy csendes
   következménye — az összefűzött meccsnek nincs EGY videófájlja, ezért

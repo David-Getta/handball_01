@@ -1401,6 +1401,55 @@ def create_app():
         except Exception:
             pass  # a jegyzet-átvétel hibája ne vigye el az összefűzést
 
+        # A KIÁLLÍTÁSOK is kézzel felvitt adat, és az emberelőny-rétegek
+        # (powerplay_*, shorthanded_attack, susp_earner_roles) EZEN
+        # állnak. Az idő a szakasz eltolásával mozog — másodpercben,
+        # mert a roster is másodpercben tárol.
+        try:
+            terkepes = [r for r in parts if r.meta.video_path and r.frames]
+            szegmensek = merged.meta.source_segments or []
+            fps_ = merged.meta.fps if merged.meta.fps > 0 else 25.0
+            kiallitasok: list = []
+            gk_home: list = []
+            gk_away: list = []
+            for resz, sz in zip(terkepes, szegmensek):
+                rp = _roster_path(resz.meta.match_id)
+                if not rp.exists():
+                    continue
+                try:
+                    adat = json.loads(rp.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                nulla_s = sz["t_from"] / fps_
+                for kia in (adat.get("suspensions") or []):
+                    try:
+                        kiallitasok.append({
+                            "team": kia["team"],
+                            "start_s": float(kia["start_s"]) + nulla_s,
+                            "duration_s": float(kia["duration_s"]),
+                        })
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                gk_home.append(bool(adat.get("gk_absent_home", False)))
+                gk_away.append(bool(adat.get("gk_absent_away", False)))
+            if kiallitasok:
+                kiallitasok.sort(key=lambda k: k["start_s"])
+                # A kapus-hiány EGÉSZ meccsre szóló jelzés, tehát
+                # szakaszonként ellentmondhat. Csak akkor állítjuk, ha
+                # MINDEN szakasz egyetért — ugyanaz az elv, mint a
+                # kalibráltságnál: amiről nem tudunk, arról nem
+                # állítunk semmit.
+                torzs = {"suspensions": kiallitasok}
+                if gk_home and all(gk_home):
+                    torzs["gk_absent_home"] = True
+                if gk_away and all(gk_away):
+                    torzs["gk_absent_away"] = True
+                # A SAJÁT végpontunkon át: így a becslés-újraszámítás és
+                # a mentés is pontosan ugyanaz, mint kézi felvitelnél.
+                set_roster(new_id, torzs)
+        except Exception:
+            pass  # a kiállítás-átvétel hibája ne vigye el az összefűzést
+
         return {"match_id": new_id, "num_frames": len(merged.frames),
                 "parts": [p.meta.match_id for p in parts]}
 

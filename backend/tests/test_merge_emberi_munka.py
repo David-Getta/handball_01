@@ -1,5 +1,6 @@
 """
-Tesztek arra, hogy az ÖSSZEFŰZÉS megőrzi az emberi munkát: a jegyzeteket.
+Tesztek arra, hogy az ÖSSZEFŰZÉS megőrzi az EMBERI munkát: a
+jegyzeteket és a kézzel felvitt kiállításokat.
 
 A jegyzet gépelt szöveg — nem újratermelhető adat. Aki hat klip közben
 megjelölt tizenöt pillanatot, majd összefűzte a meccset, eddig mindet
@@ -10,7 +11,7 @@ pillanatra mutatna, és a "koppints a visszanézéshez" rossz helyre
 ugrana — ami rosszabb, mint ha el sem jutna oda.
 
 Futtatás:
-    python -m pytest tests/test_merge_jegyzetek.py
+    python -m pytest tests/test_merge_emberi_munka.py
 """
 
 from __future__ import annotations
@@ -112,3 +113,69 @@ def test_a_jegyzetek_idorendben_allnak():
                                    "match_id": "sorrend"})
     jegyzetek = c.get("/matches/sorrend/notes").json()["notes"]
     assert [j["text"] for j in jegyzetek] == ["korabban", "kesobb"]
+# ---- A kiállítások is emberi munka ----------------------------------
+
+
+def test_a_kiallitasok_atjonnek_es_elcsusznak():
+    """A kiállítás kézzel felvitt adat, és az EMBERELŐNY-rétegek
+    (powerplay-hozam, hátrány-támadás, kiállítás-kiharcolás) ezen
+    állnak. Összefűzéskor eddig elveszett, és ezek a rétegek némán
+    elhallgattak — az edző pedig azt hitte, nincs mit mérni.
+
+    Az idő MÁSODPERCBEN tolódik, mert a roster is másodpercben tárol.
+    """
+    a = _resz("r1", 100, "/v/a.mp4")   # 100 kocka / 10 fps = 10 mp
+    b = _resz("r2", 100, "/v/b.mp4")
+    c, tmp = _client([a, b])
+    c.post("/matches/r1/roster", json={"suspensions": [
+        {"team": "home", "start_s": 2.0, "duration_s": 120.0}]})
+    c.post("/matches/r2/roster", json={"suspensions": [
+        {"team": "away", "start_s": 3.0, "duration_s": 120.0}]})
+
+    r = c.post("/matches/merge", json={"ids": ["r1", "r2"],
+                                       "match_id": "teljes"})
+    assert r.status_code == 200
+
+    mentett = json.loads(
+        (Path(tmp) / "data" / "matches" / "teljes.roster.json")
+        .read_text(encoding="utf-8"))
+    idok = [(k["team"], round(k["start_s"], 1))
+            for k in mentett["suspensions"]]
+    # A második szakasz 10 másodperccel később kezdődik.
+    assert idok == [("home", 2.0), ("away", 13.0)], idok
+
+
+def test_a_kapushiany_csak_egyetertesnel_orokol():
+    """A kapus-hiány EGÉSZ meccsre szóló jelzés, tehát szakaszonként
+    ellentmondhat. Amiről nem tudunk, arról ne állítsunk semmit —
+    ugyanaz az elv, mint a kalibráltságnál.
+    """
+    a = _resz("g1", 100, "/v/a.mp4")
+    b = _resz("g2", 100, "/v/b.mp4")
+    c, tmp = _client([a, b])
+    c.post("/matches/g1/roster", json={
+        "suspensions": [{"team": "home", "start_s": 1.0,
+                         "duration_s": 120.0}],
+        "gk_absent_home": True})
+    c.post("/matches/g2/roster", json={
+        "suspensions": [{"team": "home", "start_s": 1.0,
+                         "duration_s": 120.0}],
+        "gk_absent_home": False})
+
+    c.post("/matches/merge", json={"ids": ["g1", "g2"],
+                                   "match_id": "vegyes"})
+    mentett = json.loads(
+        (Path(tmp) / "data" / "matches" / "vegyes.roster.json")
+        .read_text(encoding="utf-8"))
+    assert not mentett.get("gk_absent_home"), mentett
+
+
+def test_kiallitas_nelkul_nem_keletkezik_roster():
+    """Visszafelé kompatibilis: kiállítás nélküli szakaszokból nem
+    keletkezik üres roster-fájl."""
+    c, tmp = _client([_resz("q1", 50, "/v/a.mp4"),
+                      _resz("q2", 50, "/v/b.mp4")])
+    c.post("/matches/merge", json={"ids": ["q1", "q2"],
+                                   "match_id": "nincs"})
+    assert not (Path(tmp) / "data" / "matches"
+                / "nincs.roster.json").exists()
