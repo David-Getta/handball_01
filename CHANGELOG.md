@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.74 óta)
+## v0.1.75 — kiadva (2026-08-27)
+
+> Kiadás-jegyzet: az AMATŐR FELVÉTEL kiadása. Aki telefonnal vesz fel,
+> nem egy tiszta, hatvanperces meccsfájlt kap, hanem darabokat — és
+> eddig a program úgy tett, mintha nem így lenne. Mostantól: a
+> szakaszok akárhányan összefűzhetők (nem csak "két félidő"), a rövid
+> felvétel megmondja, mit várj tőle a hallgatás helyett, és a program
+> szól, ha a rövid szakaszon megéri a "Pontos" profil — mert azon
+> múlik a labda felismerése, amire a birtoklás, a passz, az eladás és
+> a lövés is épül.
+
 
 - **Az összefűzés akárhány szakaszt elfogad** (felület): aki telefonnal
   vagy fényképezőgéppel vesz fel, DARABOKBAN kapja a meccset — a
