@@ -1401,6 +1401,17 @@ class _UploadScreenState extends State<UploadScreen> {
             ? "Kalibráció kész (${_calib!.label}) — újranyitás"
             : "Pálya-kalibráció megnyitása"),
       ),
+      // ÁTVÉTEL másik videóról: aki darabokban vesz fel, hat klipet
+      // kap ugyanarról a rögzített kameráról — enélkül mind a hatot
+      // külön kellene bejelölni, huszonnégy kattintással.
+      if (_calib == null) ...[
+        const SizedBox(height: AppSpacing.sm),
+        TextButton.icon(
+          onPressed: _atvetelFlow,
+          icon: const Icon(Icons.content_copy_outlined, size: 16),
+          label: const Text("Kalibráció átvétele másik videóról"),
+        ),
+      ],
       const SizedBox(height: AppSpacing.md),
       _stepNav(
           hint: _calib != null
@@ -1408,6 +1419,109 @@ class _UploadScreenState extends State<UploadScreen> {
               : "Kalibráció nélkül is indítható, de a táv/sebesség adatok "
                   "pontatlanok lehetnek."),
     ]);
+  }
+
+  /// Kalibráció átvétele egy másik videóról.
+  ///
+  /// CSAK akkor helyes, ha a kamera nem mozdult a két felvétel közt —
+  /// ezt a program nem tudja eldönteni, ezért ki kell mondani. Az
+  /// átvett kalibráció a szokásos módon szerkeszthető: a
+  /// Pálya-kalibráció megnyitásával igazítható, ha mégis elmozdult.
+  Future<void> _atvetelFlow() async {
+    final path = _pathCtrl.text.trim();
+    final items = await _api.fetchSavedCalibrations(
+        excludePath: path.isEmpty ? null : path);
+    if (!mounted) return;
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Még nincs másik videóhoz mentett kalibráció — "
+              "az elsőt be kell jelölni.")));
+      return;
+    }
+    final valasztott = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Kalibráció átvétele"),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  "Csak akkor vedd át, ha a kamera NEM mozdult a két "
+                  "felvétel közt — a program ezt nem tudja eldönteni. "
+                  "Az átvett sarkokat utána a Pálya-kalibrációban "
+                  "igazíthatod.",
+                  style: AppText.label.copyWith(fontSize: 12)),
+              const SizedBox(height: AppSpacing.md),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 260),
+                child: ListView(shrinkWrap: true, children: [
+                  for (final it in items)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.grid_on, size: 18),
+                      title: Text("${it["video"]}",
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.value.copyWith(fontSize: 12.5)),
+                      subtitle: Text("${it["count"]} kalibráció",
+                          style: AppText.label.copyWith(fontSize: 11)),
+                      onTap: () => Navigator.pop(ctx, it),
+                    ),
+                ]),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Mégse")),
+        ],
+      ),
+    );
+    if (valasztott == null || !mounted) return;
+    final maps = ((valasztott["calibs"] as List?) ?? const [])
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    final items2 = <CalibrationResult>[];
+    for (final m in maps) {
+      final raw = (m["corners"] as List?) ?? const [];
+      final corners = [
+        for (final pt in raw)
+          if (pt is List && pt.length >= 2)
+            [(pt[0] as num).toInt(), (pt[1] as num).toInt()],
+      ];
+      if (corners.length != 4) continue;
+      items2.add(CalibrationResult(
+        corners: corners,
+        region: (m["region"] as String?) ?? "full",
+        rotate: (m["rotate"] as bool?) ?? false,
+        startFrame: (m["frame"] as num?)?.toInt() ?? 0,
+      ));
+    }
+    if (items2.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Az átvett kalibráció nem értelmezhető.")));
+      return;
+    }
+    setState(() {
+      _calib = CalibrationSet(items2);
+      if (_wstep == 2) _wstep = 3;
+    });
+    // A MOSTANI videóhoz is elmentjük: újrafeldolgozásnál már a sajátja.
+    if (path.isNotEmpty) {
+      try {
+        await _api.saveCalibration(path, _calibMaps(_calib!));
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Kalibráció átvéve innen: ${valasztott["video"]} — "
+            "ha a kamera mozdult, igazítsd a Pálya-kalibrációban.")));
   }
 
   /// 4. lépés: minőség/hossz beállítása és a feldolgozás indítása.

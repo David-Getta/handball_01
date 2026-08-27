@@ -206,6 +206,33 @@ class ApiClient {
         .toList();
   }
 
+  /// A gépen MÁR ELMENTETT kalibrációk, ÁTVÉTELRE (GET
+  /// /calibration/saved). Aki darabokban vesz fel, hat klipet kap
+  /// ugyanarról a rögzített kameráról — enélkül mind a hatot külön
+  /// kellene bejelölni.
+  ///
+  /// [excludePath] a most szerkesztett videó: a saját kalibrációját ne
+  /// kínáljuk fel átvételre. Hibánál üres lista — az átvétel kényelem,
+  /// nem kapu.
+  Future<List<Map<String, dynamic>>> fetchSavedCalibrations(
+      {String? excludePath}) async {
+    final uri = Uri.parse("$baseUrl/calibration/saved").replace(
+        queryParameters:
+            excludePath == null ? null : {"exclude_path": excludePath});
+    try {
+      final resp = await http.get(uri).timeout(const Duration(seconds: 4));
+      if (resp.statusCode != 200) return const [];
+      final json =
+          jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+      return ((json["items"] as List?) ?? const [])
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Kalibrációk mentése a videóhoz (POST /calibration) — újrafeldolgozásnál
   /// nem kell újra bejelölni.
   Future<void> saveCalibration(

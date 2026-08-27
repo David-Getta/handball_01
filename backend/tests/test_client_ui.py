@@ -2283,3 +2283,29 @@ def test_az_osszefuzes_akarhany_szakaszt_elfogad():
     # A megnevezés sem "félidő": az csak az egyik eset.
     assert "Szakaszok összefűzése" in kezdo
     assert "Félidők összefűzése" not in kezdo
+def test_a_kalibracio_atveheto_masik_videorol():
+    """Hat klip ugyanarról a rögzített kameráról = huszonnégy
+    sarok-kattintás ugyanarra a pályára.
+
+    A kalibráció a videó FÁJLNEVÉHEZ van kötve, tehát a darabokban
+    felvett meccs minden részét külön kellett bejelölni. Az átvétel
+    ezt veszi el — de CSAK akkor helyes, ha a kamera nem mozdult, és
+    ezt a programnak ki kell mondania, mert eldönteni nem tudja.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    fel = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert "_atvetelFlow" in fel, "nincs átvétel-folyamat"
+    assert "Kalibráció átvétele másik videóról" in fel
+    # A FELTÉTEL kimondva: enélkül az edző elmozdult kamerára is átvenné.
+    assert "NEM mozdult" in fel
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "fetchSavedCalibrations" in api
+    # A saját kalibrációját ne kínáljuk fel: értelmetlen, és elrejti a
+    # valódit.
+    assert "excludePath" in api

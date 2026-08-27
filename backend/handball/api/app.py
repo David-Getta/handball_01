@@ -1388,6 +1388,51 @@ def create_app():
                 pass
         return {"calibs": []}
 
+    @app.get("/calibration/saved")
+    def list_saved_calibrations(exclude_path: Optional[str] = None):
+        """A gépen MÁR ELMENTETT kalibrációk, átvételre.
+
+        Aki telefonnal vesz fel, darabokban kapja a meccset: hat klip
+        UGYANARRÓL a rögzített kameráról. A kalibráció a videó
+        FÁJLNEVÉHEZ van kötve, tehát eddig mind a hatot külön kellett
+        bejelölni — huszonnégy sarok-kattintás ugyanarra a pályára.
+
+        Az átvétel CSAK akkor helyes, ha a kamera nem mozdult a két
+        felvétel közt; ezt a felület mondja ki, mert a program nem
+        tudja eldönteni.
+
+        Válasz: {"items": [{"video", "calibs", "count", "modified"}]},
+        a legfrissebb elöl.
+        """
+        import re as _re
+
+        d = data_root() / "data" / "calibrations"
+        if not d.exists():
+            return {"items": []}
+        # A SAJÁT kalibrációját ne kínáljuk átvételre: a fájlnevet
+        # ugyanazzal a szabállyal tisztítjuk, mint a _calibration_path.
+        kizar = None
+        if exclude_path:
+            kizar = _re.sub(r"[^A-Za-z0-9._-]", "_",
+                            Path(exclude_path).name) or "video"
+        out = []
+        for f in d.glob("*.json"):
+            try:
+                adat = json.loads(f.read_text(encoding="utf-8"))
+                calibs = adat.get("calibs") or []
+            except Exception:
+                continue  # sérült fájl: kihagyjuk, nem hiba
+            if not isinstance(calibs, list) or not calibs:
+                continue
+            video = f.name[:-5] if f.name.endswith(".json") else f.name
+            if kizar and video == kizar:
+                continue
+            out.append({"video": video, "calibs": calibs,
+                        "count": len(calibs),
+                        "modified": f.stat().st_mtime})
+        out.sort(key=lambda r: -r["modified"])
+        return {"items": out}
+
     @app.post("/calibration")
     def save_calibration(body: dict):
         """Kalibrációk mentése a videóhoz. Törzs: {"path": ..., "calibs": [...]}."""

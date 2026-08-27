@@ -3,6 +3,23 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.75 óta)
+
+- **Kalibráció átvétele másik videóról** (API + felület): a kalibráció
+  a videó FÁJLNEVÉHEZ van kötve, tehát aki darabokban vesz fel, minden
+  klipet külön jelölt be — hat klip ugyanarról a rögzített kameráról
+  huszonnégy sarok-kattintás ugyanarra a pályára. Az Új elemzés lapon
+  mostantól átvehető egy korábbi videó kalibrációja (a legfrissebb
+  elöl), és az átvett sarkok utána a Pálya-kalibrációban igazíthatók.
+
+  A program **kimondja a feltételt**: csak akkor helyes az átvétel, ha
+  a kamera nem mozdult a két felvétel közt — ezt eldönteni nem tudja,
+  elhallgatni viszont nem szabad. A saját kalibrációját nem kínálja
+  fel (értelmetlen választás, és elrejti a valódit), és a kizárás a
+  fájlnevet UGYANAZZAL a szabállyal tisztítja, mint a mentés —
+  őr-teszttel, mert ékezetes vagy szóközös néven a saját kalibráció
+  némán mégis megjelenne.
+
 ## v0.1.75 — kiadva (2026-08-27)
 
 > Kiadás-jegyzet: az AMATŐR FELVÉTEL kiadása. Aki telefonnal vesz fel,
