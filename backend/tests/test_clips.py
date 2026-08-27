@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 import pytest
 
-from handball.models.tracking import Match, MatchMeta
+from handball.models.tracking import Frame, Match, MatchMeta
 from handball.pipeline.clips import export_event_clips
 
 
@@ -575,3 +575,78 @@ def test_a_rossz_lap_nem_viszi_el_a_videot(tmp_path):
     assert res.count == 1
     with zipfile.ZipFile(res.zip_path) as z:
         assert "rossz.html" not in z.namelist()
+# ---- ÖSSZEFŰZÖTT meccs: több forrás-videó ----------------------------
+
+
+def test_osszefuzott_meccsbol_is_vaghato_klip(tmp_path):
+    """Aki darabokban vesz fel, összefűzi a klipeket EGY meccsé — és
+    utána a gólvideót is szeretné.
+
+    Az összefűzött meccsnek nincs egy videófájlja, ezért a klipvágás
+    korábban azt mondta: "az eredeti videófájl nem érhető el". Ez
+    félrevezető volt: a fájl megvan, csak TÖBB van belőle.
+    """
+    from handball.pipeline.merge import merge_matches
+
+    a_video = tmp_path / "elso.mp4"
+    b_video = tmp_path / "masodik.mp4"
+    _make_video(a_video, n_frames=300)
+    _make_video(b_video, n_frames=300)
+
+    a = _match(a_video)
+    a.frames = [Frame(t=i, players=[], ball=None) for i in range(100)]
+    b = _match(b_video)
+    b.frames = [Frame(t=i, players=[], ball=None) for i in range(100)]
+
+    egy = merge_matches([a, b], "teljes")
+    assert egy.meta.video_path is None       # nincs EGY fájl
+    assert len(egy.meta.source_segments) == 2
+
+    # Egy esemény MINDKÉT szakaszból: a másodiké a második fájlból kell
+    # hogy jöjjön.
+    events = [{"t": 50, "type": "goal", "team": "home"},
+              {"t": 150, "type": "goal", "team": "away"}]
+    res = export_event_clips(egy, events, {"goal"}, tmp_path / "ki")
+    assert res.count == 2, res.count
+
+
+def test_a_hianyzo_forras_videot_megnevezzuk(tmp_path):
+    """Ha az egyik szakasz fájlja hiányzik, a hibaüzenet mondja meg,
+    MELYIK — a többi megvan, és a "nem érhető el a videó" ott
+    félrevezető."""
+    from handball.pipeline.merge import merge_matches
+
+    a_video = tmp_path / "megvan.mp4"
+    _make_video(a_video)
+    a = _match(a_video)
+    a.frames = [Frame(t=i, players=[], ball=None) for i in range(50)]
+    b = _match(tmp_path / "elveszett.mp4")   # NINCS ilyen fájl
+    b.frames = [Frame(t=i, players=[], ball=None) for i in range(50)]
+
+    egy = merge_matches([a, b], "teljes")
+    with pytest.raises(RuntimeError) as hiba:
+        export_event_clips(egy, [{"t": 10, "type": "goal", "team": "home"}],
+                           {"goal"}, tmp_path / "ki")
+    uzenet = str(hiba.value)
+    assert "elveszett.mp4" in uzenet
+    assert "1/2" in uzenet, uzenet
+
+
+def test_az_egy_videos_meccs_utja_valtozatlan(tmp_path):
+    """ŐR: a gyakori eset (EGY videó) ugyanazon a kódon megy.
+
+    Egy külön "összefűzött" ág idővel szétcsúszna a normálistól, és a
+    hiba pont a ritkább eseten jönne elő — ott, ahol a legkevesebbet
+    tesztelik.
+    """
+    from handball.pipeline.clips import _source_segments
+
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video, stride=2, start=100)
+    szakaszok = _source_segments(m)
+    assert len(szakaszok) == 1
+    assert szakaszok[0]["video_path"] == str(video)
+    assert szakaszok[0]["start_frame"] == 100
+    assert szakaszok[0]["stride"] == 2
+    assert szakaszok[0]["t_to"] is None   # a végéig

@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.75 óta)
 
+- **Az összefűzött meccsből is vágható klip** (motor): a most
+  engedélyezett N-szakaszos összefűzésnek volt egy csendes
+  következménye — az összefűzött meccsnek nincs EGY videófájlja, ezért
+  a klipvágás azt mondta, hogy "az eredeti videófájl nem érhető el".
+  Ez félrevezető volt: a fájl megvan, csak több van belőle. Aki
+  darabokban vesz fel, összerakta a meccset, megkapta a teljes elemzést
+  — és pont a gólvideót nem tudta kivágni.
+
+  Az összefűzés mostantól **forrás-térképet** ment (melyik játékidő
+  melyik fájl melyik kép-indexén van), és a klipvágás szakaszonként
+  nyitja a megfelelő videót. Az EGY videós eset ugyanazon a kódon megy
+  (egyelemű térkép) — egy külön ág idővel szétcsúszna, és a hiba pont a
+  ritkább eseten jönne elő. Ha egy szakasz fájlja hiányzik, az üzenet
+  **megnevezi, melyik** és hányról van szó: a többi megvan.
+
 - **Kalibráció átvétele másik videóról** (API + felület): a kalibráció
   a videó FÁJLNEVÉHEZ van kötve, tehát aki darabokban vesz fel, minden
   klipet külön jelölt be — hat klip ugyanarról a rögzített kameráról

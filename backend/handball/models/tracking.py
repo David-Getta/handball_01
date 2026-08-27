@@ -165,6 +165,19 @@ class MatchMeta:
     # javítás a MECCS tulajdonsága, nem egy képernyőé, és
     # újrafeldolgozás nélkül is meg kell maradnia.
     event_overrides: list = field(default_factory=list)
+    # ÖSSZEFŰZÖTT meccs forrás-szakaszai. Aki darabokban vesz fel (a
+    # telefon négy gigánál vagy tíz percnél elvágja a felvételt), hat
+    # klipből rak össze egy meccset — az összefűzött meccsnek nincs
+    # EGY videófájlja, tehát a `video_path` üres.
+    #
+    # Enélkül a klipvágás azt mondaná, hogy "a videó nem érhető el",
+    # ami félrevezető: a fájl megvan, csak több van belőle. Ez a
+    # térkép mondja meg, melyik játékidő melyik fájl melyik
+    # kép-indexén van.
+    #
+    # Elemenként: {"t_from", "t_to" (kizárólagos), "video_path",
+    # "start_frame", "stride"} — a t a MERGE UTÁNI játékidő kockákban.
+    source_segments: list = field(default_factory=list)
 
 
 @dataclass

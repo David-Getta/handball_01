@@ -68,8 +68,15 @@ def merge_matches(parts: list[Match], match_id: str,
     frames: list[Frame] = []
     t_offset = 0
     id_offset = 0
+    # FORRÁS-TÉRKÉP: melyik játékidő melyik fájl melyik kép-indexén
+    # van. Enélkül az összefűzött meccsből nem lehetne klipet vágni —
+    # a `video_path` üres, és a klipvágás azt mondaná, hogy "a videó
+    # nem érhető el", ami félrevezető: a fájl megvan, csak több van
+    # belőle.
+    szakaszok: list = []
     for part in parts:
         max_id = 0
+        szakasz_kezd = t_offset
         for f in part.frames:
             players = [replace(p, track_id=p.track_id + id_offset)
                        for p in f.players]
@@ -79,6 +86,18 @@ def merge_matches(parts: list[Match], match_id: str,
             ball = Ball(x=f.ball.x, y=f.ball.y, confidence=f.ball.confidence) \
                 if f.ball is not None else None
             frames.append(Frame(t=t_offset + f.t, players=players, ball=ball))
-        t_offset = (frames[-1].t + 1) if frames else 0
+        uj_offset = (frames[-1].t + 1) if frames else 0
+        if part.meta.video_path and uj_offset > szakasz_kezd:
+            szakaszok.append({
+                "t_from": szakasz_kezd,
+                "t_to": uj_offset,          # kizárólagos
+                "video_path": part.meta.video_path,
+                # A szakaszon BELÜLI t-hez tartozó kép-index:
+                # start_frame + (t - t_from) * stride.
+                "start_frame": part.meta.start_frame or 0,
+                "stride": part.meta.stride or 1,
+            })
+        t_offset = uj_offset
         id_offset += max_id + 1
+    meta.source_segments = szakaszok
     return Match(meta=meta, frames=frames)

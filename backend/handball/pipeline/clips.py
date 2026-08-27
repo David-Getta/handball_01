@@ -69,6 +69,53 @@ def _clock(seconds: float) -> str:
     return f"{m:02d}-{s:02d}"
 
 
+def _source_segments(match: Match) -> list:
+    """A meccs forrás-szakaszai egységes alakban.
+
+    Egyetlen videóból feldolgozott meccsnél EGY elem (a teljes
+    játékidő); összefűzött meccsnél annyi, ahány részből összeraktuk
+    (`meta.source_segments`). A hívó így nem ágazik el: ugyanaz a kód
+    vágja a klipet mindkét esetben.
+
+    Elemenként: {"t_from", "t_to" (kizárólagos, None = a végéig),
+    "video_path", "start_frame", "stride"}.
+    """
+    nyers = getattr(match.meta, "source_segments", None) or []
+    ki = []
+    for sz in nyers:
+        if not isinstance(sz, dict) or not sz.get("video_path"):
+            continue
+        try:
+            ki.append({
+                "t_from": int(sz.get("t_from") or 0),
+                "t_to": (int(sz["t_to"]) if sz.get("t_to") is not None
+                         else None),
+                "video_path": str(sz["video_path"]),
+                "start_frame": int(sz.get("start_frame") or 0),
+                "stride": max(1, int(sz.get("stride") or 1)),
+            })
+        except (TypeError, ValueError):
+            continue  # rossz alakú bejegyzés: kihagyjuk, nem hiba
+    if ki:
+        ki.sort(key=lambda z: z["t_from"])
+        return ki
+    # Nincs térkép: a klasszikus, EGY videós eset.
+    if match.meta.video_path:
+        return [{"t_from": 0, "t_to": None,
+                 "video_path": match.meta.video_path,
+                 "start_frame": getattr(match.meta, "start_frame", 0) or 0,
+                 "stride": max(1, getattr(match.meta, "stride", 1) or 1)}]
+    return []
+
+
+def _segment_of(szakaszok: list, t: int) -> Optional[dict]:
+    """Melyik forrás-szakaszba esik a t. játékidő-kocka."""
+    for sz in szakaszok:
+        if t >= sz["t_from"] and (sz["t_to"] is None or t < sz["t_to"]):
+            return sz
+    return None
+
+
 def _jersey_of_track(match: Match) -> dict:
     """track_id → mezszám (trackenként az ELSŐ ismert érték).
 
@@ -164,25 +211,34 @@ def export_event_clips(match: Match, events: list, types: set[str],
     """
     import cv2
 
-    video_path = match.meta.video_path
-    if not video_path or not os.path.exists(video_path):
-        raise RuntimeError(
-            "Az eredeti videófájl nem érhető el ezen a gépen "
-            f"({video_path or 'nincs útvonal mentve'}) — a klipvágáshoz a "
-            "feldolgozáskor használt videó kell.")
-
-    cap = open_capture(video_path)
-    native_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-    if W <= 0 or H <= 0:
-        cap.release()
-        raise RuntimeError(f"A videó nem olvasható: {video_path}")
-
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
-    stride = max(1, getattr(match.meta, "stride", 1) or 1)
-    start_frame = getattr(match.meta, "start_frame", 0) or 0
+    # A FORRÁS-SZAKASZOK: egyetlen videónál egy elem, összefűzött
+    # meccsnél annyi, ahány klipből összeraktuk. Így a kettő ugyanazon
+    # az úton megy — egy külön "összefűzött" ág idővel szétcsúszna a
+    # normálistól, és a hiba pont a ritkább eseten jönne elő.
+    szakaszok = _source_segments(match)
+    hianyzo = [sz["video_path"] for sz in szakaszok
+               if not sz["video_path"] or not os.path.exists(sz["video_path"])]
+    if not szakaszok:
+        raise RuntimeError(
+            "Az eredeti videófájl nem érhető el ezen a gépen (nincs "
+            "útvonal mentve) — a klipvágáshoz a feldolgozáskor használt "
+            "videó kell.")
+    if hianyzo:
+        # ÖSSZEFŰZÖTT meccsnél megnevezzük, MELYIK szakasz hiányzik: a
+        # "a videó nem érhető el" itt félrevezető lenne, mert a többi
+        # fájl megvan.
+        ha_tobb = len(szakaszok) > 1
+        nevek = ", ".join(os.path.basename(h) or "nincs útvonal"
+                          for h in hianyzo)
+        raise RuntimeError(
+            (f"Az összefűzött meccs {len(hianyzo)}/{len(szakaszok)} "
+             f"forrás-videója nem érhető el ezen a gépen ({nevek}) — a "
+             "klipvágáshoz a feldolgozáskor használt fájlok kellenek."
+             ) if ha_tobb else
+            (f"Az eredeti videófájl nem érhető el ezen a gépen "
+             f"({nevek}) — a klipvágáshoz a feldolgozáskor használt "
+             "videó kell."))
 
     # A kért típusú események, idő szerint; plafon fölött a lista eleje.
     def _field(e, name):
@@ -229,14 +285,41 @@ def export_event_clips(match: Match, events: list, types: set[str],
     # rendez mappákba.
     made: list[tuple[Path, str, Optional[int]]] = []
 
+    # A megnyitott videók gyorsítótára: egy összefűzött meccsnél az
+    # események oda-vissza ugrálhatnak a szakaszok közt, és minden
+    # eseménynél újranyitni a fájlt lassú lenne.
+    nyitott: dict = {}
+
+    def _cap_of(sz):
+        """(capture, natív fps, W, H, kockaszám) a szakasz videójához."""
+        ut = sz["video_path"]
+        if ut not in nyitott:
+            c = open_capture(ut)
+            w = int(c.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(c.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if w <= 0 or h <= 0:
+                c.release()
+                raise RuntimeError(f"A videó nem olvasható: {ut}")
+            nyitott[ut] = (c, c.get(cv2.CAP_PROP_FPS) or 25.0, w, h,
+                           int(c.get(cv2.CAP_PROP_FRAME_COUNT) or 0))
+        return nyitott[ut]
+
     for i, e in enumerate(picked):
         t = int(_field(e, "t") or 0)
         typ = str(_field(e, "type"))
         team = str(_field(e, "team") or "")
         team_name = (match.meta.home_team if team == "home"
                      else match.meta.away_team)
-        # Az esemény helye az eredeti videóban (kép-index és másodperc).
-        center_idx = start_frame + t * stride
+        # MELYIK forrás-videóban van ez a pillanat. Összefűzött meccsnél
+        # ez szakaszonként más fájl; egyetlen videónál mindig ugyanaz.
+        sz = _segment_of(szakaszok, t)
+        if sz is None:
+            continue  # a térképen kívüli esemény: nincs mit vágni
+        cap, native_fps, W, H, n_frames = _cap_of(sz)
+        # Az esemény helye a SZAKASZ videójában (kép-index): a
+        # játékidőből előbb a szakaszon belüli t-t kell képezni.
+        center_idx = (sz["start_frame"]
+                      + (t - sz["t_from"]) * sz["stride"])
         clip_from = max(0, center_idx - int(PRE_SECONDS * native_fps))
         clip_to = center_idx + int(POST_SECONDS * native_fps)
         if n_frames > 0:
@@ -273,7 +356,8 @@ def export_event_clips(match: Match, events: list, types: set[str],
         else:
             dest.unlink(missing_ok=True)  # üres klip nem kell
 
-    cap.release()
+    for c, *_ in nyitott.values():
+        c.release()
 
     if not made:
         # A mezszám-szűrés a leggyakoribb ok: a #7-es kér magának
