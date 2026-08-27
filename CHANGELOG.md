@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.75 óta)
+## v0.1.76 — kiadva (2026-08-27)
+
+> Kiadás-jegyzet: az ÖSSZEFŰZÉS mostantól nem veszít el semmit. A
+> v0.1.75 megengedte, hogy akárhány klipből egy meccs legyen — ez a
+> kiadás teszi használhatóvá. Az összefűzött meccsből vágható klip (a
+> forrás-térkép megmondja, melyik pillanat melyik fájlban van), és
+> túléli az összefűzést minden EMBERI munka: a kézi esemény-javítás, a
+> jegyzet és a kiállítás. Mellette a kalibráció átvehető egy másik
+> videóról — hat klip ugyanarról a rögzített kameráról eddig
+> huszonnégy sarok-kattintás volt.
+
 
 - **A kézi javítások túlélik az összefűzést** (motor): aki hat klipben
   kijavította a felismerés nyolc tévedését, EMBERI munkát végzett — az
