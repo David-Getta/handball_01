@@ -74,6 +74,12 @@ def merge_matches(parts: list[Match], match_id: str,
     # nem érhető el", ami félrevezető: a fájl megvan, csak több van
     # belőle.
     szakaszok: list = []
+    # KÉZI JAVÍTÁSOK a szakaszokból. Aki hat klipben kijavította a
+    # felismerés nyolc tévedését, az EMBERI munkát végzett — az
+    # összefűzés némán eldobta volna, és az összerakott meccs megint
+    # rossz eredményt mutatna. A javítás ideje a szakasz eltolásával
+    # együtt mozog, különben egy MÁSIK esemény típusát írná át.
+    javitasok: list = []
     for part in parts:
         max_id = 0
         szakasz_kezd = t_offset
@@ -97,7 +103,24 @@ def merge_matches(parts: list[Match], match_id: str,
                 "start_frame": part.meta.start_frame or 0,
                 "stride": part.meta.stride or 1,
             })
+        for ov in (getattr(part.meta, "event_overrides", None) or []):
+            if not isinstance(ov, dict):
+                continue
+            try:
+                eltolt = dict(ov)
+                eltolt["t"] = int(ov["t"]) + szakasz_kezd
+            except (KeyError, TypeError, ValueError):
+                continue  # rossz alakú javítás: kihagyjuk, nem hiba
+            # A lövő track-azonosítója is eltolódik — enélkül a kézzel
+            # felvett gól egy MÁSIK emberhez kerülne.
+            if ov.get("player_id") is not None:
+                try:
+                    eltolt["player_id"] = int(ov["player_id"]) + id_offset
+                except (TypeError, ValueError):
+                    eltolt.pop("player_id", None)
+            javitasok.append(eltolt)
         t_offset = uj_offset
         id_offset += max_id + 1
     meta.source_segments = szakaszok
+    meta.event_overrides = javitasok
     return Match(meta=meta, frames=frames)

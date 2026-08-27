@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.75 óta)
 
+- **A kézi javítások túlélik az összefűzést** (motor): aki hat klipben
+  kijavította a felismerés nyolc tévedését, EMBERI munkát végzett — az
+  összefűzés eddig **némán eldobta**, és az összerakott meccs megint
+  rossz eredményt mutatott. Az edző nem értette, hova lettek a
+  javításai; a program pedig pont azt a bizalmat vesztette el, amiért
+  a javítás egyáltalán bekerült.
+
+  A javítás ideje a szakasz eltolásával együtt mozog (különben egy
+  MÁSIK esemény típusát írná át, vagy az egyeztetés-ablakon kívülre
+  esve csendben elmaradna), és a kézzel felvett gól **lövője** is: az
+  track-azonosító, azt pedig az összefűzés eltolja — eltolás nélkül a
+  gól egy másik emberhez kerülne, pont a góllövő-listán.
+
 - **Az összefűzött meccsből is vágható klip** (motor): a most
   engedélyezett N-szakaszos összefűzésnek volt egy csendes
   következménye — az összefűzött meccsnek nincs EGY videófájlja, ezért

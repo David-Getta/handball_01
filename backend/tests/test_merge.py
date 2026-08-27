@@ -122,3 +122,65 @@ def test_egy_szakasz_nem_osszefuzes():
     # A motor megengedi (érvényes másolat), de a jelentése "semmi sem
     # változott" — a KETTŐS korlát a végponton és a felületen van.
     assert len(m.frames) == 3
+# ---- A KÉZI JAVÍTÁSOK túlélik az összefűzést -------------------------
+
+
+def test_a_kezi_javitasok_atjonnek_es_elcsusznak_a_szakasszal():
+    """Aki hat klipben kijavította a felismerés nyolc tévedését, EMBERI
+    munkát végzett.
+
+    Az összefűzés eddig NÉMÁN eldobta: az összerakott meccs megint rossz
+    eredményt mutatott, és az edző nem értette, hova lettek a javításai.
+
+    Az idő a szakasz eltolásával együtt mozog — enélkül a javítás egy
+    MÁSIK esemény típusát írná át (vagy az egyeztetés-ablakon kívülre
+    esve csendben elmaradna, ami még rosszabb: néma).
+    """
+    a = _part("h1", 10, track_id=1)
+    a.meta.event_overrides = [{"op": "set_type", "t": 3, "type": "goal"}]
+    b = _part("h2", 10, track_id=1)
+    b.meta.event_overrides = [{"op": "add", "t": 5, "type": "goal",
+                               "team": "home"}]
+
+    m = merge_matches([a, b], "teljes")
+    idok = [o["t"] for o in m.meta.event_overrides]
+    assert idok == [3, 15], idok        # a második szakasz +10-zel
+
+
+def test_a_javitas_lovoje_is_elcsuszik():
+    """A kézzel felvett gól LÖVŐJE track-azonosító, azt pedig az
+    összefűzés eltolja (a "7-es" az egyik klipen nem ugyanaz, mint a
+    másikon). Eltolás nélkül a gól egy MÁSIK emberhez kerülne — és
+    pont a góllövő-listán, ahol a legfeltűnőbb.
+    """
+    a = _part("h1", 4, track_id=1)
+    b = _part("h2", 4, track_id=1)
+    b.meta.event_overrides = [{"op": "add", "t": 1, "type": "goal",
+                               "team": "home", "player_id": 1}]
+    m = merge_matches([a, b], "teljes")
+    ov = m.meta.event_overrides[0]
+    # A második szakasz trackjei eltolva — a javítás lövője is.
+    masodik_track_ids = {p.track_id for f in m.frames[4:] for p in f.players}
+    assert ov["player_id"] in masodik_track_ids, (
+        ov["player_id"], masodik_track_ids)
+
+
+def test_a_rossz_alaku_javitas_nem_viszi_el_a_tobbit():
+    """Egy sérült bejegyzés ne akadályozza meg a többi átvételét."""
+    a = _part("h1", 4, track_id=1)
+    a.meta.event_overrides = [
+        {"op": "set_type", "t": "nem szám", "type": "goal"},
+        {"op": "set_type", "t": 2, "type": "goal"},
+        "nem is szótár",
+    ]
+    m = merge_matches([a, _part("h2", 4, track_id=1)], "teljes")
+    assert m.meta.event_overrides == [
+        {"op": "set_type", "t": 2, "type": "goal"}]
+
+
+def test_javitas_nelkul_ures_marad():
+    """Visszafelé kompatibilis: javítás nélküli szakaszokból javítás
+    nélküli meccs lesz — nem hiba, nem kitalált bejegyzés."""
+    m = merge_matches([_part("h1", 3, track_id=1),
+                       _part("h2", 3, track_id=2)], "teljes")
+    assert m.meta.event_overrides == []
