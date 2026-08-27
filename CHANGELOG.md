@@ -18,6 +18,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   track-azonosító, azt pedig az összefűzés eltolja — eltolás nélkül a
   gól egy másik emberhez kerülne, pont a góllövő-listán.
 
+- **A jegyzetek is túlélik az összefűzést** (API): ugyanaz a
+  hibafajta egy szinttel odébb. A jegyzet **gépelt szöveg**, nem
+  újratermelhető adat — aki hat klip közben megjelölt tizenöt
+  pillanatot, majd összefűzte a meccset, eddig mindet elvesztette,
+  némán. A kockaszám a szakasz eltolásával mozog (különben a "koppints
+  a visszanézéshez" rossz helyre ugrana, ami rosszabb, mintha el sem
+  jutna oda), és az összefűzött meccs jegyzetei **időrendben** állnak:
+  a szakaszonkénti felvételi sorrend itt semmit nem mondana.
+
+  A szakaszokat POZÍCIÓ szerint párosítjuk a részekhez, nem a videó
+  útja szerint: két szakasz jöhet ugyanabból a fájlból (megszakadt
+  feldolgozás folytatása), és egy útvonal-kulcsú párosítás
+  összeolvasztaná őket — a jegyzet ettől még ott lenne, csak rossz
+  időn. Erre külön őr van.
+
 - **Az összefűzött meccsből is vágható klip** (motor): a most
   engedélyezett N-szakaszos összefűzésnek volt egy csendes
   következménye — az összefűzött meccsnek nincs EGY videófájlja, ezért

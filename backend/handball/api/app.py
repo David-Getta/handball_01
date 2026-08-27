@@ -1362,6 +1362,45 @@ def create_app():
             parts, new_id,
             home_team=body.get("home_team"), away_team=body.get("away_team"))
         _put_match(merged)  # memóriába + lemezre (perzisztencia)
+
+        # A JEGYZETEK is EMBERI munka: amit az edző a klipek közben
+        # megjelölt, az összefűzött meccsen is meg kell lennie. A
+        # kockaszám a szakasz eltolásával mozog — enélkül a jegyzet egy
+        # MÁSIK pillanatra mutatna, és a "koppints a visszanézéshez"
+        # rossz helyre ugrana.
+        #
+        # A szakaszok eltolását a forrás-térképből olvassuk ki, hogy ne
+        # kelljen újraszámolni (és ne csússzon el a kettő).
+        try:
+            # A szakaszokat POZÍCIÓ szerint párosítjuk a részekhez, nem
+            # a videó útja szerint: két szakasz jöhet UGYANABBÓL a
+            # fájlból (megszakadt feldolgozás folytatása), és egy
+            # útvonal-kulcsú szótár összeolvasztaná őket — a második
+            # félidő jegyzetei az elsőre csúsznának.
+            #
+            # Az összefűzés arra a részre tesz szakaszt, amelynek van
+            # videó-útja ÉS adott kockát; itt ugyanezzel szűrünk.
+            terkepes = [r for r in parts if r.meta.video_path and r.frames]
+            szegmensek = merged.meta.source_segments or []
+            atvett: list = []
+            for resz, sz in zip(terkepes, szegmensek):
+                nulla = sz["t_from"]
+                for jegy in _load_notes(resz.meta.match_id):
+                    try:
+                        uj = dict(jegy)
+                        uj["frame"] = int(jegy.get("frame") or 0) + nulla
+                    except (TypeError, ValueError):
+                        continue
+                    atvett.append(uj)
+            if atvett:
+                atvett.sort(key=lambda j: j.get("frame", 0))
+                _notes_path(new_id).write_text(
+                    json.dumps({"notes": atvett}, ensure_ascii=False,
+                               indent=2),
+                    encoding="utf-8")
+        except Exception:
+            pass  # a jegyzet-átvétel hibája ne vigye el az összefűzést
+
         return {"match_id": new_id, "num_frames": len(merged.frames),
                 "parts": [p.meta.match_id for p in parts]}
 
