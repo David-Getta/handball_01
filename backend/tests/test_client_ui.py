@@ -2234,3 +2234,23 @@ def test_a_klip_jelzes_a_meccs_elemzoben_is_latszik():
     meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
     assert 'q["clip_note"]' in meccs, "a lap nem olvassa a klip-jelzést"
     assert "KLIP, NEM TELJES MECCS" in meccs
+def test_a_feltoltes_lap_ajanlja_a_pontos_profilt_rovid_szakaszra():
+    """A profil-választó három nevet kínál, és nem mondja meg, mikor
+    melyik éri meg.
+
+    Rövid szakaszon a "Pontos" percekbe kerül (teljes meccsen órákba),
+    és pont a labda felismerésén javít — amire a birtoklás, a passz,
+    az eladás és a lövés is épül. Ez NEM hiba-üzenet, ezért nem is
+    riasztó színnel.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    fel = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert '_preflight["profile_hint"]' in fel, (
+        "a lap nem olvassa a profil-javaslatot")
+    assert "_profileHintCard" in fel and "_profileHintCard()," in fel, (
+        "a javaslat-kártya nincs beépítve a lapba")

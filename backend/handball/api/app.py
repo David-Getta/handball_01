@@ -1126,7 +1126,34 @@ def create_app():
                 feldolgozando = min(feldolgozando, korlat)
         becsult = estimate_seconds(feldolgozando, _job_log_rows(),
                                    stride=stride, imgsz=imgsz)
+
+        # PROFIL-JAVASLAT rövid szakaszra. A "Pontos" profil egy teljes
+        # meccsen órákat kér, ezért jogosan nem az alapértelmezés — egy
+        # pár perces klipen viszont percekbe kerül, és pont azon segít
+        # a legtöbbet, ami a termék leggyengébb pontja amatőr,
+        # széles-látószögű felvételen: a LABDA felismerésén (a labda
+        # ott alig pár képpont, és rá épül a birtoklás, a passz, az
+        # eladás és a lövés).
+        #
+        # Csak akkor szólunk, ha NEM a Pontos van kiválasztva — a
+        # meglévő döntést nem kérdőjelezzük meg.
+        from ..pipeline.quality import CLIP_LENGTH_S
+
+        profil_javaslat = None
+        if (feldolgozando and 0 < feldolgozando < CLIP_LENGTH_S
+                and stride is not None and stride > 2):
+            profil_javaslat = (
+                f"Ez rövid szakasz ({feldolgozando / 60:.0f} perc). A "
+                "\"Pontos\" profil egy teljes meccsen órákat kérne, itt "
+                "viszont csak perceket — és pont a LABDA felismerésén "
+                "javít a legtöbbet, amire a birtoklás, a passz, az "
+                "eladás és a lövés is épül. Széles, távoli felvételen "
+                "ez a különbség dönti el, használható-e az elemzés.")
+
         return {
+            # None, ha nincs mit javasolni (hosszú szakasz, vagy már a
+            # Pontos van kiválasztva). A mező mindig LÉTEZIK.
+            "profile_hint": profil_javaslat,
             "path_ok": letezik,
             "free_gb": free_gb(data_root()),
             "space_error": disk_space_error(path if letezik else None,

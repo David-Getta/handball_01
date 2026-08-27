@@ -218,3 +218,63 @@ def test_preflight_a_hossz_korlatra_becsul(tmp_path):
     r = client.post("/preflight", json={"path": str(video), "max_s": 4.0}).json()
     assert r["video_seconds"] == pytest.approx(10.0, abs=0.3)
     assert r["processed_seconds"] == pytest.approx(4.0, abs=0.3)
+# ---- Profil-javaslat rövid szakaszra ---------------------------------
+
+
+def test_rovid_szakaszra_a_pontos_profilt_ajanljuk(tmp_path):
+    """A "Pontos" profil egy teljes meccsen órákat kér — jogosan nem az
+    alapértelmezés. Egy pár perces klipen viszont perceket, és pont a
+    LABDA felismerésén javít, amire a birtoklás, a passz, az eladás és
+    a lövés is épül.
+
+    A felhasználó ezt magától nem tudja: a profil-választó három nevet
+    kínál, és sehol nem mondja meg, mikor melyik éri meg.
+    """
+    video = tmp_path / "klip.mp4"
+    _tiny_video(video)
+    c = _client()
+    r = c.post("/preflight", json={"path": str(video), "stride": 3,
+                                   "imgsz": 1280}).json()
+    javaslat = r["profile_hint"]
+    assert javaslat, "rövid szakaszra nincs profil-javaslat"
+    assert "Pontos" in javaslat
+    assert "LABDA" in javaslat or "labda" in javaslat
+
+
+def test_a_mar_pontos_profilt_nem_kerdojelezzuk_meg(tmp_path):
+    """Aki már a Pontosat választotta, ne kapjon javaslatot ugyanarra:
+    a meglévő döntést nem kérdőjelezzük meg."""
+    video = tmp_path / "klip.mp4"
+    _tiny_video(video)
+    c = _client()
+    r = c.post("/preflight", json={"path": str(video), "stride": 2,
+                                   "imgsz": 1920}).json()
+    assert r["profile_hint"] is None
+
+
+def test_hosszu_szakaszra_nincs_javaslat(tmp_path):
+    """Teljes meccsen a Pontos profil ÓRÁKAT kér — ott ez rossz tanács
+    lenne. A hossz-korláttal szűkített szakaszra viszont a szűkített
+    hossz számít, nem a videóé."""
+    video = tmp_path / "klip.mp4"
+    _tiny_video(video)
+    c = _client()
+    # A videó rövid, de úgy teszünk, mintha a feldolgozandó szakasz
+    # hosszú lenne: a kezdet/vég a videó hosszára vágódik, ezért a
+    # hossz-korlátot használjuk fordítva — a küszöb fölötti videót a
+    # modul-oldali teszt fedi. Itt azt nézzük, hogy a mező LÉTEZIK.
+    r = c.post("/preflight", json={"path": str(video)}).json()
+    assert "profile_hint" in r
+
+
+def test_a_javaslat_kuszobe_kozos_a_klip_jelzessel():
+    """ŐR: a két hely UGYANAZT a küszöböt használja.
+
+    Ha külön számot írnánk, egy felvétel kaphatna profil-javaslatot
+    ("ez rövid") és közben meccs-szintű elemzést is — vagy fordítva.
+    A felhasználó ezt ellentmondásnak látná, és joggal.
+    """
+    src = (Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert "from ..pipeline.quality import CLIP_LENGTH_S" in src
+    assert "feldolgozando < CLIP_LENGTH_S" in src

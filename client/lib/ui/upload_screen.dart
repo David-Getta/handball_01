@@ -345,7 +345,16 @@ class _UploadScreenState extends State<UploadScreen> {
     final hely = _preflight["space_error"] as String?;
     final becsles = _preflight["estimate_label"] as String?;
     final szabad = (_preflight["free_gb"] as num?)?.toDouble();
-    if (hely == null && becsles == null) return const SizedBox.shrink();
+    // PROFIL-JAVASLAT rövid szakaszra: a "Pontos" egy teljes meccsen
+    // órákat kérne, egy klipen perceket — és pont a labda
+    // felismerésén javít, amire a birtoklás, a passz, az eladás és a
+    // lövés is épül. A felhasználó ezt magától nem tudhatja: a
+    // választó három nevet kínál, és nem mondja meg, mikor melyik éri
+    // meg.
+    final javaslat = _preflight["profile_hint"] as String?;
+    if (hely == null && becsles == null && javaslat == null) {
+      return const SizedBox.shrink();
+    }
     final baj = hely != null;
     final szin = baj ? AppColors.away : AppColors.gold;
     return Padding(
@@ -371,6 +380,43 @@ class _UploadScreenState extends State<UploadScreen> {
                         "${szabad != null ? " (Szabad hely: "
                             "${szabad.toStringAsFixed(1)} GB.)" : ""}",
                 style: AppText.label.copyWith(fontSize: 12, color: szin)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// A profil-javaslat KÜLÖN kártyán: nem hiba és nem idő-becslés,
+  /// hanem egy nyereség, amiről a felhasználó nem tud. Semleges
+  /// színnel — a sárga/piros doboz azt sugallná, baj van.
+  Widget _profileHintCard() {
+    final javaslat = _preflight["profile_hint"] as String?;
+    if (javaslat == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.tips_and_updates_outlined,
+              size: 16, color: AppColors.accent),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("ÉRDEMES A PONTOS PROFIL",
+                      style: AppText.sectionLabel),
+                  const SizedBox(height: 2),
+                  Text(javaslat,
+                      style: AppText.label.copyWith(
+                          fontSize: 12, color: AppColors.textPrimary)),
+                ]),
           ),
         ]),
       ),
@@ -1473,6 +1519,7 @@ class _UploadScreenState extends State<UploadScreen> {
       _matchWindowFields(),
       _preStartChecklist(),
       _preflightCard(),
+      _profileHintCard(),
       const SizedBox(height: AppSpacing.md),
       Row(children: [
         if (_wstep > 0) ...[

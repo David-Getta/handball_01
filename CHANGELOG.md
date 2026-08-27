@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.74 óta)
 
+- **Rövid szakaszra a program ajánlja a "Pontos" profilt** (API +
+  felület): a profil-választó eddig három nevet kínált, és sehol nem
+  mondta meg, mikor melyik éri meg. A "Pontos" egy teljes meccsen
+  órákat kér — jogosan nem az alapértelmezés —, egy pár perces klipen
+  viszont csak perceket, és pont a **labda** felismerésén javít a
+  legtöbbet: arra épül a birtoklás, a passz, az eladás és a lövés, és
+  széles, távoli amatőr felvételen ez a különbség dönti el, használható
+  lesz-e az elemzés. Az indítás előtti ellenőrzés ezért javaslatot ad,
+  ha a feldolgozandó szakasz klip-hosszú. Aki már a Pontosat
+  választotta, nem kap javaslatot — a meglévő döntést nem
+  kérdőjelezzük meg. A küszöb KÖZÖS a "klip, nem teljes meccs"
+  jelzéssel (őr-teszt köti ki): különben ugyanaz a felvétel kaphatna
+  "ez rövid" javaslatot és meccs-szintű elemzést is.
+
 - **"Klip, nem teljes meccs"** (motor + felület): egy kézilabda-meccs
   2×30 perc; egy pár perces felvétel nem meccs, hanem KLIP. Ez
   teljesen jogos bemenet — de a meccs-szintű rétegek (hajrá,
