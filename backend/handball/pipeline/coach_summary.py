@@ -7929,6 +7929,19 @@ def _coach_summary_cached(match: Match) -> dict:
     except Exception:
         caveat = None  # a figyelmeztetés hibája ne vigye el az összefoglalót
 
+    # A KLIP-jelzés SAJÁT mezőn, nem a caveat-ban: egy hibátlan
+    # feldolgozású három perces klipnél a pontszám magas és nincs
+    # teendő — ott a "mennyire bízhatsz ebben" doboz riogatás lenne.
+    # Az edzőnek mégis tudnia kell, miért hallgat a fele.
+    try:
+        # HELYI import: a modul-szintű névtérben ez a függvény nincs
+        # benne (csak a _quality_caveat-en belül), és a try/except a
+        # NameError-t is elnyelné — némán None-t adva.
+        from .quality import compute_quality_report as _qr
+        clip_note = _qr(match).get("clip_note")
+    except Exception:
+        clip_note = None
+
     for build in (_story_section, _events_section, _xg_section,
                   _style_section):
         try:
@@ -8365,7 +8378,11 @@ def _coach_summary_cached(match: Match) -> dict:
     return {"sections": sections, "highlights": highlights,
             # None, ha a feldolgozás rendben volt; különben egy mondat
             # arról, mennyire hihetők az alábbi állítások.
-            "caveat": caveat}
+            "caveat": caveat,
+            # None, ha a felvétel meccs-hosszú; különben egy mondat
+            # arról, MI működik a klipen és mi nem. Ez nem hiba —
+            # ezért nem a caveat-ban van.
+            "clip_note": clip_note}
 
 
 # Mondathatár: pont/felkiáltó/kérdőjel UTÁN álló szóköz, amit nagybetű
@@ -8397,6 +8414,8 @@ def coach_summary_text(match: Match) -> str:
     if data.get("caveat"):
         # A figyelmeztetés a szöveges alakban is ELÖL áll.
         lines.append(f"Mennyire bízhatsz ebben: {data['caveat']}")
+    if data.get("clip_note"):
+        lines.append(f"Klip, nem teljes meccs: {data['clip_note']}")
     for s in data["sections"]:
         lines.append(f"{s['title']}: {s['body']}")
     if data["highlights"]:

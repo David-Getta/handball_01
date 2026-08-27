@@ -2218,3 +2218,19 @@ def test_a_jatekos_latja_javul_e_vagy_romlik():
     assert "trend_window" in jatekos, "a lap nem mondja meg, mihez méri"
     assert "nem irány, zaj" in jatekos, (
         "az ítélet nélküli eset némán számot mutatna")
+def test_a_klip_jelzes_a_meccs_elemzoben_is_latszik():
+    """Aki egy pár perces klipet elemez, a hallgató rétegeket enélkül
+    hiányos elemzésnek nézi.
+
+    És NEM figyelmeztetésként: ez nem hiba. A riasztó szín ugyanolyan
+    félrevezető lenne, mint a hallgatás.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert 'q["clip_note"]' in meccs, "a lap nem olvassa a klip-jelzést"
+    assert "KLIP, NEM TELJES MECCS" in meccs

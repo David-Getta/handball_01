@@ -2326,6 +2326,41 @@ class _MatchScreenState extends State<MatchScreen> {
                 ]),
               ),
             ],
+            // KLIP, NEM MECCS: nem hiba, hanem tájékoztatás — ezért
+            // nem a figyelmeztetések közt és nem riasztó színnel. Aki
+            // egy három perces klipet elemez, enélkül a hallgató
+            // rétegeket hiányos elemzésnek nézi.
+            if (q["clip_note"] != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const Icon(Icons.movie_outlined,
+                      size: 16, color: AppColors.accent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("KLIP, NEM TELJES MECCS",
+                              style: AppText.sectionLabel),
+                          const SizedBox(height: 2),
+                          Text("${q["clip_note"]}",
+                              style: AppText.label.copyWith(
+                                  fontSize: 12.5,
+                                  color: AppColors.textPrimary)),
+                        ]),
+                  ),
+                ]),
+              ),
+            ],
             if (warnings.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               for (final w in warnings)

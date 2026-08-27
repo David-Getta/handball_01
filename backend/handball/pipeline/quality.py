@@ -80,6 +80,18 @@ GOALS_RATE_MIN_MINUTES = 10.0
 GOALS_LOPSIDED_MIN_TOTAL = 12
 GOALS_LOPSIDED_FACTOR = 5.0
 
+# KLIP vagy MECCS? Egy kézilabda-meccs 2x30 perc; ennél a küszöbnél
+# rövidebb felvétel nem meccs, hanem KLIP (egy támadás-sorozat, egy
+# félidő-részlet, egy próba). A klip teljesen jogos bemenet — de a
+# meccs-szintű rétegek (hajrá, félidő-összevetés, kondíció, momentum)
+# némán hallgatnak rajta, és a felhasználó ezt eddig HIBÁNAK látta:
+# "megcsináltam, és a fele üres". Egy mondat elveszi ezt.
+#
+# IDŐTARTAM, tehát másodpercben (a termék minden 3. kockát dolgozza
+# fel, egy kockában megadott küszöb a profiltól függően háromszoros
+# valós időt jelentene).
+CLIP_LENGTH_S = 1200.0   # 20 perc — ez alatt klip, nem meccs
+
 # ELSŐ TEENDŐ: a figyelmeztetések fontossági SORRENDJE. Egy gyenge
 # feldolgozás jellemzően négy-hat figyelmeztetést kap egyszerre, és a
 # felhasználó ilyenkor nem tudja, mivel kezdje — pedig a lista eleje és
@@ -556,7 +568,31 @@ def compute_quality_report(match: Match) -> dict:
             "vannak; érdemes a meccs tényleges kezdetétől indítani a "
             "feldolgozást.")
 
+    # KLIP vagy MECCS: a rövid felvétel teljesen jogos bemenet, de a
+    # meccs-szintű rétegek némán hallgatnak rajta — és a felhasználó
+    # ezt HIBÁNAK látja ("megcsináltam, és a fele üres"). Egy mondat
+    # elveszi ezt, és megnevezi, mi MŰKÖDIK.
+    #
+    # KÜLÖN MEZŐ, nem figyelmeztetés: ez nem probléma, hanem
+    # tájékoztatás. A `warnings` a HIBÁKÉ — ha az információ is oda
+    # kerülne, a "hibátlan feldolgozás = üres figyelmeztetés-lista"
+    # szabály elveszne, és minden rövid próba gyanúsnak látszana.
+    clip_note = None
+    if 0 < duration_s < CLIP_LENGTH_S:
+        clip_note = (
+            f"Ez klip-hosszú felvétel ({duration_s / 60:.0f} perc, a "
+            f"küszöb {CLIP_LENGTH_S / 60:.0f} perc) — nem hiba, csak "
+            "tudni kell, mit vársz tőle. MŰKÖDIK: lövés és "
+            "helyzetminőség, poszt- és felállás-kép, passz- és "
+            "birtoklás-mutatók, klipvágás. NEM szólal meg: hajrá, "
+            "félidő-összevetés, kondíció/fáradás, sorozatok — ezekhez "
+            "teljes meccs kell. A réteg-megbízhatóság szakasz "
+            "soronként is megmutatja, melyik mire épül.")
+
     return {
+        # None, ha a felvétel meccs-hosszú — a mező LÉTEZIK mindig,
+        # hogy a felület ne kulcs-hiányra fusson.
+        "clip_note": clip_note,
         "frames": n,
         "score": score,
         "avg_measured_players": round(avg_measured, 1),

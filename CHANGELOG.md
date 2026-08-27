@@ -5,6 +5,24 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.74 óta)
 
+- **"Klip, nem teljes meccs"** (motor + felület): egy kézilabda-meccs
+  2×30 perc; egy pár perces felvétel nem meccs, hanem KLIP. Ez
+  teljesen jogos bemenet — de a meccs-szintű rétegek (hajrá,
+  félidő-összevetés, kondíció, sorozatok) némán hallgatnak rajta, és a
+  felhasználó ezt eddig HIBÁNAK látta: "megcsináltam, és a fele üres".
+  A 20 percnél rövidebb felvétel mostantól kap egy mondatot arról,
+  **mi működik** (lövés és helyzetminőség, poszt- és felállás-kép,
+  passz- és birtoklás-mutatók, klipvágás) és **mi nem**. Megjelenik a
+  meccs-elemzőben, az edzői összefoglalóban (a szöveges alakban is,
+  tehát a csomagban) és a nyomtatott jelentés elején.
+
+  Szándékosan **nem figyelmeztetés és nem "első teendő"**, hanem külön
+  mező: a `warnings` a hibáké. Ha az információ is oda kerülne,
+  elveszne a "nincs figyelmeztetés = megbízható" szabály, és minden
+  rövid próba gyanúsnak látszana. Ugyanezért nem a "mennyire bízhatsz
+  ebben" dobozban van — hibátlan feldolgozású klipnél az riogatás
+  lenne.
+
 - **A "Javulok vagy romlok" a nyomtatott szezon-lapon is** (motor):
   a lapot a játékos TESZI EL — ha a képernyő megmondja, hogy javul, a
   nyomtatvány pedig nem, akkor a papír kevesebbet ér, mint a program,

@@ -3203,6 +3203,10 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     if quality:
         _pont = quality.get("score")
         _teendo = quality.get("next_action")
+        # A KLIP-jelzés nem hiba, hanem tájékoztatás — de a lap ELEJÉN
+        # a helye: aki egy három perces klip jelentését olvassa, a
+        # hallgató rétegeket enélkül hiányos elemzésnek nézi.
+        _klip = quality.get("clip_note")
         if _pont is not None and (_pont < LOW_SCORE_WARN or _teendo):
             _sor = (f"A feldolgozás minősége {_pont}/100 — az alábbi "
                     "megállapítások ennyire megbízhatóak.")
@@ -3210,6 +3214,9 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 _sor += f" Első teendő: {escape(str(_teendo))}"
             q_top = ('<div class="warnbox"><b>Mennyire bízhatsz ebben</b>'
                      f'<br>{_sor}</div>')
+        if _klip:
+            q_top += ('<div class="infobox"><b>Klip, nem teljes meccs</b>'
+                      f'<br>{escape(str(_klip))}</div>')
 
     # Minőség-önellenőrzés (ha van): pontszám + figyelmeztetések.
     q_html = ""
@@ -3267,6 +3274,12 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   p.empty {{ color: #8492A6; font-size: 12.5px; }}
   p.note {{ color: #4A5768; font-size: 12px; margin: 8px 0 0; }}
   .warnbox {{ border: 1px solid #C0392B; background: #FDECEA; color: #6E2018;
+              border-radius: 8px; padding: 10px 12px; margin: 0 0 18px;
+              font-size: 13px; line-height: 1.45; }}
+  /* TÁJÉKOZTATÁS, nem hiba (pl. "klip, nem teljes meccs"): semleges
+     szín. A piros doboz ugyanolyan félrevezető lenne, mint a
+     hallgatás — egy klip elemzése nem hibás elemzés. */
+  .infobox {{ border: 1px solid #C3CCD8; background: #F4F7FA; color: #2B3A4A;
               border-radius: 8px; padding: 10px 12px; margin: 0 0 18px;
               font-size: 13px; line-height: 1.45; }}
   .leadbox {{ border: 1.5px solid #9d7526; background: #fdf9f0;
