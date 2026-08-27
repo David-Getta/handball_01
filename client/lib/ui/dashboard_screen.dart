@@ -1040,61 +1040,123 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Félidők összefűzése: a két (külön feldolgozott) félidőből EGY teljes
-  /// meccs készül — a statisztikák, események és a felderítés így a teljes
-  /// mérkőzésre számolódnak. A sorrend számít: 1. félidő → 2. félidő.
+  /// Szakaszok összefűzése: a külön feldolgozott részekből EGY teljes
+  /// meccs készül — a statisztikák, események és a felderítés így a
+  /// teljes mérkőzésre számolódnak. A sorrend számít.
+  ///
+  /// AKÁRHÁNY szakasz: a "két félidő" csak az egyik eset. Aki
+  /// telefonnal vagy fényképezőgéppel vesz fel, darabokban kapja a
+  /// meccset (a felvétel négy gigánál vagy tíz percnél elvágódik) —
+  /// hat-nyolc klip, nem kettő. A motor eddig is tudott N szakaszt
+  /// összefűzni; csak a felület kérdezett pontosan kettőt.
   Future<void> _mergeFlow() async {
-    String? firstId;
-    String? secondId;
+    // A kijelölt szakaszok SORRENDBEN — a lista maga a sorrend, mert
+    // az összefűzés időrendet vár, és egy rossz sorrendű meccsen
+    // minden idő-alapú réteg félremegy.
+    final List<String> parts = [];
     final nameCtrl = TextEditingController();
+
+    String _cimke(String id) {
+      final m = _matches.firstWhere((e) => e["match_id"] == id,
+          orElse: () => const <String, dynamic>{});
+      final home = (m["home_team"] as String?) ?? "Hazai";
+      final away = (m["away_team"] as String?) ?? "Vendég";
+      return "$home vs $away · $id";
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlg) {
-          DropdownButtonFormField<String> picker(
-              String label, String? value, void Function(String?) onChanged,
-              {String? exclude}) {
-            return DropdownButtonFormField<String>(
-              initialValue: value,
-              decoration: InputDecoration(labelText: label),
-              dropdownColor: AppColors.surfaceAlt,
-              items: [
-                for (final m in _matches)
-                  if (m["match_id"] != exclude)
-                    DropdownMenuItem(
-                      value: m["match_id"] as String,
-                      child: Text(
-                        "${m["home_team"] ?? "Hazai"} vs ${m["away_team"] ?? "Vendég"}"
-                        " · ${m["match_id"]}",
-                        overflow: TextOverflow.ellipsis,
-                        style: AppText.value.copyWith(fontSize: 13),
-                      ),
-                    ),
-              ],
-              onChanged: (v) => setDlg(() => onChanged(v)),
-            );
-          }
-
+          final maradek = [
+            for (final m in _matches)
+              if (!parts.contains(m["match_id"])) m
+          ];
           return AlertDialog(
             backgroundColor: AppColors.surface,
-            title: const Text("Félidők összefűzése"),
+            title: const Text("Szakaszok összefűzése"),
             content: SizedBox(
-              width: 460,
+              width: 520,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Válaszd ki időrendben a két felvételt — egy teljes meccs "
-                    "készül belőlük. Az eredeti félidők megmaradnak.",
+                    "Add hozzá a szakaszokat IDŐRENDBEN — akárhányat. "
+                    "Két félidő, vagy egy darabokban felvett meccs "
+                    "összes klipje. Az eredeti szakaszok megmaradnak.",
                     style: AppText.label.copyWith(fontSize: 12),
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  picker("1. félidő", firstId, (v) => firstId = v,
-                      exclude: secondId),
                   const SizedBox(height: AppSpacing.md),
-                  picker("2. félidő", secondId, (v) => secondId = v,
-                      exclude: firstId),
+                  // A KIJELÖLT lista, sorszámozva: a sorrend itt
+                  // látszik, és itt is javítható.
+                  if (parts.isEmpty)
+                    Text("Még nincs kijelölt szakasz.",
+                        style: AppText.label.copyWith(fontSize: 12))
+                  else
+                    for (var i = 0; i < parts.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(children: [
+                          SizedBox(
+                              width: 22,
+                              child: Text("${i + 1}.",
+                                  style: AppText.value
+                                      .copyWith(fontSize: 12.5))),
+                          Expanded(
+                            child: Text(_cimke(parts[i]),
+                                overflow: TextOverflow.ellipsis,
+                                style: AppText.label.copyWith(
+                                    fontSize: 12.5,
+                                    color: AppColors.textPrimary)),
+                          ),
+                          IconButton(
+                            tooltip: "Feljebb",
+                            iconSize: 16,
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(Icons.arrow_upward),
+                            onPressed: i == 0
+                                ? null
+                                : () => setDlg(() {
+                                      final x = parts.removeAt(i);
+                                      parts.insert(i - 1, x);
+                                    }),
+                          ),
+                          IconButton(
+                            tooltip: "Eltávolítás",
+                            iconSize: 16,
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(Icons.close),
+                            onPressed: () =>
+                                setDlg(() => parts.removeAt(i)),
+                          ),
+                        ]),
+                      ),
+                  const SizedBox(height: AppSpacing.md),
+                  DropdownButtonFormField<String>(
+                    initialValue: null,
+                    decoration: const InputDecoration(
+                        labelText: "Szakasz hozzáadása a lista végére"),
+                    dropdownColor: AppColors.surfaceAlt,
+                    items: [
+                      for (final m in maradek)
+                        DropdownMenuItem(
+                          value: m["match_id"] as String,
+                          child: Text(
+                            "${m["home_team"] ?? "Hazai"} vs "
+                            "${m["away_team"] ?? "Vendég"} · "
+                            "${m["match_id"]}",
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.value.copyWith(fontSize: 13),
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) setDlg(() => parts.add(v));
+                    },
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   TextField(
                     controller: nameCtrl,
@@ -1113,24 +1175,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: FilledButton.styleFrom(
                     backgroundColor: AppColors.accent,
                     foregroundColor: AppColors.onAccent),
-                onPressed: (firstId == null || secondId == null)
+                // A motor legalább KETTŐT vár — egy szakaszt nincs
+                // mihez fűzni.
+                onPressed: parts.length < 2
                     ? null
                     : () => Navigator.pop(ctx, true),
-                child: const Text("Összefűzés"),
+                child: Text(parts.length < 2
+                    ? "Összefűzés"
+                    : "Összefűzés (${parts.length} szakasz)"),
               ),
             ],
           );
         },
       ),
     );
-    if (ok != true || firstId == null || secondId == null) return;
+    if (ok != true || parts.length < 2) return;
     try {
-      final newId = await _api.mergeMatches([firstId!, secondId!],
+      final newId = await _api.mergeMatches(List<String>.from(parts),
           matchId: nameCtrl.text.trim());
       await _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Teljes meccs létrehozva: $newId")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Teljes meccs létrehozva ${parts.length} "
+              "szakaszból: $newId")));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -1688,7 +1755,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           : AppColors.borderStrong),
                 ),
                 icon: const Icon(Icons.merge_type, size: 18),
-                label: const Text("Félidők összefűzése"),
+                // NEM "félidők": aki telefonnal vesz fel, hat-nyolc
+                // darabot kap, nem kettőt.
+                label: const Text("Szakaszok összefűzése"),
               ),
               const SizedBox(width: AppSpacing.sm),
               OutlinedButton.icon(

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.74 óta)
 
+- **Az összefűzés akárhány szakaszt elfogad** (felület): aki telefonnal
+  vagy fényképezőgéppel vesz fel, DARABOKBAN kapja a meccset — a
+  felvétel négy gigánál vagy tíz percnél elvágódik, és hat-nyolc klip
+  lesz belőle, nem kettő. A motor eddig is tudott N szakaszt
+  összefűzni; a **felület kérdezett pontosan kettőt**, és emiatt a
+  darabokban felvett meccs összerakhatatlan volt. Mostantól sorszámozott
+  listába lehet felvenni akárhány szakaszt, a **sorrend látszik és
+  javítható** (mozgatás, eltávolítás) — az összefűzés időrendet vár, és
+  egy rossz sorrendű meccsen minden idő-alapú réteg (hajrá, sorozatok,
+  kondíció) némán félremegy. A gomb neve sem "félidők" többé: az csak
+  az egyik eset.
+
 - **Rövid szakaszra a program ajánlja a "Pontos" profilt** (API +
   felület): a profil-választó eddig három nevet kínált, és sehol nem
   mondta meg, mikor melyik éri meg. A "Pontos" egy teljes meccsen

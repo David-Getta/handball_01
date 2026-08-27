@@ -2254,3 +2254,32 @@ def test_a_feltoltes_lap_ajanlja_a_pontos_profilt_rovid_szakaszra():
         "a lap nem olvassa a profil-javaslatot")
     assert "_profileHintCard" in fel and "_profileHintCard()," in fel, (
         "a javaslat-kártya nincs beépítve a lapba")
+def test_az_osszefuzes_akarhany_szakaszt_elfogad():
+    """Aki telefonnal vesz fel, DARABOKBAN kapja a meccset.
+
+    A felvétel négy gigánál vagy tíz percnél elvágódik — hat-nyolc
+    klip lesz belőle, nem kettő. A motor eddig is tudott N szakaszt
+    összefűzni; a felület kérdezett pontosan kettőt, és emiatt a
+    darabokban felvett meccs összerakhatatlan volt.
+
+    A SORREND látszódjon és legyen javítható: az összefűzés időrendet
+    vár, és egy rossz sorrendű meccsen minden idő-alapú réteg
+    (hajrá, sorozatok, kondíció) félremegy — némán.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    # Nem két rögzített mező, hanem LISTA.
+    assert "final List<String> parts = []" in kezdo, (
+        "az összefűzés még mindig két rögzített szakaszt kér")
+    assert "parts.length < 2" in kezdo, "hiányzik a kettes alsó korlát"
+    # A sorrend látszik (sorszám) és javítható (mozgatás, eltávolítás).
+    assert "Feljebb" in kezdo and "Eltávolítás" in kezdo
+    # A megnevezés sem "félidő": az csak az egyik eset.
+    assert "Szakaszok összefűzése" in kezdo
+    assert "Félidők összefűzése" not in kezdo
