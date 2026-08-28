@@ -35,14 +35,45 @@ MID_LO, MID_HI = 0.2, 0.8  # a szünetet a felvétel középső részén keress�
 SWAP_MIN_SHIFT_M = 3.0
 
 
+def _segment_swap_halftime(match: Match) -> Optional[int]:
+    """A DARABOK KÖZTI térfélcsere-határ mint félidő-pont.
+
+    A darabokban felvett meccsben NINCS alacsony-aktivitású szünet: a
+    telefon a szünet alatt nem vett fel, az összefűzött frames-ben a két
+    félidő közvetlenül ér össze. Az aktivitás-alapú felismerés itt némán
+    None-t adna, és minden félidő-tudatos réteg (félidei állás,
+    fordítás, félidő-nyitás, fáradás-összevetés) elhallgatna — pont a
+    darabokban felvett meccseken. Az összefűzés viszont TUDJA, hol
+    fordult a pálya: az a szakasz-határ, ahol a tükrözés-állapot
+    átvált (akár a gép döntött, akár az ember a ⇄ gombbal), maga a
+    félidő. Pontosan EGY ilyen határnál fogadjuk el — több fordulás
+    (oda-vissza) már nem félidő-alakú, ott nem tippelünk.
+    """
+    szakaszok = getattr(match.meta, "source_segments", None) or []
+    hatarok = []
+    for i in range(1, len(szakaszok)):
+        elozo, ez = szakaszok[i - 1], szakaszok[i]
+        if (bool(elozo.get("mirrored")) != bool(ez.get("mirrored"))
+                and ez.get("mirror_decided") is True):
+            hatarok.append(ez["t_from"])
+    return hatarok[0] if len(hatarok) == 1 else None
+
+
 @memoize_primitive("detect_halftime")
 def detect_halftime(match: Match) -> Optional[int]:
-    """A félidei szünet KÖZEPÉNEK frame-ideje, vagy None, ha nincs szünet.
+    """A félidő-pont frame-ideje, vagy None, ha nem ismerhető fel.
 
-    Ablakonként méri az aktivitást (mért játékosok átlagos száma); a
-    felvétel középső 20–80%-ában keresi a leghosszabb alacsony-aktivitású
-    összefüggő szakaszt, és csak BREAK_MIN_S felett fogadja el.
+    Két forrás, ebben a sorrendben:
+    1. Darabokban felvett (összefűzött) meccsnél a szakasz-határ, ahol
+       a térfél fordult — ott nincs felvett szünet, amit mérni lehetne.
+    2. Egyben felvett meccsnél a szünet KÖZEPE: ablakonként mért
+       aktivitás (mért játékosok átlagos száma), a felvétel középső
+       20–80%-ában a leghosszabb alacsony-aktivitású összefüggő
+       szakasz, csak BREAK_MIN_S felett.
     """
+    szakasz_ht = _segment_swap_halftime(match)
+    if szakasz_ht is not None:
+        return szakasz_ht
     span = detect_break_span(match)
     if span is None:
         return None

@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.83 óta)
 
+- **Három vagy több darabnál a 2. félidő minden darabja jó irányba
+  fordul** (motor, SÜRGŐS): a v0.1.83 szakasz-határos tükrözése az
+  állapotot billegtette ("fordulás → átváltunk"), pedig a határ előtti
+  ablak már a NORMALIZÁLT képet mutatja — ezért a tükrözött darab
+  utáni nyers darab újra "fordulást" mutatott, és a hatklipes meccsben
+  minden MÁSODIK 2. félidős darab visszafordult volna. A szabály
+  mostantól: pontosan akkor tükrözünk, ha a nyers kép a normalizálthoz
+  képest fordított. Két darabnál a viselkedés változatlan; aki 3+
+  darabból fűzött össze a v0.1.83-mal, fűzze össze újra.
+
+- **Az összefűzött meccsnek is van félideje** (motor): a darabokban
+  felvett meccsben nincs felvett szünet (a telefon a szünet alatt
+  állt), az aktivitás-alapú félidő-felismerés némán semmit sem talált
+  — és minden félidő-tudatos réteg (félidei állás, fordítás,
+  félidő-nyitás, momentum, fáradás-összevetés) elhallgatott, pont a
+  darabokban felvett meccseken. A félidő-pont mostantól a
+  szakasz-határ, ahol a térfél fordult — akár a gép döntött, akár az
+  ember a ⇄ gombbal. Egyben felvett meccsen minden marad a régiben.
+
 - **A térfél egy gombbal eldönthető — az ember dönt, ahol a gép nem
   tudott** (motor + könyvtár): az összefűzés kevés mért pozíciónál nem
   dönti el a térfélcserét, és eddig a jelentés csak annyit tudott

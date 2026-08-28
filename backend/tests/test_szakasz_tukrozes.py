@@ -184,3 +184,120 @@ def test_a_flip_hibai_erthetoek():
     assert "forrás-térkép" in r.json()["detail"]
     # Nem létező meccs → 404.
     assert c.post("/matches/nincs/segments/0/flip").status_code == 404
+
+
+# ------------------------------------------------- félidő a határból
+
+def _aktiv_resz(match_id, n, home_x, video, fps=10.0):
+    """Mint a _resz, de AKTÍV: 3-3 mért játékos csapatonként — így az
+    aktivitás-alapú szünet-felismerés nem lát mindenütt "szünetet"
+    (a ritkás fixture-t annak látná), és tényleg a szakasz-határ útja
+    dönt."""
+    from handball.pipeline.calibration import COURT_LENGTH_M
+
+    meta = MatchMeta(match_id=match_id, home_team="Mi", away_team="Ok",
+                     fps=fps, video_path=video)
+    frames = []
+    for i in range(n):
+        jatekosok = []
+        for j in range(3):
+            jatekosok.append(PlayerPosition(
+                track_id=1 + j, team=Team.HOME,
+                x=home_x + (i % 5) * 0.1 + j * 0.3, y=6.0 + j * 2.0))
+            jatekosok.append(PlayerPosition(
+                track_id=11 + j, team=Team.AWAY,
+                x=COURT_LENGTH_M - home_x - (i % 5) * 0.1 - j * 0.3,
+                y=6.0 + j * 2.0))
+        frames.append(Frame(t=i, players=jatekosok,
+                            ball=Ball(x=home_x, y=10.0)))
+    return Match(meta, frames)
+
+
+def test_a_felido_a_terfelcsere_hatarbol_jon_a_darabolt_meccsen():
+    """A darabokban felvett meccsben NINCS felvett szünet (a telefon a
+    szünet alatt állt) — az aktivitás-alapú félidő-felismerés némán
+    None-t adna, és minden félidő-tudatos réteg elhallgatna. Az
+    összefűzés viszont tudja, hol fordult a pálya: az a határ a félidő."""
+    from handball.pipeline.halftime import detect_halftime
+
+    a = _aktiv_resz("ht1", 800, 10.0, video="/v/a.mp4")
+    b = _aktiv_resz("ht2", 800, 30.0, video="/v/b.mp4")
+    m = merge_matches([a, b], "teljes")
+    assert m.meta.source_segments[1]["mirrored"] is True  # a gép döntött
+
+    assert detect_halftime(m) == 800  # a 2. szakasz első kockája
+
+
+def test_az_emberi_forditas_utan_is_meglesz_a_felido():
+    """Kevés mintánál a gép nem dönt — félidő sincs. Amikor az ember a
+    ⇄ gombbal megfordítja a 2. szakaszt, a döntésével együtt a
+    félidő-pont is megszületik: a félidő-tudatos rétegek felébrednek."""
+    from handball.pipeline.halftime import detect_halftime
+
+    a = _resz("hu1", 20, 10.0, video="/v/a.mp4")
+    b = _resz("hu2", 20, 10.0, video="/v/b.mp4")
+    m = merge_matches([a, b], "teljes")
+    assert detect_halftime(m) is None  # nincs döntés, nincs szünet sem
+
+    flip_segment(m, 1)
+    assert detect_halftime(m) == 20
+
+
+def test_a_felidon_beluli_vagas_nem_ad_hamis_felidot():
+    """Ha a telefon a félidőn BELÜL vágta el a felvételt (nincs csere a
+    határon), a határ nem félidő — és nem is jelentjük annak."""
+    from handball.pipeline.halftime import detect_halftime
+
+    a = _aktiv_resz("hv1", 800, 10.0, video="/v/a.mp4")
+    b = _aktiv_resz("hv2", 800, 10.0, video="/v/b.mp4")
+    m = merge_matches([a, b], "teljes")
+    assert m.meta.source_segments[1]["mirrored"] is False
+
+    assert detect_halftime(m) is None
+
+
+def test_tobb_fordulasnal_nem_tippelunk_felidot():
+    """Oda-vissza forduló szakaszok (pl. rossz sorrendben összefűzött
+    darabok) nem félidő-alakúak — ott inkább nincs félidő-pont, mint
+    egy rossz."""
+    from handball.pipeline.halftime import detect_halftime
+
+    a = _aktiv_resz("hz1", 800, 10.0, video="/v/a.mp4")
+    b = _aktiv_resz("hz2", 800, 30.0, video="/v/b.mp4")
+    c_ = _aktiv_resz("hz3", 800, 10.0, video="/v/c.mp4")
+    m = merge_matches([a, b, c_], "teljes")
+    sz = m.meta.source_segments
+    assert [s["mirrored"] for s in sz] == [False, True, False]
+
+    assert detect_halftime(m) is None
+
+
+def test_a_hat_darabos_meccs_masodik_felideje_egyben_fordul():
+    """A hat klipes meccs (a tipikus telefonos felvétel): a félidő a 3.
+    és 4. darab közé esik. A 2. félidő MINDEN darabjának tükrözve kell
+    lennie — nem csak az elsőnek. (A határ előtti ablak már a
+    normalizált képet mutatja, ezért a tükrözött darab utáni nyers
+    darab újra "fordulást" mutat — az állapot billegtetése minden
+    második 2. félidős darabot visszafordított volna.)"""
+    from handball.pipeline.halftime import detect_halftime
+
+    reszek = [
+        _aktiv_resz("s1", 800, 10.0, video="/v/1.mp4"),
+        _aktiv_resz("s2", 800, 10.0, video="/v/2.mp4"),
+        _aktiv_resz("s3", 800, 10.0, video="/v/3.mp4"),
+        _aktiv_resz("s4", 800, 30.0, video="/v/4.mp4"),
+        _aktiv_resz("s5", 800, 30.0, video="/v/5.mp4"),
+        _aktiv_resz("s6", 800, 30.0, video="/v/6.mp4"),
+    ]
+    m = merge_matches(reszek, "teljes")
+    sz = m.meta.source_segments
+    assert [s["mirrored"] for s in sz] == [
+        False, False, False, True, True, True], sz
+
+    # A hazai a TELJES meccsen a bal térfélen áll (normalizált kép).
+    hazai_x = [p.x for f in m.frames for p in f.players
+               if p.team == Team.HOME]
+    assert max(hazai_x) < 15.0
+
+    # És a félidő-pont a 4. darab eleje.
+    assert detect_halftime(m) == 3 * 800

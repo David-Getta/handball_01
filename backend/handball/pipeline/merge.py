@@ -220,8 +220,16 @@ def _normalize_segment_sides(match: Match) -> None:
                 atfordult += 1
         if vizsgalt > 0:
             fordult = atfordult == vizsgalt and atfordult > 0
-        if fordult:
-            forditva = not forditva
+        # A határ ELŐTTI ablak már a NORMALIZÁLT képet mutatja (a
+        # korábbi szakaszokat tükröztük a frames-ben), tehát a "fordult"
+        # azt jelenti: a KÖVETKEZŐ szakasz nyers képe a normalizálthoz
+        # képest fordított — pontosan akkor kell tükrözni, ha fordult.
+        # (NEM billegtetés: az állapot átbillentése három vagy több
+        # szakasznál minden második 2. félidős darabot visszafordított
+        # volna, mert a tükrözött darab után a következő nyers darab
+        # újra "fordulást" mutat.)
+        if fordult is not None:
+            forditva = fordult
         # Eldönthetetlen határnál (kevés minta) az ÁLLAPOT öröklődik:
         # fordulásra nincs jel, tehát maradunk az eddigi irányban — és
         # ha az fordított volt, ezt a szakaszt is tükrözni kell,
