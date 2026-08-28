@@ -3,6 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.77 óta)
+
+- **Az összefűzött meccs darabjai nem duplázzák a szezont** (motor +
+  API): összefűzés után a darabok és az egész is a könyvtárban van (a
+  darab szándékosan megmarad — törölhető, külön is megnézhető). A
+  szezon-szintű összesítés viszont így ugyanazt a meccset KÉTSZER
+  számolta: a #7 gólja egyszer a darabban, egyszer az egészben — a
+  góllövő-lista, a játékos-görbe, a szezon-mérleg, az egymás-elleni és
+  a jegyzet-lista is duplázott. Az összefűzött meccs mostantól viszi,
+  MIBŐL lett (`merged_from`), és minden szezon-számolás kihagyja a
+  darabokat. A könyvtár-LISTA (a kezelő nézet) továbbra is mindent
+  mutat: a törléshez látni kell. Aki nem fűz össze, annak semmi nem
+  változik — erre külön őr van.
+
 ## v0.1.77 — kiadva (2026-08-28)
 
 > Kiadás-jegyzet: a darabokban felvett meccs EGY mozdulat. A v0.1.75

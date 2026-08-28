@@ -178,6 +178,12 @@ class MatchMeta:
     # Elemenként: {"t_from", "t_to" (kizárólagos), "video_path",
     # "start_frame", "stride"} — a t a MERGE UTÁNI játékidő kockákban.
     source_segments: list = field(default_factory=list)
+    # MIBŐL lett összefűzve (a darabok match_id-jei). A szezon-szintű
+    # számolás ebből tudja, hogy a darabokat KI KELL hagynia: az
+    # összefűzött meccs és a hat darabja együtt ugyanazt a meccset
+    # kétszer számolná — a góllövő-lista, a szezon-mérleg és a
+    # jegyzet-lista is duplázna.
+    merged_from: list = field(default_factory=list)
 
 
 @dataclass

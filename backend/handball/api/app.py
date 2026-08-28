@@ -2013,7 +2013,7 @@ def create_app():
         # legutóbbi meccsből indul, és húsz meccs jegyzetei közt a
         # felvételi sorrend semmit nem mond. Meccsen belül marad az
         # időrend (a jegyzetek a meccs menetét követik).
-        meccsek = sorted(_store.values(),
+        meccsek = sorted(_season_matches(),
                          key=lambda m: ((m.meta.date or ""),
                                         m.meta.match_id),
                          reverse=True)
@@ -2802,6 +2802,25 @@ def create_app():
     import_library.__annotations__["request"] = Request
     app.post("/library/import")(import_library)
 
+    def _season_matches() -> list:
+        """A könyvtár meccsei SZEZON-számoláshoz: az összefűzött meccsek
+        DARABJAI nélkül.
+
+        Összefűzés után a darabok és az egész is a könyvtárban van (a
+        darab szándékosan megmarad: törölhető, újrafeldolgozható). A
+        szezon-szintű összesítés viszont így ugyanazt a meccset KÉTSZER
+        számolná — a góllövő-lista, a szezon-mérleg, az egymás-elleni
+        és a jegyzet-lista is duplázna. Ez a szűrő veszi ki a
+        darabokat; a könyvtár-LISTA (a kezelő nézet) továbbra is
+        mindent mutat.
+        """
+        reszek: set = set()
+        for m in _store.values():
+            for rid in (getattr(m.meta, "merged_from", None) or []):
+                reszek.add(str(rid))
+        return [m for m in _store.values()
+                if m.meta.match_id not in reszek]
+
     # A keret-viszonyítás küszöbei: ennyi játékidő alatt valaki nem
     # "játszott" (a fél percre beálló csere lehúzná az átlagot), és
     # ennyi ember alatt nincs értelmes keret-átlag.
@@ -2866,7 +2885,7 @@ def create_app():
         pont ezért éri meg mezszámot rendelni a játékosokhoz.
         """
         points = []
-        for match in _store.values():
+        for match in _season_matches():
             side = None
             if match.meta.home_team == team:
                 side = Team.HOME
@@ -3029,7 +3048,7 @@ def create_app():
         from fastapi.responses import HTMLResponse
         pair = {team_a, team_b}
         entries = []
-        for m in _store.values():
+        for m in _season_matches():
             if {m.meta.home_team, m.meta.away_team} != pair:
                 continue
             entries.append((m.meta.date or "", m))
@@ -3125,7 +3144,7 @@ def create_app():
         van a csapattól."""
         from fastapi.responses import HTMLResponse
         entries = []
-        for m in _store.values():
+        for m in _season_matches():
             side = ("home" if m.meta.home_team == team
                     else "away" if m.meta.away_team == team else None)
             if side is None:
@@ -3293,7 +3312,7 @@ def create_app():
         """
         fokusz: dict = {}
         try:
-            for m_ in _store.values():
+            for m_ in _season_matches():
                 if m_.meta.home_team == team:
                     oldal = "home"
                 elif m_.meta.away_team == team:
@@ -3556,7 +3575,7 @@ def create_app():
         A meccsenkénti számítás gyorsítótárazott (frame-szám az érvényesség),
         így a kezdőlap újranyitása nagy könyvtárnál is azonnali.
         """
-        per = [_match_summary(m) for m in _store.values()]
+        per = [_match_summary(m) for m in _season_matches()]
         per.sort(key=lambda d: (d.get("date") or "", d["match_id"]))
         teams = sorted({t for d in per
                         for t in (d["home_team"], d["away_team"]) if t})
@@ -3590,7 +3609,7 @@ def create_app():
         saves_t: dict = {}
         assists_t: dict = {}
         matches_t: dict = {}
-        for m in _store.values():
+        for m in _season_matches():
             jersey_of: dict = {}
             team_name = {"home": m.meta.home_team,
                          "away": m.meta.away_team}
@@ -3759,7 +3778,7 @@ def create_app():
         from ..pipeline.training import training_focus
         agg: dict = {}
         counts: dict = {}
-        for m in _store.values():
+        for m in _season_matches():
             key = (len(m.frames), m.meta.home_team, m.meta.away_team)
             cached = _training_cache.get(m.meta.match_id)
             if cached is not None and cached[0] == key:
@@ -3817,7 +3836,7 @@ def create_app():
         gyakorlandója van: az edző ott kezdi a hetet.
         """
         mezek: set = set()
-        for m_ in _store.values():
+        for m_ in _season_matches():
             if m_.meta.home_team == team:
                 oldal = Team.HOME
             elif m_.meta.away_team == team:

@@ -123,4 +123,5 @@ def merge_matches(parts: list[Match], match_id: str,
         id_offset += max_id + 1
     meta.source_segments = szakaszok
     meta.event_overrides = javitasok
+    meta.merged_from = [p.meta.match_id for p in parts]
     return Match(meta=meta, frames=frames)
