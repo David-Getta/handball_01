@@ -3,6 +3,27 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.82 óta)
+
+- **Térfélcsere a szakasz-határokon — az összefűzött meccs eredménye
+  helyes** (motor, SÜRGŐS): egy videón belül a feldolgozás felismeri a
+  szünetet és tükrözi a második félidőt — de a darabokban felvett
+  meccsnél a térfélcsere a DARABOK KÖZÖTT van, és a 2. félidő darabja
+  önmagában normalizálatlan maradt. A lövés-felismerés irány-szabálya
+  az egész meccsre egy, tehát az összefűzött meccs 2. félidejének
+  MINDEN gólja a rossz csapathoz került volna — az eredmény
+  értelmetlen. Az összefűzés mostantól minden szakasz-határon
+  ellenőrzi a súlypont-fordulást (a szünet-felismerés szabályával), és
+  tükrözi a fordult szakaszokat.
+
+  Három védőkorlát: a félidőn BELÜLI vágásnál (a telefon elvágta a
+  felvételt, de nincs csere) nem tükrözünk; kevés mért pozíciónál nem
+  döntünk (a rossz irányú tükrözés ugyanakkora hiba, mint a
+  kihagyott) és a bejegyzés kimondja, hogy a döntés nem született meg;
+  az eldönthetetlen határon pedig az addigi irány öröklődik. A döntés
+  szakaszonként a forrás-térképbe kerül. A klip-vágást nem érinti: a
+  kép-indexek a videóra mutatnak, a tükrözés csak pálya-koordináta.
+
 ## v0.1.82 — kiadva (2026-08-28)
 
 > Kiadás-jegyzet: a BIZONYÍTÉK kiadása. A felderítés kulcs-mondata

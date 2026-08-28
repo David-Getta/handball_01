@@ -205,3 +205,100 @@ def test_a_mezszamok_tulelik_az_osszefuzest():
     m = merge_matches([a, b], "teljes")
     mezek = sorted({p.jersey_number for f in m.frames for p in f.players})
     assert mezek == [9, 11], mezek
+# ---- Térfélcsere a szakasz-határon -----------------------------------
+
+
+def _terfeles_resz(match_id, n, home_x, video="/v/a.mp4",
+                   fps=10.0):
+    """Rész, ahol a HAZAI súlypontja home_x, a VENDÉGÉ a tükörképe."""
+    from handball.pipeline.calibration import COURT_LENGTH_M
+
+    meta = MatchMeta(match_id=match_id, home_team="Mi", away_team="Ok",
+                     fps=fps, video_path=video)
+    frames = []
+    for i in range(n):
+        frames.append(Frame(t=i, players=[
+            PlayerPosition(track_id=1, team=Team.HOME,
+                           x=home_x + (i % 5) * 0.1, y=8.0),
+            PlayerPosition(track_id=2, team=Team.AWAY,
+                           x=COURT_LENGTH_M - home_x - (i % 5) * 0.1,
+                           y=12.0),
+        ], ball=Ball(x=home_x, y=10.0)))
+    return Match(meta, frames)
+
+
+def test_a_masodik_felido_darabja_tukrozodik():
+    """A DARABOK KÖZTI térfélcsere: egy videón belül a feldolgozás
+    felismeri a szünetet és tükröz — a külön feldolgozott 2. félidő
+    darabja viszont önmagában normalizálatlan. Tükrözés nélkül a
+    lövés-felismerés a 2. félidő MINDEN gólját a rossz csapathoz írná
+    (az irány-szabály az egész meccsre egy), és az összefűzött meccs
+    eredménye értelmetlen lenne.
+    """
+    # 1. félidő: a hazai a bal térfélen (x≈10); 2. félidő: átment a
+    # jobbra (x≈30) — 800 kocka / 10 fps, hogy a minta-küszöb meglegyen.
+    a = _terfeles_resz("f1", 800, 10.0, video="/v/a.mp4")
+    b = _terfeles_resz("f2", 800, 30.0, video="/v/b.mp4")
+    m = merge_matches([a, b], "teljes")
+
+    sz = m.meta.source_segments
+    assert sz[0]["mirrored"] is False
+    assert sz[1]["mirrored"] is True, sz
+
+    # A tükrözés után a hazai VÉGIG a bal térfélen van.
+    masodik = [f for f in m.frames if f.t >= sz[1]["t_from"]]
+    hazai_x = [p.x for f in masodik for p in f.players
+               if p.team == Team.HOME]
+    assert max(hazai_x) < 15.0, (min(hazai_x), max(hazai_x))
+    # A labda is tükröződött.
+    assert all(f.ball.x < 15.0 for f in masodik if f.ball is not None)
+
+
+def test_a_felidon_beluli_vagas_nem_tukrozodik():
+    """Aki egy félidőt vett fel két darabban (a telefon elvágta), annál
+    NINCS térfélcsere a határon — a tükrözés ott hiba lenne."""
+    a = _terfeles_resz("g1", 800, 10.0, video="/v/a.mp4")
+    b = _terfeles_resz("g2", 800, 10.0, video="/v/b.mp4")
+    m = merge_matches([a, b], "teljes")
+    assert m.meta.source_segments[1]["mirrored"] is False
+    hazai_x = [p.x for f in m.frames for p in f.players
+               if p.team == Team.HOME]
+    assert max(hazai_x) < 15.0
+
+
+def test_keves_mintanal_nem_tukrozunk_es_ki_van_mondva():
+    """Kevés mért pozíciónál nem döntünk: a rossz irányú tükrözés
+    ugyanakkora hiba, mint a kihagyott — a bejegyzés kimondja, hogy a
+    döntés nem született meg (mirror_decided=False)."""
+    a = _terfeles_resz("h1", 20, 10.0, video="/v/a.mp4")
+    b = _terfeles_resz("h2", 20, 30.0, video="/v/b.mp4")
+    m = merge_matches([a, b], "teljes")
+    sz = m.meta.source_segments
+    assert sz[1]["mirror_decided"] is False
+    assert sz[1]["mirrored"] is False  # az állapot öröklődik (nem volt)
+
+
+def test_a_gol_a_jo_csapathoz_kerul_a_tukrozes_utan():
+    """A VALÓDI következmény: a 2. félidei hazai gól tükrözés nélkül a
+    vendégé lenne. A lövés-felismerésen mérjük, nem a koordinátákon."""
+    from handball.pipeline.calibration import COURT_LENGTH_M
+    from handball.pipeline.event_detection import EventType, detect_shots
+
+    # 1. félidő: hazai balról jobbra támad (labda a +x kapu felé fut).
+    a = _terfeles_resz("i1", 800, 10.0, video="/v/a.mp4")
+    for i in range(6):
+        a.frames[700 + i].ball = Ball(x=34.0 + i, y=5.0, confidence=1.0)
+    # 2. félidő: térfélcsere — a hazai most jobbról BALRA támad, a
+    # gólja a -x kapura megy.
+    b = _terfeles_resz("i2", 800, 30.0, video="/v/b.mp4")
+    for i in range(6):
+        b.frames[700 + i].ball = Ball(x=COURT_LENGTH_M - 34.0 - i,
+                                      y=15.0, confidence=1.0)
+
+    m = merge_matches([a, b], "teljes")
+    lovesek = detect_shots(m)
+    masodik_felido = [e for e in lovesek
+                      if e.t >= m.meta.source_segments[1]["t_from"]]
+    assert masodik_felido, "a 2. félidei lövés nem került felismerésre"
+    # Tükrözés UTÁN a 2. félidei lövés is a hazaié.
+    assert all(e.team == Team.HOME for e in masodik_felido), masodik_felido
