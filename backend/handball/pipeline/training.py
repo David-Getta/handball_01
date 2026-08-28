@@ -36,6 +36,11 @@ PTF_XG_GAP = 0.8
 # Kondíció: ekkora (százalékos) második félidei tempó-esés fölött
 # beszélünk a LÁBRÓL, nem a napi formáról.
 PTF_FATIGUE_DROP_PCT = 25.0
+# Kapus: ennyi kapura tartó lövés kell az ítélethez (kevesebből a
+# védés-arány szórás), és ekkora várható-alatti mérleg (GSAx) számít
+# formahiánynak — az 1,0 nagyjából egy "bevédhető" gól.
+PTF_GK_MIN_ON_TARGET = 6
+PTF_GK_GSAX = -1.0
 
 
 def training_focus(match: Match,
@@ -11453,7 +11458,7 @@ def player_training_focus(match: Match,
     fókuszokat, ugyanabban az alakban, mint a csapat-lista (terület,
     fókusz, indok, gyakorlat).
 
-    Hét forrás, mind a maga küszöbével (egy forrás hibája nem viheti
+    Nyolc forrás, mind a maga küszöbével (egy forrás hibája nem viheti
     el a többit):
       - nyomás alatti labdakezelés (pressure_sensitive_players),
       - fáradt eladás (tired_turnover_players),
@@ -11461,7 +11466,9 @@ def player_training_focus(match: Match,
       - hosszú labda kockázata (risky_passers),
       - döntés a hajrában (clutch_turnover_players),
       - egy az egy elleni védekezés (beaten_defenders),
-      - kondíció: második félidei tempó-esés (player_fatigue).
+      - kondíció: második félidei tempó-esés (player_fatigue),
+      - kapus: várható alatti védés-mérleg (goalkeeper_timeline) — a
+        kapus is játékos, az ő lapja sem maradhat üres.
 
     A védekezés szándékosan benne van: e nélkül a lap csak a
     támadó-oldali hibákat sorolná, és a védekező munkát végző emberek
@@ -11684,6 +11691,42 @@ def _player_training_focus_cached(match: Match,
                 "intervallum-futás a hajrá ritmusában (30/30), és "
                 "cserével tervezett terhelés a meccsen — a lábat nem "
                 "meccsen kell megszerezni")
+    except Exception:
+        pass
+
+    # (e) Kapus — a várható alatti védés-mérleg (GSAx).
+    #
+    # A KAPUS IS JÁTÉKOS: a hét mezőnyforrás egyike sem szól róla, és
+    # a kapus lapja e nélkül üresen maradt — miközben a csapat-szintű
+    # edzés-fókusznak van kapus-szabálya. A lapot a játékos azért
+    # teszi el, mert RÓLA szól; az üres lap azt mondja neki, hogy a
+    # program nem látja.
+    try:
+        from .goalkeeper import goalkeeper_timeline
+        gtl = goalkeeper_timeline(match)
+        for side in ("home", "away"):
+            per_keeper = (gtl.get(side) or {}).get("per_keeper") or {}
+            for tid, rec in per_keeper.items():
+                on = rec.get("on_target") or 0
+                gsax = rec.get("prevented")
+                if on < PTF_GK_MIN_ON_TARGET or gsax is None:
+                    continue
+                if gsax > PTF_GK_GSAX:
+                    continue
+                add(side, tid, mez.get(tid),
+                    "kapus",
+                    "Védés-forma",
+                    f"a kapura tartó {on} lövésből {rec.get('saves', 0)} "
+                    f"védés — a várhatónál {abs(gsax):.1f} góllal "
+                    "kevesebbet fogott",
+                    "helyezkedés-sor: alap-pozíció a lövő szöge szerint, "
+                    "majd reakció-sor közelről (5-7 m) váltott sarokra; "
+                    "a hosszú sarok zárása tudatosan — a mérleg ott "
+                    "szokott elfolyni",
+                    # A kapott gól a MÁSIK csapat eseménye — mezszám
+                    # szerint nem szűrhető rá; a jelenet-ajánlás itt
+                    # üres, nem hazudunk "nézd meg" gombot.
+                    clips=[])
     except Exception:
         pass
 

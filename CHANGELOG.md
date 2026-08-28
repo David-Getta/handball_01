@@ -3,6 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.79 óta)
+
+- **A kapus is kap egyéni edzés-fókuszt** (motor): az egyéni "Mit
+  gyakorolj" hét forrása mind mezőnyjátékosról szólt — a kapus lapja
+  üresen maradt, miközben a csapat-szintű fókusznak van
+  kapus-szabálya. Az üres lap azt mondja a kapusnak: a program nem lát
+  téged. Új, nyolcadik forrás: a várható alatti védés-mérleg (GSAx) —
+  legalább 6 kapura tartó lövésből, legalább egy "bevédhető" gólnyi
+  elmaradással. A jelenet-ajánlás szándékosan üres: a kapott gól a
+  MÁSIK csapat eseménye, mezszámra nem szűrhető — nem hazudunk "nézd
+  meg" gombot.
+
 ## v0.1.79 — kiadva (2026-08-28)
 
 > Kiadás-jegyzet: a KIMUTATÁS kiadása. A "küldd el Excelben, ki hány

@@ -53,6 +53,10 @@ def _csend(monkeypatch):
         "handball.pipeline.momentum.clutch_turnover_players", _ures)
     monkeypatch.setattr("handball.pipeline.defense.beaten_defenders",
                         _ures)
+    monkeypatch.setattr(
+        "handball.pipeline.goalkeeper.goalkeeper_timeline",
+        lambda m, c=None: {"home": {"per_keeper": {}},
+                           "away": {"per_keeper": {}}})
 
 
 # ---- A négy forrás egyenként megszólal -------------------------------
@@ -681,3 +685,53 @@ def test_minden_tetelnek_van_clips_mezoje(monkeypatch):
     assert "clips" in tetel
     # Az erőnlétet egyetlen jelenet sem mutatja meg — üres, nem hiányzó.
     assert tetel["clips"] == []
+# ---- A kapus is játékos ----------------------------------------------
+
+
+def test_a_kapus_is_kap_egyeni_fokuszt(monkeypatch):
+    """A hét mezőnyforrás egyike sem szól a kapusról — az ő lapja
+    üresen maradt, miközben a csapat-szintű fókusznak van
+    kapus-szabálya. Az üres lap azt mondja a kapusnak, hogy a program
+    nem látja.
+    """
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.goalkeeper.goalkeeper_timeline",
+        lambda m, c=None: {
+            "home": {"per_keeper": {12: {"on_target": 10, "saves": 4,
+                                         "prevented": -1.6}}},
+            "away": {"per_keeper": {}}})
+    rec = player_training_focus(_match())["home"]["players"]
+    assert len(rec) == 1
+    tetel = rec[0]["items"][0]
+    assert tetel["area"] == "kapus"
+    assert "10 lövésből 4" in tetel["why"]
+    assert "1.6" in tetel["why"].replace(",", ".")
+    # A kapott gól a MÁSIK csapat eseménye — mezszámra nem szűrhető,
+    # ezért nincs klip-ajánlás: nem hazudunk "nézd meg" gombot.
+    assert tetel["clips"] == []
+
+
+def test_a_jo_formaju_kapus_nem_kap_fokuszt(monkeypatch):
+    """Pozitív mérlegnél (a várhatónál TÖBBET fog) nincs tétel — a
+    fókusz a gyengeségeké, nem dicséret-lista."""
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.goalkeeper.goalkeeper_timeline",
+        lambda m, c=None: {
+            "home": {"per_keeper": {12: {"on_target": 12, "saves": 8,
+                                         "prevented": 1.2}}},
+            "away": {"per_keeper": {}}})
+    assert player_training_focus(_match())["home"]["players"] == []
+
+
+def test_keves_lovesbol_nincs_kapus_itelet(monkeypatch):
+    """PTF_GK_MIN_ON_TARGET alatt a védés-arány szórás — nem ítélünk."""
+    _csend(monkeypatch)
+    monkeypatch.setattr(
+        "handball.pipeline.goalkeeper.goalkeeper_timeline",
+        lambda m, c=None: {
+            "home": {"per_keeper": {12: {"on_target": 3, "saves": 0,
+                                         "prevented": -2.0}}},
+            "away": {"per_keeper": {}}})
+    assert player_training_focus(_match())["home"]["players"] == []
