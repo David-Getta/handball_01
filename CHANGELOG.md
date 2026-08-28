@@ -3,6 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.81 óta)
+
+- **Lánc-teszt a darabokban felvett meccsre** (teszt): a v0.1.75–81
+  története egyben, a VALÓDI végpontokon át — két klip köteg-csoporttal
+  feldolgozva, a motor magától összefűzi, a könyvtár jelöli az egészet
+  és a darabokat, az összkép egy meccset lát (nem hármat), a
+  klip-számláló és a szezon-CSV válaszol, és az összefűzött meccsből
+  klip vágható. A darab-tesztek mindezt külön őrzik; ez a kör azt
+  mutatja meg, ha a lépések KÖZÖTT szakad meg valami.
+
 ## v0.1.81 — kiadva (2026-08-28)
 
 > Kiadás-jegyzet: a SZEZON-VÁLOGATÁS. "Az összes gólom egy helyen" —

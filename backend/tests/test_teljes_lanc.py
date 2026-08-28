@@ -164,3 +164,75 @@ def test_videotol_a_csomagig_ep_a_lanc(tmp_path):
     assert terv.status_code == 200
     assert "<!DOCTYPE html>" in terv.text
     assert "Edzésterv" in terv.text and "Hazai" in terv.text
+def test_darabokban_felvett_meccs_lanca(tmp_path):
+    """A DARABOKBAN felvett meccs teljes útja, a valódi végpontokon át.
+
+    Ez a v0.1.75–v0.1.81 története egyben: két klip köteg-csoporttal
+    feldolgozva → a motor magától összefűzi → a szezon nem dupláz → a
+    klip-számláló és a szezon-CSV a teljes meccset látja → az
+    összefűzött meccsből klip vágható. A darab-tesztek mindezt külön
+    őrzik; ez a kör azt mutatja meg, ha a VALÓDI úton szakad meg
+    valami a lépések KÖZÖTT.
+    """
+    from handball.api.app import create_app
+
+    root = tempfile.mkdtemp(prefix="hb_lanc_darab_")
+    os.environ["HANDBALL_DATA_DIR"] = root
+    client = TestClient(create_app())
+
+    v1, v2 = tmp_path / "resz1.mp4", tmp_path / "resz2.mp4"
+    _video(v1, frames=100)
+    _video(v2, frames=100)
+
+    # 1) Köteg: két darab, közös csoporttal — ahogy a kliens küldi.
+    jobs = []
+    for i, v in enumerate((v1, v2)):
+        r = client.post("/matches/process", json={
+            "path": str(v), "max": 15, "home_team": "Mi",
+            "away_team": "Ok", "merge_group": "lanc-1",
+            "merge_order": i, "merge_total": 2, "queue_behind": True})
+        assert r.status_code == 200, r.text
+        jobs.append(r.json()["job_id"])
+    kesz = [_var_job(client, j) for j in jobs]
+    assert all(j["status"] == "done" for j in kesz), kesz
+    assert any("összefűzve" in (j.get("message") or "") for j in kesz), (
+        [j.get("message") for j in kesz])
+
+    # 2) Az összefűzött meccs a könyvtárban, jelölve; a darabok is.
+    lista = client.get("/matches").json()["matches"]
+    egeszek = [m for m in lista if (m.get("merged_parts") or 0) > 0]
+    darabok = [m for m in lista if m.get("part_of")]
+    assert len(egeszek) == 1 and len(darabok) == 2, lista
+    egesz_id = egeszek[0]["match_id"]
+    assert all(d["part_of"] == egesz_id for d in darabok)
+
+    # 3) A szezon nem dupláz: a játékos-görbén EGY pont van (az
+    #    egész), nem három — és a szezon-CSV is válaszol.
+    #    (Mezszám e zajos videón nem biztos, hogy van; a pont-számot
+    #    ezért a meccs-szinten nézzük.)
+    csv = client.get("/library/roster.csv", params={"team": "Mi"})
+    assert csv.status_code == 200
+    # Az összkép EGY meccset lát (az egészet), nem hármat (2 darab +
+    # egész) — a könyvtár-lista viszont mindhármat mutatja.
+    osszkep = client.get("/library/summary").json()
+    assert osszkep["matches"] == 1, osszkep
+
+    # 4) A klip-számláló az összefűzött meccsen is válaszol (a
+    #    forrás-térképen át), és a becslés-mezők ott vannak.
+    szamlalo = client.get(f"/matches/{egesz_id}/clip-players").json()
+    assert "totals" in szamlalo and "max_clips" in szamlalo
+
+    # 5) Az összefűzött meccsből klip vágható (a két forrás-videóból).
+    r = client.post(f"/matches/{egesz_id}/clips/export",
+                    json={"types": ["goal", "shot", "turnover"]})
+    job = _var_job(client, r.json()["job_id"])
+    # Zajos apró videón lehet, hogy nincs vágható esemény — az is
+    # érvényes kimenet, de akkor a hiba MAGYARUL mondja meg, miért.
+    if job["status"] == "done":
+        letoltes = client.get(f"/matches/{egesz_id}/clips/download")
+        assert letoltes.status_code == 200
+        z = zipfile.ZipFile(io.BytesIO(letoltes.content))
+        assert z.namelist(), "üres zip jött vissza"
+    else:
+        assert "esemény" in (job.get("error") or "") or "videó" in (
+            job.get("error") or ""), job
