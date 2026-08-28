@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.81 óta)
+## v0.1.82 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a BIZONYÍTÉK kiadása. A felderítés kulcs-mondata
+> ("a #7-esükre kettőzz") mellé egy kattintással ott a videó — a
+> Célpont-videó az összes elemzett meccsükből vágja ki a megnevezett
+> emberük hibáit. A jegyzet-lista fájlba menthető, a darabokban
+> felvett meccs teljes útját pedig lánc-teszt őrzi a valódi
+> végpontokon.
+
 
 - **Célpont-videó a felderítésből** (felület): a kulcs-mondat ("a
   #7-esükre kettőzz — nála a szorítás labdaszerzés") megnevezi a
