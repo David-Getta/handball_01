@@ -3,6 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.80 óta)
+
+- **A klip-számláló gyorsítótárazva** (API): a becslő most már a
+  teljes bővített esemény-készletet építi, ami egy hosszú meccsen
+  másodpercekbe telik — a Klipek lap pedig minden megnyitáskor lekéri.
+  Az eredmény meccsekként gyorsítótárazódik; a kulcsban ott van minden,
+  ami az eseményeket vagy a mezszám-képet változtatja (kockaszám,
+  jegyzetek, kézi javítások, mezszám-kiosztás fájl-ideje), tehát a
+  friss jegyzet azonnal látszik — a gyorsítótár nem mutathat régi
+  képet (őr-teszt).
+
 ## v0.1.80 — kiadva (2026-08-28)
 
 > Kiadás-jegyzet: a KAPUS is játékos. Az egyéni "Mit gyakorolj" eddig

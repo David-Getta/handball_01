@@ -292,3 +292,21 @@ def test_a_kozos_epito_kotelezo():
     assert src.count("def _clip_events(") == 1
     # A worker ÉS a számláló is a közös építőt hívja.
     assert src.count("_clip_events(match, match_id,") >= 2
+def test_a_szamlalo_gyorsitotara_frissul_a_valtozasra():
+    """A számláló gyorsítótárazva van (egy hosszú meccsen az építés
+    másodpercekbe telik, és a Klipek lap minden megnyitása lekéri) —
+    de a gyorsítótár nem mutathat RÉGI képet: az új jegyzet azonnal
+    látszódjon a becslésben.
+    """
+    import time
+
+    client, mid = _client()
+    # A megosztott teszt-mappában maradhatott korábbi jegyzet — a
+    # VÁLTOZÁST mérjük, nem az abszolút számot.
+    elotte = client.get(f"/matches/{mid}/clip-players").json()
+    volt = elotte["totals"].get("note", 0)
+    time.sleep(0.02)  # az mtime-kulcs biztosan elmozduljon
+    client.post(f"/matches/{mid}/notes", json={"frame": 4,
+                                               "text": "friss"})
+    utana = client.get(f"/matches/{mid}/clip-players").json()
+    assert utana["totals"].get("note", 0) == volt + 1, utana["totals"]

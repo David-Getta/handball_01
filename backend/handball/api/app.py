@@ -2678,6 +2678,9 @@ def create_app():
                 if key in mapping:
                     p.jersey_number = mapping[key]
 
+    # A klip-számláló eredmény-gyorsítótára (match_id → (kulcs, válasz)).
+    _clip_players_cache: dict = {}
+
     @app.get("/matches/{match_id}/clip-players")
     def clip_players(match_id: str):
         """KIHEZ köthető jelenet ezen a meccsen — mezszám szerint.
@@ -2710,6 +2713,25 @@ def create_app():
         try:
             from ..pipeline.clips import _TYPE_HU
             from ..pipeline.primitive_cache import primitive_cache
+
+            # EREDMÉNY-gyorsítótár: a teljes esemény-készlet felépítése
+            # egy hosszú meccsen másodpercekbe telik, és a Klipek lap
+            # minden megnyitása lekéri. A kulcsban ott van minden, ami
+            # az eseményeket vagy a mezszám-képet változtatja: a
+            # kockaszám (újrafeldolgozás), a jegyzetek, a kézi
+            # javítások és a mezszám-kiosztás fájl-ideje.
+            def _mtime(path_):
+                try:
+                    return path_.stat().st_mtime
+                except OSError:
+                    return 0.0
+            kulcs_cp = (len(match.frames),
+                        _mtime(_notes_path(match_id)),
+                        _mtime(_overrides_path(match_id)),
+                        _mtime(_jerseys_path(match_id)))
+            cached_cp = _clip_players_cache.get(match_id)
+            if cached_cp is not None and cached_cp[0] == kulcs_cp:
+                return cached_cp[1]
 
             # A TELJES típus-készlettel építünk, a KÖZÖS építővel: a
             # becslés és a vágás így nem tud széttartani. Korábban itt
@@ -2749,7 +2771,10 @@ def create_app():
         out.sort(key=lambda r: (-r["total"], r["jersey"]))
         # A `totals` és a plafon a BECSLÉSHEZ kell: a vágás percekbe
         # telik, és a rossz kijelölés csak a végén derülne ki.
-        return {"players": out, "totals": osszesen, "max_clips": MAX_CLIPS}
+        valasz = {"players": out, "totals": osszesen,
+                  "max_clips": MAX_CLIPS}
+        _clip_players_cache[match_id] = (kulcs_cp, valasz)
+        return valasz
 
     @app.get("/matches/{match_id}/jerseys")
     def get_jerseys(match_id: str):
