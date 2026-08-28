@@ -3,7 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.82 óta)
+## v0.1.83 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: SÜRGŐS javítás az összefűzéshez. A darabokban
+> felvett meccsnél a térfélcsere a darabok KÖZÖTT van — tükrözés
+> nélkül a 2. félidő minden gólja a rossz csapathoz került volna. Aki
+> a v0.1.75–v0.1.82 alatt fűzött össze két-félidős meccset, fűzze
+> össze újra ezzel a verzióval (a darabok megvannak — pont ezért).
+
 
 - **Térfélcsere a szakasz-határokon — az összefűzött meccs eredménye
   helyes** (motor, SÜRGŐS): egy videón belül a feldolgozás felismeri a
