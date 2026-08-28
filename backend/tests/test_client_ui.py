@@ -2442,3 +2442,17 @@ def test_a_felderites_kulcs_mondata_mellett_ott_a_video():
     assert 'gyujt("ptf_clutch"' in felderites
     # A vágás percekbe telhet: a gombon fut a haladás.
     assert "_targetWorking" in felderites
+def test_a_jegyzet_lista_mentheto():
+    """A Jegyzetek lista az edző teendő-listája — a videó-szobába
+    fájlban megy, nem a program előtt ülve. És a LÁTHATÓ (szűrt)
+    listát menti: az edző pont azt a válogatást viszi."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jegyzet = (lib / "ui" / "notes_screen.dart").read_text(encoding="utf-8")
+    assert "_saveTxt" in jegyzet and "Mentés (szöveg)" in jegyzet
+    assert "final rows = _shown" in jegyzet, (
+        "nem a szűrt listát menti")

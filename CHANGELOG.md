@@ -13,6 +13,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   ÖSSZES elemzett meccsükből, egy zip-be — a szezon-válogatás
   motorján. A mondat meggyőz; a felvétel felkészít.
 
+- **A jegyzet-lista menthető** (felület): a Jegyzetek az edző
+  teendő-listája — a videó-szobába fájlban megy, nem a program előtt
+  ülve. A mentés a LÁTHATÓ (keresésre szűrt) listát viszi: az edző
+  pont azt a válogatást viszi magával.
+
 - **Lánc-teszt a darabokban felvett meccsre** (teszt): a v0.1.75–81
   története egyben, a VALÓDI végpontokon át — két klip köteg-csoporttal
   feldolgozva, a motor magától összefűzi, a könyvtár jelöli az egészet

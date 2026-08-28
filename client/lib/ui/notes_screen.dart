@@ -12,6 +12,9 @@
 /// már a szöveg a fogódzó, nem a dátum.
 library;
 
+import "dart:io";
+
+import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
@@ -166,12 +169,54 @@ class _NotesScreenState extends State<NotesScreen> {
                     "vágható a Klipek menüben.",
                     style: AppText.label)
               else ...[
-                _search(),
+                Row(children: [
+                  _search(),
+                  const Spacer(),
+                  // A lista az edző TEENDŐ-listája — a videó-szobába
+                  // papíron vagy fájlban megy, nem a program előtt ülve.
+                  OutlinedButton.icon(
+                    onPressed: _saveTxt,
+                    icon: const Icon(Icons.download_outlined, size: 16),
+                    label: const Text("Mentés (szöveg)"),
+                  ),
+                ]),
                 const SizedBox(height: AppSpacing.md),
                 Expanded(child: _list()),
               ],
             ]),
     );
+  }
+
+  /// A LÁTHATÓ lista mentése szövegfájlba: ha épp keresésre van
+  /// szűrve, azt mentjük — az edző pont azt a válogatást viszi.
+  Future<void> _saveTxt() async {
+    final rows = _shown;
+    if (rows.isEmpty) return;
+    final sorok = <String>[
+      "Jegyzetek (${rows.length} db)",
+      "",
+      for (final n in rows)
+        "[${_ora((n["t_s"] as num?) ?? 0)}] ${n["text"]} — "
+            "${n["home_team"] ?? "Hazai"} vs ${n["away_team"] ?? "Vendég"}"
+            "${(n["date"] as String?)?.isNotEmpty == true ? " (${n["date"]})" : ""}",
+    ];
+    try {
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Jegyzetek mentése (szöveg)",
+        fileName: "jegyzetek.txt",
+        type: FileType.custom,
+        allowedExtensions: const ["txt"],
+      );
+      if (path == null) return;
+      await File(path).writeAsString("${sorok.join("\n")}\n");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Jegyzetek mentve: $path")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A mentés nem sikerült: ${humanError(e)}")));
+    }
   }
 
   Widget _search() {
