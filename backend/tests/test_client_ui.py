@@ -2378,3 +2378,12 @@ def test_a_konyvtar_jelzi_a_darabot_es_az_egeszet():
     # felhasználó a szezon-számokat hibásnak hinné ("hova lett a
     # meccsem?").
     assert "nem duplázódik" in kezdo
+
+    # A felderítés-választóban UGYANEZ a csapda: a darabot ÉS az
+    # egészet kijelölve az egyesített jelentés kétszer számolná
+    # ugyanazt a meccset.
+    valaszto = (lib / "ui" / "scouting_picker_screen.dart").read_text(
+        encoding="utf-8")
+    assert 'm["part_of"]' in valaszto, (
+        "a felderítés-választó nem jelzi a darabot")
+    assert "kétszer számolna" in valaszto

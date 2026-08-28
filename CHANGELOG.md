@@ -3,6 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.78 óta)
+
+- **A felderítés-választó is jelzi a darabot** (felület): az
+  egyesített felderítésbe a darabot ÉS az egészet kijelölve ugyanaz a
+  meccs kétszer számolna — a "darab" címke (rámutatva a magyarázattal)
+  megmondja, hogy az EGÉSZET jelöld ki.
+
 ## v0.1.78 — kiadva (2026-08-28)
 
 > Kiadás-jegyzet: a szezon nem duplázódik. A v0.1.77 automatikus
