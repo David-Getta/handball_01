@@ -2309,3 +2309,52 @@ def test_a_kalibracio_atveheto_masik_videorol():
     # A saját kalibrációját ne kínáljuk fel: értelmetlen, és elrejti a
     # valódit.
     assert "excludePath" in api
+def test_a_koteg_orokli_a_fo_video_kalibraciojat():
+    """A köteg tipikusan EGY meccs darabjai, ugyanarról a kameráról.
+
+    A felhasználó a fő videót bekalibrálta — a köteg többi darabja
+    eddig kalibráció NÉLKÜL futott, tehát a meccs 5/6-án minden
+    távolság-alapú réteg némán félrement. A saját mentett kalibráció
+    erősebb (azt nem írjuk felül), és az öröklést a felület KIMONDJA:
+    ha a kamera mozdult a darabok közt, a felhasználónak tudnia kell,
+    honnan jött a kalibráció.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    fel = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert "calibs == null && _calib != null" in fel, (
+        "a köteg nem örökli a fő videó kalibrációját")
+    # Az örökölt kalibráció a darab videójához is elmentődik.
+    assert "orokolt" in fel
+    # És a felület kimondja — a néma öröklés zavarba ejtő lenne.
+    assert "örökölte" in fel and "kalibráld őket külön" in fel
+def test_a_koteg_a_vegen_magatol_osszeall():
+    """Aki egy meccs hat darabját tölti fel éjszakára, reggel hat
+    KÜLÖN "meccset" talált, és kézzel kellett összefűznie — pont az a
+    lépés, amit az ember elfelejt.
+
+    A köteg mostantól közös csoport-jelet visz, és a motor a végén
+    magától fűzi össze. KIKAPCSOLHATÓ: aki több külön meccset tölt fel
+    egyszerre, annak az összefűzés hiba lenne.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    fel = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert "_mergeBatch" in fel, "nincs összefűzés-kapcsoló"
+    assert "mergeGroup: mergeGroup" in fel, (
+        "a csoport-jel nem jut el az indításig")
+    assert "mergeTotal" in fel, (
+        "a darabszám nélkül a csoport versenyben zárulhatna le")
+    # A kapcsoló kimondja, mikor KELL kikapcsolni.
+    assert "kapcsold ki" in fel
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "merge_group" in api and "merge_total" in api

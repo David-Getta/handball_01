@@ -79,6 +79,10 @@ class _UploadScreenState extends State<UploadScreen> {
   // a "Feldolgozás indítása" MINDET sorba állítja a szerveren, mindegyiket a
   // saját elmentett kalibrációjával (ha van).
   final List<String> _batchPaths = [];
+  // A köteg végén automatikus összefűzés: a darabokban felvett meccs
+  // magától áll össze. Alapból BE, mert a köteg tipikusan egy meccs
+  // darabjai — aki több KÜLÖN meccset tölt fel egyszerre, kikapcsolja.
+  bool _mergeBatch = true;
 
   // Feldolgozási beállítások: minőségi profil + rövid próba mód.
   // A profilok (stride, imgsz): gyors = ritkább mintavétel kisebb képen;
@@ -759,6 +763,13 @@ class _UploadScreenState extends State<UploadScreen> {
     // az fps nem olvasható ki a fájlból.
     final korlatMp = _hosszKorlatMp;
     final max = korlatMp == null ? 0 : (korlatMp * 25 / stride).round();
+    // KÖTEG-CSOPORT: ha van köteg és kérték az összefűzést, minden
+    // darab (a fő videóval együtt) közös jelet kap — a motor a végén
+    // magától fűzi össze őket, jó sorrendben.
+    final String? mergeGroup = (_batchPaths.isNotEmpty && _mergeBatch)
+        ? DateTime.now().millisecondsSinceEpoch.toRadixString(36)
+        : null;
+    final mergeTotal = _batchPaths.length + 1;
     try {
       final r = await _api.startProcessing(
         path,
@@ -784,6 +795,9 @@ class _UploadScreenState extends State<UploadScreen> {
         jerseyOcr: _jerseyOcr,
         // A felhasználó döntése: megvárja-e a már futó feldolgozást.
         queueBehind: queueBehind,
+        mergeGroup: mergeGroup,
+        mergeOrder: 0,
+        mergeTotal: mergeGroup == null ? 0 : mergeTotal,
       );
       _jobId = r["job_id"] as String;
       _matchId = r["match_id"] as String?;
@@ -795,7 +809,9 @@ class _UploadScreenState extends State<UploadScreen> {
         final batch = List<String>.from(_batchPaths);
         setState(() => _batchPaths.clear());
         var queued = 0;
-        for (final p in batch) {
+        var orokoltDb = 0;
+        for (var bi = 0; bi < batch.length; bi++) {
+          final p = batch[bi];
           try {
             List<Map<String, dynamic>>? calibs;
             var startFrame = 0;
@@ -808,6 +824,23 @@ class _UploadScreenState extends State<UploadScreen> {
                     .reduce((a, b) => a < b ? a : b);
               }
             } catch (_) {} // nincs mentett kalibráció — enélkül megy
+            // ÖRÖKLÉS a fő videóról: a köteg tipikusan EGY meccs
+            // darabjai, ugyanarról a kameráról. A felhasználó a fő
+            // videót bekalibrálta — a többi darab eddig kalibráció
+            // NÉLKÜL futott, tehát a meccs 5/6-án minden
+            // távolság-alapú réteg némán félrement. A saját mentett
+            // kalibráció erősebb: azt nem írjuk felül.
+            var orokolt = false;
+            if (calibs == null && _calib != null) {
+              calibs = _calibMaps(_calib!);
+              startFrame = 0; // a fő videó kocka-indexe itt nem érvényes
+              orokolt = true;
+              // Elmentjük ehhez a videóhoz is: újrafeldolgozásnál és a
+              // Folytatásnál már a sajátja.
+              try {
+                await _api.saveCalibration(p, calibs);
+              } catch (_) {}
+            }
             await _api.startProcessing(
               p,
               weights: "yolov8n.pt",
@@ -823,8 +856,13 @@ class _UploadScreenState extends State<UploadScreen> {
               jerseyOcr: _jerseyOcr,
               // A köteg többi videója mindig SORBAN vár a sorára.
               queueBehind: true,
+              mergeGroup: mergeGroup,
+              // A fő videó a 0.; a köteg a kiválasztás sorrendjében jön.
+              mergeOrder: bi + 1,
+              mergeTotal: mergeGroup == null ? 0 : mergeTotal,
             );
             queued++;
+            if (orokolt) orokoltDb++;
           } catch (e) {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -832,9 +870,15 @@ class _UploadScreenState extends State<UploadScreen> {
           }
         }
         if (queued > 0 && mounted) {
+          // Az öröklést KI KELL mondani: ha a kamera mégis mozdult a
+          // darabok közt, a felhasználónak tudnia kell, hogy a
+          // kalibráció átment — különben nem érti, honnan jött.
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text("További $queued videó sorba állítva — egymás után "
-                  "dolgozza fel őket a motor (állapot: Kezdőlap).")));
+                  "dolgozza fel őket a motor (állapot: Kezdőlap)."
+                  "${orokoltDb > 0 ? " A fő videó kalibrációját "
+                      "$orokoltDb darab örökölte — ha a kamera mozdult "
+                      "köztük, kalibráld őket külön." : ""}")));
         }
       }
     } catch (e) {
@@ -1333,6 +1377,26 @@ class _UploadScreenState extends State<UploadScreen> {
                 onDeleted: () => setState(() => _batchPaths.remove(p)),
               ),
           ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        // A köteg végén automatikus összefűzés: a darabokban felvett
+        // meccs magától áll össze — a hat éjszakai feldolgozás után
+        // nem kell emlékezni rá, hogy még van egy dolog. Aki több
+        // KÜLÖN meccset tölt fel egyszerre, kikapcsolja.
+        InkWell(
+          onTap: () => setState(() => _mergeBatch = !_mergeBatch),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(_mergeBatch ? Icons.check_box : Icons.check_box_outline_blank,
+                size: 18,
+                color: _mergeBatch ? AppColors.accent : AppColors.textFaint),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                  "A végén fűzd össze egy meccsé (a fenti sorrendben) — "
+                  "több KÜLÖN meccsnél kapcsold ki",
+                  style: AppText.label.copyWith(fontSize: 12)),
+            ),
+          ]),
         ),
       ],
       const SizedBox(height: AppSpacing.md),

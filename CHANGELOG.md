@@ -3,6 +3,34 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.76 óta)
+
+- **A köteg a végén magától összeáll egy meccsé** (motor + API +
+  felület): aki egy meccs hat darabját tölti fel — jellemzően
+  éjszakára —, reggel hat KÜLÖN "meccset" talált, és kézzel kellett
+  összefűznie, jó sorrendben. Pont az a lépés, amit az ember elfelejt;
+  a motor viszont tudja, mikor lett kész az utolsó darab. A köteg
+  mostantól közös csoport-jelet visz, és az utolsó darab elkészültekor
+  a motor magától fűzi össze őket (ugyanazon az úton, mint a kézi
+  összefűzés — tehát a jegyzet-, javítás- és kiállítás-átvétellel
+  együtt). A kapcsoló a köteg-listán van és KIKAPCSOLHATÓ: aki több
+  külön meccset tölt fel egyszerre, annak az összefűzés hiba lenne.
+
+  Három védőkorlát: ha bármelyik darab elhasalt vagy megszakadt, az
+  összefűzés ELMARAD és az üzenet megmondja, miért (fél meccset
+  összefűzni rosszabb, mint szólni); részleges darabot nem fűzünk
+  össze (előbb a Folytatás); és a csoport a beküldött darabszámot is
+  ismeri — különben versenyben egy darabbal "teljesnek" látszhatna.
+
+- **A köteg örökli a fő videó kalibrációját** (felület): aki egy
+  meccs hat darabját egyszerre tölti fel, a fő videót bekalibrálja —
+  a köteg többi darabja viszont eddig kalibráció NÉLKÜL futott, tehát
+  a meccs 5/6-án minden távolság-alapú réteg némán félrement. A darab
+  mostantól a fő videó kalibrációját örökli (a saját mentett
+  kalibrációja erősebb — azt nem írjuk felül), az örökölt kalibráció a
+  darab videójához is elmentődik, és a felület kimondja: ha a kamera
+  mozdult a darabok közt, kalibráld őket külön.
+
 ## v0.1.76 — kiadva (2026-08-27)
 
 > Kiadás-jegyzet: az ÖSSZEFŰZÉS mostantól nem veszít el semmit. A

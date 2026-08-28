@@ -1390,6 +1390,12 @@ class ApiClient {
     // perc lenne. A motor a VALÓDI fps-sel váltja át; a `max` marad a
     // tartalék, ha az fps nem olvasható ki.
     double? maxS,
+    // KÖTEG-CSOPORT: az egy meccshez tartozó darabok közös jele +
+    // a darab sorszáma és a csoport teljes darabszáma. Ha minden darab
+    // elkészült, a motor magától fűzi össze őket.
+    String? mergeGroup,
+    int mergeOrder = 0,
+    int mergeTotal = 0,
   }) async {
     final body = <String, dynamic>{
       "path": path,
@@ -1410,6 +1416,11 @@ class ApiClient {
       if (awayTeam != null && awayTeam.isNotEmpty) "away_team": awayTeam,
       if (jerseyOcr) "jersey_ocr": true,
       if (queueBehind) "queue_behind": true,
+      if (mergeGroup != null) ...{
+        "merge_group": mergeGroup,
+        "merge_order": mergeOrder,
+        "merge_total": mergeTotal,
+      },
     };
     final resp = await http.post(
       Uri.parse("$baseUrl/matches/process"),

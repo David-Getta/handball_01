@@ -780,7 +780,19 @@ def create_app():
                "video_seconds": _video_seconds_safe(path),
                # A minőségi profil — az idő-becslés ebből tanul.
                "stride": int(body.get("stride", 3) or 3),
-               "imgsz": int(body.get("imgsz", 1280) or 1280)}
+               "imgsz": int(body.get("imgsz", 1280) or 1280),
+               # KÖTEG-CSOPORT: az egy meccshez tartozó darabok közös
+               # jele. Ha minden darab elkészült, a motor magától fűzi
+               # össze őket — a felhasználónak nem kell megjegyeznie,
+               # hogy a hat éjszakai feldolgozás után még van egy dolga.
+               "merge_group": (str(body["merge_group"])
+                               if body.get("merge_group") else None),
+               "merge_order": int(body.get("merge_order") or 0),
+               # Hány darabból áll a csoport ÖSSZESEN. Enélkül verseny
+               # lenne: ha az első darab elkészül, mielőtt a többit
+               # egyáltalán beküldték, a csoport "teljesnek" látszana
+               # egy darabbal — és az igazi összefűzés soha nem futna le.
+               "merge_total": int(body.get("merge_total") or 0)}
         _jobs[job_id] = job
         _job_params[job_id] = body
         # Alapesetben az új elemzés AZONNAL indul: a jelenleg FUTÓ (korábbi)
@@ -865,6 +877,69 @@ def create_app():
             job["message"] = "indítás"
             job["started"] = _t.time()
             _run_job(job, _job_params.pop(job_id, {}))
+
+    # A már összefűzött köteg-csoportok: egy csoportot pontosan EGYSZER
+    # fűzünk össze, akkor is, ha a "minden kész?" ellenőrzés versenyben
+    # futna le kétszer.
+    _merged_groups: set = set()
+
+    def _maybe_merge_group(job: dict) -> None:
+        """Köteg-utáni automatikus összefűzés, ha a csoport teljes.
+
+        Aki egy meccs hat darabját tölti fel, hat feldolgozást indít —
+        jellemzően éjszakára. Reggel hat KÜLÖN "meccset" talált, és
+        kézzel kellett összefűznie (jó sorrendben!). Ez a lépés pont az
+        a fajta, amit az ember elfelejt — a motor viszont tudja, mikor
+        lett kész az utolsó darab.
+
+        Csendes és hibatűrő: ha bármelyik darab megszakadt vagy
+        elhasalt, az összefűzés ELMARAD (fél meccset összefűzni
+        rosszabb, mint szólni), és az utolsó munka üzenete mondja meg,
+        miért.
+        """
+        csoport = job.get("merge_group")
+        if not csoport or csoport in _merged_groups:
+            return
+        tarsak = [j for j in _jobs.values()
+                  if j.get("merge_group") == csoport]
+        if any(j.get("status") in ("queued", "running") for j in tarsak):
+            return  # még dolgozik valamelyik darab
+        vart = max((j.get("merge_total") or 0 for j in tarsak), default=0)
+        if vart and len(tarsak) < vart:
+            return  # még nem minden darab lett beküldve — nem jelölünk
+        if csoport in _merged_groups:
+            return
+        _merged_groups.add(csoport)
+        rossz = [j for j in tarsak if j.get("status") != "done"]
+        if rossz or len(tarsak) < 2:
+            job["message"] = (job.get("message") or "") + (
+                " — az automatikus összefűzés elmaradt: "
+                f"{len(rossz)} darab nem készült el hibátlanul."
+                if rossz else "")
+            return
+        tarsak.sort(key=lambda j: j.get("merge_order") or 0)
+        ids = [j["match_id"] for j in tarsak]
+        # RÉSZLEGES darabot nem fűzünk össze némán: a "kész" státusz a
+        # megszakított-de-mentett feldolgozásra is igaz, de egy fél
+        # darabból összerakott meccs rossz meccs — inkább szólunk.
+        reszleges = [mid for mid in ids
+                     if _store.get(mid) is not None
+                     and _store[mid].meta.partial]
+        if reszleges:
+            job["message"] = (job.get("message") or "") + (
+                " — az automatikus összefűzés elmaradt: részleges darab "
+                f"({', '.join(reszleges)}); fejezd be a Folytatással, és "
+                "fűzd össze kézzel.")
+            return
+        try:
+            ki = _merge_and_store(ids)
+            uzenet = (f"kész — a köteg {len(ids)} darabja összefűzve: "
+                      f"{ki['match_id']}")
+            for j in tarsak:
+                j["message"] = uzenet
+        except Exception as e:
+            job["message"] = (job.get("message") or "") + (
+                f" — az automatikus összefűzés nem sikerült: {e}")
 
     # A KORAI figyelmeztetésre érdemes jelek: ezek a feldolgozás elején
     # is látszanak, és ha igazak, az egész óra kárba vész. Jobb három
@@ -996,6 +1071,7 @@ def create_app():
                             f"({len(match.frames)} kocka)")
                     else:
                         job["message"] = f"kész ({len(match.frames)} frame)"
+                    _maybe_merge_group(job)
             except Exception as e:  # a hibát a kliensnek is megmutatjuk
                 msg = str(e)
                 # A nyers zlib-hiba ("Error -3 ... incorrect header check")
@@ -1333,34 +1409,33 @@ def create_app():
         _put_match(match)  # memóriába + lemezre (perzisztencia)
         return {"match_id": match_id, "swapped": True}
 
-    @app.post("/matches/merge")
-    def merge_halves(body: dict):
-        """Több feldolgozott felvétel (pl. 1. és 2. félidő) összefűzése EGY meccsé.
+    def _merge_and_store(ids: list, match_id_kert: str = "",
+                         home_team=None, away_team=None) -> dict:
+        """Az összefűzés TELJES munkája: meccs + az emberi munka átvétele.
 
-        Törzs: {"ids": [elso, masodik, ...]  — időrendben!,
-                "match_id": opcionális név, "home_team"/"away_team": opcionális}.
-        Az eredmény új meccsként kerül a könyvtárba; az eredeti részek megmaradnak.
+        Egy helyen, mert két hívója van (a /matches/merge végpont és a
+        köteg-utáni automatikus összefűzés) — egy másolt ág idővel
+        szétcsúszna, és pont az emberi munka átvétele maradna le róla.
+        ValueError-t dob, amit a végpont HTTP-hibára fordít.
         """
         import uuid
 
         from ..pipeline.merge import merge_matches
 
-        ids = body.get("ids") or []
         if not isinstance(ids, list) or len(ids) < 2:
-            raise HTTPException(status_code=400, detail="legalabb ket meccs-azonosito kell")
+            raise ValueError("legalabb ket meccs-azonosito kell")
         parts = []
         for mid in ids:
             m = _store.get(str(mid))
             if m is None:
-                raise HTTPException(status_code=404, detail=f"match not found: {mid}")
+                raise ValueError(f"match not found: {mid}")
             parts.append(m)
-        new_id = str(body.get("match_id") or "").strip() or (
+        new_id = str(match_id_kert or "").strip() or (
             "teljes-" + "+".join(str(i) for i in ids))
         if new_id in _store:
             new_id = f"{new_id}-{uuid.uuid4().hex[:6]}"
         merged = merge_matches(
-            parts, new_id,
-            home_team=body.get("home_team"), away_team=body.get("away_team"))
+            parts, new_id, home_team=home_team, away_team=away_team)
         _put_match(merged)  # memóriába + lemezre (perzisztencia)
 
         # A JEGYZETEK is EMBERI munka: amit az edző a klipek közben
@@ -1452,6 +1527,24 @@ def create_app():
 
         return {"match_id": new_id, "num_frames": len(merged.frames),
                 "parts": [p.meta.match_id for p in parts]}
+
+    @app.post("/matches/merge")
+    def merge_halves(body: dict):
+        """Több feldolgozott felvétel (pl. 1. és 2. félidő) összefűzése EGY meccsé.
+
+        Törzs: {"ids": [elso, masodik, ...]  — időrendben!,
+                "match_id": opcionális név, "home_team"/"away_team": opcionális}.
+        Az eredmény új meccsként kerül a könyvtárba; az eredeti részek megmaradnak.
+        """
+        try:
+            return _merge_and_store(
+                body.get("ids") or [], str(body.get("match_id") or ""),
+                home_team=body.get("home_team"),
+                away_team=body.get("away_team"))
+        except ValueError as e:
+            hiba = str(e)
+            raise HTTPException(status_code=404 if "not found" in hiba
+                                else 400, detail=hiba)
 
     def _calibration_path(video_path: str) -> Path:
         """A videóhoz tartozó kalibráció-fájl (kulcs: a videó fájlneve)."""
