@@ -184,3 +184,24 @@ def test_javitas_nelkul_ures_marad():
     m = merge_matches([_part("h1", 3, track_id=1),
                        _part("h2", 3, track_id=2)], "teljes")
     assert m.meta.event_overrides == []
+def test_a_mezszamok_tulelik_az_osszefuzest():
+    """ŐR: a kézzel kiosztott mezszám a KOCKÁKBA van beleírva (a
+    mentés is úgy viszi), tehát az összefűzött másolatnak is vinnie
+    kell — akkor is, ha a track-azonosítók eltolódnak.
+
+    Ha ez elveszne, az összefűzött meccsen a játékos-lap, a
+    góllövő-lista és a klip-szűrés is "számozatlan" embereket látna, és
+    a felhasználó az egész mezszám-munkáját újrakezdené.
+    """
+    a = _part("h1", 3, track_id=7)
+    b = _part("h2", 3, track_id=7)
+    for f in a.frames:
+        for p in f.players:
+            p.jersey_number = 9
+    for f in b.frames:
+        for p in f.players:
+            p.jersey_number = 11
+
+    m = merge_matches([a, b], "teljes")
+    mezek = sorted({p.jersey_number for f in m.frames for p in f.players})
+    assert mezek == [9, 11], mezek
