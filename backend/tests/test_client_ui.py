@@ -2358,3 +2358,23 @@ def test_a_koteg_a_vegen_magatol_osszeall():
 
     api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
     assert "merge_group" in api and "merge_total" in api
+def test_a_konyvtar_jelzi_a_darabot_es_az_egeszet():
+    """Összefűzés után a darab és az egész is a listában van, AZONOS
+    csapatnevekkel — jelölés nélkül három egyforma sor lenne, és nem
+    tudni, melyiket nyisd meg (és miért nem duplázódik a szezon).
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert 'm["merged_parts"]' in kezdo and 'm["part_of"]' in kezdo, (
+        "a kártya nem olvassa az összefűzés-jelölést")
+    assert "darabból" in kezdo, "az egész nem mondja, miből áll"
+    # A darab MEGMAGYARÁZZA, miért nem duplázódik — enélkül a
+    # felhasználó a szezon-számokat hibásnak hinné ("hova lett a
+    # meccsem?").
+    assert "nem duplázódik" in kezdo

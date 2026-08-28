@@ -1336,8 +1336,17 @@ def create_app():
         képkocka-szám, fps és becsült hossz. Idő szerint (fps-alapú hossz) rendezve.
         """
         out = []
+        # MELYIK meccs darabja: összefűzés után a darab és az egész is a
+        # listában van, azonos csapatnevekkel — jelölés nélkül három
+        # egyforma "Mi vs Ők" sor lenne, és a felhasználó nem tudná,
+        # melyiket nyissa meg.
+        resze: dict = {}
+        for m in _store.values():
+            for rid in (getattr(m.meta, "merged_from", None) or []):
+                resze[str(rid)] = m.meta.match_id
         for m in _store.values():
             fps = m.meta.fps if m.meta.fps > 0 else 25.0
+            merged_from = list(getattr(m.meta, "merged_from", None) or [])
             out.append({
                 "match_id": m.meta.match_id,
                 "home_team": m.meta.home_team,
@@ -1347,6 +1356,12 @@ def create_app():
                 "duration_s": len(m.frames) / fps,
                 # Részleges feldolgozás (megszakítva/összeomlás után mentve).
                 "partial": bool(m.meta.partial),
+                # Összefűzött meccs: hány darabból áll (0 = nem az).
+                "merged_parts": len(merged_from),
+                # Egy összefűzött meccs DARABJA: melyiké. None = önálló.
+                # A szezon-számolás az ilyet kihagyja — a felület ebből
+                # tudja jelezni, hogy a sor már benne van az egészben.
+                "part_of": resze.get(m.meta.match_id),
             })
         out.sort(key=lambda d: d["match_id"])
         return {"matches": out}

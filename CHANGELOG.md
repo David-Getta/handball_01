@@ -17,6 +17,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   mutat: a törléshez látni kell. Aki nem fűz össze, annak semmi nem
   változik — erre külön őr van.
 
+  A könyvtár-kártyák jelölik is: az egészen "teljes meccs · N
+  darabból" címke, a darabon "darab" — rámutatva megmagyarázza, hogy a
+  szezon-számok az egészben számolják, tehát nem duplázódik. Enélkül
+  három egyforma "Mi vs Ők" sor lenne, és a felhasználó a
+  szezon-számokat hinné hibásnak ("hova lett a meccsem?").
+
 ## v0.1.77 — kiadva (2026-08-28)
 
 > Kiadás-jegyzet: a darabokban felvett meccs EGY mozdulat. A v0.1.75

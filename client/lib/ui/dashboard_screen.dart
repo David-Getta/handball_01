@@ -2744,6 +2744,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final date = (sum?["date"] as String?) ?? "";
     // Részleges feldolgozás (megszakítva / összeomlás után mentve).
     final partial = (m["partial"] as bool?) ?? false;
+    // Összefűzés-jelölés: összefűzés után a darab és az egész is a
+    // listában van, AZONOS csapatnevekkel — jelölés nélkül három
+    // egyforma sor lenne, és nem tudni, melyiket nyisd meg.
+    final mergedParts = (m["merged_parts"] as num?)?.toInt() ?? 0;
+    final partOf = m["part_of"] as String?;
     // A hozzá tartozó folytatás-meccsek ("<id>-folyt", "-folyt2", ...) —
     // ha vannak, egy gombbal összefűzhető velük egy teljes meccsé.
     final contIds = _matches
@@ -2797,6 +2802,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Text("részleges",
                             style: AppText.label.copyWith(
                                 fontSize: 10.5, color: AppColors.gold)),
+                      ),
+                    ],
+                    if (mergedParts > 0) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                              color: AppColors.accent.withOpacity(0.45)),
+                        ),
+                        child: Text("teljes meccs · $mergedParts darabból",
+                            style: AppText.label.copyWith(
+                                fontSize: 10.5, color: AppColors.accent)),
+                      ),
+                    ],
+                    if (partOf != null) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Tooltip(
+                        message: "Benne van az összefűzött meccsben "
+                            "($partOf) — a szezon-számok ott számolják, "
+                            "itt nem duplázódik.",
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceAlt,
+                            borderRadius: BorderRadius.circular(6),
+                            border:
+                                Border.all(color: AppColors.borderStrong),
+                          ),
+                          child: Text("darab",
+                              style: AppText.label.copyWith(
+                                  fontSize: 10.5,
+                                  color: AppColors.textSecondary)),
+                        ),
                       ),
                     ],
                   ]),
