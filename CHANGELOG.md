@@ -14,6 +14,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   + BOM, mert a magyar Excel a vesszőt tizedesjelnek olvasná), és a
   nevet is viszi — a kimutatásban a név a lényeg, nem a szám.
 
+  A meccs-szintű statisztika-CSV is kapott "Név" oszlopot: nem
+  mondhat kevesebbet, mint a szezon-kimutatás.
+
 - **A felderítés-választó is jelzi a darabot** (felület): az
   egyesített felderítésbe a darabot ÉS az egészet kijelölve ugyanaz a
   meccs kétszer számolna — a "darab" címke (rámutatva a magyarázattal)

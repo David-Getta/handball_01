@@ -2230,7 +2230,7 @@ def create_app():
         except Exception:
             pass
 
-        lines = ["Játékos;Csapat;Track-ek;Táv (m);Átl. sebesség (m/s);"
+        lines = ["Játékos;Név;Csapat;Track-ek;Táv (m);Átl. sebesség (m/s);"
                  "Max sebesség (km/h);Sprintek;Sprint táv (m);"
                  "Séta (mp);Kocogás (mp);Futás (mp);Sprint (mp);"
                  "Mért kocka;Becsült kocka;Gól;Lövés;xG;Blokk;Poszt;"
@@ -2239,8 +2239,13 @@ def create_app():
             team = (match.meta.home_team if g["team"] == "home"
                     else match.meta.away_team)
             zones = g["zone_seconds"]
+            # A NÉV a névjegyzékből: a kimutatásban a név a lényeg, nem
+            # a szám — és a szezon-CSV már viszi, a meccs-CSV nem
+            # mondhat kevesebbet.
+            nev = (_player_name(team, g["jersey"])
+                   if g.get("jersey") is not None else None) or ""
             lines.append(";".join([
-                g["label"], team,
+                g["label"], nev, team,
                 "+".join(str(t) for t in g["track_ids"]),
                 num(g["distance_m"]), num(g["avg_speed_ms"]),
                 num(g["top_speed_ms"] * 3.6), str(g["sprint_count"]),

@@ -129,7 +129,9 @@ def test_package_without_video_contains_report_and_csv():
     html = z.read("jelentes.html").decode("utf-8")
     assert "Meccsjelentés" in html
     csv = z.read("statisztika.csv").decode("utf-8")
-    assert "Játékos;Csapat" in csv
+    # A NÉV oszlop is ott van: a kimutatásban a név a lényeg, és a
+    # meccs-CSV nem mondhat kevesebbet, mint a szezon-CSV.
+    assert "Játékos;Név;Csapat" in csv
     # A játék-statisztika oszlopok is ott vannak a fejlécben.
     assert ";Gól;Lövés;xG;Blokk;Poszt;Őrzés (mp);Őrzés átl. táv (m)" in csv
 
