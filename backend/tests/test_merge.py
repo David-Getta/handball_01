@@ -302,3 +302,23 @@ def test_a_gol_a_jo_csapathoz_kerul_a_tukrozes_utan():
     assert masodik_felido, "a 2. félidei lövés nem került felismerésre"
     # Tükrözés UTÁN a 2. félidei lövés is a hazaié.
     assert all(e.team == Team.HOME for e in masodik_felido), masodik_felido
+def test_az_eldontetlen_hatar_a_minoseg_jelentesben_is_ott_van():
+    """Ha a térfélcsere nem dönthető el, az eredmény ROSSZ IRÁNYÚ is
+    lehet — és ezt a minőség-jelentésnek kell kimondania, mert a
+    forrás-térképet a felhasználó sosem nézi meg."""
+    from handball.pipeline.quality import compute_quality_report, next_action
+
+    a = _terfeles_resz("q1", 20, 10.0, video="/v/a.mp4")
+    b = _terfeles_resz("q2", 20, 30.0, video="/v/b.mp4")
+    m = merge_matches([a, b], "teljes")
+    assert m.meta.source_segments[1]["mirror_decided"] is False
+
+    q = compute_quality_report(m)
+    talalat = [w for w in q["warnings"]
+               if "nem volt eldönthető a térfélcsere" in w]
+    assert talalat, q["warnings"]
+    # A figyelmeztetéshez TEENDŐ is tartozik a rangsorban. (Ezen a
+    # ritkás fixture-ön a "kevés játékos" előzi — helyesen: a gyenge
+    # detektálás a gyökér-ok —, ezért a teendőt önmagában nézzük.)
+    teendo = next_action(talalat)
+    assert teendo and "EREDMÉNYT" in teendo, teendo

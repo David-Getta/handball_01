@@ -122,6 +122,10 @@ NEXT_ACTION_ORDER: tuple = (
      "rajzolt 6 m-es és 9 m-es vonalnak mindkét oldalon rá kell ülnie a "
      "valódira. Ha a kalibráció jó, az Események listán a hiányzó "
      "gólokat kézzel is felveheted."),
+    ("eldönthető a térfélcsere",
+     "Ellenőrizd az EREDMÉNYT: ha a második félidő góljai fordítva "
+     "vannak, az Események listán javíthatod, vagy fűzd össze újra a "
+     "meccset hosszabb darabokból."),
     ("Gyanúsan kevés gól",
      "Nézd végig az Események listát: a lövésként jelölt gólokat a sor "
      "⋮ menüjében egy kattintással gólra javíthatod (a javítás az "
@@ -567,6 +571,25 @@ def compute_quality_report(match: Match) -> dict:
             "álló labdás jelenetek (bemelegítés, időkérés) is a felvételen "
             "vannak; érdemes a meccs tényleges kezdetétől indítani a "
             "feldolgozást.")
+
+    # ÖSSZEFŰZÖTT meccs eldöntetlen térfélcsere-határa: ha a szakaszok
+    # közti fordulást kevés mért pozíció miatt nem lehetett eldönteni,
+    # az eredmény ROSSZ IRÁNYÚ is lehet (a 2. félidő góljai a másik
+    # csapathoz), és ezt semmi nem jelezné. Ez HIBA-gyanú, nem
+    # tájékoztatás — a figyelmeztetések közé való.
+    eldontetlen = [
+        i for i, sz in enumerate(
+            getattr(match.meta, "source_segments", None) or [])
+        if isinstance(sz, dict) and sz.get("mirror_decided") is False]
+    if eldontetlen:
+        warnings.append(
+            f"Az összefűzés {len(eldontetlen)} szakasz-határán nem volt "
+            "eldönthető a térfélcsere (kevés mért pozíció a határ "
+            "környékén) — ha a határ a félidei szünet volt, az "
+            "eredmény és minden irány-alapú szám FORDÍTVA lehet a "
+            "második félidőre. Ellenőrizd az eredményt; ha rossz, az "
+            "Események listán a gólok kézzel javíthatók, vagy fűzd "
+            "össze újra hosszabb darabokból.")
 
     # KLIP vagy MECCS: a rövid felvétel teljesen jogos bemenet, de a
     # meccs-szintű rétegek némán hallgatnak rajta — és a felhasználó

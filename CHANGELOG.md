@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.83 óta)
+
+- **Az eldöntetlen térfélcsere-határ figyelmeztetést kap** (motor): ha
+  az összefűzés egy határán kevés mért pozíció miatt nem dönthető el a
+  csere, az eredmény rossz irányú is lehet — és a forrás-térképet a
+  felhasználó sosem nézi meg. A minőség-jelentés mostantól kimondja,
+  teendővel: ellenőrizd az eredményt; ha rossz, az Események listán
+  javítható, vagy fűzd össze újra hosszabb darabokból.
+
 ## v0.1.83 — kiadva (2026-08-28)
 
 > Kiadás-jegyzet: SÜRGŐS javítás az összefűzéshez. A darabokban
