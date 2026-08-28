@@ -2652,6 +2652,140 @@ def create_app():
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
         return data_root() / "clips" / safe
 
+    @app.post("/players/season-clips/export")
+    def start_season_clips(body: dict):
+        """SZEZON-VÁLOGATÁS egy játékosról: az összes meccséből, egy zip.
+
+        A meccsenkénti klipcsomag megvan — de a játékos a SZEZONJÁT
+        akarja látni: "az összes gólom egy helyen". Eddig meccsenként
+        kellett vágatni és a zipeket kézzel összeszedni.
+
+        Törzs: {"team": ..., "jersey": 7,
+                "types": ["goal", ...] — üres/hiányzó = gólok}.
+        Meccsenkénti mappákba rendez (dátum + ellenfél); a videó
+        nélküli meccsek kimaradnak, és az üzenet megmondja, hány.
+        A haladás a GET /jobs/{id} végponton követhető; a kész zip a
+        GET /players/season-clips/download címen tölthető le.
+        """
+        import time
+        import uuid
+        import zipfile as _zipfile
+
+        from ..pipeline.clips import export_event_clips
+
+        team = str(body.get("team") or "").strip()
+        if not team:
+            raise HTTPException(status_code=400, detail="team required")
+        try:
+            jersey = int(body.get("jersey"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="jersey required")
+        types = set(body.get("types") or ["goal"])
+
+        # A játékos meccsei, időrendben — a darab-szűréssel (a szezon
+        # nem duplázhat itt sem).
+        sajat = []
+        for m in _season_matches():
+            if team not in (m.meta.home_team, m.meta.away_team):
+                continue
+            sajat.append(m)
+        sajat.sort(key=lambda m: ((m.meta.date or ""), m.meta.match_id))
+        if not sajat:
+            raise HTTPException(status_code=404,
+                                detail="nincs meccse ennek a csapatnak")
+
+        job_id = uuid.uuid4().hex[:12]
+        job = {"job_id": job_id, "match_id": f"szezon-{jersey}",
+               "status": "running", "stage": "K", "progress": 0.0,
+               "message": "szezon-válogatás indítása", "error": None,
+               "created": time.time(), "video": f"#{jersey} {team}"}
+        _jobs[job_id] = job
+
+        import re as _re
+        safe = _re.sub(r"[^A-Za-z0-9._-]", "_", f"{team}_{jersey}")
+        out_root = data_root() / "clips" / f"szezon_{safe}"
+
+        def _work():
+            try:
+                out_root.mkdir(parents=True, exist_ok=True)
+                mester = out_root / "szezon_valogatas.zip"
+                keszult = 0
+                kihagyott_video = 0
+                ures = 0
+                with _zipfile.ZipFile(mester, "w",
+                                      _zipfile.ZIP_STORED) as mz:
+                    for i, m in enumerate(sajat):
+                        job["progress"] = i / max(1, len(sajat))
+                        ellenfel = (m.meta.away_team
+                                    if m.meta.home_team == team
+                                    else m.meta.home_team)
+                        job["message"] = (f"vágás: {ellenfel} "
+                                          f"({i + 1}/{len(sajat)})")
+                        if not m.meta.video_path and not getattr(
+                                m.meta, "source_segments", None):
+                            kihagyott_video += 1
+                            continue
+                        mid = m.meta.match_id
+                        aldir = out_root / _re.sub(r"[^A-Za-z0-9._-]",
+                                                   "_", mid)
+                        try:
+                            ev = _clip_events(m, mid, types)
+                            res = export_event_clips(
+                                m, ev, types, aldir, jerseys={jersey})
+                        except RuntimeError:
+                            # Nincs jelenete ezen a meccsen, vagy a
+                            # videó nem érhető el — a válogatás a
+                            # TÖBBI meccsből így is összeáll.
+                            ures += 1
+                            continue
+                        mappa = _re.sub(
+                            r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ.-]+", "_",
+                            f"{m.meta.date or mid}_{ellenfel}")
+                        with _zipfile.ZipFile(res.zip_path) as rz:
+                            for nev in rz.namelist():
+                                mz.writestr(f"{mappa}/{nev}",
+                                            rz.read(nev))
+                                keszult += 1
+                if keszult == 0:
+                    job["status"] = "error"
+                    job["error"] = (
+                        "Egyetlen jelenet sem vágható: vagy nincs a "
+                        f"#{jersey} mezszámhoz kért esemény, vagy a "
+                        "meccsek videói nem érhetők el ezen a gépen.")
+                    job["message"] = f"hiba: {job['error']}"
+                    return
+                job["status"] = "done"
+                job["progress"] = 1.0
+                job["message"] = (
+                    f"kész: {keszult} klip, {len(sajat)} meccsből"
+                    + (f" ({kihagyott_video} meccs videó nélkül kimaradt)"
+                       if kihagyott_video else "")
+                    + (f" ({ures} meccsen nem volt jelenete)"
+                       if ures else ""))
+            except Exception as e:
+                job["status"] = "error"
+                job["error"] = str(e)
+                job["message"] = f"hiba: {e}"
+            _log_job(job)
+
+        _threading.Thread(target=_work, daemon=True).start()
+        return {"job_id": job_id}
+
+    @app.get("/players/season-clips/download")
+    def download_season_clips(team: str, jersey: int):
+        """A legutóbb elkészült szezon-válogatás letöltése."""
+        import re as _re
+
+        from fastapi.responses import FileResponse
+        safe = _re.sub(r"[^A-Za-z0-9._-]", "_", f"{team}_{jersey}")
+        zip_path = (data_root() / "clips" / f"szezon_{safe}"
+                    / "szezon_valogatas.zip")
+        if not zip_path.exists():
+            raise HTTPException(status_code=404,
+                                detail="nincs kész szezon-válogatás")
+        return FileResponse(str(zip_path), media_type="application/zip",
+                            filename=f"szezon_valogatas_{safe}.zip")
+
     @app.get("/matches/{match_id}/clips/download")
     def download_clips(match_id: str):
         """A legutóbb exportált klip-csomag (zip) letöltése."""

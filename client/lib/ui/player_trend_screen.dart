@@ -178,6 +178,68 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
   /// A Klipek lap a JÁTÉKOS mezszámával előre kijelölve. Ha a beírt
   /// mezszám még üres, a képernyő a szokásos (csapat-szintű) alakban
   /// nyílik — nem hibázunk, csak nem szűkítünk.
+  // Szezon-válogatás állapota: fut-e, és mit üzen a motor.
+  bool _seasonWorking = false;
+  String _seasonMsg = "";
+
+  /// Szezon-válogatás: a játékos ÖSSZES meccséből egy zip, meccsenkénti
+  /// mappákkal. A vágás percekbe telhet — a gombon fut a haladás.
+  Future<void> _seasonClips() async {
+    final team = _team;
+    final jersey = int.tryParse(_jerseyCtrl.text.trim());
+    if (team == null || jersey == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Előbb válassz csapatot és adj meg mezszámot.")));
+      return;
+    }
+    setState(() {
+      _seasonWorking = true;
+      _seasonMsg = "indítás…";
+    });
+    try {
+      final jobId = await _api.startSeasonClips(team, jersey);
+      String zaroUzenet = "";
+      while (true) {
+        await Future.delayed(const Duration(seconds: 1));
+        if (!mounted) return;
+        final job = await _api.fetchJob(jobId);
+        final status = job["status"] as String?;
+        setState(() =>
+            _seasonMsg = (job["message"] as String?) ?? _seasonMsg);
+        if (status == "done") {
+          zaroUzenet = (job["message"] as String?) ?? "";
+          break;
+        }
+        if (status == "error") {
+          throw Exception(job["error"] ?? "ismeretlen hiba");
+        }
+      }
+      final bytes = await _api.fetchSeasonClipsZip(team, jersey);
+      if (!mounted) return;
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Szezon-válogatás mentése (zip)",
+        fileName: "szezon_valogatas_#${jersey}_$team.zip".replaceAll(
+            RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ#.-]+"), "_"),
+        type: FileType.custom,
+        allowedExtensions: const ["zip"],
+      );
+      if (path != null) {
+        await File(path).writeAsBytes(bytes);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Szezon-válogatás mentve: $path — "
+                "$zaroUzenet")));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text("Szezon-válogatás hiba: ${humanError(e)}")));
+    } finally {
+      if (mounted) setState(() => _seasonWorking = false);
+    }
+  }
+
   void _openMyClips({List<String> types = const []}) {
     final jersey = int.tryParse(_jerseyCtrl.text.trim());
     Navigator.of(context).push(MaterialPageRoute(
@@ -266,6 +328,20 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
               onPressed: _openMyClips,
               icon: const Icon(Icons.movie_creation_outlined, size: 17),
               label: const Text("Klipjeim"),
+            ),
+            // SZEZON-válogatás: az összes meccs góljai egy zip-ben. A
+            // meccsenkénti csomag a "Klipjeim"; ez a szezon egésze —
+            // amit a játékos megoszt, eltesz, visszanéz.
+            const SizedBox(width: AppSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: _seasonWorking ? null : _seasonClips,
+              icon: _seasonWorking
+                  ? const SizedBox(width: 15, height: 15,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.video_collection_outlined, size: 17),
+              label: Text(_seasonWorking
+                  ? _seasonMsg
+                  : "Szezon-válogatás"),
             ),
             // Szezon-lap mentése (HTML) — csak ha van megjelenített adat.
             if (_points.isNotEmpty) ...[

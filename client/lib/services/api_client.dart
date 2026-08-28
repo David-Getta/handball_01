@@ -1230,6 +1230,34 @@ class ApiClient {
   /// mezszáma egy táblában — meccs-darabszámmal és szezon-összegekkel.
   /// A toplisták az öt legjobbat adják, ez MINDENKIT, aki mezszámmal
   /// szerepel a könyvtárban.
+  /// Szezon-válogatás indítása egy játékosról (POST
+  /// /players/season-clips/export) — az összes meccséből, egy zip.
+  Future<String> startSeasonClips(String team, int jersey,
+      {List<String> types = const ["goal"]}) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/players/season-clips/export"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"team": team, "jersey": jersey, "types": types}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem indult el a szezon-válogatás", resp));
+    }
+    return (jsonDecode(utf8.decode(resp.bodyBytes))
+        as Map<String, dynamic>)["job_id"] as String;
+  }
+
+  /// A kész szezon-válogatás letöltése (zip, nyers bájtok).
+  Future<List<int>> fetchSeasonClipsZip(String team, int jersey) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/players/season-clips/download"
+            "?team=${Uri.encodeQueryComponent(team)}&jersey=$jersey"))
+        .timeout(const Duration(minutes: 2));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem tölthető le a szezon-válogatás", resp));
+    }
+    return resp.bodyBytes;
+  }
+
   /// A keret-lap CSV-ben (GET /library/roster.csv) — a vezetőségi
   /// kimutatáshoz. Nyers bájtok: a hívó menti fájlba.
   Future<List<int>> fetchTeamRosterCsv(String team) async {

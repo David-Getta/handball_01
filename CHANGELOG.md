@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.80 óta)
 
+- **Szezon-válogatás egy játékosról** (API + felület): "az összes
+  gólom egy helyen" — a meccsenkénti klipcsomag megvolt, a szezoné
+  nem: a játékos meccsenként vágatott, és a zipeket kézzel szedte
+  össze. A játékos-fejlődés lapon egy gomb az egész szezont vágja: a
+  játékos minden meccséből az ő jelenetei, meccsenkénti mappákba
+  rendezve (dátum + ellenfél), egy zip-ben. A videó nélküli meccsek
+  kimaradnak és az üzenet megmondja, hány; ahol nincs jelenete, azt is.
+  A vágás percekbe telhet — a gombon fut a motor haladás-üzenete. A
+  szezon-szűrő itt is él: az összefűzött meccs darabjai nem duplázzák
+  a válogatást.
+
 - **A klip-számláló gyorsítótárazva** (API): a becslő most már a
   teljes bővített esemény-készletet építi, ami egy hosszú meccsen
   másodpercekbe telik — a Klipek lap pedig minden megnyitáskor lekéri.

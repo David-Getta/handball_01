@@ -2400,3 +2400,21 @@ def test_a_keret_lap_kimutatast_ad_csv_ben():
     assert "_exportCsv" in keret and "Kimutatás (CSV)" in keret
     api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
     assert "roster.csv" in api, "a kliens nem a közös számolásból kér"
+def test_a_jatekos_szezon_valogatast_kap():
+    """"Az összes gólom egy helyen" — a meccsenkénti csomag megvolt, a
+    szezoné nem: a játékos meccsenként vágatott, és a zipeket kézzel
+    szedte össze."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_seasonClips" in jatekos and "Szezon-válogatás" in jatekos
+    # A vágás percekbe telhet: a gombon FUT a haladás, nem néma.
+    assert "_seasonWorking" in jatekos and "_seasonMsg" in jatekos
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "season-clips/export" in api and "season-clips/download" in api
