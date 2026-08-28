@@ -3,7 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.83 óta)
+## v0.1.84 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a v0.1.83 sürgős javításának kiegészítése. Aki HÁROM
+> vagy több darabból fűzött össze meccset a v0.1.83-mal, fűzze össze
+> újra ezzel a verzióval (két darabnál nem kell). Az eldöntetlen
+> térfél mostantól egy gombbal javítható, és az összefűzött meccsnek
+> félideje is van.
 
 - **Három vagy több darabnál a 2. félidő minden darabja jó irányba
   fordul** (motor, SÜRGŐS): a v0.1.83 szakasz-határos tükrözése az
