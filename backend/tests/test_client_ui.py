@@ -2418,3 +2418,27 @@ def test_a_jatekos_szezon_valogatast_kap():
 
     api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
     assert "season-clips/export" in api and "season-clips/download" in api
+def test_a_felderites_kulcs_mondata_mellett_ott_a_video():
+    """"A #7-esükre kettőzz" — a mondat meggyőz, a felvétel felkészít.
+
+    A felderítés megnevezi a célpontot, de a bizonyíték (az ő eladásai
+    videón) eddig kézi munkával járt: meccsenkénti vágatás. A
+    Célpont-videó gomb a szezon-válogatás motorján az ÖSSZES elemzett
+    meccsükből vágja ki.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    felderites = (lib / "ui" / "scouting_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_targetVideo" in felderites and "Célpont-videó" in felderites
+    # A célpontok a KULCS-mondatok mezőiből jönnek — nem kézzel beírt
+    # mezszámból.
+    assert "_targetJerseys" in felderites
+    assert 'gyujt("ptf_press"' in felderites
+    assert 'gyujt("ptf_clutch"' in felderites
+    # A vágás percekbe telhet: a gombon fut a haladás.
+    assert "_targetWorking" in felderites

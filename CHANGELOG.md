@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.81 óta)
 
+- **Célpont-videó a felderítésből** (felület): a kulcs-mondat ("a
+  #7-esükre kettőzz — nála a szorítás labdaszerzés") megnevezi a
+  célpontot, de a bizonyíték eddig kézi munka volt. Az
+  Ellenfél-felderítés fejlécében egy gomb a megnevezett emberek
+  (nyomás-érzékeny + hajrá-hibázó) eladásait és góljait vágja ki az
+  ÖSSZES elemzett meccsükből, egy zip-be — a szezon-válogatás
+  motorján. A mondat meggyőz; a felvétel felkészít.
+
 - **Lánc-teszt a darabokban felvett meccsre** (teszt): a v0.1.75–81
   története egyben, a VALÓDI végpontokon át — két klip köteg-csoporttal
   feldolgozva, a motor magától összefűzi, a könyvtár jelöli az egészet

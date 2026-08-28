@@ -238,6 +238,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           icon: const Icon(Icons.print_outlined, size: 18),
           label: const Text("Mentés / nyomtatás"),
         ),
+        const SizedBox(width: AppSpacing.sm),
+        // CÉLPONT-VIDEÓ: a kulcs-mondat ("a #7-esükre kettőzz") mellé
+        // a bizonyíték — az ő eladásaik videón, az összes elemzett
+        // meccsükből. A mondat meggyőz; a felvétel felkészít.
+        if (_targetJerseys().isNotEmpty)
+          OutlinedButton.icon(
+            onPressed: _targetWorking ? null : _targetVideo,
+            icon: _targetWorking
+                ? const SizedBox(width: 15, height: 15,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.gps_fixed, size: 18),
+            label: Text(_targetWorking ? _targetMsg : "Célpont-videó"),
+          ),
         const SizedBox(width: AppSpacing.md),
         // Melyik csapatot derítsük fel (egyesített módban meccsenként rögzített).
         if (widget.items == null)
@@ -2488,6 +2501,120 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (top == null || topN < 2) return null;
     return "az indításaitokra a(z) $top. ugrik rá a legtöbbször "
         "($topN elcsípett indítás) · ne az ő térfelére nyisson a kapus";
+  }
+
+  // Célpont-videó állapota (fut-e, mit üzen a motor).
+  bool _targetWorking = false;
+  String _targetMsg = "";
+
+  /// A kulcs-mondatokban megnevezett mezszámok: a nyomás-érzékeny és a
+  /// hajrá-hibázó emberek. Ha egy sincs, a gomb sem jelenik meg.
+  List<(int, String)> _targetJerseys() {
+    final r = _report;
+    if (r == null) return const [];
+    final ki = <(int, String)>[];
+    void gyujt(String mezo, String miert) {
+      final m = (r[mezo] as Map?)?.cast<String, dynamic>();
+      if (m == null) return;
+      m.forEach((k, v) {
+        final mez = int.tryParse(k);
+        if (mez != null && (v as num).toInt() >= 1) {
+          ki.add((mez, miert));
+        }
+      });
+    }
+
+    gyujt("ptf_press", "nyomás alatt elveszti a labdát");
+    gyujt("ptf_clutch", "a hajrában szakad el nála a labda");
+    return ki;
+  }
+
+  /// Célpont-videó: a kiválasztott emberük ELADÁSAI az összes elemzett
+  /// meccsükből, egy zip-ben — a szezon-válogatás motorján.
+  Future<void> _targetVideo() async {
+    final celpontok = _targetJerseys();
+    if (celpontok.isEmpty) return;
+    final csapat = _report?["team_name"] as String?;
+    if (csapat == null || csapat.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("A jelentésben nincs csapatnév — a válogatás "
+              "nem indítható.")));
+      return;
+    }
+    final valasztott = celpontok.length == 1
+        ? celpontok.first
+        : await showDialog<(int, String)>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: AppColors.surface,
+              title: const Text("Célpont-videó"),
+              content: SizedBox(
+                width: 380,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  for (final c in celpontok)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.gps_fixed, size: 17),
+                      title: Text("#${c.$1}",
+                          style: AppText.value.copyWith(fontSize: 13.5)),
+                      subtitle: Text(c.$2,
+                          style: AppText.label.copyWith(fontSize: 11.5)),
+                      onTap: () => Navigator.pop(ctx, c),
+                    ),
+                ]),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text("Mégse")),
+              ],
+            ),
+          );
+    if (valasztott == null || !mounted) return;
+    setState(() {
+      _targetWorking = true;
+      _targetMsg = "indítás…";
+    });
+    try {
+      final jobId = await _api.startSeasonClips(csapat, valasztott.$1,
+          types: const ["turnover", "goal"]);
+      String zaro = "";
+      while (true) {
+        await Future.delayed(const Duration(seconds: 1));
+        if (!mounted) return;
+        final job = await _api.fetchJob(jobId);
+        setState(() =>
+            _targetMsg = (job["message"] as String?) ?? _targetMsg);
+        if (job["status"] == "done") {
+          zaro = (job["message"] as String?) ?? "";
+          break;
+        }
+        if (job["status"] == "error") {
+          throw Exception(job["error"] ?? "ismeretlen hiba");
+        }
+      }
+      final bytes = await _api.fetchSeasonClipsZip(csapat, valasztott.$1);
+      if (!mounted) return;
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Célpont-videó mentése (zip)",
+        fileName: "celpont_#${valasztott.$1}_$csapat.zip".replaceAll(
+            RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ#.-]+"), "_"),
+        type: FileType.custom,
+        allowedExtensions: const ["zip"],
+      );
+      if (path != null) {
+        await File(path).writeAsBytes(bytes);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Célpont-videó mentve: $path — $zaro")));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Célpont-videó hiba: ${humanError(e)}")));
+    } finally {
+      if (mounted) setState(() => _targetWorking = false);
+    }
   }
 
   // Nyomás-érzékeny emberük: kire kell kettőzni. A jelentés-mező
