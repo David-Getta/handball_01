@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.79 óta)
 
+- **A klip-becslő a bővített csomagokat is számolja** (API): a
+  "kb. hány klip lesz" becslés eddig csak az alap-eseményeket
+  (gól/lövés/eladás) látta — a bővített csomagokra (nagy védés,
+  kulcs-pillanat, jegyzet, hétméteres, ...) NULLÁT mondott, a felület
+  pedig "üres csomagot adna"-val riasztott, miközben a vágás klipeket
+  adott volna. A becslő és a vágás mostantól UGYANABBÓL az
+  esemény-építőből él (őr-teszt tiltja a saját listát), tehát nem
+  tudnak széttartani.
+
+- **A nagy védés a kapusé** (API): a nagy-védés klip eddig nem vitte,
+  KI védte — a kapus a "Klipjeim" gombbal (mezszám-szűréssel) némán
+  üres csomagot kapott, pedig pont az ő jelenetei ezek. Az esemény
+  mostantól a szolgálatban lévő kapus track-jéhez kötődik (a
+  kapus-idővonalból), tehát a kapus saját válogatása is működik.
+
 - **A kapus is kap egyéni edzés-fókuszt** (motor): az egyéni "Mit
   gyakorolj" hét forrása mind mezőnyjátékosról szólt — a kapus lapja
   üresen maradt, miközben a csapat-szintű fókusznak van

@@ -269,3 +269,26 @@ def test_mezszam_nelkul_nincs_jatekos_lap():
     assert not [n for n in lapok if "jatekos_lap" in n], lapok
     assert "edzoi_osszefoglalo.txt" in lapok, lapok
     assert lapok["edzoi_osszefoglalo.txt"].strip()
+def test_a_becsles_a_bovitett_csomagokat_is_szamolja():
+    """ŐR: a becslő UGYANABBÓL az esemény-építőből él, mint a vágás.
+
+    Korábban a számláló csak az alap-eseményeket látta, a bővített
+    csomagokra (jegyzet, nagy védés, kulcs-pillanat) NULLÁT becsült —
+    a felület "üres csomagot adna"-t mondott, miközben a vágás
+    klipeket adott volna. A jegyzet a legkönnyebben előállítható
+    bővített típus: azon mérjük.
+    """
+    client, mid = _client()
+    client.post(f"/matches/{mid}/notes", json={"frame": 5,
+                                               "text": "jelenet"})
+    r = client.get(f"/matches/{mid}/clip-players").json()
+    assert r["totals"].get("note", 0) >= 1, r["totals"]
+
+
+def test_a_kozos_epito_kotelezo():
+    """ŐR a széttartás ellen: a számláló nem építhet saját listát."""
+    src = (Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert src.count("def _clip_events(") == 1
+    # A worker ÉS a számláló is a közös építőt hívja.
+    assert src.count("_clip_events(match, match_id,") >= 2

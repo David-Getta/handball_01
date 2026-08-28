@@ -2290,6 +2290,254 @@ def create_app():
             headers={"Content-Disposition":
                      f'attachment; filename="statisztika_{match_id}.csv"'})
 
+    def _clip_events(match, match_id: str, types: set) -> list:
+        """A klipvágás esemény-listája a kért típusokra — EGY helyen.
+
+        Két hívója van: a klipvágó munkás és a /clip-players számláló
+        (a "kinek vágjuk" lista + a becsült klipszám). Korábban a
+        számláló csak az alap-eseményeket (gól/lövés/eladás) látta,
+        ezért a bővített csomagokra (nagy védés, kulcs-pillanat,
+        jegyzet, ...) NULLÁT becsült — a felület pedig azt mondta,
+        "üres csomagot adna", miközben a vágás klipeket adott volna.
+        Egy közös építővel a kettő nem tud széttartani.
+        """
+        events = detect_events(match)
+        # A player_id KELL: enélkül a mezszám-szűrés némán
+        # üres csomagot adna (az esemény nem tudná, kihez
+        # tartozik).
+        ev = [{"t": e.t, "type": e.type.value,
+               "team": e.team.value, "player_id": e.player_id}
+              for e in events]
+        # Az új elemző rétegek jelenetei is kérhetők klipnek:
+        # hétméteres, időkérés (a leálláshoz vezető jelenet) és
+        # cserehullám — hibatűrően, rétegenként.
+        if "seven_meter" in types:
+            try:
+                from ..pipeline.rules import seven_meter_outcomes
+                ev += [{"t": sm["t"], "type": "seven_meter",
+                        "team": sm["team"]}
+                       for sm in seven_meter_outcomes(match)]
+            except Exception:
+                pass
+        if "timeout" in types:
+            try:
+                from ..pipeline.stoppages import detect_stoppages
+                ev += [{"t": st["start_frame"], "type": "timeout",
+                        "team": st["likely_team"] or "home"}
+                       for st in detect_stoppages(match)
+                       if st["kind"] == "időkérés"]
+            except Exception:
+                pass
+        if "substitution" in types:
+            try:
+                from ..pipeline.substitutions import (
+                    detect_substitutions)
+                ev += [{"t": sw["t"], "type": "substitution",
+                        "team": sw["team"]}
+                       for sw in detect_substitutions(match)]
+            except Exception:
+                pass
+        if "missed_chance" in types:
+            # Kihagyott ziccer: nagy értékű (xG >= 0,5) helyzet,
+            # ami nem lett gól — a leginkább visszanézendő jelenetek.
+            try:
+                from ..pipeline.xg import missed_big_chances
+                ev += [{"t": mc["t"], "type": "missed_chance",
+                        "team": mc["team"]}
+                       for mc in missed_big_chances(match)]
+            except Exception:
+                pass
+        if "big_save" in types:
+            # Bravúr-védés: ziccert fogott a kapus — a védő csapathoz
+            # írjuk, és a SZOLGÁLATBAN LÉVŐ kapus track-jéhez kötjük:
+            # enélkül a kapus mezszám-szűrője ("Klipjeim") némán üres
+            # csomagot adna, pedig pont az ő jelenetei ezek.
+            try:
+                from ..pipeline.goalkeeper import goalkeeper_timeline
+                from ..pipeline.xg import big_saves
+                _fps_bs = (match.meta.fps if match.meta.fps > 0
+                           else 25.0)
+                _stints = goalkeeper_timeline(match)
+
+                def _kapus(oldal, t):
+                    for st_ in ((_stints.get(oldal) or {}).get("stints")
+                                or []):
+                        if st_["from_s"] <= t / _fps_bs <= st_["to_s"]:
+                            return st_["track_id"]
+                    return None
+
+                for bs in big_saves(match):
+                    vedo = "away" if bs["team"] == "home" else "home"
+                    ev.append({"t": bs["t"], "type": "big_save",
+                               "team": vedo,
+                               "player_id": _kapus(vedo, bs["t"])})
+            except Exception:
+                pass
+        if "block" in types:
+            # Blokkolt lövések: a fal munkája — a blokkoló
+            # csapathoz írva.
+            try:
+                from ..pipeline.defense import detect_blocks
+                blk = detect_blocks(match)
+                for side in ("home", "away"):
+                    ev += [{"t": e_["t"], "type": "block",
+                            "team": side}
+                           for e_ in blk[side].get("events", [])]
+            except Exception:
+                pass
+        if "free_shot" in types:
+            # Fedezés-hibák: a szabadon hagyott lövők jelenetei
+            # — a VÉDEKEZŐ oldal tanuló-anyaga.
+            try:
+                from ..pipeline.defense import defense_analysis
+                _da = defense_analysis(match)
+                for side in ("home", "away"):
+                    ev += [{"t": sh_["t"], "type": "free_shot",
+                            "team": side,
+                            "label": sh_.get("zone") or ""}
+                           for sh_ in _da[side].get("shots", [])
+                           if sh_.get("free") is True]
+            except Exception:
+                pass
+        if "best_figure" in types:
+            # A legjobb (leggólerősebb) figura támadásai
+            # csapatonként — "tanuld meg felismerni" csomag.
+            try:
+                from ..pipeline.setplays import setplay_efficiency
+                eff_bf = setplay_efficiency(match)
+                for side in ("home", "away"):
+                    rows_bf = eff_bf.get(side) or []
+                    best_bf = max(rows_bf,
+                                  key=lambda r: r["goals"],
+                                  default=None)
+                    if best_bf is None or best_bf["goals"] < 1:
+                        continue
+                    ev += [{"t": t_bf, "type": "best_figure",
+                            "team": side,
+                            "label": (f"{best_bf['figure'] + 1}. "
+                                      "figura")}
+                           for t_bf in best_bf.get("starts", [])]
+            except Exception:
+                pass
+        if "pivot_goal" in types:
+            # Beállós gólok: a beállón átfutó, gólra váltott
+            # támadások — a beadás-játék videós visszanézése.
+            try:
+                from ..pipeline.attack_types import pivot_usage
+                pu_cl = pivot_usage(match)
+                for side in ("home", "away"):
+                    ev += [{"t": t_pg, "type": "pivot_goal",
+                            "team": side, "label": "beállós gól"}
+                           for t_pg in
+                           pu_cl[side]["pivot_goal_ts"]]
+            except Exception:
+                pass
+        if "breakthrough" in types:
+            # Betörések: az ellenfél belépései a 9 m-en belülre
+            # — a sáv a fájlnévben, védekezés-videózáshoz.
+            try:
+                from ..pipeline.defense import breakthrough_lanes
+                bl_cl = breakthrough_lanes(match)
+                for side in ("home", "away"):
+                    ev += [{"t": e_bt["t"],
+                            "type": "breakthrough",
+                            "team": side,
+                            "label": e_bt["lane"]}
+                           for e_bt in
+                           bl_cl[side]["entries_ts"]]
+            except Exception:
+                pass
+        if "steal" in types:
+            # Labdaszerzések: a birtokos-váltás pillanatai — a
+            # védekezés motorjának videós visszanézése.
+            try:
+                from ..pipeline.defense import ball_winners
+                bw_cl = ball_winners(match)
+                for side in ("home", "away"):
+                    ev += [{"t": e_bw["t"], "type": "steal",
+                            "team": side,
+                            "label": "labdaszerzés"}
+                           for e_bw in bw_cl[side]["ts"]]
+            except Exception:
+                pass
+        if "key_moment" in types:
+            # A meccs gerince videóban: a key_moments réteg
+            # pillanataiból egy-egy klip, a címkével a
+            # fájlnévben.
+            try:
+                from ..pipeline.momentum import key_moments
+                ev += [{"t": km["t"], "type": "key_moment",
+                        "team": "home", "label": km["label"]}
+                       for km in key_moments(match)]
+            except Exception:
+                pass
+        if "turning_point" in types:
+            # A meccs fordulópontja: a győzelmi esély legnagyobb
+            # billenésének pillanata (ha volt legalább 2 gól).
+            try:
+                from ..pipeline.momentum import win_probability
+                tp = win_probability(match).get("turning_point")
+                if tp is not None:
+                    fps_tp = (match.meta.fps
+                              if match.meta.fps > 0 else 25.0)
+                    ev.append({
+                        "t": round(tp["t_s"] * fps_tp),
+                        "type": "turning_point",
+                        "team": ("home" if tp["to_p"] > tp["from_p"]
+                                 else "away"),
+                    })
+            except Exception:
+                pass
+        if "empty_net" in types:
+            # 7 a 6 szakaszok: a lehozott kapusos játék jelenetei
+            # — a saját végrehajtás és az ellenfél szokásainak
+            # visszanézéséhez.
+            try:
+                from ..pipeline.goalkeeper import detect_empty_net
+                ev += [{"t": w["start_frame"], "type": "empty_net",
+                        "team": w["team"]}
+                       for w in detect_empty_net(match)]
+            except Exception:
+                pass
+        if "top_shooter" in types:
+            # A fő lövő lövései: csapatonként a legtöbbet lövő
+            # azonosított játékos minden lövése — felderítési
+            # videó-csomag ("készülj a fő lövőre").
+            try:
+                from ..pipeline.xg import match_xg
+                shots = [s_ for s_ in
+                         match_xg(match).get("shots", [])
+                         if s_.get("player_id") is not None]
+                for side in ("home", "away"):
+                    per: dict = {}
+                    for s_ in shots:
+                        if s_["team"] == side:
+                            per[s_["player_id"]] = (
+                                per.get(s_["player_id"], 0) + 1)
+                    if not per:
+                        continue
+                    top = max(per.items(),
+                              key=lambda kv: kv[1])[0]
+                    ev += [{"t": s_["t"], "type": "top_shooter",
+                            "team": side}
+                           for s_ in shots
+                           if s_["team"] == side
+                           and s_["player_id"] == top]
+            except Exception:
+                pass
+        if "note" in types:
+            # Az edző saját jegyzetei — a megjelölt pillanat
+            # jelenete, a jegyzet szövegével a fájlnévben.
+            try:
+                ev += [{"t": int(n.get("frame", 0)), "type": "note",
+                        "team": "home",
+                        "label": str(n.get("text", ""))[:40]}
+                       for n in _load_notes(match_id)]
+            except Exception:
+                pass
+
+        return ev
+
     @app.post("/matches/{match_id}/clips/export")
     def start_clip_export(match_id: str, body: dict):
         """Videóklip-export indítása HÁTTÉRSZÁLON: a kiválasztott típusú
@@ -2330,225 +2578,7 @@ def create_app():
 
         def _work():
             try:
-                events = detect_events(match)
-                # A player_id KELL: enélkül a mezszám-szűrés némán
-                # üres csomagot adna (az esemény nem tudná, kihez
-                # tartozik).
-                ev = [{"t": e.t, "type": e.type.value,
-                       "team": e.team.value, "player_id": e.player_id}
-                      for e in events]
-                # Az új elemző rétegek jelenetei is kérhetők klipnek:
-                # hétméteres, időkérés (a leálláshoz vezető jelenet) és
-                # cserehullám — hibatűrően, rétegenként.
-                if "seven_meter" in types:
-                    try:
-                        from ..pipeline.rules import seven_meter_outcomes
-                        ev += [{"t": sm["t"], "type": "seven_meter",
-                                "team": sm["team"]}
-                               for sm in seven_meter_outcomes(match)]
-                    except Exception:
-                        pass
-                if "timeout" in types:
-                    try:
-                        from ..pipeline.stoppages import detect_stoppages
-                        ev += [{"t": st["start_frame"], "type": "timeout",
-                                "team": st["likely_team"] or "home"}
-                               for st in detect_stoppages(match)
-                               if st["kind"] == "időkérés"]
-                    except Exception:
-                        pass
-                if "substitution" in types:
-                    try:
-                        from ..pipeline.substitutions import (
-                            detect_substitutions)
-                        ev += [{"t": sw["t"], "type": "substitution",
-                                "team": sw["team"]}
-                               for sw in detect_substitutions(match)]
-                    except Exception:
-                        pass
-                if "missed_chance" in types:
-                    # Kihagyott ziccer: nagy értékű (xG >= 0,5) helyzet,
-                    # ami nem lett gól — a leginkább visszanézendő jelenetek.
-                    try:
-                        from ..pipeline.xg import missed_big_chances
-                        ev += [{"t": mc["t"], "type": "missed_chance",
-                                "team": mc["team"]}
-                               for mc in missed_big_chances(match)]
-                    except Exception:
-                        pass
-                if "big_save" in types:
-                    # Bravúr-védés: ziccert fogott a kapus — a védő
-                    # csapathoz írjuk (az ő kapusának jelenete).
-                    try:
-                        from ..pipeline.xg import big_saves
-                        ev += [{"t": bs["t"], "type": "big_save",
-                                "team": ("away" if bs["team"] == "home"
-                                         else "home")}
-                               for bs in big_saves(match)]
-                    except Exception:
-                        pass
-                if "block" in types:
-                    # Blokkolt lövések: a fal munkája — a blokkoló
-                    # csapathoz írva.
-                    try:
-                        from ..pipeline.defense import detect_blocks
-                        blk = detect_blocks(match)
-                        for side in ("home", "away"):
-                            ev += [{"t": e_["t"], "type": "block",
-                                    "team": side}
-                                   for e_ in blk[side].get("events", [])]
-                    except Exception:
-                        pass
-                if "free_shot" in types:
-                    # Fedezés-hibák: a szabadon hagyott lövők jelenetei
-                    # — a VÉDEKEZŐ oldal tanuló-anyaga.
-                    try:
-                        from ..pipeline.defense import defense_analysis
-                        _da = defense_analysis(match)
-                        for side in ("home", "away"):
-                            ev += [{"t": sh_["t"], "type": "free_shot",
-                                    "team": side,
-                                    "label": sh_.get("zone") or ""}
-                                   for sh_ in _da[side].get("shots", [])
-                                   if sh_.get("free") is True]
-                    except Exception:
-                        pass
-                if "best_figure" in types:
-                    # A legjobb (leggólerősebb) figura támadásai
-                    # csapatonként — "tanuld meg felismerni" csomag.
-                    try:
-                        from ..pipeline.setplays import setplay_efficiency
-                        eff_bf = setplay_efficiency(match)
-                        for side in ("home", "away"):
-                            rows_bf = eff_bf.get(side) or []
-                            best_bf = max(rows_bf,
-                                          key=lambda r: r["goals"],
-                                          default=None)
-                            if best_bf is None or best_bf["goals"] < 1:
-                                continue
-                            ev += [{"t": t_bf, "type": "best_figure",
-                                    "team": side,
-                                    "label": (f"{best_bf['figure'] + 1}. "
-                                              "figura")}
-                                   for t_bf in best_bf.get("starts", [])]
-                    except Exception:
-                        pass
-                if "pivot_goal" in types:
-                    # Beállós gólok: a beállón átfutó, gólra váltott
-                    # támadások — a beadás-játék videós visszanézése.
-                    try:
-                        from ..pipeline.attack_types import pivot_usage
-                        pu_cl = pivot_usage(match)
-                        for side in ("home", "away"):
-                            ev += [{"t": t_pg, "type": "pivot_goal",
-                                    "team": side, "label": "beállós gól"}
-                                   for t_pg in
-                                   pu_cl[side]["pivot_goal_ts"]]
-                    except Exception:
-                        pass
-                if "breakthrough" in types:
-                    # Betörések: az ellenfél belépései a 9 m-en belülre
-                    # — a sáv a fájlnévben, védekezés-videózáshoz.
-                    try:
-                        from ..pipeline.defense import breakthrough_lanes
-                        bl_cl = breakthrough_lanes(match)
-                        for side in ("home", "away"):
-                            ev += [{"t": e_bt["t"],
-                                    "type": "breakthrough",
-                                    "team": side,
-                                    "label": e_bt["lane"]}
-                                   for e_bt in
-                                   bl_cl[side]["entries_ts"]]
-                    except Exception:
-                        pass
-                if "steal" in types:
-                    # Labdaszerzések: a birtokos-váltás pillanatai — a
-                    # védekezés motorjának videós visszanézése.
-                    try:
-                        from ..pipeline.defense import ball_winners
-                        bw_cl = ball_winners(match)
-                        for side in ("home", "away"):
-                            ev += [{"t": e_bw["t"], "type": "steal",
-                                    "team": side,
-                                    "label": "labdaszerzés"}
-                                   for e_bw in bw_cl[side]["ts"]]
-                    except Exception:
-                        pass
-                if "key_moment" in types:
-                    # A meccs gerince videóban: a key_moments réteg
-                    # pillanataiból egy-egy klip, a címkével a
-                    # fájlnévben.
-                    try:
-                        from ..pipeline.momentum import key_moments
-                        ev += [{"t": km["t"], "type": "key_moment",
-                                "team": "home", "label": km["label"]}
-                               for km in key_moments(match)]
-                    except Exception:
-                        pass
-                if "turning_point" in types:
-                    # A meccs fordulópontja: a győzelmi esély legnagyobb
-                    # billenésének pillanata (ha volt legalább 2 gól).
-                    try:
-                        from ..pipeline.momentum import win_probability
-                        tp = win_probability(match).get("turning_point")
-                        if tp is not None:
-                            fps_tp = (match.meta.fps
-                                      if match.meta.fps > 0 else 25.0)
-                            ev.append({
-                                "t": round(tp["t_s"] * fps_tp),
-                                "type": "turning_point",
-                                "team": ("home" if tp["to_p"] > tp["from_p"]
-                                         else "away"),
-                            })
-                    except Exception:
-                        pass
-                if "empty_net" in types:
-                    # 7 a 6 szakaszok: a lehozott kapusos játék jelenetei
-                    # — a saját végrehajtás és az ellenfél szokásainak
-                    # visszanézéséhez.
-                    try:
-                        from ..pipeline.goalkeeper import detect_empty_net
-                        ev += [{"t": w["start_frame"], "type": "empty_net",
-                                "team": w["team"]}
-                               for w in detect_empty_net(match)]
-                    except Exception:
-                        pass
-                if "top_shooter" in types:
-                    # A fő lövő lövései: csapatonként a legtöbbet lövő
-                    # azonosított játékos minden lövése — felderítési
-                    # videó-csomag ("készülj a fő lövőre").
-                    try:
-                        from ..pipeline.xg import match_xg
-                        shots = [s_ for s_ in
-                                 match_xg(match).get("shots", [])
-                                 if s_.get("player_id") is not None]
-                        for side in ("home", "away"):
-                            per: dict = {}
-                            for s_ in shots:
-                                if s_["team"] == side:
-                                    per[s_["player_id"]] = (
-                                        per.get(s_["player_id"], 0) + 1)
-                            if not per:
-                                continue
-                            top = max(per.items(),
-                                      key=lambda kv: kv[1])[0]
-                            ev += [{"t": s_["t"], "type": "top_shooter",
-                                    "team": side}
-                                   for s_ in shots
-                                   if s_["team"] == side
-                                   and s_["player_id"] == top]
-                    except Exception:
-                        pass
-                if "note" in types:
-                    # Az edző saját jegyzetei — a megjelölt pillanat
-                    # jelenete, a jegyzet szövegével a fájlnévben.
-                    try:
-                        ev += [{"t": int(n.get("frame", 0)), "type": "note",
-                                "team": "home",
-                                "label": str(n.get("text", ""))[:40]}
-                               for n in _load_notes(match_id)]
-                    except Exception:
-                        pass
+                ev = _clip_events(match, match_id, types)
 
                 def cb(done, total, msg):
                     job["progress"] = round(done / max(1, total), 3)
@@ -2678,17 +2708,28 @@ def create_app():
         soronkent: dict = {}
         osszesen: dict = {}
         try:
-            for e in detect_events(match):
-                tip_ = getattr(e.type, "value", e.type)
+            from ..pipeline.clips import _TYPE_HU
+            from ..pipeline.primitive_cache import primitive_cache
+
+            # A TELJES típus-készlettel építünk, a KÖZÖS építővel: a
+            # becslés és a vágás így nem tud széttartani. Korábban itt
+            # csak az alap-események (gól/lövés/eladás) számolódtak, a
+            # bővített csomagokra (nagy védés, kulcs-pillanat, jegyzet)
+            # a becslő NULLÁT mondott — "üres csomagot adna" —,
+            # miközben a vágás klipeket adott volna. A primitive_cache
+            # hatókörrel a rétegek meccsenként egyszer számolódnak.
+            with primitive_cache(match):
+                esemenyek = _clip_events(match, match_id, set(_TYPE_HU))
+            for e in esemenyek:
+                tip_ = e.get("type")
                 # A TELJES darabszám a mezszám-nélküli jeleneteket is
                 # viszi: a csapat-szintű becslés különben alábecsülne,
                 # és az edző azt hinné, kevesebb klipet kap.
                 osszesen[tip_] = osszesen.get(tip_, 0) + 1
-                mez = mez_of.get(e.player_id)
+                mez = mez_of.get(e.get("player_id"))
                 if mez is None:
                     continue
-                oldal = team_of.get(e.player_id) or getattr(
-                    e.team, "value", e.team)
+                oldal = team_of.get(e.get("player_id")) or e.get("team")
                 kulcs = (int(mez), str(oldal))
                 rec = soronkent.setdefault(
                     kulcs, {"jersey": int(mez), "team": str(oldal),
