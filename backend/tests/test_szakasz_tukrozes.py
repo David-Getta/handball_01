@@ -131,7 +131,9 @@ def test_a_szakasz_lista_es_a_konyvtar_jelzi_az_eldontetlent():
                                        "match_id": "teljes"})
     assert r.status_code == 200
 
-    segs = c.get("/matches/teljes/segments").json()["segments"]
+    valasz = c.get("/matches/teljes/segments").json()
+    assert "goals_home" in valasz and "goals_away" in valasz
+    segs = valasz["segments"]
     assert len(segs) == 2
     assert segs[0]["file"] == "a.mp4"
     assert segs[1]["mirror_decided"] is False
@@ -154,6 +156,9 @@ def test_a_flip_vegpont_fordit_ment_es_lezarja_a_dontest():
     segs = r.json()["segments"]
     assert segs[1]["mirrored"] is True
     assert segs[1]["mirror_decided"] is True
+    # A friss eredmeny is a valaszban van: a felhasznalo a valodi
+    # vegeredmennyel veti ossze, anelkul vakon nyomkodna a gombot.
+    assert "goals_home" in r.json() and "goals_away" in r.json()
 
     # A meccs-JSON-ban tényleg fordultak a koordináták.
     m = c.get("/matches/teljes").json()

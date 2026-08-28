@@ -3,6 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.84 óta)
+
+- **A szakasz-párbeszéd mutatja a felismert eredményt** (könyvtár): a
+  kézi térfél-döntés lényege az összevetés a VALÓDI végeredménnyel —
+  eddig a párbeszéd csak annyit tudott mondani, "nézd meg máshol". A
+  szakasz-lista és a fordítás válasza mostantól viszi a felismert
+  eredményt (hazai : vendég), és a "Megfordítom" után azonnal frissül:
+  látszik, hogy a fordítással a valódi végeredmény jött-e ki.
+
+- **A súgó tanítja a darabokban felvett meccset** (kezdőlap): az "Első
+  lépések" új lépése elmondja a teljes utat — az összes darab egy
+  kötegben, időrendben; a köteg magától összeáll; a "térfél?" jelvény
+  és a ⇄ gomb pedig az eredmény-ellenőrzéshez visz.
+
 ## v0.1.84 — kiadva (2026-08-28)
 
 > Kiadás-jegyzet: a v0.1.83 sürgős javításának kiegészítése. Aki HÁROM

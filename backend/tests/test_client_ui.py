@@ -2477,6 +2477,13 @@ def test_a_terfel_kezzel_is_eldontheto_a_konyvtarbol():
         "a kártya nem olvassa az eldöntetlen-jelzést")
     assert "_segmentsDialog" in kezdo, "nincs szakasz-párbeszéd"
     assert "Megfordítom" in kezdo, "nincs fordító gomb"
+    # A párbeszéd mutatja a FELISMERT eredményt, és fordítás után
+    # frissíti — a valódi végeredménnyel összevetve derül ki a hiba.
+    assert "Felismert eredmény" in kezdo, "nincs eredmény a párbeszédben"
+    # És a súgó megtanítja a teljes utat (köteg → automatikus
+    # összefűzés → térfél-ellenőrzés) — a nem-műszaki edző csak innen
+    # tudhatja, hogy ez az út létezik.
+    assert "Darabokban felvett meccs" in kezdo, "a súgó nem tanítja a kötegelést"
     assert "ellenőrizd az eredményt" in kezdo.lower(), (
         "a párbeszéd nem mondja, MIT nézzen az ember")
 

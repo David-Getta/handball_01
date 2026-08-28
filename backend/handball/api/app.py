@@ -1472,7 +1472,13 @@ def create_app():
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return {"match_id": match_id, "segments": _segment_summary(match)}
+        # A felismert eredmény is megy: a kézi térfél-döntéshez a
+        # felhasználó a VALÓDI végeredménnyel veti össze — anélkül a
+        # párbeszéd csak annyit tudna mondani, "nézd meg máshol".
+        osszegzes = _match_summary(match)
+        return {"match_id": match_id, "segments": _segment_summary(match),
+                "goals_home": osszegzes.get("goals_home"),
+                "goals_away": osszegzes.get("goals_away")}
 
     @app.post("/matches/{match_id}/segments/{index}/flip")
     def flip_match_segment(match_id: str, index: int):
@@ -1495,8 +1501,14 @@ def create_app():
             raise HTTPException(status_code=400, detail=str(e))
         _put_match(match)  # memóriába + lemezre (perzisztencia)
         _drop_derived_caches(match_id)
+        # A friss (fordítás UTÁNI) eredmény megy vissza: a felhasználó
+        # azonnal látja, hogy a fordítással a valódi végeredmény
+        # jött-e ki — e nélkül vakon nyomkodná a gombot.
+        osszegzes = _match_summary(match)
         return {"match_id": match_id, "index": index,
-                "segments": _segment_summary(match)}
+                "segments": _segment_summary(match),
+                "goals_home": osszegzes.get("goals_home"),
+                "goals_away": osszegzes.get("goals_away")}
 
     def _merge_and_store(ids: list, match_id_kert: str = "",
                          home_team=None, away_team=None) -> dict:

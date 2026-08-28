@@ -203,12 +203,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     "pozíciókat. Ha jó: Félidő vagy Teljes videó. Több videót is "
                     "sorba állíthatsz; a haladás itt, a kezdőlapon látszik. Az "
                     "appot ne zárd be feldolgozás közben."),
-                step("4", "Elemzés",
+                step("4", "Darabokban felvett meccs",
+                    "Telefonnal darabokban vetted fel? Add fel az összes "
+                    "darabot EGY kötegben, időrendben — a feldolgozás végén "
+                    "magától összeáll egy teljes meccsé. Ha a sor \"térfél?\" "
+                    "jelvényt mutat, a ⇄ gombbal ellenőrizd: a párbeszéd "
+                    "mutatja a felismert eredményt, és ha fordítva áll, egy "
+                    "gombbal megfordíthatod."),
+                step("5", "Elemzés",
                     "A kész meccs a könyvtárban. Meccs-nézet: lejátszás, "
                     "statisztika, események (kattintásra a VIDEÓ a jelenetre "
                     "ugrik), játékos-kiemelés a pályára kattintva. Ha a csapatok "
                     "fordítva: ⇄ gomb. Jelentés: 📄 (nyomtatható) és 📊 (Excel)."),
-                step("5", "Felderítés és fejlődés",
+                step("6", "Felderítés és fejlődés",
                     "Meccs-nézet → Felderítés: ellenfél-jelentés kulcsokkal. "
                     "Kezdőlap → Egyesített felderítés (több meccsből) és "
                     "Fejlődés (két időszak összevetése)."),
@@ -1453,10 +1460,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// (eredmény, összefoglaló, edzés-fókusz) újraszámol.
   Future<void> _segmentsDialog(String id) async {
     List<dynamic> segs = [];
+    // A felismert eredmény a döntéshez: a valódi végeredménnyel
+    // összevetve látszik, fordítva áll-e a meccs.
+    int? gh, ga;
     String? err;
     try {
       final r = await _api.fetchMatchSegments(id);
       segs = r["segments"] as List<dynamic>? ?? [];
+      gh = (r["goals_home"] as num?)?.toInt();
+      ga = (r["goals_away"] as num?)?.toInt();
     } catch (e) {
       err = humanError(e);
     }
@@ -1507,8 +1519,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   try {
                     final r = await _api.flipMatchSegment(id, i);
                     changed = true;
-                    setSt(() =>
-                        segs = r["segments"] as List<dynamic>? ?? segs);
+                    setSt(() {
+                      segs = r["segments"] as List<dynamic>? ?? segs;
+                      gh = (r["goals_home"] as num?)?.toInt();
+                      ga = (r["goals_away"] as num?)?.toInt();
+                    });
                   } catch (e) {
                     if (!ctx.mounted) return;
                     ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
@@ -1537,6 +1552,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           "szakaszt — az elemzés újraszámol. A döntésed "
                           "megmarad.",
                           style: AppText.label.copyWith(fontSize: 12.5)),
+                      if (gh != null && ga != null) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        // Fordítás után frissül: azonnal látszik, a
+                        // valódi végeredmény jött-e ki.
+                        Text("Felismert eredmény most: $gh : $ga "
+                            "(hazai : vendég)",
+                            style: AppText.value.copyWith(
+                                fontSize: 13.5, color: AppColors.gold)),
+                      ],
                       const SizedBox(height: AppSpacing.md),
                       for (var i = 0; i < segs.length; i++) sor(i),
                       if (segs.isEmpty)
