@@ -49,10 +49,20 @@ Sorrendben (kb. 200–280 sor összesen):
    grep -rn "_<rövidítés>_" client/lib/ui/scouting_screen.dart
    ```
 
+   SZÓTŐVEL keress, ne teljes szóval: a katalógus-címek ragozottak, és
+   a "utolsó labda" nem találja meg az "UTOLSÓ LABDÁVAL" címet (á ≠ a,
+   és a rag is más). Tehát: `grep -i "labdá"` a "labda" helyett,
+   "zárás\|záró" a "félidő-zárás" helyett — a tő plusz egy-két
+   alternatíva.
+
    Ez nem formalitás: a `substitutions.phase_specialists` réteg egyszer
    végig is készült (motor, API, összefoglaló, felderítés, edzés-szabály,
    kliens-csempe, három teszt), mire kiderült, hogy a `roles.py`-ban már
-   ott volt UGYANAZ a réteg ugyanazon a néven. A duplán regisztrált
+   ott volt UGYANAZ a réteg ugyanazon a néven. A `closing_attacks` pedig
+   majdnem duplán készült el "félidő-záró támadás" néven: a "utolsó
+   támadás" és "utolsó labda" keresés a ragozott cím ("MIT KEZDENEK AZ
+   UTOLSÓ LABDÁVAL") mellett ment el — a motor már kész volt, mire a
+   felderítés-mezőknél kiderült, hogy a kérdés le van fedve. A duplán regisztrált
    nevet az őr (`test_package_reteg_nevek_egyediek`) elkapja, de csak a
    teljes futásnál — a katalógus-keresés harminc másodperc.
 
