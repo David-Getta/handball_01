@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.78 óta)
+## v0.1.79 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a KIMUTATÁS kiadása. A "küldd el Excelben, ki hány
+> gólnál jár" mostantól egy gomb a Keret-lapon — ugyanabból a
+> számolásból, amit az edző a képernyőn lát, névvel együtt. A
+> meccs-CSV is kapott név-oszlopot, a felderítés-választó pedig jelzi
+> a darabot, hogy az egyesített jelentés ne számolja kétszer ugyanazt
+> a meccset.
+
 
 - **Szezon-kimutatás CSV-ben a Keret-lapról** (API + felület): a
   meccs-szintű játékos-CSV megvolt, a szezon-szintű nem — pedig a
