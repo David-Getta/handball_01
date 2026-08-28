@@ -1230,6 +1230,19 @@ class ApiClient {
   /// mezszáma egy táblában — meccs-darabszámmal és szezon-összegekkel.
   /// A toplisták az öt legjobbat adják, ez MINDENKIT, aki mezszámmal
   /// szerepel a könyvtárban.
+  /// A keret-lap CSV-ben (GET /library/roster.csv) — a vezetőségi
+  /// kimutatáshoz. Nyers bájtok: a hívó menti fájlba.
+  Future<List<int>> fetchTeamRosterCsv(String team) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/roster.csv"
+            "?team=${Uri.encodeQueryComponent(team)}"))
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a szezon-CSV", resp));
+    }
+    return resp.bodyBytes;
+  }
+
   Future<Map<String, dynamic>> fetchTeamRoster(String team) async {
     final resp = await http
         .get(Uri.parse("$baseUrl/library/roster"

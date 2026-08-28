@@ -19,6 +19,9 @@
 /// kérdés, két külön teendő.
 library;
 
+import "dart:io";
+
+import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
@@ -330,7 +333,44 @@ class _RosterScreenState extends State<RosterScreen> {
                 _loadFocus();
               },
       ),
+      const SizedBox(width: AppSpacing.md),
+      // Szezon-kimutatás Excelbe: "küldd el, ki hány gólnál jár" — a
+      // hét végi vezetőségi feladat. Eddig a képernyőről kellett
+      // kimásolni.
+      OutlinedButton.icon(
+        onPressed: _team == null ? null : _exportCsv,
+        icon: const Icon(Icons.table_view_outlined, size: 16),
+        label: const Text("Kimutatás (CSV)"),
+      ),
     ]);
+  }
+
+  /// A keret-tábla mentése CSV-be. Ugyanabból a számolásból él, mint a
+  /// képernyő (a backend közös útján) — a kimutatás nem tarthat szét
+  /// attól, amit az edző lát.
+  Future<void> _exportCsv() async {
+    final team = _team;
+    if (team == null) return;
+    try {
+      final bytes = await _api.fetchTeamRosterCsv(team);
+      if (!mounted) return;
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Szezon-kimutatás mentése (CSV)",
+        fileName: "szezon_$team.csv".replaceAll(
+            RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ.-]+"), "_"),
+        type: FileType.custom,
+        allowedExtensions: const ["csv"],
+      );
+      if (path == null) return;
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Kimutatás mentve: $path — Excelben nyitható.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Nem sikerült a kimutatás: ${humanError(e)}")));
+    }
   }
 
   Widget _table() {

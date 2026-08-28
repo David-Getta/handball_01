@@ -2387,3 +2387,16 @@ def test_a_konyvtar_jelzi_a_darabot_es_az_egeszet():
     assert 'm["part_of"]' in valaszto, (
         "a felderítés-választó nem jelzi a darabot")
     assert "kétszer számolna" in valaszto
+def test_a_keret_lap_kimutatast_ad_csv_ben():
+    """"Küldd el Excelben, ki hány gólnál jár" — a hét végi vezetőségi
+    feladat. Eddig a képernyőről kellett kimásolni."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    keret = (lib / "ui" / "roster_screen.dart").read_text(encoding="utf-8")
+    assert "_exportCsv" in keret and "Kimutatás (CSV)" in keret
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "roster.csv" in api, "a kliens nem a közös számolásból kér"

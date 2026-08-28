@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.78 óta)
 
+- **Szezon-kimutatás CSV-ben a Keret-lapról** (API + felület): a
+  meccs-szintű játékos-CSV megvolt, a szezon-szintű nem — pedig a
+  "küldd el Excelben, ki hány gólnál jár" tipikus hét végi vezetőségi
+  feladat, és eddig a képernyőről kellett kimásolni. A kimutatás
+  UGYANABBÓL a számolásból él, mint a Keret-lap (őr-teszt köti ki: a
+  vezetőség nem láthat mást, mint az edző), Excel-barát (pontosvessző
+  + BOM, mert a magyar Excel a vesszőt tizedesjelnek olvasná), és a
+  nevet is viszi — a kimutatásban a név a lényeg, nem a szám.
+
 - **A felderítés-választó is jelzi a darabot** (felület): az
   egyesített felderítésbe a darabot ÉS az egészet kijelölve ugyanaz a
   meccs kétszer számolna — a "darab" címke (rámutatva a magyarázattal)

@@ -3776,6 +3776,40 @@ def create_app():
                      "és onnantól a korábbi meccsek is beszámítanak."),
         }
 
+    @app.get("/library/roster.csv")
+    def library_roster_csv(team: str):
+        """A keret-lap CSV-ben — a vezetőségi/szövetségi kimutatáshoz.
+
+        A meccs-szintű játékos-CSV megvan; a SZEZON-szintű eddig
+        hiányzott, pedig a hét végi kimutatás tipikus edzői feladat:
+        "küldd el Excelben, ki hány gólnál jár". A képernyőről ezt
+        eddig kézzel kellett kimásolni.
+
+        Ugyanabból a számolásból él, mint a Keret-lap (a kettő nem
+        tarthat szét), és ugyanazért Excel-barát, amiért a meccs-CSV:
+        pontosvessző és BOM, mert a magyar Excel vesszőt tizedesjelnek
+        olvasna.
+        """
+        import re
+
+        from fastapi.responses import Response
+
+        adat = library_roster(team)
+        sorok_csv = ["mezszam;nev;meccsek;golok;golpasszok;blokkok;"
+                     "labdaszerzesek;vedesek"]
+        for r in adat["players"]:
+            sorok_csv.append(
+                f"{r['jersey']};{r['name'] or ''};{r['matches']};"
+                f"{r['goals']};{r['assists']};{r['blocks']};"
+                f"{r['steals']};{r['saves']}")
+        tartalom = "\ufeff" + "\r\n".join(sorok_csv) + "\r\n"
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", team) or "csapat"
+        return Response(
+            content=tartalom.encode("utf-8"),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition":
+                     f'attachment; filename="szezon_{safe}.csv"'})
+
     # Edzés-fókusz kivonat-gyorsítótár (match_id → (kulcs, eredmény)) — a
     # könyvtár-szintű összesítés ne számolja újra a változatlan meccseket.
     _training_cache: dict = {}
