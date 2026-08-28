@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.77 óta)
+## v0.1.78 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a szezon nem duplázódik. A v0.1.77 automatikus
+> összefűzése után a darabok és az egész is a könyvtárban van — a
+> szezon-számolás mostantól tudja, hogy ez ugyanaz a meccs: a
+> góllövő-lista, a játékos-görbe, a mérlegek és a jegyzet-lista a
+> teljes meccset számolja, egyszer. A könyvtárban címke mondja meg,
+> melyik sor az egész ("teljes meccs · N darabból") és melyik a darab.
+> A v0.1.77-tel EGYÜTT frissítendő: az automatikus összefűzés e nélkül
+> a javítás nélkül duplázna.
+
 
 - **Az összefűzött meccs darabjai nem duplázzák a szezont** (motor +
   API): összefűzés után a darabok és az egész is a könyvtárban van (a
