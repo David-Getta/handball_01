@@ -3,7 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.80 óta)
+## v0.1.81 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a SZEZON-VÁLOGATÁS. "Az összes gólom egy helyen" —
+> a játékos-fejlődés lapról egy gomb az egész szezont vágja:
+> meccsenkénti mappák, dátum + ellenfél, egy zip. Mellette a
+> klip-becslő gyorsítótárat kapott, hogy a Klipek lap hosszú meccsen
+> is azonnal nyíljon.
+
 
 - **Szezon-válogatás egy játékosról** (API + felület): "az összes
   gólom egy helyen" — a meccsenkénti klipcsomag megvolt, a szezoné
