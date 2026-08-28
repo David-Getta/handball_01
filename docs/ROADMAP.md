@@ -2,7 +2,7 @@
 
 > ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (2166 automata teszt zöld; élő számok:
+> **Kész és tesztelt (2168 automata teszt zöld; élő számok:
 > `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
@@ -89,10 +89,16 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 
 ## 6. fázis — 3D & LiDAR
 - LiDAR ingest, 3D rekonstrukció, pontfelhő-alapú követés.
-- 3D bejárható nézet (web, Three.js).
+- 3D bejárható nézet — ELSŐ KÖR KÉSZ ✅: a kliens "3D pálya" füle a
+  kész meccset térben játssza le, szabad (játék-szerű) mozgással, a
+  meglévő egykamerás követésből. A többkamerás/LiDAR bemenet ide
+  csatlakozik majd.
 
 ## 7. fázis — VR
-- VR kliens (Unity), a csapat bejár a pályára, edző mutatja a szituációt.
+- VR kliens: a tervezett út a WebXR (böngészős headset — a Quest-féle
+  önálló eszközökön telepítés nélkül fut), a 3D pálya nézetére építve;
+  a natív (Unity) kliens későbbi opció, ha a WebXR kevés lenne.
+- A csapat bejár a pályára, az edző mutatja a szituációt.
 
 ## 8. fázis — Élő meccskövetés
 - Valós idejű pipeline (streaming inferencia).

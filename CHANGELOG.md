@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.84 óta)
 
+- **3D pálya — az elemzett meccs bejárása, mint egy videójátékban**
+  (új menüpont): a bal menü új "3D pálya" füle a kész meccset térben
+  játssza le — szabad mozgás WASD + egérrel (R/F fel-le, Shift gyors),
+  nézet-gombok (Lelátó, Kapu mögül, Pálya-szint, Madártávlat),
+  lejátszás tekerővel és sebesség-váltóval, interpolált mozgással. A
+  jövendő termék 3D/VR-útjának (ROADMAP 6-7. fázis) első köre: a
+  többkamerás/LiDAR bemenet és a VR erre a nézetre épül majd rá.
+  Könyvtár nélkül demó-meccsel indul.
+
+- **A köteg időrendben áll össze** (új elemzés): a fájlválasztó a
+  KIJELÖLÉS sorrendjét adja (ctrl+katt = véletlen sorrend), az
+  automatikus összefűzés pedig a sorrendből épít meccset — rossz
+  sorrendben némán rossz meccs lett volna. A kiválasztott fájlok
+  mostantól szám-tudatos névsorba rendeződnek (a telefon időbélyeges
+  fájlneveinél ez az időrend), és a köteg-lista sorszámozva mutatja,
+  mi lesz a sorrend.
+
 - **A szakasz-párbeszéd mutatja a felismert eredményt** (könyvtár): a
   kézi térfél-döntés lényege az összevetés a VALÓDI végeredménnyel —
   eddig a párbeszéd csak annyit tudott mondani, "nézd meg máshol". A

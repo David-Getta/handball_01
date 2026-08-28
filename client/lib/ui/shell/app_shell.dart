@@ -28,6 +28,7 @@ import "../../theme/app_theme.dart";
 import "../../version.dart";
 import "../account_gate.dart";
 import "../clips_screen.dart";
+import "../court3d_screen.dart";
 import "../dashboard_screen.dart";
 import "../designer_screen.dart";
 import "../error_text.dart";
@@ -49,7 +50,7 @@ import "../upload_screen.dart";
 /// a könyvtárból a kiválasztott meccsel — a kijelölés ilyenkor is ezt jelöli.)
 enum NavId {
   dashboard, upload, jobs, live, matches, scouting, matchup, clips,
-  designer, training, season, roster, teamTrend, playerTrend, notes
+  designer, court3d, training, season, roster, teamTrend, playerTrend, notes
 }
 
 /// A menü csoportjai és elemei — EGY helyen, a sáv és a billentyű-kiosztás
@@ -67,6 +68,9 @@ const List<(String, List<(NavId, IconData, String)>)> kNavGroups = [
     (NavId.matchup, Icons.fact_check_outlined, "Meccsterv"),
     (NavId.clips, Icons.video_library_outlined, "Klipek"),
     (NavId.designer, Icons.edit_outlined, "Figura-tervező"),
+    // A jövendő termék 3D/VR-útjának első köre: az elemzett meccs
+    // bejárása térben, játék-szerű mozgással (ROADMAP 6-7. fázis).
+    (NavId.court3d, Icons.view_in_ar, "3D pálya"),
   ]),
   ("CSAPAT", [
     (NavId.training, Icons.fitness_center, "Edzésterv"),
@@ -91,6 +95,7 @@ void navTo(BuildContext context, NavId id) {
     NavId.matchup => const MatchupScreen(),
     NavId.clips => const ClipsScreen(),
     NavId.designer => DesignerScreen(match: buildDemoMatch()),
+    NavId.court3d => const Court3DScreen(),
     NavId.training => const TrainingPlanScreen(),
     NavId.season => const SeasonScreen(),
     NavId.roster => const RosterScreen(),

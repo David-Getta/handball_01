@@ -2489,3 +2489,56 @@ def test_a_terfel_kezzel_is_eldontheto_a_konyvtarbol():
 
     api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
     assert "fetchMatchSegments" in api and "flipMatchSegment" in api
+
+
+def test_a_koteg_idorendben_all_ossze():
+    """ŐR: a fájlválasztó a KIJELÖLÉS sorrendjét adja (ctrl+katt =
+    véletlen sorrend), az automatikus összefűzés pedig a sorrendből
+    épít meccset — rossz sorrendben némán rossz meccs lenne. A telefon
+    fájlnevei időbélyegesek, ezért a szám-tudatos névrendezés = időrend;
+    a köteg-lista sorszámozva mutatja, mi lesz a sorrend."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    fel = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert "_naturalCompare" in fel, "nincs szám-tudatos névrendezés"
+    assert "sort((a, b) => _naturalCompare(a.name, b.name))" in fel, (
+        "a kiválasztott fájlok nem rendeződnek névsorba")
+    # A köteg-lista sorszámozva mutatja a sorrendet (a fő videó az 1.).
+    assert '"${bi + 2}. ${_batchPaths[bi]' in fel, (
+        "a köteg-lista nem sorszámozott")
+
+
+def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
+    """ŐR: a 3D/VR-út első köre — a bal menü "3D pálya" füle, ahol az
+    elemzett meccs térben járható be, játék-szerű mozgással. A vetítés
+    szoftveres (nincs Flutter-beli 3D motor), a mozgás WASD + egér, a
+    lejátszás interpolált (a ritkított követés különben darabos lenne)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    hej = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "court3d" in hej and '"3D pálya"' in hej, (
+        "a 3D pálya nincs a bal menüben")
+    assert "Court3DScreen" in hej, "a menü nem nyitja a 3D képernyőt"
+
+    harom = (lib / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    # Játék-szerű mozgás és a súgó-sor, amiből a felhasználó megtudja.
+    assert "keyW" in harom and "keyD" in harom, "nincs WASD-mozgás"
+    assert "onPanUpdate" in harom, "nincs egér-nézelődés"
+    assert "WASD — mozgás" in harom, "nincs kezelés-súgó a képernyőn"
+    # Távlati vetítés közeli síkra vágással — enélkül a háttal lévő
+    # pontok "kifordulnának" a képből.
+    assert "_kozel" in harom and "_szakasz" in harom, (
+        "nincs közeli-sík vágás a vetítésben")
+    # Interpolált lejátszás: a ritkított követés (~8 kép/mp) darabos lenne.
+    assert "interpol" in harom.lower(), "nincs interpolált lejátszás"
+    # Könyvtár nélkül demóval indul — az új felhasználó is lát valamit.
+    assert "buildDemoMatch" in harom, "nincs demó-tartalék"
