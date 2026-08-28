@@ -1362,6 +1362,13 @@ def create_app():
                 # A szezon-számolás az ilyet kihagyja — a felület ebből
                 # tudja jelezni, hogy a sor már benne van az egészben.
                 "part_of": resze.get(m.meta.match_id),
+                # Hány szakasz-határon maradt eldöntetlen a térfélcsere:
+                # itt az eredmény fordítva állhat, és a felületnek kézi
+                # ellenőrzést kell kínálnia (szakasz-tükrözés).
+                "undecided_segments": sum(
+                    1 for sz in (getattr(m.meta, "source_segments",
+                                         None) or [])
+                    if sz.get("mirror_decided") is False),
             })
         out.sort(key=lambda d: d["match_id"])
         return {"matches": out}
@@ -1423,6 +1430,73 @@ def create_app():
         match.swap_teams()
         _put_match(match)  # memóriába + lemezre (perzisztencia)
         return {"match_id": match_id, "swapped": True}
+
+    def _drop_derived_caches(match_id: str) -> None:
+        """A meccsből származtatott kivonatok eldobása.
+
+        A kivonat-gyorsítótárak kulcsa jellemzően a kockaszám / fájl-mtime,
+        ami a meccs HELYBEN módosításától (esemény-javítás, szakasz-
+        tükrözés) nem változik — ezért kézzel dobjuk el őket."""
+        _summary_cache.pop(match_id, None)
+        _training_cache.pop(match_id, None)
+        _ptf_cache.pop(match_id, None)
+        _clip_players_cache.pop(match_id, None)
+        for k in [k for k in _quality_score_cache if k[0] == match_id]:
+            _quality_score_cache.pop(k, None)
+
+    def _segment_summary(match) -> list:
+        """A forrás-szakaszok emberi olvasatban (a kliens szakasz-listája)."""
+        fps = match.meta.fps if match.meta.fps > 0 else 25.0
+        out = []
+        for i, sz in enumerate(getattr(match.meta, "source_segments",
+                                       None) or []):
+            t_to = sz.get("t_to")
+            out.append({
+                "index": i,
+                "from_s": sz["t_from"] / fps,
+                "to_s": (t_to / fps) if t_to is not None else None,
+                "file": Path(str(sz.get("video_path") or "")).name or None,
+                "mirrored": bool(sz.get("mirrored")),
+                # None = régi (v0.1.83 előtti) összefűzés, nincs döntés-adat.
+                "mirror_decided": sz.get("mirror_decided"),
+            })
+        return out
+
+    @app.get("/matches/{match_id}/segments")
+    def get_match_segments(match_id: str):
+        """Az összefűzött meccs forrás-szakaszai.
+
+        A szakasz-tükrözés kézi ellenőrzéséhez: melyik szakasz melyik
+        fájlból jött, mettől meddig tart, és tükrözte-e az összefűzés
+        (illetve született-e egyáltalán döntés)."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {"match_id": match_id, "segments": _segment_summary(match)}
+
+    @app.post("/matches/{match_id}/segments/{index}/flip")
+    def flip_match_segment(match_id: str, index: int):
+        """Egy szakasz KÉZI tükrözése — az ember dönti el a térfelet.
+
+        Az automatikus térfélcsere-felismerés kevés mért pozíciónál nem
+        dönt, és a minőség-jelentés csak annyit tud mondani: ellenőrizd
+        az eredményt. A meccset látott ember viszont TUDJA a valódi
+        végeredményt — ha az összefűzött meccs fordítva mutatja, ezzel
+        fordítja vissza. A döntés lemezre kerül (újraindítás után is él),
+        és a származtatott kivonatok (eredmény, összefoglaló,
+        edzés-fókusz) újraszámolódnak."""
+        from ..pipeline.merge import flip_segment
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            flip_segment(match, index)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        _put_match(match)  # memóriába + lemezre (perzisztencia)
+        _drop_derived_caches(match_id)
+        return {"match_id": match_id, "index": index,
+                "segments": _segment_summary(match)}
 
     def _merge_and_store(ids: list, match_id_kert: str = "",
                          home_team=None, away_team=None) -> dict:
@@ -1932,17 +2006,8 @@ def create_app():
         if m is not None:
             m.meta.event_overrides = _load_overrides(match_id)
             # A meccsből származtatott kivonatok elavulnak: az eredmény,
-            # a lövésszám és az edzés-fókusz is a javított eseményekből
-            # jön. A kulcsuk a kockaszám, ami NEM változik — ezért itt
-            # kézzel dobjuk el őket.
-            _summary_cache.pop(match_id, None)
-            _training_cache.pop(match_id, None)
-            _ptf_cache.pop(match_id, None)
-            # A minőség-pontszám kulcsa (match_id, kockaszám) — a
-            # kockaszám nem változik a javítástól, ezért NÉV szerint
-            # keressük ki a bejegyzést.
-            for k in [k for k in _quality_score_cache if k[0] == match_id]:
-                _quality_score_cache.pop(k, None)
+            # a lövésszám és az edzés-fókusz is a javított eseményekből jön.
+            _drop_derived_caches(match_id)
 
     @app.get("/matches/{match_id}/event-overrides")
     def get_event_overrides(match_id: str):

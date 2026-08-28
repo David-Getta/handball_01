@@ -402,6 +402,29 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Az összefűzött meccs forrás-szakaszai (GET /matches/{id}/segments):
+  /// melyik fájlból jött, mettől meddig tart, tükrözte-e az összefűzés.
+  Future<Map<String, dynamic>> fetchMatchSegments(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/segments"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a szakasz-lista", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Egy szakasz kézi tükrözése (POST /matches/{id}/segments/{i}/flip) —
+  /// ha az összefűzött meccs eredménye fordítva áll, az ember dönt.
+  Future<Map<String, dynamic>> flipMatchSegment(
+      String matchId, int index) async {
+    final resp = await http
+        .post(Uri.parse("$baseUrl/matches/$matchId/segments/$index/flip"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a szakasz tükrözése", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A feldolgozás minőség-jelentése (GET /matches/{id}/quality).
   Future<Map<String, dynamic>> fetchQuality(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/quality"));

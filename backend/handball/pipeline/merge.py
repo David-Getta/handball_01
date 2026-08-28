@@ -229,13 +229,47 @@ def _normalize_segment_sides(match: Match) -> None:
         ez["mirrored"] = forditva
         ez["mirror_decided"] = fordult is not None
         if forditva:
-            veg = ez["t_to"]
-            for f in match.frames:
-                if f.t < hatar or (veg is not None and f.t >= veg):
-                    continue
-                for p_ in f.players:
-                    p_.x = COURT_LENGTH_M - p_.x
-                    p_.y = COURT_WIDTH_M - p_.y
-                if f.ball is not None:
-                    f.ball.x = COURT_LENGTH_M - f.ball.x
-                    f.ball.y = COURT_WIDTH_M - f.ball.y
+            _mirror_frames(match, hatar, ez["t_to"])
+
+
+def _mirror_frames(match: Match, t_from: int, t_to: Optional[int]) -> None:
+    """A [t_from, t_to) képkockák pálya-koordinátáinak tükrözése helyben."""
+    from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+
+    for f in match.frames:
+        if f.t < t_from or (t_to is not None and f.t >= t_to):
+            continue
+        for p_ in f.players:
+            p_.x = COURT_LENGTH_M - p_.x
+            p_.y = COURT_WIDTH_M - p_.y
+        if f.ball is not None:
+            f.ball.x = COURT_LENGTH_M - f.ball.x
+            f.ball.y = COURT_WIDTH_M - f.ball.y
+
+
+def flip_segment(match: Match, index: int) -> dict:
+    """Egy összefűzött szakasz KÉZI tükrözése — az ember dönt.
+
+    Az automatikus döntés (`_normalize_segment_sides`) kevés mért
+    pozíciónál nem dönt, és a jelentés csak annyit tud mondani:
+    ellenőrizd az eredményt. A meccset látott ember viszont TUDJA, mi
+    volt a valódi végeredmény — ez a függvény adja a kezébe a javítást:
+    a kért szakasz pálya-koordinátáit megfordítja (x→L−x, y→W−y, a
+    labdát is), a `mirrored` jelzőt átbillenti, és a döntést
+    véglegesnek jelöli (`mirror_decided=True` — a figyelmeztetés ezzel
+    el is hallgat, mert döntés SZÜLETETT, csak nem géptől).
+
+    A klip-vágást nem érinti: a forrás-térkép kép-indexei a videóra
+    mutatnak. Visszaadja a szakasz frissített bejegyzését.
+    """
+    szakaszok = getattr(match.meta, "source_segments", None) or []
+    if not szakaszok:
+        raise ValueError("a meccsnek nincs forrás-térképe (nem összefűzött)")
+    if not (0 <= index < len(szakaszok)):
+        raise ValueError(
+            f"nincs {index}. szakasz (0..{len(szakaszok) - 1} létezik)")
+    sz = szakaszok[index]
+    _mirror_frames(match, sz["t_from"], sz.get("t_to"))
+    sz["mirrored"] = not bool(sz.get("mirrored"))
+    sz["mirror_decided"] = True
+    return sz

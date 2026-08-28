@@ -1444,6 +1444,118 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Az összefűzött meccs szakasz-listája + KÉZI térfél-tükrözés.
+  ///
+  /// Az összefűzés a szakasz-határokon magától felismeri a térfélcserét,
+  /// de kevés mért pozíciónál nem dönt — ilyenkor az eredmény fordítva
+  /// állhat. A meccset látott ember viszont TUDJA a valódi végeredményt:
+  /// itt egy gombbal megfordíthatja a gyanús szakaszt, és az elemzés
+  /// (eredmény, összefoglaló, edzés-fókusz) újraszámol.
+  Future<void> _segmentsDialog(String id) async {
+    List<dynamic> segs = [];
+    String? err;
+    try {
+      final r = await _api.fetchMatchSegments(id);
+      segs = r["segments"] as List<dynamic>? ?? [];
+    } catch (e) {
+      err = humanError(e);
+    }
+    if (!mounted) return;
+    var changed = false;
+    String ido(num? s) {
+      if (s == null) return "vége";
+      final t = s.round();
+      return "${t ~/ 60}:${(t % 60).toString().padLeft(2, "0")}";
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSt) {
+        Widget sor(int i) {
+          final s = segs[i] as Map<String, dynamic>;
+          final mirrored = (s["mirrored"] as bool?) ?? false;
+          final decided = s["mirror_decided"];
+          final file = s["file"] as String? ?? "";
+          // decided == false: az összefűzés NEM tudott dönteni — itt
+          // állhat fordítva az eredmény, ezt emeljük ki.
+          final String allapot = decided == false
+              ? "nincs döntés — ellenőrizd az eredményt!"
+              : (mirrored ? "tükrözve" : "normál");
+          final Color szin = decided == false
+              ? AppColors.gold
+              : (mirrored ? AppColors.accent : AppColors.textSecondary);
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        "${i + 1}. szakasz · "
+                        "${ido(s["from_s"] as num?)}–${ido(s["to_s"] as num?)}"
+                        "${file.isNotEmpty ? " · $file" : ""}",
+                        style: AppText.value.copyWith(fontSize: 13)),
+                    Text(allapot,
+                        style: AppText.label
+                            .copyWith(fontSize: 11.5, color: szin)),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  try {
+                    final r = await _api.flipMatchSegment(id, i);
+                    changed = true;
+                    setSt(() =>
+                        segs = r["segments"] as List<dynamic>? ?? segs);
+                  } catch (e) {
+                    if (!ctx.mounted) return;
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                        content: Text(humanError(e))));
+                  }
+                },
+                child: const Text("Megfordítom"),
+              ),
+            ]),
+          );
+        }
+
+        return AlertDialog(
+          title: const Text("Szakaszok és térfelek"),
+          content: SizedBox(
+            width: 480,
+            child: err != null
+                ? Text(err!)
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          "Ha az eredmény fordítva áll (a gólok a rossz "
+                          "csapathoz kerültek), fordítsd meg a gyanús "
+                          "szakaszt — az elemzés újraszámol. A döntésed "
+                          "megmarad.",
+                          style: AppText.label.copyWith(fontSize: 12.5)),
+                      const SizedBox(height: AppSpacing.md),
+                      for (var i = 0; i < segs.length; i++) sor(i),
+                      if (segs.isEmpty)
+                        Text("Ennek a meccsnek nincs forrás-térképe.",
+                            style: AppText.label.copyWith(fontSize: 12.5)),
+                    ],
+                  ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text("Kész")),
+          ],
+        );
+      }),
+    );
+    if (changed) await _load();
+  }
+
   /// Részleges meccs feldolgozásának folytatása: a backend a mentett
   /// beállításokkal új jobot indít onnan, ahol a feldolgozás megszakadt.
   /// Az eredmény külön meccsként jelenik meg ("<id>-folyt").
@@ -2749,6 +2861,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // egyforma sor lenne, és nem tudni, melyiket nyisd meg.
     final mergedParts = (m["merged_parts"] as num?)?.toInt() ?? 0;
     final partOf = m["part_of"] as String?;
+    // Eldöntetlen térfélcsere-határ: az összefűzés nem tudta eldönteni,
+    // fordult-e a pálya — az eredmény fordítva állhat, kézi ellenőrzés kell.
+    final undecided = (m["undecided_segments"] as num?)?.toInt() ?? 0;
     // A hozzá tartozó folytatás-meccsek ("<id>-folyt", "-folyt2", ...) —
     // ha vannak, egy gombbal összefűzhető velük egy teljes meccsé.
     final contIds = _matches
@@ -2820,6 +2935,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 fontSize: 10.5, color: AppColors.accent)),
                       ),
                     ],
+                    if (undecided > 0) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Tooltip(
+                        message: "Az összefűzés $undecided szakasz-határon "
+                            "nem tudta eldönteni a térfélcserét — az "
+                            "eredmény fordítva állhat. Kattints az "
+                            "ellenőrzéshez.",
+                        child: InkWell(
+                          onTap: () => _segmentsDialog(id),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.gold.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                  color: AppColors.gold.withOpacity(0.5)),
+                            ),
+                            child: Text("térfél?",
+                                style: AppText.label.copyWith(
+                                    fontSize: 10.5, color: AppColors.gold)),
+                          ),
+                        ),
+                      ),
+                    ],
                     if (partOf != null) ...[
                       const SizedBox(width: AppSpacing.md),
                       Tooltip(
@@ -2885,6 +3026,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: const Icon(Icons.merge_type, color: AppColors.gold),
                 tooltip: "Összefűzés a folytatással egy teljes meccsé "
                     "(${contIds.join(", ")})",
+              ),
+            if (mergedParts > 0)
+              IconButton(
+                onPressed: () => _segmentsDialog(id),
+                icon: Icon(Icons.swap_horiz,
+                    color: undecided > 0
+                        ? AppColors.gold
+                        : AppColors.textFaint),
+                tooltip: "Szakaszok és térfelek — ha az eredmény fordítva "
+                    "áll, itt fordíthatod vissza",
               ),
             IconButton(
               onPressed: () => _rename(m),

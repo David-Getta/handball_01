@@ -124,8 +124,8 @@ NEXT_ACTION_ORDER: tuple = (
      "gólokat kézzel is felveheted."),
     ("eldönthető a térfélcsere",
      "Ellenőrizd az EREDMÉNYT: ha a második félidő góljai fordítva "
-     "vannak, az Események listán javíthatod, vagy fűzd össze újra a "
-     "meccset hosszabb darabokból."),
+     "vannak, a könyvtárban a meccs sorának ⇄ gombjával fordítsd meg "
+     "a gyanús szakaszt — az elemzés újraszámol."),
     ("Gyanúsan kevés gól",
      "Nézd végig az Események listát: a lövésként jelölt gólokat a sor "
      "⋮ menüjében egy kattintással gólra javíthatod (a javítás az "
@@ -587,9 +587,9 @@ def compute_quality_report(match: Match) -> dict:
             "eldönthető a térfélcsere (kevés mért pozíció a határ "
             "környékén) — ha a határ a félidei szünet volt, az "
             "eredmény és minden irány-alapú szám FORDÍTVA lehet a "
-            "második félidőre. Ellenőrizd az eredményt; ha rossz, az "
-            "Események listán a gólok kézzel javíthatók, vagy fűzd "
-            "össze újra hosszabb darabokból.")
+            "második félidőre. Ellenőrizd az eredményt; ha rossz, a "
+            "könyvtárban a meccs sorának ⇄ gombjával fordítsd meg a "
+            "gyanús szakaszt — az elemzés újraszámol.")
 
     # KLIP vagy MECCS: a rövid felvétel teljesen jogos bemenet, de a
     # meccs-szintű rétegek némán hallgatnak rajta — és a felhasználó

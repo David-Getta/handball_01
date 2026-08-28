@@ -2456,3 +2456,29 @@ def test_a_jegyzet_lista_mentheto():
     assert "_saveTxt" in jegyzet and "Mentés (szöveg)" in jegyzet
     assert "final rows = _shown" in jegyzet, (
         "nem a szűrt listát menti")
+
+
+def test_a_terfel_kezzel_is_eldontheto_a_konyvtarbol():
+    """ŐR: az eldöntetlen térfélcsere-határnál a jelentés azt mondja,
+    ellenőrizd az eredményt — de a javításnak EGY gombnak kell lennie,
+    nem újra-összefűzésnek. A könyvtár-sor jelzi az eldöntetlent, és a
+    szakasz-párbeszédben az ember fordít (a backend menti a döntést)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    # A sor olvassa a jelzést, és kiemeli (a némán rossz eredmény a
+    # legdrágább hiba).
+    assert 'm["undecided_segments"]' in kezdo, (
+        "a kártya nem olvassa az eldöntetlen-jelzést")
+    assert "_segmentsDialog" in kezdo, "nincs szakasz-párbeszéd"
+    assert "Megfordítom" in kezdo, "nincs fordító gomb"
+    assert "ellenőrizd az eredményt" in kezdo.lower(), (
+        "a párbeszéd nem mondja, MIT nézzen az ember")
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "fetchMatchSegments" in api and "flipMatchSegment" in api

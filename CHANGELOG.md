@@ -5,12 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.83 óta)
 
+- **A térfél egy gombbal eldönthető — az ember dönt, ahol a gép nem
+  tudott** (motor + könyvtár): az összefűzés kevés mért pozíciónál nem
+  dönti el a térfélcserét, és eddig a jelentés csak annyit tudott
+  mondani: ellenőrizd az eredményt, rossz esetben fűzd össze újra. A
+  meccset látott ember viszont TUDJA a valódi végeredményt. A könyvtár
+  sora mostantól jelzi az eldöntetlen határt ("térfél?" jelvény + ⇄
+  gomb), a szakasz-párbeszéd megmutatja, melyik szakasz melyik fájlból
+  jött és tükrözve van-e, a "Megfordítom" gomb pedig megfordítja a
+  gyanús szakaszt. A döntés lemezre kerül (újraindítás után is él), az
+  elemzés (eredmény, összefoglaló, edzés-fókusz, klip-számláló)
+  újraszámol, és a figyelmeztetés elhallgat — döntés SZÜLETETT, csak
+  nem géptől.
+
 - **Az eldöntetlen térfélcsere-határ figyelmeztetést kap** (motor): ha
   az összefűzés egy határán kevés mért pozíció miatt nem dönthető el a
   csere, az eredmény rossz irányú is lehet — és a forrás-térképet a
   felhasználó sosem nézi meg. A minőség-jelentés mostantól kimondja,
-  teendővel: ellenőrizd az eredményt; ha rossz, az Események listán
-  javítható, vagy fűzd össze újra hosszabb darabokból.
+  teendővel: ellenőrizd az eredményt; ha rossz, a meccs sorának ⇄
+  gombjával fordítható vissza.
 
 ## v0.1.83 — kiadva (2026-08-28)
 
