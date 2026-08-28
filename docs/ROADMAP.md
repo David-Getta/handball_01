@@ -160,6 +160,25 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   féloldalas kalibráció, takart kapu). Mindkettő megmondja, HOL
   javítható: a figyelmeztetés nem zsákutca, hanem teendő.
 
+- **A darabokban felvett meccs — MEGOLDVA.** Aki telefonnal vagy
+  fényképezőgéppel vesz fel, nem egy tiszta hatvanperces fájlt kap,
+  hanem darabokat: a felvétel négy gigánál vagy tíz percnél elvágódik.
+  A program eddig úgy tett, mintha nem így lenne — hat klip hat külön
+  "meccs" volt, kalibrálva egyenként, összefűzve kézzel (két
+  rögzített mezőben), az emberi munka (jegyzet, kézi javítás,
+  kiállítás) pedig az összefűzésnél némán elveszett.
+
+  A megoldás rétegei (v0.1.75–v0.1.78): akárhány szakasz összefűzhető
+  sorrend-tartással; az összefűzés FORRÁS-TÉRKÉPET ment (melyik
+  játékidő melyik fájl melyik kép-indexén van), így az összefűzött
+  meccsből klip vágható; a jegyzet, a kézi javítás és a kiállítás
+  idő-eltolással átjön; a köteg örökli a fő videó kalibrációját, és a
+  feldolgozás végén MAGÁTÓL áll össze egy meccsé (csoport-jel +
+  darabszám, hogy versenyben se zárulhasson le fél csoporttal). A
+  szezon-számolás pedig tudja, hogy a darab és az egész ugyanaz a
+  meccs — nem dupláz. A teljes utat lánc-teszt járja végig a valódi
+  végpontokon.
+
 - **Kocka vagy másodperc — MEGOLDVA, de visszatérhet.** Egyetlen nap
   alatt HÉT olyan küszöböt találtunk, ami kockában volt megadva, pedig
   IDŐTARTAMOT jelent. Mivel a feldolgozás ritkít (a termék alapja
