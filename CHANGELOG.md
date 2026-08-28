@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.76 óta)
+## v0.1.77 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a darabokban felvett meccs EGY mozdulat. A v0.1.75
+> megengedte az akárhány szakaszt, a v0.1.76 megtartotta az emberi
+> munkát — ez a kiadás pedig elveszi a kézimunkát: a köteg örökli a fő
+> videó kalibrációját (nem fut 5/6-od meccs kalibrálatlanul), és a
+> feldolgozás végén magától áll össze egy meccsé, jó sorrendben.
+> Reggelre nem hat darabot találsz, hanem a kész meccset.
+
 
 - **A köteg a végén magától összeáll egy meccsé** (motor + API +
   felület): aki egy meccs hat darabját tölti fel — jellemzően
