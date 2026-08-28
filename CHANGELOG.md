@@ -3,7 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.79 óta)
+## v0.1.80 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a KAPUS is játékos. Az egyéni "Mit gyakorolj" eddig
+> csak mezőnyjátékosról szólt — a kapus lapja üres maradt, a
+> "Klipjeim" pedig üres csomagot adott neki, mert a nagy védés nem
+> vitte, ki védte. Mostantól a kapus is kap egyéni fókuszt (a várható
+> alatti védés-mérlegből), a nagy védés az övé, és a klip-becslő a
+> bővített csomagokat is számolja — nem riaszt "üres csomaggal" ott,
+> ahol a vágás klipeket adna.
+
 
 - **A klip-becslő a bővített csomagokat is számolja** (API): a
   "kb. hány klip lesz" becslés eddig csak az alap-eseményeket
