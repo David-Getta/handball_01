@@ -473,6 +473,23 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   /// Natív fájlválasztó → videó feltöltése a backendre → a visszakapott
+  /// Szám-tudatos névrendezés: a "2" a "10" ELÉ kerül, az időbélyeges
+  /// telefonos fájlnevek (pl. vid_20260814_…) pedig időrendbe állnak.
+  static int _naturalCompare(String a, String b) {
+    final darab = RegExp(r"\d+|\D+");
+    final ta = [for (final m in darab.allMatches(a.toLowerCase())) m.group(0)!];
+    final tb = [for (final m in darab.allMatches(b.toLowerCase())) m.group(0)!];
+    for (var i = 0; i < ta.length && i < tb.length; i++) {
+      final na = int.tryParse(ta[i]);
+      final nb = int.tryParse(tb[i]);
+      final c = (na != null && nb != null)
+          ? na.compareTo(nb)
+          : ta[i].compareTo(tb[i]);
+      if (c != 0) return c;
+    }
+    return ta.length.compareTo(tb.length);
+  }
+
   /// backend-oldali utat beírja a mezőbe (ezt használja a kalibráció + feldolgozás).
   Future<void> _pickAndUpload() async {
     final res = await FilePicker.platform.pickFiles(
@@ -482,7 +499,14 @@ class _UploadScreenState extends State<UploadScreen> {
       allowMultiple: true, // több felvétel (pl. 1. és 2. félidő) egyszerre
     );
     if (res == null || res.files.isEmpty) return; // a felhasználó megszakította
-    final files = res.files;
+    // IDŐREND a kötegben: a fájlválasztó a KIJELÖLÉS sorrendjét adja
+    // (ctrl+katt = véletlen sorrend), az automatikus összefűzés pedig a
+    // sorrendből épít meccset — rossz sorrendben némán rossz meccs
+    // lenne. A telefon fájlnevei időbélyegesek (pl. vid_20260814_…),
+    // tehát a név szerinti, szám-tudatos rendezés = időrend. A köteg
+    // sorrendje a listában látszik, ott ellenőrizhető.
+    final files = List.of(res.files)
+      ..sort((a, b) => _naturalCompare(a.name, b.name));
 
     // A feltöltés a helyi motorra megy — ha az nem fut, a nyers hálózati
     // hiba ("Connection refused") semmitmondó. Előbb ellenőrizzük, és ha
@@ -1365,16 +1389,19 @@ class _UploadScreenState extends State<UploadScreen> {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.xs,
           children: [
-            for (final p in _batchPaths)
+            // Sorszámozva (a fő videó az 1.): az összefűzés EBBEN a
+            // sorrendben épít meccset — itt látszik, ha rossz.
+            for (var bi = 0; bi < _batchPaths.length; bi++)
               Chip(
-                label: Text(p.split("/").last,
+                label: Text(
+                    "${bi + 2}. ${_batchPaths[bi].split("/").last}",
                     style: AppText.label.copyWith(fontSize: 12)),
                 avatar: const Icon(Icons.movie_outlined,
                     size: 16, color: AppColors.textSecondary),
                 backgroundColor: AppColors.surfaceAlt,
                 side: const BorderSide(color: AppColors.border),
                 deleteIcon: const Icon(Icons.close, size: 16),
-                onDeleted: () => setState(() => _batchPaths.remove(p)),
+                onDeleted: () => setState(() => _batchPaths.removeAt(bi)),
               ),
           ],
         ),
