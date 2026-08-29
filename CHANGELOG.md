@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.84 óta)
+## v0.1.85 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: megérkezett a 3D pálya — az elemzett meccs térben
+> bejárható, mint egy videójátékban (bal menü → 3D pálya). Emellett a
+> köteg-feltöltés időrendbe rendez, és a kézi térfél-döntés a
+> felismert eredményt is mutatja.
 
 - **3D pálya — az elemzett meccs bejárása, mint egy videójátékban**
   (új menüpont): a bal menü új "3D pálya" füle a kész meccset térben
