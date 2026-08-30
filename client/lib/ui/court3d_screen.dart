@@ -62,6 +62,16 @@ class _Court3DScreenState extends State<Court3DScreen>
   // — aki nyúl a kamerához, az vezetni akarja.
   bool _tvKamera = false;
 
+  // JÁTÉKOS-KAMERA: a kiválasztott mezszámú játékost követi hátulról,
+  // a haladási iránya mögül — a pálya az ő szemével. A mezszám stabil
+  // fogódzó (a track-azonosítók a valódi követésben töredezettek).
+  String? _kovTeam; // "home" | "away"
+  int? _kovMez;
+  double _kovIranyX = 0, _kovIranyY = 1; // simított haladás-irány
+  double? _kovElozoX, _kovElozoY;
+  // A meccsen LÁTOTT mezszámok csapatonként (egyszer, betöltéskor).
+  List<int> _mezekHome = const [], _mezekAway = const [];
+
   late final Ticker _ticker;
   Duration _last = Duration.zero;
   final Set<LogicalKeyboardKey> _keys = {};
@@ -109,12 +119,24 @@ class _Court3DScreenState extends State<Court3DScreen>
     try {
       final m = await _api.fetchMatch(id);
       if (!mounted) return;
+      final h = <int>{}, a = <int>{};
+      for (final f in m.frames) {
+        for (final p in f.players) {
+          final mez = p.jerseyNumber;
+          if (mez == null) continue;
+          (p.team == Team.home ? h : a).add(mez);
+        }
+      }
       setState(() {
         _match = m;
         _matchId = id;
         _demo = false;
         _playhead = 0;
         _loading = false;
+        _mezekHome = h.toList()..sort();
+        _mezekAway = a.toList()..sort();
+        _kovTeam = null;
+        _kovMez = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -204,6 +226,61 @@ class _Court3DScreenState extends State<Court3DScreen>
         valtozott = true;
       }
     }
+    // Játékos-kamera: a kiválasztott mezszám mögött, a (simított)
+    // haladási iránya felől — ha épp nem látszik, a kamera marad.
+    if (_kovMez != null && m != null && m.frames.isNotEmpty && dt > 0) {
+      _Jatekos? cel;
+      for (final j in _aktualisAllapot(m).jatekosok) {
+        if (j.mez == _kovMez && j.home == (_kovTeam == "home")) {
+          cel = j;
+          break;
+        }
+      }
+      if (cel != null) {
+        if (_kovElozoX != null && _kovElozoY != null) {
+          final vx = (cel.x - _kovElozoX!) / dt;
+          final vy = (cel.y - _kovElozoY!) / dt;
+          final sebesseg = math.sqrt(vx * vx + vy * vy);
+          if (sebesseg > 0.6) {
+            // Erős simítás: a zajos követés ne rángassa a kamerát.
+            final ks = (dt * 1.5).clamp(0.0, 1.0);
+            _kovIranyX += (vx / sebesseg - _kovIranyX) * ks;
+            _kovIranyY += (vy / sebesseg - _kovIranyY) * ks;
+            final hossz = math.sqrt(
+                _kovIranyX * _kovIranyX + _kovIranyY * _kovIranyY);
+            if (hossz > 1e-6) {
+              _kovIranyX /= hossz;
+              _kovIranyY /= hossz;
+            }
+          }
+        }
+        _kovElozoX = cel.x;
+        _kovElozoY = cel.y;
+        final celKx = cel.x - _kovIranyX * 4.0;
+        final celKy = cel.y - _kovIranyY * 4.0;
+        const celKz = 2.2;
+        final k = (dt * 3.0).clamp(0.0, 1.0);
+        _cx += (celKx - _cx) * k;
+        _cy += (celKy - _cy) * k;
+        _cz += (celKz - _cz) * k;
+        final dx = cel.x - _cx, dy = cel.y - _cy, dz = 1.3 - _cz;
+        final viz = math.sqrt(dx * dx + dy * dy);
+        final celYaw = math.atan2(dx, dy);
+        final celPitch = math.atan2(dz, viz);
+        // A yaw ±π-nél átfordulhat (a játékos irányt vált): a rövidebb
+        // ívre igazítjuk, különben a kamera körbepördülne.
+        var dYaw = celYaw - _yaw;
+        while (dYaw > math.pi) {
+          dYaw -= 2 * math.pi;
+        }
+        while (dYaw < -math.pi) {
+          dYaw += 2 * math.pi;
+        }
+        _yaw += dYaw * k;
+        _pitch += (celPitch - _pitch) * k;
+        valtozott = true;
+      }
+    }
     if (valtozott && mounted) setState(() {});
   }
 
@@ -225,6 +302,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         LogicalKeyboardKey.keyF,
       ].contains(k)) {
         _tvKamera = false;
+        _kovMez = null;
       }
     } else if (e is KeyUpEvent) {
       _keys.remove(k);
@@ -245,6 +323,7 @@ class _Court3DScreenState extends State<Court3DScreen>
   void _nezet(double x, double y, double z, double yaw, double pitch) {
     setState(() {
       _tvKamera = false;
+      _kovMez = null;
       _cx = x;
       _cy = y;
       _cz = z;
@@ -342,6 +421,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         onPanUpdate: (d) {
           setState(() {
             _tvKamera = false;
+            _kovMez = null;
             _yaw += d.delta.dx * 0.005;
             _pitch = (_pitch - d.delta.dy * 0.005).clamp(-1.45, 1.45);
           });
@@ -414,14 +494,71 @@ class _Court3DScreenState extends State<Court3DScreen>
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           ),
           onPressed: () {
-            setState(() => _tvKamera = !_tvKamera);
-            if (_tvKamera && !_playing) setState(() => _playing = true);
+            setState(() {
+              _tvKamera = !_tvKamera;
+              _kovMez = null;
+              if (_tvKamera && !_playing) _playing = true;
+            });
             _focus.requestFocus();
           },
           child: Text(_tvKamera ? "TV-kamera: BE" : "TV-kamera (labda)",
               style: const TextStyle(fontSize: 11.5)),
         ),
       ),
+      // Játékos-kamera: mezszám-választó (csak ha van mezszám-adat).
+      if (_mezekHome.isNotEmpty || _mezekAway.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: _kovMez != null
+                  ? AppColors.accent.withOpacity(0.18)
+                  : AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.borderStrong),
+            ),
+            child: DropdownButton<String>(
+              value: _kovMez == null ? null : "$_kovTeam-$_kovMez",
+              hint: Text("Játékos-kamera",
+                  style: AppText.label.copyWith(fontSize: 11.5)),
+              underline: const SizedBox.shrink(),
+              dropdownColor: AppColors.surface,
+              items: [
+                const DropdownMenuItem(
+                    value: "-", child: Text("kikapcsolva")),
+                for (final mez in _mezekHome)
+                  DropdownMenuItem(
+                      value: "home-$mez",
+                      child: Text("Hazai $mez",
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.home))),
+                for (final mez in _mezekAway)
+                  DropdownMenuItem(
+                      value: "away-$mez",
+                      child: Text("Vendég $mez",
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.away))),
+              ],
+              onChanged: (v) {
+                setState(() {
+                  if (v == null || v == "-") {
+                    _kovMez = null;
+                  } else {
+                    final d = v.split("-");
+                    _kovTeam = d[0];
+                    _kovMez = int.tryParse(d[1]);
+                    _kovElozoX = null;
+                    _kovElozoY = null;
+                    _tvKamera = false;
+                    if (!_playing) _playing = true;
+                  }
+                });
+                _focus.requestFocus();
+              },
+            ),
+          ),
+        ),
       gomb("Lelátó", () => _nezet(20, -12, 9, 0, -0.5)),
       gomb("Kapu mögül", () => _nezet(-6, 10, 2.5, math.pi / 2, -0.12)),
       gomb("Pálya-szint", () => _nezet(20, 4, 1.7, 0, 0.0)),

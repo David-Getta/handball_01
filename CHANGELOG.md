@@ -3,6 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.88 óta)
+
+- **Játékos-kamera a 3D pályán** (3D pálya): mezszám-választóval a
+  kamera egy kiválasztott játékost követ hátulról, a (simított)
+  haladási iránya mögül — a meccs az ő szemével nézhető végig. Bármely
+  kézi mozgás visszaadja a vezérlést; a TV-kamerával kölcsönösen
+  kizárják egymást. Mezszám-adat nélkül a választó nem jelenik meg.
+
 ## v0.1.88 — kiadva (2026-08-30)
 
 > Kiadás-jegyzet: a visszajelzés-kör két eszköze. A minőség-párbeszéd

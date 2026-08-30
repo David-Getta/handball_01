@@ -2633,3 +2633,9 @@ def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     # vezetni akarja.
     assert "_tvKamera" in harom and "TV-kamera" in harom, (
         "nincs labda-követő TV-kamera")
+    # Játékos-kamera: mezszám szerint követ (a track-azonosítók a
+    # valódi követésben töredezettek), a yaw a rövidebb íven fordul
+    # (±π-átfordulásnál különben körbepördülne a kamera).
+    assert "_kovMez" in harom and "Játékos-kamera" in harom, (
+        "nincs játékos-követő kamera")
+    assert "dYaw" in harom, "nincs yaw-átfordulás-kezelés"
