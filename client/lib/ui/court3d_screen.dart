@@ -57,6 +57,11 @@ class _Court3DScreenState extends State<Court3DScreen>
   bool _playing = false;
   double _speed = 1.0;
 
+  // TV-KAMERA: a nézet magától követi a labdát az oldalvonal felől,
+  // mint egy közvetítés gépállása. Kézi mozgásra (WASD, egér) kikapcsol
+  // — aki nyúl a kamerához, az vezetni akarja.
+  bool _tvKamera = false;
+
   late final Ticker _ticker;
   Duration _last = Duration.zero;
   final Set<LogicalKeyboardKey> _keys = {};
@@ -178,6 +183,27 @@ class _Court3DScreenState extends State<Court3DScreen>
       }
       valtozott = true;
     }
+    // TV-kamera: sima követés — a kamera az oldalvonal felől tartja
+    // képben a labdát (x-ben követi, a magasság és a távolság fix),
+    // a nézés-irány mindig a labdára áll.
+    if (_tvKamera && m != null && m.frames.isNotEmpty && dt > 0) {
+      final labda = _aktualisAllapot(m).labda;
+      if (labda != null) {
+        final celX = labda.x.clamp(4.0, 36.0);
+        const celY = -7.0, celZ = 4.5;
+        final k = (dt * 2.5).clamp(0.0, 1.0);
+        _cx += (celX - _cx) * k;
+        _cy += (celY - _cy) * k;
+        _cz += (celZ - _cz) * k;
+        final dx = labda.x - _cx, dy = labda.y - _cy, dz = 0.6 - _cz;
+        final vizszintes = math.sqrt(dx * dx + dy * dy);
+        final celYaw = math.atan2(dx, dy);
+        final celPitch = math.atan2(dz, vizszintes);
+        _yaw += (celYaw - _yaw) * k;
+        _pitch += (celPitch - _pitch) * k;
+        valtozott = true;
+      }
+    }
     if (valtozott && mounted) setState(() {});
   }
 
@@ -189,6 +215,17 @@ class _Court3DScreenState extends State<Court3DScreen>
         return KeyEventResult.handled;
       }
       _keys.add(k);
+      // Bármely mozgás-billentyű: a felhasználó vezeti a kamerát.
+      if (const [
+        LogicalKeyboardKey.keyW,
+        LogicalKeyboardKey.keyA,
+        LogicalKeyboardKey.keyS,
+        LogicalKeyboardKey.keyD,
+        LogicalKeyboardKey.keyR,
+        LogicalKeyboardKey.keyF,
+      ].contains(k)) {
+        _tvKamera = false;
+      }
     } else if (e is KeyUpEvent) {
       _keys.remove(k);
     }
@@ -207,6 +244,7 @@ class _Court3DScreenState extends State<Court3DScreen>
 
   void _nezet(double x, double y, double z, double yaw, double pitch) {
     setState(() {
+      _tvKamera = false;
       _cx = x;
       _cy = y;
       _cz = z;
@@ -303,6 +341,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         onTapDown: (_) => _focus.requestFocus(),
         onPanUpdate: (d) {
           setState(() {
+            _tvKamera = false;
             _yaw += d.delta.dx * 0.005;
             _pitch = (_pitch - d.delta.dy * 0.005).clamp(-1.45, 1.45);
           });
@@ -364,6 +403,25 @@ class _Court3DScreenState extends State<Court3DScreen>
           ),
         );
     return Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor:
+                _tvKamera ? AppColors.accent : AppColors.surfaceAlt,
+            foregroundColor:
+                _tvKamera ? AppColors.onAccent : AppColors.textSecondary,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          ),
+          onPressed: () {
+            setState(() => _tvKamera = !_tvKamera);
+            if (_tvKamera && !_playing) setState(() => _playing = true);
+            _focus.requestFocus();
+          },
+          child: Text(_tvKamera ? "TV-kamera: BE" : "TV-kamera (labda)",
+              style: const TextStyle(fontSize: 11.5)),
+        ),
+      ),
       gomb("Lelátó", () => _nezet(20, -12, 9, 0, -0.5)),
       gomb("Kapu mögül", () => _nezet(-6, 10, 2.5, math.pi / 2, -0.12)),
       gomb("Pálya-szint", () => _nezet(20, 4, 1.7, 0, 0.0)),

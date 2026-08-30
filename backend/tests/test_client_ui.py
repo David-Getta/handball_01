@@ -2628,3 +2628,8 @@ def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     assert "interpol" in harom.lower(), "nincs interpolált lejátszás"
     # Könyvtár nélkül demóval indul — az új felhasználó is lát valamit.
     assert "buildDemoMatch" in harom, "nincs demó-tartalék"
+    # TV-kamera: a nézet magától követi a labdát (közvetítés-gépállás),
+    # és bármely kézi mozgásra kikapcsol — aki a kamerához nyúl, az
+    # vezetni akarja.
+    assert "_tvKamera" in harom and "TV-kamera" in harom, (
+        "nincs labda-követő TV-kamera")

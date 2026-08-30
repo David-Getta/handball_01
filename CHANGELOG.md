@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.86 óta)
 
+- **TV-kamera a 3D pályán** (3D pálya): egy gombbal a nézet magától
+  követi a labdát — sima, oldalvonali gépállás, mint egy közvetítésben;
+  bekapcsolva a lejátszás is elindul. Bármely kézi mozgás (WASD, egér,
+  nézet-gomb) visszaadja a vezérlést.
+
 - **Diagnosztika-mentés — visszajelzés képernyőkép helyett**
   (meccs-elemző): a minőség-párbeszéd új "Diagnosztika mentése" gombja
   egy gép által olvasható JSON-t ment — minőség-jelentés teendőkkel,
