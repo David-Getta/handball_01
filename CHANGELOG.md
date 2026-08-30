@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.85 óta)
+## v0.1.86 — kiadva (2026-08-30)
+
+> Kiadás-jegyzet: az első valódi-meccses visszajelzés (Kiel) köre. A
+> bennmaradt bemutatás mostantól utólag, a ✂ gombbal levágható —
+> nem kell újrafeldolgozni —, és megadható a jegyzőkönyvi végeredmény,
+> amihez az app méri a saját pontosságát.
 
 - **Utólagos vágás (✂) — a bemutatás nem gyárt több ál-eseményt**
   (motor + könyvtár): a valódi Kiel-meccsen a felvétel elején kilenc
