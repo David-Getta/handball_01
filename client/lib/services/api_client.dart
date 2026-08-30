@@ -1383,6 +1383,18 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Diagnosztika-csomag (GET /matches/{id}/diagnostics) — gép által
+  /// olvasható JSON a fejlesztőnek: minőség-jelentés, eseményszámok,
+  /// beállítások. Videót és személyes adatot nem tartalmaz.
+  Future<Map<String, dynamic>> fetchDiagnostics(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/diagnostics"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a diagnosztika", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Töröl egy meccset a backendről (memória + lemez).
   Future<void> deleteMatch(String matchId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/matches/$matchId"));

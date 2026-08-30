@@ -1541,6 +1541,60 @@ def create_app():
                 "goals_home": osszegzes.get("goals_home"),
                 "goals_away": osszegzes.get("goals_away")}
 
+    @app.get("/matches/{match_id}/diagnostics")
+    def match_diagnostics(match_id: str):
+        """Gép által olvasható diagnosztika-csomag EGY meccsről — a
+        fejlesztőnek szánt visszajelzéshez.
+
+        A képernyőkép lassú és veszteséges: ez a végpont mindent egy
+        JSON-ba gyűjt, amiből a hiba oka kiolvasható — minőség-jelentés
+        teendőkkel, esemény-számok, feldolgozás-beállítások, forrás-
+        térkép, felismert vs. valódi eredmény. VIDEÓT, képet vagy
+        személyes adatot nem tartalmaz."""
+        from .. import __version__ as verzio
+        from ..pipeline.quality import (analysis_confidence,
+                                        compute_quality_report,
+                                        next_action)
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        fps_ = match.meta.fps if match.meta.fps > 0 else 25.0
+        ki: dict = {"app_version": verzio, "match_id": match_id,
+                    "num_frames": len(match.frames), "fps": match.meta.fps,
+                    "duration_s": round(len(match.frames) / fps_, 1),
+                    "stride": match.meta.stride,
+                    "calibrated": match.meta.calibrated,
+                    "partial": bool(match.meta.partial),
+                    "game_window_found": match.meta.game_window_found,
+                    "source_segments": list(
+                        getattr(match.meta, "source_segments", None) or []),
+                    "event_overrides_count": len(
+                        getattr(match.meta, "event_overrides", None) or []),
+                    "real_goals_home": match.meta.real_goals_home,
+                    "real_goals_away": match.meta.real_goals_away}
+        try:
+            q = compute_quality_report(match)
+            q["confidence"] = analysis_confidence(match)
+            q["next_action"] = next_action(q.get("warnings") or [])
+            ki["quality"] = q
+        except Exception as e:  # a diagnosztika fél lábon is érjen célba
+            ki["quality_error"] = str(e)
+        try:
+            from ..pipeline.event_detection import detect_shots
+            from ..pipeline.primitive_cache import primitive_cache
+            szamok: dict = {}
+            with primitive_cache(match):
+                for e in detect_shots(match):
+                    kulcs = getattr(e.type, "value", str(e.type))
+                    szamok[kulcs] = szamok.get(kulcs, 0) + 1
+            ki["event_counts"] = szamok
+        except Exception as e:
+            ki["events_error"] = str(e)
+        osszegzes = _match_summary(match)
+        ki["goals_home"] = osszegzes.get("goals_home")
+        ki["goals_away"] = osszegzes.get("goals_away")
+        return ki
+
     @app.post("/matches/{match_id}/trim")
     def trim_match(match_id: str, body: dict):
         """A meccs UTÓLAGOS vágása: a megadott játékidő-ablakon kívüli

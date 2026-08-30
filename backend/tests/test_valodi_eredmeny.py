@@ -187,3 +187,31 @@ def test_a_valodi_eredmeny_a_minoseg_vegponton_is_atut():
     utana = c.get("/matches/p3/quality").json()
     assert [w for w in utana["warnings"]
             if "messze van a megadott valóditól" in w], utana["warnings"]
+
+
+def test_a_diagnosztika_egyben_hozza_a_kepet():
+    """A fejlesztő-visszajelzés végpontja: minőség + eseményszám +
+    beállítások + eredmények EGY JSON-ban — a képernyőkép helyett.
+    Videót nem tartalmaz, és fél lábon (hibás rétegnél) is célba ér."""
+    m = _meccs("d1", golok_home=3, golok_away=2, real=(20, 19))
+    c, tmp = _client([m])
+    # A betöltő a javításokat a MELLÉKFÁJLBÓL olvassa (a meta-belit
+    # felülírja) — a fixture ezért a sidecart is kiírja.
+    (Path(tmp) / "data" / "matches" / "d1.events.json").write_text(
+        json.dumps({"overrides": m.meta.event_overrides}),
+        encoding="utf-8")
+    c.post("/matches/d1/event-overrides",
+           json={"overrides": m.meta.event_overrides})
+    r = c.get("/matches/d1/diagnostics")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["num_frames"] == 50
+    assert d["real_goals_home"] == 20
+    assert "quality" in d and "warnings" in d["quality"]
+    assert "next_action" in d["quality"]
+    assert d["event_counts"].get("goal") == 5
+    assert d["goals_home"] == 3 and d["goals_away"] == 2
+    # Videó-utat nem szivárogtat (personal adat lehetne).
+    assert "video_path" not in json.dumps(d)
+
+    assert c.get("/matches/nincs/diagnostics").status_code == 404

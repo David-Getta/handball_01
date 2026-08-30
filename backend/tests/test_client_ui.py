@@ -2577,6 +2577,27 @@ def test_a_bemutatas_utolag_is_levaghato():
     assert "SingleChildScrollView" in hej, "a menü nem görgethető"
 
 
+def test_a_diagnosztika_a_minoseg_parbeszedbol_mentheto():
+    """ŐR: a fejlesztő-visszajelzés leggyorsabb útja — a minőség-
+    párbeszéd "Diagnosztika mentése" gombja egy JSON-t ment (minőség +
+    eseményszámok + beállítások), képernyőkép helyett. A mentés
+    kimondja, hogy videót nem tartalmaz."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "_saveDiagnostics" in meccs, "nincs diagnosztika-mentés"
+    assert "Diagnosztika mentése" in meccs, "nincs gomb a párbeszédben"
+    assert "videót nem tartalmaz" in meccs, (
+        "a mentés nem mondja ki, mit NEM tartalmaz")
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "fetchDiagnostics" in api and "/diagnostics" in api
+
+
 def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     """ŐR: a 3D/VR-út első köre — a bal menü "3D pálya" füle, ahol az
     elemzett meccs térben járható be, játék-szerű mozgással. A vetítés

@@ -5,6 +5,7 @@
 library;
 
 import "dart:async";
+import "dart:convert";
 import "dart:io";
 import "dart:math" as math;
 
@@ -2057,6 +2058,32 @@ class _MatchScreenState extends State<MatchScreen> {
     }
   }
 
+  /// Diagnosztika-JSON mentése — a fejlesztőnek szánt visszajelzés.
+  /// Videót, képet, személyes adatot nem tartalmaz.
+  Future<void> _saveDiagnostics() async {
+    try {
+      final diag = await _api.fetchDiagnostics(widget.matchId);
+      if (!mounted) return;
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Diagnosztika mentése (JSON)",
+        fileName: "diagnosztika_${widget.matchId}.json",
+        type: FileType.custom,
+        allowedExtensions: const ["json"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsString(
+          const JsonEncoder.withIndent("  ").convert(diag));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Diagnosztika mentve: $path — ezt küldd el a "
+              "fejlesztőnek (videót nem tartalmaz).")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
+  }
+
   Future<void> _swapTeams() async {
     final match = _match;
     if (match == null) return;
@@ -2545,6 +2572,17 @@ class _MatchScreenState extends State<MatchScreen> {
               },
               child: const Text("Újrafeldolgozás a friss kalibrációval"),
             ),
+          // DIAGNOSZTIKA a fejlesztőnek: a képernyőkép lassú és
+          // veszteséges — ez egy gép által olvasható JSON-t ment
+          // (minőség + eseményszámok + beállítások, videó nélkül),
+          // amiből a hiba oka kiolvasható.
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _saveDiagnostics();
+            },
+            child: const Text("Diagnosztika mentése"),
+          ),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Rendben")),
         ],
       ),

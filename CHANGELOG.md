@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.86 óta)
 
+- **Diagnosztika-mentés — visszajelzés képernyőkép helyett**
+  (meccs-elemző): a minőség-párbeszéd új "Diagnosztika mentése" gombja
+  egy gép által olvasható JSON-t ment — minőség-jelentés teendőkkel,
+  eseményszámok, feldolgozás-beállítások, forrás-térkép, felismert vs.
+  valódi eredmény. Videót, képet, személyes adatot nem tartalmaz; ezt
+  küldd a fejlesztőnek, és a hiba oka kiolvasható belőle.
+
 - **A ✂ vágás a meccs-nézetből is elérhető, az eredmény-sáv a valódit
   is mutatja** (meccs-elemző): az ál-eseményeket a felhasználó a
   meccs-nézetben veszi észre — a ✂ mostantól ott is ott van, nem kell
