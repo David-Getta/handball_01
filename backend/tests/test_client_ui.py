@@ -2512,6 +2512,31 @@ def test_a_koteg_idorendben_all_ossze():
         "a köteg-lista nem sorszámozott")
 
 
+def test_a_valodi_eredmeny_a_kliensrol_is_megadhato():
+    """ŐR: a pontosság-tükör bemenete a kliensen van — a csapatnév-
+    párbeszéd két eredmény-mezője. Enélkül a mező csak API-ból lenne
+    elérhető, azaz a valóságban senki nem adná meg. A sor a felismert
+    mellett mutatja a valódit, és NAGY eltérésnél kiemeli (a küszöb a
+    backenddel azonos)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "Valódi eredmény" in kezdo, "nincs valódi-eredmény mező"
+    assert "_realScoreLabel" in kezdo, "a sor nem mutatja a valódit"
+    # A kliens-küszöb a backend konstansával fut együtt (kommentben
+    # jelezve) — az őr a számot is fogja: 4 gól.
+    assert "REAL_SCORE_DIFF_WARN" in kezdo, (
+        "a kliens-küszöb nincs a backend-konstanshoz kötve (komment)")
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "setRealScore" in api and "real_goals_home" in api
+
+
 def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     """ŐR: a 3D/VR-út első köre — a bal menü "3D pálya" füle, ahol az
     elemzett meccs térben járható be, játék-szerű mozgással. A vetítés

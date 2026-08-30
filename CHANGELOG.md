@@ -3,6 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.85 óta)
+
+- **Valódi eredmény — a pontosság-tükör** (motor + könyvtár): a
+  csapatnév-párbeszédben megadható a jegyzőkönyvi végeredmény — az a
+  legerősebb mérce, ami csak létezik, és az edző fejből tudja. A
+  minőség-jelentés ehhez méri a felismerést: nagy eltérésnél kimondja
+  és teendőt ad (Események lista + kalibráció), ha pedig a felismert
+  eredmény a valódi TÜKÖRKÉPE, azt is név szerint — az a csapatcsere
+  esete, és a ⇄ gomb javítja. A könyvtár-sor a felismert mellett
+  mutatja a valódit, nagy eltérésnél kiemelve. Két-három gólnyi
+  eltérés nem riaszt: az normális felismerési szórás.
+
 ## v0.1.85 — kiadva (2026-08-28)
 
 > Kiadás-jegyzet: megérkezett a 3D pálya — az elemzett meccs térben

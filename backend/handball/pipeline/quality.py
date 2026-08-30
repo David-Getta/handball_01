@@ -80,6 +80,14 @@ GOALS_RATE_MIN_MINUTES = 10.0
 GOALS_LOPSIDED_MIN_TOTAL = 12
 GOALS_LOPSIDED_FACTOR = 5.0
 
+# Valódi eredmény: ha az edző megadta a jegyzőkönyvi végeredményt, a
+# felismerés ehhez MÉRI magát. Ennyi összes gól-eltérés fölött szólunk
+# (a kettő-három gólnyi eltérés normális felismerési szórás); és ha a
+# FELCSERÉLT valódi eredmény ennyivel közelebb van, azt mondjuk ki,
+# hogy a két csapat fordítva van.
+REAL_SCORE_DIFF_WARN = 4
+REAL_SCORE_SWAP_MARGIN = 4
+
 # KLIP vagy MECCS? Egy kézilabda-meccs 2x30 perc; ennél a küszöbnél
 # rövidebb felvétel nem meccs, hanem KLIP (egy támadás-sorozat, egy
 # félidő-részlet, egy próba). A klip teljesen jogos bemenet — de a
@@ -117,6 +125,14 @@ NEXT_ACTION_ORDER: tuple = (
     ("Kevés játékos látszik",
      "Ellenőrizd, hogy a kamera a játékteret mutatja-e, és hogy a "
      "kalibráció a látható térfélre készült-e."),
+    ("fordítva osztotta ki",
+     "Nyisd meg a meccset, és a ⇄ (csapatcsere) gombbal fordítsd meg a "
+     "két csapatot — a nevek maradnak, az összes szám átáll. Utána "
+     "nézd meg újra az eredményt."),
+    ("messze van a megadott valóditól",
+     "Nézd végig az Események listát (a lövésként jelölt gólok a ⋮ "
+     "menüvel gólra javíthatók), és ellenőrizd a kalibrációt mindkét "
+     "térfélen."),
     ("Aránytalan eredmény",
      "Nyisd meg a Pálya-kalibrációt, és ellenőrizd MINDKÉT térfelet: a "
      "rajzolt 6 m-es és 9 m-es vonalnak mindkét oldalon rá kell ülnie a "
@@ -554,6 +570,47 @@ def compute_quality_report(match: Match) -> dict:
                 "kalibráció mindkét térfélre ráül-e (a rajzolt 6 és 9 "
                 "m-es vonalnak mindkét oldalon a valódin kell lennie), "
                 "és hogy a felvétel nem takarja-e az egyik kaput.")
+    except Exception:
+        pass
+
+    # --- A VALÓDI eredményhez képest? ---
+    # Ha az edző megadta a jegyzőkönyvi végeredményt, az a legerősebb
+    # mérce, ami csak létezik: nem heurisztika, hanem tény. Két
+    # kimondható hiba van: (1) a felismerés a két csapatot FORDÍTVA
+    # osztotta ki (a felcserélt valódi eredmény sokkal közelebb van),
+    # (2) egyszerűen messze van a valóditól.
+    try:
+        rh = getattr(match.meta, "real_goals_home", None)
+        ra = getattr(match.meta, "real_goals_away", None)
+        if rh is not None and ra is not None:
+            from .event_detection import (EventType as _ET3,
+                                          detect_shots as _ds3)
+            _fel = {"home": 0, "away": 0}
+            for e in _ds3(match):
+                if e.type is _ET3.GOAL:
+                    _fel[getattr(e.team, "value", e.team)] += 1
+            gh, ga = _fel["home"], _fel["away"]
+            elteres = abs(gh - rh) + abs(ga - ra)
+            csereben = abs(gh - ra) + abs(ga - rh)
+            if (elteres >= REAL_SCORE_DIFF_WARN
+                    and csereben + REAL_SCORE_SWAP_MARGIN <= elteres):
+                warnings.append(
+                    "A felismerés a két csapatot valószínűleg "
+                    f"fordítva osztotta ki: a felismert {gh}:{ga} a "
+                    f"megadott valódi {rh}:{ra} eredmény TÜKÖRKÉPÉHEZ "
+                    "áll közel. "
+                    "A meccs-nézet ⇄ (csapatcsere) gombja javítja; "
+                    "összefűzött meccsnél a könyvtár-sor ⇄ gombjával a "
+                    "gyanús szakasz fordítható.")
+            elif elteres >= REAL_SCORE_DIFF_WARN:
+                warnings.append(
+                    f"A felismert eredmény ({gh}:{ga}) "
+                    f"messze van a megadott valóditól ({rh}:{ra}, "
+                    f"eltérés {elteres} gól) "
+                    "— a hiányzó gólok jellemzően lövésként vannak "
+                    "jelölve, vagy a kalibráció nem ül az egyik "
+                    "térfélen. Az Események listán a ⋮ menüvel a gólok "
+                    "kézzel javíthatók.")
     except Exception:
         pass
 

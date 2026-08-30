@@ -184,6 +184,14 @@ class MatchMeta:
     # kétszer számolná — a góllövő-lista, a szezon-mérleg és a
     # jegyzet-lista is duplázna.
     merged_from: list = field(default_factory=list)
+    # A VALÓDI végeredmény, ahogy az edző a jegyzőkönyvből tudja.
+    # A felismerés ehhez MÉRHETI magát: a minőség-jelentés kimondja, ha
+    # a felismert eredmény messze van tőle (vagy épp fordítva áll), és
+    # megmondja a teendőt. None = nincs megadva — ilyenkor nem állítunk
+    # semmit. Ez a pontosság-visszajelzés legolcsóbb formája: két szám,
+    # amit az edző fejből tud.
+    real_goals_home: Optional[int] = None
+    real_goals_away: Optional[int] = None
 
 
 @dataclass

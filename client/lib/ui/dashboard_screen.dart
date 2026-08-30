@@ -1253,6 +1253,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final awayCtrl = TextEditingController(text: (m["away_team"] as String?) ?? "");
     final dateCtrl = TextEditingController(
         text: (_perMatch[m["match_id"]]?["date"] as String?) ?? "");
+    // A VALÓDI (jegyzőkönyvi) végeredmény: az edző fejből tudja, és a
+    // minőség-jelentés ehhez tudja mérni a felismerést — ez a
+    // legolcsóbb pontosság-visszajelzés, két szám.
+    final realHCtrl = TextEditingController(
+        text: (m["real_goals_home"] as num?)?.toInt().toString() ?? "");
+    final realACtrl = TextEditingController(
+        text: (m["real_goals_away"] as num?)?.toInt().toString() ?? "");
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1285,6 +1292,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 prefixIcon: Icon(Icons.event, size: 18, color: AppColors.gold),
               ),
             ),
+            const SizedBox(height: AppSpacing.md),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: realHCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: "Valódi eredmény — hazai",
+                    hintText: "pl. 25",
+                    prefixIcon: Icon(Icons.scoreboard_outlined,
+                        size: 18, color: AppColors.home),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: TextField(
+                  controller: realACtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: "— vendég",
+                    hintText: "pl. 24",
+                    prefixIcon: Icon(Icons.scoreboard_outlined,
+                        size: 18, color: AppColors.away),
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 4),
+            Text(
+                "A jegyzőkönyvi végeredmény — a minőség-jelentés ehhez "
+                "méri a felismerést, és szól, ha messze van vagy "
+                "fordítva áll. Üresen hagyva törlődik.",
+                style: AppText.label.copyWith(fontSize: 11)),
           ],
         ),
         actions: [
@@ -1304,6 +1345,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           homeTeam: homeCtrl.text.trim(),
           awayTeam: awayCtrl.text.trim(),
           date: dateCtrl.text.trim());
+      await _api.setRealScore(m["match_id"] as String,
+          int.tryParse(realHCtrl.text.trim()),
+          int.tryParse(realACtrl.text.trim()));
       await _load();
     } catch (e) {
       if (!mounted) return;
@@ -2831,6 +2875,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// A VALÓDI (jegyzőkönyvi) eredmény a felismert mellett — ha az edző
+  /// megadta. Nagy eltérésnél kiemelt: a minőség-jelentés ilyenkor
+  /// megmondja a teendőt is (a küszöb a backenddel azonos: 4 gól,
+  /// quality.REAL_SCORE_DIFF_WARN).
+  List<Widget> _realScoreLabel(
+      Map<String, dynamic> m, Map<String, dynamic> sum) {
+    final rh = (m["real_goals_home"] as num?)?.toInt();
+    final ra = (m["real_goals_away"] as num?)?.toInt();
+    if (rh == null || ra == null) return const [];
+    final gh = (sum["goals_home"] as num?)?.toInt() ?? 0;
+    final ga = (sum["goals_away"] as num?)?.toInt() ?? 0;
+    final elter = (gh - rh).abs() + (ga - ra).abs();
+    final messze = elter >= 4; // = REAL_SCORE_DIFF_WARN
+    return [
+      const SizedBox(width: AppSpacing.sm),
+      Tooltip(
+        message: messze
+            ? "A felismert eredmény $elter góllal tér el a megadott "
+                "valóditól — a minőség-jelentés megmondja a teendőt."
+            : "A megadott jegyzőkönyvi végeredmény.",
+        child: Text("valódi: $rh:$ra",
+            style: AppText.label.copyWith(
+                fontSize: 12,
+                color: messze ? AppColors.gold : AppColors.textSecondary)),
+      ),
+    ];
+  }
+
   /// Kis eredmény-címke a felismert gólokból: ki nyerte a felvételt.
   /// (Csak ha volt gól — a 0:0 jellemzően rövid próba-feldolgozás.)
   List<Widget> _resultBadge(Map<String, dynamic> sum) {
@@ -2922,6 +2994,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: AppText.value.copyWith(
                               fontSize: 15, color: AppColors.gold)),
                       ..._resultBadge(sum),
+                      ..._realScoreLabel(m, sum),
                     ],
                     if (date.isNotEmpty) ...[
                       const SizedBox(width: AppSpacing.md),

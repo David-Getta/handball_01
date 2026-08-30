@@ -1352,6 +1352,20 @@ class ApiClient {
     }
   }
 
+  /// A VALÓDI (jegyzőkönyvi) végeredmény mentése (PATCH /matches/{id})
+  /// — a pontosság-tükör alapja: a minőség-jelentés ehhez méri a
+  /// felismerést. null = törlés (a kulcs jelenléte számít a backendnek).
+  Future<void> setRealScore(String matchId, int? home, int? away) async {
+    final resp = await http.patch(
+      Uri.parse("$baseUrl/matches/$matchId"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"real_goals_home": home, "real_goals_away": away}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a valódi eredmény mentése", resp));
+    }
+  }
+
   /// Töröl egy meccset a backendről (memória + lemez).
   Future<void> deleteMatch(String matchId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/matches/$matchId"));

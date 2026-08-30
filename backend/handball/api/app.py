@@ -1369,6 +1369,10 @@ def create_app():
                     1 for sz in (getattr(m.meta, "source_segments",
                                          None) or [])
                     if sz.get("mirror_decided") is False),
+                # A jegyzőkönyvi (valódi) végeredmény, ha az edző megadta
+                # — a felület a felismert mellett mutatja.
+                "real_goals_home": getattr(m.meta, "real_goals_home", None),
+                "real_goals_away": getattr(m.meta, "real_goals_away", None),
             })
         out.sort(key=lambda d: d["match_id"])
         return {"matches": out}
@@ -1394,9 +1398,34 @@ def create_app():
         home = body.get("home_team")
         away = body.get("away_team")
         date = body.get("date")
-        if home is None and away is None and date is None:
+        # A VALÓDI (jegyzőkönyvi) végeredmény: a pontosság-tükör alapja.
+        # A kulcs JELENLÉTE számít: {"real_goals_home": null} törlést
+        # jelent, a hiányzó kulcs pedig "ne nyúlj hozzá"-t.
+        van_valodi = ("real_goals_home" in body or "real_goals_away" in body)
+        if (home is None and away is None and date is None
+                and not van_valodi):
             raise HTTPException(status_code=400,
-                                detail="home_team, away_team or date required")
+                                detail="home_team, away_team, date vagy "
+                                       "real_goals_* kell")
+        if van_valodi:
+            def _gol(kulcs):
+                v = body.get(kulcs)
+                if v is None:
+                    return None
+                try:
+                    v = int(v)
+                except (TypeError, ValueError):
+                    raise HTTPException(status_code=400,
+                                        detail=f"{kulcs}: egész szám kell")
+                if not (0 <= v <= 99):
+                    raise HTTPException(status_code=400,
+                                        detail=f"{kulcs}: 0..99 között")
+                return v
+
+            match.meta.real_goals_home = _gol("real_goals_home")
+            match.meta.real_goals_away = _gol("real_goals_away")
+            # A minőség-jelentés (pontosság-tükör) elavul tőle.
+            _drop_derived_caches(match_id)
         if home is not None:
             match.meta.home_team = str(home).strip() or match.meta.home_team
         if away is not None:
@@ -1417,7 +1446,9 @@ def create_app():
         return {"match_id": match_id,
                 "home_team": match.meta.home_team,
                 "away_team": match.meta.away_team,
-                "date": match.meta.date}
+                "date": match.meta.date,
+                "real_goals_home": match.meta.real_goals_home,
+                "real_goals_away": match.meta.real_goals_away}
 
     @app.post("/matches/{match_id}/swap-teams")
     def swap_teams(match_id: str):
