@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.88 óta)
+## v0.1.89 — kiadva (2026-08-30)
+
+> Kiadás-jegyzet: a 3D/VR-út két lépcsője. A Játékos-kamerával a meccs
+> egy kiválasztott játékos szemével nézhető végig, a "Böngészős 3D /
+> VR" gomb pedig WebXR-képes oldalt nyit — headsettel az "ENTER VR"
+> gombbal térbe lép, telepítés nélkül.
 
 - **Böngészős 3D / VR nézet — a headset-út első lépcsője** (3D
   pálya): a "Böngészős 3D / VR" gomb a meccset WebXR-képes oldalként
