@@ -1541,6 +1541,45 @@ def create_app():
                 "goals_home": osszegzes.get("goals_home"),
                 "goals_away": osszegzes.get("goals_away")}
 
+    @app.post("/matches/{match_id}/trim")
+    def trim_match(match_id: str, body: dict):
+        """A meccs UTÓLAGOS vágása: a megadott játékidő-ablakon kívüli
+        rész eldobása az elemzésből.
+
+        A tipikus eset: a felvételen rajta a bemutatás/bemelegítés, az
+        automatikus meccs-ablak nem találta meg a kezdést, és a
+        felismerés a felállásból lövéseket-eladásokat gyártott. A
+        felhasználó viszont TUDJA, mikor kezdődött — eddig csak a
+        teljes újrafeldolgozás érvényesítette, ez a végpont utólag.
+
+        Törzs: {"from_s": mp, "to_s": mp|null}. A videófájlt nem
+        érinti; a kockák idő-címkéi maradnak (a jegyzetek, javítások,
+        kiállítások hivatkozásai nem csúsznak el). VÉGLEGES: a levágott
+        rész elemzése csak újrafeldolgozással jön vissza."""
+        from ..pipeline.game_window import trim_to_window
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            from_s = float(body.get("from_s") or 0.0)
+            to_s = (float(body["to_s"])
+                    if body.get("to_s") is not None else None)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400,
+                                detail="from_s/to_s: másodperc kell")
+        try:
+            info = trim_to_window(match, from_s, to_s)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        _put_match(match)  # memóriába + lemezre (perzisztencia)
+        _drop_derived_caches(match_id)
+        osszegzes = _match_summary(match)
+        fps_ = match.meta.fps if match.meta.fps > 0 else 25.0
+        return {"match_id": match_id, **info,
+                "duration_s": len(match.frames) / fps_,
+                "goals_home": osszegzes.get("goals_home"),
+                "goals_away": osszegzes.get("goals_away")}
+
     def _merge_and_store(ids: list, match_id_kert: str = "",
                          home_team=None, away_team=None) -> dict:
         """Az összefűzés TELJES munkája: meccs + az emberi munka átvétele.

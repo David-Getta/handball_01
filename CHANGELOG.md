@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.85 óta)
 
+- **Utólagos vágás (✂) — a bemutatás nem gyárt több ál-eseményt**
+  (motor + könyvtár): a valódi Kiel-meccsen a felvétel elején kilenc
+  perc csapatbemutatás volt, az automatikus meccs-ablak nem találta a
+  kezdést, és a felismerés a felállásból lövéseket-eladásokat
+  gyártott. A felhasználó viszont TUDJA, mikor kezdődött a meccs — a
+  könyvtár-sor új ✂ gombjával utólag levágja (p:mp vagy másodperc,
+  a vége is megadható), és az elemzés újraszámol: nem kell órákig
+  újrafeldolgozni. A videófájlt nem érinti; az idő-hivatkozások
+  (jegyzet, javítás, kiállítás, klipvágás) nem csúsznak el. A
+  minőség-jelentés teendői (meccs-kezdet, sok hétméteres, sok eladott
+  labda) mostantól a ✂ gombra mutatnak első helyen.
+
 - **Valódi eredmény — a pontosság-tükör** (motor + könyvtár): a
   csapatnév-párbeszédben megadható a jegyzőkönyvi végeredmény — az a
   legerősebb mérce, ami csak létezik, és az edző fejből tudja. A

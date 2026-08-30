@@ -1624,6 +1624,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (changed) await _load();
   }
 
+  /// "p:mp" vagy puszta másodperc → másodperc. Hibás alaknál null.
+  static double? _parseIdo(String s) {
+    final t = s.trim();
+    if (t.isEmpty) return null;
+    if (t.contains(":")) {
+      final d = t.split(":");
+      if (d.length != 2) return null;
+      final p = int.tryParse(d[0]);
+      final mp = double.tryParse(d[1].replaceAll(",", "."));
+      if (p == null || mp == null) return null;
+      return p * 60 + mp;
+    }
+    return double.tryParse(t.replaceAll(",", "."));
+  }
+
+  /// UTÓLAGOS vágás: a bemutatás/bemelegítés levágása a kész
+  /// elemzésből. A felhasználó pontosan tudja, mikor kezdődött a meccs
+  /// ("az 549. másodpercben") — eddig ezt csak a teljes
+  /// újrafeldolgozás érvényesítette, most egy párbeszéd.
+  Future<void> _trimDialog(String id) async {
+    final fromCtrl = TextEditingController();
+    final toCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Meccs eleje/vége levágása"),
+        content: SizedBox(
+          width: 440,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(
+                "Ha a felvételen rajta maradt a bemutatás vagy a "
+                "bemelegítés, a felismerés abból is eseményeket gyárt. "
+                "Add meg, mikor KEZDŐDÖTT a meccs (az Események lista / "
+                "a csúszka idő-skálája szerint) — az azelőtti rész "
+                "kikerül az elemzésből.",
+                style: AppText.label.copyWith(fontSize: 12.5)),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: fromCtrl,
+              decoration: const InputDecoration(
+                labelText: "A meccs kezdete (p:mp vagy mp)",
+                hintText: "pl. 9:09 vagy 549",
+                prefixIcon: Icon(Icons.content_cut, size: 18,
+                    color: AppColors.gold),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: toCtrl,
+              decoration: const InputDecoration(
+                labelText: "A meccs vége (üres = a felvétel vége)",
+                hintText: "pl. 92:00",
+                prefixIcon: Icon(Icons.content_cut, size: 18,
+                    color: AppColors.textFaint),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+                "A videófájlt nem érinti, de az elemzésből VÉGLEG "
+                "törli a levágott részt — az csak újrafeldolgozással "
+                "jön vissza.",
+                style: AppText.label.copyWith(
+                    fontSize: 11, color: AppColors.gold)),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Levágás"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final fromS = _parseIdo(fromCtrl.text) ?? 0.0;
+    final toS = _parseIdo(toCtrl.text);
+    try {
+      final r = await _api.trimMatch(id, fromS, toS: toS);
+      await _load();
+      if (!mounted) return;
+      final ele = (r["head_cut_s"] as num?)?.toDouble() ?? 0;
+      final vege = (r["tail_cut_s"] as num?)?.toDouble() ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Levágva: ${ele.toStringAsFixed(0)} mp az "
+              "elejéről, ${vege.toStringAsFixed(0)} mp a végéről — az "
+              "elemzés újraszámolt.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
+  }
+
   /// Részleges meccs feldolgozásának folytatása: a backend a mentett
   /// beállításokkal új jobot indít onnan, ahol a feldolgozás megszakadt.
   /// Az eredmény külön meccsként jelenik meg ("<id>-folyt").
@@ -3133,6 +3233,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         : AppColors.textFaint),
                 tooltip: "Szakaszok és térfelek — ha az eredmény fordítva "
                     "áll, itt fordíthatod vissza",
+              ),
+            if (!partial)
+              IconButton(
+                onPressed: () => _trimDialog(id),
+                icon: const Icon(Icons.content_cut,
+                    color: AppColors.textFaint),
+                tooltip: "Meccs eleje/vége levágása — ha a bemutatás/"
+                    "bemelegítés bennmaradt, a felismerés abból is "
+                    "eseményeket gyárt",
               ),
             IconButton(
               onPressed: () => _rename(m),

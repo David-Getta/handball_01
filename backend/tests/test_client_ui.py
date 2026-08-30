@@ -2537,6 +2537,31 @@ def test_a_valodi_eredmeny_a_kliensrol_is_megadhato():
     assert "setRealScore" in api and "real_goals_home" in api
 
 
+def test_a_bemutatas_utolag_is_levaghato():
+    """ŐR: a valódi Kiel-meccsen a felvétel elején kilenc perc
+    csapatbemutatás volt, és a felismerés abból lövéseket-eladásokat
+    gyártott. A felhasználó tudja, mikor kezdődött a meccs — a
+    könyvtár-sor ✂ gombja utólag vágja le, újrafeldolgozás nélkül."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_trimDialog" in kezdo, "nincs vágás-párbeszéd"
+    assert "Meccs eleje/vége levágása" in kezdo, "nincs ✂ gomb"
+    # p:mp ÉS puszta másodperc is elfogadott — az edző órát mond, a
+    # csúszka másodpercet mutat.
+    assert "_parseIdo" in kezdo, "nincs idő-értelmező (p:mp / mp)"
+    # A párbeszéd kimondja, hogy a vágás végleges, de a videót nem bántja.
+    assert "VÉGLEG" in kezdo and "videófájlt nem érinti" in kezdo
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "trimMatch" in api and "/trim" in api
+
+
 def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     """ŐR: a 3D/VR-út első köre — a bal menü "3D pálya" füle, ahol az
     elemzett meccs térben járható be, játék-szerű mozgással. A vetítés

@@ -164,3 +164,49 @@ def trim_to_game(match: Match, tail: bool = True,
         window_out["head_cut_s"] = info["head_cut_s"]
         window_out["tail_cut_s"] = info["tail_cut_s"]
     return info
+
+
+def trim_to_window(match: Match, from_s: float,
+                   to_s: Optional[float] = None) -> dict:
+    """KÉZI vágás: a megadott játékidő-ablakon kívüli kockák eldobása.
+
+    Az automatikus felismerés (trim_to_game) nem mindig találja meg a
+    meccs kezdetét — a felhasználó viszont pontosan TUDJA ("az 549.
+    másodpercben kezdődött"), és eddig csak újrafeldolgozással tudta
+    érvényesíteni. Ez a függvény utólag vágja le a bemutatást /
+    bemelegítést az elemzésből.
+
+    A kockák `t` idejét NEM írjuk át (a trim_to_game mintája): a
+    videó-időzítés (jelenet-lejátszás, klipvágás), a jegyzetek, a
+    kiállítások és az esemény-javítások idő-hivatkozásai változatlanul
+    helyesek maradnak — a kidobott időkhöz egyszerűen nem tartozik
+    többé kocka, tehát esemény sem.
+
+    Részleges (folytatható) meccsen nem vágunk: a folytatás a levágott
+    végéhez fűzne vissza, és némán hézag keletkezne.
+    Visszatérés: {"head_cut_s", "tail_cut_s", "kept_frames"}.
+    """
+    if getattr(match.meta, "partial", False):
+        raise ValueError("részleges feldolgozás nem vágható — előbb "
+                         "fejezd be (Folytatás), vagy dolgozd fel újra")
+    if not match.frames:
+        raise ValueError("nincs mit vágni: a meccsnek nincs kockája")
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    if from_s < 0 or (to_s is not None and to_s <= from_s):
+        raise ValueError("az ablak eleje 0-nál, a vége az elejénél "
+                         "nagyobb kell legyen")
+    t0 = int(round(from_s * fps))
+    t1 = None if to_s is None else int(round(to_s * fps))
+    total = len(match.frames)
+    keep = [f for f in match.frames
+            if f.t >= t0 and (t1 is None or f.t <= t1)]
+    if not keep:
+        raise ValueError("a megadott ablakban nincs egyetlen kocka sem "
+                         "— nézd meg a másodperceket")
+    eldobott_elol = sum(1 for f in match.frames if f.t < t0)
+    match.frames[:] = keep
+    return {
+        "head_cut_s": round(eldobott_elol / fps, 1),
+        "tail_cut_s": round((total - eldobott_elol - len(keep)) / fps, 1),
+        "kept_frames": len(keep),
+    }

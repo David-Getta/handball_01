@@ -120,8 +120,9 @@ NEXT_ACTION_ORDER: tuple = (
      "Nyisd meg a Pálya-kalibrációt, és igazíts a sarokpontokon: a "
      "rajzolt 6 m-es és 9 m-es vonalnak rá kell ülnie a valódira."),
     ("meccs tényleges kezdetét nem sikerült",
-     "Add meg a meccs időablakát (perc:másodperc) az Új elemzés lapon: "
-     "a bemelegítés és a csapatbemutatás enélkül meccsnek számít."),
+     "Ha tudod, mikor kezdődött a meccs, vágd le az elejét utólag "
+     "(könyvtár-sor ✂ gombja) — vagy add meg a meccs időablakát az Új "
+     "elemzés lapon, és futtasd újra."),
     ("Kevés játékos látszik",
      "Ellenőrizd, hogy a kamera a játékteret mutatja-e, és hogy a "
      "kalibráció a látható térfélre készült-e."),
@@ -147,8 +148,9 @@ NEXT_ACTION_ORDER: tuple = (
      "⋮ menüjében egy kattintással gólra javíthatod (a javítás az "
      "egész elemzésen átüt)."),
     ("Gyanúsan sok hétméteres-jel",
-     "Add meg a meccs időablakát (perc:másodperc), hogy a bemelegítés "
-     "és a ceremónia kimaradjon."),
+     "A bemelegítés és a ceremónia maradhatott bent: vágd le utólag a "
+     "könyvtár-sor ✂ gombjával, vagy add meg a meccs időablakát és "
+     "futtasd újra."),
     # (A forrásban f-string töréspont van a "dolgoztuk" után — a
     # részlet szándékosan addig tart, hogy a forrás-őr is megtalálja.)
     ("%-át dolgoztuk",
@@ -159,8 +161,9 @@ NEXT_ACTION_ORDER: tuple = (
      "esnie."),
     ("Gyanúsan sok eladott labda",
      "Nézd meg, hogy a felvétel eleje (bemelegítés, csapatbemutatás) "
-     "kimaradt-e: add meg a meccs időablakát. Ha a meccs alatt is így "
-     "van, a labda-észlelés a szűk keresztmetszet — futtasd újra a "
+     "kimaradt-e — utólag a könyvtár-sor ✂ gombjával vágható le, vagy "
+     "add meg a meccs időablakát és futtasd újra. Ha a meccs alatt is "
+     "így van, a labda-észlelés a szűk keresztmetszet — futtasd újra a "
      "\"Pontos\" profillal."),
     ("Kevés labda-észlelés",
      "Futtasd újra a \"Pontos\" minőségi profillal (nagyobb felbontáson "

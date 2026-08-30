@@ -1366,6 +1366,23 @@ class ApiClient {
     }
   }
 
+  /// UTÓLAGOS vágás (POST /matches/{id}/trim): a megadott játékidő-
+  /// ablakon kívüli rész eldobása az elemzésből. A tipikus eset a
+  /// bennmaradt bemutatás/bemelegítés — a felhasználó tudja, mikor
+  /// kezdődött a meccs, és nem akar órákat újrafeldolgozni.
+  Future<Map<String, dynamic>> trimMatch(String matchId, double fromS,
+      {double? toS}) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/$matchId/trim"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"from_s": fromS, "to_s": toS}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a vágás", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Töröl egy meccset a backendről (memória + lemez).
   Future<void> deleteMatch(String matchId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/matches/$matchId"));
