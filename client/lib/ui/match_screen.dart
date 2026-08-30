@@ -857,7 +857,25 @@ class _MatchScreenState extends State<MatchScreen> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          child: Text("$hazai – $vendeg", style: AppText.statBig),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text("$hazai – $vendeg", style: AppText.statBig),
+            // A VALÓDI (jegyzőkönyvi) eredmény a felismert alatt — ha
+            // az edző megadta a könyvtár ceruza-párbeszédében. Nagy
+            // eltérésnél arany: a minőség-jelentés mondja a teendőt.
+            if (match.meta.realGoalsHome != null &&
+                match.meta.realGoalsAway != null)
+              Text(
+                  "valódi: ${match.meta.realGoalsHome}–"
+                  "${match.meta.realGoalsAway}",
+                  style: AppText.label.copyWith(
+                      fontSize: 10.5,
+                      // = REAL_SCORE_DIFF_WARN (backend-küszöb): 4 gól
+                      color: ((hazai - match.meta.realGoalsHome!).abs() +
+                                  (vendeg - match.meta.realGoalsAway!)
+                                      .abs()) >= 4
+                          ? AppColors.gold
+                          : AppColors.textFaint)),
+          ]),
         ),
         Expanded(
           child: Text(match.meta.awayTeam,
@@ -1669,6 +1687,14 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.swap_horiz, color: AppColors.textSecondary),
           tooltip: "Csapatok felcserélése (ha a színek fordítva vannak)",
         ),
+        // UTÓLAGOS vágás: a bennmaradt bemutatás/bemelegítés ál-eseményeket
+        // gyárt — itt, a meccs-nézetben veszi észre a felhasználó.
+        IconButton(
+          onPressed: _sourceLabel == "demó" ? null : _trimDialog,
+          icon: const Icon(Icons.content_cut, color: AppColors.textSecondary),
+          tooltip: "Meccs eleje/vége levágása (bennmaradt bemutatás, "
+              "bemelegítés)",
+        ),
         // Egyoldalas edzői meccsjelentés mentése (HTML → böngészőből PDF).
         IconButton(
           onPressed: _sourceLabel == "demó" ? null : _exportReport,
@@ -1933,6 +1959,104 @@ class _MatchScreenState extends State<MatchScreen> {
   /// Csapatok felcserélése — ha a színfelismerés fordítva osztotta ki, melyik
   /// szín a hazai. Megerősítés után a backend átbillenti minden játékos
   /// csapat-mezőjét, és a nézet újratölt (statisztika is frissül).
+  /// "p:mp" vagy puszta másodperc → másodperc. Hibás alaknál null.
+  static double? _parseIdo(String s) {
+    final t = s.trim();
+    if (t.isEmpty) return null;
+    if (t.contains(":")) {
+      final d = t.split(":");
+      if (d.length != 2) return null;
+      final p = int.tryParse(d[0]);
+      final mp = double.tryParse(d[1].replaceAll(",", "."));
+      if (p == null || mp == null) return null;
+      return p * 60 + mp;
+    }
+    return double.tryParse(t.replaceAll(",", "."));
+  }
+
+  /// UTÓLAGOS vágás a meccs-nézetből: itt látja a felhasználó a
+  /// bemutatás-kori ál-eseményeket — ne kelljen a könyvtárba
+  /// visszamennie a ✂-ért. Ugyanaz a végpont, mint a könyvtár-sorban.
+  Future<void> _trimDialog() async {
+    final fromCtrl = TextEditingController();
+    final toCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Meccs eleje/vége levágása"),
+        content: SizedBox(
+          width: 440,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(
+                "Add meg, mikor kezdődött a meccs (az Események lista / "
+                "a csúszka idő-skálája szerint) — az azelőtti rész, a "
+                "bemutatás és a bemelegítés ál-eseményeivel együtt, "
+                "kikerül az elemzésből.",
+                style: AppText.label.copyWith(fontSize: 12.5)),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: fromCtrl,
+              decoration: const InputDecoration(
+                labelText: "A meccs kezdete (p:mp vagy mp)",
+                hintText: "pl. 9:09 vagy 549",
+                prefixIcon: Icon(Icons.content_cut, size: 18,
+                    color: AppColors.gold),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: toCtrl,
+              decoration: const InputDecoration(
+                labelText: "A meccs vége (üres = a felvétel vége)",
+                hintText: "pl. 92:00",
+                prefixIcon: Icon(Icons.content_cut, size: 18,
+                    color: AppColors.textFaint),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+                "A videófájlt nem érinti, de az elemzésből VÉGLEG törli "
+                "a levágott részt — az csak újrafeldolgozással jön "
+                "vissza.",
+                style: AppText.label.copyWith(
+                    fontSize: 11, color: AppColors.gold)),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Levágás"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final r = await _api.trimMatch(widget.matchId,
+          _parseIdo(fromCtrl.text) ?? 0.0,
+          toS: _parseIdo(toCtrl.text));
+      if (!mounted) return;
+      final ele = (r["head_cut_s"] as num?)?.toDouble() ?? 0;
+      final vege = (r["tail_cut_s"] as num?)?.toDouble() ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Levágva: ${ele.toStringAsFixed(0)} mp az "
+              "elejéről, ${vege.toStringAsFixed(0)} mp a végéről — az "
+              "elemzés újraszámolt.")));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
+  }
+
   Future<void> _swapTeams() async {
     final match = _match;
     if (match == null) return;

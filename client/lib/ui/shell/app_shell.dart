@@ -661,25 +661,37 @@ class _SideNavState extends State<_SideNav> {
           children: [
             _brand(),
             const SizedBox(height: AppSpacing.xl),
-            for (final (groupName, group) in kNavGroups) ...[
-              _sectionLabel(groupName),
-              for (final (id, icon, label) in group)
-                _NavItem(
-                  id: id,
-                  icon: icon,
-                  label: label,
-                  shortcut: ++shortcut,
-                  selected: id == widget.active,
-                  open: _open,
-                  live: id == NavId.live,
-                  // A futó feldolgozások száma BÁRHONNAN látszik: ez
-                  // teszi visszatalálhatóvá az elemzést, ha a
-                  // felhasználó közben mást néz az appban.
-                  badge: id == NavId.jobs,
+            // GÖRGETHETŐ elemlista: a menü hosszabb lett (3D pálya), és
+            // alacsonyabb ablaknál a lenti verzió-felirat kilógott /
+            // félbevágva jelent meg. A lista görög, a verzió-sor alul
+            // marad.
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final (groupName, group) in kNavGroups) ...[
+                      _sectionLabel(groupName),
+                      for (final (id, icon, label) in group)
+                        _NavItem(
+                          id: id,
+                          icon: icon,
+                          label: label,
+                          shortcut: ++shortcut,
+                          selected: id == widget.active,
+                          open: _open,
+                          live: id == NavId.live,
+                          // A futó feldolgozások száma BÁRHONNAN
+                          // látszik: ez teszi visszatalálhatóvá az
+                          // elemzést, ha a felhasználó mást néz.
+                          badge: id == NavId.jobs,
+                        ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
+                  ],
                 ),
-              const SizedBox(height: AppSpacing.lg),
-            ],
-            const Spacer(),
+              ),
+            ),
             if (_open)
               Padding(
                 padding: const EdgeInsets.only(left: 6, top: 4),

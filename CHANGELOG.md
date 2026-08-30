@@ -3,6 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.86 óta)
+
+- **A ✂ vágás a meccs-nézetből is elérhető, az eredmény-sáv a valódit
+  is mutatja** (meccs-elemző): az ál-eseményeket a felhasználó a
+  meccs-nézetben veszi észre — a ✂ mostantól ott is ott van, nem kell
+  a könyvtárba visszamenni. Az eredmény-sáv a felismert állás alatt a
+  megadott VALÓDI eredményt is mutatja (nagy eltérésnél kiemelve, a
+  minőség-jelentés küszöbével azonosan).
+
+- **A bal menü nem vágja le a verzió-sort** (felület): a menü hosszabb
+  lett (3D pálya), és alacsonyabb ablaknál az alsó "SPORT MACHINE ·
+  v…" felirat kilógott / félbevágva jelent meg. Az elemlista mostantól
+  görgethető, a verzió-sor alul marad.
+
 ## v0.1.86 — kiadva (2026-08-30)
 
 > Kiadás-jegyzet: az első valódi-meccses visszajelzés (Kiel) köre. A

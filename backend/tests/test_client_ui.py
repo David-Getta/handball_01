@@ -2561,6 +2561,21 @@ def test_a_bemutatas_utolag_is_levaghato():
     api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
     assert "trimMatch" in api and "/trim" in api
 
+    # A MECCS-NÉZETBŐL is elérhető: ott látja a felhasználó az
+    # ál-eseményeket, ne kelljen a könyvtárba visszamennie.
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "_trimDialog" in meccs, "a meccs-nézetben nincs ✂"
+    # És az eredmény-sáv a VALÓDI eredményt is mutatja, ha meg van adva
+    # (a küszöb a backend-konstanssal fut együtt, kommentben jelezve).
+    assert "realGoalsHome" in meccs, "az eredmény-sáv nem mutatja a valódit"
+    assert "REAL_SCORE_DIFF_WARN" in meccs
+
+    # A bal menü elemlistája görgethető, a verzió-sor alul marad — a
+    # menü nőtt (3D pálya), és kis ablaknál a felirat kilógott.
+    hej = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "SingleChildScrollView" in hej, "a menü nem görgethető"
+
 
 def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     """ŐR: a 3D/VR-út első köre — a bal menü "3D pálya" füle, ahol az
