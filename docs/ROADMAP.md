@@ -2,7 +2,7 @@
 
 > ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (2187 automata teszt zöld; élő számok:
+> **Kész és tesztelt (2188 automata teszt zöld; élő számok:
 > `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
@@ -98,6 +98,9 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 - VR kliens: a tervezett út a WebXR (böngészős headset — a Quest-féle
   önálló eszközökön telepítés nélkül fut), a 3D pálya nézetére építve;
   a natív (Unity) kliens későbbi opció, ha a WebXR kevés lenne.
+  ELSŐ LÉPCSŐ KÉSZ ✅: a motor `/matches/{id}/view3d` végpontja a
+  meccset WebXR-képes oldalként adja ki (three.js, VR-gomb, bal karos
+  közlekedés); a kliens "Böngészős 3D / VR" gombja nyitja.
 - A csapat bejár a pályára, az edző mutatja a szituációt.
 
 ## 8. fázis — Élő meccskövetés

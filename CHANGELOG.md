@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.88 óta)
 
+- **Böngészős 3D / VR nézet — a headset-út első lépcsője** (3D
+  pálya): a "Böngészős 3D / VR" gomb a meccset WebXR-képes oldalként
+  nyitja meg a böngészőben (a motor szolgálja ki, three.js-szel) —
+  egér-nézelődés + WASD, lejátszás-tekerő, és VR-headsetben az "ENTER
+  VR" gombbal térbe lép, bal karral közlekedve. A követés-adat
+  ritkítva ágyazódik az oldalba (~6 kép/mp), egy teljes meccs is csak
+  pár MB. Internet kell hozzá (a three.js CDN-ről jön).
+
 - **Játékos-kamera a 3D pályán** (3D pálya): mezszám-választóval a
   kamera egy kiválasztott játékost követ hátulról, a (simított)
   haladási iránya mögül — a meccs az ő szemével nézhető végig. Bármely

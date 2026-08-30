@@ -215,3 +215,29 @@ def test_a_diagnosztika_egyben_hozza_a_kepet():
     assert "video_path" not in json.dumps(d)
 
     assert c.get("/matches/nincs/diagnostics").status_code == 404
+
+
+# ---------------------------------------------------- böngészős 3D / VR
+
+def test_a_bongeszos_3d_oldal_osszeall():
+    """A /view3d WebXR-képes HTML-t ad: three.js + VR-gomb + beágyazott,
+    RITKÍTOTT követés-adat (legfeljebb ~6 kép/mp — a méret miatt)."""
+    from handball.pipeline.view3d_html import (VIEW3D_MAX_FPS,
+                                               _compact_data, view3d_html)
+
+    m = _meccs("v3d", n=100)  # 10 fps → ritkítva ~5-6 fps-re
+    oldal = view3d_html(m)
+    assert "three.module.js" in oldal, "nincs three.js-betöltés"
+    assert "VRButton" in oldal, "nincs VR-gomb (WebXR)"
+    assert "Mi vs Ok" in oldal, "nincs cím a csapatnevekből"
+    assert "WASD" in oldal, "nincs kezelés-súgó"
+
+    adat = _compact_data(m)
+    assert len(adat["frames"]) <= 100 * VIEW3D_MAX_FPS / 10.0 + 1, (
+        "a beágyazott adat nincs ritkítva")
+
+    c, _tmp = _client([m])
+    r = c.get("/matches/v3d/view3d")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    assert c.get("/matches/nincs/view3d").status_code == 404

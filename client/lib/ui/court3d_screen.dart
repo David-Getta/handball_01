@@ -12,6 +12,7 @@
 /// terében mozog (méter; z felfelé).
 library;
 
+import "dart:io";
 import "dart:math" as math;
 
 import "package:flutter/gestures.dart";
@@ -360,6 +361,31 @@ class _Court3DScreenState extends State<Court3DScreen>
     );
   }
 
+  /// A böngészős (WebXR-képes) 3D nézet megnyitása az alapértelmezett
+  /// böngészőben. VR-headsethez ugyanez az oldal kell: a WebXR
+  /// biztonságos környezetet kér, a localhost az — Quest-féle headsetről
+  /// USB-kábellel és "adb reverse"-szel érhető el.
+  Future<void> _bongeszos3d() async {
+    final url = "${_api.baseUrl}/matches/$_matchId/view3d";
+    try {
+      if (Platform.isMacOS) {
+        await Process.run("open", [url]);
+      } else if (Platform.isWindows) {
+        await Process.run("cmd", ["/c", "start", "", url]);
+      } else {
+        await Process.run("xdg-open", [url]);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Megnyitva a böngészőben: $url — VR-headsetben "
+              "ugyanez a cím megy (internet kell hozzá).")));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Nyisd meg kézzel a böngészőben: $url")));
+    }
+  }
+
   Widget _fejlec(Match m) {
     return Row(children: [
       Expanded(
@@ -389,6 +415,20 @@ class _Court3DScreenState extends State<Court3DScreen>
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
+      if (_matchId != null)
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: OutlinedButton.icon(
+            onPressed: _bongeszos3d,
+            icon: const Icon(Icons.public, size: 16),
+            label: const Text("Böngészős 3D / VR",
+                style: TextStyle(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              side: const BorderSide(color: AppColors.borderStrong),
+            ),
+          ),
+        ),
       if (_matches.isNotEmpty)
         DropdownButton<String>(
           value: _matchId,

@@ -1541,6 +1541,21 @@ def create_app():
                 "goals_home": osszegzes.get("goals_home"),
                 "goals_away": osszegzes.get("goals_away")}
 
+    @app.get("/matches/{match_id}/view3d")
+    def match_view3d(match_id: str):
+        """Böngészős 3D / VR nézet: a meccs WebXR-képes HTML-oldalként.
+
+        A kliens 3D füle a képernyős út; ez ugyanaz böngészőben — és a
+        jövőben VR-headseten: a WebXR biztonságos környezetet kér, a
+        localhost az (headsetről USB + adb reverse teszi elérhetővé).
+        A three.js CDN-ről jön, tehát internet kell hozzá."""
+        from fastapi.responses import HTMLResponse
+        from ..pipeline.view3d_html import view3d_html
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return HTMLResponse(content=view3d_html(match))
+
     @app.get("/matches/{match_id}/diagnostics")
     def match_diagnostics(match_id: str):
         """Gép által olvasható diagnosztika-csomag EGY meccsről — a

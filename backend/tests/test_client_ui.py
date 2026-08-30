@@ -2639,3 +2639,7 @@ def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     assert "_kovMez" in harom and "Játékos-kamera" in harom, (
         "nincs játékos-követő kamera")
     assert "dYaw" in harom, "nincs yaw-átfordulás-kezelés"
+    # Böngészős 3D / VR: ugyanaz a meccs WebXR-képes oldalként a
+    # motorról — a headset-út első lépcsője.
+    assert "_bongeszos3d" in harom and "/view3d" in harom, (
+        "nincs böngészős 3D / VR megnyitó")
