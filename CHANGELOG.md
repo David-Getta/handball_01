@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.86 óta)
+## v0.1.88 — kiadva (2026-08-30)
+
+> Kiadás-jegyzet: a visszajelzés-kör két eszköze. A minőség-párbeszéd
+> "Diagnosztika mentése" gombja egy fájlba gyűjti, amit a fejlesztőnek
+> érdemes elküldeni (videó nélkül) — és a 3D pályán megjött a
+> TV-kamera, ami magától követi a labdát.
 
 - **TV-kamera a 3D pályán** (3D pálya): egy gombbal a nézet magától
   követi a labdát — sima, oldalvonali gépállás, mint egy közvetítésben;
@@ -16,6 +21,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   eseményszámok, feldolgozás-beállítások, forrás-térkép, felismert vs.
   valódi eredmény. Videót, képet, személyes adatot nem tartalmaz; ezt
   küldd a fejlesztőnek, és a hiba oka kiolvasható belőle.
+
+## v0.1.87 — kiadva (2026-08-30)
 
 - **A ✂ vágás a meccs-nézetből is elérhető, az eredmény-sáv a valódit
   is mutatja** (meccs-elemző): az ál-eseményeket a felhasználó a
