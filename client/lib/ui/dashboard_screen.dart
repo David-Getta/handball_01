@@ -427,15 +427,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Expanded(
           child: Text(
             "Az app (v$appVersion) és a motor "
-            "(v${ApiClient.engineVersion}) verziója eltér — a telepítés "
-            "fél-frissült. Töltsd le és telepítsd újra a teljes "
-            "csomagot a GitHub Releases oldalról, hogy a kettő együtt "
-            "frissüljön.",
+            "(v${ApiClient.engineVersion}) verziója eltér — jellemzően "
+            "egy RÉGI motor-folyamat maradt életben a frissítés után. "
+            "A \"Motor újraindítása\" gomb leállítja, és a beépített "
+            "(v$appVersion) motort indítja el.",
             style: AppText.label,
           ),
         ),
+        const SizedBox(width: AppSpacing.md),
+        FilledButton(
+          style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: AppColors.onAccent),
+          onPressed: _restartEngine,
+          child: const Text("Motor újraindítása"),
+        ),
       ]),
     );
+  }
+
+  /// A verzió-eltérés helyben javítása: a régi motor leállítása és a
+  /// beépített indítása (az indító fél-frissülés-védelme végzi el).
+  Future<void> _restartEngine() async {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("Motor újraindítása…")));
+    // Közvetlenül az indítót hívjuk: a sima újra-felderítés a futó
+    // RÉGI motort találná meg és "rendben"-t mondana — az indító
+    // fél-frissülés-védelme viszont leállítja, és a beépítettet hozza.
+    final launcher = BackendLauncher.instance ?? BackendLauncher();
+    final st = await launcher.ensureRunning();
+    final ok = st.phase == BackendPhase.ready;
+    if (!mounted) return;
+    ApiClient.engineVersion = null; // a friss /health tölti újra
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? "A motor újraindult — ha a sáv eltűnt, a verziók már "
+                "egyeznek."
+            : "Nem sikerült újraindítani — indítsd újra a számítógépet, "
+                "az biztosan leállítja a régi motort.")));
   }
 
   /// Vendég-sáv: fiók nélküli munkamenetben a munka a következő

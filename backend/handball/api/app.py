@@ -171,6 +171,29 @@ def create_app():
         from .. import __version__
         return {"status": "ok", "version": __version__}
 
+    # A kilépés-függvény cserélhető: a tesztben nem állhat le a folyamat.
+    app.state.exit_fn = None  # None = os._exit
+
+    @app.post("/shutdown")
+    def shutdown():
+        """A motor SZÁNDÉKOS leállítása — a fél-frissülés őre használja.
+
+        Frissítés után a RÉGI motor-folyamat életben maradhat, és az új
+        app ahhoz csatlakozna (verzió-eltérés sáv). Az indító ezzel a
+        végponttal állítja le a régi motort, mielőtt a beépítettet
+        indítja. A motor eleve csak a 127.0.0.1-en figyel, tehát ezt
+        csak a helyi gép hívhatja."""
+        import os
+        import threading
+        import time
+
+        def _kilep():
+            time.sleep(0.3)  # a válasz még kimegy
+            (app.state.exit_fn or os._exit)(0)
+
+        threading.Thread(target=_kilep, daemon=True).start()
+        return {"stopping": True}
+
     # --- Fiókok és felhasználási feltételek -------------------------------
     # A program a Tulajdonos szellemi és fizikai tulajdona; a használat
     # fiókhoz kötött, a fiók létrehozásához pedig a feltételek elfogadása

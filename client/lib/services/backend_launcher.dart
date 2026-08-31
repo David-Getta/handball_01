@@ -16,6 +16,9 @@ import "dart:io";
 
 import "package:flutter/foundation.dart";
 
+import "package:http/http.dart" as http;
+
+import "../version.dart";
 import "api_client.dart";
 
 /// A motor-indítás eredménye — ezt mutatja a kezdőképernyő.
@@ -78,6 +81,63 @@ class BackendLauncher {
       }
     }
     return null;
+  }
+
+  /// A megadott porton futó motor verziója a /health-ből (null: nem
+  /// olvasható — nagyon régi motor, vagy nem a miénk).
+  Future<String?> _versionOnPort(int p) async {
+    try {
+      final r = await http
+          .get(Uri.parse("http://127.0.0.1:$p/health"))
+          .timeout(const Duration(seconds: 3));
+      final j = jsonDecode(utf8.decode(r.bodyBytes));
+      if (j is Map && j["version"] is String) return j["version"] as String;
+    } catch (_) {}
+    return null;
+  }
+
+  /// A megadott porton futó motor leállítása: előbb a szándékos
+  /// /shutdown végponttal (új motorok), majd — mert a RÉGI motorban ez
+  /// még nincs — a portot fogó folyamat leállításával. A végén megvárjuk,
+  /// hogy a port tényleg elengedjen (legfeljebb ~5 mp).
+  Future<void> _stopEngineOnPort(int p) async {
+    try {
+      await http
+          .post(Uri.parse("http://127.0.0.1:$p/shutdown"))
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {}
+    for (var i = 0; i < 10; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      if (!await ApiClient(baseUrl: "http://127.0.0.1:$p").isHealthy()) {
+        return;
+      }
+      if (i == 3) await _killPortProcess(p); // a /shutdown nem ment
+    }
+  }
+
+  /// A portot fogó folyamat leállítása rendszer-eszközzel — a régi
+  /// (shutdown-végpont előtti) motorokhoz.
+  Future<void> _killPortProcess(int p) async {
+    try {
+      if (Platform.isWindows) {
+        final r = await Process.run("cmd", ["/c", "netstat -ano"]);
+        for (final sor in (r.stdout as String).split("\n")) {
+          if (!sor.contains(":$p ") || !sor.contains("LISTENING")) continue;
+          final darab = sor.trim().split(RegExp(r"\s+"));
+          final pid = darab.isNotEmpty ? darab.last : "";
+          if (int.tryParse(pid) != null) {
+            await Process.run("taskkill", ["/PID", pid, "/F"]);
+          }
+        }
+      } else {
+        final r = await Process.run("lsof", ["-ti", "tcp:$p"]);
+        for (final pid in (r.stdout as String).split("\n")) {
+          if (int.tryParse(pid.trim()) != null) {
+            await Process.run("kill", ["-9", pid.trim()]);
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   /// A motor kimenetének naplófájlja a felhasználói adatmappában — ha a motor
@@ -161,10 +221,33 @@ class BackendLauncher {
     _stoppedByUs = false;
     // 1) Már fut valamelyik porton? (A 8000-es foglaltsága esetén a motor
     // tartalék portra köt — ugyanazt a tartományt fésüljük át.)
-    final running = await _findHealthyPort();
+    var running = await _findHealthyPort();
     if (running != null) {
-      onLog?.call("A motor már fut (port: $running).");
-      return const BackendStatus(BackendPhase.ready, "A motor fut.");
+      // FÉL-FRISSÜLÉS-VÉDELEM: frissítés után a RÉGI motor-folyamat
+      // életben maradhat, és az app ahhoz csatlakozna — minden rejtélyes
+      // eltérés (hiányzó végpontok, verzió-sáv) ebből jön. Ha a futó
+      // motor verziója nem a miénk, leállítjuk, és a BEÉPÍTETT indul.
+      final futoVerzio = await _versionOnPort(running);
+      final elter = futoVerzio != null &&
+          futoVerzio.isNotEmpty &&
+          !appVersion.contains("-dev") &&
+          futoVerzio != appVersion;
+      if (!elter) {
+        onLog?.call("A motor már fut (port: $running).");
+        return const BackendStatus(BackendPhase.ready, "A motor fut.");
+      }
+      onLog?.call("Régi motor fut (v$futoVerzio, port: $running) — "
+          "leállítom, és a beépített (v$appVersion) indul.");
+      await _stopEngineOnPort(running);
+      running = await _findHealthyPort();
+      if (running != null) {
+        // Nem sikerült leállítani (pl. más felhasználó folyamata) —
+        // őszintén szólunk, és a régivel megyünk tovább: az app
+        // működik, a verzió-sáv pedig megmondja a teendőt.
+        onLog?.call("A régi motort nem sikerült leállítani — a futó "
+            "példánnyal megyünk tovább.");
+        return const BackendStatus(BackendPhase.ready, "A motor fut.");
+      }
     }
 
     // Weben nincs alfolyamat-indítás.

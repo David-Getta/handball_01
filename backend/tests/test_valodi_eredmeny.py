@@ -321,3 +321,21 @@ def test_a_tanitas_kapuorei():
     assert "Tanítóadat gyűjtése" in r.json()["detail"]
     st = c.get("/dataset/train-status").json()
     assert st["running"] is False
+
+
+def test_a_shutdown_vegpont_cserelheto_kilepessel():
+    """A fél-frissülés őre: a /shutdown a régi motort állítja le. A
+    kilépés-függvény cserélhető (app.state.exit_fn) — a teszt így nem
+    hal bele; azt nézzük, hogy a végpont válaszol ÉS tényleg meghívja."""
+    import time
+
+    c, _tmp = _client([])
+    hivasok = []
+    c.app.state.exit_fn = lambda code: hivasok.append(code)
+    r = c.post("/shutdown")
+    assert r.status_code == 200 and r.json()["stopping"] is True
+    for _ in range(30):  # a kilépés késleltetett szálon fut
+        if hivasok:
+            break
+        time.sleep(0.1)
+    assert hivasok == [0]

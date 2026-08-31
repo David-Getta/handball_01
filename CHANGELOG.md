@@ -3,6 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.93 óta)
+
+- **A fél-frissült telepítés magától gyógyul** (motor + indító +
+  kezdőlap): frissítés után a RÉGI motor-folyamat életben maradhat, és
+  az app ahhoz csatlakozott — ebből jött a verzió-eltérés sáv
+  újratelepítés után is (valós eset: app v0.1.93, motor v0.1.89). Az
+  indító mostantól a talált motor verzióját is nézi: eltérésnél
+  leállítja (az új /shutdown végponttal; a régi, végpont előtti
+  motoroknál a portot fogó folyamat leállításával), és a beépített
+  motort hozza. A sáv új "Motor újraindítása" gombja ugyanezt kézzel
+  is elindítja — újratelepítés és gép-újraindítás nélkül.
+
 ## v0.1.93 — kiadva (2026-08-31)
 
 > Kiadás-jegyzet: a TELJES pontosság-lánc az appban. Gyűjtés a saját

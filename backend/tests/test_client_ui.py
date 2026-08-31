@@ -2598,6 +2598,34 @@ def test_a_diagnosztika_a_minoseg_parbeszedbol_mentheto():
     assert "fetchDiagnostics" in api and "/diagnostics" in api
 
 
+def test_a_fel_frissules_magatol_gyogyul():
+    """ŐR: frissítés után a RÉGI motor-folyamat életben maradhat, és az
+    app ahhoz csatlakozna (verzió-eltérés sáv — valós esetben: app
+    v0.1.93 + motor v0.1.89 újratelepítés után is). Az indító mostantól
+    a talált motor VERZIÓJÁT is nézi: eltérésnél leállítja (/shutdown,
+    régi motornál a portot fogó folyamat leállításával), és a
+    beépítettet hozza; a sáv gombja ugyanezt kézzel is elindítja."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    indito = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    assert "_versionOnPort" in indito, "az indító nem nézi a verziót"
+    assert "_stopEngineOnPort" in indito and "/shutdown" in indito, (
+        "nincs szándékos motor-leállítás")
+    assert "_killPortProcess" in indito, (
+        "nincs tartalék a shutdown-végpont ELŐTTI (régi) motorokhoz")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "Motor újraindítása" in kezdo, (
+        "a verzió-sávból hiányzik az egy gombos javítás")
+    assert "_restartEngine" in kezdo
+
+
 def test_a_tanitoadat_gyujtes_a_kezdolabrol_indul():
     """ŐR: a pontosság következő szintje a saját felvételeken tanított
     detektor — de a gyűjtő eddig csak terminálból ment, amit az edző
