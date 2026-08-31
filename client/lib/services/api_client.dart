@@ -1395,6 +1395,30 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Tanítóadat-gyűjtés indítása (POST /dataset/collect) — a detektor
+  /// finomhangolásának első lépése a saját meccsekből.
+  Future<Map<String, dynamic>> startDatasetCollect(
+      List<String> matchIds, int samples) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/dataset/collect"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"match_ids": matchIds, "samples": samples}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a gyűjtés indítása", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A tanítóadat-gyűjtés állapota (GET /dataset/status).
+  Future<Map<String, dynamic>> fetchDatasetStatus() async {
+    final resp = await http.get(Uri.parse("$baseUrl/dataset/status"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az állapot", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Töröl egy meccset a backendről (memória + lemez).
   Future<void> deleteMatch(String matchId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/matches/$matchId"));

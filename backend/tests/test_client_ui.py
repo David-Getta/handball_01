@@ -2598,6 +2598,30 @@ def test_a_diagnosztika_a_minoseg_parbeszedbol_mentheto():
     assert "fetchDiagnostics" in api and "/diagnostics" in api
 
 
+def test_a_tanitoadat_gyujtes_a_kezdolabrol_indul():
+    """ŐR: a pontosság következő szintje a saját felvételeken tanított
+    detektor — de a gyűjtő eddig csak terminálból ment, amit az edző
+    sosem nyit meg. A Továbbiak menü új pontja pipálós listával indítja,
+    és a végén megmondja a következő lépést (FINETUNE.md)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_datasetDialog" in kezdo, "nincs gyűjtő-párbeszéd"
+    assert "Tanítóadat gyűjtése" in kezdo, "nincs menüpont"
+    assert "FINETUNE.md" in kezdo, "nem mondja meg a következő lépést"
+    # Összefűzött meccsnek nincs videója — a párbeszéd kimondja, hogy
+    # a darabokat kell kijelölni.
+    assert "DARABOKAT" in kezdo
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "startDatasetCollect" in api and "fetchDatasetStatus" in api
+
+
 def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     """ŐR: a 3D/VR-út első köre — a bal menü "3D pálya" füle, ahol az
     elemzett meccs térben járható be, játék-szerű mozgással. A vetítés

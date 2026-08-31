@@ -1730,6 +1730,128 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// TANÍTÓADAT-GYŰJTÉS: a pontosság következő szintje a saját
+  /// felvételeken finomhangolt detektor (docs/FINETUNE.md) — az első
+  /// lépése, az előcímkézett képgyűjtés, eddig csak terminálból ment,
+  /// amit az edző sosem nyit meg. Innen egy pipálós lista + egy gomb.
+  Future<void> _datasetDialog() async {
+    final valasztott = <String>{};
+    var samples = 200;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Tanítóadat gyűjtése"),
+          content: SizedBox(
+            width: 480,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                  "A felismerés a TE felvételeiden lesz igazán pontos: "
+                  "a gyűjtő a kijelölt meccsek videóiból képeket "
+                  "mintavételez és előcímkéz — ezt átnézve és tanítva "
+                  "készül a saját modelled (útmutató: docs/FINETUNE.md). "
+                  "Összefűzött meccsnél a DARABOKAT jelöld ki.",
+                  style: AppText.label.copyWith(fontSize: 12.5)),
+              const SizedBox(height: AppSpacing.md),
+              SizedBox(
+                height: 220,
+                child: ListView(children: [
+                  for (final m in _matches)
+                    CheckboxListTile(
+                      dense: true,
+                      value: valasztott.contains(m["match_id"]),
+                      title: Text(
+                          "${m["home_team"]} vs ${m["away_team"]} "
+                          "(${m["match_id"]})",
+                          style: AppText.label.copyWith(fontSize: 12.5)),
+                      onChanged: (v) => setDlg(() {
+                        if (v == true) {
+                          valasztott.add(m["match_id"] as String);
+                        } else {
+                          valasztott.remove(m["match_id"]);
+                        }
+                      }),
+                    ),
+                ]),
+              ),
+              Row(children: [
+                Text("Kép/videó: $samples",
+                    style: AppText.label.copyWith(fontSize: 12)),
+                Expanded(
+                  child: Slider(
+                    value: samples.toDouble(),
+                    min: 50,
+                    max: 500,
+                    divisions: 9,
+                    onChanged: (v) => setDlg(() => samples = v.round()),
+                  ),
+                ),
+              ]),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Mégse")),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent),
+              onPressed: valasztott.isEmpty
+                  ? null
+                  : () => Navigator.pop(ctx, true),
+              child: const Text("Gyűjtés indítása"),
+            ),
+          ],
+        );
+      }),
+    );
+    if (ok != true) return;
+    try {
+      final r = await _api.startDatasetCollect(
+          valasztott.toList(), samples);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Gyűjtés fut a háttérben (${r["videos_total"]} "
+              "videó) — pár perc, a végén szólunk.")));
+      _figyeljDataset();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
+  }
+
+  /// A gyűjtés követése: 3 mp-enként állapot, a végén összegzés.
+  Future<void> _figyeljDataset() async {
+    while (mounted) {
+      await Future<void>.delayed(const Duration(seconds: 3));
+      Map<String, dynamic> st;
+      try {
+        st = await _api.fetchDatasetStatus();
+      } catch (_) {
+        continue;
+      }
+      if (st["running"] == true) continue;
+      if (!mounted) return;
+      if (st["error"] != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            duration: const Duration(seconds: 10),
+            content: Text("A gyűjtés hibára futott: ${st["error"]}")));
+      } else if (st["done"] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            duration: const Duration(seconds: 12),
+            content: Text(
+                "Tanítóadat kész: ${st["images"]} kép — a labda a képek "
+                "${st["ball_pct"] ?? "?"}%-án. Mappa: ${st["out_dir"]}\n"
+                "Következő lépés: címke-átnézés (CVAT/LabelImg), majd a "
+                "tanítás — útmutató: docs/FINETUNE.md.")));
+      }
+      return;
+    }
+  }
+
   /// Részleges meccs feldolgozásának folytatása: a backend a mentett
   /// beállításokkal új jobot indít onnan, ahol a feldolgozás megszakadt.
   /// Az eredmény külön meccsként jelenik meg ("<id>-folyt").
@@ -1832,6 +1954,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     if (v == "import") _importLibrary();
                     if (v == "update") _checkUpdatesManually();
                     if (v == "token") _updateTokenDialog();
+                    if (v == "dataset") _datasetDialog();
                     if (v == "help") _showHelp();
                   },
                   itemBuilder: (_) => const [
@@ -1881,6 +2004,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           dense: true),
                     ),
                     PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: "dataset",
+                      child: ListTile(
+                          leading: Icon(Icons.model_training, size: 18),
+                          title: Text("Tanítóadat gyűjtése (pontosabb "
+                              "felismeréshez)"),
+                          dense: true),
+                    ),
                     PopupMenuItem(
                       value: "help",
                       child: ListTile(

@@ -245,3 +245,23 @@ def test_a_bongeszos_3d_oldal_osszeall():
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/html")
     assert c.get("/matches/nincs/view3d").status_code == 404
+
+
+# ------------------------------------------------- tanítóadat-gyűjtés
+
+def test_a_tanitoadat_gyujtes_hibai_erthetoek():
+    """A gyűjtő-végpont kapuőrei: ismeretlen meccs → 404; videó nélküli
+    meccs → 400 azzal, hogy összefűzöttnél a darabokat kell kijelölni;
+    üres lista → 400. (A tényleges gyűjtés detektort igényel — azt a
+    CLI-teszt és a valódi futás fedi.)"""
+    c, _tmp = _client([_meccs("g1")])  # nincs video_path
+    r = c.post("/dataset/collect", json={"match_ids": ["g1"]})
+    assert r.status_code == 400
+    assert "DARABOKAT" in r.json()["detail"]
+    assert c.post("/dataset/collect",
+                  json={"match_ids": ["nincs"]}).status_code == 404
+    assert c.post("/dataset/collect",
+                  json={"match_ids": []}).status_code == 400
+    # Az állapot-végpont üresen is válaszol (a kliens 3 mp-enként kérdezi).
+    st = c.get("/dataset/status").json()
+    assert st["running"] is False

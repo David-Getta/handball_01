@@ -1541,6 +1541,85 @@ def create_app():
                 "goals_home": osszegzes.get("goals_home"),
                 "goals_away": osszegzes.get("goals_away")}
 
+    # ---- Tanítóadat-gyűjtés (a detektor finomhangolásához) ----
+    # A pontosság következő szintje a SAJÁT felvételeken finomhangolt
+    # modell (docs/FINETUNE.md) — de a gyűjtő eddig csak terminálból
+    # ment, amit a nem-műszaki edző sosem nyit meg. Ez a pár végpont a
+    # kliens "Tanítóadat gyűjtése" gombja mögött áll: a könyvtár
+    # meccseinek videóiból előcímkézett YOLO-adathalmazt épít.
+    _dataset_state: dict = {"running": False, "done": False}
+
+    @app.post("/dataset/collect")
+    def dataset_collect(body: dict):
+        """Gyűjtés indítása: {"match_ids": [...], "samples": 200}.
+
+        Háttérszálon fut (a több száz kocka előcímkézése perceket vesz
+        igénybe); az állapot a /dataset/status végponton követhető.
+        409: már fut; 400: nincs elérhető videó / rossz mintaszám."""
+        import threading
+        if _dataset_state.get("running"):
+            raise HTTPException(status_code=409,
+                                detail="már fut egy gyűjtés — várd meg")
+        try:
+            samples = int(body.get("samples") or 200)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400,
+                                detail="samples: egész szám kell")
+        samples = max(20, min(1000, samples))
+        videok = []
+        for mid in (body.get("match_ids") or []):
+            m = _store.get(str(mid))
+            if m is None:
+                raise HTTPException(status_code=404,
+                                    detail=f"match not found: {mid}")
+            vp = m.meta.video_path
+            if not vp or not Path(vp).exists():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"nincs elérhető videó ehhez: {mid} — "
+                           "összefűzött meccsnél a DARABOKAT jelöld ki")
+            videok.append((vp, m.meta.start_frame or 0))
+        if not videok:
+            raise HTTPException(status_code=400,
+                                detail="legalább egy meccs kell videóval")
+        out_dir = data_root() / "dataset"
+        _dataset_state.update({
+            "running": True, "done": False, "error": None,
+            "images": 0, "ball_pct": None, "videos_done": 0,
+            "videos_total": len(videok), "out_dir": str(out_dir),
+        })
+
+        def _gyujt():
+            try:
+                from scripts.collect_dataset import _make_detect_fn
+                from ..pipeline.dataset import collect_dataset
+                detect = _make_detect_fn("yolov8n.pt", 1920, 0.35, 0.05)
+                osszes = 0
+                labdas = 0
+                for vp, start in videok:
+                    stats = collect_dataset(vp, detect, out_dir,
+                                            samples=samples, start=start)
+                    osszes += stats.images
+                    labdas += stats.images_with_ball
+                    _dataset_state["images"] = osszes
+                    _dataset_state["videos_done"] += 1
+                _dataset_state["ball_pct"] = round(
+                    100.0 * labdas / max(1, osszes))
+                _dataset_state["done"] = True
+            except Exception as e:  # a hibát a státusz viszi a felületre
+                _dataset_state["error"] = str(e)
+            finally:
+                _dataset_state["running"] = False
+
+        threading.Thread(target=_gyujt, daemon=True).start()
+        return {"started": True, "out_dir": str(out_dir),
+                "videos_total": len(videok), "samples": samples}
+
+    @app.get("/dataset/status")
+    def dataset_status():
+        """A tanítóadat-gyűjtés állapota (a kliens haladás-nézete)."""
+        return dict(_dataset_state)
+
     @app.get("/matches/{match_id}/view3d")
     def match_view3d(match_id: str):
         """Böngészős 3D / VR nézet: a meccs WebXR-képes HTML-oldalként.

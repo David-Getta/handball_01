@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.91 óta)
 
+- **Tanítóadat gyűjtése egy gombbal — a pontosság következő szintje**
+  (kezdőlap → Továbbiak): a felismerés a SAJÁT felvételeken
+  finomhangolt detektorral lesz igazán pontos (docs/FINETUNE.md) — az
+  első lépés, az előcímkézett képgyűjtés, eddig csak terminálból ment.
+  Mostantól pipálós lista a könyvtár meccseiből + mintaszám-csúszka; a
+  gyűjtés a háttérben fut, a végén az app megmondja, hány kép készült,
+  a labda a képek hány százalékán van, és mi a következő lépés
+  (címke-átnézés CVAT/LabelImg-ben, majd tanítás).
+
 - **A böngészős 3D ott folytatja, ahol az appban tartasz** (3D
   pálya): a "Böngészős 3D / VR" gomb átadja az aktuális pillanatot
   (?t=mp), az oldal ott nyílik és rögtön játszik — és a cím
