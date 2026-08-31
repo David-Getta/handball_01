@@ -1620,6 +1620,108 @@ def create_app():
         """A tanítóadat-gyűjtés állapota (a kliens haladás-nézete)."""
         return dict(_dataset_state)
 
+    # A beépített CÍMKÉZŐ végpontjai: a gyűjtött képek átnézése és a
+    # dobozok javítása az appból — külső eszköz (CVAT/LabelImg) nélkül.
+    # A címke-fájlok szabványos YOLO-sorok (osztály cx cy w h, 0..1),
+    # tehát a kimenet továbbra is bármely külső eszközzel kompatibilis.
+    def _dataset_kep_ut(split: str, name: str) -> Path:
+        import re
+        if split not in ("train", "val"):
+            raise HTTPException(status_code=400, detail="split: train|val")
+        # Útvonal-védelem: csak sima fájlnév, könyvtár-ugrás nélkül.
+        if not re.fullmatch(r"[A-Za-z0-9._\-áéíóöőúüűÁÉÍÓÖŐÚÜŰ ]+", name) \
+                or ".." in name:
+            raise HTTPException(status_code=400, detail="rossz fájlnév")
+        return data_root() / "dataset" / "images" / split / name
+
+    @app.get("/dataset/images")
+    def dataset_images():
+        """A gyűjtött képek listája (split + fájlnév), címke-számmal."""
+        out = []
+        gyoker = data_root() / "dataset"
+        for split in ("train", "val"):
+            d = gyoker / "images" / split
+            if not d.exists():
+                continue
+            for f in sorted(d.iterdir()):
+                if f.suffix.lower() not in (".jpg", ".jpeg", ".png"):
+                    continue
+                cimke = gyoker / "labels" / split / (f.stem + ".txt")
+                n_doboz = 0
+                if cimke.exists():
+                    try:
+                        n_doboz = len([s for s in cimke.read_text(
+                            encoding="utf-8").splitlines() if s.strip()])
+                    except Exception:
+                        n_doboz = 0
+                out.append({"split": split, "name": f.name,
+                            "boxes": n_doboz})
+        return {"images": out}
+
+    @app.get("/dataset/image/{split}/{name}")
+    def dataset_image(split: str, name: str):
+        """Egy gyűjtött kép (a címkéző rajzfelülete alá)."""
+        from fastapi.responses import FileResponse
+        ut = _dataset_kep_ut(split, name)
+        if not ut.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen kép")
+        return FileResponse(str(ut))
+
+    @app.get("/dataset/labels/{split}/{name}")
+    def dataset_labels_get(split: str, name: str):
+        """A kép címkéi: {"boxes": [[osztály, cx, cy, w, h], …]} (0..1)."""
+        ut = _dataset_kep_ut(split, name)
+        cimke = (data_root() / "dataset" / "labels" / split
+                 / (Path(name).stem + ".txt"))
+        if not ut.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen kép")
+        boxes = []
+        if cimke.exists():
+            for sor in cimke.read_text(encoding="utf-8").splitlines():
+                d = sor.split()
+                if len(d) != 5:
+                    continue
+                try:
+                    boxes.append([int(d[0])] + [float(x) for x in d[1:]])
+                except ValueError:
+                    continue
+        return {"boxes": boxes}
+
+    @app.post("/dataset/labels/{split}/{name}")
+    def dataset_labels_set(split: str, name: str, body: dict):
+        """A kép címkéinek mentése (a címkéző Mentés gombja).
+
+        Törzs: {"boxes": [[osztály, cx, cy, w, h], …]} — osztály 0
+        (játékos) vagy 1 (labda), a többi 0..1 közti normált érték.
+        A fájl szabványos YOLO-sor marad."""
+        ut = _dataset_kep_ut(split, name)
+        if not ut.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen kép")
+        sorok = []
+        for b in (body.get("boxes") or []):
+            try:
+                cls = int(b[0])
+                cx, cy, w, h = (float(b[1]), float(b[2]),
+                                float(b[3]), float(b[4]))
+            except (TypeError, ValueError, IndexError):
+                raise HTTPException(status_code=400,
+                                    detail="boxes: [osztály,cx,cy,w,h] kell")
+            if cls not in (0, 1):
+                raise HTTPException(status_code=400,
+                                    detail="osztály: 0 (játékos) vagy 1 "
+                                           "(labda)")
+            if not all(0.0 <= v <= 1.0 for v in (cx, cy, w, h)) \
+                    or w <= 0 or h <= 0:
+                raise HTTPException(status_code=400,
+                                    detail="cx/cy/w/h: 0..1 közti érték")
+            sorok.append(f"{cls} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}")
+        cimke = (data_root() / "dataset" / "labels" / split
+                 / (Path(name).stem + ".txt"))
+        cimke.parent.mkdir(parents=True, exist_ok=True)
+        cimke.write_text("\n".join(sorok) + ("\n" if sorok else ""),
+                         encoding="utf-8")
+        return {"saved": len(sorok)}
+
     @app.get("/matches/{match_id}/view3d")
     def match_view3d(match_id: str):
         """Böngészős 3D / VR nézet: a meccs WebXR-képes HTML-oldalként.

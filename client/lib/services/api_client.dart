@@ -1419,6 +1419,43 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A gyűjtött tanítóképek listája (GET /dataset/images).
+  Future<List<Map<String, dynamic>>> fetchDatasetImages() async {
+    final resp = await http.get(Uri.parse("$baseUrl/dataset/images"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a kép-lista", resp));
+    }
+    final d = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (d["images"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Egy tanítókép címkéi (GET /dataset/labels/...): [[o,cx,cy,w,h],…].
+  Future<List<List<num>>> fetchDatasetLabels(
+      String split, String name) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/dataset/labels/$split/$name"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a címkék betöltése", resp));
+    }
+    final d = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return [
+      for (final b in (d["boxes"] as List)) (b as List).cast<num>(),
+    ];
+  }
+
+  /// Címkék mentése (POST /dataset/labels/...) — szabványos YOLO-sorok.
+  Future<void> saveDatasetLabels(
+      String split, String name, List<List<num>> boxes) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/dataset/labels/$split/$name"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"boxes": boxes}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a címkék mentése", resp));
+    }
+  }
+
   /// Töröl egy meccset a backendről (memória + lemez).
   Future<void> deleteMatch(String matchId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/matches/$matchId"));

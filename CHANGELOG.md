@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.91 óta)
 
+- **Beépített címkéző — a tanítóadat átnézése az appban** (kezdőlap
+  → Továbbiak → Címkéző): a finomhangolás-lánc középső lépése eddig
+  külső eszközt kért (CVAT/LabelImg — regisztráció, import, export).
+  Mostantól az appban megy: húzással új doboz (alapból LABDA — az a
+  leggyakoribb pótlás), koppintással kijelölés (a legkisebb találó
+  doboz nyer, így a labda a játékos-doboz belsejében is elérhető),
+  osztály-váltás és törlés egy gombbal; a lista a 0 dobozos (gyanús)
+  képeket kiemeli, a mentés szabványos YOLO-sorokat ír — a kimenet
+  külső eszközzel is kompatibilis marad.
+
 - **Tanítóadat gyűjtése egy gombbal — a pontosság következő szintje**
   (kezdőlap → Továbbiak): a felismerés a SAJÁT felvételeken
   finomhangolt detektorral lesz igazán pontos (docs/FINETUNE.md) — az

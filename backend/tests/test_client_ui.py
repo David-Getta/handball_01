@@ -2622,6 +2622,38 @@ def test_a_tanitoadat_gyujtes_a_kezdolabrol_indul():
     assert "startDatasetCollect" in api and "fetchDatasetStatus" in api
 
 
+def test_a_cimkezo_beepitve_mukodik():
+    """ŐR: a finomhangolás-lánc középső lépése (címke-átnézés) eddig
+    külső eszközt kért — a beépített címkéző három gombbal ugyanaz:
+    húzással doboz, osztály-váltás, törlés. A rajzolás alapértelmezett
+    osztálya a LABDA (az a leggyakoribb pótlás), a lista a 0 dobozos
+    (gyanús) képet kiemeli."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    cimkezo = (lib / "ui" / "label_screen.dart").read_text(encoding="utf-8")
+    assert "_ujDoboz" in cimkezo and "onPanStart" in cimkezo, (
+        "nincs húzásos doboz-rajzolás")
+    assert "_rajzOsztaly = 1" in cimkezo, (
+        "a rajzolás alapértelmezettje nem a labda")
+    assert "Osztály-váltás" in cimkezo and "Törlés" in cimkezo
+    # A kijelölés a LEGKISEBB találó dobozt veszi — a labda a
+    # játékos-doboz belsejében is kijelölhető.
+    assert "talalatTerulet" in cimkezo
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "Címkéző" in kezdo and "LabelScreen" in kezdo, (
+        "a címkéző nem érhető el a Továbbiak menüből")
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert ("fetchDatasetImages" in api and "fetchDatasetLabels" in api
+            and "saveDatasetLabels" in api)
+
+
 def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     """ŐR: a 3D/VR-út első köre — a bal menü "3D pálya" füle, ahol az
     elemzett meccs térben járható be, játék-szerű mozgással. A vetítés

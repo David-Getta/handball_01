@@ -19,6 +19,7 @@ import "../services/update_service.dart";
 import "anim.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
+import "label_screen.dart";
 import "match_screen.dart";
 import "player_trend_screen.dart";
 import "scouting_screen.dart";
@@ -1845,8 +1846,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             content: Text(
                 "Tanítóadat kész: ${st["images"]} kép — a labda a képek "
                 "${st["ball_pct"] ?? "?"}%-án. Mappa: ${st["out_dir"]}\n"
-                "Következő lépés: címke-átnézés (CVAT/LabelImg), majd a "
-                "tanítás — útmutató: docs/FINETUNE.md.")));
+                "Következő lépés: Továbbiak → Címkéző (átnézés), majd "
+                "a tanítás — útmutató: docs/FINETUNE.md.")));
       }
       return;
     }
@@ -1955,6 +1956,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     if (v == "update") _checkUpdatesManually();
                     if (v == "token") _updateTokenDialog();
                     if (v == "dataset") _datasetDialog();
+                    if (v == "labeler") {
+                      Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => const LabelScreen()));
+                    }
                     if (v == "help") _showHelp();
                   },
                   itemBuilder: (_) => const [
@@ -2010,6 +2015,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           leading: Icon(Icons.model_training, size: 18),
                           title: Text("Tanítóadat gyűjtése (pontosabb "
                               "felismeréshez)"),
+                          dense: true),
+                    ),
+                    PopupMenuItem(
+                      value: "labeler",
+                      child: ListTile(
+                          leading: Icon(Icons.crop_free, size: 18),
+                          title: Text("Címkéző (a gyűjtött képek "
+                              "átnézése)"),
                           dense: true),
                     ),
                     PopupMenuItem(

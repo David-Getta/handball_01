@@ -265,3 +265,48 @@ def test_a_tanitoadat_gyujtes_hibai_erthetoek():
     # Az állapot-végpont üresen is válaszol (a kliens 3 mp-enként kérdezi).
     st = c.get("/dataset/status").json()
     assert st["running"] is False
+
+
+# --------------------------------------------------------- címkéző
+
+def test_a_cimkezo_vegpontok_kore():
+    """A beépített címkéző teljes köre: lista → címke-olvasás → mentés
+    → visszaolvasás. A fájl szabványos YOLO-sor marad (külső eszközzel
+    is kompatibilis), és az útvonal-védelem a könyvtár-ugrást fogja."""
+    c, tmp = _client([])
+    # A dataset szándékosan a data/ fán KÍVÜL él: a könyvtár-mentés
+    # (export zip) a data/-t csomagolja, és a képhalmaz százmegás.
+    gyoker = Path(tmp) / "dataset"
+    (gyoker / "images" / "train").mkdir(parents=True)
+    (gyoker / "labels" / "train").mkdir(parents=True)
+    # 1x1-es érvényes JPEG helyett elég egy kamu-tartalmú .jpg: a lista
+    # és a címke-végpontok nem dekódolják a képet.
+    (gyoker / "images" / "train" / "a.jpg").write_bytes(b"jpg")
+    (gyoker / "labels" / "train" / "a.txt").write_text(
+        "0 0.5 0.5 0.1 0.2\n", encoding="utf-8")
+
+    kepek = c.get("/dataset/images").json()["images"]
+    assert kepek == [{"split": "train", "name": "a.jpg", "boxes": 1}]
+
+    r = c.get("/dataset/labels/train/a.jpg").json()
+    assert r["boxes"] == [[0, 0.5, 0.5, 0.1, 0.2]]
+
+    r = c.post("/dataset/labels/train/a.jpg",
+               json={"boxes": [[1, 0.3, 0.4, 0.05, 0.05],
+                               [0, 0.6, 0.6, 0.2, 0.3]]})
+    assert r.status_code == 200 and r.json()["saved"] == 2
+    ujra = c.get("/dataset/labels/train/a.jpg").json()["boxes"]
+    assert ujra[0][0] == 1 and len(ujra) == 2
+    # A fájl YOLO-sor maradt.
+    szoveg = (gyoker / "labels" / "train" / "a.txt").read_text(
+        encoding="utf-8")
+    assert szoveg.startswith("1 0.3")
+
+    # Kapuőrök: rossz osztály / érték / fájlnév / hiányzó kép.
+    assert c.post("/dataset/labels/train/a.jpg",
+                  json={"boxes": [[2, .5, .5, .1, .1]]}).status_code == 400
+    assert c.post("/dataset/labels/train/a.jpg",
+                  json={"boxes": [[0, 1.5, .5, .1, .1]]}).status_code == 400
+    assert c.get("/dataset/labels/train/../a.jpg").status_code in (400, 404)
+    assert c.get("/dataset/labels/train/nincs.jpg").status_code == 404
+    assert c.get("/dataset/image/train/nincs.jpg").status_code == 404
