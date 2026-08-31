@@ -2652,6 +2652,13 @@ def test_a_cimkezo_beepitve_mukodik():
     api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
     assert ("fetchDatasetImages" in api and "fetchDatasetLabels" in api
             and "saveDatasetLabels" in api)
+    # A lánc utolsó lépése is gombra került: tanítás a címkézőből,
+    # őszinte figyelmeztetéssel (órákig tarthat), és a kész modell
+    # magától élesbe áll.
+    assert "startTraining" in api and "fetchTrainStatus" in api
+    assert "Tanítás indítása" in cimkezo
+    assert "ÓRÁKIG TARTHAT" in cimkezo, "nincs őszinte idő-figyelmeztetés"
+    assert "élesbe áll" in cimkezo
 
 
 def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():

@@ -1620,6 +1620,70 @@ def create_app():
         """A tanítóadat-gyűjtés állapota (a kliens haladás-nézete)."""
         return dict(_dataset_state)
 
+    # A TANÍTÁS végpontja: a lánc utolsó lépése is gombra kerül. A
+    # feldolgozó ugyanazt az ultralytics-csomagot használja előrejelzésre,
+    # amelyik tanítani is tud — a kész modell a felhasználói súly-mappába
+    # kerül (a régi .bak mentésével), és a KÖVETKEZŐ feldolgozás már
+    # ezzel fut.
+    _train_state: dict = {"running": False, "done": False}
+
+    @app.post("/dataset/train")
+    def dataset_train(body: dict):
+        """Finomhangolás indítása: {"epochs": 60}. Órákig tarthat (CPU-n
+        különösen); háttérszálon fut, az állapot a /dataset/train-status.
+        400: nincs átnézett adathalmaz; 409: már fut tanítás/gyűjtés."""
+        import threading
+        if _train_state.get("running") or _dataset_state.get("running"):
+            raise HTTPException(status_code=409,
+                                detail="már fut tanítás vagy gyűjtés")
+        yaml_ut = data_root() / "dataset" / "dataset.yaml"
+        if not yaml_ut.exists():
+            raise HTTPException(
+                status_code=400,
+                detail="nincs adathalmaz — előbb Tanítóadat gyűjtése, "
+                       "majd a Címkézőben átnézés")
+        try:
+            epochs = max(5, min(200, int(body.get("epochs") or 60)))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400,
+                                detail="epochs: egész szám kell")
+        _train_state.update({"running": True, "done": False, "error": None,
+                             "epochs": epochs, "installed": None})
+
+        def _tanit():
+            try:
+                from scripts.finetune import install_weights
+                from scripts.process_video import (_pick_device,
+                                                   _resolve_weights)
+                from ultralytics import YOLO
+                model = YOLO(_resolve_weights("yolov8n.pt"))
+                eredmeny = model.train(
+                    data=str(yaml_ut), epochs=epochs, imgsz=960, batch=-1,
+                    device=_pick_device(),
+                    project=str(data_root() / "runs"), name="handball",
+                    exist_ok=True)
+                best = (Path(getattr(eredmeny, "save_dir",
+                                     data_root() / "runs" / "handball"))
+                        / "weights" / "best.pt")
+                if not best.exists():
+                    raise RuntimeError("a kész modell (best.pt) nem "
+                                       "jött létre")
+                cel = install_weights(best)
+                _train_state["installed"] = str(cel)
+                _train_state["done"] = True
+            except Exception as e:
+                _train_state["error"] = str(e)
+            finally:
+                _train_state["running"] = False
+
+        threading.Thread(target=_tanit, daemon=True).start()
+        return {"started": True, "epochs": epochs}
+
+    @app.get("/dataset/train-status")
+    def dataset_train_status():
+        """A tanítás állapota (a kliens követi; a kész modell útjával)."""
+        return dict(_train_state)
+
     # A beépített CÍMKÉZŐ végpontjai: a gyűjtött képek átnézése és a
     # dobozok javítása az appból — külső eszköz (CVAT/LabelImg) nélkül.
     # A címke-fájlok szabványos YOLO-sorok (osztály cx cy w h, 0..1),

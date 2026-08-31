@@ -3,6 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.93 óta)
+
+- **Tanítás egy gombbal — a finomhangolás-lánc vége is az appban**
+  (Címkéző → "Tanítás indítása"): az átnézett képekből a modell
+  tanítása eddig terminál-parancs volt. Mostantól a címkézőből indul,
+  kör-szám csúszkával és őszinte figyelmeztetéssel (órákig tarthat,
+  videokártya nélkül különösen); a háttérben fut, a végén a kész
+  modell MAGÁTÓL élesbe áll (a régi .bak néven megmarad), és a
+  következő feldolgozás már azzal megy. Ezzel a teljes
+  pontosság-lánc — gyűjtés → címkézés → tanítás → éles — az appból
+  végigjárható.
+
 ## v0.1.93 — kiadva (2026-08-31)
 
 > Kiadás-jegyzet: a pontosság útja a kezedben. A Továbbiak menüből

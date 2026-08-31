@@ -310,3 +310,14 @@ def test_a_cimkezo_vegpontok_kore():
     assert c.get("/dataset/labels/train/../a.jpg").status_code in (400, 404)
     assert c.get("/dataset/labels/train/nincs.jpg").status_code == 404
     assert c.get("/dataset/image/train/nincs.jpg").status_code == 404
+
+
+def test_a_tanitas_kapuorei():
+    """Tanítás gombra: adathalmaz nélkül 400 azzal, hogy előbb gyűjtés
+    és címkézés kell; az állapot-végpont üresen is válaszol."""
+    c, _tmp = _client([])
+    r = c.post("/dataset/train", json={"epochs": 60})
+    assert r.status_code == 400
+    assert "Tanítóadat gyűjtése" in r.json()["detail"]
+    st = c.get("/dataset/train-status").json()
+    assert st["running"] is False

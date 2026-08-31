@@ -116,6 +116,102 @@ class _LabelScreenState extends State<LabelScreen> {
     }
   }
 
+  /// Tanítás a címkézett képekből — megerősítéssel: órákig tarthat,
+  /// és a kész modell magától élesbe áll (a régi .bak mentésével).
+  Future<void> _tanitasDialog() async {
+    if (_modositott) await _ment(csendes: true);
+    var epochs = 60;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Finomhangolás indítása"),
+          content: SizedBox(
+            width: 440,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                  "A tanítás az átnézett képekből készít kézilabdára "
+                  "hangolt felismerő-modellt. ÓRÁKIG TARTHAT (videokártya "
+                  "nélkül különösen), közben a feldolgozás lassú lehet. "
+                  "A kész modell magától élesbe áll — a következő "
+                  "feldolgozás már azzal fut; a régi modell .bak néven "
+                  "megmarad.",
+                  style: AppText.label.copyWith(fontSize: 12.5)),
+              const SizedBox(height: AppSpacing.md),
+              Row(children: [
+                Text("Körök (epoch): $epochs",
+                    style: AppText.label.copyWith(fontSize: 12)),
+                Expanded(
+                  child: Slider(
+                    value: epochs.toDouble(),
+                    min: 20,
+                    max: 120,
+                    divisions: 10,
+                    onChanged: (v) => setDlg(() => epochs = v.round()),
+                  ),
+                ),
+              ]),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Mégse")),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Indítás"),
+            ),
+          ],
+        );
+      }),
+    );
+    if (ok != true) return;
+    try {
+      await _api.startTraining(epochs);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          duration: Duration(seconds: 8),
+          content: Text("A tanítás fut a háttérben — a végén szólunk, "
+              "és a modell magától élesbe áll.")));
+      _figyeljTanitas();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
+  }
+
+  /// A tanítás követése: fél percenként állapot, a végén összegzés.
+  Future<void> _figyeljTanitas() async {
+    while (mounted) {
+      await Future<void>.delayed(const Duration(seconds: 30));
+      Map<String, dynamic> st;
+      try {
+        st = await _api.fetchTrainStatus();
+      } catch (_) {
+        continue;
+      }
+      if (st["running"] == true) continue;
+      if (!mounted) return;
+      if (st["error"] != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            duration: const Duration(seconds: 12),
+            content: Text("A tanítás hibára futott: ${st["error"]}")));
+      } else if (st["done"] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            duration: const Duration(seconds: 12),
+            content: Text("A tanítás KÉSZ — az új modell élesben: "
+                "${st["installed"]}. A következő feldolgozás már ezzel "
+                "fut.")));
+      }
+      return;
+    }
+  }
+
   // A megjelenített kép téglalapja a vásznon (BoxFit.contain szerint).
   Rect _kepRect(Size vaszon, Size kep) {
     final arany = kep.width / kep.height;
@@ -178,6 +274,11 @@ class _LabelScreenState extends State<LabelScreen> {
           if (_modositott)
             TextButton(
                 onPressed: _ment, child: const Text("Mentés")),
+          // A lánc utolsó lépése is innen indul: az átnézett képekből
+          // tanítás, a kész modell magától élesbe áll.
+          TextButton(
+              onPressed: _tanitasDialog,
+              child: const Text("Tanítás indítása")),
           const SizedBox(width: 8),
         ],
       ),

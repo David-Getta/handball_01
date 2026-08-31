@@ -1456,6 +1456,29 @@ class ApiClient {
     }
   }
 
+  /// Finomhangolás indítása (POST /dataset/train) — a kész modell
+  /// automatikusan élesbe áll a következő feldolgozáshoz.
+  Future<Map<String, dynamic>> startTraining(int epochs) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/dataset/train"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"epochs": epochs}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a tanítás indítása", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A tanítás állapota (GET /dataset/train-status).
+  Future<Map<String, dynamic>> fetchTrainStatus() async {
+    final resp = await http.get(Uri.parse("$baseUrl/dataset/train-status"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az állapot", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Töröl egy meccset a backendről (memória + lemez).
   Future<void> deleteMatch(String matchId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/matches/$matchId"));
