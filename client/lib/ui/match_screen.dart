@@ -21,6 +21,7 @@ import "../services/api_client.dart";
 import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
 import "anim.dart";
+import "court3d_screen.dart";
 import "court_geometry.dart";
 import "court_painter.dart";
 import "decisions_panel.dart";
@@ -1309,48 +1310,59 @@ class _MatchScreenState extends State<MatchScreen> {
               ),
             ),
           Text("${(t / fps).toStringAsFixed(1)} s", style: AppText.label.copyWith(fontSize: 11.5)),
-          // Javítás: a felismerés téved, és az edző egy rossz eredményű
-          // jelentésnek egyetlen számát sem hiszi el. Csak lövés/gól
-          // sorokon — a passzt és a labdaeladást nem javítjuk kézzel.
-          if (type == "goal" || type == "shot")
-            PopupMenuButton<String>(
-              tooltip: "Javítás",
-              enabled: !_correcting && _sourceLabel != "demó",
-              iconSize: 15,
-              padding: EdgeInsets.zero,
-              icon: const Icon(Icons.more_vert,
-                  color: AppColors.textFaint),
-              color: AppColors.surface,
-              onSelected: (v) {
-                if (v == "goal" || v == "shot") {
-                  _correct("set_type", t, v);
-                } else if (v == "remove") {
-                  _correct("remove", t, type);
-                }
-              },
-              itemBuilder: (_) => [
-                if (type != "goal")
-                  const PopupMenuItem(
-                      value: "goal",
-                      child: ListTile(
-                          leading: Icon(Icons.sports_score, size: 17),
-                          title: Text("Ez GÓL volt"),
-                          dense: true)),
-                if (type != "shot")
-                  const PopupMenuItem(
-                      value: "shot",
-                      child: ListTile(
-                          leading: Icon(Icons.sports_handball, size: 17),
-                          title: Text("Ez csak lövés volt"),
-                          dense: true)),
+          // Javítás + 3D: a felismerés téved, és az edző egy rossz
+          // eredményű jelentésnek egyetlen számát sem hiszi el — a
+          // javítás gól/lövés sorokon él. A "Megnézem 3D-ben" minden
+          // soron: a jelenet térben, TV-kamerával játszódik le.
+          PopupMenuButton<String>(
+            tooltip: "Javítás / 3D",
+            enabled: !_correcting && _sourceLabel != "demó",
+            iconSize: 15,
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.more_vert,
+                color: AppColors.textFaint),
+            color: AppColors.surface,
+            onSelected: (v) {
+              if (v == "goal" || v == "shot") {
+                _correct("set_type", t, v);
+              } else if (v == "remove") {
+                _correct("remove", t, type);
+              } else if (v == "3d") {
+                Navigator.of(context).pushReplacement(MaterialPageRoute(
+                    builder: (_) => Court3DScreen(
+                        matchId: widget.matchId, startS: t / fps)));
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                  value: "3d",
+                  child: ListTile(
+                      leading: Icon(Icons.view_in_ar, size: 17),
+                      title: Text("Megnézem 3D-ben"),
+                      dense: true)),
+              if (type == "shot")
+                const PopupMenuItem(
+                    value: "goal",
+                    child: ListTile(
+                        leading: Icon(Icons.sports_score, size: 17),
+                        title: Text("Ez GÓL volt"),
+                        dense: true)),
+              if (type == "goal")
+                const PopupMenuItem(
+                    value: "shot",
+                    child: ListTile(
+                        leading: Icon(Icons.sports_handball, size: 17),
+                        title: Text("Ez csak lövés volt"),
+                        dense: true)),
+              if (type == "goal" || type == "shot")
                 const PopupMenuItem(
                     value: "remove",
                     child: ListTile(
                         leading: Icon(Icons.delete_outline, size: 17),
                         title: Text("Nem volt ilyen esemény"),
                         dense: true)),
-              ],
-            ),
+            ],
+          ),
         ]),
       ),
     );

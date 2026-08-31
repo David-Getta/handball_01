@@ -2643,3 +2643,10 @@ def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     # motorról — a headset-út első lépcsője.
     assert "_bongeszos3d" in harom and "/view3d" in harom, (
         "nincs böngészős 3D / VR megnyitó")
+    # Eseményből érkezve a jelenet ELŐTT pár másodperccel indul,
+    # TV-kamerával — kattintás nélkül nézhető.
+    assert "startS" in harom, "nincs jelenet-ugrás paraméter"
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "Megnézem 3D-ben" in meccs, (
+        "az esemény-sorból nem nyílik a 3D jelenet")

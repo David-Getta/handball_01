@@ -3,6 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.89 óta)
+
+- **"Megnézem 3D-ben" — az esemény-sorból a térbe** (meccs-elemző +
+  3D pálya): az Események lista minden sorának ⋮ menüjében új pont
+  visz a 3D pályára — a jelenet pár másodperccel az esemény előtt,
+  TV-kamerával indul, kattintás nélkül nézhető. A javítás-menü
+  (gól/lövés átminősítés, törlés) változatlanul a gól/lövés sorokon él.
+
 ## v0.1.89 — kiadva (2026-08-30)
 
 > Kiadás-jegyzet: a 3D/VR-út két lépcsője. A Játékos-kamerával a meccs

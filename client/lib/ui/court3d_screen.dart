@@ -31,7 +31,11 @@ import "shell/app_shell.dart";
 class Court3DScreen extends StatefulWidget {
   /// Ha a könyvtárból jövünk, a megnyitandó meccs; menüből null (választó).
   final String? matchId;
-  const Court3DScreen({super.key, this.matchId});
+
+  /// Ha eseményből jövünk ("Megnézem 3D-ben"), a jelenet kezdete
+  /// másodpercben: a lejátszó ide ugrik, és TV-kamerával indul.
+  final double? startS;
+  const Court3DScreen({super.key, this.matchId, this.startS});
 
   @override
   State<Court3DScreen> createState() => _Court3DScreenState();
@@ -128,11 +132,21 @@ class _Court3DScreenState extends State<Court3DScreen>
           (p.team == Team.home ? h : a).add(mez);
         }
       }
+      // Eseményből érkezve pár másodperccel a jelenet ELŐTT kezdünk
+      // (a felvezetés nélkül a jelenet értelmezhetetlen), és a
+      // TV-kamera viszi a képet — kattintás nélkül nézhető.
+      final fps0 = m.meta.fps > 0 ? m.meta.fps : 25.0;
+      final ugras = widget.startS == null
+          ? 0.0
+          : ((widget.startS! - 4.0) * fps0)
+              .clamp(0.0, (m.frames.length - 1).toDouble());
       setState(() {
         _match = m;
         _matchId = id;
         _demo = false;
-        _playhead = 0;
+        _playhead = ugras;
+        _playing = widget.startS != null;
+        _tvKamera = widget.startS != null;
         _loading = false;
         _mezekHome = h.toList()..sort();
         _mezekAway = a.toList()..sort();
