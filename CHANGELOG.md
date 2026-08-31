@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.89 óta)
 
+- **A 3D felfedezhető** (súgók): a gyorsbillentyű-lista új "3D
+  pályán" csoportot kapott (WASD, R/F, Shift, Szóköz), az "Első
+  lépések" pedig új, 7. lépésben tanítja a 3D pályát — TV-kamera,
+  Játékos-kamera, jelenet-ugrás, böngészős VR.
+
 - **"Megnézem 3D-ben" — az esemény-sorból a térbe** (meccs-elemző +
   3D pálya): az Események lista minden sorának ⋮ menüjében új pont
   visz a 3D pályára — a jelenet pár másodperccel az esemény előtt,

@@ -2650,3 +2650,12 @@ def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
     assert "Megnézem 3D-ben" in meccs, (
         "az esemény-sorból nem nyílik a 3D jelenet")
+    # És a 3D felfedezhető: a gyorsbillentyű-súgónak és az "Első
+    # lépések"-nek is tanítania kell.
+    hej2 = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert '"3D pályán"' in hej2, "a billentyű-súgó nem tanítja a 3D-t"
+    kezdo2 = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert '"3D pálya"' in kezdo2 or "3D pálya" in kezdo2, (
+        "az Első lépések nem tanítja a 3D pályát")

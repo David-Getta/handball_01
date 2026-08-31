@@ -219,6 +219,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     "Meccs-nézet → Felderítés: ellenfél-jelentés kulcsokkal. "
                     "Kezdőlap → Egyesített felderítés (több meccsből) és "
                     "Fejlődés (két időszak összevetése)."),
+                step("7", "3D pálya",
+                    "A kész meccs térben is bejárható (bal menü → 3D "
+                    "pálya): WASD + egér, TV-kamera a labdára, "
+                    "Játékos-kamera mezszám szerint. Az Események lista "
+                    "⋮ menüjéből bármely jelenet 3D-ben nyílik; a "
+                    "\"Böngészős 3D / VR\" gomb headset-re kész oldalt ad."),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   "Az app magától frissül (arany sáv). Minden adat a saját "

@@ -127,6 +127,12 @@ const List<(String, List<(String, String)>)> kShortcutGroups = [
     ("Q / E  vagy  ↑ / ↓",
      "előző / következő ugrópont az aktív szűrő szerint"),
   ]),
+  ("3D pályán", [
+    ("W / A / S / D", "mozgás a pályán (egér-húzás: nézelődés)"),
+    ("R / F", "fel / le"),
+    ("Shift", "gyors mozgás"),
+    ("Szóköz", "lejátszás / szünet"),
+  ]),
 ];
 
 /// A gyorsbillentyű-súgó megnyitása (bárhonnan).
