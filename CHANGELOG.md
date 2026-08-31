@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.93 óta)
+## v0.1.93 — kiadva (2026-08-31)
+
+> Kiadás-jegyzet: a TELJES pontosság-lánc az appban. Gyűjtés a saját
+> meccseidből, átnézés a beépített címkézőben, tanítás egy gombbal —
+> a kész modell magától élesbe áll, és a következő feldolgozás már a
+> kézilabdára hangolt felismeréssel megy.
 
 - **Tanítás egy gombbal — a finomhangolás-lánc vége is az appban**
   (Címkéző → "Tanítás indítása"): az átnézett képekből a modell
@@ -14,13 +19,6 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   következő feldolgozás már azzal megy. Ezzel a teljes
   pontosság-lánc — gyűjtés → címkézés → tanítás → éles — az appból
   végigjárható.
-
-## v0.1.93 — kiadva (2026-08-31)
-
-> Kiadás-jegyzet: a pontosság útja a kezedben. A Továbbiak menüből
-> gyűjthetsz tanítóadatot a saját meccseidből, és a beépített
-> címkézővel át is nézheted — a finomhangolt detektor innen már csak
-> egy tanítás-parancs (docs/FINETUNE.md).
 
 - **Beépített címkéző — a tanítóadat átnézése az appban** (kezdőlap
   → Továbbiak → Címkéző): a finomhangolás-lánc középső lépése eddig
