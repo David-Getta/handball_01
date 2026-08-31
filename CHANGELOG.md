@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.89 óta)
+## Kiadatlan (a v0.1.91 óta)
+
+- **A böngészős 3D ott folytatja, ahol az appban tartasz** (3D
+  pálya): a "Böngészős 3D / VR" gomb átadja az aktuális pillanatot
+  (?t=mp), az oldal ott nyílik és rögtön játszik — és a cím
+  megosztható: ugyanaz a link ugyanazt a jelenetet hozza.
+
+## v0.1.91 — kiadva (2026-08-31)
+
+> Kiadás-jegyzet: az élő kalibrálásod két jelzésének javítása — a
+> mentés-gomb nem lóg le többé, és a sarok nyilakkal, képpontonként
+> finomítható, míg a rajzolt kapu ráül a valódira.
 
 - **A sarok nyilakkal finomítható** (kalibráció): "a kapu egy kicsit
   el van csúszva" — az egérrel a hajszál-pontos igazítás kínszenvedés.
@@ -25,6 +36,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   pályán" csoportot kapott (WASD, R/F, Shift, Szóköz), az "Első
   lépések" pedig új, 7. lépésben tanítja a 3D pályát — TV-kamera,
   Játékos-kamera, jelenet-ugrás, böngészős VR.
+
+## v0.1.90 — kiadva (2026-08-31)
 
 - **"Megnézem 3D-ben" — az esemény-sorból a térbe** (meccs-elemző +
   3D pálya): az Események lista minden sorának ⋮ menüjében új pont

@@ -236,6 +236,10 @@ def test_a_bongeszos_3d_oldal_osszeall():
     assert len(adat["frames"]) <= 100 * VIEW3D_MAX_FPS / 10.0 + 1, (
         "a beágyazott adat nincs ritkítva")
 
+    # Jelenet-ugrás: a ?t= paramétert az oldal érti (URLSearchParams),
+    # az appból az aktuális pillanat így folytatódik a böngészőben.
+    assert "URLSearchParams" in oldal, "nincs ?t= jelenet-ugrás"
+
     c, _tmp = _client([m])
     r = c.get("/matches/v3d/view3d")
     assert r.status_code == 200

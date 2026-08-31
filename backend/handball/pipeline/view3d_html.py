@@ -173,11 +173,17 @@ szinpad.add(labda);
 // Lejátszás + interpoláció.
 const frames = ADAT.frames;
 const veg = frames.length ? frames[frames.length-1][0] : 0;
-let ido = 0, megy = false, utolso = performance.now();
+// ?t=349 — a jelenet-ugrás: az appból (vagy megosztott linkből) az
+// oldal az adott játékidő-másodpercen nyílik, és rögtön játszik.
+const t0 = Math.max(0, Math.min(veg,
+  parseFloat(new URLSearchParams(location.search).get("t") || "0") || 0));
+let ido = t0, megy = t0 > 0, utolso = performance.now();
 const csuszka = document.getElementById("csuszka");
 csuszka.max = veg;
 const lejatszasGomb = document.getElementById("lejatszas");
 lejatszasGomb.onclick = () => { megy = !megy; lejatszasGomb.textContent = megy ? "⏸" : "▶"; };
+if (megy) lejatszasGomb.textContent = "⏸";
+csuszka.value = ido;
 csuszka.oninput = () => { ido = parseFloat(csuszka.value); };
 function keres(t){
   let lo = 0, hi = frames.length-1;

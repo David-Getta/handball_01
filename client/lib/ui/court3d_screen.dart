@@ -380,7 +380,12 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// biztonságos környezetet kér, a localhost az — Quest-féle headsetről
   /// USB-kábellel és "adb reverse"-szel érhető el.
   Future<void> _bongeszos3d() async {
-    final url = "${_api.baseUrl}/matches/$_matchId/view3d";
+    // A 3D fül AKTUÁLIS pillanatát visszük át (?t=mp): a böngészős
+    // nézet ugyanott folytatja, ahol az appban tartasz.
+    final m = _match;
+    final fpsB = (m != null && m.meta.fps > 0) ? m.meta.fps : 25.0;
+    final tS = (_playhead / fpsB).toStringAsFixed(1);
+    final url = "${_api.baseUrl}/matches/$_matchId/view3d?t=$tS";
     try {
       if (Platform.isMacOS) {
         await Process.run("open", [url]);
