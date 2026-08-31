@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.89 óta)
 
+- **A sarok nyilakkal finomítható** (kalibráció): "a kapu egy kicsit
+  el van csúszva" — az egérrel a hajszál-pontos igazítás kínszenvedés.
+  Az utoljára megfogott sarok mostantól a NYÍL-billentyűkkel
+  képpontonként tolható (Shift: nagyobb lépés), arany gyűrű mutatja,
+  melyik mozog, és a sáv súgó-sora tanítja: addig told, míg a rajzolt
+  kapu és a 6 m-es ív ráül a valódira.
+
+- **A kalibráció mentés-gombja mindig elérhető** (kalibráció): a jobb
+  oldali sáv alacsonyabb ablaknál lelógott, és a "térfél mentése" /
+  "Kész" gombra nem lehetett rákattintani — a felhasználó jelezte. A
+  sáv mostantól görgethető.
+
+- **A jegyzet-sorból is nyílik a 3D** (jegyzetek): a megjelölt
+  pillanat a térbeli nézetben is visszajátszható — a jegyzet az edző
+  legjobb jelenet-listája, a 3D gomb mostantól ott is ott van.
+
 - **A 3D felfedezhető** (súgók): a gyorsbillentyű-lista új "3D
   pályán" csoportot kapott (WASD, R/F, Shift, Szóköz), az "Első
   lépések" pedig új, 7. lépésben tanítja a 3D pályát — TV-kamera,

@@ -2659,3 +2659,51 @@ def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
         encoding="utf-8")
     assert '"3D pálya"' in kezdo2 or "3D pálya" in kezdo2, (
         "az Első lépések nem tanítja a 3D pályát")
+    # A jegyzet az edző legjobb jelenet-listája — onnan is nyílik a 3D.
+    jegyzet = (lib / "ui" / "notes_screen.dart").read_text(
+        encoding="utf-8")
+    assert "Court3DScreen" in jegyzet and "Megnézem 3D-ben" in jegyzet, (
+        "a jegyzet-sorból nem nyílik a 3D jelenet")
+
+
+def test_a_kalibracio_oldalsavja_gorgetheto():
+    """ŐR: alacsonyabb ablaknál a kalibráció jobb oldali sávjának alja
+    (a mentés / Kész gomb) lelógott, és nem lehetett rákattintani — a
+    felhasználó jelezte. A sáv görgethető, és nincs benne Spacer (az
+    görgethető oszlopban kivételt dobna)."""
+    import pytest
+    import re
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kal = (lib / "ui" / "calibration_screen.dart").read_text(
+        encoding="utf-8")
+    panel = kal[kal.index("Widget _sidePanel"):]
+    panel = panel[:panel.index("\n  /// ")]
+    assert "SingleChildScrollView" in panel, (
+        "a kalibráció oldalsávja nem görgethető")
+    assert not re.search(r"\bSpacer\(", panel), (
+        "Spacer görgethető oszlopban — futásidejű kivétel lenne")
+
+
+def test_a_sarok_nyilakkal_finomithato():
+    """ŐR: "a kapu egy kicsit el van csúszva" — az egérrel a
+    hajszál-pontos sarok-igazítás kínszenvedés. Az utoljára fogott
+    sarok a NYILAKKAL képpontonként tolható (Shift: nagyobb lépés),
+    arany gyűrű mutatja, melyik mozog, és a súgó-sor tanítja."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kal = (lib / "ui" / "calibration_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_nudgeKey" in kal and "_lastCorner" in kal, (
+        "nincs nyíl-billentyűs sarok-finomítás")
+    assert "arrowLeft" in kal and "isShiftPressed" in kal
+    assert "NYILAKKAL" in kal, "a súgó-sor nem tanítja a nyilakat"
+    # Az aktív sarok kiemelése — enélkül nem látszik, mit mozgatsz.
+    assert "i == active" in kal, "nincs aktív-sarok kiemelés"

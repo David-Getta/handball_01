@@ -113,6 +113,11 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   // válassz, ahol a bejelölendő terület a legjobban látszik.
   late int _frameIdx = widget.frameIndex;
   int? _drag;
+  // NYÍL-FINOMÍTÁS: az utoljára megfogott sarok — a nyilak ezt tolják
+  // 1 képpontonként (Shift: 5). Egérrel a hajszál-pontos igazítás
+  // kínszenvedés, pedig a kapu/6 m-es ív pont ezen múlik.
+  int? _lastCorner;
+  Size? _canvasSize;
   bool _saved = false;
 
   // Sarok-JAVASLAT a felismert pályavonalakból: a motor a hosszú, egyenes
@@ -230,6 +235,45 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     );
   }
 
+  /// Nyíl-billentyűs finomítás: az utoljára fogott sarok 1 képpontot
+  /// lép (Shift: 5) — a kapu / 6 m-es ív hajszál-igazításához.
+  KeyEventResult _nudgeKey(FocusNode node, KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final idx = _lastCorner;
+    final size = _canvasSize;
+    if (idx == null || size == null) return KeyEventResult.ignored;
+    double dx = 0, dy = 0;
+    if (e.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      dx = -1;
+    } else if (e.logicalKey == LogicalKeyboardKey.arrowRight) {
+      dx = 1;
+    } else if (e.logicalKey == LogicalKeyboardKey.arrowUp) {
+      dy = -1;
+    } else if (e.logicalKey == LogicalKeyboardKey.arrowDown) {
+      dy = 1;
+    } else {
+      return KeyEventResult.ignored;
+    }
+    final lepes = HardwareKeyboard.instance.isShiftPressed ? 5.0 : 1.0;
+    setState(() {
+      final next = [..._activePts];
+      if (idx >= next.length) return;
+      next[idx] = Offset(
+        (next[idx].dx + dx * lepes / size.width).clamp(0.0, 1.0),
+        (next[idx].dy + dy * lepes / size.height).clamp(0.0, 1.0),
+      );
+      if (_fineTune) {
+        _six = next;
+      } else {
+        _corners = next;
+      }
+      _saved = false;
+    });
+    return KeyEventResult.handled;
+  }
+
   Widget _frameCard() {
     return Container(
       decoration: AppTheme.card(),
@@ -237,8 +281,12 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       child: LayoutBuilder(
         builder: (context, c) {
           final size = Size(c.maxWidth, c.maxHeight);
+          _canvasSize = size;
           final pts = [for (final f in _activePts) Offset(f.dx * size.width, f.dy * size.height)];
-          return GestureDetector(
+          return Focus(
+            autofocus: true,
+            onKeyEvent: _nudgeKey,
+            child: GestureDetector(
             onPanStart: (d) {
               double best = 32;
               _drag = null;
@@ -246,6 +294,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                 final dist = (pts[i] - d.localPosition).distance;
                 if (dist < best) { best = dist; _drag = i; }
               }
+              if (_drag != null) setState(() => _lastCorner = _drag);
             },
             onPanUpdate: (d) {
               if (_drag == null) return;
@@ -285,10 +334,12 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                       rotate: _rotate,
                       margin: _margin,
                       fine: _fineTune,
+                      active: _lastCorner,
                       drawBackground: _frameBytes == null),
                   size: size,
                 ),
               ],
+            ),
             ),
           );
         },
@@ -451,10 +502,13 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   }
 
   Widget _sidePanel() {
+    // GÖRGETHETŐ: alacsonyabb ablaknál a mentés / Kész gomb lelógott,
+    // és nem lehetett rákattintani — a felhasználó jelezte.
     return Container(
       decoration: AppTheme.card(),
       padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (!_fineTune) ...[
@@ -550,8 +604,14 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             _cornerRow("Távoli-jobb", 1),
             _cornerRow("Közeli-jobb", 2),
             _cornerRow("Közeli-bal", 3),
+            const SizedBox(height: 6),
+            Text(
+                "Finomítás: fogd meg a sarkot, majd a NYILAKKAL told "
+                "képpontonként (Shift: nagyobb lépés) — addig, míg a "
+                "rajzolt kapu és a 6 m-es ív ráül a valódira.",
+                style: AppText.label.copyWith(fontSize: 11)),
           ],
-          const Spacer(),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             _fineTune
                 ? "ÖSSZENÉZET: a bal és a jobb térfél a SAJÁT bekalibrált "
@@ -680,6 +740,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             ],
           ],
         ],
+        ),
       ),
     );
   }
@@ -1005,10 +1066,11 @@ class _CalibPainter extends CustomPainter {
   final bool rotate; // 180°-os forgatás (túloldali kamera)
   final double margin; // a képkocka körüli sáv aránya (kicsinyítésnél nő)
   final bool fine; // összenézet: 6 pont (4 sarok + felezővonal két vége)
+  final int? active; // az utoljára fogott sarok — a nyilak ezt tolják
   final bool drawBackground; // helyőrző háttér (ha nincs valódi képkocka)
   _CalibPainter(this.corners,
       {this.region = "full", this.rotate = false, this.margin = 0.12,
-       this.fine = false, this.drawBackground = true});
+       this.fine = false, this.active, this.drawBackground = true});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1086,12 +1148,20 @@ class _CalibPainter extends CustomPainter {
     _drawHandles(canvas);
   }
 
-  /// A húzható pontok (fogantyúk) kirajzolása.
+  /// A húzható pontok (fogantyúk) kirajzolása; az aktív (nyilakkal
+  /// tolható) sarok arany gyűrűt kap, hogy látszódjon, mit mozgatsz.
   void _drawHandles(Canvas canvas) {
-    for (final c in corners) {
+    for (int i = 0; i < corners.length; i++) {
+      final c = corners[i];
       canvas.drawCircle(c, 11, Paint()..color = AppColors.accent.withOpacity(0.25));
       canvas.drawCircle(c, 7, Paint()..color = AppColors.accent);
       canvas.drawCircle(c, 7, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.5);
+      if (i == active) {
+        canvas.drawCircle(c, 14, Paint()
+          ..color = AppColors.gold
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2);
+      }
     }
   }
 

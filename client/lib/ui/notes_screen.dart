@@ -20,6 +20,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "error_text.dart";
+import "court3d_screen.dart";
 import "match_screen.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
@@ -294,6 +295,25 @@ class _NotesScreenState extends State<NotesScreen> {
             ),
             const Icon(Icons.play_circle_outline,
                 size: 18, color: AppColors.accent),
+            // A megjelölt pillanat 3D-ben: a jegyzet az edző legjobb
+            // jelenet-listája — a térbeli visszanézés innen egy gomb.
+            IconButton(
+              tooltip: "Megnézem 3D-ben",
+              iconSize: 16,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(),
+              padding: const EdgeInsets.only(left: 8),
+              icon: const Icon(Icons.view_in_ar,
+                  color: AppColors.textSecondary),
+              onPressed: () {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => Court3DScreen(
+                    matchId: n["match_id"] as String,
+                    startS: ((n["t_s"] as num?) ?? 0).toDouble(),
+                  ),
+                ));
+              },
+            ),
             IconButton(
               tooltip: "Jegyzet törlése",
               iconSize: 15,
