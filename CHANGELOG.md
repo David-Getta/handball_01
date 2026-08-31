@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.91 óta)
+## v0.1.93 — kiadva (2026-08-31)
+
+> Kiadás-jegyzet: a pontosság útja a kezedben. A Továbbiak menüből
+> gyűjthetsz tanítóadatot a saját meccseidből, és a beépített
+> címkézővel át is nézheted — a finomhangolt detektor innen már csak
+> egy tanítás-parancs (docs/FINETUNE.md).
 
 - **Beépített címkéző — a tanítóadat átnézése az appban** (kezdőlap
   → Továbbiak → Címkéző): a finomhangolás-lánc középső lépése eddig
@@ -23,6 +28,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   gyűjtés a háttérben fut, a végén az app megmondja, hány kép készült,
   a labda a képek hány százalékán van, és mi a következő lépés
   (címke-átnézés CVAT/LabelImg-ben, majd tanítás).
+
+## v0.1.92 — kiadva (2026-08-31)
 
 - **A böngészős 3D ott folytatja, ahol az appban tartasz** (3D
   pálya): a "Böngészős 3D / VR" gomb átadja az aktuális pillanatot
