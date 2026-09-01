@@ -5362,6 +5362,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.decisions import ball_carry_players
+            res["ball_carry_players"] = ball_carry_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.substitutions import substitution_blocks
             res["substitution_blocks"] = substitution_blocks(match)
         except Exception:
@@ -7653,6 +7658,9 @@ def create_app():
                 from ..pipeline.decisions import hold_time_players
                 _layer("hold_time_players",
                        lambda: hold_time_players(match))
+                from ..pipeline.decisions import ball_carry_players
+                _layer("ball_carry_players",
+                       lambda: ball_carry_players(match))
                 from ..pipeline.substitutions import substitution_blocks
                 _layer("substitution_blocks",
                        lambda: substitution_blocks(match))

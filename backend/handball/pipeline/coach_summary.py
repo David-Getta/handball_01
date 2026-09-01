@@ -824,6 +824,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{htp[side]['avg_s']:.1f} mp).")
     except Exception:
         pass
+    # Labdavezetés-táv: ki cipeli sokat a labdát a csapatátlaghoz képest.
+    try:
+        from .decisions import ball_carry_players
+        bcp = ball_carry_players(match)
+        for side, name in (("home", home), ("away", away)):
+            aki = bcp[side]["carrier"]
+            if aki is None:
+                continue
+            jn = aki["jersey"] or _jersey_of_track(match).get(
+                aki["player_id"])
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{aki['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} viszi a legtöbbet a labdát: "
+                     f"átlag {aki['avg_m']:.1f} métert labdás "
+                     f"szakaszonként ({aki['holds']} szakasz, a "
+                     f"csapatátlag {bcp[side]['avg_m']:.1f} m) — nála "
+                     f"van idő a leszúrásra.")
+    except Exception:
+        pass
     # Csere-blokkok: egyesével cseréltek, vagy egységekben.
     try:
         from .substitutions import substitution_blocks

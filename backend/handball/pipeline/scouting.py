@@ -658,6 +658,11 @@ class ScoutingReport:
     # átlagos tartás = frames / holds / fps).
     hold_players: list = field(default_factory=list)
     hold_fps: float = 25.0
+    # Labdavezetésük: [{"player_id", "jersey", "holds", "meters"}] —
+    # játékosonként a labdás szakaszok száma és a bennük labdával
+    # megtett út méterben; darabszám és összeg, meccsek közt pontosan
+    # összegződnek (átlagos labdás út = meters / holds).
+    carry_players: list = field(default_factory=list)
     # Lövőerő-esésük: félidőnként a mért lövések száma + a
     # sebesség-összeg (km/h) — darabszámok és összegek, meccsek közt
     # pontosan összegződnek (félidő-átlag = összeg / darab).
@@ -8387,6 +8392,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "rá jöjjön a kettőzés és a letámadás, mert nála "
                 "lassul a támadásuk.")
 
+    # Labdavezetés-táv: ki CIPELI náluk a labdát (nem tartja — viszi).
+    _bcp_rows = [p for p in (rep.carry_players or []) if p["holds"] >= 5]
+    _bcp_holds = sum(p["holds"] for p in (rep.carry_players or []))
+    _bcp_m = sum(p["meters"] for p in (rep.carry_players or []))
+    if _bcp_rows and _bcp_holds >= 5:
+        _bcp_avg = _bcp_m / _bcp_holds
+        _bcp_top = max(_bcp_rows, key=lambda p: p["meters"] / p["holds"])
+        _bcp_pm = _bcp_top["meters"] / _bcp_top["holds"]
+        if _bcp_pm - _bcp_avg >= 3.0:  # = CARRY_LONG_GAP_M
+            _bcp_who = (f"{_bcp_top['jersey']}-es mezszámú"
+                        if _bcp_top.get("jersey") is not None
+                        else f"{_bcp_top['player_id']} azonosítójú")
+            keys.append(
+                f"A(z) {_bcp_who} játékosuk viszi a labdát (átlag "
+                f"{_bcp_pm:.1f} m labdás szakaszonként a csapatátlag "
+                f"{_bcp_avg:.1f} m helyett) — futó labdásnál a labda "
+                "elvehető: rá menjen a leszúrás és a halászás, az ő "
+                "útvonalát zárjátok el.")
+
     # Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak.
     if rep.fsw_attacks >= 6 and rep.fsw_pairs > 0 and rep.fsw_labels:
         _fsw_main = max(rep.fsw_labels.items(), key=lambda kv: kv[1])[0]
@@ -12270,6 +12294,11 @@ def _scout_team_cached(match: Match, team: Team,
              "holds": p["holds"],
              "frames": round(p["seconds"] * _hfps)}
             for p in _htp(match, config)[team.value]["players"]]
+        from .decisions import ball_carry_players as _bcp
+        rep.carry_players = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "holds": p["holds"], "meters": p["meters"]}
+            for p in _bcp(match, config)[team.value]["players"]]
         rep.fsw_labels = dict(fswrec["labels"])
         rep.fsw_attacks = fswrec["attacks"]
         rep.fsw_pairs = max(0, fswrec["attacks"] - 1)
@@ -13436,6 +13465,28 @@ def _merge_hold_players(reports) -> list:
                                  / max(1, kv[1]["holds"])))]
 
 
+def _merge_carry_players(reports) -> list:
+    """Labdavezetés: játékosonként a labdás szakaszok és a labdával
+    megtett méterek összegzése (az átlagos labdás út szerint
+    csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for p in (r.carry_players or []):
+            rec = tally.setdefault(p["player_id"],
+                                   {"jersey": None, "holds": 0,
+                                    "meters": 0.0})
+            if rec["jersey"] is None:
+                rec["jersey"] = p.get("jersey")
+            rec["holds"] += int(p.get("holds", 0))
+            rec["meters"] += float(p.get("meters", 0.0))
+    return [{"player_id": pid,
+             **{**rec, "meters": round(rec["meters"], 1)}}
+            for pid, rec in sorted(
+                tally.items(),
+                key=lambda kv: -(kv[1]["meters"]
+                                 / max(1, kv[1]["holds"])))]
+
+
 def _merge_fsw_labels(reports) -> dict:
     """Védekezés-váltás: formánként a védekezett támadások összegzése
     (a támadás-szám szerint csökkenő)."""
@@ -14431,6 +14482,27 @@ def matchup_plan(own: "ScoutingReport",
             f"({own.clutch_goals_for}–{own.clutch_goals_against} a "
             "döntő szakaszban) — az utolsó percekben rá kell terhelni: "
             "az ő döntés-kényszere a ti kontrátok.")
+
+    # 458) Az ő labdahordójuk × a ti labdaszerző védekezésetek: a futó
+    # labdás elvehető labdát jelent — a leszúrásnak célpontja van.
+    _p458 = [p for p in (opp.carry_players or []) if p["holds"] >= 5]
+    _h458 = sum(p["holds"] for p in (opp.carry_players or []))
+    if _p458 and _h458 >= 5 and own.trans_steals >= 5:
+        _avg458 = sum(p["meters"] for p in (opp.carry_players or [])) \
+            / _h458
+        _top458 = max(_p458, key=lambda p: p["meters"] / p["holds"])
+        _m458 = _top458["meters"] / _top458["holds"]
+        if _m458 - _avg458 >= 3.0:  # = CARRY_LONG_GAP_M
+            _who458 = (f"{_top458['jersey']}-es mezszámú"
+                       if _top458.get("jersey") is not None
+                       else f"{_top458['player_id']} azonosítójú")
+            plan.append(
+                f"A(z) {_who458} játékosuk viszi a labdát (átlag "
+                f"{_m458:.1f} m labdás szakaszonként a csapatátlag "
+                f"{_avg458:.1f} m helyett), ti pedig jó labdaszerzők "
+                f"vagytok ({own.trans_steals} szerzés) — futó "
+                "labdásnál a labda elvehető: az ő indulásaira "
+                "időzítsétek a leszúrást, és onnan indul a kontrátok.")
 
     from .tactics import ATV_MIN_ATTACKS as _A449
     from .tactics import ATV_ONE_TEMPO_PCT as _A449P
@@ -22749,6 +22821,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sbl_block_waves=sum(r.sbl_block_waves for r in reports),
         hold_players=_merge_hold_players(reports),
         hold_fps=(reports[0].hold_fps if reports else 25.0),
+        carry_players=_merge_carry_players(reports),
         fsw_labels=_merge_fsw_labels(reports),
         fsw_attacks=sum(r.fsw_attacks for r in reports),
         fsw_pairs=sum(r.fsw_pairs for r in reports),

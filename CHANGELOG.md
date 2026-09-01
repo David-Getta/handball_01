@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.94 óta)
 
+- **Labdavezetés-táv** (motor + elemzés + meccs-csomag + edzői
+  összefoglaló + felderítés + meccsterv + edzés-fókusz + kliens-csempe):
+  KI mennyit MOZOG a labdával. A labdatartás azt méri, meddig van
+  valakinél a labda — ez azt, hogy közben hány métert cipeli
+  (követés-ugrás kiszűrve). Edzői olvasat: az ellenfél labdahordója a
+  leszúrás és a halászás célpontja — futó labdásnál a labda elvehető,
+  és nála lassul a szervezés; saját oldalon a "vidd kevesebbet, add
+  korábban" névre szólóan (új edzés-szabály és meccsterv-páros).
+
 - **A lezárt feldolgozás mutatja, mikor készült** (Feldolgozások
   képernyő): a lezárt sorokon eddig csak a név állt — több azonos nevű
   futás megkülönböztethetetlen volt. Mostantól ott a befejezés ideje

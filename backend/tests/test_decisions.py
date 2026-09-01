@@ -277,6 +277,63 @@ def test_hold_time_players_finds_where_the_ball_stops():
     assert few["home"]["slowest"] is None
 
 
+def test_ball_carry_players_finds_the_carrier():
+    """Az 1-es labdás szakaszonként ~10 métert visz, a 2-es ~1-et, a
+    3-as követés-ugrással "mozog" (nem számít bele) → az 1-es a
+    labdahordó; kevés szakasznál nincs megnevezett játékos."""
+    from handball.pipeline.decisions import ball_carry_players
+
+    frames = []
+    t = 0
+
+    def _carry(pid, meters, seconds=2.0, step=None):
+        """`seconds` mp-ig a pid-es hazai játékosnál a labda, és közben
+        `meters` métert halad vele (vagy `step` m/kocka ugrásokkal)."""
+        nonlocal t
+        n = int(seconds * 25)
+        lepes = meters / (n - 1) if step is None else step
+        x = 5.0
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=pid, team=Team.HOME, x=x, y=10.0,
+                               source=PositionSource.MEASURED,
+                               confidence=1.0),
+            ], ball=Ball(x=x, y=10.0, confidence=1.0)))
+            x += lepes
+            t += 1
+        for _ in range(3):      # labda nélküli szünet: zárul a szakasz
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    for _ in range(5):
+        _carry(1, 10.0)
+    for _ in range(5):
+        _carry(2, 1.0)
+    for _ in range(5):
+        # 0,5 m/kocka = 12,5 m/s — CARRY_MAX_STEP_MS felett: ugrás.
+        _carry(3, 0.0, step=0.5)
+
+    meta = MatchMeta(match_id="c", home_team="H", away_team="A", fps=25.0)
+    bcp = ball_carry_players(Match(meta, frames))
+    h = bcp["home"]
+    one = next(p for p in h["players"] if p["player_id"] == 1)
+    two = next(p for p in h["players"] if p["player_id"] == 2)
+    three = next(p for p in h["players"] if p["player_id"] == 3)
+    assert one["holds"] == 5 and one["avg_m"] == 10.0
+    assert two["avg_m"] == 1.0
+    assert three["avg_m"] == 0.0        # a követés-ugrás nem futás
+    assert h["carrier"] is not None and h["carrier"]["player_id"] == 1
+    assert h["carrier"]["gap_m"] > 0
+    # A vendégnek nincs labdás szakasza → nincs átlag, nincs ítélet.
+    assert bcp["away"]["holds"] == 0
+    assert bcp["away"]["avg_m"] is None
+    assert bcp["away"]["carrier"] is None
+
+    # Egyetlen szakasz: kevés minta → nincs megnevezett játékos.
+    few = ball_carry_players(Match(meta, frames[:53]))
+    assert few["home"]["carrier"] is None
+
+
 # ---- Passz-sebesség (éles vagy lágy labdajáratás) ----------------------------
 
 def _speed_match(flight_frames, n_passes=12, dist_m=8.0, fps=25.0):

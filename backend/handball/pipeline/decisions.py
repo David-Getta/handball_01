@@ -478,6 +478,110 @@ def hold_time_players(match: Match,
     return out
 
 
+# Labdavezetés-táv: az érintés-küszöb és a minta-minimum a
+# labdatartáséval közös (HOLD_MIN_S, HOLD_MIN_HOLDS — ugyanaz a
+# "mi számít birtoklásnak" kérdés); e feletti lépés-sebesség
+# követés-ugrás, nem futás (méter/másodpercben — a kockánkénti alak a
+# ritkítástól függne); és ennyi méterrel a csapatátlag feletti
+# átlagos labdás út tesz valakit labdahordóvá.
+CARRY_MAX_STEP_MS = 10.0
+CARRY_LONG_GAP_M = 3.0
+
+
+def ball_carry_players(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Labdavezetés-táv: KI mennyit MOZOG a labdával.
+
+    A labdatartás-idő (hold_time_players) azt méri, meddig van valakinél
+    a labda — ez azt, hogy közben mennyi utat tesz meg vele. A kettő
+    nem ugyanaz: az egy helyben passzra váró beálló sokáig tartja, de
+    nem viszi; a labdával kifelé-befelé húzogató átlövő keveset tart
+    egyszerre, de sok métert cipeli. Minden labdás szakaszban a
+    birtokos elmozdulását összegezzük (a követés-ugrásnyi, CARRY_MAX_
+    STEP_MS feletti lépést kihagyva), és a szakasz métereit a
+    birtokoshoz írjuk.
+
+    Edzőileg: az ellenfél labdahordója a LESZÚRÁS és a halászás
+    célpontja — aki sokat fut a labdával, az sokáig van elvehető
+    helyzetben, és nála lassul le a támadás-szervezés. Saját oldalon a
+    "vidd kevesebbet, add korábban" téma névre szólóan.
+
+    Visszatérés csapatonként:
+      {"holds", "meters", "avg_m", "players": [{"player_id", "jersey",
+       "holds", "meters", "avg_m"}], "carrier": {..., "gap_m"}|None}
+    — players az átlagos labdás út szerint csökkenően; avg_m és
+    carrier None, ha kevés a minta (HOLD_MIN_HOLDS).
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    hold_min = max(1, int(round(HOLD_MIN_S * fps)))
+    max_step = CARRY_MAX_STEP_MS / fps  # méter/kocka
+    jersey: dict[int, int] = {}
+    tally: dict[str, dict[int, list]] = {"home": {}, "away": {}}
+    run_id = run_team = None
+    run_len = 0
+    run_m = 0.0
+    prev_xy = None
+
+    def _close():
+        """A lezáruló labdás szakasz métereinek jóváírása."""
+        if run_id is None or run_team is None:
+            return
+        if run_len < hold_min:
+            return
+        rec = tally[run_team].setdefault(run_id, [0, 0.0])
+        rec[0] += 1
+        rec[1] += run_m
+
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        pid = holder.track_id if holder is not None else None
+        side = (holder.team.value
+                if holder is not None and holder.team is not None
+                else None)
+        if holder is not None and holder.jersey_number is not None:
+            jersey.setdefault(holder.track_id, holder.jersey_number)
+        if pid != run_id or side != run_team:
+            _close()
+            run_id, run_team, run_len, run_m = pid, side, 0, 0.0
+            prev_xy = None
+        if pid is not None and side is not None:
+            run_len += 1
+            if prev_xy is not None:
+                lepes = math.hypot(holder.x - prev_xy[0],
+                                   holder.y - prev_xy[1])
+                if lepes <= max_step:  # a nagyobb ugrás nem futás
+                    run_m += lepes
+            prev_xy = (holder.x, holder.y)
+    _close()
+
+    out: dict = {}
+    for s in ("home", "away"):
+        players = []
+        for pid, (holds, meters) in tally[s].items():
+            players.append({"player_id": pid, "jersey": jersey.get(pid),
+                            "holds": holds,
+                            "meters": round(meters, 1),
+                            "avg_m": round(meters / holds, 2)})
+        players.sort(key=lambda p: -p["avg_m"])
+        n_holds = sum(p["holds"] for p in players)
+        n_m = round(sum(p["meters"] for p in players), 1)
+        team_avg = (round(n_m / n_holds, 2) if n_holds else None)
+        carrier = None
+        if n_holds >= HOLD_MIN_HOLDS and team_avg is not None:
+            cands = [{**p, "gap_m": round(p["avg_m"] - team_avg, 2)}
+                     for p in players
+                     if p["holds"] >= HOLD_MIN_HOLDS
+                     and p["avg_m"] - team_avg >= CARRY_LONG_GAP_M]
+            if cands:
+                carrier = max(cands, key=lambda p: p["gap_m"])
+        out[s] = {"holds": n_holds, "meters": n_m,
+                  "avg_m": (team_avg if n_holds >= HOLD_MIN_HOLDS
+                            else None),
+                  "players": players, "carrier": carrier}
+    return out
+
+
 # Passz-sebesség: ennyi mért passz kell az ítélethez, e felett számít
 # élesnek egy passz, és e felett már mérési hiba (követés-ugrás).
 PASS_SPEED_MIN_PASSES = 10

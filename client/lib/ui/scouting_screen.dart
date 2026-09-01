@@ -9929,6 +9929,42 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "${avg.toStringAsFixed(1)} mp) · rá a kettőzés és a letámadás";
   }
 
+  // Labdavezetés-táv: ki cipeli náluk a labdát (a backenddel azonos
+  // küszöbök: HOLD_MIN_HOLDS labdás szakasz, CARRY_LONG_GAP_M méter a
+  // csapatátlag felett).
+  String? _ballCarry(Map<String, dynamic> r) {
+    final list = r["carry_players"];
+    if (list is! List) return null;
+    int holds = 0;
+    double meters = 0.0;
+    for (final e in list) {
+      if (e is! Map) continue;
+      holds += ((e["holds"] as num?) ?? 0).toInt();
+      meters += ((e["meters"] as num?) ?? 0).toDouble();
+    }
+    if (holds < 5) return null;
+    final avg = meters / holds;
+    Map? top;
+    double topM = 0.0;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final n = ((e["holds"] as num?) ?? 0).toInt();
+      if (n < 5) continue;
+      final m = ((e["meters"] as num?) ?? 0).toDouble() / n;
+      if (top == null || m > topM) {
+        top = e;
+        topM = m;
+      }
+    }
+    if (top == null || topM - avg < 3.0) return null;
+    final who = top["jersey"] != null
+        ? "${top["jersey"]}-es"
+        : "${top["player_id"]} azonosítójú";
+    return "a(z) $who játékosuk viszi a labdát: átlag "
+        "${topM.toStringAsFixed(1)} m labdás szakaszonként (csapatátlag "
+        "${avg.toStringAsFixed(1)} m) · futó labdásnál rá a leszúrás";
+  }
+
   // Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak (6+
   // védekezett támadás, 30% váltás-arány / 80% fő forma; a
   // backend-kulccsal azonos küszöbök).
@@ -11570,6 +11606,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_formationSwitching(r) != null)
         ["Védekezés-váltás", _formationSwitching(r)!],
       if (_holdTime(r) != null) ["Labdatartás", _holdTime(r)!],
+      if (_ballCarry(r) != null) ["Labdavezetés", _ballCarry(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],

@@ -1383,6 +1383,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 477) Labdahordó: ha valakink a csapatátlagnál sokkal többet fut a
+    # labdával, az ellenfél leszúrása őt fogja megtalálni — a "vidd
+    # kevesebbet, add korábban" edzés-téma, mielőtt meccsen derül ki.
+    try:
+        from .decisions import CARRY_LONG_GAP_M, ball_carry_players
+        bcp477 = ball_carry_players(match, config)
+        for side in ("home", "away"):
+            aki = (bcp477.get(side) or {}).get("carrier")
+            if aki is None:
+                continue
+            mez = (f"#{aki['jersey']}" if aki.get("jersey") is not None
+                   else f"({aki['player_id']} azonosító)")
+            add(side, "labdás",
+                f"Labdahordó: {mez} viszi a labdát",
+                f"átlag {aki['avg_m']:.1f} m labdás szakaszonként a "
+                f"csapatátlag {bcp477[side]['avg_m']:.1f} m helyett "
+                f"(küszöb: +{CARRY_LONG_GAP_M:.0f} m) — futó labdásnál "
+                "a labda elvehető, és nála lassul a szervezés",
+                "kétérintős / háromérintős kisjáték neki súlyozva, "
+                "passz-le-fuss szabály a fektetett támadásban; a "
+                "labdavezetés helyett kapja mozgásból a visszatöltést")
+    except Exception:
+        pass
+
     # 476) Egyéni fókusz a csapat-tervben: ha ugyanaz a terület TÖBB
     # emberünknél jön elő, az már nem egyéni ügy, hanem edzés-téma.
     try:
