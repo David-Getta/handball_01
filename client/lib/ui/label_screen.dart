@@ -202,11 +202,27 @@ class _LabelScreenState extends State<LabelScreen> {
             duration: const Duration(seconds: 12),
             content: Text("A tanítás hibára futott: ${st["error"]}")));
       } else if (st["done"] == true) {
+        // A mérőszám mondja meg, MEGÉRTE-e: a mAP50 az összkép, a
+        // labda külön sora a szűk keresztmetszet.
+        var meres = "";
+        final m = st["metrics"];
+        if (m is Map) {
+          final osszes = (m["map50"] as num?)?.toDouble();
+          final labda = (m["map50_ball"] as num?)?.toDouble();
+          if (osszes != null) {
+            meres = " Találat-pontosság (mAP50): "
+                "${osszes.toStringAsFixed(0)}%";
+            if (labda != null) {
+              meres += " — a labdára ${labda.toStringAsFixed(0)}%";
+            }
+            meres += ".";
+          }
+        }
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            duration: const Duration(seconds: 12),
+            duration: const Duration(seconds: 15),
             content: Text("A tanítás KÉSZ — az új modell élesben: "
                 "${st["installed"]}. A következő feldolgozás már ezzel "
-                "fut.")));
+                "fut.$meres")));
       }
       return;
     }

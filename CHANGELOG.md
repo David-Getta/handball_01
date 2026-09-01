@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.94 óta)
 
+- **A tanítás megmondja, megérte-e** (motor + tanítás-állapot végpont
+  + címkéző): a tanítás végén eddig csak annyi látszott, hogy "kész" —
+  mostantól a mérőszámok is jönnek ("Találat-pontosság (mAP50): 72% —
+  a labdára 61%"). A labda külön sora a lényeg: kézilabdánál az a szűk
+  keresztmetszet, és így látszik, hogy a következő címkézés-kör hova
+  érdemes.
+
 - **Aktív tanulás a tanítóadat-gyűjtésben** (motor + gyűjtő végpont +
   gyűjtés-párbeszéd): a minták fele mostantól onnan jön, ahol a
   MOSTANI felismerés elvesztette a labdát (a tárolt követés

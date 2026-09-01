@@ -75,6 +75,36 @@ def preemptable_jobs(jobs, job_id: str, queue_behind: bool) -> list:
             if j.get("job_id") != job_id and j.get("status") == "running"]
 
 
+def train_metrics(eredmeny) -> dict:
+    """A tanítás mérőszámai emberi alakban (0..1 → %).
+
+    A felhasználó eddig csak annyit látott, hogy "kész" — azt nem, hogy
+    JAVULT-e a modell. A mAP50 az összkép, a labda-osztály külön sora
+    pedig a lényeg: kézilabdánál a labda a szűk keresztmetszet. Minden
+    ág izolált: ha az ultralytics más alakban adja vissza, mérőszám
+    nélkül is kész a tanítás.
+    """
+    ki: dict = {}
+    rd = getattr(eredmeny, "results_dict", None) or {}
+    for kulcs, nev in (("metrics/mAP50(B)", "map50"),
+                       ("metrics/precision(B)", "precision"),
+                       ("metrics/recall(B)", "recall")):
+        try:
+            ki[nev] = round(100.0 * float(rd[kulcs]), 1)
+        except Exception:
+            pass
+    try:  # osztályonkénti AP50 — a labda sora a lényeg
+        box = eredmeny.box
+        nevek = getattr(eredmeny, "names", {}) or {}
+        for idx, ap in zip(box.ap_class_index.tolist(),
+                           box.ap50.tolist()):
+            osztaly = str(nevek.get(int(idx), idx))
+            ki[f"map50_{osztaly}"] = round(100.0 * float(ap), 1)
+    except Exception:
+        pass
+    return ki
+
+
 def create_app():
     """Létrehozza és visszaadja a FastAPI alkalmazást.
 
@@ -1680,7 +1710,8 @@ def create_app():
             raise HTTPException(status_code=400,
                                 detail="epochs: egész szám kell")
         _train_state.update({"running": True, "done": False, "error": None,
-                             "epochs": epochs, "installed": None})
+                             "epochs": epochs, "installed": None,
+                             "metrics": None})
 
         def _tanit():
             try:
@@ -1702,6 +1733,7 @@ def create_app():
                                        "jött létre")
                 cel = install_weights(best)
                 _train_state["installed"] = str(cel)
+                _train_state["metrics"] = train_metrics(eredmeny)
                 _train_state["done"] = True
             except Exception as e:
                 _train_state["error"] = str(e)

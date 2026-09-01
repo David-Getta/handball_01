@@ -323,6 +323,40 @@ def test_a_tanitas_kapuorei():
     assert st["running"] is False
 
 
+def test_a_tanitas_merszamai_emberi_alakban():
+    """A tanítás végén a mérőszám mondja meg, MEGÉRTE-e — a kinyerés
+    az ultralytics eredmény-objektum alakját tükrözi, és ha az más,
+    mérőszám nélkül sem törik (üres dict)."""
+    from handball.api.app import train_metrics
+
+    class _Tomb:
+        def __init__(self, ertekek):
+            self._e = ertekek
+
+        def tolist(self):
+            return self._e
+
+    class _Box:
+        ap_class_index = _Tomb([0, 1])
+        ap50 = _Tomb([0.82, 0.61])
+
+    class _Eredmeny:
+        results_dict = {"metrics/mAP50(B)": 0.715,
+                        "metrics/precision(B)": 0.8,
+                        "metrics/recall(B)": 0.66}
+        box = _Box()
+        names = {0: "person", 1: "ball"}
+
+    m = train_metrics(_Eredmeny())
+    assert m["map50"] == 71.5
+    assert m["map50_ball"] == 61.0
+    assert m["map50_person"] == 82.0
+    assert m["precision"] == 80.0 and m["recall"] == 66.0
+
+    # Ismeretlen alak: nem törik, üres marad.
+    assert train_metrics(object()) == {}
+
+
 def test_a_shutdown_vegpont_cserelheto_kilepessel():
     """A fél-frissülés őre: a /shutdown a régi motort állítja le. A
     kilépés-függvény cserélhető (app.state.exit_fn) — a teszt így nem
