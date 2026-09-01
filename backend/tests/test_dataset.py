@@ -16,7 +16,8 @@ import cv2
 import numpy as np
 
 from handball.pipeline.dataset import (
-    collect_dataset, sample_frame_indices, yolo_label_lines,
+    collect_dataset, hard_frame_indices, sample_frame_indices,
+    yolo_label_lines,
 )
 from scripts.process_video import _class_ids
 
@@ -89,6 +90,51 @@ def test_collect_skips_dark_frames(tmp_path):
     stats = collect_dataset(video, _stub_detect, tmp_path / "ds", samples=10)
     assert stats.skipped_dark >= 4  # a minták fele a sötét részre esett
     assert stats.images + stats.skipped_dark <= 10
+
+
+def _labda_hezagos_meccs():
+    """Meccs t=0..99 kockákkal; a labda mért, KIVÉVE két kiesést:
+    t=10..39 (hosszú) és t=60..69 (rövid) — a rövidebbik pótolt
+    (interpolált) labdát kap, ami kiesésnek számít."""
+    from handball.models.tracking import Ball, Frame, Match, MatchMeta
+    from handball.pipeline.ball_filter import INTERPOLATED_CONFIDENCE
+
+    frames = []
+    for t in range(100):
+        if 10 <= t <= 39:
+            ball = None                       # tényleg nincs észlelés
+        elif 60 <= t <= 69:
+            ball = Ball(x=20.0, y=10.0,
+                        confidence=INTERPOLATED_CONFIDENCE)  # pótolt
+        else:
+            ball = Ball(x=20.0, y=10.0)
+        frames.append(Frame(t=t, players=[], ball=ball))
+    return Match(MatchMeta(match_id="hf", home_team="A", away_team="B",
+                           fps=10.0), frames)
+
+
+def test_hard_indices_a_leghosszabb_kiesesek_kozepet_adjak():
+    m = _labda_hezagos_meccs()
+    # count=1: csak a leghosszabb (t=10..39) közepe.
+    assert hard_frame_indices(m, 1) == [24]
+    # count=2: a pótolt szakasz (t=60..69) közepe is — időrendben.
+    assert hard_frame_indices(m, 2) == [24, 64]
+    assert hard_frame_indices(m, 0) == []
+
+
+def test_collect_a_nehez_kockakat_is_menti(tmp_path):
+    video = tmp_path / "aktiv.mp4"
+    _make_video(video, n_frames=100)
+    stats = collect_dataset(video, _stub_detect, tmp_path / "ds",
+                            samples=10, hard_indices=[3, 7])
+    # A nehéz kockák tényleg bekerültek (a képnév hordozza az indexet)…
+    nevek = set()
+    for split in ("train", "val"):
+        nevek |= {p.stem for p in
+                  (tmp_path / "ds" / "images" / split).iterdir()}
+    assert "aktiv_000003" in nevek and "aktiv_000007" in nevek
+    # …és a keret nem duzzadt: legfeljebb `samples` kép készült.
+    assert stats.images <= 10
 
 
 def test_class_ids_for_coco_and_custom_models():

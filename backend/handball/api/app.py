@@ -1601,7 +1601,7 @@ def create_app():
                     status_code=400,
                     detail=f"nincs elérhető videó ehhez: {mid} — "
                            "összefűzött meccsnél a DARABOKAT jelöld ki")
-            videok.append((vp, m.meta.start_frame or 0))
+            videok.append((vp, m.meta.start_frame or 0, m))
         if not videok:
             raise HTTPException(status_code=400,
                                 detail="legalább egy meccs kell videóval")
@@ -1615,13 +1615,22 @@ def create_app():
         def _gyujt():
             try:
                 from scripts.collect_dataset import _make_detect_fn
-                from ..pipeline.dataset import collect_dataset
+                from ..pipeline.dataset import (
+                    collect_dataset, hard_frame_indices,
+                )
                 detect = _make_detect_fn("yolov8n.pt", 1920, 0.35, 0.05)
                 osszes = 0
                 labdas = 0
-                for vp, start in videok:
+                for vp, start, m in videok:
+                    # Aktív tanulás: a tárolt követés labda-kieséseiből
+                    # is mintát veszünk — ott bukik a mostani modell.
+                    try:
+                        nehez = hard_frame_indices(m, samples // 2)
+                    except Exception:
+                        nehez = []  # javaslat nélkül egyenletes marad
                     stats = collect_dataset(vp, detect, out_dir,
-                                            samples=samples, start=start)
+                                            samples=samples, start=start,
+                                            hard_indices=nehez)
                     osszes += stats.images
                     labdas += stats.images_with_ball
                     _dataset_state["images"] = osszes

@@ -1836,9 +1836,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text(
                   "A felismerés a TE felvételeiden lesz igazán pontos: "
                   "a gyűjtő a kijelölt meccsek videóiból képeket "
-                  "mintavételez és előcímkéz — ezt átnézve és tanítva "
-                  "készül a saját modelled (útmutató: docs/FINETUNE.md). "
-                  "Összefűzött meccsnél a DARABOKAT jelöld ki.",
+                  "mintavételez és előcímkéz — a minták FELE onnan jön, "
+                  "ahol a mostani felismerés elvesztette a labdát (ott "
+                  "tanít a legtöbbet a kézi címke). Ezt átnézve és "
+                  "tanítva készül a saját modelled (útmutató: "
+                  "docs/FINETUNE.md). Összefűzött meccsnél a DARABOKAT "
+                  "jelöld ki.",
                   style: AppText.label.copyWith(fontSize: 12.5)),
               const SizedBox(height: AppSpacing.md),
               SizedBox(

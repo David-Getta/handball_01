@@ -63,6 +63,45 @@ def sample_frame_indices(n_total: int, count: int, start: int = 0) -> list[int]:
     return out
 
 
+def hard_frame_indices(match, count: int) -> list[int]:
+    """A NEHÉZ kockák videó-indexei a tárolt követésből (aktív tanulás).
+
+    A tanítóadat ott gyorsítja legjobban a modellt, ahol a MOSTANI
+    detektor elbukik: a labda-kiesések (nincs mért labda) kockái. Az
+    egyenletes mintavétel ezekből alig lát — pedig pont az ilyen
+    kockák kézi címkéje tanít a legtöbbet.
+
+    A kockák `t` címkéje a forrásvideó kocka-indexe (a ritkítás és az
+    utólagos vágás a t-t nem írja át), így a kiesés-szakasz közepének
+    t-je közvetlenül videó-index. Egy szakaszból legfeljebb EGY mintát
+    veszünk (az egymás melletti kockák majdnem azonosak, keveset
+    tanítanak); a leghosszabb szakaszok kapnak elsőbbséget, az eredmény
+    időrendben jön. A pótolt (interpolált) labda kiesésnek számít — az
+    a saját találgatásunk, nem mérés.
+    """
+    from .ball_filter import INTERPOLATED_CONFIDENCE
+
+    if count <= 0:
+        return []
+    szakaszok: list[tuple[int, int]] = []  # (hossz, közép-t)
+    start_t = None
+    prev_t = 0
+    for f in match.frames:
+        merve = (f.ball is not None
+                 and f.ball.confidence > INTERPOLATED_CONFIDENCE)
+        if not merve:
+            if start_t is None:
+                start_t = f.t
+            prev_t = f.t
+        elif start_t is not None:
+            szakaszok.append((prev_t - start_t + 1, (start_t + prev_t) // 2))
+            start_t = None
+    if start_t is not None:
+        szakaszok.append((prev_t - start_t + 1, (start_t + prev_t) // 2))
+    szakaszok.sort(key=lambda s: -s[0])
+    return sorted(int(t) for _, t in szakaszok[:count])
+
+
 def yolo_label_lines(boxes: list, width: int, height: int) -> list[str]:
     """YOLO label-sorok: "osztály cx cy w h" — 0..1-re normálva.
 
@@ -101,13 +140,18 @@ def collect_dataset(video_path: str | Path,
                     start: int = 0,
                     val_ratio: float = 0.1,
                     skip_dark: bool = True,
-                    dark_thresh: float = 40.0) -> DatasetStats:
+                    dark_thresh: float = 40.0,
+                    hard_indices: list[int] | None = None) -> DatasetStats:
     """Képkockák mintavételezése egy videóból + előcímkék a detektorral.
 
     - detect_fn(img) -> [(name, conf, x1, y1, x2, y2), ...] — a név "person"
       vagy "ball" (mást eldobunk); a koordináták pixelben.
     - Minden ~10. minta a validációs halmazba kerül (val_ratio szerint).
     - A sötét (bevezető/átúszós) kockákat kihagyjuk.
+    - `hard_indices` (aktív tanulás): a hívó által kijelölt NEHÉZ kockák
+      (lásd hard_frame_indices) legfeljebb a keret FELÉT kapják — a
+      másik fele egyenletes marad, hogy az adathalmaz változatos legyen
+      és ne csak a mostani modell vakfoltjaiból álljon.
 
     A képek a videó nevével prefixelve mentődnek, így TÖBB videóból is
     gyűjthető ugyanabba a mappába — a kész adathalmaz együtt nő.
@@ -130,8 +174,14 @@ def collect_dataset(video_path: str | Path,
 
     stem = video_path.stem.replace(" ", "_")
     val_every = max(2, round(1 / val_ratio)) if val_ratio > 0 else 0
+    # Aktív tanulás: a nehéz kockák legfeljebb a keret felét kapják,
+    # a maradék egyenletes — a kettő uniója időrendben.
+    nehez = sorted({int(i) for i in (hard_indices or [])
+                    if start <= i < n_total})[: samples // 2]
+    egyenletes = sample_frame_indices(n_total, samples - len(nehez),
+                                      start=start)
     kept = 0
-    for idx in sample_frame_indices(n_total, samples, start=start):
+    for idx in sorted(set(egyenletes) | set(nehez)):
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ok, img = cap.read()
         if not ok:

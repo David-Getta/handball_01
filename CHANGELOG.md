@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.94 óta)
 
+- **Aktív tanulás a tanítóadat-gyűjtésben** (motor + gyűjtő végpont +
+  gyűjtés-párbeszéd): a minták fele mostantól onnan jön, ahol a
+  MOSTANI felismerés elvesztette a labdát (a tárolt követés
+  labda-kieséseinek közepéről) — pont az ilyen kockák kézi címkéje
+  tanítja a legtöbbet a modellt. A másik fele egyenletes marad, hogy
+  az adathalmaz változatos legyen; egy kiesés-szakaszból legfeljebb
+  egy minta jön (az egymás melletti kockák majdnem azonosak).
+
 - **A minőség-jelentés kimondja a bennmaradt bemutatást** (motor +
   minden felület, ahol a jelentés látszik): a meccs-ablak-felismerés
   a minőség-jelentésben a tárolt követésen is lefut, és ha a felvétel
