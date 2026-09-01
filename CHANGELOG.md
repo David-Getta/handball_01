@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.94 óta)
 
+- **A lezárt feldolgozás mutatja, mikor készült** (Feldolgozások
+  képernyő): a lezárt sorokon eddig csak a név állt — több azonos nevű
+  futás megkülönböztethetetlen volt. Mostantól ott a befejezés ideje
+  és a futás hossza ("aug. 31. 14:22 · 42 perc feldolgozás").
+  Felhasználói kérésre.
+
 - **A tanítás megmondja, megérte-e** (motor + tanítás-állapot végpont
   + címkéző): a tanítás végén eddig csak annyi látszott, hogy "kész" —
   mostantól a mérőszámok is jönnek ("Találat-pontosság (mAP50): 72% —

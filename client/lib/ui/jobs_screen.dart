@@ -244,6 +244,36 @@ class _JobsScreenState extends State<JobsScreen> {
     );
   }
 
+  /// Epoch-másodperc → "aug. 31. 14:22" (helyi idő szerint).
+  static String _mikor(num epochS) {
+    final t = DateTime.fromMillisecondsSinceEpoch((epochS * 1000).round());
+    const ho = [
+      "jan.", "febr.", "márc.", "ápr.", "máj.", "jún.",
+      "júl.", "aug.", "szept.", "okt.", "nov.", "dec."
+    ];
+    final ora = t.hour.toString().padLeft(2, "0");
+    final perc = t.minute.toString().padLeft(2, "0");
+    return "${ho[t.month - 1]} ${t.day}. $ora:$perc";
+  }
+
+  /// A lezárt sor idő-címkéje: mikor készült el, és mennyi ideig
+  /// futott ("aug. 31. 14:22 · 42 perc feldolgozás"). A "mikor" a
+  /// kérdés, amit a napló eddig nem válaszolt meg: több sor ugyanazzal
+  /// a névvel csak így különböztethető meg.
+  static String? _idoCimke(Map<String, dynamic> h) {
+    final kesz = h["finished"];
+    if (kesz is! num) return null;
+    var cimke = _mikor(kesz);
+    final kezdet = h["started"];
+    if (kezdet is num && kesz > kezdet) {
+      final mp = (kesz - kezdet).round();
+      cimke += mp < 60
+          ? " · $mp mp feldolgozás"
+          : " · ${(mp / 60).round()} perc feldolgozás";
+    }
+    return cimke;
+  }
+
   /// Egy LEZÁRT feldolgozás sora — a vége és (hiba esetén) a miértje.
   Widget _historyRow(Map<String, dynamic> h) {
     final status = (h["status"] as String?) ?? "";
@@ -277,6 +307,10 @@ class _JobsScreenState extends State<JobsScreen> {
               Text(matchId ?? "(nincs meccs-azonosító)",
                   style: AppText.value.copyWith(fontSize: 13),
                   overflow: TextOverflow.ellipsis),
+              if (_idoCimke(h) != null)
+                Text(_idoCimke(h)!,
+                    style: AppText.label.copyWith(
+                        fontSize: 11, color: AppColors.textFaint)),
               if (hiba && err.isNotEmpty)
                 Text(err,
                     style: AppText.label
