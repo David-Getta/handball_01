@@ -88,6 +88,16 @@ GOALS_LOPSIDED_FACTOR = 5.0
 REAL_SCORE_DIFF_WARN = 4
 REAL_SCORE_SWAP_MARGIN = 4
 
+# Bennmaradt nem-játék él: a minőség-jelentés a TÁROLT követésen is
+# lefuttatja a meccs-ablak-felismerést (suggest_game_window), és ha a
+# felvétel elején ennél hosszabb nem-játék rész maradt, kimondja. A
+# feldolgozás-kori jelzés (game_window_found) a régi motorral elemzett
+# mentéseken hiányzik — a Kiel-meccs 549 mp bemutatása így némán
+# torzított. IDŐTARTAM, tehát másodpercben; a vágás-küszöbnél
+# (GW_MIN_TRIM_S = 45 mp) szándékosan magasabb: a figyelmeztetés csak
+# akkor szóljon, ha az él tényleg esemény-gyártó méretű.
+GW_HEAD_WARN_S = 120.0
+
 # KLIP vagy MECCS? Egy kézilabda-meccs 2x30 perc; ennél a küszöbnél
 # rövidebb felvétel nem meccs, hanem KLIP (egy támadás-sorozat, egy
 # félidő-részlet, egy próba). A klip teljesen jogos bemenet — de a
@@ -123,6 +133,10 @@ NEXT_ACTION_ORDER: tuple = (
      "Ha tudod, mikor kezdődött a meccs, vágd le az elejét utólag "
      "(könyvtár-sor ✂ gombja) — vagy add meg a meccs időablakát az Új "
      "elemzés lapon, és futtasd újra."),
+    ("eleje nem-játéknak látszik",
+     "Nyisd meg a vágást (könyvtár-sor ✂ gombja) — a párbeszéd elő is "
+     "tölti a javasolt meccs-kezdést, csak ellenőrizned és jóváhagynod "
+     "kell."),
     ("Kevés játékos látszik",
      "Ellenőrizd, hogy a kamera a játékteret mutatja-e, és hogy a "
      "kalibráció a látható térfélre készült-e."),
@@ -524,6 +538,27 @@ def compute_quality_report(match: Match) -> dict:
             "álldogálást a motor eladott labdának, a bemelegítő kapura "
             "lövéseket lövésnek látja. Add meg a meccs időablakát "
             "(perc:másodperc) az Új elemzés lapon, és futtasd újra.")
+
+    # --- Bennmaradt-e nem-játék rész a felvétel ELEJÉN? ---
+    # A feldolgozás-kori jelzés (fent) a régi motorral készült
+    # mentéseken hiányzik, pedig pont azokban maradhatott bent a
+    # bemutatás. Ezért a felismerést a TÁROLT követésen újra
+    # lefuttatjuk: ha az elején hosszú nem-játék él van, kimondjuk —
+    # az időpontot a t-alapú (Események listával egyező) órajelben.
+    try:
+        from .game_window import suggest_game_window
+        _gw_javaslat = suggest_game_window(match)
+        if (_gw_javaslat is not None
+                and _gw_javaslat["head_s"] >= GW_HEAD_WARN_S):
+            warnings.append(
+                "A felvétel eleje nem-játéknak látszik: kb. "
+                f"{clock_label(_gw_javaslat['start_s'])}-ig bemutatás/"
+                "bemelegítés lehet az elemzésben — az álldogálásból a "
+                "motor eladott labdát, a bemelegítő lövésekből kapura "
+                "lövést gyárt. A ✂ vágás elő is tölti a javasolt "
+                "kezdést.")
+    except Exception:
+        pass  # a javaslat hibája ne vigye el a jelentést
 
     # --- Hihető-e a felismert EREDMÉNY? ---
     # Az edző az eredményből dönti el, hogy hisz-e a jelentésnek: ha az

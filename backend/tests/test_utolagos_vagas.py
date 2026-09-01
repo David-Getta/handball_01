@@ -146,6 +146,28 @@ def test_a_javaslat_jatek_nelkul_none():
     assert suggest_game_window(_meccs(n=200)) is None
 
 
+def test_a_minoseg_jelentes_kimondja_a_bennmaradt_elejet():
+    """A VALÓDI rétegből: a minőség-jelentés a tárolt követésen újra
+    lefuttatja a felismerést, és a hosszú nem-játék élt kimondja — a
+    teendő a ✂ előtöltött javaslatára mutat. (Régi motorral elemzett
+    meccsen — pl. a Kiel-eset 549 mp bemutatása — csak ez szól.)"""
+    from handball.pipeline.quality import compute_quality_report
+
+    # 140 mp nem-játék él (a 15 mp ráhagyás után is a 120 mp-es
+    # GW_HEAD_WARN_S küszöb felett) + 70 mp játék.
+    rep = compute_quality_report(_jatek_meccs(head=1400, game=700))
+    talalat = [w for w in rep["warnings"]
+               if "eleje nem-játéknak látszik" in w]
+    assert talalat, rep["warnings"]
+    assert rep["next_action"] is not None
+    assert "elő is tölti a javasolt meccs-kezdést" in rep["next_action"]
+
+    # Rövid (ráhagyásnyi) élnél nincs ilyen jelzés.
+    rep2 = compute_quality_report(_jatek_meccs(head=300, game=700))
+    assert not [w for w in rep2["warnings"]
+                if "eleje nem-játéknak látszik" in w]
+
+
 # ------------------------------------------------------------------ API
 
 TestClient = pytest.importorskip(

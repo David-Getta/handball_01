@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.94 óta)
 
+- **A minőség-jelentés kimondja a bennmaradt bemutatást** (motor +
+  minden felület, ahol a jelentés látszik): a meccs-ablak-felismerés
+  a minőség-jelentésben a tárolt követésen is lefut, és ha a felvétel
+  elején 2 percnél hosszabb nem-játék rész maradt ("kb. 9:09-ig
+  bemutatás/bemelegítés lehet az elemzésben"), figyelmeztet — az
+  első teendő pedig a ✂ előtöltött javaslatára mutat. A régi motorral
+  elemzett meccseken (mint a Kiel-eset 549 másodperce) eddig SEMMI
+  nem szólt erről.
+
 - **A vágás-párbeszéd előtölti a meccs kezdetét** (motor + API +
   könyvtár ✂ + meccs-nézet ✂): a meccs-ablak-felismerés mostantól a
   TÁROLT követésen is lefut — régi motorral elemzett meccsen is —, és
