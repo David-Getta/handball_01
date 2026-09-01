@@ -1366,6 +1366,19 @@ class ApiClient {
     }
   }
 
+  /// Javasolt vágás-ablak (GET /matches/{id}/game-window): a tárolt
+  /// követésen futó meccs-ablak-felismerés eredménye játékidő-mp-ben.
+  /// A vágás-párbeszéd előtöltéséhez — a felhasználónak ne kelljen
+  /// kézzel kikeresnie, mikor kezdődött a meccs.
+  Future<Map<String, dynamic>> fetchGameWindow(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/game-window"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a javaslat", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// UTÓLAGOS vágás (POST /matches/{id}/trim): a megadott játékidő-
   /// ablakon kívüli rész eldobása az elemzésből. A tipikus eset a
   /// bennmaradt bemutatás/bemelegítés — a felhasználó tudja, mikor

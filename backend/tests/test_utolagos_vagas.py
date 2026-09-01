@@ -45,6 +45,27 @@ def _meccs(match_id="v1", n=300, fps=10.0, partial=False):
     return Match(meta, frames)
 
 
+def _jatek_meccs(match_id="g1", head=700, game=700, fps=10.0):
+    """Elöl `head` üres (nem-játék) kocka, utána `game` kocka tényleges
+    játék-jellel (8 mért játékos, közeli súlypontok, mozgás). A t
+    címkék 5000-től futnak — mint egy korábban már vágott meccsen —,
+    hogy a javaslat t-alapúsága kiderüljön."""
+    meta = MatchMeta(match_id=match_id, home_team="Mi", away_team="Ok",
+                     fps=fps)
+    frames = [Frame(t=5000 + i, players=[]) for i in range(head)]
+    for i in range(game):
+        dx = (i % 20) * 0.05  # fűrészfog-mozgás: ~0,5 m/s, pályán marad
+        players = []
+        for k in range(4):
+            players.append(PlayerPosition(track_id=10 + k, team=Team.HOME,
+                                          x=16.0 + k + dx, y=6.0 + k))
+            players.append(PlayerPosition(track_id=20 + k, team=Team.AWAY,
+                                          x=18.0 + k + dx, y=6.0 + k))
+        frames.append(Frame(t=5000 + head + i, players=players,
+                            ball=Ball(x=20.0, y=10.0)))
+    return Match(meta, frames)
+
+
 # ---------------------------------------------------------------- motor
 
 def test_a_vagas_eldobja_az_ablakon_kivult_es_megorzi_a_t_t():
@@ -103,6 +124,28 @@ def test_a_vagas_utan_a_korai_esemenyek_eltunnek():
     assert any(e.t == 200 for e in utana)
 
 
+def test_a_javaslat_t_alapu_masodpercet_ad():
+    """A javaslat a kocka `t` címkéjéből számol — egy korábban már
+    vágott meccsen az index-alapú másodperc rossz helyre vágna."""
+    from handball.pipeline.game_window import suggest_game_window
+
+    j = suggest_game_window(_jatek_meccs())
+    assert j is not None
+    # head_s a tárolt kocka-lista elejétől mért él (index-alapú)…
+    assert j["head_s"] == pytest.approx(55.0, abs=1.0)
+    # …a start_s viszont a kocka t címkéjéből jön: az 5000-től futó
+    # t-tér miatt 500 mp-vel odébb — EZT kapja a trim_to_window.
+    assert j["start_s"] == pytest.approx(555.0, abs=1.0)
+    assert j["end_s"] > j["start_s"]
+
+
+def test_a_javaslat_jatek_nelkul_none():
+    from handball.pipeline.game_window import suggest_game_window
+
+    # 2 mért játékos, mozgás nélkül: nincs elég hosszú játék-futam.
+    assert suggest_game_window(_meccs(n=200)) is None
+
+
 # ------------------------------------------------------------------ API
 
 TestClient = pytest.importorskip(
@@ -139,6 +182,23 @@ def test_a_trim_vegpont_vag_ment_es_frissit():
             encoding="utf-8"))
     assert len(mentett["frames"]) == 200
     assert mentett["frames"][0]["t"] == 100
+
+
+def test_a_game_window_vegpont_javasol_vagy_bevallja():
+    """A vágás-párbeszéd előtöltése: ha a felismerés talál kezdést,
+    t-alapú másodpercet ad; ha nem, found=False — sose hallgat némán."""
+    c, _tmp = _client([_jatek_meccs("g1"), _meccs("sima", n=100)])
+
+    v = c.get("/matches/g1/game-window")
+    assert v.status_code == 200, v.text
+    j = v.json()
+    assert j["found"] is True
+    assert j["start_s"] == pytest.approx(555.0, abs=1.0)
+
+    j2 = c.get("/matches/sima/game-window").json()
+    assert j2["found"] is False and "start_s" not in j2
+
+    assert c.get("/matches/nincs/game-window").status_code == 404
 
 
 def test_a_trim_hibai_erthetoek():

@@ -120,6 +120,34 @@ def detect_game_window(match: Match) -> Optional[dict]:
     }
 
 
+def suggest_game_window(match: Match) -> Optional[dict]:
+    """Javasolt vágás-ablak a TÁROLT meccsre, játékidő-másodpercben.
+
+    A detect_game_window frame-INDEXEKKEL dolgozik; a kézi vágás
+    (trim_to_window) viszont a kockák `t` címkéi szerint vág — egy
+    korábban már vágott vagy hézagos meccsen a kettő nem ugyanaz. Ez a
+    függvény a felismerés eredményét a kocka `t`-jére fordítja, hogy a
+    kliens vágás-párbeszéde elő tudja tölteni ("Javasolt kezdés:
+    9:09"). Régi motorral feldolgozott meccsen is működik — a
+    felismerés a tárolt követésen fut, nem a videón.
+
+    Visszatérés: {"start_s", "end_s", "head_s", "tail_s"} — start_s és
+    end_s a trim_to_window-nak közvetlenül átadható játékidő; head_s
+    és tail_s az ablakon kívüli él hossza. None, ha nincs elég hosszú
+    játék-futam (a felvétel nem ítélhető meg).
+    """
+    gw = detect_game_window(match)
+    if gw is None:
+        return None
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    return {
+        "start_s": round(match.frames[gw["start_idx"]].t / fps, 1),
+        "end_s": round(match.frames[gw["end_idx"]].t / fps, 1),
+        "head_s": gw["head_s"],
+        "tail_s": gw["tail_s"],
+    }
+
+
 def trim_to_game(match: Match, tail: bool = True,
                  window_out: Optional[dict] = None) -> Optional[dict]:
     """A nem-meccs élek levágása HELYBEN (a frame-lista szűkítése).

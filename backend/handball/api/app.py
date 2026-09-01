@@ -1878,6 +1878,26 @@ def create_app():
         ki["goals_away"] = osszegzes.get("goals_away")
         return ki
 
+    @app.get("/matches/{match_id}/game-window")
+    def game_window_suggestion(match_id: str):
+        """Javasolt vágás-ablak a TÁROLT követésből, játékidő-mp-ben.
+
+        A vágás-párbeszéd előtöltéséhez: a felismerés (detect_game_window)
+        a tárolt kockákon fut, tehát régi motorral feldolgozott meccsen
+        is ad javaslatot — a felhasználónak nem kell kézzel kikeresnie,
+        mikor kezdődött a meccs. Válasz: {"found": bool, és ha talált:
+        "start_s", "end_s", "head_s", "tail_s"}."""
+        from ..pipeline.game_window import suggest_game_window
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            gw = suggest_game_window(match)
+        except Exception as e:  # javaslat nélkül is működjön a vágás
+            return {"match_id": match_id, "found": False, "error": str(e)}
+        return {"match_id": match_id, "found": gw is not None,
+                **(gw or {})}
+
     @app.post("/matches/{match_id}/trim")
     def trim_match(match_id: str, body: dict):
         """A meccs UTÓLAGOS vágása: a megadott játékidő-ablakon kívüli

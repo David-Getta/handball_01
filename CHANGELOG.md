@@ -3,7 +3,25 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.93 óta)
+## Kiadatlan (a v0.1.94 óta)
+
+- **A vágás-párbeszéd előtölti a meccs kezdetét** (motor + API +
+  könyvtár ✂ + meccs-nézet ✂): a meccs-ablak-felismerés mostantól a
+  TÁROLT követésen is lefut — régi motorral elemzett meccsen is —, és
+  a ✂ párbeszéd megnyitásakor előtölti a javasolt kezdést/befejezést
+  ("A felismerés szerint a meccs kb. 9:09-kor kezdődik"). A
+  felhasználónak csak ellenőriznie és jóváhagynia kell, nem kell az
+  Események listából kikeresnie a kezdés másodpercét. Ha a felismerés
+  nem talál egyértelmű kezdést, ezt őszintén kiírja, és marad a kézi
+  megadás.
+
+## v0.1.94 — kiadva (2026-08-31)
+
+> Kiadás-jegyzet: a fél-frissült telepítés magától gyógyul. Ha a
+> frissítés után a régi motor-folyamat életben maradt (ebből jött az
+> "app és motor verziója eltér" sáv, amit az újratelepítés sem vitt
+> el), a v0.1.94 indítója felismeri, leállítja és a friss motort
+> hozza — se újratelepítés, se gép-újraindítás nem kell hozzá.
 
 - **A fél-frissült telepítés magától gyógyul** (motor + indító +
   kezdőlap): frissítés után a RÉGI motor-folyamat életben maradhat, és

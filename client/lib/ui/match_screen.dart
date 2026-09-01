@@ -1987,15 +1987,58 @@ class _MatchScreenState extends State<MatchScreen> {
     return double.tryParse(t.replaceAll(",", "."));
   }
 
+  /// Másodperc → "p:mp" (pl. 549 → "9:09").
+  static String _fmtIdoPmp(double s) {
+    final t = s.round();
+    return "${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}";
+  }
+
   /// UTÓLAGOS vágás a meccs-nézetből: itt látja a felhasználó a
   /// bemutatás-kori ál-eseményeket — ne kelljen a könyvtárba
-  /// visszamennie a ✂-ért. Ugyanaz a végpont, mint a könyvtár-sorban.
+  /// visszamennie a ✂-ért. Ugyanaz a végpont, mint a könyvtár-sorban,
+  /// és a kezdést itt is a meccs-ablak-felismerés javaslata előtölti.
   Future<void> _trimDialog() async {
     final fromCtrl = TextEditingController();
     final toCtrl = TextEditingController();
+    // Javaslat a tárolt követésből — a párbeszéd azonnal megnyílik, a
+    // javaslat megérkezéskor tölti elő a mezőket (ha még üresek).
+    String? javaslat; // a mutatott sor; null = még számol
+    var javaslatVan = false;
+    void Function(void Function())? frissit;
+    _api.fetchGameWindow(widget.matchId).then((r) {
+      final start = (r["start_s"] as num?)?.toDouble();
+      final end = (r["end_s"] as num?)?.toDouble();
+      final head = (r["head_s"] as num?)?.toDouble() ?? 0;
+      final tail = (r["tail_s"] as num?)?.toDouble() ?? 0;
+      if (r["found"] == true && start != null &&
+          head >= 45 /* = GW_MIN_TRIM_S */) {
+        if (fromCtrl.text.trim().isEmpty) {
+          fromCtrl.text = _fmtIdoPmp(start);
+        }
+        if (end != null && tail >= 45 && toCtrl.text.trim().isEmpty) {
+          toCtrl.text = _fmtIdoPmp(end);
+        }
+        javaslatVan = true;
+        javaslat = "A felismerés szerint a meccs kb. "
+            "${_fmtIdoPmp(start)}-kor kezdődik — a javaslat elő van "
+            "töltve, ellenőrizd és igazítsd, ha kell.";
+      } else if (r["found"] == true) {
+        javaslat = "A felismerés szerint az elején nincs mit levágni — "
+            "csak akkor vágj, ha mást látsz.";
+      } else {
+        javaslat = "A felismerés nem talált egyértelmű meccs-kezdést — "
+            "add meg kézzel.";
+      }
+      frissit?.call(() {});
+    }).catchError((_) {
+      javaslat = ""; // hiba: javaslat nélkül megy tovább a kézi vágás
+      frissit?.call(() {});
+    });
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        frissit = setDlg;
+        return AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text("Meccs eleje/vége levágása"),
         content: SizedBox(
@@ -2007,7 +2050,19 @@ class _MatchScreenState extends State<MatchScreen> {
                 "bemutatás és a bemelegítés ál-eseményeivel együtt, "
                 "kikerül az elemzésből.",
                 style: AppText.label.copyWith(fontSize: 12.5)),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm),
+            if (javaslat == null)
+              Text("A felismerés keresi a meccs kezdetét a követésben…",
+                  style: AppText.label.copyWith(
+                      fontSize: 11.5, color: AppColors.textFaint))
+            else if (javaslat!.isNotEmpty)
+              Text(javaslat!,
+                  style: AppText.label.copyWith(
+                      fontSize: 11.5,
+                      color: javaslatVan
+                          ? AppColors.gold
+                          : AppColors.textFaint)),
+            const SizedBox(height: AppSpacing.sm),
             TextField(
               controller: fromCtrl,
               decoration: const InputDecoration(
@@ -2048,8 +2103,10 @@ class _MatchScreenState extends State<MatchScreen> {
             child: const Text("Levágás"),
           ),
         ],
-      ),
+        );
+      }),
     );
+    frissit = null; // a késve érkező javaslat már ne frissítsen semmit
     if (ok != true) return;
     try {
       final r = await _api.trimMatch(widget.matchId,
