@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.95 óta)
 
+- **A "nem készült klip" hiba megmondja, miért és mit tegyél**
+  (klipvágás): eddig "nincs a szűrőnek megfelelő esemény, vagy a videó
+  nem olvasható" — két, egymástól nagyon különböző ok egy mondatban.
+  Mostantól külön szól: ha a szűrő nem illik semmire, felsorolja, mi
+  VAN a meccsen ("a szűrőnek (gól) egyetlen felismert esemény sem felel
+  meg — ami van: lövés: 37, labdaeladás: 12") és mit lehet tenni
+  (lövés-szűrő, vagy a hiányzó gólok javítása a meccs-elemzőben); ha a
+  jelenetek megvoltak, de a videó nem olvasható, azt mondja.
+
 - **Vágott meccsen is a jó kockára ugrik a meccs-nézet** (meccs-elemző):
   az esemény-, jegyzet- és idővonal-kattintás, a gól-felvétel és a
   jegyzet-mentés eddig a kocka lista-INDEXÉT vette videó-időnek — az

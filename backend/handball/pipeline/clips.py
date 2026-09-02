@@ -370,8 +370,35 @@ def export_event_clips(match: Match, events: list, types: set[str],
                 "kért jelenet sem tartozik ezen a meccsen. Vagy nincs "
                 "ilyen eseménye, vagy a mezszám nincs kiosztva — ez "
                 "utóbbi a meccs-elemzőben pótolható.")
-        raise RuntimeError("Nem készült klip — nincs a szűrőnek megfelelő "
-                           "esemény, vagy a videó nem olvasható.")
+        if not picked:
+            # A szűrő nem talált semmit: mondjuk meg, MI VAN a meccsen,
+            # hogy a következő próbálkozás célzott legyen (valós eset:
+            # gól-szűrő egy 0 gólosra felismert elemzésen — a hiba nem
+            # a klipvágásé, hanem a szűrőé vagy a felismerésé).
+            nev = {"goal": "gól", "shot": "lövés", "turnover": "labdaeladás",
+                   "pass": "passz"}  # az üzenetbe, nem fájlnévbe
+            szamok: dict = {}
+            for e in events:
+                k = str(_field(e, "type"))
+                szamok[k] = szamok.get(k, 0) + 1
+            kert = ", ".join(nev.get(str(t), _TYPE_HU.get(str(t), str(t)))
+                             for t in sorted(types, key=str))
+            van = ", ".join(f"{nev.get(k, _TYPE_HU.get(k, k))}: {n}"
+                            for k, n in sorted(szamok.items(),
+                                               key=lambda kv: -kv[1]))
+            raise RuntimeError(
+                f"Nem készült klip — a szűrőnek ({kert}) egyetlen "
+                "felismert esemény sem felel meg ezen a meccsen"
+                + (f" (ami van: {van})" if van
+                   else " (nincs felismert esemény)")
+                + ". Válassz másik szűrőt — gól nélkülire felismert "
+                "elemzésnél a lövés-szűrő működik —, vagy a "
+                "meccs-elemzőben javítsd a hiányzó gólokat (a sor ⋮ "
+                "menüje: \"Ez GÓL volt\").")
+        raise RuntimeError(
+            "Nem készült klip — a kért jelenetek megvoltak, de a videó "
+            "egyetlen kockája sem volt olvasható: a fájl sérült, vagy "
+            "más helyre került a feldolgozás óta.")
 
     # Zip-be csomagolás (tömörítés nélkül — a videó már tömörített).
     #

@@ -97,9 +97,16 @@ def test_no_matching_events_gives_clear_error(tmp_path):
     video = tmp_path / "meccs.mp4"
     _make_video(video, n_frames=50)
     m = _match(video)
-    with pytest.raises(RuntimeError, match="Nem készült klip"):
+    # A szűrő nem illik semmire: az üzenet megmondja, MI VAN a meccsen
+    # és mit lehet tenni (gól-szűrő egy gól nélkülire felismert
+    # elemzésen — a hiba nem a klipvágásé).
+    with pytest.raises(RuntimeError) as hiba:
         export_event_clips(m, [{"t": 5, "type": "pass", "team": "home"}],
                            {"goal"}, tmp_path / "ki")
+    uzenet = str(hiba.value)
+    assert "Nem készült klip" in uzenet
+    assert "(gól)" in uzenet and "passz: 1" in uzenet
+    assert "lövés-szűrő" in uzenet
 
 
 if __name__ == "__main__":
