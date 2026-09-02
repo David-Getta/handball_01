@@ -76,6 +76,10 @@ class _Court3DScreenState extends State<Court3DScreen>
   double? _kovElozoX, _kovElozoY;
   // A meccsen LÁTOTT mezszámok csapatonként (egyszer, betöltéskor).
   List<int> _mezekHome = const [], _mezekAway = const [];
+  // A meccs eseményei (gól/lövés/eladás) t szerint növekvően — a 3D-n
+  // belüli előző/következő ugráshoz és a jelenet-felirathoz, hogy ne
+  // kelljen az Események listához visszajárni.
+  List<Map<String, dynamic>> _esemenyek = const [];
 
   late final Ticker _ticker;
   Duration _last = Duration.zero;
@@ -124,6 +128,19 @@ class _Court3DScreenState extends State<Court3DScreen>
     try {
       final m = await _api.fetchMatch(id);
       if (!mounted) return;
+      // Az események külön kérés — hibája nem viheti el a 3D nézetet.
+      List<Map<String, dynamic>> esemenyek = const [];
+      try {
+        esemenyek = (await _api.fetchEvents(id))
+            .where((e) => const {"goal", "shot", "turnover"}
+                .contains(e["type"]))
+            .toList()
+          ..sort((x, y) =>
+              ((x["t"] as num?) ?? 0).compareTo((y["t"] as num?) ?? 0));
+      } catch (_) {
+        esemenyek = const [];
+      }
+      if (!mounted) return;
       final h = <int>{}, a = <int>{};
       for (final f in m.frames) {
         for (final p in f.players) {
@@ -135,15 +152,18 @@ class _Court3DScreenState extends State<Court3DScreen>
       // Eseményből érkezve pár másodperccel a jelenet ELŐTT kezdünk
       // (a felvezetés nélkül a jelenet értelmezhetetlen), és a
       // TV-kamera viszi a képet — kattintás nélkül nézhető.
+      // A startS videó-másodperc, a lejátszófej pedig lista-INDEX — a
+      // kettő vágott meccsen nem ugyanaz, ezért a t címke szerint
+      // keressük meg a kockát (_tIndex).
       final fps0 = m.meta.fps > 0 ? m.meta.fps : 25.0;
       final ugras = widget.startS == null
           ? 0.0
-          : ((widget.startS! - 4.0) * fps0)
-              .clamp(0.0, (m.frames.length - 1).toDouble());
+          : _tIndex(m, (widget.startS! - 4.0) * fps0).toDouble();
       setState(() {
         _match = m;
         _matchId = id;
         _demo = false;
+        _esemenyek = esemenyek;
         _playhead = ugras;
         _playing = widget.startS != null;
         _tvKamera = widget.startS != null;
@@ -519,6 +539,26 @@ class _Court3DScreenState extends State<Court3DScreen>
                   ),
                 ),
                 Positioned(right: 10, top: 10, child: _nezetGombok()),
+                // Jelenet-felirat: mi történik épp (a közvetítés
+                // inzertje) — a 3D-ben a labda pályája önmagában nem
+                // mondja meg, hogy gól volt-e vagy védés.
+                if (_esemenyFelirat(m) != null)
+                  Positioned(
+                    left: 12,
+                    bottom: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.gold),
+                      ),
+                      child: Text(_esemenyFelirat(m)!,
+                          style: AppText.value.copyWith(
+                              fontSize: 14, color: AppColors.gold)),
+                    ),
+                  ),
               ]),
             ),
           ),
@@ -625,20 +665,110 @@ class _Court3DScreenState extends State<Court3DScreen>
     ]);
   }
 
+  /// Videó-kocka (t címke) → frame-lista index (az első kocka, amelynek
+  /// t-je eléri). A kettő NEM ugyanaz: utólagos vágás után a lista
+  /// elejéről kockák hiányoznak, a t címkék viszont maradnak — az
+  /// esemény t-jére indexszel ugrani rossz jelenetre vinne.
+  static int _tIndex(Match m, double t) {
+    var lo = 0, hi = m.frames.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (m.frames[mid].t < t) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo < 0 ? 0 : lo;
+  }
+
+  /// A lejátszófej alatti kocka t címkéje (videó-kocka).
+  int _mostT(Match m) {
+    if (m.frames.isEmpty) return 0;
+    return m.frames[_playhead.floor().clamp(0, m.frames.length - 1)].t;
+  }
+
+  /// Ugrás az előző/következő eseményre — a jelenet előtt 4 mp-cel,
+  /// TV-kamerával, lejátszva (mint az Események listából érkezve).
+  /// Egy másodpercnyi holt sáv, hogy az épp nézett esemény ne "ragadjon".
+  void _esemenyUgras(Match m, int irany) {
+    if (_esemenyek.isEmpty || m.frames.isEmpty) return;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m);
+    Map<String, dynamic>? talalt;
+    if (irany > 0) {
+      for (final e in _esemenyek) {
+        if (((e["t"] as num?) ?? 0) > most + fps) {
+          talalt = e;
+          break;
+        }
+      }
+    } else {
+      for (final e in _esemenyek.reversed) {
+        if (((e["t"] as num?) ?? 0) < most - fps) {
+          talalt = e;
+          break;
+        }
+      }
+    }
+    if (talalt == null) return;
+    final celT = ((talalt["t"] as num?) ?? 0).toDouble();
+    setState(() {
+      _playhead = _tIndex(m, celT - 4.0 * fps).toDouble();
+      _playing = true;
+      _tvKamera = true;
+      _kovMez = null;
+    });
+  }
+
+  /// A lejátszófejhez tartozó esemény felirata a jelenet közben
+  /// ("GÓL — Kiel"): az esemény előtt 0,3 mp-től utána 2,5 mp-ig.
+  String? _esemenyFelirat(Match m) {
+    if (_esemenyek.isEmpty || m.frames.isEmpty) return null;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m);
+    for (final e in _esemenyek) {
+      final t = ((e["t"] as num?) ?? 0).toDouble();
+      if (most < t - 0.3 * fps) break; // időrendben: a többi későbbi
+      if (most > t + 2.5 * fps) continue;
+      final nev = switch (e["type"]) {
+        "goal" => "GÓL",
+        "shot" => "Lövés",
+        _ => "Labdaeladás",
+      };
+      final csapat =
+          e["team"] == "home" ? m.meta.homeTeam : m.meta.awayTeam;
+      return "$nev — $csapat";
+    }
+    return null;
+  }
+
   Widget _lejatszoSav(Match m) {
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
     final osszes = m.frames.isEmpty ? 1 : m.frames.length;
-    String ido(double f) {
-      final s = (f / fps).round();
+    // Az idő a kocka t címkéjéből (videó-idő): így egyezik az Események
+    // lista és a jelenet-lejátszó időskálájával vágott meccsen is.
+    String ido(int t) {
+      final s = (t / fps).round();
       return "${s ~/ 60}:${(s % 60).toString().padLeft(2, "0")}";
     }
 
     return Row(children: [
       IconButton(
+        onPressed: _esemenyek.isEmpty ? null : () => _esemenyUgras(m, -1),
+        icon: const Icon(Icons.skip_previous, size: 22),
+        tooltip: "Előző esemény (gól / lövés / eladás)",
+      ),
+      IconButton(
         onPressed: () => setState(() => _playing = !_playing),
         icon: Icon(_playing ? Icons.pause_circle : Icons.play_circle,
             color: AppColors.accent, size: 32),
         tooltip: _playing ? "Szünet (Szóköz)" : "Lejátszás (Szóköz)",
+      ),
+      IconButton(
+        onPressed: _esemenyek.isEmpty ? null : () => _esemenyUgras(m, 1),
+        icon: const Icon(Icons.skip_next, size: 22),
+        tooltip: "Következő esemény (gól / lövés / eladás)",
       ),
       Expanded(
         child: Slider(
@@ -648,7 +778,9 @@ class _Court3DScreenState extends State<Court3DScreen>
           onChanged: (v) => setState(() => _playhead = v),
         ),
       ),
-      Text("${ido(_playhead)} / ${ido((osszes - 1).toDouble())}",
+      Text(
+          "${ido(_mostT(m))} / "
+          "${ido(m.frames.isEmpty ? 0 : m.frames.last.t)}",
           style: AppText.label.copyWith(fontSize: 12.5)),
       const SizedBox(width: AppSpacing.md),
       DropdownButton<double>(

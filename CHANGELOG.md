@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.95 óta)
 
+- **Esemény-ugrás a 3D pályán belül** (3D pálya): a lejátszó-sáv új
+  ⏮ / ⏭ gombjaival a következő/előző gólra, lövésre vagy eladásra
+  ugrik a nézet — a jelenet előtt 4 másodperccel, TV-kamerával,
+  lejátszva —, és a jelenet közben a képen egy inzert mondja, mi
+  történik ("GÓL — Kiel"). Eddig ehhez vissza kellett járni a
+  meccs-nézet Események listájához. Javítás mellé: a beugrás és az
+  idő-kijelzés a kocka videó-idejéből számol, így utólag vágott
+  meccsen is a jó jelenetre visz.
+
 ## v0.1.95 — kiadva (2026-09-01)
 
 > Kiadás-jegyzet: a ✂ vágás magától megtalálja a meccs kezdetét, a
