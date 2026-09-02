@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.95 óta)
 
+- **Vágott meccsen is a jó kockára ugrik a meccs-nézet** (meccs-elemző):
+  az esemény-, jegyzet- és idővonal-kattintás, a gól-felvétel és a
+  jegyzet-mentés eddig a kocka lista-INDEXÉT vette videó-időnek — az
+  utólagos ✂ vágás után (amikor a lista elejéről kockák hiányoznak, de
+  az időpontok maradnak) rossz kockára, jellemzően a meccs végére
+  ugrott. Mostantól minden ugrás és összehasonlítás a kocka
+  videó-idejéből (t címke) megy, az idő-kijelzés és az esemény-jelölők
+  is; a jegyzetek és a javítások a valódi videó-időt kapják.
+
 - **Esemény-ugrás a 3D pályán belül** (3D pálya): a lejátszó-sáv új
   ⏮ / ⏭ gombjaival a következő/előző gólra, lövésre vagy eladásra
   ugrik a nézet — a jelenet előtt 4 másodperccel, TV-kamerával,

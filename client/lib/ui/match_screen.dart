@@ -344,8 +344,7 @@ class _MatchScreenState extends State<MatchScreen> {
       // — csak most, a hossz ismeretében tudjuk határok közé szorítani.
       if (!_initialFrameApplied && widget.initialFrame != null) {
         _initialFrameApplied = true;
-        final utolso = match.frames.isEmpty ? 0 : match.frames.length - 1;
-        _frameIndex = widget.initialFrame!.clamp(0, utolso);
+        _frameIndex = _indexOfT(match, widget.initialFrame!);
       }
       _stats = computePlayerStats(match);
       _summary = computeMatchSummary(match);
@@ -635,7 +634,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 // A jelenlegi képkockára veszünk fel gólt — az edző
                 // épp azt a pillanatot nézi —, és ha ki van jelölve
                 // játékos, ő lesz a lövő.
-                _correct("add", _frameIndex, "goal",
+                _correct("add", _tOf(match), "goal",
                     team: v, playerId: _selectedTrack);
               }
             },
@@ -982,7 +981,7 @@ class _MatchScreenState extends State<MatchScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: _frameIndex == frame
+          color: _tOf(match) == frame
               ? AppColors.accentSoft
               : AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(10),
@@ -1053,8 +1052,8 @@ class _MatchScreenState extends State<MatchScreen> {
       "7 a 6" => (Icons.group_add, AppColors.away),
       _ => (Icons.grid_view, AppColors.textSecondary),
     };
-    final selected = _frameIndex >= start &&
-        _frameIndex <= ((a["end_frame"] as num?)?.toInt() ?? start);
+    final selected = _tOf(match) >= start &&
+        _tOf(match) <= ((a["end_frame"] as num?)?.toInt() ?? start);
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => _seekToFrame(match, start),
@@ -1263,25 +1262,12 @@ class _MatchScreenState extends State<MatchScreen> {
       "turnover" => ("Labdaeladás", Icons.swap_horiz, AppColors.away),
       _ => ("Passz", Icons.arrow_forward, AppColors.textSecondary),
     };
-    final selected = _frameIndex == t;
+    final selected = _tOf(match) == t;
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       // Ugrás az esemény képkockájára (a lejátszót is megállítjuk), és ha az
       // eredeti videó elérhető, a jelenet-lejátszó is a jelenetre ugrik.
-      onTap: () {
-        setState(() {
-          _timer?.cancel();
-          _playing = false;
-          _frameIndex = t.clamp(0, match.frames.length - 1);
-          if (match.meta.videoPath != null && VideoPanel.supported) {
-            _showVideo = true;
-          }
-        });
-        // A panel épp most jelenhetett meg — a kirajzolás után ugrunk.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(t));
-        });
-      },
+      onTap: () => _seekToFrame(match, t),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -1458,7 +1444,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 isDense: true,
                 hintText: demo
                     ? "Demó módban nem menthető jegyzet"
-                    : "Jegyzet ${(_frameIndex / fps).toStringAsFixed(1)} s-hez…",
+                    : "Jegyzet ${(_tOf(match) / fps).toStringAsFixed(1)} s-hez…",
                 hintStyle: AppText.label.copyWith(fontSize: 12),
               ),
               onSubmitted: (_) => _addNote(match),
@@ -1515,23 +1501,11 @@ class _MatchScreenState extends State<MatchScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       // Ugrás a jegyzet pillanatára — mint az eseményeknél.
-      onTap: () {
-        setState(() {
-          _timer?.cancel();
-          _playing = false;
-          _frameIndex = frame.clamp(0, match.frames.length - 1);
-          if (match.meta.videoPath != null && VideoPanel.supported) {
-            _showVideo = true;
-          }
-        });
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(frame));
-        });
-      },
+      onTap: () => _seekToFrame(match, frame),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: _frameIndex == frame ? AppColors.accentSoft : AppColors.surfaceAlt,
+          color: _tOf(match) == frame ? AppColors.accentSoft : AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(children: [
@@ -1576,7 +1550,7 @@ class _MatchScreenState extends State<MatchScreen> {
     if (text.isEmpty || _savingNote) return;
     setState(() => _savingNote = true);
     try {
-      await _api.addNote(widget.matchId, _frameIndex, text);
+      await _api.addNote(widget.matchId, _tOf(match), text);
       final notes = await _api.fetchNotes(widget.matchId);
       if (!mounted) return;
       setState(() {
@@ -2938,7 +2912,7 @@ class _MatchScreenState extends State<MatchScreen> {
                   curve: Curves.easeOutCubic,
                   builder: (context, t, _) => CustomPaint(
                     painter: ShotMapPainter(
-                        shots: _filteredShots(), currentFrame: _frameIndex,
+                        shots: _filteredShots(), currentFrame: _tOf(match),
                         progress: t),
                   ),
                 ),
@@ -3594,10 +3568,10 @@ class _MatchScreenState extends State<MatchScreen> {
     setState(() {
       _timer?.cancel();
       _playing = false;
-      _frameIndex = frame.clamp(0, match.frames.length - 1);
+      _frameIndex = _indexOfT(match, frame);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(_frameIndex));
+      _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(frame));
     });
   }
 
@@ -3645,7 +3619,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 emptyNets: _emptyNet,
                 subs: _subs,
                 stoppages: _stoppages,
-                currentFrame: _frameIndex,
+                currentFrame: _tOf(match),
                 onSeek: (f) => _seekTimelineTo(match, f),
               ),
             ),
@@ -3657,7 +3631,7 @@ class _MatchScreenState extends State<MatchScreen> {
             ),
             // Esemény-jelölők az idővonal alatt: arany = gól, türkiz = lövés,
             // piros = labdaeladás — ránézésre látszik, hol történt valami.
-            if (_events.isNotEmpty)
+            if (_events.isNotEmpty && match.frames.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: SizedBox(
@@ -3665,15 +3639,21 @@ class _MatchScreenState extends State<MatchScreen> {
                   child: CustomPaint(
                     size: const Size(double.infinity, 6),
                     painter: _EventTickPainter(
-                        events: _events, frames: match.frames.length),
+                        events: _events,
+                        tStart: match.frames.first.t,
+                        tEnd: match.frames.last.t),
                   ),
                 ),
               ),
           ]),
         ),
         const SizedBox(width: AppSpacing.sm),
-        Text("${(_frameIndex / fps).toStringAsFixed(1)} s", style: AppText.value),
-        Text("  /  ${(match.frames.length / fps).toStringAsFixed(0)} s", style: AppText.label),
+        // Videó-idő (a kocka t címkéjéből): egyezik az Események lista, a
+        // jegyzetek és a jelenet-lejátszó időskálájával vágott meccsen is.
+        Text("${(_tOf(match) / fps).toStringAsFixed(1)} s", style: AppText.value),
+        Text(
+            "  /  ${((match.frames.isEmpty ? 0 : match.frames.last.t) / fps).toStringAsFixed(0)} s",
+            style: AppText.label),
         const SizedBox(width: AppSpacing.sm),
         // Lejátszási sebesség — billentyűzetről is: szóköz/nyilak/E/Q
         // (a gomb tooltipje sorolja a gyorsbillentyűket).
@@ -3741,32 +3721,56 @@ class _MatchScreenState extends State<MatchScreen> {
   void _jumpToEvent(Match match, int dir) {
     final points = _navPoints();
     if (points.isEmpty) return;
+    final most = _tOf(match);
     int target;
     if (dir > 0) {
-      target = points.firstWhere((t) => t > _frameIndex,
+      target = points.firstWhere((t) => t > most,
           orElse: () => points.first); // a végén körbeér az elejére
     } else {
-      target = points.lastWhere((t) => t < _frameIndex,
+      target = points.lastWhere((t) => t < most,
           orElse: () => points.last); // az elején körbeér a végére
     }
     _seekToFrame(match, target);
   }
 
-  /// Ugrás egy adott képkockára: megállítjuk a lejátszást, és ha van eredeti
-  /// videó, azt is a jelenetre állítjuk (közös logika esemény/jegyzet/grafikon
-  /// kattintáshoz).
+  /// Videó-kocka (t címke) → lista-INDEX: az első kocka, amelynek t-je
+  /// eléri. A kettő NEM ugyanaz: utólagos ✂ vágás után a lista elejéről
+  /// kockák hiányoznak, a t címkék (események, jegyzetek, javítások,
+  /// videó-idő) viszont maradnak — t-vel indexelni rossz kockára vinne.
+  static int _indexOfT(Match m, int t) {
+    var lo = 0, hi = m.frames.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (m.frames[mid].t < t) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo < 0 ? 0 : lo;
+  }
+
+  /// A mutatott kocka t címkéje (videó-kocka) — ezt hasonlítjuk az
+  /// események/jegyzetek t-jéhez, és ezt mentjük jegyzet/javítás idejének.
+  int _tOf(Match m) {
+    if (m.frames.isEmpty) return 0;
+    return m.frames[_frameIndex.clamp(0, m.frames.length - 1)].t;
+  }
+
+  /// Ugrás egy adott videó-kockára (t): megállítjuk a lejátszást, és ha
+  /// van eredeti videó, azt is a jelenetre állítjuk (közös logika
+  /// esemény/jegyzet/grafikon kattintáshoz).
   void _seekToFrame(Match match, int frame) {
-    final t = frame.clamp(0, match.frames.length - 1);
     setState(() {
       _timer?.cancel();
       _playing = false;
-      _frameIndex = t;
+      _frameIndex = _indexOfT(match, frame);
       if (match.meta.videoPath != null && VideoPanel.supported) {
         _showVideo = true;
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(t));
+      _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(frame));
     });
   }
 
@@ -3852,12 +3856,14 @@ class _MatchScreenState extends State<MatchScreen> {
 /// labdaeladás; a passzokat nem rajzoljuk — túl sűrű lenne).
 class _EventTickPainter extends CustomPainter {
   final List<Map<String, dynamic>> events;
-  final int frames;
-  _EventTickPainter({required this.events, required this.frames});
+  // A mutatott kockák t-tartománya: vágott meccsen nem 0-tól indul.
+  final int tStart, tEnd;
+  _EventTickPainter(
+      {required this.events, required this.tStart, required this.tEnd});
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (frames <= 1) return;
+    if (tEnd <= tStart) return;
     for (final e in events) {
       final type = (e["type"] as String?) ?? "";
       final color = switch (type) {
@@ -3868,7 +3874,8 @@ class _EventTickPainter extends CustomPainter {
       };
       if (color == null) continue; // passzokat nem jelöljük
       final t = (e["t"] as num?)?.toInt() ?? 0;
-      final x = size.width * t / (frames - 1);
+      if (t < tStart || t > tEnd) continue; // levágott részre esik
+      final x = size.width * (t - tStart) / (tEnd - tStart);
       final h = type == "goal" ? size.height : size.height * 0.66;
       canvas.drawLine(
           Offset(x, size.height - h), Offset(x, size.height),
@@ -3878,5 +3885,5 @@ class _EventTickPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _EventTickPainter old) =>
-      old.events != events || old.frames != frames;
+      old.events != events || old.tStart != tStart || old.tEnd != tEnd;
 }

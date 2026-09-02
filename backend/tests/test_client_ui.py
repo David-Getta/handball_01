@@ -1672,10 +1672,13 @@ def test_a_jegyzetek_egy_listat_alkotnak_es_visszanezhetok():
     meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
     assert "initialFrame" in meccs, (
         "a meccs-elemző nem fogad kezdő-képkockát")
-    # A kért képkockát HATÁROK KÖZÉ kell szorítani: egy régi jegyzet
-    # mutathat a meccs hosszán túlra (újravágott videó).
-    assert "clamp(0, utolso)" in meccs, (
-        "a kezdő-képkocka nincs a meccs hosszához igazítva")
+    # A kért képkocka VIDEÓ-KOCKA (t címke), nem lista-index: utólag
+    # vágott meccsen a kettő eltér, ezért t szerint kell megkeresni a
+    # kockát (_indexOfT — ez egyben határok közé is szorít: egy régi
+    # jegyzet mutathat a meccs hosszán túlra).
+    assert "_indexOfT(match, widget.initialFrame!)" in meccs, (
+        "a kezdő-képkocka nincs a t címke szerint megkeresve")
+    assert "static int _indexOfT(" in meccs
 
     from pathlib import Path as _Path
 
