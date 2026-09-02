@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.94 óta)
+## Kiadatlan (a v0.1.95 óta)
+
+## v0.1.95 — kiadva (2026-09-01)
+
+> Kiadás-jegyzet: a ✂ vágás magától megtalálja a meccs kezdetét, a
+> minőség-jelentés kimondja a bennmaradt bemutatást, a tanítóadat-
+> gyűjtés a labda-kiesésekből is tanul, a tanítás megmondja,
+> megérte-e, a Feldolgozások képernyő mutatja, mikor készült egy
+> futás — és új réteg a labdavezetés-táv (504 réteg).
 
 - **Labdavezetés-táv** (motor + elemzés + meccs-csomag + edzői
   összefoglaló + felderítés + meccsterv + edzés-fókusz + kliens-csempe):
