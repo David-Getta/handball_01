@@ -105,6 +105,36 @@ def train_metrics(eredmeny) -> dict:
     return ki
 
 
+def should_install(uj: dict, regi: dict) -> dict:
+    """Élesbe álljon-e az új modell? — a tanítás VÉDŐHÁLÓJA.
+
+    A tanítás eddig vakon lecserélte a súlyt, akkor is, ha az új modell
+    rosszabb lett (kevés vagy pontatlan címke, túltanulás). Itt a
+    validációs halmazon mért számokat vetjük össze: a LABDA AP50-je
+    dönt (kézilabdánál az a szűk keresztmetszet), ha az nincs, az
+    összesített mAP50. Ha nincs mihez mérni (első tanítás, vagy a
+    mostani modell nem mérhető ugyanezen a halmazon), élesbe áll.
+    Visszatérés: {"install": bool, "reason": magyar egy mondat}.
+    """
+    kulcs = ("map50_ball" if "map50_ball" in uj and "map50_ball" in regi
+             else "map50")
+    if kulcs not in uj:
+        return {"install": True,
+                "reason": "nincs mérőszám az új modellről — élesbe áll"}
+    if kulcs not in regi:
+        return {"install": True,
+                "reason": "első tanítás — nincs korábbi modell, amihez "
+                          "mérni lehetne"}
+    mi = "labda mAP50" if kulcs == "map50_ball" else "mAP50"
+    u, r = float(uj[kulcs]), float(regi[kulcs])
+    if u >= r:
+        return {"install": True,
+                "reason": f"{mi}: {u:.0f}% az eddigi {r:.0f}% helyett"}
+    return {"install": False,
+            "reason": f"{mi}: {u:.0f}% az eddigi {r:.0f}% helyett — "
+                      "rosszabb lett, a mostani modell marad"}
+
+
 def create_app():
     """Létrehozza és visszaadja a FastAPI alkalmazást.
 
@@ -1711,7 +1741,8 @@ def create_app():
                                 detail="epochs: egész szám kell")
         _train_state.update({"running": True, "done": False, "error": None,
                              "epochs": epochs, "installed": None,
-                             "metrics": None})
+                             "metrics": None, "baseline": None,
+                             "decision": None})
 
         def _tanit():
             try:
@@ -1719,7 +1750,10 @@ def create_app():
                 from scripts.process_video import (_pick_device,
                                                    _resolve_weights)
                 from ultralytics import YOLO
-                model = YOLO(_resolve_weights("yolov8n.pt"))
+                # A MOSTANI éles súly: ebből indul a tanítás, és ehhez
+                # mérjük a végén az újat (védőháló).
+                regi_ut = _resolve_weights("yolov8n.pt")
+                model = YOLO(regi_ut)
                 eredmeny = model.train(
                     data=str(yaml_ut), epochs=epochs, imgsz=960, batch=-1,
                     device=_pick_device(),
@@ -1731,9 +1765,32 @@ def create_app():
                 if not best.exists():
                     raise RuntimeError("a kész modell (best.pt) nem "
                                        "jött létre")
-                cel = install_weights(best)
-                _train_state["installed"] = str(cel)
-                _train_state["metrics"] = train_metrics(eredmeny)
+                uj_m = train_metrics(eredmeny)
+                _train_state["metrics"] = uj_m
+                # VÉDŐHÁLÓ: a mostani éles modellt ugyanazon a
+                # validációs halmazon mérjük. Csak akkor mérhető, ha
+                # már finomhangolt (2 osztály) — az általános COCO-
+                # modell osztályai nem esnek egybe, azon a mérés
+                # értelmetlen; ilyenkor "első tanítás".
+                regi_m: dict = {}
+                try:
+                    regi = YOLO(regi_ut)
+                    if len(getattr(regi, "names", {}) or {}) <= 2:
+                        regi_val = regi.val(
+                            data=str(yaml_ut), imgsz=960,
+                            device=_pick_device(),
+                            project=str(data_root() / "runs"),
+                            name="regi_val", exist_ok=True,
+                            verbose=False, plots=False)
+                        regi_m = train_metrics(regi_val)
+                except Exception:
+                    regi_m = {}  # mérés nélkül: első tanításként kezeljük
+                _train_state["baseline"] = regi_m
+                dontes = should_install(uj_m, regi_m)
+                _train_state["decision"] = dontes
+                if dontes["install"]:
+                    cel = install_weights(best)
+                    _train_state["installed"] = str(cel)
                 _train_state["done"] = True
             except Exception as e:
                 _train_state["error"] = str(e)

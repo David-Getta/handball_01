@@ -218,11 +218,23 @@ class _LabelScreenState extends State<LabelScreen> {
             meres += ".";
           }
         }
+        // Védőháló: a motor összeméri az új modellt a mostanival, és
+        // csak akkor állítja élesbe, ha nem lett rosszabb — különben a
+        // régi marad, és az üzenet megmondja, miért.
+        final dontes = st["decision"];
+        final atallt = st["installed"] != null;
+        final indok = (dontes is Map ? dontes["reason"] as String? : null);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            duration: const Duration(seconds: 15),
-            content: Text("A tanítás KÉSZ — az új modell élesben: "
-                "${st["installed"]}. A következő feldolgozás már ezzel "
-                "fut.$meres")));
+            duration: const Duration(seconds: 18),
+            content: Text(atallt
+                ? "A tanítás KÉSZ — az új modell élesben: "
+                    "${st["installed"]}. A következő feldolgozás már "
+                    "ezzel fut.$meres"
+                    "${indok != null ? " ($indok)" : ""}"
+                : "A tanítás KÉSZ, de az új modell NEM állt élesbe — a "
+                    "mostani marad.${indok != null ? " $indok" : ""}"
+                    "$meres Több és pontosabb címke kell a következő "
+                    "körhöz.")));
       }
       return;
     }

@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.95 óta)
+## Kiadatlan (a v0.1.96 óta)
+
+- **A tanítás védőhálója: csak a jobb modell áll élesbe** (motor +
+  tanítás-állapot + címkéző): a tanítás eddig vakon lecserélte a
+  modellt — kevés vagy pontatlan címkéből rosszabb is lehetett, és a
+  következő feldolgozás azzal ment. Mostantól a tanítás végén a MOSTANI
+  modellt ugyanazon a validációs halmazon méri, és a labda AP50 dönt:
+  ha az új nem rosszabb, élesbe áll; ha rosszabb, a mostani marad, és
+  az üzenet megmondja, miért ("labda mAP50: 48% az eddigi 55% helyett
+  — rosszabb lett, a mostani modell marad"). Első tanításnál (az
+  általános modell nem mérhető a 2-osztályos halmazon) élesbe áll.
 
 - **A "nem készült klip" hiba megmondja, miért és mit tegyél**
   (klipvágás): eddig "nincs a szűrőnek megfelelő esemény, vagy a videó
@@ -13,6 +23,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   meg — ami van: lövés: 37, labdaeladás: 12") és mit lehet tenni
   (lövés-szűrő, vagy a hiányzó gólok javítása a meccs-elemzőben); ha a
   jelenetek megvoltak, de a videó nem olvasható, azt mondja.
+
+## v0.1.96 — kiadva (2026-09-02)
+
+> Kiadás-jegyzet: esemény-ugrás és jelenet-felirat a 3D pályán
+> belül, és a meccs-nézet minden kattintása a jó kockára ugrik
+> az utólag ✂ vágott meccsen is.
 
 - **Vágott meccsen is a jó kockára ugrik a meccs-nézet** (meccs-elemző):
   az esemény-, jegyzet- és idővonal-kattintás, a gól-felvétel és a

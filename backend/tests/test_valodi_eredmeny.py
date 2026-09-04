@@ -357,6 +357,29 @@ def test_a_tanitas_merszamai_emberi_alakban():
     assert train_metrics(object()) == {}
 
 
+def test_a_tanitas_vedohaloja_csak_a_jobb_modellt_allitja_elesbe():
+    """A tanítás nem cserélhet vakon: a labda AP50 dönt; ha nincs mihez
+    mérni (első tanítás), élesbe áll; ha rosszabb lett, a mostani marad
+    — és az indok magyarul megmondja, miért."""
+    from handball.api.app import should_install
+
+    # Első tanítás: nincs korábbi mérés → élesbe áll.
+    d = should_install({"map50": 60.0, "map50_ball": 50.0}, {})
+    assert d["install"] is True and "első tanítás" in d["reason"]
+    # Javult a labda → csere.
+    d = should_install({"map50_ball": 61.0}, {"map50_ball": 55.0})
+    assert d["install"] is True and "61%" in d["reason"]
+    # Rosszabb lett a labda → a mostani marad, indokkal.
+    d = should_install({"map50_ball": 48.0, "map50": 70.0},
+                       {"map50_ball": 55.0, "map50": 60.0})
+    assert d["install"] is False and "rosszabb" in d["reason"]
+    # Ha nincs labda-sor, az összesített mAP50 dönt.
+    d = should_install({"map50": 70.0}, {"map50": 65.0})
+    assert d["install"] is True and "mAP50" in d["reason"]
+    # Mérőszám nélküli új modell: nem blokkolunk vakon.
+    assert should_install({}, {"map50": 65.0})["install"] is True
+
+
 def test_a_shutdown_vegpont_cserelheto_kilepessel():
     """A fél-frissülés őre: a /shutdown a régi motort állítja le. A
     kilépés-függvény cserélhető (app.state.exit_fn) — a teszt így nem
