@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.97 óta)
 
+- **A diagnosztika-JSON viszi a horgonyzás-arányt** (diagnosztika +
+  doksi): a svenkelő kameránál a fejlesztő első kérdése, hány kockán
+  sikerült a kalibrált képhez mérni — a `pan_anchor_pct` mostantól a
+  diagnosztika-csomagban is ott van (régi mentésen null). A pásztázás-
+  követés működése és a pontos kalibráció tippjei egy új lapon:
+  docs/PASZTAZAS.md.
+
 - **A bekalibrált képkockák kötelező horgonyok** (feldolgozás): a
   pásztázás-követés a kalibrált kockákat — egy vagy kettő, akár külön
   képkockán bejelölve — a távolság-szabálytól függetlenül horgonynak

@@ -396,3 +396,15 @@ def test_a_shutdown_vegpont_cserelheto_kilepessel():
             break
         time.sleep(0.1)
     assert hivasok == [0]
+
+
+def test_a_diagnosztika_viszi_a_horgonyzas_aranyt():
+    """A svenkelő kameránál a fejlesztő első kérdése: hány kockán
+    sikerült a kalibrált képhez mérni. Régi mentésen None — de a kulcs
+    akkor is ott van, hogy a hiány látsszon."""
+    m = _meccs("pan1")
+    m.meta.pan_anchor_pct = 42.5
+    c, _tmp = _client([m, _meccs("pan0")])
+    assert c.get("/matches/pan1/diagnostics").json()["pan_anchor_pct"] == 42.5
+    regi = c.get("/matches/pan0/diagnostics").json()
+    assert "pan_anchor_pct" in regi and regi["pan_anchor_pct"] is None

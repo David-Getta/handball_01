@@ -1947,6 +1947,11 @@ def create_app():
                     "calibrated": match.meta.calibrated,
                     "partial": bool(match.meta.partial),
                     "game_window_found": match.meta.game_window_found,
+                    # A pásztázás-követés horgonyzás-aránya (%): a
+                    # svenkelő kameránál ez mondja meg, mennyire
+                    # hihetők a helyek — a fejlesztőnek az első kérdés.
+                    "pan_anchor_pct": getattr(match.meta,
+                                              "pan_anchor_pct", None),
                     "source_segments": list(
                         getattr(match.meta, "source_segments", None) or []),
                     "event_overrides_count": len(
