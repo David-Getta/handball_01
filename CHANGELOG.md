@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.96 óta)
 
+- **Pásztázás-követés horgonnyal: a kamera-mozgás a KALIBRÁLT képhez
+  mérve** (feldolgozás): a kamera jobbra-balra svenkelését eddig csak
+  kockáról kockára követtük, és a lépések hibája összeadódott — mire a
+  kamera visszafordult a kalibrált állásba, a becslés már elcsúszott, a
+  játékosok "odébb kerültek" a felülnézeten. Mostantól a kalibrált
+  alap-kocka jellemzőpontjait eltároljuk, és a futó kockát rendszeresen
+  közvetlenül ehhez illesztjük (abszolút mérés, nem halmozódik); a
+  távolra elforduló nézetekből kulcs-horgonyok készülnek, a lánc csak
+  áthidal, ahol nincs elég egyezés. A mozgó embereket (detektált
+  dobozok) mindkét becslő kimaszkolja: csak az álló háttér adja a
+  kamera mozgását. A feldolgozás-napló mondja, hány kockán horgonyzott.
+  Felhasználói javaslatra ("a bekalibrált képkockákon talált
+  távpontokat keresse a meccsen").
+
 - **A tanítás védőhálója: csak a jobb modell áll élesbe** (motor +
   tanítás-állapot + címkéző): a tanítás eddig vakon lecserélte a
   modellt — kevés vagy pontatlan címkéből rosszabb is lehetett, és a

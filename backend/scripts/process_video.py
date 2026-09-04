@@ -609,7 +609,16 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
         panH = None
         if pan_tracker is not None:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            panH = pan_tracker.update(gray)
+            # A MOZGÓ embereket (minden detektált személy, küszöbtől
+            # függetlenül) kimaszkoljuk: csak az álló háttér adja a
+            # kamera mozgását.
+            mozgo = []
+            if r.boxes is not None:
+                for b in r.boxes:
+                    if int(b.cls[0]) in person_ids:
+                        mozgo.append(tuple(
+                            int(v) for v in b.xyxy[0].tolist()))
+            panH = pan_tracker.update(gray, exclude=mozgo)
         persons, best_ball = [], None
         if r.boxes is not None:
             for b in r.boxes:
@@ -687,6 +696,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     if pan_tracker is not None:
         tx, ty = pan_tracker.translation
         print(f"pásztázás-követés: össz-elmozdulás a végére: ({tx:.0f}, {ty:.0f}) px")
+        print(pan_tracker.summary())
     # A termelő-szál elengedése: ha még él (korai break / plafon),
     # jelezzük, hogy nincs több fogyasztó, és felébresztjük.
     feed.abandon()

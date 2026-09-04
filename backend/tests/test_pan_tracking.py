@@ -103,3 +103,59 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def _textured_big(seed=3, w=640, h=360):
+    """Nagyobb, részletgazdag kép a horgony-teszthez (ORB-nak elég pont)."""
+    import cv2
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    img = (rng.random((h, w)) * 255).astype(np.uint8)
+    img = cv2.GaussianBlur(img, (3, 3), 0)
+    # Néhány éles alakzat is (a valódi képen: vonalak, lelátó, falak).
+    for _ in range(40):
+        x, y = int(rng.integers(10, w - 40)), int(rng.integers(10, h - 40))
+        cv2.rectangle(img, (x, y), (x + 20, y + 20), int(rng.integers(0, 255)), -1)
+    return img
+
+
+def test_horgony_visszahozza_a_kalibralt_allast():
+    """A kamera elfordul, majd VISSZAÁLL a kalibrált állásba: a horgonyzott
+    becslés a végén ~egység (a puszta lánc a lépések hibáját halmozná).
+    Ez a Kiel-féle eset: a kamera jobbra-balra svenkel, és nem biztos,
+    hogy pontosan ugyanott áll meg — a horgony a kalibrált képhez méri."""
+    img = _textured_big()
+    tr = PanTracker(anchor=True)
+    tr.update(img)
+    for dx in (8, 16, 24, 32, 40, 32, 24, 16, 8, 0, 0):
+        G = tr.update(_shift(img, dx))
+    assert abs(G[0][2]) < 1.5 and abs(G[1][2]) < 1.5, f"G={G}"
+    assert tr.stats["anchored"] >= 1
+    assert tr.stats["frames"] == 12
+    assert "horgonyzott" in tr.summary()
+
+
+def test_horgony_kozben_is_helyes_az_eltolas():
+    """A horgonyzott becslés az elfordult állásban is a valódi eltolást
+    adja (nem csak a visszaállásnál)."""
+    img = _textured_big()
+    tr = PanTracker(anchor=True)
+    tr.update(img)
+    G = None
+    for dx in (10, 20, 30, 40, 50):
+        G = tr.update(_shift(img, dx))
+    # 5 lépés után (ANCHOR_EVERY = 5) horgonyzott: az eltolás ~ -50.
+    assert abs(G[0][2] + 50.0) < 2.0, f"tx={G[0][2]}"
+    assert tr.stats["anchored"] >= 1
+
+
+def test_a_mozgo_dobozok_kimaszkolva_is_megy_a_becsles():
+    """A kizárt (mozgó ember) dobozokkal is helyes az eltolás — és a
+    maszk nem töri el a becslést, ha a kép nagy részét fedi."""
+    img = _textured_big()
+    tr = PanTracker(anchor=False)
+    tr.update(img, exclude=[(100, 100, 200, 250)])
+    G = tr.update(_shift(img, 12), exclude=[(100, 100, 200, 250),
+                                            (400, 50, 460, 200)])
+    assert abs(G[0][2] + 12.0) < 1.5, f"tx={G[0][2]}"
+    assert tr.stats["chain"] == 1
