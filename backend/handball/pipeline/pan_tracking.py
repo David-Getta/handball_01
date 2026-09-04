@@ -182,13 +182,30 @@ class PanTracker:
 
     # ------------------------------------------------------------ fő hívás
 
-    def update(self, gray, exclude=None):
+    def _force_anchor(self, gray, mask):
+        """A MOSTANI kockát horgonnyá tesszük a mostani G-vel — a távolság-
+        szabálytól függetlenül. A KALIBRÁLT kockákra való: a felhasználó
+        pont ezeket a nézeteket jelölte be, ide kell a legpontosabb
+        visszamérés, amikor a kamera később visszatér."""
+        pts, des = self._orb_of(gray, mask)
+        if pts is None:
+            return False
+        if len(self._anchors) >= self.MAX_ANCHORS:
+            self._anchors.pop(1 if len(self._anchors) > 1 else 0)
+        self._anchors.append((pts, des, self._G.copy()))
+        self.stats["anchors"] = len(self._anchors)
+        self.stats["forced"] = self.stats.get("forced", 0) + 1
+        return True
+
+    def update(self, gray, exclude=None, force_anchor=False):
         """Feldolgoz egy új (szürkeárnyalatos) képkockát; visszaadja G(t)-t.
 
         `exclude`: a mozgó objektumok (detektált emberek) pixel-dobozai
-        [(x1, y1, x2, y2), ...] — ezeket egyik becslő sem használja. A
-        visszatérési érték 3x3-as beágyazott lista (JSON-barát), ami az
-        AKTUÁLIS képkocka pixeleit az ALAP (első) képkocka koordinátáiba viszi.
+        [(x1, y1, x2, y2), ...] — ezeket egyik becslő sem használja.
+        `force_anchor`: ez a kocka KALIBRÁLT kocka — horgony lesz belőle a
+        távolság-szabálytól függetlenül. A visszatérési érték 3x3-as
+        beágyazott lista (JSON-barát), ami az AKTUÁLIS képkocka pixeleit az
+        ALAP (első) képkocka koordinátáiba viszi.
         """
         import cv2
         import numpy as np
@@ -237,6 +254,11 @@ class PanTracker:
                 self.stats["chain"] += 1
             else:
                 self.stats["held"] += 1  # nincs becslés: az előző marad
+        # 3) KALIBRÁLT kocka: kötelező horgony (a legjobb, ha előbb a
+        #    horgonyhoz mértük — a G ilyenkor abszolút; ha nem sikerült, a
+        #    lánc szerinti G-vel is jobb, mint horgony nélkül).
+        if self._anchor and force_anchor:
+            self._force_anchor(gray, mask)
 
         self._prev_gray = gray
         self._n += 1

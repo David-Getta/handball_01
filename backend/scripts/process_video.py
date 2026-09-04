@@ -413,7 +413,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   pan=False, jersey_voter=None, ocr_every=5,
                   ball_recover=True, stop_check=None,
                   raw_out=None, colors_out=None, on_note=None,
-                  pan_stats_out=None):
+                  pan_stats_out=None, anchor_frames=None):
     import os
     # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
     # hiba helyett. A torch importja ELŐTT kell beállítani.
@@ -471,6 +471,9 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     if pan:
         from handball.pipeline.pan_tracking import PanTracker
         pan_tracker = PanTracker()
+    # A kalibrált kockák video-indexei növekvő sorban — ezekből lesz
+    # kötelező horgony, amint a feldolgozás eléri őket.
+    horgony_var = sorted(int(f) for f in (anchor_frames or []))
     # Labda-visszaszerzés: elveszett labdánál a várható helye körüli KIS
     # kivágásban keresünk újra — ott a labda relatíve nagy, jobb az esély.
     reacquirer = None
@@ -619,7 +622,16 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                     if int(b.cls[0]) in person_ids:
                         mozgo.append(tuple(
                             int(v) for v in b.xyxy[0].tolist()))
-            panH = pan_tracker.update(gray, exclude=mozgo)
+            # A KALIBRÁLT kockák kötelező horgonyok: a felhasználó pont
+            # ezeket a nézeteket jelölte be, ide kell a legpontosabb
+            # visszamérés. A kalibráció kocka-indexe nem feltétlenül esik
+            # a ritkítás rácsára: az első ELÉRT feldolgozott kocka lesz az.
+            kalibralt = False
+            while horgony_var and fi * stride >= horgony_var[0]:
+                horgony_var.pop(0)
+                kalibralt = True
+            panH = pan_tracker.update(gray, exclude=mozgo,
+                                      force_anchor=kalibralt)
         persons, best_ball = [], None
         if r.boxes is not None:
             for b in r.boxes:
@@ -1203,7 +1215,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             court_poly, start=start, skip_dark=skip_dark,
             on_frame=on_frame, on_note=on_note, pan=bool(calib_list),
             jersey_voter=jersey_voter, stop_check=stop_check,
-            raw_out=raw, colors_out=all_colors, pan_stats_out=pan_stats))
+            raw_out=raw, colors_out=all_colors, pan_stats_out=pan_stats,
+            anchor_frames={int(c.get("frame", start)) for c in calib_list}))
     else:
         _process_hog(video_path, stride, max_frames, stop_check=stop_check,
                      raw_out=raw, colors_out=all_colors, on_frame=on_frame,

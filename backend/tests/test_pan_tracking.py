@@ -189,3 +189,19 @@ def test_a_minoseg_jelentes_szol_ha_ritkan_horgonyzott():
     assert not [w for w in rep_jo["warnings"] if "kalibrált képhez" in w]
     rep_regi = compute_quality_report(_meccs(None))
     assert not [w for w in rep_regi["warnings"] if "kalibrált képhez" in w]
+
+
+def test_a_kalibralt_kocka_kotelezo_horgony():
+    """A force_anchor-os kocka a távolság-szabálytól függetlenül horgony
+    lesz (a kalibrált nézetekre a legpontosabb visszamérés kell), és a
+    visszatéréskor hozzá mér: 4 px-es elfordulás után is ~egység."""
+    img = _textured_big()
+    tr = PanTracker(anchor=True)
+    tr.update(img)
+    # Az alap után 4 px-re (a 150 px-es távolság-szabály alatt) egy
+    # kalibrált kocka: kötelezően bekerül a horgonyok közé.
+    tr.update(_shift(img, 4), force_anchor=True)
+    assert tr.stats["anchors"] == 2 and tr.stats.get("forced") == 1
+    for dx in (12, 20, 12, 4, 4):
+        G = tr.update(_shift(img, dx))
+    assert abs(G[0][2] + 4.0) < 1.5, f"tx={G[0][2]}"

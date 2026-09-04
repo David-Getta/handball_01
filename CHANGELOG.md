@@ -3,7 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.96 óta)
+## Kiadatlan (a v0.1.97 óta)
+
+- **A bekalibrált képkockák kötelező horgonyok** (feldolgozás): a
+  pásztázás-követés a kalibrált kockákat — egy vagy kettő, akár külön
+  képkockán bejelölve — a távolság-szabálytól függetlenül horgonynak
+  veszi, így pont azokra a nézetekre lesz a legpontosabb a visszamérés,
+  amiket a felhasználó bejelölt. Felhasználói javaslatra ("a kettő
+  bekalibrált képkockát hasonlítsa össze a futó képkockákkal").
+
+## v0.1.97 — kiadva (2026-09-04)
+
+> Kiadás-jegyzet: a kamera svenkelését a motor mostantól a
+> KALIBRÁLT képhez méri vissza (horgony), nem csak kockáról kockára
+> halmoz — a pásztázás alatt nem csúsznak el a helyek; a tanítás
+> csak a jobb modellt állítja élesbe; a klip-hiba megmondja, mit
+> tegyél.
 
 - **A minőség-jelentés szól, ha a kamera-mozgást ritkán sikerült a
   kalibrált képhez mérni** (feldolgozás + minőség-jelentés): a
