@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.97 óta)
 
+- **Esemény-ugrás és jelenet-felirat a böngészős 3D/VR nézetben is**
+  (Böngészős 3D / VR): a beágyazott oldal ⏮/⏭ gombjaival (és a [ / ]
+  billentyűkkel) a következő/előző gólra, lövésre vagy eladásra ugrik a
+  lejátszás — a jelenet előtt 4 másodperccel —, és a jelenet közben
+  inzert mondja, mi történik ("GÓL — Kiel"). Ugyanaz, mint az appbeli
+  3D pályán; VR-headsetben is működik (az oldal maga hordozza az
+  eseményeket).
+
 - **A diagnosztika-JSON viszi a horgonyzás-arányt** (diagnosztika +
   doksi): a svenkelő kameránál a fejlesztő első kérdése, hány kockán
   sikerült a kalibrált képhez mérni — a `pan_anchor_pct` mostantól a

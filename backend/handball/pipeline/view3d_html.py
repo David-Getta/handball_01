@@ -41,10 +41,27 @@ def _compact_data(match: Match) -> dict:
         labda = ([round(f.ball.x, 1), round(f.ball.y, 1)]
                  if f.ball is not None else 0)
         frames.append([round(f.t / fps, 2), jatekosok, labda])
+    # Események a jelenet-ugráshoz és a felirathoz: [t_s, típus, hazai?]
+    # — a típus "g" (gól), "s" (lövés), "t" (eladás); a passz túl sűrű.
+    esemenyek: list = []
+    try:
+        from .event_detection import detect_shots
+        kod = {"goal": "g", "shot": "s", "turnover": "t"}
+        for e in detect_shots(match):
+            tipus = kod.get(getattr(e.type, "value", str(e.type)))
+            if tipus is None:
+                continue
+            esemenyek.append([round(e.t / fps, 2), tipus,
+                              1 if getattr(e.team, "value", e.team) == "home"
+                              else 0])
+        esemenyek.sort(key=lambda x: x[0])
+    except Exception:
+        esemenyek = []  # esemény nélkül is működjön a nézet
     return {
         "home": match.meta.home_team,
         "away": match.meta.away_team,
         "frames": frames,
+        "events": esemenyek,
     }
 
 
@@ -67,13 +84,18 @@ def view3d_html(match: Match) -> str:
  input[type=range]{flex:1}
  button{background:#173042;color:#dfe7ef;border:1px solid #2b4a5e;border-radius:8px;padding:6px 12px;cursor:pointer}
  #sugo{position:fixed;right:12px;top:10px;font-size:11.5px;opacity:.7;text-align:right}
+ #felirat{position:fixed;left:12px;bottom:56px;padding:6px 12px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.85);color:#d9b544;font-weight:600;font-size:15px;display:none}
 </style></head><body>
 <div id="hud"><b>__CIM__</b></div>
 <div id="sugo">Kattints a képre: egér-nézelődés (Esc kilép)<br>
 WASD — mozgás · R/F — fel/le · Shift — gyors · Szóköz — lejátszás<br>
+[ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
+<div id="felirat"></div>
 <div id="vez">
+ <button id="elozo" title="Előző esemény">⏮</button>
  <button id="lejatszas">▶</button>
+ <button id="kov" title="Következő esemény">⏭</button>
  <input type="range" id="csuszka" min="0" max="0" step="0.01" value="0">
  <span id="ido">0:00</span>
 </div>
@@ -185,6 +207,33 @@ lejatszasGomb.onclick = () => { megy = !megy; lejatszasGomb.textContent = megy ?
 if (megy) lejatszasGomb.textContent = "⏸";
 csuszka.value = ido;
 csuszka.oninput = () => { ido = parseFloat(csuszka.value); };
+// Esemény-ugrás (⏮/⏭ és [ / ]): a jelenet előtt 4 mp-cel, lejátszva —
+// mint az appból érkezve. Egy másodpercnyi holt sáv, hogy az épp nézett
+// esemény ne "ragadjon". A felirat a jelenet közben mondja, mi történik.
+const ESEM = ADAT.events || [];
+const NEV = {g: "GÓL", s: "Lövés", t: "Labdaeladás"};
+function esemenyUgras(irany){
+  if (!ESEM.length) return;
+  let cel = null;
+  if (irany > 0){ for (const e of ESEM){ if (e[0] > ido + 1){ cel = e; break; } } }
+  else { for (let i = ESEM.length-1; i >= 0; i--){ if (ESEM[i][0] < ido - 1){ cel = ESEM[i]; break; } } }
+  if (!cel) return;
+  ido = Math.max(0, cel[0] - 4); megy = true; lejatszasGomb.textContent = "⏸";
+  csuszka.value = ido;
+}
+document.getElementById("elozo").onclick = () => esemenyUgras(-1);
+document.getElementById("kov").onclick = () => esemenyUgras(1);
+const feliratElem = document.getElementById("felirat");
+function felirat(t){
+  for (const e of ESEM){
+    if (t < e[0] - 0.3) break;
+    if (t > e[0] + 2.5) continue;
+    feliratElem.textContent = NEV[e[1]] + " — " + (e[2] ? ADAT.home : ADAT.away);
+    feliratElem.style.display = "block";
+    return;
+  }
+  feliratElem.style.display = "none";
+}
 function keres(t){
   let lo = 0, hi = frames.length-1;
   while (lo < hi){ const kozep = (lo+hi+1)>>1;
@@ -226,6 +275,8 @@ let yaw = 0, pitch = 0;
 const gombok = new Set();
 addEventListener("keydown", e => {
   if (e.code === "Space"){ lejatszasGomb.onclick(); e.preventDefault(); return; }
+  if (e.code === "BracketLeft"){ esemenyUgras(-1); return; }
+  if (e.code === "BracketRight"){ esemenyUgras(1); return; }
   gombok.add(e.code);
 });
 addEventListener("keyup", e => gombok.delete(e.code));
@@ -274,7 +325,7 @@ fest.setAnimationLoop(() => {
   if (megy){ ido = Math.min(veg, ido + dt);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido);
+  mozgas(dt); vrMozgas(dt); rajzol(ido); felirat(ido);
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);

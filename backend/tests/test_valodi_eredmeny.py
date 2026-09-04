@@ -408,3 +408,20 @@ def test_a_diagnosztika_viszi_a_horgonyzas_aranyt():
     assert c.get("/matches/pan1/diagnostics").json()["pan_anchor_pct"] == 42.5
     regi = c.get("/matches/pan0/diagnostics").json()
     assert "pan_anchor_pct" in regi and regi["pan_anchor_pct"] is None
+
+
+def test_a_view3d_esemenyeket_es_ugrast_is_visz():
+    """A böngészős 3D/VR nézet paritása az appbeli 3D-vel: az események
+    (gól/lövés/eladás) beágyazva, ⏮/⏭ gombok és jelenet-felirat."""
+    from handball.pipeline.view3d_html import _compact_data, view3d_html
+
+    m = _meccs("v3e", golok_home=2, golok_away=1)
+    adat = _compact_data(m)
+    assert len(adat["events"]) == 3
+    assert {e[1] for e in adat["events"]} == {"g"}
+    assert sorted(e[2] for e in adat["events"]) == [0, 1, 1]
+    assert adat["events"] == sorted(adat["events"], key=lambda e: e[0])
+    oldal = view3d_html(m)
+    for jel in ('id="elozo"', 'id="kov"', 'id="felirat"',
+                "esemenyUgras", "BracketRight"):
+        assert jel in oldal, jel
