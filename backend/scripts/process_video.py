@@ -888,7 +888,14 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 report(stage, prog, msg)
 
         say(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
-        rep("C", 0.78, "követés kész")
+        # A horgonyzás-arány a job-üzenetben is: a Feldolgozások képernyőn
+        # látszik, mennyire hihetők a helyek a svenkelő kameránál.
+        if pan_stats.get("frames"):
+            _hp = 100.0 * pan_stats.get("anchored", 0) / pan_stats["frames"]
+            rep("C", 0.78, f"követés kész — a kamera-mozgás a kockák "
+                           f"{_hp:.0f}%-án a kalibrált képhez mérve")
+        else:
+            rep("C", 0.78, "követés kész")
 
         # [D] csapatszín-klaszterezés (kapus/bíró külön kezelése a szín-profilban).
         rep("D", 0.82, "csapatszín / kapus / bíró")

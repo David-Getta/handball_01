@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.97 óta)
 
+- **A feldolgozás üzenete mondja a horgonyzás-arányt** (Feldolgozások):
+  a "követés kész" lépés mostantól azt is kiírja, a kockák hány
+  százalékán sikerült a kamera-mozgást a kalibrált képhez mérni —
+  svenkelő kameránál ebből látszik előre, mennyire hihetők a helyek.
+
 - **Egy kattintás a bennmaradt bemutatás levágásához** (meccs-nézet,
   minőség-panel): ha a jelentés megtalálta a meccs kezdetét ("a felvétel
   eleje nem-játéknak látszik"), a panel alján "Levágás a javaslat
