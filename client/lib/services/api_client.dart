@@ -1379,6 +1379,12 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Kalibráció-ellenőrző kép (GET /matches/{id}/calib-overlay?t=): a
+  /// videó adott kockája a visszarajzolt pályavonalakkal — a rajzolt
+  /// vonalnak a valódira kell ülnie. Image.network-kel jeleníthető meg.
+  String calibOverlayUrl(String matchId, int t) =>
+      "$baseUrl/matches/$matchId/calib-overlay?t=$t";
+
   /// UTÓLAGOS vágás (POST /matches/{id}/trim): a megadott játékidő-
   /// ablakon kívüli rész eldobása az elemzésből. A tipikus eset a
   /// bennmaradt bemutatás/bemelegítés — a felhasználó tudja, mikor

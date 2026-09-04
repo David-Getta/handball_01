@@ -1688,6 +1688,14 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.description_outlined, color: AppColors.textSecondary),
           tooltip: "Meccsjelentés mentése (nyomtatható)",
         ),
+        // KALIBRÁCIÓ-ELLENŐRZÉS: a pályavonalak visszarajzolva a videó
+        // három kockájára (eleje/közepe/vége) — a szem dönti el, tartja-e
+        // a kalibráció a svenkelés alatt.
+        IconButton(
+          onPressed: _sourceLabel == "demó" ? null : _calibCheckDialog,
+          icon: const Icon(Icons.grid_on, color: AppColors.textSecondary),
+          tooltip: "Kalibráció ellenőrzése (vonalak a videón)",
+        ),
         // MECCS-CSOMAG: jelentés + CSV + gólklipek EGY zip-ben — megosztásra.
         IconButton(
           onPressed: _sourceLabel == "demó" || _exportingPackage
@@ -2099,6 +2107,88 @@ class _MatchScreenState extends State<MatchScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(humanError(e))));
     }
+  }
+
+  /// KALIBRÁCIÓ-ELLENŐRZÉS: a motor a pályavonalakat visszarajzolja a
+  /// videó kockáira (a kalibráció + a kamera-mozgás követése alapján).
+  /// Három kocka — eleje, közepe, vége —, mert a svenkelés a meccs
+  /// közben csúsztatja el a helyeket, nem a kalibrált kockán.
+  Future<void> _calibCheckDialog() async {
+    final match = _match;
+    if (match == null || match.frames.isEmpty) return;
+    final n = match.frames.length;
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    final kockak = [
+      match.frames[(n * 0.05).floor().clamp(0, n - 1)].t,
+      match.frames[(n * 0.5).floor().clamp(0, n - 1)].t,
+      match.frames[(n * 0.95).floor().clamp(0, n - 1)].t,
+    ];
+    String ido(int t) {
+      final s = (t / fps).round();
+      return "${s ~/ 60}:${(s % 60).toString().padLeft(2, "0")}";
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Kalibráció ellenőrzése"),
+        content: SizedBox(
+          width: 900,
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                  "A motor a pályavonalakat (alapvonal, felező, 6 m-es "
+                  "kapuelőtér, kapuk) visszarajzolja a videó kockáira. A "
+                  "rajzolt vonalnak a VALÓDI vonalra kell ülnie — a meccs "
+                  "elején, közepén és végén is. Ahol elcsúszik, ott a "
+                  "kalibráció vagy a kamera-mozgás követése a hibás.",
+                  style: AppText.label.copyWith(fontSize: 12.5)),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final t in kockak)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Column(children: [
+                          Text(ido(t),
+                              style: AppText.label.copyWith(fontSize: 11)),
+                          const SizedBox(height: 4),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              _api.calibOverlayUrl(widget.matchId, t),
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => Container(
+                                padding: const EdgeInsets.all(12),
+                                color: AppColors.surfaceAlt,
+                                child: Text(
+                                    "Nem készült kép ehhez a kockához — "
+                                    "régi mentés (kalibráció-geometria "
+                                    "nélkül), vagy a videó nem érhető el. "
+                                    "Újrafeldolgozás után elérhető.",
+                                    style: AppText.label
+                                        .copyWith(fontSize: 11)),
+                              ),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ),
+                ],
+              ),
+            ]),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Rendben")),
+        ],
+      ),
+    );
   }
 
   /// Diagnosztika-JSON mentése — a fejlesztőnek szánt visszajelzés.

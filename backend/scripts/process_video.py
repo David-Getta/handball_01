@@ -977,6 +977,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         # A meccs dátuma a videó metaadatából (mvhd creation_time, tartalék:
         # fájl-mtime) — a játékos-trend és a könyvtár időrendje erre épül.
         from handball.pipeline.video_meta import video_recording_date
+        from handball.pipeline.calib_overlay import (
+            sample_pan_keyframes as _sample_pan_keyframes)
         rec_date = video_recording_date(str(video_path))
         meta = MatchMeta(match_id=match_id, home_team=home_team, away_team=away_team,
                          fps=fps / stride, frame_width=W, frame_height=H,
@@ -992,7 +994,18 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                                         if n_total > 0 and fps > 0 else None),
                          # Volt-e kalibráció: enélkül a koordináta arányos
                          # becslés, és a pályán kívüliek nem szűrhetők.
-                         calibrated=bool(calib_list))
+                         calibrated=bool(calib_list),
+                         # Kalibráció-ellenőrzéshez: az elsődleges
+                         # homográfia és a kamera-mozgás ritkított sora
+                         # (calib_overlay) — a pályavonalak utólag
+                         # bármelyik kockára visszarajzolhatók.
+                         court_homography=(
+                             [[float(v) for v in sor] for sor in mappers[0][2]]
+                             if calib_list and mappers else None),
+                         pan_keyframes=(
+                             _sample_pan_keyframes([r_[2] for r_ in raw],
+                                                   fps / stride)
+                             if calib_list else None))
         if rec_date:
             say(f"meccs-dátum a videóból: {rec_date}")
         frames = []

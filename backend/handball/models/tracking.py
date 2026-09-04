@@ -161,6 +161,14 @@ class MatchMeta:
     # a svenkelés alatt a helyek elcsúszhatnak — a minőség-jelentés
     # ebből szól. None = régi mentés vagy pásztázás-követés nélkül.
     pan_anchor_pct: Optional[float] = None
+    # KALIBRÁCIÓ-ELLENŐRZÉSHEZ: az elsődleges kalibráció homográfiája
+    # (alap-kocka pixel → pálya méter, 3x3) és a kamera-mozgás ritkított
+    # sora [[t, G 3x3], …] (G: aktuális kocka → alap-kocka). Ezekből a
+    # pályavonalak utólag bármelyik kockára visszarajzolhatók — a
+    # felhasználó a szemével ellenőrzi, tartja-e a kalibráció a
+    # svenkelés alatt. None = régi mentés vagy kalibráció nélkül.
+    court_homography: Optional[list] = None
+    pan_keyframes: Optional[list] = None
     # KÉZI esemény-javítások: amit az edző a felismerésen kijavít.
     # Elemenként {"op": "add"|"remove"|"set_type", "t": kocka,
     # "type": "goal"|"shot", "team": "home"|"away"}. A lövés-felismerés

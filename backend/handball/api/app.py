@@ -2001,6 +2001,53 @@ def create_app():
         return {"match_id": match_id, "found": gw is not None,
                 **(gw or {})}
 
+    @app.get("/matches/{match_id}/calib-overlay")
+    def calib_overlay(match_id: str, t: int = 0):
+        """KALIBRÁCIÓ-ELLENŐRZÉS: a videó t kockája a visszarajzolt
+        pályavonalakkal (JPEG). Ha a rajzolt vonal a valódira ül, a helyek
+        hihetők; ahol elcsúszik, ott a kalibráció vagy a pásztázás-követés
+        hibás. 400: nincs kalibráció-geometria (régi mentés vagy
+        kalibráció nélkül) vagy a videó nem érhető el; 404: nincs ilyen
+        meccs / kocka."""
+        import cv2
+        from fastapi import Response
+
+        from ..pipeline.calib_overlay import (draw_overlay, keyframe_at,
+                                              overlay_pixels)
+        from ..video_io import VideoOpenError, open_capture
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        h0 = getattr(match.meta, "court_homography", None)
+        if not h0:
+            raise HTTPException(
+                status_code=400,
+                detail="ehhez a meccshez nincs kalibráció-geometria — "
+                       "régi mentés vagy kalibráció nélküli feldolgozás; "
+                       "újrafeldolgozás után elérhető")
+        vp = match.meta.video_path
+        if not vp or not Path(vp).exists():
+            raise HTTPException(status_code=400,
+                                detail="az eredeti videó nem érhető el "
+                                       "ezen a gépen")
+        try:
+            cap = open_capture(vp)
+        except VideoOpenError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        t = max(0, int(t))
+        kocka = int(match.meta.start_frame or 0) + t * max(1, int(
+            match.meta.stride or 1))
+        cap.set(cv2.CAP_PROP_POS_FRAMES, kocka)
+        ok, img = cap.read()
+        cap.release()
+        if not ok:
+            raise HTTPException(status_code=404, detail="frame not read")
+        H_, W_ = img.shape[:2]
+        g = keyframe_at(getattr(match.meta, "pan_keyframes", None), t)
+        draw_overlay(img, overlay_pixels(h0, g, W_, H_))
+        ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        return Response(content=buf.tobytes(), media_type="image/jpeg")
+
     @app.post("/matches/{match_id}/trim")
     def trim_match(match_id: str, body: dict):
         """A meccs UTÓLAGOS vágása: a megadott játékidő-ablakon kívüli

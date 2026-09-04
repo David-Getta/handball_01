@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.97 óta)
 
+- **Kalibráció ellenőrzése a szemmel — vonalak a videón** (feldolgozás +
+  motor + meccs-nézet): a feldolgozás mostantól elteszi a kalibráció
+  homográfiáját és a kamera-mozgás ritkított sorát (2 mp-enként), és a
+  meccs-nézet új gombja a pályavonalakat (alapvonal, felező, 6 m-es
+  kapuelőtér, kapuk) visszarajzolja a videó három kockájára — eleje,
+  közepe, vége. A rajzolt vonalnak a valódira kell ülnie; ahol elcsúszik,
+  ott a kalibráció vagy a pásztázás-követés a hibás. Ez a közvetlen
+  válasz a "tényleg tartja-e a kalibráció a svenk alatt" kérdésre. Régi
+  mentésen (geometria nélkül) a gomb ezt őszintén mondja.
+
 - **A feldolgozás üzenete mondja a horgonyzás-arányt** (Feldolgozások):
   a "követés kész" lépés mostantól azt is kiírja, a kockák hány
   százalékán sikerült a kamera-mozgást a kalibrált képhez mérni —
