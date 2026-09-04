@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.97 óta)
 
+- **Egy kattintás a bennmaradt bemutatás levágásához** (meccs-nézet,
+  minőség-panel): ha a jelentés megtalálta a meccs kezdetét ("a felvétel
+  eleje nem-játéknak látszik"), a panel alján "Levágás a javaslat
+  szerint" gomb nyitja a ✂ párbeszédet — a javaslattal előtöltve. Nem
+  kell a könyvtárba vagy az eszköztárba menni érte.
+
 - **Esemény-ugrás és jelenet-felirat a böngészős 3D/VR nézetben is**
   (Böngészős 3D / VR): a beágyazott oldal ⏮/⏭ gombjaival (és a [ / ]
   billentyűkkel) a következő/előző gólra, lövésre vagy eladásra ugrik a

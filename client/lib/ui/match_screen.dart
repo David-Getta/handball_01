@@ -2615,6 +2615,19 @@ class _MatchScreenState extends State<MatchScreen> {
               },
               child: const Text("Újrafeldolgozás a friss kalibrációval"),
             ),
+          // BENNMARADT BEMUTATÁS: a jelentés megtalálta a meccs kezdetét
+          // — a ✂ párbeszéd elő is tölti; innen egy kattintás, nem kell
+          // a könyvtárba vagy az eszköztárba menni érte.
+          if (warnings.any((w) => "$w".contains("nem-játéknak látszik")) &&
+              !widget.matchId.startsWith("sim-"))
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _trimDialog();
+              },
+              icon: const Icon(Icons.content_cut, size: 16),
+              label: const Text("Levágás a javaslat szerint"),
+            ),
           // DIAGNOSZTIKA a fejlesztőnek: a képernyőkép lassú és
           // veszteséges — ez egy gép által olvasható JSON-t ment
           // (minőség + eseményszámok + beállítások, videó nélkül),

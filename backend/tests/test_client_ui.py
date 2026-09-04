@@ -2801,3 +2801,19 @@ def test_a_sarok_nyilakkal_finomithato():
     assert "NYILAKKAL" in kal, "a súgó-sor nem tanítja a nyilakat"
     # Az aktív sarok kiemelése — enélkül nem látszik, mit mozgatsz.
     assert "i == active" in kal, "nincs aktív-sarok kiemelés"
+
+
+def test_a_minoseg_panel_a_vagas_javaslatra_gombot_ad():
+    """A "bennmaradt bemutatás" figyelmeztetés mellett a minőség-panel
+    egy kattintással nyitja a ✂ párbeszédet (ami a javaslatot elő is
+    tölti) — a részlet a motor figyelmeztetésének SZÖVEGÉRE illik."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    meccs = (gyoker / "client" / "lib" / "ui" / "match_screen.dart").read_text(
+        encoding="utf-8")
+    assert 'contains("nem-játéknak látszik")' in meccs
+    assert "Levágás a javaslat szerint" in meccs
+    # A kliens-részlet a motor üzenetében is szerepel — különben a gomb
+    # sosem jelenne meg.
+    minoseg = (gyoker / "backend" / "handball" / "pipeline" / "quality.py"
+               ).read_text(encoding="utf-8")
+    assert "nem-játéknak látszik" in minoseg
