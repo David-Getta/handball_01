@@ -155,6 +155,12 @@ class MatchMeta:
     game_window_found: Optional[bool] = None
     game_trim_head_s: Optional[float] = None
     game_trim_tail_s: Optional[float] = None
+    # PÁSZTÁZÁS-KÖVETÉS horgonyzás-aránya (%): a feldolgozott kockák
+    # hányadán sikerült a kamera-mozgást közvetlenül a KALIBRÁLT
+    # alap-kockához mérni (pan_tracking.PanTracker). Alacsony aránynál
+    # a svenkelés alatt a helyek elcsúszhatnak — a minőség-jelentés
+    # ebből szól. None = régi mentés vagy pásztázás-követés nélkül.
+    pan_anchor_pct: Optional[float] = None
     # KÉZI esemény-javítások: amit az edző a felismerésen kijavít.
     # Elemenként {"op": "add"|"remove"|"set_type", "t": kocka,
     # "type": "goal"|"shot", "team": "home"|"away"}. A lövés-felismerés

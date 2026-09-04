@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.96 óta)
 
+- **A minőség-jelentés szól, ha a kamera-mozgást ritkán sikerült a
+  kalibrált képhez mérni** (feldolgozás + minőség-jelentés): a
+  horgonyzás aránya a meccs mellé kerül, és 8% alatt a jelentés
+  kimondja, hogy a pásztázás alatt a helyek elcsúszhattak — teendővel
+  (a kalibrációt az ELSŐ feldolgozott kockára, a meccs tipikus
+  kameraállásában vedd fel). Régi mentésen és pásztázás-követés nélkül
+  nem állít semmit.
+
 - **Pásztázás-követés horgonnyal: a kamera-mozgás a KALIBRÁLT képhez
   mérve** (feldolgozás): a kamera jobbra-balra svenkelését eddig csak
   kockáról kockára követtük, és a lépések hibája összeadódott — mire a

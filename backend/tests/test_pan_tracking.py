@@ -159,3 +159,33 @@ def test_a_mozgo_dobozok_kimaszkolva_is_megy_a_becsles():
                                             (400, 50, 460, 200)])
     assert abs(G[0][2] + 12.0) < 1.5, f"tx={G[0][2]}"
     assert tr.stats["chain"] == 1
+
+
+def test_a_minoseg_jelentes_szol_ha_ritkan_horgonyzott():
+    """A horgonyzás-arány a meta-ból a minőség-jelentésbe: alacsony
+    aránynál figyelmeztetés + teendő; None-nál (régi mentés) csend."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+    from handball.pipeline.quality import (PAN_ANCHOR_WARN_PCT,
+                                           compute_quality_report)
+
+    def _meccs(pct):
+        meta = MatchMeta(match_id="pan", home_team="H", away_team="A",
+                         fps=10.0, pan_anchor_pct=pct)
+        frames = [Frame(t=i, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=10.0, y=8.0),
+            PlayerPosition(track_id=2, team=Team.AWAY, x=30.0, y=12.0),
+        ], ball=Ball(x=20.0, y=10.0)) for i in range(200)]
+        return Match(meta, frames)
+
+    rep = compute_quality_report(_meccs(PAN_ANCHOR_WARN_PCT / 2))
+    talalt = [w for w in rep["warnings"]
+              if "kalibrált képhez mérni" in w]
+    assert talalt, rep["warnings"]
+    from handball.pipeline.quality import next_action
+    assert "ELSŐ feldolgozott kockára" in next_action(talalt)
+
+    rep_jo = compute_quality_report(_meccs(PAN_ANCHOR_WARN_PCT * 2))
+    assert not [w for w in rep_jo["warnings"] if "kalibrált képhez" in w]
+    rep_regi = compute_quality_report(_meccs(None))
+    assert not [w for w in rep_regi["warnings"] if "kalibrált képhez" in w]

@@ -412,7 +412,8 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   court_poly=None, start=0, skip_dark=True, on_frame=None,
                   pan=False, jersey_voter=None, ocr_every=5,
                   ball_recover=True, stop_check=None,
-                  raw_out=None, colors_out=None, on_note=None):
+                  raw_out=None, colors_out=None, on_note=None,
+                  pan_stats_out=None):
     import os
     # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
     # hiba helyett. A torch importja ELŐTT kell beállítani.
@@ -697,6 +698,8 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
         tx, ty = pan_tracker.translation
         print(f"pásztázás-követés: össz-elmozdulás a végére: ({tx:.0f}, {ty:.0f}) px")
         print(pan_tracker.summary())
+        if pan_stats_out is not None:  # a hívó a meta-ba teszi (minőség)
+            pan_stats_out.update(pan_tracker.stats)
     # A termelő-szál elengedése: ha még él (korai break / plafon),
     # jelezzük, hogy nincs több fogyasztó, és felébresztjük.
     feed.abandon()
@@ -1192,6 +1195,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 print(f"FIGYELEM: részeredmény-mentés nem sikerült: {e}")
 
     stalled = False
+    pan_stats: dict = {}
     if weights:
         # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).
         stalled = bool(_process_yolo(
@@ -1199,7 +1203,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             court_poly, start=start, skip_dark=skip_dark,
             on_frame=on_frame, on_note=on_note, pan=bool(calib_list),
             jersey_voter=jersey_voter, stop_check=stop_check,
-            raw_out=raw, colors_out=all_colors))
+            raw_out=raw, colors_out=all_colors, pan_stats_out=pan_stats))
     else:
         _process_hog(video_path, stride, max_frames, stop_check=stop_check,
                      raw_out=raw, colors_out=all_colors, on_frame=on_frame,
@@ -1213,6 +1217,11 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                "rész feldolgozva, a meccs befejezetlenként mentve "
                "(a könyvtárból folytatható)")
     match = _finalize(raw, all_colors, partial=stopped or stalled)
+    # A horgonyzás-arány a meta-ba: a minőség-jelentés ebből mondja ki, ha
+    # a svenkelés alatt a kalibrált képhez ritkán sikerült visszamérni.
+    if pan_stats.get("frames"):
+        match.meta.pan_anchor_pct = round(
+            100.0 * pan_stats.get("anchored", 0) / pan_stats["frames"], 1)
 
     if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
         with open(out_path, "w", encoding="utf-8") as f:

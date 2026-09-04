@@ -98,6 +98,15 @@ REAL_SCORE_SWAP_MARGIN = 4
 # akkor szóljon, ha az él tényleg esemény-gyártó méretű.
 GW_HEAD_WARN_S = 120.0
 
+# Pásztázás-követés horgonyzás-aránya: a feldolgozott kockák ekkora
+# hányada alatt mondjuk ki, hogy a kamera-mozgást ritkán sikerült a
+# KALIBRÁLT képhez mérni — a köztes kockákat a kockáról-kockára lánc
+# vitte, aminek a hibája halmozódik, tehát a svenkelés alatt a helyek
+# elcsúszhatnak. (A horgony ANCHOR_EVERY = 5 kockánként próbál, tehát a
+# 20% a "mindig sikerül" plafon — a 8% alatt már a próbák kevesebb mint
+# fele jött össze.)
+PAN_ANCHOR_WARN_PCT = 8.0
+
 # KLIP vagy MECCS? Egy kézilabda-meccs 2x30 perc; ennél a küszöbnél
 # rövidebb felvétel nem meccs, hanem KLIP (egy támadás-sorozat, egy
 # félidő-részlet, egy próba). A klip teljesen jogos bemenet — de a
@@ -137,6 +146,10 @@ NEXT_ACTION_ORDER: tuple = (
      "Nyisd meg a vágást (könyvtár-sor ✂ gombja) — a párbeszéd elő is "
      "tölti a javasolt meccs-kezdést, csak ellenőrizned és jóváhagynod "
      "kell."),
+    ("ritkán tudta a kalibrált képhez mérni",
+     "A kalibrációt az ELSŐ feldolgozott kockára vedd fel, a meccs "
+     "tipikus kameraállásában (ne a bemutatás alatti, elfordult képre), "
+     "és futtasd újra — a pásztázás-követés ehhez a képhez horgonyoz."),
     ("Kevés játékos látszik",
      "Ellenőrizd, hogy a kamera a játékteret mutatja-e, és hogy a "
      "kalibráció a látható térfélre készült-e."),
@@ -538,6 +551,25 @@ def compute_quality_report(match: Match) -> dict:
             "álldogálást a motor eladott labdának, a bemelegítő kapura "
             "lövéseket lövésnek látja. Add meg a meccs időablakát "
             "(perc:másodperc) az Új elemzés lapon, és futtasd újra.")
+
+    # --- Pásztázás-követés: sikerült-e a kalibrált képhez horgonyozni? ---
+    # A svenkelő kameránál a kockáról-kockára lánc hibája halmozódik; a
+    # horgony (a kalibrált alap-kockához illesztés) ezt nullázza — ha
+    # ritkán sikerül, a helyek a pásztázás alatt elcsúszhatnak. None =
+    # régi mentés vagy pásztázás-követés nélkül: nem állítunk semmit.
+    _pan_pct = getattr(match.meta, "pan_anchor_pct", None)
+    if _pan_pct is not None and _pan_pct < PAN_ANCHOR_WARN_PCT:
+        warnings.append(
+            # (A rangsor részlete EGY literálban marad — a forrás-őr így
+            # találja meg.)
+            "A kamera-mozgás követése ritkán tudta a kalibrált képhez mérni "
+            f"a helyzetet (a kockák csak {_pan_pct:.0f}%-án) — a "
+            "többit a kockáról-kockára becslés vitte, aminek a hibája "
+            "halmozódik, "
+            "tehát a pásztázás alatt a játékosok helye elcsúszhatott. "
+            "A leggyakoribb ok: a kalibráció nem a meccs tipikus "
+            "kameraállásán készült, vagy a kép nagy részét a mozgó "
+            "tömeg fedi.")
 
     # --- Bennmaradt-e nem-játék rész a felvétel ELEJÉN? ---
     # A feldolgozás-kori jelzés (fent) a régi motorral készült
