@@ -94,6 +94,30 @@ A rendszert **először asztali gépen / laptopon** teszteljük, ezért:
   külön szerver az első teszthez. A kliens a `localhost`-on éri el a backendet
   (REST/WebSocket). Erősebb GPU-s gép vagy felhő csak később, élesben kell.
 
+### Fiókok és felhasználási feltételek (jogosultság-réteg)
+A program a **Tulajdonos szellemi és fizikai tulajdona**, ezért a használat
+fiókhoz kötött, a fiók létrehozása pedig a felhasználási feltételek
+elfogadásához:
+
+- **Motor** (`backend/handball/accounts.py`): a fiókok a program írható
+  adatmappájában (`data/accounts.json`) élnek — nincs felhő, nincs külső
+  szolgáltatás. A jelszó SOSE tárolódik nyíltan, csak PBKDF2-HMAC-SHA256
+  lenyomatként, fiókonkénti véletlen sóval. A belépés lejáró
+  munkamenet-kulcsot (token) ad. A feltételek szövege VERZIÓZOTT: ha a
+  `TERMS_VERSION` nő, a belépés `terms_ok: false`-t ad, és a felületnek
+  újra el kell fogadtatnia. Az elfogadás verziója és UTC időbélyege a
+  fiókban marad, tehát később is bizonyítható.
+- **API** (`api/app.py`): `GET /legal/terms`, `GET /accounts/status`,
+  `POST /accounts/register` (elfogadás nélkül 400), `POST /accounts/login`,
+  `GET /accounts/me`, `POST /accounts/accept-terms`, `POST /accounts/logout`,
+  `POST /accounts/change-password`.
+- **Kliens**: a motor indulása után a **fiók-kapu** jön
+  (`ui/account_gate.dart`), és csak elfogadott feltételekkel enged a
+  dashboardra. A jogi szöveg egyetlen forrása a motor (`/legal/terms`); a
+  motor nélküli (demó) módban a kapu egy rövid tulajdonjogi tudomásulvételt
+  kér. A munkamenet-kulcs a gépen marad (`services/session_store.dart`),
+  hogy ne kelljen minden indításkor belépni.
+
 ## Javasolt technológiai stack
 - **Backend / ML**: Python + PyTorch + Ultralytics (YOLO) + OpenCV.
 - **API**: FastAPI (REST + WebSocket az élő adathoz).

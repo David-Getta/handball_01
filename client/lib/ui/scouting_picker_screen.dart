@@ -132,6 +132,11 @@ class _ScoutingPickerScreenState extends State<ScoutingPickerScreen> {
     final home = (m["home_team"] as String?) ?? "Hazai";
     final away = (m["away_team"] as String?) ?? "Vendég";
     final date = (m["date"] as String?) ?? "";
+    // Összefűzött meccs DARABJA: az egyesített felderítésbe a darabot
+    // ÉS az egészet kijelölni ugyanazt a meccset kétszer számolná —
+    // a jelölés nélkül pedig három egyforma sor közül kellene
+    // választani.
+    final partOf = m["part_of"] as String?;
     String? selectedTeam;
     for (final e in _selected) {
       if (e["match_id"] == id) selectedTeam = e["team"];
@@ -171,9 +176,34 @@ class _ScoutingPickerScreenState extends State<ScoutingPickerScreen> {
           flex: 2,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("$home vs $away",
-                    overflow: TextOverflow.ellipsis,
-                    style: AppText.value),
+                Row(children: [
+                  Flexible(
+                    child: Text("$home vs $away",
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.value.copyWith(fontSize: 14)),
+                  ),
+                  if (partOf != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Tooltip(
+                        message: "Az összefűzött meccs ($partOf) darabja "
+                            "— az egyesített felderítésbe az EGÉSZET "
+                            "jelöld ki, különben kétszer számolna.",
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceAlt,
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(
+                                color: AppColors.borderStrong),
+                          ),
+                          child: Text("darab",
+                              style: AppText.label.copyWith(fontSize: 10)),
+                        ),
+                      ),
+                    ),
+                ]),
                 if (date.isNotEmpty)
                   Text(date, style: AppText.label.copyWith(fontSize: 11)),
               ]),

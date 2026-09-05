@@ -31,8 +31,12 @@ import pytest  # noqa: E402
 # mezők, hanem lista-elemek belső kulcsai (player_id, frames, ...)
 # vagy más térképből olvasott értékek. Zárt lista — új felső szintű
 # kulcs ide nem kerülhet.
+# Kulcsok, amiket NEM a ScoutingReport mezői adnak: a beágyazott
+# sor-szótárak kulcsai, és a `report_to_dict` által számolt, származtatott
+# mezők (narrative = a szöveges bevezető, caveat = mennyire hihető a
+# jelentés alapanyaga).
 _DART_ROW_KEYS = {
-    "breaks", "chances", "count", "def_frames", "depth_sum_m",
+    "breaks", "caveat", "chances", "count", "def_frames", "depth_sum_m",
     "frames", "jersey", "narrative", "player_id", "setter_id",
     "shooter_id", "sprints", "takes",
 }
@@ -384,7 +388,10 @@ def test_kliens_mutato_csempe_birja_a_mondatot():
         pytest.skip("nincs kliens a fában")
     src = path.read_text(encoding="utf-8")
 
-    m = re.search(r"Widget _metricTile\(String label, String value\) \{"
+    # A szignatúra kaphat további NEVESÍTETT paramétert (pl. a keresés
+    # kiemeléséhez) — a csempe belsejére vonatkozó elvárás ettől nem
+    # változik, ezért a minta a záró zárójelig szabadon illeszkedik.
+    m = re.search(r"Widget _metricTile\(String label, String value[^)]*\) \{"
                   r"(.*?)\n  \}", src, flags=re.S)
     assert m, "nem találom a _metricTile-t"
     body = m.group(1)
@@ -443,3 +450,2402 @@ def test_kliens_varazslo_lepesei_megmondjak_mi_hianyzik():
     assert not missing, (
         "varázsló-lépés magyarázat nélkül — a letiltott 'Tovább' így néma "
         f"zsákutca (sorok): {missing}")
+
+
+def test_minden_posztonkenti_mezo_a_kliensben_is():
+    """ŐR: minden *_by_role ScoutingReport-mezőt olvasson a kliens
+    felderítő-képernyője is — a réteg-recept 6. lépése (csempe) ne
+    maradhasson ki csendben."""
+    import dataclasses
+    from pathlib import Path
+
+    import pytest
+
+    from handball.pipeline import scouting
+
+    dart = (Path(__file__).resolve().parents[2] / "client" / "lib"
+            / "ui" / "scouting_screen.dart")
+    if not dart.exists():
+        pytest.skip("nincs kliens a fában")
+    src = dart.read_text(encoding="utf-8")
+    fields = [f.name for f in dataclasses.fields(scouting.ScoutingReport)
+              if f.name.endswith("_by_role")]
+    assert len(fields) >= 60, fields   # az olvasás elromlott
+    arva = [f for f in fields if f'"{f}"' not in src]
+    assert not arva, f"kliens-csempe nélküli posztonkénti mezők: {arva}"
+
+
+def _client_lib() -> "Path":
+    from pathlib import Path
+    return Path(__file__).resolve().parents[2] / "client" / "lib"
+
+
+def test_fiok_kapu_a_dashboard_ele_kerul():
+    """ŐR: a motor elindulása után a FIÓK-KAPU jön, nem egyből a
+    dashboard — különben a feltétel-elfogadás megkerülhető lenne."""
+    import pytest
+
+    boot = _client_lib() / "ui" / "bootstrap_screen.dart"
+    if not boot.exists():
+        pytest.skip("nincs kliens a fában")
+    src = boot.read_text(encoding="utf-8")
+    assert "AccountGate(" in src, "a bootstrap nem a fiók-kapuba lép be"
+    assert "DashboardScreen()" not in src, (
+        "a bootstrap megkerüli a fiók-kaput, és egyből a dashboardra lép")
+
+
+def test_fiok_letrehozas_csak_elfogadassal():
+    """ŐR: a "Fiók létrehozása" gomb csak a feltételek elfogadásával
+    aktív, és a kérésbe is bekerül az elfogadás."""
+    import pytest
+
+    scr = _client_lib() / "ui" / "account_screen.dart"
+    if not scr.exists():
+        pytest.skip("nincs kliens a fában")
+    src = scr.read_text(encoding="utf-8")
+    assert "(!_registerMode || _acceptTerms)" in src, (
+        "a létrehozó gomb elfogadás nélkül is aktív lehet")
+    assert "acceptTerms: _acceptTerms" in src, (
+        "az elfogadás nem megy át a szervernek")
+
+
+def test_a_feltetel_szoveg_a_motortol_jon():
+    """ŐR: a teljes jogi szöveget a motor adja (GET /legal/terms) — a
+    kliensben nincs második, elsodródó másolat."""
+    import pytest
+
+    ui = _client_lib() / "ui"
+    if not ui.exists():
+        pytest.skip("nincs kliens a fában")
+    terms = (ui / "terms_screen.dart").read_text(encoding="utf-8")
+    assert "fetchTerms()" in terms, "a képernyő nem a motortól kéri a szöveget"
+    # A demó (motor nélküli) mód RÖVID tudomásulvétele a kivétel — az is
+    # csak egy helyen, a kapuban él, és jelzi, hogy a teljes szöveg a
+    # motorral jön.
+    gate = (ui / "account_gate.dart").read_text(encoding="utf-8")
+    assert gate.count("kOfflineTermsSummary") == 2, (
+        "a demó-szöveg nem egy helyen van definiálva és felhasználva")
+    assert "szellemi tulajdona" in gate and "fizikai tulajdon" in gate
+
+
+def test_jelszocsere_elerheto_a_kliensbol():
+    """ŐR: a jelszócsere-végpontnak van FELÜLETE is — a fiók-menüből
+    nyílik, és a kliens-hívás (changePassword) be van kötve. Backend-
+    képesség kliens nélkül = nem létező képesség a felhasználónak."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "changePassword(" in shell, (
+        "a jelszócsere API-hívás nincs bekötve a felületről")
+    assert "Jelszócsere" in shell, "nincs Jelszócsere menüpont"
+
+
+def test_elfelejtett_jelszo_utmutato_a_belepon():
+    """ŐR: sikertelen belépésnél a képernyő elmondja az elfelejtett
+    jelszó őszinte útját (nincs e-mailes visszaállítás — új fiók, a
+    meccsek megmaradnak), ne csak a telepítési útmutató tudja."""
+    import pytest
+
+    scr = _client_lib() / "ui" / "account_screen.dart"
+    if not scr.exists():
+        pytest.skip("nincs kliens a fában")
+    src = scr.read_text(encoding="utf-8")
+    assert "Elfelejtetted a jelszavad?" in src
+    assert "megmaradnak" in src
+
+
+def test_motor_ujraelesztes_ujra_is_indit():
+    """ŐR: hálózati hibánál a kliens nem csak KERESI a motort (portok),
+    hanem ÚJRA IS INDÍTJA (reviveEngine → BackendLauncher.ensureRunning)
+    — a motor-folyamat el is halhat (frissítés, altatás), olyankor a
+    port-keresés kevés, és a felhasználót csak a program teljes
+    újraindítása mentené meg."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "reviveEngine" in api, "nincs mély öngyógyítás (reviveEngine)"
+    assert "ensureRunning" in api, (
+        "a revive nem indítja újra a motort, csak portot keres")
+    # Mindkét fiók-felület a MÉLY öngyógyítást hívja, nem a puszta
+    # port-keresést.
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    scr = (lib / "ui" / "account_screen.dart").read_text(encoding="utf-8")
+    assert "ApiClient.reviveEngine()" in gate
+    assert "ApiClient.reviveEngine()" in scr
+    assert "rediscoverEngine()" not in gate
+    assert "rediscoverEngine()" not in scr
+
+
+def test_hibajelentes_lathato_verzioval():
+    """ŐR: a fiók-képernyő és a motor-hiba képernyő kiírja a futó kiadás
+    számát — egy hibajelentő képernyőképből így azonnal látszik, MELYIK
+    verzió adta a hibát (enélkül a támogatás találgat)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    scr = (lib / "ui" / "account_screen.dart").read_text(encoding="utf-8")
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    assert "appVersion" in scr, "a fiók-képernyőn nincs verziószám"
+    assert "appVersion" in gate, "a motor-hiba képernyőn nincs verziószám"
+
+
+def test_motor_hiba_kepernyo_mutatja_a_naplot():
+    """ŐR: a motor-hiba képernyő a motor-napló utolsó sorait is
+    megmutatja — a kiváltó ok így egyetlen hibajelentő képernyőképen
+    elfér, a felhasználónak nem kell fájlok közt keresgélnie."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    launcher = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    assert "logTail" in launcher, "nincs napló-farok olvasó a motor-indítóban"
+    assert "logTail" in gate, "a hiba-képernyő nem mutatja a naplót"
+    assert "SelectableText" in gate, (
+        "a napló nem kijelölhető szöveg — másolni sem lehetne")
+
+
+def test_elveszett_valaszu_regisztracio_belepesbe_fut():
+    """ŐR: ha az első regisztráció célba ért, de a válasz elveszett (a
+    motor épp elhalt), az ismétlés "már van fiók" hibát ad — a kliens
+    ilyenkor BELÉPÉSSEL folytatja ugyanazokkal az adatokkal, nem
+    hibaüzenettel ijesztget egy élő fiók mellett."""
+    import pytest
+
+    scr = _client_lib() / "ui" / "account_screen.dart"
+    if not scr.exists():
+        pytest.skip("nincs kliens a fában")
+    src = scr.read_text(encoding="utf-8")
+    assert "már van fiók" in src, "nincs belépés-tartalék a duplikált fiókra"
+    assert src.index("már van fiók") > src.index("reviveEngine"), (
+        "a tartalék nem az újraélesztett ismétlés ágában van")
+
+
+def test_motor_orkutya_ujraindit_es_korlatoz():
+    """ŐR: a motor-indítónak van őrkutyája — a magától elhalt motort
+    újraindítja (a felhasználó észre sem veszi), de korlátozott számú
+    próbával (a hibás motort nem pörgeti örökké), és a SZÁNDÉKOS
+    leállítást (kilépés, frissítés előtti fájlcsere) békén hagyja."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    assert "_watchdog" in src, "nincs őrkutya a motor-indítóban"
+    assert "watchdogMaxRestarts" in src, "az őrkutya korlát nélkül pörgetne"
+    assert "_stoppedByUs" in src, (
+        "az őrkutya nem különbözteti meg a szándékos leállítást")
+    # A szándékos leállítás jelzi magát, az őrkutya pedig tiszteli.
+    assert src.index("_stoppedByUs = true") > 0
+    assert "if (_stoppedByUs) return;" in src
+
+
+def test_vendeg_belepes_tudomasulvetellel_es_takaritassal():
+    """ŐR: van vendég-belépés (fiók nélkül), de NEM kerüli meg a
+    tulajdonjogi tudomásulvételt, és a vendég-munka a következő
+    induláskor takarítódik — csak a vendég-belépés UTÁN készült
+    meccsek, a korábbiak nem."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    scr = (lib / "ui" / "account_screen.dart").read_text(encoding="utf-8")
+    assert "onGuest" in scr, "nincs vendég-belépés gomb a fiók-képernyőn"
+    assert "_enterAsGuest" in gate, "a kapu nem ismeri a vendég-utat"
+    # A tudomásulvétel nem kerülhető meg: a vendég-út ellenőrzi.
+    assert "offlineTermsVersion < kOfflineTermsVersion" in gate, (
+        "a vendég-belépés megkerüli a tulajdonjogi tudomásulvételt")
+    # A takarítás alapvonal-alapú: csak az újat törli.
+    assert "guestBaseline" in gate and "deleteMatch" in gate, (
+        "a vendég-takarítás hiányzik vagy nem alapvonal-alapú")
+
+
+def test_fejlesztoi_mod_vedi_a_vendeg_munkat():
+    """ŐR: a fejlesztői mód kapcsolható (fiók-képernyő ÉS fiók-menü), és
+    bekapcsolva a vendég-takarítás NEM töröl."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    scr = (lib / "ui" / "account_screen.dart").read_text(encoding="utf-8")
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    store = (lib / "services" / "session_store.dart").read_text(
+        encoding="utf-8")
+    assert "setDevMode" in store, "nincs fejlesztői mód a munkamenet-tárban"
+    assert "setDevMode" in scr, "a fiók-képernyőről nem kapcsolható"
+    assert "setDevMode" in shell, "a fiók-menüből nem kapcsolható"
+    # A takarítás tiszteli a fejlesztői módot: előbb kérdez, aztán töröl.
+    assert gate.index("SessionStore.devMode") < gate.index("deleteMatch"), (
+        "a takarítás nem a fejlesztői mód ellenőrzésével kezdődik")
+
+
+def test_frissites_a_kapu_elott_is_elerheto():
+    """ŐR: a frissítés-keresés a BELÉPŐ képernyőről is elérhető — ha a
+    frissítő csak a dashboardon (a fiók-kapu mögött) él, a belépésnél
+    elakadt felhasználó régi, hibás verzión ragad, és a javítás sosem
+    ér el hozzá."""
+    import pytest
+
+    scr = _client_lib() / "ui" / "account_screen.dart"
+    if not scr.exists():
+        pytest.skip("nincs kliens a fában")
+    src = scr.read_text(encoding="utf-8")
+    # A folyamat maga a közös update_flow.dart-ba került (a motor-hiba
+    # képernyőnek is kell) — az ELVÁRÁS változatlan: a belépő képernyőről
+    # keresni ÉS telepíteni is lehessen.
+    assert "checkAndInstallUpdate" in src, (
+        "a belépő képernyő nem ismeri a frissítőt")
+    assert "Frissítés keresése" in src, "nincs frissítés-kereső gomb"
+    flow = (_client_lib() / "ui" / "update_flow.dart").read_text(
+        encoding="utf-8")
+    assert "downloadAndInstall" in flow, (
+        "a frissítés-folyamatból csak keresni lehet, telepíteni nem")
+
+
+def test_vendeg_sav_a_dashboardon():
+    """ŐR: vendég-munkamenetben a dashboard sávban jelzi, hogy a munka
+    múlandó, és egy kattintással védhetővé tehető (fejlesztői mód) —
+    csendben elveszett munka nem lehet."""
+    import pytest
+
+    dash = _client_lib() / "ui" / "dashboard_screen.dart"
+    if not dash.exists():
+        pytest.skip("nincs kliens a fában")
+    src = dash.read_text(encoding="utf-8")
+    assert "guestMode" in src, "a dashboard nem tud a vendég-munkamenetről"
+    assert "törlődik" in src, "a sáv nem mondja ki a múlandóságot"
+    assert "setDevMode" in src, "a sávból nem védhető a munka egy kattintással"
+
+
+def test_belepes_vendegbol_megtartja_a_munkat():
+    """ŐR: a vendég a fiók-menüből el tud jutni a belépéshez, a belépési
+    szándékú kapu nem takarít, sikeres belépésnél pedig a
+    vendég-munkamenet úgy zárul le, hogy a munka MEGMARAD (fiókot
+    csinált — magáénak vallotta)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    gate = (lib / "ui" / "account_gate.dart").read_text(encoding="utf-8")
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "Belépés / fiók létrehozása" in shell, (
+        "a vendég nem jut el a belépéshez a fiók-menüből")
+    assert "preserveGuestWork: true" in shell, (
+        "a belépési szándékú kapu takarítana")
+    assert "preserveGuestWork" in gate
+    # Sikeres belépésnél a vendég-jelző lezárul takarítás NÉLKÜL.
+    i = gate.index('if (me == null)')
+    assert "endGuest" in gate[i:], (
+        "belépés után a vendég-munkamenet nem zárul le")
+
+
+def test_fel_frissult_telepites_lathato():
+    """ŐR: a kliens a /health-ből olvassa a motor verzióját, és a
+    dashboard kimondja, ha az app és a motor verziója eltér — a
+    fél-frissült telepítés ne rejtélyes hibaként jelentkezzen."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    dash = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "engineVersion" in api, "a kliens nem olvassa a motor verzióját"
+    assert "engineVersion" in dash and "eltér" in dash, (
+        "a dashboard nem jelzi a verzió-eltérést")
+    assert "Releases" in dash, "a sáv nem adja meg a megoldást"
+
+
+def test_palya_szabalykonyvi_elemei_a_rajzolon():
+    """ŐR: a felülnézeti pálya a SZABÁLYKÖNYVI elemeket rajzolja — 6 m-es
+    kapuelőtér, 9 m-es (szaggatott) szabaddobási vonal, 7 m-es és 4 m-es
+    vonal, kapu. Ezek nélkül a kép "sematikus doboz", és az edző nem
+    tudja hova tenni a látottakat."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    geom = (lib / "ui" / "court_geometry.dart").read_text(encoding="utf-8")
+    painter = (lib / "ui" / "court_painter.dart").read_text(encoding="utf-8")
+    for name in ("goalAreaRadius", "freeThrowRadius", "sevenMeterX",
+                 "keeperLineX"):
+        assert name in geom, f"hiányzó pálya-méret: {name}"
+    assert "freeThrowBoundary" in geom and "freeThrowBoundary" in painter, (
+        "a 9 m-es szabaddobási vonal nincs kirajzolva")
+    assert "sevenMeterX" in painter, "a hetes-vonal nincs kirajzolva"
+    assert "keeperLineX" in painter, "a 4 m-es kapus-vonal nincs kirajzolva"
+
+
+def test_hotérkep_nem_cellankent_elmosott():
+    """ŐR (teljesítmény): a hőtérkép 200 cellája NEM cellánkénti
+    elmosással (MaskFilter.blur) lágyul, hanem sugaras színátmenettel —
+    a cellánkénti elmosás külön rajz-réteget kényszerítene ki, és
+    gyengébb gépen akadozna a kép."""
+    import pytest
+
+    hp = _client_lib() / "ui" / "heatmap_painter.dart"
+    if not hp.exists():
+        pytest.skip("nincs kliens a fában")
+    src = hp.read_text(encoding="utf-8")
+    assert "RadialGradient" in src, "a lágy hőfolt nem gradienssel készül"
+    assert "maskFilter" not in src, (
+        "cellánkénti elmosás a hőtérképen — ez akadozó rajzolást okoz")
+
+
+def test_a_felhasznaloi_szoveg_nem_beszel_fejlesztoi_nyelven():
+    """ŐR (nyelv): a felhasználónak MOTORT mondunk, nem "backendet" és
+    végképp nem "uvicornt".
+
+    A motor-elérhetetlenség a leggyakoribb élő hiba; a képernyő eddig
+    azt mondta rá, hogy "indítsd el a lokális szervert (uvicorn)". Ez
+    egy edzőnek, aki asztali alkalmazást telepített, nem utasítás,
+    hanem zsargon. A kódban a "backend" szó maradhat (fájlnév, import,
+    komment) — a MEGJELENÍTETT szövegekben nem.
+    """
+    import re
+
+    import pytest
+
+    ui = _client_lib() / "ui"
+    if not ui.exists():
+        pytest.skip("nincs kliens a fában")
+
+    # Csak a magyar mondatokat nézzük: legalább 12 karakter és van
+    # benne szóköz — az import-utak és az azonosítók így kiesnek.
+    rossz = []
+    for f in sorted(ui.glob("*.dart")):
+        src = f.read_text(encoding="utf-8")
+        for line in src.splitlines():
+            if line.lstrip().startswith("//"):
+                continue  # komment: ott szabad
+            for lit in re.findall(r'"([^"\\]{12,})"', line):
+                if " " not in lit:
+                    continue
+                low = lit.lower()
+                if "uvicorn" in low or "backend" in low:
+                    rossz.append(f"{f.name}: {lit}")
+    assert not rossz, (
+        "fejlesztői zsargon a felhasználói szövegben: " + "; ".join(rossz))
+
+
+def test_a_kepkockankent_ujrarajzolt_feluletek_nem_elmosnak():
+    """ŐR (teljesítmény): a LEJÁTSZÁS ALATT minden képkockán újrarajzolt
+    felületeken nincs MaskFilter.blur.
+
+    A hőtérkép-őr a statikus rajzot védi; ez a kettő ennél rosszabb eset:
+    a felülnézeti pálya és a meccs-sztori sávja a lejátszófej minden
+    lépésénél újrarajzolódik. Tizennégy játékos árnyéka, illetve
+    gólonként egy-egy elmosott pötty képkockánként tucatnyi külön
+    rajz-menetet jelentene — a lágyságot ezért sugaras/lineáris
+    színátmenet adja.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    # A pálya és a sztori-sáv a lejátszófejjel, a két grafikon pedig a
+    # betöltő berajzolás-animáció alatt rajzolódik újra képkockánként.
+    for name in ("court_painter.dart", "story_timeline.dart",
+                 "score_chart.dart", "shot_map_painter.dart"):
+        src = (lib / "ui" / name).read_text(encoding="utf-8")
+        assert "maskFilter" not in src, (
+            f"{name}: elmosás a képkockánként újrarajzolt felületen")
+        assert "_softGlow" in src, (
+            f"{name}: nincs meg az elmosás-mentes ragyogás-segéd")
+
+
+def test_az_animaciok_tiszteletben_tartjak_a_csokkentett_mozgast():
+    """ŐR (hozzáférhetőség): a közös animációs elemek megnézik, kért-e
+    a felhasználó CSÖKKENTETT MOZGÁST.
+
+    Az app tele van úszó, pörgő és növekvő elemekkel. Akinél a
+    rendszerben be van kapcsolva a mozgás-csökkentés, annál ez nem
+    díszítés, hanem rosszullét — és mivel a kapcsoló egy helyről
+    kiszolgálható, elemenként elfelejteni is egy helyen lehet.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    anim = (lib / "ui" / "anim.dart").read_text(encoding="utf-8")
+    assert "disableAnimations" in anim, (
+        "az anim.dart nem kérdezi le a rendszer mozgás-beállítását")
+    assert "bool reduceMotion(" in anim, "nincs közös reduceMotion segéd"
+    # A négy közös elem mindegyikének hivatkoznia kell rá.
+    for elem in ("FadeSlideIn", "CountUp", "HoverLift", "AnimatedBar"):
+        assert elem in anim, f"hiányzó animációs elem: {elem}"
+    assert anim.count("reduceMotion(context)") >= 4, (
+        "nem mindegyik közös animációs elem nézi a mozgás-csökkentést")
+
+    # A betöltő berajzolás-animációk (grafikonok) és a FOLYAMATOS,
+    # sosem álló mozgások (forgó lépés-ikon, lélegző pörgettyű) is
+    # nézzék — a végtelen mozgás a legrosszabb fajta.
+    for name in ("score_chart.dart", "intensity_chart.dart",
+                 "trend_screen.dart", "match_screen.dart",
+                 "upload_screen.dart", "waiting.dart"):
+        src = (lib / "ui" / name).read_text(encoding="utf-8")
+        assert "reduceMotion(context)" in src, (
+            f"{name}: a berajzolás-animáció nem nézi a mozgás-csökkentést")
+
+
+def test_a_frissito_motor_es_fiok_nelkul_is_elerheto():
+    """ŐR: a frissítés-gomb ott van MINDEN olyan képernyőn, ahol a
+    felhasználó a motor hiánya miatt elakadhat.
+
+    Ez a termék legsúlyosabb zárt köre volt: régi verzió → a motor el
+    sem indul → a fiók-kapu a MOTOR-HIBA képernyőn áll meg → onnan nem
+    vezetett út a frissítőhöz (az a fiók-képernyőn ült, ami a motor
+    nélkül el sem érhető) → a felhasználó SOHA nem jut olyan verzióra,
+    amelyikben a hiba javítva van. Csak kézi újratelepítéssel lehetett
+    kiszabadulni.
+
+    A frissítéshez se fiók, se motor nem kell (a kiadásokat a GitHub
+    adja), ezért mindhárom elakadási ponton ott kell lennie.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    flow = lib / "ui" / "update_flow.dart"
+    assert flow.exists(), "nincs közös frissítés-folyamat (update_flow.dart)"
+    assert "checkAndInstallUpdate" in flow.read_text(encoding="utf-8")
+
+    for name in ("account_gate.dart",      # motor-hiba képernyő
+                 "bootstrap_screen.dart",  # a motor el sem indult
+                 "account_screen.dart"):   # a kapu (fiók nélkül)
+        src = (lib / "ui" / name).read_text(encoding="utf-8")
+        assert "checkAndInstallUpdate" in src, (
+            f"{name}: innen nem érhető el a frissítő — a régi verzión "
+            "ragadt felhasználó nem tud kiszabadulni")
+
+
+def test_a_diagnosztika_minden_elakadasi_ponton_ott_van():
+    """ŐR: a "Diagnosztika másolása" gomb ott van minden képernyőn, ahol
+    a motor hiánya megállítja a felhasználót.
+
+    A naplófájl önmagában kevés: ha a motor-program meg sem található,
+    vagy az adatmappa nem írható, akkor NAPLÓ SINCS — a felhasználó
+    pedig csak annyit tud mondani, hogy "nem megy". A jelentésnek ezért
+    a hiányzó FELTÉTELEKET is ki kell mondania.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    launcher = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    assert "static Future<String> diagnostics(" in launcher, (
+        "nincs diagnosztika-jelentés a motor-indítóban")
+    for kell in ("engineCandidates",   # hol kerestük a motort
+                 "adatmappa",          # írható-e
+                 "portok",             # válaszol-e bármelyik
+                 "logTail"):           # a napló vége
+        assert kell in launcher, f"a diagnosztikából hiányzik: {kell}"
+
+    for name in ("account_gate.dart",       # motor-hiba képernyő
+                 "bootstrap_screen.dart",   # a motor el sem indult
+                 "dashboard_screen.dart"):  # a motor menet közben halt el
+        src = (lib / "ui" / name).read_text(encoding="utf-8")
+        assert "DiagnosticsButton" in src, (
+            f"{name}: innen nem lehet diagnosztikát másolni")
+
+
+def test_a_motor_naplo_utf8_kent_olvasodik():
+    """ŐR: a motor kimenetét UTF-8-ként dekódoljuk.
+
+    A motor MAGYARUL naplóz. A String.fromCharCodes bájtonként képez
+    karaktert, tehát az ékezeteket összetöri ("Ã¡") — pont azt a naplót,
+    amit a felhasználótól hibakereséshez kérünk.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    assert "utf8.decode" in src, "a motor-napló nem UTF-8-ként olvasódik"
+    # Csak a VÉGREHAJTOTT sorok számítanak: a kommentben magyarázatként
+    # szerepelhet a régi, hibás hívás neve.
+    kod = [ln for ln in src.splitlines()
+           if not ln.lstrip().startswith("//")]
+    assert not any("String.fromCharCodes" in ln for ln in kod), (
+        "bájtonkénti dekódolás a motor kimenetén — összetöri az ékezeteket")
+
+
+def test_a_lejart_var_ido_nem_oli_meg_az_indulo_motort():
+    """ŐR: az indulási időtúllépés NEM állíthatja le a még élő motrot.
+
+    A becsomagolt motor negyedmilliárd bájt, és a víruskereső az első
+    futásnál végigolvassa. Ha ilyenkor a lejárt idő kilövi a
+    folyamatot, a felhasználó újrapróbál — és az átvizsgálás elölről
+    kezdődik: a hiba önmagát tartja életben. A még élő folyamatot ezért
+    futni kell hagyni; a port-tartomány végigfésülése úgyis megtalálja,
+    amint válaszol.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+
+    # A várakozó ág (az ensureRunning vége) a health-várakozástól a
+    # visszatérésig: ebben nem lehet stop() hívás.
+    start = src.index("final ok = await _waitForHealth(")
+    end = src.index("return BackendStatus(BackendPhase.failed, why);", start)
+    ag = [ln for ln in src[start:end].splitlines()
+          if not ln.lstrip().startswith("//")]
+    assert not any("stop();" in ln for ln in ag), (
+        "az időtúllépés leállítja a még induló motrot — a felhasználó "
+        "újrapróbálásakor az egész átvizsgálás elölről kezdődik")
+
+    # És legyen bőven idő az első, átvizsgált indulásra.
+    m = re.search(r"_waitForHealth\(const Duration\(seconds: (\d+)\)", src)
+    assert m, "nem találom az indulási várakozás hosszát"
+    assert int(m.group(1)) >= 150, (
+        "túl rövid indulási várakozás — az első futás víruskereső-"
+        f"átvizsgálással ennél tovább tart ({m.group(1)} mp)")
+
+
+def test_a_motor_sajat_naploja_is_latszik():
+    """ŐR: a hiba-képernyők a motor SAJÁT naplóját is megmutatják.
+
+    A becsomagolt motor ablak nélküli programként fut (console=False a
+    PyInstaller-recepetben). Windowson ilyenkor a Pythonnak nincs
+    stdout/stderr-je, tehát a kliens csövébe SEMMI nem érkezik — a motor
+    a saját üzeneteit egy KÜLÖN fájlba írja (engine.log), az indító
+    naplója (engine-app.log) mellé. Ha a kliens csak a sajátját olvassa,
+    a felhasználó pont a MIÉRT-et nem látja: csak azt, hogy
+    "elindítottam" és "leállt".
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    assert "engine.log" in src, (
+        "a kliens nem olvassa a motor saját naplóját (engine.log)")
+    # És tényleg a logTail fűzze össze — ne csak valahol szerepeljen.
+    start = src.index("static Future<String?> logTail(")
+    end = src.index("\n  }", start)
+    torzs = src[start:end]
+    assert "_engineOwnLogFile" in torzs and "_logFile" in torzs, (
+        "a logTail nem fűzi össze a motor és az indító naplóját")
+
+
+def test_a_szerver_magyarazata_eljut_a_felhasznaloig():
+    """ŐR: a kliens a szerver EMBERI hibaüzenetét mutassa, ne a kódot.
+
+    A motor sok hibára pontos, magyar mondatot ad — például hogy a videó
+    útvonalában ékezet van, és mit tegyen a felhasználó. Ez a kliensben
+    elveszett: minden hiba "HTTP 400" alakban csapódott le, tehát a
+    legjobb magyarázatunk sosem jutott el odáig, ahol elolvassák.
+    """
+    import re
+
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+
+    assert "static String serverDetail(" in src, (
+        "nincs segéd a szerver magyarázatának kibontására")
+    # Csupasz státuszkód-dobás nem maradhat: minden hibaüzenetnek a
+    # közös segéden kell átmennie.
+    csupasz = re.findall(
+        r'throw Exception\(\s*"[^"]*HTTP \$\{(?:resp|r)\.statusCode\}',
+        src)
+    assert not csupasz, (
+        f"{len(csupasz)} helyen csak a státuszkódot dobjuk — a szerver "
+        "magyarázata elveszik")
+
+
+def test_a_futo_feldolgozasok_barhonnan_visszatalalhatok():
+    """ŐR: van külön Feldolgozások képernyő, és a menü ÉLŐ jelvénnyel
+    mutatja, hány elemzés fut.
+
+    Egy meccs feldolgozása percekig fut. A haladás korábban csak a
+    kezdőlapon látszott, és csak amíg a felhasználó ott állt: aki közben
+    átment a felderítésre vagy a figura-tervezőbe, elvesztette szem elől
+    — és nem volt hová visszamennie.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.jobs" in shell, "nincs Feldolgozások menüpont"
+    assert "Feldolgozások" in shell, "a menüpontnak nincs neve"
+    assert "_JobsBadge" in shell, (
+        "a menüpont nem mutat élő darabszámot — a futó munka nem "
+        "látszik más képernyőkről")
+
+    assert (lib / "ui" / "jobs_screen.dart").exists(), (
+        "nincs Feldolgozások képernyő")
+
+    # A figyelő KÖZÖS: egyetlen kérdezgető járjon, ne képernyőnként külön.
+    monitor = (lib / "services" / "jobs_monitor.dart").read_text(
+        encoding="utf-8")
+    assert "static final JobsMonitor instance" in monitor, (
+        "a feldolgozás-figyelő nem közös példány")
+    for name in ("jobs_screen.dart", "dashboard_screen.dart"):
+        src = (lib / "ui" / name).read_text(encoding="utf-8")
+        assert "JobsMonitor" in src, f"{name}: nem a közös figyelőt használja"
+
+
+def test_az_alvas_gatlas_a_feldolgozas_ideje_alatt_el():
+    """ŐR: a motor alvás-gátló zárat fog a feldolgozás idejére, és
+    MINDIG feloldja.
+
+    A feldolgozás percekig-órákig tart, és közben a felhasználó nem a
+    képernyőt nézi. Zár nélkül a rendszer tétlenségi alvásra vált, és a
+    számítás megáll. Feloldás nélkül viszont a gép a munka után is ébren
+    maradna, és enné az akkumulátort.
+    """
+    from pathlib import Path
+
+    app = (Path(__file__).resolve().parent.parent
+           / "handball" / "api" / "app.py").read_text(encoding="utf-8")
+    fo = app.index("def _run_job(")
+    veg = app.index("_log_job(job)", fo)
+    torzs = app[fo:veg]
+    assert "KeepAwake" in torzs, (
+        "a feldolgozás nem fog alvás-gátló zárat")
+    assert "finally:" in torzs and "_awake.stop()" in torzs, (
+        "a zár nem oldódik fel minden ágon — a gép a munka után is "
+        "ébren maradna")
+
+
+# ---- Küszöb-egyezés: a kliens kézzel másolt számai és a motor --------------
+
+# Kivételek: olyan helper-blokkok, ahol a hivatkozott konstans SZÁMA
+# szándékosan nem jelenik meg a Dart-törzsben. Mindegyikhez tartozik
+# indoklás — kivételt csak ezzel együtt szabad felvenni.
+_KUSZOB_KIVETELEK = {
+    # A figura-szűrést MÁR A MOTOR elvégzi: a spf_telegraphed /
+    # spo_telegraphed csak a részarány-küszöböt elért figurákat
+    # számolja, a kliensnek nincs mit újra ellenőriznie.
+    ("_setplayFinisher", "SPF_SHARE_PCT"),
+    ("_setplayOpener", "SPO_SHARE_PCT"),
+}
+
+
+def _motor_konstansok():
+    """A pipeline modul-szintű NAGYBETŰS szám-konstansai.
+
+    Egy név TÖBB modulban is előfordulhat eltérő értékkel (pl. a
+    PSR_SHARE_PCT a rules.py-ban 20.0, a decisions.py-ban 60.0), ezért
+    névhez az ÖSSZES előforduló értéket gyűjtjük — a kliens bármelyiket
+    tükrözheti. Az `X = Y` alakú aliasokat feloldjuk.
+    """
+    import ast
+    import re as _re
+
+    ertekek: dict[str, set] = {}
+    aliasok: list[tuple[str, str]] = []
+    pipeline = Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+    for py in sorted(pipeline.glob("*.py")):
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for t in node.targets:
+                if not isinstance(t, ast.Name):
+                    continue
+                if not _re.fullmatch(r"[A-Z][A-Z0-9_]{3,}", t.id):
+                    continue
+                try:
+                    val = ast.literal_eval(node.value)
+                except Exception:
+                    if isinstance(node.value, ast.Name):
+                        aliasok.append((t.id, node.value.id))
+                    continue
+                if isinstance(val, bool) or not isinstance(val, (int, float)):
+                    continue
+                ertekek.setdefault(t.id, set()).add(float(val))
+    for _ in range(3):          # láncolt aliasok feloldása
+        for nev, cel in aliasok:
+            if cel in ertekek:
+                ertekek.setdefault(nev, set()).update(ertekek[cel])
+    return ertekek
+
+
+def _dart_helper_blokkok(dart_szoveg: str):
+    """(helper-név, komment-blokk, törzs) hármasok a Dart-fájlból."""
+    sorok = dart_szoveg.split("\n")
+    ki = []
+    i = 0
+    fej = re.compile(
+        r"\s*(?:String\?|Widget|List<[^>]*>\??|Map<[^>]*>\??|double\?|int\?"
+        r"|bool)\s+(_\w+)\(")
+    while i < len(sorok):
+        m = fej.match(sorok[i])
+        if not m:
+            i += 1
+            continue
+        j = i - 1
+        komment = []
+        while j >= 0 and sorok[j].strip().startswith("//"):
+            komment.insert(0, sorok[j])
+            j -= 1
+        melyseg = 0
+        torzs = []
+        k = i
+        while k < len(sorok):
+            torzs.append(sorok[k])
+            melyseg += sorok[k].count("{") - sorok[k].count("}")
+            if melyseg <= 0 and k > i:
+                break
+            k += 1
+        ki.append((m.group(1), "\n".join(komment), "\n".join(torzs)))
+        i = k + 1
+    return ki
+
+
+def test_kliens_kuszobok_egyeznek_a_motorral():
+    """A kliens-csempék küszöbei KÉZZEL másolt számok a motorból.
+
+    Minden helper kommentje megnevezi, melyik motor-konstansokat
+    tükrözi ("a backenddel azonos küszöbök: ATV_MIN_ATTACKS, …") — de
+    eddig semmi nem ellenőrizte, hogy a szám tényleg ugyanaz. Egy
+    elcsúszás azt jelentené, hogy a csempe olyat állít, amit a motor
+    nem mondana ki (vagy hallgat ott, ahol a motor beszél), és ez a
+    fajta hiba némán él évekig.
+
+    Az ellenőrzés megengedő az ÁBRÁZOLÁSSAL szemben (a Dart néha törtet
+    használ a százalék helyett, vagy kockát a perc helyett), de szigorú
+    a NÉVVEL szemben: nem létező konstansra hivatkozni tilos, mert
+    akkor a következő olvasó rossz helyen módosít.
+    """
+    dart = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if not dart.exists():
+        pytest.skip("nincs kliens a fában")
+    konst = _motor_konstansok()
+    assert len(konst) > 500, "a konstans-olvasás elromlott"
+
+    blokkok = _dart_helper_blokkok(dart.read_text(encoding="utf-8"))
+    assert len(blokkok) > 300, "a helper-olvasás elromlott"
+
+    ismeretlen: list = []
+    elteres: list = []
+    ellenorzott = 0
+    for nev, komment, torzs in blokkok:
+        hivatkozott = set(re.findall(r"\b([A-Z][A-Z0-9]{2,}_[A-Z0-9_]+)\b",
+                                     komment))
+        if not hivatkozott:
+            continue
+        szamok = {float(x) for x in re.findall(r"\d+(?:\.\d+)?", torzs)}
+        for c in sorted(hivatkozott):
+            if (nev, c) in _KUSZOB_KIVETELEK:
+                continue
+            if c not in konst:
+                ismeretlen.append(f"{nev}: {c}")
+                continue
+            varhato = set()
+            for v in konst[c]:
+                # Ugyanaz a szám; százalék↔tört; perc↔kocka (25 fps).
+                varhato.update({v, v / 100.0, v * 100.0, v * 60.0 * 25.0})
+            if not any(any(abs(w - s) < 1e-6 for s in szamok)
+                       for w in varhato):
+                elteres.append(f"{nev}: {c}={sorted(konst[c])} "
+                               f"nincs a törzs számai közt")
+            ellenorzott += 1
+
+    assert not ismeretlen, (
+        "a kliens NEM LÉTEZŐ motor-konstansra hivatkozik (a következő "
+        "olvasó rossz helyen módosítana): " + "; ".join(ismeretlen))
+    assert not elteres, (
+        "a kliens küszöbe eltér a motorétól — a csempe mást állítana, "
+        "mint a motor: " + "; ".join(elteres))
+    assert ellenorzott > 300, (
+        f"csak {ellenorzott} küszöböt ellenőriztünk — az olvasás elromlott")
+
+
+def test_a_tobbi_kliens_kepernyo_kuszobei_is_egyeznek():
+    """A felderítő képernyőn kívül is vannak kézzel másolt küszöbök.
+
+    Kevés, de fontos: az indítás előtti detektálás-próba a motoréval
+    AZONOS küszöbnél mondja ki, hogy túl sok ember esik a pályára
+    (TOO_MANY_PLAYERS) — ez az a jelzés, ami egy elrontott kalibráció
+    esetén megspórol egy órát. Ha a két szám elcsúszik, a próba
+    átengedi azt a feldolgozást, amit a motor utólag használhatatlannak
+    minősít.
+
+    Ezek a képernyők nem csempe-helperekből állnak, ezért itt
+    FÁJL-szinten ellenőrzünk: a hivatkozott konstansnak léteznie kell,
+    és az értékének elő kell fordulnia a fájlban.
+    """
+    konst = _motor_konstansok()
+    gyoker = (Path(__file__).resolve().parent.parent.parent
+              / "client" / "lib" / "ui")
+    baj: list = []
+    ellenorzott = 0
+    for nev in ("upload_screen.dart", "match_screen.dart",
+                "summary_panel.dart", "calibration_screen.dart"):
+        f = gyoker / nev
+        if not f.exists():
+            continue
+        sorok = f.read_text(encoding="utf-8").split("\n")
+        for i, sor in enumerate(sorok):
+            for c in sorted(set(re.findall(
+                    r"\b([A-Z][A-Z0-9]{2,}_[A-Z0-9_]+)\b", sor))):
+                if c not in konst:
+                    baj.append(f"{nev}:{i + 1}: nem létező konstans — {c}")
+                    continue
+                # A hivatkozás KÖRNYEZETÉBEN keressük az értéket (a
+                # fájl egésze túl laza lenne: egy 18-as tördelési szám
+                # véletlenül "igazolna" egy elcsúszott küszöböt).
+                ablak = "\n".join(sorok[max(0, i - 3):i + 12])
+                szamok = {float(x) for x in
+                          re.findall(r"\d+(?:\.\d+)?", ablak)}
+                varhato = set()
+                for v in konst[c]:
+                    varhato.update({v, v / 100.0, v * 100.0})
+                if not any(any(abs(w - s) < 1e-6 for s in szamok)
+                           for w in varhato):
+                    baj.append(f"{nev}:{i + 1}: {c}={sorted(konst[c])} "
+                               "nincs a hivatkozás környezetében")
+                ellenorzott += 1
+    assert not baj, "kliens-küszöb eltérés: " + "; ".join(baj)
+    assert ellenorzott >= 1, "a konstans-hivatkozások olvasása elromlott"
+
+
+# A pipeline-ban TÖBB modulban is előforduló, AZONOS nevű konstansok.
+# Nem hiba önmagában (a nevek modulonként külön névtérben élnek), de
+# csapda: a kliens- és doksi-kommentek NÉVRE hivatkoznak, és a
+# következő olvasó a rossz modulban módosít. Új ütközést ezért csak
+# tudatosan, ide felvéve szabad bevezetni.
+_ISMERT_UTKOZO_KONSTANSOK = {
+    # rules.py: 20.0 (pressz-poszt kiállításnál) · decisions.py: 60.0
+    "PSR_SHARE_PCT",
+    "PSR_MIN_TO",
+    # attack_types.py: 60.0 (elzáró-páros) · decisions.py: 50.0 (lágy passz)
+    "SPP_SHARE_PCT",
+    "SPP_MIN_SHOTS",
+    # event_detection.py: 5 (gólpassz-hossz) · roles.py: 3 (kiszolgált poszt)
+    "ASR_MIN_ASSISTED",
+    # goalkeeper.py: 6.8 (a 6 m-es vonal + ráhagyás, mert a kapus kilép)
+    # · play_simulation.py: 6.0 (a VALÓDI szabálykönyvi hatos)
+    "GOAL_AREA_RADIUS_M",
+}
+
+
+def test_nem_no_a_duplan_hasznalt_konstansnevek_szama():
+    """Ugyanaz a konstansnév két modulban, ELTÉRŐ értékkel: csapda.
+
+    A kliens-csempék és a doksik NÉVRE hivatkoznak a küszöbökre ("a
+    backenddel azonos küszöb: PSR_SHARE_PCT"), és ha ugyanaz a név két
+    helyen mást jelent, a következő olvasó a rossz modulban módosít —
+    a hiba pedig némán él tovább, mert mindkét szám "helyes valahol".
+
+    A meglévő négy ütközés dokumentálva van; újat csak tudatosan, a
+    lista bővítésével szabad bevezetni.
+    """
+    import ast
+    import re as _re
+    from collections import defaultdict
+
+    hol = defaultdict(dict)
+    pipeline = Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+    for py in sorted(pipeline.glob("*.py")):
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for t in node.targets:
+                if not isinstance(t, ast.Name):
+                    continue
+                if not _re.fullmatch(r"[A-Z][A-Z0-9_]{3,}", t.id):
+                    continue
+                try:
+                    val = ast.literal_eval(node.value)
+                except Exception:
+                    continue
+                if isinstance(val, bool) or not isinstance(val, (int, float)):
+                    continue
+                hol[t.id][py.name] = float(val)
+
+    utkozo = {nev: modulok for nev, modulok in hol.items()
+              if len(set(modulok.values())) > 1}
+    ujak = sorted(set(utkozo) - _ISMERT_UTKOZO_KONSTANSOK)
+    assert not ujak, (
+        "új, KÉTSZER definiált konstansnév eltérő értékkel — a "
+        "kliens/doksi kommentek névre hivatkoznak, tehát a következő "
+        "olvasó a rossz modulban módosítana: "
+        + "; ".join(f"{n} ({utkozo[n]})" for n in ujak))
+
+
+def test_a_csapat_menucsoport_hazat_ad_az_egesz_szezonnak():
+    """A csapat-szintű munkának SAJÁT menüpont jár.
+
+    Az edzésterv, a szezon-toplisták és a nyomtatható szezon-riportok
+    mind készen voltak a motorban, a felületen viszont a kezdőlap
+    mélyén (illetve egy meccs összefoglalójában) laktak: aki nem
+    görgetett odáig, nem is tudott róluk. Az edző munkarendjében ez
+    önálló feladat ("mit gyakorolunk a héten", "hol tartunk a
+    szezonban"), a játékos pedig a toplistán keresi magát.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert '"CSAPAT"' in shell, "nincs CSAPAT menücsoport"
+    for nav, nev, fajl in (("NavId.training", "Edzésterv",
+                            "training_plan_screen.dart"),
+                           ("NavId.season", "Szezon", "season_screen.dart")):
+        assert nav in shell, f"nincs {nev} menüpont"
+        assert f'"{nev}"' in shell, f"a {nav} menüpontnak nincs neve"
+        assert (lib / "ui" / fajl).exists(), f"nincs {nev} képernyő"
+
+    # A menü minden elemének jár gyorsbillentyű: tíz elemnél a 0 a
+    # tizedik. Ha a menü bővül, ez a sor mondja meg, hogy a kiosztás
+    # elfogyott — némán ne szakadjon meg.
+    elemek = shell.count("(NavId.")
+    # (a navTo switch-ágai nem "(NavId." alakúak, csak a menü-lista)
+    assert elemek >= 10, elemek
+    assert "LogicalKeyboardKey.digit0" in shell, (
+        "a tizedik menüpontnak nincs gyorsbillentyűje")
+
+    # A két új képernyő a KÖNYVTÁR-szintű végpontokat használja (nem egy
+    # meccsét): ez a különbség köztük és a meccs-elemző között.
+    terv = (lib / "ui" / "training_plan_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchLibraryTrainingFocus" in terv, (
+        "az edzésterv nem a visszatérő (szezon-szintű) fókuszokat kéri")
+    assert "fetchTraining" in terv, (
+        "az edzéstervből nem kérhető le EGY meccs fókusza")
+
+    szezon = (lib / "ui" / "season_screen.dart").read_text(encoding="utf-8")
+    for hivas in ("fetchLibrarySummary", "fetchLibraryLeaders",
+                  "fetchSeasonReport", "fetchHeadToHead"):
+        assert hivas in szezon, f"a szezon-lapról hiányzik: {hivas}"
+    # A toplista mezszám-alapú: aki nincs beszámozva, kimarad — ezt ki
+    # kell mondani, különben hiányzó teljesítménynek olvassa a játékos.
+    assert "MEZSZÁM" in szezon or "mezszám" in szezon, (
+        "a toplista nem mondja meg, miért maradhat ki valaki")
+
+
+def test_a_meccsterv_sajat_menupontot_kap():
+    """A meccs előtti este EGY kérdése: hogyan verjük meg ŐKET.
+
+    A meccsterv-illesztés (a mi profilunk × az ő profiljuk) készen volt,
+    de csak a felderítő jelentés egyik kártyájaként: hozzá kézzel kellett
+    kijelölni MINDEN meccset, amelyiken az ellenfél játszott, és külön a
+    sajátjainkat is. Saját menüpontból két csapatnév elég — a meccseket
+    a képernyő gyűjti össze a könyvtárból.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.matchup" in shell, "nincs Meccsterv menüpont"
+    assert '"Meccsterv"' in shell, "a menüpontnak nincs neve"
+    assert (lib / "ui" / "matchup_screen.dart").exists(), (
+        "nincs Meccsterv képernyő")
+
+    kepernyo = (lib / "ui" / "matchup_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchMatchup" in kepernyo, (
+        "a Meccsterv nem a meccsterv-illesztést kéri")
+    # A lényeg, amiért saját képernyőt kapott: a meccseket NEM a
+    # felhasználó kattintja össze, hanem a csapatnévből épülnek.
+    assert "_itemsOf" in kepernyo, (
+        "a képernyő nem gyűjti össze magától a csapat meccseit")
+    assert "listMatches" in kepernyo, (
+        "a képernyő nem a könyvtárból dolgozik")
+
+
+def test_a_klipek_menupont_szabadon_kombinalhato_csomagokat_ad():
+    """A videó-dosszié összeállítása önálló munka.
+
+    A klipvágás eddig csak a meccs-elemző eszköztárában élt, és ott is
+    EGY csomag egyszerre: aki a gólokat ÉS a kihagyott ziccereket is
+    akarta, kétszer vágatott, két zip-be. Az edzés előtt viszont pont
+    az a kérdés, mit viszünk le a pályára — a csomagokat szabadon kell
+    tudni kombinálni, és nem kell hozzá megnyitni a meccset.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.clips" in shell, "nincs Klipek menüpont"
+    assert '"Klipek"' in shell, "a menüpontnak nincs neve"
+    assert (lib / "ui" / "clips_screen.dart").exists(), (
+        "nincs Klipek képernyő")
+
+    kepernyo = (lib / "ui" / "clips_screen.dart").read_text(
+        encoding="utf-8")
+    assert "startClipExport" in kepernyo and "fetchClipsZip" in kepernyo
+    # A lényeg: TÖBB típus egyszerre, egy exportban.
+    assert "_selected.toList()" in kepernyo, (
+        "a képernyő nem több kijelölt csomagot ad át")
+
+    # A felkínált klip-típusoknak LÉTEZNIÜK kell a motorban: egy
+    # elgépelt kulcs némán üres csomagot adna (a backend ismeretlen
+    # típusra egyszerűen nem vág semmit).
+    import re as _re
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    esemeny = {"goal", "shot", "turnover"}  # a detect_events alap-típusai
+    ismert = esemeny | set(_re.findall(r'if "(\w+)" in types', app))
+    kinalt = set(_re.findall(r'\("(\w+)", "', kepernyo))
+    hianyzo = kinalt - ismert
+    assert not hianyzo, f"a kliens nem létező klip-típust kínál: {hianyzo}"
+
+
+def test_a_csapat_fejlodes_egy_csapatnevbol_indul():
+    """A "fejlődünk-e?" kérdést nem szabad húsz kattintással kérdezni.
+
+    A fejlődés-követés (két időszak összevetése) eddig csak a kezdőlap
+    egyik gombja volt, és két párbeszéd-ablakon át KÉZZEL kellett
+    kijelölni, melyik meccs melyik időszakba tartozik — meccsenként azt
+    is, hogy a figyelt csapat melyik oldalon játszott. Saját
+    menüpontból egy csapatnév elég: a meccseket a képernyő szedi össze
+    és vágja ketté, a vágópont húzható.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.teamTrend" in shell, "nincs Csapat-fejlődés menüpont"
+    assert '"Csapat-fejlődés"' in shell, "a menüpontnak nincs neve"
+    assert (lib / "ui" / "team_trend_screen.dart").exists(), (
+        "nincs Csapat-fejlődés képernyő")
+
+    kepernyo = (lib / "ui" / "team_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_ofTeam" in kepernyo, (
+        "a képernyő nem szedi össze magától a csapat meccseit")
+    assert "Slider(" in kepernyo, "a vágópont nem húzható"
+    # Az összevetést a MEGLÉVŐ fejlődés-nézet rajzolja — ne szülessen
+    # belőle második, széttartó megjelenítés.
+    assert "TrendScreen(" in kepernyo, (
+        "a képernyő nem a meglévő fejlődés-nézetet használja")
+
+    # A fejlődés-nézet kijelölése a saját menüpontján álljon, akárhonnan
+    # nyílt meg (korábban a kezdőlapot jelölte).
+    trend = (lib / "ui" / "trend_screen.dart").read_text(encoding="utf-8")
+    assert "NavId.teamTrend" in trend, (
+        "a fejlődés-nézet még mindig más menüpontot jelöl aktívnak")
+
+
+def test_a_keret_lap_mindenkit_mutat_nem_csak_a_top_otot():
+    """A játékos a SAJÁT sorát keresi, nem a gólkirályt.
+
+    A szezon-toplisták az öt legjobbat adják; a mezszám-alapú összegek
+    viszont mindenkire megvannak a motorban, csak nem jutottak ki a
+    felületre. A keret-lap ezt a metszetet adja: a csapat minden
+    mezszáma egy táblában, meccs-darabszámmal — enélkül egy alacsony
+    gólszám félrevezet (kevés játék vagy gyenge forma?).
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.roster" in shell, "nincs Keret menüpont"
+    assert '"Keret"' in shell, "a menüpontnak nincs neve"
+    assert (lib / "ui" / "roster_screen.dart").exists(), (
+        "nincs Keret képernyő")
+
+    kepernyo = (lib / "ui" / "roster_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchTeamRoster" in kepernyo, "a keret-lap nem a keretet kéri"
+    # A meccs-darabszám oszlop nem elhagyható: ez adja a többi szám
+    # olvasatát.
+    assert '("matches", "Meccs")' in kepernyo, (
+        "a keret-lapról hiányzik a meccs-darabszám oszlop")
+    # Egy sorra koppintva a játékos görbéje nyíljon — ELŐRE KITÖLTVE,
+    # ne egy üres űrlap (különben a kattintás semmit nem takarít meg).
+    assert "initialJersey" in kepernyo, (
+        "a keret-lap nem tölti ki előre a játékos-görbét")
+
+    trend = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "initialJersey" in trend and "initialTeam" in trend, (
+        "a játékos-görbe nem fogad előre kitöltött játékost")
+
+    # A kliens által kért végpontnak léteznie kell a motorban.
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/library/roster")' in app, (
+        "a kliens olyan végpontot hív, ami nincs a motorban")
+
+
+def test_a_jegyzetek_egy_listat_alkotnak_es_visszanezhetok():
+    """A jegyzetelés eddig egyirányú volt.
+
+    A meccs közben meg lehetett jelölni egy pillanatot, de utána csak
+    ANNAK a meccsnek a lejátszójában lehetett megtalálni. Az edző
+    fejében viszont a jegyzetek egyetlen listát alkotnak — "amit vissza
+    akarok nézni" —, és a hét közbeni munka ebből indul.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    shell = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "NavId.notes" in shell, "nincs Jegyzetek menüpont"
+    assert '"Jegyzetek"' in shell, "a menüpontnak nincs neve"
+    assert (lib / "ui" / "notes_screen.dart").exists(), (
+        "nincs Jegyzetek képernyő")
+
+    kepernyo = (lib / "ui" / "notes_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchLibraryNotes" in kepernyo, (
+        "a lap nem a könyvtár-szintű jegyzeteket kéri")
+    # A visszanézés a lényeg: a meccs A MEGJELÖLT pillanatnál nyíljon.
+    assert "initialFrame" in kepernyo, (
+        "a jegyzetre koppintva nem a megjelölt pillanat nyílik")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "initialFrame" in meccs, (
+        "a meccs-elemző nem fogad kezdő-képkockát")
+    # A kért képkocka VIDEÓ-KOCKA (t címke), nem lista-index: utólag
+    # vágott meccsen a kettő eltér, ezért t szerint kell megkeresni a
+    # kockát (_indexOfT — ez egyben határok közé is szorít: egy régi
+    # jegyzet mutathat a meccs hosszán túlra).
+    assert "_indexOfT(match, widget.initialFrame!)" in meccs, (
+        "a kezdő-képkocka nincs a t címke szerint megkeresve")
+    assert "static int _indexOfT(" in meccs
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/library/notes")' in app, (
+        "a kliens olyan végpontot hív, ami nincs a motorban")
+
+
+def test_a_jatekosok_nevet_kapnak_nem_csak_szamot():
+    """Az egész termék "#7"-et mondott.
+
+    Az edző nem számokban gondolkodik, a játékos pedig a saját nevét
+    keresi. A név a CSAPATHOZ és a mezszámhoz tartozik (a mezszám a
+    szezonban stabil, a track-azonosító nem), ezért egy helyen kell
+    tudni megadni — és ott kell látszania, ahol a játékosról szó van.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    keret = (lib / "ui" / "roster_screen.dart").read_text(encoding="utf-8")
+    assert "setPlayerName" in keret, "a keret-lapon nem adható meg név"
+    assert '"NÉV"' in keret, "a keret-lapon nincs név-oszlop"
+
+    # Ahol a játékosról szó van, ott a névnek is látszania kell —
+    # különben az egyik lapon Kovács, a másikon #7 szerepel.
+    szezon = (lib / "ui" / "season_screen.dart").read_text(encoding="utf-8")
+    assert '"name"' in szezon, (
+        "a toplistákon nem látszik a felvitt név")
+    trend = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert '"name"' in trend, (
+        "a játékos-görbén nem látszik a felvitt név")
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.post("/library/players")' in app
+    # A névjegyzék NEM a meccs-mappába való: a betöltő minden ottani
+    # *.json-t meccsnek próbál olvasni.
+    assert '_data_dir.parent / "players.json"' in app, (
+        "a névjegyzék a meccs-mappában landolna")
+
+
+def test_a_felismeres_kezzel_javithato_a_meccs_elemzoben():
+    """A felismerés téved — és javíthatatlan hibából nincs bizalom.
+
+    Az edző egy rossz eredményű jelentésnek EGYETLEN számát sem hiszi
+    el, akkor sem, ha a többi jó. A javításnak ezért ott kell lennie,
+    ahol a hibát meglátja (az eseménysoron), és át kell ütnie az egész
+    elemzésen — nem elég az esemény-listát átfesteni.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "saveEventOverrides" in meccs, "nincs kézi javítás a felületen"
+    for muvelet in ('"set_type"', '"remove"', '"add"'):
+        assert muvelet in meccs, f"hiányzó javítás-művelet: {muvelet}"
+    # A javítás után ÚJRA kell tölteni: a javítás minden rétegen átüt,
+    # a fél nézet frissítése ellentmondó képet adna.
+    assert "await _load();" in meccs, (
+        "a javítás után nem tölt újra a nézet")
+    # Az edző lássa, mit írt felül ő maga, és tudja visszavonni.
+    assert '"manual"' in meccs, "a kézi javítás nincs megjelölve a listán"
+    assert "_clearCorrections" in meccs, (
+        "a javítások nem vonhatók vissza")
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.post("/matches/{match_id}/event-overrides")' in app
+
+    # A javítás a LÖVÉS-FELISMERÉSBEN ül, nem a végponton: csak így üt
+    # át az xG-n, a lövő-listákon és a felderítésen is.
+    ed = (_Path(__file__).resolve().parents[1] / "handball" / "pipeline"
+          / "event_detection.py").read_text(encoding="utf-8")
+    assert "_apply_event_overrides(match, events)" in ed
+
+
+def test_a_mezszamok_egy_menetben_kioszthatok():
+    """A mezszám kapuőr — és a kiosztása eddig elrettentés volt.
+
+    Meccsek között csak a mezszám köti össze a játékost: enélkül a
+    Keret, a toplisták és a Játékos-fejlődés néma marad. A
+    pályára-kattintós szerkesztő viszont játékosonként külön párbeszéd,
+    tizennégy emberre az már nem munka — és ezért marad el.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "_bulkJerseys" in meccs, "nincs tömeges mezszám-kiosztó"
+    # JÁTÉKIDŐ szerint: elöl a valódi trackek, hátul a másodperces
+    # töredékek — különben a lista használhatatlanul hosszú.
+    assert "b.measuredFrames.compareTo(a.measuredFrames)" in meccs, (
+        "a lista nem játékidő szerint rendez")
+    # Csak a VÁLTOZOTT sorokat küldjük el.
+    assert "if (uj == st.jerseyNumber) continue;" in meccs, (
+        "minden sort elküld, a változatlanokat is")
+    # A vezérlőket a párbeszéd után el kell dobni (memória-szivárgás).
+    assert "c.dispose();" in meccs, (
+        "a tömeges szerkesztő vezérlői nincsenek eldobva")
+
+
+def test_az_egyeni_edzes_fokusz_a_feluleten_is_ott_van():
+    """Az egyéni fókusz a JÁTÉKOS lapja — ha csak a motorban él, nincs.
+
+    A csapat-lista megmondja, mit gyakoroljon a csapat; a játékos
+    viszont a saját nevét keresi, és az edző emberre bontva osztja ki a
+    hét feladatait.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    panel = (lib / "ui" / "summary_panel.dart").read_text(encoding="utf-8")
+    assert "_playerTrainingCard" in panel, "nincs egyéni edzés-fókusz csempe"
+    assert '"EGYÉNI EDZÉS-FÓKUSZ"' in panel
+    # KÜLÖN hívás: az egyéni fókusz akkor is megszólalhat, ha
+    # csapat-szinten nincs kilógó gyengeség (a csapat-kártya olyankor
+    # üres listát ad vissza, és magával vinné az egyénit is).
+    assert panel.count("..._playerTrainingCard()") == 1
+    assert panel.index("..._trainingCard()") < panel.index(
+        "..._playerTrainingCard()")
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert 'ki["players"] = player_training_focus(match)' in app, (
+        "az edzés-végpont nem adja ki az egyéni fókuszt")
+
+
+def test_a_mit_gyakorolj_a_jatekos_kepernyojen_is_ott_van():
+    """A játékos a görbéjét nézi meg — a teendő legyen mellette.
+
+    A "Mit gyakorolj" eddig csak a letöltött szezon-lapon szerepelt;
+    a képernyőn ez az a rész, amiért a játékos egyáltalán megnyitja a
+    saját lapját.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    trend = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchPlayerFocus" in trend, "a képernyő nem kéri le a fókuszt"
+    assert '"MIT GYAKOROLJ"' in trend
+    # A meccs-darabszám nélkül nem derül ki, hogy visszatérő-e.
+    assert 'meccsen"' in trend
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/players/focus")' in app
+    # A képernyő és a nyomtatott lap UGYANABBÓL a számolásból él.
+    assert app.count("_season_player_focus(") >= 2, (
+        "a képernyő és a nyomtatott lap külön számolna")
+
+
+def test_az_edzesterv_es_a_meccsterv_nyomtathato():
+    """A pályán és a meccs előtti estén nincs képernyő.
+
+    A két új munkalap (Edzésterv, Meccsterv) eddig csak a képernyőn
+    élt — az edző viszont a papírt viszi le az edzésre és a
+    meccs-helyszínre. A nyomtatható lap nem külön adat, ugyanaz a
+    számolás.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    terv = (lib / "ui" / "training_plan_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchTrainingPlanExport" in terv, (
+        "az edzésterv nem nyomtatható")
+    meccs = (lib / "ui" / "matchup_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchMatchupExport" in meccs, "a meccsterv nem nyomtatható"
+    # A meccsterv-lap a SAJÁT csapat saját meccseiből épül, nem abból a
+    # feltevésből, hogy mi voltunk az ellenfelük.
+    assert "_itemsOf(own), _itemsOf(opp)" in meccs
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/library/training-focus/export")' in app
+
+
+def test_a_kepernyo_nem_mond_kevesebbet_a_sajat_nyomtatvanyanal():
+    """Az edzésterv-lap az EGYÉNI feladatokat is viszi — a képernyőnek
+    is mutatnia kell.
+
+    Ha csak a papíron lenne rajta, a program kevesebbet mondana, mint a
+    saját nyomtatványa: az edző azt venné észre, hogy a nyomtatás
+    "többet tud". A kettő ugyanabból a számolásból él.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    terv = (lib / "ui" / "training_plan_screen.dart").read_text(
+        encoding="utf-8")
+    assert "fetchTeamPlayerPlan" in terv, (
+        "a képernyő nem kéri le az egyéni tervet")
+    assert '"EGYÉNI FELADATOK"' in terv
+    # A csapat-választó MINDEN csapatot kínál: egyéni feladat akkor is
+    # lehet, ha csapat-szinten nincs kilógó gyengeség.
+    assert "for (final name in _matchCounts.keys)" in terv, (
+        "a választó csak a csapat-fókuszos csapatokat kínálja")
+
+    from pathlib import Path as _Path
+
+    app = (_Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/library/training-focus/players")' in app
+    # A képernyő és a nyomtatott lap KÖZÖS számolásból él.
+    assert app.count("_team_player_plan(") >= 2, (
+        "a képernyő és a nyomtatott lap külön számolna")
+
+
+def test_a_keret_lap_mutatja_kivel_van_dolga_az_edzonek():
+    """A keret-lap ne csak azt mutassa, ki mit teljesített.
+
+    Az edző a keretet azért nézi végig, hogy eldöntse, kivel kell
+    foglalkoznia — a gyakorolnivalók száma pont ezt mondja meg. Egy
+    kérés az egész keretre (a részletes lista a játékos görbéjén van).
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    keret = (lib / "ui" / "roster_screen.dart").read_text(encoding="utf-8")
+    assert "fetchTeamPlayerPlan" in keret, (
+        "a keret-lap nem kéri le az egyéni tervet")
+    assert "_focusCount" in keret
+    # EGY kérés az egész keretre — nem mezszámonként.
+    assert keret.count("fetchTeamPlayerPlan") == 1
+
+
+def test_a_jegyzet_torolheto_es_az_ures_csomag_megszolal():
+    """Két néma pont javítása a felületen.
+
+    (1) A jegyzet-lista az edző TEENDŐ-listája: a kipipált tételnek le
+    kell tudnia kerülni róla — megerősítéssel, mert gépelt szöveg, nem
+    újratermelhető adat. (2) Aki hat klip-csomagot kér és egy zip-et
+    kap, tudja meg, mihez nem volt jelenet.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jegyzet = (lib / "ui" / "notes_screen.dart").read_text(encoding="utf-8")
+    assert "deleteNote" in jegyzet, "a jegyzet nem törölhető"
+    assert "A törlés nem vonható vissza" in jegyzet, (
+        "a törlés megerősítés nélkül megy")
+
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "nem volt jelenet" in klip, (
+        "a néma üres csomagok nem jutnak el a felhasználóhoz")
+
+
+def test_az_edzesterv_ket_nezete_ugyanazt_mondja():
+    """Az \"Egy meccs\" nézet is mutassa az egyéni feladatokat.
+
+    A végpont a csapat-lista mellett ezt is adja, és a szezon-nézet
+    mutatja — ha itt kimaradna, a két nézet mást mondana ugyanarról a
+    meccsről.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    terv = (lib / "ui" / "training_plan_screen.dart").read_text(
+        encoding="utf-8")
+    assert '_matchFocus?["players"]' in terv, (
+        "az egy-meccs nézet nem mutatja az egyéni feladatokat")
+
+
+def test_a_stilus_tengelyek_olvashatoak():
+    """A 0..1 nyers szám nem tanács.
+
+    A meccsterv stílus-kártyája a tengely-értékeket mutatja; ha
+    "0.42"-t ír, azt csak az érti, aki a képletet ismeri. Százalék +
+    egy mondat arról, mit jelent a MAGASABB érték — ettől lesz belőle
+    edzői információ.
+
+    A tengely-nevek a motorból jönnek: ha ott átnevezik őket, a
+    magyarázat némán elmarad. Ezért itt összevetjük a kettőt.
+    """
+    import re
+
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kep = (lib / "ui" / "matchup_screen.dart").read_text(encoding="utf-8")
+    assert "_axisHint" in kep and "_pct(" in kep
+
+    from pathlib import Path as _Path
+    sc = (_Path(__file__).resolve().parents[1] / "handball" / "pipeline"
+          / "scouting.py").read_text(encoding="utf-8")
+    kezdet = sc.index("def _sty_axes")
+    vege = sc.index("def style_distance")
+    motor = set(re.findall(r'ax\["([^"]+)"\]', sc[kezdet:vege]))
+    assert len(motor) >= 5, motor
+    kliens = set(re.findall(r'case "([^"]+)":', kep))
+    hianyzo = motor - kliens
+    assert not hianyzo, (
+        f"a stílus-tengelyekhez nincs magyarázat a kliensen: {hianyzo}")
+
+
+def test_a_kezi_golnak_lehet_lovoje_a_feluleten():
+    """A kézzel felvett gól a kijelölt játékoshoz tartozzon.
+
+    Enélkül a gól ott van az eredményben, de a góllövő-listákból
+    kimarad — az edző pont azt a gólt vette fel, amit a felismerés
+    kihagyott, és pont annak a játékosnak nem számítana.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "playerId: _selectedTrack" in meccs, (
+        "a kézi gól nem a kijelölt játékoshoz kerül")
+    # A menü meg is mondja, KI lesz a lövő — különben az edző nem
+    # tudja, hogy a kijelölés számít.
+    assert "lövő: " in meccs
+
+
+def test_a_jegyzet_csomag_nem_kinal_mukodeskeptelen_kapcsolot():
+    """Felajánlani egy működésképtelen kapcsolót rosszabb, mint
+    elmondani, miért nem elérhető.
+
+    A "jegyzetelt pillanatok" klip-csomag jegyzet nélkül némán üres
+    zip-et adna — a képernyő ezért megnézi, hány jegyzet van, és
+    kiírja a darabszámot (vagy azt, hol lehet jegyzetet írni).
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "_noteCount" in klip and "fetchNotes" in klip
+    assert "nincs jegyzet" in klip, (
+        "a letiltott csomag nem mondja meg, miért nem elérhető")
+def test_a_toplista_soraibol_a_jatekos_sajat_lapjara_lehet_jutni():
+    """A játékos a toplistán megtalálja magát — és ott meg is akad.
+
+    A szezon-képernyő toplistái eddig zsákutcák voltak: a #7-es
+    kiolvasta, hogy ő a második góllövő, de a saját görbéjéhez és a
+    "mit gyakorolj" listájához vissza kellett mennie a menübe, és
+    kézzel begépelnie a csapatot meg a mezszámot. A sor mostantól
+    koppintható, és a játékos-lapot ELŐRE KITÖLTVE nyitja.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    szezon = (lib / "ui" / "season_screen.dart").read_text(encoding="utf-8")
+    assert "_openPlayer" in szezon, "a toplista sora nem visz sehova"
+    assert "InkWell" in szezon and "onTap: () => _openPlayer" in szezon, (
+        "a sor nem koppintható")
+    # Az ELŐRE KITÖLTÉS a lényeg: enélkül a játékos ugyanúgy gépelne.
+    assert "initialTeam:" in szezon and "initialJersey:" in szezon, (
+        "a játékos-lap nem előre kitöltve nyílik")
+    # És a sor LÁTSZÓDJON is koppinthatónak — a rejtett kattinthatóság
+    # ugyanolyan használhatatlan, mint a hiányzó.
+    assert "Icons.chevron_right" in szezon, (
+        "semmi nem jelzi, hogy a sor koppintható")
+
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "this.initialTeam" in jatekos and "this.initialJersey" in jatekos
+def test_a_klipcsomag_egy_jatekosra_szukitheto_a_feluleten():
+    """A játékos a SAJÁT videóját kéri — a felületen is.
+
+    A motor tud mezszámra szűrni, de ha a képernyő nem kínálja fel, a
+    funkció nem létezik. És csak a MŰKÖDŐ mezszámok kínálhatók: a
+    kiosztatlan szám némán üres zip-et adna, ezért a lista a
+    backendtől jön, jelenet-darabszámmal.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "fetchClipPlayers" in klip, (
+        "a képernyő nem kérdezi meg, kihez van jelenet")
+    assert "_jerseys" in klip and "jerseys: _jerseys.toList()" in klip, (
+        "a kijelölt mezszámok nem jutnak el a vágásig")
+    # A darabszám ott van a csempén: ne kelljen kipróbálni.
+    assert "jelenet" in klip
+    # Az ÜRES kijelölés az egész csapatot jelenti — és ezt ki is
+    # mondja, különben az edző nem meri elengedni a szűrőt.
+    assert "az egész csapat" in klip
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "clip-players" in api
+    assert "jerseys" in api, "a kliens nem küldi a mezszámokat"
+
+    # A játékos a SAJÁT lapjáról egy kattintással eljut a klipjeihez —
+    # különben a Klipek menüben újra ki kellene keresnie magát.
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_openMyClips" in jatekos
+    assert "ClipsScreen(" in jatekos and "initialJersey: jersey" in jatekos
+    assert "initialJersey" in klip, (
+        "a Klipek lap nem fogadja az előre kért mezszámot")
+    # Több játékosnál a zip mappákra bomlik — a lap MONDJA MEG
+    # előre, mit fog kapni, különben a mappák meglepetésként érik.
+    assert "külön mappát kap" in klip
+def test_a_jatekos_latja_hol_tart_a_kereten_belul():
+    """A játékos első kérdése: sokat futottam vagy keveset?
+
+    A nyers "4,2 km" magában nem válasz. A lapnak a keret-átlagot és a
+    helyezést is mutatnia kell — és ki kell mondania, hogy PERCRE
+    VETÍTVE hasonlít, különben a tizenöt percet kapó szélső azt hiszi,
+    lemaradt.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_squadCompare" in jatekos
+    for mezo in ("team_distance_per_min", "distance_per_min",
+                 "distance_rank", "squad_size"):
+        assert mezo in jatekos, f"a lap nem olvassa a(z) {mezo} mezőt"
+    assert "m/perc" in jatekos, "a mértékegység nem derül ki"
+    # A LÉNYEG kimondva: a több futómunka önmagában nem jobb.
+    assert "önmagában nem jobb" in jatekos
+def test_a_gyakorlandotol_egy_kattintas_a_felvetelig():
+    """A gyakorlat elmondja, MIT kell csinálni — a felvétel azt, MIÉRT.
+
+    A "Mit gyakorolj" tételei eddig szövegek voltak: a játékos
+    elolvasta, hogy nyomás alatt eladja a labdát, és nem tudta, melyik
+    pillanatról van szó. A klip-válogatáshoz pedig ki kellett volna
+    találnia, melyik csomagot kérje.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_clipsOf" in jatekos, "a lap nem olvassa a tétel klip-típusait"
+    assert "Nézd meg a felvételen" in jatekos
+    assert "_openMyClips(types:" in jatekos, (
+        "a gomb nem adja tovább a tételhez illő csomagokat")
+
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "initialTypes" in klip, (
+        "a Klipek lap nem fogadja az előre kért csomagokat")
+def test_a_klipvagas_elore_megmondja_mennyi_lesz():
+    """A vágás PERCEKBE telik — a rossz kijelölés a végén derülne ki.
+
+    Az edző kijelöl tizenhárom csomagot, elindítja, és öt perc múlva
+    látja, hogy háromhoz nem volt jelenet. A becslés ezt előre
+    megmondja, és a plafonra is figyelmeztet — de FELSŐ korlátként,
+    mert az ismétléseket a motor kiszűri.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    klip = (lib / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "_becsultKlipek" in klip
+    assert "_maxClips" in klip and "_totals" in klip
+    # A NULLA eset a legfontosabb: az üres csomag néma pazarlás lenne.
+    assert "nincs jelenet" in klip
+    # És a becslés nem ígér pontos számot.
+    assert "kb." in klip
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "max_clips" in api or "fetchClipPlayers" in api
+def test_a_jatekos_latja_javul_e_vagy_romlik():
+    """A görbe SZÁMOKAT mutat — a játékos IRÁNYT akar tudni.
+
+    Egy pontsorból ezt kinézni nem lehet, mert minden második meccs
+    jobb az előzőnél. És ahol nincs irány (kevés meccs vagy zajsávon
+    belüli mozgás), ott a lapnak KI KELL MONDANIA, hogy az zaj — a
+    néma szám ítéletnek látszana.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_formCard" in jatekos and "JAVULOK VAGY ROMLOK" in jatekos
+    assert "trend_window" in jatekos, "a lap nem mondja meg, mihez méri"
+    assert "nem irány, zaj" in jatekos, (
+        "az ítélet nélküli eset némán számot mutatna")
+def test_a_klip_jelzes_a_meccs_elemzoben_is_latszik():
+    """Aki egy pár perces klipet elemez, a hallgató rétegeket enélkül
+    hiányos elemzésnek nézi.
+
+    És NEM figyelmeztetésként: ez nem hiba. A riasztó szín ugyanolyan
+    félrevezető lenne, mint a hallgatás.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert 'q["clip_note"]' in meccs, "a lap nem olvassa a klip-jelzést"
+    assert "KLIP, NEM TELJES MECCS" in meccs
+def test_a_feltoltes_lap_ajanlja_a_pontos_profilt_rovid_szakaszra():
+    """A profil-választó három nevet kínál, és nem mondja meg, mikor
+    melyik éri meg.
+
+    Rövid szakaszon a "Pontos" percekbe kerül (teljes meccsen órákba),
+    és pont a labda felismerésén javít — amire a birtoklás, a passz,
+    az eladás és a lövés is épül. Ez NEM hiba-üzenet, ezért nem is
+    riasztó színnel.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    fel = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert '_preflight["profile_hint"]' in fel, (
+        "a lap nem olvassa a profil-javaslatot")
+    assert "_profileHintCard" in fel and "_profileHintCard()," in fel, (
+        "a javaslat-kártya nincs beépítve a lapba")
+def test_az_osszefuzes_akarhany_szakaszt_elfogad():
+    """Aki telefonnal vesz fel, DARABOKBAN kapja a meccset.
+
+    A felvétel négy gigánál vagy tíz percnél elvágódik — hat-nyolc
+    klip lesz belőle, nem kettő. A motor eddig is tudott N szakaszt
+    összefűzni; a felület kérdezett pontosan kettőt, és emiatt a
+    darabokban felvett meccs összerakhatatlan volt.
+
+    A SORREND látszódjon és legyen javítható: az összefűzés időrendet
+    vár, és egy rossz sorrendű meccsen minden idő-alapú réteg
+    (hajrá, sorozatok, kondíció) félremegy — némán.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    # Nem két rögzített mező, hanem LISTA.
+    assert "final List<String> parts = []" in kezdo, (
+        "az összefűzés még mindig két rögzített szakaszt kér")
+    assert "parts.length < 2" in kezdo, "hiányzik a kettes alsó korlát"
+    # A sorrend látszik (sorszám) és javítható (mozgatás, eltávolítás).
+    assert "Feljebb" in kezdo and "Eltávolítás" in kezdo
+    # A megnevezés sem "félidő": az csak az egyik eset.
+    assert "Szakaszok összefűzése" in kezdo
+    assert "Félidők összefűzése" not in kezdo
+def test_a_kalibracio_atveheto_masik_videorol():
+    """Hat klip ugyanarról a rögzített kameráról = huszonnégy
+    sarok-kattintás ugyanarra a pályára.
+
+    A kalibráció a videó FÁJLNEVÉHEZ van kötve, tehát a darabokban
+    felvett meccs minden részét külön kellett bejelölni. Az átvétel
+    ezt veszi el — de CSAK akkor helyes, ha a kamera nem mozdult, és
+    ezt a programnak ki kell mondania, mert eldönteni nem tudja.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    fel = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert "_atvetelFlow" in fel, "nincs átvétel-folyamat"
+    assert "Kalibráció átvétele másik videóról" in fel
+    # A FELTÉTEL kimondva: enélkül az edző elmozdult kamerára is átvenné.
+    assert "NEM mozdult" in fel
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "fetchSavedCalibrations" in api
+    # A saját kalibrációját ne kínáljuk fel: értelmetlen, és elrejti a
+    # valódit.
+    assert "excludePath" in api
+def test_a_koteg_orokli_a_fo_video_kalibraciojat():
+    """A köteg tipikusan EGY meccs darabjai, ugyanarról a kameráról.
+
+    A felhasználó a fő videót bekalibrálta — a köteg többi darabja
+    eddig kalibráció NÉLKÜL futott, tehát a meccs 5/6-án minden
+    távolság-alapú réteg némán félrement. A saját mentett kalibráció
+    erősebb (azt nem írjuk felül), és az öröklést a felület KIMONDJA:
+    ha a kamera mozdult a darabok közt, a felhasználónak tudnia kell,
+    honnan jött a kalibráció.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    fel = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert "calibs == null && _calib != null" in fel, (
+        "a köteg nem örökli a fő videó kalibrációját")
+    # Az örökölt kalibráció a darab videójához is elmentődik.
+    assert "orokolt" in fel
+    # És a felület kimondja — a néma öröklés zavarba ejtő lenne.
+    assert "örökölte" in fel and "kalibráld őket külön" in fel
+def test_a_koteg_a_vegen_magatol_osszeall():
+    """Aki egy meccs hat darabját tölti fel éjszakára, reggel hat
+    KÜLÖN "meccset" talált, és kézzel kellett összefűznie — pont az a
+    lépés, amit az ember elfelejt.
+
+    A köteg mostantól közös csoport-jelet visz, és a motor a végén
+    magától fűzi össze. KIKAPCSOLHATÓ: aki több külön meccset tölt fel
+    egyszerre, annak az összefűzés hiba lenne.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    fel = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert "_mergeBatch" in fel, "nincs összefűzés-kapcsoló"
+    assert "mergeGroup: mergeGroup" in fel, (
+        "a csoport-jel nem jut el az indításig")
+    assert "mergeTotal" in fel, (
+        "a darabszám nélkül a csoport versenyben zárulhatna le")
+    # A kapcsoló kimondja, mikor KELL kikapcsolni.
+    assert "kapcsold ki" in fel
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "merge_group" in api and "merge_total" in api
+def test_a_konyvtar_jelzi_a_darabot_es_az_egeszet():
+    """Összefűzés után a darab és az egész is a listában van, AZONOS
+    csapatnevekkel — jelölés nélkül három egyforma sor lenne, és nem
+    tudni, melyiket nyisd meg (és miért nem duplázódik a szezon).
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert 'm["merged_parts"]' in kezdo and 'm["part_of"]' in kezdo, (
+        "a kártya nem olvassa az összefűzés-jelölést")
+    assert "darabból" in kezdo, "az egész nem mondja, miből áll"
+    # A darab MEGMAGYARÁZZA, miért nem duplázódik — enélkül a
+    # felhasználó a szezon-számokat hibásnak hinné ("hova lett a
+    # meccsem?").
+    assert "nem duplázódik" in kezdo
+
+    # A felderítés-választóban UGYANEZ a csapda: a darabot ÉS az
+    # egészet kijelölve az egyesített jelentés kétszer számolná
+    # ugyanazt a meccset.
+    valaszto = (lib / "ui" / "scouting_picker_screen.dart").read_text(
+        encoding="utf-8")
+    assert 'm["part_of"]' in valaszto, (
+        "a felderítés-választó nem jelzi a darabot")
+    assert "kétszer számolna" in valaszto
+def test_a_keret_lap_kimutatast_ad_csv_ben():
+    """"Küldd el Excelben, ki hány gólnál jár" — a hét végi vezetőségi
+    feladat. Eddig a képernyőről kellett kimásolni."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    keret = (lib / "ui" / "roster_screen.dart").read_text(encoding="utf-8")
+    assert "_exportCsv" in keret and "Kimutatás (CSV)" in keret
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "roster.csv" in api, "a kliens nem a közös számolásból kér"
+def test_a_jatekos_szezon_valogatast_kap():
+    """"Az összes gólom egy helyen" — a meccsenkénti csomag megvolt, a
+    szezoné nem: a játékos meccsenként vágatott, és a zipeket kézzel
+    szedte össze."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jatekos = (lib / "ui" / "player_trend_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_seasonClips" in jatekos and "Szezon-válogatás" in jatekos
+    # A vágás percekbe telhet: a gombon FUT a haladás, nem néma.
+    assert "_seasonWorking" in jatekos and "_seasonMsg" in jatekos
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "season-clips/export" in api and "season-clips/download" in api
+def test_a_felderites_kulcs_mondata_mellett_ott_a_video():
+    """"A #7-esükre kettőzz" — a mondat meggyőz, a felvétel felkészít.
+
+    A felderítés megnevezi a célpontot, de a bizonyíték (az ő eladásai
+    videón) eddig kézi munkával járt: meccsenkénti vágatás. A
+    Célpont-videó gomb a szezon-válogatás motorján az ÖSSZES elemzett
+    meccsükből vágja ki.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    felderites = (lib / "ui" / "scouting_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_targetVideo" in felderites and "Célpont-videó" in felderites
+    # A célpontok a KULCS-mondatok mezőiből jönnek — nem kézzel beírt
+    # mezszámból.
+    assert "_targetJerseys" in felderites
+    assert 'gyujt("ptf_press"' in felderites
+    assert 'gyujt("ptf_clutch"' in felderites
+    # A vágás percekbe telhet: a gombon fut a haladás.
+    assert "_targetWorking" in felderites
+def test_a_jegyzet_lista_mentheto():
+    """A Jegyzetek lista az edző teendő-listája — a videó-szobába
+    fájlban megy, nem a program előtt ülve. És a LÁTHATÓ (szűrt)
+    listát menti: az edző pont azt a válogatást viszi."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    jegyzet = (lib / "ui" / "notes_screen.dart").read_text(encoding="utf-8")
+    assert "_saveTxt" in jegyzet and "Mentés (szöveg)" in jegyzet
+    assert "final rows = _shown" in jegyzet, (
+        "nem a szűrt listát menti")
+
+
+def test_a_terfel_kezzel_is_eldontheto_a_konyvtarbol():
+    """ŐR: az eldöntetlen térfélcsere-határnál a jelentés azt mondja,
+    ellenőrizd az eredményt — de a javításnak EGY gombnak kell lennie,
+    nem újra-összefűzésnek. A könyvtár-sor jelzi az eldöntetlent, és a
+    szakasz-párbeszédben az ember fordít (a backend menti a döntést)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    # A sor olvassa a jelzést, és kiemeli (a némán rossz eredmény a
+    # legdrágább hiba).
+    assert 'm["undecided_segments"]' in kezdo, (
+        "a kártya nem olvassa az eldöntetlen-jelzést")
+    assert "_segmentsDialog" in kezdo, "nincs szakasz-párbeszéd"
+    assert "Megfordítom" in kezdo, "nincs fordító gomb"
+    # A párbeszéd mutatja a FELISMERT eredményt, és fordítás után
+    # frissíti — a valódi végeredménnyel összevetve derül ki a hiba.
+    assert "Felismert eredmény" in kezdo, "nincs eredmény a párbeszédben"
+    # És a súgó megtanítja a teljes utat (köteg → automatikus
+    # összefűzés → térfél-ellenőrzés) — a nem-műszaki edző csak innen
+    # tudhatja, hogy ez az út létezik.
+    assert "Darabokban felvett meccs" in kezdo, "a súgó nem tanítja a kötegelést"
+    assert "ellenőrizd az eredményt" in kezdo.lower(), (
+        "a párbeszéd nem mondja, MIT nézzen az ember")
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "fetchMatchSegments" in api and "flipMatchSegment" in api
+
+
+def test_a_koteg_idorendben_all_ossze():
+    """ŐR: a fájlválasztó a KIJELÖLÉS sorrendjét adja (ctrl+katt =
+    véletlen sorrend), az automatikus összefűzés pedig a sorrendből
+    épít meccset — rossz sorrendben némán rossz meccs lenne. A telefon
+    fájlnevei időbélyegesek, ezért a szám-tudatos névrendezés = időrend;
+    a köteg-lista sorszámozva mutatja, mi lesz a sorrend."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    fel = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert "_naturalCompare" in fel, "nincs szám-tudatos névrendezés"
+    assert "sort((a, b) => _naturalCompare(a.name, b.name))" in fel, (
+        "a kiválasztott fájlok nem rendeződnek névsorba")
+    # A köteg-lista sorszámozva mutatja a sorrendet (a fő videó az 1.).
+    assert '"${bi + 2}. ${_batchPaths[bi]' in fel, (
+        "a köteg-lista nem sorszámozott")
+
+
+def test_a_valodi_eredmeny_a_kliensrol_is_megadhato():
+    """ŐR: a pontosság-tükör bemenete a kliensen van — a csapatnév-
+    párbeszéd két eredmény-mezője. Enélkül a mező csak API-ból lenne
+    elérhető, azaz a valóságban senki nem adná meg. A sor a felismert
+    mellett mutatja a valódit, és NAGY eltérésnél kiemeli (a küszöb a
+    backenddel azonos)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "Valódi eredmény" in kezdo, "nincs valódi-eredmény mező"
+    assert "_realScoreLabel" in kezdo, "a sor nem mutatja a valódit"
+    # A kliens-küszöb a backend konstansával fut együtt (kommentben
+    # jelezve) — az őr a számot is fogja: 4 gól.
+    assert "REAL_SCORE_DIFF_WARN" in kezdo, (
+        "a kliens-küszöb nincs a backend-konstanshoz kötve (komment)")
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "setRealScore" in api and "real_goals_home" in api
+
+
+def test_a_bemutatas_utolag_is_levaghato():
+    """ŐR: a valódi Kiel-meccsen a felvétel elején kilenc perc
+    csapatbemutatás volt, és a felismerés abból lövéseket-eladásokat
+    gyártott. A felhasználó tudja, mikor kezdődött a meccs — a
+    könyvtár-sor ✂ gombja utólag vágja le, újrafeldolgozás nélkül."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_trimDialog" in kezdo, "nincs vágás-párbeszéd"
+    assert "Meccs eleje/vége levágása" in kezdo, "nincs ✂ gomb"
+    # p:mp ÉS puszta másodperc is elfogadott — az edző órát mond, a
+    # csúszka másodpercet mutat.
+    assert "_parseIdo" in kezdo, "nincs idő-értelmező (p:mp / mp)"
+    # A párbeszéd kimondja, hogy a vágás végleges, de a videót nem bántja.
+    assert "VÉGLEG" in kezdo and "videófájlt nem érinti" in kezdo
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "trimMatch" in api and "/trim" in api
+
+    # A MECCS-NÉZETBŐL is elérhető: ott látja a felhasználó az
+    # ál-eseményeket, ne kelljen a könyvtárba visszamennie.
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "_trimDialog" in meccs, "a meccs-nézetben nincs ✂"
+    # És az eredmény-sáv a VALÓDI eredményt is mutatja, ha meg van adva
+    # (a küszöb a backend-konstanssal fut együtt, kommentben jelezve).
+    assert "realGoalsHome" in meccs, "az eredmény-sáv nem mutatja a valódit"
+    assert "REAL_SCORE_DIFF_WARN" in meccs
+
+    # A bal menü elemlistája görgethető, a verzió-sor alul marad — a
+    # menü nőtt (3D pálya), és kis ablaknál a felirat kilógott.
+    hej = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "SingleChildScrollView" in hej, "a menü nem görgethető"
+
+
+def test_a_diagnosztika_a_minoseg_parbeszedbol_mentheto():
+    """ŐR: a fejlesztő-visszajelzés leggyorsabb útja — a minőség-
+    párbeszéd "Diagnosztika mentése" gombja egy JSON-t ment (minőség +
+    eseményszámok + beállítások), képernyőkép helyett. A mentés
+    kimondja, hogy videót nem tartalmaz."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "_saveDiagnostics" in meccs, "nincs diagnosztika-mentés"
+    assert "Diagnosztika mentése" in meccs, "nincs gomb a párbeszédben"
+    assert "videót nem tartalmaz" in meccs, (
+        "a mentés nem mondja ki, mit NEM tartalmaz")
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "fetchDiagnostics" in api and "/diagnostics" in api
+
+
+def test_a_fel_frissules_magatol_gyogyul():
+    """ŐR: frissítés után a RÉGI motor-folyamat életben maradhat, és az
+    app ahhoz csatlakozna (verzió-eltérés sáv — valós esetben: app
+    v0.1.93 + motor v0.1.89 újratelepítés után is). Az indító mostantól
+    a talált motor VERZIÓJÁT is nézi: eltérésnél leállítja (/shutdown,
+    régi motornál a portot fogó folyamat leállításával), és a
+    beépítettet hozza; a sáv gombja ugyanezt kézzel is elindítja."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    indito = (lib / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    assert "_versionOnPort" in indito, "az indító nem nézi a verziót"
+    assert "_stopEngineOnPort" in indito and "/shutdown" in indito, (
+        "nincs szándékos motor-leállítás")
+    assert "_killPortProcess" in indito, (
+        "nincs tartalék a shutdown-végpont ELŐTTI (régi) motorokhoz")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "Motor újraindítása" in kezdo, (
+        "a verzió-sávból hiányzik az egy gombos javítás")
+    assert "_restartEngine" in kezdo
+
+
+def test_a_tanitoadat_gyujtes_a_kezdolabrol_indul():
+    """ŐR: a pontosság következő szintje a saját felvételeken tanított
+    detektor — de a gyűjtő eddig csak terminálból ment, amit az edző
+    sosem nyit meg. A Továbbiak menü új pontja pipálós listával indítja,
+    és a végén megmondja a következő lépést (FINETUNE.md)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_datasetDialog" in kezdo, "nincs gyűjtő-párbeszéd"
+    assert "Tanítóadat gyűjtése" in kezdo, "nincs menüpont"
+    assert "FINETUNE.md" in kezdo, "nem mondja meg a következő lépést"
+    # Összefűzött meccsnek nincs videója — a párbeszéd kimondja, hogy
+    # a darabokat kell kijelölni.
+    assert "DARABOKAT" in kezdo
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "startDatasetCollect" in api and "fetchDatasetStatus" in api
+
+
+def test_a_cimkezo_beepitve_mukodik():
+    """ŐR: a finomhangolás-lánc középső lépése (címke-átnézés) eddig
+    külső eszközt kért — a beépített címkéző három gombbal ugyanaz:
+    húzással doboz, osztály-váltás, törlés. A rajzolás alapértelmezett
+    osztálya a LABDA (az a leggyakoribb pótlás), a lista a 0 dobozos
+    (gyanús) képet kiemeli."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    cimkezo = (lib / "ui" / "label_screen.dart").read_text(encoding="utf-8")
+    assert "_ujDoboz" in cimkezo and "onPanStart" in cimkezo, (
+        "nincs húzásos doboz-rajzolás")
+    assert "_rajzOsztaly = 1" in cimkezo, (
+        "a rajzolás alapértelmezettje nem a labda")
+    assert "Osztály-váltás" in cimkezo and "Törlés" in cimkezo
+    # A kijelölés a LEGKISEBB találó dobozt veszi — a labda a
+    # játékos-doboz belsejében is kijelölhető.
+    assert "talalatTerulet" in cimkezo
+
+    kezdo = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert "Címkéző" in kezdo and "LabelScreen" in kezdo, (
+        "a címkéző nem érhető el a Továbbiak menüből")
+
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert ("fetchDatasetImages" in api and "fetchDatasetLabels" in api
+            and "saveDatasetLabels" in api)
+    # A lánc utolsó lépése is gombra került: tanítás a címkézőből,
+    # őszinte figyelmeztetéssel (órákig tarthat), és a kész modell
+    # magától élesbe áll.
+    assert "startTraining" in api and "fetchTrainStatus" in api
+    assert "Tanítás indítása" in cimkezo
+    assert "ÓRÁKIG TARTHAT" in cimkezo, "nincs őszinte idő-figyelmeztetés"
+    assert "élesbe áll" in cimkezo
+
+
+def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
+    """ŐR: a 3D/VR-út első köre — a bal menü "3D pálya" füle, ahol az
+    elemzett meccs térben járható be, játék-szerű mozgással. A vetítés
+    szoftveres (nincs Flutter-beli 3D motor), a mozgás WASD + egér, a
+    lejátszás interpolált (a ritkított követés különben darabos lenne)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    hej = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "court3d" in hej and '"3D pálya"' in hej, (
+        "a 3D pálya nincs a bal menüben")
+    assert "Court3DScreen" in hej, "a menü nem nyitja a 3D képernyőt"
+
+    harom = (lib / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    # Játék-szerű mozgás és a súgó-sor, amiből a felhasználó megtudja.
+    assert "keyW" in harom and "keyD" in harom, "nincs WASD-mozgás"
+    assert "onPanUpdate" in harom, "nincs egér-nézelődés"
+    assert "WASD — mozgás" in harom, "nincs kezelés-súgó a képernyőn"
+    # Távlati vetítés közeli síkra vágással — enélkül a háttal lévő
+    # pontok "kifordulnának" a képből.
+    assert "_kozel" in harom and "_szakasz" in harom, (
+        "nincs közeli-sík vágás a vetítésben")
+    # Interpolált lejátszás: a ritkított követés (~8 kép/mp) darabos lenne.
+    assert "interpol" in harom.lower(), "nincs interpolált lejátszás"
+    # Könyvtár nélkül demóval indul — az új felhasználó is lát valamit.
+    assert "buildDemoMatch" in harom, "nincs demó-tartalék"
+    # TV-kamera: a nézet magától követi a labdát (közvetítés-gépállás),
+    # és bármely kézi mozgásra kikapcsol — aki a kamerához nyúl, az
+    # vezetni akarja.
+    assert "_tvKamera" in harom and "TV-kamera" in harom, (
+        "nincs labda-követő TV-kamera")
+    # Játékos-kamera: mezszám szerint követ (a track-azonosítók a
+    # valódi követésben töredezettek), a yaw a rövidebb íven fordul
+    # (±π-átfordulásnál különben körbepördülne a kamera).
+    assert "_kovMez" in harom and "Játékos-kamera" in harom, (
+        "nincs játékos-követő kamera")
+    assert "dYaw" in harom, "nincs yaw-átfordulás-kezelés"
+    # Böngészős 3D / VR: ugyanaz a meccs WebXR-képes oldalként a
+    # motorról — a headset-út első lépcsője.
+    assert "_bongeszos3d" in harom and "/view3d" in harom, (
+        "nincs böngészős 3D / VR megnyitó")
+    # Eseményből érkezve a jelenet ELŐTT pár másodperccel indul,
+    # TV-kamerával — kattintás nélkül nézhető.
+    assert "startS" in harom, "nincs jelenet-ugrás paraméter"
+
+    meccs = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "Megnézem 3D-ben" in meccs, (
+        "az esemény-sorból nem nyílik a 3D jelenet")
+    # És a 3D felfedezhető: a gyorsbillentyű-súgónak és az "Első
+    # lépések"-nek is tanítania kell.
+    hej2 = (lib / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert '"3D pályán"' in hej2, "a billentyű-súgó nem tanítja a 3D-t"
+    kezdo2 = (lib / "ui" / "dashboard_screen.dart").read_text(
+        encoding="utf-8")
+    assert '"3D pálya"' in kezdo2 or "3D pálya" in kezdo2, (
+        "az Első lépések nem tanítja a 3D pályát")
+    # A jegyzet az edző legjobb jelenet-listája — onnan is nyílik a 3D.
+    jegyzet = (lib / "ui" / "notes_screen.dart").read_text(
+        encoding="utf-8")
+    assert "Court3DScreen" in jegyzet and "Megnézem 3D-ben" in jegyzet, (
+        "a jegyzet-sorból nem nyílik a 3D jelenet")
+
+
+def test_a_kalibracio_oldalsavja_gorgetheto():
+    """ŐR: alacsonyabb ablaknál a kalibráció jobb oldali sávjának alja
+    (a mentés / Kész gomb) lelógott, és nem lehetett rákattintani — a
+    felhasználó jelezte. A sáv görgethető, és nincs benne Spacer (az
+    görgethető oszlopban kivételt dobna)."""
+    import pytest
+    import re
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kal = (lib / "ui" / "calibration_screen.dart").read_text(
+        encoding="utf-8")
+    panel = kal[kal.index("Widget _sidePanel"):]
+    panel = panel[:panel.index("\n  /// ")]
+    assert "SingleChildScrollView" in panel, (
+        "a kalibráció oldalsávja nem görgethető")
+    assert not re.search(r"\bSpacer\(", panel), (
+        "Spacer görgethető oszlopban — futásidejű kivétel lenne")
+
+
+def test_a_sarok_nyilakkal_finomithato():
+    """ŐR: "a kapu egy kicsit el van csúszva" — az egérrel a
+    hajszál-pontos sarok-igazítás kínszenvedés. Az utoljára fogott
+    sarok a NYILAKKAL képpontonként tolható (Shift: nagyobb lépés),
+    arany gyűrű mutatja, melyik mozog, és a súgó-sor tanítja."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+
+    kal = (lib / "ui" / "calibration_screen.dart").read_text(
+        encoding="utf-8")
+    assert "_nudgeKey" in kal and "_lastCorner" in kal, (
+        "nincs nyíl-billentyűs sarok-finomítás")
+    assert "arrowLeft" in kal and "isShiftPressed" in kal
+    assert "NYILAKKAL" in kal, "a súgó-sor nem tanítja a nyilakat"
+    # Az aktív sarok kiemelése — enélkül nem látszik, mit mozgatsz.
+    assert "i == active" in kal, "nincs aktív-sarok kiemelés"
+
+
+def test_a_minoseg_panel_a_vagas_javaslatra_gombot_ad():
+    """A "bennmaradt bemutatás" figyelmeztetés mellett a minőség-panel
+    egy kattintással nyitja a ✂ párbeszédet (ami a javaslatot elő is
+    tölti) — a részlet a motor figyelmeztetésének SZÖVEGÉRE illik."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    meccs = (gyoker / "client" / "lib" / "ui" / "match_screen.dart").read_text(
+        encoding="utf-8")
+    assert 'contains("nem-játéknak látszik")' in meccs
+    assert "Levágás a javaslat szerint" in meccs
+    # A kliens-részlet a motor üzenetében is szerepel — különben a gomb
+    # sosem jelenne meg.
+    minoseg = (gyoker / "backend" / "handball" / "pipeline" / "quality.py"
+               ).read_text(encoding="utf-8")
+    assert "nem-játéknak látszik" in minoseg
+
+
+def test_a_minoseg_panel_kalibracio_gombja_a_motor_szovegere_illik():
+    """A "pályavonal nem ül" figyelmeztetéshez a minőség-panelen közvetlen
+    gomb nyitja a Kalibráció ellenőrzését. A kliens-részletnek a motor
+    figyelmeztetés-szövegére kell illenie — különben a gomb sosem
+    jelenne meg, és a teszt zöld maradna."""
+    from pathlib import Path as _P
+    gyoker = _P(__file__).resolve().parent.parent
+    meccs = (gyoker.parent / "client" / "lib" / "ui"
+             / "match_screen.dart").read_text(encoding="utf-8")
+    quality = (gyoker / "handball" / "pipeline" / "quality.py").read_text(
+        encoding="utf-8")
+    assert 'contains("pályavonal nem ül")' in meccs
+    assert "pályavonal nem ül a kép valódi vonalain" in quality
+    assert "Kalibráció ellenőrzése" in meccs and "_calibCheckDialog();" in meccs
+
+
+def test_a_kalibracio_gomb_a_motor_figyelmeztetesere_illik():
+    """ŐR: a minőség-panel "Kalibráció ellenőrzése" gombja a motor
+    figyelmeztetésének szövegrészletére vár — ha a motor átfogalmazza,
+    a gomb némán eltűnne. A részletnek a quality.py-ban is ott kell
+    lennie."""
+    gyoker = Path(__file__).resolve().parent.parent
+    meccs = (gyoker.parent / "client" / "lib" / "ui"
+             / "match_screen.dart").read_text(encoding="utf-8")
+    quality = (gyoker / "handball" / "pipeline"
+               / "quality.py").read_text(encoding="utf-8")
+    assert 'contains("pályavonal nem ül")' in meccs
+    assert "pályavonal nem ül" in quality
+    assert '"Kalibráció ellenőrzése"' in meccs
+    assert "_calibCheckDialog();" in meccs

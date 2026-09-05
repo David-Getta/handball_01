@@ -35,6 +35,210 @@ from handball.pipeline.calibration import COURT_LENGTH_M, COURT_WIDTH_M
 PROC_WIDTH = 960  # HOG feldolgozási szélesség
 
 
+class StallSkippingFeed:
+    """Időkorlátos kocka-adagoló: az ELAKADT képkockát átugorja.
+
+    Terepen látott hiba: a videó-olvasás/detektálás natív szinten
+    beragad EGY képkockánál, és a feldolgozás örökre megáll rajta. A
+    termelőt ezért külön szál futtatja, a fogyasztó időkorlátos
+    sorból olvas. Ha skip_timeout_s-ig nem érkezik új kocka, a
+    beragadt termelőt elengedjük (a szála árván marad — a natív
+    hívást nem lehet megszakítani), az elakadt kockát ÁTUGORJUK, és
+    a resume_factory(start_frame) által adott új termelővel a
+    KÖVETKEZŐ kockától folytatjuk. Legfeljebb max_skips átugrás után
+    (vagy resume_factory nélkül) feladjuk: a stalled jelzővel az
+    addig kész rész normál utómunkával mentődik.
+    """
+
+    _SENTINEL = object()
+
+    # Ennyiszeresére nő az ugrás-táv minden EREDMÉNYTELEN átugrás után
+    # (ha az új olvasó sem ad kockát, a hibás szakasz hosszabb egy
+    # kockánál), és ennyi kockánál nem ugrunk többet egyszerre.
+    _SKIP_GROWTH = 4
+    _SKIP_MAX_FRAMES = 750
+
+    def __init__(self, producer, resume_factory=None, stride=1,
+                 start_pos=0, first_timeout_s=180.0,
+                 skip_timeout_s=30.0, max_skips=20, on_skip=None):
+        import queue
+        import threading
+        self._queue_mod = queue
+        self._threading = threading
+        self._q = queue.Queue(maxsize=8)
+        self._resume_factory = resume_factory
+        self._stride = max(1, int(stride))
+        self._next_pos = start_pos   # a következő várt kocka kép-indexe
+        self._first_timeout_s = first_timeout_s
+        self._skip_timeout_s = skip_timeout_s
+        self._max_skips = max_skips
+        self._gen = 0
+        self._on_skip = on_skip
+        self._dry = 0        # egymást követő, kocka nélküli átugrások
+        self.skips = 0
+        self.skipped_frames = 0
+        self.stalled = False
+        self._start(producer)
+
+    def _start(self, iterable):
+        gen = self._gen
+
+        def run():
+            try:
+                for item in iterable:
+                    if not self._put(gen, item):
+                        return
+            except Exception as e:  # az olvasó hibája nem dönti a folyamatot
+                print(f"FIGYELEM: a videó-olvasó hibával leállt: {e}")
+            finally:
+                try:
+                    self._q.put_nowait((gen, self._SENTINEL))
+                except self._queue_mod.Full:
+                    pass  # a fogyasztó már kilépett — nincs kinek jelezni
+
+        self._threading.Thread(target=run, daemon=True).start()
+
+    def _put(self, gen, item):
+        while gen == self._gen and not self.stalled:
+            try:
+                self._q.put((gen, item), timeout=1.0)
+                return True
+            except self._queue_mod.Full:
+                continue
+        return False
+
+    def abandon(self):
+        """A termelő elengedése (korai kilépéskor): jelzés+felébresztés."""
+        self._gen += 1
+        try:
+            self._q.get_nowait()
+        except self._queue_mod.Empty:
+            pass
+
+    def frames(self):
+        """A kockák időkorlátos, elakadás-átugró folyama."""
+        timeout = self._first_timeout_s
+        while True:
+            try:
+                gen, item = self._q.get(timeout=timeout)
+            except self._queue_mod.Empty:
+                bad = self._next_pos
+                if (self._resume_factory is None
+                        or self.skips >= self._max_skips):
+                    self.stalled = True
+                    print(f"FIGYELEM: {int(timeout)} mp-e nem érkezik új "
+                          "kocka a videó-olvasóból, és nincs több "
+                          "folytatási kísérlet — a feldolgozás elakadt; "
+                          "az addig kész rész feldolgozva mentődik.")
+                    return
+                self.skips += 1
+                self._gen += 1
+                # Ha az előző átugrás után sem jött kocka, a hibás
+                # szakasz hosszabb egynél: nagyobbat lépünk.
+                jump = min(self._SKIP_MAX_FRAMES,
+                           self._stride
+                           * (self._SKIP_GROWTH ** self._dry))
+                self._dry += 1
+                self._next_pos = bad + jump
+                self.skipped_frames += jump
+                msg = (f"elakadt a(z) {bad}. képkockánál — {jump} kocka "
+                       "átugorva, folytatás a(z) "
+                       f"{self._next_pos}. kockától "
+                       f"({self.skips}/{self._max_skips} átugrás)")
+                print(f"FIGYELEM: a feldolgozás {msg}.")
+                if self._on_skip is not None:
+                    try:
+                        self._on_skip(msg)
+                    except Exception:
+                        pass   # a visszajelzés hibája nem állíthat meg
+                try:
+                    nxt = self._resume_factory(self._next_pos)
+                except Exception as e:
+                    self.stalled = True
+                    print("FIGYELEM: a folytató videó-olvasó nem indult "
+                          f"el: {e} — az addig kész rész mentődik.")
+                    return
+                self._start(nxt)
+                timeout = self._skip_timeout_s
+                continue
+            if gen != self._gen:
+                continue  # elavult (elengedett) termelő maradéka
+            if item is self._SENTINEL:
+                return
+            timeout = self._skip_timeout_s
+            self._dry = 0            # jött kocka: az ugrás-táv visszaáll
+            self._next_pos += self._stride
+            yield item
+
+
+# Kockánkénti dúsítás (mezszám-OCR, labda-újrakeresés) időkorlátja és
+# az egymást követő beragadások száma, ami után a dúsítót kikapcsoljuk.
+ENRICH_TIMEOUT_S = 10.0
+ENRICH_MAX_TIMEOUTS = 3
+
+
+class TimeboxedEnricher:
+    """Időkorlátos dúsító-hívás: a fő detektálást SOSEM állíthatja meg.
+
+    A StallSkippingFeed a termelő oldalt (videó-olvasás + detektálás)
+    védi — de a fogyasztó cikluson belüli natív hívások (mezszám-OCR,
+    labda-újrakereső predict) is beragadhatnak, és olyankor a sor
+    olvasása áll meg, tehát az átugró sem léphet működésbe: a haladás
+    örökre megáll, pont a "percek óta nincs előrelépés" tünettel.
+
+    Ezért minden dúsító hívás külön szálban, időkorláttal fut: ha
+    lejár, a hívást kihagyjuk (a beragadt szál árván marad — a natív
+    hívást nem lehet megszakítani), és max_timeouts beragadás után a
+    dúsítót kikapcsoljuk a hátralévő kockákra. Egy-egy kihagyott
+    OCR-minta vagy újrakeresés semmit nem ront az elemzésen; az örök
+    állás mindent elrontana.
+    """
+
+    def __init__(self, name, timeout_s=ENRICH_TIMEOUT_S,
+                 max_timeouts=ENRICH_MAX_TIMEOUTS, on_note=None):
+        import threading
+        self._threading = threading
+        self._name = name
+        self._timeout_s = timeout_s
+        self._max_timeouts = max_timeouts
+        self._on_note = on_note
+        self._timeouts = 0
+        self.disabled = False
+
+    def call(self, fn):
+        """fn() eredménye, vagy None (időtúllépés/kikapcsolt/hiba)."""
+        if self.disabled:
+            return None
+        box = {}
+
+        def run():
+            try:
+                box["out"] = fn()
+            except Exception:
+                box["out"] = None  # a dúsító hibája sosem állít meg
+
+        th = self._threading.Thread(target=run, daemon=True)
+        th.start()
+        th.join(self._timeout_s)
+        if th.is_alive():
+            self._timeouts += 1
+            msg = (f"a(z) {self._name} {int(self._timeout_s)} mp után sem "
+                   f"tért vissza — kihagyva "
+                   f"({self._timeouts}/{self._max_timeouts} beragadás)")
+            print(f"FIGYELEM: {msg}.")
+            if self._timeouts >= self._max_timeouts:
+                self.disabled = True
+                print(f"FIGYELEM: a(z) {self._name} kikapcsolva a "
+                      "hátralévő kockákra — a fő feldolgozás megy tovább.")
+            if self._on_note is not None:
+                try:
+                    self._on_note(msg)
+                except Exception:
+                    pass
+            return None
+        return box.get("out")
+
+
 def _torso_bounds(x1, y1, x2, y2):
     h = y2 - y1
     return (max(0, y1 + int(0.20 * h)), max(0, y1 + int(0.55 * h)),
@@ -208,7 +412,9 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   court_poly=None, start=0, skip_dark=True, on_frame=None,
                   pan=False, jersey_voter=None, ocr_every=5,
                   ball_recover=True, stop_check=None,
-                  raw_out=None, colors_out=None):
+                  raw_out=None, colors_out=None, on_note=None,
+                  pan_stats_out=None, anchor_frames=None,
+                  fit_h0=None, fit_every=16):
     import os
     # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
     # hiba helyett. A torch importja ELŐTT kell beállítani.
@@ -266,6 +472,14 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     if pan:
         from handball.pipeline.pan_tracking import PanTracker
         pan_tracker = PanTracker()
+    # A kalibrált kockák video-indexei növekvő sorban — ezekből lesz
+    # kötelező horgony, amint a feldolgozás eléri őket.
+    horgony_var = sorted(int(f) for f in (anchor_frames or []))
+    # Kalibráció-illeszkedés a feldolgozás ALATT: fit_every kockánként a
+    # visszarajzolt pályavonalak mentén megmérjük, ülnek-e a kép valódi
+    # vonalain (calib_overlay.line_fit_score) — a minőség-jelentés ebből
+    # mondja ki, ha a kalibráció a meccs közben elcsúszik.
+    fit_pontok: list = []
     # Labda-visszaszerzés: elveszett labdánál a várható helye körüli KIS
     # kivágásban keresünk újra — ott a labda relatíve nagy, jobb az esély.
     reacquirer = None
@@ -289,58 +503,100 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                           vid_stride=stride, tracker="bytetrack.yaml", verbose=False)
 
     # ELAKADÁS-VÉDŐ: a kocka-generátort külön szál húzza, a feldolgozó
-    # időkorlátos sorból olvas. Ha a videó-olvasás/detektálás natív szinten
-    # beragad egy pozíciónál (terepen látott hiba: a haladás egy fix kockánál
-    # örökre megáll), a várakozás STALL_ABORT_S után megszakad, és az addig
-    # kész rész normál utómunkával, RÉSZLEGES meccsként mentődik — a végtelen
-    # csendes állás helyett.
-    import queue as _queue_mod
-    import threading as _threading_mod
-    STALL_ABORT_S = 180.0
-    _frame_q = _queue_mod.Queue(maxsize=8)
-    _SENTINEL = object()
-    _abandon = {"x": False}
-    stall = {"hit": False}
+    # időkorlátos sorból olvas (StallSkippingFeed). Ha a videó-olvasás/
+    # detektálás natív szinten beragad egy képkockánál (terepen látott
+    # hiba: a haladás egy fix kockánál örökre megáll), az elakadt kockát
+    # ÁTUGORJUK, és egy folytató-olvasóval a következő kockától megyünk
+    # tovább — a feladás (részleges mentés) csak sok egymást követő
+    # elakadásnál marad. Az első kockára türelmesebb a korlát: abban a
+    # dekóder és a modell bemelegedése is benne van.
+    STALL_FIRST_S = 180.0
+    STALL_SKIP_S = 30.0
+    STALL_MAX_SKIPS = 20
 
-    def _produce():
-        try:
-            for _item in results:
-                while not _abandon["x"]:
-                    try:
-                        _frame_q.put(_item, timeout=1.0)
-                        break
-                    except _queue_mod.Full:
-                        continue
-                if _abandon["x"]:
-                    break
-        except Exception as _e:  # az olvasó hibája nem dönti a folyamatot
-            print(f"FIGYELEM: a videó-olvasó hibával leállt: {_e}")
-        finally:
+    def _resume_from(start_frame):
+        """Folytató-olvasó az elakadt kocka UTÁNI pozíciótól: saját
+        VideoCapture + kockánkénti track() hívás.
+
+        SAJÁT modell-példánnyal dolgozik: az elakadt szál a natív
+        hívásban ragadt bent, és ott feltehetően a KÖZÖS modellt
+        fogja — ha ugyanarra a példányra hívnánk párhuzamosan, az
+        összeomlást vagy újabb befagyást okozhatna. A friss példány
+        ára egy modellnyi memória; cserébe a folytatás független az
+        árván maradt száltól. A követési id-k emiatt újraindulnak, de
+        egy elakadás után a folytonosság úgyis megszakadt.
+        """
+        def _iter():
             try:
-                _frame_q.put_nowait(_SENTINEL)
-            except _queue_mod.Full:
-                pass  # a fogyasztó már kilépett — nincs kinek jelezni
-
-    _producer = _threading_mod.Thread(target=_produce, daemon=True)
-    _producer.start()
-
-    def _timed_frames():
-        while True:
+                mdl = YOLO(resolved)
+            except Exception as e:
+                print("FIGYELEM: a folytató modell nem tölthető be "
+                      f"({e}) — a közös példánnyal próbáljuk.")
+                mdl = model
+            from handball.video_io import open_capture
+            cap = open_capture(video_path)
             try:
-                item = _frame_q.get(timeout=STALL_ABORT_S)
-            except _queue_mod.Empty:
-                stall["hit"] = True
-                print(f"FIGYELEM: {int(STALL_ABORT_S)} mp-e nem érkezik új "
-                      "kocka a videó-olvasóból — a feldolgozás elakadt; az "
-                      "addig kész rész feldolgozva mentődik.")
-                return
-            if item is _SENTINEL:
-                return
-            yield item
+                cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                pos = start_frame
+                while True:
+                    if not cap.grab():
+                        return
+                    if (pos - start_frame) % stride == 0:
+                        ok2, img = cap.retrieve()
+                        if ok2 and img is not None:
+                            rr = mdl.track(
+                                img, persist=True,
+                                classes=person_ids + ball_ids,
+                                imgsz=1920, conf=0.05, device=device,
+                                tracker="bytetrack.yaml",
+                                verbose=False)
+                            if rr:
+                                yield rr[0]
+                    pos += 1
+            finally:
+                cap.release()
+        return _iter()
+
+    feed = StallSkippingFeed(results, resume_factory=_resume_from,
+                             stride=stride,
+                             first_timeout_s=STALL_FIRST_S,
+                             skip_timeout_s=STALL_SKIP_S,
+                             max_skips=STALL_MAX_SKIPS,
+                             # Az átugrás a FELÜLETRE is kimegy: enélkül a
+                             # haladás-jelző (és az elakadás-őrszem
+                             # szívverése) az átugrások alatt is állna, és
+                             # a felhasználó azt látná, hogy semmi nem
+                             # történik.
+                             on_skip=on_note)
+
+    # A dúsítók (OCR, újrakeresés) időkorlátos védelme — lásd a
+    # TimeboxedEnricher docstringjét: a fogyasztó-oldali beragadás ellen
+    # az átugró nem véd, ezért itt külön őr kell.
+    ocr_guard = TimeboxedEnricher("mezszám-OCR", on_note=on_note)
+    # Bőkezűbb korlát: az első hívásban a saját modell betöltése is
+    # benne van (lassú lemezen fél perc is lehet) — az nem beragadás.
+    reacq_guard = TimeboxedEnricher("labda-újrakeresés", timeout_s=45.0,
+                                    on_note=on_note)
+    # A labda-újrakeresés SAJÁT modell-példányt kap (lustán töltve): a
+    # termelő szál a közös modellt streamelve hajtja, és az ultralytics
+    # predictor nem szál-biztos — a közös példány párhuzamos hívása
+    # összeomlást vagy befagyást okozhat. Ha a saját példány nem tölthető
+    # be, az újrakeresés kimarad; a közös modellt SOSEM hívjuk innen.
+    reacq_model_box = {}
+
+    def _reacq_model():
+        if "m" not in reacq_model_box:
+            try:
+                reacq_model_box["m"] = YOLO(resolved)
+            except Exception as e:
+                print("FIGYELEM: a labda-újrakereső modell nem tölthető "
+                      f"be ({e}) — az újrakeresés kimarad.")
+                reacq_model_box["m"] = None
+        return reacq_model_box["m"]
 
     kept = 0
     skipped_dark = 0
-    for fi, r in enumerate(_timed_frames()):
+    for fi, r in enumerate(feed.frames()):
         # Szelíd leállítás: a hívó (pl. a Megszakítás gomb) jelzésére a
         # detektálás megáll, de az ADDIG feldolgozott kockák megmaradnak —
         # az utómunka lefut rájuk, és az eredmény elmentődik.
@@ -363,7 +619,44 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
         panH = None
         if pan_tracker is not None:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            panH = pan_tracker.update(gray)
+            # A MOZGÓ embereket (minden detektált személy, küszöbtől
+            # függetlenül) kimaszkoljuk: csak az álló háttér adja a
+            # kamera mozgását.
+            mozgo = []
+            if r.boxes is not None:
+                for b in r.boxes:
+                    if int(b.cls[0]) in person_ids:
+                        mozgo.append(tuple(
+                            int(v) for v in b.xyxy[0].tolist()))
+            # A KALIBRÁLT kockák kötelező horgonyok: a felhasználó pont
+            # ezeket a nézeteket jelölte be, ide kell a legpontosabb
+            # visszamérés. A kalibráció kocka-indexe nem feltétlenül esik
+            # a ritkítás rácsára: az első ELÉRT feldolgozott kocka lesz az.
+            kalibralt = False
+            while horgony_var and fi * stride >= horgony_var[0]:
+                horgony_var.pop(0)
+                kalibralt = True
+            panH = pan_tracker.update(gray, exclude=mozgo,
+                                      force_anchor=kalibralt)
+            if fit_h0 is not None and (kept - 1) % max(1, fit_every) == 0:
+                try:
+                    # Mérés + ÖNKORREKCIÓ egyben (calib_overlay
+                    # .measure_and_correct — a követővel együtt tesztelt):
+                    # ha a rajz nem ül a valódi vonalakon, a pálya saját
+                    # vonalai mondják meg, hova kell; a jobb G-t a követő
+                    # átveszi, és innen folytatja. Horgonyzott kockához nem
+                    # nyúl (az abszolút mérés erősebb az él-rácsnál).
+                    from handball.pipeline.calib_overlay import (
+                        measure_and_correct)
+                    ki_ = measure_and_correct(
+                        gray, fit_h0, panH,
+                        getattr(pan_tracker, "last_mode", "chain"))
+                    if ki_["corrected"]:
+                        panH = ki_["g"]
+                        pan_tracker.correct(panH)
+                    fit_pontok.append((kept - 1, ki_["fit"]))
+                except Exception:
+                    pass  # a mérés hibája nem érinti a feldolgozást
         persons, best_ball = [], None
         if r.boxes is not None:
             for b in r.boxes:
@@ -389,9 +682,13 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                             read_jersey_number, torso_crop)
                         crop = torso_crop(img, (x1, y1, x2, y2))
                         if crop is not None:
-                            r = read_jersey_number(crop)
-                            if r is not None:
-                                jersey_voter.add(tid, r[0], r[1])
+                            # Időkorlátos hívás: az OCR beragadása nem
+                            # állíthatja meg a detektálást.
+                            ocr_res = ocr_guard.call(
+                                lambda c=crop: read_jersey_number(c))
+                            if ocr_res is not None:
+                                jersey_voter.add(
+                                    tid, ocr_res[0], ocr_res[1])
                 elif cls in ball_ids:  # labda — a legmegbízhatóbbat tartjuk
                     if best_ball is None or bc > best_ball[0]:
                         best_ball = (bc, (x1 + x2) / 2.0, (y1 + y2) / 2.0)
@@ -402,10 +699,17 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
             roi = reacquirer.roi_for(fi * stride, img.shape[1], img.shape[0])
             if roi is not None:
                 crop = img[roi[1]:roi[3], roi[0]:roi[2]]
-                try:
-                    rr = model.predict(crop, imgsz=640, conf=0.03,
-                                       classes=ball_ids, device=device,
-                                       verbose=False)
+                # Saját modell-példány + időkorlát: a közös modellt a
+                # termelő szál hajtja, párhuzamos hívása befagyhatna;
+                # az újrakeresés beragadása sem állíthatja meg a fő
+                # detektálást (lásd TimeboxedEnricher).
+                def _reacquire(crop=crop):
+                    mdl = _reacq_model()
+                    if mdl is None:
+                        return None
+                    rr = mdl.predict(crop, imgsz=640, conf=0.03,
+                                     classes=ball_ids, device=device,
+                                     verbose=False)
                     best = None
                     for r2 in rr:
                         if r2.boxes is None:
@@ -415,11 +719,13 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                             if best is None or bc2 > best[0]:
                                 bx1, by1, bx2, by2 = \
                                     [float(v) for v in b2.xyxy[0].tolist()]
-                                best = (bc2, (bx1 + bx2) / 2, (by1 + by2) / 2)
-                    if best is not None:
-                        ball_xy = reacquirer.map_back(roi, best[1], best[2])
-                except Exception:
-                    pass  # az újrakeresés hibája sosem állítja meg a feldolgozást
+                                best = (bc2, (bx1 + bx2) / 2,
+                                        (by1 + by2) / 2)
+                    return best
+
+                best = reacq_guard.call(_reacquire)
+                if best is not None:
+                    ball_xy = reacquirer.map_back(roi, best[1], best[2])
         if reacquirer is not None:
             reacquirer.note(fi * stride, ball_xy)
         raw.append((persons, ball_xy, panH))
@@ -428,14 +734,14 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     if pan_tracker is not None:
         tx, ty = pan_tracker.translation
         print(f"pásztázás-követés: össz-elmozdulás a végére: ({tx:.0f}, {ty:.0f}) px")
-    # A termelő-szál elengedése: ha még él (korai break / plafon), jelezzük,
-    # hogy nincs több fogyasztó, és kihúzunk egy elemet, hogy felébredjen.
-    _abandon["x"] = True
-    try:
-        _frame_q.get_nowait()
-    except _queue_mod.Empty:
-        pass
-    return stall["hit"]
+        print(pan_tracker.summary())
+        if pan_stats_out is not None:  # a hívó a meta-ba teszi (minőség)
+            pan_stats_out.update(pan_tracker.stats)
+            pan_stats_out["fit_points"] = fit_pontok
+    # A termelő-szál elengedése: ha még él (korai break / plafon),
+    # jelezzük, hogy nincs több fogyasztó, és felébresztjük.
+    feed.abandon()
+    return feed.stalled
 
 
 class _SimpleTracker:
@@ -466,7 +772,9 @@ class _SimpleTracker:
 def _process_hog(video_path, stride, max_frames, stop_check=None,
                  raw_out=None, colors_out=None, on_frame=None, start=0):
     import cv2
-    cap = cv2.VideoCapture(video_path)
+
+    from handball.video_io import open_capture
+    cap = open_capture(video_path)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
     scale = PROC_WIDTH / W if W > PROC_WIDTH else 1.0
     # Az OpenCV 5-ből kikerült a HOG személydetektor — nélküle a tartalék mód
@@ -519,7 +827,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             home_team="Csapat A", away_team="Csapat B", ball_smooth=True,
             track_smooth=True, calib_region="full", calib_rotate=False,
             calibs=None, jersey_ocr=False, stop_check=None,
-            checkpoint_save=None, checkpoint_every_s=180.0):
+            checkpoint_save=None, checkpoint_every_s=180.0,
+            manual_window=False):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -530,6 +839,12 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     SZELÍDEN leáll — az addig feldolgozott kockákra az utómunka lefut, és
     a (részleges) Match visszaadódik. Órákig tartó feldolgozásnál ez azt
     jelenti, hogy a Megszakítás nem dobja el az elvégzett munkát.
+
+    `manual_window`: a felhasználó MEGMONDTA a meccs időablakát
+    (perc:másodperc). Ilyenkor az automatikus meccs-ablak-felismerés nem
+    vág tovább — az ő állítása erősebb, mint a felismerésé. Enélkül a
+    kézi ablak ígérete ("felülír minden felismerést") nem lenne igaz:
+    a felismerés a megadott szakasz elejéből-végéből még lecsíphetne.
     """
     import cv2
     import numpy as np
@@ -538,7 +853,12 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         if progress_cb is not None:
             progress_cb(stage, prog, msg)
 
-    cap = cv2.VideoCapture(video_path)
+    # A megnyitást a közös segéd végzi: ÉKEZETES windowsos útvonalon a
+    # nyers VideoCapture némán elbukik, és akkor a fps/felbontás a
+    # tartalék értékekre esne vissza — vagyis minden idő-alapú mutató
+    # (sebesség, támadás-hossz, ütem) csendben elcsúszna.
+    from handball.video_io import open_capture
+    cap = open_capture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
     H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 720
@@ -594,7 +914,14 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 report(stage, prog, msg)
 
         say(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
-        rep("C", 0.78, "követés kész")
+        # A horgonyzás-arány a job-üzenetben is: a Feldolgozások képernyőn
+        # látszik, mennyire hihetők a helyek a svenkelő kameránál.
+        if pan_stats.get("frames"):
+            _hp = 100.0 * pan_stats.get("anchored", 0) / pan_stats["frames"]
+            rep("C", 0.78, f"követés kész — a kamera-mozgás a kockák "
+                           f"{_hp:.0f}%-án a kalibrált képhez mérve")
+        else:
+            rep("C", 0.78, "követés kész")
 
         # [D] csapatszín-klaszterezés (kapus/bíró külön kezelése a szín-profilban).
         rep("D", 0.82, "csapatszín / kapus / bíró")
@@ -676,6 +1003,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         # A meccs dátuma a videó metaadatából (mvhd creation_time, tartalék:
         # fájl-mtime) — a játékos-trend és a könyvtár időrendje erre épül.
         from handball.pipeline.video_meta import video_recording_date
+        from handball.pipeline.calib_overlay import (
+            sample_pan_keyframes as _sample_pan_keyframes)
         rec_date = video_recording_date(str(video_path))
         meta = MatchMeta(match_id=match_id, home_team=home_team, away_team=away_team,
                          fps=fps / stride, frame_width=W, frame_height=H,
@@ -684,7 +1013,25 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                          stride=int(stride), date=rec_date,
                          # Részleges eredménynél innen folytatható a feldolgozás.
                          partial=bool(partial),
-                         next_start_frame=int(start) + len(raw) * int(stride))
+                         next_start_frame=int(start) + len(raw) * int(stride),
+                         # A FORRÁSVIDEÓ hossza: ebből derül ki, hogy a
+                         # feldolgozás a felvétel mekkora részét fedte le.
+                         video_seconds=((n_total / fps)
+                                        if n_total > 0 and fps > 0 else None),
+                         # Volt-e kalibráció: enélkül a koordináta arányos
+                         # becslés, és a pályán kívüliek nem szűrhetők.
+                         calibrated=bool(calib_list),
+                         # Kalibráció-ellenőrzéshez: az elsődleges
+                         # homográfia és a kamera-mozgás ritkított sora
+                         # (calib_overlay) — a pályavonalak utólag
+                         # bármelyik kockára visszarajzolhatók.
+                         court_homography=(
+                             [[float(v) for v in sor] for sor in mappers[0][2]]
+                             if calib_list and mappers else None),
+                         pan_keyframes=(
+                             _sample_pan_keyframes([r_[2] for r_ in raw],
+                                                   fps / stride)
+                             if calib_list else None))
         if rec_date:
             say(f"meccs-dátum a videóból: {rec_date}")
         frames = []
@@ -729,6 +1076,52 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         if stitched:
             say(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
 
+        # Meccs-ablak: a bemelegítés / meccs előtti rész / lefújás utáni
+        # szakasz levágása — ezek nem a meccs részei (a bemelegítő kapura
+        # lövés gólnak látszana, az üres percek felhígítanák az idő-alapú
+        # mutatókat). A félidő-felismerés ELŐTT fut (annak a "felvétel
+        # középső része" feltevését is javítja). Részleges (folytatható)
+        # feldolgozásnál a VÉGÉT nem vágjuk — a folytatás oda fűz vissza.
+        from handball.pipeline.game_window import trim_to_game
+        _gw_info: dict = {}
+        if manual_window:
+            # A felhasználó megmondta, hol a meccs — az ő állítása
+            # erősebb, mint a felismerésé. Vágni nem vágunk, de a
+            # felismerés eredményét kiírjuk: ha ő is és a motor is
+            # ugyanoda teszi a meccs kezdetét, az megerősítés.
+            gw = None
+            _gw_info["manual"] = True
+            say("meccs-ablak: a KÉZI időablak érvényes, automatikus "
+                "vágás nincs")
+        else:
+            gw = trim_to_game(match, tail=not partial, window_out=_gw_info)
+        if gw is not None:
+            say(f"meccs-ablak: eleje {gw['head_cut_s']:.0f}s, vége "
+                f"{gw['tail_cut_s']:.0f}s levágva (bemelegítés / meccs "
+                "előtti-utáni rész)")
+        elif _gw_info.get("manual"):
+            pass  # már kimondtuk fentebb
+        elif _gw_info.get("found"):
+            say("meccs-ablak: a felvétel eleje-vége is meccs, nincs mit "
+                "levágni")
+        else:
+            # NEM sikerült: a bemelegítés és a ceremónia bennmaradhatott.
+            # Ezt ki kell mondani — a felhasználó különben csak a kész
+            # elemzésben látja a következményét ("eladott labda", miközben
+            # a csapatok álltak), és nem tudja, mit tegyen ellene.
+            say("meccs-ablak: NEM sikerült megtalálni a tényleges játék "
+                "kezdetét — ha a felvételen bemelegítés vagy "
+                "csapatbemutatás is van, add meg kézzel a meccs "
+                "időablakát")
+        # A felismerés eredménye a mentésbe is: enélkül a minőség-jelentés
+        # nem tudná megmondani, kimaradt-e a bemelegítés.
+        if not manual_window:
+            match.meta.game_window_found = bool(_gw_info.get("found"))
+            match.meta.game_trim_head_s = float(
+                _gw_info.get("head_cut_s") or 0.0)
+            match.meta.game_trim_tail_s = float(
+                _gw_info.get("tail_cut_s") or 0.0)
+
         # Félidő-érzékelés + térfélcsere-normalizálás: teljes meccset egyben
         # tartalmazó felvételnél a 2. félidő koordinátáit tükrözi, hogy a
         # támadás-irányok egységesek legyenek. A kapus-azonosítás ELŐTT fut.
@@ -765,6 +1158,16 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             if n_ocr:
                 say(f"mezszám-OCR: {n_ocr} track kapott számot "
                       f"({jersey_voter.decisions()})")
+
+        # Kispad- és néző-szűrés: a pálya-régió tűréssávjában ÜL a
+        # cserepad és a nézők első sora — az egy helyben ülő, végig a
+        # vonalon kívüli track nem játékos. A kilépő (mozgó) játékost nem
+        # érinti.
+        from handball.pipeline.track_filter import drop_bench_tracks
+        bench = drop_bench_tracks(match)
+        if bench["tracks"]:
+            say(f"kispad-szűrés: {len(bench['tracks'])} álló, pályán "
+                f"kívüli track eldobva ({bench['removed']} pozíció)")
 
         # Játékos-pálya simítás: a detektálási remegés (jitter) csökkentése — a
         # táv/sebesség statisztika ne a dobozok ugrálását mérje. Csak a mért
@@ -807,6 +1210,22 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     _t0 = _time.time()
     _cp = {"last": _time.time()}
 
+    _last = {"kept": 0, "show": 0}
+
+    def on_note(msg):
+        """Közbeszóló üzenet a felületnek (pl. elakadt kocka átugorva).
+
+        Enélkül az átugrások alatt a haladás-jelző ÁLLNA — a
+        felhasználó azt látná, hogy semmi nem történik, holott a
+        rendszer épp a hibás videó-szakaszon lépked át. A hívás egyben
+        frissíti az elakadás-őrszem szívverését is.
+        """
+        kept = _last["kept"]
+        show = _last["show"] or (disp_total or 0)
+        frac = min(1.0, kept / max(1, show)) if show else 0.0
+        report("B", 0.05 + 0.70 * frac,
+               f"detektálás {kept}/{show} · {msg}")
+
     def on_frame(kept, total):
         # A kijelzéshez a becsült teljes darabszámot használjuk (a `total` a
         # belső plafon, ami teljes videónál csak egy óriási felső korlát).
@@ -819,6 +1238,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         else:
             eta = ""
         frac = min(1.0, kept / max(1, show))
+        _last["kept"], _last["show"] = kept, show
         report("B", 0.05 + 0.70 * frac, f"detektálás {kept}/{show}{eta}")
         # IDŐSZAKOS CHECKPOINT: pár percenként lefut az utómunka az addig
         # feldolgozott kockákra, és a részeredmény ELMENTŐDIK — a motor
@@ -833,14 +1253,35 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 print(f"FIGYELEM: részeredmény-mentés nem sikerült: {e}")
 
     stalled = False
+    pan_stats: dict = {}
+    # KALIBRÁCIÓ-ILLESZKEDÉS a feldolgozás alatt: az elsődleges kalibráció
+    # homográfiája már itt kiszámolható (a finalize ugyanezt számolja), a
+    # mérés a kulcs-kockákon (PAN_KEYFRAME_S) fut — a minőség-jelentés
+    # ebből mondja ki, ha a vonal valahol nem ül a valódin.
+    _fit_h0 = None
+    _fit_every = 16
+    if calib_list:
+        try:
+            from handball.pipeline._homography import homography_from_points
+            from handball.pipeline.calib_overlay import PAN_KEYFRAME_S
+            _c0 = calib_list[0]
+            _fit_h0 = homography_from_points(
+                [tuple(p) for p in _c0["corners"]],
+                _calib_court_points(_c0.get("region", "full"),
+                                    bool(_c0.get("rotate"))))
+            _fit_every = max(1, int(round(PAN_KEYFRAME_S * fps / max(1, stride))))
+        except Exception:
+            _fit_h0 = None  # mérés nélkül is fut a feldolgozás
     if weights:
         # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).
         stalled = bool(_process_yolo(
             video_path, weights, stride, max_frames, imgsz, conf,
             court_poly, start=start, skip_dark=skip_dark,
-            on_frame=on_frame, pan=bool(calib_list),
+            on_frame=on_frame, on_note=on_note, pan=bool(calib_list),
             jersey_voter=jersey_voter, stop_check=stop_check,
-            raw_out=raw, colors_out=all_colors))
+            raw_out=raw, colors_out=all_colors, pan_stats_out=pan_stats,
+            anchor_frames={int(c.get("frame", start)) for c in calib_list},
+            fit_h0=_fit_h0, fit_every=_fit_every))
     else:
         _process_hog(video_path, stride, max_frames, stop_check=stop_check,
                      raw_out=raw, colors_out=all_colors, on_frame=on_frame,
@@ -854,6 +1295,15 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                "rész feldolgozva, a meccs befejezetlenként mentve "
                "(a könyvtárból folytatható)")
     match = _finalize(raw, all_colors, partial=stopped or stalled)
+    # A horgonyzás-arány a meta-ba: a minőség-jelentés ebből mondja ki, ha
+    # a svenkelés alatt a kalibrált képhez ritkán sikerült visszamérni.
+    if pan_stats.get("frames"):
+        match.meta.pan_anchor_pct = round(
+            100.0 * pan_stats.get("anchored", 0) / pan_stats["frames"], 1)
+    # A feldolgozás alatt mért kalibráció-illeszkedés összegzése a meta-ba.
+    if pan_stats.get("fit_points"):
+        from handball.pipeline.calib_overlay import fit_summary
+        match.meta.calib_fit = fit_summary(pan_stats["fit_points"])
 
     if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
         with open(out_path, "w", encoding="utf-8") as f:

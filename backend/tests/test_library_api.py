@@ -86,3 +86,45 @@ if __name__ == "__main__":
     test_import_rejects_invalid_zip()
     test_import_skips_path_traversal_entries()
     print("Minden könyvtár-mentés teszt OK.")
+
+
+def test_a_mentes_viszi_a_neveket_es_a_kezi_javitasokat():
+    """A gépváltás nem veszíthet el EMBERI munkát.
+
+    A mezszám-nevek és a kézi esemény-javítások nem a videóból jönnek:
+    valaki beírta őket. Ha a mentés ezeket nem viszi, az új gépen
+    elölről kell kezdeni — pont azt a munkát, amit a program nem tud
+    újratermelni.
+    """
+    tmp = tempfile.mkdtemp(prefix="handball_lib_emberi_")
+    client, mid = _fresh_client(tmp)
+    csapat = client.get("/matches").json()["matches"][0]["home_team"]
+    client.post("/library/players",
+                json={"team": csapat, "jersey": 7, "name": "Kovács"})
+    # FELVÉTEL (add) a javítás: ez akkor is él, ha a rövid
+    # szimuláción egyáltalán nincs felismert lövés — így a próba
+    # tényleg a mentést méri, nem a felismerést.
+    client.post(f"/matches/{mid}/event-overrides",
+                json={"overrides": [{"op": "add", "t": 2, "type": "goal",
+                                     "team": "home"}]})
+
+    zip_bytes = client.get("/library/export").content
+    names = zipfile.ZipFile(io.BytesIO(zip_bytes)).namelist()
+    assert any(n.endswith("players.json") for n in names), names
+    assert any(n.endswith(f"{mid}.events.json") for n in names), names
+
+    # "Új gép".
+    tmp2 = tempfile.mkdtemp(prefix="handball_lib_emberi2_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp2
+    client2 = TestClient(create_app())
+    client2.post("/library/import", content=zip_bytes)
+
+    nevek = client2.get("/library/players").json()["players"]
+    assert (nevek.get(csapat) or {}).get("7") == "Kovács"
+    ov = client2.get(f"/matches/{mid}/event-overrides").json()["overrides"]
+    assert ov and ov[0]["op"] == "add"
+    # És a javítás ÉL is: a betöltő a meccs meta-jába teszi, tehát a
+    # felvett gól ott van az esemény-listán.
+    esemenyek = client2.get(f"/matches/{mid}/events").json()["events"]
+    assert any(e["type"] == "goal" and e["t"] == 2 for e in esemenyek), \
+        esemenyek

@@ -22,6 +22,7 @@ import math
 from typing import Optional
 
 from ..models.tracking import Match
+from .primitive_cache import copy_rows, memoize_primitive
 from .tactics import TacticsConfig
 
 STOP_SPEED_MS = 0.4     # ez alatt "állnak" a játékosok
@@ -33,6 +34,11 @@ JOIN_S = 1.5            # ennél rövidebb "megmozdulást" összevonunk
 PRE_WINDOW_S = 3.0      # a leállás előtti birtoklás-ablak (ki kérhette)
 
 
+# A megszakítás-felismerés a TELJES felvételt végigjárja, és egy
+# összeállítás alatt tucatnyi réteg kéri (időkérés-mérleg, -időzítés,
+# -hozam, effektív játékidő, hosszú állás utáni játék...). Hatókörön
+# belül egyszer szabad lefutnia.
+@memoize_primitive("detect_stoppages", copy=copy_rows)
 def detect_stoppages(match: Match,
                      config: Optional[TacticsConfig] = None) -> list[dict]:
     """Játékmegszakítások időrendben.
@@ -173,6 +179,63 @@ def timeout_record(match: Match,
             rec["broke"] += 1
         elif st.get("verdict") == "nem hozott fordulatot":
             rec["failed"] += 1
+    return out
+
+
+# Időkérés-hozam: ennyi ítéletes időkérés kell a kimondáshoz, és
+# ekkora részarány fölött mondjuk ki, hogy az időkérésük rendez
+# (vagy hatástalan).
+TOY_MIN_JUDGED = 2
+TOY_SHARE_PCT = 67.0
+
+
+def timeout_yield(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Időkérés-hozam: MŰKÖDIK-E a mentő időkérésük.
+
+    Az időkérés-mérleg (timeout_record) a nyers számokat adja — ez
+    az ÍTÉLETET: a megtört sorozatok arányából mondja ki, hogy az
+    időkérésük rendez-e.
+
+    Edzőileg ez a sorozat-építés terve. Ha az időkérésük rendre
+    megtöri a sorozatot, az ő időkérésük után nem szabad kapkodni —
+    rendezett fal jön, a következő támadást ki kell dolgozni. Ha az
+    időkérésük hatástalan, a megkezdett gól-sorozat az időkérésük
+    UTÁN is tolható — nem kell tisztelni a zöld kartont. Saját
+    csapatra: a hatástalan időkérés tartalom-kérdés (mit mondunk el
+    az egy percben), nem időzítés.
+
+    Visszatérés csapatonként (a KÉRŐ oldal): {"timeouts", "broke",
+    "failed", "broke_pct", "verdict"} — a pct/verdict None, ha kevés
+    (TOY_MIN_JUDGED alatti) az ítéletes időkérés.
+    """
+    config = config or TacticsConfig()
+    rec_all = timeout_record(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        src = rec_all.get(side, {})
+        rec = {"timeouts": src.get("timeouts", 0),
+               "broke": src.get("broke", 0),
+               "failed": src.get("failed", 0),
+               "broke_pct": None, "verdict": None}
+        judged = rec["broke"] + rec["failed"]
+        if judged >= TOY_MIN_JUDGED:
+            pct = 100.0 * rec["broke"] / judged
+            rec["broke_pct"] = round(pct, 1)
+            if pct >= TOY_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az időkérésük rendez ({rec['broke']}/{judged} "
+                    "megtört sorozat) — az ő időkérésük után nem "
+                    "szabad kapkodni: rendezett fal jön, a következő "
+                    "támadást ki kell dolgozni")
+            elif pct <= 100.0 - TOY_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az időkérésük hatástalan ({rec['broke']}/"
+                    f"{judged} megtört sorozat) — a megkezdett "
+                    "gól-sorozat az időkérésük után is tolható: nem "
+                    "kell tisztelni a zöld kartont")
+        out[side] = rec
     return out
 
 
@@ -546,4 +609,331 @@ def long_break_response(match: Match,
                 rec["verdict"] = "a hosszú állások után meglódulnak"
             elif diff <= -LBR_DIFF:
                 rec["verdict"] = "a hosszú állások kizökkentik őket"
+    return out
+
+
+# Időkérés-befejező: ennyi poszthoz kötött lövés kell az ítélethez az
+# időkérések utáni ablakban, és ekkora részarány számít mintázatnak. Az
+# időkérés ritka esemény (meccsenként 3 db), ezért a küszöb alacsony —
+# a felderítésben viszont meccsek közt összegződik.
+TOF_MIN_SHOTS = 3
+TOF_SHARE_PCT = 60.0
+TOF_WINDOW_S = 40.0
+
+
+def timeout_finisher(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Időkérés-befejező: AZ IDŐKÉRÉS UTÁN KIRE JÁTSZANAK.
+
+    Az időkérés utáni első támadás (`timeout_first_attack`) azt mondja
+    meg, van-e kész figurájuk — ez azt, hogy a kész figura KIRE fut ki.
+    Az időkérést kérő csapat első TOF_WINDOW_S másodpercét nézzük az
+    újraindítás után, és a benne esett lövéseket az ELENGEDŐ játékos
+    posztjához írjuk.
+
+    Edzőileg ez a legolcsóbb felkészülés a meccsen belül. Az időkérés
+    után a fal TUDJA, hogy figura jön — csak azt nem, kire. Ha a
+    lövések nagy része ugyanarra a posztra megy, a megbeszélésben egy
+    mondat elég: "időkérés után rá figyelünk, elé állunk, a többit
+    hagyjuk". Ha szórt a befejezés, az időkérés utáni támadásra nem
+    érdemes külön embert rendelni — a szokásos fal a jobb.
+
+    Visszatérés csapatonként: {"timeouts", "shots" (poszthoz kötött),
+    "roles": {poszt: lövés}, "main_role", "share_pct", "verdict"} — a
+    main_role/share_pct/verdict None, ha nincs meg a TOF_MIN_SHOTS
+    lövés, vagy egyik poszt sem éri el a TOF_SHARE_PCT részarányt.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TOF_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {"timeouts": 0, "shots": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for s in detect_stoppages(match, config):
+        if s["kind"] != "időkérés" or s["likely_team"] is None:
+            continue
+        side = s["likely_team"]
+        rec = out[side]
+        rec["timeouts"] += 1
+        end = s["end_frame"]
+        for e in shots:
+            if e.team.value != side or not (end < e.t <= end + win):
+                continue
+            if e.player_id is None:
+                continue
+            rec_role = roles[side].get(e.player_id)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+            rec["shots"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= TOF_MIN_SHOTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["shots"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= TOF_SHARE_PCT:
+                rec["verdict"] = (
+                    f"időkérés után a(z) {poszt} fejez be "
+                    f"({share:.0f}%, {rec['shots']} lövésből) — a "
+                    "megbeszélésen ő kapja az embert, elé kell állni")
+    return out
+
+
+# Időkéréspáros-poszt: ennyi párhoz kötött időkérés utáni lövés kell
+# az ítélethez, ekkora részarány fölött mondjuk ki a tengelyt, és
+# ennyi időn belüli utolsó passzt tekintünk előkészítésnek.
+TOP_MIN_SHOTS = 3
+TOP_SHARE_PCT = 60.0
+TOP_PASS_WINDOW_S = 4.0
+
+
+def timeout_pair_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Időkéréspáros-poszt: AZ IDŐKÉRÉS UTÁNI FIGURA TENGELYE.
+
+    Az időkérés-befejező a figura végpontját nevezi meg — ez a
+    tengelyt: az időkérés utáni ablakban leadott lövésekhez
+    megkeresi a lövő felé menő utolsó passzt, és a lövést az
+    (előkészítő poszt → befejező poszt) párhoz írja.
+
+    Edzőileg ez a megbeszélés egy mondata: az időkérés után a fal
+    tudja, hogy kész figura jön — ha a tengely ismert, nem csak a
+    befejezőre kell figyelni, hanem az ELSŐ passzt kell elvágni. A
+    figura az indításnál a legolcsóbban törik meg. Saját csapatra: az
+    időkérés utáni figura ne mindig ugyanazon a tengelyen fusson.
+
+    Visszatérés csapatonként: {"shots" (párhoz kötött), "roles":
+    {"előkészítő→befejező": darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a TOP_MIN_SHOTS, vagy
+    egyik pár sem éri el a TOP_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TOF_WINDOW_S * fps
+    pass_win = TOP_PASS_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    passes = detect_passes(match, config)
+
+    # Az időkérést kérő csapat és az újraindítás ideje.
+    stops = [(s["likely_team"], s["end_frame"])
+             for s in detect_stoppages(match, config)
+             if s.get("likely_team") is not None]
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not stops:
+        return out
+
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        side = e.team.value
+        if not any(team == side and 0 <= e.t - end <= win
+                   for (team, end) in stops):
+            continue
+        best = None
+        for p in passes:
+            if not (0 <= e.t - p.t <= pass_win) or p.team != e.team:
+                continue
+            if (p.receiver_id != e.player_id
+                    or p.passer_id == e.player_id):
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        r_feed = roles[side].get(best.passer_id)
+        r_shot = roles[side].get(e.player_id)
+        if r_feed is None or r_shot is None:
+            continue
+        kulcs = f"{r_feed['poszt']}→{r_shot['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["shots"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= TOP_MIN_SHOTS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["shots"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= TOP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az időkérés utáni figurájuk a(z) {par} "
+                    f"tengelyen fut ({share:.0f}%, {rec['shots']} "
+                    "időkérés utáni lövésből) — ne csak a befejezőre"
+                    " figyeljetek: az ELSŐ passzt vágjátok el, ott "
+                    "törik meg a figura a legolcsóbban")
+    return out
+
+
+# Időkérés-hiba poszt küszöbei: ennyi poszthoz kötött időkérés utáni
+# eladás kell az ítélethez, és ekkora részarány a vezető posztnak.
+TOE_MIN_TURNOVERS = 3
+TOE_SHARE_PCT = 60.0
+
+
+def timeout_turnover_roles(match: Match,
+                           config: Optional[TacticsConfig] = None
+                           ) -> dict:
+    """Időkérés-hiba poszt: A MEGBESZÉLT FIGURA kinek a kezén hal el.
+
+    Az időkérés-befejező és az időkéréspáros a sikeres figurát írja
+    le (ki fejez be, milyen tengelyen) — ez a kudarcát: az időkérés
+    utáni ablakban (TOF_WINDOW_S) elkövetett labdaeladásaikat a
+    vesztes posztjához írja.
+
+    Edzőileg ez az időkérés utáni védekezés második mondata: a
+    megbeszélt figura ott a legsérülékenyebb, ahol eddig is elhalt —
+    ha az időkérés utáni labdájuk rendre ugyanannak a kezében vész
+    el, oda kell nyomni a figura indításánál (előrelépő védő,
+    kettőzés az első bejátszásnál). Saját csapatra: a táblára rajzolt
+    figura nem működik, ha a kulcspasszt mindig ugyanaz rontja el —
+    egyszerűbb kezdés kell.
+
+    Visszatérés csapatonként: {"turnovers" (poszthoz kötött időkérés
+    utáni eladás), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    TOE_MIN_TURNOVERS, vagy egyik poszt sem éri el a
+    TOE_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_events
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TOF_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+
+    # Az időkérést kérő csapat és az újraindítás ideje.
+    stops = [(s["likely_team"], s["end_frame"])
+             for s in detect_stoppages(match, config)
+             if s.get("likely_team") is not None]
+
+    out: dict = {side: {"turnovers": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not stops:
+        return out
+
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        if not any(team == side and 0 <= e.t - end <= win
+                   for (team, end) in stops):
+            continue
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["turnovers"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["turnovers"] >= TOE_MIN_TURNOVERS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["turnovers"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= TOE_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az időkérés utáni labdájuk {share:.0f}%-ban "
+                    f"a(z) {poszt} kezén vész el ({rec['turnovers']} "
+                    "eladásból) — a megbeszélt figurát az ő "
+                    "indításánál kell megnyomni, ott hal el "
+                    "magától is")
+    return out
+
+
+# Időkérés-hibázók: ennyi időkérés utáni eladástól emeljük ki a
+# játékost (az időkérés ritka esemény, ezért alacsony a küszöb).
+TOEP_MIN_TURNOVERS = 2
+
+
+def timeout_turnover_players(match: Match,
+                             config: Optional[TacticsConfig] = None
+                             ) -> dict:
+    """Időkérés-hibázók: A MEGBESZÉLT FIGURA kinek a kezén hal el.
+
+    Az időkérés-hiba poszt (timeout_turnover_roles) a POSZTOT nevezi
+    meg — ez az EMBERT: ugyanazokat az időkérés utáni ablakban
+    elkövetett labdaeladásokat játékosonként számolja.
+
+    Edzőileg ez az időkérés utáni védekezés névre szóló mondata: a
+    táblára rajzolt figura ott a legsérülékenyebb, ahol eddig is
+    elhalt — az ő fogadására menjen a kilépés és a kettőzés. Saját
+    csapatra: a kulcspasszt ne az kapja, aki a megbeszélés utáni
+    feszültségben rendre elrontja.
+
+    Visszatérés csapatonként: {"turnovers", "players":
+    [{"player_id", "jersey", "turnovers"}], "top"} — a "top" az első
+    játékos, ha legalább TOEP_MIN_TURNOVERS időkérés utáni eladása
+    van, különben None.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TOF_WINDOW_S * fps
+    stops = [(s["likely_team"], s["end_frame"])
+             for s in detect_stoppages(match, config)
+             if s.get("likely_team") is not None]
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    if stops:
+        for e in detect_events(match, config):
+            if e.type != EventType.TURNOVER or e.player_id is None:
+                continue
+            side = e.team.value
+            if not any(team == side and 0 <= e.t - end <= win
+                       for (team, end) in stops):
+                continue
+            tally[side][e.player_id] = (
+                tally[side].get(e.player_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "turnovers": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["turnovers"] >= TOEP_MIN_TURNOVERS
+               else None)
+        out[side] = {"turnovers": sum(r["turnovers"] for r in rows),
+                     "players": rows, "top": top}
     return out

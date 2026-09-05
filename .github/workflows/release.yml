@@ -51,7 +51,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Teszt-függőségek
-        run: pip install pytest numpy opencv-python-headless
+        # A fastapi+httpx nélkül az API-őrök (fiókok, réteg-regisztry,
+        # könyvtár, csomag) modul-szinten, NÉMÁN kimaradnának.
+        run: pip install pytest numpy opencv-python-headless fastapi httpx
       - name: Backend tesztek
         working-directory: backend
         run: python -m pytest -q
@@ -84,6 +86,13 @@ jobs:
           python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
           Pop-Location
           if (-not (Test-Path packaging\weights\yolov8n.pt)) { throw "sulyfajl hianyzik" }
+      - name: Motor-verzió pecsét (a /health kiadja, a kliens összeveti)
+        if: env.RELEASE_TAG != ''
+        shell: pwsh
+        run: |
+          $v = $env:RELEASE_TAG.TrimStart('v')
+          (Get-Content backend\handball\__init__.py) -replace '__version__ = ".*"', "__version__ = `"$v`"" | Set-Content backend\handball\__init__.py
+          Select-String -Path backend\handball\__init__.py -Pattern "__version__"
       - name: Motor becsomagolása (PyInstaller)
         run: pyinstaller packaging/backend.spec --noconfirm --distpath dist --workpath build/pyi
       - name: A becsomagolt súlyfájl épség-ellenőrzése
@@ -94,8 +103,12 @@ jobs:
           $w = Get-ChildItem -Recurse dist\handball_backend -Filter yolov8n.pt | Select-Object -First 1
           if (-not $w) { throw "nincs sulyfajl a csomagban" }
           python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]); print('sulyfajl OK:', sys.argv[1])" $w.FullName
-      - name: Motor füstteszt (elindul és válaszol a /health-en)
+      - name: Motor füstteszt (elindul, és a FIÓK-folyamat is megy)
+        # Lásd a macOS-ág megjegyzését: a /health kevés, a fiók-végpontok
+        # futásidejű importjai csak a végigjátszott belépő-úton bukhatnak ki.
         shell: pwsh
+        env:
+          HANDBALL_DATA_DIR: ${{ runner.temp }}\smoke-data
         run: |
           $p = Start-Process -FilePath "dist\handball_backend\handball_backend.exe" -PassThru
           $ok = $false
@@ -106,8 +119,73 @@ jobs:
               if ($r.StatusCode -eq 200) { $ok = $true; break }
             } catch {}
           }
+          if (-not $ok) {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            throw "A motor nem válaszolt a /health-en"
+          }
+          if ($env:RELEASE_TAG) {
+            $v = $env:RELEASE_TAG.TrimStart('v')
+            $hv = ((Invoke-WebRequest -Uri http://127.0.0.1:8000/health -UseBasicParsing -TimeoutSec 5).Content | ConvertFrom-Json).version
+            if ($hv -ne $v) {
+              Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+              throw "A motor-verzió pecsét hianyzik: /health=$hv, vart=$v"
+            }
+          }
+          function Post-Json($url, $body) {
+            try {
+              $r = Invoke-WebRequest -Uri $url -Method POST -UseBasicParsing `
+                -ContentType "application/json" -Body $body -TimeoutSec 10
+              return [int]$r.StatusCode
+            } catch {
+              if ($_.Exception.Response) { return [int]$_.Exception.Response.StatusCode }
+              return 0
+            }
+          }
+          $terms = (Invoke-WebRequest -Uri http://127.0.0.1:8000/legal/terms -UseBasicParsing -TimeoutSec 10).Content
+          $status = (Invoke-WebRequest -Uri http://127.0.0.1:8000/accounts/status -UseBasicParsing -TimeoutSec 10).Content
+          $reg  = Post-Json "http://127.0.0.1:8000/accounts/register" '{"email":"smoke@teszt.hu","password":"jelszo12345","accept_terms":true}'
+          $nope = Post-Json "http://127.0.0.1:8000/accounts/register" '{"email":"mas@teszt.hu","password":"jelszo12345","accept_terms":false}'
+          $log  = Post-Json "http://127.0.0.1:8000/accounts/login" '{"email":"smoke@teszt.hu","password":"jelszo12345"}'
           Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Write-Host "regisztráció=$reg elfogadás-nélkül=$nope belépés=$log"
+          if ($terms -notmatch '"version"') { throw "a /legal/terms nem adott verziót" }
+          if ($status -notmatch "has_accounts") { throw "a /accounts/status válasza hiányos" }
+          if ($reg -ne 200) { throw "a fiók-létrehozás nem ment (HTTP $reg)" }
+          if ($nope -ne 400) { throw "elfogadás nélkül is létrejött volna a fiók (HTTP $nope)" }
+          if ($log -ne 200) { throw "a belépés nem ment (HTTP $log)" }
           if (-not $ok) { throw "A motor nem valaszolt a /health vegponton" }
+          # A DIAGNÓZIS-LÁNC ellenőrzése a VALÓDI csomagolt motoron: ha
+          # egyszer baj lesz, a felhasználónak legyen mit elküldenie. A
+          # becsomagolt motor ablak nélküli, ilyenkor a Pythonnak nincs
+          # stdout-ja, és a saját üzeneteit engine.log-ba írja.
+          #
+          # A v0.1.50 kiadás naplója megerősítette, hogy ez a valódi
+          # csomagolt motoron működik ("engine.log MEGVAN; indulási
+          # mérföldkövek: True"), ezért az ellenőrzés innentől ÉLES: ha
+          # a napló eltűnik vagy üres marad, a kiadás elbukik. Pontosan
+          # ez a hiba küldte úgy útjára a korábbi kiadást, hogy a
+          # felhasználó üres naplót látott, és nem volt mit elküldenie.
+          $engineLog = Join-Path $env:HANDBALL_DATA_DIR "engine.log"
+          if (Test-Path $engineLog) {
+            $txt = Get-Content $engineLog -Raw
+            $hasStages = $txt -match "\[indul"
+            $diag = "engine.log MEGVAN; indulási mérföldkövek: $hasStages"
+          } else {
+            $diag = "engine.log NINCS ($engineLog) — a motor kimenete a csövön ment"
+            $hasStages = $false
+          }
+          Write-Host "DIAGNÓZIS-ELLENŐRZÉS: $diag"
+          if (-not (Test-Path $engineLog)) {
+            throw "a csomagolt motor nem irt engine.log-ot — a hibakereses-lanc elszakadt"
+          }
+          if (-not $hasStages) {
+            throw "az engine.log-bol hianyoznak az indulasi merfoldkovek — a hibakereses-lanc elszakadt"
+          }
+          # Fájlba is: a telepítő fordítása ezután PERCEKIG ontja a
+          # kimenetet, és ez a sor a napló közepén elveszne. Az utolsó
+          # lépés újra kiírja, hogy egy rövid napló-vég is mutassa.
+          Set-Content -Path (Join-Path $env:RUNNER_TEMP "diag-check.txt") `
+            -Value $diag -Encoding utf8
 
       # ---- Flutter desktop app ----
       - uses: subosito/flutter-action@v2
@@ -189,6 +267,20 @@ jobs:
   # A teljes macOS-alkalmazás legyártása (app + beágyazott motor, zip-ben).
   # FIGYELEM: a macOS futtató 10x szorzóval fogyasztja az Actions-percet —
   # ez viszi a kiadási költség ~85%-át; iterálás közben hagyd ki (platforms).
+      # A füstteszt diagnózis-eredményének MEGISMÉTLÉSE a job végén: a
+      # telepítő fordítása percekig ontja a kimenetet, és az eredeti sor
+      # a napló közepén elveszne. Így egy rövid napló-vég is mutatja.
+      - name: Diagnózis-lánc jelentés
+        if: always()
+        shell: pwsh
+        run: |
+          $f = Join-Path $env:RUNNER_TEMP "diag-check.txt"
+          if (Test-Path $f) {
+            Write-Host "DIAGNÓZIS-ELLENŐRZÉS (ismétlés): $(Get-Content $f -Raw)"
+          } else {
+            Write-Host "DIAGNÓZIS-ELLENŐRZÉS (ismétlés): nem futott le a füstteszt"
+          }
+
   macos-app:
     needs: tests
     # Csak ha kérték (platforms: all/macos); címke-indításnál mindig.
@@ -204,6 +296,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Backend + ML függőségek + PyInstaller
         run: |
           python -m pip install --upgrade pip
@@ -213,6 +306,12 @@ jobs:
           mkdir -p packaging/weights
           (cd packaging/weights && python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')")
           test -f packaging/weights/yolov8n.pt
+      - name: Motor-verzió pecsét (a /health kiadja, a kliens összeveti)
+        if: env.RELEASE_TAG != ''
+        run: |
+          v="${RELEASE_TAG#v}"
+          sed -i '' -e "s/__version__ = \".*\"/__version__ = \"$v\"/" backend/handball/__init__.py
+          grep "__version__" backend/handball/__init__.py
       - name: Motor becsomagolása (PyInstaller)
         run: pyinstaller packaging/backend.spec --noconfirm --distpath dist --workpath build/pyi
       - name: A becsomagolt súlyfájl épség-ellenőrzése
@@ -222,16 +321,52 @@ jobs:
           W=$(find dist/handball_backend -name yolov8n.pt | head -1)
           test -n "$W"
           python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]); print('sulyfajl OK:', sys.argv[1])" "$W"
-      - name: Motor füstteszt (elindul és válaszol a /health-en)
+      - name: Motor füstteszt (elindul, és a FIÓK-folyamat is megy)
+        # Nem elég a /health: a fiók-végpontok a becsomagolt motorban
+        # futásidőben importálnak (handball.accounts), és egy hiányzó modul
+        # csak ITT bukna ki — a felhasználónál pedig a fiók-készítésnél.
+        # Ezért a füstteszt végigjátssza a teljes belépő-utat.
+        env:
+          HANDBALL_DATA_DIR: ${{ runner.temp }}/smoke-data
         run: |
           ./dist/handball_backend/handball_backend & echo $! > engine.pid
           ok=0
           for i in $(seq 1 30); do
             sleep 2
-            if curl -sf http://127.0.0.1:8000/health; then ok=1; break; fi
+            if curl -sf http://127.0.0.1:8000/health >/dev/null; then ok=1; break; fi
           done
+          if [ "$ok" != "1" ]; then
+            kill "$(cat engine.pid)" 2>/dev/null || true
+            echo "A motor nem válaszolt a /health-en"; exit 1
+          fi
+          if [ -n "$RELEASE_TAG" ]; then
+            v="${RELEASE_TAG#v}"
+            hv=$(curl -sf http://127.0.0.1:8000/health | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))')
+            if [ "$hv" != "$v" ]; then
+              kill "$(cat engine.pid)" 2>/dev/null || true
+              echo "A motor-verzió pecsét hiányzik: /health=$hv, várt=$v"; exit 1
+            fi
+          fi
+          set +e
+          curl -sf http://127.0.0.1:8000/legal/terms | grep -q '"version"'      && t=1 || t=0
+          curl -sf http://127.0.0.1:8000/accounts/status | grep -q 'has_accounts' && s=1 || s=0
+          reg=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://127.0.0.1:8000/accounts/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"smoke@teszt.hu","password":"jelszo12345","accept_terms":true}')
+          nope=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://127.0.0.1:8000/accounts/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"mas@teszt.hu","password":"jelszo12345","accept_terms":false}')
+          log=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://127.0.0.1:8000/accounts/login \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"smoke@teszt.hu","password":"jelszo12345"}')
+          set -e
           kill "$(cat engine.pid)" 2>/dev/null || true
-          [ "$ok" = "1" ]
+          echo "feltételek=$t állapot=$s regisztráció=$reg elfogadás-nélkül=$nope belépés=$log"
+          [ "$t" = "1" ] && [ "$s" = "1" ] && [ "$reg" = "200" ] \
+            && [ "$nope" = "400" ] && [ "$log" = "200" ]
 
       # ---- Flutter desktop app ----
       - uses: subosito/flutter-action@v2

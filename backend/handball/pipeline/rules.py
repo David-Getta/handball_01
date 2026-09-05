@@ -377,6 +377,9 @@ def discipline_fade(match: Match, config=None) -> dict:
     return out
 
 
+# A hetes-felismerés a TELJES felvételt végigjárja, és a hetes-rétegek
+# (dobó, sarok, kapus-mérleg, ismétlés, fáradás...) mind ezt kérik.
+@memoize_primitive("detect_seven_meters", copy=copy_rows)
 def detect_seven_meters(match: Match,
                         config: Optional[TacticsConfig] = None) -> list[dict]:
     """Hétméteres (büntetődobás) felismerése.
@@ -443,6 +446,64 @@ def passive_play_risks(match: Match,
         if any(a["start_frame"] <= t <= a["end_frame"] for t in shot_ts):
             continue
         out.append(a)
+    return out
+
+
+# Passzív-kockázat: ennyi felállt támadás kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy rendszeresen belefutnak a
+# passzív jelbe.
+PSR_MIN_ATTACKS = 4
+PSR_SHARE_PCT = 20.0
+
+
+def passive_risk(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Passzív-kockázat: MENNYIRE gyakran futnak bele a passzív jelbe.
+
+    A passzív-kockázatú szakaszok (passive_play_risks) a listát
+    adják — ez az ARÁNYT: a lövés nélkül elnyúló felállt támadásokat
+    az ÖSSZES felállt támadásukhoz viszonyítja.
+
+    Edzőileg ez a türelem jutalma: ha rendszeresen belefutnak a
+    passzív jelbe, ellenük a zárt, türelmes fal dolgozik — nem kell
+    kilépni és kockáztatni, a játékvezető és az óra a szövetségesünk.
+    Saját csapatra: a lövés nélkül elnyúló támadás nem stílus, hanem
+    befejezés-hiány — a második hullámnak befejezés-lehetőséggel
+    kell érkeznie.
+
+    Visszatérés csapatonként: {"positional", "passive", "share_pct",
+    "verdict"} — a share_pct/verdict None, ha kevés
+    (PSR_MIN_ATTACKS alatti) a felállt támadás.
+    """
+    from .attack_types import AttackType, classify_attacks
+
+    config = config or TacticsConfig()
+    out = {side: {"positional": 0, "passive": 0, "share_pct": None,
+                  "verdict": None}
+           for side in ("home", "away")}
+
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.POSITIONAL.value:
+            continue
+        side = a["team"]
+        if side in out:
+            out[side]["positional"] += 1
+    for a in passive_play_risks(match, config):
+        side = a["team"]
+        if side in out:
+            out[side]["passive"] += 1
+
+    for rec in out.values():
+        if rec["positional"] >= PSR_MIN_ATTACKS:
+            share = 100.0 * rec["passive"] / rec["positional"]
+            rec["share_pct"] = round(share, 1)
+            if share >= PSR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"rendszeresen belefutnak a passzív jelbe "
+                    f"({rec['passive']}/{rec['positional']} felállt "
+                    f"támadás, {share:.0f}%) — ellenük a zárt, "
+                    "türelmes fal dolgozik: nem kell kilépni, az óra "
+                    "és a játékvezető nekünk dolgozik")
     return out
 
 
@@ -547,6 +608,63 @@ def seven_meter_summary(match: Match,
             rec["saved"] += 1
         elif sm["outcome"] == "kihagyva":
             rec["missed"] += 1
+    return out
+
+
+# Hetes-hozam: ennyi mért hetes kell az ítélethez; e fölött
+# "biztos kezűek", e alatt "megfoghatók" a hetesnél.
+SVY_MIN_ATTEMPTS = 4
+SVY_HIGH_PCT = 85.0
+SVY_LOW_PCT = 60.0
+
+
+def seven_yield(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-hozam: MENNYIT ÉR NÁLUK egy megítélt hetes.
+
+    A hétméteres-mérleg (seven_meter_summary) a nyers számokat adja
+    — ez az ÍTÉLETET: a felismert hetesek gólarányát méri, és
+    megmondja, mit ér ellenük a hetest érő szabálytalanság.
+
+    Edzőileg ez a védekezés ár-kalkulációja. Ha a heteseik szinte
+    mindig bemennek, a hetest érő szabálytalanság a legrosszabb
+    üzlet: a fal lábbal védekezzen, és a beugró ellen inkább a
+    testtel elzárt út kell, mint a kézzel visszahúzás. Ha a
+    hetesük megfogható, a biztos helyzetet megállító szabálytalanság
+    vállalható, és a kapusnak érdemes a hetesre külön készülnie.
+    Saját csapatra: a hetes-értékesítésünk mérhető, nem hitkérdés.
+
+    Visszatérés csapatonként (a DOBÓ oldal): {"attempts", "goals",
+    "saved", "missed", "goal_pct", "verdict"} — a pct/verdict None,
+    ha kevés (SVY_MIN_ATTEMPTS alatti) a mért hetes.
+    """
+    config = config or TacticsConfig()
+    summ = seven_meter_summary(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = dict(summ.get(side, {"attempts": 0, "goals": 0,
+                                   "saved": 0, "missed": 0}))
+        rec["goal_pct"] = None
+        rec["verdict"] = None
+        if rec["attempts"] >= SVY_MIN_ATTEMPTS:
+            pct = 100.0 * rec["goals"] / rec["attempts"]
+            rec["goal_pct"] = round(pct, 1)
+            if pct >= SVY_HIGH_PCT:
+                rec["verdict"] = (
+                    f"a hetesük szinte biztos gól ({rec['goals']}/"
+                    f"{rec['attempts']}, {pct:.0f}%) — a hetest érő "
+                    "szabálytalanság a legrosszabb üzlet: a fal "
+                    "lábbal védekezzen, a beugró elé testtel kell "
+                    "állni, nem kézzel visszahúzni")
+            elif pct <= SVY_LOW_PCT:
+                rec["verdict"] = (
+                    f"a hetesük megfogható ({rec['goals']}/"
+                    f"{rec['attempts']}, {pct:.0f}%) — a biztos "
+                    "helyzetet megállító szabálytalanság ellenük "
+                    "vállalható, és a kapusnak külön készülnie kell "
+                    "a hetesükre")
+        out[side] = rec
     return out
 
 
@@ -657,6 +775,77 @@ def powerplay_efficiency(match: Match,
 # Hetes-kiharcoló: ennyi másodperccel a hetes-jel előtt nézzük, ki volt
 # a kapuhoz legközelebbi támadó (a szabálytalanság áldozata jellemzően ő).
 SEVEN_EARNER_LOOKBACK_S = 2.0
+
+
+# Hetes-forrás: ennyi felismert hetes kell az ítélethez, és ekkora
+# részarány fölött mondjuk ki, hogy a heteseik egy játékhelyzetből
+# jönnek.
+SVS_MIN_SEVENS = 3
+SVS_SHARE_PCT = 60.0
+
+
+def seven_sources(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-forrás: MILYEN HELYZETBŐL jön a hetesük.
+
+    A hetes-kiharcolók (seven_earners) az embert nevezik meg, a
+    hetes-okozók a védőt — ez a JÁTÉKHELYZETET: minden felismert
+    hetest ahhoz a támadás-szakaszhoz köt, amelyben esett, és a
+    szakasz típusa szerint csoportosít (lerohanás, felállt támadás,
+    átmenet).
+
+    Edzőileg ez a szabálytalanság-fegyelem címzettje. Ha a heteseik
+    zöme lerohanásból jön, a visszafutásnál tilos a kézzel fékezés —
+    inkább menjen be a gól, mint a hetes plusz kiállítás; ha felállt
+    támadásból, a fal lábmunkája a kérdés, és a beugró elé testtel
+    kell állni. Saját csapatra fordítva: ugyanez mutatja, honnan
+    tudunk hetest kiharcolni.
+
+    Visszatérés csapatonként (a DOBÓ oldal): {"sevens", "types":
+    {típus: darab}, "main_type", "share_pct", "verdict"} — az ítélet
+    None, ha nincs meg az SVS_MIN_SEVENS, vagy egyik típus sem éri
+    el az SVS_SHARE_PCT-t.
+    """
+    from .attack_types import classify_attacks
+
+    config = config or TacticsConfig()
+    attacks = classify_attacks(match, config)
+
+    out: dict = {side: {"sevens": 0, "types": {}, "main_type": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sm in detect_seven_meters(match, config):
+        side = sm["team"]
+        if side not in out:
+            continue
+        tipus = None
+        for a in attacks:
+            if (a["team"] == side
+                    and a["start_frame"] <= sm["t"] <= a["end_frame"]):
+                tipus = a["type"]
+                break
+        if tipus is None:
+            continue
+        rec = out[side]
+        rec["types"][tipus] = rec["types"].get(tipus, 0) + 1
+        rec["sevens"] += 1
+
+    for rec in out.values():
+        rec["types"] = dict(sorted(rec["types"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["sevens"] >= SVS_MIN_SEVENS:
+            tipus = max(rec["types"], key=lambda k: rec["types"][k])
+            share = 100.0 * rec["types"][tipus] / rec["sevens"]
+            rec["main_type"] = tipus
+            rec["share_pct"] = round(share, 1)
+            if share >= SVS_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a heteseik {share:.0f}%-a {tipus} helyzetből "
+                    f"jön ({rec['sevens']} felismert hetesből) — a "
+                    "szabálytalanság-fegyelmet oda kell vinni: ott "
+                    "kézzel fékezni tilos, inkább menjen be a gól, "
+                    "mint a hetes")
+    return out
 
 
 def seven_meter_earners(match: Match,
@@ -790,6 +979,122 @@ def suspended_players(match: Match,
                    for pid, n in sorted(rec.items(),
                                         key=lambda kv: -kv[1])]
             for side, rec in tally.items()}
+
+
+# Kiülő-poszt: ennyi poszthoz kötött kiállítás kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a kétperceik egy posztra
+# járnak.
+SUP_MIN_SUSP = 3
+SUP_SHARE_PCT = 60.0
+
+
+def suspended_roles(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Kiülő-poszt: MELYIK POSZTJUK gyűjti a kétperceket.
+
+    A "ki ült ki" réteg (suspended_players) az embert nevezi meg — ez
+    a posztot: a kiállításokat a kiülő játékos posztjához írja. Így a
+    minta akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg két olvasat egyszerre. Ellenük: ha a kétperceik rendre
+    ugyanarról a posztról jönnek, a meccs elején oda kell vezetni a
+    játékot — az az ember hamar behúzza az első kettőt, és onnantól
+    vagy hiányzik, vagy fékezve véd. Saját csapatra: ha a mi
+    kétperceink egy poszton gyűlnek, az az ember (vagy a mögötte lévő
+    besegítés-szabály) szorul rendezésre, mert a fegyelmezetlenség
+    rendszer-hiba, nem pech.
+
+    Visszatérés csapatonként (a BÜNTETETT oldal): {"suspensions"
+    (poszthoz kötött), "roles": {poszt: kiállítás}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    SUP_MIN_SUSP, vagy egyik poszt sem éri el a SUP_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    susp = suspended_players(match, config)
+
+    out: dict = {side: {"suspensions": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in susp[side]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["suspensions"])
+            rec["suspensions"] += row["suspensions"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["suspensions"] >= SUP_MIN_SUSP:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["suspensions"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SUP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kétperceik a(z) {poszt} posztra járnak "
+                    f"({share:.0f}%, {rec['suspensions']} "
+                    "kiállításból) — a meccs elején oda kell vezetni "
+                    "a játékot: az első két perc után az az ember "
+                    "vagy hiányzik, vagy fékezve véd")
+    return out
+
+
+# Kétperc-gyűjtők: ennyi kiállítástól nevezünk meg embert (a
+# harmadik kétperc már kizárás — ezért éles a második).
+STC_MIN_SUSP = 2
+
+
+def suspension_collectors(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Kétperc-gyűjtők: KI ül ki náluk a legtöbbször.
+
+    A kiülő-poszt (suspended_roles) a POSZTOT nevezi meg — ez az
+    EMBERT: a felismert kiállításokat a kiülő játékos nevéhez
+    összegzi.
+
+    Edzőileg ez a szabályok adta erőforrás. Ellenük: akinél már két
+    kétperc van, egy lépésre áll a kizárástól — rá kell vinni a
+    játékot (betörés az ő sávjába, elzárás rá), mert vagy fékezve
+    véd, vagy elmegy a meccs hátralévő részére. Saját csapatra: ha a
+    kétperceink egy emberre gyűlnek, az nem pech, hanem rendszer-
+    hiba — a mögötte lévő besegítés hiányzik, vagy a párharcait
+    későn kezdi.
+
+    Visszatérés csapatonként (a BÜNTETETT oldal): {"suspensions",
+    "players": [{"player_id", "jersey", "suspensions"}], "top"} — a
+    "top" az első játékos, ha legalább STC_MIN_SUSP kiállítása van,
+    különben None.
+    """
+    config = config or TacticsConfig()
+    susp = suspended_players(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": r["player_id"],
+                 "jersey": jersey.get(r["player_id"]),
+                 "suspensions": r["suspensions"]}
+                for r in sorted(susp[side],
+                                key=lambda r: -r["suspensions"])]
+        top = (rows[0]
+               if rows and rows[0]["suspensions"] >= STC_MIN_SUSP
+               else None)
+        out[side] = {"suspensions": sum(r["suspensions"] for r in rows),
+                     "players": rows, "top": top}
+    return out
 
 
 # Hátrány-támadás: ennyi emberhátrányban töltött másodperctől ítélünk,
@@ -1037,6 +1342,194 @@ def seven_meter_conceders(match: Match,
         top = (rows[0] if rows and rows[0]["conceded"] >= SEVEN_CONCEDER_MIN
                else None)
         out[side] = {"players": rows, "top": top}
+    return out
+
+
+# Hetes-okozó poszt: ennyi poszthoz kötött okozott hetes kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a heteseik
+# egy sávban szakadnak be.
+SVR_MIN_SEVENS = 3
+SVR_SHARE_PCT = 60.0
+
+
+def seven_conceder_roles(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-okozó poszt: MELYIK SÁVJUK szakad be hetessel.
+
+    A hetes-okozó védők rétege az embert nevezi meg — ez a posztot:
+    az okozott heteseket az okozó védő posztjához írja. Így akkor is
+    látszik a minta, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a betörés-térkép: ha a heteseik rendre ugyanazon a
+    poszton szakadnak be, az a sáv kézzel véd a lábmunka helyett —
+    oda ÉRDEMES betörést vezetni, mert vagy gól lesz belőle, vagy
+    hetes (és idővel kiállítás). Ha a hetes-okozásuk szórt, nincs
+    kitüntetett sáv — a betörést a mozgó fal réseihez kell igazítani.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"sevens" (poszthoz
+    kötött okozott hetes), "roles": {poszt: hetes}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    SVR_MIN_SEVENS, vagy egyik poszt sem éri el az SVR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    conc = seven_meter_conceders(match, config)
+
+    out: dict = {side: {"sevens": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in conc[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["conceded"])
+            rec["sevens"] += row["conceded"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["sevens"] >= SVR_MIN_SEVENS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["sevens"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SVR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a heteseik a(z) {poszt} poszton szakadnak be "
+                    f"({share:.0f}%, {rec['sevens']} okozott hetesből)"
+                    " — abba a sávba érdemes betörést vezetni: kézzel"
+                    " véd, gól vagy hetes lesz belőle")
+    return out
+
+
+# Emberhátrány-túlélés: ennyi hátrányban töltött másodperc kell az
+# ítélethez, és a KÉT PERCRE vetített kapott gól e küszöbei döntik
+# el, beszakadnak-e vagy állják a hátrányt.
+SHS_MIN_S = 90.0
+SHS_BAD_PER_2MIN = 1.5
+SHS_GOOD_PER_2MIN = 0.5
+
+
+def shorthanded_survival(match: Match,
+                         config: Optional[TacticsConfig] = None
+                         ) -> dict:
+    """Emberhátrány-túlélés: MIT ÉR ellenük az emberelőny.
+
+    Az emberelőny-hozam (powerplay_yield) a NYERTES oldalt nézi — ez
+    a BÜNTETETT oldalt: a hátrányban töltött időre vetíti a
+    hátrányban kapott gólokat (gól / két perc hátrány).
+
+    Edzőileg ez az emberelőny-terv címzettje. Ha hátrányban
+    beszakadnak, a kiállításukat végig kell büntetni: türelmes,
+    zárt emberelőny-figurák, semmi kapkodás — az idő nekik fáj. Ha
+    hátrányban is állnak, a kettős fölény ellenük keveset ér: az
+    emberelőnyben is az egyenlő létszámú fegyverek (1v1, betörés)
+    dolgoznak, és a kiállításuk alatt a gyors gól többet ér, mint a
+    hosszú járatás. Saját csapatra: a hátrány-védekezés (4+1 fal,
+    labdatartás) edzés-téma.
+
+    Visszatérés csapatonként (a BÜNTETETT oldal): {"sh_seconds",
+    "sh_conceded", "per_2min", "verdict"} — a per_2min/verdict None,
+    ha kevés (SHS_MIN_S alatti) a hátrányban töltött idő.
+    """
+    config = config or TacticsConfig()
+    eff = powerplay_efficiency(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        src = (eff or {}).get(side, {})
+        rec = {"sh_seconds": round(src.get("sh_seconds", 0.0), 1),
+               "sh_conceded": int(src.get("sh_conceded", 0)),
+               "per_2min": None, "verdict": None}
+        if rec["sh_seconds"] >= SHS_MIN_S:
+            per2 = 120.0 * rec["sh_conceded"] / rec["sh_seconds"]
+            rec["per_2min"] = round(per2, 2)
+            if per2 >= SHS_BAD_PER_2MIN:
+                rec["verdict"] = (
+                    f"hátrányban beszakadnak ({rec['per_2min']:.1f} "
+                    f"kapott gól két percenként, {rec['sh_seconds']:.0f}"
+                    " mp hátrányból) — a kiállításukat végig kell "
+                    "büntetni: türelmes, zárt emberelőny-figurák, az "
+                    "idő nekik fáj")
+            elif per2 <= SHS_GOOD_PER_2MIN:
+                rec["verdict"] = (
+                    f"hátrányban is állnak ({rec['per_2min']:.1f} "
+                    "kapott gól két percenként) — a kettős fölény "
+                    "ellenük keveset ér: emberelőnyben is az 1v1 és "
+                    "a betörés dolgozik, és a gyors gól többet ér a "
+                    "hosszú járatásnál")
+        out[side] = rec
+    return out
+
+
+# Emberelőny-hozam: sávonként ennyi kaputra tartó lövés kell az
+# ítélethez, és ekkora (százalékpontos) különbség számít érdeminek.
+PPY_MIN_SHOTS = 4
+PPY_GAP_PP = 15.0
+
+
+def powerplay_yield(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Emberelőny-hozam: MEGBÜNTETIK-E a kiállítást.
+
+    Az emberelőny-hatékonyság (powerplay_efficiency) a nyers
+    számokat adja — ez az ÍTÉLETET: összeveti a kaputra tartó
+    lövéseik gólarányát emberelőnyben és egyenlő létszámnál.
+
+    Edzőileg ez rangsorolja a fegyelmet. Ha emberelőnyben érdemben
+    jobban fejeznek be, ellenük a kétperc a legdrágább hiba: a falnak
+    lábbal kell védekeznie, a taktikai szabálytalanság tilos, és a
+    kiállítás utáni percet külön kell megbeszélni. Ha emberelőnyben
+    sem jobbak (vagy rosszabbak), a két perc ellenük olcsó — a
+    szükséges taktikai megállítás vállalható. Saját csapatra: az
+    emberelőny-játékunk hozama mérhető, nem érzés kérdése.
+
+    Visszatérés csapatonként: {"pp_shots", "pp_goals", "eq_shots",
+    "eq_goals", "pp_pct", "eq_pct", "gap_pp", "verdict"} — a
+    pct/gap/verdict None, ha nem volt kiállítás, vagy valamelyik
+    sávban kevés (PPY_MIN_SHOTS alatti) a kaputra tartó lövés.
+    """
+    config = config or TacticsConfig()
+    empty = {"pp_shots": 0, "pp_goals": 0, "eq_shots": 0,
+             "eq_goals": 0, "pp_pct": None, "eq_pct": None,
+             "gap_pp": None, "verdict": None}
+    out = {side: dict(empty) for side in ("home", "away")}
+
+    eff = powerplay_efficiency(match, config)
+    if not eff:
+        return out
+
+    for side in ("home", "away"):
+        rec = out[side]
+        src = eff.get(side, {})
+        rec["pp_shots"] = src.get("pp_shots", 0)
+        rec["pp_goals"] = src.get("pp_goals", 0)
+        rec["eq_shots"] = src.get("eq_shots", 0)
+        rec["eq_goals"] = src.get("eq_goals", 0)
+        if (rec["pp_shots"] >= PPY_MIN_SHOTS
+                and rec["eq_shots"] >= PPY_MIN_SHOTS):
+            pp = 100.0 * rec["pp_goals"] / rec["pp_shots"]
+            eq = 100.0 * rec["eq_goals"] / rec["eq_shots"]
+            rec["pp_pct"] = round(pp, 1)
+            rec["eq_pct"] = round(eq, 1)
+            rec["gap_pp"] = round(pp - eq, 1)
+            if pp - eq >= PPY_GAP_PP:
+                rec["verdict"] = (
+                    f"megbüntetik a kiállítást ({pp:.0f}% "
+                    f"emberelőnyben, {eq:.0f}% egyenlő létszámnál) — "
+                    "ellenük a kétperc a legdrágább hiba: a fal "
+                    "lábbal védekezzen, taktikai szabálytalanság "
+                    "nincs")
+            elif eq - pp >= PPY_GAP_PP:
+                rec["verdict"] = (
+                    f"nem büntetik a kiállítást ({pp:.0f}% "
+                    f"emberelőnyben, {eq:.0f}% egyenlő létszámnál) — "
+                    "a két perc ellenük olcsó: a szükséges taktikai "
+                    "megállítás vállalható")
     return out
 
 
@@ -1659,4 +2152,1374 @@ def susp_earner_roles(match: Match,
             if share >= SUR_SHARE and not tie:
                 rec["top"] = {"poszt": poszt, "count": n,
                               "share_pct": round(share, 1)}
+    return out
+
+
+# Hetes-oldal: ennyi irány-mérhető hetes kell az ítélethez, és ekkora
+# részarány számít kiszámíthatónak. A hetes ritka, de a legtisztább
+# helyzet a meccsen — három mérhető dobásból kirajzolódó oldal-szokás
+# már megéri a kapus-megbeszélés egy mondatát.
+SVD_MIN_ATTEMPTS = 3
+SVD_SHARE_PCT = 60.0
+
+
+def seven_shot_directions(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-oldal: MERRE DOBJÁK a heteseiket.
+
+    A hetes-mérleg (seven_meter_summary) azt mondja meg, hogyan
+    konvertálnak — ez azt, HOVA: a hetes-kimenetelek irány-jelét
+    (bal/közép/jobb a dobó szemszögéből) csapatonként összegezzük.
+
+    Edzőileg ez a kapus-megbeszélés legolcsóbb mondata. A hetes az
+    egyetlen helyzet, ahol a kapusnak van ideje DÖNTENI, merre vetődik —
+    és a dobók szokás-állatok: nyomás alatt a begyakorolt sarkukat
+    keresik. Ha a heteseik jelentős része ugyanarra az oldalra megy, a
+    kapus arra az oldalra vetődhet tudatosan; ha szórnak, a kapusnak a
+    dobó mozdulatából kell olvasnia, nem előre eldöntenie.
+
+    Visszatérés csapatonként: {"attempts" (irány-mérhető hetes),
+    "goals", "dirs": {"bal","közép","jobb"}, "goal_dirs": {...},
+    "dominant", "share_pct", "verdict"} — a dominant/share_pct/verdict
+    None, ha nincs meg az SVD_MIN_ATTEMPTS, vagy egyik oldal sem éri el
+    az SVD_SHARE_PCT részarányt.
+    """
+    config = config or TacticsConfig()
+    out: dict = {side: {"attempts": 0, "goals": 0,
+                        "dirs": {"bal": 0, "közép": 0, "jobb": 0},
+                        "goal_dirs": {"bal": 0, "közép": 0, "jobb": 0},
+                        "dominant": None, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for sm in seven_meter_outcomes(match, config):
+        if sm["irany"] is None:
+            continue
+        rec = out[sm["team"]]
+        rec["attempts"] += 1
+        rec["dirs"][sm["irany"]] += 1
+        if sm["outcome"] == "gól":
+            rec["goals"] += 1
+            rec["goal_dirs"][sm["irany"]] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["attempts"] < SVD_MIN_ATTEMPTS:
+            continue
+        dom = max(rec["dirs"], key=lambda k: rec["dirs"][k])
+        share = 100.0 * rec["dirs"][dom] / rec["attempts"]
+        if share >= SVD_SHARE_PCT:
+            rec["dominant"] = dom
+            rec["share_pct"] = round(share, 1)
+            rec["verdict"] = (
+                f"a heteseik {share:.0f}%-a {dom} oldalra megy "
+                f"({rec['attempts']} mérhető dobásból) — hetesnél a "
+                "kapus tudatosan arra az oldalra vetődhet")
+    return out
+
+
+# Hetes-sarok emberre: dobónként ennyi irány-mérhető hetes kell az
+# ítélethez, és ekkora részarány teszi a sarkot bejáratott szokássá.
+STC_MIN_ATTEMPTS = 3
+STC_SHARE_PCT = 60.0
+
+
+def seven_taker_corners(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-sarok emberre: MELYIK SARKÁT keresi a hetesdobójuk.
+
+    A hetes-oldal (seven_shot_directions) CSAPATRA mondja meg, merre
+    mennek a hetesek — a kapusnak viszont a DOBÓ kell: a hetesnél ő az
+    egyetlen, akinek van ideje dönteni, és a dobók szokás-állatok —
+    nyomás alatt a begyakorolt sarkukat keresik. Ez a réteg a
+    hétméterek irány-jelét a dobóra bontja.
+
+    Edzőileg ez a kapus-lap: dobónként egy sor — ki áll oda, és hova
+    dobja. A bejáratott sarkú dobónál a kapus tudatosan arra vetődhet;
+    a szórónál a mozdulatból kell olvasnia. Saját oldalon fordítva: ha
+    a dobónk kiszámítható, a sarkot variálni kell — vagy a hetes-lista
+    következő embere kapja a labdát.
+
+    Visszatérés csapatonként: {"attempts" (irány- ÉS dobó-mérhető
+    hetes), "players": [{"player_id", "jersey", "attempts", "dirs":
+    {"bal","közép","jobb"}, "favorite", "share_pct"}] dobás szerint
+    csökkenően, "top"} — a "favorite" STC_MIN_ATTEMPTS dobástól és
+    STC_SHARE_PCT részaránytól nevesül; a "top" a legtöbbet dobó
+    bejáratott sarkú ember (egyébként None).
+    """
+    config = config or TacticsConfig()
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if getattr(p, "jersey_number", None) is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sm in seven_meter_outcomes(match, config):
+        if sm["irany"] is None or sm["shooter_id"] is None:
+            continue
+        rec = tally[sm["team"]].setdefault(
+            sm["shooter_id"], {"bal": 0, "közép": 0, "jobb": 0})
+        rec[sm["irany"]] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        players = []
+        for pid, dirs in tally[side].items():
+            attempts = sum(dirs.values())
+            fav, share = None, None
+            if attempts >= STC_MIN_ATTEMPTS:
+                d = max(dirs, key=lambda k: dirs[k])
+                pct = 100.0 * dirs[d] / attempts
+                if pct >= STC_SHARE_PCT:
+                    fav, share = d, round(pct, 1)
+            players.append({"player_id": pid, "jersey": jersey.get(pid),
+                            "attempts": attempts, "dirs": dict(dirs),
+                            "favorite": fav, "share_pct": share})
+        players.sort(key=lambda r: -r["attempts"])
+        top = next((p for p in players if p["favorite"]), None)
+        out[side] = {"attempts": sum(p["attempts"] for p in players),
+                     "players": players, "top": top}
+    return out
+
+
+
+# Hetes-ismétlés: ennyi EGYMÁST KÖVETŐ, ugyanattól a dobótól jövő
+# hetes-pár kell az ítélethez, és ekkora ismétlés-arány fölött
+# mondjuk ki, hogy a dobójuk másodszorra is ugyanoda megy.
+SREP_MIN_PAIRS = 3
+SREP_REPEAT_PCT = 60.0
+
+
+def seven_taker_repeat(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-ismétlés: MÁSODSZORRA IS UGYANODA megy-e a hetesük.
+
+    A hetes-sarok (seven_taker_corners) a dobó ELOSZLÁSÁT adja: hova
+    megy a hetesei többsége. A kapusnak viszont a SORREND a fontos —
+    az a kérdés, hogy a MOST következő hetes hova megy. Két dobó
+    ugyanazzal a 60%-os bal-aránnyal teljesen mást jelent: aki
+    egymás után kétszer is ugyanoda dobja, az kiszámítható; aki
+    váltogat, arra az eloszlás nem használható előrejelzésnek.
+
+    Ez a réteg a dobónkénti hetes-sorozatot nézi: az EGYMÁST KÖVETŐ
+    párokból hány ment ugyanabba a sávba (bal/közép/jobb).
+
+    Edzőileg: ha az ellenfél dobója ismétlő, a kapusnak a LEGUTÓBB
+    látott sarok az esély — ezt a hetes előtt kell bekiabálni neki.
+    Saját oldalon fordítva: ha a mi dobónk ismétlő, a következő
+    hetesnél tudatosan váltani kell (vagy más álljon oda), mert az
+    ellenfél kapusa is látja ugyanezt.
+
+    Visszatérés csapatonként: {"pairs" (egymást követő, irány-mérhető
+    hetes-párok száma), "repeats", "repeat_pct", "verdict"
+    ("ismétlő"/"váltogató"), "players": [{"player_id", "jersey",
+    "pairs", "repeats", "last_dir"}] pár szerint csökkenően, "top"} —
+    az ítélet SREP_MIN_PAIRS pártól nevesül, alatta None (sose
+    hallgatólagos 0); a "top" a legtöbb párral rendelkező ismétlő
+    dobó (egyébként None).
+    """
+    config = config or TacticsConfig()
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if getattr(p, "jersey_number", None) is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    # Dobónkénti irány-SOROZAT, a meccs időrendjében.
+    seq: dict = {"home": {}, "away": {}}
+    for sm in seven_meter_outcomes(match, config):
+        if sm["irany"] is None or sm["shooter_id"] is None:
+            continue
+        seq[sm["team"]].setdefault(sm["shooter_id"], []).append(sm["irany"])
+
+    out: dict = {}
+    for side in ("home", "away"):
+        players = []
+        pairs_total = 0
+        repeats_total = 0
+        for pid, dirs in seq[side].items():
+            pairs = len(dirs) - 1
+            if pairs <= 0:
+                continue  # egyetlen hetesből nincs "másodszorra"
+            repeats = sum(1 for i in range(pairs) if dirs[i] == dirs[i + 1])
+            pairs_total += pairs
+            repeats_total += repeats
+            players.append({"player_id": pid, "jersey": jersey.get(pid),
+                            "pairs": pairs, "repeats": repeats,
+                            "last_dir": dirs[-1]})
+        players.sort(key=lambda r: (-r["pairs"], -r["repeats"]))
+        pct = None
+        verdict = None
+        if pairs_total >= SREP_MIN_PAIRS:
+            pct = round(100.0 * repeats_total / pairs_total, 1)
+            verdict = "ismétlő" if pct >= SREP_REPEAT_PCT else "váltogató"
+        top = next((p for p in players
+                    if p["pairs"] >= 2
+                    and 100.0 * p["repeats"] / p["pairs"] >= SREP_REPEAT_PCT),
+                   None)
+        out[side] = {"pairs": pairs_total, "repeats": repeats_total,
+                     "repeat_pct": pct, "verdict": verdict,
+                     "players": players, "top": top}
+    return out
+
+
+
+# Emberelőny-poszt: ennyi poszthoz kötött emberelőny-lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy az
+# emberelőnyük egy posztra fut ki.
+PPR_MIN_SHOTS = 3
+PPR_SHARE_PCT = 60.0
+
+
+def powerplay_shooter_roles(match: Match,
+                            config: Optional[TacticsConfig] = None
+                            ) -> dict:
+    """Emberelőny-poszt: MELYIK POSZTJUK fejez be a két perc alatt.
+
+    Az emberelőny-lövők rétege (powerplay_shooters) az embert nevezi
+    meg — ez a posztot: a kiállítás-ablakokban leadott lövéseiket a
+    lövő posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez az emberhátrány-terv: öt védővel a fal nem érhet
+    mindenhová — ha az emberelőnyük rendre ugyanarra a posztra fut
+    ki, a hátrányban az ő sávját kell tartani, és a többieket rá
+    lehet engedni. Saját csapatra: az egy posztra futó emberelőny
+    kiszámítható — második kifutási út kell.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"shots" (poszthoz
+    kötött emberelőny-lövés), "roles": {poszt: lövés}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    PPR_MIN_SHOTS, vagy egyik poszt sem éri el a PPR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    pps = powerplay_shooters(match, config)
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in pps[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["shots"])
+            rec["shots"] += row["shots"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= PPR_MIN_SHOTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["shots"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az emberelőnyük a(z) {poszt} posztra fut ki "
+                    f"({share:.0f}%, {rec['shots']} emberelőny-"
+                    "lövésből) — hátrányban az ő sávját kell tartani,"
+                    " a többieket rá lehet engedni")
+    return out
+
+
+# Emberhátrány-poszt: ennyi poszthoz kötött hátrány-lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy öt emberrel
+# egy posztra fut ki a játékuk.
+SHR_MIN_SHOTS = 3
+SHR_SHARE_PCT = 60.0
+
+
+def shorthanded_shooter_roles(match: Match,
+                              config: Optional[TacticsConfig] = None
+                              ) -> dict:
+    """Emberhátrány-poszt: MELYIK POSZTJUK vállal be öt emberrel.
+
+    Az emberhátrány-lövők rétege (shorthanded_shooters) az embert
+    nevezi meg — ez a posztot: a kiállítás-ablakokban a HÁTRÁNYBAN
+    lévő csapat lövéseit a lövő posztjához írja. Így a minta akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez az emberelőny-védelem terve: az ő hátrány-lövő
+    posztjuk a kontra-fenyegetés — a saját emberelőnyben az ő oldalán
+    kell a labdabiztonság, és rá kell hagyni a legkevesebb teret.
+    Saját csapatra: ha öt emberrel mindig ugyanaz a poszt vállal be,
+    a hátrány-játékunk kiszámítható — időhúzó variáció is kell.
+
+    Visszatérés csapatonként (a HÁTRÁNYBAN lévő oldal): {"shots"
+    (poszthoz kötött hátrány-lövés), "roles": {poszt: lövés},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg az SHR_MIN_SHOTS, vagy egyik poszt sem éri el az
+    SHR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    shs = shorthanded_shooters(match, config)
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in shs[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["shots"])
+            rec["shots"] += row["shots"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= SHR_MIN_SHOTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["shots"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SHR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"öt emberrel a(z) {poszt} posztjuk vállal be "
+                    f"({share:.0f}%, {rec['shots']} hátrány-lövésből)"
+                    " — emberelőnyben az ő oldalán kell a "
+                    "labdabiztonság: onnan indul az ellentámadásuk")
+    return out
+
+
+# Passzív-poszt: ennyi poszthoz kötött labdás kocka kell a passzív
+# (lövés nélküli, hosszú) támadásokból az ítélethez, és ekkora
+# részarány fölött mondjuk ki, hogy a támadásuk egy posztnál hal el.
+PVR_MIN_FRAMES = 250
+PVR_SHARE_PCT = 60.0
+
+
+# Passzív-birtoklók: ennyi passzív labdás kocka kell a névhez, és
+# ekkora részarány fölött mondjuk ki, hogy a terméketlen idő egy
+# ember kezén telik.
+PVP_MIN_FRAMES = 200
+PVP_SHARE_PCT = 50.0
+
+
+def passive_holders(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Passzív-birtoklók: KINÉL hal el a felállt támadásuk.
+
+    A passzív-poszt (passive_holder_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: a lövés nélküli, hosszú felállt támadások labdás
+    kockáit a birtokos nevéhez írja.
+
+    Edzőileg ez a passzív jelzés terve névre szólóan: ha a
+    terméketlen támadás-idő rendre ugyanannak a kezén telik, a
+    passzív jelzés alatt ŐT kell nyomás alá tenni — nála jön a
+    kényszer-lövés vagy az eladás. Saját csapatra: neki kell kész
+    befejező megoldás, mielőtt a játékvezető keze felmegy.
+
+    Visszatérés csapatonként: {"frames", "players": [{"player_id",
+    "jersey", "frames"}], "top"} — a "top" az első játékos, ha
+    legalább PVP_MIN_FRAMES passzív labdás kockája van, és ez a
+    csapat passzív idejének legalább PVP_SHARE_PCT-a, különben None.
+    """
+    from .decisions import ball_holder
+
+    config = config or TacticsConfig()
+    segments = [(a["start_frame"], a["end_frame"], a["team"])
+                for a in passive_play_risks(match, config)]
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    if segments:
+        for f in match.frames:
+            side = next((s for (a, b, s) in segments
+                         if a <= f.t <= b), None)
+            if side is None:
+                continue
+            h = ball_holder(f, config)
+            if h is None or h.team is None \
+                    or h.team.value != side or h.role == "kapus":
+                continue
+            if h.jersey_number is not None:
+                jersey.setdefault(h.track_id, h.jersey_number)
+            tally[side][h.track_id] = tally[side].get(h.track_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "frames": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["frames"] for r in rows)
+        top = None
+        if rows and rows[0]["frames"] >= PVP_MIN_FRAMES:
+            share = 100.0 * rows[0]["frames"] / max(1, total)
+            if share >= PVP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"frames": total, "players": rows, "top": top}
+    return out
+
+
+def passive_holder_roles(match: Match,
+                         config: Optional[TacticsConfig] = None
+                         ) -> dict:
+    """Passzív-poszt: MELYIK POSZTJUKNÁL hal el a felállt támadás.
+
+    A passzív-kockázat rétege (passive_play_risks) a szakaszt nevezi
+    meg — ez a posztot: a lövés nélküli, hosszú felállt támadások
+    labdás kockáit a birtokos posztjához írja. Így látszik, kinél
+    áll meg a játék, amikor a támadásuk nem jut el a lövésig.
+
+    Edzőileg ez a passzív jelzés terve: ha a terméketlen támadásaik
+    ideje rendre ugyanannál a posztnál telik, a passzív jelzés alatt
+    őt kell nyomás alá tenni — nála jön a kényszer-lövés vagy az
+    eladás. Saját csapatra: annál a posztnál kell a kész befejező
+    megoldás, mielőtt a játékvezető keze felmegy.
+
+    Visszatérés csapatonként: {"frames" (poszthoz kötött passzív
+    labdás kocka), "roles": {poszt: kocka}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    PVR_MIN_FRAMES, vagy egyik poszt sem éri el a PVR_SHARE_PCT-t.
+    """
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    segments = [(a["start_frame"], a["end_frame"], a["team"])
+                for a in passive_play_risks(match, config)]
+
+    out: dict = {side: {"frames": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if segments:
+        for f in match.frames:
+            side = next((s for (a, b, s) in segments
+                         if a <= f.t <= b), None)
+            if side is None:
+                continue
+            h = ball_holder(f, config)
+            if h is None or h.team is None \
+                    or h.team.value != side or h.role == "kapus":
+                continue
+            rec_role = roles[side].get(h.track_id)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec = out[side]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+            rec["frames"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["frames"] >= PVR_MIN_FRAMES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["frames"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PVR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a lövés nélküli, hosszú támadásaik labdás "
+                    f"idejének {share:.0f}%-a a(z) {poszt} posztnál "
+                    "telik — ott hal el a támadásuk: passzív "
+                    "jelzésnél őt kell nyomás alá tenni, nála jön a "
+                    "kényszer-eladás")
+    return out
+
+
+# Hetesdobó-poszt: ennyi poszthoz kötött hetes-kísérlet kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a heteseiket
+# egy poszt dobja.
+STK_MIN_ATTEMPTS = 3
+STK_SHARE_PCT = 60.0
+
+
+def seven_taker_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Hetesdobó-poszt: MELYIK POSZTJUK áll oda a hétméteresekhez.
+
+    A hetes-dobók listája az embert nevezi meg — ez a posztot: a
+    felismert hétméteresek kimenetel-lövéseit (seven_meter_outcomes)
+    a dobó posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kapus-felkészülés és a fárasztás terve: ha a
+    heteseiket rendre ugyanaz a poszt dobja, a kapus az ő
+    szokás-irányait tanulja (a Hetes-oldal réteggel együtt), a
+    meccsterv pedig tudja: ha ezt a posztot kivesszük (kiállítás,
+    fáradás, csere-kényszer), a hetes-rutinjuk is vele megy. Saját
+    csapatra: kell a második kijelölt dobó.
+
+    Visszatérés csapatonként: {"attempts" (poszthoz kötött hetes),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az STK_MIN_ATTEMPTS, vagy egyik
+    poszt sem éri el az STK_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"attempts": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for sm in seven_meter_outcomes(match, config):
+        pid = sm.get("shooter_id")
+        if pid is None:
+            continue
+        side = sm["team"]
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["attempts"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["attempts"] >= STK_MIN_ATTEMPTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["attempts"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= STK_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a heteseiket {share:.0f}%-ban a(z) {poszt} "
+                    f"posztjuk dobja ({rec['attempts']} hetesből) — "
+                    "a kapus az ő szokás-irányaira készüljön; ha ezt"
+                    " a posztot kiveszik, a hetes-rutinjuk is vele "
+                    "megy")
+    return out
+
+
+# Hetespáros-poszt: ennyi poszthoz kötött hetes kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a hetes-játékuk egy
+# (kiharcoló → dobó) posztpárra jár.
+SVP_MIN_SEVENS = 3
+SVP_SHARE_PCT = 60.0
+
+
+def seven_pair_roles(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Hetespáros-poszt: KI HARCOLJA KI és KI DOBJA a heteseiket.
+
+    A hetes-kiharcoló és a hetesdobó poszt külön-külön ismert — ez a
+    kettőt köti össze hetesenként: a (kiharcoló poszt → dobó poszt)
+    párost számolja. A bejáratott hetes-munkamegosztás akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg két kiosztható feladat egyszerre: a kiharcoló posztja
+    ellen kéz nélkül, lábmunkával kell védekezni (nála a lerántás
+    büntető), a dobó posztjának szokás-irányait pedig a kapus
+    tanulja. Saját csapatra: ha a kiharcolás és a dobás is egy-egy
+    emberen áll, mindkettőhöz kell tartalék.
+
+    Visszatérés csapatonként: {"sevens" (párhoz kötött hetes),
+    "roles": {"kiharcoló→dobó": darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az SVP_MIN_SEVENS,
+    vagy egyik pár sem éri el az SVP_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames_by_t = {f.t: f for f in match.frames}
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"sevens": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sm in seven_meter_outcomes(match, config):
+        taker_id = sm.get("shooter_id")
+        if taker_id is None:
+            continue
+        # A kiharcoló: a jel előtti pillanatban a kapuhoz legközelebb
+        # járó (nem kapus) támadó — mint a seven_meter_earners-ben.
+        t_prev = sm["t"] - round(SEVEN_EARNER_LOOKBACK_S * fps)
+        fr = None
+        for dt in range(0, round(fps)):
+            fr = (frames_by_t.get(t_prev - dt)
+                  or frames_by_t.get(t_prev + dt))
+            if fr is not None and fr.players:
+                break
+        if fr is None or not fr.players:
+            continue
+        best = None
+        for p in fr.players:
+            if p.team.value != sm["team"] or p.role == "kapus":
+                continue
+            d = abs(p.x - sm["goal_x"])
+            if best is None or d < best[1]:
+                best = (p.track_id, d)
+        if best is None:
+            continue
+        side = sm["team"]
+        r_earn = roles[side].get(best[0])
+        r_take = roles[side].get(taker_id)
+        if r_earn is None or r_take is None:
+            continue
+        kulcs = f"{r_earn['poszt']}→{r_take['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["sevens"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["sevens"] >= SVP_MIN_SEVENS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["sevens"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= SVP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a hetes-játékuk a(z) {par} posztpárra jár "
+                    f"({share:.0f}%, {rec['sevens']} hetesből) — a "
+                    "kiharcoló ellen kéz nélkül kell védekezni, a "
+                    "dobó szokás-irányait a kapus tanulja")
+    return out
+
+
+# Emberelőnypáros-poszt: ennyi párhoz kötött emberelőny-lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a 6-5
+# játékuk egy (előkészítő → befejező) tengelyen fut.
+PWP_MIN_SHOTS = 3
+PWP_SHARE_PCT = 60.0
+PWP_WINDOW_S = 4.0
+
+
+def powerplay_pair_roles(match: Match,
+                         config: Optional[TacticsConfig] = None
+                         ) -> dict:
+    """Emberelőnypáros-poszt: MELYIK TENGELYEN fut a 6-5 játékuk.
+
+    Az emberelőny-poszt a befejezőt nevezi meg — ez a tengelyt:
+    minden emberelőnyben leadott lövésnél megkeresi a lövő felé menő
+    utolsó passzt (PWP_WINDOW_S ablakban), és a lövést az
+    (előkészítő poszt → befejező poszt) párhoz írja.
+
+    Edzőileg ez az öt emberrel is kiosztható feladat: emberhátrányban
+    nincs elég kéz mindenre, ezért a tengelyt kell elvágni — az
+    előkészítő posztjának passzsávját zárja a fal széle, a befejező
+    posztjára pedig a kilépés jusson. Saját csapatra: ha a 6-5-ünk
+    egy tengelyen fut, öt emberrel is kiszámítható vagyunk.
+
+    Visszatérés csapatonként: {"shots" (párhoz kötött emberelőny-
+    lövés), "roles": {"előkészítő→befejező": darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    PWP_MIN_SHOTS, vagy egyik pár sem éri el a PWP_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = PWP_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    passes = detect_passes(match, config)
+
+    # Emberelőny-ablakok az ELŐNYBEN lévő csapat szerint.
+    up_windows: list[tuple] = []
+    for w in detect_powerplay(match):
+        up = "away" if w["team_down"] == "home" else "home"
+        up_windows.append((up, w["start_frame"], w["end_frame"]))
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not up_windows:
+        return out
+
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        side = e.team.value
+        if not any(up == side and a <= e.t <= b
+                   for (up, a, b) in up_windows):
+            continue
+        best = None
+        for p in passes:
+            if not (0 <= e.t - p.t <= win) or p.team != e.team:
+                continue
+            if (p.receiver_id != e.player_id
+                    or p.passer_id == e.player_id):
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        r_feed = roles[side].get(best.passer_id)
+        r_shot = roles[side].get(e.player_id)
+        if r_feed is None or r_shot is None:
+            continue
+        kulcs = f"{r_feed['poszt']}→{r_shot['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["shots"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= PWP_MIN_SHOTS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["shots"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= PWP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a 6-5 játékuk a(z) {par} tengelyen fut "
+                    f"({share:.0f}%, {rec['shots']} emberelőny-"
+                    "lövésből) — öt emberrel a tengelyt vágjátok el:"
+                    " az előkészítő passzsávját a fal széle zárja, a"
+                    " befejezőre jusson a kilépés")
+    return out
+
+
+# Hetes-kihagyó poszt: ennyi poszthoz kötött, gól nélkül záruló
+# hetes kell az ítélethez, és ekkora részarány fölött mondjuk ki,
+# hogy a kihagyott heteseik egy posztra sűrűsödnek.
+SVM_MIN_MISSES = 3
+SVM_SHARE_PCT = 60.0
+
+
+def seven_miss_roles(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-kihagyó poszt: MELYIK POSZTJUK hibázza el a hetest.
+
+    A hetesdobó-poszt azt mondja meg, ki áll oda — ez azt, ki hibáz:
+    a felismert hétméteresek közül a gól NÉLKÜL zárulókat (védés
+    vagy mellé) a dobó posztjához írja.
+
+    Edzőileg ez a kapus felkészítésének második fele: ha a
+    kihagyásaik egy posztra sűrűsödnek, a kapus tudja, melyik dobó
+    ellen érdemes a saját megérzésére hagyatkozni (kimozdulás,
+    késleltetett vetődés) — nála a hetes nem automatikus gól. Saját
+    csapatra: a kihagyó poszt hetes-gyakorlása és a második dobó
+    kijelölése a téma.
+
+    Visszatérés csapatonként: {"misses" (poszthoz kötött kihagyott
+    hetes), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az SVM_MIN_MISSES,
+    vagy egyik poszt sem éri el az SVM_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"misses": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sm in seven_meter_outcomes(match, config):
+        pid = sm.get("shooter_id")
+        if pid is None or sm.get("outcome") == "gól":
+            continue
+        if sm.get("outcome") in (None, "ismeretlen"):
+            continue   # nem mérhető kimenetel: nem számoljuk hibának
+        side = sm["team"]
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["misses"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["misses"] >= SVM_MIN_MISSES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["misses"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SVM_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kihagyott heteseik {share:.0f}%-a a(z) "
+                    f"{poszt} posztjukhoz kötődik ({rec['misses']} "
+                    "gól nélküli hetesből) — ellene a kapus a saját "
+                    "megérzésére hagyatkozhat (kimozdulás, "
+                    "késleltetett vetődés): nála a hetes nem "
+                    "automatikus gól")
+    return out
+
+
+# Emberelőny-hiba poszt küszöbei: ennyi poszthoz kötött
+# emberelőny-eladás kell az ítélethez, és ekkora részarány a vezető
+# posztnak.
+PPT_MIN_TURNOVERS = 3
+PPT_SHARE_PCT = 60.0
+
+
+def powerplay_turnover_roles(match: Match,
+                             config: Optional[TacticsConfig] = None
+                             ) -> dict:
+    """Emberelőny-hiba poszt: KINEK A KEZÉN akad el az emberelőnyük.
+
+    Az emberelőny-poszt azt mondja meg, kire fut ki a hat a öt ellen
+    — ez azt, kinél vész el: a kiállítás-ablakokban, EMBERELŐNYBEN
+    elkövetett labdaeladásaikat a vesztes posztjához írja. A
+    poszt-hibák rétege az egész meccset nézi, ez csak a két percet,
+    ahol a hiba a legdrágább.
+
+    Edzőileg ez a hátrányban álló csapat egyetlen esélye: ha az
+    emberelőnyük rendre ugyanannak a kezén akad el, hátrányban rá
+    kell nyomni (kettőzés, passzsáv-zárás a fogadásánál) — az ő
+    elvett labdája dupla büntetés, mert a kétperc alatt kontrázni
+    lehet belőle. Saját csapatra: az emberelőny-figurát nem szabad
+    ugyanarra a kézre bízni, ha ott szakad el.
+
+    Visszatérés csapatonként (a TÁMADÓ, tehát emberelőnyben lévő
+    oldal): {"turnovers" (poszthoz kötött emberelőny-eladás),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg a PPT_MIN_TURNOVERS, vagy egyik
+    poszt sem éri el a PPT_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_events
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    # Az emberelőny-ablakok a TÁMADÓ (előnyben lévő) oldal szerint.
+    windows = [("away" if w["team_down"] == "home" else "home",
+                w["start_frame"], w["end_frame"])
+               for w in detect_powerplay(match)]
+
+    out: dict = {side: {"turnovers": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not windows:
+        return out
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        if not any(s == side and a <= e.t <= b for s, a, b in windows):
+            continue
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["turnovers"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["turnovers"] >= PPT_MIN_TURNOVERS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["turnovers"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PPT_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az emberelőnyük {share:.0f}%-ban a(z) {poszt} "
+                    f"kezén akad el ({rec['turnovers']} "
+                    "emberelőny-eladásból) — hátrányban rá kell "
+                    "nyomni: az ő elvett labdája dupla büntetés, "
+                    "mert a kétperc alatt kontrázni lehet belőle")
+    return out
+
+
+# Emberhátrány-hiba poszt küszöbei: ennyi poszthoz kötött hátrányban
+# elkövetett eladás kell az ítélethez, és ekkora részarány a vezető
+# posztnak.
+SHT_MIN_TURNOVERS = 3
+SHT_SHARE_PCT = 60.0
+
+
+def shorthanded_turnover_roles(match: Match,
+                               config: Optional[TacticsConfig] = None
+                               ) -> dict:
+    """Emberhátrány-hiba poszt: ÖT EMBERREL kinek a kezén vész el.
+
+    Az emberhátrány-poszt azt mondja meg, ki vállalja a befejezést öt
+    emberrel — ez a párja: a kiállítás-ablakokban, EMBERHÁTRÁNYBAN
+    elkövetett labdaeladásaikat a vesztes posztjához írja. Az
+    emberelőny-hiba poszt a két percet előnyből nézi, ez hátrányból,
+    ahol egy elvesztett labda azonnal gólt ér.
+
+    Edzőileg ez az emberelőny-védekezésük gyenge pontja: ha hátrányban
+    rendre ugyanannak a kezén vész el a labda, a hat a öt ellen az ő
+    fogadására kell menni (kilépő védő, passzsáv-zárás) — az elvett
+    labdából üres kapura indulhat a kontra. Saját csapatra: öt
+    emberrel a kockázatos passzt ki kell venni a rendszerből, és a
+    labda a legbiztosabb kézben maradjon.
+
+    Visszatérés csapatonként (a HÁTRÁNYBAN lévő oldal): {"turnovers"
+    (poszthoz kötött hátrány-eladás), "roles": {poszt: darab},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg a SHT_MIN_TURNOVERS, vagy egyik poszt sem éri el a
+    SHT_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_events
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    # Az ablakok a HÁTRÁNYBAN lévő oldal szerint.
+    windows = [(w["team_down"], w["start_frame"], w["end_frame"])
+               for w in detect_powerplay(match)]
+
+    out: dict = {side: {"turnovers": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not windows:
+        return out
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        if not any(s == side and a <= e.t <= b for s, a, b in windows):
+            continue
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["turnovers"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["turnovers"] >= SHT_MIN_TURNOVERS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["turnovers"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SHT_SHARE_PCT:
+                rec["verdict"] = (
+                    f"hátrányban {share:.0f}%-ban a(z) {poszt} kezén "
+                    f"vész el a labdájuk ({rec['turnovers']} "
+                    "hátrány-eladásból) — a hat az öt ellen az ő "
+                    "fogadására kell menni: az elvett labdából üres "
+                    "kapura indulhat a kontra")
+    return out
+
+
+# Hetes-kihagyók: ennyi gól nélküli hetes kell ahhoz, hogy a
+# játékost kiemeljük (a hetes ritka esemény, ezért alacsony a küszöb).
+SVMP_MIN_MISSES = 2
+
+
+def seven_miss_players(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-kihagyók: KI HIBÁZZA EL a hetest.
+
+    A hetes-mérleg (seven_meter_summary) csapat-szinten mondja meg,
+    mennyi megy be a hetesekből, a hetes-kihagyó poszt a POSZTOT — ez
+    az EMBERT: a gól nélkül záruló hétméteresek (védés vagy mellé) a
+    dobó játékoshoz kerülnek.
+
+    Edzőileg ez a kapus felkészítésének névsora: ha ő áll oda, a
+    kapus mehet a saját megérzésére (kimozdulás, késleltetett
+    vetődés) — nála a hetes nem automatikus gól. Saját csapatra: a
+    hetes-sorrend nem rangsor, hanem napi forma; a listán szereplő
+    dobó mögé kell egy második ember.
+
+    Visszatérés csapatonként: {"misses" (gól nélküli hetes),
+    "players": [{"player_id", "jersey", "misses"}], "top"} — a "top"
+    az első játékos, ha legalább SVMP_MIN_MISSES kihagyása van,
+    különben None.
+    """
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sm in seven_meter_outcomes(match, config):
+        pid = sm.get("shooter_id")
+        if pid is None or sm.get("outcome") in ("gól", None,
+                                                "ismeretlen"):
+            continue
+        side = sm["team"]
+        tally[side][pid] = tally[side].get(pid, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "misses": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0] if rows and rows[0]["misses"] >= SVMP_MIN_MISSES
+               else None)
+        out[side] = {"misses": sum(r["misses"] for r in rows),
+                     "players": rows, "top": top}
+    return out
+
+
+# Kétperc-páros küszöbei: ennyi poszthoz kötött (kiharcoló →
+# emberelőny-befejező) pár kell az ítélethez, és ekkora részarány a
+# vezető párosnak. A kiállítás ritka esemény, ezért enyhébb a
+# részarány-küszöb, mint az egy-posztos lencséknél.
+SCH_MIN_PAIRS = 3
+SCH_SHARE_PCT = 55.0
+
+
+def suspension_chain_roles(match: Match,
+                           config: Optional[TacticsConfig] = None
+                           ) -> dict:
+    """Kétperc-páros: KI HARCOLJA KI és KI FEJEZI BE a kétpercüket.
+
+    A kiállítás-kiharcolás poszt szerint azt mondja meg, ki hozza a
+    kétperceseket, az emberelőny-poszt azt, kire fut ki a hat az öt
+    ellen — ez a kettőt köti össze kiállításonként: a (kiharcoló
+    poszt → emberelőny-befejező poszt) párost számolja, az ablakon
+    belül leadott lövéseik alapján.
+
+    Edzőileg egy kiállítás két feladatot ad egyszerre: a kiharcoló
+    posztja ellen fegyelmezetten, testtel kell védekezni (nála a
+    kései fogás kétpercet ér), a befejező posztját pedig hátrányban
+    kell letiltani — a lánc így már az elején elvágható. Saját
+    csapatra: ha a kiharcolás és az emberelőny-befejezés is egy-egy
+    poszton áll, mindkettő kiszámítható.
+
+    Visszatérés csapatonként (a KÉTPERCET SZERZŐ oldal): {"chains"
+    (poszthoz kötött lánc), "roles": {"A→B": darab}, "main_role" (a
+    fő páros), "share_pct", "verdict"} — az ítélet None, ha nincs meg
+    a SCH_MIN_PAIRS, vagy egyik páros sem éri el a SCH_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames_by_t = {f.t: f for f in match.frames}
+    roles = estimate_positions(match, config)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {"chains": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for w in detect_powerplay(match):
+        up = "away" if w["team_down"] == "home" else "home"
+        goal_x = config.attacks_toward_x(
+            Team.HOME if up == "home" else Team.AWAY)
+        # A kiharcoló: az ablak kezdete előtt a kapuhoz legmélyebben
+        # nyomuló támadó — ugyanaz a heurisztika, mint a
+        # suspension_earners-ben.
+        t0 = w["start_frame"] - round(SUSP_EARNER_LOOKBACK_S * fps)
+        best = None
+        for dt in range(0, round(SUSP_EARNER_LOOKBACK_S * fps) + 1):
+            fr = frames_by_t.get(t0 + dt)
+            if fr is None:
+                continue
+            for p in fr.players:
+                if p.team.value != up or p.role == "kapus":
+                    continue
+                d = abs(p.x - goal_x)
+                if best is None or d < best[1]:
+                    best = (p.track_id, d)
+        if best is None:
+            continue
+        r_earn = roles[up].get(best[0])
+        if r_earn is None:
+            continue
+        for e in shots:
+            if e.team.value != up or e.player_id is None:
+                continue
+            if not (w["start_frame"] <= e.t <= w["end_frame"]):
+                continue
+            r_fin = roles[up].get(e.player_id)
+            if r_fin is None:
+                continue
+            kulcs = f"{r_earn['poszt']}→{r_fin['poszt']}"
+            rec = out[up]
+            rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+            rec["chains"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["chains"] >= SCH_MIN_PAIRS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["chains"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= SCH_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kétperceik {share:.0f}%-a ugyanazt a láncot "
+                    f"futja ({par}, {rec['chains']} "
+                    "emberelőny-lövésből) — a kiharcolójuk ellen "
+                    "testtel, kéz nélkül kell védekezni, a "
+                    "befejezőjüket pedig hátrányban le kell tiltani")
+    return out
+
+
+# Kétperc ára: ennyi mért kiállítás-ablak kell az ítélethez, e fölött
+# drága a kétperc (gól/kiállítás), ez alatt viszont olcsó — a
+# hátrány-védekezésük jó.
+SCT_MIN_WINDOWS = 3
+SCT_COSTLY = 1.2
+SCT_CHEAP = 0.5
+
+
+def suspension_cost(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Kétperc ára: MENNYI GÓLBA KERÜL egy kiállításuk.
+
+    Az emberelőny-hatékonyság azt méri, mit TÁMADNAK a két perc
+    alatt, az emberelőny-védekezés azt, mit kapnak közben — ez a
+    HÁTRÁNY oldalát egyetlen számban: hány gólt kapnak átlagosan egy
+    kiállítás-ablak alatt.
+
+    Edzőileg ez a fegyelem ára forintosítva. Ha egy kétperc átlag
+    több mint egy gólba kerül nekik, a kiharcolás önmagában
+    pont-termelés: a betöréseket vállalni kell, mert a szabálytalanság
+    duplán fizet. Ha viszont olcsón megússzák, a kiállítás nem
+    stratégia — nem szabad rá játszani, marad a felállt támadás.
+    Saját csapatra: a hátrány-védekezés (fal-forma, kapus, labdatartás)
+    a téma.
+
+    Visszatérés csapatonként (a KIÁLLÍTOTT oldal): {"windows"
+    (kiállítás-ablak), "conceded" (közben kapott gól), "per_susp",
+    "verdict"} — a per_susp None SCT_MIN_WINDOWS alatt, az ítélet
+    None, ha a két küszöb közé esik.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    out: dict = {side: {"windows": 0, "conceded": 0, "per_susp": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for w in detect_powerplay(match):
+        down = w["team_down"]
+        up = "away" if down == "home" else "home"
+        rec = out[down]
+        rec["windows"] += 1
+        rec["conceded"] += sum(
+            1 for (gt, gs) in goals
+            if gs == up and w["start_frame"] <= gt <= w["end_frame"])
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["windows"] < SCT_MIN_WINDOWS:
+            continue
+        per = rec["conceded"] / rec["windows"]
+        rec["per_susp"] = round(per, 2)
+        if per >= SCT_COSTLY:
+            rec["verdict"] = (
+                f"egy kiállításuk átlag {per:.1f} gólba kerül "
+                f"({rec['conceded']} gól {rec['windows']} kétperc "
+                "alatt) — a kiharcolás náluk pont-termelés: a "
+                "betöréseket vállalni kell, mert a szabálytalanság "
+                "duplán fizet")
+        elif per <= SCT_CHEAP:
+            rec["verdict"] = (
+                f"egy kiállításuk csak {per:.1f} gólba kerül "
+                f"({rec['conceded']} gól {rec['windows']} kétperc "
+                "alatt) — olcsón megússzák a hátrányt: nem szabad a "
+                "kiállítás kiharcolására játszani, marad a felállt "
+                "támadás")
+    return out
+
+
+# Emberelőny-hibázók: ennyi emberelőny-eladástól emeljük ki a
+# játékost (a két perc rövid, ezért alacsony a küszöb).
+PPTP_MIN_TURNOVERS = 2
+
+
+def powerplay_turnover_players(match: Match,
+                               config: Optional[TacticsConfig] = None
+                               ) -> dict:
+    """Emberelőny-hibázók: KI ADJA EL a labdát a két perc alatt.
+
+    Az emberelőny-hiba poszt (powerplay_turnover_roles) a POSZTOT
+    nevezi meg — ez az EMBERT: ugyanazokat a kiállítás-ablakokban,
+    emberelőnyben elkövetett labdaeladásokat játékosonként számolja.
+
+    Edzőileg ez a hátrány-védekezés névre szóló célpontja: hátrányban
+    rá kell nyomni (kettőzés, passzsáv-zárás a fogadásánál), mert az
+    ő elvett labdája dupla büntetés — a kétperc alatt kontrázni lehet
+    belőle. Saját csapatra: az emberelőny-figurában a kockázatos
+    passzt ki kell venni a kezéből.
+
+    Visszatérés csapatonként (a TÁMADÓ, tehát emberelőnyben lévő
+    oldal): {"turnovers", "players": [{"player_id", "jersey",
+    "turnovers"}], "top"} — a "top" az első játékos, ha legalább
+    PPTP_MIN_TURNOVERS emberelőny-eladása van, különben None.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    windows = [("away" if w["team_down"] == "home" else "home",
+                w["start_frame"], w["end_frame"])
+               for w in detect_powerplay(match)]
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    if windows:
+        for e in detect_events(match, config):
+            if e.type != EventType.TURNOVER or e.player_id is None:
+                continue
+            side = e.team.value
+            if not any(s == side and a <= e.t <= b
+                       for s, a, b in windows):
+                continue
+            tally[side][e.player_id] = (
+                tally[side].get(e.player_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "turnovers": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["turnovers"] >= PPTP_MIN_TURNOVERS
+               else None)
+        out[side] = {"turnovers": sum(r["turnovers"] for r in rows),
+                     "players": rows, "top": top}
+    return out
+
+
+# Emberhátrány-hibázók: ennyi hátrány-eladástól emeljük ki a
+# játékost — öt emberrel egy elvesztett labda azonnal gólt ér.
+SHTP_MIN_TURNOVERS = 2
+
+
+def shorthanded_turnover_players(match: Match,
+                                 config: Optional[TacticsConfig] = None
+                                 ) -> dict:
+    """Emberhátrány-hibázók: ÖT EMBERREL ki veszíti el a labdát.
+
+    Az emberhátrány-hiba poszt (shorthanded_turnover_roles) a
+    POSZTOT nevezi meg — ez az EMBERT: ugyanazokat a
+    kiállítás-ablakokban, emberhátrányban elkövetett labdaeladásokat
+    játékosonként számolja.
+
+    Edzőileg ez az emberelőny-játékunk névre szóló célpontja: a hat
+    az öt ellen az ő fogadására kell menni, mert az elvett labdából
+    üres kapura indulhat a kontra. Saját csapatra: hátrányban a
+    labdát a legbiztosabb kézben kell tartani — ha nála rendre
+    elmegy, más legyen a labdatartó.
+
+    Visszatérés csapatonként (a HÁTRÁNYBAN lévő oldal):
+    {"turnovers", "players": [{"player_id", "jersey", "turnovers"}],
+    "top"} — a "top" az első játékos, ha legalább
+    SHTP_MIN_TURNOVERS hátrány-eladása van, különben None.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    windows = [(w["team_down"], w["start_frame"], w["end_frame"])
+               for w in detect_powerplay(match)]
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    if windows:
+        for e in detect_events(match, config):
+            if e.type != EventType.TURNOVER or e.player_id is None:
+                continue
+            side = e.team.value
+            if not any(s == side and a <= e.t <= b
+                       for s, a, b in windows):
+                continue
+            tally[side][e.player_id] = (
+                tally[side].get(e.player_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "turnovers": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["turnovers"] >= SHTP_MIN_TURNOVERS
+               else None)
+        out[side] = {"turnovers": sum(r["turnovers"] for r in rows),
+                     "players": rows, "top": top}
+    return out
+
+
+# Hetesdobók: ennyi hetestől emeljük ki a játékost (a hetes ritka
+# esemény, ezért alacsony a küszöb).
+STP_MIN_SEVENS = 2
+
+
+def seven_taker_players(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Hetesdobók: KI ÁLL ODA a hétméteresekhez.
+
+    A hetesdobó-poszt (seven_taker_roles) a POSZTOT nevezi meg, a
+    hetes-kihagyók azt, ki HIBÁZZA el — ez azt, ki áll oda
+    egyáltalán: a felismert hétméteresek dobóit számolja
+    játékosonként, a góllal és a gól nélkül zárulókat együtt.
+
+    Edzőileg ez a kapus felkészítésének első lapja: ha a hetesek nagy
+    részét ugyanaz dobja, a kapus RÁ készülhet (szokás-sarok,
+    lépésritmus, csel), és a videó-elemzés is egy emberre szűkül.
+    Saját csapatra: az egyetlen hetesdobó kockázat — kiállítás,
+    sérülés vagy rossz nap esetén kell egy második ember.
+
+    Visszatérés csapatonként: {"sevens" (dobóhoz kötött hetes),
+    "players": [{"player_id", "jersey", "sevens", "goals"}], "top"} —
+    a "top" az első játékos, ha legalább STP_MIN_SEVENS hetese van,
+    különben None.
+    """
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sm in seven_meter_outcomes(match, config):
+        pid = sm.get("shooter_id")
+        if pid is None:
+            continue
+        rec = tally[sm["team"]].setdefault(pid, {"sevens": 0,
+                                                 "goals": 0})
+        rec["sevens"] += 1
+        if sm.get("outcome") == "gól":
+            rec["goals"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "sevens": r["sevens"], "goals": r["goals"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1]["sevens"])]
+        top = (rows[0] if rows and rows[0]["sevens"] >= STP_MIN_SEVENS
+               else None)
+        out[side] = {"sevens": sum(r["sevens"] for r in rows),
+                     "players": rows, "top": top}
     return out

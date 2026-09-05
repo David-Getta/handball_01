@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 import pytest
 
-from handball.models.tracking import Match, MatchMeta
+from handball.models.tracking import Frame, Match, MatchMeta
 from handball.pipeline.clips import export_event_clips
 
 
@@ -97,9 +97,16 @@ def test_no_matching_events_gives_clear_error(tmp_path):
     video = tmp_path / "meccs.mp4"
     _make_video(video, n_frames=50)
     m = _match(video)
-    with pytest.raises(RuntimeError, match="Nem készült klip"):
+    # A szűrő nem illik semmire: az üzenet megmondja, MI VAN a meccsen
+    # és mit lehet tenni (gól-szűrő egy gól nélkülire felismert
+    # elemzésen — a hiba nem a klipvágásé).
+    with pytest.raises(RuntimeError) as hiba:
         export_event_clips(m, [{"t": 5, "type": "pass", "team": "home"}],
                            {"goal"}, tmp_path / "ki")
+    uzenet = str(hiba.value)
+    assert "Nem készült klip" in uzenet
+    assert "(gól)" in uzenet and "passz: 1" in uzenet
+    assert "lövés-szűrő" in uzenet
 
 
 if __name__ == "__main__":
@@ -265,3 +272,388 @@ def test_steal_clip_gets_hungarian_name(tmp_path):
     with zipfile.ZipFile(res.zip_path) as z:
         names = " ".join(z.namelist())
     assert "labdaszerzes" in names
+
+
+def test_tobb_tipusnal_a_zip_mappakba_rendez(tmp_path):
+    """Több csomagnál TÍPUS-MAPPÁK, egynél lapos a zip.
+
+    A klip-képernyőn az edző egyszerre tizenhárom csomagot is kérhet;
+    hatvan fájl egy lapos mappában kezelhetetlen, az edzésen pedig
+    témánként kell levetíteni. Egyetlen típusnál viszont a mappa csak
+    egy fölösleges kattintás lenne.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [
+        {"t": 60, "type": "goal", "team": "home"},
+        {"t": 120, "type": "block", "team": "away"},
+    ]
+    res = export_event_clips(m, events, {"goal", "block"}, tmp_path / "ki")
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = z.namelist()
+    assert sorted(n.split("/")[0] for n in names) == ["blokk", "gol"], names
+    assert all("/" in n for n in names)
+
+    # Egyetlen típus: marad a lapos alak.
+    res1 = export_event_clips(m, events, {"goal"}, tmp_path / "ki1")
+    with zipfile.ZipFile(res1.zip_path) as z:
+        names1 = z.namelist()
+    assert names1 and all("/" not in n for n in names1), names1
+
+
+def test_a_plafon_tipusonkent_igazsagos_es_a_meccs_egeszet_lefedi():
+    """A MAX_CLIPS plafon nem az elejéről vág.
+
+    A korábbi `picked[:MAX_CLIPS]` időrendben csonkolt: aki sok
+    csomagot kért egyszerre, a meccs ELSŐ harmadát kapta meg, és a
+    ritka csomagok (fordulópont) simán kimaradtak, mert a gólok
+    elvitték a keretet. Ez néma hiba: a zip tele van klippel, csak épp
+    nem arról, amit az edző keresett.
+    """
+    from handball.pipeline.clips import MAX_CLIPS, _fair_cap
+
+    def field(e, name):
+        return e[name]
+
+    events = ([{"t": i, "type": "goal"} for i in range(100)]
+              + [{"t": i * 40, "type": "turning_point"} for i in range(3)]
+              + [{"t": i * 5, "type": "block"} for i in range(20)])
+    events.sort(key=lambda e: e["t"])
+    out = _fair_cap(events, field)
+
+    assert len(out) == MAX_CLIPS
+    tipusok = {e["type"] for e in out}
+    # A ritka típus TELJES egészében benne van — ez a lényeg.
+    assert tipusok == {"goal", "turning_point", "block"}
+    assert sum(1 for e in out if e["type"] == "turning_point") == 3
+    assert sum(1 for e in out if e["type"] == "block") == 20
+    # A gólok a meccs EGÉSZÉBŐL jönnek, nem az első hatvanból.
+    golok = [e["t"] for e in out if e["type"] == "goal"]
+    assert max(golok) > 90, golok
+    # Időrendben marad (a fájlnevek sorszáma így követi a meccset).
+    assert [e["t"] for e in out] == sorted(e["t"] for e in out)
+
+
+def test_a_plafon_alatt_semmi_nem_valtozik():
+    """Plafon alatt a lista érintetlen — a mintavétel csak akkor lép be,
+    ha tényleg nem fér bele minden."""
+    from handball.pipeline.clips import _fair_cap
+
+    def field(e, name):
+        return e[name]
+
+    events = [{"t": i, "type": "goal"} for i in range(10)]
+    assert _fair_cap(events, field) == events
+
+
+def test_a_neman_ures_csomagokat_megnevezzuk(tmp_path):
+    """Aki hat csomagot kér és egy zip-et kap, tudja meg, mihez nem
+    volt jelenet.
+
+    A néma semmi félrevezet: az edző nem tudja eldönteni, hogy az adott
+    csomaghoz tényleg nem volt jelenet, vagy elromlott valami.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "goal", "team": "home"}]
+    res = export_event_clips(m, events, {"goal", "block", "big_save"},
+                             tmp_path / "ki")
+    assert res.count == 1
+    assert res.by_type == {"gol": 1}
+    # A két kért, de üres csomag MAGYAR néven jelenik meg.
+    assert res.empty == ["blokk", "nagy-vedes"], res.empty
+
+
+def test_minden_csomag_adott_jelenetet(tmp_path):
+    """Ha mindegyik kért típushoz volt jelenet, az `empty` üres —
+    a jelzés csak akkor ér valamit, ha ritka."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "goal", "team": "home"},
+              {"t": 120, "type": "block", "team": "away"}]
+    res = export_event_clips(m, events, {"goal", "block"}, tmp_path / "ki")
+    assert res.empty == []
+    assert res.by_type == {"gol": 1, "blokk": 1}
+# ---- Mezszám-szűrés: a játékos SAJÁT válogatása -----------------------
+
+
+def _match_mezekkel(video_path):
+    """Meccs két emberrel: a 7-es (track 1) és a 9-es (track 2).
+
+    A klip-motor a track_id-ből (esemény player_id) számol mezszámot,
+    tehát a keretek KELLENEK — mezszám nélküli meccsen a szűrés némán
+    mindent kidobna.
+    """
+    from handball.models.tracking import Frame, PlayerPosition, Team
+
+    m = _match(video_path)
+    m.frames = [
+        Frame(t=i, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=10.0, y=10.0,
+                   jersey_number=7),
+            PlayerPosition(track_id=2, team=Team.HOME, x=20.0, y=10.0,
+                   jersey_number=9),
+        ], ball=None)
+        for i in range(3)
+    ]
+    return m
+
+
+def test_a_klip_egy_jatekosra_szukitheto(tmp_path):
+    """A #7 a SAJÁT gólvideóját kéri.
+
+    Klip-válogatás mezszám nélkül azt jelenti, hogy a játékos a
+    tizennyolc emberes csapatvideóból keresi ki magát — az edzés előtti
+    öt percben ez nem történik meg.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [
+        {"t": 60, "type": "goal", "team": "home", "player_id": 1},
+        {"t": 120, "type": "goal", "team": "home", "player_id": 2},
+    ]
+    mind = export_event_clips(m, events, {"goal"}, tmp_path / "mind")
+    assert mind.count == 2
+    assert mind.jerseys == []
+
+    hetes = export_event_clips(m, events, {"goal"}, tmp_path / "hetes",
+                               jerseys={7})
+    assert hetes.count == 1
+    assert hetes.jerseys == [7]
+
+
+def test_tobb_mezszam_egyszerre_kerheto(tmp_path):
+    """A szélső páros két embere egy csomagban — az edző így ül le
+    velük négyszemközt."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1},
+              {"t": 120, "type": "goal", "team": "home", "player_id": 2}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7, 9})
+    assert res.count == 2 and res.jerseys == [7, 9]
+
+
+def test_az_ures_mezszam_lista_az_egesz_csapatot_jelenti(tmp_path):
+    """ŐR: a szűrés HIÁNYA nem szűkíthet.
+
+    Ha az üres lista véletlenül "senki"-t jelentene, a képernyő minden
+    vágása üres zip lenne — és ez pont az a hibafajta, ami némán megy
+    át a teszteken, mert a hívók külön adják meg a mezszámot.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1}]
+    for ures in (None, set(), []):
+        res = export_event_clips(m, events, {"goal"},
+                                 tmp_path / f"ki{ures}", jerseys=ures)
+        assert res.count == 1, ures
+
+
+def test_az_ismeretlen_mezszam_megmondja_miert_nincs_klip(tmp_path):
+    """A #23-hoz nincs jelenet — ez NEM hiba, de ki kell mondani.
+
+    A néma "nem készült klip" itt elromlott programnak látszana, pedig
+    csak a mezszám nincs kiosztva vagy nincs ilyen eseménye.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1}]
+    with pytest.raises(RuntimeError) as hiba:
+        export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                           jerseys={23})
+    uzenet = str(hiba.value)
+    assert "#23" in uzenet
+    assert "mezszám" in uzenet
+def test_tobb_jatekosnal_mindenki_sajat_mappat_kap(tmp_path):
+    """Az edző három emberrel KÜLÖN-KÜLÖN ül le.
+
+    Egy összekevert zip-ből minden beszélgetés előtt újra kellene
+    válogatnia — a mappa itt nem díszítés, hanem a munkamenet.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1},
+              {"t": 120, "type": "goal", "team": "home", "player_id": 2}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7, 9})
+    with zipfile.ZipFile(res.zip_path) as z:
+        nevek = z.namelist()
+    assert len(nevek) == 2
+    assert sorted(n.split("/")[0] for n in nevek) == ["#7", "#9"]
+
+
+def test_egy_jatekosnal_nincs_folosleges_mappa(tmp_path):
+    """EGY kijelölt embernél a mappa csak egy kattintás lenne — a zip
+    marad lapos, ahogy szűrés nélkül is."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7})
+    with zipfile.ZipFile(res.zip_path) as z:
+        nevek = z.namelist()
+    assert nevek and "/" not in nevek[0], nevek
+
+
+def test_a_jatekos_es_a_tipus_mappa_egymasba_ep(tmp_path):
+    """Két játékos × két csomag: a játékos a KÜLSŐ mappa.
+
+    Az edző emberenként készül, nem témánként — a "#7/gol" úton a
+    beszélgetés anyaga egyben van, a "gol/#7" úton szét.
+    """
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 40, "type": "goal", "team": "home", "player_id": 1},
+              {"t": 90, "type": "block", "team": "home", "player_id": 2}]
+    res = export_event_clips(m, events, {"goal", "block"}, tmp_path / "ki",
+                             jerseys={7, 9})
+    with zipfile.ZipFile(res.zip_path) as z:
+        nevek = sorted(z.namelist())
+    assert nevek[0].startswith("#7/gol/"), nevek
+    assert nevek[1].startswith("#9/blokk/"), nevek
+def test_a_plafon_a_jatekosok_kozt_is_igazsagosan_oszlik(tmp_path):
+    """A sokat szereplő ember NE vigye el a másik keretét.
+
+    Ez ugyanaz a néma igazságtalanság, mint a típusoknál, egy szinttel
+    feljebb: a zip tele van klippel, csak épp a #9 mappájában kettő
+    van, mert a #7-nek nyolcvan jelenete volt. Az edző így pont azzal
+    a játékossal nem tud leülni, akiről a legkevesebb anyaga van.
+    """
+    from handball.pipeline.clips import MAX_CLIPS
+
+    video = tmp_path / "meccs.mp4"
+    _make_video(video, n_frames=4000)
+    m = _match_mezekkel(video)
+    # A #7-nek sokkal több jelenete van, mint a #9-nek — de a plafon
+    # fölött mindkettőnek jutnia kell.
+    events = [{"t": 20 + i, "type": "goal", "team": "home", "player_id": 1}
+              for i in range(0, MAX_CLIPS * 4, 2)]
+    events += [{"t": 2000 + i, "type": "goal", "team": "home",
+                "player_id": 2} for i in range(0, MAX_CLIPS * 2, 2)]
+
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7, 9})
+    with zipfile.ZipFile(res.zip_path) as z:
+        nevek = z.namelist()
+    hetes = [n for n in nevek if n.startswith("#7/")]
+    kilences = [n for n in nevek if n.startswith("#9/")]
+    assert hetes and kilences, nevek[:5]
+    # Nagyjából fele-fele: a bővebb ember legfeljebb kétszer annyit
+    # vihet, mint a szűkebb (nem húszszor).
+    assert len(hetes) <= 2 * len(kilences), (len(hetes), len(kilences))
+def test_a_klipek_melle_tett_lap_bekerul_a_zipbe(tmp_path):
+    """A hívó tehet lapokat a klipek mellé — a motor nem ismeri a
+    jelentéseket, csak beteszi, amit kap."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7},
+                             extra_files={"lap.html": "<html>szia</html>"})
+    with zipfile.ZipFile(res.zip_path) as z:
+        assert "lap.html" in z.namelist()
+        assert z.read("lap.html").decode("utf-8") == "<html>szia</html>"
+    # A KLIP is megvan: a lap nem lép a videó helyébe.
+    assert res.count == 1
+
+
+def test_a_rossz_lap_nem_viszi_el_a_videot(tmp_path):
+    """Egy lap hiánya vagy hibája nem viheti el a klipeket: az edző a
+    VIDEÓÉRT vágatott, a lap ráadás."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match_mezekkel(video)
+    events = [{"t": 60, "type": "goal", "team": "home", "player_id": 1}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki",
+                             jerseys={7},
+                             extra_files={"rossz.html": object()})
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        assert "rossz.html" not in z.namelist()
+# ---- ÖSSZEFŰZÖTT meccs: több forrás-videó ----------------------------
+
+
+def test_osszefuzott_meccsbol_is_vaghato_klip(tmp_path):
+    """Aki darabokban vesz fel, összefűzi a klipeket EGY meccsé — és
+    utána a gólvideót is szeretné.
+
+    Az összefűzött meccsnek nincs egy videófájlja, ezért a klipvágás
+    korábban azt mondta: "az eredeti videófájl nem érhető el". Ez
+    félrevezető volt: a fájl megvan, csak TÖBB van belőle.
+    """
+    from handball.pipeline.merge import merge_matches
+
+    a_video = tmp_path / "elso.mp4"
+    b_video = tmp_path / "masodik.mp4"
+    _make_video(a_video, n_frames=300)
+    _make_video(b_video, n_frames=300)
+
+    a = _match(a_video)
+    a.frames = [Frame(t=i, players=[], ball=None) for i in range(100)]
+    b = _match(b_video)
+    b.frames = [Frame(t=i, players=[], ball=None) for i in range(100)]
+
+    egy = merge_matches([a, b], "teljes")
+    assert egy.meta.video_path is None       # nincs EGY fájl
+    assert len(egy.meta.source_segments) == 2
+
+    # Egy esemény MINDKÉT szakaszból: a másodiké a második fájlból kell
+    # hogy jöjjön.
+    events = [{"t": 50, "type": "goal", "team": "home"},
+              {"t": 150, "type": "goal", "team": "away"}]
+    res = export_event_clips(egy, events, {"goal"}, tmp_path / "ki")
+    assert res.count == 2, res.count
+
+
+def test_a_hianyzo_forras_videot_megnevezzuk(tmp_path):
+    """Ha az egyik szakasz fájlja hiányzik, a hibaüzenet mondja meg,
+    MELYIK — a többi megvan, és a "nem érhető el a videó" ott
+    félrevezető."""
+    from handball.pipeline.merge import merge_matches
+
+    a_video = tmp_path / "megvan.mp4"
+    _make_video(a_video)
+    a = _match(a_video)
+    a.frames = [Frame(t=i, players=[], ball=None) for i in range(50)]
+    b = _match(tmp_path / "elveszett.mp4")   # NINCS ilyen fájl
+    b.frames = [Frame(t=i, players=[], ball=None) for i in range(50)]
+
+    egy = merge_matches([a, b], "teljes")
+    with pytest.raises(RuntimeError) as hiba:
+        export_event_clips(egy, [{"t": 10, "type": "goal", "team": "home"}],
+                           {"goal"}, tmp_path / "ki")
+    uzenet = str(hiba.value)
+    assert "elveszett.mp4" in uzenet
+    assert "1/2" in uzenet, uzenet
+
+
+def test_az_egy_videos_meccs_utja_valtozatlan(tmp_path):
+    """ŐR: a gyakori eset (EGY videó) ugyanazon a kódon megy.
+
+    Egy külön "összefűzött" ág idővel szétcsúszna a normálistól, és a
+    hiba pont a ritkább eseten jönne elő — ott, ahol a legkevesebbet
+    tesztelik.
+    """
+    from handball.pipeline.clips import _source_segments
+
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video, stride=2, start=100)
+    szakaszok = _source_segments(m)
+    assert len(szakaszok) == 1
+    assert szakaszok[0]["video_path"] == str(video)
+    assert szakaszok[0]["start_frame"] == 100
+    assert szakaszok[0]["stride"] == 2
+    assert szakaszok[0]["t_to"] is None   # a végéig

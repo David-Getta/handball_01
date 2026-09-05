@@ -18,7 +18,7 @@ import math
 from dataclasses import dataclass, field
 
 from ..models.tracking import Match, PositionSource, Team
-from .primitive_cache import copy_by_id, memoize_primitive
+from .primitive_cache import copy_by_id, memoize_primitive, copy_rows
 
 
 @dataclass
@@ -410,6 +410,9 @@ def sprints_by_score(match: Match, config=None) -> dict:
     return out
 
 
+# A fáradás-mérés a teljes felvételt végigjárja, és több réteg kéri
+# (fáradó-poszt, késő cserék, edzés-fókusz, felderítés).
+@memoize_primitive("player_fatigue", copy=copy_rows)
 def player_fatigue(match: Match, config=None,
                    half_t: int | None = None) -> list[dict]:
     """Játékosonkénti tempó-visszaesés: első vs második félidő átlag-
@@ -935,4 +938,476 @@ def distance_battle(match: Match, config=None) -> dict:
             elif own <= other * (1.0 - DBT_GAP_PCT / 100.0):
                 rec["verdict"] = "túlfutja őket az ellenfél"
         out[side] = rec
+    return out
+
+
+# Futómunka-eloszlás: ennyi mért mezőnyjátékos ÉS ennyi összesen
+# futott méter kell az ítélethez (pár másodperces felvételen az
+# eloszlás semmit nem jelent), és a három legtöbbet futó embernek
+# ekkora hányad fölött van a csapat-futás nagy része egy kis körön.
+LBL_MIN_PLAYERS = 6
+LBL_MIN_DISTANCE_M = 500.0
+LBL_TOP3_PCT = 55.0
+
+
+def running_load_balance(match: Match, config=None) -> dict:
+    """Futómunka-eloszlás: HÁNY EMBERRE épül a futómunkájuk.
+
+    A futás-mérleg (distance_battle) a két csapatot veti össze — ez a
+    csapaton BELÜLI eloszlást: mekkora hányadát futja a
+    csapat-távnak a három legtöbbet futó mezőnyjátékos.
+
+    Edzőileg: ha a futómunka néhány emberre koncentrálódik, ők a
+    hajrára elfogynak — az utolsó húsz percben rájuk kell vinni a
+    tempót (kontra, gyors középkezdés az ő oldalukra), és a
+    cserehullámuk után nem szabad lassítani. Ha a futás egyenletesen
+    oszlik, a tempóval nem lehet szétszedni őket: ott a
+    lövés-választás és a fal minősége dönt. Saját csapatra: a
+    koncentrált futómunka csere- és terhelés-kérdés.
+
+    Visszatérés csapatonként: {"players", "distance_m", "top3_m",
+    "top3_pct", "verdict"} — a pct/verdict None, ha kevés
+    (LBL_MIN_PLAYERS alatti) a mért mezőnyjátékos, vagy kevés
+    (LBL_MIN_DISTANCE_M alatti) a mért futott táv.
+    """
+    keeper: set = set()
+    team_of: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            team_of.setdefault(p.track_id, p.team.value)
+            if p.role == "kapus":
+                keeper.add(p.track_id)
+
+    stats = compute_player_stats(match)
+    per_side: dict = {"home": [], "away": []}
+    for tid, st in stats.items():
+        side = team_of.get(tid)
+        if side is None or tid in keeper or st.distance_m <= 0:
+            continue
+        per_side[side].append(st.distance_m)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        vals = sorted(per_side[side], reverse=True)
+        total = sum(vals)
+        rec = {"players": len(vals), "distance_m": round(total, 1),
+               "top3_m": round(sum(vals[:3]), 1), "top3_pct": None,
+               "verdict": None}
+        if (len(vals) >= LBL_MIN_PLAYERS
+                and total >= LBL_MIN_DISTANCE_M):
+            share = 100.0 * sum(vals[:3]) / total
+            rec["top3_pct"] = round(share, 1)
+            if share >= LBL_TOP3_PCT:
+                rec["verdict"] = (
+                    f"a futómunkájuk kevés emberre épül (a három "
+                    f"legtöbbet futó adja a táv {share:.0f}%-át, "
+                    f"{len(vals)} mért játékosból) — ők a hajrára "
+                    "elfogynak: az utolsó húsz percben rájuk kell "
+                    "vinni a tempót")
+            else:
+                rec["verdict"] = (
+                    f"a futómunkájuk egyenletesen oszlik (a három "
+                    f"legtöbbet futó a táv {share:.0f}%-a) — "
+                    "tempóval nem lehet szétszedni őket: a "
+                    "lövés-választás és a fal minősége dönt")
+        out[side] = rec
+    return out
+
+
+# Vasember-poszt: legalább ennyi perces felvételtől ítélünk; ekkora
+# jelenlét-arány számít "végigjátszásnak", és ennyi százalékponttal
+# kell a többi poszt fölé nőnie (különben az egész csapat cserétlen,
+# és nincs kitüntetett poszt).
+IRM_MIN_MATCH_MIN = 10.0
+IRM_SHARE_PCT = 85.0
+IRM_GAP_PP = 15.0
+
+
+def iron_man_roles(match, config=None) -> dict:
+    """Vasember-poszt: MELYIK POSZTJUK játszik végig csere nélkül.
+
+    A rotáció-mélység (rotation_depth) azt mondja meg, hány emberrel
+    játszanak — ez azt, HOL nincs váltás: posztonként megnézi a
+    legtöbbet pályán lévő játékos jelenlét-arányát, és kimondja, ha
+    egy poszt kilóg: ott egy ember viszi az egész meccset, miközben a
+    többi posztot cserével frissítik.
+
+    Edzőileg ez a hajrá-terv: a végigjátszó poszt a meccs végére
+    elfárad — az utolsó tíz percben oda kell vinni a tempót (őt kell
+    futtatni, az ő sávjában jön a betörés), és a saját oldalon az ő
+    ellenfelére friss embert kell hozni. Saját csapatnál ugyanez
+    figyelmeztetés: a cserétlen posztunk a hajrában sebezhető.
+
+    Visszatérés csapatonként: {"minutes" (felvétel-hossz percben),
+    "roles": {poszt: jelenlét-%}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha a felvétel rövidebb az
+    IRM_MIN_MATCH_MIN-nél, a vezető poszt nem éri el az
+    IRM_SHARE_PCT-t, vagy nem nő ki a mezőnyből (IRM_GAP_PP).
+    """
+    from ..models.tracking import PositionSource
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    total = len(match.frames)
+    minutes = total / fps / 60.0
+    roles = estimate_positions(match, config)
+
+    presence: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        for p in f.players:
+            if p.source != PositionSource.MEASURED or p.role == "kapus":
+                continue
+            side = p.team.value
+            presence[side][p.track_id] = (
+                presence[side].get(p.track_id, 0) + 1)
+
+    out: dict = {side: {"minutes": round(minutes, 1), "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    if total == 0:
+        return out
+    for side in ("home", "away"):
+        rec = out[side]
+        best_by_post: dict = {}
+        for tid, n in presence[side].items():
+            rec_role = roles[side].get(tid)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            share = 100.0 * n / total
+            if share > best_by_post.get(poszt, 0.0):
+                best_by_post[poszt] = share
+        rec["roles"] = {p: round(v, 1) for p, v in
+                        sorted(best_by_post.items(),
+                               key=lambda kv: -kv[1])}
+        if not rec["roles"] or minutes < IRM_MIN_MATCH_MIN:
+            continue
+        vals = list(rec["roles"].values())
+        top_share = vals[0]
+        gap_ok = len(vals) == 1 or top_share - vals[1] >= IRM_GAP_PP
+        if top_share >= IRM_SHARE_PCT and gap_ok:
+            poszt = next(iter(rec["roles"]))
+            rec["main_role"] = poszt
+            rec["share_pct"] = top_share
+            rec["verdict"] = (
+                f"a(z) {poszt} posztjuk végigjátssza a meccset "
+                f"({top_share:.0f}% jelenlét, miközben a többi posztot"
+                " cserélik) — a hajrában oda kell vinni a tempót: őt "
+                "kell futtatni, és vele szemben friss ember jöjjön")
+    return out
+
+
+# Vasemberek (ember-réteg): legalább ennyi perces felvételtől ítélünk;
+# e feletti jelenlét-arány a végigjátszó ember; ennél több végigjátszó
+# már nem célpont, hanem csapat-stílus (mindenki bent marad).
+IRONMEN_MIN_MATCH_MIN = 10.0
+IRONMEN_SHARE_PCT = 85.0
+IRONMEN_MAX_TARGETS = 3
+
+
+def iron_men(match, config=None) -> dict:
+    """Vasemberek: KI játssza végig a meccset csere nélkül.
+
+    A vasember-poszt (iron_man_roles) POSZTRA mondja meg, hol nincs
+    váltás — ez NÉVRE: a mezszám szerint összevont jelenlét-időkből
+    (rotation_depth) kigyűjti, ki van a pályán a meccs döntő részében
+    (IRONMEN_SHARE_PCT felett). A kettő együtt kerek: a poszt a
+    tervhez kell (hova vigyük a tempót), a név a padhoz (kivel
+    szemben jöjjön a friss ember).
+
+    Edzőileg: a végigjátszó ember a hajrában a legfáradtabb a pályán —
+    az utolsó tíz percben ŐT kell futtatni (elzárások hozzá, betörés az
+    ő sávjában), és vele szemben mindig friss láb jöjjön. Saját
+    oldalon ugyanez figyelmeztetés: ha valakink csere nélkül megy
+    végig, a hajrá-hibái nem formahanyatlás, hanem terhelés — pihentetni
+    kell, vagy a hajrára tudatosan tempót váltani.
+
+    Ha háromnál több ember játszik végig, az nem célpont, hanem
+    csapat-stílus (szűk keret) — ilyenkor nincs név szerinti ítélet, a
+    rotáció-mélység rétege mondja el a képet.
+
+    Visszatérés csapatonként: {"minutes", "players":
+    [{"label", "minutes", "share_pct"}] (a végigjátszók, jelenlét
+    szerint csökkenően), "verdict"} — a players üres és a verdict None,
+    ha a felvétel rövidebb az IRONMEN_MIN_MATCH_MIN-nél, nincs
+    végigjátszó, vagy IRONMEN_MAX_TARGETS-nél többen vannak.
+    """
+    rot = rotation_depth(match, config)
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    minutes = len(match.frames) / fps / 60.0
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = {"minutes": round(minutes, 1), "players": [], "verdict": None}
+        men = [p for p in rot[side]["players"]
+               if p["share_pct"] >= IRONMEN_SHARE_PCT]
+        if (minutes >= IRONMEN_MIN_MATCH_MIN and men
+                and len(men) <= IRONMEN_MAX_TARGETS):
+            rec["players"] = men
+            nevek = ", ".join(p["label"] for p in men)
+            rec["verdict"] = (
+                f"csere nélkül végigjátssza a meccset: {nevek} "
+                f"({men[0]['share_pct']:.0f}% jelenlét) — a hajrában őt "
+                "kell futtatni, és vele szemben mindig friss ember "
+                "jöjjön")
+        out[side] = rec
+    return out
+
+
+# Sprint-poszt: ennyi poszthoz kötött sprint kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a kontrájukat egy poszt
+# futja.
+SPR_MIN_SPRINTS = 10
+SPR_SHARE_PCT = 60.0
+
+
+def sprint_threat_roles(match: Match, config=None) -> dict:
+    """Sprint-poszt: MELYIK POSZTJUK futja a sprinteket.
+
+    A sprint-veszély rétege (sprint_threats) az embert nevezi meg —
+    ez a posztot: a mért sprinteket a futó posztjához írja. Így a
+    minta akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kontra-fék terve: a kézilabdában a sprint szinte
+    mindig átmenet — ha a sprintek rendre ugyanarról a posztról
+    jönnek, labdavesztésnél először annak a posztnak az útját kell
+    lezárni, és tilos őt a fal mögé engedni. Saját csapatra: az egy
+    posztra jutó sprint-teher a rotáció-tervezés bemenete.
+
+    Visszatérés csapatonként: {"sprints" (poszthoz kötött sprint),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az SPR_MIN_SPRINTS, vagy egyik
+    poszt sem éri el az SPR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    st = sprint_threats(match, config)
+
+    out: dict = {side: {"sprints": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in st[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["sprints"])
+            rec["sprints"] += row["sprints"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["sprints"] >= SPR_MIN_SPRINTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["sprints"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a sprintjeik {share:.0f}%-át a(z) {poszt} "
+                    f"posztjuk futja ({rec['sprints']} sprintből) — "
+                    "a kontra-fék posztra szóló: labdavesztésnél az "
+                    "ő útját kell először lezárni, és tilos a fal "
+                    "mögé engedni")
+    return out
+
+
+# Fáradó-poszt: legalább ekkora összegzett első félidei tempó-alap
+# (cm/s) kell egy poszt ítéletéhez, és ekkora tempó-esés fölött
+# mondjuk ki, hogy a poszt a második félidőre visszaesik.
+FTR_MIN_CMS = 100
+FTR_DROP_PCT = 20.0
+
+
+def fatigue_roles(match: Match, config=None) -> dict:
+    """Fáradó-poszt: MELYIK POSZTJUK esik vissza a második félidőre.
+
+    A játékos-fáradás rétege (player_fatigue) az embert nevezi meg —
+    ez a posztot: a félidőnkénti átlagsebességeket a játékos
+    posztjához összegzi (cm/s-ban), és megkeresi, melyik posztjuk
+    tempója esik a legnagyobbat. Így a minta akkor is látszik, ha a
+    nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a második félidő terve: a visszaeső posztjuk ellen a
+    szünet után kell támadni — az ő sávjában jön a tempó-fölény, és
+    ott érdemes a friss embert bevetni. Saját csapatra: annak a
+    posztnak korábbi pihentetés és kondicionális blokk jár.
+
+    Visszatérés csapatonként: {"first_cms_roles": {poszt: cm/s
+    összeg}, "second_cms_roles": {poszt: cm/s összeg}, "main_role",
+    "drop_pct", "verdict"} — az ítélet None, ha nincs felismert
+    szünet/mért idő, a poszt alapja nem éri el az FTR_MIN_CMS-t,
+    vagy az esés az FTR_DROP_PCT alatt marad.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"first_cms_roles": {}, "second_cms_roles": {},
+                        "main_role": None, "drop_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for row in player_fatigue(match):
+        side = row["team"]
+        if side not in out:
+            continue
+        rec_role = roles[side].get(row["track_id"])
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["first_cms_roles"][poszt] = (
+            rec["first_cms_roles"].get(poszt, 0)
+            + round(row["first_ms"] * 100))
+        rec["second_cms_roles"][poszt] = (
+            rec["second_cms_roles"].get(poszt, 0)
+            + round(row["second_ms"] * 100))
+
+    for side in ("home", "away"):
+        rec = out[side]
+        worst = None
+        for poszt, first in rec["first_cms_roles"].items():
+            if first < FTR_MIN_CMS:
+                continue
+            second = rec["second_cms_roles"].get(poszt, 0)
+            drop = 100.0 * (first - second) / first
+            if worst is None or drop > worst[1]:
+                worst = (poszt, drop)
+        if worst is not None and worst[1] >= FTR_DROP_PCT:
+            poszt, drop = worst
+            rec["main_role"] = poszt
+            rec["drop_pct"] = round(drop, 1)
+            rec["verdict"] = (
+                f"a második félidőre a(z) {poszt} posztjuk esik "
+                f"vissza a legjobban (−{drop:.0f}% tempó) — a "
+                "szünet után az ő sávjában kell támadni, és ott "
+                "éri meg a friss embert bevetni")
+    return out
+
+
+# Sprint-esés küszöbei: félidőnként ennyi játékperc és ennyi sprint
+# kell az ítélethez, és ekkora arányú változás az érdemi.
+SFD_MIN_HALF_MIN = 5.0
+SFD_MIN_SPRINTS = 8
+SFD_DROP_RATIO = 0.7
+
+
+def sprint_fade(match: Match, config=None) -> dict:
+    """Sprint-esés: MEGFOGY-E A LÁB a második félidőre.
+
+    A sprint-állás (sprints_by_score) az eredményjelzőn nézi a
+    futást, a játékos-fáradás (player_fatigue) emberenként — ez
+    csapatszinten, félidőnként: a sprint/perc ütemet veti össze az
+    első és a második félidőben.
+
+    Edzőileg ez a második félidő tempó-döntése. Ha a lábuk megfogy
+    (az ütem a SFD_DROP_RATIO-ra vagy alá esik), a második félidőben
+    tempót KELL emelni: minden labdaszerzésből futni, mert a
+    visszarendeződésük már nem megy. Ha nő az ütem, ők kapcsolnak a
+    hajrára — akkor a saját ritmust kell tartani, és a labdát nem
+    szabad elveszíteni a saját térfélen.
+
+    Visszatérés csapatonként: {"fh_sprints", "fh_min",
+    "fh_per_min", "sh_sprints", "sh_min", "sh_per_min", "ratio",
+    "verdict"} — az ítélet None félidő-jel nélkül, kevés játékperc
+    (félidőnként SFD_MIN_HALF_MIN) vagy kevés sprint
+    (SFD_MIN_SPRINTS) esetén.
+    """
+    from .halftime import detect_halftime
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    empty = {"fh_sprints": 0, "fh_min": 0.0, "fh_per_min": None,
+             "sh_sprints": 0, "sh_min": 0.0, "sh_per_min": None,
+             "ratio": None, "verdict": None}
+    out = {side: dict(empty) for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None or not match.frames:
+        return out
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    out["home"]["fh_min"] = out["away"]["fh_min"] = round(
+        ht / fps / 60.0, 1)
+    sh_min = round((match.frames[-1].t - ht) / fps / 60.0, 1)
+    out["home"]["sh_min"] = out["away"]["sh_min"] = sh_min
+
+    # Sprint-futamok félidőnként, a futam KEZDETE szerint.
+    prev_pos: dict = {}
+    runs: dict = {}
+
+    def close_run(tid):
+        run = runs.pop(tid, None)
+        if run is None or run["s"] < SPRINT_MIN_S:
+            return
+        key = "fh" if run["t0"] < ht else "sh"
+        out[run["team"]][f"{key}_sprints"] += 1
+
+    for f in match.frames:
+        seen = set()
+        for pl in f.players:
+            if pl.source != PositionSource.MEASURED:
+                continue
+            seen.add(pl.track_id)
+            prev = prev_pos.get(pl.track_id)
+            prev_pos[pl.track_id] = (f.t, pl.x, pl.y,
+                                     getattr(pl.team, "value", pl.team))
+            if prev is None or f.t - prev[0] != 1:
+                close_run(pl.track_id)
+                continue
+            speed = math.hypot(pl.x - prev[1], pl.y - prev[2]) * fps
+            if SPRINT_SPEED_MS <= speed <= MAX_PLAUSIBLE_MS:
+                run = runs.get(pl.track_id)
+                if run is None:
+                    runs[pl.track_id] = {
+                        "t0": prev[0], "s": 1.0 / fps,
+                        "team": getattr(pl.team, "value", pl.team)}
+                else:
+                    run["s"] += 1.0 / fps
+            else:
+                close_run(pl.track_id)
+        for tid in list(runs):
+            if tid not in seen:
+                close_run(tid)
+    for tid in list(runs):
+        close_run(tid)
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["fh_min"] > 0:
+            rec["fh_per_min"] = round(
+                rec["fh_sprints"] / rec["fh_min"], 2)
+        if rec["sh_min"] > 0:
+            rec["sh_per_min"] = round(
+                rec["sh_sprints"] / rec["sh_min"], 2)
+        if (rec["fh_min"] < SFD_MIN_HALF_MIN
+                or rec["sh_min"] < SFD_MIN_HALF_MIN
+                or rec["fh_sprints"] + rec["sh_sprints"]
+                < SFD_MIN_SPRINTS
+                or not rec["fh_per_min"]):
+            continue
+        ratio = rec["sh_per_min"] / rec["fh_per_min"]
+        rec["ratio"] = round(ratio, 2)
+        if ratio <= SFD_DROP_RATIO:
+            rec["verdict"] = (
+                f"a második félidőre megfogy a lábuk "
+                f"({rec['sh_per_min']:.1f} sprint/perc az "
+                f"{rec['fh_per_min']:.1f} helyett) — a szünet után "
+                "tempót kell emelni: minden labdaszerzésből futni, "
+                "mert a visszarendeződésük már nem megy")
+        elif ratio >= 1.0 / SFD_DROP_RATIO:
+            rec["verdict"] = (
+                f"a második félidőre KAPCSOLNAK "
+                f"({rec['sh_per_min']:.1f} sprint/perc az "
+                f"{rec['fh_per_min']:.1f} helyett) — a hajrára "
+                "gyorsítanak: a saját ritmust kell tartani, és a "
+                "labdát nem szabad elveszíteni a saját térfélen")
     return out

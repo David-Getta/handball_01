@@ -41,7 +41,7 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
   demóval is fut). Lásd [`client/README.md`](client/README.md).
 
 ## Hol tartunk
-A rendszer **működő, telepíthető alkalmazás** (v0.1.24 kiadva Windows- és
+A rendszer **működő, telepíthető alkalmazás** (v0.1.83 kiadva Windows- és
 macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
 
 - **Feldolgozás**: YOLO + ByteTrack követés, kézi 4-sarkos kalibráció
@@ -96,7 +96,7 @@ macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
   (vágás/totálkép-szűrő, pályavonal-felismerés), több-nézetes fúzió
   (`POST /matches/fuse`) és lidar-finomítás — részletek a
   [`docs/BROADCAST_AND_SENSORS.md`](docs/BROADCAST_AND_SENSORS.md)-ben.
-- **Minőség**: 1312 automata teszt; pontosság-validáció kézi eseménylista
+- **Minőség**: 2239 automata teszt; pontosság-validáció kézi eseménylista
   ellen (API + parancssori eszköz); réteg-megbízhatósági önjelentés
   (mihez van elég minta az adott meccsen).
 

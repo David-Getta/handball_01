@@ -132,6 +132,86 @@ class MatchMeta:
     # videóbeli kép-index, ahonnan a feldolgozás FOLYTATHATÓ.
     partial: bool = False
     next_start_frame: int = 0
+    # A FORRÁSVIDEÓ teljes hossza másodpercben (ha kiolvasható). Ebből
+    # derül ki, hogy a feldolgozás a felvétel mekkora részét fedte le —
+    # egy megvágott/félbeszakadt feltöltésnél a felhasználó egyébként
+    # csak annyit lát, hogy "csak az első félidőt elemezte ki".
+    video_seconds: Optional[float] = None
+    # Volt-e PÁLYA-KALIBRÁCIÓ a feldolgozáskor. Enélkül a koordináták
+    # csak arányos becslések (a képet nyújtjuk a pályára), és a pályán
+    # kívüli embereket — kispad, edző, NÉZŐTÉR — nem lehet kiszűrni.
+    # A jelentésnek ezt ki kell mondania, különben a felhasználó a
+    # számokból nem tudja, mennyire bízhat bennük.
+    # None = nem tudjuk (RÉGI mentés, a mező előtti időkből) — ilyenkor
+    # nem állítunk semmit; False = biztosan nem volt kalibráció.
+    calibrated: Optional[bool] = None
+    # AUTOMATIKUS meccs-ablak (game_window.trim_to_game): talált-e a
+    # felismerés összefüggő JÁTÉKOT a felvételen, és mennyit vágott le
+    # az elejéből/végéből másodpercben. Enélkül a felhasználó nem tudja
+    # meg, hogy a bemelegítés és a csapatbemutatás kimaradt-e — pedig
+    # ha bennmaradt, az álldogálást a motor eladott labdának látja.
+    # None = nem tudjuk (RÉGI mentés, a mezők előttről); False = a
+    # felismerés NEM talált elég hosszú összefüggő játékot.
+    game_window_found: Optional[bool] = None
+    game_trim_head_s: Optional[float] = None
+    game_trim_tail_s: Optional[float] = None
+    # PÁSZTÁZÁS-KÖVETÉS horgonyzás-aránya (%): a feldolgozott kockák
+    # hányadán sikerült a kamera-mozgást közvetlenül a KALIBRÁLT
+    # alap-kockához mérni (pan_tracking.PanTracker). Alacsony aránynál
+    # a svenkelés alatt a helyek elcsúszhatnak — a minőség-jelentés
+    # ebből szól. None = régi mentés vagy pásztázás-követés nélkül.
+    pan_anchor_pct: Optional[float] = None
+    # KALIBRÁCIÓ-ELLENŐRZÉSHEZ: az elsődleges kalibráció homográfiája
+    # (alap-kocka pixel → pálya méter, 3x3) és a kamera-mozgás ritkított
+    # sora [[t, G 3x3], …] (G: aktuális kocka → alap-kocka). Ezekből a
+    # pályavonalak utólag bármelyik kockára visszarajzolhatók — a
+    # felhasználó a szemével ellenőrzi, tartja-e a kalibráció a
+    # svenkelés alatt. None = régi mentés vagy kalibráció nélkül.
+    court_homography: Optional[list] = None
+    pan_keyframes: Optional[list] = None
+    # KALIBRÁCIÓ-ILLESZKEDÉS a feldolgozás alatt mérve (calib_overlay
+    # .line_fit_score a kulcs-kockákon): {"mean_fit", "min_fit",
+    # "worst_t", "points"} — a minőség-jelentés ebből mondja ki, ha a
+    # kalibráció a meccs közben elcsúszik. None = régi mentés vagy
+    # kalibráció nélkül.
+    calib_fit: Optional[dict] = None
+    # KÉZI esemény-javítások: amit az edző a felismerésen kijavít.
+    # Elemenként {"op": "add"|"remove"|"set_type", "t": kocka,
+    # "type": "goal"|"shot", "team": "home"|"away"}. A lövés-felismerés
+    # a lista alapján javítja a saját eredményét, tehát a javítás MINDEN
+    # rétegen átüt (eredmény, xG, lövő-listák, felderítés).
+    #
+    # Miért a meta-ban: a felismerés hibája nem a videó hibája — a
+    # javítás a MECCS tulajdonsága, nem egy képernyőé, és
+    # újrafeldolgozás nélkül is meg kell maradnia.
+    event_overrides: list = field(default_factory=list)
+    # ÖSSZEFŰZÖTT meccs forrás-szakaszai. Aki darabokban vesz fel (a
+    # telefon négy gigánál vagy tíz percnél elvágja a felvételt), hat
+    # klipből rak össze egy meccset — az összefűzött meccsnek nincs
+    # EGY videófájlja, tehát a `video_path` üres.
+    #
+    # Enélkül a klipvágás azt mondaná, hogy "a videó nem érhető el",
+    # ami félrevezető: a fájl megvan, csak több van belőle. Ez a
+    # térkép mondja meg, melyik játékidő melyik fájl melyik
+    # kép-indexén van.
+    #
+    # Elemenként: {"t_from", "t_to" (kizárólagos), "video_path",
+    # "start_frame", "stride"} — a t a MERGE UTÁNI játékidő kockákban.
+    source_segments: list = field(default_factory=list)
+    # MIBŐL lett összefűzve (a darabok match_id-jei). A szezon-szintű
+    # számolás ebből tudja, hogy a darabokat KI KELL hagynia: az
+    # összefűzött meccs és a hat darabja együtt ugyanazt a meccset
+    # kétszer számolná — a góllövő-lista, a szezon-mérleg és a
+    # jegyzet-lista is duplázna.
+    merged_from: list = field(default_factory=list)
+    # A VALÓDI végeredmény, ahogy az edző a jegyzőkönyvből tudja.
+    # A felismerés ehhez MÉRHETI magát: a minőség-jelentés kimondja, ha
+    # a felismert eredmény messze van tőle (vagy épp fordítva áll), és
+    # megmondja a teendőt. None = nincs megadva — ilyenkor nem állítunk
+    # semmit. Ez a pontosság-visszajelzés legolcsóbb formája: két szám,
+    # amit az edző fejből tud.
+    real_goals_home: Optional[int] = None
+    real_goals_away: Optional[int] = None
 
 
 @dataclass

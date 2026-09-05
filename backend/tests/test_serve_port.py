@@ -94,3 +94,103 @@ def test_health_full_checklist():
     assert by_name["Adatmappa írható"]["ok"] is True
     assert by_name["OpenCV (videó-kezelés)"]["ok"] is True
     assert by_name["Meccskönyvtár"]["ok"] is True
+
+
+def test_health_kiadja_a_motor_verziot():
+    """ŐR: a /health a motor verzióját is kiadja — a kliens ebből veszi
+    észre a fél-frissült telepítést (új app + régi motor)."""
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball import __version__
+    from handball.api.app import create_app
+
+    client = TestClient(create_app())
+    body = client.get("/health").json()
+    assert body["status"] == "ok"
+    assert body["version"] == __version__
+
+
+def test_az_indulas_merfoldkovei_a_nehez_importok_elott_szolalnak_meg():
+    """ŐR: a motor indulási sorai a NEHÉZ IMPORTOK ELŐTT kezdődnek.
+
+    A torch/OpenCV betöltése másodpercekig — becsomagolt kiadásban,
+    víruskereső-átvizsgálással percekig — tart. Ha az első naplósor csak
+    utánuk jönne, akkor az ott elhaló motor ÜRES naplót hagyna, és nem
+    lehetne megmondani, meddig jutott el. A felhasználó ilyenkor csak
+    "Connection refused"-öt lát.
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent
+           / "scripts" / "serve.py").read_text(encoding="utf-8")
+    fo = src.index("def main(")
+    elso_sor = src.index("_stage(", fo)
+    elso_import = src.index("import uvicorn", fo)
+    assert elso_sor < elso_import, (
+        "az első indulási naplósor a nehéz importok UTÁN jön — az ott "
+        "elhaló motor üres naplót hagyna")
+
+
+def test_az_indulasi_kivetel_nem_vesz_el():
+    """ŐR: a végzetes indulási kivétel jelentést kap.
+
+    A becsomagolt kiadás legcsúnyább hibái (hiányzó rendszerkönyvtár,
+    OpenMP-ütközés, nem írható adatmappa) itt csapódnak le. Kezeletlenül
+    a folyamat NÉMÁN meghal, és a felhasználónak nincs mit elküldenie.
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent
+           / "scripts" / "serve.py").read_text(encoding="utf-8")
+    assert "except BaseException" in src, (
+        "a main() nem fogja meg a végzetes indulási kivételt")
+    assert "_crash_report" in src, "nincs összeomlás-jelentés"
+    assert "engine-crash.log" in src, (
+        "az összeomlás nem kerül tartós fájlba — a cső eltörésével elvész")
+
+
+def test_az_osszeomlas_jelentes_stdout_nelkul_is_ir(tmp_path, monkeypatch):
+    """ŐR: a hibajelentő akkor is fájlba ír, ha NINCS stdout.
+
+    Pont az az eset a legfontosabb, amikor a stream-átirányítás maga
+    bukott el (nem írható adatmappa, ablak nélküli futás): ilyenkor a
+    print() kivételt dob, és ha a jelentő azon elhasal, a hiba oka
+    nyomtalanul elvész — a felhasználó csak "Connection refused"-öt lát.
+    """
+    import sys
+
+    from scripts.serve import _crash_report
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(sys, "stdout", None)
+    try:
+        raise RuntimeError("szimulált indulási hiba")
+    except BaseException as exc:  # noqa: BLE001 — ezt teszteljük
+        _crash_report(exc)  # nem dobhat
+
+    naplo = tmp_path / "engine-crash.log"
+    assert naplo.exists(), "stdout nélkül nem készült összeomlás-napló"
+    szoveg = naplo.read_text(encoding="utf-8")
+    assert "RuntimeError: szimulált indulási hiba" in szoveg, (
+        "a napló nem tartalmazza a hiba lényegét")
+
+
+def test_a_stream_atiranyitas_a_hibakezelesen_belul_fut():
+    """ŐR: az _ensure_streams a try-n BELÜL fut.
+
+    Ha az adatmappa nem írható, a napló megnyitása kivételt dob. A
+    try-n kívülről ez azt jelentette, hogy a motor nyom nélkül halt meg
+    — a hibajelentő maga sem futott le.
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent
+           / "scripts" / "serve.py").read_text(encoding="utf-8")
+    fo = src.index("def main(")
+    try_poz = src.index("try:", fo)
+    ensure_poz = src.index("_ensure_streams()", fo)
+    assert try_poz < ensure_poz, (
+        "az _ensure_streams a hibakezelésen KÍVÜL fut — nem írható "
+        "adatmappánál a motor nyom nélkül hal meg")

@@ -3,8 +3,15 @@
 A tévés úton a kamera-állás vágásról vágásra változik, ezért az egyszeri
 kézi sarok-kijelölés nem elég: minden totálkép-szakaszhoz ÚJRA meg kell
 találni a pálya geometriáját. Ennek első lépcsője a hosszú, egyenes
-FEHÉR VONALAK (oldalvonal, alapvonal, kapuelőtér-ív húrjai) megtalálása
-a képen.
+VONALAK (oldalvonal, alapvonal, kapuelőtér-ív húrjai) megtalálása a
+képen.
+
+A vonal nem mindig fehér: a több sportot kiszolgáló csarnokokban a
+padlón egymáson futnak a kosár-, futsal- és röplabda-vonalak, és a
+KÉZILABDA-PÁLYÁÉ gyakran PIROS (mellette festett mezők is: sárga
+kapuelőtér, színes pályafelület). Ezért a fényesség-alapú maszk mellett
+van szín-alapú is (color_line_mask), és az "auto" mód a képből dönti
+el, melyik szín vonalait kövesse (detect_court_lines_color).
 
 A mag tiszta numpy (egyszerűsített Hough-transzformáció), így valódi
 közvetítés-felvétel nélkül, szintetikus képekkel tesztelhető. A
@@ -53,6 +60,72 @@ def edge_mask(gray, delta: int = LINE_BRIGHTNESS_DELTA):
             & (core - g[2 * d:, d:-d] >= delta))
     out[d:-d, d:-d] = horiz | vert
     return out
+
+
+# A SZÍNES vonalak felismerése (több sportot kiszolgáló csarnokok).
+# A kézilabda-pálya vonala sok teremben NEM fehér: a padlón egymáson
+# futnak a kosár-, futsal- és röplabda-vonalak, és a kézié gyakran PIROS
+# (mellette kék/zöld/sárga vonalak és festett mezők). A szín-maszk azt a
+# pixelt tartja meg, ahol a választott szín érdemben erősebb a többinél,
+# ÉS a pixel vékony vonalként kiemelkedik a környezetéből — így a nagy
+# festett MEZŐK (pl. a sárga kapuelőtér, a zöld pályafelület) nem
+# szennyezik a vonal-keresést, csak a szélük.
+COLOR_LINE_DOMINANCE = 30   # a szín-csatorna ennyivel erősebb a többinél
+COLOR_LINE_DELTA = 18       # ...és a vonal ennyivel üt el a környezetétől
+
+# A támogatott vonalszínek: magyar név → (pozitív csatornák, negatív
+# csatornák) az RGB-ből. A pontszám = min(pozitívak) − max(negatívak).
+LINE_COLORS = {
+    "piros": ((0,), (1, 2)),
+    "kek": ((2,), (0, 1)),
+    "zold": ((1,), (0, 2)),
+    "sarga": ((0, 1), (2,)),
+}
+
+
+def _thin_line_mask(score, delta):
+    """Vékony, a környezeténél `delta`-val erősebb pixelek maszkja.
+
+    Ugyanaz a kétoldali teszt, mint a fehér vonalaknál (edge_mask): a
+    pixel bal-jobb VAGY fel-le szomszédainál is erősebb — a nagy egybe-
+    festett foltok belseje így kiesik, csak a vonalak maradnak."""
+    import numpy as np
+
+    g = score.astype(np.int16)
+    out = np.zeros(g.shape, dtype=bool)
+    d = 5
+    if g.shape[0] <= 2 * d or g.shape[1] <= 2 * d:
+        return out
+    core = g[d:-d, d:-d]
+    horiz = ((core - g[d:-d, :-2 * d] >= delta)
+             & (core - g[d:-d, 2 * d:] >= delta))
+    vert = ((core - g[:-2 * d, d:-d] >= delta)
+            & (core - g[2 * d:, d:-d] >= delta))
+    out[d:-d, d:-d] = horiz | vert
+    return out
+
+
+def color_line_mask(rgb, color: str = "piros",
+                    dominance: int = COLOR_LINE_DOMINANCE,
+                    delta: int = COLOR_LINE_DELTA):
+    """Adott SZÍNŰ, vékony vonal-pixelek maszkja (bool tömb).
+
+    `rgb`: (magasság, szélesség, 3) tömb R,G,B sorrendben (OpenCV-ből
+    BGR jön — meg kell fordítani). `color`: a LINE_COLORS kulcsa.
+
+    Két feltétel együtt: a szín érdemben DOMINÁL a pixelen (a saját
+    csatornája legalább `dominance`-szal erősebb a többinél), és a pixel
+    vékony vonalként ki is emelkedik a környezetéből (`delta`)."""
+    import numpy as np
+
+    if color not in LINE_COLORS:
+        raise ValueError(f"ismeretlen vonalszín: {color}")
+    pos, neg = LINE_COLORS[color]
+    a = np.asarray(rgb).astype(np.int16)
+    pos_v = np.min(np.stack([a[:, :, i] for i in pos], axis=0), axis=0)
+    neg_v = np.max(np.stack([a[:, :, i] for i in neg], axis=0), axis=0)
+    score = pos_v - neg_v
+    return _thin_line_mask(score, delta) & (score >= dominance)
 
 
 def hough_lines(mask, max_lines: int = HOUGH_MAX_LINES):
@@ -113,15 +186,22 @@ def hough_lines(mask, max_lines: int = HOUGH_MAX_LINES):
     return peaks
 
 
-def detect_court_lines(gray, max_lines: int = HOUGH_MAX_LINES) -> list[dict]:
-    """Pályavonal-jelöltek egy szürke képből.
+def detect_court_lines(gray, max_lines: int = HOUGH_MAX_LINES,
+                       mask=None) -> list[dict]:
+    """Pályavonal-jelöltek egy szürke képből (vagy kész maszkból).
+
+    `mask`: ha meg van adva, azt használjuk a fehér-vonal maszk helyett
+    — így ugyanez a Hough-lépcső dolgozik a SZÍNES vonalakon is (lásd
+    color_line_mask / detect_court_lines_color). A `gray` ilyenkor is
+    kell: belőle jön a kép mérete.
 
     Visszatérés: [{"theta_deg", "rho", "votes", "p1", "p2"}] — a p1/p2 a
     vonal két, képen belüli végpontja (megjelenítéshez / a következő
     lépcső megfeleltetéséhez)."""
     import numpy as np
 
-    mask = edge_mask(gray)
+    if mask is None:
+        mask = edge_mask(gray)
     h, w = gray.shape[:2]
     out = []
     for (theta_deg, rho, votes) in hough_lines(mask, max_lines):
@@ -149,6 +229,56 @@ def detect_court_lines(gray, max_lines: int = HOUGH_MAX_LINES) -> list[dict]:
         out.append({"theta_deg": round(theta_deg, 1), "rho": round(rho, 1),
                     "votes": votes, "p1": uniq[0], "p2": uniq[1]})
     return out
+
+
+# A szín-választáshoz: a nyertes szín-maszknak ennyivel több vonal-pixelt
+# kell adnia, mint a fehérnek — különben maradunk a fehérnél (a legtöbb
+# csarnokban az a jó, és a kevés szín-pixel könnyen zaj).
+COLOR_WIN_RATIO = 1.3
+
+
+def detect_court_lines_color(rgb, color: str = "auto",
+                             max_lines: int = HOUGH_MAX_LINES) -> dict:
+    """Pályavonal-jelöltek SZÍNES vonalakhoz — több sportot kiszolgáló
+    csarnokokhoz.
+
+    A kézilabda-pálya vonala sok teremben nem fehér (a felhasználó
+    felvételén PIROS), és mellette más sportok kék/zöld/sárga vonalai
+    futnak. A `color`:
+      - "feher": a régi, fényesség-alapú maszk,
+      - "piros"/"kek"/"zold"/"sarga": az adott szín vonalai,
+      - "auto": mindet kipróbáljuk, és a LEGTÖBB vonal-pixelt adó
+        maszk nyer — a fehér csak akkor veszít, ha egy szín érdemben
+        (COLOR_WIN_RATIO-szor) több pixelt hoz.
+
+    `rgb`: (magasság, szélesség, 3) R,G,B tömb.
+
+    Visszatérés: {"color", "lines", "pixels": {szín: pixel-szám}} — a
+    "color" a ténylegesen használt vonalszín (a kliens ezt kiírhatja,
+    hogy a felhasználó lássa, mit követ a rendszer).
+    """
+    import numpy as np
+
+    a = np.asarray(rgb)
+    gray = a.mean(axis=2).astype(np.uint8)
+    masks = {"feher": edge_mask(gray)}
+    for name in LINE_COLORS:
+        masks[name] = color_line_mask(a, name)
+    pixels = {k: int(m.sum()) for k, m in masks.items()}
+
+    if color == "auto":
+        best_color = max(LINE_COLORS, key=lambda c: pixels[c])
+        chosen = (best_color
+                  if pixels[best_color] >= COLOR_WIN_RATIO * max(
+                      1, pixels["feher"])
+                  else "feher")
+    else:
+        if color not in masks:
+            raise ValueError(f"ismeretlen vonalszín: {color}")
+        chosen = color
+
+    lines = detect_court_lines(gray, max_lines, mask=masks[chosen])
+    return {"color": chosen, "lines": lines, "pixels": pixels}
 
 
 # Metszéspont-számításnál ennél párhuzamosabb vonalpárt nem metszünk.

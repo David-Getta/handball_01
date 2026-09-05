@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Callable
 
 from .dataset import sample_frame_indices
+from ..video_io import open_capture
 
 
 @dataclass
@@ -60,7 +61,7 @@ def evaluate_detector(video_path: str | Path,
     """
     import cv2
 
-    cap = cv2.VideoCapture(str(video_path))
+    cap = open_capture(video_path)
     n_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     if n_total <= 0:
         cap.release()

@@ -252,3 +252,242 @@ def test_setplay_efficiency_counts_goals_per_figure():
     assert len(top["starts"]) == top["attacks"]
     assert all(isinstance(t_, int) for t_ in top["starts"])
     assert eff["away"] == []
+
+
+def _spf_match(plan, ys=None):
+    """`plan` = a lövést leadó hazai játékos azonosítói, támadásonként.
+
+    Minden támadás UGYANAZZAL a mozgás-mintázattal indul (egy figura),
+    csak a befejező más. A labda előbb a lövő KEZÉBEN van (ez az
+    elengedés pillanata, innen jön a lövő-hozzárendelés), majd a +x
+    kapuba repül.
+    """
+    xs = [30.0, 28.0, 32.0]
+    ys = ys or [10.0, 4.0, 16.0]
+    pos = {i + 1: (xs[i], ys[i]) for i in range(3)}
+    frames = []
+    t = 0
+    for tid in plan:
+        for _ in range(20):      # a figura mozgás-mintázata
+            frames.append(_home_attack_frame(t, xs, ys))
+            t += 1
+        sx, sy = pos[tid]
+        cast = [_pl(i + 1, Team.HOME, xs[i], ys[i]) for i in range(3)]
+        for _ in range(6):       # a lövő kezében a labda
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        steps = 10
+        for i in range(1, steps + 1):
+            f = i / steps
+            frames.append(Frame(
+                t=t, players=cast,
+                ball=Ball(x=sx + 0.2 + (40.4 - sx - 0.2) * f,
+                          y=sy + (10.0 - sy) * f, confidence=1.0)))
+            t += 1
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=5.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="spf", home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_setplay_finishers_finds_the_telegraphed_figure():
+    """Ha a figura lövéseinek négyötöde ugyanarra a posztra fut ki, a
+    falnak már a figura indulásakor arra az oldalra kell csúsznia."""
+    from handball.pipeline.setplays import (SPF_MIN_SHOTS,
+                                            setplay_finishers)
+
+    rec = setplay_finishers(_spf_match([1, 1, 1, 1, 2]))["home"]
+    assert rec["figures"], rec
+    top = rec["figures"][0]
+    assert sum(top["roles"].values()) >= SPF_MIN_SHOTS, rec
+    assert rec["telegraphed"] is not None, rec
+    assert rec["telegraphed"]["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "INDULÁSAKOR" in rec["verdict"], rec
+
+
+def test_setplay_finishers_silent_with_few_shots():
+    """Két lövésből nincs ítélet — a figura befejezője még nem minta."""
+    from handball.pipeline.setplays import setplay_finishers
+
+    rec = setplay_finishers(_spf_match([1, 2]))["home"]
+    assert rec["telegraphed"] is None and rec["verdict"] is None, rec
+    assert all(r["main_role"] is None for r in rec["figures"]), rec
+
+
+# ---- Figura-koncentráció (egy figurára épül-e a támadójáték) ---------------
+
+
+def _spk_match(sides, fps=25.0):
+    """`sides` = támadásonként a tömörülés oldala ("bal"/"jobb"): a
+    két oldal két külön figurát ad. Támadások közt átmenet."""
+    frames = []
+    t = 0
+    for side in sides:
+        y = 4.0 if side == "bal" else 16.0
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, [28.0, 31.0, 34.0],
+                                             [y, y, y]))
+            t += 1
+        for _ in range(4):     # átmenet: a hazai a saját térfelén
+            frames.append(Frame(t=t,
+                                players=[_pl(1, Team.HOME, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="spk", home_team="A", away_team="B",
+                           fps=fps), frames)
+
+
+def test_setplay_concentration_flags_the_one_figure_team():
+    """Ha a támadások nagy része egyetlen mintából jön, konkrét
+    figurára lehet készülni."""
+    from handball.pipeline.setplays import (SPK_MIN_ATTACKS,
+                                            setplay_concentration)
+
+    rec = setplay_concentration(_spk_match(["bal"] * 6 + ["jobb"]))["home"]
+    assert rec["attacks"] >= SPK_MIN_ATTACKS, rec
+    assert rec["figures"] == 2, rec
+    assert rec["top_pct"] and rec["top_pct"] >= 40.0, rec
+    assert rec["cover_figures"] and rec["cover_figures"] >= 1, rec
+    assert rec["verdict"] and "konkrét figurára" in rec["verdict"], rec
+
+
+def test_setplay_concentration_silent_with_few_attacks():
+    """Néhány támadásból nincs ítélet — a szám viszont látszik."""
+    from handball.pipeline.setplays import setplay_concentration
+
+    rec = setplay_concentration(_spk_match(["bal", "jobb"]))["home"]
+    assert rec["attacks"] == 2, rec
+    assert rec["verdict"] is None, rec
+    assert setplay_concentration(
+        _spk_match(["bal", "jobb"]))["away"]["attacks"] == 0
+
+
+_SPD_PATTERNS = [[30.0, 28.0, 32.0], [26.0, 34.0, 30.0],
+                 [33.0, 25.0, 29.0], [24.0, 31.0, 35.0]]
+
+
+def _spd_match(first_goal=True, repeat_goal=False, patterns=None):
+    """Négy különböző hazai figura: előbb mind egyszer (ELSŐ
+    előfordulás), majd mind újra (ISMÉTLÉS) — sávonként a megadott
+    kimenetellel (gól vagy befejezés nélkül)."""
+    pats = patterns or _SPD_PATTERNS
+    frames = []
+    t = 0
+
+    def _attack(xs, goal):
+        nonlocal t
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, xs))
+            t += 1
+        if goal:
+            for i in range(8):
+                frames.append(Frame(
+                    t=t, players=[_pl(1, Team.HOME, 33.5, 10.0)],
+                    ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for _ in range(25):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for xs in pats:
+        _attack(xs, first_goal)
+    for xs in pats:
+        _attack(xs, repeat_goal)
+    return Match(MatchMeta(match_id="spd", home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_setplay_decay_shows_the_value_of_recognition():
+    """Ha az ismétlésre esik a figurák hozama, a fal maga megoldja a
+    felismerést."""
+    from handball.pipeline.setplays import SPD_GAP_PP, setplay_decay
+
+    rec = setplay_decay(_spd_match())["home"]
+    assert rec["first_attacks"] >= 4 and rec["repeat_attacks"] >= 4, rec
+    assert rec["gap_pp"] is not None
+    assert rec["first_pct"] - rec["repeat_pct"] >= SPD_GAP_PP, rec
+    assert rec["verdict"] and "felismerést" in rec["verdict"], rec
+
+
+def test_setplay_decay_silent_with_few_attacks():
+    """Kevés figura-támadásból nincs ítélet."""
+    from handball.pipeline.setplays import setplay_decay
+
+    rec = setplay_decay(_spd_match(patterns=_SPD_PATTERNS[:2]))["home"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None, rec
+
+
+# ---- Figura-indító (setplay_openers) ---------------------------------------
+
+
+def _spo_match(openers, ys=None):
+    """`openers` = támadásonként az a hazai játékos, AKINÉL a labda van
+    a szakasz elején.
+
+    A mozgás-mintázat minden támadásban UGYANAZ (a három játékos
+    ugyanott áll), tehát egyetlen figura-klaszter jön létre — csak az
+    INDÍTÓ ember más. Pont ezt méri a réteg.
+    """
+    xs = [30.0, 28.0, 32.0]
+    ys = ys or [10.0, 4.0, 16.0]
+    pos = {i + 1: (xs[i], ys[i]) for i in range(3)}
+    frames = []
+    t = 0
+    for tid in openers:
+        ox, oy = pos[tid]
+        cast = [_pl(i + 1, Team.HOME, xs[i], ys[i]) for i in range(3)]
+        for _ in range(20):      # a figura: a labda az INDÍTÓ kezében
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=ox + 0.2, y=oy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(30):      # átmenet a következő támadásig
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=5.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="spo", home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_setplay_openers_finds_the_readable_start():
+    """Ha a figura indításainak négyötöde ugyanarról a posztról jön, a
+    fal már az ELSŐ passznál tudja, mi következik."""
+    from handball.pipeline.setplays import (SPO_MIN_STARTS,
+                                            setplay_openers)
+
+    rec = setplay_openers(_spo_match([1, 1, 1, 1, 2]))["home"]
+    assert rec["figures"], rec
+    top = rec["figures"][0]
+    assert sum(top["roles"].values()) >= SPO_MIN_STARTS, rec
+    assert rec["telegraphed"] is not None, rec
+    assert rec["telegraphed"]["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "passzsávot" in rec["verdict"], rec
+
+
+def test_setplay_openers_silent_when_the_start_varies():
+    """Váltogatott indítással nincs előjel — a figurát nem lehet az
+    első passzból felismerni (sose hallgatólagos előjel)."""
+    from handball.pipeline.setplays import setplay_openers
+
+    # A 2-es és a 3-as ugyanazt a posztot (szélső) kapja a becsléstől,
+    # ezért a váltogatást az 1-es (átlövő) és a 2-es között mérjük.
+    rec = setplay_openers(_spo_match([1, 2, 1, 2, 1, 2]))["home"]
+    assert rec["figures"][0]["roles"] == {"átlövő": 3, "szélső": 3}, rec
+    assert rec["telegraphed"] is None and rec["verdict"] is None, rec
+
+
+def test_setplay_openers_silent_on_thin_samples():
+    """Két indításból még nem minta — a figura ítélete None."""
+    from handball.pipeline.setplays import setplay_openers
+
+    rec = setplay_openers(_spo_match([1, 2]))["home"]
+    assert rec["telegraphed"] is None and rec["verdict"] is None, rec
+    assert all(r["main_role"] is None for r in rec["figures"]), rec

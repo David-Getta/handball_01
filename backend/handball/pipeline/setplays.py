@@ -278,6 +278,15 @@ def discover_setplays(match: Match, config: TacticsConfig | None = None,
     )
 
 
+def _copy_side_rows(data: dict) -> dict:
+    """{oldal: [sor-dict, ...]} védő-másolata a gyorsítótárhoz."""
+    return {side: [dict(r) for r in (rows or [])]
+            for side, rows in (data or {}).items()}
+
+
+# A figura-hatékonyság a támadásokat ÚJRA ujjlenyomatozza és
+# klaszterezi — egy összeállítás alatt öt figura-réteg kéri.
+@memoize_primitive("setplay_efficiency", copy=_copy_side_rows)
 def setplay_efficiency(match: Match, config: TacticsConfig | None = None,
                        threshold: float = 0.15, min_length: int = 5,
                        min_attacks: int = 2) -> dict:
@@ -326,4 +335,380 @@ def setplay_efficiency(match: Match, config: TacticsConfig | None = None,
                 if rec["attacks"] >= min_attacks]
         rows.sort(key=lambda r: (-r["attacks"], -r["goals"]))
         out[team.value] = rows
+    return out
+
+
+# Figura-kopás: sávonként ennyi mért figura-támadás kell az
+# ítélethez, és ekkora (százalékpontos) esés számít érdeminek.
+SPD_MIN_ATTACKS = 4
+SPD_GAP_PP = 15.0
+
+
+def setplay_decay(match: Match, config: TacticsConfig | None = None,
+                  threshold: float = 0.15, min_length: int = 5) -> dict:
+    """Figura-kopás: MŰKÖDIK-E MÉG a figura a második ismétlésre.
+
+    A figura-hatékonyság (setplay_efficiency) azt mondja meg, MELYIK
+    figurájuk veszélyes — ez azt, MEDDIG: minden figura első
+    előfordulását szétválasztja az ISMÉTLÉSEKTŐL, és a két sávban
+    külön számol gólarányt.
+
+    Edzőileg ez a felismerés értéke, számokban. Ha az ismétlésre
+    érdemben esik a hozamuk, a fal maga megoldja a felismerést —
+    elég lefuttatni velük a figurát, és a második-harmadik
+    ismétlésre már készen áll a válasz. Ha az ismétlés is ugyanúgy
+    gólt hoz, a baj nem a felismerés, hanem a párharc: ott
+    emberfogás vagy kettőzés kell a befejezőre, nem "figyeljetek
+    jobban".
+
+    Visszatérés csapatonként: {"first_attacks", "first_goals",
+    "repeat_attacks", "repeat_goals", "first_pct", "repeat_pct",
+    "gap_pp", "verdict"} — a pct/gap/verdict None, ha valamelyik
+    sávban kevés (SPD_MIN_ATTACKS alatti) a mért figura-támadás.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(3.0 * fps)
+    shots_ev = [e for e in detect_shots(match, config)
+                if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        labels = cluster_signatures([attack_signature(s_) for s_ in seqs],
+                                    threshold=threshold)
+        seen: set = set()
+        rec = {"first_attacks": 0, "first_goals": 0,
+               "repeat_attacks": 0, "repeat_goals": 0,
+               "first_pct": None, "repeat_pct": None,
+               "gap_pp": None, "verdict": None}
+        for seq, lab in zip(seqs, labels):
+            kulcs = "first" if lab not in seen else "repeat"
+            seen.add(lab)
+            rec[f"{kulcs}_attacks"] += 1
+            if any(e.team == team and e.type == EventType.GOAL
+                   and seq.start_t <= e.t <= seq.end_t + tail
+                   for e in shots_ev):
+                rec[f"{kulcs}_goals"] += 1
+        if (rec["first_attacks"] >= SPD_MIN_ATTACKS
+                and rec["repeat_attacks"] >= SPD_MIN_ATTACKS):
+            fp = 100.0 * rec["first_goals"] / rec["first_attacks"]
+            rp = 100.0 * rec["repeat_goals"] / rec["repeat_attacks"]
+            rec["first_pct"] = round(fp, 1)
+            rec["repeat_pct"] = round(rp, 1)
+            rec["gap_pp"] = round(rp - fp, 1)
+            if fp - rp >= SPD_GAP_PP:
+                rec["verdict"] = (
+                    f"a figuráik kopnak az ismétlésre ({fp:.0f}% → "
+                    f"{rp:.0f}% gólarány) — a fal maga megoldja a "
+                    "felismerést: elég lefuttatni velük a figurát, a "
+                    "második ismétlésre kész a válasz")
+            elif rp - fp >= SPD_GAP_PP:
+                rec["verdict"] = (
+                    f"az ismétlés NEKIK dolgozik ({fp:.0f}% → "
+                    f"{rp:.0f}% gólarány) — a baj nem a felismerés, "
+                    "hanem a párharc: a befejezőre emberfogás vagy "
+                    "kettőzés kell")
+        out[team.value] = rec
+    return out
+
+
+# Figura-befejező: egy figurához ennyi mért lövés kell az ítélethez, és
+# ekkora részarány számít kiszámíthatónak. A 60% azt jelenti, hogy öt
+# lövésből három ugyanarra a posztra fut ki — a falnak ennyiből már
+# érdemes a figura FELISMERÉSÉRE készülnie, nem a lövés pillanatára.
+SPF_MIN_SHOTS = 4
+SPF_SHARE_PCT = 60.0
+
+
+def setplay_finishers(match: Match, config: TacticsConfig | None = None,
+                      threshold: float = 0.15, min_length: int = 5,
+                      min_attacks: int = 2) -> dict:
+    """Figura-befejező: MELYIK FIGURÁJUKAT KI FEJEZI BE.
+
+    A figura-hatékonyság (`setplay_efficiency`) azt mondja meg, melyik
+    figurájuk veszélyes — ez azt, hogy a veszélyes figura KIRE FUT KI.
+    Minden figura-klaszterhez összegyűjtjük a benne (vagy 3 mp-en belül
+    utána) esett lövéseket, és az ELENGEDŐ játékos posztjához írjuk
+    őket.
+
+    Edzőileg ez a FELISMERÉS haszna. Egy figurát a fal a második-
+    harmadik ismétlésre megismer — de a felismerésből csak akkor lesz
+    védés, ha tudja, mire fut ki. Ha a figura lövéseinek nagy része
+    ugyanarra a posztra megy, a fal már a figura INDULÁSAKOR
+    elhelyezkedhet: a befejező oldalára csúszik, és a passzsávot zárja,
+    ahelyett hogy a lövés pillanatában reagálna. Ha a figura befejezése
+    szórt, a felismerés önmagában keveset ér — ott a labdát kell
+    üldözni, nem az embert.
+
+    Visszatérés csapatonként: {"figures": [{"figure", "attacks",
+    "shots", "roles": {poszt: lövés}, "main_role", "share_pct"}],
+    "telegraphed": {"figure", "shots", "poszt", "share_pct"} | None,
+    "verdict": str | None} — a main_role/share_pct None, ha a figura
+    nem érte el az SPF_MIN_SHOTS lövést; a telegraphed/verdict None, ha
+    egyik figura sem éri el az SPF_SHARE_PCT részarányt.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(3.0 * fps)
+    shots_ev = [e for e in detect_shots(match, config)
+                if e.type in (EventType.SHOT, EventType.GOAL)]
+    roles = estimate_positions(match, config)
+
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        labels = cluster_signatures([attack_signature(s_) for s_ in seqs],
+                                    threshold=threshold)
+        agg: dict = {}
+        for seq, lab in zip(seqs, labels):
+            rec = agg.setdefault(lab, {"attacks": 0, "shots": 0,
+                                       "roles": {}})
+            rec["attacks"] += 1
+            for e in shots_ev:
+                if e.team != team or not (seq.start_t <= e.t
+                                          <= seq.end_t + tail):
+                    continue
+                rec["shots"] += 1
+                if e.player_id is None:
+                    continue
+                rec_role = roles[team.value].get(e.player_id)
+                if rec_role is None:
+                    continue
+                poszt = rec_role["poszt"]
+                rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+
+        rows = []
+        for lab, rec in agg.items():
+            if rec["attacks"] < min_attacks:
+                continue
+            named = sum(rec["roles"].values())
+            main = share = None
+            if named >= SPF_MIN_SHOTS:
+                poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+                main = poszt
+                share = round(100.0 * rec["roles"][poszt] / named, 1)
+            rows.append({"figure": int(lab), "attacks": rec["attacks"],
+                         "shots": rec["shots"],
+                         "roles": dict(sorted(rec["roles"].items(),
+                                              key=lambda kv: -kv[1])),
+                         "main_role": main, "share_pct": share})
+        rows.sort(key=lambda r: (-r["attacks"], -r["shots"]))
+
+        telegraphed = verdict = None
+        best = [r for r in rows
+                if r["share_pct"] is not None
+                and r["share_pct"] >= SPF_SHARE_PCT]
+        if best:
+            r = max(best, key=lambda r_: (r_["share_pct"], r_["shots"]))
+            telegraphed = {"figure": r["figure"],
+                           "shots": sum(r["roles"].values()),
+                           "poszt": r["main_role"],
+                           "share_pct": r["share_pct"]}
+            verdict = (f"a(z) {r['figure']}. figurájuk lövéseinek "
+                       f"{r['share_pct']:.0f}%-a a(z) {r['main_role']} "
+                       "posztra fut ki — a figura INDULÁSAKOR arra az "
+                       "oldalra kell csúszni, nem a lövésnél")
+        out[team.value] = {"figures": rows, "telegraphed": telegraphed,
+                           "verdict": verdict}
+    return out
+
+
+# Figura-indító küszöbei: ennyi poszthoz kötött INDÍTÁS kell a figura
+# ítéletéhez, és ekkora részarány fölött mondjuk ki, hogy a figura
+# indítása egy posztról olvasható.
+SPO_MIN_STARTS = 4
+SPO_SHARE_PCT = 60.0
+
+
+def setplay_openers(match: Match, config: TacticsConfig | None = None,
+                    threshold: float = 0.15, min_length: int = 5,
+                    min_attacks: int = 2) -> dict:
+    """Figura-indító: MELYIK POSZTRÓL INDUL a figurájuk.
+
+    A figura-befejező (`setplay_finishers`) azt mondja meg, KIRE FUT KI
+    a figura — ez azt, HONNAN INDUL. A kettő nem ugyanaz a védekező
+    szempontjából: a befejezőt a fal a lövés előtt egy-két másodperccel
+    ismeri fel, az indítót viszont AZONNAL, az első passznál.
+
+    Minden figura-klaszter minden támadásában megnézzük, kinél volt a
+    labda a szakasz ELSŐ mért pillanatában (a birtoklás-eldöntött első
+    kockán), és azt a játékos posztjához írjuk.
+
+    Edzőileg ez az ELŐJEL. Ha egy figura a támadásaik nagy részében
+    ugyanarról a posztról indul, akkor abban a pillanatban, ahogy a
+    labda odaér, a fal már tudja, mi jön — nem a felismerésre kell
+    várni, hanem a kiinduló passzsávot lehet zárni, és a figura el sem
+    indul. Saját oldalon fordítva: ha a mi figuránk mindig ugyanonnan
+    indul, az ellenfél ugyanezt látja — az indítót variálni kell,
+    különben a figura a harmadik ismétléstől nem ér semmit.
+
+    Visszatérés csapatonként: {"figures": [{"figure", "attacks",
+    "starts", "roles": {poszt: indítás}, "main_role", "share_pct"}],
+    "telegraphed": {"figure", "starts", "poszt", "share_pct"} | None,
+    "verdict": str | None} — a main_role/share_pct None, ha a figura
+    nem érte el az SPO_MIN_STARTS poszthoz kötött indítást; a
+    telegraphed/verdict None, ha egyik figura sem éri el az
+    SPO_SHARE_PCT részarányt (sose hallgatólagos előjel).
+    """
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        labels = cluster_signatures([attack_signature(s_) for s_ in seqs],
+                                    threshold=threshold)
+        agg: dict = {}
+        for seq, lab in zip(seqs, labels):
+            rec = agg.setdefault(lab, {"attacks": 0, "starts": 0,
+                                       "roles": {}})
+            rec["attacks"] += 1
+            # A szakasz ELSŐ kockája, ahol a labda a támadó csapat
+            # egyik emberénél van — ő indítja a figurát.
+            for f in seq.frames:
+                holder = ball_holder(f, config)
+                if holder is None or holder.team != team:
+                    continue
+                rec["starts"] += 1
+                rec_role = roles[team.value].get(holder.track_id)
+                if rec_role is not None:
+                    poszt = rec_role["poszt"]
+                    rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+                break
+
+        rows = []
+        for lab, rec in agg.items():
+            if rec["attacks"] < min_attacks:
+                continue
+            named = sum(rec["roles"].values())
+            main = share = None
+            if named >= SPO_MIN_STARTS:
+                poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+                main = poszt
+                share = round(100.0 * rec["roles"][poszt] / named, 1)
+            rows.append({"figure": int(lab), "attacks": rec["attacks"],
+                         "starts": rec["starts"],
+                         "roles": dict(sorted(rec["roles"].items(),
+                                              key=lambda kv: -kv[1])),
+                         "main_role": main, "share_pct": share})
+        rows.sort(key=lambda r: (-r["attacks"], -r["starts"]))
+
+        telegraphed = verdict = None
+        best = [r for r in rows
+                if r["share_pct"] is not None
+                and r["share_pct"] >= SPO_SHARE_PCT]
+        if best:
+            r = max(best, key=lambda r_: (r_["share_pct"], r_["starts"]))
+            telegraphed = {"figure": r["figure"],
+                           "starts": sum(r["roles"].values()),
+                           "poszt": r["main_role"],
+                           "share_pct": r["share_pct"]}
+            verdict = (f"a(z) {r['figure']}. figurájuk indításainak "
+                       f"{r['share_pct']:.0f}%-a a(z) {r['main_role']} "
+                       "posztról jön — amint a labda odaér, zárni kell a "
+                       "kiinduló passzsávot, és a figura el sem indul")
+        out[team.value] = {"figures": rows, "telegraphed": telegraphed,
+                           "verdict": verdict}
+    return out
+
+
+# Figura-koncentráció küszöbei: ennyi mért támadás kell az ítélethez,
+# ekkora részarány számít "egy figurára épülő" játéknak, ennyi
+# részarány alatt viszont változatosnak, és ennyi figurát nézünk a
+# lefedettségnél.
+SPK_MIN_ATTACKS = 6
+SPK_TOP_PCT = 40.0
+SPK_VARIED_PCT = 25.0
+SPK_COVER_PCT = 80.0
+
+
+def setplay_concentration(match: Match,
+                          config: TacticsConfig | None = None,
+                          threshold: float = 0.15,
+                          min_length: int = 5) -> dict:
+    """Figura-koncentráció: EGY FIGURÁRA épül-e a támadójátékuk.
+
+    A figura-hatékonyság (setplay_efficiency) azt mondja meg, MELYIK
+    figurájuk veszélyes, a figura-befejező azt, KIRE fut ki — ez a
+    repertoár SZÉLESSÉGÉT: a támadás-szakaszaikat csapatonként
+    klaszterezi, és megnézi, mekkora hányad esik a legnagyobb
+    klaszterbe, illetve hány figura fedi le a támadások
+    SPK_COVER_PCT százalékát.
+
+    Edzőileg ez a felkészülés terjedelme. Ha a támadásaik nagy része
+    egyetlen mintából jön, konkrét figurára lehet készülni (videó,
+    bejátszott védekezés, előre megbeszélt kettőzés) — ez a
+    legolcsóbb felkészülés. Ha viszont sokfelé oszlik, figurákra
+    készülni pazarlás: elvekre kell (kilépés-szabály, beálló-átadás,
+    kettőzés-jel), mert a konkrét minta úgysem ismétlődik.
+
+    Visszatérés csapatonként: {"attacks" (mért támadás), "figures"
+    (klaszter), "top_pct" (a legnagyobb klaszter részaránya),
+    "cover_figures" (ennyi figura fedi le a támadások
+    SPK_COVER_PCT%-át), "verdict"} — az ítélet None, ha nincs meg a
+    SPK_MIN_ATTACKS, vagy a kép a két küszöb közé esik.
+    """
+    config = config or TacticsConfig()
+
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        rec = {"attacks": len(seqs), "figures": 0, "top_pct": None,
+               "cover_figures": None, "verdict": None}
+        if seqs:
+            labels = cluster_signatures(
+                [attack_signature(s_) for s_ in seqs],
+                threshold=threshold)
+            sizes: dict = {}
+            for lab in labels:
+                sizes[lab] = sizes.get(lab, 0) + 1
+            counts = sorted(sizes.values(), reverse=True)
+            rec["figures"] = len(counts)
+            top = 100.0 * counts[0] / len(seqs)
+            rec["top_pct"] = round(top, 1)
+            # Hány figura kell a támadások SPK_COVER_PCT%-ához.
+            acc = 0
+            cover = 0
+            for n in counts:
+                acc += n
+                cover += 1
+                if 100.0 * acc / len(seqs) >= SPK_COVER_PCT:
+                    break
+            rec["cover_figures"] = cover
+            if len(seqs) >= SPK_MIN_ATTACKS:
+                if top >= SPK_TOP_PCT:
+                    rec["verdict"] = (
+                        f"a támadásaik {top:.0f}%-a egyetlen "
+                        f"mintából jön ({len(seqs)} mért támadásból, "
+                        f"{cover} figura fedi le a "
+                        f"{SPK_COVER_PCT:.0f}%-ot) — konkrét figurára "
+                        "lehet készülni: videó, bejátszott "
+                        "védekezés, előre megbeszélt kettőzés")
+                elif top <= SPK_VARIED_PCT:
+                    rec["verdict"] = (
+                        f"a támadásaik sokfelé oszlanak (a legnagyobb "
+                        f"minta is csak {top:.0f}%, {rec['figures']} "
+                        f"figura, {cover} kell a "
+                        f"{SPK_COVER_PCT:.0f}%-hoz) — figurákra "
+                        "készülni pazarlás: elvekre kell "
+                        "(kilépés-szabály, beálló-átadás, "
+                        "kettőzés-jel)")
+        out[team.value] = rec
     return out

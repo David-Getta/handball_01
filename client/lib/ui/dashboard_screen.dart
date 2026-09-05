@@ -5,16 +5,21 @@
 /// match_id-vel. Backend nélkül/üres tárnál barátságos állapotot mutat.
 library;
 
-import "dart:async";
 import "dart:io";
 
 import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
+import "../services/backend_launcher.dart";
+import "../services/jobs_monitor.dart";
+import "diagnostics_button.dart";
+import "../services/session_store.dart";
 import "../services/update_service.dart";
+import "anim.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
+import "label_screen.dart";
 import "match_screen.dart";
 import "player_trend_screen.dart";
 import "scouting_screen.dart";
@@ -36,6 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   bool _loading = true;
   bool _offline = false; // a backend nem elérhető
+  bool _reviving = false; // épp fut a motor-újraindítás
   List<Map<String, dynamic>> _matches = [];
 
   // Szezon-összkép (GET /library/summary) — hibánál null, a kártyák a
@@ -53,31 +59,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // egy koppintással külön a kész és a folytatásra/törlésre váró elemzések.
   String _libFilter = "all";
 
-  // Feldolgozási sor: a futó/sorban álló munkák a kezdőlapon is látszanak,
-  // és amíg van aktív munka, pár másodpercenként frissülnek.
-  List<Map<String, dynamic>> _jobs = [];
+  // Feldolgozási sor: a futó/sorban álló munkák a kezdőlapon is
+  // látszanak. A kérdezgetést a KÖZÖS figyelő végzi (JobsMonitor) — a
+  // menü-jelvény és a Feldolgozások képernyő ugyanabból az állapotból
+  // dolgozik, tehát egyetlen kérés jár, nem képernyőnként külön.
   List<Map<String, dynamic>> _jobHistory = [];
-  Timer? _jobsTimer;
 
-  bool _isActiveJob(Map<String, dynamic> j) =>
-      j["status"] == "running" || j["status"] == "queued";
+  List<Map<String, dynamic>> get _jobs => JobsMonitor.instance.jobs.value;
 
-  Future<void> _refreshJobs() async {
-    final jobs = await _api.fetchJobs();
-    if (!mounted) return;
-    final hadActive = _jobs.any(_isActiveJob);
-    final hasActive = jobs.any(_isActiveJob);
-    setState(() => _jobs = jobs);
-    if (hasActive) {
-      _jobsTimer ??= Timer.periodic(
-          const Duration(seconds: 2), (_) => _refreshJobs());
-    } else {
-      _jobsTimer?.cancel();
-      _jobsTimer = null;
-      // Ha épp most fejeződött be egy munka, a könyvtár is frissül.
-      if (hadActive) _load();
-    }
+  bool _isActiveJob(Map<String, dynamic> j) => JobsMonitor.isActive(j);
+
+  /// A közös figyelő jelzi, ha KIFUTOTT az utolsó munka — ilyenkor a
+  /// könyvtárat újra kell tölteni, hogy a kész meccs megjelenjen.
+  void _onJobsFinished() {
+    if (mounted) _load();
   }
+
+  Future<void> _refreshJobs() => JobsMonitor.instance.refreshNow();
 
   // Automatikus frissítés: az elérhető új verzió (ha van) és az elrejtés.
   UpdateInfo? _update;
@@ -88,11 +86,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _load();
     _checkUpdatesSilently();
+    // A közös figyelő állapotára hangolódunk: a kártyák frissülnek, és
+    // ha kifutott az utolsó munka, a könyvtár is újratöltődik.
+    JobsMonitor.instance.start();
+    JobsMonitor.instance.jobs.addListener(_onJobsChanged);
+    JobsMonitor.instance.finishedTick.addListener(_onJobsFinished);
+  }
+
+  void _onJobsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _jobsTimer?.cancel();
+    JobsMonitor.instance.jobs.removeListener(_onJobsChanged);
+    JobsMonitor.instance.finishedTick.removeListener(_onJobsFinished);
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -196,15 +204,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     "pozíciókat. Ha jó: Félidő vagy Teljes videó. Több videót is "
                     "sorba állíthatsz; a haladás itt, a kezdőlapon látszik. Az "
                     "appot ne zárd be feldolgozás közben."),
-                step("4", "Elemzés",
+                step("4", "Darabokban felvett meccs",
+                    "Telefonnal darabokban vetted fel? Add fel az összes "
+                    "darabot EGY kötegben, időrendben — a feldolgozás végén "
+                    "magától összeáll egy teljes meccsé. Ha a sor \"térfél?\" "
+                    "jelvényt mutat, a ⇄ gombbal ellenőrizd: a párbeszéd "
+                    "mutatja a felismert eredményt, és ha fordítva áll, egy "
+                    "gombbal megfordíthatod."),
+                step("5", "Elemzés",
                     "A kész meccs a könyvtárban. Meccs-nézet: lejátszás, "
                     "statisztika, események (kattintásra a VIDEÓ a jelenetre "
                     "ugrik), játékos-kiemelés a pályára kattintva. Ha a csapatok "
                     "fordítva: ⇄ gomb. Jelentés: 📄 (nyomtatható) és 📊 (Excel)."),
-                step("5", "Felderítés és fejlődés",
+                step("6", "Felderítés és fejlődés",
                     "Meccs-nézet → Felderítés: ellenfél-jelentés kulcsokkal. "
                     "Kezdőlap → Egyesített felderítés (több meccsből) és "
                     "Fejlődés (két időszak összevetése)."),
+                step("7", "3D pálya",
+                    "A kész meccs térben is bejárható (bal menü → 3D "
+                    "pálya): WASD + egér, TV-kamera a labdára, "
+                    "Játékos-kamera mezszám szerint. Az Események lista "
+                    "⋮ menüjéből bármely jelenet 3D-ben nyílik; a "
+                    "\"Böngészős 3D / VR\" gomb headset-re kész oldalt ad."),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   "Az app magától frissül (arany sáv). Minden adat a saját "
@@ -374,6 +395,120 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Frissítési hiba: ${humanError(e)}")));
     }
+  }
+
+  /// Igaz, ha az app és a motor verziója is ismert, kiadott, és eltér —
+  /// tipikusan fél-frissült telepítés (a fájlcsere félbe maradt, vagy a
+  /// régi app-példány indult el).
+  bool _versionMismatch() {
+    final ev = ApiClient.engineVersion;
+    return ev != null &&
+        ev.isNotEmpty &&
+        !appVersion.contains("-dev") &&
+        ev != appVersion;
+  }
+
+  /// Figyelmeztető sáv: az app és a motor verziója eltér — a rejtélyes
+  /// hibák helyett kimondjuk, és a megoldást is adjuk (teljes
+  /// újratelepítés a Releases-ről).
+  Widget _versionMismatchBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.away.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.away),
+      ),
+      child: Row(children: [
+        const Icon(Icons.warning_amber_rounded,
+            color: AppColors.away, size: 18),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Text(
+            "Az app (v$appVersion) és a motor "
+            "(v${ApiClient.engineVersion}) verziója eltér — jellemzően "
+            "egy RÉGI motor-folyamat maradt életben a frissítés után. "
+            "A \"Motor újraindítása\" gomb leállítja, és a beépített "
+            "(v$appVersion) motort indítja el.",
+            style: AppText.label,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        FilledButton(
+          style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: AppColors.onAccent),
+          onPressed: _restartEngine,
+          child: const Text("Motor újraindítása"),
+        ),
+      ]),
+    );
+  }
+
+  /// A verzió-eltérés helyben javítása: a régi motor leállítása és a
+  /// beépített indítása (az indító fél-frissülés-védelme végzi el).
+  Future<void> _restartEngine() async {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("Motor újraindítása…")));
+    // Közvetlenül az indítót hívjuk: a sima újra-felderítés a futó
+    // RÉGI motort találná meg és "rendben"-t mondana — az indító
+    // fél-frissülés-védelme viszont leállítja, és a beépítettet hozza.
+    final launcher = BackendLauncher.instance ?? BackendLauncher();
+    final st = await launcher.ensureRunning();
+    final ok = st.phase == BackendPhase.ready;
+    if (!mounted) return;
+    ApiClient.engineVersion = null; // a friss /health tölti újra
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? "A motor újraindult — ha a sáv eltűnt, a verziók már "
+                "egyeznek."
+            : "Nem sikerült újraindítani — indítsd újra a számítógépet, "
+                "az biztosan leállítja a régi motort.")));
+  }
+
+  /// Vendég-sáv: fiók nélküli munkamenetben a munka a következő
+  /// indításkor törlődik — kivéve, ha a fejlesztői mód be van kapcsolva.
+  Widget _guestBanner() {
+    final dev = SessionStore.devMode;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(children: [
+        const Icon(Icons.person_outline,
+            color: AppColors.textFaint, size: 18),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Text(
+            dev
+                ? "Vendég-munkamenet · fejlesztői mód BE — a munkád "
+                    "kilépés után is megmarad."
+                : "Vendég-munkamenet — a most készülő munka az app "
+                    "következő indításakor törlődik.",
+            style: AppText.label,
+          ),
+        ),
+        TextButton(
+          onPressed: () async {
+            await SessionStore.setDevMode(!SessionStore.devMode);
+            if (mounted) setState(() {});
+          },
+          style: TextButton.styleFrom(
+              foregroundColor: AppColors.accent,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          child: Text(dev
+              ? "Fejlesztői mód kikapcsolása"
+              : "Megőrzöm a munkám (fejlesztői mód)"),
+        ),
+      ]),
+    );
   }
 
   /// Arany figyelmeztető sáv a lista tetején: új verzió érhető el.
@@ -950,61 +1085,123 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Félidők összefűzése: a két (külön feldolgozott) félidőből EGY teljes
-  /// meccs készül — a statisztikák, események és a felderítés így a teljes
-  /// mérkőzésre számolódnak. A sorrend számít: 1. félidő → 2. félidő.
+  /// Szakaszok összefűzése: a külön feldolgozott részekből EGY teljes
+  /// meccs készül — a statisztikák, események és a felderítés így a
+  /// teljes mérkőzésre számolódnak. A sorrend számít.
+  ///
+  /// AKÁRHÁNY szakasz: a "két félidő" csak az egyik eset. Aki
+  /// telefonnal vagy fényképezőgéppel vesz fel, darabokban kapja a
+  /// meccset (a felvétel négy gigánál vagy tíz percnél elvágódik) —
+  /// hat-nyolc klip, nem kettő. A motor eddig is tudott N szakaszt
+  /// összefűzni; csak a felület kérdezett pontosan kettőt.
   Future<void> _mergeFlow() async {
-    String? firstId;
-    String? secondId;
+    // A kijelölt szakaszok SORRENDBEN — a lista maga a sorrend, mert
+    // az összefűzés időrendet vár, és egy rossz sorrendű meccsen
+    // minden idő-alapú réteg félremegy.
+    final List<String> parts = [];
     final nameCtrl = TextEditingController();
+
+    String _cimke(String id) {
+      final m = _matches.firstWhere((e) => e["match_id"] == id,
+          orElse: () => const <String, dynamic>{});
+      final home = (m["home_team"] as String?) ?? "Hazai";
+      final away = (m["away_team"] as String?) ?? "Vendég";
+      return "$home vs $away · $id";
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlg) {
-          DropdownButtonFormField<String> picker(
-              String label, String? value, void Function(String?) onChanged,
-              {String? exclude}) {
-            return DropdownButtonFormField<String>(
-              initialValue: value,
-              decoration: InputDecoration(labelText: label),
-              dropdownColor: AppColors.surfaceAlt,
-              items: [
-                for (final m in _matches)
-                  if (m["match_id"] != exclude)
-                    DropdownMenuItem(
-                      value: m["match_id"] as String,
-                      child: Text(
-                        "${m["home_team"] ?? "Hazai"} vs ${m["away_team"] ?? "Vendég"}"
-                        " · ${m["match_id"]}",
-                        overflow: TextOverflow.ellipsis,
-                        style: AppText.value.copyWith(fontSize: 13),
-                      ),
-                    ),
-              ],
-              onChanged: (v) => setDlg(() => onChanged(v)),
-            );
-          }
-
+          final maradek = [
+            for (final m in _matches)
+              if (!parts.contains(m["match_id"])) m
+          ];
           return AlertDialog(
             backgroundColor: AppColors.surface,
-            title: const Text("Félidők összefűzése"),
+            title: const Text("Szakaszok összefűzése"),
             content: SizedBox(
-              width: 460,
+              width: 520,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Válaszd ki időrendben a két felvételt — egy teljes meccs "
-                    "készül belőlük. Az eredeti félidők megmaradnak.",
+                    "Add hozzá a szakaszokat IDŐRENDBEN — akárhányat. "
+                    "Két félidő, vagy egy darabokban felvett meccs "
+                    "összes klipje. Az eredeti szakaszok megmaradnak.",
                     style: AppText.label.copyWith(fontSize: 12),
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  picker("1. félidő", firstId, (v) => firstId = v,
-                      exclude: secondId),
                   const SizedBox(height: AppSpacing.md),
-                  picker("2. félidő", secondId, (v) => secondId = v,
-                      exclude: firstId),
+                  // A KIJELÖLT lista, sorszámozva: a sorrend itt
+                  // látszik, és itt is javítható.
+                  if (parts.isEmpty)
+                    Text("Még nincs kijelölt szakasz.",
+                        style: AppText.label.copyWith(fontSize: 12))
+                  else
+                    for (var i = 0; i < parts.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(children: [
+                          SizedBox(
+                              width: 22,
+                              child: Text("${i + 1}.",
+                                  style: AppText.value
+                                      .copyWith(fontSize: 12.5))),
+                          Expanded(
+                            child: Text(_cimke(parts[i]),
+                                overflow: TextOverflow.ellipsis,
+                                style: AppText.label.copyWith(
+                                    fontSize: 12.5,
+                                    color: AppColors.textPrimary)),
+                          ),
+                          IconButton(
+                            tooltip: "Feljebb",
+                            iconSize: 16,
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(Icons.arrow_upward),
+                            onPressed: i == 0
+                                ? null
+                                : () => setDlg(() {
+                                      final x = parts.removeAt(i);
+                                      parts.insert(i - 1, x);
+                                    }),
+                          ),
+                          IconButton(
+                            tooltip: "Eltávolítás",
+                            iconSize: 16,
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(Icons.close),
+                            onPressed: () =>
+                                setDlg(() => parts.removeAt(i)),
+                          ),
+                        ]),
+                      ),
+                  const SizedBox(height: AppSpacing.md),
+                  DropdownButtonFormField<String>(
+                    initialValue: null,
+                    decoration: const InputDecoration(
+                        labelText: "Szakasz hozzáadása a lista végére"),
+                    dropdownColor: AppColors.surfaceAlt,
+                    items: [
+                      for (final m in maradek)
+                        DropdownMenuItem(
+                          value: m["match_id"] as String,
+                          child: Text(
+                            "${m["home_team"] ?? "Hazai"} vs "
+                            "${m["away_team"] ?? "Vendég"} · "
+                            "${m["match_id"]}",
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.value.copyWith(fontSize: 13),
+                          ),
+                        ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) setDlg(() => parts.add(v));
+                    },
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   TextField(
                     controller: nameCtrl,
@@ -1023,24 +1220,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: FilledButton.styleFrom(
                     backgroundColor: AppColors.accent,
                     foregroundColor: AppColors.onAccent),
-                onPressed: (firstId == null || secondId == null)
+                // A motor legalább KETTŐT vár — egy szakaszt nincs
+                // mihez fűzni.
+                onPressed: parts.length < 2
                     ? null
                     : () => Navigator.pop(ctx, true),
-                child: const Text("Összefűzés"),
+                child: Text(parts.length < 2
+                    ? "Összefűzés"
+                    : "Összefűzés (${parts.length} szakasz)"),
               ),
             ],
           );
         },
       ),
     );
-    if (ok != true || firstId == null || secondId == null) return;
+    if (ok != true || parts.length < 2) return;
     try {
-      final newId = await _api.mergeMatches([firstId!, secondId!],
+      final newId = await _api.mergeMatches(List<String>.from(parts),
           matchId: nameCtrl.text.trim());
       await _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Teljes meccs létrehozva: $newId")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Teljes meccs létrehozva ${parts.length} "
+              "szakaszból: $newId")));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -1089,6 +1291,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final awayCtrl = TextEditingController(text: (m["away_team"] as String?) ?? "");
     final dateCtrl = TextEditingController(
         text: (_perMatch[m["match_id"]]?["date"] as String?) ?? "");
+    // A VALÓDI (jegyzőkönyvi) végeredmény: az edző fejből tudja, és a
+    // minőség-jelentés ehhez tudja mérni a felismerést — ez a
+    // legolcsóbb pontosság-visszajelzés, két szám.
+    final realHCtrl = TextEditingController(
+        text: (m["real_goals_home"] as num?)?.toInt().toString() ?? "");
+    final realACtrl = TextEditingController(
+        text: (m["real_goals_away"] as num?)?.toInt().toString() ?? "");
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1121,6 +1330,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 prefixIcon: Icon(Icons.event, size: 18, color: AppColors.gold),
               ),
             ),
+            const SizedBox(height: AppSpacing.md),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: realHCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: "Valódi eredmény — hazai",
+                    hintText: "pl. 25",
+                    prefixIcon: Icon(Icons.scoreboard_outlined,
+                        size: 18, color: AppColors.home),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: TextField(
+                  controller: realACtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: "— vendég",
+                    hintText: "pl. 24",
+                    prefixIcon: Icon(Icons.scoreboard_outlined,
+                        size: 18, color: AppColors.away),
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 4),
+            Text(
+                "A jegyzőkönyvi végeredmény — a minőség-jelentés ehhez "
+                "méri a felismerést, és szól, ha messze van vagy "
+                "fordítva áll. Üresen hagyva törlődik.",
+                style: AppText.label.copyWith(fontSize: 11)),
           ],
         ),
         actions: [
@@ -1140,6 +1383,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           homeTeam: homeCtrl.text.trim(),
           awayTeam: awayCtrl.text.trim(),
           date: dateCtrl.text.trim());
+      await _api.setRealScore(m["match_id"] as String,
+          int.tryParse(realHCtrl.text.trim()),
+          int.tryParse(realACtrl.text.trim()));
       await _load();
     } catch (e) {
       if (!mounted) return;
@@ -1287,6 +1533,415 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Az összefűzött meccs szakasz-listája + KÉZI térfél-tükrözés.
+  ///
+  /// Az összefűzés a szakasz-határokon magától felismeri a térfélcserét,
+  /// de kevés mért pozíciónál nem dönt — ilyenkor az eredmény fordítva
+  /// állhat. A meccset látott ember viszont TUDJA a valódi végeredményt:
+  /// itt egy gombbal megfordíthatja a gyanús szakaszt, és az elemzés
+  /// (eredmény, összefoglaló, edzés-fókusz) újraszámol.
+  Future<void> _segmentsDialog(String id) async {
+    List<dynamic> segs = [];
+    // A felismert eredmény a döntéshez: a valódi végeredménnyel
+    // összevetve látszik, fordítva áll-e a meccs.
+    int? gh, ga;
+    String? err;
+    try {
+      final r = await _api.fetchMatchSegments(id);
+      segs = r["segments"] as List<dynamic>? ?? [];
+      gh = (r["goals_home"] as num?)?.toInt();
+      ga = (r["goals_away"] as num?)?.toInt();
+    } catch (e) {
+      err = humanError(e);
+    }
+    if (!mounted) return;
+    var changed = false;
+    String ido(num? s) {
+      if (s == null) return "vége";
+      final t = s.round();
+      return "${t ~/ 60}:${(t % 60).toString().padLeft(2, "0")}";
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSt) {
+        Widget sor(int i) {
+          final s = segs[i] as Map<String, dynamic>;
+          final mirrored = (s["mirrored"] as bool?) ?? false;
+          final decided = s["mirror_decided"];
+          final file = s["file"] as String? ?? "";
+          // decided == false: az összefűzés NEM tudott dönteni — itt
+          // állhat fordítva az eredmény, ezt emeljük ki.
+          final String allapot = decided == false
+              ? "nincs döntés — ellenőrizd az eredményt!"
+              : (mirrored ? "tükrözve" : "normál");
+          final Color szin = decided == false
+              ? AppColors.gold
+              : (mirrored ? AppColors.accent : AppColors.textSecondary);
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        "${i + 1}. szakasz · "
+                        "${ido(s["from_s"] as num?)}–${ido(s["to_s"] as num?)}"
+                        "${file.isNotEmpty ? " · $file" : ""}",
+                        style: AppText.value.copyWith(fontSize: 13)),
+                    Text(allapot,
+                        style: AppText.label
+                            .copyWith(fontSize: 11.5, color: szin)),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  try {
+                    final r = await _api.flipMatchSegment(id, i);
+                    changed = true;
+                    setSt(() {
+                      segs = r["segments"] as List<dynamic>? ?? segs;
+                      gh = (r["goals_home"] as num?)?.toInt();
+                      ga = (r["goals_away"] as num?)?.toInt();
+                    });
+                  } catch (e) {
+                    if (!ctx.mounted) return;
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                        content: Text(humanError(e))));
+                  }
+                },
+                child: const Text("Megfordítom"),
+              ),
+            ]),
+          );
+        }
+
+        return AlertDialog(
+          title: const Text("Szakaszok és térfelek"),
+          content: SizedBox(
+            width: 480,
+            child: err != null
+                ? Text(err!)
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          "Ha az eredmény fordítva áll (a gólok a rossz "
+                          "csapathoz kerültek), fordítsd meg a gyanús "
+                          "szakaszt — az elemzés újraszámol. A döntésed "
+                          "megmarad.",
+                          style: AppText.label.copyWith(fontSize: 12.5)),
+                      if (gh != null && ga != null) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        // Fordítás után frissül: azonnal látszik, a
+                        // valódi végeredmény jött-e ki.
+                        Text("Felismert eredmény most: $gh : $ga "
+                            "(hazai : vendég)",
+                            style: AppText.value.copyWith(
+                                fontSize: 13.5, color: AppColors.gold)),
+                      ],
+                      const SizedBox(height: AppSpacing.md),
+                      for (var i = 0; i < segs.length; i++) sor(i),
+                      if (segs.isEmpty)
+                        Text("Ennek a meccsnek nincs forrás-térképe.",
+                            style: AppText.label.copyWith(fontSize: 12.5)),
+                    ],
+                  ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text("Kész")),
+          ],
+        );
+      }),
+    );
+    if (changed) await _load();
+  }
+
+  /// "p:mp" vagy puszta másodperc → másodperc. Hibás alaknál null.
+  static double? _parseIdo(String s) {
+    final t = s.trim();
+    if (t.isEmpty) return null;
+    if (t.contains(":")) {
+      final d = t.split(":");
+      if (d.length != 2) return null;
+      final p = int.tryParse(d[0]);
+      final mp = double.tryParse(d[1].replaceAll(",", "."));
+      if (p == null || mp == null) return null;
+      return p * 60 + mp;
+    }
+    return double.tryParse(t.replaceAll(",", "."));
+  }
+
+  /// Másodperc → "p:mp" (pl. 549 → "9:09").
+  static String _fmtIdo(double s) {
+    final t = s.round();
+    return "${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}";
+  }
+
+  /// UTÓLAGOS vágás: a bemutatás/bemelegítés levágása a kész
+  /// elemzésből. A felhasználó pontosan tudja, mikor kezdődött a meccs
+  /// ("az 549. másodpercben") — eddig ezt csak a teljes
+  /// újrafeldolgozás érvényesítette, most egy párbeszéd. A kezdést a
+  /// meccs-ablak-felismerés javaslata előtölti, ha megtalálja.
+  Future<void> _trimDialog(String id) async {
+    final fromCtrl = TextEditingController();
+    final toCtrl = TextEditingController();
+    // Javaslat a tárolt követésből — a párbeszéd azonnal megnyílik, a
+    // javaslat megérkezéskor tölti elő a mezőket (ha még üresek).
+    String? javaslat; // a mutatott sor; null = még számol
+    var javaslatVan = false;
+    void Function(void Function())? frissit;
+    _api.fetchGameWindow(id).then((r) {
+      final start = (r["start_s"] as num?)?.toDouble();
+      final end = (r["end_s"] as num?)?.toDouble();
+      final head = (r["head_s"] as num?)?.toDouble() ?? 0;
+      final tail = (r["tail_s"] as num?)?.toDouble() ?? 0;
+      if (r["found"] == true && start != null &&
+          head >= 45 /* = GW_MIN_TRIM_S */) {
+        if (fromCtrl.text.trim().isEmpty) fromCtrl.text = _fmtIdo(start);
+        if (end != null && tail >= 45 && toCtrl.text.trim().isEmpty) {
+          toCtrl.text = _fmtIdo(end);
+        }
+        javaslatVan = true;
+        javaslat = "A felismerés szerint a meccs kb. ${_fmtIdo(start)}-kor "
+            "kezdődik — a javaslat elő van töltve, ellenőrizd és igazítsd, "
+            "ha kell.";
+      } else if (r["found"] == true) {
+        javaslat = "A felismerés szerint az elején nincs mit levágni — "
+            "csak akkor vágj, ha mást látsz.";
+      } else {
+        javaslat = "A felismerés nem talált egyértelmű meccs-kezdést — "
+            "add meg kézzel.";
+      }
+      frissit?.call(() {});
+    }).catchError((_) {
+      javaslat = ""; // hiba: javaslat nélkül megy tovább a kézi vágás
+      frissit?.call(() {});
+    });
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        frissit = setDlg;
+        return AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Meccs eleje/vége levágása"),
+        content: SizedBox(
+          width: 440,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(
+                "Ha a felvételen rajta maradt a bemutatás vagy a "
+                "bemelegítés, a felismerés abból is eseményeket gyárt. "
+                "Add meg, mikor KEZDŐDÖTT a meccs (az Események lista / "
+                "a csúszka idő-skálája szerint) — az azelőtti rész "
+                "kikerül az elemzésből.",
+                style: AppText.label.copyWith(fontSize: 12.5)),
+            const SizedBox(height: AppSpacing.sm),
+            if (javaslat == null)
+              Text("A felismerés keresi a meccs kezdetét a követésben…",
+                  style: AppText.label.copyWith(
+                      fontSize: 11.5, color: AppColors.textFaint))
+            else if (javaslat!.isNotEmpty)
+              Text(javaslat!,
+                  style: AppText.label.copyWith(
+                      fontSize: 11.5,
+                      color: javaslatVan
+                          ? AppColors.gold
+                          : AppColors.textFaint)),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: fromCtrl,
+              decoration: const InputDecoration(
+                labelText: "A meccs kezdete (p:mp vagy mp)",
+                hintText: "pl. 9:09 vagy 549",
+                prefixIcon: Icon(Icons.content_cut, size: 18,
+                    color: AppColors.gold),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: toCtrl,
+              decoration: const InputDecoration(
+                labelText: "A meccs vége (üres = a felvétel vége)",
+                hintText: "pl. 92:00",
+                prefixIcon: Icon(Icons.content_cut, size: 18,
+                    color: AppColors.textFaint),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+                "A videófájlt nem érinti, de az elemzésből VÉGLEG "
+                "törli a levágott részt — az csak újrafeldolgozással "
+                "jön vissza.",
+                style: AppText.label.copyWith(
+                    fontSize: 11, color: AppColors.gold)),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Levágás"),
+          ),
+        ],
+        );
+      }),
+    );
+    frissit = null; // a késve érkező javaslat már ne frissítsen semmit
+    if (ok != true) return;
+    final fromS = _parseIdo(fromCtrl.text) ?? 0.0;
+    final toS = _parseIdo(toCtrl.text);
+    try {
+      final r = await _api.trimMatch(id, fromS, toS: toS);
+      await _load();
+      if (!mounted) return;
+      final ele = (r["head_cut_s"] as num?)?.toDouble() ?? 0;
+      final vege = (r["tail_cut_s"] as num?)?.toDouble() ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Levágva: ${ele.toStringAsFixed(0)} mp az "
+              "elejéről, ${vege.toStringAsFixed(0)} mp a végéről — az "
+              "elemzés újraszámolt.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
+  }
+
+  /// TANÍTÓADAT-GYŰJTÉS: a pontosság következő szintje a saját
+  /// felvételeken finomhangolt detektor (docs/FINETUNE.md) — az első
+  /// lépése, az előcímkézett képgyűjtés, eddig csak terminálból ment,
+  /// amit az edző sosem nyit meg. Innen egy pipálós lista + egy gomb.
+  Future<void> _datasetDialog() async {
+    final valasztott = <String>{};
+    var samples = 200;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Tanítóadat gyűjtése"),
+          content: SizedBox(
+            width: 480,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                  "A felismerés a TE felvételeiden lesz igazán pontos: "
+                  "a gyűjtő a kijelölt meccsek videóiból képeket "
+                  "mintavételez és előcímkéz — a minták FELE onnan jön, "
+                  "ahol a mostani felismerés elvesztette a labdát (ott "
+                  "tanít a legtöbbet a kézi címke). Ezt átnézve és "
+                  "tanítva készül a saját modelled (útmutató: "
+                  "docs/FINETUNE.md). Összefűzött meccsnél a DARABOKAT "
+                  "jelöld ki.",
+                  style: AppText.label.copyWith(fontSize: 12.5)),
+              const SizedBox(height: AppSpacing.md),
+              SizedBox(
+                height: 220,
+                child: ListView(children: [
+                  for (final m in _matches)
+                    CheckboxListTile(
+                      dense: true,
+                      value: valasztott.contains(m["match_id"]),
+                      title: Text(
+                          "${m["home_team"]} vs ${m["away_team"]} "
+                          "(${m["match_id"]})",
+                          style: AppText.label.copyWith(fontSize: 12.5)),
+                      onChanged: (v) => setDlg(() {
+                        if (v == true) {
+                          valasztott.add(m["match_id"] as String);
+                        } else {
+                          valasztott.remove(m["match_id"]);
+                        }
+                      }),
+                    ),
+                ]),
+              ),
+              Row(children: [
+                Text("Kép/videó: $samples",
+                    style: AppText.label.copyWith(fontSize: 12)),
+                Expanded(
+                  child: Slider(
+                    value: samples.toDouble(),
+                    min: 50,
+                    max: 500,
+                    divisions: 9,
+                    onChanged: (v) => setDlg(() => samples = v.round()),
+                  ),
+                ),
+              ]),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Mégse")),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent),
+              onPressed: valasztott.isEmpty
+                  ? null
+                  : () => Navigator.pop(ctx, true),
+              child: const Text("Gyűjtés indítása"),
+            ),
+          ],
+        );
+      }),
+    );
+    if (ok != true) return;
+    try {
+      final r = await _api.startDatasetCollect(
+          valasztott.toList(), samples);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Gyűjtés fut a háttérben (${r["videos_total"]} "
+              "videó) — pár perc, a végén szólunk.")));
+      _figyeljDataset();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
+  }
+
+  /// A gyűjtés követése: 3 mp-enként állapot, a végén összegzés.
+  Future<void> _figyeljDataset() async {
+    while (mounted) {
+      await Future<void>.delayed(const Duration(seconds: 3));
+      Map<String, dynamic> st;
+      try {
+        st = await _api.fetchDatasetStatus();
+      } catch (_) {
+        continue;
+      }
+      if (st["running"] == true) continue;
+      if (!mounted) return;
+      if (st["error"] != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            duration: const Duration(seconds: 10),
+            content: Text("A gyűjtés hibára futott: ${st["error"]}")));
+      } else if (st["done"] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            duration: const Duration(seconds: 12),
+            content: Text(
+                "Tanítóadat kész: ${st["images"]} kép — a labda a képek "
+                "${st["ball_pct"] ?? "?"}%-án. Mappa: ${st["out_dir"]}\n"
+                "Következő lépés: Továbbiak → Címkéző (átnézés), majd "
+                "a tanítás — útmutató: docs/FINETUNE.md.")));
+      }
+      return;
+    }
+  }
+
   /// Részleges meccs feldolgozásának folytatása: a backend a mentett
   /// beállításokkal új jobot indít onnan, ahol a feldolgozás megszakadt.
   /// Az eredmény külön meccsként jelenik meg ("<id>-folyt").
@@ -1346,6 +2001,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             // Új verzió sáv — csak ha találtunk frissítést és nem rejtették el.
             if (_update != null && !_updateDismissed) _updateBanner(_update!),
+            // Vendég-sáv: a fiók nélküli munkamenet munkája múlandó —
+            // itt egy kattintással védhetővé tehető (fejlesztői mód).
+            if (SessionStore.guestMode) _guestBanner(),
+            // Fél-frissült telepítés: az app és a motor verziója eltér.
+            if (_versionMismatch()) _versionMismatchBanner(),
             Row(
               children: [
                 Expanded(
@@ -1384,6 +2044,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     if (v == "import") _importLibrary();
                     if (v == "update") _checkUpdatesManually();
                     if (v == "token") _updateTokenDialog();
+                    if (v == "dataset") _datasetDialog();
+                    if (v == "labeler") {
+                      Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => const LabelScreen()));
+                    }
                     if (v == "help") _showHelp();
                   },
                   itemBuilder: (_) => const [
@@ -1433,6 +2098,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           dense: true),
                     ),
                     PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: "dataset",
+                      child: ListTile(
+                          leading: Icon(Icons.model_training, size: 18),
+                          title: Text("Tanítóadat gyűjtése (pontosabb "
+                              "felismeréshez)"),
+                          dense: true),
+                    ),
+                    PopupMenuItem(
+                      value: "labeler",
+                      child: ListTile(
+                          leading: Icon(Icons.crop_free, size: 18),
+                          title: Text("Címkéző (a gyűjtött képek "
+                              "átnézése)"),
+                          dense: true),
+                    ),
                     PopupMenuItem(
                       value: "help",
                       child: ListTile(
@@ -1593,7 +2274,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           : AppColors.borderStrong),
                 ),
                 icon: const Icon(Icons.merge_type, size: 18),
-                label: const Text("Félidők összefűzése"),
+                // NEM "félidők": aki telefonnal vesz fel, hat-nyolc
+                // darabot kap, nem kettőt.
+                label: const Text("Szakaszok összefűzése"),
               ),
               const SizedBox(width: AppSpacing.sm),
               OutlinedButton.icon(
@@ -1617,9 +2300,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     icon: Icons.list_alt_outlined),
               )
             else if (_offline)
-              _notice(Icons.cloud_off, "A backend nem elérhető",
-                  "Indítsd el a lokális szervert (uvicorn), majd frissíts. Addig a demó megnyitható.",
-                  action: _demoButton())
+              _notice(
+                  Icons.cloud_off,
+                  "Nem érem el a háttérmotort",
+                  "A Sport Machine motorja nem válaszol. A gomb megpróbálja "
+                      "újraindítani — ez néhány másodperc. Addig is: a demó "
+                      "meccs a motor nélkül is megnyitható.",
+                  action: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      _reviveButton(),
+                      const SizedBox(width: AppSpacing.md),
+                      _demoButton(),
+                    ]),
+                    const SizedBox(height: AppSpacing.sm),
+                    const DiagnosticsButton(),
+                  ]))
             else if (_matches.isEmpty)
               _firstStepsCard()
             else if (_filteredMatches.isEmpty)
@@ -1632,8 +2327,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ? "Még nincs befejezett elemzés."
                               : "Nincs elemzés a könyvtárban.")
             else
-              for (final m in _filteredMatches) ...[
-                _matchCard(m),
+              for (final (i, m) in _filteredMatches.indexed) ...[
+                // Lépcsőzött belépő animáció + hover-emelés: a könyvtár
+                // "él", a kártya megfoghatónak érződik.
+                FadeSlideIn(
+                  key: ValueKey("mc-${m["match_id"]}"),
+                  index: i,
+                  child: HoverLift(child: _matchCard(m)),
+                ),
                 const SizedBox(height: AppSpacing.md),
               ],
           ],
@@ -1670,36 +2371,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
               style: AppText.label.copyWith(fontSize: 11, letterSpacing: 0.6)),
           const SizedBox(height: AppSpacing.lg),
           for (var i = 0; i < steps.length; i++) ...[
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 26,
-                height: 26,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.accent),
-                ),
-                child: Text("${i + 1}",
-                    style: AppText.value.copyWith(
-                        fontSize: 12, color: AppColors.accent)),
+            FadeSlideIn(
+              index: i,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 26,
+                    height: 26,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.accent),
+                    ),
+                    child: Text("${i + 1}",
+                        style: AppText.value.copyWith(
+                            fontSize: 12, color: AppColors.accent)),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Icon(steps[i].$1, size: 18, color: AppColors.textSecondary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(steps[i].$2,
+                              style: AppText.value.copyWith(fontSize: 13.5)),
+                          Text(steps[i].$3,
+                              style: AppText.label.copyWith(
+                                  fontSize: 12,
+                                  color: AppColors.textPrimary)),
+                        ]),
+                  ),
+                ],
               ),
-              const SizedBox(width: AppSpacing.md),
-              Icon(steps[i].$1, size: 18, color: AppColors.textSecondary),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(steps[i].$2,
-                          style: AppText.value.copyWith(fontSize: 13.5)),
-                      Text(steps[i].$3,
-                          style: AppText.label.copyWith(
-                              fontSize: 12, color: AppColors.textPrimary)),
-                    ]),
+            ),
+            // Összekötő vonal a sorszámok között: a négy lépés így
+            // SOROZATNAK látszik, nem négy egymás mellé tett tippnek —
+            // pedig sorrendben kell megcsinálni őket.
+            if (i < steps.length - 1)
+              Padding(
+                padding: const EdgeInsets.only(left: 12.5),
+                child: Container(
+                    width: 1,
+                    height: AppSpacing.md + 4,
+                    color: AppColors.accent.withOpacity(0.35)),
               ),
-            ]),
-            if (i < steps.length - 1) const SizedBox(height: AppSpacing.md),
           ],
           const SizedBox(height: AppSpacing.lg),
           Row(children: [
@@ -1763,6 +2481,84 @@ class _DashboardScreenState extends State<DashboardScreen> {
         foregroundColor: AppColors.accent, side: const BorderSide(color: AppColors.accent)),
       icon: const Icon(Icons.play_arrow, size: 18),
       label: const Text("Demó megnyitása"),
+    );
+  }
+
+  /// Motor-újraindító gomb: a kliens előbb ÚJRA MEGKERESI a motort a
+  /// port-tartományban, és ha sehol nem válaszol, újra is indítja
+  /// (ApiClient.reviveEngine). Eddig a felhasználót itt csak a program
+  /// teljes újraindítása mentette meg — pedig a kliens tud magától is.
+  Widget _reviveButton() {
+    return FilledButton.icon(
+      onPressed: _reviving ? null : _reviveEngine,
+      style: FilledButton.styleFrom(
+          backgroundColor: AppColors.accent,
+          foregroundColor: AppColors.onAccent),
+      icon: _reviving
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.onAccent))
+          : const Icon(Icons.restart_alt, size: 18),
+      label: Text(_reviving ? "Indítom…" : "Motor újraindítása"),
+    );
+  }
+
+  Future<void> _reviveEngine() async {
+    setState(() => _reviving = true);
+    final ok = await ApiClient.reviveEngine();
+    if (!mounted) return;
+    setState(() => _reviving = false);
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("A motor válaszol — betöltöm a könyvtárat.")));
+      await _load();
+      return;
+    }
+    // Nem sikerült: a napló VÉGE a leggyorsabb út a diagnózishoz —
+    // enélkül a felhasználónak nincs mit elküldenie.
+    final log = await BackendLauncher.logTail();
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("A motor továbbra sem válaszol"),
+        content: SizedBox(
+          width: 560,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text(
+                "Próbáld meg a programot teljesen bezárni és újraindítani. "
+                "Ha ez sem segít, a napló utolsó sorai megmondják, min "
+                "akadt el:",
+                style: AppText.label),
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(maxHeight: 220),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                    log == null || log.trim().isEmpty
+                        ? "Nincs napló — úgy tűnik, a motor el sem indult."
+                        : log,
+                    style: AppText.label.copyWith(
+                        fontSize: 11, color: AppColors.textPrimary)),
+              ),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Bezár")),
+        ],
+      ),
     );
   }
 
@@ -1904,6 +2700,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text(running ? message : "sorban áll — előtte másik feldolgozás fut",
                 style: AppText.label.copyWith(fontSize: 11),
                 overflow: TextOverflow.ellipsis),
+            // Hátralévő idő: ebből dől el, hogy a felhasználó megvárja-e.
+            if (etaLabel(j) != null)
+              Text(etaLabel(j)!,
+                  style: AppText.label
+                      .copyWith(fontSize: 11, color: AppColors.gold)),
+            // KORAI riasztás: a részeredményből már látszik, ha a
+            // feldolgozás használhatatlan lesz — itt még van értelme
+            // megszakítani, egy óra múlva már nincs.
+            for (final w in ((j["early_warnings"] as List?) ?? const []))
+              Text("$w",
+                  style: AppText.label
+                      .copyWith(fontSize: 11, color: AppColors.away),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis),
           ]),
         ),
         IconButton(
@@ -1929,22 +2739,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
         : (_totalDurationS / 60);
     final cards = <Widget>[
       _statCard("ELEMZETT MECCS", "${s?["matches"] ?? _matches.length}",
-          _offline ? "backend offline" : "a tárolt könyvtárból", accent: true),
+          _offline ? "a motor nem válaszol" : "a tárolt könyvtárból",
+          accent: true, icon: Icons.sports_handball),
       _statCard("ÖSSZ. JÁTÉKIDŐ", "${durMin.toStringAsFixed(1)} perc",
           s != null ? "${(s["teams"] as List).length} csapat a könyvtárban"
-                    : "${_matches.length} meccs feldolgozva"),
+                    : "${_matches.length} meccs feldolgozva",
+          icon: Icons.schedule),
       if (s != null)
-        _statCard("GÓL-ESEMÉNY", "${s["goals"]}", _goalNote(s)),
+        _statCard("GÓL-ESEMÉNY", "${s["goals"]}", _goalNote(s),
+            icon: Icons.gps_fixed),
       if (s != null)
         _statCard("FUTOTT TÁV", "${s["distance_km"]} km",
-            "${s["sprints"]} sprint összesen"),
+            "${s["sprints"]} sprint összesen",
+            icon: Icons.directions_run),
     ];
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < cards.length; i++) ...[
           if (i > 0) const SizedBox(width: AppSpacing.lg),
-          Expanded(child: cards[i]),
+          // A kártyák balról jobbra úsznak be — a szezon-összkép így
+          // "felépül", nem egyszerre csapódik oda.
+          Expanded(child: FadeSlideIn(index: i, child: cards[i])),
         ],
       ],
     );
@@ -2158,16 +2974,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return note;
   }
 
-  Widget _statCard(String label, String value, String note, {bool accent = false}) {
+  Widget _statCard(String label, String value, String note,
+      {bool accent = false, IconData? icon}) {
+    final tint = accent ? AppColors.accent : AppColors.textSecondary;
     return Container(
-      decoration: AppTheme.card(),
+      decoration: BoxDecoration(
+        // A kiemelt kártya halk akcentus-fényt kap a sarkából — a
+        // szezon-összkép sorában van hierarchia, ne legyen négy egyforma
+        // szürke doboz.
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent
+                ? AppColors.accent.withOpacity(0.10)
+                : AppColors.surface,
+            AppColors.surface,
+          ],
+          stops: const [0.0, 0.6],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: accent
+                ? AppColors.accent.withOpacity(0.35)
+                : AppColors.border),
+      ),
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppText.sectionLabel),
+          Row(children: [
+            if (icon != null) ...[
+              // Ikon puha korongon: a négy kártya ránézésre is
+              // megkülönböztethető, nem csak a feliratából.
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tint.withOpacity(0.13),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 13, color: tint),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(child: Text(label, style: AppText.sectionLabel)),
+          ]),
           const SizedBox(height: AppSpacing.md),
-          Text(value, style: AppText.statBig),
+          // Szám-felpörgetés, ha a érték tisztán szám — különben sima
+          // szöveg (pl. "12:9" eredmény-formátum).
+          if (double.tryParse(value.replaceAll(",", ".")) != null)
+            CountUp(
+                value: double.parse(value.replaceAll(",", ".")),
+                style: AppText.statBig,
+                format: (v) => value.contains(",") || value.contains(".")
+                    ? v.toStringAsFixed(1).replaceAll(".", ",")
+                    : v.round().toString())
+          else
+            Text(value, style: AppText.statBig),
           const SizedBox(height: AppSpacing.sm),
           Text(note, style: AppText.label.copyWith(color: accent ? AppColors.accent : AppColors.textFaint)),
         ],
@@ -2349,6 +3214,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// A VALÓDI (jegyzőkönyvi) eredmény a felismert mellett — ha az edző
+  /// megadta. Nagy eltérésnél kiemelt: a minőség-jelentés ilyenkor
+  /// megmondja a teendőt is (a küszöb a backenddel azonos: 4 gól,
+  /// quality.REAL_SCORE_DIFF_WARN).
+  List<Widget> _realScoreLabel(
+      Map<String, dynamic> m, Map<String, dynamic> sum) {
+    final rh = (m["real_goals_home"] as num?)?.toInt();
+    final ra = (m["real_goals_away"] as num?)?.toInt();
+    if (rh == null || ra == null) return const [];
+    final gh = (sum["goals_home"] as num?)?.toInt() ?? 0;
+    final ga = (sum["goals_away"] as num?)?.toInt() ?? 0;
+    final elter = (gh - rh).abs() + (ga - ra).abs();
+    final messze = elter >= 4; // = REAL_SCORE_DIFF_WARN
+    return [
+      const SizedBox(width: AppSpacing.sm),
+      Tooltip(
+        message: messze
+            ? "A felismert eredmény $elter góllal tér el a megadott "
+                "valóditól — a minőség-jelentés megmondja a teendőt."
+            : "A megadott jegyzőkönyvi végeredmény.",
+        child: Text("valódi: $rh:$ra",
+            style: AppText.label.copyWith(
+                fontSize: 12,
+                color: messze ? AppColors.gold : AppColors.textSecondary)),
+      ),
+    ];
+  }
+
   /// Kis eredmény-címke a felismert gólokból: ki nyerte a felvételt.
   /// (Csak ha volt gól — a 0:0 jellemzően rövid próba-feldolgozás.)
   List<Widget> _resultBadge(Map<String, dynamic> sum) {
@@ -2382,12 +3275,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final frames = (m["num_frames"] as num?)?.toInt() ?? 0;
     final durS = (m["duration_s"] as num?)?.toDouble() ?? 0.0;
     final fps = (m["fps"] as num?)?.toDouble() ?? 25.0;
-    final meta = "$id · $frames képkocka · ${durS.toStringAsFixed(1)} s · ${fps.toStringAsFixed(0)} fps";
+    // A kártya alsó sora eddig gépi adat volt ("1234 képkocka · 240.0 s ·
+    // 25 fps"). Az edzőt a HOSSZ érdekli, percben; a képkocka-szám és a
+    // pontos azonosító diagnosztika — azok a rámutatásra jönnek elő.
+    final totalS = durS.round();
+    final durLabel = totalS >= 60
+        ? "${totalS ~/ 60}:${(totalS % 60).toString().padLeft(2, "0")} perc"
+        : "$totalS másodperc";
+    final meta = "$durLabel · ${fps.toStringAsFixed(0)} kép/mp";
+    final metaTip = "Azonosító: $id\n"
+        "$frames képkocka · ${durS.toStringAsFixed(1)} s · "
+        "${fps.toStringAsFixed(0)} kép/mp";
     // Az összkép-kivonat kiegészítése, ha már megjött: eredmény + dátum.
     final sum = _perMatch[id];
     final date = (sum?["date"] as String?) ?? "";
     // Részleges feldolgozás (megszakítva / összeomlás után mentve).
     final partial = (m["partial"] as bool?) ?? false;
+    // Összefűzés-jelölés: összefűzés után a darab és az egész is a
+    // listában van, AZONOS csapatnevekkel — jelölés nélkül három
+    // egyforma sor lenne, és nem tudni, melyiket nyisd meg.
+    final mergedParts = (m["merged_parts"] as num?)?.toInt() ?? 0;
+    final partOf = m["part_of"] as String?;
+    // Eldöntetlen térfélcsere-határ: az összefűzés nem tudta eldönteni,
+    // fordult-e a pálya — az eredmény fordítva állhat, kézi ellenőrzés kell.
+    final undecided = (m["undecided_segments"] as num?)?.toInt() ?? 0;
+    // A feldolgozás alatt mért kalibráció-illeszkedés minimuma: ha a
+    // motor küszöbe (0.3 = CALIB_FIT_WARN) alatt van, a kalibráció
+    // valahol elcsúszott — a sor ránézésre jelzi.
+    final calibMinFit = (m["calib_min_fit"] as num?)?.toDouble();
+    final calibGyenge = calibMinFit != null && calibMinFit < 0.3;
     // A hozzá tartozó folytatás-meccsek ("<id>-folyt", "-folyt2", ...) —
     // ha vannak, egy gombbal összefűzhető velük egy teljes meccsé.
     final contIds = _matches
@@ -2422,6 +3338,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: AppText.value.copyWith(
                               fontSize: 15, color: AppColors.gold)),
                       ..._resultBadge(sum),
+                      ..._realScoreLabel(m, sum),
+                    ],
+                    if (calibGyenge) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      Tooltip(
+                        message: "A kalibráció valahol elcsúszott: a "
+                            "visszarajzolt pályavonal a leggyengébb kockán "
+                            "csak ${(calibMinFit * 100).round()}%-ban ül a "
+                            "valódin. Nyisd meg → Kalibráció ellenőrzése.",
+                        child: const Icon(Icons.grid_off,
+                            size: 16, color: AppColors.gold),
+                      ),
                     ],
                     if (date.isNotEmpty) ...[
                       const SizedBox(width: AppSpacing.md),
@@ -2443,6 +3371,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 fontSize: 10.5, color: AppColors.gold)),
                       ),
                     ],
+                    if (mergedParts > 0) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                              color: AppColors.accent.withOpacity(0.45)),
+                        ),
+                        child: Text("teljes meccs · $mergedParts darabból",
+                            style: AppText.label.copyWith(
+                                fontSize: 10.5, color: AppColors.accent)),
+                      ),
+                    ],
+                    if (undecided > 0) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Tooltip(
+                        message: "Az összefűzés $undecided szakasz-határon "
+                            "nem tudta eldönteni a térfélcserét — az "
+                            "eredmény fordítva állhat. Kattints az "
+                            "ellenőrzéshez.",
+                        child: InkWell(
+                          onTap: () => _segmentsDialog(id),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.gold.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                  color: AppColors.gold.withOpacity(0.5)),
+                            ),
+                            child: Text("térfél?",
+                                style: AppText.label.copyWith(
+                                    fontSize: 10.5, color: AppColors.gold)),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (partOf != null) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Tooltip(
+                        message: "Benne van az összefűzött meccsben "
+                            "($partOf) — a szezon-számok ott számolják, "
+                            "itt nem duplázódik.",
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceAlt,
+                            borderRadius: BorderRadius.circular(6),
+                            border:
+                                Border.all(color: AppColors.borderStrong),
+                          ),
+                          child: Text("darab",
+                              style: AppText.label.copyWith(
+                                  fontSize: 10.5,
+                                  color: AppColors.textSecondary)),
+                        ),
+                      ),
+                    ],
                   ]),
                   const SizedBox(height: 6),
                   // Egymondatos főcím: mi történt a meccsen (ha megjött).
@@ -2453,7 +3445,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 4),
                   ],
-                  Text(meta, style: AppText.label.copyWith(fontSize: 12)),
+                  Tooltip(
+                    message: metaTip,
+                    child: Text(meta,
+                        style: AppText.label.copyWith(fontSize: 12)),
+                  ),
                   if (sum != null) ...[
                     const SizedBox(height: 4),
                     Text(
@@ -2482,6 +3478,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: const Icon(Icons.merge_type, color: AppColors.gold),
                 tooltip: "Összefűzés a folytatással egy teljes meccsé "
                     "(${contIds.join(", ")})",
+              ),
+            if (mergedParts > 0)
+              IconButton(
+                onPressed: () => _segmentsDialog(id),
+                icon: Icon(Icons.swap_horiz,
+                    color: undecided > 0
+                        ? AppColors.gold
+                        : AppColors.textFaint),
+                tooltip: "Szakaszok és térfelek — ha az eredmény fordítva "
+                    "áll, itt fordíthatod vissza",
+              ),
+            if (!partial)
+              IconButton(
+                onPressed: () => _trimDialog(id),
+                icon: const Icon(Icons.content_cut,
+                    color: AppColors.textFaint),
+                tooltip: "Meccs eleje/vége levágása — ha a bemutatás/"
+                    "bemelegítés bennmaradt, a felismerés abból is "
+                    "eseményeket gyárt",
               ),
             IconButton(
               onPressed: () => _rename(m),

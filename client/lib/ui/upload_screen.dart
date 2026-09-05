@@ -17,6 +17,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
+import "anim.dart";
 import "calibration_screen.dart";
 import "match_screen.dart";
 import "shell/app_shell.dart";
@@ -48,6 +49,13 @@ class _UploadScreenState extends State<UploadScreen> {
   // ezeket használja (utólag is átírhatók a könyvtárban).
   final _homeCtrl = TextEditingController();
   final _awayCtrl = TextEditingController();
+  // KÉZI meccs-ablak (perc:mp): hol kezdődik és hol ér véget a MECCS a
+  // felvételen. A feltöltött videóban rendszerint benne van a
+  // bemelegítés és a csapatbemutatás — abból a felismerő lövést és
+  // eladott labdát csinálna. Üresen hagyva marad az automatikus
+  // meccs-ablak-felismerés.
+  final _startSCtrl = TextEditingController();
+  final _endSCtrl = TextEditingController();
   final _api = ApiClient();
 
   // Aktuális feldolgozási munka állapota (a backendtől, GET /jobs/{id}).
@@ -71,6 +79,10 @@ class _UploadScreenState extends State<UploadScreen> {
   // a "Feldolgozás indítása" MINDET sorba állítja a szerveren, mindegyiket a
   // saját elmentett kalibrációjával (ha van).
   final List<String> _batchPaths = [];
+  // A köteg végén automatikus összefűzés: a darabokban felvett meccs
+  // magától áll össze. Alapból BE, mert a köteg tipikusan egy meccs
+  // darabjai — aki több KÜLÖN meccset tölt fel egyszerre, kikapcsolja.
+  bool _mergeBatch = true;
 
   // Feldolgozási beállítások: minőségi profil + rövid próba mód.
   // A profilok (stride, imgsz): gyors = ritkább mintavétel kisebb képen;
@@ -87,15 +99,373 @@ class _UploadScreenState extends State<UploadScreen> {
   // képkockán) — ezzel lesz PONTOS a pálya-koordináta és a szűrés.
   CalibrationSet? _calib;
 
+  /// A hossz-beállítás korlátja MÁSODPERCBEN — a feliratokkal azonos
+  /// szám ("Próba (~2 p)", "Félidő (~35 p)"), null = a teljes videó.
+  ///
+  /// Ez megy a motornak; a kockában számolt `max` csak tartalék. A
+  /// kettő azért nem ugyanaz: kockára váltani csak a videó VALÓDI
+  /// fps-ével lehet, azt pedig itt nem ismerjük — 25-tel számolva egy
+  /// 30 fps-es telefonvideón a "35 perc" 29 perc lenne, egy 50 fps-esen
+  /// 17,5. A felhasználó a feliratot hiszi el, nem a kockaszámot.
+  double? get _hosszKorlatMp => switch (_length) {
+        "trial" => 120.0,
+        "half" => 2100.0,
+        _ => null,
+      };
+
   static const Map<String, (int, int, String)> _qualityPresets = {
     "fast": (5, 960, "Gyors"),
     "balanced": (3, 1280, "Kiegyensúlyozott"),
     "precise": (2, 1920, "Pontos"),
   };
 
+  // Indítás előtti ellenőrzés (POST /preflight): szabad hely és — ha a
+  // gépen már futott pár feldolgozás — a várható idő. Enélkül a
+  // felhasználó vakon indít el egy fél-egy órás munkát.
+  Map<String, dynamic> _preflight = const {};
+  Timer? _preflightDebounce;
+  String _preflightPath = "";
+
+  @override
+  void initState() {
+    super.initState();
+    // A mező kézzel is átírható (nem csak fájlválasztóval), ezért a
+    // figyelő az út MINDEN forrását lefedi. A késleltetés azért kell,
+    // hogy gépelés közben ne kérdezgessük a motort karakterenként.
+    _pathCtrl.addListener(() {
+      _preflightDebounce?.cancel();
+      _preflightDebounce =
+          Timer(const Duration(milliseconds: 600), _runPreflight);
+    });
+  }
+
+  /// "12:30" vagy "750" → másodperc. Üresnél/értelmezhetetlennél null.
+  ///
+  /// Két alak megy: perc:másodperc (ahogy a lejátszóban látszik) és
+  /// puszta másodperc. Aki elgépeli, ne kapjon hibát — csak nem lesz
+  /// kézi ablak (marad az automatikus felismerés).
+  static double? _idoMasodpercben(String szoveg) {
+    final t = szoveg.trim();
+    if (t.isEmpty) return null;
+    if (t.contains(":")) {
+      final reszek = t.split(":");
+      if (reszek.length != 2) return null;
+      final perc = int.tryParse(reszek[0].trim());
+      final mp = int.tryParse(reszek[1].trim());
+      if (perc == null || mp == null || perc < 0 || mp < 0 || mp > 59) {
+        return null;
+      }
+      return perc * 60.0 + mp;
+    }
+    final mp = double.tryParse(t);
+    if (mp == null || mp < 0) return null;
+    return mp;
+  }
+
+  /// A kézi ablak kezdete másodpercben (vagy null: marad az automatika).
+  double? _ablakKezdet() {
+    final kezd = _idoMasodpercben(_startSCtrl.text);
+    final veg = _idoMasodpercben(_endSCtrl.text);
+    if (kezd != null && veg != null && veg <= kezd) return null;
+    return kezd;
+  }
+
+  /// A kézi ablak vége másodpercben (vagy null: a videó végéig).
+  double? _ablakVeg() {
+    final kezd = _idoMasodpercben(_startSCtrl.text);
+    final veg = _idoMasodpercben(_endSCtrl.text);
+    if (kezd != null && veg != null && veg <= kezd) return null;
+    return veg;
+  }
+
+  /// A kézi meccs-ablak mezői — a bemelegítés és a ceremónia levágása.
+  Widget _matchWindowFields() {
+    final kezd = _idoMasodpercben(_startSCtrl.text);
+    final veg = _idoMasodpercben(_endSCtrl.text);
+    final rossz = (_startSCtrl.text.trim().isNotEmpty && kezd == null) ||
+        (_endSCtrl.text.trim().isNotEmpty && veg == null);
+    final sorrendBaj = kezd != null && veg != null && veg <= kezd;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("A MECCS IDŐABLAKA A FELVÉTELEN", style: AppText.sectionLabel),
+        const SizedBox(height: 4),
+        Text(
+            "Ha a videóban benne van a bemelegítés vagy a csapatbemutatás, "
+            "add meg, hol kezdődik az első kezdődobás — enélkül a "
+            "bemelegítő lövésekből is „lövés”, az álldogálásból „eladott "
+            "labda” lesz. Üresen hagyva a rendszer maga próbálja "
+            "megtalálni. Alak: perc:másodperc (pl. 4:30).",
+            style: AppText.label.copyWith(fontSize: 12)),
+        const SizedBox(height: AppSpacing.sm),
+        Row(children: [
+          SizedBox(
+            width: 190,
+            child: TextField(
+              controller: _startSCtrl,
+              onChanged: (_) {
+                setState(() {});
+                _preflightDebounce?.cancel();
+                _preflightDebounce = Timer(
+                    const Duration(milliseconds: 600), _runPreflight);
+              },
+              decoration: const InputDecoration(
+                labelText: "Meccs kezdete (pl. 4:30)",
+                isDense: true,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          SizedBox(
+            width: 190,
+            child: TextField(
+              controller: _endSCtrl,
+              onChanged: (_) {
+                setState(() {});
+                _preflightDebounce?.cancel();
+                _preflightDebounce = Timer(
+                    const Duration(milliseconds: 600), _runPreflight);
+              },
+              decoration: const InputDecoration(
+                labelText: "Meccs vége (üres = végig)",
+                isDense: true,
+              ),
+            ),
+          ),
+        ]),
+        if (rossz || sorrendBaj) ...[
+          const SizedBox(height: 6),
+          Text(
+              sorrendBaj
+                  ? "A vége korábban van, mint a kezdet — így nem indul el a "
+                      "kézi ablak."
+                  : "Nem értelmezhető időpont — használd a perc:másodperc "
+                      "alakot (pl. 4:30). Amíg így marad, az automatikus "
+                      "meccs-ablak dönt.",
+              style: AppText.label
+                  .copyWith(fontSize: 11.5, color: AppColors.away)),
+        ],
+      ],
+    );
+  }
+
+  /// Indítás előtti ELLENŐRZŐ LISTA — élő állapottal.
+  ///
+  /// Az első éles meccs úgy ment el, hogy a felhasználó minden buktatóba
+  /// belelépett egyszerre: kalibráció nélkül/rosszul indult, a
+  /// bemelegítés és a csapatbemutatás bekerült az elemzésbe, és mindez
+  /// csak egy óra múlva derült ki. Ez a lista a hármat egy helyen
+  /// mutatja, MIELŐTT az óra elindulna. Nem tilt semmit: aki tudja, mit
+  /// csinál, sárga pipákkal is elindíthatja.
+  Widget _preStartChecklist() {
+    if (!_hasVideo) return const SizedBox.shrink();
+    final kalib = _calib != null;
+    final ablak = _ablakKezdet() != null || _ablakVeg() != null;
+    final probaFutott = _previewOk != null;
+    final probaJo = _previewOk == true;
+
+    Widget sor(bool jo, bool figyelmeztet, String cim, String mit) {
+      final szin = jo
+          ? AppColors.accent
+          : (figyelmeztet ? AppColors.away : AppColors.gold);
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(
+              jo
+                  ? Icons.check_circle_outline
+                  : (figyelmeztet
+                      ? Icons.error_outline
+                      : Icons.radio_button_unchecked),
+              size: 15, color: szin),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              text: TextSpan(children: [
+                TextSpan(text: "$cim — ",
+                    style: AppText.value.copyWith(fontSize: 12)),
+                TextSpan(text: mit,
+                    style: AppText.label
+                        .copyWith(fontSize: 12, color: szin)),
+              ]),
+            ),
+          ),
+        ]),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("INDÍTÁS ELŐTT", style: AppText.sectionLabel),
+          const SizedBox(height: 4),
+          sor(kalib, false, "Pálya-kalibráció",
+              kalib
+                  ? "bejelölve (${_calib!.label})"
+                  : "nincs — enélkül a nézőtér is a pályára kerül"),
+          sor(probaJo, probaFutott && !probaJo, "Detektálás-próba",
+              !probaFutott
+                  ? "még nem futott — egy kockán megmutatja, mit lát a "
+                      "rendszer"
+                  : (probaJo
+                      ? "rendben"
+                      : "${_previewOnCourt ?? "?"} ember esik a pályára "
+                          "(legfeljebb 14 lehet) — a kalibráció hibás")),
+          sor(ablak, false, "Meccs időablaka",
+              ablak
+                  ? "megadva"
+                  : "nincs megadva — ha a videóban benne van a "
+                      "bemelegítés, add meg a kezdést"),
+        ],
+      ),
+    );
+  }
+
+  /// " (a 95 percből 40 perc feldolgozásával)" — csak ha a meccs
+  /// időablaka tényleg szűkít. Enélkül nem derülne ki, hogy a becslés
+  /// nem a teljes videóra szól.
+  String get _feldolgozandoSzoveg {
+    final teljes = (_preflight["video_seconds"] as num?)?.toDouble();
+    final resz = (_preflight["processed_seconds"] as num?)?.toDouble();
+    if (teljes == null || resz == null) return "";
+    if (resz >= teljes - 1.0) return "";   // nincs érdemi szűkítés
+    return " (a ${(teljes / 60).round()} percből "
+        "${(resz / 60).round()} perc feldolgozásával)";
+  }
+
+  /// Az indítás előtti ellenőrzés kártyája — röviden, a gomb mellett.
+  ///
+  /// Két dolgot mond meg, amit utólag már nem érdemes megtudni: elég-e
+  /// a hely (kevésnél a motor amúgy is elutasítja, de itt előbb
+  /// látszik), és kb. meddig tart. Az idő-becslés EZEN a gépen mért
+  /// adatból jön, ezért az első pár feldolgozásnál nincs — ilyenkor a
+  /// kártya inkább hallgat, mint hogy tévesen nyugtasson meg.
+  Widget _preflightCard() {
+    if (_preflight.isEmpty || _preflight["path_ok"] != true) {
+      return const SizedBox.shrink();
+    }
+    final hely = _preflight["space_error"] as String?;
+    final becsles = _preflight["estimate_label"] as String?;
+    final szabad = (_preflight["free_gb"] as num?)?.toDouble();
+    // PROFIL-JAVASLAT rövid szakaszra: a "Pontos" egy teljes meccsen
+    // órákat kérne, egy klipen perceket — és pont a labda
+    // felismerésén javít, amire a birtoklás, a passz, az eladás és a
+    // lövés is épül. A felhasználó ezt magától nem tudhatja: a
+    // választó három nevet kínál, és nem mondja meg, mikor melyik éri
+    // meg.
+    final javaslat = _preflight["profile_hint"] as String?;
+    if (hely == null && becsles == null && javaslat == null) {
+      return const SizedBox.shrink();
+    }
+    final baj = hely != null;
+    final szin = baj ? AppColors.away : AppColors.gold;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Container(
+        decoration: BoxDecoration(
+          color: szin.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: szin.withOpacity(0.35)),
+        ),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        child: Row(children: [
+          Icon(baj ? Icons.warning_amber_rounded : Icons.schedule,
+              size: 16, color: szin),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+                baj
+                    ? hely
+                    : "A gépeden eddig mért ütem alapján ez kb. $becsles "
+                        "lesz$_feldolgozandoSzoveg."
+                        "${szabad != null ? " (Szabad hely: "
+                            "${szabad.toStringAsFixed(1)} GB.)" : ""}",
+                style: AppText.label.copyWith(fontSize: 12, color: szin)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// A profil-javaslat KÜLÖN kártyán: nem hiba és nem idő-becslés,
+  /// hanem egy nyereség, amiről a felhasználó nem tud. Semleges
+  /// színnel — a sárga/piros doboz azt sugallná, baj van.
+  Widget _profileHintCard() {
+    final javaslat = _preflight["profile_hint"] as String?;
+    if (javaslat == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.tips_and_updates_outlined,
+              size: 16, color: AppColors.accent),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("ÉRDEMES A PONTOS PROFIL",
+                      style: AppText.sectionLabel),
+                  const SizedBox(height: 2),
+                  Text(javaslat,
+                      style: AppText.label.copyWith(
+                          fontSize: 12, color: AppColors.textPrimary)),
+                ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// Lekéri az indítás előtti ellenőrzést az aktuális útra.
+  ///
+  /// Csendes: a hibája nem üzenet, csak nincs kártya — az ellenőrzés
+  /// kényelem, nem kapu (a valódi hely-elutasítás a motorban van).
+  Future<void> _runPreflight() async {
+    final path = _pathCtrl.text.trim();
+    if (path.isEmpty) {
+      if (mounted && _preflight.isNotEmpty) {
+        setState(() {
+          _preflight = const {};
+          _preflightPath = "";
+        });
+      }
+      return;
+    }
+    // Ugyanarra az ÚT + PROFIL párosra nem kérdezünk újra. A profil
+    // azért része a kulcsnak, mert az idő-becslés profil-függő: a
+    // "Pontos" ugyanarra a videóra többszörös időt kér.
+    final (stride, imgsz, _) = _qualityPresets[_quality]!;
+    final kezd = _ablakKezdet();
+    final veg = _ablakVeg();
+    final korlat = _hosszKorlatMp;
+    final kulcs = "$path|$stride|$imgsz|$kezd|$veg|$korlat";
+    if (kulcs == _preflightPath) return;
+    final r = await _api.fetchPreflight(path,
+        stride: stride, imgsz: imgsz, startS: kezd, endS: veg, maxS: korlat);
+    if (!mounted) return;
+    setState(() {
+      _preflight = r;
+      _preflightPath = kulcs;
+    });
+  }
+
   @override
   void dispose() {
     _poll?.cancel();
+    _preflightDebounce?.cancel();
+    _startSCtrl.dispose();
+    _endSCtrl.dispose();
     _pathCtrl.dispose();
     _homeCtrl.dispose();
     _awayCtrl.dispose();
@@ -103,6 +473,23 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   /// Natív fájlválasztó → videó feltöltése a backendre → a visszakapott
+  /// Szám-tudatos névrendezés: a "2" a "10" ELÉ kerül, az időbélyeges
+  /// telefonos fájlnevek (pl. vid_20260814_…) pedig időrendbe állnak.
+  static int _naturalCompare(String a, String b) {
+    final darab = RegExp(r"\d+|\D+");
+    final ta = [for (final m in darab.allMatches(a.toLowerCase())) m.group(0)!];
+    final tb = [for (final m in darab.allMatches(b.toLowerCase())) m.group(0)!];
+    for (var i = 0; i < ta.length && i < tb.length; i++) {
+      final na = int.tryParse(ta[i]);
+      final nb = int.tryParse(tb[i]);
+      final c = (na != null && nb != null)
+          ? na.compareTo(nb)
+          : ta[i].compareTo(tb[i]);
+      if (c != 0) return c;
+    }
+    return ta.length.compareTo(tb.length);
+  }
+
   /// backend-oldali utat beírja a mezőbe (ezt használja a kalibráció + feldolgozás).
   Future<void> _pickAndUpload() async {
     final res = await FilePicker.platform.pickFiles(
@@ -112,7 +499,14 @@ class _UploadScreenState extends State<UploadScreen> {
       allowMultiple: true, // több felvétel (pl. 1. és 2. félidő) egyszerre
     );
     if (res == null || res.files.isEmpty) return; // a felhasználó megszakította
-    final files = res.files;
+    // IDŐREND a kötegben: a fájlválasztó a KIJELÖLÉS sorrendjét adja
+    // (ctrl+katt = véletlen sorrend), az automatikus összefűzés pedig a
+    // sorrendből épít meccset — rossz sorrendben némán rossz meccs
+    // lenne. A telefon fájlnevei időbélyegesek (pl. vid_20260814_…),
+    // tehát a név szerinti, szám-tudatos rendezés = időrend. A köteg
+    // sorrendje a listában látszik, ott ellenőrizhető.
+    final files = List.of(res.files)
+      ..sort((a, b) => _naturalCompare(a.name, b.name));
 
     // A feltöltés a helyi motorra megy — ha az nem fut, a nyers hálózati
     // hiba ("Connection refused") semmitmondó. Előbb ellenőrizzük, és ha
@@ -236,16 +630,146 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
+  /// Rákérdez, ha KALIBRÁCIÓ NÉLKÜL indulna a feldolgozás.
+  ///
+  /// Nem tiltás: van, amikor egy gyors, hozzávetőleges kép is ér
+  /// valamit. De a fél-egy órás munka végén szembesülni azzal, hogy a
+  /// nézőtér is a pályán van, sokkal rosszabb, mint most tíz másodpercet
+  /// szánni a négy sarokra.
+  Future<bool?> _askNoCalibration() async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Row(children: [
+          Icon(Icons.warning_amber_rounded, color: AppColors.gold, size: 20),
+          SizedBox(width: 8),
+          Text("Nincs pálya-kalibráció"),
+        ]),
+        content: SizedBox(
+          width: 470,
+          child: Text(
+            "Kalibráció nélkül a pozíciók csak arányos becslések (a kép "
+            "széle a pálya széle), és a pályán kívüli embereket — "
+            "kispad, edző, NÉZŐTÉR — nem lehet kiszűrni: mindenki „a "
+            "pályára” kerül. Emiatt a távolság-, fal-forma- és "
+            "birtoklás-alapú elemzések megbízhatatlanok lesznek.\n\n"
+            "A kalibrálás egy perc: jelöld be a játéktér 4 sarkát. Ha "
+            "csak egy hozzávetőleges képre van szükséged, indíthatod "
+            "így is.",
+            style: AppText.label.copyWith(fontSize: 12.5),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text("Mégse — előbb kalibrálok"),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text("Indítás kalibráció nélkül"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Megkérdezi, mi legyen a MÁR FUTÓ feldolgozással, ha közben új
+  /// elemzést indítunk. Visszatérés: true = megvárja az előzőt (sorba
+  /// áll mögé), false = azonnal kezdje az újat (az előzőt a szerver
+  /// félreteszi, az addigi része elmentve marad), null = mégse.
+  Future<bool?> _askQueueChoice(String runningVideo) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Row(children: [
+          Icon(Icons.hourglass_top, color: AppColors.gold, size: 20),
+          SizedBox(width: 8),
+          Text("Már fut egy elemzés"),
+        ]),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Épp fut: $runningVideo",
+                style: AppText.value.copyWith(fontSize: 13.5),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Megvárja ennek a végét, vagy azonnal kezdje az újat? "
+                "Azonnali kezdésnél a futó feldolgozás félrekerül — az "
+                "eddig feldolgozott része elmentve marad, később "
+                "folytatható.",
+                style: AppText.label.copyWith(fontSize: 12.5),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text("Mégse"),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text("Most kezdje az újat"),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text("Megvárom az előzőt"),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Elindítja a feldolgozást a megadott videó-úton, majd időzítővel lekérdezi
   /// a haladást (GET /jobs/{id}) és frissíti a kártyát.
   Future<void> _startProcessing() async {
     final path = _pathCtrl.text.trim();
     if (path.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Adj meg egy backend-oldali videó-utat.")),
+        const SnackBar(
+            content: Text("Adj meg egy videó-útvonalat azon a gépen, "
+                "ahol a motor fut.")),
       );
       return;
     }
+    // KALIBRÁCIÓ NÉLKÜL nem indítunk el némán egy fél-egy órás munkát:
+    // ilyenkor a koordináta csak arányos becslés, és a pályán kívüli
+    // embereket (kispad, edző, NÉZŐTÉR) nem lehet kiszűrni — mindenki
+    // "a pályára" kerül, tehát a távolság-, fal-forma- és
+    // birtoklás-alapú elemzések megbízhatatlanok. Ezt az órát a
+    // felhasználó tudatosan áldozza fel, vagy sehogy.
+    if (_calib == null) {
+      final megis = await _askNoCalibration();
+      if (megis != true) return;
+    }
+    if (!mounted) return;
+    // Ha épp fut egy másik feldolgozás, a felhasználó dönt: megvárja,
+    // vagy azonnal kezdje az újat (a régit a szerver félreteszi).
+    var queueBehind = false;
+    try {
+      final running = (await _api.fetchJobs())
+          .where((j) => j["status"] == "running")
+          .toList();
+      if (running.isNotEmpty && mounted) {
+        final choice = await _askQueueChoice(
+            (running.first["video"] as String?) ?? "korábbi videó");
+        if (choice == null) return; // mégse
+        queueBehind = choice;
+      }
+    } catch (_) {
+      // nem érjük el a sort — az eddigi viselkedéssel megyünk tovább
+    }
+    if (!mounted) return;
     setState(() {
       _status = "running";
       _stage = "A";
@@ -257,13 +781,19 @@ class _UploadScreenState extends State<UploadScreen> {
     // A kiválasztott profil paraméterei; próba módban csak a videó eleje
     // (~2 percnyi feldolgozott kocka) készül el — gyors ellenőrzéshez.
     final (stride, imgsz, _) = _qualityPresets[_quality]!;
-    // A hossz-korlát FELDOLGOZOTT kockában értendő (25 fps-sel számolva):
-    // próba ~2 perc, félidő ~35 perc, 0 = a videó vége.
-    final max = switch (_length) {
-      "trial" => (3000 / stride).round(),
-      "half" => (52500 / stride).round(),
-      _ => 0,
-    };
+    // A hossz-korlát TARTALÉK alakja: feldolgozott kockában, 25 fps-t
+    // feltételezve. A mérvadó a másodperces `maxS` — a motor a videó
+    // VALÓDI fps-ével váltja kockára; ez a szám csak akkor számít, ha
+    // az fps nem olvasható ki a fájlból.
+    final korlatMp = _hosszKorlatMp;
+    final max = korlatMp == null ? 0 : (korlatMp * 25 / stride).round();
+    // KÖTEG-CSOPORT: ha van köteg és kérték az összefűzést, minden
+    // darab (a fő videóval együtt) közös jelet kap — a motor a végén
+    // magától fűzi össze őket, jó sorrendben.
+    final String? mergeGroup = (_batchPaths.isNotEmpty && _mergeBatch)
+        ? DateTime.now().millisecondsSinceEpoch.toRadixString(36)
+        : null;
+    final mergeTotal = _batchPaths.length + 1;
     try {
       final r = await _api.startProcessing(
         path,
@@ -279,7 +809,19 @@ class _UploadScreenState extends State<UploadScreen> {
         // szerver a pásztázás-mátrixszal vezeti vissza az alap-kockára).
         calibs: _calib == null ? null : _calibMaps(_calib!),
         start: _calib?.startFrame ?? 0,
+        // Kézi meccs-ablak: ha meg van adva, ez dönt (a bemelegítés és a
+        // ceremónia levágása) — az értelmetlen párost eldobjuk.
+        startS: _ablakKezdet(),
+        endS: _ablakVeg(),
+        // A hossz-korlát másodpercben: a motor a valódi fps-sel váltja
+        // kockára, tehát a "Félidő (~35 p)" tényleg 35 perc lesz.
+        maxS: korlatMp,
         jerseyOcr: _jerseyOcr,
+        // A felhasználó döntése: megvárja-e a már futó feldolgozást.
+        queueBehind: queueBehind,
+        mergeGroup: mergeGroup,
+        mergeOrder: 0,
+        mergeTotal: mergeGroup == null ? 0 : mergeTotal,
       );
       _jobId = r["job_id"] as String;
       _matchId = r["match_id"] as String?;
@@ -291,7 +833,9 @@ class _UploadScreenState extends State<UploadScreen> {
         final batch = List<String>.from(_batchPaths);
         setState(() => _batchPaths.clear());
         var queued = 0;
-        for (final p in batch) {
+        var orokoltDb = 0;
+        for (var bi = 0; bi < batch.length; bi++) {
+          final p = batch[bi];
           try {
             List<Map<String, dynamic>>? calibs;
             var startFrame = 0;
@@ -304,6 +848,23 @@ class _UploadScreenState extends State<UploadScreen> {
                     .reduce((a, b) => a < b ? a : b);
               }
             } catch (_) {} // nincs mentett kalibráció — enélkül megy
+            // ÖRÖKLÉS a fő videóról: a köteg tipikusan EGY meccs
+            // darabjai, ugyanarról a kameráról. A felhasználó a fő
+            // videót bekalibrálta — a többi darab eddig kalibráció
+            // NÉLKÜL futott, tehát a meccs 5/6-án minden
+            // távolság-alapú réteg némán félrement. A saját mentett
+            // kalibráció erősebb: azt nem írjuk felül.
+            var orokolt = false;
+            if (calibs == null && _calib != null) {
+              calibs = _calibMaps(_calib!);
+              startFrame = 0; // a fő videó kocka-indexe itt nem érvényes
+              orokolt = true;
+              // Elmentjük ehhez a videóhoz is: újrafeldolgozásnál és a
+              // Folytatásnál már a sajátja.
+              try {
+                await _api.saveCalibration(p, calibs);
+              } catch (_) {}
+            }
             await _api.startProcessing(
               p,
               weights: "yolov8n.pt",
@@ -314,9 +875,18 @@ class _UploadScreenState extends State<UploadScreen> {
               awayTeam: _awayCtrl.text.trim(),
               calibs: calibs,
               start: startFrame,
+              startS: _ablakKezdet(),
+              endS: _ablakVeg(),
               jerseyOcr: _jerseyOcr,
+              // A köteg többi videója mindig SORBAN vár a sorára.
+              queueBehind: true,
+              mergeGroup: mergeGroup,
+              // A fő videó a 0.; a köteg a kiválasztás sorrendjében jön.
+              mergeOrder: bi + 1,
+              mergeTotal: mergeGroup == null ? 0 : mergeTotal,
             );
             queued++;
+            if (orokolt) orokoltDb++;
           } catch (e) {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -324,9 +894,15 @@ class _UploadScreenState extends State<UploadScreen> {
           }
         }
         if (queued > 0 && mounted) {
+          // Az öröklést KI KELL mondani: ha a kamera mégis mozdult a
+          // darabok közt, a felhasználónak tudnia kell, hogy a
+          // kalibráció átment — különben nem érti, honnan jött.
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text("További $queued videó sorba állítva — egymás után "
-                  "dolgozza fel őket a motor (állapot: Kezdőlap).")));
+                  "dolgozza fel őket a motor (állapot: Kezdőlap)."
+                  "${orokoltDb > 0 ? " A fő videó kalibrációját "
+                      "$orokoltDb darab örökölte — ha a kamera mozdult "
+                      "köztük, kalibráld őket külön." : ""}")));
         }
       }
     } catch (e) {
@@ -402,6 +978,11 @@ class _UploadScreenState extends State<UploadScreen> {
 
   // Detektálás-próba folyamatban?
   bool _previewing = false;
+  // A detektálás-próba EREDMÉNYE (null = még nem futott). Ebből épül az
+  // indítás előtti ellenőrző lista: a próba az egyetlen pont, ahol a
+  // rossz kalibráció a feldolgozás ELŐTT kiderül.
+  int? _previewOnCourt;
+  bool? _previewOk;
   // Közvetítés-ellenőrzés folyamatban?
   bool _checkingBroadcast = false;
 
@@ -438,8 +1019,20 @@ class _UploadScreenState extends State<UploadScreen> {
           final nLines = ((lr["lines"] as List?) ?? const []).length;
           final nCorners = ((lr["corners"] as List?) ?? const []).length;
           final hasQuad = lr["suggested_quad"] != null;
+          // Több sportot kiszolgáló csarnokban a kézilabda-pálya vonala
+          // gyakran nem fehér (pl. PIROS) — kiírjuk, melyik szín vonalait
+          // követte a felismerés, hogy a felhasználó lássa és hihesse.
+          final colorName = switch (lr["line_color"] as String?) {
+            "piros" => "piros",
+            "kek" => "kék",
+            "zold" => "zöld",
+            "sarga" => "sárga",
+            "feher" => "fehér",
+            _ => null,
+          };
           lineInfo = "Vonal-felismerés az első totálképen: $nLines vonal, "
               "$nCorners sarok-jelölt"
+              "${colorName == null ? "" : " ($colorName vonalak alapján)"}"
               "${hasQuad ? " — van kalibrációs négyszög-javaslat." : "."}";
         } catch (_) {
           lineInfo = null; // vonal-infó nélkül is teljes az ellenőrzés
@@ -522,7 +1115,17 @@ class _UploadScreenState extends State<UploadScreen> {
       final balls = (r["balls"] as num?)?.toInt() ?? 0;
       final refs = (r["referees"] as num?)?.toInt() ?? 0;
       final onCourt = (r["on_court"] as num?)?.toInt();
-      final ok = persons >= 8;
+      // A pályán legfeljebb 14 játékos lehet (2x7). Ha a kalibrált
+      // pálya-modellbe ennél sokkal több ember esik, a homográfia a
+      // LELÁTÓT is a pályára vetíti — ez a leggyakoribb hiba, és
+      // órákat visz el, ha csak a feldolgozás után derül ki. Ugyanaz a
+      // küszöb, mint a motorban: TOO_MANY_PLAYERS.
+      final tulSok = onCourt != null && onCourt > 18;
+      final ok = !tulSok && persons >= 8;
+      setState(() {
+        _previewOnCourt = onCourt;
+        _previewOk = ok;
+      });
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -558,12 +1161,23 @@ class _UploadScreenState extends State<UploadScreen> {
                   ok
                       ? "Jól néz ki — a dobozok színe mutatja, melyik "
                           "csapathoz sorolná a rendszer a játékost."
-                      : "Kevés játékos látszik — léptess olyan kockára, ahol "
-                          "a pálya jól látszik (kalibráció), vagy válassz "
-                          "tisztább felvételt.",
+                      : tulSok
+                          ? "TÚL sok ember esik a pályára ($onCourt — a "
+                              "pályán legfeljebb 14 lehet): a kalibráció a "
+                              "lelátót is a játéktérre vetíti. Így a "
+                              "pozíciók, a birtoklás és minden "
+                              "távolság-alapú elemzés félremegy. Jelöld "
+                              "újra a 4 sarkot a JÁTÉKTÉR sarkain (ne a "
+                              "lelátón), és ha csak az egyik térfél "
+                              "látszik, válaszd a fél-pálya kalibrációt."
+                          : "Kevés játékos látszik — léptess olyan kockára, "
+                              "ahol a pálya jól látszik (kalibráció), vagy "
+                              "válassz tisztább felvételt.",
                   style: AppText.label.copyWith(
                       fontSize: 12,
-                      color: ok ? AppColors.accent : AppColors.gold),
+                      color: ok
+                          ? AppColors.accent
+                          : tulSok ? AppColors.away : AppColors.gold),
                 ),
               ],
             ),
@@ -754,7 +1368,7 @@ class _UploadScreenState extends State<UploadScreen> {
         onChanged: (_) => setState(() {}),
         decoration: InputDecoration(
           isDense: true,
-          hintText: "Backend-oldali videó útja (pl. /home/.../match.mp4)",
+          hintText: "Videó útja a motor gépén (pl. /home/.../meccs.mp4)",
           hintStyle: AppText.label.copyWith(fontSize: 12),
           prefixIcon: const Icon(Icons.folder_open, size: 18, color: AppColors.textSecondary),
           enabledBorder: OutlineInputBorder(
@@ -775,18 +1389,41 @@ class _UploadScreenState extends State<UploadScreen> {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.xs,
           children: [
-            for (final p in _batchPaths)
+            // Sorszámozva (a fő videó az 1.): az összefűzés EBBEN a
+            // sorrendben épít meccset — itt látszik, ha rossz.
+            for (var bi = 0; bi < _batchPaths.length; bi++)
               Chip(
-                label: Text(p.split("/").last,
+                label: Text(
+                    "${bi + 2}. ${_batchPaths[bi].split("/").last}",
                     style: AppText.label.copyWith(fontSize: 12)),
                 avatar: const Icon(Icons.movie_outlined,
                     size: 16, color: AppColors.textSecondary),
                 backgroundColor: AppColors.surfaceAlt,
                 side: const BorderSide(color: AppColors.border),
                 deleteIcon: const Icon(Icons.close, size: 16),
-                onDeleted: () => setState(() => _batchPaths.remove(p)),
+                onDeleted: () => setState(() => _batchPaths.removeAt(bi)),
               ),
           ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        // A köteg végén automatikus összefűzés: a darabokban felvett
+        // meccs magától áll össze — a hat éjszakai feldolgozás után
+        // nem kell emlékezni rá, hogy még van egy dolog. Aki több
+        // KÜLÖN meccset tölt fel egyszerre, kikapcsolja.
+        InkWell(
+          onTap: () => setState(() => _mergeBatch = !_mergeBatch),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(_mergeBatch ? Icons.check_box : Icons.check_box_outline_blank,
+                size: 18,
+                color: _mergeBatch ? AppColors.accent : AppColors.textFaint),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                  "A végén fűzd össze egy meccsé (a fenti sorrendben) — "
+                  "több KÜLÖN meccsnél kapcsold ki",
+                  style: AppText.label.copyWith(fontSize: 12)),
+            ),
+          ]),
         ),
       ],
       const SizedBox(height: AppSpacing.md),
@@ -855,6 +1492,17 @@ class _UploadScreenState extends State<UploadScreen> {
             ? "Kalibráció kész (${_calib!.label}) — újranyitás"
             : "Pálya-kalibráció megnyitása"),
       ),
+      // ÁTVÉTEL másik videóról: aki darabokban vesz fel, hat klipet
+      // kap ugyanarról a rögzített kameráról — enélkül mind a hatot
+      // külön kellene bejelölni, huszonnégy kattintással.
+      if (_calib == null) ...[
+        const SizedBox(height: AppSpacing.sm),
+        TextButton.icon(
+          onPressed: _atvetelFlow,
+          icon: const Icon(Icons.content_copy_outlined, size: 16),
+          label: const Text("Kalibráció átvétele másik videóról"),
+        ),
+      ],
       const SizedBox(height: AppSpacing.md),
       _stepNav(
           hint: _calib != null
@@ -862,6 +1510,109 @@ class _UploadScreenState extends State<UploadScreen> {
               : "Kalibráció nélkül is indítható, de a táv/sebesség adatok "
                   "pontatlanok lehetnek."),
     ]);
+  }
+
+  /// Kalibráció átvétele egy másik videóról.
+  ///
+  /// CSAK akkor helyes, ha a kamera nem mozdult a két felvétel közt —
+  /// ezt a program nem tudja eldönteni, ezért ki kell mondani. Az
+  /// átvett kalibráció a szokásos módon szerkeszthető: a
+  /// Pálya-kalibráció megnyitásával igazítható, ha mégis elmozdult.
+  Future<void> _atvetelFlow() async {
+    final path = _pathCtrl.text.trim();
+    final items = await _api.fetchSavedCalibrations(
+        excludePath: path.isEmpty ? null : path);
+    if (!mounted) return;
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Még nincs másik videóhoz mentett kalibráció — "
+              "az elsőt be kell jelölni.")));
+      return;
+    }
+    final valasztott = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Kalibráció átvétele"),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  "Csak akkor vedd át, ha a kamera NEM mozdult a két "
+                  "felvétel közt — a program ezt nem tudja eldönteni. "
+                  "Az átvett sarkokat utána a Pálya-kalibrációban "
+                  "igazíthatod.",
+                  style: AppText.label.copyWith(fontSize: 12)),
+              const SizedBox(height: AppSpacing.md),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 260),
+                child: ListView(shrinkWrap: true, children: [
+                  for (final it in items)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.grid_on, size: 18),
+                      title: Text("${it["video"]}",
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.value.copyWith(fontSize: 12.5)),
+                      subtitle: Text("${it["count"]} kalibráció",
+                          style: AppText.label.copyWith(fontSize: 11)),
+                      onTap: () => Navigator.pop(ctx, it),
+                    ),
+                ]),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Mégse")),
+        ],
+      ),
+    );
+    if (valasztott == null || !mounted) return;
+    final maps = ((valasztott["calibs"] as List?) ?? const [])
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    final items2 = <CalibrationResult>[];
+    for (final m in maps) {
+      final raw = (m["corners"] as List?) ?? const [];
+      final corners = [
+        for (final pt in raw)
+          if (pt is List && pt.length >= 2)
+            [(pt[0] as num).toInt(), (pt[1] as num).toInt()],
+      ];
+      if (corners.length != 4) continue;
+      items2.add(CalibrationResult(
+        corners: corners,
+        region: (m["region"] as String?) ?? "full",
+        rotate: (m["rotate"] as bool?) ?? false,
+        startFrame: (m["frame"] as num?)?.toInt() ?? 0,
+      ));
+    }
+    if (items2.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Az átvett kalibráció nem értelmezhető.")));
+      return;
+    }
+    setState(() {
+      _calib = CalibrationSet(items2);
+      if (_wstep == 2) _wstep = 3;
+    });
+    // A MOSTANI videóhoz is elmentjük: újrafeldolgozásnál már a sajátja.
+    if (path.isNotEmpty) {
+      try {
+        await _api.saveCalibration(path, _calibMaps(_calib!));
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Kalibráció átvéve innen: ${valasztott["video"]} — "
+            "ha a kamera mozdult, igazítsd a Pálya-kalibrációban.")));
   }
 
   /// 4. lépés: minőség/hossz beállítása és a feldolgozás indítása.
@@ -884,7 +1635,12 @@ class _UploadScreenState extends State<UploadScreen> {
             selected: {_quality},
             onSelectionChanged: _status == "running"
                 ? null
-                : (s) => setState(() => _quality = s.first),
+                // Profilváltásnál az idő-becslés is újraszámol: a
+                // "Pontos" ugyanarra a videóra többszörös időt kér.
+                : (s) {
+                    setState(() => _quality = s.first);
+                    unawaited(_runPreflight());
+                  },
           ),
           SegmentedButton<String>(
             showSelectedIcon: false,
@@ -964,6 +1720,11 @@ class _UploadScreenState extends State<UploadScreen> {
               : "Közvetítés-ellenőrzés (vágott-e a felvétel?)"),
         ),
       ),
+      const SizedBox(height: AppSpacing.md),
+      _matchWindowFields(),
+      _preStartChecklist(),
+      _preflightCard(),
+      _profileHintCard(),
       const SizedBox(height: AppSpacing.md),
       Row(children: [
         if (_wstep > 0) ...[
@@ -1179,11 +1940,30 @@ class _UploadScreenState extends State<UploadScreen> {
             : active
                 ? Icons.autorenew
                 : Icons.circle_outlined;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      // Az ÉPPEN FUTÓ lépés kiemelt sávot kap — a hosszú listában a
+      // szem azonnal megtalálja, hol tart a feldolgozás.
+      decoration: BoxDecoration(
+        color: active
+            ? AppColors.gold.withOpacity(0.07)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: active
+                ? AppColors.gold.withOpacity(0.35)
+                : Colors.transparent),
+      ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: c),
+          // A "folyamatban" ikon FOROG — eddig statikus autorenew volt,
+          // ami mozdulatlanul pont a mozgás hiányát sugallta.
+          active
+              ? _SpinningIcon(icon: icon, color: c)
+              : Icon(icon, size: 18, color: c),
           const SizedBox(width: AppSpacing.md),
           Text(name, style: AppText.value.copyWith(
               color: (done || active || error) ? AppColors.textPrimary : AppColors.textFaint,
@@ -1237,28 +2017,100 @@ class _DashedRectPainter extends CustomPainter {
 }
 
 /// Kör alakú folyamatjelző százalékkal.
+///
+/// A feldolgozás percekig tart — itt tölti a felhasználó a legtöbb
+/// várakozási időt. Ezért a gyűrű ÉL: az állás simán úszik az új
+/// értékre (nem ugrik), a szám felpörög, és a gyűrű mögött halk
+/// akcentus-ragyogás lélegzik, amíg dolgozunk.
 class _RingProgress extends StatelessWidget {
   final double value;
   const _RingProgress({required this.value});
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 78, height: 78,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 78, height: 78,
-            child: CircularProgressIndicator(
-              value: value,
-              strokeWidth: 6,
-              backgroundColor: AppColors.surfaceAlt,
-              valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: value.clamp(0.0, 1.0)),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, _) => SizedBox(
+        width: 82,
+        height: 82,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Halk ragyogás a gyűrű mögött — jelzi, hogy folyik a munka.
+            Container(
+              width: 62,
+              height: 62,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                      color: AppColors.accent.withOpacity(0.16 + 0.12 * v),
+                      blurRadius: 22,
+                      spreadRadius: 1),
+                ],
+              ),
             ),
-          ),
-          Text("${(value * 100).round()}%", style: AppText.value.copyWith(fontSize: 16)),
-        ],
+            SizedBox(
+              width: 78,
+              height: 78,
+              child: CircularProgressIndicator(
+                value: v,
+                strokeWidth: 6,
+                strokeCap: StrokeCap.round,
+                backgroundColor: AppColors.surfaceAlt,
+                valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+              ),
+            ),
+            Text("${(v * 100).round()}%",
+                style: AppText.value.copyWith(fontSize: 16)),
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Folyamatosan forgó ikon — az "épp dolgozom" jelzés a folyamat-
+/// listában (a statikus autorenew-ikon pont a mozgás hiányát sugallta).
+class _SpinningIcon extends StatefulWidget {
+  const _SpinningIcon({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  State<_SpinningIcon> createState() => _SpinningIconState();
+}
+
+class _SpinningIconState extends State<_SpinningIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1600));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // A FOLYAMATOS forgás a mozgás-érzékeny felhasználónak a
+    // legrosszabb fajta mozgás: sosem áll meg. Ilyenkor az ikon
+    // mozdulatlan marad — hogy a lépés fut, a kiemelt sáv és a
+    // "folyamatban…" felirat úgyis megmondja.
+    if (reduceMotion(context)) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RotationTransition(
+        turns: _c,
+        child: Icon(widget.icon, size: 18, color: widget.color),
+      );
 }

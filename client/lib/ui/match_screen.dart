@@ -5,6 +5,7 @@
 library;
 
 import "dart:async";
+import "dart:convert";
 import "dart:io";
 import "dart:math" as math;
 
@@ -19,6 +20,8 @@ import "../models/tracking.dart";
 import "../services/api_client.dart";
 import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
+import "anim.dart";
+import "court3d_screen.dart";
 import "court_geometry.dart";
 import "court_painter.dart";
 import "decisions_panel.dart";
@@ -31,6 +34,7 @@ import "shot_map_painter.dart";
 import "stats_panel.dart";
 import "story_timeline.dart";
 import "summary_panel.dart";
+import "zoomable.dart";
 import "video_panel.dart";
 import "error_text.dart";
 import "waiting.dart";
@@ -40,7 +44,13 @@ enum ViewMode { players, heatmap, shots, passes }
 
 class MatchScreen extends StatefulWidget {
   final String matchId;
-  const MatchScreen({super.key, this.matchId = "sim-0"});
+
+  /// Melyik képkockánál nyíljon meg a lejátszó. A jegyzet-listából
+  /// érkezve a MEGJELÖLT pillanatra kell ugrani — különben az edző a
+  /// saját jegyzetét keresgélheti végig a meccsen.
+  final int? initialFrame;
+
+  const MatchScreen({super.key, this.matchId = "sim-0", this.initialFrame});
 
   @override
   State<MatchScreen> createState() => _MatchScreenState();
@@ -59,6 +69,11 @@ class _MatchScreenState extends State<MatchScreen> {
   // Felismert események a backendből (passz/lövés/gól/labdaeladás) — kattintásra
   // a lejátszó az esemény képkockájára ugrik. Demó módban üres.
   List<Map<String, dynamic>> _events = [];
+  // KÉZI esemény-javítások: amit az edző a felismerésen kijavít. A
+  // felismerés téved (gólt lövésnek lát, lövést nem vesz észre), az edző
+  // pedig egy rossz eredményű jelentésnek EGYETLEN számát sem hiszi el.
+  List<Map<String, dynamic>> _overrides = [];
+  bool _correcting = false;
   // A feldolgozás minőség-önellenőrzése (score + figyelmeztetések) — a
   // felhasználó lássa, mennyire megbízható az elemzés. Demó módban null.
   Map<String, dynamic>? _quality;
@@ -101,6 +116,9 @@ class _MatchScreenState extends State<MatchScreen> {
   final TextEditingController _noteCtrl = TextEditingController();
   bool _savingNote = false;
   int _frameIndex = 0;
+  // Egyszer használatos: a hívó által kért kezdő-képkocka, amint a
+  // meccs betöltött (előtte nincs mihez képest határt szabni).
+  bool _initialFrameApplied = false;
   bool _playing = false;
   String _sourceLabel = "betöltés…";
   Timer? _timer;
@@ -151,6 +169,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<dynamic> keyMoments = const [];
     Map<String, dynamic>? setplayEff;
     List<Map<String, dynamic>> notes = [];
+    List<Map<String, dynamic>> overrides = [];
     Map<String, dynamic>? coach;
     List<Map<String, dynamic>> attacks = [];
     Map<String, dynamic> attackEff = {};
@@ -173,11 +192,16 @@ class _MatchScreenState extends State<MatchScreen> {
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
-        label = "backend · ${match.meta.matchId}";
+        label = "motor · ${match.meta.matchId}";
         try {
           events = await _api.fetchEvents(widget.matchId);
         } catch (_) {
           events = []; // esemény nélkül is működik a nézet
+        }
+        try {
+          overrides = await _api.fetchEventOverrides(widget.matchId);
+        } catch (_) {
+          overrides = []; // javítás nélkül is működik a nézet
         }
         try {
           shotSpeeds = await _api.fetchShotSpeeds(widget.matchId);
@@ -316,11 +340,18 @@ class _MatchScreenState extends State<MatchScreen> {
     }
     setState(() {
       _match = match;
+      // A hívó által kért kezdő-képkocka (jegyzet-lista, kulcs-pillanat)
+      // — csak most, a hossz ismeretében tudjuk határok közé szorítani.
+      if (!_initialFrameApplied && widget.initialFrame != null) {
+        _initialFrameApplied = true;
+        _frameIndex = _indexOfT(match, widget.initialFrame!);
+      }
       _stats = computePlayerStats(match);
       _summary = computeMatchSummary(match);
       _intensity = computeIntensityTimeline(match);
       _formations = computeFormationTimeline(match);
       _events = events;
+      _overrides = overrides;
       _shots = _computeShotMarkers(match, events, xgByT, freeByT);
       _xgShooters = xgShooters;
       _passNetwork = computePassNetwork(match, events, _passTeam);
@@ -530,7 +561,7 @@ class _MatchScreenState extends State<MatchScreen> {
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Text(
             _sourceLabel == "demó"
-                ? "Az események a backend feldolgozásból jönnek — demó módban nem elérhetők."
+                ? "Az események a motor feldolgozásából jönnek — demó módban nem elérhetők."
                 : "Nincs felismert esemény (ehhez labda-detektálás kell a felvételen).",
             style: AppText.label,
             textAlign: TextAlign.center,
@@ -552,6 +583,7 @@ class _MatchScreenState extends State<MatchScreen> {
         ? const <Map<String, dynamic>>[]
         : _filteredEvents();
     return Column(children: [
+      _scoreBar(match),
       // Típus-szűrő: az edző pl. csak a gólokat nézi végig, gólról gólra.
       // A támadás-címkék (atk:) a szakasz-listára váltanak.
       Padding(
@@ -580,6 +612,63 @@ class _MatchScreenState extends State<MatchScreen> {
               if (_stoppages.any((s) => s["kind"] == "időkérés"))
                 _filterChip("rule:timeout", "Időkérés"),
             ]),
+          ),
+          // Kézi javítás: a felismerés téved, és egy rossz eredményű
+          // jelentésnek az edző EGYETLEN számát sem hiszi el. Itt lehet
+          // hiányzó gólt felvenni és az összes javítást visszavonni; a
+          // meglévő események javítása a soruk menüjében van.
+          PopupMenuButton<String>(
+            enabled: !_correcting && _sourceLabel != "demó",
+            tooltip: _overrides.isEmpty
+                ? "Javítások"
+                : "Javítások (${_overrides.length})",
+            icon: Icon(Icons.fact_check_outlined,
+                color: _overrides.isEmpty
+                    ? AppColors.textFaint
+                    : AppColors.gold),
+            color: AppColors.surface,
+            onSelected: (v) {
+              if (v == "clear") {
+                _clearCorrections();
+              } else {
+                // A jelenlegi képkockára veszünk fel gólt — az edző
+                // épp azt a pillanatot nézi —, és ha ki van jelölve
+                // játékos, ő lesz a lövő.
+                _correct("add", _tOf(match), "goal",
+                    team: v, playerId: _selectedTrack);
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                  value: "home",
+                  child: ListTile(
+                      leading: const Icon(Icons.add, size: 17),
+                      title: Text("Hiányzó gól: ${match.meta.homeTeam}"),
+                      subtitle: Text(_selectedTrack == null
+                          ? "a jelenlegi pillanatra"
+                          : "a jelenlegi pillanatra · lövő: "
+                              "${_playerShort(match, _selectedTrack!)}"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "away",
+                  child: ListTile(
+                      leading: const Icon(Icons.add, size: 17),
+                      title: Text("Hiányzó gól: ${match.meta.awayTeam}"),
+                      subtitle: Text(_selectedTrack == null
+                          ? "a jelenlegi pillanatra"
+                          : "a jelenlegi pillanatra · lövő: "
+                              "${_playerShort(match, _selectedTrack!)}"),
+                      dense: true)),
+              if (_overrides.isNotEmpty)
+                PopupMenuItem(
+                    value: "clear",
+                    child: ListTile(
+                        leading: const Icon(Icons.undo, size: 17),
+                        title: Text("Minden javítás visszavonása "
+                            "(${_overrides.length})"),
+                        subtitle: const Text("a felismerés eredeti képe"),
+                        dense: true)),
+            ],
           ),
           // Klip-export: a SZŰRT eseménytípusok jelenetei MP4-ekben, zip-ben.
           IconButton(
@@ -734,6 +823,86 @@ class _MatchScreenState extends State<MatchScreen> {
     ]);
   }
 
+  /// EREDMÉNY-SÁV: a felismert állás, kimondva, hogy javítható.
+  ///
+  /// Az edző az eredményből dönti el, hogy hisz-e a jelentésnek. Ha a
+  /// felismerés 21–19-et mond a valós 24–22 helyett, a többi szám sem
+  /// ér semmit a szemében — akkor sem, ha egyébként pontos. Ezért az
+  /// állás LÁTSZIK, és mellette ott a mondat, hogy javítható: a
+  /// javítás-eszközök máshogy rejtve maradnának.
+  Widget _scoreBar(Match match) {
+    var hazai = 0;
+    var vendeg = 0;
+    for (final e in _events) {
+      if (e["type"] != "goal") continue;
+      if (e["team"] == "home") {
+        hazai++;
+      } else {
+        vendeg++;
+      }
+    }
+    final demo = _sourceLabel == "demó";
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: AppTheme.card(
+          borderColor: _overrides.isEmpty ? null : AppColors.gold),
+      child: Row(children: [
+        Expanded(
+          child: Text(match.meta.homeTeam,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.value.copyWith(fontSize: 13)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text("$hazai – $vendeg", style: AppText.statBig),
+            // A VALÓDI (jegyzőkönyvi) eredmény a felismert alatt — ha
+            // az edző megadta a könyvtár ceruza-párbeszédében. Nagy
+            // eltérésnél arany: a minőség-jelentés mondja a teendőt.
+            if (match.meta.realGoalsHome != null &&
+                match.meta.realGoalsAway != null)
+              Text(
+                  "valódi: ${match.meta.realGoalsHome}–"
+                  "${match.meta.realGoalsAway}",
+                  style: AppText.label.copyWith(
+                      fontSize: 10.5,
+                      // = REAL_SCORE_DIFF_WARN (backend-küszöb): 4 gól
+                      color: ((hazai - match.meta.realGoalsHome!).abs() +
+                                  (vendeg - match.meta.realGoalsAway!)
+                                      .abs()) >= 4
+                          ? AppColors.gold
+                          : AppColors.textFaint)),
+          ]),
+        ),
+        Expanded(
+          child: Text(match.meta.awayTeam,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.value.copyWith(fontSize: 13)),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Flexible(
+          flex: 2,
+          child: Text(
+              demo
+                  ? "demó adat"
+                  : _overrides.isEmpty
+                      ? "a felismerés szerint — ha nem stimmel, a "
+                          "sorok ⋮ menüjében javítható"
+                      : "${_overrides.length} kézi javítással",
+              style: AppText.label.copyWith(
+                  fontSize: 11.5,
+                  color: _overrides.isEmpty
+                      ? AppColors.textFaint
+                      : AppColors.gold)),
+        ),
+      ]),
+    );
+  }
+
   /// A kiválasztott szabály-szűrő (rule:...) sorai egységes alakban:
   /// {"label", "team", "frame", "duration_s"?}.
   List<Map<String, dynamic>> _ruleRows() {
@@ -812,7 +981,7 @@ class _MatchScreenState extends State<MatchScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: _frameIndex == frame
+          color: _tOf(match) == frame
               ? AppColors.accentSoft
               : AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(10),
@@ -883,8 +1052,8 @@ class _MatchScreenState extends State<MatchScreen> {
       "7 a 6" => (Icons.group_add, AppColors.away),
       _ => (Icons.grid_view, AppColors.textSecondary),
     };
-    final selected = _frameIndex >= start &&
-        _frameIndex <= ((a["end_frame"] as num?)?.toInt() ?? start);
+    final selected = _tOf(match) >= start &&
+        _tOf(match) <= ((a["end_frame"] as num?)?.toInt() ?? start);
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => _seekToFrame(match, start),
@@ -1093,25 +1262,12 @@ class _MatchScreenState extends State<MatchScreen> {
       "turnover" => ("Labdaeladás", Icons.swap_horiz, AppColors.away),
       _ => ("Passz", Icons.arrow_forward, AppColors.textSecondary),
     };
-    final selected = _frameIndex == t;
+    final selected = _tOf(match) == t;
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       // Ugrás az esemény képkockájára (a lejátszót is megállítjuk), és ha az
       // eredeti videó elérhető, a jelenet-lejátszó is a jelenetre ugrik.
-      onTap: () {
-        setState(() {
-          _timer?.cancel();
-          _playing = false;
-          _frameIndex = t.clamp(0, match.frames.length - 1);
-          if (match.meta.videoPath != null && VideoPanel.supported) {
-            _showVideo = true;
-          }
-        });
-        // A panel épp most jelenhetett meg — a kirajzolás után ugrunk.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(t));
-        });
-      },
+      onTap: () => _seekToFrame(match, t),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -1129,10 +1285,130 @@ class _MatchScreenState extends State<MatchScreen> {
                   : "$team · gólpassz: ${_playerShort(match, assistId)}",
               style: AppText.label.copyWith(fontSize: 11.5),
               overflow: TextOverflow.ellipsis)),
+          // Kézi eredet jelölése: az edző lássa, mit írt felül ő maga.
+          if (((e["detail"] as Map?)?["manual"]) == true)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Tooltip(
+                message: "kézzel javított",
+                child: Icon(Icons.edit_outlined,
+                    size: 13, color: AppColors.gold),
+              ),
+            ),
           Text("${(t / fps).toStringAsFixed(1)} s", style: AppText.label.copyWith(fontSize: 11.5)),
+          // Javítás + 3D: a felismerés téved, és az edző egy rossz
+          // eredményű jelentésnek egyetlen számát sem hiszi el — a
+          // javítás gól/lövés sorokon él. A "Megnézem 3D-ben" minden
+          // soron: a jelenet térben, TV-kamerával játszódik le.
+          PopupMenuButton<String>(
+            tooltip: "Javítás / 3D",
+            enabled: !_correcting && _sourceLabel != "demó",
+            iconSize: 15,
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.more_vert,
+                color: AppColors.textFaint),
+            color: AppColors.surface,
+            onSelected: (v) {
+              if (v == "goal" || v == "shot") {
+                _correct("set_type", t, v);
+              } else if (v == "remove") {
+                _correct("remove", t, type);
+              } else if (v == "3d") {
+                Navigator.of(context).pushReplacement(MaterialPageRoute(
+                    builder: (_) => Court3DScreen(
+                        matchId: widget.matchId, startS: t / fps)));
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                  value: "3d",
+                  child: ListTile(
+                      leading: Icon(Icons.view_in_ar, size: 17),
+                      title: Text("Megnézem 3D-ben"),
+                      dense: true)),
+              if (type == "shot")
+                const PopupMenuItem(
+                    value: "goal",
+                    child: ListTile(
+                        leading: Icon(Icons.sports_score, size: 17),
+                        title: Text("Ez GÓL volt"),
+                        dense: true)),
+              if (type == "goal")
+                const PopupMenuItem(
+                    value: "shot",
+                    child: ListTile(
+                        leading: Icon(Icons.sports_handball, size: 17),
+                        title: Text("Ez csak lövés volt"),
+                        dense: true)),
+              if (type == "goal" || type == "shot")
+                const PopupMenuItem(
+                    value: "remove",
+                    child: ListTile(
+                        leading: Icon(Icons.delete_outline, size: 17),
+                        title: Text("Nem volt ilyen esemény"),
+                        dense: true)),
+            ],
+          ),
         ]),
       ),
     );
+  }
+
+  /// KÉZI javítás felvétele és mentése, majd a nézet újratöltése.
+  ///
+  /// Miért a teljes újratöltés: a javítás a lövés-felismerésbe épül be,
+  /// tehát MINDEN rétegen átüt (eredmény, xG, lövő-listák, edzés-fókusz)
+  /// — a fél nézet frissítése ellentmondó képet adna, ami rosszabb,
+  /// mint a másodperces várakozás.
+  Future<void> _correct(String op, int t, String type,
+      {String? team, int? playerId}) async {
+    if (_correcting) return;
+    setState(() => _correcting = true);
+    try {
+      final uj = <Map<String, dynamic>>[
+        ..._overrides,
+        {
+          "op": op,
+          "t": t,
+          "type": type,
+          if (team != null) "team": team,
+          // A LÖVŐ: ha ki van jelölve játékos a pályán, a kézzel
+          // felvett gól hozzá tartozik — enélkül a gól ott lenne az
+          // eredményben, de a góllövő-listákból kimaradna.
+          if (playerId != null) "player_id": playerId,
+        },
+      ];
+      await _api.saveEventOverrides(widget.matchId, uj);
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Javítás mentve — az elemzés újraszámolt "
+              "(eredmény, xG, listák).")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A javítás nem sikerült: ${humanError(e)}")));
+    } finally {
+      if (mounted) setState(() => _correcting = false);
+    }
+  }
+
+  /// Az ÖSSZES kézi javítás visszavonása (a felismerés eredeti képe).
+  Future<void> _clearCorrections() async {
+    if (_correcting) return;
+    setState(() => _correcting = true);
+    try {
+      await _api.saveEventOverrides(widget.matchId, const []);
+      if (!mounted) return;
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A visszavonás nem sikerült: ${humanError(e)}")));
+    } finally {
+      if (mounted) setState(() => _correcting = false);
+    }
   }
 
   /// Rövid játékos-címke az eseménysorhoz: mezszám, ha ismert ("#7"),
@@ -1168,7 +1444,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 isDense: true,
                 hintText: demo
                     ? "Demó módban nem menthető jegyzet"
-                    : "Jegyzet ${(_frameIndex / fps).toStringAsFixed(1)} s-hez…",
+                    : "Jegyzet ${(_tOf(match) / fps).toStringAsFixed(1)} s-hez…",
                 hintStyle: AppText.label.copyWith(fontSize: 12),
               ),
               onSubmitted: (_) => _addNote(match),
@@ -1201,7 +1477,7 @@ class _MatchScreenState extends State<MatchScreen> {
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   child: Text(
                     demo
-                        ? "A jegyzetek a backenden tárolódnak — demó módban nem elérhetők."
+                        ? "A jegyzeteket a motor tárolja — demó módban nem elérhetők."
                         : "Állítsd a lejátszót a kívánt pillanatra, és írd be a megjegyzést — "
                             "a jegyzet a jelentésbe is bekerül.",
                     style: AppText.label,
@@ -1225,23 +1501,11 @@ class _MatchScreenState extends State<MatchScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       // Ugrás a jegyzet pillanatára — mint az eseményeknél.
-      onTap: () {
-        setState(() {
-          _timer?.cancel();
-          _playing = false;
-          _frameIndex = frame.clamp(0, match.frames.length - 1);
-          if (match.meta.videoPath != null && VideoPanel.supported) {
-            _showVideo = true;
-          }
-        });
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(frame));
-        });
-      },
+      onTap: () => _seekToFrame(match, frame),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: _frameIndex == frame ? AppColors.accentSoft : AppColors.surfaceAlt,
+          color: _tOf(match) == frame ? AppColors.accentSoft : AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(children: [
@@ -1286,7 +1550,7 @@ class _MatchScreenState extends State<MatchScreen> {
     if (text.isEmpty || _savingNote) return;
     setState(() => _savingNote = true);
     try {
-      await _api.addNote(widget.matchId, _frameIndex, text);
+      await _api.addNote(widget.matchId, _tOf(match), text);
       final notes = await _api.fetchNotes(widget.matchId);
       if (!mounted) return;
       setState(() {
@@ -1386,6 +1650,19 @@ class _MatchScreenState extends State<MatchScreen> {
                 color: _showVideo ? AppColors.accent : AppColors.textSecondary),
             tooltip: _showVideo ? "Videó elrejtése" : "Videó megjelenítése",
           ),
+        // Mezszámok EGY menetben: enélkül minden szezon-szintű lap
+        // (keret, toplisták, játékos-fejlődés) néma marad, a
+        // pályára-kattintós szerkesztő pedig játékosonként külön
+        // párbeszéd — tizennégy emberre az már nem munka, hanem
+        // elrettentés.
+        IconButton(
+          onPressed: _sourceLabel == "demó"
+              ? null
+              : () => _bulkJerseys(match),
+          icon: const Icon(Icons.badge_outlined,
+              color: AppColors.textSecondary),
+          tooltip: "Mezszámok kiosztása (egy listában)",
+        ),
         IconButton(
           onPressed: _sourceLabel == "demó" ? null : _editSuspensions,
           icon: const Icon(Icons.timer_outlined, color: AppColors.textSecondary),
@@ -1397,11 +1674,27 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.swap_horiz, color: AppColors.textSecondary),
           tooltip: "Csapatok felcserélése (ha a színek fordítva vannak)",
         ),
+        // UTÓLAGOS vágás: a bennmaradt bemutatás/bemelegítés ál-eseményeket
+        // gyárt — itt, a meccs-nézetben veszi észre a felhasználó.
+        IconButton(
+          onPressed: _sourceLabel == "demó" ? null : _trimDialog,
+          icon: const Icon(Icons.content_cut, color: AppColors.textSecondary),
+          tooltip: "Meccs eleje/vége levágása (bennmaradt bemutatás, "
+              "bemelegítés)",
+        ),
         // Egyoldalas edzői meccsjelentés mentése (HTML → böngészőből PDF).
         IconButton(
           onPressed: _sourceLabel == "demó" ? null : _exportReport,
           icon: const Icon(Icons.description_outlined, color: AppColors.textSecondary),
           tooltip: "Meccsjelentés mentése (nyomtatható)",
+        ),
+        // KALIBRÁCIÓ-ELLENŐRZÉS: a pályavonalak visszarajzolva a videó
+        // három kockájára (eleje/közepe/vége) — a szem dönti el, tartja-e
+        // a kalibráció a svenkelés alatt.
+        IconButton(
+          onPressed: _sourceLabel == "demó" ? null : _calibCheckDialog,
+          icon: const Icon(Icons.grid_on, color: AppColors.textSecondary),
+          tooltip: "Kalibráció ellenőrzése (vonalak a videón)",
         ),
         // MECCS-CSOMAG: jelentés + CSV + gólklipek EGY zip-ben — megosztásra.
         IconButton(
@@ -1420,12 +1713,189 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.table_chart_outlined, color: AppColors.textSecondary),
           tooltip: "Statisztika mentése (Excel/CSV)",
         ),
+        // Elemzés-könyvtár: befejezett és félbehagyott elemzések egy
+        // helyen — megnyitás és törlés (a dashboardra lépés nélkül).
+        IconButton(
+            onPressed: _openLibrary,
+            tooltip: "Elemzés-könyvtár (befejezett és félbehagyott)",
+            icon: const Icon(Icons.folder_open,
+                color: AppColors.textSecondary)),
         IconButton(
               onPressed: _load,
               tooltip: "Meccs újratöltése",
               icon: const Icon(Icons.refresh,
                   color: AppColors.textSecondary)),
       ],
+    );
+  }
+
+  /// Elemzés-könyvtár párbeszéd: fülekkel (mind/befejezett/félbehagyott),
+  /// megnyitással és törléssel. A félbehagyott elemzés is teljes értékű
+  /// nézetet kap (az addig feldolgozott részből), és innen törölhető is.
+  Future<void> _openLibrary() async {
+    List<Map<String, dynamic>> items;
+    try {
+      items = await _api.listMatches();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("A könyvtár nem érhető el: ${humanError(e)}")));
+      return;
+    }
+    if (!mounted) return;
+    var filter = "all";
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) {
+          final shown = [
+            for (final m in items)
+              if (filter == "all" ||
+                  (filter == "partial") == ((m["partial"] as bool?) ?? false))
+                m,
+          ];
+          final doneN =
+              items.where((m) => !((m["partial"] as bool?) ?? false)).length;
+          final partN = items.length - doneN;
+          return AlertDialog(
+            backgroundColor: AppColors.surface,
+            title: const Text("Elemzés-könyvtár"),
+            content: SizedBox(
+              width: 560,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    style: const ButtonStyle(
+                        visualDensity: VisualDensity.compact),
+                    segments: [
+                      ButtonSegment(
+                          value: "all",
+                          label: Text("Mind (${items.length})")),
+                      ButtonSegment(
+                          value: "done",
+                          label: Text("Befejezett ($doneN)")),
+                      ButtonSegment(
+                          value: "partial",
+                          label: Text("Félbehagyott ($partN)")),
+                    ],
+                    selected: {filter},
+                    onSelectionChanged: (s) =>
+                        setDlg(() => filter = s.first),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  if (shown.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Text(
+                          filter == "partial"
+                              ? "Nincs félbehagyott elemzés."
+                              : "Nincs ilyen elemzés a könyvtárban.",
+                          style: AppText.label),
+                    )
+                  else
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Column(children: [
+                          for (final m in shown)
+                            _libraryRow(ctx, m, items, setDlg),
+                        ]),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text("Bezár"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Egy könyvtár-sor: megnyitás (koppintásra) + törlés (kuka ikon).
+  Widget _libraryRow(BuildContext ctx, Map<String, dynamic> m,
+      List<Map<String, dynamic>> items, StateSetter setDlg) {
+    final id = m["match_id"] as String;
+    final partial = (m["partial"] as bool?) ?? false;
+    final durS = ((m["duration_s"] as num?) ?? 0).toDouble();
+    final mins = (durS / 60).floor();
+    final secs = (durS % 60).round();
+    return ListTile(
+      dense: true,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      title: Row(children: [
+        Flexible(
+          child: Text("${m["home_team"] ?? "?"} – ${m["away_team"] ?? "?"}",
+              overflow: TextOverflow.ellipsis,
+              style: AppText.value.copyWith(fontSize: 14)),
+        ),
+        if (partial) ...[
+          const SizedBox(width: AppSpacing.sm),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.away.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text("FÉLBEHAGYOTT",
+                style: AppText.label
+                    .copyWith(fontSize: 10, color: AppColors.away)),
+          ),
+        ],
+      ]),
+      subtitle: Text(
+          "$id · ${m["num_frames"]} kocka · $mins:${secs.toString().padLeft(2, '0')}",
+          style: AppText.label.copyWith(fontSize: 11)),
+      trailing: IconButton(
+        tooltip: "Törlés",
+        icon: const Icon(Icons.delete_outline,
+            color: AppColors.textSecondary, size: 20),
+        onPressed: () async {
+          final ok = await showDialog<bool>(
+            context: ctx,
+            builder: (c2) => AlertDialog(
+              backgroundColor: AppColors.surface,
+              title: const Text("Elemzés törlése"),
+              content: Text(
+                  "${m["home_team"] ?? "?"} – ${m["away_team"] ?? "?"} "
+                  "($id) végleg törlődik a könyvtárból."),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(c2).pop(false),
+                    child: const Text("Mégse")),
+                TextButton(
+                    onPressed: () => Navigator.of(c2).pop(true),
+                    child: const Text("Törlés",
+                        style: TextStyle(color: AppColors.away))),
+              ],
+            ),
+          );
+          if (ok != true) return;
+          try {
+            await _api.deleteMatch(id);
+            setDlg(() => items.removeWhere((x) => x["match_id"] == id));
+          } catch (e) {
+            if (!ctx.mounted) return;
+            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                content: Text("Törlési hiba: ${humanError(e)}")));
+          }
+        },
+      ),
+      onTap: () {
+        Navigator.of(ctx).pop();
+        if (id == widget.matchId) return; // már ez van nyitva
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+            builder: (_) => MatchScreen(matchId: id)));
+      },
     );
   }
 
@@ -1484,6 +1954,333 @@ class _MatchScreenState extends State<MatchScreen> {
   /// Csapatok felcserélése — ha a színfelismerés fordítva osztotta ki, melyik
   /// szín a hazai. Megerősítés után a backend átbillenti minden játékos
   /// csapat-mezőjét, és a nézet újratölt (statisztika is frissül).
+  /// "p:mp" vagy puszta másodperc → másodperc. Hibás alaknál null.
+  static double? _parseIdo(String s) {
+    final t = s.trim();
+    if (t.isEmpty) return null;
+    if (t.contains(":")) {
+      final d = t.split(":");
+      if (d.length != 2) return null;
+      final p = int.tryParse(d[0]);
+      final mp = double.tryParse(d[1].replaceAll(",", "."));
+      if (p == null || mp == null) return null;
+      return p * 60 + mp;
+    }
+    return double.tryParse(t.replaceAll(",", "."));
+  }
+
+  /// Másodperc → "p:mp" (pl. 549 → "9:09").
+  static String _fmtIdoPmp(double s) {
+    final t = s.round();
+    return "${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}";
+  }
+
+  /// UTÓLAGOS vágás a meccs-nézetből: itt látja a felhasználó a
+  /// bemutatás-kori ál-eseményeket — ne kelljen a könyvtárba
+  /// visszamennie a ✂-ért. Ugyanaz a végpont, mint a könyvtár-sorban,
+  /// és a kezdést itt is a meccs-ablak-felismerés javaslata előtölti.
+  Future<void> _trimDialog() async {
+    final fromCtrl = TextEditingController();
+    final toCtrl = TextEditingController();
+    // Javaslat a tárolt követésből — a párbeszéd azonnal megnyílik, a
+    // javaslat megérkezéskor tölti elő a mezőket (ha még üresek).
+    String? javaslat; // a mutatott sor; null = még számol
+    var javaslatVan = false;
+    void Function(void Function())? frissit;
+    _api.fetchGameWindow(widget.matchId).then((r) {
+      final start = (r["start_s"] as num?)?.toDouble();
+      final end = (r["end_s"] as num?)?.toDouble();
+      final head = (r["head_s"] as num?)?.toDouble() ?? 0;
+      final tail = (r["tail_s"] as num?)?.toDouble() ?? 0;
+      if (r["found"] == true && start != null &&
+          head >= 45 /* = GW_MIN_TRIM_S */) {
+        if (fromCtrl.text.trim().isEmpty) {
+          fromCtrl.text = _fmtIdoPmp(start);
+        }
+        if (end != null && tail >= 45 && toCtrl.text.trim().isEmpty) {
+          toCtrl.text = _fmtIdoPmp(end);
+        }
+        javaslatVan = true;
+        javaslat = "A felismerés szerint a meccs kb. "
+            "${_fmtIdoPmp(start)}-kor kezdődik — a javaslat elő van "
+            "töltve, ellenőrizd és igazítsd, ha kell.";
+      } else if (r["found"] == true) {
+        javaslat = "A felismerés szerint az elején nincs mit levágni — "
+            "csak akkor vágj, ha mást látsz.";
+      } else {
+        javaslat = "A felismerés nem talált egyértelmű meccs-kezdést — "
+            "add meg kézzel.";
+      }
+      frissit?.call(() {});
+    }).catchError((_) {
+      javaslat = ""; // hiba: javaslat nélkül megy tovább a kézi vágás
+      frissit?.call(() {});
+    });
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        frissit = setDlg;
+        return AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Meccs eleje/vége levágása"),
+        content: SizedBox(
+          width: 440,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(
+                "Add meg, mikor kezdődött a meccs (az Események lista / "
+                "a csúszka idő-skálája szerint) — az azelőtti rész, a "
+                "bemutatás és a bemelegítés ál-eseményeivel együtt, "
+                "kikerül az elemzésből.",
+                style: AppText.label.copyWith(fontSize: 12.5)),
+            const SizedBox(height: AppSpacing.sm),
+            if (javaslat == null)
+              Text("A felismerés keresi a meccs kezdetét a követésben…",
+                  style: AppText.label.copyWith(
+                      fontSize: 11.5, color: AppColors.textFaint))
+            else if (javaslat!.isNotEmpty)
+              Text(javaslat!,
+                  style: AppText.label.copyWith(
+                      fontSize: 11.5,
+                      color: javaslatVan
+                          ? AppColors.gold
+                          : AppColors.textFaint)),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: fromCtrl,
+              decoration: const InputDecoration(
+                labelText: "A meccs kezdete (p:mp vagy mp)",
+                hintText: "pl. 9:09 vagy 549",
+                prefixIcon: Icon(Icons.content_cut, size: 18,
+                    color: AppColors.gold),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: toCtrl,
+              decoration: const InputDecoration(
+                labelText: "A meccs vége (üres = a felvétel vége)",
+                hintText: "pl. 92:00",
+                prefixIcon: Icon(Icons.content_cut, size: 18,
+                    color: AppColors.textFaint),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+                "A videófájlt nem érinti, de az elemzésből VÉGLEG törli "
+                "a levágott részt — az csak újrafeldolgozással jön "
+                "vissza.",
+                style: AppText.label.copyWith(
+                    fontSize: 11, color: AppColors.gold)),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Levágás"),
+          ),
+        ],
+        );
+      }),
+    );
+    frissit = null; // a késve érkező javaslat már ne frissítsen semmit
+    if (ok != true) return;
+    try {
+      final r = await _api.trimMatch(widget.matchId,
+          _parseIdo(fromCtrl.text) ?? 0.0,
+          toS: _parseIdo(toCtrl.text));
+      if (!mounted) return;
+      final ele = (r["head_cut_s"] as num?)?.toDouble() ?? 0;
+      final vege = (r["tail_cut_s"] as num?)?.toDouble() ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Levágva: ${ele.toStringAsFixed(0)} mp az "
+              "elejéről, ${vege.toStringAsFixed(0)} mp a végéről — az "
+              "elemzés újraszámolt.")));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
+  }
+
+  /// KALIBRÁCIÓ-ELLENŐRZÉS: a motor a pályavonalakat visszarajzolja a
+  /// videó kockáira (a kalibráció + a kamera-mozgás követése alapján).
+  /// Három kocka — eleje, közepe, vége —, mert a svenkelés a meccs
+  /// közben csúsztatja el a helyeket, nem a kalibrált kockán.
+  Future<void> _calibCheckDialog() async {
+    final match = _match;
+    if (match == null || match.frames.isEmpty) return;
+    final n = match.frames.length;
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    // A jelenlegi kocka is: ahol a felhasználó épp gyanút fogott, ott
+    // nézze meg — a három fix minta a meccs egészéről szól.
+    final kockak = <int>{
+      _tOf(match),
+      match.frames[(n * 0.05).floor().clamp(0, n - 1)].t,
+      match.frames[(n * 0.5).floor().clamp(0, n - 1)].t,
+      match.frames[(n * 0.95).floor().clamp(0, n - 1)].t,
+    }.toList();
+    String ido(int t) {
+      final s = (t / fps).round();
+      return "${s ~/ 60}:${(s % 60).toString().padLeft(2, "0")}";
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Kalibráció ellenőrzése"),
+        content: SizedBox(
+          width: 900,
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                  "A motor a pályavonalakat (alapvonal, felező, 6 m-es "
+                  "kapuelőtér, kapuk) visszarajzolja a videó kockáira. A "
+                  "rajzolt vonalnak a VALÓDI vonalra kell ülnie — a meccs "
+                  "elején, közepén és végén is. Ahol elcsúszik, ott a "
+                  "kalibráció vagy a kamera-mozgás követése a hibás.",
+                  style: AppText.label.copyWith(fontSize: 12.5)),
+              const SizedBox(height: AppSpacing.sm),
+              // A FELDOLGOZÁS ALATT mért illeszkedés (a meccs mellől, kérés
+              // nélkül): 2 mp-enként minden kulcs-kockán — ez a teljes
+              // meccsről szól, a lenti nyolc-kockás újramérés a mostani
+              // állapotról.
+              if (match.meta.calibFit != null &&
+                  (match.meta.calibFit!["mean_fit"] as num?) != null)
+                Builder(builder: (_) {
+                  final cf = match.meta.calibFit!;
+                  final atlag = (cf["mean_fit"] as num).toDouble();
+                  final min = (cf["min_fit"] as num?)?.toDouble() ?? atlag;
+                  final rosszT = (cf["worst_t"] as num?)?.toInt();
+                  final db = (cf["points"] as List?)?.length ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                        "A feldolgozás alatt mérve ($db kockán): átlag "
+                        "${(atlag * 100).round()}% · leggyengébb "
+                        "${(min * 100).round()}%"
+                        "${rosszT != null ? " (${ido(rosszT)}-nál)" : ""}"
+                        "${match.meta.panAnchorPct != null ? " · a kalibrált képhez mérve a kockák ${match.meta.panAnchorPct!.round()}%-án" : ""}.",
+                        style: AppText.label.copyWith(
+                            fontSize: 12,
+                            color: min >= 0.3 /* = CALIB_FIT_WARN */
+                                ? AppColors.accent
+                                : AppColors.gold)),
+                  );
+                }),
+              // ILLESZKEDÉS SZÁMOKBAN: a szemmel-ellenőrzés géppel — a
+              // motor nyolc kockán méri, mennyire ül a rajz a valódi
+              // vonalakon (0..1), és megmondja, hol a leggyengébb.
+              FutureBuilder<Map<String, dynamic>>(
+                future: _api.fetchCalibFit(widget.matchId),
+                builder: (ctx2, snap) {
+                  if (snap.connectionState != ConnectionState.done) {
+                    return Text("Illeszkedés mérése a videón…",
+                        style: AppText.label.copyWith(
+                            fontSize: 11.5, color: AppColors.textFaint));
+                  }
+                  final r = snap.data;
+                  final atlag = (r?["mean_fit"] as num?)?.toDouble();
+                  if (snap.hasError || r == null || atlag == null) {
+                    return Text(
+                        "Az illeszkedés nem mérhető (régi mentés vagy a "
+                        "videó nem érhető el).",
+                        style: AppText.label.copyWith(
+                            fontSize: 11.5, color: AppColors.textFaint));
+                  }
+                  final min = (r["min_fit"] as num?)?.toDouble() ?? atlag;
+                  final rosszT = (r["worst_t"] as num?)?.toInt();
+                  final jo = atlag >= 0.5 && min >= 0.3;
+                  return Text(
+                      "Illeszkedés: átlag ${(atlag * 100).round()}% · "
+                      "leggyengébb ${(min * 100).round()}%"
+                      "${rosszT != null ? " (${ido(rosszT)}-nál)" : ""}"
+                      "${jo ? " — a kalibráció tartja." : " — ahol gyenge, ott elcsúszott a kalibráció vagy a kamera-követés."}",
+                      style: AppText.label.copyWith(
+                          fontSize: 12,
+                          color: jo ? AppColors.accent : AppColors.gold));
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final t in kockak)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Column(children: [
+                          Text(ido(t),
+                              style: AppText.label.copyWith(fontSize: 11)),
+                          const SizedBox(height: 4),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              _api.calibOverlayUrl(widget.matchId, t),
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => Container(
+                                padding: const EdgeInsets.all(12),
+                                color: AppColors.surfaceAlt,
+                                child: Text(
+                                    "Nem készült kép ehhez a kockához — "
+                                    "régi mentés (kalibráció-geometria "
+                                    "nélkül), vagy a videó nem érhető el. "
+                                    "Újrafeldolgozás után elérhető.",
+                                    style: AppText.label
+                                        .copyWith(fontSize: 11)),
+                              ),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ),
+                ],
+              ),
+            ]),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Rendben")),
+        ],
+      ),
+    );
+  }
+
+  /// Diagnosztika-JSON mentése — a fejlesztőnek szánt visszajelzés.
+  /// Videót, képet, személyes adatot nem tartalmaz.
+  Future<void> _saveDiagnostics() async {
+    try {
+      final diag = await _api.fetchDiagnostics(widget.matchId);
+      if (!mounted) return;
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Diagnosztika mentése (JSON)",
+        fileName: "diagnosztika_${widget.matchId}.json",
+        type: FileType.custom,
+        allowedExtensions: const ["json"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsString(
+          const JsonEncoder.withIndent("  ").convert(diag));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Diagnosztika mentve: $path — ezt küldd el a "
+              "fejlesztőnek (videót nem tartalmaz).")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
+  }
+
   Future<void> _swapTeams() async {
     final match = _match;
     if (match == null) return;
@@ -1653,29 +2450,122 @@ class _MatchScreenState extends State<MatchScreen> {
   /// Minőség-jelvény: pontszám színnel (jó/közepes/gyenge), kattintásra részletek.
   Widget _qualityChip(Map<String, dynamic> q) {
     final score = (q["score"] as num?)?.toInt() ?? 0;
+    final warnCount = ((q["warnings"] as List?) ?? const []).length;
     final color = score >= 70
         ? AppColors.accent
         : score >= 40
             ? AppColors.gold
             : AppColors.away;
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => _showQualityDetails(q),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color),
+    return Tooltip(
+      message: warnCount == 0
+          ? "A feldolgozás minősége — koppints a részletekért"
+          : "$warnCount figyelmeztetés — koppints, hogy lásd, mit érdemes "
+              "javítani",
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => _showQualityDetails(q),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.verified_outlined, size: 13, color: color),
+            const SizedBox(width: 5),
+            Text("minőség $score/100",
+                style: AppText.label.copyWith(fontSize: 11, color: color)),
+            // Ha VAN mit megnézni, a csipet ki is mondja — eddig csak a
+            // pontszám színe utalt rá, és a figyelmeztetések (pl. az
+            // elcsúszott kalibráció) rejtve maradtak a párbeszédben.
+            if (warnCount > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(8),
+                  border:
+                      Border.all(color: AppColors.gold.withOpacity(0.6)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      size: 11, color: AppColors.gold),
+                  const SizedBox(width: 3),
+                  Text("$warnCount",
+                      style: AppText.label.copyWith(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.gold)),
+                ]),
+              ),
+            ],
+          ]),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.verified_outlined, size: 13, color: color),
-          const SizedBox(width: 5),
-          Text("minőség $score/100",
-              style: AppText.label.copyWith(fontSize: 11, color: color)),
-        ]),
       ),
     );
+  }
+
+  /// "Javult-e?" — a mostani pontszám a legutóbbi feldolgozáshoz mérve.
+  ///
+  /// Az első feldolgozásnál (nincs mihez viszonyítani) null: nem
+  /// találunk ki összehasonlítást.
+  String? _javulasSzoveg(Map<String, dynamic> q) {
+    final elozoek = (q["previous"] as List?) ?? const [];
+    if (elozoek.isEmpty) return null;
+    final delta = (q["score_delta"] as num?)?.toInt();
+    if (delta == null) return null;
+    final elozo = (elozoek.first as Map)["score"];
+    if (delta > 0) {
+      return "Javult: a legutóbbi feldolgozásod $elozo/100 volt "
+          "(+$delta pont).";
+    }
+    if (delta < 0) {
+      return "Romlott: a legutóbbi feldolgozásod $elozo/100 volt "
+          "($delta pont).";
+    }
+    return "Ugyanannyi, mint a legutóbbi feldolgozásod ($elozo/100).";
+  }
+
+  /// Másodperc → "óra:perc:mp" (egy óra alatt "perc:mp") — a videó
+  /// lejátszójában ebben az alakban kereshető vissza a szakasz.
+  /// A backend `_ora` segédjének tükre.
+  String _ora(Object? seconds) {
+    final mp = (seconds as num?)?.toDouble();
+    if (mp == null || mp < 0) return "?";
+    final ossz = mp.round();
+    final ora = ossz ~/ 3600;
+    final perc = (ossz % 3600) ~/ 60;
+    final masodperc = ossz % 60;
+    final mm = masodperc.toString().padLeft(2, "0");
+    if (ora > 0) return "$ora:${perc.toString().padLeft(2, "0")}:$mm";
+    return "$perc:$mm";
+  }
+
+  /// Mit vágott le a motor a felvétel elejéből/végéből (meccs-ablak).
+  ///
+  /// A backend másodpercben adja; itt percre kerekítünk, mert a
+  /// felhasználó a videót percben keresi vissza. Ha nem vágott semmit,
+  /// azt is kimondjuk — az a jó hír, hogy a felvétel eleve csak meccs.
+  String _meccsAblakSzoveg(Map<String, dynamic> q) {
+    final eleje = (q["game_trim_head_s"] as num?)?.toDouble() ?? 0.0;
+    final vege = (q["game_trim_tail_s"] as num?)?.toDouble() ?? 0.0;
+    if (eleje <= 0 && vege <= 0) {
+      // Ezt a mondatot a felhasználó ELLENŐRIZNI tudja: ha tudja, hogy
+      // a videóban benne volt a bemelegítés, akkor a felismerés
+      // tévedett, és a kézi időablak a megoldás. Enélkül csak a kész
+      // elemzés furcsaságaiból jönne rá — sokkal később.
+      return "Meccs-ablak: a motor szerint a felvétel eleje-vége is "
+          "meccs, ezért nem vágott. Ha volt rajta bemelegítés vagy "
+          "csapatbemutatás, add meg kézzel a meccs időablakát.";
+    }
+    final reszek = <String>[];
+    if (eleje > 0) reszek.add("elejéről ${(eleje / 60).round()} perc");
+    if (vege > 0) reszek.add("végéről ${(vege / 60).round()} perc");
+    return "Meccs-ablak: ${reszek.join(", ")} levágva "
+        "(bemelegítés / meccs előtti-utáni rész)";
   }
 
   void _showQualityDetails(Map<String, dynamic> q) {
@@ -1690,9 +2580,135 @@ class _MatchScreenState extends State<MatchScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text("Mért játékos/kocka: ${q["avg_measured_players"]}", style: AppText.label),
-            Text("Labda-lefedettség: ${q["ball_coverage_pct"]}%", style: AppText.label),
+            // A lefedettség csak a LÁTOTT labdát számolja; a rövid
+            // hézagok pótlása külön szám, hogy a mutató ne tűnjön
+            // jobbnak a saját találgatásunktól.
+            Text(
+                "Labda-lefedettség: ${q["ball_coverage_pct"]}%"
+                "${q["ball_filled_pct"] != null
+                    ? " (+${q["ball_filled_pct"]}% pótolt)" : ""}",
+                style: AppText.label),
             Text("Becsült pozíciók: ${q["estimated_ratio_pct"]}%", style: AppText.label),
             Text("Leghosszabb labda-kiesés: ${q["longest_ball_gap_s"]} mp", style: AppText.label),
+            // A pályán kívülre vetülő mérések aránya: ez az elcsúszott
+            // kalibráció ujjlenyomata (a motor ebből ad figyelmeztetést).
+            if (q["out_of_court_pct"] != null)
+              Text("Pályán kívülre eső mérés: ${q["out_of_court_pct"]}%",
+                  style: AppText.label),
+            // A felvétel mekkora részét dolgoztuk fel: enélkül a
+            // "csak az első félidőt elemezte ki" élmény megmagyarázatlan
+            // marad (megvágott feltöltés, hossz-beállítás, megszakadás).
+            if (q["calibrated"] == false)
+              Text("Pálya-kalibráció: NEM volt",
+                  style: AppText.label.copyWith(color: AppColors.away)),
+            if (q["processed_pct"] != null)
+              Text(
+                  "A felvétel feldolgozott része: ${q["processed_pct"]}%"
+                  "${q["video_seconds"] != null ? " (a videó "
+                      "${((q["video_seconds"] as num) / 60).round()} perc)"
+                      : ""}",
+                  style: AppText.label),
+            // MELYIK szakasz: a százalék nem mondja meg, hogy az eleje
+            // vagy a vége maradt ki. A felhasználó a videót
+            // perc:másodpercben keresi vissza — ez azonnal ellenőrizhető.
+            if (q["processed_from_s"] != null && q["processed_to_s"] != null)
+              Text(
+                  "Feldolgozott szakasz: "
+                  "${_ora(q["processed_from_s"])}–${_ora(q["processed_to_s"])}"
+                  " (a videó órája szerint)",
+                  style: AppText.label),
+            // MECCS-ABLAK: levágta-e a motor a bemelegítést és a
+            // csapatbemutatást. Ha nem sikerült megtalálni a játék
+            // kezdetét, azok BENNMARADTAK — és az álldogálás eladott
+            // labdának látszik. (A null a régi mentések állapota:
+            // arról nem állítunk semmit.)
+            if (q["game_window_found"] == false)
+              Text("Meccs-ablak: NEM sikerült megtalálni a játék kezdetét",
+                  style: AppText.label.copyWith(color: AppColors.away))
+            else if (q["game_window_found"] == true)
+              Text(_meccsAblakSzoveg(q), style: AppText.label),
+            // JAVULT-E? Aki újrakalibrál és újrafuttat, pont ezt a
+            // választ keresi — a puszta "72/100" nem mondja meg, hogy
+            // jó irányba ment-e. A motor a korábbi feldolgozások
+            // pontszámát is kiadja.
+            if (_javulasSzoveg(q) != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(_javulasSzoveg(q)!,
+                  style: AppText.value.copyWith(
+                      fontSize: 13,
+                      color: ((q["score_delta"] as num?) ?? 0) >= 0
+                          ? AppColors.accent
+                          : AppColors.away)),
+            ],
+            // ELSŐ TEENDŐ: négy-hat figyelmeztetés mellett a
+            // felhasználó nem tudja, mivel kezdje — pedig a lista eleje
+            // és a vége nem egyenrangú. A motor rangsorol; itt csak
+            // kiemeljük, hogy ne vesszen el a felsorolásban.
+            if (q["next_action"] != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.gold.withOpacity(0.4)),
+                ),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const Icon(Icons.flag_outlined,
+                      size: 16, color: AppColors.gold),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("ELSŐ TEENDŐ", style: AppText.sectionLabel),
+                          const SizedBox(height: 2),
+                          Text("${q["next_action"]}",
+                              style: AppText.label.copyWith(
+                                  fontSize: 12.5,
+                                  color: AppColors.textPrimary)),
+                        ]),
+                  ),
+                ]),
+              ),
+            ],
+            // KLIP, NEM MECCS: nem hiba, hanem tájékoztatás — ezért
+            // nem a figyelmeztetések közt és nem riasztó színnel. Aki
+            // egy három perces klipet elemez, enélkül a hallgató
+            // rétegeket hiányos elemzésnek nézi.
+            if (q["clip_note"] != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border),
+                ),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const Icon(Icons.movie_outlined,
+                      size: 16, color: AppColors.accent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("KLIP, NEM TELJES MECCS",
+                              style: AppText.sectionLabel),
+                          const SizedBox(height: 2),
+                          Text("${q["clip_note"]}",
+                              style: AppText.label.copyWith(
+                                  fontSize: 12.5,
+                                  color: AppColors.textPrimary)),
+                        ]),
+                  ),
+                ]),
+              ),
+            ],
             if (warnings.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
               for (final w in warnings)
@@ -1739,10 +2755,118 @@ class _MatchScreenState extends State<MatchScreen> {
           ],
         ),
         actions: [
+          // ÚJRAFELDOLGOZÁS: a jelentés megmondja, mi a baj (jellemzően
+          // a kalibráció) — a javítás után itt lehet egy kattintással
+          // újrafuttatni ugyanarra a meccsre. A motor a videóhoz
+          // MENTETT (tehát a frissen javított) kalibrációval indul, nem
+          // a régi job-beállítással: különben ugyanazt a rossz
+          // eredményt adná még egyszer, egy újabb óra árán.
+          if (q["next_action"] != null && !widget.matchId.startsWith("sim-"))
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _reprocessThisMatch();
+              },
+              child: const Text("Újrafeldolgozás a friss kalibrációval"),
+            ),
+          // BENNMARADT BEMUTATÁS: a jelentés megtalálta a meccs kezdetét
+          // — a ✂ párbeszéd elő is tölti; innen egy kattintás, nem kell
+          // a könyvtárba vagy az eszköztárba menni érte.
+          if (warnings.any((w) => "$w".contains("nem-játéknak látszik")) &&
+              !widget.matchId.startsWith("sim-"))
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _trimDialog();
+              },
+              icon: const Icon(Icons.content_cut, size: 16),
+              label: const Text("Levágás a javaslat szerint"),
+            ),
+          // ELCSÚSZÓ KALIBRÁCIÓ: a jelentés megmérte, hogy a visszarajzolt
+          // vonal valahol nem ül a valódin — innen egy kattintás a képekig.
+          if (warnings.any((w) => "$w".contains("pályavonal nem ül")) &&
+              !widget.matchId.startsWith("sim-"))
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _calibCheckDialog();
+              },
+              icon: const Icon(Icons.grid_on, size: 16),
+              label: const Text("Kalibráció ellenőrzése"),
+            ),
+          // DIAGNOSZTIKA a fejlesztőnek: a képernyőkép lassú és
+          // veszteséges — ez egy gép által olvasható JSON-t ment
+          // (minőség + eseményszámok + beállítások, videó nélkül),
+          // amiből a hiba oka kiolvasható.
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _saveDiagnostics();
+            },
+            child: const Text("Diagnosztika mentése"),
+          ),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Rendben")),
         ],
       ),
     );
+  }
+
+  /// Ezt a meccset dolgoztatja fel újra — a videóhoz MENTETT (tehát a
+  /// javított) kalibrációval, a régi meccs helyére.
+  ///
+  /// A megerősítés nem formalitás: a gomb a KALIBRÁCIÓT frissíti, a
+  /// többi beállítást (meccs-időablak, minőségi profil, hossz) viszont
+  /// az eredeti indításból viszi. Ha a baj éppen az volt, hogy a
+  /// bemelegítés bekerült az elemzésbe, ez a gomb nem oldja meg — azt
+  /// az Új elemzés lapon kell megadni. Egy fél-egy órás munkát nem
+  /// indítunk el ilyen félreértéssel.
+  Future<void> _reprocessThisMatch() async {
+    final rendben = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Újrafeldolgozás"),
+        content: SizedBox(
+          width: 470,
+          child: Text(
+            "A feldolgozás a videóhoz MENTETT (tehát a frissen javított) "
+            "kalibrációval indul újra, és a régi meccs helyére dolgozik.\n\n"
+            "A többi beállítást — a meccs időablakát, a minőségi profilt "
+            "és a hosszt — az EREDETI indításból viszi. Ha a baj az volt, "
+            "hogy a bemelegítés vagy a csapatbemutatás bekerült az "
+            "elemzésbe, azt itt nem lehet megadni: indítsd inkább az Új "
+            "elemzés lapról, ahol a meccs időablaka is beállítható.",
+            style: AppText.label.copyWith(fontSize: 12.5),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text("Mégse"),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text("Indítás így"),
+          ),
+        ],
+      ),
+    );
+    if (rendben != true) return;
+    try {
+      await _api.reprocessMatch(widget.matchId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              "Újrafeldolgozás elindítva a videóhoz mentett kalibrációval "
+              "— a haladást a Feldolgozások lapon követheted.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
   }
 
   Widget _chip(String text) => Container(
@@ -1926,7 +3050,11 @@ class _MatchScreenState extends State<MatchScreen> {
     final frame = match.frames[_frameIndex];
     return LayoutBuilder(builder: (context, c) {
       final size = Size(c.maxWidth, c.maxHeight);
-      return GestureDetector(
+      // Nagyítható pálya: touchpad-csippentés vagy Ctrl+görgő nagyít,
+      // dupla kattintás visszaáll — a koordinátákat a Transform
+      // hit-tesztje igazítja, ezért a játékos-kijelölés nagyítva is jó.
+      return ZoomPanView(
+          child: GestureDetector(
         // Kattintás egy játékosra → kijelölés + nyomvonal + egyéni adatok.
         onTapUp: (d) => _handleCourtTap(d.localPosition, size, frame),
         child: Stack(
@@ -1949,11 +3077,23 @@ class _MatchScreenState extends State<MatchScreen> {
                   ),
                 ),
               ),
+            if (_viewMode == ViewMode.heatmap && _heatmap != null)
+              Positioned(left: 10, top: 10, child: _heatmapChip(match)),
             if (_viewMode == ViewMode.shots)
               Positioned.fill(
-                child: CustomPaint(
-                  painter: ShotMapPainter(
-                      shots: _filteredShots(), currentFrame: _frameIndex),
+                // A nézetre váltáskor a jelölők lépcsőzve pattannak be
+                // (a widget ilyenkor épül fel, tehát egyszer játszik le).
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: reduceMotion(context)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 900),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, t, _) => CustomPaint(
+                    painter: ShotMapPainter(
+                        shots: _filteredShots(), currentFrame: _tOf(match),
+                        progress: t),
+                  ),
                 ),
               ),
             if (_viewMode == ViewMode.shots)
@@ -1972,7 +3112,7 @@ class _MatchScreenState extends State<MatchScreen> {
               Positioned(left: 10, top: 10, child: _playerChip(match)),
           ],
         ),
-      );
+      ));
     });
   }
 
@@ -2001,6 +3141,58 @@ class _MatchScreenState extends State<MatchScreen> {
   /// hatékonyság + zóna-bontás (irány és távolság szerint). A csapat-
   /// szűrővel nézőpontot váltasz: a saját csapat = honnan lövünk; az
   /// ellenfél = honnan kapjuk (védekezés-elemzés).
+  /// Hőtérkép-csipet: MIT JELENT a szín. A lövés- és passz-nézetnek van
+  /// magyarázó csipetje, a hőtérképnek eddig nem volt — pedig itt a szín
+  /// maga az adat, és magyarázat nélkül csak "valami piros folt".
+  Widget _heatmapChip(Match match) {
+    final hm = _heatmap!;
+    final color =
+        _heatmapTeam == Team.home ? AppColors.home : AppColors.away;
+    final name = _heatmapTeam == Team.home
+        ? match.meta.homeTeam
+        : match.meta.awayTeam;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text("$name — hol tölti az időt",
+            style: AppText.value.copyWith(fontSize: 12)),
+        const SizedBox(height: 6),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Text("ritkán", style: AppText.label.copyWith(fontSize: 10.5)),
+          const SizedBox(width: 6),
+          // Skála-sáv: pontosan az a színátmenet, amit a rajzoló használ.
+          Container(
+            width: 84,
+            height: 8,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              // A rajzoló VALÓDI tartománya (heatmap_painter): a folt
+              // magja 0,18-tól 0,63-ig sötétedik, és a legforróbb
+              // cellák magja világosodik is. A skála ne ígérjen többet.
+              gradient: LinearGradient(colors: [
+                color.withOpacity(0.18),
+                Color.lerp(color, Colors.white, 0.35)!.withOpacity(0.63),
+              ]),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text("sokat", style: AppText.label.copyWith(fontSize: 10.5)),
+        ]),
+        const SizedBox(height: 4),
+        Text(
+            "a folt SŰRŰSÉGE a cellában töltött idő · "
+            "${hm.binsX}×${hm.binsY}-es rács",
+            style: AppText.label
+                .copyWith(fontSize: 10.5, color: AppColors.textFaint)),
+      ]),
+    );
+  }
+
   Widget _shotMapChip() {
     final shots = _filteredShots();
     final goals = shots.where((s) => s.goal).length;
@@ -2039,6 +3231,16 @@ class _MatchScreenState extends State<MatchScreen> {
           // Várható gól (xG): a helyzetek összesített értéke — a tényleges
           // gólszámmal összevetve látszik a befejezés hatékonysága.
           // Szabad lövések a szűrt lövések közt (fedezés-hiba a védőnél).
+          // A jelölő MÉRETE a helyzet értéke — enélkül a nagy körök
+          // csak "valamiért nagyobbak".
+          if (shots.any((s) => s.xg != null))
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                  "a jelölő MÉRETE a helyzet értéke (xG): a nagy körök a "
+                  "nagy helyzetek",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            ),
           if (shots.any((s) => s.free == true))
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -2159,7 +3361,20 @@ class _MatchScreenState extends State<MatchScreen> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
-      child: Text(text, style: AppText.value.copyWith(fontSize: 12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(text, style: AppText.value.copyWith(fontSize: 12)),
+        if (net != null && net.totalPasses > 0) ...[
+          const SizedBox(height: 3),
+          // A rajz két dolgot kódol méretbe/vastagságba; enélkül a háló
+          // csak "valami pókháló" — a lövéstérkép és a hőtérkép is
+          // kimondja, mit jelentenek a jelei.
+          Text(
+              "a korong mérete a passz-részvétel · a vonal vastagsága a "
+              "két ember közti passzok száma",
+              style: AppText.label
+                  .copyWith(fontSize: 10.5, color: AppColors.textFaint)),
+        ],
+      ]),
     );
   }
 
@@ -2351,6 +3566,150 @@ class _MatchScreenState extends State<MatchScreen> {
     }
   }
 
+  /// TÖMEGES mezszám-kiosztás: minden követett játékos egy listában.
+  ///
+  /// Miért kell: a mezszám kapuőr — nélküle a keret-lap, a toplisták és
+  /// a játékos-fejlődés néma marad, mert meccsek közt csak a szám köti
+  /// össze a játékost. A pályára-kattintós szerkesztő játékosonként egy
+  /// külön párbeszéd; tizennégy emberre az már nem munka, hanem
+  /// elrettentés — és ezért marad el.
+  ///
+  /// A lista JÁTÉKIDŐ szerint csökken: elöl a sokat játszó (valódi)
+  /// trackek, hátul a másodperces töredékek, amiket úgysem érdemes
+  /// beszámozni. Csapatonként csoportosítva, mert az edző a saját
+  /// keretét egyben tartja fejben.
+  Future<void> _bulkJerseys(Match match) async {
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    final sorok = _stats.values.toList()
+      ..sort((a, b) {
+        if (a.team != b.team) return a.team == Team.home ? -1 : 1;
+        return b.measuredFrames.compareTo(a.measuredFrames);
+      });
+    final ctrls = {
+      for (final st in sorok)
+        st.trackId: TextEditingController(
+            text: st.jerseyNumber?.toString() ?? "")
+    };
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Mezszámok kiosztása"),
+        content: SizedBox(
+          width: 460,
+          height: 460,
+          child: Column(children: [
+            Text(
+                "A mezszám köti össze a játékost a meccsek között: enélkül "
+                "a Keret, a toplisták és a Játékos-fejlődés üres marad. "
+                "Elöl a legtöbbet játszó trackek — a másodperces "
+                "töredékeket nyugodtan hagyd üresen.",
+                style: AppText.label.copyWith(fontSize: 11.5)),
+            const SizedBox(height: AppSpacing.sm),
+            Expanded(
+              child: ListView.builder(
+                itemCount: sorok.length,
+                itemBuilder: (_, i) {
+                  final st = sorok[i];
+                  final perc = st.measuredFrames / fps / 60.0;
+                  final hazai = st.team == Team.home;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(children: [
+                      Container(width: 8, height: 8,
+                          decoration: BoxDecoration(
+                              color: hazai
+                                  ? AppColors.home
+                                  : AppColors.away,
+                              shape: BoxShape.circle)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                            "${hazai ? match.meta.homeTeam : match.meta.awayTeam}"
+                            " · ${st.trackId}. track · "
+                            "${perc.toStringAsFixed(1)} perc",
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.label.copyWith(fontSize: 12)),
+                      ),
+                      SizedBox(
+                        width: 70,
+                        child: TextField(
+                          controller: ctrls[st.trackId],
+                          keyboardType: TextInputType.number,
+                          style: AppText.value.copyWith(fontSize: 13),
+                          decoration: const InputDecoration(
+                              isDense: true,
+                              hintText: "szám",
+                              border: OutlineInputBorder()),
+                        ),
+                      ),
+                    ]),
+                  );
+                },
+              ),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Mentés"),
+          ),
+        ],
+      ),
+    );
+    // A beírt értékeket a párbeszéd bezárása UTÁN olvassuk ki, mielőtt
+    // a vezérlőket eldobjuk.
+    final beirt = {
+      for (final e in ctrls.entries) e.key: e.value.text.trim()
+    };
+    for (final c in ctrls.values) {
+      c.dispose();
+    }
+    if (ok != true || !mounted) return;
+
+    // Csak a VÁLTOZOTT sorokat küldjük el — egy meccsen tizennégy
+    // felesleges kérés is elég ahhoz, hogy lassúnak érződjön.
+    var mentve = 0;
+    var hibas = 0;
+    for (final st in sorok) {
+      final szoveg = beirt[st.trackId] ?? "";
+      final uj = szoveg.isEmpty ? null : int.tryParse(szoveg);
+      if (szoveg.isNotEmpty && (uj == null || uj < 0 || uj > 99)) {
+        hibas++;
+        continue;
+      }
+      if (uj == st.jerseyNumber) continue;
+      try {
+        await _api.setJersey(widget.matchId, st.trackId, uj);
+        for (final f in match.frames) {
+          for (final p in f.players) {
+            if (p.trackId == st.trackId) p.jerseyNumber = uj;
+          }
+        }
+        mentve++;
+      } catch (_) {
+        hibas++;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _stats = computePlayerStats(match);
+      _passNetwork = computePassNetwork(match, _events, _passTeam);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(hibas == 0
+            ? "$mentve mezszám mentve."
+            : "$mentve mezszám mentve, $hibas sor kimaradt "
+                "(a szám 0 és 99 közötti lehet).")));
+  }
+
   Widget _tacticalCaption(Match match) {
     const cfg = TacticsConfig();
     final frame = match.frames[_frameIndex];
@@ -2388,10 +3747,10 @@ class _MatchScreenState extends State<MatchScreen> {
     setState(() {
       _timer?.cancel();
       _playing = false;
-      _frameIndex = frame.clamp(0, match.frames.length - 1);
+      _frameIndex = _indexOfT(match, frame);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(_frameIndex));
+      _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(frame));
     });
   }
 
@@ -2439,7 +3798,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 emptyNets: _emptyNet,
                 subs: _subs,
                 stoppages: _stoppages,
-                currentFrame: _frameIndex,
+                currentFrame: _tOf(match),
                 onSeek: (f) => _seekTimelineTo(match, f),
               ),
             ),
@@ -2451,7 +3810,7 @@ class _MatchScreenState extends State<MatchScreen> {
             ),
             // Esemény-jelölők az idővonal alatt: arany = gól, türkiz = lövés,
             // piros = labdaeladás — ránézésre látszik, hol történt valami.
-            if (_events.isNotEmpty)
+            if (_events.isNotEmpty && match.frames.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: SizedBox(
@@ -2459,15 +3818,21 @@ class _MatchScreenState extends State<MatchScreen> {
                   child: CustomPaint(
                     size: const Size(double.infinity, 6),
                     painter: _EventTickPainter(
-                        events: _events, frames: match.frames.length),
+                        events: _events,
+                        tStart: match.frames.first.t,
+                        tEnd: match.frames.last.t),
                   ),
                 ),
               ),
           ]),
         ),
         const SizedBox(width: AppSpacing.sm),
-        Text("${(_frameIndex / fps).toStringAsFixed(1)} s", style: AppText.value),
-        Text("  /  ${(match.frames.length / fps).toStringAsFixed(0)} s", style: AppText.label),
+        // Videó-idő (a kocka t címkéjéből): egyezik az Események lista, a
+        // jegyzetek és a jelenet-lejátszó időskálájával vágott meccsen is.
+        Text("${(_tOf(match) / fps).toStringAsFixed(1)} s", style: AppText.value),
+        Text(
+            "  /  ${((match.frames.isEmpty ? 0 : match.frames.last.t) / fps).toStringAsFixed(0)} s",
+            style: AppText.label),
         const SizedBox(width: AppSpacing.sm),
         // Lejátszási sebesség — billentyűzetről is: szóköz/nyilak/E/Q
         // (a gomb tooltipje sorolja a gyorsbillentyűket).
@@ -2535,32 +3900,56 @@ class _MatchScreenState extends State<MatchScreen> {
   void _jumpToEvent(Match match, int dir) {
     final points = _navPoints();
     if (points.isEmpty) return;
+    final most = _tOf(match);
     int target;
     if (dir > 0) {
-      target = points.firstWhere((t) => t > _frameIndex,
+      target = points.firstWhere((t) => t > most,
           orElse: () => points.first); // a végén körbeér az elejére
     } else {
-      target = points.lastWhere((t) => t < _frameIndex,
+      target = points.lastWhere((t) => t < most,
           orElse: () => points.last); // az elején körbeér a végére
     }
     _seekToFrame(match, target);
   }
 
-  /// Ugrás egy adott képkockára: megállítjuk a lejátszást, és ha van eredeti
-  /// videó, azt is a jelenetre állítjuk (közös logika esemény/jegyzet/grafikon
-  /// kattintáshoz).
+  /// Videó-kocka (t címke) → lista-INDEX: az első kocka, amelynek t-je
+  /// eléri. A kettő NEM ugyanaz: utólagos ✂ vágás után a lista elejéről
+  /// kockák hiányoznak, a t címkék (események, jegyzetek, javítások,
+  /// videó-idő) viszont maradnak — t-vel indexelni rossz kockára vinne.
+  static int _indexOfT(Match m, int t) {
+    var lo = 0, hi = m.frames.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (m.frames[mid].t < t) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo < 0 ? 0 : lo;
+  }
+
+  /// A mutatott kocka t címkéje (videó-kocka) — ezt hasonlítjuk az
+  /// események/jegyzetek t-jéhez, és ezt mentjük jegyzet/javítás idejének.
+  int _tOf(Match m) {
+    if (m.frames.isEmpty) return 0;
+    return m.frames[_frameIndex.clamp(0, m.frames.length - 1)].t;
+  }
+
+  /// Ugrás egy adott videó-kockára (t): megállítjuk a lejátszást, és ha
+  /// van eredeti videó, azt is a jelenetre állítjuk (közös logika
+  /// esemény/jegyzet/grafikon kattintáshoz).
   void _seekToFrame(Match match, int frame) {
-    final t = frame.clamp(0, match.frames.length - 1);
     setState(() {
       _timer?.cancel();
       _playing = false;
-      _frameIndex = t;
+      _frameIndex = _indexOfT(match, frame);
       if (match.meta.videoPath != null && VideoPanel.supported) {
         _showVideo = true;
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(t));
+      _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(frame));
     });
   }
 
@@ -2572,13 +3961,12 @@ class _MatchScreenState extends State<MatchScreen> {
         length: 5,
         child: Column(
           children: [
+            // A fül-stílust (pill-indikátor, színek) a téma adja —
+            // lásd AppTheme.dark tabBarTheme.
             const TabBar(
               isScrollable: true,
               tabAlignment: TabAlignment.start,
-              labelColor: AppColors.textPrimary,
-              unselectedLabelColor: AppColors.textFaint,
-              indicatorColor: AppColors.accent,
-              labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               tabs: [
                 Tab(text: "Statisztika"),
                 Tab(text: "Összegzés"),
@@ -2647,12 +4035,14 @@ class _MatchScreenState extends State<MatchScreen> {
 /// labdaeladás; a passzokat nem rajzoljuk — túl sűrű lenne).
 class _EventTickPainter extends CustomPainter {
   final List<Map<String, dynamic>> events;
-  final int frames;
-  _EventTickPainter({required this.events, required this.frames});
+  // A mutatott kockák t-tartománya: vágott meccsen nem 0-tól indul.
+  final int tStart, tEnd;
+  _EventTickPainter(
+      {required this.events, required this.tStart, required this.tEnd});
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (frames <= 1) return;
+    if (tEnd <= tStart) return;
     for (final e in events) {
       final type = (e["type"] as String?) ?? "";
       final color = switch (type) {
@@ -2663,7 +4053,8 @@ class _EventTickPainter extends CustomPainter {
       };
       if (color == null) continue; // passzokat nem jelöljük
       final t = (e["t"] as num?)?.toInt() ?? 0;
-      final x = size.width * t / (frames - 1);
+      if (t < tStart || t > tEnd) continue; // levágott részre esik
+      final x = size.width * (t - tStart) / (tEnd - tStart);
       final h = type == "goal" ? size.height : size.height * 0.66;
       canvas.drawLine(
           Offset(x, size.height - h), Offset(x, size.height),
@@ -2673,5 +4064,5 @@ class _EventTickPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _EventTickPainter old) =>
-      old.events != events || old.frames != frames;
+      old.events != events || old.tStart != tStart || old.tEnd != tEnd;
 }

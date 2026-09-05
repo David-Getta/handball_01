@@ -17,8 +17,10 @@ felderítés. Az összefűzés:
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Optional
 
-from ..models.tracking import Ball, Frame, Match, MatchMeta
+from ..models.tracking import (Ball, Frame, Match, MatchMeta,
+                               PositionSource, Team)
 
 
 def merge_matches(parts: list[Match], match_id: str,
@@ -54,13 +56,35 @@ def merge_matches(parts: list[Match], match_id: str,
         # megszakadt, az összefűzött meccs is folytatható marad.
         partial=parts[-1].meta.partial,
         next_start_frame=parts[-1].meta.next_start_frame,
+        # A forrásvideó hossza csak akkor öröklődik, ha tényleg ugyanaz
+        # a fájl — ebből számol a minőség-jelentés lefedettséget, és két
+        # külön videó összefűzésénél az szám félrevezető lenne.
+        video_seconds=(first.meta.video_seconds if same_video else None),
+        # Kalibráltság: csak akkor állítjuk, ha MINDEN szakasz egyetért
+        # (különben nem tudjuk, mire vonatkozna az állítás).
+        calibrated=(first.meta.calibrated
+                    if all(p.meta.calibrated == first.meta.calibrated
+                           for p in parts) else None),
     )
 
     frames: list[Frame] = []
     t_offset = 0
     id_offset = 0
+    # FORRÁS-TÉRKÉP: melyik játékidő melyik fájl melyik kép-indexén
+    # van. Enélkül az összefűzött meccsből nem lehetne klipet vágni —
+    # a `video_path` üres, és a klipvágás azt mondaná, hogy "a videó
+    # nem érhető el", ami félrevezető: a fájl megvan, csak több van
+    # belőle.
+    szakaszok: list = []
+    # KÉZI JAVÍTÁSOK a szakaszokból. Aki hat klipben kijavította a
+    # felismerés nyolc tévedését, az EMBERI munkát végzett — az
+    # összefűzés némán eldobta volna, és az összerakott meccs megint
+    # rossz eredményt mutatna. A javítás ideje a szakasz eltolásával
+    # együtt mozog, különben egy MÁSIK esemény típusát írná át.
+    javitasok: list = []
     for part in parts:
         max_id = 0
+        szakasz_kezd = t_offset
         for f in part.frames:
             players = [replace(p, track_id=p.track_id + id_offset)
                        for p in f.players]
@@ -70,6 +94,190 @@ def merge_matches(parts: list[Match], match_id: str,
             ball = Ball(x=f.ball.x, y=f.ball.y, confidence=f.ball.confidence) \
                 if f.ball is not None else None
             frames.append(Frame(t=t_offset + f.t, players=players, ball=ball))
-        t_offset = (frames[-1].t + 1) if frames else 0
+        uj_offset = (frames[-1].t + 1) if frames else 0
+        if part.meta.video_path and uj_offset > szakasz_kezd:
+            szakaszok.append({
+                "t_from": szakasz_kezd,
+                "t_to": uj_offset,          # kizárólagos
+                "video_path": part.meta.video_path,
+                # A szakaszon BELÜLI t-hez tartozó kép-index:
+                # start_frame + (t - t_from) * stride.
+                "start_frame": part.meta.start_frame or 0,
+                "stride": part.meta.stride or 1,
+            })
+        for ov in (getattr(part.meta, "event_overrides", None) or []):
+            if not isinstance(ov, dict):
+                continue
+            try:
+                eltolt = dict(ov)
+                eltolt["t"] = int(ov["t"]) + szakasz_kezd
+            except (KeyError, TypeError, ValueError):
+                continue  # rossz alakú javítás: kihagyjuk, nem hiba
+            # A lövő track-azonosítója is eltolódik — enélkül a kézzel
+            # felvett gól egy MÁSIK emberhez kerülne.
+            if ov.get("player_id") is not None:
+                try:
+                    eltolt["player_id"] = int(ov["player_id"]) + id_offset
+                except (TypeError, ValueError):
+                    eltolt.pop("player_id", None)
+            javitasok.append(eltolt)
+        t_offset = uj_offset
         id_offset += max_id + 1
-    return Match(meta=meta, frames=frames)
+    meta.source_segments = szakaszok
+    meta.event_overrides = javitasok
+    meta.merged_from = [p.meta.match_id for p in parts]
+    ki = Match(meta=meta, frames=frames)
+    # TÉRFÉLCSERE a szakasz-határokon. Egy videón BELÜL a feldolgozás
+    # felismeri a szünetet és tükrözi a második félidőt — de a
+    # darabokban felvett meccsnél a csere a DARABOK KÖZÖTT van, és a
+    # 2. félidő darabja önmagában normalizálatlan. Enélkül a lövés-
+    # felismerés a 2. félidő MINDEN gólját a rossz csapathoz írná: az
+    # irány-szabály (attacks_toward_x) az egész meccsre egy.
+    _normalize_segment_sides(ki)
+    return ki
+
+
+# A szakasz-határos térfélcsere ellenőrző ablaka: ennyi (valós)
+# másodpercet nézünk a határ két oldalán. IDŐTARTAM, tehát
+# másodpercben — a kockaszámot a meccs fps-éből számoljuk.
+SEG_SWAP_WINDOW_S = 120.0
+# Ennyi mért pozíció alatt nem döntünk: a tükrözés rossz irányba is
+# üthet, és egy bizonytalan tükrözés rosszabb, mint a kimondott
+# bizonytalanság.
+SEG_SWAP_MIN_SAMPLES = 50
+
+
+def _centroid_x_window(frames: list, team: Team, t_from: int,
+                       t_to: int) -> tuple[Optional[float], int]:
+    """A csapat mért pozícióinak átlagos x-e és darabszáma [t_from, t_to)."""
+    total = 0.0
+    n = 0
+    for f in frames:
+        if not (t_from <= f.t < t_to):
+            continue
+        for p in f.players:
+            if p.team == team and p.source == PositionSource.MEASURED:
+                total += p.x
+                n += 1
+    return (total / n if n else None), n
+
+
+def _normalize_segment_sides(match: Match) -> None:
+    """A szakasz-határokon átforduló térfelek tükrözése helyben.
+
+    Minden belső határnál a HAZAI és a VENDÉG súlypontját hasonlítjuk a
+    határ előtti és utáni ablakban (a halftime.detect_side_swap
+    szabályával: mindkét csapat a felező MÁSIK oldalára került,
+    legalább SWAP_MIN_SHIFT_M-rel). Ha fordulás van, a szakaszt — és
+    minden utána következőt az ESETLEGES következő fordulásig —
+    tükrözzük (x→L−x, y→W−y). A döntés szakaszonként a
+    `source_segments` bejegyzésbe kerül ("mirrored": True/False/None
+    — None = kevés minta, nem döntöttünk).
+
+    A klip-vágást nem érinti: a forrás-térkép kép-indexei a VIDEÓRA
+    mutatnak, a tükrözés csak a pálya-koordinátákat fordítja.
+    """
+    from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+    from .halftime import SWAP_MIN_SHIFT_M
+
+    szakaszok = getattr(match.meta, "source_segments", None) or []
+    if len(szakaszok) < 2 or not match.frames:
+        return
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    ablak = round(SEG_SWAP_WINDOW_S * fps)
+    mid = COURT_LENGTH_M / 2.0
+
+    # Görgetett állapot: az aktuális szakasz tükrözve van-e az ELSŐHÖZ
+    # képest. Egy fordulás után minden későbbi szakasz fordítva jön,
+    # amíg egy újabb fordulás vissza nem állítja.
+    forditva = False
+    szakaszok[0]["mirrored"] = False
+    szakaszok[0]["mirror_decided"] = True
+    for i in range(1, len(szakaszok)):
+        elozo, ez = szakaszok[i - 1], szakaszok[i]
+        hatar = ez["t_from"]
+        fordult = None  # None = nem eldönthető
+        atfordult = 0
+        vizsgalt = 0
+        for team in (Team.HOME, Team.AWAY):
+            elott, n1 = _centroid_x_window(
+                match.frames, team, max(elozo["t_from"], hatar - ablak),
+                hatar)
+            utan, n2 = _centroid_x_window(
+                match.frames, team, hatar,
+                min(ez["t_to"] or (match.frames[-1].t + 1),
+                    hatar + ablak))
+            if (elott is None or utan is None
+                    or n1 < SEG_SWAP_MIN_SAMPLES
+                    or n2 < SEG_SWAP_MIN_SAMPLES):
+                continue
+            # Az ELŐZŐ oldal már a normalizált képet mutatja (ha a
+            # korábbi szakaszokat tükröztük, a frames-ben az van).
+            vizsgalt += 1
+            if ((elott - mid) * (utan - mid) < 0
+                    and abs(elott - mid) >= SWAP_MIN_SHIFT_M
+                    and abs(utan - mid) >= SWAP_MIN_SHIFT_M):
+                atfordult += 1
+        if vizsgalt > 0:
+            fordult = atfordult == vizsgalt and atfordult > 0
+        # A határ ELŐTTI ablak már a NORMALIZÁLT képet mutatja (a
+        # korábbi szakaszokat tükröztük a frames-ben), tehát a "fordult"
+        # azt jelenti: a KÖVETKEZŐ szakasz nyers képe a normalizálthoz
+        # képest fordított — pontosan akkor kell tükrözni, ha fordult.
+        # (NEM billegtetés: az állapot átbillentése három vagy több
+        # szakasznál minden második 2. félidős darabot visszafordított
+        # volna, mert a tükrözött darab után a következő nyers darab
+        # újra "fordulást" mutat.)
+        if fordult is not None:
+            forditva = fordult
+        # Eldönthetetlen határnál (kevés minta) az ÁLLAPOT öröklődik:
+        # fordulásra nincs jel, tehát maradunk az eddigi irányban — és
+        # ha az fordított volt, ezt a szakaszt is tükrözni kell,
+        # különben épp itt csúszna szét a pálya.
+        ez["mirrored"] = forditva
+        ez["mirror_decided"] = fordult is not None
+        if forditva:
+            _mirror_frames(match, hatar, ez["t_to"])
+
+
+def _mirror_frames(match: Match, t_from: int, t_to: Optional[int]) -> None:
+    """A [t_from, t_to) képkockák pálya-koordinátáinak tükrözése helyben."""
+    from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+
+    for f in match.frames:
+        if f.t < t_from or (t_to is not None and f.t >= t_to):
+            continue
+        for p_ in f.players:
+            p_.x = COURT_LENGTH_M - p_.x
+            p_.y = COURT_WIDTH_M - p_.y
+        if f.ball is not None:
+            f.ball.x = COURT_LENGTH_M - f.ball.x
+            f.ball.y = COURT_WIDTH_M - f.ball.y
+
+
+def flip_segment(match: Match, index: int) -> dict:
+    """Egy összefűzött szakasz KÉZI tükrözése — az ember dönt.
+
+    Az automatikus döntés (`_normalize_segment_sides`) kevés mért
+    pozíciónál nem dönt, és a jelentés csak annyit tud mondani:
+    ellenőrizd az eredményt. A meccset látott ember viszont TUDJA, mi
+    volt a valódi végeredmény — ez a függvény adja a kezébe a javítást:
+    a kért szakasz pálya-koordinátáit megfordítja (x→L−x, y→W−y, a
+    labdát is), a `mirrored` jelzőt átbillenti, és a döntést
+    véglegesnek jelöli (`mirror_decided=True` — a figyelmeztetés ezzel
+    el is hallgat, mert döntés SZÜLETETT, csak nem géptől).
+
+    A klip-vágást nem érinti: a forrás-térkép kép-indexei a videóra
+    mutatnak. Visszaadja a szakasz frissített bejegyzését.
+    """
+    szakaszok = getattr(match.meta, "source_segments", None) or []
+    if not szakaszok:
+        raise ValueError("a meccsnek nincs forrás-térképe (nem összefűzött)")
+    if not (0 <= index < len(szakaszok)):
+        raise ValueError(
+            f"nincs {index}. szakasz (0..{len(szakaszok) - 1} létezik)")
+    sz = szakaszok[index]
+    _mirror_frames(match, sz["t_from"], sz.get("t_to"))
+    sz["mirrored"] = not bool(sz.get("mirrored"))
+    sz["mirror_decided"] = True
+    return sz

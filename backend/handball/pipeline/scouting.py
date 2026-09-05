@@ -280,6 +280,11 @@ class ScoutingReport:
     rotation_used_sum: int = 0
     rotation_regulars_sum: int = 0
     rotation_matches: int = 0
+    # Vasembereik: játékosonkénti játékperc-ÖSSZEG + a felvétel-percek
+    # összege — meccsek közt pontosan összegződik (jelenlét-arány =
+    # játékos-perc / felvétel-perc).
+    imn_minutes_by_player: dict = field(default_factory=dict)
+    imn_match_min: float = 0.0
     # Labdaszerzőik: [{"player_id", "steals"}] — ki szerzi a labdákat;
     # játékosonként meccsek közt pontosan összegezhető.
     ball_winners: list = field(default_factory=list)
@@ -309,6 +314,23 @@ class ScoutingReport:
     # összeg / kockák). Tömör fal = szélek nyitva; széthúzott = közép nyitva.
     defw_sum_m: float = 0.0
     defw_frames: int = 0
+    # Védekezési formáció (a fal ALAKJA): értékelhető kockák + alakonkénti
+    # kocka-darabszám (6-0 / 5-1 / 3-2-1 / kétszintű). Darabszámok, meccsek
+    # közt pontosan összegződnek (részarány = alak / összes).
+    dform_frames: int = 0
+    dform_counts: dict = field(default_factory=dict)
+    # Fal-rés térképük: a mért kockák, a legnagyobb rések ÖSSZEGE (m) és
+    # sávonkénti kocka-darabszám — összeg és darabszámok, meccsek közt
+    # pontosan összegződnek (átlag = összeg / kocka).
+    dgap_frames: int = 0
+    dgap_sum_m: float = 0.0
+    dgap_zones: dict = field(default_factory=dict)
+    # Fal-rés fáradásuk: félidőnkénti rés-összeg (m) + kocka — meccsek
+    # közt pontosan összegződik (átlag = összeg / kocka félidőnként).
+    gfd_fh_sum_m: float = 0.0
+    gfd_fh_frames: int = 0
+    gfd_sh_sum_m: float = 0.0
+    gfd_sh_frames: int = 0
     # Passz-tempó (labdajáratás): passzok + mért birtoklás-idő (mp) —
     # meccsek közt pontosan összegződik (passz/perc = 60·passz/idő).
     pt_passes: int = 0
@@ -342,6 +364,53 @@ class ScoutingReport:
     prf_fh_n: int = 0
     prf_sh_sum_m: float = 0.0
     prf_sh_n: int = 0
+    # Fal-MÉLYSÉG félidőnként (a saját gólvonaltól mért távolság összege
+    # és kockaszáma). Nem az átlagot tároljuk, hogy több meccs pontosan
+    # összegződjön; a fellazulástól (prf_*) függetlenül mérve: az a
+    # labdástól mért távolság, ez a fal HELYE.
+    lhf_fh_sum_m: float = 0.0
+    lhf_fh_n: int = 0
+    lhf_sh_sum_m: float = 0.0
+    lhf_sh_n: int = 0
+    # Visszaállás-idő félidőnként (a lövéseik utáni hazaérés
+    # másodperc-összege és a mért lövések száma). Összeg + darab, hogy
+    # több meccs pontosan összegződjön.
+    rtf_fh_sum_s: float = 0.0
+    rtf_fh_n: int = 0
+    rtf_sh_sum_s: float = 0.0
+    rtf_sh_n: int = 0
+    # A jelentés MÖGÖTTI feldolgozások minősége. A meccsterv az, ami
+    # alapján az edző dönt — ha a mögötte lévő feldolgozás gyenge volt
+    # (a nézőtér is a pályára került, kevés a labda-észlelés), akkor a
+    # terv zajról szól, és ezt ki kell mondani. Darab + összeg, hogy
+    # több meccs pontosan összegződjön.
+    # Szélső-bevonás félidőnként (a szélre eljutó támadások és az összes
+    # támadás darabszáma). Darab + darab, hogy több meccs pontosan
+    # összegződjön — az arány a teljes mintán számolódik.
+    wif_fh_wing: int = 0
+    wif_fh_n: int = 0
+    wif_sh_wing: int = 0
+    wif_sh_n: int = 0
+    # Támadás-mélység félidőnként (a kapu-távolság összege és a mért
+    # kockaszám). Összeg + darab, hogy több meccs pontosan összegződjön.
+    adf_fh_sum_m: float = 0.0
+    adf_fh_n: int = 0
+    adf_sh_sum_m: float = 0.0
+    adf_sh_n: int = 0
+    # Beálló-bevonás félidőnként (beállós támadás / összes támadás
+    # darabszáma). Darab + darab, hogy több meccs pontosan összegződjön.
+    puf_fh_pivot: int = 0
+    puf_fh_n: int = 0
+    puf_sh_pivot: int = 0
+    puf_sh_n: int = 0
+    # Hajrá-profil: hány fáradás-jel szólalt meg összesen, és hány
+    # meccsen mértük. Darab + darab, hogy több meccs pontosan
+    # összegződjön (átlag = jel/meccs a teljes mintán).
+    fpr_signals: int = 0
+    fpr_matches: int = 0
+    q_score_sum: float = 0.0
+    q_matches: int = 0
+    q_weak_matches: int = 0
     # Időkérés-mérleg: felismert időkéréseik + ebből a sorozatot megtörő
     # (broke) és a fordulatot nem hozó (failed) — meccsek közt összegződik.
     to_n: int = 0
@@ -589,6 +658,11 @@ class ScoutingReport:
     # átlagos tartás = frames / holds / fps).
     hold_players: list = field(default_factory=list)
     hold_fps: float = 25.0
+    # Labdavezetésük: [{"player_id", "jersey", "holds", "meters"}] —
+    # játékosonként a labdás szakaszok száma és a bennük labdával
+    # megtett út méterben; darabszám és összeg, meccsek közt pontosan
+    # összegződnek (átlagos labdás út = meters / holds).
+    carry_players: list = field(default_factory=list)
     # Lövőerő-esésük: félidőnként a mért lövések száma + a
     # sebesség-összeg (km/h) — darabszámok és összegek, meccsek közt
     # pontosan összegződnek (félidő-átlag = összeg / darab).
@@ -669,6 +743,13 @@ class ScoutingReport:
     olp_punished: int = 0
     sac_slow: int = 0
     sac_scored: int = 0
+    # Támadás-ritmus: hány támadásuk esett a három tempó-sávba. Csak
+    # darabszám, hogy több meccsen pontosan összegződjön (az arányt a
+    # felhasználás helyén számoljuk).
+    atv_attacks: int = 0
+    atv_fast: int = 0
+    atv_mid: int = 0
+    atv_slow: int = 0
     obt_out: int = 0
     sps_tr: int = 0
     sps_lead: int = 0
@@ -746,6 +827,652 @@ class ScoutingReport:
     rst_time_sum_by_role: dict = field(default_factory=dict)
     rsp_shots_by_role: dict = field(default_factory=dict)
     rsp_kmh_sum_by_role: dict = field(default_factory=dict)
+    # Poszt-kezesség: posztonként a bal-jelű és az összes értékelhető
+    # lövés — darabszámok, meccsek közt pontosan összegződnek.
+    rsh_left_by_role: dict = field(default_factory=dict)
+    rsh_shots_by_role: dict = field(default_factory=dict)
+    # Poszt-kapuoldal: "poszt|oldal" → gólszám. Darabszám, meccsek közt
+    # pontosan összegződik (részarány = oldal / a poszt összes gólja).
+    rgp_goals_by_role_side: dict = field(default_factory=dict)
+    # Poszt-nyomás: posztonként a FEDEZETT lövés és a belőtt fedezett
+    # lövés darabszáma. Csak darabszám — a gólarány meccsek közt az
+    # összegekből számolódik, sose átlagok átlagából.
+    rpf_covered_shots_by_role: dict = field(default_factory=dict)
+    rpf_covered_goals_by_role: dict = field(default_factory=dict)
+    # Figura-befejező: a figura-azonosítók meccsenként újra képződnek,
+    # ezért NEM azokat tároljuk, hanem a DARABSZÁMOT: hány figurájuk
+    # volt mérhető, ebből hány kiszámítható befejezésű, és a
+    # kiszámítható figuráik melyik posztra futottak ki.
+    # Időkérés-befejező: az időkérések utáni ablakban leadott,
+    # poszthoz kötött lövések darabszáma posztonként + az időkérések
+    # száma. Darabszám, meccsek közt pontosan összegződik.
+    # Lövésválasztás: a mért lövések és azok darabszáma, ahol jobb
+    # SZABAD helyzet volt a pályán. Darabszám, meccsek közt pontosan
+    # összegződik (arány = better / shots).
+    scq_shots: int = 0
+    scq_better: int = 0
+    # Kontra-poszt: a lerohanás-szakaszokra eső, poszthoz kötött
+    # lövések darabszáma posztonként. Darabszám, meccsek közt
+    # pontosan összegződik.
+    rfb_shots_by_role: dict = field(default_factory=dict)
+    # Hetes-oldal: az irány-mérhető hetesek darabszáma oldalanként
+    # ("bal"/"közép"/"jobb"). Darabszám, meccsek közt összegződik.
+    svd_dirs: dict = field(default_factory=dict)
+    # Hetes-sarok emberre: dobónkénti irány-darabszámok LAPOS kulccsal
+    # ("játékos·irány" → dobás). Darabszám, meccsek közt pontosan
+    # összegződik.
+    stc_dir_by_taker: dict = field(default_factory=dict)
+    # Hetes-ismétlés: az egymást követő hetes-PÁROK darabszáma és
+    # közülük az ismétlők (ugyanabba a sávba menők) darabszáma.
+    # Darabszám, meccsek közt pontosan összegződik.
+    srep_pairs: int = 0
+    srep_repeats: int = 0
+    # Gólpassz-poszt: a poszthoz kötött gólpasszok darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    ras_assists_by_role: dict = field(default_factory=dict)
+    # Labdaszerző-poszt: a poszthoz kötött labdaszerzések darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    rsw_steals_by_role: dict = field(default_factory=dict)
+    # Lepattanó-poszt: a poszthoz kötött második lövések darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    scr_shots_by_role: dict = field(default_factory=dict)
+    # Blokk-poszt: a poszthoz kötött blokkok darabszáma posztonként.
+    # Darabszám, meccsek közt pontosan összegződik.
+    rbk_blocks_by_role: dict = field(default_factory=dict)
+    # 7a6-befejező poszt: a 7 a 6 alatti lövések darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    en7_shots_by_role: dict = field(default_factory=dict)
+    # Hetes-okozó poszt: az okozott hetesek darabszáma posztonként.
+    # Darabszám, meccsek közt pontosan összegződik.
+    svr_sevens_by_role: dict = field(default_factory=dict)
+    # Kiülő-poszt: a kiállítások darabszáma posztonként. Darabszám,
+    # meccsek közt pontosan összegződik.
+    sup_susp_by_role: dict = field(default_factory=dict)
+    # Visszafutás-poszt: az ellenfél-kontráknál elöl maradások
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    rtr_lags_by_role: dict = field(default_factory=dict)
+    # Átvert-poszt: a védőhöz rendelt kapott gólok darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    btr_beaten_by_role: dict = field(default_factory=dict)
+    # Elzáró-poszt: az elzárások darabszáma posztonként. Darabszám,
+    # meccsek közt pontosan összegződik.
+    sc2_screens_by_role: dict = field(default_factory=dict)
+    # Kulcs-poszt: hány poszt-réteg ítélete futott ki az adott
+    # posztra. Réteg-darabszám, meccsek közt pontosan összegződik.
+    kp_layers_by_post: dict = field(default_factory=dict)
+    # Indítás-vadász poszt: az elrabolt kapus-indítások darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    ohr_steals_by_role: dict = field(default_factory=dict)
+    # Bejátszó-poszt: a beálló-beadások darabszáma posztonként.
+    # Darabszám, meccsek közt pontosan összegződik.
+    pfr_feeds_by_role: dict = field(default_factory=dict)
+    # Vasember-poszt: posztonként a legtöbbet pályán lévő játékos
+    # mért kockái + az összes kocka. Darabszámok, pontosan
+    # összegződnek (arány = irm_on_by_role / irm_total_frames).
+    irm_on_by_role: dict = field(default_factory=dict)
+    irm_total_frames: int = 0
+    # Kockáztató-poszt: az elszórt hosszú passzok darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    rpr_to_by_role: dict = field(default_factory=dict)
+    # Kettőző-poszt: a kettőzött kockák darabszáma posztonként.
+    # Darabszám, meccsek közt pontosan összegződik.
+    ddr_frames_by_role: dict = field(default_factory=dict)
+    # Kiosztás-poszt: a betörés utáni kiosztások darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    kor_kickouts_by_role: dict = field(default_factory=dict)
+    # Emberelőny-poszt: az emberelőny-lövések darabszáma posztonként.
+    # Darabszám, meccsek közt pontosan összegződik.
+    ppr_shots_by_role: dict = field(default_factory=dict)
+    # Emberhátrány-poszt: a hátrány-lövések darabszáma posztonként.
+    # Darabszám, meccsek közt pontosan összegződik.
+    shr_shots_by_role: dict = field(default_factory=dict)
+    # Hajrá-poszt: a hajrá-gólok darabszáma posztonként. Darabszám,
+    # meccsek közt pontosan összegződik.
+    csr_goals_by_role: dict = field(default_factory=dict)
+    # Szuper-csere poszt: a padról szerzett gólok POSZTONKÉNT.
+    # Darabszámok, meccsek közt pontosan összegződnek. (sspr_ előtag:
+    # az ssr_ a szünet utáni rajté — second_start_roles.)
+    sspr_goals_by_role: dict = field(default_factory=dict)
+    # Felzárkózás-poszt: a hátrányban szerzett gól-részvételek
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    cbr_trailing_by_role: dict = field(default_factory=dict)
+    # Pazarló-poszt: a kaput elkerülő (mellé/blokkolt) lövések
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    wsr_off_by_role: dict = field(default_factory=dict)
+    # Ziccer-poszt: a nagy helyzetű (BIG_CHANCE_XG feletti) lövések
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    bcr_chances_by_role: dict = field(default_factory=dict)
+    # Labdatartó-poszt: a mért labdatartás másodpercei posztonként.
+    # Másodperc-összeg, pontosan összegződik.
+    htr_seconds_by_role: dict = field(default_factory=dict)
+    # Pressz-poszt: a nyomott (testközeli védő melletti) eladások
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    psr_to_by_role: dict = field(default_factory=dict)
+    # Csendtörő-poszt: a 300+ mp-es gólcsendet megtörő gólok
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    gct_breaks_by_role: dict = field(default_factory=dict)
+    # Eltűnő-poszt: gól-részvételek (gól+gólpassz) posztonként,
+    # félidőnként. Darabszám, pontosan összegződik.
+    fdp_fh_by_role: dict = field(default_factory=dict)
+    fdp_sh_by_role: dict = field(default_factory=dict)
+    # Hajráhiba-poszt: az utolsó öt perc labdaeladásai posztonként.
+    # Darabszám, pontosan összegződik.
+    ctr_to_by_role: dict = field(default_factory=dict)
+    # Forró-poszt: a sorozatban (2+ szomszédos gól ugyanattól a
+    # lövőtől) lőtt gólok darabszáma posztonként. Darabszám,
+    # pontosan összegződik.
+    hhr_goals_by_role: dict = field(default_factory=dict)
+    # Középkezdő-poszt: a kapott gól utáni felező-környéki
+    # labdaátvételek darabszáma posztonként. Darabszám, pontosan
+    # összegződik.
+    rtr_takes_by_role: dict = field(default_factory=dict)
+    # Sprint-poszt: a mért sprintek darabszáma posztonként.
+    # Darabszám, pontosan összegződik.
+    spr_sprints_by_role: dict = field(default_factory=dict)
+    # Lágypassz-poszt: a lágy (SPS_SOFT_MS alatti röptű) passzok
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    sps_soft_by_role: dict = field(default_factory=dict)
+    # Hajrákéz-poszt: az utolsó öt perc labdás kockái posztonként.
+    # Kocka-darabszám, pontosan összegződik.
+    chr_frames_by_role: dict = field(default_factory=dict)
+    # Kiszolgált-poszt: az asszisztos gólok darabszáma a befejező
+    # posztja szerint. Darabszám, pontosan összegződik.
+    asr_assisted_by_role: dict = field(default_factory=dict)
+    # Rajt-poszt: a meccs első tíz percének góljai posztonként.
+    # Darabszám, pontosan összegződik.
+    osr_goals_by_role: dict = field(default_factory=dict)
+    # Passzív-poszt: a lövés nélküli, hosszú felállt támadások labdás
+    # kockái posztonként. Kocka-darabszám, pontosan összegződik.
+    pvr_frames_by_role: dict = field(default_factory=dict)
+    # Fáradó-poszt: félidőnkénti tempó-összegek posztonként (cm/s).
+    # Összeg, pontosan összegződik.
+    ftr_first_cms_by_role: dict = field(default_factory=dict)
+    ftr_second_cms_by_role: dict = field(default_factory=dict)
+    # Kettőzött-poszt: a kettőzött (két védős) labdás kockák
+    # darabszáma posztonként. Kocka-darabszám, pontosan összegződik.
+    dtr_frames_by_role: dict = field(default_factory=dict)
+    # Elzárt-poszt: az elzárásban elakadt védések darabszáma a védő
+    # posztja szerint. Darabszám, pontosan összegződik.
+    sdr_screens_by_role: dict = field(default_factory=dict)
+    # Újrakezdő-poszt: a második félidő első tíz percének góljai
+    # posztonként. Darabszám, pontosan összegződik.
+    ssr_goals_by_role: dict = field(default_factory=dict)
+    # Hetesdobó-poszt: a hetes-kísérletek darabszáma a dobó posztja
+    # szerint. Darabszám, pontosan összegződik.
+    stk_attempts_by_role: dict = field(default_factory=dict)
+    # Blokkolt-poszt: a blokkolt lövések darabszáma a lövő posztja
+    # szerint. Darabszám, pontosan összegződik.
+    bsr_blocks_by_role: dict = field(default_factory=dict)
+    # Ziccerhagyó-poszt: a kihagyott (gól nélkül záruló) nagy
+    # helyzetek darabszáma posztonként. Darabszám, pontosan
+    # összegződik.
+    mcr_misses_by_role: dict = field(default_factory=dict)
+    # Kilépő-poszt: felállt-védekezéses mért kockák és kapu-távolság
+    # összegek posztonként. Darabszám/összeg, pontosan összegződik
+    # (átlag-mélység = adr_depthm / adr_frames posztonként).
+    adr_frames_by_role: dict = field(default_factory=dict)
+    adr_depthm_by_role: dict = field(default_factory=dict)
+    # Beállóőr-poszt: a beálló-őrzés kockái az őrző posztja szerint.
+    # Kocka-darabszám, pontosan összegződik.
+    pgr_frames_by_role: dict = field(default_factory=dict)
+    # Indító-poszt: a támadás-szakaszok darabszáma az első birtokos
+    # posztja szerint. Darabszám, pontosan összegződik.
+    ats_attacks_by_role: dict = field(default_factory=dict)
+    # Előkészítő-poszt: a lövés előtti utolsó passzok darabszáma a
+    # passzoló posztja szerint. Darabszám, pontosan összegződik.
+    epr_passes_by_role: dict = field(default_factory=dict)
+    # Előnyben-poszt: a saját vezetés közben lőtt gólok darabszáma
+    # posztonként. Darabszám, pontosan összegződik.
+    lgr_goals_by_role: dict = field(default_factory=dict)
+    # Térnyerő-poszt: a labdával megtett előre-méterek posztonként.
+    # Méter-összeg, pontosan összegződik.
+    tnr_meters_by_role: dict = field(default_factory=dict)
+    # Hátrapassz-poszt: a hátra-passzok darabszáma a passzoló
+    # posztja szerint. Darabszám, pontosan összegződik.
+    bpr_passes_by_role: dict = field(default_factory=dict)
+    # Fáradt-eladó poszt: labdaeladások posztonként, félidőnként.
+    # Darabszám, pontosan összegződik.
+    fto_fh_by_role: dict = field(default_factory=dict)
+    fto_sh_by_role: dict = field(default_factory=dict)
+    # Fáradt-lövő poszt: kaput elkerülő lövések posztonként,
+    # félidőnként. Darabszám, pontosan összegződik.
+    fsa_fh_by_role: dict = field(default_factory=dict)
+    fsa_sh_by_role: dict = field(default_factory=dict)
+    # Fáradt-fal poszt: kapott gólok a lövő posztja szerint,
+    # félidőnként. Darabszám, pontosan összegződik.
+    tcr_fh_by_role: dict = field(default_factory=dict)
+    tcr_sh_by_role: dict = field(default_factory=dict)
+    # Forgatott-poszt: a lecserélések darabszáma a lecserélt posztja
+    # szerint. Darabszám, pontosan összegződik.
+    sbr_outs_by_role: dict = field(default_factory=dict)
+    # Beérkező-poszt: a beállások darabszáma a beálló posztja
+    # szerint. Darabszám, pontosan összegződik.
+    ibr_ins_by_role: dict = field(default_factory=dict)
+    # Drága-eladó poszt: a gólba forduló eladások darabszáma
+    # posztonként. Darabszám, pontosan összegződik.
+    dto_punished_by_role: dict = field(default_factory=dict)
+    # Áttörő-poszt: a labdás betörések darabszáma posztonként.
+    # Darabszám, pontosan összegződik.
+    btr_entries_by_role: dict = field(default_factory=dict)
+    # Védőmotor-poszt: védő-akciók (szerzés+blokk) posztonként,
+    # félidőnként. Darabszám, pontosan összegződik.
+    fdd_fh_by_role: dict = field(default_factory=dict)
+    fdd_sh_by_role: dict = field(default_factory=dict)
+    # Fedezett-lövő poszt: a fedezett (testközeli védő melletti)
+    # lövések darabszáma posztonként. Darabszám, pontosan
+    # összegződik.
+    cvr_covered_by_role: dict = field(default_factory=dict)
+    # Célkereszt-poszt: a kapott lövések darabszáma a legközelebbi
+    # védő posztja szerint. Darabszám, pontosan összegződik.
+    tgr_shots_by_role: dict = field(default_factory=dict)
+    # Letámadó-poszt: a támadó térfélen született szerzések
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    hsr_high_by_role: dict = field(default_factory=dict)
+    # Álló-poszt: labda nélküli mozgás posztonként — mért másodperc
+    # és megtett méter. Összegek, pontosan összegződnek.
+    sar_seconds_by_role: dict = field(default_factory=dict)
+    sar_meters_by_role: dict = field(default_factory=dict)
+    # Elzárópáros-poszt: elzárt lövések az (elzáró→lövő) posztpár
+    # szerint. Darabszám, pontosan összegződik.
+    spp_shots_by_role: dict = field(default_factory=dict)
+    # Csere-stílus: poszthoz köthető ki-be párosok és ebből az
+    # azonos-posztú váltások. Darabszámok, pontosan összegződnek.
+    sws_pairs: int = 0
+    sws_same: int = 0
+    # Hetespáros-poszt: hetesek a (kiharcoló→dobó) posztpár szerint.
+    # Darabszám, pontosan összegződik.
+    svp_sevens_by_role: dict = field(default_factory=dict)
+    # Kontrapáros-poszt: lerohanások az (indító→befejező) posztpár
+    # szerint. Darabszám, pontosan összegződik.
+    fbp_breaks_by_role: dict = field(default_factory=dict)
+    # Gólpasszpáros-poszt: asszisztos gólok az (adó→befejező)
+    # posztpár szerint. Darabszám, pontosan összegződik.
+    apr_goals_by_role: dict = field(default_factory=dict)
+    # Kettőzőpáros-poszt: kettőzött kockák a két legközelebbi védő
+    # posztpárja szerint. Kocka-darabszám, pontosan összegződik.
+    dpp_frames_by_role: dict = field(default_factory=dict)
+    # Lepattanópáros-poszt: második rohamok a (lövő→érkező) posztpár
+    # szerint. Darabszám, pontosan összegződik.
+    rbp_shots_by_role: dict = field(default_factory=dict)
+    # Kulcs-páros: posztpáronként HÁNY páros-réteg ítélete mutat rá.
+    # Réteg-darabszám, meccsek közt pontosan összegződik.
+    kpr_layers_by_role: dict = field(default_factory=dict)
+    # Specialista-poszt: mért jelenlét (játékos-másodperc) és ebből a
+    # védekezésben töltött, posztonként. Összeg, pontosan összegződik.
+    spc_seconds_by_role: dict = field(default_factory=dict)
+    spc_def_seconds_by_role: dict = field(default_factory=dict)
+    # Emberelőnypáros-poszt: emberelőny-lövések az (előkészítő→
+    # befejező) posztpár szerint. Darabszám, pontosan összegződik.
+    pwp_shots_by_role: dict = field(default_factory=dict)
+    # Válasz-poszt: a kapott gólt 60 mp-en belül követő saját gólok
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    rsp_goals_by_role: dict = field(default_factory=dict)
+    # Elöl lógó poszt: védekezett kockák és ebből a saját térfélen
+    # töltöttek posztonként. Kocka-darabszám, pontosan összegződik.
+    rcr_frames_by_role: dict = field(default_factory=dict)
+    rcr_home_by_role: dict = field(default_factory=dict)
+    # Sávváltó-poszt: a támadás közbeni sávváltások darabszáma
+    # posztonként. Darabszám, pontosan összegződik.
+    lsw_switches_by_role: dict = field(default_factory=dict)
+    # Időkéréspáros-poszt: időkérés utáni lövések az (előkészítő→
+    # befejező) posztpár szerint. Darabszám, pontosan összegződik.
+    top_shots_by_role: dict = field(default_factory=dict)
+    # Menekülő-poszt: a nyomás alatti passzok darabszáma a FOGADÓ
+    # posztja szerint. Darabszám, pontosan összegződik.
+    esc_passes_by_role: dict = field(default_factory=dict)
+    # Vég-birtokos poszt: a lövés nélkül záruló támadások darabszáma
+    # az utolsó birtokos posztja szerint. Darabszám, összegződik.
+    lst_attacks_by_role: dict = field(default_factory=dict)
+    # Ziccer-előkészítő poszt: a nagy helyzetekhez adott utolsó
+    # passzok darabszáma a PASSZOLÓ posztja szerint. Darabszám,
+    # pontosan összegződik.
+    bcf_chances_by_role: dict = field(default_factory=dict)
+    # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
+    # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
+    svm_misses_by_role: dict = field(default_factory=dict)
+    # Fáradt-eladók: a MÁSODIK félidei labdaeladások darabszáma
+    # JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    ftop_sh_by_player: dict = field(default_factory=dict)
+    ftop_fh_by_player: dict = field(default_factory=dict)
+    # Visszafutás-lemaradók: az ellenfél kontráinál elöl maradás
+    # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    srp_lags_by_player: dict = field(default_factory=dict)
+    # Fáradt-fal emberek: az ELLENFÉL lövőinek góljai félidőnként,
+    # LÖVŐNKÉNT (a mi falunk ellen). Darabszám, összegződik.
+    tcp_sh_by_player: dict = field(default_factory=dict)
+    tcp_fh_by_player: dict = field(default_factory=dict)
+    # Indítás-vadász emberek: az elcsípett kapus-indítások darabszáma
+    # RABLÓNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    ohp_steals_by_player: dict = field(default_factory=dict)
+    # 7a6 eladás: a lehozott kapus mellett elvesztett labdák és a
+    # góllal büntetett részük. Darabszám, meccsek közt összegződik.
+    ent_turnovers: int = 0
+    ent_punished: int = 0
+    # Kiszolgált befejezők: a bejátszásból esett gólok és az ÖSSZES
+    # góljuk BEFEJEZŐNKÉNT. Darabszám, meccsek közt összegződik.
+    asp_assisted_by_player: dict = field(default_factory=dict)
+    asp_goals_by_player: dict = field(default_factory=dict)
+    # Kétperc-gyűjtők: a kiállítások darabszáma KIÜLŐNKÉNT.
+    # Darabszám, meccsek közt pontosan összegződik.
+    stc_susp_by_player: dict = field(default_factory=dict)
+    # Felhozatal-emberek: a kapus-indítások átvételeinek darabszáma
+    # CÉLPONTONKÉNT. Darabszám, meccsek közt összegződik.
+    otp_outlets_by_player: dict = field(default_factory=dict)
+    # Elzárás-hozam: az elzárásos és a tiszta lövések darabszáma és a
+    # belőlük esett gólok. Darabszám, meccsek közt összegződik.
+    # Blokk-fáradás: a blokkok és az ellenfél lövés-kísérletei
+    # félidőnként. Darabszám, meccsek közt összegződik.
+    # Emberelőny-hozam: kaputra tartó lövések és gólok emberelőnyben,
+    # illetve egyenlő létszámnál. Darabszám, összegződik.
+    # Hetes-hozam: a mért hetesek és a belőlük esett gólok.
+    # Darabszám, meccsek közt pontosan összegződik.
+    # Passzív-kockázat: a felállt és a lövés nélkül elnyúló
+    # támadások darabszáma. Darabszám, összegződik.
+    # Csere-hozam: a cserék utáni ablak dobott és kapott góljai.
+    # Darabszám, meccsek közt pontosan összegződik.
+    # Kettőzött emberek: a kettőzött labdás kockák darabszáma
+    # BIRTOKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    dtp_frames_by_player: dict = field(default_factory=dict)
+    # Kapus-visszaérés: a mért 7 a 6 szakaszok, a visszaérésre
+    # összesen mért idő tizedmásodpercben, és a közben kapott gólok.
+    # Darabszám/összeg, meccsek közt pontosan összegződik.
+    # Ellenszer-lap: a rangsor élén álló teendők és a hozzájuk
+    # talált gyakorlatok darabszáma. Darabszám, összegződik.
+    # Figura-kopás: az első előfordulású és az ismételt
+    # figura-támadások, illetve a belőlük esett gólok. Darabszám.
+    # Futómunka-eloszlás: a mért mezőnyjátékosok száma, a teljes
+    # futott táv és a három legtöbbet futó táv (méterben, egészre
+    # kerekítve). Összeg, meccsek közt összegződik.
+    # Kapus a kapott gól után: a "friss seb" és a többi lövés
+    # darabszáma, illetve a védések. Darabszám, összegződik.
+    # Hetes-forrás: a felismert hetesek darabszáma JÁTÉKHELYZET
+    # szerint. Darabszám, meccsek közt pontosan összegződik.
+    svs_sevens_by_type: dict = field(default_factory=dict)
+    # Kontroll-idővonal: hány ötperces szakaszt vittek, vesztettek,
+    # illetve mennyi volt kiegyenlített. Darabszám, összegződik.
+    # Ziccerhagyó emberek: a kihagyott ziccerek darabszáma
+    # LÖVŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    mcp_misses_by_player: dict = field(default_factory=dict)
+    # Fáradt lövők: a kaput elkerülő lövések darabszáma LÖVŐNKÉNT,
+    # félidőnként. Darabszám, meccsek közt összegződik.
+    # Lágy passzolók: a lágy (belenyúlható) passzok darabszáma
+    # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
+    spp_soft_by_player: dict = field(default_factory=dict)
+    # Passzív-birtoklók: a lövés nélküli hosszú támadások labdás
+    # kockái BIRTOKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    pvp_frames_by_player: dict = field(default_factory=dict)
+    # Előkészítő emberek: a lövés-előkészítő utolsó passzok
+    # darabszáma PASSZOLÓNKÉNT. Darabszám, összegződik.
+    epp_passes_by_player: dict = field(default_factory=dict)
+    # Válaszoló emberek: a kapott gól utáni saját gólok darabszáma
+    # LÖVŐNKÉNT. Darabszám, meccsek közt összegződik.
+    rspp_goals_by_player: dict = field(default_factory=dict)
+    # Rajt-emberek: a meccs első tíz percének góljai LÖVŐNKÉNT.
+    # Darabszám, meccsek közt pontosan összegződik.
+    osp_goals_by_player: dict = field(default_factory=dict)
+    # Újrakezdő emberek: a szünet utáni tíz perc góljai LÖVŐNKÉNT.
+    # Darabszám, meccsek közt pontosan összegződik.
+    ssp_goals_by_player: dict = field(default_factory=dict)
+    # Előnyben-emberek: a saját vezetésnél lőtt gólok darabszáma
+    # LÖVŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    lgp_goals_by_player: dict = field(default_factory=dict)
+    # Elzárt védők: az elzárásban elakadó védő elakadásainak
+    # darabszáma VÉDŐNKÉNT. Darabszám, meccsek közt összegződik.
+    sdp_screens_by_player: dict = field(default_factory=dict)
+    # Futtatott szélsők: a lendületes szélső-átvételek darabszáma
+    # SZÉLSŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    wrp_running_by_player: dict = field(default_factory=dict)
+    # Leforduló beállók: a mozgásból hozott beálló-átvételek darabszáma
+    # JÁTÉKOSONKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    lfb_running_by_player: dict = field(default_factory=dict)
+    # Befutó emberek: a második hullámos kontra-befejezések darabszáma
+    # JÁTÉKOSONKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    bfw_shots_by_player: dict = field(default_factory=dict)
+    # Befutó poszt: a második hullámos kontra-befejezések POSZTONKÉNT.
+    # Darabszámok, meccsek közt pontosan összegződnek.
+    swr_shots_by_role: dict = field(default_factory=dict)
+    # Egálbontó emberek: a döntetlenről szerzett (egált bontó) gólok
+    # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    pbp_breaks_by_player: dict = field(default_factory=dict)
+    # Egálbontó poszt: az egálbontó gólok POSZTONKÉNT. Darabszámok,
+    # meccsek közt pontosan összegződnek.
+    pbr_breaks_by_role: dict = field(default_factory=dict)
+    # Kezesség-becslés: bal-jelű és összes értékelhető lövés
+    # JÁTÉKOSONKÉNT (két count-dict — arány sose, pontos összegzésért).
+    hand_left_by_player: dict = field(default_factory=dict)
+    hand_shots_by_player: dict = field(default_factory=dict)
+    # Keresztjáró emberek: a keresztben-részvételek darabszáma
+    # JÁTÉKOSONKÉNT, és a mért keresztek száma. Darabszámok,
+    # meccsek közt pontosan összegződnek.
+    crp_runs_by_player: dict = field(default_factory=dict)
+    crp_crosses: int = 0
+    # 7a6-befejező emberek: a 7 a 6 alatti lövések darabszáma
+    # LÖVŐNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    en7p_shots_by_player: dict = field(default_factory=dict)
+    # Gólpassz-duó: az asszisztos gólok darabszáma (adó→befejező)
+    # KETTŐSÖNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    adu_goals_by_duo: dict = field(default_factory=dict)
+    # Hoki-assziszt: a másod-előkészítések darabszáma JÁTÉKOSONKÉNT, és
+    # a láncolható asszisztos gólok száma. Darabszámok, meccsek közt
+    # pontosan összegződnek.
+    prea_by_player: dict = field(default_factory=dict)
+    prea_chained: int = 0
+    # Rejtett szervező poszt: a másod-előkészítések POSZTONKÉNT.
+    # Darabszámok, meccsek közt pontosan összegződnek.
+    prear_by_role: dict = field(default_factory=dict)
+    # Szuper-csere: a padról (nem a kezdő magból) szerzett gólok
+    # JÁTÉKOSONKÉNT. Darabszámok, meccsek közt pontosan összegződnek.
+    ssu_goals_by_player: dict = field(default_factory=dict)
+    # Időkérés-hozam: az ítéletes időkérések mérlege (megtörte /
+    # nem hozott fordulatot). Darabszám, meccsek közt összegződik.
+    toy_broke: int = 0
+    toy_failed: int = 0
+    # Kapuscsere-hozam: a cserék száma és a védés-változás összege
+    # tized-százalékpontban (meccsek közt átlagolható). Összeg.
+    gcy_changes: int = 0
+    gcy_delta_dpp: int = 0
+    # Emberhátrány-túlélés: hátrányban töltött idő (mp, egészre
+    # kerekítve) és hátrányban kapott gól. Összeg, összegződik.
+    shs_seconds: int = 0
+    shs_conceded: int = 0
+    # Középkezdés-hozam: a kapott gól utáni újraindítások és a
+    # 25 mp-en belüli válasz-gólok. Darabszám, összegződik.
+    rsy_restarts: int = 0
+    rsy_answered: int = 0
+    fsp_sh_by_player: dict = field(default_factory=dict)
+    fsp_fh_by_player: dict = field(default_factory=dict)
+    ctl_won: int = 0
+    ctl_lost: int = 0
+    ctl_blocks: int = 0
+    gka_fresh_shots: int = 0
+    gka_fresh_saves: int = 0
+    gka_rest_shots: int = 0
+    gka_rest_saves: int = 0
+    lbl_players: int = 0
+    lbl_distance_m: int = 0
+    lbl_top3_m: int = 0
+    spd_first_attacks: int = 0
+    spd_first_goals: int = 0
+    spd_repeat_attacks: int = 0
+    spd_repeat_goals: int = 0
+    cpl_total: int = 0
+    cpl_matched: int = 0
+    krt_measured: int = 0
+    krt_sum_ds: int = 0
+    krt_conceded: int = 0
+    sby_rotations: int = 0
+    sby_goals_for: int = 0
+    sby_goals_against: int = 0
+    psr_positional: int = 0
+    psr_passive: int = 0
+    svy_attempts: int = 0
+    svy_goals: int = 0
+    ppy_pp_shots: int = 0
+    ppy_pp_goals: int = 0
+    ppy_eq_shots: int = 0
+    ppy_eq_goals: int = 0
+    blf_fh_blocks: int = 0
+    blf_fh_shots: int = 0
+    blf_sh_blocks: int = 0
+    blf_sh_shots: int = 0
+    # Elzárás-fáradás: félidőnkénti őrzött és elzárásos lövések.
+    # Darabszámok, meccsek közt pontosan összegződnek.
+    scrf_fh_shots: int = 0
+    scrf_fh_screened: int = 0
+    scrf_sh_shots: int = 0
+    scrf_sh_screened: int = 0
+    scy_screened_shots: int = 0
+    scy_screened_goals: int = 0
+    scy_clean_shots: int = 0
+    scy_clean_goals: int = 0
+    # Hátrapasszolók: a hátrafelé menő passzok darabszáma
+    # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
+    bprp_passes_by_player: dict = field(default_factory=dict)
+    # Térnyerők: a labdával megtett előre-méterek JÁTÉKOSONKÉNT.
+    # Összeg (méter), meccsek közt pontosan összegződik.
+    tnrp_meters_by_player: dict = field(default_factory=dict)
+    # Sávváltók: a megerősített sávváltások darabszáma
+    # JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    lswp_switches_by_player: dict = field(default_factory=dict)
+    # Menekülők: a nyomás alatt meghozott passzok darabszáma a
+    # FOGADÓ szerint. Darabszám, meccsek közt összegződik.
+    escp_passes_by_player: dict = field(default_factory=dict)
+    # Vég-birtokosok: a lövés nélkül záruló támadások darabszáma az
+    # UTOLSÓ birtokos szerint. Darabszám, meccsek közt összegződik.
+    lstp_attacks_by_player: dict = field(default_factory=dict)
+    # Ziccer-előkészítők: a nagy helyzetekhez adott utolsó passzok
+    # darabszáma PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
+    bcfp_chances_by_player: dict = field(default_factory=dict)
+    # Válaszhiba-emberek: a kapott gólt követő percben elkövetett
+    # labdaeladások darabszáma JÁTÉKOSONKÉNT. Darabszám, összegződik.
+    rtop_turnovers_by_player: dict = field(default_factory=dict)
+    # Időkérés-hibázók: az időkérés utáni ablakban elkövetett
+    # labdaeladások darabszáma JÁTÉKOSONKÉNT. Darabszám, összegződik.
+    toep_turnovers_by_player: dict = field(default_factory=dict)
+    # Hetesdobók: a hetesek darabszáma DOBÓNKÉNT. Darabszám, meccsek
+    # közt összegződik.
+    stp_sevens_by_player: dict = field(default_factory=dict)
+    # Áttörés-hozam: a mért betörések és a belőlük esett gólok
+    # darabszáma. Darabszám, pontosan összegződik (arány = goals /
+    # entries).
+    bty_entries: int = 0
+    bty_goals: int = 0
+    # Emberhátrány-hibázók: a hátrányban elkövetett labdaeladások
+    # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    shtp_turnovers_by_player: dict = field(default_factory=dict)
+    # Emberelőny-hibázók: az emberelőnyben elkövetett labdaeladások
+    # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    pptp_turnovers_by_player: dict = field(default_factory=dict)
+    # Kulcs-ember: játékosonként hány EMBER-réteg ítélete mutat rá.
+    # Darabszám, meccsek közt összegződik (a kulcs-ember a több
+    # meccsen át legtöbb réteget gyűjtő játékos).
+    kpl_layers_by_player: dict = field(default_factory=dict)
+    # Kétperc ára: a mért kiállítás-ablakok és a közben kapott gólok
+    # darabszáma. Darabszám, pontosan összegződik (arány = conceded /
+    # windows).
+    sct_windows: int = 0
+    sct_conceded: int = 0
+    # Emberfogás-váltás: a legszorosabb őrzési páros átlagtávolsága
+    # félidőnként (méter) — egy meccs képe, több meccsnél az UTOLSÓ
+    # felvétel értéke marad (nem összegezhető átlag).
+    msh_fh_dist_m: float = 0.0
+    msh_sh_dist_m: float = 0.0
+    # Kipattanó-szedők: a megszerzett kipattanók darabszáma
+    # JÁTÉKOSONKÉNT (mez-szám vagy track-azonosító). Darabszám,
+    # meccsek közt összegződik.
+    rbcp_rebounds_by_player: dict = field(default_factory=dict)
+    # Kétperc-páros: a (kiharcoló poszt → emberelőny-befejező poszt)
+    # láncok darabszáma. Darabszám, pontosan összegződik.
+    sup_chains_by_pair: dict = field(default_factory=dict)
+    # Hetes-kihagyók: a gól nélküli hetesek darabszáma DOBÓNKÉNT
+    # (kulcs: mez-szám vagy track-azonosító). Darabszám, meccsek közt
+    # összegződik.
+    svmp_misses_by_player: dict = field(default_factory=dict)
+    # Sprint-esés: félidőnkénti sprint-darabszám és játékperc.
+    # Darabszám/összeg, hogy meccsek közt pontosan összegződjön
+    # (ütem = sprint / perc).
+    sfd_fh_sprints: int = 0
+    sfd_fh_min: float = 0.0
+    sfd_sh_sprints: int = 0
+    sfd_sh_min: float = 0.0
+    # Óralopás: a hajrában vezetéssel, illetve máskor indított
+    # támadások darabszáma + hosszuk ÖSSZEGE (mp). Darabszám/összeg,
+    # hogy meccsek közt pontosan összegződjön (átlag = sum / db).
+    clk_lead: int = 0
+    clk_lead_sum_s: float = 0.0
+    clk_base: int = 0
+    clk_base_sum_s: float = 0.0
+    # Kipattanó ára: a mért védések és a közülük második helyzetből
+    # góllal büntetettek darabszáma. Darabszám, pontosan összegződik
+    # (arány = punished / saves).
+    rpn_saves: int = 0
+    rpn_punished: int = 0
+    # Visszaállás ára: a gól nélküli lövések és a közülük gyors
+    # kapott góllal büntetettek darabszáma. Darabszám, pontosan
+    # összegződik (arány = punished / shots).
+    rtp_shots: int = 0
+    rtp_punished: int = 0
+    # Lepattanó-szedő poszt: a kapusuk védése után megszerzett
+    # kipattanók darabszáma a SZEDŐ posztja szerint. Darabszám,
+    # pontosan összegződik.
+    rbc_rebounds_by_role: dict = field(default_factory=dict)
+    # Figura-koncentráció: a mért támadások és a legnagyobb figura
+    # támadásainak darabszáma + a figurák száma. Darabszám, meccsek
+    # közt összegződik (arány = top / attacks).
+    spk_attacks: int = 0
+    spk_top: int = 0
+    spk_figures: int = 0
+    # Hajrá-kapus: az utolsó öt percben, illetve azelőtt kaputra
+    # érkezett lövések és védések darabszáma. Darabszám, pontosan
+    # összegződik (arány = saves / faced).
+    gkc_clutch_faced: int = 0
+    gkc_clutch_saves: int = 0
+    gkc_rest_faced: int = 0
+    gkc_rest_saves: int = 0
+    # Emberhátrány-hiba poszt: a hátrányban elkövetett labdaeladások
+    # darabszáma a VESZTES posztja szerint. Darabszám, pontosan
+    # összegződik.
+    sht_turnovers_by_role: dict = field(default_factory=dict)
+    # Kapkodás-index: a kapott gól utáni ("válasz") és a többi
+    # támadás darabszáma + hosszuk ÖSSZEGE (mp) — darabszám/összeg,
+    # hogy meccsek közt pontosan összegződjön (átlag = sum / db).
+    rus_after: int = 0
+    rus_after_sum_s: float = 0.0
+    rus_base: int = 0
+    rus_base_sum_s: float = 0.0
+    # Visszaállás-idő: a mért lövések száma, a visszaállási idők
+    # ÖSSZEGE (mp) és a lassú esetek száma — darabszám/összeg, hogy
+    # meccsek közt pontosan összegződjön (átlag = sum / shots).
+    rtt_shots: int = 0
+    rtt_sum_s: float = 0.0
+    rtt_slow: int = 0
+    # Időkérés-hiba poszt: az időkérés utáni ablakban elkövetett
+    # labdaeladások darabszáma a VESZTES posztja szerint. Darabszám,
+    # pontosan összegződik.
+    toe_turnovers_by_role: dict = field(default_factory=dict)
+    # Válaszhiba-poszt: a kapott gólt követő percben elkövetett
+    # labdaeladások darabszáma a VESZTES posztja szerint. Darabszám,
+    # pontosan összegződik.
+    rto_turnovers_by_role: dict = field(default_factory=dict)
+    # Emberelőny-hiba poszt: az emberelőnyben elkövetett
+    # labdaeladások darabszáma a VESZTES posztja szerint. Darabszám,
+    # pontosan összegződik.
+    ppt_turnovers_by_role: dict = field(default_factory=dict)
+    # Ziccerpáros-poszt: a nagy helyzetek darabszáma az
+    # (előkészítő poszt → befejező poszt) páros szerint. Darabszám,
+    # pontosan összegződik.
+    bcp_chances_by_pair: dict = field(default_factory=dict)
+    tof_timeouts: int = 0
+    tof_shots_by_role: dict = field(default_factory=dict)
+    spf_figures: int = 0
+    spf_telegraphed: int = 0
+    spf_telegraphed_by_role: dict = field(default_factory=dict)
+    # Figura-indító: hány figurájuk INDÍTÁSA olvasható egy posztról,
+    # és melyik posztról hány ilyen figura indul. Darabszámok, meccsek
+    # közt pontosan összegződnek.
+    spo_figures: int = 0
+    spo_telegraphed: int = 0
+    spo_telegraphed_by_role: dict = field(default_factory=dict)
     rht_holds_by_role: dict = field(default_factory=dict)
     rht_frames_by_role: dict = field(default_factory=dict)
     rrz_recv_by_role: dict = field(default_factory=dict)
@@ -976,6 +1703,17 @@ class ScoutingReport:
     # pontosan összegződnek (átlag = ccq_sum_xga / ccq_shots).
     ccq_shots: int = 0
     ccq_sum_xga: float = 0.0
+    # Egyéni gyengeségeik (az egyéni edzés-fókuszból): MEZSZÁM →
+    # hány meccsen jött elő ugyanaz. Darabszám-alapú tárolás, tehát
+    # meccsek közt pontosan összegződik; a mezszám nélkül játszókról
+    # nem tudunk sort adni (meccsek közt csak a szám köti össze őket).
+    #
+    # Miért éri meg: az általános kulcsok a CSAPATRÓL szólnak, a
+    # meccsterv viszont attól lesz konkrét, hogy KIRE mit kell
+    # csinálni — "a 7-esük nyomás alatt elveszti a labdát" egy
+    # kettőzés-utasítás, nem egy megfigyelés.
+    ptf_press: dict = field(default_factory=dict)
+    ptf_clutch: dict = field(default_factory=dict)
     # Félidő-zárásuk: a félidők utolsó percében indult támadásaik és
     # a gólig jutók száma — darabszámok, meccsek közt pontosan
     # összegződnek (arány = clo_goals / clo_attacks).
@@ -1066,6 +1804,24 @@ class ScoutingReport:
     # (arány = stg_after / stg_subs).
     stg_subs: int = 0
     stg_after: int = 0
+    # Csere-fázisuk: a mért cserék, és azok száma, amelyek AZ ELLENFÉL
+    # birtoklása közben indultak — darabszámok, meccsek közt pontosan
+    # összegződnek (arány = sph_opp_ball / sph_subs).
+    sph_subs: int = 0
+    sph_opp_ball: int = 0
+    # Befejezés-mérlegük: lövések, gólok és a várható gól ÖSSZEGE —
+    # darabszámok és összeg, meccsek közt pontosan összegződnek
+    # (eltérés = fbal_goals − fbal_xg_sum).
+    fbal_shots: int = 0
+    fbal_goals: int = 0
+    fbal_xg_sum: float = 0.0
+    # Kapusuk a lövő KEZESSÉGE szerint: kezenként a rá kaputra tartó
+    # lövések és a védések darabszáma — meccsek közt pontosan
+    # összegződnek (védés-arány = védés / kapura tartó).
+    gkh_left_faced: int = 0
+    gkh_left_saves: int = 0
+    gkh_right_faced: int = 0
+    gkh_right_saves: int = 0
     # Falépítés-idejük: a mért birtokváltások és a rendezett falig
     # eltelt idő összege (mp) — összegek, meccsek közt pontosan
     # összegződnek (átlag = összeg / eset).
@@ -1232,6 +1988,11 @@ class ScoutingReport:
     # tc_clustered / tc_turnovers).
     tc_turnovers: int = 0
     tc_clustered: int = 0
+    # Kényszerített vs. magától jött eladás: a mérhető eladások és
+    # azok száma, amelyeknél NEM volt védő 2,5 m-en belül. Darabszámok,
+    # meccsek közt pontosan összegződnek (arány = pto_unforced / pto_total).
+    pto_total: int = 0
+    pto_unforced: int = 0
     tc_clusters: int = 0
     # Kapott góljaik posztonként: {poszt: gólok} — melyik poszt ellen
     # szivárog a faluk; darabszámok, meccsek közt pontosan
@@ -1544,7 +2305,10 @@ def _shot_zones(match: Match, team: Team, config: TacticsConfig) -> dict:
     for e in detect_events(match, config):
         if e.team != team or e.type not in (EventType.SHOT, EventType.GOAL):
             continue
-        frame = frames_by_t.get(e.t)
+        # A lövés zónája az ELENGEDÉS kockájából (release_t) — az
+        # esemény kockáján a labda már métereket repült a kapu felé.
+        frame = (frames_by_t.get((e.detail or {}).get("release_t"))
+                 or frames_by_t.get(e.t))
         if frame is None or frame.ball is None:
             continue
         z = _shot_zone(frame.ball.x, frame.ball.y, goal_x)
@@ -2680,6 +3444,45 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"/{rep.sac_slow}) — a 35. másodpercben is teljes "
                 "koncentráció: a falban senki nem kapcsolhat ki.")
 
+    # Támadás-ritmus: egy tempóban játszanak-e, vagy váltogatják.
+    # (A küszöbök a motorból jönnek, hogy ne csússzanak szét.)
+    from .tactics import (ATV_MIN_ATTACKS, ATV_MIXED_MIN_PCT,
+                          ATV_ONE_TEMPO_PCT)
+    if rep.atv_attacks >= ATV_MIN_ATTACKS:
+        _atv = {"fast": 100.0 * rep.atv_fast / rep.atv_attacks,
+                "mid": 100.0 * rep.atv_mid / rep.atv_attacks,
+                "slow": 100.0 * rep.atv_slow / rep.atv_attacks}
+        _atv_top = max(_atv, key=lambda k: _atv[k])
+        if _atv[_atv_top] >= ATV_ONE_TEMPO_PCT:
+            if _atv_top == "fast":
+                keys.append(
+                    f"Egy tempóban játszanak: gyorsan fejeznek be "
+                    f"({rep.atv_fast}/{rep.atv_attacks} támadásuk 12 "
+                    "másodpercen belül zárul) — a visszarendeződés a "
+                    "meccsterv első pontja: a labdavesztés pillanatában "
+                    "álljon a fal, különben az első hullám eldönti a "
+                    "meccset.")
+            elif _atv_top == "slow":
+                keys.append(
+                    f"Egy tempóban játszanak: hosszan járatják a "
+                    f"támadást ({rep.atv_slow}/{rep.atv_attacks} akciójuk "
+                    "30 másodperc fölött) — türelmes, hibátlan fal kell: "
+                    "a passzív jel nektek dolgozik, ne ugorjatok bele a "
+                    "csali-mozgásokba.")
+            else:
+                keys.append(
+                    f"Egy tempóban játszanak: közepes ritmusban "
+                    f"({rep.atv_mid}/{rep.atv_attacks} támadásuk) — a fal "
+                    "beállhat erre a ritmusra, és a lövés-kényszert a "
+                    "megszokott idejükben lehet rájuk erőltetni.")
+        elif all(v >= ATV_MIXED_MIN_PCT for v in _atv.values()):
+            keys.append(
+                f"Váltogatják a tempót ({rep.atv_fast} gyors, "
+                f"{rep.atv_mid} közepes, {rep.atv_slow} hosszú támadás) — "
+                "a fal nem állhat rá egy ritmusra: a JELZÉSEKRE kell "
+                "edzeni a felismerést (ki hozza fel a labdát, mikor "
+                "indul az első keresztmozgás).")
+
     # Kidobott labda: olcsó eladások — oldalvonalra szorítás.
     if rep.obt_out >= 3:
         keys.append(
@@ -2964,6 +3767,2396 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Lepattanó-poszt: a zárás után kit kell kivenni a lepattanóból.
+    _scr_n = sum(rep.scr_shots_by_role.values())
+    if _scr_n >= 3:
+        _scr_p, _scr_c = max(rep.scr_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _scr_pct = 100.0 * _scr_c / _scr_n
+        if _scr_pct >= 60.0:
+            keys.append(
+                f"A második rohamukat a(z) {_scr_p} viszi "
+                f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
+                "lövésük zárása után az első dolog őt kivenni a "
+                "lepattanóból, nem a lövőt nézni.")
+
+    # Felzárkózás-poszt: kinek a kivétele ragasztja be a hátrányukat.
+    _cbr_n = sum(rep.cbr_trailing_by_role.values())
+    if _cbr_n >= 3:
+        _cbr_p, _cbr_c = max(rep.cbr_trailing_by_role.items(),
+                             key=lambda kv: kv[1])
+        _cbr_pct = 100.0 * _cbr_c / _cbr_n
+        if _cbr_pct >= 60.0:
+            keys.append(
+                f"Hátrányból a(z) {_cbr_p} posztjuk hozza őket vissza"
+                f" ({_cbr_pct:.0f}%, {_cbr_n} hátrány-gól-"
+                "részvételből) — ha vezettek, az ő kivétele (szoros "
+                "fogás, korai kettőzés) a hátrányukat beragasztja.")
+
+    # Pazarló-poszt: kire lehet ráengedni a lövést.
+    _wsr_n = sum(rep.wsr_off_by_role.values())
+    if _wsr_n >= 3:
+        _wsr_p, _wsr_c = max(rep.wsr_off_by_role.items(),
+                             key=lambda kv: kv[1])
+        _wsr_pct = 100.0 * _wsr_c / _wsr_n
+        if _wsr_pct >= 60.0:
+            keys.append(
+                f"A kaput elkerülő lövéseik {_wsr_pct:.0f}%-a a(z) "
+                f"{_wsr_p} posztról jön ({_wsr_n} mellé/blokkolt "
+                "lövésből) — az ő lövését rá lehet engedni: kilépés "
+                "helyett zárt sáv, a kidobásból azonnali indítás.")
+
+    # Ziccer-poszt: hol kell a helyzetet a kialakulása előtt megfogni.
+    _bcr_n = sum(rep.bcr_chances_by_role.values())
+    if _bcr_n >= 3:
+        _bcr_p, _bcr_c = max(rep.bcr_chances_by_role.items(),
+                             key=lambda kv: kv[1])
+        _bcr_pct = 100.0 * _bcr_c / _bcr_n
+        if _bcr_pct >= 60.0:
+            keys.append(
+                f"A ziccereik {_bcr_pct:.0f}%-a a(z) {_bcr_p} "
+                f"posztnál alakul ki ({_bcr_n} nagy helyzetből) — "
+                "korábbi besegítés és szűkítés az ő sávjában, mert "
+                "ami ott kialakult, az jó eséllyel gól.")
+
+    # Labdatartó-poszt: hova kell időzíteni a kettőzést.
+    _htr_n = sum(rep.htr_seconds_by_role.values())
+    if _htr_n >= 60.0:
+        _htr_p, _htr_c = max(rep.htr_seconds_by_role.items(),
+                             key=lambda kv: kv[1])
+        _htr_pct = 100.0 * _htr_c / _htr_n
+        if _htr_pct >= 60.0:
+            keys.append(
+                f"A labda a(z) {_htr_p} posztjuknál áll meg: a mért "
+                f"labdatartásuk {_htr_pct:.0f}%-a nála telik "
+                f"({_htr_n:.0f} mp-ből) — a kettőzést rá kell "
+                "időzíteni, nála van idő odaérni.")
+
+    # Pressz-poszt: hova kell küldeni a kettőzést.
+    _psr_n = sum(rep.psr_to_by_role.values())
+    if _psr_n >= 3:
+        _psr_p, _psr_c = max(rep.psr_to_by_role.items(),
+                             key=lambda kv: kv[1])
+        _psr_pct = 100.0 * _psr_c / _psr_n
+        if _psr_pct >= 60.0:
+            keys.append(
+                f"Szorításban a(z) {_psr_p} posztjuk ejti a labdát "
+                f"({_psr_pct:.0f}%, {_psr_n} nyomott eladásból) — a "
+                "kettőzés oda nem kockázat, hanem labdaszerzés.")
+
+    # Csendtörő-poszt: kit kell fogni, amikor áll a szekerük.
+    _gct_n = sum(rep.gct_breaks_by_role.values())
+    if _gct_n >= 3:
+        _gct_p, _gct_c = max(rep.gct_breaks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _gct_pct = 100.0 * _gct_c / _gct_n
+        if _gct_pct >= 60.0:
+            keys.append(
+                f"A gólcsendjüket a(z) {_gct_p} posztjuk töri meg "
+                f"({_gct_pct:.0f}%, {_gct_n} csend-törő gólból) — a "
+                "saját sorozatotok alatt őt fogjátok a "
+                "legszorosabban: hozzá menekül a labda.")
+
+    # Eltűnő-poszt: az első 30 perc terve.
+    for _fdp_p, _fdp_fh in sorted(rep.fdp_fh_by_role.items(),
+                                  key=lambda kv: -kv[1]):
+        _fdp_sh = rep.fdp_sh_by_role.get(_fdp_p, 0)
+        if _fdp_fh >= 3 and _fdp_sh <= 1:
+            keys.append(
+                f"A(z) {_fdp_p} posztjuk az első félidőben él "
+                f"({_fdp_fh} gól-részvétel), a másodikra eltűnik "
+                f"({_fdp_sh}) — az első 30 percben duplán rá, "
+                "cserével frissen tartott őrzővel; a második "
+                "félidőre a termelése magától elhal.")
+            break
+
+    # Hajráhiba-poszt: a záró percek pressz-terve.
+    _ctr_n = sum(rep.ctr_to_by_role.values())
+    if _ctr_n >= 3:
+        _ctr_p, _ctr_c = max(rep.ctr_to_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ctr_pct = 100.0 * _ctr_c / _ctr_n
+        if _ctr_pct >= 60.0:
+            keys.append(
+                f"A hajrá-eladásaik {_ctr_pct:.0f}%-a a(z) {_ctr_p} "
+                f"posztnál történik ({_ctr_n} eladás az utolsó öt "
+                "percben) — a záró percekben oda kettőzés és "
+                "passzsáv-zárás: ott a legolcsóbb a labdaszerzés.")
+
+    # Forró-poszt: az első sorozat-gól utáni azonnali reakció.
+    _hhr_n = sum(rep.hhr_goals_by_role.values())
+    if _hhr_n >= 3:
+        _hhr_p, _hhr_c = max(rep.hhr_goals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _hhr_pct = 100.0 * _hhr_c / _hhr_n
+        if _hhr_pct >= 60.0:
+            keys.append(
+                f"A gólsorozataik {_hhr_pct:.0f}%-a a(z) {_hhr_p} "
+                f"posztról jön ({_hhr_n} sorozat-gólból) — az első "
+                "gólja után azonnali őrzés-váltás vagy kettőzés, "
+                "mielőtt a második-harmadik jönne.")
+
+    # Középkezdő-poszt: a gól utáni letámadás célpontja.
+    _rtr_n = sum(rep.rtr_takes_by_role.values())
+    if _rtr_n >= 3:
+        _rtr_p, _rtr_c = max(rep.rtr_takes_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rtr_pct = 100.0 * _rtr_c / _rtr_n
+        if _rtr_pct >= 60.0:
+            keys.append(
+                f"A középkezdésük {_rtr_pct:.0f}%-ban a(z) {_rtr_p} "
+                f"posztnál indul ({_rtr_n} átvételből) — a gól utáni"
+                " letámadás őt fogja le, és a középkezdésük megáll.")
+
+    # Sprint-poszt: a kontra-fék iránya.
+    _spr_n = sum(rep.spr_sprints_by_role.values())
+    if _spr_n >= 10:
+        _spr_p, _spr_c = max(rep.spr_sprints_by_role.items(),
+                             key=lambda kv: kv[1])
+        _spr_pct = 100.0 * _spr_c / _spr_n
+        if _spr_pct >= 60.0:
+            keys.append(
+                f"A sprintjeik {_spr_pct:.0f}%-át a(z) {_spr_p} "
+                f"posztjuk futja ({_spr_n} sprintből) — "
+                "labdavesztésnél először az ő útját zárjátok le, és "
+                "tilos a fal mögé engedni.")
+
+    # Lágypassz-poszt: a beleérő védekezés iránya.
+    _sps_n = sum(rep.sps_soft_by_role.values())
+    if _sps_n >= 5:
+        _sps_p, _sps_c = max(rep.sps_soft_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sps_pct = 100.0 * _sps_c / _sps_n
+        if _sps_pct >= 60.0:
+            keys.append(
+                f"A lágy passzaik {_sps_pct:.0f}%-a a(z) {_sps_p} "
+                f"posztról jön ({_sps_n} lágy passzból) — az ő "
+                "labdáiba bele lehet nyúlni: kilépés és "
+                "passzsáv-támadás az ő sávjában.")
+
+    # Hajrákéz-poszt: a hajrá-kettőzés címzettje.
+    _chr_n = sum(rep.chr_frames_by_role.values())
+    if _chr_n >= 200:
+        _chr_p, _chr_c = max(rep.chr_frames_by_role.items(),
+                             key=lambda kv: kv[1])
+        _chr_pct = 100.0 * _chr_c / _chr_n
+        if _chr_pct >= 60.0:
+            keys.append(
+                f"A végjátékuk a(z) {_chr_p} poszt kezén fut "
+                f"({_chr_pct:.0f}%-a az utolsó öt perc labdás "
+                "idejének) — a hajrá-kettőzés őt fogja, nem a "
+                "lövőt: ha nem kap labdát, a záró figuráik el sem "
+                "indulnak.")
+
+    # Kiszolgált-poszt: a passzsáv-zárás címzettje.
+    _asr_n = sum(rep.asr_assisted_by_role.values())
+    if _asr_n >= 3:
+        _asr_p, _asr_c = max(rep.asr_assisted_by_role.items(),
+                             key=lambda kv: kv[1])
+        _asr_pct = 100.0 * _asr_c / _asr_n
+        if _asr_pct >= 60.0:
+            keys.append(
+                f"A kiszolgált góljaik {_asr_pct:.0f}%-át a(z) "
+                f"{_asr_p} posztjuk fejezi be ({_asr_n} asszisztos "
+                "gólból) — őt nem fogni kell, hanem éheztetni: a "
+                "felé futó passz elvágásával magától elhal.")
+
+    # Rajt-poszt: a meccs eleji párosítás terve.
+    _osr_n = sum(rep.osr_goals_by_role.values())
+    if _osr_n >= 3:
+        _osr_p, _osr_c = max(rep.osr_goals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _osr_pct = 100.0 * _osr_c / _osr_n
+        if _osr_pct >= 60.0:
+            keys.append(
+                f"A rajtjuk a(z) {_osr_p} posztra épül "
+                f"({_osr_pct:.0f}%, {_osr_n} gól az első tíz "
+                "percben) — a meccs elején őt fogja a legjobb "
+                "védőtök, és a korai elhúzásuk elmarad.")
+
+    # Passzív-poszt: hol kell rájuk hozni a passzív jelzést.
+    _pvr_n = sum(rep.pvr_frames_by_role.values())
+    if _pvr_n >= 250:
+        _pvr_p, _pvr_c = max(rep.pvr_frames_by_role.items(),
+                             key=lambda kv: kv[1])
+        _pvr_pct = 100.0 * _pvr_c / _pvr_n
+        if _pvr_pct >= 60.0:
+            keys.append(
+                f"A terméketlen támadásaik a(z) {_pvr_p} posztnál "
+                f"halnak el ({_pvr_pct:.0f}%-a a lövés nélküli "
+                "hosszú támadások labdás idejének) — passzív "
+                "jelzésnél őt nyomjátok meg: nála jön a "
+                "kényszer-eladás.")
+
+    # Fáradó-poszt: a második félidő terve.
+    _ftr_worst = None
+    for _ftr_p, _ftr_f in rep.ftr_first_cms_by_role.items():
+        if _ftr_f < 100:
+            continue
+        _ftr_s = rep.ftr_second_cms_by_role.get(_ftr_p, 0)
+        _ftr_d = 100.0 * (_ftr_f - _ftr_s) / _ftr_f
+        if _ftr_worst is None or _ftr_d > _ftr_worst[1]:
+            _ftr_worst = (_ftr_p, _ftr_d)
+    if _ftr_worst is not None and _ftr_worst[1] >= 20.0:
+        keys.append(
+            f"A második félidőre a(z) {_ftr_worst[0]} posztjuk esik"
+            f" vissza a legjobban (−{_ftr_worst[1]:.0f}% tempó) — a"
+            " szünet után az ő sávjában támadjatok, és oda "
+            "időzítsétek a friss embert.")
+
+    # Kettőzött-poszt: hova jár a bevált kettőzés.
+    _dtr_n = sum(rep.dtr_frames_by_role.values())
+    if _dtr_n >= 100:
+        _dtr_p, _dtr_c = max(rep.dtr_frames_by_role.items(),
+                             key=lambda kv: kv[1])
+        _dtr_pct = 100.0 * _dtr_c / _dtr_n
+        if _dtr_pct >= 60.0:
+            keys.append(
+                f"Az ellenfelek kettőzései {_dtr_pct:.0f}%-ban a(z)"
+                f" {_dtr_p} posztjukra érkeznek — bevált recept: "
+                "oda a kettőzés, és a mögötte kilépő passzsáv "
+                "zárása.")
+
+    # Elzárt-poszt: hova kell vinni az elzárásokat.
+    _sdr_n = sum(rep.sdr_screens_by_role.values())
+    if _sdr_n >= 3:
+        _sdr_p, _sdr_c = max(rep.sdr_screens_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sdr_pct = 100.0 * _sdr_c / _sdr_n
+        if _sdr_pct >= 60.0:
+            keys.append(
+                f"Az elzárások {_sdr_pct:.0f}%-ban a(z) {_sdr_p} "
+                f"posztjukon lévő védőt találják meg ({_sdr_n} "
+                "elakadásból) — az ő oldalára vigyétek a "
+                "figurákat: ott az elzárás tisztán hagyja a lövőt.")
+
+    # Újrakezdő-poszt: a szünet utáni párosítás terve.
+    _ssr_n = sum(rep.ssr_goals_by_role.values())
+    if _ssr_n >= 3:
+        _ssr_p, _ssr_c = max(rep.ssr_goals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ssr_pct = 100.0 * _ssr_c / _ssr_n
+        if _ssr_pct >= 60.0:
+            keys.append(
+                f"A szünet utáni rajtjuk a(z) {_ssr_p} posztra épül"
+                f" ({_ssr_pct:.0f}%, {_ssr_n} gól a második félidő "
+                "első tíz percében) — a szünet után őt fogja a "
+                "legjobb védőtök.")
+
+    # Hetesdobó-poszt: a kapus-felkészülés iránya.
+    _stk_n = sum(rep.stk_attempts_by_role.values())
+    if _stk_n >= 3:
+        _stk_p, _stk_c = max(rep.stk_attempts_by_role.items(),
+                             key=lambda kv: kv[1])
+        _stk_pct = 100.0 * _stk_c / _stk_n
+        if _stk_pct >= 60.0:
+            keys.append(
+                f"A heteseiket {_stk_pct:.0f}%-ban a(z) {_stk_p} "
+                f"posztjuk dobja ({_stk_n} hetesből) — a kapusotok "
+                "az ő szokás-irányait tanulja, és ha ezt a posztot "
+                "kiveszitek, a hetes-rutinjuk is vele megy.")
+
+    # Blokkolt-poszt: ki ellen zárhat bátran a fal.
+    _bsr_n = sum(rep.bsr_blocks_by_role.values())
+    if _bsr_n >= 3:
+        _bsr_p, _bsr_c = max(rep.bsr_blocks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _bsr_pct = 100.0 * _bsr_c / _bsr_n
+        if _bsr_pct >= 60.0:
+            keys.append(
+                f"A blokkolt lövéseik {_bsr_pct:.0f}%-a a(z) "
+                f"{_bsr_p} posztról jön ({_bsr_n} blokkból) — a fal"
+                " ellene bátran zárhat: az előkészítetlen lövése "
+                "falba megy, és onnan kontra indul.")
+
+    # Ziccerhagyó-poszt: kit lehet helyzetbe engedni.
+    _mcr_n = sum(rep.mcr_misses_by_role.values())
+    if _mcr_n >= 3:
+        _mcr_p, _mcr_c = max(rep.mcr_misses_by_role.items(),
+                             key=lambda kv: kv[1])
+        _mcr_pct = 100.0 * _mcr_c / _mcr_n
+        if _mcr_pct >= 60.0:
+            keys.append(
+                f"A kihagyott ziccereik {_mcr_pct:.0f}%-a a(z) "
+                f"{_mcr_p} posztnál esik ({_mcr_n} kihagyásból) — "
+                "ha választani kell, őt engedjétek helyzetbe: a "
+                "besegítés a biztos kezű társakra menjen.")
+
+    # Kilépő-poszt: hol nyílik a tér a faluk mögött.
+    _adr_ok = {p: n for p, n in rep.adr_frames_by_role.items()
+               if n >= 100}
+    if len(_adr_ok) >= 3:
+        _adr_avg = {p: rep.adr_depthm_by_role.get(p, 0.0) / n
+                    for p, n in _adr_ok.items()}
+        _adr_p = max(_adr_avg, key=lambda p: _adr_avg[p])
+        _adr_tk = sum(n for p, n in _adr_ok.items() if p != _adr_p)
+        _adr_tt = sum(rep.adr_depthm_by_role.get(p, 0.0)
+                      for p in _adr_ok if p != _adr_p)
+        _adr_gap = _adr_avg[_adr_p] - _adr_tt / _adr_tk
+        if _adr_gap >= 2.5:
+            keys.append(
+                f"A faluk a(z) {_adr_p} posztnál lép ki (a "
+                f"társaknál {_adr_gap:.1f} m-rel előrébb) — "
+                "elzárást a kilépőre, és a háta mögé befutóval 2 az"
+                " 1-et: mögötte nyílik a tér.")
+
+    # Beállóőr-poszt: kit kell elzárással kihúzni.
+    _pgr_n = sum(rep.pgr_frames_by_role.values())
+    if _pgr_n >= 300:
+        _pgr_p, _pgr_c = max(rep.pgr_frames_by_role.items(),
+                             key=lambda kv: kv[1])
+        _pgr_pct = 100.0 * _pgr_c / _pgr_n
+        if _pgr_pct >= 60.0:
+            keys.append(
+                f"A beálló-őrzésük a(z) {_pgr_p} posztjukon áll "
+                f"({_pgr_pct:.0f}%-a az őrzött időnek) — az elzárás"
+                " őt húzza ki: a beálló felszabadul, és a belső "
+                "biztosításuk borul.")
+
+    # Indító-poszt: a korai pressz címzettje.
+    _ats_n = sum(rep.ats_attacks_by_role.values())
+    if _ats_n >= 5:
+        _ats_p, _ats_c = max(rep.ats_attacks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ats_pct = 100.0 * _ats_c / _ats_n
+        if _ats_pct >= 60.0:
+            keys.append(
+                f"A támadásaik {_ats_pct:.0f}%-a a(z) {_ats_p} "
+                f"posztnál indul ({_ats_n} szakaszból) — korai "
+                "nyomás rá már a felezőnél, és a szervezésük el sem"
+                " kezdődik.")
+
+    # Előkészítő-poszt: kinek a sávját kell zárni.
+    _epr_n = sum(rep.epr_passes_by_role.values())
+    if _epr_n >= 5:
+        _epr_p, _epr_c = max(rep.epr_passes_by_role.items(),
+                             key=lambda kv: kv[1])
+        _epr_pct = 100.0 * _epr_c / _epr_n
+        if _epr_pct >= 60.0:
+            keys.append(
+                f"A lövéseiket {_epr_pct:.0f}%-ban a(z) {_epr_p} "
+                f"posztjuk készíti elő ({_epr_n} előkészítő passz) "
+                "— az ő sávjának zárásával a lövéseik "
+                "előkészítetlenné válnak, és a lövők elhalnak.")
+
+    # Előnyben-poszt: a lendület-tartásuk törése.
+    _lgr_n = sum(rep.lgr_goals_by_role.values())
+    if _lgr_n >= 3:
+        _lgr_p, _lgr_c = max(rep.lgr_goals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _lgr_pct = 100.0 * _lgr_c / _lgr_n
+        if _lgr_pct >= 60.0:
+            keys.append(
+                f"Vezetésnél a(z) {_lgr_p} posztjuk viszi a játékot"
+                f" ({_lgr_pct:.0f}%, {_lgr_n} előnyben lőtt gól) — "
+                "ha ők vezetnek, az ő kivétele (szoros fogás, "
+                "kettőzés) töri meg a lendület-tartásukat.")
+
+    # Térnyerő-poszt: a lendület-fék címzettje.
+    _tnr_n = sum(rep.tnr_meters_by_role.values())
+    if _tnr_n >= 50.0:
+        _tnr_p, _tnr_c = max(rep.tnr_meters_by_role.items(),
+                             key=lambda kv: kv[1])
+        _tnr_pct = 100.0 * _tnr_c / _tnr_n
+        if _tnr_pct >= 60.0:
+            keys.append(
+                f"A térnyerésük a(z) {_tnr_p} poszt lábán van "
+                f"({_tnr_pct:.0f}%-a a labdával megtett "
+                f"{_tnr_n:.0f} előre-méternek) — őt a felezőtől "
+                "hátrálva fogadjátok: lendületbe engedni tilos.")
+
+    # Hátrapassz-poszt: a pressz-jutalom címzettje.
+    _bpr_n = sum(rep.bpr_passes_by_role.values())
+    if _bpr_n >= 5:
+        _bpr_p, _bpr_c = max(rep.bpr_passes_by_role.items(),
+                             key=lambda kv: kv[1])
+        _bpr_pct = 100.0 * _bpr_c / _bpr_n
+        if _bpr_pct >= 60.0:
+            keys.append(
+                f"A játékuk {_bpr_pct:.0f}%-ban a(z) {_bpr_p} "
+                f"posztnál fordul vissza ({_bpr_n} hátra-passz) — "
+                "nyomás alatt hátrafelé menekül: presszeljétek, és "
+                "a hátra-passza után toljátok feljebb a falat.")
+
+    # Fáradt-eladó poszt: a második félidei pressz-terv.
+    for _fto_p, _fto_sh in sorted(rep.fto_sh_by_role.items(),
+                                  key=lambda kv: -kv[1]):
+        _fto_fh = rep.fto_fh_by_role.get(_fto_p, 0)
+        if _fto_sh >= 3 and _fto_sh >= 2.0 * max(1, _fto_fh):
+            keys.append(
+                f"A(z) {_fto_p} posztjuk eladásai a második "
+                f"félidőre megugranak ({_fto_fh} → {_fto_sh}) — "
+                "fáradtan nála nyílik ki a kéz: a szünet után friss"
+                " védővel őt nyomjátok, rajta olcsó a labdaszerzés.")
+            break
+
+    # Fáradt-lövő poszt: a szünet utáni fal-terv.
+    for _fsa_p, _fsa_sh in sorted(rep.fsa_sh_by_role.items(),
+                                  key=lambda kv: -kv[1]):
+        _fsa_fh = rep.fsa_fh_by_role.get(_fsa_p, 0)
+        if _fsa_sh >= 3 and _fsa_sh >= 2.0 * max(1, _fsa_fh):
+            keys.append(
+                f"A(z) {_fsa_p} posztjuk kaput elkerülő lövései a "
+                f"második félidőre megugranak ({_fsa_fh} → "
+                f"{_fsa_sh}) — fáradtan szétmegy a lövése: a szünet"
+                " után rá lehet engedni, a kilépés nála fölösleges "
+                "kockázat.")
+            break
+
+    # Fáradt-fal poszt: hol ül le a faluk a második félidőre.
+    for _tcr_p, _tcr_sh in sorted(rep.tcr_sh_by_role.items(),
+                                  key=lambda kv: -kv[1]):
+        _tcr_fh = rep.tcr_fh_by_role.get(_tcr_p, 0)
+        if _tcr_sh >= 3 and _tcr_sh >= 2.0 * max(1, _tcr_fh):
+            keys.append(
+                f"A faluk a második félidőre a(z) {_tcr_p} poszt "
+                f"ellen ül le ({_tcr_fh} → {_tcr_sh} kapott gól) — "
+                "a szünet után onnan nyissatok: ott fáradnak, ott "
+                "nyílik a rés.")
+            break
+
+    # Forgatott-poszt: hova NE tervezzetek fárasztást.
+    _sbr_n = sum(rep.sbr_outs_by_role.values())
+    if _sbr_n >= 3:
+        _sbr_p, _sbr_c = max(rep.sbr_outs_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sbr_pct = 100.0 * _sbr_c / _sbr_n
+        if _sbr_pct >= 60.0:
+            keys.append(
+                f"A forgatásuk a(z) {_sbr_p} posztra jár "
+                f"({_sbr_pct:.0f}%, {_sbr_n} lecserélés) — ott "
+                "mindig friss ember áll: a fárasztást a nem "
+                "forgatott posztjaikra tervezzétek.")
+
+    # Beérkező-poszt: hova figyeljetek a cserehullám után.
+    _ibr_n = sum(rep.ibr_ins_by_role.values())
+    if _ibr_n >= 3:
+        _ibr_p, _ibr_c = max(rep.ibr_ins_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ibr_pct = 100.0 * _ibr_c / _ibr_n
+        if _ibr_pct >= 60.0:
+            keys.append(
+                f"A padjuk a(z) {_ibr_p} posztra hoz frissítést "
+                f"({_ibr_pct:.0f}%, {_ibr_n} beállás) — a "
+                "cserehullámuk után arra a sávra váltsatok: friss "
+                "láb, új lendület, az addigi párosítás ott elavul.")
+
+    # Drága-eladó poszt: hol a legnagyobb a szerezhető nyereség.
+    _dto_n = sum(rep.dto_punished_by_role.values())
+    if _dto_n >= 3:
+        _dto_p, _dto_c = max(rep.dto_punished_by_role.items(),
+                             key=lambda kv: kv[1])
+        _dto_pct = 100.0 * _dto_c / _dto_n
+        if _dto_pct >= 60.0:
+            keys.append(
+                f"A gólba forduló eladásaik {_dto_pct:.0f}%-a a(z) "
+                f"{_dto_p} posztnál történik ({_dto_n} büntetett "
+                "hibából) — a felhozatalnál őt kettőzzétek-"
+                "zavarjátok: nála a legnagyobb a nyereség.")
+
+    # Áttörő-poszt: kinek a védője kapjon segítőt.
+    _btr_n = sum(rep.btr_entries_by_role.values())
+    if _btr_n >= 4:
+        _btr_p, _btr_c = max(rep.btr_entries_by_role.items(),
+                             key=lambda kv: kv[1])
+        _btr_pct = 100.0 * _btr_c / _btr_n
+        if _btr_pct >= 60.0:
+            keys.append(
+                f"A falat {_btr_pct:.0f}%-ban a(z) {_btr_p} "
+                f"posztjuk nyitja szét ({_btr_n} labdás betörésből)"
+                " — a védője kapjon segítőt, a betörés vonalát "
+                "testtel zárjátok: nélküle a többiek kívül "
+                "rekednek.")
+
+    # Védőmotor-poszt: a szünet utáni támadás-irány.
+    for _fdd_p, _fdd_fh in sorted(rep.fdd_fh_by_role.items(),
+                                  key=lambda kv: -kv[1]):
+        _fdd_sh = rep.fdd_sh_by_role.get(_fdd_p, 0)
+        if _fdd_fh >= 3 and _fdd_sh <= 1:
+            keys.append(
+                f"A védő-motorjuk a(z) {_fdd_p} poszton az első "
+                f"félidőben pörög ({_fdd_fh} szerzés+blokk), a "
+                f"másodikra leáll ({_fdd_sh}) — a szünet után pont "
+                "az ő zónáján át támadjatok: addigra már nem ér "
+                "oda.")
+            break
+
+    # Fedezett-lövő poszt: kire nem kell kilépni.
+    _cvr_n = sum(rep.cvr_covered_by_role.values())
+    if _cvr_n >= 3:
+        _cvr_p, _cvr_c = max(rep.cvr_covered_by_role.items(),
+                             key=lambda kv: kv[1])
+        _cvr_pct = 100.0 * _cvr_c / _cvr_n
+        if _cvr_pct >= 60.0:
+            keys.append(
+                f"A fedezett lövéseik {_cvr_pct:.0f}%-a a(z) "
+                f"{_cvr_p} posztról jön ({_cvr_n} fedezett lövés) —"
+                " rá nem kell kilépni: a fedezett lövése alacsony "
+                "értékű, elég a blokk-kéz és a mögé rendezett fal.")
+
+    # Célkereszt-poszt: hova szervezik ellenük a befejezést.
+    _tgr_n = sum(rep.tgr_shots_by_role.values())
+    if _tgr_n >= 5:
+        _tgr_p, _tgr_c = max(rep.tgr_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _tgr_pct = 100.0 * _tgr_c / _tgr_n
+        if _tgr_pct >= 60.0:
+            keys.append(
+                f"Az ellenfelek {_tgr_pct:.0f}%-ban a(z) {_tgr_p} "
+                f"posztjuk előtt fejeznek be ({_tgr_n} rá-lövés) — "
+                "a minta bevált: oda szervezzétek a támadást, a "
+                "védője elé elzárást.")
+
+    # Letámadó-poszt: melyik oldalt kerülje a kihozatal.
+    _hsr_n = sum(rep.hsr_high_by_role.values())
+    if _hsr_n >= 3:
+        _hsr_p, _hsr_c = max(rep.hsr_high_by_role.items(),
+                             key=lambda kv: kv[1])
+        _hsr_pct = 100.0 * _hsr_c / _hsr_n
+        if _hsr_pct >= 60.0:
+            keys.append(
+                f"Az elöl-szerzéseik {_hsr_pct:.0f}%-a a(z) {_hsr_p}"
+                f" posztjuknál születik ({_hsr_n} letámadás-szerzés)"
+                " — az ő oldalán tilos a kihozatalt vezetni: a "
+                "kapus a másik oldalra indítson.")
+
+    # Álló-poszt: honnan lehet besegítést nyerni.
+    _sar_s = sum(rep.sar_seconds_by_role.values())
+    _sar_m = sum(rep.sar_meters_by_role.values())
+    if _sar_s > 0:
+        _sar_avg = _sar_m / _sar_s
+        for _sar_p, _sar_ps in rep.sar_seconds_by_role.items():
+            if _sar_ps < 20.0:
+                continue
+            _sar_pm = rep.sar_meters_by_role.get(_sar_p, 0.0)
+            _sar_pa = _sar_pm / _sar_ps
+            if _sar_avg > 0 and _sar_pa <= _sar_avg * 0.8:
+                keys.append(
+                    f"A(z) {_sar_p} posztjuk áll labda nélkül "
+                    f"({_sar_pa:.1f} m/s a {_sar_avg:.1f} m/s "
+                    "csapatátlag mellett) — a védője otthagyhatja: "
+                    "befelé segíthet, kettőzhet vagy a beállóra "
+                    "léphet.")
+                break
+
+    # Elzárópáros-poszt: melyik kettősre készüljön a fal.
+    _spp_n = sum(rep.spp_shots_by_role.values())
+    if _spp_n >= 3:
+        _spp_p, _spp_c = max(rep.spp_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _spp_pct = 100.0 * _spp_c / _spp_n
+        if _spp_pct >= 60.0:
+            keys.append(
+                f"Az elzárás-játékuk a(z) {_spp_p} posztpárra jár "
+                f"({_spp_pct:.0f}%, {_spp_n} elzárt lövés) — párban"
+                " készüljetek: az elzáró őrzője előre szól, a lövőé"
+                " az elzárás előtt lép ki.")
+
+    # Csere-stílus: mit jelent a cserehullámuk a párosításra.
+    if rep.sws_pairs >= 3:
+        _sws_pct = 100.0 * rep.sws_same / rep.sws_pairs
+        if _sws_pct >= 70.0:
+            keys.append(
+                f"Posztot tartó a padjuk ({rep.sws_same}/"
+                f"{rep.sws_pairs} azonos-posztú váltás) — a "
+                "párosításotok a csere után is érvényes, csak a "
+                "nevet frissítsétek.")
+        elif _sws_pct <= 40.0:
+            keys.append(
+                f"Átszabó a padjuk ({rep.sws_same}/{rep.sws_pairs} "
+                "azonos-posztú váltás) — a cserehullámuk utáni első"
+                " támadásnál osszátok újra a fogásokat, különben "
+                "szabad emberük marad.")
+
+    # Hetespáros-poszt: két kiosztható hetes-feladat.
+    _svp_n = sum(rep.svp_sevens_by_role.values())
+    if _svp_n >= 3:
+        _svp_p, _svp_c = max(rep.svp_sevens_by_role.items(),
+                             key=lambda kv: kv[1])
+        _svp_pct = 100.0 * _svp_c / _svp_n
+        if _svp_pct >= 60.0:
+            keys.append(
+                f"A hetes-játékuk a(z) {_svp_p} posztpárra jár "
+                f"({_svp_pct:.0f}%, {_svp_n} hetes) — a kiharcoló "
+                "ellen kéz nélkül védekezzetek, a dobó "
+                "szokás-irányait a kapus tanulja.")
+
+    # Kontrapáros-poszt: a kontra-tengelyük két fogási pontja.
+    _fbp_n = sum(rep.fbp_breaks_by_role.values())
+    if _fbp_n >= 3:
+        _fbp_p, _fbp_c = max(rep.fbp_breaks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _fbp_pct = 100.0 * _fbp_c / _fbp_n
+        if _fbp_pct >= 60.0:
+            keys.append(
+                f"A kontráik a(z) {_fbp_p} tengelyen futnak "
+                f"({_fbp_pct:.0f}%, {_fbp_n} lerohanás) — az "
+                "indítót már a labdavesztés pillanatában nyomjátok,"
+                " a befejező sávját az első visszaérő zárja.")
+
+    # Gólpasszpáros-poszt: a gól-tengelyük elvágása.
+    _apr_n = sum(rep.apr_goals_by_role.values())
+    if _apr_n >= 3:
+        _apr_p, _apr_c = max(rep.apr_goals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _apr_pct = 100.0 * _apr_c / _apr_n
+        if _apr_pct >= 60.0:
+            keys.append(
+                f"A góljaik a(z) {_apr_p} tengelyen születnek "
+                f"({_apr_pct:.0f}%, {_apr_n} asszisztos gól) — a "
+                "kettős közti passzsávot zárjátok: az adót testtel,"
+                " a sávot beleéréssel, és a gól-gépezetük áll.")
+
+    # Kettőzőpáros-poszt: hova menjen a kioldó passz.
+    _dpp_n = sum(rep.dpp_frames_by_role.values())
+    if _dpp_n >= 100:
+        _dpp_p, _dpp_c = max(rep.dpp_frames_by_role.items(),
+                             key=lambda kv: kv[1])
+        _dpp_pct = 100.0 * _dpp_c / _dpp_n
+        if _dpp_pct >= 60.0:
+            keys.append(
+                f"A kettőzésük a(z) {_dpp_p} védő-pároson áll "
+                f"({_dpp_pct:.0f}%-a a kettőzött időnek) — a "
+                "kettőző elhagyott embere fix: a kioldó passz oda "
+                "menjen, még a szorítás előtt begyakorolva.")
+
+    # Lepattanópáros-poszt: a zárás utáni második mozdulat.
+    _rbp_n = sum(rep.rbp_shots_by_role.values())
+    if _rbp_n >= 3:
+        _rbp_p, _rbp_c = max(rep.rbp_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rbp_pct = 100.0 * _rbp_c / _rbp_n
+        if _rbp_pct >= 60.0:
+            keys.append(
+                f"A lepattanó-játékuk a(z) {_rbp_p} párra jár "
+                f"({_rbp_pct:.0f}%, {_rbp_n} második roham) — az "
+                "első lövés zárása UTÁN azonnal az érkező útját "
+                "álljátok el: a lepattanóban a másodperc dönt.")
+
+    # Kulcs-páros: a meccsterv második lapja (a kulcs-poszt után).
+    if rep.kpr_layers_by_role:
+        _kpr_p, _kpr_c = max(rep.kpr_layers_by_role.items(),
+                             key=lambda kv: kv[1])
+        _kpr_vals = sorted(rep.kpr_layers_by_role.values(),
+                           reverse=True)
+        _kpr_tie = len(_kpr_vals) > 1 and _kpr_vals[1] == _kpr_c
+        if _kpr_c >= 2 and not _kpr_tie:
+            keys.append(
+                f"A kulcs-párosuk a(z) {_kpr_p}: {_kpr_c} "
+                "páros-réteg ítélete mutat rá — a kettejük közti "
+                "sávot vágjátok szét, azzal több mintájuk hal el "
+                "egyszerre.")
+
+    # Specialista-poszt: a csere-pillanatuk kihasználása.
+    _spc_tot = sum(rep.spc_seconds_by_role.values())
+    _spc_dtot = sum(rep.spc_def_seconds_by_role.values())
+    for _spc_p, _spc_n in sorted(rep.spc_seconds_by_role.items(),
+                                 key=lambda kv: -kv[1]):
+        # Mindkét fázis legyen meg, különben egy fél-támadásnyi
+        # felvétel is 100%-ot mutatna.
+        if (_spc_n < 120.0 or _spc_dtot < 60.0
+                or _spc_tot - _spc_dtot < 60.0):
+            continue
+        _spc_d = rep.spc_def_seconds_by_role.get(_spc_p, 0.0)
+        _spc_pct = 100.0 * _spc_d / _spc_n
+        if _spc_pct >= 80.0 or _spc_pct <= 20.0:
+            _spc_ir = ("védekezésben" if _spc_pct >= 80.0
+                       else "támadásban")
+            keys.append(
+                f"A(z) {_spc_p} posztjukat váltott sorban játsszák "
+                f"(az idejük {max(_spc_pct, 100.0 - _spc_pct):.0f}"
+                f"%-át {_spc_ir} töltik) — gyors középkezdéssel és a"
+                " szerzés utáni azonnali indítással a "
+                "csere-pillanatukat támadjátok.")
+            break
+
+    # Emberelőnypáros-poszt: az öt emberrel elvágandó tengely.
+    _pwp_n = sum(rep.pwp_shots_by_role.values())
+    if _pwp_n >= 3:
+        _pwp_p, _pwp_c = max(rep.pwp_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _pwp_pct = 100.0 * _pwp_c / _pwp_n
+        if _pwp_pct >= 60.0:
+            keys.append(
+                f"A 6-5 játékuk a(z) {_pwp_p} tengelyen fut "
+                f"({_pwp_pct:.0f}%, {_pwp_n} emberelőny-lövés) — öt "
+                "emberrel a tengelyt vágjátok el: az előkészítő "
+                "passzsávját a fal széle zárja, a befejezőre jusson "
+                "a kilépés.")
+
+    # Válasz-poszt: a saját gólunk utáni első védekezés terve.
+    _rsp_n = sum(rep.rsp_goals_by_role.values())
+    if _rsp_n >= 3:
+        _rsp_p, _rsp_c = max(rep.rsp_goals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rsp_pct = 100.0 * _rsp_c / _rsp_n
+        if _rsp_pct >= 60.0:
+            keys.append(
+                f"Kapott gól után a(z) {_rsp_p} posztjuk válaszol "
+                f"({_rsp_pct:.0f}%, {_rsp_n} válasz-gól) — a saját "
+                "gólotok után azonnal az ő fogására váltsatok: ott "
+                "törik meg a lendületük, mielőtt elindulna.")
+
+    # Elöl lógó poszt: merre vezessétek a gyors indítást.
+    for _rcr_p, _rcr_n in sorted(rep.rcr_frames_by_role.items(),
+                                 key=lambda kv: -kv[1]):
+        if _rcr_n < 200:
+            continue
+        _rcr_h = rep.rcr_home_by_role.get(_rcr_p, 0)
+        _rcr_pct = 100.0 * _rcr_h / _rcr_n
+        if _rcr_pct < 70.0:
+            keys.append(
+                f"A(z) {_rcr_p} posztjuk elöl lóg: a védekezett "
+                f"idejének csak {_rcr_pct:.0f}%-ában van a saját "
+                "térfelén — a gyors indítást az ő oldalára "
+                "vezessétek, mögötte üres a pálya.")
+            break
+
+    # Sávváltó-poszt: követés vagy átadás.
+    _lsw_n = sum(rep.lsw_switches_by_role.values())
+    if _lsw_n >= 5:
+        _lsw_p, _lsw_c = max(rep.lsw_switches_by_role.items(),
+                             key=lambda kv: kv[1])
+        _lsw_pct = 100.0 * _lsw_c / _lsw_n
+        if _lsw_pct >= 60.0:
+            keys.append(
+                f"A keresztmozgásuk a(z) {_lsw_p} posztra épül "
+                f"({_lsw_pct:.0f}%, {_lsw_n} sávváltás) — előre "
+                "döntsétek el, hogy a védője KÖVETI a sávváltáson "
+                "át, vagy ÁTADJA a szomszédnak: a bizonytalan "
+                "átadásból nyílik a lyuk.")
+
+    # Időkéréspáros-poszt: az időkérés utáni figura elvágása.
+    _top_n = sum(rep.top_shots_by_role.values())
+    if _top_n >= 3:
+        _top_p, _top_c = max(rep.top_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _top_pct = 100.0 * _top_c / _top_n
+        if _top_pct >= 60.0:
+            keys.append(
+                f"Az időkérés utáni figurájuk a(z) {_top_p} "
+                f"tengelyen fut ({_top_pct:.0f}%, {_top_n} lövés) — "
+                "ne csak a befejezőre figyeljetek: az ELSŐ passzt "
+                "vágjátok el, ott törik meg a figura a legolcsóbban.")
+
+    # Menekülő-poszt: hol álljon lesben a harmadik ember.
+    _esc_n = sum(rep.esc_passes_by_role.values())
+    if _esc_n >= 5:
+        _esc_p, _esc_c = max(rep.esc_passes_by_role.items(),
+                             key=lambda kv: kv[1])
+        _esc_pct = 100.0 * _esc_c / _esc_n
+        if _esc_pct >= 60.0:
+            keys.append(
+                f"Szorításban a labda a(z) {_esc_p} poszthoz "
+                f"menekül ({_esc_pct:.0f}%, {_esc_n} nyomás alatti "
+                "passz) — a kettőzés mögötti harmadik ember ott "
+                "álljon lesben: a menekülő passz így elfogott "
+                "labda.")
+
+    # Vég-birtokos poszt: kire toljátok a nyomást a támadás végén.
+    _lst_n = sum(rep.lst_attacks_by_role.values())
+    if _lst_n >= 4:
+        _lst_p, _lst_c = max(rep.lst_attacks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _lst_pct = 100.0 * _lst_c / _lst_n
+        if _lst_pct >= 60.0:
+            keys.append(
+                f"A lövés nélkül záruló támadásaik {_lst_pct:.0f}"
+                f"%-a a(z) {_lst_p} poszt kezében hal el ({_lst_n} "
+                "terméketlen támadás) — a támadás második felében rá"
+                " toljátok a nyomást: ott a legolcsóbb a "
+                "labdaszerzés.")
+
+    # Ziccer-előkészítő poszt: a legdrágább passzsáv.
+    _bcf_n = sum(rep.bcf_chances_by_role.values())
+    if _bcf_n >= 3:
+        _bcf_p, _bcf_c = max(rep.bcf_chances_by_role.items(),
+                             key=lambda kv: kv[1])
+        _bcf_pct = 100.0 * _bcf_c / _bcf_n
+        if _bcf_pct >= 60.0:
+            keys.append(
+                f"A ziccereik {_bcf_pct:.0f}%-át a(z) {_bcf_p} "
+                f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
+                "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
+                "sem alakul, nem a befejezést kell hárítani.")
+
+    # Fáradt-eladók: kire menjen a szünet utáni pressz.
+    if rep.ftop_sh_by_player:
+        _ftop_k, _ftop_sh = max(rep.ftop_sh_by_player.items(),
+                                key=lambda kv: kv[1])
+        _ftop_fh = rep.ftop_fh_by_player.get(_ftop_k, 0)
+        if _ftop_sh >= 2 and _ftop_sh >= 2 * max(1, _ftop_fh):
+            keys.append(
+                f"A(z) {_ftop_k}. eladásai a második félidőre "
+                f"megugranak ({_ftop_fh} → {_ftop_sh}) — a szünet "
+                "után őt tegyétek nyomás alá: fáradtan nála a "
+                "legolcsóbb a labdaszerzés.")
+
+    # Visszafutás-lemaradók: merre vezessétek a lerohanást.
+    if rep.srp_lags_by_player:
+        _srp_k, _srp_n = max(rep.srp_lags_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _srp_n >= 3:
+            keys.append(
+                f"A kontráitoknál a(z) {_srp_k}. marad elöl a "
+                f"legtöbbször ({_srp_n} alkalom) — a lerohanást az "
+                "ő oldalára vezessétek: ott marad üres a pálya, "
+                "mire a labda odaér.")
+
+    # Fáradt-fal emberek: kire kell friss védő a szünet után.
+    if rep.tcp_sh_by_player:
+        _tcp_k, _tcp_sh = max(rep.tcp_sh_by_player.items(),
+                              key=lambda kv: kv[1])
+        _tcp_fh = rep.tcp_fh_by_player.get(_tcp_k, 0)
+        if _tcp_sh >= 2 and _tcp_sh >= 2 * max(1, _tcp_fh):
+            keys.append(
+                f"A falatokon a második félidőre a(z) {_tcp_k}. jár "
+                f"át ({_tcp_fh} → {_tcp_sh} kapott gól) — a szünet "
+                "után rá friss védő és besegítés kell: fáradtan "
+                "vele szemben nyílik meg a fal.")
+
+    # Indítás-vadász emberek: merre nyisson a kapusotok.
+    if rep.ohp_steals_by_player:
+        _ohp_k, _ohp_n = max(rep.ohp_steals_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _ohp_n >= 2:
+            keys.append(
+                f"Az indításaitokra a(z) {_ohp_k}. ugrik rá a "
+                f"legtöbbször ({_ohp_n} elcsípett indítás) — a "
+                "kapusotok ne az ő térfelére nyisson: vagy a másik "
+                "oldal, vagy a feje fölött a hosszú indítás.")
+
+    # 7a6 eladás: mennyibe kerül nálatok a lehozott kapus hibája.
+    if rep.ent_turnovers >= 2:
+        _ent_pct = 100.0 * rep.ent_punished / rep.ent_turnovers
+        if _ent_pct >= 50.0:
+            keys.append(
+                f"A 7 a 6-otok alatt elvesztett labdák "
+                f"{_ent_pct:.0f}%-a gólt ér ({rep.ent_punished}/"
+                f"{rep.ent_turnovers}) — a lehozott kapus mellé csak "
+                "biztos kezű ötös menjen, és a kockázatos megoldások "
+                "(zsúfoltba bejátszás, kipattanós átlövés) maradjanak "
+                "ki a képletből.")
+
+    # Kiszolgált befejezők: kit éheztetni kell, nem fogni.
+    if rep.asp_assisted_by_player:
+        _asp_k, _asp_n = max(rep.asp_assisted_by_player.items(),
+                             key=lambda kv: kv[1])
+        _asp_g = rep.asp_goals_by_player.get(_asp_k, 0)
+        if _asp_n >= 3 and _asp_n >= 0.6 * max(1, _asp_g):
+            keys.append(
+                f"A(z) {_asp_k}. a bejátszásokból él ({_asp_n}/"
+                f"{_asp_g} gólja gólpasszos) — őt nem fogni kell, "
+                "hanem éheztetni: a felé futó passzt vágjátok el "
+                "(sávzárás, előrelépő védő), egyénileg nem teremt "
+                "helyzetet.")
+
+    # Kétperc-gyűjtők: kire kell rávinni a játékot.
+    if rep.stc_susp_by_player:
+        _stc_k, _stc_n = max(rep.stc_susp_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _stc_n >= 2:
+            keys.append(
+                f"A kétperceiteket a(z) {_stc_k}. gyűjti ({_stc_n} "
+                "kiállítás) — vigyétek rá a játékot: betörés az ő "
+                "sávjába, elzárás rá; a következő kétperce már "
+                "kizárás, addig pedig fékezve véd.")
+
+    # Felhozatal-emberek: kire lépjen rá a letámadásotok.
+    if rep.otp_outlets_by_player:
+        _otp_k, _otp_n = max(rep.otp_outlets_by_player.items(),
+                             key=lambda kv: kv[1])
+        _otp_all = sum(rep.otp_outlets_by_player.values())
+        if _otp_n >= 3 and _otp_n >= 0.5 * max(1, _otp_all):
+            keys.append(
+                f"A felhozatalotok a(z) {_otp_k}. kezén megy át "
+                f"({_otp_n}/{_otp_all} indítás-átvétel) — a "
+                "letámadásnál rá kell lépni az átvételnél, és a "
+                "visszapassz sávját lezárni: nála akad meg az egész "
+                "kihozatal.")
+
+    # Elzárás-hozam: a váltás-kommunikáció vagy a lövő-vonal.
+    if (rep.scy_screened_shots >= 4 and rep.scy_clean_shots >= 4):
+        _scy_s = 100.0 * rep.scy_screened_goals / rep.scy_screened_shots
+        _scy_c = 100.0 * rep.scy_clean_goals / rep.scy_clean_shots
+        if _scy_s - _scy_c >= 15.0:
+            keys.append(
+                f"Az elzárásos lövéseik {_scy_s:.0f}%-ban mennek be, "
+                f"a tiszták csak {_scy_c:.0f}%-ban — a váltás-"
+                "kommunikáció a meccs: hangos váltás vagy átcsúszás "
+                "az elzárás alatt, a lövő szorítása önmagában kevés.")
+        elif _scy_c - _scy_s >= 15.0:
+            keys.append(
+                f"Az elzárásuk nem fizet ({_scy_s:.0f}% elzárásból, "
+                f"{_scy_c:.0f}% tisztán) — hagyjátok őket elzárni, és "
+                "menjetek a lövő-vonalra: a váltásra fordított "
+                "energia máshol többet ér.")
+
+    # Blokk-fáradás: mire építsetek a hajrában.
+    _blf_fh = rep.blf_fh_blocks + rep.blf_fh_shots
+    _blf_sh = rep.blf_sh_blocks + rep.blf_sh_shots
+    if _blf_fh >= 5 and _blf_sh >= 5:
+        _blf_f = 100.0 * rep.blf_fh_blocks / _blf_fh
+        _blf_s = 100.0 * rep.blf_sh_blocks / _blf_sh
+        if _blf_f - _blf_s >= 10.0:
+            keys.append(
+                f"Elfogy a blokk-munkájuk ({_blf_f:.0f}% → "
+                f"{_blf_s:.0f}% blokk-arány) — az utolsó húsz percben "
+                "tudatosan az átlövésre építsetek: a hajrában a "
+                "távoli lövés ellenük szinte ingyen van.")
+        elif _blf_s - _blf_f >= 10.0:
+            keys.append(
+                f"A hajrára nő a blokk-munkájuk ({_blf_f:.0f}% → "
+                f"{_blf_s:.0f}%) — a végén ne az átlövés legyen a "
+                "megoldás, hanem a bejátszás és a kiugratás.")
+
+    # Elzárás-fáradás: mit tehet a fal a hajrában.
+    if rep.scrf_fh_shots >= 4 and rep.scrf_sh_shots >= 4:
+        _scrf_f = 100.0 * rep.scrf_fh_screened / rep.scrf_fh_shots
+        _scrf_s = 100.0 * rep.scrf_sh_screened / rep.scrf_sh_shots
+        if _scrf_f - _scrf_s >= 15.0:
+            keys.append(
+                f"Elfogy az elzárás-munkájuk ({_scrf_f:.0f}% → "
+                f"{_scrf_s:.0f}% elzárásos lövés) — a hajrában a "
+                "lövőik magukra maradnak: a fal bátrabban kiléphet, "
+                "a kilépés és a blokk szinte ingyen van.")
+        elif _scrf_s - _scrf_f >= 15.0:
+            keys.append(
+                f"A hajrára erősödik az elzárás-játékuk "
+                f"({_scrf_f:.0f}% → {_scrf_s:.0f}%) — a végjátékra a "
+                "váltás-kommunikációt élesítsétek: hangos váltás vagy "
+                "átcsúszás az elzárás alatt.")
+
+    # Emberelőny-hozam: mennyibe kerül ellenük egy kétperc.
+    if rep.ppy_pp_shots >= 4 and rep.ppy_eq_shots >= 4:
+        _ppy_p = 100.0 * rep.ppy_pp_goals / rep.ppy_pp_shots
+        _ppy_e = 100.0 * rep.ppy_eq_goals / rep.ppy_eq_shots
+        if _ppy_p - _ppy_e >= 15.0:
+            keys.append(
+                f"Megbüntetik a kiállítást ({_ppy_p:.0f}% "
+                f"emberelőnyben, {_ppy_e:.0f}% egyenlő létszámnál) — "
+                "ellenük a kétperc a legdrágább hiba: a fal lábbal "
+                "védekezzen, és taktikai szabálytalanság nincs.")
+        elif _ppy_e - _ppy_p >= 15.0:
+            keys.append(
+                f"Nem büntetik a kiállítást ({_ppy_p:.0f}% "
+                f"emberelőnyben, {_ppy_e:.0f}% egyenlő létszámnál) — "
+                "a két perc ellenük olcsó: a szükséges taktikai "
+                "megállítás vállalható.")
+
+    # Hetes-hozam: mit ér ellenük a hetest érő szabálytalanság.
+    if rep.svy_attempts >= 4:
+        _svy_p = 100.0 * rep.svy_goals / rep.svy_attempts
+        if _svy_p >= 85.0:
+            keys.append(
+                f"A heteseik szinte biztos gólok ({rep.svy_goals}/"
+                f"{rep.svy_attempts}, {_svy_p:.0f}%) — a hetest érő "
+                "szabálytalanság a legrosszabb üzlet: a fal lábbal "
+                "védekezzen, a beugró elé testtel álljatok, ne kézzel "
+                "húzzátok vissza.")
+        elif _svy_p <= 60.0:
+            keys.append(
+                f"A hetesük megfogható ({rep.svy_goals}/"
+                f"{rep.svy_attempts}, {_svy_p:.0f}%) — a biztos "
+                "helyzetet megállító szabálytalanság ellenük "
+                "vállalható, a kapusotok pedig külön készüljön a "
+                "hetesükre.")
+
+    # Passzív-kockázat: a türelmes fal jutalma.
+    if rep.psr_positional >= 4:
+        _psr_s = 100.0 * rep.psr_passive / rep.psr_positional
+        if _psr_s >= 20.0:
+            keys.append(
+                f"A felállt támadásaik {_psr_s:.0f}%-a lövés nélkül "
+                f"nyúlik el ({rep.psr_passive}/{rep.psr_positional}) "
+                "— ellenük a zárt, türelmes fal dolgozik: nem kell "
+                "kilépni és kockáztatni, az óra és a passzív jel "
+                "nektek dolgozik.")
+
+    # Csere-hozam: támadható-e a csere-pillanatuk.
+    if rep.sby_rotations >= 4:
+        _sby_d = rep.sby_goals_for - rep.sby_goals_against
+        if _sby_d <= -2:
+            keys.append(
+                f"A cseréik után {rep.sby_goals_for}-"
+                f"{rep.sby_goals_against} a mérlegük "
+                f"({rep.sby_rotations} cseréből) — a csere-pillanat "
+                "célzottan támadható: gyors középkezdés és azonnali "
+                "befejezés, mielőtt a friss emberek a helyükre "
+                "állnának.")
+        elif _sby_d >= 2:
+            keys.append(
+                f"A cseréik után jönnek fel ({rep.sby_goals_for}-"
+                f"{rep.sby_goals_against}, {rep.sby_rotations} "
+                "cseréből) — a friss emberek lendületét kell "
+                "megtörni: saját időkérés vagy lassított felállás a "
+                "cserehullámuk után.")
+
+    # Kettőzött emberek: kire jár rá a kettőzés (bevált recept).
+    if rep.dtp_frames_by_player:
+        _dtp_k, _dtp_n = max(rep.dtp_frames_by_player.items(),
+                             key=lambda kv: kv[1])
+        _dtp_all = sum(rep.dtp_frames_by_player.values())
+        if _dtp_n >= 75 and _dtp_n >= 0.5 * max(1, _dtp_all):
+            keys.append(
+                f"Az ellenfelek kettőzése a(z) {_dtp_k}. kezére jár "
+                f"rá ({_dtp_n}/{_dtp_all} kettőzött kocka) — a minta "
+                "bevált recept, ti is oda küldjétek; a kettőzés "
+                "mögött kilépő passzsávot pedig zárjátok.")
+
+    # Kapus-visszaérés: mennyit ér a szerzés utáni azonnali dobás.
+    if rep.krt_measured >= 2:
+        _krt_avg = rep.krt_sum_ds / 10.0 / rep.krt_measured
+        if _krt_avg >= 4.0:
+            keys.append(
+                f"A kapusuk {_krt_avg:.1f} mp alatt ér haza a 7 a 6 "
+                f"után ({rep.krt_measured} mért szakasz, "
+                f"{rep.krt_conceded} gól ez alatt) — a labdaszerzés "
+                "után NE álljatok fel: az első nézés a még üres "
+                "kapu legyen.")
+
+    # Ellenszer-lap: van-e kész gyakorlat a teendőikre.
+    if rep.cpl_total >= 3 and rep.cpl_matched < rep.cpl_total:
+        keys.append(
+            f"A rangsor élén álló {rep.cpl_total} teendőből "
+            f"{rep.cpl_matched}-hez van kész gyakorlat az "
+            "edzés-fókuszban — a maradékra a vezetőedző saját "
+            "megoldása kell, ezt a heti tervben külön jelöljétek.")
+
+    # Figura-kopás: mennyit ér a felismerés ellenük.
+    if (rep.spd_first_attacks >= 4 and rep.spd_repeat_attacks >= 4):
+        _spd_f = 100.0 * rep.spd_first_goals / rep.spd_first_attacks
+        _spd_r = 100.0 * rep.spd_repeat_goals / rep.spd_repeat_attacks
+        if _spd_f - _spd_r >= 15.0:
+            keys.append(
+                f"A figuráik kopnak az ismétlésre ({_spd_f:.0f}% → "
+                f"{_spd_r:.0f}% gólarány) — a fal maga megoldja a "
+                "felismerést: elég lefuttatni velük a figurát, a "
+                "második ismétlésre kész a válasz.")
+        elif _spd_r - _spd_f >= 15.0:
+            keys.append(
+                f"Az ismétlés NEKIK dolgozik ({_spd_f:.0f}% → "
+                f"{_spd_r:.0f}% gólarány) — nem a felismerés a baj, "
+                "hanem a párharc: a figura befejezőjére emberfogás "
+                "vagy kettőzés kell.")
+
+    # Futómunka-eloszlás: kifogy-e a futómunkájuk a hajrára.
+    if rep.lbl_players >= 6 and rep.lbl_distance_m > 0:
+        _lbl_p = 100.0 * rep.lbl_top3_m / rep.lbl_distance_m
+        if _lbl_p >= 55.0:
+            keys.append(
+                f"A futómunkájuk {_lbl_p:.0f}%-át három ember adja "
+                f"({rep.lbl_players} mért mezőnyjátékosból) — ők a "
+                "hajrára elfogynak: az utolsó húsz percben rájuk "
+                "kell vinni a tempót, és a cserehullámuk után se "
+                "lassítsatok.")
+
+    # Kapus a kapott gól után: mikor éri meg azonnal ismételni.
+    if rep.gka_fresh_shots >= 4 and rep.gka_rest_shots >= 4:
+        _gka_f = 100.0 * rep.gka_fresh_saves / rep.gka_fresh_shots
+        _gka_r = 100.0 * rep.gka_rest_saves / rep.gka_rest_shots
+        if _gka_r - _gka_f >= 15.0:
+            keys.append(
+                f"A kapusuk a kapott gól utáni két lövésen csak "
+                f"{_gka_f:.0f}%-ot véd (egyébként {_gka_r:.0f}%) — a "
+                "gól UTÁNI percben kell újra lőni: gyors "
+                "középkezdés, ugyanaz a kép, ugyanaz a sarok.")
+        elif _gka_f - _gka_r >= 15.0:
+            keys.append(
+                f"A kapusuk felébred a kapott góltól ({_gka_f:.0f}% "
+                f"védés a következő két lövésen, egyébként "
+                f"{_gka_r:.0f}%) — gól után ne kapkodjatok, a "
+                "következő támadást dolgozzátok ki.")
+
+    # Hetes-forrás: hova kell vinni a szabálytalanság-fegyelmet.
+    if rep.svs_sevens_by_type:
+        _svs_all = sum(rep.svs_sevens_by_type.values())
+        _svs_k, _svs_n = max(rep.svs_sevens_by_type.items(),
+                             key=lambda kv: kv[1])
+        if _svs_all >= 3 and _svs_n >= 0.6 * _svs_all:
+            keys.append(
+                f"A heteseik {100.0 * _svs_n / _svs_all:.0f}%-a "
+                f"{_svs_k} helyzetből jön ({_svs_n}/{_svs_all}) — a "
+                "szabálytalanság-fegyelmet oda vigyétek: ott kézzel "
+                "fékezni tilos, inkább menjen be a gól, mint a hetes "
+                "plusz kiállítás.")
+
+    # Kontroll-idővonal: birtoklásban ki diktál.
+    if rep.ctl_blocks >= 3:
+        if rep.ctl_won > rep.ctl_lost:
+            keys.append(
+                f"Az ötperces szakaszok {rep.ctl_won}/"
+                f"{rep.ctl_blocks} részét ők viszik birtoklásban — a "
+                "meccset a saját tempójukban játsszák; a ti "
+                "időkéréseteket az ő sorozataik ELÉ kell időzíteni.")
+        elif rep.ctl_lost > rep.ctl_won:
+            keys.append(
+                f"Az ötperces szakaszok {rep.ctl_lost}/"
+                f"{rep.ctl_blocks} részét elveszítik birtoklásban — "
+                "a tempó nálatok van: hosszú, türelmes támadásokkal "
+                "és korai indításokkal tovább lehet nyújtani ezt.")
+
+    # Ziccerhagyó emberek: kinél vállalható a helyzet.
+    if rep.mcp_misses_by_player:
+        _mcp_all = sum(rep.mcp_misses_by_player.values())
+        _mcp_k, _mcp_n = max(rep.mcp_misses_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _mcp_n >= 2 and _mcp_n >= 0.5 * max(1, _mcp_all):
+            keys.append(
+                f"A kihagyott ziccereik {_mcp_n}/{_mcp_all} része a(z) "
+                f"{_mcp_k}. kezéhez kötődik — nála a helyzetbe engedés "
+                "a kisebbik rossz: a besegítés a biztos kezű társakra "
+                "menjen, a kapus pedig bevárhatja őt.")
+
+    # Fáradt lövők: kire lehet ráengedni a szünet után.
+    if rep.fsp_sh_by_player:
+        _fsp_k, _fsp_sh = max(rep.fsp_sh_by_player.items(),
+                              key=lambda kv: kv[1])
+        _fsp_fh = rep.fsp_fh_by_player.get(_fsp_k, 0)
+        if _fsp_sh >= 2 and _fsp_sh >= 2 * max(1, _fsp_fh):
+            keys.append(
+                f"A(z) {_fsp_k}. lövései a második félidőre mennek "
+                f"szét ({_fsp_fh} → {_fsp_sh} pontatlan lövés) — rá a "
+                "szünet után rá lehet engedni: a kilépés nála "
+                "fölösleges kockázat, elég a lövő-vonalba állni.")
+
+    # Lágy passzolók: kinek a labdáiba nyúljatok bele.
+    if rep.spp_soft_by_player:
+        _spp_all = sum(rep.spp_soft_by_player.values())
+        _spp_k, _spp_n = max(rep.spp_soft_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _spp_n >= 4 and _spp_n >= 0.5 * max(1, _spp_all):
+            keys.append(
+                f"A lágy passzaik {_spp_n}/{_spp_all} része a(z) "
+                f"{_spp_k}. kezéből jön — az ő átadásaiba nyúljatok "
+                "bele: kilépés és passzsáv-támadás az ő sávjában "
+                "azonnal termel.")
+
+    # Passzív-birtoklók: kire menjen a nyomás a passzív jelzésnél.
+    if rep.pvp_frames_by_player:
+        _pvp_all = sum(rep.pvp_frames_by_player.values())
+        _pvp_k, _pvp_n = max(rep.pvp_frames_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _pvp_n >= 200 and _pvp_n >= 0.5 * max(1, _pvp_all):
+            keys.append(
+                f"A terméketlen (lövés nélküli) támadás-idejük "
+                f"{100.0 * _pvp_n / _pvp_all:.0f}%-a a(z) {_pvp_k}. "
+                "kezén telik — passzív jelzésnél rá menjen a nyomás: "
+                "nála jön a kényszer-lövés vagy az eladás.")
+
+    # Előkészítő emberek: kit kell elvágni a lövőktől.
+    if rep.epp_passes_by_player:
+        _epp_all = sum(rep.epp_passes_by_player.values())
+        _epp_k, _epp_n = max(rep.epp_passes_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _epp_n >= 4 and _epp_n >= 0.5 * max(1, _epp_all):
+            keys.append(
+                f"A lövéseik {_epp_n}/{_epp_all} részét a(z) "
+                f"{_epp_k}. készíti elő — nem a lövőt kell fogni, "
+                "hanem őt: az ő átadás-vonalait vágjátok el, és a "
+                "lövőik előkészítetlenül maradnak.")
+
+    # Válaszoló emberek: kire váltsatok a saját gólotok után.
+    if rep.rspp_goals_by_player:
+        _rspp_all = sum(rep.rspp_goals_by_player.values())
+        _rspp_k, _rspp_n = max(rep.rspp_goals_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _rspp_n >= 2 and _rspp_n >= 0.5 * max(1, _rspp_all):
+            keys.append(
+                f"A kapott gól utáni válasz-góljaik {_rspp_n}/"
+                f"{_rspp_all} része a(z) {_rspp_k}. nevéhez kötődik "
+                "— a saját gólotok után azonnal az ő fogására "
+                "váltsatok: ott törik meg a lendületük, ahol "
+                "elindulna.")
+
+    # Rajt-emberek: kit kell megfogni az első tíz percben.
+    if rep.osp_goals_by_player:
+        _osp_all = sum(rep.osp_goals_by_player.values())
+        _osp_k, _osp_n = max(rep.osp_goals_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _osp_n >= 2 and _osp_n >= 0.5 * max(1, _osp_all):
+            keys.append(
+                f"A meccs eleji góljaik {_osp_n}/{_osp_all} része "
+                f"a(z) {_osp_k}. nevéhez kötődik — az első tíz "
+                "percben őt kell a legjobb védővel megfogni: a korai "
+                "elhúzásuk motorja nélkül a nyitás kiegyenlített "
+                "marad.")
+
+    # Újrakezdő emberek: kit kell megfogni a szünet után.
+    if rep.ssp_goals_by_player:
+        _ssp_all = sum(rep.ssp_goals_by_player.values())
+        _ssp_k, _ssp_n = max(rep.ssp_goals_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _ssp_n >= 2 and _ssp_n >= 0.5 * max(1, _ssp_all):
+            keys.append(
+                f"A szünet utáni góljaik {_ssp_n}/{_ssp_all} része "
+                f"a(z) {_ssp_k}. nevéhez kötődik — a második félidő "
+                "első tíz percére rá tegyétek a legjobb védőt: a "
+                "szünetben rá építik az újrakezdést.")
+
+    # Előnyben-emberek: kit kell kivenni, ha ők vezetnek.
+    if rep.lgp_goals_by_player:
+        _lgp_all = sum(rep.lgp_goals_by_player.values())
+        _lgp_k, _lgp_n = max(rep.lgp_goals_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _lgp_n >= 2 and _lgp_n >= 0.5 * max(1, _lgp_all):
+            keys.append(
+                f"Az előnyben lőtt góljaik {_lgp_n}/{_lgp_all} része "
+                f"a(z) {_lgp_k}. nevéhez kötődik — ha ők vezetnek, az "
+                "ő kivétele (szoros fogás, kettőzés) töri meg a "
+                "lendület-tartásukat: a felzárkózásra ez a "
+                "leggyorsabb út.")
+
+    # Elzárt védők: kire vigyétek a zárásokat.
+    if rep.sdp_screens_by_player:
+        _sdp_all = sum(rep.sdp_screens_by_player.values())
+        _sdp_k, _sdp_n = max(rep.sdp_screens_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _sdp_n >= 2 and _sdp_n >= 0.5 * max(1, _sdp_all):
+            keys.append(
+                f"Az elzárások {_sdp_n}/{_sdp_all} része a(z) "
+                f"{_sdp_k}. védőjükön ragad — a figuráitok zárásait "
+                "az ő oldalára vigyétek: nála a zárás tisztán "
+                "hagyja a lövőt.")
+
+    # Futtatott szélsők: kinek az oldalán kell a passzsávot zárni.
+    if rep.wrp_running_by_player:
+        _wrp_all = sum(rep.wrp_running_by_player.values())
+        _wrp_k, _wrp_n = max(rep.wrp_running_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _wrp_n >= 2 and _wrp_n >= 0.5 * max(1, _wrp_all):
+            keys.append(
+                f"A futó szélső-átvételeik {_wrp_n}/{_wrp_all} része "
+                f"a(z) {_wrp_k}. szélsőhöz megy — az ő oldalán nem a "
+                "kifutás véd, hanem a futópassz sávjának zárása: a "
+                "szomszéd védő lépjen a passzvonalba, mielőtt "
+                "lendületet vesz.")
+
+    # Keresztjáró emberek: kinek a sávjában dől el a váltás.
+    if rep.crp_runs_by_player and rep.crp_crosses >= 3:
+        _crp_items = sorted(rep.crp_runs_by_player.items(),
+                            key=lambda kv: -kv[1])
+        _crp_k, _crp_n = _crp_items[0]
+        _crp_tie = len(_crp_items) > 1 and _crp_items[1][1] >= _crp_n
+        if (not _crp_tie and _crp_n >= 3
+                and _crp_n >= 0.6 * rep.crp_crosses):
+            keys.append(
+                f"A keresztjeik {_crp_n}/{rep.crp_crosses} része a(z) "
+                f"{_crp_k}. játékoson át fut — az ő sávjában legyen "
+                "hangos, korai a váltás: ha őt fegyelmezetten "
+                "átadjátok, a keresztjátékuk kifullad.")
+
+    # Leforduló beállók: kinél kell a bejátszás előtt elé lépni.
+    if rep.lfb_running_by_player:
+        _lfb_all = sum(rep.lfb_running_by_player.values())
+        _lfb_k, _lfb_n = max(rep.lfb_running_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _lfb_n >= 2 and _lfb_n >= 0.5 * max(1, _lfb_all):
+            keys.append(
+                f"A mozgásos beálló-átvételeik {_lfb_n}/{_lfb_all} "
+                f"része a(z) {_lfb_k}. beállóhoz megy — nála a "
+                "bejátszás ELŐTT lépjetek elé (hangos váltás, "
+                "passzsáv-zárás a lefordulás előtt): az átvétel "
+                "utáni birkózás nála mindig késő.")
+
+    # Befutó emberek: kit kell a visszafutásnál megtalálni.
+    if rep.bfw_shots_by_player:
+        _bfw_all = sum(rep.bfw_shots_by_player.values())
+        _bfw_k, _bfw_n = max(rep.bfw_shots_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _bfw_n >= 2 and _bfw_n >= 0.5 * max(1, _bfw_all):
+            keys.append(
+                f"A kontráik befutó embere a(z) {_bfw_k}. játékos "
+                f"({_bfw_n}/{_bfw_all} második hullámos befejezés) — "
+                "a visszafutásnál az első ember felvétele után NE "
+                "álljatok meg: a középső sávban hátra, és őt kell "
+                "megtalálni, mielőtt labdát kap.")
+
+    # Befutó poszt: posztról olvasható második hullám.
+    _swr_n = sum(rep.swr_shots_by_role.values())
+    if _swr_n >= 3:
+        _swr_p, _swr_c = max(rep.swr_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _swr_pct = 100.0 * _swr_c / _swr_n
+        if _swr_pct >= 60.0:
+            keys.append(
+                f"A kontráik második hulláma a(z) {_swr_p} poszt "
+                f"({_swr_pct:.0f}%, {_swr_n} befutós befejezésből) — a "
+                "visszafutás-parancs posztra szóljon: az első ember "
+                "után az ő sávját vegyétek fel, akárki játssza.")
+
+    # Kezesség: balkezes lövőjük — tükör-feladat a sáncnak és a kapusnak.
+    if rep.hand_shots_by_player:
+        for _hnd_k, _hnd_n in sorted(rep.hand_shots_by_player.items(),
+                                     key=lambda kv: -kv[1]):
+            _hnd_l = rep.hand_left_by_player.get(_hnd_k, 0)
+            if _hnd_n >= 4 and _hnd_l >= 0.7 * _hnd_n:
+                keys.append(
+                    f"A(z) {_hnd_k}. játékosuk BALKEZES ({_hnd_n} "
+                    f"lövésből {_hnd_l} bal-jel) — ellene tükrözni "
+                    "kell: a sánc a másik kezét emelje, a kapus "
+                    "alapállása a túloldalra álljon, és a jobb "
+                    "oldalról befelé jövő útját kell elzárni.")
+                break
+
+    # Egálbontó emberek: egálnál kit kell először kivenni.
+    if rep.pbp_breaks_by_player:
+        _pbp_all = sum(rep.pbp_breaks_by_player.values())
+        _pbp_k, _pbp_n = max(rep.pbp_breaks_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _pbp_n >= 2 and _pbp_n >= 0.5 * max(1, _pbp_all):
+            keys.append(
+                f"A holtpontjaikat a(z) {_pbp_k}. játékos viszi el "
+                f"({_pbp_n}/{_pbp_all} egálbontó gól) — egálnál az ő "
+                "kivétele az első dolog: szoros fogás, korai "
+                "kettőzés, a kedvenc befejezése letiltva.")
+
+    # Egálbontó poszt: posztról olvasható holtpont-terv.
+    _pbr_n = sum(rep.pbr_breaks_by_role.values())
+    if _pbr_n >= 3:
+        _pbr_p, _pbr_c = max(rep.pbr_breaks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _pbr_pct = 100.0 * _pbr_c / _pbr_n
+        if _pbr_pct >= 60.0:
+            keys.append(
+                f"A holtpontjaikat a(z) {_pbr_p} posztjuk viszi el "
+                f"({_pbr_pct:.0f}%, {_pbr_n} egálbontó gólból) — "
+                "egálnál arra a sávra korai kettőzés és a kedvenc "
+                "befejezés letiltása, akárki játssza éppen.")
+
+    # 7a6-befejező emberek: kit kell először megtalálni.
+    if rep.en7p_shots_by_player:
+        _en7_all = sum(rep.en7p_shots_by_player.values())
+        _en7_k, _en7_n = max(rep.en7p_shots_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _en7_n >= 2 and _en7_n >= 0.5 * max(1, _en7_all):
+            keys.append(
+                f"A 7 a 6-uk {_en7_n}/{_en7_all} lövése a(z) "
+                f"{_en7_k}. emberre fut ki — a lehozott kapus "
+                "felismerésekor őt találjátok meg először: a hetedik "
+                "ember játéka kiszámítható, és minden megvárt "
+                "másodperc nekik kockázat.")
+
+    # Gólpassz-duó: melyik kettőst kell szétvágni.
+    if rep.adu_goals_by_duo:
+        _adu_all = sum(rep.adu_goals_by_duo.values())
+        _adu_k, _adu_n = max(rep.adu_goals_by_duo.items(),
+                             key=lambda kv: kv[1])
+        if _adu_n >= 2 and _adu_n >= 0.4 * max(1, _adu_all):
+            keys.append(
+                f"A gólgyártásuk a(z) {_adu_k} kettősön fut "
+                f"({_adu_n}/{_adu_all} asszisztos gól) — a duó ellen "
+                "párban védekezzetek: az adót testtel, a kettejük "
+                "passzsávját beleéréssel, és a gépezet áll.")
+
+    # Hoki-assziszt: a rejtett szervező — a zárás nála kezdődjön.
+    if rep.prea_chained >= 2 and rep.prea_by_player:
+        from .event_detection import PREA_MIN, PREA_SHARE_PCT
+        _prea_k, _prea_n = max(rep.prea_by_player.items(),
+                               key=lambda kv: kv[1])
+        if (_prea_n >= PREA_MIN
+                and 100.0 * _prea_n / rep.prea_chained >= PREA_SHARE_PCT):
+            keys.append(
+                f"A rejtett szervezőjük a(z) {_prea_k}. játékos: ő adja "
+                f"a gólpassz ELŐTTI passzt ({_prea_n}/{rep.prea_chained} "
+                "másod-előkészítés) — a passzsáv-zárást nála kezdjétek, "
+                "ne a gólpasszolónál: ha ő nem tudja megjátszani a "
+                "beadót, a gólgyáruk el sem indul.")
+
+    # Rejtett szervező poszt: posztról olvasható szervezés.
+    _prr_n = sum(rep.prear_by_role.values())
+    if _prr_n >= 3:
+        _prr_p, _prr_c = max(rep.prear_by_role.items(),
+                             key=lambda kv: kv[1])
+        _prr_pct = 100.0 * _prr_c / _prr_n
+        if _prr_pct >= 60.0:
+            keys.append(
+                f"A másod-előkészítésük a(z) {_prr_p} poszton fut "
+                f"({_prr_pct:.0f}%, {_prr_n} másod-előkészítésből) — a "
+                "passzsáv-zárást a poszt sávjában kezdjétek, akárki "
+                "játssza éppen: a cseréjük nem véd meg tőle.")
+
+    # Szuper-csere: a padról termelő emberük — a beállása a jelzés.
+    if rep.ssu_goals_by_player:
+        from .momentum import SSUB_MIN_BENCH_GOALS, SSUB_TOP_PCT
+        _ssu_all = sum(rep.ssu_goals_by_player.values())
+        _ssu_k, _ssu_n = max(rep.ssu_goals_by_player.items(),
+                             key=lambda kv: kv[1])
+        if (_ssu_all >= SSUB_MIN_BENCH_GOALS
+                and 100.0 * _ssu_n / _ssu_all >= SSUB_TOP_PCT):
+            keys.append(
+                f"A szuper-cseréjük a(z) {_ssu_k}. játékos: a padról "
+                f"beállva ő szerzi a csere-góljaik zömét "
+                f"({_ssu_n}/{_ssu_all} pad-gól) — a beállása jelzés: "
+                "onnantól rá külön figyelő, és vele szemben mindig "
+                "friss láb legyen a falban.")
+
+    # Szuper-csere poszt: posztról olvasható paduk.
+    _ssp_n = sum(rep.sspr_goals_by_role.values())
+    if _ssp_n >= 3:
+        _ssp_p, _ssp_c = max(rep.sspr_goals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ssp_pct = 100.0 * _ssp_c / _ssp_n
+        if _ssp_pct >= 60.0:
+            keys.append(
+                f"A paduk a(z) {_ssp_p} posztról termel "
+                f"({_ssp_pct:.0f}%, {_ssp_n} pad-gólból) — a cseréjük "
+                "olvasható: az erre a posztra érkező friss embert "
+                "azonnal vegyétek fel, mielőtt az első helyzetéig jut.")
+
+    # Időkérés-hozam: mit ér az ő zöld kartonjuk.
+    _toy_judged = rep.toy_broke + rep.toy_failed
+    if _toy_judged >= 2:
+        _toy_pct = 100.0 * rep.toy_broke / _toy_judged
+        if _toy_pct >= 67.0:
+            keys.append(
+                f"Az időkérésük rendez ({rep.toy_broke}/{_toy_judged} "
+                "megtört sorozat) — az ő időkérésük után ne "
+                "kapkodjatok: rendezett fal jön, a következő "
+                "támadást dolgozzátok ki.")
+        elif _toy_pct <= 33.0:
+            keys.append(
+                f"Az időkérésük hatástalan ({rep.toy_broke}/"
+                f"{_toy_judged} megtört sorozat) — a megkezdett "
+                "gól-sorozatotok az időkérésük után is tolható: nem "
+                "kell tisztelni a zöld kartont.")
+
+    # Kapuscsere-hozam: készüljetek-e a második kapusra.
+    if rep.gcy_changes >= 1:
+        _gcy_avg = rep.gcy_delta_dpp / 10.0 / rep.gcy_changes
+        if _gcy_avg >= 15.0:
+            keys.append(
+                f"A kapuscseréjük fordít ({_gcy_avg:+.0f} "
+                "százalékpont védés-változás) — a lövő-tervet a "
+                "második kapusra is készítsétek el, és a beállása "
+                "utáni első percekben büntessetek, amíg hideg.")
+        elif _gcy_avg <= -15.0:
+            keys.append(
+                f"A kapuscseréjük sem segít ({_gcy_avg:+.0f} "
+                "százalékpont) — az első kapusuk megingása után "
+                "nincs mentőövük: nyomjátok tovább ugyanazt, ami "
+                "addig bement.")
+
+    # Emberhátrány-túlélés: mit ér ellenük a megszerzett kétperc.
+    if rep.shs_seconds >= 90:
+        _shs_per2 = 120.0 * rep.shs_conceded / rep.shs_seconds
+        if _shs_per2 >= 1.5:
+            keys.append(
+                f"Hátrányban beszakadnak ({_shs_per2:.1f} kapott gól "
+                "két percenként) — a kiállításukat végig büntessétek: "
+                "türelmes, zárt emberelőny-figurák, az idő nekik "
+                "fáj.")
+        elif _shs_per2 <= 0.5:
+            keys.append(
+                f"Hátrányban is állnak ({_shs_per2:.1f} kapott gól "
+                "két percenként) — a kettős fölény ellenük keveset "
+                "ér: emberelőnyben is az 1v1 és a betörés dolgozik, "
+                "és a gyors gól többet ér a hosszú járatásnál.")
+
+    # Középkezdés-hozam: mennyire drága ellenük az ünneplés.
+    if rep.rsy_restarts >= 4:
+        _rsy_pct = 100.0 * rep.rsy_answered / rep.rsy_restarts
+        if _rsy_pct >= 40.0:
+            keys.append(
+                f"A kapott gólra {rep.rsy_answered}/"
+                f"{rep.rsy_restarts} arányban azonnali góllal "
+                "válaszolnak — a gól utáni ünneplés ellenük tilos: "
+                "kijelölt fékező ember középen, azonnali "
+                "visszarendeződés.")
+
+    # Hátrapasszolók: kire érdemes kimenni.
+    if rep.bprp_passes_by_player:
+        _bprp_k, _bprp_n = max(rep.bprp_passes_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _bprp_n >= 3:
+            keys.append(
+                f"A játékuk a(z) {_bprp_k}. kezénél fordul vissza a "
+                f"legtöbbször ({_bprp_n} hátra-passz) — rá menjetek "
+                "ki: a hátrapassz időt ad a falnak, és nála a "
+                "legolcsóbb a nyomás.")
+
+    # Térnyerők: kit kell a felezőtől hátrálva fogadni.
+    if rep.tnrp_meters_by_player:
+        _tnrp_k, _tnrp_m = max(rep.tnrp_meters_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _tnrp_m >= 25.0:
+            keys.append(
+                f"A térnyerésük a(z) {_tnrp_k}. lábán van "
+                f"({_tnrp_m:.0f} m labdával előre) — őt ne a "
+                "hatosnál fogadjátok, hanem a felezőtől hátrálva: "
+                "lendületbe engedni tilos.")
+
+    # Sávváltók: kinek a védőjére kell külön szabály.
+    if rep.lswp_switches_by_player:
+        _lswp_k, _lswp_n = max(rep.lswp_switches_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _lswp_n >= 4:
+            keys.append(
+                f"A keresztmozgásukat a(z) {_lswp_k}. viszi a "
+                f"legtöbbet ({_lswp_n} sávváltás) — az ő védőjéről "
+                "előre döntsétek el: KÖVETI a sávváltáson át, vagy "
+                "ÁTADJA a szomszédnak; a bizonytalan átadásból nyílik "
+                "a lyuk.")
+
+    # Menekülők: hol álljon lesben a harmadik ember.
+    if rep.escp_passes_by_player:
+        _escp_k, _escp_n = max(rep.escp_passes_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _escp_n >= 3:
+            keys.append(
+                f"Szorításban a labda a(z) {_escp_k}. felé megy a "
+                f"leggyakrabban ({_escp_n} nyomás alatti passz) — a "
+                "kettőzés mögötti harmadik ember ott álljon lesben: "
+                "a menekülő passz így elfogott labda.")
+
+    # Vég-birtokosok: kire toljuk a nyomást a támadás végén.
+    if rep.lstp_attacks_by_player:
+        _lstp_k, _lstp_n = max(rep.lstp_attacks_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _lstp_n >= 3:
+            keys.append(
+                f"A terméketlen támadásaik a(z) {_lstp_k}. kezében "
+                f"halnak el a legtöbbször ({_lstp_n} lövés nélküli "
+                "támadás) — a támadás második felében rá toljátok a "
+                "nyomást: ott a legolcsóbb a labdaszerzés.")
+
+    # Ziccer-előkészítők: kinek a bejátszó-sávját kell elvágni.
+    if rep.bcfp_chances_by_player:
+        _bcfp_k, _bcfp_n = max(rep.bcfp_chances_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _bcfp_n >= 2:
+            keys.append(
+                f"A ziccereiket a(z) {_bcfp_k}. teremti a legtöbbször "
+                f"({_bcfp_n} ziccer-előkészítés) — az ő "
+                "bejátszó-sávját vágjátok el (testtel zárás, "
+                "előrelépő védő): a helyzet így ki sem alakul.")
+
+    # Válaszhiba-emberek: kire menjen a gólunk utáni pressz.
+    if rep.rtop_turnovers_by_player:
+        _rtop_k, _rtop_n = max(rep.rtop_turnovers_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _rtop_n >= 2:
+            keys.append(
+                f"Kapott gól után a(z) {_rtop_k}. veszíti el a "
+                f"legtöbb labdát ({_rtop_n} válasz-eladás) — a "
+                "gólotok után azonnal az ő fogadására menjetek: "
+                "nála a legolcsóbb a labdaszerzés.")
+
+    # Időkérés-hibázók: kire menjen a figura-indításnál a nyomás.
+    if rep.toep_turnovers_by_player:
+        _toep_k, _toep_n = max(rep.toep_turnovers_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _toep_n >= 2:
+            keys.append(
+                f"Az időkérés utáni labdát a(z) {_toep_k}. veszíti el "
+                f"a legtöbbször ({_toep_n} eladás) — a megbeszélt "
+                "figurát az ő fogadásánál nyomjátok meg: ott hal el "
+                "magától is.")
+
+    # Hetesdobók: kire készüljön a kapus a hetesnél.
+    if rep.stp_sevens_by_player:
+        _stp_k, _stp_n = max(rep.stp_sevens_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _stp_n >= 2:
+            keys.append(
+                f"A heteseiket a(z) {_stp_k}. dobja ({_stp_n} hetes) "
+                "— a kapusotok RÁ készüljön: szokás-sarok, "
+                "lépésritmus, csel; a videó-elemzés is egy emberre "
+                "szűkíthető.")
+
+    # Áttörés-hozam: mennyire drága, ha bejutnak.
+    if rep.bty_entries >= 5:
+        _bty_pct = 100.0 * rep.bty_goals / rep.bty_entries
+        if _bty_pct >= 40.0:
+            keys.append(
+                f"A betöréseik {_bty_pct:.0f}%-a gólba fut "
+                f"({rep.bty_goals} gól {rep.bty_entries} betörésből) "
+                "— bejutnak ÉS büntetnek is: a falat előbb kell "
+                "zárni, kilépéssel a lövő elé, mert a hatoson belül "
+                "már késő.")
+        elif _bty_pct <= 15.0:
+            keys.append(
+                f"A betöréseik csak {_bty_pct:.0f}%-a fut gólba "
+                f"({rep.bty_goals} gól {rep.bty_entries} betörésből) "
+                "— bejutnak, de nem büntetnek: a záró-fal és a kapus "
+                "dolgozik, elég a fegyelmet tartani és a "
+                "kipattanóra embert küldeni.")
+
+    # Emberhátrány-hibázók: kire menjen az emberelőny-pressz.
+    if rep.shtp_turnovers_by_player:
+        _shtp_k, _shtp_n = max(rep.shtp_turnovers_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _shtp_n >= 2:
+            keys.append(
+                f"Hátrányban a(z) {_shtp_k}. veszíti el a legtöbb "
+                f"labdát ({_shtp_n} hátrány-eladás) — a hat az öt "
+                "ellen az ő fogadására lépjetek ki: az elvett "
+                "labdából üres kapura indulhat a kontra.")
+
+    # Emberelőny-hibázók: kire menjen a hátrány-pressz.
+    if rep.pptp_turnovers_by_player:
+        _pptp_k, _pptp_n = max(rep.pptp_turnovers_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _pptp_n >= 2:
+            keys.append(
+                f"Az emberelőnyükben a(z) {_pptp_k}. veszíti el a "
+                f"legtöbb labdát ({_pptp_n} emberelőny-eladás) — "
+                "hátrányban rá menjen a kettőzés és a passzsáv-zárás: "
+                "az ő elvett labdájából kontrázni lehet.")
+
+    # Kulcs-ember: kire szóljon a személyre szabott feladat.
+    if rep.kpl_layers_by_player:
+        _kpl_k, _kpl_n = max(rep.kpl_layers_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _kpl_n >= 4:
+            keys.append(
+                f"A kulcs-emberük a(z) {_kpl_k}. számú: {_kpl_n} "
+                "ember-réteg ítélete mutat rá — ő nem egy a hét "
+                "mezőnyjátékos közül: emberfogás, kettőzés vagy a "
+                "labdaútja elvágása önmagában meccstervnyi feladat.")
+
+    # Kétperc ára: megéri-e a kiállítás kiharcolására játszani.
+    if rep.sct_windows >= 3:
+        _sct_per = rep.sct_conceded / rep.sct_windows
+        if _sct_per >= 1.2:
+            keys.append(
+                f"Egy kiállításuk átlag {_sct_per:.1f} gólba kerül "
+                f"({rep.sct_conceded} gól {rep.sct_windows} kétperc "
+                "alatt) — a kiharcolás náluk pont-termelés: "
+                "vállaljátok a betöréseket, a szabálytalanság duplán "
+                "fizet.")
+        elif _sct_per <= 0.5:
+            keys.append(
+                f"Egy kiállításuk csak {_sct_per:.1f} gólba kerül "
+                f"({rep.sct_conceded} gól {rep.sct_windows} kétperc "
+                "alatt) — olcsón megússzák a hátrányt: ne a "
+                "kiállítás kiharcolására játsszatok, marad a "
+                "felállt támadás.")
+
+    # Emberfogás-váltás: mire készüljünk a szünet után.
+    if rep.msh_fh_dist_m > 0.0 and rep.msh_sh_dist_m > 0.0:
+        if (rep.msh_sh_dist_m <= 2.0
+                and rep.msh_sh_dist_m <= 0.7 * rep.msh_fh_dist_m):
+            keys.append(
+                f"A szünet után emberfogásra váltanak (a legszorosabb "
+                f"páros {rep.msh_sh_dist_m:.1f} m az első félidei "
+                f"{rep.msh_fh_dist_m:.1f} m helyett) — a fogott "
+                "emberetek húzza el a védőjét, és a felszabaduló "
+                "területet játsszátok meg.")
+        elif (rep.msh_fh_dist_m <= 2.0
+                and rep.msh_fh_dist_m <= 0.7 * rep.msh_sh_dist_m):
+            keys.append(
+                f"A szünet után elengedik az emberfogást (a "
+                f"legszorosabb páros {rep.msh_sh_dist_m:.1f} m az "
+                f"első félidei {rep.msh_fh_dist_m:.1f} m helyett) — a "
+                "korábban fogott emberetek visszakapja a labdát.")
+
+    # Kipattanó-szedők: kit kell blokkolni a második helyzetnél.
+    if rep.rbcp_rebounds_by_player:
+        _rbcp_k, _rbcp_n = max(rep.rbcp_rebounds_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _rbcp_n >= 2:
+            keys.append(
+                f"A kipattanókat leggyakrabban a(z) {_rbcp_k}. szedi "
+                f"össze ({_rbcp_n} kipattanó) — a második helyzetnél "
+                "őt kell blokkolni (test, elzárás a "
+                "kipattanó-zónában).")
+
+    # Kétperc-páros: a kiállítás-lánc két végpontja. A küszöböket a
+    # motor rétegétől vesszük (nem másolt szám): így egy küszöb-változás
+    # nem csúsztathatja szét a kulcsot és a réteget.
+    from .rules import SCH_MIN_PAIRS as _SCH_N, SCH_SHARE_PCT as _SCH_P
+    _sup_n = sum(rep.sup_chains_by_pair.values())
+    if _sup_n >= _SCH_N:
+        _sup_p, _sup_c = max(rep.sup_chains_by_pair.items(),
+                             key=lambda kv: kv[1])
+        _sup_pct = 100.0 * _sup_c / _sup_n
+        if _sup_pct >= _SCH_P:
+            keys.append(
+                f"A kétperceik {_sup_pct:.0f}%-a ugyanazt a láncot "
+                f"futja ({_sup_p}, {_sup_n} emberelőny-lövés) — a "
+                "kiharcolójuk ellen testtel, kéz nélkül védekezzetek "
+                "(nála a kései fogás kétpercet ér), a befejezőjüket "
+                "pedig hátrányban tiltsátok le.")
+
+    # Hetes-kihagyók: kire mehet rá a kapus a hetesnél.
+    if rep.svmp_misses_by_player:
+        _svmp_k, _svmp_n = max(rep.svmp_misses_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _svmp_n >= 2:
+            keys.append(
+                f"A heteseiket leggyakrabban a(z) {_svmp_k}. hagyja "
+                f"ki ({_svmp_n} gól nélküli hetes) — ha ő áll oda, a "
+                "kapusotok mehet a saját megérzésére (kimozdulás, "
+                "késleltetett vetődés).")
+
+    # Sprint-esés: a második félidő tempó-döntése.
+    if (rep.sfd_fh_min >= 5.0 and rep.sfd_sh_min >= 5.0
+            and rep.sfd_fh_sprints + rep.sfd_sh_sprints >= 8
+            and rep.sfd_fh_sprints > 0):
+        _sfd_f = rep.sfd_fh_sprints / rep.sfd_fh_min
+        _sfd_s = rep.sfd_sh_sprints / rep.sfd_sh_min
+        _sfd_r = _sfd_s / _sfd_f if _sfd_f else None
+        if _sfd_r is not None and _sfd_r <= 0.7:
+            keys.append(
+                f"A második félidőre megfogy a lábuk ({_sfd_s:.1f} "
+                f"sprint/perc az {_sfd_f:.1f} helyett) — a szünet "
+                "után emeljetek tempót: minden labdaszerzésből "
+                "fussatok, a visszarendeződésük már nem megy.")
+        elif _sfd_r is not None and _sfd_r >= 1.43:
+            keys.append(
+                f"A második félidőre kapcsolnak ({_sfd_s:.1f} "
+                f"sprint/perc az {_sfd_f:.1f} helyett) — a hajrára "
+                "gyorsítanak: tartsátok a saját ritmusotokat, és a "
+                "labdát ne veszítsétek el a saját térfeleteken.")
+
+    # Óralopás: a végjáték óra-kezelése.
+    if rep.clk_lead >= 3 and rep.clk_base >= 4:
+        _clk_l = rep.clk_lead_sum_s / rep.clk_lead
+        _clk_b = rep.clk_base_sum_s / rep.clk_base
+        _clk_d = _clk_l - _clk_b
+        if _clk_d >= 3.0:
+            keys.append(
+                f"Vezetve {_clk_d:.1f} másodperccel hosszabb a "
+                f"támadásuk a hajrában ({_clk_l:.1f} mp a "
+                f"{_clk_b:.1f} mp helyett, {rep.clk_lead} támadás) — "
+                "lopják az órát: játsszatok a passzív jelre, korai "
+                "kettőzéssel és azonnali kontrával.")
+        elif _clk_d <= -3.0:
+            keys.append(
+                f"Vezetve {abs(_clk_d):.1f} másodperccel rövidebb a "
+                f"támadásuk a hajrában ({_clk_l:.1f} mp a "
+                f"{_clk_b:.1f} mp helyett, {rep.clk_lead} támadás) — "
+                "nem húzzák az időt, hanem sietnek: elég zárt fallal "
+                "kivárni, maguktól hoznak helyzetet.")
+
+    # Kipattanó ára: megéri-e berobbanó embert küldeni.
+    if rep.rpn_saves >= 5:
+        _rpn_pct = 100.0 * rep.rpn_punished / rep.rpn_saves
+        if _rpn_pct >= 15.0:
+            keys.append(
+                f"A védéseik {_rpn_pct:.0f}%-a után gól jön a "
+                f"kipattanóból ({rep.rpn_punished} a {rep.rpn_saves} "
+                "védésből) — náluk a védés elhalasztott helyzet: "
+                "minden lövésnél induljon a berobbanó ember a "
+                "kipattanó-zónába.")
+
+    # Visszaállás ára: mennyit hoz a lövésük utáni azonnali indítás.
+    if rep.rtp_shots >= 6:
+        _rtp_pct = 100.0 * rep.rtp_punished / rep.rtp_shots
+        if _rtp_pct >= 20.0:
+            keys.append(
+                f"A gól nélküli lövéseik {_rtp_pct:.0f}%-át gyors "
+                f"kapott gól követi ({rep.rtp_punished} a "
+                f"{rep.rtp_shots} lövésből) — minden védésetekből "
+                "azonnal indítsatok: a faluk ilyenkor még nincs "
+                "ott, ez a lassú visszaállásuk ára.")
+
+    # Lepattanó-szedő poszt: hova küldjük a berobbanó embert.
+    _rbc_n = sum(rep.rbc_rebounds_by_role.values())
+    if _rbc_n >= 3:
+        _rbc_p, _rbc_c = max(rep.rbc_rebounds_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rbc_pct = 100.0 * _rbc_c / _rbc_n
+        if _rbc_pct >= 60.0:
+            keys.append(
+                f"A kipattanók {_rbc_pct:.0f}%-át a(z) {_rbc_p} "
+                f"posztjuk szedi össze ({_rbc_n} kipattanó) — oda "
+                "küldjétek a berobbanó embert (szélső vagy beálló "
+                "becsúszása): a második lövés a legolcsóbb gól.")
+
+    # Figura-koncentráció: mennyire éri meg figurákra készülni.
+    if rep.spk_attacks >= 6:
+        _spk_pct = 100.0 * rep.spk_top / rep.spk_attacks
+        if _spk_pct >= 40.0:
+            keys.append(
+                f"A támadásaik {_spk_pct:.0f}%-a egyetlen mintából "
+                f"jön ({rep.spk_attacks} mért támadás, "
+                f"{rep.spk_figures} figura) — konkrét figurára "
+                "készüljetek: videó, bejátszott védekezés, előre "
+                "megbeszélt kettőzés.")
+        elif _spk_pct <= 25.0:
+            keys.append(
+                f"A támadásaik sokfelé oszlanak (a legnagyobb minta "
+                f"is csak {_spk_pct:.0f}%, {rep.spk_figures} figura, "
+                f"{rep.spk_attacks} mért támadás) — figurákra "
+                "készülni pazarlás: elvekre kell (kilépés-szabály, "
+                "beálló-átadás, kettőzés-jel).")
+
+    # Hajrá-kapus: a végjáték lövésválasztása.
+    if rep.gkc_clutch_faced >= 3 and rep.gkc_rest_faced >= 3:
+        _gkc_c = 100.0 * rep.gkc_clutch_saves / rep.gkc_clutch_faced
+        _gkc_r = 100.0 * rep.gkc_rest_saves / rep.gkc_rest_faced
+        _gkc_d = _gkc_c - _gkc_r
+        if _gkc_d >= 15.0:
+            keys.append(
+                f"A kapusuk a hajrában nő ({_gkc_c:.0f}% a "
+                f"{_gkc_r:.0f}% helyett, {rep.gkc_clutch_faced} "
+                "lövésből) — a döntő percekben ne félhelyzetből "
+                "lőjetek: kiugratás, beállós helyzet vagy hetes "
+                "kell.")
+        elif _gkc_d <= -15.0:
+            keys.append(
+                f"A kapusuk a hajrában beesik ({_gkc_c:.0f}% a "
+                f"{_gkc_r:.0f}% helyett, {rep.gkc_clutch_faced} "
+                "lövésből) — a végjátékban minden tiszta lövés "
+                "megéri, vigyétek fel a lövésszámot.")
+
+    # Emberhátrány-hiba poszt: az emberelőnyünk célpontja.
+    _sht_n = sum(rep.sht_turnovers_by_role.values())
+    if _sht_n >= 3:
+        _sht_p, _sht_c = max(rep.sht_turnovers_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sht_pct = 100.0 * _sht_c / _sht_n
+        if _sht_pct >= 60.0:
+            keys.append(
+                f"Hátrányban {_sht_pct:.0f}%-ban a(z) {_sht_p} kezén "
+                f"vész el a labdájuk ({_sht_n} hátrány-eladás) — a "
+                "hat az öt ellen az ő fogadására menjetek (kilépő "
+                "védő, passzsáv-zárás): az elvett labdából üres "
+                "kapura indulhat a kontra.")
+
+    # Kapkodás-index: a saját gólunk utáni terv egy mondata.
+    if rep.rus_after >= 3 and rep.rus_base >= 4:
+        _rus_a = rep.rus_after_sum_s / rep.rus_after
+        _rus_b = rep.rus_base_sum_s / rep.rus_base
+        _rus_d = _rus_a - _rus_b
+        if _rus_d <= -3.0:
+            keys.append(
+                f"Kapott gól után {abs(_rus_d):.1f} másodperccel "
+                f"rövidebb a támadásuk ({_rus_a:.1f} mp a "
+                f"{_rus_b:.1f} mp helyett, {rep.rus_after} "
+                "válasz-támadás) — kapkodnak: a gólotok után álljatok "
+                "vissza, az elsietett lövésük nektek termel labdát.")
+        elif _rus_d >= 3.0:
+            keys.append(
+                f"Kapott gól után {_rus_d:.1f} másodperccel hosszabb "
+                f"a támadásuk ({_rus_a:.1f} mp a {_rus_b:.1f} mp "
+                f"helyett, {rep.rus_after} válasz-támadás) — "
+                "befagynak: a gólotok után toljátok előre a "
+                "védekezést, az óra nekik ketyeg.")
+
+    # Visszaállás-idő: a kontra-terv egy száma.
+    if rep.rtt_shots >= 4:
+        _rtt_avg = rep.rtt_sum_s / rep.rtt_shots
+        if _rtt_avg > 8.0:
+            keys.append(
+                f"A lövésük után átlag {_rtt_avg:.1f} másodperc, míg "
+                f"négy emberük hazaér ({rep.rtt_shots} lövésből "
+                f"{rep.rtt_slow} volt 8 mp fölött) — a kapusotok "
+                "azonnal indítson: az első hullám még üres pályát "
+                "talál, nem kell megvárni a felállt támadást.")
+
+    # Időkérés-hiba poszt: a megbeszélt figura leggyengébb pontja.
+    _toe_n = sum(rep.toe_turnovers_by_role.values())
+    if _toe_n >= 3:
+        _toe_p, _toe_c = max(rep.toe_turnovers_by_role.items(),
+                             key=lambda kv: kv[1])
+        _toe_pct = 100.0 * _toe_c / _toe_n
+        if _toe_pct >= 60.0:
+            keys.append(
+                f"Az időkérés utáni labdájuk {_toe_pct:.0f}%-ban "
+                f"a(z) {_toe_p} kezén vész el ({_toe_n} eladás) — a "
+                "táblára rajzolt figurát az ő indításánál nyomjátok "
+                "meg: ott hal el magától is.")
+
+    # Válaszhiba-poszt: a saját gólunk utáni pressz célpontja.
+    _rto_n = sum(rep.rto_turnovers_by_role.values())
+    if _rto_n >= 3:
+        _rto_p, _rto_c = max(rep.rto_turnovers_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rto_pct = 100.0 * _rto_c / _rto_n
+        if _rto_pct >= 60.0:
+            keys.append(
+                f"Kapott gól után {_rto_pct:.0f}%-ban a(z) {_rto_p} "
+                f"kezén vész el a labdájuk ({_rto_n} válasz-eladás) "
+                "— a gólotok után azonnal az ő fogadására menjetek "
+                "(előrelépő védő, kettőzés a bejátszásnál): a "
+                "válaszuk el sem indul.")
+
+    # Emberelőny-hiba poszt: a hátrány-védekezés célpontja.
+    _ppt_n = sum(rep.ppt_turnovers_by_role.values())
+    if _ppt_n >= 3:
+        _ppt_p, _ppt_c = max(rep.ppt_turnovers_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ppt_pct = 100.0 * _ppt_c / _ppt_n
+        if _ppt_pct >= 60.0:
+            keys.append(
+                f"Az emberelőnyük {_ppt_pct:.0f}%-ban a(z) {_ppt_p} "
+                f"kezén akad el ({_ppt_n} emberelőny-eladás) — "
+                "hátrányban rá nyomjatok (kettőzés, passzsáv-zárás a "
+                "fogadásánál): az ő elvett labdájából a kétperc "
+                "alatt kontrázni lehet.")
+
+    # Ziccerpáros-poszt: a legdrágább passzsáv két végpontja.
+    _bcp_n = sum(rep.bcp_chances_by_pair.values())
+    if _bcp_n >= 3:
+        _bcp_p, _bcp_c = max(rep.bcp_chances_by_pair.items(),
+                             key=lambda kv: kv[1])
+        _bcp_pct = 100.0 * _bcp_c / _bcp_n
+        if _bcp_pct >= 55.0:
+            keys.append(
+                f"A ziccereik {_bcp_pct:.0f}%-a ugyanabból a "
+                f"párosból jön ({_bcp_p}, {_bcp_n} helyzet) — ne "
+                "külön-külön fogjátok őket, hanem a köztük lévő "
+                "passzsávot vágjátok el: zárt sávnál a helyzet ki "
+                "sem alakul.")
+
+    # Hetes-kihagyó poszt: a kapus hetes-felkészítése.
+    _svm_n = sum(rep.svm_misses_by_role.values())
+    if _svm_n >= 3:
+        _svm_p, _svm_c = max(rep.svm_misses_by_role.items(),
+                             key=lambda kv: kv[1])
+        _svm_pct = 100.0 * _svm_c / _svm_n
+        if _svm_pct >= 60.0:
+            keys.append(
+                f"A kihagyott heteseik {_svm_pct:.0f}%-a a(z) "
+                f"{_svm_p} posztjukhoz kötődik ({_svm_n} gól nélküli "
+                "hetes) — ha ő áll oda, a kapusotok mehet a saját "
+                "megérzésére (kimozdulás, késleltetett vetődés): "
+                "nála a hetes nem automatikus gól.")
+
+    # Hajrá-poszt: az utolsó öt perc terve.
+    _csr_n = sum(rep.csr_goals_by_role.values())
+    if _csr_n >= 3:
+        _csr_p, _csr_c = max(rep.csr_goals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _csr_pct = 100.0 * _csr_c / _csr_n
+        if _csr_pct >= 60.0:
+            keys.append(
+                f"A végjátékuk a(z) {_csr_p} posztjukra fut ki "
+                f"({_csr_pct:.0f}%, {_csr_n} hajrá-gólból) — szoros "
+                "állásnál az utolsó öt percben őt kell fogni (akár "
+                "emberfogással), és az ő sávjára áll rá a kapus is.")
+
+    # Emberhátrány-poszt: emberelőnyben kire kell vigyázni.
+    _shr_n = sum(rep.shr_shots_by_role.values())
+    if _shr_n >= 3:
+        _shr_p, _shr_c = max(rep.shr_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _shr_pct = 100.0 * _shr_c / _shr_n
+        if _shr_pct >= 60.0:
+            keys.append(
+                f"Öt emberrel a(z) {_shr_p} posztjuk vállal be "
+                f"({_shr_pct:.0f}%, {_shr_n} hátrány-lövésből) — a "
+                "saját emberelőnyben az ő oldalán kell a "
+                "labdabiztonság: onnan indul az ellentámadásuk.")
+
+    # Emberelőny-poszt: hátrányban melyik sávot kell tartani.
+    _ppr_n = sum(rep.ppr_shots_by_role.values())
+    if _ppr_n >= 3:
+        _ppr_p, _ppr_c = max(rep.ppr_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ppr_pct = 100.0 * _ppr_c / _ppr_n
+        if _ppr_pct >= 60.0:
+            keys.append(
+                f"Az emberelőnyük a(z) {_ppr_p} posztjukra fut ki "
+                f"({_ppr_pct:.0f}%, {_ppr_n} emberelőny-lövésből) — "
+                "hátrányban az öt védő az ő sávját tartsa, a "
+                "többieket rá lehet engedni.")
+
+    # Kiosztás-poszt: melyik passzsávot lehet előre elzárni.
+    _kor_n = sum(rep.kor_kickouts_by_role.values())
+    if _kor_n >= 4:
+        _kor_p, _kor_c = max(rep.kor_kickouts_by_role.items(),
+                             key=lambda kv: kv[1])
+        _kor_pct = 100.0 * _kor_c / _kor_n
+        if _kor_pct >= 60.0:
+            keys.append(
+                f"A betöréseik utáni labda a(z) {_kor_p} posztjukra "
+                f"jár ({_kor_pct:.0f}%, {_kor_n} kiosztásból) — az ő "
+                "védője előre elmozdulhat a passzsávba, a betörésre "
+                "pedig indulhat a kettőzés: a kiosztás így elveszti "
+                "az értelmét.")
+
+    # Kettőző-poszt: hol nyílik ki a pálya a kettőzésükkor.
+    _ddr_n = sum(rep.ddr_frames_by_role.values())
+    if _ddr_n >= 40:
+        _ddr_p, _ddr_c = max(rep.ddr_frames_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ddr_pct = 100.0 * _ddr_c / _ddr_n
+        if _ddr_pct >= 60.0:
+            keys.append(
+                f"A kettőzésük a(z) {_ddr_p} posztjukról érkezik "
+                f"({_ddr_pct:.0f}% a kettőzött időből) — a kettőzés "
+                "pillanatában az ő elhagyott embere felé menjen az "
+                "első passz: ő az üres ember.")
+
+    # Kockáztató-poszt: hol lehet a hosszú labdát elcsípni.
+    _rpr_n = sum(rep.rpr_to_by_role.values())
+    if _rpr_n >= 3:
+        _rpr_p, _rpr_c = max(rep.rpr_to_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rpr_pct = 100.0 * _rpr_c / _rpr_n
+        if _rpr_pct >= 60.0:
+            keys.append(
+                f"A hazárd hosszú labdáik a(z) {_rpr_p} posztjukról "
+                f"indulnak ({_rpr_pct:.0f}%, {_rpr_n} elszórt "
+                "hosszúból) — az ő passzsávjába kell beállni: a sávba "
+                "lépés nála azonnal labdát hoz, mögötte nyitott a "
+                "pálya.")
+
+    # Vasember-poszt: a hajrá-terv — melyik posztjuk fárad el.
+    if rep.irm_total_frames >= 15000 and rep.irm_on_by_role:
+        _irm_items = sorted(rep.irm_on_by_role.items(),
+                            key=lambda kv: -kv[1])
+        _irm_p, _irm_c = _irm_items[0]
+        _irm_pct = 100.0 * _irm_c / rep.irm_total_frames
+        _irm_2nd = (100.0 * _irm_items[1][1] / rep.irm_total_frames
+                    if len(_irm_items) > 1 else 0.0)
+        if _irm_pct >= 85.0 and _irm_pct - _irm_2nd >= 15.0:
+            keys.append(
+                f"A(z) {_irm_p} posztjuk végigjátssza a meccseket "
+                f"({_irm_pct:.0f}% jelenlét, miközben a többi posztot "
+                "cserélik) — a hajrában oda kell vinni a tempót: őt "
+                "kell futtatni, és vele szemben friss ember jöjjön.")
+
+    # Vasemberek: KI játssza végig a meccseket — a hajrá név szerinti
+    # célpontja.
+    if rep.imn_match_min >= 10.0 and rep.imn_minutes_by_player:
+        from .stats import IRONMEN_MAX_TARGETS, IRONMEN_SHARE_PCT
+        _imn_men = sorted(
+            ((k, v) for k, v in rep.imn_minutes_by_player.items()
+             if 100.0 * v / rep.imn_match_min >= IRONMEN_SHARE_PCT),
+            key=lambda kv: -kv[1])
+        if _imn_men and len(_imn_men) <= IRONMEN_MAX_TARGETS:
+            _imn_nevek = ", ".join(k for k, _ in _imn_men)
+            _imn_pct = 100.0 * _imn_men[0][1] / rep.imn_match_min
+            keys.append(
+                f"Csere nélkül végig a pályán: {_imn_nevek} "
+                f"({_imn_pct:.0f}% jelenlét) — a hajrában ő a "
+                "legfáradtabb ember: az utolsó tíz percben ŐT "
+                "futtassátok (elzárások hozzá, betörés az ő sávjában), "
+                "és vele szemben mindig friss láb jöjjön.")
+
+    # Bejátszó-poszt: kinek a kezén kell a beálló-vonalba lépni.
+    _pfr_n = sum(rep.pfr_feeds_by_role.values())
+    if _pfr_n >= 4:
+        _pfr_p, _pfr_c = max(rep.pfr_feeds_by_role.items(),
+                             key=lambda kv: kv[1])
+        _pfr_pct = 100.0 * _pfr_c / _pfr_n
+        if _pfr_pct >= 60.0:
+            keys.append(
+                f"A beálló-beadásaik a(z) {_pfr_p} posztjukról jönnek "
+                f"({_pfr_pct:.0f}%, {_pfr_n} beadásból) — az ő kezén "
+                "kell a beálló-vonalba lépni, és az ő oldalán "
+                "induljon a kettőzés: a bejátszó zárása többet ér, "
+                "mint a beálló birkózása.")
+
+    # Indítás-vadász poszt: melyik sávot kerülje a kapus-indításunk.
+    _ohr_n = sum(rep.ohr_steals_by_role.values())
+    if _ohr_n >= 3:
+        _ohr_p, _ohr_c = max(rep.ohr_steals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ohr_pct = 100.0 * _ohr_c / _ohr_n
+        if _ohr_pct >= 60.0:
+            keys.append(
+                f"Az indítás-vadászatuk a(z) {_ohr_p} posztjukon fut "
+                f"({_ohr_pct:.0f}%, {_ohr_n} elrabolt indításból) — a "
+                "kapusunk indítása a másik oldalon vagy az ő feje "
+                "fölött nyisson, az első passz sávját ő ne érje el.")
+
+    # Kulcs-poszt: kire fut ki az egész elemzés.
+    if rep.kp_layers_by_post:
+        _kp_items = sorted(rep.kp_layers_by_post.items(),
+                           key=lambda kv: -kv[1])
+        _kp_p, _kp_c = _kp_items[0]
+        _kp_tie = len(_kp_items) > 1 and _kp_items[1][1] == _kp_c
+        if _kp_c >= 3 and not _kp_tie:
+            keys.append(
+                f"A kulcs-posztjuk a(z) {_kp_p}: {_kp_c} poszt-réteg "
+                "ítélete fut ki rá — az ő kezelése (fogás, zárás, "
+                "kettőzés) nem részfeladat, hanem a meccsterv első "
+                "lapja.")
+
+    # Elzáró-poszt: honnan érkezik a test, hol kell hangosan váltani.
+    _sc2_n = sum(rep.sc2_screens_by_role.values())
+    if _sc2_n >= 3:
+        _sc2_p, _sc2_c = max(rep.sc2_screens_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sc2_pct = 100.0 * _sc2_c / _sc2_n
+        if _sc2_pct >= 60.0:
+            keys.append(
+                f"Az elzárásaik a(z) {_sc2_p} posztjukról jönnek "
+                f"({_sc2_pct:.0f}%, {_sc2_n} elzárásból) — az ő "
+                "oldalán hangos váltás vagy átcsúszás kell, és őt "
+                "elölről kell fogni: nélküle a lövőjük nem marad "
+                "tisztán.")
+
+    # Átvert-poszt: melyik poszt ellen kell az 1v1-et vinni.
+    _btr_n = sum(rep.btr_beaten_by_role.values())
+    if _btr_n >= 3:
+        _btr_p, _btr_c = max(rep.btr_beaten_by_role.items(),
+                             key=lambda kv: kv[1])
+        _btr_pct = 100.0 * _btr_c / _btr_n
+        if _btr_pct >= 60.0:
+            keys.append(
+                f"A kapott góljaik a(z) {_btr_p} posztjuk mögött "
+                f"esnek ({_btr_pct:.0f}%, {_btr_n} védőhöz rendelt "
+                "gólból) — oda kell vinni az 1v1-et: a figura az ő "
+                "emberét támadja, elzárás is hozzá terelje a lövőt.")
+
+    # Visszafutás-poszt: kinek a sávjába fusson a saját kontra.
+    _rtr_n = sum(rep.rtr_lags_by_role.values())
+    if _rtr_n >= 3:
+        _rtr_p, _rtr_c = max(rep.rtr_lags_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rtr_pct = 100.0 * _rtr_c / _rtr_n
+        if _rtr_pct >= 60.0:
+            keys.append(
+                f"A visszarendeződésük a(z) {_rtr_p} posztjukon "
+                f"szakad el ({_rtr_pct:.0f}%, {_rtr_n} kontrából ő "
+                "maradt elöl) — a kontrát az ő sávjába kell vezetni: "
+                "ott a pálya üres.")
+
+    # Kiülő-poszt: kinél jár hamar a két perc.
+    _sup_n = sum(rep.sup_susp_by_role.values())
+    if _sup_n >= 3:
+        _sup_p, _sup_c = max(rep.sup_susp_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sup_pct = 100.0 * _sup_c / _sup_n
+        if _sup_pct >= 60.0:
+            keys.append(
+                f"A kétperceik a(z) {_sup_p} posztjukra járnak "
+                f"({_sup_pct:.0f}%, {_sup_n} kiállításból) — a meccs "
+                "elején oda kell vezetni a játékot: az első két perc "
+                "után az az ember vagy hiányzik, vagy fékezve véd.")
+
+    # Hetes-okozó poszt: melyik sávjukba érdemes betörést vezetni.
+    _svr_n = sum(rep.svr_sevens_by_role.values())
+    if _svr_n >= 3:
+        _svr_p, _svr_c = max(rep.svr_sevens_by_role.items(),
+                             key=lambda kv: kv[1])
+        _svr_pct = 100.0 * _svr_c / _svr_n
+        if _svr_pct >= 60.0:
+            keys.append(
+                f"A heteseik a(z) {_svr_p} posztjukon szakadnak be "
+                f"({_svr_pct:.0f}%, {_svr_n} okozott hetesből) — abba "
+                "a sávba érdemes betörést vezetni: kézzel véd, gól "
+                "vagy hetes lesz belőle.")
+
+    # 7a6-befejező poszt: a lehozott kapusnál hova kell sűríteni.
+    _en7_n = sum(rep.en7_shots_by_role.values())
+    if _en7_n >= 3:
+        _en7_p, _en7_c = max(rep.en7_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _en7_pct = 100.0 * _en7_c / _en7_n
+        if _en7_pct >= 60.0:
+            keys.append(
+                f"A 7 a 6-uk a(z) {_en7_p} posztra fut ki "
+                f"({_en7_pct:.0f}%, {_en7_n} lövésből) — a lehozott "
+                "kapus felismerésekor az ő sávját kell besűríteni, és "
+                "minden labdaszerzés üres kapura támadható.")
+
+    # Blokk-poszt: melyik sávba nem szabad előkészítés nélkül lőni.
+    _rbk_n = sum(rep.rbk_blocks_by_role.values())
+    if _rbk_n >= 3:
+        _rbk_p, _rbk_c = max(rep.rbk_blocks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rbk_pct = 100.0 * _rbk_c / _rbk_n
+        if _rbk_pct >= 60.0:
+            keys.append(
+                f"A blokkjaik zöme a(z) {_rbk_p} posztjuktól jön "
+                f"({_rbk_pct:.0f}%, {_rbk_n} blokkból) — az ő sávjába "
+                "csak elmozgatás UTÁN szabad lőni: a figura először "
+                "őt húzza ki, és a lövés a megnyílt sávba megy.")
+
+    # Labdaszerző-poszt: melyik sávot kell kerülni labdával.
+    _rsw_n = sum(rep.rsw_steals_by_role.values())
+    if _rsw_n >= 5:
+        _rsw_p, _rsw_c = max(rep.rsw_steals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rsw_pct = 100.0 * _rsw_c / _rsw_n
+        if _rsw_pct >= 50.0:
+            keys.append(
+                f"A labdáik felét-többségét a(z) {_rsw_p} posztjuk "
+                f"szedi ({_rsw_pct:.0f}%, {_rsw_n} szerzésből) — az ő "
+                "sávjába csak biztonsági passz mehet, a támadást a "
+                "másik oldalon kell átvezetni.")
+
+    # Gólpassz-poszt: kitől kell a passzt elvenni.
+    _ras_n = sum(rep.ras_assists_by_role.values())
+    if _ras_n >= 3:
+        _ras_p, _ras_c = max(rep.ras_assists_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ras_pct = 100.0 * _ras_c / _ras_n
+        if _ras_pct >= 60.0:
+            keys.append(
+                f"A góljaik a(z) {_ras_p} kezéből indulnak "
+                f"({_ras_pct:.0f}%, {_ras_n} gólpasszból) — nem a "
+                "lövést kell zárni, hanem tőle a passzt elvenni: egy "
+                "ember feljebb lép rá, a többiek posztot tartanak.")
+
+    # Hetes-oldal: hetesnél merre vetődjön a kapusunk.
+    _svd_n = sum(rep.svd_dirs.values())
+    if _svd_n >= 3:
+        _svd_d, _svd_c = max(rep.svd_dirs.items(), key=lambda kv: kv[1])
+        _svd_pct = 100.0 * _svd_c / _svd_n
+        if _svd_pct >= 60.0:
+            keys.append(
+                f"A heteseik {_svd_pct:.0f}%-a {_svd_d} oldalra megy "
+                f"({_svd_n} mérhető dobásból) — hetesnél a kapus "
+                "tudatosan arra az oldalra vetődhet.")
+
+    # Hetes-sarok emberre: a bejáratott sarkú dobó a kapus-lap első sora.
+    if rep.stc_dir_by_taker:
+        from .rules import STC_MIN_ATTEMPTS, STC_SHARE_PCT
+        _stc_tak: dict = {}
+        for _stc_key, _stc_n in rep.stc_dir_by_taker.items():
+            _stc_k, _, _stc_d = _stc_key.partition("·")
+            _stc_tak.setdefault(_stc_k, {})[_stc_d] = _stc_n
+        _stc_best = None
+        for _stc_k, _stc_dirs in _stc_tak.items():
+            _stc_att = sum(_stc_dirs.values())
+            if _stc_att < STC_MIN_ATTEMPTS:
+                continue
+            _stc_d = max(_stc_dirs, key=lambda d: _stc_dirs[d])
+            _stc_pct = 100.0 * _stc_dirs[_stc_d] / _stc_att
+            if _stc_pct >= STC_SHARE_PCT and (
+                    _stc_best is None or _stc_att > _stc_best[1]):
+                _stc_best = (_stc_k, _stc_att, _stc_d, _stc_pct)
+        if _stc_best:
+            _stc_k, _stc_att, _stc_d, _stc_pct = _stc_best
+            keys.append(
+                f"A hetesdobójuk, a(z) {_stc_k}. játékos a {_stc_d} "
+                f"sarkot keresi ({_stc_pct:.0f}%, {_stc_att} dobásból) — "
+                "a kapus nála ne olvasson, hanem KÉSZÜLJÖN: tudatosan "
+                "arra a sarokra vetődjön.")
+
+    # Hetes-ismétlés: a SORREND, nem az eloszlás — mire készüljön a
+    # kapus a MOST következő hetesnél.
+    from .rules import SREP_MIN_PAIRS, SREP_REPEAT_PCT
+    if rep.srep_pairs >= SREP_MIN_PAIRS:
+        _srep_pct = 100.0 * rep.srep_repeats / rep.srep_pairs
+        if _srep_pct >= SREP_REPEAT_PCT:
+            keys.append(
+                f"A hetesdobóik ISMÉTLŐK: az egymást követő heteseik "
+                f"{_srep_pct:.0f}%-a ugyanabba a sávba ment "
+                f"({rep.srep_repeats}/{rep.srep_pairs} pár) — a "
+                "kapusnak a LEGUTÓBB látott sarkot kell bekiabálni a "
+                "következő hetes előtt.")
+
+    # Kontra-poszt: visszafutásnál kit kell először felvenni.
+    _rfb_n = sum(rep.rfb_shots_by_role.values())
+    if _rfb_n >= 3:
+        _rfb_p, _rfb_c = max(rep.rfb_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rfb_pct = 100.0 * _rfb_c / _rfb_n
+        if _rfb_pct >= 60.0:
+            keys.append(
+                f"A lerohanásaik a(z) {_rfb_p} poszton záródnak "
+                f"({_rfb_pct:.0f}%, {_rfb_n} kontra-lövésből) — "
+                "visszafutásnál őt kell először felvenni, a többiek "
+                "egy ütemmel ráérnek.")
+
+    # Lövésválasztás: felnéznek-e a lövés előtt.
+    if rep.scq_shots >= 6:
+        _scq_pct = 100.0 * rep.scq_better / rep.scq_shots
+        if _scq_pct >= 45.0:
+            keys.append(
+                f"A lövéseik {_scq_pct:.0f}%-ánál volt jobb SZABAD "
+                f"helyzet a pályán ({rep.scq_better}/{rep.scq_shots}) — "
+                "nem néznek fel: a rossz szögű lövést rájuk lehet "
+                "engedni, a szabadon álló társukat kell zárni.")
+        elif _scq_pct <= 15.0:
+            keys.append(
+                f"Fegyelmezett lövésválasztás (csak {_scq_pct:.0f}%-nál "
+                "volt jobb szabad helyzet) — ellenük a helyzet-teremtést "
+                "kell zárni, a lövés pillanatában már késő.")
+
+    # Időkérés-befejező: az időkérésük utáni támadásra kit fogjunk.
+    _tof_n = sum(rep.tof_shots_by_role.values())
+    if _tof_n >= 3:
+        _tof_p, _tof_c = max(rep.tof_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _tof_pct = 100.0 * _tof_c / _tof_n
+        if _tof_pct >= 60.0:
+            keys.append(
+                f"Időkérés után a(z) {_tof_p} posztjuk fejez be: az "
+                f"újraindítás utáni lövéseik {_tof_pct:.0f}%-a onnan "
+                f"jött ({_tof_n} lövésből, {rep.tof_timeouts} időkérés "
+                "után) — a megbeszélésen egy mondat elég: ő kapja az "
+                "embert, elé állunk, a többit hagyjuk.")
+
+    # Figura-befejező: melyik figurájukra hova kell csúszni.
+    if rep.spf_figures >= 2 and rep.spf_telegraphed >= 1:
+        _spf_top = sorted(rep.spf_telegraphed_by_role.items(),
+                          key=lambda kv: -kv[1])
+        if _spf_top:
+            _spf_p, _spf_n = _spf_top[0]
+            keys.append(
+                f"A figuráik {rep.spf_figures}-ból "
+                f"{rep.spf_telegraphed} kiszámítható befejezésű, és a "
+                f"legtöbb ({_spf_n}) a(z) {_spf_p} posztra fut ki — a "
+                "figura FELISMERÉSEKOR kell arra az oldalra csúszni, "
+                "nem a lövésnél reagálni.")
+
+    # Figura-indító: melyik figurájuk olvasható már az INDÍTÁSNÁL.
+    if rep.spo_figures >= 2 and rep.spo_telegraphed >= 1:
+        _spo_top = sorted(rep.spo_telegraphed_by_role.items(),
+                          key=lambda kv: -kv[1])
+        if _spo_top:
+            _spo_p, _spo_n = _spo_top[0]
+            keys.append(
+                f"A figuráik {rep.spo_figures}-ból "
+                f"{rep.spo_telegraphed} már az INDÍTÁSNÁL olvasható, és "
+                f"a legtöbb ({_spo_n}) a(z) {_spo_p} posztról indul — "
+                "amint a labda odaér felállt támadásban, zárni kell a "
+                "kiinduló passzsávot: a figura így el sem indul, nem a "
+                "befejezésénél kell megfogni.")
+
+    # Poszt-nyomás: kire lépjen ki a falunk, kit kell kizárni.
+    _rpf_cs = rep.rpf_covered_shots_by_role
+    _rpf_n = sum(_rpf_cs.values())
+    if _rpf_n >= 8:
+        _rpf_team = 100.0 * sum(rep.rpf_covered_goals_by_role.values()) / _rpf_n
+        _rpf_rows = [(p, n,
+                      100.0 * rep.rpf_covered_goals_by_role.get(p, 0) / n)
+                     for p, n in _rpf_cs.items() if n >= 4]
+        if _rpf_rows:
+            _rpf_p, _rpf_c, _rpf_pct = max(_rpf_rows, key=lambda r: r[2])
+            if _rpf_pct - _rpf_team >= 20.0:
+                keys.append(
+                    f"A(z) {_rpf_p} posztjuk fedezetten is befejez: a "
+                    f"fedezett lövéseik {_rpf_pct:.0f}%-át belövi "
+                    f"({_rpf_c} lövésből; a csapat-átlaguk "
+                    f"{_rpf_team:.0f}%) — őt KI KELL ZÁRNI, a puszta "
+                    "kilépés nála kevés.")
+            else:
+                _rpf_p2, _rpf_c2, _rpf_pct2 = min(_rpf_rows,
+                                                  key=lambda r: r[2])
+                if _rpf_team - _rpf_pct2 >= 20.0:
+                    keys.append(
+                        f"A(z) {_rpf_p2} posztjuk fedezetten beesik: a "
+                        f"fedezett lövéseik {_rpf_pct2:.0f}%-át lövi be "
+                        f"({_rpf_c2} lövésből; a csapat-átlaguk "
+                        f"{_rpf_team:.0f}%) — rá érdemes kilépni, nála a "
+                        "nyomás önmagában megoldja a helyzetet.")
+
+    # Poszt-kapuoldal: melyik sarokra állhat rá a kapusunk.
+    _rgp = rep.rgp_goals_by_role_side
+    if sum(_rgp.values()) >= 6:
+        _rgp_by_post: dict = {}
+        for _key, _n in _rgp.items():
+            _p, _, _side = _key.partition("|")
+            _rgp_by_post.setdefault(_p, {})[_side] = _n
+        _rgp_best = None
+        for _p, _sides in _rgp_by_post.items():
+            _tot = sum(_sides.values())
+            if _tot < 4:
+                continue
+            _dom = max(_sides, key=lambda k: _sides[k])
+            _pct = 100.0 * _sides[_dom] / _tot
+            if _pct >= 60.0 and (_rgp_best is None or _pct > _rgp_best[2]):
+                _rgp_best = (_p, _dom, _pct, _tot)
+        if _rgp_best is not None:
+            _p, _dom, _pct, _tot = _rgp_best
+            keys.append(
+                f"A(z) {_p} posztjuk kiszámítható a kapu előtt: a "
+                f"góljaik {_pct:.0f}%-át {_dom} oldalra lövik "
+                f"({_tot} gólból) — a kapusunk arra az oldalra állhat "
+                "rá, a fal pedig a másikat zárja.")
 
     # Poszt-lövéserő: melyik posztra készüljön a kapusunk.
     _rsp_n = sum(rep.rsp_shots_by_role.values())
@@ -3955,6 +7148,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "megérkezik, és a keresztpassz nyugodtan vállalható.")
 
     # Kapott helyzetek minősége: befelé vagy kívülről támadjunk.
+    # Egyéni gyengeségeik: ez a legkonkrétabb utasítás, amit egy
+    # felderítés adhat — nem "figyeljetek a labdabiztonságukra", hanem
+    # "a 7-esükre kettőzz".
+    _ptf_p = sorted(rep.ptf_press.items(), key=lambda kv: -kv[1])
+    if _ptf_p and _ptf_p[0][1] >= 1:
+        _mez, _db = _ptf_p[0]
+        keys.append(
+            f"A #{_mez} nyomás alatt elveszti a labdát "
+            f"({_db} meccsen jött elő) — RÁ kettőzzetek: az ő "
+            "szorítása nem kockázat, hanem labdaszerzés.")
+    _ptf_c = sorted(rep.ptf_clutch.items(), key=lambda kv: -kv[1])
+    if _ptf_c and _ptf_c[0][1] >= 1:
+        _mezc, _dbc = _ptf_c[0]
+        keys.append(
+            f"A #{_mezc} kezén szakad el a labda a HAJRÁBAN "
+            f"({_dbc} meccsen) — a döntő szakaszban rá kell terhelni, "
+            "a védekezésben őt kell döntés-kényszerbe hozni.")
+
     if rep.ccq_shots >= 8:
         _ccq_avg = rep.ccq_sum_xga / rep.ccq_shots
         if _ccq_avg >= 0.35:
@@ -4310,6 +7521,66 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "csere-ritmusuk kiszámítható: a saját cseréiteket "
                 "ahhoz lehet igazítani, és a friss emberük ellen "
                 "időzíteni a támadást.")
+
+    # Csere-fázis: mikor indul a csere — birtokláskor vagy védekezés közben.
+    if rep.sph_subs >= 4:
+        from .substitutions import SUBPH_RISKY_PCT, SUBPH_SAFE_PCT
+        _sph_pct = 100.0 * rep.sph_opp_ball / rep.sph_subs
+        if _sph_pct >= SUBPH_RISKY_PCT:
+            keys.append(
+                f"Védekezés közben is cserélnek (a cseréik "
+                f"{_sph_pct:.0f}%-a a TI birtoklásotok alatt indul, "
+                f"{rep.sph_opp_ball}/{rep.sph_subs}) — ilyenkor egy "
+                "emberrel kevesebbel áll fel a faluk: a csere "
+                "pillanatában gyors indítás a csere-oldalra, és a "
+                "rövid ideig nyitva lévő szélen kell befejezni.")
+        elif _sph_pct <= SUBPH_SAFE_PCT:
+            keys.append(
+                f"Fegyelmezett a csere-rendjük (a cseréiknek csak "
+                f"{_sph_pct:.0f}%-a indul a ti birtoklásotok alatt) — "
+                "a csere-pillanatra nem lehet játszani ellenük, marad "
+                "a felállt támadás minősége.")
+
+    # Kapus-védés a lövő kezessége szerint: bírja-e a balkezeseket.
+    if (rep.gkh_left_faced >= 4 and rep.gkh_right_faced >= 4):
+        from .goalkeeper import GKH_GAP_PP
+        _gkh_l = 100.0 * rep.gkh_left_saves / rep.gkh_left_faced
+        _gkh_r = 100.0 * rep.gkh_right_saves / rep.gkh_right_faced
+        if _gkh_r - _gkh_l >= GKH_GAP_PP:
+            keys.append(
+                f"A kapusuk a BALKEZES lövők ellen gyengébb "
+                f"({_gkh_l:.0f}% vs {_gkh_r:.0f}% a jobbkezesek ellen, "
+                f"{rep.gkh_left_faced} kapura tartó lövésből) — a "
+                "balkezes emberünket kell rá szervezni: az ő oldaláról "
+                "indított figurák, és hetes helyett is ő vállalja.")
+        elif _gkh_l - _gkh_r >= GKH_GAP_PP:
+            keys.append(
+                f"A kapusuk a balkezesekre fel van készülve "
+                f"({_gkh_l:.0f}%), a JOBBKEZES lövők ellen gyengébb "
+                f"({_gkh_r:.0f}%, {rep.gkh_right_faced} kapura tartó "
+                "lövésből) — a szokásos befejezőinket kell rá "
+                "engedni, ne a tükrözött figurát erőltessük.")
+
+    # Befejezés-mérleg: fenntartható-e a gólterméskük (gól − várható gól).
+    if rep.fbal_shots >= 12:
+        from .xg import FBAL_DIFF_GOALS
+        _fb_diff = rep.fbal_goals - rep.fbal_xg_sum
+        if _fb_diff >= FBAL_DIFF_GOALS:
+            keys.append(
+                f"A gólszámuk szebb a játékuknál ({rep.fbal_goals} gól "
+                f"{rep.fbal_xg_sum:.1f} várható gólra, +{_fb_diff:.1f}) — "
+                "ne szabjátok át miatta a védekezést: ugyanezeket a "
+                "lövéseket kell rájuk kényszeríteni, a kapus a bejáratott "
+                "sarkukra álljon, és ha egy emberen múlik a többlet, ŐT "
+                "kell kivenni.")
+        elif _fb_diff <= -FBAL_DIFF_GOALS:
+            keys.append(
+                f"A játékuknál kevesebbet szereztek ({rep.fbal_goals} gól "
+                f"{rep.fbal_xg_sum:.1f} várható gólra, {_fb_diff:.1f}) — "
+                "veszélyesebbek, mint amit az eredmény mutat: a "
+                "HELYZET-TEREMTÉSÜKET kell megfogni (a bejátszásokat és a "
+                "ziccer-forrásokat), mert a befejezésük magától rendbe "
+                "jön.")
 
     # Falépítés-idő: mennyi idő alatt áll fel a faluk.
     if rep.dst_cases >= 4 and rep.dst_sum_s > 0:
@@ -4893,6 +8164,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                     "szervezni a befejezést, és onnan bátran kell "
                     "lőni rá, mert azt a szöget nem zárja.")
 
+    # Kényszerített vagy magától jött eladás: érdemes-e letámadni.
+    from .defense import PTO_MIN_TURNOVERS, PTO_UNFORCED_PCT
+    if rep.pto_total >= PTO_MIN_TURNOVERS:
+        _pto_pct = 100.0 * rep.pto_unforced / rep.pto_total
+        if _pto_pct >= PTO_UNFORCED_PCT:
+            keys.append(
+                f"Az eladásaik {_pto_pct:.0f}%-a MAGÁTÓL jön (nem volt "
+                f"védő 2,5 m-en belül: {rep.pto_unforced}/"
+                f"{rep.pto_total}) — a letámadás keveset ad hozzá, a "
+                "kockázata viszont megvan: maradjatok zárt falban, és "
+                "várjátok meg a hibát. Ők maguktól odaadják.")
+        elif _pto_pct <= 100.0 - PTO_UNFORCED_PCT:
+            keys.append(
+                f"Az eladásaik {100.0 - _pto_pct:.0f}%-át KIPRÉSELIK "
+                f"belőlük (védő volt a labdásukon: "
+                f"{rep.pto_total - rep.pto_unforced}/{rep.pto_total}) — "
+                "a prés működik ellenük: a kettőzést tartani kell, mert "
+                "nyomás nélkül nem hibáznak.")
+
     # Hiba-sorozatok: egymás után jönnek-e az eladásaik.
     if rep.tc_turnovers >= 5:
         _tc_pct = 100.0 * rep.tc_clustered / rep.tc_turnovers
@@ -5101,6 +8391,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_htp_avg:.1f} mp helyett) — nála van idő odaérni: "
                 "rá jöjjön a kettőzés és a letámadás, mert nála "
                 "lassul a támadásuk.")
+
+    # Labdavezetés-táv: ki CIPELI náluk a labdát (nem tartja — viszi).
+    _bcp_rows = [p for p in (rep.carry_players or []) if p["holds"] >= 5]
+    _bcp_holds = sum(p["holds"] for p in (rep.carry_players or []))
+    _bcp_m = sum(p["meters"] for p in (rep.carry_players or []))
+    if _bcp_rows and _bcp_holds >= 5:
+        _bcp_avg = _bcp_m / _bcp_holds
+        _bcp_top = max(_bcp_rows, key=lambda p: p["meters"] / p["holds"])
+        _bcp_pm = _bcp_top["meters"] / _bcp_top["holds"]
+        if _bcp_pm - _bcp_avg >= 3.0:  # = CARRY_LONG_GAP_M
+            _bcp_who = (f"{_bcp_top['jersey']}-es mezszámú"
+                        if _bcp_top.get("jersey") is not None
+                        else f"{_bcp_top['player_id']} azonosítójú")
+            keys.append(
+                f"A(z) {_bcp_who} játékosuk viszi a labdát (átlag "
+                f"{_bcp_pm:.1f} m labdás szakaszonként a csapatátlag "
+                f"{_bcp_avg:.1f} m helyett) — futó labdásnál a labda "
+                "elvehető: rá menjen a leszúrás és a halászás, az ő "
+                "útvonalát zárjátok el.")
 
     # Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak.
     if rep.fsw_attacks >= 6 and rep.fsw_pairs > 0 and rep.fsw_labels:
@@ -5866,6 +9175,123 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "megkezdett sorozatot az időkérésük után is tolhatod, ne "
                 "állj le tőle.")
 
+    # Támadás-mélység esése: hátrébb állnak-e a hajrára. Ez a
+    # lövés-távolság esésének a FELÁLLÁS-oldali párja, és hamarabb
+    # látszik, mert nem kell hozzá lövés.
+    if rep.adf_fh_n >= 100 and rep.adf_sh_n >= 100 \
+            and rep.adf_fh_sum_m > 0 and rep.adf_sh_sum_m > 0:
+        _adf_fh = rep.adf_fh_sum_m / rep.adf_fh_n
+        _adf_sh = rep.adf_sh_sum_m / rep.adf_sh_n
+        _adf_d = _adf_sh - _adf_fh          # pozitív = hátrébb álltak
+        if _adf_d >= 0.5:
+            keys.append(
+                f"A támadásuk a 2. félidőre hátrébb kerül ({_adf_fh:.1f} → "
+                f"{_adf_sh:.1f} m a kaputól) — a hajrában már nem mennek be "
+                "a hatosra: a falatok nyugodtan tömörülhet beljebb, "
+                "kilépésre nincs szükség.")
+        elif _adf_d <= -0.5:
+            keys.append(
+                f"A 2. félidőre KÖZELEBB nyomulnak a kapuhoz "
+                f"({_adf_fh:.1f} → {_adf_sh:.1f} m) — a hajrában a hatos "
+                "elleni munka a téma: testes fogadás és segítő-csúszás.")
+
+    # Beálló-bevonás esése: elfogy-e a beálló a hajrára. Más kérdés,
+    # mint a szélső-bevonás (az a labda SZÉLES ívű járatása, ez a
+    # MÉLYSÉGI bejátszás — bátorság és időzítés, nem lábmunka).
+    if rep.puf_fh_n >= 6 and rep.puf_sh_n >= 6:
+        _puf_fh = 100.0 * rep.puf_fh_pivot / rep.puf_fh_n
+        _puf_sh = 100.0 * rep.puf_sh_pivot / rep.puf_sh_n
+        _puf_d = _puf_fh - _puf_sh          # pozitív = elfogy a beálló
+        if _puf_d >= 10.0:
+            keys.append(
+                f"A beállójuk a 2. félidőre elfogy ({_puf_fh:.0f}% → "
+                f"{_puf_sh:.0f}% a beállós támadás) — a hajrában elárvul a "
+                "hatos vonal: a fal középső hármasa nyugodtan dolgozhat "
+                "KIFELÉ, az átlövőre.")
+        elif _puf_d <= -10.0:
+            keys.append(
+                f"A 2. félidőre TÖBBET játszanak a beállóra "
+                f"({_puf_fh:.0f}% → {_puf_sh:.0f}%) — a hajrában a fal "
+                "középső hármasának befelé kell zárnia, és a bejátszó "
+                "passzsávot kell elvenni.")
+
+    # Hajrá-profil: hány fáradás-jel szólal meg náluk egy meccsen. Ez
+    # nem új mérés, hanem az ÖSSZKÉP — egy tucat esés-szám mellett az
+    # edző nem tudja, mivel kezdje.
+    if rep.fpr_matches >= 1:
+        _fpr = rep.fpr_signals / rep.fpr_matches
+        if _fpr >= 3.0:
+            keys.append(
+                f"Meccsenként átlag {_fpr:.1f} fáradás-jel szólal meg náluk "
+                "(visszaállás, fal-mélység, nyomás, szélső-bevonás, sprint) "
+                "— a hajrá az ő gyenge pontjuk: az utolsó tizenöt percre "
+                "tartogassátok a friss lábakat és a tempót.")
+        elif _fpr <= 0.0 and rep.fpr_matches >= 2:
+            keys.append(
+                f"{rep.fpr_matches} meccsen EGYETLEN fáradás-jel sem "
+                "szólalt meg náluk — hatvan percig bírják, tehát a hajrára "
+                "számítani nem terv: a meccset korábban kell eldönteni.")
+
+    # Szélső-bevonás esése: beszűkül-e a támadásuk a hajrára. Ez a
+    # lövés-távolság esésének az OKA — a fáradó csapatban a lábmunka
+    # fogy el először, és a labda középen ragad.
+    if rep.wif_fh_n >= 6 and rep.wif_sh_n >= 6:
+        _wif_fh = 100.0 * rep.wif_fh_wing / rep.wif_fh_n
+        _wif_sh = 100.0 * rep.wif_sh_wing / rep.wif_sh_n
+        _wif_d = _wif_fh - _wif_sh          # pozitív = beszűkültek
+        if _wif_d >= 10.0:
+            keys.append(
+                f"A támadásuk a 2. félidőre beszűkül ({_wif_fh:.0f}% → "
+                f"{_wif_sh:.0f}% jut el a szélre) — a hajrában húzzátok "
+                "beljebb a szélső-védőket: tömör fallal a beállót és az "
+                "átlövést kell elzárni, a szélt úgysem játsszák meg.")
+        elif _wif_d <= -10.0:
+            keys.append(
+                f"A támadásuk a 2. félidőre jobban széthúzódik "
+                f"({_wif_fh:.0f}% → {_wif_sh:.0f}% jut el a szélre) — a "
+                "hajrában a szélső-védekezés és a kifutás a feladat.")
+
+    # Visszaállás-fáradás: lassul-e a hazaérésük a hajrára. Ez a késői
+    # összeomlás leggyakoribb mechanizmusa, és a gólszámban nem látszik.
+    if rep.rtf_fh_n >= 4 and rep.rtf_sh_n >= 4 \
+            and rep.rtf_fh_sum_s > 0 and rep.rtf_sh_sum_s > 0:
+        _rtf_fh = rep.rtf_fh_sum_s / rep.rtf_fh_n
+        _rtf_sh = rep.rtf_sh_sum_s / rep.rtf_sh_n
+        _rtf_d = _rtf_sh - _rtf_fh          # pozitív = lassult
+        if _rtf_d >= 1.0:
+            keys.append(
+                f"A visszaállásuk a 2. félidőre lassul ({_rtf_fh:.1f} → "
+                f"{_rtf_sh:.1f} mp a lövésük után) — a hajrában a "
+                "kapusotoknak AZONNAL indítania kell: az első hullám üres "
+                "pályát talál.")
+        elif _rtf_d <= -1.0:
+            keys.append(
+                f"A visszaállásuk a 2. félidőre gyorsul ({_rtf_fh:.1f} → "
+                f"{_rtf_sh:.1f} mp) — a hajrában ne a kontrára építsetek, "
+                "hanem a felállt támadásra.")
+
+    # Fal-MÉLYSÉG esése: hova áll a faluk a hajrában. Ez más kérdés,
+    # mint a fellazulás (az a labdástól mért távolság) — visszahúzódó
+    # fal ellen a 9 méteres lövés a válasz, feljebb jövő fal ellen a
+    # kilépő mögé játszás.
+    if rep.lhf_fh_n >= 100 and rep.lhf_sh_n >= 100 \
+            and rep.lhf_fh_sum_m > 0 and rep.lhf_sh_sum_m > 0:
+        _lhf_fh = rep.lhf_fh_sum_m / rep.lhf_fh_n
+        _lhf_sh = rep.lhf_sh_sum_m / rep.lhf_sh_n
+        _lhf_d = _lhf_fh - _lhf_sh          # pozitív = visszahúzódott
+        if _lhf_d >= 0.5:
+            keys.append(
+                f"A faluk a 2. félidőre visszahúzódik ({_lhf_fh:.1f} → "
+                f"{_lhf_sh:.1f} m a saját kaputól) — a hajrában nem lép ki "
+                "senki: a külső lövőiteket akkor hozzátok helyzetbe, a 9 "
+                "méteres lövés zavartalan lesz.")
+        elif _lhf_d <= -0.5:
+            keys.append(
+                f"A faluk a 2. félidőre feljebb jön ({_lhf_fh:.1f} → "
+                f"{_lhf_sh:.1f} m a saját kaputól) — a hajrában "
+                "agresszívebbek: a kilépő védő MÖGÉ kell játszani "
+                "(elzárás utáni beállós, áthúzás).")
+
     # Védekezés-fellazulás: ha a faluk a 2. félidőre lazul, a hajrát kell
     # megtolni ellenük; ha szorosabbra vált, az elején kell előnyt szerezni.
     if rep.prf_fh_n >= 100 and rep.prf_sh_n >= 100 \
@@ -6168,6 +9594,99 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Széthúzott falat húznak (átlag {_dw:.0f} m széles) — a "
                 "közép nyílik: betörés a réseken, beálló-játék és "
                 "elzárás-leválás középen.")
+
+    # Fal-rés fáradás: a betörős figurákat a 2. félidőre kell tenni.
+    if rep.gfd_fh_frames >= 60 and rep.gfd_sh_frames >= 60:
+        from .defense import GFD_RISE_M
+        _gfd_fh = rep.gfd_fh_sum_m / rep.gfd_fh_frames
+        _gfd_sh = rep.gfd_sh_sum_m / rep.gfd_sh_frames
+        if _gfd_sh - _gfd_fh >= GFD_RISE_M:
+            keys.append(
+                f"A 2. félidőre szétnyílnak a közök a falukban "
+                f"({_gfd_fh:.1f} m → {_gfd_sh:.1f} m a legnagyobb rés "
+                "átlaga) — a betörős figurákat a MÁSODIK félidőre "
+                "tartogassátok: az első félidei \"nem ment\" nem "
+                "ítélet, a hajrában ugyanaz a figura működni fog.")
+
+    # Poszt-kezesség: melyik posztjukon lő balkezes — tükör-feladat.
+    if rep.rsh_shots_by_role:
+        from .roles import RSH_MIN_SHOTS, RSH_SHARE_PCT
+        for _rsh_p, _rsh_n in sorted(rep.rsh_shots_by_role.items(),
+                                     key=lambda kv: -kv[1]):
+            _rsh_l = rep.rsh_left_by_role.get(_rsh_p, 0)
+            if _rsh_n >= RSH_MIN_SHOTS and _rsh_l >= (
+                    RSH_SHARE_PCT / 100.0) * _rsh_n:
+                keys.append(
+                    f"A(z) {_rsh_p} posztjukon BALKEZES lő "
+                    f"({_rsh_l}/{_rsh_n} bal-jelű lövés) — ellene "
+                    "tükrözni kell: a sánc a másik kezét emelje, a kapus "
+                    "alapállása a túlsó sarokra álljon, és a befelé "
+                    "vezető utat kell elzárni.")
+                break
+
+    # Fal-rés térkép: hol a legnagyobb köz a falukban — oda kell betörni.
+    if rep.dgap_frames >= 100 and rep.dgap_sum_m > 0:
+        from .defense import DGAP_WIDE_M, DGAP_ZONE_SHARE_PCT
+        _dgp_avg = rep.dgap_sum_m / rep.dgap_frames
+        _dgp_zone, _dgp_share = None, None
+        if rep.dgap_zones:
+            _dgp_zone, _dgp_n = max(rep.dgap_zones.items(),
+                                    key=lambda kv: kv[1])
+            _dgp_share = 100.0 * _dgp_n / rep.dgap_frames
+            if _dgp_share < DGAP_ZONE_SHARE_PCT:
+                _dgp_zone = None
+        if _dgp_avg >= DGAP_WIDE_M:
+            _hol = (f", és jellemzően a {_dgp_zone} sávban nyílik "
+                    f"({_dgp_share:.0f}%)" if _dgp_zone else "")
+            keys.append(
+                f"Nagy közök vannak a falukban (átlag {_dgp_avg:.1f} m a "
+                f"legnagyobb rés két szomszédos védő között{_hol}) — oda "
+                "kell betörni lendületből, és az elzárást is oda tenni, "
+                "hogy a rés ne záródjon.")
+        elif _dgp_zone:
+            keys.append(
+                f"A faluk zárt (átlag {_dgp_avg:.1f} m a legnagyobb köz), "
+                f"de a rés a(z) {_dgp_zone} sávban nyílik "
+                f"({_dgp_share:.0f}%) — a figurát arra az oldalra kell "
+                "építeni, elzárással a rés mellé.")
+
+    # Védekezési formáció: az ALAK mondja meg, mivel kell támadni ellenük.
+    if rep.dform_frames >= 100 and rep.dform_counts:
+        from .defense import DFORM_SHARE_PCT
+        _df_shape, _df_n = max(rep.dform_counts.items(), key=lambda kv: kv[1])
+        _df_share = 100.0 * _df_n / rep.dform_frames
+        if _df_share >= DFORM_SHARE_PCT:
+            if _df_shape.startswith("6-0"):
+                keys.append(
+                    f"Lapos 6-0 falat tartanak (a felállt védekezés "
+                    f"{_df_share:.0f}%-ában) — nem lépnek ki: távoli "
+                    "lövéssel és gyors labdajáratással kell kihúzni őket, "
+                    "aztán a megnyílt résbe betörni.")
+            elif _df_shape.startswith("5-1"):
+                keys.append(
+                    f"5-1-et védekeznek, egy kitolt védővel (a felállt "
+                    f"védekezés {_df_share:.0f}%-ában) — a kitolt védő "
+                    "MÖGÖTTI tér a cél: mellette kettős elzárás, a beálló "
+                    "a háta mögé lépjen le.")
+            elif _df_shape.startswith("3-2-1"):
+                keys.append(
+                    f"Lépcsős 3-2-1-et védekeznek (a felállt védekezés "
+                    f"{_df_share:.0f}%-ában) — keresztmozgásra lassú: gyors "
+                    "oldalváltás és szélső-befejezés bontja meg őket.")
+            elif _df_shape.startswith("4-2"):
+                keys.append(
+                    f"4-2-t védekeznek, két kitolt védővel (a felállt "
+                    f"védekezés {_df_share:.0f}%-ában) — a két kilépő "
+                    "MÖGÖTT és KÖZÖTT van a tér: a beálló a hátuk mögé "
+                    "lépjen le, és gyors bejátszás a két kitolt ember "
+                    "közti résbe.")
+        else:
+            keys.append(
+                f"Nincs állandó fal-alakjuk (a leggyakoribb {_df_shape} "
+                f"is csak a felállt védekezés {_df_share:.0f}%-a) — "
+                "váltogatnak: a felismerés a feladat, a felhozó hangosan "
+                "mondja be a formát, és két kész figurasorral kell "
+                "érkezni.")
 
     # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
     # maradó ellen a lepattanóra kell menni.
@@ -6757,6 +10276,12 @@ def _scout_team_cached(match: Match, team: Team,
             rep.rotation_used_sum = rd["used"]
             rep.rotation_regulars_sum = rd["regulars"]
             rep.rotation_matches = 1
+        # Vasemberek: MINDEN bevetett játékos perce (nem csak a
+        # végigjátszóké) — a küszöb az összesített mintán dől el.
+        fps_imn = match.meta.fps if match.meta.fps > 0 else 25.0
+        rep.imn_match_min = round(len(match.frames) / fps_imn / 60.0, 1)
+        rep.imn_minutes_by_player = {
+            p["label"]: p["minutes"] for p in rd["players"]}
         from .defense import ball_winners
         rep.ball_winners = [
             {"player_id": (w["jersey"] if w["jersey"] is not None
@@ -6794,6 +10319,26 @@ def _scout_team_cached(match: Match, team: Team,
             rep.defw_sum_m = round(
                 dwrec["avg_width_m"] * dwrec["frames"], 1)
             rep.defw_frames = dwrec["frames"]
+        from .defense import defensive_formation
+        dfmrec = defensive_formation(match, config)[team.value]
+        rep.dform_frames = dfmrec["frames"]
+        rep.dform_counts = dict(dfmrec["counts"])
+        from .defense import defensive_gaps
+        dgprec = defensive_gaps(match, config)[team.value]
+        rep.dgap_frames = dgprec["frames"]
+        if dgprec["avg_max_gap_m"] is not None:
+            rep.dgap_sum_m = round(
+                dgprec["avg_max_gap_m"] * dgprec["frames"], 1)
+        rep.dgap_zones = dict(dgprec["zones"])
+        from .defense import gap_fade
+        gfdrec = gap_fade(match, config)[team.value]
+        if gfdrec["fh_gap_m"] is not None:
+            rep.gfd_fh_sum_m = round(
+                gfdrec["fh_gap_m"] * gfdrec["fh_frames"], 1)
+            rep.gfd_fh_frames = gfdrec["fh_frames"]
+            rep.gfd_sh_sum_m = round(
+                gfdrec["sh_gap_m"] * gfdrec["sh_frames"], 1)
+            rep.gfd_sh_frames = gfdrec["sh_frames"]
         from .tactics import pass_tempo
         ptrec = pass_tempo(match, config)[team.value]
         rep.pt_passes = ptrec["passes"]
@@ -6826,6 +10371,69 @@ def _scout_team_cached(match: Match, team: Team,
         if prfrec["sh_m"] is not None:
             rep.prf_sh_sum_m = round(prfrec["sh_m"] * prfrec["sh_frames"], 1)
             rep.prf_sh_n = prfrec["sh_frames"]
+        from .defense import line_height_fade
+        lhfrec = line_height_fade(match, config)[team.value]
+        if lhfrec["fh_m"] is not None:
+            rep.lhf_fh_sum_m = round(lhfrec["fh_m"] * lhfrec["fh_frames"], 1)
+            rep.lhf_fh_n = lhfrec["fh_frames"]
+        if lhfrec["sh_m"] is not None:
+            rep.lhf_sh_sum_m = round(lhfrec["sh_m"] * lhfrec["sh_frames"], 1)
+            rep.lhf_sh_n = lhfrec["sh_frames"]
+        from .attack_types import attack_depth_fade
+        adfrec = attack_depth_fade(match, config)[team.value]
+        rep.adf_fh_n = adfrec["fh_frames"]
+        rep.adf_sh_n = adfrec["sh_frames"]
+        if adfrec["fh_m"] is not None:
+            rep.adf_fh_sum_m = round(adfrec["fh_m"] * adfrec["fh_frames"], 1)
+        if adfrec["sh_m"] is not None:
+            rep.adf_sh_sum_m = round(adfrec["sh_m"] * adfrec["sh_frames"], 1)
+        from .attack_types import pivot_usage_fade
+        pufrec = pivot_usage_fade(match, config)[team.value]
+        rep.puf_fh_n = pufrec["fh_attacks"]
+        rep.puf_sh_n = pufrec["sh_attacks"]
+        if pufrec["fh_pct"] is not None:
+            rep.puf_fh_pivot = round(
+                pufrec["fh_pct"] * pufrec["fh_attacks"] / 100.0)
+        if pufrec["sh_pct"] is not None:
+            rep.puf_sh_pivot = round(
+                pufrec["sh_pct"] * pufrec["sh_attacks"] / 100.0)
+        try:
+            from .priorities import fatigue_profile
+            fprrec = fatigue_profile(match, config)[team.value]
+            rep.fpr_signals = int(fprrec["count"])
+            rep.fpr_matches = 1
+        except Exception:
+            pass
+        from .attack_types import wing_involvement_fade
+        wifrec = wing_involvement_fade(match, config)[team.value]
+        rep.wif_fh_n = wifrec["fh_attacks"]
+        rep.wif_sh_n = wifrec["sh_attacks"]
+        if wifrec["fh_pct"] is not None:
+            rep.wif_fh_wing = round(
+                wifrec["fh_pct"] * wifrec["fh_attacks"] / 100.0)
+        if wifrec["sh_pct"] is not None:
+            rep.wif_sh_wing = round(
+                wifrec["sh_pct"] * wifrec["sh_attacks"] / 100.0)
+        # A feldolgozás minősége: a jelentésnek meg kell tudnia
+        # mondani, mennyire hihető a saját alapanyaga.
+        try:
+            from .quality import LOW_SCORE_WARN, compute_quality_report
+            _q = compute_quality_report(match)
+            _qs = _q.get("score")
+            if _qs is not None:
+                rep.q_score_sum = float(_qs)
+                rep.q_matches = 1
+                rep.q_weak_matches = 1 if _qs < LOW_SCORE_WARN else 0
+        except Exception:
+            pass
+        from .defense import retreat_fade
+        rtfrec = retreat_fade(match, config)[team.value]
+        if rtfrec["fh_s"] is not None:
+            rep.rtf_fh_sum_s = round(rtfrec["fh_s"] * rtfrec["fh_shots"], 1)
+            rep.rtf_fh_n = rtfrec["fh_shots"]
+        if rtfrec["sh_s"] is not None:
+            rep.rtf_sh_sum_s = round(rtfrec["sh_s"] * rtfrec["sh_shots"], 1)
+            rep.rtf_sh_n = rtfrec["sh_shots"]
         from .stoppages import timeout_record
         torec = timeout_record(match, config)[team.value]
         rep.to_n = torec["timeouts"]
@@ -7172,6 +10780,12 @@ def _scout_team_cached(match: Match, team: Team,
         sacrec = _sac(match, config)[team.value]
         rep.sac_slow = sacrec["slow"]
         rep.sac_scored = sacrec["scored"]
+        from .tactics import attack_tempo_variety as _atvf
+        atvrec = _atvf(match, config)[team.value]
+        rep.atv_attacks = atvrec["attacks"]
+        rep.atv_fast = atvrec["fast"]
+        rep.atv_mid = atvrec["mid"]
+        rep.atv_slow = atvrec["slow"]
         from .attack_types import balls_out as _obt
         rep.obt_out = _obt(match, config)[team.value]["out"]
         from .rules import suspensions_by_score as _sps
@@ -7299,6 +10913,771 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_goal_placement as _rgp
+        rgprec = _rgp(match, config)[team.value]
+        rep.rgp_goals_by_role_side = {
+            f"{p}|{side}": r[side]
+            for p, r in rgprec["roles"].items()
+            for side in ("bal", "közép", "jobb") if r[side]}
+        from .roles import role_fast_breaks as _rfb
+        rfbrec = _rfb(match, config)[team.value]
+        rep.rfb_shots_by_role = dict(rfbrec["roles"])
+        from .rules import seven_shot_directions as _svd
+        svdrec = _svd(match, config)[team.value]
+        rep.svd_dirs = {d: n for d, n in svdrec["dirs"].items() if n}
+        from .rules import seven_taker_corners as _stc
+        stcrec = _stc(match, config)[team.value]
+        for r in stcrec["players"]:
+            _stc_k = str(r["jersey"] if r["jersey"] is not None
+                         else r["player_id"])
+            for _stc_d, _stc_n in r["dirs"].items():
+                if _stc_n:
+                    key = f"{_stc_k}·{_stc_d}"
+                    rep.stc_dir_by_taker[key] = (
+                        rep.stc_dir_by_taker.get(key, 0) + _stc_n)
+        from .rules import seven_taker_repeat as _srep
+        sreprec = _srep(match, config)[team.value]
+        rep.srep_pairs = sreprec["pairs"]
+        rep.srep_repeats = sreprec["repeats"]
+        from .roles import role_assist_sources as _ras
+        rasrec = _ras(match, config)[team.value]
+        rep.ras_assists_by_role = dict(rasrec["roles"])
+        from .defense import role_steal_sources as _rsw
+        rswrec = _rsw(match, config)[team.value]
+        rep.rsw_steals_by_role = dict(rswrec["roles"])
+        from .attack_types import second_chance_roles as _scr
+        scrrec = _scr(match, config)[team.value]
+        rep.scr_shots_by_role = dict(scrrec["roles"])
+        from .defense import role_block_sources as _rbk
+        rbkrec = _rbk(match, config)[team.value]
+        rep.rbk_blocks_by_role = dict(rbkrec["roles"])
+        from .goalkeeper import seven_six_finisher_roles as _en7
+        en7rec = _en7(match, config)[team.value]
+        rep.en7_shots_by_role = dict(en7rec["roles"])
+        from .rules import seven_conceder_roles as _svr
+        svrrec = _svr(match, config)[team.value]
+        rep.svr_sevens_by_role = dict(svrrec["roles"])
+        from .rules import suspended_roles as _sup
+        suprec = _sup(match, config)[team.value]
+        rep.sup_susp_by_role = dict(suprec["roles"])
+        from .defense import slow_retreat_roles as _rtr
+        rtrrec = _rtr(match, config)[team.value]
+        rep.rtr_lags_by_role = dict(rtrrec["roles"])
+        from .defense import beaten_defender_roles as _btr
+        btrrec = _btr(match, config)[team.value]
+        rep.btr_beaten_by_role = dict(btrrec["roles"])
+        from .attack_types import screen_setter_roles as _sc2
+        sc2rec = _sc2(match, config)[team.value]
+        rep.sc2_screens_by_role = dict(sc2rec["roles"])
+        from .priorities import key_post as _kp
+        kprec = _kp(match, config)[team.value]
+        rep.kp_layers_by_post = dict(kprec["posts"])
+        from .goalkeeper import outlet_hunter_roles as _ohr
+        ohrrec = _ohr(match, config)[team.value]
+        rep.ohr_steals_by_role = dict(ohrrec["roles"])
+        from .attack_types import pivot_feeder_roles as _pfr
+        pfrrec = _pfr(match, config)[team.value]
+        rep.pfr_feeds_by_role = dict(pfrrec["roles"])
+        from .attack_types import risky_passer_roles as _rpr
+        rprrec = _rpr(match, config)[team.value]
+        rep.rpr_to_by_role = dict(rprrec["roles"])
+        from .defense import doubling_defender_roles as _ddr
+        ddrrec = _ddr(match, config)[team.value]
+        rep.ddr_frames_by_role = dict(ddrrec["roles"])
+        from .attack_types import kickout_target_roles as _kor
+        korrec = _kor(match, config)[team.value]
+        rep.kor_kickouts_by_role = dict(korrec["roles"])
+        from .rules import powerplay_shooter_roles as _ppr
+        pprrec = _ppr(match, config)[team.value]
+        rep.ppr_shots_by_role = dict(pprrec["roles"])
+        from .rules import shorthanded_shooter_roles as _shr
+        shrrec = _shr(match, config)[team.value]
+        rep.shr_shots_by_role = dict(shrrec["roles"])
+        from .momentum import clutch_scorer_roles as _csr
+        csrrec = _csr(match, config)[team.value]
+        rep.csr_goals_by_role = dict(csrrec["roles"])
+        from .momentum import super_sub_roles as _ssp
+        ssprec = _ssp(match, config)[team.value]
+        rep.sspr_goals_by_role = dict(ssprec["roles"])
+        from .momentum import comeback_carrier_roles as _cbr
+        cbrrec = _cbr(match, config)[team.value]
+        rep.cbr_trailing_by_role = dict(cbrrec["roles"])
+        from .xg import wasteful_shooter_roles as _wsr
+        wsrrec = _wsr(match, config)[team.value]
+        rep.wsr_off_by_role = dict(wsrrec["roles"])
+        from .xg import big_chance_roles as _bcr2
+        bcr2rec = _bcr2(match, config)[team.value]
+        rep.bcr_chances_by_role = dict(bcr2rec["roles"])
+        from .decisions import hold_time_roles as _htr
+        htrrec = _htr(match, config)[team.value]
+        rep.htr_seconds_by_role = dict(htrrec["roles"])
+        from .decisions import press_sensitive_roles as _psr
+        psrrec = _psr(match, config)[team.value]
+        rep.psr_to_by_role = dict(psrrec["roles"])
+        from .momentum import drought_breaker_roles as _gct
+        gctrec = _gct(match, config)[team.value]
+        rep.gct_breaks_by_role = dict(gctrec["roles"])
+        from .momentum import fading_scorer_roles as _fdp
+        fdprec = _fdp(match, config)[team.value]
+        rep.fdp_fh_by_role = dict(fdprec["fh_roles"])
+        rep.fdp_sh_by_role = dict(fdprec["sh_roles"])
+        from .momentum import clutch_turnover_roles as _ctr
+        ctrrec = _ctr(match, config)[team.value]
+        rep.ctr_to_by_role = dict(ctrrec["roles"])
+        from .momentum import hot_hand_roles as _hhr
+        hhrrec = _hhr(match, config)[team.value]
+        rep.hhr_goals_by_role = dict(hhrrec["roles"])
+        from .momentum import restart_taker_roles as _rtr
+        rtrrec = _rtr(match, config)[team.value]
+        rep.rtr_takes_by_role = dict(rtrrec["roles"])
+        from .stats import sprint_threat_roles as _spr
+        sprrec = _spr(match, config)[team.value]
+        rep.spr_sprints_by_role = dict(sprrec["roles"])
+        from .decisions import soft_pass_roles as _sps
+        spsrec = _sps(match, config)[team.value]
+        rep.sps_soft_by_role = dict(spsrec["roles"])
+        from .momentum import clutch_hog_roles as _chr
+        chrrec = _chr(match, config)[team.value]
+        rep.chr_frames_by_role = dict(chrrec["roles"])
+        from .roles import assisted_scorer_roles as _asr2
+        asr2rec = _asr2(match, config)[team.value]
+        rep.asr_assisted_by_role = dict(asr2rec["roles"])
+        from .momentum import opening_scorer_roles as _osr
+        osrrec = _osr(match, config)[team.value]
+        rep.osr_goals_by_role = dict(osrrec["roles"])
+        from .rules import passive_holder_roles as _pvr
+        pvrrec = _pvr(match, config)[team.value]
+        rep.pvr_frames_by_role = dict(pvrrec["roles"])
+        from .stats import fatigue_roles as _ftr
+        ftrrec = _ftr(match, config)[team.value]
+        rep.ftr_first_cms_by_role = dict(ftrrec["first_cms_roles"])
+        rep.ftr_second_cms_by_role = dict(ftrrec["second_cms_roles"])
+        from .defense import doubled_target_roles as _dtr
+        dtrrec = _dtr(match, config)[team.value]
+        rep.dtr_frames_by_role = dict(dtrrec["roles"])
+        from .defense import screened_defender_roles as _sdr
+        sdrrec = _sdr(match, config)[team.value]
+        rep.sdr_screens_by_role = dict(sdrrec["roles"])
+        from .momentum import second_start_roles as _ssr
+        ssrrec = _ssr(match, config)[team.value]
+        rep.ssr_goals_by_role = dict(ssrrec["roles"])
+        from .rules import seven_taker_roles as _stk
+        stkrec = _stk(match, config)[team.value]
+        rep.stk_attempts_by_role = dict(stkrec["roles"])
+        from .defense import blocked_shooter_roles as _bsr
+        bsrrec = _bsr(match, config)[team.value]
+        rep.bsr_blocks_by_role = dict(bsrrec["roles"])
+        from .xg import missed_chance_roles as _mcr
+        mcrrec = _mcr(match, config)[team.value]
+        rep.mcr_misses_by_role = dict(mcrrec["roles"])
+        from .defense import advanced_defender_roles as _adr
+        adrrec = _adr(match, config)[team.value]
+        rep.adr_frames_by_role = dict(adrrec["roles"])
+        rep.adr_depthm_by_role = dict(adrrec["depth_m"])
+        from .defense import pivot_guard_roles as _pgr
+        pgrrec = _pgr(match, config)[team.value]
+        rep.pgr_frames_by_role = dict(pgrrec["roles"])
+        from .roles import attack_starter_roles as _ats
+        atsrec = _ats(match, config)[team.value]
+        rep.ats_attacks_by_role = dict(atsrec["roles"])
+        from .attack_types import last_pass_roles as _epr
+        eprrec = _epr(match, config)[team.value]
+        rep.epr_passes_by_role = dict(eprrec["roles"])
+        from .momentum import lead_scorer_roles as _lgr
+        lgrrec = _lgr(match, config)[team.value]
+        rep.lgr_goals_by_role = dict(lgrrec["roles"])
+        from .decisions import ball_carrier_roles as _tnr
+        tnrrec = _tnr(match, config)[team.value]
+        rep.tnr_meters_by_role = dict(tnrrec["roles"])
+        from .attack_types import backward_pass_roles as _bpr
+        bprrec = _bpr(match, config)[team.value]
+        rep.bpr_passes_by_role = dict(bprrec["roles"])
+        from .decisions import tired_turnover_roles as _fto
+        ftorec = _fto(match, config)[team.value]
+        rep.fto_fh_by_role = dict(ftorec["fh_roles"])
+        rep.fto_sh_by_role = dict(ftorec["sh_roles"])
+        from .xg import tired_shooter_roles as _fsa
+        fsarec = _fsa(match, config)[team.value]
+        rep.fsa_fh_by_role = dict(fsarec["fh_roles"])
+        rep.fsa_sh_by_role = dict(fsarec["sh_roles"])
+        from .defense import tired_conceder_roles as _tcr
+        tcrrec = _tcr(match, config)[team.value]
+        rep.tcr_fh_by_role = dict(tcrrec["fh_roles"])
+        rep.tcr_sh_by_role = dict(tcrrec["sh_roles"])
+        from .substitutions import substituted_roles as _sbr
+        sbrrec = _sbr(match, config)[team.value]
+        rep.sbr_outs_by_role = dict(sbrrec["roles"])
+        from .substitutions import sub_in_roles as _ibr
+        ibrrec = _ibr(match, config)[team.value]
+        rep.ibr_ins_by_role = dict(ibrrec["roles"])
+        from .defense import costly_turnover_roles as _dto
+        dtorec = _dto(match, config)[team.value]
+        rep.dto_punished_by_role = dict(dtorec["roles"])
+        from .attack_types import breakthrough_roles as _btr
+        btrrec = _btr(match, config)[team.value]
+        rep.btr_entries_by_role = dict(btrrec["roles"])
+        from .defense import fading_defender_roles as _fdd
+        fddrec = _fdd(match, config)[team.value]
+        rep.fdd_fh_by_role = dict(fddrec["fh_roles"])
+        rep.fdd_sh_by_role = dict(fddrec["sh_roles"])
+        from .defense import covered_shooter_roles as _cvr
+        cvrrec = _cvr(match, config)[team.value]
+        rep.cvr_covered_by_role = dict(cvrrec["roles"])
+        from .defense import targeted_defender_roles as _tgr
+        tgrrec = _tgr(match, config)[team.value]
+        rep.tgr_shots_by_role = dict(tgrrec["roles"])
+        from .defense import high_steal_roles as _hsr
+        hsrrec = _hsr(match, config)[team.value]
+        rep.hsr_high_by_role = dict(hsrrec["roles"])
+        from .tactics import static_attacker_roles as _sar
+        sarrec = _sar(match, config)[team.value]
+        rep.sar_seconds_by_role = {
+            p: r["seconds"] for p, r in sarrec["roles"].items()}
+        rep.sar_meters_by_role = {
+            p: r["meters"] for p, r in sarrec["roles"].items()}
+        from .attack_types import screen_pair_roles as _spp
+        spprec = _spp(match, config)[team.value]
+        rep.spp_shots_by_role = dict(spprec["roles"])
+        from .substitutions import swap_style as _sws
+        swsrec = _sws(match, config)[team.value]
+        rep.sws_pairs = swsrec["pairs"]
+        rep.sws_same = swsrec["same"]
+        from .rules import seven_pair_roles as _svp
+        svprec = _svp(match, config)[team.value]
+        rep.svp_sevens_by_role = dict(svprec["roles"])
+        from .attack_types import fast_break_pair_roles as _fbp
+        fbprec = _fbp(match, config)[team.value]
+        rep.fbp_breaks_by_role = dict(fbprec["roles"])
+        from .roles import assist_pair_roles as _apr
+        aprrec = _apr(match, config)[team.value]
+        rep.apr_goals_by_role = dict(aprrec["roles"])
+        from .defense import doubling_pair_roles as _dpp
+        dpprec = _dpp(match, config)[team.value]
+        rep.dpp_frames_by_role = dict(dpprec["roles"])
+        from .attack_types import rebound_pair_roles as _rbp
+        rbprec = _rbp(match, config)[team.value]
+        rep.rbp_shots_by_role = dict(rbprec["roles"])
+        from .priorities import key_pair as _kpr
+        kprrec = _kpr(match, config)[team.value]
+        rep.kpr_layers_by_role = dict(kprrec["pairs"])
+        from .rules import powerplay_pair_roles as _pwp
+        pwprec = _pwp(match, config)[team.value]
+        rep.pwp_shots_by_role = dict(pwprec["roles"])
+        from .momentum import response_scorer_roles as _rsp
+        rsprec = _rsp(match, config)[team.value]
+        rep.rsp_goals_by_role = dict(rsprec["roles"])
+        from .attack_types import lane_switch_roles as _lsw
+        lswrec = _lsw(match, config)[team.value]
+        rep.lsw_switches_by_role = dict(lswrec["roles"])
+        from .stoppages import timeout_pair_roles as _top
+        toprec = _top(match, config)[team.value]
+        rep.top_shots_by_role = dict(toprec["roles"])
+        from .decisions import press_outlet_roles as _esc
+        escrec = _esc(match, config)[team.value]
+        rep.esc_passes_by_role = dict(escrec["roles"])
+        from .attack_types import last_holder_roles as _lst
+        lstrec = _lst(match, config)[team.value]
+        rep.lst_attacks_by_role = dict(lstrec["roles"])
+        from .xg import big_chance_feeder_roles as _bcf
+        bcfrec = _bcf(match, config)[team.value]
+        rep.bcf_chances_by_role = dict(bcfrec["roles"])
+        from .rules import seven_miss_roles as _svm
+        svmrec = _svm(match, config)[team.value]
+        rep.svm_misses_by_role = dict(svmrec["roles"])
+        from .xg import big_chance_pair_roles as _bcp
+        bcprec = _bcp(match, config)[team.value]
+        rep.bcp_chances_by_pair = dict(bcprec["roles"])
+        from .rules import powerplay_turnover_roles as _ppt
+        pptrec = _ppt(match, config)[team.value]
+        rep.ppt_turnovers_by_role = dict(pptrec["roles"])
+        from .momentum import response_turnover_roles as _rto
+        rtorec = _rto(match, config)[team.value]
+        rep.rto_turnovers_by_role = dict(rtorec["roles"])
+        from .stoppages import timeout_turnover_roles as _toe
+        toerec = _toe(match, config)[team.value]
+        rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .decisions import tired_turnover_players as _ftop
+        ftoprec = _ftop(match, config)[team.value]
+        rep.ftop_sh_by_player = dict(ftoprec["sh"])
+        rep.ftop_fh_by_player = dict(ftoprec["fh"])
+        from .defense import slow_retreat_players as _srp
+        srprec = _srp(match, config)[team.value]
+        rep.srp_lags_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["lags"]
+            for r in srprec["players"]}
+        from .defense import tired_conceder_players as _tcp
+        tcprec = _tcp(match, config)[team.value]
+        rep.tcp_sh_by_player = dict(tcprec["sh"])
+        rep.tcp_fh_by_player = dict(tcprec["fh"])
+        from .goalkeeper import outlet_hunters as _ohp
+        ohprec = _ohp(match, config)[team.value]
+        rep.ohp_steals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["steals"]
+            for r in ohprec["players"]}
+        from .goalkeeper import empty_net_turnovers as _ent
+        entrec = _ent(match, config)[team.value]
+        rep.ent_turnovers = entrec["turnovers"]
+        rep.ent_punished = entrec["punished"]
+        from .momentum import restart_yield as _rsy
+        rsyrec = _rsy(match, config)[team.value]
+        rep.rsy_restarts = rsyrec["restarts"]
+        rep.rsy_answered = rsyrec["answered"]
+        from .rules import shorthanded_survival as _shs
+        shsrec = _shs(match, config)[team.value]
+        rep.shs_seconds = int(round(shsrec["sh_seconds"]))
+        rep.shs_conceded = shsrec["sh_conceded"]
+        from .goalkeeper import gk_change_yield as _gcy
+        gcyrec = _gcy(match, config)[team.value]
+        rep.gcy_changes = (1 if gcyrec["delta_pp"] is not None else 0)
+        rep.gcy_delta_dpp = int(round(10.0 * (gcyrec["delta_pp"] or 0.0)))
+        from .stoppages import timeout_yield as _toy
+        toyrec = _toy(match, config)[team.value]
+        rep.toy_broke = toyrec["broke"]
+        rep.toy_failed = toyrec["failed"]
+        from .event_detection import assist_duos as _adu
+        adurec = _adu(match, config)[team.value]
+        rep.adu_goals_by_duo = {
+            (f"{d['jersey_from'] if d['jersey_from'] is not None else d['from']}"
+             f"→"
+             f"{d['jersey_to'] if d['jersey_to'] is not None else d['to']}"):
+            d["goals"]
+            for d in adurec["duos"]}
+        from .event_detection import pre_assists as _prea
+        prearec = _prea(match, config)[team.value]
+        rep.prea_chained = prearec["chained"]
+        rep.prea_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["pre_assists"]
+            for r in prearec["players"]}
+        from .event_detection import pre_assist_roles as _prr
+        prrrec = _prr(match, config)[team.value]
+        rep.prear_by_role = dict(prrrec["roles"])
+        from .momentum import super_sub as _ssu
+        ssurec = _ssu(match, config)[team.value]
+        rep.ssu_goals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["goals"]
+            for r in ssurec["players"]}
+        from .goalkeeper import seven_six_finishers as _en7p
+        en7prec = _en7p(match, config)[team.value]
+        rep.en7p_shots_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["shots"]
+            for r in en7prec["players"]}
+        from .defense import screened_defenders as _sdp
+        sdprec = _sdp(match, config)[team.value]
+        rep.sdp_screens_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["screens"]
+            for r in sdprec["players"]}
+        from .attack_types import wing_runners as _wrp
+        wrprec = _wrp(match, config)[team.value]
+        rep.wrp_running_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["running"]
+            for r in wrprec["players"]}
+        from .attack_types import crossing_runners as _crp
+        crprec = _crp(match, config)[team.value]
+        rep.crp_runs_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["runs"]
+            for r in crprec["players"]}
+        rep.crp_crosses = crprec["crosses"]
+        from .attack_types import pivot_runners as _lfb
+        lfbrec = _lfb(match, config)[team.value]
+        rep.lfb_running_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["running"]
+            for r in lfbrec["players"]}
+        from .attack_types import second_wave_finishers as _bfw
+        bfwrec = _bfw(match, config)[team.value]
+        rep.bfw_shots_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["shots"]
+            for r in bfwrec["players"]}
+        from .attack_types import second_wave_roles as _swr
+        swrrec = _swr(match, config)[team.value]
+        rep.swr_shots_by_role = dict(swrrec["roles"])
+        from .momentum import parity_break_scorers as _pbp
+        pbprec = _pbp(match, config)[team.value]
+        rep.pbp_breaks_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["breaks"]
+            for r in pbprec["players"]}
+        from .momentum import parity_break_roles as _pbr
+        pbrrec = _pbr(match, config)[team.value]
+        rep.pbr_breaks_by_role = dict(pbrrec["roles"])
+        from .event_detection import shooting_hand as _hnd
+        hndrec = _hnd(match, config)[team.value]
+        for r in hndrec["players"]:
+            _k = str(r["jersey"] if r["jersey"] is not None
+                     else r["player_id"])
+            rep.hand_shots_by_player[_k] = r["shots"]
+            rep.hand_left_by_player[_k] = r["left"]
+        from .momentum import lead_scorers as _lgp
+        lgprec = _lgp(match, config)[team.value]
+        rep.lgp_goals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["goals"]
+            for r in lgprec["players"]}
+        from .momentum import second_start_scorers as _ssp
+        ssprec = _ssp(match, config)[team.value]
+        rep.ssp_goals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["goals"]
+            for r in ssprec["players"]}
+        from .momentum import opening_scorers as _osp
+        osprec = _osp(match, config)[team.value]
+        rep.osp_goals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["goals"]
+            for r in osprec["players"]}
+        from .momentum import response_scorers as _rspp
+        rspprec = _rspp(match, config)[team.value]
+        rep.rspp_goals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["goals"]
+            for r in rspprec["players"]}
+        from .attack_types import last_passers as _epp
+        epprec = _epp(match, config)[team.value]
+        rep.epp_passes_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["passes"]
+            for r in epprec["players"]}
+        from .rules import passive_holders as _pvp
+        pvprec = _pvp(match, config)[team.value]
+        rep.pvp_frames_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["frames"]
+            for r in pvprec["players"]}
+        from .decisions import soft_passers as _spp
+        spprec = _spp(match, config)[team.value]
+        rep.spp_soft_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["soft"]
+            for r in spprec["players"]}
+        from .xg import tired_shooters as _fsp
+        fsprec = _fsp(match, config)[team.value]
+        rep.fsp_sh_by_player = dict(fsprec["sh"])
+        rep.fsp_fh_by_player = dict(fsprec["fh"])
+        from .xg import missed_chance_players as _mcp
+        mcprec = _mcp(match, config)[team.value]
+        rep.mcp_misses_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["misses"]
+            for r in mcprec["players"]}
+        from .momentum import control_timeline as _ctl
+        ctlrec = _ctl(match, config)[team.value]
+        rep.ctl_won = ctlrec["won"]
+        rep.ctl_lost = ctlrec["lost"]
+        rep.ctl_blocks = len(ctlrec["blocks"])
+        from .rules import seven_sources as _svs
+        svsrec = _svs(match, config)[team.value]
+        rep.svs_sevens_by_type = dict(svsrec["types"])
+        from .goalkeeper import gk_after_goal as _gka
+        gkarec = _gka(match, config)[team.value]
+        rep.gka_fresh_shots = gkarec["fresh_shots"]
+        rep.gka_fresh_saves = gkarec["fresh_saves"]
+        rep.gka_rest_shots = gkarec["rest_shots"]
+        rep.gka_rest_saves = gkarec["rest_saves"]
+        from .stats import running_load_balance as _lbl
+        lblrec = _lbl(match, config)[team.value]
+        rep.lbl_players = lblrec["players"]
+        rep.lbl_distance_m = int(round(lblrec["distance_m"]))
+        rep.lbl_top3_m = int(round(lblrec["top3_m"]))
+        from .setplays import setplay_decay as _spd
+        spdrec = _spd(match, config)[team.value]
+        rep.spd_first_attacks = spdrec["first_attacks"]
+        rep.spd_first_goals = spdrec["first_goals"]
+        rep.spd_repeat_attacks = spdrec["repeat_attacks"]
+        rep.spd_repeat_goals = spdrec["repeat_goals"]
+        from .priorities import counter_plan as _cpl
+        cplrec = _cpl(match, config)[team.value]
+        rep.cpl_total = cplrec["total"]
+        rep.cpl_matched = cplrec["matched"]
+        from .goalkeeper import keeper_return as _krt
+        krtrec = _krt(match, config)[team.value]
+        rep.krt_measured = krtrec["measured"]
+        rep.krt_sum_ds = int(round(10.0 * (krtrec["avg_s"] or 0.0)
+                                   * krtrec["measured"]))
+        rep.krt_conceded = krtrec["conceded_returning"]
+        from .defense import doubled_targets as _dtp
+        dtprec = _dtp(match, config)[team.value]
+        rep.dtp_frames_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["frames"]
+            for r in dtprec["players"]}
+        from .substitutions import substitution_yield as _sby
+        sbyrec = _sby(match, config)[team.value]
+        rep.sby_rotations = sbyrec["rotations"]
+        rep.sby_goals_for = sbyrec["goals_for"]
+        rep.sby_goals_against = sbyrec["goals_against"]
+        from .rules import passive_risk as _psr
+        psrrec = _psr(match, config)[team.value]
+        rep.psr_positional = psrrec["positional"]
+        rep.psr_passive = psrrec["passive"]
+        from .rules import seven_yield as _svy
+        svyrec = _svy(match, config)[team.value]
+        rep.svy_attempts = svyrec["attempts"]
+        rep.svy_goals = svyrec["goals"]
+        from .rules import powerplay_yield as _ppy
+        ppyrec = _ppy(match, config)[team.value]
+        rep.ppy_pp_shots = ppyrec["pp_shots"]
+        rep.ppy_pp_goals = ppyrec["pp_goals"]
+        rep.ppy_eq_shots = ppyrec["eq_shots"]
+        rep.ppy_eq_goals = ppyrec["eq_goals"]
+        from .defense import block_fade as _blf
+        blfrec = _blf(match, config)[team.value]
+        rep.blf_fh_blocks = blfrec["fh_blocks"]
+        rep.blf_fh_shots = blfrec["fh_shots"]
+        rep.blf_sh_blocks = blfrec["sh_blocks"]
+        rep.blf_sh_shots = blfrec["sh_shots"]
+        from .attack_types import screen_fade as _scrf
+        scrfrec = _scrf(match, config)[team.value]
+        rep.scrf_fh_shots = int(scrfrec["fh_shots"])
+        rep.scrf_fh_screened = int(scrfrec["fh_screened"])
+        rep.scrf_sh_shots = int(scrfrec["sh_shots"])
+        rep.scrf_sh_screened = int(scrfrec["sh_screened"])
+        from .attack_types import screen_yield as _scy
+        scyrec = _scy(match, config)[team.value]
+        rep.scy_screened_shots = scyrec["screened_shots"]
+        rep.scy_screened_goals = scyrec["screened_goals"]
+        rep.scy_clean_shots = scyrec["clean_shots"]
+        rep.scy_clean_goals = scyrec["clean_goals"]
+        from .goalkeeper import outlet_targets as _otp
+        otprec = _otp(match, config)[team.value]
+        rep.otp_outlets_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["outlets"]
+            for r in otprec["players"]}
+        from .rules import suspension_collectors as _stc
+        stcrec = _stc(match, config)[team.value]
+        rep.stc_susp_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["suspensions"]
+            for r in stcrec["players"]}
+        from .roles import assisted_scorers as _asp
+        asprec = _asp(match, config)[team.value]
+        rep.asp_assisted_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["assisted"]
+            for r in asprec["players"] if r["assisted"]}
+        rep.asp_goals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["goals"]
+            for r in asprec["players"] if r["goals"]}
+        from .attack_types import backward_passers as _bprp
+        bprprec = _bprp(match, config)[team.value]
+        rep.bprp_passes_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["passes"]
+            for r in bprprec["players"]}
+        from .decisions import ball_carriers as _tnrp
+        tnrprec = _tnrp(match, config)[team.value]
+        rep.tnrp_meters_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["meters"]
+            for r in tnrprec["players"]}
+        from .attack_types import lane_switchers as _lswp
+        lswprec = _lswp(match, config)[team.value]
+        rep.lswp_switches_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["switches"]
+            for r in lswprec["players"]}
+        from .decisions import press_outlets as _escp
+        escprec = _escp(match, config)[team.value]
+        rep.escp_passes_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["passes"]
+            for r in escprec["players"]}
+        from .attack_types import last_holders as _lstp
+        lstprec = _lstp(match, config)[team.value]
+        rep.lstp_attacks_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["attacks"]
+            for r in lstprec["players"]}
+        from .xg import big_chance_feeders as _bcfp
+        bcfprec = _bcfp(match, config)[team.value]
+        rep.bcfp_chances_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["chances"]
+            for r in bcfprec["players"]}
+        from .momentum import response_turnover_players as _rtop
+        rtoprec = _rtop(match, config)[team.value]
+        rep.rtop_turnovers_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["turnovers"]
+            for r in rtoprec["players"]}
+        from .stoppages import timeout_turnover_players as _toep
+        toeprec = _toep(match, config)[team.value]
+        rep.toep_turnovers_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["turnovers"]
+            for r in toeprec["players"]}
+        from .rules import seven_taker_players as _stp
+        stprec = _stp(match, config)[team.value]
+        rep.stp_sevens_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["sevens"]
+            for r in stprec["players"]}
+        from .attack_types import breakthrough_yield as _bty
+        btyrec = _bty(match, config)[team.value]
+        rep.bty_entries = int(btyrec["entries"])
+        rep.bty_goals = int(btyrec["goals"])
+        from .rules import shorthanded_turnover_players as _shtp
+        shtprec = _shtp(match, config)[team.value]
+        rep.shtp_turnovers_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["turnovers"]
+            for r in shtprec["players"]}
+        from .rules import powerplay_turnover_players as _pptp
+        pptprec = _pptp(match, config)[team.value]
+        rep.pptp_turnovers_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["turnovers"]
+            for r in pptprec["players"]}
+        from .priorities import key_player as _kpl
+        kplrec = _kpl(match, config)[team.value]
+        rep.kpl_layers_by_player = dict(kplrec["players"])
+        from .rules import suspension_cost as _sct
+        sctrec = _sct(match, config)[team.value]
+        rep.sct_windows = int(sctrec["windows"])
+        rep.sct_conceded = int(sctrec["conceded"])
+        from .defense import marking_shift as _msh
+        mshrec = _msh(match, config)[team.value]
+        rep.msh_fh_dist_m = float(mshrec["fh_dist_m"] or 0.0)
+        rep.msh_sh_dist_m = float(mshrec["sh_dist_m"] or 0.0)
+        from .defense import defensive_rebound_players as _rbcp
+        rbcprec = _rbcp(match, config)[team.value]
+        rep.rbcp_rebounds_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["rebounds"]
+            for r in rbcprec["players"]}
+        from .rules import suspension_chain_roles as _sup
+        suprec = _sup(match, config)[team.value]
+        rep.sup_chains_by_pair = dict(suprec["roles"])
+        from .rules import seven_miss_players as _svmp
+        svmprec = _svmp(match, config)[team.value]
+        rep.svmp_misses_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["misses"]
+            for r in svmprec["players"]}
+        from .stats import sprint_fade as _sfd
+        sfdrec = _sfd(match, config)[team.value]
+        rep.sfd_fh_sprints = int(sfdrec["fh_sprints"])
+        rep.sfd_fh_min = float(sfdrec["fh_min"])
+        rep.sfd_sh_sprints = int(sfdrec["sh_sprints"])
+        rep.sfd_sh_min = float(sfdrec["sh_min"])
+        from .momentum import clock_management as _clk
+        clkrec = _clk(match, config)[team.value]
+        rep.clk_lead = int(clkrec["lead"])
+        rep.clk_lead_sum_s = round(
+            (clkrec["lead_s"] or 0.0) * clkrec["lead"], 1)
+        rep.clk_base = int(clkrec["base"])
+        rep.clk_base_sum_s = round(
+            (clkrec["base_s"] or 0.0) * clkrec["base"], 1)
+        from .goalkeeper import rebound_punishment as _rpn
+        rpnrec = _rpn(match, config)[team.value]
+        rep.rpn_saves = int(rpnrec["saves"])
+        rep.rpn_punished = int(rpnrec["punished"])
+        from .defense import retreat_punishment as _rtp2
+        rtp2rec = _rtp2(match, config)[team.value]
+        rep.rtp_shots = int(rtp2rec["shots"])
+        rep.rtp_punished = int(rtp2rec["punished"])
+        from .defense import defensive_rebound_roles as _rbc
+        rbcrec = _rbc(match, config)[team.value]
+        rep.rbc_rebounds_by_role = dict(rbcrec["roles"])
+        from .setplays import setplay_concentration as _spk
+        spkrec = _spk(match, config)[team.value]
+        rep.spk_attacks = int(spkrec["attacks"])
+        rep.spk_top = int(round(
+            (spkrec["top_pct"] or 0.0) * spkrec["attacks"] / 100.0))
+        rep.spk_figures = int(spkrec["figures"])
+        from .goalkeeper import gk_clutch_saves as _gkc
+        gkcrec = _gkc(match, config)[team.value]
+        rep.gkc_clutch_faced = int(gkcrec["clutch"]["faced"])
+        rep.gkc_clutch_saves = int(gkcrec["clutch"]["saves"])
+        rep.gkc_rest_faced = int(gkcrec["rest"]["faced"])
+        rep.gkc_rest_saves = int(gkcrec["rest"]["saves"])
+        from .rules import shorthanded_turnover_roles as _sht
+        shtrec = _sht(match, config)[team.value]
+        rep.sht_turnovers_by_role = dict(shtrec["roles"])
+        from .attack_types import post_goal_rush as _rus
+        rusrec = _rus(match, config)[team.value]
+        rep.rus_after = int(rusrec["after"])
+        rep.rus_after_sum_s = round(
+            (rusrec["after_s"] or 0.0) * rusrec["after"], 1)
+        rep.rus_base = int(rusrec["base"])
+        rep.rus_base_sum_s = round(
+            (rusrec["base_s"] or 0.0) * rusrec["base"], 1)
+        from .defense import retreat_time as _rtt
+        rttrec = _rtt(match, config)[team.value]
+        rep.rtt_shots = int(rttrec["shots"])
+        rep.rtt_sum_s = round(
+            (rttrec["avg_s"] or 0.0) * rttrec["shots"], 1)
+        rep.rtt_slow = int(rttrec["slow"])
+        from .defense import recovery_roles as _rcr
+        rcrrec = _rcr(match, config)[team.value]
+        rep.rcr_frames_by_role = {
+            p: r["frames"] for p, r in rcrrec["roles"].items()}
+        rep.rcr_home_by_role = {
+            p: r["home_frames"] for p, r in rcrrec["roles"].items()}
+        from .roles import specialist_roles as _spc
+        spcrec = _spc(match, config)[team.value]
+        rep.spc_seconds_by_role = {
+            p: r["seconds"] for p, r in spcrec["roles"].items()}
+        rep.spc_def_seconds_by_role = {
+            p: r["def_seconds"] for p, r in spcrec["roles"].items()}
+        from .stats import iron_man_roles as _irm
+        irmrec = _irm(match, config)[team.value]
+        rep.irm_total_frames = len(match.frames)
+        rep.irm_on_by_role = {
+            p: round(v / 100.0 * len(match.frames))
+            for p, v in irmrec["roles"].items()}
+        from .decisions import shot_choice_quality as _scq
+        scqrec = _scq(match, config)[team.value]
+        rep.scq_shots = scqrec["shots"]
+        rep.scq_better = scqrec["better_options"]
+        from .stoppages import timeout_finisher as _tof
+        tofrec = _tof(match, config)[team.value]
+        rep.tof_timeouts = tofrec["timeouts"]
+        rep.tof_shots_by_role = dict(tofrec["roles"])
+        from .setplays import setplay_finishers as _spf
+        spfrec = _spf(match, config)[team.value]
+        _spf_rows = [r for r in spfrec["figures"]
+                     if r["share_pct"] is not None]
+        rep.spf_figures = len(_spf_rows)
+        rep.spf_telegraphed = sum(1 for r in _spf_rows
+                                  if r["share_pct"] >= 60.0)
+        _spf_hits: dict = {}
+        for r in _spf_rows:
+            if r["share_pct"] >= 60.0:
+                _spf_hits[r["main_role"]] = _spf_hits.get(
+                    r["main_role"], 0) + 1
+        rep.spf_telegraphed_by_role = _spf_hits
+        from .setplays import setplay_openers as _spo
+        sporec = _spo(match, config)[team.value]
+        _spo_rows = [r for r in sporec["figures"]
+                     if r["share_pct"] is not None]
+        rep.spo_figures = len(_spo_rows)
+        rep.spo_telegraphed = sum(1 for r in _spo_rows
+                                  if r["share_pct"] >= 60.0)
+        _spo_hits: dict = {}
+        for r in _spo_rows:
+            if r["share_pct"] >= 60.0:
+                _spo_hits[r["main_role"]] = _spo_hits.get(
+                    r["main_role"], 0) + 1
+        rep.spo_telegraphed_by_role = _spo_hits
+        from .roles import role_pressure_finish as _rpf
+        rpfrec = _rpf(match, config)[team.value]
+        rep.rpf_covered_shots_by_role = {
+            p: r["covered_shots"] for p, r in rpfrec["roles"].items()
+            if r["covered_shots"]}
+        rep.rpf_covered_goals_by_role = {
+            p: r["covered_goals"] for p, r in rpfrec["roles"].items()
+            if r["covered_shots"]}
         from .roles import role_shot_power as _rsp
         rsprec = _rsp(match, config)[team.value]
         rep.rsp_shots_by_role = {p: r["shots"]
@@ -7306,6 +11685,12 @@ def _scout_team_cached(match: Match, team: Team,
         # KM/H-ÖSSZEG (nem átlag): meccsek közt pontosan összegződik.
         rep.rsp_kmh_sum_by_role = {p: round(r["shots"] * r["avg_kmh"], 1)
                                    for p, r in rsprec["roles"].items()}
+        from .roles import role_shooting_hand as _rsh
+        rshrec = _rsh(match, config)[team.value]
+        rep.rsh_shots_by_role = {p: r["shots"]
+                                 for p, r in rshrec["roles"].items()}
+        rep.rsh_left_by_role = {p: r["left"]
+                                for p, r in rshrec["roles"].items()}
         from .roles import role_shot_timing as _rst
         rstrec = _rst(match, config)[team.value]
         rep.rst_shots_by_role = {p: r["shots"]
@@ -7591,6 +11976,22 @@ def _scout_team_cached(match: Match, team: Team,
         ccqrec = _ccq(match, config)[team.value]
         rep.ccq_shots = ccqrec["shots"]
         rep.ccq_sum_xga = (ccqrec["avg_xga"] or 0.0) * ccqrec["shots"]
+        # Egyéni gyengeségeik: a KETTŐ legkonkrétabb (nyomás alatti
+        # kiadás, hajrá-döntés) mezszám szerint. Egy meccs egy szavazat
+        # — a meccsek közti összegzés mondja meg, mi a visszatérő.
+        from .training import player_training_focus as _ptf
+        ptfrec = (_ptf(match, config) or {}).get(team.value) or {}
+        for _p in ptfrec.get("players") or []:
+            _j = _p.get("jersey")
+            if _j is None:
+                continue
+            for _it in _p.get("items") or []:
+                if _it.get("title") == "Kiadás nyomás alatt":
+                    rep.ptf_press[str(_j)] = rep.ptf_press.get(
+                        str(_j), 0) + 1
+                elif _it.get("title") == "Döntés a hajrában":
+                    rep.ptf_clutch[str(_j)] = rep.ptf_clutch.get(
+                        str(_j), 0) + 1
         from .momentum import closing_attacks as _clo
         clorec = _clo(match, config)[team.value]
         rep.clo_attacks = clorec["attacks"]
@@ -7673,6 +12074,21 @@ def _scout_team_cached(match: Match, team: Team,
         stgrec = _stg(match, config)[team.value]
         rep.stg_subs = stgrec["subs"]
         rep.stg_after = stgrec["after_conceded"]
+        from .substitutions import substitution_phase as _sph
+        sphrec = _sph(match, config)[team.value]
+        rep.sph_subs = sphrec["subs"]
+        rep.sph_opp_ball = sphrec["opp_ball"]
+        from .xg import finishing_balance as _fbal
+        fbalrec = _fbal(match, config)[team.value]
+        rep.fbal_shots = fbalrec["shots"]
+        rep.fbal_goals = fbalrec["goals"]
+        rep.fbal_xg_sum = round(fbalrec["xg"], 2)
+        from .goalkeeper import gk_saves_by_hand as _gkh
+        gkhrec = _gkh(match, config)[team.value]
+        rep.gkh_left_faced = gkhrec["hands"]["bal"]["faced"]
+        rep.gkh_left_saves = gkhrec["hands"]["bal"]["saves"]
+        rep.gkh_right_faced = gkhrec["hands"]["jobb"]["faced"]
+        rep.gkh_right_saves = gkhrec["hands"]["jobb"]["saves"]
         from .defense import defense_setup_time as _dst
         dstrec = _dst(match, config)[team.value]
         rep.dst_cases = dstrec["cases"]
@@ -7833,6 +12249,10 @@ def _scout_team_cached(match: Match, team: Team,
             for poszt, r in _gsr(match, config)[team.value]["roles"].items()}
         from .defense import turnover_clusters as _tcl
         tclrec = _tcl(match, config)[team.value]
+        from .defense import pressured_turnovers as _pto
+        ptorec = _pto(match, config)[team.value]
+        rep.pto_total = ptorec["total"]
+        rep.pto_unforced = ptorec["unforced"]
         rep.tc_turnovers = tclrec["turnovers"]
         rep.tc_clustered = tclrec["clustered"]
         rep.tc_clusters = tclrec["clusters"]
@@ -7874,6 +12294,11 @@ def _scout_team_cached(match: Match, team: Team,
              "holds": p["holds"],
              "frames": round(p["seconds"] * _hfps)}
             for p in _htp(match, config)[team.value]["players"]]
+        from .decisions import ball_carry_players as _bcp
+        rep.carry_players = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "holds": p["holds"], "meters": p["meters"]}
+            for p in _bcp(match, config)[team.value]["players"]]
         rep.fsw_labels = dict(fswrec["labels"])
         rep.fsw_attacks = fswrec["attacks"]
         rep.fsw_pairs = max(0, fswrec["attacks"] - 1)
@@ -9040,6 +13465,28 @@ def _merge_hold_players(reports) -> list:
                                  / max(1, kv[1]["holds"])))]
 
 
+def _merge_carry_players(reports) -> list:
+    """Labdavezetés: játékosonként a labdás szakaszok és a labdával
+    megtett méterek összegzése (az átlagos labdás út szerint
+    csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for p in (r.carry_players or []):
+            rec = tally.setdefault(p["player_id"],
+                                   {"jersey": None, "holds": 0,
+                                    "meters": 0.0})
+            if rec["jersey"] is None:
+                rec["jersey"] = p.get("jersey")
+            rec["holds"] += int(p.get("holds", 0))
+            rec["meters"] += float(p.get("meters", 0.0))
+    return [{"player_id": pid,
+             **{**rec, "meters": round(rec["meters"], 1)}}
+            for pid, rec in sorted(
+                tally.items(),
+                key=lambda kv: -(kv[1]["meters"]
+                                 / max(1, kv[1]["holds"])))]
+
+
 def _merge_fsw_labels(reports) -> dict:
     """Védekezés-váltás: formánként a védekezett támadások összegzése
     (a támadás-szám szerint csökkenő)."""
@@ -9233,6 +13680,172 @@ def _merge_blockers(reports) -> list:
                                      + int(b["blocks"]))
     return [{"player_id": pid, "blocks": n}
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
+# A meccsterv TÉMA-sorrendje: a lista élén az álljon, amit a
+# felkészülésen először el kell mondani. Kimondott, vitatható edzői
+# sorrend (mint a teendő-rangsor családjainál) — nem tanult súly:
+# 1. kapus (a legolcsóbb gólok jönnek innen), 2. védekezés (a
+# legtöbb pont ott áll vagy dől el), 3. támadás, 4. fegyelem és
+# létszám (kétperc, hetes), 5. hajrá és erőnlét, 6. egyéb.
+MPL_THEMES: tuple = (
+    # A lap élén a meccs JELLEGE áll (tükör- vagy ellentétes stílus):
+    # ez keretezi az összes többi mondatot.
+    ("jelleg", ("tükör-meccs", "ellentétes stílus", "stílus-egyezés",
+                "hasonló stílus")),
+    ("kapus", ("kapus", "kapu ", "üres kapu", "hetes", "7 a 6",
+               "7a6", "indítás")),
+    ("védekezés", ("fal", "véd", "kettőz", "blokk", "emberfog",
+                   "letámad", "pressz", "visszafut", "kilép",
+                   "elzár", "betör")),
+    # A kulcsok TÖVEK, nem teljes szavak: a magyar toldalék az utolsó
+    # magánhangzót is átírja ("kontra" → "kontrát"), ezért "kontr".
+    ("támadás", ("támad", "lövés", "lövő", "lőni", "kontr",
+                 "lerohan", "beálló", "szélső", "figur",
+                 "bejátsz", "középkezd", "átlöv")),
+    ("fegyelem", ("kétperc", "kiállítás", "fegyelem", "emberelőny",
+                  "emberhátrány", "szabálytalan")),
+    ("hajrá", ("hajrá", "utolsó húsz", "utolsó tíz", "fárad",
+               "futómunka", "csere", "időkérés", "félidő")),
+)
+
+
+def _mpl_theme(sor: str) -> int:
+    """A meccsterv-mondat téma-indexe (kisebb = előbbre kerül).
+
+    Az első illeszkedő téma dönt, a témán belül a szabályok eredeti
+    sorrendje marad (stabil rendezés) — így a kimenet
+    determinisztikus, és a mondatok nem keverednek össze.
+    """
+    kicsi = sor.lower()
+    for i, (_nev, kulcsok) in enumerate(MPL_THEMES):
+        if any(k in kicsi for k in kulcsok):
+            return i
+    return len(MPL_THEMES)
+
+
+def _mpl_order(plan: list) -> list:
+    """A meccsterv téma szerinti sorrendje (lásd MPL_THEMES)."""
+    return [sor for _, sor in
+            sorted(enumerate(plan),
+                   key=lambda pair: (_mpl_theme(pair[1]), pair[0]))]
+
+
+# Stílus-távolság: ennyi közös tengely kell az ítélethez, és e
+# fölött/alatt mondjuk ki, hogy tükör- vagy ellentétes meccs lesz.
+STY_MIN_AXES = 4
+STY_MIRROR_PCT = 80.0
+STY_OPPOSITE_PCT = 50.0
+
+
+def _sty_axes(rep: "ScoutingReport") -> dict:
+    """A stílus mérhető tengelyei egy felderítésből, 0..1 skálán.
+
+    Csak olyan tengely kerül be, amelyhez van elég adat — így két
+    csapat összevetése mindig a KÖZÖS tengelyeken történik, és a
+    hiányzó mérés nem hamisít hasonlóságot.
+    """
+    ax: dict = {}
+    if rep.shots >= 5:
+        tav = rep.sr_close_shots + rep.sr_mid_shots + rep.sr_far_shots
+        if tav >= 5:
+            ax["lövés-távolság"] = rep.sr_far_shots / tav
+    if rep.pace_minutes >= 5.0:
+        # Támadás/perc: 3 fölött már nagyon pörgős, ez a skála teteje.
+        ax["tempó"] = min(1.0, (rep.pace_attacks / rep.pace_minutes)
+                          / 3.0)
+    if rep.fast_break_pct > 0:
+        ax["lerohanás"] = min(1.0, rep.fast_break_pct / 40.0)
+    scy = rep.scy_screened_shots + rep.scy_clean_shots
+    if scy >= 6:
+        ax["elzárás"] = rep.scy_screened_shots / scy
+    if rep.pivot_total_attacks >= 6:
+        ax["beállós játék"] = (rep.pivot_attacks
+                               / rep.pivot_total_attacks)
+    meccs = max(1, rep.matches)
+    if rep.agr_susp or rep.svy_attempts:
+        # Keménység: kiállítás + okozott hetes meccsenként; 6 fölött
+        # már nagyon kemény, ez a skála teteje.
+        ax["keménység"] = min(1.0, (rep.agr_susp + rep.svy_attempts)
+                              / meccs / 6.0)
+    return ax
+
+
+def style_distance(own: "ScoutingReport",
+                   opp: "ScoutingReport") -> dict:
+    """Stílus-távolság: MENNYIRE HASONLÍT a két csapat játéka.
+
+    A meccsterv-illesztés (matchup_plan) az erősség-gyengeség
+    kereszteket adja — ez a KÉPET: a két felderítés közös
+    stílus-tengelyeit (lövés-távolság, tempó, lerohanás, elzárás,
+    beállós játék, keménység) veti össze, és egy 0–100-as
+    hasonlóság-pontot ad.
+
+    Edzőileg: a tükör-meccsen (magas pontszám) a részletek döntenek
+    — ott a saját rutinok minősége és a fegyelem a különbség, nem a
+    terv. Az ellentétes stílusú meccs viszont arról szól, ki
+    kényszeríti rá a sajátját: a legnagyobb eltérésű tengelyt kell
+    a saját javunkra billenteni (ha ők lassítanak, mi pörgetünk — és
+    fordítva).
+
+    Visszatérés: {"score_pct", "axes": [{"axis", "own", "opp",
+    "diff"}], "closest", "farthest", "verdict"} — a score/verdict
+    None, ha kevés (STY_MIN_AXES alatti) a közös tengely.
+    """
+    a_own = _sty_axes(own)
+    a_opp = _sty_axes(opp)
+    kozos = [k for k in a_own if k in a_opp]
+    sorok = [{"axis": k, "own": round(a_own[k], 3),
+              "opp": round(a_opp[k], 3),
+              "diff": round(abs(a_own[k] - a_opp[k]), 3)}
+             for k in kozos]
+    sorok.sort(key=lambda r: r["diff"])
+    out = {"score_pct": None, "axes": sorok, "closest": None,
+           "farthest": None, "verdict": None}
+    if len(sorok) < STY_MIN_AXES:
+        return out
+
+    atlag = sum(r["diff"] for r in sorok) / len(sorok)
+    pont = 100.0 * (1.0 - atlag)
+    out["score_pct"] = round(pont, 1)
+    out["closest"] = sorok[0]["axis"]
+    out["farthest"] = sorok[-1]["axis"]
+    if pont >= STY_MIRROR_PCT:
+        out["verdict"] = (
+            f"tükör-meccs ({pont:.0f}% stílus-egyezés, "
+            f"{len(sorok)} tengelyen) — a terv nem hoz különbséget: "
+            "a rutinok minősége, a fegyelem és a kapus dönt; a "
+            f"legnagyobb eltérés a(z) {sorok[-1]['axis']}, azt "
+            "érdemes a magunk javára billenteni")
+    elif pont <= STY_OPPOSITE_PCT:
+        out["verdict"] = (
+            f"ellentétes stílus ({pont:.0f}% egyezés, "
+            f"{len(sorok)} tengelyen) — a meccs arról szól, ki "
+            f"kényszeríti rá a sajátját; a(z) {sorok[-1]['axis']} a "
+            "legnagyobb szakadék, ott kell átvenni az irányítást")
+    else:
+        out["verdict"] = (
+            f"részben hasonló stílus ({pont:.0f}% egyezés, "
+            f"{len(sorok)} tengelyen) — a(z) {sorok[-1]['axis']} az "
+            f"igazi különbség, a(z) {sorok[0]['axis']} pedig "
+            "semleges terep")
+    return out
+
+
+def _merge_counts(reports: list, mezo: str) -> dict:
+    """{kulcs: darab} szótárak összeadása több jelentésből.
+
+    A jelentés-mezők darabszám-alapúak, hogy meccsek közt PONTOSAN
+    összegződjenek; ez a segéd ugyanezt teszi a szótár-alakúakkal.
+    """
+    ki: dict = {}
+    for r in reports:
+        for k, v in (getattr(r, mezo, None) or {}).items():
+            try:
+                ki[k] = ki.get(k, 0) + int(v)
+            except (TypeError, ValueError):
+                continue
+    return ki
 
 
 def matchup_plan(own: "ScoutingReport",
@@ -9844,6 +14457,3248 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 456) Az ő NYOMÁS-ÉRZÉKENY emberük × a ti labdaszerző
+    # védekezésetek: a kettőzésnek célpontja van, nem iránya.
+    _p456 = sorted(opp.ptf_press.items(), key=lambda kv: -kv[1])
+    if _p456 and own.trans_steals >= 5:
+        _p456_mez, _p456_db = _p456[0]
+        plan.append(
+            f"A #{_p456_mez} nyomás alatt elveszti a labdát "
+            f"({_p456_db} meccsen jött elő), ti pedig jó labdaszerzők "
+            f"vagytok ({own.trans_steals} szerzés) — a kettőzést RÁ "
+            "időzítsétek: nála a szorítás nem kockázat, hanem "
+            "labdaszerzés, és onnan indul a kontrátok.")
+
+    # 457) Az ő HAJRÁ-hibázójuk × a mi hajrá-mérlegünk: a döntő
+    # szakaszban tudjuk, kit kell döntés-kényszerbe hozni.
+    _p457 = sorted(opp.ptf_clutch.items(), key=lambda kv: -kv[1])
+    if (_p457 and own.clutch_matches >= 1
+            and own.clutch_goals_for >= own.clutch_goals_against):
+        _p457_mez, _p457_db = _p457[0]
+        plan.append(
+            f"A hajrában a #{_p457_mez} kezén szakad el a labda "
+            f"({_p457_db} meccsen), ti pedig bírjátok a végjátékot "
+            f"({own.clutch_goals_for}–{own.clutch_goals_against} a "
+            "döntő szakaszban) — az utolsó percekben rá kell terhelni: "
+            "az ő döntés-kényszere a ti kontrátok.")
+
+    # 458) Az ő labdahordójuk × a ti labdaszerző védekezésetek: a futó
+    # labdás elvehető labdát jelent — a leszúrásnak célpontja van.
+    _p458 = [p for p in (opp.carry_players or []) if p["holds"] >= 5]
+    _h458 = sum(p["holds"] for p in (opp.carry_players or []))
+    if _p458 and _h458 >= 5 and own.trans_steals >= 5:
+        _avg458 = sum(p["meters"] for p in (opp.carry_players or [])) \
+            / _h458
+        _top458 = max(_p458, key=lambda p: p["meters"] / p["holds"])
+        _m458 = _top458["meters"] / _top458["holds"]
+        if _m458 - _avg458 >= 3.0:  # = CARRY_LONG_GAP_M
+            _who458 = (f"{_top458['jersey']}-es mezszámú"
+                       if _top458.get("jersey") is not None
+                       else f"{_top458['player_id']} azonosítójú")
+            plan.append(
+                f"A(z) {_who458} játékosuk viszi a labdát (átlag "
+                f"{_m458:.1f} m labdás szakaszonként a csapatátlag "
+                f"{_avg458:.1f} m helyett), ti pedig jó labdaszerzők "
+                f"vagytok ({own.trans_steals} szerzés) — futó "
+                "labdásnál a labda elvehető: az ő indulásaira "
+                "időzítsétek a leszúrást, és onnan indul a kontrátok.")
+
+    from .tactics import ATV_MIN_ATTACKS as _A449
+    from .tactics import ATV_ONE_TEMPO_PCT as _A449P
+    # 455) Az ő hátrébb kerülő támadásuk × a ti tömör falatok: ha a
+    # hajrában nem jönnek be a hatosra, a fal beljebb tömörülhet.
+    if (opp.adf_fh_n >= 100 and opp.adf_sh_n >= 100
+            and opp.adf_fh_sum_m > 0 and opp.adf_sh_sum_m > 0
+            and opp.adf_sh_sum_m / opp.adf_sh_n
+            - opp.adf_fh_sum_m / opp.adf_fh_n >= 0.5
+            and own.defense_main in ("6-0", "5-1")):
+        _p455_fh = opp.adf_fh_sum_m / opp.adf_fh_n
+        _p455_sh = opp.adf_sh_sum_m / opp.adf_sh_n
+        plan.append(
+            f"A támadásuk a 2. félidőre hátrébb kerül ({_p455_fh:.1f} → "
+            f"{_p455_sh:.1f} m a kaputól), ti pedig {own.defense_main}-ban "
+            "védekeztek — a hajrában a falatok nyugodtan tömörülhet "
+            "beljebb: kilépésre nincs szükség, ha úgysem jönnek be, és "
+            "a beálló-vonal így mindig fedve marad.")
+
+    # 454) Az ő elfogyó beállójuk × a ti magas falatok: ha a hajrában
+    # nem megy be a labda a hatosra, a fal kifelé dolgozhat.
+    if (opp.puf_fh_n >= 6 and opp.puf_sh_n >= 6
+            and 100.0 * opp.puf_fh_pivot / opp.puf_fh_n
+            - 100.0 * opp.puf_sh_pivot / opp.puf_sh_n >= 10.0
+            and own.defense_main in ("5-1", "3-2-1", "4-2")):
+        _p454_fh = 100.0 * opp.puf_fh_pivot / opp.puf_fh_n
+        _p454_sh = 100.0 * opp.puf_sh_pivot / opp.puf_sh_n
+        plan.append(
+            f"A beállójuk a 2. félidőre elfogy ({_p454_fh:.0f}% → "
+            f"{_p454_sh:.0f}% a beállós támadás), ti pedig "
+            f"{own.defense_main}-ben védekeztek — a hajrában a kilépő "
+            "védőtök bátran mehet KI az átlövőre: a hatoson már nincs "
+            "kit büntetni a kilépés mögött.")
+
+    # 453) Az ő halmozott fáradásuk × a ti hajrá-erőtök: a meccs vége
+    # a ti ablakotok — a friss lábakat oda kell időzíteni.
+    if (opp.fpr_matches >= 1
+            and opp.fpr_signals / opp.fpr_matches >= 3.0
+            and own.clutch_matches >= 1
+            and own.clutch_goals_for > own.clutch_goals_against):
+        _p453 = opp.fpr_signals / opp.fpr_matches
+        plan.append(
+            f"Meccsenként átlag {_p453:.1f} fáradás-jel szólal meg náluk, ti "
+            f"pedig jók vagytok a hajrában ({own.clutch_goals_for}–"
+            f"{own.clutch_goals_against} a meccsek végén) — a friss átlövőt "
+            "és a tempó-váltást a második félidő közepére időzítsd: az ő "
+            "elfogyó hatvan percük + a ti hajrátok döntheti el a meccset.")
+
+    # 452) Az ő beszűkülő támadásuk × a ti tömör falatok: a hajrában a
+    # szélső-védők beljebb húzhatók, mert a szélt úgysem játsszák meg.
+    if (opp.wif_fh_n >= 6 and opp.wif_sh_n >= 6
+            and 100.0 * opp.wif_fh_wing / opp.wif_fh_n
+            - 100.0 * opp.wif_sh_wing / opp.wif_sh_n >= 10.0
+            and own.defense_main in ("6-0", "5-1")):
+        _p452_fh = 100.0 * opp.wif_fh_wing / opp.wif_fh_n
+        _p452_sh = 100.0 * opp.wif_sh_wing / opp.wif_sh_n
+        plan.append(
+            f"A támadásuk a 2. félidőre beszűkül ({_p452_fh:.0f}% → "
+            f"{_p452_sh:.0f}% jut el a szélre), ti pedig "
+            f"{own.defense_main}-ban védekeztek — a hajrára húzzátok "
+            "beljebb a szélső-védőket: középen fognak keresgélni, és "
+            "onnan csak a nehéz átlövés marad nekik.")
+
+    # 451) Az ő lassuló visszaállásuk × a ti kontrátok: a hajrában
+    # minden lövésük után nyílik egy kontra-ablak — azt kell kihasználni.
+    if (opp.rtf_fh_n >= 4 and opp.rtf_sh_n >= 4
+            and opp.rtf_fh_sum_s > 0 and opp.rtf_sh_sum_s > 0
+            and opp.rtf_sh_sum_s / opp.rtf_sh_n
+            - opp.rtf_fh_sum_s / opp.rtf_fh_n >= 1.0
+            and own.fbc_breaks >= 3):
+        _p451_fh = opp.rtf_fh_sum_s / opp.rtf_fh_n
+        _p451_sh = opp.rtf_sh_sum_s / opp.rtf_sh_n
+        plan.append(
+            f"A visszaállásuk a 2. félidőre lassul ({_p451_fh:.1f} → "
+            f"{_p451_sh:.1f} mp a lövésük után), ti pedig tudtok kontrázni "
+            f"({own.fbc_breaks} indított kontra) — a hajrában a kapus "
+            "MINDEN védés és kapott gól után azonnal indítson: a "
+            "különbség pont egy kontra-lépés.")
+
+    # 450) Az ő visszahúzódó faluk × a ti külső lövőitek: a hajrában a
+    # 9 méteres lövés zavartalan lesz — oda kell időzíteni a lövőt.
+    if (opp.lhf_fh_n >= 100 and opp.lhf_sh_n >= 100
+            and opp.lhf_fh_sum_m > 0 and opp.lhf_sh_sum_m > 0
+            and opp.lhf_fh_sum_m / opp.lhf_fh_n
+            - opp.lhf_sh_sum_m / opp.lhf_sh_n >= 0.5
+            and own.sr_far_shots >= 8
+            and own.sr_far_goals * 100.0 / max(1, own.sr_far_shots) >= 25.0):
+        _p450_fh = opp.lhf_fh_sum_m / opp.lhf_fh_n
+        _p450_sh = opp.lhf_sh_sum_m / opp.lhf_sh_n
+        plan.append(
+            f"A faluk a 2. félidőre visszahúzódik ({_p450_fh:.1f} → "
+            f"{_p450_sh:.1f} m a saját kaputól), ti pedig eltaláljátok a "
+            f"távoli lövést ({own.sr_far_goals}/{own.sr_far_shots} a 9 "
+            "méteres körből) — a hajrára tartogasd a friss átlövőt: "
+            "kilépő védő nélkül zavartalanul tud elengedni.")
+
+    # 449) Az ő EGY tempójuk × a ti gyors kontrátok: a kiszámítható
+    # ritmusra a fal be tud állni, és a nyereség a másik végén jön.
+    if opp.atv_attacks >= _A449 and own.fbc_breaks >= 3:
+        _p449 = {"fast": 100.0 * opp.atv_fast / opp.atv_attacks,
+                 "mid": 100.0 * opp.atv_mid / opp.atv_attacks,
+                 "slow": 100.0 * opp.atv_slow / opp.atv_attacks}
+        _p449top = max(_p449, key=lambda k: _p449[k])
+        if _p449[_p449top] >= _A449P:
+            if _p449top == "slow":
+                plan.append(
+                    f"A támadásaik {_p449[_p449top]:.0f}%-a HOSSZÚ "
+                    f"({opp.atv_slow}/{opp.atv_attacks} akció 30 mp "
+                    f"fölött), ti pedig futtok kontrát "
+                    f"({own.fbc_breaks} lerohanás) — ez ajándék: "
+                    "türelmes, hibátlan 6-0, semmi kilépés, és amikor a "
+                    "passzív jel megjön, a kényszerű lövés után MINDEN "
+                    "labdával azonnal induljatok. Az ő 30 másodpercük "
+                    "után a faluk rendezetlen.")
+            elif _p449top == "fast":
+                plan.append(
+                    f"A támadásaik {_p449[_p449top]:.0f}%-a 12 mp-en "
+                    f"belül zárul ({opp.atv_fast}/{opp.atv_attacks}), ti "
+                    f"pedig magatok is kontráztok ({own.fbc_breaks} "
+                    "lerohanás) — a meccs a VISSZARENDEZŐDÉSEN dől el: "
+                    "saját támadásnál egy ember már a lövés pillanatában "
+                    "hátrafelé indul, és a lövés-választásotokban is "
+                    "kerüljétek a kipattanós, hosszú távolit.")
+
+    from .defense import PTO_MIN_TURNOVERS, PTO_UNFORCED_PCT
+    # 448) Az ő magától jövő eladásaik × a ti fegyelmezett falatok:
+    # akinek magától elszáll a labdája, azt nem kell megtámadni.
+    if opp.pto_total >= PTO_MIN_TURNOVERS and own.blocks >= 4:
+        _p448_pct = 100.0 * opp.pto_unforced / opp.pto_total
+        if _p448_pct >= PTO_UNFORCED_PCT:
+            plan.append(
+                f"Az eladásaik {_p448_pct:.0f}%-a MAGÁTÓL jön (nem volt "
+                f"védő 2,5 m-en belül: {opp.pto_unforced}/"
+                f"{opp.pto_total}), ti pedig fegyelmezetten zártok "
+                f"({own.blocks} blokk) — NE menjetek ki rájuk: a "
+                "letámadás csak rést nyitna, a hibát úgyis megkapjátok. "
+                "Zárt 6-0, kezek fent, és a megszerzett labdát azonnal "
+                "indítsátok — a kockázat nélküli labdaszerzés a "
+                "leggyorsabb kontra.")
+
+    # 447) Az ő indításnál olvasható figurájuk × a ti aktív falatok:
+    # a passzsáv zárása a figurát INDULÁS ELŐTT megöli.
+    if (opp.spo_telegraphed >= 1 and opp.spo_telegraphed_by_role
+            and own.trans_steals >= 4):
+        _p447_p, _p447_n = max(opp.spo_telegraphed_by_role.items(),
+                               key=lambda kv: kv[1])
+        plan.append(
+            f"A figuráik közül {opp.spo_telegraphed} már az INDÍTÁSNÁL "
+            f"olvasható, a legtöbb ({_p447_n}) a(z) {_p447_p} posztról "
+            f"indul, ti pedig aktívan szereztek labdát "
+            f"({own.trans_steals} szerzés) — felállt támadásban a(z) "
+            f"{_p447_p} posztra menő ELSŐ passz sávját zárjátok: "
+            "kilépés a passzvonalra, nem az emberre. A figura így el "
+            "sem indul, és a megszerzett labda azonnal kontra.")
+
+    from .rules import SREP_MIN_PAIRS, SREP_REPEAT_PCT
+    # 446) Az ő ismétlő hetesdobójuk × a ti védő kapusotok: a
+    # legutóbb látott sarok maga az esély — a kapus KÉSZÜLHET.
+    if opp.srep_pairs >= SREP_MIN_PAIRS and own.gk_saves >= 5:
+        _s446_pct = 100.0 * opp.srep_repeats / opp.srep_pairs
+        if _s446_pct >= SREP_REPEAT_PCT:
+            plan.append(
+                f"A hetesdobóik ismétlők: az egymást követő heteseik "
+                f"{_s446_pct:.0f}%-a ugyanabba a sávba ment "
+                f"({opp.srep_repeats}/{opp.srep_pairs} pár), a ti "
+                f"kapusotok pedig fog ({own.gk_saves} védés) — vezessetek "
+                "hetes-naplót a kispadon: minden hetesüknél kiabáljátok "
+                "be a kapusnak, hova ment az ELŐZŐ, mert nagy eséllyel "
+                "oda megy a következő is.")
+
+    # 445) Az ő elfogyó elzárásuk × a ti blokk-játékotok: a hajrában a
+    # fedetlen lövő a blokk-kéz prédája — kilépni, blokkolni.
+    if (opp.scrf_fh_shots >= 4 and opp.scrf_sh_shots >= 4
+            and own.blocks >= 3):
+        _s445_f = 100.0 * opp.scrf_fh_screened / opp.scrf_fh_shots
+        _s445_s = 100.0 * opp.scrf_sh_screened / opp.scrf_sh_shots
+        if _s445_f - _s445_s >= 15.0:
+            plan.append(
+                f"A 2. félidőre elfogy az elzárás-munkájuk "
+                f"({_s445_f:.0f}% → {_s445_s:.0f}% elzárásos lövés), "
+                f"ti pedig aktívan zártok ({own.blocks} blokk) — a "
+                "hajrában váltsatok bátor falra: elzárás nélkül érkező "
+                "lövőre azonnali kilépés és blokk-kéz, a hosszú "
+                "kísérleteiket pedig a kapus a blokk mögül olvassa.")
+
+    # 444) Az ő posztról olvasható befutójuk × a ti gyors
+    # visszafutásotok: a második hullám sávja posztra szólóan zárható.
+    _p444_fast = own.rtt_shots - own.rtt_slow
+    if opp.swr_shots_by_role and own.rtt_shots >= 4 and _p444_fast >= 3:
+        _p444_n = sum(opp.swr_shots_by_role.values())
+        _p444_p, _p444_c = max(opp.swr_shots_by_role.items(),
+                               key=lambda kv: kv[1])
+        if _p444_n >= 3 and 100.0 * _p444_c / _p444_n >= 60.0:
+            plan.append(
+                f"A kontráik második hulláma a(z) {_p444_p} poszt "
+                f"({_p444_c}/{_p444_n} befutós befejezés), ti pedig "
+                f"gyorsan futtok vissza ({_p444_fast} időben záró "
+                "visszarendeződés) — a visszafutás-parancs posztra "
+                "szóljon: az első embert az első visszaérő veszi, a "
+                "második visszaérő automatikusan a(z) "
+                f"{_p444_p} sávjába lép hátra, mielőtt a befutó labdát "
+                "kap.")
+
+    # 443) Az ő posztról olvasható holtpont-tervük × a ti kettőzésetek:
+    # egálnál a poszt sávjára kell a korai kettőzés, akárki játssza.
+    if opp.pbr_breaks_by_role and own.blocks >= 3:
+        _p443_n = sum(opp.pbr_breaks_by_role.values())
+        _p443_p, _p443_c = max(opp.pbr_breaks_by_role.items(),
+                               key=lambda kv: kv[1])
+        if _p443_n >= 3 and 100.0 * _p443_c / _p443_n >= 60.0:
+            plan.append(
+                f"A holtpontjaikat a(z) {_p443_p} posztjuk viszi el "
+                f"({_p443_c}/{_p443_n} egálbontó gól), ti pedig "
+                f"aktívan záró fal vagytok ({own.blocks} blokk) "
+                "— egál-állásnál álljon készen a jel: a poszt sávjára "
+                "korai kettőzés megy, akárki játssza éppen, és a "
+                "holtpont-figurájuk fő ága zárva van.")
+
+    # 442) Az ő posztról futó szervezésük × a ti labdaszerzésetek: a
+    # sáv-zárást a posztra kell tenni, akárki játssza — az ott csípett
+    # labda a legkorábbi töréspont.
+    if opp.prear_by_role and own.trans_steals >= 4:
+        _p442_n = sum(opp.prear_by_role.values())
+        _p442_p, _p442_c = max(opp.prear_by_role.items(),
+                               key=lambda kv: kv[1])
+        if _p442_n >= 3 and 100.0 * _p442_c / _p442_n >= 60.0:
+            plan.append(
+                f"A másod-előkészítésük a(z) {_p442_p} poszton fut "
+                f"({_p442_c}/{_p442_n}), ti pedig jó labdaszerzők "
+                f"vagytok ({own.trans_steals} szerzés) — a beleérős "
+                "présnyomást a poszt sávjára tegyétek, akárki játssza "
+                "éppen: az ott elcsípett labda a támadásukat a "
+                "legkorábbi pontján töri meg, és kontrát ad.")
+
+    # 441) Az ő posztról olvasható paduk × a ti aktív falatok: a posztra
+    # érkező friss embert az érkezése pillanatában kell felvenni.
+    if opp.sspr_goals_by_role and own.blocks >= 3:
+        _s441_n = sum(opp.sspr_goals_by_role.values())
+        _s441_p, _s441_c = max(opp.sspr_goals_by_role.items(),
+                               key=lambda kv: kv[1])
+        if _s441_n >= 3 and 100.0 * _s441_c / _s441_n >= 60.0:
+            plan.append(
+                f"A paduk a(z) {_s441_p} posztról termel "
+                f"({_s441_c}/{_s441_n} pad-gól), a ti falatok pedig "
+                f"aktívan zár ({own.blocks} blokk) — tegyétek "
+                "szabállyá: amikor erre a "
+                "posztra friss ember érkezik, a sáv védője azonnal "
+                "vegye fel, és az első két támadásban kettőzzetek rá "
+                "— a pad-fegyverük az első helyzete előtt hal el.")
+
+    # 440) Az ő szuper-cseréjük × a ti mély padotok: a padról termelő
+    # emberük beállása jelzés — friss védő várja, ne fáradt.
+    if opp.ssu_goals_by_player and own.rotation_matches > 0:
+        _s440_all = sum(opp.ssu_goals_by_player.values())
+        _s440_k, _s440_n = max(opp.ssu_goals_by_player.items(),
+                               key=lambda kv: kv[1])
+        _s440_rot = own.rotation_used_sum / max(1, own.rotation_matches)
+        if (_s440_all >= 3 and 100.0 * _s440_n / _s440_all >= 50.0
+                and _s440_rot >= 9.0):
+            plan.append(
+                f"A padjukról a(z) {_s440_k}. játékos termel "
+                f"({_s440_n}/{_s440_all} pad-gól — szuper-csere), ti "
+                f"pedig mély paddal forogtok (átlag {_s440_rot:.0f} "
+                "bevetett játékos) — a beállása legyen a jelzésetek: "
+                "amikor beáll, azonnal friss belső védő jöjjön vele "
+                "szembe, és a figyelő mindig érintés-közelben kísérje.")
+
+    # 439) Az ő fáradó faluk × a ti betörő emberetek: a rés a második
+    # félidőben nyílik — akkor kell a betörős kártyát kijátszani.
+    if (opp.gfd_fh_frames >= 60 and opp.gfd_sh_frames >= 60
+            and own.break_entries >= 5):
+        _g439_fh = opp.gfd_fh_sum_m / opp.gfd_fh_frames
+        _g439_sh = opp.gfd_sh_sum_m / opp.gfd_sh_frames
+        if _g439_sh - _g439_fh >= 0.8:
+            plan.append(
+                f"Az ő falukban a 2. félidőre szétnyílnak a közök "
+                f"({_g439_fh:.1f} m → {_g439_sh:.1f} m), ti pedig sokat "
+                f"törtök be ({own.break_entries} betörés) — a betörős "
+                "figurákat a MÁSODIK félidőre tartogassátok: az első "
+                "félidőben járassátok a labdát és fárasszátok a falat, "
+                "a szünet után jöhet a lendületből érkező ember.")
+
+    # 438) Az ő kiszámítható hetesdobójuk × a ti fogó kapusotok: a
+    # hetes az egyetlen helyzet, ahol a kapus előre dönthet.
+    if opp.stc_dir_by_taker and own.gk_saves >= 5:
+        _s438_tak: dict = {}
+        for _s438_key, _s438_n in opp.stc_dir_by_taker.items():
+            _s438_k, _, _s438_d = _s438_key.partition("·")
+            _s438_tak.setdefault(_s438_k, {})[_s438_d] = _s438_n
+        _s438_best = None
+        for _s438_k, _s438_dirs in _s438_tak.items():
+            _s438_att = sum(_s438_dirs.values())
+            if _s438_att < 3:
+                continue
+            _s438_d = max(_s438_dirs, key=lambda d: _s438_dirs[d])
+            _s438_pct = 100.0 * _s438_dirs[_s438_d] / _s438_att
+            if _s438_pct >= 60.0 and (
+                    _s438_best is None or _s438_att > _s438_best[1]):
+                _s438_best = (_s438_k, _s438_att, _s438_d, _s438_pct)
+        if _s438_best:
+            _s438_k, _s438_att, _s438_d, _s438_pct = _s438_best
+            plan.append(
+                f"A hetesdobójuk, a(z) {_s438_k}. játékos a {_s438_d} "
+                f"sarkot keresi ({_s438_pct:.0f}%, {_s438_att} dobásból), "
+                f"nektek pedig fogó kapusotok van ({own.gk_saves} védés) "
+                "— hetesnél a kapus NE olvasson, hanem előre döntsön: "
+                "tudatosan a bejáratott sarokra vetődjön; a hetes az "
+                "egyetlen helyzet, ahol ezt megteheti.")
+
+    # 437) Az ő rejtett szervezőjük × a ti labdaszerzésetek: a
+    # másod-előkészítőnél elcsípett labda a leggyorsabb kontra-forrás.
+    if (opp.prea_chained >= 2 and opp.prea_by_player
+            and own.trans_steals >= 4):
+        _p437_k, _p437_n = max(opp.prea_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _p437_n >= 2 and 100.0 * _p437_n / opp.prea_chained >= 50.0:
+            plan.append(
+                f"A góljaik mögött a(z) {_p437_k}. játékos a rejtett "
+                f"szervező ({_p437_n}/{opp.prea_chained} "
+                f"másod-előkészítés), ti pedig jó labdaszerzők vagytok "
+                f"({own.trans_steals} szerzés) — a présnyomás nála "
+                "kezdődjön: az ő passzsávjába érjetek bele, mert az ott "
+                "elcsípett labda a legkorábbi pillanatban töri meg a "
+                "támadásukat, és a leggyorsabb kontrát adja.")
+
+    # 436) Az ő vasemberük × a ti mély padotok: a név szerinti
+    # hajrá-célpont — a poszt-szabály (286) párja emberre.
+    if (opp.imn_match_min >= 10.0 and opp.imn_minutes_by_player
+            and own.rotation_matches > 0):
+        _i436_men = sorted(
+            ((k, v) for k, v in opp.imn_minutes_by_player.items()
+             if 100.0 * v / opp.imn_match_min >= 85.0),
+            key=lambda kv: -kv[1])
+        _i436_rot = own.rotation_used_sum / max(1, own.rotation_matches)
+        if _i436_men and len(_i436_men) <= 3 and _i436_rot >= 9.0:
+            _i436_k, _i436_v = _i436_men[0]
+            plan.append(
+                f"A(z) {_i436_k} csere nélkül végigjátssza a meccseiket "
+                f"({100.0 * _i436_v / opp.imn_match_min:.0f}% jelenlét), "
+                f"ti pedig mély paddal forogtok (átlag {_i436_rot:.0f} "
+                "bevetett játékos) — a hajrá a tiétek: az utolsó tíz "
+                "percben ŐT futtassátok, az ő emberével szemben mindig "
+                "friss láb jöjjön, és az ő sávjában jöjjön a betörés.")
+
+    # 435) Az ő balkezes POSZTJUK × a ti sáncotok: a poszt akkor is
+    # marad, ha az ember cserélődik — a sánc-tervet erre kell építeni.
+    if opp.rsh_shots_by_role and own.blocks >= 3:
+        for _r435_p, _r435_n in sorted(opp.rsh_shots_by_role.items(),
+                                       key=lambda kv: -kv[1]):
+            _r435_l = opp.rsh_left_by_role.get(_r435_p, 0)
+            if _r435_n >= 4 and _r435_l >= 0.7 * _r435_n:
+                plan.append(
+                    f"A(z) {_r435_p} posztjukról balkezes lő "
+                    f"({_r435_l}/{_r435_n} bal-jel), ti pedig sokat "
+                    f"blokkoltok ({own.blocks} blokk) — a sánc-tervet "
+                    "POSZTRA építsétek, ne névre: azon az oldalon "
+                    "mindig a másik kéz emelkedjen, a kapus a túlsó "
+                    "sarkat vegye alapba, és a befelé vezető utat "
+                    "zárjátok el — így a cserélt ember sem hoz "
+                    "meglepetést.")
+                break
+
+    # 434) Az ő fal-résük × a ti betörő emberetek: a rés csak akkor ér
+    # valamit, ha van, aki lendületből bemegy oda.
+    if (opp.dgap_frames >= 100 and opp.dgap_sum_m > 0
+            and own.break_entries >= 5):
+        _d434 = opp.dgap_sum_m / opp.dgap_frames
+        if _d434 >= 3.5:
+            _z434 = None
+            if opp.dgap_zones:
+                _z434, _zn434 = max(opp.dgap_zones.items(),
+                                    key=lambda kv: kv[1])
+                if 100.0 * _zn434 / opp.dgap_frames < 40.0:
+                    _z434 = None
+            plan.append(
+                f"Nagy közök vannak a falukban (átlag {_d434:.1f} m)"
+                + (f", jellemzően a {_z434} sávban" if _z434 else "")
+                + f", ti pedig sokat törtök be ({own.break_entries} "
+                "betörés) — erre kell építeni a támadást: elzárás a rés "
+                "MELLÉ, hogy ne záródjon, és lendületből induló "
+                "betörés a közepébe; ha a védő kilép, a kiosztás jön a "
+                "beállóra.")
+
+    # 433) Az ő balkezesekre sebezhető kapusuk × a ti balkezes lövőtök: a
+    # tükör-feladat a kapusnak, ha van kire szervezni.
+    if (opp.gkh_left_faced >= 4 and opp.gkh_right_faced >= 4
+            and own.hand_shots_by_player):
+        _g433_l = 100.0 * opp.gkh_left_saves / opp.gkh_left_faced
+        _g433_r = 100.0 * opp.gkh_right_saves / opp.gkh_right_faced
+        if _g433_r - _g433_l >= 15.0:
+            for _g433_k, _g433_n in sorted(own.hand_shots_by_player.items(),
+                                           key=lambda kv: -kv[1]):
+                _g433_left = own.hand_left_by_player.get(_g433_k, 0)
+                if _g433_n >= 4 and _g433_left >= 0.7 * _g433_n:
+                    plan.append(
+                        f"Az ő kapusuk a balkezesek ellen gyengébb "
+                        f"({_g433_l:.0f}% vs {_g433_r:.0f}%), nektek "
+                        f"pedig van balkezes lövőtök (a(z) {_g433_k}. "
+                        f"játékos, {_g433_n} lövésből {_g433_left} "
+                        "bal-jel) — rá kell szervezni a befejezést: az "
+                        "ő oldaláról induló figurák, és hetesnél is ő "
+                        "álljon oda.")
+                    break
+
+    # 432) Az ő felülteljesítő befejezésük × a ti kapusotok: a többlet
+    # nagy része a kapun múlik — az alapállást a bejáratott sarkukra kell
+    # állítani, nem az egész védekezést átszabni.
+    if opp.fbal_shots >= 12 and own.gk_saves >= 5:
+        _fb432 = opp.fbal_goals - opp.fbal_xg_sum
+        if _fb432 >= 2.5:
+            plan.append(
+                f"Ők a helyzeteik felett teljesítenek ({opp.fbal_goals} "
+                f"gól {opp.fbal_xg_sum:.1f} várható gólra, +{_fb432:.1f}), "
+                f"nektek pedig van fogó kapusotok ({own.gk_saves} védés) — "
+                "ne a falat szabjátok át: ugyanezeket a lövéseket kell "
+                "rájuk kényszeríteni, a kapus alapállása pedig a "
+                "bejáratott sarkukra álljon; a mérleg magától visszatér.")
+
+    # 431) Az ő védekezés közbeni cseréjük × a ti átmeneti játékotok: a
+    # csere-pillanat egy emberrel kevesebb falat jelent — pont az
+    # indításra kell játszani.
+    if opp.sph_subs >= 4 and own.trans_steals >= 4:
+        _s431 = 100.0 * opp.sph_opp_ball / opp.sph_subs
+        if _s431 >= 40.0:
+            plan.append(
+                f"Ők a ti birtoklásotok alatt is cserélnek (a cseréik "
+                f"{_s431:.0f}%-a, {opp.sph_opp_ball}/{opp.sph_subs}), ti "
+                f"pedig sok labdát szereztek ({own.trans_steals} szerzés) "
+                "— a csere-pillanat a ti időtök: aki látja a cserezónában "
+                "a mozgást, azonnal indítson előre a csere OLDALÁRA, és a "
+                "szélső fejezzen be, mielőtt a fal összeáll.")
+
+    # 429) Az ő fal-ALAKJUK × a ti támadó-fegyveretek: a formáció dönti el,
+    # melyik fegyvert kell elővenni ellenük (5-1 → beálló a kitolt mögé,
+    # 6-0 → szélső-oldalváltás, 3-2-1 → gyors keresztmozgás).
+    if opp.dform_frames >= 100 and opp.dform_counts:
+        _d429_shape, _d429_n = max(opp.dform_counts.items(),
+                                   key=lambda kv: kv[1])
+        _d429_share = 100.0 * _d429_n / opp.dform_frames
+        if _d429_share >= 50.0:
+            if (_d429_shape.startswith("5-1")
+                    and own.pivot_attacks >= 8
+                    and own.pivot_goals * 2 >= own.pivot_attacks):
+                plan.append(
+                    f"Ők 5-1-et védekeznek (a felállt védekezés "
+                    f"{_d429_share:.0f}%-ában), ti pedig erősek vagytok "
+                    f"beállóval ({own.pivot_goals}/{own.pivot_attacks} "
+                    "gólos beállós támadás) — a kitolt védő MÖGÖTTI teret "
+                    "vegyétek célba: mellette kettős elzárás, a beálló a "
+                    "háta mögé lépjen le, és onnan érkezzen a labda.")
+            elif (_d429_shape.startswith("6-0")
+                  and own.wing_total_goals >= 5
+                  and own.wing_goals * 3 >= own.wing_total_goals):
+                plan.append(
+                    f"Ők lapos 6-0-t tartanak (a felállt védekezés "
+                    f"{_d429_share:.0f}%-ában), ti pedig sokat szereztek "
+                    f"szélről ({own.wing_goals}/{own.wing_total_goals} "
+                    "gól) — nem lépnek ki, ezért a gyors oldalváltás a "
+                    "fegyver: húzzátok át a falat egyik szélről a "
+                    "másikra, és a záró szélső fejezze be.")
+            elif (_d429_shape.startswith("3-2-1")
+                  and own.pt_poss_s > 0
+                  and 60.0 * own.pt_passes / own.pt_poss_s >= 12.0):
+                plan.append(
+                    f"Ők lépcsős 3-2-1-et védekeznek (a felállt védekezés "
+                    f"{_d429_share:.0f}%-ában), ti pedig gyorsan "
+                    f"járatjátok a labdát "
+                    f"({60.0 * own.pt_passes / own.pt_poss_s:.0f} "
+                    "passz/perc) — a lépcsős fal keresztmozgásra lassú: "
+                    "tartsátok a tempót, két gyors oldalváltás után nyílik "
+                    "a rés a második szint mellett.")
+
+    # 428) Az ő balkezes lövőjük × a ti sáncotok: a sánc kezét tükrözni
+    # kell, különben a jó blokkoló csapat is mellé emel.
+    if opp.hand_shots_by_player and own.blocks >= 3:
+        for _h428_k, _h428_n in sorted(opp.hand_shots_by_player.items(),
+                                       key=lambda kv: -kv[1]):
+            _h428_l = opp.hand_left_by_player.get(_h428_k, 0)
+            if _h428_n >= 4 and _h428_l >= 0.7 * _h428_n:
+                plan.append(
+                    f"A(z) {_h428_k}. játékosuk balkezes ({_h428_n} "
+                    f"lövésből {_h428_l} bal-jel), ti pedig sokat "
+                    f"blokkoltok ({own.blocks} blokk) — ellene "
+                    "TÜKRÖZZÉTEK a sáncot: a másik kéz emelkedjen, a "
+                    "kapus a túlsó sarkat vegye alapba, és a jobb "
+                    "oldalról befelé induló útját zárjátok el; a jó "
+                    "blokkoló csapat is mellé emel, ha a megszokott "
+                    "kezét teszi fel.")
+                break
+
+    # 427) Az ő holtpont-emberük × a ti hajrá-erőtök: az egál a ti
+    # műfajotok legyen, ne az övé.
+    if opp.pbp_breaks_by_player and own.clutch_goals_for >= 3:
+        _pbp427_all = sum(opp.pbp_breaks_by_player.values())
+        _pbp427_k, _pbp427_n = max(opp.pbp_breaks_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _pbp427_n >= 2 and _pbp427_n >= 0.5 * max(1, _pbp427_all):
+            plan.append(
+                f"A holtpontjaikat a(z) {_pbp427_k}. játékos viszi el "
+                f"({_pbp427_n}/{_pbp427_all} egálbontó gól), ti "
+                f"pedig erősek vagytok a feszült szakaszokban "
+                f"({own.clutch_goals_for} hajrá-gól) — egálnál őt "
+                "vegyétek ki (szoros fogás, korai kettőzés), és "
+                "kényszerítsétek másra a döntést: a holtpont így a "
+                "ti műfajotok marad.")
+
+    # 426) Az ő befutó emberük × a ti gyors visszafutásotok: a
+    # második hullámot a középső sáv feltöltése öli meg.
+    if opp.bfw_shots_by_player and own.trans_steals >= 5:
+        _bfw426_all = sum(opp.bfw_shots_by_player.values())
+        _bfw426_k, _bfw426_n = max(opp.bfw_shots_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _bfw426_n >= 2 and _bfw426_n >= 0.5 * max(1, _bfw426_all):
+            plan.append(
+                f"A kontráik gólja a befutótól jön — {_bfw426_n}/"
+                f"{_bfw426_all} második hullámos befejezés a(z) "
+                f"{_bfw426_k}. emberüktől —, ti pedig jól olvassátok "
+                f"a játékot ({own.trans_steals} szerzés) — a "
+                "visszafutásnál a középső sávot töltsétek fel, és a "
+                "befutó passzát csípjétek el: az ő labdája a "
+                "legkönnyebb szerzés, és belőle visszakontra lesz.")
+
+    # 425) Az ő leforduló beállójuk × a ti labdaszerzésetek: a
+    # bejátszás-sáv a lefordulás előtt nyitva áll.
+    if opp.lfb_running_by_player and own.trans_steals >= 5:
+        _lfb425_all = sum(opp.lfb_running_by_player.values())
+        _lfb425_k, _lfb425_n = max(opp.lfb_running_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _lfb425_n >= 2 and _lfb425_n >= 0.5 * max(1, _lfb425_all):
+            plan.append(
+                f"A mozgásos beálló-átvételeik {_lfb425_n}/"
+                f"{_lfb425_all} része a(z) {_lfb425_k}. beállóhoz "
+                f"megy, ti pedig jó labdaszerzők vagytok "
+                f"({own.trans_steals} szerzés) — az ő bejátszás-"
+                "sávjába lépjetek be még a lefordulása előtt: az "
+                "elcsípett bejátszás azonnal kontra, és a beálló-"
+                "játékuk elbizonytalanodik.")
+
+    # 424) Az ő kereszt-motorjuk × a ti blokkoló falatok: a
+    # szervezett fal a kereszt alatt is tud váltani.
+    if (opp.crp_runs_by_player and opp.crp_crosses >= 3
+            and own.blocks >= 3):
+        _crp424 = sorted(opp.crp_runs_by_player.items(),
+                         key=lambda kv: -kv[1])
+        _crp424_k, _crp424_n = _crp424[0]
+        _crp424_tie = len(_crp424) > 1 and _crp424[1][1] >= _crp424_n
+        if (not _crp424_tie and _crp424_n >= 3
+                and _crp424_n >= 0.6 * opp.crp_crosses):
+            plan.append(
+                f"A keresztjeik {_crp424_n}/{opp.crp_crosses} része "
+                f"a(z) {_crp424_k}. játékoson át fut, a falatok pedig "
+                f"szervezett ({own.blocks} blokk) — az ő sávjában "
+                "hangos, korai váltással vegyétek át: a kereszt után "
+                "senki ne fusson vele, és a blokk-fegyelem marad.")
+
+    # 423) Az ő futtatott szélsőjük × a ti labdaszerzésetek: a
+    # futópassz sávja a legjobb szerzőhely.
+    if opp.wrp_running_by_player and own.trans_steals >= 5:
+        _wrp423_all = sum(opp.wrp_running_by_player.values())
+        _wrp423_k, _wrp423_n = max(opp.wrp_running_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _wrp423_n >= 2 and _wrp423_n >= 0.5 * max(1, _wrp423_all):
+            plan.append(
+                f"A futó szélső-átvételeik {_wrp423_n}/{_wrp423_all} "
+                f"része a(z) {_wrp423_k}. szélsőhöz megy, ti pedig jó "
+                f"labdaszerzők vagytok ({own.trans_steals} szerzés) — "
+                "az ő oldalán a futópassz sávjába lépjetek be: a "
+                "levegőben lévő futópassz a legkönnyebb szerzés, és "
+                "azonnal kontra lesz belőle.")
+
+    # 422) Az ő azonnali válaszuk × a ti gól utáni fegyelmetek: az
+    # ünneplő fal kapja a legolcsóbb gólokat.
+    if opp.rsy_restarts >= 4 and own.goals >= 10:
+        _rsy422_pct = 100.0 * opp.rsy_answered / opp.rsy_restarts
+        if _rsy422_pct >= 40.0:
+            plan.append(
+                f"A kapott gólra {opp.rsy_answered}/"
+                f"{opp.rsy_restarts} arányban azonnali góllal "
+                f"válaszolnak, ti pedig sok gólt szereztek "
+                f"({own.goals}) — minden gólotok után azonnali "
+                "visszarendeződés és kijelölt fékező ember középen: "
+                "az ünneplő fal kapja a legolcsóbb gólokat.")
+
+    # 421) Az ő hátrány-beszakadásuk × a ti kiharcolt
+    # büntetéseitek: a megszerzett emberelőnyt végig kell büntetni.
+    if opp.shs_seconds >= 90:
+        _shs421_per2 = 120.0 * opp.shs_conceded / opp.shs_seconds
+        _shs421_earned = sum(
+            p_.get("earned", 0) for p_ in (own.seven_earners or []))
+        if (_shs421_per2 >= 1.5
+                and own.agr_sevens + _shs421_earned >= 2):
+            plan.append(
+                f"Hátrányban beszakadnak ({_shs421_per2:.1f} kapott "
+                "gól két percenként), ti pedig ki tudjátok harcolni "
+                "a büntetést — a kiállításaikat végig büntessétek: "
+                "türelmes, zárt emberelőny-figurák, semmi kapkodás.")
+
+    # 420) Az ő kapuscseréjük × a ti lövő-tervetek: a B-lap.
+    if opp.gcy_changes >= 1 and own.shots >= 10:
+        _gcy420_avg = opp.gcy_delta_dpp / 10.0 / opp.gcy_changes
+        if _gcy420_avg >= 15.0:
+            plan.append(
+                f"A kapuscseréjük fordít ({_gcy420_avg:+.0f} "
+                f"százalékpont), ti pedig sokat lőtök ({own.shots} "
+                "lövés) — a lövő-tervet a második kapusukra is "
+                "készítsétek el: az ő beállása utáni első percekben "
+                "kell büntetni, amíg hideg.")
+        elif _gcy420_avg <= -15.0:
+            plan.append(
+                f"A kapuscseréjük sem segít ({_gcy420_avg:+.0f} "
+                "százalékpont), ti pedig sokat lőtök "
+                f"({own.shots} lövés) — az első kapusuk megingása "
+                "után nincs mentőövük: nyomjátok tovább ugyanazt.")
+
+    # 419) Az ő hatástalan időkérésük × a ti sorozataitok: a zöld
+    # karton nem állít meg titeket.
+    _toy419_judged = opp.toy_broke + opp.toy_failed
+    if _toy419_judged >= 2 and own.goals >= 10:
+        _toy419_pct = 100.0 * opp.toy_broke / _toy419_judged
+        if _toy419_pct <= 33.0:
+            plan.append(
+                f"Az időkérésük hatástalan ({opp.toy_broke}/"
+                f"{_toy419_judged} megtört sorozat), ti pedig "
+                f"gólerősek vagytok ({own.goals} gól) — a zöld "
+                "kartonjuk után is toljátok tovább: a lendületet "
+                "nem az ő időkérésük töri meg.")
+
+    # 418) Az ő gólpassz-duójuk × a ti páros védekezésetek: a
+    # kettőst kell szétvágni, nem a lövőt fogni.
+    if opp.adu_goals_by_duo and own.defense_main:
+        _adu418_all = sum(opp.adu_goals_by_duo.values())
+        _adu418_k, _adu418_n = max(opp.adu_goals_by_duo.items(),
+                                   key=lambda kv: kv[1])
+        if _adu418_n >= 2 and _adu418_n >= 0.4 * max(1, _adu418_all):
+            plan.append(
+                f"A gólgyártásuk a(z) {_adu418_k} kettősön fut "
+                f"({_adu418_n}/{_adu418_all} asszisztos gól), ti "
+                f"pedig {own.defense_main} falat játszotok — a "
+                "kettőst vágjátok szét: az adót testtel, a kettejük "
+                "passzsávját beleéréssel, és a gólgépezet áll.")
+
+    # 417) Az ő 7a6-befejezőjük × a ti üres-kapus készenlétetek: a
+    # kiszámítható hetedik ember büntethető.
+    if opp.en7p_shots_by_player and own.trans_steals >= 3:
+        _en7_417_all = sum(opp.en7p_shots_by_player.values())
+        _en7_417_k, _en7_417_n = max(opp.en7p_shots_by_player.items(),
+                                     key=lambda kv: kv[1])
+        if _en7_417_n >= 2 and _en7_417_n >= 0.5 * max(1, _en7_417_all):
+            plan.append(
+                f"A 7 a 6-uk a(z) {_en7_417_k}. emberre fut ki "
+                f"({_en7_417_n}/{_en7_417_all} lövés), ti pedig "
+                f"tudtok labdát szerezni ({own.trans_steals} "
+                "szerzés) — a lehozott kapusuk alatt őt sűrítsétek "
+                "be, és a szerzés után azonnal az üres kapura.")
+
+    # 416) Az ő elzárt védőjük × a ti elzárás-játékotok: a zárást
+    # oda kell vinni, ahol ragad.
+    if opp.sdp_screens_by_player and own.scy_screened_shots >= 6:
+        _sdp416_all = sum(opp.sdp_screens_by_player.values())
+        _sdp416_k, _sdp416_n = max(opp.sdp_screens_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _sdp416_n >= 2 and _sdp416_n >= 0.5 * max(1, _sdp416_all):
+            plan.append(
+                f"Az elzárások {_sdp416_n}/{_sdp416_all} része a(z) "
+                f"{_sdp416_k}. védőjükön ragad, ti pedig elzárásos "
+                f"csapat vagytok ({own.scy_screened_shots} zárásból "
+                "lőtt lövés) — a figuráitok zárásait az ő oldalára "
+                "vigyétek: nála a zárás tisztán hagyja a lövőt.")
+
+    # 415) Az ő előnyben-emberük × a ti felzárkózásotok: hátrányban
+    # az ő kivétele a leggyorsabb út.
+    _lgp415_own = sum(p_.get("trailing", 0)
+                      for p_ in (own.cbc_players or []))
+    if opp.lgp_goals_by_player and _lgp415_own >= 3:
+        _lgp415_all = sum(opp.lgp_goals_by_player.values())
+        _lgp415_k, _lgp415_n = max(opp.lgp_goals_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _lgp415_n >= 2 and _lgp415_n >= 0.5 * max(1, _lgp415_all):
+            plan.append(
+                f"Az előnyben lőtt góljaik zöme a(z) {_lgp415_k}. "
+                f"nevéhez kötődik ({_lgp415_n}/{_lgp415_all}), ti "
+                f"pedig tudtok felzárkózni ({_lgp415_own} "
+                "hátrányban hozott gól-részvétel) — ha hátrányba "
+                "kerültök, először "
+                "őt vegyétek ki: szoros fogás vagy kettőzés, és a "
+                "lendület-tartásuk megtörik.")
+
+    # 414) Az ő újrakezdő emberük × a ti szünet utáni tervetek: a
+    # második félidő első tíz perce.
+    if opp.ssp_goals_by_player and own.defense_main:
+        _ssp414_all = sum(opp.ssp_goals_by_player.values())
+        _ssp414_k, _ssp414_n = max(opp.ssp_goals_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _ssp414_n >= 2 and _ssp414_n >= 0.5 * max(1, _ssp414_all):
+            plan.append(
+                f"A szünet utáni góljaik zöme a(z) {_ssp414_k}. "
+                f"nevéhez kötődik ({_ssp414_n}/{_ssp414_all}), ti "
+                f"pedig {own.defense_main} falat játszotok — a "
+                "második félidő első tíz percére rá tegyétek a "
+                "legjobb védőt, és a szünetben ezt mondjátok el "
+                "először.")
+
+    # 413) Az ő rajt-emberük × a ti legjobb védőtök: az első tíz
+    # perc párosítása.
+    if opp.osp_goals_by_player and own.defense_main:
+        _osp413_all = sum(opp.osp_goals_by_player.values())
+        _osp413_k, _osp413_n = max(opp.osp_goals_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _osp413_n >= 2 and _osp413_n >= 0.5 * max(1, _osp413_all):
+            plan.append(
+                f"A meccs eleji góljaik zöme a(z) {_osp413_k}. "
+                f"nevéhez kötődik ({_osp413_n}/{_osp413_all}), ti "
+                f"pedig {own.defense_main} falat játszotok — az első "
+                "tíz percre rá tegyétek a legjobb védőt: a rajtjuk "
+                "motorja nélkül a nyitás kiegyenlített marad.")
+
+    # 412) Az ő válaszoló emberük × a ti gólerősségetek: a saját
+    # gólunk után rá kell váltani.
+    if opp.rspp_goals_by_player and own.goals >= 10:
+        _rspp412_all = sum(opp.rspp_goals_by_player.values())
+        _rspp412_k, _rspp412_n = max(opp.rspp_goals_by_player.items(),
+                                     key=lambda kv: kv[1])
+        if _rspp412_n >= 2 and _rspp412_n >= 0.5 * max(1, _rspp412_all):
+            plan.append(
+                f"A válasz-góljaik {_rspp412_n}/{_rspp412_all} része "
+                f"a(z) {_rspp412_k}. nevéhez kötődik, ti pedig sokat "
+                f"gólt szereztek ({own.goals} gól) — minden saját "
+                "gólotok UTÁN azonnal az ő kiemelt őrzésére "
+                "váltsatok.")
+
+    # 411) Az ő előkészítőjük × a ti kilépésetek: a kiszolgálót
+    # kell elvágni, nem a lövőt fogni.
+    if opp.epp_passes_by_player and own.defense_main:
+        _epp411_all = sum(opp.epp_passes_by_player.values())
+        _epp411_k, _epp411_n = max(opp.epp_passes_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _epp411_n >= 4 and _epp411_n >= 0.5 * max(1, _epp411_all):
+            plan.append(
+                f"A lövéseik {_epp411_n}/{_epp411_all} részét a(z) "
+                f"{_epp411_k}. készíti elő, ti pedig "
+                f"{own.defense_main} falat játszotok — az ő "
+                "átadás-vonalait vágjátok el (kilépés, sávzárás): a "
+                "lövőik előkészítetlenül maradnak.")
+
+    # 410) Az ő passzív-birtoklójuk × a ti kettőzésetek: a passzív
+    # jelzés alatt rá kell menni.
+    if opp.pvp_frames_by_player and own.dbl_doubled_frames >= 50:
+        _pvp410_all = sum(opp.pvp_frames_by_player.values())
+        _pvp410_k, _pvp410_n = max(opp.pvp_frames_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _pvp410_n >= 200 and _pvp410_n >= 0.5 * max(1, _pvp410_all):
+            plan.append(
+                f"A terméketlen támadás-idejük zöme a(z) {_pvp410_k}. "
+                f"kezén telik ({_pvp410_n}/{_pvp410_all} labdás "
+                "kocka), ti pedig tudtok kettőzni — passzív jelzés "
+                "alatt rá időzítsétek a kettőzést: ott jön a "
+                "kényszer-eladás.")
+
+    # 409) Az ő lágy passzolójuk × a ti letámadásotok: az ő
+    # átadásait kell megcélozni.
+    if opp.spp_soft_by_player and own.trans_steals >= 3:
+        _spp409_all = sum(opp.spp_soft_by_player.values())
+        _spp409_k, _spp409_n = max(opp.spp_soft_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _spp409_n >= 4 and _spp409_n >= 0.5 * max(1, _spp409_all):
+            plan.append(
+                f"A lágy passzaik zöme a(z) {_spp409_k}. kezéből jön "
+                f"({_spp409_n}/{_spp409_all}), ti pedig sokat "
+                f"szereztek ({own.trans_steals} szerzés) — a "
+                "letámadás az ő ÁTADÁSAIT célozza, ne a labdást "
+                "szorítsa: ott a leggyorsabb a labdaszerzés.")
+
+    # 408) Az ő fáradt lövőjük × a ti falatok: a hajrában elég a
+    # lövő-vonalba állni ellene.
+    if opp.fsp_sh_by_player and own.defense_main:
+        _fsp408_k, _fsp408_sh = max(opp.fsp_sh_by_player.items(),
+                                    key=lambda kv: kv[1])
+        _fsp408_fh = opp.fsp_fh_by_player.get(_fsp408_k, 0)
+        if _fsp408_sh >= 2 and _fsp408_sh >= 2 * max(1, _fsp408_fh):
+            plan.append(
+                f"A(z) {_fsp408_k}. lövései a második félidőre "
+                f"szétmennek ({_fsp408_fh} → {_fsp408_sh} pontatlan "
+                f"lövés), ti pedig {own.defense_main} falat "
+                "játszotok — a szünet után rá nem kell kilépni: elég "
+                "a lövő-vonalba állni, a kilépés máshol többet ér.")
+
+    # 407) Az ő ziccerhagyójuk × a ti besegítésetek: nála a
+    # helyzetbe engedés a kisebbik rossz.
+    if opp.mcp_misses_by_player and own.dbl_doubled_frames >= 50:
+        _mcp407_all = sum(opp.mcp_misses_by_player.values())
+        _mcp407_k, _mcp407_n = max(opp.mcp_misses_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _mcp407_n >= 2 and _mcp407_n >= 0.5 * max(1, _mcp407_all):
+            plan.append(
+                f"A kihagyott ziccereik zöme a(z) {_mcp407_k}. kezéhez "
+                f"kötődik ({_mcp407_n}/{_mcp407_all}), ti pedig "
+                "tudtok besegíteni — a besegítést és a kettőzést a "
+                "biztos kezű társaikra tartsátok: az ő ziccere "
+                "vállalható kockázat.")
+
+    # 406) Az ő kontroll-képük × a ti időkéréseitek: az ő
+    # sorozataik ELÉ kell időzíteni a megszakítást.
+    if opp.ctl_blocks >= 3 and opp.ctl_won > opp.ctl_lost:
+        plan.append(
+            f"Az ötperces szakaszok {opp.ctl_won}/{opp.ctl_blocks} "
+            "részét ők viszik birtoklásban — az időkérést az ő "
+            "sorozatuk ELÉ időzítsétek, ne utána: a saját tempótok "
+            "visszavétele többet ér, mint a lendületük megtörése "
+            "két góllal később.")
+
+    # 405) A meccs jellege: tükör- vagy ellentétes stílus. Ez a lap
+    # kerete, ezért a téma-rendezés a lista élére teszi.
+    try:
+        _sty405 = style_distance(own, opp)
+        if _sty405.get("verdict"):
+            plan.append(_sty405["verdict"][0].upper()
+                        + _sty405["verdict"][1:] + ".")
+    except Exception:
+        pass
+
+    # 404) Az ő hetes-forrásuk × a mi fegyelmünk: ott kell a kéz
+    # nélküli védekezés.
+    if opp.svs_sevens_by_type and own.agr_susp >= 2:
+        _svs404_all = sum(opp.svs_sevens_by_type.values())
+        _svs404_k, _svs404_n = max(opp.svs_sevens_by_type.items(),
+                                   key=lambda kv: kv[1])
+        if _svs404_all >= 3 and _svs404_n >= 0.6 * _svs404_all:
+            plan.append(
+                f"A heteseik zöme {_svs404_k} helyzetből jön "
+                f"({_svs404_n}/{_svs404_all}), ti pedig kaptok "
+                f"kétperceket ({own.agr_susp} kiállítás) — pont ott "
+                "kell kéz nélkül védekezni: inkább menjen be a gól, "
+                "mint a hetes plusz kiállítás.")
+
+    # 403) Az ő megingó kapusuk × a ti gyors középkezdésetek: a
+    # gól utáni percben kell újra lőni.
+    if (opp.gka_fresh_shots >= 4 and opp.gka_rest_shots >= 4
+            and own.rs_fast >= 2):
+        _gka403_f = 100.0 * opp.gka_fresh_saves / opp.gka_fresh_shots
+        _gka403_r = 100.0 * opp.gka_rest_saves / opp.gka_rest_shots
+        if _gka403_r - _gka403_f >= 15.0:
+            plan.append(
+                f"A kapusuk a kapott gól utáni két lövésen csak "
+                f"{_gka403_f:.0f}%-ot véd (egyébként "
+                f"{_gka403_r:.0f}%), ti pedig tudtok gyorsan kezdeni "
+                f"({own.rs_fast} gyors középkezdés) — gól után "
+                "azonnal ismételjétek ugyanazt a képet, ugyanabba a "
+                "sarokba.")
+
+    # 402) Az ő koncentrált futómunkájuk × a ti tempótok: a három
+    # futó embert kell elfárasztani.
+    if (opp.lbl_players >= 6 and opp.lbl_distance_m > 0
+            and own.fast_break_pct >= 12.0):
+        _lbl402 = 100.0 * opp.lbl_top3_m / opp.lbl_distance_m
+        if _lbl402 >= 55.0:
+            plan.append(
+                f"A futómunkájuk {_lbl402:.0f}%-át három ember adja, "
+                f"ti pedig gyorsan indultok ({own.fast_break_pct:.0f}"
+                "%) — a tempót végig tartani kell: ők fogynak el "
+                "előbb, és a hajrában az ő oldalukra kell vezetni a "
+                "kontrát.")
+
+    # 401) Az ő figura-kopásuk × a ti fal-fegyelmetek: a
+    # felismerés vagy a párharc a kérdés.
+    if (opp.spd_first_attacks >= 4 and opp.spd_repeat_attacks >= 4
+            and own.defense_main):
+        _spd401_f = (100.0 * opp.spd_first_goals
+                     / opp.spd_first_attacks)
+        _spd401_r = (100.0 * opp.spd_repeat_goals
+                     / opp.spd_repeat_attacks)
+        if _spd401_r - _spd401_f >= 15.0:
+            plan.append(
+                f"A figuráik az ismétlésre is bejönnek "
+                f"({_spd401_f:.0f}% → {_spd401_r:.0f}% gólarány), ti "
+                f"pedig {own.defense_main} falat játszotok — itt nem "
+                "a felismerés a kérdés: a figura befejezőjére "
+                "emberfogás vagy kettőzés kell.")
+
+    # 400) Az ő lassan hazaérő kapusuk × a ti labdaszerzésetek: a
+    # szerzés utáni azonnali dobás ingyen gól.
+    if opp.krt_measured >= 2 and own.trans_steals >= 3:
+        _krt400 = opp.krt_sum_ds / 10.0 / opp.krt_measured
+        if _krt400 >= 4.0:
+            plan.append(
+                f"A kapusuk {_krt400:.1f} mp alatt ér haza a 7 a 6 "
+                f"után, ti pedig sokat szereztek ({own.trans_steals} "
+                "szerzés) — a szerzés utáni első nézés a még üres "
+                "kapu legyen: ez a leggyorsabb gól a meccsen.")
+
+    # 399) Az ő kettőzött emberük × a ti kettőzésetek: a bevált
+    # receptet érdemes követni.
+    if opp.dtp_frames_by_player and own.dbl_doubled_frames >= 50:
+        _dtp399_k, _dtp399_n = max(opp.dtp_frames_by_player.items(),
+                                   key=lambda kv: kv[1])
+        _dtp399_all = sum(opp.dtp_frames_by_player.values())
+        if _dtp399_n >= 75 and _dtp399_n >= 0.5 * max(1, _dtp399_all):
+            plan.append(
+                f"Az ellenfeleik a(z) {_dtp399_k}. emberüket "
+                f"kettőzik a legtöbbet ({_dtp399_n}/{_dtp399_all} "
+                "kettőzött kocka), és ti is tudtok kettőzni — "
+                "kövessétek a bevált receptet: rá menjen a kettőzés, "
+                "és mögötte a kilépő passzsáv legyen zárva.")
+
+    # 398) Az ő csere-hozamuk × a ti gyors középkezdésetek: a
+    # csere-pillanat célzottan támadható.
+    if opp.sby_rotations >= 4 and own.fast_break_pct >= 12.0:
+        _sby398 = opp.sby_goals_for - opp.sby_goals_against
+        if _sby398 <= -2:
+            plan.append(
+                f"A cseréik után {opp.sby_goals_for}-"
+                f"{opp.sby_goals_against} a mérlegük "
+                f"({opp.sby_rotations} cseréből), ti pedig gyorsan "
+                f"indultok ({own.fast_break_pct:.0f}%) — a "
+                "cserehullámuk pillanatát célozzátok: gyors "
+                "középkezdés és azonnali befejezés, mielőtt a friss "
+                "emberek beállnak.")
+
+    # 397) Az ő passzív-kockázatuk × a ti falatok: a türelem
+    # fegyver, ha ők maguktól elakadnak.
+    if opp.psr_positional >= 4 and own.defense_main:
+        _psr397 = 100.0 * opp.psr_passive / opp.psr_positional
+        if _psr397 >= 20.0:
+            plan.append(
+                f"A felállt támadásaik {_psr397:.0f}%-a lövés nélkül "
+                f"nyúlik el ({opp.psr_passive}/{opp.psr_positional}), "
+                f"ti pedig {own.defense_main} falat játszotok — "
+                "tartsátok zártan és türelmesen: kilépés nélkül is "
+                "az óra és a passzív jel nektek dolgozik.")
+
+    # 396) Az ő hetes-hozamuk × a ti kapusotok: a hetest érő
+    # szabálytalanság ára náluk mérhető.
+    if opp.svy_attempts >= 4 and own.gk_on_target >= 5:
+        _svy396 = 100.0 * opp.svy_goals / opp.svy_attempts
+        if _svy396 <= 60.0:
+            plan.append(
+                f"A hetesük megfogható ({opp.svy_goals}/"
+                f"{opp.svy_attempts}, {_svy396:.0f}%), a kapusotok "
+                f"pedig {100.0 * own.gk_saves / own.gk_on_target:.0f}"
+                "%-on véd — a biztos "
+                "helyzetet megállító szabálytalanság ellenük "
+                "vállalható: a hetes jobb üzlet, mint az üres kapu.")
+        elif _svy396 >= 85.0:
+            plan.append(
+                f"A heteseik szinte biztos gólok ({opp.svy_goals}/"
+                f"{opp.svy_attempts}, {_svy396:.0f}%) — a hetest érő "
+                "szabálytalanságot ki kell venni a játékunkból: a "
+                "fal lábbal védekezzen, a beugró elé testtel "
+                "álljatok.")
+
+    # 395) Az ő emberelőny-hozamuk × a ti fegyelmetek: a kétperc
+    # ára náluk mérhető.
+    if (opp.ppy_pp_shots >= 4 and opp.ppy_eq_shots >= 4
+            and own.agr_susp >= 2):
+        _ppy395_p = 100.0 * opp.ppy_pp_goals / opp.ppy_pp_shots
+        _ppy395_e = 100.0 * opp.ppy_eq_goals / opp.ppy_eq_shots
+        if _ppy395_p - _ppy395_e >= 15.0:
+            plan.append(
+                f"Emberelőnyben {_ppy395_p:.0f}%-ban fejeznek be "
+                f"(egyenlő létszámnál {_ppy395_e:.0f}%), ti pedig "
+                f"kaptok kétperceket ({own.agr_susp} kiállítás) — "
+                "ellenük a fegyelem az első számú taktikai kérdés: "
+                "lábbal védekező fal, taktikai szabálytalanság "
+                "nélkül.")
+
+    # 394) Az ő blokk-fáradásuk × a ti átlövőitek: a hajrában a
+    # távoli lövés ellenük szinte ingyen van.
+    _blf394_fh = opp.blf_fh_blocks + opp.blf_fh_shots
+    _blf394_sh = opp.blf_sh_blocks + opp.blf_sh_shots
+    if _blf394_fh >= 5 and _blf394_sh >= 5 and own.sr_far_shots >= 5:
+        _blf394_f = 100.0 * opp.blf_fh_blocks / _blf394_fh
+        _blf394_s = 100.0 * opp.blf_sh_blocks / _blf394_sh
+        if _blf394_f - _blf394_s >= 10.0:
+            plan.append(
+                f"A blokk-munkájuk elfogy a hajrára ({_blf394_f:.0f}% "
+                f"→ {_blf394_s:.0f}% blokk-arány), nektek pedig van "
+                f"átlövésetek ({own.sr_far_shots} távoli lövés) — az "
+                "utolsó húsz percet tudatosan az átlövésre "
+                "építsétek: ott már nem lépnek a lövő-vonalba.")
+
+    # 393) Az ő elzárás-hozamuk × a ti fal-kommunikációtok: a
+    # váltás vagy a lövő-vonal — attól függ, mi fizet nekik.
+    if (opp.scy_screened_shots >= 4 and opp.scy_clean_shots >= 4
+            and own.defense_main):
+        _scy393_s = (100.0 * opp.scy_screened_goals
+                     / opp.scy_screened_shots)
+        _scy393_c = 100.0 * opp.scy_clean_goals / opp.scy_clean_shots
+        if _scy393_s - _scy393_c >= 15.0:
+            plan.append(
+                f"Az elzárásos lövéseik {_scy393_s:.0f}%-ban mennek "
+                f"be, a tiszták {_scy393_c:.0f}%-ban, ti pedig "
+                f"{own.defense_main} falat játszotok — a hangos "
+                "váltást és az átcsúszást kell begyakorolni rájuk: "
+                "az elzárás megtörése többet ér, mint a lövő "
+                "szorítása.")
+
+    # 392) Az ő felhozatal-emberük × a ti letámadásotok: egy
+    # emberrel megfogható a kihozataluk.
+    if opp.otp_outlets_by_player and own.trans_steals >= 3:
+        _otp392_k, _otp392_n = max(opp.otp_outlets_by_player.items(),
+                                   key=lambda kv: kv[1])
+        _otp392_all = sum(opp.otp_outlets_by_player.values())
+        if _otp392_n >= 3 and _otp392_n >= 0.5 * max(1, _otp392_all):
+            plan.append(
+                f"A felhozataluk a(z) {_otp392_k}. kezén megy át "
+                f"({_otp392_n}/{_otp392_all} indítás-átvétel), ti "
+                f"pedig tudtok letámadni ({own.trans_steals} "
+                "szerzés) — az ő átvételére kell rálépni, és a "
+                "visszapassz sávját lezárni: a kihozataluk egy "
+                "emberrel megfogható.")
+
+    # 391) Az ő kétperc-gyűjtőjük × a ti betöréseitek: a második
+    # kétperc után egy lépésre áll a kizárástól.
+    if opp.stc_susp_by_player and own.bty_entries >= 3:
+        _stc391_k, _stc391_n = max(opp.stc_susp_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _stc391_n >= 2:
+            plan.append(
+                f"A(z) {_stc391_k}. gyűjti a kétperceiket "
+                f"({_stc391_n} kiállítás), ti pedig tudtok betörni "
+                f"({own.bty_entries} betörés) — a betöréseket "
+                "az ő sávjába vezessétek: vagy fékezve véd, vagy "
+                "megkapja a kizárást érő harmadikat.")
+
+    # 390) Az ő kiszolgált befejezőjük × a ti passzsáv-zárásotok:
+    # az éheztetés olcsóbb, mint az emberfogás.
+    if opp.asp_assisted_by_player and own.dbl_doubled_frames >= 50:
+        _asp390_k, _asp390_n = max(opp.asp_assisted_by_player.items(),
+                                   key=lambda kv: kv[1])
+        _asp390_g = opp.asp_goals_by_player.get(_asp390_k, 0)
+        if _asp390_n >= 3 and _asp390_n >= 0.6 * max(1, _asp390_g):
+            plan.append(
+                f"A(z) {_asp390_k}. a bejátszásokból él ({_asp390_n}/"
+                f"{_asp390_g} gólja gólpasszos), ti pedig tudtok "
+                "kettőzni — de ellene ne a kettőzés menjen: a felé "
+                "futó passzt vágjátok el (sávzárás, előrelépő védő), "
+                "és a kettőzést tartsátok meg a magát megteremtő "
+                "emberükre.")
+
+    # 389) Az ő 7a6-eladásuk × a ti labdaszerzésetek: a lehozott
+    # kapus mellett minden szerzés azonnali dobás.
+    if opp.ent_turnovers >= 2 and own.trans_steals >= 3:
+        _ent389 = 100.0 * opp.ent_punished / opp.ent_turnovers
+        plan.append(
+            f"A 7 a 6-juk alatt {opp.ent_turnovers} labdát vesztenek "
+            f"(ebből {opp.ent_punished} volt gól, {_ent389:.0f}%), ti "
+            f"pedig sokat szereztek ({own.trans_steals} szerzés) — "
+            "a lehozott kapusuk alatt a szerzés után NE álljatok fel: "
+            "az első nézés az üres kapu, a második a kiugró társ.")
+
+    # 388) Az ő indítás-vadászuk × a ti kapus-indításotok: a rabló
+    # térfelét el kell kerülni az első passzal.
+    if opp.ohp_steals_by_player and own.gos_outlets >= 6:
+        _ohp388_k, _ohp388_n = max(opp.ohp_steals_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _ohp388_n >= 2:
+            plan.append(
+                f"A(z) {_ohp388_k}. ugrik rá az indításokra "
+                f"({_ohp388_n} elcsípett indítás), ti pedig sokat "
+                f"indítotok a kapustól ({own.gos_outlets} indítás) — "
+                "az első passz az ő térfelét kerülje el: másik "
+                "oldalra vagy a feje fölött, hosszan.")
+
+    # 387) Az ő fáradó faluk × a ti hajrá-emberetek: a szünet utáni
+    # figurákat arra a lövőre kell építeni, aki átjár rajtuk.
+    if opp.tcp_sh_by_player and own.clutch_goals_for >= 2:
+        _tcp387_k, _tcp387_sh = max(opp.tcp_sh_by_player.items(),
+                                    key=lambda kv: kv[1])
+        _tcp387_fh = opp.tcp_fh_by_player.get(_tcp387_k, 0)
+        if _tcp387_sh >= 2 and _tcp387_sh >= 2 * max(1, _tcp387_fh):
+            plan.append(
+                f"A faluk a második félidőre a(z) {_tcp387_k}. ellen "
+                f"nyílik meg ({_tcp387_fh} → {_tcp387_sh} kapott "
+                f"gól), nektek pedig van hajrá-emberetek "
+                f"({own.clutch_goals_for} hajrá-gól) — a szünet utáni "
+                "figurákat erre a párosításra építsétek.")
+
+    # 386) Az ő visszafutás-lemaradójuk × a ti gyors indításotok: a
+    # lerohanást az üresen maradt oldalra kell vezetni.
+    if opp.srp_lags_by_player and own.fast_break_pct >= 12.0:
+        _srp386_k, _srp386_n = max(opp.srp_lags_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _srp386_n >= 3:
+            plan.append(
+                f"A kontráknál a(z) {_srp386_k}. marad elöl a "
+                f"legtöbbször ({_srp386_n} alkalom), ti pedig gyorsan "
+                f"indultok ({own.fast_break_pct:.0f}%) — a "
+                "lerohanást tudatosan az ő oldalára vezessétek: ott "
+                "egy emberrel kevesebben érnek vissza.")
+
+    # 385) Az ő fáradt-eladójuk × a ti cserepadotok: friss védő
+    # fáradt labdakezelés ellen.
+    if (opp.ftop_sh_by_player
+            and own.sbs_lead_subs + own.sbs_rest_subs >= 3):
+        _ftop385_k, _ftop385_sh = max(opp.ftop_sh_by_player.items(),
+                                      key=lambda kv: kv[1])
+        _ftop385_fh = opp.ftop_fh_by_player.get(_ftop385_k, 0)
+        if _ftop385_sh >= 2 and _ftop385_sh >= 2 * max(1, _ftop385_fh):
+            plan.append(
+                f"A(z) {_ftop385_k}. eladásai a második félidőre "
+                f"megugranak ({_ftop385_fh} → {_ftop385_sh}), ti "
+                "pedig cseréltek "
+                f"({own.sbs_lead_subs + own.sbs_rest_subs} csere) — a "
+                "szünet után "
+                "friss védőt állítsatok rá: fáradtan nála a "
+                "legolcsóbb a labdaszerzés.")
+
+    # 384) Az ő hátrapasszolójuk × a ti letámadásotok: a
+    # visszafordított labda a pressz jutalma.
+    if opp.bprp_passes_by_player and own.trans_steals >= 3:
+        _bprp384_k, _bprp384_n = max(
+            opp.bprp_passes_by_player.items(), key=lambda kv: kv[1])
+        if _bprp384_n >= 3:
+            plan.append(
+                f"A játékuk a(z) {_bprp384_k}. kezénél fordul vissza "
+                f"({_bprp384_n} hátra-passz), ti pedig szedtek "
+                f"labdát ({own.trans_steals} szerzés) — rá menjetek "
+                "ki bátran: a hátrapasszal időt nyertek, és a "
+                "visszafordított labda a ti presszetek jutalma.")
+
+    # 383) Az ő térnyerőjük × a ti visszarendeződésetek: a
+    # lendületet a felezőnél kell megfogni.
+    if opp.tnrp_meters_by_player and own.def_shots_against >= 4:
+        _tnrp383_k, _tnrp383_m = max(
+            opp.tnrp_meters_by_player.items(), key=lambda kv: kv[1])
+        if _tnrp383_m >= 25.0:
+            plan.append(
+                f"A térnyerésük a(z) {_tnrp383_k}. lábán van "
+                f"({_tnrp383_m:.0f} m labdával előre), ti pedig "
+                f"rendszeresen védekeztek ({own.def_shots_against} "
+                "kapott lövés) — az ő felhozatalát a felezőnél "
+                "fogadjátok hátrálva, ne a hatosnál: onnan már csak "
+                "szabálytalansággal állítható meg.")
+
+    # 382) Az ő sávváltójuk × a ti bejáratott falatok: a
+    # követés/átadás szabálya előre kiosztható.
+    if opp.lswp_switches_by_player and own.defense_main != "—":
+        _lswp382_k, _lswp382_n = max(
+            opp.lswp_switches_by_player.items(), key=lambda kv: kv[1])
+        if _lswp382_n >= 4:
+            plan.append(
+                f"A keresztmozgásukat a(z) {_lswp382_k}. viszi "
+                f"({_lswp382_n} sávváltás), ti pedig bejáratott falat "
+                f"játszotok ({own.defense_main}) — az ő sávváltására "
+                "adjatok külön szabályt (követés vagy átadás), és "
+                "gyakoroljátok be: a bizonytalan pillanatban nyílik "
+                "a lyuk.")
+
+    # 381) Az ő menekülőjük × a ti kettőzésetek: a kiút előre
+    # ismert, ott kell lesben állni.
+    if (opp.escp_passes_by_player and own.dbl_holder_frames > 0
+            and own.dbl_doubled_frames >= 25):
+        _escp381_k, _escp381_n = max(
+            opp.escp_passes_by_player.items(), key=lambda kv: kv[1])
+        if _escp381_n >= 3:
+            plan.append(
+                f"Szorításban a labda a(z) {_escp381_k}. felé megy "
+                f"({_escp381_n} nyomás alatti passz), ti pedig "
+                "kettőztök is — a kettőzés mögötti harmadik ember az "
+                "ő sávjában álljon lesben: a menekülő passz így nem "
+                "kiút, hanem elfogott labda és kontra.")
+
+    # 380) Az ő vég-birtokosuk × a ti labdaszerzésetek: ahol a
+    # támadásuk elhal, ott a legolcsóbb elvenni a labdát.
+    if opp.lstp_attacks_by_player and own.trans_steals >= 3:
+        _lstp380_k, _lstp380_n = max(
+            opp.lstp_attacks_by_player.items(), key=lambda kv: kv[1])
+        if _lstp380_n >= 3:
+            plan.append(
+                f"A terméketlen támadásaik a(z) {_lstp380_k}. kezében "
+                f"halnak el ({_lstp380_n} lövés nélküli támadás), ti "
+                f"pedig jó labdaszerzők vagytok ({own.trans_steals} "
+                "szerzés) — a támadásuk második felében rá toljátok a "
+                "nyomást: nála zárul a támadás, ott a legolcsóbb "
+                "elvenni.")
+
+    # 379) Az ő ziccer-előkészítőjük × a ti kilépő faltok: a
+    # bejátszó-sáv elvágásával a helyzet ki sem alakul.
+    if (opp.bcfp_chances_by_player and own.def_shots_against >= 4
+            and 0.0 < own.defensive_pressure_m <= 1.3):
+        _bcfp379_k, _bcfp379_n = max(
+            opp.bcfp_chances_by_player.items(), key=lambda kv: kv[1])
+        if _bcfp379_n >= 2:
+            plan.append(
+                f"A ziccereiket a(z) {_bcfp379_k}. teremti a "
+                f"legtöbbször ({_bcfp379_n} előkészítés), ti pedig "
+                f"szorosan védekeztek (átlag "
+                f"{own.defensive_pressure_m:.1f} m) — a kilépés az ő "
+                "bejátszó-sávjára menjen: a ziccer ki sem alakul, "
+                "nem a befejezést kell hárítani.")
+
+    # 378) Az ő válaszhiba-emberük × a ti gólerősségetek: minden
+    # gólotok után nyílik egy névre szóló ablak.
+    if opp.rtop_turnovers_by_player and own.goals >= 5:
+        _rtop378_k, _rtop378_n = max(
+            opp.rtop_turnovers_by_player.items(), key=lambda kv: kv[1])
+        if _rtop378_n >= 2:
+            plan.append(
+                f"Kapott gól után a(z) {_rtop378_k}. veszíti el a "
+                f"legtöbb labdát ({_rtop378_n} eladás), ti pedig "
+                f"gólerősek vagytok ({own.goals} gól) — minden "
+                "gólotok után egy emberre kell menni: az ő "
+                "fogadására lépjetek ki, és a labdából induljon a "
+                "következő támadás.")
+
+    # 377) Az ő időkérés-hibázójuk × a ti labdaszerzésetek: az
+    # időkérés utáni első támadás a legolcsóbb labda.
+    if opp.toep_turnovers_by_player and own.trans_steals >= 3:
+        _toep377_k, _toep377_n = max(
+            opp.toep_turnovers_by_player.items(), key=lambda kv: kv[1])
+        if _toep377_n >= 2:
+            plan.append(
+                f"Az időkérés utáni labdát a(z) {_toep377_k}. veszíti "
+                f"el a legtöbbször ({_toep377_n} eladás), ti pedig "
+                f"szedtek labdát ({own.trans_steals} szerzés) — az ő "
+                "időkérésük után ne a befejezőt várjátok: az ő "
+                "fogadására lépjetek ki, ott a legolcsóbb elvenni.")
+
+    # 376) Az ő hetesdobójuk × a ti kapusotok: névre szóló
+    # hetes-felkészülés.
+    if opp.stp_sevens_by_player and own.gk_on_target >= 5:
+        _stp376_k, _stp376_n = max(opp.stp_sevens_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _stp376_n >= 2:
+            plan.append(
+                f"A heteseiket a(z) {_stp376_k}. dobja ({_stp376_n} "
+                "hetes), a ti kapusotok pedig rendszeresen dolgozik "
+                f"({own.gk_on_target} kaputra érkezett lövés) — "
+                "nézzétek végig az ő hetes-felvételeit, és "
+                "beszéljétek meg a kapussal a szokás-sarkát: a hetes "
+                "az egyetlen helyzet, amit előre lehet gyakorolni.")
+
+    # 375) Az ő áttörés-hozamuk × a ti fal-mélységetek: a betörést
+    # a falon kívül kell megállítani.
+    if opp.bty_entries >= 5 and own.defensive_pressure_m > 0.0:
+        _bty375 = 100.0 * opp.bty_goals / opp.bty_entries
+        if _bty375 >= 40.0:
+            plan.append(
+                f"A betöréseik {_bty375:.0f}%-a gólba fut "
+                f"({opp.bty_goals} gól {opp.bty_entries} betörésből), "
+                f"ti pedig átlag {own.defensive_pressure_m:.1f} "
+                "méterre védekeztek a labdástól — a betörést a falon "
+                "KÍVÜL kell megállítani: időben kilépő védő és "
+                "testtel zárt vonal, mert a hatoson belül már nincs "
+                "megoldás.")
+
+    # 374) Az ő emberhátrány-hibázójuk × a ti emberelőny-játékotok:
+    # a hat az öt ellen névre szóló célpont van.
+    if opp.shtp_turnovers_by_player and own.pp_shots >= 3:
+        _shtp374_k, _shtp374_n = max(
+            opp.shtp_turnovers_by_player.items(), key=lambda kv: kv[1])
+        if _shtp374_n >= 2:
+            plan.append(
+                f"Hátrányban a(z) {_shtp374_k}. veszíti el a legtöbb "
+                f"labdát ({_shtp374_n} eladás), ti pedig "
+                f"emberelőnyben is játszotok ({own.pp_shots} "
+                "emberelőny-lövés) — a hat az öt ellen ne csak "
+                "körbejárassátok: az ő fogadására lépjen ki a védő, "
+                "mert az elvett labda üres kaput ér.")
+
+    # 373) Az ő emberelőny-hibázójuk × a ti kontrátok: a két perc
+    # alatt elvett labda üres kapura visz.
+    if opp.pptp_turnovers_by_player and own.fast_break_pct >= 10.0:
+        _pptp373_k, _pptp373_n = max(
+            opp.pptp_turnovers_by_player.items(), key=lambda kv: kv[1])
+        if _pptp373_n >= 2:
+            plan.append(
+                f"Az emberelőnyükben a(z) {_pptp373_k}. veszíti el a "
+                f"legtöbb labdát ({_pptp373_n} eladás), ti pedig "
+                f"kontráztok (a támadásaitok {own.fast_break_pct:.0f}"
+                "%-a lerohanás) — hátrányban ne csak tartsatok: az ő "
+                "fogadására menjen a kettőzés, és az elvett labdából "
+                "azonnal induljon a kontra.")
+
+    # 372) Az ő kulcs-emberük × a ti védekezés-fegyelmetek: a
+    # személyre szabott feladat a meccsterv első sora.
+    if opp.kpl_layers_by_player and own.def_shots_against >= 4:
+        _kpl372_k, _kpl372_n = max(opp.kpl_layers_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _kpl372_n >= 4:
+            plan.append(
+                f"A kulcs-emberük a(z) {_kpl372_k}. számú "
+                f"({_kpl372_n} ember-réteg mutat rá), ti pedig "
+                f"rendszeresen védekeztek ({own.def_shots_against} "
+                "kapott lövés) — jelöljetek ki rá felelőst: "
+                "emberfogás vagy azonnali kettőzés, és a labdaútját "
+                "vágjátok el, mert nála minden szál összefut.")
+
+    # 371) Az ő drága kétpercük × a ti betörés-erősségetek: a
+    # kiharcolás pontot ér.
+    if opp.sct_windows >= 3 and own.shots >= 8:
+        _sct371 = opp.sct_conceded / opp.sct_windows
+        if _sct371 >= 1.2:
+            plan.append(
+                f"Egy kiállításuk átlag {_sct371:.1f} gólba kerül "
+                f"({opp.sct_conceded} gól {opp.sct_windows} kétperc "
+                f"alatt), ti pedig sokat lőttök ({own.shots} lövés) "
+                "— vállaljátok a betöréseket és a beállós "
+                "helyzeteket: náluk a szabálytalanság duplán fizet, "
+                "mert a kétperc alatt is szivárognak.")
+
+    # 370) Az ő emberfogás-váltásuk × a ti kulcsemberetek: a
+    # szünet utáni terv előre megírható.
+    if (opp.msh_fh_dist_m > 0.0 and opp.msh_sh_dist_m > 0.0
+            and own.goals >= 5):
+        if (opp.msh_sh_dist_m <= 2.0
+                and opp.msh_sh_dist_m <= 0.7 * opp.msh_fh_dist_m):
+            plan.append(
+                f"A szünet után emberfogásra váltanak (a legszorosabb "
+                f"páros {opp.msh_sh_dist_m:.1f} m az első félidei "
+                f"{opp.msh_fh_dist_m:.1f} m helyett), nálatok pedig "
+                f"van, akire ez jönni fog ({own.goals} gól) — a "
+                "szünetben beszéljétek meg: a fogott ember kifut a "
+                "szélre vagy mélyre beáll, és a felszabaduló "
+                "területre érkezik a második hullám.")
+
+    # 369) Az ő kipattanó-szedőjük × a ti lövésszámotok: a második
+    # helyzet akkor ér gólt, ha van, aki elveszi tőle.
+    if opp.rbcp_rebounds_by_player and own.shots >= 8:
+        _rbcp369_k, _rbcp369_n = max(
+            opp.rbcp_rebounds_by_player.items(), key=lambda kv: kv[1])
+        if _rbcp369_n >= 2:
+            plan.append(
+                f"A kipattanókat leggyakrabban a(z) {_rbcp369_k}. "
+                f"szedi össze ({_rbcp369_n} kipattanó), ti pedig "
+                f"sokat lőttök ({own.shots} lövés) — a berobbanó "
+                "emberetek ne a kapust nézze, hanem őt: ha nem ő "
+                "éri el elsőként a labdát, a második lövés a "
+                "tiétek.")
+
+    # 368) Az ő kétperc-párosuk × a ti fegyelmetek: a lánc az
+    # elejénél a legolcsóbban vágható el.
+    _sup368_n = sum(opp.sup_chains_by_pair.values())
+    if _sup368_n >= 3 and own.suspensions >= 2:
+        _sup368_p, _sup368_c = max(opp.sup_chains_by_pair.items(),
+                                   key=lambda kv: kv[1])
+        _sup368_pct = 100.0 * _sup368_c / _sup368_n
+        if _sup368_pct >= 55.0:
+            plan.append(
+                f"A kétperceik {_sup368_pct:.0f}%-a ugyanazt a "
+                f"láncot futja ({_sup368_p}, {_sup368_n} "
+                f"emberelőny-lövés), ti pedig kaptok kiállításokat "
+                f"({own.suspensions} kétperc) — a láncot az elején "
+                "vágjátok el: a kiharcolójuk ellen testtel, kéz "
+                "nélkül, mert a kétperc nálatok duplán fáj.")
+
+    # 367) Az ő hetes-kihagyójuk × a ti kapusotok: névre szóló
+    # hetes-terv a kapusnak.
+    if opp.svmp_misses_by_player and own.gk_on_target >= 5:
+        _svmp367_k, _svmp367_n = max(
+            opp.svmp_misses_by_player.items(), key=lambda kv: kv[1])
+        if _svmp367_n >= 2:
+            _svmp367_gk = 100.0 * own.gk_saves / own.gk_on_target
+            plan.append(
+                f"A heteseiket leggyakrabban a(z) {_svmp367_k}. "
+                f"hagyja ki ({_svmp367_n} gól nélküli hetes), a ti "
+                f"kapusotok pedig fog ({_svmp367_gk:.0f}% védés) — "
+                "névre szóló hetes-terv: ha ő áll oda, a kapus "
+                "kockáztasson (korai kimozdulás vagy késleltetett "
+                "vetődés), másnál maradjon a vonalon.")
+
+    # 366) Az ő sprint-esésük × a ti kontra-erősségetek: a második
+    # félidő a futás félideje.
+    if (opp.sfd_fh_min >= 5.0 and opp.sfd_sh_min >= 5.0
+            and opp.sfd_fh_sprints > 0 and own.fast_break_pct >= 10.0):
+        _sfd366_f = opp.sfd_fh_sprints / opp.sfd_fh_min
+        _sfd366_s = opp.sfd_sh_sprints / opp.sfd_sh_min
+        if _sfd366_f and _sfd366_s / _sfd366_f <= 0.7:
+            plan.append(
+                f"A második félidőre megfogy a lábuk ({_sfd366_s:.1f} "
+                f"sprint/perc az {_sfd366_f:.1f} helyett), ti pedig "
+                f"kontráztok (a támadásaitok {own.fast_break_pct:.0f}"
+                "%-a lerohanás) — a szünet után minden "
+                "labdaszerzésből induljatok: a második félidő a "
+                "futás félideje, ott dől el a meccs.")
+
+    # 365) Az ő óralopásuk × a ti labdaszerzésetek: az elhúzott
+    # támadás a passzív jel és a kettőzés terepe.
+    if (opp.clk_lead >= 3 and opp.clk_base >= 4
+            and own.trans_steals >= 3):
+        _clk365_l = opp.clk_lead_sum_s / opp.clk_lead
+        _clk365_b = opp.clk_base_sum_s / opp.clk_base
+        if _clk365_l - _clk365_b >= 3.0:
+            plan.append(
+                f"Vezetve {_clk365_l - _clk365_b:.1f} másodperccel "
+                f"hosszabb a támadásuk a hajrában ({_clk365_l:.1f} "
+                f"mp a {_clk365_b:.1f} mp helyett), ti pedig jó "
+                f"labdaszerzők vagytok ({own.trans_steals} szerzés) "
+                "— a végjátékban ne várjatok: kérjétek a passzív "
+                "jelet, és a hetedik-nyolcadik passznál jöjjön a "
+                "kettőzés, mert ott már nekik sürgős.")
+
+    # 364) Az ő drága kipattanóik × a ti lövésszámotok: a második
+    # helyzet a legolcsóbb gól.
+    if opp.rpn_saves >= 5 and own.shots >= 8:
+        _rpn364 = 100.0 * opp.rpn_punished / opp.rpn_saves
+        if _rpn364 >= 15.0:
+            plan.append(
+                f"A védéseik {_rpn364:.0f}%-a után gól jön a "
+                f"kipattanóból ({opp.rpn_punished} a {opp.rpn_saves} "
+                f"védésből), ti pedig sokat lőttök ({own.shots} "
+                "lövés) — a lövés ne legyen a támadás vége: "
+                "kijelölt berobbanó a rövid és a hosszú sarokra, "
+                "mert a kipattanójuk gólt ér.")
+
+    # 363) Az ő büntethető visszaállásuk × a ti kontra-erősségetek:
+    # a lövésük utáni első hullám a legolcsóbb gól.
+    if opp.rtp_shots >= 6 and own.fast_break_pct >= 10.0:
+        _rtp363 = 100.0 * opp.rtp_punished / opp.rtp_shots
+        if _rtp363 >= 20.0:
+            plan.append(
+                f"A gól nélküli lövéseik {_rtp363:.0f}%-át már most "
+                f"gyors kapott gól követi ({opp.rtp_punished} a "
+                f"{opp.rtp_shots} lövésből), ti pedig futtok "
+                f"kontrákat (a támadásaitok {own.fast_break_pct:.0f}"
+                "%-a lerohanás) — ezt kell megsokszorozni: a "
+                "kapusotok és a szélsők előre megbeszélt jelre "
+                "induljanak minden védésnél, ne csak a bravúroknál.")
+
+    # 362) Az ő lepattanó-szedő posztjuk × a ti lövésszámotok: sok
+    # lövés = sok kipattanó, ha van, aki utánamegy.
+    _rbc362_n = sum(opp.rbc_rebounds_by_role.values())
+    if _rbc362_n >= 3 and own.shots >= 8:
+        _rbc362_p, _rbc362_c = max(opp.rbc_rebounds_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rbc362_pct = 100.0 * _rbc362_c / _rbc362_n
+        if _rbc362_pct >= 60.0:
+            plan.append(
+                f"A kipattanók {_rbc362_pct:.0f}%-át a(z) "
+                f"{_rbc362_p} posztjuk szedi össze ({_rbc362_n} "
+                f"kipattanó), ti pedig sokat lőttök ({own.shots} "
+                "lövés) — minden lövésnél induljon a berobbanó "
+                "ember az ő zónájába: a második lövés a legolcsóbb "
+                "gól, és a kipattanó nekik nem szabad labda.")
+
+    # 361) Az ő figura-koncentrációjuk × a ti védekezés-váltásotok:
+    # egy mintára készülni csak akkor éri meg, ha van mire váltani.
+    if opp.spk_attacks >= 6 and own.defense_main != "—":
+        _spk361 = 100.0 * opp.spk_top / opp.spk_attacks
+        if _spk361 >= 40.0:
+            plan.append(
+                f"A támadásaik {_spk361:.0f}%-a egyetlen mintából "
+                f"jön ({opp.spk_attacks} mért támadás), ti pedig "
+                f"bejáratott falat játszotok ({own.defense_main}) "
+                "— erre az egy figurára készüljetek külön "
+                "védekezéssel: az első felismerésnél jöjjön a "
+                "váltás, ne a harmadik gól után.")
+
+    # 360) Az ő hajrá-kapusuk × a ti hajrá-gólerősségetek: a
+    # végjáték lövésválasztása.
+    if (opp.gkc_clutch_faced >= 3 and opp.gkc_rest_faced >= 3
+            and own.goals >= 5):
+        _gkc360_c = (100.0 * opp.gkc_clutch_saves
+                     / opp.gkc_clutch_faced)
+        _gkc360_r = 100.0 * opp.gkc_rest_saves / opp.gkc_rest_faced
+        _gkc360_d = _gkc360_c - _gkc360_r
+        if _gkc360_d >= 15.0:
+            plan.append(
+                f"A kapusuk a hajrában nő ({_gkc360_c:.0f}% a "
+                f"{_gkc360_r:.0f}% helyett, {opp.gkc_clutch_faced} "
+                "lövésből) — az utolsó öt percben ne a lövésszám "
+                "döntsön: minden támadás végén tiszta helyzet "
+                "kell (kiugratás, beállós, kiharcolt hetes), "
+                "félhelyzetből ne engedjétek el a labdát.")
+        elif _gkc360_d <= -15.0:
+            plan.append(
+                f"A kapusuk a hajrában beesik ({_gkc360_c:.0f}% a "
+                f"{_gkc360_r:.0f}% helyett, {opp.gkc_clutch_faced} "
+                "lövésből) — az utolsó öt percben vigyétek fel a "
+                "lövésszámot: minden tiszta lövés megéri, a "
+                "kipattanóra pedig küldjetek embert.")
+
+    # 359) Az ő emberhátrány-hiba posztjuk × a ti
+    # emberelőny-játékotok: a két perc alatt elvett labda üres kapu.
+    _sht359_n = sum(opp.sht_turnovers_by_role.values())
+    if _sht359_n >= 3 and own.pp_shots >= 3:
+        _sht359_p, _sht359_c = max(opp.sht_turnovers_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sht359_pct = 100.0 * _sht359_c / _sht359_n
+        if _sht359_pct >= 60.0:
+            plan.append(
+                f"Hátrányban {_sht359_pct:.0f}%-ban a(z) "
+                f"{_sht359_p} kezén vész el a labdájuk "
+                f"({_sht359_n} hátrány-eladás), ti pedig "
+                f"emberelőnyben is játszotok ({own.pp_shots} "
+                "emberelőny-lövés) — a hat az öt ellen ne csak "
+                "körbejárassátok: az ő fogadására lépjen ki a "
+                "védőtök, mert az elvett labda üres kaput ér.")
+
+    # 358) Az ő kapkodásuk × a ti gólerősségetek: minden gólotok
+    # után jön egy elsietett támadásuk.
+    if opp.rus_after >= 3 and opp.rus_base >= 4 and own.goals >= 5:
+        _rus358_a = opp.rus_after_sum_s / opp.rus_after
+        _rus358_b = opp.rus_base_sum_s / opp.rus_base
+        _rus358_d = _rus358_a - _rus358_b
+        if _rus358_d <= -3.0:
+            plan.append(
+                f"Kapott gól után {abs(_rus358_d):.1f} másodperccel "
+                f"rövidebb a támadásuk ({_rus358_a:.1f} mp a "
+                f"{_rus358_b:.1f} mp helyett), ti pedig gólerősek "
+                f"vagytok ({own.goals} gól) — minden gólotok után "
+                "jön egy elsietett támadásuk: ne menjetek ki rá, "
+                "álljatok vissza zárt fallal, és az elsietett "
+                "lövésből induljon a következő kontrátok.")
+
+    # 357) Az ő lassú visszaállásuk × a ti kapus-indításotok: a
+    # lövésük utáni első hullám üres pályát talál.
+    if opp.rtt_shots >= 4 and own.gk_outlets >= 2:
+        _rtt357_avg = opp.rtt_sum_s / opp.rtt_shots
+        _rtt357_fast = (100.0 * own.gk_outlet_fast / own.gk_outlets
+                        if own.gk_outlets else 0.0)
+        if _rtt357_avg > 8.0:
+            plan.append(
+                f"A lövésük után átlag {_rtt357_avg:.1f} másodperc, "
+                f"míg négy emberük hazaér ({opp.rtt_shots} lövésből "
+                f"{opp.rtt_slow} volt 8 mp fölött), a kapusotok "
+                f"pedig indít ({own.gk_outlets} indítás, "
+                f"{_rtt357_fast:.0f}% gyors) — minden védés és "
+                "kapott gól után azonnal jöjjön a hosszú indítás: a "
+                "második hullámra már felállnak, az elsőre nem.")
+
+    # 356) Az ő időkérés-hiba posztjuk × a ti időkérés utáni
+    # védekezésetek: a figura az indításnál törik a legolcsóbban.
+    _toe356_n = sum(opp.toe_turnovers_by_role.values())
+    if _toe356_n >= 3 and own.trans_steals >= 3:
+        _toe356_p, _toe356_c = max(opp.toe_turnovers_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _toe356_pct = 100.0 * _toe356_c / _toe356_n
+        if _toe356_pct >= 60.0:
+            plan.append(
+                f"Az időkérés utáni labdájuk {_toe356_pct:.0f}%-ban "
+                f"a(z) {_toe356_p} kezén vész el ({_toe356_n} "
+                "eladás), ti pedig szedtek labdát "
+                f"({own.trans_steals} szerzés) — az ő időkérésük után "
+                "ne a befejezőt várjátok: a figura indításánál, az ő "
+                "fogadásánál lépjetek ki, ott a legolcsóbb elvenni.")
+
+    # 355) Az ő válaszhiba-posztjuk × a ti gólerősségetek: minden
+    # gólunk után nyílik egy ablak, amiben elvehető a labda.
+    _rto355_n = sum(opp.rto_turnovers_by_role.values())
+    if _rto355_n >= 3 and own.goals >= 5:
+        _rto355_p, _rto355_c = max(opp.rto_turnovers_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rto355_pct = 100.0 * _rto355_c / _rto355_n
+        if _rto355_pct >= 60.0:
+            plan.append(
+                f"Kapott gól után {_rto355_pct:.0f}%-ban a(z) "
+                f"{_rto355_p} kezén vész el a labdájuk ({_rto355_n} "
+                f"válasz-eladás), ti pedig gólerősek vagytok "
+                f"({own.goals} gól) — minden gólotok után nyílik egy "
+                "ablak: azonnal az ő fogadására lépjetek ki, a "
+                "sorozatot ott lehet elindítani.")
+
+    # 354) Az ő emberelőny-hiba posztjuk × a ti kontrátok: a
+    # kétperc alatt elvett labda dupla büntetés.
+    _ppt354_n = sum(opp.ppt_turnovers_by_role.values())
+    if _ppt354_n >= 3 and own.fast_break_pct >= 10.0:
+        _ppt354_p, _ppt354_c = max(opp.ppt_turnovers_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ppt354_pct = 100.0 * _ppt354_c / _ppt354_n
+        if _ppt354_pct >= 60.0:
+            plan.append(
+                f"Az emberelőnyük {_ppt354_pct:.0f}%-ban a(z) "
+                f"{_ppt354_p} kezén akad el ({_ppt354_n} "
+                "emberelőny-eladás), ti pedig futtok kontrákat "
+                f"(a támadásaitok {own.fast_break_pct:.0f}%-a "
+                "lerohanás) — hátrányban ne "
+                "csak tartsatok: az ő fogadására menjen a "
+                "passzsáv-zárás, és az elvett labdából azonnal "
+                "induljon a kontra, mert a kétperc alatt üres a "
+                "másik kapu.")
+
+    # 353) Az ő ziccerpárosuk × a ti kettőzésetek: a páros közötti
+    # passzsáv elvágása egy mozdulattal két posztot fog ki.
+    _bcp353_n = sum(opp.bcp_chances_by_pair.values())
+    if (_bcp353_n >= 3 and own.dbl_holder_frames > 0
+            and own.dbl_doubled_frames >= 25):
+        _bcp353_p, _bcp353_c = max(opp.bcp_chances_by_pair.items(),
+                                   key=lambda kv: kv[1])
+        _bcp353_pct = 100.0 * _bcp353_c / _bcp353_n
+        if _bcp353_pct >= 55.0:
+            plan.append(
+                f"A ziccereik {_bcp353_pct:.0f}%-a ugyanabból a "
+                f"párosból jön ({_bcp353_p}, {_bcp353_n} helyzet), "
+                "ti pedig kettőztök is (a labdás-kockák "
+                f"{100.0 * own.dbl_doubled_frames / own.dbl_holder_frames:.0f}"
+                "%-ában) — a "
+                "kettőzés ne a labdásra menjen, hanem a páros közé: "
+                "a passzsáv elvágásával egy mozdulattal mindkét "
+                "posztot kifogjátok, a ziccer ki sem alakul.")
+
+    # 352) Az ő hetes-kihagyó posztjuk × a ti kapusotok: ha ő áll
+    # oda, a kapus mehet a saját megérzésére.
+    _svm352_n = sum(opp.svm_misses_by_role.values())
+    if _svm352_n >= 3 and own.gk_on_target >= 5:
+        _svm352_p, _svm352_c = max(opp.svm_misses_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _svm352_pct = 100.0 * _svm352_c / _svm352_n
+        _svm352_gk = 100.0 * own.gk_saves / own.gk_on_target
+        if _svm352_pct >= 60.0:
+            plan.append(
+                f"A kihagyott heteseik {_svm352_pct:.0f}%-a a(z) "
+                f"{_svm352_p} posztjukhoz kötődik ({_svm352_n} gól "
+                "nélküli hetes), a ti kapusotok pedig fog "
+                f"({_svm352_gk:.0f}% védés, {own.gk_saves}/"
+                f"{own.gk_on_target}) — ha ő áll a hetesnél, a kapus "
+                "menjen a saját megérzésére (kimozdulás, késleltetett "
+                "vetődés): nála a hetes nem automatikus gól, "
+                "megéri kockáztatni.")
+
+    # 351) Az ő ziccer-előkészítő posztjuk × a ti kilépő faltok: a
+    # bejátszó-sáv elvágásával a helyzet ki sem alakul.
+    _bcf351_n = sum(opp.bcf_chances_by_role.values())
+    if (_bcf351_n >= 3 and own.def_shots_against >= 4
+            and 0.0 < own.defensive_pressure_m <= 1.3):
+        _bcf351_p, _bcf351_c = max(opp.bcf_chances_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _bcf351_pct = 100.0 * _bcf351_c / _bcf351_n
+        if _bcf351_pct >= 60.0:
+            plan.append(
+                f"A ziccereik {_bcf351_pct:.0f}%-át a(z) "
+                f"{_bcf351_p} posztjuk teremti ({_bcf351_n} "
+                "előkészítés), ti pedig szorosan, kilépve "
+                f"védekeztek (átlag {own.defensive_pressure_m:.1f} "
+                "m) — a kilépés az ő bejátszó-sávjára menjen: a "
+                "ziccer ki sem alakul, nem a befejezést kell "
+                "hárítani.")
+
+    # 350) Az ő vég-birtokos posztjuk × a ti labdaszerzésetek: ahol a
+    # támadásuk elhal, ott a legolcsóbb elvenni a labdát.
+    _lst350_n = sum(opp.lst_attacks_by_role.values())
+    if _lst350_n >= 4 and own.steal_n >= 5:
+        _lst350_p, _lst350_c = max(opp.lst_attacks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _lst350_pct = 100.0 * _lst350_c / _lst350_n
+        if _lst350_pct >= 60.0:
+            plan.append(
+                f"A lövés nélkül záruló támadásaik "
+                f"{_lst350_pct:.0f}%-a a(z) {_lst350_p} poszt "
+                f"kezében hal el ({_lst350_n} terméketlen támadás), "
+                f"ti pedig sok labdát szereztek ({own.steal_n} "
+                "szerzés) — a támadásuk második felében őt "
+                "nyomjátok: ott zárul a támadás, és ott a legkisebb "
+                "kockázattal vehető el a labda.")
+
+    # 349) Az ő menekülő-posztjuk × a ti kettőzésetek: a kettőzés
+    # mögötti harmadik ember a menekülő passzra álljon lesben.
+    _esc349_n = sum(opp.esc_passes_by_role.values())
+    _dbl349 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _esc349_n >= 5 and _dbl349 >= 20.0:
+        _esc349_p, _esc349_c = max(opp.esc_passes_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _esc349_pct = 100.0 * _esc349_c / _esc349_n
+        if _esc349_pct >= 60.0:
+            plan.append(
+                f"Szorításban a labda a(z) {_esc349_p} poszthoz "
+                f"menekül ({_esc349_pct:.0f}%, {_esc349_n} nyomás "
+                "alatti passz), ti pedig sokat kettőztök "
+                f"({_dbl349:.0f}% a labdás nyomás alatt) — a "
+                "kettőzés mögötti harmadik ember eleve az ő "
+                "passzsávjába álljon: a kiútjuk elfogott labda "
+                "lesz.")
+
+    # 348) Az ő időkéréspáros-posztjuk × a ti aktív időkérésetek: ha
+    # ti is sokat kértek időt, sokszor jön a kész figurájuk — annyiszor
+    # vágható el az első passznál.
+    _top348_n = sum(opp.top_shots_by_role.values())
+    if _top348_n >= 3 and own.tsc_timeouts >= 2:
+        _top348_p, _top348_c = max(opp.top_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _top348_pct = 100.0 * _top348_c / _top348_n
+        if _top348_pct >= 60.0:
+            plan.append(
+                f"Az időkérés utáni figurájuk a(z) {_top348_p} "
+                f"tengelyen fut ({_top348_pct:.0f}%, {_top348_n} "
+                "lövés), és a meccsen sok az időkérés (nálatok "
+                f"{own.tsc_timeouts}) — minden újraindításnál az "
+                "ELSŐ passzt vágjátok el: a figurájuk az indításnál "
+                "törik meg a legolcsóbban.")
+
+    # 347) Az ő sávváltó-posztjuk × a ti kettőzésetek: a keresztmozgás
+    # pillanata a legjobb kettőzés-időzítés.
+    _lsw347_n = sum(opp.lsw_switches_by_role.values())
+    _dbl347 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _lsw347_n >= 5 and _dbl347 >= 20.0:
+        _lsw347_p, _lsw347_c = max(opp.lsw_switches_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _lsw347_pct = 100.0 * _lsw347_c / _lsw347_n
+        if _lsw347_pct >= 60.0:
+            plan.append(
+                f"A keresztmozgásuk a(z) {_lsw347_p} posztra épül "
+                f"({_lsw347_pct:.0f}%, {_lsw347_n} sávváltás), ti "
+                f"pedig jól kettőztök ({_dbl347:.0f}% a labdás "
+                "nyomás alatt) — a sávváltás pillanatában "
+                "kettőzzetek rá: ott a legnagyobb a bizonytalanság "
+                "az átadásban, és ott a legolcsóbb a labdaszerzés.")
+
+    # 346) Az ő elöl lógó posztjuk × a ti gyorsan indító kapusotok: a
+    # mögötte lévő üres sávba érdemes vezetni a kihozatalt.
+    if own.gk_outlets >= 5 and own.gk_outlet_fast >= 3:
+        for _rcr346_p, _rcr346_n in sorted(
+                opp.rcr_frames_by_role.items(), key=lambda kv: -kv[1]):
+            if _rcr346_n < 200:
+                continue
+            _rcr346_h = opp.rcr_home_by_role.get(_rcr346_p, 0)
+            _rcr346_pct = 100.0 * _rcr346_h / _rcr346_n
+            if _rcr346_pct < 70.0:
+                plan.append(
+                    f"A(z) {_rcr346_p} posztjuk elöl lóg (a "
+                    f"védekezett idő {_rcr346_pct:.0f}%-ában van "
+                    "otthon), a kapusotok pedig gyorsan indít "
+                    f"({own.gk_outlet_fast} gyors indítás) — a "
+                    "kihozatalt tudatosan az ő oldalára vezessétek: "
+                    "mögötte nincs védő, ott indul a kontrátok.")
+                break
+
+    # 345) Az ő válasz-posztjuk × a ti gólerős támadásotok: ha sokat
+    # gólt lőttök, sokszor jön a válaszuk — annyiszor fogható.
+    _rsp345_n = sum(opp.rsp_goals_by_role.values())
+    if _rsp345_n >= 3 and own.goals >= 10:
+        _rsp345_p, _rsp345_c = max(opp.rsp_goals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rsp345_pct = 100.0 * _rsp345_c / _rsp345_n
+        if _rsp345_pct >= 60.0:
+            plan.append(
+                f"Kapott gól után a(z) {_rsp345_p} posztjuk "
+                f"válaszol ({_rsp345_pct:.0f}%, {_rsp345_n} "
+                f"válasz-gól), ti pedig sokat gólt lőttök "
+                f"({own.goals} gól a mérésben) — minden saját "
+                "gólotok után legyen kész a váltás: kiemelt őrzés "
+                "vagy korai kettőzés rá, és a lendületük el sem "
+                "indul.")
+
+    # 344) Az ő emberelőnypáros-posztjuk × a ti kiállítás-mérlegetek:
+    # ha sokat vagytok hátrányban, a 6-5 tengelyük elvágása a
+    # legolcsóbb védekezés.
+    _pwp344_n = sum(opp.pwp_shots_by_role.values())
+    if _pwp344_n >= 3 and own.suspensions >= 2:
+        _pwp344_p, _pwp344_c = max(opp.pwp_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _pwp344_pct = 100.0 * _pwp344_c / _pwp344_n
+        if _pwp344_pct >= 60.0:
+            plan.append(
+                f"A 6-5 játékuk a(z) {_pwp344_p} tengelyen fut "
+                f"({_pwp344_pct:.0f}%, {_pwp344_n} emberelőny-lövés)"
+                f", ti pedig sokat vagytok hátrányban "
+                f"({own.suspensions} kiállítás) — öt emberrel ne "
+                "mindenkire jusson kéz: az előkészítő passzsávját a "
+                "fal széle zárja, a befejezőre menjen a kilépés.")
+
+    # 343) Az ő specialista-posztjuk × a ti gyors középkezdésetek: a
+    # csere-pillanat pont a váltott soros poszton sebezhető.
+    _spc343_tot = sum(opp.spc_seconds_by_role.values())
+    _spc343_dtot = sum(opp.spc_def_seconds_by_role.values())
+    for _spc343_p, _spc343_n in sorted(
+            opp.spc_seconds_by_role.items(), key=lambda kv: -kv[1]):
+        if (_spc343_n < 120.0 or own.trans_steals < 4
+                or _spc343_dtot < 60.0
+                or _spc343_tot - _spc343_dtot < 60.0):
+            continue
+        _spc343_d = opp.spc_def_seconds_by_role.get(_spc343_p, 0.0)
+        _spc343_pct = 100.0 * _spc343_d / _spc343_n
+        if _spc343_pct >= 80.0 or _spc343_pct <= 20.0:
+            plan.append(
+                f"A(z) {_spc343_p} posztjukat váltott sorban "
+                f"játsszák (az idejük "
+                f"{max(_spc343_pct, 100.0 - _spc343_pct):.0f}%-át "
+                "egy fázisban töltik), ti pedig sokat szereztek "
+                f"labdát átmenetben ({own.trans_steals} szerzés) — "
+                "a szerzés utáni azonnali indítás és a gyors "
+                "középkezdés pont a cseréjük közben ér oda: rossz "
+                "ember (vagy senki) lesz a helyén.")
+            break
+
+    # 342) Az ő kulcs-párosuk × a ti kettőzésetek: a legtöbb réteg
+    # által megnevezett kettőst szétválasztva több minta hal el.
+    _dbl342 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if opp.kpr_layers_by_role and _dbl342 >= 20.0:
+        _kpr342_p, _kpr342_c = max(opp.kpr_layers_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _kpr342_vals = sorted(opp.kpr_layers_by_role.values(),
+                              reverse=True)
+        _kpr342_tie = (len(_kpr342_vals) > 1
+                       and _kpr342_vals[1] == _kpr342_c)
+        if _kpr342_c >= 2 and not _kpr342_tie:
+            plan.append(
+                f"A kulcs-párosuk a(z) {_kpr342_p} ({_kpr342_c} "
+                "páros-réteg mutat rá), ti pedig jól kettőztök "
+                f"({_dbl342:.0f}% a labdás nyomás alatt) — a "
+                "meccsterv gerince a kettejük szétválasztása: a "
+                "köztük lévő passzsávot zárjátok, és a kettőzés is "
+                "erre a tengelyre menjen.")
+
+    # 341) Az ő lepattanópáros-posztjuk × a ti blokkoló falatok: a
+    # blokk után a lepattanó-útvonal ismert, és elzárható.
+    _rbp341_n = sum(opp.rbp_shots_by_role.values())
+    if _rbp341_n >= 3 and own.blk_for >= 3:
+        _rbp341_p, _rbp341_c = max(opp.rbp_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rbp341_pct = 100.0 * _rbp341_c / _rbp341_n
+        if _rbp341_pct >= 60.0:
+            plan.append(
+                f"A lepattanó-játékuk a(z) {_rbp341_p} párra jár "
+                f"({_rbp341_pct:.0f}%, {_rbp341_n} második roham), "
+                f"ti pedig sokat blokkoltok ({own.blk_for} blokk) —"
+                " a blokk UTÁNI első mozdulat az érkező útjának "
+                "elállása legyen: a saját blokkotokból így nem lesz"
+                " nekik második esély.")
+
+    # 340) Az ő kettőzőpáros-posztjuk × a ti pressz-tűrésetek: a
+    # begyakorolt kioldó passz a kettőzésüket bünteti.
+    _dpp340_n = sum(opp.dpp_frames_by_role.values())
+    if (_dpp340_n >= 100 and own.ps_press_passes >= 10
+            and own.ps_press_to * 5 <= own.ps_press_passes):
+        _dpp340_p, _dpp340_c = max(opp.dpp_frames_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _dpp340_pct = 100.0 * _dpp340_c / _dpp340_n
+        if _dpp340_pct >= 60.0:
+            plan.append(
+                f"A kettőzésük a(z) {_dpp340_p} védő-pároson áll "
+                f"({_dpp340_pct:.0f}%-a a kettőzött időnek), ti "
+                "pedig jól tűritek a nyomást (a nyomott "
+                f"passzaitokból csak {own.ps_press_to} veszett el) "
+                "— a kettőző elhagyott embere fix: a "
+                "kioldó passz oda menjen, és a kettőzésük minden "
+                "alkalommal emberelőnyt ad nektek.")
+
+    # 339) Az ő gólpasszpáros-posztjuk × a ti labdaszerzésetek: a
+    # tengely-sáv beleérése azonnali labdaszerzés.
+    _apr339_n = sum(opp.apr_goals_by_role.values())
+    if _apr339_n >= 3 and own.steal_n >= 5:
+        _apr339_p, _apr339_c = max(opp.apr_goals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _apr339_pct = 100.0 * _apr339_c / _apr339_n
+        if _apr339_pct >= 60.0:
+            plan.append(
+                f"A góljaik a(z) {_apr339_p} tengelyen születnek "
+                f"({_apr339_pct:.0f}%, {_apr339_n} asszisztos gól),"
+                f" ti pedig sok labdát szereztek ({own.steal_n} "
+                "szerzés) — a kettősük passzsávjában védekezzetek "
+                "beleéréssel: ott a labdaszerzés a legolcsóbb, és a"
+                " gól-gépezetük áll.")
+
+    # 338) Az ő kontrapáros-posztjuk × a ti átmenet-fegyelmetek: a
+    # tengely két pontján fogható a lerohanásuk.
+    _fbp338_n = sum(opp.fbp_breaks_by_role.values())
+    if (_fbp338_n >= 3 and own.transition_turnovers >= 4
+            and own.transition_goals_against * 3
+            <= own.transition_turnovers):
+        _fbp338_p, _fbp338_c = max(opp.fbp_breaks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _fbp338_pct = 100.0 * _fbp338_c / _fbp338_n
+        if _fbp338_pct >= 60.0:
+            plan.append(
+                f"A kontráik a(z) {_fbp338_p} tengelyen futnak "
+                f"({_fbp338_pct:.0f}%, {_fbp338_n} lerohanás), ti "
+                "pedig fegyelmezetten rendeződtök vissza (az "
+                f"eladásaitokból csak {own.transition_goals_against}"
+                " lett gól) — a tengely két pontján fogjátok őket: "
+                "az indítóra azonnali nyomás, a befejező sávját az "
+                "első visszaérő zárja.")
+
+    # 337) Az ő hetespáros-posztjuk × a ti kettőzésetek: a kiharcoló
+    # betörését kettőzéssel kell megfogni, mielőtt lerántás lenne.
+    _svp337_n = sum(opp.svp_sevens_by_role.values())
+    _dbl337 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _svp337_n >= 3 and _dbl337 >= 20.0:
+        _svp337_p, _svp337_c = max(opp.svp_sevens_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _svp337_pct = 100.0 * _svp337_c / _svp337_n
+        if _svp337_pct >= 60.0:
+            plan.append(
+                f"A hetes-játékuk a(z) {_svp337_p} posztpárra jár "
+                f"({_svp337_pct:.0f}%, {_svp337_n} hetes), ti pedig"
+                f" jól kettőztök ({_dbl337:.0f}% a labdás nyomás "
+                "alatt) — a kiharcoló betörését időzített, korai "
+                "kettőzéssel fogjátok meg (test, nem kéz): a "
+                "hetes-gépezetük el sem indul.")
+
+    # 336) Az ő átszabó padjuk × a ti aktív időkérésetek: az átszabó
+    # hullám utáni zavart rendezéssel kell lecsapni.
+    if (opp.sws_pairs >= 3 and own.tsc_timeouts >= 2
+            and 100.0 * opp.sws_same / opp.sws_pairs <= 40.0):
+        plan.append(
+            f"Átszabó a padjuk ({opp.sws_same}/{opp.sws_pairs} "
+            "azonos-posztú váltás), ti pedig aktívan éltek az "
+            f"időkéréssel ({own.tsc_timeouts} a mérésben) — a "
+            "cserehullámuk után azonnal rendezzétek a fogásokat "
+            "(hangos jelzés vagy időkérés), és támadásban az első "
+            "labda a még rendezetlen sávjukba menjen.")
+
+    # 335) Az ő elzárópáros-posztjuk × a ti kettőzésetek: a
+    # bejáratott kettősük párban fogható.
+    _spp335_n = sum(opp.spp_shots_by_role.values())
+    _dbl335 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _spp335_n >= 3 and _dbl335 >= 20.0:
+        _spp335_p, _spp335_c = max(opp.spp_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _spp335_pct = 100.0 * _spp335_c / _spp335_n
+        if _spp335_pct >= 60.0:
+            plan.append(
+                f"Az elzárás-játékuk a(z) {_spp335_p} posztpárra "
+                f"jár ({_spp335_pct:.0f}%, {_spp335_n} elzárt "
+                "lövés), ti pedig jól kettőztök "
+                f"({_dbl335:.0f}% a labdás nyomás alatt) — a "
+                "kettősük ellen párban álljatok: az elzáró őrzője "
+                "előre szól, a lövőé korán kilép, és a bejáratott "
+                "figurájuk elhal.")
+
+    # 334) Az ő álló-posztjuk × a ti kettőzésetek: az álló poszt
+    # védője nálatok ingyen besegítő.
+    _sar334_s = sum(opp.sar_seconds_by_role.values())
+    _sar334_m = sum(opp.sar_meters_by_role.values())
+    _dbl334 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _sar334_s > 0 and _dbl334 >= 20.0:
+        _sar334_avg = _sar334_m / _sar334_s
+        for _sar334_p, _sar334_ps in opp.sar_seconds_by_role.items():
+            if _sar334_ps < 20.0:
+                continue
+            _sar334_pa = (opp.sar_meters_by_role.get(_sar334_p, 0.0)
+                          / _sar334_ps)
+            if _sar334_avg > 0 \
+                    and _sar334_pa <= _sar334_avg * 0.8:
+                plan.append(
+                    f"A(z) {_sar334_p} posztjuk áll labda nélkül "
+                    f"({_sar334_pa:.1f} m/s a {_sar334_avg:.1f} m/s"
+                    f" átlag mellett), ti pedig sokat kettőztök "
+                    f"({_dbl334:.0f}%) — az ő védője az ingyen "
+                    "besegítőtök: onnan jöjjön a kettőzés, az álló "
+                    "ember úgysem bünteti meg.")
+                break
+
+    # 333) Az ő letámadó-posztjuk × a ti gyorsan indító kapusotok:
+    # az indítás a letámadó oldalát kerülje, és a lerohanás él marad.
+    _hsr333_n = sum(opp.hsr_high_by_role.values())
+    if (_hsr333_n >= 3 and own.gk_outlets >= 5
+            and own.gk_outlet_fast >= 3):
+        _hsr333_p, _hsr333_c = max(opp.hsr_high_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _hsr333_pct = 100.0 * _hsr333_c / _hsr333_n
+        if _hsr333_pct >= 60.0:
+            plan.append(
+                f"Az elöl-szerzéseik {_hsr333_pct:.0f}%-a a(z) "
+                f"{_hsr333_p} posztjuknál születik ({_hsr333_n} "
+                "letámadás-szerzés), a kapusotok pedig gyorsan "
+                f"indít ({own.gk_outlet_fast} gyors indítás) — az "
+                "indítás mindig az ő oldalát kerülje: a gyors "
+                "kihozatalotok él marad, a letámadásuk üresbe fut.")
+
+    # 332) Az ő célkereszt-posztjuk × a ti elzáró-játékotok: a
+    # bevált célpont elé vitt elzárás tiszta befejezést ad.
+    _tgr332_n = sum(opp.tgr_shots_by_role.values())
+    _scr332_n = sum(own.sc2_screens_by_role.values())
+    if _tgr332_n >= 5 and _scr332_n >= 4:
+        _tgr332_p, _tgr332_c = max(opp.tgr_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _tgr332_pct = 100.0 * _tgr332_c / _tgr332_n
+        if _tgr332_pct >= 60.0:
+            plan.append(
+                f"Az ellenfelek {_tgr332_pct:.0f}%-ban a(z) "
+                f"{_tgr332_p} posztjuk előtt fejeznek be "
+                f"({_tgr332_n} rá-lövés), ti pedig élő "
+                f"elzáró-játékot játszotok ({_scr332_n} elzárás) — "
+                "kövessétek a bevált mintát: a támadás oda menjen, "
+                "az ő védője elé pedig elzárás, és tiszta a "
+                "befejezés.")
+
+    # 331) Az ő fedezett-lövő posztjuk × a ti blokkoló falatok: a
+    # ráengedett fedezett lövés a blokk-kezetekben landol.
+    _cvr331_n = sum(opp.cvr_covered_by_role.values())
+    if _cvr331_n >= 3 and own.blk_for >= 3:
+        _cvr331_p, _cvr331_c = max(opp.cvr_covered_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _cvr331_pct = 100.0 * _cvr331_c / _cvr331_n
+        if _cvr331_pct >= 60.0:
+            plan.append(
+                f"A fedezett lövéseik {_cvr331_pct:.0f}%-a a(z) "
+                f"{_cvr331_p} posztról jön ({_cvr331_n} fedezett "
+                f"lövés), ti pedig jól blokkoltok ({own.blk_for} "
+                "blokk a mérésben) — rá ne lépjetek ki: a fedezett "
+                "lövése a blokk-kezetekben landol, és onnan kontra "
+                "indul.")
+
+    # 330) Az ő védőmotor-posztjuk × a ti jó félidő-nyitásotok: a
+    # szünet után a leálló zónán át vezet a legrövidebb út.
+    _ho330 = own.ho_for - own.ho_against
+    if _ho330 >= 2:
+        for _fdd330_p, _fdd330_fh in sorted(
+                opp.fdd_fh_by_role.items(), key=lambda kv: -kv[1]):
+            _fdd330_sh = opp.fdd_sh_by_role.get(_fdd330_p, 0)
+            if _fdd330_fh >= 3 and _fdd330_sh <= 1:
+                plan.append(
+                    f"A védő-motorjuk a(z) {_fdd330_p} poszton az "
+                    f"első félidőben pörög ({_fdd330_fh} "
+                    f"szerzés+blokk), a másodikra leáll "
+                    f"({_fdd330_sh}), ti pedig jól nyitjátok a "
+                    f"félidőket (+{_ho330} a mérleg) — a szünet "
+                    "utáni figurák az ő zónáján át menjenek: "
+                    "addigra már nem ér oda.")
+                break
+
+    # 329) Az ő áttörő-posztjuk × a ti kettőzésetek: az áttörő
+    # védője segítőt kap, és a fal zárva marad.
+    _btr329_n = sum(opp.btr_entries_by_role.values())
+    _dbl329 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _btr329_n >= 4 and _dbl329 >= 20.0:
+        _btr329_p, _btr329_c = max(opp.btr_entries_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _btr329_pct = 100.0 * _btr329_c / _btr329_n
+        if _btr329_pct >= 60.0:
+            plan.append(
+                f"A falat {_btr329_pct:.0f}%-ban a(z) {_btr329_p} "
+                f"posztjuk nyitja szét ({_btr329_n} labdás betörés),"
+                f" ti pedig amúgy is sokat kettőztök ({_dbl329:.0f}%"
+                " a labdás nyomás alatt) — az ő védője kapjon "
+                "segítőt már a betörés indulásakor: a vonalát "
+                "testtel zárva a falatok egyben marad, és a többi "
+                "lövőjük kívül reked.")
+
+    # 328) Az ő drága-eladó posztjuk × a ti szerzés-utáni gyors
+    # gólotok: az ő hibája nálatok azonnal a hálóban köt ki.
+    _dto328_n = sum(opp.dto_punished_by_role.values())
+    if (_dto328_n >= 3 and own.trans_steals >= 4
+            and own.trans_quick_goals >= 2):
+        _dto328_p, _dto328_c = max(opp.dto_punished_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _dto328_pct = 100.0 * _dto328_c / _dto328_n
+        if _dto328_pct >= 60.0:
+            plan.append(
+                f"A gólba forduló eladásaik {_dto328_pct:.0f}%-a "
+                f"a(z) {_dto328_p} posztnál történik ({_dto328_n} "
+                "büntetett hiba), ti pedig a szerzett labdát gyorsan"
+                f" gólra váltjátok ({own.trans_quick_goals}/"
+                f"{own.trans_steals}) — a felhozatalnál őt "
+                "kettőzzétek: az ő hibája nálatok azonnal a hálóban"
+                " köt ki.")
+
+    # 327) Az ő beérkező-posztjuk × a ti aktív időkérésetek: a
+    # cserehullámukra azonnali átszervezéssel lehet válaszolni.
+    _ibr327_n = sum(opp.ibr_ins_by_role.values())
+    if _ibr327_n >= 3 and own.tsc_timeouts >= 2:
+        _ibr327_p, _ibr327_c = max(opp.ibr_ins_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ibr327_pct = 100.0 * _ibr327_c / _ibr327_n
+        if _ibr327_pct >= 60.0:
+            plan.append(
+                f"A padjuk a(z) {_ibr327_p} posztra hoz frissítést "
+                f"({_ibr327_pct:.0f}%, {_ibr327_n} beállás), ti "
+                f"pedig aktívan éltek az időkéréssel "
+                f"({own.tsc_timeouts} a mérésben) — a cserehullámuk"
+                " után szervezzétek át a párosítást arra a sávra: "
+                "a friss emberük ne kapjon szabad első akciót.")
+
+    # 326) Az ő forgatott-posztjuk × a ti pörgetett tempótok: a
+    # fárasztás a nem forgatott posztjaikon fog beérni.
+    _sbr326_n = sum(opp.sbr_outs_by_role.values())
+    if _sbr326_n >= 3 and own.fast_break_pct >= 12.0:
+        _sbr326_p, _sbr326_c = max(opp.sbr_outs_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sbr326_pct = 100.0 * _sbr326_c / _sbr326_n
+        if _sbr326_pct >= 60.0:
+            plan.append(
+                f"A forgatásuk a(z) {_sbr326_p} posztra jár "
+                f"({_sbr326_pct:.0f}%, {_sbr326_n} lecserélés), ti "
+                "pedig pörgetett tempóval játszotok "
+                f"({own.fast_break_pct:.0f}% lerohanás-arány) — a "
+                "tempót tartsátok, de a fárasztás hasznát a NEM "
+                "forgatott posztjaikon keressétek: ott gyűlik a "
+                "fáradtság, oda menjenek a záró figurák.")
+
+    # 325) Az ő fáradt-fal posztjuk × a ti jó félidő-nyitásotok: a
+    # szünet után a leülő sávjukból kell nyitni.
+    _ho325 = own.ho_for - own.ho_against
+    if _ho325 >= 2:
+        for _tcr325_p, _tcr325_sh in sorted(
+                opp.tcr_sh_by_role.items(), key=lambda kv: -kv[1]):
+            _tcr325_fh = opp.tcr_fh_by_role.get(_tcr325_p, 0)
+            if _tcr325_sh >= 3 \
+                    and _tcr325_sh >= 2.0 * max(1, _tcr325_fh):
+                plan.append(
+                    f"A faluk a második félidőre a(z) {_tcr325_p} "
+                    f"poszt ellen ül le ({_tcr325_fh} → "
+                    f"{_tcr325_sh} kapott gól), ti pedig jól "
+                    f"nyitjátok a félidőket (+{_ho325} a mérleg) — "
+                    "a szünet utáni első öt figura a leülő "
+                    "sávjukba menjen: ott fáradnak, ott nyílik a "
+                    "rés.")
+                break
+
+    # 324) Az ő fáradt-lövő posztjuk × a ti nagyvédéses kapusotok: a
+    # szünet után rá lehet engedni, és a kidobásból indítani.
+    if own.gk_big_saves >= 3:
+        for _fsa324_p, _fsa324_sh in sorted(
+                opp.fsa_sh_by_role.items(), key=lambda kv: -kv[1]):
+            _fsa324_fh = opp.fsa_fh_by_role.get(_fsa324_p, 0)
+            if _fsa324_sh >= 3 \
+                    and _fsa324_sh >= 2.0 * max(1, _fsa324_fh):
+                plan.append(
+                    f"A(z) {_fsa324_p} posztjuk lövései a második "
+                    f"félidőre szétmennek ({_fsa324_fh} → "
+                    f"{_fsa324_sh} kaput elkerülő lövés), a "
+                    f"kapusotok pedig hoz nagyvédést "
+                    f"({own.gk_big_saves} a mérésben) — a szünet "
+                    "után engedjétek rá: a kilépés nála fölösleges,"
+                    " a mellé lövése után a kidobás azonnali "
+                    "indítás.")
+                break
+
+    # 323) Az ő fáradt-eladó posztjuk × a ti mély padotok: a szünet
+    # után friss védő rajta olcsó labdákat szerez.
+    _rot323 = (own.rotation_used_sum / max(1, own.rotation_matches)
+               if own.rotation_matches else 0.0)
+    if _rot323 >= 9.0:
+        for _fto323_p, _fto323_sh in sorted(
+                opp.fto_sh_by_role.items(), key=lambda kv: -kv[1]):
+            _fto323_fh = opp.fto_fh_by_role.get(_fto323_p, 0)
+            if _fto323_sh >= 3 \
+                    and _fto323_sh >= 2.0 * max(1, _fto323_fh):
+                plan.append(
+                    f"A(z) {_fto323_p} posztjuk eladásai a második "
+                    f"félidőre megugranak ({_fto323_fh} → "
+                    f"{_fto323_sh}), ti pedig mély paddal forogtok "
+                    f"(átlag {_rot323:.0f} bevetett játékos) — a "
+                    "szünet után friss védő menjen rá: fáradtan "
+                    "nála nyílik ki a kéz, és olcsó a labdaszerzés.")
+                break
+
+    # 322) Az ő hátrapassz-posztjuk × a ti magas labdaszerzésetek: a
+    # hátrafelé menekülő posztra a pressz jutalmat hoz.
+    _bpr322_n = sum(opp.bpr_passes_by_role.values())
+    if _bpr322_n >= 5 and own.steal_high >= 3:
+        _bpr322_p, _bpr322_c = max(opp.bpr_passes_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _bpr322_pct = 100.0 * _bpr322_c / _bpr322_n
+        if _bpr322_pct >= 60.0:
+            plan.append(
+                f"A játékuk {_bpr322_pct:.0f}%-ban a(z) {_bpr322_p}"
+                f" posztnál fordul vissza ({_bpr322_n} hátra-passz)"
+                f", ti pedig tudtok magasan labdát szerezni "
+                f"({own.steal_high} magas szerzés) — presszeljétek "
+                "őt: nyomás alatt hátrafelé menekül, a hátra-passza"
+                " után pedig toljátok feljebb a falat, és a "
+                "támadásuk nulláról indul újra.")
+
+    # 321) Az ő térnyerő-posztjuk × a ti kilépő faltok: a korai
+    # kontakt megfogja a lendületet, mielőtt kialakulna.
+    _tnr321_n = sum(opp.tnr_meters_by_role.values())
+    if (_tnr321_n >= 50.0 and opp.matches >= 1
+            and own.def_shots_against >= 4
+            and 0.0 < own.defensive_pressure_m <= 1.3):
+        _tnr321_p, _tnr321_c = max(opp.tnr_meters_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _tnr321_pct = 100.0 * _tnr321_c / _tnr321_n
+        if _tnr321_pct >= 60.0:
+            plan.append(
+                f"A térnyerésük a(z) {_tnr321_p} poszt lábán van "
+                f"({_tnr321_pct:.0f}%, {_tnr321_n:.0f} labdás "
+                "előre-méter), ti pedig amúgy is korán léptek ki "
+                f"(átlag {own.defensive_pressure_m:.1f} m) — a "
+                "korai kontakt őt kapja már a felezőnél: lendület "
+                "nélkül a térnyerésük elvész.")
+
+    # 320) Az ő előnyben-posztjuk × a ti mentő-játékotok: hátrányban
+    # az ő előny-vivőjük kivétele a leggyorsabb visszaút.
+    _lgr320_n = sum(opp.lgr_goals_by_role.values())
+    _cbr320_n = sum(own.cbr_trailing_by_role.values())
+    if _lgr320_n >= 3 and _cbr320_n >= 3:
+        _lgr320_p, _lgr320_c = max(opp.lgr_goals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _lgr320_pct = 100.0 * _lgr320_c / _lgr320_n
+        if _lgr320_pct >= 60.0:
+            plan.append(
+                f"Vezetésnél a(z) {_lgr320_p} posztjuk viszi a "
+                f"játékot ({_lgr320_pct:.0f}%, {_lgr320_n} előnyben"
+                " lőtt gól), nektek pedig van bizonyított "
+                f"mentő-játékotok ({_cbr320_n} hátrány-gól-"
+                "részvétel) — ha hátrányba kerültök, az ő kivétele "
+                "(szoros fogás, kettőzés) a leggyorsabb visszaút: a"
+                " lendület-tartásuk nála törik.")
+
+    # 319) Az ő előkészítő-posztjuk × a ti labdaszerzésetek: az ő
+    # sávjának zárása a lövő-gépezetük főkapcsolója.
+    _epr319_n = sum(opp.epr_passes_by_role.values())
+    if _epr319_n >= 5 and own.steal_n >= 5:
+        _epr319_p, _epr319_c = max(opp.epr_passes_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _epr319_pct = 100.0 * _epr319_c / _epr319_n
+        if _epr319_pct >= 60.0:
+            plan.append(
+                f"A lövéseiket {_epr319_pct:.0f}%-ban a(z) "
+                f"{_epr319_p} posztjuk készíti elő ({_epr319_n} "
+                f"előkészítő passz), ti pedig sok labdát szereztek "
+                f"({own.steal_n} szerzés) — az ő passzsávjait "
+                "zárjátok testtel és beleéréssel: az előkészítés "
+                "nélkül a lövőik elhalnak, a beleérés pedig "
+                "labdaszerzés.")
+
+    # 318) Az ő indító-posztjuk × a ti magas labdaszerzésetek: a
+    # felhozójukat presszingelve a szervezésük el sem kezdődik.
+    _ats318_n = sum(opp.ats_attacks_by_role.values())
+    if _ats318_n >= 5 and own.steal_high >= 3:
+        _ats318_p, _ats318_c = max(opp.ats_attacks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ats318_pct = 100.0 * _ats318_c / _ats318_n
+        if _ats318_pct >= 60.0:
+            plan.append(
+                f"A támadásaik {_ats318_pct:.0f}%-a a(z) {_ats318_p}"
+                f" posztnál indul ({_ats318_n} szakasz), ti pedig "
+                f"tudtok magasan labdát szerezni ({own.steal_high} "
+                "magas szerzés) — a korai presszetek őt kapja már a"
+                " felezőnél: a szervezésük el sem kezdődik, a "
+                "szerzett labda pedig rövid pályás kontra.")
+
+    # 317) Az ő beállóőr-posztjuk × a ti beálló-játékotok: az őrző
+    # kihúzásával a beállótok felszabadul.
+    _pgr317_n = sum(opp.pgr_frames_by_role.values())
+    if _pgr317_n >= 300 and own.pd_pivot_attacks >= 5:
+        _pgr317_p, _pgr317_c = max(opp.pgr_frames_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _pgr317_pct = 100.0 * _pgr317_c / _pgr317_n
+        if _pgr317_pct >= 60.0:
+            plan.append(
+                f"A beálló-őrzésük a(z) {_pgr317_p} posztjukon áll "
+                f"({_pgr317_pct:.0f}%), ti pedig élő beálló-játékot"
+                f" játszotok ({own.pd_pivot_attacks} bejátszásos "
+                "támadás) — az elzárásotok az őrzőt húzza ki: a "
+                "beállótok felszabadul, és a belső biztosításuk "
+                "borul.")
+
+    # 316) Az ő kilépő-posztjuk × a ti elzáró-játékotok: a kilépőre
+    # tett elzárással a mögötte nyíló tér 2 az 1-re váltható.
+    _adr316_ok = {p: n for p, n in opp.adr_frames_by_role.items()
+                  if n >= 100}
+    if len(_adr316_ok) >= 3 and opp.matches >= 1 \
+            and own.scd_screened_shots >= 4:
+        _adr316_avg = {p: opp.adr_depthm_by_role.get(p, 0.0) / n
+                       for p, n in _adr316_ok.items()}
+        _adr316_p = max(_adr316_avg, key=lambda p: _adr316_avg[p])
+        _adr316_tk = sum(n for p, n in _adr316_ok.items()
+                         if p != _adr316_p)
+        _adr316_tt = sum(opp.adr_depthm_by_role.get(p, 0.0)
+                         for p in _adr316_ok if p != _adr316_p)
+        _adr316_gap = _adr316_avg[_adr316_p] - _adr316_tt / _adr316_tk
+        if _adr316_gap >= 2.5:
+            plan.append(
+                f"A faluk a(z) {_adr316_p} posztnál lép ki (a "
+                f"társaknál {_adr316_gap:.1f} m-rel előrébb), ti "
+                "pedig sokat játszotok elzárásból "
+                f"({own.scd_screened_shots} elzárásos lövés) — az "
+                "elzárás a kilépőre menjen, a háta mögé befutó "
+                "emberrel 2 az 1-et: mögötte nyílik a tér.")
+
+    # 315) Az ő ziccerhagyó-posztjuk × a ti nagyvédéses kapusotok: a
+    # bizonytalan befejezőt érdemes a kapusotokra engedni.
+    _mcr315_n = sum(opp.mcr_misses_by_role.values())
+    if _mcr315_n >= 3 and own.gk_big_saves >= 3:
+        _mcr315_p, _mcr315_c = max(opp.mcr_misses_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _mcr315_pct = 100.0 * _mcr315_c / _mcr315_n
+        if _mcr315_pct >= 60.0:
+            plan.append(
+                f"A kihagyott ziccereik {_mcr315_pct:.0f}%-a a(z) "
+                f"{_mcr315_p} posztnál esik ({_mcr315_n} kihagyás),"
+                f" a kapusotok pedig hoz nagyvédést "
+                f"({own.gk_big_saves} a mérésben) — ha a fal "
+                "választásra kényszerül, őt engedjétek lőni: az ő "
+                "ziccere a kapusotok ellen vállalható kockázat.")
+
+    # 314) Az ő blokkolt-posztjuk × a ti blokkoló falatok: a falba
+    # lövő poszt ellen a zárás nem szerencse, hanem terv.
+    _bsr314_n = sum(opp.bsr_blocks_by_role.values())
+    _rbk314_n = sum(own.rbk_blocks_by_role.values())
+    if _bsr314_n >= 3 and _rbk314_n >= 3:
+        _bsr314_p, _bsr314_c = max(opp.bsr_blocks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _bsr314_pct = 100.0 * _bsr314_c / _bsr314_n
+        if _bsr314_pct >= 60.0:
+            plan.append(
+                f"A blokkolt lövéseik {_bsr314_pct:.0f}%-a a(z) "
+                f"{_bsr314_p} posztról jön ({_bsr314_n} blokk), a "
+                f"ti falatok pedig blokkol ({_rbk314_n} blokk a "
+                "mérésben) — az ő sávjában bátran zárjatok elé: a "
+                "falba lőtt labdája azonnali kontra-indítás.")
+
+    # 313) Az ő hetesdobó-posztjuk × a ti nagyvédéses kapusotok: egy
+    # dobó szokás-irányait meg lehet tanulni.
+    _stk313_n = sum(opp.stk_attempts_by_role.values())
+    if _stk313_n >= 3 and own.gk_big_saves >= 3:
+        _stk313_p, _stk313_c = max(opp.stk_attempts_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _stk313_pct = 100.0 * _stk313_c / _stk313_n
+        if _stk313_pct >= 60.0:
+            plan.append(
+                f"A heteseiket {_stk313_pct:.0f}%-ban a(z) "
+                f"{_stk313_p} posztjuk dobja ({_stk313_n} hetes), a"
+                f" kapusotok pedig hoz nagyvédést ({own.gk_big_saves}"
+                " a mérésben) — videóról tanulja meg ennek az EGY "
+                "dobónak a szokás-irányait: a hetes ellenük "
+                "kivédhető lövés.")
+
+    # 312) Az ő újrakezdő-posztjuk × a ti félidő-nyitásotok: ha ti
+    # jól jöttök ki a szünetről, az ő második rajt-motorjuk
+    # kivételével a harmadik negyedóra a tiétek.
+    _ssr312_n = sum(opp.ssr_goals_by_role.values())
+    _ho312 = own.ho_for - own.ho_against
+    if _ssr312_n >= 3 and _ho312 >= 2:
+        _ssr312_p, _ssr312_c = max(opp.ssr_goals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ssr312_pct = 100.0 * _ssr312_c / _ssr312_n
+        if _ssr312_pct >= 60.0:
+            plan.append(
+                f"A szünet utáni rajtjuk a(z) {_ssr312_p} posztra "
+                f"épül ({_ssr312_pct:.0f}%, {_ssr312_n} gól a "
+                "második félidő elején), ti pedig jól nyittok "
+                f"(+{_ho312} a félidő-nyitások mérlege) — a szünet "
+                "utáni első tíz percre a legjobb védőtök őt kapja: "
+                "a második rajt-motorjuk nélkül a harmadik "
+                "negyedóra a tiétek.")
+
+    # 311) Az ő elzárt-posztjuk × a ti elzáró-játékotok: ha van
+    # kire építeni az elzárást, oda kell vinni, ahol a védőjük
+    # rendre elakad.
+    _sdr311_n = sum(opp.sdr_screens_by_role.values())
+    _sc2311_n = sum(own.sc2_screens_by_role.values())
+    if _sdr311_n >= 3 and _sc2311_n >= 3:
+        _sdr311_p, _sdr311_c = max(opp.sdr_screens_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sdr311_pct = 100.0 * _sdr311_c / _sdr311_n
+        if _sdr311_pct >= 60.0:
+            plan.append(
+                f"Az elzárások {_sdr311_pct:.0f}%-ban a(z) "
+                f"{_sdr311_p} posztjukon lévő védőt találják meg "
+                f"({_sdr311_n} elakadás), nektek pedig él az "
+                f"elzáró-játékotok ({_sc2311_n} elzárás a mérésben)"
+                " — a figuráitok elzárása az ő oldalára menjen: ott"
+                " a lövőtök tisztán marad.")
+
+    # 310) Az ő kettőzött-posztjuk × a ti kettőzésetek: a bevált
+    # kettőzés-minta követése a legolcsóbb terv.
+    _dtr310_n = sum(opp.dtr_frames_by_role.values())
+    _dbl310 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _dtr310_n >= 100 and _dbl310 >= 20.0:
+        _dtr310_p, _dtr310_c = max(opp.dtr_frames_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _dtr310_pct = 100.0 * _dtr310_c / _dtr310_n
+        if _dtr310_pct >= 60.0:
+            plan.append(
+                f"Az ellenfelek kettőzései {_dtr310_pct:.0f}%-ban "
+                f"a(z) {_dtr310_p} posztjukra érkeznek, ti pedig "
+                f"amúgy is sokat kettőztök ({_dbl310:.0f}% a labdás"
+                " nyomás alatt) — kövessétek a bevált mintát: a "
+                "kettőzés oda menjen, a mögötte kilépő passzsávot "
+                "pedig a harmadik ember zárja.")
+
+    # 309) Az ő fáradó-posztjuk × a ti mély padotok: a második
+    # félidőben friss emberrel az ő visszaeső sávjukban jön a fölény.
+    _ftr309 = None
+    for _ftr309_p, _ftr309_f in opp.ftr_first_cms_by_role.items():
+        if _ftr309_f < 100:
+            continue
+        _ftr309_s = opp.ftr_second_cms_by_role.get(_ftr309_p, 0)
+        _ftr309_d = 100.0 * (_ftr309_f - _ftr309_s) / _ftr309_f
+        if _ftr309 is None or _ftr309_d > _ftr309[1]:
+            _ftr309 = (_ftr309_p, _ftr309_d)
+    _rot309 = (own.rotation_used_sum / max(1, own.rotation_matches)
+               if own.rotation_matches else 0.0)
+    if (_ftr309 is not None and _ftr309[1] >= 20.0
+            and _rot309 >= 9.0):
+        plan.append(
+            f"A második félidőre a(z) {_ftr309[0]} posztjuk esik "
+            f"vissza (−{_ftr309[1]:.0f}% tempó), ti pedig mély "
+            f"paddal forogtok (átlag {_rot309:.0f} bevetett játékos)"
+            " — a szünet után az ő sávjába időzítsétek a friss "
+            "támadót: ott jön a tempó-fölény.")
+
+    # 308) Az ő passzív-posztjuk × a ti labdaszerzésetek: a passzív
+    # jelzés alatt megnyomott poszt eladása azonnali labdaszerzés.
+    _pvr308_n = sum(opp.pvr_frames_by_role.values())
+    if _pvr308_n >= 250 and own.steal_n >= 5:
+        _pvr308_p, _pvr308_c = max(opp.pvr_frames_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _pvr308_pct = 100.0 * _pvr308_c / _pvr308_n
+        if _pvr308_pct >= 60.0:
+            plan.append(
+                f"A terméketlen támadásaik a(z) {_pvr308_p} "
+                f"posztnál halnak el ({_pvr308_pct:.0f}%-a a "
+                "passzív-gyanús támadásaik labdás idejének), ti "
+                f"pedig sok labdát szereztek ({own.steal_n} szerzés)"
+                " — amikor a játékvezető keze felmegy, őt nyomjátok "
+                "meg kilépéssel: a kényszer-eladása nálatok azonnali"
+                " indítás.")
+
+    # 307) Az ő rajt-posztjuk × a ti félidő-nyitásotok: ha ti jól
+    # nyittok, az ő nyitó-motorjuk kivételével a rajt a tiétek.
+    _osr307_n = sum(opp.osr_goals_by_role.values())
+    _ho307 = own.ho_for - own.ho_against
+    if _osr307_n >= 3 and _ho307 >= 2:
+        _osr307_p, _osr307_c = max(opp.osr_goals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _osr307_pct = 100.0 * _osr307_c / _osr307_n
+        if _osr307_pct >= 60.0:
+            plan.append(
+                f"A rajtjuk a(z) {_osr307_p} posztra épül "
+                f"({_osr307_pct:.0f}%, {_osr307_n} gól az első tíz "
+                f"percben), ti pedig jól nyittok (+{_ho307} a "
+                "félidő-nyitások mérlege) — a meccs elején a "
+                "legjobb védőtök őt fogja: a nyitó-motorjuk nélkül "
+                "a rajt a tiétek.")
+
+    # 306) Az ő kiszolgált-posztjuk × a ti labdaszerzésetek: a felé
+    # futó passz elvágása nálatok azonnal labdaszerzés.
+    _asr306_n = sum(opp.asr_assisted_by_role.values())
+    if _asr306_n >= 3 and own.steal_n >= 5:
+        _asr306_p, _asr306_c = max(opp.asr_assisted_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _asr306_pct = 100.0 * _asr306_c / _asr306_n
+        if _asr306_pct >= 60.0:
+            plan.append(
+                f"A kiszolgált góljaik {_asr306_pct:.0f}%-át a(z) "
+                f"{_asr306_p} posztjuk fejezi be ({_asr306_n} "
+                f"asszisztos gól), ti pedig sok labdát szereztek "
+                f"({own.steal_n} szerzés) — a felé futó passzsávot "
+                "zárjátok előrelépő védővel: a bejátszásuk nálatok "
+                "labdaszerzés, ő pedig kiszolgálás nélkül elhal.")
+
+    # 305) Az ő hajrákéz-posztjuk × a ti kettőzésetek: a hajrában a
+    # kezet kell kettőzni, nem a lövőt.
+    _chr305_n = sum(opp.chr_frames_by_role.values())
+    _dbl305 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _chr305_n >= 200 and _dbl305 >= 20.0:
+        _chr305_p, _chr305_c = max(opp.chr_frames_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _chr305_pct = 100.0 * _chr305_c / _chr305_n
+        if _chr305_pct >= 60.0:
+            plan.append(
+                f"A végjátékuk a(z) {_chr305_p} poszt kezén fut "
+                f"({_chr305_pct:.0f}%-a a hajrá labdás idejének), ti"
+                f" pedig sokat kettőztök ({_dbl305:.0f}% a labdás "
+                "nyomás alatt) — a záró percekben a kettőzésetek ezt"
+                " a kezet fogja, ne a lövőket: ha ő nem kap labdát, "
+                "a záró figuráik el sem indulnak.")
+
+    # 304) Az ő lágypassz-posztjuk × a ti szerzés-utáni gyors
+    # gólotok: a beleérésből szerzett labda azonnal gólra váltható.
+    _sps304_n = sum(opp.sps_soft_by_role.values())
+    if (_sps304_n >= 5 and own.trans_steals >= 4
+            and own.trans_quick_goals >= 2):
+        _sps304_p, _sps304_c = max(opp.sps_soft_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sps304_pct = 100.0 * _sps304_c / _sps304_n
+        if _sps304_pct >= 60.0:
+            plan.append(
+                f"A lágy passzaik {_sps304_pct:.0f}%-a a(z) "
+                f"{_sps304_p} posztról jön ({_sps304_n} lágy passz),"
+                " ti pedig a szerzett labdát gyorsan gólra "
+                f"váltjátok ({own.trans_quick_goals}/"
+                f"{own.trans_steals}) — kilépés és passzsáv-támadás"
+                " az ő sávjában: a beleérésből induló labda nálatok "
+                "azonnali gól.")
+
+    # 303) Az ő sprint-posztjuk × a ti átmenet-fegyelmetek: ha eddig
+    # is jól éltétek túl az eladásaitokat, a posztra szóló kontra-fék
+    # a maradék gólt is elveszi tőlük.
+    _spr303_n = sum(opp.spr_sprints_by_role.values())
+    if (_spr303_n >= 10 and own.transition_turnovers >= 4
+            and own.transition_goals_against * 3
+            <= own.transition_turnovers):
+        _spr303_p, _spr303_c = max(opp.spr_sprints_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _spr303_pct = 100.0 * _spr303_c / _spr303_n
+        if _spr303_pct >= 60.0:
+            plan.append(
+                f"A kontrájukat a(z) {_spr303_p} posztjuk futja "
+                f"({_spr303_pct:.0f}%, {_spr303_n} sprint), ti pedig"
+                " fegyelmezetten rendeződtök vissza (az "
+                f"eladásaitokból csak {own.transition_goals_against}"
+                " lett gól) — a visszarendeződés első embere mindig "
+                "az ő útját zárja: a kontra-motorjuk fék nélkül "
+                "marad.")
+
+    # 302) Az ő középkezdő-posztjuk × a ti magas labdaszerzésetek: a
+    # gól utáni letámadásnak posztra szóló célpontja van.
+    _rtr302_n = sum(opp.rtr_takes_by_role.values())
+    if _rtr302_n >= 3 and own.steal_high >= 3:
+        _rtr302_p, _rtr302_c = max(opp.rtr_takes_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rtr302_pct = 100.0 * _rtr302_c / _rtr302_n
+        if _rtr302_pct >= 60.0:
+            plan.append(
+                f"A középkezdésük {_rtr302_pct:.0f}%-ban a(z) "
+                f"{_rtr302_p} posztnál indul ({_rtr302_n} átvétel), "
+                f"ti pedig tudtok magasan labdát szerezni "
+                f"({own.steal_high} magas szerzés) — a gól utáni "
+                "letámadásotok az ő posztját fogja le: a "
+                "középkezdésük megáll, és a labda magasan "
+                "visszaszerezhető.")
+
+    # 301) Az ő forró-posztjuk × a ti aktív időkérésetek: az első
+    # sorozat-gól után azonnali megállítással törhető a lendület.
+    _hhr301_n = sum(opp.hhr_goals_by_role.values())
+    if _hhr301_n >= 3 and own.tsc_timeouts >= 2:
+        _hhr301_p, _hhr301_c = max(opp.hhr_goals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _hhr301_pct = 100.0 * _hhr301_c / _hhr301_n
+        if _hhr301_pct >= 60.0:
+            plan.append(
+                f"A gólsorozataik {_hhr301_pct:.0f}%-a a(z) "
+                f"{_hhr301_p} posztról jön ({_hhr301_n} "
+                "sorozat-gól), ti pedig aktívan éltek az "
+                f"időkéréssel ({own.tsc_timeouts} a mérésben) — az "
+                "első sorozat-gólja után azonnal állítsátok meg a "
+                "játékot: időkérés vagy őrzés-váltás rá, mielőtt a "
+                "lendülete sorozattá válik.")
+
+    # 300) Az ő hajráhiba-posztjuk × a ti hajrá-gólposztotok: a záró
+    # percekben tőlük elvett labda nálatok gólra váltható.
+    _ctr300_n = sum(opp.ctr_to_by_role.values())
+    _csr300_n = sum(own.csr_goals_by_role.values())
+    if _ctr300_n >= 3 and _csr300_n >= 3:
+        _ctr300_p, _ctr300_c = max(opp.ctr_to_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ctr300_pct = 100.0 * _ctr300_c / _ctr300_n
+        if _ctr300_pct >= 60.0:
+            plan.append(
+                f"A hajrá-eladásaik {_ctr300_pct:.0f}%-a a(z) "
+                f"{_ctr300_p} posztnál történik ({_ctr300_n} eladás "
+                "az utolsó öt percben), és nektek van kijátszott "
+                f"hajrá-megoldásotok ({_csr300_n} hajrá-gól a "
+                "mérésben) — a záró percekben az ő posztjára menjen "
+                "a kettőzés és a passzsáv-zárás: az ott szerzett "
+                "labda a ti hajrá-figurátokkal gólra váltható.")
+
+    # 299) Az ő eltűnő-posztjuk × a ti mély padotok: friss, cserélt
+    # őrzővel az első félidejük is megfogható — a második magától
+    # megoldódik.
+    _rot299 = (own.rotation_used_sum / max(1, own.rotation_matches)
+               if own.rotation_matches else 0.0)
+    if _rot299 >= 9.0:
+        for _fdp299_p, _fdp299_fh in sorted(
+                opp.fdp_fh_by_role.items(), key=lambda kv: -kv[1]):
+            _fdp299_sh = opp.fdp_sh_by_role.get(_fdp299_p, 0)
+            if _fdp299_fh >= 3 and _fdp299_sh <= 1:
+                plan.append(
+                    f"A(z) {_fdp299_p} posztjuk az első félidőben él"
+                    f" ({_fdp299_fh} gól-részvétel), a másodikra "
+                    f"eltűnik ({_fdp299_sh}), ti pedig mély paddal "
+                    f"forogtok (átlag {_rot299:.0f} bevetett "
+                    "játékos) — az őrzőjét cserével tartsátok "
+                    "frissen az első 30 percben: ha ott megfogjátok,"
+                    " a második félidő magától megoldódik.")
+                break
+
+    # 298) Az ő csendtörő-posztjuk × a ti nagyvédéses kapusotok: ha a
+    # kapus csendet tud rájuk hozni, a csend a válság-posztjuk
+    # fogásával nyújtható meg.
+    _gct298_n = sum(opp.gct_breaks_by_role.values())
+    if _gct298_n >= 3 and own.gk_big_saves >= 3:
+        _gct298_p, _gct298_c = max(opp.gct_breaks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _gct298_pct = 100.0 * _gct298_c / _gct298_n
+        if _gct298_pct >= 60.0:
+            plan.append(
+                f"A gólcsendjüket a(z) {_gct298_p} posztjuk töri meg"
+                f" ({_gct298_pct:.0f}%, {_gct298_n} csend-törő gól),"
+                f" a kapusotok pedig hoz nagyvédést ({own.gk_big_saves}"
+                " a mérésben) — amikor beáll a csendjük, a válság-"
+                "posztjukat vegyétek ki (szoros fogás, korai "
+                "kettőzés): nélküle a csend sorozattá nyúlik.")
+
+    # 297) Az ő pressz-posztjuk × a ti kilépő faltok: ha amúgy is
+    # szorosan védekeztek, a nyomást az ő gyenge posztjukra irányítva
+    # az eladásaik labdaszerzéssé válnak.
+    _psr297_n = sum(opp.psr_to_by_role.values())
+    if (_psr297_n >= 3 and opp.def_shots_against >= 4
+            and 0.0 < own.defensive_pressure_m <= 1.3):
+        _psr297_p, _psr297_c = max(opp.psr_to_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _psr297_pct = 100.0 * _psr297_c / _psr297_n
+        if _psr297_pct >= 60.0:
+            plan.append(
+                f"Szorításban a(z) {_psr297_p} posztjuk ejti a "
+                f"labdát ({_psr297_pct:.0f}%, {_psr297_n} nyomott "
+                "eladás), ti pedig amúgy is szorosan, kilépve "
+                f"védekeztek (átlag {own.defensive_pressure_m:.1f} "
+                "m) — a kilépéseket és a kettőzést az ő posztjára "
+                "irányítsátok: ott a pressz labdaszerzést hoz.")
+
+    # 296) Az ő labdatartó-posztjuk × a ti labdaszerzésetek: ahol a
+    # labda megáll, oda időzített nyomással el is lehet venni.
+    _htr296_n = sum(opp.htr_seconds_by_role.values())
+    if _htr296_n >= 60.0 and own.steal_n >= 5:
+        _htr296_p, _htr296_c = max(opp.htr_seconds_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _htr296_pct = 100.0 * _htr296_c / _htr296_n
+        if _htr296_pct >= 60.0:
+            plan.append(
+                f"A labda a(z) {_htr296_p} posztjuknál áll meg "
+                f"({_htr296_pct:.0f}%, {_htr296_n:.0f} mp mért "
+                f"tartás), ti pedig sok labdát szereztek "
+                f"({own.steal_n} szerzés) — a kettőzést és a "
+                "szerzés-kísérletet az ő tartásaira időzítsétek: "
+                "nála van idő odaérni, és az ott elvett labda "
+                "azonnali kontra.")
+
+    # 295) Az ő ziccer-posztjuk × a ti kettőzésetek: ha tudtok időben
+    # besegíteni, a nagy helyzeteik a kialakulás előtt megfoghatók.
+    _bcr295_n = sum(opp.bcr_chances_by_role.values())
+    _dbl295 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _bcr295_n >= 3 and _dbl295 >= 20.0:
+        _bcr295_p, _bcr295_c = max(opp.bcr_chances_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _bcr295_pct = 100.0 * _bcr295_c / _bcr295_n
+        if _bcr295_pct >= 60.0:
+            plan.append(
+                f"A ziccereik {_bcr295_pct:.0f}%-a a(z) {_bcr295_p} "
+                f"posztnál alakul ki ({_bcr295_n} nagy helyzet), ti "
+                f"pedig sokat kettőztök ({_dbl295:.0f}% a labdás "
+                "nyomás alatt) — a kettőzést az ő sávjára "
+                "időzítsétek, még a labda-átvétel ELŐTT: a ziccer ne "
+                "alakulhasson ki.")
+
+    # 294) Az ő pazarló-posztjuk × a ti kontrátok: ha van futó
+    # kontra-játékotok, a mellé lövéseik kidobásai gólra válthatók.
+    _wsr294_n = sum(opp.wsr_off_by_role.values())
+    _rfb294_n = sum(own.rfb_shots_by_role.values())
+    if _wsr294_n >= 3 and _rfb294_n >= 5:
+        _wsr294_p, _wsr294_c = max(opp.wsr_off_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _wsr294_pct = 100.0 * _wsr294_c / _wsr294_n
+        if _wsr294_pct >= 60.0:
+            plan.append(
+                f"A(z) {_wsr294_p} posztjuk rendre mellé lő "
+                f"({_wsr294_pct:.0f}%, {_wsr294_n} kaput elkerülő "
+                f"lövés), a ti kontrátok pedig él ({_rfb294_n} "
+                "kontra-lövés) — az ő lövését engedjétek rá, és a "
+                "mellé lövés utáni kidobásból azonnal indítsatok: "
+                "gyors első passz a szélre.")
+
+    # 293) Az ő felzárkózás-posztjuk × a ti félidő-nyitásotok: ha jól
+    # nyittok, és tudni lehet, ki hozza őket vissza, a megszerzett
+    # előny megtartható — az ő kivételével.
+    _cbr293_n = sum(opp.cbr_trailing_by_role.values())
+    _ho293 = own.ho_for - own.ho_against
+    if _cbr293_n >= 3 and _ho293 >= 2:
+        _cbr293_p, _cbr293_c = max(opp.cbr_trailing_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _cbr293_pct = 100.0 * _cbr293_c / _cbr293_n
+        if _cbr293_pct >= 60.0:
+            plan.append(
+                f"Hátrányból a(z) {_cbr293_p} posztjuk hozza őket "
+                f"vissza ({_cbr293_pct:.0f}%), ti pedig jól nyittok "
+                f"(+{_ho293} a félidő-nyitások mérlege) — ha megvan "
+                "az előny, azonnal az ő kivételére váltsatok (szoros"
+                " fogás, korai kettőzés): a mentőemberük nélkül a "
+                "hátrányuk beragad.")
+
+    # 292) Az ő hajrá-posztjuk × a ti mély padotok: ha a végjátékuk
+    # egy emberen áll, a hajrában friss, kijelölt fogó embert lehet
+    # rá küldeni.
+    _csr292_n = sum(opp.csr_goals_by_role.values())
+    _rot292 = (own.rotation_used_sum / max(1, own.rotation_matches)
+               if own.rotation_matches else 0.0)
+    if _csr292_n >= 3 and _rot292 >= 9.0:
+        _csr292_p, _csr292_c = max(opp.csr_goals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _csr292_pct = 100.0 * _csr292_c / _csr292_n
+        if _csr292_pct >= 60.0:
+            plan.append(
+                f"A végjátékuk a(z) {_csr292_p} posztjukra fut ki "
+                f"({_csr292_pct:.0f}%), ti pedig mély paddal "
+                f"forogtok (átlag {_rot292:.0f} bevetett játékos) — "
+                "az utolsó öt percre küldjetek rá friss, kijelölt "
+                "fogó embert: az ő kikapcsolása a végjátékuk felét "
+                "viszi el.")
+
+    # 291) Az ő emberhátrány-posztjuk × a ti kiharcolt két perceitek:
+    # ha ti sok emberelőnyt szereztek, és tudni lehet, náluk ki
+    # vállal be öt emberrel, az emberelőnyötök biztonsági terve kész.
+    _shr291_n = sum(opp.shr_shots_by_role.values())
+    _earn291 = sum(p.get("earned", 0) for p in (own.susp_earners or []))
+    if _shr291_n >= 3 and _earn291 >= 2:
+        _shr291_p, _shr291_c = max(opp.shr_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _shr291_pct = 100.0 * _shr291_c / _shr291_n
+        if _shr291_pct >= 60.0:
+            plan.append(
+                f"Öt emberrel a(z) {_shr291_p} posztjuk vállal be "
+                f"({_shr291_pct:.0f}%), ti pedig hozzátok a két "
+                f"perceket ({_earn291} kiharcolt kiállítás) — az "
+                "emberelőnyötök biztonsági terve kész: az ő oldalán "
+                "kockázatmentes passz, a visszafutásnál pedig őt "
+                "veszi fel az első ember.")
+
+    # 290) Az ő emberelőny-posztjuk × a ti fegyelmetek: ha sokat
+    # vagytok emberhátrányban, és tudni lehet, kire fut ki az
+    # emberelőnyük, a hátrány-védekezésetek megtervezhető.
+    _ppr290_n = sum(opp.ppr_shots_by_role.values())
+    _own290_susp = sum(own.sup_susp_by_role.values())
+    if _ppr290_n >= 3 and _own290_susp >= 3:
+        _ppr290_p, _ppr290_c = max(opp.ppr_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ppr290_pct = 100.0 * _ppr290_c / _ppr290_n
+        if _ppr290_pct >= 60.0:
+            plan.append(
+                f"Az emberelőnyük a(z) {_ppr290_p} posztjukra fut ki "
+                f"({_ppr290_pct:.0f}%), ti pedig sok két percet "
+                f"kaptok ({_own290_susp} kiállítás) — a "
+                "hátrány-védekezésetek előre megírható: öt emberrel "
+                "az ő sávja zár, a többiek lövését a kapusra "
+                "bízzátok — és közben a saját fegyelem a legolcsóbb "
+                "védekezés.")
+
+    # 289) Az ő kiosztás-posztjuk × a ti kettőzés-készségetek: ha a
+    # betörésük utáni labda kiszámítható, a betörőre bátran lehet
+    # kettőzni — a kiosztás sávja már zárva van.
+    _kor289_n = sum(opp.kor_kickouts_by_role.values())
+    _dbl289 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _kor289_n >= 4 and _dbl289 >= 20.0:
+        _kor289_p, _kor289_c = max(opp.kor_kickouts_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _kor289_pct = 100.0 * _kor289_c / _kor289_n
+        if _kor289_pct >= 60.0:
+            plan.append(
+                f"A betöréseik utáni labda a(z) {_kor289_p} "
+                f"posztjukra jár ({_kor289_pct:.0f}%), ti pedig "
+                "tudtok kettőzni — a betörőre bátran induljon a "
+                "második ember: a kiosztás sávját a kijelölt védő "
+                "előre zárja, így a betörésük zsákutca.")
+
+    # 288) Az ő kettőző-posztjuk × a ti passz-fegyelmetek: ha a
+    # kettőzésük kiolvasható, és a labdátok nyomás alatt is megmarad,
+    # a kettőzésük minden kilépése egy emberelőnyt ad nektek.
+    _ddr288_n = sum(opp.ddr_frames_by_role.values())
+    _ps288 = own.ps_press_passes + own.ps_press_to
+    if _ddr288_n >= 40 and _ps288 >= 20:
+        _ddr288_p, _ddr288_c = max(opp.ddr_frames_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ddr288_pct = 100.0 * _ddr288_c / _ddr288_n
+        _to288 = 100.0 * own.ps_press_to / _ps288
+        if _ddr288_pct >= 60.0 and _to288 <= 12.0:
+            plan.append(
+                f"A kettőzésük kiolvasható (a kettőzött idő "
+                f"{_ddr288_pct:.0f}%-ában a(z) {_ddr288_p} posztról "
+                "érkezik), a ti labdátok pedig nyomás alatt is "
+                f"megmarad (csak {_to288:.0f}% eladás) — várjátok be "
+                "a kettőzést: az érkező elhagyott embere felé megy az"
+                " első passz, és minden kilépésük emberelőnyt ad.")
+
+    # 287) Az ő kockáztató-posztjuk × a ti kontra-játékotok: ha a
+    # hazárd hosszú labdáik egy posztról jönnek, és ti a szerzésből
+    # futni tudtok, az ő sávja a kontra-forrásotok.
+    _rpr287_n = sum(opp.rpr_to_by_role.values())
+    if _rpr287_n >= 3 and own.fbc_breaks >= 5:
+        _rpr287_p, _rpr287_c = max(opp.rpr_to_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rpr287_pct = 100.0 * _rpr287_c / _rpr287_n
+        if _rpr287_pct >= 60.0:
+            plan.append(
+                f"A hazárd hosszú labdáik a(z) {_rpr287_p} "
+                f"posztjukról indulnak ({_rpr287_pct:.0f}%), ti pedig "
+                f"futó csapat vagytok ({own.fbc_breaks} kontra) — az "
+                "ő passzsávjába álljatok be: minden sávba lépés "
+                "labdát hoz, és a szerzés mögött már fut is a "
+                "kontrátok.")
+
+    # 286) Az ő vasember-posztjuk × a ti mély padotok: ha náluk egy
+    # poszt csere nélkül végigmegy, ti pedig sok emberrel forogtok, a
+    # hajrá a tiétek — csak oda kell vinni a tempót.
+    if (opp.irm_total_frames >= 15000 and opp.irm_on_by_role
+            and opp.rotation_matches > 0):
+        _irm286 = sorted(opp.irm_on_by_role.items(),
+                         key=lambda kv: -kv[1])
+        _irm286_p, _irm286_c = _irm286[0]
+        _irm286_pct = 100.0 * _irm286_c / opp.irm_total_frames
+        _irm286_2nd = (100.0 * _irm286[1][1] / opp.irm_total_frames
+                       if len(_irm286) > 1 else 0.0)
+        _rot286 = opp.rotation_matches and (
+            own.rotation_used_sum / max(1, own.rotation_matches))
+        if (_irm286_pct >= 85.0 and _irm286_pct - _irm286_2nd >= 15.0
+                and own.rotation_matches > 0 and _rot286 and
+                _rot286 >= 9.0):
+            plan.append(
+                f"A(z) {_irm286_p} posztjuk csere nélkül végigmegy "
+                f"({_irm286_pct:.0f}% jelenlét), ti pedig mély paddal "
+                f"forogtok (átlag {_rot286:.0f} bevetett játékos) — a "
+                "hajrában oda vigyétek a tempót: az ő sávjában jöjjön"
+                " a betörés és a futtatás, vele szemben pedig mindig "
+                "friss ember álljon.")
+
+    # 285) Az ő bejátszó-posztjuk × a ti beálló-védekezésetek: ha a
+    # beálló-játékuk egy posztról fut, és a ti falatok amúgy is
+    # szenved a beállóval, a bejátszó zárása a leggazdaságosabb terv.
+    _pfr285_n = sum(opp.pfr_feeds_by_role.values())
+    if (_pfr285_n >= 4 and own.pd_pivot_attacks >= 4
+            and own.pd_pivot_goals * 2 >= own.pd_pivot_attacks):
+        _pfr285_p, _pfr285_c = max(opp.pfr_feeds_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _pfr285_pct = 100.0 * _pfr285_c / _pfr285_n
+        if _pfr285_pct >= 60.0:
+            plan.append(
+                f"A beálló-beadásaik a(z) {_pfr285_p} posztjukról "
+                f"jönnek ({_pfr285_pct:.0f}%), a ti falatok pedig "
+                "eddig szenvedett a beállós támadásokkal "
+                f"({own.pd_pivot_goals}/{own.pd_pivot_attacks} gól "
+                "ellenetek) — ne a beállóval birkózzatok: a bejátszó "
+                "kezén lépjetek a vonalba, és az ő oldalán induljon "
+                "a kettőzés.")
+
+    # 284) Az ő indítás-vadász posztjuk × a ti gólba kerülő
+    # indítás-hibáitok: ha az indításaitok elvesznek ÉS tudni lehet,
+    # ki vadássza őket, a kapus-indítás terve poszt-szinten megírható.
+    _ohr284_n = sum(opp.ohr_steals_by_role.values())
+    if _ohr284_n >= 3 and own.olp_lost >= 3:
+        _ohr284_p, _ohr284_c = max(opp.ohr_steals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ohr284_pct = 100.0 * _ohr284_c / _ohr284_n
+        if _ohr284_pct >= 60.0:
+            plan.append(
+                f"Az indítás-vadászatuk a(z) {_ohr284_p} posztjukon "
+                f"fut ({_ohr284_pct:.0f}%), ti pedig sok indítást "
+                f"veszítetek el ({own.olp_lost}) — a kapus indítása "
+                "előre megbeszélt: a vadász sávját kerüli, a másik "
+                "oldalon vagy a feje fölött nyit, szorításban pedig "
+                "rövid biztonsági passz jön, nem hosszú hazárd.")
+
+    # 283) Az ő kulcs-posztjuk × a ti fegyelmezett tervkövetésetek: ha
+    # az elemzés rétegei ugyanarra a posztra mutatnak, a meccsterv nem
+    # sok részszabály, hanem EGY ember kezelése.
+    if opp.kp_layers_by_post:
+        _kp283 = sorted(opp.kp_layers_by_post.items(),
+                        key=lambda kv: -kv[1])
+        _kp283_p, _kp283_c = _kp283[0]
+        _kp283_tie = len(_kp283) > 1 and _kp283[1][1] == _kp283_c
+        if _kp283_c >= 3 and not _kp283_tie:
+            plan.append(
+                f"Az elemzés {_kp283_c} poszt-rétege ugyanarra mutat: "
+                f"a kulcs-posztjuk a(z) {_kp283_p} — a meccsterv első "
+                "lapja az ő kezelése (ki fogja, ki zár rá, mikor jön "
+                "a kettőzés), és csak utána jönnek a részszabályok: "
+                "ha őt kikapcsoljátok, több minta dől össze egyszerre.")
+
+    # 282) Az ő elzáró-posztjuk × a ti elzárás-védekezésetek: ha az
+    # elzárásaik kiszámíthatók, de a ti falatok eddig rosszul bírta az
+    # elzárást, a váltás-terv poszt-szinten megírható.
+    _sc2282_n = sum(opp.sc2_screens_by_role.values())
+    if (_sc2282_n >= 3 and own.scd_screened_shots >= 4
+            and own.scd_open_shots > 0):
+        _sc2282_p, _sc2282_c = max(opp.sc2_screens_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sc2282_pct = 100.0 * _sc2282_c / _sc2282_n
+        _scd282_gap = (100.0 * own.scd_screened_goals
+                       / own.scd_screened_shots
+                       - 100.0 * own.scd_open_goals
+                       / own.scd_open_shots)
+        if _sc2282_pct >= 60.0 and _scd282_gap >= 15.0:
+            plan.append(
+                f"Az elzárásaik a(z) {_sc2282_p} posztjukról jönnek "
+                f"({_sc2282_pct:.0f}%), a ti falatok pedig eddig "
+                "rosszul bírta az elzárást (elzárásos lövésből "
+                f"{_scd282_gap:.0f} százalékponttal többször kaptok "
+                "gólt) — a váltás-terv kész: az ő sávjában előre "
+                "bemondott hangos váltás, és az elzáróját elölről "
+                "kell fogni.")
+
+    # 281) Az ő átvert posztjuk × a ti 1v1-erőtök: ha a kapott góljaik
+    # egy poszt párharc-vereségéből esnek, és nálatok van, aki az
+    # 1v1-et megnyeri, a párosítás kész terv.
+    _btr281_n = sum(opp.btr_beaten_by_role.values())
+    _earn281 = sum(p.get("earned", 0) for p in (own.seven_earners or []))
+    if _btr281_n >= 3 and _earn281 >= 2:
+        _btr281_p, _btr281_c = max(opp.btr_beaten_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _btr281_pct = 100.0 * _btr281_c / _btr281_n
+        if _btr281_pct >= 60.0:
+            plan.append(
+                f"A kapott góljaik a(z) {_btr281_p} posztjuk mögött "
+                f"esnek ({_btr281_pct:.0f}%), nálatok pedig van, aki "
+                f"az 1v1-et megnyeri ({_earn281} kiharcolt hetes) — a "
+                "figura tudatosan az ő emberét támadja: elzárás "
+                "terelje hozzá a lövőt, és a betörés az ő sávjában "
+                "induljon.")
+
+    # 280) Az ő lemaradó posztjuk × a ti kontra-játékotok: ha náluk
+    # kontránál rendre ugyanaz a poszt marad elöl, és ti amúgy is
+    # futtok, a kontráitokat az ő sávjába kell irányítani.
+    _rtr280_n = sum(opp.rtr_lags_by_role.values())
+    if _rtr280_n >= 3 and own.fbc_breaks >= 5:
+        _rtr280_p, _rtr280_c = max(opp.rtr_lags_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rtr280_pct = 100.0 * _rtr280_c / _rtr280_n
+        if _rtr280_pct >= 60.0:
+            plan.append(
+                f"A visszarendeződésük a(z) {_rtr280_p} posztjukon "
+                f"szakad el ({_rtr280_pct:.0f}%), ti pedig futó "
+                f"csapat vagytok ({own.fbc_breaks} kontra) — az "
+                "indításokat tudatosan az ő sávjába vezessétek: ott "
+                "a pálya üres, és a kontra kifutása előtt nem ér "
+                "vissza.")
+
+    # 279) Az ő kiülő-posztjuk × a ti kiállítás-kiharcolóitok: ha a
+    # kétperceik egy posztra járnak, és nálatok van, aki a kiállítást
+    # ki tudja harcolni, a meccs eleji párosítás megtervezhető.
+    _sup279_n = sum(opp.sup_susp_by_role.values())
+    _earn279 = sum(p.get("earned", 0) for p in (own.susp_earners or []))
+    if _sup279_n >= 3 and _earn279 >= 2:
+        _sup279_p, _sup279_c = max(opp.sup_susp_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sup279_pct = 100.0 * _sup279_c / _sup279_n
+        if _sup279_pct >= 60.0:
+            plan.append(
+                f"A kétperceik a(z) {_sup279_p} posztjukra járnak "
+                f"({_sup279_pct:.0f}%), nálatok pedig van, aki hozza "
+                f"a kiállításokat ({_earn279} kiharcolt két perc) — a "
+                "meccs ELEJÉN küldjétek a kiharcolótokat az ő "
+                "sávjába: az első két perce után az az ember vagy "
+                "hiányzik, vagy fékezve véd, és onnantól ott nyílik a "
+                "pálya.")
+
+    # 278) Az ő hetes-okozó posztjuk × a ti hetes-lövőtök: ha az egyik
+    # sávjuk kézzel véd, és nálatok van, aki a kiharcolt hetest be is
+    # lövi, a betörés oda kétszeresen kifizetődő.
+    _svr278_n = sum(opp.svr_sevens_by_role.values())
+    _own7_278 = own.seven_takers or []
+    _att278 = sum(p.get("attempts", 0) for p in _own7_278)
+    _gol278 = sum(p.get("goals", 0) for p in _own7_278)
+    if _svr278_n >= 3 and _att278 >= 3:
+        _svr278_p, _svr278_c = max(opp.svr_sevens_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _svr278_pct = 100.0 * _svr278_c / _svr278_n
+        _conv278 = 100.0 * _gol278 / _att278
+        if _svr278_pct >= 60.0 and _conv278 >= 70.0:
+            plan.append(
+                f"A heteseik a(z) {_svr278_p} posztjukon szakadnak be "
+                f"({_svr278_pct:.0f}%), a ti hetesetek pedig kész gól "
+                f"({_gol278}/{_att278}, {_conv278:.0f}%) — vezessétek "
+                "a betöréseket az ő sávjába: kézzel véd, minden "
+                "leszakított hetes nálatok gólt ér, és idővel a "
+                "kiállítását is hozza.")
+
+    # 277) Az ő 7a6-befejező posztjuk × a ti labdaszerzésetek: ha a
+    # hetedik ember játéka kiszámítható, a besűrítés labdát terem — és
+    # a szerzés mögött üres a kapujuk.
+    _en7277_n = sum(opp.en7_shots_by_role.values())
+    if _en7277_n >= 3 and own.trans_steals >= 4:
+        _en7277_p, _en7277_c = max(opp.en7_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _en7277_pct = 100.0 * _en7277_c / _en7277_n
+        if _en7277_pct >= 60.0:
+            plan.append(
+                f"A 7 a 6-uk a(z) {_en7277_p} posztra fut ki "
+                f"({_en7277_pct:.0f}%, {_en7277_n} lövésből), ti "
+                f"pedig jó labdaszerzők vagytok ({own.trans_steals} "
+                "szerzés) — a lehozott kapus felismerésekor az ő "
+                "sávját sűrítsétek be: a szerzés mögött ÜRES a "
+                "kapujuk, az első pontos hosszú labda gól.")
+
+    # 276) Az ő blokk-posztjuk × a ti falba lövésetek: ha a lövéseitek
+    # amúgy is sokszor akadnak el a falban, és náluk tudni lehet, KI
+    # blokkol, a lövés-előkészítés első dolga az ő kihúzása.
+    _rbk276_n = sum(opp.rbk_blocks_by_role.values())
+    if _rbk276_n >= 3 and own.blk_for >= 4 and own.blk_attempts > 0:
+        _rbk276_p, _rbk276_c = max(opp.rbk_blocks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rbk276_pct = 100.0 * _rbk276_c / _rbk276_n
+        _blk276_pct = 100.0 * own.blk_for / own.blk_attempts
+        if _rbk276_pct >= 60.0 and _blk276_pct >= 20.0:
+            plan.append(
+                f"A blokkjaik zöme a(z) {_rbk276_p} posztjuktól jön "
+                f"({_rbk276_pct:.0f}%), ti pedig sokat lőttök falba "
+                f"(a kísérleteitek {_blk276_pct:.0f}%-a) — az ő "
+                "sávjába előkészítés nélkül NE lőjetek: a figura "
+                "először őt mozgassa el (beálló-felfutás, kereszt), "
+                "és a lövés a megnyílt sávba menjen.")
+
+    # 275) Az ő lepattanó-posztjuk × a ti visszaengedett második
+    # rohamaitok: ha amúgy is sok lepattanót engedtek vissza, és náluk
+    # tudni lehet, KI jön a második labdára, a zárás utáni első
+    # mozdulat adott.
+    _scr275_n = sum(opp.scr_shots_by_role.values())
+    if _scr275_n >= 3 and own.sca_opp_misses >= 6:
+        _scr275_p, _scr275_c = max(opp.scr_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _scr275_pct = 100.0 * _scr275_c / _scr275_n
+        _sca275 = 100.0 * own.sca_allowed / own.sca_opp_misses
+        if _scr275_pct >= 60.0 and _sca275 >= 35.0:
+            plan.append(
+                f"A második rohamukat a(z) {_scr275_p} viszi "
+                f"({_scr275_pct:.0f}%, {_scr275_n} második lövésből), "
+                f"ti pedig sok lepattanót engedtek vissza (a kimaradt "
+                f"lövéseik {_sca275:.0f}%-ánál újra lőhettek) — a "
+                "lövésük pillanatában a hozzá legközelebbi védő NE a "
+                "labdát nézze, hanem őt tolja ki a lepattanóból. Egy "
+                "kijelölt ember, egy mozdulat.")
+
+    # 274) Az ő egy-posztos labdaszerzésük × a ti nyomás alatti
+    # eladásaitok: ha a passzaitok nyomás alatt amúgy is potyognak, az
+    # ő szedő-emberének a sávja a legveszélyesebb hely a pályán.
+    _rsw274_n = sum(opp.rsw_steals_by_role.values())
+    _ps274 = own.ps_press_passes + own.ps_press_to
+    if _rsw274_n >= 5 and _ps274 >= 20:
+        _rsw274_p, _rsw274_c = max(opp.rsw_steals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rsw274_pct = 100.0 * _rsw274_c / _rsw274_n
+        _to274 = 100.0 * own.ps_press_to / _ps274
+        if _rsw274_pct >= 50.0 and _to274 >= 20.0:
+            plan.append(
+                f"A labdáik felét-többségét a(z) {_rsw274_p} posztjuk "
+                f"szedi ({_rsw274_pct:.0f}%), ti pedig nyomás alatt "
+                f"sokat adtok el (a nyomott labdáitok {_to274:.0f}%-a) "
+                "— az ő sávja a legveszélyesebb hely a pályán: oda NE "
+                "vezessétek a támadást, és a szélső-átadás előtt "
+                "nézzetek fel. A kényes átadások a túloldalon "
+                "menjenek át.")
+
+    # 273) Az ő gólpassz-posztjuk × a ti kettőzési hajlandóságotok: ha
+    # amúgy is szívesen kettőztök, a kettőzés célpontja ne a lövő
+    # legyen, hanem a posztjuk, akinek a kezéből a gólok indulnak.
+    _ras273_n = sum(opp.ras_assists_by_role.values())
+    if _ras273_n >= 3 and own.dbl_holder_frames >= 250:
+        _ras273_p, _ras273_c = max(opp.ras_assists_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ras273_pct = 100.0 * _ras273_c / _ras273_n
+        _dbl273 = 100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+        if _ras273_pct >= 60.0 and _dbl273 >= 25.0:
+            plan.append(
+                f"A góljaik a(z) {_ras273_p} kezéből indulnak "
+                f"({_ras273_pct:.0f}%, {_ras273_n} gólpasszból), ti "
+                f"pedig amúgy is sokat kettőztök (a labdás-kockák "
+                f"{_dbl273:.0f}%-a) — a kettőzés célpontját tegyétek "
+                "át: nem a lövőre, hanem RÁ menjen a második ember, "
+                "amikor nála a labda. A gólgyártásuk a passznál "
+                "törik meg, nem a lövésnél.")
+
+    # 272) Az ő kiszámítható hetes-oldaluk × a ti kapusotok gyenge
+    # mérlege: a hetes az egyetlen helyzet, ahol a kapus előre
+    # eldöntheti a vetődést — a gyenge mérlegű kapusnak ez ingyen
+    # javulás, mert nem reflexet, hanem döntést kér.
+    _svd272_n = sum(opp.svd_dirs.values())
+    if _svd272_n >= 3 and own.gk_on_target >= 10:
+        _svd272_d, _svd272_c = max(opp.svd_dirs.items(),
+                                   key=lambda kv: kv[1])
+        _svd272_pct = 100.0 * _svd272_c / _svd272_n
+        _gk272 = 100.0 * own.gk_saves / own.gk_on_target
+        if _svd272_pct >= 60.0 and _gk272 <= 25.0:
+            plan.append(
+                f"A heteseik {_svd272_pct:.0f}%-a {_svd272_d} oldalra "
+                f"megy ({_svd272_n} mérhető dobásból), a ti kapusotok "
+                f"mérlege pedig gyenge ({_gk272:.0f}% védés) — a hetes "
+                "az a helyzet, ahol ezen ingyen lehet javítani: nem "
+                "reflex kell hozzá, hanem előre eldöntött vetődés a(z) "
+                f"{_svd272_d} oldalra. A megbeszélésen mondjátok ki, és "
+                "a kapus ne váltson menet közben.")
+
+    # 271) Az ő kontra-posztjuk × a ti lassú visszarendeződésetek: ha
+    # amúgy is lassan értek vissza, mindenkit nem tudtok felvenni — de
+    # az EGY kijelölt embert igen, és náluk a kontra egy poszton zárul.
+    _rfb271_n = sum(opp.rfb_shots_by_role.values())
+    if (_rfb271_n >= 3 and opp.fast_break_pct >= 12.0
+            and own.rec_transitions >= 4
+            and own.rec_slow * 2 >= own.rec_transitions):
+        _rfb271_p, _rfb271_c = max(opp.rfb_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rfb271_pct = 100.0 * _rfb271_c / _rfb271_n
+        if _rfb271_pct >= 60.0:
+            plan.append(
+                f"A lerohanásaik ({opp.fast_break_pct:.0f}% a "
+                f"támadásaikból) a(z) {_rfb271_p} poszton záródnak "
+                f"({_rfb271_pct:.0f}%, {_rfb271_n} kontra-lövésből), a "
+                f"ti visszarendeződésetek pedig lassú "
+                f"({own.rec_slow}/{own.rec_transitions} lassú "
+                "visszaérés) — mindenkit nem tudtok felvenni, de EGY "
+                "embert igen: labdavesztésnél a hozzá legközelebbi "
+                "játékos NEM a labdára, hanem rá sprintel vissza. A "
+                "többi kontra-sáv másodlagos.")
+
+    # 270) Az ő rossz lövésválasztásuk × a ti fal-szélességetek: aki
+    # nem néz fel, azt tömör fallal lehet a rossz szögbe szorítani —
+    # széles fal ellen viszont pont a szabad társ kapja a labdát.
+    _w270 = ((own.width_sum_m / own.width_frames)
+             if own.width_frames >= 100 else None)
+    if opp.scq_shots >= 6 and _w270 is not None:
+        _pct270 = 100.0 * opp.scq_better / opp.scq_shots
+        if _pct270 >= 45.0 and _w270 >= 12.0:
+            plan.append(
+                f"A lövéseik {_pct270:.0f}%-ánál volt jobb szabad "
+                f"helyzet a pályán ({opp.scq_better}/{opp.scq_shots}) — "
+                "nem néznek fel. A ti falatok viszont széles (átlag "
+                f"{_w270:.1f} m), és a széles fal épp a "
+                "szabad társat hagyja: TÖMÖRÍTSETEK. Ha a labdás nem "
+                "keresi a jobb helyzetet, a fal középre húzva a rossz "
+                "szögű lövést kényszeríti ki, és nem kell a passzt is "
+                "megjátszani hagyni.")
+
+    # 269) Az ő időkérés-befejezőjük × a ti kettőzési szokásotok: ha
+    # amúgy ritkán kettőztök, az időkérés utáni támadás a legjobb hely
+    # egy ELŐRE MEGBESZÉLT kettőzésre — tudjuk a pillanatot és az embert.
+    _tof269_n = sum(opp.tof_shots_by_role.values())
+    if _tof269_n >= 3 and own.dbl_holder_frames >= 250:
+        _p269, _c269 = max(opp.tof_shots_by_role.items(),
+                           key=lambda kv: kv[1])
+        _pct269 = 100.0 * _c269 / _tof269_n
+        _dbl269 = 100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+        if _pct269 >= 60.0 and _dbl269 <= 20.0:
+            plan.append(
+                f"Időkérés után az ő lövéseik {_pct269:.0f}%-a a(z) "
+                f"{_p269} posztról jön ({_tof269_n} lövésből, "
+                f"{opp.tof_timeouts} időkérés után), ti pedig ritkán "
+                f"kettőztök (a labdás-kockák {_dbl269:.0f}%-a) — épp "
+                "ezért éri meg: az időkérés utáni EGY támadásra "
+                "beszéljetek meg kettőzést rá. Ismeritek a pillanatot "
+                "is, az embert is; a meglepetés-érték egyszer a "
+                "tiétek.")
+
+    # 268) Az ő kiszámítható befejezésű figuráik × a ti fal-csúszásotok:
+    # ha a falunk amúgy is lassan igazodik, a figura felismerése az
+    # egyetlen esély — a csúszásnak a figura INDULÁSÁRA kell indulnia.
+    _lag268 = (own.dsl_sum_s / own.dsl_frames) if own.dsl_frames else None
+    if (opp.spf_telegraphed >= 1 and opp.spf_figures >= 2
+            and _lag268 is not None and _lag268 >= 1.0):
+        _spf268 = sorted(opp.spf_telegraphed_by_role.items(),
+                         key=lambda kv: -kv[1])
+        if _spf268:
+            _p268, _n268 = _spf268[0]
+            plan.append(
+                f"A figuráik {opp.spf_figures}-ból "
+                f"{opp.spf_telegraphed} ugyanarra a posztra fut ki "
+                f"(a legtöbb, {_n268} a(z) {_p268}-ra), a ti falatok "
+                f"pedig lassan igazodik ({_lag268:.1f} mp a "
+                "fal-csúszás késése) — a reagálásra nincs időtök: a "
+                "csúszás a figura INDULÁSÁRA induljon. A videós "
+                "felkészülésen a figura első két másodpercét nézzétek "
+                "át, ne a befejezést.")
+
+    # 267) Az ő fedezetten is befejező posztjuk × a ti védekezési
+    # nyomásotok: ha a falunk amúgy is szorosan játszik a labdásra, a
+    # "lépj ki rá" utasítás nála nem hoz újat — a labdát kell elvenni
+    # tőle, nem a lövését zavarni.
+    _rpf267_cs = opp.rpf_covered_shots_by_role
+    _rpf267_n = sum(_rpf267_cs.values())
+    if _rpf267_n >= 8 and 0.0 < own.defensive_pressure_m <= 1.6:
+        _rpf267_team = (100.0 * sum(opp.rpf_covered_goals_by_role.values())
+                        / _rpf267_n)
+        _rpf267_rows = [
+            (p, n, 100.0 * opp.rpf_covered_goals_by_role.get(p, 0) / n)
+            for p, n in _rpf267_cs.items() if n >= 4]
+        if _rpf267_rows:
+            _p267, _n267, _pct267 = max(_rpf267_rows, key=lambda r: r[2])
+            if _pct267 - _rpf267_team >= 20.0:
+                plan.append(
+                    f"A(z) {_p267} posztjuk a fedezett lövései "
+                    f"{_pct267:.0f}%-át belövi ({_n267} lövésből; a "
+                    f"csapat-átlaguk {_rpf267_team:.0f}%), a ti falatok "
+                    f"pedig már most szorosan játszik (átlag "
+                    f"{own.defensive_pressure_m:.1f} m a labdásra) — "
+                    "nála a kilépés nem hoz újat: KIZÁRÁS kell, a "
+                    "passzsáv zárása és kettőzés MÉG A LABDA ELŐTT. Ez "
+                    "a poszt-lencse fal-párja: a távolság megmondja, "
+                    "meddig lépj ki, ez pedig azt, KIRE NE.")
+
+    # 266) Az ő kiszámítható posztjuk × a ti kapusotok oldal-profilja:
+    # ha a kapusunk épp azon az oldalon véd jobban, amerre lőnek, a
+    # párosítás nekünk dolgozik — ezt ki kell használni.
+    _rgp266 = opp.rgp_goals_by_role_side
+    if sum(_rgp266.values()) >= 6:
+        _by_post266: dict = {}
+        for _k, _n in _rgp266.items():
+            _p, _, _sd = _k.partition("|")
+            _by_post266.setdefault(_p, {})[_sd] = _n
+        _best266 = None
+        for _p, _sides in _by_post266.items():
+            _tot = sum(_sides.values())
+            if _tot < 4:
+                continue
+            _dom = max(_sides, key=lambda k: _sides[k])
+            _pct = 100.0 * _sides[_dom] / _tot
+            if _pct >= 60.0 and (_best266 is None or _pct > _best266[2]):
+                _best266 = (_p, _dom, _pct, _tot)
+        if _best266 is not None:
+            _p266, _dom266, _pct266, _tot266 = _best266
+            plan.append(
+                f"A(z) {_p266} posztjuk a góljaik {_pct266:.0f}%-át "
+                f"{_dom266} oldalra lövi ({_tot266} gólból) — a "
+                "kapusunk erre az oldalra álljon rá, a fal pedig a "
+                "másikat zárja. Ez a poszt-lencse kapus-hármasának "
+                "harmadik darabja: a távolság megmondja, meddig lépj "
+                "ki, az erő azt, mikor indulj, ez pedig azt, MERRE.")
 
     # 265) Az ő kemény lövő posztjuk × a ti kapusotok tempó-profilja:
     # ha a kapusunk épp a kemény lövéseknél gyengébb, ott kell a fal
@@ -13599,7 +21454,9 @@ def matchup_plan(own: "ScoutingReport",
                 "időzítsd: ott dől be a labdabiztonságuk, és onnan jönnek "
                 "az olcsó gólok.")
 
-    return plan
+    # A szabályok sorszáma történeti (a legújabb szabály van elöl a
+    # függvényben) — az edzőnek viszont TÉMA szerint kell a lap.
+    return _mpl_order(plan)
 
 
 def _merge_attack_origins(reports) -> dict:
@@ -13929,6 +21786,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rotation_regulars_sum=sum(r.rotation_regulars_sum
                                   for r in reports),
         rotation_matches=sum(r.rotation_matches for r in reports),
+        imn_minutes_by_player=_merge_count_dicts(
+            r.imn_minutes_by_player for r in reports),
+        imn_match_min=round(sum(r.imn_match_min for r in reports), 1),
         ball_winners=_merge_ball_winners(reports),
         turnover_players=_merge_turnover_players(reports),
         clutch_scorers=_merge_clutch_scorers(reports),
@@ -13940,6 +21800,24 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         tilt_opp=sum(r.tilt_opp for r in reports),
         defw_sum_m=round(sum(r.defw_sum_m for r in reports), 1),
         defw_frames=sum(r.defw_frames for r in reports),
+        dform_frames=sum(r.dform_frames for r in reports),
+        dform_counts=_merge_count_dicts(r.dform_counts for r in reports),
+        dgap_frames=sum(r.dgap_frames for r in reports),
+        dgap_sum_m=round(sum(r.dgap_sum_m for r in reports), 1),
+        dgap_zones=_merge_count_dicts(r.dgap_zones for r in reports),
+        gfd_fh_sum_m=round(sum(r.gfd_fh_sum_m for r in reports), 1),
+        gfd_fh_frames=sum(r.gfd_fh_frames for r in reports),
+        gfd_sh_sum_m=round(sum(r.gfd_sh_sum_m for r in reports), 1),
+        gfd_sh_frames=sum(r.gfd_sh_frames for r in reports),
+        sph_subs=sum(r.sph_subs for r in reports),
+        sph_opp_ball=sum(r.sph_opp_ball for r in reports),
+        fbal_shots=sum(r.fbal_shots for r in reports),
+        fbal_goals=sum(r.fbal_goals for r in reports),
+        fbal_xg_sum=round(sum(r.fbal_xg_sum for r in reports), 2),
+        gkh_left_faced=sum(r.gkh_left_faced for r in reports),
+        gkh_left_saves=sum(r.gkh_left_saves for r in reports),
+        gkh_right_faced=sum(r.gkh_right_faced for r in reports),
+        gkh_right_saves=sum(r.gkh_right_saves for r in reports),
         pt_passes=sum(r.pt_passes for r in reports),
         pt_poss_s=round(sum(r.pt_poss_s for r in reports), 1),
         blk_for=sum(r.blk_for for r in reports),
@@ -13956,6 +21834,31 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_fh_n=sum(r.prf_fh_n for r in reports),
         prf_sh_sum_m=round(sum(r.prf_sh_sum_m for r in reports), 1),
         prf_sh_n=sum(r.prf_sh_n for r in reports),
+        lhf_fh_sum_m=round(sum(r.lhf_fh_sum_m for r in reports), 1),
+        lhf_fh_n=sum(r.lhf_fh_n for r in reports),
+        lhf_sh_sum_m=round(sum(r.lhf_sh_sum_m for r in reports), 1),
+        lhf_sh_n=sum(r.lhf_sh_n for r in reports),
+        rtf_fh_sum_s=round(sum(r.rtf_fh_sum_s for r in reports), 1),
+        rtf_fh_n=sum(r.rtf_fh_n for r in reports),
+        rtf_sh_sum_s=round(sum(r.rtf_sh_sum_s for r in reports), 1),
+        rtf_sh_n=sum(r.rtf_sh_n for r in reports),
+        wif_fh_wing=sum(r.wif_fh_wing for r in reports),
+        wif_fh_n=sum(r.wif_fh_n for r in reports),
+        wif_sh_wing=sum(r.wif_sh_wing for r in reports),
+        wif_sh_n=sum(r.wif_sh_n for r in reports),
+        adf_fh_sum_m=round(sum(r.adf_fh_sum_m for r in reports), 1),
+        adf_fh_n=sum(r.adf_fh_n for r in reports),
+        adf_sh_sum_m=round(sum(r.adf_sh_sum_m for r in reports), 1),
+        adf_sh_n=sum(r.adf_sh_n for r in reports),
+        puf_fh_pivot=sum(r.puf_fh_pivot for r in reports),
+        puf_fh_n=sum(r.puf_fh_n for r in reports),
+        puf_sh_pivot=sum(r.puf_sh_pivot for r in reports),
+        puf_sh_n=sum(r.puf_sh_n for r in reports),
+        fpr_signals=sum(r.fpr_signals for r in reports),
+        fpr_matches=sum(r.fpr_matches for r in reports),
+        q_score_sum=round(sum(r.q_score_sum for r in reports), 1),
+        q_matches=sum(r.q_matches for r in reports),
+        q_weak_matches=sum(r.q_weak_matches for r in reports),
         to_n=sum(r.to_n for r in reports),
         to_broke=sum(r.to_broke for r in reports),
         to_failed=sum(r.to_failed for r in reports),
@@ -14149,6 +22052,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         olp_punished=sum(r.olp_punished for r in reports),
         sac_slow=sum(r.sac_slow for r in reports),
         sac_scored=sum(r.sac_scored for r in reports),
+        atv_attacks=sum(r.atv_attacks for r in reports),
+        atv_fast=sum(r.atv_fast for r in reports),
+        atv_mid=sum(r.atv_mid for r in reports),
+        atv_slow=sum(r.atv_slow for r in reports),
         obt_out=sum(r.obt_out for r in reports),
         sps_tr=sum(r.sps_tr for r in reports),
         sps_lead=sum(r.sps_lead for r in reports),
@@ -14224,8 +22131,425 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rgp_goals_by_role_side=_merge_count_dicts(
+            r.rgp_goals_by_role_side for r in reports),
+        scq_shots=sum(r.scq_shots for r in reports),
+        scq_better=sum(r.scq_better for r in reports),
+        rfb_shots_by_role=_merge_count_dicts(
+            r.rfb_shots_by_role for r in reports),
+        svd_dirs=_merge_count_dicts(r.svd_dirs for r in reports),
+        ras_assists_by_role=_merge_count_dicts(
+            r.ras_assists_by_role for r in reports),
+        rsw_steals_by_role=_merge_count_dicts(
+            r.rsw_steals_by_role for r in reports),
+        scr_shots_by_role=_merge_count_dicts(
+            r.scr_shots_by_role for r in reports),
+        rbk_blocks_by_role=_merge_count_dicts(
+            r.rbk_blocks_by_role for r in reports),
+        en7_shots_by_role=_merge_count_dicts(
+            r.en7_shots_by_role for r in reports),
+        svr_sevens_by_role=_merge_count_dicts(
+            r.svr_sevens_by_role for r in reports),
+        sup_susp_by_role=_merge_count_dicts(
+            r.sup_susp_by_role for r in reports),
+        rtr_lags_by_role=_merge_count_dicts(
+            r.rtr_lags_by_role for r in reports),
+        btr_beaten_by_role=_merge_count_dicts(
+            r.btr_beaten_by_role for r in reports),
+        sc2_screens_by_role=_merge_count_dicts(
+            r.sc2_screens_by_role for r in reports),
+        kp_layers_by_post=_merge_count_dicts(
+            r.kp_layers_by_post for r in reports),
+        ohr_steals_by_role=_merge_count_dicts(
+            r.ohr_steals_by_role for r in reports),
+        pfr_feeds_by_role=_merge_count_dicts(
+            r.pfr_feeds_by_role for r in reports),
+        irm_on_by_role=_merge_count_dicts(
+            r.irm_on_by_role for r in reports),
+        irm_total_frames=sum(r.irm_total_frames for r in reports),
+        rpr_to_by_role=_merge_count_dicts(
+            r.rpr_to_by_role for r in reports),
+        ddr_frames_by_role=_merge_count_dicts(
+            r.ddr_frames_by_role for r in reports),
+        kor_kickouts_by_role=_merge_count_dicts(
+            r.kor_kickouts_by_role for r in reports),
+        ppr_shots_by_role=_merge_count_dicts(
+            r.ppr_shots_by_role for r in reports),
+        shr_shots_by_role=_merge_count_dicts(
+            r.shr_shots_by_role for r in reports),
+        csr_goals_by_role=_merge_count_dicts(
+            r.csr_goals_by_role for r in reports),
+        cbr_trailing_by_role=_merge_count_dicts(
+            r.cbr_trailing_by_role for r in reports),
+        wsr_off_by_role=_merge_count_dicts(
+            r.wsr_off_by_role for r in reports),
+        bcr_chances_by_role=_merge_count_dicts(
+            r.bcr_chances_by_role for r in reports),
+        htr_seconds_by_role=_merge_count_dicts(
+            r.htr_seconds_by_role for r in reports),
+        psr_to_by_role=_merge_count_dicts(
+            r.psr_to_by_role for r in reports),
+        gct_breaks_by_role=_merge_count_dicts(
+            r.gct_breaks_by_role for r in reports),
+        fdp_fh_by_role=_merge_count_dicts(
+            r.fdp_fh_by_role for r in reports),
+        fdp_sh_by_role=_merge_count_dicts(
+            r.fdp_sh_by_role for r in reports),
+        ctr_to_by_role=_merge_count_dicts(
+            r.ctr_to_by_role for r in reports),
+        hhr_goals_by_role=_merge_count_dicts(
+            r.hhr_goals_by_role for r in reports),
+        rtr_takes_by_role=_merge_count_dicts(
+            r.rtr_takes_by_role for r in reports),
+        spr_sprints_by_role=_merge_count_dicts(
+            r.spr_sprints_by_role for r in reports),
+        sps_soft_by_role=_merge_count_dicts(
+            r.sps_soft_by_role for r in reports),
+        chr_frames_by_role=_merge_count_dicts(
+            r.chr_frames_by_role for r in reports),
+        asr_assisted_by_role=_merge_count_dicts(
+            r.asr_assisted_by_role for r in reports),
+        osr_goals_by_role=_merge_count_dicts(
+            r.osr_goals_by_role for r in reports),
+        pvr_frames_by_role=_merge_count_dicts(
+            r.pvr_frames_by_role for r in reports),
+        ftr_first_cms_by_role=_merge_count_dicts(
+            r.ftr_first_cms_by_role for r in reports),
+        ftr_second_cms_by_role=_merge_count_dicts(
+            r.ftr_second_cms_by_role for r in reports),
+        dtr_frames_by_role=_merge_count_dicts(
+            r.dtr_frames_by_role for r in reports),
+        sdr_screens_by_role=_merge_count_dicts(
+            r.sdr_screens_by_role for r in reports),
+        ssr_goals_by_role=_merge_count_dicts(
+            r.ssr_goals_by_role for r in reports),
+        stk_attempts_by_role=_merge_count_dicts(
+            r.stk_attempts_by_role for r in reports),
+        bsr_blocks_by_role=_merge_count_dicts(
+            r.bsr_blocks_by_role for r in reports),
+        mcr_misses_by_role=_merge_count_dicts(
+            r.mcr_misses_by_role for r in reports),
+        adr_frames_by_role=_merge_count_dicts(
+            r.adr_frames_by_role for r in reports),
+        adr_depthm_by_role=_merge_count_dicts(
+            r.adr_depthm_by_role for r in reports),
+        pgr_frames_by_role=_merge_count_dicts(
+            r.pgr_frames_by_role for r in reports),
+        ats_attacks_by_role=_merge_count_dicts(
+            r.ats_attacks_by_role for r in reports),
+        epr_passes_by_role=_merge_count_dicts(
+            r.epr_passes_by_role for r in reports),
+        lgr_goals_by_role=_merge_count_dicts(
+            r.lgr_goals_by_role for r in reports),
+        tnr_meters_by_role=_merge_count_dicts(
+            r.tnr_meters_by_role for r in reports),
+        bpr_passes_by_role=_merge_count_dicts(
+            r.bpr_passes_by_role for r in reports),
+        fto_fh_by_role=_merge_count_dicts(
+            r.fto_fh_by_role for r in reports),
+        fto_sh_by_role=_merge_count_dicts(
+            r.fto_sh_by_role for r in reports),
+        fsa_fh_by_role=_merge_count_dicts(
+            r.fsa_fh_by_role for r in reports),
+        fsa_sh_by_role=_merge_count_dicts(
+            r.fsa_sh_by_role for r in reports),
+        tcr_fh_by_role=_merge_count_dicts(
+            r.tcr_fh_by_role for r in reports),
+        tcr_sh_by_role=_merge_count_dicts(
+            r.tcr_sh_by_role for r in reports),
+        sbr_outs_by_role=_merge_count_dicts(
+            r.sbr_outs_by_role for r in reports),
+        ibr_ins_by_role=_merge_count_dicts(
+            r.ibr_ins_by_role for r in reports),
+        dto_punished_by_role=_merge_count_dicts(
+            r.dto_punished_by_role for r in reports),
+        btr_entries_by_role=_merge_count_dicts(
+            r.btr_entries_by_role for r in reports),
+        fdd_fh_by_role=_merge_count_dicts(
+            r.fdd_fh_by_role for r in reports),
+        fdd_sh_by_role=_merge_count_dicts(
+            r.fdd_sh_by_role for r in reports),
+        cvr_covered_by_role=_merge_count_dicts(
+            r.cvr_covered_by_role for r in reports),
+        tgr_shots_by_role=_merge_count_dicts(
+            r.tgr_shots_by_role for r in reports),
+        hsr_high_by_role=_merge_count_dicts(
+            r.hsr_high_by_role for r in reports),
+        sar_seconds_by_role=_merge_count_dicts(
+            r.sar_seconds_by_role for r in reports),
+        sar_meters_by_role=_merge_count_dicts(
+            r.sar_meters_by_role for r in reports),
+        spp_shots_by_role=_merge_count_dicts(
+            r.spp_shots_by_role for r in reports),
+        sws_pairs=sum(r.sws_pairs for r in reports),
+        sws_same=sum(r.sws_same for r in reports),
+        svp_sevens_by_role=_merge_count_dicts(
+            r.svp_sevens_by_role for r in reports),
+        fbp_breaks_by_role=_merge_count_dicts(
+            r.fbp_breaks_by_role for r in reports),
+        apr_goals_by_role=_merge_count_dicts(
+            r.apr_goals_by_role for r in reports),
+        dpp_frames_by_role=_merge_count_dicts(
+            r.dpp_frames_by_role for r in reports),
+        rbp_shots_by_role=_merge_count_dicts(
+            r.rbp_shots_by_role for r in reports),
+        kpr_layers_by_role=_merge_count_dicts(
+            r.kpr_layers_by_role for r in reports),
+        pwp_shots_by_role=_merge_count_dicts(
+            r.pwp_shots_by_role for r in reports),
+        rsp_goals_by_role=_merge_count_dicts(
+            r.rsp_goals_by_role for r in reports),
+        lsw_switches_by_role=_merge_count_dicts(
+            r.lsw_switches_by_role for r in reports),
+        top_shots_by_role=_merge_count_dicts(
+            r.top_shots_by_role for r in reports),
+        esc_passes_by_role=_merge_count_dicts(
+            r.esc_passes_by_role for r in reports),
+        lst_attacks_by_role=_merge_count_dicts(
+            r.lst_attacks_by_role for r in reports),
+        bcf_chances_by_role=_merge_count_dicts(
+            r.bcf_chances_by_role for r in reports),
+        svm_misses_by_role=_merge_count_dicts(
+            r.svm_misses_by_role for r in reports),
+        bcp_chances_by_pair=_merge_count_dicts(
+            r.bcp_chances_by_pair for r in reports),
+        ppt_turnovers_by_role=_merge_count_dicts(
+            r.ppt_turnovers_by_role for r in reports),
+        rto_turnovers_by_role=_merge_count_dicts(
+            r.rto_turnovers_by_role for r in reports),
+        toe_turnovers_by_role=_merge_count_dicts(
+            r.toe_turnovers_by_role for r in reports),
+        ftop_sh_by_player=_merge_count_dicts(
+            r.ftop_sh_by_player for r in reports),
+        ftop_fh_by_player=_merge_count_dicts(
+            r.ftop_fh_by_player for r in reports),
+        srp_lags_by_player=_merge_count_dicts(
+            r.srp_lags_by_player for r in reports),
+        tcp_sh_by_player=_merge_count_dicts(
+            r.tcp_sh_by_player for r in reports),
+        tcp_fh_by_player=_merge_count_dicts(
+            r.tcp_fh_by_player for r in reports),
+        ohp_steals_by_player=_merge_count_dicts(
+            r.ohp_steals_by_player for r in reports),
+        ent_turnovers=sum(r.ent_turnovers for r in reports),
+        ent_punished=sum(r.ent_punished for r in reports),
+        asp_assisted_by_player=_merge_count_dicts(
+            r.asp_assisted_by_player for r in reports),
+        asp_goals_by_player=_merge_count_dicts(
+            r.asp_goals_by_player for r in reports),
+        stc_susp_by_player=_merge_count_dicts(
+            r.stc_susp_by_player for r in reports),
+        otp_outlets_by_player=_merge_count_dicts(
+            r.otp_outlets_by_player for r in reports),
+        dtp_frames_by_player=_merge_count_dicts(
+            r.dtp_frames_by_player for r in reports),
+        svs_sevens_by_type=_merge_count_dicts(
+            r.svs_sevens_by_type for r in reports),
+        mcp_misses_by_player=_merge_count_dicts(
+            r.mcp_misses_by_player for r in reports),
+        spp_soft_by_player=_merge_count_dicts(
+            r.spp_soft_by_player for r in reports),
+        pvp_frames_by_player=_merge_count_dicts(
+            r.pvp_frames_by_player for r in reports),
+        epp_passes_by_player=_merge_count_dicts(
+            r.epp_passes_by_player for r in reports),
+        rspp_goals_by_player=_merge_count_dicts(
+            r.rspp_goals_by_player for r in reports),
+        osp_goals_by_player=_merge_count_dicts(
+            r.osp_goals_by_player for r in reports),
+        ssp_goals_by_player=_merge_count_dicts(
+            r.ssp_goals_by_player for r in reports),
+        lgp_goals_by_player=_merge_count_dicts(
+            r.lgp_goals_by_player for r in reports),
+        sdp_screens_by_player=_merge_count_dicts(
+            r.sdp_screens_by_player for r in reports),
+        wrp_running_by_player=_merge_count_dicts(
+            r.wrp_running_by_player for r in reports),
+        crp_runs_by_player=_merge_count_dicts(
+            r.crp_runs_by_player for r in reports),
+        crp_crosses=sum(r.crp_crosses for r in reports),
+        lfb_running_by_player=_merge_count_dicts(
+            r.lfb_running_by_player for r in reports),
+        bfw_shots_by_player=_merge_count_dicts(
+            r.bfw_shots_by_player for r in reports),
+        swr_shots_by_role=_merge_count_dicts(
+            r.swr_shots_by_role for r in reports),
+        pbp_breaks_by_player=_merge_count_dicts(
+            r.pbp_breaks_by_player for r in reports),
+        pbr_breaks_by_role=_merge_count_dicts(
+            r.pbr_breaks_by_role for r in reports),
+        hand_left_by_player=_merge_count_dicts(
+            r.hand_left_by_player for r in reports),
+        hand_shots_by_player=_merge_count_dicts(
+            r.hand_shots_by_player for r in reports),
+        en7p_shots_by_player=_merge_count_dicts(
+            r.en7p_shots_by_player for r in reports),
+        adu_goals_by_duo=_merge_count_dicts(
+            r.adu_goals_by_duo for r in reports),
+        prea_by_player=_merge_count_dicts(
+            r.prea_by_player for r in reports),
+        prea_chained=sum(r.prea_chained for r in reports),
+        prear_by_role=_merge_count_dicts(
+            r.prear_by_role for r in reports),
+        ssu_goals_by_player=_merge_count_dicts(
+            r.ssu_goals_by_player for r in reports),
+        sspr_goals_by_role=_merge_count_dicts(
+            r.sspr_goals_by_role for r in reports),
+        stc_dir_by_taker=_merge_count_dicts(
+            r.stc_dir_by_taker for r in reports),
+        srep_pairs=sum(r.srep_pairs for r in reports),
+        srep_repeats=sum(r.srep_repeats for r in reports),
+        rsy_restarts=sum(r.rsy_restarts for r in reports),
+        rsy_answered=sum(r.rsy_answered for r in reports),
+        shs_seconds=sum(r.shs_seconds for r in reports),
+        shs_conceded=sum(r.shs_conceded for r in reports),
+        gcy_changes=sum(r.gcy_changes for r in reports),
+        gcy_delta_dpp=sum(r.gcy_delta_dpp for r in reports),
+        toy_broke=sum(r.toy_broke for r in reports),
+        toy_failed=sum(r.toy_failed for r in reports),
+        fsp_sh_by_player=_merge_count_dicts(
+            r.fsp_sh_by_player for r in reports),
+        fsp_fh_by_player=_merge_count_dicts(
+            r.fsp_fh_by_player for r in reports),
+        ctl_won=sum(r.ctl_won for r in reports),
+        ctl_lost=sum(r.ctl_lost for r in reports),
+        ctl_blocks=sum(r.ctl_blocks for r in reports),
+        gka_fresh_shots=sum(r.gka_fresh_shots for r in reports),
+        gka_fresh_saves=sum(r.gka_fresh_saves for r in reports),
+        gka_rest_shots=sum(r.gka_rest_shots for r in reports),
+        gka_rest_saves=sum(r.gka_rest_saves for r in reports),
+        lbl_players=max((r.lbl_players for r in reports), default=0),
+        lbl_distance_m=sum(r.lbl_distance_m for r in reports),
+        lbl_top3_m=sum(r.lbl_top3_m for r in reports),
+        spd_first_attacks=sum(r.spd_first_attacks for r in reports),
+        spd_first_goals=sum(r.spd_first_goals for r in reports),
+        spd_repeat_attacks=sum(r.spd_repeat_attacks for r in reports),
+        spd_repeat_goals=sum(r.spd_repeat_goals for r in reports),
+        cpl_total=sum(r.cpl_total for r in reports),
+        cpl_matched=sum(r.cpl_matched for r in reports),
+        krt_measured=sum(r.krt_measured for r in reports),
+        krt_sum_ds=sum(r.krt_sum_ds for r in reports),
+        krt_conceded=sum(r.krt_conceded for r in reports),
+        sby_rotations=sum(r.sby_rotations for r in reports),
+        sby_goals_for=sum(r.sby_goals_for for r in reports),
+        sby_goals_against=sum(r.sby_goals_against for r in reports),
+        psr_positional=sum(r.psr_positional for r in reports),
+        psr_passive=sum(r.psr_passive for r in reports),
+        svy_attempts=sum(r.svy_attempts for r in reports),
+        svy_goals=sum(r.svy_goals for r in reports),
+        ppy_pp_shots=sum(r.ppy_pp_shots for r in reports),
+        ppy_pp_goals=sum(r.ppy_pp_goals for r in reports),
+        ppy_eq_shots=sum(r.ppy_eq_shots for r in reports),
+        ppy_eq_goals=sum(r.ppy_eq_goals for r in reports),
+        blf_fh_blocks=sum(r.blf_fh_blocks for r in reports),
+        blf_fh_shots=sum(r.blf_fh_shots for r in reports),
+        blf_sh_blocks=sum(r.blf_sh_blocks for r in reports),
+        blf_sh_shots=sum(r.blf_sh_shots for r in reports),
+        scrf_fh_shots=sum(r.scrf_fh_shots for r in reports),
+        scrf_fh_screened=sum(r.scrf_fh_screened for r in reports),
+        scrf_sh_shots=sum(r.scrf_sh_shots for r in reports),
+        scrf_sh_screened=sum(r.scrf_sh_screened for r in reports),
+        scy_screened_shots=sum(r.scy_screened_shots for r in reports),
+        scy_screened_goals=sum(r.scy_screened_goals for r in reports),
+        scy_clean_shots=sum(r.scy_clean_shots for r in reports),
+        scy_clean_goals=sum(r.scy_clean_goals for r in reports),
+        bprp_passes_by_player=_merge_count_dicts(
+            r.bprp_passes_by_player for r in reports),
+        tnrp_meters_by_player=_merge_count_dicts(
+            r.tnrp_meters_by_player for r in reports),
+        lswp_switches_by_player=_merge_count_dicts(
+            r.lswp_switches_by_player for r in reports),
+        escp_passes_by_player=_merge_count_dicts(
+            r.escp_passes_by_player for r in reports),
+        lstp_attacks_by_player=_merge_count_dicts(
+            r.lstp_attacks_by_player for r in reports),
+        bcfp_chances_by_player=_merge_count_dicts(
+            r.bcfp_chances_by_player for r in reports),
+        rtop_turnovers_by_player=_merge_count_dicts(
+            r.rtop_turnovers_by_player for r in reports),
+        toep_turnovers_by_player=_merge_count_dicts(
+            r.toep_turnovers_by_player for r in reports),
+        stp_sevens_by_player=_merge_count_dicts(
+            r.stp_sevens_by_player for r in reports),
+        bty_entries=sum(r.bty_entries for r in reports),
+        bty_goals=sum(r.bty_goals for r in reports),
+        shtp_turnovers_by_player=_merge_count_dicts(
+            r.shtp_turnovers_by_player for r in reports),
+        pptp_turnovers_by_player=_merge_count_dicts(
+            r.pptp_turnovers_by_player for r in reports),
+        kpl_layers_by_player=_merge_count_dicts(
+            r.kpl_layers_by_player for r in reports),
+        sct_windows=sum(r.sct_windows for r in reports),
+        sct_conceded=sum(r.sct_conceded for r in reports),
+        msh_fh_dist_m=max((r.msh_fh_dist_m for r in reports),
+                          default=0.0),
+        msh_sh_dist_m=max((r.msh_sh_dist_m for r in reports),
+                          default=0.0),
+        rbcp_rebounds_by_player=_merge_count_dicts(
+            r.rbcp_rebounds_by_player for r in reports),
+        sup_chains_by_pair=_merge_count_dicts(
+            r.sup_chains_by_pair for r in reports),
+        svmp_misses_by_player=_merge_count_dicts(
+            r.svmp_misses_by_player for r in reports),
+        sfd_fh_sprints=sum(r.sfd_fh_sprints for r in reports),
+        sfd_fh_min=round(sum(r.sfd_fh_min for r in reports), 1),
+        sfd_sh_sprints=sum(r.sfd_sh_sprints for r in reports),
+        sfd_sh_min=round(sum(r.sfd_sh_min for r in reports), 1),
+        clk_lead=sum(r.clk_lead for r in reports),
+        clk_lead_sum_s=round(sum(r.clk_lead_sum_s for r in reports), 1),
+        clk_base=sum(r.clk_base for r in reports),
+        clk_base_sum_s=round(sum(r.clk_base_sum_s for r in reports), 1),
+        rpn_saves=sum(r.rpn_saves for r in reports),
+        rpn_punished=sum(r.rpn_punished for r in reports),
+        rtp_shots=sum(r.rtp_shots for r in reports),
+        rtp_punished=sum(r.rtp_punished for r in reports),
+        rbc_rebounds_by_role=_merge_count_dicts(
+            r.rbc_rebounds_by_role for r in reports),
+        spk_attacks=sum(r.spk_attacks for r in reports),
+        spk_top=sum(r.spk_top for r in reports),
+        spk_figures=sum(r.spk_figures for r in reports),
+        gkc_clutch_faced=sum(r.gkc_clutch_faced for r in reports),
+        gkc_clutch_saves=sum(r.gkc_clutch_saves for r in reports),
+        gkc_rest_faced=sum(r.gkc_rest_faced for r in reports),
+        gkc_rest_saves=sum(r.gkc_rest_saves for r in reports),
+        sht_turnovers_by_role=_merge_count_dicts(
+            r.sht_turnovers_by_role for r in reports),
+        rus_after=sum(r.rus_after for r in reports),
+        rus_after_sum_s=round(sum(r.rus_after_sum_s for r in reports), 1),
+        rus_base=sum(r.rus_base for r in reports),
+        rus_base_sum_s=round(sum(r.rus_base_sum_s for r in reports), 1),
+        rtt_shots=sum(r.rtt_shots for r in reports),
+        rtt_sum_s=round(sum(r.rtt_sum_s for r in reports), 1),
+        rtt_slow=sum(r.rtt_slow for r in reports),
+        rcr_frames_by_role=_merge_count_dicts(
+            r.rcr_frames_by_role for r in reports),
+        rcr_home_by_role=_merge_count_dicts(
+            r.rcr_home_by_role for r in reports),
+        spc_seconds_by_role=_merge_count_dicts(
+            r.spc_seconds_by_role for r in reports),
+        spc_def_seconds_by_role=_merge_count_dicts(
+            r.spc_def_seconds_by_role for r in reports),
+        tof_timeouts=sum(r.tof_timeouts for r in reports),
+        tof_shots_by_role=_merge_count_dicts(
+            r.tof_shots_by_role for r in reports),
+        spf_figures=sum(r.spf_figures for r in reports),
+        spf_telegraphed=sum(r.spf_telegraphed for r in reports),
+        spf_telegraphed_by_role=_merge_count_dicts(
+            r.spf_telegraphed_by_role for r in reports),
+        spo_figures=sum(r.spo_figures for r in reports),
+        spo_telegraphed=sum(r.spo_telegraphed for r in reports),
+        spo_telegraphed_by_role=_merge_count_dicts(
+            r.spo_telegraphed_by_role for r in reports),
+        rpf_covered_shots_by_role=_merge_count_dicts(
+            r.rpf_covered_shots_by_role for r in reports),
+        rpf_covered_goals_by_role=_merge_count_dicts(
+            r.rpf_covered_goals_by_role for r in reports),
         rsp_shots_by_role=_merge_count_dicts(
             r.rsp_shots_by_role for r in reports),
+        rsh_shots_by_role=_merge_count_dicts(
+            r.rsh_shots_by_role for r in reports),
+        rsh_left_by_role=_merge_count_dicts(
+            r.rsh_left_by_role for r in reports),
         rsp_kmh_sum_by_role=_merge_count_dicts(
             r.rsp_kmh_sum_by_role for r in reports),
         rst_shots_by_role=_merge_count_dicts(
@@ -14373,6 +22697,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         stt_int=sum(r.stt_int for r in reports),
         ccq_shots=sum(r.ccq_shots for r in reports),
         ccq_sum_xga=sum(r.ccq_sum_xga for r in reports),
+        # Mezszámonként ÖSSZEADJUK a meccs-szavazatokat: ami több
+        # meccsen visszatér, az nem napi forma.
+        ptf_press=_merge_counts(reports, "ptf_press"),
+        ptf_clutch=_merge_counts(reports, "ptf_clutch"),
         clo_attacks=sum(r.clo_attacks for r in reports),
         clo_goals=sum(r.clo_goals for r in reports),
         fbc_breaks=sum(r.fbc_breaks for r in reports),
@@ -14474,6 +22802,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         lhs_trail_sum_m=round(sum(r.lhs_trail_sum_m for r in reports), 1),
         attack_outcomes=_merge_attack_outcomes(reports),
         gk_role_saves=_merge_gk_role_saves(reports),
+        pto_total=sum(r.pto_total for r in reports),
+        pto_unforced=sum(r.pto_unforced for r in reports),
         tc_turnovers=sum(r.tc_turnovers for r in reports),
         tc_clustered=sum(r.tc_clustered for r in reports),
         tc_clusters=sum(r.tc_clusters for r in reports),
@@ -14491,6 +22821,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sbl_block_waves=sum(r.sbl_block_waves for r in reports),
         hold_players=_merge_hold_players(reports),
         hold_fps=(reports[0].hold_fps if reports else 25.0),
+        carry_players=_merge_carry_players(reports),
         fsw_labels=_merge_fsw_labels(reports),
         fsw_attacks=sum(r.fsw_attacks for r in reports),
         fsw_pairs=sum(r.fsw_pairs for r in reports),
@@ -15016,11 +23347,49 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
     return out
 
 
+def scouting_caveat(rep: ScoutingReport) -> Optional[str]:
+    """Egy mondat arról, mennyire hihető a jelentés ALAPANYAGA (vagy None).
+
+    A meccsterv az, ami alapján az edző dönt: kit állít a beállóra, hol
+    fogja a legjobb lövőt, mikor kér időt. Ha a mögötte lévő
+    feldolgozás gyenge volt (a nézőtér is a pályára került, kevés a
+    labda-észlelés), akkor a terv NEM a másik csapatról szól, hanem a
+    zajról — és ezt nem szabad elhallgatni, mert a jelentés minden
+    mondata magabiztosan fogalmaz (így is kell egy edzői jelentést
+    írni).
+
+    A több meccsből álló jelentésnél a gyenge feldolgozások SZÁMÁT is
+    kimondjuk: 5 meccsből 1 gyenge más helyzet, mint 5-ből 5.
+    None, ha nincs adat (régi jelentés) vagy minden feldolgozás jó.
+    """
+    from .quality import LOW_SCORE_WARN
+    if rep.q_matches <= 0:
+        return None                      # régi jelentés: nem állítunk semmit
+    if rep.q_weak_matches <= 0:
+        return None                      # minden feldolgozás rendben volt
+    atlag = rep.q_score_sum / rep.q_matches
+    if rep.q_matches == 1:
+        return (f"FIGYELEM: a jelentés mögötti feldolgozás gyenge volt "
+                f"({atlag:.0f}/100 — a küszöb {LOW_SCORE_WARN}). A lenti "
+                "megállapítások ezért nem a csapatról szólnak, hanem a "
+                "mérés zajáról. Nézd meg a meccs minőség-jelentését (mi a "
+                "teendő), javítsd a kalibrációt, és futtasd újra — csak "
+                "azután építs erre meccstervet.")
+    return (f"FIGYELEM: a jelentés {rep.q_matches} meccsből épült, ebből "
+            f"{rep.q_weak_matches} feldolgozása gyenge volt (átlag "
+            f"{atlag:.0f}/100, a küszöb {LOW_SCORE_WARN}). A gyenge "
+            "meccsek számai a mérés zajáról szólnak, és ugyanúgy "
+            "beleszámítanak az összegzésbe — a lenti megállapításokat "
+            "ennek tudatában olvasd.")
+
+
 def report_to_dict(rep: ScoutingReport) -> dict:
     """A jelentés JSON-barát szótárrá alakítása (az API-hoz) — a szöveges
-    narratívával kiegészítve."""
+    narratívával és a minőség-figyelmeztetéssel kiegészítve."""
     d = asdict(rep)
     d["narrative"] = scouting_narrative(rep)
+    # Mennyire hihető a jelentés alapanyaga (None = nincs mit mondani).
+    d["caveat"] = scouting_caveat(rep)
     return d
 
 
@@ -15057,6 +23426,37 @@ _TREND_METRICS = [
     # Kezdés: milyen arányban szerzik a meccs első gólját (jó kezdés =
     # gyorsan a saját tempójukat kényszerítik rá az ellenfélre = jobb).
     ("open_first_yes", "Nyitógól-arány", "", True, True),
+]
+
+
+# Ennyi mért lövés kell egy időszakban ahhoz, hogy a származtatott
+# befejezés-mutatót értelmezzük (a poszt-lencse küszöbe posztonként 4;
+# csapat-szinten ennél többet várunk el).
+TREND_DERIVED_MIN_SHOTS = 8
+
+
+def _avg_from_sums(counts: dict, sums: dict) -> Optional[float]:
+    """Súlyozott átlag két darabszám/összeg szótárból, vagy None.
+
+    A poszt-lencse mezői SZÁNDÉKOSAN darabszám és összeg formában
+    állnak (hogy meccsek közt pontosan összegződjenek) — az átlag
+    ebből mindig frissen számolódik.
+    """
+    n = sum((counts or {}).values())
+    if n < TREND_DERIVED_MIN_SHOTS:
+        return None
+    return sum((sums or {}).values()) / n
+
+
+# Származtatott trend-mutatók: nem egyetlen mezőből jönnek, hanem a
+# poszt-lencse darabszám/összeg szótáraiból. (mező-kulcs, címke,
+# egység, jobb-e ha nő, számoló) — a számoló None-t ad, ha az időszak
+# nem mérhető, és akkor a mutató KIMARAD (nem látszik nulla-esésnek).
+_TREND_DERIVED = [
+    ("shot_distance_m", "Befejezés-távolság", " m", False,
+     lambda r: _avg_from_sums(r.rsd_shots_by_role, r.rsd_dist_sum_by_role)),
+    ("shot_power_kmh", "Lövéserő", " km/h", True,
+     lambda r: _avg_from_sums(r.rsp_shots_by_role, r.rsp_kmh_sum_by_role)),
 ]
 
 
@@ -15098,6 +23498,33 @@ def trend_report(older: ScoutingReport, newer: ScoutingReport) -> dict:
         if better is not None and abs(delta) / base >= 0.10:
             word = "Javult" if better else "Romlott"
             summary.append(f"{word}: {label.lower()} {a:.1f}{unit} → {b:.1f}{unit}.")
+
+    # Származtatott mutatók (poszt-lencse): a befejezés HELYE és EREJE
+    # csapat-szinten. Ezek szezon-kérdések ("közelebbről fejezünk-e be,
+    # mint ősszel?"), és a dict-alapú tárolás miatt nem fértek be a
+    # mező-alapú listába.
+    for key, label, unit, up_is_better, calc in _TREND_DERIVED:
+        try:
+            a = calc(older)
+            b = calc(newer)
+        except Exception:
+            continue
+        if a is None or b is None:
+            continue  # valamelyik időszak nem mérhető — nem találgatunk
+        delta = b - a
+        better = None
+        if abs(delta) > 1e-9:
+            better = (delta > 0) == up_is_better
+        metrics.append({
+            "metric": key, "label": label, "unit": unit,
+            "older": round(a, 2), "newer": round(b, 2),
+            "delta": round(delta, 2), "better": better,
+        })
+        base = max(abs(a), 1e-9)
+        if better is not None and abs(delta) / base >= 0.10:
+            word = "Javult" if better else "Romlott"
+            summary.append(
+                f"{word}: {label.lower()} {a:.1f}{unit} → {b:.1f}{unit}.")
 
     if not summary:
         summary.append("Nincs jelentős változás a két időszak között.")

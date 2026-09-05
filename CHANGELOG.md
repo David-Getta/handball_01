@@ -3,7 +3,6375 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.24 óta)
+## Kiadatlan (a v0.1.100 óta)
+
+- **Emberszerű figurák a böngészős 3D/VR nézetben is** (Böngészős 3D /
+  VR): a henger+gömb bábuk helyett fej hajjal, mez, nadrág, karok és
+  lábak (forgáspontos végtagok, lépés-lendítés a sebességgel), a
+  haladás irányába fordulva, talaj-árnyékkal és fénnyel — ugyanaz a
+  látvány, mint az appbeli 3D pályán, VR-headsetben is.
+
+- **Emberszerű játékosok a 3D pályán** (3D pálya, a demóban is): a
+  "nyalóka" (vonal + korong) helyett figurák — fej hajjal, mez a
+  csapatszínben, nadrág, karok és lábak —, amelyek a haladás irányába
+  fordulnak, a sebességgel arányosan lépnek és lendítenek (álló játékos
+  a kamera felé fordul), talaj-árnyékkal, a mezszám a mezen. A testrészek
+  a kamerától távolabbi oldallal kezdve rajzolódnak, hogy a figura
+  takarja saját magát. Felhasználói kérésre.
+
+- **Az önkorrekció a vízszintes svenket is elkapja** (feldolgozás): a
+  finomítás küszöbe 0,5-re nőtt — a vízszintes svenk csak a függőleges
+  vonalakat viszi el, a vízszintesek helyben maradnak, így 15–20 px-es
+  elcsúszásnál is 0,35 körüli volt a mért illeszkedés, és a korrekció
+  nem indult el. A javulás-feltétel (≥ 0,15) továbbra is véd a
+  fölösleges igazítástól. A mérés + korrekció lépése egy, a követővel
+  együtt tesztelt függvény (a feldolgozó azt hívja) — a csendes hiba
+  kizárva.
+
+- **A könyvtár-sor jelzi az elcsúszott kalibrációt** (kezdőlap): ha a
+  feldolgozás alatt mért illeszkedés valahol a küszöb alá esett, a
+  meccs sorában egy jelzés mutatja (súgóval: hány százalék, és hogy a
+  Kalibráció ellenőrzése mutatja meg, hol) — nem kell minden meccset
+  megnyitni, hogy kiderüljön.
+
+- **A Kalibráció ellenőrzése ablak kérés nélkül mondja a számokat**
+  (meccs-nézet): a feldolgozás alatt mért illeszkedés (hány kockán,
+  átlag, leggyengébb és mikor) és a horgonyzás-arány a meccs mellől
+  azonnal látszik — a nyolc-kockás újramérés alatta fut, a mostani
+  állapotról.
+
+## v0.1.100 — kiadva (2026-09-05)
+
+> Kiadás-jegyzet: ÖNKORREKCIÓ a pályavonalak alapján — ha a
+> visszarajzolt vonal nem ül a valódin, a motor ráigazítja a
+> kamera-mátrixot a pálya saját vonalaihoz (a nem-horgonyzott
+> kockákon); egy kattintás a Kalibráció ellenőrzéséhez a
+> minőség-panelről; a diagnosztika az illeszkedést is viszi.
+
+- **Az önkorrekció gyors és pontos** (feldolgozás): a vonal menti
+  mintavétel numpy-ban megy (egy 4K-s kockán ~7000 pont, ~130 jelölt
+  egy másodperc alatt), és a finom lépés élesebb él-térképen keresi a
+  plató közepét — a talált eltolás ±3 px-en belül a valódi.
+
+- **Önkorrekció a pályavonalak alapján** (feldolgozás): ha egy
+  kulcs-kockán a visszarajzolt pályavonal nem ül a kép valódi vonalain
+  (illeszkedés 0,5 alatt), a motor ±24 px-es eltolás-rácson megkeresi,
+  hol ülne a legjobban, és ha legalább 0,15-tel javul, ráigazítja a
+  kamera-mátrixot — a követés innen folytatja. A pálya saját vonalai a
+  legmegbízhatóbb "távpontok": nem mozognak, és pontosan tudjuk, hol
+  kell lenniük. Horgonyzott kockához nem nyúl (az abszolút mérés
+  erősebb), csak a lánccal vitt vagy tartott kockákat igazítja. A
+  feldolgozás-napló mondja, hány kockán korrigált.
+
+- **Egy kattintás a kalibráció ellenőrzéséhez a minőség-panelről**
+  (meccs-nézet): ha a jelentés azt mondja, a visszarajzolt pályavonal
+  valahol nem ül a valódin, a panel alján "Kalibráció ellenőrzése" gomb
+  nyitja a képeket — nem kell az eszköztárban keresni.
+
+- **A diagnosztika-JSON a kalibráció-illeszkedést is viszi**
+  (diagnosztika): a "calib_fit" mező (átlag, minimum, a leggyengébb kocka
+  ideje) — a fejlesztő így a képernyőkép nélkül látja, tartotta-e a
+  kalibráció a meccs alatt.
+
+## v0.1.99 — kiadva (2026-09-05)
+
+> Kiadás-jegyzet: a kalibráció-illeszkedés SZÁMOKBAN — a motor a
+> feldolgozás alatt méri, ülnek-e a visszarajzolt pályavonalak a
+> kép valódi vonalain, és a minőség-jelentés kimondja, hol csúszik
+> el; gyorsabb pásztázás-követés 4K-n; a diagnosztika a kamera
+> útját is viszi.
+
+- **A feldolgozás magától méri, tartja-e a kalibráció** (feldolgozás +
+  minőség-jelentés): a kalibráció-illeszkedés a feldolgozás alatt is
+  lefut (2 mp-enként, a kulcs-kockákon), az eredmény a meccs mellé
+  kerül, és a minőség-jelentés kimondja, ha a visszarajzolt pályavonal
+  valahol nem ül a kép valódi vonalain — a leggyengébb kocka idejével
+  (az átlag elrejtené a meccs közepén elcsúszó követést) és teendővel
+  (Kalibráció ellenőrzése, majd sarkok vagy kameraállás). Eddig ehhez a
+  felhasználónak kellett a gombra kattintania.
+
+- **Kalibráció-illeszkedés számokban** (motor + végpont + meccs-nézet):
+  a szemmel-ellenőrzés géppel — a visszarajzolt vonalak mentén a motor
+  megméri, mennyire ül a rajz a kép valódi vonalain (él-erősség a vonal
+  sávjában a kép alapszintjéhez képest, 0..1), nyolc egyenletesen
+  elosztott kockán. A "Kalibráció ellenőrzése" ablak mutatja az átlagot
+  és a leggyengébb kocka idejét: ha az eleje jó, de a közepe gyenge, a
+  pásztázás-követés csúszott el; ha már az elején gyenge, a 4 sarok
+  rossz.
+
+- **A finomhangolás-útmutató az appbeli utat írja le** (docs/FINETUNE.md):
+  a három lépés gombokkal — gyűjtés (aktív tanulás), Címkéző, Tanítás
+  indítása mérőszámmal és védőhálóval —, a CLI-út tartalékként.
+
+- **Gyorsabb pásztázás-követés 4K-s videón** (feldolgozás): a kamera-
+  mozgás becslése eddig a teljes felbontású képen kereste a
+  sarokpontokat minden kockán — 4K-n ez a feldolgozás jelentős részét
+  vitte. Mostantól legfeljebb 1280 px széles munkaképen fut (a
+  mátrix visszaskálázva a teljes felbontásra), ugyanazzal a
+  pontossággal: a svenk mértéke nem a pixel-számon múlik.
+
+- **A kalibráció-ellenőrzés a jelenlegi kockát is mutatja, a
+  diagnosztika a kamera útját** (meccs-nézet + diagnosztika + doksi): a
+  "Kalibráció ellenőrzése" ablak első képe az éppen nézett kocka, utána
+  a meccs eleje/közepe/vége; a diagnosztika-JSON "camera_path" mezője
+  megmondja, mekkora svenk volt egyáltalán (legnagyobb és záró eltolás
+  px-ben, kulcs-kockák száma) — az alacsony horgonyzás-arány mást
+  jelent alig mozduló és 800 px-t forduló kameránál. A docs/PASZTAZAS.md
+  leírja, hogyan olvasd a rárajzolt vonalakat.
+
+## v0.1.98 — kiadva (2026-09-04)
+
+> Kiadás-jegyzet: a kalibráció a SZEMMEL ellenőrizhető — a
+> pályavonalak visszarajzolva a videó kockáira; a bekalibrált
+> képkockák kötelező horgonyok a kamera-követésben; esemény-ugrás
+> a böngészős 3D/VR-ben is; egy kattintás a bennmaradt bemutatás
+> levágásához.
+
+- **Kalibráció ellenőrzése a szemmel — vonalak a videón** (feldolgozás +
+  motor + meccs-nézet): a feldolgozás mostantól elteszi a kalibráció
+  homográfiáját és a kamera-mozgás ritkított sorát (2 mp-enként), és a
+  meccs-nézet új gombja a pályavonalakat (alapvonal, felező, 6 m-es
+  kapuelőtér, kapuk) visszarajzolja a videó három kockájára — eleje,
+  közepe, vége. A rajzolt vonalnak a valódira kell ülnie; ahol elcsúszik,
+  ott a kalibráció vagy a pásztázás-követés a hibás. Ez a közvetlen
+  válasz a "tényleg tartja-e a kalibráció a svenk alatt" kérdésre. Régi
+  mentésen (geometria nélkül) a gomb ezt őszintén mondja.
+
+- **A feldolgozás üzenete mondja a horgonyzás-arányt** (Feldolgozások):
+  a "követés kész" lépés mostantól azt is kiírja, a kockák hány
+  százalékán sikerült a kamera-mozgást a kalibrált képhez mérni —
+  svenkelő kameránál ebből látszik előre, mennyire hihetők a helyek.
+
+- **Egy kattintás a bennmaradt bemutatás levágásához** (meccs-nézet,
+  minőség-panel): ha a jelentés megtalálta a meccs kezdetét ("a felvétel
+  eleje nem-játéknak látszik"), a panel alján "Levágás a javaslat
+  szerint" gomb nyitja a ✂ párbeszédet — a javaslattal előtöltve. Nem
+  kell a könyvtárba vagy az eszköztárba menni érte.
+
+- **Esemény-ugrás és jelenet-felirat a böngészős 3D/VR nézetben is**
+  (Böngészős 3D / VR): a beágyazott oldal ⏮/⏭ gombjaival (és a [ / ]
+  billentyűkkel) a következő/előző gólra, lövésre vagy eladásra ugrik a
+  lejátszás — a jelenet előtt 4 másodperccel —, és a jelenet közben
+  inzert mondja, mi történik ("GÓL — Kiel"). Ugyanaz, mint az appbeli
+  3D pályán; VR-headsetben is működik (az oldal maga hordozza az
+  eseményeket).
+
+- **A diagnosztika-JSON viszi a horgonyzás-arányt** (diagnosztika +
+  doksi): a svenkelő kameránál a fejlesztő első kérdése, hány kockán
+  sikerült a kalibrált képhez mérni — a `pan_anchor_pct` mostantól a
+  diagnosztika-csomagban is ott van (régi mentésen null). A pásztázás-
+  követés működése és a pontos kalibráció tippjei egy új lapon:
+  docs/PASZTAZAS.md.
+
+- **A bekalibrált képkockák kötelező horgonyok** (feldolgozás): a
+  pásztázás-követés a kalibrált kockákat — egy vagy kettő, akár külön
+  képkockán bejelölve — a távolság-szabálytól függetlenül horgonynak
+  veszi, így pont azokra a nézetekre lesz a legpontosabb a visszamérés,
+  amiket a felhasználó bejelölt. Felhasználói javaslatra ("a kettő
+  bekalibrált képkockát hasonlítsa össze a futó képkockákkal").
+
+## v0.1.97 — kiadva (2026-09-04)
+
+> Kiadás-jegyzet: a kamera svenkelését a motor mostantól a
+> KALIBRÁLT képhez méri vissza (horgony), nem csak kockáról kockára
+> halmoz — a pásztázás alatt nem csúsznak el a helyek; a tanítás
+> csak a jobb modellt állítja élesbe; a klip-hiba megmondja, mit
+> tegyél.
+
+- **A minőség-jelentés szól, ha a kamera-mozgást ritkán sikerült a
+  kalibrált képhez mérni** (feldolgozás + minőség-jelentés): a
+  horgonyzás aránya a meccs mellé kerül, és 8% alatt a jelentés
+  kimondja, hogy a pásztázás alatt a helyek elcsúszhattak — teendővel
+  (a kalibrációt az ELSŐ feldolgozott kockára, a meccs tipikus
+  kameraállásában vedd fel). Régi mentésen és pásztázás-követés nélkül
+  nem állít semmit.
+
+- **Pásztázás-követés horgonnyal: a kamera-mozgás a KALIBRÁLT képhez
+  mérve** (feldolgozás): a kamera jobbra-balra svenkelését eddig csak
+  kockáról kockára követtük, és a lépések hibája összeadódott — mire a
+  kamera visszafordult a kalibrált állásba, a becslés már elcsúszott, a
+  játékosok "odébb kerültek" a felülnézeten. Mostantól a kalibrált
+  alap-kocka jellemzőpontjait eltároljuk, és a futó kockát rendszeresen
+  közvetlenül ehhez illesztjük (abszolút mérés, nem halmozódik); a
+  távolra elforduló nézetekből kulcs-horgonyok készülnek, a lánc csak
+  áthidal, ahol nincs elég egyezés. A mozgó embereket (detektált
+  dobozok) mindkét becslő kimaszkolja: csak az álló háttér adja a
+  kamera mozgását. A feldolgozás-napló mondja, hány kockán horgonyzott.
+  Felhasználói javaslatra ("a bekalibrált képkockákon talált
+  távpontokat keresse a meccsen").
+
+- **A tanítás védőhálója: csak a jobb modell áll élesbe** (motor +
+  tanítás-állapot + címkéző): a tanítás eddig vakon lecserélte a
+  modellt — kevés vagy pontatlan címkéből rosszabb is lehetett, és a
+  következő feldolgozás azzal ment. Mostantól a tanítás végén a MOSTANI
+  modellt ugyanazon a validációs halmazon méri, és a labda AP50 dönt:
+  ha az új nem rosszabb, élesbe áll; ha rosszabb, a mostani marad, és
+  az üzenet megmondja, miért ("labda mAP50: 48% az eddigi 55% helyett
+  — rosszabb lett, a mostani modell marad"). Első tanításnál (az
+  általános modell nem mérhető a 2-osztályos halmazon) élesbe áll.
+
+- **A "nem készült klip" hiba megmondja, miért és mit tegyél**
+  (klipvágás): eddig "nincs a szűrőnek megfelelő esemény, vagy a videó
+  nem olvasható" — két, egymástól nagyon különböző ok egy mondatban.
+  Mostantól külön szól: ha a szűrő nem illik semmire, felsorolja, mi
+  VAN a meccsen ("a szűrőnek (gól) egyetlen felismert esemény sem felel
+  meg — ami van: lövés: 37, labdaeladás: 12") és mit lehet tenni
+  (lövés-szűrő, vagy a hiányzó gólok javítása a meccs-elemzőben); ha a
+  jelenetek megvoltak, de a videó nem olvasható, azt mondja.
+
+## v0.1.96 — kiadva (2026-09-02)
+
+> Kiadás-jegyzet: esemény-ugrás és jelenet-felirat a 3D pályán
+> belül, és a meccs-nézet minden kattintása a jó kockára ugrik
+> az utólag ✂ vágott meccsen is.
+
+- **Vágott meccsen is a jó kockára ugrik a meccs-nézet** (meccs-elemző):
+  az esemény-, jegyzet- és idővonal-kattintás, a gól-felvétel és a
+  jegyzet-mentés eddig a kocka lista-INDEXÉT vette videó-időnek — az
+  utólagos ✂ vágás után (amikor a lista elejéről kockák hiányoznak, de
+  az időpontok maradnak) rossz kockára, jellemzően a meccs végére
+  ugrott. Mostantól minden ugrás és összehasonlítás a kocka
+  videó-idejéből (t címke) megy, az idő-kijelzés és az esemény-jelölők
+  is; a jegyzetek és a javítások a valódi videó-időt kapják.
+
+- **Esemény-ugrás a 3D pályán belül** (3D pálya): a lejátszó-sáv új
+  ⏮ / ⏭ gombjaival a következő/előző gólra, lövésre vagy eladásra
+  ugrik a nézet — a jelenet előtt 4 másodperccel, TV-kamerával,
+  lejátszva —, és a jelenet közben a képen egy inzert mondja, mi
+  történik ("GÓL — Kiel"). Eddig ehhez vissza kellett járni a
+  meccs-nézet Események listájához. Javítás mellé: a beugrás és az
+  idő-kijelzés a kocka videó-idejéből számol, így utólag vágott
+  meccsen is a jó jelenetre visz.
+
+## v0.1.95 — kiadva (2026-09-01)
+
+> Kiadás-jegyzet: a ✂ vágás magától megtalálja a meccs kezdetét, a
+> minőség-jelentés kimondja a bennmaradt bemutatást, a tanítóadat-
+> gyűjtés a labda-kiesésekből is tanul, a tanítás megmondja,
+> megérte-e, a Feldolgozások képernyő mutatja, mikor készült egy
+> futás — és új réteg a labdavezetés-táv (504 réteg).
+
+- **Labdavezetés-táv** (motor + elemzés + meccs-csomag + edzői
+  összefoglaló + felderítés + meccsterv + edzés-fókusz + kliens-csempe):
+  KI mennyit MOZOG a labdával. A labdatartás azt méri, meddig van
+  valakinél a labda — ez azt, hogy közben hány métert cipeli
+  (követés-ugrás kiszűrve). Edzői olvasat: az ellenfél labdahordója a
+  leszúrás és a halászás célpontja — futó labdásnál a labda elvehető,
+  és nála lassul a szervezés; saját oldalon a "vidd kevesebbet, add
+  korábban" névre szólóan (új edzés-szabály és meccsterv-páros).
+
+- **A lezárt feldolgozás mutatja, mikor készült** (Feldolgozások
+  képernyő): a lezárt sorokon eddig csak a név állt — több azonos nevű
+  futás megkülönböztethetetlen volt. Mostantól ott a befejezés ideje
+  és a futás hossza ("aug. 31. 14:22 · 42 perc feldolgozás").
+  Felhasználói kérésre.
+
+- **A tanítás megmondja, megérte-e** (motor + tanítás-állapot végpont
+  + címkéző): a tanítás végén eddig csak annyi látszott, hogy "kész" —
+  mostantól a mérőszámok is jönnek ("Találat-pontosság (mAP50): 72% —
+  a labdára 61%"). A labda külön sora a lényeg: kézilabdánál az a szűk
+  keresztmetszet, és így látszik, hogy a következő címkézés-kör hova
+  érdemes.
+
+- **Aktív tanulás a tanítóadat-gyűjtésben** (motor + gyűjtő végpont +
+  gyűjtés-párbeszéd): a minták fele mostantól onnan jön, ahol a
+  MOSTANI felismerés elvesztette a labdát (a tárolt követés
+  labda-kieséseinek közepéről) — pont az ilyen kockák kézi címkéje
+  tanítja a legtöbbet a modellt. A másik fele egyenletes marad, hogy
+  az adathalmaz változatos legyen; egy kiesés-szakaszból legfeljebb
+  egy minta jön (az egymás melletti kockák majdnem azonosak).
+
+- **A minőség-jelentés kimondja a bennmaradt bemutatást** (motor +
+  minden felület, ahol a jelentés látszik): a meccs-ablak-felismerés
+  a minőség-jelentésben a tárolt követésen is lefut, és ha a felvétel
+  elején 2 percnél hosszabb nem-játék rész maradt ("kb. 9:09-ig
+  bemutatás/bemelegítés lehet az elemzésben"), figyelmeztet — az
+  első teendő pedig a ✂ előtöltött javaslatára mutat. A régi motorral
+  elemzett meccseken (mint a Kiel-eset 549 másodperce) eddig SEMMI
+  nem szólt erről.
+
+- **A vágás-párbeszéd előtölti a meccs kezdetét** (motor + API +
+  könyvtár ✂ + meccs-nézet ✂): a meccs-ablak-felismerés mostantól a
+  TÁROLT követésen is lefut — régi motorral elemzett meccsen is —, és
+  a ✂ párbeszéd megnyitásakor előtölti a javasolt kezdést/befejezést
+  ("A felismerés szerint a meccs kb. 9:09-kor kezdődik"). A
+  felhasználónak csak ellenőriznie és jóváhagynia kell, nem kell az
+  Események listából kikeresnie a kezdés másodpercét. Ha a felismerés
+  nem talál egyértelmű kezdést, ezt őszintén kiírja, és marad a kézi
+  megadás.
+
+## v0.1.94 — kiadva (2026-08-31)
+
+> Kiadás-jegyzet: a fél-frissült telepítés magától gyógyul. Ha a
+> frissítés után a régi motor-folyamat életben maradt (ebből jött az
+> "app és motor verziója eltér" sáv, amit az újratelepítés sem vitt
+> el), a v0.1.94 indítója felismeri, leállítja és a friss motort
+> hozza — se újratelepítés, se gép-újraindítás nem kell hozzá.
+
+- **A fél-frissült telepítés magától gyógyul** (motor + indító +
+  kezdőlap): frissítés után a RÉGI motor-folyamat életben maradhat, és
+  az app ahhoz csatlakozott — ebből jött a verzió-eltérés sáv
+  újratelepítés után is (valós eset: app v0.1.93, motor v0.1.89). Az
+  indító mostantól a talált motor verzióját is nézi: eltérésnél
+  leállítja (az új /shutdown végponttal; a régi, végpont előtti
+  motoroknál a portot fogó folyamat leállításával), és a beépített
+  motort hozza. A sáv új "Motor újraindítása" gombja ugyanezt kézzel
+  is elindítja — újratelepítés és gép-újraindítás nélkül.
+
+## v0.1.93 — kiadva (2026-08-31)
+
+> Kiadás-jegyzet: a TELJES pontosság-lánc az appban. Gyűjtés a saját
+> meccseidből, átnézés a beépített címkézőben, tanítás egy gombbal —
+> a kész modell magától élesbe áll, és a következő feldolgozás már a
+> kézilabdára hangolt felismeréssel megy.
+
+- **Tanítás egy gombbal — a finomhangolás-lánc vége is az appban**
+  (Címkéző → "Tanítás indítása"): az átnézett képekből a modell
+  tanítása eddig terminál-parancs volt. Mostantól a címkézőből indul,
+  kör-szám csúszkával és őszinte figyelmeztetéssel (órákig tarthat,
+  videokártya nélkül különösen); a háttérben fut, a végén a kész
+  modell MAGÁTÓL élesbe áll (a régi .bak néven megmarad), és a
+  következő feldolgozás már azzal megy. Ezzel a teljes
+  pontosság-lánc — gyűjtés → címkézés → tanítás → éles — az appból
+  végigjárható.
+
+- **Beépített címkéző — a tanítóadat átnézése az appban** (kezdőlap
+  → Továbbiak → Címkéző): a finomhangolás-lánc középső lépése eddig
+  külső eszközt kért (CVAT/LabelImg — regisztráció, import, export).
+  Mostantól az appban megy: húzással új doboz (alapból LABDA — az a
+  leggyakoribb pótlás), koppintással kijelölés (a legkisebb találó
+  doboz nyer, így a labda a játékos-doboz belsejében is elérhető),
+  osztály-váltás és törlés egy gombbal; a lista a 0 dobozos (gyanús)
+  képeket kiemeli, a mentés szabványos YOLO-sorokat ír — a kimenet
+  külső eszközzel is kompatibilis marad.
+
+- **Tanítóadat gyűjtése egy gombbal — a pontosság következő szintje**
+  (kezdőlap → Továbbiak): a felismerés a SAJÁT felvételeken
+  finomhangolt detektorral lesz igazán pontos (docs/FINETUNE.md) — az
+  első lépés, az előcímkézett képgyűjtés, eddig csak terminálból ment.
+  Mostantól pipálós lista a könyvtár meccseiből + mintaszám-csúszka; a
+  gyűjtés a háttérben fut, a végén az app megmondja, hány kép készült,
+  a labda a képek hány százalékán van, és mi a következő lépés
+  (címke-átnézés CVAT/LabelImg-ben, majd tanítás).
+
+## v0.1.92 — kiadva (2026-08-31)
+
+- **A böngészős 3D ott folytatja, ahol az appban tartasz** (3D
+  pálya): a "Böngészős 3D / VR" gomb átadja az aktuális pillanatot
+  (?t=mp), az oldal ott nyílik és rögtön játszik — és a cím
+  megosztható: ugyanaz a link ugyanazt a jelenetet hozza.
+
+## v0.1.91 — kiadva (2026-08-31)
+
+> Kiadás-jegyzet: az élő kalibrálásod két jelzésének javítása — a
+> mentés-gomb nem lóg le többé, és a sarok nyilakkal, képpontonként
+> finomítható, míg a rajzolt kapu ráül a valódira.
+
+- **A sarok nyilakkal finomítható** (kalibráció): "a kapu egy kicsit
+  el van csúszva" — az egérrel a hajszál-pontos igazítás kínszenvedés.
+  Az utoljára megfogott sarok mostantól a NYÍL-billentyűkkel
+  képpontonként tolható (Shift: nagyobb lépés), arany gyűrű mutatja,
+  melyik mozog, és a sáv súgó-sora tanítja: addig told, míg a rajzolt
+  kapu és a 6 m-es ív ráül a valódira.
+
+- **A kalibráció mentés-gombja mindig elérhető** (kalibráció): a jobb
+  oldali sáv alacsonyabb ablaknál lelógott, és a "térfél mentése" /
+  "Kész" gombra nem lehetett rákattintani — a felhasználó jelezte. A
+  sáv mostantól görgethető.
+
+- **A jegyzet-sorból is nyílik a 3D** (jegyzetek): a megjelölt
+  pillanat a térbeli nézetben is visszajátszható — a jegyzet az edző
+  legjobb jelenet-listája, a 3D gomb mostantól ott is ott van.
+
+- **A 3D felfedezhető** (súgók): a gyorsbillentyű-lista új "3D
+  pályán" csoportot kapott (WASD, R/F, Shift, Szóköz), az "Első
+  lépések" pedig új, 7. lépésben tanítja a 3D pályát — TV-kamera,
+  Játékos-kamera, jelenet-ugrás, böngészős VR.
+
+## v0.1.90 — kiadva (2026-08-31)
+
+- **"Megnézem 3D-ben" — az esemény-sorból a térbe** (meccs-elemző +
+  3D pálya): az Események lista minden sorának ⋮ menüjében új pont
+  visz a 3D pályára — a jelenet pár másodperccel az esemény előtt,
+  TV-kamerával indul, kattintás nélkül nézhető. A javítás-menü
+  (gól/lövés átminősítés, törlés) változatlanul a gól/lövés sorokon él.
+
+## v0.1.89 — kiadva (2026-08-30)
+
+> Kiadás-jegyzet: a 3D/VR-út két lépcsője. A Játékos-kamerával a meccs
+> egy kiválasztott játékos szemével nézhető végig, a "Böngészős 3D /
+> VR" gomb pedig WebXR-képes oldalt nyit — headsettel az "ENTER VR"
+> gombbal térbe lép, telepítés nélkül.
+
+- **Böngészős 3D / VR nézet — a headset-út első lépcsője** (3D
+  pálya): a "Böngészős 3D / VR" gomb a meccset WebXR-képes oldalként
+  nyitja meg a böngészőben (a motor szolgálja ki, three.js-szel) —
+  egér-nézelődés + WASD, lejátszás-tekerő, és VR-headsetben az "ENTER
+  VR" gombbal térbe lép, bal karral közlekedve. A követés-adat
+  ritkítva ágyazódik az oldalba (~6 kép/mp), egy teljes meccs is csak
+  pár MB. Internet kell hozzá (a three.js CDN-ről jön).
+
+- **Játékos-kamera a 3D pályán** (3D pálya): mezszám-választóval a
+  kamera egy kiválasztott játékost követ hátulról, a (simított)
+  haladási iránya mögül — a meccs az ő szemével nézhető végig. Bármely
+  kézi mozgás visszaadja a vezérlést; a TV-kamerával kölcsönösen
+  kizárják egymást. Mezszám-adat nélkül a választó nem jelenik meg.
+
+## v0.1.88 — kiadva (2026-08-30)
+
+> Kiadás-jegyzet: a visszajelzés-kör két eszköze. A minőség-párbeszéd
+> "Diagnosztika mentése" gombja egy fájlba gyűjti, amit a fejlesztőnek
+> érdemes elküldeni (videó nélkül) — és a 3D pályán megjött a
+> TV-kamera, ami magától követi a labdát.
+
+- **TV-kamera a 3D pályán** (3D pálya): egy gombbal a nézet magától
+  követi a labdát — sima, oldalvonali gépállás, mint egy közvetítésben;
+  bekapcsolva a lejátszás is elindul. Bármely kézi mozgás (WASD, egér,
+  nézet-gomb) visszaadja a vezérlést.
+
+- **Diagnosztika-mentés — visszajelzés képernyőkép helyett**
+  (meccs-elemző): a minőség-párbeszéd új "Diagnosztika mentése" gombja
+  egy gép által olvasható JSON-t ment — minőség-jelentés teendőkkel,
+  eseményszámok, feldolgozás-beállítások, forrás-térkép, felismert vs.
+  valódi eredmény. Videót, képet, személyes adatot nem tartalmaz; ezt
+  küldd a fejlesztőnek, és a hiba oka kiolvasható belőle.
+
+## v0.1.87 — kiadva (2026-08-30)
+
+- **A ✂ vágás a meccs-nézetből is elérhető, az eredmény-sáv a valódit
+  is mutatja** (meccs-elemző): az ál-eseményeket a felhasználó a
+  meccs-nézetben veszi észre — a ✂ mostantól ott is ott van, nem kell
+  a könyvtárba visszamenni. Az eredmény-sáv a felismert állás alatt a
+  megadott VALÓDI eredményt is mutatja (nagy eltérésnél kiemelve, a
+  minőség-jelentés küszöbével azonosan).
+
+- **A bal menü nem vágja le a verzió-sort** (felület): a menü hosszabb
+  lett (3D pálya), és alacsonyabb ablaknál az alsó "SPORT MACHINE ·
+  v…" felirat kilógott / félbevágva jelent meg. Az elemlista mostantól
+  görgethető, a verzió-sor alul marad.
+
+## v0.1.86 — kiadva (2026-08-30)
+
+> Kiadás-jegyzet: az első valódi-meccses visszajelzés (Kiel) köre. A
+> bennmaradt bemutatás mostantól utólag, a ✂ gombbal levágható —
+> nem kell újrafeldolgozni —, és megadható a jegyzőkönyvi végeredmény,
+> amihez az app méri a saját pontosságát.
+
+- **Utólagos vágás (✂) — a bemutatás nem gyárt több ál-eseményt**
+  (motor + könyvtár): a valódi Kiel-meccsen a felvétel elején kilenc
+  perc csapatbemutatás volt, az automatikus meccs-ablak nem találta a
+  kezdést, és a felismerés a felállásból lövéseket-eladásokat
+  gyártott. A felhasználó viszont TUDJA, mikor kezdődött a meccs — a
+  könyvtár-sor új ✂ gombjával utólag levágja (p:mp vagy másodperc,
+  a vége is megadható), és az elemzés újraszámol: nem kell órákig
+  újrafeldolgozni. A videófájlt nem érinti; az idő-hivatkozások
+  (jegyzet, javítás, kiállítás, klipvágás) nem csúsznak el. A
+  minőség-jelentés teendői (meccs-kezdet, sok hétméteres, sok eladott
+  labda) mostantól a ✂ gombra mutatnak első helyen.
+
+- **Valódi eredmény — a pontosság-tükör** (motor + könyvtár): a
+  csapatnév-párbeszédben megadható a jegyzőkönyvi végeredmény — az a
+  legerősebb mérce, ami csak létezik, és az edző fejből tudja. A
+  minőség-jelentés ehhez méri a felismerést: nagy eltérésnél kimondja
+  és teendőt ad (Események lista + kalibráció), ha pedig a felismert
+  eredmény a valódi TÜKÖRKÉPE, azt is név szerint — az a csapatcsere
+  esete, és a ⇄ gomb javítja. A könyvtár-sor a felismert mellett
+  mutatja a valódit, nagy eltérésnél kiemelve. Két-három gólnyi
+  eltérés nem riaszt: az normális felismerési szórás.
+
+## v0.1.85 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: megérkezett a 3D pálya — az elemzett meccs térben
+> bejárható, mint egy videójátékban (bal menü → 3D pálya). Emellett a
+> köteg-feltöltés időrendbe rendez, és a kézi térfél-döntés a
+> felismert eredményt is mutatja.
+
+- **3D pálya — az elemzett meccs bejárása, mint egy videójátékban**
+  (új menüpont): a bal menü új "3D pálya" füle a kész meccset térben
+  játssza le — szabad mozgás WASD + egérrel (R/F fel-le, Shift gyors),
+  nézet-gombok (Lelátó, Kapu mögül, Pálya-szint, Madártávlat),
+  lejátszás tekerővel és sebesség-váltóval, interpolált mozgással. A
+  jövendő termék 3D/VR-útjának (ROADMAP 6-7. fázis) első köre: a
+  többkamerás/LiDAR bemenet és a VR erre a nézetre épül majd rá.
+  Könyvtár nélkül demó-meccsel indul.
+
+- **A köteg időrendben áll össze** (új elemzés): a fájlválasztó a
+  KIJELÖLÉS sorrendjét adja (ctrl+katt = véletlen sorrend), az
+  automatikus összefűzés pedig a sorrendből épít meccset — rossz
+  sorrendben némán rossz meccs lett volna. A kiválasztott fájlok
+  mostantól szám-tudatos névsorba rendeződnek (a telefon időbélyeges
+  fájlneveinél ez az időrend), és a köteg-lista sorszámozva mutatja,
+  mi lesz a sorrend.
+
+- **A szakasz-párbeszéd mutatja a felismert eredményt** (könyvtár): a
+  kézi térfél-döntés lényege az összevetés a VALÓDI végeredménnyel —
+  eddig a párbeszéd csak annyit tudott mondani, "nézd meg máshol". A
+  szakasz-lista és a fordítás válasza mostantól viszi a felismert
+  eredményt (hazai : vendég), és a "Megfordítom" után azonnal frissül:
+  látszik, hogy a fordítással a valódi végeredmény jött-e ki.
+
+- **A súgó tanítja a darabokban felvett meccset** (kezdőlap): az "Első
+  lépések" új lépése elmondja a teljes utat — az összes darab egy
+  kötegben, időrendben; a köteg magától összeáll; a "térfél?" jelvény
+  és a ⇄ gomb pedig az eredmény-ellenőrzéshez visz.
+
+## v0.1.84 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a v0.1.83 sürgős javításának kiegészítése. Aki HÁROM
+> vagy több darabból fűzött össze meccset a v0.1.83-mal, fűzze össze
+> újra ezzel a verzióval (két darabnál nem kell). Az eldöntetlen
+> térfél mostantól egy gombbal javítható, és az összefűzött meccsnek
+> félideje is van.
+
+- **Három vagy több darabnál a 2. félidő minden darabja jó irányba
+  fordul** (motor, SÜRGŐS): a v0.1.83 szakasz-határos tükrözése az
+  állapotot billegtette ("fordulás → átváltunk"), pedig a határ előtti
+  ablak már a NORMALIZÁLT képet mutatja — ezért a tükrözött darab
+  utáni nyers darab újra "fordulást" mutatott, és a hatklipes meccsben
+  minden MÁSODIK 2. félidős darab visszafordult volna. A szabály
+  mostantól: pontosan akkor tükrözünk, ha a nyers kép a normalizálthoz
+  képest fordított. Két darabnál a viselkedés változatlan; aki 3+
+  darabból fűzött össze a v0.1.83-mal, fűzze össze újra.
+
+- **Az összefűzött meccsnek is van félideje** (motor): a darabokban
+  felvett meccsben nincs felvett szünet (a telefon a szünet alatt
+  állt), az aktivitás-alapú félidő-felismerés némán semmit sem talált
+  — és minden félidő-tudatos réteg (félidei állás, fordítás,
+  félidő-nyitás, momentum, fáradás-összevetés) elhallgatott, pont a
+  darabokban felvett meccseken. A félidő-pont mostantól a
+  szakasz-határ, ahol a térfél fordult — akár a gép döntött, akár az
+  ember a ⇄ gombbal. Egyben felvett meccsen minden marad a régiben.
+
+- **A térfél egy gombbal eldönthető — az ember dönt, ahol a gép nem
+  tudott** (motor + könyvtár): az összefűzés kevés mért pozíciónál nem
+  dönti el a térfélcserét, és eddig a jelentés csak annyit tudott
+  mondani: ellenőrizd az eredményt, rossz esetben fűzd össze újra. A
+  meccset látott ember viszont TUDJA a valódi végeredményt. A könyvtár
+  sora mostantól jelzi az eldöntetlen határt ("térfél?" jelvény + ⇄
+  gomb), a szakasz-párbeszéd megmutatja, melyik szakasz melyik fájlból
+  jött és tükrözve van-e, a "Megfordítom" gomb pedig megfordítja a
+  gyanús szakaszt. A döntés lemezre kerül (újraindítás után is él), az
+  elemzés (eredmény, összefoglaló, edzés-fókusz, klip-számláló)
+  újraszámol, és a figyelmeztetés elhallgat — döntés SZÜLETETT, csak
+  nem géptől.
+
+- **Az eldöntetlen térfélcsere-határ figyelmeztetést kap** (motor): ha
+  az összefűzés egy határán kevés mért pozíció miatt nem dönthető el a
+  csere, az eredmény rossz irányú is lehet — és a forrás-térképet a
+  felhasználó sosem nézi meg. A minőség-jelentés mostantól kimondja,
+  teendővel: ellenőrizd az eredményt; ha rossz, a meccs sorának ⇄
+  gombjával fordítható vissza.
+
+## v0.1.83 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: SÜRGŐS javítás az összefűzéshez. A darabokban
+> felvett meccsnél a térfélcsere a darabok KÖZÖTT van — tükrözés
+> nélkül a 2. félidő minden gólja a rossz csapathoz került volna. Aki
+> a v0.1.75–v0.1.82 alatt fűzött össze két-félidős meccset, fűzze
+> össze újra ezzel a verzióval (a darabok megvannak — pont ezért).
+
+
+- **Térfélcsere a szakasz-határokon — az összefűzött meccs eredménye
+  helyes** (motor, SÜRGŐS): egy videón belül a feldolgozás felismeri a
+  szünetet és tükrözi a második félidőt — de a darabokban felvett
+  meccsnél a térfélcsere a DARABOK KÖZÖTT van, és a 2. félidő darabja
+  önmagában normalizálatlan maradt. A lövés-felismerés irány-szabálya
+  az egész meccsre egy, tehát az összefűzött meccs 2. félidejének
+  MINDEN gólja a rossz csapathoz került volna — az eredmény
+  értelmetlen. Az összefűzés mostantól minden szakasz-határon
+  ellenőrzi a súlypont-fordulást (a szünet-felismerés szabályával), és
+  tükrözi a fordult szakaszokat.
+
+  Három védőkorlát: a félidőn BELÜLI vágásnál (a telefon elvágta a
+  felvételt, de nincs csere) nem tükrözünk; kevés mért pozíciónál nem
+  döntünk (a rossz irányú tükrözés ugyanakkora hiba, mint a
+  kihagyott) és a bejegyzés kimondja, hogy a döntés nem született meg;
+  az eldönthetetlen határon pedig az addigi irány öröklődik. A döntés
+  szakaszonként a forrás-térképbe kerül. A klip-vágást nem érinti: a
+  kép-indexek a videóra mutatnak, a tükrözés csak pálya-koordináta.
+
+## v0.1.82 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a BIZONYÍTÉK kiadása. A felderítés kulcs-mondata
+> ("a #7-esükre kettőzz") mellé egy kattintással ott a videó — a
+> Célpont-videó az összes elemzett meccsükből vágja ki a megnevezett
+> emberük hibáit. A jegyzet-lista fájlba menthető, a darabokban
+> felvett meccs teljes útját pedig lánc-teszt őrzi a valódi
+> végpontokon.
+
+
+- **Célpont-videó a felderítésből** (felület): a kulcs-mondat ("a
+  #7-esükre kettőzz — nála a szorítás labdaszerzés") megnevezi a
+  célpontot, de a bizonyíték eddig kézi munka volt. Az
+  Ellenfél-felderítés fejlécében egy gomb a megnevezett emberek
+  (nyomás-érzékeny + hajrá-hibázó) eladásait és góljait vágja ki az
+  ÖSSZES elemzett meccsükből, egy zip-be — a szezon-válogatás
+  motorján. A mondat meggyőz; a felvétel felkészít.
+
+- **A jegyzet-lista menthető** (felület): a Jegyzetek az edző
+  teendő-listája — a videó-szobába fájlban megy, nem a program előtt
+  ülve. A mentés a LÁTHATÓ (keresésre szűrt) listát viszi: az edző
+  pont azt a válogatást viszi magával.
+
+- **Lánc-teszt a darabokban felvett meccsre** (teszt): a v0.1.75–81
+  története egyben, a VALÓDI végpontokon át — két klip köteg-csoporttal
+  feldolgozva, a motor magától összefűzi, a könyvtár jelöli az egészet
+  és a darabokat, az összkép egy meccset lát (nem hármat), a
+  klip-számláló és a szezon-CSV válaszol, és az összefűzött meccsből
+  klip vágható. A darab-tesztek mindezt külön őrzik; ez a kör azt
+  mutatja meg, ha a lépések KÖZÖTT szakad meg valami.
+
+## v0.1.81 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a SZEZON-VÁLOGATÁS. "Az összes gólom egy helyen" —
+> a játékos-fejlődés lapról egy gomb az egész szezont vágja:
+> meccsenkénti mappák, dátum + ellenfél, egy zip. Mellette a
+> klip-becslő gyorsítótárat kapott, hogy a Klipek lap hosszú meccsen
+> is azonnal nyíljon.
+
+
+- **Szezon-válogatás egy játékosról** (API + felület): "az összes
+  gólom egy helyen" — a meccsenkénti klipcsomag megvolt, a szezoné
+  nem: a játékos meccsenként vágatott, és a zipeket kézzel szedte
+  össze. A játékos-fejlődés lapon egy gomb az egész szezont vágja: a
+  játékos minden meccséből az ő jelenetei, meccsenkénti mappákba
+  rendezve (dátum + ellenfél), egy zip-ben. A videó nélküli meccsek
+  kimaradnak és az üzenet megmondja, hány; ahol nincs jelenete, azt is.
+  A vágás percekbe telhet — a gombon fut a motor haladás-üzenete. A
+  szezon-szűrő itt is él: az összefűzött meccs darabjai nem duplázzák
+  a válogatást.
+
+- **A klip-számláló gyorsítótárazva** (API): a becslő most már a
+  teljes bővített esemény-készletet építi, ami egy hosszú meccsen
+  másodpercekbe telik — a Klipek lap pedig minden megnyitáskor lekéri.
+  Az eredmény meccsekként gyorsítótárazódik; a kulcsban ott van minden,
+  ami az eseményeket vagy a mezszám-képet változtatja (kockaszám,
+  jegyzetek, kézi javítások, mezszám-kiosztás fájl-ideje), tehát a
+  friss jegyzet azonnal látszik — a gyorsítótár nem mutathat régi
+  képet (őr-teszt).
+
+## v0.1.80 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a KAPUS is játékos. Az egyéni "Mit gyakorolj" eddig
+> csak mezőnyjátékosról szólt — a kapus lapja üres maradt, a
+> "Klipjeim" pedig üres csomagot adott neki, mert a nagy védés nem
+> vitte, ki védte. Mostantól a kapus is kap egyéni fókuszt (a várható
+> alatti védés-mérlegből), a nagy védés az övé, és a klip-becslő a
+> bővített csomagokat is számolja — nem riaszt "üres csomaggal" ott,
+> ahol a vágás klipeket adna.
+
+
+- **A klip-becslő a bővített csomagokat is számolja** (API): a
+  "kb. hány klip lesz" becslés eddig csak az alap-eseményeket
+  (gól/lövés/eladás) látta — a bővített csomagokra (nagy védés,
+  kulcs-pillanat, jegyzet, hétméteres, ...) NULLÁT mondott, a felület
+  pedig "üres csomagot adna"-val riasztott, miközben a vágás klipeket
+  adott volna. A becslő és a vágás mostantól UGYANABBÓL az
+  esemény-építőből él (őr-teszt tiltja a saját listát), tehát nem
+  tudnak széttartani.
+
+- **A nagy védés a kapusé** (API): a nagy-védés klip eddig nem vitte,
+  KI védte — a kapus a "Klipjeim" gombbal (mezszám-szűréssel) némán
+  üres csomagot kapott, pedig pont az ő jelenetei ezek. Az esemény
+  mostantól a szolgálatban lévő kapus track-jéhez kötődik (a
+  kapus-idővonalból), tehát a kapus saját válogatása is működik.
+
+- **A kapus is kap egyéni edzés-fókuszt** (motor): az egyéni "Mit
+  gyakorolj" hét forrása mind mezőnyjátékosról szólt — a kapus lapja
+  üresen maradt, miközben a csapat-szintű fókusznak van
+  kapus-szabálya. Az üres lap azt mondja a kapusnak: a program nem lát
+  téged. Új, nyolcadik forrás: a várható alatti védés-mérleg (GSAx) —
+  legalább 6 kapura tartó lövésből, legalább egy "bevédhető" gólnyi
+  elmaradással. A jelenet-ajánlás szándékosan üres: a kapott gól a
+  MÁSIK csapat eseménye, mezszámra nem szűrhető — nem hazudunk "nézd
+  meg" gombot.
+
+## v0.1.79 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a KIMUTATÁS kiadása. A "küldd el Excelben, ki hány
+> gólnál jár" mostantól egy gomb a Keret-lapon — ugyanabból a
+> számolásból, amit az edző a képernyőn lát, névvel együtt. A
+> meccs-CSV is kapott név-oszlopot, a felderítés-választó pedig jelzi
+> a darabot, hogy az egyesített jelentés ne számolja kétszer ugyanazt
+> a meccset.
+
+
+- **Szezon-kimutatás CSV-ben a Keret-lapról** (API + felület): a
+  meccs-szintű játékos-CSV megvolt, a szezon-szintű nem — pedig a
+  "küldd el Excelben, ki hány gólnál jár" tipikus hét végi vezetőségi
+  feladat, és eddig a képernyőről kellett kimásolni. A kimutatás
+  UGYANABBÓL a számolásból él, mint a Keret-lap (őr-teszt köti ki: a
+  vezetőség nem láthat mást, mint az edző), Excel-barát (pontosvessző
+  + BOM, mert a magyar Excel a vesszőt tizedesjelnek olvasná), és a
+  nevet is viszi — a kimutatásban a név a lényeg, nem a szám.
+
+  A meccs-szintű statisztika-CSV is kapott "Név" oszlopot: nem
+  mondhat kevesebbet, mint a szezon-kimutatás.
+
+- **A felderítés-választó is jelzi a darabot** (felület): az
+  egyesített felderítésbe a darabot ÉS az egészet kijelölve ugyanaz a
+  meccs kétszer számolna — a "darab" címke (rámutatva a magyarázattal)
+  megmondja, hogy az EGÉSZET jelöld ki.
+
+## v0.1.78 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a szezon nem duplázódik. A v0.1.77 automatikus
+> összefűzése után a darabok és az egész is a könyvtárban van — a
+> szezon-számolás mostantól tudja, hogy ez ugyanaz a meccs: a
+> góllövő-lista, a játékos-görbe, a mérlegek és a jegyzet-lista a
+> teljes meccset számolja, egyszer. A könyvtárban címke mondja meg,
+> melyik sor az egész ("teljes meccs · N darabból") és melyik a darab.
+> A v0.1.77-tel EGYÜTT frissítendő: az automatikus összefűzés e nélkül
+> a javítás nélkül duplázna.
+
+
+- **Az összefűzött meccs darabjai nem duplázzák a szezont** (motor +
+  API): összefűzés után a darabok és az egész is a könyvtárban van (a
+  darab szándékosan megmarad — törölhető, külön is megnézhető). A
+  szezon-szintű összesítés viszont így ugyanazt a meccset KÉTSZER
+  számolta: a #7 gólja egyszer a darabban, egyszer az egészben — a
+  góllövő-lista, a játékos-görbe, a szezon-mérleg, az egymás-elleni és
+  a jegyzet-lista is duplázott. Az összefűzött meccs mostantól viszi,
+  MIBŐL lett (`merged_from`), és minden szezon-számolás kihagyja a
+  darabokat. A könyvtár-LISTA (a kezelő nézet) továbbra is mindent
+  mutat: a törléshez látni kell. Aki nem fűz össze, annak semmi nem
+  változik — erre külön őr van.
+
+  A könyvtár-kártyák jelölik is: az egészen "teljes meccs · N
+  darabból" címke, a darabon "darab" — rámutatva megmagyarázza, hogy a
+  szezon-számok az egészben számolják, tehát nem duplázódik. Enélkül
+  három egyforma "Mi vs Ők" sor lenne, és a felhasználó a
+  szezon-számokat hinné hibásnak ("hova lett a meccsem?").
+
+## v0.1.77 — kiadva (2026-08-28)
+
+> Kiadás-jegyzet: a darabokban felvett meccs EGY mozdulat. A v0.1.75
+> megengedte az akárhány szakaszt, a v0.1.76 megtartotta az emberi
+> munkát — ez a kiadás pedig elveszi a kézimunkát: a köteg örökli a fő
+> videó kalibrációját (nem fut 5/6-od meccs kalibrálatlanul), és a
+> feldolgozás végén magától áll össze egy meccsé, jó sorrendben.
+> Reggelre nem hat darabot találsz, hanem a kész meccset.
+
+
+- **A köteg a végén magától összeáll egy meccsé** (motor + API +
+  felület): aki egy meccs hat darabját tölti fel — jellemzően
+  éjszakára —, reggel hat KÜLÖN "meccset" talált, és kézzel kellett
+  összefűznie, jó sorrendben. Pont az a lépés, amit az ember elfelejt;
+  a motor viszont tudja, mikor lett kész az utolsó darab. A köteg
+  mostantól közös csoport-jelet visz, és az utolsó darab elkészültekor
+  a motor magától fűzi össze őket (ugyanazon az úton, mint a kézi
+  összefűzés — tehát a jegyzet-, javítás- és kiállítás-átvétellel
+  együtt). A kapcsoló a köteg-listán van és KIKAPCSOLHATÓ: aki több
+  külön meccset tölt fel egyszerre, annak az összefűzés hiba lenne.
+
+  Három védőkorlát: ha bármelyik darab elhasalt vagy megszakadt, az
+  összefűzés ELMARAD és az üzenet megmondja, miért (fél meccset
+  összefűzni rosszabb, mint szólni); részleges darabot nem fűzünk
+  össze (előbb a Folytatás); és a csoport a beküldött darabszámot is
+  ismeri — különben versenyben egy darabbal "teljesnek" látszhatna.
+
+- **A köteg örökli a fő videó kalibrációját** (felület): aki egy
+  meccs hat darabját egyszerre tölti fel, a fő videót bekalibrálja —
+  a köteg többi darabja viszont eddig kalibráció NÉLKÜL futott, tehát
+  a meccs 5/6-án minden távolság-alapú réteg némán félrement. A darab
+  mostantól a fő videó kalibrációját örökli (a saját mentett
+  kalibrációja erősebb — azt nem írjuk felül), az örökölt kalibráció a
+  darab videójához is elmentődik, és a felület kimondja: ha a kamera
+  mozdult a darabok közt, kalibráld őket külön.
+
+## v0.1.76 — kiadva (2026-08-27)
+
+> Kiadás-jegyzet: az ÖSSZEFŰZÉS mostantól nem veszít el semmit. A
+> v0.1.75 megengedte, hogy akárhány klipből egy meccs legyen — ez a
+> kiadás teszi használhatóvá. Az összefűzött meccsből vágható klip (a
+> forrás-térkép megmondja, melyik pillanat melyik fájlban van), és
+> túléli az összefűzést minden EMBERI munka: a kézi esemény-javítás, a
+> jegyzet és a kiállítás. Mellette a kalibráció átvehető egy másik
+> videóról — hat klip ugyanarról a rögzített kameráról eddig
+> huszonnégy sarok-kattintás volt.
+
+
+- **A kézi javítások túlélik az összefűzést** (motor): aki hat klipben
+  kijavította a felismerés nyolc tévedését, EMBERI munkát végzett — az
+  összefűzés eddig **némán eldobta**, és az összerakott meccs megint
+  rossz eredményt mutatott. Az edző nem értette, hova lettek a
+  javításai; a program pedig pont azt a bizalmat vesztette el, amiért
+  a javítás egyáltalán bekerült.
+
+  A javítás ideje a szakasz eltolásával együtt mozog (különben egy
+  MÁSIK esemény típusát írná át, vagy az egyeztetés-ablakon kívülre
+  esve csendben elmaradna), és a kézzel felvett gól **lövője** is: az
+  track-azonosító, azt pedig az összefűzés eltolja — eltolás nélkül a
+  gól egy másik emberhez kerülne, pont a góllövő-listán.
+
+- **A jegyzetek is túlélik az összefűzést** (API): ugyanaz a
+  hibafajta egy szinttel odébb. A jegyzet **gépelt szöveg**, nem
+  újratermelhető adat — aki hat klip közben megjelölt tizenöt
+  pillanatot, majd összefűzte a meccset, eddig mindet elvesztette,
+  némán. A kockaszám a szakasz eltolásával mozog (különben a "koppints
+  a visszanézéshez" rossz helyre ugrana, ami rosszabb, mintha el sem
+  jutna oda), és az összefűzött meccs jegyzetei **időrendben** állnak:
+  a szakaszonkénti felvételi sorrend itt semmit nem mondana.
+
+  A szakaszokat POZÍCIÓ szerint párosítjuk a részekhez, nem a videó
+  útja szerint: két szakasz jöhet ugyanabból a fájlból (megszakadt
+  feldolgozás folytatása), és egy útvonal-kulcsú párosítás
+  összeolvasztaná őket — a jegyzet ettől még ott lenne, csak rossz
+  időn. Erre külön őr van.
+
+- **A kiállítások is túlélik az összefűzést** (API): a kiállítás
+  kézzel felvitt adat, és az **emberelőny-rétegek** (emberelőny-hozam,
+  hátrány-támadás, kiállítás-kiharcolás, 6-5 játék) ezen állnak.
+  Összefűzéskor eddig elveszett, ezek a rétegek pedig némán
+  elhallgattak — az edző azt hitte, nincs mit mérni. Az idő
+  másodpercben tolódik (a roster is másodpercben tárol), és az átvétel
+  a SAJÁT végpontunkon megy át, tehát a becslés-újraszámítás pontosan
+  ugyanaz, mint kézi felvitelnél.
+
+  A kapus-hiány jelzése egész meccsre szól, tehát szakaszonként
+  ellentmondhat: csak akkor öröklődik, ha MINDEN szakasz egyetért —
+  ugyanaz az elv, mint a kalibráltságnál (amiről nem tudunk, arról nem
+  állítunk semmit).
+
+- **Az összefűzött meccsből is vágható klip** (motor): a most
+  engedélyezett N-szakaszos összefűzésnek volt egy csendes
+  következménye — az összefűzött meccsnek nincs EGY videófájlja, ezért
+  a klipvágás azt mondta, hogy "az eredeti videófájl nem érhető el".
+  Ez félrevezető volt: a fájl megvan, csak több van belőle. Aki
+  darabokban vesz fel, összerakta a meccset, megkapta a teljes elemzést
+  — és pont a gólvideót nem tudta kivágni.
+
+  Az összefűzés mostantól **forrás-térképet** ment (melyik játékidő
+  melyik fájl melyik kép-indexén van), és a klipvágás szakaszonként
+  nyitja a megfelelő videót. Az EGY videós eset ugyanazon a kódon megy
+  (egyelemű térkép) — egy külön ág idővel szétcsúszna, és a hiba pont a
+  ritkább eseten jönne elő. Ha egy szakasz fájlja hiányzik, az üzenet
+  **megnevezi, melyik** és hányról van szó: a többi megvan.
+
+- **Kalibráció átvétele másik videóról** (API + felület): a kalibráció
+  a videó FÁJLNEVÉHEZ van kötve, tehát aki darabokban vesz fel, minden
+  klipet külön jelölt be — hat klip ugyanarról a rögzített kameráról
+  huszonnégy sarok-kattintás ugyanarra a pályára. Az Új elemzés lapon
+  mostantól átvehető egy korábbi videó kalibrációja (a legfrissebb
+  elöl), és az átvett sarkok utána a Pálya-kalibrációban igazíthatók.
+
+  A program **kimondja a feltételt**: csak akkor helyes az átvétel, ha
+  a kamera nem mozdult a két felvétel közt — ezt eldönteni nem tudja,
+  elhallgatni viszont nem szabad. A saját kalibrációját nem kínálja
+  fel (értelmetlen választás, és elrejti a valódit), és a kizárás a
+  fájlnevet UGYANAZZAL a szabállyal tisztítja, mint a mentés —
+  őr-teszttel, mert ékezetes vagy szóközös néven a saját kalibráció
+  némán mégis megjelenne.
+
+## v0.1.75 — kiadva (2026-08-27)
+
+> Kiadás-jegyzet: az AMATŐR FELVÉTEL kiadása. Aki telefonnal vesz fel,
+> nem egy tiszta, hatvanperces meccsfájlt kap, hanem darabokat — és
+> eddig a program úgy tett, mintha nem így lenne. Mostantól: a
+> szakaszok akárhányan összefűzhetők (nem csak "két félidő"), a rövid
+> felvétel megmondja, mit várj tőle a hallgatás helyett, és a program
+> szól, ha a rövid szakaszon megéri a "Pontos" profil — mert azon
+> múlik a labda felismerése, amire a birtoklás, a passz, az eladás és
+> a lövés is épül.
+
+
+- **Az összefűzés akárhány szakaszt elfogad** (felület): aki telefonnal
+  vagy fényképezőgéppel vesz fel, DARABOKBAN kapja a meccset — a
+  felvétel négy gigánál vagy tíz percnél elvágódik, és hat-nyolc klip
+  lesz belőle, nem kettő. A motor eddig is tudott N szakaszt
+  összefűzni; a **felület kérdezett pontosan kettőt**, és emiatt a
+  darabokban felvett meccs összerakhatatlan volt. Mostantól sorszámozott
+  listába lehet felvenni akárhány szakaszt, a **sorrend látszik és
+  javítható** (mozgatás, eltávolítás) — az összefűzés időrendet vár, és
+  egy rossz sorrendű meccsen minden idő-alapú réteg (hajrá, sorozatok,
+  kondíció) némán félremegy. A gomb neve sem "félidők" többé: az csak
+  az egyik eset.
+
+- **Rövid szakaszra a program ajánlja a "Pontos" profilt** (API +
+  felület): a profil-választó eddig három nevet kínált, és sehol nem
+  mondta meg, mikor melyik éri meg. A "Pontos" egy teljes meccsen
+  órákat kér — jogosan nem az alapértelmezés —, egy pár perces klipen
+  viszont csak perceket, és pont a **labda** felismerésén javít a
+  legtöbbet: arra épül a birtoklás, a passz, az eladás és a lövés, és
+  széles, távoli amatőr felvételen ez a különbség dönti el, használható
+  lesz-e az elemzés. Az indítás előtti ellenőrzés ezért javaslatot ad,
+  ha a feldolgozandó szakasz klip-hosszú. Aki már a Pontosat
+  választotta, nem kap javaslatot — a meglévő döntést nem
+  kérdőjelezzük meg. A küszöb KÖZÖS a "klip, nem teljes meccs"
+  jelzéssel (őr-teszt köti ki): különben ugyanaz a felvétel kaphatna
+  "ez rövid" javaslatot és meccs-szintű elemzést is.
+
+- **"Klip, nem teljes meccs"** (motor + felület): egy kézilabda-meccs
+  2×30 perc; egy pár perces felvétel nem meccs, hanem KLIP. Ez
+  teljesen jogos bemenet — de a meccs-szintű rétegek (hajrá,
+  félidő-összevetés, kondíció, sorozatok) némán hallgatnak rajta, és a
+  felhasználó ezt eddig HIBÁNAK látta: "megcsináltam, és a fele üres".
+  A 20 percnél rövidebb felvétel mostantól kap egy mondatot arról,
+  **mi működik** (lövés és helyzetminőség, poszt- és felállás-kép,
+  passz- és birtoklás-mutatók, klipvágás) és **mi nem**. Megjelenik a
+  meccs-elemzőben, az edzői összefoglalóban (a szöveges alakban is,
+  tehát a csomagban) és a nyomtatott jelentés elején.
+
+  Szándékosan **nem figyelmeztetés és nem "első teendő"**, hanem külön
+  mező: a `warnings` a hibáké. Ha az információ is oda kerülne,
+  elveszne a "nincs figyelmeztetés = megbízható" szabály, és minden
+  rövid próba gyanúsnak látszana. Ugyanezért nem a "mennyire bízhatsz
+  ebben" dobozban van — hibátlan feldolgozású klipnél az riogatás
+  lenne.
+
+- **A "Javulok vagy romlok" a nyomtatott szezon-lapon is** (motor):
+  a lapot a játékos TESZI EL — ha a képernyő megmondja, hogy javul, a
+  nyomtatvány pedig nem, akkor a papír kevesebbet ér, mint a program,
+  és pont az marad ki, amiért elteszi. Az ítélet nélküli esetet a lap
+  is kimondja ("nem irány, zaj"), és a viszonyítási ablakot is leírja.
+  Forma-irány nélkül a lap változatlan — nem üres címsor, hanem semmi.
+
+## v0.1.74 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: EGY fájl a beszélgetéshez, és egy mondat a görbe
+> helyett. A klipcsomag mostantól viszi a hozzá tartozó lapot is — a
+> játékoséba az ő meccs-lapja, a csapatéba az edzői összefoglaló:
+> a videó megmutatja, MI történt, a lap azt, mit jelent. A
+> játékos-görbe pedig végre irányt is mond ("javulok vagy romlok"),
+> úgy, hogy kevés meccsből és zajsávon belüli mozgásból KIMONDOTTAN
+> nem mond ítéletet.
+
+
+- **"Javulok vagy romlok?"** (API + felület): a játékos-görbe eddig
+  számokat mutatott meccsről meccsre — az irányt viszont egy
+  pontsorból kinézni nem lehet, mert minden második meccs jobb az
+  előzőnél. Az utolsó három meccs mostantól az azt megelőző háromhoz
+  van mérve (gólarány, befejezés a helyzetekhez képest, gól). Két
+  szándékos korlát: **kevés meccsből nincs ítélet** (egy jó meccs
+  bármikor jön, és a játékos elhiszi), és a **10% alatti változás nem
+  irány, hanem zaj** — a lap ilyenkor kiírja a számokat, de kimondja,
+  hogy ez nem irány. A futómunka szándékosan kimarad: ott a több nem
+  "jobb", csak több — a poszt dönti el, mennyi kell belőle. A
+  kihagyott meccs (None) nem nullaként számít, különben egy sérülés
+  romlásnak látszana.
+
+- **A játékos lapja a klipek mellé kerül** (motor + API): az edző EGY
+  fájlt visz a beszélgetésre, nem kettőt. Ha a klipcsomag mezszámra
+  van szűkítve, a zip a játékos meccs-lapját (HTML) is viszi — több
+  kijelölt játékosnál mindenki a saját mappájába. A videó megmutatja,
+  MI történt, a lap azt, mit jelent; külön letöltve a kettő szétesik.
+  Csapat-szintű csomagba nem kerül játékos-lap (ott nincs kihez
+  tenni) — helyette az **edzői összefoglaló** megy a klipek mellé,
+  ugyanaz a gondolat egy szinttel feljebb. Egy lap hibája nem viheti
+  el a videót: az edző a felvételért vágatott.
+
+## v0.1.73 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: a klip mint MUNKAESZKÖZ. A v0.1.72 megnyitotta az
+> utat a játékos saját videójához; ez a kiadás használhatóvá teszi.
+> Három emberrel külön-külön ülsz le — mindenki külön mappát kap, és a
+> plafon is emberenként oszlik, hogy senki mappájában ne maradjon két
+> klip. A "Mit gyakorolj" tételeitől egy kattintás a felvételig: a
+> gyakorlat elmondja, MIT kell csinálni, a klip azt, MIÉRT. És a vágás
+> előtt megtudod, mennyi lesz — a percekig tartó vágás után derülne ki
+> különben, hogy három csomaghoz nem volt jelenet.
+
+
+- **A klipvágás előre megmondja, mennyi lesz** (API + felület): a
+  vágás percekbe telik, és eddig csak a VÉGÉN derült ki, hogy három
+  kijelölt csomaghoz nem volt jelenet — az edző addig várt a semmire.
+  A Klipek lap mostantól a kijelölés mellett mutatja a becsült
+  klipszámot, külön kiemelve a nullát ("a vágás üres csomagot adna"),
+  és jelzi, ha a kijelölés a motor plafonja fölé megy (a csomag ott
+  arányosan elosztva áll meg). A becslés FELSŐ korlát, ezért "kb."-t
+  mond: az azonos pillanatra eső ismétléseket a motor kiszűri. A
+  csapat-szintű darabszám a mezszám nélküli jeleneteket is viszi —
+  őr-teszt köti ki, különben a becslés alábecsülne.
+
+- **A gyakorlandótól egy kattintás a felvételig** (motor + API +
+  felület): a "Mit gyakorolj" tételei eddig szövegek voltak — a
+  játékos elolvasta, hogy nyomás alatt eladja a labdát, és nem tudta,
+  melyik pillanatról van szó; a klip-válogatáshoz pedig ki kellett
+  volna találnia, melyik csomagot kérje. Minden tétel mostantól viszi
+  azokat a klip-típusokat, amelyeken a hiba LÁTSZIK, és a lapon egy
+  "Nézd meg a felvételen" gomb nyitja a Klipek képernyőt a saját
+  mezszámmal ÉS a megfelelő csomagokkal. Az erőnlét-tétel üres listát
+  ad — azt egyetlen jelenet sem mutatja meg —, de a mező ott van
+  minden tételen (a hiányzó kulcs try/except-ben némán elvinné az
+  egész lapot). Új őr méri a rétegből jövő típusokat a klip-motor
+  jegyzékéhez: egy elgépelt típus működő gombot és üres zip-et adna.
+
+- **Több kijelölt játékosnál mindenki külön mappát kap** (motor +
+  felület): az edző három emberrel KÜLÖN-KÜLÖN ül le, egy összekevert
+  zip-ből viszont minden beszélgetés előtt újra kellene válogatnia. A
+  játékos-mappa a KÜLSŐ (`#7/gol/…`), mert az edző emberenként készül,
+  nem témánként. Egy kijelölt játékosnál nincs mappa — ott csak
+  fölösleges kattintás lenne. A Klipek lap előre megmondja, mit fog
+  kapni.
+
+  A klip-plafon is JÁTÉKOSONKÉNT oszlik ilyenkor: enélkül ugyanaz a
+  néma igazságtalanság tért volna vissza egy szinttel feljebb — a
+  sokat szereplő ember elvitte volna a keretet, és a másik két
+  játékos mappájában két klip maradt volna. Az edző pont azzal nem
+  tudna leülni, akiről a legkevesebb anyaga van.
+
+## v0.1.72 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: a JÁTÉKOS lapja. Eddig mindenki a csapatnak készült
+> termékből próbálta kiolvasni magát: a klipcsomag tizennyolc emberé
+> volt, a toplista zsákutca, a futómunka pedig egy nyers szám, amihez
+> nem volt mihez viszonyítani. Mostantól a klip mezszámra szűkíthető
+> (és a saját lapról egy kattintás), a toplista sora a játékos lapjára
+> visz, és a lap megmondja, hol tart a kereten belül. Az őr-hármas az
+> 503 rétegre tiszta: sorrend-függés 0, tükrözés 0 hibás, stride 24
+> (változatlan).
+
+
+- **"Hol tartok a kereten belül"** (motor + felület): a játékos-lap
+  eddig nyers számokat mutatott — a "4,2 kilométer" magában nem
+  válasz arra, hogy sokat futott-e vagy keveset. A görbe mostantól a
+  keret-átlagot és a helyezést is viszi: futómunka **percre vetítve**
+  (a végig játszó irányító és a tizenöt percet kapó szélső nyers
+  métere nem összemérhető), a keret átlagához mérve, és hogy a
+  legutóbbi meccsen hányadik volt a játszó emberek közt. Mezszám
+  szerint összegzünk, nem trackenként: a megszakadt követés különben
+  két embernek látszana, és lehúzná az átlagot. Kevés mintánál (rövid
+  játékidő, öt játszó ember alatt) nincs ítélet — a lap el sem kezdi
+  mutatni. A szöveg kimondja, hogy a több futómunka önmagában nem
+  jobb: a poszt dönti el, mennyi kell belőle.
+
+- **A klipcsomag egy játékosra szűkíthető** (motor + API + felület): a
+  klipvágás eddig csapat-szintű volt — a #7 a tizennyolc emberes
+  gólvideóból kereste ki magát, ami az edzés előtti öt percben nem
+  történik meg. A Klipek lapon mostantól ki lehet jelölni, KINEK
+  vágjuk: a felkínált mezszámok a backendtől jönnek, jelenet-
+  darabszámmal (kiosztatlan szám nem is jelenik meg), a kijelölés a
+  fájlnévbe is bekerül, és üres kijelölés továbbra is az egész
+  csapatot jelenti. Ha egy mezszámhoz nincs kért jelenet, a program
+  megmondja, miért — nem néma "nem készült klip".
+
+- **"Klipjeim" a játékos saját lapján** (felület): a játékos a számok
+  után a videót akarja látni. A játékos-fejlődés lapról egy gomb a
+  Klipek képernyőre visz, az ő mezszámával ELŐRE KIJELÖLVE — nem kell
+  újra kikeresnie magát a keretből. Ha az adott meccsen nincs
+  jelenete, a kijelölés magától elmarad.
+
+- **A toplista sorából a játékos saját lapjára** (felület): a Szezon
+  képernyő toplistái zsákutcák voltak — a játékos megtalálta magát a
+  góllövők közt, de a saját görbéjéhez és a "Mit gyakorolj" listájához
+  vissza kellett mennie a menübe, és kézzel begépelnie a csapatot meg
+  a mezszámot. A sor mostantól koppintható (nyíl jelzi), és a
+  játékos-lapot ELŐRE KITÖLTVE nyitja meg.
+
+## v0.1.71 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: az EMBER a lapon. A kézzel felvett gólnak mostantól
+> lövője van (különben a góllövő-listákból kimaradt volna), a
+> "Mit gyakorolj" ott van a meccs utáni játékos-lapon is, a Keret
+> megmutatja, kivel van dolga az edzőnek, és a program sehol nem mond
+> kevesebbet, mint a saját nyomtatványa. Az őr-hármas az 503 rétegre
+> tiszta: sorrend-függés 0, tükrözés 0 hibás, stride 24 (változatlan).
+
+- **A jegyzet-klipcsomag nem kínál működésképtelen kapcsolót**
+  (felület): a "jegyzetelt pillanatok" csomag jegyzet nélkül némán
+  üres zip-et adott volna. A Klipek lap mostantól kiírja, hány jegyzet
+  van a meccshez, és ha nincs, letiltva megmondja, hol lehet írni.
+
+- **A jegyzet-lista a legújabb meccsel kezd** (motor): a hét közbeni
+  munka a legutóbbi meccsből indul; húsz meccs jegyzetei közt a
+  felvételi sorrend semmit nem mondott. Meccsen belül marad az
+  időrend, mert a jegyzetek a meccs menetét követik.
+
+- **A kézzel felvett gólnak lehet LÖVŐJE** (motor + felület): eddig a
+  javítás a gólt felvette az eredménybe, de a góllövő-listákból
+  kimaradt — pedig az edző pont azt a gólt vette fel, amit a
+  felismerés kihagyott, és pont annak a játékosnak nem számított. Ha
+  ki van jelölve játékos a pályán, ő lesz a lövő; a menü meg is
+  mondja, kiről van szó. Lövő nélkül is érvényes a javítás: nem
+  mindig tudjuk, ki volt.
+
+- **A meccsterv stílus-kártyája olvasható lett** (felület): a 0..1
+  nyers szám nem tanács — csak az érti, aki a képletet ismeri.
+  Mostantól százalék áll ott, és minden tengely alatt egy mondat
+  arról, mit jelent a MAGASABB érték (pl. "magasabb = többet lő
+  távolról"). Új őr-teszt köti össze a motor tengely-neveit a
+  kliens-magyarázatokkal: átnevezésnél a magyarázat nem maradhat
+  némán el.
+
+- **"Mit gyakorolj" a meccs utáni játékos-lapon is** (motor): a
+  szezon-lapon a VISSZATÉRŐ tételek állnak, itt a mai meccsé. A
+  játékos ezért a részért teszi el a lapot — ha csak a számok lennének
+  rajta, egyszer nézné meg. (A meccs-csomag `jatekos_lapok/` mappája
+  is ezt a lapot viszi.)
+
+- **A teljes lánc a mai újdonságokat is végigjárja** (teszt): a
+  videó → feldolgozás → jelentés → csomag kör kiegészült a kézi
+  javítással (a felvett gól átüt az esemény-listán, és a jelentés ki
+  is mondja), a mezszám–név–keret–egyéni fókusz úttal, és az
+  edzésterv nyomtatható lapjával. A modul-tesztek darabonként őrzik a
+  motort; ez a kör azt mutatja meg, ha a VALÓDI úton szakad meg
+  valami.
+
+- **457. meccsterv-szabály: a hajrá-célpont** (motor): az ő
+  hajrá-hibázójuk × a mi hajrá-mérlegünk — az utolsó percekben tudjuk,
+  kit kell döntés-kényszerbe hozni. Csak akkor szólal meg, ha MI
+  bírjuk a végjátékot: különben nem a mi fegyverünk, hanem üres
+  jótanács.
+- **A mentés viszi az EMBERI munkát** (teszt): a mezszám-nevek és a
+  kézi esemény-javítások nem a videóból jönnek — valaki beírta őket.
+  Új teszt bizonyítja, hogy a gépváltás (mentés → visszaállítás új
+  gépen) mindkettőt megőrzi, és a javítás az új gépen is ÉL.
+
+- **Az egyéni feladatok az Edzésterv EGY MECCS nézetében is**
+  (felület): a végpont a csapat-lista mellett ezt is adja, és a
+  szezon-nézet mutatja — ha itt kimaradna, a két nézet mást mondana
+  ugyanarról a meccsről.
+- **A jelentés kimondja a kézi javítást** (motor): ha az edző javította
+  a felismerést, a nyomtatott lap megbízhatóság-szakasza megmutatja,
+  hány javítás van benne. A jelentés így is a mérésről szól — de az
+  olvasó (másik edző, vezetőség) lássa, hogy egy része emberi döntés.
+
+- **A klip-export megnevezi az üres csomagokat** (motor + felület):
+  aki hat csomagot kért és egy zip-et kapott, eddig nem tudta, hogy
+  kettőhöz nem volt jelenet, vagy elromlott valami. A vágás eredménye
+  mostantól típusonkénti darabszámot és a NÉMÁN üres csomagok listáját
+  is viszi, és ez a záró üzenetben is megjelenik.
+- **A jegyzet törölhető a Jegyzetek lapról** (felület): a lista az edző
+  teendő-listája — a kipipált tételnek le kell tudnia kerülni róla.
+  Megerősítéssel, mert a jegyzet gépelt szöveg, nem újratermelhető
+  adat.
+
+- **A Keret-lap megmutatja, kivel van dolga az edzőnek** (felület): a
+  tábla eddig azt mutatta, ki mit teljesített — az edző viszont azért
+  nézi végig a keretet, hogy eldöntse, kivel kell foglalkoznia. Az új
+  oszlop a gyakorolnivalók számát hozza az egyéni edzés-tervből (egy
+  kérés az egész keretre); a részletes lista a játékos görbéjén van.
+
+- **Az egyéni edzés-fókusz védekezést is ad** (motor): a réteg hét
+  forrásból dolgozik — bekerült az **egy az egy elleni védekezés** (a
+  hozzá rendelhető kapott gólok mekkora része esett nála). E nélkül a
+  lap csak a támadó-oldali hibákat sorolta, és a védekező munkát végző
+  emberek úgy nézték, hogy nincs mit gyakorolniuk.
+
+- **Az egyéni feladatok a képernyőn is, nem csak a nyomtatványon**
+  (motor + felület): az edzésterv-lap viszi az egyéni feladatokat — a
+  képernyő eddig nem, tehát a program kevesebbet mondott, mint a saját
+  nyomtatványa. Új végpont (`/library/training-focus/players`), és a
+  két felület KÖZÖS számolásból él. A csapat-választó mostantól minden
+  csapatot kínál, nem csak azokat, akiknek van visszatérő
+  csapat-gyengeségük: egyéni feladat akkor is lehet, ha csapat-szinten
+  nincs kilógó hiba.
+
+- **Az egyéni fókusz meccsenként egyszer számol** (motor): a
+  szezon-szintű összegzés (a "Mit gyakorolj" és az edzésterv-lap)
+  minden mezszámra újrafuttatta a réteget, az pedig minden
+  forrás-mérését újraszámolta — húsz meccses könyvtárnál ez percekben
+  mérhető. Mostantól meccsenként gyorsítótárazunk (a kulcs a kockaszám
+  és a csapatnevek); a kézi esemény-javítás kifejezetten dobja a
+  bejegyzést, mert a javítás a fókuszt is átírja.
+- **A ROADMAP feljegyzi a javíthatatlan felismerés hibafajtáját** — a
+  megoldással és a hihetőség-ellenőrzésekkel együtt.
+
+## v0.1.70 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: a papír és a célpont. A két új munkalap
+> (Edzésterv, Meccsterv) mostantól nyomtatható — a pályán és a meccs
+> előtti estén nincs képernyő. Az egyéni gyengeség pedig átmegy a
+> meccstervre: nem "figyeljetek a labdabiztonságukra", hanem "a
+> 7-esükre kettőzz". Mellette a motor szól, ha a felismert eredmény
+> aránytalan — az egyik kapu felismerése külön is elromolhat.
+
+- **"Aránytalan eredmény" figyelmeztetés** (motor): a két kapu
+  felismerése KÜLÖN romolhat el (féloldalas kalibráció, takart kapu).
+  Kézilabdában a nagy különbség is jellemzően kétszeres arány körül
+  van; ötszörös eltérés (legalább 12 gól mellett) inkább azt jelenti,
+  hogy az egyik oldalon nem látjuk a gólokat. A figyelmeztetés ezt
+  kimondja, és a teendő-rangsorban a MINDKÉT térfél kalibrációjának
+  ellenőrzésére küld.
+- **Az egyéni feladatok a meccs-csomag edzéstervében is** (felület): a
+  zip `edzesterv.txt` fájlja eddig csak a csapat-szintű fókuszokat
+  hozta — az edző viszont emberre bontva osztja ki a hét munkáját, és
+  a csomagot sokszor épp ezért nyitja meg.
+
+- **Az egyéni gyengeség átmegy a MECCSTERVRE** (motor + felület): az
+  általános felderítő-kulcsok a CSAPATRÓL szólnak — a meccsterv viszont
+  attól lesz konkrét, hogy KIRE mit kell csinálni. A jelentés
+  mostantól viszi, hogy melyik MEZSZÁM veszti el a labdát nyomás
+  alatt, és kinek a kezén szakad el a hajrában (mezszámonkénti
+  darabszám, tehát meccsek közt pontosan összegződik: ami több
+  meccsen visszatér, az nem napi forma). Ebből lett két új edzői
+  kulcs, a **456. meccsterv-szabály** (az ő nyomás-érzékeny emberük ×
+  a ti labdaszerző védekezésetek — a kettőzésnek célpontja van, nem
+  iránya) és két kliens-csempe (Kettőzés-célpont, Hajrá-célpont).
+- **476. edzés-szabály: közös gyengeség** (motor): ha ugyanaz a hiba
+  KÉT vagy több emberünknél jön elő, az már nem egyéni ügy, hanem
+  csoportos edzés-blokk — a szabály meg is nevezi, kiknek.
+
+- **Az egyéni edzés-fókusz két új forrása** (motor): a réteg négy
+  helyett hat mérésből dolgozik — bekerült a **hosszú labda döntése**
+  (kinek az indításai foghatók el) és a **döntés a hajrában** (kinél
+  szakad el a labda a döntő szakaszban). Az őr-teszt is bővült: a
+  "top"-ot adó rétegek MEZŐNEVEIT is ellenőrzi a valódi kimeneten,
+  mert a szabályok try/except-je egy elgépelt kulcsot némán elnyelne.
+
+- **Nyomtatható Edzésterv és Meccsterv** (motor + felület): a pályán
+  és a meccs előtti estén nincs képernyő — az edző a papírt viszi. A
+  két ma született munkalap eddig csak a képernyőn élt. Az
+  **edzésterv-lap** (új végpont, `/library/training-focus/export`) egy
+  oldalon hozza a csapat visszatérő gyakorlandóit ÉS az egyéni
+  feladatokat mezszám (és név) szerint; üres listánál kimondja, hogy
+  ez eredmény, nem hiányzó adat. A **meccsterv-lap** az ellenfél
+  felderítését és a páros-specifikus tervet adja — a saját oldal a
+  SAJÁT csapat saját meccseiből épül, nem abból a feltevésből, hogy mi
+  voltunk az ellenfelük.
+
+## v0.1.69 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: a játékos lapjának lezárása. A "Mit gyakorolj"
+> mostantól nem csak a nyomtatott szezon-lapon van rajta, hanem a
+> képernyőn is, a saját görbe mellett — és a kettő ugyanabból a
+> számolásból él. Plusz a recept egy új szabállyal: ha egy réteg
+> MÁSIK réteg mezőit olvassa, kell mellé teszt, ami a valódi
+> rétegeket futtatja (a try/except az elgépelt mezőnevet is elnyeli).
+
+- **"Mit gyakorolj" a játékos KÉPERNYŐJÉN is** (motor + felület): a
+  játékos a saját görbéjét nézi meg — a teendő legyen mellette, ne egy
+  külön letöltött HTML-ben. Új végpont (`/players/focus`); a képernyő
+  és a nyomtatott lap ugyanabból a számolásból él.
+- **"Mit gyakorolj" a játékos szezon-lapján** (motor): a nyomtatható
+  játékos-lap eddig azt mutatta, hány kilométert futott és hány gólt
+  szerzett — ez az a rész, amiért a JÁTÉKOS elteszi a lapot: min kell
+  dolgoznia. Az egyéni edzés-fókusz minden meccsből összegyűlik erre a
+  mezszámra, és ami több meccsen visszatér, az kerül előre: az nem
+  napi forma, hanem fejlesztendő terület.
+
+## v0.1.68 — kiadva (2026-08-26)
+
+> Kiadás-jegyzet: a JÁTÉKOS kiadása. Eddig minden elemzés a csapatról
+> szólt; az 503. réteg emberre bontja a hét feladatait — nem "a csapat
+> rosszul fejez be", hanem "neked ez a kettő". Ott van a képernyőn, az
+> edzői összefoglalóban és a nyomtatott jelentésen is, mert az egyéni
+> beszélgetés a papírból indul.
+
+- **Az egyéni edzés-fókusz a nyomtatott jelentésben is** (felület): a
+  papír az, amit az edző a kezébe vesz a hét első edzésén — az egyéni
+  beszélgetés abból indul, nem a csapat-listából.
+- **Egyéni edzés-fókusz** (új réteg, `player_training_focus`): a
+  csapat-szintű fókusz megmondja, mit gyakoroljon a CSAPAT — a játékos
+  viszont a saját nevét keresi, és az edző is emberre bontva osztja ki
+  a hét feladatait. Az új réteg a már meglévő játékos-szintű
+  mérésekből állít össze személyes fókuszokat, ugyanabban az alakban,
+  mint a csapat-lista (terület, fókusz, indok, gyakorlat). Négy forrás,
+  mind a maga küszöbével: nyomás alatti labdakezelés, fáradt eladás,
+  befejezés a helyzetminőséghez képest (gól − xG), és második félidei
+  tempó-esés. Emberenként legfeljebb két tétel — a fókusz attól fókusz,
+  hogy kevés; üres lista érvényes eredmény (a mért területeken senkinél
+  nincs kilógó gyengeség). Felületek: `/analyze` és a meccs-csomag, az
+  edzés-végpont `players` kulcsa, az edzői összefoglaló új szakasza és
+  az összegző panel EGYÉNI EDZÉS-FÓKUSZ csempéje. A tesztek közt egy
+  őr, ami a VALÓDI forrás-rétegekkel fut: a szabályok `try/except`-ben
+  ülnek, ami egy elgépelt mezőnevet is elnyelne — a szabály némán
+  semmit sem csinálna, a teszt pedig zöld maradna.
+
+## v0.1.67 — kiadva (2026-08-25)
+
+> Kiadás-jegyzet: a BIZALOM kiadása. A felismerés téved — eddig ezt
+> semmivel nem lehetett javítani, az edző pedig egy rossz eredményű
+> jelentésnek egyetlen számát sem hiszi el, akkor sem, ha a többi jó.
+> Mostantól a gólok kézzel javíthatók, a javítás az egész elemzésen
+> átüt, az állás ott van a lista tetején, és a motor maga szól, ha az
+> eredmény hihetetlenül kevés. Mellette a mezszám-kiosztás egy
+> menetben — ez a kapuőr minden szezon-szintű lap előtt.
+
+- **Mezszámok kiosztása egy menetben** (felület): a mezszám kapuőr —
+  meccsek között csak ez köti össze a játékost, tehát nélküle a Keret,
+  a toplisták és a Játékos-fejlődés néma marad. Eddig a szerkesztés
+  játékosonként külön párbeszéd volt (pályára kattintás → ikon →
+  ablak); tizennégy emberre ez nem munka, hanem elrettentés — és ezért
+  maradt el. Az új listában minden követett játékos egy sor, JÁTÉKIDŐ
+  szerint csökkenő sorrendben (elöl a valódi trackek, hátul a
+  másodperces töredékek), csapatonként csoportosítva; mentéskor csak a
+  változott sorok mennek el.
+
+- **Eredmény-sáv az Események lapon** (felület): az edző az
+  EREDMÉNYBŐL dönti el, hogy hisz-e a jelentésnek — ha a felismerés
+  21–19-et mond a valós 24–22 helyett, a többi szám sem ér semmit a
+  szemében. Az állás mostantól ott van a lista tetején, és mellette a
+  mondat, hogy javítható (különben a javítás-eszközök rejtve
+  maradnának); kézi javítás után a sáv a javítások számát mutatja.
+- **"Gyanúsan kevés gól" figyelmeztetés** (motor): kézilabdában a két
+  csapat együtt percenként nagyjából egy gólt szerez. Ha a felismerés
+  ennek a töredékét látja (0,30 gól/perc alatt, legalább 10 perces
+  felvételen), nem szoros meccset mért, hanem gólokat hagyott ki —
+  jellemzően lövésként jelölte őket. A figyelmeztetés ezt kimondja, és
+  megmondja, hol javítható: nem zsákutca, hanem teendő.
+
+- **A felismerés kézzel javítható** (motor + felület): a felismerés
+  téved — gólt lövésnek lát, lövést nem vesz észre —, és eddig ezt
+  semmivel nem lehetett javítani. Az edző pedig egy rossz eredményű
+  jelentésnek EGYETLEN számát sem hiszi el, akkor sem, ha a többi jó.
+  Az eseménysoron mostantól három javítás érhető el ("ez GÓL volt",
+  "ez csak lövés volt", "nem volt ilyen esemény"), a hiányzó gól pedig
+  felvehető a jelenlegi pillanatra. A javítás a LÖVÉS-FELISMERÉSBE
+  épül be, tehát minden rétegen átüt (eredmény, xG, lövő-listák,
+  hajrá-elemzés, felderítés) — egyetlen helyen javítunk, nem
+  ötszázon; a kézi eredetet a lista meg is jelöli, és minden javítás
+  visszavonható. A javítás a MECCS tulajdonsága: külön fájlban él a
+  meccs mellett, túléli a program újraindítását, és a
+  könyvtár-mentésbe is bekerül. Az egyeztetés-ablak másodpercben van
+  (`OVERRIDE_MATCH_S`), és egy régi, elcsúszott javítás csendben
+  elmarad ahelyett, hogy egy MÁSIK esemény típusát írná át.
+
+## v0.1.66 — kiadva (2026-08-25)
+
+> Kiadás-jegyzet: a bal oldali menü kiegészítésének második köre, és
+> egy régi adósság törlesztése. A játékosok mostantól NEVET kapnak, nem
+> csak mezszámot — az edző nem számokban gondolkodik, a játékos pedig a
+> saját nevét keresi a lapon. Mellette négy új menüpont (Klipek, Keret,
+> Csapat-fejlődés, Jegyzetek), és a klipvágás két néma hibájának
+> javítása.
+
+- **A játékosok nevet kapnak, nem csak számot** (motor + felület): az
+  egész termék "#7"-et mondott — az edző viszont nem számokban
+  gondolkodik, a játékos pedig a saját nevét keresi. A név a
+  CSAPATHOZ és a mezszámhoz tartozik, nem egy meccshez (a mezszám a
+  szezonban stabil, a track-azonosító nem), ezért egy helyen kell
+  megadni: a Keret-lapon, ceruza-ikonnal. Onnantól minden korábbi és
+  későbbi meccsen látszik — keret, toplisták, játékos-fejlődés,
+  nyomtatható szezon-lap. Új végpontok: `GET/POST /library/players`;
+  a névjegyzék a meccs-mappa MELLETT él (a betöltő minden ottani
+  *.json-t meccsnek próbál olvasni), és a könyvtár-mentésbe így is
+  bekerül. A név kényelem, nem adat: sérült névjegyzék mellett a
+  lapok a mezszámokkal ugyanúgy működnek.
+
+- **Jegyzetek menüpont: egy lista, meccsektől függetlenül** (motor +
+  felület): a jegyzetelés eddig egyirányú volt — a meccs közben meg
+  lehetett jelölni egy pillanatot, de utána csak ANNAK a meccsnek a
+  lejátszójában lehetett megtalálni. Az edző fejében viszont a
+  jegyzetek egyetlen listát alkotnak ("amit vissza akarok nézni"), és
+  a hét közbeni munka ebből indul. Új végpont (`/library/notes`) az
+  összes jegyzettel, meccs-környezettel és JÁTÉKIDŐVEL (a
+  képkocka-index az edzőnek semmit nem mond); a képernyő kereshető, és
+  egy sorra koppintva a meccs-elemző a MEGJELÖLT pillanatnál nyílik.
+
+- **Keret menüpont: a csapat MINDEN mezszáma egy táblában** (motor +
+  felület): a szezon-toplisták az öt legjobbat adják — a játékos
+  viszont nem a gólkirályt keresi, hanem a SAJÁT sorát, az edző pedig
+  a teljes keretet nézi végig. Új végpont (`/library/roster`) a csapat
+  minden mezszámával: meccs-darabszám, gól, gólpassz, blokk,
+  labdaszerzés, védés. A meccs-oszlop szándékosan az első: enélkül egy
+  alacsony gólszám félrevezet (kevés játék vagy gyenge forma? — két
+  külön teendő). A tábla rendezhető, egy sorra koppintva a játékos
+  fejlődés-görbéje nyílik ELŐRE KITÖLTVE. A toplista és a keret-lap
+  ugyanabból a számolásból él, hogy ne tudjanak széttartani — teszt is
+  méri az egyezést.
+- **Csapat-fejlődés menüpont** (felület): a "fejlődünk-e?" kérdést
+  eddig két párbeszéd-ablakon át, meccsenként kézzel kellett
+  összekattintani (melyik időszak, melyik oldal) — annyi kattintás,
+  hogy a gyakorlatban senki nem tette fel. Most egy csapatnév elég: a
+  képernyő a könyvtárból összeszedi a csapat összes meccsét dátum
+  szerint, és kettévágja korábbi/újabb időszakra; a vágópont húzható
+  (szünet előtt vs után, régi vs új felállás). Az összevetést a
+  meglévő fejlődés-nézet rajzolja — nem született belőle második,
+  széttartó megjelenítés.
+
+- **Klipek menüpont: szabadon kombinálható videó-csomagok** (felület):
+  a klipvágás eddig csak a meccs-elemző eszköztárában élt, és ott is
+  EGY csomag egyszerre — aki a gólokat és a kihagyott ziccereket is
+  akarta, kétszer vágatott, két zip-be. Az új képernyőn a 19 csomag
+  témák szerint csoportosítva áll (támadás · védekezés · kapus és
+  helyzetek · a meccs gerince · egyéb), tetszőlegesen kijelölhető, és
+  mind EGY zip-be kerül; négy gyors-összeállítás (teljes dosszié,
+  támadás, védekezés, csak gólok) egy kattintás. A vágás haladása
+  látszik — a néma várakozás megakadásnak látszik.
+- **A klip-plafon típusonként igazságos** (motor, javítás): a hatvan
+  klipes plafon eddig IDŐRENDBEN csonkolt, tehát aki sok csomagot kért
+  egyszerre, a meccs első harmadát kapta meg, és a ritka csomagok
+  (fordulópont, 7 a 6) simán kimaradtak, mert a gólok elvitték a
+  keretet. Ez néma hiba: a zip tele van klippel, csak épp nem arról,
+  amit az edző keresett. Mostantól minden kért típus kap kvótát (a
+  szűkösek teljes anyaga befér, a maradék a bővebbeké), és a típuson
+  belül a meccs TELJES idősávjából mintázunk.
+- **A klip-zip típus-mappákba rendez** (motor): egy tizenhárom
+  csomagos dosszié hatvan fájlja egy lapos mappában kezelhetetlen, az
+  edzésen pedig témánként kell levetíteni. Egyetlen típusnál marad a
+  lapos alak.
+
+## v0.1.65 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: a bal oldali menü kiegészítése edzői és játékos
+> szemmel. A motor sok mindent tudott, aminek a felületen nem volt
+> HELYE: az edzésterv, a szezon-toplisták és a meccsterv a kezdőlap,
+> illetve a felderítés mélyén lakott. Egy funkció, amit nem találnak
+> meg, nem létezik.
+
+- **Meccsterv saját menüponttal** (felület): a meccs előtti este EGY
+  kérdése — hogyan verjük meg ŐKET. A meccsterv-illesztés (a mi
+  profilunk × az ő profiljuk) készen volt, de csak a felderítő
+  jelentés egyik kártyájaként: hozzá kézzel kellett kijelölni minden
+  meccset, amelyiken az ellenfél játszott, és külön a sajátjainkat is.
+  Az új képernyőn két csapatnév elég (MI · ŐK) — a meccseket a
+  könyvtárból maga gyűjti össze, oldallal együtt. Két rész: a
+  sorszámozott, páros-specifikus TERV, és a STÍLUS-hasonlóság
+  (0–100) a három legnagyobb eltérésű tengellyel — tükör-meccsen a
+  részletek döntenek, ellentétes stílusnál az, ki kényszeríti rá a
+  sajátját.
+
+- **CSAPAT menücsoport: Edzésterv és Szezon** (felület): a bal oldali
+  menü eddig két csoportot ismert (MUNKAFOLYAMAT, ELEMZÉS), és minden
+  csapat-szintű munka a kezdőlap mélyén lakott. Aki nem görgetett
+  odáig, nem is tudott róluk — pedig készen voltak a motorban.
+  - **Edzésterv** (új képernyő): edzői szemmel a heti munkalap.
+    SZEZON nézet = ami legalább KÉT meccsen előjött ugyanannál a
+    csapatnál (`/library/training-focus`) — ez nem egyszeri kisiklás,
+    hanem edzhető gyengeség; EGY MECCS nézet = a kiválasztott meccs
+    fókuszai. Minden tétel: terület, fókusz, INDOK és konkrét
+    gyakorlat.
+  - **Szezon** (új képernyő): edzői szemmel az összkép (meccsek, mért
+    játékidő, gól, lövés, védés, sprint, táv) és a nyomtatható
+    szezon-/egymás elleni riport; JÁTÉKOS szemmel a toplisták (gól,
+    gólpassz, blokk, labdaszerzés, védés) mezszám szerint. A lap
+    kimondja, hogy a mezszám nélküli játékos KIMARAD a listából —
+    különben hiányzó teljesítménynek olvasná.
+  - A Játékos-fejlődés átkerült ide (nem egy meccsről szól), a menü
+    tíz elemű lett, és a tizedikhez is jár gyorsbillentyű
+    (Cmd/Ctrl+0).
+
+
+- **Tíz esés-réteg a hajrá-profilban** (motor): a hajrá-profil eddig
+  hét esés-jelet nézett, pedig a csomagban ennél több van — így az
+  "egy lapon" ígéret hiányos volt. Bekötve az **elszálló labdák**
+  (`turnover_fade`), az **elfogyó blokk** (`block_fade`) és a
+  **beragadó befejezés** (`finish_fade`). A rangsor két kimondott elve
+  most már a docstringben is ott áll: elöl, ami KÖZVETLENÜL gólt ér
+  (kontra-ablak, eladott labda), utána a fal munkája (hely, nyomás,
+  blokk), majd a támadó-oldali beszűkülés; hátul, ami inkább TÜNET
+  (befejezés, sprint). Új őr-teszt mind a tíz olvasót megszólaltatja
+  egyszerre — egy jel, amit felveszünk a listára, de az olvasója
+  sosem fut le, némán hiányzik.
+
+## v0.1.64 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: egy hiány javítása a saját munkánkban. Az új réteg
+> megszólalt a saját csempéjén, de az összképből kimaradt — az edző
+> pedig az összképet olvassa. Egy réteg akkor kész, ha a szintézisben
+> is ott van.
+
+
+- **A támadás-mélység esése bekerült a hajrá-profilba** (motor): az új
+  réteg a saját csempéjén megszólalt, de az ÖSSZKÉPBŐL kimaradt — ami
+  rosszabb a semminél, mert az edző azt hiszi, mindent lát. (A
+  hajrá-profil saját tesztje pontosan ezt mondja ki.) A rangsorban a
+  beálló-esés UTÁN áll — az elárvult hatos vonal konkrétabb tét, mint
+  a felállás hátrébb csúszása —, de a szélső-esés ELŐTT.
+
+## v0.1.63 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: az 502. elemző réteg, és a gyorsítótár
+> szemantikájának lezárása. Az új réteg a fáradás legőszintébb jelét
+> méri: hátrébb áll-e a támadás a hajrában. A hatos elleni munka
+> (betörés, beugrás, elzárás utáni leválás) lábat kíván, és aki
+> elfárad, egy lépéssel hátrébb marad — onnan viszont már csak a
+> kényelmes, de nehéz átlövés jön. Ez hamarabb látszik, mint a
+> lövés-távolság esése, mert nem kell hozzá lövés.
+
+
+- **Támadás-mélység a hajrában** (új réteg, `attack_depth_fade`): a
+  támadás-mélység megmondja, milyen messze állnak a kaputól felállt
+  támadásban; ez a réteg azt teszi hozzá, hogy VÁLTOZIK-E a meccs
+  alatt. A fáradás egyik legőszintébb jele: a hatos elleni munka
+  (betörés, beugrás, elzárás utáni leválás) lábat kíván, és aki
+  elfárad, egy lépéssel hátrébb marad — onnan viszont már csak a
+  kényelmes, de nehéz átlövés jön. A `shot_distance_fade` a LÖVÉS
+  helyét méri, ez a FELÁLLÁSÉT: a kettő oka ugyanaz, de a második
+  hamarabb látszik, mert nem kell hozzá lövés. Ellenfélként a hajrára
+  a fal beljebb tömörülhet (kilépésre nincs szükség, ha úgysem jönnek
+  be); saját csapatra a teendő a hajrá-támadások első mozdulatának
+  kikötése: valakinek BE kell indulnia. Felületek: /analyze,
+  meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs + 455.
+  meccsterv-szabály), edzés-fókusz (475. szabály), kliens-csempe.
+
+- **A gyorsítótár-kulcs szemantikája rögzítve** (motor + teszt): a
+  v0.1.62-es javítás után a záró "nincs megadva" jelentésű
+  argumentumok is kimaradnak a kulcsból, tehát a `réteg(meccs)`, a
+  `réteg(meccs, None)` és a `réteg(meccs, alapbeállítás)` mind
+  UGYANAZT az eredményt olvassa — mindhárom szó szerint ugyanazt
+  számolja. A hívás maga változatlan (az eredeti argumentumokkal megy
+  tovább), csak a kulcs rövidül. Teszt rögzíti, hogy a MÓDOSÍTOTT
+  beállítás továbbra is külön kulcsot kap: a normalizálás nem moshatja
+  össze a különböző beállításokat, mert az azt jelentené, hogy egy
+  réteg más beállítás eredményét olvassa.
+
+## v0.1.62 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: rövidebb várakozás és őszintébb csomag. A
+> gyorsítótár egy régi hiányossága miatt ugyanaz a mérés kétszer
+> futott le, ha az egyik hívó kifejezetten átadta az alapértelmezett
+> beállítást — javítva: az edzői összefoglaló 16, az ellenszer-lap 27
+> százalékkal gyorsabb. Emellett a meccs-csomag mostantól megnevezi,
+> ha egy elemzés mégsem készült el (a szöveges lapon is), és egy új
+> teszt a TELJES láncot végigjárja egy videótól a csomagig.
+
+
+- **Gyorsítás: az alapértelmezett beállítás nem számol újra** (motor):
+  a gyorsítótár kulcsába a hívás argumentumai is beleszámítanak — és
+  kiderült, hogy a `réteg(meccs)` és a `réteg(meccs, TacticsConfig())`
+  KÜLÖN kulcsot kapott, pedig a `None` épp egy alapértelmezett
+  beállítást jelent. Ugyanaz a mérés így kétszer futott le. A kulcs
+  mostantól az alapértelmezett beállítást a `None`-nal azonosnak veszi
+  (csak akkor, ha a mezői tényleg az alapértékek). Mérve, 15 perces
+  meccsen: edzői összefoglaló 44,2 → 37,1 mp (−16%), ellenszer-lap
+  30,5 → 22,2 mp (−27%). Az őr-hármas változatlan: sorrend-függés 0,
+  tükrözés 0 hibás.
+- **Gyorsítás: a hajrá-rétegek a hatókörbe** (motor): a mai öt
+  esés-réteg és a hajrá-profil is memoizált lett. Ezeket az edzői
+  összefoglaló és a hajrá-profil is kéri, és mindegyik a saját
+  alap-mérését KÉTSZER számolja (a két félidőre külön) — valódi
+  meccsen ez rétegenként tized-másodpercek, összeadva másodpercek.
+
+- **Új teszt: a TELJES lánc egy futásban** (teszt): a modul-tesztek
+  darabonként őrzik a motort, a réteg-regiszter őrei pedig szimulált
+  meccsen néznek mindent — a kettő közt maradt egy rés: a valódi
+  útvonal, ahol egy VIDEÓBÓL indulunk, a detektálás és az utómunka
+  lefut, és a végén a felhasználó jelentést meg csomagot kap. Egy nap
+  alatt hét idő-küszöböt és több némán kimaradó ágat javítottunk —
+  pont az ilyen kör mutatja meg, ha valamelyik javítás elrontotta a
+  valódi utat. Az új teszt végigmegy rajta: előellenőrzés →
+  feldolgozás (másodperces hossz-korláttal) → a mentés meccs-ablak
+  mezői → minőség-jelentés (feldolgozott szakasz, pótolt labda,
+  korábbi pontszámok) → meccs-csomag (minden réteg elkészül) →
+  nyomtatható jelentés.
+
+- **A csomag szöveges lapja is szól a kimaradt elemzésekről** (motor):
+  az elhasalt rétegek listája a v0.1.61 óta bekerül a csomag
+  JSON-jába — de a ZIP-et megkapó edző jellemzően az
+  `osszefoglalo.txt`-et nyitja meg elsőként. Ha ott nincs jelzés, a
+  hiányzó elemzés ugyanúgy nyom nélkül marad el. Mostantól a szöveges
+  lap végén ott a figyelmeztetés a darabszámmal és azzal, hol találja
+  a neveket.
+
+## v0.1.61 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: a "néma kód" elleni kör. A motor minden rétegét és
+> szabályát `try/except` védi, hogy egy elromló darab ne vigye el a
+> többit — ez helyes, de az ára, hogy egy elgépelt név NÉMÁN semmit
+> nem csinál, és a tesztek zöldek maradnak. Ma öt ilyen szabályt
+> találtunk (a v0.1.60 javította őket); most a HIBAFAJTA kapott
+> ellenszert: statikus őr a definiálatlan nevekre, az elgépelt
+> felderítés-mezőnevekre és a rossz alakú edzés-tételekre — plusz a
+> meccs-csomag mostantól megnevezi, ha egy réteg mégis elhasalt,
+> ahelyett hogy nyom nélkül eltűnne.
+
+
+- **A meccs-csomag megnevezi az elhasalt rétegeket** (motor): a
+  csomagban minden elemző réteget `try/except` véd, hogy egy réteg
+  hibája ne vigye el a többit. Az ára eddig az volt, hogy egy elhasaló
+  réteg NYOM NÉLKÜL eltűnt: a kulcs nem került be, a felhasználó pedig
+  azt hitte, az az elemzés nem is létezik. Mostantól a csomag mindig
+  visz egy `_hibas_retegek` listát a réteg nevével és a hiba
+  típusával — üresen is, mert a "nem hasalt el semmi" is állítás —, és
+  ha volt hiba, a feldolgozás állapotüzenete is kimondja. A
+  mintameccsen a lista üres, és ezt őr-teszt rögzíti.
+
+- **Az őr párja: elgépelt felderítés-mezőnév** (teszt): a
+  `rep.wif_fh_wingg` `AttributeError`-t dobna, amit a védő try/except
+  ugyanúgy elnyel — a szabály némán kimarad. A meglévő "néma mező" őr
+  ezt nem fogta meg (a nem létező név egyszerűen kiesett a mezők
+  metszetéből), most külön ellenőrzés nézi. A kódbázis tisztán jött
+  ki; az őr elbukását szándékos elgépeléssel ellenőriztem.
+- **Új őr: definiálatlan nevek a motorban** (teszt): a v0.1.60-ban
+  javított öt néma edzés-szabály gyökere egy elgépelt változónév volt.
+  A rétegeket és szabályokat `try/except Exception: pass` védi —
+  helyesen, hogy egy elromló réteg ne vigye el a többit —, így a
+  `NameError` elveszik, a kód némán semmit nem csinál, és a tesztek
+  zöldek maradnak. Futtatással ez nem elkapható; statikus elemzéssel
+  harminc másodperc. Az új őr a Python hatókör-szabályait követve
+  (függvény-, lambda- és osztály-hatókör külön) végigolvassa a motort
+  és a szkripteket, és jelzi, ami sehol nincs kötve. Külső függősége
+  nincs. A teljes kódbázis tisztán jött ki; az őr elbukását és a
+  téves riasztás hiányát is teszt rögzíti.
+
+## v0.1.60 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: javító kiadás. A v0.1.56–57-ben bevezetett öt
+> hajrá-edzésszabály (fal-mélység, visszaállás, széles játék,
+> halmozott fáradás, beálló-bejátszás) NÉMÁN nem futott le: egy nem
+> létező változóra hivatkoztak, a hibát pedig elnyelte a védő
+> try/except, ami arra való, hogy egy elromló réteg ne vigye el a
+> többit. A tesztek zöldek voltak, mert ezek a szabályok a
+> mintameccsen amúgy sem szólaltak volna meg — a hibát csak MÉRÉSSEL
+> lehetett megtalálni. Mind az öt javítva, és három új őr gondoskodik
+> róla, hogy a "némán semmit nem csináló szabály" ne térhessen vissza.
+
+
+- **JAVÍTÁS: öt új edzés-szabály soha nem futott le** (motor): a
+  v0.1.56–57-ben bevezetett hajrá-rétegekhez tartozó öt edzés-fókusz
+  szabály (fal-mélység, visszaállás, széles játék, halmozott fáradás,
+  beálló-bejátszás) egy NEM LÉTEZŐ változóra hivatkozott. A szabályokat
+  `try/except Exception: pass` védi — helyesen, hogy egy elromló réteg
+  ne vigye el az egész listát —, így a `NameError` elveszett, és a
+  szabályok némán semmit nem csináltak. A tesztek zöldek voltak, mert a
+  fade-rétegek a mintameccsen nem szólalnak meg. Mind az öt javítva a
+  közös `add(...)` alakra, ami a tétel szerkezetét (terület, cím,
+  miért, gyakorlat) és a darabszám-korlátot is garantálja.
+- **A hajrá-rétegek felderítés-oldali szabályai tesztet kaptak**
+  (teszt): a réteg és a felület megléte nem elég — a kulcsnak MEG IS
+  kell szólalnia a megfelelő adatra. Egy elgépelt mezőnév vagy egy
+  rossz irányú összehasonlítás néma szabályt ad, és semmi nem hasal
+  el. Az öt új edzői kulcs és az öt párosított meccsterv-szabály
+  mostantól mind ellenőrzött (a beálló-szabály szándékosan más
+  falformára szól, mint a szélső-szabály — ezt is rögzíti a teszt).
+- **Új őr: az edzés-tételek csak a közös segéden át jöhetnek** (teszt):
+  a fenti hiba a "némán eltűnő" fajtából való, amit futtatással nem
+  lehet elkapni (a szabály amúgy sem szólalt volna meg). Az őr ezért a
+  FORRÁST nézi: nyers `append` az edzés-listára tilos. Plusz egy párja,
+  ami a tényleges kimenet alakját ellenőrzi a mintameccsen.
+
+## v0.1.59 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: az olvashatóság kiadása. Az ötszáz elemző réteg
+> mellékhatása, hogy a jelentések MEGNŐTTEK: az edzői összefoglaló
+> háromezer szavas lett (a "Játékkép és tempó" szakasz egymaga
+> tizenhatezer karakter), a felderítés "Hogyan játssz ellenük"
+> listája pedig 123 tételre. Egyik sem hibás — csak olvashatatlan.
+> Hiányzott a FONTOSSÁGI SORREND, pedig a rendszer már kiszámolja.
+> Mostantól az összefoglaló "A lényeg" szakasszal nyit (a rangsor
+> első három tétele csapatonként, plusz hogy mennyi maradt), és a
+> felderítésben a párosított meccsterv megelőzi a százas általános
+> listát. Semmi nem veszett el: minden szakasz ott van mögötte.
+
+
+- **A párosított meccsterv megelőzi az általános kulcsokat** (kliens +
+  motor): a felderítés két listát ad. A "Hogyan játssz ellenük" kulcsok
+  általánosak és SOKAN vannak — egy hatszáz másodperces mintameccsen
+  123 kulcs, közel húszezer karakter. A meccsterv-szabályok viszont
+  kifejezetten ERRE a párosításra szólnak ("az ő lassuló visszaállásuk
+  × a ti kontrátok"), tehát azok a konkrétak. Eddig mégis a százas
+  lista jött előbb — a felderítő képernyőn és a nyomtatható lapon is,
+  ahol a meccsterv a támadás-mix és a védekezés-eloszlás MÖGÉ került.
+  Mostantól mindkettőn a párosított terv áll elöl: aki két percet szán
+  a felkészülésre, a konkrétat lássa elsőként.
+
+- **Az edzői összefoglaló "A lényeg" szakasszal nyit** (motor): az
+  ötszáz réteggel az összefoglaló HÁROMEZER szavassá nőtt — a
+  "Játékkép és tempó" szakasz egymaga tizenhatezer karakter. Ezt
+  végigolvasni nem reális, és a mondatokra bontás sem segít, ha
+  negyven felsorolás-pont lesz belőle: a hiányzó darab a FONTOSSÁGI
+  SORREND. A teendő-rangsor ezt már kiszámolja, csak eddig a jelentés
+  belsejében lapult. Mostantól a meccs története (rövid, kontextust
+  adó) után rögtön "A lényeg" jön: csapatonként a rangsor első három
+  tétele, és hogy hány további jelzés maradt a részletes szakaszokra.
+  Ez BEVEZETŐ, nem rövidítés — a hosszú szakaszok változatlanul ott
+  vannak mögötte. Aki két percet szán a jelentésre, most is megkapja
+  a három dolgot, ami számít. A kliens ezt a szakaszt nem csukja
+  össze (a többi hosszú szakaszt öt mondat után igen): ha a nyolc
+  tételéből ötöt mutatna, a rangsor vége és a "mennyi maradt" sor
+  eltűnne — pont az, ami miatt a szakasz létezik. A nyomtatható
+  meccsjelentésen kiemelt dobozba kerül: ha ugyanolyan felsorolás
+  lenne, mint a többi tizennégy szakasz, elveszne bennük — pedig pont
+  attól hasznos, hogy az olvasó ott megállhat.
+
+## v0.1.58 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: a visszacsatolás kiadása. Aki a gyenge feldolgozás
+> után újrakalibrál és újrafuttat, eddig egy számot kapott a
+> semmiben ("72/100") — most azt is megtudja, hogy JAVULT-E a
+> legutóbbihoz képest. Emellett a labda-lefedettség többé nem hízik a
+> saját hézagpótlásunktól: a szám azt méri, milyen gyakran LÁTTUK a
+> labdát, a pótolt kockák külön jelennek meg. A háttérben négy új őr
+> azokra a hibafajtákra, amiket nem lehet észrevenni: néma
+> felderítés-mező, rossz feldolgozáson eltűnő réteg, elcsúszott
+> kliens-küszöb.
+
+
+- **A jelentés megmondja, hogy JAVULT-E** (motor + kliens): a
+  minőség-pontszám eddig egy szám volt a semmiben. Aki a gyenge
+  feldolgozás után újrakalibrál és újrafuttat, pont azt a választ
+  keresi, hogy jó irányba ment-e — és a puszta "72/100" ezt nem mondja
+  meg. A minőség-jelentés mostantól viszi a KORÁBBI feldolgozások
+  pontszámát is (legfeljebb hármat, dátum szerint a legfrissebbel
+  elöl), és a különbséget: "Javult: a legutóbbi feldolgozásod 41/100
+  volt (+31 pont)." Az első feldolgozásnál üres a lista — nem találunk
+  ki összehasonlítást. A pontszámok gyorsítótárazva vannak (a kulcsban
+  a kockaszám is benne van, tehát egy újrafeldolgozott meccs friss
+  pontszámot kap).
+
+- **Új őr: nincs néma felderítés-mező** (teszt): a felderítés-jelentésnek
+  több mint EZER mezője van, és a csempék meg a meccsterv-szabályok
+  ezekből olvasnak. Ha egy mezőt senki nem tölt ki, az alapértéke
+  (0 / üres) marad — a csempe pedig ÖRÖKRE néma, vagy ami rosszabb, a
+  szabály hamis feltevéssel dolgozik. Semmi nem hasal el, semmi nem
+  jelez: a réteg egyszerűen nincs ott, és senki nem tudja meg, hogy
+  hiányzik. Az őr mindkét irányt nézi (olvasott-de-nem-töltött, és
+  kiszámolt-de-sehol-nem-olvasott). Az első futás tisztán jött ki: az
+  1052 mezőből egy sem néma.
+
+- **Az őrök kiterjesztése** (teszt): (1) a réteg-eltűnés őre egy
+  harmadik elfajzási esetet is néz — amikor a mezszín-klaszterezés
+  összeomlik, és MINDEN játékos egy csapatba kerül (azonos színű mezek,
+  rossz megvilágítás). Ilyenkor a legtöbb réteg jogosan hallgat, de a
+  kulcsnak ott kell lennie. (2) A kliens-küszöb őre az indítás előtti
+  detektálás-próbára is kiterjed: az a jelzés, ami elrontott
+  kalibrációnál egy órát megspórol, a motoréval AZONOS küszöbnél kell
+  megszólaljon. Az ellenőrzés a hivatkozás KÖRNYEZETÉBEN keresi az
+  értéket — a fájl egésze túl laza lenne, mert egy véletlen tördelési
+  szám "igazolna" egy elcsúszott küszöböt.
+
+- **A labda-lefedettség nem hízik a saját pótlásunktól** (motor +
+  kliens): a mutató eddig minden olyan kockát megszámolt, ahol volt
+  labda-pozíció — beleértve azokat is, amiket MI pótoltunk a rövid
+  hézagokba. Vagyis az őszinteség-mutató a saját találgatásunktól
+  tűnt jobbnak, és a "kevés labda-észlelés" figyelmeztetés épp azokon
+  a felvételeken hallgathatott, ahol a legnagyobb szükség lett volna
+  rá. Mostantól a lefedettség azt méri, milyen gyakran LÁTTUK a
+  labdát; a pótolt kockák külön számként jelennek meg (a kliens is
+  így mutatja: "42% (+9% pótolt)"). A réteg-megbízhatóság
+  labda-családja is a mért számot nézi.
+
+- **Új őrök: a rossz feldolgozáson sem tűnhet el réteg nyom nélkül**
+  (teszt): a meccs-csomag minden elemző rétegét `try/except` védi, hogy
+  egy réteg hibája ne vigye el a többit — a hátulütő, hogy egy elhasaló
+  réteg NÉMÁN eltűnik, és a felhasználó azt hiszi, az az elemzés nem is
+  létezik. Eddig egy őr nézte ezt, a JÓ mintameccsen. Most a rossz eset
+  párja is: (1) labda nélküli feldolgozás (távoli, széles felvételen
+  reális), (2) két másodperces töredék (a megszakadt feldolgozás
+  részleges mentése). Mindkettőn minden réteg-kulcsnak meg kell
+  jelennie — a rétegnek nem kell mondania semmit (üres ítélet a helyes
+  válasz kevés mintára), de a jelentés nem lehet némán hiányos. Épp
+  ezeken a futásokon a legfontosabb, hogy a jelentés elmondja, mi
+  történt.
+
+## v0.1.57 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: a "kocka vagy másodperc" kiadás. A feldolgozás
+> ritkít (a termék alapja minden 3. kocka), és kiderült, hogy HÉT
+> olyan küszöb volt a motorban, ami kockában szerepelt, pedig
+> IDŐTARTAMOT jelent — vagyis a termék alapbeállításán mindegyik
+> HÁROMSZOROS valós időt követelt. A leglátványosabb: a labda rövid
+> eltűnéseit egyenes vonallal pótoljuk, de a "rövid" fél másodperc
+> helyett közel másfél lett — annyi idő alatt kétszer is
+> passzolhatnak, tehát a pótlás nem létező birtoklást és passzokat
+> gyártott. A képen kívüli játékosokat pedig 2 helyett 6 másodpercig
+> vetítettük előre egyenes vonalban, ami egy sprintelőt a pálya túlsó
+> végébe visz. Mind a hét javítva, 25 fps-en pontosan az eredeti
+> értékekre — ez nem hangolás, hanem a szándék helyreállítása.
+> Mérhető hatás: a stride-érzékenységi jelentésből eltűnt a
+> labdatartás-poszt réteg. Mellette két új őr, hogy ez a hibafajta ne
+> jöjjön vissza, egy őr a kliens-küszöbök elcsúszására, és egy új
+> elemzés (beálló-bevonás a hajrában).
+
+
+- **Új őr: az idő-küszöbök nem eshetnek vissza kockára** (teszt +
+  fejlesztési szabály): egyetlen nap alatt HÉT olyan küszöböt
+  találtunk, ami kockában volt megadva, pedig IDŐTARTAMOT jelent — és
+  mivel a feldolgozás ritkít, mindegyik háromszoros valós időt
+  követelt a termék alapbeállításán. A visszaesés reális, ezért az
+  átállított küszöbök kocka-alakja mostantól nem jelenhet meg futó
+  kódban (csak visszafelé kompatibilis alapértékként, a saját
+  definíciójában). A CLAUDE.md is kimondja a szabályt: MINTASZÁM
+  maradhat kockában (100 minta tényleg 100 minta), IDŐTARTAM
+  kötelezően másodpercben, a `match.meta.fps`-ből számolva.
+
+- **Négy további idő-küszöb a valódi másodperchez igazítva** (motor):
+  ugyanaz a hibafajta, mint a hossz-korlátnál, a labda-hézagpótlásnál
+  és a becslésnél — kockában rögzített szám, ami valójában
+  IDŐTARTAMOT jelent. Mivel a feldolgozás ritkít (a termék alapja
+  minden 3. kocka), ezek a küszöbök a minőségi profiltól függően
+  háromszoros valós időt követeltek:
+  - **őrzési párok**: a kommentje eredetileg is "1 mp @ 25 fps"-t
+    mondott, a termékben mégis HÁROM másodperces követést követelt —
+    a rövid, de valódi őrzések kimaradtak a listából,
+  - **blokkolt-poszt**: a lövőt a blokk előtti egy másodpercben
+    keressük; ritkítva ez három másodperc visszanézés lett, és három
+    másodperccel a blokk előtt rendszerint már MÁS volt a labdánál —
+    vagyis a falba lőtt labdát a rossz posztra írhattuk,
+  - **labdatartás**: az "ez csak érintés, nem birtoklás" küszöb 0,2
+    helyett 0,6 másodperc lett,
+  - **beálló-terhelés**: a villanás-szűrő szigora sem függhet a
+    profiltól.
+  Mind a négy 25 fps-en pontosan a régi érték, tehát ez az EREDETI
+  szándék helyreállítása, nem hangolás.
+
+- **A képen kívüli játékosok becslése nem szalad el** (motor): a
+  pásztázó kamerából kicsúszott játékosokat az utolsó látott
+  sebességükből vetítjük előre, és a sebesség hatása egy idő után
+  "elfogy" (a játékos nem mozoghat örökké egyenesen). Ez az idő
+  KOCKÁBAN volt megadva (50 kocka), a feldolgozás pedig ritkít: a
+  termék alapbeállításán 2 helyett 6 másodpercig hatott. Egy 7 m/s-mal
+  sprintelő játékost hat másodperc egyenes vonalú vetítés a pálya
+  túlsó végébe visz — ami rosszabb, mint ha ott "megállna", ahol
+  utoljára láttuk. Ugyanez állt a megbízhatóság felezési idejére is (1
+  helyett 3 másodperc), vagyis a becsült pozíciók a kelleténél tovább
+  látszottak magabiztosnak. Mindkettő mostantól VALÓS másodpercben
+  értendő, a meccs saját képrátájából számolva — 25 fps-en pontosan a
+  régi értékek, tehát ez az EREDETI szándék helyreállítása.
+
+- **A labda-hézagpótlás nem gyárt többé nem létező passzokat** (motor):
+  a felvételen a labda időnként eltűnik (takarás, motion blur), és a
+  rövid hézagokat egyenes vonallal pótoljuk — mert a birtoklás-, passz-
+  és lövés-felismerés folytonos labda-pályát igényel. A korlát viszont
+  KOCKÁBAN volt megadva (12 kocka), a feldolgozás pedig ritkít: a
+  termék alapbeállításán (minden 3. kocka) ez nem fél, hanem közel
+  MÁSFÉL másodpercet jelentett. Másfél másodperc alatt kétszer is
+  passzolhatnak — az odaképzelt egyenes vonal tehát nem létező
+  birtoklást és passzokat gyártott, és pont a birtoklás-, passz- és
+  eladás-alapú rétegek épülnek erre. A korlát mostantól VALÓS
+  másodpercben értendő (fél másodperc — a takarás és a motion blur
+  tipikus hossza, és pontosan ez volt az eredeti szándék is: 12 kocka
+  25 fps-en). A hosszabb hézag marad üres: ott tényleg nincs adat, és
+  ezt a labda-lefedettség száma is őszintén mutatja.
+- **A kétperc-páros edzői kulcs a motor konstansait használja**
+  (motor): eddig kézzel másolt számokkal (3 és 55%) dolgozott, most a
+  réteg saját küszöbeit importálja — így egy küszöb-változás nem
+  csúsztathatja szét a kulcsot és a réteget.
+
+- **Beálló-bevonás a hajrában** (új réteg, `pivot_usage_fade`): a
+  beálló-terhelés megmondja, a támadásaik mekkora része megy át a
+  beállón; ez a réteg azt teszi hozzá, hogy ELFOGY-E a meccs alatt. A
+  beállóba adott labda a kézilabda legnehezebb passza — takarásba,
+  testek közé, pontos időzítéssel. Fáradtan ez fogy el először, és nem
+  azért, mert a beálló nem dolgozik, hanem mert a KISZOLGÁLÓ nem meri
+  (vagy nem látja) beadni. A következmény: a hatos vonal elárvul, a
+  fal nyugodtan dolgozhat kifelé, és a támadás átlövésekbe szorul.
+  Más kérdés, mint a szélső-bevonás esése: az a labda SZÉLES ívű
+  járatásáról szól (lábmunka), ez a MÉLYSÉGI bejátszásról (bátorság és
+  időzítés) — egy csapat elveszítheti a beállóját úgy is, hogy közben
+  végig széthúzva játszik. Bekerült a hajrá-profil rangsorába is (a
+  szélső-esés elé: elárvult hatos vonal mellett a fal kifelé dolgozhat,
+  ami nagyobb tét, mint a középen ragadt labda). Felületek: /analyze,
+  meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs + 454.
+  meccsterv-szabály), edzés-fókusz (474. szabály), kliens-csempe.
+
+- **Új őr: a kliens küszöbei nem csúszhatnak el a motortól** (teszt):
+  a felderítő képernyő közel ötszáz csempéje KÉZZEL másolt számokkal
+  dolgozik ("8+ mért támadás", "60% részarány"), és minden helper
+  kommentje megnevezi, melyik motor-konstanst tükrözi. Eddig semmi nem
+  ellenőrizte, hogy a szám tényleg ugyanaz — egy elcsúszás azt
+  jelentené, hogy a csempe olyat állít, amit a motor nem mondana ki
+  (vagy hallgat ott, ahol a motor beszél), és ez a fajta hiba némán él
+  évekig. Az új őr 363 küszöböt vet össze: megengedő az ÁBRÁZOLÁSSAL
+  szemben (a Dart néha törtet használ százalék helyett, vagy kockát
+  perc helyett), de szigorú a NÉVVEL: nem létező konstansra hivatkozni
+  tilos, mert akkor a következő olvasó rossz helyen módosít. Az első
+  futás egy rossz hivatkozást talált (a kétperc-páros csempe a
+  KIÜLŐ-POSZT réteg konstansaira hivatkozott, más küszöbökkel — az
+  értékek jók voltak, a név nem) és két félrevezető kommentet, ahol a
+  szűrést valójában már a motor elvégzi. Mindhárom javítva.
+- **Új őr: azonos nevű konstans két modulban** (teszt): ugyanaz a név
+  eltérő értékkel két pipeline-modulban csapda, mert a kliens- és
+  doksi-kommentek NÉVRE hivatkoznak. A hat meglévő ütközés dokumentálva
+  (mind szándékos, pl. a kapuelőtér sugara a kapus-jelölésnél 6,8 m —
+  a 6 m-es vonal plusz ráhagyás —, a szimulációban a valódi 6,0 m);
+  újat csak tudatosan, a lista bővítésével lehet bevezetni.
+
+- **Hajrá-profil** (új réteg, `fatigue_profile`): a csomagban egy tucat
+  "esés"-réteg méri, mi változik a 2. félidőre (visszaállás,
+  fal-mélység, védekezési nyomás, szélső-bevonás, sprint). Külön-külön
+  mindegyik egy szám; együtt viszont az edző nem tudja, MIVEL kezdje —
+  pontosan az a gond, amit a minőség-jelentésben az "első teendő" old
+  meg. Ez a réteg összegyűjti a MEGSZÓLALÓ eséseket, és edzői leverage
+  szerint rangsorolja: elöl az áll, ami közvetlenül gólt ér (a lassuló
+  visszaállás minden lövés után kontra-ablakot nyit), utána a fal
+  helye, és csak azután a támadó-oldali beszűkülés és a láb. Három
+  egyidejű jel fölött külön kimondja, hogy ez már nem egy-egy szám,
+  hanem a hatvan perc kérdése. Ha a lista ÜRES, az önmagában értékes
+  információ: a csapat kibírja a hatvan percet, tehát ellene a meccset
+  korábban kell eldönteni. Felületek: /analyze, meccs-csomag, edzői
+  összefoglaló, felderítés (edzői kulcs + 453. meccsterv-szabály),
+  edzés-fókusz (473. szabály), kliens-csempe.
+
+- **Szélső-bevonás a hajrában** (új réteg, `wing_involvement_fade`): a
+  szélső-bevonás megmondja, a támadásaik hány százalékában jár a labda
+  a szél-sávban; ez a réteg azt teszi hozzá, hogy BESZŰKÜLNEK-E a
+  meccs alatt. Ez a fáradás egyik legkorábbi jele, és a lövés-távolság
+  esésének (`shot_distance_fade`) az OKA: a fáradó csapatban a lábmunka
+  fogy el először, a labda nem megy át a széles ívben, minden támadás
+  középen ragad — és onnan már csak a nehéz átlövés marad.
+  Ellenfélként a hajrára a szélső-védők beljebb húzhatók; saját
+  csapatra a teendő a hajrá-támadások első passzának kikötése a szélre
+  (a labda gyorsabb, mint a láb). Felületek: /analyze, meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 452. meccsterv-szabály),
+  edzés-fókusz (472. szabály), kliens-csempe.
+
+## v0.1.56 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: az első éles meccs jelentésének utolsó nyitott
+> pontjai. A hossz-beállítás mostantól TÉNYLEG annyi, amennyit ír
+> (a régi számolás 25 fps-t feltételezett, egy 30 fps-es
+> telefonvideón a "Félidő (~35 p)" 29 percet dolgozott fel — ez
+> önmagában megmagyarázza a "csak az első félidőt elemezte ki"
+> élményt). A jelentés megmondja, MELYIK szakaszt dolgozta fel a
+> videó órája szerint, és hogy kimaradt-e a bemelegítés. A kézi
+> időablak végre tényleg felülír minden felismerést. A meccsterv
+> pedig — a legveszélyesebb hely, mert ez alapján dönt az edző —
+> mostantól szintén elöl mondja meg, ha gyenge alapanyagból épült.
+> Mellette két új elemzés a hajráról: hova áll a fal és milyen
+> gyorsan ér haza a meccs végén.
+
+
+- **A meccsterv is megmondja, mennyire hihető** (motor + kliens): az
+  edzői összefoglaló és a nyomtatható meccsjelentés a v0.1.54 óta elöl
+  visz egy figyelmeztetést gyenge feldolgozásnál — a FELDERÍTŐ jelentés
+  viszont nem. Pedig ez a legveszélyesebb hely: a meccsterv az, ami
+  alapján az edző dönt (kit állít a beállóra, hol fogja a legjobb
+  lövőt, mikor kér időt), és minden mondata magabiztosan fogalmaz. Ha a
+  mögötte lévő feldolgozás gyenge volt, a terv nem a másik csapatról
+  szól, hanem a mérés zajáról. A jelentés mostantól viszi a mögötte
+  lévő feldolgozások minőségét, és gyenge alapanyagnál a felderítő
+  képernyő és a nyomtatható lap is ELÖL szól — a nyomtatott lapon a
+  tartalomjegyzék után, az első szakasz előtt, ahogy a meccsjelentésben
+  is. Több meccsből épült jelentésnél a gyenge feldolgozások SZÁMÁT is
+  kimondja (5 meccsből 1 gyenge más helyzet, mint 5-ből 5). Régi
+  jelentésről (nincs adat) továbbra sem állítunk semmit.
+
+- **A nyomtatható jelentés is megmondja, melyik szakaszról szól**
+  (motor): a lapot napokkal később olvassák vissza, és akkor már semmi
+  nem árulja el, hogy a teljes meccsről szól-e vagy csak az első
+  félidőről. A megbízhatóság-szakasz mostantól viszi a feldolgozott
+  szakaszt a videó órája szerint (pl. "1:00–34:14"). Régi mentésnél
+  (nincs adat) a sor egyszerűen kimarad — nem írunk oda kitalált
+  értéket.
+
+- **Visszaállás a hajrában** (új réteg, `retreat_fade`): a
+  visszaállás-idő (`retreat_time`) megmondja, hány másodperc alatt áll
+  össze a fal a saját lövés után; ez a réteg azt teszi hozzá, hogy
+  ROMLIK-E a meccs alatt. Ez a késői összeomlás leggyakoribb
+  mechanizmusa, és a gólszámban NEM látszik: a csapat ugyanannyit lő a
+  2. félidőben, csak minden lövése után egy másodperccel később ér
+  haza — és az az egy másodperc pont egy kontra-lépés. Ellenfélként ez
+  a hajrá kontra-terve (a kapusnak azonnal indítania kell); saját
+  csapatra a teendő nem futóedzés, hanem a lövés PILLANATÁBAN kijelölt
+  első visszafutó — fáradtan a fejben dől el, ki fordul meg.
+  Felületek: /analyze, meccs-csomag, edzői összefoglaló, felderítés
+  (edzői kulcs + 451. meccsterv-szabály), edzés-fókusz (471. szabály),
+  kliens-csempe.
+
+- **A jelentés megmondja, MELYIK szakaszt dolgozta fel** (motor +
+  kliens): eddig csak a százalékot mondta ("a felvétel 60%-át"). Az a
+  szám viszont nem árulja el, hogy az eleje vagy a vége maradt ki —
+  pedig a felhasználó pont ezt akarja tudni, amikor azt látja, hogy
+  "csak az első félidőt elemezte ki". A jelentés mostantól a
+  forrásvideó órája szerint mondja meg a szakaszt (pl. "1:00–2:40 a
+  10:00 hosszú videóból"), tehát a lejátszóban azonnal ellenőrizhető.
+  A minőség-ablakban külön sorban is látszik.
+
+- **Fal-mélység a hajrában** (új réteg, `line_height_fade`): a
+  védekezési vonal magasságát eddig egy átlagszám írta le az egész
+  meccsre. Ez a réteg azt teszi hozzá, hogy VÁLTOZIK-E: a felismert
+  félidő mentén kettébontva méri, milyen messze áll a fal a saját
+  gólvonaltól. Ha a 2. félidőre közelebb kerül, a fal visszahúzódott —
+  a fáradó láb nem lép ki, a fal beszorul a 6-os köré. Edzőileg ez a
+  legkonkrétabb hajrá-információ a támadónak: visszahúzódó fal ellen a
+  meccs végére a külső lövőket kell helyzetbe hozni (kilépő védő
+  nélkül a 9 méteres lövés zavartalan), feljebb jövő fal ellen viszont
+  a kilépő MÖGÉ kell játszani. Más kérdés, mint a védekezés-fellazulás
+  (`pressure_fade`): az a labdástól mért távolságot méri, ez a fal
+  HELYÉT — egy fal fellazulhat úgy is, hogy a helye nem változik.
+  Felületek: /analyze, meccs-csomag, edzői összefoglaló, felderítés
+  (edzői kulcs + 450. meccsterv-szabály), edzés-fókusz (470. szabály),
+  kliens-csempe.
+
+- **A kézi meccs-időablak tényleg felülír mindent** (motor): a kézi
+  ablak leírása azt ígérte, hogy "felülír minden felismerést" — de nem
+  ez történt. A megadott szakasz beolvasása UTÁN az automatikus
+  meccs-ablak-felismerés még lefutott, és lecsíphetett a megadott
+  szakasz elejéből-végéből. Aki perc:másodpercre megmondta, hol a
+  meccs, nem erre számít; ráadásul pont azok a felvételek hívják elő a
+  kézi ablakot, ahol a felismerés amúgy is téved. Kézi ablaknál
+  mostantól a felismerés le sem fut, és a mentés meccs-ablak mezői
+  ismeretlenek maradnak: a jelentés nem állít semmit olyasmiről, amit
+  meg sem vizsgáltunk.
+
+- **A "Félidő (~35 p)" tényleg 35 perc** (motor + kliens): a
+  hossz-beállítás korlátját a kliens KOCKÁBAN küldte el, és 25 fps-sel
+  számolt — mert a videó valódi képrátáját ott nem ismeri. Egy 30
+  fps-es telefonvideón ez azt jelentette, hogy a "Félidő (~35 p)"
+  valójában 29 percet dolgozott fel, egy 50 fps-esen 17,5-et; a "Próba
+  (~2 p)" ugyanígy rövidült. A felhasználó a feliratot hiszi el, nem a
+  kockaszámot — és utána azt látja, hogy "csak az első félidőt elemezte
+  ki". A korlát mostantól MÁSODPERCBEN megy a motornak, ami a videó
+  valódi fps-ével váltja kockára; a régi, kockában számolt érték
+  tartalékként megmarad arra az esetre, ha az fps nem olvasható ki.
+  Ugyanez az indítás előtti idő-becslésre is áll: a "Próba (~2 p)"
+  becslése két percre szól, nem a teljes videóra. Ha időablak ÉS
+  hossz-korlát is meg van adva, a szigorúbb nyer.
+
+- **A jelentés megmondja, kimaradt-e a bemelegítés** (motor + kliens):
+  a motor eddig is levágta a felvétel nem-meccs széleit (bemelegítés,
+  csapatbemutatás, lefújás utáni rész), de az eredményét SEHOL nem
+  mondta meg — pedig ha a vágás nem sikerült, az álldogálást eladott
+  labdának, a bemelegítő kapura lövést lövésnek látja. A felismerés
+  eredménye mostantól a mentésbe kerül (talált-e összefüggő játékot,
+  és mennyit vágott az elejéből/végéből), a minőség-jelentés pedig
+  kimondja. Három eset, három üzenet: (1) nem találta meg a játék
+  kezdetét → figyelmeztetés + ELSŐ TEENDŐ a kézi időablakra, (2)
+  vágott → megmondja, mennyit (percben), (3) nem volt mit vágni → ezt
+  is kimondja, mert ez ELLENŐRIZHETŐ állítás: aki tudja, hogy a
+  videóban benne volt a bemelegítés, azonnal látja, hogy a felismerés
+  tévedett — nem a kész elemzés furcsaságaiból kell rájönnie.
+  A régi mentésekről (nincs adat) továbbra sem állítunk semmit.
+
+## v0.1.55 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ebben a kiadásban nincs új elemzés — a
+> VÁRAKOZÁS lett rövidebb. A detektálás utáni számolás (az
+> ~500 réteg kiértékelése) feleannyi idő alatt fut le, mint
+> eddig. Az ítéletek egy betűt sem változtak: az őr-jelentések
+> (sorrend-függés, tükrözés, stride) szám szerint ugyanazok,
+> mint a gyorsítás előtt.
+
+
+- **A feldolgozás utáni számolás 40%-kal gyorsabb** (motor): a
+  detektálás után a ~500 elemző réteg kiszámítása is percekbe telik egy
+  teljes meccsen — ez a felhasználó szempontjából ugyanolyan várakozás,
+  mint maga a feldolgozás. Profilozás négy szűk keresztmetszetet
+  mutatott, mind ugyanabból a családból: olyan mérések, amelyek a
+  TELJES felvételt végigjárják, és amelyeket egy összeállítás alatt
+  tucatnyi réteg kér újra és újra (kapus-jelölés, megszakítás-,
+  csere- és hetes-felismerés, kezdő hatos) — ezek mostantól
+  hatókörönként egyszer futnak. Emellett a legforróbb úton (a
+  birtoklás-mérés kockánként, összeállításonként milliószor) a
+  függvényen belüli import is mérhető költség volt: kiemelve.
+  A további körökben a passz-felismerés (168 hívás/összeállítás), a
+  fáradás-mérés és a figura-hatékonyság (öt figura-réteg közös, drága
+  bemenete) is a hatókörbe került.
+  Mérve, 15 perces meccsen: edzői összefoglaló 27,2 → 13,0 mp (−52%),
+  felderítés 22,9 → 12,3 mp (−46%). A teljes teszt-csomag 8:18 → 4:38.
+
+## v0.1.54 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: a jelentések mostantól MAGUK mondják meg,
+> mennyire hihetők. Az edzői összefoglaló és a nyomtatható
+> meccsjelentés is ELÖL visz egy figyelmeztetést, ha a
+> feldolgozás gyenge volt — a pontszámmal, a kifejezetten
+> bizonytalan réteg-családokkal és az első teendővel. Eddig ezt
+> csak egy külön ablakban lehetett megtudni, illetve a nyomtatott
+> lap legalján. Emellett az újrafeldolgozás gombja megmondja, mit
+> visz és mit nem.
+
+- **Az edzői összefoglaló megmondja, mennyire hihető** (motor +
+  kliens): a jelentés minden mondata magabiztosan fogalmaz — így is
+  kell írni egy edzői jelentést. De ha a feldolgozás gyenge volt (a
+  nézőtér is a pályára került, kevés a labda-észlelés), akkor ezek a
+  mondatok zajról szólnak, és eddig ezt csak egy külön ablakban lehetett
+  megtudni, amit nem biztos, hogy bárki megnyit. Az összefoglaló
+  mostantól 50/100 alatt (vagy ha van rangsorolt teendő) visz egy
+  figyelmeztetést: a pontszámot, a kifejezetten bizonytalan
+  réteg-családokat (labda- és pálya-alapú) és az első teendőt. A
+  felületen a jelentés FÖLÖTT áll, más formában; a szöveges alakban is
+  elöl. A szekciók szerkezete változatlan (külön mezőn megy), és üres
+  meccsre továbbra sem mondunk semmit.
+- **A nyomtatható meccsjelentés is elöl szól** (motor): a részletes
+  "Elemzés megbízhatósága" szakasz eddig a lap ALJÁN volt — egy
+  nyomtatott jelentést viszont fentről lefelé olvasnak: aki a végén
+  tudja meg, hogy az adat gyenge, addig már döntött. Gyenge
+  feldolgozásnál mostantól a tartalomjegyzék után, az első tartalmi
+  szakasz ELŐTT áll egy rövid, kiemelt doboz a pontszámmal és az első
+  teendővel. A részletes szakasz a helyén marad.
+
+- **A "gyanúsan sok eladott labda" magyarázata frissült** (motor): a
+  jelzés szövege még a JAVÍTÁS ELŐTTI működést írta le ("a
+  birtokos-váltás egyetlen képkockából eldől, és kockánként átugrik a
+  másik csapatra") — ez a kitartás-követelmény óta nem igaz. Az app nem
+  mondhat valótlant a saját működéséről. Az új szöveg a két valódi okot
+  nevezi meg, teendővel: vagy a labda-észlelés annyira szakadozott,
+  hogy a kitartást is zaj elégíti ki ("Pontos" profil), vagy a
+  feldolgozott szakasz nem is meccs (meccs-időablak).
+
+- **Az újrafeldolgozás megmondja, mit visz és mit nem** (kliens): a
+  gomb a KALIBRÁCIÓT frissíti, a többi beállítást — a meccs időablakát,
+  a minőségi profilt és a hosszt — viszont az EREDETI indításból viszi.
+  Ha a baj éppen az volt, hogy a bemelegítés bekerült az elemzésbe, ez
+  a gomb nem oldja meg. A megerősítő párbeszéd ezt kimondja, és
+  odaküld, ahol megadható (Új elemzés lap) — egy fél-egy órás munkát
+  nem indítunk el ilyen félreértéssel.
+
+- **Az eladott labda kitartás-szabálya: két javítás önellenőrzésből**
+  (motor): (1) a futam hosszát egy kockával rövidebbnek számoltuk (a
+  záró kocka kimaradt), tehát a szabály a szándékoltnál egy hajszállal
+  szigorúbb volt; (2) a felvétel ELEJÉN álló, meg nem erősített
+  villanásból labdaVESZTÉST írtunk valakinek a nevére — pedig a széleken
+  álló rövid futam sosem igazolja magát (nincs mellette mindkét oldalon
+  szomszéd). A végén állóra ez már eddig is így volt; most szimmetrikus.
+
+## v0.1.53 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: két javítás ugyanabból a hibaosztályból — a
+> hátralévő idő becslése olyankor tévedett, amikor a döntésed
+> (megvárod-e, vagy elmész a gép mellől) éppen rajta múlik. A
+> becslés eddig a minőségi profiltól függetlenül és a TELJES
+> videóval számolt; mostantól csak azonos profilú korábbi
+> futásokból, és a megadott meccs-időablakra.
+
+- **A hátralévő idő becslése PROFIL-FÜGGŐ lett** (motor + kliens) —
+  JAVÍTÁS: a becslés eddig a gépen mért ütemet a minőségi profiltól
+  függetlenül használta. Csakhogy a "Pontos" profil sűrűbben mintavesz
+  és nagyobb képen keres, tehát UGYANARRA a videóra többszörös időt
+  kér: aki profilt váltott, "kb. 20 percet" olvasott egy másfél órás
+  munkára — pont akkor, amikor a döntése (megvárja-e) ezen múlik.
+  Mostantól a feldolgozás-napló viszi a profilt, és a becslés csak az
+  AZONOS beállítású korábbi futásokból számol. Ismeretlen profilnál
+  inkább nincs becslés, mint egy másikból vett szám. Az Új elemzés
+  lapon a profil váltása azonnal újraszámolja a becslést.
+- **A becslés a MECCS-ABLAKRA szól, nem a teljes videóra** (motor +
+  kliens): ugyanaz a hibaosztály — ha megadod, hogy a meccs a 4. perctől
+  a 40.-ig tart, csak azt a 36 percet dolgozzuk fel, a becslés viszont a
+  teljes felvétellel számolt. Mostantól a `/preflight` a szűkített
+  szakaszra becsül (a fordított vagy a videón túlnyúló ablakot
+  értelemszerűen kezelve), és a kártya ki is írja: "kb. 1 óra 10 perc
+  lesz (a 95 percből 36 perc feldolgozásával)".
+
+## v0.1.52 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ez a kör az első éles meccs utolsó nyitott
+> tünetét zárja le. A rendszer a meccs ELŐTTI felállásnál is
+> eladott labdákat írt — az ok az volt, hogy a birtokos-váltás
+> egyetlen képkockából eldőlt, és tömörülésnél a jel kockánként
+> ide-oda billegett. Mostantól az eladott labdához kitartás kell:
+> az ellenfélnek tényleg nála kell lennie a labdának. A csapaton
+> belüli passz változatlan.
+
+- **Az eladott labda BILLEGÉSE megoldva** (motor) — JAVÍTÁS: a birtokos
+  a labdához LEGKÖZELEBBI játékos, és a váltás eddig egyetlen
+  képkockából eldőlt. Tömörülésnél (elzárás, beállós harc) és zajos
+  labda-észlelésnél ez kockánként ide-oda billegett, és minden
+  billenésből ELADOTT LABDA lett — az első éles meccsen ez a meccs
+  ELŐTTI felállásnál is eladásokat gyártott, miközben senki nem
+  játszott. Mostantól az eladott labdához KITARTÁS kell: az ellenfélnek
+  legalább 0,3 másodpercig nála kell lennie a labdának. A csapaton
+  belüli passzra ez NEM vonatkozik — az kisebb állítás (a labda nem
+  hagyta el a csapatot), és a passz-alapú rétegek a régi viselkedésre
+  épülnek.
+
+  A kitartást a CSAPATRA mérjük, nem az egyes játékosra: ha az ellenfél
+  megszerzi a labdát és rögtön tovább is passzolja a társának, az attól
+  még valódi szerzés. A küszöb óvatos — a termék alap-ritkításával ez
+  ~0,36 másodpercnyi valós idő, ennél gyorsabban valódi labdaszerzés
+  sem stabilizálódik —, tehát igazi eladást nem veszítünk el. A
+  felvétel legvégén álló, meg nem erősített váltásból sem lesz esemény.
+
+## v0.1.51 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ez a kör arról szól, hogy MELYIK SZÁMOT hidd el.
+> A jelentés mostantól külön szól a labda-alapú (birtoklás, passz,
+> eladás, lövés) és a pálya-alapú (távolság, fal-forma, zónák)
+> rétegekről, és kimondja, ha a labdaeladás-szám nem a játékról
+> szól, hanem a billegő birtokos-váltásról. Az Új elemzés lapon
+> pedig ott a három pont ÉLŐ állapottal, MIELŐTT az óra elindulna:
+> kalibráció, detektálás-próba, meccs-időablak. A kiadás-lánc
+> saját őre is élessé vált: ha a becsomagolt motor nem ír naplót,
+> a kiadás elbukik.
+
+- **"Gyanúsan sok eladott labda" — kimondva** (motor): a birtokos a
+  labdához LEGKÖZELEBBI játékos, és a váltás egyetlen képkockából
+  eldől. Tömörülésnél (és ritka labda-észlelésnél) ez ide-oda billeg, és
+  minden billenésből eladott labda lesz — az éles meccsen ez a meccs
+  ELŐTTI felállásnál is termelt eladásokat. A számot most nem javítjuk
+  ki (az a birtoklás-felismerés dolga, és külön, validált lépést
+  érdemel — lásd az útitervet), de a jelentés kimondja, ha az ütem nem
+  a játékról szól: valódi meccsen fél-másfél eladás jut egy percre
+  csapatonként, négy fölött a jelzés bejön, teendővel együtt.
+
+- **Réteg-megbízhatóság: külön szó a labda- és a pálya-alapú
+  számokról** (motor): az első éles meccsen a felhasználó ugyanolyan
+  magabiztosan olvasta a birtoklás- és passz-számokat, mint a
+  pozíció-alapúakat — pedig a labdát a kockák negyedén láttuk, és a
+  pálya-vetítés is hibás volt. A megbízhatósági lista (amit a
+  minőség-ablak amúgy is mutat) mostantól két új sort visz: a
+  LABDA-alapú rétegeket (birtoklás, passz, eladás, lövés) 40%-os
+  labda-lefedettség alatt megjelöli, a PÁLYA-alapúakat (távolság,
+  fal-forma, zónák) pedig akkor, ha lehetetlen a létszám vagy nincs
+  kalibráció — mindkettőnél megmondva, MIÉRT.
+
+- **A diagnózis-lánc ellenőrzése ÉLES lett** (kiadás): a windowsos
+  füstteszt eddig csak JELEZTE, hogy a becsomagolt motor ír-e
+  `engine.log`-ot — mert a futtató tényleges viselkedését még nem
+  erősítettük meg. A v0.1.50 naplója megerősítette ("engine.log
+  MEGVAN; indulási mérföldkövek: True"), ezért az ellenőrzés innentől
+  megbuktatja a kiadást, ha a napló eltűnik vagy üres marad. Pontosan
+  ez a hiba küldte úgy útjára a korábbi kiadást, hogy a felhasználó
+  üres naplót látott, és nem volt mit elküldenie.
+
+- **A labda-figyelmeztetés mostantól TEENDŐT mond** (motor): a kevés
+  labda-észlelésre eddig annyi volt a válasz, hogy "tisztább felvétel
+  segít" — ami igaz, de a már meglévő felvételen nem lehet vele mit
+  kezdeni. Széles, távoli felvételen a labda alig pár képpont, ezért a
+  "Pontos" minőségi profil (nagyobb felbontáson keres) a leggyorsabb
+  javulás ugyanazon a videón. Ez most a figyelmeztetésben és az "első
+  teendő" rangsorban is szerepel.
+
+- **Indítás előtti ellenőrző lista** (kliens): az első éles meccs úgy
+  ment el, hogy a felhasználó mindhárom buktatóba belelépett egyszerre
+  — rossz kalibrációval indult, a bemelegítés és a csapatbemutatás
+  bekerült az elemzésbe, és mindez csak egy óra múlva derült ki. Az Új
+  elemzés lapon mostantól ott a három pont ÉLŐ állapottal, közvetlenül
+  az indítás gomb fölött: bejelölted-e a pályát, lefuttattad-e a
+  detektálás-próbát (és mit mutatott: hány ember esik a pályára), és
+  megadtad-e a meccs időablakát. Nem tilt semmit — aki tudja, mit
+  csinál, sárga pipákkal is indíthat.
+
+## v0.1.50 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ez a kör bezárja a hurkot az első éles meccs
+> tanulságai körül. A minőség-jelentés eddig felsorolt négy-hat
+> figyelmeztetést; most kiemel EGY teendőt, amivel kezdeni kell —
+> és rögtön mellette ott a gomb, amivel a javított kalibrációval
+> újrafuttatható ugyanaz a meccs (eddig az újrafeldolgozás a régi,
+> rossz kalibrációt vitte volna). Emellett egy tényleges
+> felismerés-javítás: egy lövésből nem lesz négy esemény.
+
+- **Lövés-csendidő: egy lövésből ne legyen négy** (motor) — JAVÍTÁS: az
+  éles meccsen az eseménylistában négy „lövés" állt 1264,6 – 1267,1 mp
+  között, vagyis EGY lövésből négy esemény lett. A hely-alapú
+  ismétlés-szűrő (a labdának ki kell lépnie a kapu-zónából) zajos
+  labda-észlelésnél nem elég: a labda ki-be billeg a zóna szélén.
+  Mostantól ugyanarra a kapura fél másodpercen belül nem indul újabb
+  esemény, és a csendidő minden elnyomott jelöltnél újraindul (a
+  zaj-sorozat így egy eseménnyé olvad). A küszöb szándékosan óvatos:
+  ennél gyorsabban két KÜLÖN lövés fizikailag sem hihető, tehát valódi
+  eseményt nem dobunk el. A ritkább, 1–1,5 másodperces ismétléseket ez
+  nem szűri — azok oka a hibás pálya-vetítés, és a kalibráció
+  rendbetétele oldja meg.
+
+- **Újrafeldolgozás a JAVÍTOTT kalibrációval** (motor + kliens): az
+  újrafeldolgozás leggyakoribb oka éppen az, hogy a kalibráció rossz
+  volt — a felhasználó ilyenkor újrakalibrál a varázslóban (az a
+  videóhoz mentődik), és újraindítja a feldolgozást. Eddig viszont az
+  újrafeldolgozás a JOB régi beállításait vitte, tehát pontosan ugyanazt
+  a rossz eredményt adta volna még egyszer, egy újabb óra árán.
+  Mostantól a videóhoz mentett (frissen javított) kalibráció élvez
+  elsőbbséget, és a feldolgozás a legkorábbi kalibrált kockától indul.
+  A gomb is a helyére került: eddig CSAK a hibára futott munkákon
+  látszott a kezdőlapon — most ott van a meccs minőség-jelentésében is,
+  ahol a baj kiderül.
+
+- **"Első teendő" a minőség-jelentésben** (motor + kliens): egy gyenge
+  feldolgozás négy-hat figyelmeztetést kap egyszerre, és a felhasználó
+  nem tudja, mivel kezdje — pedig a lista eleje és a vége nem
+  egyenrangú: a rossz kalibrációt kijavítva a jelzések fele magától
+  eltűnik, míg a mezszám-hozzárendelés a rossz alapokon semmit nem ér.
+  A jelentés mostantól rangsorol, és kiemel EGY mondatnyi teendőt,
+  amivel kezdeni kell. Őr-teszt vigyáz rá, hogy minden figyelmeztetéshez
+  tartozzon teendő.
+
+## v0.1.49 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ez a kör a KALIBRÁCIÓRÓL szól — az első éles
+> meccs tanulsága az volt, hogy a rosszul bejelölt pálya minden
+> további számot elvisz. Mostantól a kalibráló képernyőn egy
+> gombbal betölthető a sarok-javaslat a felismert pályavonalakból,
+> az indítás rákérdez, ha nincs kalibráció, a futó feldolgozás
+> pedig már pár perc után szól, ha az eredmény használhatatlan
+> lesz — így nem megy el rá egy óra. A kész meccs jelentése
+> kimondja, ha kalibráció nélkül futott.
+
+- **Korai riasztás a futó feldolgozáson** (motor + kliens): egy meccs
+  feldolgozása fél-egy óra, és eddig CSAK a végén derült ki, ha az
+  egész használhatatlan lett (a nézőtér is a pályán, hiányzó
+  kalibráció). Pedig a motor amúgy is ment részeredményt pár
+  percenként — mostantól ugyanabból kiolvassa azt a két jelet, ami már
+  a legelején eldönti a sorsát, és ráteszi a munkára. A Feldolgozások
+  lapon és a kezdőlapon is látszik, tehát három perc után meg lehet
+  szakítani, ahelyett hogy egy óra menne el rá. A riasztás hibája nem
+  érintheti a részeredmény mentését: az fut le előbb.
+- **Kalibráció nélkül rákérdez az indítás** (kliens): nem tiltás — van,
+  amikor egy hozzávetőleges kép is ér valamit —, de a fél-egy órás
+  munka nem indulhat el némán úgy, hogy a végén a nézőtér is a pályán
+  lesz. A párbeszéd elmondja, mit veszít a felhasználó, és felkínálja
+  mindkét utat.
+
+- **"Kalibráció nélkül futott" — kimondva** (motor + kliens): eddig
+  semmi nem jelezte, ha egy feldolgozás pálya-kalibráció NÉLKÜL futott.
+  Pedig ilyenkor a koordináta csak arányos becslés (a kép széle a pálya
+  széle), és a pályán kívüli embereket — kispad, edző, NÉZŐTÉR — nem
+  lehet kiszűrni: mindenki „a pályára" kerül, tehát a távolság-,
+  fal-forma- és birtoklás-alapú elemzések megbízhatatlanok. A meccs
+  mostantól viszi ezt a tényt, a minőség-jelentés kimondja a teendővel
+  együtt, és a kliens is mutatja. A RÉGI mentésekről (ahol nincs adat)
+  szándékosan nem állítunk semmit.
+
+- **Sarok-javaslat a kalibráló képernyőn** (kliens): a motor RÉGÓTA
+  adott négyszög-javaslatot a felismert pályavonalakból
+  (`/broadcast/lines` → `suggested_quad`), de a felület csak említette
+  ("van javaslat") — használni nem lehetett. Mostantól egy gomb
+  betölti a 4 sarkot, és a szöveg kimondja, hogy ELLENŐRIZNI kell:
+  a javaslat segítség, nem garancia. Ez a legfontosabb kényelmi lépés
+  a legdrágább hiba ellen — a rosszul jelölt sarok az egész elemzést
+  elviszi (a lelátó a pályára vetül, a pozíciók félremennek).
+
+## v0.1.48 — kiadva (2026-08-24)
+
+> Kiadás-jegyzet: ez a kör az ELSŐ éles meccs tanulságairól szól. A
+> legfontosabb egy javítás: a minőség-jelentés eddig a TÖBBLET
+> észlelést jutalmazta, ezért egy olyan feldolgozás, amiben a lelátó is
+> a pályára került (27 "játékos" kockánként), 70/100-at kapott. Most a
+> többlet ugyanúgy ront, mint a hiány, a lehetetlen létszám plafont ad,
+> és a detektálás-próba már az INDÍTÁS ELŐTT kimondja, ha a kalibráció
+> a nézőteret is a játéktérre vetíti. A bemelegítés és a
+> csapatbemutatás ellen kézi meccs-időablak jött (perc:másodperc), a
+> "csak az első félidőt elemezte ki" élményre pedig lefedettség-jelzés.
+> Emellett: hátralévő idő a feldolgozásoknál, "kész" bejelentés
+> bárhonnan, indítás előtti hely-ellenőrzés, és új elemző réteg
+> (támadás-ritmus).
+
+- **Minőség-jelentés: a TÖBBLET is hiba** (motor + kliens) — JAVÍTÁS:
+  egy éles meccsen a rendszer 27,4 játékost mért kockánként (a pályán
+  14 lehet: a nézőteret és a kispadot is játékosnak mérte), a jelentés
+  mégis 70/100-at mutatott. A képlet a játékos-lefedettséget 1.0-ra
+  vágta, tehát a hibás feldolgozást TÖKÉLETESNEK látta. Innentől a 14
+  fölötti rész ugyanolyan meredeken ront, ahogy a hiány, a lehetetlen
+  létszám pedig PLAFONT ad az összpontszámra (jó labda-lefedettséggel
+  se lehet "közepes" egy olyan feldolgozás, amiben a lelátó is a
+  pályán van). Külön figyelmeztetés is jár hozzá, a leggyakoribb okkal
+  és a teendővel: a 4 sarokpont a JÁTÉKTÉR sarkait jelölje, fél pálya
+  esetén a fél-pálya kalibrációt kell választani, és a rajzolt 6/9
+  m-es vonalnak rá kell ülnie a valódira.
+- **Kézi meccs-időablak** (motor + kliens): a feltöltött felvételben
+  rendszerint benne van a bemelegítés és a csapatbemutatás — ezekből a
+  felismerő lövést és eladott labdát csinál. Az automatikus meccs-ablak
+  eddig is vágott, de rossz kalibrációnál becsapható (ha a lelátó is a
+  pályára vetül, a bemelegítés is "játéknak" látszik). Mostantól az Új
+  elemzés lapon megadható perc:másodperc alakban, hol kezdődik és hol
+  ér véget a MECCS; ez felülír minden felismerést, bekerül a mentett
+  paraméterekbe (tehát a Folytatás is ezt viszi), és a köteg többi
+  videójára is érvényes.
+- **"A felvétel mekkora részét dolgoztuk fel"** (motor + kliens): a
+  meccs mostantól viszi a FORRÁSVIDEÓ hosszát, és a minőség-jelentés
+  kimondja, ha a feldolgozott szakasz a felvétel 60%-a alatt maradt.
+  Enélkül a "csak az első félidőt elemezte ki" élmény
+  megmagyarázhatatlan: nem derül ki, hogy megvágott feltöltésről, a
+  hossz-beállításról vagy megszakadt feldolgozásról van-e szó.
+
+- **Új elemző réteg: támadás-ritmus** (`attack_tempo_variety`): a
+  támadó-szakaszok HOSSZÁT három sávba soroljuk (12 mp alatt gyors, 30
+  mp fölött hosszú). Nem az a kérdés, melyik a jobb, hanem hogy
+  egyfélék-e: aki egy tempóban játszik, kiszámítható. Edzőileg ez a
+  felkészülés ritmusa — gyors befejezőknél a visszarendeződés a
+  meccsterv első pontja, hosszan járatóknál türelmes, hibátlan fal kell
+  (a passzív jel a védőnek dolgozik), váltogatóknál pedig a JELZÉSEKRE
+  kell edzeni a felismerést. Felületek: /analyze, meccs-csomag, edzői
+  összefoglaló, felderítés (kulcs + 449. meccsterv-szabály), edzés-fókusz
+  (469. szabály), kliens-csempe.
+
+- **Indítás előtti ellenőrzés: hely és várható idő** (motor + kliens):
+  egy meccs feldolgozása fél-egy óra. A legrosszabb vég az, amikor ez
+  az óra elmegy, és UTÁNA derül ki, hogy nem volt hova írni az
+  eredményt. Mostantól a motor az indításkor megnézi a szabad helyet,
+  és kevésnél el sem indítja a munkát — magyar indoklással, számokkal
+  (mennyi van, mennyi kellene). A második kérdés a "meddig tart": az
+  új `POST /preflight` a videó hosszából és a gépen KORÁBBAN mért
+  ütemből ad becslést, tehát nem laborszám, hanem az adott gép saját
+  tempója. Az első pár feldolgozásnál nincs becslés — inkább semmi,
+  mint egy téves szám. Az Új elemzés lapon mindkettő ott van az
+  indítás gomb mellett.
+
+- **"Kész!" — a feldolgozás vége megtalál bárhol** (kliens): a
+  Feldolgozások menüpont után maradt egy rés: ha a felhasználó közben
+  máshol dolgozik az appban, a munka befejezéséről CSAK úgy értesült,
+  ha visszament megnézni — a menü-jelvény eltűnése néma. Mostantól a
+  burokban (tehát minden képernyőn) megjelenik egy sáv: kész a
+  feldolgozás, itt a meccs, egy kattintás a megnyitás; hiba esetén a
+  motor magyar indoklása és a részletek gomb. A megszakított munkát
+  szándékosan NEM jelenti be — azt a felhasználó maga állította le. Az
+  app indulása utáni első kör is néma: a tegnapi kész elemzést ma
+  reggel bejelenteni értelmetlen lenne.
+
+- **Hátralévő idő a feldolgozásnál** (motor + kliens): percekig futó
+  munkánál ez volt a leghiányzóbb adat — a százalék önmagában nem
+  mondja meg, hogy megvárd-e, vagy elmenj a gép mellől. A motor
+  mostantól minden futó munkához ad becslést (`eta_s`): a TÉNYLEGES
+  munkaidő és a haladás arányából, tehát a sorban töltött idő nem
+  számít bele (különben a második munka becslése reménytelenül
+  túllőne). Az első öt százalékban nincs becslés: ott a modell-betöltés
+  és a videó-megnyitás torzít, és egy vadul téves "kb. 3 óra" rosszabb,
+  mint a semmi. A felület emberi mondatként mutatja ("kb. 12 perc van
+  hátra") a Feldolgozások lapon és a kezdőlapon is.
+- **Windowsos telepítő: a diagnózis-lánc jelentése a napló végén**
+  (kiadás): a füstteszt eddig is megnézte, hogy a becsomagolt motor
+  hibája végigfut-e a diagnózis-láncon, de a válasza a hosszú napló
+  közepén veszett el. Mostantól a windowsos munka UTOLSÓ lépése újra
+  kiírja a verdiktet, tehát a napló rövid végéből is látszik.
+
+## v0.1.47 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ebben a körben a hosszú feldolgozás körüli élet lett
+> rendben. Új **Feldolgozások** menüpont: a menüben élő szám mutatja,
+> hány elemzés fut, tehát nyugodtan átmehetsz máshova az appban, és egy
+> kattintással visszatalálsz — a részleges eredmény menet közben is
+> megnyitható. A motor emellett **ébren tartja a gépet** a munka
+> idejére, hogy a tétlenségi alvás ne állítsa meg a számítást (a
+> lehajtott MacBook-tető külső kijelző nélkül továbbra is alvás — ezt
+> alkalmazásból nem lehet felülbírálni, és a felület ezt ki is mondja).
+> Két régi, néma hiba is javult: az ÉKEZETES útvonalon lévő videó
+> Windowson nem nyílt meg (magyar felhasználónál mindennapi eset), és a
+> motor pontos magyar hibaüzenetei sosem jutottak el a képernyőig — 72
+> hívóhely csak "HTTP 400"-at mutatott. Új elemző réteg:
+> eladás-kényszer (kipréselik belőlük, vagy maguktól szórják el).
+
+- **Feldolgozások: külön menüpont, élő jelvénnyel** (kliens): egy meccs
+  feldolgozása percekig fut, de a haladás eddig CSAK a kezdőlapon
+  látszott, és csak amíg a felhasználó ott állt. Aki közben átment a
+  felderítésre vagy a figura-tervezőbe, elvesztette szem elől, és nem
+  volt hová visszamennie. Mostantól saját menüpont van rá, a menüben
+  ÉLŐ szám mutatja, hány elemzés dolgozik (bárhonnan látszik), a lapon
+  pedig ott a szakasz, a százalék, a megszakítás, az "ami eddig kész"
+  gomb (a részleges eredmény menet közben is megnyitható), és alatta a
+  LEZÁRT feldolgozások naplója a hibaüzenetekkel. A kérdezgetést egy
+  KÖZÖS figyelő végzi, tehát a kezdőlap és az új lap együtt sem
+  terheli jobban a motort, mint eddig a kezdőlap egyedül. Őr-teszt
+  védi.
+
+- **A gép nem alszik el feldolgozás közben** (motor): a feldolgozás
+  percekig-órákig tart, és közben a felhasználó nem a képernyőt nézi —
+  elmegy, lehajtja a laptop tetejét. A rendszer ilyenkor tétlenségi
+  alvásra vált, és a számítás megáll vagy lelassul. Mostantól a motor a
+  MUNKA IDEJÉRE alvás-gátló zárat fog (macOS: caffeinate a saját
+  folyamatunkhoz kötve; Windows: SetThreadExecutionState), és a végén —
+  kész, hiba és megszakítás után is — MINDIG elengedi, hogy a gép ne
+  maradjon ébren fölöslegesen. A Feldolgozások lap ki is írja, hogy a
+  gép ébren marad. Őszintén a határról: MacBookon a LEHAJTOTT tető
+  külső kijelző nélkül a macOS-t akkor is elaltatja — ezt alkalmazásból
+  nem lehet felülbírálni; a zár a képernyő-elalvás utáni tétlenségi
+  alvást és a lemez-alvást oldja meg. Három teszt védi, köztük az,
+  hogy a zár hibája sosem akadályozhatja a feldolgozást.
+
+- **Ékezetes útvonalon is megnyílik a videó** (motor, javítás): az
+  OpenCV Windowson a rendszer kódlapján át nyitja a fájlt, ezért az
+  ÉKEZETES útvonalon (magyar felhasználónál a mindennapi eset:
+  `C:\Users\Dávid\Videók\meccs.mp4`) egyszerűen nem nyílt meg — és
+  NEM is dobott hibát, csak "nem sikerült képkockát olvasni" lett
+  belőle. A kódbázisban kilenc helyen nyitottunk videót, egyik sem
+  nézte meg, sikerült-e. Mostantól egy közös megnyitó (`video_io.py`)
+  csinálja: ha az ékezet miatt bukna, MÁSODIK próbálkozás a Windows
+  rövid (8.3-as, csak ASCII) útvonalával, és ha úgy sem megy, EMBERI
+  mondat jön a teendővel ("tedd a fájlt ékezet nélküli mappába"),
+  megkülönböztetve a hiányzó fájltól és az ismeretlen kodektől. Öt
+  teszt védi.
+
+- **A szerver magyarázata eljut a felhasználóig** (kliens, javítás): a
+  motor sok hibára pontos, magyar mondatot ad — például hogy az
+  útvonalban ékezet van, és mit tegyen ellene. A kliensben ez
+  ELVESZETT: 72 hívóhely csak "HTTP 400"-at dobott, tehát a legjobb
+  magyarázatunk sosem jutott el odáig, ahol elolvassák. Mostantól
+  minden hívás a szerver `detail` mezőjét mutatja, ha van; a
+  státuszkód csak akkor marad, ha nincs jobb. Őr-teszt védi, hogy ne
+  csússzon vissza.
+
+- **Eladás-kényszer** (új réteg): az eladás-rétegek eddig azt mondták
+  meg, KI veszíti el a labdát, HOL, MIKOR és mennyibe kerül — azt nem,
+  hogy KI TEHET RÓLA. Pedig a kétféle eladás két különböző teendő: ha
+  az ellenfél VESZI el (védő volt a labdás emberen), az a fal érdeme;
+  ha üres térben szórják el, az a saját technikájuk hibája. Az új réteg
+  minden eladás pillanatában megméri, milyen messze volt a legközelebbi
+  ellenfél (2,5 m-en belül = kényszerített). Edzői olvasat: ha az
+  ellenfél eladásai MAGUKTÓL jönnek, a letámadás keveset ad hozzá, a
+  kockázata viszont megvan — maradjatok zárt falban. Ha kipréseltek, a
+  prés működik: a kettőzést tartani kell. Saját oldalon a magától jött
+  eladás edzés-téma, nem taktika. Felületek: /analyze, meccs-csomag,
+  edzői összefoglaló, felderítő kulcs (mindkét irányra) + meccsterv
+  (448.), edzés-fókusz (468.), kliens-csempe, 3 teszt.
+
+- **Az indító képernyő mutatja, mennyi ideje vár** (kliens): az ELSŐ
+  indítás percekig is tarthat (a víruskereső egyszer végigolvassa a
+  programot), és eddig ilyenkor csak egy néma pörgettyű forgott. A
+  felhasználó ebből azt hiszi, lefagyott, és bezárja a programot —
+  pont azt a folyamatot lőve ki, amelyik mindjárt kész lenne.
+  Mostantól három másodperc után látszik az eltelt idő (a bizonyíték,
+  hogy megy), fél perc után pedig egy mondat is: az első indítás
+  lassú, ne zárja be, a következő már gyors lesz. A számláló minden
+  indítási kísérletnél nulláról indul, és a kísérlet végén megáll.
+
+## v0.1.46 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ha eddig azt láttad, hogy "nem érem el a
+> háttérmotort", és a napló semmit nem árult el — ez a kiadás pont
+> ezért készült. Kiderült, hogy a motor üzenetei Windowson EGY MÁSIK
+> FÁJLBA mentek (a becsomagolt motor ablak nélkül fut, ilyenkor a
+> Pythonnak nincs kimenete), és a program ezt a fájlt meg sem nézte:
+> a hiba-képernyőn ezért csak az állt, hogy "elindítottam" és
+> "leállt". Mostantól mindkét naplót mutatja. A motor emellett
+> elmondja, MEDDIG jutott az indulásban (a nehéz részek betöltése
+> előtt is naplóz), a végzetes hibát tartós fájlba menti, és akkor
+> sem hal meg némán, ha az adatmappa nem írható. A "Diagnosztika
+> másolása" gomb mindezt egy kattintással a vágólapra teszi.
+
+- **A nem írható adatmappa sem öl némán** (motor, javítás): a
+  napló-átirányítás MAGA is elhasalhat, ha az adatmappa nem írható
+  (vállalati gép, OneDrive-ra terelt AppData) — és eddig ez a
+  hibakezelésen KÍVÜL futott, tehát a motor nyom nélkül halt meg: a
+  hibajelentő maga sem futott le. Mostantól a hibakezelésen belül van,
+  és a hibajelentő stdout nélkül is fájlba ír. Három őr-teszt védi (az
+  egyik ténylegesen elveszi a stdout-ot, és ellenőrzi, hogy a napló
+  így is elkészül).
+
+- **Windowson végre látszik, mit mond a motor** (kliens, javítás): a
+  becsomagolt motor ABLAK NÉLKÜLI programként fut, és Windowson
+  ilyenkor a Pythonnak nincs stdout/stderr-je — vagyis a kliens
+  csövébe SEMMI nem érkezik. A motor a saját üzeneteit ezért egy KÜLÖN
+  fájlba írja (`engine.log`), az indító naplója (`engine-app.log`)
+  mellé. A kliens viszont eddig csak a sajátját olvasta: a
+  hiba-képernyőn ott állt, hogy "elindítottam" és "leállt", de a
+  MIÉRT — ami a másik fájlban volt — soha nem látszott. Ez a
+  legvalószínűbb oka annak, hogy a hibajelentések üresnek tűntek.
+  Mostantól a napló-kivonat MINDKÉT fájlt összefűzi, külön
+  fejlécekkel. Őr-teszt védi.
+
+- **A motor elmondja, MEDDIG jutott az indulásban** (motor): a nehéz
+  részek betöltése (torch, OpenCV) másodpercekig — becsomagolt
+  kiadásban, víruskereső-átvizsgálással percekig — tart, és eddig az
+  ELSŐ naplósor is csak utánuk jött. Ha a motor közben halt el
+  (hiányzó rendszerkönyvtár, OpenMP-ütközés), a felhasználó ÜRES
+  naplót látott, és nem lehetett megmondani, hol akadt el. Mostantól
+  mérföldkövek jelzik az utat: "az indító elindult", "webszerver
+  betöltése", "elemző motor betöltése", "a motor betöltve".
+
+- **A végzetes indulási hiba nem vész el** (motor): a `main()`
+  mostantól elkapja a halálos kivételt, kiírja a LÉNYEGET egyetlen
+  sorban (típus + üzenet), és a teljes nyomkövetést tartós fájlba is
+  menti (`engine-crash.log` a felhasználói adatmappában). Eddig a
+  folyamat némán meghalt, és ha a kliens csöve közben eltört, a
+  hibaüzenet nyomtalanul elveszett. A "Diagnosztika másolása" gomb
+  ezt a fájlt is beolvassa. Két őr-teszt védi.
+
+## v0.1.45 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ez a kiadás arról szól, MIÉRT nem indul el a motor —
+> és a legvalószínűbb okot meg is javítja. A becsomagolt motor ~244 MB,
+> és a víruskereső az ELSŐ futásnál végigolvassa; a kliens viszont 90
+> másodperc után nemcsak feladta, hanem LE IS ÁLLÍTOTTA a folyamatot —
+> vagyis pont azt lőtte ki, amelyik talán másodpercekre volt attól,
+> hogy válaszoljon. Újrapróbálásnál az átvizsgálás elölről kezdődött: a
+> hiba fenntartotta önmagát. Mostantól 180 másodperc a türelem, és a
+> még ÉLŐ motrot futni hagyjuk. Mellé egy "Diagnosztika másolása"
+> gomb került mindhárom elakadási pontra: egy kattintás, és a
+> vágólapon ott van minden tény (hol kerestük a motort, írható-e az
+> adatmappa, válaszol-e bármelyik port, a napló vége). A motor naplója
+> ráadásul eddig összetörte a magyar ékezeteket — az is javítva.
+
+- **Az időtúllépés többé nem öli meg az induló motrot** (kliens,
+  KRITIKUS javítás): a becsomagolt motor negyedmilliárd bájt, és a
+  víruskereső az ELSŐ futásnál végigolvassa, mielőtt a program
+  egyáltalán elindulna — lassú lemezen ez simán túlmegy két percen. A
+  kliens 90 másodperc után feladta, és — ez volt a baj — le is ÁLLÍTOTTA
+  a folyamatot. Vagyis pont azt lőttük ki, amelyik talán másodpercekre
+  volt attól, hogy válaszoljon; a felhasználó újrapróbált, és az egész
+  átvizsgálás elölről kezdődött. A hiba önmagát tartotta életben.
+  Mostantól a várakozás 180 másodperc, és ha a folyamat még ÉL, futni
+  hagyjuk: az Újrapróbálom a port-tartomány végigfésülésével megtalálja,
+  amint válaszol. A képernyő ezt ki is mondja ("ne zárd be a
+  programot"). A leállítás a `_stoppedByUs` jelzőn át az őrkutyát is
+  kikapcsolta — az is megszűnt. Őr-teszt védi.
+
+- **"Diagnosztika másolása" gomb a motor-hibáknál** (kliens): a
+  naplófájl önmagában kevés. Ha a motor-program meg sem található,
+  vagy az adatmappa nem írható, akkor NAPLÓ SINCS — a felhasználó
+  pedig csak annyit tud mondani, hogy "nem megy". Az új gomb egy
+  kattintással a vágólapra teszi a hiányzó feltételeket is: app- és
+  rendszer-verzió, hol kerestük a motor-programot (ha nincs meg,
+  MINDEN keresett útvonalat felsorolva) és mekkora, írható-e az
+  adatmappa, válaszol-e bármelyik port a 8000–8010 tartományban, és a
+  napló utolsó 40 sora. Ott van mind a három elakadási ponton: az
+  indító képernyőn, a motor-hiba képernyőn és a nyitóképernyő
+  offline-értesítésén. Őr-teszt védi.
+
+- **A motor naplója már olvasható magyarul** (kliens, javítás): a
+  motor kimenetét a kliens bájtonként dekódolta
+  (`String.fromCharCodes`), ami az ékezeteket összetörte ("Ã¡"
+  az "á" helyett) — pont azt a naplót, amit hibakereséshez kérünk. A
+  dekódolás mostantól UTF-8 (sérült darabhatárt is tűrve). Őr-teszt
+  védi.
+
+- **Nem szivárog a napló-fájlleíró** (kliens, javítás): az őrkutyás
+  újraindítás új napló-sinket nyitott a régi lezárása nélkül.
+  Windowson a még fogott fájl csonkoló megnyitása el is bukhat — azaz
+  pont az újraindításnál veszett volna el a napló. Emellett a sikeres
+  indulás mostantól nullázza az őrkutya újraindítás-kvótáját: a korlát
+  a beindulni SEM tudó motor pörgetése ellen véd, nem az ellen, hogy
+  egy hosszú munkamenetben többször kelljen újraéleszteni.
+
+## v0.1.44 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ez a kiadás egyetlen dolog miatt fontos — feloldja
+> azt a ZÁRT KÖRT, ami a régi verzión ragadt felhasználókat kizárta a
+> javításokból. Ha a motor nem indult el, a program a motor-hiba
+> képernyőn állt meg, és onnan nem vezetett út a frissítőhöz; a
+> frissítéshez viszont se fiók, se motor nem kell. Mostantól a
+> "Frissítés keresése" gomb ott van mindhárom elakadási ponton.
+> (Aki még a régi, hibás verziót futtatja, annak EGYSZER kézzel kell
+> letöltenie a telepítőt a Releases oldalról — utána a program már
+> magától tud frissülni. A fiókokat és a meccseket ez nem érinti: azok
+> külön adatmappában élnek.)
+> Mellette: sima lejátszás gyengébb gépen (a mozgó felületekről eltűnt
+> az elmosás), mozgás-csökkentés támogatása, beszélő jelmagyarázatok,
+> és látszik, hogy a pálya nagyítható.
+
+- **A frissítő motor nélkül is elérhető — a zárt kör feloldása**
+  (kliens, KRITIKUS): a legsúlyosabb hibánk volt, és pont azokat
+  zárta ki, akik régi verzión ragadtak. A lánc: régi verzió → a motor
+  el sem indul → a fiók-kapu a MOTOR-HIBA képernyőn áll meg → onnan
+  NEM vezetett út a frissítőhöz (az a fiók-képernyőn ült, ami motor
+  nélkül el sem érhető) → a felhasználó soha nem jut olyan verzióra,
+  amelyikben a hiba javítva van. Csak kézi újratelepítéssel lehetett
+  kiszabadulni. A frissítéshez viszont SE FIÓK, SE MOTOR nem kell (a
+  kiadásokat a GitHub adja), ezért a folyamat közös helyre került
+  (`update_flow.dart`), és mostantól ott a "Frissítés keresése" gomb
+  MINDHÁROM elakadási ponton: az indító képernyőn (ha a motor el sem
+  indult), a motor-hiba képernyőn és a belépőn. A motor-hiba
+  képernyő szövege ki is mondja, hogy ez a gomb motor nélkül is
+  működik. Őr-teszt védi mind a hármat.
+
+- **Látszik, hogy a pálya nagyítható** (kliens): a felülnézeti pálya, az
+  élő nézet és a videó-panel régóta nagyítható (touchpad-csippentés,
+  Ctrl+görgő, dupla kattintás = vissza) — de ez SEHOL nem volt
+  kiírva, csak a forráskód kommentjében. Egy pályarajzon senki nem
+  próbál csippenteni magától. Mostantól a nézet sarkában halvány
+  jelzés áll: alaphelyzetben azt mondja, hogyan lehet nagyítani,
+  nagyítva pedig a szorzót és a visszaállás módját ("×2,3 · dupla
+  kattintás: vissza"). Mind a négy nagyítható felület egyszerre
+  kapta meg, mert a jelzés magában a nagyítható nézetben ül. A
+  "hogyan nagyíts" súgó CSAK rámutatásra jelenik meg — állandóan
+  kiírva zaj lenne, főleg a videó fölött —, a nagyítás-szorzó
+  viszont mindig látszik: az állapot, nem tipp.
+
+- **A passzháló is megmondja, mit jelentenek a jelei** (kliens): a
+  hőtérkép és a lövéstérkép már kimondja, mit kódol méretbe és színbe
+  — a passzháló volt az utolsó térkép-réteg magyarázat nélkül.
+  Mostantól a csipeten ott áll, hogy a korong mérete a
+  passz-részvétel, a vonal vastagsága pedig a két ember közti passzok
+  száma. (A rajzolóban maradó egyetlen elmosás mellé komment került
+  arról, miért megengedett: a passzháló nem rajzolódik újra
+  képkockánként, és csapatonként egyetlen ilyen ragyogás van.)
+
+- **Az indító képernyő is megmutatja a motor naplóját** (kliens): a
+  motor indulási hibája ELŐSZÖR itt jelenik meg — a fiók-kapu és a
+  nyitóképernyő már eddig is kiírta a napló végét, ez a képernyő
+  viszont egyetlen mondattal elintézte, és a felhasználónak nem volt
+  mit elküldenie. Sikertelen indításnál mostantól itt is ott a napló
+  utolsó sorai, kijelölhető szöveggel, az "Újrapróbálom" gomb fölött.
+
+- **Az animációk tiszteletben tartják a csökkentett mozgást** (kliens,
+  hozzáférhetőség): az app az elmúlt körökben tele lett úszó, pörgő és
+  növekvő elemekkel. Akinél a rendszerben be van kapcsolva a
+  mozgás-csökkentés (macOS: Kisegítő lehetőségek → Kijelző → Mozgás
+  csökkentése; Windows: Animációk kikapcsolása), annál ez nem
+  díszítés, hanem rosszullét. Mostantól a közös animációs elemek
+  (belépő úszás, szám-felpörgetés, hover-emelés, mérő-sáv) és a
+  grafikonok berajzolása is lekérdezi a beállítást, és mozgás nélkül,
+  AZONNAL a végállapotot mutatja — a tartalom ugyanaz marad. A
+  FOLYAMATOS mozgások is megállnak (a feldolgozás-lista forgó
+  lépés-ikonja és a várakozó nézet lélegző ragyogása): a sosem
+  álló mozgás a legzavaróbb fajta, és a haladást a kiemelt sáv, a
+  "folyamatban…" felirat meg az élő másodperc-számláló úgyis
+  elmondja. Őr-teszt védi.
+
+- **A két grafikon is elmosás nélkül ragyog** (kliens, teljesítmény):
+  az eredmény-alakulás és a lövéstérkép betöltéskor BERAJZOLÓDIK, és
+  az animáció alatt képkockánként újrarajzolódnak — gólonként egy-egy
+  elmosott ragyogással. Gólgazdag meccsen ez képkockánként több tucat
+  külön rajz-menet. Mindkettő átállt a sugaras színátmenetre (a pálya
+  és a sztori-sáv mintájára); az őr-teszt mostantól mind a négy
+  képkockánként újrarajzolt felületet védi.
+
+## v0.1.43 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ez a kör a GRAFIKÁKRÓL és a sima futásról szól. A
+> lejátszás alatt másodpercenként 25-ször újrarajzolt felületekről
+> (pálya, meccs-sztori sáv) eltűnt az elmosás — gyengébb gépen ettől
+> akadozott volna a kép —, a labdás ember pedig visszakapta a
+> csapatszínét: a korong marad kék vagy piros, csak a holdudvara
+> arany. A hőtérkép mostantól megmondja, mit jelent a szín; a
+> felderítés keresője kiemeli, HOL talált a 467 mutató közt; a
+> döntés-panel kimondja, mihez képest "optimális" egy passz; az első
+> lépések kártya pedig sorozatnak látszik, nem négy külön tippnek.
+> Új elemző réteg: figura-indító — melyik posztról indul a figurájuk,
+> mert azt a fal már az ELSŐ passznál olvashatja.
+
+- **Figura-indító** (új réteg): a figura-befejező réteg megmondja, KIRE
+  FUT KI a figurájuk — ez azt, HONNAN INDUL. A kettő nem ugyanaz a
+  védekező szempontjából: a befejezőt a fal a lövés előtt egy-két
+  másodperccel ismeri fel, az indítót viszont AZONNAL, az első
+  passznál. A réteg minden figura-klaszterben megnézi, kinél volt a
+  labda a támadás első mért pillanatában, és a poszthoz írja. Edzői
+  olvasat: ha a figura mindig ugyanarról a posztról indul, elég a
+  kiinduló passzsávot zárni — a figura el sem indul. Saját oldalon az
+  indítást variálni kell. Felületek: /analyze, meccs-csomag, edzői
+  összefoglaló, felderítő kulcs + meccsterv (447.), edzés-fókusz
+  (467.), kulcs-poszt lista és jelentés-lencse, kliens-csempe,
+  3 teszt.
+
+- **A labdás ember megtartja a csapatszínét** (kliens): a labdát vivő
+  játékos arany ragyogása eddig a korong FÖLÉ került, és rámosódott —
+  a két csapat labdás embere egyforma sárgás foltnak látszott, pont
+  amikor a legfontosabb tudni, KI van a labdánál. A ragyogás mostantól
+  a korong alá kerül: a token marad kék vagy piros, és csak a
+  holdudvara arany.
+
+- **A hőtérkép megmondja, mit jelent a szín** (kliens): a lövés- és a
+  passz-nézetnek volt magyarázó csipetje, a hőtérképnek nem — pedig
+  ott a SZÍN maga az adat, magyarázat nélkül viszont csak "valami
+  piros folt". Mostantól a bal felső sarokban ott a skála (ritkán →
+  sokat), a csapat neve és a rács mérete. A skála-sáv pontosan azt a
+  fedettség-tartományt mutatja, amit a rajzoló használ — nem ígér
+  többet, mint amit a kép ad.
+
+- **Az "első lépések" kártya sorozatnak látszik** (kliens): az üres
+  könyvtárnál megjelenő négy lépés eddig négy egymás alá tett tippnek
+  tűnt, pedig SORRENDBEN kell elvégezni őket (videó → kalibráció →
+  indítás → elemzés). Mostantól a sorszámokat összekötő vonal fűzi
+  össze, és a lépések lépcsőzve úsznak be — az első benyomás is
+  megmutatja, hogy van egy út.
+
+- **A felderítés keresője megmutatja, HOL talált** (kliens): 467
+  mérőszám közt a puszta szűrés kevés — a szem újra végigolvassa a
+  címeket, hogy megtalálja a keresett szót. Mostantól a találat
+  akcentus-színnel, félkövéren kiemelve látszik a csempe címében. A
+  csoport-nyitó nyíl pedig FORDUL (nem kicserélődik), így látszik,
+  hogy ugyanaz a csoport nyílt ki.
+
+- **Sima lejátszás gyengébb gépen is** (kliens, teljesítmény): a
+  felülnézeti pálya és a meccs-sztori sávja a lejátszófej MINDEN
+  lépésénél újrarajzolódik — másodpercenként 25-ször. Mindkettő
+  elmosással (MaskFilter.blur) lágyította a puha árnyékokat és
+  ragyogásokat: a pályán tizennégy játékos árnyéka + a labdás ember
+  fénye + a labda izzása, a sávon gólonként egy-egy pötty. Ez
+  képkockánként tucatnyi (gólgazdag meccsen több tucat) külön
+  rajz-menetet jelent. A lágyságot mostantól sugaras/lineáris
+  színátmenet adja — a látvány ugyanaz, a költség töredéke, és a
+  pálya árnyéka a motor saját (olcsó) árnyék-útján megy. Őr-teszt
+  védi mindkét felületet.
+
+- **A döntés-panel megmondja, mit mér** (kliens): a passz-döntéseknél
+  eddig ott állt egy szám ("62% optimális") anélkül, hogy bárhol
+  kiderült volna, MIHEZ képest optimális. Mostantól egy mondat
+  megmondja: a mezőny akkori állásából számolva hányszor választotta a
+  legjobb elérhető opciót — és hogy a 100% nem reális cél, mert a
+  kényszerpasszok is beleszámítanak. A két nagy szám felpörög
+  (játékos-váltásnál eddig némán ugrott át, és könnyű volt a régit
+  olvasni az újnak), a cél-lista pedig lépcsőzve épül fel.
+
+## v0.1.42 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: ez a kör arról szól, hogy a program a FELHASZNÁLÓ
+> nyelvén beszéljen, és hogy a grafikák magukban is válaszoljanak.
+> Ha a motor nem válaszol, mostantól van EGY GOMB, ami tényleg
+> újraindítja (és port-újrakeresést is végez), a hibaüzenet pedig
+> odamutat; a felületen pedig egységesen "motor" szerepel a
+> "backend"/"uvicorn" helyett — őr-teszt védi. Az eredmény-grafikonon
+> színes mező mutatja, ki vezetett és mennyivel; a fejlődés-lapon
+> változás-sáv a mutatók nagyságrendjét; a lövéstérkép a meccs
+> sorrendjében rakja ki a lövéseket. Új elemző réteg: hetes-ismétlés
+> — másodszorra is ugyanoda megy-e a hetesük.
+
+- **A motor-hiba üzenete a MEGOLDÁSRA mutat** (kliens): a kapcsolódási
+  hiba eddig azt mondta, hogy "a program újraindítása magától
+  elindítja" — csakhogy ha a motor egy mélyebb okból nem indul, az
+  újraindítás sem segít, és a felhasználó zsákutcába jut. Mostantól az
+  üzenet a nyitóképernyő új "Motor újraindítása" gombjára mutat (ami
+  port-újrakeresést IS csinál), és csak másodsorban javasolja a
+  program bezárását.
+
+- **UI 16. kör: a terhelés-tábla a csapat nyelvén beszél** (kliens): a
+  játékosonkénti táv-csíkok eddig mind akcentus-színűek voltak, pedig
+  a pályán, a grafikonokon és a jelmagyarázatban minden a csapat
+  színét viseli. Mostantól a csík is a csapaté, az aktuális rendezés
+  ÉLÉN álló ember arany jelet és félkövér mezszámot kap (nem kell a
+  lista tetejét külön keresni), a sorok pedig lépcsőzve úsznak be.
+
+- **A meccs-kártya emberi adatokat mutat** (kliens): a könyvtár
+  kártyáinak alsó sora eddig gépi adat volt ("d3f1a · 6000 képkocka ·
+  240.0 s · 25 fps"). Az edzőt a HOSSZ érdekli, percben — mostantól
+  "4:00 perc · 25 kép/mp" áll ott, az azonosító és a képkocka-szám
+  pedig rámutatásra (Tooltip) jön elő, ahol a hibakereséshez kell.
+
+- **Egy néven nevezzük a motort** (kliens, nyelv): a felületen hol
+  "backend", hol "motor", hol "lokális szerver (uvicorn)" szerepelt —
+  ugyanarra a dologra három név, közülük kettő fejlesztői zsargon.
+  Mostantól mindenhol MOTOR: a nyitóképernyő állapotsorán, a
+  meccs-forrás címkéjén, a demó-korlátozásoknál, a kalibráció
+  helyőrzőjén és a videó-út mezőn. Őr-teszt védi: a megjelenített
+  szövegekben nem lehet "backend" vagy "uvicorn" (a kódban, importban,
+  kommentben persze maradhat).
+
+- **"Motor újraindítása" gomb a nyitóképernyőn** (kliens): ha a motor
+  nem válaszol, az értesítés eddig azt mondta, hogy "indítsd el a
+  lokális szervert (uvicorn)" — fejlesztői mondat egy edzőnek, aki
+  asztali alkalmazást telepített, és pont ezt a hibát látta. Mostantól
+  emberi nyelven szól, és van benne EGY GOMB, ami tényleg megcsinálja:
+  előbb újra megkeresi a motort a port-tartományban, és ha sehol nem
+  válaszol, újra is indítja. Ha ez sem sikerül, felugrik a motor
+  naplójának a vége (kijelölhető szöveggel) — enélkül a felhasználónak
+  nincs mit elküldenie a hibáról.
+
+- **UI 15. kör: beszédesebb szezon-összkép a nyitóképernyőn** (kliens):
+  a négy nagy szám eddig négy egyforma szürke dobozban ült, felirat
+  nélkül nem lehetett őket ránézésre megkülönböztetni. Mostantól
+  mindegyik saját ikont kap puha korongon, a kiemelt kártya
+  akcentus-keretet és halk fényt, a sor pedig balról jobbra úszik be —
+  a nyitókép "felépül", nem egyszerre csapódik oda.
+
+- **UI 14. kör: az edzői összefoglaló lett a lap hőse** (kliens): az
+  összefoglaló az egész elemzés emberi nyelvű kivonata, mégis
+  ugyanolyan szürke csempe volt, mint az alatta futó tucatnyi kártya.
+  Mostantól arany keretet és halk arany fényt kap, a címe is aranyra
+  vált ikonnal, a szakaszai és a kiemelések lépcsőzve úsznak be. A
+  hosszú szakaszok kinyitása pedig már nem ugrik: a doboz simán
+  megnő (AnimatedSize), így látszik, hogy ugyanaz a szakasz lett
+  hosszabb.
+
+- **UI 13. kör: a lövéstérkép sorra rakja ki a lövéseket** (kliens):
+  eddig a nézetre váltáskor az egész pontfelhő egyszerre jelent meg —
+  a szem ilyenkor egyben látja, és nem tudja, hol kezdje. Mostantól a
+  jelölők a meccs SORRENDJÉBEN pattannak be (900 ms alatt), így a
+  lövés-történet is olvasható belőle. A térkép-csipet ráadásul
+  kimondja, hogy a jelölő MÉRETE a helyzet értéke (xG) — eddig a nagy
+  körök magyarázat nélkül voltak nagyok.
+
+- **UI 12. kör: az eredmény-grafikon megmutatja a VEZETÉST** (kliens):
+  eddig két lépcsős vonal futott egymás mellett, és a "ki vezetett,
+  mennyivel" kérdést a néző fejben vonta ki belőlük. Mostantól a két
+  vonal KÖZÖTTI mező a vezető csapat színét viseli, a fedettsége
+  pedig a különbséggel nő — ránézésre látszik, meddig tartott a
+  vezetés és mikor fordult a meccs. A csapat-területek halványabbak
+  lettek, hogy a vezetés-mező olvasható maradjon.
+
+- **Hetes-ismétlés** (új réteg): a hetes-sarok réteg eddig a dobó
+  ELOSZLÁSÁT adta ("a heteseinek 60%-a balra megy") — a kapusnak
+  viszont a SORREND kell: hova megy a MOST következő. Két dobó
+  ugyanazzal a 60%-kal teljesen mást jelent. Az új réteg a dobónkénti
+  hetes-sorozat egymást követő párjait nézi: hány ment ugyanabba a
+  sávba. Edzői olvasat: ismétlő dobónál a kapusnak a LEGUTÓBB látott
+  sarkot kell bekiabálni; saját oldalon a dobó kiszámítható, tehát
+  váltani kell. Felületek: /analyze, meccs-csomag, edzői összefoglaló,
+  felderítő kulcs + meccsterv (446.), edzés-fókusz (466.),
+  kulcsember-lista, kliens-csempe, 3 teszt.
+
+- **UI 11. kör: a fejlődés-képernyő mutatja a nagyságrendet** (kliens):
+  a "korábbi → újabb" sorok eddig csak két szám voltak egy nyíllal —
+  abból nem derült ki, hogy a mutató SOKAT vagy alig mozdult.
+  Mostantól minden mutató alatt változás-sáv fut: a hossza a
+  nagyságrend, a halvány rész a közös alap, a színes farok maga a
+  változás. Mellé relatív jelvény kerül ("+23%"), az új érték
+  felpörög, a sorok lépcsőzve úsznak be, az összegzés doboza pedig
+  halk arany fényt kap.
+
+- **A minőség-csipet kimondja, ha van mit javítani** (kliens): a
+  fejlécben ülő minőség-csipet eddig csak SZÍNNEL utalt a bajra, a
+  figyelmeztetések (pl. az elcsúszott kalibráció) a párbeszéd
+  megnyitásáig rejtve maradtak — így a leggyakoribb hiba észrevétlen
+  maradhatott. Mostantól a csipeten arany jelvény mutatja a
+  figyelmeztetések DARABSZÁMÁT, a rámutatás megmondja, mit tegyünk, a
+  részletek pedig a pályán kívülre eső mérés arányát is kiírják.
+
+- **Elcsúszott kalibráció felismerése** (motor): a minőség-jelentés
+  mostantól méri, a mért pozíciók hány százaléka vetül a pályán KÍVÜLRE
+  (2 m tűréssel — a kifutó szélső és a mérés zaja belefér). 12% fölött
+  kimondja, hogy a kalibráció valószínűleg elcsúszott (rossz sarokpont,
+  vagy a kamera elmozdult felvétel közben), és megmondja a teendőt:
+  a Pálya-kalibrációban ellenőrizni kell, hogy a rajzolt 6 m-es ÉS az
+  új 9 m-es vonal ráül-e a valódiakra. Eddig ez a hiba csak
+  "furcsán néznek ki a pozíciók" élményként jelentkezett.
+
+- **Gyorsabb hőtérkép** (kliens, teljesítmény): a puha hőfoltok
+  mostantól sugaras színátmenettel készülnek, nem cellánkénti
+  elmosással — a rácson 200 cella van, és cellánként egy-egy elmosás
+  külön rajz-réteget kényszerített volna ki (gyengébb gépen akadozó
+  kép). A látvány ugyanaz, a költség töredéke. Őr-teszt védi.
+
+- **Élő feldolgozás-képernyő** (kliens): itt tölti a felhasználó a
+  legtöbb várakozási időt, ezért a folyamat mostantól él — a
+  kör-jelző simán úszik az új állásra (nem ugrik), a százalék
+  felpörög, a gyűrű mögött halk akcentus-ragyogás lélegzik; az ÉPPEN
+  FUTÓ lépés kiemelt sávot kap, és az ikonja tényleg FOROG (eddig
+  mozdulatlan "autorenew" volt, ami pont a mozgás hiányát sugallta).
+
+## v0.1.41 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: a felülnézeti pálya mostantól IGAZI kézilabda-pálya —
+> 9 m-es szaggatott vonal, hetes- és kapus-vonal, kapuháló, mélység és
+> gömbölyű játékos-tokenek; a labdás embert arany ragyogás emeli ki. A
+> vezérlők is megfoghatóbbak: a meccs-sztori sávján hover-előnézet
+> mutatja a cél-időpontot, a védekezés-sáv szakaszai felfénylenek, a
+> mezők/gombok/fülek pedig egységes téma-nyelvet kaptak.
+
+- **Egységes gombok, mezők és fülek** (kliens): a beviteli mezők
+  mostantól kitöltött, lekerekített dobozok akcentus-fókusszal (eddig
+  csak a fiók-képernyő csinálta ezt kézzel, minden más a Material
+  aláhúzott alapját kapta); a gombok egységes lekerekítést és tapintható
+  méretet; a meccs-nézet fülei a vékony alsó vonal helyett lekerekített
+  akcentus-pill kijelölést.
+
+- **Idővonalak: hover-előnézet és megfogható szakaszok** (kliens): a
+  meccs-sztori sávján az egér alatt megjelenik a CÉL-IDŐPONT egy kis
+  buborékban (koppintás előtt látszik, hova ugrik a lejátszó), a
+  lejátszófej ragyogó vonalat és felső fogantyút kapott, a gólok
+  pöttyei ragyognak. A védekezés-idővonal szakaszai rámutatásra
+  felfénylenek és megnyúlnak — látszik, melyikre lehet ugrani.
+
+- **Igazi kézilabda-pálya a felülnézeti képen** (kliens): a rajz eddig
+  a 6 m-es kapuelőteret és a középvonalat ismerte; mostantól ott a
+  szabálykönyvi **9 m-es szaggatott szabaddobási vonal**, a **7 m-es**
+  (hetes) és a **4 m-es kapus-vonal**, és a kapuk mögött finom
+  háló-rács. Mellé mélység: a pálya színátmenetes felületet és vetett
+  árnyékot kapott, a játékos-tokenek gömbölyűek (sugaras átmenet +
+  árnyék), a labdás ember arany ragyogást kap, a labda izzik, a
+  kijelölt játékos nyomvonala pedig elhalványuló farokká vált — így a
+  MOZGÁS IRÁNYA is látszik rajta. Őr-teszt védi a pályaelemeket.
+
+## v0.1.40 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: a vizuális kör lezárása. Animált kitöltésű mérő-sávok
+> minden mutató-felületen (közös AnimatedBar elem), animált belépő
+> képernyő és egységes márka-ragyogás a logón — a v0.1.39-es animációs
+> alapokra építve.
+
+- **Belépő képernyő és márka-ragyogás** (kliens): a belépő kártya
+  finoman úszik be (az első benyomás animált), a logó a belépőn és az
+  oldalsávban puha akcentus-ragyogást kapott.
+
+- **Animált mérő-sávok** (kliens): a játékos-táv, döntés-, összegző-,
+  felderítő- és fejlődés-nézetek kitöltés-csíkjai animálva úsznak az
+  értékükre (közös AnimatedBar elem) — a "mennyi?" kérdésre a mozgás
+  maga is felel.
+
+## v0.1.39 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: vizuális kör — az app "megmozdult". Animációs
+> eszköztár (belépő animációk, szám-felpörgetés, hover-emelés), élő
+> grafikonok (berajzolás, terület-kitöltés, sima görbék, ragyogó
+> gól-pontok), puha hőtérkép és ívelt passzháló, világító navigáció, és
+> egységes téma-nyelv a Material szürke alapértelmezései helyett —
+> külső csomag nélkül, csupa beépített Flutter-primitívvel.
+
+- **UI-szépítés: animációk és élő grafikák** (kliens, 4 kör):
+  - Új animációs eszköztár (anim.dart): lépcsőzött belépés
+    (FadeSlideIn), szám-felpörgetés (CountUp), asztali hover-emelés
+    (HoverLift) — csupa beépített primitív, külső csomag nélkül.
+  - Eredmény-grafikon: berajzolás-animáció, csapatszínű
+    terület-kitöltés, ragyogó gól-pontok; intenzitás-grafikon: sima
+    görbék (Catmull-Rom), terület-kitöltés, berajzolás.
+  - Lövéstérkép: a gólok puha csapatszínű ragyogást kapnak; passzháló:
+    ívelt élek, sugaras átmenetű csomópontok, a legaktívabb ember
+    ragyogással; hőtérkép: éles rácstéglák helyett puha, elmosott
+    hőfoltok világosodó maggal.
+  - Dashboard: a meccs-kártyák lépcsőzve úsznak be, hoverre
+    megemelkednek; a statisztika-nagyszámok felpörögnek; a felderítés
+    csempe-fala lépcsőzve épül fel; az oldalsáv kijelölt eleme
+    világító pill.
+  - Globális téma-nyelv: kártya-formájú dialógusok és felugró menük,
+    lebegő lekerekített snackbar, olvasható sötét súgóbuborék,
+    egységes chipek, vékony görgetősáv; a várakozó nézet lélegző
+    ragyogást, az üres állapot belépő animációt és korong-hátteres
+    ikont kapott.
+
+## v0.1.38 — kiadva (2026-08-23)
+
+> Kiadás-jegyzet: megbízhatósági kör. A kiadás mostantól a motorba is
+> belepecsételi a verziót, a /health kiadja, a kliens összeveti — a
+> fél-frissült telepítés (új app + régi motor) piros sávként jelenik
+> meg, megoldással, nem rejtélyes hibaként. Mellé a gépi ellenőrzés
+> erősödött: push-CI (Dart-elemzés + gyors backend-őr kör), és a
+> hiányzó fastapi pótlása, ami miatt az API-őrök eddig némán kimaradtak
+> a CI-futásokból; a csomagolás-füstteszt a verzió-pecsétet is állítja.
+
+- **Fél-frissült telepítés felismerése** (motor + kliens): a kiadás
+  mostantól a MOTORBA is belepecsételi a verziószámot, a /health
+  kiadja, a kliens pedig összeveti a sajátjával — ha az app és a motor
+  verziója eltér (a fájlcsere félbe maradt, vagy a régi app-példány
+  indult el), a dashboard piros sávban kimondja, és a megoldást is
+  adja (teljes újratelepítés a Releases-ről). A rejtélyes "néha
+  furcsán viselkedik" hibaosztály így néven nevezhető. Őr-tesztek a
+  /health-verzióra és a kliens-sávra.
+
+- **A CI-k tényleg futtatják az API-őröket** (infrastruktúra): a
+  teszt-függőségek közül hiányzott a fastapi+httpx, ezért az összes
+  API-teszt (fiókok, réteg-regisztry, könyvtár, csomag) modul-szinten,
+  NÉMÁN kimaradt a gépi futásokból — helyben zöld volt, a CI-ben
+  láthatatlan. A push-CI és a kiadási teszt-kör is pótolta; a push-CI
+  emellett gyors backend-őr kört is kapott a Dart-elemzés mellé.
+
+- **Push-CI Dart-elemzéssel** (infrastruktúra): minden push-ra lefut
+  egy ~2 perces `flutter analyze` — a fordítást blokkoló Dart-hibát
+  nem a drága (~20 perces) kiadási build fogja meg, hanem már a
+  pusholás. Tanulság a v0.1.36-ból: egy típushiba az első kiadási
+  buildet buktatta el.
+
+## v0.1.37 — kiadva (2026-08-22)
+
+> Kiadás-jegyzet: a vendég-mód kerekítése és egy új fáradás-réteg. A
+> vendég-munkamenet mostantól látható (sáv a dashboardon, egy-
+> kattintásos védelemmel), és van belőle út a fiókba a munka
+> megtartásával. Az Elzárás-fáradás a fáradás-család kiegészítése a
+> legfizikálisabb támadó-munkával; mellé a lövés-jelenetet mérő 13
+> réteg az elengedés kockájára állt (a ritkított felvétel pontossága).
+
+- **A jelenet-mérő rétegek is az elengedés kockájáról** (motor): a
+  lövés-jelenetet mérő rétegek (elzárás-használat/-hozam/-fáradás,
+  elzárók és elzárás-párosok, elzárás-védekezés, átvert védők,
+  folyosó-gólok, kapott-lendület, kilépés-büntetés, célba vett védők)
+  a képet eddig az esemény kockáján olvasták — ritkított felvételen
+  ott már mindenki elmozdult. A match_xg lövés-rekordja mostantól a
+  release_t-t is hordozza, és mind a 13 jelenet-mérő az elengedés
+  kockájából mér (tartalék a régi viselkedés).
+
+- **Vendégből fiókba — a munka megtartásával** (kliens): a vendég a
+  fiók-menüből egy kattintással eljut a belépéshez ("Belépés / fiók
+  létrehozása"), a belépési szándékkal nyitott kapu nem takarít, és
+  sikeres belépésnél a vendég-munkamenet úgy zárul le, hogy a munka
+  MEGMARAD — aki fiókot csinált, magáénak vallotta. Ha mégsem lép be,
+  a következő hideg indulás takarít a szokott módon. Őr-teszt védi.
+
+- **Elzárás-fáradás** (új réteg): ELFOGY-E az elzárás-munka a második
+  félidőre — a fáradás-család (blokk-, fal-rés-, láb-fáradás)
+  kiegészítése a legfizikálisabb támadó-munkával. Félidőnként méri, az
+  őrzött lövéseik mekkora hányada elé érkezett elzárás. Edzői olvasat:
+  az elfogyó elzárású csapat ellen a hajrában bátrabban léphet ki a
+  fal (a lövő fedetlenül érkezik); a saját elfogyó elzárás kondíció-
+  kérdés — az elzárók forgatása és a fáradt elzárás-gyakorlat az
+  edzés-téma. Felületek: /analyze + meccs-csomag, edzői összefoglaló,
+  felderítés (félidőnkénti darabszámok, edzői kulcs, 445.
+  meccsterv-szabály), 465. edzés-szabály, kliens-csempe.
+
+- **Vendég-sáv a dashboardon** (kliens): fiók nélküli munkamenetben a
+  meccs-lista tetején sáv jelzi, hogy a most készülő munka az app
+  következő indításakor törlődik — és egy kattintással védhetővé
+  tehető ("Megőrzöm a munkám" = fejlesztői mód). Csendben elveszett
+  munka így nem lehet. A telepítési útmutató a vendég-belépést és a
+  kapu előtti frissítést is leírja. Őr-teszt védi.
+
+## v0.1.36 — kiadva (2026-08-22)
+
+> Kiadás-jegyzet: a belépésnél elakadt felhasználó kiszabadítása, két
+> úton. Egy: vendég-belépés — az app fiók nélkül is használható (a
+> tulajdonjogi tudomásulvétellel), a vendég-munka a következő
+> induláskor törlődik, KIVÉVE ha a fejlesztői mód be van kapcsolva.
+> Kettő: a frissítés-keresés és -telepítés a belépő képernyőről is
+> elérhető — a frissítő eddig a fiók-kapu mögött volt, így aki a
+> belépésnél akadt el, régi verzión ragadt, és a javítások sosem értek
+> el hozzá.
+
+- **Frissítés a kapu előtt** (kliens): a frissítés-keresés és
+  -telepítés mostantól a BELÉPŐ képernyőről is elérhető — eddig csak a
+  dashboardon (a fiók-kapu mögött) élt, így a belépésnél elakadt
+  felhasználó régi verzión ragadt, és a javítások sosem értek el
+  hozzá. A frissítéshez se fiók, se futó motor nem kell. Őr-teszt
+  védi.
+
+- **Vendég-belépés + fejlesztői mód** (kliens): az appba mostantól
+  fiók nélkül is be lehet lépni ("Folytatás fiók nélkül (vendég)" a
+  belépő képernyőn). A vendég-út nem kerüli meg a tulajdonjogi
+  tudomásulvételt (első alkalommal a rövid elfogadó képernyő jön), és
+  a vendégként végzett munka az app következő indulásakor törlődik — a
+  takarítás alapvonal-alapú: csak a vendég-belépés UTÁN készült
+  meccseket törli, a korábbiakat nem, és ha a motor nem érhető el,
+  inkább nem töröl semmit. KIVÉTEL a fejlesztői mód: bekapcsolva a
+  vendég-munka megmarad — a belépő képernyőről és a fiók-menüből is
+  kapcsolható (fejlesztési fázisra való). Őr-tesztek: a
+  tudomásulvétel megkerülhetetlensége, az alapvonal-alapú takarítás
+  és a fejlesztői mód elsőbbsége is védve.
+
+## v0.1.35 — kiadva (2026-08-22)
+
+> Kiadás-jegyzet: három új poszt-réteg egy éjszaka alatt — a
+> réteg-térkép ember/poszt pár-auditjának terméke (mindkét irányban
+> végigfésülve; ezzel a pár-tér lefedett). A Rejtett szervező poszt, az
+> Egálbontó poszt és a Befutó poszt közös elve: a minta posztról
+> ismerszik meg, nem emberről — a felderítési kép a cserék és a
+> meccsek közt is összeadódik. Mellé a poszt-távolság mérés
+> elengedés-kockás pontosítása került még a v0.1.34-be; itt a
+> stride-jelentés frissítése zárja a kört (26 dokumentált, mintavételi
+> természetű eltérés).
+
+- **Befutó poszt** (új réteg): MELYIK POSZT a második hullám a
+  kontráikban — a befutó emberek poszt-szintű párja. A második
+  hullámos kontra-befejezéseket a lövő posztjához írja: a "mindig az
+  átlövő fut be másodikként" típusú kontra-szokás posztról ismerszik
+  meg, a minta a cserék után is él. Edzői olvasat: a
+  visszafutás-parancs posztra szól — az első ember felvétele után a
+  poszt sávjába kell hátralépni, akárki játssza; a saját, egy posztra
+  épülő második hullám kiszámítható — a befutót variálni kell.
+  Felületek: /analyze + meccs-csomag, edzői összefoglaló, felderítés
+  (posztonkénti darabszámok, edzői kulcs, 444. meccsterv-szabály),
+  464. edzés-szabály, kliens-csempe, Kulcs-poszt regisztráció +
+  riport-lencse sor.
+
+- **Egálbontó poszt** (új réteg): MELYIK POSZTJUK viszi el a
+  holtpontokat — az egálbontó emberek poszt-szintű párja. A
+  döntetlenről szerzett gólokat a lövő posztjához írja: a "feszült
+  pillanatban a beállóra megy a labda" típusú holtpont-terv posztról
+  ismerszik meg, és a minta a cserék után is él. Edzői olvasat:
+  egálnál a poszt sávjára korai kettőzés, akárki játssza; a saját, egy
+  posztra épülő holtpont-tervnek második befejezési ág kell másik
+  poszton. Felületek: /analyze + meccs-csomag, edzői összefoglaló,
+  felderítés (posztonkénti darabszámok, edzői kulcs, 443.
+  meccsterv-szabály), 463. edzés-szabály, kliens-csempe, Kulcs-poszt
+  regisztráció + riport-lencse sor.
+
+- **Rejtett szervező poszt** (új réteg): MELYIK POSZTON fut a
+  másod-előkészítés — a hoki-assziszt (rejtett szervező) poszt-szintű
+  párja. A gólpassz előtti passzokat az adó posztjához írja: a
+  "mindig az irányító fordítja meg a falat" típusú szervezés posztról
+  ismerszik meg, nem emberről — a minta a cserék után is él. Edzői
+  olvasat: a passzsáv-zárást a poszt sávjában kell kezdeni, akárki
+  játssza; a saját, egy posztra épülő szervezés kiszámítható — második
+  indító-forrás kell. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (posztonkénti darabszámok, edzői kulcs,
+  442. meccsterv-szabály), 462. edzés-szabály, kliens-csempe,
+  Kulcs-poszt regisztráció + riport-lencse sor.
+
+## v0.1.34 — kiadva (2026-08-22)
+
+> Kiadás-jegyzet: az elengedés-kocka (release_t) elvének végigvitele a
+> teljes motoron. A v0.1.33 a lövés helyét és a kezességet állította az
+> elengedés pillanatára — ez a kör a maradék hely-olvasót is: zónák,
+> kapu-sarok (közös metszéspont-logikából), poszt-távolság,
+> fedezettség, kapus-mérések és a lövés-döntés minősége. A release_t
+> emellett idő-korlátot kapott (követés-lyukon át nem mutat régi
+> kockára). Ritkított felvételen minden hely-alapú ítélet a tényleges
+> elengedési pontból születik.
+
+- **Zónák és kapus-mérések is az elengedés kockájáról** (motor): a
+  lövés-zóna (felderítés), a kapus zóna-bontása, a kapus-forma
+  fedezettség-szűrése és a lövés-döntés minősége (jobb passz-opciók) is
+  az elengedés kockájáról (release_t) mér — az esemény kockáján a labda
+  már métereket repült, a játékosok elmozdultak. Tartalék mindenhol a
+  régi viselkedés.
+
+- **A fedezettség is az elengedés pillanatából** (motor): a védekezés
+  képe (defense), a fedezetten lövők (covered_shooters) és a
+  szélső-kifutás (wing_closeout) a lövő és a védők távolságát eddig az
+  esemény kockáján mérte — ott a labda már úton van, a lövő és a fal
+  is elmozdult (ritkítva métereket). A mérés az elengedés kockájára
+  (release_t) áll; a release_t pedig idő-korlátot kapott: követés-lyuk
+  esetén a lövő NEVE megmarad, de a hely nem állítódik túl régi
+  kockából.
+
+- **A poszt-távolság is az elengedés kockájáról** (motor): a
+  lövés-távolság poszt-bontása (role_shot_distance) a lövő helyét
+  eddig az esemény kockáján olvasta — ritkított felvételen a lövő ott
+  már elmozdult a lövése óta, és a távolság lefelé torzult. A mérés a
+  release_t kockára áll (tartalék a régi viselkedés).
+
+- **A kapu-sarok a tényleges beérkezési pontból** (motor): a
+  gól-felismerés és az elhelyezés-rétegek közös metszéspont-logikát
+  kaptak (goal_crossing_y). A lövő-kapuoldal réteg eddig a gólvonal
+  0,7 m-es sávjába eső mintát követelt — ritkított felvételen ilyen
+  sokszor nincs, az ítélet üresen maradt; mostantól a szakasz-metszés
+  (vagy törésnél az extrapolált pont) y-ja adja a sarkot. A gól-minták
+  rétege a lövő helyét az elengedés kockájáról olvassa. A stride-őr
+  listája 27-ről 25-re rövidült; a maradék eltérés mintavételi
+  természetű (kevesebb minta → óvatosabb ítélet), a jelentés
+  dokumentálja.
+
+
+## v0.1.33 — kiadva (2026-08-21)
+
+> Kiadás-jegyzet: a v0.1.32 aznapi folytatása két szálon. Egyrészt a
+> motor-elérés végleges megerősítése: őrkutya (az elhalt motort a
+> program magától újraindítja), a motor-napló a hiba-képernyőn, és az
+> elveszett válaszú regisztráció belépésbe futtatása. Másrészt a
+> stride-őr leleteinek mélyjavítása: a lövés helye és a kezesség az
+> elengedés kockájáról mérve, az együtemű lövés lövője a röppálya
+> töréspontjából — ritkítva is 24/24 lövő-egyezés, az xG-torzítás
+> eltűnt, a stride-eltéréslista 38-ról 27-re rövidült. Új réteg a
+> Szuper-csere poszt (a tegnapi névre szóló réteg poszt-párja).
+
+- **A kezesség az elengedés kockájáról mérve** (motor): a
+  kezesség-becslés a labda test-melletti oldal-eltolását eddig az
+  esemény-kocka előtti kockán mérte — ott a labda (ritkított felvételen
+  különösen) már repül, és a röppálya oldal-eltolása hamis
+  kezesség-jelet adhatott. A mérés mostantól az elengedés kockájára
+  (release_t) áll: ott a labda még a lövő kezében van — a docstring
+  eredeti szándéka szerint.
+
+- **Az együtemű lövés lövője ritkítva is a lövő** (motor): a
+  röppálya-töréspont szabálya. Ritkított felvételen az elkapásból
+  azonnal (együtemben) leadott lövésnél a labda kézben-tartott kockája
+  eltűnhet a minták közül — a lövő-kereső ilyenkor a PASSZOLÓT nevezte
+  lövőnek (a szimulált meccsen ritkítva 4/24 gól csúszott át a
+  passzolóra). Ritka felvételen (15 fps alatt) a felismerés mostantól a
+  röppálya töréspontját keresi meg (ahol a passz-szár lövés-szárba
+  vált), és a mellette álló saját mezőnyjátékost nevezi lövőnek — sűrű
+  felvételen nem szólal meg. Az elengedés-hely javítással együtt a
+  szimulált meccsen ritkítva is 24/24 a lövő-egyezés, az átlag xG
+  0,141 vs 0,140 (a torzítás eltűnt), a stride-őr eltéréslistája 38-ról
+  27 rétegre rövidült. Egység-teszt: együtemű szélső gól ritkítva.
+
+- **A lövés helye az elengedés kockája** (motor): a stride-őr második
+  lelete. A lövés-esemény a labda KAPU-MEGKÖZELÍTÉSEKOR jelölődik —
+  ekkor a labda már úton van, és ritkított felvételen kockánként
+  métereket ugrik: aki ott méri a lövés helyét, az a kapuhoz
+  közelebbről mér, és az xG felfelé torzul (mérve: 0,14 → 0,20 átlag
+  ritkítva). Az esemény mostantól az ELENGEDÉS kockáját is rögzíti
+  (release_t: az utolsó kocka, ahol a lövő még birtokolta a labdát), és
+  az xG onnan mér — az egyező lövőjű lövések helye ritkítva is kockára
+  azonos. Ami marad: a nagyon gyors (szélső) lövések lövő-hozzárendelése
+  ritkítva néha a passzolóra csúszik — ez mintavételi korlát, a
+  stride-jelentés dokumentálja. Regressziós teszt: a 12 m-es átlövés
+  akkor is 12 m-esként mérődik, ha a lövő utána besétál a hatosig.
+
+- **Motor-őrkutya** (kliens): ha a motor-folyamat magától elhal, a
+  program azonnal, magától újraindítja (munkamenetenként legfeljebb 3
+  próbával — a hibás motort nem pörgeti örökké), a szándékos
+  leállítást (kilépés, frissítés előtti fájlcsere) pedig békén hagyja.
+  A felhasználó így a legtöbb motor-elhalást észre sem veszi: a
+  következő kattintás már az új példányhoz ér. Őr-teszt védi.
+
+- **Szuper-csere poszt** (új réteg): MELYIK POSZTRÓL termel a paduk —
+  a névre szóló Szuper-csere poszt-szintű párja (a kódbázis bevett
+  emberek/poszt réteg-pár mintája szerint). A padról beállók góljait a
+  lövő posztjához írja: a minta akkor is látszik, ha a nevek meccsről
+  meccsre cserélődnek. Edzői olvasat: a posztról olvasható pad ellen az
+  arra a posztra érkező friss embert az érkezése pillanatában kell
+  felvenni; a saját, egy posztra épülő pad kiszámítható — második
+  pad-megoldás kell. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (posztonkénti pad-gól számok, edzői kulcs,
+  441. meccsterv-szabály), 461. edzés-szabály, kliens-csempe,
+  Kulcs-poszt regisztráció + riport-lencse sor.
+
+- **Elveszett válaszú regisztráció → belépés** (kliens): ha az első
+  fiók-létrehozó kérés célba ért, de a válasz elveszett (a motor épp
+  elhalt), az újraélesztett ismétlés "már van fiók" hibát adna — pedig
+  a fiók él. A kliens ilyenkor belépéssel folytatja ugyanazokkal az
+  adatokkal. Őr-teszt védi.
+
+- **A motor naplója a hiba-képernyőn** (kliens): ha a motor az
+  újraélesztés után sem válaszol, a hiba-képernyő a motor-napló utolsó
+  sorait is megmutatja (kijelölhető szövegként) — a kiváltó ok így
+  egyetlen hibajelentő képernyőképen elfér, a felhasználónak nem kell
+  fájlok közt keresgélnie. Őr-teszt védi.
+
+## v0.1.32 — kiadva (2026-08-21)
+
+> Kiadás-jegyzet: gyors javító+bővítő kör a v0.1.31 után. A fő ok a
+> fiók-képernyő ismételt "Nem érem el a háttérmotort" hibája: a kliens
+> mostantól nem csak keresi, hanem újra is INDÍTJA az elhalt motort, és
+> a képernyők kiírják a futó verziót. Mellé a stride-őr első komoly
+> leletének javítása (ritkított felvételen elveszett gólok) és egy új
+> névre szóló réteg (Szuper-csere).
+
+- **Szuper-csere** (új réteg): KI termel a padról — névre szólóan. A
+  pad-gólok réteg azt mondja meg, termel-e a kispad egyáltalán; ez azt,
+  ki: a kezdő maghoz nem tartozó gólszerzők név szerint, és ha a
+  pad-gólok legalább fele (3+ gólból) egy emberé, ő a csapat
+  szuper-cseréje. Edzői olvasat: a szuper-cserés csapat ellen a
+  beállása a jelzés — onnantól rá külön figyelő és friss védő; a saját
+  szuper-cserénk pedig időzítve ér a legtöbbet (a fáradó fal ellen
+  álljon be, ne csak pihentetésként). Felületek: /analyze +
+  meccs-csomag, edzői összefoglaló, felderítés (játékosonkénti
+  pad-gól számok, edzői kulcs, 440. meccsterv-szabály), 460.
+  edzés-szabály, kliens-csempe, kulcs-ember regisztráció.
+
+- **A motor-újraélesztés mostantól újra is INDÍT** (kliens-javítás): a
+  fiók-képernyő ismételt "Nem érem el a háttérmotort" hibája nyomán. A
+  v0.1.30-as öngyógyítás hálózati hibánál újra MEGKERESTE a motort a
+  port-tartományban — de ha a motor-folyamat közben elhalt (frissítés
+  utáni fájlcsere, a gép altatása, belső hiba), a keresés kevés volt,
+  és csak a program teljes újraindítása segített. A kliens mostantól
+  ilyenkor ÚJRA IS INDÍTJA a motort (reviveEngine → BackendLauncher),
+  a fiók-kapun és a beküldésnél is; a motor-hiba képernyő elmondja,
+  hogy az Újrapróbálom gomb ezt megteszi, és hova kell nyúlni a
+  naplóért. A fiók-képernyő és a hiba-képernyő ezentúl a futó kiadás
+  számát is kiírja — egy hibajelentő képernyőképből azonnal látszik,
+  melyik verzió adta a hibát. Őr-tesztek: a mély öngyógyítás és a
+  látható verziószám is védve.
+
+- **A gól ritkított felvételen is gól** (motor): a stride-érzékenység
+  őr első komoly lelete. A gól-felismerés eddig azt követelte, hogy a
+  labda egy MINTÁN a gólvonal 0,7 m-es sávjában legyen — a termék
+  alap-ritkításánál (minden 3. kocka, effektív ~8 fps) viszont a labda
+  kockánként métereket lép, és a sávot ÁTUGORJA: a szimulált meccsen a
+  gólok kétharmada sima lövésnek minősült. A felismerés mostantól három,
+  egymást kiegészítő jelre épül: (1) minta a sávban (a hálóban megülő
+  labda), (2) a két egymást követő minta közti útvonal átlépi a
+  gólvonalat a kapufák között, (3) ritkított felvételen (15 fps alatt) a
+  vonal egy lépésén belül járó, kapu felé tartó labda extrapolált
+  átlépése, ha a követés ott megszakad (élesben a hálóba érő labdát a
+  háló kitakarja, és a középkezdésnél bukkan fel) — folytonos követésnél
+  az extrapoláció nem szólal meg, sűrű felvételen a viselkedés
+  változatlan. A szimulált meccsen stride 1/2/3 mellett most mind a 24
+  gól megvan (korábban 24/4/8); a stride-őr eltérés-listája 53-ról 37
+  rétegre rövidült. Regressziós tesztek mindhárom jelre.
+
+## v0.1.31 — kiadva (2026-08-21)
+
+> Kiadás-jegyzet: a v0.1.30 óta a kör három szálon futott — egy
+> JAVÍTÁS a kiadott fal-rés réteghez, négy új elemző réteg és a fiók
+> felületének kerekítése, valamint két új minőség-őr.
+>
+> **(1) Fal-rés javítás.** A v0.1.29–30-ban kiadott fal-rés térkép két
+> helyen félrevezethetett: az oldal-nevet a pálya nyers
+> koordinátájából adta (a két csapat szemben áll — az egyik falról
+> fordított oldalt mondott), és a szerep-jelölés nélküli kapus hamis,
+> több méteres "rést" nyithatott. Mindkettő javítva, őr-tesztekkel; a
+> sáv mostantól a FAL saját nézőpontjából kap nevet, mint az
+> engedett-oldal rétegben.
+>
+> **(2) Négy új réteg.** Vasemberek (KI játssza végig csere nélkül — a
+> hajrá név szerinti célpontja), Hoki-assziszt (a gólpassz ELŐTTI
+> passz — a rejtett szervező), Hetes-sarok emberre (melyik sarkát
+> keresi a dobó — a kapus előre dönthet), Fal-rés fáradás (szétnyílnak-e
+> a közök a 2. félidőre — a betörős figurákat akkorra kell tenni).
+> Mind a teljes felület-sorral: /analyze + meccs-csomag, edzői
+> összefoglaló, felderítés + meccsterv-szabály, edzés-szabály,
+> kliens-csempe; a névre szóló rétegek a Kulcs-ember lencsébe is.
+>
+> **(3) Fiók-felület és minőség-őrök.** Jelszócsere a fiók-menüből,
+> elfelejtett-jelszó útmutató a belépőn. Két új jelentés-szintű őr:
+> tükrözés-őr (a bal/jobb oldal-nevek helyessége — 11 oldal-címkés
+> réteg, mind helyes) és stride-érzékenység őr (a kocka-ritkítás
+> hatása az ítéletekre — 486 rétegből 53 érintett, dokumentálva).
+>
+> A csomag 486 elemző réteget, 439 meccsterv- és 459 edzés-szabályt
+> tartalmaz; a teljes backend csomag zöld (1755 teszt), a
+> sorrend-függés lista üres.
+
+
+- **Stride-érzékenység őr** (minőség-eszköz): új jelentés-szkript
+  (`scripts.stride_sensitivity` → `docs/STRIDE_ERZEKENYSEG.md`). A
+  feldolgozó alapból minden harmadik képkockát dolgozza fel (stride=3,
+  effektív fps = fps/3) — a kockaszám-küszöbbel ítélő rétegek ugyanarról
+  a meccsről ritkítva másképp (jellemzően óvatosabban) ítélhetnek. Az őr
+  ugyanazt a szimulált meccset sűrűn és ritkítva futtatja, és csak az
+  ÍTÉLET-mezőket veti össze (verdict, top, main_role, …) — a nyers
+  számok ritkítva jogosan térnek el. Az első teljes futás: 486 rétegből
+  53 ítél másképp — ez a lista a küszöb-kalibrálás leltára, a CLAUDE.md
+  recepthez hozzáadva. Gyors tesztek rögzítik a mechanikát (a ritkítás
+  a termék modelljét követi: t újraszámozva, fps harmadolva — az
+  időzítés pontos marad).
+- **Fal-rés fáradás**: SZÉTNYÍLNAK-E a közök a második félidőre. A
+  fal-fáradás (wall_fade) a következményt méri — jobb helyzeteket
+  engednek a 2. félidőben; ez az okot: a szomszédos védők közti
+  legnagyobb köz átlagát félidőnként (a fal-rés térkép közös
+  motorjával). Ítélet félidőnként 60+ értékelhető kockától, 0,8 m
+  növekedéstől. Edzői olvasat: a fáradt fal nem lassabban fut, hanem
+  később zár — aki ellen a 2. félidőben nyílnak a közök, ott a betörős
+  figurákat a MÁSODIK félidőre kell tartogatni (az első félidei "nem
+  ment" nem ítélet); saját oldalon ez csere-terv: a belső védőket kell
+  forgatni, mielőtt a köz kinyílik. Felületek: /analyze + meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 439. meccsterv-szabály
+  a betörő emberrel párosítva), 459. edzés-szabály, kliens-csempe.
+- **Jelszócsere a fiók-menüből + elfelejtett-jelszó útmutató**
+  (kliens): a jelszócsere-végpont eddig felület nélkül állt — mostantól
+  a jobb felső fiók-menü "Jelszócsere" pontja nyitja (jelenlegi + új
+  jelszó; a csere a máshol nyitva maradt belépéseket érvényteleníti, az
+  itteni munkamenet új kulcsot kap, tehát nem dob ki). A belépő
+  képernyő sikertelen belépésnél elmondja az elfelejtett jelszó őszinte
+  útját is: a fiókok csak ezen a gépen élnek, nincs e-mailes
+  visszaállítás — új fiókkal a meccsek és elemzések megmaradnak (a
+  géphez tartoznak, nem a fiókhoz). Őr-teszt rögzíti, hogy a
+  jelszócsere elérhető a felületről, és az útmutató ott van a belépőn.
+- **Hetes-sarok emberre**: MELYIK SARKÁT keresi a hetesdobójuk. A
+  hetes-oldal réteg csapatra mondja meg, merre mennek a hetesek — a
+  kapusnak viszont a DOBÓ kell: a hetesnél ő az egyetlen, akinek van
+  ideje dönteni, és a dobók szokás-állatok — nyomás alatt a begyakorolt
+  sarkukat keresik. A réteg a hétméterek irány-jelét dobóra bontja;
+  ítélet dobónként 3+ irány-mérhető hetestől, 60%+ részaránytól. Edzői
+  olvasat: a bejáratott sarkú dobónál a kapus NE olvasson, hanem előre
+  döntsön — tudatosan arra a sarokra vetődjön; a szórónál a mozdulatból
+  kell olvasnia. Saját oldalon: a kiszámítható dobónk sarkát variálni
+  kell, és második dobót építeni. Felületek: /analyze + meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 438. meccsterv-szabály
+  a fogó kapussal párosítva), 458. edzés-szabály, Kulcs-ember lencse,
+  kliens-csempe.
+- **Hoki-assziszt (rejtett szervező)**: KI adja a gólpassz ELŐTTI
+  passzt. A gólpasszos mindig látszik — a valódi szervező sokszor
+  eggyel korábban van: ő adja azt a passzt, ami elmozdítja a falat
+  (oldalváltás, betörés utáni kiosztás), a gólpassz utána már csak
+  végrehajtás. A réteg a gólokhoz a gólpassz előtti utolsó, a
+  gólpasszolóhoz érkező saját passzt köti (6 mp-en belül, és nem
+  átnyúlva az előző lövésen — az más támadás volt), emberre összesítve;
+  ítélet 2+ másod-előkészítéstől, a láncolt gólok felétől. Edzői
+  olvasat: a rejtett szervező ellen a passzsáv-zárást EGGYEL korábban
+  kell kezdeni — ha ő nem tudja megjátszani a beadót, a gólgyár el sem
+  indul; saját oldalon ez a láthatatlan munka kimutatása (a
+  hoki-asszisztos embert a gól/gólpassz statisztika alulméri), és
+  figyelmeztetés: a szervezés ne egy rejtett kézen fusson. Felületek:
+  /analyze + meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs
+  + 437. meccsterv-szabály a labdaszerzéssel párosítva), 457.
+  edzés-szabály, Kulcs-ember lencse, kliens-csempe.
+- **Vasemberek**: KI játssza végig a meccset csere nélkül — a
+  vasember-poszt ember-ikre. A poszt a tervhez kell (hova vigyük a
+  tempót), a név a padhoz: a mezszám szerint összevont
+  jelenlét-időkből kigyűjti, ki van a pályán a meccs 85%-a felett
+  (10+ perces felvételtől; háromnál több végigjátszó már csapat-stílus,
+  nem célpont — ott a rotáció-mélység beszél). Edzői olvasat: a
+  végigjátszó ember a hajrában a legfáradtabb a pályán — az utolsó tíz
+  percben ŐT kell futtatni (elzárások hozzá, betörés az ő sávjában), és
+  vele szemben mindig friss láb jöjjön; saját oldalon a hajrá-hibái nem
+  formahanyatlás, hanem terhelés — tervezett pihentetés vagy tudatos
+  tempóváltás kell. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (edzői kulcs + 436. meccsterv-szabály a mély
+  paddal párosítva), 456. edzés-szabály, kliens-csempe.
+- **Tükrözés-őr** (minőség-eszköz): új jelentés-szkript
+  (`scripts.mirror_sides` → `docs/TUKROZES.md`), amely a pálya
+  hossztengelyére tükrözött meccsen ellenőrzi, hogy minden
+  oldal-megnevezés ("bal szél" → "jobb szél") helyesen megfordul-e. A
+  fal-rés hibája ihlette: aki a nyers y-koordinátából nevez oldalt, az
+  a védekező csapatról fordítva állít, mert a két csapat szemben áll. A
+  mérés a magyar nyelv csapdáját is kezeli (a "jobb" better-t is
+  jelent: csak a pontos oldal-címkék cserélődnek, a próza soha). Az első
+  futás eredménye: 11 oldal-címkés réteg, mind helyesen tükröződik.
+  Gyors tesztek rögzítik a mechanikát (test_mirror_sides.py); a teljes
+  söprés kiadás előtti feladat, a CLAUDE.md recepthez hozzáadva.
+- **Fal-rés térkép: javítás az oldal-megnevezésben és a jelöletlen
+  kapusnál**. Két félrevezető állítást javít az előző kiadásban
+  bemutatott rétegen: (1) a rés sávját eddig a pálya nyers y-koordinátája
+  szerint nevezte meg, holott a két csapat SZEMBEN áll — ugyanaz a
+  pálya-sáv az egyik falnak a bal, a másiknak a jobb oldala, tehát az
+  egyik csapatról fordított oldalt mondtunk (a saját kapujától a pálya
+  felé néző védő bal keze a nagyobb y felé esik; ugyanez a konvenció,
+  mint az engedett-oldal rétegben); (2) a kapust eddig csak a
+  szerep-jelölés alapján hagyta ki, így egy jelöletlen kapus több
+  méteres HAMIS rést nyitott a fal és a kapu között — mostantól a
+  kaputól 2 m-en belül álló játékos akkor is kimarad, ha nincs
+  szerepe. Mindkettőre őr-teszt került.
+
+## v0.1.30 — kiadva (2026-08-20)
+
+> Kiadás-jegyzet: javító kiadás a v0.1.29 fiók-kapujához.
+>
+> A fiók-képernyő betöltése ment (a feltételek és a tulajdonos neve
+> megjött a motortól), a "Fiók létrehozása" viszont "Nem érem el a
+> háttérmotort" hibát adhatott: a kliens a képernyő létrehozásakor
+> BEFAGYASZTOTTA a motor címét, így ha a motor közben másik portra
+> költözött (újraindulás, tartalék port, vagy két app-példányból az
+> egyik kilépett a motorjával együtt), a képernyő a halott címre
+> beszélt. Mostantól a cím mindig az éppen érvényes, a fiók-kapu és a
+> fiók-készítő pedig hálózati hibánál MEGKERESI a motort újra, és
+> egyszer újrapróbálja a kérést. Ha tényleg nem fut motor, a kapu
+> beszélő képernyőt mutat — teendővel, a napló helyével és
+> Újrapróbálom gombbal — nem egy űrlapot, ami csak beküldéskor bukik el.
+>
+> Megelőzésként a kiadás füsttesztje már nem áll meg a /health-nél: a
+> becsomagolt motoron végigjátssza a teljes belépő-utat, és a csomagoló
+> a saját csomagok minden almodulját beveszi.
+
+
+- **A motor elmozdulása nem dobja el a kérést** (kliens): a kliens
+  eddig a példány létrehozásakor BEFAGYASZTOTTA a motor címét — ha a
+  motor közben másik portra költözött (újraindult, tartalék portra
+  kötött, vagy két app-példányból az egyik kilépett a motorjával
+  együtt), a régóta nyitva lévő képernyők a halott címre beszéltek.
+  Ettől fordulhatott elő, hogy a fiók-képernyő BETÖLTÉSE még ment (a
+  feltételek és a tulajdonos neve megjött), a "Fiók létrehozása" viszont
+  már "Nem érem el a háttérmotort" hibát adott. Mostantól a cím mindig
+  az éppen érvényes alapértelmezés, a fiók-kapu és a fiók-készítő pedig
+  hálózati hibánál MEGKERESI a motort újra (8000-től felfelé), és
+  egyszer újrapróbálja a kérést.
+- **A kiadás füsttesztje a fiók-folyamatot is végigjátssza** (CI): eddig
+  csak a /health-et hívta a becsomagolt motoron. A fiók-végpontok
+  futásidőben importálnak, ezért egy csomagolási hiány csak a
+  felhasználónál bukott volna ki — az első képernyőn. A build mostantól
+  lekéri a feltételeket és a fiók-állapotot, létrehoz egy próba-fiókot,
+  ellenőrzi, hogy elfogadás NÉLKÜL elutasít (400), és belép — izolált
+  adatmappában, mindkét platformon. Emellé a csomagoló a `handball` és a
+  `scripts` MINDEN almodulját beveszi (a projekt sok modult a függvény
+  testéből importál), és őr-tesztek rögzítik mindkettőt.
+- **A fiók-kapu megmondja, ha nem fut a motor** (kliens): a fiókok a
+  motorban élnek, a fiók-lekérdezés viszont hálózati hibára is
+  "nincs bejelentkezve"-t adott — a felhasználó ezért egy űrlapot
+  kapott, ami csak a BEKÜLDÉSNÉL bukott el ("Nem érem el a
+  háttérmotort"). A kapu mostantól előbb megnézi, él-e a motor, és ha
+  nem, beszélő képernyőt mutat: mit tegyen (teljes újraindítás), hol a
+  motor naplója (engine-app.log, platformonkénti útvonallal), plusz egy
+  Újrapróbálom gomb és a demó módba lépés. A motor menet közben is
+  leállhat (pl. frissítés után), ezért az újrapróbálás ugyanazt a
+  teljes ellenőrzést futtatja le.
+
+## v0.1.29 — kiadva (2026-08-20)
+
+> Kiadás-jegyzet: a v0.1.28 óta a kör három szálon futott — a program
+> JOGI és FIÓK-kerete, a valódi csarnok-felvételekhez igazított
+> felismerés, és tizenegy új elemző réteg.
+>
+> **(1) Fiókok és felhasználási feltételek.** A program mostantól
+> fiókhoz kötött, és az első használat előtt el kell fogadni a
+> feltételeket: a Sport Machine a Tulajdonos kizárólagos SZELLEMI
+> tulajdona, a példányai és a hozzá adott eszközök a FIZIKAI
+> tulajdonát képezik, a felhasználó pedig korlátozott, át nem
+> ruházható, bármikor visszavonható használati engedélyt kap. A fiók a
+> saját gépen készül el (nincs felhő), a jelszó sose tárolódik
+> nyíltan, a belépés 90 napig érvényes, a feltételek verziózottak — ha
+> a szöveg megújul, a belépés újra elfogadásra kínálja, és az
+> elfogadás verzióját + időpontját a fiók őrzi.
+>
+> **(2) Valódi csarnok, valódi felvétel.** A vonal-felismerés eddig
+> FEHÉR vonalat keresett — a több sportot kiszolgáló csarnokokban
+> viszont a kézilabda-pályát gyakran PIROS vonal jelöli, a kosár- és
+> futsal-vonalak meg keresztezik. Mostantól van szín-alapú vonalmaszk
+> (piros/kék/zöld/sárga) és "auto" mód, ami a képből dönti el, melyik
+> szín vonalait kövesse; a festett mezők belseje nem vonal, csak a
+> szélük. Emellé jött a kispad- és néző-szűrés: a vonal mellett VÉGIG
+> EGY HELYBEN ülő track nem játékos — eddig felfelé húzta a létszámot
+> és beleszólt a fal-mérésekbe. A bevonulás/köszöntés meccs-ablakon
+> kívül tartását őr-teszt rögzíti.
+>
+> **(3) Tizenegy új elemző réteg.** Kezesség-becslés (melyik kézzel
+> lőnek) és a poszt-párja; a kapus-védés kezesség szerint (bírja-e a
+> balkezeseket); a fal geometriája — védekezési formáció-biztosság
+> (mennyire ÁLLANDÓ a fal alakja) és fal-rés térkép (hol és mekkora a
+> legnagyobb köz); befejezés-mérleg (fenntartható-e a gólterméskük);
+> csere-fázis (támadásban vagy védekezésben cserélnek); meccs-ablak,
+> egálbontó, befutó, leforduló és keresztjáró emberek, futtatott
+> szélsők.
+>
+> A csomag 480 elemző réteget, 435 meccsterv-szabályt és 455
+> edzés-szabályt tartalmaz; a teljes backend csomag zöld (1732 teszt),
+> és a sorrend-függés lista üres (482 rétegből 0).
+
+
+- **Poszt-kezesség**: MELYIK POSZTJUKON lő balkezes. A kezesség-becslés
+  névre mondja meg, ki balkezes — ez posztra: a név meccsről meccsre
+  cserélődhet, a poszt marad, ezért a védekezés-terv és a
+  kapus-felkészítés poszt-alapon tart ki. Ítélet posztonként 4+
+  értékelhető lövéstől, 70%+ egyoldalúságtól. Edzői olvasat: a balkezes
+  a JOBB oldali posztok (jobbszélső, jobbátlövő) fegyvere — befelé jövet
+  a megszokott sánc-kéz mellett lő el, ezért azon az oldalon tükrözni
+  kell (a sánc a másik kezét emelje, a kapus a túlsó sarkat vegye
+  alapba, a befelé vezető utat elzárni); saját oldalon a balkezes
+  posztra külön figurát érdemes építeni. Felületek: /analyze +
+  meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs + 435.
+  meccsterv-szabály), 455. edzés-szabály, kliens-csempe.
+- **Kispad- és néző-szűrés a követésben**: a pálya-régió szándékosan
+  hagy tűréssávot a vonalon kívül (a játékos néha kilép: partdobás,
+  cserezóna) — a csarnokban viszont pont ebben a sávban ül a CSEREPAD és
+  a nézők első sora. A felhasználó felvételén a padok székei
+  közvetlenül az oldalvonal mellett vannak, tehát a rajtuk ülők eddig
+  "játékosnak" számítottak (felfelé húzva a létszámot, és a fal-, a
+  formáció- és a rés-mérésbe is beleszólva). Mostantól a feldolgozás
+  eldobja azt a track-et, amelyik a mért kockái legalább 80%-ában a
+  vonalakon kívül van, ÉS a mozgása belefér egy 3 m-es dobozba (ül vagy
+  áll) — legalább 50 mért kockából. A kilépő, de MOZGÓ játékos
+  (partdobás, csere) megmarad, és a rövid track-ekről nem ítélünk. A
+  napló kiírja, hány álló, pályán kívüli track esett ki.
+- **Fal-rés térkép**: HOL és MEKKORA a legnagyobb köz a falukban. A
+  fal-szélesség a fal teljes terjedelmét méri, a formáció az alakját —
+  ez a KÖZÖKET: felállt védekezésnél a mezőnyvédőket keresztirányban
+  sorba rakja, és megnézi a szomszédos védők közti legnagyobb hézagot,
+  a méretét és a sávját (bal szél / közép / jobb szél). Ítélet 100+
+  kockától: 3,5 m feletti átlagos legnagyobb rés = rés-veszélyes fal, és
+  40% feletti részaránynál a sáv is nevesül. Edzői olvasat: ez a betörés
+  címe — egy 4 m-es résbe lendületből befér egy ember, az elzárást a rés
+  MELLÉ kell tenni, hogy ne záródjon; ha a rés mindig ugyanabban a
+  sávban nyílik, az bejáratott gyengeség (rendszerint a kilépő védő
+  mellett), és a figurát arra kell építeni. Saját oldalon a szomszédok
+  átadás-rendjét kell gyakorolni. Felületek: /analyze + meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 434. meccsterv-szabály),
+  454. edzés-szabály, kliens-csempe.
+- **Kapus-védés a lövő kezessége szerint**: bírja-e a kapusuk a
+  BALKEZESEKET. A posztonkénti és a távolság-sávos kapus-kép után a
+  harmadik tengely a lövő KEZE: a balkezes lövő tükör-feladat a
+  kapusnak (az alapállás, a láb-munka és a sarok-olvasás a
+  jobbkezesekre van bejáratva), és sok kapus mérhetően gyengébb
+  ellenük. Ítélet kezenként 4+ kapura tartó lövéstől, 15
+  százalékpontos különbségtől. Edzői olvasat: ha a kapusuk a
+  balkezesek ellen gyengébb, a balkezes emberünket kell rá szervezni —
+  az ő oldaláról indított figurákkal, és hetesnél is ő álljon oda; ha
+  a saját kapusunk esik vissza, balkezes dobókkal (vagy tükrözött
+  gyakorlattal) kell edzeni. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (edzői kulcs + 433. meccsterv-szabály),
+  453. edzés-szabály, kliens-csempe.
+- **Színes pályavonalak: a piros kézilabda-vonal is pálya**: a
+  vonal-felismerés eddig FEHÉR vonalat keresett (a padlónál világosabb
+  pixelt). A több sportot kiszolgáló csarnokokban viszont a padlón
+  egymáson futnak a kosár-, futsal- és röplabda-vonalak, és a
+  kézilabda-pályát gyakran PIROS vonal jelöli — nagy festett mezőkkel
+  együtt (sárga kapuelőtér, színes pályafelület). Mostantól van
+  szín-alapú vonalmaszk (piros/kék/zöld/sárga), és az "auto" mód a
+  képből dönti el, melyik szín vonalait kövesse: a fehér csak akkor
+  veszít, ha egy szín érdemben több vonal-pixelt hoz. A festett mezők
+  BELSEJE nem vonal — csak a szélük —, így a sárga kapuelőtér nem
+  árasztja el a felismerést. A /broadcast/lines végpont új `line_color`
+  paramétert kapott (alap: "auto"), és visszaadja, melyik színt
+  használta; a kliens közvetítés-ellenőrzője ki is írja ("… piros
+  vonalak alapján"), hogy látszódjon, mit követ a rendszer.
+- **Bevonulás/köszöntés a meccs-ablakon kívül** (őr-teszt): a
+  meccs-ablak eddig is a MOZGÁSBÓL ismerte fel a ceremóniát — mostantól
+  ezt teszt is rögzíti: a felezővonalnál sorban álló két csapat (elég
+  ember a pályán, közeli súlypontok, de nincs mozgás) nem játék, és a
+  csak ceremóniát tartalmazó felvételre nincs meccs-ablak.
+- **Befejezés-mérleg**: FENNTARTHATÓ-E a gólterméskük — a gól és a
+  várható gól (xG) különbsége edzői ítélettel. A meccs-xG eddig is
+  kiszámolta a különbséget, de nem mondta meg, mit kezdjen vele az edző.
+  Ítélet 12+ lövéstől, 2,5 gólnyi eltéréstől: aki a helyzetei FELETT
+  teljesít, annak a gólszáma szebb a játékánál — ugyanezekből a
+  helyzetekből legközelebb kevesebb gól lesz; aki ALATT, annál a játék
+  jó, csak a befejezés nem ült, ő veszélyesebb, mint amit az eredmény
+  mutat. Edzői olvasat felderítésben: a felülteljesítő ellen NEM kell
+  átszabni a védekezést — ugyanazokat a lövéseket kell rájuk
+  kényszeríteni, és a kapus alapállását a bejáratott sarkukra állítani;
+  az alulteljesítő ellen a helyzet-teremtést kell megfogni. Saját
+  oldalon az alulteljesítés befejezés-edzést jelent a MEGLÉVŐ
+  helyzet-típusokra. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (edzői kulcs + 432. meccsterv-szabály), 452.
+  edzés-szabály, kliens-csempe.
+- **Csere-fázis**: MIKOR indul a cseréjük — a cserehullám pillanatában
+  kinél volt a labda. A csere-kiváltók azt mondják meg, mire cserélnek, a
+  csere-lyukak azt, meddig vannak öten; ez azt, hogy saját birtoklásban
+  (olcsó), az ellenfél támadása alatt (drága) vagy megszakításban
+  váltanak-e. Ítélet 4+ cseréről: 40% felett kockázatos csere-rend, 15%
+  alatt fegyelmezett. Edzői olvasat: aki az ellenfél birtoklása közben is
+  forgat, annál a fal egy emberrel kevesebbel áll fel — a csere
+  pillanatában azonnal indítani kell a csere OLDALÁRA, és a rövid ideig
+  nyitva lévő szélen befejezni; saját oldalon a szabály egyszerű:
+  cserélni birtoklásban vagy megszakításban lehet, az ellenfél támadása
+  alatt nem. Felületek: /analyze + meccs-csomag, edzői összefoglaló,
+  felderítés (edzői kulcs + 431. meccsterv-szabály), 451. edzés-szabály,
+  kliens-csempe.
+- **Fiókok és felhasználási feltételek**: a program mostantól fiókhoz
+  kötött, és az első használat előtt el kell fogadni a felhasználási
+  feltételeket. A feltételek kimondják, hogy a Sport Machine szoftver — a
+  forráskód, az elemző eljárások és modellek, a felület, a nevek és a
+  megjelenés — a Tulajdonos kizárólagos **szellemi tulajdona**, a program
+  példányai és a hozzá adott eszközök pedig a **fizikai tulajdonát**
+  képezik; a felhasználó csak korlátozott, át nem ruházható, bármikor
+  visszavonható használati engedélyt kap (másolás, terjesztés,
+  továbbadás, visszafejtés, származékos mű tilos). A fiókok a saját gépen,
+  a program adatmappájában készülnek (nincs felhő), a jelszó sose
+  tárolódik nyíltan — csak PBKDF2-HMAC-SHA256 lenyomatként, egyedi sóval;
+  a belépés 90 napig érvényes munkamenet-kulcsot ad, így nem kell minden
+  indításnál újra belépni. A feltételek verziózottak: ha a szöveg
+  megújul, a belépés után újra el kell fogadni, és az elfogadás verziója
+  + időpontja a fiókban marad. Felületek: fiók-kapu a motor indulása után
+  (belépés / fiók létrehozása a feltételek elfogadásával), teljes jogi
+  szöveg olvasó nézetben, fiók-menü a felső sávban (feltételek, kilépés),
+  motor nélküli demó módban rövid tulajdonjogi tudomásulvétel. Végpontok:
+  `/legal/terms`, `/accounts/status|register|login|me|accept-terms|
+  logout|change-password`.
+- **Védekezési formáció-biztosság**: MENNYIRE ÁLLANDÓ a faluk alakja. A
+  leggyakoribb forma (`most_common_formations`) megnevezi a falat, de nem
+  mondja meg, mennyire tartják — pedig egy 95%-ban tartott 6-0 és egy
+  40%-ban tartott 6-0 két különböző ellenfél. A réteg a felállt védekezés
+  kockáit a projekt EGYETLEN forma-osztályozójával címkézi (6-0 / 5-1 /
+  4-2 / 3-2-1 / 3-3), és a részarányból ítél: 100+ kockától nevez meg
+  formációt, ha a leggyakoribb alak eléri az 50%-ot — különben a
+  "váltogatnak" maga az információ. Edzői olvasat: a 6-0 ellen a távoli
+  lövés és a gyors oldalváltás (a fal nem lép ki), az 5-1 ellen a kitolt
+  védő MÖGÖTTI tér (kettős elzárás mellette, a beálló a háta mögé), a
+  3-2-1 ellen a szélek és a gyors keresztmozgás, a 4-2 ellen a két
+  kilépő mögötti és közötti tér; ha nincs állandó alak, a felismerés a
+  feladat (a felhozó mondja be a formát, két kész figurasorral).
+  Saját olvasatban a 80% feletti egy-alakúság kiszámíthatóság — a
+  második fal-alakot is be kell gyakorolni. Felületek: /analyze +
+  meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs + 429.
+  meccsterv-szabály), 449. edzés-szabály, kliens-csempe.
+- **Kezesség-becslés**: MELYIK KÉZZEL lőnek a lövőik — az elengedés
+  előtti kockán a labda a lövő testéhez képest a dobó kéz oldalán van;
+  a kapu-irányhoz mért oldal-eltolás előjele lövésenként megmondja a
+  kezet, játékosonként összesítve a kezességet (4+ értékelhető lövés,
+  70%+ egyoldalúság). Edzői olvasat: a balkezes lövő a védelemnek
+  tükör-feladat — a sánc a másik kezét emelje, a kapus alapállása a
+  túlsó sarokra álljon, és a jobb oldalról befelé jövő útját kell
+  elzárni; saját olvasatban a balkezes a jobbszélső/jobbátlövő poszt
+  fegyvere, a hozzá menő passz a bal kezéhez érkezzen. Felületek:
+  /analyze + meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs
+  + 428. meccsterv-szabály), 448. edzés-szabály, prioritások
+  (ember-család + Kulcs-ember), kliens-csempe.
+- **Meccs-ablak: a bemelegítés és a nem-meccs részek kimaradnak**
+  (motor): a feltöltött felvételben gyakran benne van a bemelegítés, a
+  meccs előtti ceremónia és a lefújás utáni rész is — eddig ezek is
+  "meccsnek" számítottak (a bemelegítő kapura lövés gólnak látszott,
+  az üres percek felhígították az idő-alapú mutatókat). A feldolgozás
+  mostantól megkeresi a tényleges játék első és utolsó jelét (elég
+  játékos a pályán, a két csapat EGY kapu körül — bemelegítésnél
+  ki-ki a sajátjánál —, és tényleges mozgás), és a felvétel nem-meccs
+  éleit levágja; a félidei szünet-sávba eső "lövéseket/gólokat"
+  (kapus-bemelegítés, labdaszedők) pedig az eseménydetektor szűri ki.
+  A videó-időzítés (jelenet-lejátszás, klipek) változatlanul pontos, a
+  félidő-felismerés és a térfélcsere-normalizálás érintetlen.
+- **Egálbontó emberek**: KI viszi el góllal a holtpontjaikat — a
+  holtpont-mérleg ember-ikre: a döntetlen állásról szerzett (egált
+  bontó) gólokat emberre bontja; akinél a zömük landol (2+, 50%+), ő
+  a holtpont-ember. Edzői olvasat: egálnál az ő kivétele az első
+  dolog — szoros fogás, korai kettőzés, a kedvenc befejezése
+  letiltva; a saját csapatnak a holtpont ne egy emberen álljon — a
+  második és harmadik opció is merje vállalni a döntést. Felületek:
+  /analyze + meccs-csomag, edzői összefoglaló, felderítés (edzői
+  kulcs + 427. meccsterv-szabály), 447. edzés-szabály, prioritások
+  (ember-család + Kulcs-ember), kliens-csempe.
+- **Befutó emberek**: KI a második hullám embere a kontráikban — a
+  kontra-hullámok ember-ikre: a második hullámos (nem a legelöl futó
+  által lőtt) kontra-befejezéseket emberre bontja; akinél a zömük
+  landol (2+, 50%+), ő a befutó ember. Edzői olvasat: a visszafutásnál
+  őt kell megtalálni — az első ember felvétele után nem szabad
+  megállni, a középső sávot kell feltölteni; a saját csapatnak az egy
+  befutóra épülő kontra kiszámítható — két sávból, változó időzítéssel
+  kell befutni. Felületek: /analyze + meccs-csomag, edzői
+  összefoglaló, felderítés (edzői kulcs + 426. meccsterv-szabály),
+  446. edzés-szabály, prioritások (ember-család + Kulcs-ember),
+  kliens-csempe.
+- **Az azonnali indítás tényleg azonnal indul** (motor): a "kezdje
+  most" választásnál az új elemzés eddig a soros munkáson várta végig
+  a félretett munka utómunkáját/mentését (ami perceket — beragadt
+  feldolgozásnál korábban akár örökké — tartott). Mostantól az új
+  elemzés saját szálon AZONNAL indul, a félretett munka a háttérben
+  menti az addig kész részt (félbehagyott elemzésként a könyvtárba
+  kerül); a "megvárja az előzőt" választás viselkedése változatlan.
+- **Elemzés-könyvtár a meccs-elemzőben** (kliens): új gomb a
+  meccs-képernyő eszközsorában — fülekkel (Mind · Befejezett ·
+  Félbehagyott), megnyitással és törléssel; a félbehagyott elemzés
+  jelölést kap, és innen is megnyitható vagy törölhető, nem csak a
+  dashboardról.
+- **Leforduló beállók**: MELYIK beálló kapja mozgásból a labdát — a
+  beálló-futtatás ember-ikre: a mozgásból (elzárásból lefordulva)
+  hozott beálló-átvételeket emberre bontja; akinél a zömük landol
+  (2+, 50%+), ő a lefordulós játék címzettje. Edzői olvasat: nála a
+  bejátszás ELŐTT kell elé lépni (hangos váltás, passzsáv-zárás a
+  lefordulás előtt) — az átvétel utáni birkózás késő; a saját
+  csapatnak az egy beállóra épülő lefordulás kiszámítható — több
+  vállra, több emberre kell variálni. Felületek: /analyze +
+  meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs + 425.
+  meccsterv-szabály), 445. edzés-szabály, prioritások (ember-család
+  + Kulcs-ember), kliens-csempe.
+- **Videó-lejátszás Windowson** (kliens): a jelenet-lejátszó eddig
+  csak macOS/iOS/Android alatt működött, Windowson tájékoztató
+  szöveg volt helyette — mostantól Windowson is játszik (media_kit /
+  libmpv lejátszóval), ugyanazzal a felülettel: eseményre kattintva
+  a jelenetre ugrik, ±5 mp, lejátszás/megállítás, és a videókép itt
+  is nagyítható (csippentés / Ctrl+görgő).
+- **Beragadás-javítás a kockánkénti dúsítóknál** (motor): terepen
+  látott hiba — a feldolgozás úgy állt meg örökre ("X perce nincs
+  előrelépés"), hogy az elakadás-átugró sem lépett működésbe. Ok: az
+  átugró csak a videó-olvasást/fő detektálást védte, a kockánkénti
+  dúsítók (mezszám-OCR, labda-újrakeresés) beragadása ellen nem volt
+  őr — ráadásul az újrakeresés a közös modellt hívta párhuzamosan a
+  termelő szállal, ami maga is befagyást okozhat. Javítás: minden
+  dúsító hívás időkorláttal fut (beragadásnál kihagyjuk, 3 beragadás
+  után a dúsító kikapcsol és a fő feldolgozás megy tovább — a
+  felület értesül), és a labda-újrakeresés saját modell-példányt
+  kapott.
+- **Keresztjáró emberek**: KIN keresztül fut a keresztjáték — minden
+  hátsó-sori oldalcserénél a helyet cserélő játékosokat írjuk fel;
+  akin a keresztek 60%-a átfut (3+ kereszt, holtverseny nélkül), ő a
+  keresztjáték motorja. Edzői olvasat: az ő sávjában kell a hangos,
+  korai váltás; a saját csapatnak az egy emberre épülő kereszt
+  kiszámítható — variálni kell. Felületek: /analyze + meccs-csomag,
+  edzői összefoglaló, felderítés (edzői kulcs + 424. meccsterv-
+  szabály), 444. edzés-szabály, prioritások (ember-család +
+  Kulcs-ember), kliens-csempe.
+- **Nagyítható nézetek** (kliens): a pálya-nézet (meccs-képernyő és
+  élő nézet) és a jelenet-videó nagyítható — touchpadon két ujjas
+  csippentéssel, egérrel Ctrl+görgővel (a kurzor, illetve a
+  csippentés középpontja körül), két ujjas húzással mozgatható,
+  dupla kattintásra visszaáll. A sima görgő viselkedése nem változik,
+  a játékos-kijelölés nagyítva is pontos marad.
+- **Futtatott szélsők** (ember-réteg): MELYIK szélső kapja lendületből
+  a labdát — a szélső-futtatás (wing_service) ember-ikre, a lendületes
+  szélső-átvételeket emberre bontja. Edzői olvasat: a futtatott szélső
+  ellen nem a kifutás véd, hanem a futópassz-sáv zárása — és azt az ő
+  oldalán kell begyakorolni; a saját csapatnak: az egy szélsőre járó
+  futtatás kiszámítható, mindkét szélre kell variálni. Felületek:
+  /analyze + meccs-csomag (`wing_runners`), edzői összefoglaló,
+  felderítés (edzői kulcs + 423. meccsterv-szabály a labdaszerzéssel
+  párosítva), 443. edzés-szabály, prioritás-regiszter (ember-család +
+  Kulcs-ember lencse), kliens-csempe.
+
+## v0.1.28 — kiadva (2026-08-14)
+
+> Kiadás-jegyzet: a v0.1.27 óta a kör vezérfonala az EMBER- és a
+> HOZAM-lencse kiteljesítése volt, két új szintézissel.
+>
+> **(1) Tizenhat néven nevező EMBER-réteg.** A poszt-lencse rétegek
+> ember-szintű párjai sorra elkészültek: Kettőzött emberek,
+> Ziccerhagyók, Fáradt lövők, Lágy passzolók, Passzív-birtoklók,
+> Előkészítő emberek, Válaszoló emberek, Rajt-emberek, Újrakezdő
+> emberek, Előnyben-emberek, Elzárt védők, 7a6-befejezők — mind a
+> Kulcs-ember bizonyíték-rétegei közé is bekerült. A Kulcs-ember
+> küszöbe közben a lencse méretével nő (a padló és a lista tizede
+> közül a nagyobbik), így a bővülő lista nem hígítja a szintézist.
+>
+> **(2) Kilenc HOZAM-mérés.** Mennyit ér egy-egy játékelem:
+> Csere-hozam, Kapus-visszaérés, Figura-kopás, Futómunka-eloszlás,
+> Kapus a kapott gól után, Hetes-forrás, Kontroll-idővonal,
+> Gólpassz-duó, Időkérés-hozam, Kapuscsere-hozam,
+> Emberhátrány-túlélés, Középkezdés-hozam — ezek árazzák be a
+> cserét, az időkérést, a kapuscserét, a kétperc-védekezést és a
+> gól utáni újraindítást.
+>
+> **(3) Két új szintézis és okosabb lapok.** Az Ellenszer-lap minden
+> teendőhöz hozzárendeli a kész edzés-gyakorlatot (és őszintén
+> jelzi, mire nincs válasz); a Stílus-távolság megmondja,
+> tükör-meccs jön-e vagy stílus-ütközés — a meccsterv-lap élére
+> került, és a kliens MECCSTERV kártyáján is látszik. A meccsterv
+> mondatai téma szerint rendeződnek (kapus → védekezés → támadás →
+> fegyelem → hajrá), a jelentés pedig három új táblát kapott:
+> Hozam-lencse, Ember-lencse és a bővített lencse-sorok.
+>
+> **(4) Gyorsabb és változatlanul őszinte.** A teendő-rangsor és az
+> edzés-fókusz meccsenként egyszer számolódik (memoizálás
+> védő-másolattal) — az ellenszer-lap ára 2,7 mp-ről 0,7 mp-re
+> esett; minden réteg kevés mintánál hallgat, és a kiadás előtt
+> lefutott a lassú sorrend-jelentés: 470 rétegből 0 sorrend-függő.
+>
+> Számokban: 470 elemző réteg, 422 meccsterv-szabály, 442
+> edzés-szabály, 443 kliens-csempe, 1674 zöld teszt.
+
+
+- **Középkezdés-hozam: gólra váltják-e a gól utáni újraindítást.** A
+  középkezdés-tempó azt méri, milyen gyorsan hozzák játékba a labdát
+  a kapott gól után — az új réteg azt, mit ér: minden kapott góljuk
+  után megnézi, szereznek-e saját gólt 25 másodpercen belül.
+  Edzőileg: aki a kapott gólra rendre azonnali góllal válaszol, az
+  ellen a gól utáni ünneplés tilos — kijelölt fékező ember középen,
+  azonnali visszarendeződés, mert a legolcsóbb gólokat az ünneplő fal
+  kapja; akinél az újraindítás üresjárat, ott a saját gól után
+  nyugodtan rendezhető a fal. Saját csapatra a gyors középkezdés-rutin
+  az edzés-téma. Négy mért újraindítástól ítél. A rangsorban a
+  "felkészülés" családba tartozik. Felületek: /analyze + meccs-csomag
+  (`restart_yield`), edzői összefoglaló, felderítés (`rsy_restarts` /
+  `rsy_answered` mezők + edzői kulcs + 422. meccsterv-szabály),
+  edzés-fókusz (442. szabály), kliens-csempe.
+
+- **Emberhátrány-túlélés: mit ér ellenük az emberelőny.** Az
+  emberelőny-hozam a nyertes oldalt nézi — az új réteg a büntetett
+  oldalt: a hátrányban töltött időre vetíti a hátrányban kapott
+  gólokat (gól / két perc hátrány). Edzőileg ez az emberelőny-terv
+  címzettje: ha hátrányban beszakadnak, a kiállításukat végig kell
+  büntetni (türelmes, zárt figurák — az idő nekik fáj); ha hátrányban
+  is állnak, a kettős fölény ellenük keveset ér — emberelőnyben is az
+  1v1 és a betörés dolgozik. Saját csapatra a hátrány-védekezés
+  (zárt 5-ös fal, időhúzás) az edzés-téma. Kilencven másodperc mért
+  hátránytól ítél. A rangsorban az "ár" családba tartozik, és a
+  jelentés Hozam-lencséjébe is bekerült. Felületek: /analyze +
+  meccs-csomag (`shorthanded_survival`), edzői összefoglaló,
+  felderítés (`shs_seconds` / `shs_conceded` mezők + edzői kulcs +
+  421. meccsterv-szabály), edzés-fókusz (441. szabály),
+  kliens-csempe.
+
+- **A Hozam-lencse a mai új rétegeket is hozza.** A meccs-jelentés
+  Hozam-lencse táblája kiegészült a Hetes-forrás, a Gólpassz-duó, a
+  Kapuscsere-hozam és az Időkérés-hozam ítéleteivel — az
+  ár-kalkulációs kép így a friss rétegekkel együtt teljes.
+
+- **Kapuscsere-hozam: fordít-e a kapuscseréjük.** A kapuscsere-hatás
+  a nyers védés-változást adja — az új réteg az ítéletet: a csere
+  utáni védés-százalék változásából mondja ki, hogy a második kapus
+  mentőöv-e. Edzőileg ez a lövő-terv B-lapja: ha a cseréjük rendre
+  fordít, a lövő-tervet a második kapusra is el kell készíteni, és a
+  beállása utáni első percekben kell büntetni, amíg hideg; ha a csere
+  sem segít, az első kapus megingása után nincs mentőövük — nyomni
+  kell tovább ugyanazt. Saját csapatra a második kapus beállás-rutinja
+  az edzés-téma. Tizenöt százalékpontos változástól ítél. A rangsorban
+  a "felkészülés" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`gk_change_yield`), edzői összefoglaló, felderítés
+  (`gcy_changes` / `gcy_delta_dpp` mezők + edzői kulcs + 420.
+  meccsterv-szabály), edzés-fókusz (440. szabály), kliens-csempe.
+
+- **Időkérés-hozam: működik-e a mentő időkérésük.** Az
+  időkérés-mérleg a nyers számokat adja — az új réteg az ítéletet: a
+  megtört sorozatok arányából mondja ki, hogy az időkérésük rendez-e.
+  Edzőileg ez a sorozat-építés terve: ha az időkérésük rendre megtöri
+  a sorozatot, utána nem szabad kapkodni (rendezett fal jön); ha
+  hatástalan, a megkezdett gól-sorozat a zöld karton után is tolható.
+  Saját csapatra a hatástalan időkérés tartalom-kérdés: egy kimondott
+  első támadás, egy védekezés-igazítás — nem általános buzdítás. Két
+  ítéletes időkéréstől és 67%-os aránytól mond ítéletet. A rangsorban
+  a "felkészülés" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`timeout_yield`), edzői összefoglaló, felderítés
+  (`toy_broke` / `toy_failed` mezők + edzői kulcs + 419.
+  meccsterv-szabály), edzés-fókusz (439. szabály), kliens-csempe.
+
+- **Gólpassz-duó: melyik kettősön fut a gólgyártásuk.** A
+  gólpassz-hálózat minden párost felsorol — az új réteg az ítéletet:
+  ha az asszisztos gólok nagy része ugyanazon az (adó → befejező)
+  kettősön születik, a duó bejáratott gólgyár. Edzőileg a duó ellen
+  párban kell védekezni: az adót testtel, a kettejük passzsávját
+  beleéréssel — ha a sáv zárva, a gépezet áll, mert a befejező
+  magától nem teremt ugyanennyit. Saját csapatra: a bejáratott duó
+  kiszámíthatóság is, kell egy második gól-tengely. Két közös góltól
+  és az asszisztos gólok 40%-ától ítél. A rangsorban a "felkészülés"
+  családba tartozik (kettőst nevez meg, ezért se a Kulcs-ember, se a
+  Kulcs-páros poszt-lencséjébe nem való). Felületek: /analyze +
+  meccs-csomag (`assist_duos`), edzői összefoglaló, felderítés
+  (`adu_goals_by_duo` mező + edzői kulcs + 418. meccsterv-szabály),
+  edzés-fókusz (438. szabály), kliens-csempe.
+
+- **7a6-befejező emberek: kire fut ki a hetedik ember játéka.** A
+  7a6-befejező poszt a posztot nevezi meg — az új réteg az embert: a
+  felismert üres-kapus szakaszaik alatt leadott lövéseket a lövő
+  nevéhez írja. Edzőileg a 7 a 6 értelme a túlterhelés — a plusz
+  mezőnyjátékos valakit felszabadít; ha ez rendre ugyanaz az ember, a
+  lehozott kapus felismerésekor a védekezés első dolga ŐT megtalálni
+  és besűríteni a sávját — a hetedik ember játéka kiszámítható, és
+  minden megvárt másodperc nekik kockázat. Saját csapatra: a 7 a
+  6-nak két kifutása legyen. Két 7a6-lövéstől és a lövések felétől
+  emel ki nevet. A rangsorban az "ember" családba tartozik, és a
+  Kulcs-ember bizonyíték-rétegei közé is bekerült. Felületek:
+  /analyze + meccs-csomag (`seven_six_finishers`), edzői
+  összefoglaló, felderítés (`en7p_shots_by_player` mező + edzői kulcs
+  + 417. meccsterv-szabály), edzés-fókusz (437. szabály),
+  kliens-csempe.
+
+- **Elzárt védők: ki akad el az elzárásokban.** Az elzárt-poszt a
+  posztot nevezi meg — az új réteg az embert: lövésenként megkeresi a
+  lövő őrzőjét és a mellé állított elzárót, és az elakadt őrző
+  nevéhez írja az esetet. Edzőileg ez az elzárás-célpont terve névre
+  szólóan: akire a zárás rendre ráragad, oda kell vinni a figurákat —
+  az ő oldalán a zárás tisztán hagyja a lövőt. Saját csapatra: neki
+  átcsúszás- és váltás-gyakorlás kell hangos kommunikációval — az
+  elakadás nem alkat, hanem technika kérdése. Két elakadástól és az
+  elakadások felétől emel ki nevet. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag (`screened_defenders`), edzői
+  összefoglaló, felderítés (`sdp_screens_by_player` mező + edzői
+  kulcs + 416. meccsterv-szabály), edzés-fókusz (436. szabály),
+  kliens-csempe.
+
+- **Előnyben-emberek: ki viszi a játékot vezetésnél.** Az
+  előnyben-poszt a posztot nevezi meg — az új réteg az embert: a
+  saját vezetés közben lőtt gólokat a lövő nevéhez írja. Edzőileg ez
+  a lendület-törés terve hátrányban, névre szólóan: ha ők vezetnek,
+  és az előny-tartásuk egy emberen áll, az ő kivétele (szoros fogás,
+  kettőzés) töri meg a lendület-tartásukat — a felzárkózásra ez a
+  leggyorsabb út. Saját csapatra: a vezetés-tartás ne egy emberen
+  álljon. Két vezetésnél lőtt góltól és a gólok felétől emel ki
+  nevet. A rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`lead_scorers`), edzői összefoglaló, felderítés
+  (`lgp_goals_by_player` mező + edzői kulcs + 415.
+  meccsterv-szabály), edzés-fókusz (435. szabály), kliens-csempe.
+
+- **Újrakezdő emberek: ki viszi a szünet utáni rajtot.** Az
+  újrakezdő-poszt a posztot nevezi meg — az új réteg az embert: a
+  második félidő első tíz percének góljait a lövő nevéhez írja.
+  Edzőileg ez a szünet utáni párosítás terve névre szólóan: sok
+  csapat a szünetben beszéli meg, kire építi az újrakezdést — ha az
+  rendre ugyanaz az ember, a második félidő elején ŐT kell a legjobb
+  védővel megfogni. Saját csapatra: a második félidei nyitó-megoldás
+  ne egy emberen álljon. Két szünet utáni góltól és a gólok felétől
+  emel ki nevet; félidő-jel nélkül hallgat. A rangsorban az "ember"
+  családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé is
+  bekerült. Felületek: /analyze + meccs-csomag
+  (`second_start_scorers`), edzői összefoglaló, felderítés
+  (`ssp_goals_by_player` mező + edzői kulcs + 414.
+  meccsterv-szabály), edzés-fókusz (434. szabály), kliens-csempe.
+
+- **Rajt-emberek: ki viszi a meccs elejét.** A rajt-poszt a posztot
+  nevezi meg — az új réteg az embert: a meccs első tíz percének
+  góljait a lövő nevéhez írja. Edzőileg ez a meccs eleji párosítás
+  terve névre szólóan: az első tíz percben ŐT kell a legjobb védővel
+  megfogni — a korai elhúzásuk motorja nélkül a nyitás kiegyenlített
+  marad. Saját csapatra: az egy emberre épülő rajt kockázat, kell a
+  második nyitó-megoldás. Két nyitó-góltól és a nyitó-gólok felétől
+  emel ki nevet. A rangsorban az "ember" családba tartozik, és a
+  Kulcs-ember bizonyíték-rétegei közé is bekerült. Felületek:
+  /analyze + meccs-csomag (`opening_scorers`), edzői összefoglaló,
+  felderítés (`osp_goals_by_player` mező + edzői kulcs + 413.
+  meccsterv-szabály), edzés-fókusz (433. szabály), kliens-csempe.
+
+- **Válaszoló emberek: kapott gól után ki válaszol.** A válasz-poszt
+  a posztot nevezi meg — az új réteg az embert: a kapott gólt egy
+  percen belül követő saját gólokat a lövő nevéhez írja. Edzőileg ez
+  a saját gólunk utáni első védekezés terve névre szólóan: a gólunk
+  után azonnal az ő fogására kell váltani (kiemelt őrzés, korai
+  kettőzés) — a lendületük ott törik meg, ahol elindulna. Saját
+  csapatra: ha a válasz egy emberen áll, a bekapott gól után
+  kiszámíthatók vagyunk. Két válasz-góltól és a válasz-gólok felétől
+  emel ki nevet. A rangsorban az "ember" családba tartozik, és a
+  Kulcs-ember bizonyíték-rétegei közé is bekerült. Felületek:
+  /analyze + meccs-csomag (`response_scorers`), edzői összefoglaló,
+  felderítés (`rspp_goals_by_player` mező + edzői kulcs + 412.
+  meccsterv-szabály), edzés-fókusz (432. szabály), kliens-csempe.
+
+- **Előkészítő emberek: ki készíti elő a lövéseiket.** Az
+  előkészítő-poszt a posztot nevezi meg — az új réteg az embert:
+  minden felismert lövéshez megkeresi a lövő felé menő utolsó
+  passzt, és a lövést a PASSZOLÓ nevéhez írja (a gólpassz-listával
+  szemben itt minden lövés számít, nem csak a beérett gólok).
+  Edzőileg ez a passzsáv-zárás címzettje: nem a lövőt kell fogni,
+  hanem a kiszolgálót — az ő átadás-vonalainak elvágásával a lövőik
+  előkészítetlenül maradnak. Saját csapatra a második előkészítő
+  kinevelése az edzés-téma. Négy előkészítéstől és az előkészítések
+  felétől emel ki nevet. A rangsorban az "ember" családba tartozik, és
+  a Kulcs-ember bizonyíték-rétegei közé is bekerült. Felületek:
+  /analyze + meccs-csomag (`last_passers`), edzői összefoglaló,
+  felderítés (`epp_passes_by_player` mező + edzői kulcs + 411.
+  meccsterv-szabály), edzés-fókusz (431. szabály), kliens-csempe.
+
+- **Kulcs-ember: a küszöb a lencse méretével nő.** A Kulcs-ember
+  eddig négy egyező réteg fölött szólalt meg — de ahogy az
+  ember-rétegek száma nőtt (mára ötven fölött), négy egyezés egyre
+  kevesebbet jelentett: több lista mellett könnyebb véletlenül
+  négyszer az élre kerülni. Mostantól a tényleges küszöb a padló (4)
+  és a lista tizede közül a nagyobbik — kis lencsénél marad a régi
+  viselkedés, a mai nagy lencsénél szigorodik (jelenleg 5 egyezés
+  kell). Új őr-teszt rögzíti mindkét ágat.
+
+- **Passzív-birtoklók: kinél hal el a felállt támadásuk.** A
+  passzív-poszt a posztot nevezi meg — az új réteg az embert: a
+  lövés nélküli, hosszú felállt támadások labdás kockáit a birtokos
+  nevéhez írja. Edzőileg ez a passzív jelzés terve névre szólóan: a
+  jelzés alatt ŐT kell nyomás alá tenni (időzített kettőzés), mert
+  nála jön a kényszer-lövés vagy az eladás. Saját csapatra neki kell
+  kész befejező megoldás, mielőtt a játékvezető keze felmegy.
+  Kétszáz passzív labdás kockától és a passzív idő felétől emel ki
+  nevet. A rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`passive_holders`), edzői összefoglaló, felderítés
+  (`pvp_frames_by_player` mező + edzői kulcs + 410.
+  meccsterv-szabály), edzés-fókusz (430. szabály), kliens-csempe.
+
+- **Lágy passzolók: kinek a labdáiba lehet belenyúlni.** A
+  lágypassz-poszt a posztot nevezi meg — az új réteg az embert: a
+  lassú, ívelt passzokat a passzoló nevéhez írja. Edzőileg ez a
+  beleérő védekezés címzettje: a letámadás az ő ÁTADÁSAIT célozza,
+  ne a labdást szorítsa — ott a leggyorsabb a labdaszerzés. Saját
+  csapatra a passz-élesség (csuklós, feszes átadás) az edzés-témája.
+  Négy lágy passztól és a lágy passzok felétől emel ki nevet. A
+  rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`soft_passers`), edzői összefoglaló, felderítés
+  (`spp_soft_by_player` mező + edzői kulcs + 409. meccsterv-szabály),
+  edzés-fókusz (429. szabály), kliens-csempe.
+
+- **Fáradt lövők: kinek megy szét a lövése a második félidőre.** A
+  fáradt-lövő poszt a posztot nevezi meg — az új réteg az embert: a
+  kaput elkerülő (mellé/blokkolt) lövéseket félidőnként a lövő
+  nevéhez írja, és megkeresi, kinek ugrik meg a pontatlansága a
+  szünet után. Edzőileg ez a második félidei fal-terv névre szólóan:
+  akinek fáradtan szétmegy a lövése, arra rá lehet engedni — a
+  kilépés nála fölösleges kockázat, elég a lövő-vonalba állni. Saját
+  csapatra fáradt célzás-blokk és a befejezés átosztása a hajrában.
+  Két második félidei pontatlan lövéstől és kétszeres ugrástól emel
+  ki nevet; félidő-jel nélkül hallgat. A rangsorban az "ember"
+  családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé is
+  bekerült. Felületek: /analyze + meccs-csomag (`tired_shooters`),
+  edzői összefoglaló, felderítés (`fsp_sh_by_player` /
+  `fsp_fh_by_player` mezők + edzői kulcs + 408. meccsterv-szabály),
+  edzés-fókusz (428. szabály), kliens-csempe.
+
+- **Ziccerhagyó emberek: ki hagyja ki a ziccereket.** A
+  ziccerhagyó-poszt a posztot nevezi meg — az új réteg az embert: a
+  nagy helyzet-értékű (ziccer), gól nélkül záruló lövéseket a lövő
+  nevéhez írja. Edzőileg ez a fal kockázat-kezelése névre szólóan:
+  akinél a ziccer rendre kimarad, nála a helyzetbe engedés a kisebbik
+  rossz — a besegítés a biztos kezű társakra menjen, a kapus pedig
+  bevárhatja őt. Saját csapatra befejezés-gyakorlás jár hozzá
+  (ziccer-sorozat kapussal, fáradtan is). Két kihagyástól és a
+  kihagyások felétől emel ki nevet. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag (`missed_chance_players`), edzői
+  összefoglaló, felderítés (`mcp_misses_by_player` mező + edzői kulcs
+  + 407. meccsterv-szabály), edzés-fókusz (427. szabály),
+  kliens-csempe.
+
+- **Kontroll-idővonal: ki diktált ötpercenként.** A negyedóra-profil
+  az EREDMÉNYT bontja szakaszokra — az új réteg a KONTROLLT:
+  ötperces blokkonként megnézi, kié volt a birtoklás nagyobb része, és
+  mennyi helyzetet (xG) teremtettek benne. Egy blokk akkor "övék", ha
+  a birtoklásuk eléri a 60%-ot. Edzőileg: a gólkülönbség hazudhat (két
+  kapus-bravúr átírja) — a kontroll-kép azt mutatja, hol kellett volna
+  időkérés; ha egy csapat egymás utáni blokkokat visz, a másik
+  oldalon a felállás vagy a fal nem működik. Három mért blokktól
+  ítél. A rangsorban az "állás" családba tartozik. Felületek:
+  /analyze + meccs-csomag (`control_timeline`), edzői összefoglaló,
+  felderítés (`ctl_won` / `ctl_lost` / `ctl_blocks` mezők + edzői
+  kulcs + 406. meccsterv-szabály), edzés-fókusz (426. szabály),
+  kliens-csempe.
+
+- **Stílus-távolság: tükör-meccs vagy ellentétes stílus.** A
+  meccsterv-illesztés az erősség–gyengeség kereszteket adja — az új
+  mérés a KÉPET: a két felderítés közös stílus-tengelyeit
+  (lövés-távolság, tempó, lerohanás, elzárás, beállós játék,
+  keménység) veti össze, és 0–100-as hasonlóság-pontot ad. Edzőileg:
+  a tükör-meccsen a részletek döntenek (rutinok, fegyelem, kapus) —
+  ott a terv nem hoz különbséget; az ellentétes stílusú meccs viszont
+  arról szól, ki kényszeríti rá a sajátját, és a réteg megnevezi a
+  legnagyobb szakadékot, ahol ezt meg lehet tenni. Csak KÖZÖS
+  tengelyeken hasonlít (a hiányzó mérés nem hamisít egyezést), és
+  négy tengely alatt hallgat. Felületek: a meccsterv-lap élére került
+  405. szabályként (a téma-rendezés új "jelleg" témája keretezi a
+  lapot), a `/scouting/matchup` válasz új `style` mezője, és a
+  kliens MECCSTERV kártyájának fejlécében a stílus-egyezés
+  százaléka.
+
+- **Hetes-forrás: milyen helyzetből jön a hetesük.** A
+  hetes-kiharcolók az embert nevezik meg, a hetes-okozók a védőt — az
+  új réteg a JÁTÉKHELYZETET: minden felismert hetest ahhoz a
+  támadás-szakaszhoz köt, amelyben esett, és a szakasz típusa szerint
+  csoportosít (lerohanás, felállt támadás, átmenet). Edzőileg ez a
+  szabálytalanság-fegyelem címzettje: ha a heteseik zöme
+  lerohanásból jön, a visszafutásnál tilos a kézzel fékezés (inkább
+  menjen be a gól, mint a hetes plusz kiállítás); ha felállt
+  támadásból, a fal lábmunkája a kérdés. Saját csapatra fordítva
+  ugyanez mutatja, honnan tudunk hetest kiharcolni. Három felismert
+  hetestől és 60%-os aránytól ítél. A rangsorban a "felkészülés"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`seven_sources`), edzői összefoglaló, felderítés
+  (`svs_sevens_by_type` mező + edzői kulcs + 404. meccsterv-szabály),
+  edzés-fókusz (425. szabály), kliens-csempe.
+
+- **A meccsterv téma szerint rendeződik.** A meccsterv-illesztés
+  szabályai történeti sorrendben álltak a lapon (a legújabb szabály
+  elöl), ami az edzőnek semmit nem jelent. Mostantól a mondatok téma
+  szerint csoportosulnak, kimondott sorrendben: kapus (innen jönnek a
+  legolcsóbb gólok) → védekezés → támadás → fegyelem és létszám →
+  hajrá és erőnlét → egyéb; a témán belül a szabályok eredeti
+  sorrendje marad (stabil rendezés, determinisztikus kimenet). Egyetlen
+  mondat sem vész el, csak a sorrend lett olvasható. A témákat
+  szótövek azonosítják (a magyar toldalék az utolsó magánhangzót is
+  átírja, ezért pl. "kontr" és nem "kontra").
+
+- **Kapus a kapott gól után: beesik-e, amíg friss a seb.** A
+  kapus-sorozat a jó szériát méri, a kapus-hidegedés a tétlenséget —
+  az új réteg a lélektant: minden rá kaputra érkező lövésnél
+  megnézi, hányadik a legutóbb kapott gólja óta, és a következő két
+  lövést külön vödörbe teszi. Edzőileg: ha a kapusuk a kapott gól
+  után beesik, a gól UTÁNI percben kell újra lőni (gyors
+  középkezdés, ugyanaz a kép, ugyanaz a sarok); ha éppen felébred
+  tőle, a gól utáni kapkodás ajándék — a következő támadást ki kell
+  dolgozni. Saját kapusnál ez rutin-kérdés: rögzített újraindulás a
+  kapott gól után. Sávonként négy lövéstől és 15 százalékpontos
+  eltéréstől ítél. A rangsorban a "fáradás" családba tartozik.
+  Felületek: /analyze + meccs-csomag (`gk_after_goal`), edzői
+  összefoglaló, felderítés (`gka_*` mezők + edzői kulcs + 403.
+  meccsterv-szabály), edzés-fókusz (424. szabály), kliens-csempe.
+
+- **Ember-lencse a meccs-jelentésben.** A néven nevező rétegek eddig
+  csak az app csempéin és a Kulcs-ember indoklásában látszottak — most
+  a nyomtatható jelentés is hoz egy táblát belőlük: melyik réteg kit
+  nevez meg, csapatonként. Ez a meccsterv névsora: kit kell fogni, kit
+  éheztetni, kire kell rálépni az átvételnél, kinél éri meg megvárni a
+  fáradást. A lista a Kulcs-ember nyilvántartásából (KPL_LAYERS)
+  épül, tehát minden új ember-réteggel magától bővül.
+
+- **Hozam-lencse a meccs-jelentésben.** A nyomtatható meccs-jelentés
+  eddig két lencse-táblát hozott (Befejező- és Védő-lencse, mindkettő
+  poszt-profilokból). Most kapott egy harmadikat: a Hozam-lencse azt
+  gyűjti egy helyre, MENNYIT ÉR nekik egy-egy játékelem —
+  emberelőny-hozam, hetes-hozam, elzárás-hozam, 7a6 eladás,
+  kapus-visszaérés, blokk-fáradás, csere-hozam, figura-kopás,
+  passzív-kockázat és futómunka-eloszlás. Ez az ár-kalkuláció a
+  védekezéshez és a hajrához: mennyibe kerül ellenük egy kétperc vagy
+  egy hetes, és meddig működik a figurájuk. A lencse-sorokat építő
+  segédfüggvény kikerült a blokkból, így mindhárom tábla ugyanazt a
+  rétegenként izolált (try/except) építőt használja.
+
+- **Futómunka-eloszlás: rövid felvételen hallgat.** A réteg pár
+  másodperces felvételen is ítéletet mondott (ott az eloszlás semmit
+  nem jelent) — mostantól 500 mért futott méter alatt csendben marad.
+
+- **Gyorsabb csomag: a rangsor és az edzés-fókusz csak egyszer
+  számolódik.** Az ellenszer-lap bevezetésével a teendő-rangsor és az
+  edzés-fókusz kétszer futott le minden meccsnél (egyszer önálló
+  rétegként, egyszer a lap párosításához). Mostantól mindkettő a
+  `primitive_cache` hatókörön belül meccsenként EGYSZER számolódik, és
+  minden hívó saját védő-másolatot kap — az eredmény bitre azonos, az
+  ellenszer-lap ára viszont 2,7 mp-ről 0,7 mp-re esett (60 mp-es
+  szimulált meccsen). Két új őr-teszt rögzíti, hogy a rangsor
+  hatókörön belül egyszer fut, és hogy a másolat módosítása nem
+  szennyezi a gyorsítótárat.
+
+- **Futómunka-eloszlás: hány emberre épül a futásuk.** A futás-mérleg
+  a két csapatot veti össze — az új réteg a csapaton BELÜLI
+  eloszlást: mekkora hányadát futja a csapat-távnak a három
+  legtöbbet futó mezőnyjátékos. Edzőileg: ha a futómunka néhány
+  emberre koncentrálódik, ők a hajrára elfogynak — az utolsó húsz
+  percben rájuk kell vinni a tempót (kontra, gyors középkezdés az ő
+  oldalukra), és a cserehullámuk után nem szabad lassítani; ha a
+  futás egyenletes, tempóval nem lehet szétszedni őket, ott a
+  lövés-választás és a fal minősége dönt. Saját csapatra a
+  terhelés-szétosztás (kontra-futások körbeadása, csere-ritmus) az
+  edzés-téma. Hat mért mezőnyjátékostól ítél, 55%-os top-3 aránytól
+  jelez. A rangsorban a "fáradás" családba tartozik. Felületek:
+  /analyze + meccs-csomag (`running_load_balance`), edzői
+  összefoglaló, felderítés (`lbl_*` mezők + edzői kulcs + 402.
+  meccsterv-szabály), edzés-fókusz (423. szabály), kliens-csempe.
+
+- **Figura-kopás: működik-e még a figura a második ismétlésre.** A
+  figura-hatékonyság azt mondja meg, melyik figurájuk veszélyes — az
+  új réteg azt, meddig: minden figura ELSŐ előfordulását
+  szétválasztja az ismétlésektől, és a két sávban külön számol
+  gólarányt. Edzőileg ez a felismerés értéke számokban: ha az
+  ismétlésre érdemben esik a hozamuk, a fal maga megoldja a
+  felismerést (elég lefuttatni velük a figurát); ha az ismétlés is
+  ugyanúgy gólt hoz, nem a felismerés a baj, hanem a párharc — a
+  befejezőre emberfogás vagy kettőzés kell. Saját csapatra: minden
+  figurához két befejezés (variáció) az edzés-téma. Sávonként négy
+  figura-támadástól és 15 százalékpontos eltéréstől ítél. A
+  rangsorban a "felkészülés" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`setplay_decay`), edzői összefoglaló, felderítés
+  (`spd_*` mezők + edzői kulcs + 401. meccsterv-szabály),
+  edzés-fókusz (422. szabály), kliens-csempe.
+
+- **Ellenszer-lap: teendő → hozzá tartozó gyakorlat.** A
+  teendő-rangsor megmondja, MI a baj; az edzés-fókusz azt, MIT lehet
+  gyakorolni — de a kettő eddig két külön lista volt, és az edzőnek
+  fejben kellett összekötnie. Az új szintézis-réteg elvégzi a
+  párosítást: minden teendőhöz megkeresi a legjobban illeszkedő
+  edzés-tételt (közös szótövek a címke/ítélet és a gyakorlat
+  címe/indoklása között, magyar toldalékokra csonkolva), és egy
+  gyakorlatot csak egyszer használ fel. Ahol nincs párja egy
+  teendőnek, az őszinte jelzés: arra még nincs kész edzés-válasz, ott
+  a vezetőedző döntése kell. Edzés-szabályt szándékosan NEM kapott: a
+  réteg maga olvassa az edzés-fókuszt, egy oda írt szabály
+  körkörös lenne. Felületek: /analyze + meccs-csomag
+  (`counter_plan`), edzői összefoglaló, felderítés (`cpl_total` /
+  `cpl_matched` mezők + edzői kulcs), kliens-csempe.
+
+- **Kapus-visszaérés: milyen gyorsan ér haza a lehozott kapus.** Az
+  üres kapura kapott gólok az árat mérik — az új réteg a
+  mechanizmust: minden 7 a 6 szakasz vége után megméri, hány
+  másodperc alatt ér vissza a kapus a kapuja körzetébe, és közben
+  hány gólt kapnak. Edzőileg ez a hajrá-terv egyik legolcsóbb pontja:
+  ha a kapusuk lassan ér vissza, a labdaszerzés után NEM felállni
+  kell, hanem azonnal dobni — a kapu még üres. Saját csapatra a
+  hazafutás edzhető (kijelölt útvonal, a hetedik mezőnyjátékos zárja
+  a lövő-vonalat), és a 7 a 6 csak akkor vállalható, ha ez megy. Két
+  mért szakasztól ítél, 4 másodperc fölött lassúnak minősít. A
+  rangsorban az "ár" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`keeper_return`), edzői összefoglaló, felderítés
+  (`krt_measured` / `krt_sum_ds` / `krt_conceded` mezők + edzői kulcs
+  + 400. meccsterv-szabály), edzés-fókusz (421. szabály),
+  kliens-csempe.
+
+- **Kettőzött emberek: kire jár rá az ellenfelek kettőzése.** A
+  kettőzött-poszt a posztot nevezi meg — az új réteg az embert: a
+  kettőzött (két védővel szorongatott) labdás kockákat a birtokos
+  nevéhez írja. Edzőileg ez kollektív felderítés névre szólóan: ha az
+  ellenfelek rendre ugyanarra az emberükre küldik a kettőzést, a
+  minta bevált recept — érdemes követni, de a kettőzés mögött kilépő
+  passzsávot is zárni kell. Saját csapatra: akit rendre kettőznek,
+  annak lekapcsolódó társ és begyakorolt kettőzés-elleni leadás kell,
+  különben minden támadásunk rajta akad el. Hetvenöt kettőzött
+  kockától és a kockák felétől emel ki nevet. A rangsorban az "ember"
+  családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé is
+  bekerült. Felületek: /analyze + meccs-csomag (`doubled_targets`),
+  edzői összefoglaló, felderítés (`dtp_frames_by_player` mező + edzői
+  kulcs + 399. meccsterv-szabály), edzés-fókusz (420. szabály),
+  kliens-csempe.
+
+- **Csere-hozam: nyernek vagy vesztenek a cseréik után.** A
+  csere-büntetés a lyukas cserét árazza — az új réteg a friss emberek
+  hatását: a cserék utáni másfél percben összeveti a dobott és a
+  kapott gólokat. Edzőileg ez a csere-pillanat menetrendje: ha a
+  cseréik után rendre több gólt kapnak, mint dobnak, a csere-pillanat
+  célzottan támadható (gyors középkezdés, azonnali befejezés); ha a
+  cseréik után ők jönnek fel, saját időkérés vagy lassított felállás
+  töri meg a lendületet. Saját csapatra a csere-fegyelem edzés-téma:
+  csak saját birtoklásban cserélünk, a beérkező a helyére fut.
+  Négy mért cserétől és két gólos különbségtől ítél. A rangsorban az
+  "ár" családba tartozik. Felületek: /analyze + meccs-csomag
+  (`substitution_yield`), edzői összefoglaló, felderítés (`sby_*`
+  mezők + edzői kulcs + 398. meccsterv-szabály), edzés-fókusz (419.
+  szabály), kliens-csempe.
+
+## v0.1.27 — kiadva (2026-08-09)
+
+> Kiadás-jegyzet: a v0.1.26 óta három vezérfonal futott.
+>
+> **(1) Új elemzés futó feldolgozás mellett: mostantól te döntesz.**
+> Eddig egy új videó indítása MINDIG félretette az éppen futót. Most
+> a program megkérdezi: megvárja az előző elemzés végét, vagy azonnal
+> kezdje az újat. Várakozásnál a futó feldolgozáshoz nem nyúlunk (az
+> új szépen sorba áll mögé); azonnali kezdésnél marad a régi
+> viselkedés — a futó munka szelíden félrekerül, az addig
+> feldolgozott része elmentve marad, és később folytatható. A
+> párbeszéd a "Mégse" gombbal el is hagyható, a több videós köteg
+> pedig továbbra is mindig egymás után dolgozódik fel.
+>
+> **(2) Tizenhárom új réteg — EMBER- és HOZAM-lencse.** Hét
+> réteg néven nevez: Fáradt-eladók, Visszafutás-lemaradók,
+> Fáradt-fal emberek, Indítás-vadász emberek, Kiszolgált befejezők,
+> Kétperc-gyűjtők, Felhozatal-emberek — mind bekerült a Kulcs-ember
+> szintézis bizonyíték-rétegei közé is. Mellettük hat mérés arról
+> szól, MENNYIT ÉR egy-egy játékelem: 7a6 eladás, Elzárás-hozam,
+> Blokk-fáradás, Emberelőny-hozam, Hetes-hozam és Passzív-kockázat —
+> ezek árazzák be a kétpercet, a hetest, az elzárást és a türelmet,
+> vagyis megmondják, hova érdemes a védekező munkát tenni.
+>
+> **(3) A mérési igazság változatlanul kötelező.** Minden réteg
+> kevés mintánál hallgat (nincs hallgatólagos nulla), a felderítés
+> csak darabszámot tárol (így meccsek közt pontosan összegződik), és
+> a felületek külön-külön try/except-tel futnak — egy réteg hibája
+> nem viszi el a többit. A kiadás előtt lefutott a lassú
+> sorrend-jelentés is: 445 rétegből 0 sorrend-függő.
+>
+> Számokban: 445 elemző réteg, 397 meccsterv-szabály, 418
+> edzés-szabály, 418 kliens-csempe, 1616 zöld teszt.
+
+
+- **Új elemzés futó feldolgozás mellett: mostantól te döntesz.**
+  Eddig egy új videó indítása mindig félretette az éppen futót. Most
+  a program megkérdezi: *megvárja az előző elemzés végét*, vagy
+  *azonnal kezdje az újat*. A várakozásnál a futó feldolgozáshoz nem
+  nyúlunk, az új szépen sorba áll mögé; az azonnali kezdésnél marad a
+  régi viselkedés — a futó munka szelíden félrekerül, az addig
+  feldolgozott része elmentve marad, és később folytatható. A
+  párbeszéd a "Mégse" gombbal el is hagyható. A több videós köteg
+  (pl. két félidő) továbbra is mindig egymás után dolgozódik fel.
+  Felületek: `/matches/process` új `queue_behind` mezője, kliens
+  párbeszéd az indítás előtt.
+
+- **Passzív-kockázat: mennyire futnak bele a passzív jelbe.** A
+  passzív-kockázatú szakaszok eddig csak listaként léteztek — az új
+  réteg az arányt adja: a lövés nélkül elnyúló felállt támadásokat az
+  összes felállt támadáshoz viszonyítja. Edzőileg ez a türelem
+  jutalma: ha rendszeresen belefutnak a passzív jelbe, ellenük a
+  zárt, türelmes fal dolgozik — nem kell kilépni és kockáztatni, az
+  óra és a játékvezető a szövetségesünk. Saját csapatra: a lövés
+  nélkül elnyúló támadás nem stílus, hanem befejezés-hiány, a második
+  hullámnak befejezés-lehetőséggel kell érkeznie. Négy felállt
+  támadástól és 20%-os aránytól ítél. A rangsorban a "felkészülés"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`passive_risk`), edzői összefoglaló, felderítés (`psr_positional`
+  / `psr_passive` mezők + edzői kulcs + 397. meccsterv-szabály),
+  edzés-fókusz (418. szabály), kliens-csempe.
+
+- **Hetes-hozam: mennyit ér náluk egy megítélt hetes.** A
+  hétméteres-mérleg eddig csak a nyers számokat adta — az új réteg az
+  ítéletet: a felismert hetesek gólarányát méri, és megmondja, mit ér
+  ellenük a hetest érő szabálytalanság. Edzőileg ez a védekezés
+  ár-kalkulációja: ha a heteseik szinte mindig bemennek, a hetest érő
+  szabálytalanság a legrosszabb üzlet (lábbal védekező fal, a beugró
+  elé testtel, nem kézzel); ha a hetesük megfogható, a biztos
+  helyzetet megállító szabálytalanság vállalható, és a kapusnak külön
+  készülnie kell rá. Saját csapatra: a hetes-értékesítésünk mérhető,
+  és 60% alatt edzés-téma (fix rutin, fáradtan gyakorolt hetes). Négy
+  mért hetestől ítél. A rangsorban a "felkészülés" családba tartozik.
+  Felületek: /analyze + meccs-csomag (`seven_yield`), edzői
+  összefoglaló, felderítés (`svy_attempts` / `svy_goals` mezők +
+  edzői kulcs + 396. meccsterv-szabály), edzés-fókusz (417.
+  szabály), kliens-csempe.
+
+- **Emberelőny-hozam: megbüntetik-e a kiállítást.** Az
+  emberelőny-hatékonyság eddig csak a nyers számokat adta — az új
+  réteg az ítéletet: összeveti a kaputra tartó lövések gólarányát
+  emberelőnyben és egyenlő létszámnál. Edzőileg ez rangsorolja a
+  fegyelmet: ha emberelőnyben érdemben jobban fejeznek be, ellenük a
+  kétperc a legdrágább hiba (lábbal védekező fal, taktikai
+  szabálytalanság nélkül); ha nem, a két perc ellenük olcsó, a
+  szükséges taktikai megállítás vállalható. Saját csapatra az
+  emberelőny-figurák hozama mérhető, nem érzés kérdése. Sávonként
+  négy kaputra tartó lövéstől és 15 százalékpontos különbségtől ítél.
+  A rangsorban az "ár" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`powerplay_yield`), edzői összefoglaló, felderítés
+  (`ppy_*` mezők + edzői kulcs + 395. meccsterv-szabály),
+  edzés-fókusz (416. szabály), kliens-csempe.
+
+- **Blokk-fáradás: elfogy-e a blokk-munka a második félidőre.** A
+  blokkolt lövések rétege a darabszámot adja — az új réteg a
+  kitartást: félidőnként elosztja a blokkokat az ellenfél
+  lövés-kísérleteivel (blokk + kaputra jutott lövés), így a mennyiség
+  nem torzít, ha az egyik félidőben többet lőttek rájuk. Edzőileg a
+  blokk tiszta akarat-munka: ha a második félidőre érdemben
+  visszaesik, az utolsó húsz percben tudatosan az átlövésre kell
+  építeni — ott már nem lépnek a lövő-vonalba; ha viszont a hajrára
+  nő, a végén a bejátszás és a kiugratás a megoldás. Saját csapatra a
+  blokkoló emberek pihentetése és a lábmunka-állóképesség az
+  edzés-téma. Félidőnként öt lövés-kísérlettől és 10 százalékpontos
+  eltéréstől ítél. A rangsorban a "fáradás" családba tartozik.
+  Felületek: /analyze + meccs-csomag (`block_fade`), edzői
+  összefoglaló, felderítés (`blf_*` mezők + edzői kulcs + 394.
+  meccsterv-szabály), edzés-fókusz (415. szabály), kliens-csempe.
+
+- **Elzárás-hozam: megéri-e nekik az elzárás.** Az elzárás-használat
+  a gyakoriságot méri — az új réteg a hozamot: az őrzött lövéseket
+  két sávra bontja (elzárásból lőtt vagy tisztán), és sávonként
+  számol gólarányt. Edzőileg ez dönti el, hova megy a védekező
+  munka: ha az elzárásos lövéseik érdemben jobban mennek be, a
+  váltás-kommunikáció (hangos váltás, átcsúszás) a meccs kulcsa — az
+  elzárás megtörése többet ér, mint a lövő szorítása; ha az
+  elzárásból ugyanannyi vagy kevesebb gól esik, hagyni kell őket
+  elzárni és a lövő-vonalra menni. Saját csapatra: az elzárás-játék
+  hozama mérhető, nem hitkérdés. Sávonként négy lövéstől és 15
+  százalékpontos különbségtől ítél. A rangsorban a "felkészülés"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`screen_yield`), edzői összefoglaló, felderítés (`scy_*` mezők +
+  edzői kulcs + 393. meccsterv-szabály), edzés-fókusz (414. szabály,
+  mindkét irányban), kliens-csempe.
+
+- **Felhozatal-emberek: kire hozzák fel a labdát a kaputól.** A
+  felhozatal-posztok a posztot nevezik meg — az új réteg az embert: a
+  kapus-indítások célpontjait névre bontva összegzi. Edzőileg ez a
+  letámadás címzettje: ha a felhozataluk egy emberen megy át, a
+  letámadásnál ŐT kell fogni (rálépés az átvételnél, a visszapassz
+  sávjának lezárása), mert nála akad meg az egész kihozatal. Saját
+  csapatra: ha a labda mindig ugyanahhoz megy, az ellenfél egy
+  emberrel megfogja a kihozatalunkat — kell második és harmadik
+  felkínálás is. Három átvételtől és az indítások felétől emel ki
+  nevet. A rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`outlet_targets`), edzői összefoglaló, felderítés
+  (`otp_outlets_by_player` mező + edzői kulcs + 392.
+  meccsterv-szabály), edzés-fókusz (413. szabály), kliens-csempe.
+
+- **Kétperc-gyűjtők: ki ül ki náluk a legtöbbször.** A kiülő-poszt
+  a posztot nevezi meg — az új réteg az embert: a felismert
+  kiállításokat a kiülő játékos nevéhez összegzi. Edzőileg ez a
+  szabályok adta erőforrás: akinél már két kétperc van, egy lépésre
+  áll a kizárástól — rá kell vinni a játékot (betörés az ő sávjába,
+  elzárás rá), mert vagy fékezve véd, vagy elmegy a meccs hátralévő
+  részére. Saját csapatra: ha a kétperceink egy emberre gyűlnek, az
+  nem pech, hanem rendszer-hiba (hiányzó besegítés, későn kezdett
+  párharcok). Két kiállítástól emel ki nevet. A rangsorban az "ember"
+  családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé is
+  bekerült. Felületek: /analyze + meccs-csomag
+  (`suspension_collectors`), edzői összefoglaló, felderítés
+  (`stc_susp_by_player` mező + edzői kulcs + 391. meccsterv-szabály),
+  edzés-fókusz (412. szabály), kliens-csempe.
+
+- **Kiszolgált befejezők: ki él a bejátszásokból.** A kiszolgált-
+  poszt a posztot nevezi meg — az új réteg az embert: minden gólnál
+  megnézi, volt-e gólpassz, és a befejező nevéhez írja. Edzőileg ez
+  dönti el, mit kell ellene tenni: aki a góljai nagy részét
+  bejátszásból szerzi, azt nem fogni kell, hanem éheztetni (a felé
+  futó passzt elvágni sávzárással, előrelépő védővel) — egyénileg nem
+  teremt helyzetet; aki maga teremt, ott a passz elvágása keveset ér,
+  oda emberfogás vagy kettőzés kell. Saját csapatra: aki csak
+  kiszolgálásból él, a bejátszója kiesésekor terv nélkül marad. Három
+  kiszolgált góltól és a góljai 60%-ától emel ki nevet. A rangsorban
+  az "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei
+  közé is bekerült. Felületek: /analyze + meccs-csomag
+  (`assisted_scorers`), edzői összefoglaló, felderítés
+  (`asp_assisted_by_player` / `asp_goals_by_player` mezők + edzői
+  kulcs + 390. meccsterv-szabály), edzés-fókusz (411. szabály),
+  kliens-csempe.
+
+- **7a6 eladás: mennyibe kerül egy elvesztett labda üres kapunál.**
+  Az üres kapura kapott gólok rétege a 7 a 6 teljes mérlegét adja —
+  az új réteg a mechanizmust: megszámolja a lehozott kapus mellett
+  elvesztett labdákat, és megnézi, hányat büntettek meg nyolc
+  másodpercen belül góllal. Edzőileg a 7 a 6 kockázata nem a létszám,
+  hanem a labdakezelés: ha az eladásaikat rendre megbüntetik, a
+  szerzés után az első nézés MINDIG az üres kapu legyen, ne a
+  felállás; saját csapatra a lehozott kapus mellé kijelölt, biztos
+  kezű ötös és tiltott-megoldás-lista tartozik. Két eladástól ítél,
+  alatta hallgat. A rangsorban az "ár" családba tartozik. Felületek:
+  /analyze + meccs-csomag (`empty_net_turnovers`), edzői összefoglaló,
+  felderítés (`ent_turnovers` / `ent_punished` mezők + edzői kulcs +
+  389. meccsterv-szabály), edzés-fókusz (410. szabály), kliens-csempe.
+
+- **Indítás-vadász emberek: ki ugrik rá a kapus-indításra.** Az
+  indítás-vadász poszt a posztot nevezi meg — az új réteg az embert:
+  minden elveszett kapus-indításnál a labdát megszerző játékos
+  nevéhez ír egy rablást. Edzőileg kétirányú és azonnal használható:
+  ellenük a saját kapus indítása ne az ő térfelére nyisson (másik
+  oldal, vagy a feje fölött hosszan), saját csapatra pedig figyelmeztet,
+  ha a letámadásunk egyetlen emberen áll — azt az ellenfél egy cserével
+  hatástalanítja. Két elcsípett indítástól emel ki nevet. A rangsorban
+  az "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei
+  közé is bekerült. Felületek: /analyze + meccs-csomag
+  (`outlet_hunters`), edzői összefoglaló, felderítés
+  (`ohp_steals_by_player` mező + edzői kulcs + 388. meccsterv-szabály),
+  edzés-fókusz (409. szabály), kliens-csempe.
+
+- **Fáradt-fal emberek: ki jár át rajtuk a második félidőre.** A
+  fáradt-fal poszt a posztot nevezi meg — az új réteg az embert: a
+  kapott gólokat félidőnként a LÖVŐ nevéhez írja, és megkeresi, kinek
+  a góljai ugranak meg a szünet után. Edzőileg ez a hajrá-figurák
+  terve névre szólóan: aki a második félidőben rendre átjár a falon,
+  arra kell építeni; saját csapatra fordítva rá kell friss védőt és
+  kijelölt besegítőt tervezni, mert nem a rendszer, hanem a fáradás
+  nyitja meg ellene a falat. Két második félidei góltól és kétszeres
+  ugrástól emel ki nevet; félidő-jel nélkül hallgat. A rangsorban az
+  "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé
+  is bekerült. Felületek: /analyze + meccs-csomag
+  (`tired_conceder_players`), edzői összefoglaló, felderítés
+  (`tcp_sh_by_player` / `tcp_fh_by_player` mezők + edzői kulcs + 387.
+  meccsterv-szabály), edzés-fókusz (408. szabály), kliens-csempe.
+
+- **Visszafutás-lemaradók: ki marad elöl a kontrák alatt.** A
+  visszafutás-poszt a posztot nevezi meg — az új réteg az embert: az
+  ellenfél lerohanás-szakaszainak végén megnézi, a védekező csapat
+  melyik mezőnyjátékosa van legmesszebb a saját kapujától, és a
+  lemaradást a nevéhez írja. Edzőileg ez két dolgot ad: ellenük a
+  saját lerohanást tudatosan az ő oldalára kell vezetni (ott egy
+  emberrel kevesebben érnek vissza), saját csapatra pedig a
+  visszafutás-sorrend edzés-téma — a lövés pillanatában kijelölt
+  első visszafutó nem lehet mindig ugyanaz. Három lemaradástól emel
+  ki nevet, alatta hallgat. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag (`slow_retreat_players`), edzői
+  összefoglaló, felderítés (`srp_lags_by_player` mező + edzői kulcs
+  + 386. meccsterv-szabály), edzés-fókusz (407. szabály),
+  kliens-csempe.
+
+- **Fáradt-eladók: kinek a labdái vesznek el fáradtan.** A
+  fáradt-eladó poszt a posztot nevezi meg — az új réteg az embert: a
+  labdaeladásokat félidőnként a vesztes játékoshoz írja, és
+  megkeresi, kinek ugranak meg az eladásai a második félidőre.
+  Edzőileg ez a második félidei pressz-terv névre szólóan: akinek az
+  eladásai fáradtan megugranak, azt a szünet után kell nyomás alá
+  tenni; saját csapatra a terhelés-menedzsment és a fáradt
+  labdabiztonság-edzés a téma. Két második félidei eladástól és
+  kétszeres ugrástól emel ki nevet; félidő-jel nélkül hallgat. A
+  rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`tired_turnover_players`), edzői összefoglaló,
+  felderítés (`ftop_sh_by_player` / `ftop_fh_by_player` mezők +
+  edzői kulcs + 385. meccsterv-szabály), edzés-fókusz (406.
+  szabály), kliens-csempe.
+
+- **Hátrapasszolók: kinél fordul vissza a játék.** A
+  hátrapassz-poszt a posztot nevezi meg — az új réteg az embert: a
+  kaputól távolabbi társhoz menő passzokat a passzoló játékoshoz
+  írja. Edzőileg ez a pressz jutalma névre szólóan: ha nyomás alatt
+  rendre ugyanaz fordítja vissza a labdát, rá érdemes kimenni — a
+  hátrapassz időt ad a falnak; saját csapatra a labdás mögé érkező
+  felkínálás a téma. Három hátra-passztól emel ki nevet. A
+  rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`backward_passers`), edzői összefoglaló, felderítés
+  (`bprp_passes_by_player` mező + edzői kulcs + 384.
+  meccsterv-szabály), edzés-fókusz (405. szabály), kliens-csempe.
+
+- **Térnyerők: ki viszi előre a labdát.** A térnyerő-poszt a
+  posztot nevezi meg — az új réteg az embert: a labdás játékos
+  egymást követő kockái közt a támadott kapu felé megtett métereket
+  játékosonként összegzi. Edzőileg ez a lendület-fék névre szóló
+  terve: őt nem a hatosnál kell fogadni, hanem a felezőtől hátrálva
+  — lendületbe engedni tilos, mert onnan már csak
+  szabálytalansággal állítható meg; saját csapatra a második
+  labdavivő a téma. Huszonöt métertől emel ki nevet. A rangsorban az
+  "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei
+  közé is bekerült. Felületek: /analyze + meccs-csomag
+  (`ball_carriers`), edzői összefoglaló, felderítés
+  (`tnrp_meters_by_player` mező + edzői kulcs + 383.
+  meccsterv-szabály), edzés-fókusz (404. szabály), kliens-csempe.
+
+## v0.1.26 — kiadva (2026-08-09)
+
+> Kiadás-jegyzet: a v0.1.25 óta rövid, de sűrű kör futott. Két
+> vezérfonala van: az EMBER-lencse kiteljesítése (a poszt-lencse
+> névre szóló párja), és egy terepről visszajött hiba kijavítása,
+> ami eddig egész feldolgozásokat vitt el.
+>
+> **(1) Az elakadt videó-szakaszon tényleg átjut a feldolgozás.** A
+> felhasználó jelezte: a feldolgozás 22 percig állt ugyanannál a
+> képkockánál, pedig az átugró-adagoló már benne volt a v0.1.25-ben.
+> Három külön ok volt, mindhárom javítva: (a) az átugrás csak a
+> konzolra írt, így a felület haladás-jelzője állni látszott — most
+> minden átugrás kimegy a felületre is; (b) minden újraindítás
+> egyetlen kockányit lépett a hibás pozíció után, ezért ugyanabban a
+> sérült szakaszban toporgott — most az ugrás-táv négyszereződik
+> (legfeljebb 750 kocka), és sikeres kocka után visszaáll; (c) a
+> folytató-olvasó a KÖZÖS modell-példányt hívta, miközben az elakadt
+> szál épp abban ragadt bent — most saját példánnyal dolgozik. Az
+> átugrás időkorlátja 60 → 30 másodperc.
+>
+> **(2) Kulcs-ember: a harmadik szintézis.** A Kulcs-poszt a
+> posztot, a Kulcs-páros a kettőst nevezi meg — az új réteg az
+> EMBERT: a néven nevező rétegek élén álló játékosokat számolja
+> össze, és ha négy különböző szempont ugyanoda mutat, kimondja a
+> kulcs-embert. A meccs-jelentésben önálló szakaszként, a
+> bizonyíték-rétegek felsorolásával jelenik meg. Őr-teszt vigyáz
+> arra, hogy új ember-réteg ne maradhasson ki a névsorból — élesben
+> rögtön talált is egy hiányt (Kilépő védő).
+>
+> **(3) Tíz új EMBER-réteg.** A poszt-lencse mintáinak névre szóló
+> párja: Hetesdobók, Hetes-kihagyók, Emberelőny- és
+> Emberhátrány-hibázók, Időkérés-hibázók, Válaszhiba-emberek,
+> Ziccer-előkészítők, Vég-birtokosok, Menekülők, Sávváltók,
+> Kipattanó-szedők. Mindegyik ugyanazt az utat járja be (motor →
+> /analyze és meccs-csomag → edzői összefoglaló → felderítés →
+> edzés-fókusz → kliens-csempe → teszt), és mindegyik bizonyítékként
+> beszámít a Kulcs-emberbe.
+>
+> **(4) Új mérések a csapat-oldalon.** Áttörés-hozam (bejutnak-e a
+> falba, és büntetnek-e onnan), Kétperc ára (mennyi gólba kerül egy
+> kiállításuk), Emberfogás-váltás (a szünet után emberfogásra
+> váltanak-e — a leggyakoribb meccs közbeni tervmódosítás).
+>
+> **(5) Mérési igazság.** A réteg-katalógus, a tény-lap és a
+> pályázati doksik számai generáltak, őr-teszttel; a sorrend-függés
+> jelentése a kiadás előtt újra lefutott: **430 rétegből 0
+> sorrend-függő**.
+>
+> A kiadás számai: **430 elemző réteg**, **1582 automata teszt**,
+> 382 meccsterv-szabály, 403 edzés-szabály, 403 kliens-csempe.
+
+- **Sávváltók: ki viszi a keresztmozgást.** A sávváltó-poszt a
+  posztot nevezi meg — az új réteg az embert: ugyanazokat a
+  megerősített (két másodpercig tartott) sávváltásokat számolja
+  játékosonként. Edzőileg ez a keresztmozgás névre szóló kezelése:
+  az ő védőjéről előre el kell dönteni, hogy követi a sávváltáson
+  át, vagy átadja a szomszédnak — a bizonytalan átadásból nyílik a
+  lyuk; saját csapatra a keresztmozgás szélesítése a téma. Négy
+  sávváltástól emel ki nevet. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag (`lane_switchers`), edzői
+  összefoglaló, felderítés (`lswp_switches_by_player` mező + edzői
+  kulcs + 382. meccsterv-szabály), edzés-fókusz (403. szabály),
+  kliens-csempe.
+
+- **Menekülők: nyomás alatt kihez megy a labda.** A menekülő-poszt a
+  posztot nevezi meg — az új réteg az embert: a testközeli védő
+  mellett meghozott passzokat a fogadó játékoshoz írja. Edzőileg ez
+  teszi a presszt labdaszerzéssé névre szólóan: ha szorításban a
+  labda rendre ugyanahhoz megy, a kettőzés mögötti harmadik ember
+  előre tudja, hol kell lesben állnia — a menekülő passz így nem
+  kiút, hanem elfogott labda; saját csapatra a második kiút a téma.
+  Három nyomás alatti passztól emel ki nevet. A rangsorban az
+  "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei
+  közé is bekerült. Felületek: /analyze + meccs-csomag
+  (`press_outlets`), edzői összefoglaló, felderítés
+  (`escp_passes_by_player` mező + edzői kulcs + 381.
+  meccsterv-szabály), edzés-fókusz (402. szabály), kliens-csempe.
+
+- **Vég-birtokosok: kinek a kezében hal el a támadásuk.** A
+  vég-birtokos poszt a posztot nevezi meg — az új réteg az embert:
+  minden lövés nélkül záruló támadás utolsó labdabirtokosát számolja
+  játékosonként. Edzőileg ez a nyomás névre szóló címzettje: a
+  támadás második felében rá kell tolni a nyomást, mert nála zárul a
+  támadás, és ott a legolcsóbb a labdaszerzés; saját csapatra a
+  befejezés-felelősség tisztázása a téma. Három terméketlen
+  támadástól emel ki nevet. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag (`last_holders`), edzői
+  összefoglaló, felderítés (`lstp_attacks_by_player` mező + edzői
+  kulcs + 380. meccsterv-szabály), edzés-fókusz (401. szabály),
+  kliens-csempe.
+
+- **Ziccer-előkészítők: ki adja a passzt a nagy helyzethez.** A
+  ziccer-előkészítő poszt a posztot nevezi meg — az új réteg az
+  embert: a nagy helyzet-értékű lövésekhez megkeresi a lövő felé menő
+  utolsó passzt, és a helyzetet a passzoló játékoshoz írja.
+  Edzőileg ez a legdrágább passzsáv névre szólóan: az ő
+  bejátszó-sávját kell elvágni (testtel zárás, előrelépő védő) — a
+  helyzet így ki sem alakul; saját csapatra a fő előkészítő
+  tehermentesítése a téma. Két előkészítéstől emel ki nevet. A
+  rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`big_chance_feeders`), edzői összefoglaló, felderítés
+  (`bcfp_chances_by_player` mező + edzői kulcs + 379.
+  meccsterv-szabály), edzés-fókusz (400. szabály), kliens-csempe.
+
+- **Válaszhiba-emberek: kapott gól után ki veszíti el a labdát.** A
+  válaszhiba-poszt a posztot nevezi meg — az új réteg az embert:
+  ugyanazokat a kapott gólt egy percen belül követő labdaeladásokat
+  játékosonként számolja. Edzőileg ez a saját gólunk utáni pressz
+  névre szóló célpontja: a gólunk után azonnal az ő fogadására kell
+  menni, mert nála a legolcsóbb a labdaszerzés; saját csapatra a
+  bekapott gól utáni első támadás átcímzése a téma. Két eladástól
+  emel ki nevet. A rangsorban az "ember" családba tartozik, és a
+  Kulcs-ember bizonyíték-rétegei közé is bekerült. Felületek:
+  /analyze + meccs-csomag (`response_turnover_players`), edzői
+  összefoglaló, felderítés (`rtop_turnovers_by_player` mező + edzői
+  kulcs + 378. meccsterv-szabály), edzés-fókusz (399. szabály),
+  kliens-csempe.
+
+- **Időkérés-hibázók: a megbeszélt figura kinek a kezén hal el.** Az
+  időkérés-hiba poszt a posztot nevezi meg — az új réteg az embert:
+  ugyanazokat az időkérés utáni ablakban elkövetett labdaeladásokat
+  játékosonként számolja. Edzőileg ez az időkérés utáni védekezés
+  névre szóló mondata: a táblára rajzolt figura ott a
+  legsérülékenyebb, ahol eddig is elhalt — az ő fogadására menjen a
+  kilépés és a kettőzés; saját csapatra a kulcspassz átcímzése a
+  téma. Két eladástól emel ki nevet. A rangsorban az "ember"
+  családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé is
+  bekerült. Felületek: /analyze + meccs-csomag
+  (`timeout_turnover_players`), edzői összefoglaló, felderítés
+  (`toep_turnovers_by_player` mező + edzői kulcs + 377.
+  meccsterv-szabály), edzés-fókusz (398. szabály), kliens-csempe.
+
+- **Őr-teszt a Kulcs-ember névsorára.** A Kulcs-poszt lefedettségét
+  eddig is őrizte teszt; mostantól az ember-oldalt is: minden
+  pipeline-függvény, amely a `top` mezőjében EMBERT nevez meg
+  (`player_id`), szerepelnie kell a `KPL_LAYERS` listában — a
+  poszt- és páros-lencse rétegek nevesített kivételek. Az őr rögtön
+  dolgozott is: a Kilépő védő (`advanced_defender`) kimaradt a
+  névsorból, most bekerült, így a Kulcs-ember bizonyíték-lánca
+  teljes.
+
+- **Hetesdobók: ki áll oda a hétméteresekhez.** A hetesdobó-poszt a
+  posztot nevezi meg, a hetes-kihagyók azt, ki hibázza el — az új
+  réteg azt, ki áll oda egyáltalán: a felismert hétméteresek dobóit
+  számolja játékosonként (góllal és gól nélkül zárulókat együtt).
+  Edzőileg ez a kapus felkészítésének első lapja: ha a heteseket
+  ugyanaz dobja, a kapus RÁ készülhet (szokás-sarok, lépésritmus,
+  csel), és a videó-elemzés is egy emberre szűkül; saját csapatra az
+  egyetlen hetesdobó kockázat. Két hetestől emel ki nevet. A
+  rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`seven_taker_players`), edzői összefoglaló,
+  felderítés (`stp_sevens_by_player` mező + edzői kulcs + 376.
+  meccsterv-szabály), edzés-fókusz (397. szabály), kliens-csempe.
+
+- **Javítás — az elakadt szakaszon tényleg átjut a feldolgozás.** Az
+  átugró-adagoló eddig három ponton is elakadhatott ugyanott: (1) az
+  átugrás nem jelzett vissza a felületnek, így a haladás-jelző (és az
+  elakadás-őrszem szívverése) állni látszott, a felhasználó pedig azt
+  látta, hogy húsz perce nem történik semmi; (2) minden újraindítás
+  ugyanabból a hibás szakaszból próbálkozott egyetlen kockányit
+  lépve, holott a sérült rész hosszabb — most, ha a folytatás sem ad
+  kockát, az ugrás-táv négyszereződik (legfeljebb 750 kockáig), és
+  sikeres kocka után visszaáll a legkisebbre; (3) a folytató-olvasó a
+  KÖZÖS modell-példányt hívta, miközben az elakadt szál épp abban
+  ragadt bent — mostantól saját példánnyal dolgozik. Az átugrás
+  időkorlátja 60-ról 30 másodpercre csökkent, így a hibás szakaszon
+  gyorsabban jutunk át. A felület üzenete is pontosabb: az átugrás
+  folyamatban van, több lépésben.
+
+- **Áttörés-hozam: bejutnak-e a falba, és büntetnek-e onnan.** Az
+  áttörő játékosok rétege azt mondja meg, ki viszi be a labdát, az
+  áttörő-poszt azt, melyik posztjuk — az új réteg a hozamot: a
+  betörések hány százaléka végződik góllal, és hány betörés jut egy
+  támadásra. A két szám más-más tervet ír elő: ha sokat jutnak be ÉS
+  büntetnek is, a falat előbb kell zárni (kilépés a lövő elé, a
+  betörés vonalának testtel zárása); ha bejutnak, de nem büntetnek, a
+  záró-fal és a kapus dolgozik — nem a rendszert kell átszabni,
+  hanem a kipattanóra embert küldeni. Öt betörés alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag (`breakthrough_yield`),
+  edzői összefoglaló, felderítés (`bty_entries` / `bty_goals` mezők +
+  edzői kulcs mindkét irányra + 375. meccsterv-szabály), edzés-fókusz
+  (396. szabály, külön mondattal az erősségre és a befejezés-gondra),
+  kliens-csempe.
+
+- **Emberhátrány-hibázók: öt emberrel ki veszíti el a labdát.** Az
+  emberhátrány-hiba poszt a posztot nevezi meg — az új réteg az
+  embert: ugyanazokat a kiállítás-ablakokban, emberhátrányban
+  elkövetett labdaeladásokat játékosonként számolja. Edzőileg ez az
+  emberelőny-játékunk névre szóló célpontja: a hat az öt ellen az ő
+  fogadására kell menni, mert az elvett labdából üres kapura indulhat
+  a kontra; saját csapatra a labdatartó kijelölése a téma. Két
+  eladástól emel ki nevet. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag
+  (`shorthanded_turnover_players`), edzői összefoglaló, felderítés
+  (`shtp_turnovers_by_player` mező + edzői kulcs + 374.
+  meccsterv-szabály), edzés-fókusz (395. szabály), kliens-csempe.
+
+- **Emberelőny-hibázók: ki adja el a labdát a két perc alatt.** Az
+  emberelőny-hiba poszt a posztot nevezi meg — az új réteg az
+  embert: ugyanazokat a kiállítás-ablakokban, emberelőnyben
+  elkövetett labdaeladásokat játékosonként számolja. Edzőileg ez a
+  hátrány-védekezés névre szóló célpontja: hátrányban rá kell nyomni
+  (kettőzés, passzsáv-zárás a fogadásánál), mert az ő elvett labdája
+  dupla büntetés. Két eladástól emel ki nevet. A rangsorban az
+  "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei
+  közé is bekerült. Felületek: /analyze + meccs-csomag
+  (`powerplay_turnover_players`), edzői összefoglaló, felderítés
+  (`pptp_turnovers_by_player` mező + edzői kulcs + 373.
+  meccsterv-szabály), edzés-fókusz (394. szabály), kliens-csempe.
+
+- **Kulcs-ember: hány réteg mutat ugyanarra a játékosra.** A
+  Kulcs-poszt a posztot, a Kulcs-páros a kettőst nevezi meg — az új,
+  harmadik szintézis az EMBERT: a néven nevező rétegek (tüzes kéz,
+  aszály-törő, hajrá-birtokló, letámadó, áttörő, elzáró,
+  kipattanó-szedő, hetes-kihagyó, sprint-veszély, …) élén álló
+  játékosokat számolja össze csapatonként. A három lista
+  szándékosan külön áll: a "melyik poszt", a "melyik kettős" és a
+  "melyik EMBER" kérdés más-más választ ad. Edzőileg ez a személyre
+  szóló feladat lapja: ha négy különböző szempont ugyanazt az embert
+  dobja ki, az ő kezelése (emberfogás, kettőzés, a labdaútjának
+  elvágása) önmagában meccstervnyi; saját csapatra ugyanez
+  figyelmeztetés a tehermentesítésre. Négy egyező réteg alatt vagy
+  holtversenynél hallgat (None). A rangsorban az "ember" családba
+  tartozik. Felületek: /analyze + meccs-csomag (`key_player`), edzői
+  összefoglaló, felderítés (`kpl_layers_by_player` mező + edzői
+  kulcs + 372. meccsterv-szabály), edzés-fókusz (393. szabály),
+  HTML-riport (önálló Kulcs-ember szakasz a bizonyíték-rétegek
+  felsorolásával), kliens-csempe.
+
+- **Kétperc ára: mennyi gólba kerül egy kiállításuk.** Az
+  emberelőny-hatékonyság azt méri, mit támadnak a két perc alatt, az
+  emberelőny-védekezés azt, mit kapnak közben — az új réteg a
+  hátrány oldalát egyetlen számban: hány gólt kapnak átlagosan egy
+  kiállítás-ablak alatt. Edzőileg ez a fegyelem ára forintosítva: ha
+  egy kétperc átlag több mint egy gólba kerül, a kiharcolás
+  önmagában pont-termelés (a betöréseket vállalni kell); ha olcsón
+  megússzák, nem szabad a kiállításra játszani. Három
+  kiállítás-ablak alatt hallgat (None). A rangsorban az "ár"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`suspension_cost`), edzői összefoglaló, felderítés (edzői kulcs
+  mindkét irányra + 371. meccsterv-szabály), edzés-fókusz (392.
+  szabály, külön mondattal a drága és az olcsó hátrányra),
+  kliens-csempe.
+
+- **Emberfogás-váltás: a szünet után emberfogásra váltanak-e.** Az
+  őrzési párok a meccs egészére mondják meg, ki kit fogott — az új
+  réteg a váltást: félidőnként megkeresi a legszorosabb párost, és
+  összeveti a két átlagtávolságot. A szünetben hozott emberfogás a
+  leggyakoribb meccs közbeni tervmódosítás, és a felkészülésben ez a
+  legdrágább meglepetés. Edzőileg: ha a szünet után emberfogásra
+  váltanak, a fogott játékosnak el kell húznia a védőjét, és a
+  felszabaduló területet kell megjátszani; ha elengedik, a korábban
+  fogott ember visszakapja a labdát. Félidő-jel nélkül vagy kevés
+  őrzés-kocka mellett hallgat (None). A rangsorban a "szünet"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`marking_shift`), edzői összefoglaló, felderítés (edzői kulcs
+  mindkét irányra + 370. meccsterv-szabály), edzés-fókusz (391.
+  szabály, külön mondattal a váltásra és az elengedésre),
+  kliens-csempe.
+
+## v0.1.25 — kiadva (2026-08-09)
+
+> Kiadás-jegyzet: a v0.1.24 óta a fejlesztés hat szálon futott. A kör
+> vezérfonala a POSZT-LENCSE kiteljesítése: a rendszer immár nemcsak
+> azt mondja meg, MI történt, hanem azt is, MELYIK POSZTJUKNÁL — és
+> ami ebből következik, KI ELLEN mit kell tenni.
+>
+> **(1) Poszt-lencse mindenre**: kilencven fölötti új réteg vitte
+> végig ugyanazt a formát a játék minden szakaszán — befejezés
+> (ziccer, ziccerhagyó, pazarló, blokkolt, fedezett, fáradt lövő),
+> építkezés (indító, előkészítő, bejátszó, térnyerő, hátrapassz,
+> labdatartó, lágypassz, kockáztató, sávváltó, vég-birtokos),
+> védekezés (kilépő, átvert, elzárt, kettőző, kettőzött, célkereszt,
+> beállóőr, letámadó, visszafutás, elöl lógó, védőmotor,
+> lepattanó-szedő), szabály és létszám (hetesdobó, hetes-okozó,
+> hetes-kihagyó, kiülő, emberelőny, emberhátrány, 7a6-befejező),
+> valamint a végjáték és a lélektan (hajrá, hajrákéz, hajráhiba,
+> válasz, válaszhiba, csendtörő, forró, eltűnő, felzárkózás, rajt,
+> újrakezdő, középkezdő). Minden réteg ugyanazt az utat járja be: motor
+> → /analyze és meccs-csomag → edzői összefoglaló → felderítés (mező,
+> edzői kulcs, sorszámozott meccsterv-szabály, több meccs összegzése)
+> → edzés-fókusz → HTML-jelentés lencse-sora → kliens-csempe → teszt.
+>
+> **(2) Páros-lencse és a két szintézis**: kilenc réteg már nem egy
+> posztot, hanem egy KETTŐST nevez meg (elzáró-, hetes-, kontra-,
+> gólpassz-, kettőző-, lepattanó-, emberelőny-, időkérés- és
+> ziccerpáros, majd a kétperc-lánc). Fölébük két összegző réteg
+> került: a **Kulcs-poszt** azt mondja meg, hány réteg mutat ugyanarra
+> az EGY posztra, a **Kulcs-páros** azt, hány réteg ugyanarra a
+> KETTŐSRE — a két lista szándékosan külön áll, hogy a "melyik ember"
+> és a "melyik kettős" kérdés ne hígítsa egymást. A jelentésben mindkettő
+> indoklással, a bizonyíték-rétegek felsorolásával jelenik meg.
+>
+> **(3) Ár és végjáték**: új "ár"-rétegek mondják meg, mennyibe kerül
+> egy szokás — a **visszaállás ára** (a gól nélküli lövés után kapott
+> gyors gól) és a **kipattanó ára** (a védés utáni második-helyzet
+> gól). A végjátékot a **hajrá-kapus**, az **óralopás** (vezetve
+> elhúzzák-e a támadást), a **kapkodás-index** (kapott gól után
+> rövidül-e) és a **sprint-esés** írja le. Ide tartozik a
+> **figura-koncentráció** is: megmondja, egyáltalán érdemes-e konkrét
+> figurára készülni ellenük, vagy elvekre kell.
+>
+> **(4) Feldolgozás: nem áll meg egy rossz képkockán.** A videó-feldolgozó
+> eddig 3 perc előrelépés nélkül feladta és részleges meccset mentett.
+> Mostantól a beragadt képkockát ÁTUGORJA, és a következőtől folytatja
+> (legfeljebb húsz ugrás), a felület pedig ki is írja, hogy ez történik.
+>
+> **(5) Szerkezeti őr-tesztek**: a kör során több olyan háló készült,
+> ami nem egy réteget mér, hanem a rendszer épségét — kétszer definiált
+> modul-konstans és függvény, kimaradt Kulcs-poszt bizonyíték-réteg,
+> lefedetlen kliens-csempe-csoport, hiányzó lencse-sor. Ezek élesben
+> fogtak meg valódi hibákat: egy néma küszöb-felülírás miatt a kapus
+> gyengeoldal-rétege 0,45 helyett 0,65-ös küszöbbel futott, egy másik
+> a Kiülő-poszt küszöbét írta át, egy ütköző teszt-helper pedig két
+> meglévő tesztet döntött be.
+>
+> **(6) Mérési igazság**: a réteg-katalógus, a tény-lap és a pályázati
+> doksik számai generáltak, őr-teszttel; a sorrend-függés jelentése a
+> kiadás előtt újra lefutott, és **417 rétegből 0 sorrend-függő** — a
+> termék minden összeállítása sorrend-független.
+>
+> A kiadás számai: **417 elemző réteg**, **1548 automata teszt**, 369
+> meccsterv-szabály, 390 edzés-szabály, 390 kliens-csempe.
+
+- **Kipattanó-szedők: ki szedi össze a kipattanót védés után.** A
+  lepattanó-szedő poszt a posztot nevezi meg — az új réteg az
+  embert: ugyanazokat a megszerzett kipattanókat játékosonként
+  számolja. Edzőileg ez a berobbanó ember célpontja: aki rendre
+  összeszedi a kipattanókat, azt a második helyzetnél blokkolni kell
+  (test, elzárás a kipattanó-zónában); saját csapatra a
+  kipattanó-munka kiosztása a téma. Két kipattanótól emel ki nevet.
+  A rangsorban az "ember" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`defensive_rebound_players`), edzői összefoglaló,
+  felderítés (`rbcp_rebounds_by_player` mező + edzői kulcs + 369.
+  meccsterv-szabály), edzés-fókusz (390. szabály), kliens-csempe.
+- **Kétperc-páros: ki harcolja ki és ki fejezi be a kétpercüket.**
+  A kiállítás-kiharcolás poszt szerint azt mondja meg, ki hozza a
+  kétperceseket, az emberelőny-poszt azt, kire fut ki a hat az öt
+  ellen — az új réteg a kettőt köti össze kiállításonként: a
+  (kiharcoló poszt → emberelőny-befejező poszt) párost számolja az
+  ablakon belüli lövéseik alapján. Edzőileg egy kiállítás két
+  feladatot ad egyszerre: a kiharcoló posztja ellen fegyelmezetten,
+  testtel kell védekezni (nála a kései fogás kétpercet ér), a
+  befejező posztját pedig hátrányban letiltani — a lánc így már az
+  elején elvágható. Három lánc és 55% párosrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`suspension_chain_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 368. meccsterv-szabály), edzés-fókusz (389. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-páros bizonyíték-réteg,
+  kliens-csempe.
+- **Hetes-kihagyók: ki hibázza el a hetest.** A hetes-mérleg
+  csapat-szinten mondja meg, mennyi megy be a hetesekből, a
+  hetes-kihagyó poszt a posztot — az új réteg az embert: a gól
+  nélkül záruló hétméteresek (védés vagy mellé) a dobó játékoshoz
+  kerülnek. Edzőileg ez a kapus felkészítésének névsora: ha ő áll
+  oda, a kapus mehet a saját megérzésére (kimozdulás, késleltetett
+  vetődés) — nála a hetes nem automatikus gól. Saját csapatra a
+  hetes-sorrend és a második dobó kijelölése a téma. Két kihagyástól
+  emel ki nevet (a hetes ritka esemény). A rangsorban az "ember"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`seven_miss_players`), edzői összefoglaló, felderítés
+  (`svmp_misses_by_player` mező dobónként + edzői kulcs + 367.
+  meccsterv-szabály), edzés-fókusz (388. szabály), kliens-csempe.
+- **Sprint-esés: megfogy-e a láb a második félidőre.** A
+  sprint-állás az eredményjelzőn nézi a futást, a játékos-fáradás
+  emberenként — az új réteg csapatszinten, félidőnként: a
+  sprint/perc ütemet veti össze az első és a második félidőben.
+  Edzőileg ez a második félidő tempó-döntése: ha a lábuk megfogy, a
+  szünet után tempót kell emelni (minden labdaszerzésből futni, mert
+  a visszarendeződésük már nem megy); ha nő, ők kapcsolnak a hajrára
+  — akkor a saját ritmust kell tartani. Félidő-jel nélkül, öt
+  játékperc vagy nyolc sprint alatt hallgat (None). A rangsorban a
+  "fáradás" családba tartozik. Felületek: /analyze + meccs-csomag
+  (`sprint_fade`), edzői összefoglaló, felderítés (edzői kulcs
+  mindkét irányra + 366. meccsterv-szabály), edzés-fókusz (387.
+  szabály, külön mondattal az esésre és a kapcsolásra),
+  kliens-csempe.
+- **Óralopás: vezetve elhúzzák-e a támadást a hajrában.** A
+  kapkodás-index a kapott gól utáni tempót méri, a hajrá-rétegek
+  azt, ki viszi a végjátékot — az új réteg az órát: a felvétel
+  utolsó öt percében, vezetésben indított támadásaik átlagos hosszát
+  veti össze a többi támadásukéval. Edzőileg ez a végjáték egyik
+  döntése: ha vezetve elhúzzák a támadást, a passzív jelre kell
+  játszani (korai kettőzés, azonnali kontra); ha nem lassítanak, elég
+  zárt fallal kivárni, mert maguktól hoznak helyzetet. Három
+  hajrá-támadás és négy alap-támadás alatt hallgat (None), és három
+  másodperc eltérés kell az ítélethez. A rangsorban az "állás"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`clock_management`), edzői összefoglaló, felderítés (edzői kulcs
+  mindkét irányra + 365. meccsterv-szabály), edzés-fókusz (386.
+  szabály, külön mondattal az időhúzásra és a kapkodásra),
+  kliens-csempe.
+- **Kipattanó ára: a védésük után kapott második-helyzet gól.** A
+  kapus-kipattanó azt mondja meg, fogja-e vagy kiüti a kapus a
+  labdát, a lepattanó-szedő poszt azt, ki szedi össze — az új réteg
+  azt, mennyibe kerül: a védéseiket nézi, és megszámolja, hányat
+  követett négy másodpercen belül a támadó csapat gólja. A védés így
+  nem megúszott helyzet, hanem elhalasztott. Edzőileg ez a berobbanó
+  ember számlája: ha a védéseik hatoda gólba fut, minden lövésnél
+  indítani kell a kipattanó-zónába; saját csapatra a kapus
+  terelés-iránya (a szélre üsse, ne középre) és a
+  kipattanó-felelősség kiosztása a téma. Öt védés alatt hallgat
+  (None); az ítélet 15% fölött szólal meg. A rangsorban az "ár"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`rebound_punishment`), edzői összefoglaló, felderítés (edzői
+  kulcs + 364. meccsterv-szabály), edzés-fókusz (385. szabály),
+  kliens-csempe.
+- **Visszaállás ára: a gól nélküli lövésük után kapott gyors gól.**
+  A visszaállás-idő azt mondja meg, hány másodperc alatt áll össze a
+  faluk — az új réteg azt, mennyibe kerül: a gól nélkül záruló
+  lövéseiket (védés, mellé, blokk) nézi, és megszámolja, hányat
+  követett tizenkét másodpercen belül az ellenfél gólja (a góllal
+  záruló lövések kimaradnak: onnan középkezdés jön, nem lerohanás).
+  Edzőileg ez a lassú visszaállás számlája: ha a lövéseik ötödét
+  gyors kapott gól követi, nem a fal minősége a baj, hanem hogy a
+  fal nincs ott. Hat gól nélküli lövés alatt hallgat (None); az
+  ítélet 20% fölött szólal meg. A rangsorban az "ár" családba
+  tartozik. Felületek: /analyze + meccs-csomag
+  (`retreat_punishment`), edzői összefoglaló, felderítés (edzői
+  kulcs + 363. meccsterv-szabály), edzés-fókusz (384. szabály),
+  kliens-csempe.
+- **Lepattanó-szedő poszt: védés után kinél marad a labda.** A
+  kapus-kipattanó azt mondja meg, fogja-e a kapus a labdát, a
+  lepattanó-poszt azt, ki lő másodszor — az új réteg a védekező
+  oldalt: a kapusuk védése utáni négy másodpercben megszerzett
+  kipattanókat a labdát megszerző védőjük posztjához írja (ha a
+  kapus egy másodpercnél tovább tartja, az fogás, nem kipattanó — az
+  ilyen eset nem számít). Edzőileg ez a második helyzet terve: ha a
+  kipattanókat rendre ugyanaz a posztjuk szedi össze, oda kell
+  küldeni a berobbanó embert, mert a második lövés a legolcsóbb gól.
+  Legalább 3 megszerzett kipattanó és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`defensive_rebound_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 362. meccsterv-szabály), edzés-fókusz (383. szabály),
+  HTML-riport (Védő-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Figura-koncentráció: egy figurára épül-e a támadójátékuk.** A
+  figura-hatékonyság azt mondja meg, melyik figurájuk veszélyes, a
+  figura-befejező azt, kire fut ki — az új réteg a repertoár
+  szélességét: a támadás-szakaszokat csapatonként klaszterezi, és
+  megnézi, mekkora hányad esik a legnagyobb klaszterbe, illetve hány
+  figura fedi le a támadások 80%-át. Edzőileg ez a felkészülés
+  terjedelme: 40% fölött konkrét figurára lehet készülni (videó,
+  bejátszott védekezés, előre megbeszélt kettőzés), 25% alatt viszont
+  figurákra készülni pazarlás — elvekre kell (kilépés-szabály,
+  beálló-átadás, kettőzés-jel). Hat mért támadás alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`setplay_concentration`), edzői összefoglaló, felderítés (edzői
+  kulcs mindkét irányra + 361. meccsterv-szabály), edzés-fókusz (382.
+  szabály, külön mondattal a szűk és a széles repertoárra),
+  kliens-csempe. Nem poszt-lencse: a Kulcs-poszt bizonyíték-rétegek
+  közé nem kerül be.
+- **Hajrá-kapus: nő vagy beesik a kapusuk az utolsó öt percben.** A
+  kapus-bemelegedés a meccs elejét méri, a kapus-forma félidőnként a
+  fáradást — az új réteg a végjátékot: a rá kaputra érkezett
+  lövéseket szétválasztja a felvétel utolsó öt percére és a
+  maradékra. Edzőileg ez a hajrá-terv kapus-fejezete: ha a kapusuk a
+  végén nő, a döntő percekben nem szabad félhelyzetből lőni
+  (kiugratás, beállós helyzet vagy hetes kell); ha beesik, minden
+  tiszta lövés megéri, és a lövésszámot fel kell vinni. Szakaszonként
+  három kaputra érkezett lövés és 15 százalékpont eltérés alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`gk_clutch_saves`), edzői összefoglaló, felderítés (edzői kulcs +
+  360. meccsterv-szabály, mindkét irányra), edzés-fókusz (381.
+  szabály, külön mondattal a beeső és az erősödő kapusra),
+  kliens-csempe. Nem poszt-lencse: a Kulcs-poszt bizonyíték-rétegek
+  közé nem kerül be.
+- **Emberhátrány-hiba poszt: öt emberrel kinek a kezén vész el a
+  labdájuk.** Az emberhátrány-poszt azt mondja meg, ki vállalja a
+  befejezést öt emberrel — az új réteg a párja: a kiállítás-
+  ablakokban, emberhátrányban elkövetett labdaeladásokat a vesztes
+  posztjához írja (az emberelőny-hiba poszt a két percet előnyből
+  nézi, ez hátrányból, ahol egy elvesztett labda azonnal gólt ér).
+  Edzőileg ez az emberelőny-játékunk célpontja: a hat az öt ellen az
+  ő fogadására kell menni, mert az elvett labdából üres kapura
+  indulhat a kontra. Legalább 3 hátrány-eladás és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`shorthanded_turnover_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 359. meccsterv-szabály), edzés-fókusz
+  (380. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Kapkodás-index: kapott gól után rövidül vagy nyúlik a
+  támadásuk.** A válasz-poszt és a válaszhiba-poszt embert nevez meg
+  — az új réteg a tempót: a kapott gólt egy percen belül követő
+  támadásaik átlagos hosszát veti össze a többi támadásukéval. A
+  különbség előjele mondja meg, mit csinálnak a bekapott góllal: 3
+  másodperccel rövidebb támadás = kapkodás, ennyivel hosszabb =
+  befagyás. Edzőileg ez a saját gólunk utáni terv egy mondata: ha
+  kapkodnak, vissza kell állni (az elsietett lövés nekünk termel
+  labdát); ha befagynak, előre kell tolni a védekezést, mert az óra
+  nekik ketyeg. Három válasz-támadás és négy alap-támadás alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`post_goal_rush`), edzői összefoglaló, felderítés (edzői kulcs +
+  358. meccsterv-szabály), edzés-fókusz (379. szabály, mindkét
+  irányra külön mondattal), kliens-csempe. Nem poszt-lencse:
+  csapatszintű szám, a Kulcs-poszt bizonyíték-rétegek közé nem
+  kerül be.
+- **Visszaállás-idő: hány másodperc alatt áll össze a faluk a
+  lövésük után.** A visszafutás-poszt azt mondja meg, KI marad le —
+  az új réteg azt, MENNYI IDŐ alatt áll össze a fal: minden lövésük
+  után megméri, mennyi idő telik el, míg négy mezőnyjátékosuk a
+  saját térfelükre ér (ha húsz másodperc alatt sem, a felső
+  korláttal számol — a lassúságot nem hallgatja el). Edzőileg ez a
+  kontra-terv egy száma: nyolc másodperc fölött a lövésük után
+  indított első hullám még üres pályát talál, a kapusnak azonnal
+  indítania kell. Négy mért lövés alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`retreat_time`), edzői összefoglaló,
+  felderítés (edzői kulcs + 357. meccsterv-szabály), edzés-fókusz
+  (378. szabály), kliens-csempe. Nem poszt-lencse: csapatszintű
+  szám, ezért a Kulcs-poszt bizonyíték-rétegek közé nem kerül be.
+- **Időkérés-hiba poszt: a megbeszélt figura kinek a kezén hal
+  el.** Az időkérés-befejező és az időkéréspáros a sikeres figurát
+  írja le — az új réteg a kudarcát: az időkérés utáni ablakban
+  elkövetett labdaeladásokat a vesztes posztjához írja. Edzőileg ez
+  az időkérés utáni védekezés második mondata: a figura ott a
+  legsérülékenyebb, ahol eddig is elhalt — az ő indításánál kell
+  megnyomni (előrelépő védő, kettőzés az első bejátszásnál). Saját
+  csapatra: ha a kulcspasszt mindig ugyanaz rontja el, egyszerűbb
+  kezdés kell. Legalább 3 időkérés utáni eladás és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`timeout_turnover_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 356. meccsterv-szabály), edzés-fókusz
+  (377. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Válaszhiba-poszt: kapott gól után kinél vész el a labdájuk.**
+  A válasz-poszt azt mondja meg, kire fut ki a bekapott gól utáni
+  válaszuk — az új réteg a másik felét: a kapott gólt egy percen
+  belül követő labdaeladásokat a vesztes posztjához írja (a
+  poszt-hibák rétege az egész meccset nézi, ez csak a gól utáni
+  percet, amikor a csapat kapkod). Edzőileg ez a saját gólunk utáni
+  presszterv: ha a kapott gól után rendre ugyanannak a kezén vész el
+  a labda, a gólunk után azonnal az ő fogadására kell menni — a
+  válaszuk el sem indul, és a labdából jöhet a következő gólunk.
+  Legalább 3 válasz-eladás és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`response_turnover_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 355. meccsterv-szabály), edzés-fókusz (376. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Emberelőny-hiba poszt: kinek a kezén akad el az
+  emberelőnyük.** Az emberelőny-poszt azt mondja meg, kire fut ki a
+  hat a öt ellen — az új réteg azt, kinél vész el: a
+  kiállítás-ablakokban, emberelőnyben elkövetett labdaeladásokat a
+  vesztes posztjához írja (a poszt-hibák rétege az egész meccset
+  nézi, ez csak a két percet, ahol a hiba a legdrágább). Edzőileg ez
+  a hátrányban álló csapat esélye: ha az emberelőnyük rendre
+  ugyanannak a kezén akad el, rá kell nyomni — az ő elvett labdája
+  dupla büntetés, mert a kétperc alatt kontrázni lehet belőle.
+  Legalább 3 emberelőny-eladás és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`powerplay_turnover_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 354. meccsterv-szabály), edzés-fókusz (375.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Ziccerpáros-poszt: ki adja és ki fejezi be a nagy
+  helyzeteiket.** A ziccer-előkészítő poszt azt mondja meg, kinek a
+  kezéből indul a helyzet, a ziccer-poszt azt, kinél alakul ki — az
+  új réteg a kettőt köti össze helyzetenként: az (előkészítő poszt →
+  befejező poszt) párost számolja. A gólpasszpáros a góllal zárult
+  összjátékot nézi, ez a helyzet-értéket: a bejáratott ziccer-gyár
+  akkor is látszik, ha a befejezés sokszor kimarad. Edzőileg egy
+  mozdulattal két posztot fog ki a védekezés: nem külön-külön kell
+  fogni őket, hanem a köztük lévő passzsávot elvágni — zárt sávnál a
+  ziccer ki sem alakul. Legalább 3 ziccer-páros és 55%
+  párosrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`big_chance_pair_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 353. meccsterv-szabály), edzés-fókusz
+  (374. szabály), HTML-riport (Befejező-lencse sor), Kulcs-páros
+  bizonyíték-réteg, kliens-csempe.
+- **Hetes-kihagyó poszt: melyik posztjuk hibázza el a hetest.** A
+  hetesdobó-poszt azt mondja meg, ki áll oda — az új réteg azt, ki
+  hibáz: a felismert hétméteresek közül a gól NÉLKÜL zárulókat
+  (védés vagy mellé) a dobó posztjához írja. Edzőileg ez a kapus
+  felkészítésének második fele: ha a kihagyásaik egy posztra
+  sűrűsödnek, a kapus tudja, melyik dobó ellen érdemes a saját
+  megérzésére hagyatkozni (kimozdulás, késleltetett vetődés) — nála a
+  hetes nem automatikus gól. Saját csapatra a hetes-rutin és a
+  második dobó kijelölése a téma. Legalább 3 gól nélküli hetes és
+  60% posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`seven_miss_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 352. meccsterv-szabály), edzés-fókusz (373.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Ziccer-előkészítő poszt: ki adja a passzt a nagy helyzethez.** A
+  ziccer-poszt azt mondja meg, melyik posztnál alakul ki a nagy
+  helyzet — az új réteg azt, ki teremti: a nagy helyzet-értékű
+  lövésekhez megkeresi a lövő felé menő utolsó passzt, és a
+  helyzetet a passzoló posztjához írja (az előkészítő-poszt minden
+  lövést néz, ez csak a veszélyeseket). Edzőileg a legdrágább
+  passzsáv: az előkészítő bejátszó-sávját elvágva a helyzet ki sem
+  alakul, nem a befejezést kell hárítani. Legalább 3
+  ziccer-előkészítés és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`big_chance_feeder_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 351. meccsterv-
+  szabály), edzés-fókusz (372. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.** A
+  passzív-poszt csak a hosszú, felállt támadásokat nézi — az új
+  réteg minden lövés nélkül záruló támadást: a szakasz utolsó
+  labdabirtokosát a posztjához írja, így a rövid, eladásba fulladó
+  támadások vége is látszik. Edzőileg a nyomás címzettje: ha a
+  terméketlen támadásaik rendre ugyanannak a posztnak a kezében
+  halnak el, a támadás második felében rá kell tolni a nyomást —
+  ott zárul a támadás, és ott a legolcsóbb a labdaszerzés. Saját
+  oldalon a befejezés-felelősség tisztázása az edzés-téma. Legalább
+  4 terméketlen támadás és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`last_holder_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 350. meccsterv-szabály),
+  edzés-fókusz (371. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Menekülő-poszt: nyomás alatt kihez megy a labda.** A
+  pressz-poszt azt mondja meg, melyik posztjuk veszíti el a labdát
+  szorításban — az új réteg azt, hová menekül: a testközeli védő
+  mellett meghozott passzokat a FOGADÓ posztjához írja. Edzőileg ez
+  teszi a presszt labdaszerzéssé: ha szorításban a labda rendre
+  ugyanahhoz a poszthoz megy, a kettőzés mögötti harmadik ember
+  előre tudja, hol kell lesben állnia — a menekülő passz így nem
+  kiút, hanem elfogott labda. Saját oldalon a két irányba nyíló kiút
+  az edzés-téma. Legalább 5 nyomás alatti passz és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`press_outlet_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 349. meccsterv-szabály), edzés-fókusz
+  (370. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Időkéréspáros-poszt: az időkérés utáni figura tengelye.** Az
+  időkérés-befejező a figura végpontját nevezi meg — az új réteg a
+  tengelyt: az időkérés utáni ablakban leadott lövésekhez megkeresi a
+  lövő felé menő utolsó passzt, és a lövést az (előkészítő poszt →
+  befejező poszt) párhoz írja. Edzőileg a megbeszélés egy mondata: a
+  fal tudja, hogy kész figura jön — ha a tengely ismert, nem csak a
+  befejezőre kell figyelni, hanem az ELSŐ passzt kell elvágni, mert
+  ott törik meg a figura a legolcsóbban. Legalább 3 időkérés utáni
+  lövés és 60% párrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`timeout_pair_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 348. meccsterv-szabály),
+  edzés-fókusz (369. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Sávváltó-poszt: melyik posztjuk vált sávot a támadásban.** Új
+  mérés (nem meglévő motor lencséje): a saját támadás közben
+  megszámolja, hányszor lép át egy játékos a pálya szélességének
+  másik harmadába úgy, hogy ott legalább egy másodpercig marad, és a
+  sávváltást a posztjához írja. Edzőileg a védekezés váltás-szabálya:
+  ha a keresztmozgásuk egy posztra épül, előre el kell dönteni, hogy
+  a védője KÖVETI a sávváltáson át, vagy ÁTADJA a szomszédnak — a
+  bizonytalan átadásból nyílik a lyuk. Saját oldalon a
+  figura-repertoár mérője. Legalább 5 sávváltás és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`lane_switch_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 347. meccsterv-szabály), edzés-fókusz (368.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Elöl lógó poszt: melyik posztjuk nem ér haza védekezni.** A
+  visszaérés-fegyelem rétege az embert nevezi meg — az új réteg a
+  posztot: a védekezett kockákat posztonként összegzi, és megnézi,
+  melyik poszt tölti az idejének nagy részét az ellenfél térfelén. A
+  visszafutás-poszttól abban tér el, hogy az a kontrák VÉGÉN mért
+  lemaradást nézi, ez pedig a védekezett IDŐ eloszlását. Edzőileg a
+  gyors indítás iránya: az elöl lógó poszt mögött nincs védő — a
+  kihozatalt az ő oldalára kell vezetni. Posztonként 200 védekezett
+  kocka és 70% fölötti hazaérés mellett hallgat (None). Felületek:
+  /analyze + meccs-csomag (`recovery_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 346. meccsterv-szabály), edzés-fókusz
+  (367. szabály), HTML-riport (Védő-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Válasz-poszt: kapott gól után melyik posztjuk válaszol.** A
+  kapott gól utáni megingás csapat-szinten mondja meg, mi történik a
+  bekapott gól után — az új réteg a posztot: a kapott gólt 60
+  másodpercen belül követő saját gólokat a lövő posztjához írja.
+  Edzőileg a gól utáni első védekezés terve: ha a válaszuk rendre
+  ugyanarról a posztról jön, a saját gólunk után azonnal az ő
+  fogására kell váltani — ott törik meg a lendületük, mielőtt
+  elindulna. Saját oldalon a B-s válasz-forgatókönyv az edzés-téma.
+  Legalább 3 válasz-gól és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`response_scorer_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 345. meccsterv-
+  szabály), edzés-fókusz (366. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Emberelőnypáros-poszt: melyik tengelyen fut a 6-5 játékuk.** Az
+  emberelőny-poszt a befejezőt nevezi meg — az új réteg a tengelyt:
+  minden emberelőnyben leadott lövésnél megkeresi a lövő felé menő
+  utolsó passzt, és a lövést az (előkészítő poszt → befejező poszt)
+  párhoz írja. Edzőileg az öt emberrel is kiosztható feladat:
+  hátrányban nincs elég kéz mindenre, ezért a tengelyt kell elvágni
+  — az előkészítő passzsávját a fal széle zárja, a befejezőre jusson
+  a kilépés. Legalább 3 emberelőny-lövés és 60% párrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`powerplay_pair_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 344. meccsterv-szabály), edzés-fókusz (365. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Javítás — kétszer definiált modul-konstansok.** Új őr-teszt
+  (`test_nincs_ketszer_definialt_modul_konstans`) számolja a
+  pipeline-modulok NAGYBETŰS modul-konstansait: ha egy új réteg
+  elveszi egy meglévő konstans nevét, a Python csendben felülírja a
+  régit, és a régi réteg küszöbe megváltozik. Az őr két valódi
+  ütközést talált: a Védőmotor-poszt konstansai elvették az "Eltűnő
+  védő" rétegéit (azonos érték, törékeny név → FDR_ előtag), a
+  kapus-indítás oldal-küszöbe (0,65) pedig FELÜLÍRTA a
+  kapus-gyengeoldal küszöbét (0,45) — az utóbbi réteg eddig csendben
+  szigorúbb határral futott a dokumentáltnál, mostantól külön néven
+  (`GK_OUTLET_SIDE_SHARE`) a helyes értékkel dolgozik.
+- **Specialista-poszt: melyik posztot játsszák váltott sorban.** Az
+  egyirányú játékosok rétege az embert nevezi meg — az új réteg a
+  posztot: a fázis-besorolt kockákat posztonként összegzi, és
+  megnézi, melyik poszt tölti az idejét szinte csak védekezésben
+  vagy szinte csak támadásban. Edzőileg a csere-pillanat
+  kihasználása: a váltott sorban játszott poszt a labda
+  elvesztésekor/megszerzésekor cserélődik — a gyors középkezdés és a
+  szerzés utáni azonnali indítás pont ott talál rossz embert a
+  pályán. Saját oldalon a csere-fegyelem az edzés-téma. Posztonként
+  120 mp mért jelenlét, csapat-szinten mindkét fázisban 60 mp, és
+  80% egyoldalúság alatt hallgat (None) — a kétfázisú küszöb nélkül
+  egy fél-támadásnyi felvétel is 100%-ot mutatna.
+  Felületek: /analyze + meccs-csomag (`specialist_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 343. meccsterv-szabály),
+  edzés-fókusz (364. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Kulcs-páros: hány réteg mutat ugyanarra a posztpárra.** A hat
+  páros-lencse (elzárás-, hetes-, kontra-, gólpassz-, kettőző- és
+  lepattanó-páros) egyenként egy bejáratott kettőst nevez meg — az
+  új réteg összeszámolja őket, és kimondja a csapat kulcs-párosát.
+  Edzőileg a meccsterv második lapja: a kulcs-poszt egy embert jelöl
+  ki, a kulcs-páros egy tengelyt — a kettejük közti sáv szétvágásával
+  több minta hal el egyszerre. A páros-rétegek ezzel kikerültek a
+  kulcs-poszt listájából (KP_PAIRS a KP_LAYERS mellett): a
+  kulcs-poszt embert keres, a kulcs-páros kettőst, a keverés
+  mindkét számot hígítaná. 2 egyező réteg alatt (vagy holtversenynél)
+  hallgat (None). Felületek: /analyze + meccs-csomag (`key_pair`),
+  edzői összefoglaló, felderítés (edzői kulcs + 342. meccsterv-
+  szabály), edzés-fókusz (363. szabály), HTML-riport (önálló
+  Kulcs-páros szakasz bizonyíték-rétegekkel), kliens-csempe.
+- **Lepattanópáros-poszt: melyik lövésükre ki érkezik.** A
+  lepattanó-poszt az érkezőt nevezi meg — az új réteg a párost:
+  minden megnyert második rohamnál az eredeti lövő és az újra lövő
+  posztját párba állítja. Edzőileg a zárás sorrendje: ha az egyik
+  posztjuk lövésére rendre ugyanaz a másik poszt indul be, a lövés
+  zárása UTÁN azonnal az ő útját kell elállni. Saját oldalon a
+  lepattanó-útvonalak bővítése az edzés-téma. Legalább 3 második
+  roham és 60% párrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`rebound_pair_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 341. meccsterv-szabály),
+  edzés-fókusz (362. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Kettőzőpáros-poszt: melyik védő-kettősük kettőz együtt.** A
+  kettőző-poszt az egy védőt nevezi meg — az új réteg a párost: a
+  kettőzött labdás kockákon a labdáshoz legközelebbi két védő
+  posztpárját számolja. Edzőileg a kioldó-passz térképe: ha a
+  kettőzés mindig ugyanattól a párostól jön, a kettőzés miatt
+  elhagyott ember fix — a kioldó passz oda menjen, még a szorítás
+  előtt begyakorolva. Saját oldalon a kettőző-páros forgatása az
+  edzés-téma. Legalább 100 kettőzött kocka és 60% párrészarány
+  alatt hallgat (None). Felületek: /analyze + meccs-csomag
+  (`doubling_pair_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 340. meccsterv-szabály), edzés-fókusz (361. szabály),
+  HTML-riport (Védő-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Gólpasszpáros-poszt: melyik tengelyen születnek a góljaik.** A
+  gólpassz-poszt az adót, a kiszolgált-poszt a befejezőt nevezi meg
+  — az új réteg a kettőt köti össze gólonként: az asszisztos gólokat
+  az (adó poszt → befejező poszt) párhoz írja. Edzőileg a
+  tengely-vágás terve: a kettős közti passzsáv a fal első számú
+  zárnivalója — az adót testtel, a sávot beleéréssel. Saját oldalon
+  a második gól-tengely az edzés-téma. Legalább 3 asszisztos gól és
+  60% párrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`assist_pair_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 339. meccsterv-szabály), edzés-fókusz (360.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Kontrapáros-poszt: melyik tengelyen futnak a kontráik.** A
+  kontra-poszt a befejezőt nevezi meg — az új réteg a teljes
+  tengelyt: minden lerohanásnál az első labdabirtokos (indító) és a
+  lövést elengedő (befejező) posztját párba állítja. Edzőileg a
+  kontra két ponton fogható: az indítóra azonnali nyomás a
+  labdavesztés pillanatában, a befejező sávját az első visszaérő
+  zárja. Saját oldalon a második kontra-tengely az edzés-téma.
+  Legalább 3 lerohanás és 60% párrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`fast_break_pair_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 338. meccsterv-
+  szabály), edzés-fókusz (359. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Hetespáros-poszt: ki harcolja ki és ki dobja a heteseiket.** A
+  hetes-kiharcoló és a hetesdobó poszt külön ismert — az új réteg a
+  kettőt köti össze hetesenként: a (kiharcoló poszt → dobó poszt)
+  párost számolja. Edzőileg két kiosztható feladat egyszerre: a
+  kiharcoló ellen kéz nélkül, lábmunkával kell védekezni, a dobó
+  szokás-irányait a kapus tanulja. Saját oldalon mindkettőhöz kell
+  tartalék. Legalább 3 hetes és 60% párrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag (`seven_pair_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 337. meccsterv-
+  szabály), edzés-fókusz (358. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Csere-stílus: posztot tart vagy átszab a padjuk.** A
+  cserehullám-rétegek a posztokat nézik külön — az új réteg a ki-be
+  párokat: minden hullámban a lecserélt és a beálló játékost párba
+  állítja, és megnézi, azonos posztra érkezik-e a váltás. Edzőileg:
+  posztot tartó pad ellen a párosítás a csere után is érvényes;
+  átszabó pad ellen a hullám utáni első támadásnál újra kell osztani
+  a fogásokat. Saját oldalon a csere utáni rendeződés a téma. 3
+  ki-be pár alatt hallgat (None); 70% fölött tartó, 40% alatt
+  átszabó az ítélet. Felületek: /analyze + meccs-csomag
+  (`swap_style`), edzői összefoglaló, felderítés (edzői kulcs + 336.
+  meccsterv-szabály), edzés-fókusz (357. szabály), kliens-csempe.
+- **Elzárópáros-poszt: melyik posztpárra jár az elzárás-játékuk.**
+  Az elzárás-páros rétege a két embert nevezi meg — az új réteg a
+  posztpárt: minden elzárt lövést az (elzáró poszt → lövő poszt)
+  kettőshöz ír. Edzőileg a páros elleni felkészülés: az elzáró
+  posztjának őrzője előre szól, a lövőé az elzárás előtt lép ki.
+  Saját oldalon a figura tükrözése a másik oldalra az edzés-téma.
+  Legalább 3 elzárt lövés és 60% párrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`screen_pair_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 335. meccsterv-szabály),
+  edzés-fókusz (356. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Álló-poszt: melyik posztjuk áll labda nélkül.** Az álló támadók
+  rétege az embert nevezi meg — az új réteg a posztot: a szervezett
+  támadás mozgás-másodperceit és métereit a játékos posztjához
+  összegzi, és megnézi, melyik posztjuk mozog érdemben a csapatátlag
+  alatt. Edzőileg a besegítés-forrás: az álló posztot a védője
+  otthagyhatja — befelé segíthet, kettőzhet vagy a beállóra léphet.
+  Saját oldalon a labda nélküli munka az edzés-téma. Posztonként 20
+  mp mért mozgás és 20% lemaradás alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`static_attacker_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 334. meccsterv-szabály),
+  edzés-fókusz (355. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Letámadó-poszt: melyik posztjuk szed labdát elöl.** Az elöl
+  szerző védők rétege az embert nevezi meg — az új réteg a posztot:
+  a támadó térfélen született szerzéseket a szerző posztjához írja.
+  Edzőileg a kihozatal-terv: a letámadó poszt oldalán tilos a
+  kihozatalt vezetni — a kapus a másik oldalra indítson. Saját
+  oldalon a letámadás-motor biztosítása (mögötte nyíló tér) a téma.
+  Legalább 3 elöl-szerzés és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag (`high_steal_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 333. meccsterv-
+  szabály), edzés-fókusz (354. szabály), HTML-riport (Védő-lencse
+  sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Célkereszt-poszt: melyik posztjuk előtt fejeznek be ellenük.**
+  A célba vett védő rétege az embert nevezi meg — az új réteg a
+  posztot: a kapott lövéseket a lövőhöz legközelebbi védő posztjához
+  írja. Edzőileg kollektív felderítés: ha az ellenfelek rendre
+  ugyanannak a posztnak az orra előtt fejeznek be, a minta bevált —
+  a támadást oda kell szervezni, a védője elé elzárást. Saját
+  oldalon a célba vett poszt segítséget kap. Legalább 5 rá-lövés és
+  60% posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`targeted_defender_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 332. meccsterv-szabály), edzés-fókusz
+  (353. szabály), HTML-riport (Védő-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Fedezett-lövő poszt: melyik posztjuk lő fedezetten is.** A
+  fedezetten lövők rétege az embert nevezi meg — az új réteg a
+  posztot: a testközeli védő melletti lövéseket a lövő posztjához
+  írja. Edzőileg a fal takarékossága: amelyik posztjuk fedezetten
+  is elhúzza a ravaszt, arra nem kell kilépni — a fedezett lövés
+  alacsony értékű, elég a blokk-kéz és a mögé rendezett fal. Saját
+  oldalon a lövés-szelekció az edzés-téma. Legalább 3 fedezett
+  lövés és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`covered_shooter_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 331. meccsterv-szabály),
+  edzés-fókusz (352. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Védőmotor-poszt: melyik posztjuk védő-motorja áll le.** Az
+  eltűnő védő rétege az embert nevezi meg — az új réteg a posztot: a
+  védő-akciókat (labdaszerzés + blokk) félidőnként a védő posztjához
+  írja, és megkeresi, melyik posztjuk motorja áll le a másodikra.
+  Edzőileg a második félidei támadás-irány: az első félidei kép
+  alapján a pörgő védő-zónát kerülnénk — pedig a másodikra már nem
+  ér oda, a szünet után pont ott kell támadni. Saját oldalon a
+  védő-motor tervezett pihenője az edzés-téma. Felismert szünet
+  nélkül, 3 első félidei akció és legfeljebb 1 második félidei alatt
+  szólal meg. Felületek: /analyze + meccs-csomag
+  (`fading_defender_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 330. meccsterv-szabály), edzés-fókusz (351. szabály),
+  HTML-riport (Védő-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Áttörő-poszt: melyik posztjuk nyitja szét a falat.** Az áttörő
+  játékosok rétege az embert nevezi meg — az új réteg a posztot: a
+  labdás betöréseket (a kapu közeli körzetébe lépés) a betörő
+  posztjához írja. Edzőileg a kettőzés-terv belső köre: az áttörő
+  poszt védője segítőt kap, a betörés vonalát testtel kell zárni —
+  nélküle a többiek kívül rekednek. Saját oldalon a második áttörő
+  az edzés-téma. Legalább 4 betörés és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`breakthrough_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 329. meccsterv-szabály), edzés-fókusz (350. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Drága-eladó poszt: kinek a hibái kerülnek gólba.** A drága
+  eladók rétege az embert nevezi meg — az új réteg a posztot: a
+  gólba forduló (kapott góllal büntetett) eladásokat a vesztes
+  posztjához írja. Edzőileg a nyereség-térkép: amelyik posztjuk
+  hibái rendre gólt érnek, a felhozatalnál őt kell kettőzni-zavarni
+  — nála a legnagyobb a szerezhető nyereség. Saját oldalon a nyomás
+  alatti labdakezelés és a hiba utáni visszazárás az edzés-téma.
+  Legalább 3 büntetett eladás és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`costly_turnover_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 328. meccsterv-szabály), edzés-fókusz (349. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Beérkező-poszt: melyik posztra hoz frissítést a padjuk.** A
+  forgatott-poszt a lecserélteket nézi — az új réteg a beállókat: a
+  cserehullámokkal érkező játékosokat a posztjukhoz írja. Edzőileg a
+  cserehullám utáni figyelem-irány: ha a padjuk rendre ugyanarra a
+  posztra hoz friss embert, a hullám után arra a sávra kell váltani
+  — friss láb, új lendület, az addigi párosítás ott elavul. Saját
+  oldalon a második sor szélesítése az edzés-téma. Legalább 3
+  beállás és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`sub_in_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 327. meccsterv-szabály), edzés-fókusz
+  (348. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Forgatott-poszt: melyik posztjukat cserélik.** A
+  cserehullám-rétegek a hullámot nézik — az új réteg a posztot: a
+  lecserélt játékosokat a posztjukhoz írja. Edzőileg a
+  fárasztás-terv iránya: a sokat forgatott posztra fárasztásra
+  építeni hiba — oda mindig friss ember jön; a terhelés-csapdát a
+  nem forgatott posztokra kell tenni. Saját oldalon a forgatás-terv
+  kiegyenlítése az edzés-téma. Legalább 3 lecserélés és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`substituted_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 326. meccsterv-szabály), edzés-fókusz (347.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Fáradt-fal poszt: a második félidőben melyik poszt jár át
+  rajtuk.** A kapott gólok poszt-térképe a teljes meccset nézi — az
+  új réteg a fáradást: a kapott gólokat félidőnként a lövő
+  posztjához írja, és megkeresi, melyik poszt góljai ugranak meg
+  ellenük a másodikra. Edzőileg a szünet utáni támadás-terv: a faluk
+  leülő sávjából kell nyitni — ott fáradnak, ott nyílik a rés. Saját
+  oldalon a sáv-frissítés (tervezett védő-csere, kondíció) az
+  edzés-téma. Felismert szünet nélkül, 3 második félidei kapott gól
+  és kétszeres ugrás alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`tired_conceder_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 325. meccsterv-szabály), edzés-fókusz
+  (346. szabály), HTML-riport (Védő-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Fáradt-lövő poszt: kinek megy szét a lövése a második
+  félidőben.** A pazarló-poszt a teljes meccset nézi — az új réteg a
+  fáradást: a kaput elkerülő lövéseket félidőnként a lövő posztjához
+  írja, és megkeresi, melyik posztjuk pontatlansága ugrik meg a
+  másodikra. Edzőileg a szünet utáni fal-terv: fáradtan szétmegy a
+  lövése — rá lehet engedni, a kilépés nála fölösleges kockázat.
+  Saját oldalon a fáradt célzás-blokk és a befejezés átosztása az
+  edzés-téma. Felismert szünet nélkül, 3 második félidei mellé és
+  kétszeres ugrás alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`tired_shooter_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 324. meccsterv-szabály), edzés-fókusz
+  (345. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Fáradt-eladó poszt: kinek a labdái vesznek el a második
+  félidőben.** Az eladás-rétegek a teljes meccset nézik — az új
+  réteg a fáradást: a labdaeladásokat félidőnként a vesztes
+  posztjához írja, és megkeresi, melyik posztjuk eladásai ugranak
+  meg a másodikra. Edzőileg a második félidei pressz-terv: fáradtan
+  nála nyílik ki a kéz — a szünet után friss védővel őt kell nyomás
+  alá tenni. Saját oldalon a terhelés-menedzsment és a fáradt
+  labdabiztonság az edzés-téma. Felismert szünet nélkül, 3 második
+  félidei eladás és kétszeres ugrás alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`tired_turnover_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 323. meccsterv-szabály),
+  edzés-fókusz (344. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Hátrapassz-poszt: melyik posztjuknál fordul vissza a játék.** A
+  passz-irány rétege csapat-szinten mondja meg, mennyit játszanak
+  hátrafelé — az új réteg posztonként: a kaputól legalább 1 méterrel
+  távolabbi társhoz menő passzokat a passzoló posztjához írja.
+  Edzőileg a pressz-jutalom: amelyik posztjuk nyomás alatt hátrafelé
+  menekül, arra rá lehet menni — a hátra-passza után a fal feljebb
+  tolható. Saját oldalon az előre-játék bátorság az edzés-téma.
+  Legalább 5 hátra-passz és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`backward_pass_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 322. meccsterv-szabály),
+  edzés-fókusz (343. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Térnyerő-poszt: melyik posztjuk viszi előre a labdát.** A
+  labdatartó-poszt azt méri, kinél áll a labda — az új réteg azt,
+  kinél halad: a labdás játékos kockái közt a támadott kapu felé
+  megtett métereket a birtokos posztjához összegzi. Edzőileg a
+  lendület-fék terve: a térnyerő posztot a felezőtől hátrálva kell
+  fogadni — lendületbe engedni tilos. Saját oldalon a második
+  labdavivő az edzés-téma. Legalább 50 labdás előre-méter és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`ball_carrier_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 321. meccsterv-szabály), edzés-fókusz
+  (342. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Előnyben-poszt: vezetésnél melyik posztjuk viszi a játékot.** A
+  felzárkózás-poszt a hátrányt nézi, a hajrá-poszt a záró perceket —
+  az új réteg a vezetést: a saját vezetés közben lőtt gólokat a lövő
+  posztjához írja. Edzőileg a lendület-törés terve hátrányban: ha
+  vezetnek, az előny-vivőjük kivétele (szoros fogás, kettőzés) a
+  leggyorsabb visszaút. Saját oldalon a két lábon álló előny-tartás
+  az edzés-téma. Legalább 3 előnyben lőtt gól és 60% posztrészarány
+  alatt hallgat (None). Felületek: /analyze + meccs-csomag
+  (`lead_scorer_roles`), edzői összefoglaló, felderítés (edzői kulcs
+  + 320. meccsterv-szabály), edzés-fókusz (341. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Előkészítő-poszt: melyik posztjuk készíti elő a lövéseket.** A
+  gólpassz-poszt csak a gólok passzait nézi — az új réteg minden
+  lövését: a lövés előtti utolsó passzt a passzoló posztjához írja.
+  Edzőileg a passzsáv-zárás nagyobb képe: ha a lövéseik
+  előkészítése rendre egy posztról jön, az ő sávjának zárásával a
+  lövéseik előkészítetlenné válnak — a lövők maguktól elhalnak.
+  Saját oldalon a második előkészítő az edzés-téma. Legalább 5
+  előkészítő passz és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`last_pass_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 319. meccsterv-szabály),
+  edzés-fókusz (340. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Indító-poszt: melyik posztjuknál indul a támadás-szervezés.** A
+  támadás-szakaszok a szakaszt adják — az új réteg a posztot: minden
+  szakasz első labdabirtokosát megkeresi, és a szakaszt az ő
+  posztjához írja. Edzőileg a korai pressz címzettje: ha a
+  támadásaik rendre ugyanannál a posztnál indulnak, a felhozatalt őt
+  presszingelve lehet borítani — korai nyomás rá már a felezőnél.
+  Saját oldalon a második labdafelhozó az edzés-téma. Legalább 5
+  szakasz és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`attack_starter_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 318. meccsterv-szabály),
+  edzés-fókusz (339. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Beállóőr-poszt: melyik posztjuk őrzi a beállót.** A beálló-őr
+  rétege az embert nevezi meg — az új réteg a posztot: az
+  őrzés-kockákat az őrző (támadó-fázisból becsült) posztjához írja.
+  Edzőileg az elzárás-terv magja: ha a beálló-őrzésük egy poszton
+  áll, az elzárás pont őt húzza ki — a beálló felszabadul, és a
+  belső biztosításuk borul. Saját oldalon a váltás-szabály az
+  edzés-téma. Legalább 300 őrzés-kocka és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`pivot_guard_roles`), edzői összefoglaló, felderítés (edzői kulcs
+  + 317. meccsterv-szabály), edzés-fókusz (338. szabály),
+  HTML-riport (Védő-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Kilépő-poszt: melyik posztjuk lép ki a falból.** A kilépő védő
+  rétege az embert nevezi meg — az új réteg a posztot: a felállt
+  védekezés mért kockáit és kapu-távolságait a védő posztjához
+  összegzi, és megnézi, van-e a többieknél legalább 2,5 méterrel
+  előrébb álló poszt. Edzőileg: a kilépő mögött nyílik a tér —
+  elzárást rá, és a háta mögé befutóval 2 az 1-et. Saját oldalon a
+  kilépés mögötti biztosítás az edzés-téma. Posztonként 100 mért
+  kocka, 3 mért poszt és 2,5 m mélység-többlet alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`advanced_defender_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 316. meccsterv-
+  szabály), edzés-fókusz (337. szabály), HTML-riport (Védő-lencse
+  sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Ziccerhagyó-poszt: melyik posztjuk hagyja ki a ziccereket.** A
+  ziccer-befejezők rétege az embert nevezi meg — az új réteg a
+  posztot: a nagy helyzet-értékű, gól nélkül záruló lövéseket a lövő
+  posztjához írja. Edzőileg a fal kockázat-kezelése: amelyik
+  posztjuk a ziccert rendre kihagyja, annál a helyzetbe engedés a
+  kisebbik rossz — a besegítés a biztos kezű társakra menjen. Saját
+  oldalon a befejezés-gyakorlás az edzés-téma. Legalább 3 kihagyott
+  ziccer és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`missed_chance_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 315. meccsterv-szabály),
+  edzés-fókusz (336. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Blokkolt-poszt: melyik posztjuk lövéseit blokkolják.** A
+  blokk-réteg a védő oldalt nevezi meg — az új réteg a megakasztott
+  lövőt: minden blokkhoz megkeresi a blokk előtti utolsó támadó
+  labdabirtokost, és a blokkot az ő posztjához írja. Edzőileg a fal
+  bátorsága: amelyik posztjuk rendre falba lő, ellene a blokk nem
+  szerencse, hanem terv — a védője bátran zárhat elé. Saját oldalon
+  a lövés-előkészítés (elzárás, lövőcsel, lövés-szelekció) az
+  edzés-téma. Legalább 3 blokkolt lövés és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`blocked_shooter_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 314. meccsterv-szabály), edzés-fókusz (335. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Hetesdobó-poszt: melyik posztjuk áll oda a hetesekhez.** A
+  hetes-dobók listája az embert nevezi meg — az új réteg a posztot:
+  a felismert hétméteresek kimenetel-lövéseit a dobó posztjához
+  írja. Edzőileg a kapus-felkészülés és a fárasztás terve: ha a
+  heteseiket rendre ugyanaz a poszt dobja, a kapus az ő
+  szokás-irányait tanulja, a meccsterv pedig tudja: ha ezt a posztot
+  kiveszik, a hetes-rutinjuk is vele megy. Saját oldalon a második
+  kijelölt dobó a téma. Legalább 3 hetes és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`seven_taker_roles`), edzői összefoglaló, felderítés (edzői kulcs
+  + 313. meccsterv-szabály), edzés-fókusz (334. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Javítás — az elakadt képkockát a feldolgozó átugorja.** Terepen
+  látott hiba: a videó-olvasás/detektálás natív szinten beragadt egy
+  fix képkockánál, és a feldolgozás örökre megállt rajta (a védő
+  eddig ilyenkor feladta, és csak az addig kész részt mentette). Az
+  új adagoló (StallSkippingFeed) az elakadt kockát átugorja, és egy
+  folytató-olvasóval a következő képkockától megy tovább — a
+  követési azonosítók megmaradnak (persist), feladás csak 20 egymást
+  követő elakadás után jár. Az első kockára türelmesebb az időkorlát
+  (dekóder- és modell-bemelegedés), az állapot-üzenet pedig jelzi,
+  hogy a rendszer magától folytatja.
+- **Újrakezdő-poszt: melyik posztjuk viszi a szünet utáni rajtot.**
+  A félidő-nyitások rétege csapat-szinten mondja meg, hogyan jönnek
+  ki a szünetről — az új réteg a posztot: a második félidő első tíz
+  percének góljait a lövő posztjához írja. Edzőileg a szünet utáni
+  párosítás terve: ha az újrakezdés rendre ugyanarra a posztra épül,
+  a második félidő első tíz percében őt kell a legjobb védővel
+  megfogni. Saját oldalon a B-s nyitó-forgatókönyv a téma. Felismert
+  szünet nélkül, 3 gól és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`second_start_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 312. meccsterv-szabály),
+  edzés-fókusz (333. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Elzárt-poszt: melyik védőjük akad el az elzárásokban.** Az
+  elzárók rétege a támadó oldalt nevezi meg — az új réteg a
+  megtalált védőt: lövésenként az elzáróval elakasztott őrző
+  posztjához írja az esetet. Edzőileg az elzárás-célpont terve:
+  amelyik védő-posztjuk rendre elakad, ellene oda kell vinni a
+  figurákat — az ő oldalán az elzárás tisztán hagyja a lövőt. Saját
+  oldalon átcsúszás- és váltás-gyakorlás a téma. Legalább 3 elakadás
+  és 60% posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`screened_defender_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 311. meccsterv-szabály), edzés-fókusz
+  (332. szabály), HTML-riport (Védő-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Kettőzött-poszt: melyik posztjukra érkezik a kettőzés.** A
+  kettőzés-réteg a védő oldalt minősíti — az új réteg a megtámadott
+  posztot: a két védővel szorongatott labdás kockákat a birtokos
+  posztjához írja a támadó oldalon. Edzőileg kollektív felderítés:
+  ha az ellenfelek kettőzései rendre ugyanarra a posztjukra
+  érkeznek, a minta bevált recept — követni kell, és zárni a
+  kettőzés mögött kilépő passzsávot. Saját oldalon a kettőzött
+  posztnak lekapcsolódó társ és kettőzés-elleni leadás kell.
+  Legalább 100 kettőzött labdás kocka és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`doubled_target_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 310. meccsterv-szabály), edzés-fókusz (331. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Fáradó-poszt: melyik posztjuk esik vissza a második félidőre.**
+  A játékos-fáradás rétege az embert nevezi meg — az új réteg a
+  posztot: a félidőnkénti átlagsebességeket a játékos posztjához
+  összegzi, és megkeresi, melyik posztjuk tempója esik a
+  legnagyobbat. Edzőileg a második félidő terve: a visszaeső poszt
+  ellen a szünet után kell támadni — ott jön a tempó-fölény, és oda
+  éri meg a friss embert időzíteni. Saját oldalon kondicionális
+  blokk és korábbi pihentetés a téma. 100 cm/s tempó-alap és 20%
+  esés alatt hallgat (None). Felületek: /analyze + meccs-csomag
+  (`fatigue_roles`), edzői összefoglaló, felderítés (edzői kulcs +
+  309. meccsterv-szabály), edzés-fókusz (330. szabály), HTML-riport
+  (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Passzív-poszt: melyik posztjuknál hal el a felállt támadás.** A
+  passzív-kockázat rétege a szakaszt nevezi meg — az új réteg a
+  posztot: a lövés nélküli, hosszú felállt támadások labdás kockáit
+  a birtokos posztjához írja. Edzőileg a passzív jelzés terve: ha a
+  terméketlen támadásaik ideje rendre ugyanannál a posztnál telik, a
+  jelzés alatt őt kell nyomás alá tenni — nála jön a kényszer-lövés
+  vagy az eladás. Saját oldalon a passzív-protokoll (kész befejező
+  megoldás) a téma. Legalább 250 passzív labdás kocka és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`passive_holder_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 308. meccsterv-szabály), edzés-fókusz
+  (329. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Rajt-poszt: melyik posztjuk viszi a meccs elejét.** A
+  nyitás-profil csapat-szinten mondja meg, hogyan rajtolnak — az új
+  réteg a posztot: a meccs első tíz percének góljait a lövő
+  posztjához írja. Edzőileg a meccs eleji párosítás terve: ha a
+  rajtjuk rendre ugyanarról a posztról indul, az első tíz percben őt
+  kell a legjobb védővel megfogni — a nyitó-motorjuk nélkül a korai
+  elhúzásuk elmarad. Saját oldalon a második nyitó-megoldás a téma.
+  Legalább 3 meccs eleji gól és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`opening_scorer_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 307. meccsterv-szabály), edzés-fókusz (328. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Kiszolgált-poszt: melyik posztjuk fejezi be a bejátszásokat.**
+  A gólpassz-poszt azt mondja meg, kinek a kezéből indul a gól — az
+  új réteg azt, hova érkezik: az asszisztos gólokat a befejező
+  posztjához írja. Edzőileg a passzsáv-zárás címzettje: a
+  kiszolgálásból élő posztot nem fogni kell, hanem éheztetni — a
+  felé futó passzt elvágni, és magától elhal. Saját oldalon az
+  önálló helyzet-teremtés az edzés-téma. Legalább 3 asszisztos gól
+  és 60% posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`assisted_scorer_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 306. meccsterv-szabály), edzés-fókusz
+  (327. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Hajrákéz-poszt: melyik poszt kezén fut a végjátékuk.** A
+  hajrá-labdabirtoklás rétege az embert nevezi meg — az új réteg a
+  posztot: az utolsó öt perc labdás kockáit a birtokos posztjához
+  írja. Edzőileg a hajrá-kettőzés címzettje: ha a végjátékuk egy
+  poszt kezén fut, nem a lövőket kell fogni, hanem A kezet — ha az
+  a poszt nem kap labdát, a záró figuráik el sem indulnak. Saját
+  oldalon a második labdakihozó kijelölése a téma. Legalább 200
+  hajrá-labdás kocka és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`clutch_hog_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 305. meccsterv-szabály),
+  edzés-fókusz (326. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Lágypassz-poszt: melyik posztjuk passzol lágyan.** A
+  passz-sebesség rétege csapat-szinten mondja meg, éles-e a
+  labdajáratás — az új réteg posztonként: a 8 m/s alatti röptű
+  (lágy, ívelt) passzokat a passzoló posztjához írja. Edzőileg a
+  beleérő védekezés iránya: amelyik posztjuk lágyan passzol, annak a
+  labdáiba bele lehet nyúlni — kilépés és passzsáv-támadás az ő
+  sávjában azonnal termel. Saját oldalon a passz-élesség az
+  edzés-téma. Legalább 5 lágy passz és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`soft_pass_roles`), edzői összefoglaló, felderítés (edzői kulcs +
+  304. meccsterv-szabály), edzés-fókusz (325. szabály), HTML-riport
+  (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Sprint-poszt: melyik posztjuk futja a sprinteket.** A
+  sprint-veszély rétege az embert nevezi meg — az új réteg a
+  posztot: a mért sprinteket a futó posztjához írja. Edzőileg a
+  kontra-fék terve: a sprint a kézilabdában szinte mindig átmenet —
+  ha a sprintek rendre ugyanarról a posztról jönnek, labdavesztésnél
+  először annak az útját kell lezárni, és tilos a fal mögé engedni.
+  Saját oldalon a sprint-teher a rotáció-tervezés bemenete. Legalább
+  10 sprint és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`sprint_threat_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 303. meccsterv-szabály),
+  edzés-fókusz (324. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Középkezdő-poszt: melyik posztjuknál indul a középkezdés.** A
+  középkezdés-átvevő rétege az embert nevezi meg — az új réteg a
+  posztot: a kapott gól utáni első felező-környéki labdaátvételeket
+  az átvevő posztjához írja. Edzőileg a gól utáni letámadás terve:
+  ha a középkezdésük rendre ugyanannál a posztnál indul, a
+  letámadásnak posztra szóló célpontja van — őt kell lefogni, és a
+  középkezdésük megáll. Saját oldalon a kiszámítható átvevő
+  variálandó. Legalább 3 átvétel és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`restart_taker_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 302. meccsterv-szabály), edzés-fókusz (323. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Forró-poszt: melyik posztjuk lövi a gólsorozatokat.** A forró
+  kéz rétege az embert nevezi meg — az új réteg a posztot: a
+  sorozatban (két vagy több szomszédos csapatgól ugyanattól a
+  lövőtől) lőtt gólokat a lövő posztjához írja. Edzőileg a
+  lendület-törés terve: ha a sorozataik rendre ugyanarról a posztról
+  jönnek, az első gólja után azonnal reagálni kell — őrzés-váltás
+  vagy kettőzés, mielőtt a második-harmadik jönne. Saját oldalon a
+  második lendület-vivő kijelölése a téma. Legalább 3 sorozat-gól és
+  60% posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`hot_hand_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 301. meccsterv-szabály), edzés-fókusz (322.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Hajráhiba-poszt: melyik posztjuk adja el a labdát a hajrában.**
+  A hajrá-hibázók rétege az embert nevezi meg — az új réteg a
+  posztot: az utolsó öt perc labdaeladásait a vesztes posztjához
+  írja. Edzőileg a záró percek pressz-terve: amelyik posztjuknál a
+  végén rendre elmegy a labda, oda a hajrában kettőzés és
+  passzsáv-zárás jön — ott a legolcsóbb a labdaszerzés, amikor a
+  legtöbbet ér. Saját oldalon a hajrá-figurák tehermentesítése a
+  téma. Legalább 3 hajrá-eladás és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`clutch_turnover_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 300. meccsterv-szabály), edzés-fókusz (321. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Eltűnő-poszt: melyik posztjuk tűnik el a második félidőre.** Az
+  eltűnő ember rétege az embert nevezi meg — az új réteg a posztot:
+  a gól-részvételeket (gól + gólpassz) félidőnként a játékos
+  posztjához írja, és megkeresi, melyik posztjuk termelése hal el a
+  másodikra. Edzőileg az első 30 perc terve: az eltűnő posztra
+  duplán, cserével frissen tartott őrzővel kell ráállni — a második
+  félidő magától megoldódik. Saját oldalon a terhelés-menedzsment
+  témája. Legalább 3 első félidei részvétel és legfeljebb 1 második
+  félidei alatt szólal meg; felismert szünet nélkül hallgat (None).
+  Felületek: /analyze + meccs-csomag (`fading_scorer_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 299. meccsterv-szabály),
+  edzés-fókusz (320. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Csendtörő-poszt: melyik posztjuk töri meg a gólcsendet.** A
+  csend-törők rétege az embert nevezi meg — az új réteg a posztot: a
+  300+ másodperces gólcsendet megtörő gólokat a lövő posztjához
+  írja. Edzőileg a saját sorozat védelme: amikor áll a szekerük, a
+  labda a válság-posztjukhoz menekül — pont a sorozatunk alatt őt
+  kell a legszorosabban fogni. Saját oldalon az egy poszton álló
+  csend-törés kiszámítható válság-megoldás. Legalább 3 csend-törő
+  gól és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`drought_breaker_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 298. meccsterv-szabály),
+  edzés-fókusz (319. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Pressz-poszt: melyik posztjuk ejti a labdát szorításban.** A
+  pressz-érzékeny játékosok rétege az embert nevezi meg — az új
+  réteg a posztot: a nyomott (testközeli védő melletti) eladásokat a
+  labdavesztő posztjához írja. Edzőileg a kettőzés iránya: amelyik
+  posztjuk szorításban rendre eladja a labdát, oda a kettőzés nem
+  kockázat, hanem labdaszerzés; saját oldalon a nyomás alatti kiadás
+  a gyakorlandó. Legalább 3 nyomott eladás és 60% posztrészarány
+  alatt hallgat (None). Felületek: /analyze + meccs-csomag
+  (`press_sensitive_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 297. meccsterv-szabály), edzés-fókusz (318. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Labdatartó-poszt: melyik posztjuknál áll meg a labda.** A
+  labdatartás-idő rétege az embert nevezi meg — az új réteg a
+  posztot: minden mért labdás szakasz idejét a birtokos posztjához
+  írja. Edzőileg a kettőzés időzítése: amelyik posztjuknál rendre
+  megáll a labda, ott van idő odaérni a nyomással, és ott lassul a
+  támadásuk. Saját oldalon a gyorsabb továbbítás edzés-témája.
+  Legalább 60 mp mért tartás és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag (`hold_time_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 296. meccsterv-
+  szabály), edzés-fókusz (317. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Ziccer-poszt: melyik posztjuknál alakul ki a nagy helyzet.** A
+  ziccer-befejezők rétege az embert nevezi meg — az új réteg a
+  posztot: a BIG_CHANCE_XG feletti helyzet-értékű lövéseket a lövő
+  posztjához írja. Edzőileg a megelőzés terve: ha a ziccereik rendre
+  ugyanannál a posztnál alakulnak ki, a helyzetet a kialakulása
+  előtt kell megfogni — korábbi besegítés és szűkítés az ő sávjában.
+  Legalább 3 nagy helyzet és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag (`big_chance_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 295. meccsterv-
+  szabály), edzés-fókusz (316. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
+- **Pazarló-poszt: melyik posztjuk lövi mellé a lövéseit.** A
+  pontatlan lövők rétege az embert nevezi meg — az új réteg a
+  posztot: a kaput elkerülő (mellé/blokkolt) lövéseket a lövő
+  posztjához írja. Edzőileg a védekezés-takarékosság terve: amelyik
+  posztjuk rendre mellé lő, arra rá lehet engedni a lövést — ott a
+  kilépés fölösleges kockázat, a mellé lövés utáni kidobás pedig
+  azonnali indítás. Legalább 3 kaput elkerülő lövés és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`wasteful_shooter_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 294. meccsterv-szabály), edzés-fókusz
+  (315. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Felzárkózás-poszt: melyik posztjuk hozza őket vissza hátrányból.**
+  A felzárkózás-húzó rétege az embert nevezi meg — az új réteg a
+  posztot: a hátrányban lőtt gólok és gólpasszok részvételeit a
+  játékos posztjához írja. Edzőileg ez a vezetés megtartásának terve:
+  ha vezetünk, és tudjuk, melyik posztjukon keresztül szoktak
+  visszajönni, annak a kivétele (szoros fogás, korai kettőzés) a
+  hátrányukat beragasztja. Legalább 3 hátrány-gól-részvétel és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`comeback_carrier_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 293. meccsterv-szabály), edzés-fókusz
+  (314. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
+- **Hajrá-poszt: melyik posztjuk viszi a végjátékot.** A
+  hajrá-emberek rétege az embert nevezi meg — az új réteg a posztot:
+  a meccs utolsó öt percének góljait a lövő posztjához írja.
+  Edzőileg ez az utolsó öt perc terve: szoros állásnál nem kell
+  találgatni, kire fut ki a támadásuk — a záró percekben őt kell
+  fogni (akár emberfogással), és az ő sávjára áll rá a kapus is.
+  Saját csapatra: az egy emberre épülő hajrához B-forgatókönyv kell.
+  Felületek: `/analyze` és meccs-csomag (`clutch_scorer_roles`),
+  edzői összefoglaló, felderítő edzői kulcs, meccsterv-szabály (292:
+  az ő hajrá-posztjuk × a ti mély padotok → friss fogó ember a záró
+  percekre), edzés-fókusz (313: hajrá-forgatókönyv B-vel,
+  lekapcsolódás-gyakorlattal), teendő-rangsor, a kulcs-poszt lencse
+  és a meccs-jelentés Befejező-lencse táblája, kliens-csempe.
+
+- **Emberhátrány-poszt: melyik posztjuk vállal be öt emberrel.** Az
+  emberhátrány-lövők rétege az embert nevezi meg — az új réteg a
+  posztot: a kiállítás-ablakokban a hátrányban lévő csapat lövéseit
+  a lövő posztjához írja. Edzőileg ez az emberelőny-védelem terve:
+  az ő hátrány-lövő posztjuk a kontra-fenyegetés — a saját
+  emberelőnyben az ő oldalán kell a labdabiztonság, mert onnan indul
+  az ellentámadásuk. Saját csapatra: az egy posztra futó
+  hátrány-játékhoz második vállaló kell. Felületek: `/analyze` és
+  meccs-csomag (`shorthanded_shooter_roles`), edzői összefoglaló,
+  felderítő edzői kulcs, meccsterv-szabály (291: az ő
+  hátrány-posztjuk × a ti kiharcolt két perceitek → az emberelőnyötök
+  biztonsági terve), edzés-fókusz (312: hátrány-repertoár két
+  befejezéssel), teendő-rangsor, a kulcs-poszt lencse és a
+  meccs-jelentés Befejező-lencse táblája, kliens-csempe.
+
+- **Emberelőny-poszt: melyik posztjuk fejez be a két perc alatt.**
+  Az emberelőny-lövők rétege az embert nevezi meg — az új réteg a
+  posztot: a kiállítás-ablakok lövéseit a lövő posztjához írja.
+  Edzőileg ez az emberhátrány-terv: öt védővel a fal nem érhet
+  mindenhová — ha az emberelőnyük rendre ugyanarra a posztra fut ki,
+  hátrányban az ő sávját kell tartani, a többieket rá lehet engedni.
+  Saját csapatra: az egy posztra futó emberelőnyhöz második kifutási
+  út kell. Felületek: `/analyze` és meccs-csomag
+  (`powerplay_shooter_roles`), edzői összefoglaló, felderítő edzői
+  kulcs, meccsterv-szabály (290: az ő emberelőny-posztjuk × a ti sok
+  két percetek → megírt hátrány-védekezés), edzés-fókusz (311:
+  emberelőny-figurák két befejezési úttal), teendő-rangsor, a
+  kulcs-poszt lencse és a meccs-jelentés Befejező-lencse táblája,
+  kliens-csempe.
+
+- **Kiosztás-poszt: melyik posztra jár a betörés utáni labda.** A
+  kiosztás-célpont rétege az embert nevezi meg — az új réteg a
+  posztot: a betörés utáni kiosztásokat a fogadó posztjához írja.
+  Edzőileg ez a passzsáv-terv: ha a betöréseik után a labda rendre
+  ugyanarra a posztra megy, annak a védője előre elmozdulhat a
+  passzsávba, és a betörésre indulhat a kettőzés — a kiosztás
+  elveszti az értelmét. Felületek: `/analyze` és meccs-csomag
+  (`kickout_target_roles`), edzői összefoglaló, felderítő edzői
+  kulcs, meccsterv-szabály (289: az ő kiszámítható kiosztásuk × a ti
+  kettőzés-készségetek → a betörésük zsákutca), edzés-fókusz (310:
+  kiosztás-variációk két opcióval induló betörővel), teendő-rangsor,
+  a kulcs-poszt lencse és a meccs-jelentés Befejező-lencse táblája,
+  kliens-csempe.
+
+- **Kettőző-poszt: melyik posztjuk lép ki kettőzni.** A kettőző
+  emberek rétege az embert nevezi meg — az új réteg a posztot: a
+  kettőzött kockákat a másodiknak érkező védő posztjához írja.
+  Edzőileg ez a kijátszás-terv: ha a kettőzésük rendre ugyanarról a
+  posztról érkezik, előre tudni, hol nyílik ki a pálya — a kettőzés
+  pillanatában az ő elhagyott embere felé megy az első passz, mert ő
+  szabadult fel. Saját csapatra: a kiolvasható kettőzést forgatni
+  kell. Felületek: `/analyze` és meccs-csomag
+  (`doubling_defender_roles`), edzői összefoglaló, felderítő edzői
+  kulcs, meccsterv-szabály (288: az ő kiolvasható kettőzésük × a ti
+  nyomásálló passzjátékotok → minden kilépésük emberelőny),
+  edzés-fókusz (309: kettőzés-forgó besegítővel), teendő-rangsor, a
+  kulcs-poszt lencse és a meccs-jelentés Védő-lencse táblája,
+  kliens-csempe.
+
+- **Kulcs-poszt indoklással a meccs-jelentésben.** A jelentés
+  Kulcs-poszt szekciója az ítélet mellé mostantól felsorolja, MELY
+  rétegek mutatnak a megnevezett posztra (pl. "rétegek:
+  Labdaszerző-poszt, Blokk-poszt, Átvert-poszt") — a magyarázható
+  lánc a papíron is követhető, az edző látja, miből áll össze a
+  meccsterv első lapja. Őr-teszt ellenőrzi.
+
+- **Kulcs-poszt: teljes lencse-lefedettség + őr-teszt.** A
+  kulcs-poszt összegzés mostantól mind a 17 poszt-ítéletes réteget
+  számolja (bekerült az Indítás-vadász, a Bejátszó-, a Kockáztató-
+  és a Vasember-poszt is), és őr-teszt figyeli, hogy minden
+  "main_role" ítéletet adó pipeline-függvény szerepeljen a
+  KP_LAYERS listában — új poszt-réteg többé nem maradhat ki az
+  összegzésből.
+
+- **Kockáztató-poszt: melyik posztjuk szórja el a hosszú labdákat.**
+  A kockázatos passzolók rétege az embert nevezi meg — az új réteg a
+  posztot: a hosszú passzokból lett eladásokat a kiinduló játékos
+  posztjához írja. Edzőileg ez a labdaszerzés-terv: ha a hazárd
+  labdáik rendre ugyanarról a posztról indulnak (tipikusan az
+  irányítótól), az ő passzsávjába kell beállni — a sávba lépés nála
+  azonnal labdát hoz, mögötte nyitott a pálya. Saját csapatra: az
+  egy poszton gyűlő eladás passz-technika edzés-téma. Felületek:
+  `/analyze` és meccs-csomag (`risky_passer_roles`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (287: az ő
+  kockáztató-posztjuk × a ti kontra-játékotok → az ő sávja a
+  kontra-forrásotok), edzés-fókusz (308: passz-technika blokk sávba
+  lépő védővel), teendő-rangsor és a meccs-jelentés Befejező-lencse
+  táblája, kliens-csempe.
+
+- **Vasember-poszt: melyik posztjuk játszik végig csere nélkül.** A
+  rotáció-mélység azt mondja meg, hány emberrel játszanak — az új
+  réteg azt, HOL nincs váltás: posztonként a legtöbbet pályán lévő
+  játékos jelenlét-aránya, és ítélet, ha egy poszt kilóg (85%+
+  jelenlét, 15 százalékponttal a mezőny fölött, 10+ perces
+  felvételen). Edzőileg ez a hajrá-terv: a végigjátszó poszt a meccs
+  végére elfárad — az utolsó tíz percben oda kell vinni a tempót, és
+  vele szemben friss ember jöjjön; saját cserétlen posztunk ugyanígy
+  figyelmeztetés. Felületek: `/analyze` és meccs-csomag
+  (`iron_man_roles`), edzői összefoglaló, felderítő edzői kulcs,
+  meccsterv-szabály (286: az ő vasember-posztjuk × a ti mély padotok
+  → a hajrá a tiétek), edzés-fókusz (307: váltóember-építés heti
+  játékperc-céllal), teendő-rangsor és a meccs-jelentés
+  Befejező-lencse táblája, kliens-csempe.
+
+- **Bejátszó-poszt: melyik posztjuk játssza be a beállót.** A
+  beálló-kiszolgálók rétege az embert nevezi meg — az új réteg a
+  posztot: a beállóhoz futó beadásokat a passzoló posztjához írja.
+  Edzőileg ez a beálló-vonal zárásának térképe: ha a beadásaik
+  rendre ugyanarról a posztról jönnek (tipikusan az irányítótól), az
+  ő kezén kell a vonalba lépni, és az ő oldalán indul a kettőzés — a
+  bejátszó zárása többet ér, mint a beálló birkózása. Felületek:
+  `/analyze` és meccs-csomag (`pivot_feeder_roles`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (285: az ő
+  bejátszó-posztjuk × a ti beállóval szenvedő falatok → a bejátszó
+  zárása a terv), edzés-fókusz (306: beadás-forgó posztonként
+  begyakorolt beadás-fajtákkal), teendő-rangsor és a meccs-jelentés
+  Befejező-lencse táblája, kliens-csempe.
+
+- **Indítás-vadász poszt: melyik posztjuk vadássza az indítást.**
+  Az indítás-hiba ára réteg az indító oldalt nézi — az új réteg a
+  rabló oldalt: minden elveszett kapus-indításnál a labdát megszerző
+  játékos posztjához ír egy rablást. Edzőileg kétirányú. Ellenük: ha
+  a rablásaik rendre ugyanarról a posztról jönnek (tipikusan a
+  szélső ugrik az első passzra), a saját kapus a másik oldalon vagy
+  a feje fölött nyisson. Saját csapatra: az egy emberen futó
+  letámadást az ellenfél egy cserével hatástalanítja. Felületek:
+  `/analyze` és meccs-csomag (`outlet_hunter_roles`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (284: az ő
+  vadász-posztjuk × a ti elszórt indításaitok → megbeszélt
+  indítás-terv), edzés-fókusz (305: letámadás-forgó jelre vándorló
+  vadásszal), teendő-rangsor és a meccs-jelentés Védő-lencse
+  táblája, kliens-csempe.
+
+- **Kulcs-poszt: hány réteg mutat ugyanarra a posztra.** A
+  poszt-lencse rétegek (kire fut ki a játékuk, hol sebezhető a
+  védekezésük) egyenként egy-egy mintát mondanak ki — az új réteg
+  összeszámolja őket: ha a megszólaló ítéletek zöme (3+ réteg,
+  holtverseny nélkül) ugyanazt a posztot nevezi meg, az a csapat
+  KULCS-POSZTJA. Edzőileg ez a meccsterv első lapja: az ellenfélnél
+  egyetlen ember kezelése (fogás, zárás, kettőzés) több mintát
+  kapcsol ki egyszerre; saját csapatnál az egy emberre futó játék
+  kiszámíthatóság — tehermentesítés kell. Felületek: `/analyze` és
+  meccs-csomag (`key_post`), edzői összefoglaló, felderítő edzői
+  kulcs, meccsterv-szabály (283: a kulcs-posztjuk ismert → az ő
+  kezelése az első pont), edzés-fókusz (304: tehermentesítő hét
+  második felelősökkel), teendő-rangsor, a meccs-jelentés önálló
+  Kulcs-poszt szekciója a lencse-táblák előtt, kliens-csempe.
+
+- **Elzáró-poszt: melyik posztjuk áll elzárásba.** Az elzárók
+  rétege az embert nevezi meg — az új réteg a posztot: az
+  elzárásokat az elzáró játékos posztjához írja. Edzőileg ez a
+  váltás-terv: ha az elzárásaik rendre ugyanarról a posztról jönnek
+  (tipikusan a beálló), a védekezés előre tudja, honnan érkezik a
+  test — az ő oldalán hangos váltás vagy átcsúszás kell, és őt
+  elölről kell fogni, mert nélküle a lövőjük nem marad tisztán.
+  Felületek: `/analyze` és meccs-csomag (`screen_setter_roles`),
+  edzői összefoglaló, felderítő edzői kulcs, meccsterv-szabály (282:
+  az ő elzáró-posztjuk × a ti gyenge elzárás-védekezésetek →
+  poszt-szintű váltás-terv), edzés-fókusz (303: elzárás-variációk
+  váltakozó elzáró-poszttal), teendő-rangsor és a meccs-jelentés
+  Befejező-lencse táblája, kliens-csempe.
+
+- **Átvert-poszt: melyik posztjuk mögött esnek a kapott gólok.** Az
+  átvert védők rétege az embert nevezi meg — az új réteg a posztot:
+  a védőhöz rendelt kapott gólokat az átvert játékos posztjához
+  írja. Edzőileg ez az 1v1-térkép: ha a kapott góljaik rendre
+  ugyanannak a posztnak a párharc-vereségéből esnek, oda kell vinni
+  az 1v1-et — a figura az ő emberét támadja, elzárás is hozzá
+  terelje a lövőt. Saját csapatra: a sokat átvert posztunk mellé
+  besegítő váltás és párharc-edzés kell. Felületek: `/analyze` és
+  meccs-csomag (`beaten_defender_roles`), edzői összefoglaló,
+  felderítő edzői kulcs, meccsterv-szabály (281: az ő átvert
+  posztjuk × a ti 1v1-erőtök → a figura célpontja adott),
+  edzés-fókusz (302: párharc-blokk besegítő váltással + videó),
+  teendő-rangsor és a meccs-jelentés Védő-lencse táblája,
+  kliens-csempe.
+
+- **Visszafutás-poszt: ki marad le a visszarendeződésben.** Az
+  ellenfél kontráinak kifutásakor megnézi, a védekező csapat melyik
+  mezőnyjátékosa van legmesszebb a saját kapujától, és a lemaradást
+  a posztjához írja. Edzőileg két olvasat. Ellenük: ha rendre
+  ugyanaz a posztjuk marad elöl, a saját kontrát tudatosan az ő
+  sávjába kell vezetni — ott a pálya üres. Saját csapatra: a
+  visszafutás sorrendje edzés-téma — kijelölt első visszafutó kell,
+  és nem lehet mindig ugyanaz a lemaradó. Felületek: `/analyze` és
+  meccs-csomag (`slow_retreat_roles`), edzői összefoglaló, felderítő
+  edzői kulcs, meccsterv-szabály (280: az ő lemaradó posztjuk × a ti
+  kontra-játékotok → az indítás célzottan az ő sávjába), edzés-fókusz
+  (301: visszafutás-staféta sípszóra mérve), teendő-rangsor és a
+  meccs-jelentés Védő-lencse táblája, kliens-csempe.
+
+- **Védő-lencse a meccs-jelentésben.** A Befejező-lencse táblába
+  időközben védő-oldali ítéletek is kerültek — most szétválik: a
+  Befejező-lencse a támadó-oldali "kire fut ki a játékuk" ítéleteké
+  (poszt-nyomás, időkérés-, kontra-, lepattanó-, 7a6-befejező,
+  gólpassz-poszt, hetes-oldal), az új Védő-lencse pedig a "hol
+  sebezhető a védekezésük" térképe: melyik sáv blokkol
+  (Blokk-poszt), hol szakad be a hetes (Hetes-okozó poszt), ki
+  gyűjti a kétperceket (Kiülő-poszt), ki szedi a labdákat
+  (Labdaszerző-poszt). Edzői olvasat: az egyik tábla azt mondja, KIT
+  fogj, a másik azt, HOVÁ támadj — őr-teszt mindkettőre.
+
+- **Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.** A "ki ült
+  ki" réteg az embert nevezi meg — az új réteg a posztot: a
+  kiállításokat a kiülő játékos posztjához írja. Edzőileg két olvasat
+  egyszerre. Ellenük: ha a kétperceik rendre ugyanarról a posztról
+  jönnek, a meccs elején oda kell vezetni a játékot — az az ember
+  hamar behúzza az első kettőt, és onnantól vagy hiányzik, vagy
+  fékezve véd. Saját csapatra: az egy poszton gyűlő két perc
+  rendszer-hiba (hiányzó besegítés), nem pech. Felületek: `/analyze`
+  és meccs-csomag (`suspended_roles`), edzői összefoglaló, felderítő
+  edzői kulcs, meccsterv-szabály (279: az ő kiülő-posztjuk × a ti
+  kiállítás-kiharcolótok → meccs eleji párosítás-terv), edzés-fókusz
+  (300: szituációs 1v1 besegítővel + videó), teendő-rangsor és a
+  meccs-jelentés Befejező-lencse táblája, kliens-csempe.
+
+- **Hetes-okozó poszt: melyik sávjuk szakad be hetessel.** A
+  hetes-okozó védők rétege az embert nevezi meg — az új réteg a
+  posztot: az okozott heteseket az okozó védő posztjához írja, így a
+  minta akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+  Edzőileg ez a betörés-térkép: ha a heteseik rendre ugyanazon a
+  poszton szakadnak be, az a sáv kézzel véd a lábmunka helyett — oda
+  érdemes betörést vezetni, mert gól vagy hetes lesz belőle (idővel
+  kiállítás). Felületek: `/analyze` és meccs-csomag
+  (`seven_conceder_roles`), edzői összefoglaló, felderítő edzői
+  kulcs, meccsterv-szabály (278: az ő beszakadó sávjuk × a ti biztos
+  hetes-lövőtök → a betörés kétszeresen fizet), edzés-fókusz (299:
+  lábmunka-gyakorlat tiltott kézhasználattal), teendő-rangsor és a
+  meccs-jelentés Befejező-lencse táblája, kliens-csempe.
+
+- **7a6-befejező poszt: kire fut ki a hetedik ember játéka.** A
+  7 a 6 rétegei eddig azt mondták meg, MIKOR és MENNYIT játsszák a
+  lehozott kapust — az új réteg azt, KIRE: az üres-kapus szakaszok
+  alatti lövéseiket a lövő posztjához írja. Edzőileg a 7 a 6 értelme
+  a túlterhelés; ha a lövéseik rendre ugyanarról a posztról jönnek, a
+  hetedik ember játéka kiszámíthatóvá vált — a lehozott kapus
+  felismerésekor a védekezés első dolga oda sűríteni, és minden
+  labdaszerzés üres kapura támadható. Felületek: `/analyze` és
+  meccs-csomag (`seven_six_finisher_roles`), edzői összefoglaló,
+  felderítő edzői kulcs, meccsterv-szabály (277: az ő kiszámítható
+  7 a 6-uk × a ti labdaszerzésetek → besűrítés, a szerzés mögött üres
+  a kapu), edzés-fókusz (298: 7 a 6 két kijátszási úttal),
+  teendő-rangsor és a meccs-jelentés Befejező-lencse táblája,
+  kliens-csempe.
+
+- **Blokk-poszt: melyik posztjuk blokkol.** A blokkolt lövések
+  rétege az embert nevezi meg — az új réteg a posztot: a blokkokat a
+  blokkoló játékos posztjához írja. Edzőileg ez a lövés-előkészítés
+  térképe: ha a blokkjaik zöme egy posztról jön (tipikusan a középső
+  védőtől), az ő sávjába átlövéssel próbálkozni ajándék labdavesztés
+  — oda csak elmozgatás UTÁN szabad lőni: a figura először őt húzza
+  ki, és a lövés a megnyílt sávba megy. Felületek: `/analyze` és
+  meccs-csomag (`role_block_sources`), edzői összefoglaló, felderítő
+  edzői kulcs, meccsterv-szabály (276: az ő blokk-posztjuk × a ti
+  falba lövésetek → előkészítés nélkül oda nem megy lövés),
+  edzés-fókusz (297: blokk-staféta, a blokk a falé legyen, ne egy
+  emberé), teendő-rangsor és a meccs-jelentés Befejező-lencse
+  táblája, kliens-csempe.
+
+- **Lepattanó-poszt: ki lő másodszor.** A második roham rétege
+  csapat-szinten mondja meg, harcolnak-e a lepattanóért — az új réteg
+  azt, KI: minden megnyert második rohamnál a második lövést az
+  elengedő játékos posztjához írja. Edzőileg ez a zárás sorrendje: a
+  lövés pillanatában a fal dolga nem ér véget — ha a második lövéseik
+  rendre ugyanarról a posztról jönnek (tipikusan a beálló), a zárás
+  utáni első mozdulat őt kivenni a lepattanóból, nem a lövőt nézni.
+  Felületek: `/analyze` és meccs-csomag (`second_chance_roles`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (275: az ő
+  lepattanó-posztjuk × a ti visszaengedett második rohamaitok → egy
+  kijelölt ember, egy mozdulat), edzés-fókusz (296: lepattanó-játék
+  váltakozó második hullámmal), teendő-rangsor és a meccs-jelentés
+  Befejező-lencse táblája, kliens-csempe.
+
+- **Labdaszerző-poszt: melyik posztjuk nyeri a labdákat.** A
+  labdaszerzők rétege az embert nevezi meg — az új réteg a posztot: a
+  birtokos-váltásokat a szerző játékos posztjához írja (a küszöb itt
+  50%, mert a labdaszerzés a legszórtabb esemény). Edzőileg mindkét
+  irányban éles: ellenük az ő szedő-posztjuk sávjába csak biztonsági
+  passz mehet, a támadást a másik oldalon kell átvezetni; a saját
+  oldalon az egy emberen álló letámadás egyetlen cserével
+  hatástalanítható — a nyomás-váltást több posztra kell szétosztani.
+  Felületek: `/analyze` és meccs-csomag (`role_steal_sources`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (274: az ő
+  szedő-posztjuk × a ti nyomás alatti eladásaitok → a sávját kerülő
+  labdavezetés), edzés-fókusz (295: nyomás-váltó gyakorlat),
+  teendő-rangsor és a meccs-jelentés Befejező-lencse táblája,
+  kliens-csempe.
+
+- **A lövésválasztás is a teendő-rangsorban.** A lövésválasztás
+  rétege ("volt-e jobb szabad helyzet a pályán") eddig kimaradt a
+  rangsorból — pedig az ítélete kiosztható feladat. Mostantól a
+  "felkészülés" családban rangsorolódik, és az őr-teszt számon kéri.
+
+- **Gólpassz-poszt: kinek a kezéből indulnak a góljaik.** A
+  gólpassz-forrás a pálya-zónát nézi, a gólpassz-hálózat az embert — az
+  új réteg a POSZTOT: a gólokhoz rendelt gólpasszokat az adó játékos
+  posztjához írja. Edzőileg ez a védekezés célpont-váltása: a
+  befejező-lencse megmondja, ki fejez be, de ha a gólok nagy része
+  ugyanannak a posztnak (tipikusan az irányítónak) a kezéből INDUL, a
+  lövés zárása késő — tőle a passzt kell elvenni, és a lövők maguktól
+  elhalkulnak. Felületek: `/analyze` és meccs-csomag
+  (`role_assist_sources`), edzői összefoglaló, felderítő edzői kulcs,
+  meccsterv-szabály (273: az ő elosztójuk × a ti kettőzési
+  hajlandóságotok → a kettőzés célpontja az elosztó, nem a lövő),
+  edzés-fókusz (294: második elosztó gyakorlat), teendő-rangsor és a
+  meccs-jelentés Befejező-lencse táblája, kliens-csempe.
+
+- **Befejező-lencse a meccs-jelentésben.** A négy "kire fut ki"
+  ítélet (poszt-nyomás, időkérés-befejező, kontra-poszt, hetes-oldal)
+  eddig az app felderítő-csempéin és a teendő-rangsorban élt — a
+  nyomtatható HTML meccs-jelentésből hiányzott. Új szekció gyűjti őket
+  egy táblába, a figura-tábla mellé; üres meccsen a szekció el sem
+  készül. A figura-tábla emellett új "Befejező poszt" oszlopot kapott
+  (a figura-befejező rétegből): a magas gól-arányú figura mellett most
+  az is látszik, MERRE fut ki.
+
+- **Hetes-oldal: merre dobják a heteseiket.** A hetes-mérleg eddig
+  megmondta, hogyan konvertálnak — azt nem, HOVA: az új réteg a
+  hetes-kimenetelek irány-jelét (bal/közép/jobb a dobó szemszögéből)
+  csapatonként összegzi. Edzőileg ez a kapus-megbeszélés legolcsóbb
+  mondata: a hetes az egyetlen helyzet, ahol a kapusnak van ideje
+  DÖNTENI, merre vetődik, a dobók pedig nyomás alatt a begyakorolt
+  sarkukat keresik. Ha a heteseik jelentős része ugyanarra az oldalra
+  megy, a kapus tudatosan arra vetődhet; ha szórnak, a dobó
+  mozdulatából kell olvasnia. Felületek: `/analyze` és meccs-csomag
+  (`seven_shot_directions`), edzői összefoglaló, felderítő edzői kulcs,
+  meccsterv-szabály (272: az ő kiszámítható hetes-oldaluk × a ti
+  kapusotok gyenge mérlege → előre eldöntött vetődés), edzés-fókusz
+  (293: hetes-sorozat edzői jelre, fáradtan), kliens-csempe.
+
+- **Kontra-poszt: melyik posztjukon zárul a lerohanás.** A
+  kontra-befejezők rétege a gólt szerző EMBERT nevezi meg — ez a
+  posztot, és nemcsak a gólnál: a lerohanás-szakaszok minden lövését az
+  elengedő játékos posztjához írja. Edzőileg ez a visszafutás
+  sorrendje: visszarendeződéskor nem lehet mindenkit egyszerre
+  felvenni — azt kell először, aki a kontrát ténylegesen befejezi. Ha
+  szórt a befejezésük, a labdát kell késleltetni, nem a befejezőt
+  keresni. Felületek: `/analyze` és meccs-csomag (`role_fast_breaks`),
+  edzői összefoglaló, felderítő edzői kulcs, meccsterv-szabály (271: az
+  ő egy-csatornás kontrájuk × a ti lassú visszarendeződésetek → egy
+  kijelölt ember, nem a labda), edzés-fókusz (292: kétsávos
+  kontra-gyakorlat), teendő-rangsor ("felkészülés" család),
+  kliens-csempe.
+
+- **Lövésválasztás: volt-e jobb helyzet a pályán.** A
+  helyzetminőség (xG) eddig megmondta, MILYEN helyzetekből lőnek — azt
+  viszont nem, hogy a lövés pillanatában volt-e JOBB. Az új réteg
+  minden lövésnél összeveti az elengedő játékos helyzetértékét a
+  legjobb SZABADON álló csapattársáéval; ha a társé érdemben nagyobb, a
+  lövés "eldobott jobb helyzet". Edzőileg ez a támadó-játék fegyelme: a
+  magas arány nem azt jelenti, hogy rosszul lőnek, hanem hogy nem
+  néznek fel — a fal ellenük tudatosan hagyhatja a rossz szögű lövést,
+  a szabad társat viszont zárni kell. Felületek: `/analyze` és
+  meccs-csomag (`shot_choice_quality`), edzői összefoglaló, felderítő
+  edzői kulcs, meccsterv-szabály (270: az ő rossz lövésválasztásuk × a
+  ti széles falatok → tömörítés), edzés-fókusz (291: döntés-játék, ahol
+  a lövés csak a szabadabb társ megnevezése után érvényes),
+  kliens-csempe.
+
+- **A befejező-lencse eljut a teendő-rangsorba.** A három új
+  befejező-réteg (poszt-nyomás, figura-befejező, időkérés-befejező)
+  ítélete eddig csak a saját felületén látszott: a rangsor (a
+  háromszáz rétegből öt teendő) nem olvasta őket, így a legkonkrétabb
+  mondatok — "őt ki kell zárni", "a figura indulásakor csússz",
+  "időkérés után ő kapja az embert" — csak böngészéssel voltak
+  megtalálhatók. Most a "felkészülés" családban rangsorba kerülnek, és
+  az őr-teszt is számon kéri őket.
+
+- **Időkérés-befejező: az időkérés után kire játszanak.** Az időkérés
+  utáni első támadás rétege eddig megmondta, van-e kész figurájuk — azt
+  viszont nem, hogy a kész figura kire fut ki. Az új réteg az
+  újraindítás utáni 40 másodperc lövéseit az elengedő játékos
+  posztjához írja. Edzőileg ez a legolcsóbb felkészülés a meccsen
+  belül: az időkérés után a fal TUDJA, hogy figura jön — csak azt nem,
+  kire. Ha a lövések nagy része ugyanarra a posztra megy, a
+  megbeszélésen egy mondat elég ("időkérés után rá figyelünk, elé
+  állunk, a többit hagyjuk"); ha szórt, arra a támadásra nem érdemes
+  külön embert rendelni. Felületek: `/analyze` és meccs-csomag
+  (`timeout_finisher`), edzői összefoglaló, felderítő edzői kulcs,
+  meccsterv-szabály (269: az ő időkérés-befejezőjük × a ti ritka
+  kettőzésetek → egy előre megbeszélt kettőzés arra az egy támadásra),
+  edzés-fókusz (290: két időkérés-figura azonos indítással),
+  kliens-csempe.
+
+- **Figura-befejező: melyik figurájuk kire fut ki.** A
+  figura-hatékonyság eddig megmondta, melyik figurájuk veszélyes — azt
+  viszont nem, hogy a veszélyes figura KIRE fut ki. Az új réteg minden
+  figura-klaszterhez összegyűjti a benne esett lövéseket, és az
+  elengedő játékos posztjához írja őket. Edzőileg ez a felismerés
+  haszna: egy figurát a fal a második-harmadik ismétlésre megismer, de
+  a felismerésből csak akkor lesz védés, ha tudja, mire fut ki. Ha a
+  lövések nagy része ugyanarra a posztra megy, a fal már a figura
+  INDULÁSAKOR arra az oldalra csúszhat, ahelyett hogy a lövés
+  pillanatában reagálna. A felderítésben a figura-azonosító nem
+  tárolható (meccsenként újra képződik), ezért a DARABSZÁM megy át:
+  hány figurájuk mérhető, ebből hány kiszámítható befejezésű, és
+  melyik posztra. Felületek: `/analyze` és meccs-csomag
+  (`setplay_finishers`), edzői összefoglaló, felderítő edzői kulcs,
+  meccsterv-szabály (268: az ő kiszámítható figuráik × a ti lassú
+  fal-csúszásotok → a csúszás a figura indulására induljon),
+  edzés-fókusz (289: második befejező a saját figuránkba),
+  kliens-csempe.
+
+- **Poszt-nyomás: melyik posztjuk fejez be fedezetten is.** Eddig
+  csapat-szinten tudtuk, mennyit ér a fedezés ellenük
+  (`pressure_finishing`) — azt viszont nem, KIN fog. Az új réteg minden
+  lövésnél megkeresi az elengedő játékost, és az elengedés kockáján a
+  legközelebbi mezőny-védő távolságát: a két méteren belüli lövés
+  fedezett. A fedezett lövések gólarányát a lövő posztjához írja.
+  Edzőileg ez a "kire lépj ki" döntés: aki fedezetten is belövi, azt ki
+  kell zárni (a kinyújtott kéz nála kevés), aki fedezetten beesik, arra
+  épp rá kell engedni — a fal nem tud mindenkire kilépni. Felületek:
+  `/analyze` és meccs-csomag (`role_pressure_finish`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (267: az ő
+  hidegvérű posztjuk × a ti amúgy is szoros falatok → kizárás, nem
+  kilépés), edzés-fókusz (288: a fedezetten beeső posztunknak kontakt
+  alatti befejezés gyakorlása), kliens-csempe.
+
+- **A teszt-csomag negyedével gyorsabb (8:20 → 6:10).** A recept
+  minden commit előtt teljes futást ír elő, a csomag viszont nyolc perc
+  fölé nőtt — ez már elriaszt a futtatástól, és pont az őrzés vész el
+  vele. A mérés (`--durations`) szerint négy meccsjelentés-teszt vitte
+  az idő negyedét: 12-20 perces jeleneteket építettek 25 fps-sel, és a
+  teljes jelentés minden réteget végigfuttat rajtuk. A jelenetek
+  MÁSODPERCEKBEN vannak megfogalmazva (a rétegek is abból számolnak),
+  ezért ahol nem kellett lövés-fizika, ötödére csökkent a
+  képkocka-sebesség; ahol igen, ott a kitöltő szakaszok rövidültek az
+  arányok megtartásával. A leglassabb teszt 65 → 12 másodperc, a
+  jelenetek jelentése változatlan.
+
+- **A TRL-4 bizonyíték-út őrzés alá került.** A pontosság-mérés
+  útja — annotációs sablon → kézi javítás → mérés → dátumozott,
+  verziózott naplósor — a pályázat egyik fő bizonyítéka, de a
+  parancssori eszköznek eddig csak a riport-ága volt tesztelve. A
+  `--sablon` és a `--jegyzokonyv` kapcsoló fedetlen maradt: ha
+  elromlanak, az a valós felvétel érkezésekor derült volna ki, amikor
+  a legdrágább. Végigpróbáltam a teljes utat egy szimulált meccsen
+  (működik), és mindkét ágra teszt került — a napló-írásnál arra is,
+  hogy a meglévő tartalom ne vesszen el.
+
+- **A fejlődés-követés végre látja a befejezést is.** A trend eddig
+  csak SKALÁR mezőket tudott követni, a poszt-lencse viszont
+  darabszám/összeg szótárakban áll (hogy meccsek közt pontosan
+  összegződjön) — így egy tipikus szezon-kérdés megválaszolhatatlan
+  volt: "közelebbről fejezünk-e be, mint ősszel?". Mostantól két
+  SZÁRMAZTATOTT mutató is bekerül: **befejezés-távolság** (a csökkenés
+  a javulás — közelebbről lőni jobb) és **lövéserő**. Az átlag mindig
+  frissen számolódik az összegekből. Ha valamelyik időszakban nincs
+  elég mért lövés (nyolc alatt), a mutató KIMARAD — nem látszik
+  nulla-esésnek.
+
+- **A poszt-lencse ítéletei eljutnak a teendő-rangsorba.** A rangsor
+  háromszáz rétegből ötöt emel ki, öt kimondott család szerint (ár →
+  ember → szünet → fáradás → állás). A poszt-lencse lövés-rétegei
+  egyikbe sem tartoztak, így az ítéletük ("őt ki kell zárni", "a kapus
+  arra állhat rá") csak böngészéssel volt megtalálható. Új, HATODIK
+  család: **felkészülés** — poszt-profil, ami nem hiba és nem romlás,
+  hanem állandó tulajdonság. Szándékosan a sor VÉGÉN áll: nem tolja el
+  a sürgősebb jelzéseket, viszont ha azok hallgatnak (rövid felvétel,
+  kevés esemény), a lista nem marad üresen. Őr-teszt rögzíti a család
+  helyét és azt, hogy minden nyilvántartott család szerepel a
+  sorrendben.
+
+- **Kapus-felkészítés posztonként: egy tábla három réteg helyett.** A
+  poszt-lencse kapus-hármasa (honnan lő, milyen keményen, merre lő)
+  három külön csempeként szóródott szét a 300-as mutató-falon — a
+  kapusedző háromszor kereste meg ugyanazt a posztot. Mostantól a
+  felderítő jelentés kap egy külön szakaszt (képernyőn kártya, papíron
+  táblázat), ahol posztonként egy sorban áll mind a három. Ahol még
+  nincs elég mért lövés, ott KIMONDOTT hiány-jel ("—") áll, nem nulla
+  vagy üres cella, és a lábjegyzet megmondja, mennyi kellene. Adat
+  nélkül a szakasz elmarad — üres fejléc rosszabb, mint a hiánya. A
+  jelentés ugró-sávjába is bekerült.
+
+- **Poszt-kapuoldal: melyik sarokra állhat rá a kapus.** Új elemző
+  réteg, és a poszt-lencse kapus-hármasának harmadik darabja: a
+  lövéstávolság megmondja, MEDDIG lépj ki, a lövéserő azt, MIKOR
+  indulj, ez pedig azt, MERRE. A lövő-kapuoldal eddig névre mondta meg,
+  ki kiszámítható — ez posztra, tehát akkor is használható, ha az
+  ellenfél mást állít be. Ha egy posztjuk a góljainak 60%-át ugyanabba
+  a sarokba lövi, a kapus arra állhat rá, a fal pedig a másikat zárja.
+  Négy gól alatt, illetve szétszórt oldalaknál nincs ítélet. Felületek:
+  elemzés-végpont, meccs-csomag, edzői összefoglaló, felderítő kulcsok,
+  meccsterv (266. szabály), edzés-fókusz (287. szabály:
+  kapuoldal-váltás a kapus MOZDULATÁRA döntve), felderítés-képernyő
+  csempéje.
 
 - **Az új-elemzés varázsló magyarázata őrzés alá került.** A "Tovább"
   gomb letiltva marad, amíg a lépés nincs kész — magyarázat nélkül ez

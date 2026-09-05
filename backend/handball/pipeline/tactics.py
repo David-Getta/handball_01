@@ -24,6 +24,10 @@ from typing import Optional
 
 from ..models.tracking import Match, Frame, Team
 from .calibration import COURT_LENGTH_M
+# A kocka-szintű gyorsítótár a LEGFORRÓBB úton hívódik (a birtoklás- és
+# fázis-mérés kockánként, egy összeállítás alatt milliószor): a
+# függvényen belüli import ennyi hívásnál már mérhető költség.
+from .primitive_cache import cached_frame
 
 
 # ---- Konfiguráció ----------------------------------------------------------
@@ -59,7 +63,6 @@ def possession_team(frame: Frame, config: TacticsConfig) -> Optional[Team]:
     Ha nincs labda, vagy a legközelebbi játékos is távolabb van a sugárnál,
     None ("szabad labda" / nincs egyértelmű birtokos).
     """
-    from .primitive_cache import cached_frame
     return cached_frame("possession_team", frame, config,
                         lambda: _possession_team(frame, config))
 
@@ -96,7 +99,6 @@ def classify_phase(frame: Frame, config: TacticsConfig) -> Phase:
     labda az ő TÁMADÓ térfelén van. Minden más (szabad labda, saját térfélen
     felépítés) ÁTMENET. Labda nélkül UNKNOWN.
     """
-    from .primitive_cache import cached_frame
     return cached_frame("classify_phase", frame, config,
                         lambda: _classify_phase(frame, config))
 
@@ -256,6 +258,102 @@ def slow_attacks(match: Match, config: Optional[TacticsConfig] = None) -> dict:
         rec["longest_s"] = round(rec["longest_s"], 1)
         if rec["attacks"]:
             rec["slow_pct"] = round(100.0 * rec["slow"] / rec["attacks"], 1)
+    return out
+
+
+# Támadás-ritmus: mennyire változatos a tempójuk.
+ATV_MIN_SPAN_S = 3.0     # ennél rövidebb szakasz zaj (fázis-váltás), nem támadás
+ATV_FAST_S = 12.0        # ez alatt "gyors" (kontra, korai befejezés)
+ATV_SLOW_S = 30.0        # e felett "hosszú" (kijátszott, passzív-közeli)
+ATV_MIN_ATTACKS = 8      # ennyi támadás alatt nincs ítélet
+ATV_ONE_TEMPO_PCT = 60.0  # egy sáv ekkora többsége: EGY tempó
+ATV_MIXED_MIN_PCT = 20.0  # mindhárom sáv ekkora fölött: váltogatják
+
+
+def attack_tempo_variety(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Támadás-ritmus: EGY tempóban játszanak-e, vagy váltogatják.
+
+    A támadó-fázis szakaszok HOSSZÁT soroljuk három sávba: gyors
+    (ATV_FAST_S alatt — kontra, korai befejezés), közepes, hosszú
+    (ATV_SLOW_S felett — kijátszott, passzív-közeli akció). Nem az a
+    kérdés, melyik a jobb: az, hogy egyfélék-e.
+
+    Edzőileg ez a felkészülés RITMUSA. Aki egy tempóban játszik,
+    kiszámítható: ha mindig gyorsan fejeznek be, a védekezés a
+    labdavesztés pillanatában már álljon készen, és a visszarendeződés
+    a mérkőzés-terv első pontja; ha mindig hosszan járatják, türelmes,
+    hibátlan fal kell, a passzív jel a védőnek dolgozik, és nem szabad
+    beleugrani a csali-mozgásokba. Aki VÁLTOGAT, az ellen a fal nem
+    állhat rá egy ritmusra — ott a jelzésekre (ki hozza fel a labdát,
+    milyen gyorsan indul az első keresztmozgás) kell edzeni a
+    felismerést.
+
+    Visszatérés csapatonként: {"attacks", "fast", "mid", "slow",
+    "top_share_pct", "verdict"} — a verdict "egy tempóban játszanak"
+    (ha egy sáv ATV_ONE_TEMPO_PCT fölött van, a sáv nevével),
+    "váltogatják a tempót" (ha mindhárom sáv ATV_MIXED_MIN_PCT
+    fölött van); kevés mintánál (ATV_MIN_ATTACKS alatt) és a köztes
+    esetben None.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    out = {side: {"attacks": 0, "fast": 0, "mid": 0, "slow": 0,
+                  "top_share_pct": None, "verdict": None}
+           for side in ("home", "away")}
+
+    current = 0
+    current_phase: Optional[Phase] = None
+
+    def close_run():
+        nonlocal current, current_phase
+        if current > 0 and current_phase is not None:
+            dur = current / fps
+            # A nagyon rövid szakasz nem támadás, hanem fázis-billegés
+            # (a labda-átadás körüli bizonytalanság) — beszámítva
+            # mindenkit "gyorsnak" mutatna.
+            if dur >= ATV_MIN_SPAN_S:
+                side = ("home" if current_phase == Phase.HOME_ATTACK
+                        else "away")
+                rec = out[side]
+                rec["attacks"] += 1
+                if dur < ATV_FAST_S:
+                    rec["fast"] += 1
+                elif dur > ATV_SLOW_S:
+                    rec["slow"] += 1
+                else:
+                    rec["mid"] += 1
+        current = 0
+        current_phase = None
+
+    attack_phases = {Phase.HOME_ATTACK, Phase.AWAY_ATTACK}
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        if ph in attack_phases:
+            if ph == current_phase:
+                current += 1
+            else:
+                close_run()
+                current = 1
+                current_phase = ph
+        else:
+            close_run()
+    close_run()
+
+    nevek = {"fast": "gyorsan fejeznek be",
+             "mid": "közepes tempóban játszanak",
+             "slow": "hosszan járatják a támadást"}
+    for rec in out.values():
+        if rec["attacks"] < ATV_MIN_ATTACKS:
+            continue
+        aranyok = {k: 100.0 * rec[k] / rec["attacks"]
+                   for k in ("fast", "mid", "slow")}
+        top = max(aranyok, key=lambda k: aranyok[k])
+        rec["top_share_pct"] = round(aranyok[top], 1)
+        if aranyok[top] >= ATV_ONE_TEMPO_PCT:
+            rec["verdict"] = f"egy tempóban játszanak — {nevek[top]}"
+        elif all(v >= ATV_MIXED_MIN_PCT for v in aranyok.values()):
+            rec["verdict"] = "váltogatják a tempót"
     return out
 
 
@@ -1144,4 +1242,80 @@ def static_attackers(match: Match,
                     static = slowest
         out[side] = {"team_avg_mps": team_avg, "players": rows,
                      "static": static}
+    return out
+
+
+# Álló-poszt: posztonként ennyi mért másodperc kell, és a
+# csapatátlagnál ekkora (százalékos) lassabb labda nélküli mozgás,
+# hogy a posztot állónak mondjuk ki.
+SAR_MIN_S = 20.0
+SAR_GAP_PCT = 20.0
+
+
+def static_attacker_roles(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Álló-poszt: MELYIK POSZTJUK áll labda nélkül.
+
+    Az álló támadók rétege (static_attackers) az embert nevezi meg —
+    ez a posztot: a szervezett támadásban mért mozgás-másodperceket
+    és métereket a játékos posztjához összegzi, és megnézi, melyik
+    posztjuk mozog érdemben a csapatátlag alatt.
+
+    Edzőileg ez a besegítés-forrás: az álló posztot a védője
+    nyugodtan otthagyhatja — befelé segíthet, kettőzhet vagy a
+    beállóra léphet, mert az álló ember nem bünteti meg. Saját
+    csapatra: a poszt labda nélküli munkája kész edzés-téma.
+
+    Visszatérés csapatonként: {"roles": {poszt: {"seconds",
+    "meters", "avg_mps"}}, "team_avg_mps", "main_role", "verdict"} —
+    az ítélet None, ha egyik poszt sem éri el a SAR_MIN_S-t a
+    SAR_GAP_PCT-s lemaradással.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    sa = static_attackers(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        agg: dict = {}
+        for row in sa[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec = agg.setdefault(poszt, {"seconds": 0.0,
+                                         "meters": 0.0})
+            rec["seconds"] += row["seconds"]
+            rec["meters"] += row["seconds"] * row["avg_mps"]
+        total_s = sum(r["seconds"] for r in agg.values())
+        total_m = sum(r["meters"] for r in agg.values())
+        team_avg = (total_m / total_s) if total_s > 0 else None
+        for r in agg.values():
+            r["seconds"] = round(r["seconds"], 1)
+            r["avg_mps"] = (round(r["meters"] / r["seconds"], 2)
+                            if r["seconds"] > 0 else None)
+            r["meters"] = round(r["meters"], 1)
+        rec_out = {"roles": dict(sorted(
+                       agg.items(),
+                       key=lambda kv: kv[1]["avg_mps"] or 0.0)),
+                   "team_avg_mps": (round(team_avg, 2)
+                                    if team_avg else None),
+                   "main_role": None, "verdict": None}
+        if team_avg:
+            for poszt, r in rec_out["roles"].items():
+                if r["seconds"] < SAR_MIN_S or r["avg_mps"] is None:
+                    continue
+                if r["avg_mps"] <= team_avg * (1 - SAR_GAP_PCT / 100.0):
+                    rec_out["main_role"] = poszt
+                    rec_out["verdict"] = (
+                        f"a(z) {poszt} posztjuk áll labda nélkül "
+                        f"({r['avg_mps']:.1f} m/s a "
+                        f"{team_avg:.1f} m/s csapatátlag mellett) —"
+                        " a védője otthagyhatja: befelé segíthet, "
+                        "kettőzhet vagy a beállóra léphet")
+                    break
+        out[side] = rec_out
     return out

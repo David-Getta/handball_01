@@ -114,10 +114,15 @@ class Calibrator:
     def homography_for_frame(self, frame, reference_calib: CourtCalibration) -> CourtCalibration:
         """Egy konkrét frame kalibrációja.
 
-        A pásztázás miatt a frame nézete eltér a referenciától; itt a frame-et a
-        referenciához illesztjük (jellemzőpont-illesztéssel), és a két homográfiát
-        összefűzve kapjuk a frame->pálya leképezést.
+        A pásztázás miatt a frame nézete eltér a referenciától; a frame-et a
+        referenciához illesztve, a két homográfiát összefűzve kapjuk a
+        frame->pálya leképezést.
 
-        TODO: ORB/SIFT jellemzők + illesztés a referencia-képpel; homográfiák szorzata.
+        A tényleges illesztés a feldolgozóban él: a `pan_tracking.PanTracker`
+        a kalibrált alap-kockához HORGONYOZ (ORB jellemzőpontok + RANSAC
+        homográfia), a köztes kockákat optikai áramlással hidalja át, és a
+        kapott G(t) mátrixot a kockák mellé teszi — a vetítés H0·G(t)-vel
+        megy. Ez a metódus a referenciát adja vissza; a per-kocka mátrixot a
+        feldolgozó kezeli.
         """
-        return reference_calib  # placeholder: a referenciát használjuk
+        return reference_calib

@@ -3,6 +3,7 @@ library;
 
 import "package:flutter/material.dart";
 
+import "anim.dart";
 import "../analytics/court_analytics.dart";
 import "../analytics/match_summary.dart";
 import "../analytics/tactics.dart";
@@ -668,45 +669,199 @@ class SummaryPanel extends StatelessWidget {
     ];
   }
 
+  /// EGYÉNI edzés-fókusz: KINEK mit kell gyakorolnia.
+  ///
+  /// A csapat-lista megmondja, mit gyakoroljon a csapat — a játékos
+  /// viszont a saját nevét keresi, és az edző is emberre bontva osztja
+  /// ki a hét feladatait. Emberenként legfeljebb két tétel: a fókusz
+  /// attól fókusz, hogy kevés.
+  List<Widget> _playerTrainingCard() {
+    final t = training;
+    final ptf = (t?["players"] as Map?) ?? const {};
+    final sides = [
+      ("home", homeName, AppColors.home),
+      ("away", awayName, AppColors.away),
+    ];
+    List<Map<String, dynamic>> sorok(String key) => [
+          for (final p in (((ptf[key] as Map?)?["players"] as List?) ??
+              const []))
+            Map<String, dynamic>.from(p as Map)
+        ];
+    final hasAny = sides.any((s) => sorok(s.$1).isNotEmpty);
+    if (!hasAny) return const [];
+    return [
+      Text("EGYÉNI EDZÉS-FÓKUSZ", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (key, name, color) in sides)
+              if (sorok(key).isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 4),
+                  child: Text(name,
+                      style: AppText.value.copyWith(
+                          fontSize: 12.5, color: color)),
+                ),
+                for (final p in sorok(key))
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            p["jersey"] != null
+                                ? "#${p["jersey"]}"
+                                : "${p["player_id"]}. játékos",
+                            style: AppText.value.copyWith(
+                                fontSize: 12, color: AppColors.gold)),
+                        for (final it in ((p["items"] as List)
+                            .cast<Map<String, dynamic>>()))
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, top: 2),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text.rich(TextSpan(children: [
+                                  TextSpan(
+                                      text: "${it["title"]}",
+                                      style: AppText.value
+                                          .copyWith(fontSize: 12)),
+                                  TextSpan(
+                                      text: "  ·  ${it["area"]}",
+                                      style: AppText.label.copyWith(
+                                          fontSize: 11,
+                                          color: AppColors.textFaint)),
+                                ])),
+                                Text("miért: ${it["why"]}",
+                                    style: AppText.label.copyWith(
+                                        fontSize: 11.5,
+                                        color: AppColors.textPrimary)),
+                                Text("gyakorlat: ${it["drill"]}",
+                                    style: AppText.label.copyWith(
+                                        fontSize: 11.5,
+                                        color: AppColors.accent)),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xl),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final sections =
         ((coach?["sections"] as List?) ?? const []).cast<Map<String, dynamic>>();
     final highlights =
         ((coach?["highlights"] as List?) ?? const []).cast<String>();
+    final caveat = coach?["caveat"] as String?;
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        if (sections.isNotEmpty) ...[
-          Text("EDZŐI ÖSSZEFOGLALÓ", style: AppText.sectionLabel),
-          const SizedBox(height: AppSpacing.sm),
+        // MEGBÍZHATÓSÁG: az összefoglaló minden mondata magabiztosan
+        // fogalmaz — így is kell írni egy edzői jelentést. De ha a
+        // feldolgozás gyenge volt, ezek a mondatok zajról szólnak, és
+        // ezt az edzőnek AZ ELSŐ pillantásra tudnia kell, nem egy külön
+        // ablakban, amit nem biztos, hogy megnyit.
+        if (caveat != null && caveat.isNotEmpty) ...[
           Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: AppColors.surfaceAlt,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.border),
+              color: AppColors.away.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.away.withOpacity(0.45)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final s in sections) _CoachSection(section: s),
-                for (final h in highlights)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.tips_and_updates_outlined,
-                              size: 14, color: AppColors.gold),
-                          const SizedBox(width: 6),
-                          Expanded(
-                              child: Text(h,
-                                  style: AppText.label.copyWith(
-                                      fontSize: 12, color: AppColors.gold))),
-                        ]),
-                  ),
-              ],
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+              const Icon(Icons.report_problem_outlined,
+                  size: 16, color: AppColors.away),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("MENNYIRE BÍZHATSZ EBBEN",
+                          style: AppText.sectionLabel
+                              .copyWith(color: AppColors.away)),
+                      const SizedBox(height: 2),
+                      Text(caveat,
+                          style: AppText.label.copyWith(
+                              fontSize: 12.5,
+                              color: AppColors.textPrimary)),
+                    ]),
+              ),
+            ]),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (sections.isNotEmpty) ...[
+          Row(children: [
+            const Icon(Icons.auto_awesome, size: 14, color: AppColors.gold),
+            const SizedBox(width: 6),
+            Text("EDZŐI ÖSSZEFOGLALÓ",
+                style: AppText.sectionLabel.copyWith(color: AppColors.gold)),
+          ]),
+          const SizedBox(height: AppSpacing.sm),
+          // Ez a panel LEGFONTOSABB doboza: az egész elemzés emberi
+          // nyelvű kivonata. Eddig ugyanolyan szürke csempe volt, mint
+          // az alatta futó tucatnyi kártya — most arany bal-sín és halk
+          // arany fény emeli ki, hogy a szem itt kezdjen.
+          FadeSlideIn(
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.gold.withOpacity(0.09),
+                    AppColors.surfaceAlt,
+                  ],
+                  stops: const [0.0, 0.6],
+                ),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.gold.withOpacity(0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final (i, s) in sections.indexed)
+                    FadeSlideIn(index: i, child: _CoachSection(section: s)),
+                  for (final (i, h) in highlights.indexed)
+                    FadeSlideIn(
+                      index: sections.length + i,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.tips_and_updates_outlined,
+                                  size: 14, color: AppColors.gold),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                  child: Text(h,
+                                      style: AppText.label.copyWith(
+                                          fontSize: 12,
+                                          color: AppColors.gold))),
+                            ]),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -717,6 +872,10 @@ class SummaryPanel extends StatelessWidget {
         ..._defenseMotorCard(),
         ..._keyPlayersCard(),
         ..._trainingCard(),
+        // KÜLÖN hívás, nem a csapat-kártya végén: az egyéni fókusz
+        // akkor is megszólalhat, ha csapat-szinten nincs kilógó
+        // gyengeség (a csapat-kártya olyankor üres listát ad vissza).
+        ..._playerTrainingCard(),
         if (goals.isNotEmpty) ...[
           Text("EREDMÉNY-ALAKULÁS", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
@@ -814,15 +973,7 @@ class SummaryPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 5),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: (pct / 100).clamp(0.0, 1.0),
-              minHeight: 6,
-              backgroundColor: AppColors.surfaceAlt,
-              valueColor: AlwaysStoppedAnimation(color),
-            ),
-          ),
+          AnimatedBar(value: pct / 100, minHeight: 6, color: color),
         ],
       ),
     );
@@ -860,6 +1011,11 @@ class _CoachSectionState extends State<_CoachSection> {
         ((widget.section["lines"] as List?) ?? const []).cast<String>();
     final body = (widget.section["body"] as String?) ?? "";
 
+    // A motor megjelölheti, hogy a szakaszt NE csukjuk össze (a
+    // "A lényeg" a rangsor teteje — pont az a dolga, hogy egyben
+    // olvasható legyen).
+    final showAll = widget.section["show_all"] == true;
+
     // Rövid szakasz (vagy régi backend): marad az egybefüggő bekezdés.
     if (lines.length <= 2) {
       return Padding(
@@ -876,10 +1032,17 @@ class _CoachSectionState extends State<_CoachSection> {
       );
     }
 
-    final shown = _all ? lines : lines.take(_preview).toList();
+    final shown =
+        (_all || showAll) ? lines : lines.take(_preview).toList();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
+      // A kinyitás/becsukás nem ugrik, hanem NŐ: a szem követni tudja,
+      // hogy ugyanaz a szakasz lett hosszabb (nem másik lap jött).
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
@@ -915,15 +1078,19 @@ class _CoachSectionState extends State<_CoachSection> {
                 ],
               ),
             ),
-          TextButton.icon(
-            onPressed: () => setState(() => _all = !_all),
-            icon: Icon(_all ? Icons.expand_less : Icons.expand_more,
-                size: 18),
-            label: Text(_all
-                ? "Rövidítve (az első $_preview)"
-                : "Mind a ${lines.length} megállapítás"),
-          ),
+          // A megjelölt szakasz (A lényeg) teljes egészében látszik —
+          // ott nincs mit kinyitni.
+          if (!showAll)
+            TextButton.icon(
+              onPressed: () => setState(() => _all = !_all),
+              icon: Icon(_all ? Icons.expand_less : Icons.expand_more,
+                  size: 18),
+              label: Text(_all
+                  ? "Rövidítve (az első $_preview)"
+                  : "Mind a ${lines.length} megállapítás"),
+            ),
         ],
+        ),
       ),
     );
   }

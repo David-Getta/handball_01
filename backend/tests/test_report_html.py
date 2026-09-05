@@ -350,3 +350,81 @@ def test_scouting_report_break_lanes_table():
                                                    {"entries": 3,
                                                     "goals": 1}}))
     assert "Betörés-sávjaik" not in html2
+
+
+def test_kapus_felkeszites_tabla():
+    """A poszt-lencse három lövés-rétege EGY táblában.
+
+    Külön csempeként a kapusedző háromszor keresi meg ugyanazt a
+    posztot; együtt egy pillantás: milyen messziről, milyen keményen,
+    merre lő.
+    """
+    import re
+
+    html = scouting_report_html(_rep(
+        rsd_shots_by_role={"irányító": 6, "beálló": 5},
+        rsd_dist_sum_by_role={"irányító": 72.0, "beálló": 32.5},
+        rsp_shots_by_role={"irányító": 6},
+        rsp_kmh_sum_by_role={"irányító": 780.0},
+        rgp_goals_by_role_side={"irányító|bal": 4, "irányító|jobb": 1}))
+    m = re.search(r"<h2[^>]*>Kapus-felkészítés posztonként</h2>(.*?)</table>",
+                  html, re.S)
+    assert m, "hiányzik a kapus-tábla"
+    body = m.group(1)
+    assert "12.0 m" in body and "130 km/h" in body and "bal (80%)" in body
+    # A beállónál nincs erő- és oldal-adat: ott KIMONDOTT hiány-jel áll,
+    # nem nulla vagy üres cella.
+    assert "6.5 m" in body and "—" in body
+
+
+def test_kapus_tabla_elmarad_ha_nincs_adat():
+    """Adat nélkül nincs tábla — üres fejléc rosszabb, mint a hiánya."""
+    assert "Kapus-felkészítés posztonként" not in scouting_report_html(_rep())
+
+
+
+def test_a_felderito_lap_elol_szol_a_gyenge_alapanyagrol():
+    """Egy nyomtatott meccstervet fentről lefelé olvasnak: aki a végén
+    tudja meg, hogy az adat gyenge, addig már eldöntötte, kit állít a
+    beállóra. A figyelmeztetés ezért a narratíva ELŐTT áll."""
+    rep = ScoutingReport(team="home", team_name="Alfa")
+    rep.q_matches = 1
+    rep.q_score_sum = 28.0
+    rep.q_weak_matches = 1
+    html = scouting_report_html(rep)
+    assert '<div class="warnbox">' in html
+    assert "28/100" in html
+    # A doboz az első TARTALMI szakasz előtt áll (a tartalomjegyzék
+    # után — ugyanott, ahol a meccsjelentésben).
+    assert html.index('<div class="warnbox">') < html.index(
+        '<h2 id="sz1">')
+
+
+def test_jo_alapanyagnal_nincs_doboz_a_felderito_lapon():
+    """Jó feldolgozásnál (és régi, adat nélküli jelentésnél) a lap
+    tiszta marad — nem riogatunk ok nélkül."""
+    jo = ScoutingReport(team="home", team_name="Alfa")
+    jo.q_matches = 2
+    jo.q_score_sum = 2 * 90.0
+    jo.q_weak_matches = 0
+    assert '<div class="warnbox">' not in scouting_report_html(jo)
+    assert '<div class="warnbox">' not in scouting_report_html(
+        ScoutingReport(team="home", team_name="Alfa"))
+
+
+def test_a_meccsterv_megelozi_az_altalanos_kulcsokat():
+    """A PÁROSÍTOTT meccsterv menjen elöl.
+
+    Az "ő gyengéjük × a ti erősségetek" szabályok kifejezetten ERRE a
+    párosításra szólnak, míg a "Hogyan játssz ellenük" kulcsok
+    általános, SZÁZ FÖLÖTTI listát adnak (mérve: 123 kulcs, közel
+    húszezer karakter). Aki két percet szán a felkészülésre, a
+    konkrétat kell hogy elsőként lássa — ezért a nyomtatott lapon is
+    a meccsterv áll előbb.
+    """
+    rep = ScoutingReport(team="home", team_name="Alfa")
+    html = scouting_report_html(
+        rep, matchup=["Az ő lassuló visszaállásuk × a ti kontrátok."])
+    assert "Meccsterv (a kettőnk párosítása)" in html
+    assert (html.index("Meccsterv (a kettőnk párosítása)")
+            < html.index("Hogyan játssz ellenük</h2>"))

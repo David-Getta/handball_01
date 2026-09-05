@@ -11,17 +11,102 @@ import "dart:typed_data";
 import "package:http/http.dart" as http;
 
 import "../models/tracking.dart";
+import "backend_launcher.dart";
+import "session_store.dart";
 
 class ApiClient {
+  /// Kimondott cím-felülbírálás (port-próbákhoz). Ha null, a kliens az
+  /// ÉPPEN érvényes alapértelmezést használja — lásd `baseUrl`.
+  final String? _baseUrlOverride;
+
   /// A backend alap-URL-je. Lokális teszthez a laptopon ez a localhost.
-  final String baseUrl;
+  ///
+  /// Szándékosan getter, nem a példány létrehozásakor befagyasztott érték:
+  /// a motor menet közben is költözhet másik portra (újraindítás, tartalék
+  /// port), és a régóta nyitva lévő képernyők addig a HALOTT címre
+  /// beszéltek volna.
+  String get baseUrl => _baseUrlOverride ?? defaultBaseUrl;
 
   /// Az alapértelmezett cím — a motor-indító ÁTÁLLÍTJA, ha a motor tartalék
   /// porton indult (a 8000-es foglalt volt). Az ezután létrejövő kliensek
   /// automatikusan a jó címet használják.
   static String defaultBaseUrl = "http://127.0.0.1:8000";
 
-  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? defaultBaseUrl;
+  /// Hány portot fésülünk át a 8000-estől felfelé, ha keressük a motort
+  /// (a motor ugyanekkora tartományban keres szabad portot).
+  static const int portRange = 11;
+
+  ApiClient({String? baseUrl}) : _baseUrlOverride = baseUrl;
+
+  /// Megkeresi ÚJRA, melyik porton válaszol a motor, és átállítja az
+  /// alapértelmezett címet. Akkor kell, ha egy hívás hálózati hibára
+  /// futott: a motor közben újraindulhatott másik porton (pl. két
+  /// példány közül az egyik kilépett). Igaz, ha talált motort.
+  static Future<bool> rediscoverEngine() async {
+    final probes = [
+      for (var p = 8000; p < 8000 + portRange; p++)
+        ApiClient(baseUrl: "http://127.0.0.1:$p")
+            .isHealthy()
+            .then((ok) => ok ? p : null)
+    ];
+    for (final p in await Future.wait(probes)) {
+      if (p != null) {
+        defaultBaseUrl = "http://127.0.0.1:$p";
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Mélyebb öngyógyítás hálózati hibánál: előbb ÚJRA MEGKERESSÜK a
+  /// motort a port-tartományban (elmozdulhatott), és ha SEHOL nem
+  /// válaszol, ÚJRA IS INDÍTJUK a motor-indítón keresztül — a
+  /// motor-folyamat el is halhatott (frissítés utáni fájlcsere, a gép
+  /// altatása, belső hiba), olyankor a port-keresés önmagában kevés,
+  /// és a felhasználót eddig csak a program teljes újraindítása
+  /// mentette meg. Igaz, ha a végén válaszol a motor.
+  static Future<bool> reviveEngine() async {
+    if (await rediscoverEngine()) return true;
+    final launcher = BackendLauncher.instance;
+    if (launcher == null) return false; // web/teszt: nincs mit indítani
+    launcher.stop(); // a félholt (élő, de nem válaszoló) példány elengedése
+    final st = await launcher.ensureRunning();
+    return st.phase == BackendPhase.ready;
+  }
+
+  /// A motor /health-ből olvasott verziója — a kliens a sajátjával
+  /// összevetve veszi észre a FÉL-FRISSÜLT telepítést (új app + régi
+  /// motor, vagy fordítva). Null, amíg nem válaszolt a motor, vagy ha
+  /// régi motor fut, amelyik még nem adja ki.
+  static String? engineVersion;
+
+  /// A szerver EMBERI hibaüzenete a válaszból (FastAPI `detail`).
+  ///
+  /// A motor sok hibára pontos, magyar mondatot ad — például hogy a
+  /// videó útvonalában ékezet van, és mit tegyen a felhasználó. Ez a
+  /// kliensben eddig ELVESZETT: minden hiba "HTTP 400" alakban
+  /// csapódott le, tehát a legjobb magyarázatunk sosem jutott el
+  /// odáig, ahol elolvassák.
+  ///
+  /// Üres sztringet ad, ha a válaszban nincs használható magyarázat.
+  static String serverDetail(http.Response r) {
+    try {
+      final j = jsonDecode(utf8.decode(r.bodyBytes));
+      if (j is Map && j["detail"] is String) {
+        final d = (j["detail"] as String).trim();
+        // A FastAPI alap-üzenetei angol kulcsszavak (pl. "Not Found") —
+        // azokat ne mutassuk emberi magyarázatként.
+        if (d.isNotEmpty && d.length > 3) return d;
+      }
+    } catch (_) {}
+    return "";
+  }
+
+  /// Hibaszöveg: a szerver magyarázata, ha van; különben a státuszkód.
+  static String _hiba(String mit, http.Response r) {
+    final d = serverDetail(r);
+    return d.isEmpty ? "$mit: HTTP ${r.statusCode}" : d;
+  }
 
   /// Életjel: igaz, ha a backend elérhető (GET /health).
   Future<bool> isHealthy() async {
@@ -29,7 +114,13 @@ class ApiClient {
       final resp = await http
           .get(Uri.parse("$baseUrl/health"))
           .timeout(const Duration(seconds: 2));
-      return resp.statusCode == 200;
+      if (resp.statusCode != 200) return false;
+      try {
+        final body = jsonDecode(utf8.decode(resp.bodyBytes));
+        final v = body is Map ? body["version"] : null;
+        if (v is String && v.isNotEmpty) engineVersion = v;
+      } catch (_) {}
+      return true;
     } catch (_) {
       return false; // nincs backend → a hívó a beágyazott demóra eshet vissza
     }
@@ -44,7 +135,7 @@ class ApiClient {
       body: jsonEncode({"seconds": seconds}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a demó létrehozása: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a demó létrehozása", resp));
     }
     return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["match_id"] as String;
   }
@@ -56,7 +147,7 @@ class ApiClient {
         .replace(queryParameters: {"team": team});
     final resp = await http.get(uri);
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a figura-egyeztetés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a figura-egyeztetés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -66,7 +157,7 @@ class ApiClient {
     final resp = await http.get(Uri.parse("$baseUrl/playbook"))
         .timeout(const Duration(seconds: 4));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a figurákat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a figurákat", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["plays"] as List).cast<Map<String, dynamic>>();
@@ -76,7 +167,7 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchPlay(String playId) async {
     final resp = await http.get(Uri.parse("$baseUrl/playbook/$playId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült betölteni a figurát: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült betölteni a figurát", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -89,7 +180,7 @@ class ApiClient {
       body: jsonEncode({"name": name, "attackers": attackers}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült menteni a figurát: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült menteni a figurát", resp));
     }
     return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["id"] as String;
   }
@@ -98,7 +189,7 @@ class ApiClient {
   Future<void> deletePlay(String playId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/playbook/$playId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült törölni a figurát: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült törölni a figurát", resp));
     }
   }
 
@@ -115,6 +206,33 @@ class ApiClient {
         .toList();
   }
 
+  /// A gépen MÁR ELMENTETT kalibrációk, ÁTVÉTELRE (GET
+  /// /calibration/saved). Aki darabokban vesz fel, hat klipet kap
+  /// ugyanarról a rögzített kameráról — enélkül mind a hatot külön
+  /// kellene bejelölni.
+  ///
+  /// [excludePath] a most szerkesztett videó: a saját kalibrációját ne
+  /// kínáljuk fel átvételre. Hibánál üres lista — az átvétel kényelem,
+  /// nem kapu.
+  Future<List<Map<String, dynamic>>> fetchSavedCalibrations(
+      {String? excludePath}) async {
+    final uri = Uri.parse("$baseUrl/calibration/saved").replace(
+        queryParameters:
+            excludePath == null ? null : {"exclude_path": excludePath});
+    try {
+      final resp = await http.get(uri).timeout(const Duration(seconds: 4));
+      if (resp.statusCode != 200) return const [];
+      final json =
+          jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+      return ((json["items"] as List?) ?? const [])
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Kalibrációk mentése a videóhoz (POST /calibration) — újrafeldolgozásnál
   /// nem kell újra bejelölni.
   Future<void> saveCalibration(
@@ -125,7 +243,7 @@ class ApiClient {
       body: jsonEncode({"path": videoPath, "calibs": calibs}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a kalibráció mentése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a kalibráció mentése", resp));
     }
   }
 
@@ -147,7 +265,7 @@ class ApiClient {
       body: jsonEncode({"attackers": attackers, "ball_carrier": ballCarrier}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a szimuláció: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a szimuláció", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -157,7 +275,7 @@ class ApiClient {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/stats/export"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a statisztika-export: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a statisztika-export", resp));
     }
     return resp.bodyBytes;
   }
@@ -167,7 +285,7 @@ class ApiClient {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/report/export"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a jelentés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a jelentés", resp));
     }
     return resp.bodyBytes;
   }
@@ -177,7 +295,7 @@ class ApiClient {
   Future<void> swapTeams(String matchId) async {
     final resp = await http.post(Uri.parse("$baseUrl/matches/$matchId/swap-teams"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a csapatok cseréje: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a csapatok cseréje", resp));
     }
   }
 
@@ -197,7 +315,7 @@ class ApiClient {
       }),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült az összefűzés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az összefűzés", resp));
     }
     final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return data["match_id"] as String;
@@ -210,8 +328,7 @@ class ApiClient {
     final resp = await http.get(Uri.parse(
         "$baseUrl/season/report?team=${Uri.encodeQueryComponent(team)}"));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a szezon-riport: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a szezon-riport", resp));
     }
     return resp.bodyBytes;
   }
@@ -224,8 +341,7 @@ class ApiClient {
         "?team_a=${Uri.encodeQueryComponent(teamA)}"
         "&team_b=${Uri.encodeQueryComponent(teamB)}"));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült az egymás elleni riport: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az egymás elleni riport", resp));
     }
     return resp.bodyBytes;
   }
@@ -237,7 +353,7 @@ class ApiClient {
         "$baseUrl/players/season-report?team=${Uri.encodeQueryComponent(team)}"
         "&jersey=$jersey"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a szezon-lap: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a szezon-lap", resp));
     }
     return resp.bodyBytes;
   }
@@ -248,7 +364,7 @@ class ApiClient {
     final resp = await http.get(Uri.parse(
         "$baseUrl/matches/$matchId/players/$trackId/report"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a játékos-lap: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a játékos-lap", resp));
     }
     return resp.bodyBytes;
   }
@@ -259,8 +375,7 @@ class ApiClient {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/setplays"));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a figura-elemzés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a figura-elemzés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -271,8 +386,7 @@ class ApiClient {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/key-moments"));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a kulcs-pillanat lista: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a kulcs-pillanat lista", resp));
     }
     final json =
         jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
@@ -283,7 +397,30 @@ class ApiClient {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/key-players"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a kulcsember-lista: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a kulcsember-lista", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Az összefűzött meccs forrás-szakaszai (GET /matches/{id}/segments):
+  /// melyik fájlból jött, mettől meddig tart, tükrözte-e az összefűzés.
+  Future<Map<String, dynamic>> fetchMatchSegments(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/segments"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a szakasz-lista", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Egy szakasz kézi tükrözése (POST /matches/{id}/segments/{i}/flip) —
+  /// ha az összefűzött meccs eredménye fordítva áll, az ember dönt.
+  Future<Map<String, dynamic>> flipMatchSegment(
+      String matchId, int index) async {
+    final resp = await http
+        .post(Uri.parse("$baseUrl/matches/$matchId/segments/$index/flip"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a szakasz tükrözése", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -292,7 +429,7 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchQuality(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/quality"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a minőség-jelentés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a minőség-jelentés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -301,7 +438,7 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchRoster(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/roster"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a kiállításokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a kiállításokat", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -316,7 +453,7 @@ class ApiClient {
       body: jsonEncode({"suspensions": suspensions}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült menteni a kiállításokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült menteni a kiállításokat", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -326,7 +463,7 @@ class ApiClient {
   Future<List<Map<String, dynamic>>> fetchEvents(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/events"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni az eseményeket: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni az eseményeket", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["events"] as List).cast<Map<String, dynamic>>();
@@ -370,14 +507,33 @@ class ApiClient {
   }
 
   /// Videóklip-export indítása (POST /matches/{id}/clips/export) — job_id-t ad.
-  Future<String> startClipExport(String matchId, List<String> types) async {
+  /// Kihez köthető jelenet ezen a meccsen — mezszám szerint, a
+  /// jelenetek darabszámával. A klip-válogatás ebből tudja felkínálni
+  /// a MŰKÖDŐ mezszámokat (a kiosztatlan szám némán üres zip-et adna).
+  /// A nyers válasz: {"players": [...], "totals": {típus: db},
+  /// "max_clips": N}. A `totals` és a plafon a BECSLÉSHEZ kell — a
+  /// vágás percekbe telik, és a rossz kijelölés csak a végén derülne
+  /// ki.
+  Future<Map<String, dynamic>> fetchClipPlayers(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/clip-players"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("A játékos-lista nem érhető el", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// [jerseys] megadásával a csomag EGY (vagy néhány) játékos
+  /// jeleneteire szűkül — a játékos saját válogatása.
+  Future<String> startClipExport(String matchId, List<String> types,
+      {List<int> jerseys = const []}) async {
     final resp = await http.post(
       Uri.parse("$baseUrl/matches/$matchId/clips/export"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"types": types}),
+      body: jsonEncode({"types": types, "jerseys": jerseys}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem indult el a klipvágás: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem indult el a klipvágás", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return json["job_id"] as String;
@@ -388,7 +544,7 @@ class ApiClient {
     final resp = await http
         .get(Uri.parse("$baseUrl/matches/$matchId/clips/download"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a klipek letöltése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a klipek letöltése", resp));
     }
     return resp.bodyBytes;
   }
@@ -397,7 +553,7 @@ class ApiClient {
   Future<List<int>> exportLibrary() async {
     final resp = await http.get(Uri.parse("$baseUrl/library/export"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a könyvtár mentése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a könyvtár mentése", resp));
     }
     return resp.bodyBytes;
   }
@@ -410,8 +566,7 @@ class ApiClient {
       body: zipBytes,
     );
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a könyvtár visszaállítása: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a könyvtár visszaállítása", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -424,10 +579,29 @@ class ApiClient {
         queryParameters: {"team": team, "jersey": "$jersey"});
     final resp = await http.get(uri);
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a játékos-fejlődés lekérése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a játékos-fejlődés lekérése", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Egy játékos SZEZON-szintű edzés-fókusza (GET /players/focus):
+  /// mit gyakoroljon. Ugyanaz, ami a nyomtatható szezon-lap "Mit
+  /// gyakorolj" szakaszában áll — a count azt mondja meg, hány meccsen
+  /// jött elő ugyanaz.
+  Future<List<Map<String, dynamic>>> fetchPlayerFocus(
+      String team, int jersey) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/players/focus"
+            "?team=${Uri.encodeQueryComponent(team)}&jersey=$jersey"))
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a fókuszt", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["focus"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 
   /// Mezszám hozzárendelése egy játékoshoz (POST /matches/{id}/jerseys).
@@ -439,7 +613,7 @@ class ApiClient {
       body: jsonEncode({"track_id": trackId, "jersey": jersey}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a mezszám mentése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a mezszám mentése", resp));
     }
   }
 
@@ -452,7 +626,7 @@ class ApiClient {
       body: jsonEncode({"clip_types": clipTypes}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem indult el a csomag-készítés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem indult el a csomag-készítés", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return json["job_id"] as String;
@@ -463,19 +637,74 @@ class ApiClient {
     final resp = await http
         .get(Uri.parse("$baseUrl/matches/$matchId/package/download"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a csomag letöltése: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a csomag letöltése", resp));
     }
     return resp.bodyBytes;
+  }
+
+  /// A meccshez felvitt KÉZI esemény-javítások
+  /// (GET /matches/{id}/event-overrides).
+  Future<List<Map<String, dynamic>>> fetchEventOverrides(
+      String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/event-overrides"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a javításokat", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["overrides"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  /// A kézi esemény-javítások mentése (POST /matches/{id}/event-overrides)
+  /// — a TELJES lista cseréje. A javítás a lövés-felismerésbe épül be,
+  /// tehát minden rétegen átüt (eredmény, xG, lövő-listák, felderítés).
+  Future<List<Map<String, dynamic>>> saveEventOverrides(
+      String matchId, List<Map<String, dynamic>> overrides) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/$matchId/event-overrides"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"overrides": overrides}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült menteni a javítást", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["overrides"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 
   /// Edzői jegyzetek a meccshez (GET /matches/{id}/notes) — idő szerint.
   Future<List<Map<String, dynamic>>> fetchNotes(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/notes"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a jegyzeteket: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a jegyzeteket", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["notes"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// MINDEN edzői jegyzet a könyvtárból (GET /library/notes), meccs-
+  /// környezettel: {"match_id", "home_team", "away_team", "date", "id",
+  /// "frame", "t_s", "text"}. A jegyzetek az edző fejében egyetlen
+  /// listát alkotnak, meccsektől függetlenül.
+  Future<List<Map<String, dynamic>>> fetchLibraryNotes() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/notes"))
+        .timeout(const Duration(seconds: 20));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a jegyzeteket", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["notes"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 
   /// Új edzői jegyzet az adott képkockához (POST /matches/{id}/notes).
@@ -487,7 +716,7 @@ class ApiClient {
       body: jsonEncode({"frame": frame, "text": text}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült menteni a jegyzetet: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült menteni a jegyzetet", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -497,7 +726,7 @@ class ApiClient {
     final resp = await http
         .delete(Uri.parse("$baseUrl/matches/$matchId/notes/$noteId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült törölni a jegyzetet: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült törölni a jegyzetet", resp));
     }
   }
 
@@ -507,7 +736,7 @@ class ApiClient {
         .replace(queryParameters: {"team": team});
     final resp = await http.get(uri);
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a felderítés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a felderítés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -523,7 +752,7 @@ class ApiClient {
       body: jsonEncode({"items": items}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült az egyesített felderítés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az egyesített felderítés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -537,7 +766,7 @@ class ApiClient {
       body: jsonEncode({"older": {"items": older}, "newer": {"items": newer}}),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a fejlődés-elemzés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a fejlődés-elemzés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -553,8 +782,7 @@ class ApiClient {
           {"older": {"items": older}, "newer": {"items": newer}}),
     );
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a fejlődés-riport: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a fejlődés-riport", resp));
     }
     return resp.bodyBytes;
   }
@@ -573,10 +801,53 @@ class ApiClient {
       }),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a meccsterv: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a meccsterv", resp));
     }
     final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return ((data["plan"] as List?) ?? const []).cast<String>();
+  }
+
+  /// A meccsterv TELJES válasza (POST /scouting/matchup): a "plan"
+  /// mondatok mellett a "style" stílus-távolság is (tükör-meccs vagy
+  /// ellentétes stílus, tengelyekre bontva).
+  Future<Map<String, dynamic>> fetchMatchup(
+      List<Map<String, dynamic>> ownItems,
+      List<Map<String, dynamic>> oppItems) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting/matchup"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "own": {"items": ownItems},
+        "opp": {"items": oppItems},
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a meccsterv", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A MECCSTERV nyomtatható lapja (POST /scouting/export): az
+  /// ellenfél felderítése + a páros-specifikus meccsterv szakasz.
+  ///
+  /// A tükrözős változattól (fetchCombinedScoutingExport) az különíti
+  /// el, hogy itt a SAJÁT oldal a saját csapat saját meccseiből jön —
+  /// nem abból a feltevésből, hogy mi voltunk az ellenfelük.
+  Future<Uint8List> fetchMatchupExport(
+      List<Map<String, dynamic>> ownItems,
+      List<Map<String, dynamic>> oppItems) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting/export"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "items": oppItems,
+        "own": {"items": ownItems},
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a meccsterv-lap", resp));
+    }
+    return resp.bodyBytes;
   }
 
   /// Az egyesített felderítés nyomtatható HTML-je (POST /scouting/export).
@@ -600,7 +871,7 @@ class ApiClient {
       }),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült az export: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az export", resp));
     }
     return resp.bodyBytes;
   }
@@ -612,7 +883,7 @@ class ApiClient {
         .replace(queryParameters: {"team": team});
     final resp = await http.get(uri);
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült az export: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az export", resp));
     }
     return resp.bodyBytes;
   }
@@ -633,8 +904,7 @@ class ApiClient {
           final resp = await http.get(Uri.parse("$base/matches"))
               .timeout(const Duration(seconds: 4));
           if (resp.statusCode != 200) {
-            throw Exception(
-                "Nem sikerült lekérni a meccslistát: HTTP ${resp.statusCode}");
+            throw Exception(_hiba("Nem sikerült lekérni a meccslistát", resp));
           }
           final json =
               jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
@@ -665,12 +935,7 @@ class ApiClient {
         .post(Uri.parse("$baseUrl/matches/$matchId/reprocess"))
         .timeout(const Duration(seconds: 10));
     if (resp.statusCode != 200) {
-      String msg = "HTTP ${resp.statusCode}";
-      try {
-        msg = (jsonDecode(utf8.decode(resp.bodyBytes))
-                as Map<String, dynamic>)["detail"] as String? ?? msg;
-      } catch (_) {}
-      throw Exception("Nem sikerült az újra-feldolgozás: $msg");
+      throw Exception(_hiba("Nem sikerült az újra-feldolgozás", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -683,12 +948,7 @@ class ApiClient {
         .post(Uri.parse("$baseUrl/matches/$matchId/resume"))
         .timeout(const Duration(seconds: 10));
     if (resp.statusCode != 200) {
-      String msg = "HTTP ${resp.statusCode}";
-      try {
-        msg = (jsonDecode(utf8.decode(resp.bodyBytes))
-                as Map<String, dynamic>)["detail"] as String? ?? msg;
-      } catch (_) {}
-      throw Exception("Nem sikerült a folytatás: $msg");
+      throw Exception(_hiba("Nem sikerült a folytatás", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -702,7 +962,7 @@ class ApiClient {
             queryParameters: {"path": path, "stride": "$stride"}))
         .timeout(const Duration(seconds: 120));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a közvetítés-elemzés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a közvetítés-elemzés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -722,21 +982,32 @@ class ApiClient {
             }))
         .timeout(const Duration(seconds: 60));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a nézet-egyesítés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a nézet-egyesítés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
   /// Pályavonal-jelöltek egy képkockából (GET /broadcast/lines):
   /// vonalak + sarok-jelöltek + javasolt kalibrációs négyszög.
+  ///
+  /// `lineColor`: a KÖVETENDŐ vonalszín. Több sportot kiszolgáló
+  /// csarnokban a kézilabda-pálya vonala gyakran nem fehér, hanem piros
+  /// (mellette a kosár/futsal kék-zöld vonalai) — az "auto" a képből
+  /// dönti el, melyiket kövesse, és a válasz "line_color" mezője
+  /// megmondja, mire jutott. Kézi felülbírálás: "feher", "piros",
+  /// "kek", "zold", "sarga".
   Future<Map<String, dynamic>> fetchBroadcastLines(String path,
-      {int frame = 0}) async {
+      {int frame = 0, String lineColor = "auto"}) async {
     final resp = await http
         .get(Uri.parse("$baseUrl/broadcast/lines").replace(
-            queryParameters: {"path": path, "frame": "$frame"}))
+            queryParameters: {
+              "path": path,
+              "frame": "$frame",
+              "line_color": lineColor,
+            }))
         .timeout(const Duration(seconds: 60));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a vonal-felismerés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a vonal-felismerés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -761,8 +1032,7 @@ class ApiClient {
     }))
         .timeout(const Duration(seconds: 90));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült a detektálás-próba: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült a detektálás-próba", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -774,7 +1044,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/momentum"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a sorozatokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a sorozatokat", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["runs"] as List).cast<Map<String, dynamic>>();
@@ -787,8 +1057,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/momentum"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni az állás-menetet: "
-          "HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni az állás-menetet", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     final prog = (json["progression"] as Map?)?.cast<String, dynamic>() ?? {};
@@ -825,8 +1094,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/xg"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a helyzetminőséget: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a helyzetminőséget", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -838,8 +1106,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/substitutions"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a cseréket: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a cseréket", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -851,10 +1118,40 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/library/training-focus"))
         .timeout(const Duration(seconds: 20));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a szezon-fókuszt: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a szezon-fókuszt", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A csapat EGYÉNI edzés-terve (GET /library/training-focus/players)
+  /// — a nyomtatható lap képernyős párja, ugyanabból a számolásból.
+  Future<List<Map<String, dynamic>>> fetchTeamPlayerPlan(
+      String team) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/training-focus/players"
+            "?team=${Uri.encodeQueryComponent(team)}"))
+        .timeout(const Duration(seconds: 120));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az egyéni edzés-terv", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["players"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  /// A heti EDZÉSTERV nyomtatható HTML-je egy csapatra
+  /// (GET /library/training-focus/export) — a pályán nincs képernyő.
+  Future<List<int>> fetchTrainingPlanExport(String team) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/training-focus/export"
+            "?team=${Uri.encodeQueryComponent(team)}"))
+        .timeout(const Duration(seconds: 120));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az edzésterv-lap", resp));
+    }
+    return resp.bodyBytes;
   }
 
   /// Edzés-fókusz javaslatok (GET /matches/{id}/training): csapatonként
@@ -864,8 +1161,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/training"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni az edzés-fókuszt: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni az edzés-fókuszt", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -877,8 +1173,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/stoppages"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a megszakításokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a megszakításokat", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["stoppages"] as List).cast<Map<String, dynamic>>();
@@ -891,8 +1186,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/defense"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a védekezés-elemzést: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a védekezés-elemzést", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -903,8 +1197,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/empty-net"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a 7a6-szakaszokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a 7a6-szakaszokat", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["windows"] as List).cast<Map<String, dynamic>>();
@@ -917,8 +1210,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/rules"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a szabály-elemzést: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a szabály-elemzést", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -931,8 +1223,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/attacks"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni a támadásokat: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a támadásokat", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -944,8 +1235,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/matches/$matchId/coach-summary"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception(
-          "Nem sikerült lekérni az összefoglalót: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni az összefoglalót", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -959,6 +1249,77 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Keret-lap (GET /library/roster?team=...): a csapat ÖSSZES ismert
+  /// mezszáma egy táblában — meccs-darabszámmal és szezon-összegekkel.
+  /// A toplisták az öt legjobbat adják, ez MINDENKIT, aki mezszámmal
+  /// szerepel a könyvtárban.
+  /// Szezon-válogatás indítása egy játékosról (POST
+  /// /players/season-clips/export) — az összes meccséből, egy zip.
+  Future<String> startSeasonClips(String team, int jersey,
+      {List<String> types = const ["goal"]}) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/players/season-clips/export"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"team": team, "jersey": jersey, "types": types}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem indult el a szezon-válogatás", resp));
+    }
+    return (jsonDecode(utf8.decode(resp.bodyBytes))
+        as Map<String, dynamic>)["job_id"] as String;
+  }
+
+  /// A kész szezon-válogatás letöltése (zip, nyers bájtok).
+  Future<List<int>> fetchSeasonClipsZip(String team, int jersey) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/players/season-clips/download"
+            "?team=${Uri.encodeQueryComponent(team)}&jersey=$jersey"))
+        .timeout(const Duration(minutes: 2));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem tölthető le a szezon-válogatás", resp));
+    }
+    return resp.bodyBytes;
+  }
+
+  /// A keret-lap CSV-ben (GET /library/roster.csv) — a vezetőségi
+  /// kimutatáshoz. Nyers bájtok: a hívó menti fájlba.
+  Future<List<int>> fetchTeamRosterCsv(String team) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/roster.csv"
+            "?team=${Uri.encodeQueryComponent(team)}"))
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a szezon-CSV", resp));
+    }
+    return resp.bodyBytes;
+  }
+
+  Future<Map<String, dynamic>> fetchTeamRoster(String team) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/roster"
+            "?team=${Uri.encodeQueryComponent(team)}"))
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a keretet", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Játékos-név hozzárendelése egy csapat mezszámához
+  /// (POST /library/players). ÜRES név törli a hozzárendelést.
+  /// A név csapat-szintű (nem meccsenkénti): a mezszám a szezonban
+  /// stabil, a track-azonosító nem.
+  Future<void> setPlayerName(String team, int jersey, String name) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/library/players"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"team": team, "jersey": jersey, "name": name}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült menteni a nevet", resp));
+    }
+  }
+
   /// Szezon-összkép a kezdőlapnak (GET /library/summary): összesített
   /// mutatók (meccsek, játékidő, gólok, táv, sprintek) + meccsenkénti
   /// kivonat a "per_match" kulcs alatt.
@@ -966,7 +1327,7 @@ class ApiClient {
     final resp = await http.get(Uri.parse("$baseUrl/library/summary"))
         .timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni az összképet: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni az összképet", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -987,15 +1348,174 @@ class ApiClient {
       body: jsonEncode(body),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült átnevezni: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült átnevezni", resp));
     }
+  }
+
+  /// A VALÓDI (jegyzőkönyvi) végeredmény mentése (PATCH /matches/{id})
+  /// — a pontosság-tükör alapja: a minőség-jelentés ehhez méri a
+  /// felismerést. null = törlés (a kulcs jelenléte számít a backendnek).
+  Future<void> setRealScore(String matchId, int? home, int? away) async {
+    final resp = await http.patch(
+      Uri.parse("$baseUrl/matches/$matchId"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"real_goals_home": home, "real_goals_away": away}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a valódi eredmény mentése", resp));
+    }
+  }
+
+  /// Javasolt vágás-ablak (GET /matches/{id}/game-window): a tárolt
+  /// követésen futó meccs-ablak-felismerés eredménye játékidő-mp-ben.
+  /// A vágás-párbeszéd előtöltéséhez — a felhasználónak ne kelljen
+  /// kézzel kikeresnie, mikor kezdődött a meccs.
+  Future<Map<String, dynamic>> fetchGameWindow(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/game-window"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a javaslat", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Kalibráció-ellenőrző kép (GET /matches/{id}/calib-overlay?t=): a
+  /// videó adott kockája a visszarajzolt pályavonalakkal — a rajzolt
+  /// vonalnak a valódira kell ülnie. Image.network-kel jeleníthető meg.
+  String calibOverlayUrl(String matchId, int t) =>
+      "$baseUrl/matches/$matchId/calib-overlay?t=$t";
+
+  /// Kalibráció-illeszkedés számokban (GET /matches/{id}/calib-fit): n
+  /// kockán mennyire ül a rajzolt vonal a valódin (0..1) — a szemmel
+  /// ellenőrzés géppel; a leggyengébb kocka ideje is jön.
+  Future<Map<String, dynamic>> fetchCalibFit(String matchId,
+      {int n = 8}) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/calib-fit?n=$n"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az illeszkedés mérése", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// UTÓLAGOS vágás (POST /matches/{id}/trim): a megadott játékidő-
+  /// ablakon kívüli rész eldobása az elemzésből. A tipikus eset a
+  /// bennmaradt bemutatás/bemelegítés — a felhasználó tudja, mikor
+  /// kezdődött a meccs, és nem akar órákat újrafeldolgozni.
+  Future<Map<String, dynamic>> trimMatch(String matchId, double fromS,
+      {double? toS}) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/$matchId/trim"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"from_s": fromS, "to_s": toS}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a vágás", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Diagnosztika-csomag (GET /matches/{id}/diagnostics) — gép által
+  /// olvasható JSON a fejlesztőnek: minőség-jelentés, eseményszámok,
+  /// beállítások. Videót és személyes adatot nem tartalmaz.
+  Future<Map<String, dynamic>> fetchDiagnostics(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/diagnostics"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a diagnosztika", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Tanítóadat-gyűjtés indítása (POST /dataset/collect) — a detektor
+  /// finomhangolásának első lépése a saját meccsekből.
+  Future<Map<String, dynamic>> startDatasetCollect(
+      List<String> matchIds, int samples) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/dataset/collect"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"match_ids": matchIds, "samples": samples}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a gyűjtés indítása", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A tanítóadat-gyűjtés állapota (GET /dataset/status).
+  Future<Map<String, dynamic>> fetchDatasetStatus() async {
+    final resp = await http.get(Uri.parse("$baseUrl/dataset/status"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az állapot", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A gyűjtött tanítóképek listája (GET /dataset/images).
+  Future<List<Map<String, dynamic>>> fetchDatasetImages() async {
+    final resp = await http.get(Uri.parse("$baseUrl/dataset/images"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a kép-lista", resp));
+    }
+    final d = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (d["images"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Egy tanítókép címkéi (GET /dataset/labels/...): [[o,cx,cy,w,h],…].
+  Future<List<List<num>>> fetchDatasetLabels(
+      String split, String name) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/dataset/labels/$split/$name"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a címkék betöltése", resp));
+    }
+    final d = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return [
+      for (final b in (d["boxes"] as List)) (b as List).cast<num>(),
+    ];
+  }
+
+  /// Címkék mentése (POST /dataset/labels/...) — szabványos YOLO-sorok.
+  Future<void> saveDatasetLabels(
+      String split, String name, List<List<num>> boxes) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/dataset/labels/$split/$name"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"boxes": boxes}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a címkék mentése", resp));
+    }
+  }
+
+  /// Finomhangolás indítása (POST /dataset/train) — a kész modell
+  /// automatikusan élesbe áll a következő feldolgozáshoz.
+  Future<Map<String, dynamic>> startTraining(int epochs) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/dataset/train"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"epochs": epochs}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a tanítás indítása", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A tanítás állapota (GET /dataset/train-status).
+  Future<Map<String, dynamic>> fetchTrainStatus() async {
+    final resp = await http.get(Uri.parse("$baseUrl/dataset/train-status"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az állapot", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
   /// Töröl egy meccset a backendről (memória + lemez).
   Future<void> deleteMatch(String matchId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/matches/$matchId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült törölni: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült törölni", resp));
     }
   }
 
@@ -1003,7 +1523,7 @@ class ApiClient {
   Future<Match> fetchMatch(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a meccset: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a meccset", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return Match.fromJson(json);
@@ -1037,7 +1557,7 @@ class ApiClient {
     );
     final resp = await http.Response.fromStream(await req.send());
     if (resp.statusCode != 200) {
-      throw Exception("Feltöltés sikertelen: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Feltöltés sikertelen", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1051,7 +1571,7 @@ class ApiClient {
       body: bytes,
     );
     if (resp.statusCode != 200) {
-      throw Exception("Feltöltés sikertelen: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Feltöltés sikertelen", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1076,6 +1596,29 @@ class ApiClient {
     String? homeTeam,
     String? awayTeam,
     bool jerseyOcr = false, // KÍSÉRLETI: mezszám-OCR a feldolgozás alatt
+    // Ha épp FUT egy másik feldolgozás: true = ez megvárja a végét,
+    // false (alap) = azonnal indul, a futót a szerver félreteszi (az
+    // addig feldolgozott része elmentve marad, később folytatható).
+    bool queueBehind = false,
+    // KÉZI meccs-ablak másodpercben: hol kezdődik és hol ér véget a
+    // MECCS a felvételen. A feltöltött videóban rendszerint benne van a
+    // bemelegítés és a csapatbemutatás; ezekből a felismerő lövést és
+    // eladott labdát csinálna. Ha meg van adva, felülír minden
+    // automatikus meccs-ablak-felismerést.
+    double? startS,
+    double? endS,
+    // HOSSZ-korlát MÁSODPERCBEN ("Próba ~2 perc", "Félidő ~35 perc").
+    // A `max` kockában ugyanezt mondja, de a kliens csak 25 fps-sel tud
+    // számolni — egy 30 fps-es telefonvideón a "35 perc" valójában 29
+    // perc lenne. A motor a VALÓDI fps-sel váltja át; a `max` marad a
+    // tartalék, ha az fps nem olvasható ki.
+    double? maxS,
+    // KÖTEG-CSOPORT: az egy meccshez tartozó darabok közös jele +
+    // a darab sorszáma és a csoport teljes darabszáma. Ha minden darab
+    // elkészült, a motor magától fűzi össze őket.
+    String? mergeGroup,
+    int mergeOrder = 0,
+    int mergeTotal = 0,
   }) async {
     final body = <String, dynamic>{
       "path": path,
@@ -1083,6 +1626,9 @@ class ApiClient {
       "max": max,
       "imgsz": imgsz,
       "start": start,
+      if (startS != null) "start_s": startS,
+      if (endS != null) "end_s": endS,
+      if (maxS != null) "max_s": maxS,
       if (weights != null) "weights": weights,
       if (calib != null) "calib": calib,
       if (calib != null && calibRegion != null) "calib_region": calibRegion,
@@ -1092,6 +1638,12 @@ class ApiClient {
       if (homeTeam != null && homeTeam.isNotEmpty) "home_team": homeTeam,
       if (awayTeam != null && awayTeam.isNotEmpty) "away_team": awayTeam,
       if (jerseyOcr) "jersey_ocr": true,
+      if (queueBehind) "queue_behind": true,
+      if (mergeGroup != null) ...{
+        "merge_group": mergeGroup,
+        "merge_order": mergeOrder,
+        "merge_total": mergeTotal,
+      },
     };
     final resp = await http.post(
       Uri.parse("$baseUrl/matches/process"),
@@ -1099,7 +1651,7 @@ class ApiClient {
       body: jsonEncode(body),
     );
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült elindítani a feldolgozást: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült elindítani a feldolgozást", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1109,9 +1661,45 @@ class ApiClient {
   Future<Map<String, dynamic>> fetchJob(String jobId) async {
     final resp = await http.get(Uri.parse("$baseUrl/jobs/$jobId"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a munka állapotát: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a munka állapotát", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Indítás ELŐTTI ellenőrzés egy videóra (POST /preflight): van-e elég
+  /// hely, és a gép eddigi ütemét ismerve kb. meddig fog tartani.
+  ///
+  /// Hibánál üres térkép: az ellenőrzés kényelem, nem kapu — a
+  /// feldolgozás indítását nem akadályozhatja meg egy megbicsakló
+  /// kérés. (A tényleges hely-elutasítás a motorban van.)
+  Future<Map<String, dynamic>> fetchPreflight(String path,
+      {int? stride, int? imgsz, double? startS, double? endS,
+      double? maxS}) async {
+    try {
+      final resp = await http
+          .post(Uri.parse("$baseUrl/preflight"),
+              headers: {"Content-Type": "application/json"},
+              body: jsonEncode({
+                "path": path,
+                // A MOST választott minőségi profil: a becslés csak az
+                // ugyanilyen beállítású korábbi futásokból számol (a
+                // "Pontos" többszörös időt kér ugyanarra a videóra).
+                if (stride != null) "stride": stride,
+                if (imgsz != null) "imgsz": imgsz,
+                // A meccs időablaka: a becslés a FELDOLGOZANDÓ szakaszra
+                // szóljon, ne a teljes videóra.
+                if (startS != null) "start_s": startS,
+                if (endS != null) "end_s": endS,
+                // A hossz-korlát is: a "Próba (~2 p)" becslése két
+                // percre szóljon, ne a teljes videóra.
+                if (maxS != null) "max_s": maxS,
+              }))
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return const {};
+      return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    } catch (_) {
+      return const {};
+    }
   }
 
   /// A feldolgozási munkák listája (GET /jobs) — legújabb elöl. A kezdőlap
@@ -1143,7 +1731,7 @@ class ApiClient {
         .get(Uri.parse("$baseUrl/health/full"))
         .timeout(const Duration(seconds: 15));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült az ellenőrzés: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült az ellenőrzés", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
@@ -1169,9 +1757,167 @@ class ApiClient {
   Future<Map<String, dynamic>> cancelJob(String jobId) async {
     final resp = await http.post(Uri.parse("$baseUrl/jobs/$jobId/cancel"));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült megszakítani: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült megszakítani", resp));
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  // --- Fiókok és felhasználási feltételek --------------------------------
+  // A program a Tulajdonos szellemi és fizikai tulajdona; a használat
+  // fiókhoz kötött, a fiók létrehozásához a feltételek elfogadása kell. A
+  // munkamenet-kulcsot a SessionStore tartja (services/session_store.dart).
+
+  Map<String, String> _authHeaders() {
+    final t = SessionStore.token;
+    return {
+      "Content-Type": "application/json",
+      if (t != null) "Authorization": "Bearer $t",
+    };
+  }
+
+  /// A szerver magyar hibaüzenete, ha van — különben a HTTP-kód.
+  String _errorText(http.Response resp, String fallback) {
+    try {
+      final body = jsonDecode(utf8.decode(resp.bodyBytes));
+      if (body is Map && body["detail"] is String) {
+        return body["detail"] as String;
+      }
+    } catch (_) {}
+    return "$fallback (HTTP ${resp.statusCode})";
+  }
+
+  /// A felhasználási feltételek szövege és verziója (GET /legal/terms).
+  Future<Map<String, dynamic>> fetchTerms() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/legal/terms"))
+        .timeout(const Duration(seconds: 5));
+    if (resp.statusCode != 200) {
+      throw Exception(_errorText(resp, "Nem sikerült lekérni a feltételeket"));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Van-e már fiók a gépen (GET /accounts/status).
+  Future<Map<String, dynamic>> fetchAccountsStatus() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/accounts/status"))
+        .timeout(const Duration(seconds: 5));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          _errorText(resp, "Nem sikerült lekérni a fiók-állapotot"));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Fiók létrehozása (POST /accounts/register). A feltételek elfogadása
+  /// KÖTELEZŐ — `acceptTerms: false` esetén a szerver elutasítja. Sikernél
+  /// eltárolja a munkamenet-kulcsot, és visszaadja a fiókot.
+  Future<Map<String, dynamic>> registerAccount({
+    required String email,
+    required String password,
+    String name = "",
+    String team = "",
+    required bool acceptTerms,
+  }) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/accounts/register"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "email": email,
+        "password": password,
+        "name": name,
+        "team": team,
+        "accept_terms": acceptTerms,
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_errorText(resp, "Nem sikerült a fiók létrehozása"));
+    }
+    final json =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    await SessionStore.setToken(json["token"] as String?);
+    return Map<String, dynamic>.from(json["account"] as Map);
+  }
+
+  /// Belépés (POST /accounts/login) — sikernél eltárolja a kulcsot.
+  Future<Map<String, dynamic>> loginAccount(
+      String email, String password) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/accounts/login"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email, "password": password}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_errorText(resp, "Nem sikerült a belépés"));
+    }
+    final json =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    await SessionStore.setToken(json["token"] as String?);
+    return Map<String, dynamic>.from(json["account"] as Map);
+  }
+
+  /// A belépett fiók (GET /accounts/me) — null, ha nincs érvényes kulcs.
+  Future<Map<String, dynamic>?> fetchMe() async {
+    if (SessionStore.token == null) return null;
+    try {
+      final resp = await http
+          .get(Uri.parse("$baseUrl/accounts/me"), headers: _authHeaders())
+          .timeout(const Duration(seconds: 5));
+      if (resp.statusCode != 200) return null;
+      return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// A megújult feltételek elfogadása (POST /accounts/accept-terms).
+  Future<Map<String, dynamic>> acceptTerms() async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/accounts/accept-terms"),
+      headers: _authHeaders(),
+      body: jsonEncode({"token": SessionStore.token}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(
+          _errorText(resp, "Nem sikerült elfogadni a feltételeket"));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Kilépés (POST /accounts/logout) — a kulcs a szerveren és itt is elszáll.
+  Future<void> logoutAccount() async {
+    try {
+      await http
+          .post(Uri.parse("$baseUrl/accounts/logout"),
+              headers: _authHeaders(),
+              body: jsonEncode({"token": SessionStore.token}))
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // A motor már nem válaszol — a helyi kulcsot akkor is eldobjuk.
+    }
+    await SessionStore.clear();
+  }
+
+  /// Jelszócsere (POST /accounts/change-password) — új kulcsot ad, a
+  /// korábbi munkamenetek érvénytelenné válnak.
+  Future<Map<String, dynamic>> changePassword(
+      String oldPassword, String newPassword) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/accounts/change-password"),
+      headers: _authHeaders(),
+      body: jsonEncode({
+        "token": SessionStore.token,
+        "old_password": oldPassword,
+        "new_password": newPassword,
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_errorText(resp, "Nem sikerült a jelszócsere"));
+    }
+    final json =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    await SessionStore.setToken(json["token"] as String?);
+    return Map<String, dynamic>.from(json["account"] as Map);
   }
 
   /// A kalibráló képernyő referencia-képkockájának URL-je (GET /reference-frame).
@@ -1185,7 +1931,7 @@ class ApiClient {
   Future<Uint8List> fetchReferenceFrame(String videoPath, {int t = 100}) async {
     final resp = await http.get(referenceFrameUri(videoPath, t: t));
     if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a képkockát: HTTP ${resp.statusCode}");
+      throw Exception(_hiba("Nem sikerült lekérni a képkockát", resp));
     }
     return resp.bodyBytes;
   }

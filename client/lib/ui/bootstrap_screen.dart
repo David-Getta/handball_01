@@ -6,13 +6,16 @@
 /// kiadás), akkor is tovább lehet lépni demó módban.
 library;
 
+import "dart:async";
 import "dart:ui" show AppExitResponse;
 
 import "package:flutter/material.dart";
 
 import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
-import "dashboard_screen.dart";
+import "account_gate.dart";
+import "diagnostics_button.dart";
+import "update_flow.dart";
 
 class BootstrapScreen extends StatefulWidget {
   const BootstrapScreen({super.key});
@@ -26,6 +29,22 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
   String _message = "Motor indítása…";
   BackendPhase? _phase;
 
+  /// A motor naplójának utolsó sorai — CSAK sikertelen indításnál
+  /// töltjük be. Ez az első képernyő, ahol az indulási hiba
+  /// megjelenhet; a fiók-kapu és a nyitóképernyő is megmutatja a
+  /// naplót, itt viszont eddig csak egy mondat állt, és a felhasználó
+  /// nem tudott mit elküldeni.
+  String? _log;
+
+  /// Eltelt másodpercek az indítás kezdete óta.
+  ///
+  /// Az első indulás — víruskereső-átvizsgálással — PERCEKIG tarthat. Egy
+  /// néma pörgettyű mellett ilyenkor a felhasználó azt hiszi, lefagyott,
+  /// és bezárja a programot: pont azt a folyamatot lövi ki, amelyik
+  /// mindjárt kész lenne. A látható számláló a bizonyíték, hogy megy.
+  int _elapsed = 0;
+  Timer? _tick;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +54,7 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
 
   @override
   void dispose() {
+    _tick?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _launcher.stop(); // az app bezárásakor a motort is leállítjuk
     super.dispose();
@@ -47,9 +67,17 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
   }
 
   Future<void> _start() async {
+    // A számláló minden indítási kísérletnél nulláról indul (az
+    // Újrapróbálom is ide jön vissza), és a kísérlet végén megáll.
+    _tick?.cancel();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _elapsed += 1);
+    });
     setState(() {
       _message = "Motor indítása…";
       _phase = BackendPhase.starting;
+      _elapsed = 0;
+      _log = null;
     });
     final status = await _launcher.ensureRunning(
       onLog: (line) {
@@ -57,6 +85,7 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
         setState(() => _message = line);
       },
     );
+    _tick?.cancel();
     if (!mounted) return;
     setState(() {
       _phase = status.phase;
@@ -64,13 +93,25 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
     });
     if (status.phase == BackendPhase.ready) {
       _enterApp();
+      return;
+    }
+    if (status.phase == BackendPhase.failed) {
+      final tail = await BackendLauncher.logTail();
+      if (!mounted) return;
+      setState(() => _log = tail);
     }
   }
 
+  // A motor után a FIÓK-KAPU jön: belépés (vagy fiók létrehozása a
+  // feltételek elfogadásával), és csak utána a dashboard. Motor nélküli
+  // (demó) módban a kapu a rövid tulajdonjogi tudomásulvételt kéri.
   void _enterApp() {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      MaterialPageRoute(
+        builder: (_) =>
+            AccountGate(engineReady: _phase == BackendPhase.ready),
+      ),
     );
   }
 
@@ -117,12 +158,62 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
                   ),
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  busy ? "Az elemző motor indítása…" : (failed ? "A motor nem indult el" : "Motor nélküli (demó) mód"),
+                  // "Nem indult el" helyett "még nem válaszol": az
+                  // időtúllépés óta a folyamat ilyenkor gyakran ÉL, csak
+                  // a víruskereső még olvassa. Az alatta lévő üzenet
+                  // mondja meg, melyik esetről van szó.
+                  busy
+                      ? "Az elemző motor indítása…"
+                      : (failed
+                          ? "A motor még nem válaszol"
+                          : "Motor nélküli (demó) mód"),
                   style: AppText.value.copyWith(fontSize: 16),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(_message, style: AppText.label, textAlign: TextAlign.center),
+
+                if (busy && _elapsed >= 3) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Text("fut: ${_elapsed < 60 ? "$_elapsed mp" : "${_elapsed ~/ 60}:${(_elapsed % 60).toString().padLeft(2, "0")}"}",
+                      style: AppText.label
+                          .copyWith(color: AppColors.textFaint)),
+                ],
+                if (busy && _elapsed >= 30) ...[
+                  const SizedBox(height: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    child: Text(
+                        "Az ELSŐ indítás percekig is tarthat: a víruskereső "
+                        "egyszer végigolvassa a programot. Ne zárd be — a "
+                        "következő indítás már gyors lesz.",
+                        style: AppText.label
+                            .copyWith(color: AppColors.textFaint),
+                        textAlign: TextAlign.center),
+                  ),
+                ],
+
+                if (failed && _log != null && _log!.trim().isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Text("A MOTOR NAPLÓJA (UTOLSÓ SOROK)",
+                      style: AppText.sectionLabel),
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(maxHeight: 160),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceAlt,
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: SingleChildScrollView(
+                      child: SelectableText(_log!,
+                          style: AppText.label.copyWith(
+                              fontSize: 11, color: AppColors.textPrimary)),
+                    ),
+                  ),
+                ],
 
                 if (failed || noEngine) ...[
                   const SizedBox(height: AppSpacing.xl),
@@ -138,6 +229,19 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
                           label: const Text("Újrapróbálom"),
                         ),
                       if (failed) const SizedBox(width: AppSpacing.md),
+                      // A frissítéshez se fiók, se motor nem kell — és
+                      // pont az akad itt el, aki olyan régi verziót
+                      // futtat, amelyikben a motor még el sem indul.
+                      if (failed)
+                        OutlinedButton.icon(
+                          onPressed: () => checkAndInstallUpdate(context),
+                          style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.accent,
+                              side: const BorderSide(color: AppColors.accent)),
+                          icon: const Icon(Icons.system_update, size: 18),
+                          label: const Text("Frissítés keresése"),
+                        ),
+                      if (failed) const SizedBox(width: AppSpacing.md),
                       FilledButton.icon(
                         onPressed: _enterApp,
                         style: FilledButton.styleFrom(
@@ -147,6 +251,7 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
                       ),
                     ],
                   ),
+                  if (failed) const DiagnosticsButton(),
                 ],
               ],
             ),

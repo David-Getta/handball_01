@@ -82,18 +82,20 @@ def _wait_job(client, job_id, timeout_s=120):
     raise AssertionError("a csomag-job nem fejeződött be időben")
 
 
-def _registered_package_layers() -> list[str]:
-    src = _APP_PY.read_text(encoding="utf-8")
-    return re.findall(r'_layer\(\s*"([a-z0-9_]+)"', src)
+# A drága lépések (csomag-export, végpont-söprés) MODUL-hatókörű
+# fixtúrákban futnak: a füstteszt több őre ugyanazt a mintameccset
+# nézi más szemszögből, és a kimenet előállítása másodpercekbe kerül.
+# Egyszer állítjuk elő, aztán mindegyik őr a saját állítását teszi rá.
+@pytest.fixture(scope="module")
+def sample_match():
+    """A lövéses mintameccs és a rá nyitott kliens — egyszer épül."""
+    return _client_with_match()
 
 
-def test_package_minden_regisztralt_reteg_elkeszul():
-    """A csomag elemzés-JSON-jában MINDEN `_layer(...)`-rel regisztrált
-    réteg ott van — egy kivétellel elhasaló motor itt bukna ki, mert a
-    `_layer` a hibát lenyeli, a kulcs pedig hiányozna."""
-    names = _registered_package_layers()
-    assert len(names) > 200, "a regisztry-olvasás elromlott"
-    client, mid = _client_with_match()
+@pytest.fixture(scope="module")
+def package_analyses(sample_match):
+    """A meccs-csomag elemzés-JSON-ja — egyszer exportálva."""
+    client, mid = sample_match
     r = client.post(f"/matches/{mid}/package/export",
                     json={"clip_types": []})
     job = _wait_job(client, r.json()["job_id"])
@@ -101,12 +103,64 @@ def test_package_minden_regisztralt_reteg_elkeszul():
     pkg = client.get(f"/matches/{mid}/package/download")
     assert pkg.status_code == 200
     z = zipfile.ZipFile(io.BytesIO(pkg.content))
-    analyses = json.loads(z.read("elemzesek.json").decode("utf-8"))
-    missing = sorted(set(names) - set(analyses))
+    return json.loads(z.read("elemzesek.json").decode("utf-8"))
+
+
+@pytest.fixture(scope="module")
+def get_answers(sample_match):
+    """Minden GET /matches/{id}/... végpont válasza — egyszer lekérve.
+
+    {útvonal-sablon: (HTTP-kód, törzs)}. A paraméteres játékos-
+    végpontok az első valódi track_id-vel hívódnak; ha nincs ilyen,
+    kimaradnak.
+    """
+    client, mid = sample_match
+    src = _APP_PY.read_text(encoding="utf-8")
+    paths = sorted(set(re.findall(
+        r'@app\.get\("(/matches/\{match_id\}[^"]*)"\)', src)))
+    body = client.get(f"/matches/{mid}/positions")
+    tid = None
+    if body.status_code == 200 and isinstance(body.json(), dict):
+        for side in ("home", "away"):
+            ids = list((body.json().get(side) or {}).keys())
+            if ids:
+                tid = ids[0]
+                break
+    out: dict[str, tuple[int, object]] = {}
+    for path in paths:
+        url = path.replace("{match_id}", mid)
+        if "{track_id}" in url or "{player_id}" in url:
+            if tid is None:
+                continue
+            url = (url.replace("{track_id}", str(tid))
+                      .replace("{player_id}", str(tid)))
+        if "{" in url:
+            continue  # egyéb paraméteres útvonal kimarad
+        r = client.get(url)
+        try:
+            payload = r.json()
+        except ValueError:
+            payload = None
+        out[path] = (r.status_code, payload)
+    return out
+
+
+def _registered_package_layers() -> list[str]:
+    src = _APP_PY.read_text(encoding="utf-8")
+    return re.findall(r'_layer\(\s*"([a-z0-9_]+)"', src)
+
+
+def test_package_minden_regisztralt_reteg_elkeszul(package_analyses):
+    """A csomag elemzés-JSON-jában MINDEN `_layer(...)`-rel regisztrált
+    réteg ott van — egy kivétellel elhasaló motor itt bukna ki, mert a
+    `_layer` a hibát lenyeli, a kulcs pedig hiányozna."""
+    names = _registered_package_layers()
+    assert len(names) > 200, "a regisztry-olvasás elromlott"
+    missing = sorted(set(names) - set(package_analyses))
     assert not missing, f"némán elbukott rétegek a csomagban: {missing}"
 
 
-def test_loves_retegek_valodi_adatot_kapnak():
+def test_loves_retegek_valodi_adatot_kapnak(package_analyses):
     """A lövés-alapú rétegek NEM üresen jönnek vissza.
 
     A "kulcs ott van" őrzés önmagában gyenge: egy lövés nélküli
@@ -115,18 +169,10 @@ def test_loves_retegek_valodi_adatot_kapnak():
     mintameccs ezért LŐ is — itt pedig megköveteljük, hogy a
     lövés-rétegek lássák is a lövéseket.
     """
-    client, mid = _client_with_match()
-    r = client.post(f"/matches/{mid}/package/export", json={"clip_types": []})
-    job = _wait_job(client, r.json()["job_id"])
-    assert job["status"] == "done", job
-    pkg = client.get(f"/matches/{mid}/package/download")
-    z = zipfile.ZipFile(io.BytesIO(pkg.content))
-    analyses = json.loads(z.read("elemzesek.json").decode("utf-8"))
-
     empty = []
     for name in ("role_shot_distance", "role_shot_timing",
                  "role_shot_power", "shot_speeds", "xg"):
-        rec = analyses.get(name)
+        rec = package_analyses.get(name)
         if rec is None:
             empty.append(f"{name}: hiányzik")
             continue
@@ -138,6 +184,24 @@ def test_loves_retegek_valodi_adatot_kapnak():
     assert not empty, (
         "a lövés-rétegek nem kaptak valódi bemenetet — a mintameccs "
         f"lövései nem érnek el hozzájuk: {empty}")
+
+
+def test_a_csomag_megnevezi_az_elhasalt_retegeket(package_analyses):
+    """Ha egy réteg mégis elhasal, a NEVE kerüljön a csomagba.
+
+    A védelem (try/except) helyes: egy réteg hibája nem viheti el a
+    többit. Az ára viszont az, hogy a kulcs NYOM NÉLKÜL eltűnik, és a
+    felhasználó azt hiszi, az az elemzés nem is létezik. A csomag
+    ezért mindig visz egy listát az elhasalt rétegekről — üresen is,
+    mert a "nem hasalt el semmi" is állítás.
+    """
+    assert "_hibas_retegek" in package_analyses, (
+        "a csomag nem mondja meg, mely rétegek nem készültek el")
+    assert isinstance(package_analyses["_hibas_retegek"], list)
+    # A mintameccsen egyetlen rétegnek sem szabad elhasalnia.
+    assert package_analyses["_hibas_retegek"] == [], (
+        "elhasalt rétegek a mintameccsen: "
+        + ", ".join(package_analyses["_hibas_retegek"]))
 
 
 def test_package_reteg_nevek_egyediek():
@@ -165,7 +229,7 @@ def _endpoint_registries() -> dict[str, set[str]]:
     return out
 
 
-def test_vegpontok_minden_regisztralt_kulcs_elkeszul():
+def test_vegpontok_minden_regisztralt_kulcs_elkeszul(get_answers):
     """Minden elemzés-végpont válaszában ott van minden
     `res["..."]`-ként bekötött kulcs — a félidő-feltételes (_fh és
     first_half_close) kulcsok kivételével, amelyek a rövid szimulált
@@ -174,14 +238,12 @@ def test_vegpontok_minden_regisztralt_kulcs_elkeszul():
     assert len(registries) >= 4, "a végpont-olvasás elromlott"
     assert sum(len(k) for k in registries.values()) > 200, \
         "a kulcs-olvasás elromlott"
-    client, mid = _client_with_match()
     problems = []
     for path, registered in sorted(registries.items()):
-        r = client.get(path.replace("{match_id}", mid))
-        if r.status_code != 200:
-            problems.append(f"{path}: HTTP {r.status_code}")
+        status, body = get_answers[path]
+        if status != 200:
+            problems.append(f"{path}: HTTP {status}")
             continue
-        body = r.json()
         missing = registered - set(body if isinstance(body, dict) else {})
         unexpected = sorted(
             k for k in missing
@@ -287,38 +349,16 @@ def test_felido_kulcsok_elkeszulnek_felidos_meccsen():
         f"hiányzó félidő-kulcsok felismert félidő mellett: {problems}"
 
 
-def test_minden_get_vegpont_tulel():
+def test_minden_get_vegpont_tulel(get_answers):
     """Minden GET /matches/{id}/... végpont — a paraméteres
     játékos-végpontokkal együtt — 5xx nélkül fut le egy érvényes
     szimulált meccsen. A kulcs-őrök a regisztrált rétegeket nézik;
     ez azt, hogy EGYIK végpont sem omlik össze (a 404 pl. csomag-
     letöltésnél export előtt jogos, az 500 sosem az)."""
-    src = _APP_PY.read_text(encoding="utf-8")
-    paths = sorted(set(re.findall(
-        r'@app\.get\("(/matches/\{match_id\}[^"]*)"\)', src)))
-    assert len(paths) > 30, "az útvonal-olvasás elromlott"
-    client, mid = _client_with_match()
-    body = client.get(f"/matches/{mid}/positions")
-    tid = None
-    if body.status_code == 200 and isinstance(body.json(), dict):
-        for side in ("home", "away"):
-            ids = list((body.json().get(side) or {}).keys())
-            if ids:
-                tid = ids[0]
-                break
-    problems = []
-    for path in paths:
-        url = path.replace("{match_id}", mid)
-        if "{track_id}" in url or "{player_id}" in url:
-            if tid is None:
-                continue
-            url = (url.replace("{track_id}", str(tid))
-                      .replace("{player_id}", str(tid)))
-        if "{" in url:
-            continue  # egyéb paraméteres útvonal kimarad
-        r = client.get(url)
-        if r.status_code >= 500:
-            problems.append(f"{path}: HTTP {r.status_code}")
+    assert len(get_answers) > 30, "az útvonal-olvasás elromlott"
+    problems = [f"{path}: HTTP {status}"
+                for path, (status, _) in sorted(get_answers.items())
+                if status >= 500]
     assert not problems, f"összeomló végpontok: {problems}"
 
 
@@ -482,3 +522,348 @@ def test_szam_szinkron_javitja_az_elavult_doksit():
         assert good in doc.read_text(encoding="utf-8")
     finally:
         doc.write_text(original, encoding="utf-8")
+
+
+def test_nincs_ketszer_definialt_modul_konstans():
+    """ŐR: egy pipeline-modulban ne legyen KÉTSZER definiált
+    NAGYBETŰS modul-konstans.
+
+    A réteg-recept minden új réteghez küszöb-konstansokat kér a modul
+    tetejére. Ha egy új réteg elveszi egy meglévő konstans nevét
+    (pl. PPP_WINDOW_S), a Python csendben FELÜLÍRJA a régit — a régi
+    réteg küszöbe megváltozik, és a hiba csak egy távoli teszten
+    bukik ki. Ez a teszt a modul-szintű értékadásokat számolja meg.
+    """
+    import pathlib
+    import re
+    from collections import Counter
+
+    pipeline_dir = pathlib.Path("handball/pipeline")
+    hibak = []
+    for mod in sorted(pipeline_dir.glob("*.py")):
+        src = mod.read_text(encoding="utf-8")
+        # Csak a modul legfelső szintje (nincs behúzás), NAGYBETŰS név.
+        nevek = re.findall(r"^([A-Z][A-Z0-9_]{2,})\s*(?::[^=\n]+)?=",
+                           src, flags=re.M)
+        dupla = [n for n, c in Counter(nevek).items() if c > 1]
+        if dupla:
+            hibak.append(f"{mod.name}: {sorted(dupla)}")
+    assert not hibak, ("kétszer definiált modul-konstansok: "
+                       + "; ".join(hibak))
+
+
+def test_nincs_ketszer_definialt_fuggveny():
+    """ŐR: egy modulban ne legyen KÉTSZER definiált modul-szintű
+    függvény.
+
+    Ugyanaz a csendes felülírás, mint a konstansoknál: ha egy új
+    réteg motorja elveszi egy meglévő függvény nevét, a Python az
+    utolsót tartja meg — a régi réteg minden felülete észrevétlenül
+    az ÚJ motort hívja. A tesztfájlokra is áll: a pytest ott is csak
+    az utolsó azonos nevű tesztet futtatja, a korábbi némán eltűnik.
+    """
+    import pathlib
+    import re
+    from collections import Counter
+
+    hibak = []
+    for d, minta in ((pathlib.Path("handball/pipeline"), "*.py"),
+                     (pathlib.Path("handball/api"), "*.py"),
+                     (pathlib.Path("tests"), "test_*.py")):
+        for mod in sorted(d.glob(minta)):
+            src = mod.read_text(encoding="utf-8")
+            nevek = re.findall(r"^def (\w+)\(", src, flags=re.M)
+            dupla = [n for n, c in Counter(nevek).items() if c > 1]
+            if dupla:
+                hibak.append(f"{mod.name}: {sorted(dupla)}")
+    assert not hibak, ("kétszer definiált függvények: "
+                       + "; ".join(hibak))
+
+
+# Idő-küszöbök, amiket MÁSODPERCBEN tartunk (a kocka-alakjuk már csak
+# visszafelé kompatibilis alapérték a képrátát nem ismerő hívóknak).
+# A pár: (kocka-konstans, a másodperces párja).
+_IDO_KUSZOB_PAROK = (
+    ("CONFIDENCE_HALFLIFE_FRAMES", "CONFIDENCE_HALFLIFE_S"),
+    ("VELOCITY_FADE_FRAMES", "VELOCITY_FADE_S"),
+    ("DEFAULT_MAX_GAP_FRAMES", "MAX_GAP_S"),
+    ("BSR_LOOKBACK_FRAMES", "BSR_LOOKBACK_S"),
+    ("MARK_MIN_FRAMES", "MARK_MIN_S"),
+    ("HOLD_MIN_FRAMES", "HOLD_MIN_S"),
+    ("PIVOT_TOUCH_MIN_FRAMES", "PIVOT_TOUCH_MIN_S"),
+)
+
+
+def test_az_ido_kuszobok_nem_esnek_vissza_kockara():
+    """Az IDŐTARTAM-jelentésű küszöböket másodpercben kell tartani.
+
+    A feldolgozás ritkít (a termék alapja minden 3. kocka), tehát egy
+    kockában rögzített időtartam a minőségi profiltól függően
+    háromszoros valós időt jelent. Ebből a hibafajtából egy nap alatt
+    HÉT darabot találtunk (hossz-korlát, labda-hézagpótlás, becslés
+    sebesség-elhalása és felezési ideje, őrzési párok, blokkolt-poszt
+    visszanézés, labdatartás, beálló-villanás) — a visszaesés reális.
+
+    A kocka-alak megmarad visszafelé kompatibilis alapértéknek, de a
+    MOTORNAK a másodperces párt kell használnia: ha egy kocha-konstans
+    újra megjelenik futó kódban (nem a saját definíciójában és nem
+    kommentben), az regresszió.
+
+    Fontos, ami NEM tartozik ide: a MINTASZÁM-küszöbök (pl. a
+    "legalább 100 mért kocka kell az átlaghoz") jogosan kockában
+    vannak — ott 100 minta tényleg 100 minta.
+    """
+    import re
+
+    pipeline = Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+    forrasok = {py.name: py.read_text(encoding="utf-8")
+                for py in sorted(pipeline.glob("*.py"))}
+
+    hianyzo_par: list = []
+    visszaeses: list = []
+    for kocka, masodperc in _IDO_KUSZOB_PAROK:
+        hol = [n for n, t in forrasok.items()
+               if re.search(rf"^{kocka} = ", t, re.M)]
+        assert hol, f"eltűnt a kocka-konstans: {kocka}"
+        for modul in hol:
+            szoveg = forrasok[modul]
+            if not re.search(rf"^{masodperc} = ", szoveg, re.M):
+                hianyzo_par.append(f"{modul}: {kocka} → nincs {masodperc}")
+                continue
+            for i, sor in enumerate(szoveg.split("\n"), 1):
+                csupasz = sor.split("#", 1)[0]
+                if kocka not in csupasz:
+                    continue
+                if re.match(rf"\s*{kocka} = ", csupasz):
+                    continue          # a saját definíciója
+                visszaeses.append(f"{modul}:{i}: {kocka} ({sor.strip()})")
+
+    assert not hianyzo_par, (
+        "idő-küszöb másodperces párja nélkül: " + "; ".join(hianyzo_par))
+    assert not visszaeses, (
+        "IDŐTARTAM-küszöb kocka-alakja futó kódban — a ritkítás miatt ez "
+        "profilonként mást jelent; a másodperces párt kell használni: "
+        + "; ".join(visszaeses))
+
+
+def _client_with_sovany_match():
+    """Kliens egy SZÁNDÉKOSAN sovány meccsel: mozgás van, labda nincs.
+
+    Ez nem elméleti eset: pont ez történik, ha a labda-észlelés nem
+    működik (távoli, széles felvétel, rossz megvilágítás). A
+    felhasználó ilyenkor is megnyitja a jelentést — és ha egy réteg
+    ezen elhasal, a `_layer` lenyeli a hibát, a szakasz pedig NYOM
+    NÉLKÜL eltűnik. Épp akkor, amikor a legnagyobb szükség lenne rá,
+    hogy a jelentés elmondja, mi történt.
+    """
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
+    m = simulate_ground_truth(duration_s=40, fps=25.0, seed=5,
+                              shots_per_min=12.0)
+    m.meta.match_id = f"{m.meta.match_id}-sovany"
+    for fr in m.frames:
+        fr.ball = None                       # a labda sehol nem látszik
+    matches_dir = Path(_tmp) / "data" / "matches"
+    matches_dir.mkdir(parents=True, exist_ok=True)
+    (matches_dir / f"{m.meta.match_id}.json").write_text(
+        json.dumps(m.to_dict()), encoding="utf-8")
+    return TestClient(create_app()), m.meta.match_id
+
+
+@pytest.fixture(scope="module")
+def sovany_package_analyses():
+    """A sovány meccs elemzés-JSON-ja — egyszer exportálva."""
+    client, mid = _client_with_sovany_match()
+    r = client.post(f"/matches/{mid}/package/export", json={"clip_types": []})
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    pkg = client.get(f"/matches/{mid}/package/download")
+    assert pkg.status_code == 200
+    z = zipfile.ZipFile(io.BytesIO(pkg.content))
+    return json.loads(z.read("elemzesek.json").decode("utf-8"))
+
+
+def _client_with_egycsapatos_match():
+    """Kliens egy meccsel, ahol MINDENKI ugyanabba a csapatba került.
+
+    Valós hibamód: ha a mezszín-klaszterezés összeomlik (azonos színű
+    mezek, rossz megvilágítás), minden játékos egy oldalra kerül. A
+    minőség-jelentés ezt ki is mondja ("a csapat-besorolás egyoldalú"),
+    de a rétegeknek addig sem szabad NÉMÁN elhasalniuk — a felhasználó
+    különben azt hiszi, azok az elemzések nem is léteznek.
+    """
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
+    from handball.models.tracking import Team
+    m = simulate_ground_truth(duration_s=40, fps=25.0, seed=11,
+                              shots_per_min=12.0)
+    m.meta.match_id = f"{m.meta.match_id}-egycsapat"
+    for fr in m.frames:
+        for pl in fr.players:
+            pl.team = Team.HOME
+    matches_dir = Path(_tmp) / "data" / "matches"
+    matches_dir.mkdir(parents=True, exist_ok=True)
+    (matches_dir / f"{m.meta.match_id}.json").write_text(
+        json.dumps(m.to_dict()), encoding="utf-8")
+    return TestClient(create_app()), m.meta.match_id
+
+
+@pytest.fixture(scope="module")
+def egycsapatos_package_analyses():
+    """Az egycsapatos meccs elemzés-JSON-ja — egyszer exportálva."""
+    client, mid = _client_with_egycsapatos_match()
+    r = client.post(f"/matches/{mid}/package/export", json={"clip_types": []})
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    pkg = client.get(f"/matches/{mid}/package/download")
+    assert pkg.status_code == 200
+    z = zipfile.ZipFile(io.BytesIO(pkg.content))
+    return json.loads(z.read("elemzesek.json").decode("utf-8"))
+
+
+def test_egy_reteg_sem_hasal_el_az_egycsapatos_meccsen(
+        egycsapatos_package_analyses):
+    """Összeomlott csapat-besorolásnál SEM tűnhet el réteg nyom nélkül.
+
+    Ilyenkor a legtöbb réteg jogosan hallgat (nincs kivel szembeállítani
+    a csapatot), de a kulcsnak ott kell lennie — a jelentés nem lehet
+    NÉMÁN hiányos épp azon a futáson, ahol magyarázatra volna szükség.
+    """
+    names = _registered_package_layers()
+    missing = sorted(set(names) - set(egycsapatos_package_analyses))
+    assert not missing, (
+        "egycsapatos meccsen NÉMÁN elbukó rétegek: " + ", ".join(missing))
+
+
+def _client_with_toredek_match():
+    """Kliens egy TÖREDÉK meccsel: két másodpercnyi felvétel.
+
+    Ez a "a feldolgozás pár másodperc után megszakadt" eset — a
+    részleges mentés a könyvtárba kerül, és a felhasználó megnyitja.
+    Egy nullával osztó vagy üres listát indexelő réteg itt bukna el.
+    """
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
+    m = simulate_ground_truth(duration_s=2, fps=25.0, seed=7)
+    m.meta.match_id = f"{m.meta.match_id}-toredek"
+    matches_dir = Path(_tmp) / "data" / "matches"
+    matches_dir.mkdir(parents=True, exist_ok=True)
+    (matches_dir / f"{m.meta.match_id}.json").write_text(
+        json.dumps(m.to_dict()), encoding="utf-8")
+    return TestClient(create_app()), m.meta.match_id
+
+
+@pytest.fixture(scope="module")
+def toredek_package_analyses():
+    """A töredék meccs elemzés-JSON-ja — egyszer exportálva."""
+    client, mid = _client_with_toredek_match()
+    r = client.post(f"/matches/{mid}/package/export", json={"clip_types": []})
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    pkg = client.get(f"/matches/{mid}/package/download")
+    assert pkg.status_code == 200
+    z = zipfile.ZipFile(io.BytesIO(pkg.content))
+    return json.loads(z.read("elemzesek.json").decode("utf-8"))
+
+
+def test_egy_reteg_sem_hasal_el_a_toredek_meccsen(toredek_package_analyses):
+    """Két másodpercnyi felvételen SEM tűnhet el réteg nyom nélkül.
+
+    A megszakadt feldolgozás részleges mentése a könyvtárba kerül, és
+    a felhasználó megnyitja. A rétegnek itt sincs mit mondania — de a
+    kulcsnak ott kell lennie, hogy a jelentés ne legyen NÉMÁN hiányos.
+    """
+    names = _registered_package_layers()
+    missing = sorted(set(names) - set(toredek_package_analyses))
+    assert not missing, (
+        "két másodperces meccsen NÉMÁN elbukó rétegek: "
+        + ", ".join(missing))
+
+
+def test_egy_reteg_sem_hasal_el_a_labda_nelkuli_meccsen(
+        sovany_package_analyses):
+    """Labda nélküli feldolgozáson SEM tűnhet el réteg nyom nélkül.
+
+    A meglévő őr a jó mintameccsre néz; ez a rossz eset párja. A
+    rétegnek nem kell mondania semmit (üres/None ítélet a helyes
+    válasz kevés mintára), de a KULCSNAK ott kell lennie — különben a
+    jelentés némán hiányos, és a felhasználó azt hiszi, az adott
+    elemzés nem is létezik.
+    """
+    names = _registered_package_layers()
+    assert len(names) > 200, "a regisztry-olvasás elromlott"
+    missing = sorted(set(names) - set(sovany_package_analyses))
+    assert not missing, (
+        "labda nélküli meccsen NÉMÁN elbukó rétegek: " + ", ".join(missing))
+
+
+# Felderítés-mezők, amiket a motor kiszámol, de SEHOL nem olvasunk —
+# mindegyikhez indoklás. Új ilyen mező felvétele előtt gondold végig:
+# ha senki nem olvassa, minek számoljuk?
+_NEM_OLVASOTT_MEZOK = {
+    "team",                 # a jelentés kulcsa ("home"/"away"), nem tartalom
+    "attack_centroid_x",    # a támadó súlypont a kliens hőtérképéhez
+    "attack_centroid_y",    # készült; ma a hőtérkép a nyers kockákból dolgozik
+}
+
+
+def test_nincs_olvasott_de_soha_ki_nem_toltott_felderites_mezo():
+    """Egy OLVASOTT, de sosem KITÖLTÖTT mező néma hiba.
+
+    A felderítés-jelentésnek több mint ezer mezője van, és a
+    csempék/szabályok ezekből olvasnak. Ha egy mezőt senki nem tölt ki,
+    az alapértéke (0 / üres) marad — a csempe pedig ÖRÖKRE néma, vagy
+    ami rosszabb, a szabály hamis feltevéssel dolgozik. Semmi nem hasal
+    el, semmi nem jelez: a réteg egyszerűen nincs ott, és senki nem
+    tudja meg, hogy hiányzik.
+    """
+    import ast
+    import re
+
+    sc_path = (Path(__file__).resolve().parent.parent
+               / "handball" / "pipeline" / "scouting.py")
+    sc = sc_path.read_text(encoding="utf-8")
+
+    mezok = set()
+    for node in ast.walk(ast.parse(sc)):
+        if isinstance(node, ast.ClassDef) and node.name == "ScoutingReport":
+            for st in node.body:
+                if (isinstance(st, ast.AnnAssign)
+                        and isinstance(st.target, ast.Name)):
+                    mezok.add(st.target.id)
+    assert len(mezok) > 500, "a mező-olvasás elromlott"
+
+    # Kitöltés: `rep.<mezo> = ...`, sorozat-kirendelés (`rep.a, rep.b = ...`),
+    # és a combine_reports kulcsszavas építése (`<mezo>=...`).
+    kitoltott = set(re.findall(r"\brep\.([a-z0-9_]+)\s*(?:,|=)", sc))
+    kitoltott |= set(re.findall(r"^\s{8}([a-z0-9_]+)=", sc, re.M))
+
+    olvasott = set(re.findall(r"\b(?:rep|own|opp|r)\.([a-z0-9_]+)\b", sc))
+    dart = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if dart.exists():
+        olvasott |= set(re.findall(r'r\["([a-z0-9_]+)"\]',
+                                   dart.read_text(encoding="utf-8")))
+
+    nema = sorted((olvasott & mezok) - kitoltott)
+    assert not nema, (
+        "olvasott, de SOHA ki nem töltött felderítés-mezők (a rájuk "
+        "épülő csempe/szabály örökre néma): " + ", ".join(nema))
+
+    felesleges = sorted((kitoltott & mezok) - olvasott - _NEM_OLVASOTT_MEZOK)
+    assert not felesleges, (
+        "kiszámolt, de SEHOL nem olvasott felderítés-mezők — vagy hiányzik "
+        "a felület, vagy fölösleges a számolás: " + ", ".join(felesleges))
+
+    # Elgépelt MEZŐNÉV: a `rep.wif_fh_wingg` AttributeError-t dobna, amit
+    # a védő try/except elnyel — a szabály némán kimarad. (A fenti két
+    # halmaz-művelet ezt nem fogja meg: a nem létező név egyszerűen
+    # kiesik a mezők metszetéből.)
+    # CSAK a jelentés-változókról (`rep`/`own`/`opp`): az `r` a
+    # kódban sor-szótárakat és más objektumokat is jelöl, azok
+    # attribútumai nem felderítés-mezők.
+    jelentes_olvasas = set(re.findall(r"\b(?:rep|own|opp)\.([a-z0-9_]+)\b",
+                                      sc))
+    ismeretlen = sorted(n for n in (jelentes_olvasas - mezok)
+                        if not n.startswith("__"))
+    assert not ismeretlen, (
+        "NEM LÉTEZŐ felderítés-mezőt olvasunk (a try/except elnyelné az "
+        "AttributeError-t, a szabály némán kimaradna): "
+        + ", ".join(ismeretlen))

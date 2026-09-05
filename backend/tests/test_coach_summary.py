@@ -226,9 +226,11 @@ def test_goalkeeper_change_verdict_sentence():
             frames.append(Frame(t=t, players=players,
                                 ball=Ball(x=x, y=10.0, confidence=1.0)))
             t += 1
-        frames.append(Frame(t=t, players=[gk(9)],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        # Lövés-csendidő: valós szünet kell két kapu-megközelítés közé.
+        for _i in range(20):
+            frames.append(Frame(t=t, players=[gk(9)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
     # ...csere után három kapott gól a 8-asra.
     for _ in range(600):
         frames.append(Frame(t=t, players=[gk(8)],
@@ -241,9 +243,10 @@ def test_goalkeeper_change_verdict_sentence():
                                 ball=Ball(x=33.6 + i, y=10.0,
                                           confidence=1.0)))
             t += 1
-        frames.append(Frame(t=t, players=[gk(8)],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        for _i in range(20):
+            frames.append(Frame(t=t, players=[gk(8)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
     m = Match(MatchMeta(match_id="gkv", home_team="H", away_team="A",
                         fps=25.0), frames)
     sec = _goalkeepers_section(m, "H", "A")
@@ -344,3 +347,108 @@ def test_sentence_split_handles_empty_body():
 
     assert split_sentences("") == []
     assert split_sentences("   ") == []
+
+
+def test_gyenge_feldolgozasnal_az_osszefoglalo_elore_szol():
+    """A jelentés MAGA mondja ki, ha zajról szólnak az állításai.
+
+    Az összefoglaló minden szekciója magabiztosan fogalmaz — így is kell
+    írni egy edzői jelentést. De ha a feldolgozás gyenge volt (a nézőtér
+    is a pályára került), akkor ezek a mondatok nem a meccsről szólnak.
+    Ezt az EDZŐ az első szekcióban tudja meg, nem a hetedik után.
+    """
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.coach_summary import coach_summary
+
+    # 27 "játékos" kockánként: a pályán legfeljebb 14 lehet.
+    frames = []
+    for t in range(300):
+        pl = [PlayerPosition(track_id=i,
+                             team=Team.HOME if i % 2 == 0 else Team.AWAY,
+                             x=5.0 + (i % 10) * 3.0, y=3.0 + (i % 5) * 3.0,
+                             source=PositionSource.MEASURED, confidence=1.0)
+              for i in range(27)]
+        frames.append(Frame(t=t, players=pl,
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="rossz", home_team="H", away_team="A",
+                        fps=25.0, calibrated=True), frames)
+
+    data = coach_summary(m)
+    caveat = data.get("caveat")
+    assert caveat, "gyenge feldolgozásnál nincs figyelmeztetés"
+    assert "/100" in caveat
+    assert "Első teendő" in caveat
+    # A szekciók szerkezetét NEM tolja el: a figyelmeztetés külön mező.
+    assert all(s["title"] != "Mennyire bízhatsz ebben"
+               for s in data["sections"])
+
+
+def test_jo_feldolgozasnal_nincs_megbizhatosag_szekcio():
+    """Rendben lévő feldolgozásnál ne riogassunk."""
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=90, fps=10.0, seed=3)
+    m.meta.calibrated = True
+    assert coach_summary(m).get("caveat") is None
+
+
+def test_a_jelentes_a_lenyeggel_nyit():
+    """Az összefoglaló az ötszáz réteggel háromezer szavassá nőtt.
+
+    Egy edző ezt nem olvassa végig — és a mondatokra bontás sem segít,
+    ha negyven felsorolás-pont lesz belőle: a hiányzó darab a
+    FONTOSSÁGI SORREND. A jelentés ezért a teendő-rangsor tetejével
+    nyit, csapatonként legfeljebb hárommal, és megmondja, mennyi
+    maradt a részletes szakaszokra.
+
+    Ez BEVEZETŐ, nem rövidítés: a hosszú szakaszok utána változatlanul
+    ott vannak.
+    """
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    cs = coach_summary(m)
+    cimek_mind = [s["title"] for s in cs["sections"]]
+    # A meccs története marad a nyitó szakasz (rövid, kontextust ad);
+    # a rangsor tüstént utána jön.
+    assert cimek_mind[0] == "A meccs története"
+    elso = cs["sections"][1]
+    assert elso["title"] == "A lényeg"
+    # Csapatonként legfeljebb 3 tétel + legfeljebb 1 "további N" sor.
+    assert 1 <= len(elso["lines"]) <= 8, elso["lines"]
+    assert any("/ 1. " in sor for sor in elso["lines"])
+    # A részletes szakaszok megmaradnak MÖGÖTTE.
+    cimek = [s["title"] for s in cs["sections"]]
+    assert "Játékkép és tempó" in cimek
+    assert cimek.index("A lényeg") == 1
+    # ...és jóval a hosszú szakasz ELŐTT.
+    assert cimek.index("A lényeg") < cimek.index("Játékkép és tempó")
+
+
+def test_ures_meccsen_nincs_lenyeg_szakasz():
+    """Ha egyetlen jelzés sem szólal meg, nem találunk ki lényeget —
+    a szakasz egyszerűen kimarad."""
+    meta = MatchMeta(match_id="ures", home_team="A", away_team="B", fps=25.0)
+    cs = coach_summary(Match(meta, []))
+    cimek = [s["title"] for s in cs.get("sections", [])]
+    assert "A lényeg" not in cimek
+
+
+def test_a_lenyeg_szakaszt_a_kliens_nem_csukja_ossze():
+    """A kliens a hosszú szakaszokat öt mondat után összecsukja.
+
+    "A lényeg" viszont pont attól lényeg, hogy EGYBEN olvasható — ha
+    a nyolc tételéből ötöt mutatnánk, a rangsor vége (és a "mennyi
+    maradt" sor) eltűnne. A motor ezért megjelöli a szakaszt.
+    """
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    cs = coach_summary(m)
+    lenyeg = next(s for s in cs["sections"] if s["title"] == "A lényeg")
+    assert lenyeg.get("show_all") is True
+    # A többi szakasz NEM kap ilyen jelölést (különben az egész
+    # összecsukás értelmét vesztené).
+    tobbi = [s for s in cs["sections"] if s["title"] != "A lényeg"]
+    assert not any(s.get("show_all") for s in tobbi)

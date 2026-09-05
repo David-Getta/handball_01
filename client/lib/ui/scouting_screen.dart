@@ -12,6 +12,7 @@ import "package:file_picker/file_picker.dart";
 import "package:flutter/foundation.dart" show kIsWeb;
 import "package:flutter/material.dart";
 
+import "anim.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
@@ -46,6 +47,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   final ApiClient _api = ApiClient();
   late String _team = widget.team;
   List<String> _matchup = const [];
+  // A meccsterv stílus-távolsága (POST /scouting/matchup "style"):
+  // tükör-meccs vagy ellentétes stílus, 0–100-as ponttal.
+  Map<String, dynamic>? _matchupStyle;
   Map<String, dynamic>? _report;
   // Figura-egyezés a mentett könyvtárral (csak egy-meccses módban töltjük).
   Map<String, dynamic>? _playbookMatch;
@@ -118,6 +122,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       // Meccsterv: a MI profilunk (ugyanezen meccsek másik oldala)
       // keresztezve az ellenfélével — enélkül is teljes a jelentés.
       List<String> matchup = const [];
+      Map<String, dynamic>? style;
       try {
         final oppItems = widget.items ??
             [
@@ -130,15 +135,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
               "team": (it["team"] == "home") ? "away" : "home",
             }
         ];
-        matchup = await _api.fetchMatchupPlan(ownItems, oppItems);
+        final mm = await _api.fetchMatchup(ownItems, oppItems);
+        matchup = ((mm["plan"] as List?) ?? const []).cast<String>();
+        style = (mm["style"] as Map?)?.cast<String, dynamic>();
       } catch (_) {
         matchup = const [];
+        style = null;
       }
       if (!mounted) return;
       setState(() {
         _report = r;
         _playbookMatch = pm;
         _matchup = matchup;
+        _matchupStyle = style;
         _loading = false;
       });
     } catch (e) {
@@ -229,6 +238,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           icon: const Icon(Icons.print_outlined, size: 18),
           label: const Text("Mentés / nyomtatás"),
         ),
+        const SizedBox(width: AppSpacing.sm),
+        // CÉLPONT-VIDEÓ: a kulcs-mondat ("a #7-esükre kettőzz") mellé
+        // a bizonyíték — az ő eladásaik videón, az összes elemzett
+        // meccsükből. A mondat meggyőz; a felvétel felkészít.
+        if (_targetJerseys().isNotEmpty)
+          OutlinedButton.icon(
+            onPressed: _targetWorking ? null : _targetVideo,
+            icon: _targetWorking
+                ? const SizedBox(width: 15, height: 15,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.gps_fixed, size: 18),
+            label: Text(_targetWorking ? _targetMsg : "Célpont-videó"),
+          ),
         const SizedBox(width: AppSpacing.md),
         // Melyik csapatot derítsük fel (egyesített módban meccsenként rögzített).
         if (widget.items == null)
@@ -271,6 +293,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final r = _report!;
     final hasNarrative =
         ((r["narrative"] as List?) ?? const []).isNotEmpty;
+    // Egyszer építjük fel: a sáv, a feltétel és a tartalom is ezt nézi.
+    final keeperCard = _keeperPrepCard(r);
     // A sávban CSAK a ténylegesen megjelenő szekciók szerepelnek —
     // egy üresbe ugró gomb rosszabb, mint a hiánya.
     final jumps = <(String, IconData)>[
@@ -282,6 +306,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ("Honnan kapják a lövéseket", Icons.shield_outlined),
       if (_playbookMatch != null) ("Ismert figuráik", Icons.route_outlined),
       ("Védekezésük", Icons.security),
+      if (keeperCard != null)
+        ("Kapus-felkészítés", Icons.sports_kabaddi),
       ("Kulcsjátékosok", Icons.person_outline),
     ];
     return Column(
@@ -294,16 +320,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // MENNYIRE BÍZHATSZ EBBEN: a meccsterv az, ami alapján
+                // az edző dönt — ha a mögötte lévő feldolgozás gyenge
+                // volt, azt a lap ELEJÉN kell kimondani, mert a
+                // jelentés minden mondata magabiztosan fogalmaz.
+                if ((r["caveat"] as String?)?.isNotEmpty ?? false) ...[
+                  _caveatCard(r["caveat"] as String),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 if (hasNarrative) ...[
                   KeyedSubtree(
                       key: _sectionKey("Így játszanak"),
                       child: _narrativeCard(r)),
                   const SizedBox(height: AppSpacing.lg),
                 ],
+                // A PÁROSÍTOTT meccsterv megy elöl: az "ő gyengéjük x a
+                // ti erősségetek" szabályok kifejezetten ERRE a
+                // párosításra szólnak, míg a lenti kulcsok általános,
+                // száz fölötti listát adnak. Aki két percet szán a
+                // felkészülésre, a konkrétat kell hogy elsőként lássa.
+                if (_matchup.isNotEmpty) ...[
+                  _matchupCard(),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 KeyedSubtree(
                     key: _sectionKey("Hogyan játssz ellenük"),
                     child: _keysCard(r)),
-                if (_matchup.isNotEmpty) _matchupCard(),
                 const SizedBox(height: AppSpacing.lg),
                 KeyedSubtree(
                   key: _sectionKey("Erősségek / gyengeségek"),
@@ -340,6 +382,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                 KeyedSubtree(
                     key: _sectionKey("Védekezésük"), child: _defenseCard(r)),
                 const SizedBox(height: AppSpacing.lg),
+                if (keeperCard != null) ...[
+                  KeyedSubtree(
+                      key: _sectionKey("Kapus-felkészítés"),
+                      child: keeperCard),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 KeyedSubtree(
                     key: _sectionKey("Kulcsjátékosok"),
                     child: _keyPlayersCard(r)),
@@ -394,6 +442,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   }
 
   /// Szöveges bevezető: hogyan játszanak — mondatokban, a számok elé.
+  /// Figyelmeztető doboz a jelentés ALAPANYAGÁRÓL (motor: scouting_caveat).
+  ///
+  /// Szándékosan a narratíva FÖLÖTT és más formában: egy meccstervet
+  /// fentről lefelé olvasnak, és aki a végén tudja meg, hogy az adat
+  /// gyenge, addig már eldöntötte, kit állít a beállóra.
+  Widget _caveatCard(String szoveg) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.away.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.away.withOpacity(0.45)),
+      ),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.md),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.warning_amber_rounded,
+            size: 18, color: AppColors.away),
+        const SizedBox(width: 10),
+        Expanded(
+            child: Text(szoveg,
+                style: AppText.label.copyWith(height: 1.45))),
+      ]),
+    );
+  }
+
   Widget _narrativeCard(Map<String, dynamic> r) {
     final sections =
         ((r["narrative"] as List?) ?? const []).cast<Map<String, dynamic>>();
@@ -440,9 +513,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("MECCSTERV (A KETTŐNK PÁROSÍTÁSA)",
-                style: AppText.sectionLabel
-                    .copyWith(color: AppColors.accent)),
+            Row(children: [
+              Text("MECCSTERV (A KETTŐNK PÁROSÍTÁSA)",
+                  style: AppText.sectionLabel
+                      .copyWith(color: AppColors.accent)),
+              if (_matchupStyle?["score_pct"] != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  "· stílus-egyezés "
+                  "${(_matchupStyle!["score_pct"] as num).round()}%",
+                  style: AppText.label.copyWith(
+                      fontSize: 11.5, color: AppColors.textSecondary),
+                ),
+              ],
+            ]),
             const SizedBox(height: AppSpacing.sm),
             for (final p in (_allPlan
                 ? _matchup
@@ -2038,6 +2122,4692 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "az elszórt indításaik gólba kerülnek ($punished/$lost "
         "elveszett kihozatal után gyors gól) · magas letámadással "
         "vadászd a kapus-indításaikat";
+  }
+
+  // Poszt-kapuoldal: melyik posztjuk melyik sarkot keresi (6+ gól,
+  // posztonként 4+, 60% részarány — a backenddel azonos küszöbök:
+  // RGP_MIN_GOALS, RGP_SHARE_PCT).
+  String? _goalPlacementRole(Map<String, dynamic> r) {
+    final raw =
+        (r["rgp_goals_by_role_side"] as Map?)?.cast<String, dynamic>();
+    if (raw == null || raw.isEmpty) return null;
+    var total = 0;
+    final byPost = <String, Map<String, int>>{};
+    raw.forEach((k, v) {
+      final n = (v as num).toInt();
+      final i = k.indexOf("|");
+      if (i <= 0) return;
+      byPost.putIfAbsent(k.substring(0, i), () => {})[k.substring(i + 1)] = n;
+      total += n;
+    });
+    if (total < 6) return null;
+    String? best, bestSide;
+    var bestPct = 0.0;
+    var bestGoals = 0;
+    byPost.forEach((post, sides) {
+      final sum = sides.values.fold(0, (a, b) => a + b);
+      if (sum < 4) return;
+      final dom = sides.keys.reduce((a, b) => sides[a]! >= sides[b]! ? a : b);
+      final pct = 100.0 * sides[dom]! / sum;
+      if (pct >= 60.0 && pct > bestPct) {
+        best = post;
+        bestSide = dom;
+        bestPct = pct;
+        bestGoals = sum;
+      }
+    });
+    if (best == null) return null;
+    return "a(z) $best posztjuk a góljai ${bestPct.round()}%-át $bestSide "
+        "oldalra lövi ($bestGoals gól) · a kapus arra állhat rá, a fal a "
+        "másikat zárja";
+  }
+
+  // Lepattanó-poszt: ki viszi a második rohamot (3+ poszthoz kötött
+  // második lövés, 60% részarány — a backenddel azonos küszöbök:
+  // SCR_MIN_SHOTS, SCR_SHARE_PCT).
+  String? _reboundRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["scr_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a második rohamukat a(z) $top viszi (${pct.round()}%, "
+        "$total második lövés) · a zárás után őt kell kivenni a "
+        "lepattanóból";
+  }
+
+  // Hajrá-poszt: melyik posztjuk viszi a végjátékot (3+ hajrá-gól,
+  // 60% részarány — a backenddel azonos küszöbök: CSR_MIN_GOALS,
+  // CSR_SHARE_PCT).
+  String? _clutchRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["csr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a végjátékuk a(z) $top posztra fut ki (${pct.round()}%, "
+        "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
+  }
+
+  // Ziccer-előkészítő poszt: ki adja a passzt a nagy helyzethez (3+
+  // előkészítés, 60% részarány — a backenddel azonos küszöbök:
+  // BCF_FEED_MIN, BCF_FEED_SHARE_PCT).
+  String? _bigChanceFeederRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["bcf_chances_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a ziccereik ${pct.round()}%-át a(z) $top posztjuk "
+        "teremti ($total előkészítés) · az ő bejátszó-sávját "
+        "vágjátok el, a helyzet ki sem alakul";
+  }
+
+  // Áttörés-hozam: a betöréseik hány százaléka fut gólba (5+
+  // betörés; 40% fölött büntetnek, 15% alatt nem — a backenddel
+  // azonos küszöbök: BTY_MIN_ENTRIES, BTY_HIGH_PCT, BTY_LOW_PCT).
+  String? _breakthroughYield(Map<String, dynamic> r) {
+    final entries = (r["bty_entries"] as num?)?.toInt() ?? 0;
+    final goals = (r["bty_goals"] as num?)?.toInt() ?? 0;
+    if (entries < 5) return null;
+    final pct = 100.0 * goals / entries;
+    if (pct >= 40.0) {
+      return "a betöréseik ${pct.round()}%-a gólba fut ($goals gól "
+          "$entries betörésből) · a falat előbb kell zárni, "
+          "kilépéssel a lövő elé";
+    }
+    if (pct <= 15.0) {
+      return "a betöréseik csak ${pct.round()}%-a fut gólba ($goals "
+          "gól $entries betörésből) · bejutnak, de nem büntetnek: "
+          "elég a fegyelmet tartani";
+    }
+    return null;
+  }
+
+  // Emberhátrány-hibázók: öt emberrel ki veszíti el a labdát (2+
+  // hátrány-eladás — a backenddel azonos küszöb:
+  // SHTP_MIN_TURNOVERS).
+  String? _shorthandedTurnoverPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["shtp_turnovers_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "hátrányban a(z) $top. veszíti el a legtöbb labdát ($topN "
+        "eladás) · a hat az öt ellen az ő fogadására lépjetek ki";
+  }
+
+  // Emberelőny-hibázók: ki adja el a labdát a két perc alatt (2+
+  // emberelőny-eladás — a backenddel azonos küszöb:
+  // PPTP_MIN_TURNOVERS).
+  String? _powerplayTurnoverPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["pptp_turnovers_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "az emberelőnyükben a(z) $top. veszíti el a legtöbb "
+        "labdát ($topN eladás) · hátrányban rá menjen a kettőzés";
+  }
+
+  // Kulcs-ember: hány EMBER-réteg ítélete mutat ugyanarra a
+  // játékosra (4 egyező rétegtől — a backenddel azonos küszöb:
+  // KPL_MIN_LAYERS).
+  String? _keyPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["kpl_layers_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 4) return null;
+    return "a kulcs-emberük a(z) $top. számú: $topN ember-réteg "
+        "ítélete mutat rá · emberfogás, kettőzés vagy a labdaútja "
+        "elvágása önmagában meccstervnyi feladat";
+  }
+
+  // Kétperc ára: mennyi gólba kerül egy kiállításuk (3+ ablak; 1,2
+  // gól/kiállítás fölött drága, 0,5 alatt olcsó — a backenddel
+  // azonos küszöbök: SCT_MIN_WINDOWS, SCT_COSTLY, SCT_CHEAP).
+  String? _suspensionCost(Map<String, dynamic> r) {
+    final windows = (r["sct_windows"] as num?)?.toInt() ?? 0;
+    final conceded = (r["sct_conceded"] as num?)?.toInt() ?? 0;
+    if (windows < 3) return null;
+    final per = conceded / windows;
+    if (per >= 1.2) {
+      return "egy kiállításuk átlag ${per.toStringAsFixed(1)} gólba "
+          "kerül ($conceded gól $windows kétperc alatt) · a "
+          "kiharcolás náluk pont-termelés";
+    }
+    if (per <= 0.5) {
+      return "egy kiállításuk csak ${per.toStringAsFixed(1)} gólba "
+          "kerül ($conceded gól $windows kétperc alatt) · ne a "
+          "kiállításra játsszatok";
+    }
+    return null;
+  }
+
+  // Emberfogás-váltás: a szünet után emberfogásra váltanak-e (2 m
+  // alatt emberfogás, 0,7-es arány a váltás — a backenddel azonos
+  // küszöbök: MSH_TIGHT_M, MSH_DROP_RATIO).
+  String? _markingShift(Map<String, dynamic> r) {
+    final fh = (r["msh_fh_dist_m"] as num?)?.toDouble() ?? 0.0;
+    final sh = (r["msh_sh_dist_m"] as num?)?.toDouble() ?? 0.0;
+    if (fh <= 0.0 || sh <= 0.0) return null;
+    if (sh <= 2.0 && sh <= 0.7 * fh) {
+      return "a szünet után emberfogásra váltanak (a legszorosabb "
+          "páros ${sh.toStringAsFixed(1)} m az első félidei "
+          "${fh.toStringAsFixed(1)} m helyett) · a fogott emberetek "
+          "húzza el a védőjét";
+    }
+    if (fh <= 2.0 && fh <= 0.7 * sh) {
+      return "a szünet után elengedik az emberfogást (a legszorosabb "
+          "páros ${sh.toStringAsFixed(1)} m az első félidei "
+          "${fh.toStringAsFixed(1)} m helyett) · a fogott emberetek "
+          "visszakapja a labdát";
+    }
+    return null;
+  }
+
+  // Kipattanó-szedők: ki szedi össze a kipattanót védés után (2+
+  // kipattanó ugyanattól a védőtől — a backenddel azonos küszöb:
+  // RBCP_MIN_REBOUNDS).
+  String? _reboundCollector(Map<String, dynamic> r) {
+    final byPlayer = (r["rbcp_rebounds_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "a kipattanókat leggyakrabban a(z) $top. szedi össze "
+        "($topN kipattanó) · a második helyzetnél őt kell blokkolni";
+  }
+
+  // Kétperc-páros: ki harcolja ki és ki fejezi be a kétpercüket (3+
+  // lánc, 55% részarány — a backenddel azonos küszöbök:
+  // SCH_MIN_PAIRS, SCH_SHARE_PCT). (A SUP_* a KIÜLŐ-POSZT rétegé, más
+  // küszöbökkel — a kettőt nem szabad összekeverni.)
+  String? _suspensionChain(Map<String, dynamic> r) {
+    final byPair =
+        (r["sup_chains_by_pair"] as Map?)?.cast<String, dynamic>();
+    if (byPair == null || byPair.isEmpty) return null;
+    var total = 0;
+    byPair.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byPair.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 55.0) return null;
+    return "a kétperceik ${pct.round()}%-a ugyanazt a láncot futja "
+        "($top, $total emberelőny-lövés) · a kiharcoló ellen "
+        "testtel, a befejező ellen emberfogással";
+  }
+
+  // Fáradt-eladók: kinek a labdái vesznek el a második félidőre (2+
+  // második félidei eladás, kétszeres ugrás — a backenddel azonos
+  // küszöbök: FTOP_MIN_SH, FTOP_FACTOR).
+  String? _tiredTurnoverPlayer(Map<String, dynamic> r) {
+    final sh = (r["ftop_sh_by_player"] as Map?)?.cast<String, dynamic>();
+    final fh = (r["ftop_fh_by_player"] as Map?)?.cast<String, dynamic>();
+    if (sh == null || sh.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    sh.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    final first = ((fh?[top] as num?) ?? 0).toInt();
+    if (topN < 2 * (first < 1 ? 1 : first)) return null;
+    return "a(z) $top. eladásai a második félidőre megugranak "
+        "($first → $topN) · a szünet után őt tegyétek nyomás alá";
+  }
+
+  // Visszafutás-lemaradók: ki marad elöl a kontráik alatt (3+
+  // lemaradás — a backenddel azonos küszöb: SRP_MIN_LAGS).
+  String? _slowRetreatPlayer(Map<String, dynamic> r) {
+    final lags = (r["srp_lags_by_player"] as Map?)?.cast<String, dynamic>();
+    if (lags == null || lags.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    lags.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    return "a kontráknál a(z) $top. marad elöl a legtöbbször "
+        "($topN alkalom) · a lerohanást az ő oldalára vezessétek";
+  }
+
+  // Fáradt-fal emberek: ki jár át rajtuk a második félidőre (2+
+  // második félidei gól, kétszeres ugrás — a backenddel azonos
+  // küszöbök: TCP_MIN_SH, TCP_FACTOR).
+  String? _tiredConcederPlayer(Map<String, dynamic> r) {
+    final sh = (r["tcp_sh_by_player"] as Map?)?.cast<String, dynamic>();
+    final fh = (r["tcp_fh_by_player"] as Map?)?.cast<String, dynamic>();
+    if (sh == null || sh.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    sh.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    final first = ((fh?[top] as num?) ?? 0).toInt();
+    if (topN < 2 * (first < 1 ? 1 : first)) return null;
+    return "a falatokon a második félidőre a(z) $top. jár át "
+        "($first → $topN kapott gól) · friss védő és besegítés kell rá";
+  }
+
+  // Indítás-vadász emberek: ki ugrik rá a kapus-indításra (2+
+  // elcsípett indítás — a backenddel azonos küszöb: OHP_MIN_STEALS).
+  String? _outletHunter(Map<String, dynamic> r) {
+    final st = (r["ohp_steals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (st == null || st.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    st.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "az indításaitokra a(z) $top. ugrik rá a legtöbbször "
+        "($topN elcsípett indítás) · ne az ő térfelére nyisson a kapus";
+  }
+
+  // Célpont-videó állapota (fut-e, mit üzen a motor).
+  bool _targetWorking = false;
+  String _targetMsg = "";
+
+  /// A kulcs-mondatokban megnevezett mezszámok: a nyomás-érzékeny és a
+  /// hajrá-hibázó emberek. Ha egy sincs, a gomb sem jelenik meg.
+  List<(int, String)> _targetJerseys() {
+    final r = _report;
+    if (r == null) return const [];
+    final ki = <(int, String)>[];
+    void gyujt(String mezo, String miert) {
+      final m = (r[mezo] as Map?)?.cast<String, dynamic>();
+      if (m == null) return;
+      m.forEach((k, v) {
+        final mez = int.tryParse(k);
+        if (mez != null && (v as num).toInt() >= 1) {
+          ki.add((mez, miert));
+        }
+      });
+    }
+
+    gyujt("ptf_press", "nyomás alatt elveszti a labdát");
+    gyujt("ptf_clutch", "a hajrában szakad el nála a labda");
+    return ki;
+  }
+
+  /// Célpont-videó: a kiválasztott emberük ELADÁSAI az összes elemzett
+  /// meccsükből, egy zip-ben — a szezon-válogatás motorján.
+  Future<void> _targetVideo() async {
+    final celpontok = _targetJerseys();
+    if (celpontok.isEmpty) return;
+    final csapat = _report?["team_name"] as String?;
+    if (csapat == null || csapat.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("A jelentésben nincs csapatnév — a válogatás "
+              "nem indítható.")));
+      return;
+    }
+    final valasztott = celpontok.length == 1
+        ? celpontok.first
+        : await showDialog<(int, String)>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: AppColors.surface,
+              title: const Text("Célpont-videó"),
+              content: SizedBox(
+                width: 380,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  for (final c in celpontok)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.gps_fixed, size: 17),
+                      title: Text("#${c.$1}",
+                          style: AppText.value.copyWith(fontSize: 13.5)),
+                      subtitle: Text(c.$2,
+                          style: AppText.label.copyWith(fontSize: 11.5)),
+                      onTap: () => Navigator.pop(ctx, c),
+                    ),
+                ]),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text("Mégse")),
+              ],
+            ),
+          );
+    if (valasztott == null || !mounted) return;
+    setState(() {
+      _targetWorking = true;
+      _targetMsg = "indítás…";
+    });
+    try {
+      final jobId = await _api.startSeasonClips(csapat, valasztott.$1,
+          types: const ["turnover", "goal"]);
+      String zaro = "";
+      while (true) {
+        await Future.delayed(const Duration(seconds: 1));
+        if (!mounted) return;
+        final job = await _api.fetchJob(jobId);
+        setState(() =>
+            _targetMsg = (job["message"] as String?) ?? _targetMsg);
+        if (job["status"] == "done") {
+          zaro = (job["message"] as String?) ?? "";
+          break;
+        }
+        if (job["status"] == "error") {
+          throw Exception(job["error"] ?? "ismeretlen hiba");
+        }
+      }
+      final bytes = await _api.fetchSeasonClipsZip(csapat, valasztott.$1);
+      if (!mounted) return;
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Célpont-videó mentése (zip)",
+        fileName: "celpont_#${valasztott.$1}_$csapat.zip".replaceAll(
+            RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ#.-]+"), "_"),
+        type: FileType.custom,
+        allowedExtensions: const ["zip"],
+      );
+      if (path != null) {
+        await File(path).writeAsBytes(bytes);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Célpont-videó mentve: $path — $zaro")));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Célpont-videó hiba: ${humanError(e)}")));
+    } finally {
+      if (mounted) setState(() => _targetWorking = false);
+    }
+  }
+
+  // Nyomás-érzékeny emberük: kire kell kettőzni. A jelentés-mező
+  // mezszám → hány meccsen jött elő ugyanaz (a backendben az egyéni
+  // edzés-fókuszból gyűlik).
+  String? _pressTarget(Map<String, dynamic> r) {
+    final m = (r["ptf_press"] as Map?)?.cast<String, dynamic>();
+    if (m == null || m.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    m.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 1) return null;
+    return "a #$top nyomás alatt elveszti a labdát ($topN meccsen "
+        "jött elő) · RÁ kettőzzetek — nála a szorítás nem kockázat, "
+        "hanem labdaszerzés";
+  }
+
+  // Hajrá-hibázójuk: kit kell döntés-kényszerbe hozni a végén.
+  String? _clutchTarget(Map<String, dynamic> r) {
+    final m = (r["ptf_clutch"] as Map?)?.cast<String, dynamic>();
+    if (m == null || m.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    m.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 1) return null;
+    return "a #$top kezén szakad el a labda a hajrában ($topN "
+        "meccsen) · a döntő szakaszban őt kell döntés-kényszerbe hozni";
+  }
+
+  // 7a6 eladás: mennyibe kerül a lehozott kapus melletti hiba (2+
+  // eladás, 50%+ büntetés — a backenddel azonos küszöbök:
+  // ENT_MIN_TURNOVERS, ENT_PUNISH_PCT).
+  String? _emptyNetTurnovers(Map<String, dynamic> r) {
+    final to = (r["ent_turnovers"] as num?)?.toInt() ?? 0;
+    final pun = (r["ent_punished"] as num?)?.toInt() ?? 0;
+    if (to < 2) return null;
+    final pct = 100.0 * pun / to;
+    if (pct < 50.0) return null;
+    return "a 7 a 6 alatt elvesztett labdák ${pct.toStringAsFixed(0)}%-a "
+        "gólt ér ($pun/$to) · szerzés után azonnal az üres kapura";
+  }
+
+  // Kiszolgált befejezők: ki él a bejátszásokból (3+ kiszolgált gól,
+  // a góljainak 60%-a — a backenddel azonos küszöbök:
+  // ASP_MIN_ASSISTED, ASP_SHARE_PCT).
+  String? _assistedScorer(Map<String, dynamic> r) {
+    final asd = (r["asp_assisted_by_player"] as Map?)?.cast<String, dynamic>();
+    final gls = (r["asp_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (asd == null || asd.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    asd.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    final goals = ((gls?[top] as num?) ?? 0).toInt();
+    if (topN < 0.6 * (goals < 1 ? 1 : goals)) return null;
+    return "a(z) $top. a bejátszásokból él ($topN/$goals gólja "
+        "gólpasszos) · éheztetni kell, nem fogni";
+  }
+
+  // Kétperc-gyűjtők: kinél áll már két kiállítás (a backenddel azonos
+  // küszöb: STC_MIN_SUSP).
+  String? _suspensionCollector(Map<String, dynamic> r) {
+    final su = (r["stc_susp_by_player"] as Map?)?.cast<String, dynamic>();
+    if (su == null || su.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    su.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "a kétperceiket a(z) $top. gyűjti ($topN kiállítás) · "
+        "vigyétek rá a játékot, a következő már kizárás";
+  }
+
+  // Felhozatal-emberek: kire hozzák fel a labdát (3+ átvétel, az
+  // indítások fele — a backenddel azonos küszöbök: OTP_MIN_OUTLETS,
+  // OTP_SHARE_PCT).
+  String? _outletTargetPlayer(Map<String, dynamic> r) {
+    final ou = (r["otp_outlets_by_player"] as Map?)?.cast<String, dynamic>();
+    if (ou == null || ou.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    ou.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a felhozataluk a(z) $top. kezén megy át ($topN/$all "
+        "indítás-átvétel) · rá kell lépni az átvételnél";
+  }
+
+  // Elzárás-hozam: megéri-e nekik az elzárás (sávonként 4+ lövés,
+  // 15 százalékpontos különbség — a backenddel azonos küszöbök:
+  // SCY_MIN_SHOTS, SCY_GAP_PP).
+  String? _screenYield(Map<String, dynamic> r) {
+    final ss = (r["scy_screened_shots"] as num?)?.toInt() ?? 0;
+    final sg = (r["scy_screened_goals"] as num?)?.toInt() ?? 0;
+    final cs = (r["scy_clean_shots"] as num?)?.toInt() ?? 0;
+    final cg = (r["scy_clean_goals"] as num?)?.toInt() ?? 0;
+    if (ss < 4 || cs < 4) return null;
+    final sp = 100.0 * sg / ss;
+    final cp = 100.0 * cg / cs;
+    if (sp - cp >= 15.0) {
+      return "az elzárásos lövéseik ${sp.toStringAsFixed(0)}%-ban "
+          "mennek be, a tiszták ${cp.toStringAsFixed(0)}%-ban · "
+          "hangos váltás és átcsúszás kell";
+    }
+    if (cp - sp >= 15.0) {
+      return "az elzárásuk nem fizet (${sp.toStringAsFixed(0)}% vs "
+          "${cp.toStringAsFixed(0)}% tisztán) · hagyjátok zárni, "
+          "menjetek a lövő-vonalra";
+    }
+    return null;
+  }
+
+  // Blokk-fáradás: elfogy-e a blokk-munkájuk a hajrára (félidőnként
+  // 5+ lövés-kísérlet, 10 százalékpontos eltérés — a backenddel
+  // azonos küszöbök: BLF_MIN_SHOTS, BLF_GAP_PP).
+  String? _blockFade(Map<String, dynamic> r) {
+    final fb = (r["blf_fh_blocks"] as num?)?.toInt() ?? 0;
+    final fs = (r["blf_fh_shots"] as num?)?.toInt() ?? 0;
+    final sb = (r["blf_sh_blocks"] as num?)?.toInt() ?? 0;
+    final ss = (r["blf_sh_shots"] as num?)?.toInt() ?? 0;
+    final ft = fb + fs;
+    final st = sb + ss;
+    if (ft < 5 || st < 5) return null;
+    final fp = 100.0 * fb / ft;
+    final sp = 100.0 * sb / st;
+    if (fp - sp >= 10.0) {
+      return "elfogy a blokk-munkájuk (${fp.toStringAsFixed(0)}% → "
+          "${sp.toStringAsFixed(0)}% blokk-arány) · a hajrát az "
+          "átlövésre építsétek";
+    }
+    if (sp - fp >= 10.0) {
+      return "a hajrára nő a blokk-munkájuk (${fp.toStringAsFixed(0)}% → "
+          "${sp.toStringAsFixed(0)}%) · a végén bejátszás és "
+          "kiugratás kell";
+    }
+    return null;
+  }
+
+  // Emberelőny-hozam: megbüntetik-e a kiállítást (sávonként 4+
+  // kaputra tartó lövés, 15 százalékpontos eltérés — a backenddel
+  // azonos küszöbök: PPY_MIN_SHOTS, PPY_GAP_PP).
+  String? _powerplayYield(Map<String, dynamic> r) {
+    final ps = (r["ppy_pp_shots"] as num?)?.toInt() ?? 0;
+    final pg = (r["ppy_pp_goals"] as num?)?.toInt() ?? 0;
+    final es = (r["ppy_eq_shots"] as num?)?.toInt() ?? 0;
+    final eg = (r["ppy_eq_goals"] as num?)?.toInt() ?? 0;
+    if (ps < 4 || es < 4) return null;
+    final pp = 100.0 * pg / ps;
+    final eq = 100.0 * eg / es;
+    if (pp - eq >= 15.0) {
+      return "megbüntetik a kiállítást (${pp.toStringAsFixed(0)}% "
+          "emberelőnyben vs ${eq.toStringAsFixed(0)}%) · a kétperc "
+          "ellenük a legdrágább hiba";
+    }
+    if (eq - pp >= 15.0) {
+      return "nem büntetik a kiállítást (${pp.toStringAsFixed(0)}% "
+          "emberelőnyben vs ${eq.toStringAsFixed(0)}%) · a taktikai "
+          "megállítás vállalható";
+    }
+    return null;
+  }
+
+  // Hetes-hozam: mennyit ér náluk egy megítélt hetes (4+ hetes — a
+  // backenddel azonos küszöbök: SVY_MIN_ATTEMPTS, SVY_HIGH_PCT,
+  // SVY_LOW_PCT).
+  String? _sevenYield(Map<String, dynamic> r) {
+    final att = (r["svy_attempts"] as num?)?.toInt() ?? 0;
+    final gl = (r["svy_goals"] as num?)?.toInt() ?? 0;
+    if (att < 4) return null;
+    final pct = 100.0 * gl / att;
+    if (pct >= 85.0) {
+      return "a heteseik szinte biztos gólok ($gl/$att, "
+          "${pct.toStringAsFixed(0)}%) · a hetest érő "
+          "szabálytalanság a legrosszabb üzlet";
+    }
+    if (pct <= 60.0) {
+      return "a hetesük megfogható ($gl/$att, "
+          "${pct.toStringAsFixed(0)}%) · a megállító szabálytalanság "
+          "ellenük vállalható";
+    }
+    return null;
+  }
+
+  // Passzív-kockázat: mennyire futnak bele a passzív jelbe (4+
+  // felállt támadás, 20%+ lövés nélkül — a backenddel azonos
+  // küszöbök: PSR_MIN_ATTACKS, PSR_SHARE_PCT).
+  String? _passiveRisk(Map<String, dynamic> r) {
+    final pos = (r["psr_positional"] as num?)?.toInt() ?? 0;
+    final pas = (r["psr_passive"] as num?)?.toInt() ?? 0;
+    if (pos < 4) return null;
+    final pct = 100.0 * pas / pos;
+    if (pct < 20.0) return null;
+    return "a felállt támadásaik ${pct.toStringAsFixed(0)}%-a lövés "
+        "nélkül nyúlik el ($pas/$pos) · zárt, türelmes fal kell";
+  }
+
+  // Csere-hozam: nyernek vagy vesztenek a cseréik után (4+ csere, 2
+  // gólos különbség — a backenddel azonos küszöbök:
+  // SBY_MIN_ROTATIONS, SBY_GAP_GOALS).
+  String? _substitutionYield(Map<String, dynamic> r) {
+    final rot = (r["sby_rotations"] as num?)?.toInt() ?? 0;
+    final gf = (r["sby_goals_for"] as num?)?.toInt() ?? 0;
+    final ga = (r["sby_goals_against"] as num?)?.toInt() ?? 0;
+    if (rot < 4) return null;
+    final diff = gf - ga;
+    if (diff <= -2) {
+      return "a cseréik után $gf-$ga a mérlegük ($rot cseréből) · a "
+          "csere-pillanat célzottan támadható";
+    }
+    if (diff >= 2) {
+      return "a cseréik után jönnek fel ($gf-$ga, $rot cseréből) · "
+          "időkéréssel vagy lassítással törjétek meg";
+    }
+    return null;
+  }
+
+  // Kettőzött emberek: kire jár rá az ellenfelek kettőzése (75+
+  // kettőzött kocka, a kockák fele — a backenddel azonos küszöbök:
+  // DTG_MIN_FRAMES, DTG_SHARE_PCT).
+  String? _doubledTarget(Map<String, dynamic> r) {
+    final fr = (r["dtp_frames_by_player"] as Map?)?.cast<String, dynamic>();
+    if (fr == null || fr.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    fr.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 75) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a kettőzések a(z) $top. kezére járnak rá ($topN/$all "
+        "kettőzött kocka) · bevált recept, de zárd mögötte a passzsávot";
+  }
+
+  // Kapus-visszaérés: milyen gyorsan ér haza a lehozott kapus (2+
+  // mért szakasz, 4 mp fölött lassú — a backenddel azonos küszöbök:
+  // KRT_MIN_WINDOWS, KRT_SLOW_S).
+  String? _keeperReturn(Map<String, dynamic> r) {
+    final n = (r["krt_measured"] as num?)?.toInt() ?? 0;
+    final ds = (r["krt_sum_ds"] as num?)?.toInt() ?? 0;
+    final conceded = (r["krt_conceded"] as num?)?.toInt() ?? 0;
+    if (n < 2) return null;
+    final avg = ds / 10.0 / n;
+    if (avg < 4.0) return null;
+    return "a kapusuk ${avg.toStringAsFixed(1)} mp alatt ér haza a 7 a 6 "
+        "után ($n szakasz, $conceded gól ez alatt) · szerzés után "
+        "azonnal az üres kapura";
+  }
+
+  // Ellenszer-lap: a rangsor élén álló teendőkből hányhoz van kész
+  // gyakorlat az edzés-fókuszban (3+ teendőtől mutatjuk).
+  String? _counterPlan(Map<String, dynamic> r) {
+    final total = (r["cpl_total"] as num?)?.toInt() ?? 0;
+    final matched = (r["cpl_matched"] as num?)?.toInt() ?? 0;
+    if (total < 3) return null;
+    if (matched >= total) {
+      return "mind a(z) $total teendőhöz van kész gyakorlat · a heti "
+          "terv összeállítható a listából";
+    }
+    return "$total teendőből $matched-hez van kész gyakorlat · a "
+        "maradék edzői döntést kíván";
+  }
+
+  // Figura-kopás: működik-e még a figura az ismétlésre (sávonként 4+
+  // figura-támadás, 15 százalékpontos eltérés — a backenddel azonos
+  // küszöbök: SPD_MIN_ATTACKS, SPD_GAP_PP).
+  String? _setplayDecay(Map<String, dynamic> r) {
+    final fa = (r["spd_first_attacks"] as num?)?.toInt() ?? 0;
+    final fg = (r["spd_first_goals"] as num?)?.toInt() ?? 0;
+    final ra = (r["spd_repeat_attacks"] as num?)?.toInt() ?? 0;
+    final rg = (r["spd_repeat_goals"] as num?)?.toInt() ?? 0;
+    if (fa < 4 || ra < 4) return null;
+    final fp = 100.0 * fg / fa;
+    final rp = 100.0 * rg / ra;
+    if (fp - rp >= 15.0) {
+      return "a figuráik kopnak az ismétlésre (${fp.toStringAsFixed(0)}% "
+          "→ ${rp.toStringAsFixed(0)}%) · a felismerést a fal megoldja";
+    }
+    if (rp - fp >= 15.0) {
+      return "az ismétlés nekik dolgozik (${fp.toStringAsFixed(0)}% → "
+          "${rp.toStringAsFixed(0)}%) · a befejezőre emberfogás vagy "
+          "kettőzés kell";
+    }
+    return null;
+  }
+
+  // Futómunka-eloszlás: hány emberre épül a futásuk (6+ mért
+  // mezőnyjátékos, a top-3 55%+ — a backenddel azonos küszöbök:
+  // LBL_MIN_PLAYERS, LBL_TOP3_PCT).
+  String? _runningLoad(Map<String, dynamic> r) {
+    final n = (r["lbl_players"] as num?)?.toInt() ?? 0;
+    final total = (r["lbl_distance_m"] as num?)?.toInt() ?? 0;
+    final top3 = (r["lbl_top3_m"] as num?)?.toInt() ?? 0;
+    if (n < 6 || total <= 0) return null;
+    final pct = 100.0 * top3 / total;
+    if (pct < 55.0) return null;
+    return "a futómunkájuk ${pct.toStringAsFixed(0)}%-át három ember "
+        "adja ($n mért játékosból) · a hajrában rájuk kell vinni a tempót";
+  }
+
+  // Kapus a kapott gól után: beesik-e, amíg friss a seb (sávonként
+  // 4+ lövés, 15 százalékpontos eltérés — a backenddel azonos
+  // küszöbök: GKA_MIN_SHOTS, GKA_GAP_PP).
+  String? _keeperAfterGoal(Map<String, dynamic> r) {
+    final fs = (r["gka_fresh_shots"] as num?)?.toInt() ?? 0;
+    final fv = (r["gka_fresh_saves"] as num?)?.toInt() ?? 0;
+    final rs = (r["gka_rest_shots"] as num?)?.toInt() ?? 0;
+    final rv = (r["gka_rest_saves"] as num?)?.toInt() ?? 0;
+    if (fs < 4 || rs < 4) return null;
+    final fp = 100.0 * fv / fs;
+    final rp = 100.0 * rv / rs;
+    if (rp - fp >= 15.0) {
+      return "a kapusuk beesik a kapott gól után "
+          "(${fp.toStringAsFixed(0)}% vs ${rp.toStringAsFixed(0)}%) · "
+          "gól után azonnal ismételjétek a képet";
+    }
+    if (fp - rp >= 15.0) {
+      return "a kapusuk felébred a kapott góltól "
+          "(${fp.toStringAsFixed(0)}% vs ${rp.toStringAsFixed(0)}%) · "
+          "gól után kidolgozott támadás kell";
+    }
+    return null;
+  }
+
+  // Hetes-forrás: milyen helyzetből jön a hetesük (3+ hetes, 60%+
+  // egy helyzetből — a backenddel azonos küszöbök: SVS_MIN_SEVENS,
+  // SVS_SHARE_PCT).
+  String? _sevenSource(Map<String, dynamic> r) {
+    final t = (r["svs_sevens_by_type"] as Map?)?.cast<String, dynamic>();
+    if (t == null || t.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    t.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (all < 3 || topN < 0.6 * all) return null;
+    return "a heteseik ${(100.0 * topN / all).toStringAsFixed(0)}%-a "
+        "$top helyzetből jön ($topN/$all) · ott kézzel fékezni tilos";
+  }
+
+  // Kontroll-idővonal: ki diktál ötpercenként (3+ mért szakasz — a
+  // backenddel azonos küszöb: CTL_MIN_BLOCKS).
+  String? _controlTimeline(Map<String, dynamic> r) {
+    final blocks = (r["ctl_blocks"] as num?)?.toInt() ?? 0;
+    final won = (r["ctl_won"] as num?)?.toInt() ?? 0;
+    final lost = (r["ctl_lost"] as num?)?.toInt() ?? 0;
+    if (blocks < 3) return null;
+    if (won > lost) {
+      return "az ötperces szakaszok $won/$blocks részét ők viszik "
+          "birtoklásban · időkérés az ő sorozatuk ELÉ";
+    }
+    if (lost > won) {
+      return "az ötperces szakaszok $lost/$blocks részét elveszítik "
+          "birtoklásban · a tempó nálatok van";
+    }
+    return null;
+  }
+
+  // Ziccerhagyó emberek: kihez kötődnek a kihagyott ziccerek (2+
+  // kihagyás, a kihagyások fele — a backenddel azonos küszöbök:
+  // MCP_MIN_MISSES, MCP_SHARE_PCT).
+  String? _missedChancePlayer(Map<String, dynamic> r) {
+    final ms = (r["mcp_misses_by_player"] as Map?)?.cast<String, dynamic>();
+    if (ms == null || ms.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    ms.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a kihagyott ziccerek $topN/$all része a(z) $top. kezéhez "
+        "kötődik · nála a helyzetbe engedés a kisebbik rossz";
+  }
+
+  // Fáradt lövők: kinek megy szét a lövése a 2. félidőre (2+
+  // pontatlan lövés, kétszeres ugrás — a backenddel azonos küszöbök:
+  // FSP_MIN_SH, FSP_FACTOR).
+  String? _tiredShooter(Map<String, dynamic> r) {
+    final sh = (r["fsp_sh_by_player"] as Map?)?.cast<String, dynamic>();
+    final fh = (r["fsp_fh_by_player"] as Map?)?.cast<String, dynamic>();
+    if (sh == null || sh.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    sh.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    final first = ((fh?[top] as num?) ?? 0).toInt();
+    if (topN < 2 * (first < 1 ? 1 : first)) return null;
+    return "a(z) $top. lövései a második félidőre mennek szét "
+        "($first → $topN pontatlan lövés) · rá nem kell kilépni";
+  }
+
+  // Lágy passzolók: kinek a labdáiba lehet belenyúlni (4+ lágy
+  // passz, a lágy passzok fele — a backenddel azonos küszöbök:
+  // SPP_MIN_SOFT, SPP_SHARE_PCT).
+  String? _softPasser(Map<String, dynamic> r) {
+    final sp = (r["spp_soft_by_player"] as Map?)?.cast<String, dynamic>();
+    if (sp == null || sp.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    sp.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 4) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a lágy passzaik $topN/$all része a(z) $top. kezéből jön · "
+        "az ő átadásaiba nyúljatok bele";
+  }
+
+  // Passzív-birtoklók: kinél hal el a felállt támadásuk (200+ labdás
+  // kocka, a passzív idő fele — a backenddel azonos küszöbök:
+  // PVP_MIN_FRAMES, PVP_SHARE_PCT).
+  String? _passiveHolder(Map<String, dynamic> r) {
+    final pv = (r["pvp_frames_by_player"] as Map?)?.cast<String, dynamic>();
+    if (pv == null || pv.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    pv.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 200) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a terméketlen támadás-idejük "
+        "${(100.0 * topN / all).toStringAsFixed(0)}%-a a(z) $top. kezén "
+        "telik · passzív jelzésnél rá menjen a nyomás";
+  }
+
+  // Előkészítő emberek: ki készíti elő a lövéseiket (4+ előkészítés,
+  // az előkészítések fele — a backenddel azonos küszöbök:
+  // EPP_MIN_PASSES, EPP_SHARE_PCT).
+  String? _lastPasser(Map<String, dynamic> r) {
+    final ep = (r["epp_passes_by_player"] as Map?)?.cast<String, dynamic>();
+    if (ep == null || ep.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    ep.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 4) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a lövéseik $topN/$all részét a(z) $top. készíti elő · "
+        "nem a lövőt kell fogni, hanem a kiszolgálót";
+  }
+
+  // Válaszoló emberek: kapott gól után ki válaszol (2+ válasz-gól, a
+  // válasz-gólok fele — a backenddel azonos küszöbök:
+  // RSPP_MIN_GOALS, RSPP_SHARE_PCT).
+  String? _responseScorer(Map<String, dynamic> r) {
+    final rs = (r["rspp_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (rs == null || rs.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    rs.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a válasz-góljaik $topN/$all része a(z) $top. nevéhez "
+        "kötődik · a saját gólotok után rá váltsatok";
+  }
+
+  // Rajt-emberek: ki viszi a meccs elejét (2+ nyitó-gól, a
+  // nyitó-gólok fele — a backenddel azonos küszöbök:
+  // OSP_MIN_GOALS, OSP_SHARE_PCT).
+  String? _openingScorer(Map<String, dynamic> r) {
+    final os = (r["osp_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (os == null || os.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    os.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a meccs eleji góljaik $topN/$all része a(z) $top. nevéhez "
+        "kötődik · az első tíz percben őt kell megfogni";
+  }
+
+  // Újrakezdő emberek: ki viszi a szünet utáni rajtot (2+ gól, a
+  // szünet utáni gólok fele — a backenddel azonos küszöbök:
+  // SSP_MIN_GOALS, SSP_SHARE_PCT).
+  String? _secondStartScorer(Map<String, dynamic> r) {
+    final ss = (r["ssp_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (ss == null || ss.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    ss.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a szünet utáni góljaik $topN/$all része a(z) $top. nevéhez "
+        "kötődik · a második félidő elején rá a legjobb védő";
+  }
+
+  // Előnyben-emberek: ki viszi a játékot vezetésnél (2+ gól, az
+  // előnyben lőtt gólok fele — a backenddel azonos küszöbök:
+  // LGP_MIN_GOALS, LGP_SHARE_PCT).
+  String? _leadScorer(Map<String, dynamic> r) {
+    final lg = (r["lgp_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (lg == null || lg.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    lg.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "az előnyben lőtt góljaik $topN/$all része a(z) $top. "
+        "nevéhez kötődik · hátrányban őt vegyétek ki először";
+  }
+
+  // Elzárt védők: ki akad el az elzárásokban (2+ elakadás, az
+  // elakadások fele — a backenddel azonos küszöbök:
+  // SDP_MIN_SCREENS, SDP_SHARE_PCT).
+  String? _screenedDefender(Map<String, dynamic> r) {
+    final sd = (r["sdp_screens_by_player"] as Map?)?.cast<String, dynamic>();
+    if (sd == null || sd.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    sd.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "az elzárások $topN/$all része a(z) $top. védőjükön ragad · "
+        "a zárásokat az ő oldalára vigyétek";
+  }
+
+  // Futtatott szélsők: melyik szélső kapja lendületből a labdát (2+
+  // futó átvétel, a futó átvételek fele — a backenddel azonos
+  // küszöbök: WRP_MIN_RUNNING, WRP_SHARE_PCT).
+  String? _wingRunner(Map<String, dynamic> r) {
+    final wr = (r["wrp_running_by_player"] as Map?)?.cast<String, dynamic>();
+    if (wr == null || wr.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    wr.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a futó szélső-átvételeik $topN/$all része a(z) $top. "
+        "szélsőhöz megy · az ő oldalán a futópassz-sávot zárjátok";
+  }
+
+  // Keresztjáró emberek: kin át fut a keresztjáték (3+ kereszt, a
+  // keresztek 60%-a, holtverseny nélkül — a backenddel azonos
+  // küszöbök: CRP_MIN_CROSSES, CRP_SHARE_PCT).
+  String? _crossRunner(Map<String, dynamic> r) {
+    final cr = (r["crp_runs_by_player"] as Map?)?.cast<String, dynamic>();
+    final crosses = (r["crp_crosses"] as num?)?.toInt() ?? 0;
+    if (cr == null || cr.isEmpty || crosses < 3) return null;
+    String? top;
+    var topN = 0;
+    var second = 0;
+    cr.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        if (top != null && topN > second) second = topN;
+        top = k;
+        topN = n;
+      } else if (n > second) {
+        second = n;
+      }
+    });
+    if (top == null || topN < 3 || topN <= second) return null;
+    if (topN < 0.6 * crosses) return null;
+    return "a keresztjeik $topN/$crosses része a(z) $top. játékoson át "
+        "fut · az ő sávjában hangos, korai váltás";
+  }
+
+  // Leforduló beállók: melyik beálló kapja mozgásból a labdát (2+
+  // mozgásos átvétel, a mozgásos átvételek fele — a backenddel azonos
+  // küszöbök: LFB_MIN_RUNNING, LFB_SHARE_PCT).
+  String? _pivotRunner(Map<String, dynamic> r) {
+    final lf = (r["lfb_running_by_player"] as Map?)?.cast<String, dynamic>();
+    if (lf == null || lf.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    lf.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a mozgásos beálló-átvételeik $topN/$all része a(z) $top. "
+        "beállóhoz megy · nála a bejátszás előtt lépjetek elé";
+  }
+
+  // Befutó emberek: ki a második hullám embere a kontrákban (2+
+  // második hullámos befejezés, a befejezések fele — a backenddel
+  // azonos küszöbök: BFW_MIN_SECOND, BFW_SHARE_PCT).
+  String? _secondWaveFinisher(Map<String, dynamic> r) {
+    final bf = (r["bfw_shots_by_player"] as Map?)?.cast<String, dynamic>();
+    if (bf == null || bf.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    bf.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a kontráik befutó embere a(z) $top. játékos ($topN/$all "
+        "második hullámos befejezés) · a visszafutásnál őt találjátok meg";
+  }
+
+  // Egálbontó emberek: ki viszi el góllal a holtpontokat (2+ egálbontó
+  // gól, a gólok fele — a backenddel azonos küszöbök: PBP_MIN_BREAKS,
+  // PBP_SHARE_PCT).
+  String? _parityBreakScorer(Map<String, dynamic> r) {
+    final pb = (r["pbp_breaks_by_player"] as Map?)?.cast<String, dynamic>();
+    if (pb == null || pb.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    pb.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a holtpontjaikat a(z) $top. játékos viszi el ($topN/$all "
+        "egálbontó gól) · egálnál őt vegyétek ki először";
+  }
+
+  // Kezesség: van-e balkezes lövőjük (4+ értékelhető lövés, 70%+ bal-jel
+  // — a backenddel azonos küszöbök: HANDED_MIN_SHOTS, HANDED_SHARE_PCT).
+  String? _leftHandedShooter(Map<String, dynamic> r) {
+    final shots = (r["hand_shots_by_player"] as Map?)?.cast<String, dynamic>();
+    final left = (r["hand_left_by_player"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty || left == null) return null;
+    final keys = shots.keys.toList()
+      ..sort((a, b) =>
+          (shots[b] as num).toInt().compareTo((shots[a] as num).toInt()));
+    for (final k in keys) {
+      final n = (shots[k] as num).toInt();
+      final l = ((left[k] ?? 0) as num).toInt();
+      if (n >= 4 && l >= 0.7 * n) {
+        return "a(z) $k. játékosuk BALKEZES ($n lövésből $l bal-jel) · "
+            "tükrözzétek a sáncot és a kapus alapállását";
+      }
+    }
+    return null;
+  }
+
+  // Hetes-sarok emberre: melyik sarkát keresi a dobójuk (dobónként 3+
+  // irány-mérhető hetes, 60%+ részarány — a backenddel azonos küszöbök:
+  // STC_MIN_ATTEMPTS, STC_SHARE_PCT). A kulcs alakja "játékos·irány".
+  String? _sevenTakerCorner(Map<String, dynamic> r) {
+    final flat = (r["stc_dir_by_taker"] as Map?)?.cast<String, dynamic>();
+    if (flat == null || flat.isEmpty) return null;
+    final byTaker = <String, Map<String, int>>{};
+    flat.forEach((key, v) {
+      final i = key.indexOf("·");
+      if (i <= 0) return;
+      final taker = key.substring(0, i);
+      final dir = key.substring(i + 1);
+      (byTaker[taker] ??= {})[dir] =
+          ((byTaker[taker]![dir] ?? 0) + (v as num).toInt());
+    });
+    String? bestK;
+    var bestAtt = 0;
+    String bestDir = "";
+    double bestPct = 0;
+    byTaker.forEach((taker, dirs) {
+      var att = 0;
+      dirs.forEach((_, n) => att += n);
+      if (att < 3) return;
+      String dom = "";
+      var domN = 0;
+      dirs.forEach((d, n) {
+        if (n > domN) {
+          dom = d;
+          domN = n;
+        }
+      });
+      final pct = 100.0 * domN / att;
+      if (pct >= 60.0 && att > bestAtt) {
+        bestK = taker;
+        bestAtt = att;
+        bestDir = dom;
+        bestPct = pct;
+      }
+    });
+    if (bestK == null) return null;
+    return "a hetesdobójuk, a(z) $bestK. játékos a $bestDir sarkot "
+        "keresi (${bestPct.toStringAsFixed(0)}%, $bestAtt dobásból) · "
+        "a kapus nála előre döntsön, ne olvasson";
+  }
+
+  // Kényszerített vagy magától jött eladás: kipréselik belőlük, vagy
+  // maguktól szórják el (5+ mért eladás, 60% küszöb — a backenddel
+  // azonos küszöbök: PTO_MIN_TURNOVERS, PTO_UNFORCED_PCT).
+  String? _pressuredTurnovers(Map<String, dynamic> r) {
+    final total = ((r["pto_total"] ?? 0) as num).toInt();
+    final unforced = ((r["pto_unforced"] ?? 0) as num).toInt();
+    if (total < 5) return null;
+    final pct = 100.0 * unforced / total;
+    if (pct >= 60.0) {
+      return "az eladásaik ${pct.toStringAsFixed(0)}%-a MAGÁTÓL jön "
+          "($unforced/$total, védő nélkül 2,5 m-en belül) · a letámadás "
+          "keveset ad hozzá — zárt falban is hibáznak";
+    }
+    if (pct <= 40.0) {
+      return "az eladásaik ${(100.0 - pct).toStringAsFixed(0)}%-át "
+          "KIPRÉSELIK belőlük (${total - unforced}/$total) · a prés "
+          "működik ellenük, a kettőzést tartani kell";
+    }
+    return null;
+  }
+
+  // Támadás-ritmus: egy tempóban játszanak-e, vagy váltogatják (8+
+  // mért támadás; 60% egy sávban = egy tempó, mindhárom sáv 20% fölött
+  // = váltogatás — a backenddel azonos küszöbök: ATV_MIN_ATTACKS,
+  // ATV_ONE_TEMPO_PCT, ATV_MIXED_MIN_PCT).
+  String? _attackTempo(Map<String, dynamic> r) {
+    final n = ((r["atv_attacks"] ?? 0) as num).toInt();
+    if (n < 8) return null;
+    final fast = ((r["atv_fast"] ?? 0) as num).toInt();
+    final mid = ((r["atv_mid"] ?? 0) as num).toInt();
+    final slow = ((r["atv_slow"] ?? 0) as num).toInt();
+    final pf = 100.0 * fast / n;
+    final pm = 100.0 * mid / n;
+    final ps = 100.0 * slow / n;
+    if (ps >= 60.0) {
+      return "a támadásaik ${ps.toStringAsFixed(0)}%-a HOSSZÚ "
+          "($slow/$n akció 30 mp fölött) · türelmes, hibátlan fal — a "
+          "passzív jel nektek dolgozik, ne ugorjatok ki";
+    }
+    if (pf >= 60.0) {
+      return "a támadásaik ${pf.toStringAsFixed(0)}%-a 12 mp-en belül "
+          "zárul ($fast/$n) · a visszarendeződés a meccsterv első "
+          "pontja: a labdavesztéskor már álljon a fal";
+    }
+    if (pm >= 60.0) {
+      return "közepes ritmusban játszanak ($mid/$n támadás) · a fal "
+          "beállhat erre az egy tempóra";
+    }
+    if (pf >= 20.0 && pm >= 20.0 && ps >= 20.0) {
+      return "váltogatják a tempót ($fast gyors, $mid közepes, $slow "
+          "hosszú) · a fal nem állhat rá egy ritmusra — a JELZÉSEKRE "
+          "edzetek felismerést";
+    }
+    return null;
+  }
+
+  // Hetes-ismétlés: másodszorra is ugyanoda megy-e a hetesük — a
+  // SORREND, nem az eloszlás (3+ egymást követő hetes-pár, 60%+
+  // ismétlés — a backenddel azonos küszöbök: SREP_MIN_PAIRS,
+  // SREP_REPEAT_PCT).
+  String? _sevenRepeat(Map<String, dynamic> r) {
+    final pairs = ((r["srep_pairs"] ?? 0) as num).toInt();
+    final repeats = ((r["srep_repeats"] ?? 0) as num).toInt();
+    if (pairs < 3) return null;
+    final pct = 100.0 * repeats / pairs;
+    if (pct < 60.0) return null;
+    return "az egymást követő heteseik ${pct.toStringAsFixed(0)}%-a "
+        "ugyanabba a sávba ment ($repeats/$pairs pár) · a kapusnak a "
+        "LEGUTÓBB látott sarkot kiabáljátok be a következő hetes előtt";
+  }
+
+  // Hoki-assziszt: ki a rejtett szervező a gólpassz mögött (2+
+  // másod-előkészítés, a láncolt gólok fele — a backenddel azonos
+  // küszöbök: PREA_MIN, PREA_SHARE_PCT).
+  String? _preAssist(Map<String, dynamic> r) {
+    final chained = ((r["prea_chained"] ?? 0) as num).toInt();
+    final byP = (r["prea_by_player"] as Map?)?.cast<String, dynamic>();
+    if (chained < 2 || byP == null || byP.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byP.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2 || topN < 0.5 * chained) return null;
+    return "a rejtett szervezőjük a(z) $top. játékos: ő adja a gólpassz "
+        "ELŐTTI passzt ($topN/$chained) · a zárást nála kezdjétek, ne a "
+        "gólpasszolónál";
+  }
+
+  // Elzárás-fáradás: elfogy-e az elzárás-munka a 2. félidőre
+  // (félidőnként 4+ őrzött lövés, 15 százalékpont esés — a backenddel
+  // azonos küszöbök: SCRF_MIN_SHOTS, SCRF_GAP_PP).
+  String? _screenFade(Map<String, dynamic> r) {
+    final fhN = ((r["scrf_fh_shots"] ?? 0) as num).toInt();
+    final shN = ((r["scrf_sh_shots"] ?? 0) as num).toInt();
+    if (fhN < 4 || shN < 4) return null;
+    final fh = 100.0 * ((r["scrf_fh_screened"] ?? 0) as num) / fhN;
+    final sh = 100.0 * ((r["scrf_sh_screened"] ?? 0) as num) / shN;
+    if (fh - sh >= 15.0) {
+      return "a 2. félidőre elfogy az elzárás-munkájuk "
+          "(${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "elzárásos lövés) · a hajrában bátor fal: kilépés és "
+          "blokk-kéz a fedetlen lövőre";
+    }
+    if (sh - fh >= 15.0) {
+      return "a hajrára erősödik az elzárás-játékuk "
+          "(${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}%) · "
+          "a végjátékra a váltás-kommunikációt élesítsétek";
+    }
+    return null;
+  }
+
+  // Befutó poszt: melyik poszt a második hullám a kontráikban (3+
+  // befutós befejezés, 60% egy poszté — a backenddel azonos küszöbök:
+  // SWR_MIN_SECOND, SWR_SHARE_PCT).
+  String? _secondWaveRole(Map<String, dynamic> r) {
+    final byR = (r["swr_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byR == null || byR.isEmpty) return null;
+    var all = 0;
+    String? top;
+    var topN = 0;
+    byR.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || all < 3 || topN < 0.6 * all) return null;
+    return "a kontráik második hulláma a(z) $top poszt ($topN/$all "
+        "befutós befejezés) · a visszafutásnál az első ember után az ő "
+        "sávját vegyétek fel, akárki játssza";
+  }
+
+  // Egálbontó poszt: melyik posztjuk viszi el a holtpontokat (3+
+  // egálbontó gól, 60% egy poszté — a backenddel azonos küszöbök:
+  // PBR_MIN_BREAKS, PBR_SHARE_PCT).
+  String? _parityBreakRole(Map<String, dynamic> r) {
+    final byR = (r["pbr_breaks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byR == null || byR.isEmpty) return null;
+    var all = 0;
+    String? top;
+    var topN = 0;
+    byR.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || all < 3 || topN < 0.6 * all) return null;
+    return "a holtpontjaikat a(z) $top posztjuk viszi el ($topN/$all "
+        "egálbontó gól) · egálnál arra a sávra korai kettőzés, akárki "
+        "játssza";
+  }
+
+  // Rejtett szervező poszt: melyik poszton fut a másod-előkészítés
+  // (3+ másod-előkészítés, 60% egy poszté — a backenddel azonos
+  // küszöbök: PREAR_MIN_CHAINED, PREAR_SHARE_PCT).
+  String? _preAssistRole(Map<String, dynamic> r) {
+    final byR = (r["prear_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byR == null || byR.isEmpty) return null;
+    var all = 0;
+    String? top;
+    var topN = 0;
+    byR.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || all < 3 || topN < 0.6 * all) return null;
+    return "a másod-előkészítésük a(z) $top poszton fut ($topN/$all) · "
+        "a passzsáv-zárást a poszt sávjában kezdjétek, akárki játssza";
+  }
+
+  // Szuper-csere: ki termel a padról (3+ pad-gól, a fele egy emberé —
+  // a backenddel azonos küszöbök: SSUB_MIN_BENCH_GOALS, SSUB_TOP_PCT).
+  String? _superSub(Map<String, dynamic> r) {
+    final byP = (r["ssu_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (byP == null || byP.isEmpty) return null;
+    var all = 0;
+    String? top;
+    var topN = 0;
+    byP.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || all < 3 || topN < 0.5 * all) return null;
+    return "a szuper-cseréjük a(z) $top. játékos: a padról beállva ő "
+        "szerzi a csere-góljaik zömét ($topN/$all pad-gól) · a beállása "
+        "jelzés — onnantól rá külön figyelő, vele szemben friss láb";
+  }
+
+  // Szuper-csere poszt: melyik posztról termel a paduk (3+ pad-gól,
+  // 60% egy poszté — a backenddel azonos küszöbök: SSPR_MIN_GOALS,
+  // SSPR_SHARE_PCT).
+  String? _superSubRole(Map<String, dynamic> r) {
+    final byR = (r["sspr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byR == null || byR.isEmpty) return null;
+    var all = 0;
+    String? top;
+    var topN = 0;
+    byR.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || all < 3 || topN < 0.6 * all) return null;
+    return "a paduk a(z) $top posztról termel ($topN/$all pad-gól) · a "
+        "posztra érkező friss embert azonnal vegyétek fel, mielőtt az "
+        "első helyzetéig jut";
+  }
+
+  // Fal-rés fáradás: szétnyílnak-e a közök a 2. félidőre (félidőnként
+  // 60+ kocka, 0,8 m növekedés — a backenddel azonos küszöbök:
+  // GFD_MIN_FRAMES, GFD_RISE_M).
+  String? _gapFade(Map<String, dynamic> r) {
+    final fhN = ((r["gfd_fh_frames"] ?? 0) as num).toInt();
+    final shN = ((r["gfd_sh_frames"] ?? 0) as num).toInt();
+    if (fhN < 60 || shN < 60) return null;
+    final fh = ((r["gfd_fh_sum_m"] ?? 0) as num).toDouble() / fhN;
+    final sh = ((r["gfd_sh_sum_m"] ?? 0) as num).toDouble() / shN;
+    if (sh - fh < 0.8) return null;
+    return "a 2. félidőre szétnyílnak a közök a falukban "
+        "(${fh.toStringAsFixed(1)} m → ${sh.toStringAsFixed(1)} m a "
+        "legnagyobb rés átlaga) · a betörős figurákat a második "
+        "félidőre tartogassátok";
+  }
+
+  // Vasemberek: ki játssza végig a meccseket csere nélkül (10+ perc
+  // felvétel, 85%+ jelenlét, legfeljebb 3 név — a backenddel azonos
+  // küszöbök: IRONMEN_MIN_MATCH_MIN, IRONMEN_SHARE_PCT,
+  // IRONMEN_MAX_TARGETS).
+  String? _ironMen(Map<String, dynamic> r) {
+    final matchMin = ((r["imn_match_min"] ?? 0) as num).toDouble();
+    final mins = (r["imn_minutes_by_player"] as Map?)?.cast<String, dynamic>();
+    if (matchMin < 10.0 || mins == null || mins.isEmpty) return null;
+    final men = <MapEntry<String, double>>[];
+    mins.forEach((k, v) {
+      final m = (v as num).toDouble();
+      if (100.0 * m / matchMin >= 85.0) men.add(MapEntry(k, m));
+    });
+    if (men.isEmpty || men.length > 3) return null;
+    men.sort((a, b) => b.value.compareTo(a.value));
+    final pct = 100.0 * men.first.value / matchMin;
+    final nevek = men.map((e) => e.key).join(", ");
+    return "csere nélkül végig a pályán: $nevek "
+        "(${pct.toStringAsFixed(0)}% jelenlét) · a hajrában őt "
+        "futtassátok, vele szemben mindig friss láb";
+  }
+
+  // Poszt-kezesség: melyik posztjukon lő balkezes (4+ értékelhető lövés,
+  // 70%+ bal-jel — a backenddel azonos küszöbök: RSH_MIN_SHOTS,
+  // RSH_SHARE_PCT).
+  String? _leftHandedRole(Map<String, dynamic> r) {
+    final shots = (r["rsh_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final left = (r["rsh_left_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty || left == null) return null;
+    final keys = shots.keys.toList()
+      ..sort((a, b) =>
+          (shots[b] as num).toInt().compareTo((shots[a] as num).toInt()));
+    for (final k in keys) {
+      final n = (shots[k] as num).toInt();
+      final l = ((left[k] ?? 0) as num).toInt();
+      if (n >= 4 && l >= 0.7 * n) {
+        return "a(z) $k posztjukon BALKEZES lő ($n lövésből $l bal-jel) · "
+            "tükrözzétek a sáncot és a kapus alapállását — a poszt akkor "
+            "is marad, ha az ember cserélődik";
+      }
+    }
+    return null;
+  }
+
+  // Fal-rés térkép: hol és mekkora a legnagyobb köz a falukban (100+
+  // kocka, 3,5 m-től rés-veszélyes, 40%-tól jellemző sáv — a backenddel
+  // azonos küszöbök: DGAP_MIN_FRAMES, DGAP_WIDE_M, DGAP_ZONE_SHARE_PCT).
+  String? _defensiveGaps(Map<String, dynamic> r) {
+    final n = ((r["dgap_frames"] ?? 0) as num).toInt();
+    final sum = ((r["dgap_sum_m"] ?? 0) as num).toDouble();
+    if (n < 100 || sum <= 0) return null;
+    final avg = sum / n;
+    final zones = (r["dgap_zones"] as Map?)?.cast<String, dynamic>();
+    String? zone;
+    double share = 0;
+    if (zones != null && zones.isNotEmpty) {
+      String? top;
+      var topN = 0;
+      zones.forEach((k, v) {
+        final c = (v as num).toInt();
+        if (top == null || c > topN) {
+          top = k;
+          topN = c;
+        }
+      });
+      share = 100.0 * topN / n;
+      if (share >= 40.0) zone = top;
+    }
+    final hol = zone == null
+        ? ""
+        : ", jellemzően a $zone sávban (${share.toStringAsFixed(0)}%)";
+    if (avg >= 3.5) {
+      return "nagy közök a falukban (átlag "
+          "${avg.toStringAsFixed(1)} m a legnagyobb rés$hol) · oda "
+          "lendületből betörni, elzárás a rés mellé";
+    }
+    if (zone != null) {
+      return "zárt fal (átlag ${avg.toStringAsFixed(1)} m a legnagyobb "
+          "köz), de a rés a(z) $zone sávban nyílik "
+          "(${share.toStringAsFixed(0)}%) · a figurát arra az oldalra";
+    }
+    return null;
+  }
+
+  // Védekezési formáció: milyen ALAKOT tart a faluk (100+ értékelhető
+  // kocka, 50%+ részarány — a backenddel azonos küszöbök:
+  // DFORM_MIN_FRAMES, DFORM_SHARE_PCT).
+  String? _defensiveFormation(Map<String, dynamic> r) {
+    final n = ((r["dform_frames"] ?? 0) as num).toInt();
+    final counts = (r["dform_counts"] as Map?)?.cast<String, dynamic>();
+    if (n < 100 || counts == null || counts.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    counts.forEach((k, v) {
+      final c = (v as num).toInt();
+      if (top == null || c > topN) {
+        top = k;
+        topN = c;
+      }
+    });
+    if (top == null) return null;
+    final share = 100.0 * topN / n;
+    if (share < 50.0) {
+      // Nincs állandó alak: ez maga az információ — váltogatnak.
+      return "nincs állandó fal-alakjuk (a leggyakoribb $top is csak "
+          "${share.toStringAsFixed(0)}%) · a felismerés a feladat: a "
+          "felhozó mondja be a formát, két kész figurasor kell";
+    }
+    final tipp = top!.startsWith("6-0")
+        ? "nem lépnek ki: távoli lövés és gyors oldalváltás ellenük"
+        : top!.startsWith("5-1")
+            ? "a kitolt védő MÖGÖTTI tér a cél: kettős elzárás, "
+                "a beálló a háta mögé"
+            : top!.startsWith("3-2-1")
+                ? "keresztmozgásra lassú: gyors oldalváltás és szélső"
+                : top!.startsWith("4-2")
+                    ? "a két kilépő MÖGÖTT és KÖZÖTT van a tér"
+                    : "szokatlan fal — nézzétek vissza, hogyan állnak";
+    return "$top alakot tartanak (a felállt védekezés "
+        "${share.toStringAsFixed(0)}%-ában) · $tipp";
+  }
+
+  // Kapus-védés a lövő kezessége szerint: bírja-e a balkezeseket
+  // (kezenként 4+ kapura tartó lövés, 15 százalékpont különbség — a
+  // backenddel azonos küszöbök: GKH_MIN_FACED, GKH_GAP_PP).
+  String? _gkByHand(Map<String, dynamic> r) {
+    final lf = ((r["gkh_left_faced"] ?? 0) as num).toInt();
+    final rf = ((r["gkh_right_faced"] ?? 0) as num).toInt();
+    if (lf < 4 || rf < 4) return null;
+    final ls = ((r["gkh_left_saves"] ?? 0) as num).toInt();
+    final rs = ((r["gkh_right_saves"] ?? 0) as num).toInt();
+    final lp = 100.0 * ls / lf;
+    final rp = 100.0 * rs / rf;
+    if (rp - lp >= 15.0) {
+      return "a kapusuk a BALKEZESEK ellen gyengébb "
+          "(${lp.toStringAsFixed(0)}% vs ${rp.toStringAsFixed(0)}%) · "
+          "a balkezes emberünket kell rá szervezni, hetesnél is";
+    }
+    if (lp - rp >= 15.0) {
+      return "a kapusuk a jobbkezesek ellen gyengébb "
+          "(${rp.toStringAsFixed(0)}% vs ${lp.toStringAsFixed(0)}%) · "
+          "a szokásos befejezőinket engedjük rá, ne tükrözzünk";
+    }
+    return null;
+  }
+
+  // Befejezés-mérleg: fenntartható-e a gólterméskük (12+ lövés, 2,5
+  // gólnyi eltérés — a backenddel azonos küszöbök: FBAL_MIN_SHOTS,
+  // FBAL_DIFF_GOALS).
+  String? _finishingBalance(Map<String, dynamic> r) {
+    final n = ((r["fbal_shots"] ?? 0) as num).toInt();
+    if (n < 12) return null;
+    final goals = ((r["fbal_goals"] ?? 0) as num).toInt();
+    final xg = ((r["fbal_xg_sum"] ?? 0) as num).toDouble();
+    final diff = goals - xg;
+    if (diff >= 2.5) {
+      return "a gólszámuk szebb a játékuknál ($goals gól "
+          "${xg.toStringAsFixed(1)} várható gólra, "
+          "+${diff.toStringAsFixed(1)}) · ne szabjátok át a falat, "
+          "ugyanezeket a lövéseket kényszerítsétek rájuk";
+    }
+    if (diff <= -2.5) {
+      return "a játékuknál kevesebbet szereztek ($goals gól "
+          "${xg.toStringAsFixed(1)} várható gólra, "
+          "${diff.toStringAsFixed(1)}) · veszélyesebbek az eredménynél: "
+          "a helyzet-teremtésüket kell megfogni";
+    }
+    return null;
+  }
+
+  // Csere-fázis: mikor indul a cseréjük — birtokláskor vagy védekezés
+  // közben (4+ csere, 40%+ kockázatos / 15%- fegyelmezett — a backenddel
+  // azonos küszöbök: SUBPH_MIN_SUBS, SUBPH_RISKY_PCT, SUBPH_SAFE_PCT).
+  String? _subPhase(Map<String, dynamic> r) {
+    final n = ((r["sph_subs"] ?? 0) as num).toInt();
+    if (n < 4) return null;
+    final opp = ((r["sph_opp_ball"] ?? 0) as num).toInt();
+    final pct = 100.0 * opp / n;
+    if (pct >= 40.0) {
+      return "védekezés közben is cserélnek "
+          "(${pct.toStringAsFixed(0)}%, $opp/$n) · a csere-pillanatban "
+          "azonnal indítás a csere-oldalra";
+    }
+    if (pct <= 15.0) {
+      return "fegyelmezett csere-rend (csak "
+          "${pct.toStringAsFixed(0)}% indul a ti birtoklásotok alatt) · "
+          "a csere-pillanatra nem lehet játszani";
+    }
+    return null;
+  }
+
+  // 7a6-befejező emberek: kire fut ki a hetedik ember játéka (2+
+  // 7a6-lövés, a lövések fele — a backenddel azonos küszöbök:
+  // EN7P_MIN_SHOTS, EN7P_SHARE_PCT).
+  String? _sevenSixFinisher(Map<String, dynamic> r) {
+    final e7 = (r["en7p_shots_by_player"] as Map?)?.cast<String, dynamic>();
+    if (e7 == null || e7.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    e7.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a 7 a 6-uk $topN/$all lövése a(z) $top. emberre fut ki · "
+        "a lehozott kapusnál őt találjátok meg először";
+  }
+
+  // Gólpassz-duó: melyik kettősön fut a gólgyártásuk (2+ közös gól,
+  // az asszisztos gólok 40%-a — a backenddel azonos küszöbök:
+  // ADU_MIN_GOALS, ADU_SHARE_PCT).
+  String? _assistDuo(Map<String, dynamic> r) {
+    final du = (r["adu_goals_by_duo"] as Map?)?.cast<String, dynamic>();
+    if (du == null || du.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    du.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.4 * (all < 1 ? 1 : all)) return null;
+    return "a gólgyártásuk a(z) $top kettősön fut ($topN/$all "
+        "asszisztos gól) · a duó ellen párban védekezzetek";
+  }
+
+  // Időkérés-hozam: működik-e a mentő időkérésük (2+ ítéletes
+  // időkérés, 67%-os arány — a backenddel azonos küszöbök:
+  // TOY_MIN_JUDGED, TOY_SHARE_PCT).
+  String? _timeoutYield(Map<String, dynamic> r) {
+    final broke = (r["toy_broke"] as num?)?.toInt() ?? 0;
+    final failed = (r["toy_failed"] as num?)?.toInt() ?? 0;
+    final judged = broke + failed;
+    if (judged < 2) return null;
+    final pct = 100.0 * broke / judged;
+    if (pct >= 67.0) {
+      return "az időkérésük rendez ($broke/$judged megtört sorozat) · "
+          "utána ne kapkodjatok, kidolgozott támadás kell";
+    }
+    if (pct <= 33.0) {
+      return "az időkérésük hatástalan ($broke/$judged megtört "
+          "sorozat) · a sorozatotok utána is tolható";
+    }
+    return null;
+  }
+
+  // Kapuscsere-hozam: fordít-e a kapuscseréjük (15 százalékpontos
+  // változástól — a backenddel azonos küszöb: GCY_GAP_PP).
+  String? _gkChangeYield(Map<String, dynamic> r) {
+    final changes = (r["gcy_changes"] as num?)?.toInt() ?? 0;
+    final dpp = (r["gcy_delta_dpp"] as num?)?.toInt() ?? 0;
+    if (changes < 1) return null;
+    final avg = dpp / 10.0 / changes;
+    if (avg >= 15.0) {
+      return "a kapuscseréjük fordít (${avg.toStringAsFixed(0)} "
+          "százalékpont javulás) · a lövő-terv a második kapusra is "
+          "készüljön";
+    }
+    if (avg <= -15.0) {
+      return "a kapuscseréjük sem segít (${avg.toStringAsFixed(0)} "
+          "százalékpont) · nyomjátok tovább ugyanazt";
+    }
+    return null;
+  }
+
+  // Emberhátrány-túlélés: mit ér ellenük az emberelőny (90+ mp
+  // hátrány — a backenddel azonos küszöbök: SHS_MIN_S,
+  // SHS_BAD_PER_2MIN, SHS_GOOD_PER_2MIN).
+  String? _shorthandedSurvival(Map<String, dynamic> r) {
+    final secs = (r["shs_seconds"] as num?)?.toInt() ?? 0;
+    final conceded = (r["shs_conceded"] as num?)?.toInt() ?? 0;
+    if (secs < 90) return null;
+    final per2 = 120.0 * conceded / secs;
+    if (per2 >= 1.5) {
+      return "hátrányban beszakadnak (${per2.toStringAsFixed(1)} "
+          "kapott gól/2 perc) · a kiállításukat végig büntessétek";
+    }
+    if (per2 <= 0.5) {
+      return "hátrányban is állnak (${per2.toStringAsFixed(1)} "
+          "kapott gól/2 perc) · emberelőnyben is az 1v1 dolgozik";
+    }
+    return null;
+  }
+
+  // Középkezdés-hozam: gólra váltják-e az újraindítást (4+ mért
+  // újraindítás, 40%-os válasz-arány — a backenddel azonos küszöbök:
+  // RSY_MIN_RESTARTS, RSY_GOOD_PCT).
+  String? _restartYield(Map<String, dynamic> r) {
+    final restarts = (r["rsy_restarts"] as num?)?.toInt() ?? 0;
+    final answered = (r["rsy_answered"] as num?)?.toInt() ?? 0;
+    if (restarts < 4) return null;
+    final pct = 100.0 * answered / restarts;
+    if (pct < 40.0) return null;
+    return "a kapott gólra $answered/$restarts arányban azonnali "
+        "góllal válaszolnak · a gól utáni ünneplés ellenük tilos";
+  }
+
+  // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
+  // backenddel azonos küszöb: BPRP_MIN_PASSES).
+  String? _backwardPasserPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["bprp_passes_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    return "a játékuk a(z) $top. kezénél fordul vissza a legtöbbször "
+        "($topN hátra-passz) · rá menjetek ki";
+  }
+
+  // Térnyerők: ki viszi előre a labdát (25+ méter labdával előre —
+  // a backenddel azonos küszöb: TNRP_MIN_M).
+  String? _ballCarrierPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["tnrp_meters_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topM = 0.0;
+    byPlayer.forEach((k, v) {
+      final m = (v as num).toDouble();
+      if (top == null || m > topM) {
+        top = k;
+        topM = m;
+      }
+    });
+    if (top == null || topM < 25.0) return null;
+    return "a térnyerésük a(z) $top. lábán van (${topM.round()} m "
+        "labdával előre) · őt a felezőtől hátrálva fogadjátok";
+  }
+
+  // Sávváltók: ki viszi a keresztmozgást (4+ sávváltás — a
+  // backenddel azonos küszöb: LSWP_MIN_SWITCHES).
+  String? _laneSwitcherPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["lswp_switches_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 4) return null;
+    return "a keresztmozgásukat a(z) $top. viszi a legtöbbet ($topN "
+        "sávváltás) · az ő védőjéről döntsétek el előre: követés "
+        "vagy átadás";
+  }
+
+  // Menekülők: nyomás alatt kihez megy a labda (3+ nyomás alatti
+  // passz — a backenddel azonos küszöb: ESCP_MIN_PASSES).
+  String? _pressOutletPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["escp_passes_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    return "szorításban a labda a(z) $top. felé megy a leggyakrabban "
+        "($topN nyomás alatti passz) · ott álljon lesben a harmadik "
+        "ember";
+  }
+
+  // Vég-birtokosok: kinek a kezében hal el a támadásuk (3+ lövés
+  // nélkül záruló támadás — a backenddel azonos küszöb:
+  // LSTP_MIN_ATTACKS).
+  String? _lastHolderPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["lstp_attacks_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    return "a terméketlen támadásaik a(z) $top. kezében halnak el a "
+        "legtöbbször ($topN támadás) · a támadás második felében rá "
+        "toljátok a nyomást";
+  }
+
+  // Ziccer-előkészítők: ki adja a passzt a nagy helyzethez (2+
+  // előkészítés — a backenddel azonos küszöb: BCFP_MIN_FEEDS).
+  String? _bigChanceFeederPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["bcfp_chances_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "a ziccereiket a(z) $top. teremti a legtöbbször ($topN "
+        "előkészítés) · az ő bejátszó-sávját vágjátok el";
+  }
+
+  // Válaszhiba-emberek: kapott gól után ki veszíti el a labdát (2+
+  // válasz-eladás — a backenddel azonos küszöb:
+  // RTOP_MIN_TURNOVERS).
+  String? _responseTurnoverPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["rtop_turnovers_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "kapott gól után a(z) $top. veszíti el a legtöbb labdát "
+        "($topN eladás) · a gólotok után azonnal rá menjetek";
+  }
+
+  // Időkérés-hibázók: kinek a kezén hal el a megbeszélt figura (2+
+  // időkérés utáni eladás — a backenddel azonos küszöb:
+  // TOEP_MIN_TURNOVERS).
+  String? _timeoutTurnoverPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["toep_turnovers_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "az időkérés utáni labdát a(z) $top. veszíti el a "
+        "legtöbbször ($topN eladás) · a figurát az ő fogadásánál "
+        "nyomjátok meg";
+  }
+
+  // Hetesdobók: ki áll oda a hétméteresekhez (2+ hetes ugyanattól a
+  // dobótól — a backenddel azonos küszöb: STP_MIN_SEVENS).
+  String? _sevenTakerPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["stp_sevens_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "a heteseiket a(z) $top. dobja ($topN hetes) · a kapusotok "
+        "rá készüljön: szokás-sarok, lépésritmus, csel";
+  }
+
+  // Hetes-kihagyók: ki hibázza el a hetest (2+ gól nélküli hetes
+  // ugyanattól a dobótól — a backenddel azonos küszöb:
+  // SVMP_MIN_MISSES).
+  String? _sevenMissPlayer(Map<String, dynamic> r) {
+    final byPlayer =
+        (r["svmp_misses_by_player"] as Map?)?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "a heteseiket leggyakrabban a(z) $top. hagyja ki ($topN "
+        "gól nélküli hetes) · ha ő áll oda, a kapusotok mehet a "
+        "saját megérzésére";
+  }
+
+  // Sprint-esés: megfogy-e a láb a második félidőre (félidőnként 5+
+  // játékperc, 8+ sprint, 0,7 arány alatt esés / 1,43 fölött
+  // kapcsolás — a backenddel azonos küszöbök: SFD_MIN_HALF_MIN,
+  // SFD_MIN_SPRINTS, SFD_DROP_RATIO).
+  String? _sprintFade(Map<String, dynamic> r) {
+    final fhS = (r["sfd_fh_sprints"] as num?)?.toInt() ?? 0;
+    final shS = (r["sfd_sh_sprints"] as num?)?.toInt() ?? 0;
+    final fhM = (r["sfd_fh_min"] as num?)?.toDouble() ?? 0.0;
+    final shM = (r["sfd_sh_min"] as num?)?.toDouble() ?? 0.0;
+    if (fhM < 5.0 || shM < 5.0 || fhS + shS < 8 || fhS == 0) {
+      return null;
+    }
+    final f = fhS / fhM;
+    final s = shS / shM;
+    if (f <= 0) return null;
+    final ratio = s / f;
+    if (ratio <= 0.7) {
+      return "a második félidőre megfogy a lábuk "
+          "(${s.toStringAsFixed(1)} sprint/perc az "
+          "${f.toStringAsFixed(1)} helyett) · a szünet után "
+          "emeljetek tempót";
+    }
+    if (ratio >= 1.43) {
+      return "a második félidőre kapcsolnak (${s.toStringAsFixed(1)} "
+          "sprint/perc az ${f.toStringAsFixed(1)} helyett) · "
+          "tartsátok a saját ritmusotokat";
+    }
+    return null;
+  }
+
+  // Óralopás: vezetve elhúzzák-e a támadást a hajrában (3+
+  // hajrá-támadás vezetésben, 4+ alap-támadás, 3 mp eltérés — a
+  // backenddel azonos küszöbök: CLK_MIN_ATTACKS, CLK_MIN_BASE,
+  // CLK_DIFF_S).
+  String? _clockManagement(Map<String, dynamic> r) {
+    final lead = (r["clk_lead"] as num?)?.toInt() ?? 0;
+    final base = (r["clk_base"] as num?)?.toInt() ?? 0;
+    final leadSum = (r["clk_lead_sum_s"] as num?)?.toDouble() ?? 0.0;
+    final baseSum = (r["clk_base_sum_s"] as num?)?.toDouble() ?? 0.0;
+    if (lead < 3 || base < 4) return null;
+    final l = leadSum / lead;
+    final b = baseSum / base;
+    final d = l - b;
+    if (d.abs() < 3.0) return null;
+    if (d > 0) {
+      return "vezetve ${d.toStringAsFixed(1)} mp-cel hosszabb a "
+          "támadásuk a hajrában (${l.toStringAsFixed(1)} mp a "
+          "${b.toStringAsFixed(1)} mp helyett) · lopják az órát, "
+          "játsszatok a passzív jelre";
+    }
+    return "vezetve ${d.abs().toStringAsFixed(1)} mp-cel rövidebb a "
+        "támadásuk a hajrában (${l.toStringAsFixed(1)} mp a "
+        "${b.toStringAsFixed(1)} mp helyett) · sietnek, elég zárt "
+        "fallal kivárni";
+  }
+
+  // Kipattanó ára: a védéseik után kapott második-helyzet gólok (5+
+  // védés, 15% fölött drága — a backenddel azonos küszöbök:
+  // RPN_MIN_SAVES, RPN_COSTLY_PCT).
+  String? _reboundPunishment(Map<String, dynamic> r) {
+    final saves = (r["rpn_saves"] as num?)?.toInt() ?? 0;
+    final punished = (r["rpn_punished"] as num?)?.toInt() ?? 0;
+    if (saves < 5) return null;
+    final pct = 100.0 * punished / saves;
+    if (pct < 15.0) return null;
+    return "a védéseik ${pct.round()}%-a után gól jön a kipattanóból "
+        "($punished a $saves védésből) · minden lövésnél induljon a "
+        "berobbanó ember";
+  }
+
+  // Visszaállás ára: a gól nélküli lövésük után kapott gyors gólok
+  // (6+ lövés, 20% fölött drága — a backenddel azonos küszöbök:
+  // RTP_MIN_SHOTS, RTP_COSTLY_PCT).
+  String? _retreatPunishment(Map<String, dynamic> r) {
+    final shots = (r["rtp_shots"] as num?)?.toInt() ?? 0;
+    final punished = (r["rtp_punished"] as num?)?.toInt() ?? 0;
+    if (shots < 6) return null;
+    final pct = 100.0 * punished / shots;
+    if (pct < 20.0) return null;
+    return "a gól nélküli lövéseik ${pct.round()}%-át gyors kapott "
+        "gól követi ($punished a $shots lövésből) · minden "
+        "védésetekből azonnal indítsatok";
+  }
+
+  // Lepattanó-szedő poszt: védés után kinél marad a labda (3+
+  // megszerzett kipattanó, 60% részarány — a backenddel azonos
+  // küszöbök: RBC_MIN_REBOUNDS, RBC_SHARE_PCT).
+  String? _defensiveReboundRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rbc_rebounds_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kipattanók ${pct.round()}%-át a(z) $top posztjuk szedi "
+        "össze ($total kipattanó) · oda küldjétek a berobbanó embert";
+  }
+
+  // Figura-koncentráció: egy figurára épül-e a támadójátékuk (6+
+  // mért támadás; 40% fölött egy mintára készülni éri meg, 25%
+  // alatt elvekre kell — a backenddel azonos küszöbök:
+  // SPK_MIN_ATTACKS, SPK_TOP_PCT, SPK_VARIED_PCT).
+  String? _setplayConcentration(Map<String, dynamic> r) {
+    final attacks = (r["spk_attacks"] as num?)?.toInt() ?? 0;
+    final top = (r["spk_top"] as num?)?.toInt() ?? 0;
+    final figures = (r["spk_figures"] as num?)?.toInt() ?? 0;
+    if (attacks < 6) return null;
+    final pct = 100.0 * top / attacks;
+    if (pct >= 40.0) {
+      return "a támadásaik ${pct.round()}%-a egyetlen mintából jön "
+          "($attacks mért támadás, $figures figura) · konkrét "
+          "figurára készüljetek";
+    }
+    if (pct <= 25.0) {
+      return "a támadásaik sokfelé oszlanak (a legnagyobb minta is "
+          "csak ${pct.round()}%, $figures figura) · elvekre "
+          "készüljetek, ne figurákra";
+    }
+    return null;
+  }
+
+  // Hajrá-kapus: nő vagy beesik a kapusuk az utolsó öt percben (3+
+  // kaputra érkezett lövés mindkét szakaszban, 15 százalékpont
+  // eltérés — a backenddel azonos küszöbök: GKC_MIN_FACED,
+  // GKC_GAP_PP).
+  String? _clutchKeeper(Map<String, dynamic> r) {
+    final cf = (r["gkc_clutch_faced"] as num?)?.toInt() ?? 0;
+    final cs = (r["gkc_clutch_saves"] as num?)?.toInt() ?? 0;
+    final rf = (r["gkc_rest_faced"] as num?)?.toInt() ?? 0;
+    final rs = (r["gkc_rest_saves"] as num?)?.toInt() ?? 0;
+    if (cf < 3 || rf < 3) return null;
+    final c = 100.0 * cs / cf;
+    final b = 100.0 * rs / rf;
+    final d = c - b;
+    if (d.abs() < 15.0) return null;
+    if (d > 0) {
+      return "a kapusuk a hajrában nő (${c.round()}% a ${b.round()}% "
+          "helyett, $cf lövésből) · a végén csak tiszta helyzetből "
+          "lőjetek";
+    }
+    return "a kapusuk a hajrában beesik (${c.round()}% a "
+        "${b.round()}% helyett, $cf lövésből) · a végén vigyétek fel "
+        "a lövésszámot";
+  }
+
+  // Emberhátrány-hiba poszt: öt emberrel kinek a kezén vész el a
+  // labdájuk (3+ hátrány-eladás, 60% részarány — a backenddel
+  // azonos küszöbök: SHT_MIN_TURNOVERS, SHT_SHARE_PCT).
+  String? _shorthandedTurnoverRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["sht_turnovers_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "hátrányban ${pct.round()}%-ban a(z) $top kezén vész el a "
+        "labdájuk ($total hátrány-eladás) · a hat az öt ellen az ő "
+        "fogadására menjetek";
+  }
+
+  // Kapkodás-index: kapott gól után rövidül vagy nyúlik a támadásuk
+  // (3+ válasz-támadás, 4+ alap-támadás, 3 mp eltérés — a
+  // backenddel azonos küszöbök: RUS_MIN_ATTACKS, RUS_MIN_BASE,
+  // RUS_DIFF_S).
+  String? _postGoalRush(Map<String, dynamic> r) {
+    final after = (r["rus_after"] as num?)?.toInt() ?? 0;
+    final base = (r["rus_base"] as num?)?.toInt() ?? 0;
+    final afterSum = (r["rus_after_sum_s"] as num?)?.toDouble() ?? 0.0;
+    final baseSum = (r["rus_base_sum_s"] as num?)?.toDouble() ?? 0.0;
+    if (after < 3 || base < 4) return null;
+    final a = afterSum / after;
+    final b = baseSum / base;
+    final d = a - b;
+    if (d.abs() < 3.0) return null;
+    if (d < 0) {
+      return "kapott gól után ${d.abs().toStringAsFixed(1)} mp-cel "
+          "rövidebb a támadásuk (${a.toStringAsFixed(1)} mp a "
+          "${b.toStringAsFixed(1)} mp helyett) · kapkodnak, a "
+          "gólotok után álljatok vissza";
+    }
+    return "kapott gól után ${d.toStringAsFixed(1)} mp-cel hosszabb "
+        "a támadásuk (${a.toStringAsFixed(1)} mp a "
+        "${b.toStringAsFixed(1)} mp helyett) · befagynak, toljátok "
+        "előre a védekezést";
+  }
+
+  // Visszaállás-idő: hány másodperc alatt áll össze a faluk a
+  // lövésük után (4+ mért lövés, 8 mp fölött szólal meg — a
+  // backenddel azonos küszöbök: RTT_MIN_SHOTS, RTT_SLOW_S).
+  String? _retreatTime(Map<String, dynamic> r) {
+    final shots = (r["rtt_shots"] as num?)?.toInt() ?? 0;
+    final sum = (r["rtt_sum_s"] as num?)?.toDouble() ?? 0.0;
+    final slow = (r["rtt_slow"] as num?)?.toInt() ?? 0;
+    if (shots < 4) return null;
+    final avg = sum / shots;
+    if (avg <= 8.0) return null;
+    return "a lövésük után átlag ${avg.toStringAsFixed(1)} mp, míg "
+        "négy emberük hazaér ($shots lövésből $slow volt 8 mp "
+        "fölött) · a kapusotok azonnal indítson";
+  }
+
+  // Időkérés-hiba poszt: a megbeszélt figura kinek a kezén hal el
+  // (3+ időkérés utáni eladás, 60% részarány — a backenddel azonos
+  // küszöbök: TOE_MIN_TURNOVERS, TOE_SHARE_PCT).
+  String? _timeoutTurnoverRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["toe_turnovers_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az időkérés utáni labdájuk ${pct.round()}%-ban a(z) $top "
+        "kezén vész el ($total eladás) · a figurát az ő indításánál "
+        "nyomjátok meg";
+  }
+
+  // Válaszhiba-poszt: kapott gól után kinél vész el a labdájuk (3+
+  // válasz-eladás, 60% részarány — a backenddel azonos küszöbök:
+  // RTO_MIN_TURNOVERS, RTO_SHARE_PCT).
+  String? _responseTurnoverRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rto_turnovers_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "kapott gól után ${pct.round()}%-ban a(z) $top kezén vész "
+        "el a labdájuk ($total válasz-eladás) · a gólotok után "
+        "azonnal az ő fogadására menjetek";
+  }
+
+  // Emberelőny-hiba poszt: kinek a kezén akad el az emberelőnyük (3+
+  // emberelőny-eladás, 60% részarány — a backenddel azonos küszöbök:
+  // PPT_MIN_TURNOVERS, PPT_SHARE_PCT).
+  String? _powerplayTurnoverRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ppt_turnovers_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az emberelőnyük ${pct.round()}%-ban a(z) $top kezén akad "
+        "el ($total emberelőny-eladás) · hátrányban rá nyomjatok, az "
+        "elvett labdából kontrázni lehet";
+  }
+
+  // Ziccerpáros-poszt: ki adja és ki fejezi be a nagy helyzeteiket
+  // (3+ ziccer-páros, 55% részarány — a backenddel azonos küszöbök:
+  // BCP_PAIR_MIN, BCP_PAIR_SHARE_PCT).
+  String? _bigChancePair(Map<String, dynamic> r) {
+    final byPair =
+        (r["bcp_chances_by_pair"] as Map?)?.cast<String, dynamic>();
+    if (byPair == null || byPair.isEmpty) return null;
+    var total = 0;
+    byPair.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byPair.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 55.0) return null;
+    return "a ziccereik ${pct.round()}%-a ugyanabból a párosból jön "
+        "($top, $total helyzet) · a köztük lévő passzsávot vágjátok "
+        "el, ne külön-külön fogjátok őket";
+  }
+
+  // Hetes-kihagyó poszt: melyik posztjuk hibázza el a hetest (3+ gól
+  // nélküli hetes, 60% részarány — a backenddel azonos küszöbök:
+  // SVM_MIN_MISSES, SVM_SHARE_PCT).
+  String? _sevenMissRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["svm_misses_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kihagyott heteseik ${pct.round()}%-a a(z) $top "
+        "posztjukhoz kötődik ($total gól nélküli hetes) · ha ő áll "
+        "oda, a kapus mehet a saját megérzésére";
+  }
+
+  // Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül (4+
+  // terméketlen támadás, 60% részarány — a backenddel azonos
+  // küszöbök: LST_MIN_ATTACKS, LST_SHARE_PCT).
+  String? _lastHolderRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["lst_attacks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 4) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a lövés nélkül záruló támadásaik ${pct.round()}%-a a(z) "
+        "$top poszt kezében hal el ($total terméketlen támadás) · a "
+        "támadás második felében rá toljátok a nyomást";
+  }
+
+  // Menekülő-poszt: nyomás alatt kihez megy a labda (5+ nyomás
+  // alatti passz, 60% részarány — a backenddel azonos küszöbök:
+  // ESC_MIN_PASSES, ESC_SHARE_PCT).
+  String? _pressOutletRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["esc_passes_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "szorításban a labda a(z) $top poszthoz menekül "
+        "(${pct.round()}%, $total nyomás alatti passz) · a harmadik "
+        "ember ott álljon lesben";
+  }
+
+  // Időkéréspáros-poszt: az időkérés utáni figura tengelye (3+
+  // időkérés utáni lövés, 60% részarány — a backenddel azonos
+  // küszöbök: TOP_MIN_SHOTS, TOP_SHARE_PCT).
+  String? _timeoutPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["top_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az időkérés utáni figurájuk a(z) $top tengelyen fut "
+        "(${pct.round()}%, $total lövés) · az ELSŐ passzt vágjátok "
+        "el, ott törik meg a legolcsóbban";
+  }
+
+  // Sávváltó-poszt: melyik posztjuk vált sávot a támadásban (5+
+  // sávváltás, 60% részarány — a backenddel azonos küszöbök:
+  // LSW_MIN_SWITCHES, LSW_SHARE_PCT).
+  String? _laneSwitchRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["lsw_switches_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a keresztmozgásuk a(z) $top posztra épül "
+        "(${pct.round()}%, $total sávváltás) · előre döntsétek el: a"
+        " védője követi vagy átadja";
+  }
+
+  // Elöl lógó poszt: melyik posztjuk nem ér haza védekezni (200+
+  // védekezett kocka, 70% alatti hazaérés — a backenddel azonos
+  // küszöbök: RCR_MIN_FRAMES, RCR_LOW_PCT).
+  String? _recoveryRole(Map<String, dynamic> r) {
+    final fr =
+        (r["rcr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    final hm =
+        (r["rcr_home_by_role"] as Map?)?.cast<String, dynamic>();
+    if (fr == null || fr.isEmpty) return null;
+    String? post;
+    var postPct = 100.0;
+    fr.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 200) return;
+      final h = ((hm?[k] as num?) ?? 0).toInt();
+      final pct = 100.0 * h / n;
+      if (pct < 70.0 && pct < postPct) {
+        post = k;
+        postPct = pct;
+      }
+    });
+    if (post == null) return null;
+    return "a(z) $post posztjuk elöl lóg (a védekezett idő "
+        "${postPct.round()}%-ában van otthon) · a gyors indítást az "
+        "ő oldalára vezessétek";
+  }
+
+  // Válasz-poszt: kapott gól után melyik posztjuk válaszol (3+
+  // válasz-gól, 60% részarány — a backenddel azonos küszöbök:
+  // RSP_MIN_GOALS, RSP_SHARE_PCT).
+  String? _responseScorerRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rsp_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "kapott gól után a(z) $top posztjuk válaszol "
+        "(${pct.round()}%, $total válasz-gól) · a saját gólotok után"
+        " azonnal az ő fogására váltsatok";
+  }
+
+  // Emberelőnypáros-poszt: melyik tengelyen fut a 6-5 játékuk (3+
+  // emberelőny-lövés, 60% részarány — a backenddel azonos küszöbök:
+  // PWP_MIN_SHOTS, PWP_SHARE_PCT).
+  String? _powerplayPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["pwp_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a 6-5 játékuk a(z) $top tengelyen fut (${pct.round()}%, "
+        "$total emberelőny-lövés) · öt emberrel ezt a tengelyt kell "
+        "elvágni";
+  }
+
+  // Specialista-poszt: melyik posztot játsszák váltott sorban (120+
+  // mp mért jelenlét posztonként, mindkét fázisban 60+ mp, 80%
+  // egyoldalúság — a backenddel azonos küszöbök: SPC_MIN_S,
+  // SPC_MIN_PHASE_S, SPC_SPEC_PCT).
+  String? _specialistRole(Map<String, dynamic> r) {
+    final fr =
+        (r["spc_seconds_by_role"] as Map?)?.cast<String, dynamic>();
+    final df = (r["spc_def_seconds_by_role"] as Map?)
+        ?.cast<String, dynamic>();
+    if (fr == null || fr.isEmpty) return null;
+    var total = 0.0;
+    var defTotal = 0.0;
+    fr.forEach((k, v) => total += (v as num).toDouble());
+    df?.forEach((k, v) => defTotal += (v as num).toDouble());
+    // Mindkét fázis legyen meg: egy fél-támadásnyi felvétel is
+    // 100%-ot mutatna.
+    if (defTotal < 60.0 || total - defTotal < 60.0) return null;
+    String? post;
+    var postN = 0.0;
+    var postPct = 0.0;
+    fr.forEach((k, v) {
+      final n = (v as num).toDouble();
+      if (n < 120.0) return;
+      final d = ((df?[k] as num?) ?? 0).toDouble();
+      final pct = 100.0 * d / n;
+      if ((pct >= 80.0 || pct <= 20.0) && n > postN) {
+        post = k;
+        postN = n;
+        postPct = pct;
+      }
+    });
+    if (post == null) return null;
+    final egyold = postPct >= 80.0 ? postPct : 100.0 - postPct;
+    final irany = postPct >= 80.0 ? "védekezésben" : "támadásban";
+    return "a(z) $post posztjukat váltott sorban játsszák (idejük "
+        "${egyold.round()}%-a $irany) · a csere-pillanatuk gyors "
+        "középkezdéssel támadható";
+  }
+
+  // Kulcs-páros: hány páros-réteg mutat ugyanarra a kettősre (2+
+  // egyező réteg, holtverseny nélkül — a backenddel azonos küszöb:
+  // KPR_MIN_LAYERS).
+  String? _keyPair(Map<String, dynamic> r) {
+    final byPair =
+        (r["kpr_layers_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byPair == null || byPair.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var secondN = 0;
+    byPair.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n > topN) {
+        secondN = topN;
+        top = k;
+        topN = n;
+      } else if (n > secondN) {
+        secondN = n;
+      }
+    });
+    if (top == null || topN < 2 || topN == secondN) return null;
+    return "a kulcs-párosuk a(z) $top: $topN páros-réteg mutat rá · "
+        "a kettejük közti sávot kell szétvágni";
+  }
+
+  // Lepattanópáros-poszt: melyik lövésükre ki érkezik (3+ második
+  // roham, 60% részarány — a backenddel azonos küszöbök:
+  // RBP_MIN_SHOTS, RBP_SHARE_PCT).
+  String? _reboundPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rbp_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a lepattanó-játékuk a(z) $top párra jár "
+        "(${pct.round()}%, $total második roham) · a lövés zárása "
+        "után az érkező útját kell elállni";
+  }
+
+  // Kettőzőpáros-poszt: melyik védő-kettősük kettőz együtt (100+
+  // kettőzött kocka, 60% részarány — a backenddel azonos küszöbök:
+  // DPP_MIN_FRAMES, DPP_SHARE_PCT).
+  String? _doublingPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["dpp_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 100) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kettőzésük a(z) $top védő-pároson áll "
+        "(${pct.round()}% a kettőzött időből) · a kioldó passz "
+        "célpontja fix, gyakoroljátok be";
+  }
+
+  // Gólpasszpáros-poszt: melyik tengelyen születnek a góljaik (3+
+  // asszisztos gól, 60% részarány — a backenddel azonos küszöbök:
+  // APR_MIN_GOALS, APR_SHARE_PCT).
+  String? _assistPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["apr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a góljaik a(z) $top tengelyen születnek "
+        "(${pct.round()}%, $total asszisztos gól) · a kettős közti "
+        "passzsáv a fő zárnivaló";
+  }
+
+  // Kontrapáros-poszt: melyik tengelyen futnak a kontráik (3+
+  // lerohanás, 60% részarány — a backenddel azonos küszöbök:
+  // FBP_MIN_BREAKS, FBP_SHARE_PCT).
+  String? _fastBreakPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["fbp_breaks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kontráik a(z) $top tengelyen futnak (${pct.round()}%,"
+        " $total lerohanás) · az indítóra azonnali nyomás, a "
+        "befejező sávját az első visszaérő zárja";
+  }
+
+  // Hetespáros-poszt: ki harcolja ki és ki dobja a hetest (3+
+  // hetes, 60% részarány — a backenddel azonos küszöbök:
+  // SVP_MIN_SEVENS, SVP_SHARE_PCT).
+  String? _sevenPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["svp_sevens_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a hetes-játékuk a(z) $top posztpárra jár "
+        "(${pct.round()}%, $total hetes) · a kiharcoló ellen kéz "
+        "nélkül, a dobóra a kapus készül";
+  }
+
+  // Csere-stílus: posztot tart vagy átszab a padjuk (3+ ki-be pár;
+  // 70% fölött tartó, 40% alatt átszabó — a backenddel azonos
+  // küszöbök: SWS_MIN_PAIRS, SWS_SAME_PCT, SWS_CROSS_PCT).
+  String? _swapStyle(Map<String, dynamic> r) {
+    final pairs = (r["sws_pairs"] as num?)?.toInt() ?? 0;
+    final same = (r["sws_same"] as num?)?.toInt() ?? 0;
+    if (pairs < 3) return null;
+    final pct = 100.0 * same / pairs;
+    if (pct >= 70.0) {
+      return "posztot tartó a padjuk ($same/$pairs azonos-posztú "
+          "váltás) · a párosítás a csere után is érvényes";
+    }
+    if (pct <= 40.0) {
+      return "átszabó a padjuk ($same/$pairs azonos-posztú váltás) "
+          "· a cserehullámuk után újra kell osztani a fogásokat";
+    }
+    return null;
+  }
+
+  // Elzárópáros-poszt: melyik posztpárra jár az elzárás-játékuk
+  // (3+ elzárt lövés, 60% részarány — a backenddel azonos küszöbök:
+  // SPP_MIN_SHOTS, SPP_SHARE_PCT).
+  String? _screenPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["spp_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az elzárás-játékuk a(z) $top posztpárra jár "
+        "(${pct.round()}%, $total elzárt lövés) · párban készül a "
+        "védekezés: az elzáró őrzője előre szól";
+  }
+
+  // Álló-poszt: melyik posztjuk áll labda nélkül (20+ mp mért
+  // mozgás, a csapatátlagnál 20%-kal lassabb — a backenddel azonos
+  // küszöbök: SAR_MIN_S, SAR_GAP_PCT).
+  String? _staticAttackerRole(Map<String, dynamic> r) {
+    final secs =
+        (r["sar_seconds_by_role"] as Map?)?.cast<String, dynamic>();
+    final mets =
+        (r["sar_meters_by_role"] as Map?)?.cast<String, dynamic>();
+    if (secs == null || secs.isEmpty || mets == null) return null;
+    var totalS = 0.0;
+    var totalM = 0.0;
+    secs.forEach((k, v) => totalS += (v as num).toDouble());
+    mets.forEach((k, v) => totalM += (v as num).toDouble());
+    if (totalS <= 0) return null;
+    final teamAvg = totalM / totalS;
+    String? post;
+    var postA = 0.0;
+    secs.forEach((k, v) {
+      final ps = (v as num).toDouble();
+      if (ps < 20.0) return;
+      final pa = ((mets[k] as num?) ?? 0).toDouble() / ps;
+      if (teamAvg > 0 && pa <= teamAvg * 0.8 && post == null) {
+        post = k;
+        postA = pa;
+      }
+    });
+    if (post == null) return null;
+    return "a(z) $post posztjuk áll labda nélkül "
+        "(${postA.toStringAsFixed(1)} m/s a "
+        "${teamAvg.toStringAsFixed(1)} m/s átlag mellett) · a "
+        "védője otthagyhatja, és befelé segíthet";
+  }
+
+  // Letámadó-poszt: melyik posztjuk szed labdát elöl (3+
+  // elöl-szerzés, 60% részarány — a backenddel azonos küszöbök:
+  // HSR_MIN_HIGH, HSR_SHARE_PCT).
+  String? _highStealRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["hsr_high_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az elöl-szerzéseik ${pct.round()}%-a a(z) $top "
+        "posztjuknál születik ($total letámadás-szerzés) · az ő "
+        "oldalán tilos a kihozatalt vezetni";
+  }
+
+  // Célkereszt-poszt: melyik posztjuk előtt fejeznek be ellenük
+  // (5+ rá-lövés, 60% részarány — a backenddel azonos küszöbök:
+  // TGR_MIN_SHOTS, TGR_SHARE_PCT).
+  String? _targetedDefenderRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["tgr_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az ellenfelek ${pct.round()}%-ban a(z) $top posztjuk "
+        "előtt fejeznek be ($total rá-lövés) · bevált minta: oda a "
+        "támadás, a védője elé elzárás";
+  }
+
+  // Fedezett-lövő poszt: melyik posztjuk lő fedezetten is (3+
+  // fedezett lövés, 60% részarány — a backenddel azonos küszöbök:
+  // CVR_MIN_COVERED, CVR_SHARE_PCT).
+  String? _coveredShooterRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["cvr_covered_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a fedezett lövéseik ${pct.round()}%-a a(z) $top "
+        "posztról jön ($total fedezett lövés) · rá nem kell "
+        "kilépni, elég a blokk-kéz";
+  }
+
+  // Védőmotor-poszt: melyik posztjuk védő-motorja áll le (3+ első
+  // félidei szerzés+blokk, legfeljebb 1 második félidei — a
+  // backenddel azonos küszöbök: FDD_MIN_FH, FDD_MAX_SH).
+  String? _fadingDefenderRole(Map<String, dynamic> r) {
+    final fh =
+        (r["fdd_fh_by_role"] as Map?)?.cast<String, dynamic>();
+    final sh =
+        (r["fdd_sh_by_role"] as Map?)?.cast<String, dynamic>();
+    if (fh == null || fh.isEmpty) return null;
+    String? post;
+    var postFh = 0;
+    fh.forEach((k, v) {
+      final n = (v as num).toInt();
+      final s2 = ((sh?[k] as num?) ?? 0).toInt();
+      if (n >= 3 && s2 <= 1 && n > postFh) {
+        post = k;
+        postFh = n;
+      }
+    });
+    if (post == null) return null;
+    final postSh = ((sh?[post] as num?) ?? 0).toInt();
+    return "a védő-motorjuk a(z) $post poszton az 1. félidőben "
+        "pörög ($postFh szerzés+blokk), a 2.-ra leáll ($postSh) · "
+        "a szünet után az ő zónáján át kell támadni";
+  }
+
+  // Áttörő-poszt: melyik posztjuk nyitja szét a falat (4+ labdás
+  // betörés, 60% részarány — a backenddel azonos küszöbök:
+  // BTR_MIN_ENTRIES, BTR_SHARE_PCT).
+  String? _breakthroughRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["btr_entries_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 4) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a falat ${pct.round()}%-ban a(z) $top posztjuk nyitja "
+        "szét ($total labdás betörés) · a védője kapjon segítőt, a "
+        "vonalát testtel kell zárni";
+  }
+
+  // Drága-eladó poszt: kinek a hibái kerülnek gólba (3+ büntetett
+  // eladás, 60% részarány — a backenddel azonos küszöbök:
+  // DTO_MIN_PUNISHED, DTO_SHARE_PCT).
+  String? _costlyTurnoverRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["dto_punished_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a gólba forduló eladásaik ${pct.round()}%-a a(z) $top "
+        "posztnál történik ($total büntetett hiba) · a "
+        "felhozatalnál őt kell kettőzni-zavarni";
+  }
+
+  // Beérkező-poszt: melyik posztra hoz frissítést a padjuk (3+
+  // beállás, 60% részarány — a backenddel azonos küszöbök:
+  // IBR_MIN_INS, IBR_SHARE_PCT).
+  String? _subInRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ibr_ins_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a padjuk a(z) $top posztra hoz frissítést "
+        "(${pct.round()}%, $total beállás) · a cserehullám után "
+        "arra a sávra kell váltani";
+  }
+
+  // Forgatott-poszt: melyik posztjukat cserélik (3+ lecserélés,
+  // 60% részarány — a backenddel azonos küszöbök: SBR_MIN_OUTS,
+  // SBR_SHARE_PCT).
+  String? _substitutedRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["sbr_outs_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a forgatásuk a(z) $top posztra jár (${pct.round()}%, "
+        "$total lecserélés) · a fárasztást a nem forgatott "
+        "posztokra kell tervezni";
+  }
+
+  // Fáradt-fal poszt: a 2. félidőben melyik poszt jár át rajtuk
+  // (3+ 2. félidei kapott gól, az 1. félidei legalább kétszerese —
+  // a backenddel azonos küszöbök: TCR_MIN_SH, TCR_FACTOR).
+  String? _tiredConcederRole(Map<String, dynamic> r) {
+    final fh =
+        (r["tcr_fh_by_role"] as Map?)?.cast<String, dynamic>();
+    final sh =
+        (r["tcr_sh_by_role"] as Map?)?.cast<String, dynamic>();
+    if (sh == null || sh.isEmpty) return null;
+    String? post;
+    var postSh = 0;
+    var postFh = 0;
+    sh.forEach((k, v) {
+      final n = (v as num).toInt();
+      final f = ((fh?[k] as num?) ?? 0).toInt();
+      final base = f < 1 ? 1 : f;
+      if (n >= 3 && n >= 2 * base && n > postSh) {
+        post = k;
+        postSh = n;
+        postFh = f;
+      }
+    });
+    if (post == null) return null;
+    return "a faluk a 2. félidőre a(z) $post poszt ellen ül le "
+        "($postFh → $postSh kapott gól) · a szünet után onnan kell "
+        "nyitni";
+  }
+
+  // Fáradt-lövő poszt: kinek megy szét a lövése a 2. félidőben (3+
+  // 2. félidei mellé, az 1. félidei legalább kétszerese — a
+  // backenddel azonos küszöbök: FSA_MIN_SH, FSA_FACTOR).
+  String? _tiredShooterRole(Map<String, dynamic> r) {
+    final fh =
+        (r["fsa_fh_by_role"] as Map?)?.cast<String, dynamic>();
+    final sh =
+        (r["fsa_sh_by_role"] as Map?)?.cast<String, dynamic>();
+    if (sh == null || sh.isEmpty) return null;
+    String? post;
+    var postSh = 0;
+    var postFh = 0;
+    sh.forEach((k, v) {
+      final n = (v as num).toInt();
+      final f = ((fh?[k] as num?) ?? 0).toInt();
+      final base = f < 1 ? 1 : f;
+      if (n >= 3 && n >= 2 * base && n > postSh) {
+        post = k;
+        postSh = n;
+        postFh = f;
+      }
+    });
+    if (post == null) return null;
+    return "a(z) $post posztjuk kaput elkerülő lövései a 2. "
+        "félidőre megugranak ($postFh → $postSh) · fáradtan rá "
+        "lehet engedni";
+  }
+
+  // Fáradt-eladó poszt: kinek a labdái vesznek el a 2. félidőben
+  // (3+ 2. félidei eladás, az 1. félidei legalább kétszerese — a
+  // backenddel azonos küszöbök: FTO_MIN_SH, FTO_FACTOR).
+  String? _tiredTurnoverRole(Map<String, dynamic> r) {
+    final fh =
+        (r["fto_fh_by_role"] as Map?)?.cast<String, dynamic>();
+    final sh =
+        (r["fto_sh_by_role"] as Map?)?.cast<String, dynamic>();
+    if (sh == null || sh.isEmpty) return null;
+    String? post;
+    var postSh = 0;
+    var postFh = 0;
+    sh.forEach((k, v) {
+      final n = (v as num).toInt();
+      final f = ((fh?[k] as num?) ?? 0).toInt();
+      final base = f < 1 ? 1 : f;
+      if (n >= 3 && n >= 2 * base && n > postSh) {
+        post = k;
+        postSh = n;
+        postFh = f;
+      }
+    });
+    if (post == null) return null;
+    return "a(z) $post posztjuk eladásai a 2. félidőre megugranak "
+        "($postFh → $postSh) · a szünet után friss védővel őt kell "
+        "nyomni";
+  }
+
+  // Hátrapassz-poszt: melyik posztjuknál fordul vissza a játék (5+
+  // hátra-passz, 60% részarány — a backenddel azonos küszöbök:
+  // BPR_MIN_PASSES, BPR_SHARE_PCT).
+  String? _backwardPassRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["bpr_passes_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a játékuk ${pct.round()}%-ban a(z) $top posztnál fordul"
+        " vissza ($total hátra-passz) · a pressz rá jutalmat hoz";
+  }
+
+  // Térnyerő-poszt: melyik posztjuk viszi előre a labdát (50+
+  // labdás előre-méter, 60% részarány — a backenddel azonos
+  // küszöbök: TNR_MIN_M, TNR_SHARE_PCT).
+  String? _ballCarrierRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["tnr_meters_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0.0;
+    byRole.forEach((k, v) => total += (v as num).toDouble());
+    if (total < 50.0) return null;
+    String? top;
+    var topN = 0.0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toDouble();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a térnyerésük a(z) $top poszt lábán van "
+        "(${pct.round()}%, ${total.round()} labdás előre-méter) · "
+        "hátrálva kell fogadni, lendületbe engedni tilos";
+  }
+
+  // Előnyben-poszt: vezetésnél melyik posztjuk viszi a játékot (3+
+  // előnyben lőtt gól, 60% részarány — a backenddel azonos
+  // küszöbök: LGR_MIN_GOALS, LGR_SHARE_PCT).
+  String? _leadScorerRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["lgr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "vezetésnél a(z) $top posztjuk viszi a játékot "
+        "(${pct.round()}%, $total előnyben lőtt gól) · az ő "
+        "kivétele töri a lendület-tartásukat";
+  }
+
+  // Előkészítő-poszt: melyik posztjuk készíti elő a lövéseket (5+
+  // előkészítő passz, 60% részarány — a backenddel azonos küszöbök:
+  // EPR_MIN_PASSES, EPR_SHARE_PCT).
+  String? _lastPassRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["epr_passes_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a lövéseiket ${pct.round()}%-ban a(z) $top posztjuk "
+        "készíti elő ($total előkészítő passz) · az ő sávjának "
+        "zárásával a lövőik elhalnak";
+  }
+
+  // Indító-poszt: melyik posztjuknál indul a támadás-szervezés (5+
+  // szakasz, 60% részarány — a backenddel azonos küszöbök:
+  // ATS_MIN_ATTACKS, ATS_SHARE_PCT).
+  String? _attackStarterRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ats_attacks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a támadásaik ${pct.round()}%-a a(z) $top posztnál indul"
+        " ($total szakasz) · korai pressz rá már a felezőnél";
+  }
+
+  // Beállóőr-poszt: melyik posztjuk őrzi a beállót (300+
+  // őrzés-kocka, 60% részarány — a backenddel azonos küszöbök:
+  // PGR_MIN_FRAMES, PGR_SHARE_PCT).
+  String? _pivotGuardRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["pgr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 300) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a beálló-őrzésük a(z) $top posztjukon áll "
+        "(${pct.round()}% az őrzött időből) · az elzárás őt húzza "
+        "ki, és a beálló felszabadul";
+  }
+
+  // Kilépő-poszt: melyik posztjuk lép ki a falból (posztonként
+  // 100+ kocka, 3+ mért poszt, 2,5 m mélység-többlet — a backenddel
+  // azonos küszöbök: ADR_MIN_FRAMES, ADR_MIN_ROLES, ADR_GAP_M).
+  String? _advancedDefRole(Map<String, dynamic> r) {
+    final frames =
+        (r["adr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    final depth =
+        (r["adr_depthm_by_role"] as Map?)?.cast<String, dynamic>();
+    if (frames == null || frames.isEmpty || depth == null) return null;
+    final ok = <String, int>{};
+    frames.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n >= 100) ok[k] = n;
+    });
+    if (ok.length < 3) return null;
+    String? top;
+    var topAvg = 0.0;
+    ok.forEach((k, n) {
+      final avg = ((depth[k] as num?) ?? 0).toDouble() / n;
+      if (top == null || avg > topAvg) {
+        top = k;
+        topAvg = avg;
+      }
+    });
+    if (top == null) return null;
+    var restN = 0;
+    var restD = 0.0;
+    ok.forEach((k, n) {
+      if (k == top) return;
+      restN += n;
+      restD += ((depth[k] as num?) ?? 0).toDouble();
+    });
+    if (restN == 0) return null;
+    final gap = topAvg - restD / restN;
+    if (gap < 2.5) return null;
+    return "a faluk a(z) $top posztnál lép ki (a társaknál "
+        "${gap.toStringAsFixed(1)} m-rel előrébb) · elzárást rá, "
+        "mögötte nyílik a tér";
+  }
+
+  // Ziccerhagyó-poszt: melyik posztjuk hagyja ki a ziccereket (3+
+  // kihagyott nagy helyzet, 60% részarány — a backenddel azonos
+  // küszöbök: MCR_MIN_MISSES, MCR_SHARE_PCT).
+  String? _missedChanceRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["mcr_misses_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kihagyott ziccereik ${pct.round()}%-a a(z) $top "
+        "posztnál esik ($total kihagyás) · az ő helyzetbe engedése "
+        "a kisebbik rossz";
+  }
+
+  // Blokkolt-poszt: melyik posztjuk lövéseit blokkolják (3+
+  // blokkolt lövés, 60% részarány — a backenddel azonos küszöbök:
+  // BSR_MIN_BLOCKS, BSR_SHARE_PCT).
+  String? _blockedShooterRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["bsr_blocks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a blokkolt lövéseik ${pct.round()}%-a a(z) $top "
+        "posztról jön ($total blokk) · a fal ellene bátran zárhat";
+  }
+
+  // Hetesdobó-poszt: melyik posztjuk áll oda a hetesekhez (3+
+  // hetes-kísérlet, 60% részarány — a backenddel azonos küszöbök:
+  // STK_MIN_ATTEMPTS, STK_SHARE_PCT).
+  String? _sevenTakerRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["stk_attempts_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a heteseiket ${pct.round()}%-ban a(z) $top posztjuk "
+        "dobja ($total hetes) · a kapus az ő szokás-irányaira "
+        "készüljön";
+  }
+
+  // Újrakezdő-poszt: melyik posztjuk viszi a szünet utáni rajtot
+  // (3+ gól a 2. félidő első tíz percében, 60% részarány — a
+  // backenddel azonos küszöbök: SSR_MIN_GOALS, SSR_SHARE_PCT).
+  String? _secondStartRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ssr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a szünet utáni rajtjuk a(z) $top posztra épül "
+        "(${pct.round()}%, $total gól a 2. félidő első tíz "
+        "percében) · a szünet után őt fogja a legjobb védő";
+  }
+
+  // Elzárt-poszt: melyik védőjük akad el az elzárásokban (3+
+  // elakadás, 60% részarány — a backenddel azonos küszöbök:
+  // SDR_MIN_SCREENS, SDR_SHARE_PCT).
+  String? _screenedDefRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["sdr_screens_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az elzárások ${pct.round()}%-ban a(z) $top posztjukon "
+        "lévő védőt találják meg ($total elakadás) · az ő oldalára "
+        "kell vinni a figurákat";
+  }
+
+  // Kettőzött-poszt: melyik posztjukra érkezik a kettőzés (100+
+  // kettőzött labdás kocka, 60% részarány — a backenddel azonos
+  // küszöbök: DTR_MIN_FRAMES, DTR_SHARE_PCT).
+  String? _doubledTargetRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["dtr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 100) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az ellenfelek kettőzései ${pct.round()}%-ban a(z) $top "
+        "posztjukra érkeznek · bevált recept: oda a kettőzés, "
+        "mögötte passzsáv-zárás";
+  }
+
+  // Fáradó-poszt: melyik posztjuk esik vissza a 2. félidőre (100+
+  // cm/s tempó-alap, 20% esés — a backenddel azonos küszöbök:
+  // FTR_MIN_CMS, FTR_DROP_PCT).
+  String? _fatigueRole(Map<String, dynamic> r) {
+    final first =
+        (r["ftr_first_cms_by_role"] as Map?)?.cast<String, dynamic>();
+    final second =
+        (r["ftr_second_cms_by_role"] as Map?)?.cast<String, dynamic>();
+    if (first == null || first.isEmpty) return null;
+    String? worst;
+    var worstDrop = 0.0;
+    first.forEach((k, v) {
+      final f = (v as num).toDouble();
+      if (f < 100) return;
+      final s2 = ((second?[k] as num?) ?? 0).toDouble();
+      final drop = 100.0 * (f - s2) / f;
+      if (worst == null || drop > worstDrop) {
+        worst = k;
+        worstDrop = drop;
+      }
+    });
+    if (worst == null || worstDrop < 20.0) return null;
+    return "a második félidőre a(z) $worst posztjuk esik vissza a "
+        "legjobban (−${worstDrop.round()}% tempó) · a szünet után az"
+        " ő sávjában kell támadni";
+  }
+
+  // Passzív-poszt: melyik posztjuknál hal el a felállt támadás
+  // (250+ passzív labdás kocka, 60% részarány — a backenddel azonos
+  // küszöbök: PVR_MIN_FRAMES, PVR_SHARE_PCT).
+  String? _passiveHolderRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["pvr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 250) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a terméketlen támadásaik a(z) $top posztnál halnak el "
+        "(${pct.round()}% a passzív-gyanús labdás időből) · passzív"
+        " jelzésnél őt kell nyomás alá tenni";
+  }
+
+  // Rajt-poszt: melyik posztjuk viszi a meccs elejét (3+ gól az
+  // első tíz percben, 60% részarány — a backenddel azonos küszöbök:
+  // OSR_MIN_GOALS, OSR_SHARE_PCT).
+  String? _openingScorerRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["osr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a rajtjuk a(z) $top posztra épül (${pct.round()}%, "
+        "$total gól az első tíz percben) · a meccs elején őt fogja "
+        "a legjobb védő";
+  }
+
+  // Kiszolgált-poszt: melyik posztjuk fejezi be a bejátszásokat (3+
+  // asszisztos gól, 60% részarány — a backenddel azonos küszöbök:
+  // ASR_MIN_ASSISTED, ASR_SHARE_PCT).
+  String? _assistedScorerRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["asr_assisted_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kiszolgált góljaik ${pct.round()}%-át a(z) $top "
+        "posztjuk fejezi be ($total asszisztos gól) · a felé futó "
+        "passzt kell elvágni, és magától elhal";
+  }
+
+  // Hajrákéz-poszt: melyik poszt kezén fut a végjátékuk (200+
+  // hajrá-labdás kocka, 60% részarány — a backenddel azonos
+  // küszöbök: CHR_MIN_FRAMES, CHR_SHARE_PCT).
+  String? _clutchHogRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["chr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 200) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a végjátékuk a(z) $top poszt kezén fut (${pct.round()}%"
+        " a hajrá labdás idejéből) · a hajrá-kettőzés őt fogja, nem"
+        " a lövőt";
+  }
+
+  // Lágypassz-poszt: melyik posztjuk passzol lágyan (5+ lágy passz,
+  // 60% részarány — a backenddel azonos küszöbök: SPS_MIN_SOFT,
+  // SPS_SHARE_PCT).
+  String? _softPassRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["sps_soft_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a lágy passzaik ${pct.round()}%-a a(z) $top posztról "
+        "jön ($total lágy passz) · az ő labdáiba bele lehet nyúlni";
+  }
+
+  // Sprint-poszt: melyik posztjuk futja a sprinteket (10+ sprint,
+  // 60% részarány — a backenddel azonos küszöbök: SPR_MIN_SPRINTS,
+  // SPR_SHARE_PCT).
+  String? _sprintThreatRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["spr_sprints_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 10) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a sprintjeik ${pct.round()}%-át a(z) $top posztjuk futja"
+        " ($total sprint) · labdavesztésnél az ő útját kell először "
+        "lezárni";
+  }
+
+  // Középkezdő-poszt: melyik posztjuknál indul a középkezdés (3+
+  // átvétel, 60% részarány — a backenddel azonos küszöbök:
+  // RTR_MIN_TAKES, RTR_SHARE_PCT).
+  String? _restartTakerRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rtr_takes_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a középkezdésük ${pct.round()}%-ban a(z) $top posztnál "
+        "indul ($total átvétel) · a gól utáni letámadás őt fogja le";
+  }
+
+  // Forró-poszt: melyik posztjuk lövi a gólsorozatokat (3+
+  // sorozat-gól, 60% részarány — a backenddel azonos küszöbök:
+  // HHR_MIN_GOALS, HHR_SHARE_PCT).
+  String? _hotHandRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["hhr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a gólsorozataik ${pct.round()}%-a a(z) $top posztról "
+        "jön ($total sorozat-gól) · az első gólja után azonnal "
+        "őrzés-váltás vagy kettőzés";
+  }
+
+  // Hajráhiba-poszt: melyik posztjuk adja el a labdát a hajrában
+  // (3+ hajrá-eladás, 60% részarány — a backenddel azonos küszöbök:
+  // CTR_MIN_TO, CTR_SHARE_PCT).
+  String? _clutchTurnoverRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ctr_to_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a hajrá-eladásaik ${pct.round()}%-a a(z) $top posztnál "
+        "történik ($total eladás az utolsó öt percben) · a záró "
+        "percekben oda jön a pressz";
+  }
+
+  // Eltűnő-poszt: melyik posztjuk tűnik el a második félidőre (3+
+  // első félidei gól-részvétel, legfeljebb 1 második félidei — a
+  // backenddel azonos küszöbök: FDP_MIN_FH, FDP_MAX_SH).
+  String? _fadingRole(Map<String, dynamic> r) {
+    final fh =
+        (r["fdp_fh_by_role"] as Map?)?.cast<String, dynamic>();
+    final sh =
+        (r["fdp_sh_by_role"] as Map?)?.cast<String, dynamic>();
+    if (fh == null || fh.isEmpty) return null;
+    String? post;
+    var postFh = 0;
+    fh.forEach((k, v) {
+      final n = (v as num).toInt();
+      final s2 = ((sh?[k] as num?) ?? 0).toInt();
+      if (n >= 3 && s2 <= 1 && n > postFh) {
+        post = k;
+        postFh = n;
+      }
+    });
+    if (post == null) return null;
+    final postSh = ((sh?[post] as num?) ?? 0).toInt();
+    return "a(z) $post posztjuk az első félidőben él ($postFh "
+        "gól-részvétel), a másodikra eltűnik ($postSh) · az első 30 "
+        "percben kell megfogni";
+  }
+
+  // Csendtörő-poszt: melyik posztjuk töri meg a gólcsendet (3+
+  // csend-törő gól, 60% részarány — a backenddel azonos küszöbök:
+  // GCT_MIN_BREAKS, GCT_SHARE_PCT).
+  String? _droughtBreakRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["gct_breaks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a gólcsendjüket a(z) $top posztjuk töri meg "
+        "(${pct.round()}%, $total csend-törő gól) · a sorozatotok "
+        "alatt őt kell a legszorosabban fogni";
+  }
+
+  // Pressz-poszt: melyik posztjuk ejti a labdát szorításban (3+
+  // nyomott eladás, 60% részarány — a backenddel azonos küszöbök:
+  // PSR_MIN_TO, PSR_SHARE_PCT).
+  String? _pressSensRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["psr_to_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "szorításban a(z) $top posztjuk ejti a labdát "
+        "(${pct.round()}%, $total nyomott eladás) · a kettőzés oda "
+        "labdaszerzés";
+  }
+
+  // Labdatartó-poszt: melyik posztjuknál áll meg a labda (60+ mp
+  // mért tartás, 60% részarány — a backenddel azonos küszöbök:
+  // HTR_MIN_S, HTR_SHARE_PCT).
+  String? _holdShareRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["htr_seconds_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0.0;
+    byRole.forEach((k, v) => total += (v as num).toDouble());
+    if (total < 60.0) return null;
+    String? top;
+    var topN = 0.0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toDouble();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a labda a(z) $top posztjuknál áll meg (${pct.round()}%, "
+        "${total.round()} mp mért tartás) · a kettőzést rá kell "
+        "időzíteni";
+  }
+
+  // Ziccer-poszt: melyik posztjuknál alakul ki a nagy helyzet (3+
+  // ziccer, 60% részarány — a backenddel azonos küszöbök:
+  // BCR_MIN_CHANCES, BCR_SHARE_PCT).
+  String? _bigChanceRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["bcr_chances_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a ziccereik ${pct.round()}%-a a(z) $top posztnál alakul "
+        "ki ($total nagy helyzet) · korábbi besegítés és szűkítés az "
+        "ő sávjában";
+  }
+
+  // Pazarló-poszt: melyik posztjuk lövi mellé a lövéseit (3+ kaput
+  // elkerülő lövés, 60% részarány — a backenddel azonos küszöbök:
+  // WSR_MIN_OFF, WSR_SHARE_PCT).
+  String? _wastefulRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["wsr_off_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kaput elkerülő lövéseik ${pct.round()}%-a a(z) $top "
+        "posztról jön ($total mellé/blokkolt lövés) · az ő lövését "
+        "rá lehet engedni, a kidobásból azonnali indítás";
+  }
+
+  // Felzárkózás-poszt: melyik posztjuk hozza őket vissza hátrányból
+  // (3+ hátrány-gól-részvétel, 60% részarány — a backenddel azonos
+  // küszöbök: CBR_MIN_TRAILING, CBR_SHARE_PCT).
+  String? _comebackRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["cbr_trailing_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "hátrányból a(z) $top posztjuk hozza őket vissza "
+        "(${pct.round()}%, $total hátrány-gól-részvétel) · vezetésnél "
+        "őt kell kivenni, és a hátrányuk beragad";
+  }
+
+  // Emberhátrány-poszt: melyik posztjuk vállal be öt emberrel (3+
+  // hátrány-lövés, 60% részarány — a backenddel azonos küszöbök:
+  // SHR_MIN_SHOTS, SHR_SHARE_PCT).
+  String? _shorthandedRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["shr_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "öt emberrel a(z) $top posztjuk vállal be "
+        "(${pct.round()}%, $total lövés) · emberelőnyben az ő "
+        "oldalán kell a labdabiztonság";
+  }
+
+  // Emberelőny-poszt: melyik posztjuk fejez be a két perc alatt (3+
+  // emberelőny-lövés, 60% részarány — a backenddel azonos küszöbök:
+  // PPR_MIN_SHOTS, PPR_SHARE_PCT).
+  String? _powerplayRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ppr_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az emberelőnyük a(z) $top posztra fut ki "
+        "(${pct.round()}%, $total lövés) · hátrányban az ő sávját "
+        "kell tartani";
+  }
+
+  // Kiosztás-poszt: melyik posztra jár a betörés utáni labda (4+
+  // kiosztás, 60% részarány — a backenddel azonos küszöbök:
+  // KOR_MIN_KICKOUTS, KOR_SHARE_PCT).
+  String? _kickoutRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["kor_kickouts_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 4) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a betöréseik utáni labda a(z) $top posztra jár "
+        "(${pct.round()}%, $total kiosztás) · a védője előre "
+        "zárhatja a sávot";
+  }
+
+  // Kettőző-poszt: melyik posztjuk lép ki kettőzni (40+ kettőzött
+  // kocka, 60% részarány — a backenddel azonos küszöbök:
+  // DDR_MIN_FRAMES, DDR_SHARE_PCT).
+  String? _doublingRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ddr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 40) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kettőzésük a(z) $top posztról érkezik "
+        "(${pct.round()}%) · az elhagyott embere felé menjen az "
+        "első passz";
+  }
+
+  // Kockáztató-poszt: melyik posztjuk szórja el a hosszú labdákat
+  // (3+ elszórt hosszú passz, 60% részarány — a backenddel azonos
+  // küszöbök: RPR_MIN_TO, RPR_SHARE_PCT).
+  String? _riskyPasserRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rpr_to_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a hazárd hosszú labdáik a(z) $top posztról indulnak "
+        "(${pct.round()}%, $total eladás) · az ő passzsávjába kell "
+        "beállni";
+  }
+
+  // Vasember-poszt: melyik posztjuk játszik végig csere nélkül
+  // (10+ percnyi kocka, 85% jelenlét és 15 százalékpontos előny — a
+  // backenddel azonos küszöbök: IRM_MIN_MATCH_MIN, IRM_SHARE_PCT,
+  // IRM_GAP_PP; a kocka→perc váltás 25 fps-t feltételez).
+  String? _ironManRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["irm_on_by_role"] as Map?)?.cast<String, dynamic>();
+    final total = (r["irm_total_frames"] as num?)?.toInt() ?? 0;
+    if (byRole == null || byRole.isEmpty || total < 15000) return null;
+    final shares = byRole.entries
+        .map((e) => MapEntry(e.key, 100.0 * (e.value as num) / total))
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final top = shares.first;
+    final second = shares.length > 1 ? shares[1].value : 0.0;
+    if (top.value < 85.0 || top.value - second < 15.0) return null;
+    return "a(z) ${top.key} posztjuk végigjátssza a meccset "
+        "(${top.value.round()}% jelenlét) · a hajrában oda kell "
+        "vinni a tempót";
+  }
+
+  // Bejátszó-poszt: melyik posztjuk játssza be a beállót (4+
+  // beálló-beadás, 60% részarány — a backenddel azonos küszöbök:
+  // PFR_MIN_FEEDS, PFR_SHARE_PCT).
+  String? _pivotFeederRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["pfr_feeds_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 4) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a beálló-beadásaik a(z) $top posztról jönnek "
+        "(${pct.round()}%, $total beadás) · az ő kezén kell a "
+        "vonalba lépni";
+  }
+
+  // Indítás-vadász poszt: melyik posztjuk vadássza a kapus-indítást
+  // (3+ elrabolt indítás, 60% részarány — a backenddel azonos
+  // küszöbök: OHR_MIN_STEALS, OHR_SHARE_PCT).
+  String? _outletHunterRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ohr_steals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az indítás-vadászatuk a(z) $top poszton fut "
+        "(${pct.round()}%, $total rablás) · a kapus-indítás a másik "
+        "oldalon nyisson";
+  }
+
+  // Kulcs-poszt: hány poszt-réteg ítélete fut ki ugyanarra a posztra
+  // (3+ egyező réteg, holtverseny nélkül — a backenddel azonos
+  // küszöb: KP_MIN_LAYERS).
+  String? _keyPost(Map<String, dynamic> r) {
+    final byPost =
+        (r["kp_layers_by_post"] as Map?)?.cast<String, dynamic>();
+    if (byPost == null || byPost.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var tie = false;
+    byPost.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+        tie = false;
+      } else if (n == topN) {
+        tie = true;
+      }
+    });
+    if (top == null || topN < 3 || tie) return null;
+    return "a kulcs-posztjuk a(z) $top: $topN poszt-réteg ítélete "
+        "fut ki rá · az ő kezelése a meccsterv első lapja";
+  }
+
+  // Elzáró-poszt: melyik posztjuk áll elzárásba (3+ poszthoz kötött
+  // elzárás, 60% részarány — a backenddel azonos küszöbök:
+  // SCR2_MIN_SCREENS, SCR2_SHARE_PCT).
+  String? _screenSetterRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["sc2_screens_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az elzárásaik a(z) $top posztról jönnek (${pct.round()}%, "
+        "$total elzárás) · az ő oldalán hangos váltás kell";
+  }
+
+  // Átvert-poszt: melyik posztjuk mögött esnek a kapott gólok (3+
+  // védőhöz rendelt gól, 60% részarány — a backenddel azonos
+  // küszöbök: BTR_MIN_GOALS, BTR_SHARE_PCT).
+  String? _beatenRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["btr_beaten_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kapott góljaik a(z) $top posztjuk mögött esnek "
+        "(${pct.round()}%, $total gól) · oda kell vinni az 1v1-et";
+  }
+
+  // Visszafutás-poszt: ki marad le a visszarendeződésben (3+ mért
+  // ellenfél-kontra, 60% részarány — a backenddel azonos küszöbök:
+  // RTR_MIN_BREAKS, RTR_SHARE_PCT).
+  String? _slowRetreatRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rtr_lags_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a visszarendeződésük a(z) $top poszton szakad el "
+        "(${pct.round()}%, $total kontra) · a kontrát az ő sávjába "
+        "kell vezetni";
+  }
+
+  // Kiülő-poszt: melyik posztjuk gyűjti a kétperceket (3+ poszthoz
+  // kötött kiállítás, 60% részarány — a backenddel azonos küszöbök:
+  // SUP_MIN_SUSP, SUP_SHARE_PCT).
+  String? _suspendedRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["sup_susp_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kétperceik a(z) $top posztra járnak (${pct.round()}%, "
+        "$total kiállítás) · a meccs elején oda kell vezetni a "
+        "játékot";
+  }
+
+  // Hetes-okozó poszt: melyik sávjuk szakad be hetessel (3+ okozott
+  // hetes, 60% részarány — a backenddel azonos küszöbök:
+  // SVR_MIN_SEVENS, SVR_SHARE_PCT).
+  String? _sevenConcederRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["svr_sevens_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a heteseik a(z) $top poszton szakadnak be "
+        "(${pct.round()}%, $total hetes) · oda érdemes betörést "
+        "vezetni";
+  }
+
+  // 7a6-befejező poszt: kire fut ki a hetedik ember játéka (3+
+  // 7a6-lövés, 60% részarány — a backenddel azonos küszöbök:
+  // EN7_MIN_SHOTS, EN7_SHARE_PCT).
+  String? _sevenSixRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["en7_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a 7 a 6-uk a(z) $top posztra fut ki (${pct.round()}%, "
+        "$total lövés) · a lehozott kapusnál oda kell sűríteni";
+  }
+
+  // Blokk-poszt: melyik posztjuk blokkolja a lövéseket (3+ poszthoz
+  // kötött blokk, 60% részarány — a backenddel azonos küszöbök:
+  // RBK_MIN_BLOCKS, RBK_SHARE_PCT).
+  String? _blockRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rbk_blocks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a blokkjaik zöme a(z) $top poszttól jön (${pct.round()}%, "
+        "$total blokk) · az ő sávjába csak elmozgatás után szabad "
+        "lőni";
+  }
+
+  // Labdaszerző-poszt: melyik posztjuk nyeri a labdákat (5+ poszthoz
+  // kötött szerzés, 50% részarány — a backenddel azonos küszöbök:
+  // RSW_MIN_STEALS, RSW_SHARE_PCT).
+  String? _stealRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rsw_steals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 50.0) return null;
+    return "a labdáik felét-többségét a(z) $top szedi (${pct.round()}%, "
+        "$total szerzés) · az ő sávjába csak biztonsági passz mehet";
+  }
+
+  // Gólpassz-poszt: kinek a kezéből indulnak a góljaik (3+ poszthoz
+  // kötött gólpassz, 60% részarány — a backenddel azonos küszöbök:
+  // RAS_MIN_ASSISTS, RAS_SHARE_PCT).
+  String? _assistRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ras_assists_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a góljaik a(z) $top kezéből indulnak (${pct.round()}%, "
+        "$total gólpassz) · tőle a passzt kell elvenni, nem a lövést "
+        "zárni";
+  }
+
+  // Hetes-oldal: merre dobják a heteseiket (3+ mérhető dobás, 60%
+  // részarány — a backenddel azonos küszöbök: SVD_MIN_ATTEMPTS,
+  // SVD_SHARE_PCT).
+  String? _sevenSide(Map<String, dynamic> r) {
+    final dirs = (r["svd_dirs"] as Map?)?.cast<String, dynamic>();
+    if (dirs == null || dirs.isEmpty) return null;
+    var total = 0;
+    dirs.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    dirs.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a heteseik ${pct.round()}%-a $top oldalra megy ($total "
+        "mérhető dobás) · hetesnél a kapus tudatosan arra vetődhet";
+  }
+
+  // Kontra-poszt: melyik posztjukon zárul a lerohanás (3+ kontra-lövés,
+  // 60% részarány — a backenddel azonos küszöbök: RFB_MIN_SHOTS,
+  // RFB_SHARE_PCT).
+  String? _fastBreakRole(Map<String, dynamic> r) {
+    final shots =
+        (r["rfb_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty) return null;
+    var total = 0;
+    shots.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    shots.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a lerohanásaik a(z) $top poszton záródnak (${pct.round()}%, "
+        "$total kontra-lövés) · visszafutásnál őt kell először felvenni";
+  }
+
+  // Lövésválasztás: felnéznek-e a lövés előtt (6+ mért lövés, 45%
+  // felett "nem néznek fel", 15% alatt fegyelmezett — a backenddel
+  // azonos küszöbök: SCQ_MIN_SHOTS, SCQ_HIGH_PCT, SCQ_LOW_PCT).
+  String? _shotChoice(Map<String, dynamic> r) {
+    final shots = (r["scq_shots"] as num?)?.toInt() ?? 0;
+    final better = (r["scq_better"] as num?)?.toInt() ?? 0;
+    if (shots < 6) return null;
+    final pct = 100.0 * better / shots;
+    if (pct >= 45.0) {
+      return "a lövéseik ${pct.round()}%-ánál volt jobb SZABAD helyzet a "
+          "pályán ($better/$shots) · nem néznek fel: a rossz szögű lövést "
+          "rájuk lehet engedni, a szabad társukat kell zárni";
+    }
+    if (pct <= 15.0) {
+      return "fegyelmezett lövésválasztás: csak ${pct.round()}%-nál volt "
+          "jobb szabad helyzet ($better/$shots) · a helyzet-teremtést "
+          "kell zárni, a lövésnél már késő";
+    }
+    return null;
+  }
+
+  // Időkérés-befejező: az időkérés után melyik posztra játszanak (3+
+  // poszthoz kötött lövés, 60% részarány — a backenddel azonos
+  // küszöbök: TOF_MIN_SHOTS, TOF_SHARE_PCT).
+  String? _timeoutFinisher(Map<String, dynamic> r) {
+    final shots =
+        (r["tof_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty) return null;
+    var total = 0;
+    shots.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    shots.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    final timeouts = (r["tof_timeouts"] as num?)?.toInt() ?? 0;
+    return "időkérés után a(z) $top posztjuk fejez be: a lövéseik "
+        "${pct.round()}%-a onnan jött ($total lövés, $timeouts időkérés "
+        "után) · ő kapja az embert, elé kell állni";
+  }
+
+  // Figura-befejező: hány figurájuk fut ki ugyanarra a posztra (2+
+  // mérhető figura). A 60%-os részarány-szűrést (SPF_SHARE_PCT) MÁR A
+  // MOTOR elvégzi: a spf_telegraphed csak a küszöböt elért figurákat
+  // számolja, itt tehát nincs mit újra ellenőrizni.
+  String? _setplayFinisher(Map<String, dynamic> r) {
+    final figures = (r["spf_figures"] as num?)?.toInt() ?? 0;
+    final tel = (r["spf_telegraphed"] as num?)?.toInt() ?? 0;
+    final byRole =
+        (r["spf_telegraphed_by_role"] as Map?)?.cast<String, dynamic>();
+    if (figures < 2 || tel < 1 || byRole == null || byRole.isEmpty) {
+      return null;
+    }
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    return "a figuráik $figures-ból $tel kiszámítható befejezésű, a "
+        "legtöbb ($topN) a(z) $top posztra fut ki · a figura "
+        "felismerésekor kell odacsúszni, nem a lövésnél";
+  }
+
+  // Figura-indító: hány figurájuk INDÍTÁSA olvasható egy posztról (2+
+  // mérhető figura). A 60%-os részarány-szűrést (SPO_SHARE_PCT) MÁR A
+  // MOTOR elvégzi, ahogy a figura-befejezőnél is. A befejező a lövés
+  // előtt derül ki, ez az ELSŐ passznál.
+  String? _setplayOpener(Map<String, dynamic> r) {
+    final figures = (r["spo_figures"] as num?)?.toInt() ?? 0;
+    final tel = (r["spo_telegraphed"] as num?)?.toInt() ?? 0;
+    final byRole =
+        (r["spo_telegraphed_by_role"] as Map?)?.cast<String, dynamic>();
+    if (figures < 2 || tel < 1 || byRole == null || byRole.isEmpty) {
+      return null;
+    }
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    return "a figuráik $figures-ból $tel már az INDÍTÁSNÁL olvasható, a "
+        "legtöbb ($topN) a(z) $top posztról indul · zárjátok a kiinduló "
+        "passzsávot, és a figura el sem indul";
+  }
+
+  // Poszt-nyomás: melyik posztjuk fejez be fedezetten is (8+ fedezett
+  // lövés, posztonként 4+, 20 százalékpont eltérés — a backenddel
+  // azonos küszöbök: RPF_MIN_SHOTS, RPF_GAP_PCT).
+  String? _pressureFinishRole(Map<String, dynamic> r) {
+    final shots =
+        (r["rpf_covered_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final goals =
+        (r["rpf_covered_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty || goals == null) return null;
+    var total = 0;
+    var totalG = 0;
+    shots.forEach((k, v) => total += (v as num).toInt());
+    goals.forEach((k, v) => totalG += (v as num).toInt());
+    if (total < 8) return null;
+    final teamPct = 100.0 * totalG / total;
+    String? cold, shy;
+    var coldPct = 0.0, shyPct = 0.0;
+    var coldN = 0, shyN = 0;
+    shots.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 4) return;
+      final pct = 100.0 * ((goals[k] as num?) ?? 0).toInt() / n;
+      if (cold == null || pct > coldPct) {
+        cold = k;
+        coldPct = pct;
+        coldN = n;
+      }
+      if (shy == null || pct < shyPct) {
+        shy = k;
+        shyPct = pct;
+        shyN = n;
+      }
+    });
+    if (cold != null && coldPct - teamPct >= 20.0) {
+      return "a(z) $cold posztjuk fedezetten is befejez: a fedezett "
+          "lövéseik ${coldPct.round()}%-át belövi ($coldN lövés, "
+          "csapat-átlag ${teamPct.round()}%) · őt ki kell zárni, a puszta "
+          "kilépés nála kevés";
+    }
+    if (shy != null && teamPct - shyPct >= 20.0) {
+      return "a(z) $shy posztjuk fedezetten beesik: a fedezett lövéseik "
+          "${shyPct.round()}%-át lövi be ($shyN lövés, csapat-átlag "
+          "${teamPct.round()}%) · rá érdemes kilépni, nála a nyomás "
+          "megoldja a helyzetet";
+    }
+    return null;
   }
 
   // Poszt-lövéserő: melyik posztjuk lő keményen (8+ lövés,
@@ -5159,6 +9929,42 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "${avg.toStringAsFixed(1)} mp) · rá a kettőzés és a letámadás";
   }
 
+  // Labdavezetés-táv: ki cipeli náluk a labdát (a backenddel azonos
+  // küszöbök: HOLD_MIN_HOLDS labdás szakasz, CARRY_LONG_GAP_M méter a
+  // csapatátlag felett).
+  String? _ballCarry(Map<String, dynamic> r) {
+    final list = r["carry_players"];
+    if (list is! List) return null;
+    int holds = 0;
+    double meters = 0.0;
+    for (final e in list) {
+      if (e is! Map) continue;
+      holds += ((e["holds"] as num?) ?? 0).toInt();
+      meters += ((e["meters"] as num?) ?? 0).toDouble();
+    }
+    if (holds < 5) return null;
+    final avg = meters / holds;
+    Map? top;
+    double topM = 0.0;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final n = ((e["holds"] as num?) ?? 0).toInt();
+      if (n < 5) continue;
+      final m = ((e["meters"] as num?) ?? 0).toDouble() / n;
+      if (top == null || m > topM) {
+        top = e;
+        topM = m;
+      }
+    }
+    if (top == null || topM - avg < 3.0) return null;
+    final who = top["jersey"] != null
+        ? "${top["jersey"]}-es"
+        : "${top["player_id"]} azonosítójú";
+    return "a(z) $who játékosuk viszi a labdát: átlag "
+        "${topM.toStringAsFixed(1)} m labdás szakaszonként (csapatátlag "
+        "${avg.toStringAsFixed(1)} m) · futó labdásnál rá a leszúrás";
+  }
+
   // Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak (6+
   // védekezett támadás, 30% váltás-arány / 80% fő forma; a
   // backend-kulccsal azonos küszöbök).
@@ -6069,6 +10875,138 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Fal-mélység esése: a fal HELYE (a saját kaputól mért távolság) a 2.
+  // félidőre — más kérdés, mint a fellazulás (az a labdástól mért
+  // távolság). Félidőnként 100+ mért kockánál, 0,5 m küszöbbel: a
+  // backend LINE_FADE_MIN_FRAMES / LINE_FADE_DROP_M tükre.
+  String? _lineHeightFade(Map<String, dynamic> r) {
+    final fhN = ((r["lhf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["lhf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 100 || shN < 100) return null;
+    final fhSum = ((r["lhf_fh_sum_m"] as num?) ?? 0).toDouble();
+    final shSum = ((r["lhf_sh_sum_m"] as num?) ?? 0).toDouble();
+    if (fhSum <= 0 || shSum <= 0) return null;
+    final fh = fhSum / fhN;
+    final sh = shSum / shN;
+    final d = fh - sh; // pozitív = visszahúzódott
+    if (d >= 0.5) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+          "· visszahúzódik · a 9 méteres nyílik";
+    }
+    if (d <= -0.5) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+          "· feljebb jön · a kilépő mögé kell játszani";
+    }
+    return null;
+  }
+
+  // Visszaállás-fáradás: lassul-e a hazaérésük a 2. félidőre
+  // (félidőnként 4+ mért lövésnél, 1,0 mp küszöbbel — a backend
+  // RETREAT_FADE_MIN_SHOTS / RETREAT_FADE_SLOW_S tükre).
+  String? _retreatFade(Map<String, dynamic> r) {
+    final fhN = ((r["rtf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["rtf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 4 || shN < 4) return null;
+    final fhSum = ((r["rtf_fh_sum_s"] as num?) ?? 0).toDouble();
+    final shSum = ((r["rtf_sh_sum_s"] as num?) ?? 0).toDouble();
+    if (fhSum <= 0 || shSum <= 0) return null;
+    final fh = fhSum / fhN;
+    final sh = shSum / shN;
+    final d = sh - fh; // pozitív = lassult
+    if (d >= 1.0) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} mp "
+          "· lassul · a hajrában kontrázhatók";
+    }
+    if (d <= -1.0) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} mp "
+          "· gyorsul · a hajrában nem kontrázhatók";
+    }
+    return null;
+  }
+
+  // Támadás-mélység esése: hátrébb állnak-e a 2. félidőre
+  // (félidőnként 100+ mért kockánál, 0,5 m küszöbbel — a backend
+  // ADEPTH_FADE_MIN_FRAMES / ADEPTH_FADE_DROP_M tükre).
+  String? _attackDepthFade(Map<String, dynamic> r) {
+    final fhN = ((r["adf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["adf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 100 || shN < 100) return null;
+    final fhSum = ((r["adf_fh_sum_m"] as num?) ?? 0).toDouble();
+    final shSum = ((r["adf_sh_sum_m"] as num?) ?? 0).toDouble();
+    if (fhSum <= 0 || shSum <= 0) return null;
+    final fh = fhSum / fhN;
+    final sh = shSum / shN;
+    final d = sh - fh; // pozitív = hátrébb álltak
+    if (d >= 0.5) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+          "· hátrébb kerülnek · a fal tömörülhet beljebb";
+    }
+    if (d <= -0.5) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+          "· közelebb nyomulnak · hatos elleni munka a téma";
+    }
+    return null;
+  }
+
+  // Beálló-bevonás esése: elfogy-e a beállójuk a 2. félidőre
+  // (félidőnként 6+ mért támadásnál, 10 százalékpontos küszöbbel — a
+  // backend PIVOT_FADE_MIN_ATTACKS / PIVOT_FADE_DROP_PCT tükre).
+  String? _pivotUsageFade(Map<String, dynamic> r) {
+    final fhN = ((r["puf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["puf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 6 || shN < 6) return null;
+    final fh = 100.0 * (((r["puf_fh_pivot"] as num?) ?? 0).toInt()) / fhN;
+    final sh = 100.0 * (((r["puf_sh_pivot"] as num?) ?? 0).toInt()) / shN;
+    final d = fh - sh; // pozitív = elfogy a beálló
+    if (d >= 10.0) {
+      return "${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "· elfogy a beálló · a fal kifelé dolgozhat";
+    }
+    if (d <= -10.0) {
+      return "${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "· többet játsszák · a középső hármas zárjon befelé";
+    }
+    return null;
+  }
+
+  // Hajrá-profil: hány fáradás-jel szólal meg náluk meccsenként. Nem
+  // új mérés, hanem az ÖSSZKÉP — a backend FATIGUE_PATTERN_MIN = 3
+  // küszöbének tükre.
+  String? _fatigueProfile(Map<String, dynamic> r) {
+    final n = ((r["fpr_matches"] as num?) ?? 0).toInt();
+    if (n < 1) return null;
+    final jel = ((r["fpr_signals"] as num?) ?? 0).toInt() / n;
+    if (jel >= 3.0) {
+      return "${jel.toStringAsFixed(1)} jel/meccs "
+          "· a hajrá az ő gyenge pontjuk";
+    }
+    if (jel <= 0.0 && n >= 2) {
+      return "0 jel $n meccsen · hatvan percig bírják";
+    }
+    return null;
+  }
+
+  // Szélső-bevonás esése: beszűkül-e a támadásuk a 2. félidőre
+  // (félidőnként 6+ mért támadásnál, 10 százalékpontos küszöbbel — a
+  // backend WING_INV_FADE_MIN_ATTACKS / WING_INV_FADE_DROP_PCT tükre).
+  String? _wingInvolvementFade(Map<String, dynamic> r) {
+    final fhN = ((r["wif_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["wif_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 6 || shN < 6) return null;
+    final fh = 100.0 * (((r["wif_fh_wing"] as num?) ?? 0).toInt()) / fhN;
+    final sh = 100.0 * (((r["wif_sh_wing"] as num?) ?? 0).toInt()) / shN;
+    final d = fh - sh; // pozitív = beszűkültek
+    if (d >= 10.0) {
+      return "${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "· beszűkül · húzd beljebb a szélső-védőket";
+    }
+    if (d <= -10.0) {
+      return "${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "· széthúzódik · a szélső-védekezés a feladat";
+    }
+    return null;
+  }
+
   // Lövés-időzítés: az első hullámból lövők vs kivárók (5+ lőtt
   // támadásnál; a backend-kulcsokkal azonos küszöbök).
   String? _shotTiming(Map<String, dynamic> r) {
@@ -6540,6 +11478,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_shotTiming(r) != null) ["Lövés-időzítés", _shotTiming(r)!],
       if (_pressureFade(r) != null)
         ["Védekezés-fellazulás", _pressureFade(r)!],
+      if (_lineHeightFade(r) != null)
+        ["Fal-mélység a hajrában", _lineHeightFade(r)!],
+      if (_retreatFade(r) != null)
+        ["Visszaállás a hajrában", _retreatFade(r)!],
+      if (_wingInvolvementFade(r) != null)
+        ["Szélső-bevonás a hajrában", _wingInvolvementFade(r)!],
+      if (_pivotUsageFade(r) != null)
+        ["Beálló-bevonás a hajrában", _pivotUsageFade(r)!],
+      if (_attackDepthFade(r) != null)
+        ["Támadás-mélység a hajrában", _attackDepthFade(r)!],
+      if (_fatigueProfile(r) != null)
+        ["Hajrá-profil (fáradás-jelek)", _fatigueProfile(r)!],
       if (_timeoutRecord(r) != null)
         ["Időkérés-mérleg", _timeoutRecord(r)!],
       if (_turnoverFade(r) != null)
@@ -6656,6 +11606,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_formationSwitching(r) != null)
         ["Védekezés-váltás", _formationSwitching(r)!],
       if (_holdTime(r) != null) ["Labdatartás", _holdTime(r)!],
+      if (_ballCarry(r) != null) ["Labdavezetés", _ballCarry(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],
@@ -6940,6 +11891,366 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_reboundRole(r) != null)
+        ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_bigChanceFeederRole(r) != null)
+        ["Ziccer-előkészítő poszt", _bigChanceFeederRole(r)!],
+      if (_sevenMissRole(r) != null)
+        ["Hetes-kihagyó poszt", _sevenMissRole(r)!],
+      if (_bigChancePair(r) != null)
+        ["Ziccerpáros-poszt", _bigChancePair(r)!],
+      if (_powerplayTurnoverRole(r) != null)
+        ["Emberelőny-hiba poszt", _powerplayTurnoverRole(r)!],
+      if (_responseTurnoverRole(r) != null)
+        ["Válaszhiba-poszt", _responseTurnoverRole(r)!],
+      if (_timeoutTurnoverRole(r) != null)
+        ["Időkérés-hiba poszt", _timeoutTurnoverRole(r)!],
+      if (_retreatTime(r) != null)
+        ["Visszaállás-idő", _retreatTime(r)!],
+      if (_postGoalRush(r) != null)
+        ["Kapkodás-index", _postGoalRush(r)!],
+      if (_shorthandedTurnoverRole(r) != null)
+        ["Emberhátrány-hiba poszt", _shorthandedTurnoverRole(r)!],
+      if (_clutchKeeper(r) != null)
+        ["Hajrá-kapus", _clutchKeeper(r)!],
+      if (_setplayConcentration(r) != null)
+        ["Figura-koncentráció", _setplayConcentration(r)!],
+      if (_defensiveReboundRole(r) != null)
+        ["Lepattanó-szedő poszt", _defensiveReboundRole(r)!],
+      if (_retreatPunishment(r) != null)
+        ["Visszaállás ára", _retreatPunishment(r)!],
+      if (_reboundPunishment(r) != null)
+        ["Kipattanó ára", _reboundPunishment(r)!],
+      if (_clockManagement(r) != null)
+        ["Óralopás", _clockManagement(r)!],
+      if (_sprintFade(r) != null)
+        ["Sprint-esés", _sprintFade(r)!],
+      if (_sevenTakerPlayer(r) != null)
+        ["Hetesdobó ember", _sevenTakerPlayer(r)!],
+      if (_timeoutTurnoverPlayer(r) != null)
+        ["Időkérés-hibázó ember", _timeoutTurnoverPlayer(r)!],
+      if (_responseTurnoverPlayer(r) != null)
+        ["Válaszhiba-ember", _responseTurnoverPlayer(r)!],
+      if (_bigChanceFeederPlayer(r) != null)
+        ["Ziccer-előkészítő ember", _bigChanceFeederPlayer(r)!],
+      if (_lastHolderPlayer(r) != null)
+        ["Vég-birtokos ember", _lastHolderPlayer(r)!],
+      if (_pressOutletPlayer(r) != null)
+        ["Menekülő ember", _pressOutletPlayer(r)!],
+      if (_laneSwitcherPlayer(r) != null)
+        ["Sávváltó ember", _laneSwitcherPlayer(r)!],
+      if (_ballCarrierPlayer(r) != null)
+        ["Térnyerő ember", _ballCarrierPlayer(r)!],
+      if (_backwardPasserPlayer(r) != null)
+        ["Hátrapasszoló ember", _backwardPasserPlayer(r)!],
+      if (_tiredTurnoverPlayer(r) != null)
+        ["Fáradt-eladó ember", _tiredTurnoverPlayer(r)!],
+      if (_slowRetreatPlayer(r) != null)
+        ["Visszafutás-lemaradó ember", _slowRetreatPlayer(r)!],
+      if (_tiredConcederPlayer(r) != null)
+        ["Fáradt-fal ember", _tiredConcederPlayer(r)!],
+      if (_outletHunter(r) != null)
+        ["Indítás-vadász ember", _outletHunter(r)!],
+      if (_pressTarget(r) != null)
+        ["Kettőzés-célpont", _pressTarget(r)!],
+      if (_clutchTarget(r) != null)
+        ["Hajrá-célpont", _clutchTarget(r)!],
+      if (_emptyNetTurnovers(r) != null)
+        ["7a6 eladás ára", _emptyNetTurnovers(r)!],
+      if (_assistedScorer(r) != null)
+        ["Kiszolgált befejező", _assistedScorer(r)!],
+      if (_suspensionCollector(r) != null)
+        ["Kétperc-gyűjtő", _suspensionCollector(r)!],
+      if (_outletTargetPlayer(r) != null)
+        ["Felhozatal-ember", _outletTargetPlayer(r)!],
+      if (_screenYield(r) != null)
+        ["Elzárás-hozam", _screenYield(r)!],
+      if (_blockFade(r) != null)
+        ["Blokk-fáradás", _blockFade(r)!],
+      if (_powerplayYield(r) != null)
+        ["Emberelőny-hozam", _powerplayYield(r)!],
+      if (_sevenYield(r) != null)
+        ["Hetes-hozam", _sevenYield(r)!],
+      if (_passiveRisk(r) != null)
+        ["Passzív-kockázat", _passiveRisk(r)!],
+      if (_substitutionYield(r) != null)
+        ["Csere-hozam", _substitutionYield(r)!],
+      if (_doubledTarget(r) != null)
+        ["Kettőzött ember", _doubledTarget(r)!],
+      if (_keeperReturn(r) != null)
+        ["Kapus-visszaérés", _keeperReturn(r)!],
+      if (_counterPlan(r) != null)
+        ["Ellenszer-lap", _counterPlan(r)!],
+      if (_setplayDecay(r) != null)
+        ["Figura-kopás", _setplayDecay(r)!],
+      if (_runningLoad(r) != null)
+        ["Futómunka-eloszlás", _runningLoad(r)!],
+      if (_keeperAfterGoal(r) != null)
+        ["Kapus a kapott gól után", _keeperAfterGoal(r)!],
+      if (_sevenSource(r) != null)
+        ["Hetes-forrás", _sevenSource(r)!],
+      if (_controlTimeline(r) != null)
+        ["Kontroll-idővonal", _controlTimeline(r)!],
+      if (_missedChancePlayer(r) != null)
+        ["Ziccerhagyó ember", _missedChancePlayer(r)!],
+      if (_tiredShooter(r) != null)
+        ["Fáradt lövő", _tiredShooter(r)!],
+      if (_softPasser(r) != null)
+        ["Lágy passzoló", _softPasser(r)!],
+      if (_passiveHolder(r) != null)
+        ["Passzív-birtokló", _passiveHolder(r)!],
+      if (_lastPasser(r) != null)
+        ["Előkészítő ember", _lastPasser(r)!],
+      if (_responseScorer(r) != null)
+        ["Válaszoló ember", _responseScorer(r)!],
+      if (_openingScorer(r) != null)
+        ["Rajt-ember", _openingScorer(r)!],
+      if (_secondStartScorer(r) != null)
+        ["Újrakezdő ember", _secondStartScorer(r)!],
+      if (_leadScorer(r) != null)
+        ["Előnyben-ember", _leadScorer(r)!],
+      if (_screenedDefender(r) != null)
+        ["Elzárt védő", _screenedDefender(r)!],
+      if (_wingRunner(r) != null)
+        ["Futtatott szélső", _wingRunner(r)!],
+      if (_crossRunner(r) != null)
+        ["Keresztjáró ember", _crossRunner(r)!],
+      if (_pivotRunner(r) != null)
+        ["Leforduló beálló", _pivotRunner(r)!],
+      if (_secondWaveFinisher(r) != null)
+        ["Befutó ember", _secondWaveFinisher(r)!],
+      if (_parityBreakScorer(r) != null)
+        ["Egálbontó ember", _parityBreakScorer(r)!],
+      if (_leftHandedShooter(r) != null)
+        ["Balkezes lövő", _leftHandedShooter(r)!],
+      if (_defensiveFormation(r) != null)
+        ["Védekezési formáció", _defensiveFormation(r)!],
+      if (_defensiveGaps(r) != null) ["Fal-rés térkép", _defensiveGaps(r)!],
+      if (_gapFade(r) != null) ["Fal-rés fáradás", _gapFade(r)!],
+      if (_leftHandedRole(r) != null)
+        ["Balkezes poszt", _leftHandedRole(r)!],
+      if (_ironMen(r) != null) ["Vasemberek", _ironMen(r)!],
+      if (_preAssist(r) != null) ["Rejtett szervező", _preAssist(r)!],
+      if (_preAssistRole(r) != null)
+        ["Rejtett szervező poszt", _preAssistRole(r)!],
+      if (_parityBreakRole(r) != null)
+        ["Egálbontó poszt", _parityBreakRole(r)!],
+      if (_secondWaveRole(r) != null)
+        ["Befutó poszt", _secondWaveRole(r)!],
+      if (_screenFade(r) != null) ["Elzárás-fáradás", _screenFade(r)!],
+      if (_superSub(r) != null) ["Szuper-csere", _superSub(r)!],
+      if (_superSubRole(r) != null)
+        ["Szuper-csere poszt", _superSubRole(r)!],
+      if (_sevenTakerCorner(r) != null)
+        ["Hetes-sarok emberre", _sevenTakerCorner(r)!],
+      if (_sevenRepeat(r) != null) ["Hetes-ismétlés", _sevenRepeat(r)!],
+      if (_pressuredTurnovers(r) != null)
+        ["Eladás-kényszer", _pressuredTurnovers(r)!],
+      if (_attackTempo(r) != null) ["Támadás-ritmus", _attackTempo(r)!],
+      if (_subPhase(r) != null) ["Csere-fázis", _subPhase(r)!],
+      if (_finishingBalance(r) != null)
+        ["Befejezés-mérleg", _finishingBalance(r)!],
+      if (_gkByHand(r) != null) ["Kapus a kezesség ellen", _gkByHand(r)!],
+      if (_sevenSixFinisher(r) != null)
+        ["7a6-befejező ember", _sevenSixFinisher(r)!],
+      if (_assistDuo(r) != null)
+        ["Gólpassz-duó", _assistDuo(r)!],
+      if (_timeoutYield(r) != null)
+        ["Időkérés-hozam", _timeoutYield(r)!],
+      if (_gkChangeYield(r) != null)
+        ["Kapuscsere-hozam", _gkChangeYield(r)!],
+      if (_shorthandedSurvival(r) != null)
+        ["Emberhátrány-túlélés", _shorthandedSurvival(r)!],
+      if (_restartYield(r) != null)
+        ["Középkezdés-hozam", _restartYield(r)!],
+      if (_sevenMissPlayer(r) != null)
+        ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
+      if (_suspensionChain(r) != null)
+        ["Kétperc-páros", _suspensionChain(r)!],
+      if (_reboundCollector(r) != null)
+        ["Kipattanó-szedő ember", _reboundCollector(r)!],
+      if (_markingShift(r) != null)
+        ["Emberfogás-váltás", _markingShift(r)!],
+      if (_suspensionCost(r) != null)
+        ["Kétperc ára", _suspensionCost(r)!],
+      if (_keyPlayer(r) != null)
+        ["Kulcs-ember", _keyPlayer(r)!],
+      if (_powerplayTurnoverPlayer(r) != null)
+        ["Emberelőny-hibázó", _powerplayTurnoverPlayer(r)!],
+      if (_shorthandedTurnoverPlayer(r) != null)
+        ["Emberhátrány-hibázó", _shorthandedTurnoverPlayer(r)!],
+      if (_breakthroughYield(r) != null)
+        ["Áttörés-hozam", _breakthroughYield(r)!],
+      if (_lastHolderRole(r) != null)
+        ["Vég-birtokos poszt", _lastHolderRole(r)!],
+      if (_pressOutletRole(r) != null)
+        ["Menekülő-poszt", _pressOutletRole(r)!],
+      if (_timeoutPairRole(r) != null)
+        ["Időkéréspáros-poszt", _timeoutPairRole(r)!],
+      if (_laneSwitchRole(r) != null)
+        ["Sávváltó-poszt", _laneSwitchRole(r)!],
+      if (_recoveryRole(r) != null)
+        ["Elöl lógó poszt", _recoveryRole(r)!],
+      if (_responseScorerRole(r) != null)
+        ["Válasz-poszt", _responseScorerRole(r)!],
+      if (_powerplayPairRole(r) != null)
+        ["Emberelőnypáros-poszt", _powerplayPairRole(r)!],
+      if (_specialistRole(r) != null)
+        ["Specialista-poszt", _specialistRole(r)!],
+      if (_keyPair(r) != null)
+        ["Kulcs-páros", _keyPair(r)!],
+      if (_reboundPairRole(r) != null)
+        ["Lepattanópáros-poszt", _reboundPairRole(r)!],
+      if (_doublingPairRole(r) != null)
+        ["Kettőzőpáros-poszt", _doublingPairRole(r)!],
+      if (_assistPairRole(r) != null)
+        ["Gólpasszpáros-poszt", _assistPairRole(r)!],
+      if (_fastBreakPairRole(r) != null)
+        ["Kontrapáros-poszt", _fastBreakPairRole(r)!],
+      if (_sevenPairRole(r) != null)
+        ["Hetespáros-poszt", _sevenPairRole(r)!],
+      if (_swapStyle(r) != null)
+        ["Csere-stílus", _swapStyle(r)!],
+      if (_screenPairRole(r) != null)
+        ["Elzárópáros-poszt", _screenPairRole(r)!],
+      if (_staticAttackerRole(r) != null)
+        ["Álló-poszt", _staticAttackerRole(r)!],
+      if (_highStealRole(r) != null)
+        ["Letámadó-poszt", _highStealRole(r)!],
+      if (_targetedDefenderRole(r) != null)
+        ["Célkereszt-poszt", _targetedDefenderRole(r)!],
+      if (_coveredShooterRole(r) != null)
+        ["Fedezett-lövő poszt", _coveredShooterRole(r)!],
+      if (_fadingDefenderRole(r) != null)
+        ["Védőmotor-poszt", _fadingDefenderRole(r)!],
+      if (_breakthroughRole(r) != null)
+        ["Áttörő-poszt", _breakthroughRole(r)!],
+      if (_costlyTurnoverRole(r) != null)
+        ["Drága-eladó poszt", _costlyTurnoverRole(r)!],
+      if (_subInRole(r) != null)
+        ["Beérkező-poszt", _subInRole(r)!],
+      if (_substitutedRole(r) != null)
+        ["Forgatott-poszt", _substitutedRole(r)!],
+      if (_tiredConcederRole(r) != null)
+        ["Fáradt-fal poszt", _tiredConcederRole(r)!],
+      if (_tiredShooterRole(r) != null)
+        ["Fáradt-lövő poszt", _tiredShooterRole(r)!],
+      if (_tiredTurnoverRole(r) != null)
+        ["Fáradt-eladó poszt", _tiredTurnoverRole(r)!],
+      if (_backwardPassRole(r) != null)
+        ["Hátrapassz-poszt", _backwardPassRole(r)!],
+      if (_ballCarrierRole(r) != null)
+        ["Térnyerő-poszt", _ballCarrierRole(r)!],
+      if (_leadScorerRole(r) != null)
+        ["Előnyben-poszt", _leadScorerRole(r)!],
+      if (_lastPassRole(r) != null)
+        ["Előkészítő-poszt", _lastPassRole(r)!],
+      if (_attackStarterRole(r) != null)
+        ["Indító-poszt", _attackStarterRole(r)!],
+      if (_pivotGuardRole(r) != null)
+        ["Beállóőr-poszt", _pivotGuardRole(r)!],
+      if (_advancedDefRole(r) != null)
+        ["Kilépő-poszt", _advancedDefRole(r)!],
+      if (_missedChanceRole(r) != null)
+        ["Ziccerhagyó-poszt", _missedChanceRole(r)!],
+      if (_blockedShooterRole(r) != null)
+        ["Blokkolt-poszt", _blockedShooterRole(r)!],
+      if (_sevenTakerRole(r) != null)
+        ["Hetesdobó-poszt", _sevenTakerRole(r)!],
+      if (_secondStartRole(r) != null)
+        ["Újrakezdő-poszt", _secondStartRole(r)!],
+      if (_screenedDefRole(r) != null)
+        ["Elzárt-poszt", _screenedDefRole(r)!],
+      if (_doubledTargetRole(r) != null)
+        ["Kettőzött-poszt", _doubledTargetRole(r)!],
+      if (_fatigueRole(r) != null)
+        ["Fáradó-poszt", _fatigueRole(r)!],
+      if (_passiveHolderRole(r) != null)
+        ["Passzív-poszt", _passiveHolderRole(r)!],
+      if (_openingScorerRole(r) != null)
+        ["Rajt-poszt", _openingScorerRole(r)!],
+      if (_assistedScorerRole(r) != null)
+        ["Kiszolgált-poszt", _assistedScorerRole(r)!],
+      if (_clutchHogRole(r) != null)
+        ["Hajrákéz-poszt", _clutchHogRole(r)!],
+      if (_softPassRole(r) != null)
+        ["Lágypassz-poszt", _softPassRole(r)!],
+      if (_sprintThreatRole(r) != null)
+        ["Sprint-poszt", _sprintThreatRole(r)!],
+      if (_restartTakerRole(r) != null)
+        ["Középkezdő-poszt", _restartTakerRole(r)!],
+      if (_hotHandRole(r) != null)
+        ["Forró-poszt", _hotHandRole(r)!],
+      if (_clutchTurnoverRole(r) != null)
+        ["Hajráhiba-poszt", _clutchTurnoverRole(r)!],
+      if (_fadingRole(r) != null)
+        ["Eltűnő-poszt", _fadingRole(r)!],
+      if (_droughtBreakRole(r) != null)
+        ["Csendtörő-poszt", _droughtBreakRole(r)!],
+      if (_pressSensRole(r) != null)
+        ["Pressz-poszt", _pressSensRole(r)!],
+      if (_holdShareRole(r) != null)
+        ["Labdatartó-poszt", _holdShareRole(r)!],
+      if (_bigChanceRole(r) != null)
+        ["Ziccer-poszt", _bigChanceRole(r)!],
+      if (_wastefulRole(r) != null)
+        ["Pazarló-poszt", _wastefulRole(r)!],
+      if (_comebackRole(r) != null)
+        ["Felzárkózás-poszt", _comebackRole(r)!],
+      if (_clutchRole(r) != null)
+        ["Hajrá-poszt", _clutchRole(r)!],
+      if (_shorthandedRole(r) != null)
+        ["Emberhátrány-poszt", _shorthandedRole(r)!],
+      if (_powerplayRole(r) != null)
+        ["Emberelőny-poszt", _powerplayRole(r)!],
+      if (_kickoutRole(r) != null)
+        ["Kiosztás-poszt", _kickoutRole(r)!],
+      if (_doublingRole(r) != null)
+        ["Kettőző-poszt", _doublingRole(r)!],
+      if (_riskyPasserRole(r) != null)
+        ["Kockáztató-poszt", _riskyPasserRole(r)!],
+      if (_ironManRole(r) != null)
+        ["Vasember-poszt", _ironManRole(r)!],
+      if (_pivotFeederRole(r) != null)
+        ["Bejátszó-poszt", _pivotFeederRole(r)!],
+      if (_outletHunterRole(r) != null)
+        ["Indítás-vadász poszt", _outletHunterRole(r)!],
+      if (_keyPost(r) != null)
+        ["Kulcs-poszt", _keyPost(r)!],
+      if (_screenSetterRole(r) != null)
+        ["Elzáró-poszt", _screenSetterRole(r)!],
+      if (_beatenRole(r) != null)
+        ["Átvert-poszt", _beatenRole(r)!],
+      if (_slowRetreatRole(r) != null)
+        ["Visszafutás-poszt", _slowRetreatRole(r)!],
+      if (_suspendedRole(r) != null)
+        ["Kiülő-poszt", _suspendedRole(r)!],
+      if (_sevenConcederRole(r) != null)
+        ["Hetes-okozó poszt", _sevenConcederRole(r)!],
+      if (_sevenSixRole(r) != null)
+        ["7a6-befejező", _sevenSixRole(r)!],
+      if (_blockRole(r) != null)
+        ["Blokk-poszt", _blockRole(r)!],
+      if (_stealRole(r) != null)
+        ["Labdaszerző-poszt", _stealRole(r)!],
+      if (_assistRole(r) != null)
+        ["Gólpassz-poszt", _assistRole(r)!],
+      if (_sevenSide(r) != null)
+        ["Hetes-oldal", _sevenSide(r)!],
+      if (_fastBreakRole(r) != null)
+        ["Kontra-poszt", _fastBreakRole(r)!],
+      if (_shotChoice(r) != null)
+        ["Lövésválasztás", _shotChoice(r)!],
+      if (_timeoutFinisher(r) != null)
+        ["Időkérés-befejező", _timeoutFinisher(r)!],
+      if (_setplayFinisher(r) != null)
+        ["Figura-befejező", _setplayFinisher(r)!],
+      if (_setplayOpener(r) != null)
+        ["Figura-indító", _setplayOpener(r)!],
+      if (_pressureFinishRole(r) != null)
+        ["Poszt-nyomás", _pressureFinishRole(r)!],
+      if (_goalPlacementRole(r) != null)
+        ["Poszt-kapuoldal", _goalPlacementRole(r)!],
       if (_shotPowerRole(r) != null)
         ["Poszt-lövéserő", _shotPowerRole(r)!],
       if (_shotTimingRole(r) != null)
@@ -7046,18 +12357,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                "hetes-védés", "kapu-sarok"]),
     ("Posztok", ["poszt"]),
     ("Szabály és létszám", ["hetes", "kiállítás", "fegyelem",
-                            "emberelőny", "emberhátrány", "létszám",
+                            "emberelőny", "emberhátrány", "létszám", "kétperc",
                             "előny-", "hátrány-", "kettős ember"]),
     ("Idő, állás, forma", ["-állás", "állás szerint", "félidő", "félidei",
                            "szünet", "hajrá", "negyedóra", "ötperc",
-                           "-esés", "fáradás", "holtpont", "ritmus",
+                           "-esés", "fáradás", "holtpont", "egálbont",
+                           "ritmus",
                            "sorozat", "lendület", "elalvás", "gólcsend",
                            "csend-", "hidegedés", "bemelegedés",
                            "utolsó labda", "meccsek", "percek", "forró",
-                           "hosszú áll"]),
-    ("Védekezés", ["véd", "fal", "kettőz", "emberfog", "blokk", "szerz",
+                           "hosszú áll", "kapkodás", "óra",
+                           "idővonal", "szakasz"]),
+    ("Védekezés", ["véd", "fal", "formáció", "kettőz", "emberfog", "blokk",
+                   "szerz",
                    "betörés", "kilép", "átvert", "lefogott", "őr",
-                   "kifutás", "visszaérés", "visszaállás", "press",
+                   "kifutás", "visszaérés", "visszaállás", "visszafutás",
+                   "vadász", "press",
                    "engedett", "kapott", "keménység", "mélység",
                    "folyosó", "szorult", "elöl szerző", "zóna"]),
     ("Támadás és befejezés", ["támad", "lövés", "lövő", "gól", "passz",
@@ -7066,17 +12381,21 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                               "indítás", "labdatartás", "forgatás",
                               "ziccer", "befejez", "célzás", "oldal",
                               "xg", "tempó", "birtoklás", "figur",
-                              "keresztjáték", "roham", "áttörő",
+                              "keresztjáték", "roham", "áttörő", "áttörés",
                               "kivárás", "bontó", "kiosztás",
-                              "előkészít", "asszist", "elsütés",
+                              "előkészít", "szervez", "asszist", "elsütés",
                               "középkezdés", "labda", "elad", "hiba",
                               "kockázatos", "pontatlan", "fedezett",
                               "kihagy"]),
     ("Emberek és cserék", ["csere", "váltó", "váltott", "rotáció",
                            "pad-", "sprint", "futás", "játékos",
                            "kezd", "ember", "páros", "időkérés",
+                           "futómunka",
                            "területi", "támogatás", "mérleg",
                            "felkészülés"]),
+    // Terv-szintű összegzések: nem egy mérés, hanem a heti munka
+    // kerete (a lista VÉGÉN, hogy a konkrét mutatókat ne szívja el).
+    ("Terv és fókusz", ["ellenszer", "teendő", "fókusz", "heti"]),
   ];
 
   /// Mindig látható mutatók: ezekkel kezdi az edző, ezért nem kell
@@ -7207,8 +12526,15 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
             child: Row(children: [
-              Icon(open ? Icons.expand_less : Icons.expand_more,
-                  size: 18, color: AppColors.textSecondary),
+              // A nyíl FORDUL, nem kicserélődik: a mozgás mondja meg,
+              // hogy ugyanaz a csoport nyílt ki, nem másik lap jött.
+              AnimatedRotation(
+                turns: open ? 0.5 : 0.0,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                child: const Icon(Icons.expand_more,
+                    size: 18, color: AppColors.textSecondary),
+              ),
               const SizedBox(width: 6),
               Text(name.toUpperCase(), style: AppText.sectionLabel),
               const SizedBox(width: AppSpacing.sm),
@@ -7221,7 +12547,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           Wrap(
             spacing: AppSpacing.lg,
             runSpacing: AppSpacing.md,
-            children: [for (final t in shown) _metricTile(t[0], t[1])],
+            // Lépcsőzött belépés: a csempe-fal nem "bevágódik", hanem
+            // felépül — a szem követi, hol kezdődik a lista.
+            children: [
+              for (final (i, t) in shown.indexed)
+                FadeSlideIn(
+                    index: i,
+                    child: _metricTile(t[0], t[1], highlight: query))
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
         ],
@@ -7253,7 +12586,10 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   ///     után elvágva; a teljes szöveg a súgóbuborékban.
   /// A címke KERÜL ELŐRE: a fal átfutásakor azt keresi az edző, nem az
   /// értéket.
-  Widget _metricTile(String label, String value) {
+  /// Egy mérőszám-csempe. A [highlight] a keresés kisbetűs szövege:
+  /// négyszázhatvan mutató közt a puszta szűrés kevés — látni kell, HOL
+  /// talált a keresés, különben a szem újra végigolvassa a címet.
+  Widget _metricTile(String label, String value, {String highlight = ""}) {
     final short = value.length <= _shortValueChars;
     return SizedBox(
       width: short ? 150 : 240,
@@ -7263,11 +12599,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label,
-                style: AppText.label
-                    .copyWith(fontSize: 11, color: AppColors.textFaint),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            _highlighted(label, highlight),
             const SizedBox(height: 3),
             Text(value,
                 style: AppText.value.copyWith(
@@ -7279,6 +12611,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// A cím kiemelt találattal: a [query]-nek megfelelő rész akcentus-
+  /// színű és félkövér. Üres keresésnél sima cím.
+  Widget _highlighted(String label, String query) {
+    final base = AppText.label
+        .copyWith(fontSize: 11, color: AppColors.textFaint);
+    final i = query.isEmpty
+        ? -1
+        : label.toLowerCase().indexOf(query.toLowerCase());
+    if (i < 0) {
+      return Text(label,
+          style: base, maxLines: 1, overflow: TextOverflow.ellipsis);
+    }
+    return Text.rich(
+      TextSpan(children: [
+        TextSpan(text: label.substring(0, i), style: base),
+        TextSpan(
+            text: label.substring(i, i + query.length),
+            style: base.copyWith(
+                color: AppColors.accent, fontWeight: FontWeight.w700)),
+        TextSpan(text: label.substring(i + query.length), style: base),
+      ]),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 
@@ -7351,15 +12709,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         SizedBox(width: 110, child: Text(zone, style: AppText.value.copyWith(fontSize: 13))),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: frac.clamp(0.0, 1.0),
-              minHeight: 8,
-              backgroundColor: AppColors.surfaceAlt,
-              valueColor: const AlwaysStoppedAnimation(AppColors.gold),
-            ),
-          ),
+          child: AnimatedBar(
+              value: frac, minHeight: 8, color: AppColors.gold),
         ),
         const SizedBox(width: AppSpacing.sm),
         SizedBox(
@@ -7447,20 +12798,109 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         SizedBox(width: 56, child: Text(label, style: AppText.value.copyWith(fontSize: 13))),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: (pct / 100).clamp(0.0, 1.0),
-              minHeight: 8,
-              backgroundColor: AppColors.surfaceAlt,
-              valueColor: const AlwaysStoppedAnimation(AppColors.accent),
-            ),
-          ),
+          child: AnimatedBar(value: pct / 100, minHeight: 8),
         ),
         const SizedBox(width: AppSpacing.sm),
         SizedBox(width: 44, child: Text("${pct.toStringAsFixed(0)}%",
             textAlign: TextAlign.right, style: AppText.label.copyWith(fontSize: 12))),
       ]),
+    );
+  }
+
+  /// Kapus-felkészítés posztonként: a poszt-lencse három lövés-rétege
+  /// EGY táblában — milyen messziről, milyen keményen, merre lő az adott
+  /// poszt. Külön csempeként a kapusedző háromszor keresi meg ugyanazt a
+  /// posztot; itt egy pillantás.
+  ///
+  /// Küszöbök a backenddel azonosak: posztonként 4 mért lövés, az oldal
+  /// pedig 60% részaránytól szólal meg.
+  Widget? _keeperPrepCard(Map<String, dynamic> r) {
+    final shots = (r["rsd_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final dists = (r["rsd_dist_sum_by_role"] as Map?)?.cast<String, dynamic>();
+    final pShots = (r["rsp_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final kmh = (r["rsp_kmh_sum_by_role"] as Map?)?.cast<String, dynamic>();
+    final sidesRaw =
+        (r["rgp_goals_by_role_side"] as Map?)?.cast<String, dynamic>();
+
+    final sides = <String, Map<String, int>>{};
+    sidesRaw?.forEach((k, v) {
+      final i = k.indexOf("|");
+      if (i <= 0) return;
+      sides.putIfAbsent(k.substring(0, i), () => {})[k.substring(i + 1)] =
+          (v as num).toInt();
+    });
+
+    final posts = <String>{
+      ...?shots?.keys, ...?pShots?.keys, ...sides.keys
+    }.toList()
+      ..sort();
+
+    final rows = <List<String>>[];
+    for (final post in posts) {
+      final nd = ((shots?[post] as num?) ?? 0).toInt();
+      final dist = nd >= 4
+          ? "${(((dists?[post] as num?) ?? 0).toDouble() / nd).toStringAsFixed(1)} m"
+          : "—";
+      final np = ((pShots?[post] as num?) ?? 0).toInt();
+      final power = np >= 4
+          ? "${(((kmh?[post] as num?) ?? 0).toDouble() / np).round()} km/h"
+          : "—";
+      var side = "—";
+      final sm = sides[post];
+      if (sm != null) {
+        final tot = sm.values.fold(0, (a, b) => a + b);
+        if (tot >= 4) {
+          final dom = sm.keys.reduce((a, b) => sm[a]! >= sm[b]! ? a : b);
+          final pct = 100.0 * sm[dom]! / tot;
+          if (pct >= 60.0) side = "$dom (${pct.round()}%)";
+        }
+      }
+      if (dist == "—" && power == "—" && side == "—") continue;
+      rows.add([post, dist, power, side]);
+    }
+    if (rows.isEmpty) return null;   // adat nélkül nincs kártya
+
+    Widget cell(String t, {bool head = false, int flex = 1}) => Expanded(
+          flex: flex,
+          child: Text(t,
+              style: head
+                  ? AppText.label.copyWith(fontSize: 11)
+                  : AppText.value.copyWith(fontSize: 13)),
+        );
+
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("KAPUS-FELKÉSZÍTÉS POSZTONKÉNT", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          Row(children: [
+            cell("Poszt", head: true, flex: 2),
+            cell("Honnan lő", head: true),
+            cell("Milyen keményen", head: true),
+            cell("Merre lő", head: true),
+          ]),
+          const Divider(height: 12),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                cell(row[0], flex: 2),
+                cell(row[1]),
+                cell(row[2]),
+                cell(row[3]),
+              ]),
+            ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+              "A „—” azt jelenti, hogy abból a bontásból még nincs elég "
+              "mért lövés (posztonként 4 kell). A „merre” csak 60% "
+              "részaránytól szólal meg.",
+              style: AppText.label.copyWith(fontSize: 11)),
+        ],
+      ),
     );
   }
 

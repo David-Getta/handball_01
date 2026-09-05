@@ -181,6 +181,26 @@ def _xg_section(match: Match, home: str, away: str) -> dict | None:
         elif rec["diff"] <= -0.8:
             body += (f" A(z) {name} elpuskázott helyzeteket "
                      f"({rec['diff']:.1f}) — a befejezésen érdemes dolgozni.")
+    # Befejezés-mérleg: fenntartható-e a gólterméskük (nagy eltérésnél).
+    try:
+        from .xg import finishing_balance
+        fbal = finishing_balance(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fb = fbal[side]
+            if rec_fb["verdict"] is None:
+                continue
+            if rec_fb["diff"] > 0:
+                body += (f" A(z) {name} gólszáma szebb a játékánál "
+                         f"({rec_fb['goals']} gól {rec_fb['xg']:.1f} "
+                         "várható gólra) — ugyanezekből a helyzetekből "
+                         "legközelebb kevesebb gól lesz.")
+            else:
+                body += (f" A(z) {name} a játékánál kevesebbet szerzett "
+                         f"({rec_fb['goals']} gól {rec_fb['xg']:.1f} "
+                         "várható gólra) — a helyzet-teremtés rendben van, "
+                         "a befejezés nem ült.")
+    except Exception:
+        pass
     verdict = _xg_verdict(th, ta, home, away)
     if verdict:
         body += verdict
@@ -268,6 +288,51 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
                 parts.append(
                     f"a(z) {name} fala {rec_dw['style']} "
                     f"(átlag {rec_dw['avg_width_m']:.0f} m széles)")
+    except Exception:
+        pass
+
+    # Fal-rés térkép: hol és mekkora a legnagyobb rés a falban.
+    try:
+        from .defense import defensive_gaps
+        dgp = defensive_gaps(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dgp = dgp[side]
+            if rec_dgp["verdict"] is None:
+                continue
+            hol = (f", jellemzően a {rec_dgp['worst_zone']} sávban"
+                   if rec_dgp["worst_zone"] else "")
+            parts.append(
+                f"a(z) {name} falában nagy közök nyíltak "
+                f"(átlag {rec_dgp['avg_max_gap_m']:.1f} m a legnagyobb "
+                f"rés két szomszédos védő között{hol})")
+    except Exception:
+        pass
+
+    # Fal-rés fáradás: szétnyílnak-e a közök a második félidőre.
+    try:
+        from .defense import gap_fade
+        gfd = gap_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gfd = gfd[side]
+            if rec_gfd["verdict"] is None:
+                continue
+            parts.append(
+                f"a(z) {name} falában a 2. félidőre szétnyíltak a közök "
+                f"({rec_gfd['fh_gap_m']:.1f} m → {rec_gfd['sh_gap_m']:.1f} "
+                "m a legnagyobb rés átlaga)")
+    except Exception:
+        pass
+
+    # Védekezési formáció: a fal ALAKJA (6-0 lapos, 5-1 kitolt, 3-2-1).
+    try:
+        from .defense import defensive_formation
+        dfm = defensive_formation(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dfm = dfm[side]
+            if rec_dfm["formation"]:
+                parts.append(
+                    f"a(z) {name} fala {rec_dfm['formation']} alakot tart "
+                    f"(a felállt védekezés {rec_dfm['share_pct']:.0f}%-ában)")
     except Exception:
         pass
 
@@ -759,6 +824,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{htp[side]['avg_s']:.1f} mp).")
     except Exception:
         pass
+    # Labdavezetés-táv: ki cipeli sokat a labdát a csapatátlaghoz képest.
+    try:
+        from .decisions import ball_carry_players
+        bcp = ball_carry_players(match)
+        for side, name in (("home", home), ("away", away)):
+            aki = bcp[side]["carrier"]
+            if aki is None:
+                continue
+            jn = aki["jersey"] or _jersey_of_track(match).get(
+                aki["player_id"])
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{aki['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} viszi a legtöbbet a labdát: "
+                     f"átlag {aki['avg_m']:.1f} métert labdás "
+                     f"szakaszonként ({aki['holds']} szakasz, a "
+                     f"csapatátlag {bcp[side]['avg_m']:.1f} m) — nála "
+                     f"van idő a leszúrásra.")
+    except Exception:
+        pass
     # Csere-blokkok: egyesével cseréltek, vagy egységekben.
     try:
         from .substitutions import substitution_blocks
@@ -885,6 +969,2574 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Lepattanó-poszt: ki viszi a második rohamot.
+    try:
+        from .attack_types import second_chance_roles
+        scr = second_chance_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_scr = scr[side]
+            if rec_scr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} második rohamát a(z) "
+                     f"{rec_scr['main_role']} viszi "
+                     f"({rec_scr['share_pct']:.0f}%, "
+                     f"{rec_scr['second_shots']} második lövésből) — a "
+                     "lövés zárása után az első dolog őt kivenni a "
+                     "lepattanóból.")
+    except Exception:
+        pass
+    # Labdaszerző-poszt: melyik posztjuk nyeri a labdákat.
+    try:
+        from .defense import role_steal_sources
+        rsw = role_steal_sources(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rsw = rsw[side]
+            if rec_rsw["verdict"] is None:
+                continue
+            body += (f" A(z) {name} labdaszerzése egy poszton áll: a "
+                     f"szerzéseik {rec_rsw['share_pct']:.0f}%-a a(z) "
+                     f"{rec_rsw['main_role']} posztról jön "
+                     f"({rec_rsw['steals']} szerzésből) — az ő sávjába "
+                     "csak biztonsági passz mehet.")
+    except Exception:
+        pass
+    # Ziccer-előkészítő poszt: ki adja a passzt a nagy helyzethez.
+    try:
+        from .xg import big_chance_feeder_roles
+        bcf = big_chance_feeder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bcf = bcf[side]
+            if rec_bcf["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ziccereit a(z) "
+                     f"{rec_bcf['main_role']} posztja teremti "
+                     f"({rec_bcf['share_pct']:.0f}%, "
+                     f"{rec_bcf['chances']} előkészítésből) — az ő "
+                     "bejátszó-sávját kell elvágni.")
+    except Exception:
+        pass
+    # Hetes-kihagyó poszt: melyik posztjuk hibázza el a hetest.
+    try:
+        from .rules import seven_miss_roles
+        svm = seven_miss_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svm = svm[side]
+            if rec_svm["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kihagyott heteseinek "
+                     f"{rec_svm['share_pct']:.0f}%-a a(z) "
+                     f"{rec_svm['main_role']} posztjához kötődik "
+                     f"({rec_svm['misses']} gól nélküli hetes) — "
+                     "ellene a kapus a saját megérzésére "
+                     "hagyatkozhat.")
+    except Exception:
+        pass
+    # Ziccerpáros-poszt: ki adja és ki fejezi be a nagy helyzeteiket.
+    try:
+        from .xg import big_chance_pair_roles
+        bcp = big_chance_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bcp = bcp[side]
+            if rec_bcp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ziccereinek "
+                     f"{rec_bcp['share_pct']:.0f}%-a ugyanabból a "
+                     f"párosból jön ({rec_bcp['main_role']}, "
+                     f"{rec_bcp['chances']} helyzetből) — a köztük "
+                     "lévő passzsávot kell elvágni.")
+    except Exception:
+        pass
+    # Emberelőny-hiba poszt: kinek a kezén akad el az emberelőnyük.
+    try:
+        from .rules import powerplay_turnover_roles
+        ppt = powerplay_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ppt = ppt[side]
+            if rec_ppt["verdict"] is None:
+                continue
+            body += (f" A(z) {name} emberelőnye "
+                     f"{rec_ppt['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_ppt['main_role']} kezén akad el "
+                     f"({rec_ppt['turnovers']} emberelőny-eladás) — "
+                     "hátrányban rá kell nyomni.")
+    except Exception:
+        pass
+    # Válaszhiba-poszt: kapott gól után kinél vész el a labdájuk.
+    try:
+        from .momentum import response_turnover_roles
+        rto = response_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rto = rto[side]
+            if rec_rto["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapott gól után "
+                     f"{rec_rto['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_rto['main_role']} kezén veszíti el a "
+                     f"labdát ({rec_rto['turnovers']} "
+                     "válasz-eladás) — gól után azonnal az ő "
+                     "fogadására kell menni.")
+    except Exception:
+        pass
+    # Időkérés-hiba poszt: a megbeszélt figura hol hal el.
+    try:
+        from .stoppages import timeout_turnover_roles
+        toe = timeout_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_toe = toe[side]
+            if rec_toe["verdict"] is None:
+                continue
+            body += (f" A(z) {name} időkérés utáni labdája "
+                     f"{rec_toe['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_toe['main_role']} kezén vész el "
+                     f"({rec_toe['turnovers']} eladás) — a figurát "
+                     "az ő indításánál kell megnyomni.")
+    except Exception:
+        pass
+    # Visszaállás-idő: mennyi idő alatt áll össze a faluk.
+    try:
+        from .defense import retreat_time
+        rtt = retreat_time(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rtt = rtt[side]
+            if rec_rtt["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lövése után átlag "
+                     f"{rec_rtt['avg_s']:.1f} másodperc, míg "
+                     f"összeáll a faluk ({rec_rtt['shots']} "
+                     "lövésből) — a kapusnak azonnal indítania "
+                     "kell.")
+    except Exception:
+        pass
+    # Kapkodás-index: kapott gól után rövidül-e a támadásuk.
+    try:
+        from .attack_types import post_goal_rush
+        rus = post_goal_rush(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rus = rus[side]
+            if rec_rus["verdict"] is None:
+                continue
+            _irany = ("rövidebb" if rec_rus["diff_s"] < 0
+                      else "hosszabb")
+            body += (f" A(z) {name} támadása kapott gól után "
+                     f"{abs(rec_rus['diff_s']):.1f} másodperccel "
+                     f"{_irany} ({rec_rus['after_s']:.1f} mp a "
+                     f"{rec_rus['base_s']:.1f} mp helyett).")
+    except Exception:
+        pass
+    # Emberhátrány-hiba poszt: öt emberrel kinél vész el a labda.
+    try:
+        from .rules import shorthanded_turnover_roles
+        sht = shorthanded_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sht = sht[side]
+            if rec_sht["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hátrányban "
+                     f"{rec_sht['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_sht['main_role']} kezén veszíti el a "
+                     f"labdát ({rec_sht['turnovers']} "
+                     "hátrány-eladás) — a hat az öt ellen az ő "
+                     "fogadására kell menni.")
+    except Exception:
+        pass
+    # Hajrá-kapus: nő vagy beesik a kapusuk az utolsó öt percben.
+    try:
+        from .goalkeeper import gk_clutch_saves
+        gkc = gk_clutch_saves(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gkc = gkc[side]
+            if rec_gkc["verdict"] is None:
+                continue
+            _ir = "nő" if rec_gkc["gap_pp"] > 0 else "beesik"
+            body += (f" A(z) {name} kapusa a hajrában {_ir} "
+                     f"({rec_gkc['clutch']['save_pct']:.0f}% a "
+                     f"{rec_gkc['rest']['save_pct']:.0f}% helyett, "
+                     f"{rec_gkc['clutch']['faced']} lövésből).")
+    except Exception:
+        pass
+    # Figura-koncentráció: egy figurára épül-e a támadójátékuk.
+    try:
+        from .setplays import setplay_concentration
+        spk = setplay_concentration(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spk = spk[side]
+            if rec_spk["verdict"] is None:
+                continue
+            body += (f" A(z) {name} támadásainak "
+                     f"{rec_spk['top_pct']:.0f}%-a a legnagyobb "
+                     f"mintából jön ({rec_spk['attacks']} mért "
+                     f"támadás, {rec_spk['figures']} figura).")
+    except Exception:
+        pass
+    # Lepattanó-szedő poszt: védés után kinél marad a labda.
+    try:
+        from .defense import defensive_rebound_roles
+        rbc = defensive_rebound_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rbc = rbc[side]
+            if rec_rbc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kipattanóinak "
+                     f"{rec_rbc['share_pct']:.0f}%-át a(z) "
+                     f"{rec_rbc['main_role']} posztja szedi össze "
+                     f"({rec_rbc['rebounds']} kipattanó) — oda kell "
+                     "küldeni a berobbanó embert.")
+    except Exception:
+        pass
+    # Visszaállás ára: a lövésük után kapott gyors gólok.
+    try:
+        from .defense import retreat_punishment
+        rtp = retreat_punishment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rtp = rtp[side]
+            if rec_rtp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} gól nélküli lövéseinek "
+                     f"{rec_rtp['rate_pct']:.0f}%-át gyors kapott "
+                     f"gól követi ({rec_rtp['punished']} a "
+                     f"{rec_rtp['shots']} lövésből) — ez a lassú "
+                     "visszaállás ára.")
+    except Exception:
+        pass
+    # Kipattanó ára: a védés után kapott második-helyzet gól.
+    try:
+        from .goalkeeper import rebound_punishment
+        rpn = rebound_punishment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rpn = rpn[side]
+            if rec_rpn["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védéseinek "
+                     f"{rec_rpn['rate_pct']:.0f}%-a után gól jön a "
+                     f"kipattanóból ({rec_rpn['punished']} a "
+                     f"{rec_rpn['saves']} védésből) — a védés náluk "
+                     "elhalasztott helyzet.")
+    except Exception:
+        pass
+    # Óralopás: vezetve elhúzzák-e a támadást a hajrában.
+    try:
+        from .momentum import clock_management
+        clk = clock_management(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_clk = clk[side]
+            if rec_clk["verdict"] is None:
+                continue
+            _ir = ("hosszabb" if rec_clk["diff_s"] > 0 else "rövidebb")
+            body += (f" A(z) {name} vezetve "
+                     f"{abs(rec_clk['diff_s']):.1f} másodperccel "
+                     f"{_ir} támadásokat játszik a hajrában "
+                     f"({rec_clk['lead_s']:.1f} mp a "
+                     f"{rec_clk['base_s']:.1f} mp helyett).")
+    except Exception:
+        pass
+    # Sprint-esés: megfogy-e a láb a második félidőre.
+    try:
+        from .stats import sprint_fade
+        sfd = sprint_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sfd = sfd[side]
+            if rec_sfd["verdict"] is None:
+                continue
+            _ir = ("megfogy" if rec_sfd["ratio"] < 1.0
+                   else "megnő")
+            body += (f" A(z) {name} sprint-üteme a második félidőre "
+                     f"{_ir} ({rec_sfd['sh_per_min']:.1f} "
+                     f"sprint/perc az {rec_sfd['fh_per_min']:.1f} "
+                     "helyett).")
+    except Exception:
+        pass
+    # Hetes-kihagyók: ki hibázza el a hetest.
+    try:
+        from .rules import seven_miss_players
+        svmp = seven_miss_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = svmp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} hetesein {_ki} hibázott a "
+                     f"legtöbbet ({top['misses']} gól nélküli "
+                     "hetes) — ellene a kapus mehet a saját "
+                     "megérzésére.")
+    except Exception:
+        pass
+    # Kétperc-páros: ki harcolja ki és ki fejezi be a kétpercüket.
+    try:
+        from .rules import suspension_chain_roles
+        sup = suspension_chain_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sup = sup[side]
+            if rec_sup["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kétperceinek "
+                     f"{rec_sup['share_pct']:.0f}%-a ugyanazt a "
+                     f"láncot futja ({rec_sup['main_role']}, "
+                     f"{rec_sup['chains']} emberelőny-lövés) — a "
+                     "kiharcoló ellen testtel, a befejező ellen "
+                     "emberfogással.")
+    except Exception:
+        pass
+    # Kipattanó-szedők: ki szedi össze a kipattanót védés után.
+    try:
+        from .defense import defensive_rebound_players
+        rbcp = defensive_rebound_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = rbcp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} kipattanóit {_ki} szedi össze a "
+                     f"legtöbbször ({top['rebounds']} kipattanó) — a "
+                     "második helyzetnél őt kell blokkolni.")
+    except Exception:
+        pass
+    # Emberfogás-váltás: a szünet után emberfogásra váltanak-e.
+    try:
+        from .defense import marking_shift
+        msh = marking_shift(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_msh = msh[side]
+            if rec_msh["verdict"] is None:
+                continue
+            _ir = ("emberfogásra váltott"
+                   if rec_msh["sh_dist_m"] < rec_msh["fh_dist_m"]
+                   else "elengedte az emberfogást")
+            body += (f" A(z) {name} a szünet után {_ir} (a "
+                     f"legszorosabb páros {rec_msh['sh_dist_m']:.1f} "
+                     f"m az első félidei {rec_msh['fh_dist_m']:.1f} m "
+                     "helyett).")
+    except Exception:
+        pass
+    # Kétperc ára: mennyi gólba kerül egy kiállításuk.
+    try:
+        from .rules import suspension_cost
+        sct = suspension_cost(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sct = sct[side]
+            if rec_sct["verdict"] is None:
+                continue
+            body += (f" A(z) {name} egy kiállítása átlag "
+                     f"{rec_sct['per_susp']:.1f} gólba kerül "
+                     f"({rec_sct['conceded']} gól "
+                     f"{rec_sct['windows']} kétperc alatt).")
+    except Exception:
+        pass
+    # Emberelőny-hibázók: ki adja el a labdát a két perc alatt.
+    try:
+        from .rules import powerplay_turnover_players
+        pptp = powerplay_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = pptp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} emberelőnyében {_ki} veszítette "
+                     f"el a legtöbb labdát ({top['turnovers']} "
+                     "emberelőny-eladás) — hátrányban rá kell "
+                     "nyomni.")
+    except Exception:
+        pass
+    # Emberhátrány-hibázók: öt emberrel ki veszíti el a labdát.
+    try:
+        from .rules import shorthanded_turnover_players
+        shtp = shorthanded_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = shtp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} hátrányában {_ki} veszítette el "
+                     f"a legtöbb labdát ({top['turnovers']} "
+                     "hátrány-eladás) — a hat az öt ellen rá kell "
+                     "menni.")
+    except Exception:
+        pass
+    # Áttörés-hozam: bejutnak-e a falba, és büntetnek-e onnan.
+    try:
+        from .attack_types import breakthrough_yield
+        bty = breakthrough_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bty = bty[side]
+            if rec_bty["verdict"] is None:
+                continue
+            body += (f" A(z) {name} betöréseinek "
+                     f"{rec_bty['goal_pct']:.0f}%-a fut gólba "
+                     f"({rec_bty['goals']} gól "
+                     f"{rec_bty['entries']} betörésből).")
+    except Exception:
+        pass
+    # Hetesdobók: ki áll oda a hétméteresekhez.
+    try:
+        from .rules import seven_taker_players
+        stp = seven_taker_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = stp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} heteseit {_ki} dobja "
+                     f"({top['sevens']} hetes, {top['goals']} gól) — "
+                     "a kapus rá készülhet.")
+    except Exception:
+        pass
+    # Időkérés-hibázók: kinek a kezén hal el a megbeszélt figura.
+    try:
+        from .stoppages import timeout_turnover_players
+        toep = timeout_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = toep[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} időkérés utáni labdáját {_ki} "
+                     f"veszítette el a legtöbbször "
+                     f"({top['turnovers']} eladás) — a figurát az ő "
+                     "fogadásánál kell megnyomni.")
+    except Exception:
+        pass
+    # Válaszhiba-emberek: kapott gól után ki veszíti el a labdát.
+    try:
+        from .momentum import response_turnover_players
+        rtop = response_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = rtop[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} kapott gól után {_ki} kezén "
+                     f"veszíti el a labdát a legtöbbször "
+                     f"({top['turnovers']} válasz-eladás) — a gól "
+                     "után azonnal rá kell menni.")
+    except Exception:
+        pass
+    # Ziccer-előkészítők: ki adja a passzt a nagy helyzethez.
+    try:
+        from .xg import big_chance_feeders
+        bcfp = big_chance_feeders(match)
+        for side, name in (("home", home), ("away", away)):
+            top = bcfp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} ziccereit {_ki} teremti a "
+                     f"legtöbbször ({top['chances']} előkészítés) — "
+                     "az ő bejátszó-sávját kell elvágni.")
+    except Exception:
+        pass
+    # Vég-birtokosok: kinek a kezében hal el a támadásuk.
+    try:
+        from .attack_types import last_holders
+        lstp = last_holders(match)
+        for side, name in (("home", home), ("away", away)):
+            top = lstp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} terméketlen támadásai {_ki} "
+                     f"kezében halnak el a legtöbbször "
+                     f"({top['attacks']} támadás) — a támadás "
+                     "második felében rá kell tolni a nyomást.")
+    except Exception:
+        pass
+    # Menekülők: nyomás alatt kihez megy a labda.
+    try:
+        from .decisions import press_outlets
+        escp = press_outlets(match)
+        for side, name in (("home", home), ("away", away)):
+            top = escp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} szorításban {_ki} felé menekül a "
+                     f"leggyakrabban ({top['passes']} nyomás alatti "
+                     "passz) — ott érdemes lesben állni.")
+    except Exception:
+        pass
+    # Sávváltók: ki viszi a keresztmozgást.
+    try:
+        from .attack_types import lane_switchers
+        lswp = lane_switchers(match)
+        for side, name in (("home", home), ("away", away)):
+            top = lswp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} keresztmozgását {_ki} viszi a "
+                     f"legtöbbet ({top['switches']} sávváltás) — az "
+                     "ő védőjének követés/átadás szabálya kell.")
+    except Exception:
+        pass
+    # Térnyerők: ki viszi előre a labdát.
+    try:
+        from .decisions import ball_carriers
+        tnrp = ball_carriers(match)
+        for side, name in (("home", home), ("away", away)):
+            top = tnrp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} térnyerése {_ki} lábán van "
+                     f"({top['meters']:.0f} m labdával előre) — őt a "
+                     "felezőtől hátrálva kell fogadni.")
+    except Exception:
+        pass
+    # Hátrapasszolók: kinél fordul vissza a játék.
+    try:
+        from .attack_types import backward_passers
+        bprp = backward_passers(match)
+        for side, name in (("home", home), ("away", away)):
+            top = bprp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} játéka {_ki} kezénél fordul "
+                     f"vissza a legtöbbször ({top['passes']} "
+                     "hátra-passz) — rá érdemes kimenni.")
+    except Exception:
+        pass
+    # Fáradt-eladók: kinek a labdái vesznek el a második félidőre.
+    try:
+        from .decisions import tired_turnover_players
+        ftop = tired_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = ftop[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} eladásai a második félidőre {_ki} "
+                     f"kezén ugranak meg ({top['fh']} → "
+                     f"{top['sh']}) — a szünet után őt kell nyomás "
+                     "alá tenni.")
+    except Exception:
+        pass
+    # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
+    try:
+        from .attack_types import last_holder_roles
+        lst = last_holder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lst = lst[side]
+            if rec_lst["verdict"] is None:
+                continue
+            body += (f" A(z) {name} terméketlen támadásai a(z) "
+                     f"{rec_lst['main_role']} poszt kezében halnak "
+                     f"el ({rec_lst['share_pct']:.0f}%, "
+                     f"{rec_lst['attacks']} támadásból) — a támadás "
+                     "második felében rá kell tolni a nyomást.")
+    except Exception:
+        pass
+    # Menekülő-poszt: nyomás alatt kihez megy a labda.
+    try:
+        from .decisions import press_outlet_roles
+        esc = press_outlet_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_esc = esc[side]
+            if rec_esc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} szorításban a(z) "
+                     f"{rec_esc['main_role']} poszthoz menekül "
+                     f"({rec_esc['share_pct']:.0f}%, "
+                     f"{rec_esc['passes']} nyomás alatti passzból) —"
+                     " a harmadik ember ott álljon lesben.")
+    except Exception:
+        pass
+    # Időkéréspáros-poszt: az időkérés utáni figura tengelye.
+    try:
+        from .stoppages import timeout_pair_roles
+        top = timeout_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_top = top[side]
+            if rec_top["verdict"] is None:
+                continue
+            body += (f" A(z) {name} időkérés utáni figurája a(z) "
+                     f"{rec_top['main_role']} tengelyen fut "
+                     f"({rec_top['share_pct']:.0f}%, "
+                     f"{rec_top['shots']} lövésből) — az első "
+                     "passzt kell elvágni.")
+    except Exception:
+        pass
+    # Sávváltó-poszt: melyik posztjuk vált sávot a támadásban.
+    try:
+        from .attack_types import lane_switch_roles
+        lsw = lane_switch_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lsw = lsw[side]
+            if rec_lsw["verdict"] is None:
+                continue
+            body += (f" A(z) {name} keresztmozgása a(z) "
+                     f"{rec_lsw['main_role']} posztra épül "
+                     f"({rec_lsw['share_pct']:.0f}%, "
+                     f"{rec_lsw['switches']} sávváltásból) — előre "
+                     "kell dönteni: követés vagy átadás.")
+    except Exception:
+        pass
+    # Elöl lógó poszt: melyik posztjuk nem ér haza védekezni.
+    try:
+        from .defense import recovery_roles
+        rcr = recovery_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rcr = rcr[side]
+            if rec_rcr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_rcr['main_role']} posztja "
+                     f"elöl lóg (a védekezett idő "
+                     f"{rec_rcr['share_pct']:.0f}%-ában van otthon)"
+                     " — a gyors indítást az ő oldalára érdemes "
+                     "vezetni.")
+    except Exception:
+        pass
+    # Válasz-poszt: kapott gól után melyik posztjuk válaszol.
+    try:
+        from .momentum import response_scorer_roles
+        rsp = response_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rsp = rsp[side]
+            if rec_rsp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapott gól után a(z) "
+                     f"{rec_rsp['main_role']} posztjával válaszol "
+                     f"({rec_rsp['share_pct']:.0f}%, "
+                     f"{rec_rsp['goals']} válasz-gólból) — a saját "
+                     "gólunk után azonnal őt kell fogni.")
+    except Exception:
+        pass
+    # Emberelőnypáros-poszt: melyik tengelyen fut a 6-5 játékuk.
+    try:
+        from .rules import powerplay_pair_roles
+        pwp = powerplay_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pwp = pwp[side]
+            if rec_pwp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} 6-5 játéka a(z) "
+                     f"{rec_pwp['main_role']} tengelyen fut "
+                     f"({rec_pwp['share_pct']:.0f}%, "
+                     f"{rec_pwp['shots']} emberelőny-lövésből) — öt"
+                     " emberrel ezt a tengelyt kell elvágni.")
+    except Exception:
+        pass
+    # Specialista-poszt: melyik posztot játsszák váltott sorban.
+    try:
+        from .roles import specialist_roles
+        spc = specialist_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spc = spc[side]
+            if rec_spc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_spc['main_role']} posztját "
+                     "váltott sorban játssza — a csere-pillanatuk "
+                     "gyors középkezdéssel támadható.")
+    except Exception:
+        pass
+    # Kulcs-páros: hány réteg mutat ugyanarra a posztpárra.
+    try:
+        from .priorities import key_pair
+        kpr = key_pair(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_kpr = kpr[side]
+            if rec_kpr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kulcs-párosa a(z) "
+                     f"{rec_kpr['top']}: {rec_kpr['pairs'][rec_kpr['top']]}"
+                     f" páros-réteg mutat rá — a kettejük közti "
+                     "sávot kell szétvágni.")
+    except Exception:
+        pass
+    # Kulcs-ember: hány réteg mutat ugyanarra a játékosra.
+    try:
+        from .priorities import key_player
+        kpl = key_player(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_kpl = kpl[side]
+            if rec_kpl["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kulcs-embere a(z) "
+                     f"{rec_kpl['top']}. számú: "
+                     f"{rec_kpl['players'][rec_kpl['top']]} "
+                     "ember-réteg mutat rá — az ő kezelése "
+                     "önmagában meccstervnyi feladat.")
+    except Exception:
+        pass
+    # Lepattanópáros-poszt: melyik lövésükre ki érkezik.
+    try:
+        from .attack_types import rebound_pair_roles
+        rbp = rebound_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rbp = rbp[side]
+            if rec_rbp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lepattanó-játéka a(z) "
+                     f"{rec_rbp['main_role']} párra jár "
+                     f"({rec_rbp['share_pct']:.0f}%, "
+                     f"{rec_rbp['second_shots']} második rohamból) —"
+                     " a lövés zárása után az érkező útját kell "
+                     "elállni.")
+    except Exception:
+        pass
+    # Kettőzőpáros-poszt: melyik védő-kettősük kettőz együtt.
+    try:
+        from .defense import doubling_pair_roles
+        dpp = doubling_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dpp = dpp[side]
+            if rec_dpp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kettőzése a(z) "
+                     f"{rec_dpp['main_role']} védő-pároson áll "
+                     f"({rec_dpp['share_pct']:.0f}%-a a kettőzött "
+                     "időnek) — a kioldó passz célpontja fix.")
+    except Exception:
+        pass
+    # Gólpasszpáros-poszt: melyik tengelyen születnek a góljaik.
+    try:
+        from .roles import assist_pair_roles
+        apr = assist_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_apr = apr[side]
+            if rec_apr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} góljai a(z) "
+                     f"{rec_apr['main_role']} tengelyen születnek "
+                     f"({rec_apr['share_pct']:.0f}%, "
+                     f"{rec_apr['goals']} asszisztos gólból) — a "
+                     "kettős közti passzsáv a fő zárnivaló.")
+    except Exception:
+        pass
+    # Kontrapáros-poszt: melyik tengelyen futnak a kontráik.
+    try:
+        from .attack_types import fast_break_pair_roles
+        fbp = fast_break_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fbp = fbp[side]
+            if rec_fbp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kontrái a(z) "
+                     f"{rec_fbp['main_role']} tengelyen futnak "
+                     f"({rec_fbp['share_pct']:.0f}%, "
+                     f"{rec_fbp['breaks']} lerohanásból) — az "
+                     "indítót kell először fékezni.")
+    except Exception:
+        pass
+    # Hetespáros-poszt: ki harcolja ki és ki dobja a hetest.
+    try:
+        from .rules import seven_pair_roles
+        svp = seven_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svp = svp[side]
+            if rec_svp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hetes-játéka a(z) "
+                     f"{rec_svp['main_role']} posztpárra jár "
+                     f"({rec_svp['share_pct']:.0f}%, "
+                     f"{rec_svp['sevens']} hetesből) — a kiharcoló "
+                     "és a dobó két külön kiosztható feladat.")
+    except Exception:
+        pass
+    # Csere-stílus: posztot tart vagy átszab a padjuk.
+    try:
+        from .substitutions import swap_style
+        sws = swap_style(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sws = sws[side]
+            if rec_sws["verdict"] is None:
+                continue
+            body += (f" A(z) {name} cseréinél {rec_sws['verdict']} "
+                     f"({rec_sws['same']}/{rec_sws['pairs']} "
+                     "azonos-posztú váltás).")
+    except Exception:
+        pass
+    # Elzárópáros-poszt: melyik posztpárra jár az elzárás-játékuk.
+    try:
+        from .attack_types import screen_pair_roles
+        spp = screen_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spp = spp[side]
+            if rec_spp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} elzárás-játéka a(z) "
+                     f"{rec_spp['main_role']} posztpárra jár "
+                     f"({rec_spp['share_pct']:.0f}%, "
+                     f"{rec_spp['shots']} elzárt lövésből) — a "
+                     "védekezés párban készül ellene.")
+    except Exception:
+        pass
+    # Álló-poszt: melyik posztjuk áll labda nélkül.
+    try:
+        from .tactics import static_attacker_roles
+        sar = static_attacker_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sar = sar[side]
+            if rec_sar["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_sar['main_role']} posztja "
+                     "áll labda nélkül — a védője otthagyhatja, és "
+                     "befelé segíthet.")
+    except Exception:
+        pass
+    # Letámadó-poszt: melyik posztjuk szed labdát elöl.
+    try:
+        from .defense import high_steal_roles
+        hsr = high_steal_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_hsr = hsr[side]
+            if rec_hsr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} letámadása a(z) "
+                     f"{rec_hsr['main_role']} posztján áll "
+                     f"({rec_hsr['share_pct']:.0f}%, "
+                     f"{rec_hsr['high']} elöl-szerzésből) — az ő "
+                     "oldalán tilos a kihozatalt vezetni.")
+    except Exception:
+        pass
+    # Célkereszt-poszt: melyik posztjuk előtt fejeznek be ellenük.
+    try:
+        from .defense import targeted_defender_roles
+        tgr = targeted_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tgr = tgr[side]
+            if rec_tgr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ellen a befejezések "
+                     f"{rec_tgr['share_pct']:.0f}%-a a(z) "
+                     f"{rec_tgr['main_role']} posztjuk előtt "
+                     f"történik ({rec_tgr['shots']} rá-lövésből) — "
+                     "az ellenfelek őt keresik.")
+    except Exception:
+        pass
+    # Fedezett-lövő poszt: melyik posztjuk lő fedezetten is.
+    try:
+        from .defense import covered_shooter_roles
+        cvr = covered_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cvr = cvr[side]
+            if rec_cvr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} fedezett lövései a(z) "
+                     f"{rec_cvr['main_role']} posztról jönnek "
+                     f"({rec_cvr['share_pct']:.0f}%, "
+                     f"{rec_cvr['covered']} fedezett lövésből) — rá"
+                     " nem kell kilépni, elég a blokk-kéz.")
+    except Exception:
+        pass
+    # Védőmotor-poszt: melyik posztjuk védő-motorja áll le.
+    try:
+        from .defense import fading_defender_roles
+        fdd = fading_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fdd = fdd[side]
+            if rec_fdd["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védő-motorja a(z) "
+                     f"{rec_fdd['main_role']} poszton az első "
+                     f"félidőben pörög ({rec_fdd['fh']} "
+                     f"szerzés+blokk), a másodikra leáll "
+                     f"({rec_fdd['sh']}) — a szünet után az ő "
+                     "zónáján át kell támadni.")
+    except Exception:
+        pass
+    # Áttörő-poszt: melyik posztjuk nyitja szét a falat.
+    try:
+        from .attack_types import breakthrough_roles
+        btr = breakthrough_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_btr = btr[side]
+            if rec_btr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} falbontását a(z) "
+                     f"{rec_btr['main_role']} posztja viszi "
+                     f"({rec_btr['share_pct']:.0f}%, "
+                     f"{rec_btr['entries']} labdás betörésből) — az"
+                     " ő védője kapjon segítőt.")
+    except Exception:
+        pass
+    # Drága-eladó poszt: kinek a hibái kerülnek gólba.
+    try:
+        from .defense import costly_turnover_roles
+        dto = costly_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dto = dto[side]
+            if rec_dto["verdict"] is None:
+                continue
+            body += (f" A(z) {name} gólba forduló eladásai a(z) "
+                     f"{rec_dto['main_role']} posztnál történnek "
+                     f"({rec_dto['share_pct']:.0f}%, "
+                     f"{rec_dto['punished']} büntetett hibából) — a"
+                     " felhozatalnál őt kell zavarni.")
+    except Exception:
+        pass
+    # Beérkező-poszt: melyik posztra hoz frissítést a padjuk.
+    try:
+        from .substitutions import sub_in_roles
+        ibr = sub_in_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ibr = ibr[side]
+            if rec_ibr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} padja a(z) "
+                     f"{rec_ibr['main_role']} posztra hoz "
+                     f"frissítést ({rec_ibr['share_pct']:.0f}%, "
+                     f"{rec_ibr['ins']} beállásból) — a "
+                     "cserehullámuk után arra a sávra kell váltani.")
+    except Exception:
+        pass
+    # Forgatott-poszt: melyik posztjukat cserélik.
+    try:
+        from .substitutions import substituted_roles
+        sbr = substituted_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sbr = sbr[side]
+            if rec_sbr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} forgatása a(z) "
+                     f"{rec_sbr['main_role']} posztra jár "
+                     f"({rec_sbr['share_pct']:.0f}%, "
+                     f"{rec_sbr['outs']} lecserélésből) — a "
+                     "fárasztást a nem forgatott posztjaikra kell "
+                     "tervezni.")
+    except Exception:
+        pass
+    # Fáradt-fal poszt: a 2. félidőben melyik poszt jár át rajtuk.
+    try:
+        from .defense import tired_conceder_roles
+        tcr = tired_conceder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tcr = tcr[side]
+            if rec_tcr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} falán a második félidőre a(z) "
+                     f"{rec_tcr['main_role']} poszt jár át "
+                     f"({rec_tcr['fh']} → {rec_tcr['sh']} kapott "
+                     "gól) — a szünet után onnan kell nyitni "
+                     "ellenük.")
+    except Exception:
+        pass
+    # Fáradt-lövő poszt: kinek megy szét a lövése a 2. félidőben.
+    try:
+        from .xg import tired_shooter_roles
+        fsa = tired_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fsa = fsa[side]
+            if rec_fsa["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_fsa['main_role']} "
+                     "posztjának kaput elkerülő lövései a második "
+                     f"félidőre megugranak ({rec_fsa['fh']} → "
+                     f"{rec_fsa['sh']}) — fáradtan rá lehet engedni.")
+    except Exception:
+        pass
+    # Fáradt-eladó poszt: kinek a labdái vesznek el a 2. félidőben.
+    try:
+        from .decisions import tired_turnover_roles
+        fto = tired_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fto = fto[side]
+            if rec_fto["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_fto['main_role']} "
+                     f"posztjának eladásai a második félidőre "
+                     f"megugranak ({rec_fto['fh']} → {rec_fto['sh']})"
+                     " — a szünet után őt kell nyomás alá tenni.")
+    except Exception:
+        pass
+    # Hátrapassz-poszt: melyik posztjuknál fordul vissza a játék.
+    try:
+        from .attack_types import backward_pass_roles
+        bpr = backward_pass_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bpr = bpr[side]
+            if rec_bpr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} játéka {rec_bpr['share_pct']:.0f}"
+                     f"%-ban a(z) {rec_bpr['main_role']} posztnál "
+                     f"fordul vissza ({rec_bpr['passes']} "
+                     "hátra-passzból) — a pressz rá jutalmat hoz.")
+    except Exception:
+        pass
+    # Térnyerő-poszt: melyik posztjuk viszi előre a labdát.
+    try:
+        from .decisions import ball_carrier_roles
+        tnr = ball_carrier_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tnr = tnr[side]
+            if rec_tnr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} térnyerése a(z) "
+                     f"{rec_tnr['main_role']} poszt lábán van "
+                     f"({rec_tnr['share_pct']:.0f}%-a a labdával "
+                     f"megtett {rec_tnr['meters']:.0f} méternek) — "
+                     "őt hátrálva kell fogadni.")
+    except Exception:
+        pass
+    # Előnyben-poszt: vezetésnél melyik posztjuk viszi a játékot.
+    try:
+        from .momentum import lead_scorer_roles
+        lgr = lead_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lgr = lgr[side]
+            if rec_lgr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} előny-tartása a(z) "
+                     f"{rec_lgr['main_role']} posztra épül "
+                     f"({rec_lgr['share_pct']:.0f}%, "
+                     f"{rec_lgr['goals']} vezetésnél lőtt gólból) — "
+                     "hátrányban az ő kivétele a leggyorsabb út.")
+    except Exception:
+        pass
+    # Előkészítő-poszt: melyik posztjuk készíti elő a lövéseket.
+    try:
+        from .attack_types import last_pass_roles
+        epr = last_pass_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_epr = epr[side]
+            if rec_epr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lövéseit {rec_epr['share_pct']:.0f}"
+                     f"%-ban a(z) {rec_epr['main_role']} posztja "
+                     f"készíti elő ({rec_epr['passes']} előkészítő "
+                     "passzból) — az ő sávjának zárásával a lövőik "
+                     "elhalnak.")
+    except Exception:
+        pass
+    # Indító-poszt: melyik posztjuknál indul a támadás-szervezés.
+    try:
+        from .roles import attack_starter_roles
+        ats = attack_starter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ats = ats[side]
+            if rec_ats["verdict"] is None:
+                continue
+            body += (f" A(z) {name} támadásai a(z) "
+                     f"{rec_ats['main_role']} posztnál indulnak "
+                     f"({rec_ats['share_pct']:.0f}%, "
+                     f"{rec_ats['attacks']} szakaszból) — a "
+                     "felhozatalt őt presszingelve lehet borítani.")
+    except Exception:
+        pass
+    # Beállóőr-poszt: melyik posztjuk őrzi a beállót.
+    try:
+        from .defense import pivot_guard_roles
+        pgr = pivot_guard_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pgr = pgr[side]
+            if rec_pgr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} beálló-őrzése a(z) "
+                     f"{rec_pgr['main_role']} posztján áll "
+                     f"({rec_pgr['share_pct']:.0f}%-a az őrzött "
+                     "időnek) — az elzárás őt húzza ki.")
+    except Exception:
+        pass
+    # Kilépő-poszt: melyik posztjuk lép ki a falból.
+    try:
+        from .defense import advanced_defender_roles
+        adr = advanced_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_adr = adr[side]
+            if rec_adr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} fala a(z) "
+                     f"{rec_adr['main_role']} posztnál lép ki "
+                     f"(a társaknál {rec_adr['gap_m']:.1f} m-rel "
+                     "előrébb) — a kilépő mögött nyílik a tér.")
+    except Exception:
+        pass
+    # Ziccerhagyó-poszt: melyik posztjuk hagyja ki a ziccereket.
+    try:
+        from .xg import missed_chance_roles
+        mcr = missed_chance_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_mcr = mcr[side]
+            if rec_mcr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kihagyott ziccerei a(z) "
+                     f"{rec_mcr['main_role']} posztnál esnek "
+                     f"({rec_mcr['share_pct']:.0f}%, "
+                     f"{rec_mcr['misses']} kihagyásból) — az ő "
+                     "helyzetbe engedése a kisebbik rossz.")
+    except Exception:
+        pass
+    # Blokkolt-poszt: melyik posztjuk lövéseit blokkolják.
+    try:
+        from .defense import blocked_shooter_roles
+        bsr = blocked_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bsr = bsr[side]
+            if rec_bsr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} falba lőtt labdái a(z) "
+                     f"{rec_bsr['main_role']} posztról jönnek "
+                     f"({rec_bsr['share_pct']:.0f}%, "
+                     f"{rec_bsr['blocks']} blokkból) — a fal ellene "
+                     "bátran zárhat.")
+    except Exception:
+        pass
+    # Hetesdobó-poszt: melyik posztjuk áll oda a hetesekhez.
+    try:
+        from .rules import seven_taker_roles
+        stk = seven_taker_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_stk = stk[side]
+            if rec_stk["verdict"] is None:
+                continue
+            body += (f" A(z) {name} heteseit {rec_stk['share_pct']:.0f}"
+                     f"%-ban a(z) {rec_stk['main_role']} posztja "
+                     f"dobja ({rec_stk['attempts']} hetesből) — a "
+                     "kapus az ő szokás-irányaira készüljön.")
+    except Exception:
+        pass
+    # Újrakezdő-poszt: melyik posztjuk viszi a szünet utáni rajtot.
+    try:
+        from .momentum import second_start_roles
+        ssr = second_start_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ssr = ssr[side]
+            if rec_ssr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} szünet utáni rajtja a(z) "
+                     f"{rec_ssr['main_role']} posztra épül "
+                     f"({rec_ssr['share_pct']:.0f}%, "
+                     f"{rec_ssr['goals']} gól a második félidő első"
+                     " tíz percében) — a szünet után őt kell "
+                     "megfogni.")
+    except Exception:
+        pass
+    # Elzárt-poszt: melyik védőjük akad el az elzárásokban.
+    try:
+        from .defense import screened_defender_roles
+        sdr = screened_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sdr = sdr[side]
+            if rec_sdr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védelmében az elzárások a(z) "
+                     f"{rec_sdr['main_role']} poszton lévő védőt "
+                     f"találják meg ({rec_sdr['share_pct']:.0f}%, "
+                     f"{rec_sdr['screens']} elakadásból) — az ő "
+                     "oldalán tisztán marad a lövő.")
+    except Exception:
+        pass
+    # Kettőzött-poszt: melyik posztjukra érkezik a kettőzés.
+    try:
+        from .defense import doubled_target_roles
+        dtr = doubled_target_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dtr = dtr[side]
+            if rec_dtr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ellen a kettőzések a(z) "
+                     f"{rec_dtr['main_role']} posztra járnak "
+                     f"({rec_dtr['share_pct']:.0f}%-a a kettőzött "
+                     "labdás időnek) — a minta bevált recept.")
+    except Exception:
+        pass
+    # Fáradó-poszt: melyik posztjuk esik vissza a második félidőre.
+    try:
+        from .stats import fatigue_roles
+        ftr = fatigue_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ftr = ftr[side]
+            if rec_ftr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} tempója a(z) "
+                     f"{rec_ftr['main_role']} poszton esik vissza a "
+                     f"második félidőre (−{rec_ftr['drop_pct']:.0f}"
+                     "%) — a szünet után az ő sávjában érdemes "
+                     "támadni.")
+    except Exception:
+        pass
+    # Passzív-poszt: melyik posztjuknál hal el a felállt támadás.
+    try:
+        from .rules import passive_holder_roles
+        pvr = passive_holder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pvr = pvr[side]
+            if rec_pvr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} terméketlen támadásai a(z) "
+                     f"{rec_pvr['main_role']} posztnál halnak el "
+                     f"({rec_pvr['share_pct']:.0f}%-a a lövés "
+                     "nélküli hosszú támadások labdás idejének) — "
+                     "passzív jelzésnél őt kell nyomás alá tenni.")
+    except Exception:
+        pass
+    # Rajt-poszt: melyik posztjuk viszi a meccs elejét.
+    try:
+        from .momentum import opening_scorer_roles
+        osr = opening_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_osr = osr[side]
+            if rec_osr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} rajtja a(z) "
+                     f"{rec_osr['main_role']} posztra épül "
+                     f"({rec_osr['share_pct']:.0f}%, "
+                     f"{rec_osr['goals']} gól az első tíz percben) —"
+                     " a meccs elején őt kell megfogni.")
+    except Exception:
+        pass
+    # Kiszolgált-poszt: melyik posztjuk fejezi be a bejátszásokat.
+    try:
+        from .roles import assisted_scorer_roles
+        asr = assisted_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_asr = asr[side]
+            if rec_asr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kiszolgált góljait a(z) "
+                     f"{rec_asr['main_role']} posztja fejezi be "
+                     f"({rec_asr['share_pct']:.0f}%, "
+                     f"{rec_asr['assisted']} asszisztos gólból) — őt"
+                     " a felé futó passz elvágásával kell éheztetni.")
+    except Exception:
+        pass
+    # Hajrákéz-poszt: melyik poszt kezén fut a végjátékuk.
+    try:
+        from .momentum import clutch_hog_roles
+        chg = clutch_hog_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_chg = chg[side]
+            if rec_chg["verdict"] is None:
+                continue
+            body += (f" A(z) {name} végjátéka a(z) "
+                     f"{rec_chg['main_role']} poszt kezén fut "
+                     f"({rec_chg['share_pct']:.0f}%-a az utolsó öt "
+                     "perc labdás idejének) — a hajrá-kettőzés ezt a"
+                     " kezet fogja, nem a lövőt.")
+    except Exception:
+        pass
+    # Lágypassz-poszt: melyik posztjuk passzol lágyan.
+    try:
+        from .decisions import soft_pass_roles
+        sps = soft_pass_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sps = sps[side]
+            if rec_sps["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lágy passzai a(z) "
+                     f"{rec_sps['main_role']} posztról jönnek "
+                     f"({rec_sps['share_pct']:.0f}%, "
+                     f"{rec_sps['soft']} lágy passzból) — az ő "
+                     "labdáiba bele lehet nyúlni.")
+    except Exception:
+        pass
+    # Sprint-poszt: melyik posztjuk futja a sprinteket.
+    try:
+        from .stats import sprint_threat_roles
+        spr = sprint_threat_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spr = spr[side]
+            if rec_spr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kontráját a(z) "
+                     f"{rec_spr['main_role']} posztja futja "
+                     f"({rec_spr['share_pct']:.0f}%, "
+                     f"{rec_spr['sprints']} sprintből) — "
+                     "labdavesztésnél az ő útja zárandó először.")
+    except Exception:
+        pass
+    # Középkezdő-poszt: melyik posztjuknál indul a középkezdés.
+    try:
+        from .momentum import restart_taker_roles
+        rtr = restart_taker_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rtr = rtr[side]
+            if rec_rtr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} középkezdése a(z) "
+                     f"{rec_rtr['main_role']} posztnál indul "
+                     f"({rec_rtr['share_pct']:.0f}%, "
+                     f"{rec_rtr['takes']} átvételből) — a gól utáni "
+                     "letámadásnak posztra szóló célpontja van.")
+    except Exception:
+        pass
+    # Forró-poszt: melyik posztjuk lövi a gólsorozatokat.
+    try:
+        from .momentum import hot_hand_roles
+        hhr = hot_hand_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_hhr = hhr[side]
+            if rec_hhr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} gólsorozatait a(z) "
+                     f"{rec_hhr['main_role']} posztja lövi "
+                     f"({rec_hhr['share_pct']:.0f}%, "
+                     f"{rec_hhr['streak_goals']} sorozat-gólból) — az"
+                     " első gólja után azonnal reagálni kell.")
+    except Exception:
+        pass
+    # Hajráhiba-poszt: melyik posztjuk adja el a labdát a hajrában.
+    try:
+        from .momentum import clutch_turnover_roles
+        ctr = clutch_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ctr = ctr[side]
+            if rec_ctr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hajrá-eladásai a(z) "
+                     f"{rec_ctr['main_role']} posztnál történnek "
+                     f"({rec_ctr['share_pct']:.0f}%, "
+                     f"{rec_ctr['turnovers']} eladás az utolsó öt "
+                     "percben) — a záró percekben oda jön a pressz.")
+    except Exception:
+        pass
+    # Eltűnő-poszt: melyik posztjuk tűnik el a második félidőre.
+    try:
+        from .momentum import fading_scorer_roles
+        fdp = fading_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fdp = fdp[side]
+            if rec_fdp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_fdp['main_role']} posztja "
+                     f"az első félidőben él ({rec_fdp['fh']} "
+                     f"gól-részvétel), a másodikra eltűnik "
+                     f"({rec_fdp['sh']}) — az első 30 percben kell "
+                     "megfogni.")
+    except Exception:
+        pass
+    # Csendtörő-poszt: melyik posztjuk töri meg a gólcsendet.
+    try:
+        from .momentum import drought_breaker_roles
+        gct = drought_breaker_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gct = gct[side]
+            if rec_gct["verdict"] is None:
+                continue
+            body += (f" A(z) {name} válság-posztja a(z) "
+                     f"{rec_gct['main_role']}: a gólcsendjeik "
+                     f"{rec_gct['share_pct']:.0f}%-át ő töri meg "
+                     f"({rec_gct['breaks']} csend-törő gólból) — az "
+                     "ellenfél sorozata alatt őt kell fogni.")
+    except Exception:
+        pass
+    # Pressz-poszt: melyik posztjuk ejti a labdát szorításban.
+    try:
+        from .decisions import press_sensitive_roles
+        psr = press_sensitive_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_psr = psr[side]
+            if rec_psr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} szorításban a(z) "
+                     f"{rec_psr['main_role']} posztnál veszíti a "
+                     f"labdát ({rec_psr['share_pct']:.0f}%, "
+                     f"{rec_psr['press_to']} nyomott eladásból) — a "
+                     "kettőzést oda kell küldeni.")
+    except Exception:
+        pass
+    # Labdatartó-poszt: melyik posztjuknál áll meg a labda.
+    try:
+        from .decisions import hold_time_roles
+        htr = hold_time_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_htr = htr[side]
+            if rec_htr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} játéka a(z) "
+                     f"{rec_htr['main_role']} posztnál lassul: a mért"
+                     f" labdatartásuk {rec_htr['share_pct']:.0f}%-a "
+                     f"nála telik ({rec_htr['seconds']:.0f} mp-ből) —"
+                     " a kettőzést rá kell időzíteni.")
+    except Exception:
+        pass
+    # Ziccer-poszt: melyik posztjuknál alakul ki a nagy helyzet.
+    try:
+        from .xg import big_chance_roles
+        bcr = big_chance_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bcr = bcr[side]
+            if rec_bcr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ziccerei egy posztnál alakulnak "
+                     f"ki: a nagy helyzeteik {rec_bcr['share_pct']:.0f}"
+                     f"%-a a(z) {rec_bcr['main_role']} posztnál jön "
+                     f"létre ({rec_bcr['chances']} ziccerből) — ott a "
+                     "helyzetet a kialakulása előtt kell megfogni.")
+    except Exception:
+        pass
+    # Pazarló-poszt: melyik posztjuk lövi mellé a lövéseit.
+    try:
+        from .xg import wasteful_shooter_roles
+        wsr = wasteful_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wsr = wsr[side]
+            if rec_wsr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} pontatlansága egy posztra "
+                     f"sűrűsödik: a kaput elkerülő lövéseik "
+                     f"{rec_wsr['share_pct']:.0f}%-a a(z) "
+                     f"{rec_wsr['main_role']} posztról jön "
+                     f"({rec_wsr['off_target']} mellé/blokkolt "
+                     "lövésből) — az ő lövését rá lehet engedni.")
+    except Exception:
+        pass
+    # Felzárkózás-poszt: melyik posztjuk hozza őket vissza.
+    try:
+        from .momentum import comeback_carrier_roles
+        cbr = comeback_carrier_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cbr = cbr[side]
+            if rec_cbr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} mentőjátéka egy posztra épül: "
+                     f"hátrányból {rec_cbr['share_pct']:.0f}%-ban a(z)"
+                     f" {rec_cbr['main_role']} hozza őket vissza "
+                     f"({rec_cbr['trailing']} részvételből) — az ő "
+                     "kivétele a hátrányukat beragasztja.")
+    except Exception:
+        pass
+    # Hajrá-poszt: melyik posztjuk viszi a végjátékot.
+    try:
+        from .momentum import clutch_scorer_roles
+        csr = clutch_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_csr = csr[side]
+            if rec_csr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} végjátéka egy posztra fut ki: a "
+                     f"hajrá-góljaik {rec_csr['share_pct']:.0f}%-a "
+                     f"a(z) {rec_csr['main_role']} poszté "
+                     f"({rec_csr['goals']} hajrá-gólból) — az utolsó "
+                     "öt percben őt kell fogni.")
+    except Exception:
+        pass
+    # Emberhátrány-poszt: melyik posztjuk vállal be öt emberrel.
+    try:
+        from .rules import shorthanded_shooter_roles
+        shr = shorthanded_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_shr = shr[side]
+            if rec_shr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} öt emberrel is kiszámítható: a "
+                     f"hátrány-lövéseik {rec_shr['share_pct']:.0f}%-a "
+                     f"a(z) {rec_shr['main_role']} poszté "
+                     f"({rec_shr['shots']} lövésből) — emberelőnyben "
+                     "az ő oldalán kell a labdabiztonság.")
+    except Exception:
+        pass
+    # Emberelőny-poszt: melyik posztjuk fejez be a két perc alatt.
+    try:
+        from .rules import powerplay_shooter_roles
+        ppr = powerplay_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ppr = ppr[side]
+            if rec_ppr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} emberelőnye egy posztra fut ki: "
+                     f"a lövéseik {rec_ppr['share_pct']:.0f}%-a a(z) "
+                     f"{rec_ppr['main_role']} poszté "
+                     f"({rec_ppr['shots']} emberelőny-lövésből) — "
+                     "hátrányban az ő sávját kell tartani.")
+    except Exception:
+        pass
+    # Kiosztás-poszt: melyik posztra jár a betörés utáni labda.
+    try:
+        from .attack_types import kickout_target_roles
+        kor = kickout_target_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_kor = kor[side]
+            if rec_kor["verdict"] is None:
+                continue
+            body += (f" A(z) {name} betörései utáni labda egy posztra "
+                     f"jár: {rec_kor['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_kor['main_role']} kapja "
+                     f"({rec_kor['kickouts']} kiosztásból) — a védője "
+                     "előre elmozdulhat a passzsávba.")
+    except Exception:
+        pass
+    # Kettőző-poszt: melyik posztjuk lép ki kettőzni.
+    try:
+        from .defense import doubling_defender_roles
+        ddr = doubling_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ddr = ddr[side]
+            if rec_ddr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kettőzése kiolvasható: "
+                     f"{rec_ddr['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_ddr['main_role']} posztról érkezik — a "
+                     "kettőzés pillanatában az ő elhagyott embere az "
+                     "üres ember.")
+    except Exception:
+        pass
+    # Kockáztató-poszt: melyik posztjuk szórja el a hosszú labdákat.
+    try:
+        from .attack_types import risky_passer_roles
+        rpr = risky_passer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rpr = rpr[side]
+            if rec_rpr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hazárd hosszú labdái egy posztról "
+                     f"jönnek: {rec_rpr['share_pct']:.0f}%-uk a(z) "
+                     f"{rec_rpr['main_role']} poszté "
+                     f"({rec_rpr['turnovers']} elszórt hosszúból) — az"
+                     " ő passzsávjába kell beállni.")
+    except Exception:
+        pass
+    # Vasember-poszt: melyik posztjuk játszik végig csere nélkül.
+    try:
+        from .stats import iron_man_roles
+        irm = iron_man_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_irm = irm[side]
+            if rec_irm["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_irm['main_role']} posztja "
+                     f"végigjátssza a meccset "
+                     f"({rec_irm['share_pct']:.0f}% jelenlét) — a "
+                     "hajrában oda kell vinni a tempót.")
+    except Exception:
+        pass
+    # Vasemberek: ki játssza végig a meccset csere nélkül (név szerint).
+    try:
+        from .stats import iron_men
+        imn = iron_men(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_imn = imn[side]
+            if not rec_imn["players"]:
+                continue
+            nevek = ", ".join(p["label"] for p in rec_imn["players"])
+            body += (f" A(z) {name} csapatából csere nélkül végig a "
+                     f"pályán: {nevek} "
+                     f"({rec_imn['players'][0]['share_pct']:.0f}% "
+                     "jelenlét) — a hajrában ő a legfáradtabb ember.")
+    except Exception:
+        pass
+    # Bejátszó-poszt: melyik posztjuk játssza be a beállót.
+    try:
+        from .attack_types import pivot_feeder_roles
+        pfr = pivot_feeder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pfr = pfr[side]
+            if rec_pfr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} beálló-játéka egy posztról fut: a "
+                     f"beadásaik {rec_pfr['share_pct']:.0f}%-a a(z) "
+                     f"{rec_pfr['main_role']} poszté "
+                     f"({rec_pfr['feeds']} beadásból) — az ő kezén "
+                     "kell a beálló-vonalba lépni.")
+    except Exception:
+        pass
+    # Indítás-vadász poszt: melyik posztjuk vadássza az indítást.
+    try:
+        from .goalkeeper import outlet_hunter_roles
+        ohr = outlet_hunter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ohr = ohr[side]
+            if rec_ohr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} indítás-vadászata egy poszton "
+                     f"fut: a rablásaik {rec_ohr['share_pct']:.0f}%-a "
+                     f"a(z) {rec_ohr['main_role']} poszté "
+                     f"({rec_ohr['steals']} elrabolt indításból) — a "
+                     "kapus-indítás a másik oldalon nyisson.")
+    except Exception:
+        pass
+    # Kulcs-poszt: hány réteg mutat ugyanarra a posztra.
+    try:
+        from .priorities import key_post
+        kp = key_post(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_kp = kp[side]
+            if rec_kp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kulcs-posztja a(z) "
+                     f"{rec_kp['top']}: "
+                     f"{rec_kp['posts'][rec_kp['top']]} réteg ítélete "
+                     "fut ki rá — az ő kezelése a meccsterv első "
+                     "lapja.")
+    except Exception:
+        pass
+    # Elzáró-poszt: melyik posztjuk áll elzárásba.
+    try:
+        from .attack_types import screen_setter_roles
+        sc2 = screen_setter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sc2 = sc2[side]
+            if rec_sc2["verdict"] is None:
+                continue
+            body += (f" A(z) {name} elzárás-játéka egy posztra épül: "
+                     f"az elzárásaik {rec_sc2['share_pct']:.0f}%-a "
+                     f"a(z) {rec_sc2['main_role']} poszté "
+                     f"({rec_sc2['screens']} elzárásból) — az ő "
+                     "oldalán hangos váltás kell.")
+    except Exception:
+        pass
+    # Átvert-poszt: melyik posztjuk mögött esnek a kapott gólok.
+    try:
+        from .defense import beaten_defender_roles
+        btr = beaten_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_btr = btr[side]
+            if rec_btr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapott góljai egy poszton esnek: "
+                     f"{rec_btr['share_pct']:.0f}%-uk a(z) "
+                     f"{rec_btr['main_role']} párharc-vereségéből jön "
+                     f"({rec_btr['goals']} védőhöz rendelt gólból) — "
+                     "oda kell vinni az 1v1-et.")
+    except Exception:
+        pass
+    # Visszafutás-poszt: ki marad le a visszarendeződésben.
+    try:
+        from .defense import slow_retreat_roles
+        rtr = slow_retreat_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rtr = rtr[side]
+            if rec_rtr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} visszarendeződése a(z) "
+                     f"{rec_rtr['main_role']} poszton szakad el "
+                     f"({rec_rtr['share_pct']:.0f}%, {rec_rtr['breaks']}"
+                     " kontrából ő maradt elöl) — a kontrát az ő "
+                     "sávjába kell vezetni.")
+    except Exception:
+        pass
+    # Visszafutás-lemaradók: ki marad elöl a kontráik alatt.
+    try:
+        from .defense import slow_retreat_players
+        srp = slow_retreat_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top_srp = srp[side]["top"]
+            if top_srp is None:
+                continue
+            _ki = (f"a(z) {top_srp['jersey']}. számú"
+                   if top_srp.get("jersey") is not None
+                   else f"a(z) {top_srp['player_id']}. játékos")
+            body += (f" A(z) {name} ellen futott kontráknál {_ki} "
+                     f"marad elöl a legtöbbször ({top_srp['lags']} "
+                     "alkalom) — a lerohanást az ő oldalára kell "
+                     "vezetni.")
+    except Exception:
+        pass
+    # Fáradt-fal emberek: ki jár át rajtuk a második félidőre.
+    try:
+        from .defense import tired_conceder_players
+        tcp = tired_conceder_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top_tcp = tcp[side]["top"]
+            if top_tcp is None:
+                continue
+            _ki2 = (f"a(z) {top_tcp['jersey']}. számú"
+                    if top_tcp.get("jersey") is not None
+                    else f"a(z) {top_tcp['player_id']}. játékos")
+            body += (f" A(z) {name} falán a második félidőre {_ki2} "
+                     f"jár át ({top_tcp['fh']} → {top_tcp['sh']} "
+                     "kapott gól) — a hajrá figuráit rá kell "
+                     "építeni.")
+    except Exception:
+        pass
+    # Indítás-vadász emberek: ki ugrik rá a kapus-indításra.
+    try:
+        from .goalkeeper import outlet_hunters
+        ohp = outlet_hunters(match)
+        for side, name in (("home", home), ("away", away)):
+            top_ohp = ohp[side]["top"]
+            if top_ohp is None:
+                continue
+            _ki3 = (f"a(z) {top_ohp['jersey']}. számú"
+                    if top_ohp.get("jersey") is not None
+                    else f"a(z) {top_ohp['player_id']}. játékos")
+            body += (f" A(z) {name} indítás-rablásait {_ki3} hozza "
+                     f"({top_ohp['steals']} elcsípett indítás) — a "
+                     "kapus-indítás ne az ő térfelére nyisson.")
+    except Exception:
+        pass
+    # 7a6 eladás: mennyibe kerül egy elvesztett labda üres kapunál.
+    try:
+        from .goalkeeper import ENT_PUNISH_PCT, empty_net_turnovers
+        ent = empty_net_turnovers(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ent = ent[side]
+            if rec_ent["punish_pct"] is None:
+                continue
+            if rec_ent["punish_pct"] >= ENT_PUNISH_PCT:
+                body += (f" A(z) {name} 7 a 6-ja alatt elvesztett "
+                         f"labdák {rec_ent['punish_pct']:.0f}%-a gólt "
+                         f"ér ({rec_ent['punished']}/"
+                         f"{rec_ent['turnovers']}) — a szerzés után "
+                         "az első nézés az üres kapu.")
+    except Exception:
+        pass
+    # Kiszolgált befejezők: ki él a bejátszásokból.
+    try:
+        from .roles import assisted_scorers
+        asp = assisted_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_asp = asp[side]["top"]
+            if top_asp is None:
+                continue
+            _ki4 = (f"a(z) {top_asp['jersey']}. számú"
+                    if top_asp.get("jersey") is not None
+                    else f"a(z) {top_asp['player_id']}. játékos")
+            body += (f" A(z) {name} befejezői közül {_ki4} a "
+                     f"bejátszásokból él ({top_asp['assisted']}/"
+                     f"{top_asp['goals']} gólja gólpasszos) — őt nem "
+                     "fogni kell, hanem éheztetni: a felé futó "
+                     "passzt elvágni.")
+    except Exception:
+        pass
+    # Kétperc-gyűjtők: kinél áll már két kiállítás.
+    try:
+        from .rules import suspension_collectors
+        stc = suspension_collectors(match)
+        for side, name in (("home", home), ("away", away)):
+            top_stc = stc[side]["top"]
+            if top_stc is None:
+                continue
+            _ki5 = (f"a(z) {top_stc['jersey']}. számú"
+                    if top_stc.get("jersey") is not None
+                    else f"a(z) {top_stc['player_id']}. játékos")
+            body += (f" A(z) {name} kétperceit {_ki5} gyűjti "
+                     f"({top_stc['suspensions']} kiállítás) — rá kell "
+                     "vinni a játékot: a következő kétperce már "
+                     "kizárás.")
+    except Exception:
+        pass
+    # Felhozatal-emberek: kire hozzák fel a labdát a kaputól.
+    try:
+        from .goalkeeper import outlet_targets
+        otp = outlet_targets(match)
+        for side, name in (("home", home), ("away", away)):
+            top_otp = otp[side]["top"]
+            if top_otp is None:
+                continue
+            _ki6 = (f"a(z) {top_otp['jersey']}. számú"
+                    if top_otp.get("jersey") is not None
+                    else f"a(z) {top_otp['player_id']}. játékos")
+            body += (f" A(z) {name} felhozatala {_ki6} kezén megy át "
+                     f"({top_otp['outlets']} indítás-átvétel) — a "
+                     "letámadásnál rá kell lépni az átvételnél.")
+    except Exception:
+        pass
+    # Elzárás-hozam: megéri-e nekik az elzárás.
+    try:
+        from .attack_types import screen_yield
+        scy = screen_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_scy = scy[side]
+            if rec_scy["verdict"] is None:
+                continue
+            body += (f" A(z) {name} elzárásos lövései "
+                     f"{rec_scy['screened_pct']:.0f}%-ban mennek be, a "
+                     f"tiszták {rec_scy['clean_pct']:.0f}%-ban — "
+                     f"{rec_scy['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
+    # Blokk-fáradás: elfogy-e a blokk-munka a második félidőre.
+    try:
+        from .defense import block_fade
+        blf = block_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_blf = blf[side]
+            if rec_blf["verdict"] is None:
+                continue
+            body += (f" A(z) {name} blokk-aránya "
+                     f"{rec_blf['fh_pct']:.0f}%-ról "
+                     f"{rec_blf['sh_pct']:.0f}%-ra változik a második "
+                     f"félidőre — {rec_blf['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
+    # Emberelőny-hozam: megbüntetik-e a kiállítást.
+    try:
+        from .rules import powerplay_yield
+        ppy = powerplay_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ppy = ppy[side]
+            if rec_ppy["verdict"] is None:
+                continue
+            body += (f" A(z) {name} emberelőnyben "
+                     f"{rec_ppy['pp_pct']:.0f}%-ban fejez be, egyenlő "
+                     f"létszámnál {rec_ppy['eq_pct']:.0f}%-ban — "
+                     f"{rec_ppy['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
+    # Hetes-hozam: mennyit ér náluk egy megítélt hetes.
+    try:
+        from .rules import seven_yield
+        svy = seven_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svy = svy[side]
+            if rec_svy["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hetesei "
+                     f"{rec_svy['goal_pct']:.0f}%-ban mennek be "
+                     f"({rec_svy['goals']}/{rec_svy['attempts']}) — "
+                     f"{rec_svy['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
+    # Passzív-kockázat: mennyire futnak bele a passzív jelbe.
+    try:
+        from .rules import passive_risk
+        psr = passive_risk(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_psr = psr[side]
+            if rec_psr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} felállt támadásainak "
+                     f"{rec_psr['share_pct']:.0f}%-a lövés nélkül "
+                     f"nyúlik el ({rec_psr['passive']}/"
+                     f"{rec_psr['positional']}) — ellenük a zárt, "
+                     "türelmes fal dolgozik.")
+    except Exception:
+        pass
+    # Csere-hozam: nyernek vagy vesztenek a cseréik után.
+    try:
+        from .substitutions import substitution_yield
+        sby = substitution_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sby = sby[side]
+            if rec_sby["verdict"] is None:
+                continue
+            body += (f" A(z) {name} cseréi után "
+                     f"{rec_sby['goals_for']}-"
+                     f"{rec_sby['goals_against']} a mérleg "
+                     f"({rec_sby['rotations']} cseréből) — "
+                     f"{rec_sby['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
+    # Kettőzött emberek: kire jár rá az ellenfelek kettőzése.
+    try:
+        from .defense import doubled_targets
+        dtp = doubled_targets(match)
+        for side, name in (("home", home), ("away", away)):
+            top_dtp = dtp[side]["top"]
+            if top_dtp is None:
+                continue
+            _ki7 = (f"a(z) {top_dtp['jersey']}. számú"
+                    if top_dtp.get("jersey") is not None
+                    else f"a(z) {top_dtp['player_id']}. játékos")
+            body += (f" A(z) {name} ellen a kettőzések {_ki7} kezére "
+                     "járnak rá — a minta bevált recept, de mögötte "
+                     "a kilépő passzsávot is zárni kell.")
+    except Exception:
+        pass
+    # Kapus-visszaérés: milyen gyorsan ér haza a lehozott kapus.
+    try:
+        from .goalkeeper import KRT_SLOW_S, keeper_return
+        krt = keeper_return(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_krt = krt[side]
+            if rec_krt["avg_s"] is None:
+                continue
+            if rec_krt["avg_s"] < KRT_SLOW_S:
+                continue
+            body += (f" A(z) {name} kapusa {rec_krt['avg_s']:.1f} mp "
+                     "alatt ér haza a 7 a 6 után — a labdaszerzés "
+                     "után nem felállni kell, hanem azonnal dobni.")
+    except Exception:
+        pass
+    # Ellenszer-lap: hány teendőhöz van kész gyakorlat.
+    try:
+        from .priorities import counter_plan
+        cpl = counter_plan(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cpl = cpl[side]
+            if rec_cpl["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ellen {rec_cpl['total']} teendő "
+                     f"áll a rangsor élén, ebből {rec_cpl['matched']}"
+                     "-hez kész gyakorlat is tartozik az "
+                     "edzés-fókuszban.")
+    except Exception:
+        pass
+    # Figura-kopás: működik-e még a figura az ismétlésre.
+    try:
+        from .setplays import setplay_decay
+        spd = setplay_decay(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spd = spd[side]
+            if rec_spd["verdict"] is None:
+                continue
+            body += (f" A(z) {name} figurái első előfordulásra "
+                     f"{rec_spd['first_pct']:.0f}%-ban, ismétlésre "
+                     f"{rec_spd['repeat_pct']:.0f}%-ban hoznak gólt "
+                     f"— {rec_spd['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
+    # Futómunka-eloszlás: hány emberre épül a futásuk.
+    try:
+        from .stats import LBL_TOP3_PCT, running_load_balance
+        lbl = running_load_balance(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lbl = lbl[side]
+            if rec_lbl["top3_pct"] is None:
+                continue
+            if rec_lbl["top3_pct"] < LBL_TOP3_PCT:
+                continue
+            body += (f" A(z) {name} futómunkájának "
+                     f"{rec_lbl['top3_pct']:.0f}%-át három ember adja "
+                     "— ők a hajrára elfogynak: az utolsó húsz "
+                     "percben rájuk kell vinni a tempót.")
+    except Exception:
+        pass
+    # Kapus a kapott gól után: beesik-e, amíg friss a seb.
+    try:
+        from .goalkeeper import gk_after_goal
+        gka = gk_after_goal(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gka = gka[side]
+            if rec_gka["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusa a kapott gól utáni két "
+                     f"lövésen {rec_gka['fresh_pct']:.0f}%-ot véd, "
+                     f"egyébként {rec_gka['rest_pct']:.0f}%-ot — "
+                     f"{rec_gka['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
+    # Hetes-forrás: milyen helyzetből jön a hetesük.
+    try:
+        from .rules import seven_sources
+        svs = seven_sources(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svs = svs[side]
+            if rec_svs["verdict"] is None:
+                continue
+            body += (f" A(z) {name} heteseinek "
+                     f"{rec_svs['share_pct']:.0f}%-a "
+                     f"{rec_svs['main_type']} helyzetből jön "
+                     f"({rec_svs['sevens']} hetesből) — ott kézzel "
+                     "fékezni tilos.")
+    except Exception:
+        pass
+    # Kontroll-idővonal: ki diktált ötpercenként.
+    try:
+        from .momentum import control_timeline
+        ctl = control_timeline(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ctl = ctl[side]
+            if rec_ctl["verdict"] is None:
+                continue
+            if rec_ctl["won"] <= rec_ctl["lost"]:
+                continue
+            body += (f" A(z) {name} az ötperces szakaszok "
+                     f"{rec_ctl['won']}/"
+                     f"{len(rec_ctl['blocks'])} részét vitte "
+                     "birtoklásban — a leggyengébb szakaszuk a "
+                     f"{rec_ctl['worst']}. perctől indul.")
+    except Exception:
+        pass
+    # Ziccerhagyó emberek: kinél a helyzetbe engedés a kisebbik rossz.
+    try:
+        from .xg import missed_chance_players
+        mcp = missed_chance_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top_mcp = mcp[side]["top"]
+            if top_mcp is None:
+                continue
+            _ki8 = (f"a(z) {top_mcp['jersey']}. számú"
+                    if top_mcp.get("jersey") is not None
+                    else f"a(z) {top_mcp['player_id']}. játékos")
+            body += (f" A(z) {name} kihagyott ziccerei {_ki8} kezéhez "
+                     f"kötődnek ({top_mcp['misses']} kihagyás) — nála "
+                     "a helyzetbe engedés a kisebbik rossz.")
+    except Exception:
+        pass
+    # Fáradt lövők: kinek megy szét a lövése a második félidőre.
+    try:
+        from .xg import tired_shooters
+        fsp = tired_shooters(match)
+        for side, name in (("home", home), ("away", away)):
+            top_fsp = fsp[side]["top"]
+            if top_fsp is None:
+                continue
+            _ki9 = (f"a(z) {top_fsp['jersey']}. számú"
+                    if top_fsp.get("jersey") is not None
+                    else f"a(z) {top_fsp['player_id']}. játékos")
+            body += (f" A(z) {name} pontatlan lövései a második "
+                     f"félidőre {_ki9} kezén ugranak meg "
+                     f"({top_fsp['fh']} → {top_fsp['sh']}) — rá a "
+                     "szünet után rá lehet engedni.")
+    except Exception:
+        pass
+    # Lágy passzolók: kinek a labdáiba lehet belenyúlni.
+    try:
+        from .decisions import soft_passers
+        spp = soft_passers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_spp = spp[side]["top"]
+            if top_spp is None:
+                continue
+            _ki10 = (f"a(z) {top_spp['jersey']}. számú"
+                     if top_spp.get("jersey") is not None
+                     else f"a(z) {top_spp['player_id']}. játékos")
+            body += (f" A(z) {name} lágy passzai {_ki10} kezéből "
+                     f"jönnek ({top_spp['soft']} lágy passz) — az ő "
+                     "labdáiba bele lehet nyúlni.")
+    except Exception:
+        pass
+    # Passzív-birtoklók: kinél hal el a felállt támadásuk.
+    try:
+        from .rules import passive_holders
+        pvp = passive_holders(match)
+        for side, name in (("home", home), ("away", away)):
+            top_pvp = pvp[side]["top"]
+            if top_pvp is None:
+                continue
+            _ki11 = (f"a(z) {top_pvp['jersey']}. számú"
+                     if top_pvp.get("jersey") is not None
+                     else f"a(z) {top_pvp['player_id']}. játékos")
+            body += (f" A(z) {name} terméketlen támadás-ideje {_ki11} "
+                     "kezén telik — passzív jelzésnél őt kell nyomás "
+                     "alá tenni.")
+    except Exception:
+        pass
+    # Előkészítő emberek: ki készíti elő a lövéseiket.
+    try:
+        from .attack_types import last_passers
+        epp = last_passers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_epp = epp[side]["top"]
+            if top_epp is None:
+                continue
+            _ki12 = (f"a(z) {top_epp['jersey']}. számú"
+                     if top_epp.get("jersey") is not None
+                     else f"a(z) {top_epp['player_id']}. játékos")
+            body += (f" A(z) {name} lövéseit {_ki12} készíti elő "
+                     f"({top_epp['passes']} előkészítés) — nem a "
+                     "lövőt kell fogni, hanem a kiszolgálót.")
+    except Exception:
+        pass
+    # Válaszoló emberek: kapott gól után ki válaszol.
+    try:
+        from .momentum import response_scorers
+        rspp = response_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_rspp = rspp[side]["top"]
+            if top_rspp is None:
+                continue
+            _ki13 = (f"a(z) {top_rspp['jersey']}. számú"
+                     if top_rspp.get("jersey") is not None
+                     else f"a(z) {top_rspp['player_id']}. játékos")
+            body += (f" A(z) {name} válasz-góljai {_ki13} nevéhez "
+                     f"kötődnek ({top_rspp['goals']} válasz-gól) — a "
+                     "saját gólunk után rá kell váltani.")
+    except Exception:
+        pass
+    # Rajt-emberek: ki viszi a meccs elejét.
+    try:
+        from .momentum import opening_scorers
+        osp = opening_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_osp = osp[side]["top"]
+            if top_osp is None:
+                continue
+            _ki14 = (f"a(z) {top_osp['jersey']}. számú"
+                     if top_osp.get("jersey") is not None
+                     else f"a(z) {top_osp['player_id']}. játékos")
+            body += (f" A(z) {name} meccs eleji góljai {_ki14} "
+                     f"nevéhez kötődnek ({top_osp['goals']} "
+                     "nyitó-gól) — az első tíz percben őt kell "
+                     "megfogni.")
+    except Exception:
+        pass
+    # Újrakezdő emberek: ki viszi a szünet utáni rajtot.
+    try:
+        from .momentum import second_start_scorers
+        ssp = second_start_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_ssp = ssp[side]["top"]
+            if top_ssp is None:
+                continue
+            _ki15 = (f"a(z) {top_ssp['jersey']}. számú"
+                     if top_ssp.get("jersey") is not None
+                     else f"a(z) {top_ssp['player_id']}. játékos")
+            body += (f" A(z) {name} szünet utáni góljai {_ki15} "
+                     f"nevéhez kötődnek ({top_ssp['goals']} gól) — a "
+                     "második félidő elején rá kell a legjobb védő.")
+    except Exception:
+        pass
+    # Előnyben-emberek: ki viszi a játékot vezetésnél.
+    try:
+        from .momentum import lead_scorers
+        lgp = lead_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_lgp = lgp[side]["top"]
+            if top_lgp is None:
+                continue
+            _ki16 = (f"a(z) {top_lgp['jersey']}. számú"
+                     if top_lgp.get("jersey") is not None
+                     else f"a(z) {top_lgp['player_id']}. játékos")
+            body += (f" A(z) {name} előny-tartását {_ki16} viszi "
+                     f"({top_lgp['goals']} vezetésnél lőtt gól) — "
+                     "hátrányban az ő kivétele a leggyorsabb út a "
+                     "felzárkózáshoz.")
+    except Exception:
+        pass
+    # Elzárt védők: ki akad el az elzárásokban.
+    try:
+        from .defense import screened_defenders
+        sdp = screened_defenders(match)
+        for side, name in (("home", home), ("away", away)):
+            top_sdp = sdp[side]["top"]
+            if top_sdp is None:
+                continue
+            _ki17 = (f"a(z) {top_sdp['jersey']}. számú"
+                     if top_sdp.get("jersey") is not None
+                     else f"a(z) {top_sdp['player_id']}. játékos")
+            body += (f" A(z) {name} védői közül az elzárások {_ki17} "
+                     f"emberén ragadnak ({top_sdp['screens']} "
+                     "elakadás) — az ő oldalára érdemes a zárásokat "
+                     "vinni.")
+    except Exception:
+        pass
+    # 7a6-befejező emberek: kire fut ki a hetedik ember játéka.
+    try:
+        from .goalkeeper import seven_six_finishers
+        en7p = seven_six_finishers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_en7 = en7p[side]["top"]
+            if top_en7 is None:
+                continue
+            _ki18 = (f"a(z) {top_en7['jersey']}. számú"
+                     if top_en7.get("jersey") is not None
+                     else f"a(z) {top_en7['player_id']}. játékos")
+            body += (f" A(z) {name} 7 a 6-ja {_ki18} emberre fut ki "
+                     f"({top_en7['shots']} lövés) — a lehozott kapus "
+                     "felismerésekor őt kell először megtalálni.")
+    except Exception:
+        pass
+    # Gólpassz-duó: melyik kettősön fut a gólgyártásuk.
+    try:
+        from .event_detection import assist_duos
+        adu = assist_duos(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_adu = adu[side]
+            if rec_adu["verdict"] is None:
+                continue
+            body += (f" A(z) {name} gólgyártása a(z) "
+                     f"{rec_adu['top']} kettősön fut — a duó ellen "
+                     "párban kell védekezni: az adót testtel, a "
+                     "passzsávot beleéréssel.")
+    except Exception:
+        pass
+    # Hoki-assziszt: ki a rejtett szervező a gólpassz mögött.
+    try:
+        from .event_detection import pre_assists
+        pra = pre_assists(match)
+        for side, name in (("home", home), ("away", away)):
+            top_pra = pra[side]["top"]
+            if top_pra is None:
+                continue
+            ki_pra = (f"a(z) {top_pra['jersey']}. számú"
+                      if top_pra.get("jersey") is not None
+                      else f"a(z) {top_pra['player_id']}. játékos")
+            body += (f" A(z) {name} góljai mögött a rejtett szervező "
+                     f"{ki_pra}: ő adja a gólpassz ELŐTTI passzt "
+                     f"({top_pra['pre_assists']} másod-előkészítés) — a "
+                     "zárást nála kell kezdeni, nem a gólpasszolónál.")
+    except Exception:
+        pass
+    # Elzárás-fáradás: elfogy-e az elzárás-munka a 2. félidőre.
+    try:
+        from .attack_types import screen_fade
+        scrf = screen_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_scrf = scrf[side]
+            if rec_scrf["verdict"] is None:
+                continue
+            body += (f" A(z) {name} elzárás-munkája a 2. félidőre "
+                     f"{'elfogy' if rec_scrf['sh_pct'] < rec_scrf['fh_pct'] else 'erősödik'} "
+                     f"({rec_scrf['fh_pct']:.0f}% → "
+                     f"{rec_scrf['sh_pct']:.0f}% elzárásos lövés).")
+    except Exception:
+        pass
+    # Befutó poszt: melyik poszt a második hullám a kontráikban.
+    try:
+        from .attack_types import second_wave_roles
+        swr = second_wave_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_swr = swr[side]
+            if rec_swr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kontráinak második hulláma a(z) "
+                     f"{rec_swr['main_role']} poszt "
+                     f"({rec_swr['share_pct']:.0f}%) — a visszafutásnál "
+                     "az első ember után az ő sávját kell felvenni, "
+                     "akárki játssza.")
+    except Exception:
+        pass
+    # Egálbontó poszt: melyik posztjuk viszi el a holtpontokat.
+    try:
+        from .momentum import parity_break_roles
+        pbr = parity_break_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pbr = pbr[side]
+            if rec_pbr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} holtpontjait a(z) "
+                     f"{rec_pbr['main_role']} posztjuk viszi el "
+                     f"({rec_pbr['share_pct']:.0f}%) — egálnál arra a "
+                     "sávra korai kettőzés, akárki játssza.")
+    except Exception:
+        pass
+    # Rejtett szervező poszt: melyik poszton fut a másod-előkészítés.
+    try:
+        from .event_detection import pre_assist_roles
+        prr = pre_assist_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_prr = prr[side]
+            if rec_prr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} másod-előkészítése a(z) "
+                     f"{rec_prr['main_role']} poszton fut "
+                     f"({rec_prr['share_pct']:.0f}%) — a passzsáv-zárást "
+                     "a poszt sávjában kell kezdeni, akárki játssza.")
+    except Exception:
+        pass
+    # Szuper-csere: ki termel a padról — névre szólóan.
+    try:
+        from .momentum import super_sub
+        ssu = super_sub(match)
+        for side, name in (("home", home), ("away", away)):
+            top_ssu = ssu[side]["top"]
+            if top_ssu is None:
+                continue
+            ki_ssu = (f"a(z) {top_ssu['jersey']}. számú"
+                      if top_ssu.get("jersey") is not None
+                      else f"a(z) {top_ssu['player_id']}. játékos")
+            body += (f" A(z) {name} szuper-cseréje {ki_ssu}: a padról "
+                     f"beállva {top_ssu['goals']} gólt szerzett — a "
+                     "beállása jelzés, ott kell szorosabbra fogni a "
+                     "védekezést.")
+    except Exception:
+        pass
+    # Szuper-csere poszt: melyik posztról termel a paduk.
+    try:
+        from .momentum import super_sub_roles
+        ssr = super_sub_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ssr = ssr[side]
+            if rec_ssr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} padja a(z) {rec_ssr['main_role']} "
+                     f"posztról termel ({rec_ssr['share_pct']:.0f}%, "
+                     f"{rec_ssr['goals']} pad-gól) — az erre a posztra "
+                     "érkező friss embert azonnal fel kell venni.")
+    except Exception:
+        pass
+    # Időkérés-hozam: működik-e a mentő időkérésük.
+    try:
+        from .stoppages import timeout_yield
+        toy = timeout_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_toy = toy[side]
+            if rec_toy["verdict"] is None:
+                continue
+            body += (f" A(z) {name} időkérése "
+                     f"{rec_toy['broke']}/"
+                     f"{rec_toy['broke'] + rec_toy['failed']} "
+                     f"arányban töri meg a sorozatot — "
+                     f"{rec_toy['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
+    # Kapuscsere-hozam: fordít-e a kapuscseréjük.
+    try:
+        from .goalkeeper import gk_change_yield
+        gcy = gk_change_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gcy = gcy[side]
+            if rec_gcy["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapuscseréje "
+                     f"{rec_gcy['delta_pp']:+.0f} százalékpontot "
+                     f"változtat a védésen — "
+                     f"{rec_gcy['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
+    # Emberhátrány-túlélés: mit ér ellenük az emberelőny.
+    try:
+        from .rules import shorthanded_survival
+        shs = shorthanded_survival(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_shs = shs[side]
+            if rec_shs["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hátrányban "
+                     f"{rec_shs['per_2min']:.1f} gólt kap két "
+                     f"percenként — "
+                     f"{rec_shs['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
+    # Középkezdés-hozam: gólra váltják-e az újraindítást.
+    try:
+        from .momentum import restart_yield
+        rsy = restart_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rsy = rsy[side]
+            if rec_rsy["verdict"] is None:
+                continue
+            if rec_rsy["answered"] * 2 < rec_rsy["restarts"]:
+                continue
+            body += (f" A(z) {name} a kapott gólra "
+                     f"{rec_rsy['answered']}/{rec_rsy['restarts']} "
+                     "arányban azonnali góllal válaszol — a gól "
+                     "utáni ünneplés ellene tilos.")
+    except Exception:
+        pass
+    # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
+    try:
+        from .rules import suspended_roles
+        sup = suspended_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sup = sup[side]
+            if rec_sup["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kétpercei egy posztra járnak: a "
+                     f"kiállításaik {rec_sup['share_pct']:.0f}%-a a(z) "
+                     f"{rec_sup['main_role']} poszté "
+                     f"({rec_sup['suspensions']} kiállításból) — a "
+                     "meccs elején oda érdemes vezetni a játékot.")
+    except Exception:
+        pass
+    # Hetes-okozó poszt: melyik sávjuk szakad be hetessel.
+    try:
+        from .rules import seven_conceder_roles
+        svr = seven_conceder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svr = svr[side]
+            if rec_svr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hetesei egy sávban szakadnak be: "
+                     f"az okozott heteseik {rec_svr['share_pct']:.0f}"
+                     f"%-a a(z) {rec_svr['main_role']} poszté "
+                     f"({rec_svr['sevens']} hetesből) — oda érdemes "
+                     "betörést vezetni.")
+    except Exception:
+        pass
+    # 7a6-befejező poszt: kire fut ki a hetedik ember játéka.
+    try:
+        from .goalkeeper import seven_six_finisher_roles
+        en7 = seven_six_finisher_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_en7 = en7[side]
+            if rec_en7["verdict"] is None:
+                continue
+            body += (f" A(z) {name} 7 a 6-a kiszámítható: a lövéseik "
+                     f"{rec_en7['share_pct']:.0f}%-a a(z) "
+                     f"{rec_en7['main_role']} posztról jön "
+                     f"({rec_en7['shots']} lövésből) — a lehozott "
+                     "kapus felismerésekor oda kell sűríteni.")
+    except Exception:
+        pass
+    # Blokk-poszt: melyik posztjuk blokkolja a lövéseket.
+    try:
+        from .defense import role_block_sources
+        rbk = role_block_sources(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rbk = rbk[side]
+            if rec_rbk["verdict"] is None:
+                continue
+            body += (f" A(z) {name} blokk-munkája egy poszton áll: a "
+                     f"blokkjaik {rec_rbk['share_pct']:.0f}%-a a(z) "
+                     f"{rec_rbk['main_role']} poszttól jön "
+                     f"({rec_rbk['blocks']} blokkból) — az ő sávjába "
+                     "csak elmozgatás után szabad lőni.")
+    except Exception:
+        pass
+    # Gólpassz-poszt: kinek a kezéből indulnak a gólok.
+    try:
+        from .roles import role_assist_sources
+        ras = role_assist_sources(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ras = ras[side]
+            if rec_ras["verdict"] is None:
+                continue
+            body += (f" A(z) {name} góljai a(z) {rec_ras['main_role']} "
+                     f"kezéből indulnak ({rec_ras['share_pct']:.0f}%, "
+                     f"{rec_ras['assists']} gólpasszból) — tőle a "
+                     "passzt kell elvenni, nem a lövést zárni.")
+    except Exception:
+        pass
+    # Hetes-oldal: merre dobják a heteseiket.
+    try:
+        from .rules import seven_shot_directions
+        svd = seven_shot_directions(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svd = svd[side]
+            if rec_svd["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hetesei kiszámíthatók: "
+                     f"{rec_svd['share_pct']:.0f}%-uk "
+                     f"{rec_svd['dominant']} oldalra megy "
+                     f"({rec_svd['attempts']} mérhető dobásból) — "
+                     "hetesnél a kapus tudatosan arra vetődhet.")
+    except Exception:
+        pass
+    # Hetes-sarok emberre: melyik sarkát keresi a dobójuk.
+    try:
+        from .rules import seven_taker_corners
+        stc = seven_taker_corners(match)
+        for side, name in (("home", home), ("away", away)):
+            top_stc = stc[side]["top"]
+            if top_stc is None:
+                continue
+            ki_stc = (f"a(z) {top_stc['jersey']}. számú"
+                      if top_stc.get("jersey") is not None
+                      else f"a(z) {top_stc['player_id']}. játékos")
+            body += (f" A(z) {name} hetesdobója, {ki_stc}, a "
+                     f"{top_stc['favorite']} sarkot keresi "
+                     f"({top_stc['share_pct']:.0f}%, "
+                     f"{top_stc['attempts']} dobásból) — a kapus nála "
+                     "tudatosan arra vetődhet.")
+    except Exception:
+        pass
+    # Hetes-ismétlés: másodszorra is ugyanoda megy-e a dobójuk.
+    try:
+        from .rules import seven_taker_repeat, SREP_REPEAT_PCT
+        srep = seven_taker_repeat(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_srep = srep[side]
+            if rec_srep["verdict"] is None:
+                continue
+            if rec_srep["repeat_pct"] < SREP_REPEAT_PCT:
+                continue
+            body += (f" A(z) {name} hetesdobói ISMÉTLŐK: az egymást "
+                     f"követő heteseik {rec_srep['repeat_pct']:.0f}%-a "
+                     f"ugyanabba a sávba ment "
+                     f"({rec_srep['repeats']}/{rec_srep['pairs']} pár) — "
+                     "a kapusnak a LEGUTÓBB látott sarok az esély.")
+    except Exception:
+        pass
+    # Kontra-poszt: kit kell először felvenni visszafutásnál.
+    try:
+        from .roles import role_fast_breaks
+        rfb = role_fast_breaks(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rfb = rfb[side]
+            if rec_rfb["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lerohanásai a(z) "
+                     f"{rec_rfb['main_role']} poszton záródnak "
+                     f"({rec_rfb['share_pct']:.0f}%, "
+                     f"{rec_rfb['shots']} kontra-lövésből) — "
+                     "visszafutásnál őt kell először felvenni.")
+    except Exception:
+        pass
+    # Lövésválasztás: felnéznek-e a lövés előtt.
+    try:
+        from .decisions import shot_choice_quality
+        scq = shot_choice_quality(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_scq = scq[side]
+            if rec_scq["verdict"] is None or rec_scq["pct"] is None:
+                continue
+            body += (f" A(z) {name} lövésválasztásáról: "
+                     f"{rec_scq['verdict']} "
+                     f"({rec_scq['better_options']}/{rec_scq['shots']} "
+                     "lövés).")
+    except Exception:
+        pass
+    # Időkérés-befejező: az időkérés után kire játszanak.
+    try:
+        from .stoppages import timeout_finisher
+        tof = timeout_finisher(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tof = tof[side]
+            if rec_tof["verdict"] is None:
+                continue
+            body += (f" A(z) {name} időkérés után a(z) "
+                     f"{rec_tof['main_role']} posztra játszik: az "
+                     f"újraindítás utáni lövéseik "
+                     f"{rec_tof['share_pct']:.0f}%-a onnan jött "
+                     f"({rec_tof['shots']} lövésből, "
+                     f"{rec_tof['timeouts']} időkérés után) — a "
+                     "megbeszélésen ő kapja az embert.")
+    except Exception:
+        pass
+    # Figura-befejező: melyik figurájuk kire fut ki.
+    try:
+        from .setplays import setplay_finishers
+        spf = setplay_finishers(match)
+        for side, name in (("home", home), ("away", away)):
+            tel_spf = spf[side]["telegraphed"]
+            if tel_spf is None:
+                continue
+            body += (f" A(z) {name} {tel_spf['figure']}. figurája "
+                     f"kiszámítható befejezésű: a lövéseinek "
+                     f"{tel_spf['share_pct']:.0f}%-a a(z) "
+                     f"{tel_spf['poszt']} posztra fut ki "
+                     f"({tel_spf['shots']} lövésből) — a falnak már a "
+                     "figura indulásakor arra az oldalra kell csúsznia.")
+    except Exception:
+        pass
+    # Figura-indító: melyik posztról indul a figurájuk (az ELŐJEL).
+    try:
+        from .setplays import setplay_openers
+        spo = setplay_openers(match)
+        for side, name in (("home", home), ("away", away)):
+            tel_spo = spo[side]["telegraphed"]
+            if tel_spo is None:
+                continue
+            body += (f" A(z) {name} {tel_spo['figure']}. figurája már az "
+                     f"INDÍTÁSNÁL olvasható: az indításainak "
+                     f"{tel_spo['share_pct']:.0f}%-a a(z) "
+                     f"{tel_spo['poszt']} posztról jön "
+                     f"({tel_spo['starts']} támadásból) — amint a labda "
+                     "odaér, zárni kell a kiinduló passzsávot.")
+    except Exception:
+        pass
+    # Poszt-nyomás: kire kell kilépni, kit kell kizárni.
+    try:
+        from .roles import role_pressure_finish
+        rpf = role_pressure_finish(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rpf = rpf[side]
+            cold_rpf = rec_rpf["coldblooded"]
+            if cold_rpf is None:
+                continue
+            body += (f" A(z) {name} nyomás alatt is befejező posztja a(z) "
+                     f"{cold_rpf['poszt']}: a fedezett lövéseik "
+                     f"{cold_rpf['covered_pct']:.0f}%-át belövi "
+                     f"({cold_rpf['covered_shots']} lövésből) — őt ki "
+                     "kell zárni, a puszta kilépés nála kevés.")
+    except Exception:
+        pass
+    # Poszt-kapuoldal: melyik sarokra állhat rá a kapus.
+    try:
+        from .roles import role_goal_placement
+        rgp = role_goal_placement(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rgp = rgp[side]
+            pred = rec_rgp["predictable"]
+            if pred is None:
+                continue
+            body += (f" A(z) {name} legkiszámíthatóbb befejezője a(z) "
+                     f"{pred['poszt']} posztjuk: a góljaik "
+                     f"{pred['share_pct']:.0f}%-át {pred['dominant']} "
+                     f"oldalra lövik ({pred['goals']} gólból) — a kapus "
+                     "arra az oldalra állhat rá, a fal a másikat zárja.")
+    except Exception:
+        pass
     # Poszt-lövéserő: melyik posztra készüljön a kapus.
     try:
         from .roles import role_shot_power
@@ -900,6 +3552,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"lövésen, a csapat-átlaguk "
                      f"{rec_rsp['team_avg_kmh']:.0f} km/h — ellene a "
                      "kapus korábban induljon, a fal szöget zárjon.")
+    except Exception:
+        pass
+    # Poszt-kezesség: melyik posztjukon lő balkezes.
+    try:
+        from .roles import role_shooting_hand
+        rsh = role_shooting_hand(match)
+        for side, name in (("home", home), ("away", away)):
+            lefty_role = rsh[side]["lefty_role"]
+            if not lefty_role:
+                continue
+            rec_rsh = rsh[side]["roles"][lefty_role]
+            body += (f" A(z) {name} {lefty_role} posztján BALKEZES lő "
+                     f"({rec_rsh['left']}/{rec_rsh['shots']} bal-jelű "
+                     "lövés) — ellene tükrözni kell a sáncot és a kapus "
+                     "alapállását.")
     except Exception:
         pass
     # Poszt-lövésidőzítés: ki lő korán, ki vár ki.
@@ -1484,6 +4151,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_sac['slow']} elhúzódó támadás ért gólt).")
     except Exception:
         pass
+    # Támadás-ritmus: egy tempóban játszanak-e, vagy váltogatják.
+    try:
+        from .tactics import attack_tempo_variety
+        atv = attack_tempo_variety(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_atv = atv[side]
+            if rec_atv["verdict"] is None:
+                continue
+            body += (f" Ritmus: a(z) {name} támadásainál "
+                     f"{rec_atv['verdict']} ({rec_atv['fast']} gyors, "
+                     f"{rec_atv['mid']} közepes, {rec_atv['slow']} hosszú "
+                     f"támadás).")
+    except Exception:
+        pass
     # Indítás-hiba ára: gólba kerülnek-e az elszórt indítások.
     try:
         from .goalkeeper import outlet_punishment
@@ -1839,6 +4520,113 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_wsv['verdict']} "
                      f"({rec_wsv['running']}/{rec_wsv['receptions']} "
                      "átvétel jött mozgásból).")
+    except Exception:
+        pass
+    # Futtatott szélsők: melyik szélső kapja lendületből a labdát.
+    try:
+        from .attack_types import wing_runners
+        wrp = wing_runners(match)
+        for side, name in (("home", home), ("away", away)):
+            top_wrp = wrp[side]["top"]
+            if top_wrp is None:
+                continue
+            _wrp_j = (top_wrp["jersey"]
+                      if top_wrp["jersey"] is not None
+                      else top_wrp["player_id"])
+            body += (f" A(z) {name} futtatásainak címzettje a(z) "
+                     f"{_wrp_j}. szélső "
+                     f"({top_wrp['running']}/{wrp[side]['running']} "
+                     "futó átvétel) — az ő oldalán a futópassz-sáv "
+                     "zárása véd, nem a kifutás.")
+    except Exception:
+        pass
+    # Keresztjáró emberek: kin keresztül fut a keresztjáték.
+    try:
+        from .attack_types import crossing_runners
+        crp = crossing_runners(match)
+        for side, name in (("home", home), ("away", away)):
+            top_crp = crp[side]["top"]
+            if top_crp is None:
+                continue
+            _crp_j = (top_crp["jersey"]
+                      if top_crp["jersey"] is not None
+                      else top_crp["player_id"])
+            body += (f" A(z) {name} keresztjátékának motorja a(z) "
+                     f"{_crp_j}. játékos "
+                     f"({top_crp['runs']}/{crp[side]['crosses']} "
+                     "keresztben volt benne) — az ő sávjában dől el "
+                     "a váltás-fegyelem.")
+    except Exception:
+        pass
+    # Leforduló beállók: melyik beálló kapja mozgásból a labdát.
+    try:
+        from .attack_types import pivot_runners
+        lfb = pivot_runners(match)
+        for side, name in (("home", home), ("away", away)):
+            top_lfb = lfb[side]["top"]
+            if top_lfb is None:
+                continue
+            _lfb_j = (top_lfb["jersey"]
+                      if top_lfb["jersey"] is not None
+                      else top_lfb["player_id"])
+            body += (f" A(z) {name} lefordulós beálló-játékának "
+                     f"címzettje a(z) {_lfb_j}. beálló "
+                     f"({top_lfb['running']}/{lfb[side]['running']} "
+                     "mozgásos átvétel) — nála a bejátszás ELŐTT kell "
+                     "elé lépni, az átvétel után már késő.")
+    except Exception:
+        pass
+    # Befutó emberek: ki a második hullám embere a kontrákban.
+    try:
+        from .attack_types import second_wave_finishers
+        bfw = second_wave_finishers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_bfw = bfw[side]["top"]
+            if top_bfw is None:
+                continue
+            _bfw_j = (top_bfw["jersey"]
+                      if top_bfw["jersey"] is not None
+                      else top_bfw["player_id"])
+            body += (f" A(z) {name} kontráinak befutó embere a(z) "
+                     f"{_bfw_j}. játékos "
+                     f"({top_bfw['shots']}/{bfw[side]['second']} "
+                     "második hullámos befejezés) — a visszafutásnál "
+                     "őt kell megtalálni, nem elég az első embert "
+                     "felvenni.")
+    except Exception:
+        pass
+    # Egálbontó emberek: ki viszi el góllal a holtpontokat.
+    try:
+        from .momentum import parity_break_scorers
+        pbp = parity_break_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_pbp = pbp[side]["top"]
+            if top_pbp is None:
+                continue
+            _pbp_j = (top_pbp["jersey"]
+                      if top_pbp["jersey"] is not None
+                      else top_pbp["player_id"])
+            body += (f" A(z) {name} holtpont-embere a(z) "
+                     f"{_pbp_j}. játékos "
+                     f"({top_pbp['breaks']}/{pbp[side]['breaks']} "
+                     "egálbontó gól) — egálnál az ő kivétele az "
+                     "első dolog.")
+    except Exception:
+        pass
+    # Kezesség: van-e balkezes lövőjük — a sánc és a kapus tükör-feladata.
+    try:
+        from .event_detection import shooting_hand
+        sh = shooting_hand(match)
+        for side, name in (("home", home), ("away", away)):
+            lefty = sh[side]["lefty"]
+            if lefty is None:
+                continue
+            _sh_j = (lefty["jersey"] if lefty["jersey"] is not None
+                     else lefty["player_id"])
+            body += (f" A(z) {name} lövője, a(z) {_sh_j}. játékos "
+                     f"balkezes-jelű ({lefty['shots']} lövésből "
+                     f"{lefty['left']} bal-jel) — a sánc kezét és a "
+                     "kapus alapállását ellene át kell állítani.")
     except Exception:
         pass
     # Csere-lyukak: mennyi ideig játszanak öten csere közben.
@@ -2715,6 +5503,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_stg['subs']}).")
     except Exception:
         pass
+    # Csere-fázis: az ellenfél birtoklása közben is cseréltek-e.
+    try:
+        from .substitutions import substitution_phase
+        sph = substitution_phase(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sph = sph[side]
+            if rec_sph["verdict"] != ("védekezés közben is cserélnek "
+                                      "(kockázatos)"):
+                continue
+            body += (f" A(z) {name} kockázatosan forgatott: a cseréik "
+                     f"{rec_sph['risky_pct']:.0f}%-a az ellenfél "
+                     f"birtoklása közben indult "
+                     f"({rec_sph['opp_ball']}/{rec_sph['subs']}) — "
+                     "ilyenkor egy emberrel kevesebbel áll fel a fal.")
+    except Exception:
+        pass
     # Falépítés-idő: mennyi idő alatt állt fel a fal.
     try:
         from .defense import defense_setup_time
@@ -3199,6 +6003,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"({weak_gsr['faced']} kapura tartó lövés).")
     except Exception:
         pass
+    # Kapus-védés a lövő kezessége szerint: bírja-e a balkezeseket.
+    try:
+        from .goalkeeper import gk_saves_by_hand
+        gsh = gk_saves_by_hand(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gsh = gsh[side]
+            if rec_gsh["weak_hand"] is None:
+                continue
+            weak = rec_gsh["hands"][rec_gsh["weak_hand"]]
+            body += (f" A(z) {name} kapusa a "
+                     f"{rec_gsh['weak_hand']}kezes lövők ellen volt "
+                     f"gyengébb: {weak['save_pct']:.0f}%-ot fogott "
+                     f"({weak['faced']} kapura tartó lövés).")
+    except Exception:
+        pass
     # Hiba-sorozatok: egymás után jöttek-e az eladások.
     try:
         from .defense import turnover_clusters
@@ -3212,6 +6031,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"percen belül követte az előzőt "
                      f"({rec_tc['clustered']}/{rec_tc['turnovers']}, "
                      f"{rec_tc['clusters']} sorozat).")
+    except Exception:
+        pass
+    # Kényszerített vagy magától jött eladás: ki tehet róla.
+    try:
+        from .defense import pressured_turnovers
+        pto = pressured_turnovers(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pto = pto[side]
+            if rec_pto["verdict"] is None:
+                continue
+            body += (f" A(z) {name} eladásainak "
+                     f"{rec_pto['unforced_pct']:.0f}%-a MAGÁTÓL jött "
+                     f"(nem volt védő 2,5 m-en belül: "
+                     f"{rec_pto['unforced']}/{rec_pto['total']}) — "
+                     f"{rec_pto['verdict']}.")
     except Exception:
         pass
     # Kapott gólok posztonként: melyik poszt ellen szivárgott a faluk.
@@ -4148,6 +6982,119 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_pf['sh_m']:.1f} m).")
     except Exception:
         pass
+    # Fal-mélység esése: a fal HELYE (nem a szorossága) a 2. félidőre.
+    try:
+        from .defense import LINE_FADE_DROP_M, line_height_fade
+        lhc = line_height_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lh = lhc[side]
+            if rec_lh["drop_m"] is None:
+                continue
+            if rec_lh["drop_m"] >= LINE_FADE_DROP_M:
+                body += (f" A(z) {name} fala a 2. félidőre visszahúzódott "
+                         f"({rec_lh['fh_m']:.1f} → {rec_lh['sh_m']:.1f} m a "
+                         "saját kaputól) — a hajrában a 9 méteres lövés "
+                         "nyílik meg ellenük.")
+            elif rec_lh["drop_m"] <= -LINE_FADE_DROP_M:
+                body += (f" A(z) {name} fala a 2. félidőre feljebb jött "
+                         f"({rec_lh['fh_m']:.1f} → {rec_lh['sh_m']:.1f} m) — "
+                         "a hajrában a kilépő védő mögé kell játszani.")
+    except Exception:
+        pass
+    # Visszaállás-fáradás: lassul-e a hazaérés a 2. félidőre.
+    try:
+        from .defense import RETREAT_FADE_SLOW_S, retreat_fade
+        rfc = retreat_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rf = rfc[side]
+            if rec_rf["slow_s"] is None:
+                continue
+            if rec_rf["slow_s"] >= RETREAT_FADE_SLOW_S:
+                body += (f" A(z) {name} visszaállása a 2. félidőre lassult "
+                         f"({rec_rf['fh_s']:.1f} → {rec_rf['sh_s']:.1f} mp a "
+                         "lövésük után) — a hajrában az első hullám üres "
+                         "pályát talál ellenük.")
+            elif rec_rf["slow_s"] <= -RETREAT_FADE_SLOW_S:
+                body += (f" A(z) {name} a 2. félidőre GYORSABBAN áll vissza "
+                         f"({rec_rf['fh_s']:.1f} → {rec_rf['sh_s']:.1f} mp) — "
+                         "a hajrában nem kontrázhatók.")
+    except Exception:
+        pass
+    # Szélső-bevonás esése: beszűkül-e a támadás a hajrára.
+    try:
+        from .attack_types import (WING_INV_FADE_DROP_PCT,
+                                   wing_involvement_fade)
+        wifc = wing_involvement_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wf = wifc[side]
+            if rec_wf["drop_pct"] is None:
+                continue
+            if rec_wf["drop_pct"] >= WING_INV_FADE_DROP_PCT:
+                body += (f" A(z) {name} támadása a 2. félidőre beszűkült "
+                         f"({rec_wf['fh_pct']:.0f}% → {rec_wf['sh_pct']:.0f}% "
+                         "a szélre eljutó támadás) — a hajrában középen "
+                         "ragad a labda.")
+            elif rec_wf["drop_pct"] <= -WING_INV_FADE_DROP_PCT:
+                body += (f" A(z) {name} a 2. félidőre jobban széthúzta a "
+                         f"támadást ({rec_wf['fh_pct']:.0f}% → "
+                         f"{rec_wf['sh_pct']:.0f}%) — a hajrában a szélső "
+                         "védekezés a feladat.")
+    except Exception:
+        pass
+    # Támadás-mélység esése: hátrébb állnak-e a hajrára.
+    try:
+        from .attack_types import ADEPTH_FADE_DROP_M, attack_depth_fade
+        adfc = attack_depth_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ad = adfc[side]
+            if rec_ad["drop_m"] is None:
+                continue
+            if rec_ad["drop_m"] >= ADEPTH_FADE_DROP_M:
+                body += (f" A(z) {name} támadása a 2. félidőre hátrébb "
+                         f"került ({rec_ad['fh_m']:.1f} → "
+                         f"{rec_ad['sh_m']:.1f} m a kaputól) — a hajrában "
+                         "már nem mennek be a hatosra.")
+            elif rec_ad["drop_m"] <= -ADEPTH_FADE_DROP_M:
+                body += (f" A(z) {name} a 2. félidőre KÖZELEBB nyomult a "
+                         f"kapuhoz ({rec_ad['fh_m']:.1f} → "
+                         f"{rec_ad['sh_m']:.1f} m) — a hajrában a hatos "
+                         "elleni munka a téma ellenük.")
+    except Exception:
+        pass
+    # Beálló-bevonás esése: elfogy-e a beálló a hajrára.
+    try:
+        from .attack_types import PIVOT_FADE_DROP_PCT, pivot_usage_fade
+        pufc = pivot_usage_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pu = pufc[side]
+            if rec_pu["drop_pct"] is None:
+                continue
+            if rec_pu["drop_pct"] >= PIVOT_FADE_DROP_PCT:
+                body += (f" A(z) {name} beállója a 2. félidőre elfogy "
+                         f"({rec_pu['fh_pct']:.0f}% → "
+                         f"{rec_pu['sh_pct']:.0f}% a beállós támadás) — a "
+                         "hajrában elárvul a hatos vonal.")
+            elif rec_pu["drop_pct"] <= -PIVOT_FADE_DROP_PCT:
+                body += (f" A(z) {name} a 2. félidőre TÖBBET játszik a "
+                         f"beállóra ({rec_pu['fh_pct']:.0f}% → "
+                         f"{rec_pu['sh_pct']:.0f}%) — a hajrában a fal "
+                         "középső hármasának kell befelé zárnia.")
+    except Exception:
+        pass
+    # Hajrá-profil: a fáradás-jelek ÖSSZKÉPE — mivel kezdje az edző.
+    try:
+        from .priorities import FATIGUE_PATTERN_MIN, fatigue_profile
+        fpc = fatigue_profile(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fp = fpc[side]
+            if rec_fp["count"] < FATIGUE_PATTERN_MIN:
+                continue          # egy-két jel: a saját rétegük már szólt
+            body += (f" A(z) {name} hajrája {rec_fp['count']} fáradás-jelet "
+                     f"mutat egyszerre (a legnagyobb tétű: "
+                     f"{rec_fp['top'].lower()}) — ez már nem egy-egy szám, "
+                     "hanem a hatvan perc kérdése.")
+    except Exception:
+        pass
     # Lövés-időzítés: első hullámból lövő vagy kiváró csapat.
     try:
         from .attack_types import (SHTIM_EARLY_PCT, SHTIM_LATE_AVG_S,
@@ -4936,11 +7883,83 @@ def coach_summary(match: Match) -> dict:
         return _coach_summary_cached(match)
 
 
+# Az összefoglaló ELÉ kerülő megbízhatóság-figyelmeztetés küszöbe. E
+# pontszám alatt az elemzés állításai bizonytalan alapokon állnak, és
+# ezt az edzőnek AZ ELSŐ mondatban tudnia kell — nem a hetedik szekció
+# után, és nem egy külön ablakban, amit nem biztos, hogy megnyit.
+#
+# A küszöb a quality modulból jön: a nyomtatható meccsjelentés
+# ugyanezt használja, és a kettő nem csúszhat szét.
+from .quality import LOW_SCORE_WARN as SUMMARY_QUALITY_WARN  # noqa: E402
+
+
+def _quality_caveat(match: Match) -> str | None:
+    """Megbízhatóság-figyelmeztetés gyenge feldolgozásnál (vagy None).
+
+    Az összefoglaló minden szekciója magabiztosan fogalmaz — így is kell
+    írni egy edzői jelentést. De ha a feldolgozás gyenge volt (a
+    nézőtér is a pályára került, kevés a labda-észlelés), akkor ezek a
+    mondatok zajról szólnak. A jelentésnek magának kell kimondania,
+    mielőtt bárki tervet épít rá.
+    """
+    from .quality import analysis_confidence, compute_quality_report
+
+    # ÜRES meccsre nincs mit mondani — sem állítás, sem figyelmeztetés.
+    # (A hívó szerződése: üres meccs → üres összefoglaló.)
+    if not match.frames:
+        return None
+
+    q = compute_quality_report(match)
+    pont = q.get("score")
+    teendo = q.get("next_action")
+    if pont is None or (pont >= SUMMARY_QUALITY_WARN and not teendo):
+        return None
+    # A labda- és a pálya-alapú réteg-családok külön sora: ezek adják a
+    # jelentés állításainak nagy részét, tehát ha ők bizonytalanok, azt
+    # nevesíteni kell.
+    try:
+        sorok = analysis_confidence(match)
+    except Exception:
+        sorok = []
+    gyenge = [r["label"] for r in sorok
+              if r.get("available") is False
+              and r.get("layer") in ("ball", "court")]
+    body = (f"A feldolgozás minősége {pont}/100 — az alábbi "
+            "megállapítások ennyire megbízhatóak.")
+    if gyenge:
+        body += (" Ezek a réteg-családok kifejezetten bizonytalanok: "
+                 + ", ".join(gyenge) + ".")
+    if teendo:
+        body += f" Első teendő: {teendo}"
+    return body
+
+
 def _coach_summary_cached(match: Match) -> dict:
     """Az összefoglaló tényleges felépítése (lásd `coach_summary`)."""
     home, away = _team_names(match)
     sections: list[dict] = []
     highlights: list[str] = []
+
+    # A megbízhatóság-figyelmeztetés KÜLÖN mezőn megy (nem szekció): a
+    # felület a jelentés fölé teheti, más formában — és a szekciók
+    # szerkezete (az első a meccs története) érintetlen marad.
+    try:
+        caveat = _quality_caveat(match)
+    except Exception:
+        caveat = None  # a figyelmeztetés hibája ne vigye el az összefoglalót
+
+    # A KLIP-jelzés SAJÁT mezőn, nem a caveat-ban: egy hibátlan
+    # feldolgozású három perces klipnél a pontszám magas és nincs
+    # teendő — ott a "mennyire bízhatsz ebben" doboz riogatás lenne.
+    # Az edzőnek mégis tudnia kell, miért hallgat a fele.
+    try:
+        # HELYI import: a modul-szintű névtérben ez a függvény nincs
+        # benne (csak a _quality_caveat-en belül), és a try/except a
+        # NameError-t is elnyelné — némán None-t adva.
+        from .quality import compute_quality_report as _qr
+        clip_note = _qr(match).get("clip_note")
+    except Exception:
+        clip_note = None
 
     for build in (_story_section, _events_section, _xg_section,
                   _style_section):
@@ -5046,6 +8065,26 @@ def _coach_summary_cached(match: Match) -> dict:
             sections.append({
                 "title": "Edzés-fókusz a meccs alapján",
                 "body": ". ".join(parts) + "."})
+    except Exception:
+        pass
+
+    # Egyéni edzés-fókusz: KINEK mit — az edző emberre bontva osztja ki
+    # a hét feladatait, és az egyéni beszélgetés ebből indul.
+    try:
+        from .training import player_training_focus
+        ptf = player_training_focus(match)
+        egyeni = []
+        for side, name in (("home", home), ("away", away)):
+            sorok = (ptf.get(side) or {}).get("players") or []
+            for p in sorok[:3]:
+                ki = (f"#{p['jersey']}" if p.get("jersey") is not None
+                      else f"{p['player_id']}. játékos")
+                temak = ", ".join(i["title"].lower() for i in p["items"])
+                egyeni.append(f"{name} {ki}: {temak}")
+        if egyeni:
+            sections.append({
+                "title": "Egyéni edzés-fókusz",
+                "body": "; ".join(egyeni) + "."})
     except Exception:
         pass
 
@@ -5296,14 +8335,73 @@ def _coach_summary_cached(match: Match) -> dict:
     except Exception:
         pass
 
+    # A LÉNYEG: a rangsor teteje a jelentés ELEJÉRE.
+    #
+    # Az összefoglaló az ötszáz réteggel háromezer szavassá nőtt — a
+    # "Játékkép és tempó" szakasz egymaga tizenhatezer karakter. Ezt
+    # végigolvasni nem reális, és a mondatokra bontás sem segít, ha
+    # negyven felsorolás-pont lesz belőle: a hiányzó darab a
+    # FONTOSSÁGI SORREND. A teendő-rangsor (priority_findings) ezt már
+    # kiszámolja — itt csak elé tesszük, hogy aki két percet szán a
+    # jelentésre, a három legfontosabb dolgot mégis megkapja.
+    #
+    # A hosszú szakaszok változatlanul megmaradnak utána: ez nem
+    # rövidítés, hanem BEVEZETŐ.
+    try:
+        from .priorities import priority_findings
+        _prf = priority_findings(match)
+        _lenyeg: list[str] = []
+        for _side, _nev in (("home", match.meta.home_team),
+                            ("away", match.meta.away_team)):
+            _rec = _prf.get(_side) or {}
+            _top = (_rec.get("top") or [])[:3]
+            if not _top:
+                continue
+            for _i, _f in enumerate(_top, 1):
+                _lenyeg.append(f"{_nev} / {_i}. {_f['label']}: "
+                               f"{_f['verdict']}")
+            _ossz = _rec.get("total") or 0
+            if _ossz > len(_top):
+                _lenyeg.append(
+                    f"{_nev}: további {_ossz - len(_top)} megszólaló jelzés "
+                    "a részletes szakaszokban és a Mutatók lapon.")
+        if _lenyeg:
+            # A MECCS TÖRTÉNETE marad a nyitó szakasz (rövid, és
+            # kontextust ad: mi történt a pályán); a rangsor tüstént
+            # utána jön, jóval a hosszú szakaszok ELŐTT.
+            _hova = 1 if (sections and sections[0].get("title")
+                          == "A meccs története") else 0
+            sections.insert(_hova, {
+                "title": "A lényeg",
+                "body": " ".join(_lenyeg),
+                # A rangsor SORRENDJE a lényeg, ezért a mondatokra
+                # bontást itt nem a szöveg-vágó adja: a tételek már
+                # külön elemek.
+                "lines": list(_lenyeg),
+                # A kliens a hosszú szakaszokat öt mondat után
+                # összecsukja — EZT a szakaszt viszont nem szabad:
+                # pont az a dolga, hogy egyben olvasható legyen.
+                "show_all": True,
+            })
+    except Exception:
+        pass
+
     # A szakaszok MONDATOKRA bontva is elmennek. A "Játékkép és tempó"
     # szakasz a rétegekkel négyezer karakteres, negyvenmondatos
     # bekezdéssé nőtt — úgy olvashatatlan. A `body` változatlan marad
     # (a meglévő fogyasztók miatt), a felületek a `lines`-ból tudnak
     # felsorolást építeni.
     for sec in sections:
-        sec["lines"] = split_sentences(sec.get("body", ""))
-    return {"sections": sections, "highlights": highlights}
+        if not sec.get("lines"):
+            sec["lines"] = split_sentences(sec.get("body", ""))
+    return {"sections": sections, "highlights": highlights,
+            # None, ha a feldolgozás rendben volt; különben egy mondat
+            # arról, mennyire hihetők az alábbi állítások.
+            "caveat": caveat,
+            # None, ha a felvétel meccs-hosszú; különben egy mondat
+            # arról, MI működik a klipen és mi nem. Ez nem hiba —
+            # ezért nem a caveat-ban van.
+            "clip_note": clip_note}
 
 
 # Mondathatár: pont/felkiáltó/kérdőjel UTÁN álló szóköz, amit nagybetű
@@ -5332,6 +8430,11 @@ def coach_summary_text(match: Match) -> str:
     """Az összefoglaló sima szövegként (jelentésbe/vágólapra)."""
     data = coach_summary(match)
     lines: list[str] = []
+    if data.get("caveat"):
+        # A figyelmeztetés a szöveges alakban is ELÖL áll.
+        lines.append(f"Mennyire bízhatsz ebben: {data['caveat']}")
+    if data.get("clip_note"):
+        lines.append(f"Klip, nem teljes meccs: {data['clip_note']}")
     for s in data["sections"]:
         lines.append(f"{s['title']}: {s['body']}")
     if data["highlights"]:

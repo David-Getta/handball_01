@@ -103,3 +103,167 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def _textured_big(seed=3, w=640, h=360):
+    """Nagyobb, részletgazdag kép a horgony-teszthez (ORB-nak elég pont)."""
+    import cv2
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    img = (rng.random((h, w)) * 255).astype(np.uint8)
+    img = cv2.GaussianBlur(img, (3, 3), 0)
+    # Néhány éles alakzat is (a valódi képen: vonalak, lelátó, falak).
+    for _ in range(40):
+        x, y = int(rng.integers(10, w - 40)), int(rng.integers(10, h - 40))
+        cv2.rectangle(img, (x, y), (x + 20, y + 20), int(rng.integers(0, 255)), -1)
+    return img
+
+
+def test_horgony_visszahozza_a_kalibralt_allast():
+    """A kamera elfordul, majd VISSZAÁLL a kalibrált állásba: a horgonyzott
+    becslés a végén ~egység (a puszta lánc a lépések hibáját halmozná).
+    Ez a Kiel-féle eset: a kamera jobbra-balra svenkel, és nem biztos,
+    hogy pontosan ugyanott áll meg — a horgony a kalibrált képhez méri."""
+    img = _textured_big()
+    tr = PanTracker(anchor=True)
+    tr.update(img)
+    for dx in (8, 16, 24, 32, 40, 32, 24, 16, 8, 0, 0):
+        G = tr.update(_shift(img, dx))
+    assert abs(G[0][2]) < 1.5 and abs(G[1][2]) < 1.5, f"G={G}"
+    assert tr.stats["anchored"] >= 1
+    assert tr.stats["frames"] == 12
+    assert "horgonyzott" in tr.summary()
+
+
+def test_horgony_kozben_is_helyes_az_eltolas():
+    """A horgonyzott becslés az elfordult állásban is a valódi eltolást
+    adja (nem csak a visszaállásnál)."""
+    img = _textured_big()
+    tr = PanTracker(anchor=True)
+    tr.update(img)
+    G = None
+    for dx in (10, 20, 30, 40, 50):
+        G = tr.update(_shift(img, dx))
+    # 5 lépés után (ANCHOR_EVERY = 5) horgonyzott: az eltolás ~ -50.
+    assert abs(G[0][2] + 50.0) < 2.0, f"tx={G[0][2]}"
+    assert tr.stats["anchored"] >= 1
+
+
+def test_a_mozgo_dobozok_kimaszkolva_is_megy_a_becsles():
+    """A kizárt (mozgó ember) dobozokkal is helyes az eltolás — és a
+    maszk nem töri el a becslést, ha a kép nagy részét fedi."""
+    img = _textured_big()
+    tr = PanTracker(anchor=False)
+    tr.update(img, exclude=[(100, 100, 200, 250)])
+    G = tr.update(_shift(img, 12), exclude=[(100, 100, 200, 250),
+                                            (400, 50, 460, 200)])
+    assert abs(G[0][2] + 12.0) < 1.5, f"tx={G[0][2]}"
+    assert tr.stats["chain"] == 1
+
+
+def test_a_minoseg_jelentes_szol_ha_ritkan_horgonyzott():
+    """A horgonyzás-arány a meta-ból a minőség-jelentésbe: alacsony
+    aránynál figyelmeztetés + teendő; None-nál (régi mentés) csend."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+    from handball.pipeline.quality import (PAN_ANCHOR_WARN_PCT,
+                                           compute_quality_report)
+
+    def _meccs(pct):
+        meta = MatchMeta(match_id="pan", home_team="H", away_team="A",
+                         fps=10.0, pan_anchor_pct=pct)
+        frames = [Frame(t=i, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=10.0, y=8.0),
+            PlayerPosition(track_id=2, team=Team.AWAY, x=30.0, y=12.0),
+        ], ball=Ball(x=20.0, y=10.0)) for i in range(200)]
+        return Match(meta, frames)
+
+    rep = compute_quality_report(_meccs(PAN_ANCHOR_WARN_PCT / 2))
+    talalt = [w for w in rep["warnings"]
+              if "kalibrált képhez mérni" in w]
+    assert talalt, rep["warnings"]
+    from handball.pipeline.quality import next_action
+    assert "ELSŐ feldolgozott kockára" in next_action(talalt)
+
+    rep_jo = compute_quality_report(_meccs(PAN_ANCHOR_WARN_PCT * 2))
+    assert not [w for w in rep_jo["warnings"] if "kalibrált képhez" in w]
+    rep_regi = compute_quality_report(_meccs(None))
+    assert not [w for w in rep_regi["warnings"] if "kalibrált képhez" in w]
+
+
+def test_a_kalibralt_kocka_kotelezo_horgony():
+    """A force_anchor-os kocka a távolság-szabálytól függetlenül horgony
+    lesz (a kalibrált nézetekre a legpontosabb visszamérés kell), és a
+    visszatéréskor hozzá mér: 4 px-es elfordulás után is ~egység."""
+    img = _textured_big()
+    tr = PanTracker(anchor=True)
+    tr.update(img)
+    # Az alap után 4 px-re (a 150 px-es távolság-szabály alatt) egy
+    # kalibrált kocka: kötelezően bekerül a horgonyok közé.
+    tr.update(_shift(img, 4), force_anchor=True)
+    assert tr.stats["anchors"] == 2 and tr.stats.get("forced") == 1
+    for dx in (12, 20, 12, 4, 4):
+        G = tr.update(_shift(img, dx))
+    assert abs(G[0][2] + 4.0) < 1.5, f"tx={G[0][2]}"
+
+
+def test_a_4k_kocka_munkakepen_fut_de_teljes_felbontasban_valaszol():
+    """Széles (2560 px) kocka: a becslés ≤1280 px-es munkaképen megy, a
+    kimenet mégis a TELJES felbontás pixeleiben — a 40 px-es svenk 40
+    px-nek mérődik, nem 20-nak."""
+    import cv2
+    import numpy as np
+    rng = np.random.default_rng(5)
+    img = (rng.random((720, 2560)) * 255).astype(np.uint8)
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+    tr = PanTracker(anchor=True)
+    tr.update(img, exclude=[(100, 100, 300, 400)])
+    G = tr.update(_shift(img, 40))
+    assert abs(G[0][2] + 40.0) < 3.0, f"tx={G[0][2]}"
+    tx, _ty = tr.translation
+    assert abs(tx + 40.0) < 3.0
+    # A pont-visszavetítés is a teljes felbontásban stimmel.
+    x, _y = apply_h(G, 1040.0, 300.0)
+    assert abs(x - 1000.0) < 4.0
+
+
+def test_a_kulso_korrekcio_atveszi_a_teljes_felbontasu_g_t():
+    """A pályavonal-illesztés jobb G-t talál (teljes felbontásban): a
+    tracker átveszi, és a kimenete is az — a munkakép-skálán át is."""
+    import cv2
+    import numpy as np
+    rng = np.random.default_rng(6)
+    img = (rng.random((720, 2560)) * 255).astype(np.uint8)
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+    tr = PanTracker(anchor=False)
+    tr.update(img)
+    G_uj = [[1.0, 0.0, -40.0], [0.0, 1.0, 12.0], [0.0, 0.0, 1.0]]
+    tr.correct(G_uj)
+    tx, ty = tr.translation
+    assert abs(tx + 40.0) < 1e-6 and abs(ty - 12.0) < 1e-6
+    assert tr.stats["corrected"] == 1
+    # A következő (azonos) kocka nem mozdít: a G marad ~ a korrigált.
+    G = tr.update(img)
+    assert abs(G[0][2] + 40.0) < 1.0 and abs(G[1][2] - 12.0) < 1.0
+
+
+def test_az_utolso_becsles_forrasa_kovetheto():
+    """last_mode: az alap-kocka horgony; a köztes kockát a lánc viszi;
+    az ötödiknél (ANCHOR_EVERY) a horgony — az önkorrekció ez alapján
+    dönti el, hozzányúlhat-e."""
+    img = _textured_big()
+    tr = PanTracker(anchor=True)
+    tr.update(img)
+    assert tr.last_mode == "anchor"
+    tr.update(_shift(img, 6))
+    assert tr.last_mode == "chain"
+    for dx in (12, 18, 24):
+        tr.update(_shift(img, dx))
+    tr.update(_shift(img, 30))  # az 5. feldolgozott lépés: horgony
+    assert tr.last_mode == "anchor"
+    import numpy as np
+    # A lánc az ELŐZŐ képen keres sarkokat: az első üres kocka még
+    # "chain" lehet (a textúrás előzőről követ), a második már nem.
+    tr.update(np.zeros_like(img))
+    tr.update(np.zeros_like(img))
+    assert tr.last_mode == "held"
