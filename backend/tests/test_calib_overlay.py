@@ -264,3 +264,38 @@ def test_az_illeszkedes_osszegzese_es_a_minoseg_jelzes():
     for cf in (jo, None):
         q2 = compute_quality_report(_meccs(cf))
         assert not [w for w in q2["warnings"] if "pályavonal" in w]
+
+
+def test_az_onkorrekcio_megtalalja_az_eltolast():
+    """A kép vonalai 14 px-szel jobbra, 6-tal lejjebb vannak ahhoz képest,
+    ahova a (rossz) kamera-mátrix rajzolna: a finomítás megtalálja az
+    eltolást, az igazított G-vel a rajz már ül (fit magas)."""
+    from handball.pipeline.calib_overlay import (edge_map, refine_shift,
+                                                 shifted_g)
+
+    h0 = _skala(10.0)
+    # A VALÓDI vonalak a képen: G_igaz szerint (a kamera 14 px-t
+    # balra, 6-ot felfelé svenkelt → a tartalom jobbra-le ment).
+    g_igaz = [[1.0, 0.0, -14.0], [0.0, 1.0, -6.0], [0.0, 0.0, 1.0]]
+    kep = _vonalas_kep(h0, g_igaz)
+    sav, alap = edge_map(kep)
+    # A becsült G elmaradt (egység): a rajz 14 px-szel balra ül.
+    r = refine_shift(sav, alap, h0, None, 480, 240)
+    assert r["fit0"] is not None and r["fit"] > r["fit0"] + 0.3, r
+    assert abs(r["dx"] - 14.0) <= 2.0 and abs(r["dy"] - 6.0) <= 2.0, r
+    # Az igazított G-vel a rajz a valódira ül.
+    g_uj = shifted_g(None, r["dx"], r["dy"])
+    assert abs(g_uj[0][2] + 14.0) <= 2.0 and abs(g_uj[1][2] + 6.0) <= 2.0
+    px = overlay_pixels(h0, g_uj, 480, 240)
+    from handball.pipeline.calib_overlay import fit_on_edge_map
+    assert fit_on_edge_map(sav, alap, px)["fit"] >= r["fit"] - 0.05
+
+
+def test_az_onkorrekcio_jo_helyen_nem_mozdit():
+    from handball.pipeline.calib_overlay import edge_map, refine_shift
+
+    h0 = _skala(10.0)
+    kep = _vonalas_kep(h0, None)
+    sav, alap = edge_map(kep)
+    r = refine_shift(sav, alap, h0, None, 480, 240)
+    assert abs(r["dx"]) <= 2.0 and abs(r["dy"]) <= 2.0, r

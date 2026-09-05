@@ -100,6 +100,18 @@ mindenhol él van, 0 = csak a padló. Két helyen jelenik meg:
 - **kérésre** (`GET /matches/{id}/calib-fit?n=8`): nyolc egyenletesen
   elosztott kockán újraméri, a "Kalibráció ellenőrzése" ablak mutatja.
 
+### Önkorrekció a pályavonalak alapján
+
+A harmadik becslő. Ha egy kulcs-kockán az illeszkedés `FIT_REFINE_BELOW`
+(0,35) alá esik, a motor a rajzolt vonalakat ±`REFINE_MAX_PX` (24 px)
+eltolás-rácson próbálja (durva 8 px-es, majd finom 2 px-es lépés), és
+ha a legjobb legalább `FIT_REFINE_GAIN` (0,15) javulást ad, a
+kamera-mátrixot ráigazítja: G′ = G · T(−dx, −dy) — a követő ezt átveszi
+(`PanTracker.correct`), a lánc innen folytatja. A pálya saját vonalai a
+legmegbízhatóbb "távpontok": nem mozognak, és pontosan tudjuk, hol kell
+lenniük. Csak eltolást keresünk (a svenk kis szögben ~eltolás); a
+forgatás/skála a horgony és a lánc dolga.
+
 ## Tippek a pontos kalibrációhoz
 
 - A 4 sarkot ahhoz a kockához vedd fel, amelyiktől a feldolgozás indul —

@@ -173,6 +173,48 @@ FIT_BAND_PX = 3
 FIT_STEP_PX = 2.0
 
 
+def edge_map(gray):
+    """A kép él-térképe az illeszkedés-méréshez: Sobel-nagyság 0..1-re
+    normálva (a 99,5 percentilis = 1), FIT_BAND_PX sávra kitágítva —
+    egy kockára EGYSZER számoljuk, sok jelölt-vonalra újrahasználható.
+    Visszatérés: (sav, alapszint)."""
+    import cv2
+    import numpy as np
+    g = gray.astype(np.float32)
+    gx = cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3)
+    mag = cv2.magnitude(gx, gy)
+    csucs = float(np.percentile(mag, 99.5)) or 1.0
+    mag = np.clip(mag / csucs, 0.0, 1.0)
+    k = 2 * FIT_BAND_PX + 1
+    sav = cv2.dilate(mag, np.ones((k, k), np.uint8))
+    return sav, float(sav.mean())
+
+
+def fit_on_edge_map(sav, alap: float, polylines: list) -> dict:
+    """Illeszkedés egy kész él-térképen (lásd line_fit_score)."""
+    h, w = sav.shape[:2]
+    ertekek = []
+    for vonal in polylines:
+        for (x1, y1), (x2, y2) in zip(vonal, vonal[1:]):
+            hossz = math.hypot(x2 - x1, y2 - y1)
+            n = max(1, int(hossz / FIT_STEP_PX))
+            for i in range(n + 1):
+                a = i / n
+                xi = int(round(x1 + (x2 - x1) * a))
+                yi = int(round(y1 + (y2 - y1) * a))
+                if 0 <= xi < w and 0 <= yi < h:
+                    ertekek.append(float(sav[yi, xi]))
+    if len(ertekek) < 20:
+        return {"fit": None, "on_line": None, "baseline": round(alap, 3),
+                "samples": len(ertekek)}
+    vonalon = float(sum(ertekek) / len(ertekek))
+    fit = (vonalon - alap) / (1.0 - alap) if alap < 1.0 else 0.0
+    return {"fit": round(max(0.0, min(1.0, fit)), 3),
+            "on_line": round(vonalon, 3), "baseline": round(alap, 3),
+            "samples": len(ertekek)}
+
+
 def line_fit_score(gray, polylines: list) -> dict:
     """MENNYIRE ÜL a rajzolt vonal a kép valódi vonalain — 0..1.
 
@@ -185,38 +227,9 @@ def line_fit_score(gray, polylines: list) -> dict:
 
     Visszatérés: {"fit", "on_line", "baseline", "samples"}.
     """
-    import cv2
-    import numpy as np
-    g = gray.astype(np.float32)
-    gx = cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3)
-    gy = cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3)
-    mag = cv2.magnitude(gx, gy)
-    csucs = float(np.percentile(mag, 99.5)) or 1.0
-    mag = np.clip(mag / csucs, 0.0, 1.0)
-    k = 2 * FIT_BAND_PX + 1
-    sav = cv2.dilate(mag, np.ones((k, k), np.uint8))
-    h, w = gray.shape[:2]
-    ertekek = []
-    for vonal in polylines:
-        for (x1, y1), (x2, y2) in zip(vonal, vonal[1:]):
-            hossz = math.hypot(x2 - x1, y2 - y1)
-            n = max(1, int(hossz / FIT_STEP_PX))
-            for i in range(n + 1):
-                a = i / n
-                x = x1 + (x2 - x1) * a
-                y = y1 + (y2 - y1) * a
-                xi, yi = int(round(x)), int(round(y))
-                if 0 <= xi < w and 0 <= yi < h:
-                    ertekek.append(float(sav[yi, xi]))
-    alap = float(sav.mean())
-    if len(ertekek) < 20:
-        return {"fit": None, "on_line": None, "baseline": round(alap, 3),
-                "samples": len(ertekek)}
-    vonalon = float(sum(ertekek) / len(ertekek))
-    fit = (vonalon - alap) / (1.0 - alap) if alap < 1.0 else 0.0
-    return {"fit": round(max(0.0, min(1.0, fit)), 3),
-            "on_line": round(vonalon, 3), "baseline": round(alap, 3),
-            "samples": len(ertekek)}
+    sav, alap = edge_map(gray)
+    return fit_on_edge_map(sav, alap, polylines)
+
 
 
 def fit_summary(points: list) -> Optional[dict]:
@@ -231,3 +244,68 @@ def fit_summary(points: list) -> Optional[dict]:
     return {"mean_fit": round(sum(f for _, f in ertekes) / len(ertekes), 3),
             "min_fit": round(rossz, 3), "worst_t": rossz_t,
             "points": [[t, round(f, 3)] for t, f in ertekes]}
+
+
+# ÖNKORREKCIÓ a pályavonalak alapján: ha egy kulcs-kockán az illeszkedés
+# ez alá esik, a motor ±REFINE_MAX_PX-es eltolás-rácson megkeresi, hol
+# ülne a legjobban a rajz (durva, majd finom lépés), és ha legalább
+# FIT_REFINE_GAIN-nyit javul, ráigazítja a kamera-mátrixot. A pálya
+# saját vonalai a legmegbízhatóbb "távpontok": nem mozognak, és
+# pontosan tudjuk, hol kell lenniük.
+FIT_REFINE_BELOW = 0.35
+FIT_REFINE_GAIN = 0.15
+REFINE_MAX_PX = 24
+REFINE_COARSE_PX = 8
+REFINE_FINE_PX = 2
+
+
+def _eltolt(polylines: list, dx: float, dy: float) -> list:
+    return [[(x + dx, y + dy) for x, y in vonal] for vonal in polylines]
+
+
+def refine_shift(sav, alap: float, court_homography: list,
+                 g_at_t: Optional[list], width: int, height: int) -> dict:
+    """A rajzolt vonalak legjobb ELTOLÁSA a kép élein (px, a kockán).
+
+    Durva rács (REFINE_COARSE_PX) a ±REFINE_MAX_PX tartományon, majd
+    finom rács (REFINE_FINE_PX) a legjobb körül. Visszatérés: {"dx", "dy",
+    "fit", "fit0"} — fit0 az eltolás nélküli illeszkedés; dx=dy=0, ha
+    semmi sem jobb. A hívó G' = G · T(−dx, −dy)-vel igazít (a kockán
+    +dx-szel odébb rajzolt vonal = a kocka pixeleit −dx-szel toljuk az
+    alap-kocka felé).
+    """
+    alap_vonalak = overlay_pixels(court_homography, g_at_t, width, height)
+    fit0 = fit_on_edge_map(sav, alap, alap_vonalak).get("fit")
+    if fit0 is None:
+        return {"dx": 0.0, "dy": 0.0, "fit": None, "fit0": None}
+    legjobb = (fit0, 0.0, 0.0)
+
+    def _probal(dx, dy):
+        nonlocal legjobb
+        f = fit_on_edge_map(sav, alap, _eltolt(alap_vonalak, dx, dy)).get("fit")
+        if f is not None and f > legjobb[0]:
+            legjobb = (f, dx, dy)
+
+    r = REFINE_MAX_PX
+    for dx in range(-r, r + 1, REFINE_COARSE_PX):
+        for dy in range(-r, r + 1, REFINE_COARSE_PX):
+            if dx or dy:
+                _probal(float(dx), float(dy))
+    _f, cx, cy = legjobb
+    for dx in range(-REFINE_COARSE_PX, REFINE_COARSE_PX + 1, REFINE_FINE_PX):
+        for dy in range(-REFINE_COARSE_PX, REFINE_COARSE_PX + 1,
+                        REFINE_FINE_PX):
+            if dx or dy:
+                _probal(cx + dx, cy + dy)
+    f, dx, dy = legjobb
+    return {"dx": dx, "dy": dy, "fit": round(f, 3), "fit0": fit0}
+
+
+def shifted_g(g_at_t: Optional[list], dx: float, dy: float) -> list:
+    """G' = G · T(−dx, −dy): a kockán (dx, dy)-vel odébb ülő vonalhoz
+    tartozó javított kamera-mátrix (G: aktuális → alap)."""
+    g = g_at_t if g_at_t is not None else [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0],
+                                           [0.0, 0.0, 1.0]]
+    t = [[1.0, 0.0, -dx], [0.0, 1.0, -dy], [0.0, 0.0, 1.0]]
+    return [[sum(g[i][k] * t[k][j] for k in range(3)) for j in range(3)]
+            for i in range(3)]

@@ -641,11 +641,25 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
             if fit_h0 is not None and (kept - 1) % max(1, fit_every) == 0:
                 try:
                     from handball.pipeline.calib_overlay import (
-                        line_fit_score, overlay_pixels)
+                        FIT_REFINE_BELOW, FIT_REFINE_GAIN, edge_map,
+                        fit_on_edge_map, overlay_pixels, refine_shift,
+                        shifted_g)
                     H_, W_ = gray.shape[:2]
-                    fit = line_fit_score(
-                        gray, overlay_pixels(fit_h0, panH, W_, H_))
-                    fit_pontok.append((kept - 1, fit.get("fit")))
+                    sav, alap = edge_map(gray)
+                    fit = fit_on_edge_map(
+                        sav, alap, overlay_pixels(fit_h0, panH, W_, H_))
+                    f = fit.get("fit")
+                    # ÖNKORREKCIÓ: ha a rajz nem ül a valódi vonalakon, a
+                    # pálya saját vonalai mondják meg, hova kell — a
+                    # jobb G-t a követő átveszi, és innen folytatja.
+                    if f is not None and f < FIT_REFINE_BELOW:
+                        r_ = refine_shift(sav, alap, fit_h0, panH, W_, H_)
+                        if (r_["fit"] is not None
+                                and r_["fit"] >= f + FIT_REFINE_GAIN):
+                            panH = shifted_g(panH, r_["dx"], r_["dy"])
+                            pan_tracker.correct(panH)
+                            f = r_["fit"]
+                    fit_pontok.append((kept - 1, f))
                 except Exception:
                     pass  # a mérés hibája nem érinti a feldolgozást
         persons, best_ball = [], None

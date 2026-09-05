@@ -225,3 +225,23 @@ def test_a_4k_kocka_munkakepen_fut_de_teljes_felbontasban_valaszol():
     # A pont-visszavetítés is a teljes felbontásban stimmel.
     x, _y = apply_h(G, 1040.0, 300.0)
     assert abs(x - 1000.0) < 4.0
+
+
+def test_a_kulso_korrekcio_atveszi_a_teljes_felbontasu_g_t():
+    """A pályavonal-illesztés jobb G-t talál (teljes felbontásban): a
+    tracker átveszi, és a kimenete is az — a munkakép-skálán át is."""
+    import cv2
+    import numpy as np
+    rng = np.random.default_rng(6)
+    img = (rng.random((720, 2560)) * 255).astype(np.uint8)
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+    tr = PanTracker(anchor=False)
+    tr.update(img)
+    G_uj = [[1.0, 0.0, -40.0], [0.0, 1.0, 12.0], [0.0, 0.0, 1.0]]
+    tr.correct(G_uj)
+    tx, ty = tr.translation
+    assert abs(tx + 40.0) < 1e-6 and abs(ty - 12.0) < 1e-6
+    assert tr.stats["corrected"] == 1
+    # A következő (azonos) kocka nem mozdít: a G marad ~ a korrigált.
+    G = tr.update(img)
+    assert abs(G[0][2] + 40.0) < 1.0 and abs(G[1][2] - 12.0) < 1.0

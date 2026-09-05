@@ -285,6 +285,18 @@ class PanTracker:
         self._n += 1
         return self._kimenet()
 
+    def correct(self, G_full) -> None:
+        """KÜLSŐ korrekció: a hívó (pl. a pályavonal-illesztés) jobb G-t
+        talált a TELJES felbontás pixeleiben — átvesszük, és a lánc innen
+        folytatja. A munkakép-skálát visszavezetjük: G_munka = S · G · S⁻¹."""
+        import numpy as np
+        G = np.array(G_full, dtype=np.float64)
+        if self._s != 1.0:
+            s = self._s
+            G = np.diag([s, s, 1.0]) @ G @ np.diag([1.0 / s, 1.0 / s, 1.0])
+        self._G = G
+        self.stats["corrected"] = self.stats.get("corrected", 0) + 1
+
     def _kimenet(self):
         """G a TELJES felbontás pixeleiben (a munkakép-skála kivezetve):
         G_teljes = S⁻¹ · G_munka · S — JSON-barát beágyazott lista."""
@@ -308,7 +320,8 @@ class PanTracker:
         s = self.stats
         return (f"pásztázás-követés: {s['frames']} kocka — horgonyzott "
                 f"{s['anchored']}, lánccal vitt {s['chain']}, tartott "
-                f"{s['held']}; horgonyok: {s['anchors']}")
+                f"{s['held']}; horgonyok: {s['anchors']}; pályavonalhoz "
+                f"igazítva: {s.get('corrected', 0)}")
 
 
 def apply_h(h, x, y):

@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.99 óta)
 
+- **Önkorrekció a pályavonalak alapján** (feldolgozás): ha egy
+  kulcs-kockán a visszarajzolt pályavonal nem ül a kép valódi vonalain
+  (illeszkedés 0,35 alatt), a motor ±24 px-es eltolás-rácson megkeresi,
+  hol ülne a legjobban, és ha legalább 0,15-tel javul, ráigazítja a
+  kamera-mátrixot — a követés innen folytatja. A pálya saját vonalai a
+  legmegbízhatóbb "távpontok": nem mozognak, és pontosan tudjuk, hol
+  kell lenniük. A feldolgozás-napló mondja, hány kockán korrigált.
+
 - **Egy kattintás a kalibráció ellenőrzéséhez a minőség-panelről**
   (meccs-nézet): ha a jelentés azt mondja, a visszarajzolt pályavonal
   valahol nem ül a valódin, a panel alján "Kalibráció ellenőrzése" gomb
