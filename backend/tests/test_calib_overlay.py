@@ -156,3 +156,16 @@ def test_a_feldolgozas_elteszi_a_geometriat(tmp_path):
     # A rárajzolás ebből már megy (pixelek a 96x64-es képen).
     px = overlay_pixels(h0, None, 96, 64)
     assert px and all(len(v) >= 2 for v in px)
+
+
+def test_a_kamera_ut_osszegzese():
+    from handball.pipeline.calib_overlay import camera_path_summary
+
+    assert camera_path_summary(None) is None
+    assert camera_path_summary([]) is None
+    kf = [[0, EGYSEG],
+          [16, [[1.0, 0.0, 30.0], [0.0, 1.0, 40.0], [0.0, 0.0, 1.0]]],
+          [32, [[1.0, 0.0, 6.0], [0.0, 1.0, 8.0], [0.0, 0.0, 1.0]]]]
+    o = camera_path_summary(kf)
+    assert o["keyframes"] == 3
+    assert o["max_shift_px"] == 50.0 and o["final_shift_px"] == 10.0

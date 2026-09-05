@@ -2118,11 +2118,14 @@ class _MatchScreenState extends State<MatchScreen> {
     if (match == null || match.frames.isEmpty) return;
     final n = match.frames.length;
     final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
-    final kockak = [
+    // A jelenlegi kocka is: ahol a felhasználó épp gyanút fogott, ott
+    // nézze meg — a három fix minta a meccs egészéről szól.
+    final kockak = <int>{
+      _tOf(match),
       match.frames[(n * 0.05).floor().clamp(0, n - 1)].t,
       match.frames[(n * 0.5).floor().clamp(0, n - 1)].t,
       match.frames[(n * 0.95).floor().clamp(0, n - 1)].t,
-    ];
+    }.toList();
     String ido(int t) {
       final s = (t / fps).round();
       return "${s ~/ 60}:${(s % 60).toString().padLeft(2, "0")}";

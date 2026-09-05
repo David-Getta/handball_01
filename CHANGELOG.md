@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.97 óta)
 
+- **A kalibráció-ellenőrzés a jelenlegi kockát is mutatja, a
+  diagnosztika a kamera útját** (meccs-nézet + diagnosztika + doksi): a
+  "Kalibráció ellenőrzése" ablak első képe az éppen nézett kocka, utána
+  a meccs eleje/közepe/vége; a diagnosztika-JSON "camera_path" mezője
+  megmondja, mekkora svenk volt egyáltalán (legnagyobb és záró eltolás
+  px-ben, kulcs-kockák száma) — az alacsony horgonyzás-arány mást
+  jelent alig mozduló és 800 px-t forduló kameránál. A docs/PASZTAZAS.md
+  leírja, hogyan olvasd a rárajzolt vonalakat.
+
 - **Kalibráció ellenőrzése a szemmel — vonalak a videón** (feldolgozás +
   motor + meccs-nézet): a feldolgozás mostantól elteszi a kalibráció
   homográfiáját és a kamera-mozgás ritkított sorát (2 mp-enként), és a

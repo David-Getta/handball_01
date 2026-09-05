@@ -67,6 +67,24 @@ de a tömörülésben a játékosok a képpontok jelentős részét adhatják.)
   az ELSŐ feldolgozott kockára vegye fel (a kalibráló képernyő és a
   feldolgozás kezdőpontja ugyanaz a kocka).
 
+## Kalibráció ellenőrzése a szemmel
+
+A feldolgozás elteszi a kalibráció homográfiáját (`court_homography`)
+és a kamera-mozgás ritkított sorát (`pan_keyframes`, 2 mp-enként egy
+G-mátrix). Ebből a motor a pálya vonalait — alapvonal, felező, 6 m-es
+kapuelőterek, kapuk — **visszarajzolja a videó bármelyik kockájára**
+(`GET /matches/{id}/calib-overlay?t=`, `handball/pipeline/calib_overlay.py`):
+
+```
+pixel = G(t)⁻¹ · H0⁻¹ · pálya
+```
+
+A meccs-nézet "Kalibráció ellenőrzése" gombja a jelenlegi kockát és a
+meccs elejét, közepét, végét mutatja a vonalakkal. **A rajzolt vonalnak
+a valódira kell ülnie**: ha az elején ül, de a közepén nem, a
+pásztázás-követés csúszott el (kevés horgony — nézd a `pan_anchor_pct`
+értékét); ha már a kalibrált kockán sem ül, a 4 sarok rossz.
+
 ## Tippek a pontos kalibrációhoz
 
 - A 4 sarkot ahhoz a kockához vedd fel, amelyiktől a feldolgozás indul —

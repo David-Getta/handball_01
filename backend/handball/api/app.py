@@ -1933,6 +1933,8 @@ def create_app():
         térkép, felismert vs. valódi eredmény. VIDEÓT, képet vagy
         személyes adatot nem tartalmaz."""
         from .. import __version__ as verzio
+        from ..pipeline.calib_overlay import (
+            camera_path_summary as _camera_path_summary)
         from ..pipeline.quality import (analysis_confidence,
                                         compute_quality_report,
                                         next_action)
@@ -1952,6 +1954,11 @@ def create_app():
                     # hihetők a helyek — a fejlesztőnek az első kérdés.
                     "pan_anchor_pct": getattr(match.meta,
                                               "pan_anchor_pct", None),
+                    # A kamera útja px-ben (mekkora svenk volt egyáltalán):
+                    # az alacsony horgonyzás-arány más, ha a kamera alig
+                    # mozdult, és más, ha 800 px-t fordult.
+                    "camera_path": _camera_path_summary(
+                        getattr(match.meta, "pan_keyframes", None)),
                     "source_segments": list(
                         getattr(match.meta, "source_segments", None) or []),
                     "event_overrides_count": len(

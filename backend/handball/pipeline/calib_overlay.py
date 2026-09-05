@@ -144,3 +144,23 @@ def draw_overlay(img, polylines: list, color=(60, 220, 255),
                        dtype=np.int32).reshape(-1, 1, 2)
         cv2.polylines(img, [pts], False, color, thickness, cv2.LINE_AA)
     return img
+
+
+def camera_path_summary(pan_keyframes: Optional[list]) -> Optional[dict]:
+    """A kamera útjának összegzése a diagnosztikához (px, az alap-kockához
+    képest): hány kulcs-kocka, mekkora a legnagyobb és a záró eltolás.
+    None, ha nincs kulcs-kocka (régi mentés, kalibráció nélkül)."""
+    if not pan_keyframes:
+        return None
+    legnagyobb = 0.0
+    zaro = 0.0
+    for _t, g in pan_keyframes:
+        try:
+            tx, ty = float(g[0][2]), float(g[1][2])
+        except (TypeError, IndexError):
+            continue
+        zaro = math.hypot(tx, ty)
+        legnagyobb = max(legnagyobb, zaro)
+    return {"keyframes": len(pan_keyframes),
+            "max_shift_px": round(legnagyobb, 1),
+            "final_shift_px": round(zaro, 1)}
