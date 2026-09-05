@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.100 óta)
 
+- **Emberszerű játékosok a 3D pályán** (3D pálya, a demóban is): a
+  "nyalóka" (vonal + korong) helyett figurák — fej hajjal, mez a
+  csapatszínben, nadrág, karok és lábak —, amelyek a haladás irányába
+  fordulnak, a sebességgel arányosan lépnek és lendítenek (álló játékos
+  a kamera felé fordul), talaj-árnyékkal, a mezszám a mezen. A testrészek
+  a kamerától távolabbi oldallal kezdve rajzolódnak, hogy a figura
+  takarja saját magát. Felhasználói kérésre.
+
 - **Az önkorrekció a vízszintes svenket is elkapja** (feldolgozás): a
   finomítás küszöbe 0,5-re nőtt — a vízszintes svenk csak a függőleges
   vonalakat viszi el, a vízszintesek helyben maradnak, így 15–20 px-es

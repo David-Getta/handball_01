@@ -809,16 +809,28 @@ class _Court3DScreenState extends State<Court3DScreen>
     final b = m.frames[i1];
     final bMap = {for (final p in b.players) p.trackId: p};
     final jatekosok = <_Jatekos>[];
+    final fpsA = m.meta.fps > 0 ? m.meta.fps : 25.0;
     for (final p in a.players) {
       final q = bMap[p.trackId];
       final x = q == null ? p.x : p.x + (q.x - p.x) * t;
       final y = q == null ? p.y : p.y + (q.y - p.y) * t;
+      // Haladás a két kocka közt: irány + sebesség (a figura ebbe fordul
+      // és ezzel lendít). Követés-ugrásnál (>8 m/s) nem hisszük el.
+      final dx = q == null ? 0.0 : q.x - p.x;
+      final dy = q == null ? 0.0 : q.y - p.y;
+      final lepes = math.sqrt(dx * dx + dy * dy);
+      final seb = lepes * fpsA / math.max(1, b.t - a.t);
+      final hihet = seb <= 8.0;
       jatekosok.add(_Jatekos(
           x: x,
           y: y,
           home: p.team == Team.home,
           becsult: p.isEstimated,
-          mez: p.jerseyNumber));
+          mez: p.jerseyNumber,
+          dirX: hihet ? dx : 0.0,
+          dirY: hihet ? dy : 0.0,
+          speed: hihet ? seb : 0.0,
+          trackId: p.trackId));
     }
     _Labda? labda;
     if (a.ball != null && b.ball != null) {
@@ -828,7 +840,7 @@ class _Court3DScreenState extends State<Court3DScreen>
     } else if (a.ball != null) {
       labda = _Labda(a.ball!.x, a.ball!.y);
     }
-    return _Allapot(jatekosok, labda);
+    return _Allapot(jatekosok, labda, tSec: _playhead / fpsA);
   }
 }
 
@@ -837,12 +849,21 @@ class _Jatekos {
   final bool home;
   final bool becsult;
   final int? mez;
+  // A haladás iránya (méter/kocka, nem normált) és sebessége (m/s) — a
+  // figura ebbe fordul, és ezzel arányosan lendíti a lábát-karját. A
+  // track-azonosító a lépés-fázis eltolásához (ne egyszerre lépjenek).
+  final double dirX, dirY, speed;
+  final int trackId;
   _Jatekos(
       {required this.x,
       required this.y,
       required this.home,
       required this.becsult,
-      this.mez});
+      this.mez,
+      this.dirX = 0.0,
+      this.dirY = 0.0,
+      this.speed = 0.0,
+      this.trackId = 0});
 }
 
 class _Labda {
@@ -853,7 +874,9 @@ class _Labda {
 class _Allapot {
   final List<_Jatekos> jatekosok;
   final _Labda? labda;
-  _Allapot(this.jatekosok, this.labda);
+  // A lejátszófej ideje (mp) — a figurák lépés-fázisa ebből fut.
+  final double tSec;
+  _Allapot(this.jatekosok, this.labda, {this.tSec = 0.0});
 }
 
 /// Szoftveres távlati vetítés: pálya-koordináta (méter, z felfelé) →
@@ -945,6 +968,147 @@ class _Court3DPainter extends CustomPainter {
     }
   }
 
+  /// EMBERSZERŰ figura: fej, mez (törzs), nadrág, karok, lábak — a
+  /// haladás irányába fordulva, a sebességgel arányos láb- és
+  /// karlendítéssel, talaj-árnyékkal, mezszámmal a mezen. A demóban is
+  /// ez fut. Szoftveres vetítés: minden testpont a pálya terében
+  /// (méter, z felfelé), a figura saját "előre/jobbra" tengelyén.
+  void _figura(Canvas canvas, _Jatekos j, double tSec) {
+    final melyKozep = _kamera(j.x, j.y, 0.9).$3;
+    if (melyKozep < _kozel) return;
+    // Irány: a haladásé; álló játékos a kamera felé fordul.
+    double fx = j.dirX, fy = j.dirY;
+    var hossz = math.sqrt(fx * fx + fy * fy);
+    if (hossz < 1e-6) {
+      fx = cx - j.x;
+      fy = cy - j.y;
+      hossz = math.sqrt(fx * fx + fy * fy);
+      if (hossz < 1e-6) {
+        fx = 0;
+        fy = 1;
+        hossz = 1;
+      }
+    }
+    fx /= hossz;
+    fy /= hossz;
+    final rx = fy, ry = -fx; // a figura jobbja
+
+    // Lendítés: a sebességgel nő az amplitúdó és a lépés-ütem; a
+    // track-azonosító eltolja a fázist, hogy ne egyszerre lépjenek.
+    final seb = j.speed.clamp(0.0, 8.0);
+    final amp = (seb / 5.0).clamp(0.0, 1.0);
+    final utem = 1.2 + seb * 0.35;
+    final fazis = tSec * 2 * math.pi * utem + (j.trackId % 7) * 0.9;
+    final leng = math.sin(fazis) * amp;
+
+    final alpha = j.becsult ? 0.45 : 1.0;
+    final csapat = j.home ? AppColors.home : AppColors.away;
+    final mez = csapat.withOpacity(alpha);
+    final nadrag = Color.lerp(csapat, Colors.black, 0.5)!.withOpacity(alpha);
+    final bor = const Color(0xFFE3B98F).withOpacity(alpha);
+    final haj = const Color(0xFF3A2A1E).withOpacity(alpha);
+    final zokni = Colors.white.withOpacity(0.85 * alpha);
+
+    // Lokális (előre, jobbra, magasság) → képernyő; null, ha mögöttünk.
+    Offset? pont(double e, double o, double z) {
+      final (jb, fe, me) =
+          _kamera(j.x + fx * e + rx * o, j.y + fy * e + ry * o, z);
+      if (me < _kozel) return null;
+      return _kepernyo(jb, fe, me);
+    }
+
+    double vastag(double meter) => (meter * _f / melyKozep).clamp(1.0, 40.0);
+    Paint vonalFestek(Color c, double meter) => Paint()
+      ..color = c
+      ..strokeWidth = vastag(meter)
+      ..strokeCap = StrokeCap.round;
+    void sokszog(List<Offset?> p, Color c) {
+      if (p.any((o) => o == null)) return;
+      canvas.drawPath(Path()..addPolygon(p.cast<Offset>(), true),
+          Paint()..color = c);
+    }
+
+    // Árnyék a talajon (a figura alatt, kissé a haladás mögött).
+    final arny = <Offset>[];
+    for (var k = 0; k < 12; k++) {
+      final a = k / 12 * 2 * math.pi;
+      final o = pont(math.cos(a) * 0.34 - 0.05, math.sin(a) * 0.24, 0.0);
+      if (o != null) arny.add(o);
+    }
+    if (arny.length >= 3) {
+      canvas.drawPath(Path()..addPolygon(arny, true),
+          Paint()..color = Colors.black.withOpacity(0.35 * alpha));
+    }
+
+    // Láb: csípő → térd → boka (ellenütemben a két oldal).
+    void lab(double oldal, double lend) {
+      final csipo = pont(0.0, oldal * 0.11, 0.92);
+      final terd = pont(lend * 0.22 + (lend > 0 ? 0.06 : 0.0),
+          oldal * 0.12, 0.50);
+      final boka = pont(lend * 0.38, oldal * 0.13, 0.06);
+      if (csipo == null || terd == null || boka == null) return;
+      canvas.drawLine(csipo, terd, vonalFestek(bor, 0.12));
+      canvas.drawLine(terd, boka, vonalFestek(zokni, 0.10));
+    }
+
+    // Kar: váll → könyök → kéz (a lábakkal ellentétes ütemben).
+    void kar(double oldal, double lend) {
+      final vall = pont(0.0, oldal * 0.23, 1.42);
+      final konyok = pont(lend * 0.16, oldal * 0.27, 1.12);
+      final kez = pont(lend * 0.30 + 0.05, oldal * 0.26, 0.86);
+      if (vall == null || konyok == null || kez == null) return;
+      canvas.drawLine(vall, konyok, vonalFestek(mez, 0.09));
+      canvas.drawLine(konyok, kez, vonalFestek(bor, 0.07));
+    }
+
+    // A kamerától távolabbi oldal előbb (takarás a figurán belül).
+    final jobbMely = _kamera(j.x + rx * 0.3, j.y + ry * 0.3, 0.9).$3;
+    final balMely = _kamera(j.x - rx * 0.3, j.y - ry * 0.3, 0.9).$3;
+    final tavol = jobbMely > balMely ? 1.0 : -1.0;
+    final kozel = -tavol;
+
+    lab(tavol, -tavol * leng);
+    kar(tavol, tavol * leng);
+    // Nadrág: csípő → comb; mez: váll → csípő (a nadrág fölé).
+    sokszog([
+      pont(0.0, -0.17, 0.95), pont(0.0, 0.17, 0.95),
+      pont(0.02, 0.19, 0.70), pont(0.02, -0.19, 0.70),
+    ], nadrag);
+    sokszog([
+      pont(0.0, -0.22, 1.45), pont(0.0, 0.22, 1.45),
+      pont(0.0, 0.16, 0.93), pont(0.0, -0.16, 0.93),
+    ], mez);
+    lab(kozel, -kozel * leng);
+    kar(kozel, kozel * leng);
+
+    // Fej: bőr + haj-sapka a tetején.
+    final fejK = _kamera(j.x + fx * 0.02, j.y + fy * 0.02, 1.66);
+    if (fejK.$3 >= _kozel) {
+      final o = _kepernyo(fejK.$1, fejK.$2, fejK.$3);
+      final r = (0.12 * _f / fejK.$3).clamp(1.0, 22.0);
+      canvas.drawCircle(o, r, Paint()..color = bor);
+      canvas.drawArc(Rect.fromCircle(center: o, radius: r), math.pi,
+          math.pi, true, Paint()..color = haj);
+    }
+
+    // Mezszám a mezen (közelről olvasható).
+    if (j.mez != null && melyKozep < 30) {
+      final cimke = pont(0.0, 0.0, 1.22);
+      if (cimke != null) {
+        final tp = TextPainter(
+          text: TextSpan(
+              text: "${j.mez}",
+              style: TextStyle(
+                  color: Colors.white.withOpacity(0.95 * alpha),
+                  fontSize: (11.0 * 6 / melyKozep).clamp(7.0, 16.0),
+                  fontWeight: FontWeight.bold)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, cimke - Offset(tp.width / 2, tp.height / 2));
+      }
+    }
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     _keszit(size);
@@ -1012,36 +1176,7 @@ class _Court3DPainter extends CustomPainter {
     double melyseg(_Jatekos j) => _kamera(j.x, j.y, 1.0).$3;
     sorrend.sort((a, b) => melyseg(b).compareTo(melyseg(a)));
     for (final j in sorrend) {
-      final (jobb, fel, mely) = _kamera(j.x, j.y, 0.9);
-      if (mely < _kozel) continue;
-      final szin = (j.home ? AppColors.home : AppColors.away)
-          .withOpacity(j.becsult ? 0.45 : 0.95);
-      final test = Paint()
-        ..color = szin
-        ..strokeWidth = (34.0 / mely).clamp(1.5, 26.0)
-        ..strokeCap = StrokeCap.round;
-      _vonal(canvas, test, j.x, j.y, 0.15, j.x, j.y, 1.55);
-      final fejP = _kamera(j.x, j.y, 1.72);
-      if (fejP.$3 >= _kozel) {
-        canvas.drawCircle(_kepernyo(fejP.$1, fejP.$2, fejP.$3),
-            (0.14 * _f / fejP.$3).clamp(1.0, 20.0), Paint()..color = szin);
-      }
-      if (j.mez != null && mely < 30) {
-        final cimkeP = _kamera(j.x, j.y, 2.05);
-        if (cimkeP.$3 >= _kozel) {
-          final tp = TextPainter(
-            text: TextSpan(
-                text: "${j.mez}",
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
-                    fontSize: (11.0 * 6 / mely).clamp(8.0, 15.0),
-                    fontWeight: FontWeight.bold)),
-            textDirection: TextDirection.ltr,
-          )..layout();
-          final o = _kepernyo(cimkeP.$1, cimkeP.$2, cimkeP.$3);
-          tp.paint(canvas, o - Offset(tp.width / 2, tp.height / 2));
-        }
-      }
+      _figura(canvas, j, frame.tSec);
     }
 
     // Labda.
