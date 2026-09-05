@@ -3299,6 +3299,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Eldöntetlen térfélcsere-határ: az összefűzés nem tudta eldönteni,
     // fordult-e a pálya — az eredmény fordítva állhat, kézi ellenőrzés kell.
     final undecided = (m["undecided_segments"] as num?)?.toInt() ?? 0;
+    // A feldolgozás alatt mért kalibráció-illeszkedés minimuma: ha a
+    // motor küszöbe (0.3 = CALIB_FIT_WARN) alatt van, a kalibráció
+    // valahol elcsúszott — a sor ránézésre jelzi.
+    final calibMinFit = (m["calib_min_fit"] as num?)?.toDouble();
+    final calibGyenge = calibMinFit != null && calibMinFit < 0.3;
     // A hozzá tartozó folytatás-meccsek ("<id>-folyt", "-folyt2", ...) —
     // ha vannak, egy gombbal összefűzhető velük egy teljes meccsé.
     final contIds = _matches
@@ -3334,6 +3339,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               fontSize: 15, color: AppColors.gold)),
                       ..._resultBadge(sum),
                       ..._realScoreLabel(m, sum),
+                    ],
+                    if (calibGyenge) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      Tooltip(
+                        message: "A kalibráció valahol elcsúszott: a "
+                            "visszarajzolt pályavonal a leggyengébb kockán "
+                            "csak ${(calibMinFit * 100).round()}%-ban ül a "
+                            "valódin. Nyisd meg → Kalibráció ellenőrzése.",
+                        child: const Icon(Icons.grid_off,
+                            size: 16, color: AppColors.gold),
+                      ),
                     ],
                     if (date.isNotEmpty) ...[
                       const SizedBox(width: AppSpacing.md),

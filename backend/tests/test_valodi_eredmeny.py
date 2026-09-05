@@ -436,3 +436,13 @@ def test_a_diagnosztika_viszi_a_kalibracio_illeszkedest():
     assert d["calib_fit"]["min_fit"] == 0.2 and d["calib_fit"]["worst_t"] == 40
     regi = c.get("/matches/cf0/diagnostics").json()
     assert "calib_fit" in regi and regi["calib_fit"] is None
+
+
+def test_a_konyvtar_sor_viszi_a_kalibracio_illeszkedes_minimumat():
+    m = _meccs("cm1")
+    m.meta.calib_fit = {"mean_fit": 0.6, "min_fit": 0.2, "worst_t": 10,
+                        "points": [[0, 0.6], [10, 0.2]]}
+    c, _tmp = _client([m, _meccs("cm0")])
+    sorok = {s["match_id"]: s for s in c.get("/matches").json()["matches"]}
+    assert sorok["cm1"]["calib_min_fit"] == 0.2
+    assert sorok["cm0"]["calib_min_fit"] is None

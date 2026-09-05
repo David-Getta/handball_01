@@ -1456,6 +1456,11 @@ def create_app():
                 # — a felület a felismert mellett mutatja.
                 "real_goals_home": getattr(m.meta, "real_goals_home", None),
                 "real_goals_away": getattr(m.meta, "real_goals_away", None),
+                # A feldolgozás alatt mért kalibráció-illeszkedés
+                # minimuma (0..1): a könyvtár-sor ebből jelzi ránézésre,
+                # ha a kalibráció valahol elcsúszott. None = nem mért.
+                "calib_min_fit": (getattr(m.meta, "calib_fit", None)
+                                  or {}).get("min_fit"),
             })
         out.sort(key=lambda d: d["match_id"])
         return {"matches": out}

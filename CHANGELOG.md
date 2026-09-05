@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.99 óta)
 
+- **A könyvtár-sor jelzi az elcsúszott kalibrációt** (kezdőlap): ha a
+  feldolgozás alatt mért illeszkedés valahol a küszöb alá esett, a
+  meccs sorában egy jelzés mutatja (súgóval: hány százalék, és hogy a
+  Kalibráció ellenőrzése mutatja meg, hol) — nem kell minden meccset
+  megnyitni, hogy kiderüljön.
+
 - **A Kalibráció ellenőrzése ablak kérés nélkül mondja a számokat**
   (meccs-nézet): a feldolgozás alatt mért illeszkedés (hány kockán,
   átlag, leggyengébb és mikor) és a horgonyzás-arány a meccs mellől
