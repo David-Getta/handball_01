@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.99 óta)
+## Kiadatlan (a v0.1.100 óta)
 
 - **A könyvtár-sor jelzi az elcsúszott kalibrációt** (kezdőlap): ha a
   feldolgozás alatt mért illeszkedés valahol a küszöb alá esett, a
@@ -16,6 +16,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   átlag, leggyengébb és mikor) és a horgonyzás-arány a meccs mellől
   azonnal látszik — a nyolc-kockás újramérés alatta fut, a mostani
   állapotról.
+
+## v0.1.100 — kiadva (2026-09-05)
+
+> Kiadás-jegyzet: ÖNKORREKCIÓ a pályavonalak alapján — ha a
+> visszarajzolt vonal nem ül a valódin, a motor ráigazítja a
+> kamera-mátrixot a pálya saját vonalaihoz (a nem-horgonyzott
+> kockákon); egy kattintás a Kalibráció ellenőrzéséhez a
+> minőség-panelről; a diagnosztika az illeszkedést is viszi.
 
 - **Az önkorrekció gyors és pontos** (feldolgozás): a vonal menti
   mintavétel numpy-ban megy (egy 4K-s kockán ~7000 pont, ~130 jelölt
