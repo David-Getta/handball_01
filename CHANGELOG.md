@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.99 óta)
 
+- **A Kalibráció ellenőrzése ablak kérés nélkül mondja a számokat**
+  (meccs-nézet): a feldolgozás alatt mért illeszkedés (hány kockán,
+  átlag, leggyengébb és mikor) és a horgonyzás-arány a meccs mellől
+  azonnal látszik — a nyolc-kockás újramérés alatta fut, a mostani
+  állapotról.
+
 - **Az önkorrekció gyors és pontos** (feldolgozás): a vonal menti
   mintavétel numpy-ban megy (egy 4K-s kockán ~7000 pont, ~130 jelölt
   egy másodperc alatt), és a finom lépés élesebb él-térképen keresi a

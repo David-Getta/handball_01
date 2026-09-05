@@ -2148,6 +2148,33 @@ class _MatchScreenState extends State<MatchScreen> {
                   "kalibráció vagy a kamera-mozgás követése a hibás.",
                   style: AppText.label.copyWith(fontSize: 12.5)),
               const SizedBox(height: AppSpacing.sm),
+              // A FELDOLGOZÁS ALATT mért illeszkedés (a meccs mellől, kérés
+              // nélkül): 2 mp-enként minden kulcs-kockán — ez a teljes
+              // meccsről szól, a lenti nyolc-kockás újramérés a mostani
+              // állapotról.
+              if (match.meta.calibFit != null &&
+                  (match.meta.calibFit!["mean_fit"] as num?) != null)
+                Builder(builder: (_) {
+                  final cf = match.meta.calibFit!;
+                  final atlag = (cf["mean_fit"] as num).toDouble();
+                  final min = (cf["min_fit"] as num?)?.toDouble() ?? atlag;
+                  final rosszT = (cf["worst_t"] as num?)?.toInt();
+                  final db = (cf["points"] as List?)?.length ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                        "A feldolgozás alatt mérve ($db kockán): átlag "
+                        "${(atlag * 100).round()}% · leggyengébb "
+                        "${(min * 100).round()}%"
+                        "${rosszT != null ? " (${ido(rosszT)}-nál)" : ""}"
+                        "${match.meta.panAnchorPct != null ? " · a kalibrált képhez mérve a kockák ${match.meta.panAnchorPct!.round()}%-án" : ""}.",
+                        style: AppText.label.copyWith(
+                            fontSize: 12,
+                            color: min >= 0.3 /* = CALIB_FIT_WARN */
+                                ? AppColors.accent
+                                : AppColors.gold)),
+                  );
+                }),
               // ILLESZKEDÉS SZÁMOKBAN: a szemmel-ellenőrzés géppel — a
               // motor nyolc kockán méri, mennyire ül a rajz a valódi
               // vonalakon (0..1), és megmondja, hol a leggyengébb.
