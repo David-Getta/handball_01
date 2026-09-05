@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.98 óta)
 
+- **A diagnosztika-JSON a kalibráció-illeszkedést is viszi**
+  (diagnosztika): a "calib_fit" mező (átlag, minimum, a leggyengébb kocka
+  ideje) — a fejlesztő így a képernyőkép nélkül látja, tartotta-e a
+  kalibráció a meccs alatt.
+
 - **A feldolgozás magától méri, tartja-e a kalibráció** (feldolgozás +
   minőség-jelentés): a kalibráció-illeszkedés a feldolgozás alatt is
   lefut (2 mp-enként, a kulcs-kockákon), az eredmény a meccs mellé

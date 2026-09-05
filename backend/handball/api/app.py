@@ -1959,6 +1959,10 @@ def create_app():
                     # mozdult, és más, ha 800 px-t fordult.
                     "camera_path": _camera_path_summary(
                         getattr(match.meta, "pan_keyframes", None)),
+                    # A feldolgozás alatt mért kalibráció-illeszkedés
+                    # (átlag, minimum, leggyengébb kocka) — a "tartja-e"
+                    # kérdés számszerű válasza a fejlesztőnek.
+                    "calib_fit": getattr(match.meta, "calib_fit", None),
                     "source_segments": list(
                         getattr(match.meta, "source_segments", None) or []),
                     "event_overrides_count": len(

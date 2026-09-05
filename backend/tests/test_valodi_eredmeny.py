@@ -425,3 +425,14 @@ def test_a_view3d_esemenyeket_es_ugrast_is_visz():
     for jel in ('id="elozo"', 'id="kov"', 'id="felirat"',
                 "esemenyUgras", "BracketRight"):
         assert jel in oldal, jel
+
+
+def test_a_diagnosztika_viszi_a_kalibracio_illeszkedest():
+    m = _meccs("cf1")
+    m.meta.calib_fit = {"mean_fit": 0.7, "min_fit": 0.2, "worst_t": 40,
+                        "points": [[0, 0.7], [40, 0.2]]}
+    c, _tmp = _client([m, _meccs("cf0")])
+    d = c.get("/matches/cf1/diagnostics").json()
+    assert d["calib_fit"]["min_fit"] == 0.2 and d["calib_fit"]["worst_t"] == 40
+    regi = c.get("/matches/cf0/diagnostics").json()
+    assert "calib_fit" in regi and regi["calib_fit"] is None
