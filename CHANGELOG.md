@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.97 óta)
+## Kiadatlan (a v0.1.98 óta)
 
 - **A kalibráció-ellenőrzés a jelenlegi kockát is mutatja, a
   diagnosztika a kamera útját** (meccs-nézet + diagnosztika + doksi): a
@@ -13,6 +13,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   px-ben, kulcs-kockák száma) — az alacsony horgonyzás-arány mást
   jelent alig mozduló és 800 px-t forduló kameránál. A docs/PASZTAZAS.md
   leírja, hogyan olvasd a rárajzolt vonalakat.
+
+## v0.1.98 — kiadva (2026-09-04)
+
+> Kiadás-jegyzet: a kalibráció a SZEMMEL ellenőrizhető — a
+> pályavonalak visszarajzolva a videó kockáira; a bekalibrált
+> képkockák kötelező horgonyok a kamera-követésben; esemény-ugrás
+> a böngészős 3D/VR-ben is; egy kattintás a bennmaradt bemutatás
+> levágásához.
 
 - **Kalibráció ellenőrzése a szemmel — vonalak a videón** (feldolgozás +
   motor + meccs-nézet): a feldolgozás mostantól elteszi a kalibráció
