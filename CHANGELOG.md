@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.98 óta)
 
+- **A finomhangolás-útmutató az appbeli utat írja le** (docs/FINETUNE.md):
+  a három lépés gombokkal — gyűjtés (aktív tanulás), Címkéző, Tanítás
+  indítása mérőszámmal és védőhálóval —, a CLI-út tartalékként.
+
 - **Gyorsabb pásztázás-követés 4K-s videón** (feldolgozás): a kamera-
   mozgás becslése eddig a teljes felbontású képen kereste a
   sarokpontokat minden kockán — 4K-n ez a feldolgozás jelentős részét
