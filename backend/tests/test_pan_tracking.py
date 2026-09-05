@@ -205,3 +205,23 @@ def test_a_kalibralt_kocka_kotelezo_horgony():
     for dx in (12, 20, 12, 4, 4):
         G = tr.update(_shift(img, dx))
     assert abs(G[0][2] + 4.0) < 1.5, f"tx={G[0][2]}"
+
+
+def test_a_4k_kocka_munkakepen_fut_de_teljes_felbontasban_valaszol():
+    """Széles (2560 px) kocka: a becslés ≤1280 px-es munkaképen megy, a
+    kimenet mégis a TELJES felbontás pixeleiben — a 40 px-es svenk 40
+    px-nek mérődik, nem 20-nak."""
+    import cv2
+    import numpy as np
+    rng = np.random.default_rng(5)
+    img = (rng.random((720, 2560)) * 255).astype(np.uint8)
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+    tr = PanTracker(anchor=True)
+    tr.update(img, exclude=[(100, 100, 300, 400)])
+    G = tr.update(_shift(img, 40))
+    assert abs(G[0][2] + 40.0) < 3.0, f"tx={G[0][2]}"
+    tx, _ty = tr.translation
+    assert abs(tx + 40.0) < 3.0
+    # A pont-visszavetítés is a teljes felbontásban stimmel.
+    x, _y = apply_h(G, 1040.0, 300.0)
+    assert abs(x - 1000.0) < 4.0

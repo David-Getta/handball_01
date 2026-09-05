@@ -70,8 +70,15 @@ class PanTracker:
     ANCHOR_SPACING_PX = 150.0
     MAX_ANCHORS = 12
     ANCHOR_TRY_NEAREST = 3
+    # MUNKAKÉP: ennél szélesebb kockát lekicsinyítünk a becsléshez — 4K-n
+    # a sarokpont-keresés a feldolgozás jelentős részét vinné, a svenk
+    # mértéke pedig nem a pixel-számon múlik. A belső állapot (lánc,
+    # horgonyok, G) a munkakép terében él; a kimenet a TELJES felbontás
+    # pixeleiben van (G_teljes = S⁻¹ · G_munka · S).
+    WORK_MAX_W = 1280
 
     def __init__(self, anchor: bool = True):
+        self._s = 1.0  # teljes → munkakép skála (1 = nincs kicsinyítés)
         self._prev_gray = None
         # G: aktuális → alap (3x3, numpy) — induláskor egység (nincs elmozdulás).
         self._G = None
@@ -210,6 +217,20 @@ class PanTracker:
         import cv2
         import numpy as np
 
+        # Munkakép: a széles kockát lekicsinyítjük (a dobozokkal együtt).
+        h0, w0 = gray.shape[:2]
+        if w0 > self.WORK_MAX_W:
+            self._s = self.WORK_MAX_W / float(w0)
+            gray = cv2.resize(
+                gray, (self.WORK_MAX_W, max(1, int(round(h0 * self._s)))),
+                interpolation=cv2.INTER_AREA)
+            if exclude:
+                exclude = [(x1 * self._s, y1 * self._s,
+                            x2 * self._s, y2 * self._s)
+                           for (x1, y1, x2, y2) in exclude]
+        else:
+            self._s = 1.0
+
         mask = self._mask_of(gray, exclude)
         self.stats["frames"] += 1
         if self._G is None:
@@ -221,7 +242,7 @@ class PanTracker:
                     self.stats["anchors"] = 1
             self._prev_gray = gray
             self._n += 1
-            return [[float(v) for v in row] for row in self._G]
+            return self._kimenet()
 
         # 1) LÁNC: sarokpontok az ELŐZŐ képen, követés az aktuálisra,
         #    hasonlósági transzformáció RANSAC-kal, halmozás.
@@ -262,14 +283,25 @@ class PanTracker:
 
         self._prev_gray = gray
         self._n += 1
-        return [[float(v) for v in row] for row in self._G]
+        return self._kimenet()
+
+    def _kimenet(self):
+        """G a TELJES felbontás pixeleiben (a munkakép-skála kivezetve):
+        G_teljes = S⁻¹ · G_munka · S — JSON-barát beágyazott lista."""
+        import numpy as np
+        G = self._G
+        if self._s != 1.0:
+            s = self._s
+            G = np.diag([1.0 / s, 1.0 / s, 1.0]) @ G @ np.diag([s, s, 1.0])
+        return [[float(v) for v in row] for row in G]
 
     @property
     def translation(self):
-        """A halmozott (x, y) eltolás pixelben — diagnosztikához/naplóhoz."""
+        """A halmozott (x, y) eltolás pixelben (teljes felbontás) —
+        diagnosztikához/naplóhoz."""
         if self._G is None:
             return (0.0, 0.0)
-        return (float(self._G[0][2]), float(self._G[1][2]))
+        return (float(self._G[0][2]) / self._s, float(self._G[1][2]) / self._s)
 
     def summary(self) -> str:
         """Egy soros magyar összegzés a naplóba."""

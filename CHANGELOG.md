@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.98 óta)
 
+- **Gyorsabb pásztázás-követés 4K-s videón** (feldolgozás): a kamera-
+  mozgás becslése eddig a teljes felbontású képen kereste a
+  sarokpontokat minden kockán — 4K-n ez a feldolgozás jelentős részét
+  vitte. Mostantól legfeljebb 1280 px széles munkaképen fut (a
+  mátrix visszaskálázva a teljes felbontásra), ugyanazzal a
+  pontossággal: a svenk mértéke nem a pixel-számon múlik.
+
 - **A kalibráció-ellenőrzés a jelenlegi kockát is mutatja, a
   diagnosztika a kamera útját** (meccs-nézet + diagnosztika + doksi): a
   "Kalibráció ellenőrzése" ablak első képe az éppen nézett kocka, utána
