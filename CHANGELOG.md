@@ -3,12 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.98 óta)
+## Kiadatlan (a v0.1.99 óta)
 
 - **A diagnosztika-JSON a kalibráció-illeszkedést is viszi**
   (diagnosztika): a "calib_fit" mező (átlag, minimum, a leggyengébb kocka
   ideje) — a fejlesztő így a képernyőkép nélkül látja, tartotta-e a
   kalibráció a meccs alatt.
+
+## v0.1.99 — kiadva (2026-09-05)
+
+> Kiadás-jegyzet: a kalibráció-illeszkedés SZÁMOKBAN — a motor a
+> feldolgozás alatt méri, ülnek-e a visszarajzolt pályavonalak a
+> kép valódi vonalain, és a minőség-jelentés kimondja, hol csúszik
+> el; gyorsabb pásztázás-követés 4K-n; a diagnosztika a kamera
+> útját is viszi.
 
 - **A feldolgozás magától méri, tartja-e a kalibráció** (feldolgozás +
   minőség-jelentés): a kalibráció-illeszkedés a feldolgozás alatt is
