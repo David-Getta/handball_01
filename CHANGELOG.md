@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.100 óta)
 
+- **Az önkorrekció a vízszintes svenket is elkapja** (feldolgozás): a
+  finomítás küszöbe 0,5-re nőtt — a vízszintes svenk csak a függőleges
+  vonalakat viszi el, a vízszintesek helyben maradnak, így 15–20 px-es
+  elcsúszásnál is 0,35 körüli volt a mért illeszkedés, és a korrekció
+  nem indult el. A javulás-feltétel (≥ 0,15) továbbra is véd a
+  fölösleges igazítástól. A mérés + korrekció lépése egy, a követővel
+  együtt tesztelt függvény (a feldolgozó azt hívja) — a csendes hiba
+  kizárva.
+
 - **A könyvtár-sor jelzi az elcsúszott kalibrációt** (kezdőlap): ha a
   feldolgozás alatt mért illeszkedés valahol a küszöb alá esett, a
   meccs sorában egy jelzés mutatja (súgóval: hány százalék, és hogy a
@@ -32,7 +41,7 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 - **Önkorrekció a pályavonalak alapján** (feldolgozás): ha egy
   kulcs-kockán a visszarajzolt pályavonal nem ül a kép valódi vonalain
-  (illeszkedés 0,35 alatt), a motor ±24 px-es eltolás-rácson megkeresi,
+  (illeszkedés 0,5 alatt), a motor ±24 px-es eltolás-rácson megkeresi,
   hol ülne a legjobban, és ha legalább 0,15-tel javul, ráigazítja a
   kamera-mátrixot — a követés innen folytatja. A pálya saját vonalai a
   legmegbízhatóbb "távpontok": nem mozognak, és pontosan tudjuk, hol

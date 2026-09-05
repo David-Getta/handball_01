@@ -315,3 +315,33 @@ def test_a_finomitas_gyors_nagy_kepen():
     r = refine_shift(sav, alap, h0, None, 1920, 1080)
     assert time.perf_counter() - t0 < 1.5
     assert abs(r["dx"] - 10.0) <= 3.0 and abs(r["dy"] + 4.0) <= 3.0, r
+
+
+def test_a_meres_es_onkorrekcio_egyben_a_kovetovel():
+    """A feldolgozó lépése a VALÓDI követővel (YOLO nélkül): a kép
+    vonalai 16 px-szel odébb, a követő G-je elmaradt → a mérés alacsony,
+    a korrekció megtalálja, a követő átveszi; horgonyzott kockán nem
+    nyúl hozzá; jó helyen nincs korrekció."""
+    from handball.pipeline.calib_overlay import measure_and_correct
+    from handball.pipeline.pan_tracking import PanTracker
+
+    h0 = _skala(10.0)
+    g_igaz = [[1.0, 0.0, -16.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    kep = _vonalas_kep(h0, g_igaz)
+    tr = PanTracker(anchor=False)
+    panH = tr.update(kep)  # első kocka: egység (elmaradt a valóditól)
+
+    ki = measure_and_correct(kep, h0, panH, last_mode="chain")
+    assert ki["corrected"] is True and abs(ki["dx"] - 16.0) <= 3.0, ki
+    assert ki["fit"] > 0.6
+    tr.correct(ki["g"])
+    assert tr.stats["corrected"] == 1
+    assert abs(tr.translation[0] + 16.0) <= 3.0
+
+    # Horgonyzott kockán: mérés igen, korrekció nem.
+    ki2 = measure_and_correct(kep, h0, panH, last_mode="anchor")
+    assert ki2["corrected"] is False and ki2["fit"] is not None
+
+    # Jó helyen (a követő már igazított): nincs mit korrigálni.
+    ki3 = measure_and_correct(kep, h0, ki["g"], last_mode="chain")
+    assert ki3["corrected"] is False and ki3["fit"] > 0.6

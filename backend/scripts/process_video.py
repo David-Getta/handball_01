@@ -640,31 +640,21 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                                       force_anchor=kalibralt)
             if fit_h0 is not None and (kept - 1) % max(1, fit_every) == 0:
                 try:
+                    # Mérés + ÖNKORREKCIÓ egyben (calib_overlay
+                    # .measure_and_correct — a követővel együtt tesztelt):
+                    # ha a rajz nem ül a valódi vonalakon, a pálya saját
+                    # vonalai mondják meg, hova kell; a jobb G-t a követő
+                    # átveszi, és innen folytatja. Horgonyzott kockához nem
+                    # nyúl (az abszolút mérés erősebb az él-rácsnál).
                     from handball.pipeline.calib_overlay import (
-                        FIT_REFINE_BELOW, FIT_REFINE_GAIN, edge_map,
-                        fit_on_edge_map, overlay_pixels, refine_shift,
-                        shifted_g)
-                    H_, W_ = gray.shape[:2]
-                    sav, alap = edge_map(gray)
-                    fit = fit_on_edge_map(
-                        sav, alap, overlay_pixels(fit_h0, panH, W_, H_))
-                    f = fit.get("fit")
-                    # ÖNKORREKCIÓ: ha a rajz nem ül a valódi vonalakon, a
-                    # pálya saját vonalai mondják meg, hova kell — a
-                    # jobb G-t a követő átveszi, és innen folytatja.
-                    # Horgonyzott kockához nem nyúlunk: az abszolút mérés
-                    # (sok belső egyezés) erősebb, mint egy él-rács; a
-                    # korrekció a lánccal vitt / tartott kockáknak szól.
-                    if (f is not None and f < FIT_REFINE_BELOW
-                            and getattr(pan_tracker, "last_mode", "")
-                            != "anchor"):
-                        r_ = refine_shift(sav, alap, fit_h0, panH, W_, H_)
-                        if (r_["fit"] is not None
-                                and r_["fit"] >= f + FIT_REFINE_GAIN):
-                            panH = shifted_g(panH, r_["dx"], r_["dy"])
-                            pan_tracker.correct(panH)
-                            f = r_["fit"]
-                    fit_pontok.append((kept - 1, f))
+                        measure_and_correct)
+                    ki_ = measure_and_correct(
+                        gray, fit_h0, panH,
+                        getattr(pan_tracker, "last_mode", "chain"))
+                    if ki_["corrected"]:
+                        panH = ki_["g"]
+                        pan_tracker.correct(panH)
+                    fit_pontok.append((kept - 1, ki_["fit"]))
                 except Exception:
                     pass  # a mérés hibája nem érinti a feldolgozást
         persons, best_ball = [], None

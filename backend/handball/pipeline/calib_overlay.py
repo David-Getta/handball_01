@@ -276,7 +276,12 @@ def fit_summary(points: list) -> Optional[dict]:
 # FIT_REFINE_GAIN-nyit javul, ráigazítja a kamera-mátrixot. A pálya
 # saját vonalai a legmegbízhatóbb "távpontok": nem mozognak, és
 # pontosan tudjuk, hol kell lenniük.
-FIT_REFINE_BELOW = 0.35
+# A küszöb szándékosan a minőség-riasztás (CALIB_FIT_WARN) FÖLÖTT van:
+# a VÍZSZINTES svenk csak a függőleges vonalakat viszi el, a
+# vízszintesek "helyben" maradnak, így 15-20 px-es elcsúszásnál is
+# 0,35 körüli a fit — a javulás-feltétel (FIT_REFINE_GAIN) véd attól,
+# hogy jó helyen fölöslegesen igazítsunk.
+FIT_REFINE_BELOW = 0.5
 FIT_REFINE_GAIN = 0.15
 REFINE_MAX_PX = 24
 REFINE_COARSE_PX = 8
@@ -355,3 +360,32 @@ def shifted_g(g_at_t: Optional[list], dx: float, dy: float) -> list:
     t = [[1.0, 0.0, -dx], [0.0, 1.0, -dy], [0.0, 0.0, 1.0]]
     return [[sum(g[i][k] * t[k][j] for k in range(3)) for j in range(3)]
             for i in range(3)]
+
+
+def measure_and_correct(gray, court_homography: list, g_at_t: Optional[list],
+                        last_mode: str = "chain") -> dict:
+    """EGY kulcs-kocka mérése + önkorrekciója — a feldolgozó ezt hívja.
+
+    1. illeszkedés a mostani G-vel; 2. ha FIT_REFINE_BELOW alatt ÉS a
+    kocka nem horgonyzott (az abszolút mérés erősebb az él-rácsnál),
+    finomítás; 3. ha legalább FIT_REFINE_GAIN-nyit javul, az igazított G
+    a visszatérésben. Tiszta függvény (a követőt a hívó frissíti a
+    "corrected" jelzésre), videó nélkül tesztelhető.
+
+    Visszatérés: {"g": G (igazított vagy az eredeti), "fit": mért
+    illeszkedés (az igazítás utáni, ha volt), "corrected": bool,
+    "dx", "dy"}.
+    """
+    h, w = gray.shape[:2]
+    sav, alap = edge_map(gray)
+    f = fit_on_edge_map(sav, alap,
+                        overlay_pixels(court_homography, g_at_t, w, h)).get("fit")
+    ki = {"g": g_at_t, "fit": f, "corrected": False, "dx": 0.0, "dy": 0.0}
+    if f is None or f >= FIT_REFINE_BELOW or last_mode == "anchor":
+        return ki
+    r = refine_shift(sav, alap, court_homography, g_at_t, w, h)
+    if r["fit"] is None or r["fit"] < f + FIT_REFINE_GAIN:
+        return ki
+    ki.update({"g": shifted_g(g_at_t, r["dx"], r["dy"]), "fit": r["fit"],
+               "corrected": True, "dx": r["dx"], "dy": r["dy"]})
+    return ki

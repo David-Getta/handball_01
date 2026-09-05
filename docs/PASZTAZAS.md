@@ -103,7 +103,10 @@ mindenhol él van, 0 = csak a padló. Két helyen jelenik meg:
 ### Önkorrekció a pályavonalak alapján
 
 A harmadik becslő. Ha egy kulcs-kockán az illeszkedés `FIT_REFINE_BELOW`
-(0,35) alá esik, a motor a rajzolt vonalakat ±`REFINE_MAX_PX` (24 px)
+(0,5 — szándékosan a riasztás-küszöb fölött: a vízszintes svenk csak a
+függőleges vonalakat viszi el, a vízszintesek helyben maradnak, így
+15–20 px-es elcsúszásnál is 0,35 körüli a fit) alá esik, a motor a
+rajzolt vonalakat ±`REFINE_MAX_PX` (24 px)
 eltolás-rácson próbálja (durva 8 px-es, majd finom 2 px-es lépés), és
 ha a legjobb legalább `FIT_REFINE_GAIN` (0,15) javulást ad, a
 kamera-mátrixot ráigazítja: G′ = G · T(−dx, −dy) — a követő ezt átveszi
