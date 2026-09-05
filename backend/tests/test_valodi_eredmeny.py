@@ -446,3 +446,15 @@ def test_a_konyvtar_sor_viszi_a_kalibracio_illeszkedes_minimumat():
     sorok = {s["match_id"]: s for s in c.get("/matches").json()["matches"]}
     assert sorok["cm1"]["calib_min_fit"] == 0.2
     assert sorok["cm0"]["calib_min_fit"] is None
+
+
+def test_a_view3d_emberszeru_figurakat_rajzol():
+    """Paritás az appbeli 3D-vel: a böngészős oldal figurái is fej,
+    mez, nadrág, karok, lábak — lendítéssel és iránnyal, nem henger."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs("v3f"))
+    for jel in ("function babu", "function lendit", "function szinez",
+                "hajAnyag", "zokniAnyag", "HemisphereLight",
+                "cs.rotation.y = Math.atan2"):
+        assert jel in oldal, jel

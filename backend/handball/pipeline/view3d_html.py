@@ -172,21 +172,75 @@ for (const x of [0, H]){
   szinpad.add(new THREE.Line(g, kapuSzin));
 }
 
-// Játékos-bábuk készlete (újrahasznosítva képkockánként).
-const hazaiAnyag = new THREE.MeshBasicMaterial({color:0x2f86d6});
-const vendegAnyag = new THREE.MeshBasicMaterial({color:0xd65a4a});
+// Játékos-figurák készlete (újrahasznosítva képkockánként): fej hajjal,
+// mez a csapatszínben, nadrág, karok és lábak — a haladás irányába
+// fordulnak, a sebességgel arányosan lépnek. Ugyanaz, mint az appbeli
+// 3D pályán.
+const hazaiAnyag = new THREE.MeshLambertMaterial({color:0x2f86d6});
+const vendegAnyag = new THREE.MeshLambertMaterial({color:0xd65a4a});
+const hazaiNadrag = new THREE.MeshLambertMaterial({color:0x17436b});
+const vendegNadrag = new THREE.MeshLambertMaterial({color:0x6b2d25});
+const borAnyag = new THREE.MeshLambertMaterial({color:0xe3b98f});
+const hajAnyag = new THREE.MeshLambertMaterial({color:0x3a2a1e});
+const zokniAnyag = new THREE.MeshLambertMaterial({color:0xeeeeee});
+szinpad.add(new THREE.HemisphereLight(0xdfe7ef, 0x101820, 1.1));
+const napfeny = new THREE.DirectionalLight(0xffffff, 0.6);
+napfeny.position.set(10, 30, 10); szinpad.add(napfeny);
 const babuk = [];
+function vegtag(anyag, r, hossz){
+  // Egy végtag-szakasz: a forgáspontja a felső végén (a csoport
+  // origójában), a henger lefelé lóg — így a forgatás lendítés.
+  const cs = new THREE.Group();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r*0.85, hossz, 6), anyag);
+  m.position.y = -hossz/2; cs.add(m);
+  return cs;
+}
 function babu(){
-  const test = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22, 0.22, 1.5, 8), hazaiAnyag);
-  const csoport = new THREE.Group();
-  test.position.y = 0.9; csoport.add(test);
-  const fej = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8),
-    hazaiAnyag);
-  fej.position.y = 1.78; csoport.add(fej);
-  szinpad.add(csoport);
-  babuk.push(csoport);
-  return csoport;
+  const cs = new THREE.Group();
+  const mez = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.55, 8), hazaiAnyag);
+  mez.position.y = 1.2; cs.add(mez);
+  const nadrag = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.28, 8), hazaiNadrag);
+  nadrag.position.y = 0.82; cs.add(nadrag);
+  const fej = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), borAnyag);
+  fej.position.y = 1.66; cs.add(fej);
+  const haj = new THREE.Mesh(new THREE.SphereGeometry(0.125, 10, 6, 0, Math.PI*2, 0, Math.PI/2), hajAnyag);
+  haj.position.y = 1.67; cs.add(haj);
+  const tagok = {};
+  for (const oldal of [-1, 1]){
+    const comb = vegtag(borAnyag, 0.07, 0.42); comb.position.set(oldal*0.11, 0.92, 0);
+    const labszar = vegtag(zokniAnyag, 0.055, 0.44); labszar.position.y = -0.42; comb.add(labszar);
+    const felkar = vegtag(hazaiAnyag, 0.05, 0.3); felkar.position.set(oldal*0.25, 1.42, 0);
+    const alkar = vegtag(borAnyag, 0.04, 0.28); alkar.position.y = -0.3; felkar.add(alkar);
+    cs.add(comb); cs.add(felkar);
+    tagok[oldal] = {comb, labszar, felkar, alkar};
+  }
+  const arnyek = new THREE.Mesh(new THREE.CircleGeometry(0.3, 12),
+    new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.35}));
+  arnyek.rotation.x = -Math.PI/2; arnyek.position.y = 0.005; cs.add(arnyek);
+  cs.userData = {mez, nadrag, felkarok:[tagok[-1].felkar, tagok[1].felkar], tagok, elozo:null};
+  szinpad.add(cs);
+  babuk.push(cs);
+  return cs;
+}
+function szinez(cs, hazai){
+  const u = cs.userData;
+  u.mez.material = hazai ? hazaiAnyag : vendegAnyag;
+  u.nadrag.material = hazai ? hazaiNadrag : vendegNadrag;
+  for (const f of u.felkarok) f.children[0].material = hazai ? hazaiAnyag : vendegAnyag;
+}
+function lendit(cs, seb, t, k){
+  // Lépés: a sebességgel nő az ütem és az amplitúdó; a két oldal
+  // ellenütemben, a karok a lábakkal szemben.
+  const amp = Math.min(1, seb/5), utem = 1.2 + seb*0.35;
+  const f = Math.sin(t*2*Math.PI*utem + (k%7)*0.9) * amp;
+  const u = cs.userData;
+  for (const oldal of [-1, 1]){
+    const s = -oldal*f;
+    u.tagok[oldal].comb.rotation.x = s*0.6;
+    u.tagok[oldal].labszar.rotation.x = Math.max(0, -s)*0.8;
+    u.tagok[oldal].felkar.rotation.x = -s*0.5;
+    u.tagok[oldal].alkar.rotation.x = -0.4;
+  }
 }
 const labda = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10),
   new THREE.MeshBasicMaterial({color:0xe8a33d}));
@@ -257,10 +311,14 @@ function rajzol(t){
           q = (b[1] && b[1][k] && b[1][k][0] === p[0]) ? b[1][k] : p;
     const x = p[1] + (q[1]-p[1])*ar, y = p[2] + (q[2]-p[2])*ar;
     cs.position.set(x, 0, W - y);
-    const anyag = p[0] ? hazaiAnyag : vendegAnyag;
-    cs.children.forEach(gy => gy.material = anyag);
-    cs.children.forEach(gy => gy.material.opacity = 1);
-    if (!p[3]){ /* becsült: halványítás helyett kisebb bábu */ }
+    szinez(cs, !!p[0]);
+    // Irány és sebesség a két kocka elmozdulásából (követés-ugrás
+    // kiszűrve); álló játékos tartja az előző irányát.
+    const dx = q[1]-p[1], dy = q[2]-p[2], dt = Math.max(0.05, b[0]-a[0]);
+    const seb = Math.hypot(dx, dy)/dt;
+    if (seb > 0.3 && seb <= 8){ cs.rotation.y = Math.atan2(dx, -dy); }
+    lendit(cs, seb <= 8 ? seb : 0, t, k);
+    cs.scale.setScalar(p[3] ? 1 : 0.92);
   }
   let l = a[2];
   if (l){

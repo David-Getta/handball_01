@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.100 óta)
 
+- **Emberszerű figurák a böngészős 3D/VR nézetben is** (Böngészős 3D /
+  VR): a henger+gömb bábuk helyett fej hajjal, mez, nadrág, karok és
+  lábak (forgáspontos végtagok, lépés-lendítés a sebességgel), a
+  haladás irányába fordulva, talaj-árnyékkal és fénnyel — ugyanaz a
+  látvány, mint az appbeli 3D pályán, VR-headsetben is.
+
 - **Emberszerű játékosok a 3D pályán** (3D pálya, a demóban is): a
   "nyalóka" (vonal + korong) helyett figurák — fej hajjal, mez a
   csapatszínben, nadrág, karok és lábak —, amelyek a haladás irányába
