@@ -98,6 +98,12 @@ REAL_SCORE_SWAP_MARGIN = 4
 # akkor szóljon, ha az él tényleg esemény-gyártó méretű.
 GW_HEAD_WARN_S = 120.0
 
+# Kalibráció-illeszkedés (calib_overlay.line_fit_score, 0..1) a
+# feldolgozás alatt mért kulcs-kockákon: ez alatt a rajzolt pályavonal
+# már nem ül a kép valódi vonalain — a helyek elcsúsztak. A leggyengébb
+# kocka dönt (a meccs közepén elcsúszó követés az átlagban elveszne).
+CALIB_FIT_WARN = 0.3
+
 # Pásztázás-követés horgonyzás-aránya: a feldolgozott kockák ekkora
 # hányada alatt mondjuk ki, hogy a kamera-mozgást ritkán sikerült a
 # KALIBRÁLT képhez mérni — a köztes kockákat a kockáról-kockára lánc
@@ -142,6 +148,11 @@ NEXT_ACTION_ORDER: tuple = (
      "Ha tudod, mikor kezdődött a meccs, vágd le az elejét utólag "
      "(könyvtár-sor ✂ gombja) — vagy add meg a meccs időablakát az Új "
      "elemzés lapon, és futtasd újra."),
+    ("pályavonal nem ül a kép valódi vonalain",
+     "Nyisd meg a Kalibráció ellenőrzését (meccs-nézet): ha már a meccs "
+     "elején sem ül a vonal, a 4 sarkot igazítsd a Pálya-kalibrációban és "
+     "futtasd újra; ha csak később csúszik el, a kalibrációt a meccs "
+     "tipikus kameraállásában vedd fel (az első feldolgozott kockára)."),
     ("eleje nem-játéknak látszik",
      "Nyisd meg a vágást (könyvtár-sor ✂ gombja) — a párbeszéd elő is "
      "tölti a javasolt meccs-kezdést, csak ellenőrizned és jóváhagynod "
@@ -591,6 +602,27 @@ def compute_quality_report(match: Match) -> dict:
                 "kezdést.")
     except Exception:
         pass  # a javaslat hibája ne vigye el a jelentést
+
+    # --- Ül-e a kalibráció a meccs egészén? ---
+    # A feldolgozás a kulcs-kockákon megmérte, mennyire ül a visszarajzolt
+    # pályavonal a kép valódi vonalain. A leggyengébb kocka dönt: a meccs
+    # közepén elcsúszó kamera-követés az átlagban elveszne.
+    _cf = getattr(match.meta, "calib_fit", None)
+    try:
+        if _cf and _cf.get("min_fit") is not None \
+                and float(_cf["min_fit"]) < CALIB_FIT_WARN:
+            _cf_t = _cf.get("worst_t")
+            _cf_mikor = (clock_label(float(_cf_t) / fps)
+                         if _cf_t is not None else "?")
+            warnings.append(
+                "A visszarajzolt pályavonal nem ül a kép valódi vonalain "
+                f"a meccs egy részén (illeszkedés {100 * float(_cf['min_fit']):.0f}% "
+                f"{_cf_mikor}-nál, az átlag "
+                f"{100 * float(_cf.get('mean_fit') or 0):.0f}%) — ott a "
+                "játékosok helye elcsúszott: vagy a 4 sarok rossz, vagy a "
+                "kamera-mozgás követése vesztette el a kalibrált képet.")
+    except (TypeError, ValueError):
+        pass
 
     # --- Hihető-e a felismert EREDMÉNY? ---
     # Az edző az eredményből dönti el, hogy hisz-e a jelentésnek: ha az

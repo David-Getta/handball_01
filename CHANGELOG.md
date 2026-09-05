@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.98 óta)
 
+- **A feldolgozás magától méri, tartja-e a kalibráció** (feldolgozás +
+  minőség-jelentés): a kalibráció-illeszkedés a feldolgozás alatt is
+  lefut (2 mp-enként, a kulcs-kockákon), az eredmény a meccs mellé
+  kerül, és a minőség-jelentés kimondja, ha a visszarajzolt pályavonal
+  valahol nem ül a kép valódi vonalain — a leggyengébb kocka idejével
+  (az átlag elrejtené a meccs közepén elcsúszó követést) és teendővel
+  (Kalibráció ellenőrzése, majd sarkok vagy kameraállás). Eddig ehhez a
+  felhasználónak kellett a gombra kattintania.
+
 - **Kalibráció-illeszkedés számokban** (motor + végpont + meccs-nézet):
   a szemmel-ellenőrzés géppel — a visszarajzolt vonalak mentén a motor
   megméri, mennyire ül a rajz a kép valódi vonalain (él-erősség a vonal

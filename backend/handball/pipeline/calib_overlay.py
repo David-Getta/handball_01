@@ -217,3 +217,17 @@ def line_fit_score(gray, polylines: list) -> dict:
     return {"fit": round(max(0.0, min(1.0, fit)), 3),
             "on_line": round(vonalon, 3), "baseline": round(alap, 3),
             "samples": len(ertekek)}
+
+
+def fit_summary(points: list) -> Optional[dict]:
+    """A feldolgozás alatt mért illeszkedés-pontok [(t, fit|None), …]
+    összegzése a meta-ba: {"mean_fit", "min_fit", "worst_t", "points"} —
+    a minőség-jelentés a leggyengébb kockából ítél. None, ha nincs
+    mérhető pont."""
+    ertekes = [(int(t), float(f)) for t, f in points if f is not None]
+    if not ertekes:
+        return None
+    rossz_t, rossz = min(ertekes, key=lambda p: p[1])
+    return {"mean_fit": round(sum(f for _, f in ertekes) / len(ertekes), 3),
+            "min_fit": round(rossz, 3), "worst_t": rossz_t,
+            "points": [[t, round(f, 3)] for t, f in ertekes]}

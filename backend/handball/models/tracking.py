@@ -169,6 +169,12 @@ class MatchMeta:
     # svenkelés alatt. None = régi mentés vagy kalibráció nélkül.
     court_homography: Optional[list] = None
     pan_keyframes: Optional[list] = None
+    # KALIBRÁCIÓ-ILLESZKEDÉS a feldolgozás alatt mérve (calib_overlay
+    # .line_fit_score a kulcs-kockákon): {"mean_fit", "min_fit",
+    # "worst_t", "points"} — a minőség-jelentés ebből mondja ki, ha a
+    # kalibráció a meccs közben elcsúszik. None = régi mentés vagy
+    # kalibráció nélkül.
+    calib_fit: Optional[dict] = None
     # KÉZI esemény-javítások: amit az edző a felismerésen kijavít.
     # Elemenként {"op": "add"|"remove"|"set_type", "t": kocka,
     # "type": "goal"|"shot", "team": "home"|"away"}. A lövés-felismerés

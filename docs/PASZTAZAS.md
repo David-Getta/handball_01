@@ -85,6 +85,21 @@ a valódira kell ülnie**: ha az elején ül, de a közepén nem, a
 pásztázás-követés csúszott el (kevés horgony — nézd a `pan_anchor_pct`
 értékét); ha már a kalibrált kockán sem ül, a 4 sarok rossz.
 
+### Illeszkedés számokban
+
+Ugyanezt a motor géppel is méri (`line_fit_score`): a rajzolt vonalak
+mentén mintát vesz a kép él-erősségéből (Sobel, ±3 px sáv), és a kép
+egészének él-alapszintjéhez méri — 0..1, ahol 1 = a vonal alatt
+mindenhol él van, 0 = csak a padló. Két helyen jelenik meg:
+
+- **feldolgozás alatt** (2 mp-enként, a kulcs-kockákon): az eredmény a
+  meccs mellé kerül (`calib_fit`: átlag, minimum, a leggyengébb kocka
+  ideje), és a minőség-jelentés kimondja, ha a minimum `CALIB_FIT_WARN`
+  (0,3) alá esik — a leggyengébb kocka idejével, mert az átlag elrejtené
+  a meccs közepén elcsúszó követést;
+- **kérésre** (`GET /matches/{id}/calib-fit?n=8`): nyolc egyenletesen
+  elosztott kockán újraméri, a "Kalibráció ellenőrzése" ablak mutatja.
+
 ## Tippek a pontos kalibrációhoz
 
 - A 4 sarkot ahhoz a kockához vedd fel, amelyiktől a feldolgozás indul —

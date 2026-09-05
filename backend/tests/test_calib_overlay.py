@@ -231,3 +231,36 @@ def test_a_calib_fit_vegpont_kapuorei(tmp_path):
     assert r.status_code == 400 and "kalibráció-geometria" in r.json()["detail"]
     r = c.get("/matches/geo/calib-fit?n=4")
     assert r.status_code == 400 and "videó" in r.json()["detail"]
+
+
+def test_az_illeszkedes_osszegzese_es_a_minoseg_jelzes():
+    """A feldolgozás alatt mért pontokból a meta-összegzés, és a
+    minőség-jelentés a LEGGYENGÉBB kockából szól (az átlag elrejtené a
+    meccs közepén elcsúszó követést) — teendővel."""
+    from handball.models.tracking import Frame, Match, MatchMeta
+    from handball.pipeline.calib_overlay import fit_summary
+    from handball.pipeline.quality import (CALIB_FIT_WARN,
+                                           compute_quality_report)
+
+    assert fit_summary([]) is None
+    assert fit_summary([(0, None)]) is None
+    o = fit_summary([(0, 0.8), (16, None), (32, 0.2), (48, 0.7)])
+    assert o["min_fit"] == 0.2 and o["worst_t"] == 32
+    assert abs(o["mean_fit"] - 0.567) < 0.001
+    assert CALIB_FIT_WARN > 0.2
+
+    def _meccs(cf):
+        meta = MatchMeta(match_id="cf", home_team="A", away_team="B",
+                         fps=10.0, calib_fit=cf)
+        return Match(meta, [Frame(t=i, players=[]) for i in range(100)])
+
+    q = compute_quality_report(_meccs(o))
+    talalat = [w for w in q["warnings"]
+               if "pályavonal nem ül a kép valódi vonalain" in w]
+    assert talalat and "0:03" in talalat[0], q["warnings"]
+    assert q["next_action"] and "Kalibráció ellenőrzését" in q["next_action"]
+    # Jó illeszkedésnél és régi mentésen (None) csend.
+    jo = fit_summary([(0, 0.8), (32, 0.6)])
+    for cf in (jo, None):
+        q2 = compute_quality_report(_meccs(cf))
+        assert not [w for w in q2["warnings"] if "pályavonal" in w]

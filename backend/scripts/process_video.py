@@ -413,7 +413,8 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   pan=False, jersey_voter=None, ocr_every=5,
                   ball_recover=True, stop_check=None,
                   raw_out=None, colors_out=None, on_note=None,
-                  pan_stats_out=None, anchor_frames=None):
+                  pan_stats_out=None, anchor_frames=None,
+                  fit_h0=None, fit_every=16):
     import os
     # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
     # hiba helyett. A torch importja ELŐTT kell beállítani.
@@ -474,6 +475,11 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     # A kalibrált kockák video-indexei növekvő sorban — ezekből lesz
     # kötelező horgony, amint a feldolgozás eléri őket.
     horgony_var = sorted(int(f) for f in (anchor_frames or []))
+    # Kalibráció-illeszkedés a feldolgozás ALATT: fit_every kockánként a
+    # visszarajzolt pályavonalak mentén megmérjük, ülnek-e a kép valódi
+    # vonalain (calib_overlay.line_fit_score) — a minőség-jelentés ebből
+    # mondja ki, ha a kalibráció a meccs közben elcsúszik.
+    fit_pontok: list = []
     # Labda-visszaszerzés: elveszett labdánál a várható helye körüli KIS
     # kivágásban keresünk újra — ott a labda relatíve nagy, jobb az esély.
     reacquirer = None
@@ -632,6 +638,16 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                 kalibralt = True
             panH = pan_tracker.update(gray, exclude=mozgo,
                                       force_anchor=kalibralt)
+            if fit_h0 is not None and (kept - 1) % max(1, fit_every) == 0:
+                try:
+                    from handball.pipeline.calib_overlay import (
+                        line_fit_score, overlay_pixels)
+                    H_, W_ = gray.shape[:2]
+                    fit = line_fit_score(
+                        gray, overlay_pixels(fit_h0, panH, W_, H_))
+                    fit_pontok.append((kept - 1, fit.get("fit")))
+                except Exception:
+                    pass  # a mérés hibája nem érinti a feldolgozást
         persons, best_ball = [], None
         if r.boxes is not None:
             for b in r.boxes:
@@ -712,6 +728,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
         print(pan_tracker.summary())
         if pan_stats_out is not None:  # a hívó a meta-ba teszi (minőség)
             pan_stats_out.update(pan_tracker.stats)
+            pan_stats_out["fit_points"] = fit_pontok
     # A termelő-szál elengedése: ha még él (korai break / plafon),
     # jelezzük, hogy nincs több fogyasztó, és felébresztjük.
     feed.abandon()
@@ -1228,6 +1245,24 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
 
     stalled = False
     pan_stats: dict = {}
+    # KALIBRÁCIÓ-ILLESZKEDÉS a feldolgozás alatt: az elsődleges kalibráció
+    # homográfiája már itt kiszámolható (a finalize ugyanezt számolja), a
+    # mérés a kulcs-kockákon (PAN_KEYFRAME_S) fut — a minőség-jelentés
+    # ebből mondja ki, ha a vonal valahol nem ül a valódin.
+    _fit_h0 = None
+    _fit_every = 16
+    if calib_list:
+        try:
+            from handball.pipeline._homography import homography_from_points
+            from handball.pipeline.calib_overlay import PAN_KEYFRAME_S
+            _c0 = calib_list[0]
+            _fit_h0 = homography_from_points(
+                [tuple(p) for p in _c0["corners"]],
+                _calib_court_points(_c0.get("region", "full"),
+                                    bool(_c0.get("rotate"))))
+            _fit_every = max(1, int(round(PAN_KEYFRAME_S * fps / max(1, stride))))
+        except Exception:
+            _fit_h0 = None  # mérés nélkül is fut a feldolgozás
     if weights:
         # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).
         stalled = bool(_process_yolo(
@@ -1236,7 +1271,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             on_frame=on_frame, on_note=on_note, pan=bool(calib_list),
             jersey_voter=jersey_voter, stop_check=stop_check,
             raw_out=raw, colors_out=all_colors, pan_stats_out=pan_stats,
-            anchor_frames={int(c.get("frame", start)) for c in calib_list}))
+            anchor_frames={int(c.get("frame", start)) for c in calib_list},
+            fit_h0=_fit_h0, fit_every=_fit_every))
     else:
         _process_hog(video_path, stride, max_frames, stop_check=stop_check,
                      raw_out=raw, colors_out=all_colors, on_frame=on_frame,
@@ -1255,6 +1291,10 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     if pan_stats.get("frames"):
         match.meta.pan_anchor_pct = round(
             100.0 * pan_stats.get("anchored", 0) / pan_stats["frames"], 1)
+    # A feldolgozás alatt mért kalibráció-illeszkedés összegzése a meta-ba.
+    if pan_stats.get("fit_points"):
+        from handball.pipeline.calib_overlay import fit_summary
+        match.meta.calib_fit = fit_summary(pan_stats["fit_points"])
 
     if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
         with open(out_path, "w", encoding="utf-8") as f:
