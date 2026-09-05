@@ -191,28 +191,52 @@ def edge_map(gray):
     return sav, float(sav.mean())
 
 
-def fit_on_edge_map(sav, alap: float, polylines: list) -> dict:
-    """Illeszkedés egy kész él-térképen (lásd line_fit_score)."""
-    h, w = sav.shape[:2]
-    ertekek = []
+def sample_points(polylines: list):
+    """A vonalak menti mintapontok (Nx2 float32, px) — EGYSZER számoljuk,
+    az eltolás-rács csak eltolja őket (numpy, nem Python-ciklus: egy
+    4K-s kockán ~7000 pont, a finomítás ~130 jelöltet próbál)."""
+    import numpy as np
+    xs, ys = [], []
     for vonal in polylines:
         for (x1, y1), (x2, y2) in zip(vonal, vonal[1:]):
             hossz = math.hypot(x2 - x1, y2 - y1)
             n = max(1, int(hossz / FIT_STEP_PX))
-            for i in range(n + 1):
-                a = i / n
-                xi = int(round(x1 + (x2 - x1) * a))
-                yi = int(round(y1 + (y2 - y1) * a))
-                if 0 <= xi < w and 0 <= yi < h:
-                    ertekek.append(float(sav[yi, xi]))
-    if len(ertekek) < 20:
+            a = np.linspace(0.0, 1.0, n + 1)
+            xs.append(x1 + (x2 - x1) * a)
+            ys.append(y1 + (y2 - y1) * a)
+    if not xs:
+        return np.zeros((0, 2), np.float32)
+    return np.stack([np.concatenate(xs), np.concatenate(ys)],
+                    axis=1).astype(np.float32)
+
+
+def fit_on_points(sav, alap: float, pts, dx: float = 0.0,
+                  dy: float = 0.0) -> dict:
+    """Illeszkedés a kész él-térképen a (dx, dy)-vel eltolt mintapontokra
+    (lásd line_fit_score)."""
+    import numpy as np
+    h, w = sav.shape[:2]
+    if len(pts) == 0:
         return {"fit": None, "on_line": None, "baseline": round(alap, 3),
-                "samples": len(ertekek)}
-    vonalon = float(sum(ertekek) / len(ertekek))
+                "samples": 0}
+    xi = np.rint(pts[:, 0] + dx).astype(np.int64)
+    yi = np.rint(pts[:, 1] + dy).astype(np.int64)
+    bent = (xi >= 0) & (xi < w) & (yi >= 0) & (yi < h)
+    n = int(bent.sum())
+    if n < 20:
+        return {"fit": None, "on_line": None, "baseline": round(alap, 3),
+                "samples": n}
+    vonalon = float(sav[yi[bent], xi[bent]].mean())
     fit = (vonalon - alap) / (1.0 - alap) if alap < 1.0 else 0.0
     return {"fit": round(max(0.0, min(1.0, fit)), 3),
             "on_line": round(vonalon, 3), "baseline": round(alap, 3),
-            "samples": len(ertekek)}
+            "samples": n}
+
+
+def fit_on_edge_map(sav, alap: float, polylines: list) -> dict:
+    """Illeszkedés egy kész él-térképen (lásd line_fit_score)."""
+    return fit_on_points(sav, alap, sample_points(polylines))
+
 
 
 def line_fit_score(gray, polylines: list) -> dict:
@@ -274,15 +298,16 @@ def refine_shift(sav, alap: float, court_homography: list,
     +dx-szel odébb rajzolt vonal = a kocka pixeleit −dx-szel toljuk az
     alap-kocka felé).
     """
-    alap_vonalak = overlay_pixels(court_homography, g_at_t, width, height)
-    fit0 = fit_on_edge_map(sav, alap, alap_vonalak).get("fit")
+    pts = sample_points(
+        overlay_pixels(court_homography, g_at_t, width, height))
+    fit0 = fit_on_points(sav, alap, pts).get("fit")
     if fit0 is None:
         return {"dx": 0.0, "dy": 0.0, "fit": None, "fit0": None}
     legjobb = (fit0, 0.0, 0.0)
 
     def _probal(dx, dy):
         nonlocal legjobb
-        f = fit_on_edge_map(sav, alap, _eltolt(alap_vonalak, dx, dy)).get("fit")
+        f = fit_on_points(sav, alap, pts, dx, dy).get("fit")
         if f is not None and f > legjobb[0]:
             legjobb = (f, dx, dy)
 
@@ -291,12 +316,33 @@ def refine_shift(sav, alap: float, court_homography: list,
         for dy in range(-r, r + 1, REFINE_COARSE_PX):
             if dx or dy:
                 _probal(float(dx), float(dy))
+    # FINOM lépés: a kitágított sávon egy 3-4 px-es plató minden pontja
+    # "tökéletes" — a valódi vonalhoz ÉLESEBB térképen (a sáv
+    # visszaszűkítve, ±1 px) keressük a plató közepét.
+    import cv2
+    import numpy as np
+    k = 2 * FIT_BAND_PX - 1
+    eles = cv2.erode(sav, np.ones((k, k), np.uint8))
+    eles_alap = float(eles.mean())
     _f, cx, cy = legjobb
+    legjobb = (fit_on_points(eles, eles_alap, pts, cx, cy).get("fit") or 0.0,
+               cx, cy)
+
+    def _probal_eles(dx, dy):
+        nonlocal legjobb
+        f = fit_on_points(eles, eles_alap, pts, dx, dy).get("fit")
+        if f is not None and f > legjobb[0]:
+            legjobb = (f, dx, dy)
+
     for dx in range(-REFINE_COARSE_PX, REFINE_COARSE_PX + 1, REFINE_FINE_PX):
         for dy in range(-REFINE_COARSE_PX, REFINE_COARSE_PX + 1,
                         REFINE_FINE_PX):
             if dx or dy:
-                _probal(cx + dx, cy + dy)
+                _probal_eles(cx + dx, cy + dy)
+    # A visszaadott fit a kitágított sávon mért (a hívó küszöbei ahhoz
+    # vannak kalibrálva); az eltolás az éles térképen talált.
+    _fe, fx, fy = legjobb
+    legjobb = (fit_on_points(sav, alap, pts, fx, fy).get("fit") or 0.0, fx, fy)
     f, dx, dy = legjobb
     return {"dx": dx, "dy": dy, "fit": round(f, 3), "fit0": fit0}
 

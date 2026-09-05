@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.99 óta)
 
+- **Az önkorrekció gyors és pontos** (feldolgozás): a vonal menti
+  mintavétel numpy-ban megy (egy 4K-s kockán ~7000 pont, ~130 jelölt
+  egy másodperc alatt), és a finom lépés élesebb él-térképen keresi a
+  plató közepét — a talált eltolás ±3 px-en belül a valódi.
+
 - **Önkorrekció a pályavonalak alapján** (feldolgozás): ha egy
   kulcs-kockán a visszarajzolt pályavonal nem ül a kép valódi vonalain
   (illeszkedés 0,35 alatt), a motor ±24 px-es eltolás-rácson megkeresi,

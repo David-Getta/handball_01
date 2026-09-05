@@ -299,3 +299,19 @@ def test_az_onkorrekcio_jo_helyen_nem_mozdit():
     sav, alap = edge_map(kep)
     r = refine_shift(sav, alap, h0, None, 480, 240)
     assert abs(r["dx"]) <= 2.0 and abs(r["dy"]) <= 2.0, r
+
+
+def test_a_finomitas_gyors_nagy_kepen():
+    """A finomítás ~130 jelöltet próbál; 1920x1080-on is bőven egy
+    másodperc alatt kell maradnia (a feldolgozás alatt fut, 2 mp-enként)."""
+    import time
+    from handball.pipeline.calib_overlay import edge_map, refine_shift
+
+    h0 = [[1.0 / 40.0, 0.0, 0.0], [0.0, 1.0 / 40.0, 0.0], [0.0, 0.0, 1.0]]
+    kep = _vonalas_kep(h0, [[1.0, 0.0, -10.0], [0.0, 1.0, 4.0],
+                            [0.0, 0.0, 1.0]], w=1920, h=1080)
+    sav, alap = edge_map(kep)
+    t0 = time.perf_counter()
+    r = refine_shift(sav, alap, h0, None, 1920, 1080)
+    assert time.perf_counter() - t0 < 1.5
+    assert abs(r["dx"] - 10.0) <= 3.0 and abs(r["dy"] + 4.0) <= 3.0, r
