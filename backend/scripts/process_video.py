@@ -652,7 +652,12 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                     # ÖNKORREKCIÓ: ha a rajz nem ül a valódi vonalakon, a
                     # pálya saját vonalai mondják meg, hova kell — a
                     # jobb G-t a követő átveszi, és innen folytatja.
-                    if f is not None and f < FIT_REFINE_BELOW:
+                    # Horgonyzott kockához nem nyúlunk: az abszolút mérés
+                    # (sok belső egyezés) erősebb, mint egy él-rács; a
+                    # korrekció a lánccal vitt / tartott kockáknak szól.
+                    if (f is not None and f < FIT_REFINE_BELOW
+                            and getattr(pan_tracker, "last_mode", "")
+                            != "anchor"):
                         r_ = refine_shift(sav, alap, fit_h0, panH, W_, H_)
                         if (r_["fit"] is not None
                                 and r_["fit"] >= f + FIT_REFINE_GAIN):

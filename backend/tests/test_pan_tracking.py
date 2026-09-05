@@ -245,3 +245,25 @@ def test_a_kulso_korrekcio_atveszi_a_teljes_felbontasu_g_t():
     # A következő (azonos) kocka nem mozdít: a G marad ~ a korrigált.
     G = tr.update(img)
     assert abs(G[0][2] + 40.0) < 1.0 and abs(G[1][2] - 12.0) < 1.0
+
+
+def test_az_utolso_becsles_forrasa_kovetheto():
+    """last_mode: az alap-kocka horgony; a köztes kockát a lánc viszi;
+    az ötödiknél (ANCHOR_EVERY) a horgony — az önkorrekció ez alapján
+    dönti el, hozzányúlhat-e."""
+    img = _textured_big()
+    tr = PanTracker(anchor=True)
+    tr.update(img)
+    assert tr.last_mode == "anchor"
+    tr.update(_shift(img, 6))
+    assert tr.last_mode == "chain"
+    for dx in (12, 18, 24):
+        tr.update(_shift(img, dx))
+    tr.update(_shift(img, 30))  # az 5. feldolgozott lépés: horgony
+    assert tr.last_mode == "anchor"
+    import numpy as np
+    # A lánc az ELŐZŐ képen keres sarkokat: az első üres kocka még
+    # "chain" lehet (a textúrás előzőről követ), a második már nem.
+    tr.update(np.zeros_like(img))
+    tr.update(np.zeros_like(img))
+    assert tr.last_mode == "held"

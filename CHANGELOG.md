@@ -11,7 +11,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   hol ülne a legjobban, és ha legalább 0,15-tel javul, ráigazítja a
   kamera-mátrixot — a követés innen folytatja. A pálya saját vonalai a
   legmegbízhatóbb "távpontok": nem mozognak, és pontosan tudjuk, hol
-  kell lenniük. A feldolgozás-napló mondja, hány kockán korrigált.
+  kell lenniük. Horgonyzott kockához nem nyúl (az abszolút mérés
+  erősebb), csak a lánccal vitt vagy tartott kockákat igazítja. A
+  feldolgozás-napló mondja, hány kockán korrigált.
 
 - **Egy kattintás a kalibráció ellenőrzéséhez a minőség-panelről**
   (meccs-nézet): ha a jelentés azt mondja, a visszarajzolt pályavonal

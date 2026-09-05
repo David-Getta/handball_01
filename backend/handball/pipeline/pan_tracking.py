@@ -79,6 +79,10 @@ class PanTracker:
 
     def __init__(self, anchor: bool = True):
         self._s = 1.0  # teljes → munkakép skála (1 = nincs kicsinyítés)
+        # Az UTOLSÓ kocka becslésének forrása: "anchor" (a kalibrált
+        # képhez mérve — abszolút), "chain" (lánc), "held" (nincs becslés).
+        # A pályavonal-önkorrekció csak a nem-horgonyzott kockákhoz nyúl.
+        self.last_mode = "none"
         self._prev_gray = None
         # G: aktuális → alap (3x3, numpy) — induláskor egység (nincs elmozdulás).
         self._G = None
@@ -242,6 +246,7 @@ class PanTracker:
                     self.stats["anchors"] = 1
             self._prev_gray = gray
             self._n += 1
+            self.last_mode = "anchor"  # az alap-kocka maga a horgony
             return self._kimenet()
 
         # 1) LÁNC: sarokpontok az ELŐZŐ képen, követés az aktuálisra,
@@ -270,11 +275,14 @@ class PanTracker:
         if self._anchor and self._anchors and (
                 self._n % self.ANCHOR_EVERY == 0 or not lanc_ok):
             horgony_ok = self._try_anchor(gray, mask)
-        if not horgony_ok:
-            if lanc_ok:
-                self.stats["chain"] += 1
-            else:
-                self.stats["held"] += 1  # nincs becslés: az előző marad
+        if horgony_ok:
+            self.last_mode = "anchor"
+        elif lanc_ok:
+            self.stats["chain"] += 1
+            self.last_mode = "chain"
+        else:
+            self.stats["held"] += 1  # nincs becslés: az előző marad
+            self.last_mode = "held"
         # 3) KALIBRÁLT kocka: kötelező horgony (a legjobb, ha előbb a
         #    horgonyhoz mértük — a G ilyenkor abszolút; ha nem sikerült, a
         #    lánc szerinti G-vel is jobb, mint horgony nélkül).
