@@ -2755,6 +2755,18 @@ class _MatchScreenState extends State<MatchScreen> {
               icon: const Icon(Icons.content_cut, size: 16),
               label: const Text("Levágás a javaslat szerint"),
             ),
+          // ELCSÚSZÓ KALIBRÁCIÓ: a jelentés megmérte, hogy a visszarajzolt
+          // vonal valahol nem ül a valódin — innen egy kattintás a képekig.
+          if (warnings.any((w) => "$w".contains("pályavonal nem ül")) &&
+              !widget.matchId.startsWith("sim-"))
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _calibCheckDialog();
+              },
+              icon: const Icon(Icons.grid_on, size: 16),
+              label: const Text("Kalibráció ellenőrzése"),
+            ),
           // DIAGNOSZTIKA a fejlesztőnek: a képernyőkép lassú és
           // veszteséges — ez egy gép által olvasható JSON-t ment
           // (minőség + eseményszámok + beállítások, videó nélkül),

@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.99 óta)
 
+- **Egy kattintás a kalibráció ellenőrzéséhez a minőség-panelről**
+  (meccs-nézet): ha a jelentés azt mondja, a visszarajzolt pályavonal
+  valahol nem ül a valódin, a panel alján "Kalibráció ellenőrzése" gomb
+  nyitja a képeket — nem kell az eszköztárban keresni.
+
 - **A diagnosztika-JSON a kalibráció-illeszkedést is viszi**
   (diagnosztika): a "calib_fit" mező (átlag, minimum, a leggyengébb kocka
   ideje) — a fejlesztő így a képernyőkép nélkül látja, tartotta-e a

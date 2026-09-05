@@ -2817,3 +2817,35 @@ def test_a_minoseg_panel_a_vagas_javaslatra_gombot_ad():
     minoseg = (gyoker / "backend" / "handball" / "pipeline" / "quality.py"
                ).read_text(encoding="utf-8")
     assert "nem-játéknak látszik" in minoseg
+
+
+def test_a_minoseg_panel_kalibracio_gombja_a_motor_szovegere_illik():
+    """A "pályavonal nem ül" figyelmeztetéshez a minőség-panelen közvetlen
+    gomb nyitja a Kalibráció ellenőrzését. A kliens-részletnek a motor
+    figyelmeztetés-szövegére kell illenie — különben a gomb sosem
+    jelenne meg, és a teszt zöld maradna."""
+    from pathlib import Path as _P
+    gyoker = _P(__file__).resolve().parent.parent
+    meccs = (gyoker.parent / "client" / "lib" / "ui"
+             / "match_screen.dart").read_text(encoding="utf-8")
+    quality = (gyoker / "handball" / "pipeline" / "quality.py").read_text(
+        encoding="utf-8")
+    assert 'contains("pályavonal nem ül")' in meccs
+    assert "pályavonal nem ül a kép valódi vonalain" in quality
+    assert "Kalibráció ellenőrzése" in meccs and "_calibCheckDialog();" in meccs
+
+
+def test_a_kalibracio_gomb_a_motor_figyelmeztetesere_illik():
+    """ŐR: a minőség-panel "Kalibráció ellenőrzése" gombja a motor
+    figyelmeztetésének szövegrészletére vár — ha a motor átfogalmazza,
+    a gomb némán eltűnne. A részletnek a quality.py-ban is ott kell
+    lennie."""
+    gyoker = Path(__file__).resolve().parent.parent
+    meccs = (gyoker.parent / "client" / "lib" / "ui"
+             / "match_screen.dart").read_text(encoding="utf-8")
+    quality = (gyoker / "handball" / "pipeline"
+               / "quality.py").read_text(encoding="utf-8")
+    assert 'contains("pályavonal nem ül")' in meccs
+    assert "pályavonal nem ül" in quality
+    assert '"Kalibráció ellenőrzése"' in meccs
+    assert "_calibCheckDialog();" in meccs
