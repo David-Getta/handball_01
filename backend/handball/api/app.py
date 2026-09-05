@@ -2055,6 +2055,69 @@ def create_app():
         ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
         return Response(content=buf.tobytes(), media_type="image/jpeg")
 
+    @app.get("/matches/{match_id}/calib-fit")
+    def calib_fit(match_id: str, n: int = 8):
+        """KALIBRÁCIÓ-ILLESZKEDÉS számokban: n egyenletesen elosztott
+        kockán megmérjük, mennyire ül a visszarajzolt vonal a kép valódi
+        vonalain (0..1). A szemmel-ellenőrzés géppel: ha az eleje jó, de a
+        közepe gyenge, a pásztázás-követés csúszott el. 400/404 mint a
+        calib-overlay végpontnál."""
+        import cv2
+
+        from ..pipeline.calib_overlay import (keyframe_at, line_fit_score,
+                                              overlay_pixels)
+        from ..video_io import VideoOpenError, open_capture
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        h0 = getattr(match.meta, "court_homography", None)
+        if not h0:
+            raise HTTPException(
+                status_code=400,
+                detail="ehhez a meccshez nincs kalibráció-geometria — "
+                       "régi mentés vagy kalibráció nélküli feldolgozás")
+        vp = match.meta.video_path
+        if not vp or not Path(vp).exists():
+            raise HTTPException(status_code=400,
+                                detail="az eredeti videó nem érhető el "
+                                       "ezen a gépen")
+        if not match.frames:
+            raise HTTPException(status_code=400, detail="nincs kocka")
+        try:
+            cap = open_capture(vp)
+        except VideoOpenError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        n = max(2, min(24, int(n)))
+        utolso = len(match.frames) - 1
+        pontok = []
+        start = int(match.meta.start_frame or 0)
+        stride = max(1, int(match.meta.stride or 1))
+        kf = getattr(match.meta, "pan_keyframes", None)
+        try:
+            for i in range(n):
+                t = match.frames[round(i * utolso / (n - 1))].t
+                cap.set(cv2.CAP_PROP_POS_FRAMES, start + t * stride)
+                ok, img = cap.read()
+                if not ok:
+                    continue
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                H_, W_ = gray.shape[:2]
+                o = line_fit_score(
+                    gray, overlay_pixels(h0, keyframe_at(kf, t), W_, H_))
+                pontok.append({"t": int(t), "fit": o["fit"],
+                               "samples": o["samples"]})
+        finally:
+            cap.release()
+        ertekek = [p["fit"] for p in pontok if p["fit"] is not None]
+        if not ertekek:
+            return {"match_id": match_id, "points": pontok, "mean_fit": None,
+                    "min_fit": None, "worst_t": None}
+        legrosszabb = min((p for p in pontok if p["fit"] is not None),
+                          key=lambda p: p["fit"])
+        return {"match_id": match_id, "points": pontok,
+                "mean_fit": round(sum(ertekek) / len(ertekek), 3),
+                "min_fit": legrosszabb["fit"], "worst_t": legrosszabb["t"]}
+
     @app.post("/matches/{match_id}/trim")
     def trim_match(match_id: str, body: dict):
         """A meccs UTÓLAGOS vágása: a megadott játékidő-ablakon kívüli

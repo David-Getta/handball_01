@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.98 óta)
 
+- **Kalibráció-illeszkedés számokban** (motor + végpont + meccs-nézet):
+  a szemmel-ellenőrzés géppel — a visszarajzolt vonalak mentén a motor
+  megméri, mennyire ül a rajz a kép valódi vonalain (él-erősség a vonal
+  sávjában a kép alapszintjéhez képest, 0..1), nyolc egyenletesen
+  elosztott kockán. A "Kalibráció ellenőrzése" ablak mutatja az átlagot
+  és a leggyengébb kocka idejét: ha az eleje jó, de a közepe gyenge, a
+  pásztázás-követés csúszott el; ha már az elején gyenge, a 4 sarok
+  rossz.
+
 - **A finomhangolás-útmutató az appbeli utat írja le** (docs/FINETUNE.md):
   a három lépés gombokkal — gyűjtés (aktív tanulás), Címkéző, Tanítás
   indítása mérőszámmal és védőhálóval —, a CLI-út tartalékként.

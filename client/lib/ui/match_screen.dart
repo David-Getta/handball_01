@@ -2147,6 +2147,40 @@ class _MatchScreenState extends State<MatchScreen> {
                   "elején, közepén és végén is. Ahol elcsúszik, ott a "
                   "kalibráció vagy a kamera-mozgás követése a hibás.",
                   style: AppText.label.copyWith(fontSize: 12.5)),
+              const SizedBox(height: AppSpacing.sm),
+              // ILLESZKEDÉS SZÁMOKBAN: a szemmel-ellenőrzés géppel — a
+              // motor nyolc kockán méri, mennyire ül a rajz a valódi
+              // vonalakon (0..1), és megmondja, hol a leggyengébb.
+              FutureBuilder<Map<String, dynamic>>(
+                future: _api.fetchCalibFit(widget.matchId),
+                builder: (ctx2, snap) {
+                  if (snap.connectionState != ConnectionState.done) {
+                    return Text("Illeszkedés mérése a videón…",
+                        style: AppText.label.copyWith(
+                            fontSize: 11.5, color: AppColors.textFaint));
+                  }
+                  final r = snap.data;
+                  final atlag = (r?["mean_fit"] as num?)?.toDouble();
+                  if (snap.hasError || r == null || atlag == null) {
+                    return Text(
+                        "Az illeszkedés nem mérhető (régi mentés vagy a "
+                        "videó nem érhető el).",
+                        style: AppText.label.copyWith(
+                            fontSize: 11.5, color: AppColors.textFaint));
+                  }
+                  final min = (r["min_fit"] as num?)?.toDouble() ?? atlag;
+                  final rosszT = (r["worst_t"] as num?)?.toInt();
+                  final jo = atlag >= 0.5 && min >= 0.3;
+                  return Text(
+                      "Illeszkedés: átlag ${(atlag * 100).round()}% · "
+                      "leggyengébb ${(min * 100).round()}%"
+                      "${rosszT != null ? " (${ido(rosszT)}-nál)" : ""}"
+                      "${jo ? " — a kalibráció tartja." : " — ahol gyenge, ott elcsúszott a kalibráció vagy a kamera-követés."}",
+                      style: AppText.label.copyWith(
+                          fontSize: 12,
+                          color: jo ? AppColors.accent : AppColors.gold));
+                },
+              ),
               const SizedBox(height: AppSpacing.md),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -164,3 +164,56 @@ def camera_path_summary(pan_keyframes: Optional[list]) -> Optional[dict]:
     return {"keyframes": len(pan_keyframes),
             "max_shift_px": round(legnagyobb, 1),
             "final_shift_px": round(zaro, 1)}
+
+
+# Vonal-illeszkedés: ennyi px-es sávban keressük az élt a rajzolt vonal
+# körül (a kalibráció és a JPEG-tömörítés miatt a vonal nem hajszálpontos),
+# és ennyi px-enként veszünk mintát a vonal mentén.
+FIT_BAND_PX = 3
+FIT_STEP_PX = 2.0
+
+
+def line_fit_score(gray, polylines: list) -> dict:
+    """MENNYIRE ÜL a rajzolt vonal a kép valódi vonalain — 0..1.
+
+    A kép él-erősségét (Sobel-nagyság, 0..1) a rajzolt vonalak mentén
+    mintavételezzük (FIT_BAND_PX sávban a legerősebb élt véve), és a kép
+    egészének él-alapszintjéhez mérjük: fit = (vonalon − alapszint) /
+    (1 − alapszint). Egy jól ülő vonal alatt él van, a mellécsúszott
+    alatt csak a padló — a különbség számszerű. Kevés mintánál (a vonalak
+    a képen kívül) fit=None.
+
+    Visszatérés: {"fit", "on_line", "baseline", "samples"}.
+    """
+    import cv2
+    import numpy as np
+    g = gray.astype(np.float32)
+    gx = cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3)
+    mag = cv2.magnitude(gx, gy)
+    csucs = float(np.percentile(mag, 99.5)) or 1.0
+    mag = np.clip(mag / csucs, 0.0, 1.0)
+    k = 2 * FIT_BAND_PX + 1
+    sav = cv2.dilate(mag, np.ones((k, k), np.uint8))
+    h, w = gray.shape[:2]
+    ertekek = []
+    for vonal in polylines:
+        for (x1, y1), (x2, y2) in zip(vonal, vonal[1:]):
+            hossz = math.hypot(x2 - x1, y2 - y1)
+            n = max(1, int(hossz / FIT_STEP_PX))
+            for i in range(n + 1):
+                a = i / n
+                x = x1 + (x2 - x1) * a
+                y = y1 + (y2 - y1) * a
+                xi, yi = int(round(x)), int(round(y))
+                if 0 <= xi < w and 0 <= yi < h:
+                    ertekek.append(float(sav[yi, xi]))
+    alap = float(sav.mean())
+    if len(ertekek) < 20:
+        return {"fit": None, "on_line": None, "baseline": round(alap, 3),
+                "samples": len(ertekek)}
+    vonalon = float(sum(ertekek) / len(ertekek))
+    fit = (vonalon - alap) / (1.0 - alap) if alap < 1.0 else 0.0
+    return {"fit": round(max(0.0, min(1.0, fit)), 3),
+            "on_line": round(vonalon, 3), "baseline": round(alap, 3),
+            "samples": len(ertekek)}

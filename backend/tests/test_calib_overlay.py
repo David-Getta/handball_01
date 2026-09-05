@@ -169,3 +169,65 @@ def test_a_kamera_ut_osszegzese():
     o = camera_path_summary(kf)
     assert o["keyframes"] == 3
     assert o["max_shift_px"] == 50.0 and o["final_shift_px"] == 10.0
+
+
+def _vonalas_kep(h0, g, w=480, h=240):
+    """Sötét kép, amire a pálya vonalait FEHÉRREL rárajzoljuk a (h0, g)
+    vetítéssel — ez a "valódi" pálya a videón."""
+    import numpy as np
+    from handball.pipeline.calib_overlay import draw_overlay
+    img = np.full((h, w, 3), 30, np.uint8)
+    draw_overlay(img, overlay_pixels(h0, g, w, h), color=(255, 255, 255),
+                 thickness=2)
+    return img[:, :, 0]
+
+
+def test_a_vonal_illeszkedes_a_jo_helyen_magas_a_melle_csuszottnal_alacsony():
+    from handball.pipeline.calib_overlay import line_fit_score
+
+    h0 = _skala(10.0)  # a 40x20 m-es pálya 400x200 px
+    kep = _vonalas_kep(h0, None)
+    jo = line_fit_score(kep, overlay_pixels(h0, None, 480, 240))
+    assert jo["samples"] >= 20 and jo["fit"] is not None
+    assert jo["fit"] > 0.6, jo
+    # Ugyanaz a kép, de a rajz 25 px-szel odébb: a vonal a padlón fut.
+    g = [[1.0, 0.0, -25.0], [0.0, 1.0, -12.0], [0.0, 0.0, 1.0]]
+    rossz = line_fit_score(kep, overlay_pixels(h0, g, 480, 240))
+    assert rossz["fit"] is not None and rossz["fit"] < jo["fit"] - 0.3, (jo, rossz)
+
+
+def test_a_vonal_illeszkedes_kevés_mintanal_none():
+    import numpy as np
+    from handball.pipeline.calib_overlay import line_fit_score
+
+    kep = np.zeros((50, 50), np.uint8)
+    # A vonalak a képen messze kívül (1 px = 1 m → 40x20 px, de eltolva).
+    g = [[1.0, 0.0, -500.0], [0.0, 1.0, -500.0], [0.0, 0.0, 1.0]]
+    o = line_fit_score(kep, overlay_pixels(_skala(1.0), g, 50, 50))
+    assert o["fit"] is None and o["samples"] < 20
+
+
+def test_a_calib_fit_vegpont_kapuorei(tmp_path):
+    import json
+
+    from handball.models.tracking import Frame, Match, MatchMeta
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    regi = Match(MatchMeta(match_id="regi", home_team="A", away_team="B",
+                           fps=8.0), [Frame(t=0, players=[])])
+    geo = Match(MatchMeta(match_id="geo", home_team="A", away_team="B",
+                          fps=8.0, court_homography=_skala(10.0),
+                          video_path=str(tmp_path / "nincs.mp4")),
+                [Frame(t=0, players=[])])
+    for m in (regi, geo):
+        (d / f"{m.meta.match_id}.json").write_text(
+            json.dumps(m.to_dict()), encoding="utf-8")
+    from handball.api.app import create_app
+    c = TestClient(create_app())
+    assert c.get("/matches/nincs/calib-fit").status_code == 404
+    r = c.get("/matches/regi/calib-fit")
+    assert r.status_code == 400 and "kalibráció-geometria" in r.json()["detail"]
+    r = c.get("/matches/geo/calib-fit?n=4")
+    assert r.status_code == 400 and "videó" in r.json()["detail"]

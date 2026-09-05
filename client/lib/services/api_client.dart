@@ -1385,6 +1385,19 @@ class ApiClient {
   String calibOverlayUrl(String matchId, int t) =>
       "$baseUrl/matches/$matchId/calib-overlay?t=$t";
 
+  /// Kalibráció-illeszkedés számokban (GET /matches/{id}/calib-fit): n
+  /// kockán mennyire ül a rajzolt vonal a valódin (0..1) — a szemmel
+  /// ellenőrzés géppel; a leggyengébb kocka ideje is jön.
+  Future<Map<String, dynamic>> fetchCalibFit(String matchId,
+      {int n = 8}) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/calib-fit?n=$n"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az illeszkedés mérése", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// UTÓLAGOS vágás (POST /matches/{id}/trim): a megadott játékidő-
   /// ablakon kívüli rész eldobása az elemzésből. A tipikus eset a
   /// bennmaradt bemutatás/bemelegítés — a felhasználó tudja, mikor
