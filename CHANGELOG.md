@@ -3,7 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.101 óta)
+## Kiadatlan (a v0.1.102 óta)
+
+## v0.1.102 — kiadva (2026-09-06)
+
+> Kiadás-jegyzet: a 3D figurák végleges alakja — gömbölyű
+> kapszula-test a böngészős 3D/VR-ben, árnyékolt mez-fél és cipő
+> az appbeli 3D pályán.
 
 - **Gömbölyű testű figurák a böngészős 3D/VR-ben** (Böngészős 3D /
   VR): a törzs és a végtagok kapszulák (nem csövek), nyakkal, kissé
