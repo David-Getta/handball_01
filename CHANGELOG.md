@@ -3,7 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.102 óta)
+## Kiadatlan (a v0.1.103 óta)
+
+## v0.1.103 — kiadva (2026-09-06)
+
+> Kiadás-jegyzet: EGYSZERŰ MENÜ az alapértelmezés — a kezdőt hét
+> menüpont fogadja, a többi a "Több funkció" gombbal jön elő; a
+> 3D-ben fa parketta, lelátó és zöld kapus-mez.
 
 - **Egyszerű menü az alapértelmezés** (bal menüsor): az új felhasználót
   eddig húsz menüpont fogadta — ez elriaszt, és a lényeg (tölts fel
