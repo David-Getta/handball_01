@@ -35,7 +35,8 @@ def _compact_data(match: Match) -> dict:
         jatekosok = [
             [1 if p.team == Team.HOME else 0,
              round(p.x, 1), round(p.y, 1),
-             1 if p.source == PositionSource.MEASURED else 0]
+             1 if p.source == PositionSource.MEASURED else 0,
+             1 if getattr(p, "role", None) == "kapus" else 0]
             for p in f.players
         ]
         labda = ([round(f.ball.x, 1), round(f.ball.y, 1)]
@@ -131,11 +132,36 @@ addEventListener("resize", () => {
 
 // Pálya: talaj + vonalak. A pálya-sík a three x/z síkja (y felfelé):
 // pálya (x,y) → three (x, 0, W - y), így a nézet jobbkezes marad.
+// CSARNOK: fa parketta a pályán (a vonalak rajta), sötétebb padló
+// körülötte, és lelátó-tömbök a két hosszoldalon — a bejárás közben
+// ettől lesz "teremben vagyunk" érzet, nem a semmiben lebegő vonalak.
+const csarnokPadlo = new THREE.Mesh(
+  new THREE.PlaneGeometry(H+40, W+40),
+  new THREE.MeshLambertMaterial({color:0x151b24}));
+csarnokPadlo.rotation.x = -Math.PI/2; csarnokPadlo.position.set(H/2, -0.02, W/2);
+szinpad.add(csarnokPadlo);
 const talaj = new THREE.Mesh(
-  new THREE.PlaneGeometry(H+8, W+8),
-  new THREE.MeshBasicMaterial({color:0x101820}));
+  new THREE.PlaneGeometry(H+2, W+2),
+  new THREE.MeshLambertMaterial({color:0x8a5a34}));
 talaj.rotation.x = -Math.PI/2; talaj.position.set(H/2, -0.01, W/2);
 szinpad.add(talaj);
+// Parketta-csíkok: keskeny, váltakozó árnyalatú sávok a hossz mentén.
+for (let i = 0; i < 20; i++){
+  const csik = new THREE.Mesh(new THREE.PlaneGeometry(H+2, (W+2)/20 - 0.02),
+    new THREE.MeshLambertMaterial({color: i % 2 ? 0x8f5e37 : 0x845531}));
+  csik.rotation.x = -Math.PI/2;
+  csik.position.set(H/2, -0.005, -1 + (W+2)/20*(i+0.5));
+  szinpad.add(csik);
+}
+const lelatoAnyag = new THREE.MeshLambertMaterial({color:0x2b3a4a});
+for (const oldal of [-1, 1]){
+  for (let lepcso = 0; lepcso < 6; lepcso++){
+    const tomb = new THREE.Mesh(new THREE.BoxGeometry(H+16, 0.5, 1.6), lelatoAnyag);
+    const z = oldal < 0 ? -4 - lepcso*1.6 : W + 4 + lepcso*1.6;
+    tomb.position.set(H/2, 0.25 + lepcso*0.5, z);
+    szinpad.add(tomb);
+  }
+}
 const vonalSzin = new THREE.LineBasicMaterial({color:0x9fb6c6});
 function vonal(pontok){
   const g = new THREE.BufferGeometry().setFromPoints(
@@ -183,6 +209,8 @@ const vendegNadrag = new THREE.MeshLambertMaterial({color:0x6b2d25});
 const borAnyag = new THREE.MeshLambertMaterial({color:0xe3b98f});
 const hajAnyag = new THREE.MeshLambertMaterial({color:0x3a2a1e});
 const zokniAnyag = new THREE.MeshLambertMaterial({color:0xeeeeee});
+const kapusAnyag = new THREE.MeshLambertMaterial({color:0x3fbf6f});
+const kapusNadrag = new THREE.MeshLambertMaterial({color:0x1f5f38});
 szinpad.add(new THREE.HemisphereLight(0xdfe7ef, 0x101820, 1.1));
 const napfeny = new THREE.DirectionalLight(0xffffff, 0.6);
 napfeny.position.set(10, 30, 10); szinpad.add(napfeny);
@@ -226,11 +254,14 @@ function babu(){
   babuk.push(cs);
   return cs;
 }
-function szinez(cs, hazai){
+function szinez(cs, hazai, kapus){
+  // A kapus a valóságban is MÁS mezben játszik (a szabály előírja): a
+  // 3D-ben zöld mez + hosszú (a nadrágig érő) nadrág jelzi.
   const u = cs.userData;
-  u.mez.material = hazai ? hazaiAnyag : vendegAnyag;
-  u.nadrag.material = hazai ? hazaiNadrag : vendegNadrag;
-  for (const f of u.felkarok) f.children[0].material = hazai ? hazaiAnyag : vendegAnyag;
+  const felso = kapus ? kapusAnyag : (hazai ? hazaiAnyag : vendegAnyag);
+  u.mez.material = felso;
+  u.nadrag.material = kapus ? kapusNadrag : (hazai ? hazaiNadrag : vendegNadrag);
+  for (const f of u.felkarok) f.children[0].material = felso;
 }
 function lendit(cs, seb, t, k){
   // Lépés: a sebességgel nő az ütem és az amplitúdó; a két oldal
@@ -315,7 +346,7 @@ function rajzol(t){
           q = (b[1] && b[1][k] && b[1][k][0] === p[0]) ? b[1][k] : p;
     const x = p[1] + (q[1]-p[1])*ar, y = p[2] + (q[2]-p[2])*ar;
     cs.position.set(x, 0, W - y);
-    szinez(cs, !!p[0]);
+    szinez(cs, !!p[0], !!p[4]);
     // Irány és sebesség a két kocka elmozdulásából (követés-ugrás
     // kiszűrve); álló játékos tartja az előző irányát.
     const dx = q[1]-p[1], dy = q[2]-p[2], dt = Math.max(0.05, b[0]-a[0]);

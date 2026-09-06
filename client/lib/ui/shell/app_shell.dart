@@ -82,6 +82,31 @@ const List<(String, List<(NavId, IconData, String)>)> kNavGroups = [
   ]),
 ];
 
+/// EGYSZERŰ MÓD: a mindennapi munkához kell menüpontok. Az első
+/// indításnál ez az alapértelmezés — egy kezdőt húsz ismeretlen
+/// menüpont elriaszt, és a lényeg (tölts fel meccset, nézd meg,
+/// készíts edzéstervet) elvész köztük. A többi egy kattintással
+/// előjön (a menü alján), és a választás megmarad.
+const Set<NavId> kSimpleNav = {
+  NavId.dashboard, NavId.upload, NavId.jobs,
+  NavId.matches, NavId.scouting, NavId.training, NavId.notes,
+};
+
+/// A menü a MOSTANI mód szerint: egyszerű módban csak a kSimpleNav
+/// elemei, teljes módban minden. Az üres csoportok kimaradnak.
+List<(String, List<(NavId, IconData, String)>)> navGroups() {
+  if (!SessionStore.simpleMode) return kNavGroups;
+  final ki = <(String, List<(NavId, IconData, String)>)>[];
+  for (final (nev, csoport) in kNavGroups) {
+    final szurt = [
+      for (final elem in csoport)
+        if (kSimpleNav.contains(elem.$1)) elem
+    ];
+    if (szurt.isNotEmpty) ki.add((nev, szurt));
+  }
+  return ki;
+}
+
 /// Átnavigál a kiválasztott képernyőre. Minden elem ugyanúgy működik
 /// (csere-navigáció) — nincs "eldugott" képernyő és nincs visszagomb-káosz.
 void navTo(BuildContext context, NavId id) {
@@ -214,7 +239,7 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Gyors navigáció: Cmd/Ctrl + 1..N a menü sorrendjében.
-    final items = [for (final (_, group) in kNavGroups) ...group];
+    final items = [for (final (_, group) in navGroups()) ...group];
     const digits = [
       LogicalKeyboardKey.digit1, LogicalKeyboardKey.digit2,
       LogicalKeyboardKey.digit3, LogicalKeyboardKey.digit4,
@@ -676,7 +701,7 @@ class _SideNavState extends State<_SideNav> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (final (groupName, group) in kNavGroups) ...[
+                    for (final (groupName, group) in navGroups()) ...[
                       _sectionLabel(groupName),
                       for (final (id, icon, label) in group)
                         _NavItem(
@@ -694,6 +719,34 @@ class _SideNavState extends State<_SideNav> {
                         ),
                       const SizedBox(height: AppSpacing.lg),
                     ],
+                    // A TÖBBI funkció egy kattintással: egyszerű módban a
+                    // menü rövid (a kezdő ne ijedjen meg húsz ismeretlen
+                    // ponttól), de semmi nincs elrejtve véglegesen — és a
+                    // választás megmarad a következő indításig.
+                    if (_open)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: TextButton.icon(
+                          onPressed: () async {
+                            await SessionStore.setSimpleMode(
+                                !SessionStore.simpleMode);
+                            if (mounted) setState(() {});
+                          },
+                          style: TextButton.styleFrom(
+                              foregroundColor: AppColors.textFaint,
+                              alignment: Alignment.centerLeft),
+                          icon: Icon(
+                              SessionStore.simpleMode
+                                  ? Icons.unfold_more
+                                  : Icons.unfold_less,
+                              size: 16),
+                          label: Text(
+                              SessionStore.simpleMode
+                                  ? "Több funkció"
+                                  : "Egyszerű menü",
+                              style: AppText.label.copyWith(fontSize: 11.5)),
+                        ),
+                      ),
                   ],
                 ),
               ),

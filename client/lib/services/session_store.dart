@@ -27,6 +27,14 @@ class SessionStore {
   /// A fiók-menüből és a belépő képernyőről kapcsolható.
   static bool devMode = false;
 
+  /// EGYSZERŰ MÓD: a menü csak a mindennapi munkához kell részeket
+  /// mutatja (kezdőlap, új elemzés, feldolgozások, meccs-elemző,
+  /// felderítés, edzésterv, jegyzetek). ALAPÉRTELMEZÉSBEN BE van
+  /// kapcsolva: az új felhasználót ne ijessze meg húsz ismeretlen
+  /// menüpont; a többi egy kattintással előhozható (és a választás
+  /// megmarad).
+  static bool simpleMode = true;
+
   /// Vendég-munkamenet fut-e (fiók nélküli belépés). Ha az app úgy zárul
   /// be, hogy ez igaz, a következő indulás — fejlesztői mód híján —
   /// eltakarítja a vendég-munkamenetben készült meccseket.
@@ -66,6 +74,9 @@ class SessionStore {
       final v = data["offline_terms_version"];
       offlineTermsVersion = v is int ? v : 0;
       devMode = data["dev_mode"] == true;
+      // A hiányzó kulcs ÚJ felhasználót jelent: nála az egyszerű mód a
+      // kiindulás (a régi felhasználó választása viszont megmarad).
+      simpleMode = data["simple_mode"] != false;
       guestMode = data["guest_mode"] == true;
       final gb = data["guest_baseline"];
       guestBaseline = gb is List
@@ -75,6 +86,7 @@ class SessionStore {
       token = null;
       offlineTermsVersion = 0;
       devMode = false;
+      simpleMode = true;
       guestMode = false;
       guestBaseline = [];
     }
@@ -90,6 +102,7 @@ class SessionStore {
         "token": token,
         "offline_terms_version": offlineTermsVersion,
         "dev_mode": devMode,
+        "simple_mode": simpleMode,
         "guest_mode": guestMode,
         "guest_baseline": guestBaseline,
       }));
@@ -111,6 +124,12 @@ class SessionStore {
   /// Kilépés: a kulcs törlése (az offline elfogadás megmarad).
   static Future<void> clear() async {
     token = null;
+    await save();
+  }
+
+  /// Egyszerű mód kapcsolása (rövid vagy teljes menü).
+  static Future<void> setSimpleMode(bool value) async {
+    simpleMode = value;
     await save();
   }
 

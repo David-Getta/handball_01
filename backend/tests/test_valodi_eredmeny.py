@@ -458,3 +458,22 @@ def test_a_view3d_emberszeru_figurakat_rajzol():
                 "hajAnyag", "zokniAnyag", "HemisphereLight",
                 "cs.rotation.y = Math.atan2"):
         assert jel in oldal, jel
+
+
+def test_a_view3d_csarnokot_es_kapust_is_visz():
+    """A böngészős 3D: fa parketta + lelátó (csarnok-érzet), és a
+    kapus külön mezben — a tömör adat ötödik mezője a kapus-jelölés."""
+    from handball.models.tracking import PositionSource
+    from handball.pipeline.view3d_html import _compact_data, view3d_html
+
+    m = _meccs("v3h")
+    for f in m.frames:
+        f.players[0].role = "kapus"
+    adat = _compact_data(m)
+    elso = adat["frames"][0][1]
+    assert elso[0][4] == 1 and elso[1][4] == 0, elso
+    assert m.frames[0].players[0].source == PositionSource.MEASURED
+    oldal = view3d_html(m)
+    for jel in ("kapusAnyag", "kapusNadrag", "szinez(cs, !!p[0], !!p[4])",
+                "csarnokPadlo", "lelatoAnyag", "Parketta-csíkok"):
+        assert jel in oldal, jel

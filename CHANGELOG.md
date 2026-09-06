@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.102 óta)
 
+- **Egyszerű menü az alapértelmezés** (bal menüsor): az új felhasználót
+  eddig húsz menüpont fogadta — ez elriaszt, és a lényeg (tölts fel
+  meccset, nézd meg, készíts edzéstervet) elveszett köztük. Mostantól a
+  menü a mindennapi munkára szűkül (Kezdőlap, Új elemzés, Feldolgozások,
+  Meccs-elemző, Ellenfél-felderítés, Edzésterv, Jegyzetek); a többi a
+  menü alján a **"Több funkció"** gombbal egy kattintással előjön, és a
+  választás megmarad a következő indításig. Aki eddig használta a
+  programot, a saját beállítását tartja meg. Felhasználói kérésre.
+
+- **Csarnok-érzet és kapus-mez a 3D-ben** (3D pálya + böngészős 3D/VR):
+  fa parketta a pályán (5×5 m-es lapok, illetve parketta-csíkok a
+  böngészőben), lelátó-tömbök a hosszoldalakon — a tér nem "lebeg"
+  többé —, és a kapus a valóságnak megfelelően MÁS (zöld) mezben van, ha
+  a követés kapusként jelölte.
+
 ## v0.1.102 — kiadva (2026-09-06)
 
 > Kiadás-jegyzet: a 3D figurák végleges alakja — gömbölyű

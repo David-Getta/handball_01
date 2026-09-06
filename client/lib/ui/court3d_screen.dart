@@ -830,7 +830,8 @@ class _Court3DScreenState extends State<Court3DScreen>
           dirX: hihet ? dx : 0.0,
           dirY: hihet ? dy : 0.0,
           speed: hihet ? seb : 0.0,
-          trackId: p.trackId));
+          trackId: p.trackId,
+          kapus: p.role == "kapus"));
     }
     _Labda? labda;
     if (a.ball != null && b.ball != null) {
@@ -854,6 +855,8 @@ class _Jatekos {
   // track-azonosító a lépés-fázis eltolásához (ne egyszerre lépjenek).
   final double dirX, dirY, speed;
   final int trackId;
+  // Kapus: a követés "kapus" szerepe — külön mezt kap (mint a valóságban).
+  final bool kapus;
   _Jatekos(
       {required this.x,
       required this.y,
@@ -863,7 +866,8 @@ class _Jatekos {
       this.dirX = 0.0,
       this.dirY = 0.0,
       this.speed = 0.0,
-      this.trackId = 0});
+      this.trackId = 0,
+      this.kapus = false});
 }
 
 class _Labda {
@@ -1002,7 +1006,13 @@ class _Court3DPainter extends CustomPainter {
     final leng = math.sin(fazis) * amp;
 
     final alpha = j.becsult ? 0.45 : 1.0;
-    final csapat = j.home ? AppColors.home : AppColors.away;
+    // A kapus a valóságban is ELTÉRŐ mezt hord (a szabály is ezt kéri):
+    // a csapatszínéből világosabb, zöldes árnyalat — messziről is
+    // megkülönböztethető a mezőnyjátékosoktól.
+    final csapat = j.kapus
+        ? Color.lerp(j.home ? AppColors.home : AppColors.away,
+            const Color(0xFF7BE3A0), 0.55)!
+        : (j.home ? AppColors.home : AppColors.away);
     final mez = csapat.withOpacity(alpha);
     final nadrag = Color.lerp(csapat, Colors.black, 0.5)!.withOpacity(alpha);
     final bor = const Color(0xFFE3B98F).withOpacity(alpha);
@@ -1140,6 +1150,31 @@ class _Court3DPainter extends CustomPainter {
     }
     for (double y = -10; y <= 30; y += 5) {
       _vonal(canvas, halvany, -10, y, 0, 50, y, 0);
+    }
+
+    // PARKETTA: a pálya 5x5 m-es lapokból, váltakozó fa-árnyalattal — a
+    // lapok külön vetülnek (a kamera mögé eső lap egyszerűen kimarad),
+    // így közelről és madártávlatból is tartja a formát.
+    for (var ix = 0; ix < 8; ix++) {
+      for (var iy = 0; iy < 4; iy++) {
+        final sarkok = <Offset>[];
+        var jo = true;
+        for (final (dx, dy) in [(0.0, 0.0), (5.0, 0.0), (5.0, 5.0), (0.0, 5.0)]) {
+          final (jb, fe, me) = _kamera(ix * 5.0 + dx, iy * 5.0 + dy, 0.0);
+          if (me < _kozel) {
+            jo = false;
+            break;
+          }
+          sarkok.add(_kepernyo(jb, fe, me));
+        }
+        if (!jo) continue;
+        final sotet = (ix + iy).isOdd;
+        canvas.drawPath(
+            Path()..addPolygon(sarkok, true),
+            Paint()
+              ..color = (sotet ? const Color(0xFF6E4728) : const Color(0xFF7A5030))
+                  .withOpacity(0.55));
+      }
     }
 
     // Pálya-vonalak (méretek: court_geometry — a szabálykönyvből).

@@ -2849,3 +2849,31 @@ def test_a_kalibracio_gomb_a_motor_figyelmeztetesere_illik():
     assert "pályavonal nem ül" in quality
     assert '"Kalibráció ellenőrzése"' in meccs
     assert "_calibCheckDialog();" in meccs
+
+
+def test_az_egyszeru_mod_az_alapertelmezes():
+    """ŐR: az ÚJ felhasználó rövid menüt kap (a húsz menüpont elriaszt),
+    de semmi nincs véglegesen elrejtve — a "Több funkció" gomb előhozza,
+    és a választás megmarad. A hiányzó kulcs = új felhasználó = egyszerű."""
+    gyoker = Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+    tar = (gyoker / "services" / "session_store.dart").read_text(
+        encoding="utf-8")
+    assert "static bool simpleMode = true;" in tar
+    assert 'simpleMode = data["simple_mode"] != false;' in tar
+    assert '"simple_mode": simpleMode,' in tar
+    assert "setSimpleMode" in tar
+
+    shell = (gyoker / "ui" / "shell" / "app_shell.dart").read_text(
+        encoding="utf-8")
+    assert "kSimpleNav" in shell and "List<(String, List<(NavId, IconData, String)>)> navGroups()" in shell
+    # A menü és a gyorsbillentyűk a SZŰRT listából épülnek (különben a
+    # rejtett pontok billentyűvel mégis elérhetők lennének, elcsúszva).
+    assert "for (final (_, group) in navGroups()) ...group" in shell
+    assert "for (final (groupName, group) in navGroups()) ...[" in shell
+    assert '"Több funkció"' in shell and '"Egyszerű menü"' in shell
+    # A kezdő-halmaz a mindennapi munkát fedi le, és nem üres csoportot ad.
+    for kell in ("NavId.dashboard", "NavId.upload", "NavId.jobs",
+                 "NavId.matches", "NavId.scouting", "NavId.training",
+                 "NavId.notes"):
+        assert kell in shell.split("const Set<NavId> kSimpleNav = {")[1] \
+            .split("};")[0], kell
