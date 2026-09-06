@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.100 óta)
+## Kiadatlan (a v0.1.101 óta)
+
+## v0.1.101 — kiadva (2026-09-05)
+
+> Kiadás-jegyzet: EMBERSZERŰ JÁTÉKOSOK a 3D pályán és a böngészős
+> 3D/VR-ben (a demóban is) — fej, mez, nadrág, karok, lábak,
+> lépés-animáció, árnyék; az önkorrekció a vízszintes svenket is
+> elkapja; a könyvtár-sor és a Kalibráció ellenőrzése ablak a mért
+> illeszkedést mutatja.
 
 - **Emberszerű figurák a böngészős 3D/VR nézetben is** (Böngészős 3D /
   VR): a henger+gömb bábuk helyett fej hajjal, mez, nadrág, karok és
