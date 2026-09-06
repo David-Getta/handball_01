@@ -17,7 +17,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   fordulnak, a sebességgel arányosan lépnek és lendítenek (álló játékos
   a kamera felé fordul), talaj-árnyékkal, a mezszám a mezen. A testrészek
   a kamerától távolabbi oldallal kezdve rajzolódnak, hogy a figura
-  takarja saját magát. Felhasználói kérésre.
+  takarja saját magát; a mez két fele közül a kamerától távolabbi
+  árnyékos (térfogat-érzet), a lábon cipő. Felhasználói kérésre.
 
 - **Az önkorrekció a vízszintes svenket is elkapja** (feldolgozás): a
   finomítás küszöbe 0,5-re nőtt — a vízszintes svenk csak a függőleges

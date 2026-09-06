@@ -1049,6 +1049,12 @@ class _Court3DPainter extends CustomPainter {
       if (csipo == null || terd == null || boka == null) return;
       canvas.drawLine(csipo, terd, vonalFestek(bor, 0.12));
       canvas.drawLine(terd, boka, vonalFestek(zokni, 0.10));
+      // Cipő: sötét, kissé előre nyúló talp.
+      final orr = pont(lend * 0.38 + 0.12, oldal * 0.13, 0.04);
+      if (orr != null) {
+        canvas.drawLine(boka, orr,
+            vonalFestek(const Color(0xFF22262E).withOpacity(alpha), 0.11));
+      }
     }
 
     // Kar: váll → könyök → kéz (a lábakkal ellentétes ütemben).
@@ -1074,9 +1080,16 @@ class _Court3DPainter extends CustomPainter {
       pont(0.0, -0.17, 0.95), pont(0.0, 0.17, 0.95),
       pont(0.02, 0.19, 0.70), pont(0.02, -0.19, 0.70),
     ], nadrag);
+    // A mez két fele: a kamerától távolabbi árnyékos — ettől van
+    // "térfogata" a törzsnek egyetlen sík helyett.
+    final arnyekos = Color.lerp(mez, Colors.black, 0.28)!;
     sokszog([
-      pont(0.0, -0.22, 1.45), pont(0.0, 0.22, 1.45),
-      pont(0.0, 0.16, 0.93), pont(0.0, -0.16, 0.93),
+      pont(0.0, tavol * 0.22, 1.45), pont(0.0, 0.0, 1.47),
+      pont(0.0, 0.0, 0.93), pont(0.0, tavol * 0.16, 0.93),
+    ], arnyekos);
+    sokszog([
+      pont(0.0, 0.0, 1.47), pont(0.0, kozel * 0.22, 1.45),
+      pont(0.0, kozel * 0.16, 0.93), pont(0.0, 0.0, 0.93),
     ], mez);
     lab(kozel, -kozel * leng);
     kar(kozel, kozel * leng);
