@@ -189,20 +189,24 @@ napfeny.position.set(10, 30, 10); szinpad.add(napfeny);
 const babuk = [];
 function vegtag(anyag, r, hossz){
   // Egy végtag-szakasz: a forgáspontja a felső végén (a csoport
-  // origójában), a henger lefelé lóg — így a forgatás lendítés.
+  // origójában), a lekerekített test lefelé lóg — így a forgatás
+  // lendítés. Kapszula: a végtag nem "cső", hanem gömbölyű.
   const cs = new THREE.Group();
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r*0.85, hossz, 6), anyag);
+  const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, Math.max(0.05, hossz - 2*r), 3, 8), anyag);
   m.position.y = -hossz/2; cs.add(m);
   return cs;
 }
 function babu(){
   const cs = new THREE.Group();
-  const mez = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.55, 8), hazaiAnyag);
-  mez.position.y = 1.2; cs.add(mez);
-  const nadrag = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.28, 8), hazaiNadrag);
+  // Törzs: lekerekített kapszula (váll-szélesség), fölötte nyak.
+  const mez = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.3, 4, 10), hazaiAnyag);
+  mez.scale.set(1.15, 1, 0.75); mez.position.y = 1.2; cs.add(mez);
+  const nyak = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.1, 8), borAnyag);
+  nyak.position.y = 1.5; cs.add(nyak);
+  const nadrag = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.28, 10), hazaiNadrag);
   nadrag.position.y = 0.82; cs.add(nadrag);
-  const fej = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), borAnyag);
-  fej.position.y = 1.66; cs.add(fej);
+  const fej = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 10), borAnyag);
+  fej.scale.set(0.95, 1.1, 1.0); fej.position.y = 1.66; cs.add(fej);
   const haj = new THREE.Mesh(new THREE.SphereGeometry(0.125, 10, 6, 0, Math.PI*2, 0, Math.PI/2), hajAnyag);
   haj.position.y = 1.67; cs.add(haj);
   const tagok = {};

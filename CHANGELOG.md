@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.101 óta)
 
+- **Gömbölyű testű figurák a böngészős 3D/VR-ben** (Böngészős 3D /
+  VR): a törzs és a végtagok kapszulák (nem csövek), nyakkal, kissé
+  ovális fejjel — közelről, VR-ben is emberszerű a forma.
+
 ## v0.1.101 — kiadva (2026-09-05)
 
 > Kiadás-jegyzet: EMBERSZERŰ JÁTÉKOSOK a 3D pályán és a böngészős
