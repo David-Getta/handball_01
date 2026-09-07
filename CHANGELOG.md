@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.103 óta)
 
+- **A finomhangolás-lánc is haladó** (kezdőlap → Továbbiak):
+  egyszerű módban a Tanítóadat gyűjtése és a Címkéző kimarad a
+  menüből — a kezdőnek előbb a meccseit kell feldolgoznia, nem
+  modellt tanítania; a súgó és a karbantartás marad.
+
 - **Kevesebb kérdés az Új elemzés varázslójában** (egyszerű mód): a
   "kísérleti" mezszám-felismerés kapcsoló rejtve — a valódi
   döntések (minőségi profil, hossz) maradnak. A mezszámokat a

@@ -2051,15 +2051,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     }
                     if (v == "help") _showHelp();
                   },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
                       value: "refresh",
                       child: ListTile(
                           leading: Icon(Icons.refresh, size: 18),
                           title: Text("Lista frissítése"),
                           dense: true),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: "health",
                       child: ListTile(
                           leading:
@@ -2067,54 +2067,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           title: Text("Rendszer-ellenőrzés"),
                           dense: true),
                     ),
-                    PopupMenuDivider(),
-                    PopupMenuItem(
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
                       value: "export",
                       child: ListTile(
                           leading: Icon(Icons.download, size: 18),
                           title: Text("Könyvtár mentése (zip)"),
                           dense: true),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: "import",
                       child: ListTile(
                           leading: Icon(Icons.upload, size: 18),
                           title: Text("Könyvtár visszaállítása"),
                           dense: true),
                     ),
-                    PopupMenuDivider(),
-                    PopupMenuItem(
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
                       value: "update",
                       child: ListTile(
                           leading: Icon(Icons.system_update_alt, size: 18),
                           title: Text("Frissítés keresése"),
                           dense: true),
                     ),
-                    PopupMenuItem(
+                    const PopupMenuItem(
                       value: "token",
                       child: ListTile(
                           leading: Icon(Icons.key, size: 18),
                           title: Text("Frissítési kulcs (privát repóhoz)"),
                           dense: true),
                     ),
-                    PopupMenuDivider(),
-                    PopupMenuItem(
-                      value: "dataset",
-                      child: ListTile(
-                          leading: Icon(Icons.model_training, size: 18),
-                          title: Text("Tanítóadat gyűjtése (pontosabb "
-                              "felismeréshez)"),
-                          dense: true),
-                    ),
-                    PopupMenuItem(
-                      value: "labeler",
-                      child: ListTile(
-                          leading: Icon(Icons.crop_free, size: 18),
-                          title: Text("Címkéző (a gyűjtött képek "
-                              "átnézése)"),
-                          dense: true),
-                    ),
-                    PopupMenuItem(
+                    // A finomhangolás-lánc (gyűjtés + címkéző) HALADÓ:
+                    // egyszerű módban kimarad — a kezdőnek előbb a
+                    // meccseit kell feldolgoznia, nem modellt tanítania.
+                    if (!SessionStore.simpleMode) const PopupMenuDivider(),
+                    if (!SessionStore.simpleMode)
+                      const PopupMenuItem(
+                        value: "dataset",
+                        child: ListTile(
+                            leading: Icon(Icons.model_training, size: 18),
+                            title: Text("Tanítóadat gyűjtése (pontosabb "
+                                "felismeréshez)"),
+                            dense: true),
+                      ),
+                    if (!SessionStore.simpleMode)
+                      const PopupMenuItem(
+                        value: "labeler",
+                        child: ListTile(
+                            leading: Icon(Icons.crop_free, size: 18),
+                            title: Text("Címkéző (a gyűjtött képek "
+                                "átnézése)"),
+                            dense: true),
+                      ),
+                    const PopupMenuItem(
                       value: "help",
                       child: ListTile(
                           leading: Icon(Icons.help_outline, size: 18),

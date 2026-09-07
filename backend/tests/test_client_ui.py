@@ -2912,3 +2912,16 @@ def test_az_egyszeru_mod_a_varazslo_kiserleti_kapcsolojat_is_rejti():
     # A valódi döntések MINDIG látszanak.
     assert 'ButtonSegment(value: "trial"' in fel
     assert "for (final e in _qualityPresets.entries)" in fel
+
+
+def test_az_egyszeru_mod_a_finomhangolas_lancot_is_rejti():
+    """A kezdőlap "Továbbiak" menüjéből a finomhangolás-lánc (tanítóadat-
+    gyűjtés, címkéző) egyszerű módban kimarad — a kezdőnek előbb a
+    meccseit kell feldolgoznia, nem modellt tanítania. A súgó és a
+    karbantartás marad."""
+    dash = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
+    assert 'if (!SessionStore.simpleMode)\n                      const PopupMenuItem(\n                        value: "dataset"' in dash
+    assert 'if (!SessionStore.simpleMode)\n                      const PopupMenuItem(\n                        value: "labeler"' in dash
+    # A súgó és a lista-frissítés MINDIG elérhető.
+    assert 'value: "help"' in dash and 'value: "refresh"' in dash
