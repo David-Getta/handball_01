@@ -50,6 +50,9 @@ Match buildDemoMatch({int frames = 200, double fps = 25.0}) {
         source: PositionSource.measured,
         confidence: 1.0,
         jerseyNumber: i + 1,
+        // A sor UTOLSÓ embere a kapus (a saját kapujában áll) — a 3D
+        // nézet ettől mutatja őt eltérő mezben, mint a valóságban.
+        role: i == home.length - 1 ? "kapus" : null,
       ));
     }
     for (int i = 0; i < away.length; i++) {
@@ -65,6 +68,7 @@ Match buildDemoMatch({int frames = 200, double fps = 25.0}) {
         source: estimated ? PositionSource.estimated : PositionSource.measured,
         confidence: estimated ? 0.5 : 1.0,
         jerseyNumber: 11 + i,
+        role: i == away.length - 1 ? "kapus" : null,
       ));
     }
 

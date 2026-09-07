@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.105 óta)
 
+- **A demóban is van kapus** (3D pálya): mindkét csapat kapusa jelölve,
+  így a demó-meccsen — amit a felhasználó közvetlenül a telepítés után
+  lát — a kapus is a valóságnak megfelelő, eltérő mezben áll, nem
+  tizennégy egyforma játékos van a pályán.
+
 - **A nyomtatott jelentés mutatja a kalibráció-illeszkedést**
   (meccsjelentés): az "Elemzés megbízhatósága" blokkban új sor —
   átlag és leggyengébb érték. Aki napokkal később olvassa a lapot (más

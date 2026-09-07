@@ -2938,3 +2938,17 @@ def test_a_sugo_megmondja_hol_a_tobbi_funkcio():
     # A rejtett részeket NÉVVEL sorolja (a felhasználó ezeket keresi).
     for nev in ("3D pálya", "Klipek", "Meccsterv", "Szezon"):
         assert nev in dash, nev
+
+
+def test_a_demoban_is_van_kapus():
+    """A 3D nézet a kapust eltérő mezben mutatja — a DEMÓBAN is legyen
+    kapus, különben az első benyomás (amit a felhasználó a telepítés
+    után lát) tizennégy egyforma mezes játékos."""
+    demo = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "sim" / "demo_data.dart").read_text(encoding="utf-8")
+    assert 'role: i == home.length - 1 ? "kapus" : null,' in demo
+    assert 'role: i == away.length - 1 ? "kapus" : null,' in demo
+    # A 3D festő a role-ból dolgozik (különben a jelölés süket maradna).
+    harom = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+             / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    assert 'kapus: p.role == "kapus"' in harom
