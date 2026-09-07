@@ -18,6 +18,7 @@ import "../analytics/match_summary.dart";
 import "../analytics/tactics.dart";
 import "../models/tracking.dart";
 import "../services/api_client.dart";
+import "../services/session_store.dart";
 import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
 import "anim.dart";
@@ -1690,23 +1691,28 @@ class _MatchScreenState extends State<MatchScreen> {
         ),
         // KALIBRÁCIÓ-ELLENŐRZÉS: a pályavonalak visszarajzolva a videó
         // három kockájára (eleje/közepe/vége) — a szem dönti el, tartja-e
-        // a kalibráció a svenkelés alatt.
-        IconButton(
-          onPressed: _sourceLabel == "demó" ? null : _calibCheckDialog,
-          icon: const Icon(Icons.grid_on, color: AppColors.textSecondary),
-          tooltip: "Kalibráció ellenőrzése (vonalak a videón)",
-        ),
+        // a kalibráció a svenkelés alatt. HALADÓ eszköz: egyszerű módban
+        // rejtve (a minőség-panel gombja akkor is elővezeti, amikor
+        // tényleg kell — ott van a hozzá tartozó figyelmeztetés is).
+        if (!SessionStore.simpleMode)
+          IconButton(
+            onPressed: _sourceLabel == "demó" ? null : _calibCheckDialog,
+            icon: const Icon(Icons.grid_on, color: AppColors.textSecondary),
+            tooltip: "Kalibráció ellenőrzése (vonalak a videón)",
+          ),
         // MECCS-CSOMAG: jelentés + CSV + gólklipek EGY zip-ben — megosztásra.
-        IconButton(
-          onPressed: _sourceLabel == "demó" || _exportingPackage
-              ? null
-              : _exportPackage,
-          icon: _exportingPackage
-              ? const SizedBox(width: 18, height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.card_giftcard, color: AppColors.accent),
-          tooltip: "Meccs-csomag (jelentés + CSV + gólklipek egy zip-ben)",
-        ),
+        // Haladó eszköz: egyszerű módban a jelentés-mentés elég.
+        if (!SessionStore.simpleMode)
+          IconButton(
+            onPressed: _sourceLabel == "demó" || _exportingPackage
+                ? null
+                : _exportPackage,
+            icon: _exportingPackage
+                ? const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.card_giftcard, color: AppColors.accent),
+            tooltip: "Meccs-csomag (jelentés + CSV + gólklipek egy zip-ben)",
+          ),
         // Játékos-statisztika mentése CSV-ben (Excelben nyitható).
         IconButton(
           onPressed: _sourceLabel == "demó" ? null : _exportStatsCsv,

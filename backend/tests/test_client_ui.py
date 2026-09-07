@@ -2883,3 +2883,19 @@ def test_az_egyszeru_mod_az_alapertelmezes():
                  "NavId.notes"):
         assert kell in shell.split("const Set<NavId> kSimpleNav = {")[1] \
             .split("};")[0], kell
+
+
+def test_az_egyszeru_mod_a_meccs_eszkoztarat_is_rovidíti():
+    """A menü rövidítése önmagában kevés: a meccs-nézet eszköztárán is
+    tíz ikon sorakozott. Egyszerű módban a HALADÓ eszközök (kalibráció-
+    ellenőrzés, meccs-csomag) rejtve — de nem vesznek el: a
+    kalibráció-ellenőrzést a minőség-panel gombja akkor is elővezeti,
+    amikor tényleg kell."""
+    meccs = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+             / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert 'import "../services/session_store.dart";' in meccs
+    assert meccs.count("if (!SessionStore.simpleMode)") >= 2
+    # A minőség-panel gombja NEM módfüggő (ott a figyelmeztetés adja az
+    # okot) — ez a kettő együtt adja ki, hogy semmi nem vész el.
+    assert '"Kalibráció ellenőrzése"' in meccs
+    assert "_calibCheckDialog();" in meccs

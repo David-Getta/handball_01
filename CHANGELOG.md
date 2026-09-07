@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.103 óta)
 
+- **Rövidebb eszköztár is az egyszerű módban** (meccs-nézet): a
+  haladó gombok (kalibráció-ellenőrzés, meccs-csomag zip) egyszerű
+  módban rejtve — a mindennapi munkához való eszközök (videó, mezszámok,
+  kiállítások, csapatcsere, ✂ vágás, jelentés, statisztika, könyvtár)
+  maradnak. Semmi nem vész el: a kalibráció-ellenőrzést a minőség-panel
+  gombja akkor is elővezeti, amikor tényleg kell, a többit a "Több
+  funkció" hozza vissza.
+
 - **Egyszerű módban sem lehet eltévedni** (bal menüsor): ha a
   kezdőlapról olyan részre lépsz, ami a rövid menüben nincs benne
   (Klipek, 3D pálya, Szezon…), a menüpont ilyenkor MEGJELENIK és
