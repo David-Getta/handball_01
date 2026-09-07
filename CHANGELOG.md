@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.104 óta)
 
+- **A súgó megmondja, hol a többi funkció** (kezdőlap → Első lépések):
+  egyszerű módban a súgó kiírja, hogy a menü a mindennapi munkát
+  mutatja, és a többi rész (3D pálya, Klipek, Meccsterv, Szezon, Keret,
+  Figura-tervező, Élő követés) a "Több funkció" gombbal jön elő — a 7.
+  lépés a 3D pályára hivatkozik, azt ne keresse hiába.
+
 - **A finomhangolás-lánc is haladó** (kezdőlap → Továbbiak):
   egyszerű módban a Tanítóadat gyűjtése és a Címkéző kimarad a
   menüből — a kezdőnek előbb a meccseit kell feldolgoznia, nem

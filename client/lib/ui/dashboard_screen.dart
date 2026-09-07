@@ -227,6 +227,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     "⋮ menüjéből bármely jelenet 3D-ben nyílik; a "
                     "\"Böngészős 3D / VR\" gomb headset-re kész oldalt ad."),
                 const SizedBox(height: AppSpacing.sm),
+                // EGYSZERŰ MÓD: a 7. lépés a 3D pályára hivatkozik, ami
+                // ilyenkor nincs a menüben — a súgó mondja meg, hol jön
+                // elő, különben a felhasználó hiába keresi.
+                if (SessionStore.simpleMode)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: Text(
+                      "A menü most az EGYSZERŰ nézetet mutatja (a "
+                      "mindennapi munka). A többi rész — 3D pálya, "
+                      "Klipek, Meccsterv, Szezon, Keret, Figura-tervező, "
+                      "Élő követés — a bal menü alján a \"Több funkció\" "
+                      "gombbal jön elő, és úgy is marad.",
+                      style: AppText.label.copyWith(
+                          fontSize: 11.5, color: AppColors.textPrimary),
+                    ),
+                  ),
                 Text(
                   "Az app magától frissül (arany sáv). Minden adat a saját "
                   "gépeden marad.",

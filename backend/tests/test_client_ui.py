@@ -2925,3 +2925,16 @@ def test_az_egyszeru_mod_a_finomhangolas_lancot_is_rejti():
     assert 'if (!SessionStore.simpleMode)\n                      const PopupMenuItem(\n                        value: "labeler"' in dash
     # A súgó és a lista-frissítés MINDIG elérhető.
     assert 'value: "help"' in dash and 'value: "refresh"' in dash
+
+
+def test_a_sugo_megmondja_hol_a_tobbi_funkcio():
+    """A súgó 7. lépése a 3D pályára hivatkozik, ami egyszerű módban
+    nincs a menüben — a súgónak meg kell mondania, hol jön elő,
+    különben a felhasználó hiába keresi."""
+    dash = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
+    assert "if (SessionStore.simpleMode)" in dash
+    assert "Több funkció" in dash
+    # A rejtett részeket NÉVVEL sorolja (a felhasználó ezeket keresi).
+    for nev in ("3D pálya", "Klipek", "Meccsterv", "Szezon"):
+        assert nev in dash, nev
