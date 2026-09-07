@@ -3,7 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.106 óta)
+## Kiadatlan (a v0.1.107 óta)
+
+## v0.1.107 — kiadva (2026-09-07)
+
+> Kiadás-jegyzet: fél-pályás kalibrációnál csak a kalibrált térfelet
+> rajzoljuk és mérjük — eddig a másik félre kiterjesztett rajz
+> felezte a mért illeszkedést, és a jelentés hibát kiálthatott egy
+> hibátlan kalibrációra.
 
 - **A kérésre futó illeszkedés-mérés is a kalibrált térfelet
   használja** (Kalibráció ellenőrzése): a rárajzolt kép és a mellette
