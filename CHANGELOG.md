@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.106 óta)
 
+- **A kérésre futó illeszkedés-mérés is a kalibrált térfelet
+  használja** (Kalibráció ellenőrzése): a rárajzolt kép és a mellette
+  álló szám így ugyanarról szól — eddig a nyolc-kockás újramérés a
+  teljes pályát rajzolta, fél-pályás kalibrációnál is.
+
 - **Fél-pályás kalibrációnál csak a kalibrált térfelet mérjük**
   (feldolgozás + kalibráció-ellenőrzés): ha a kalibráció egy térfélre
   készült (a kezdőképen csak az látszik), a rárajzolás és az

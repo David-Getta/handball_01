@@ -399,3 +399,14 @@ def test_a_meta_orzi_a_kalibralt_terfelet():
                                      "away_team": "B", "fps": 8.0},
                             "frames": []})
     assert regi.meta.calib_region is None
+
+
+def test_mindket_vegpont_a_kalibralt_terfelet_hasznalja():
+    """ŐR: a rárajzoló (calib-overlay) ÉS a mérő (calib-fit) végpont is
+    a tárolt régióval dolgozik — ha csak az egyik, a kép és a szám
+    ellentmondana egymásnak."""
+    from pathlib import Path as _Path
+    forras = (_Path(__file__).resolve().parent.parent / "handball" / "api"
+              / "app.py").read_text(encoding="utf-8")
+    assert forras.count('getattr(match.meta, "calib_region", None) or "full"') >= 2
+    assert "overlay_pixels(h0, keyframe_at(kf, t), W_, H_, reg)" in forras

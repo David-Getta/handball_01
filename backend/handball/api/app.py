@@ -2104,6 +2104,10 @@ def create_app():
         start = int(match.meta.start_frame or 0)
         stride = max(1, int(match.meta.stride or 1))
         kf = getattr(match.meta, "pan_keyframes", None)
+        # FÉL-PÁLYÁS kalibrációnál csak a kalibrált térfél vonalait
+        # mérjük (a másik félen a homográfia extrapolál) — ugyanaz a
+        # szabály, mint a feldolgozás alatti mérésnél.
+        reg = getattr(match.meta, "calib_region", None) or "full"
         try:
             for i in range(n):
                 t = match.frames[round(i * utolso / (n - 1))].t
@@ -2114,7 +2118,8 @@ def create_app():
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 H_, W_ = gray.shape[:2]
                 o = line_fit_score(
-                    gray, overlay_pixels(h0, keyframe_at(kf, t), W_, H_))
+                    gray,
+                    overlay_pixels(h0, keyframe_at(kf, t), W_, H_, reg))
                 pontok.append({"t": int(t), "fit": o["fit"],
                                "samples": o["samples"]})
         finally:
