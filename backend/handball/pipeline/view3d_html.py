@@ -358,8 +358,23 @@ function rajzol(t){
   let l = a[2];
   if (l){
     const l2 = b[2] || l;
+    const lx = l[0] + (l2[0]-l[0])*ar, ly = l[1] + (l2[1]-l[1])*ar;
     labda.visible = true;
-    labda.position.set(l[0] + (l2[0]-l[0])*ar, 0.5, W - (l[1] + (l2[1]-l[1])*ar));
+    // Ha van BIRTOKOSA (a legközelebbi figura karnyújtásnyira van), a
+    // labda a kezében van — nem a földszint fölött lebeg.
+    let birtokos = null, legkozelebb = 1.2;
+    for (let k = 0; k < jat.length && k < babuk.length; k++){
+      const d = Math.hypot(jat[k][1]-lx, jat[k][2]-ly);
+      if (d < legkozelebb){ legkozelebb = d; birtokos = babuk[k]; }
+    }
+    if (birtokos){
+      const irany = new THREE.Vector3(0, 0, -1)
+        .applyAxisAngle(new THREE.Vector3(0,1,0), birtokos.rotation.y);
+      labda.position.set(birtokos.position.x + irany.x*0.32, 1.28,
+                         birtokos.position.z + irany.z*0.32);
+    } else {
+      labda.position.set(lx, 0.5, W - ly);
+    }
   } else labda.visible = false;
 }
 

@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.105 óta)
 
+- **A labda a birtokos kezében van** (3D pálya + böngészős 3D/VR): ha a
+  legközelebbi játékos karnyújtásnyira van, a labda az ő kezében,
+  kéz-magasságban, a haladás irányában kissé előtte — eddig a
+  földszint fölött lebegett, mintha magától úszna a pályán.
+
 - **A demóban is van kapus** (3D pálya): mindkét csapat kapusa jelölve,
   így a demó-meccsen — amit a felhasználó közvetlenül a telepítés után
   lát — a kapus is a valóságnak megfelelő, eltérő mezben áll, nem

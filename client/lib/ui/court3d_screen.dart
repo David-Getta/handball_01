@@ -1227,10 +1227,43 @@ class _Court3DPainter extends CustomPainter {
       _figura(canvas, j, frame.tSec);
     }
 
-    // Labda.
+    // Labda. Ha VAN birtokosa (a legközelebbi játékos karnyújtásnyira
+    // van), a labda a KEZÉBEN van — nem a földszint fölött lebeg: kéz-
+    // magasságban, a haladás irányában kissé előtte. Enélkül a jelenet
+    // úgy néz ki, mintha a labda magától úszna a pályán.
     final l = frame.labda;
     if (l != null) {
-      final (jobb, fel, mely) = _kamera(l.x, l.y, 0.6);
+      var bx = l.x, by = l.y, bz = 0.6;
+      _Jatekos? birtokos;
+      var legkozelebb = 1.2; // karnyújtásnyi (méter)
+      for (final j in frame.jatekosok) {
+        final d = math.sqrt((j.x - l.x) * (j.x - l.x) +
+            (j.y - l.y) * (j.y - l.y));
+        if (d < legkozelebb) {
+          legkozelebb = d;
+          birtokos = j;
+        }
+      }
+      if (birtokos != null) {
+        var fx = birtokos.dirX, fy = birtokos.dirY;
+        final h = math.sqrt(fx * fx + fy * fy);
+        if (h > 1e-6) {
+          fx /= h;
+          fy /= h;
+        } else {
+          fx = cx - birtokos.x;
+          fy = cy - birtokos.y;
+          final h2 = math.sqrt(fx * fx + fy * fy);
+          if (h2 > 1e-6) {
+            fx /= h2;
+            fy /= h2;
+          }
+        }
+        bx = birtokos.x + fx * 0.32;
+        by = birtokos.y + fy * 0.32;
+        bz = 1.28; // kéz-magasság
+      }
+      final (jobb, fel, mely) = _kamera(bx, by, bz);
       if (mely >= _kozel) {
         canvas.drawCircle(_kepernyo(jobb, fel, mely),
             (0.12 * _f / mely).clamp(1.5, 14.0),

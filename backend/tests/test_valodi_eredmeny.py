@@ -477,3 +477,15 @@ def test_a_view3d_csarnokot_es_kapust_is_visz():
     for jel in ("kapusAnyag", "kapusNadrag", "szinez(cs, !!p[0], !!p[4])",
                 "csarnokPadlo", "lelatoAnyag", "Parketta-csíkok"):
         assert jel in oldal, jel
+
+
+def test_a_view3d_a_birtokos_kezebe_teszi_a_labdat():
+    """A labda ne a földszint fölött lebegjen: ha a legközelebbi figura
+    karnyújtásnyira van, a labda az ő kezében (kéz-magasságban, a
+    haladás irányában kissé előtte)."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs("v3l"))
+    assert "let birtokos = null, legkozelebb = 1.2;" in oldal
+    assert "labda.position.set(birtokos.position.x" in oldal
+    assert "1.28," in oldal
