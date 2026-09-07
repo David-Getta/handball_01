@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.103 óta)
+## Kiadatlan (a v0.1.104 óta)
 
 - **A finomhangolás-lánc is haladó** (kezdőlap → Továbbiak):
   egyszerű módban a Tanítóadat gyűjtése és a Címkéző kimarad a
@@ -22,6 +22,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   maradnak. Semmi nem vész el: a kalibráció-ellenőrzést a minőség-panel
   gombja akkor is elővezeti, amikor tényleg kell, a többit a "Több
   funkció" hozza vissza.
+
+## v0.1.104 — kiadva (2026-09-07)
+
+> Kiadás-jegyzet: az egyszerű mód a menün túl is egyszerűsít — a
+> meccs-nézet eszköztára rövidebb, a varázslóban kevesebb a kérdés,
+> és a nyitott képernyő akkor is látszik a menüben.
 
 - **Egyszerű módban sem lehet eltévedni** (bal menüsor): ha a
   kezdőlapról olyan részre lépsz, ami a rövid menüben nincs benne
