@@ -3246,11 +3246,26 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 kezi = _metric("Kézi javítás", f"{_ov} db")
         except Exception:
             pass
+        # KALIBRÁCIÓ-ILLESZKEDÉS: a nyomtatott jelentés olvasója (más
+        # edző, vezetőség) ebből látja, mennyire ültek a pályavonalak a
+        # videón — a helyek pontosságának a legközvetlenebb mérőszáma.
+        # Régi mentésen (mérés nélkül) egyszerűen kimarad.
+        kalib = ""
+        try:
+            _cf = getattr(match.meta, "calib_fit", None) or {}
+            _atlag = _cf.get("mean_fit")
+            if _atlag is not None:
+                _min = _cf.get("min_fit", _atlag)
+                kalib = _metric("Kalibráció-illeszkedés",
+                                f"{round(100 * float(_atlag))}% "
+                                f"(leggyengébb {round(100 * float(_min))}%)")
+        except Exception:
+            pass
         q_html = ('<h2>Elemzés megbízhatósága</h2><div class="metrics">'
                   + _metric("Minőség-pontszám", str(quality.get("score", "—")) + "/100")
                   + _metric("Labda-lefedettség", ball_cov)
                   + _metric("Mért játékos/kocka", measured)
-                  + szakasz + kezi
+                  + szakasz + kezi + kalib
                   + "</div>" + w_html)
 
     return finish_report(f"""<!DOCTYPE html>

@@ -345,3 +345,23 @@ def test_a_meres_es_onkorrekcio_egyben_a_kovetovel():
     # Jó helyen (a követő már igazított): nincs mit korrigálni.
     ki3 = measure_and_correct(kep, h0, ki["g"], last_mode="chain")
     assert ki3["corrected"] is False and ki3["fit"] > 0.6
+
+
+def test_a_nyomtatott_jelentes_mutatja_az_illeszkedest():
+    """A nyomtatott jelentés olvasója (más edző, vezetőség) ebből látja,
+    mennyire ültek a pályavonalak a videón. Régi mentésen (mérés nélkül)
+    a sor egyszerűen kimarad — nem "0%"-ot állítunk."""
+    from handball.pipeline.quality import compute_quality_report
+    from handball.pipeline.report_html import match_report_html
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=90, fps=10.0, seed=7)
+    m.meta.calibrated = True
+    nelkul = match_report_html(m, {}, [], compute_quality_report(m))
+    assert "Kalibráció-illeszkedés" not in nelkul
+
+    m.meta.calib_fit = {"mean_fit": 0.72, "min_fit": 0.41, "worst_t": 30,
+                        "points": [[0, 0.72], [30, 0.41]]}
+    html = match_report_html(m, {}, [], compute_quality_report(m))
+    assert "Kalibráció-illeszkedés" in html
+    assert "72%" in html and "leggyengébb 41%" in html

@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.104 óta)
 
+- **A nyomtatott jelentés mutatja a kalibráció-illeszkedést**
+  (meccsjelentés): az "Elemzés megbízhatósága" blokkban új sor —
+  átlag és leggyengébb érték. Aki napokkal később olvassa a lapot (más
+  edző, vezetőség), ebből látja, mennyire ültek a pályavonalak a
+  videón. Régi mentésen (mérés nélkül) a sor kimarad, nem "0%"-ot
+  állít.
+
 - **A súgó megmondja, hol a többi funkció** (kezdőlap → Első lépések):
   egyszerű módban a súgó kiírja, hogy a menü a mindennapi munkát
   mutatja, és a többi rész (3D pálya, Klipek, Meccsterv, Szezon, Keret,
