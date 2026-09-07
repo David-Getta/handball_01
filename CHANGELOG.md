@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.104 óta)
+## Kiadatlan (a v0.1.105 óta)
 
 - **A nyomtatott jelentés mutatja a kalibráció-illeszkedést**
   (meccsjelentés): az "Elemzés megbízhatósága" blokkban új sor —
@@ -17,6 +17,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   mutatja, és a többi rész (3D pálya, Klipek, Meccsterv, Szezon, Keret,
   Figura-tervező, Élő követés) a "Több funkció" gombbal jön elő — a 7.
   lépés a 3D pályára hivatkozik, azt ne keresse hiába.
+
+## v0.1.105 — kiadva (2026-09-07)
+
+> Kiadás-jegyzet: az egyszerű mód végigvive — a finomhangolás-lánc
+> is haladó, és a súgó megmondja, hol jön elő a többi funkció.
 
 - **A finomhangolás-lánc is haladó** (kezdőlap → Továbbiak):
   egyszerű módban a Tanítóadat gyűjtése és a Címkéző kimarad a
