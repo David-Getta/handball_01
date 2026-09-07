@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.103 óta)
 
+- **Kevesebb kérdés az Új elemzés varázslójában** (egyszerű mód): a
+  "kísérleti" mezszám-felismerés kapcsoló rejtve — a valódi
+  döntések (minőségi profil, hossz) maradnak. A mezszámokat a
+  meccs-nézetben úgyis kézzel lehet kiosztani.
+
 - **Rövidebb eszköztár is az egyszerű módban** (meccs-nézet): a
   haladó gombok (kalibráció-ellenőrzés, meccs-csomag zip) egyszerű
   módban rejtve — a mindennapi munkához való eszközök (videó, mezszámok,

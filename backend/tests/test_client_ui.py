@@ -2899,3 +2899,16 @@ def test_az_egyszeru_mod_a_meccs_eszkoztarat_is_rovidíti():
     # okot) — ez a kettő együtt adja ki, hogy semmi nem vész el.
     assert '"Kalibráció ellenőrzése"' in meccs
     assert "_calibCheckDialog();" in meccs
+
+
+def test_az_egyszeru_mod_a_varazslo_kiserleti_kapcsolojat_is_rejti():
+    """Az Új elemzés varázslójában a "kísérleti" mezszám-felismerés
+    kapcsoló egy kezdőnek csak kérdés — egyszerű módban rejtve, a
+    minőségi profil és a hossz (a valódi döntések) maradnak."""
+    fel = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+           / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    assert 'import "../services/session_store.dart";' in fel
+    assert "if (!SessionStore.simpleMode)" in fel
+    # A valódi döntések MINDIG látszanak.
+    assert 'ButtonSegment(value: "trial"' in fel
+    assert "for (final e in _qualityPresets.entries)" in fel

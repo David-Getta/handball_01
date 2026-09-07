@@ -15,6 +15,7 @@ import "package:flutter/foundation.dart" show kIsWeb;
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
+import "../services/session_store.dart";
 import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
 import "anim.dart";
@@ -1673,7 +1674,10 @@ class _UploadScreenState extends State<UploadScreen> {
       const SizedBox(height: 6),
       // KÍSÉRLETI: mezszám-OCR a feldolgozás alatt — a felismert
       // számokat a szavazó csak elég bizonyíték esetén hirdeti ki,
-      // és a kézi hozzárendelés mindig felülírhatja.
+      // és a kézi hozzárendelés mindig felülírhatja. Egyszerű módban
+      // REJTVE: egy kezdőnek a "kísérleti" kapcsoló csak kérdés, a
+      // mezszámokat a meccs-nézetben úgyis kézzel osztja ki.
+      if (!SessionStore.simpleMode)
       Row(mainAxisSize: MainAxisSize.min, children: [
         SizedBox(
           height: 28,
