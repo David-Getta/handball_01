@@ -414,7 +414,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   ball_recover=True, stop_check=None,
                   raw_out=None, colors_out=None, on_note=None,
                   pan_stats_out=None, anchor_frames=None,
-                  fit_h0=None, fit_every=16):
+                  fit_h0=None, fit_every=16, fit_region="full"):
     import os
     # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
     # hiba helyett. A torch importja ELŐTT kell beállítani.
@@ -650,7 +650,8 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                         measure_and_correct)
                     ki_ = measure_and_correct(
                         gray, fit_h0, panH,
-                        getattr(pan_tracker, "last_mode", "chain"))
+                        getattr(pan_tracker, "last_mode", "chain"),
+                        fit_region)
                     if ki_["corrected"]:
                         panH = ki_["g"]
                         pan_tracker.correct(panH)
@@ -1031,6 +1032,9 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                          pan_keyframes=(
                              _sample_pan_keyframes([r_[2] for r_ in raw],
                                                    fps / stride)
+                             if calib_list else None),
+                         calib_region=(
+                             str(calib_list[0].get("region") or "full")
                              if calib_list else None))
         if rec_date:
             say(f"meccs-dátum a videóból: {rec_date}")
@@ -1260,6 +1264,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # ebből mondja ki, ha a vonal valahol nem ül a valódin.
     _fit_h0 = None
     _fit_every = 16
+    # FÉL-PÁLYÁS kalibrációnál csak a kalibrált térfél vonalait mérjük.
+    _fit_region = "full"
     if calib_list:
         try:
             from handball.pipeline._homography import homography_from_points
@@ -1270,6 +1276,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 _calib_court_points(_c0.get("region", "full"),
                                     bool(_c0.get("rotate"))))
             _fit_every = max(1, int(round(PAN_KEYFRAME_S * fps / max(1, stride))))
+            _fit_region = str(_c0.get("region") or "full")
         except Exception:
             _fit_h0 = None  # mérés nélkül is fut a feldolgozás
     if weights:
@@ -1281,7 +1288,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             jersey_voter=jersey_voter, stop_check=stop_check,
             raw_out=raw, colors_out=all_colors, pan_stats_out=pan_stats,
             anchor_frames={int(c.get("frame", start)) for c in calib_list},
-            fit_h0=_fit_h0, fit_every=_fit_every))
+            fit_h0=_fit_h0, fit_every=_fit_every,
+            fit_region=_fit_region))
     else:
         _process_hog(video_path, stride, max_frames, stop_check=stop_check,
                      raw_out=raw, colors_out=all_colors, on_frame=on_frame,

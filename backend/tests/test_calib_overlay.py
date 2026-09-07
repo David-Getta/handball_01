@@ -365,3 +365,37 @@ def test_a_nyomtatott_jelentes_mutatja_az_illeszkedest():
     html = match_report_html(m, {}, [], compute_quality_report(m))
     assert "Kalibráció-illeszkedés" in html
     assert "72%" in html and "leggyengébb 41%" in html
+
+
+def test_a_fel_palyas_kalibracio_csak_a_sajat_terfelet_rajzolja():
+    """FÉL-PÁLYÁS kalibrációnál a másik térfélen a homográfia erősen
+    extrapolál — ott a rajz eleve nem ülhet a valódin. Ha mégis
+    bevennénk, a mért illeszkedés fele akkora lenne, és a jelentés
+    hibát kiáltana egy hibátlan kalibrációra."""
+    from handball.pipeline.calib_overlay import court_polylines
+
+    tel = court_polylines()
+    bal = court_polylines("left")
+    jobb = court_polylines("right")
+    # Teljes: téglalap + felező + 2 kapuelőtér + 2 kapu = 6 vonal.
+    assert len(tel) == 6 and len(bal) == 4 and len(jobb) == 4
+    # A bal térfél rajza nem megy a felezőn túlra (x <= 20 m).
+    assert max(x for v in bal for x, _ in v) <= 20.0 + 1e-9
+    assert min(x for v in jobb for x, _ in v) >= 20.0 - 1e-9
+    # A pixelekre is átüt (a régió a hívási láncban végigmegy).
+    px_tel = overlay_pixels(_skala(10.0), None, 480, 240)
+    px_bal = overlay_pixels(_skala(10.0), None, 480, 240, "left")
+    assert len(px_bal) < len(px_tel)
+
+
+def test_a_meta_orzi_a_kalibralt_terfelet():
+    from handball.models.tracking import Match, MatchMeta
+
+    meta = MatchMeta(match_id="r", home_team="A", away_team="B", fps=8.0,
+                     calib_region="left")
+    ujra = Match.from_json(Match(meta, []).to_json())
+    assert ujra.meta.calib_region == "left"
+    regi = Match.from_dict({"meta": {"match_id": "r2", "home_team": "A",
+                                     "away_team": "B", "fps": 8.0},
+                            "frames": []})
+    assert regi.meta.calib_region is None

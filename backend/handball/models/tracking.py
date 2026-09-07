@@ -168,6 +168,11 @@ class MatchMeta:
     # felhasználó a szemével ellenőrzi, tartja-e a kalibráció a
     # svenkelés alatt. None = régi mentés vagy kalibráció nélkül.
     court_homography: Optional[list] = None
+    # Az elsődleges kalibráció TERÜLETE: "full" | "left" | "right"
+    # — fél-pályás kalibrációnál a rárajzolás és az illeszkedés-mérés
+    # csak a kalibrált térfél vonalait használja (a másik félen a
+    # homográfia erősen extrapolál). None = régi mentés (teljes).
+    calib_region: Optional[str] = None
     pan_keyframes: Optional[list] = None
     # KALIBRÁCIÓ-ILLESZKEDÉS a feldolgozás alatt mérve (calib_overlay
     # .line_fit_score a kulcs-kockákon): {"mean_fit", "min_fit",

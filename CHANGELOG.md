@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.105 óta)
 
+- **Fél-pályás kalibrációnál csak a kalibrált térfelet mérjük**
+  (feldolgozás + kalibráció-ellenőrzés): ha a kalibráció egy térfélre
+  készült (a kezdőképen csak az látszik), a rárajzolás és az
+  illeszkedés-mérés is csak annak a térfélnek a vonalait használja. A
+  másik félen a homográfia erősen extrapolál, ott a rajz eleve nem
+  ülhet a valódin — eddig ez felezte a mért illeszkedést, és a
+  jelentés hibát kiálthatott egy hibátlan kalibrációra (és az
+  önkorrekció is fölöslegesen igazított volna).
+
 - **A labda a birtokos kezében van** (3D pálya + böngészős 3D/VR): ha a
   legközelebbi játékos karnyújtásnyira van, a labda az ő kezében,
   kéz-magasságban, a haladás irányában kissé előtte — eddig a

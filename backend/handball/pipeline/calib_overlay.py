@@ -70,16 +70,30 @@ def keyframe_at(pan_keyframes: Optional[list], t: int) -> list:
     return talalt
 
 
-def court_polylines() -> list:
+def court_polylines(region: str = "full") -> list:
     """A pálya vonalai méterben: alapvonal-téglalap, felező, két
-    kapuelőtér (6 m — negyedkör + egyenes + negyedkör), két kapu."""
+    kapuelőtér (6 m — negyedkör + egyenes + negyedkör), két kapu.
+
+    `region`: "full" | "left" | "right" — FÉL-PÁLYÁS kalibrációnál csak
+    a kalibrált térfél vonalait rajzoljuk. A homográfia a másik
+    térfélen erősen extrapolál (a négy pont a fél pályát fogja körbe),
+    ott a rajz eleve nem ülhet a valódin — ha mégis bevennénk, a mért
+    illeszkedés a fele akkora lenne, és a jelentés hibát kiáltana egy
+    hibátlan kalibrációra.
+    """
     H, W = COURT_LENGTH_M, COURT_WIDTH_M
+    bal_fel = (region or "full") != "right"
+    jobb_fel = (region or "full") != "left"
+    x0 = 0.0 if bal_fel else H / 2
+    x1 = H if jobb_fel else H / 2
     vonalak = [
-        [(0.0, 0.0), (H, 0.0), (H, W), (0.0, W), (0.0, 0.0)],
+        [(x0, 0.0), (x1, 0.0), (x1, W), (x0, W), (x0, 0.0)],
         [(H / 2, 0.0), (H / 2, W)],
     ]
     also, felso = W / 2 - 1.5, W / 2 + 1.5
     for bal in (True, False):
+        if (bal and not bal_fel) or (not bal and not jobb_fel):
+            continue
         cx = 0.0 if bal else H
         elojel = 1.0 if bal else -1.0
         ut = []
@@ -98,7 +112,8 @@ def court_polylines() -> list:
 
 def overlay_pixels(court_homography: list, g_at_t: Optional[list] = None,
                    width: Optional[int] = None,
-                   height: Optional[int] = None) -> list:
+                   height: Optional[int] = None,
+                   region: str = "full") -> list:
     """A pálya vonalai PIXELBEN az adott kockán: G⁻¹ · H0⁻¹ · pálya.
 
     A kép mögé (a homográfia horizontja mögé) eső pontokat — ahol a
@@ -109,7 +124,7 @@ def overlay_pixels(court_homography: list, g_at_t: Optional[list] = None,
     h_inv = invert_3x3(court_homography)
     g_inv = invert_3x3(g_at_t) if g_at_t is not None else None
     ki = []
-    for vonal in court_polylines():
+    for vonal in court_polylines(region):
         pontok = []
         for (x, y) in vonal:
             # Alap-kocka pixel; a horizont mögötti pontot a nevező jelzi.
@@ -293,7 +308,8 @@ def _eltolt(polylines: list, dx: float, dy: float) -> list:
 
 
 def refine_shift(sav, alap: float, court_homography: list,
-                 g_at_t: Optional[list], width: int, height: int) -> dict:
+                 g_at_t: Optional[list], width: int, height: int,
+                 region: str = "full") -> dict:
     """A rajzolt vonalak legjobb ELTOLÁSA a kép élein (px, a kockán).
 
     Durva rács (REFINE_COARSE_PX) a ±REFINE_MAX_PX tartományon, majd
@@ -304,7 +320,7 @@ def refine_shift(sav, alap: float, court_homography: list,
     alap-kocka felé).
     """
     pts = sample_points(
-        overlay_pixels(court_homography, g_at_t, width, height))
+        overlay_pixels(court_homography, g_at_t, width, height, region))
     fit0 = fit_on_points(sav, alap, pts).get("fit")
     if fit0 is None:
         return {"dx": 0.0, "dy": 0.0, "fit": None, "fit0": None}
@@ -363,7 +379,8 @@ def shifted_g(g_at_t: Optional[list], dx: float, dy: float) -> list:
 
 
 def measure_and_correct(gray, court_homography: list, g_at_t: Optional[list],
-                        last_mode: str = "chain") -> dict:
+                        last_mode: str = "chain",
+                        region: str = "full") -> dict:
     """EGY kulcs-kocka mérése + önkorrekciója — a feldolgozó ezt hívja.
 
     1. illeszkedés a mostani G-vel; 2. ha FIT_REFINE_BELOW alatt ÉS a
@@ -379,11 +396,12 @@ def measure_and_correct(gray, court_homography: list, g_at_t: Optional[list],
     h, w = gray.shape[:2]
     sav, alap = edge_map(gray)
     f = fit_on_edge_map(sav, alap,
-                        overlay_pixels(court_homography, g_at_t, w, h)).get("fit")
+                        overlay_pixels(court_homography, g_at_t, w, h,
+                                       region)).get("fit")
     ki = {"g": g_at_t, "fit": f, "corrected": False, "dx": 0.0, "dy": 0.0}
     if f is None or f >= FIT_REFINE_BELOW or last_mode == "anchor":
         return ki
-    r = refine_shift(sav, alap, court_homography, g_at_t, w, h)
+    r = refine_shift(sav, alap, court_homography, g_at_t, w, h, region)
     if r["fit"] is None or r["fit"] < f + FIT_REFINE_GAIN:
         return ki
     ki.update({"g": shifted_g(g_at_t, r["dx"], r["dy"]), "fit": r["fit"],

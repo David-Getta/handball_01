@@ -2060,7 +2060,9 @@ def create_app():
             raise HTTPException(status_code=404, detail="frame not read")
         H_, W_ = img.shape[:2]
         g = keyframe_at(getattr(match.meta, "pan_keyframes", None), t)
-        draw_overlay(img, overlay_pixels(h0, g, W_, H_))
+        draw_overlay(img, overlay_pixels(
+            h0, g, W_, H_,
+            getattr(match.meta, "calib_region", None) or "full"))
         ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
         return Response(content=buf.tobytes(), media_type="image/jpeg")
 
