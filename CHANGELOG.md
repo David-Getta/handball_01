@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.105 óta)
+## Kiadatlan (a v0.1.106 óta)
 
 - **Fél-pályás kalibrációnál csak a kalibrált térfelet mérjük**
   (feldolgozás + kalibráció-ellenőrzés): ha a kalibráció egy térfélre
@@ -18,6 +18,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   legközelebbi játékos karnyújtásnyira van, a labda az ő kezében,
   kéz-magasságban, a haladás irányában kissé előtte — eddig a
   földszint fölött lebegett, mintha magától úszna a pályán.
+
+## v0.1.106 — kiadva (2026-09-07)
+
+> Kiadás-jegyzet: a 3D-ben a labda a birtokos kezében van, a demóban
+> is van kapus, és a nyomtatott jelentés mutatja a
+> kalibráció-illeszkedést.
 
 - **A demóban is van kapus** (3D pálya): mindkét csapat kapusa jelölve,
   így a demó-meccsen — amit a felhasználó közvetlenül a telepítés után
