@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.103 óta)
 
+- **Egyszerű módban sem lehet eltévedni** (bal menüsor): ha a
+  kezdőlapról olyan részre lépsz, ami a rövid menüben nincs benne
+  (Klipek, 3D pálya, Szezon…), a menüpont ilyenkor MEGJELENIK és
+  kijelölve látszik — eddig a menüben semmi nem lett volna kijelölve,
+  mintha eltévedt volna a felhasználó.
+
 ## v0.1.103 — kiadva (2026-09-06)
 
 > Kiadás-jegyzet: EGYSZERŰ MENÜ az alapértelmezés — a kezdőt hét

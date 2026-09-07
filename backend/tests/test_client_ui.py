@@ -2865,11 +2865,17 @@ def test_az_egyszeru_mod_az_alapertelmezes():
 
     shell = (gyoker / "ui" / "shell" / "app_shell.dart").read_text(
         encoding="utf-8")
-    assert "kSimpleNav" in shell and "List<(String, List<(NavId, IconData, String)>)> navGroups()" in shell
+    assert "kSimpleNav" in shell
+    assert "navGroups([NavId? aktiv])" in shell
     # A menü és a gyorsbillentyűk a SZŰRT listából épülnek (különben a
     # rejtett pontok billentyűvel mégis elérhetők lennének, elcsúszva).
-    assert "for (final (_, group) in navGroups()) ...group" in shell
-    assert "for (final (groupName, group) in navGroups()) ...[" in shell
+    assert "for (final (_, group) in navGroups(active)) ...group" in shell
+    assert ("for (final (groupName, group) in navGroups(widget.active)) ...["
+            in shell)
+    # Az ÉPPEN NYITOTT képernyő akkor is látszik a menüben, ha egyszerű
+    # módban rejtve volna (a kezdőlapról több gomb visz rejtett részre) —
+    # különben a felhasználó azt látná, hogy semmi nincs kijelölve.
+    assert "|| elem.$1 == aktiv" in shell
     assert '"Több funkció"' in shell and '"Egyszerű menü"' in shell
     # A kezdő-halmaz a mindennapi munkát fedi le, és nem üres csoportot ad.
     for kell in ("NavId.dashboard", "NavId.upload", "NavId.jobs",

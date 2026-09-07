@@ -94,13 +94,18 @@ const Set<NavId> kSimpleNav = {
 
 /// A menü a MOSTANI mód szerint: egyszerű módban csak a kSimpleNav
 /// elemei, teljes módban minden. Az üres csoportok kimaradnak.
-List<(String, List<(NavId, IconData, String)>)> navGroups() {
+///
+/// Az ÉPPEN NYITOTT képernyő (`aktiv`) akkor is bekerül, ha egyszerű
+/// módban rejtve volna: a kezdőlapról több gomb visz rejtett részekre
+/// (Klipek, 3D pálya, Szezon), és ott a felhasználó azt látná, hogy a
+/// menüben semmi nincs kijelölve — mintha eltévedt volna.
+List<(String, List<(NavId, IconData, String)>)> navGroups([NavId? aktiv]) {
   if (!SessionStore.simpleMode) return kNavGroups;
   final ki = <(String, List<(NavId, IconData, String)>)>[];
   for (final (nev, csoport) in kNavGroups) {
     final szurt = [
       for (final elem in csoport)
-        if (kSimpleNav.contains(elem.$1)) elem
+        if (kSimpleNav.contains(elem.$1) || elem.$1 == aktiv) elem
     ];
     if (szurt.isNotEmpty) ki.add((nev, szurt));
   }
@@ -239,7 +244,7 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Gyors navigáció: Cmd/Ctrl + 1..N a menü sorrendjében.
-    final items = [for (final (_, group) in navGroups()) ...group];
+    final items = [for (final (_, group) in navGroups(active)) ...group];
     const digits = [
       LogicalKeyboardKey.digit1, LogicalKeyboardKey.digit2,
       LogicalKeyboardKey.digit3, LogicalKeyboardKey.digit4,
@@ -701,7 +706,7 @@ class _SideNavState extends State<_SideNav> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (final (groupName, group) in navGroups()) ...[
+                    for (final (groupName, group) in navGroups(widget.active)) ...[
                       _sectionLabel(groupName),
                       for (final (id, icon, label) in group)
                         _NavItem(
