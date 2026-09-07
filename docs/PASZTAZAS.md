@@ -85,6 +85,17 @@ a valódira kell ülnie**: ha az elején ül, de a közepén nem, a
 pásztázás-követés csúszott el (kevés horgony — nézd a `pan_anchor_pct`
 értékét); ha már a kalibrált kockán sem ül, a 4 sarok rossz.
 
+### Fél-pályás kalibráció
+
+Ha a kalibráció egy térfélre készült (a kezdőképen csak az
+látszik), a rárajzolás és a mérés is CSAK annak a térfélnek a
+vonalait használja (`court_polylines(region)`, a meccs mellett
+`calib_region`). A másik félen a homográfia erősen extrapolál —
+ott a rajz eleve nem ülhet a valódin, és ha bevennénk, a mért
+illeszkedés fele akkora lenne: a jelentés hibát kiáltana egy
+hibátlan kalibrációra, az önkorrekció pedig fölöslegesen
+igazítana.
+
 ### Illeszkedés számokban
 
 Ugyanezt a motor géppel is méri (`line_fit_score`): a rajzolt vonalak
