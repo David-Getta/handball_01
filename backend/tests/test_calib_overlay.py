@@ -408,8 +408,11 @@ def test_mindket_vegpont_a_kalibralt_terfelet_hasznalja():
     from pathlib import Path as _Path
     forras = (_Path(__file__).resolve().parent.parent / "handball" / "api"
               / "app.py").read_text(encoding="utf-8")
-    assert forras.count('getattr(match.meta, "calib_region", None) or "full"') >= 2
-    assert "overlay_pixels(h0, keyframe_at(kf, t), W_, H_, reg)" in forras
+    # A közös segéd adja a párokat (két térfél-kalibrációnál mindkettőt,
+    # régi mentésen az egyetlen homográfiát) — MINDKÉT végpont ezt hívja.
+    assert "def calib_pairs_of(match)" in forras
+    assert forras.count("calib_pairs_of(match)") >= 2
+    assert 'getattr(match.meta, "calib_region", None) or "full"' in forras
 
 
 def test_ket_kalibraciobol_a_jobban_illeszkedo_szamit():
@@ -433,3 +436,23 @@ def test_ket_kalibraciobol_a_jobban_illeszkedo_szamit():
     # Egy homográfia átadása továbbra is működik (visszafelé kompatibilis).
     egy = measure_and_correct(kep, h0, None, "anchor")
     assert abs((egy["fit"] or 0) - parban["fit"]) < 1e-9
+
+
+def test_a_calib_parok_visszafele_kompatibilisek():
+    """A közös segéd: új mentésen a párok, RÉGI mentésen az egyetlen
+    homográfia + régió, geometria nélkül üres lista."""
+    from handball.api.app import calib_pairs_of
+    from handball.models.tracking import Match, MatchMeta
+
+    def _m(**kw):
+        return Match(MatchMeta(match_id="x", home_team="A", away_team="B",
+                               fps=8.0, **kw), [])
+
+    assert calib_pairs_of(_m()) == []
+    egy = calib_pairs_of(_m(court_homography=_skala(10.0),
+                            calib_region="left"))
+    assert egy == [(_skala(10.0), "left")]
+    ketto = calib_pairs_of(_m(
+        court_homography=_skala(10.0), calib_region="left",
+        calib_pairs=[[_skala(10.0), "left"], [_skala(8.0), "right"]]))
+    assert len(ketto) == 2 and ketto[1][1] == "right"

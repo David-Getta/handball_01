@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.107 óta)
 
+- **A Kalibráció ellenőrzése mindkét térfél vonalait mutatja**
+  (meccs-nézet): két térfél-kalibrációnál a rárajzolás mindkettőt
+  felrajzolja, a mérés pedig a jobban illeszkedőt veszi — eddig
+  csak az elsődleges kalibráció látszott, így a másik félen
+  ellenőrizhetetlen volt a pontosság. Régi mentésen változatlanul
+  az egyetlen kalibrációval megy.
+
 - **Két kalibrációnál mindkét térfelet mérjük** (feldolgozás): ha a
   felhasználó külön bal és jobb térfél kalibrációt vett fel, az
   illeszkedés-mérés és az önkorrekció MINDKETTŐT megpróbálja, és a

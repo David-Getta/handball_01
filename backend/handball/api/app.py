@@ -75,6 +75,24 @@ def preemptable_jobs(jobs, job_id: str, queue_behind: bool) -> list:
             if j.get("job_id") != job_id and j.get("status") == "running"]
 
 
+def calib_pairs_of(match) -> list:
+    """A meccs kalibráció-párjai [(H0, régió), …].
+
+    Két térfél-kalibrációnál mindkettő; régi mentésen (a calib_pairs
+    mező előttről) az egyetlen court_homography + calib_region páros.
+    Üres lista, ha nincs geometria — a hívó ebből tudja, hogy nem tud
+    rajzolni/mérni.
+    """
+    parok = getattr(match.meta, "calib_pairs", None)
+    if parok:
+        return [(p[0], str(p[1]) if len(p) > 1 else "full")
+                for p in parok if p and p[0]]
+    h0 = getattr(match.meta, "court_homography", None)
+    if not h0:
+        return []
+    return [(h0, getattr(match.meta, "calib_region", None) or "full")]
+
+
 def train_metrics(eredmeny) -> dict:
     """A tanítás mérőszámai emberi alakban (0..1 → %).
 
@@ -2060,9 +2078,8 @@ def create_app():
             raise HTTPException(status_code=404, detail="frame not read")
         H_, W_ = img.shape[:2]
         g = keyframe_at(getattr(match.meta, "pan_keyframes", None), t)
-        draw_overlay(img, overlay_pixels(
-            h0, g, W_, H_,
-            getattr(match.meta, "calib_region", None) or "full"))
+        for _h0, _reg in calib_pairs_of(match):
+            draw_overlay(img, overlay_pixels(_h0, g, W_, H_, _reg))
         ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
         return Response(content=buf.tobytes(), media_type="image/jpeg")
 
@@ -2107,7 +2124,7 @@ def create_app():
         # FÉL-PÁLYÁS kalibrációnál csak a kalibrált térfél vonalait
         # mérjük (a másik félen a homográfia extrapolál) — ugyanaz a
         # szabály, mint a feldolgozás alatti mérésnél.
-        reg = getattr(match.meta, "calib_region", None) or "full"
+        parok = calib_pairs_of(match)
         try:
             for i in range(n):
                 t = match.frames[round(i * utolso / (n - 1))].t
@@ -2117,9 +2134,14 @@ def create_app():
                     continue
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 H_, W_ = gray.shape[:2]
-                o = line_fit_score(
-                    gray,
-                    overlay_pixels(h0, keyframe_at(kf, t), W_, H_, reg))
+                o = {"fit": None, "samples": 0}
+                for _h0, _reg in parok:
+                    _o = line_fit_score(
+                        gray,
+                        overlay_pixels(_h0, keyframe_at(kf, t), W_, H_, _reg))
+                    if _o["fit"] is not None and (
+                            o["fit"] is None or _o["fit"] > o["fit"]):
+                        o = _o
                 pontok.append({"t": int(t), "fit": o["fit"],
                                "samples": o["samples"]})
         finally:

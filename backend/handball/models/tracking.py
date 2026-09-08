@@ -173,6 +173,11 @@ class MatchMeta:
     # csak a kalibrált térfél vonalait használja (a másik félen a
     # homográfia erősen extrapolál). None = régi mentés (teljes).
     calib_region: Optional[str] = None
+    # MINDEN kalibráció [[H0 3x3, régió], …] — két térfél-kalibrációnál
+    # a rárajzolás és a mérés mindkettőt használja (a svenkelő kamera
+    # hol az egyiket, hol a másikat nézi). None = régi mentés: ilyenkor
+    # a court_homography + calib_region párost használjuk.
+    calib_pairs: Optional[list] = None
     pan_keyframes: Optional[list] = None
     # KALIBRÁCIÓ-ILLESZKEDÉS a feldolgozás alatt mérve (calib_overlay
     # .line_fit_score a kulcs-kockákon): {"mean_fit", "min_fit",

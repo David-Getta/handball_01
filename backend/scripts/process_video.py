@@ -1035,7 +1035,15 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                              if calib_list else None),
                          calib_region=(
                              str(calib_list[0].get("region") or "full")
-                             if calib_list else None))
+                             if calib_list else None),
+                         # MINDEN kalibráció (H0 + régió): két
+                         # térfél-kalibrációnál a rárajzolás és a mérés
+                         # mindkettőt használja.
+                         calib_pairs=(
+                             [[[[float(v) for v in sor] for sor in m_[2]],
+                               str(c_.get("region") or "full")]
+                              for m_, c_ in zip(mappers, calib_list)]
+                             if calib_list and mappers else None))
         if rec_date:
             say(f"meccs-dátum a videóból: {rec_date}")
         frames = []
