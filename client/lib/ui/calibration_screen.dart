@@ -128,6 +128,19 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   bool _suggesting = false;
   String? _suggestNote;
 
+  // ILLESZKEDÉS-MÉRÉS: a motor megméri, mennyire ül a rajzolt pálya-modell
+  // a valódi pályavonalakon EZEN a kockán (ugyanaz a mérés, amit a
+  // feldolgozás is végez menet közben) — a szem a néhány képpontos
+  // csúszást elnézi, pedig a játékos-helyek azon múlnak. Ha egy eltolás
+  // érdemben javítana, egy gombbal ráigazítható.
+  bool _fitting = false;
+  Map<String, dynamic>? _fit; // az utolsó mérés eredménye
+  String? _fitNote;
+  // Mire vonatkozott a mérés (sarkok + kocka + terület): ha azóta
+  // elmozdult egy sarok, a szám már NEM a képernyőn látható rajzé —
+  // ilyenkor elavultnak jelöljük, nem hazudunk friss értéket.
+  String? _fitKey;
+
   // Melyik területet jelöljük be: teljes pálya vagy csak az egyik térfél
   // (pásztázó kameránál az induló képen sokszor csak egy térfél látszik).
   String _region = "full"; // full | left | right
@@ -702,6 +715,28 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                     style: AppText.label.copyWith(fontSize: 11.5)),
               ],
               const SizedBox(height: AppSpacing.sm),
+              // Gépi ellenőrzés: ül-e a rajz a valódi pályavonalakon.
+              OutlinedButton.icon(
+                onPressed: _fitting ? null : _measureFit,
+                icon: _fitting
+                    ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.straighten, size: 18),
+                label: Text(_fitting
+                    ? "Illeszkedés mérése…"
+                    : "Illeszkedés ellenőrzése"),
+              ),
+              if (_fitNote != null) ...[
+                const SizedBox(height: 6),
+                Text(_fitNote!,
+                    style: AppText.label.copyWith(fontSize: 11.5)),
+              ],
+              if (_fit != null) ...[
+                const SizedBox(height: 6),
+                _fitCard(),
+              ],
+              const SizedBox(height: AppSpacing.sm),
             ],
             FilledButton.icon(
               style: FilledButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
@@ -801,6 +836,158 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     } finally {
       if (mounted) setState(() => _suggesting = false);
     }
+  }
+
+  /// A jelenlegi rajz azonosítója — ehhez tartozik az utolsó mérés.
+  String get _rajzKulcs {
+    final b = StringBuffer("$_frameIdx|$_region|$_rotate");
+    for (final c in _corners) {
+      b.write("|${c.dx.toStringAsFixed(4)},${c.dy.toStringAsFixed(4)}");
+    }
+    return b.toString();
+  }
+
+  /// Elavult-e az utolsó mérés (azóta mozdult egy sarok / kocka / terület)?
+  bool get _fitElavult => _fit != null && _fitKey != _rajzKulcs;
+
+  /// ILLESZKEDÉS MÉRÉSE: a motor megméri, mennyire ül a rajzolt pálya-
+  /// modell a kép valódi vonalain (0..1), és megmondja, javítana-e egy
+  /// eltolás. Ugyanaz a mérés, amit a feldolgozás is végez a kulcs-
+  /// kockákon — csak MÉG az órákig tartó feldolgozás előtt.
+  Future<void> _measureFit() async {
+    final path = widget.videoPath;
+    if (path == null || _fitting) return;
+    setState(() {
+      _fitting = true;
+      _fitNote = null;
+    });
+    try {
+      final api = ApiClient(baseUrl: widget.baseUrl);
+      final r = _currentResult();
+      final kulcs = _rajzKulcs;
+      final m = await api.fetchCalibScore(
+        videoPath: path,
+        frame: _frameIdx,
+        corners: [
+          for (final c in r.corners) [c[0].toDouble(), c[1].toDouble()]
+        ],
+        region: _region,
+        rotate: _rotate,
+      );
+      if (!mounted) return;
+      setState(() {
+        _fit = m;
+        _fitKey = kulcs;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _fitNote =
+          "Az illeszkedés mérése nem sikerült: ${humanError(e)}");
+    } finally {
+      if (mounted) setState(() => _fitting = false);
+    }
+  }
+
+  /// A javasolt eltolás alkalmazása: MIND A NÉGY sarkot ugyanannyival
+  /// toljuk (a négy sarok azonos eltolása pontosan a rajzolt vonalak
+  /// eltolása), majd újramérünk, hogy a szám is a friss rajzé legyen.
+  Future<void> _applyFitShift() async {
+    final m = _fit;
+    if (m == null) return;
+    final dx = (m["dx"] as num?)?.toDouble() ?? 0.0;
+    final dy = (m["dy"] as num?)?.toDouble() ?? 0.0;
+    if (dx == 0 && dy == 0) return;
+    final w = (m["width"] as num?)?.toDouble() ?? _frameSize?.width ?? 1920.0;
+    final h = (m["height"] as num?)?.toDouble() ?? _frameSize?.height ?? 1080.0;
+    // Képpont → vászon-arány (a kép körüli sávot is beleszámítva).
+    final ax = dx / w * (1 - 2 * _margin);
+    final ay = dy / h * (1 - 2 * _margin);
+    setState(() {
+      _corners = [for (final c in _corners) Offset(c.dx + ax, c.dy + ay)];
+      _saved = false;
+      _fit = null;
+      _fitKey = null;
+    });
+    await _measureFit();
+  }
+
+  /// Az illeszkedés-mérés eredménye edzőnyelven, a javasolt igazítással.
+  /// A színküszöbök a motoréi (calib_overlay: CALIB_FIT_GOOD = 0.5 fölött
+  /// jó, CALIB_FIT_WEAK = 0.3 alatt gyenge) — az ítéletet és a mondatot
+  /// maga a motor adja, hogy egy helyen legyen megfogalmazva.
+  Widget _fitCard() {
+    final m = _fit!;
+    final fit = (m["fit"] as num?)?.toDouble();
+    final itelet = m["itelet"] as String?;
+    final szin = switch (itelet) {
+      "jó" => AppColors.accent,
+      "közepes" => AppColors.gold,
+      _ => AppColors.away,
+    };
+    String szam(double v) => v.toStringAsFixed(2).replaceAll(".", ",");
+    final dx = (m["dx"] as num?)?.toDouble() ?? 0.0;
+    final dy = (m["dy"] as num?)?.toDouble() ?? 0.0;
+    final javasolt = m["javasolt"] == true && (dx != 0 || dy != 0);
+    final javitva = (m["fit_javitva"] as num?)?.toDouble();
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: szin.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: szin.withOpacity(0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(
+                itelet == "jó"
+                    ? Icons.check_circle
+                    : itelet == "közepes"
+                        ? Icons.info_outline
+                        : Icons.warning_amber_rounded,
+                size: 16, color: szin),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                  fit == null
+                      ? "Nem mérhető"
+                      : "Illeszkedés: ${szam(fit)} — ${itelet ?? "?"}",
+                  style: AppText.label
+                      .copyWith(fontSize: 12, color: szin)),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Text("${m["uzenet"] ?? ""}",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+          if (javasolt) ...[
+            const SizedBox(height: 6),
+            Text(
+                "A motor szerint ${dx.round()} / ${dy.round()} képpont "
+                "eltolással jobban ülne"
+                "${javitva != null ? " (${szam(javitva)})" : ""}.",
+                style: AppText.label.copyWith(fontSize: 11.5)),
+            const SizedBox(height: 4),
+            OutlinedButton.icon(
+              onPressed: _fitting ? null : _applyFitShift,
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.gold,
+                  side: const BorderSide(color: AppColors.gold)),
+              icon: const Icon(Icons.open_with, size: 16),
+              label: const Text("Igazítsd rá (mind a 4 sarkot)"),
+            ),
+          ],
+          if (_fitElavult) ...[
+            const SizedBox(height: 6),
+            Text(
+                "A sarkok azóta mozdultak — ez a szám még a korábbi "
+                "rajzé. Mérj újra.",
+                style: AppText.label
+                    .copyWith(fontSize: 11.5, color: AppColors.gold)),
+          ],
+        ],
+      ),
+    );
   }
 
   /// CalibrationResult-tá alakítva, képpont-koordinátákkal.

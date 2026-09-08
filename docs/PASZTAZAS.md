@@ -111,6 +111,24 @@ mindenhol él van, 0 = csak a padló. Két helyen jelenik meg:
 - **kérésre** (`GET /matches/{id}/calib-fit?n=8`): nyolc egyenletesen
   elosztott kockán újraméri, a "Kalibráció ellenőrzése" ablak mutatja.
 
+### Mérés MÉG a feldolgozás előtt (kalibráló képernyő)
+
+Ugyanez a mérés a kalibráló képernyőn is elérhető, a most bejelölt 4
+sarokra (`GET /calib-score?path=&t=&calib=&region=&rotate=`; itt nincs
+kameramozgás, G = egység) — az "Illeszkedés ellenőrzése" gomb mögött.
+A számhoz edzői ítélet jár (`calib_verdict`): `CALIB_FIT_GOOD` (0,5)
+fölött **jó**, `CALIB_FIT_WEAK` (0,3) alatt **gyenge**, közte
+**közepes** — a küszöbök a feldolgozáséi.
+
+A végpont azt is megnézi (`refine_shift`), hogy egy ±24 px-es
+eltolással jobban ülne-e a rajz. Ha érdemben igen (legalább
+`CALIB_SHIFT_GAIN` = 0,05 javulás ÉS legalább `CALIB_SHIFT_MIN_PX` =
+4 px elmozdulás), a kliens felkínálja az "Igazítsd rá" gombot: **mind
+a négy sarkot** ugyanannyival tolja el — négy pont azonos eltolása
+pontosan a rajz eltolása, mert a belőlük számolt homográfia ilyenkor
+T·H0. Ha a mérés után elmozdul egy sarok, a kiírt szám elavultnak
+jelölődik: nem a képernyőn látható rajzé.
+
 ### Önkorrekció a pályavonalak alapján
 
 A harmadik becslő. Ha egy kulcs-kockán az illeszkedés `FIT_REFINE_BELOW`

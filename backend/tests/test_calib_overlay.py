@@ -480,3 +480,100 @@ def test_a_kulcskockak_kozott_simán_interpolalunk():
     assert keyframe_at(kf, 100)[0][2] == -32.0
     # Az első kulcs ELŐTT az első.
     assert keyframe_at([[10, kf[1][1]]], 0)[0][2] == -32.0
+
+
+def test_a_kalibracio_itelete_a_mert_illeszkedesbol():
+    """A kalibráló képernyő ítélete: a szám mellé edzőnyelvű mondat, és
+    csak akkor kínálunk eltolást, ha van mit igazítani ÉS tényleg javul.
+    A "javasolt=False" mellé a dx/dy nullázódik: a kliens gombja nem
+    tolhat el semmit egy fölösleges javaslat alapján."""
+    from handball.pipeline.calib_overlay import (
+        CALIB_FIT_GOOD, CALIB_FIT_WEAK, CALIB_SHIFT_GAIN,
+        CALIB_SHIFT_MIN_PX, calib_verdict,
+    )
+
+    assert CALIB_FIT_GOOD > CALIB_FIT_WEAK
+    # Nem mérhető: a rajz a képen kívül — teendővel.
+    nincs = calib_verdict(None)
+    assert nincs["itelet"] is None and nincs["javasolt"] is False
+    assert "képen" in nincs["uzenet"]
+    assert calib_verdict(CALIB_FIT_GOOD + 0.1)["itelet"] == "jó"
+    assert calib_verdict(CALIB_FIT_WEAK + 0.05)["itelet"] == "közepes"
+    assert calib_verdict(CALIB_FIT_WEAK - 0.05)["itelet"] == "gyenge"
+
+    # Érdemi eltolás + érdemi javulás → felkínáljuk.
+    jo = calib_verdict(0.30, {"dx": -12.0, "dy": 6.0,
+                              "fit": 0.30 + CALIB_SHIFT_GAIN + 0.05})
+    assert jo["javasolt"] is True and jo["dx"] == -12.0 and jo["dy"] == 6.0
+    assert jo["fit_javitva"] is not None and jo["fit_javitva"] > jo["fit"]
+    # Pici eltolás (a sarok-húzás pontosságán belül) → nem kínáljuk.
+    pici = calib_verdict(0.30, {"dx": CALIB_SHIFT_MIN_PX - 2.0, "dy": 0.0,
+                                "fit": 0.9})
+    assert pici["javasolt"] is False and pici["dx"] == 0.0
+    # Nagy eltolás, de alig javul → nem kínáljuk.
+    alig = calib_verdict(0.30, {"dx": -16.0, "dy": 0.0,
+                                "fit": 0.30 + CALIB_SHIFT_GAIN / 2})
+    assert alig["javasolt"] is False and alig["dx"] == 0.0
+
+
+def _vonalas_video(tmp_path, h0, w=480, h=240, n=4):
+    """Videó, aminek MINDEN kockája a (h0) szerint rárajzolt pálya —
+    ezen a "valódi" pályavonalak pontosan ott vannak, ahova a helyes
+    kalibráció rajzol."""
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    from handball.pipeline.calib_overlay import draw_overlay
+
+    img = np.full((h, w, 3), 30, np.uint8)
+    draw_overlay(img, overlay_pixels(h0, None, w, h),
+                 color=(255, 255, 255), thickness=2)
+    p = tmp_path / "vonalak.mp4"
+    vw = cv2.VideoWriter(str(p), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                         (w, h))
+    for _ in range(n):
+        vw.write(img)
+    vw.release()
+    return p
+
+
+def test_a_kalibralo_kepernyo_meri_es_igazitja_az_illeszkedest(tmp_path):
+    """A /calib-score végpont a MOST bejelölt sarkokra méri, mennyire ül
+    a rajz a valódi vonalakon — még az órákig tartó feldolgozás előtt.
+    A jól bejelölt sarok "jó" ítéletet kap, az elcsúsztatott gyengébbet,
+    és a javaslat pont visszafelé mutat (a kliens ennyivel tolja el mind
+    a négy sarkot)."""
+    import json
+
+    pytest.importorskip("cv2")
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    h0 = _skala(10.0)                     # 40x20 m → 400x200 px
+    video = _vonalas_video(tmp_path, h0)
+    jo_sarkok = [[0, 0], [400, 0], [400, 200], [0, 200]]
+    c = TestClient(create_app())
+
+    def mer(sarkok):
+        r = c.get("/calib-score", params={
+            "path": str(video), "t": 1, "calib": json.dumps(sarkok)})
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    jo = mer(jo_sarkok)
+    assert jo["fit"] is not None and jo["fit"] > 0.5, jo
+    assert jo["itelet"] == "jó" and jo["javasolt"] is False
+    assert jo["width"] == 480 and jo["height"] == 240
+
+    # Ugyanaz a kép, de a bejelölt négyszög 12/8 px-szel odébb: a rajz a
+    # padlón fut, és a javaslat visszafelé mutat.
+    el = mer([[x + 12, y + 8] for x, y in jo_sarkok])
+    assert el["fit"] is not None and el["fit"] < jo["fit"], (jo, el)
+    assert el["javasolt"] is True, el
+    assert -18 <= el["dx"] <= -6 and -14 <= el["dy"] <= -2, el
+
+    # Kapuőrök: nincs videó / hibás sarok-paraméter.
+    assert c.get("/calib-score", params={
+        "path": str(tmp_path / "nincs.mp4"), "t": 1,
+        "calib": json.dumps(jo_sarkok)}).status_code == 404
+    assert c.get("/calib-score", params={
+        "path": str(video), "t": 1, "calib": "[[0,0]]"}).status_code == 400

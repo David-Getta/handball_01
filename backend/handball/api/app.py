@@ -593,6 +593,80 @@ def create_app():
             raise HTTPException(status_code=500,
                                 detail=f"a vonal-felismerés nem sikerült: {e}")
 
+    @app.get("/calib-score")
+    def calib_score(path: str, t: int = 100, calib: str = "",
+                    region: str = "full", rotate: bool = False):
+        """MENNYIRE ÜL a bejelölt kalibráció a valódi pályavonalakon?
+
+        A kalibráló képernyő gépi ellenőrzése — ugyanaz a mérés, amit a
+        feldolgozás is végez a kulcs-kockákon (`calib_overlay`), csak MÉG
+        az indítás ELŐTT, a most bejelölt 4 sarokra. A szem könnyen
+        elnézi a néhány képpontos csúszást, pedig a játékos-helyek azon
+        múlnak.
+
+        Emellett megkeresi, hogy egy ELTOLÁSSAL (±REFINE_MAX_PX) jobban
+        ülne-e a rajz — ha érdemben igen, a kliens egy gombbal ráigazítja
+        mind a négy sarkot (a négy sarok azonos eltolása pontosan a rajz
+        eltolása).
+
+        Visszatérés: {"fit", "itelet", "uzenet", "dx", "dy",
+        "fit_javitva", "javasolt", "width", "height", "t", "region"}.
+        400: hibás calib-paraméter / nem nyitható videó; 404: nincs ilyen
+        kocka.
+        """
+        import os
+
+        import cv2
+
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="video not found")
+        try:
+            corners = json.loads(calib) if calib else None
+        except Exception:
+            corners = None
+        if not corners or len(corners) != 4:
+            raise HTTPException(
+                status_code=400,
+                detail="a calib paraméter 4 sarokpont JSON-ban")
+        from ..video_io import VideoOpenError, open_capture
+        try:
+            cap = open_capture(path)
+        except VideoOpenError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(t))
+        ok, frame = cap.read()
+        cap.release()
+        if not ok or frame is None:
+            raise HTTPException(status_code=404, detail="frame not read")
+        import sys
+        backend_dir = str(Path(__file__).resolve().parents[2])
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+        try:
+            from scripts.process_video import _calib_court_points
+
+            from ..pipeline import calib_overlay as co
+            from ..pipeline._homography import homography_from_points
+            pts_m = _calib_court_points(region, bool(rotate))
+            # kép → pálya (H0), ahogy a feldolgozás is tárolja
+            h0 = homography_from_points(
+                [tuple(map(float, p)) for p in corners], pts_m)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            h, w = gray.shape[:2]
+            sav, alap = co.edge_map(gray)
+            fit = co.fit_on_edge_map(
+                sav, alap,
+                co.overlay_pixels(h0, None, w, h, region)).get("fit")
+            shift = (co.refine_shift(sav, alap, h0, None, w, h, region)
+                     if fit is not None else None)
+            ki = co.calib_verdict(fit, shift)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"az illeszkedés-mérés nem sikerült: {e}")
+        ki.update({"width": w, "height": h, "t": int(t), "region": region})
+        return ki
+
     @app.get("/detect-preview")
     def detect_preview(path: str, t: int = 100, imgsz: int = 1280,
                        calib: str | None = None, region: str = "full",

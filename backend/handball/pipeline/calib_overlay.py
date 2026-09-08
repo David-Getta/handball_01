@@ -438,3 +438,60 @@ def measure_and_correct(gray, court_homography, g_at_t: Optional[list],
     ki.update({"g": shifted_g(g_at_t, r["dx"], r["dy"]), "fit": r["fit"],
                "corrected": True, "dx": r["dx"], "dy": r["dy"]})
     return ki
+
+
+# A KALIBRÁLÓ KÉPERNYŐ ítélete — ugyanaz a mérés, csak MÉG a feldolgozás
+# ELŐTT: a bejelölt 4 sarokból rajzolt pálya-modell mennyire ül a valódi
+# vonalakon EZEN az egy kockán (itt nincs kameramozgás, G = egység).
+# A küszöbök a feldolgozáséi: a "jó" a FIT_REFINE_BELOW (e fölött a motor
+# sem igazítana), a "gyenge" a minőség-riasztásé (quality.CALIB_FIT_WARN).
+CALIB_FIT_GOOD = 0.5
+CALIB_FIT_WEAK = 0.3
+# Az eltolás-javaslat két feltétele: legyen mit igazítani (ennél kisebb
+# elcsúszás a sarok-húzás pontosságán belül van), és tényleg javuljon.
+CALIB_SHIFT_MIN_PX = 4.0
+CALIB_SHIFT_GAIN = 0.05
+
+
+def calib_verdict(fit: Optional[float], shift: Optional[dict] = None) -> dict:
+    """Edzőnyelvű ítélet a kalibráció illeszkedéséről + eltolás-javaslat.
+
+    - `fit`: a mért illeszkedés (0..1) az eltolás nélküli rajzra, vagy
+      None (a vonalak a képen kívül / túl kevés minta).
+    - `shift`: a `refine_shift` eredménye, ha megvan.
+
+    Visszatérés: {"fit", "itelet" ("jó"|"közepes"|"gyenge"|None),
+    "uzenet", "dx", "dy", "fit_javitva", "javasolt"} — a "javasolt" azt
+    mondja meg, érdemes-e felkínálni az eltolást a felhasználónak (a
+    kliens ennyivel tolja el mind a négy sarkot). Tiszta függvény: kép
+    nélkül tesztelhető.
+    """
+    if fit is None:
+        return {"fit": None, "itelet": None, "dx": 0.0, "dy": 0.0,
+                "fit_javitva": None, "javasolt": False,
+                "uzenet": "Nem mérhető: a bejelölt pálya nagyrészt a képen "
+                          "kívülre esik — húzd a sarkokat a látható "
+                          "pályaszélekre."}
+    if fit >= CALIB_FIT_GOOD:
+        itelet = "jó"
+        uzenet = "A rajzolt vonalak ülnek a valódi pályavonalakon."
+    elif fit >= CALIB_FIT_WEAK:
+        itelet = "közepes"
+        uzenet = ("A rajz nagyjából ül, de csúszik — finomíts a sarkokon "
+                  "a nyilakkal (a 6 m-es ív a legárulkodóbb).")
+    else:
+        itelet = "gyenge"
+        uzenet = ("A rajzolt vonalak NEM a valódi pályavonalakon vannak: "
+                  "így a játékos-helyek is elcsúsznának. Igazíts a "
+                  "sarkokon, vagy válassz olyan kockát, ahol jobban "
+                  "látszik a pálya.")
+    dx = float((shift or {}).get("dx") or 0.0)
+    dy = float((shift or {}).get("dy") or 0.0)
+    uj = (shift or {}).get("fit")
+    javasolt = bool(
+        uj is not None and uj >= fit + CALIB_SHIFT_GAIN
+        and math.hypot(dx, dy) >= CALIB_SHIFT_MIN_PX)
+    return {"fit": round(fit, 3), "itelet": itelet, "uzenet": uzenet,
+            "dx": dx if javasolt else 0.0, "dy": dy if javasolt else 0.0,
+            "fit_javitva": round(float(uj), 3) if uj is not None else None,
+            "javasolt": javasolt}

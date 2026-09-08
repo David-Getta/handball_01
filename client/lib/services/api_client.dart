@@ -1398,6 +1398,33 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A KALIBRÁCIÓ ellenőrzése MÉG a feldolgozás előtt (GET /calib-score):
+  /// a most bejelölt 4 sarokból rajzolt pálya-modell mennyire ül a valódi
+  /// pályavonalakon ezen a kockán (0..1), edzőnyelvű ítélettel — és ha egy
+  /// eltolás érdemben javítana, a javasolt (dx, dy) képpontban.
+  Future<Map<String, dynamic>> fetchCalibScore({
+    required String videoPath,
+    required int frame,
+    required List<List<double>> corners,
+    String region = "full",
+    bool rotate = false,
+  }) async {
+    final q = {
+      "path": videoPath,
+      "t": "$frame",
+      "calib": jsonEncode(corners),
+      "region": region,
+      "rotate": "$rotate",
+    };
+    final uri = Uri.parse("$baseUrl/calib-score")
+        .replace(queryParameters: q);
+    final resp = await http.get(uri);
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az illeszkedés mérése", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// UTÓLAGOS vágás (POST /matches/{id}/trim): a megadott játékidő-
   /// ablakon kívüli rész eldobása az elemzésből. A tipikus eset a
   /// bennmaradt bemutatás/bemelegítés — a felhasználó tudja, mikor

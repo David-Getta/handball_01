@@ -3,7 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.108 óta)
+## Kiadatlan (a v0.1.109 óta)
+
+- **Illeszkedés-ellenőrzés a kalibráló képernyőn** (kalibráció): a
+  "Illeszkedés ellenőrzése" gomb megméri, mennyire ülnek a bejelölt
+  sarkokból rajzolt pályavonalak a kép VALÓDI vonalain (0..1) — ugyanaz
+  a mérés, amit a feldolgozás is végez menet közben, csak MÉG az
+  órákig tartó feldolgozás előtt. Edzői ítélet jár hozzá (jó / közepes /
+  gyenge) és teendő; ha egy eltolással érdemben jobban ülne a rajz, egy
+  gombbal mind a négy sarok ráigazítható. A szem a néhány képpontos
+  csúszást elnézi — pedig a játékos-helyek pontossága azon múlik.
+
+## v0.1.109 — kiadva (2026-09-08)
+
+> Kiadás-jegyzet: pontosabb kamera-követés — a kalibrált képhez
+> méréskor a legtöbb egyező pontot adó horgony nyer, és a kulcs-kockák
+> között simán interpolálunk.
 
 - **A legjobb horgony nyer, nem az első** (feldolgozás): a kamera-mozgás
   a kalibrált képhez mérésekor eddig az ELSŐ olyan horgony számított,

@@ -156,3 +156,28 @@ def test_a_megbizhatosag_a_jelentes_folott_latszik():
     # A figyelmeztetés a szekciók ELŐTT álljon a listában.
     assert src.index("MENNYIRE BÍZHATSZ EBBEN") < src.index(
         "EDZŐI ÖSSZEFOGLALÓ")
+
+
+def test_az_illeszkedes_merheto_a_kalibralo_kepernyorol():
+    """A gépi ellenőrzés MÉG az indítás előtt: a szem a néhány képpontos
+    csúszást elnézi, pedig a játékos-helyek azon múlnak. A kliensnek
+    legyen gombja a méréshez, és a javasolt eltolást is tudja
+    alkalmazni (mind a négy sarkot ugyanannyival — ez pontosan a rajz
+    eltolása)."""
+    src = _calib_src()
+    assert "_measureFit" in src, "nincs mérés-hívás"
+    assert "Illeszkedés ellenőrzése" in src, "nincs gomb a méréshez"
+    assert "_applyFitShift" in src, "a javaslat nem alkalmazható"
+    assert "Igazítsd rá" in src
+    api = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+           / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "fetchCalibScore" in api and "/calib-score" in api
+
+
+def test_az_elavult_illeszkedes_meres_nem_hazudik_frisset():
+    """Ha a mérés után elmozdul egy sarok, a kiírt szám már NEM a
+    képernyőn látható rajzé — a kliens ezt mondja is meg (különben a
+    felhasználó egy rossz kalibrációra hivatkozó jó számot lát)."""
+    src = _calib_src()
+    assert "_fitElavult" in src
+    assert "azóta mozdultak" in src
