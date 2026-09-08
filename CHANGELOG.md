@@ -3,13 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.107 óta)
+## Kiadatlan (a v0.1.108 óta)
 
 - **Sima kamera-követés a kulcs-kockák között** (kalibráció-ellenőrzés):
   a kamera-mátrixot 2 másodpercenként mentjük; eddig a köztes kockákra
   a legutolsó kulcs értéke ment, így a rárajzolt vonal két kulcs között
   tíz-húsz pixelt csúszhatott — a felhasználó ezt a kalibráció hibájának
   látta. Mostantól a két szomszédos kulcs között simán interpolálunk.
+
+## v0.1.108 — kiadva (2026-09-08)
+
+> Kiadás-jegyzet: két térfél-kalibrációnál mindkét fél vonalai
+> látszanak és mérődnek — a svenkelő kamera hol az egyiket, hol a
+> másikat nézi, és a mérés a jobban illeszkedőt veszi.
 
 - **A Kalibráció ellenőrzése mindkét térfél vonalait mutatja**
   (meccs-nézet): két térfél-kalibrációnál a rárajzolás mindkettőt
