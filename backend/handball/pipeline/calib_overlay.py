@@ -56,18 +56,36 @@ def sample_pan_keyframes(pan_list: list, fps: float) -> list:
 
 
 def keyframe_at(pan_keyframes: Optional[list], t: int) -> list:
-    """A t kockához tartozó G: az utolsó kulcs-kocka, amelynek t-je ≤ t
-    (a két kulcs között a kamera nem megy messzire). Ha nincs, egység."""
+    """A t kockához tartozó G a két szomszédos kulcs-kocka közt
+    INTERPOLÁLVA (eltolásban lineárisan).
+
+    A kulcsokat 2 másodpercenként mentjük; egy svenkelő kamera ennyi idő
+    alatt tíz-húsz pixelt is fordul. A "legutolsó kulcs" használata a
+    két kulcs között ennyivel csúszó rajzot adna — a felhasználó ezt a
+    kalibráció hibájának látná. A homográfia többi eleme (forgatás,
+    skála) a kulcsokból jön: a közelebbi kulcsé, mert azok arányos
+    keverése nem lenne érvényes homográfia.
+    """
     egyseg = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
     if not pan_keyframes:
         return egyseg
-    talalt = egyseg
+    elozo = None
     for tk, g in pan_keyframes:
         if tk <= t:
-            talalt = g
+            elozo = (tk, g)
         else:
-            break
-    return talalt
+            if elozo is None:
+                return g          # t az első kulcs ELŐTT: az első kulcs
+            t0, g0 = elozo
+            if tk == t0:
+                return g0
+            a = (t - t0) / (tk - t0)
+            alap = g0 if a < 0.5 else g   # a közelebbi kulcs alakja
+            ki = [list(sor) for sor in alap]
+            ki[0][2] = g0[0][2] + (g[0][2] - g0[0][2]) * a
+            ki[1][2] = g0[1][2] + (g[1][2] - g0[1][2]) * a
+            return ki
+    return elozo[1] if elozo else egyseg
 
 
 def court_polylines(region: str = "full") -> list:

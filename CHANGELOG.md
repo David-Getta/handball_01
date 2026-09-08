@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.107 óta)
 
+- **Sima kamera-követés a kulcs-kockák között** (kalibráció-ellenőrzés):
+  a kamera-mátrixot 2 másodpercenként mentjük; eddig a köztes kockákra
+  a legutolsó kulcs értéke ment, így a rárajzolt vonal két kulcs között
+  tíz-húsz pixelt csúszhatott — a felhasználó ezt a kalibráció hibájának
+  látta. Mostantól a két szomszédos kulcs között simán interpolálunk.
+
 - **A Kalibráció ellenőrzése mindkét térfél vonalait mutatja**
   (meccs-nézet): két térfél-kalibrációnál a rárajzolás mindkettőt
   felrajzolja, a mérés pedig a jobban illeszkedőt veszi — eddig

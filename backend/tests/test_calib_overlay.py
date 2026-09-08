@@ -77,9 +77,12 @@ def test_kulcskockak_ritkitasa_es_visszakeresese():
     lista[lepes] = None  # egy hiányzó mátrix: átugorjuk
     kf = sample_pan_keyframes(lista, fps)
     assert [k[0] for k in kf] == [0, 2 * lepes, 3 * lepes]
-    # A t-hez az utolsó ≤ t kulcs tartozik; t=0 előtt / üres: egység.
+    # A kulcsok KÖZÖTT interpolálunk (2 mp alatt a kamera sokat fordul):
+    # a 0 és a 2*lepes kulcs (tx = 0 és 2*lepes) közti felezőpont ~fele.
     assert keyframe_at(kf, 3 * lepes + 5)[0][2] == float(3 * lepes)
-    assert keyframe_at(kf, 2 * lepes - 1)[0][2] == 0.0
+    kozep = keyframe_at(kf, lepes)[0][2]
+    assert abs(kozep - lepes) < 1e-6, kozep
+    assert keyframe_at(kf, 0)[0][2] == 0.0
     assert keyframe_at([], 10) == EGYSEG
     assert keyframe_at(None, 10) == EGYSEG
     assert sample_pan_keyframes([], fps) == []
@@ -456,3 +459,24 @@ def test_a_calib_parok_visszafele_kompatibilisek():
         court_homography=_skala(10.0), calib_region="left",
         calib_pairs=[[_skala(10.0), "left"], [_skala(8.0), "right"]]))
     assert len(ketto) == 2 and ketto[1][1] == "right"
+
+
+def test_a_kulcskockak_kozott_simán_interpolalunk():
+    """A kulcsokat 2 mp-enként mentjük; egy svenkelő kamera ennyi idő
+    alatt tíz-húsz pixelt is fordul. A "legutolsó kulcs" használata a
+    két kulcs között ennyivel csúszó rajzot adna — a felhasználó ezt a
+    kalibráció hibájának látná."""
+    from handball.pipeline.calib_overlay import keyframe_at
+
+    kf = [[0, [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]],
+          [16, [[1.0, 0.0, -32.0], [0.0, 1.0, 8.0], [0.0, 0.0, 1.0]]]]
+    # A felezőpontban az eltolás fele-fele.
+    kozep = keyframe_at(kf, 8)
+    assert abs(kozep[0][2] + 16.0) < 1e-6 and abs(kozep[1][2] - 4.0) < 1e-6
+    # A kulcsokon pontosan a kulcs értéke.
+    assert keyframe_at(kf, 0)[0][2] == 0.0
+    assert keyframe_at(kf, 16)[0][2] == -32.0
+    # Az utolsó kulcs UTÁN az utolsó kulcs (nem extrapolálunk).
+    assert keyframe_at(kf, 100)[0][2] == -32.0
+    # Az első kulcs ELŐTT az első.
+    assert keyframe_at([[10, kf[1][1]]], 0)[0][2] == -32.0
