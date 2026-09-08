@@ -181,3 +181,17 @@ def test_az_elavult_illeszkedes_meres_nem_hazudik_frisset():
     src = _calib_src()
     assert "_fitElavult" in src
     assert "azóta mozdultak" in src
+
+
+def test_mentes_elott_gepileg_is_ellenorizzuk_a_kalibraciot():
+    """A négyszög lehet szabályos, és mégis a valódi pályavonalak
+    MELLETT — a kezdő ezt nem veszi észre, a feldolgozás viszont eleve
+    elcsúszott helyekkel indulna. Mentés előtt tehát megmérjük, és
+    gyenge illeszkedésnél rákérdezünk (de nem tiltjuk: a mérés nem
+    csalhatatlan, és a motor elérhetetlensége se blokkolhassa a
+    kalibrálást)."""
+    src = _calib_src()
+    ment = src.split("Future<void> _save()")[1][:2600]
+    assert "_measureFit" in ment, "mentés előtt nincs gépi ellenőrzés"
+    assert '"gyenge"' in ment, "nem a gyenge ítéletnél kérdez rá"
+    assert "Mentés így is" in ment, "nem lehet mégis menteni"

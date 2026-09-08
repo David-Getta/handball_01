@@ -1072,6 +1072,45 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       );
       if (go != true || !mounted) return;
     }
+    // GÉPI ellenőrzés mentés előtt: a négyszög lehet szabályos, és
+    // mégis a valódi pályavonalak MELLETT — a kezdő ezt nem veszi
+    // észre, a feldolgozás viszont eleve elcsúszott helyekkel indulna.
+    // A mérés csendben elmarad, ha a motor nem érhető el: a kalibrálás
+    // nem múlhat egy ellenőrzésen.
+    if (widget.videoPath != null && (_fit == null || _fitElavult)) {
+      await _measureFit();
+      if (!mounted) return;
+    }
+    // Az ítéletet a motor adja (calib_overlay: CALIB_FIT_WEAK = 0.3 alatt
+    // "gyenge"); a párbeszéd a jó küszöböt is kimondja, hogy legyen mihez
+    // mérni a látott számot (CALIB_FIT_GOOD = 0.5).
+    final mert = _fit;
+    if (mert != null && !_fitElavult && mert["itelet"] == "gyenge") {
+      final fitSzam = (mert["fit"] as num?)?.toDouble();
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("A rajz nem ül a pályavonalakon"),
+          content: Text(
+              "${mert["uzenet"]}\n\n"
+              "Mért illeszkedés: "
+              "${fitSzam == null ? "—" : fitSzam.toStringAsFixed(2).replaceAll(".", ",")}"
+              " (a jó 0,50 fölött van).",
+              style: AppText.label),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Javítom")),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text("Mentés így is",
+                    style: TextStyle(color: AppColors.gold))),
+          ],
+        ),
+      );
+      if (go != true || !mounted) return;
+    }
     final res = _currentResult();
     // A vágólapra is (CLI-hez / hibakereséshez).
     final json =

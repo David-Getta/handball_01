@@ -14,6 +14,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   gombbal mind a négy sarok ráigazítható. A szem a néhány képpontos
   csúszást elnézi — pedig a játékos-helyek pontossága azon múlik.
 
+- **Mentés előtt magától is ellenőrzi** (kalibráció): a kalibráció
+  mentésekor a rendszer megméri az illeszkedést, és ha a rajz NEM a
+  valódi pályavonalakon van, rákérdez ("Javítom" / "Mentés így is") —
+  a kezdőnek nem kell tudnia, hogy van ilyen gomb. A négyszög eddig
+  csak alaki ellenőrzést kapott (nem fajzott-e el, jó-e a sarkok
+  sorrendje); egy szabályos, de a vonalak mellé húzott négyszög
+  átment rajta.
+
 ## v0.1.109 — kiadva (2026-09-08)
 
 > Kiadás-jegyzet: pontosabb kamera-követés — a kalibrált képhez
