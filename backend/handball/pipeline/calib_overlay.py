@@ -378,7 +378,7 @@ def shifted_g(g_at_t: Optional[list], dx: float, dy: float) -> list:
             for i in range(3)]
 
 
-def measure_and_correct(gray, court_homography: list, g_at_t: Optional[list],
+def measure_and_correct(gray, court_homography, g_at_t: Optional[list],
                         last_mode: str = "chain",
                         region: str = "full") -> dict:
     """EGY kulcs-kocka mérése + önkorrekciója — a feldolgozó ezt hívja.
@@ -389,19 +389,32 @@ def measure_and_correct(gray, court_homography: list, g_at_t: Optional[list],
     a visszatérésben. Tiszta függvény (a követőt a hívó frissíti a
     "corrected" jelzésre), videó nélkül tesztelhető.
 
+    `court_homography` lehet EGY homográfia, vagy — két kalibrációnál
+    (külön bal és jobb térfél) — [(H0, region), …] lista. A svenkelő
+    kamera hol az egyik, hol a másik felet nézi: mindegyiket megmérjük,
+    és a LEGJOBB (legtöbb élre ülő) számít. Amelyik térfél épp nincs a
+    képen, ott kevés a minta, és a mérés None-t ad — magától kiesik.
+
     Visszatérés: {"g": G (igazított vagy az eredeti), "fit": mért
     illeszkedés (az igazítás utáni, ha volt), "corrected": bool,
     "dx", "dy"}.
     """
     h, w = gray.shape[:2]
+    parok = (court_homography if isinstance(court_homography, list)
+             and court_homography and isinstance(court_homography[0], tuple)
+             else [(court_homography, region)])
     sav, alap = edge_map(gray)
-    f = fit_on_edge_map(sav, alap,
-                        overlay_pixels(court_homography, g_at_t, w, h,
-                                       region)).get("fit")
+    legjobb_f, legjobb_par = None, parok[0]
+    for h0, reg in parok:
+        f0 = fit_on_edge_map(sav, alap,
+                             overlay_pixels(h0, g_at_t, w, h, reg)).get("fit")
+        if f0 is not None and (legjobb_f is None or f0 > legjobb_f):
+            legjobb_f, legjobb_par = f0, (h0, reg)
+    f = legjobb_f
     ki = {"g": g_at_t, "fit": f, "corrected": False, "dx": 0.0, "dy": 0.0}
     if f is None or f >= FIT_REFINE_BELOW or last_mode == "anchor":
         return ki
-    r = refine_shift(sav, alap, court_homography, g_at_t, w, h, region)
+    r = refine_shift(sav, alap, legjobb_par[0], g_at_t, w, h, legjobb_par[1])
     if r["fit"] is None or r["fit"] < f + FIT_REFINE_GAIN:
         return ki
     ki.update({"g": shifted_g(g_at_t, r["dx"], r["dy"]), "fit": r["fit"],

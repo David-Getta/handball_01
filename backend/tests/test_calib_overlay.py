@@ -410,3 +410,26 @@ def test_mindket_vegpont_a_kalibralt_terfelet_hasznalja():
               / "app.py").read_text(encoding="utf-8")
     assert forras.count('getattr(match.meta, "calib_region", None) or "full"') >= 2
     assert "overlay_pixels(h0, keyframe_at(kf, t), W_, H_, reg)" in forras
+
+
+def test_ket_kalibraciobol_a_jobban_illeszkedo_szamit():
+    """Két kalibrációnál (bal + jobb térfél) a svenkelő kamera hol az
+    egyik, hol a másik felet nézi: a mérés MINDKETTŐT megpróbálja, és a
+    jobban illeszkedőt veszi — a képen kívüli fél magától kiesik."""
+    from handball.pipeline.calib_overlay import measure_and_correct
+
+    h0 = _skala(10.0)                     # a valódi vonalak ezzel állnak
+    rossz = _skala(6.0)                   # ez mellémenne
+    kep = _vonalas_kep(h0, None, w=480, h=240)
+
+    # Csak a rosszal: gyenge illeszkedés.
+    csak_rossz = measure_and_correct(kep, rossz, None, "anchor")
+    # A kettő közül a jó számít (a párokat listaként adjuk át).
+    parban = measure_and_correct(kep, [(rossz, "full"), (h0, "full")],
+                                 None, "anchor")
+    assert parban["fit"] is not None
+    assert parban["fit"] > (csak_rossz["fit"] or 0.0) + 0.2, (
+        csak_rossz, parban)
+    # Egy homográfia átadása továbbra is működik (visszafelé kompatibilis).
+    egy = measure_and_correct(kep, h0, None, "anchor")
+    assert abs((egy["fit"] or 0) - parban["fit"]) < 1e-9

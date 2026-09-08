@@ -1271,10 +1271,19 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             from handball.pipeline._homography import homography_from_points
             from handball.pipeline.calib_overlay import PAN_KEYFRAME_S
             _c0 = calib_list[0]
-            _fit_h0 = homography_from_points(
-                [tuple(p) for p in _c0["corners"]],
-                _calib_court_points(_c0.get("region", "full"),
-                                    bool(_c0.get("rotate"))))
+            # MINDEN kalibráció (nem csak az elsődleges): a svenkelő
+            # kamera hol az egyik, hol a másik térfelet nézi — a mérés a
+            # legjobban illeszkedőt veszi, a képen kívüli fél magától
+            # kiesik (kevés minta → nincs ítélet).
+            _fit_parok = []
+            for _c in calib_list:
+                _fit_parok.append((
+                    homography_from_points(
+                        [tuple(p) for p in _c["corners"]],
+                        _calib_court_points(_c.get("region", "full"),
+                                            bool(_c.get("rotate")))),
+                    str(_c.get("region") or "full")))
+            _fit_h0 = _fit_parok
             _fit_every = max(1, int(round(PAN_KEYFRAME_S * fps / max(1, stride))))
             _fit_region = str(_c0.get("region") or "full")
         except Exception:

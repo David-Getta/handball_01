@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.107 óta)
 
+- **Két kalibrációnál mindkét térfelet mérjük** (feldolgozás): ha a
+  felhasználó külön bal és jobb térfél kalibrációt vett fel, az
+  illeszkedés-mérés és az önkorrekció MINDKETTŐT megpróbálja, és a
+  jobban illeszkedőt veszi — a svenkelő kamera hol az egyik, hol a
+  másik felet nézi, a képen kívüli fél magától kiesik (kevés minta →
+  nincs ítélet). Eddig csak az elsődleges kalibrációval mértünk, így a
+  másik térfélre fordulva a mérés hamisan alacsony volt.
+
 ## v0.1.107 — kiadva (2026-09-07)
 
 > Kiadás-jegyzet: fél-pályás kalibrációnál csak a kalibrált térfelet
