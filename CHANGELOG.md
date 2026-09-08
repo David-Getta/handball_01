@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.108 óta)
 
+- **A legjobb horgony nyer, nem az első** (feldolgozás): a kamera-mozgás
+  a kalibrált képhez mérésekor eddig az ELSŐ olyan horgony számított,
+  amelyik átment a küszöbön — akkor is, ha épphogy (25 egyező pont),
+  miközben egy másik kétszázat adott volna. Mostantól a legtöbb egyező
+  pontot adó illesztés nyer: ez pontosabb kamera-állást, és így
+  pontosabb játékos-helyeket ad.
+
 - **Sima kamera-követés a kulcs-kockák között** (kalibráció-ellenőrzés):
   a kamera-mátrixot 2 másodpercenként mentjük; eddig a köztes kockákra
   a legutolsó kulcs értéke ment, így a rárajzolt vonal két kulcs között

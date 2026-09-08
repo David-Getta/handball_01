@@ -127,34 +127,37 @@ class PanTracker:
         return pts, des
 
     def _fit_to_anchor(self, pts, des, anchor):
-        """Aktuális → horgony homográfia RANSAC-kal, vagy None."""
+        """Aktuális → horgony homográfia RANSAC-kal: (H, belsők) vagy
+        (None, 0). A belső (inlier) pontok száma az illesztés EREJE — a
+        hívó ez alapján választ a horgonyok közül."""
         import cv2
         import numpy as np
         a_pts, a_des, _ = anchor
         try:
             parok = self._bf.knnMatch(des, a_des, k=2)
         except cv2.error:
-            return None
+            return None, 0
         jo = [m for m, n in (p for p in parok if len(p) == 2)
               if m.distance < self.ANCHOR_RATIO * n.distance]
         if len(jo) < self.ANCHOR_MIN_INLIERS:
-            return None
+            return None, 0
         src = np.float32([pts[m.queryIdx] for m in jo]).reshape(-1, 1, 2)
         dst = np.float32([a_pts[m.trainIdx] for m in jo]).reshape(-1, 1, 2)
         H, inl = cv2.findHomography(src, dst, cv2.RANSAC, 4.0)
         if H is None or inl is None or int(inl.sum()) < self.ANCHOR_MIN_INLIERS:
-            return None
+            return None, 0
+        belsok = int(inl.sum())
         if abs(H[2][2]) < 1e-9:
-            return None
+            return None, 0
         H = H / H[2][2]
         # Józanság: egy svenk nem zoom és nem tükrözés.
         det = H[0][0] * H[1][1] - H[0][1] * H[1][0]
         if det <= 0:
-            return None
+            return None, 0
         skala = float(np.sqrt(det))
         if not (1.0 / self.ANCHOR_MAX_SCALE <= skala <= self.ANCHOR_MAX_SCALE):
-            return None
-        return H
+            return None, 0
+        return H, belsok
 
     def _try_anchor(self, gray, mask):
         """Illesztés a legközelebbi horgonyokhoz; siker esetén G frissül."""
@@ -169,10 +172,16 @@ class PanTracker:
             g = a[2]
             return (float(g[0][2]) - tx) ** 2 + (float(g[1][2]) - ty) ** 2
 
+        # A LEGJOBB illesztés nyer, nem az első: egy közeli horgony
+        # adhat épphogy elfogadható (25 belső pontos) illesztést, míg egy
+        # másik kétszázat — az utóbbi sokkal pontosabb kamera-állást ad.
+        legjobb_H, legjobb_n, legjobb_a = None, 0, None
         for anchor in sorted(self._anchors, key=_tav)[: self.ANCHOR_TRY_NEAREST]:
-            H = self._fit_to_anchor(pts, des, anchor)
-            if H is None:
-                continue
+            H, belsok = self._fit_to_anchor(pts, des, anchor)
+            if H is not None and belsok > legjobb_n:
+                legjobb_H, legjobb_n, legjobb_a = H, belsok, anchor
+        if legjobb_H is not None:
+            H, anchor = legjobb_H, legjobb_a
             self._G = anchor[2] @ H  # aktuális → horgony → alap
             self.stats["anchored"] += 1
             self._maybe_add_anchor(pts, des)

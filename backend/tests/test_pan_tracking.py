@@ -267,3 +267,19 @@ def test_az_utolso_becsles_forrasa_kovetheto():
     tr.update(np.zeros_like(img))
     tr.update(np.zeros_like(img))
     assert tr.last_mode == "held"
+
+
+def test_a_legjobb_horgony_nyer_nem_az_elso():
+    """ŐR: a horgony-választás a LEGTÖBB belső pontot adó illesztést
+    veszi, nem az elsőt, ami épphogy átmegy a küszöbön — egy gyenge
+    illesztés pontatlan kamera-állást ad, és azon áll vagy bukik a
+    helyek pontossága."""
+    from pathlib import Path
+    forras = (Path(__file__).resolve().parent.parent / "handball" /
+              "pipeline" / "pan_tracking.py").read_text(encoding="utf-8")
+    assert "legjobb_H, legjobb_n, legjobb_a" in forras
+    assert "if H is not None and belsok > legjobb_n:" in forras
+    # A fit-függvény a belső pontok számát is visszaadja (különben nem
+    # lehetne választani).
+    assert "return H, belsok" in forras
+    assert forras.count("return None, 0") >= 5
