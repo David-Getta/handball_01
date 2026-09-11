@@ -630,3 +630,30 @@ def test_a_termeketlen_kedvenc_figura_edzes_szabaly_valodi_retegbol():
     tetelek = training_focus(m)["home"]
     cimek = [t["title"] for t in tetelek]
     assert any(c.startswith("Terméketlen kedvenc figura") for c in cimek), cimek
+
+
+def test_a_visszatero_figura_kezdokockai_klip_exporthoz():
+    """A könyvtári alakhoz illő támadások kezdő-kockái — "mutasd a
+    figurát, amit mindig hoznak". Az alak irány-normált: a másik kapura
+    támadó meccsen is megtalálja."""
+    from handball.pipeline.setplays import (
+        recurring_figure_starts, setplay_library, setplay_shapes)
+
+    m1 = _spl_match(["bal"] * 4 + ["jobb"] * 3, "m1")
+    m2 = _spl_match(["bal"] * 3, "m2", toward="left")
+    cfg2 = TacticsConfig(home_attacks_positive=False)
+    sorok = ([{**r, "match_id": "m1"} for r in setplay_shapes(m1)["home"]]
+             + [{**r, "match_id": "m2"}
+                for r in setplay_shapes(m2, cfg2)["home"]])
+    assert all("starts" in r for r in sorok)
+    fo = setplay_library(sorok)["recurring"][0]
+    # Az m1-ben 4 bal oldali támadás (12 kockánként), a jobb oldaliak nem.
+    assert recurring_figure_starts(m1, fo["shape"], Team.HOME) == [0, 12, 24, 36]
+    # Az m2-ben (a másik kapura) is megvan mind a három.
+    assert recurring_figure_starts(m2, fo["shape"], Team.HOME, cfg2) == [0, 12, 24]
+    # Idegen alakhoz semmi; üres alakhoz semmi; a vendégnek nincs támadása.
+    tavol = [0.0] * 18
+    tavol[2] = 1.0
+    assert recurring_figure_starts(m1, tavol, Team.HOME) == []
+    assert recurring_figure_starts(m1, [], Team.HOME) == []
+    assert recurring_figure_starts(m1, fo["shape"], Team.AWAY) == []

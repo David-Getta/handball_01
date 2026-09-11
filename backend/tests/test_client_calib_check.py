@@ -212,3 +212,16 @@ def test_a_visszatero_figurak_rajzzal_latszanak_a_felderitesen():
     assert 'r["setplay_library"]' in src
     assert '("Visszatérő figuráik", Icons.replay_outlined)' in src, (
         "a szakasz nincs az ugró-sávban")
+
+
+def test_a_visszatero_figura_klip_tipus_mindket_oldalon_letezik():
+    """A "visszatérő figura" klip-típus: a kliens kínálja, a motor vágja —
+    ha csak az egyik oldal tudna róla, a gomb üres csomagot adna."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    dart = (gyoker / "client" / "lib" / "ui"
+            / "clips_screen.dart").read_text(encoding="utf-8")
+    api = (gyoker / "backend" / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '("recurring_figure", "A visszatérő figura"' in dart
+    assert '"recurring_figure" in types' in api
+    assert "recurring_figure_starts(" in api

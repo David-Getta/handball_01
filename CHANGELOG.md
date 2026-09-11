@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.112 óta)
 
+- **A visszatérő figura videón** (klipek): új klip-típus, "A visszatérő
+  figura" — a csapat könyvtárából (az összes elemzett meccséből) a
+  meccsről meccsre visszatérő fő figurát veszi, és ebből a meccsből
+  kivágja azokat a támadásokat, amelyek ezt játsszák. Egy meccsből nincs
+  könyvtár: több elemzett meccs kell hozzá — a gomb ezt mondja is.
+
 - **Illeszkedés-ellenőrzés az összenézetben is** (kalibráció): a két
   térfél összeillesztett nézetében eddig nem volt gépi mérés. Mostantól
   az "Illeszkedés ellenőrzése (mindkét fél)" gomb mindkét térfél

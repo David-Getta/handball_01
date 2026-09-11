@@ -806,7 +806,8 @@ def setplay_shapes(match: Match, config: TacticsConfig | None = None,
     fésüli össze.
 
     Visszatérés: {"home": [{"shape", "zone", "attacks", "shots",
-    "goals", "matches": 1}], "away": [...]} — támadás szerint csökkenő.
+    "goals", "matches": 1, "starts" (a támadások kezdő-kockái,
+    klip-exporthoz)}], "away": [...]} — támadás szerint csökkenő.
     """
     from .event_detection import EventType, detect_shots
 
@@ -826,9 +827,10 @@ def setplay_shapes(match: Match, config: TacticsConfig | None = None,
         for seq, sig, lab in zip(seqs, sigs, labels):
             rec = agg.setdefault(lab, {"sum": [0.0] * len(sig),
                                        "attacks": 0, "shots": 0,
-                                       "goals": 0})
+                                       "goals": 0, "starts": []})
             rec["sum"] = [a + b for a, b in zip(rec["sum"], sig)]
             rec["attacks"] += 1
+            rec["starts"].append(int(seq.start_t))
             for e in shots_ev:
                 if e.team == team and \
                         seq.start_t <= e.t <= seq.end_t + tail:
@@ -842,7 +844,8 @@ def setplay_shapes(match: Match, config: TacticsConfig | None = None,
             shape = [round(v / rec["attacks"], 4) for v in rec["sum"]]
             rows.append({"shape": shape, "zone": shape_zone(shape),
                          "attacks": rec["attacks"], "shots": rec["shots"],
-                         "goals": rec["goals"], "matches": 1})
+                         "goals": rec["goals"], "matches": 1,
+                         "starts": rec["starts"]})
         rows.sort(key=lambda r: (-r["attacks"], -r["goals"]))
         out[team.value] = rows
     return out
@@ -923,3 +926,23 @@ def setplay_library(shapes: list, threshold: float = SPL_MERGE_THRESHOLD,
                    "erre a mintára készüljetek: videó, bejátszott "
                    "védekezés, a súlypont sávjának lezárása")
     return {"figures": figures, "recurring": recurring, "verdict": verdict}
+
+
+def recurring_figure_starts(match: Match, shape: list, team: Team,
+                            config: TacticsConfig | None = None,
+                            threshold: float = SPL_MERGE_THRESHOLD,
+                            min_length: int = 5) -> list[int]:
+    """E meccs támadásai közül azoknak a kezdő-kockái, amelyek alakja a
+    megadott (könyvtári) alakhoz illik — "mutasd a figurát, amit mindig
+    hoznak" klip-exporthoz. A könyvtár alakja irány-normált, ezért az
+    illesztés is az; a küszöb a könyvtári összevonásé."""
+    if not shape:
+        return []
+    config = config or TacticsConfig()
+    ki = []
+    for seq in segment_attacks(match, config, min_length=min_length):
+        if seq.team != team:
+            continue
+        if _distance(normalized_signature(seq), shape) <= threshold:
+            ki.append(int(seq.start_t))
+    return ki

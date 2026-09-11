@@ -3255,6 +3255,41 @@ def create_app():
                            for t_bf in best_bf.get("starts", [])]
             except Exception:
                 pass
+        if "recurring_figure" in types:
+            # A VISSZATÉRŐ figura: a csapat könyvtárából (az összes
+            # elemzett meccséből) a meccsről meccsre visszatérő fő
+            # figura, és e meccs azon támadásai, amelyek ezt játsszák —
+            # "ezt hozzák mindig", videón. Egy meccsből nincs könyvtár.
+            try:
+                from ..pipeline.setplays import (
+                    recurring_figure_starts, setplay_library,
+                    setplay_shapes)
+                for side in ("home", "away"):
+                    nev_rf = (match.meta.home_team if side == "home"
+                              else match.meta.away_team)
+                    sorok_rf = []
+                    for m_rf in _season_matches():
+                        oldal_rf = ("home" if m_rf.meta.home_team == nev_rf
+                                    else "away"
+                                    if m_rf.meta.away_team == nev_rf
+                                    else None)
+                        if oldal_rf is None:
+                            continue
+                        sorok_rf += [
+                            {**r, "match_id": m_rf.meta.match_id}
+                            for r in setplay_shapes(m_rf)[oldal_rf]]
+                    rec_rf = setplay_library(sorok_rf).get("recurring") or []
+                    if not rec_rf:
+                        continue
+                    fo_rf = rec_rf[0]
+                    ev += [{"t": t_rf, "type": "recurring_figure",
+                            "team": side,
+                            "label": f"visszatérő figura: {fo_rf['zone']}"}
+                           for t_rf in recurring_figure_starts(
+                               match, fo_rf["shape"],
+                               Team.HOME if side == "home" else Team.AWAY)]
+            except Exception:
+                pass
         if "pivot_goal" in types:
             # Beállós gólok: a beállón átfutó, gólra váltott
             # támadások — a beadás-játék videós visszanézése.

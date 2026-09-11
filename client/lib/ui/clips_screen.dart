@@ -46,6 +46,8 @@ const List<(String, List<ClipKind>)> kClipGroups = [
         "nagy értékű helyzet, ami nem ment be — a legfájóbb anyag"),
     ("top_shooter", "A fő lövő lövései", "egy ember teljes lövés-képe"),
     ("best_figure", "A legjobb figura", "amit érdemes ismételni"),
+    ("recurring_figure", "A visszatérő figura",
+        "amit meccsről meccsre hoznak — több elemzett meccs kell hozzá"),
     ("pivot_goal", "Beállós gólok", "a beadás-játék videón"),
     ("turnover", "Labdaeladások", "hol veszik el a labda"),
   ]),
