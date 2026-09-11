@@ -203,6 +203,13 @@ jobs:
           if (Test-Path $mc) {
             (Get-Content $mc) -replace 'L"handball_client"', 'L"Sport Machine"' | Set-Content $mc
           }
+          # A Sport Machine JELKÉPE az .exe és az ablak ikonjaként (a
+          # `flutter create` a Flutter alap-ikonját teszi ide). Ugyanaz a
+          # rajz, mint az appban látható logó — lásd packaging/make_icons.py.
+          $ico = "..\packaging\icons\sportmachine.ico"
+          if (Test-Path $ico) {
+            Copy-Item $ico "windows\runner\resources\app_icon.ico" -Force
+          }
       - name: Verziószám beírása (automatikus frissítéshez)
         # A kiadott app "tudja" a saját verzióját — ehhez képest nézi a
         # GitHub Releases-t, hogy van-e újabb. Fejlesztésben "0.0.0-dev" marad.
@@ -394,6 +401,20 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleName Sport Machine" "$PL" || true
           /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Sport Machine" "$PL" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Sport Machine" "$PL" || true
+      - name: App-ikon beállítása (Sport Machine jelkép)
+        # A `flutter create` a Flutter alap-ikonját teszi az
+        # AppIcon.appiconset-be. Ugyanazt a jelképet tesszük ide, amit az
+        # app a fejlécében és a nyitóképernyőn rajzol — lásd
+        # packaging/make_icons.py. Best effort: nem töri a buildet.
+        working-directory: client
+        run: |
+          DEST=macos/Runner/Assets.xcassets/AppIcon.appiconset
+          if [ -d "$DEST" ]; then
+            for f in ../packaging/icons/app_icon_*.png; do
+              [ -e "$f" ] && cp "$f" "$DEST/$(basename "$f")"
+            done
+            ls -la "$DEST"
+          fi
       - name: Verziószám beírása (automatikus frissítéshez)
         # A kiadott app "tudja" a saját verzióját — ehhez képest nézi a
         # GitHub Releases-t, hogy van-e újabb. Fejlesztésben "0.0.0-dev" marad.

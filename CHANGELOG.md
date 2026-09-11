@@ -3,7 +3,31 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.109 óta)
+## Kiadatlan (a v0.1.110 óta)
+
+- **Saját jelkép (logó) az appban és a gépen** (megjelenés): eddig az app
+  fejlécében és a nyitóképernyőn egy általános háromszög-ikon állt, a
+  telepítő és az asztali parancsikon pedig a Flutter alap-ikonját
+  viselte. Mostantól EGY jelkép van mindenhol: felülnézeti pálya a két
+  kapuelőtér arany félkörével és egy labdával, ami a gépi követés nyomát
+  húzza maga után. Az appban rajzolva (élesen skálázódik), a Windows
+  telepítőn / .exe-n és a macOS appon ikonként, a nyomtatható
+  jelentések fejlécében pedig beágyazott rajzként — így a kinyomtatott
+  lapon is ott a márka. A rajz forrása kód (`packaging/make_icons.py`),
+  bármikor újragenerálható.
+
+- **Mentés előtt magától is ellenőrzi** (kalibráció): a kalibráció
+  mentésekor a rendszer megméri az illeszkedést, és ha a rajz NEM a
+  valódi pályavonalakon van, rákérdez ("Javítom" / "Mentés így is") —
+  a kezdőnek nem kell tudnia, hogy van ilyen gomb. A négyszög eddig
+  csak alaki ellenőrzést kapott (nem fajzott-e el, jó-e a sarkok
+  sorrendje); egy szabályos, de a vonalak mellé húzott négyszög
+  átment rajta.
+
+## v0.1.110 — kiadva (2026-09-08)
+
+> Kiadás-jegyzet: a kalibráló képernyő géppel is megméri, ül-e a
+> rajzolt pálya a valódi vonalakon — még a feldolgozás előtt.
 
 - **Illeszkedés-ellenőrzés a kalibráló képernyőn** (kalibráció): a
   "Illeszkedés ellenőrzése" gomb megméri, mennyire ülnek a bejelölt
@@ -13,14 +37,6 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   gyenge) és teendő; ha egy eltolással érdemben jobban ülne a rajz, egy
   gombbal mind a négy sarok ráigazítható. A szem a néhány képpontos
   csúszást elnézi — pedig a játékos-helyek pontossága azon múlik.
-
-- **Mentés előtt magától is ellenőrzi** (kalibráció): a kalibráció
-  mentésekor a rendszer megméri az illeszkedést, és ha a rajz NEM a
-  valódi pályavonalakon van, rákérdez ("Javítom" / "Mentés így is") —
-  a kezdőnek nem kell tudnia, hogy van ilyen gomb. A négyszög eddig
-  csak alaki ellenőrzést kapott (nem fajzott-e el, jó-e a sarkok
-  sorrendje); egy szabályos, de a vonalak mellé húzott négyszög
-  átment rajta.
 
 ## v0.1.109 — kiadva (2026-09-08)
 

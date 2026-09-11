@@ -15,6 +15,7 @@ import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
 import "account_gate.dart";
 import "diagnostics_button.dart";
+import "logo.dart";
 import "update_flow.dart";
 
 class BootstrapScreen extends StatefulWidget {
@@ -131,14 +132,7 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Márka-logó.
-                Container(
-                  width: 66, height: 66,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.accent, Color(0xFF1B8F82)]),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Icon(Icons.change_history_rounded, color: AppColors.onAccent, size: 34),
-                ),
+                const SportMachineLogo(size: 66),
                 const SizedBox(height: AppSpacing.lg),
                 const Text("SPORT MACHINE", style: AppText.brand),
                 const SizedBox(height: 4),

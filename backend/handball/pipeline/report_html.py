@@ -19,6 +19,33 @@ from .quality import LOW_SCORE_WARN, clock_label
 
 from .scouting import ScoutingReport
 
+# A Sport Machine JELKÉPE inline SVG-ként — ugyanaz a geometria, mint a
+# kliens rajzolt logója (client/lib/ui/logo.dart) és a gépen látszó ikonok
+# (packaging/make_icons.py): felülnézeti pálya, a két kapuelőtér arany
+# félköre, labda a mozgás-nyomával. INLINE, mert a jelentés ÖNÁLLÓ fájl:
+# külső képre hivatkozva a kinyomtatott/továbbküldött lapon üres keret
+# maradna. A világos, nyomtatóbarát fejlécben is olvasható marad.
+def brand_svg(size: int = 16) -> str:
+    """A jelkép SVG-je `size` képpont oldalhosszal (fejlécekbe)."""
+    return (
+        f'<svg width="{size}" height="{size}" viewBox="0 0 100 100" '
+        'style="vertical-align:-3px;margin-right:6px" '
+        'xmlns="http://www.w3.org/2000/svg">'
+        '<rect x="0" y="0" width="100" height="100" rx="22" fill="#0E141C"/>'
+        '<rect x="10" y="24.5" width="80" height="51" rx="6" '
+        'fill="#0B1C24" stroke="#2FD9C4" stroke-width="4.5"/>'
+        '<path d="M50 24.5 V75.5" stroke="#2FD9C4" stroke-width="4.5"/>'
+        '<path d="M10 34.5 A15.5 15.5 0 0 1 10 65.5" fill="none" '
+        'stroke="#D8B36B" stroke-width="4.5"/>'
+        '<path d="M90 34.5 A15.5 15.5 0 0 0 90 65.5" fill="none" '
+        'stroke="#D8B36B" stroke-width="4.5"/>'
+        '<circle cx="50.5" cy="56" r="2.8" fill="#2FD9C4" opacity="0.35"/>'
+        '<circle cx="56.5" cy="48.5" r="3.8" fill="#2FD9C4" opacity="0.55"/>'
+        '<circle cx="61.5" cy="42.5" r="5" fill="#2FD9C4" opacity="0.75"/>'
+        '<circle cx="65.5" cy="37.5" r="7.5" fill="#FFC857"/>'
+        '</svg>')
+
+
 # Ennyi szekció alatt nincs tartalomjegyzék: két-három címhez nem kell
 # navigáció, a jegyzék csak elveszi a helyet az első oldalról.
 TOC_MIN_SECTIONS = 4
@@ -583,7 +610,7 @@ def scouting_report_html(rep: ScoutingReport,
 <body>
 <div class="page">
   <header>
-    <div class="brand">Sport Machine · Felderítő jelentés</div>
+    <div class="brand">{brand_svg()}Sport Machine · Felderítő jelentés</div>
     <h1>{name}</h1>
     <div class="sub">{escape(matches)} · fő védekezés: <b>{escape(rep.defense_main)}</b></div>
   </header>
@@ -3323,7 +3350,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
 <body>
 <div class="page">
   <header>
-    <div class="brand">Sport Machine · Meccsjelentés</div>
+    <div class="brand">{brand_svg()}Sport Machine · Meccsjelentés</div>
     <h1>{home} <span style="color:#8492A6">vs</span> {away}</h1>
     <div class="sub">Elemzett szakasz: {dur_s / 60:.1f} perc · felismert gólok: {goals_h}–{goals_a}</div>
     {header_extra}
@@ -3896,7 +3923,7 @@ def player_report_html(match, track_id: int) -> str:
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · JÁTÉKOS-LAP</div>
+  <div class="brand">{brand_svg()}SPORT MACHINE · JÁTÉKOS-LAP</div>
   <h1>{escape(row['label'])} — {escape(team_name)}</h1>
   <div class="sub">{escape(sub)}</div>
 </header>
@@ -3980,7 +4007,7 @@ def trend_report_html(tr: dict) -> str:
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · FEJLŐDÉS-RIPORT</div>
+  <div class="brand">{brand_svg()}SPORT MACHINE · FEJLŐDÉS-RIPORT</div>
   <h1>{escape(name)}</h1>
   <div class="sub">Régebbi időszak: {tr.get("older_matches", 0)} meccs ·
   Újabb időszak: {tr.get("newer_matches", 0)} meccs — a darabszám-mutatók
@@ -4194,7 +4221,7 @@ def player_season_html(team: str, jersey: int, points: list[dict],
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · SZEZON-LAP</div>
+  <div class="brand">{brand_svg()}SPORT MACHINE · SZEZON-LAP</div>
   <h1>{escape(ki)} — {escape(team)}</h1>
   <div class="sub">{n} elemzett meccs, időrendben.</div>
 </header>
@@ -4290,7 +4317,7 @@ def training_plan_html(team: str, n_matches: int,
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · EDZÉSTERV</div>
+  <div class="brand">{brand_svg()}SPORT MACHINE · EDZÉSTERV</div>
   <h1>{escape(team)}</h1>
   <div class="sub">{n_matches} elemzett meccs alapján.</div>
 </header>
@@ -4424,7 +4451,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · SZEZON-RIPORT</div>
+  <div class="brand">{brand_svg()}SPORT MACHINE · SZEZON-RIPORT</div>
   <h1>{escape(team)}</h1>
   <div class="sub">{n_matches} elemzett meccs — az első és a második
   fele automatikusan összevetve ({tr.get("older_matches", 0)} vs
@@ -4512,7 +4539,7 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · EGYMÁS ELLEN</div>
+  <div class="brand">{brand_svg()}SPORT MACHINE · EGYMÁS ELLEN</div>
   <h1>{escape(team_a)} vs {escape(team_b)}</h1>
   <div class="sub">{stats.get("matches", 0)} elemzett egymás elleni
   meccs a könyvtárból.</div>

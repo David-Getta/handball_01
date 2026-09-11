@@ -34,6 +34,7 @@ import "../designer_screen.dart";
 import "../error_text.dart";
 import "../jobs_screen.dart";
 import "../live_screen.dart";
+import "../logo.dart";
 import "../match_screen.dart";
 import "../matchup_screen.dart";
 import "../notes_screen.dart";
@@ -771,11 +772,12 @@ class _SideNavState extends State<_SideNav> {
   }
 
   Widget _brand() {
+    // A VALÓDI jelkép (SportMachineLogo) — ugyanaz a rajz, mint a gépen
+    // látszó ikon (packaging/make_icons.py), nem egy általános
+    // Material-ikon: az appban és az operációs rendszerben egy márka.
     final logo = Container(
       width: 34, height: 34,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-            colors: [AppColors.accent, Color(0xFF1B8F82)]),
         borderRadius: BorderRadius.circular(10),
         // Puha márka-ragyogás — összhangban a belépő képernyő logójával.
         boxShadow: [
@@ -785,8 +787,7 @@ class _SideNavState extends State<_SideNav> {
               offset: const Offset(0, 4)),
         ],
       ),
-      child: const Icon(Icons.change_history_rounded,
-          color: AppColors.onAccent, size: 18),
+      child: const SportMachineLogo(size: 34),
     );
     if (!_open) return Center(child: logo);
     return Row(children: [
