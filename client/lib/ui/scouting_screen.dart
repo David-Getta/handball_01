@@ -305,6 +305,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ("Honnan lőnek", Icons.sports_handball),
       ("Honnan kapják a lövéseket", Icons.shield_outlined),
       if (_playbookMatch != null) ("Ismert figuráik", Icons.route_outlined),
+      if (_figureLibraryCard(r) != null)
+        ("Visszatérő figuráik", Icons.replay_outlined),
       ("Védekezésük", Icons.security),
       if (keeperCard != null)
         ("Kapus-felkészítés", Icons.sports_kabaddi),
@@ -377,6 +379,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                   KeyedSubtree(
                       key: _sectionKey("Ismert figuráik"),
                       child: _playbookCard(_playbookMatch!)),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                if (_figureLibraryCard(r) != null) ...[
+                  KeyedSubtree(
+                      key: _sectionKey("Visszatérő figuráik"),
+                      child: _figureLibraryCard(r)!),
                   const SizedBox(height: AppSpacing.lg),
                 ],
                 KeyedSubtree(
@@ -12754,6 +12762,73 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   /// Figura-egyezés: az ellenfél támadásai közül melyik egyezik egy MENTETT
   /// figurával a könyvtárunkból ("a Beúszós keresztet játszották 4x").
+  /// Visszatérő figuráik MECCSRŐL MECCSRE: a figura-könyvtár rajzzal
+  /// (mini pálya, a támadó szemszögéből, jobbra a megtámadott kapu). A
+  /// könyvtárat a backend fésüli össze (setplay_library); itt csak a
+  /// kész "recurring" sorok — null, ha nincs visszatérő figura.
+  Widget? _figureLibraryCard(Map<String, dynamic> r) {
+    final lib = r["setplay_library"];
+    if (lib is! Map) return null;
+    final rec = lib["recurring"];
+    if (rec is! List || rec.isEmpty) return null;
+    final rows = <Widget>[];
+    for (final f in rec.take(6)) {
+      if (f is! Map) continue;
+      final shape = (f["shape"] as List?)
+              ?.map((v) => (v as num).toDouble())
+              .toList() ??
+          const <double>[];
+      final matches = ((f["matches"] as num?) ?? 0).toInt();
+      final attacks = ((f["attacks"] as num?) ?? 0).toInt();
+      final goals = ((f["goals"] as num?) ?? 0).toInt();
+      final pct = ((f["goal_pct"] as num?) ?? 0).toDouble();
+      rows.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          SizedBox(
+              width: 132, height: 66,
+              child: CustomPaint(painter: _FigureShapePainter(shape))),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("${f["zone"] ?? "?"}",
+                    style: AppText.value.copyWith(fontSize: 13)),
+                const SizedBox(height: 2),
+                Text("$matches meccsen $attacks támadás, $goals gól "
+                    "(${pct.round()}%)", style: AppText.label),
+              ],
+            ),
+          ),
+        ]),
+      ));
+    }
+    if (rows.isEmpty) return null;
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.replay_outlined, size: 16, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Text("VISSZATÉRŐ FIGURÁIK (meccsről meccsre)",
+                style: AppText.sectionLabel),
+          ]),
+          const SizedBox(height: 4),
+          Text("Amit minden meccsen hoznak — erre biztosan lehet készülni. "
+              "A rajz a támadó szemszögéből, jobbra a megtámadott kapu; a "
+              "sötétebb cella a gyakoribb hely.",
+              style: AppText.label),
+          const SizedBox(height: AppSpacing.md),
+          ...rows,
+        ],
+      ),
+    );
+  }
+
   Widget _playbookCard(Map<String, dynamic> pm) {
     final matched = (pm["matched"] as Map?)?.cast<String, dynamic>() ?? {};
     final total = (pm["total_attacks"] as num?)?.toInt() ?? 0;
@@ -12965,4 +13040,51 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ]),
     );
   }
+}
+
+/// Figura-alak mini-pályán: 6x3 rács (a backend ujjlenyomat-rácsa), a
+/// cella átlátszatlansága a látogatottság; felezővonal és a két
+/// kapuelőtér-ív tájolja a képet.
+class _FigureShapePainter extends CustomPainter {
+  final List<double> shape;
+  _FigureShapePainter(this.shape);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const binsX = 6, binsY = 3;
+    final bg = Paint()..color = AppColors.surfaceAlt;
+    final r = RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(4));
+    canvas.drawRRect(r, bg);
+    if (shape.length == binsX * binsY) {
+      final mx = shape.reduce(max);
+      if (mx > 0) {
+        final cw = size.width / binsX, ch = size.height / binsY;
+        for (var i = 0; i < shape.length; i++) {
+          final v = shape[i];
+          if (v <= 0) continue;
+          canvas.drawRect(
+              Rect.fromLTWH((i % binsX) * cw, (i ~/ binsX) * ch, cw, ch),
+              Paint()..color = AppColors.accent.withOpacity(0.08 + 0.82 * v / mx));
+        }
+      }
+    }
+    final line = Paint()
+      ..color = AppColors.textFaint
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawRRect(r, line);
+    canvas.drawLine(Offset(size.width / 2, 0), Offset(size.width / 2, size.height), line);
+    final arc = Paint()
+      ..color = AppColors.gold
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final gr = size.height * 0.3;
+    canvas.drawArc(Rect.fromCircle(center: Offset(0, size.height / 2), radius: gr),
+        -pi / 2, pi, false, arc);
+    canvas.drawArc(Rect.fromCircle(center: Offset(size.width, size.height / 2), radius: gr),
+        pi / 2, pi, false, arc);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FigureShapePainter old) => old.shape != shape;
 }

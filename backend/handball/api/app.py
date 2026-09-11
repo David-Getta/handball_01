@@ -4310,10 +4310,19 @@ def create_app():
                 leaders = None
         except Exception:
             leaders = None
+        # A saját figura-könyvtár a szezon ÖSSZES meccséből: mi az, amit
+        # meccsről meccsre hozunk, és mennyit ér — hibatűrően.
+        figure_library = None
+        try:
+            figure_library = _combined_report(
+                {"items": older_items + newer_items}).setplay_library
+        except Exception:
+            figure_library = None
         from ..pipeline.report_html import season_report_html
         return HTMLResponse(content=season_report_html(
             team, tr, focuses, len(entries), timeline=timeline,
-            venue=venue, leaders=leaders, opponents=opponents))
+            venue=venue, leaders=leaders, opponents=opponents,
+            figure_library=figure_library))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):

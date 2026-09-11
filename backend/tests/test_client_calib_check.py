@@ -195,3 +195,15 @@ def test_mentes_elott_gepileg_is_ellenorizzuk_a_kalibraciot():
     assert "_measureFit" in ment, "mentés előtt nincs gépi ellenőrzés"
     assert '"gyenge"' in ment, "nem a gyenge ítéletnél kérdez rá"
     assert "Mentés így is" in ment, "nem lehet mégis menteni"
+
+
+def test_a_visszatero_figurak_rajzzal_latszanak_a_felderitesen():
+    """A figura-könyvtár nem csak egy mondat: a felderítő képernyő és a
+    nyomtatható jelentés RAJZOLJA az alakot (mini pálya), mert egy
+    "bal oldal, a kapuelőtér előtt" felirat kevesebb, mint a kép."""
+    src = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+           / "ui" / "scouting_screen.dart").read_text(encoding="utf-8")
+    assert "_figureLibraryCard" in src and "_FigureShapePainter" in src
+    assert 'r["setplay_library"]' in src
+    assert '("Visszatérő figuráik", Icons.replay_outlined)' in src, (
+        "a szakasz nincs az ugró-sávban")

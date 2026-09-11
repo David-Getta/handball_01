@@ -3,7 +3,29 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.111 óta)
+## Kiadatlan (a v0.1.112 óta)
+
+- **A visszatérő figurák rajzzal** (felderítés, jelentés): a figura-
+  könyvtár nem csak egy mondat — a felderítő képernyő új "Visszatérő
+  figuráik" szakasza és a nyomtatható jelentés mini-pályán RAJZOLJA az
+  alakot (a támadó szemszögéből, jobbra a megtámadott kapu; a sötétebb
+  cella a gyakoribb hely), mellette meccs / támadás / gól.
+  A szezon-riport ugyanezt a SAJÁT csapatra mutatja ("Saját visszatérő
+  figuráink"): mi az, amit meccsről meccsre hozunk, és mennyit ér.
+
+
+- **Mentés előtt magától is ellenőrzi** (kalibráció): a kalibráció
+  mentésekor a rendszer megméri az illeszkedést, és ha a rajz NEM a
+  valódi pályavonalakon van, rákérdez ("Javítom" / "Mentés így is") —
+  a kezdőnek nem kell tudnia, hogy van ilyen gomb. A négyszög eddig
+  csak alaki ellenőrzést kapott (nem fajzott-e el, jó-e a sarkok
+  sorrendje); egy szabályos, de a vonalak mellé húzott négyszög
+  átment rajta.
+
+## v0.1.112 — kiadva (2026-09-11)
+
+> Kiadás-jegyzet: figura-könyvtár meccsek között — a felderítés
+> megmondja, melyik figurájuk tér vissza meccsről meccsre.
 
 - **Figura-könyvtár meccsek között** (felderítés): eddig a figurákat
   csak EGY meccsen belül ismerte fel a rendszer, sorszámmal ("2.
@@ -17,15 +39,6 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: edzői kulcs, meccsterv-szabály (visszatérő figura × a
   ti szabad lövést engedő falatok), edzés-fókusz (a leggyakoribb saját
   figura gól nélkül → új befejezés), edzői összefoglaló, kliens-csempe.
-
-
-- **Mentés előtt magától is ellenőrzi** (kalibráció): a kalibráció
-  mentésekor a rendszer megméri az illeszkedést, és ha a rajz NEM a
-  valódi pályavonalakon van, rákérdez ("Javítom" / "Mentés így is") —
-  a kezdőnek nem kell tudnia, hogy van ilyen gomb. A négyszög eddig
-  csak alaki ellenőrzést kapott (nem fajzott-e el, jó-e a sarkok
-  sorrendje); egy szabályos, de a vonalak mellé húzott négyszög
-  átment rajta.
 
 ## v0.1.111 — kiadva (2026-09-11)
 

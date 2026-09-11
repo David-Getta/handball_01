@@ -100,6 +100,46 @@ def test_playbook_section_rendering():
     assert "Ismert figuráik" not in scouting_report_html(_rep())
 
 
+def test_a_visszatero_figurak_szakasza_rajzzal():
+    """A meccsről meccsre visszatérő figurák alakkal (inline SVG) és
+    edzői névvel; visszatérő figura nélkül a szakasz nincs."""
+    shape = [0.0] * 18
+    shape[5] = 0.6
+    shape[4] = 0.4
+    lib = {"figures": [], "recurring": [
+        {"zone": "bal oldal, a kapuelőtér előtt", "matches": 3,
+         "attacks": 11, "shots": 8, "goals": 4, "goal_pct": 36.4,
+         "shape": shape}], "verdict": "x"}
+    html = scouting_report_html(_rep(setplay_library=lib))
+    assert "Visszatérő figuráik" in html
+    assert "bal oldal, a kapuelőtér előtt" in html
+    assert "3 meccsen 11 támadás, 4 gól (36%)" in html
+    assert html.count("<svg") >= 2 and "<img" not in html   # jelkép + alak
+    ures = scouting_report_html(_rep(setplay_library={"recurring": []}))
+    assert "Visszatérő figuráik" not in ures
+
+
+def test_a_szezon_riport_a_sajat_visszatero_figurakat_is_rajzolja():
+    """A szezon-riportban a SAJÁT csapat meccsről meccsre visszatérő
+    figurái is ott vannak (rajzzal, hozammal); könyvtár nélkül a
+    szakasz elmarad."""
+    from handball.pipeline.report_html import season_report_html
+
+    shape = [0.0] * 18
+    shape[4] = 1.0
+    lib = {"figures": [], "recurring": [
+        {"zone": "közép, a 9-es körül", "matches": 4, "attacks": 15,
+         "shots": 10, "goals": 6, "goal_pct": 40.0, "shape": shape}],
+        "verdict": "x"}
+    tr = {"metrics": [], "summary": [], "older_matches": 2,
+          "newer_matches": 2}
+    html = season_report_html("Szeged", tr, [], 4, figure_library=lib)
+    assert "Saját visszatérő figuráink" in html
+    assert "4 meccsen 15 támadás, 6 gól (40%)" in html
+    assert "Saját visszatérő figuráink" not in season_report_html(
+        "Szeged", tr, [], 4)
+
+
 def test_playbook_section_empty_states():
     """Üres egyezésnél tájékoztató szöveg (nem üres blokk)."""
     html = scouting_report_html(_rep(), playbook_match={"total_attacks": 4, "matched": {}, "unmatched": 4})

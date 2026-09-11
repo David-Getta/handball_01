@@ -281,6 +281,54 @@ def _playbook_rows(pm: dict) -> str:
                    f'mintájú.</p>')
 
 
+def _figure_svg(shape: list, w: int = 150, h: int = 75) -> str:
+    """Egy figura-alak (6x3 rács, a +x kapu felé támadva) mini-pályán,
+    inline SVG-ként: a cella átlátszatlansága a látogatottság. A
+    jelentés önálló fájl — kép nem hivatkozható, ezért rajz."""
+    bins_x, bins_y = 6, 3
+    if not shape or len(shape) != bins_x * bins_y:
+        return ""
+    mx = max(shape) or 1.0
+    cw, ch = w / bins_x, h / bins_y
+    cells = "".join(
+        f'<rect x="{(i % bins_x) * cw:.1f}" y="{(i // bins_x) * ch:.1f}" '
+        f'width="{cw:.1f}" height="{ch:.1f}" fill="#2FD9C4" '
+        f'opacity="{0.08 + 0.82 * v / mx:.2f}"/>'
+        for i, v in enumerate(shape) if v > 0)
+    r = h * 0.3
+    return (f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
+            'style="vertical-align:middle;margin-right:10px;'
+            'border:1px solid #cfd6df;border-radius:4px" '
+            'xmlns="http://www.w3.org/2000/svg">'
+            f'<rect width="{w}" height="{h}" fill="#f4f7fa"/>{cells}'
+            f'<path d="M{w / 2:.1f} 0 V{h}" stroke="#8492A6" stroke-width="1"/>'
+            f'<path d="M0 {h / 2 - r:.1f} A{r:.1f} {r:.1f} 0 0 1 0 {h / 2 + r:.1f}" '
+            'fill="none" stroke="#D8B36B" stroke-width="1.5"/>'
+            f'<path d="M{w} {h / 2 - r:.1f} A{r:.1f} {r:.1f} 0 0 0 {w} {h / 2 + r:.1f}" '
+            'fill="none" stroke="#D8B36B" stroke-width="1.5"/>'
+            '</svg>')
+
+
+def _setplay_library_rows(lib: dict) -> str:
+    """Visszatérő figuráik: alak + edzői név + meccs/támadás/gól."""
+    rows = (lib or {}).get("recurring") or []
+    if not rows:
+        return ('<p class="empty">Még nincs meccsről meccsre visszatérő '
+                'figura (több meccs felderítése kell hozzá).</p>')
+    out = []
+    for f in rows[:6]:
+        out.append(
+            '<div class="bar-row" style="align-items:center">'
+            f'{_figure_svg(f.get("shape") or [])}'
+            f'<span><b>{escape(str(f.get("zone", "")))}</b> — '
+            f'{int(f.get("matches", 0))} meccsen {int(f.get("attacks", 0))} '
+            f'támadás, {int(f.get("goals", 0))} gól '
+            f'({float(f.get("goal_pct", 0.0)):.0f}%)</span></div>')
+    out.append('<p class="note">A rajz a támadó szemszögéből, jobbra a '
+               'megtámadott kapu; a sötétebb cella a gyakoribb hely.</p>')
+    return "".join(out)
+
+
 def _players(key_players: list) -> str:
     if not key_players:
         return '<p class="empty">Több meccs felderítése pontosítja a játékos-profilt.</p>'
@@ -650,6 +698,10 @@ def scouting_report_html(rep: ScoutingReport,
 
   {("<h2>Ismert figuráik (a könyvtárunkból)</h2>" + _playbook_rows(playbook_match))
    if playbook_match else ""}
+
+  {("<h2>Visszatérő figuráik (meccsről meccsre)</h2>"
+    + _setplay_library_rows(getattr(rep, "setplay_library", None) or {}))
+   if (getattr(rep, "setplay_library", None) or {}).get("recurring") else ""}
 
   <h2>Támadás-mix (típus szerint)</h2>
   {_defense_bars(rep.attack_mix, empty="Nincs elég támadás-minta.")}
@@ -4334,11 +4386,20 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                        timeline: list[dict] | None = None,
                        venue: dict | None = None,
                        leaders: dict | None = None,
-                       opponents: list[dict] | None = None) -> str:
+                       opponents: list[dict] | None = None,
+                       figure_library: dict | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
+
+    `figure_library` (opcionális): a SAJÁT csapat figura-könyvtára
+    (setplays.setplay_library a szezon összes meccséből) — a meccsről
+    meccsre visszatérő figuráink rajzzal és hozammal.
     """
     table = _trend_metrics_table(tr)
+    figures_html = ""
+    if (figure_library or {}).get("recurring"):
+        figures_html = ("<h2>Saját visszatérő figuráink (meccsről meccsre)</h2>"
+                        + _setplay_library_rows(figure_library))
     summary = "".join(f"<li>{escape(s_)}</li>"
                       for s_ in tr.get("summary", []))
     timeline_html = ""
@@ -4461,6 +4522,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 {venue_html}
 {opponents_html}
 {leaders_html}
+{figures_html}
 <h2>Fejlődés a szezonon belül</h2>
 {table}
 <h2>Összegzés</h2>
