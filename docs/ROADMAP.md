@@ -67,7 +67,10 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 - Trajektória-szekvenciák klaszterezése → visszatérő figurák azonosítása.
   ✅ alap kész és tesztelt: támadás-szegmentálás → mozgás-ujjlenyomat →
   klaszterezés (`setplays.py`, API: `/setplays`).
-- Figura-könyvtár csapatonként. ⏳ (finomabb trajektória-modell későbbi bővítés).
+- Figura-könyvtár csapatonként. ✅ kész és tesztelt (`setplays.py`:
+  `setplay_shapes` + `setplay_library` — irány-normált alakok, a több
+  meccsből összefésült felderítés megmondja, melyik figura tér vissza
+  meccsről meccsre; finomabb trajektória-modell későbbi bővítés).
 - **Eredmény**: "ez a csapat ezt a N figurát játssza, ilyen gyakorisággal" — az
   alap-felismerés megvan; a pontosság a valódi adattal és finomabb leíróval nő.
 
