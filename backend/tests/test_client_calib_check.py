@@ -168,6 +168,11 @@ def test_az_illeszkedes_merheto_a_kalibralo_kepernyorol():
     assert "_measureFit" in src, "nincs mérés-hívás"
     assert "Illeszkedés ellenőrzése" in src, "nincs gomb a méréshez"
     assert "_applyFitShift" in src, "a javaslat nem alkalmazható"
+    # Az összenézetben (két térfél, két kocka) is mérhető — mindkét fél.
+    assert "_measureFineFit" in src and "(mindkét fél)" in src, (
+        "az összenézetben nincs mérés")
+    assert 'region: region,' in src.split("_measureFineFit()")[1][:2500], (
+        "az összenézet-mérés nem a saját térfél vonalain mér")
     assert "Igazítsd rá" in src
     api = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
            / "services" / "api_client.dart").read_text(encoding="utf-8")

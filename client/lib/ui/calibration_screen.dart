@@ -140,6 +140,10 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   // elmozdult egy sarok, a szám már NEM a képernyőn látható rajzé —
   // ilyenkor elavultnak jelöljük, nem hazudunk friss értéket.
   String? _fitKey;
+  // ÖSSZENÉZET-mérés: a két térfél külön kalibráció, külön kockán —
+  // mindkettő a saját kockáján és a saját térfél-vonalain mérődik.
+  bool _fineFitting = false;
+  String? _fineFitNote;
 
   // Melyik területet jelöljük be: teljes pálya vagy csak az egyik térfél
   // (pásztázó kameránál az induló képen sokszor csak egy térfél látszik).
@@ -677,6 +681,25 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             const SizedBox(height: AppSpacing.sm),
           ],
           if (_fineTune) ...[
+            if (widget.videoPath != null) ...[
+              OutlinedButton.icon(
+                onPressed: _fineFitting ? null : _measureFineFit,
+                icon: _fineFitting
+                    ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.straighten, size: 18),
+                label: Text(_fineFitting
+                    ? "Illeszkedés mérése…"
+                    : "Illeszkedés ellenőrzése (mindkét fél)"),
+              ),
+              if (_fineFitNote != null) ...[
+                const SizedBox(height: 6),
+                Text(_fineFitNote!,
+                    style: AppText.label.copyWith(fontSize: 11.5)),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+            ],
             FilledButton.icon(
               style: FilledButton.styleFrom(
                   backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
@@ -1218,6 +1241,62 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
           startFrame: _savedRight?.startFrame ?? _frameIdx),
     ]..sort((a, b) => a.startFrame.compareTo(b.startFrame));
     Navigator.of(context).pop(CalibrationSet(items));
+  }
+
+  /// ÖSSZENÉZET: mindkét térfél illeszkedése a SAJÁT kockáján és a saját
+  /// térfél-vonalain (bal: "left", jobb: "right") — a két négyszög két
+  /// külön kalibráció, ezért két külön mérés. Csak mér, nem igazít: a
+  /// felezővonal két vége közös pont, egy fél eltolása a másikat is
+  /// vinné — a finomítás itt kézzel, a húzható pontokkal megy.
+  Future<void> _measureFineFit() async {
+    final path = widget.videoPath;
+    if (path == null || _fineFitting) return;
+    setState(() {
+      _fineFitting = true;
+      _fineFitNote = null;
+    });
+    List<double> px(Offset o, Size? sz) {
+      final w = sz?.width ?? _frameSize?.width ?? 1920.0;
+      final h = sz?.height ?? _frameSize?.height ?? 1080.0;
+      double toImg(double v) => (v - _margin) / (1 - 2 * _margin);
+      return [(toImg(o.dx) * w).roundToDouble(),
+              (toImg(o.dy) * h).roundToDouble()];
+    }
+
+    try {
+      final api = ApiClient(baseUrl: widget.baseUrl);
+      final parts = <String>[];
+      final felek = [
+        ("Bal fél", _leftQuad, _leftImgSize, "left",
+         _savedLeft?.startFrame ?? _frameIdx),
+        ("Jobb fél", _rightQuad, _rightImgSize, "right",
+         _savedRight?.startFrame ?? _frameIdx),
+      ];
+      for (final (nev, quad, sz, region, frame) in felek) {
+        if (quad.length != 4) continue;
+        final m = await api.fetchCalibScore(
+          videoPath: path,
+          frame: frame,
+          corners: [for (final o in quad) px(o, sz)],
+          region: region,
+        );
+        final fit = (m["fit"] as num?)?.toDouble();
+        parts.add(fit == null
+            ? "$nev: nem mérhető"
+            : "$nev: ${fit.toStringAsFixed(2).replaceAll(".", ",")} — "
+                "${m["itelet"] ?? "?"}");
+      }
+      if (!mounted) return;
+      setState(() => _fineFitNote = parts.isEmpty
+          ? "Nincs mérhető négyszög."
+          : "${parts.join(" · ")} (a jó 0,50 fölött van)");
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _fineFitNote =
+          "Az illeszkedés mérése nem sikerült: ${humanError(e)}");
+    } finally {
+      if (mounted) setState(() => _fineFitting = false);
+    }
   }
 
   /// Visszatérés az elmentett térfél-kalibrációkkal (1 vagy 2 bejegyzés).

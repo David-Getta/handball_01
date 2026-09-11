@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.112 óta)
 
+- **Illeszkedés-ellenőrzés az összenézetben is** (kalibráció): a két
+  térfél összeillesztett nézetében eddig nem volt gépi mérés. Mostantól
+  az "Illeszkedés ellenőrzése (mindkét fél)" gomb mindkét térfél
+  négyszögét a saját kockáján és a saját térfél-vonalain méri, és
+  külön-külön mondja ki (bal fél / jobb fél, ítélettel).
+
 - **A visszatérő figurák rajzzal** (felderítés, jelentés): a figura-
   könyvtár nem csak egy mondat — a felderítő képernyő új "Visszatérő
   figuráik" szakasza és a nyomtatható jelentés mini-pályán RAJZOLJA az
