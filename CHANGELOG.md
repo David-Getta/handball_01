@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.112 óta)
+## Kiadatlan (a v0.1.113 óta)
 
 - **A visszatérő figura videón** (klipek): új klip-típus, "A visszatérő
   figura" — a csapat könyvtárából (az összes elemzett meccséből) a
@@ -16,6 +16,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   az "Illeszkedés ellenőrzése (mindkét fél)" gomb mindkét térfél
   négyszögét a saját kockáján és a saját térfél-vonalain méri, és
   külön-külön mondja ki (bal fél / jobb fél, ítélettel).
+
+## v0.1.113 — kiadva (2026-09-11)
+
+> Kiadás-jegyzet: a visszatérő figurák rajzzal — a felderítő
+> képernyőn, a nyomtatható jelentésben és a szezon-riportban.
 
 - **A visszatérő figurák rajzzal** (felderítés, jelentés): a figura-
   könyvtár nem csak egy mondat — a felderítő képernyő új "Visszatérő
