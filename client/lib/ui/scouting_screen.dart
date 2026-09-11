@@ -9965,6 +9965,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "${avg.toStringAsFixed(1)} m) · futó labdásnál rá a leszúrás";
   }
 
+  // Figura-könyvtár: melyik figurájuk tér vissza MECCSRŐL MECCSRE. A
+  // könyvtárat a backend fésüli össze a nyers alakokból olvasáskor
+  // (setplay_library: legalább SPL_MIN_MATCHES = 2 meccsen látott alak
+  // a "visszatérő"; SPL_MIN_ATTACKS = 3 támadás egy alakhoz) — a
+  // kliens csak a kész "recurring" sorokat olvassa.
+  String? _setplayLibrary(Map<String, dynamic> r) {
+    final lib = r["setplay_library"];
+    if (lib is! Map) return null;
+    final rec = lib["recurring"];
+    if (rec is! List || rec.isEmpty) return null;
+    final fo = rec.first;
+    if (fo is! Map) return null;
+    final zone = "${fo["zone"] ?? "?"}";
+    final matches = ((fo["matches"] as num?) ?? 0).toInt();
+    final attacks = ((fo["attacks"] as num?) ?? 0).toInt();
+    if (matches < 2 || attacks < 3) return null;
+    final goals = ((fo["goals"] as num?) ?? 0).toInt();
+    final pct = ((fo["goal_pct"] as num?) ?? 0).toDouble();
+    final tobbi = rec.length > 1 ? " (+${rec.length - 1} további)" : "";
+    return "meccsről meccsre visszatér: $zone — $matches meccsen "
+        "$attacks támadás, $goals gól (${pct.round()}%)$tobbi · videó, "
+        "bejátszott védekezés, a súlypont sávjának lezárása";
+  }
+
   // Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak (6+
   // védekezett támadás, 30% váltás-arány / 80% fő forma; a
   // backend-kulccsal azonos küszöbök).
@@ -11607,6 +11631,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Védekezés-váltás", _formationSwitching(r)!],
       if (_holdTime(r) != null) ["Labdatartás", _holdTime(r)!],
       if (_ballCarry(r) != null) ["Labdavezetés", _ballCarry(r)!],
+      if (_setplayLibrary(r) != null)
+        ["Figura-könyvtár", _setplayLibrary(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],

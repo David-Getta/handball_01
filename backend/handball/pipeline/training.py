@@ -1383,6 +1383,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 478) Terméketlen kedvenc figura: a leggyakoribb figuránk
+    # (SPL_MIN_ATTACKS támadástól) gól nélkül maradt — a mintát az
+    # ellenfél is látja, új befejezést kell rá gyakorolni.
+    try:
+        from .setplays import SPL_MIN_ATTACKS, setplay_shapes
+        sps478 = setplay_shapes(match, config)
+        for side in ("home", "away"):
+            sorok = [r for r in (sps478.get(side) or [])
+                     if r["attacks"] >= SPL_MIN_ATTACKS]
+            if not sorok or sorok[0]["goals"] > 0:
+                continue
+            fo = sorok[0]
+            add(side, "támadás",
+                f"Terméketlen kedvenc figura: {fo['zone']}",
+                f"a leggyakoribb figurátok {fo['attacks']} támadásból "
+                f"{fo['shots']} lövést és NULLA gólt hozott (küszöb: "
+                f"{SPL_MIN_ATTACKS} támadás) — a mintát az ellenfél is "
+                "kiismerte",
+                "ugyanaz a figura két új befejezéssel (beálló-átadás és "
+                "szélső befutás), 6-6 ellen élesben; a régi befejezést "
+                "csak cselként indítsátok")
+    except Exception:
+        pass
+
     # 477) Labdahordó: ha valakink a csapatátlagnál sokkal többet fut a
     # labdával, az ellenfél leszúrása őt fogja megtalálni — a "vidd
     # kevesebbet, add korábban" edzés-téma, mielőtt meccsen derül ki.

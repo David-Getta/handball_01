@@ -1168,6 +1168,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"támadás, {rec_spk['figures']} figura).")
     except Exception:
         pass
+    # Figura-alak: a leggyakoribb figurájuk edzői néven (SPL_MIN_ATTACKS
+    # támadástól — a motoréval azonos küszöb).
+    try:
+        from .setplays import SPL_MIN_ATTACKS, setplay_shapes
+        sps = setplay_shapes(match)
+        for side, name in (("home", home), ("away", away)):
+            sorok = [r for r in sps.get(side) or []
+                     if r["attacks"] >= SPL_MIN_ATTACKS]
+            if not sorok:
+                continue
+            fo = sorok[0]
+            body += (f" A(z) {name} leggyakoribb figurája: {fo['zone']} "
+                     f"({fo['attacks']} támadás, {fo['goals']} gól).")
+    except Exception:
+        pass
     # Lepattanó-szedő poszt: védés után kinél marad a labda.
     try:
         from .defense import defensive_rebound_roles

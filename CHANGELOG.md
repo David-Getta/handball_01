@@ -3,7 +3,34 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.110 óta)
+## Kiadatlan (a v0.1.111 óta)
+
+- **Figura-könyvtár meccsek között** (felderítés): eddig a figurákat
+  csak EGY meccsen belül ismerte fel a rendszer, sorszámmal ("2.
+  figura") — két meccs "2. figurája" nem ugyanaz volt. Mostantól a
+  figurák ALAKJÁT is elteszi (a támadás irányára normálva, mert
+  félidőben térfelet cserélnek), és a több meccsből összefésült
+  felderítésben megmondja, MELYIK figurájuk tér vissza meccsről
+  meccsre: edzői néven ("bal oldal, a kapuelőtér előtt"), hány
+  meccsen, hány támadás, hány gól. Ez a felderítés legbiztosabb lapja:
+  amit minden meccsen hoznak, arra biztosan lehet készülni.
+  Felületek: edzői kulcs, meccsterv-szabály (visszatérő figura × a
+  ti szabad lövést engedő falatok), edzés-fókusz (a leggyakoribb saját
+  figura gól nélkül → új befejezés), edzői összefoglaló, kliens-csempe.
+
+
+- **Mentés előtt magától is ellenőrzi** (kalibráció): a kalibráció
+  mentésekor a rendszer megméri az illeszkedést, és ha a rajz NEM a
+  valódi pályavonalakon van, rákérdez ("Javítom" / "Mentés így is") —
+  a kezdőnek nem kell tudnia, hogy van ilyen gomb. A négyszög eddig
+  csak alaki ellenőrzést kapott (nem fajzott-e el, jó-e a sarkok
+  sorrendje); egy szabályos, de a vonalak mellé húzott négyszög
+  átment rajta.
+
+## v0.1.111 — kiadva (2026-09-11)
+
+> Kiadás-jegyzet: saját Sport Machine jelkép az appban, a telepítőn,
+> az asztali ikonon és a nyomtatható jelentésekben.
 
 - **Saját jelkép (logó) az appban és a gépen** (megjelenés): eddig az app
   fejlécében és a nyitóképernyőn egy általános háromszög-ikon állt, a
@@ -15,14 +42,6 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   jelentések fejlécében pedig beágyazott rajzként — így a kinyomtatott
   lapon is ott a márka. A rajz forrása kód (`packaging/make_icons.py`),
   bármikor újragenerálható.
-
-- **Mentés előtt magától is ellenőrzi** (kalibráció): a kalibráció
-  mentésekor a rendszer megméri az illeszkedést, és ha a rajz NEM a
-  valódi pályavonalakon van, rákérdez ("Javítom" / "Mentés így is") —
-  a kezdőnek nem kell tudnia, hogy van ilyen gomb. A négyszög eddig
-  csak alaki ellenőrzést kapott (nem fajzott-e el, jó-e a sarkok
-  sorrendje); egy szabályos, de a vonalak mellé húzott négyszög
-  átment rajta.
 
 ## v0.1.110 — kiadva (2026-09-08)
 

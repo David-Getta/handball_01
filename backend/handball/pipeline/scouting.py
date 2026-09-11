@@ -663,6 +663,16 @@ class ScoutingReport:
     # megtett út méterben; darabszám és összeg, meccsek közt pontosan
     # összegződnek (átlagos labdás út = meters / holds).
     carry_players: list = field(default_factory=list)
+    # Figura-alakok (setplays.setplay_shapes): meccsenként a felismert
+    # figurák irány-normált alakja + darabszámai (támadás/lövés/gól) és a
+    # meccs azonosítója. Sorok — meccsek közt EGYSZERŰEN egymás mögé
+    # kerülnek, a könyvtárat (mi tér vissza meccsről meccsre) a
+    # setplay_library fésüli belőlük össze olvasáskor.
+    setplay_shapes: list = field(default_factory=list)
+    # A belőlük SZÁRMAZTATOTT könyvtár (setplays.setplay_library): mi tér
+    # vissza meccsről meccsre. Nem összegződik — a combine_reports az
+    # összefésült sorokból ÚJRASZÁMOLJA (így pontos marad).
+    setplay_library: dict = field(default_factory=dict)
     # Lövőerő-esésük: félidőnként a mért lövések száma + a
     # sebesség-összeg (km/h) — darabszámok és összegek, meccsek közt
     # pontosan összegződnek (félidő-átlag = összeg / darab).
@@ -8411,6 +8421,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "elvehető: rá menjen a leszúrás és a halászás, az ő "
                 "útvonalát zárjátok el.")
 
+    # Figura-könyvtár: MI TÉR VISSZA meccsről meccsre a figuráik közül
+    # (SPL_MIN_MATCHES meccsen) — erre biztosan lehet készülni.
+    try:
+        _spl_v = (rep.setplay_library or {}).get("verdict")
+        if _spl_v:
+            keys.append(_spl_v[0].upper() + _spl_v[1:] + ".")
+    except Exception:
+        pass
+
     # Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak.
     if rep.fsw_attacks >= 6 and rep.fsw_pairs > 0 and rep.fsw_labels:
         _fsw_main = max(rep.fsw_labels.items(), key=lambda kv: kv[1])[0]
@@ -12299,6 +12318,12 @@ def _scout_team_cached(match: Match, team: Team,
             {"player_id": p["player_id"], "jersey": p["jersey"],
              "holds": p["holds"], "meters": p["meters"]}
             for p in _bcp(match, config)[team.value]["players"]]
+        from .setplays import setplay_shapes as _sps
+        rep.setplay_shapes = [
+            {**row, "match_id": match.meta.match_id}
+            for row in _sps(match, config)[team.value]]
+        from .setplays import setplay_library as _spl_fill
+        rep.setplay_library = _spl_fill(rep.setplay_shapes)
         rep.fsw_labels = dict(fswrec["labels"])
         rep.fsw_attacks = fswrec["attacks"]
         rep.fsw_pairs = max(0, fswrec["attacks"] - 1)
@@ -13465,6 +13490,13 @@ def _merge_hold_players(reports) -> list:
                                  / max(1, kv[1]["holds"])))]
 
 
+def _setplay_library_of(reports) -> dict:
+    """Figura-könyvtár az összefésült alak-sorokból újraszámolva."""
+    from .setplays import setplay_library
+    return setplay_library([row for r in reports
+                            for row in (r.setplay_shapes or [])])
+
+
 def _merge_carry_players(reports) -> list:
     """Labdavezetés: játékosonként a labdás szakaszok és a labdával
     megtett méterek összegzése (az átlagos labdás út szerint
@@ -14503,6 +14535,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"vagytok ({own.trans_steals} szerzés) — futó "
                 "labdásnál a labda elvehető: az ő indulásaira "
                 "időzítsétek a leszúrást, és onnan indul a kontrátok.")
+
+    # 459) Az ő VISSZATÉRŐ figurájuk × a ti szabad lövést engedő falatok:
+    # ha a figurájuk meccsről meccsre ugyanaz, és ti sok szabad lövést
+    # engedtek, a figura bejátszása a legolcsóbb felkészülés.
+    try:
+        _r459 = (opp.setplay_library or {}).get("recurring") or []
+        if (_r459 and own.def_shots_against >= 10
+                and own.def_free_shots * 100.0
+                >= 30.0 * own.def_shots_against):
+            _f459 = _r459[0]
+            plan.append(
+                f"A figurájuk meccsről meccsre visszatér ({_f459['zone']}: "
+                f"{_f459['matches']} meccsen {_f459['attacks']} támadás, "
+                f"{_f459['goals']} gól), ti pedig sok szabad lövést "
+                f"engedtek ({own.def_free_shots} a {own.def_shots_against} "
+                "kapott lövésből) — játsszátok be ezt a figurát edzésen, "
+                "és a súlypont sávjában előre megbeszélt kilépéssel "
+                "zárjatok: ismert minta ellen nem lehet szabadon lőni.")
+    except Exception:
+        pass
 
     from .tactics import ATV_MIN_ATTACKS as _A449
     from .tactics import ATV_ONE_TEMPO_PCT as _A449P
@@ -22822,6 +22874,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         hold_players=_merge_hold_players(reports),
         hold_fps=(reports[0].hold_fps if reports else 25.0),
         carry_players=_merge_carry_players(reports),
+        setplay_shapes=[row for r in reports
+                        for row in (r.setplay_shapes or [])],
+        setplay_library=_setplay_library_of(reports),
         fsw_labels=_merge_fsw_labels(reports),
         fsw_attacks=sum(r.fsw_attacks for r in reports),
         fsw_pairs=sum(r.fsw_pairs for r in reports),

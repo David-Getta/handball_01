@@ -6497,6 +6497,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.setplays import setplay_shapes
+            res["setplay_shapes"] = setplay_shapes(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_rebound_roles
             res["defensive_rebound_roles"] = \
                 defensive_rebound_roles(match)
@@ -8813,6 +8818,8 @@ def create_app():
                 from ..pipeline.setplays import setplay_concentration
                 _layer("setplay_concentration",
                        lambda: setplay_concentration(match))
+                from ..pipeline.setplays import setplay_shapes
+                _layer("setplay_shapes", lambda: setplay_shapes(match))
                 from ..pipeline.defense import defensive_rebound_roles
                 _layer("defensive_rebound_roles",
                        lambda: defensive_rebound_roles(match))
