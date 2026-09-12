@@ -817,17 +817,31 @@ def test_a_meccsterv_a_visszatero_figurakat_is_adja(tmp_path):
     os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
     d = tmp_path / "data" / "matches"
     d.mkdir(parents=True)
-    for mid, sides in (("m1", ["bal"] * 4 + ["jobb"] * 3), ("m2", ["bal"] * 3)):
-        (d / f"{mid}.json").write_text(
-            json.dumps(_spl_match(sides, mid).to_dict()), encoding="utf-8")
+    for mid, sides, datum in (("m1", ["bal"] * 4 + ["jobb"] * 3, "2026-01-01"),
+                              ("m2", ["bal"] * 3, "2026-02-01")):
+        m = _spl_match(sides, mid)
+        m.meta.date = datum
+        (d / f"{mid}.json").write_text(json.dumps(m.to_dict()),
+                                       encoding="utf-8")
     c = TestClient(create_app())
     r = c.post("/scouting/matchup", json={
         "own": {"items": [{"match_id": "m1", "team": "home"}]},
-        "opp": {"items": [{"match_id": "m1", "team": "home"},
-                          {"match_id": "m2", "team": "home"}]}}).json()
+        "opp": {"items": [{"match_id": "m2", "team": "home"},
+                          {"match_id": "m1", "team": "home"}]}}).json()
     assert "plan" in r and r["own_figures"] == []
     assert r["opp_figures"] and r["opp_figures"][0]["matches"] == 2
     assert "name" in r["opp_figures"][0]
+    # Az ellenfél repertoár-változása a kijelölt meccsei két fele között
+    # (DÁTUM szerint rendezve, nem a kijelölés sorrendjében): a jobb
+    # figura az első meccsen volt, a másodikon már nem → eltűnt.
+    rep = r["opp_repertoire"]
+    assert [f["zone"] for f in rep["dropped"]] == ["jobb oldal, a kapuelőtér előtt"]
+    assert rep["new"] == [] and len(rep["kept"]) == 1 and "name" in rep["kept"][0]
+    # Egy meccsből nincs mit összevetni.
+    r1 = c.post("/scouting/matchup", json={
+        "own": {"items": [{"match_id": "m1", "team": "home"}]},
+        "opp": {"items": [{"match_id": "m1", "team": "home"}]}}).json()
+    assert r1["opp_repertoire"] is None
 
 
 # ---- Figura × védőforma ------------------------------------------------------

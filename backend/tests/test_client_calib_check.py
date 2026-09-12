@@ -357,6 +357,18 @@ def test_a_meccsterv_kepernyo_rajzolja_a_visszatero_figurakat():
     assert "FigureShapePainter(" in src
 
 
+def test_a_meccsterv_kepernyo_mutatja_az_ellenfel_repertoar_valtozasat():
+    """A meccsterv képernyőn az ellenfél kijelölt meccsei két fele közti
+    változás: az utóbbi meccseken bejött új figura (a régi felderítés nem
+    készít fel rá) és az eltűnt — rajzzal."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "matchup_screen.dart").read_text(encoding="utf-8")
+    assert "ÚJ FIGURÁJUK AZ UTÓBBI MECCSEKEN" in src and "ELTŰNT FIGURÁJUK" in src
+    assert 'r["opp_repertoire"]' in src
+    assert '["new"]' in src and '["dropped"]' in src
+
+
 def test_a_szezon_kepernyo_mutatja_a_visszatero_figurakat():
     """A Szezon képernyő csapatonként rajzolja a meccsről meccsre
     visszatérő figurákat — a saját repertoár és az ellenfél lapja egy

@@ -4427,6 +4427,23 @@ def create_app():
             rep[k] = _nevesit(team, rep.get(k))
         return rep
 
+    def _items_repertoire(team_name: str, items) -> Optional[dict]:
+        """Repertoár-változás egy KIJELÖLT meccs-listából (a /scouting
+        items-alakja): a meccsek dátum szerint rendezve két félre vágva,
+        a két fél felderítéséből a változás, névvel. Két meccsnél
+        kevesebbnél None."""
+        if not items or len(items) < 2:
+            return None
+        def _kulcs(it):
+            m = _store.get(it.get("match_id"))
+            return ((m.meta.date or "") if m is not None else "",
+                    str(it.get("match_id")))
+        rendezett = sorted(items, key=_kulcs)
+        cut = max(1, len(rendezett) // 2)
+        rep_older = _combined_report({"items": rendezett[:cut]})
+        rep_newer = _combined_report({"items": rendezett[cut:]})
+        return _repertoire_change(team_name, rep_older, rep_newer)
+
     @app.get("/library/figure-repertoire")
     def get_library_figure_repertoire(team: str):
         """Egy csapat REPERTOÁR-VÁLTOZÁSA a szezon két fele között:
@@ -9820,10 +9837,19 @@ def create_app():
                                 (rep.setplay_library or {}).get("recurring"))
             except Exception:
                 return []
+        # Az ellenfél REPERTOÁR-VÁLTOZÁSA a kijelölt meccsei két fele
+        # között: az utóbbi meccseken bejött új figura az, amire a régi
+        # felderítés nem készít fel — hibatűrően, None, ha egy meccs.
+        opp_rep = None
+        try:
+            opp_rep = _items_repertoire(opp.team_name, opp_body.get("items"))
+        except Exception:
+            opp_rep = None
         return {"plan": matchup_plan(own, opp),
                 "style": style_distance(own, opp),
                 "own_team": own.team_name, "opp_team": opp.team_name,
-                "opp_figures": _rec(opp), "own_figures": _rec(own)}
+                "opp_figures": _rec(opp), "own_figures": _rec(own),
+                "opp_repertoire": opp_rep}
 
     @app.post("/scouting/export")
     def combined_scouting_export(body: dict):

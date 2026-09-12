@@ -3,7 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.124 óta)
+## Kiadatlan (a v0.1.125 óta)
+
+- **Az ellenfél új figurája a meccstervben** (meccsterv): az ellenfél
+  kijelölt meccsei dátum szerint két félre vágva — "Új figurájuk az
+  utóbbi meccseken" (erre a régi felderítés nem készít fel: külön videó,
+  bejátszott védekezés) és "Eltűnt figurájuk" (egyedül erre ne
+  készüljetek), rajzzal és névvel. Egy kijelölt meccsnél a szakasz
+  elmarad.
+
+## v0.1.125 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: a repertoár-változás a Szezon képernyőn is — ÚJ /
+> ELTŰNT / MARADT figurák csapatonként.
 
 - **Repertoár-változás a Szezon képernyőn** (szezon): csapatonként az
   ÚJ / ELTŰNT / MARADT figurák rajzzal, névvel és a két fél hozamával

@@ -109,7 +109,9 @@ figurájuk, amire a régi felderítés nem készít fel". Felülete a
 szezon-riport "Repertoár-változás (első fél → második fél)" szakasza,
 rajzzal és névvel, és a Szezon képernyő azonos nevű szakasza
 (`GET /library/figure-repertoire?team=` — csak ahol van új vagy eltűnt
-figura).
+figura). A meccsterv (`/scouting/matchup`, `opp_repertoire`) az ellenfél
+KIJELÖLT meccseit vágja dátum szerint két félre: "Új figurájuk az utóbbi
+meccseken" az, amire a régi felderítés nem készít fel.
 
 ## Korlátok
 

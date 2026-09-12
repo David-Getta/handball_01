@@ -315,6 +315,19 @@ class _MatchupScreenState extends State<MatchupScreen> {
           (r["own_figures"] as List?) ?? const [], "${r["own_team"] ?? ""}",
           "ezt hozzuk meccsről meccsre — az ellenfél is látja: legyen "
           "második befejezés"),
+      // Az ellenfél repertoár-változása a kijelölt meccsei két fele
+      // között: az utóbbi meccseken bejött figurára a régi felderítés
+      // nem készít fel; az eltűntre egyedül ne készüljetek.
+      ..._figuresSection("ÚJ FIGURÁJUK AZ UTÓBBI MECCSEKEN",
+          ((r["opp_repertoire"] as Map?)?["new"] as List?) ?? const [],
+          "${r["opp_team"] ?? ""}",
+          "ez az utóbbi meccseken jött be — a régi felderítés nem készít "
+          "fel rá: erről külön videó és bejátszott védekezés"),
+      ..._figuresSection("ELTŰNT FIGURÁJUK",
+          ((r["opp_repertoire"] as Map?)?["dropped"] as List?) ?? const [],
+          "${r["opp_team"] ?? ""}",
+          "az első meccseken hozták, az utóbbiakon nem — egyedül erre ne "
+          "készüljetek, de a videóban maradjon"),
       const SizedBox(height: AppSpacing.lg),
       Text("STÍLUS", style: AppText.sectionLabel),
       const SizedBox(height: AppSpacing.sm),
