@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.113 óta)
 
+- **A kiadás leírása tényleg a változásokat mutatja** (frissítés): a
+  GitHub-kiadás leírása — amit az app a "Mi változik?" gombra mutat a
+  frissítés előtt — eddig sablonszöveg volt ("lásd a CHANGELOG-ot"),
+  mert a kiadás készítésekor a verzió szakasza még nem létezett (a
+  munkarend utána zárja le). Mostantól a kiadás a "Kiadatlan" szakasz
+  tartalmát viszi: a frissítés előtt látszik, mi újult.
+
 - **Élő figura-riasztás** (élő követés): az élő nézet időzített jelzései
   közé bekerül, amikor valamelyik csapat a meccsről meccsre visszatérő
   figuráját kezdi játszani — a védekező oldalnak szól ("kettőzés a
