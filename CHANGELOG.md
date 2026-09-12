@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.116 óta)
 
+- **A visszatérő figura 3D-ben** (3D pálya, böngészős 3D/VR): az
+  esemény-ugrás (⏮/⏭) a visszatérő figura kezdetére is ugrik, és a
+  felirat mondja: "Ismert figura (bal oldal, a kapuelőtér előtt) —
+  csapat". A könyvtárból jön, több elemzett meccs kell hozzá.
+
 - **A meccsjelentés is rajzolja a figurákat** (jelentés): a nyomtatható
   meccsjelentés új "Figuráik (alakkal)" szakasza csapatonként a három
   leggyakoribb figura alakját mutatja mini-pályán, edzői névvel és a

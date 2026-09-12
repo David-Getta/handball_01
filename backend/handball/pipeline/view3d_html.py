@@ -25,8 +25,13 @@ from ..models.tracking import Match, PositionSource, Team
 VIEW3D_MAX_FPS = 6.0
 
 
-def _compact_data(match: Match) -> dict:
-    """A követés tömör alakja: [[t_s, [[csapat,x,y],…], [bx,by]|0],…]."""
+def _compact_data(match: Match, figure_alerts: list | None = None) -> dict:
+    """A követés tömör alakja: [[t_s, [[csapat,x,y],…], [bx,by]|0],…].
+
+    `figure_alerts` (opcionális): a figura-riasztások ({"t", "team"}, a
+    /figure-alerts alakja) — "f" típusú eseményként a jelenet-ugrásba és a
+    feliratba: a visszatérő figura 3D-ben is megnézhető.
+    """
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     lepes = max(1, int(round(fps / VIEW3D_MAX_FPS)))
     frames = []
@@ -55,9 +60,16 @@ def _compact_data(match: Match) -> dict:
             esemenyek.append([round(e.t / fps, 2), tipus,
                               1 if getattr(e.team, "value", e.team) == "home"
                               else 0])
-        esemenyek.sort(key=lambda x: x[0])
     except Exception:
         esemenyek = []  # esemény nélkül is működjön a nézet
+    # A visszatérő figura kezdete: "f" — a könyvtárból (több meccs kell).
+    try:
+        for a in (figure_alerts or []):
+            esemenyek.append([round(int(a["t"]) / fps, 2), "f",
+                              1 if a.get("team") == "home" else 0])
+    except Exception:
+        pass
+    esemenyek.sort(key=lambda x: x[0])
     return {
         "home": match.meta.home_team,
         "away": match.meta.away_team,
@@ -66,9 +78,9 @@ def _compact_data(match: Match) -> dict:
     }
 
 
-def view3d_html(match: Match) -> str:
+def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
     """A teljes, önálló HTML-oldal (three.js CDN-ről, adat beágyazva)."""
-    adat = json.dumps(_compact_data(match), ensure_ascii=False,
+    adat = json.dumps(_compact_data(match, figure_alerts), ensure_ascii=False,
                       separators=(",", ":"))
     cim = f"{match.meta.home_team} vs {match.meta.away_team} — 3D"
     # Nem f-string: a JS tele van kapcsos zárójellel; a beszúrás
@@ -300,7 +312,7 @@ csuszka.oninput = () => { ido = parseFloat(csuszka.value); };
 // mint az appból érkezve. Egy másodpercnyi holt sáv, hogy az épp nézett
 // esemény ne "ragadjon". A felirat a jelenet közben mondja, mi történik.
 const ESEM = ADAT.events || [];
-const NEV = {g: "GÓL", s: "Lövés", t: "Labdaeladás"};
+const NEV = {g: "GÓL", s: "Lövés", t: "Labdaeladás", f: "Ismert figura"};
 function esemenyUgras(irany){
   if (!ESEM.length) return;
   let cel = null;

@@ -2017,7 +2017,12 @@ def create_app():
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return HTMLResponse(content=view3d_html(match))
+        # A visszatérő figura a 3D-ben is ugorható/feliratos — hibatűrően.
+        try:
+            riasztasok = _figure_alerts_for(match)
+        except Exception:
+            riasztasok = []
+        return HTMLResponse(content=view3d_html(match, riasztasok))
 
     @app.get("/matches/{match_id}/diagnostics")
     def match_diagnostics(match_id: str):
@@ -9616,23 +9621,9 @@ def create_app():
         sugg = suggest_for_frame(match.frames[t], cfg, prev_frame=prev, fps=fps)
         return {"t": t, "suggestions": [vars(s) for s in sugg]}
 
-    @app.get("/matches/{match_id}/figure-alerts")
-    def get_figure_alerts(match_id: str):
-        """ÉLŐ figura-riasztás: mikor játssza valamelyik csapat a
-        meccsről meccsre visszatérő figuráját ezen a meccsen.
-
-        A csapat könyvtára a könyvtár ÖSSZES elemzett meccséből épül
-        (több meccs kell hozzá; egy meccsből nincs visszatérő figura),
-        és ennek a meccsnek azok a támadás-szakaszai kerülnek a listába,
-        amelyek a fő visszatérő alakot játsszák. Az élő nézet a szakasz
-        kezdetén szól: "ismert figura jön — kettőzés a súlypontnál".
-
-        Válasz: {"alerts": [{"t", "t_end", "team", "team_name", "zone",
-        "text"}]} — t szerint növekvő. 404: nincs ilyen meccs.
-        """
-        match = _store.get(match_id)
-        if match is None:
-            raise HTTPException(status_code=404, detail="match not found")
+    def _figure_alerts_for(match) -> list:
+        """A figura-riasztások listája egy meccsre (lásd get_figure_alerts)
+        — a végpont és a böngészős 3D nézet közös alapja."""
         from ..pipeline.setplays import recurring_figure_segments
         alerts = []
         for side in ("home", "away"):
@@ -9658,7 +9649,26 @@ def create_app():
                              f"meccsen {fo['goals']} gól) — {masik}: "
                              "kettőzés a súlypontnál, kilépés a lövőre!")})
         alerts.sort(key=lambda r: r["t"])
-        return {"alerts": alerts}
+        return alerts
+
+    @app.get("/matches/{match_id}/figure-alerts")
+    def get_figure_alerts(match_id: str):
+        """ÉLŐ figura-riasztás: mikor játssza valamelyik csapat a
+        meccsről meccsre visszatérő figuráját ezen a meccsen.
+
+        A csapat könyvtára a könyvtár ÖSSZES elemzett meccséből épül
+        (több meccs kell hozzá; egy meccsből nincs visszatérő figura),
+        és ennek a meccsnek azok a támadás-szakaszai kerülnek a listába,
+        amelyek a fő visszatérő alakot játsszák. Az élő nézet a szakasz
+        kezdetén szól: "ismert figura jön — kettőzés a súlypontnál".
+
+        Válasz: {"alerts": [{"t", "t_end", "team", "team_name", "zone",
+        "text"}]} — t szerint növekvő. 404: nincs ilyen meccs.
+        """
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {"alerts": _figure_alerts_for(match)}
 
     @app.get("/matches/{match_id}/setplays")
     def get_setplays(match_id: str, threshold: float = 0.15):

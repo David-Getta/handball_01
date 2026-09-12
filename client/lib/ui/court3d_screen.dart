@@ -134,9 +134,19 @@ class _Court3DScreenState extends State<Court3DScreen>
         esemenyek = (await _api.fetchEvents(id))
             .where((e) => const {"goal", "shot", "turnover"}
                 .contains(e["type"]))
-            .toList()
-          ..sort((x, y) =>
-              ((x["t"] as num?) ?? 0).compareTo((y["t"] as num?) ?? 0));
+            .toList();
+        // A visszatérő figura kezdete is ugrópont ("Ismert figura") —
+        // a könyvtárból, több meccs kell hozzá; hibája nem viszi el a nézetet.
+        try {
+          for (final a in await _api.fetchFigureAlerts(id)) {
+            esemenyek.add({
+              "t": a["t"], "type": "figure", "team": a["team"],
+              "zone": a["zone"],
+            });
+          }
+        } catch (_) {}
+        esemenyek.sort((x, y) =>
+            ((x["t"] as num?) ?? 0).compareTo((y["t"] as num?) ?? 0));
       } catch (_) {
         esemenyek = const [];
       }
@@ -734,6 +744,7 @@ class _Court3DScreenState extends State<Court3DScreen>
       final nev = switch (e["type"]) {
         "goal" => "GÓL",
         "shot" => "Lövés",
+        "figure" => "Ismert figura (${e["zone"] ?? "?"})",
         _ => "Labdaeladás",
       };
       final csapat =

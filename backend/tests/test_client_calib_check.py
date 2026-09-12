@@ -283,3 +283,16 @@ def test_a_meccs_osszefoglalo_rajzolja_a_figurakat():
     scout = (ui / "scouting_screen.dart").read_text(encoding="utf-8")
     assert "class _FigureShapePainter" not in scout, "duplán él a rajzoló"
     assert "FigureShapePainter(" in scout
+
+
+def test_a_3d_nezet_a_visszatero_figurahoz_is_ugrik():
+    """A 3D pálya esemény-ugrásában és feliratában a visszatérő figura is
+    ott van (a /figure-alerts-ből) — "nézd meg a figurájukat 3D-ben"."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "court3d_screen.dart").read_text(encoding="utf-8")
+    assert "fetchFigureAlerts(id)" in src and '"figure"' in src
+    assert "Ismert figura" in src
+    view = (gyoker / "backend" / "handball" / "pipeline"
+            / "view3d_html.py").read_text(encoding="utf-8")
+    assert 'f: "Ismert figura"' in view

@@ -246,6 +246,12 @@ def test_a_bongeszos_3d_oldal_osszeall():
     assert r.headers["content-type"].startswith("text/html")
     assert c.get("/matches/nincs/view3d").status_code == 404
 
+    # A visszatérő figura a 3D-ben: "f" esemény a jelenet-ugráshoz és a
+    # felirathoz (a riasztás-lista a /figure-alerts alakja).
+    adat_f = _compact_data(m, [{"t": 20, "team": "away"}])
+    assert [e for e in adat_f["events"] if e[1] == "f"] == [[2.0, "f", 0]]
+    assert "Ismert figura" in view3d_html(m, [{"t": 20, "team": "away"}])
+
 
 # ------------------------------------------------- tanítóadat-gyűjtés
 
