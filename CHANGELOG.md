@@ -3,12 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.119 óta)
+## Kiadatlan (a v0.1.120 óta)
 
 - **A meccsterv rajzolja a visszatérő figurákat** (meccsterv): a terv
   alatt két új szakasz — "Az ő visszatérő figuráik" (erre készüljetek)
   és "A mi visszatérő figuráink" (ezt hozzuk, legyen második befejezés)
   — mini-pályán, névvel, meccs / támadás / gól számmal.
+
+## v0.1.120 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: a figurák elnevezhetők — az edző szava a könyvtár
+> zóna-neve helyett, minden felületen.
 
 - **A figurák elnevezhetők** (felderítés): a könyvtár "bal oldal, a
   kapuelőtér előtt" néven ismeri a figurát — az edző "beúszós
