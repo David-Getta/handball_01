@@ -355,3 +355,17 @@ def test_a_meccsterv_kepernyo_rajzolja_a_visszatero_figurakat():
     assert "AZ Ő VISSZATÉRŐ FIGURÁIK" in src and "A MI VISSZATÉRŐ FIGURÁINK" in src
     assert 'r["opp_figures"]' in src and 'r["own_figures"]' in src
     assert "FigureShapePainter(" in src
+
+
+def test_a_szezon_kepernyo_mutatja_a_visszatero_figurakat():
+    """A Szezon képernyő csapatonként rajzolja a meccsről meccsre
+    visszatérő figurákat — a saját repertoár és az ellenfél lapja egy
+    helyen."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "season_screen.dart").read_text(encoding="utf-8")
+    assert "_loadFigureLibraries" in src and "VISSZATÉRŐ FIGURÁK" in src
+    assert "FigureShapePainter(" in src
+    api = (gyoker / "client" / "lib" / "services"
+           / "api_client.dart").read_text(encoding="utf-8")
+    assert "/library/figure-library" in api

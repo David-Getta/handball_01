@@ -24,6 +24,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "error_text.dart";
+import "figure_shape_painter.dart";
 import "player_trend_screen.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
@@ -52,6 +53,7 @@ class _SeasonScreenState extends State<SeasonScreen> {
   Future<void> _load() async {
     try {
       final s = await _api.fetchLibrarySummary();
+      _loadFigureLibraries(s);
       final l = await _api.fetchLibraryLeaders();
       if (!mounted) return;
       setState(() {
@@ -67,6 +69,10 @@ class _SeasonScreenState extends State<SeasonScreen> {
       });
     }
   }
+
+  // Csapatonként a meccsről meccsre visszatérő figurák (a könyvtárból) —
+  // csak azok a csapatok, amelyeknél van ilyen (több meccs kell hozzá).
+  final Map<String, List<Map<String, dynamic>>> _figures = {};
 
   List<String> get _teams =>
       [for (final t in (_summary["teams"] as List? ?? [])) t as String];
@@ -99,12 +105,92 @@ class _SeasonScreenState extends State<SeasonScreen> {
               Text("TOPLISTÁK", style: AppText.sectionLabel),
               const SizedBox(height: AppSpacing.sm),
               _leaderBoards(),
+              ..._figureLibraries(),
               const SizedBox(height: AppSpacing.lg),
               Text("RIPORTOK", style: AppText.sectionLabel),
               const SizedBox(height: AppSpacing.sm),
               _reports(),
             ]),
     );
+  }
+
+  /// A csapatok figura-könyvtárai — csapatonként külön kérés, hibánál
+  /// csendben kimarad (a szezon-kép nélküle is teljes).
+  Future<void> _loadFigureLibraries(Map<String, dynamic> summary) async {
+    final nevek = <String>{};
+    for (final m in (summary["per_match"] as List? ?? const [])) {
+      if (m is! Map) continue;
+      for (final k in const ["home_team", "away_team"]) {
+        final n = m[k];
+        if (n is String && n.isNotEmpty) nevek.add(n);
+      }
+    }
+    for (final t in nevek) {
+      try {
+        final lib = await _api.fetchTeamFigureLibrary(t);
+        final rec = ((lib["recurring"] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        if (!mounted) return;
+        if (rec.isNotEmpty) setState(() => _figures[t] = rec);
+      } catch (_) {}
+    }
+  }
+
+  /// VISSZATÉRŐ FIGURÁK csapatonként, rajzzal — amit meccsről meccsre
+  /// hoznak. Nincs ilyen csapat → a szakasz elmarad.
+  List<Widget> _figureLibraries() {
+    if (_figures.isEmpty) return const [];
+    return [
+      const SizedBox(height: AppSpacing.lg),
+      Text("VISSZATÉRŐ FIGURÁK", style: AppText.sectionLabel),
+      const SizedBox(height: 4),
+      Text("Amit egy csapat meccsről meccsre hoz — a saját csapatnál "
+          "ez a repertoár, az ellenfélnél a felkészülés lapja.",
+          style: AppText.label),
+      const SizedBox(height: AppSpacing.sm),
+      for (final e in _figures.entries) ...[
+        Text(e.key, style: AppText.value.copyWith(fontSize: 13)),
+        const SizedBox(height: 4),
+        Wrap(spacing: AppSpacing.md, runSpacing: AppSpacing.sm, children: [
+          for (final f in e.value.take(4))
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                SizedBox(
+                    width: 96, height: 48,
+                    child: CustomPaint(
+                        painter: FigureShapePainter(
+                            ((f["shape"] as List?) ?? const [])
+                                .map((v) => (v as num).toDouble())
+                                .toList()))),
+                const SizedBox(width: AppSpacing.sm),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        (f["name"] as String?)?.isNotEmpty == true
+                            ? "${f["name"]}"
+                            : "${f["zone"] ?? "?"}",
+                        style: AppText.value.copyWith(fontSize: 12.5)),
+                    Text(
+                        "${f["matches"]} meccs · ${f["attacks"]} támadás · "
+                        "${f["goals"]} gól",
+                        style: AppText.label.copyWith(fontSize: 11.5)),
+                  ],
+                ),
+              ]),
+            ),
+        ]),
+        const SizedBox(height: AppSpacing.sm),
+      ],
+    ];
   }
 
   // ---- Összkép -------------------------------------------------------

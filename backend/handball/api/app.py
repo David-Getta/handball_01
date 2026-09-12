@@ -3178,6 +3178,18 @@ def create_app():
             ki.append({**r, "name": _figure_name_for(team, r.get("shape"))})
         return ki
 
+    @app.get("/library/figure-library")
+    def get_library_figure_library(team: str):
+        """Egy csapat FIGURA-KÖNYVTÁRA a könyvtár összes elemzett
+        meccséből (névvel): {"team", "figures", "recurring", "verdict"} —
+        a Szezon képernyő "visszatérő figurák" szakasza. Egy meccsnél a
+        "recurring" üres."""
+        team = str(team or "").strip()
+        if not team:
+            raise HTTPException(status_code=400, detail="team required")
+        lib = _team_figure_library(team)
+        return {"team": team, **lib}
+
     @app.get("/library/figures")
     def get_library_figures(team: Optional[str] = None):
         """Az elnevezett figurák: {"figures": {csapat: [{"name","shape"}]}}."""

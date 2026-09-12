@@ -185,6 +185,20 @@ class ApiClient {
     return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["id"] as String;
   }
 
+  /// Egy csapat figura-könyvtára a könyvtár összes meccséből
+  /// (GET /library/figure-library?team=): a "recurring" a meccsről
+  /// meccsre visszatérő figurák (névvel) — a Szezon képernyő szakasza.
+  Future<Map<String, dynamic>> fetchTeamFigureLibrary(String team) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/figure-library"
+            "?team=${Uri.encodeQueryComponent(team)}"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a figura-könyvtár", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Egy csapat elnevezett figurái (GET /library/figures?team=):
   /// [{"name","shape"}] — a Keret képernyő listája.
   Future<List<Map<String, dynamic>>> fetchLibraryFigures(String team) async {

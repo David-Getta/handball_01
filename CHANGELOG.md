@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.121 óta)
 
+- **Visszatérő figurák a Szezon képernyőn** (szezon): csapatonként a
+  meccsről meccsre visszatérő figurák rajzzal, névvel, meccs / támadás /
+  gól számmal — a saját csapatnál a repertoár, az ellenfélnél a
+  felkészülés lapja, egy helyen az appban (eddig csak a nyomtatható
+  szezon-riportban volt).
+
 - **Figura × védőforma** (új réteg): MELYIK FAL ELLEN működik a
   figurájuk — a támadás-szakaszokat figurák szerint, a védekező csapat
   formáját a szakasz végén olvasva, figuránként és formánként a

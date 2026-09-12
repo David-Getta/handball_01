@@ -935,3 +935,34 @@ def test_a_figura_x_vedoforma_edzes_szabaly_valodi_retegbol():
     tetelek = training_focus(_fvf_match([("5-1", False)] * 4, "t1"))["home"]
     assert any(t["title"].startswith("A figuránk a 5-1 ellen nem megy")
                for t in tetelek), [t["title"] for t in tetelek]
+
+
+def test_a_csapat_figura_konyvtara_vegpont(tmp_path):
+    """/library/figure-library?team=: a csapat könyvtára az összes
+    elemzett meccséből (névvel); egy meccsnél nincs visszatérő figura;
+    üres csapatnév 400."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    (d / "m1.json").write_text(
+        json.dumps(_spl_match(["bal"] * 4 + ["jobb"] * 3, "m1").to_dict()),
+        encoding="utf-8")
+    c = TestClient(create_app())
+    assert c.get("/library/figure-library", params={"team": ""}).status_code == 400
+    r = c.get("/library/figure-library", params={"team": "A"}).json()
+    assert r["team"] == "A" and r["recurring"] == [] and len(r["figures"]) == 2
+    (d / "m2.json").write_text(
+        json.dumps(_spl_match(["bal"] * 3, "m2").to_dict()), encoding="utf-8")
+    r = TestClient(create_app()).get("/library/figure-library",
+                                     params={"team": "A"}).json()
+    assert r["recurring"] and r["recurring"][0]["matches"] == 2
+    assert "name" in r["recurring"][0]
