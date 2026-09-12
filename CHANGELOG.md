@@ -11,7 +11,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   adható; a név az alakhoz kötve, csapatonként él, és minden felületen
   látszik: felderítés, meccs-összefoglaló, élő riasztás, klip-címke, a
   nyomtatható felderítő jelentés, a meccsjelentés és a szezon-riport.
-  Üres név törli.
+  Üres név törli. A Keret képernyő "Figura-nevek" szakasza egy helyen
+  mutatja (rajzzal) és törli a csapat elnevezett figuráit.
 
 ## v0.1.119 — kiadva (2026-09-12)
 

@@ -27,6 +27,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "error_text.dart";
+import "figure_shape_painter.dart";
 import "player_trend_screen.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
@@ -56,6 +57,9 @@ class _RosterScreenState extends State<RosterScreen> {
   String? _error;
   List<String> _teams = [];
   String? _team;
+  // A csapat elnevezett figurái (a felderítésen adott nevek) — itt
+  // egy helyen áttekinthetők és törölhetők.
+  List<Map<String, dynamic>> _figures = const [];
   List<Map<String, dynamic>> _players = [];
   String _note = "";
   // Mezszám → hány gyakorlandója van a szezonban (az egyéni
@@ -94,6 +98,7 @@ class _RosterScreenState extends State<RosterScreen> {
       if (_team != null) {
         _loadRoster();
         _loadFocus();
+        _loadFigures();
       }
     } catch (e) {
       if (!mounted) return;
@@ -129,6 +134,82 @@ class _RosterScreenState extends State<RosterScreen> {
         _error = "A keret nem érhető el: ${humanError(e)}";
       });
     }
+  }
+
+  /// A csapat elnevezett figurái — hibánál csendben üres (a lista
+  /// kényelem, a keret nélküle is teljes).
+  Future<void> _loadFigures() async {
+    final team = _team;
+    if (team == null) return;
+    try {
+      final f = await _api.fetchLibraryFigures(team);
+      if (!mounted) return;
+      setState(() => _figures = f);
+    } catch (_) {
+      if (mounted) setState(() => _figures = const []);
+    }
+  }
+
+  /// Egy figura-név törlése (üres név a tárban = törlés), majd újratöltés.
+  Future<void> _deleteFigureName(Map<String, dynamic> f) async {
+    final team = _team;
+    if (team == null) return;
+    final shape = ((f["shape"] as List?) ?? const [])
+        .map((v) => (v as num).toDouble())
+        .toList();
+    try {
+      await _api.saveFigureName(team, shape, "");
+      await _loadFigures();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A törlés nem sikerült: ${humanError(e)}")));
+    }
+  }
+
+  /// FIGURA-NEVEK: a csapat elnevezett figurái rajzzal; a név a
+  /// felderítésen adható, itt törölhető. Név nélkül a szakasz elmarad.
+  Widget _figureNames() {
+    if (_figures.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text("FIGURA-NEVEK", style: AppText.sectionLabel),
+        const SizedBox(height: 4),
+        Text("A felderítésen adott nevek — az alakhoz kötve, minden "
+            "felületen ezek látszanak.",
+            style: AppText.label),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(spacing: AppSpacing.md, runSpacing: AppSpacing.sm, children: [
+          for (final f in _figures)
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                SizedBox(
+                    width: 96, height: 48,
+                    child: CustomPaint(
+                        painter: FigureShapePainter(
+                            ((f["shape"] as List?) ?? const [])
+                                .map((v) => (v as num).toDouble())
+                                .toList()))),
+                const SizedBox(width: AppSpacing.sm),
+                Text("${f["name"] ?? ""}",
+                    style: AppText.value.copyWith(fontSize: 13)),
+                IconButton(
+                  tooltip: "Név törlése",
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  onPressed: () => _deleteFigureName(f),
+                ),
+              ]),
+            ),
+        ]),
+      ]),
+    );
   }
 
   /// A csapat egyéni edzés-terve — EGY kérés az egész keretre.
@@ -283,6 +364,7 @@ class _RosterScreenState extends State<RosterScreen> {
               else ...[
                 _teamPicker(),
                 const SizedBox(height: AppSpacing.md),
+                _figureNames(),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -331,6 +413,7 @@ class _RosterScreenState extends State<RosterScreen> {
                 setState(() => _team = v);
                 _loadRoster();
                 _loadFocus();
+                _loadFigures();
               },
       ),
       const SizedBox(width: AppSpacing.md),

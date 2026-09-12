@@ -331,3 +331,16 @@ def test_a_figura_elnevezheto_a_felderitesen():
     summ = (gyoker / "client" / "lib" / "ui"
             / "summary_panel.dart").read_text(encoding="utf-8")
     assert 'f["name"]' in summ
+
+
+def test_a_keret_kepernyon_a_figura_nevek_attekinthetok():
+    """A felderítésen adott figura-nevek egy helyen: a Keret képernyő
+    listázza (rajzzal) és törli őket."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    roster = (gyoker / "client" / "lib" / "ui"
+              / "roster_screen.dart").read_text(encoding="utf-8")
+    assert "_loadFigures" in roster and "_deleteFigureName" in roster
+    assert "FIGURA-NEVEK" in roster and "FigureShapePainter(" in roster
+    api = (gyoker / "client" / "lib" / "services"
+           / "api_client.dart").read_text(encoding="utf-8")
+    assert "fetchLibraryFigures" in api

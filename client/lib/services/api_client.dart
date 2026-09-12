@@ -185,6 +185,21 @@ class ApiClient {
     return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["id"] as String;
   }
 
+  /// Egy csapat elnevezett figurái (GET /library/figures?team=):
+  /// [{"name","shape"}] — a Keret képernyő listája.
+  Future<List<Map<String, dynamic>>> fetchLibraryFigures(String team) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/figures"
+            "?team=${Uri.encodeQueryComponent(team)}"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a figura-neveket", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    final lista = ((json["figures"] as Map?)?[team] as List?) ?? const [];
+    return lista.cast<Map<String, dynamic>>();
+  }
+
   /// Egy csapat figura-ALAKJÁNAK elnevezése (POST /library/figures): a
   /// könyvtár "bal oldal, a kapuelőtér előtt" helyett az edző nevét
   /// mutatja ("Beúszós kereszt") minden felületen; üres név törli.
