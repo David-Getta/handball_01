@@ -39,11 +39,19 @@ class CalibrationResult {
   /// indulnia, mert a pásztázás-követés ehhez az álláshoz igazítja a kamerát.
   final int startFrame;
 
+  /// A mentéskor mért illeszkedés (0..1) és ítélete ("jó" / "közepes" /
+  /// "gyenge") — null, ha nem volt mérés (nincs motor, vagy összenézet).
+  /// Az indítás előtti ellenőrző lista ebből mondja, ül-e a kalibráció.
+  final double? fit;
+  final String? fitVerdict;
+
   const CalibrationResult({
     required this.corners,
     required this.region,
     required this.rotate,
     required this.startFrame,
+    this.fit,
+    this.fitVerdict,
   });
 }
 
@@ -71,6 +79,22 @@ class CalibrationSet {
     }
     return "bal + jobb térfél";
   }
+
+  /// A leggyengébb mért illeszkedés szövege ("illeszkedés 0,62 — jó"),
+  /// vagy null, ha egyik bejegyzésnél sem volt mérés.
+  String? get fitNote {
+    CalibrationResult? rossz;
+    for (final c in items) {
+      if (c.fit == null) continue;
+      if (rossz == null || c.fit! < rossz.fit!) rossz = c;
+    }
+    if (rossz == null) return null;
+    return "illeszkedés ${rossz.fit!.toStringAsFixed(2).replaceAll(".", ",")}"
+        " — ${rossz.fitVerdict ?? "?"}";
+  }
+
+  /// Igaz, ha valamelyik bejegyzés mért illeszkedése "gyenge".
+  bool get fitWeak => items.any((c) => c.fitVerdict == "gyenge");
 }
 
 class CalibrationScreen extends StatefulWidget {
@@ -113,7 +137,37 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   // válassz, ahol a bejelölendő terület a legjobban látszik.
   late int _frameIdx = widget.frameIndex;
   int? _drag;
+  // NYÍL-FINOMÍTÁS: az utoljára megfogott sarok — a nyilak ezt tolják
+  // 1 képpontonként (Shift: 5). Egérrel a hajszál-pontos igazítás
+  // kínszenvedés, pedig a kapu/6 m-es ív pont ezen múlik.
+  int? _lastCorner;
+  Size? _canvasSize;
   bool _saved = false;
+
+  // Sarok-JAVASLAT a felismert pályavonalakból: a motor a hosszú, egyenes
+  // vonalak metszéspontjaiból a legnagyobb konvex négyszöget adja vissza.
+  // Ez nem váltja ki a kézi igazítást — de nulláról jelölni sokkal
+  // nehezebb, és a rosszul jelölt sarok az egész elemzést elviszi (a
+  // lelátó a pályára vetül, a pozíciók félremennek).
+  bool _suggesting = false;
+  String? _suggestNote;
+
+  // ILLESZKEDÉS-MÉRÉS: a motor megméri, mennyire ül a rajzolt pálya-modell
+  // a valódi pályavonalakon EZEN a kockán (ugyanaz a mérés, amit a
+  // feldolgozás is végez menet közben) — a szem a néhány képpontos
+  // csúszást elnézi, pedig a játékos-helyek azon múlnak. Ha egy eltolás
+  // érdemben javítana, egy gombbal ráigazítható.
+  bool _fitting = false;
+  Map<String, dynamic>? _fit; // az utolsó mérés eredménye
+  String? _fitNote;
+  // Mire vonatkozott a mérés (sarkok + kocka + terület): ha azóta
+  // elmozdult egy sarok, a szám már NEM a képernyőn látható rajzé —
+  // ilyenkor elavultnak jelöljük, nem hazudunk friss értéket.
+  String? _fitKey;
+  // ÖSSZENÉZET-mérés: a két térfél külön kalibráció, külön kockán —
+  // mindkettő a saját kockáján és a saját térfél-vonalain mérődik.
+  bool _fineFitting = false;
+  String? _fineFitNote;
 
   // Melyik területet jelöljük be: teljes pálya vagy csak az egyik térfél
   // (pásztázó kameránál az induló képen sokszor csak egy térfél látszik).
@@ -222,6 +276,45 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     );
   }
 
+  /// Nyíl-billentyűs finomítás: az utoljára fogott sarok 1 képpontot
+  /// lép (Shift: 5) — a kapu / 6 m-es ív hajszál-igazításához.
+  KeyEventResult _nudgeKey(FocusNode node, KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final idx = _lastCorner;
+    final size = _canvasSize;
+    if (idx == null || size == null) return KeyEventResult.ignored;
+    double dx = 0, dy = 0;
+    if (e.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      dx = -1;
+    } else if (e.logicalKey == LogicalKeyboardKey.arrowRight) {
+      dx = 1;
+    } else if (e.logicalKey == LogicalKeyboardKey.arrowUp) {
+      dy = -1;
+    } else if (e.logicalKey == LogicalKeyboardKey.arrowDown) {
+      dy = 1;
+    } else {
+      return KeyEventResult.ignored;
+    }
+    final lepes = HardwareKeyboard.instance.isShiftPressed ? 5.0 : 1.0;
+    setState(() {
+      final next = [..._activePts];
+      if (idx >= next.length) return;
+      next[idx] = Offset(
+        (next[idx].dx + dx * lepes / size.width).clamp(0.0, 1.0),
+        (next[idx].dy + dy * lepes / size.height).clamp(0.0, 1.0),
+      );
+      if (_fineTune) {
+        _six = next;
+      } else {
+        _corners = next;
+      }
+      _saved = false;
+    });
+    return KeyEventResult.handled;
+  }
+
   Widget _frameCard() {
     return Container(
       decoration: AppTheme.card(),
@@ -229,8 +322,12 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       child: LayoutBuilder(
         builder: (context, c) {
           final size = Size(c.maxWidth, c.maxHeight);
+          _canvasSize = size;
           final pts = [for (final f in _activePts) Offset(f.dx * size.width, f.dy * size.height)];
-          return GestureDetector(
+          return Focus(
+            autofocus: true,
+            onKeyEvent: _nudgeKey,
+            child: GestureDetector(
             onPanStart: (d) {
               double best = 32;
               _drag = null;
@@ -238,6 +335,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                 final dist = (pts[i] - d.localPosition).distance;
                 if (dist < best) { best = dist; _drag = i; }
               }
+              if (_drag != null) setState(() => _lastCorner = _drag);
             },
             onPanUpdate: (d) {
               if (_drag == null) return;
@@ -277,10 +375,12 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                       rotate: _rotate,
                       margin: _margin,
                       fine: _fineTune,
+                      active: _lastCorner,
                       drawBackground: _frameBytes == null),
                   size: size,
                 ),
               ],
+            ),
             ),
           );
         },
@@ -298,7 +398,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         _loading
             ? "referencia képkocka betöltése…"
             : _loadError != null
-                ? "nincs képkocka (backend/videó nélkül) — helyőrző"
+                ? "nincs képkocka (motor vagy videó nélkül) — helyőrző"
                 : "referencia képkocka (helyőrző)",
         style: AppText.label.copyWith(color: AppColors.textFaint),
       ),
@@ -443,10 +543,13 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   }
 
   Widget _sidePanel() {
+    // GÖRGETHETŐ: alacsonyabb ablaknál a mentés / Kész gomb lelógott,
+    // és nem lehetett rákattintani — a felhasználó jelezte.
     return Container(
       decoration: AppTheme.card(),
       padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (!_fineTune) ...[
@@ -542,8 +645,14 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             _cornerRow("Távoli-jobb", 1),
             _cornerRow("Közeli-jobb", 2),
             _cornerRow("Közeli-bal", 3),
+            const SizedBox(height: 6),
+            Text(
+                "Finomítás: fogd meg a sarkot, majd a NYILAKKAL told "
+                "képpontonként (Shift: nagyobb lépés) — addig, míg a "
+                "rajzolt kapu és a 6 m-es ív ráül a valódira.",
+                style: AppText.label.copyWith(fontSize: 11)),
           ],
-          const Spacer(),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             _fineTune
                 ? "ÖSSZENÉZET: a bal és a jobb térfél a SAJÁT bekalibrált "
@@ -596,6 +705,25 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             const SizedBox(height: AppSpacing.sm),
           ],
           if (_fineTune) ...[
+            if (widget.videoPath != null) ...[
+              OutlinedButton.icon(
+                onPressed: _fineFitting ? null : _measureFineFit,
+                icon: _fineFitting
+                    ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.straighten, size: 18),
+                label: Text(_fineFitting
+                    ? "Illeszkedés mérése…"
+                    : "Illeszkedés ellenőrzése (mindkét fél)"),
+              ),
+              if (_fineFitNote != null) ...[
+                const SizedBox(height: 6),
+                Text(_fineFitNote!,
+                    style: AppText.label.copyWith(fontSize: 11.5)),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+            ],
             FilledButton.icon(
               style: FilledButton.styleFrom(
                   backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
@@ -610,6 +738,53 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
               label: const Text("Vissza a térfelekhez"),
             ),
           ] else ...[
+            // Sarok-javaslat: a motor a felismert pályavonalakból ajánl
+            // négyszöget. Nulláról jelölni sokkal nehezebb, a rosszul
+            // jelölt sarok pedig az egész elemzést elviszi.
+            if (widget.videoPath != null) ...[
+              OutlinedButton.icon(
+                onPressed: _suggesting ? null : _suggestCorners,
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.gold,
+                    side: const BorderSide(color: AppColors.gold)),
+                icon: _suggesting
+                    ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.auto_fix_high, size: 18),
+                label: Text(_suggesting
+                    ? "Vonal-felismerés fut…"
+                    : "Sarkok javaslata a pályavonalakból"),
+              ),
+              if (_suggestNote != null) ...[
+                const SizedBox(height: 6),
+                Text(_suggestNote!,
+                    style: AppText.label.copyWith(fontSize: 11.5)),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+              // Gépi ellenőrzés: ül-e a rajz a valódi pályavonalakon.
+              OutlinedButton.icon(
+                onPressed: _fitting ? null : _measureFit,
+                icon: _fitting
+                    ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.straighten, size: 18),
+                label: Text(_fitting
+                    ? "Illeszkedés mérése…"
+                    : "Illeszkedés ellenőrzése"),
+              ),
+              if (_fitNote != null) ...[
+                const SizedBox(height: 6),
+                Text(_fitNote!,
+                    style: AppText.label.copyWith(fontSize: 11.5)),
+              ],
+              if (_fit != null) ...[
+                const SizedBox(height: 6),
+                _fitCard(),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+            ],
             FilledButton.icon(
               style: FilledButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
               onPressed: _save,
@@ -647,11 +822,221 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             ],
           ],
         ],
+        ),
       ),
     );
   }
 
   /// Az aktuális beállítás (sarkok + terület + forgatás + képkocka) egy
+  /// Sarok-javaslat betöltése a felismert pályavonalakból.
+  ///
+  /// Csendes kudarc: ha nincs javaslat (kevés vonal, takart pálya), a
+  /// felhasználó ezt szövegben megtudja, de a kézi jelölés érintetlen
+  /// marad — a javaslat segítség, nem kapu.
+  Future<void> _suggestCorners() async {
+    final path = widget.videoPath;
+    if (path == null || _suggesting) return;
+    setState(() {
+      _suggesting = true;
+      _suggestNote = null;
+    });
+    try {
+      final api = ApiClient(baseUrl: widget.baseUrl);
+      final r = await api.fetchBroadcastLines(path, frame: _frameIdx);
+      final quad = r["suggested_quad"] as List?;
+      final w = (r["width"] as num?)?.toDouble() ??
+          _frameSize?.width ?? 1920.0;
+      final h = (r["height"] as num?)?.toDouble() ??
+          _frameSize?.height ?? 1080.0;
+      if (quad == null || quad.length != 4) {
+        if (!mounted) return;
+        setState(() => _suggestNote =
+            "Ezen a képkockán nem találtam elég pályavonalat a "
+            "javaslathoz. Léptess olyan kockára, ahol a pálya vonalai "
+            "tisztán látszanak (nincs rajta tömeg, felirat), vagy jelöld "
+            "be kézzel a 4 sarkot.");
+        return;
+      }
+      final ujak = <Offset>[];
+      for (final p in quad) {
+        final pt = (p as List);
+        final x = (pt[0] as num).toDouble();
+        final y = (pt[1] as num).toDouble();
+        // Képpont → vászon-arány (a kép körüli sávot is beleszámítva).
+        ujak.add(Offset(_margin + x / w * (1 - 2 * _margin),
+            _margin + y / h * (1 - 2 * _margin)));
+      }
+      if (!mounted) return;
+      final nLines = ((r["lines"] as List?) ?? const []).length;
+      setState(() {
+        _corners = ujak;
+        _saved = false;
+        _suggestNote =
+            "Javaslat betöltve ($nLines felismert vonalból). ELLENŐRIZD: "
+            "a négyszög a JÁTÉKTÉR négy sarkán álljon — húzd a pontokat "
+            "a helyükre, mielőtt mentesz.";
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _suggestNote =
+          "A vonal-felismerés nem sikerült: ${humanError(e)}");
+    } finally {
+      if (mounted) setState(() => _suggesting = false);
+    }
+  }
+
+  /// A jelenlegi rajz azonosítója — ehhez tartozik az utolsó mérés.
+  String get _rajzKulcs {
+    final b = StringBuffer("$_frameIdx|$_region|$_rotate");
+    for (final c in _corners) {
+      b.write("|${c.dx.toStringAsFixed(4)},${c.dy.toStringAsFixed(4)}");
+    }
+    return b.toString();
+  }
+
+  /// Elavult-e az utolsó mérés (azóta mozdult egy sarok / kocka / terület)?
+  bool get _fitElavult => _fit != null && _fitKey != _rajzKulcs;
+
+  /// ILLESZKEDÉS MÉRÉSE: a motor megméri, mennyire ül a rajzolt pálya-
+  /// modell a kép valódi vonalain (0..1), és megmondja, javítana-e egy
+  /// eltolás. Ugyanaz a mérés, amit a feldolgozás is végez a kulcs-
+  /// kockákon — csak MÉG az órákig tartó feldolgozás előtt.
+  Future<void> _measureFit() async {
+    final path = widget.videoPath;
+    if (path == null || _fitting) return;
+    setState(() {
+      _fitting = true;
+      _fitNote = null;
+    });
+    try {
+      final api = ApiClient(baseUrl: widget.baseUrl);
+      final r = _currentResult();
+      final kulcs = _rajzKulcs;
+      final m = await api.fetchCalibScore(
+        videoPath: path,
+        frame: _frameIdx,
+        corners: [
+          for (final c in r.corners) [c[0].toDouble(), c[1].toDouble()]
+        ],
+        region: _region,
+        rotate: _rotate,
+      );
+      if (!mounted) return;
+      setState(() {
+        _fit = m;
+        _fitKey = kulcs;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _fitNote =
+          "Az illeszkedés mérése nem sikerült: ${humanError(e)}");
+    } finally {
+      if (mounted) setState(() => _fitting = false);
+    }
+  }
+
+  /// A javasolt eltolás alkalmazása: MIND A NÉGY sarkot ugyanannyival
+  /// toljuk (a négy sarok azonos eltolása pontosan a rajzolt vonalak
+  /// eltolása), majd újramérünk, hogy a szám is a friss rajzé legyen.
+  Future<void> _applyFitShift() async {
+    final m = _fit;
+    if (m == null) return;
+    final dx = (m["dx"] as num?)?.toDouble() ?? 0.0;
+    final dy = (m["dy"] as num?)?.toDouble() ?? 0.0;
+    if (dx == 0 && dy == 0) return;
+    final w = (m["width"] as num?)?.toDouble() ?? _frameSize?.width ?? 1920.0;
+    final h = (m["height"] as num?)?.toDouble() ?? _frameSize?.height ?? 1080.0;
+    // Képpont → vászon-arány (a kép körüli sávot is beleszámítva).
+    final ax = dx / w * (1 - 2 * _margin);
+    final ay = dy / h * (1 - 2 * _margin);
+    setState(() {
+      _corners = [for (final c in _corners) Offset(c.dx + ax, c.dy + ay)];
+      _saved = false;
+      _fit = null;
+      _fitKey = null;
+    });
+    await _measureFit();
+  }
+
+  /// Az illeszkedés-mérés eredménye edzőnyelven, a javasolt igazítással.
+  /// A színküszöbök a motoréi (calib_overlay: CALIB_FIT_GOOD = 0.5 fölött
+  /// jó, CALIB_FIT_WEAK = 0.3 alatt gyenge) — az ítéletet és a mondatot
+  /// maga a motor adja, hogy egy helyen legyen megfogalmazva.
+  Widget _fitCard() {
+    final m = _fit!;
+    final fit = (m["fit"] as num?)?.toDouble();
+    final itelet = m["itelet"] as String?;
+    final szin = switch (itelet) {
+      "jó" => AppColors.accent,
+      "közepes" => AppColors.gold,
+      _ => AppColors.away,
+    };
+    String szam(double v) => v.toStringAsFixed(2).replaceAll(".", ",");
+    final dx = (m["dx"] as num?)?.toDouble() ?? 0.0;
+    final dy = (m["dy"] as num?)?.toDouble() ?? 0.0;
+    final javasolt = m["javasolt"] == true && (dx != 0 || dy != 0);
+    final javitva = (m["fit_javitva"] as num?)?.toDouble();
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: szin.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: szin.withOpacity(0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(
+                itelet == "jó"
+                    ? Icons.check_circle
+                    : itelet == "közepes"
+                        ? Icons.info_outline
+                        : Icons.warning_amber_rounded,
+                size: 16, color: szin),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                  fit == null
+                      ? "Nem mérhető"
+                      : "Illeszkedés: ${szam(fit)} — ${itelet ?? "?"}",
+                  style: AppText.label
+                      .copyWith(fontSize: 12, color: szin)),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Text("${m["uzenet"] ?? ""}",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+          if (javasolt) ...[
+            const SizedBox(height: 6),
+            Text(
+                "A motor szerint ${dx.round()} / ${dy.round()} képpont "
+                "eltolással jobban ülne"
+                "${javitva != null ? " (${szam(javitva)})" : ""}.",
+                style: AppText.label.copyWith(fontSize: 11.5)),
+            const SizedBox(height: 4),
+            OutlinedButton.icon(
+              onPressed: _fitting ? null : _applyFitShift,
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.gold,
+                  side: const BorderSide(color: AppColors.gold)),
+              icon: const Icon(Icons.open_with, size: 16),
+              label: const Text("Igazítsd rá (mind a 4 sarkot)"),
+            ),
+          ],
+          if (_fitElavult) ...[
+            const SizedBox(height: 6),
+            Text(
+                "A sarkok azóta mozdultak — ez a szám még a korábbi "
+                "rajzé. Mérj újra.",
+                style: AppText.label
+                    .copyWith(fontSize: 11.5, color: AppColors.gold)),
+          ],
+        ],
+      ),
+    );
+  }
+
   /// CalibrationResult-tá alakítva, képpont-koordinátákkal.
   CalibrationResult _currentResult() {
     final w = _frameSize?.width ?? 1920.0;
@@ -660,6 +1045,9 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     // tartomány felel meg a képkockának. A sávba húzott pont képen KÍVÜLI
     // (negatív vagy W/H fölötti) képpontot ad — a homográfiának ez így jó.
     double toImg(double v) => (v - _margin) / (1 - 2 * _margin);
+    // A friss mérés eredménye is megy a bejegyzésbe — az indítás előtti
+    // lista ebből mondja, ül-e a kalibráció (elavult mérés nem).
+    final friss = (_fit != null && !_fitElavult) ? _fit : null;
     return CalibrationResult(
       corners: [
         for (final cn in _corners)
@@ -668,6 +1056,8 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       region: _region,
       rotate: _rotate,
       startFrame: _frameIdx,
+      fit: (friss?["fit"] as num?)?.toDouble(),
+      fitVerdict: friss?["itelet"] as String?,
     );
   }
 
@@ -721,6 +1111,45 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
           backgroundColor: AppColors.surface,
           title: const Text("Gyanús kalibráció"),
           content: Text(warn, style: AppText.label),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Javítom")),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text("Mentés így is",
+                    style: TextStyle(color: AppColors.gold))),
+          ],
+        ),
+      );
+      if (go != true || !mounted) return;
+    }
+    // GÉPI ellenőrzés mentés előtt: a négyszög lehet szabályos, és
+    // mégis a valódi pályavonalak MELLETT — a kezdő ezt nem veszi
+    // észre, a feldolgozás viszont eleve elcsúszott helyekkel indulna.
+    // A mérés csendben elmarad, ha a motor nem érhető el: a kalibrálás
+    // nem múlhat egy ellenőrzésen.
+    if (widget.videoPath != null && (_fit == null || _fitElavult)) {
+      await _measureFit();
+      if (!mounted) return;
+    }
+    // Az ítéletet a motor adja (calib_overlay: CALIB_FIT_WEAK = 0.3 alatt
+    // "gyenge"); a párbeszéd a jó küszöböt is kimondja, hogy legyen mihez
+    // mérni a látott számot (CALIB_FIT_GOOD = 0.5).
+    final mert = _fit;
+    if (mert != null && !_fitElavult && mert["itelet"] == "gyenge") {
+      final fitSzam = (mert["fit"] as num?)?.toDouble();
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("A rajz nem ül a pályavonalakon"),
+          content: Text(
+              "${mert["uzenet"]}\n\n"
+              "Mért illeszkedés: "
+              "${fitSzam == null ? "—" : fitSzam.toStringAsFixed(2).replaceAll(".", ",")}"
+              " (a jó 0,50 fölött van).",
+              style: AppText.label),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -843,6 +1272,62 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     Navigator.of(context).pop(CalibrationSet(items));
   }
 
+  /// ÖSSZENÉZET: mindkét térfél illeszkedése a SAJÁT kockáján és a saját
+  /// térfél-vonalain (bal: "left", jobb: "right") — a két négyszög két
+  /// külön kalibráció, ezért két külön mérés. Csak mér, nem igazít: a
+  /// felezővonal két vége közös pont, egy fél eltolása a másikat is
+  /// vinné — a finomítás itt kézzel, a húzható pontokkal megy.
+  Future<void> _measureFineFit() async {
+    final path = widget.videoPath;
+    if (path == null || _fineFitting) return;
+    setState(() {
+      _fineFitting = true;
+      _fineFitNote = null;
+    });
+    List<double> px(Offset o, Size? sz) {
+      final w = sz?.width ?? _frameSize?.width ?? 1920.0;
+      final h = sz?.height ?? _frameSize?.height ?? 1080.0;
+      double toImg(double v) => (v - _margin) / (1 - 2 * _margin);
+      return [(toImg(o.dx) * w).roundToDouble(),
+              (toImg(o.dy) * h).roundToDouble()];
+    }
+
+    try {
+      final api = ApiClient(baseUrl: widget.baseUrl);
+      final parts = <String>[];
+      final felek = [
+        ("Bal fél", _leftQuad, _leftImgSize, "left",
+         _savedLeft?.startFrame ?? _frameIdx),
+        ("Jobb fél", _rightQuad, _rightImgSize, "right",
+         _savedRight?.startFrame ?? _frameIdx),
+      ];
+      for (final (nev, quad, sz, region, frame) in felek) {
+        if (quad.length != 4) continue;
+        final m = await api.fetchCalibScore(
+          videoPath: path,
+          frame: frame,
+          corners: [for (final o in quad) px(o, sz)],
+          region: region,
+        );
+        final fit = (m["fit"] as num?)?.toDouble();
+        parts.add(fit == null
+            ? "$nev: nem mérhető"
+            : "$nev: ${fit.toStringAsFixed(2).replaceAll(".", ",")} — "
+                "${m["itelet"] ?? "?"}");
+      }
+      if (!mounted) return;
+      setState(() => _fineFitNote = parts.isEmpty
+          ? "Nincs mérhető négyszög."
+          : "${parts.join(" · ")} (a jó 0,50 fölött van)");
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _fineFitNote =
+          "Az illeszkedés mérése nem sikerült: ${humanError(e)}");
+    } finally {
+      if (mounted) setState(() => _fineFitting = false);
+    }
+  }
+
   /// Visszatérés az elmentett térfél-kalibrációkkal (1 vagy 2 bejegyzés).
   void _finish() {
     final items = [
@@ -915,10 +1400,11 @@ class _CalibPainter extends CustomPainter {
   final bool rotate; // 180°-os forgatás (túloldali kamera)
   final double margin; // a képkocka körüli sáv aránya (kicsinyítésnél nő)
   final bool fine; // összenézet: 6 pont (4 sarok + felezővonal két vége)
+  final int? active; // az utoljára fogott sarok — a nyilak ezt tolják
   final bool drawBackground; // helyőrző háttér (ha nincs valódi képkocka)
   _CalibPainter(this.corners,
       {this.region = "full", this.rotate = false, this.margin = 0.12,
-       this.fine = false, this.drawBackground = true});
+       this.fine = false, this.active, this.drawBackground = true});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -996,12 +1482,20 @@ class _CalibPainter extends CustomPainter {
     _drawHandles(canvas);
   }
 
-  /// A húzható pontok (fogantyúk) kirajzolása.
+  /// A húzható pontok (fogantyúk) kirajzolása; az aktív (nyilakkal
+  /// tolható) sarok arany gyűrűt kap, hogy látszódjon, mit mozgatsz.
   void _drawHandles(Canvas canvas) {
-    for (final c in corners) {
+    for (int i = 0; i < corners.length; i++) {
+      final c = corners[i];
       canvas.drawCircle(c, 11, Paint()..color = AppColors.accent.withOpacity(0.25));
       canvas.drawCircle(c, 7, Paint()..color = AppColors.accent);
       canvas.drawCircle(c, 7, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.5);
+      if (i == active) {
+        canvas.drawCircle(c, 14, Paint()
+          ..color = AppColors.gold
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2);
+      }
     }
   }
 
@@ -1050,6 +1544,21 @@ class _CalibPainter extends CustomPainter {
         final cur = p(b.dx, b.dy);
         if (prev != null) canvas.drawLine(prev, cur, gold);
         prev = cur;
+      }
+      // 9 m-es szaggatott vonal — MÁSODIK ellenőrző jel a kalibrációhoz:
+      // ha a 6 m-es ráül a valódi vonalra, de a 9 m-es elcsúszik, a
+      // sarokpontok rosszul állnak (a hiba a képen azonnal látszik).
+      final dash = Paint()
+        ..color = AppColors.gold.withOpacity(0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..strokeCap = StrokeCap.round;
+      final fpts = [
+        for (final b in freeThrowBoundary(leftSide: gx == 0.0, segments: 22))
+          p(b.dx, b.dy)
+      ];
+      for (var i = 0; i + 1 < fpts.length; i += 2) {
+        canvas.drawLine(fpts[i], fpts[i + 1], dash);
       }
     }
   }

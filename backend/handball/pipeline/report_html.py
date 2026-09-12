@@ -15,7 +15,36 @@ from __future__ import annotations
 import re
 from html import escape
 
+from .quality import LOW_SCORE_WARN, clock_label
+
 from .scouting import ScoutingReport
+
+# A Sport Machine JELKÉPE inline SVG-ként — ugyanaz a geometria, mint a
+# kliens rajzolt logója (client/lib/ui/logo.dart) és a gépen látszó ikonok
+# (packaging/make_icons.py): felülnézeti pálya, a két kapuelőtér arany
+# félköre, labda a mozgás-nyomával. INLINE, mert a jelentés ÖNÁLLÓ fájl:
+# külső képre hivatkozva a kinyomtatott/továbbküldött lapon üres keret
+# maradna. A világos, nyomtatóbarát fejlécben is olvasható marad.
+def brand_svg(size: int = 16) -> str:
+    """A jelkép SVG-je `size` képpont oldalhosszal (fejlécekbe)."""
+    return (
+        f'<svg width="{size}" height="{size}" viewBox="0 0 100 100" '
+        'style="vertical-align:-3px;margin-right:6px" '
+        'xmlns="http://www.w3.org/2000/svg">'
+        '<rect x="0" y="0" width="100" height="100" rx="22" fill="#0E141C"/>'
+        '<rect x="10" y="24.5" width="80" height="51" rx="6" '
+        'fill="#0B1C24" stroke="#2FD9C4" stroke-width="4.5"/>'
+        '<path d="M50 24.5 V75.5" stroke="#2FD9C4" stroke-width="4.5"/>'
+        '<path d="M10 34.5 A15.5 15.5 0 0 1 10 65.5" fill="none" '
+        'stroke="#D8B36B" stroke-width="4.5"/>'
+        '<path d="M90 34.5 A15.5 15.5 0 0 0 90 65.5" fill="none" '
+        'stroke="#D8B36B" stroke-width="4.5"/>'
+        '<circle cx="50.5" cy="56" r="2.8" fill="#2FD9C4" opacity="0.35"/>'
+        '<circle cx="56.5" cy="48.5" r="3.8" fill="#2FD9C4" opacity="0.55"/>'
+        '<circle cx="61.5" cy="42.5" r="5" fill="#2FD9C4" opacity="0.75"/>'
+        '<circle cx="65.5" cy="37.5" r="7.5" fill="#FFC857"/>'
+        '</svg>')
+
 
 # Ennyi szekció alatt nincs tartalomjegyzék: két-három címhez nem kell
 # navigáció, a jegyzék csak elveszi a helyet az első oldalról.
@@ -252,6 +281,55 @@ def _playbook_rows(pm: dict) -> str:
                    f'mintájú.</p>')
 
 
+def _figure_svg(shape: list, w: int = 150, h: int = 75) -> str:
+    """Egy figura-alak (6x3 rács, a +x kapu felé támadva) mini-pályán,
+    inline SVG-ként: a cella átlátszatlansága a látogatottság. A
+    jelentés önálló fájl — kép nem hivatkozható, ezért rajz."""
+    bins_x, bins_y = 6, 3
+    if not shape or len(shape) != bins_x * bins_y:
+        return ""
+    mx = max(shape) or 1.0
+    cw, ch = w / bins_x, h / bins_y
+    cells = "".join(
+        f'<rect x="{(i % bins_x) * cw:.1f}" y="{(i // bins_x) * ch:.1f}" '
+        f'width="{cw:.1f}" height="{ch:.1f}" fill="#2FD9C4" '
+        f'opacity="{0.08 + 0.82 * v / mx:.2f}"/>'
+        for i, v in enumerate(shape) if v > 0)
+    r = h * 0.3
+    return (f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
+            'style="vertical-align:middle;margin-right:10px;'
+            'border:1px solid #cfd6df;border-radius:4px" '
+            'xmlns="http://www.w3.org/2000/svg">'
+            f'<rect width="{w}" height="{h}" fill="#f4f7fa"/>{cells}'
+            f'<path d="M{w / 2:.1f} 0 V{h}" stroke="#8492A6" stroke-width="1"/>'
+            f'<path d="M0 {h / 2 - r:.1f} A{r:.1f} {r:.1f} 0 0 1 0 {h / 2 + r:.1f}" '
+            'fill="none" stroke="#D8B36B" stroke-width="1.5"/>'
+            f'<path d="M{w} {h / 2 - r:.1f} A{r:.1f} {r:.1f} 0 0 0 {w} {h / 2 + r:.1f}" '
+            'fill="none" stroke="#D8B36B" stroke-width="1.5"/>'
+            '</svg>')
+
+
+def _setplay_library_rows(lib: dict) -> str:
+    """Visszatérő figuráik: alak + edzői név + meccs/támadás/gól."""
+    rows = (lib or {}).get("recurring") or []
+    if not rows:
+        return ('<p class="empty">Még nincs meccsről meccsre visszatérő '
+                'figura (több meccs felderítése kell hozzá).</p>')
+    out = []
+    for f in rows[:6]:
+        out.append(
+            '<div class="bar-row" style="align-items:center">'
+            f'{_figure_svg(f.get("shape") or [])}'
+            f'<span><b>{escape(str(f.get("name") or f.get("zone", "")))}</b>'
+            f'{(" (" + escape(str(f.get("zone", ""))) + ")") if f.get("name") else ""} — '
+            f'{int(f.get("matches", 0))} meccsen {int(f.get("attacks", 0))} '
+            f'támadás, {int(f.get("goals", 0))} gól '
+            f'({float(f.get("goal_pct", 0.0)):.0f}%)</span></div>')
+    out.append('<p class="note">A rajz a támadó szemszögéből, jobbra a '
+               'megtámadott kapu; a sötétebb cella a gyakoribb hely.</p>')
+    return "".join(out)
+
+
 def _players(key_players: list) -> str:
     if not key_players:
         return '<p class="empty">Több meccs felderítése pontosítja a játékos-profilt.</p>'
@@ -279,6 +357,20 @@ def scouting_report_html(rep: ScoutingReport,
     """
     name = escape(rep.team_name)
     matches = f"{rep.matches} meccs alapján" if rep.matches > 1 else "1 meccs alapján"
+
+    # Mennyire hihető a jelentés ALAPANYAGA. A meccsterv az, ami alapján
+    # az edző dönt — ha a mögötte lévő feldolgozás gyenge volt, azt a lap
+    # ELEJÉN kell kimondani, nem az alján: egy nyomtatott jelentést
+    # fentről lefelé olvasnak, és aki a végén tudja meg, addig már
+    # eldöntötte, kit állít a beállóra.
+    from .scouting import scouting_caveat
+    caveat_html = ""
+    try:
+        _cav = scouting_caveat(rep)
+        if _cav:
+            caveat_html = f'<div class="warnbox">{escape(_cav)}</div>'
+    except Exception:
+        pass
 
     # Szöveges bevezető: hogyan játszanak — mondatokban, a számok elé.
     from .scouting import scouting_narrative
@@ -326,6 +418,52 @@ def scouting_report_html(rep: ScoutingReport,
                 and ot[0]["n"] / rep.gk_outlets >= 0.5):
             _role("Indítás-célpont", ot[0]["player_id"],
                   f"{ot[0]['n']}/{rep.gk_outlets} indítás")
+        # Kapus-felkészítés posztonként: a poszt-lencse három
+        # lövés-rétege EGY táblában. Külön csempeként szétszórva a
+        # kapusedző háromszor keresi meg ugyanazt a posztot; együtt egy
+        # pillantás: milyen messziről, milyen keményen, merre.
+        keeper_rows = []
+        _rsd = rep.rsd_shots_by_role or {}
+        _rsp = rep.rsp_shots_by_role or {}
+        _rgp = rep.rgp_goals_by_role_side or {}
+        _sides: dict = {}
+        for _key, _n in _rgp.items():
+            _p, _, _side = _key.partition("|")
+            _sides.setdefault(_p, {})[_side] = _n
+        for poszt in sorted(set(_rsd) | set(_rsp) | set(_sides)):
+            n_d = _rsd.get(poszt, 0)
+            dist = (f"{(rep.rsd_dist_sum_by_role or {}).get(poszt, 0.0) / n_d:.1f} m"
+                    if n_d >= 4 else "—")
+            n_p = _rsp.get(poszt, 0)
+            power = (f"{(rep.rsp_kmh_sum_by_role or {}).get(poszt, 0.0) / n_p:.0f} km/h"
+                     if n_p >= 4 else "—")
+            side_txt = "—"
+            row_sides = _sides.get(poszt) or {}
+            tot = sum(row_sides.values())
+            if tot >= 4:
+                dom = max(row_sides, key=lambda k: row_sides[k])
+                pct = 100.0 * row_sides[dom] / tot
+                if pct >= 60.0:
+                    side_txt = f"{dom} ({pct:.0f}%)"
+            if dist == "—" and power == "—" and side_txt == "—":
+                continue
+            keeper_rows.append(
+                f"<tr><td>{escape(poszt)}</td>"
+                f'<td class="num">{dist}</td>'
+                f'<td class="num">{power}</td>'
+                f"<td>{escape(side_txt)}</td></tr>")
+        if keeper_rows:
+            roles_html += (
+                "<h2>Kapus-felkészítés posztonként</h2><table>"
+                "<tr><th>Poszt</th><th class=\"num\">Honnan lő</th>"
+                "<th class=\"num\">Milyen keményen</th>"
+                "<th>Merre lő</th></tr>"
+                + "".join(keeper_rows) + "</table>"
+                '<p class="note">A \u201e—\u201d azt jelenti, hogy abból '
+                "a bontásból még nincs elég mért lövés (posztonként 4 "
+                "kell). A \u201emerre\u201d csak akkor szólal meg, ha a "
+                "gólok legalább 60%-a ugyanarra az oldalra ment.</p>")
+
         if role_rows:
             roles_html = ("<h2>Kikre készülj (szerepek)</h2><table>"
                           "<tr><th>Szerep</th><th>Játékos</th>"
@@ -495,6 +633,9 @@ def scouting_report_html(rep: ScoutingReport,
   li.empty, p.empty {{ color: #8492A6; list-style: none; margin-left: -20px; font-size: 12.5px; }}
   p.note {{ color: #4A5768; font-size: 12px; margin: 8px 0 0; }}
   p.cs {{ font-size: 13.5px; margin: 8px 0; }}
+  .warnbox {{ border: 1px solid #C0392B; background: #FDECEA; color: #6E2018;
+              border-radius: 8px; padding: 10px 12px; margin: 0 0 18px;
+              font-size: 13px; line-height: 1.45; }}
   .cols {{ display: flex; gap: 22px; }}
   .col {{ flex: 1; }}
   .metrics {{ display: flex; flex-wrap: wrap; gap: 14px 26px; }}
@@ -518,12 +659,18 @@ def scouting_report_html(rep: ScoutingReport,
 <body>
 <div class="page">
   <header>
-    <div class="brand">Sport Machine · Felderítő jelentés</div>
+    <div class="brand">{brand_svg()}Sport Machine · Felderítő jelentés</div>
     <h1>{name}</h1>
     <div class="sub">{escape(matches)} · fő védekezés: <b>{escape(rep.defense_main)}</b></div>
   </header>
 
+  {caveat_html}
+
   {narrative_html}
+
+  {("<h2>Meccsterv (a kettőnk párosítása)</h2><ul>"
+     + "".join(f"<li>{escape(p_)}</li>" for p_ in matchup) + "</ul>")
+    if matchup else ""}
 
   <div class="keys">
     <h2>Hogyan játssz ellenük</h2>
@@ -553,6 +700,10 @@ def scouting_report_html(rep: ScoutingReport,
   {("<h2>Ismert figuráik (a könyvtárunkból)</h2>" + _playbook_rows(playbook_match))
    if playbook_match else ""}
 
+  {("<h2>Visszatérő figuráik (meccsről meccsre)</h2>"
+    + _setplay_library_rows(getattr(rep, "setplay_library", None) or {}))
+   if (getattr(rep, "setplay_library", None) or {}).get("recurring") else ""}
+
   <h2>Támadás-mix (típus szerint)</h2>
   {_defense_bars(rep.attack_mix, empty="Nincs elég támadás-minta.")}
 
@@ -560,10 +711,6 @@ def scouting_report_html(rep: ScoutingReport,
   {_defense_bars(rep.defense_distribution)}
 
   {roles_html}
-
-  {("<h2>Meccsterv (a kettőnk párosítása)</h2><ul>"
-     + "".join(f"<li>{escape(p_)}</li>" for p_ in matchup) + "</ul>")
-    if matchup else ""}
 
   <h2>Kulcsjátékosaik</h2>
   {_players(rep.key_players)}
@@ -775,14 +922,17 @@ def _pass_pairs(match, events, team_value: str, top: int = 5):
 def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                       heatmaps: dict | None = None,
                       player_stats: dict | None = None,
-                      notes: list | None = None) -> str:
+                      notes: list | None = None,
+                      figure_namer=None) -> str:
     """A meccs egyoldalas edzői jelentése (önálló HTML; böngészőből PDF).
 
     Bemenetek: a Match objektum + a taktikai profil (team_style_profile),
     a felismert események (detect_events), a minőség-önellenőrzés
     (compute_quality_report, lehet None), opcionálisan a csapat-hőtérképek
     ({"home": Heatmap, "away": Heatmap}), a játékos-statisztikák
-    (compute_player_stats — terhelés-tábla) és az edzői jegyzetek.
+    (compute_player_stats — terhelés-tábla), az edzői jegyzetek és a
+    `figure_namer(csapatnév, alak) -> név|None` — az elnevezett figurák
+    neve a "Figuráik (alakkal)" szakaszban.
     Minden szakasz hiányzó adatnál is értelmes szöveget ad — a jelentés
     sosem "törik el".
 
@@ -794,14 +944,16 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     with primitive_cache(match):
         return _match_report_html_cached(
             match, tactics, events, quality, heatmaps=heatmaps,
-            player_stats=player_stats, notes=notes)
+            player_stats=player_stats, notes=notes,
+            figure_namer=figure_namer)
 
 
 def _match_report_html_cached(match, tactics: dict, events: list,
                               quality: dict | None,
                               heatmaps: dict | None = None,
                               player_stats: dict | None = None,
-                              notes: list | None = None) -> str:
+                              notes: list | None = None,
+                              figure_namer=None) -> str:
     """A jelentés tényleges felépítése (lásd `match_report_html`)."""
 
     meta = match.meta
@@ -903,6 +1055,46 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         pass
 
     # Csapat-hőtérképek (ha vannak): hol tartózkodtak a játékosok.
+    # Figuráik ALAKKAL: a meccs figurái mini-pályán (edzői névvel,
+    # támadás / gól) — ugyanaz a rajz, mint a felderítő jelentésben.
+    figures_html = ""
+    try:
+        from .setplays import setplay_shapes
+        _shp = setplay_shapes(match)
+        _cols = []
+        for key, name in (("home", meta.home_team), ("away", meta.away_team)):
+            rows = (_shp.get(key) or [])[:3]
+            if not rows:
+                continue
+
+            def _fnev(f, _name=name):
+                try:
+                    n = figure_namer(_name, f.get("shape")) if figure_namer else None
+                except Exception:
+                    n = None
+                z = escape(str(f.get("zone", "")))
+                return f"<b>{escape(str(n))}</b> ({z})" if n else z
+
+            _cols.append(
+                f'<div style="flex:1;min-width:260px"><b>{escape(str(name))}</b>'
+                + "".join(
+                    '<div class="bar-row" style="align-items:center">'
+                    f'{_figure_svg(f.get("shape") or [], 120, 60)}'
+                    f'<span>{_fnev(f)} — '
+                    f'{int(f.get("attacks", 0))} támadás, '
+                    f'{int(f.get("goals", 0))} gól</span></div>'
+                    for f in rows)
+                + "</div>")
+        if _cols:
+            figures_html = (
+                "<h2>Figuráik (alakkal)</h2>"
+                '<div style="display:flex;gap:18px;flex-wrap:wrap">'
+                + "".join(_cols) + "</div>"
+                '<p class="note">A rajz a támadó szemszögéből, jobbra a '
+                'megtámadott kapu; a sötétebb cella a gyakoribb hely. '
+                'Legalább három támadásból álló minták.</p>')
+    except Exception:
+        figures_html = ""
     hm_html = ""
     if heatmaps:
         cols = []
@@ -1100,9 +1292,16 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 lines = sec.get("lines") or []
                 head = f'<p class="cs"><b>{escape(sec["title"])}.</b>'
                 if len(lines) <= 2:
-                    return head + f' {escape(sec["body"])}</p>'
-                items = "".join(f"<li>{escape(x)}</li>" for x in lines)
-                return head + "</p><ul>" + items + "</ul>"
+                    torzs = head + f' {escape(sec["body"])}</p>'
+                else:
+                    items = "".join(f"<li>{escape(x)}</li>" for x in lines)
+                    torzs = head + "</p><ul>" + items + "</ul>"
+                # "A lényeg" a rangsor teteje — nyomtatott lapon ez a
+                # vezetői összefoglaló, tehát ne folyjon egybe a többi
+                # szakasszal. A motor jelöli meg (show_all).
+                if sec.get("show_all"):
+                    return f'<div class="leadbox">{torzs}</div>'
+                return torzs
 
             paras = "".join(_cs_block(s) for s in cs["sections"])
             hl = ""
@@ -1716,8 +1915,20 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     # Figura-hatékonyság: melyik begyakorolt támadás hozott gólt.
     setplays_html = ""
     try:
-        from .setplays import setplay_efficiency
+        from .setplays import setplay_efficiency, setplay_finishers
         eff_sp = setplay_efficiency(match)
+        # Befejező-oszlop: melyik posztra fut ki a figura (ha mérhető).
+        fin_sp: dict = {}
+        try:
+            _fin = setplay_finishers(match)
+            for _side in ("home", "away"):
+                for _r in _fin[_side]["figures"]:
+                    if _r["main_role"]:
+                        fin_sp[(_side, _r["figure"])] = (
+                            f'{_r["main_role"]} '
+                            f'({_r["share_pct"]:.0f}%)')
+        except Exception:
+            pass
         sp_rows = []
         for side, name in (("home", home), ("away", away)):
             for r_sp in (eff_sp.get(side) or [])[:4]:
@@ -1727,7 +1938,9 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     f'<td class="num">{r_sp["attacks"]}</td>'
                     f'<td class="num">{r_sp["shots"]}</td>'
                     f'<td class="num">{r_sp["goals"]}</td>'
-                    f'<td class="num">{r_sp["goal_pct"]:.0f}%</td></tr>')
+                    f'<td class="num">{r_sp["goal_pct"]:.0f}%</td>'
+                    f'<td>{escape(fin_sp.get((side, r_sp["figure"]), "—"))}'
+                    "</td></tr>")
         if sp_rows:
             setplays_html = (
                 "<h2>Figurák (visszatérő támadás-minták)</h2>"
@@ -1736,11 +1949,411 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 '<th class="num">Támadás</th>'
                 '<th class="num">Lövés</th>'
                 '<th class="num">Gól</th>'
-                '<th class="num">Gól-arány</th></tr>'
+                '<th class="num">Gól-arány</th>'
+                "<th>Befejező poszt</th></tr>"
                 + "".join(sp_rows) + "</table>"
                 + '<p class="note">A figura: azonos mozgás-mintázatú, '
                   'legalább kétszer játszott támadás — a magas gól-arányú '
-                  'figura a csapat kenyere, arra érdemes készülni.</p>')
+                  'figura a csapat kenyere, arra érdemes készülni. A '
+                  'befejező poszt megmondja, MERRE fut ki a figura: a '
+                  'falnak már a figura indulásakor arra az oldalra kell '
+                  'csúsznia.</p>')
+    except Exception:
+        pass
+
+    # Kulcs-poszt: ha több poszt-réteg ugyanarra mutat, ez a
+    # meccsterv első lapja — a lencse-táblák elé kerül.
+    key_post_html = ""
+    try:
+        from .priorities import key_post as _kp_fn
+        kp_rec = _kp_fn(match)
+        kp_lines = []
+        for side, name in (("home", home), ("away", away)):
+            rec_kp = kp_rec.get(side) or {}
+            v = rec_kp.get("verdict")
+            if not v:
+                continue
+            # Indoklás: mely rétegek mutatnak a kulcs-posztra — a
+            # magyarázható lánc a jelentésben is látszik.
+            evidence = [n["layer"] for n in rec_kp.get("named", [])
+                        if n.get("poszt") == rec_kp.get("top")]
+            tail = (' <span class="note">(rétegek: '
+                    + escape(", ".join(evidence)) + ")</span>"
+                    if evidence else "")
+            kp_lines.append(f"<li><b>{escape(name)}</b>: "
+                            f"{escape(v)}{tail}</li>")
+        if kp_lines:
+            key_post_html = ("<h2>Kulcs-poszt</h2><ul>"
+                             + "".join(kp_lines) + "</ul>")
+    except Exception:
+        pass
+
+    # Kulcs-páros: a meccsterv második lapja — melyik KETTŐST kell
+    # szétválasztani (a kulcs-poszt szakasza után, a lencse-táblák
+    # elé).
+    key_pair_html = ""
+    try:
+        from .priorities import key_pair as _kpr_fn
+        kpr_rec = _kpr_fn(match)
+        kpr_lines = []
+        for side, name in (("home", home), ("away", away)):
+            rec_kpr = kpr_rec.get(side) or {}
+            v = rec_kpr.get("verdict")
+            if not v:
+                continue
+            evidence = [n["layer"] for n in rec_kpr.get("named", [])
+                        if n.get("pair") == rec_kpr.get("top")]
+            tail = (' <span class="note">(rétegek: '
+                    + escape(", ".join(evidence)) + ")</span>"
+                    if evidence else "")
+            kpr_lines.append(f"<li><b>{escape(name)}</b>: "
+                             f"{escape(v)}{tail}</li>")
+        if kpr_lines:
+            key_pair_html = ("<h2>Kulcs-páros</h2><ul>"
+                             + "".join(kpr_lines) + "</ul>")
+    except Exception:
+        pass
+
+    # Kulcs-ember: a meccsterv harmadik lapja — melyik EMBERT kell
+    # kezelni (a kulcs-páros szakasza után, a lencse-táblák elé).
+    key_player_html = ""
+    try:
+        from .priorities import key_player as _kpl_fn
+        kpl_rec = _kpl_fn(match)
+        kpl_lines = []
+        for side, name in (("home", home), ("away", away)):
+            rec_kpl = kpl_rec.get(side) or {}
+            v = rec_kpl.get("verdict")
+            if not v:
+                continue
+            evidence = [n["layer"] for n in rec_kpl.get("named", [])
+                        if n.get("player") == rec_kpl.get("top")]
+            tail = (' <span class="note">(rétegek: '
+                    + escape(", ".join(evidence)) + ")</span>"
+                    if evidence else "")
+            kpl_lines.append(f"<li><b>{escape(name)}</b>: "
+                             f"{escape(v)}{tail}</li>")
+        if kpl_lines:
+            key_player_html = ("<h2>Kulcs-ember</h2><ul>"
+                               + "".join(kpl_lines) + "</ul>")
+    except Exception:
+        pass
+
+    # Befejező-lencse: a "kire fut ki a játékuk" ítéletek egy helyen —
+    # kire lépj ki, időkérés után kit fogj, kontránál kit vegyél fel
+    # először, hetesnél merre vetődj. A védő-oldali párja a Védő-lencse:
+    # hol sebezhető a védekezésük (melyik sáv blokkol, hol szakad be a
+    # hetes, ki gyűjti a kétperceket, ki szedi a labdákat).
+    finishers_html = ""
+    defense_lens_html = ""
+
+    def _lens_rows(layers):
+        """Réteg-lista → jelentés-sorok (csak a megszólaló ítéletek).
+
+        Egy réteg hibája nem viheti el a táblát, ezért rétegenként
+        külön try/except — ugyanaz az elv, mint a /analyze-nál.
+        """
+        rows = []
+        for label, fn in layers:
+            try:
+                rec_fin = fn(match)
+            except Exception:
+                continue
+            for side, name in (("home", home), ("away", away)):
+                v = (rec_fin.get(side) or {}).get("verdict")
+                if v:
+                    rows.append(f"<tr><td>{escape(name)}</td>"
+                                f"<td>{escape(label)}</td>"
+                                f"<td>{escape(v)}</td></tr>")
+        return rows
+
+    try:
+        from .attack_types import (backward_pass_roles,
+                                   breakthrough_roles,
+                                   fast_break_pair_roles,
+                                   lane_switch_roles,
+                                   last_holder_roles,
+                                   rebound_pair_roles,
+                                   screen_pair_roles,
+                                   kickout_target_roles,
+                                   last_pass_roles,
+                                   pivot_feeder_roles,
+                                   risky_passer_roles,
+                                   screen_setter_roles,
+                                   second_chance_roles,
+                                   second_wave_roles)
+        from .defense import (advanced_defender_roles,
+                              beaten_defender_roles,
+                              costly_turnover_roles,
+                              defensive_rebound_roles,
+                              covered_shooter_roles,
+                              doubling_pair_roles,
+                              fading_defender_roles,
+                              high_steal_roles,
+                              recovery_roles,
+                              pivot_guard_roles,
+                              targeted_defender_roles,
+                              tired_conceder_roles,
+                              blocked_shooter_roles,
+                              doubled_target_roles,
+                              doubling_defender_roles,
+                              screened_defender_roles,
+                              role_block_sources, role_steal_sources,
+                              slow_retreat_roles)
+        from .event_detection import pre_assist_roles
+        from .goalkeeper import (outlet_hunter_roles,
+                                 seven_six_finisher_roles)
+        from .roles import (assist_pair_roles,
+                            assisted_scorer_roles,
+                            specialist_roles,
+                            attack_starter_roles,
+                            role_assist_sources, role_fast_breaks,
+                            role_pressure_finish)
+        from .rules import (passive_holder_roles,
+                            powerplay_pair_roles,
+                            powerplay_shooter_roles,
+                            powerplay_turnover_roles,
+                            seven_conceder_roles, seven_miss_roles,
+                            seven_pair_roles,
+                            seven_shot_directions,
+                            seven_taker_roles,
+                            shorthanded_shooter_roles,
+                            shorthanded_turnover_roles,
+                            suspension_chain_roles,
+                            suspended_roles)
+        from .momentum import (clutch_hog_roles,
+                               clutch_scorer_roles,
+                               parity_break_roles,
+                               super_sub_roles,
+                               lead_scorer_roles,
+                               clutch_turnover_roles,
+                               comeback_carrier_roles,
+                               drought_breaker_roles,
+                               fading_scorer_roles, hot_hand_roles,
+                               opening_scorer_roles,
+                               response_scorer_roles,
+                               response_turnover_roles,
+                               restart_taker_roles,
+                               second_start_roles)
+        from .xg import (big_chance_feeder_roles, big_chance_pair_roles,
+                         big_chance_roles,
+                         missed_chance_roles,
+                         tired_shooter_roles,
+                         wasteful_shooter_roles)
+        from .decisions import (ball_carrier_roles,
+                                hold_time_roles,
+                                press_outlet_roles,
+                                press_sensitive_roles,
+                                soft_pass_roles,
+                                tired_turnover_roles)
+        from .stats import (fatigue_roles, iron_man_roles,
+                            sprint_threat_roles)
+        from .substitutions import sub_in_roles, substituted_roles
+        from .setplays import setplay_finishers, setplay_openers
+        from .tactics import static_attacker_roles
+        from .stoppages import (timeout_finisher, timeout_pair_roles,
+                                timeout_turnover_roles)
+
+        fin_rows = _lens_rows((
+            ("Poszt-nyomás", role_pressure_finish),
+            ("Időkérés-befejező", timeout_finisher),
+            ("Kontra-poszt", role_fast_breaks),
+            ("Hetes-oldal", seven_shot_directions),
+            ("Gólpassz-poszt", role_assist_sources),
+            ("Lepattanó-poszt", second_chance_roles),
+            ("7a6-befejező", seven_six_finisher_roles),
+            ("Elzáró-poszt", screen_setter_roles),
+            ("Bejátszó-poszt", pivot_feeder_roles),
+            ("Vasember-poszt", iron_man_roles),
+            ("Kockáztató-poszt", risky_passer_roles),
+            ("Kiosztás-poszt", kickout_target_roles),
+            ("Emberelőny-poszt", powerplay_shooter_roles),
+            ("Emberhátrány-poszt", shorthanded_shooter_roles),
+            ("Hajrá-poszt", clutch_scorer_roles),
+            ("Szuper-csere poszt", super_sub_roles),
+            ("Rejtett szervező poszt", pre_assist_roles),
+            ("Egálbontó poszt", parity_break_roles),
+            ("Befutó poszt", second_wave_roles),
+            ("Felzárkózás-poszt", comeback_carrier_roles),
+            ("Pazarló-poszt", wasteful_shooter_roles),
+            ("Ziccer-poszt", big_chance_roles),
+            ("Labdatartó-poszt", hold_time_roles),
+            ("Pressz-poszt", press_sensitive_roles),
+            ("Csendtörő-poszt", drought_breaker_roles),
+            ("Eltűnő-poszt", fading_scorer_roles),
+            ("Hajráhiba-poszt", clutch_turnover_roles),
+            ("Forró-poszt", hot_hand_roles),
+            ("Középkezdő-poszt", restart_taker_roles),
+            ("Sprint-poszt", sprint_threat_roles),
+            ("Lágypassz-poszt", soft_pass_roles),
+            ("Hajrákéz-poszt", clutch_hog_roles),
+            ("Kiszolgált-poszt", assisted_scorer_roles),
+            ("Rajt-poszt", opening_scorer_roles),
+            ("Passzív-poszt", passive_holder_roles),
+            ("Újrakezdő-poszt", second_start_roles),
+            ("Hetesdobó-poszt", seven_taker_roles),
+            ("Indító-poszt", attack_starter_roles),
+            ("Előkészítő-poszt", last_pass_roles),
+            ("Előnyben-poszt", lead_scorer_roles),
+            ("Térnyerő-poszt", ball_carrier_roles),
+            ("Hátrapassz-poszt", backward_pass_roles),
+            ("Fáradt-eladó poszt", tired_turnover_roles),
+            ("Fáradt-lövő poszt", tired_shooter_roles),
+            ("Forgatott-poszt", substituted_roles),
+            ("Beérkező-poszt", sub_in_roles),
+            ("Figura-befejező", setplay_finishers),
+            ("Figura-indító", setplay_openers),
+            ("Drága-eladó poszt", costly_turnover_roles),
+            ("Áttörő-poszt", breakthrough_roles),
+            ("Fedezett-lövő poszt", covered_shooter_roles),
+            ("Álló-poszt", static_attacker_roles),
+            ("Elzárópáros-poszt", screen_pair_roles),
+            ("Hetespáros-poszt", seven_pair_roles),
+            ("Kontrapáros-poszt", fast_break_pair_roles),
+            ("Lepattanópáros-poszt", rebound_pair_roles),
+            ("Specialista-poszt", specialist_roles),
+            ("Emberelőnypáros-poszt", powerplay_pair_roles),
+            ("Válasz-poszt", response_scorer_roles),
+            ("Sávváltó-poszt", lane_switch_roles),
+            ("Időkéréspáros-poszt", timeout_pair_roles),
+            ("Menekülő-poszt", press_outlet_roles),
+            ("Vég-birtokos poszt", last_holder_roles),
+            ("Ziccer-előkészítő poszt", big_chance_feeder_roles),
+            ("Hetes-kihagyó poszt", seven_miss_roles),
+            ("Emberelőny-hiba poszt", powerplay_turnover_roles),
+            ("Válaszhiba-poszt", response_turnover_roles),
+            ("Időkérés-hiba poszt", timeout_turnover_roles),
+            ("Emberhátrány-hiba poszt", shorthanded_turnover_roles),
+            ("Lepattanó-szedő poszt", defensive_rebound_roles),
+            ("Kétperc-páros", suspension_chain_roles),
+            ("Ziccerpáros-poszt", big_chance_pair_roles),
+            ("Gólpasszpáros-poszt", assist_pair_roles),
+            ("Blokkolt-poszt", blocked_shooter_roles),
+            ("Ziccerhagyó-poszt", missed_chance_roles),
+            ("Fáradó-poszt", fatigue_roles),
+            ("Kettőzött-poszt", doubled_target_roles)))
+        if fin_rows:
+            finishers_html = (
+                "<h2>Befejező-lencse (kire fut ki a játékuk)</h2>"
+                "<table><tr><th>Csapat</th><th>Réteg</th>"
+                "<th>Ítélet</th></tr>" + "".join(fin_rows) + "</table>"
+                + '<p class="note">Ugyanazok az ítéletek, mint az app '
+                  'felderítő-csempéin — itt egy helyen, a meccs '
+                  'jelentésében.</p>')
+
+        def_rows = _lens_rows((
+            ("Labdaszerző-poszt", role_steal_sources),
+            ("Blokk-poszt", role_block_sources),
+            ("Hetes-okozó poszt", seven_conceder_roles),
+            ("Kiülő-poszt", suspended_roles),
+            ("Visszafutás-poszt", slow_retreat_roles),
+            ("Átvert-poszt", beaten_defender_roles),
+            ("Indítás-vadász poszt", outlet_hunter_roles),
+            ("Kettőző-poszt", doubling_defender_roles),
+            ("Elzárt-poszt", screened_defender_roles),
+            ("Kilépő-poszt", advanced_defender_roles),
+            ("Beállóőr-poszt", pivot_guard_roles),
+            ("Fáradt-fal poszt", tired_conceder_roles),
+            ("Védőmotor-poszt", fading_defender_roles),
+            ("Célkereszt-poszt", targeted_defender_roles),
+            ("Letámadó-poszt", high_steal_roles),
+            ("Kettőzőpáros-poszt", doubling_pair_roles),
+            ("Elöl lógó poszt", recovery_roles)))
+        if def_rows:
+            defense_lens_html = (
+                "<h2>Védő-lencse (hol sebezhető a védekezésük)</h2>"
+                "<table><tr><th>Csapat</th><th>Réteg</th>"
+                "<th>Ítélet</th></tr>" + "".join(def_rows) + "</table>"
+                + '<p class="note">A támadás-tervezés térképe: melyik '
+                  'sávot kell kerülni, hová érdemes betörést vezetni, '
+                  'kit kell korán megjáratni.</p>')
+    except Exception:
+        pass
+
+    # Hozam-lencse: MENNYIT ÉR nekik egy-egy játékelem (kétperc,
+    # hetes, elzárás, 7 a 6, csere, figura, türelem). Ezek nem
+    # poszt-profilok, hanem ár-kalkulációk — ezért külön táblában.
+    yield_lens_html = ""
+    try:
+        from .attack_types import screen_yield
+        from .defense import block_fade
+        from .event_detection import assist_duos
+        from .goalkeeper import (empty_net_turnovers, gk_change_yield,
+                                 keeper_return)
+        from .rules import (passive_risk, powerplay_yield,
+                            seven_sources, seven_yield,
+                            shorthanded_survival)
+        from .setplays import setplay_decay
+        from .stats import running_load_balance
+        from .stoppages import timeout_yield
+        from .substitutions import substitution_yield
+
+        yld_rows = _lens_rows((
+            ("Emberelőny-hozam", powerplay_yield),
+            ("Emberhátrány-túlélés", shorthanded_survival),
+            ("Hetes-hozam", seven_yield),
+            ("Hetes-forrás", seven_sources),
+            ("Elzárás-hozam", screen_yield),
+            ("Gólpassz-duó", assist_duos),
+            ("7a6 eladás", empty_net_turnovers),
+            ("Kapus-visszaérés", keeper_return),
+            ("Kapuscsere-hozam", gk_change_yield),
+            ("Blokk-fáradás", block_fade),
+            ("Csere-hozam", substitution_yield),
+            ("Időkérés-hozam", timeout_yield),
+            ("Figura-kopás", setplay_decay),
+            ("Passzív-kockázat", passive_risk),
+            ("Futómunka-eloszlás", running_load_balance)))
+        if yld_rows:
+            yield_lens_html = (
+                "<h2>Hozam-lencse (mit ér nekik egy-egy játékelem)</h2>"
+                "<table><tr><th>Csapat</th><th>Réteg</th>"
+                "<th>Ítélet</th></tr>" + "".join(yld_rows) + "</table>"
+                + '<p class="note">Ár-kalkuláció a védekezéshez és a '
+                  'hajrához: mennyibe kerül ellenük egy kétperc, egy '
+                  'hetes, mit hoz nekik az elzárás vagy a 7 a 6 — és '
+                  'meddig működik a figurájuk.</p>')
+    except Exception:
+        pass
+
+    # Ember-lencse: a NÉVEN NEVEZŐ rétegek egy táblában — kit kell
+    # fogni, éheztetni, pihentetni, kire kell rálépni. A listát a
+    # Kulcs-ember lencse nyilvántartása (KPL_LAYERS) adja, így új
+    # ember-réteg hozzáadásakor magától bővül.
+    player_lens_html = ""
+    try:
+        import importlib as _il
+
+        from .priorities import KPL_LAYERS
+
+        pl_rows = []
+        for label, mod_name, fn_name in KPL_LAYERS:
+            try:
+                mod = _il.import_module(f".{mod_name}", __package__)
+                res_pl = getattr(mod, fn_name)(match)
+            except Exception:
+                continue
+            for side, name in (("home", home), ("away", away)):
+                top_pl = (res_pl.get(side) or {}).get("top")
+                if not top_pl:
+                    continue
+                if isinstance(top_pl, dict):
+                    ki = top_pl.get("jersey") or top_pl.get("player_id")
+                else:
+                    ki = top_pl
+                pl_rows.append(f"<tr><td>{escape(name)}</td>"
+                               f"<td>{escape(label)}</td>"
+                               f"<td>{escape(str(ki))}.</td></tr>")
+        if pl_rows:
+            player_lens_html = (
+                "<h2>Ember-lencse (kit nevez meg a mérés)</h2>"
+                "<table><tr><th>Csapat</th><th>Réteg</th>"
+                "<th>Játékos</th></tr>" + "".join(pl_rows) + "</table>"
+                + '<p class="note">A meccsterv névsora: kit kell '
+                  'fogni, kit éheztetni, kire kell rálépni az '
+                  'átvételnél — és kinél éri meg megvárni a '
+                  'fáradást. Ugyanezekből a rétegekből épül a '
+                  'Kulcs-ember is.</p>')
     except Exception:
         pass
 
@@ -1759,7 +2372,11 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                             "<ul>" + lis_km + "</ul>")
     except Exception:
         pass
-    rules_html = moments_html + setplays_html + rules_html
+    rules_html = (moments_html + setplays_html + key_post_html
+                  + key_pair_html
+                  + key_player_html
+                  + finishers_html + defense_lens_html
+                  + yield_lens_html + player_lens_html + rules_html)
 
     # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.
     xg_html = ""
@@ -2671,6 +3288,61 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass  # a jelentés e blokk nélkül is teljes
 
+    # EGYÉNI edzés-fókusz: kinek mit. A nyomtatott jelentés az, amit az
+    # edző a kezébe vesz a hét első edzésén — az egyéni beszélgetés
+    # ebből indul, nem a csapat-listából.
+    player_training_html = ""
+    try:
+        from .training import player_training_focus
+        ptf = player_training_focus(match)
+        pparts = []
+        for side, name in (("home", home), ("away", away)):
+            sorok = (ptf.get(side) or {}).get("players") or []
+            if not sorok:
+                continue
+            lis = ""
+            for p_ in sorok:
+                ki = (f"#{p_['jersey']}" if p_.get("jersey") is not None
+                      else f"{p_['player_id']}. játékos")
+                temak = "".join(
+                    f"<li>{escape(it['title'])} ({escape(it['area'])}) — "
+                    f"{escape(it['why'])}.<br>"
+                    f"<span class='note'>Gyakorlat: "
+                    f"{escape(it['drill'])}.</span></li>"
+                    for it in p_["items"])
+                lis += f"<li><b>{escape(ki)}</b><ul>{temak}</ul></li>"
+            pparts.append(f"<h3>{escape(name)}</h3><ul>{lis}</ul>")
+        if pparts:
+            player_training_html = (
+                "<h2>Egyéni edzés-fókusz</h2>" + "".join(pparts)
+                + '<p class="note">Emberenként legfeljebb két tétel — a '
+                  'fókusz attól fókusz, hogy kevés.</p>')
+    except Exception:
+        pass  # a jelentés e blokk nélkül is teljes
+
+    # A megbízhatóság FIGYELMEZTETÉSE a lap TETEJÉRE. A részletes
+    # szakasz a lap alján marad, de egy nyomtatott jelentést fentről
+    # lefelé olvasnak: aki a végén tudja meg, hogy az adat gyenge, addig
+    # már döntött. Csak gyenge feldolgozásnál jelenik meg.
+    q_top = ""
+    if quality:
+        _pont = quality.get("score")
+        _teendo = quality.get("next_action")
+        # A KLIP-jelzés nem hiba, hanem tájékoztatás — de a lap ELEJÉN
+        # a helye: aki egy három perces klip jelentését olvassa, a
+        # hallgató rétegeket enélkül hiányos elemzésnek nézi.
+        _klip = quality.get("clip_note")
+        if _pont is not None and (_pont < LOW_SCORE_WARN or _teendo):
+            _sor = (f"A feldolgozás minősége {_pont}/100 — az alábbi "
+                    "megállapítások ennyire megbízhatóak.")
+            if _teendo:
+                _sor += f" Első teendő: {escape(str(_teendo))}"
+            q_top = ('<div class="warnbox"><b>Mennyire bízhatsz ebben</b>'
+                     f'<br>{_sor}</div>')
+        if _klip:
+            q_top += ('<div class="infobox"><b>Klip, nem teljes meccs</b>'
+                      f'<br>{escape(str(_klip))}</div>')
+
     # Minőség-önellenőrzés (ha van): pontszám + figyelmeztetések.
     q_html = ""
     if quality:
@@ -2679,10 +3351,46 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             if warns else '<p class="note">Nincs figyelmeztetés — az elemzés megbízható.</p>'
         ball_cov = "{:.0f}%".format(quality.get("ball_coverage_pct", 0))
         measured = "{:.1f}".format(quality.get("avg_measured_players", 0))
+        # A feldolgozott SZAKASZ a forrásvideó órája szerint. Egy
+        # nyomtatott jelentést napokkal később olvasnak vissza: akkor
+        # már semmi nem árulja el, hogy a lap a teljes meccsről szól-e
+        # vagy csak az első félidőről. Ez az egy sor elárulja.
+        szakasz = ""
+        _tol = quality.get("processed_from_s")
+        _ig = quality.get("processed_to_s")
+        if _tol is not None and _ig is not None:
+            szakasz = _metric("Feldolgozott szakasz",
+                              f"{clock_label(_tol)}–{clock_label(_ig)}")
+        # KÉZI javítások: ha az edző javította a felismerést, a lap
+        # mondja ki. A jelentés így is a mérésről szól, de az olvasó
+        # (más edző, vezetőség) lássa, hogy egy része emberi döntés.
+        kezi = ""
+        try:
+            _ov = len(getattr(match.meta, "event_overrides", None) or [])
+            if _ov:
+                kezi = _metric("Kézi javítás", f"{_ov} db")
+        except Exception:
+            pass
+        # KALIBRÁCIÓ-ILLESZKEDÉS: a nyomtatott jelentés olvasója (más
+        # edző, vezetőség) ebből látja, mennyire ültek a pályavonalak a
+        # videón — a helyek pontosságának a legközvetlenebb mérőszáma.
+        # Régi mentésen (mérés nélkül) egyszerűen kimarad.
+        kalib = ""
+        try:
+            _cf = getattr(match.meta, "calib_fit", None) or {}
+            _atlag = _cf.get("mean_fit")
+            if _atlag is not None:
+                _min = _cf.get("min_fit", _atlag)
+                kalib = _metric("Kalibráció-illeszkedés",
+                                f"{round(100 * float(_atlag))}% "
+                                f"(leggyengébb {round(100 * float(_min))}%)")
+        except Exception:
+            pass
         q_html = ('<h2>Elemzés megbízhatósága</h2><div class="metrics">'
                   + _metric("Minőség-pontszám", str(quality.get("score", "—")) + "/100")
                   + _metric("Labda-lefedettség", ball_cov)
                   + _metric("Mért játékos/kocka", measured)
+                  + szakasz + kezi + kalib
                   + "</div>" + w_html)
 
     return finish_report(f"""<!DOCTYPE html>
@@ -2705,6 +3413,18 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   li {{ margin: 4px 0; font-size: 13.5px; }}
   p.empty {{ color: #8492A6; font-size: 12.5px; }}
   p.note {{ color: #4A5768; font-size: 12px; margin: 8px 0 0; }}
+  .warnbox {{ border: 1px solid #C0392B; background: #FDECEA; color: #6E2018;
+              border-radius: 8px; padding: 10px 12px; margin: 0 0 18px;
+              font-size: 13px; line-height: 1.45; }}
+  /* TÁJÉKOZTATÁS, nem hiba (pl. "klip, nem teljes meccs"): semleges
+     szín. A piros doboz ugyanolyan félrevezető lenne, mint a
+     hallgatás — egy klip elemzése nem hibás elemzés. */
+  .infobox {{ border: 1px solid #C3CCD8; background: #F4F7FA; color: #2B3A4A;
+              border-radius: 8px; padding: 10px 12px; margin: 0 0 18px;
+              font-size: 13px; line-height: 1.45; }}
+  .leadbox {{ border: 1.5px solid #9d7526; background: #fdf9f0;
+              border-radius: 10px; padding: 10px 16px 12px; margin: 8px 0 16px; }}
+  .leadbox li {{ margin: 5px 0; }}
   p.cs {{ font-size: 13.5px; margin: 8px 0; }}
   .cols {{ display: flex; gap: 22px; }}
   .col {{ flex: 1; }}
@@ -2728,11 +3448,13 @@ def _match_report_html_cached(match, tactics: dict, events: list,
 <body>
 <div class="page">
   <header>
-    <div class="brand">Sport Machine · Meccsjelentés</div>
+    <div class="brand">{brand_svg()}Sport Machine · Meccsjelentés</div>
     <h1>{home} <span style="color:#8492A6">vs</span> {away}</h1>
     <div class="sub">Elemzett szakasz: {dur_s / 60:.1f} perc · felismert gólok: {goals_h}–{goals_a}</div>
     {header_extra}
   </header>
+
+  {q_top}
 
   {summary_html}
 
@@ -2769,6 +3491,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   {team_metrics_html}
 
   {training_html}
+  {player_training_html}
 
   {gk_html}
 
@@ -2786,6 +3509,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   {passes_html}
 
   {notes_html}
+
+  {figures_html}
 
   {hm_html}
 
@@ -3230,6 +3955,32 @@ def player_report_html(match, track_id: int) -> str:
         tips_html = ("<h2>Mire figyelj</h2><ul>"
                      + "".join(f"<li>{escape(t_)}</li>"
                                for t_ in tips[:3]) + "</ul>")
+
+    # MIT GYAKOROLJ: az egyéni edzés-fókusz ebből a meccsből. A
+    # szezon-lapon ugyanez a szakasz a visszatérő tételeket hozza —
+    # itt a mai meccsét. A játékos ezért a részért teszi el a lapot.
+    focus_html = ""
+    try:
+        from .training import player_training_focus
+        _ptf = player_training_focus(match)
+        _side = team_of.get(track_id)
+        _sajat = None
+        for _p in ((_ptf.get(_side) or {}).get("players") or []):
+            if (_p.get("player_id") in (row.get("track_ids") or ())
+                    or (_p.get("jersey") is not None
+                        and _p.get("jersey") == row.get("jersey"))):
+                _sajat = _p
+                break
+        if _sajat and _sajat.get("items"):
+            _lis = "".join(
+                f"<li><b>{escape(i_['title'])}</b> "
+                f"({escape(i_['area'])}) — {escape(i_['why'])}.<br>"
+                f"<span class='note'>Gyakorlat: {escape(i_['drill'])}."
+                "</span></li>"
+                for i_ in _sajat["items"])
+            focus_html = f"<h2>Mit gyakorolj</h2><ul>{_lis}</ul>"
+    except Exception:
+        pass  # a lap e blokk nélkül is teljes
     sub = f"{meta.home_team} vs {meta.away_team}"
     if meta.date:
         sub += f" · {meta.date}"
@@ -3264,6 +4015,7 @@ def player_report_html(match, track_id: int) -> str:
   .mv {{ font-size: 20px; font-weight: 700; }}
   .ml {{ font-size: 11px; color: #8492A6; }}
   .empty {{ color: #8492A6; font-size: 13px; }}
+  .note {{ color: #6B7889; font-size: 12px; }}
   ul {{ margin: 8px 0 0; padding-left: 20px; }}
   li {{ font-size: 13px; margin-bottom: 6px; }}
   footer {{ margin-top: 30px; font-size: 11px; color: #8492A6; }}
@@ -3271,7 +4023,7 @@ def player_report_html(match, track_id: int) -> str:
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · JÁTÉKOS-LAP</div>
+  <div class="brand">{brand_svg()}SPORT MACHINE · JÁTÉKOS-LAP</div>
   <h1>{escape(row['label'])} — {escape(team_name)}</h1>
   <div class="sub">{escape(sub)}</div>
 </header>
@@ -3281,6 +4033,7 @@ def player_report_html(match, track_id: int) -> str:
 <h2>Fizikai mutatók</h2>
 <div class="metrics">{"".join(phys_items)}</div>
 {tips_html}
+{focus_html}
 <footer>A számok a pálya-koordinátás követésből és a magyarázható
 elemzési rétegekből jönnek — azonos küszöbökkel, mint a
 meccsjelentésben.</footer>
@@ -3354,7 +4107,7 @@ def trend_report_html(tr: dict) -> str:
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · FEJLŐDÉS-RIPORT</div>
+  <div class="brand">{brand_svg()}SPORT MACHINE · FEJLŐDÉS-RIPORT</div>
   <h1>{escape(name)}</h1>
   <div class="sub">Régebbi időszak: {tr.get("older_matches", 0)} meccs ·
   Újabb időszak: {tr.get("newer_matches", 0)} meccs — a darabszám-mutatók
@@ -3370,10 +4123,71 @@ időszakok mutatói kimaradnak, hogy ne látsszanak hamis változásnak.
 </div></body></html>""")
 
 
-def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
+def player_season_html(team: str, jersey: int, points: list[dict],
+                       name: str | None = None,
+                       focus: list[dict] | None = None,
+                       trend: dict | None = None,
+                       trend_window: int = 3) -> str:
     """Szezon játékos-lap: egy játékos meccsről meccsre, nyomtatható
     HTML-ben — a /players/trend pontjaiból (összesítő + meccs-tábla).
+
+    A `name` a mezszámhoz felvitt játékos-név (ha van): a lapot a
+    játékos kapja a kezébe, és a saját NEVÉT keresi rajta, nem a
+    számát. Név nélkül a szám marad a cím — visszafelé kompatibilis.
+
+    A `trend` a forma-irány (mutatónként recent/before/change_pct/
+    verdict) és a `trend_window` az összevetett meccsek száma. A lapot
+    a játékos TESZI EL — ha a képernyő megmondja, hogy javul, a
+    nyomtatvány pedig nem, akkor a papír kevesebbet ér, mint a program,
+    és pont az marad ki, amiért elteszi.
     """
+    # A címben a szám ELŐL marad (a mezszám az azonosító, a név a
+    # kényelem): "#7 Kovács" — így a névtelen és a nevesített lap
+    # ugyanúgy olvasható.
+    ki = f"#{jersey}" + (f" {name}" if name else "")
+    # Egyéni edzés-fókusz a SZEZONBÓL: ami több meccsen visszatért, az
+    # nem napi forma, hanem fejlesztendő terület. Ez az a rész, amiért
+    # a játékos elteszi a lapot.
+    focus_html = ""
+    if focus:
+        lis = "".join(
+            f"<li><b>{escape(f_['title'])}</b> ({escape(f_['area'])})"
+            f" — {f_['count']} meccsen<br>"
+            f"<span class='note'>{escape(f_['why'])}<br>"
+            f"Gyakorlat: {escape(f_['drill'])}.</span></li>"
+            for f_ in focus)
+        focus_html = (f"<h2>Mit gyakorolj</h2><ul>{lis}</ul>"
+                      '<p class="note">A meccsek mért adataiból — '
+                      'ami több meccsen visszatér, az nem napi forma.'
+                      '</p>')
+    # Forma-irány a lapra. Ítélet NÉLKÜL is kiírjuk a számokat, de
+    # akkor kimondjuk, hogy az zaj — a néma szám ítéletnek látszana.
+    trend_html = ""
+    _TREND_NEV = {"shot_pct": "gólarány",
+                  "xg_diff": "befejezés a helyzetekhez képest",
+                  "goals": "gól"}
+    sorok = [(nev, (trend or {}).get(kulcs))
+             for kulcs, nev in _TREND_NEV.items()
+             if isinstance((trend or {}).get(kulcs), dict)]
+    if sorok:
+        lis = []
+        for nev, rec in sorok:
+            valt = rec.get("change_pct", 0.0)
+            iteles = rec.get("verdict")
+            vege = (f"<b>{escape(str(iteles))}</b> ({valt:+.0f}%)"
+                    if iteles else f"{valt:+.0f}% — nem irány, zaj")
+            lis.append(
+                f"<li>{escape(nev)}: {rec.get('before')} → "
+                f"{rec.get('recent')} — {vege}</li>")
+        trend_html = (
+            "<h2>Javulok vagy romlok</h2><ul>" + "".join(lis) + "</ul>"
+            f'<p class="note">Az utolsó {trend_window} meccs az azt '
+            f'megelőző {trend_window}-hoz mérve. Kevés meccsből és a '
+            "tíz százalék alatti mozgásból szándékosan nem mondunk "
+            "irányt: egy jó meccs bármikor jön. A futómunka kimarad — "
+            "ott a több nem jobb, csak több, és a poszt dönti el, "
+            "mennyi kell belőle.</p>")
+
     n = len(points)
     goals = sum(p_.get("goals", 0) for p_ in points)
     shots = sum(p_.get("shots", 0) for p_ in points)
@@ -3478,7 +4292,7 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
 <html lang="hu">
 <head>
 <meta charset="utf-8">
-<title>Szezon-lap — #{jersey} ({escape(team)})</title>
+<title>Szezon-lap — {escape(ki)} ({escape(team)})</title>
 <style>
   * {{ box-sizing: border-box; }}
   body {{ margin: 0; font-family: system-ui, -apple-system, "Segoe UI",
@@ -3507,16 +4321,110 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · SZEZON-LAP</div>
-  <h1>#{jersey} — {escape(team)}</h1>
+  <div class="brand">{brand_svg()}SPORT MACHINE · SZEZON-LAP</div>
+  <h1>{escape(ki)} — {escape(team)}</h1>
   <div class="sub">{n} elemzett meccs, időrendben.</div>
 </header>
 <h2>Szezon-összesítő</h2>
 <div class="metrics">{"".join(totals)}</div>
+{trend_html}
+{focus_html}
 <h2>Meccsről meccsre</h2>
 {table}
 <footer>A mezszám-hozzárendelés utáni track-csoportok összegzett
 számai; a "—" azt jelzi, az adott meccsen nem volt mérhető adat.
+</footer>
+</div></body></html>""")
+
+
+def training_plan_html(team: str, n_matches: int,
+                       team_focuses: list[dict],
+                       player_focuses: list[dict] | None = None) -> str:
+    """Edzésterv: a heti munkalap egy nyomtatható oldalon.
+
+    Az edző a hét első edzésére viszi le: MIT gyakoroljon a csapat, és
+    KINEK mi a személyes feladata. A képernyőn ugyanez él, de a pályán
+    nincs képernyő — a lapot ki lehet tenni az öltözőben.
+
+    - team_focuses: a VISSZATÉRŐ csapat-fókuszok ({"title", "area",
+      "count", "why", "drill"}), csökkenő visszatérés szerint;
+    - player_focuses: emberenként ({"jersey", "name", "items":
+      [{"title", "area", "why", "drill", "count"}]}).
+
+    Mindkettő lehet üres: az azt jelenti, hogy a mért területeken nincs
+    kilógó gyengeség — ez EREDMÉNY, nem hiányzó adat, és a lap ezt ki
+    is mondja.
+    """
+    def _items(lista):
+        return "".join(
+            f"<li><b>{escape(f_['title'])}</b> "
+            f"({escape(f_.get('area') or '')}"
+            + (f" · {f_['count']} meccsen" if f_.get("count") else "")
+            + f") — {escape(f_.get('why') or '')}.<br>"
+            f"<span class='note'>Gyakorlat: "
+            f"{escape(f_.get('drill') or '')}.</span></li>"
+            for f_ in lista)
+
+    csapat_html = (
+        f"<h2>A csapat gyakorlandói</h2><ul>{_items(team_focuses)}</ul>"
+        if team_focuses else
+        "<h2>A csapat gyakorlandói</h2>"
+        '<p class="note">Nincs olyan gyengeség, ami legalább két meccsen '
+        "visszatért volna. Ez eredmény, nem hiányzó adat — az egyszeri "
+        "kisiklásokat a meccs-jelentések tartalmazzák.</p>")
+
+    emberek = ""
+    for p_ in (player_focuses or []):
+        ki = f"#{p_['jersey']}" if p_.get("jersey") is not None else "?"
+        if p_.get("name"):
+            ki += f" {p_['name']}"
+        emberek += (f"<li><b>{escape(ki)}</b>"
+                    f"<ul>{_items(p_.get('items') or [])}</ul></li>")
+    egyeni_html = (
+        f"<h2>Egyéni feladatok</h2><ul>{emberek}</ul>"
+        '<p class="note">Emberenként legfeljebb két tétel — a fókusz '
+        "attól fókusz, hogy kevés. A mezszám nélkül játszók nem "
+        "szerepelnek: meccsek közt csak a szám köti össze a játékost."
+        "</p>"
+        if emberek else "")
+
+    return finish_report(f"""<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Edzésterv — {escape(team)}</title>
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; font-family: system-ui, -apple-system, "Segoe UI",
+         Arial, sans-serif; color: #101722; background: #fff;
+         line-height: 1.5; }}
+  .page {{ max-width: 760px; margin: 0 auto; padding: 36px 32px 48px; }}
+  header {{ border-bottom: 3px solid #12988a; padding-bottom: 14px;
+           margin-bottom: 22px; }}
+  .brand {{ font-size: 11px; letter-spacing: .22em;
+           text-transform: uppercase; color: #8492A6; }}
+  h1 {{ margin: 6px 0 2px; font-size: 26px; }}
+  .sub {{ color: #4A5768; font-size: 13px; }}
+  h2 {{ font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+       color: #12988a; margin: 26px 0 10px; }}
+  ul {{ margin: 0 0 0 18px; padding: 0; }}
+  li {{ margin-bottom: 10px; }}
+  .note {{ color: #6B7889; font-size: 12px; }}
+  footer {{ margin-top: 30px; border-top: 1px solid #E3E8EF;
+           padding-top: 12px; color: #8492A6; font-size: 11.5px; }}
+  @media print {{ .page {{ padding: 0; }} }}
+</style>
+</head>
+<body><div class="page">
+<header>
+  <div class="brand">{brand_svg()}SPORT MACHINE · EDZÉSTERV</div>
+  <h1>{escape(team)}</h1>
+  <div class="sub">{n_matches} elemzett meccs alapján.</div>
+</header>
+{csapat_html}
+{egyeni_html}
+<footer>Szabály-alapú javaslatok: minden pont mögött a meccsek
+kiszámolt adata áll. Ami több meccsen visszatér, az nem napi forma.
 </footer>
 </div></body></html>""")
 
@@ -3526,11 +4434,51 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                        timeline: list[dict] | None = None,
                        venue: dict | None = None,
                        leaders: dict | None = None,
-                       opponents: list[dict] | None = None) -> str:
+                       opponents: list[dict] | None = None,
+                       figure_library: dict | None = None,
+                       repertoire: dict | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
+
+    `figure_library` (opcionális): a SAJÁT csapat figura-könyvtára
+    (setplays.setplay_library a szezon összes meccséből) — a meccsről
+    meccsre visszatérő figuráink rajzzal és hozammal.
+    `repertoire` (opcionális): a figura-repertoár változása a szezon
+    két fele között (setplays.figure_repertoire_change) — mi jött be,
+    mi tűnt el, mi maradt (a két fél hozamával).
     """
     table = _trend_metrics_table(tr)
+    figures_html = ""
+    if (figure_library or {}).get("recurring"):
+        figures_html = ("<h2>Saját visszatérő figuráink (meccsről meccsre)</h2>"
+                        + _setplay_library_rows(figure_library))
+    if repertoire and (repertoire.get("new") or repertoire.get("dropped")
+                       or repertoire.get("kept")):
+        def _sor(f, szoveg):
+            return ('<div class="bar-row" style="align-items:center">'
+                    f'{_figure_svg(f.get("shape") or [], 120, 60)}'
+                    f'<span><b>{escape(str(f.get("name") or f.get("zone", "")))}</b>'
+                    f' — {szoveg}</span></div>')
+        reszek = []
+        for f in repertoire.get("new") or []:
+            reszek.append(_sor(f, f"ÚJ a második félben: {int(f['attacks'])} "
+                                  f"támadás, {int(f['goals'])} gól "
+                                  f"({float(f['goal_pct']):.0f}%)"))
+        for f in repertoire.get("dropped") or []:
+            reszek.append(_sor(f, f"ELTŰNT a második félre (az elsőben "
+                                  f"{int(f['attacks'])} támadás, "
+                                  f"{int(f['goals'])} gól)"))
+        for f in repertoire.get("kept") or []:
+            o, n = f["older"], f["newer"]
+            reszek.append(_sor(f, f"maradt: {int(o['attacks'])} támadás "
+                                  f"({float(o['goal_pct']):.0f}%) → "
+                                  f"{int(n['attacks'])} támadás "
+                                  f"({float(n['goal_pct']):.0f}%)"))
+        figures_html += ("<h2>Repertoár-változás (első fél → második fél)</h2>"
+                         + "".join(reszek)
+                         + '<p class="note">A szezon első és második felének '
+                           'figurái összevetve: mi jött be, mi tűnt el, mi '
+                           'maradt — a hozamával.</p>')
     summary = "".join(f"<li>{escape(s_)}</li>"
                       for s_ in tr.get("summary", []))
     timeline_html = ""
@@ -3643,7 +4591,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · SZEZON-RIPORT</div>
+  <div class="brand">{brand_svg()}SPORT MACHINE · SZEZON-RIPORT</div>
   <h1>{escape(team)}</h1>
   <div class="sub">{n_matches} elemzett meccs — az első és a második
   fele automatikusan összevetve ({tr.get("older_matches", 0)} vs
@@ -3653,6 +4601,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 {venue_html}
 {opponents_html}
 {leaders_html}
+{figures_html}
 <h2>Fejlődés a szezonon belül</h2>
 {table}
 <h2>Összegzés</h2>
@@ -3731,7 +4680,7 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">SPORT MACHINE · EGYMÁS ELLEN</div>
+  <div class="brand">{brand_svg()}SPORT MACHINE · EGYMÁS ELLEN</div>
   <h1>{escape(team_a)} vs {escape(team_b)}</h1>
   <div class="sub">{stats.get("matches", 0)} elemzett egymás elleni
   meccs a könyvtárból.</div>

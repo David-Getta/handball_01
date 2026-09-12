@@ -5,14 +5,28 @@
 library;
 
 import "dart:async";
+import "dart:io";
 
 import "package:flutter/material.dart";
+import "package:media_kit/media_kit.dart";
 
 import "services/api_client.dart";
 import "theme/app_theme.dart";
 import "ui/bootstrap_screen.dart";
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // A Windows-os jelenet-lejátszó (media_kit/libmpv) inicializálása —
+  // csak ott, ahol a natív könyvtárak be vannak csomagolva; a többi
+  // platform a video_player-t használja (lásd ui/video_panel.dart).
+  if (Platform.isWindows) {
+    try {
+      MediaKit.ensureInitialized();
+    } catch (_) {
+      // Ha a lejátszó-könyvtár hiányzik, az app a lejátszó nélkül fut
+      // tovább — a videó-panel tájékoztató szöveget mutat.
+    }
+  }
   runApp(const HandballApp());
 }
 

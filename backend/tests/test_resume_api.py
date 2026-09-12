@@ -204,3 +204,52 @@ def test_reprocess_with_saved_params(tmp_path):
     r3 = client.post("/matches/nincs-ilyen/reprocess")
     assert r3.status_code == 404
     assert "mentett" in r3.json()["detail"]
+
+
+def test_reprocess_a_friss_kalibraciot_hasznalja(tmp_path):
+    """Az újrafeldolgozás a VIDEÓHOZ mentett friss kalibrációval fut.
+
+    Az újrafeldolgozás leggyakoribb oka éppen az, hogy a kalibráció
+    rossz volt: a lelátó a pályára vetült, a pozíciók félrementek. A
+    felhasználó ilyenkor újrakalibrál a varázslóban (az a VIDEÓHOZ
+    mentődik), majd újrafeldolgozást indít. Ha ilyenkor a job
+    RÉGI kalibrációjával futnánk, ugyanazt a rossz eredményt kapná még
+    egyszer — egy újabb óra árán.
+    """
+    import tempfile
+
+    video = tmp_path / "kal.mp4"
+    _tiny_video(video, frames=10)
+    root = tempfile.mkdtemp(prefix="hb_kal_")
+    client = _partial_setup(root, video, partial=False)
+
+    # Első feldolgozás egy (rossz) kalibrációval — ez menti a sidecart.
+    # (Épség-ellenőrzést átmenő, de MÁS négyszög, mint a friss.)
+    rossz = [[10, 10], [80, 12], [78, 50], [12, 48]]
+    r = client.post("/matches/process",
+                    json={"path": str(video), "match_id": "kal1",
+                          "stride": 1, "calib": rossz})
+    assert r.status_code == 200, r.text
+    _wait_done(client, r.json()["job_id"])
+
+    # A felhasználó újrakalibrál: ez a VIDEÓHOZ mentődik.
+    jo = [[5, 5], [90, 4], [92, 60], [3, 58]]
+    s = client.post("/calibration", json={
+        "path": str(video),
+        "calibs": [{"corners": jo, "region": "full", "rotate": False,
+                    "frame": 2}]})
+    assert s.status_code == 200, s.text
+
+    # Újrafeldolgozás: a FRISS kalibrációnak kell mennie.
+    r2 = client.post("/matches/kal1/reprocess")
+    assert r2.status_code == 200, r2.text
+    _wait_done(client, r2.json()["job_id"])
+
+    par = json.loads((Path(root) / "data" / "matches"
+                      / "kal1.params.json").read_text(encoding="utf-8"))
+    assert par["calibs"][0]["corners"] == jo
+    # A régi egy-kalibrációs mezők nem maradhatnak ott: a feldolgozó
+    # azokat is nézi, és félrevezetnének a `calibs` mellett.
+    assert "calib" not in par
+    # A feldolgozás a legkorábbi kalibrált kockától indul.
+    assert par["start"] == 2

@@ -36,6 +36,29 @@ másodpercig — ez normális. Utána megnyílik a program.
 
 ---
 
+## Első indítás: fiók és feltételek
+
+Az első indításnál a program **fiókot kér**:
+
+1. Add meg az e-mail címed és egy legalább 8 karakteres jelszót (a neved és a
+   csapatod nem kötelező).
+2. Olvasd el a **felhasználási feltételeket** (a linkre kattintva a teljes
+   szöveg megnyílik), és pipáld ki az elfogadást — enélkül a fiók nem jön létre.
+3. **Fiók létrehozása** → és már bent is vagy.
+
+Tudnivalók:
+
+- A fiók a **saját gépeden** készül el, a program adatmappájában — nincs felhő,
+  a jelszavad nem hagyja el a laptopot (és nem is tárolódik nyíltan, csak
+  visszafejthetetlen lenyomatként).
+- A belépés **90 napig** érvényes: nem kell minden indításkor újra belépni.
+- Kilépni a jobb felső **fiók-ikonra** kattintva tudsz; ugyanott bármikor újra
+  elolvashatod a feltételeket.
+- Ha a feltételek szövege később megújul, a program belépéskor felkínálja
+  elfogadásra — az elfogadás időpontját a fiókod őrzi.
+
+---
+
 ## Mit tudsz csinálni a programban?
 
 1. **Feltöltés** fül → kattints a mezőre, és válaszd ki a meccsvideót. Feltölti.
@@ -85,8 +108,14 @@ repóhoz. Ezután az automatikus frissítés privát repóval is ugyanúgy műk�
 
 ## Gyakori kérdések
 
-**Nem indul el / „A motor nem indult el" üzenet.** Zárd be, és indítsd újra a
-programot. Ha marad, kattints az **Újrapróbálom** gombra a kezdőképernyőn.
+**Nem indul el / „A motor nem válaszol" üzenet.** A v0.1.33-tól a program az
+elhalt motort magától újraindítja, az **Újrapróbálom** gomb pedig keresés
+mellett újra is indítja (ez fél percig is tarthat) — a legtöbb esetben ennyi
+elég. Ha a hiba marad, a hiba-képernyő megmutatja a motor naplójának utolsó
+sorait és a futó verziót: erről készíts képernyőképet, és küldd el a
+fejlesztőnek — a napló teljes fájlja a képernyőn kiírt helyen van
+(macOS: `~/Library/Application Support/SportMachine/engine-app.log`,
+Windows: `%LOCALAPPDATA%\SportMachine\engine-app.log`).
 
 **Lassú a feldolgozás.** Az elemzés a videó hosszától és a géped erejétől függ.
 Erősebb (videokártyás) gépen gyorsabb. Hagyd a háttérben dolgozni.
@@ -95,4 +124,22 @@ Erősebb (videokártyás) gépen gyorsabb. Hagyd a háttérben dolgozni.
 az **Áttekintés** fülön később is ott lesznek.
 
 **Kell hozzá internet?** A telepítéshez igen (letöltés). Utána a program a saját
-gépeden fut, internet nélkül is elemez.
+gépeden fut, internet nélkül is elemez — a fiók és a belépés is a saját gépeden
+működik.
+
+**Nem tudok belépni / nem akarok most fiókot.** A belépő képernyőn a
+**„Folytatás fiók nélkül (vendég)"** gombbal fiók nélkül is beléphetsz (a
+tulajdonjogi tudomásulvétel elfogadásával). Fontos: a vendégként végzett
+munka az app következő indításakor törlődik — kivéve, ha a **fejlesztői
+mód** be van kapcsolva (a belépő képernyőn vagy bent a fiók-menüben
+kapcsolható); akkor minden megmarad.
+
+**Régi verzión ragadtam, és a belépés nem megy.** A belépő képernyő alján
+ott a **„Frissítés keresése"** — fiók és futó motor nélkül is letölti és
+telepíti a legújabb kiadást. Ha az appot elindítani sem tudod, a frissítés
+böngészőből is megy: a projekt GitHub Releases oldaláról töltsd le a
+gépednek való csomagot, és telepítsd a régi fölé.
+
+**Elfelejtettem a jelszavamat.** A fiókok csak a te gépeden vannak, ezért nincs
+e-mailes visszaállítás. Ilyenkor hozz létre új fiókot — a korábbi meccseid és
+elemzéseid megmaradnak, azok nem a fiókhoz, hanem a géphez tartoznak.

@@ -549,3 +549,198 @@ def test_sprints_by_score_needs_state_time():
     spb = sprints_by_score(m)
     assert spb["home"]["trailing"]["seconds"] == 0.0
     assert spb["home"]["verdict"] is None
+
+
+# ---- Sprint-poszt (melyik posztjuk futja a sprinteket) ---------------------
+
+
+def _spr_match(sprints_by_player, fps=25.0):
+    """Vendég poszt-minta (21: beálló, 22: szélső a -x kapunál), majd
+    a megadott számú sprint (0,28 m/kocka, 30 kockán át)."""
+    from handball.models.tracking import Ball
+
+    spos = {21: (6.0, 10.0), 22: (5.0, 3.0)}
+
+    def base_cast():
+        return [PlayerPosition(track_id=tid, team=Team.AWAY, x=x,
+                               y=y, source=PositionSource.MEASURED,
+                               confidence=1.0)
+                for tid, (x, y) in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: vendég birtoklás elöl
+        frames.append(Frame(t=t, players=base_cast(),
+                            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    max_sprints = max(sprints_by_player.values())
+    xs = {tid: 12.0 for tid in sprints_by_player}
+    direction = {tid: 1.0 for tid in sprints_by_player}
+    for k in range(max_sprints):
+        for phase in ("run", "rest"):
+            for _ in range(30 if phase == "run" else 15):
+                players = []
+                for j, (tid, n) in enumerate(
+                        sprints_by_player.items()):
+                    if phase == "run" and k < n:
+                        xs[tid] += 0.28 * direction[tid]
+                    players.append(PlayerPosition(
+                        track_id=tid, team=Team.AWAY, x=xs[tid],
+                        y=6.0 + 3.0 * j,
+                        source=PositionSource.MEASURED,
+                        confidence=1.0))
+                frames.append(Frame(t=t, players=players))
+                t += 1
+        for tid in sprints_by_player:    # forduló a pálya széle előtt
+            direction[tid] *= -1.0
+    return Match(
+        meta=MatchMeta(match_id="t", home_team="H", away_team="A",
+                       fps=fps),
+        frames=frames)
+
+
+def test_sprint_threat_roles_names_the_running_post():
+    """Tizenkét sprintből kilencet a beálló fut → az ő útját kell
+    lezárni labdavesztésnél."""
+    from handball.pipeline.stats import (SPR_MIN_SPRINTS,
+                                         sprint_threat_roles)
+
+    rec = sprint_threat_roles(_spr_match({21: 9, 22: 3}))["away"]
+    assert rec["sprints"] >= SPR_MIN_SPRINTS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "útját kell először lezárni" \
+        in rec["verdict"], rec
+
+
+def test_sprint_threat_roles_silent_with_few_sprints():
+    """Kevés sprintből nincs ítélet."""
+    from handball.pipeline.stats import sprint_threat_roles
+
+    rec = sprint_threat_roles(_spr_match({21: 4, 22: 2}))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Fáradó-poszt (melyik posztjuk esik vissza a 2. félidőre) --------------
+
+
+def _ftr_match(v7_first, v7_second, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső), majd mozgás-szakaszok: a
+    7-es az 1. félidőben v7_first, a 2.-ban v7_second m/s-mal
+    ingázik a helye körül, a 9-es végig 2 m/s-mal; köztük 90 mp-es
+    üres (szünet-) szakasz."""
+    from handball.models.tracking import Ball
+
+    spos = {7: (6.0, 10.0), 9: (5.0, 3.0)}
+
+    def _p(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.AWAY, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: vendég birtoklás
+        frames.append(Frame(
+            t=t,
+            players=[_p(tid, *xy) for tid, xy in spos.items()],
+            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    x7, d7 = spos[7][0], 1.0
+    x9, d9 = spos[9][0], 1.0
+
+    def _osc(x, d, v):
+        x += d * v / fps
+        if x >= 8.0:
+            d = -1.0
+        elif x <= 4.0:
+            d = 1.0
+        return x, d
+
+    for phase, v7 in (("fh", v7_first), ("sh", v7_second)):
+        for _ in range(int(40 * fps)):   # 40 mp mért mozgás
+            x7, d7 = _osc(x7, d7, v7)
+            x9, d9 = _osc(x9, d9, 2.0)
+            frames.append(Frame(t=t, players=[
+                _p(7, x7, spos[7][1]), _p(9, x9, spos[9][1])]))
+            t += 1
+        if phase == "fh":
+            for _ in range(int(90 * fps)):   # félidei szünet
+                frames.append(Frame(t=t, players=[], ball=None))
+                t += 1
+    return Match(
+        meta=MatchMeta(match_id="t", home_team="H", away_team="A",
+                       fps=fps),
+        frames=frames)
+
+
+def test_fatigue_roles_names_the_fading_post():
+    """A beálló tempója a 2. félidőre harmadára esik → a szünet után
+    az ő sávjában kell támadni."""
+    from handball.pipeline.stats import FTR_DROP_PCT, fatigue_roles
+
+    rec = fatigue_roles(_ftr_match(3.0, 1.0))["away"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["drop_pct"] and rec["drop_pct"] >= FTR_DROP_PCT, rec
+    assert rec["verdict"] and "friss embert" in rec["verdict"], rec
+
+
+def test_fatigue_roles_silent_when_steady():
+    """Egyenletes tempónál nincs ítélet."""
+    from handball.pipeline.stats import fatigue_roles
+
+    rec = fatigue_roles(_ftr_match(2.0, 2.0))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _lbl_match(steps, minutes=6.0, fps=5.0):
+    """`steps` = hazai mezőnyjátékosonként a kockánkénti lépés (méter)
+    — a futómunka eloszlása ebből áll össze. A vendég oldal fix."""
+    n = int(minutes * 60 * fps)
+    frames = []
+    xs = [10.0 + 1.5 * i for i in range(len(steps))]
+    dirs = [1.0] * len(steps)
+    for t in range(n):
+        players = []
+        for i, step in enumerate(steps):
+            xs[i] += step * dirs[i]
+            if not 5.0 <= xs[i] <= 18.0:
+                dirs[i] *= -1.0
+                xs[i] += 2 * step * dirs[i]
+            players.append(PlayerPosition(track_id=100 + i,
+                                          team=Team.HOME,
+                                          x=xs[i], y=6.0 + i))
+        players.append(PlayerPosition(track_id=200, team=Team.AWAY,
+                                      x=30.0, y=10.0))
+        frames.append(Frame(t=t, players=players))
+    return Match(
+        meta=MatchMeta(match_id="lbl", home_team="H", away_team="A",
+                       fps=fps),
+        frames=frames)
+
+
+def test_running_load_balance_flags_concentrated_work():
+    """Ha három ember futja a táv nagy részét, ők a hajrára
+    elfogynak."""
+    from handball.pipeline.stats import (LBL_TOP3_PCT,
+                                         running_load_balance)
+
+    rec = running_load_balance(
+        _lbl_match([0.5, 0.5, 0.5, 0.02, 0.02, 0.02, 0.02]))["home"]
+    assert rec["players"] >= 6, rec
+    assert rec["top3_pct"] is not None
+    assert rec["top3_pct"] >= LBL_TOP3_PCT, rec
+    assert rec["verdict"] and "hajrára" in rec["verdict"], rec
+
+
+def test_running_load_balance_even_team_and_few_players():
+    """Egyenletes futómunkánál más az ítélet; kevés mért játékosnál
+    nincs ítélet."""
+    from handball.pipeline.stats import running_load_balance
+
+    rec = running_load_balance(_lbl_match([0.3] * 7))["home"]
+    assert rec["top3_pct"] is not None and rec["top3_pct"] < 55.0, rec
+    assert rec["verdict"] and "egyenletesen" in rec["verdict"], rec
+
+    keves = running_load_balance(_lbl_match([0.3] * 4))["home"]
+    assert keves["top3_pct"] is None and keves["verdict"] is None, keves

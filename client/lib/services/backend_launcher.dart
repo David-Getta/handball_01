@@ -11,10 +11,14 @@
 /// Weben (kIsWeb) nincs alfolyamat: ilyenkor csak a /health-et ellenőrzi.
 library;
 
+import "dart:convert";
 import "dart:io";
 
 import "package:flutter/foundation.dart";
 
+import "package:http/http.dart" as http;
+
+import "../version.dart";
 import "api_client.dart";
 
 /// A motor-indítás eredménye — ezt mutatja a kezdőképernyő.
@@ -48,6 +52,15 @@ class BackendLauncher {
 
   Process? _process;
 
+  /// Igaz, ha a leállítást MI kértük (kilépés, frissítés előtti csere) —
+  /// ilyenkor az őrkutya nem indítja újra a motort.
+  bool _stoppedByUs = false;
+
+  /// Hányszor indította újra az őrkutya a magától elhalt motort ebben a
+  /// munkamenetben — a korlát a hibás motor végtelen pörgetését állítja meg.
+  int _watchdogRestarts = 0;
+  static const int watchdogMaxRestarts = 3;
+
   /// Megkeresi, melyik porton válaszol a motor (a kezdőtől felfelé), és
   /// TALÁLATKOR átállítja az alapértelmezett kliens-címet is — az ezután
   /// létrejövő ApiClient-ek automatikusan a jó portra beszélnek.
@@ -70,6 +83,63 @@ class BackendLauncher {
     return null;
   }
 
+  /// A megadott porton futó motor verziója a /health-ből (null: nem
+  /// olvasható — nagyon régi motor, vagy nem a miénk).
+  Future<String?> _versionOnPort(int p) async {
+    try {
+      final r = await http
+          .get(Uri.parse("http://127.0.0.1:$p/health"))
+          .timeout(const Duration(seconds: 3));
+      final j = jsonDecode(utf8.decode(r.bodyBytes));
+      if (j is Map && j["version"] is String) return j["version"] as String;
+    } catch (_) {}
+    return null;
+  }
+
+  /// A megadott porton futó motor leállítása: előbb a szándékos
+  /// /shutdown végponttal (új motorok), majd — mert a RÉGI motorban ez
+  /// még nincs — a portot fogó folyamat leállításával. A végén megvárjuk,
+  /// hogy a port tényleg elengedjen (legfeljebb ~5 mp).
+  Future<void> _stopEngineOnPort(int p) async {
+    try {
+      await http
+          .post(Uri.parse("http://127.0.0.1:$p/shutdown"))
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {}
+    for (var i = 0; i < 10; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      if (!await ApiClient(baseUrl: "http://127.0.0.1:$p").isHealthy()) {
+        return;
+      }
+      if (i == 3) await _killPortProcess(p); // a /shutdown nem ment
+    }
+  }
+
+  /// A portot fogó folyamat leállítása rendszer-eszközzel — a régi
+  /// (shutdown-végpont előtti) motorokhoz.
+  Future<void> _killPortProcess(int p) async {
+    try {
+      if (Platform.isWindows) {
+        final r = await Process.run("cmd", ["/c", "netstat -ano"]);
+        for (final sor in (r.stdout as String).split("\n")) {
+          if (!sor.contains(":$p ") || !sor.contains("LISTENING")) continue;
+          final darab = sor.trim().split(RegExp(r"\s+"));
+          final pid = darab.isNotEmpty ? darab.last : "";
+          if (int.tryParse(pid) != null) {
+            await Process.run("taskkill", ["/PID", pid, "/F"]);
+          }
+        }
+      } else {
+        final r = await Process.run("lsof", ["-ti", "tcp:$p"]);
+        for (final pid in (r.stdout as String).split("\n")) {
+          if (int.tryParse(pid.trim()) != null) {
+            await Process.run("kill", ["-9", pid.trim()]);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   /// A motor kimenetének naplófájlja a felhasználói adatmappában — ha a motor
   /// nem indul, ebből látszik, miért (engine-app.log).
   static File _logFile() {
@@ -88,6 +158,52 @@ class BackendLauncher {
 
   IOSink? _log;
 
+  /// A motor SAJÁT naplója (`engine.log`) a felhasználói adatmappában.
+  ///
+  /// KÜLÖN fájl az engine-app.log-tól, és Windowson EZ a fontos: a
+  /// becsomagolt motor ablak nélküli (console=False) programként fut,
+  /// ilyenkor a Pythonnak nincs stdout/stderr-je, tehát a kliens
+  /// csövébe SEMMI nem érkezik — a motor a saját üzeneteit ide írja.
+  /// A kliens naplója enélkül csak azt mutatta, hogy "elindítottam" és
+  /// "leállt", a MIÉRT-et nem.
+  static File _engineOwnLogFile() =>
+      File("${_logFile().parent.path}${Platform.pathSeparator}engine.log");
+
+  static Future<String?> _tailOf(File f, int lines) async {
+    try {
+      if (!await f.exists()) return null;
+      final all = await f.readAsLines();
+      if (all.isEmpty) return null;
+      final from = all.length > lines ? all.length - lines : 0;
+      return all.sublist(from).join("\n");
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// A napló utolsó sorai — a hiba-képernyő mutatja meg, hogy a kiváltó
+  /// ok egy képernyőképen elférjen (a felhasználónak ne kelljen fájlok
+  /// közt keresgélnie).
+  ///
+  /// MINDKÉT naplót összefűzi: a motor sajátját (ott van a MIÉRT) és a
+  /// kliensét (ott van, hogy mit próbáltunk). Null, ha egyik sincs.
+  static Future<String?> logTail({int lines = 40}) async {
+    final engine = await _tailOf(_engineOwnLogFile(), lines);
+    final client = await _tailOf(_logFile(), lines);
+    if (engine == null && client == null) return null;
+    final b = StringBuffer();
+    if (engine != null) {
+      b.writeln("--- a motor saját naplója (engine.log) ---");
+      b.writeln(engine);
+    }
+    if (client != null) {
+      if (engine != null) b.writeln("");
+      b.writeln("--- az indító naplója (engine-app.log) ---");
+      b.writeln(client);
+    }
+    return b.toString().trimRight();
+  }
+
   /// Naplósor a fájlba ÉS a kezdőképernyőre (ha van hallgató). A naplózás
   /// hibája sosem akadályozhatja az indítást.
   void _logLine(String s, void Function(String)? onLog) {
@@ -99,13 +215,39 @@ class BackendLauncher {
 
   /// Elindítja (ha kell) a backendet, és visszaadja a végállapotot.
   /// `onLog`: a motor kimenete/állapot-üzenetek a kezdőképernyőnek.
+  /// Az indítási szándék a leállítási szándékot is törli (revive után
+  /// az őrkutya újra élesedik).
   Future<BackendStatus> ensureRunning({void Function(String)? onLog}) async {
+    _stoppedByUs = false;
     // 1) Már fut valamelyik porton? (A 8000-es foglaltsága esetén a motor
     // tartalék portra köt — ugyanazt a tartományt fésüljük át.)
-    final running = await _findHealthyPort();
+    var running = await _findHealthyPort();
     if (running != null) {
-      onLog?.call("A motor már fut (port: $running).");
-      return const BackendStatus(BackendPhase.ready, "A motor fut.");
+      // FÉL-FRISSÜLÉS-VÉDELEM: frissítés után a RÉGI motor-folyamat
+      // életben maradhat, és az app ahhoz csatlakozna — minden rejtélyes
+      // eltérés (hiányzó végpontok, verzió-sáv) ebből jön. Ha a futó
+      // motor verziója nem a miénk, leállítjuk, és a BEÉPÍTETT indul.
+      final futoVerzio = await _versionOnPort(running);
+      final elter = futoVerzio != null &&
+          futoVerzio.isNotEmpty &&
+          !appVersion.contains("-dev") &&
+          futoVerzio != appVersion;
+      if (!elter) {
+        onLog?.call("A motor már fut (port: $running).");
+        return const BackendStatus(BackendPhase.ready, "A motor fut.");
+      }
+      onLog?.call("Régi motor fut (v$futoVerzio, port: $running) — "
+          "leállítom, és a beépített (v$appVersion) indul.");
+      await _stopEngineOnPort(running);
+      running = await _findHealthyPort();
+      if (running != null) {
+        // Nem sikerült leállítani (pl. más felhasználó folyamata) —
+        // őszintén szólunk, és a régivel megyünk tovább: az app
+        // működik, a verzió-sáv pedig megmondja a teendőt.
+        onLog?.call("A régi motort nem sikerült leállítani — a futó "
+            "példánnyal megyünk tovább.");
+        return const BackendStatus(BackendPhase.ready, "A motor fut.");
+      }
     }
 
     // Weben nincs alfolyamat-indítás.
@@ -115,6 +257,14 @@ class BackendLauncher {
     }
 
     // Napló nyitása (csonkolva — mindig a legutóbbi indítás látszik benne).
+    // Az ELŐZŐ sinket le kell zárni: az őrkutyás újraindítás ide is
+    // visszatér, és nyitva hagyott sinkkel fájl-leírók szivárognának —
+    // Windowson ráadásul a még fogott fájl csonkoló megnyitása el is
+    // bukhat, azaz pont az újraindításnál veszne el a napló.
+    try {
+      await _log?.close();
+    } catch (_) {}
+    _log = null;
     try {
       final f = _logFile();
       await f.parent.create(recursive: true);
@@ -158,30 +308,84 @@ class BackendLauncher {
         workingDirectory: exe.parent.path,
         environment: {"HANDBALL_HOST": "127.0.0.1", "HANDBALL_PORT": "$port"},
       );
-      _process!.stdout.listen((d) => _logLine(String.fromCharCodes(d).trimRight(), onLog));
-      _process!.stderr.listen((d) => _logLine(String.fromCharCodes(d).trimRight(), onLog));
+      // A motor UTF-8-ban ír, és a sorai MAGYARUL szólnak. A
+      // String.fromCharCodes bájtonként képez karaktert, tehát az
+      // ékezeteket összetörte ("Ã¡") — pont a naplót, amit a
+      // felhasználótól hibakereséshez kérünk. Az allowMalformed azért
+      // kell, mert egy darabhatár félbevághat egy több bájtos karaktert:
+      // egy sérült jel elfogadható, a kivétel miatt elveszett napló nem.
+      _process!.stdout.listen(
+          (d) => _logLine(utf8.decode(d, allowMalformed: true).trimRight(),
+              onLog));
+      _process!.stderr.listen(
+          (d) => _logLine(utf8.decode(d, allowMalformed: true).trimRight(),
+              onLog));
       _process!.exitCode.then((c) {
         exited = true;
         _logLine("A motor-folyamat leállt, kilépési kód: $c", onLog);
+        _watchdog(onLog);
       });
     } catch (e) {
       _logLine("A motort nem sikerült elindítani: $e", onLog);
       return BackendStatus(BackendPhase.failed, "A motort nem sikerült elindítani: $e");
     }
 
-    // A motor indulása (különösen az első alkalommal) eltarthat akár egy
-    // percig is (a rendszer első futáskor átvizsgálja a nagy programfájlt).
-    final ok = await _waitForHealth(const Duration(seconds: 90), isExited: () => exited);
+    // A motor indulása — KÜLÖNÖSEN az első alkalommal — sokáig tarthat: a
+    // becsomagolt motor negyedmilliárd bájt, és a Windows Defender (vagy
+    // más víruskereső) az ELSŐ futásnál végigolvassa, mielőtt a program
+    // egyáltalán elindulna. Lassú lemezen ez simán túlmegy két percen.
+    final ok = await _waitForHealth(const Duration(seconds: 180),
+        isExited: () => exited);
     if (ok) {
+      // Sikeres indulás után az őrkutya kvótája újratöltődik: a korlát a
+      // BEINDULNI SEM TUDÓ motor pörgetése ellen véd, nem az ellen, hogy
+      // egy hosszú munkamenetben többször is kelljen újraéleszteni.
+      _watchdogRestarts = 0;
       _logLine("A motor elindult és válaszol.", onLog);
       return const BackendStatus(BackendPhase.ready, "A motor elindult.");
     }
-    final why = exited
-        ? "A motor idő előtt leállt — részletek: ${_logFile().path}"
-        : "A motor nem válaszolt időben — részletek: ${_logFile().path}";
+    // FONTOS: itt NEM állítjuk le a motrot.
+    //
+    // Korábban a lejárt idő stop()-ot hívott — vagyis pont azt a
+    // folyamatot lőttük ki, amelyik talán másodpercekre volt attól, hogy
+    // válaszoljon (első futás, víruskereső-átvizsgálás). A felhasználó
+    // ilyenkor újrapróbált, és az egész átvizsgálás elölről kezdődött:
+    // a hiba önmagát tartotta életben. Ráadásul a stop() a
+    // `_stoppedByUs` jelzőt is beállítja, ami az őrkutyát is kikapcsolja.
+    //
+    // Ha a folyamat még ÉL, hagyjuk indulni: az Újrapróbálom (és a
+    // motor-újraélesztés) a port-tartomány végigfésülésével úgyis
+    // megtalálja, amint válaszol.
+    final String why;
+    if (exited) {
+      why = "A motor idő előtt leállt — részletek: ${_logFile().path}";
+    } else {
+      why = "A motor még mindig indul (első indításnál a víruskereső "
+          "átvizsgálja a programot — ez percekig tarthat). NE zárd be a "
+          "programot: várj egy kicsit, és nyomd meg az Újrapróbálom "
+          "gombot — amint válaszol, megtalálja.";
+    }
     _logLine(why, onLog);
-    stop();
     return BackendStatus(BackendPhase.failed, why);
+  }
+
+  /// Őrkutya: ha a motor MAGÁTÓL halt el (nem mi állítottuk le), rövid
+  /// várakozás után újraindítja — a felhasználó így észre sem veszi, a
+  /// következő kérés már az új példányhoz ér. Korlátozott számú próba:
+  /// az induláskor azonnal elhaló (hibás) motort nem pörgetjük örökké.
+  Future<void> _watchdog(void Function(String)? onLog) async {
+    if (_stoppedByUs) return;
+    if (_watchdogRestarts >= watchdogMaxRestarts) {
+      _logLine("Őrkutya: elértük az újraindítás-korlátot "
+          "($watchdogMaxRestarts) — kézi újraindítás kell.", onLog);
+      return;
+    }
+    _watchdogRestarts += 1;
+    _logLine("Őrkutya: a motor magától leállt — újraindítás "
+        "($_watchdogRestarts/$watchdogMaxRestarts)…", onLog);
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (_stoppedByUs) return; // közben kilépett a program
+    await ensureRunning(onLog: onLog);
   }
 
   /// Megvárja, míg a /health elérhető a port-tartomány VALAMELYIK portján
@@ -197,18 +401,13 @@ class BackendLauncher {
     return false;
   }
 
-  /// Megkeresi a beépített motor futtatható fájlját az app mellett.
-  /// Sorrend: HANDBALL_ENGINE env → az app melletti "engine/"/"backend/" mappa.
-  File? _findEngineExecutable() {
+  /// Azok az útvonalak, ahol a beépített motort keressük — sorrendben.
+  /// Statikus, mert a DIAGNOSZTIKA is kiírja: ha a motor nincs meg, a
+  /// felhasználó (és mi) csak ebből látjuk, hol kerestük.
+  static List<String> engineCandidates() {
     final name = Platform.isWindows ? "handball_backend.exe" : "handball_backend";
-
-    // a) Kifejezett felülbírálás környezeti változóval (fejlesztéshez/haladóknak).
-    final override = Platform.environment["HANDBALL_ENGINE"];
-    if (override != null && File(override).existsSync()) return File(override);
-
-    // b) Az app futtatható fájlja melletti szokásos helyek.
     final appDir = File(Platform.resolvedExecutable).parent;
-    final candidates = <String>[
+    return <String>[
       _join([appDir.path, "engine", name]),
       _join([appDir.path, "backend", name]),
       _join([appDir.path, "data", "engine", name]),
@@ -216,17 +415,114 @@ class BackendLauncher {
       // macOS .app csomag: a Contents/MacOS mellett a Resources/engine.
       _join([appDir.parent.path, "Resources", "engine", name]),
     ];
-    for (final c in candidates) {
+  }
+
+  /// Megkeresi a beépített motor futtatható fájlját az app mellett.
+  /// Sorrend: HANDBALL_ENGINE env → az app melletti "engine/"/"backend/" mappa.
+  static File? findEngine() {
+    // a) Kifejezett felülbírálás környezeti változóval (fejlesztéshez/haladóknak).
+    final override = Platform.environment["HANDBALL_ENGINE"];
+    if (override != null && File(override).existsSync()) return File(override);
+    for (final c in engineCandidates()) {
       final f = File(c);
       if (f.existsSync()) return f;
     }
     return null;
   }
 
-  String _join(List<String> parts) => parts.join(Platform.pathSeparator);
+  File? _findEngineExecutable() => findEngine();
+
+  static String _join(List<String> parts) => parts.join(Platform.pathSeparator);
+
+  /// Egy oldalnyi TÉNY arról, miért nem indul a motor — kimásolható
+  /// szövegként.
+  ///
+  /// A "nem indul el a motor" a leggyakoribb élő hiba, és a napló
+  /// önmagában kevés: ha a motor-program meg sem található, vagy az
+  /// adatmappa nem írható, a naplóban ennek nyoma sincs (nem is jött
+  /// létre). Ez a jelentés a hiányzó feltételeket is kimondja.
+  static Future<String> diagnostics({String appVersion = "?"}) async {
+    final b = StringBuffer();
+    b.writeln("SPORT MACHINE — DIAGNOSZTIKA");
+    b.writeln("app verzió: $appVersion");
+    b.writeln("rendszer:   ${Platform.operatingSystem} "
+        "${Platform.operatingSystemVersion}");
+    b.writeln("app helye:  ${Platform.resolvedExecutable}");
+
+    // 1) Megvan-e a motor-program?
+    final exe = findEngine();
+    if (exe == null) {
+      b.writeln("motor:      NINCS MEG — ezeken a helyeken kerestem:");
+      for (final c in engineCandidates()) {
+        b.writeln("            - $c");
+      }
+      b.writeln("            (ilyenkor csak a demó mód működik; a teljes,");
+      b.writeln("             motorral csomagolt kiadás kell)");
+    } else {
+      var size = -1;
+      try {
+        size = await exe.length();
+      } catch (_) {}
+      b.writeln("motor:      ${exe.path}");
+      b.writeln("            méret: ${size < 0 ? "?" : "${size ~/ (1024 * 1024)} MB"}");
+    }
+
+    // 2) Írható-e az adatmappa? (Ide megy a napló és ide kerülnek a
+    // fiókok — ha nem írható, a motor elindul, de azonnal elhasal.)
+    final dir = _logFile().parent;
+    try {
+      await dir.create(recursive: true);
+      final probe = File("${dir.path}${Platform.pathSeparator}.iras-proba");
+      await probe.writeAsString("ok");
+      await probe.delete();
+      b.writeln("adatmappa:  ${dir.path} (írható)");
+    } catch (e) {
+      b.writeln("adatmappa:  ${dir.path}");
+      b.writeln("            NEM ÍRHATÓ: $e");
+    }
+
+    // 3) Válaszol-e valamelyik porton?
+    final answering = <int>[];
+    final probes = [
+      for (var p = 8000; p < 8000 + portRange; p++)
+        ApiClient(baseUrl: "http://127.0.0.1:$p")
+            .isHealthy()
+            .then((ok) => ok ? p : null)
+    ];
+    for (final p in await Future.wait(probes)) {
+      if (p != null) answering.add(p);
+    }
+    b.writeln("portok:     ${answering.isEmpty ? "egyik sem válaszol "
+        "(8000–${8000 + portRange - 1})" : answering.join(", ")}");
+
+    // 4) Az ÖSSZEOMLÁS-napló, ha van. A motor ide írja a végzetes
+    // indulási kivételt (hiányzó rendszerkönyvtár, OpenMP-ütközés,
+    // jogosultsági hiba) — ez a legbeszédesebb egyetlen forrás.
+    try {
+      final crash = File("${dir.path}${Platform.pathSeparator}"
+          "engine-crash.log");
+      if (await crash.exists()) {
+        final lines = await crash.readAsLines();
+        final from = lines.length > 30 ? lines.length - 30 : 0;
+        b.writeln("");
+        b.writeln("--- a motor ÖSSZEOMLÁS-naplója (vége) ---");
+        b.writeln(lines.sublist(from).join("\n"));
+      }
+    } catch (_) {}
+
+    // 5) A napló vége.
+    final tail = await logTail(lines: 40);
+    b.writeln("");
+    b.writeln("--- naplók vége ---");
+    b.writeln((tail == null || tail.trim().isEmpty)
+        ? "(nincs napló — úgy tűnik, a motor el sem indult)"
+        : tail);
+    return b.toString();
+  }
 
   /// Leállítja a motrot (ha mi indítottuk). Az app bezárásakor hívjuk.
   void stop() {
+    _stoppedByUs = true;
     _process?.kill();
     _process = null;
     try {

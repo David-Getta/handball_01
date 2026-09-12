@@ -28,6 +28,23 @@ from .primitive_cache import copy_events, memoize_primitive
 # Heurisztikus küszöbök:
 SHOT_SPEED_MS = 8.0      # a labda ennél gyorsabban a kapu felé tartva = lövés
 APPROACH_X_M = 4.0       # a kaputól (x-ben) ekkora közelségben "kapu-megközelítés"
+# Lövés-CSENDIDŐ ugyanarra a kapura. A hely-alapú debounce (a labdának ki
+# kell lépnie a kapu-zónából) zajos labda-észlelésnél nem elég: a labda
+# ki-be billeg a zóna szélén, és EGY lövésből négy esemény lesz — éles
+# meccsen pontosan ez történt (1264,6 / 1265,9 / 1266,3 / 1267,1 mp).
+#
+# A szabály: ezen belül nem indul újabb esemény ugyanarra a kapura, és a
+# csendidő minden elnyomott jelöltnél ÚJRAINDUL. Így egy zaj-sorozat egy
+# eseménnyé olvad — ez az őszinte olvasat: másfél másodpercen belül a
+# felismerés nem tud két lövést szétválasztani, tehát egyet mond.
+#
+# A küszöb SZÁNDÉKOSAN óvatos: fél másodpercen belül ugyanarra a kapura
+# két KÜLÖN lövés fizikailag sem hihető (a kipattanó összeszedése és az
+# újabb elengedés ennél tovább tart), tehát itt nem dobunk el valódi
+# eseményt. A ritkább, 1-1,5 másodperces ismétléseket ez nem szűri —
+# azokat a kalibráció rendbetétele oldja meg, nem a csendidő: a
+# zaj-sorozat oka a hibás pálya-vetítés, nem a küszöb.
+SHOT_COOLDOWN_S = 0.5
 GOAL_TOL_M = 0.7         # a gólvonalat ennyire megközelítve számít elértnek
 GOAL_LOOKAHEAD = 12      # a góldöntéshez ennyi frame-et nézünk előre
 TURNOVER_SUPPRESS = 12   # lövés után ennyi frame-en belüli labdaeladást elnyomunk
@@ -41,7 +58,31 @@ SHOOTER_LOOKBACK_S = 1.2  # a lövés előtt ennyi időn belülről keressük a 
 # lövés viszont 15–30 m/s. E fölött tehát a labda úton van, és a
 # közelében álló beálló csak "útközben" van a röppályán.
 SHOOTER_HELD_MAX_MS = 9.0
+# Ritkított felvételen (ez alatti fps-nél) az EGYÜTEMŰ lövésnél a labda
+# lassú (kézben tartott) kockája el is tűnhet a minták közül — ilyenkor
+# a röppálya TÖRÉSPONTJA (passz-szár → lövés-szár irányváltás) mellett
+# álló játékos a lövő. A törésponthoz ennyire közel kell állnia, és az
+# irányváltást ekkora koszinusz-eltéréstől fogadjuk el.
+SHOOTER_KINK_MAX_FPS = 15.0
+SHOOTER_KINK_NEAR_M = 2.5
+SHOOTER_KINK_COS = 0.9
 ASSIST_WINDOW_S = 4.0     # a gól előtt ennyi időn belüli utolsó passz = gólpassz
+# ELADOTT LABDA minimális tartása. A birtokos a labdához LEGKÖZELEBBI
+# játékos; tömörülésnél (elzárás, beállós harc) és ritka
+# labda-észlelésnél két SZEMBEN álló ember távolsága a labdától
+# kockánként átbillen, és a jel átugrik a másik csapatra — ebből a
+# felismerés eladott labdát gyárt. Éles meccsen ez a meccs ELŐTTI
+# felállásnál is termelt eladásokat, miközben senki nem játszott.
+#
+# Csak a CSAPATVÁLTÁSRA követeljük meg a tartást, a csapaton belüli
+# passzra NEM: az, hogy a labda átment az ELLENFÉLHEZ, nagyobb állítás,
+# és fizikailag is tovább tart (a labdának oda kell érnie, és az
+# ellenfélnek uralnia kell). Egy kockányi átbillenés nem ez.
+#
+# A küszöb óvatos: a termék alap-ritkításával (stride=3) ez ~0,36
+# másodpercnyi valós idő — ennél gyorsabban valódi labdaszerzés sem
+# stabilizálódik, tehát igazi eladást nem veszítünk el.
+TURNOVER_MIN_HOLD_S = 0.3
 SAVE_RADIUS_M = 1.6       # a labda ennyire a kapushoz érve = védés
 _GK_NEAR_GOAL_M = 9.0     # a kapus csak a SAJÁT kapujánál "véd"
 
@@ -99,14 +140,104 @@ def _shooter_before(match: Match, idx: int, team: Team,
     Ha ilyen kocka nincs az ablakban, `None`-t adunk: a "nem tudjuk"
     jobb, mint a magabiztosan rossz név.
     """
+    return _shooter_release_before(match, idx, team, config, fps)[0]
+
+
+def _shooter_release_before(match: Match, idx: int, team: Team,
+                            config: TacticsConfig, fps: float):
+    """Mint a `_shooter_before`, de az ELENGEDÉS kockáját is visszaadja.
+
+    Visszatérés: (track_id, release_t) — mindkettő None, ha nincs
+    találat. A release_t a lövés HELYÉNEK a kulcsa: az esemény t-je a
+    kapu-megközelítés kockája, ahol a labda (ritkított felvételen
+    különösen) már métereket repült — aki ott méri a lövés helyét, az
+    a kapuhoz közelebbről mér, és az xG felfelé torzul."""
     frames = match.frames
     back = max(0, idx - round(SHOOTER_LOOKBACK_S * fps))
+    # Ritkított felvételen az együtemű (elkapás után azonnali) lövésnél
+    # a labda kézben-tartott kockája hiányozhat — a röppálya töréspontja
+    # (ahol a passz-szár lövés-szárba vált) pontosabb, mint az utolsó
+    # lassú birtokos (az a PASSZOLÓ lenne). Sűrű felvételen nem szólal
+    # meg: ott az elengedés kockája megvan, a régi út pontos.
+    if fps < SHOOTER_KINK_MAX_FPS:
+        kink = _shooter_at_flight_kink(match, idx, back, team, fps)
+        if kink is not None:
+            return kink
     for j in range(idx, back - 1, -1):
         if _ball_speed_ms(frames, j, fps) > SHOOTER_HELD_MAX_MS:
             continue  # a labda repül — aki mellette áll, nem birtokos
         holder = ball_holder(frames[j], config)
         if holder is not None and holder.team == team:
-            return holder.track_id
+            rt = frames[j].t
+            # Követés-lyuknál a lista-szomszédság IDŐBEN messzire
+            # mutathat: az elengedés-kocka csak akkor hiteles, ha az
+            # eseményhez időben is közel van — különben a lövő nevét
+            # megtartjuk, de a helyét nem állítjuk.
+            if frames[idx].t - rt > round(SHOOTER_LOOKBACK_S * fps):
+                rt = None
+            return holder.track_id, rt
+    return None, None
+
+
+def _shooter_at_flight_kink(match: Match, idx: int, back: int,
+                            team: Team, fps: float):
+    """A röppálya töréspontja melletti játékos (ritkított felvételre).
+
+    Az együtemű lövés röppályája két gyors szár: a passz-szár és a
+    lövés-szár — köztük a töréspont, ahol az elkapó azonnal lőtt. A
+    lövés-esemény kockája a passz-szárra is eshet (a szélső passz
+    x-ben már "kapu-közelítés"), ezért a gyors szakaszokat ELŐRE is
+    követjük, amíg a labda a kapu felé tart; a szárak végétől
+    visszafelé keressük az első irányváltást (koszinusz <
+    SHOOTER_KINK_COS). A töréspont kockáján a hozzá legközelebb álló
+    saját-csapatbeli mezőnyjátékos a lövő — ha ilyen nincs
+    SHOOTER_KINK_NEAR_M-en belül, nem találgatunk (None).
+
+    Visszatérés: (track_id, release_t) vagy None.
+    """
+    frames = match.frames
+    goal_x = 0.0 if frames[idx].ball.x < COURT_LENGTH_M / 2.0 \
+        else COURT_LENGTH_M
+    # A gyors, kapu felé tartó szakaszok vége az eseménytől előre.
+    end = idx
+    while end + 1 < len(frames):
+        a, b = frames[end].ball, frames[end + 1].ball
+        if a is None or b is None:
+            break
+        dx = b.x - a.x
+        toward = (dx < 0 and goal_x == 0.0) or (dx > 0 and goal_x > 0.0)
+        if not toward or math.hypot(dx, b.y - a.y) * fps <= SHOOTER_HELD_MAX_MS:
+            break
+        end += 1
+    shot_dir = None
+    for j2 in range(end, back, -1):
+        a, b = frames[j2 - 1].ball, frames[j2].ball
+        if a is None or b is None:
+            return None
+        dx, dy = b.x - a.x, b.y - a.y
+        n = math.hypot(dx, dy)
+        if n * fps <= SHOOTER_HELD_MAX_MS:
+            return None  # lassú (kézben tartott) kocka — a régi út dönt
+        if shot_dir is None:
+            shot_dir = (dx / n, dy / n)
+            continue
+        cos = (dx / n) * shot_dir[0] + (dy / n) * shot_dir[1]
+        if cos >= SHOOTER_KINK_COS:
+            continue  # még a lövés-szár
+        # Irányváltás: a töréspont a j2. kocka labda-helye (oda érkezett
+        # a passz, onnan indult a lövés).
+        kx, ky = frames[j2].ball.x, frames[j2].ball.y
+        best = None
+        best_d = SHOOTER_KINK_NEAR_M
+        for pl in frames[j2].players:
+            if pl.team != team or pl.role == "kapus":
+                continue
+            d = math.hypot(pl.x - kx, pl.y - ky)
+            if d <= best_d:
+                best, best_d = pl, d
+        if best is None:
+            return None
+        return best.track_id, frames[j2].t
     return None
 
 
@@ -143,16 +274,191 @@ def _save_by_goalkeeper(match: Match, idx: int, goal_x: float) -> Optional[int]:
     return None
 
 
+# A gólvonal-átlépés két minta KÖZÖTT is megtörténhet: ritkított
+# feldolgozásnál (stride) a labda kockánként métereket lép, és
+# átugorhatja a GOL_TOL_M sávot. Ekkora (m/s) labdasebességig hisszük
+# el a két minta közti átlépést — e fölött detektálási ugrás (zaj).
+GOAL_CROSS_MAX_SPEED_MS = 45.0
+# Az extrapolált (3.) gól-jel csak RITKÍTOTT felvételen él: e feletti
+# fps-nél a sáv- és az átlépés-jel lefedi a valódi gólokat, az
+# extrapoláció ott csak a téves találat kockázatát hozná.
+GOAL_EXTRAP_MAX_FPS = 15.0
+
+
 def _reaches_goal_line(match: Match, idx: int, goal_x: float) -> bool:
     """Előrenézve eléri-e a labda a gólvonalat a kapufák között (= gól)."""
+    return goal_crossing_y(match, idx, goal_x) is not None
+
+
+def goal_crossing_y(match: Match, idx: int, goal_x: float):
+    """A gólvonal-átlépés y-ja a kapufák között (None, ha nincs átlépés).
+
+    A gól-felismerés és a kapu-sarok (elhelyezés) rétegek KÖZÖS
+    metszéspont-logikája — az elhelyezés így ritkított felvételen is
+    a TÉNYLEGES beérkezési pontot kapja, nem a vonalon túli (métereket
+    ugrott) minta y-ját, és nem is marad üresen, ha a sávba nem esik
+    minta.
+
+    Három, egymást kiegészítő jel — ritkított felvételen (stride) a
+    labda kockánként métereket léphet, és az 1. jel sávja fölött
+    "átrepülne":
+
+    1. a labda egy MINTÁN a gólvonal GOAL_TOL_M sávjában, a kapufák
+       között van (a hálóban megülő labda);
+    2. a labda két EGYMÁST KÖVETŐ minta között átlépi a gólvonalat, és
+       a metszéspont y-ja a kapufák közé esik;
+    3. a kapu felé tartó labda a vonal előtt EGY LÉPÉSNYIRE jár, és a
+       követés ott MEGSZAKAD (nincs következő minta, vagy
+       teleport-ugrás jön — élesben a hálóba érő labdát a háló
+       kitakarja, majd a középkezdésnél bukkan fel): az utolsó ismert
+       sebességgel extrapolált metszéspont dönt. Ha a követés
+       FOLYTONOSAN megy tovább (tehát láttuk volna a gólt vagy a
+       védést), az extrapoláció nem szólal meg.
+    """
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    max_step = GOAL_CROSS_MAX_SPEED_MS / fps
     end = min(len(match.frames), idx + GOAL_LOOKAHEAD)
-    for j in range(idx, end):
-        b = match.frames[j].ball
+    lo = max(0, idx - 1)
+    balls = [match.frames[j].ball for j in range(lo, end)]
+
+    for k, b in enumerate(balls):
         if b is None:
             continue
+        # 1) minta a gólvonal-sávban, a kapufák között.
         if abs(b.x - goal_x) <= GOAL_TOL_M and _GOAL_Y_LOW <= b.y <= _GOAL_Y_HIGH:
-            return True
-    return False
+            return b.y
+        prev = balls[k - 1] if k > 0 else None
+        if prev is None:
+            continue
+        dx, dy = b.x - prev.x, b.y - prev.y
+        step = math.hypot(dx, dy)
+        if step > max_step or abs(dx) < 1e-9:
+            continue
+        # 2) a két minta közti szakasz átlépi a gólvonalat.
+        if (prev.x - goal_x) * (b.x - goal_x) < 0:
+            yc = prev.y + dy * (goal_x - prev.x) / dx
+            if _GOAL_Y_LOW <= yc <= _GOAL_Y_HIGH:
+                return yc
+        # 3) extrapolált átlépés folytonosság-törésnél: a labda a kapu
+        # felé tart, a vonal egy lépésen belül — és a következő minta
+        # hiányzik vagy teleport (a folytonos követés kizárja).
+        toward = dx > 0 if goal_x > 0 else dx < 0
+        remaining = abs(goal_x - b.x)
+        if fps < GOAL_EXTRAP_MAX_FPS and toward \
+                and remaining <= 1.25 * step:
+            # A törést a MECCS következő kockáján nézzük, nem az ablak
+            # szélén — az ablak vége nem a követés vége.
+            j_next = lo + k + 1
+            nxt = (match.frames[j_next].ball
+                   if j_next < len(match.frames) else None)
+            broken = (nxt is None
+                      or math.hypot(nxt.x - b.x, nxt.y - b.y) > max_step)
+            if broken:
+                yc = b.y + dy * (goal_x - b.x) / dx
+                if _GOAL_Y_LOW <= yc <= _GOAL_Y_HIGH:
+                    return yc
+    return None
+
+
+# Kézi esemény-javítás: ekkora IDŐ-ablakon belül tekintünk egy javítást
+# és egy felismert eseményt ugyanannak a pillanatnak. Másodpercben, mert
+# a kockaszám a minőségi profiltól függ (a ritkítás miatt a termékben
+# egy kocka a forrás három kockája).
+OVERRIDE_MATCH_S = 1.5
+
+
+def _apply_event_overrides(match: Match,
+                           events: list[MatchEvent]) -> list[MatchEvent]:
+    """A KÉZI javítások ráolvasása a felismert lövés/gól listára.
+
+    A felismerés téved: gólt lövésnek lát, lövést nem vesz észre, vagy a
+    kapu mögé pattanó labdát gólnak számolja. Eddig ezt semmivel nem
+    lehetett javítani — az edző pedig egy rossz eredményű jelentésnek
+    egyetlen számát sem hiszi el, akkor sem, ha a többi jó.
+
+    Három művelet (a `match.meta.event_overrides` listából):
+      - "set_type": a pillanathoz legközelebbi lövés TÍPUSA lesz a
+        megadott (a leggyakoribb eset: a gól lövésként jött ki),
+      - "remove":   a pillanathoz legközelebbi lövés/gól törlése,
+      - "add":      új lövés/gól felvétele a megadott pillanatra.
+
+    A "legközelebbi" OVERRIDE_MATCH_S másodpercen belül keres; ha nincs
+    ott semmi, a javítás csendben elmarad (a felismerés közben
+    megváltozhatott — pl. újrafeldolgozás után —, és egy régi javítás
+    nem tehet kárt egy MÁSIK esemény típusában).
+
+    A javítás itt, a lövés-felismerésben ül, nem följebb: így minden
+    rétegen átüt, ami lövésből dolgozik (eredmény, xG, lövő-listák,
+    hajrá-elemzés, felderítés) — egyetlen helyen javítunk, nem
+    ötszázon.
+    """
+    ov = getattr(match.meta, "event_overrides", None) or []
+    if not ov:
+        return events
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    ablak = max(1, int(round(OVERRIDE_MATCH_S * fps)))
+    out = list(events)
+
+    def _kozelebbi(t: int) -> Optional[int]:
+        """A t-hez legközelebbi lövés/gól INDEXE az out listában."""
+        jeloltek = [(abs(e.t - t), i) for i, e in enumerate(out)
+                    if e.type in (EventType.SHOT, EventType.GOAL)
+                    and abs(e.t - t) <= ablak]
+        if not jeloltek:
+            return None
+        return min(jeloltek)[1]
+
+    for j in ov:
+        try:
+            op = str(j.get("op") or "")
+            t = int(j.get("t") or 0)
+            tipus = str(j.get("type") or "goal")
+            if tipus not in ("goal", "shot"):
+                continue
+            uj_tipus = (EventType.GOAL if tipus == "goal"
+                        else EventType.SHOT)
+            if op == "add":
+                csapat = (Team.HOME if str(j.get("team")) == "home"
+                          else Team.AWAY)
+                out.append(MatchEvent(
+                    t=t, type=uj_tipus, team=csapat,
+                    player_id=j.get("player_id"),
+                    # A kézi eredetet MEGJELÖLJÜK: a minőség-jelentés és
+                    # a klip-vágás így meg tudja különböztetni a mért
+                    # eseménytől. Az outcome a típussal egyezik — a
+                    # lövés-táblák abból dolgoznak.
+                    detail={"manual": True,
+                            "outcome": ("goal" if uj_tipus is EventType.GOAL
+                                        else "miss")}))
+                continue
+            i = _kozelebbi(t)
+            if i is None:
+                continue
+            if op == "remove":
+                out.pop(i)
+            elif op == "set_type":
+                regi = out[i]
+                reszlet = dict(regi.detail or {})
+                reszlet["manual"] = True
+                # A KIMENETELT is igazítani kell, nem csak a típust: sok
+                # réteg a detail["outcome"] mezőből dolgozik, és egy
+                # "gól" típusú, de "miss" kimenetelű esemény néma
+                # ellentmondás lenne (a típus szerint gól, a
+                # lövés-táblákban kihagyott helyzet).
+                if uj_tipus is EventType.GOAL:
+                    reszlet["outcome"] = "goal"
+                elif reszlet.get("outcome") == "goal":
+                    # Gólból lövés: a kapus-érdem nem állapítható meg
+                    # utólag, ezért a semleges "miss" jár.
+                    reszlet["outcome"] = "miss"
+                out[i] = MatchEvent(t=regi.t, type=uj_tipus,
+                                    team=regi.team,
+                                    player_id=regi.player_id,
+                                    detail=reszlet)
+        except Exception:
+            continue  # egy hibás javítás ne vigye el a többit
+    out.sort(key=lambda e: e.t)
+    return out
 
 
 @memoize_primitive("detect_shots", copy=copy_events)
@@ -171,6 +477,10 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     events: list[MatchEvent] = []
     in_zone = {0.0: False, COURT_LENGTH_M: False}
+    # Kapunként az utolsó (elfogadott VAGY elnyomott) lövés-jelölt ideje —
+    # a csendidő ehhez képest telik.
+    last_shot_t: dict = {0.0: None, COURT_LENGTH_M: None}
+    cooldown = SHOT_COOLDOWN_S * fps
     prev = None
 
     for i, f in enumerate(match.frames):
@@ -189,9 +499,16 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
 
             if dxg <= APPROACH_X_M and toward and speed >= SHOT_SPEED_MS and not in_zone[goal_x]:
                 in_zone[goal_x] = True
+                elozo = last_shot_t[goal_x]
+                if elozo is not None and f.t - elozo < cooldown:
+                    # Zaj-sorozat: a csendidő újraindul, esemény nem lesz.
+                    last_shot_t[goal_x] = f.t
+                    continue
+                last_shot_t[goal_x] = f.t
                 is_goal = _reaches_goal_line(match, i, goal_x)
                 attacking = _attacking_team_for_goal(goal_x, config)
-                shooter = _shooter_before(match, i, attacking, config, fps)
+                shooter, release_t = _shooter_release_before(
+                    match, i, attacking, config, fps)
                 # Kimenetel: gól / védés (a kapus-jel alapján) / mellé-blokk.
                 if is_goal:
                     detail: dict = {"outcome": "goal"}
@@ -199,6 +516,10 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
                     gk = _save_by_goalkeeper(match, i, goal_x)
                     detail = ({"outcome": "save", "goalkeeper_id": gk}
                               if gk is not None else {"outcome": "miss"})
+                if release_t is not None:
+                    # Az elengedés kockája: a hely-alapú rétegek (xG,
+                    # zónák) innen mérjenek, ne a kapu-megközelítésről.
+                    detail["release_t"] = release_t
                 events.append(MatchEvent(
                     t=f.t,
                     type=EventType.GOAL if is_goal else EventType.SHOT,
@@ -209,6 +530,21 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
             if dxg > APPROACH_X_M + 1.0:
                 in_zone[goal_x] = False
         prev = (b.x, b.y)
+    # A félidei szünet-sávba eső "lövés/gól" nem meccs-esemény (szünetben
+    # nincs játék — az ilyen jel bemelegítés vagy labdaszedő), kimarad.
+    # Csak HIHETŐ szünetnél (a felvétel többi része aktív) — a ritkás
+    # követésű felvétel közepe nem szünet.
+    try:
+        from .halftime import credible_break_span
+        span = credible_break_span(match)
+        if span is not None:
+            lo = match.frames[span[0]].t
+            hi = match.frames[span[1]].t
+            events = [e for e in events if not (lo <= e.t <= hi)]
+    except Exception:
+        pass
+    # Az edző kézi javításai — a felismerés UTOLSÓ szava.
+    events = _apply_event_overrides(match, events)
     return events
 
 
@@ -217,24 +553,79 @@ def detect_possession_changes(match: Match,
                               config: Optional[TacticsConfig] = None) -> list[MatchEvent]:
     """Passzok (csapaton belül) és labdaeladások (az ellenfélhez) felismerése."""
     config = config or TacticsConfig()
-    events: list[MatchEvent] = []
-    prev_holder = None
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    # A ritkított feldolgozás miatt legalább két kocka.
+    min_hold = max(2, round(TURNOVER_MIN_HOLD_S * fps))
+
+    # 1) A birtokos-jel EGYBEFÜGGŐ szakaszokra bontva.
+    szakaszok: list = []          # [track_id, team, kezdet_t, vege_t]
     for f in match.frames:
         holder = ball_holder(f, config)
-        if holder is not None and prev_holder is not None and holder.track_id != prev_holder.track_id:
-            if holder.team == prev_holder.team:
-                events.append(MatchEvent(
-                    t=f.t, type=EventType.PASS, team=prev_holder.team,
-                    player_id=prev_holder.track_id,
-                    detail={"receiver_id": holder.track_id},
-                ))
-            else:
-                events.append(MatchEvent(
-                    t=f.t, type=EventType.TURNOVER, team=prev_holder.team,
-                    player_id=prev_holder.track_id,
-                ))
-        if holder is not None:
-            prev_holder = holder
+        if holder is None:
+            continue
+        if szakaszok and szakaszok[-1][0] == holder.track_id:
+            szakaszok[-1][3] = f.t
+        else:
+            szakaszok.append([holder.track_id, holder.team, f.t, f.t])
+
+    # 2) CSAPAT-futamok: az egymást követő, azonos csapatú szakaszok.
+    #    A kitartást a CSAPATRA mérjük, nem az egyes játékosra — a másik
+    #    csapaton belüli passzok különben elnyelnék a jelöltet.
+    futamok: list = []            # [[szakasz, ...], team, kezdet_t, vege_t]
+    for sz in szakaszok:
+        if futamok and futamok[-1][1] == sz[1]:
+            futamok[-1][0].append(sz)
+            futamok[-1][3] = sz[3]
+        else:
+            futamok.append([[sz], sz[1], sz[2], sz[3]])
+
+    # 3) A túl rövid ELLENFÉL-futam nem labdaszerzés, hanem billegés: a
+    #    körülötte lévő (azonos csapatú) futamokba olvad. Ismételve,
+    #    mert egy összevonás újabb rövid futamot hozhat felszínre.
+    valtozott = True
+    while valtozott and len(futamok) >= 3:
+        valtozott = False
+        i = 1
+        while i < len(futamok) - 1:
+            elozo, kozep, kov = futamok[i - 1], futamok[i], futamok[i + 1]
+            # A futam HOSSZA kockában: a záró kocka is beleszámít.
+            if elozo[1] == kov[1] and (kozep[3] - kozep[2] + 1) < min_hold:
+                elozo[0].extend(kov[0])
+                elozo[3] = kov[3]
+                del futamok[i:i + 2]
+                valtozott = True
+                continue
+            i += 1
+
+    # 3/b) A felvétel SZÉLEIN álló rövid futam sosem igazolja magát:
+    #      nincs mellette mindkét oldalon szomszéd, ami megerősítené.
+    #      A végén álló villanásból nem csinálunk labdaszerzést; az
+    #      elején állóból pedig nem csinálunk labdaVESZTÉST (a rá
+    #      következő váltást különben az ő nevére írnánk).
+    while len(futamok) >= 2 and (futamok[-1][3] - futamok[-1][2] + 1) < min_hold:
+        futamok.pop()
+    while len(futamok) >= 2 and (futamok[0][3] - futamok[0][2] + 1) < min_hold:
+        del futamok[0]
+
+    # 4) Események: a futamon BELÜL passz, a futamok KÖZT eladott labda.
+    events: list[MatchEvent] = []
+    elozo_szakasz = None
+    for futam in futamok:
+        for sz in futam[0]:
+            if elozo_szakasz is not None and sz[0] != elozo_szakasz[0]:
+                if sz[1] == elozo_szakasz[1]:
+                    events.append(MatchEvent(
+                        t=sz[2], type=EventType.PASS, team=elozo_szakasz[1],
+                        player_id=elozo_szakasz[0],
+                        detail={"receiver_id": sz[0]},
+                    ))
+                else:
+                    events.append(MatchEvent(
+                        t=sz[2], type=EventType.TURNOVER,
+                        team=elozo_szakasz[1],
+                        player_id=elozo_szakasz[0],
+                    ))
+            elozo_szakasz = sz
     return events
 
 
@@ -378,6 +769,242 @@ def assist_network(match: Match, config: Optional[TacticsConfig] = None) -> dict
                    for p, n in sorted(out[side]["leaders"].items(),
                                       key=lambda kv: -kv[1])]
         result[side] = {"pairs": pairs, "leaders": leaders}
+    return result
+
+
+# Hoki-assziszt (másod-előkészítés): a gólpassz ELŐTTI passz ennyi
+# másodpercen belül érjen a gólpasszolóhoz; ennyi másod-előkészítés kell
+# az ítélethez, és ekkora részarány teszi az embert rejtett szervezővé.
+PREA_WINDOW_S = 6.0
+PREA_MIN = 2
+PREA_SHARE_PCT = 50.0
+
+
+def pre_assists(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Hoki-assziszt: KI adja a gólpassz ELŐTTI passzt.
+
+    A gólpasszos (last_passers, assist_network) mindig látszik — a
+    VALÓDI szervező viszont sokszor eggyel korábban van: ő adja azt a
+    passzt, ami elmozdítja a falat (oldalváltás, betörés utáni
+    kiosztás), a gólpassz utána már csak végrehajtás. Ez a réteg a
+    gólokhoz a gólpassz előtti utolsó, a gólpasszolóhoz érkező saját
+    passzt köti (PREA_WINDOW_S-en belül), és emberre összesíti.
+
+    Edzőileg: a rejtett szervező ellen a passzsáv-zárást EGGYEL
+    korábban kell kezdeni — nem a gólpasszolónál, hanem nála: ha ő nem
+    tudja megjátszani a beadót, a gólgyáruk el sem indul. Saját oldalon
+    ez a láthatatlan munka kimutatása: a hoki-asszisztos embert a
+    statisztika (gól, gólpassz) alulméri, pedig a támadás rajta fordul.
+
+    Visszatérés csapatonként: {"assisted_goals" (asszisztos gólok),
+    "chained" (amelyikhez másod-előkészítés is köthető), "players":
+    [{"player_id", "jersey", "pre_assists"}] csökkenően, "top"} — a
+    "top" a vezető ember, ha legalább PREA_MIN másod-előkészítése van
+    és eléri a "chained" PREA_SHARE_PCT-át (egyébként None).
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = PREA_WINDOW_S * fps
+    events = detect_events(match, config)
+    passes = [e for e in events if e.type == EventType.PASS]
+    # Támadás-határok: a lánc nem nyúlhat át az előző lövésen/gólon —
+    # ami a lövés előtt történt, az egy MÁSIK támadás passza volt.
+    shot_ts = sorted(e.t for e in events
+                     if e.type in (EventType.SHOT, EventType.GOAL))
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if getattr(p, "jersey_number", None) is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    counts = {"home": [0, 0], "away": [0, 0]}   # [asszisztos, láncolt]
+    for g in events:
+        if g.type != EventType.GOAL:
+            continue
+        aid = (g.detail or {}).get("assist_id")
+        if aid is None:
+            continue
+        side = g.team.value
+        counts[side][0] += 1
+        # A gólpassz maga: az utolsó passz, aminek a fogadója a lövő.
+        assist_pass = None
+        for p in passes:
+            if p.team != g.team or p.t > g.t:
+                continue
+            if (p.detail or {}).get("receiver_id") != g.player_id:
+                continue
+            if p.player_id != aid:
+                continue
+            if assist_pass is None or p.t > assist_pass.t:
+                assist_pass = p
+        if assist_pass is None:
+            continue
+        # A másod-előkészítés: az utolsó passz ELŐTTE, aminek a fogadója
+        # a gólpasszoló — és nem ő maga adta (track-zaj). Az előző
+        # lövés/gól előtti passz nem számít (az más támadás volt).
+        boundary = max((t_ for t_ in shot_ts if t_ < assist_pass.t),
+                       default=-1)
+        best = None
+        for p in passes:
+            if p.team != g.team or not (0 <= assist_pass.t - p.t <= win):
+                continue
+            if p.t <= boundary:
+                continue
+            if (p.detail or {}).get("receiver_id") != aid:
+                continue
+            if p.player_id is None or p.player_id == aid:
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        counts[side][1] += 1
+        tally[side][best.player_id] = tally[side].get(best.player_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "pre_assists": n}
+                   for pid, n in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        chained = counts[side][1]
+        if players and chained:
+            lead = players[0]
+            if (lead["pre_assists"] >= PREA_MIN
+                    and 100.0 * lead["pre_assists"] / chained
+                    >= PREA_SHARE_PCT):
+                top = lead
+        out[side] = {"assisted_goals": counts[side][0], "chained": chained,
+                     "players": players, "top": top}
+    return out
+
+
+# Rejtett szervező poszt: ennyi poszthoz kötött másod-előkészítés kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# szervezésük egy poszton fut.
+PREAR_MIN_CHAINED = 3
+PREAR_SHARE_PCT = 60.0
+
+
+def pre_assist_roles(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Rejtett szervező poszt: MELYIK POSZTON fut a másod-előkészítés.
+
+    A hoki-assziszt (pre_assists) az embert nevezi meg — ez a posztot:
+    a gólpassz előtti passzokat az adó posztjához írja. Így a minta
+    akkor is látszik, ha a nevek meccsről meccsre cserélődnek — a
+    "mindig az irányító fordítja meg a falat" típusú szervezés
+    posztról ismerszik meg, nem emberről.
+
+    Edzőileg: ha a másod-előkészítésük rendre ugyanarról a posztról
+    jön, a passzsáv-zárást a POSZT sávjában kell kezdeni, akárki
+    játssza éppen — a cseréjük nem véd meg tőle. Saját oldalon: az egy
+    posztra épülő szervezés kiszámítható, második indító-forrás kell.
+
+    Visszatérés csapatonként: {"chained" (láncolt gólok), "roles":
+    {poszt: darab}, "main_role", "share_pct", "verdict"} — az ítélet
+    None, ha nincs meg a PREAR_MIN_CHAINED, vagy egyik poszt sem éri
+    el a PREAR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    prea = pre_assists(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = {"chained": prea[side]["chained"], "roles": {},
+               "main_role": None, "share_pct": None, "verdict": None}
+        bound = 0
+        for row in prea[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["pre_assists"])
+            bound += row["pre_assists"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if bound >= PREAR_MIN_CHAINED and rec["roles"]:
+            poszt = max(rec["roles"], key=lambda k: rec["roles"][k])
+            share = 100.0 * rec["roles"][poszt] / bound
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PREAR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a másod-előkészítésük a(z) {poszt} poszton fut "
+                    f"({share:.0f}%, {bound} másod-előkészítésből) — a "
+                    "passzsáv-zárást a poszt sávjában kell kezdeni, "
+                    "akárki játssza éppen")
+        out[side] = rec
+    return out
+
+
+# Gólpassz-duó: ennyi közös gól kell a kettős kimondásához, és ekkora
+# részarány fölött mondjuk ki, hogy a gólgyártásuk egy duón fut.
+ADU_MIN_GOALS = 2
+ADU_SHARE_PCT = 40.0
+
+
+def assist_duos(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Gólpassz-duó: MELYIK KETTŐSÖN fut a gólgyártásuk.
+
+    A gólpassz-hálózat (assist_network) minden párost felsorol — ez
+    az ÍTÉLETET: ha az asszisztos góljaik nagy része ugyanazon az
+    (adó → befejező) kettősön születik, a duó bejáratott gólgyár.
+
+    Edzőileg a duó ellen párban kell védekezni: az adót testtel, a
+    kettejük passzsávját beleéréssel — ha a sáv zárva, a gépezet
+    áll, mert a befejező magától nem teremt ugyanennyit. Saját
+    csapatra: a bejáratott duó kiszámíthatóság is — kell egy második
+    gól-tengely.
+
+    Visszatérés csapatonként: {"assisted", "duos": [{"from", "to",
+    "jersey_from", "jersey_to", "goals"}], "top", "verdict"} — a
+    top/verdict None, ha nincs meg az ADU_MIN_GOALS, vagy a vezető
+    kettős nem éri el az asszisztos gólok ADU_SHARE_PCT-át.
+    """
+    config = config or TacticsConfig()
+    net = assist_network(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    def _nev(tid):
+        return str(jersey.get(tid, tid))
+
+    result: dict = {}
+    for side in ("home", "away"):
+        pairs = net[side]["pairs"]
+        total = sum(r["goals"] for r in pairs)
+        duos = [{"from": r["from"], "to": r["to"],
+                 "jersey_from": jersey.get(r["from"]),
+                 "jersey_to": jersey.get(r["to"]),
+                 "goals": r["goals"]} for r in pairs]
+        rec = {"assisted": total, "duos": duos, "top": None,
+               "verdict": None}
+        if duos and duos[0]["goals"] >= ADU_MIN_GOALS and total > 0:
+            share = 100.0 * duos[0]["goals"] / total
+            if share >= ADU_SHARE_PCT:
+                kulcs = f"{_nev(duos[0]['from'])}→{_nev(duos[0]['to'])}"
+                rec["top"] = kulcs
+                rec["verdict"] = (
+                    f"a gólgyártásuk a(z) {kulcs} kettősön fut "
+                    f"({duos[0]['goals']}/{total} asszisztos gól) — "
+                    "a duó ellen párban kell védekezni: az adót "
+                    "testtel, a kettejük passzsávját beleéréssel, és "
+                    "a gépezet áll")
+        result[side] = rec
     return result
 
 
@@ -703,6 +1330,105 @@ def shooter_power(match: Match,
              and p["avg_kmh"] - team_avg >= SHOOTER_POWER_GAP_KMH), None)
         out[side] = {"avg_kmh": team_avg, "players": players,
                      "cannon": cannon}
+    return out
+
+
+# Kezesség-becslés: ennyi értékelhető lövés kell egy játékos ítéletéhez,
+# és e feletti egyoldalúság (bal- vagy jobb-jel aránya) adja a kezességet.
+HANDED_MIN_SHOTS = 4
+HANDED_SHARE_PCT = 70.0
+# A labda-eltolás értékelhető sávja a lövő testétől (méter): ez alatt
+# zaj (a labda "a testben" van), e felett már nem a kézben van a labda.
+HANDED_OFF_MIN_M = 0.1
+HANDED_OFF_MAX_M = 1.5
+
+
+def shooting_hand(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Kezesség-becslés: MELYIK KÉZZEL lőnek a lövőik.
+
+    A lövés elengedése előtti kockán a labda a lövő testéhez képest a
+    dobó kéz oldalán van — a kapu-irányhoz mért oldal-eltolás előjele
+    lövésenként megmondja a kezet, játékosonként összesítve pedig a
+    kezességet. A balkezes lövő a védelemnek tükör-feladat: a sánc
+    kezét és a kapus alapállását át kell állítani ellene (a jobb
+    oldalról befelé jövő balkezes a szokott sánc mellett lő el);
+    saját olvasatban a balkezes a jobbszélső/jobbátlövő poszt igazi
+    fegyvere.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "shots", "left", "right", "goals", "hand", "share_pct"}], "lefty"}
+    — a "hand" "bal"/"jobb" ítélet legalább HANDED_MIN_SHOTS
+    értékelhető lövéstől és HANDED_SHARE_PCT egyoldalúságtól
+    (egyébként None); a "lefty" a legtöbbet lövő balkezes-ítéletű
+    játékos, ha van.
+    """
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    goal_y = COURT_WIDTH_M / 2.0
+
+    tally: dict = {"home": {}, "away": {}}
+    jersey: dict = {}
+    for e in detect_shots(match, config):
+        if e.player_id is None:
+            continue
+        i = idx_of.get(e.t)
+        if i is None or i < 1:
+            continue
+        # Az elengedés kockájáról mérünk (release_t): ott a labda még a
+        # kézben van. Az esemény-kocka előtti kockán — ritkított
+        # felvételen különösen — a labda már repül, és a röppálya
+        # oldal-eltolása hamis kezesség-jelet adna.
+        i0 = idx_of.get((e.detail or {}).get("release_t"))
+        if i0 is None:
+            i0 = i - 1
+        if i0 + 1 >= len(match.frames):
+            continue
+        f0, f1 = match.frames[i0], match.frames[i0 + 1]
+        if f0.ball is None or f1.ball is None:
+            continue
+        sp = next((p for p in f0.players if p.track_id == e.player_id), None)
+        if sp is None:
+            continue
+        if getattr(sp, "jersey_number", None) is not None:
+            jersey.setdefault(e.player_id, sp.jersey_number)
+        # Labda-eltolás a testtől az elengedés előtti kockán.
+        ox, oy = f0.ball.x - sp.x, f0.ball.y - sp.y
+        off = math.hypot(ox, oy)
+        if not (HANDED_OFF_MIN_M <= off <= HANDED_OFF_MAX_M):
+            continue
+        # A megtámadott kapu a labda mozgás-irányából; kapu-irány a lövőtől.
+        goal_x = COURT_LENGTH_M if f1.ball.x > f0.ball.x else 0.0
+        gx, gy = goal_x - sp.x, goal_y - sp.y
+        if math.hypot(gx, gy) < 1e-6:
+            continue
+        cross = gx * oy - gy * ox
+        rec = tally[e.team.value].setdefault(
+            e.player_id, {"left": 0, "right": 0, "goals": 0})
+        # cross > 0: a labda a kapu-irány BAL oldalán (felülnézetben) —
+        # a kapu felé néző lövő bal keze felől.
+        rec["left" if cross > 0 else "right"] += 1
+        if e.type == EventType.GOAL:
+            rec["goals"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        players = []
+        for pid, rec in tally[side].items():
+            shots = rec["left"] + rec["right"]
+            major = max(rec["left"], rec["right"])
+            share = round(100.0 * major / shots, 1) if shots else None
+            hand = None
+            if shots >= HANDED_MIN_SHOTS and share is not None \
+                    and share >= HANDED_SHARE_PCT:
+                hand = "bal" if rec["left"] > rec["right"] else "jobb"
+            players.append({"player_id": pid, "jersey": jersey.get(pid),
+                            "shots": shots, "left": rec["left"],
+                            "right": rec["right"], "goals": rec["goals"],
+                            "hand": hand, "share_pct": share})
+        players.sort(key=lambda p: -p["shots"])
+        lefty = next((p for p in players if p["hand"] == "bal"), None)
+        out[side] = {"players": players, "lefty": lefty}
     return out
 
 

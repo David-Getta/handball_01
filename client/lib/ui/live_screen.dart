@@ -22,6 +22,7 @@ import "../theme/app_theme.dart";
 import "court_painter.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
+import "zoomable.dart";
 
 class LiveScreen extends StatefulWidget {
   final String matchId;
@@ -90,7 +91,7 @@ class _LiveScreenState extends State<LiveScreen> {
       if (selected != null) {
         try {
           match = await _api.fetchMatch(selected);
-          label = "backend · $selected";
+          label = "motor · $selected";
         } catch (_) {
           match = buildDemoMatch();
           label = "demó";
@@ -139,6 +140,16 @@ class _LiveScreenState extends State<LiveScreen> {
             Suggestion(5, "taktika",
                 "7 a 6! $team lehozta a kapust — labdaszerzésnél azonnali "
                 "hosszú indítás az üres kapura!")));
+      }
+    } catch (_) {}
+    // Ismert figura: a csapat meccsről meccsre visszatérő figurája
+    // indul — a védekező oldalnak szól (kettőzés a súlypontnál). A
+    // könyvtár több elemzett meccsből épül; egy meccsnél a lista üres.
+    try {
+      for (final a in await _api.fetchFigureAlerts(matchId)) {
+        out.add(_FeedEntry(
+            (a["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "figura", "${a["text"] ?? ""}")));
       }
     } catch (_) {}
     try {
@@ -648,7 +659,9 @@ class _LiveScreenState extends State<LiveScreen> {
           child: Container(
             decoration: AppTheme.card(),
             padding: const EdgeInsets.all(AppSpacing.md),
-            child: CustomPaint(painter: CourtPainter(frame: frame)),
+            // Nagyítható élő pálya: csippentés vagy Ctrl+görgő.
+            child: ZoomPanView(
+                child: CustomPaint(painter: CourtPainter(frame: frame))),
           ),
         ),
         const SizedBox(height: AppSpacing.md),

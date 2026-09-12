@@ -87,13 +87,22 @@ def test_package_without_video_contains_report_and_csv():
                 "pass_direction", "assist_sources",
                 "turnover_players", "clutch_scorers"):
         assert key in analyses, key
-    # Az edzésterv pontosan akkor van a csomagban, ha van fókusz.
+    # Az edzésterv pontosan akkor van a csomagban, ha van fókusz —
+    # csapat-szintű VAGY egyéni. (Az egyéni feladatok is a lapra
+    # kerülnek: az edző emberre bontva osztja ki a hét munkáját, és a
+    # csomagot sokszor épp ezért nyitja meg.)
     tf_pkg = analyses.get("training") or {}
-    has_focus = any((tf_pkg.get(s_) or []) for s_ in ("home", "away"))
+    ptf_pkg = analyses.get("player_training_focus") or {}
+    has_focus = (any((tf_pkg.get(s_) or []) for s_ in ("home", "away"))
+                 or any((ptf_pkg.get(s_) or {}).get("players")
+                        for s_ in ("home", "away")))
     assert ("edzesterv.txt" in names) == has_focus
     if has_focus:
         etxt = z.read("edzesterv.txt").decode("utf-8")
         assert "gyakorlat:" in etxt
+        if any((ptf_pkg.get(s_) or {}).get("players")
+               for s_ in ("home", "away")):
+            assert "egyéni feladatok" in etxt
     # Kulcs-pillanatok: ha van ilyen fájl, időbélyeges sorokat hoz.
     if "kulcs_pillanatok.txt" in names:
         kp = z.read("kulcs_pillanatok.txt").decode("utf-8")
@@ -120,7 +129,9 @@ def test_package_without_video_contains_report_and_csv():
     html = z.read("jelentes.html").decode("utf-8")
     assert "Meccsjelentés" in html
     csv = z.read("statisztika.csv").decode("utf-8")
-    assert "Játékos;Csapat" in csv
+    # A NÉV oszlop is ott van: a kimutatásban a név a lényeg, és a
+    # meccs-CSV nem mondhat kevesebbet, mint a szezon-CSV.
+    assert "Játékos;Név;Csapat" in csv
     # A játék-statisztika oszlopok is ott vannak a fejlécben.
     assert ";Gól;Lövés;xG;Blokk;Poszt;Őrzés (mp);Őrzés átl. táv (m)" in csv
 
@@ -223,7 +234,10 @@ def test_season_report_leaders_section():
     matches_dir = Path(tmp2) / "data" / "matches"
     matches_dir.mkdir(parents=True, exist_ok=True)
     for seed in (2, 3):
-        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed)
+        # 10 fps: a toplista másodperc-alapú (labdaszerzés/perc), a
+        # rétegek az fps-ből számolnak — a ritkább mintavétel a
+        # jelentést nem, a futásidőt viszont a felére viszi.
+        m = simulate_ground_truth(duration_s=120, fps=10.0, seed=seed)
         (matches_dir / f"{m.meta.match_id}.json").write_text(
             json.dumps(m.to_dict()), encoding="utf-8")
     client = TestClient(create_app())

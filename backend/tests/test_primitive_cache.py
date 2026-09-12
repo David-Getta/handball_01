@@ -264,3 +264,51 @@ def test_frame_level_cache_is_off_without_scope():
         cached_frame("teszt_kocka2", m.frames[0], cfg,
                      lambda: calls.append(1))
     assert len(calls) == 2, calls
+
+
+def test_az_alapertelmezett_beallitas_kulcsa_azonos_a_none_eval():
+    """`réteg(meccs)` és `réteg(meccs, TacticsConfig())` UGYANAZ.
+
+    A rétegek `config=None` esetén maguk állítanak elő egy
+    alapértelmezett beállítást (`config or TacticsConfig()`), tehát a
+    két hívás szó szerint ugyanazt számolja. Külön kulccsal viszont
+    kétszer futott le — mérve az edzői összefoglalóban a
+    teendő-rangsoron.
+    """
+    from handball.pipeline.primitive_cache import _arg_key
+    from handball.pipeline.tactics import TacticsConfig
+
+    assert _arg_key(None) == _arg_key(TacticsConfig())
+
+
+def test_a_modositott_beallitas_kulcsa_MAS():
+    """A normalizálás nem moshatja össze a KÜLÖNBÖZŐ beállításokat —
+    az azt jelentené, hogy egy réteg más beállítás eredményét olvassa."""
+    from handball.pipeline.primitive_cache import _arg_key
+    from handball.pipeline.tactics import TacticsConfig
+
+    mas = TacticsConfig()
+    mas.possession_radius_m = mas.possession_radius_m + 1.0
+    assert _arg_key(mas) != _arg_key(None)
+    assert _arg_key(mas) != _arg_key(TacticsConfig())
+
+
+def test_a_hatokor_egyszer_szamol_akkor_is_ha_az_egyik_hivo_atadja():
+    """A tényleges viselkedés: két hívás, egy számolás."""
+    from handball.pipeline.primitive_cache import (memoize_primitive,
+                                                   primitive_cache)
+    from handball.pipeline.tactics import TacticsConfig
+
+    hivasok = []
+
+    @memoize_primitive("proba_reteg")
+    def proba(match, config=None):
+        hivasok.append(1)
+        return {"home": {}, "away": {}}
+
+    m = Match(_meta(), [])
+    with primitive_cache(m):
+        proba(m)                       # config nélkül
+        proba(m, None)                 # kifejezett None
+        proba(m, TacticsConfig())      # kifejezett alapértelmezés
+    assert len(hivasok) == 1, f"{len(hivasok)} számolás egy helyett"

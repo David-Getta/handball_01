@@ -16,6 +16,8 @@ Eredmény: dist/handball_backend/handball_backend(.exe) (onedir — gyorsabb ind
 """
 
 import os
+import sys
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 # A repo gyökere a spec helyéből (packaging/) — a backend és a súlyok megtalálásához.
@@ -39,9 +41,25 @@ for pkg in ["ultralytics", "torch", "torchvision", "cv2", "uvicorn",
 
 # uvicorn dinamikus importjai (protokollok/loopok) — biztos, ami biztos.
 hiddenimports += collect_submodules("uvicorn")
-# A feldolgozót az API futásidőben importálja (from scripts.process_video import
-# process), ezért kifejezetten fel kell venni, különben kimarad a csomagból.
-hiddenimports += ["handball", "scripts", "scripts.process_video", "scripts.serve"]
+# A projekt SOK modult futásidőben, FÜGGVÉNYEN BELÜL importál (a rétegek
+# szándékosan így izoláltak: `from .xg import ...` a függvény testében). A
+# PyInstaller statikus elemzése ezekre nem mindig fut rá, és a hiányzó modul
+# némán jelentkezik: a réteg try/except-je elnyeli, a fiók-végpont pedig
+# hibát ad. Ezért a két saját csomag MINDEN almodulját kifejezetten
+# begyűjtjük — ez pár száz kB, cserébe nem maradhat ki semmi.
+hiddenimports += ["handball", "scripts"]
+# A begyűjtéshez a backend/ mappának a keresési úton kell lennie (a spec
+# saját Python-folyamatban fut). Ha valamiért mégsem importálható, a build
+# nem áll meg — csak figyelmeztet, és marad a régi, szűkebb lista.
+if BACKEND not in sys.path:
+    sys.path.insert(0, BACKEND)
+for own in ("handball", "scripts"):
+    try:
+        subs = collect_submodules(own)
+        hiddenimports += subs
+        print(f"[backend.spec] {own}: {len(subs)} almodul becsomagolva")
+    except Exception as e:  # noqa: BLE001
+        print(f"[backend.spec] FIGYELEM: {own} almoduljai nem gyűjthetők: {e}")
 
 # A tanított számjegy-háló (mezszám-OCR) a handball csomag adata — a
 # PyInstaller a .py-kon kívül mást nem visz magától, ezért kifejezetten.

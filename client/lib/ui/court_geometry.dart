@@ -11,6 +11,11 @@ const double courtLength = 40.0; // x tengely (hosszú)
 const double courtWidth = 20.0; // y tengely (rövid)
 const double goalWidth = 3.0; // kapu szélessége → kapufák y=8.5 és y=11.5
 const double goalAreaRadius = 6.0; // 6 m-es kapuelőtér sugár
+const double freeThrowRadius = 9.0; // 9 m-es (szaggatott) szabaddobási vonal
+const double sevenMeterX = 7.0; // a hetes-vonal távolsága a gólvonaltól
+const double sevenMeterHalfLen = 0.5; // a hetes-vonal fél hossza (1 m-es vonal)
+const double keeperLineX = 4.0; // 4 m-es kapus-vonal a gólvonaltól
+const double keeperLineHalfLen = 0.075; // 15 cm-es vonal fele
 
 /// Méter↔képernyő transzformáció — a felülnézeti pálya egységes leképezése.
 ///
@@ -40,28 +45,47 @@ class CourtTransform {
 /// [leftSide] true esetén a bal kapu (x=0), false esetén a jobb (x=40).
 /// A határ: alsó negyedkör (a lenti kapufa körül) → 3 m egyenes → felső negyedkör.
 /// A köríveket [segments] szakasszal mintavételezzük, hogy sima legyen.
-List<Offset> goalAreaBoundary({required bool leftSide, int segments = 16}) {
+List<Offset> goalAreaBoundary({required bool leftSide, int segments = 16}) =>
+    _postArcBoundary(
+        radius: goalAreaRadius, leftSide: leftSide, segments: segments);
+
+/// A 9 m-es SZABADDOBÁSI vonal pontjai — ugyanaz az alak, 9 m sugárral.
+///
+/// A szabálykönyvben ez SZAGGATOTT vonal (a rajzoló így is húzza meg): a
+/// szabaddobást innen kell végrehajtani, és a védekező falnak is ez a
+/// vonatkoztatási vonala — a felülnézeti képen ettől lesz "igazi" pálya.
+List<Offset> freeThrowBoundary({required bool leftSide, int segments = 16}) =>
+    _postArcBoundary(
+        radius: freeThrowRadius, leftSide: leftSide, segments: segments);
+
+/// A kapufák köré húzott, `radius` sugarú határvonal (a 6 m-es és a 9 m-es
+/// vonal alakja azonos, csak a sugár más).
+List<Offset> _postArcBoundary({
+  required double radius,
+  required bool leftSide,
+  int segments = 16,
+}) {
   final cy = courtWidth / 2.0; // 10 m
   final half = goalWidth / 2.0; // 1.5 m
   final lowerPostY = cy - half; // 8.5
   final upperPostY = cy + half; // 11.5
   final pts = <Offset>[];
 
-  // Alsó negyedkör a lenti kapufa (x=0, y=8.5) körül: a (0, 2.5) ponttól a (6, 8.5)-ig.
+  // Alsó negyedkör a lenti kapufa (x=0, y=8.5) körül.
   for (int i = 0; i <= segments; i++) {
     final theta = (math.pi / 2) * (i / segments); // 0..90°
-    final x = goalAreaRadius * math.sin(theta);
-    final y = lowerPostY - goalAreaRadius * math.cos(theta);
+    final x = radius * math.sin(theta);
+    final y = lowerPostY - radius * math.cos(theta);
     pts.add(Offset(x, y));
   }
-  // 3 m-es egyenes szakasz: (6, 8.5) -> (6, 11.5).
-  pts.add(Offset(goalAreaRadius, lowerPostY));
-  pts.add(Offset(goalAreaRadius, upperPostY));
-  // Felső negyedkör a fenti kapufa (x=0, y=11.5) körül: (6, 11.5) -> (0, 17.5).
+  // 3 m-es egyenes szakasz a két negyedkör között.
+  pts.add(Offset(radius, lowerPostY));
+  pts.add(Offset(radius, upperPostY));
+  // Felső negyedkör a fenti kapufa (x=0, y=11.5) körül.
   for (int i = 0; i <= segments; i++) {
     final theta = (math.pi / 2) * (i / segments);
-    final x = goalAreaRadius * math.cos(theta);
-    final y = upperPostY + goalAreaRadius * math.sin(theta);
+    final x = radius * math.cos(theta);
+    final y = upperPostY + radius * math.sin(theta);
     pts.add(Offset(x, y));
   }
 

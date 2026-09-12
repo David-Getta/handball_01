@@ -5,18 +5,21 @@
 ///
 /// Lokális mód: a videó ugyanazon a gépen van (a feltöltéskor a SportMachine
 /// adatmappájába került), ezért közvetlenül fájlból játszjuk le.
-/// Platform: macOS/iOS/Android (a video_player csomag támogatása); Windowsra
-/// később külön lejátszó kell — addig tájékoztató szöveg jelenik meg.
+/// Platform: macOS/iOS/Android a video_player csomaggal; Windows a
+/// media_kit (libmpv) lejátszóval — ott a video_player nem támogatott.
 library;
 
 import "dart:io";
 
 import "package:flutter/material.dart";
+import "package:media_kit/media_kit.dart" as mk;
+import "package:media_kit_video/media_kit_video.dart" as mkv;
 import "package:video_player/video_player.dart";
 
 import "../theme/app_theme.dart";
 import "error_text.dart";
 import "waiting.dart";
+import "zoomable.dart";
 
 class VideoPanel extends StatefulWidget {
   /// Az eredeti videófájl útja (a Tracking meta.video_path mezőjéből).
@@ -26,7 +29,11 @@ class VideoPanel extends StatefulWidget {
 
   /// Támogatott-e a beépített videó-lejátszás ezen a platformon.
   static bool get supported =>
-      Platform.isMacOS || Platform.isIOS || Platform.isAndroid;
+      Platform.isMacOS || Platform.isIOS || Platform.isAndroid ||
+      Platform.isWindows;
+
+  /// Windowson a media_kit (libmpv) játszik le; máshol a video_player.
+  static bool get _useMediaKit => Platform.isWindows;
 
   @override
   State<VideoPanel> createState() => VideoPanelState();
@@ -34,6 +41,8 @@ class VideoPanel extends StatefulWidget {
 
 class VideoPanelState extends State<VideoPanel> {
   VideoPlayerController? _c;
+  mk.Player? _mk;
+  mkv.VideoController? _mkView;
   String? _error;
   // Ha a seek a betöltés BEFEJEZÉSE előtt érkezik (pl. eseményre kattintva
   // nyílt meg a panel), eltesszük, és betöltés után ugrunk oda.
@@ -59,13 +68,27 @@ class VideoPanelState extends State<VideoPanel> {
             "(Másik gépen készült az elemzés, vagy törölted a videót.)");
         return;
       }
-      final c = VideoPlayerController.file(f);
-      await c.initialize();
-      if (!mounted) {
-        await c.dispose();
-        return;
+      if (VideoPanel._useMediaKit) {
+        final p = mk.Player();
+        final view = mkv.VideoController(p);
+        await p.open(mk.Media(widget.videoPath), play: false);
+        if (!mounted) {
+          await p.dispose();
+          return;
+        }
+        setState(() {
+          _mk = p;
+          _mkView = view;
+        });
+      } else {
+        final c = VideoPlayerController.file(f);
+        await c.initialize();
+        if (!mounted) {
+          await c.dispose();
+          return;
+        }
+        setState(() => _c = c);
       }
-      setState(() => _c = c);
       final pending = _pendingSeekS;
       if (pending != null) {
         _pendingSeekS = null;
@@ -78,19 +101,27 @@ class VideoPanelState extends State<VideoPanel> {
 
   /// A megadott másodpercre ugrik, és elindítja a lejátszást.
   Future<void> seekTo(double seconds) async {
+    final ms = (seconds * 1000).round();
+    final d = Duration(milliseconds: ms < 0 ? 0 : ms);
+    final p = _mk;
+    if (p != null) {
+      await p.seek(d);
+      await p.play();
+      return;
+    }
     final c = _c;
     if (c == null) {
       _pendingSeekS = seconds; // betöltés után ugrunk
       return;
     }
-    final ms = (seconds * 1000).round();
-    await c.seekTo(Duration(milliseconds: ms < 0 ? 0 : ms));
+    await c.seekTo(d);
     await c.play();
   }
 
   @override
   void dispose() {
     _c?.dispose();
+    _mk?.dispose();
     super.dispose();
   }
 
@@ -100,94 +131,158 @@ class VideoPanelState extends State<VideoPanel> {
     return "$m:${s.toString().padLeft(2, '0')}";
   }
 
+  /// Vezérlő-oszlop (cím, lejátszás/±5 mp, pozíció) — a két lejátszó
+  /// közös felülete; csak az állapot-források különböznek.
+  Widget _controls({
+    required bool playing,
+    required Duration position,
+    required Duration duration,
+    required Future<void> Function() onToggle,
+  }) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("VIDEÓ — JELENET", style: AppText.sectionLabel),
+        const SizedBox(height: AppSpacing.sm),
+        Row(children: [
+          IconButton(
+            onPressed: () =>
+                seekTo(position.inMilliseconds / 1000.0 - 5),
+            icon: const Icon(Icons.replay_5,
+                color: AppColors.textSecondary),
+            tooltip: "5 mp vissza",
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: AppColors.onAccent,
+              shape: const CircleBorder(),
+              padding: const EdgeInsets.all(10),
+            ),
+            onPressed: onToggle,
+            child: Icon(playing ? Icons.pause : Icons.play_arrow,
+                size: 22),
+          ),
+          IconButton(
+            onPressed: () =>
+                seekTo(position.inMilliseconds / 1000.0 + 5),
+            icon: const Icon(Icons.forward_5,
+                color: AppColors.textSecondary),
+            tooltip: "5 mp előre",
+          ),
+        ]),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          "${_fmt(position)} / ${_fmt(duration)}",
+          style: AppText.label.copyWith(fontSize: 12),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Az Események-listában egy elemre kattintva a "
+          "videó a jelenetre ugrik.",
+          style: AppText.label.copyWith(fontSize: 11),
+        ),
+      ],
+    );
+  }
+
+  /// A media_kit (Windows) lejátszó felülete.
+  Widget _mediaKitBody(mk.Player p, mkv.VideoController view) {
+    final w = p.state.width ?? 16;
+    final h = p.state.height ?? 9;
+    return Row(
+      children: [
+        // Maga a videókép (a panel magasságához igazítva).
+        // Nagyítható: csippentés vagy Ctrl+görgő.
+        AspectRatio(
+          aspectRatio: h == 0 ? 16 / 9 : w / h,
+          child: ZoomPanView(
+              child: mkv.Video(
+                  controller: view, controls: mkv.NoVideoControls)),
+        ),
+        const SizedBox(width: AppSpacing.lg),
+        // Vezérlők: a lejátszó állapot-folyamaiból frissülnek.
+        Expanded(
+          child: StreamBuilder<bool>(
+            stream: p.stream.playing,
+            initialData: p.state.playing,
+            builder: (_, playing) => StreamBuilder<Duration>(
+              stream: p.stream.position,
+              initialData: p.state.position,
+              builder: (_, pos) => _controls(
+                playing: playing.data ?? false,
+                position: pos.data ?? Duration.zero,
+                duration: p.state.duration,
+                onToggle: () => p.playOrPause(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// A video_player (macOS/iOS/Android) lejátszó felülete.
+  Widget _videoPlayerBody(VideoPlayerController c) {
+    return Row(
+      children: [
+        // Maga a videókép (a panel magasságához igazítva).
+        // Nagyítható: csippentés vagy Ctrl+görgő.
+        AspectRatio(
+          aspectRatio:
+              c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
+          child: ZoomPanView(child: VideoPlayer(c)),
+        ),
+        const SizedBox(width: AppSpacing.lg),
+        Expanded(
+          child: ValueListenableBuilder<VideoPlayerValue>(
+            valueListenable: c,
+            builder: (_, v, __) => _controls(
+              playing: v.isPlaying,
+              position: v.position,
+              duration: v.duration,
+              onToggle: () async {
+                if (v.isPlaying) {
+                  await c.pause();
+                } else {
+                  await c.play();
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = _c;
+    final p = _mk;
+    final view = _mkView;
+    Widget body;
+    if (_error != null) {
+      body = Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Text(_error!,
+              style: AppText.label, textAlign: TextAlign.center),
+        ),
+      );
+    } else if (p != null && view != null) {
+      body = _mediaKitBody(p, view);
+    } else if (c != null) {
+      body = _videoPlayerBody(c);
+    } else {
+      body = const WaitingView("Videókép betöltése…",
+          hint: "Az első képkocka kiolvasása a felvételből.",
+          icon: Icons.movie_outlined);
+    }
     return Container(
       decoration: AppTheme.card(),
       clipBehavior: Clip.antiAlias,
-      child: _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Text(_error!,
-                    style: AppText.label, textAlign: TextAlign.center),
-              ),
-            )
-          : c == null
-              ? const WaitingView("Videókép betöltése…",
-                  hint: "Az első képkocka kiolvasása a felvételből.",
-                  icon: Icons.movie_outlined)
-              : Row(
-                  children: [
-                    // Maga a videókép (a panel magasságához igazítva).
-                    AspectRatio(
-                      aspectRatio:
-                          c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
-                      child: VideoPlayer(c),
-                    ),
-                    const SizedBox(width: AppSpacing.lg),
-                    // Vezérlők: lejátszás/megállítás, ±5 mp, pozíció.
-                    Expanded(
-                      child: ValueListenableBuilder<VideoPlayerValue>(
-                        valueListenable: c,
-                        builder: (_, v, __) => Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("VIDEÓ — JELENET", style: AppText.sectionLabel),
-                            const SizedBox(height: AppSpacing.sm),
-                            Row(children: [
-                              IconButton(
-                                onPressed: () => seekTo(
-                                    v.position.inMilliseconds / 1000.0 - 5),
-                                icon: const Icon(Icons.replay_5,
-                                    color: AppColors.textSecondary),
-                                tooltip: "5 mp vissza",
-                              ),
-                              FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.accent,
-                                  foregroundColor: AppColors.onAccent,
-                                  shape: const CircleBorder(),
-                                  padding: const EdgeInsets.all(10),
-                                ),
-                                onPressed: () async {
-                                  if (v.isPlaying) {
-                                    await c.pause();
-                                  } else {
-                                    await c.play();
-                                  }
-                                },
-                                child: Icon(
-                                    v.isPlaying ? Icons.pause : Icons.play_arrow,
-                                    size: 22),
-                              ),
-                              IconButton(
-                                onPressed: () => seekTo(
-                                    v.position.inMilliseconds / 1000.0 + 5),
-                                icon: const Icon(Icons.forward_5,
-                                    color: AppColors.textSecondary),
-                                tooltip: "5 mp előre",
-                              ),
-                            ]),
-                            const SizedBox(height: AppSpacing.sm),
-                            Text(
-                              "${_fmt(v.position)} / ${_fmt(v.duration)}",
-                              style: AppText.label.copyWith(fontSize: 12),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Az Események-listában egy elemre kattintva a "
-                              "videó a jelenetre ugrik.",
-                              style: AppText.label.copyWith(fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+      child: body,
     );
   }
 }

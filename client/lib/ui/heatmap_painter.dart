@@ -35,18 +35,40 @@ class HeatmapPainter extends CustomPainter {
     final cellW = courtLength / heatmap.binsX; // cella szélessége méterben
     final cellH = courtWidth / heatmap.binsY;
 
+    // PUHA hőfoltok éles rácstéglák helyett: minden cella egy lágyan
+    // elhalványuló korong a cella közepén — a szomszédos foltok
+    // összemosódnak, és a kép tényleg hőtérképnek néz ki, nem mozaiknak.
+    //
+    // A lágyságot SUGARAS SZÍNÁTMENET adja, nem elmosás (MaskFilter):
+    // a rácson 200 cella van, és cellánként egy-egy elmosás külön
+    // rajz-réteget kényszerítene ki — gyengébb gépen ez akadozó
+    // hőtérképet jelentene. A gradiens ugyanazt a hatást adja a GPU-n
+    // egyetlen menetben.
     for (int iy = 0; iy < heatmap.binsY; iy++) {
       for (int ix = 0; ix < heatmap.binsX; ix++) {
         final value = heatmap.grid[iy][ix];
         if (value <= 0) continue;
-        // Normált intenzitás 0..1 → átlátszatlanság (kis alapszinttel, hogy látszódjon).
         final intensity = value / heatmap.maxCell;
-        final alpha = 0.15 + 0.65 * intensity;
-        final rect = Rect.fromPoints(
-          p(ix * cellW, iy * cellH),
-          p((ix + 1) * cellW, (iy + 1) * cellH),
-        );
-        canvas.drawRect(rect, Paint()..color = color.withOpacity(alpha));
+        final center = p((ix + 0.5) * cellW, (iy + 0.5) * cellH);
+        final radius = (cellW * scale) * (0.95 + 0.35 * intensity);
+        final rect = Rect.fromCircle(center: center, radius: radius);
+        // A legforróbb cellák magja világosodik — a gócpont kiugrik.
+        final core = intensity > 0.7
+            ? Color.lerp(color, Colors.white,
+                0.35 * (intensity - 0.7) / 0.3)!
+            : color;
+        canvas.drawCircle(
+            center,
+            radius,
+            Paint()
+              ..shader = RadialGradient(
+                colors: [
+                  core.withOpacity(0.18 + 0.45 * intensity),
+                  color.withOpacity(0.10 + 0.30 * intensity),
+                  color.withOpacity(0.0),
+                ],
+                stops: const [0.0, 0.45, 1.0],
+              ).createShader(rect));
       }
     }
   }

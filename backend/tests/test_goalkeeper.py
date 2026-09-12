@@ -95,6 +95,21 @@ def test_estimated_positions_ignored():
     assert detect_goalkeepers(m) == {}
 
 
+# A lövés-csendidő (SHOT_COOLDOWN_S) miatt két kapu-megközelítés közé
+# valós szünet kell: fél másodpercen belül a felismerés — helyesen — egy
+# lövésnek veszi a jelet. A fixture-ök ezért ennyi kockát hagynak
+# közöttük (25 fps-en bőven a csendidő fölött).
+_SHOT_GAP_FRAMES = 20
+
+
+def _gap_frames(t0, n=_SHOT_GAP_FRAMES):
+    """Üres kockák a kapu-zónán kívüli labdával — két lövés közé."""
+    from handball.models.tracking import Ball
+    return [Frame(t=t0 + i, players=[],
+                  ball=Ball(x=20.0, y=10.0, confidence=1.0))
+            for i in range(n)]
+
+
 def _shot_sequence(t0, gk_track, save=True):
     """Vendég kapu (x=40) felé tartó hazai lövés kockái t0-tól: a kapus a
     kapuban áll; védésnél a labda nála áll meg, gólnál eléri a vonalat."""
@@ -121,9 +136,9 @@ def test_goalkeeper_stats_counts_saves_and_conceded():
     # (a debounce miatt külön kapu-megközelítés kell).
     from handball.models.tracking import Ball
     frames = _shot_sequence(0, gk_track=9, save=True)
-    frames.append(Frame(t=8, players=[], ball=Ball(x=20.0, y=10.0,
-                                                   confidence=1.0)))
-    frames += _shot_sequence(9, gk_track=9, save=False)
+    frames += _gap_frames(8)
+    frames += _shot_sequence(8 + _SHOT_GAP_FRAMES, gk_track=9, save=False)
+    del Ball  # a szünetet a segéd rakja ki
     m = _match(frames)
     stats = goalkeeper_stats(m)
     away = stats["away"]
@@ -332,6 +347,133 @@ def test_outlet_speed_measures_fast_restart():
     assert rec["avg_s"] is not None and rec["avg_s"] <= OUTLET_FAST_S
     # A home oldalon nem történt védés.
     assert outlet_speed(_match(frames))["home"]["saves"] == 0
+
+
+def _ent_match(rep=2, punish=True):
+    """`rep` darab 7 a 6 szakasz: a hazai kapus elöl, a hazai birtokol,
+    majd a vendég megszerzi a labdát (eladás). `punish` esetén a
+    vendég rögtön az üres hazai kapuba is dob."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def cast(bx, by):
+        players = [
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           role="kapus"),
+            PlayerPosition(track_id=2, team=Team.HOME, x=30.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+            PlayerPosition(track_id=4, team=Team.AWAY, x=12.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+        ]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=bx, y=by, confidence=1.0))
+
+    for _ in range(rep):
+        for _ in range(150):          # 6 mp 7 a 6, hazai birtoklással
+            frames.append(cast(30.0, 10.0))
+            t += 1
+        for _ in range(40):           # a vendég megszerzi: eladás
+            frames.append(cast(12.0, 10.0))
+            t += 1
+        if punish:
+            for i in range(20):       # dobás az üres hazai kapuba
+                frames.append(cast(max(12.0 - 0.7 * i, 0.0), 10.0))
+                t += 1
+        else:
+            for _ in range(60):       # nincs befejezés
+                frames.append(cast(12.0, 10.0))
+                t += 1
+    return _match(frames)
+
+
+def _krt_match(slow=True, reps=2):
+    """`reps` darab 7 a 6 szakasz; utána a hazai kapus lassan (6 mp)
+    vagy gyorsan (1 mp) ér vissza a saját kapujához."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+    for _ in range(reps):
+        for _ in range(150):          # 6 mp 7 a 6, hazai birtoklással
+            pl = [PlayerPosition(track_id=1, team=Team.HOME, x=20.0,
+                                 y=10.0, role="kapus",
+                                 source=PositionSource.MEASURED,
+                                 confidence=1.0),
+                  PlayerPosition(track_id=2, team=Team.HOME, x=30.0,
+                                 y=10.0,
+                                 source=PositionSource.MEASURED,
+                                 confidence=1.0)]
+            frames.append(Frame(t=t, players=pl,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        n_back = 150 if slow else 25   # a kapus hazafutása
+        for i in range(n_back + 60):
+            frac = min(1.0, i / max(1, n_back))
+            gx = 20.0 + (1.5 - 20.0) * frac
+            pl = [PlayerPosition(track_id=1, team=Team.HOME, x=gx,
+                                 y=10.0, role="kapus",
+                                 source=PositionSource.MEASURED,
+                                 confidence=1.0),
+                  PlayerPosition(track_id=4, team=Team.AWAY, x=12.0,
+                                 y=10.0,
+                                 source=PositionSource.MEASURED,
+                                 confidence=1.0)]
+            frames.append(Frame(t=t, players=pl,
+                                ball=Ball(x=12.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return _match(frames)
+
+
+def test_keeper_return_flags_slow_way_home():
+    """Lassan hazaérő kapusnál a szerzés után azonnal dobni kell."""
+    from handball.pipeline.goalkeeper import KRT_SLOW_S, keeper_return
+
+    rec = keeper_return(_krt_match(slow=True))["home"]
+    assert rec["measured"] >= 2, rec
+    assert rec["avg_s"] is not None and rec["avg_s"] >= KRT_SLOW_S, rec
+    assert rec["verdict"] and "üres kapu" in rec["verdict"], rec
+
+
+def test_keeper_return_fast_keeper_and_silence_without_windows():
+    """Gyors kapusnál más az ítélet; 7 a 6 nélkül nincs mit mérni."""
+    from handball.pipeline.goalkeeper import keeper_return
+
+    rec = keeper_return(_krt_match(slow=False))["home"]
+    assert rec["avg_s"] is not None and rec["avg_s"] < 4.0, rec
+    assert rec["verdict"] and "nem jár ingyen" in rec["verdict"], rec
+
+    solo = keeper_return(_krt_match(reps=1))["home"]
+    assert solo["avg_s"] is None and solo["verdict"] is None, solo
+
+
+def test_empty_net_turnovers_punished():
+    """Ha a 7 a 6 alatt elvesztett labdákat góllal büntetik, a szerzés
+    utáni első nézés az üres kapu kell legyen."""
+    from handball.pipeline.goalkeeper import (ENT_PUNISH_PCT,
+                                              empty_net_turnovers)
+
+    rec = empty_net_turnovers(_ent_match())["home"]
+    assert rec["turnovers"] == 2 and rec["punished"] == 2, rec
+    assert rec["punish_pct"] is not None
+    assert rec["punish_pct"] >= ENT_PUNISH_PCT, rec
+    assert rec["verdict"] and "üres kapu" in rec["verdict"], rec
+
+
+def test_empty_net_turnovers_unpunished_and_silent_without_samples():
+    """Büntetés nélkül más az ítélet, egyetlen szakaszból pedig nincs."""
+    from handball.pipeline.goalkeeper import empty_net_turnovers
+
+    rec = empty_net_turnovers(_ent_match(punish=False))["home"]
+    assert rec["turnovers"] == 2 and rec["punished"] == 0, rec
+    assert rec["verdict"] and "készenlétet" in rec["verdict"], rec
+
+    solo = empty_net_turnovers(_ent_match(rep=1))["home"]
+    assert solo["punish_pct"] is None and solo["verdict"] is None, solo
 
 
 def test_empty_net_goals_counts_punish_goal():
@@ -568,9 +710,12 @@ def test_gk_save_fade_drop_second_half():
         for _ in range(n):
             frames.extend(_shot_sequence(t, gk_track=9, save=save))
             t = frames[-1].t + 1
-            frames.append(Frame(t=t, players=[],
-                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-            t += 1
+            # A lövés-csendidő miatt valós szünet kell két lövés közé.
+            for _i in range(_SHOT_GAP_FRAMES):
+                frames.append(Frame(t=t, players=[],
+                                    ball=Ball(x=20.0, y=10.0,
+                                              confidence=1.0)))
+                t += 1
 
     def active(seconds):
         # Aktív játék 12 mért játékossal — a félidő-érzékelő ezt nem
@@ -630,9 +775,11 @@ def test_gk_change_effect_improvement():
     for _ in range(3):
         frames += _shot_sequence(t, gk_track=9, save=False)
         t = frames[-1].t + 1
-        frames.append(Frame(t=t, players=[gk(9)],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        # A lövés-csendidő miatt valós szünet kell két lövés közé.
+        for _i in range(_SHOT_GAP_FRAMES):
+            frames.append(Frame(t=t, players=[gk(9)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
     # 2. szakasz: 8-as kapus, 3 védés.
     for _ in range(600):
         frames.append(Frame(t=t, players=[gk(8)],
@@ -641,9 +788,10 @@ def test_gk_change_effect_improvement():
     for _ in range(3):
         frames += _shot_sequence(t, gk_track=8, save=True)
         t = frames[-1].t + 1
-        frames.append(Frame(t=t, players=[gk(8)],
-                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
-        t += 1
+        for _i in range(_SHOT_GAP_FRAMES):
+            frames.append(Frame(t=t, players=[gk(8)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
 
     eff = gk_change_effect(_match(frames))["away"]
     assert eff["changes"] == 1
@@ -1532,6 +1680,46 @@ def _gcs_match(cold_saves, warm_saves, fps=25.0):
     return _match(frames, fps)
 
 
+def _gag_match(seq, fps=25.0):
+    """A vendég kapusra érkező lövések időrendben: True = védés,
+    False = gól. A lövések közt 8 mp szünet (külön események)."""
+    frames = []
+    t = 0
+    for save in seq:
+        for _ in range(int(8 * fps)):
+            frames.append(Frame(t=t, players=[
+                _svk_pl(1, Team.HOME, 20.0, 6.0)],
+                ball=Ball(x=20.0, y=6.0, confidence=1.0)))
+            t += 1
+        frames.extend(_shot_sequence(t, gk_track=9, save=save))
+        t = frames[-1].t + 1
+    return _match(frames, fps)
+
+
+def test_gk_after_goal_flags_the_shaken_keeper():
+    """Ha a kapott gól utáni két lövésen érdemben rosszabbul véd, a
+    gól utáni percben kell újra lőni."""
+    from handball.pipeline.goalkeeper import GKA_GAP_PP, gk_after_goal
+
+    seq = []
+    for _ in range(3):
+        seq += [False, False, False]      # gól, majd friss sebbel kettő
+        seq += [True, True, True, True]   # utána nyugodt védések
+    rec = gk_after_goal(_gag_match(seq))["away"]
+    assert rec["fresh_shots"] >= 4 and rec["rest_shots"] >= 4, rec
+    assert rec["gap_pp"] is not None
+    assert rec["rest_pct"] - rec["fresh_pct"] >= GKA_GAP_PP, rec
+    assert rec["verdict"] and "gyors középkezdés" in rec["verdict"], rec
+
+
+def test_gk_after_goal_silent_with_few_shots():
+    """Kevés lövésből nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_after_goal
+
+    rec = gk_after_goal(_gag_match([False, True, True]))["away"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None, rec
+
+
 def test_gk_cold_streaks_flags_the_cold_prone_keeper():
     """Hidegen 0/4, melegen 4/4 védés → hidegen sebezhető."""
     from handball.pipeline.goalkeeper import gk_cold_streaks
@@ -1681,6 +1869,26 @@ def test_outlet_target_roles_needs_enough_outlets():
 
     rec = outlet_target_roles(_otr_match(n_outlets=3))["away"]
     assert rec["top"] is None
+
+
+def test_outlet_targets_names_the_receiver():
+    """Ha a kapus-indítások mindig ugyanahhoz az emberhez mennek, őt
+    kell fogni a letámadásnál."""
+    from handball.pipeline.goalkeeper import (OTP_MIN_OUTLETS,
+                                              outlet_targets)
+
+    rec = outlet_targets(_otr_match())["away"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 12, rec
+    assert rec["top"]["outlets"] >= OTP_MIN_OUTLETS, rec
+
+
+def test_outlet_targets_silent_with_few_outlets():
+    """Két mért indításból nem nevezünk meg embert."""
+    from handball.pipeline.goalkeeper import outlet_targets
+
+    rec = outlet_targets(_otr_match(n_outlets=2))["away"]
+    assert rec["top"] is None, rec
 
 
 def _ops_match(slow_when_leading=True, n=5, fps=25.0):
@@ -2191,3 +2399,466 @@ def test_goalkeeper_wins_the_tie_against_a_camping_pivot():
     assert 29 in chosen, ("a gólvonalon álló kapust kell választani, "
                           f"nem a hatoson posztoló beállót: {chosen}")
     assert 5 not in chosen, chosen
+
+
+def _en7_match(shooters):
+    """`shooters` = 7a6-lövésenként a lövő HAZAI játékos (2: beálló,
+    3: irányító). A hazai kapus (1-es) végig elöl játszik, a labda a
+    hazaiaknál van → az egész felvétel egyetlen üres-kapus szakasz,
+    benne a megadott lövésekkel a +x kapura."""
+    from handball.models.tracking import Ball
+
+    # A 2-es a kaputól 6 m-re áll (beálló), és a labda a kezében már
+    # kívül van a lövés-zóna visszaállási sávján (>5 m a kaputól).
+    pos = {2: (34.0, 10.0), 3: (28.0, 13.0)}
+    frames = []
+    t = 0
+
+    def _players():
+        return [
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=14.0,
+                           source=PositionSource.MEASURED,
+                           confidence=1.0, role="kapus"),
+            PlayerPosition(track_id=2, team=Team.HOME,
+                           x=pos[2][0], y=pos[2][1],
+                           source=PositionSource.MEASURED,
+                           confidence=1.0),
+            PlayerPosition(track_id=3, team=Team.HOME,
+                           x=pos[3][0], y=pos[3][1],
+                           source=PositionSource.MEASURED,
+                           confidence=1.0),
+        ]
+
+    def _hold(n, holder):
+        nonlocal t
+        hx, hy = pos[holder]
+        for _ in range(n):
+            frames.append(Frame(t=t, players=_players(),
+                                ball=Ball(x=hx + 0.2, y=hy,
+                                          confidence=1.0)))
+            t += 1
+
+    _hold(100, 2)                    # poszt-minta + a szakasz eleje
+    for pid in shooters:
+        _hold(20, pid)
+        sx, sy = pos[pid]
+        x = sx + 0.2
+        while x < 39.0:              # lövés: 1,6 m/kocka a +x kapura
+            x = min(x + 1.6, 39.4)
+            frames.append(Frame(t=t, players=_players(),
+                                ball=Ball(x=x, y=sy, confidence=1.0)))
+            t += 1
+    _hold(20, 2)
+    return _match(frames)
+
+
+def test_seven_six_finisher_roles_names_the_target_post():
+    """Ha a 7 a 6-os lövések zöme ugyanarról a posztról jön, a lehozott
+    kapusnál oda kell sűríteni."""
+    from handball.pipeline.goalkeeper import (EN7_MIN_SHOTS,
+                                              seven_six_finisher_roles)
+
+    rec = seven_six_finisher_roles(_en7_match([2, 2, 2, 3]))["home"]
+    assert rec["shots"] >= EN7_MIN_SHOTS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "sűríteni" in rec["verdict"], rec
+
+
+def test_seven_six_finisher_roles_silent_with_few_shots():
+    """Néhány 7 a 6-os lövésből nincs ítélet."""
+    from handball.pipeline.goalkeeper import seven_six_finisher_roles
+
+    rec = seven_six_finisher_roles(_en7_match([2, 3]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def test_seven_six_finishers_names_the_free_man():
+    """Ha a 7 a 6-lövések egy embertől jönnek, a lehozott kapus
+    felismerésekor őt kell először megtalálni."""
+    from handball.pipeline.goalkeeper import (EN7P_MIN_SHOTS,
+                                              seven_six_finishers)
+
+    rec = seven_six_finishers(_en7_match([2, 2, 2, 3]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 2, rec
+    assert rec["top"]["shots"] >= EN7P_MIN_SHOTS, rec
+
+
+def test_seven_six_finishers_silent_with_one_shot():
+    """Egyetlen 7a6-lövésből nem nevezünk meg embert."""
+    from handball.pipeline.goalkeeper import seven_six_finishers
+
+    rec = seven_six_finishers(_en7_match([2]))["home"]
+    assert rec["top"] is None, rec
+
+
+def _ohr_match(hunters):
+    """`hunters` = rablásonként az a HAZAI játékos, aki a vendég kapus
+    indítását elcsípi (2: beálló, 3: szélső). Első szakasz: hazai
+    birtoklás a +x kapu felé (poszt-minta), utána indítás-rablások."""
+    from handball.models.tracking import Ball
+
+    pos = {2: (34.0, 10.0), 3: (35.0, 3.0)}
+    frames = []
+    t = 0
+
+    def cast():
+        return [
+            PlayerPosition(track_id=2, team=Team.HOME, x=pos[2][0],
+                           y=pos[2][1], source=PositionSource.MEASURED,
+                           confidence=1.0),
+            PlayerPosition(track_id=3, team=Team.HOME, x=pos[3][0],
+                           y=pos[3][1], source=PositionSource.MEASURED,
+                           confidence=1.0),
+            PlayerPosition(track_id=9, team=Team.HOME, x=0.5, y=10.0,
+                           source=PositionSource.MEASURED,
+                           confidence=1.0, role="kapus"),
+            PlayerPosition(track_id=30, team=Team.AWAY, x=39.0, y=10.0,
+                           source=PositionSource.MEASURED,
+                           confidence=1.0, role="kapus"),
+        ]
+
+    for _ in range(150):             # hazai birtoklás: poszt-minta
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in hunters:
+        for _ in range(8):           # a vendég kapusnál a labda
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=39.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        hx, hy = pos[tid]
+        for _ in range(6):           # az indítást a hazai csípi el
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=hx, y=hy, confidence=1.0)))
+            t += 1
+        for _ in range(40):          # szünet
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return _match(frames)
+
+
+def test_outlet_hunter_roles_names_the_hunting_post():
+    """Ha az indítás-rablások zöme ugyanarról a posztról jön, a
+    kapus-indítás a másik oldalon nyisson."""
+    from handball.pipeline.goalkeeper import (OHR_MIN_STEALS,
+                                              outlet_hunter_roles)
+
+    rec = outlet_hunter_roles(_ohr_match([2, 2, 2, 3]))["home"]
+    assert rec["steals"] >= OHR_MIN_STEALS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "másik oldalon" in rec["verdict"], rec
+
+
+def test_outlet_hunter_roles_silent_with_few_steals():
+    """Néhány elrabolt indításból nincs ítélet."""
+    from handball.pipeline.goalkeeper import outlet_hunter_roles
+
+    rec = outlet_hunter_roles(_ohr_match([2, 3]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def test_outlet_hunters_names_the_hunting_man():
+    """Ha az indítás-rablások egy emberhez kötődnek, őt nevezzük meg —
+    a kapus-indítás ne az ő térfelére nyisson."""
+    from handball.pipeline.goalkeeper import (OHP_MIN_STEALS,
+                                              outlet_hunters)
+
+    rec = outlet_hunters(_ohr_match([2, 2, 2, 3]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 2, rec
+    assert rec["top"]["steals"] >= OHP_MIN_STEALS, rec
+
+
+def test_outlet_hunters_silent_with_few_steals():
+    """Egy-egy rablásból nem nevezünk meg embert."""
+    from handball.pipeline.goalkeeper import outlet_hunters
+
+    rec = outlet_hunters(_ohr_match([2, 3]))["home"]
+    assert rec["top"] is None, rec
+
+
+# ---- Hajrá-kapus (az utolsó öt perc védés-mérlege) --------------------------
+
+
+def _clutch_gk_match(rest_saves=4, rest_goals=0, clutch_saves=0,
+                     clutch_goals=4, fps=25.0):
+    """A vendég kapusára érkező lövések: előbb a meccs derekán, majd
+    az utolsó öt percben (a felvétel végéhez képest)."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def _idle(seconds):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(
+                t=t, players=[PlayerPosition(
+                    track_id=99, team=Team.AWAY, x=39.2, y=10.0,
+                    role="kapus", source=PositionSource.MEASURED,
+                    confidence=1.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def _shot(save):
+        nonlocal t, frames
+        for i in range(9):
+            players = [PlayerPosition(track_id=1, team=Team.HOME,
+                                      x=33.0, y=10.0,
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0),
+                       PlayerPosition(track_id=99, team=Team.AWAY,
+                                      x=39.2, y=10.0, role="kapus",
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0)]
+            bx = min(34.0 + i, 38.6 if save else 40.4)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        _idle(2.0)
+
+    _idle(10.0)
+    for _ in range(rest_saves):
+        _shot(save=True)
+    for _ in range(rest_goals):
+        _shot(save=False)
+    _idle(600.0)          # a hajrá-ablak előtti szakasz lezárása
+    for _ in range(clutch_saves):
+        _shot(save=True)
+    for _ in range(clutch_goals):
+        _shot(save=False)
+    return Match(MatchMeta(match_id="gkc", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_gk_clutch_saves_flags_the_fading_keeper():
+    """Ha a hajrában beesik a védés, a végjátékban fel kell vinni a
+    lövésszámot."""
+    from handball.pipeline.goalkeeper import gk_clutch_saves
+
+    rec = gk_clutch_saves(_clutch_gk_match())["away"]
+    assert rec["rest"]["faced"] == 4 and rec["clutch"]["faced"] == 4
+    assert rec["rest"]["save_pct"] == 100.0
+    assert rec["clutch"]["save_pct"] == 0.0
+    assert rec["verdict"] and "beesik" in rec["verdict"], rec
+
+
+def test_gk_clutch_saves_flags_the_rising_keeper():
+    """A fordított eset: a hajrában nő a kapus — biztos befejezés kell."""
+    from handball.pipeline.goalkeeper import gk_clutch_saves
+
+    rec = gk_clutch_saves(_clutch_gk_match(
+        rest_saves=0, rest_goals=4, clutch_saves=4,
+        clutch_goals=0))["away"]
+    assert rec["verdict"] and "nő" in rec["verdict"], rec
+
+
+def test_gk_clutch_saves_needs_both_windows():
+    """Ha a hajrában nincs elég lövés, nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_clutch_saves
+
+    rec = gk_clutch_saves(_clutch_gk_match(
+        clutch_saves=0, clutch_goals=1))["away"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kipattanó ára (a védés után kapott második-helyzet gól) ---------------
+
+
+def _rpn_match(punished, clean, fps=25.0):
+    """`punished` hazai lövés, amit a vendég kapus véd, majd 2 mp-en
+    belül hazai gól jön a kipattanóból; `clean` védés büntetlenül."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def _idle(seconds):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(
+                t=t, players=[PlayerPosition(
+                    track_id=99, team=Team.AWAY, x=39.2, y=10.0,
+                    role="kapus", source=PositionSource.MEASURED,
+                    confidence=1.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def _saved_shot():
+        nonlocal t, frames
+        for i in range(9):
+            players = [PlayerPosition(track_id=1, team=Team.HOME,
+                                      x=33.0, y=10.0,
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0),
+                       PlayerPosition(track_id=99, team=Team.AWAY,
+                                      x=39.2, y=10.0, role="kapus",
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(34.0 + i, 38.6),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        _idle(2.0)
+
+    def _home_goal():
+        nonlocal t, frames
+        for i in range(9):
+            players = [PlayerPosition(track_id=1, team=Team.HOME,
+                                      x=33.0, y=10.0,
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(34.0 + i, 40.4),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        _idle(2.0)
+
+    _idle(5.0)
+    for _ in range(punished):
+        _saved_shot()
+        _home_goal()          # a védés után két másodperccel
+        _idle(10.0)
+    for _ in range(clean):
+        _saved_shot()
+        _idle(15.0)
+    return Match(MatchMeta(match_id="rpn", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_rebound_punishment_prices_the_second_chance():
+    """Ha a védéseik hatoda gólba fut a kipattanóból, minden lövésnél
+    indítani kell a kipattanó-zónába."""
+    from handball.pipeline.goalkeeper import (RPN_MIN_SAVES,
+                                              rebound_punishment)
+
+    rec = rebound_punishment(_rpn_match(punished=2, clean=4))["away"]
+    assert rec["saves"] >= RPN_MIN_SAVES, rec
+    assert rec["punished"] == 2, rec
+    assert rec["rate_pct"] and rec["rate_pct"] >= 15.0, rec
+    assert rec["verdict"] and "elhalasztott" in rec["verdict"], rec
+
+
+def test_rebound_punishment_silent_without_second_chances():
+    """Ha a védéseik után nem jön gól, nincs ítélet."""
+    from handball.pipeline.goalkeeper import rebound_punishment
+
+    rec = rebound_punishment(_rpn_match(punished=0, clean=6))["away"]
+    assert rec["saves"] >= 5 and rec["punished"] == 0, rec
+    assert rec["rate_pct"] == 0.0 and rec["verdict"] is None, rec
+
+
+def test_gk_change_yield_judges_the_swap(monkeypatch):
+    """Nagy javulásnál a csere fordít, nagy romlásnál nem segít;
+    kis változásnál nincs ítélet."""
+    from handball.pipeline import goalkeeper
+
+    monkeypatch.setattr(
+        goalkeeper, "gk_change_effect",
+        lambda match, config=None: {
+            "home": {"changes": 1, "delta_pp": 25.0},
+            "away": {"changes": 1, "delta_pp": -20.0}})
+    rec = goalkeeper.gk_change_yield(None)
+    assert rec["home"]["verdict"] and "fordít" in rec["home"]["verdict"]
+    assert rec["away"]["verdict"] and "sem segít" in rec["away"]["verdict"]
+
+    monkeypatch.setattr(
+        goalkeeper, "gk_change_effect",
+        lambda match, config=None: {
+            "home": {"changes": 1, "delta_pp": 5.0},
+            "away": {"changes": 0, "delta_pp": None}})
+    rec = goalkeeper.gk_change_yield(None)
+    assert rec["home"]["verdict"] is None
+    assert rec["away"]["verdict"] is None
+
+
+# --- Kapus-védés a lövő KEZESSÉGE szerint (gk_saves_by_hand) ------------
+
+def _hand_gk_match(left_saves=1, left_goals=3, right_saves=4,
+                   right_goals=0, fps=25.0):
+    """Hazai lövések a VENDÉG kapusára, két lövőtől: a 7-es BAL, a 8-as
+    JOBB kezes (a labda az elengedés előtti kockán a dobó kéz oldalán
+    van). A `save=True` lövés a kapuson elakad, a False gól."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def _idle(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    def _players(pid):
+        return [
+            PlayerPosition(track_id=pid, team=Team.HOME, x=33.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+            PlayerPosition(track_id=99, team=Team.AWAY, x=39.2, y=10.0,
+                           role="kapus", source=PositionSource.MEASURED,
+                           confidence=1.0),
+        ]
+
+    def _shot(pid, ball_dy, save):
+        nonlocal t
+        # Előbb a labda a lövő KEZÉBEN, a dobó kéz oldalára tolva — az
+        # elengedés előtti kockából becsli a motor a kezességet; utána
+        # egy kockán belül elszáll (a védésnél a kapuson akad el).
+        for _ in range(3):
+            frames.append(Frame(t=t, players=_players(pid),
+                                ball=Ball(x=33.0, y=10.0 + ball_dy,
+                                          confidence=1.0)))
+            t += 1
+        stop = 38.6 if save else 40.4
+        for bx in (36.0, stop, stop, stop):
+            frames.append(Frame(t=t, players=_players(pid),
+                                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+        _idle(2.0)
+
+    _idle(5.0)
+    for _ in range(left_saves):
+        _shot(7, 0.5, save=True)
+    for _ in range(left_goals):
+        _shot(7, 0.5, save=False)
+    for _ in range(right_saves):
+        _shot(8, -0.5, save=True)
+    for _ in range(right_goals):
+        _shot(8, -0.5, save=False)
+    return Match(MatchMeta(match_id="gkh", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_gk_saves_by_hand_flags_the_weak_side():
+    """Ha a kapus a balkezes lövők ellen érdemben rosszabb, a bal kéz a
+    gyenge oldala — oda kell szervezni a befejezést."""
+    from handball.pipeline.goalkeeper import gk_saves_by_hand
+
+    rec = gk_saves_by_hand(_hand_gk_match())["away"]
+    assert rec["hands"]["bal"]["faced"] == 4, rec
+    assert rec["hands"]["jobb"]["faced"] == 4, rec
+    assert rec["hands"]["bal"]["save_pct"] == 25.0, rec
+    assert rec["hands"]["jobb"]["save_pct"] == 100.0, rec
+    assert rec["weak_hand"] == "bal" and rec["gap_pp"] == 75.0, rec
+
+
+def test_gk_saves_by_hand_silent_without_enough_shots():
+    """Kevés lövés az egyik kézből → nincs ítélet (sose hallgatólagos
+    gyenge oldal)."""
+    from handball.pipeline.goalkeeper import gk_saves_by_hand
+
+    rec = gk_saves_by_hand(
+        _hand_gk_match(right_saves=2, right_goals=0))["away"]
+    assert rec["hands"]["bal"]["faced"] == 4, rec
+    # A 8-as csak 2 lövést adott le, ezért a KEZESSÉGE sincs eldöntve
+    # (shooting_hand: 4 lövéstől ítél) — a lövései így nem is
+    # sorolódnak be. Ez a szándék: bizonytalan kéz → nincs adat.
+    assert rec["hands"]["jobb"]["faced"] == 0, rec
+    assert rec["weak_hand"] is None and rec["gap_pp"] is None, rec

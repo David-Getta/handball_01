@@ -671,3 +671,112 @@ def test_attack_side_shift_stable_or_no_halftime_none():
 
     nob, _t = _sds_half_frames(0, 3.0)
     assert attack_side_shift(Match(meta, nob))["home"]["verdict"] is None
+
+
+# ---- Álló-poszt (melyik posztjuk áll labda nélkül) -------------------------
+
+
+def _sar_match(wing_moves=True, fps=25.0):
+    """Szervezett hazai támadás: a beálló (7) áll, a szélső (9) —
+    ha wing_moves — ingázik a sávjában."""
+    frames = []
+    t = 0
+    y9 = 2.0
+    dy = 0.2
+    for _ in range(600):
+        if wing_moves:
+            y9 += dy
+            if y9 >= 7.0 or y9 <= 2.0:
+                dy = -dy
+        frames.append(Frame(
+            t=t,
+            players=[_pl(7, Team.HOME, 34.0, 10.0),
+                     _pl(9, Team.HOME, 35.0, y9)],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_static_attacker_roles_names_the_standing_post():
+    """A beálló áll, a szélső ingázik → a beálló védője otthagyhatja."""
+    from handball.pipeline.tactics import static_attacker_roles
+
+    rec = static_attacker_roles(_sar_match())["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["verdict"] and "otthagyhatja" in rec["verdict"], rec
+
+
+def test_static_attacker_roles_silent_when_all_static():
+    """Ha mindenki egyformán (nem) mozog, nincs kiugró álló poszt."""
+    from handball.pipeline.tactics import static_attacker_roles
+
+    rec = static_attacker_roles(_sar_match(wing_moves=False))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _atv_match(hosszak_s, fps=25.0):
+    """Hazai támadó-szakaszok a megadott hosszakkal, közöttük szünettel."""
+    from handball.pipeline.tactics import ATV_MIN_SPAN_S  # noqa: F401
+    meta = MatchMeta(match_id="atv", home_team="H", away_team="A", fps=fps)
+    frames = []
+    t = 0
+    for h in hosszak_s:
+        for _ in range(int(h * fps)):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        # Szakasz-zárás: szabad labda a felezőnél (senki a közelben).
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(meta, frames)
+
+
+def test_attack_tempo_variety_egy_tempo():
+    """Kilenc rövid támadás → EGY tempó, gyors befejezéssel."""
+    from handball.pipeline.tactics import attack_tempo_variety
+
+    atv = attack_tempo_variety(_atv_match([8.0] * 9))
+    rec = atv["home"]
+    assert rec["attacks"] == 9
+    assert rec["fast"] == 9 and rec["mid"] == 0 and rec["slow"] == 0
+    assert rec["top_share_pct"] == 100.0
+    assert rec["verdict"] is not None
+    assert "egy tempóban" in rec["verdict"]
+    assert "gyorsan" in rec["verdict"]
+
+
+def test_attack_tempo_variety_valtogatas():
+    """Három sávban egyenletesen elosztott támadások → váltogatják."""
+    from handball.pipeline.tactics import attack_tempo_variety
+
+    atv = attack_tempo_variety(
+        _atv_match([8.0, 8.0, 8.0, 20.0, 20.0, 20.0, 34.0, 34.0, 34.0]))
+    rec = atv["home"]
+    assert rec["attacks"] == 9
+    assert (rec["fast"], rec["mid"], rec["slow"]) == (3, 3, 3)
+    assert rec["verdict"] == "váltogatják a tempót"
+
+
+def test_attack_tempo_variety_keves_mintanal_nincs_itelet():
+    """Négy támadásból nem szabad ritmust állítani."""
+    from handball.pipeline.tactics import attack_tempo_variety
+
+    atv = attack_tempo_variety(_atv_match([8.0] * 4))
+    rec = atv["home"]
+    assert rec["attacks"] == 4
+    assert rec["verdict"] is None
+    assert rec["top_share_pct"] is None
+    # A másik csapatnak egy támadása sincs — ott sem születhet ítélet.
+    assert atv["away"]["attacks"] == 0
+    assert atv["away"]["verdict"] is None
+
+
+def test_attack_tempo_variety_rovid_szakasz_nem_tamadas():
+    """A 3 mp alatti fázis-billegés nem támadás — nem szabad beszámítani."""
+    from handball.pipeline.tactics import attack_tempo_variety
+
+    atv = attack_tempo_variety(_atv_match([1.0] * 9))
+    assert atv["home"]["attacks"] == 0
+    assert atv["home"]["verdict"] is None

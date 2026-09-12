@@ -122,12 +122,15 @@ def test_front_turnovers_trigger_safe_finishing_focus():
     'Biztonságos befejezés' fókusz a hazaiaknak."""
     frames = []
     t = 0
+    # A birtoklás KITART (10 kocka @ 25 fps = 0,4 mp): az eladott labda
+    # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S), mert a
+    # kockánként átbillenő birtokos zaj, nem labdaszerzés.
     for _ in range(6):
-        for _ in range(3):
+        for _ in range(10):
             frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 35.0, 10.0)],
                                 ball=Ball(x=35.0, y=10.0, confidence=1.0)))
             t += 1
-        for _ in range(3):
+        for _ in range(10):
             frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 35.0, 10.0)],
                                 ball=Ball(x=35.0, y=10.0, confidence=1.0)))
             t += 1
@@ -947,3 +950,50 @@ def test_training_flags_weak_transition_finish():
     items = [it for it in out["away"]
              if it["title"] == "Kontra-befejezés"]
     assert items and "gyors gól" in items[0]["why"]
+
+
+def test_minden_edzes_tetel_a_kozos_alakot_koveti():
+    """Az edzés-fókusz tételei {area, title, why, drill} dictek.
+
+    Ez nem formalitás: a szabályokat `try/except Exception: pass`
+    védi, hogy egy elromló réteg ne vigye el a listát — a hátulütő,
+    hogy egy ROSSZ ALAKÚ tétel (vagy egy elgépelt változónév) NÉMÁN
+    eltűnik. Pontosan ez történt öt új szabállyal: nem létező
+    változóra hivatkoztak, a NameError elveszett a try/except-ben, és
+    a szabályok soha nem futottak le — a tesztek mégis zöldek voltak,
+    mert a mintameccsen nem szólaltak volna meg amúgy sem.
+
+    Az őr ezért NEM a mintameccsre néz, hanem a FORRÁSRA: az egyetlen
+    megengedett hozzáadás az `add(...)` segéd, ami a közös alakot
+    garantálja és a darabszám-korlátot is betartja.
+    """
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+           / "training.py").read_text(encoding="utf-8")
+    tiltott = [f"{i + 1}: {sor.strip()}"
+               for i, sor in enumerate(src.split("\n"))
+               if re.search(r"\b(out|focus|items)\s*\[\s*side\s*\]\s*\."
+                            r"append\s*\(", sor)
+               # Az `add(...)` segéd SAJÁT sora a kivétel: ő építi a
+               # közös alakot, ezért benne van a mezőnév.
+               and '"area"' not in sor]
+    assert not tiltott, (
+        "az edzés-fókusz tételeit CSAK az add(...) segéddel szabad "
+        "hozzáadni (közös alak + darabszám-korlát); nyers append: "
+        + "; ".join(tiltott))
+
+
+def test_az_edzes_tetelek_alakja_a_mintameccsen_is_helyes():
+    """A forrás-ellenőrzés párja: a tényleges kimenet is a közös alak."""
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    tf = training_focus(m)
+    for side in ("home", "away"):
+        for tetel in tf[side]:
+            assert isinstance(tetel, dict), tetel
+            assert set(tetel) == {"area", "title", "why", "drill"}, tetel
+            assert all(isinstance(v, str) and v for v in tetel.values()), tetel

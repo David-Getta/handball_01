@@ -25,7 +25,18 @@ from ..models.tracking import Match, Ball
 
 # Fizikai plauzibilitás: a kézilabda átlövésnél sem megy ~30 m/s fölé.
 MAX_BALL_SPEED_MS = 30.0
-# Ennél hosszabb hézagot nem pótolunk (nincs alapunk kitalálni, merre járt).
+# Ennél hosszabb hézagot nem pótolunk (nincs alapunk kitalálni, merre
+# járt). MÁSODPERCBEN, nem kockában: a feldolgozás ritkít (a termék
+# alapja minden 3. kocka), tehát ugyanaz a KOCKASZÁM a profiltól függően
+# fél és másfél másodperc között bármit jelenthetne. Másfél másodperc
+# alatt kétszer is passzolhatnak — az odaképzelt egyenes vonal nem
+# létező birtoklást és passzokat gyártana, és pont a birtoklás-, passz-
+# és eladás-alapú rétegek épülnek erre.
+# A fél másodperc a takarás és a motion blur tipikus hossza; ennél
+# tovább tényleg nincs adatunk.
+MAX_GAP_S = 0.5
+# Visszafelé kompatibilis alapérték a fps-t nem ismerő hívóknak
+# (12 kocka = 0,5 mp 25 fps-en — ez volt az eredeti szándék is).
 DEFAULT_MAX_GAP_FRAMES = 12
 # A pótolt (interpolált) pozíciók megbízhatósága — a kliens/elemzés lássa,
 # hogy ez származtatott adat.
@@ -63,14 +74,31 @@ def remove_ball_outliers(match: Match, max_speed_ms: float = MAX_BALL_SPEED_MS) 
     return removed
 
 
+def gap_limit_frames(match: Match) -> int:
+    """A pótolható hézag hossza KOCKÁBAN, a meccs saját képrátájából.
+
+    A `match.meta.fps` a TRACKING képrátája (a forrásé osztva a
+    ritkítással), tehát ebből a MAX_GAP_S valós másodperc a helyes
+    kockaszámot adja bármelyik minőségi profilon. Legalább 1.
+    """
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    return max(1, int(round(MAX_GAP_S * fps)))
+
+
 def interpolate_ball_gaps(match: Match,
-                          max_gap_frames: int = DEFAULT_MAX_GAP_FRAMES) -> int:
+                          max_gap_frames: int | None = None) -> int:
     """A rövid labda-hézagok lineáris pótlása. Visszaadja a pótolt kockák számát.
 
     Csak két VALÓDI észlelés közti, legfeljebb `max_gap_frames` hosszú hézagot
     töltünk ki; a pótolt pozíció confidence-e csökkentett (INTERPOLATED_CONFIDENCE),
     hogy megkülönböztethető legyen a mérttől.
+
+    `max_gap_frames=None` (alap): a korlát a meccs képrátájából jön
+    (MAX_GAP_S valós másodperc — lásd `gap_limit_frames`). Explicit
+    kockaszámot csak az adhat, aki tudja, mit mér.
     """
+    if max_gap_frames is None:
+        max_gap_frames = gap_limit_frames(match)
     frames = match.frames
     idxs = [i for i, f in enumerate(frames) if f.ball is not None]
     filled = 0
@@ -93,7 +121,7 @@ def interpolate_ball_gaps(match: Match,
 
 
 def smooth_ball(match: Match, max_speed_ms: float = MAX_BALL_SPEED_MS,
-                max_gap_frames: int = DEFAULT_MAX_GAP_FRAMES) -> dict:
+                max_gap_frames: int | None = None) -> dict:
     """A teljes labda-utómunka: kiugrók eldobása, majd hézagpótlás.
 
     A sorrend fontos: előbb a téves észleléseket dobjuk el, hogy a pótlás ne
