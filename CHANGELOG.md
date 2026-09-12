@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.114 óta)
 
+- **A felderítés-választó kettőt kér a figura-könyvtárhoz** (felderítés):
+  egy kijelölt meccsnél a képernyő mondja, hogy a visszatérő figurák
+  csak több meccsből látszanak — ne a kész jelentésben derüljön ki,
+  hogy az a szakasz üres.
+
 - **Újdonságok a frissítés után** (kezdőlap): az új verzió első
   indításakor egy ablak megmutatja, mi változott (a kiadás leírásából),
   aztán nem zavar többet. Aki nem olvas GitHubot, e nélkül nem tudta

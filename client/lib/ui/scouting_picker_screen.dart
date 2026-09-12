@@ -109,6 +109,18 @@ class _ScoutingPickerScreenState extends State<ScoutingPickerScreen> {
                   itemBuilder: (_, i) => _row(_matches[i]),
                 ),
               ),
+              // Egy meccs kijelölve: a figura-könyvtárhoz (mi tér vissza
+              // meccsről meccsre) legalább kettő kell — mondjuk is, ne a
+              // kész jelentésben derüljön ki, hogy az a szakasz üres.
+              if (_selected.length == 1)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.md),
+                  child: Text(
+                      "Még egy meccset jelölj ki ugyanattól a csapattól: a "
+                      "visszatérő figuráik (figura-könyvtár) csak több "
+                      "meccsből látszanak.",
+                      style: AppText.label),
+                ),
               if (_selected.length >= 2)
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.md),

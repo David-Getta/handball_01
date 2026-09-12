@@ -257,3 +257,14 @@ def test_frissites_utan_egyszer_megmutatja_az_ujdonsagokat():
     assert "setLastSeenVersion(appVersion)" in torzs
     assert "last_seen_version" in store and "setLastSeenVersion" in store
     assert "notesFor(" in upd and "releases/tags/v" in upd
+
+
+
+def test_a_felderites_valaszto_kettot_ker_a_figura_konyvtarhoz():
+    """Egy kijelölt meccsnél a választó mondja, hogy a figura-könyvtárhoz
+    még egy kell — ne a kész jelentésben derüljön ki az üres szakasz."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "scouting_picker_screen.dart").read_text(encoding="utf-8")
+    assert "_selected.length == 1" in src
+    assert "figura-könyvtár" in src
