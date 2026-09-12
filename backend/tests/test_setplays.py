@@ -1008,3 +1008,73 @@ def test_a_felderites_gyorsitotara_meccsenkent_egyszer_derit_fel(tmp_path, monke
     if r.status_code == 200:
         c.get("/matches/m1/scouting", params={"team": "home"})
         assert hivasok[-1] == ("m1", "home") and len(hivasok) == 3
+
+
+def test_a_repertoar_valtozas_uj_eltunt_maradt():
+    """Első fél: bal + jobb figura; második fél: bal + közép — a jobb
+    eltűnt, a közép új, a bal maradt (a két fél hozamával). Változás
+    nélkül nincs ítélet."""
+    from handball.pipeline.setplays import (
+        figure_repertoire_change, setplay_shapes)
+    from handball.pipeline.tactics import TacticsConfig  # noqa: F401
+
+    def sorok(m):
+        return [{**r, "match_id": m.meta.match_id}
+                for r in setplay_shapes(m)["home"]]
+
+    regi = sorok(_spl_match(["bal"] * 4 + ["jobb"] * 3, "r1"))
+    # A második félben a "közép" figura: y=10 (a felező-sáv).
+    ujm = _spl_match(["bal"] * 3, "u1")
+    kozep = _spl_match(["bal"] * 3, "u2")
+    for f in kozep.frames:
+        for p_ in f.players:
+            if p_.team == Team.HOME and p_.y == 4.0:
+                p_.y = 10.0
+        if f.ball is not None and f.ball.y == 4.0:
+            f.ball.y = 10.0
+    uj = sorok(ujm) + sorok(kozep)
+    v = figure_repertoire_change(regi, uj)
+    assert [f["zone"] for f in v["dropped"]] == ["jobb oldal, a kapuelőtér előtt"]
+    assert len(v["new"]) == 1 and v["new"][0]["zone"].startswith("közép")
+    assert len(v["kept"]) == 1 and v["kept"][0]["zone"].startswith("bal oldal")
+    assert v["kept"][0]["older"]["attacks"] == 4 and v["kept"][0]["newer"]["attacks"] == 3
+    assert "új figura a második félben" in v["verdict"] and "eltűnt" in v["verdict"]
+    # Változatlan repertoár: nincs ítélet.
+    assert figure_repertoire_change(regi, regi)["verdict"] is None
+    assert figure_repertoire_change([], [])["kept"] == []
+
+
+def test_a_szezon_riport_repertoar_szakasza(tmp_path):
+    """A szezon-riport a repertoár-változást is hozza (két meccs, az
+    első bal + jobb, a második csak bal → a jobb eltűnt)."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+    from handball.pipeline.report_html import season_report_html
+
+    html = season_report_html("A", {"metrics": [], "summary": []}, [], 2,
+                              repertoire={"kept": [], "new": [],
+                                          "dropped": [{"zone": "jobb oldal, a 9-es körül",
+                                                       "shape": [0.0] * 18,
+                                                       "attacks": 3, "goals": 1,
+                                                       "goal_pct": 33.3}],
+                                          "verdict": "x"})
+    assert "Repertoár-változás" in html and "ELTŰNT a második félre" in html
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    m1 = _spl_match(["bal"] * 4 + ["jobb"] * 3, "m1")
+    m2 = _spl_match(["bal"] * 3, "m2")
+    m1.meta.date = "2026-01-01"
+    m2.meta.date = "2026-02-01"
+    for m in (m1, m2):
+        (d / f"{m.meta.match_id}.json").write_text(json.dumps(m.to_dict()),
+                                                   encoding="utf-8")
+    r = TestClient(create_app()).get("/season/report", params={"team": "A"})
+    assert r.status_code == 200
+    assert "Repertoár-változás" in r.text and "ELTŰNT" in r.text

@@ -4419,8 +4419,20 @@ def create_app():
                        for e in entries[:cut]]
         newer_items = [{"match_id": e[1], "team": e[2]}
                        for e in entries[cut:]]
-        tr = trend_report(_combined_report({"items": older_items}),
-                          _combined_report({"items": newer_items}))
+        rep_older = _combined_report({"items": older_items})
+        rep_newer = _combined_report({"items": newer_items})
+        tr = trend_report(rep_older, rep_newer)
+        # Repertoár-változás: mi jött be és mi tűnt el a két fél között
+        # — hibatűrően, névvel.
+        repertoire = None
+        try:
+            from ..pipeline.setplays import figure_repertoire_change
+            repertoire = figure_repertoire_change(rep_older.setplay_shapes,
+                                                  rep_newer.setplay_shapes)
+            for k in ("kept", "new", "dropped"):
+                repertoire[k] = _nevesit(team, repertoire.get(k))
+        except Exception:
+            repertoire = None
         focuses = []
         try:
             focuses = (library_training_focus().get("teams", {})
@@ -4530,7 +4542,7 @@ def create_app():
         return HTMLResponse(content=season_report_html(
             team, tr, focuses, len(entries), timeline=timeline,
             venue=venue, leaders=leaders, opponents=opponents,
-            figure_library=figure_library))
+            figure_library=figure_library, repertoire=repertoire))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):

@@ -4435,19 +4435,50 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                        venue: dict | None = None,
                        leaders: dict | None = None,
                        opponents: list[dict] | None = None,
-                       figure_library: dict | None = None) -> str:
+                       figure_library: dict | None = None,
+                       repertoire: dict | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
 
     `figure_library` (opcionális): a SAJÁT csapat figura-könyvtára
     (setplays.setplay_library a szezon összes meccséből) — a meccsről
     meccsre visszatérő figuráink rajzzal és hozammal.
+    `repertoire` (opcionális): a figura-repertoár változása a szezon
+    két fele között (setplays.figure_repertoire_change) — mi jött be,
+    mi tűnt el, mi maradt (a két fél hozamával).
     """
     table = _trend_metrics_table(tr)
     figures_html = ""
     if (figure_library or {}).get("recurring"):
         figures_html = ("<h2>Saját visszatérő figuráink (meccsről meccsre)</h2>"
                         + _setplay_library_rows(figure_library))
+    if repertoire and (repertoire.get("new") or repertoire.get("dropped")
+                       or repertoire.get("kept")):
+        def _sor(f, szoveg):
+            return ('<div class="bar-row" style="align-items:center">'
+                    f'{_figure_svg(f.get("shape") or [], 120, 60)}'
+                    f'<span><b>{escape(str(f.get("name") or f.get("zone", "")))}</b>'
+                    f' — {szoveg}</span></div>')
+        reszek = []
+        for f in repertoire.get("new") or []:
+            reszek.append(_sor(f, f"ÚJ a második félben: {int(f['attacks'])} "
+                                  f"támadás, {int(f['goals'])} gól "
+                                  f"({float(f['goal_pct']):.0f}%)"))
+        for f in repertoire.get("dropped") or []:
+            reszek.append(_sor(f, f"ELTŰNT a második félre (az elsőben "
+                                  f"{int(f['attacks'])} támadás, "
+                                  f"{int(f['goals'])} gól)"))
+        for f in repertoire.get("kept") or []:
+            o, n = f["older"], f["newer"]
+            reszek.append(_sor(f, f"maradt: {int(o['attacks'])} támadás "
+                                  f"({float(o['goal_pct']):.0f}%) → "
+                                  f"{int(n['attacks'])} támadás "
+                                  f"({float(n['goal_pct']):.0f}%)"))
+        figures_html += ("<h2>Repertoár-változás (első fél → második fél)</h2>"
+                         + "".join(reszek)
+                         + '<p class="note">A szezon első és második felének '
+                           'figurái összevetve: mi jött be, mi tűnt el, mi '
+                           'maradt — a hozamával.</p>')
     summary = "".join(f"<li>{escape(s_)}</li>"
                       for s_ in tr.get("summary", []))
     timeline_html = ""

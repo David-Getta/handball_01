@@ -1115,3 +1115,63 @@ def figure_formation_summary(rows: list,
     figures.sort(key=lambda r: -r["attacks"])
     verdict = next((f["verdict"] for f in figures if f["verdict"]), None)
     return {"figures": figures, "verdict": verdict}
+
+
+# ---- Repertoár-változás -----------------------------------------------------
+# A szezon két fele közt mi jött be és mi tűnt el a figurák közül: a saját
+# csapatnál "él-e még a beúszós kereszt", az ellenfélnél "van-e új
+# figurájuk, amire a régi felderítés nem készít fel".
+SPR_MIN_ATTACKS = SPL_MIN_ATTACKS   # ennyi támadás kell, hogy egy alak számítson
+
+
+def figure_repertoire_change(older_rows: list, newer_rows: list,
+                             threshold: float = SPL_MERGE_THRESHOLD) -> dict:
+    """A figura-repertoár változása két időszak (alak-sorai) között.
+
+    Mindkét időszak soraiból könyvtár épül (setplay_library), majd az
+    ÚJABB alakjait a RÉGEBBI alakjaihoz párosítjuk (távolság ≤ threshold):
+    - "kept": mindkét félben megvan (a két fél támadás- és gólaránya);
+    - "new": csak az újabb félben (legalább SPR_MIN_ATTACKS támadás);
+    - "dropped": csak a régebbiben (legalább SPR_MIN_ATTACKS támadás).
+
+    Visszatérés: {"kept": [{"zone","shape","older":{"attacks","goals",
+    "goal_pct"},"newer":{...}}], "new": [figura-sor], "dropped":
+    [figura-sor], "verdict": mondat | None (nincs változás vagy kevés
+    adat)}.
+    """
+    regi = [f for f in setplay_library(older_rows).get("figures") or []
+            if f["attacks"] >= SPR_MIN_ATTACKS]
+    uj = [f for f in setplay_library(newer_rows).get("figures") or []
+          if f["attacks"] >= SPR_MIN_ATTACKS]
+    kept, new, parositott = [], [], set()
+    for f in uj:
+        legjobb, legjobb_d = None, threshold
+        for i, r in enumerate(regi):
+            if i in parositott:
+                continue
+            d = _distance(f["shape"], r["shape"])
+            if d <= legjobb_d:
+                legjobb, legjobb_d = i, d
+        if legjobb is None:
+            new.append(f)
+            continue
+        parositott.add(legjobb)
+        r = regi[legjobb]
+        kept.append({"zone": f["zone"], "shape": f["shape"],
+                     "name": f.get("name"),
+                     "older": {"attacks": r["attacks"], "goals": r["goals"],
+                               "goal_pct": r["goal_pct"]},
+                     "newer": {"attacks": f["attacks"], "goals": f["goals"],
+                               "goal_pct": f["goal_pct"]}})
+    dropped = [r for i, r in enumerate(regi) if i not in parositott]
+    verdict = None
+    if new or dropped:
+        reszek = []
+        if new:
+            reszek.append("új figura a második félben: "
+                          + ", ".join(f.get("name") or f["zone"] for f in new[:2]))
+        if dropped:
+            reszek.append("eltűnt: "
+                          + ", ".join(f.get("name") or f["zone"] for f in dropped[:2]))
+        verdict = "; ".join(reszek)
+    return {"kept": kept, "new": new, "dropped": dropped, "verdict": verdict}

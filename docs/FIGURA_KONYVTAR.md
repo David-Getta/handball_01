@@ -44,7 +44,11 @@ biztosan lehet készülni. (`handball/pipeline/setplays.py`, a
   figurájuk × a ti szabad lövést engedő falatok), "Visszatérő figuráik"
   szakasz rajzzal a felderítő képernyőn és a nyomtatható jelentésben.
 - **Szezon-riport**: "Saját visszatérő figuráink" — a saját csapat
-  könyvtára a szezon összes meccséből, hozammal.
+  könyvtára a szezon összes meccséből, hozammal; és a "Repertoár-
+  változás" szakasz (lásd lejjebb).
+- **Szezon képernyő**: `GET /library/figure-library?team=` — csapatonként
+  a visszatérő figurák rajzzal, névvel (a saját csapatnál a repertoár, az
+  ellenfélnél a felkészülés lapja).
 - **Meccs-elemző** és **meccsjelentés**: a meccs figurái alakkal (mini-
   pálya, edzői név), a 478. edzés-szabály (a leggyakoribb saját figura gól
   nélkül → új befejezés), edzői összefoglaló mondat.
@@ -90,6 +94,21 @@ riasztás szövege, klip-címke, és a nyomtatható jelentések
 (`figure_namer` a meccsjelentésben). A kliens a felderítés figura-
 sorának ceruza-gombjával nevez.
 
+## Repertoár-változás
+
+A könyvtár a szezon EGÉSZÉRE mondja, mit hoznak; a
+`figure_repertoire_change` azt, mi VÁLTOZOTT: a szezon-riport a csapat
+meccseit időrendben két félre vágja, mindkét fél alak-soraiból könyvtár
+épül, és az újabb fél figuráit a régebbiéhez párosítja
+(`SPL_MERGE_THRESHOLD`-on belüli alak = ugyanaz a figura). Három lista:
+"maradt" (a két fél támadás- és gólarányával — él-e még, hoz-e még
+gólt), "új" (csak a második félben, legalább `SPR_MIN_ATTACKS`
+támadással) és "eltűnt" (csak az elsőben). A saját csapatnál a
+kérdés "él-e még a beúszós kereszt", az ellenfélnél "van-e új
+figurájuk, amire a régi felderítés nem készít fel". Felülete a
+szezon-riport "Repertoár-változás (első fél → második fél)" szakasza,
+rajzzal és névvel.
+
 ## Korlátok
 
 - Egy meccsből nincs könyvtár: a felderítés-választó ezért kettőt kér.
@@ -105,6 +124,7 @@ sorának ceruza-gombjával nevez.
 szakasz): a tükörkép irány-normálva egy alak; edzői nevek; a könyvtár két
 meccs (a másodikban a másik kapura támadva) között visszatérő figurát
 talál, egy meccsből nem; a VALÓDI felderítés-út; a riasztás- és a
-setplays-végpont; a meccsenkénti gyorsítótár. A rajz-felületek őrei a
+setplays-végpont; a meccsenkénti gyorsítótár; a repertoár-változás
+(új / eltűnt / maradt) és a szezon-riport szakasza. A rajz-felületek őrei a
 `test_client_calib_check.py`-ban, a jelentések a `test_report_html.py` és
 `test_match_report.py` fájlokban.
