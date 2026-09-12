@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.113 óta)
+## Kiadatlan (a v0.1.114 óta)
 
 - **A kiadás leírása tényleg a változásokat mutatja** (frissítés): a
   GitHub-kiadás leírása — amit az app a "Mi változik?" gombra mutat a
@@ -23,6 +23,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   meccsről meccsre visszatérő fő figurát veszi, és ebből a meccsből
   kivágja azokat a támadásokat, amelyek ezt játsszák. Egy meccsből nincs
   könyvtár: több elemzett meccs kell hozzá — a gomb ezt mondja is.
+
+## v0.1.114 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: a visszatérő figura videón (új klip-típus), és
+> illeszkedés-mérés a kalibráció összenézetében is.
 
 - **Illeszkedés-ellenőrzés az összenézetben is** (kalibráció): a két
   térfél összeillesztett nézetében eddig nem volt gépi mérés. Mostantól
