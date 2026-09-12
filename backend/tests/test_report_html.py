@@ -113,6 +113,10 @@ def test_a_visszatero_figurak_szakasza_rajzzal():
     html = scouting_report_html(_rep(setplay_library=lib))
     assert "Visszatérő figuráik" in html
     assert "bal oldal, a kapuelőtér előtt" in html
+    # Elnevezett figura: a név elöl, a zóna zárójelben.
+    lib["recurring"][0]["name"] = "Beúszós <kereszt>"
+    nevvel = scouting_report_html(_rep(setplay_library=lib))
+    assert "<b>Beúszós &lt;kereszt&gt;</b> (bal oldal, a kapuelőtér előtt)" in nevvel
     assert "3 meccsen 11 támadás, 4 gól (36%)" in html
     assert html.count("<svg") >= 2 and "<img" not in html   # jelkép + alak
     ures = scouting_report_html(_rep(setplay_library={"recurring": []}))

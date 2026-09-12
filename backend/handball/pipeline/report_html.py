@@ -320,7 +320,8 @@ def _setplay_library_rows(lib: dict) -> str:
         out.append(
             '<div class="bar-row" style="align-items:center">'
             f'{_figure_svg(f.get("shape") or [])}'
-            f'<span><b>{escape(str(f.get("zone", "")))}</b> — '
+            f'<span><b>{escape(str(f.get("name") or f.get("zone", "")))}</b>'
+            f'{(" (" + escape(str(f.get("zone", ""))) + ")") if f.get("name") else ""} — '
             f'{int(f.get("matches", 0))} meccsen {int(f.get("attacks", 0))} '
             f'támadás, {int(f.get("goals", 0))} gól '
             f'({float(f.get("goal_pct", 0.0)):.0f}%)</span></div>')
@@ -921,14 +922,17 @@ def _pass_pairs(match, events, team_value: str, top: int = 5):
 def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                       heatmaps: dict | None = None,
                       player_stats: dict | None = None,
-                      notes: list | None = None) -> str:
+                      notes: list | None = None,
+                      figure_namer=None) -> str:
     """A meccs egyoldalas edzői jelentése (önálló HTML; böngészőből PDF).
 
     Bemenetek: a Match objektum + a taktikai profil (team_style_profile),
     a felismert események (detect_events), a minőség-önellenőrzés
     (compute_quality_report, lehet None), opcionálisan a csapat-hőtérképek
     ({"home": Heatmap, "away": Heatmap}), a játékos-statisztikák
-    (compute_player_stats — terhelés-tábla) és az edzői jegyzetek.
+    (compute_player_stats — terhelés-tábla), az edzői jegyzetek és a
+    `figure_namer(csapatnév, alak) -> név|None` — az elnevezett figurák
+    neve a "Figuráik (alakkal)" szakaszban.
     Minden szakasz hiányzó adatnál is értelmes szöveget ad — a jelentés
     sosem "törik el".
 
@@ -940,14 +944,16 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     with primitive_cache(match):
         return _match_report_html_cached(
             match, tactics, events, quality, heatmaps=heatmaps,
-            player_stats=player_stats, notes=notes)
+            player_stats=player_stats, notes=notes,
+            figure_namer=figure_namer)
 
 
 def _match_report_html_cached(match, tactics: dict, events: list,
                               quality: dict | None,
                               heatmaps: dict | None = None,
                               player_stats: dict | None = None,
-                              notes: list | None = None) -> str:
+                              notes: list | None = None,
+                              figure_namer=None) -> str:
     """A jelentés tényleges felépítése (lásd `match_report_html`)."""
 
     meta = match.meta
@@ -1060,12 +1066,21 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             rows = (_shp.get(key) or [])[:3]
             if not rows:
                 continue
+
+            def _fnev(f, _name=name):
+                try:
+                    n = figure_namer(_name, f.get("shape")) if figure_namer else None
+                except Exception:
+                    n = None
+                z = escape(str(f.get("zone", "")))
+                return f"<b>{escape(str(n))}</b> ({z})" if n else z
+
             _cols.append(
                 f'<div style="flex:1;min-width:260px"><b>{escape(str(name))}</b>'
                 + "".join(
                     '<div class="bar-row" style="align-items:center">'
                     f'{_figure_svg(f.get("shape") or [], 120, 60)}'
-                    f'<span>{escape(str(f.get("zone", "")))} — '
+                    f'<span>{_fnev(f)} — '
                     f'{int(f.get("attacks", 0))} támadás, '
                     f'{int(f.get("goals", 0))} gól</span></div>'
                     for f in rows)

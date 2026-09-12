@@ -1884,6 +1884,11 @@ def test_a_jelentes_rajzolja_a_figurakat_ha_vannak():
                              {}, [], None)
     assert "Figuráik (alakkal)" in html
     assert "bal oldal" in html and "4 támadás" in html
+    # Elnevezett figura a jelentésben: a névadó a csapatnevet és az alakot kapja.
+    nevvel = match_report_html(
+        _spl_match(["bal"] * 4 + ["jobb"] * 3, "mr"), {}, [], None,
+        figure_namer=lambda team, shape: "Kereszt" if team == "A" and shape[0 + 4] > 0 else None)
+    assert "<b>Kereszt</b> (bal oldal" in nevvel or "<b>Kereszt</b> (jobb oldal" in nevvel
     assert html.count("<svg") >= 3     # jelkép + két alak
     rovid = match_report_html(simulate_ground_truth(duration_s=5, fps=25.0,
                                                     seed=1), {}, [], None)

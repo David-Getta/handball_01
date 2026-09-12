@@ -3,14 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.118 óta)
+## Kiadatlan (a v0.1.119 óta)
 
 - **A figurák elnevezhetők** (felderítés): a könyvtár "bal oldal, a
   kapuelőtér előtt" néven ismeri a figurát — az edző "beúszós
   kereszt"-nek hívja. A felderítés figura-sorában a ceruza-gombbal név
   adható; a név az alakhoz kötve, csapatonként él, és minden felületen
-  látszik: felderítés, meccs-összefoglaló, élő riasztás, klip-címke.
+  látszik: felderítés, meccs-összefoglaló, élő riasztás, klip-címke, a
+  nyomtatható felderítő jelentés, a meccsjelentés és a szezon-riport.
   Üres név törli.
+
+## v0.1.119 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: mezszámok a böngészős 3D/VR nézetben, és a mért
+> illeszkedés a mentett kalibrációval együtt marad.
 
 - **A mért illeszkedés a mentett kalibrációval együtt marad** (új
   elemzés): a videóhoz mentett kalibráció a mentéskor mért illeszkedést

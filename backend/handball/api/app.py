@@ -3244,6 +3244,17 @@ def create_app():
     # hosszú) meccs nem olvas elavult alakot.
     _shapes_cache: dict = {}
 
+    def _lib_nevekkel(rep) -> None:
+        """A ScoutingReport figura-könyvtárának sorai névvel — a
+        nyomtatható jelentés a jelentés-objektumból épül."""
+        try:
+            lib = rep.setplay_library or {}
+            if lib:
+                lib["figures"] = _nevesit(rep.team_name, lib.get("figures"))
+                lib["recurring"] = _nevesit(rep.team_name, lib.get("recurring"))
+        except Exception:
+            pass
+
     def _report_nevekkel(d: dict) -> dict:
         """A felderítés-szótár figura-könyvtárának sorai névvel (a
         felderített csapat elnevezett alakjai szerint)."""
@@ -4497,6 +4508,10 @@ def create_app():
         try:
             figure_library = _combined_report(
                 {"items": older_items + newer_items}).setplay_library
+            figure_library["figures"] = _nevesit(
+                team, figure_library.get("figures"))
+            figure_library["recurring"] = _nevesit(
+                team, figure_library.get("recurring"))
         except Exception:
             figure_library = None
         from ..pipeline.report_html import season_report_html
@@ -9573,7 +9588,8 @@ def create_app():
             player_stats = None
         html = match_report_html(match, tactics, events, quality,
                                  heatmaps=heatmaps, player_stats=player_stats,
-                                 notes=_load_notes(match_id))
+                                 notes=_load_notes(match_id),
+                                 figure_namer=_figure_name_for)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
     @app.get("/matches/{match_id}/scouting")
@@ -9627,6 +9643,7 @@ def create_app():
                 scout_team(match, own_t, TacticsConfig()), rep_sc) or None
         except Exception:
             matchup = None
+        _lib_nevekkel(rep_sc)
         html = scouting_report_html(rep_sc, playbook_match=pm,
                                     matchup=matchup)
         return Response(content=html, media_type="text/html; charset=utf-8")
@@ -9723,6 +9740,7 @@ def create_app():
                 matchup = matchup_plan(_combined_report(own_body), rep)
             except Exception:
                 matchup = None
+        _lib_nevekkel(rep)
         html = scouting_report_html(rep, matchup=matchup)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
