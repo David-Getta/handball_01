@@ -48,6 +48,8 @@ A követési adatból taktikai fogalmakat építünk:
 - **Tempó-metrikák**: támadások hossza, lerohanások aránya, sebességek, futott táv.
 - **Figura- (set play) felismerés**: játékos-trajektóriák szekvencia-modellezése
   és klaszterezése (hasonló mozgásminták = ugyanaz a figura).
+  Meccsek között: a figura-könyvtár (mi tér vissza meccsről meccsre) —
+  lásd `docs/FIGURA_KONYVTAR.md`.
 - **Eseményfelismerés**: gól, lövés, passz, eladott labda — temporális
   akciófelismerés.
 
