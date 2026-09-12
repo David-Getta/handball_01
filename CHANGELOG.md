@@ -3,13 +3,26 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.121 óta)
+## Kiadatlan (a v0.1.122 óta)
+
+- **Gyorsabb felderítés, meccsterv és szezon** (teljesítmény): egy
+  meccs felderítése (ötszáz réteg) eddig minden kérésnél újra lefutott
+  — a meccsterv, az egyesített felderítés, a szezon-riport és a
+  figura-könyvtár ugyanazt a meccset újra és újra felderítette (tíz
+  meccsnél percek). Mostantól meccsenként és csapatonként egyszer fut;
+  az újrafeldolgozott, levágott, csapatnév-cserélt vagy esemény-
+  felülírással módosított meccs újraszámol.
 
 - **Visszatérő figurák a Szezon képernyőn** (szezon): csapatonként a
   meccsről meccsre visszatérő figurák rajzzal, névvel, meccs / támadás /
   gól számmal — a saját csapatnál a repertoár, az ellenfélnél a
   felkészülés lapja, egy helyen az appban (eddig csak a nyomtatható
   szezon-riportban volt).
+
+## v0.1.122 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: új réteg, figura × védőforma — melyik falban
+> álljatok fel a fő figurájuk ellen.
 
 - **Figura × védőforma** (új réteg): MELYIK FAL ELLEN működik a
   figurájuk — a támadás-szakaszokat figurák szerint, a védekező csapat

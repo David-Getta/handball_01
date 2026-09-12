@@ -4387,8 +4387,8 @@ def create_app():
                       else Team.AWAY)
             side_b = Team.AWAY if side_a == Team.HOME else Team.HOME
             matchup = matchup_plan(
-                scout_team(m_last, side_a, TacticsConfig()),
-                scout_team(m_last, side_b, TacticsConfig())) or None
+                _scout_cached(m_last, side_a),
+                _scout_cached(m_last, side_b)) or None
         except Exception:
             matchup = None
         from ..pipeline.report_html import h2h_report_html
@@ -9392,10 +9392,8 @@ def create_app():
                     try:
                         from ..pipeline.scouting import (matchup_plan,
                                                          scout_team)
-                        rep_h = scout_team(match, Team.HOME,
-                                           TacticsConfig())
-                        rep_a = scout_team(match, Team.AWAY,
-                                           TacticsConfig())
+                        rep_h = _scout_cached(match, Team.HOME)
+                        rep_a = _scout_cached(match, Team.AWAY)
                         mt_lines = []
                         plan_h = matchup_plan(rep_h, rep_a)
                         if plan_h:
@@ -9627,7 +9625,7 @@ def create_app():
         except ValueError:
             raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
         return _report_nevekkel(
-            report_to_dict(scout_team(match, t, TacticsConfig())))
+            report_to_dict(_scout_cached(match, t)))
 
     @app.get("/matches/{match_id}/scouting/export")
     def export_scouting(match_id: str, team: str = "away"):
@@ -9652,7 +9650,7 @@ def create_app():
             except Exception:
                 continue
         pm = match_attacks_to_playbook(match, plays, TacticsConfig(), team=t) if plays else None
-        rep_sc = scout_team(match, t, TacticsConfig())
+        rep_sc = _scout_cached(match, t)
         # Meccsterv-illesztés a másik oldallal (mint a képernyő
         # MECCSTERV kártyája) — hibatűrően, enélkül is teljes.
         matchup = None
@@ -9660,13 +9658,38 @@ def create_app():
             from ..pipeline.scouting import matchup_plan
             own_t = Team.HOME if t == Team.AWAY else Team.AWAY
             matchup = matchup_plan(
-                scout_team(match, own_t, TacticsConfig()), rep_sc) or None
+                _scout_cached(match, own_t), rep_sc) or None
         except Exception:
             matchup = None
         _lib_nevekkel(rep_sc)
         html = scouting_report_html(rep_sc, playbook_match=pm,
                                     matchup=matchup)
         return Response(content=html, media_type="text/html; charset=utf-8")
+
+    # A felderítő jelentések gyorsítótára: (meccs, csapat) → ScoutingReport.
+    # Egy jelentés ötszáz réteget futtat egy meccsen; a meccsterv, az
+    # egyesített felderítés, a szezon-riport és a figura-könyvtár ugyanazt
+    # a meccset újra és újra felderítette (tíz meccsnél percek). A kulcs
+    # a meccs azonosságát ÉS tartalmát viszi (objektum, kockaszám,
+    # csapatnevek — a csere is —, esemény-felülírások): újrafeldolgozott,
+    # levágott vagy felülírt meccs nem olvas elavult jelentést. A hívó
+    # mindig MÁSOLATOT kap: a névesítés és a meccsterv helyben módosít.
+    _scout_cache: dict = {}
+
+    def _scout_cached(match, team):
+        import copy
+        try:
+            ov = json.dumps(getattr(match.meta, "event_overrides", None) or [],
+                            sort_keys=True, default=str)
+        except Exception:
+            ov = ""
+        kulcs = (match.meta.match_id, id(match), team.value, len(match.frames),
+                 match.meta.home_team, match.meta.away_team, hash(ov))
+        rep = _scout_cache.get(kulcs)
+        if rep is None:
+            rep = scout_team(match, team, TacticsConfig())
+            _scout_cache[kulcs] = rep
+        return copy.deepcopy(rep)
 
     def _combined_report(body: dict):
         """Közös segéd: a törzs items-eiből egyesített ScoutingReport-ot épít."""
@@ -9682,7 +9705,7 @@ def create_app():
                 t = Team(it.get("team", "away"))
             except ValueError:
                 raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
-            reports.append(scout_team(m, t, TacticsConfig()))
+            reports.append(_scout_cached(m, t))
         return combine_reports(reports)
 
     @app.post("/scouting")

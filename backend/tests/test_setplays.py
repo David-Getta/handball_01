@@ -966,3 +966,45 @@ def test_a_csapat_figura_konyvtara_vegpont(tmp_path):
                                      params={"team": "A"}).json()
     assert r["recurring"] and r["recurring"][0]["matches"] == 2
     assert "name" in r["recurring"][0]
+
+
+def test_a_felderites_gyorsitotara_meccsenkent_egyszer_derit_fel(tmp_path, monkeypatch):
+    """A felderítés (500+ réteg) meccsenként és csapatonként EGYSZER fut:
+    a második kérés a gyorsítótárból jön (másolatként — a névesítés nem
+    szivárog vissza), az esemény-felülírás után viszont újraszámol."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api import app as app_mod
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    (d / "m1.json").write_text(
+        json.dumps(_spl_match(["bal"] * 4 + ["jobb"] * 3, "m1").to_dict()),
+        encoding="utf-8")
+    hivasok = []
+    eredeti = app_mod.scout_team
+    monkeypatch.setattr(app_mod, "scout_team",
+                        lambda m, t, c=None: (hivasok.append((m.meta.match_id, t.value))
+                                              or eredeti(m, t, c)))
+    c = TestClient(app_mod.create_app())
+    r1 = c.get("/matches/m1/scouting", params={"team": "home"}).json()
+    r2 = c.get("/matches/m1/scouting", params={"team": "home"}).json()
+    assert r1["team_name"] == "A" and r1["setplay_shapes"] == r2["setplay_shapes"]
+    assert hivasok == [("m1", "home")]
+    # A meccsterv is ugyanabból a jelentésből dolgozik (nem derít fel újra).
+    c.post("/scouting/matchup", json={
+        "own": {"items": [{"match_id": "m1", "team": "home"}]},
+        "opp": {"items": [{"match_id": "m1", "team": "away"}]}})
+    assert hivasok == [("m1", "home"), ("m1", "away")]
+    # Esemény-felülírás: a meccs tartalma változott → újraszámol.
+    r = c.post("/matches/m1/events/overrides",
+               json={"overrides": [{"t": 3, "type": "goal", "team": "home"}]})
+    if r.status_code == 200:
+        c.get("/matches/m1/scouting", params={"team": "home"})
+        assert hivasok[-1] == ("m1", "home") and len(hivasok) == 3
