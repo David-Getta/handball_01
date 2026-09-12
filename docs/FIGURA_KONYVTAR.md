@@ -58,6 +58,20 @@ A csapat könyvtárát az API a könyvtár ÖSSZES elemzett meccséből építi
 alak-gyorsítótárral: (meccs-azonosító, kockaszám) kulccsal, hogy az
 újrafeldolgozott meccs ne olvasson elavult alakot.
 
+## Figura-nevek
+
+A könyvtár zóna-neve ("bal oldal, a kapuelőtér előtt") helyett az edző
+a saját szavával nevezheti a figurát ("beúszós kereszt"). A név
+könyvtár-szintű (`figures.json` a meccs-mappa mellett, mint a
+játékos-nevek), csapatonként az ALAKHOZ tartozik: a
+`SPL_MERGE_THRESHOLD`-on belüli alak kapja — így a következő meccs
+ugyanazon figurája is a nevét viseli. Végpontok: `GET/POST
+/library/figures` (közeli alak átnevez, üres név töröl). Az API minden
+figura-sort névvel ad (`_nevesit`): felderítés, `/setplays`, élő
+riasztás szövege, klip-címke, és a nyomtatható jelentések
+(`figure_namer` a meccsjelentésben). A kliens a felderítés figura-
+sorának ceruza-gombjával nevez.
+
 ## Korlátok
 
 - Egy meccsből nincs könyvtár: a felderítés-választó ezért kettőt kér.
