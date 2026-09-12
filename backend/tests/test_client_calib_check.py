@@ -314,3 +314,20 @@ def test_az_inditas_elotti_lista_az_illeszkedest_is_mondja():
     # (újraindítás után is látszik), és a betöltés visszaolvassa.
     assert '"fit": c.fit' in upload and '"fit_verdict": c.fitVerdict' in upload
     assert 'fitVerdict: m["fit_verdict"] as String?' in upload
+
+
+def test_a_figura_elnevezheto_a_felderitesen():
+    """A könyvtár zóna-neve helyett az edző szava: a felderítés
+    figura-sorában elnevezés-gomb (tooltip-pel), a név a sorban és az
+    összefoglalóban is látszik."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    scout = (gyoker / "client" / "lib" / "ui"
+             / "scouting_screen.dart").read_text(encoding="utf-8")
+    assert "_nameFigure(" in scout and "saveFigureName(" in scout
+    assert '"Figura elnevezése"' in scout
+    api = (gyoker / "client" / "lib" / "services"
+           / "api_client.dart").read_text(encoding="utf-8")
+    assert "/library/figures" in api
+    summ = (gyoker / "client" / "lib" / "ui"
+            / "summary_panel.dart").read_text(encoding="utf-8")
+    assert 'f["name"]' in summ

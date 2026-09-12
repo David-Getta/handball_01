@@ -408,6 +408,7 @@ class SummaryPanel extends StatelessWidget {
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Text(
+                              "${(f["name"] as String?)?.isNotEmpty == true ? "${f["name"]} · " : ""}"
                               "${f["zone"] ?? "?"} — ${f["attacks"]} támadás, "
                               "${f["goals"]} gól",
                               style: AppText.label.copyWith(fontSize: 12)),

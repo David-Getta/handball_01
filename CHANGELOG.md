@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.118 óta)
 
+- **A figurák elnevezhetők** (felderítés): a könyvtár "bal oldal, a
+  kapuelőtér előtt" néven ismeri a figurát — az edző "beúszós
+  kereszt"-nek hívja. A felderítés figura-sorában a ceruza-gombbal név
+  adható; a név az alakhoz kötve, csapatonként él, és minden felületen
+  látszik: felderítés, meccs-összefoglaló, élő riasztás, klip-címke.
+  Üres név törli.
+
 - **A mért illeszkedés a mentett kalibrációval együtt marad** (új
   elemzés): a videóhoz mentett kalibráció a mentéskor mért illeszkedést
   is viszi — az app újraindítása vagy újrafeldolgozás után is látszik

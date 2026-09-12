@@ -749,3 +749,53 @@ def test_a_setplays_vegpont_az_alakokat_is_adja(tmp_path):
     assert "efficiency" in r and r["shapes"] is not None
     assert [x["attacks"] for x in r["shapes"]["home"]] == [4, 3]
     assert r["shapes"]["home"][0]["zone"].startswith("bal oldal")
+
+
+def test_a_figura_nevek_a_konyvtar_minden_feluleten_megjelennek(tmp_path):
+    """Az edző elnevezi az alakot ("Beúszós kereszt"): a név a
+    könyvtár-szintű tárban él, az alakhoz kötve (a könyvtári küszöbön
+    belül), és a /setplays, a /scouting, a /figure-alerts is viszi;
+    közeli alak átnevez (nem dupláz), üres név töröl."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    for mid, sides in (("m1", ["bal"] * 4 + ["jobb"] * 3), ("m2", ["bal"] * 3)):
+        (d / f"{mid}.json").write_text(
+            json.dumps(_spl_match(sides, mid).to_dict()), encoding="utf-8")
+    c = TestClient(create_app())
+    alak = c.get("/matches/m1/setplays").json()["shapes"]["home"][0]
+    assert alak["name"] is None
+    # Hibás törzsek.
+    assert c.post("/library/figures", json={"team": "", "shape": alak["shape"],
+                                            "name": "x"}).status_code == 400
+    assert c.post("/library/figures", json={"team": "A", "shape": [1, 2],
+                                            "name": "x"}).status_code == 400
+    r = c.post("/library/figures", json={"team": "A", "shape": alak["shape"],
+                                         "name": "Beúszós kereszt"})
+    assert r.status_code == 200 and len(r.json()["figures"]) == 1
+    assert c.get("/library/figures", params={"team": "A"}).json()["figures"]["A"][0]["name"] == "Beúszós kereszt"
+    # Minden felület viszi.
+    assert c.get("/matches/m1/setplays").json()["shapes"]["home"][0]["name"] == "Beúszós kereszt"
+    sc = c.get("/matches/m1/scouting", params={"team": "home"}).json()
+    assert sc["setplay_library"]["figures"][0]["name"] == "Beúszós kereszt"
+    al = c.get("/matches/m1/figure-alerts").json()["alerts"]
+    assert al and al[0]["name"] == "Beúszós kereszt" and "Beúszós kereszt" in al[0]["text"]
+    # Közeli alak (kis eltérés) → átnevezés, nem új tétel.
+    kozeli = [v + 0.01 for v in alak["shape"]]
+    r = c.post("/library/figures", json={"team": "A", "shape": kozeli,
+                                         "name": "Kereszt bal"})
+    assert [f["name"] for f in r.json()["figures"]] == ["Kereszt bal"]
+    # Üres név töröl.
+    r = c.post("/library/figures", json={"team": "A", "shape": alak["shape"],
+                                         "name": ""})
+    assert r.json()["figures"] == []
+    assert c.get("/matches/m1/setplays").json()["shapes"]["home"][0]["name"] is None

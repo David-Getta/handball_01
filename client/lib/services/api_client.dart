@@ -185,6 +185,21 @@ class ApiClient {
     return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["id"] as String;
   }
 
+  /// Egy csapat figura-ALAKJÁNAK elnevezése (POST /library/figures): a
+  /// könyvtár "bal oldal, a kapuelőtér előtt" helyett az edző nevét
+  /// mutatja ("Beúszós kereszt") minden felületen; üres név törli.
+  Future<void> saveFigureName(
+      String team, List<double> shape, String name) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/library/figures"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"team": team, "shape": shape, "name": name}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült elnevezni a figurát", resp));
+    }
+  }
+
   /// Figura törlése a könyvtárból.
   Future<void> deletePlay(String playId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/playbook/$playId"));

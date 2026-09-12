@@ -12763,6 +12763,53 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   /// Figura-egyezés: az ellenfél támadásai közül melyik egyezik egy MENTETT
   /// figurával a könyvtárunkból ("a Beúszós keresztet játszották 4x").
+  /// Figura elnevezése (vagy átnevezése): egy sor a párbeszédben, mentés a
+  /// könyvtár-szintű tárba; a sor helyben frissül, nem kell újratölteni.
+  Future<void> _nameFigure(
+      String team, List<double> shape, String current, Map row) async {
+    final ctrl = TextEditingController(text: current);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Figura elnevezése"),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+              labelText: "A figura neve (pl. Beúszós kereszt) — üres: törlés"),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Mentés"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final name = ctrl.text.trim();
+    try {
+      await _api.saveFigureName(team, shape, name);
+      if (!mounted) return;
+      setState(() => row["name"] = name.isEmpty ? null : name);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(name.isEmpty
+              ? "A figura neve törölve."
+              : "Figura elnevezve: $name")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Mentési hiba: ${humanError(e)}")));
+    }
+  }
+
   /// Visszatérő figuráik MECCSRŐL MECCSRE: a figura-könyvtár rajzzal
   /// (mini pálya, a támadó szemszögéből, jobbra a megtámadott kapu). A
   /// könyvtárat a backend fésüli össze (setplay_library); itt csak a
@@ -12773,6 +12820,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final rec = lib["recurring"];
     if (rec is! List || rec.isEmpty) return null;
     final rows = <Widget>[];
+    final csapat = "${r["team_name"] ?? ""}";
     for (final f in rec.take(6)) {
       if (f is! Map) continue;
       final shape = (f["shape"] as List?)
@@ -12783,6 +12831,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       final attacks = ((f["attacks"] as num?) ?? 0).toInt();
       final goals = ((f["goals"] as num?) ?? 0).toInt();
       final pct = ((f["goal_pct"] as num?) ?? 0).toDouble();
+      final nev = f["name"] as String?;
       rows.add(Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
@@ -12794,13 +12843,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("${f["zone"] ?? "?"}",
+                // Az edző neve elöl, a zóna-név mögötte; név nélkül a zóna.
+                Text(nev != null && nev.isNotEmpty
+                        ? "$nev · ${f["zone"] ?? "?"}"
+                        : "${f["zone"] ?? "?"}",
                     style: AppText.value.copyWith(fontSize: 13)),
                 const SizedBox(height: 2),
                 Text("$matches meccsen $attacks támadás, $goals gól "
                     "(${pct.round()}%)", style: AppText.label),
               ],
             ),
+          ),
+          // Elnevezés: a könyvtár zóna-neve helyett az edző szava — az
+          // alakhoz kötve, minden felületen (riasztás, klip, jelentés).
+          IconButton(
+            tooltip: nev != null && nev.isNotEmpty
+                ? "Átnevezés (üres név törli)"
+                : "Figura elnevezése",
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            onPressed: csapat.isEmpty || shape.length != 18
+                ? null
+                : () => _nameFigure(csapat, shape, nev ?? "", f),
           ),
         ]),
       ));

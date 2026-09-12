@@ -3131,6 +3131,110 @@ def create_app():
             headers={"Content-Disposition":
                      f'attachment; filename="statisztika_{match_id}.csv"'})
 
+    # --- Figura-nevek (csapat + alak → név), KÖNYVTÁR-szinten -----------
+    #
+    # A könyvtár "bal oldal, a kapuelőtér előtt" néven ismeri a figurát;
+    # az edző "beúszós kereszt"-nek hívja. A név az ALAKHOZ tartozik (a
+    # könyvtári összevonás küszöbén belül), csapatonként — egyszer
+    # felvéve minden felületen (felderítés, összefoglaló, riasztás, klip)
+    # a saját neve látszik.
+
+    def _figures_path() -> Path:
+        return _data_dir.parent / "figures.json"
+
+    def _load_figures() -> dict:
+        """{csapatnév: [{"name", "shape"}]} — hibás fájlra üres szótár (a
+        név kényelem, nem adat: nélküle a zóna-név marad)."""
+        p = _figures_path()
+        if p.exists():
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(d.get("figures"), dict):
+                    return d["figures"]
+            except Exception:
+                pass
+        return {}
+
+    def _figure_name_for(team: str, shape) -> Optional[str]:
+        """A csapat elnevezett alakjai közül a legközelebbi neve, ha a
+        könyvtári összevonás küszöbén (SPL_MERGE_THRESHOLD) belül van."""
+        from ..pipeline.setplays import SPL_MERGE_THRESHOLD, _distance
+        if not shape:
+            return None
+        legjobb, legjobb_d = None, SPL_MERGE_THRESHOLD
+        for f in _load_figures().get(team) or []:
+            try:
+                d = _distance(list(shape), list(f.get("shape") or []))
+            except Exception:
+                continue
+            if d <= legjobb_d:
+                legjobb, legjobb_d = f.get("name"), d
+        return legjobb
+
+    def _nevesit(team: str, rows) -> list:
+        """A figura-sorok "name" mezőt kapnak (None, ha nincs név)."""
+        ki = []
+        for r in rows or []:
+            ki.append({**r, "name": _figure_name_for(team, r.get("shape"))})
+        return ki
+
+    @app.get("/library/figures")
+    def get_library_figures(team: Optional[str] = None):
+        """Az elnevezett figurák: {"figures": {csapat: [{"name","shape"}]}}."""
+        mind = _load_figures()
+        if team is None:
+            return {"figures": mind}
+        return {"figures": {team: mind.get(team) or []}}
+
+    @app.post("/library/figures")
+    def set_library_figure(body: dict):
+        """Név hozzárendelése egy csapat figura-alakjához.
+
+        Törzs: {"team": ..., "shape": [18 szám], "name": "Beúszós kereszt"}.
+        Ha a csapatnak már van a küszöbön belüli elnevezett alakja, azt
+        nevezzük át (nem duplázunk); ÜRES név törli a nevet.
+        """
+        from ..pipeline.setplays import SPL_MERGE_THRESHOLD, _distance
+        team = str(body.get("team") or "").strip()
+        shape = body.get("shape")
+        if not team:
+            raise HTTPException(status_code=400, detail="team required")
+        if not isinstance(shape, list) or len(shape) != 18:
+            raise HTTPException(status_code=400,
+                                detail="shape: 18 szám (6x3 rács)")
+        try:
+            shape = [float(v) for v in shape]
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="shape: számok")
+        name = str(body.get("name") or "").strip()[:60]
+        mind = _load_figures()
+        sorok = [dict(f) for f in (mind.get(team) or [])]
+        # A küszöbön belüli meglévő alak: azt írjuk át / töröljük.
+        talalt = None
+        for f in sorok:
+            try:
+                if _distance(shape, list(f.get("shape") or [])) <= SPL_MERGE_THRESHOLD:
+                    talalt = f
+                    break
+            except Exception:
+                continue
+        if name:
+            if talalt is not None:
+                talalt["name"] = name
+            else:
+                sorok.append({"name": name, "shape": shape})
+        elif talalt is not None:
+            sorok.remove(talalt)
+        if sorok:
+            mind[team] = sorok
+        else:
+            mind.pop(team, None)
+        _figures_path().parent.mkdir(parents=True, exist_ok=True)
+        _figures_path().write_text(
+            json.dumps({"figures": mind}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        return {"team": team, "figures": sorok}
+
     # A figura-alakok meccsenkénti gyorsítótára: (meccs-azonosító, kocka-
     # szám) → setplay_shapes eredménye. A primitív-gyorsítótár HATÓKÖRÖS
     # (egy összeállításra él), ez a könyvtár viszont MINDEN elemzett
@@ -3139,6 +3243,19 @@ def create_app():
     # tíz másodperc. A kockaszám a kulcsban: az újrafeldolgozott (más
     # hosszú) meccs nem olvas elavult alakot.
     _shapes_cache: dict = {}
+
+    def _report_nevekkel(d: dict) -> dict:
+        """A felderítés-szótár figura-könyvtárának sorai névvel (a
+        felderített csapat elnevezett alakjai szerint)."""
+        try:
+            lib = d.get("setplay_library") or {}
+            nev = str(d.get("team_name") or "")
+            if lib and nev:
+                lib["figures"] = _nevesit(nev, lib.get("figures"))
+                lib["recurring"] = _nevesit(nev, lib.get("recurring"))
+        except Exception:
+            pass
+        return d
 
     def _team_figure_library(team_name: str) -> dict:
         """Egy csapat FIGURA-KÖNYVTÁRA a könyvtár összes elemzett
@@ -3161,7 +3278,10 @@ def create_app():
                 _shapes_cache[kulcs] = alakok
             sorok += [{**r, "match_id": m_.meta.match_id}
                       for r in alakok[oldal]]
-        return setplay_library(sorok)
+        lib = setplay_library(sorok)
+        lib["figures"] = _nevesit(team_name, lib.get("figures"))
+        lib["recurring"] = _nevesit(team_name, lib.get("recurring"))
+        return lib
 
     def _clip_events(match, match_id: str, types: set) -> list:
         """A klipvágás esemény-listája a kért típusokra — EGY helyen.
@@ -3309,7 +3429,8 @@ def create_app():
                     fo_rf = rec_rf[0]
                     ev += [{"t": t_rf, "type": "recurring_figure",
                             "team": side,
-                            "label": f"visszatérő figura: {fo_rf['zone']}"}
+                            "label": ("visszatérő figura: "
+                                      f"{fo_rf.get('name') or fo_rf['zone']}")}
                            for t_rf in recurring_figure_starts(
                                match, fo_rf["shape"],
                                Team.HOME if side == "home" else Team.AWAY)]
@@ -9469,7 +9590,8 @@ def create_app():
             t = Team(team)
         except ValueError:
             raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
-        return report_to_dict(scout_team(match, t, TacticsConfig()))
+        return _report_nevekkel(
+            report_to_dict(scout_team(match, t, TacticsConfig())))
 
     @app.get("/matches/{match_id}/scouting/export")
     def export_scouting(match_id: str, team: str = "away"):
@@ -9533,7 +9655,7 @@ def create_app():
         Törzs: {"items": [{"match_id": "...", "team": "home"|"away"}, ...]}.
         Több meccs adja a valós, zajmentes profilt (a számokat átlagolja/összegzi).
         """
-        return report_to_dict(_combined_report(body))
+        return _report_nevekkel(report_to_dict(_combined_report(body)))
 
     @app.post("/scouting/trend")
     def scouting_trend(body: dict):
@@ -9641,11 +9763,13 @@ def create_app():
             for a, b in recurring_figure_segments(
                     match, fo["shape"],
                     Team.HOME if side == "home" else Team.AWAY):
+                cimke = (f"\u201e{fo['name']}\u201d" if fo.get("name")
+                         else fo["zone"])
                 alerts.append({
                     "t": a, "t_end": b, "team": side, "team_name": nev,
-                    "zone": fo["zone"],
+                    "zone": fo["zone"], "name": fo.get("name"),
                     "text": (f"Ismert figura: {nev} a visszatérő figuráját "
-                             f"játssza ({fo['zone']}, {fo['matches']} "
+                             f"játssza ({cimke}, {fo['matches']} "
                              f"meccsen {fo['goals']} gól) — {masik}: "
                              "kettőzés a súlypontnál, kilépés a lövőre!")})
         alerts.sort(key=lambda r: r["t"])
@@ -9689,7 +9813,11 @@ def create_app():
         # A figurák ALAKJA is (irány-normált rács + edzői név): a
         # meccs-összefoglaló ebből rajzolja a mini-pályákat.
         try:
-            ki["shapes"] = setplay_shapes(match, threshold=threshold)
+            alak = setplay_shapes(match, threshold=threshold)
+            ki["shapes"] = {
+                "home": _nevesit(match.meta.home_team, alak.get("home")),
+                "away": _nevesit(match.meta.away_team, alak.get("away")),
+            }
         except Exception:
             ki["shapes"] = None
         return ki
