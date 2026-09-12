@@ -602,6 +602,10 @@ class _UploadScreenState extends State<UploadScreen> {
             "region": c.region,
             "rotate": c.rotate,
             "frame": c.startFrame,
+            // A mentéskor mért illeszkedés is elmentődik: az app
+            // újraindítása után is látszik, ül-e a kalibráció.
+            if (c.fit != null) "fit": c.fit,
+            if (c.fitVerdict != null) "fit_verdict": c.fitVerdict,
           },
       ];
 
@@ -624,6 +628,8 @@ class _UploadScreenState extends State<UploadScreen> {
           region: (m["region"] as String?) ?? "full",
           rotate: (m["rotate"] as bool?) ?? false,
           startFrame: (m["frame"] as num?)?.toInt() ?? 0,
+          fit: (m["fit"] as num?)?.toDouble(),
+          fitVerdict: m["fit_verdict"] as String?,
         ));
       }
       if (items.isEmpty || !mounted) return;

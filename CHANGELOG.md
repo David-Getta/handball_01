@@ -9,7 +9,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   "Pálya-kalibráció — bejelölve" sor a mentéskor mért illeszkedést is
   kiírja ("illeszkedés 0,62 — jó"), gyengénél pirosan és teendővel —
   egy szabályos, de a vonalak mellé húzott négyszög eddig "bejelölve"
-  volt.
+  volt. A mért illeszkedés a videóhoz mentett kalibrációval együtt
+  marad meg — az app újraindítása után is látszik.
 
 - **A visszatérő figura 3D-ben** (3D pálya, böngészős 3D/VR): az
   esemény-ugrás (⏮/⏭) a visszatérő figura kezdetére is ugrik, és a

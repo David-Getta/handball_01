@@ -310,3 +310,7 @@ def test_az_inditas_elotti_lista_az_illeszkedest_is_mondja():
     assert 'fit: (friss?["fit"] as num?)?.toDouble()' in calib
     upload = _upload_src()
     assert "_calib!.fitNote" in upload and "fitWeak" in upload
+    # A mért illeszkedés a videóhoz mentett kalibrációval együtt marad meg
+    # (újraindítás után is látszik), és a betöltés visszaolvassa.
+    assert '"fit": c.fit' in upload and '"fit_verdict": c.fitVerdict' in upload
+    assert 'fitVerdict: m["fit_verdict"] as String?' in upload
