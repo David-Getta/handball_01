@@ -41,7 +41,10 @@ def _compact_data(match: Match, figure_alerts: list | None = None) -> dict:
             [1 if p.team == Team.HOME else 0,
              round(p.x, 1), round(p.y, 1),
              1 if p.source == PositionSource.MEASURED else 0,
-             1 if getattr(p, "role", None) == "kapus" else 0]
+             1 if getattr(p, "role", None) == "kapus" else 0,
+             # Mezszám (0 = ismeretlen): a figura fölött címke — VR-ben
+             # enélkül nem tudni, ki kicsoda.
+             int(getattr(p, "jersey_number", None) or 0)]
             for p in f.players
         ]
         labda = ([round(f.ball.x, 1), round(f.ball.y, 1)]
@@ -261,10 +264,30 @@ function babu(){
   const arnyek = new THREE.Mesh(new THREE.CircleGeometry(0.3, 12),
     new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.35}));
   arnyek.rotation.x = -Math.PI/2; arnyek.position.y = 0.005; cs.add(arnyek);
-  cs.userData = {mez, nadrag, felkarok:[tagok[-1].felkar, tagok[1].felkar], tagok, elozo:null};
+  // Mezszám-címke a fej fölött (sprite: mindig a kamera felé néz).
+  const cimke = new THREE.Sprite(new THREE.SpriteMaterial({transparent:true, depthTest:false}));
+  cimke.position.y = 2.0; cimke.scale.set(0.5, 0.28, 1); cimke.visible = false; cs.add(cimke);
+  cs.userData = {mez, nadrag, felkarok:[tagok[-1].felkar, tagok[1].felkar], tagok, elozo:null,
+                 cimke, cimkeKulcs:null};
   szinpad.add(cs);
   babuk.push(cs);
   return cs;
+}
+// Mezszám-textúrák: számonként és csapatonként egyszer rajzoljuk.
+const szamTexturak = new Map();
+function szamTextura(n, hazai){
+  const kulcs = n + ":" + (hazai ? 1 : 0);
+  if (szamTexturak.has(kulcs)) return szamTexturak.get(kulcs);
+  const c = document.createElement("canvas"); c.width = 128; c.height = 72;
+  const g = c.getContext("2d");
+  g.fillStyle = hazai ? "rgba(76,154,255,0.92)" : "rgba(255,107,107,0.92)";
+  g.beginPath(); g.roundRect(4, 4, 120, 64, 14); g.fill();
+  g.fillStyle = "#ffffff"; g.font = "bold 44px sans-serif";
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(String(n), 64, 38);
+  const tex = new THREE.CanvasTexture(c);
+  szamTexturak.set(kulcs, tex);
+  return tex;
 }
 function szinez(cs, hazai, kapus){
   // A kapus a valóságban is MÁS mezben játszik (a szabály előírja): a
@@ -359,6 +382,16 @@ function rajzol(t){
     const x = p[1] + (q[1]-p[1])*ar, y = p[2] + (q[2]-p[2])*ar;
     cs.position.set(x, 0, W - y);
     szinez(cs, !!p[0], !!p[4]);
+    // Mezszám-címke: csak ismert számnál; a textúra csapatonként/számonként egy.
+    const mezszam = p[5] || 0, u = cs.userData;
+    if (mezszam){
+      const kulcs = mezszam + ":" + (p[0] ? 1 : 0);
+      if (u.cimkeKulcs !== kulcs){
+        u.cimke.material.map = szamTextura(mezszam, !!p[0]);
+        u.cimke.material.needsUpdate = true; u.cimkeKulcs = kulcs;
+      }
+      u.cimke.visible = true;
+    } else { u.cimke.visible = false; }
     // Irány és sebesség a két kocka elmozdulásából (követés-ugrás
     // kiszűrve); álló játékos tartja az előző irányát.
     const dx = q[1]-p[1], dy = q[2]-p[2], dt = Math.max(0.05, b[0]-a[0]);

@@ -246,6 +246,14 @@ def test_a_bongeszos_3d_oldal_osszeall():
     assert r.headers["content-type"].startswith("text/html")
     assert c.get("/matches/nincs/view3d").status_code == 404
 
+    # Mezszám a figura fölött (VR-ben enélkül nem tudni, ki kicsoda): a
+    # tömör adat 6. eleme a mezszám (0 = ismeretlen), a JS címkét rajzol.
+    m.frames[0].players[0].jersey_number = 7
+    adat_m = _compact_data(m)
+    assert adat_m["frames"][0][1][0][5] == 7
+    assert all(len(j) == 6 for j in adat_m["frames"][0][1])
+    assert "szamTextura" in view3d_html(m)
+
     # A visszatérő figura a 3D-ben: "f" esemény a jelenet-ugráshoz és a
     # felirathoz (a riasztás-lista a /figure-alerts alakja).
     adat_f = _compact_data(m, [{"t": 20, "team": "away"}])

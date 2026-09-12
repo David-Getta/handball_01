@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.117 óta)
 
+- **Mezszámok a böngészős 3D/VR nézetben** (3D): a figurák fölött a
+  mezszám címkéje (a csapat színével) — VR-ben enélkül nem tudni, ki
+  kicsoda. Ismeretlen mezszámnál nincs címke.
+
 - **Az indítás előtti lista az illeszkedést is mondja** (új elemzés): a
   "Pálya-kalibráció — bejelölve" sor a mentéskor mért illeszkedést is
   kiírja ("illeszkedés 0,62 — jó"), gyengénél pirosan és teendővel —
