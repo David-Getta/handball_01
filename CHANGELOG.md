@@ -3,18 +3,27 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.117 óta)
+## Kiadatlan (a v0.1.118 óta)
+
+- **A mért illeszkedés a mentett kalibrációval együtt marad** (új
+  elemzés): a videóhoz mentett kalibráció a mentéskor mért illeszkedést
+  is viszi — az app újraindítása vagy újrafeldolgozás után is látszik
+  az indítás előtti listán, ül-e a rajz.
 
 - **Mezszámok a böngészős 3D/VR nézetben** (3D): a figurák fölött a
   mezszám címkéje (a csapat színével) — VR-ben enélkül nem tudni, ki
   kicsoda. Ismeretlen mezszámnál nincs címke.
 
+## v0.1.118 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: az indítás előtti lista az illeszkedést is mondja,
+> és a visszatérő figura a 3D nézetekben is ugrópont.
+
 - **Az indítás előtti lista az illeszkedést is mondja** (új elemzés): a
   "Pálya-kalibráció — bejelölve" sor a mentéskor mért illeszkedést is
   kiírja ("illeszkedés 0,62 — jó"), gyengénél pirosan és teendővel —
   egy szabályos, de a vonalak mellé húzott négyszög eddig "bejelölve"
-  volt. A mért illeszkedés a videóhoz mentett kalibrációval együtt
-  marad meg — az app újraindítása után is látszik.
+  volt.
 
 - **A visszatérő figura 3D-ben** (3D pálya, böngészős 3D/VR): az
   esemény-ugrás (⏮/⏭) a visszatérő figura kezdetére is ugrik, és a
