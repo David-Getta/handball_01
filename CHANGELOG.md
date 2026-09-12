@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.115 óta)
 
+- **A meccs figurái rajzzal** (meccs-elemző): az összefoglaló "Figurák"
+  kártyája eddig "2. figura — 5 támadás, 2 gól" sorokat írt; mostantól
+  mini-pályán rajzolja az alakot edzői névvel ("bal oldal, a kapuelőtér
+  előtt"), ugyanazzal a rajzolóval, mint a felderítés.
+
 - **Gyorsabb figura-könyvtár** (élő követés, klipek): a csapat
   könyvtára eddig minden élő-nézet indításnál és klip-számlálásnál az
   összes elemzett meccsen újraszámolta a figura-alakokat (húsz meccsnél

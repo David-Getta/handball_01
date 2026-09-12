@@ -9,6 +9,7 @@ import "../analytics/match_summary.dart";
 import "../analytics/tactics.dart";
 import "../theme/app_theme.dart";
 import "defense_timeline.dart";
+import "figure_shape_painter.dart";
 import "intensity_chart.dart";
 import "score_chart.dart";
 
@@ -41,6 +42,11 @@ class SummaryPanel extends StatelessWidget {
   final Map<String, dynamic>? keyPlayers;
   final List<dynamic> keyMoments;
   final Map<String, dynamic>? setplayEff;
+
+  /// A figurák ALAKJA (setplay_shapes): {"home": [{"shape","zone",
+  /// "attacks","goals"}]} — mini-pályán rajzolva; nélküle a szöveges
+  /// lista marad.
+  final Map<String, dynamic>? setplayShapes;
 
   /// Őrzési párok (defense/marking): ki kit fogott a védekezésben.
   final Map<String, dynamic>? marking;
@@ -82,6 +88,7 @@ class SummaryPanel extends StatelessWidget {
     this.keyPlayers,
     this.keyMoments = const [],
     this.setplayEff,
+    this.setplayShapes,
     this.marking,
     this.blocks,
     this.ballWinners,
@@ -382,18 +389,44 @@ class SummaryPanel extends StatelessWidget {
                       style: AppText.value
                           .copyWith(fontSize: 12.5, color: color)),
                 ),
-                for (final f in ((eff[key] as List)
-                    .cast<Map<String, dynamic>>()
-                    .take(3)))
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8, bottom: 4),
-                    child: Text(
-                        "${((f["figure"] as num?) ?? 0).toInt() + 1}. "
-                        "figura — ${f["attacks"]} támadás, "
-                        "${f["goals"]} gól "
-                        "(${((f["goal_pct"] as num?) ?? 0).toStringAsFixed(0)}%)",
-                        style: AppText.label.copyWith(fontSize: 12)),
-                  ),
+                // Rajzolt alakok, ha a motor adta (edzői névvel); különben
+                // a sorszámos szöveges lista.
+                if (((setplayShapes?[key] as List?) ?? const []).isNotEmpty)
+                  for (final f in (setplayShapes![key] as List)
+                      .cast<Map<String, dynamic>>()
+                      .take(3))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8, bottom: 6),
+                      child: Row(children: [
+                        SizedBox(
+                            width: 96, height: 48,
+                            child: CustomPaint(
+                                painter: FigureShapePainter(
+                                    ((f["shape"] as List?) ?? const [])
+                                        .map((v) => (v as num).toDouble())
+                                        .toList()))),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                              "${f["zone"] ?? "?"} — ${f["attacks"]} támadás, "
+                              "${f["goals"]} gól",
+                              style: AppText.label.copyWith(fontSize: 12)),
+                        ),
+                      ]),
+                    )
+                else
+                  for (final f in ((eff[key] as List)
+                      .cast<Map<String, dynamic>>()
+                      .take(3)))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8, bottom: 4),
+                      child: Text(
+                          "${((f["figure"] as num?) ?? 0).toInt() + 1}. "
+                          "figura — ${f["attacks"]} támadás, "
+                          "${f["goals"]} gól "
+                          "(${((f["goal_pct"] as num?) ?? 0).toStringAsFixed(0)}%)",
+                          style: AppText.label.copyWith(fontSize: 12)),
+                    ),
               ],
           ],
         ),

@@ -81,6 +81,7 @@ class _MatchScreenState extends State<MatchScreen> {
   Map<String, dynamic>? _keyPlayers;
   List<dynamic> _keyMoments = const [];
   Map<String, dynamic>? _setplayEff;
+  Map<String, dynamic>? _setplayShapes;
   Map<String, dynamic>? _marking;
   Map<String, dynamic>? _blocks;
   Map<String, dynamic>? _ballWinners;
@@ -169,6 +170,7 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<String, dynamic>? keyPlayers;
     List<dynamic> keyMoments = const [];
     Map<String, dynamic>? setplayEff;
+    Map<String, dynamic>? setplayShapes;
     List<Map<String, dynamic>> notes = [];
     List<Map<String, dynamic>> overrides = [];
     Map<String, dynamic>? coach;
@@ -321,10 +323,12 @@ class _MatchScreenState extends State<MatchScreen> {
           keyMoments = const []; // kulcs-pillanatok nélkül is teljes
         }
         try {
-          setplayEff = (await _api.fetchSetplays(widget.matchId))["efficiency"]
-              as Map<String, dynamic>?;
+          final sp = await _api.fetchSetplays(widget.matchId);
+          setplayEff = sp["efficiency"] as Map<String, dynamic>?;
+          setplayShapes = sp["shapes"] as Map<String, dynamic>?;
         } catch (_) {
           setplayEff = null; // figura-kép nélkül is teljes a nézet
+          setplayShapes = null;
         }
         try {
           notes = await _api.fetchNotes(widget.matchId);
@@ -360,6 +364,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _keyPlayers = keyPlayers;
       _keyMoments = keyMoments;
       _setplayEff = setplayEff;
+      _setplayShapes = setplayShapes;
       _marking = marking;
       _blocks = blocks;
       _ballWinners = ballWinners;
@@ -4015,6 +4020,7 @@ class _MatchScreenState extends State<MatchScreen> {
                           keyPlayers: _keyPlayers,
                           keyMoments: _keyMoments,
                           setplayEff: _setplayEff,
+                          setplayShapes: _setplayShapes,
                           marking: _marking,
                           blocks: _blocks,
                           ballWinners: _ballWinners,

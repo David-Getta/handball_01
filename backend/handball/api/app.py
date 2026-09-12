@@ -9668,14 +9668,21 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         r = discover_setplays(match, threshold=threshold)
-        from ..pipeline.setplays import setplay_efficiency
-        return {
+        from ..pipeline.setplays import setplay_efficiency, setplay_shapes
+        ki = {
             "attacks": r.attacks,
             "num_figures": r.num_figures,
             "figure_sizes": r.figure_sizes,
             "labels": r.labels,
             "efficiency": setplay_efficiency(match, threshold=threshold),
         }
+        # A figurák ALAKJA is (irány-normált rács + edzői név): a
+        # meccs-összefoglaló ebből rajzolja a mini-pályákat.
+        try:
+            ki["shapes"] = setplay_shapes(match, threshold=threshold)
+        except Exception:
+            ki["shapes"] = None
+        return ki
 
     @app.get("/matches/{match_id}/events")
     def get_events(match_id: str):

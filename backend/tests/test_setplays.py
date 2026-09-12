@@ -725,3 +725,27 @@ def test_a_csapat_konyvtara_meccsenkent_egyszer_szamol(tmp_path, monkeypatch):
     r2 = c.get("/matches/m1/figure-alerts").json()["alerts"]
     assert r1 == r2 and len(r1) == 4
     assert sorted(hivasok) == ["m1", "m2"], hivasok
+
+
+def test_a_setplays_vegpont_az_alakokat_is_adja(tmp_path):
+    """A meccs-összefoglaló a figurák ALAKJÁT rajzolja: a /setplays
+    válaszban ott a "shapes" (edzői névvel), a hatékonyság mellett."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    (d / "m1.json").write_text(
+        json.dumps(_spl_match(["bal"] * 4 + ["jobb"] * 3, "m1").to_dict()),
+        encoding="utf-8")
+    r = TestClient(create_app()).get("/matches/m1/setplays").json()
+    assert "efficiency" in r and r["shapes"] is not None
+    assert [x["attacks"] for x in r["shapes"]["home"]] == [4, 3]
+    assert r["shapes"]["home"][0]["zone"].startswith("bal oldal")

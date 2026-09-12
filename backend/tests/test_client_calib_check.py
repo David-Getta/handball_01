@@ -208,7 +208,7 @@ def test_a_visszatero_figurak_rajzzal_latszanak_a_felderitesen():
     "bal oldal, a kapuelőtér előtt" felirat kevesebb, mint a kép."""
     src = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
            / "ui" / "scouting_screen.dart").read_text(encoding="utf-8")
-    assert "_figureLibraryCard" in src and "_FigureShapePainter" in src
+    assert "_figureLibraryCard" in src and "FigureShapePainter(" in src
     assert 'r["setplay_library"]' in src
     assert '("Visszatérő figuráik", Icons.replay_outlined)' in src, (
         "a szakasz nincs az ugró-sávban")
@@ -268,3 +268,18 @@ def test_a_felderites_valaszto_kettot_ker_a_figura_konyvtarhoz():
            / "scouting_picker_screen.dart").read_text(encoding="utf-8")
     assert "_selected.length == 1" in src
     assert "figura-könyvtár" in src
+
+
+def test_a_meccs_osszefoglalo_rajzolja_a_figurakat():
+    """A meccs-összefoglaló figura-kártyája az alakot rajzolja (közös
+    rajzoló a felderítéssel), nem csak "2. figura" szöveget ír."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    ui = gyoker / "client" / "lib" / "ui"
+    assert (ui / "figure_shape_painter.dart").exists()
+    summ = (ui / "summary_panel.dart").read_text(encoding="utf-8")
+    assert "setplayShapes" in summ and "FigureShapePainter(" in summ
+    match = (ui / "match_screen.dart").read_text(encoding="utf-8")
+    assert 'sp["shapes"]' in match and "setplayShapes: _setplayShapes" in match
+    scout = (ui / "scouting_screen.dart").read_text(encoding="utf-8")
+    assert "class _FigureShapePainter" not in scout, "duplán él a rajzoló"
+    assert "FigureShapePainter(" in scout
