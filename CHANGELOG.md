@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.119 óta)
 
+- **A meccsterv rajzolja a visszatérő figurákat** (meccsterv): a terv
+  alatt két új szakasz — "Az ő visszatérő figuráik" (erre készüljetek)
+  és "A mi visszatérő figuráink" (ezt hozzuk, legyen második befejezés)
+  — mini-pályán, névvel, meccs / támadás / gól számmal.
+
 - **A figurák elnevezhetők** (felderítés): a könyvtár "bal oldal, a
   kapuelőtér előtt" néven ismeri a figurát — az edző "beúszós
   kereszt"-nek hívja. A felderítés figura-sorában a ceruza-gombbal név

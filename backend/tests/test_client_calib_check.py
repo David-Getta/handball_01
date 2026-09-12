@@ -344,3 +344,14 @@ def test_a_keret_kepernyon_a_figura_nevek_attekinthetok():
     api = (gyoker / "client" / "lib" / "services"
            / "api_client.dart").read_text(encoding="utf-8")
     assert "fetchLibraryFigures" in api
+
+
+def test_a_meccsterv_kepernyo_rajzolja_a_visszatero_figurakat():
+    """A meccsterv képernyőn az ő és a mi visszatérő figuráink rajzzal —
+    a felkészülés lapján a kép mellé a teendő."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "matchup_screen.dart").read_text(encoding="utf-8")
+    assert "AZ Ő VISSZATÉRŐ FIGURÁIK" in src and "A MI VISSZATÉRŐ FIGURÁINK" in src
+    assert 'r["opp_figures"]' in src and 'r["own_figures"]' in src
+    assert "FigureShapePainter(" in src

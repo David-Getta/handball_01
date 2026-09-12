@@ -799,3 +799,32 @@ def test_a_figura_nevek_a_konyvtar_minden_feluleten_megjelennek(tmp_path):
                                          "name": ""})
     assert r.json()["figures"] == []
     assert c.get("/matches/m1/setplays").json()["shapes"]["home"][0]["name"] is None
+
+
+def test_a_meccsterv_a_visszatero_figurakat_is_adja(tmp_path):
+    """A /scouting/matchup válasza a két csapat visszatérő figuráit is
+    viszi (névvel): az ellenfélé "erre készüljetek", a miénk "ezt
+    hozzuk". Egy meccsből üres lista."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    for mid, sides in (("m1", ["bal"] * 4 + ["jobb"] * 3), ("m2", ["bal"] * 3)):
+        (d / f"{mid}.json").write_text(
+            json.dumps(_spl_match(sides, mid).to_dict()), encoding="utf-8")
+    c = TestClient(create_app())
+    r = c.post("/scouting/matchup", json={
+        "own": {"items": [{"match_id": "m1", "team": "home"}]},
+        "opp": {"items": [{"match_id": "m1", "team": "home"},
+                          {"match_id": "m2", "team": "home"}]}}).json()
+    assert "plan" in r and r["own_figures"] == []
+    assert r["opp_figures"] and r["opp_figures"][0]["matches"] == 2
+    assert "name" in r["opp_figures"][0]

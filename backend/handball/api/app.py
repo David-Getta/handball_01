@@ -9721,9 +9721,18 @@ def create_app():
         own = _combined_report(own_body)
         opp = _combined_report(opp_body)
         from ..pipeline.scouting import style_distance
+        # A két csapat meccsről meccsre visszatérő figurái (névvel): a
+        # meccsterv képernyő rajzolja — "erre készüljetek" / "ezt hozzuk".
+        def _rec(rep):
+            try:
+                return _nevesit(rep.team_name,
+                                (rep.setplay_library or {}).get("recurring"))
+            except Exception:
+                return []
         return {"plan": matchup_plan(own, opp),
                 "style": style_distance(own, opp),
-                "own_team": own.team_name, "opp_team": opp.team_name}
+                "own_team": own.team_name, "opp_team": opp.team_name,
+                "opp_figures": _rec(opp), "own_figures": _rec(own)}
 
     @app.post("/scouting/export")
     def combined_scouting_export(body: dict):

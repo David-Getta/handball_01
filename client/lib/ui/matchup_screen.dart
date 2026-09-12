@@ -27,6 +27,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "error_text.dart";
+import "figure_shape_painter.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
 
@@ -304,11 +305,72 @@ class _MatchupScreenState extends State<MatchupScreen> {
                   ]),
             ),
           ),
+      // A visszatérő figurák rajzzal: az övék ("erre készüljetek") és a
+      // miénk ("ezt hozzuk") — a könyvtárból, több meccs kell hozzá.
+      ..._figuresSection("AZ Ő VISSZATÉRŐ FIGURÁIK",
+          (r["opp_figures"] as List?) ?? const [], "${r["opp_team"] ?? ""}",
+          "erre készüljetek: videó, bejátszott védekezés, a súlypont "
+          "sávjának lezárása"),
+      ..._figuresSection("A MI VISSZATÉRŐ FIGURÁINK",
+          (r["own_figures"] as List?) ?? const [], "${r["own_team"] ?? ""}",
+          "ezt hozzuk meccsről meccsre — az ellenfél is látja: legyen "
+          "második befejezés"),
       const SizedBox(height: AppSpacing.lg),
       Text("STÍLUS", style: AppText.sectionLabel),
       const SizedBox(height: AppSpacing.sm),
       _styleCard(style),
     ]);
+  }
+
+  /// Egy csapat visszatérő figurái mini-pályán (név vagy zóna, meccs /
+  /// támadás / gól). Üres listánál a szakasz elmarad.
+  List<Widget> _figuresSection(
+      String cim, List figures, String team, String tanacs) {
+    if (figures.isEmpty) return const [];
+    return [
+      const SizedBox(height: AppSpacing.lg),
+      Text(cim, style: AppText.sectionLabel),
+      const SizedBox(height: 4),
+      Text("$team · $tanacs", style: AppText.label),
+      const SizedBox(height: AppSpacing.sm),
+      for (final f in figures.take(4))
+        if (f is Map)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: AppTheme.card(),
+              child: Row(children: [
+                SizedBox(
+                    width: 120, height: 60,
+                    child: CustomPaint(
+                        painter: FigureShapePainter(
+                            ((f["shape"] as List?) ?? const [])
+                                .map((v) => (v as num).toDouble())
+                                .toList()))),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          (f["name"] as String?)?.isNotEmpty == true
+                              ? "${f["name"]} · ${f["zone"] ?? "?"}"
+                              : "${f["zone"] ?? "?"}",
+                          style: AppText.value.copyWith(fontSize: 13)),
+                      const SizedBox(height: 2),
+                      Text(
+                          "${f["matches"]} meccsen ${f["attacks"]} támadás, "
+                          "${f["goals"]} gól "
+                          "(${((f["goal_pct"] as num?) ?? 0).round()}%)",
+                          style: AppText.label),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
+          ),
+    ];
   }
 
   /// A 0..1 skálájú tengely-érték olvasható alakja.
