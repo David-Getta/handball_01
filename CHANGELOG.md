@@ -18,16 +18,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   súlypontnál, kilépés a lövőre"). A csapat könyvtára a könyvtár összes
   elemzett meccséből épül; egy meccsnél még nincs riasztás.
 
+## v0.1.114 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: a visszatérő figura videón (új klip-típus), és
+> illeszkedés-mérés a kalibráció összenézetében is.
+
 - **A visszatérő figura videón** (klipek): új klip-típus, "A visszatérő
   figura" — a csapat könyvtárából (az összes elemzett meccséből) a
   meccsről meccsre visszatérő fő figurát veszi, és ebből a meccsből
   kivágja azokat a támadásokat, amelyek ezt játsszák. Egy meccsből nincs
   könyvtár: több elemzett meccs kell hozzá — a gomb ezt mondja is.
-
-## v0.1.114 — kiadva (2026-09-12)
-
-> Kiadás-jegyzet: a visszatérő figura videón (új klip-típus), és
-> illeszkedés-mérés a kalibráció összenézetében is.
 
 - **Illeszkedés-ellenőrzés az összenézetben is** (kalibráció): a két
   térfél összeillesztett nézetében eddig nem volt gépi mérés. Mostantól
