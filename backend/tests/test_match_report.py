@@ -1869,3 +1869,22 @@ def test_report_kimondja_a_kezi_javitast():
     javitott = match_report_html(m, {}, [], q)
     assert "Kézi javítás" in javitott
     assert "2 db" in javitott
+
+
+def test_a_jelentes_rajzolja_a_figurakat_ha_vannak():
+    """A meccsjelentés "Figuráik (alakkal)" szakasza: a figurák mini-pályán,
+    edzői névvel — ha van legalább egy három támadásos minta; a rövid
+    szimulált meccsen (nincs ilyen) a szakasz elmarad, a jelentés teljes."""
+    import sys
+    from pathlib import Path as _P
+    sys.path.insert(0, str(_P(__file__).resolve().parent))
+    from test_setplays import _spl_match
+
+    html = match_report_html(_spl_match(["bal"] * 4 + ["jobb"] * 3, "mr"),
+                             {}, [], None)
+    assert "Figuráik (alakkal)" in html
+    assert "bal oldal" in html and "4 támadás" in html
+    assert html.count("<svg") >= 3     # jelkép + két alak
+    rovid = match_report_html(simulate_ground_truth(duration_s=5, fps=25.0,
+                                                    seed=1), {}, [], None)
+    assert "Figuráik (alakkal)" not in rovid

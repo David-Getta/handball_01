@@ -1049,6 +1049,37 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         pass
 
     # Csapat-hőtérképek (ha vannak): hol tartózkodtak a játékosok.
+    # Figuráik ALAKKAL: a meccs figurái mini-pályán (edzői névvel,
+    # támadás / gól) — ugyanaz a rajz, mint a felderítő jelentésben.
+    figures_html = ""
+    try:
+        from .setplays import setplay_shapes
+        _shp = setplay_shapes(match)
+        _cols = []
+        for key, name in (("home", meta.home_team), ("away", meta.away_team)):
+            rows = (_shp.get(key) or [])[:3]
+            if not rows:
+                continue
+            _cols.append(
+                f'<div style="flex:1;min-width:260px"><b>{escape(str(name))}</b>'
+                + "".join(
+                    '<div class="bar-row" style="align-items:center">'
+                    f'{_figure_svg(f.get("shape") or [], 120, 60)}'
+                    f'<span>{escape(str(f.get("zone", "")))} — '
+                    f'{int(f.get("attacks", 0))} támadás, '
+                    f'{int(f.get("goals", 0))} gól</span></div>'
+                    for f in rows)
+                + "</div>")
+        if _cols:
+            figures_html = (
+                "<h2>Figuráik (alakkal)</h2>"
+                '<div style="display:flex;gap:18px;flex-wrap:wrap">'
+                + "".join(_cols) + "</div>"
+                '<p class="note">A rajz a támadó szemszögéből, jobbra a '
+                'megtámadott kapu; a sötétebb cella a gyakoribb hely. '
+                'Legalább három támadásból álló minták.</p>')
+    except Exception:
+        figures_html = ""
     hm_html = ""
     if heatmaps:
         cols = []
@@ -3463,6 +3494,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   {passes_html}
 
   {notes_html}
+
+  {figures_html}
 
   {hm_html}
 

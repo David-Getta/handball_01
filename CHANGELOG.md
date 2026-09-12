@@ -3,12 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.115 óta)
+## Kiadatlan (a v0.1.116 óta)
+
+- **A meccsjelentés is rajzolja a figurákat** (jelentés): a nyomtatható
+  meccsjelentés új "Figuráik (alakkal)" szakasza csapatonként a három
+  leggyakoribb figura alakját mutatja mini-pályán, edzői névvel és a
+  támadás / gól számmal — ugyanaz a rajz, mint a felderítő jelentésben.
 
 - **A meccs figurái rajzzal** (meccs-elemző): az összefoglaló "Figurák"
   kártyája eddig "2. figura — 5 támadás, 2 gól" sorokat írt; mostantól
   mini-pályán rajzolja az alakot edzői névvel ("bal oldal, a kapuelőtér
   előtt"), ugyanazzal a rajzolóval, mint a felderítés.
+
+## v0.1.116 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: Újdonságok-ablak a frissítés után, gyorsabb
+> figura-könyvtár, és a felderítés-választó kettőt kér hozzá.
 
 - **Gyorsabb figura-könyvtár** (élő követés, klipek): a csapat
   könyvtára eddig minden élő-nézet indításnál és klip-számlálásnál az
