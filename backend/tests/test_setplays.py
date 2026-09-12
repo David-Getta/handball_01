@@ -692,3 +692,36 @@ def test_a_figura_riasztas_vegpontja_a_konyvtarbol_epul(tmp_path):
     assert "B: kettőzés" in r[0]["text"]
     # Üres alakra a motor-függvény sem ad szakaszt.
     assert recurring_figure_segments(m1, [], Team.HOME) == []
+
+
+def test_a_csapat_konyvtara_meccsenkent_egyszer_szamol(tmp_path, monkeypatch):
+    """A /figure-alerts (és a klip-számlálás) a csapat ÖSSZES meccsén
+    számolna alakot minden híváskor — a primitív-gyorsítótár hatókörös,
+    nem véd. A meccsenkénti alak-gyorsítótár: két hívás, meccsenként
+    EGY számolás; az újrafeldolgozott (más hosszú) meccs újraszámol."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+    from handball.pipeline import setplays as sp
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    for mid, sides in (("m1", ["bal"] * 4), ("m2", ["bal"] * 3)):
+        (d / f"{mid}.json").write_text(
+            json.dumps(_spl_match(sides, mid).to_dict()), encoding="utf-8")
+    hivasok = []
+    eredeti = sp.setplay_shapes
+    monkeypatch.setattr(sp, "setplay_shapes",
+                        lambda m, *a, **k: (hivasok.append(m.meta.match_id)
+                                            or eredeti(m, *a, **k)))
+    c = TestClient(create_app())
+    r1 = c.get("/matches/m1/figure-alerts").json()["alerts"]
+    r2 = c.get("/matches/m1/figure-alerts").json()["alerts"]
+    assert r1 == r2 and len(r1) == 4
+    assert sorted(hivasok) == ["m1", "m2"], hivasok

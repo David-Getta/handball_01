@@ -3126,10 +3126,20 @@ def create_app():
             headers={"Content-Disposition":
                      f'attachment; filename="statisztika_{match_id}.csv"'})
 
+    # A figura-alakok meccsenkénti gyorsítótára: (meccs-azonosító, kocka-
+    # szám) → setplay_shapes eredménye. A primitív-gyorsítótár HATÓKÖRÖS
+    # (egy összeállításra él), ez a könyvtár viszont MINDEN elemzett
+    # meccsen újraszámolná a támadás-szegmentálást és a lövés-felismerést
+    # minden élő-nézet indításnál és klip-számlálásnál — húsz meccsnél az
+    # tíz másodperc. A kockaszám a kulcsban: az újrafeldolgozott (más
+    # hosszú) meccs nem olvas elavult alakot.
+    _shapes_cache: dict = {}
+
     def _team_figure_library(team_name: str) -> dict:
         """Egy csapat FIGURA-KÖNYVTÁRA a könyvtár összes elemzett
         meccséből (setplays.setplay_library): mi tér vissza meccsről
         meccsre. A klip-export és az élő figura-riasztás közös alapja."""
+        from ..pipeline.primitive_cache import primitive_cache
         from ..pipeline.setplays import setplay_library, setplay_shapes
         sorok = []
         for m_ in _season_matches():
@@ -3138,8 +3148,14 @@ def create_app():
                      else None)
             if oldal is None:
                 continue
+            kulcs = (m_.meta.match_id, len(m_.frames))
+            alakok = _shapes_cache.get(kulcs)
+            if alakok is None:
+                with primitive_cache(m_):
+                    alakok = setplay_shapes(m_)
+                _shapes_cache[kulcs] = alakok
             sorok += [{**r, "match_id": m_.meta.match_id}
-                      for r in setplay_shapes(m_)[oldal]]
+                      for r in alakok[oldal]]
         return setplay_library(sorok)
 
     def _clip_events(match, match_id: str, types: set) -> list:

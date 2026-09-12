@@ -3,7 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.114 óta)
+## Kiadatlan (a v0.1.115 óta)
+
+- **Gyorsabb figura-könyvtár** (élő követés, klipek): a csapat
+  könyvtára eddig minden élő-nézet indításnál és klip-számlálásnál az
+  összes elemzett meccsen újraszámolta a figura-alakokat (húsz meccsnél
+  tíz másodperc). Mostantól meccsenként egyszer számol, és az
+  újrafeldolgozott meccset felismeri.
 
 - **A felderítés-választó kettőt kér a figura-könyvtárhoz** (felderítés):
   egy kijelölt meccsnél a képernyő mondja, hogy a visszatérő figurák
@@ -15,6 +21,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   aztán nem zavar többet. Aki nem olvas GitHubot, e nélkül nem tudta
   meg, hogy új gomb került a kalibrálóra. Friss telepítésnél nem jön
   elő; hálózat nélkül csendben elmarad.
+
+## v0.1.115 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: élő figura-riasztás, és a kiadás leírása mostantól
+> tényleg a változásokat mutatja a frissítés előtt.
 
 - **A kiadás leírása tényleg a változásokat mutatja** (frissítés): a
   GitHub-kiadás leírása — amit az app a "Mi változik?" gombra mutat a
