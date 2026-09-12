@@ -237,3 +237,23 @@ def test_az_elo_nezet_figura_riasztast_ad():
            / "api_client.dart").read_text(encoding="utf-8")
     assert "fetchFigureAlerts" in live and '"figura"' in live
     assert "/figure-alerts" in api
+
+
+def test_frissites_utan_egyszer_megmutatja_az_ujdonsagokat():
+    """A kezdőlap az új verzió első indításakor megmutatja, mi változott
+    (a kiadás leírásából), és a látott verziót elmenti — másodszor már
+    nem zavar; friss telepítésnél és fejlesztői buildnél nem mutatja."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    dash = (gyoker / "client" / "lib" / "ui"
+            / "dashboard_screen.dart").read_text(encoding="utf-8")
+    store = (gyoker / "client" / "lib" / "services"
+             / "session_store.dart").read_text(encoding="utf-8")
+    upd = (gyoker / "client" / "lib" / "services"
+           / "update_service.dart").read_text(encoding="utf-8")
+    assert "_showWhatsNewIfUpdated" in dash and "Újdonságok a" in dash
+    torzs = dash.split("Future<void> _showWhatsNewIfUpdated()")[1][:2000]
+    assert 'appVersion.contains("-dev")' in torzs
+    assert "seen.isEmpty" in torzs, "friss telepítésnél nem szabad mutatni"
+    assert "setLastSeenVersion(appVersion)" in torzs
+    assert "last_seen_version" in store and "setLastSeenVersion" in store
+    assert "notesFor(" in upd and "releases/tags/v" in upd

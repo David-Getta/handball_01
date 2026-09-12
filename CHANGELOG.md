@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.114 óta)
 
+- **Újdonságok a frissítés után** (kezdőlap): az új verzió első
+  indításakor egy ablak megmutatja, mi változott (a kiadás leírásából),
+  aztán nem zavar többet. Aki nem olvas GitHubot, e nélkül nem tudta
+  meg, hogy új gomb került a kalibrálóra. Friss telepítésnél nem jön
+  elő; hálózat nélkül csendben elmarad.
+
 - **A kiadás leírása tényleg a változásokat mutatja** (frissítés): a
   GitHub-kiadás leírása — amit az app a "Mi változik?" gombra mutat a
   frissítés előtt — eddig sablonszöveg volt ("lásd a CHANGELOG-ot"),

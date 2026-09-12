@@ -86,6 +86,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _load();
     _checkUpdatesSilently();
+    _showWhatsNewIfUpdated();
     // A közös figyelő állapotára hangolódunk: a kártyák frissülnek, és
     // ha kifutott az utolsó munka, a könyvtár is újratöltődik.
     JobsMonitor.instance.start();
@@ -582,6 +583,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
           label: const Text("Frissítés most"),
         ),
       ]),
+    );
+  }
+
+  /// ÚJDONSÁGOK a frissítés UTÁN: az első indításkor egy új verzióval
+  /// egyszer megmutatjuk, mi változott (a kiadás leírása a
+  /// CHANGELOG-ból). Aki nem olvas GitHubot — a legtöbb edző —, e
+  /// nélkül sosem tudná meg, hogy új gomb került a kalibrálóra. Friss
+  /// telepítésnél (nincs korábban látott verzió) nem mutatjuk; fejlesztői
+  /// buildnél sem; hálózat nélkül csendben elmarad.
+  Future<void> _showWhatsNewIfUpdated() async {
+    if (appVersion.contains("-dev")) return;
+    final seen = SessionStore.lastSeenVersion;
+    if (seen == appVersion) return;
+    if (seen.isEmpty) {
+      await SessionStore.setLastSeenVersion(appVersion);
+      return;
+    }
+    final notes = await UpdateService().notesFor(appVersion);
+    if (!mounted) return;
+    // A telepítési útmutató rész nem újdonság — a "Mi változott" utáni
+    // részt mutatjuk; ha a kiadásnak nincs ilyen szakasza, nem zavarunk.
+    final idx = notes.indexOf("## Mi változott");
+    if (idx < 0) {
+      await SessionStore.setLastSeenVersion(appVersion);
+      return;
+    }
+    final valtozott = notes.substring(idx);
+    await SessionStore.setLastSeenVersion(appVersion);
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text("Újdonságok a $appVersion verzióban", style: AppText.value),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: SelectableText(plainMarkdown(valtozott),
+                style: AppText.label),
+          ),
+        ),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text("Rendben"),
+          ),
+        ],
+      ),
     );
   }
 

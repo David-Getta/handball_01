@@ -40,6 +40,11 @@ class SessionStore {
   /// eltakarítja a vendég-munkamenetben készült meccseket.
   static bool guestMode = false;
 
+  /// Melyik app-verzió "Újdonságok" ablakát látta már a felhasználó —
+  /// frissítés után EGYSZER mutatjuk meg, mi változott. Üres = első
+  /// indítás (akkor nem mutatjuk: friss telepítésnél nincs "mi újult").
+  static String lastSeenVersion = "";
+
   /// A vendég-belépéskor MÁR MEGLÉVŐ meccsek azonosítói — a takarítás
   /// csak az ezután készülteket törli.
   static List<String> guestBaseline = [];
@@ -78,6 +83,8 @@ class SessionStore {
       // kiindulás (a régi felhasználó választása viszont megmarad).
       simpleMode = data["simple_mode"] != false;
       guestMode = data["guest_mode"] == true;
+      final lsv = data["last_seen_version"];
+      lastSeenVersion = lsv is String ? lsv : "";
       final gb = data["guest_baseline"];
       guestBaseline = gb is List
           ? gb.whereType<String>().toList()
@@ -88,6 +95,7 @@ class SessionStore {
       devMode = false;
       simpleMode = true;
       guestMode = false;
+      lastSeenVersion = "";
       guestBaseline = [];
     }
   }
@@ -104,6 +112,7 @@ class SessionStore {
         "dev_mode": devMode,
         "simple_mode": simpleMode,
         "guest_mode": guestMode,
+        "last_seen_version": lastSeenVersion,
         "guest_baseline": guestBaseline,
       }));
     } catch (_) {}
@@ -124,6 +133,12 @@ class SessionStore {
   /// Kilépés: a kulcs törlése (az offline elfogadás megmarad).
   static Future<void> clear() async {
     token = null;
+    await save();
+  }
+
+  /// Az "Újdonságok" ablak megnézett verziójának rögzítése.
+  static Future<void> setLastSeenVersion(String value) async {
+    lastSeenVersion = value;
     await save();
   }
 
