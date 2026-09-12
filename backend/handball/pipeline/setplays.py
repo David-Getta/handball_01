@@ -957,3 +957,161 @@ def recurring_figure_starts(match: Match, shape: list, team: Team,
     recurring_figure_segments)."""
     return [a for a, _b in recurring_figure_segments(
         match, shape, team, config, threshold, min_length)]
+
+
+# ---- Figura × védőforma --------------------------------------------------------
+# A figura-hatékonyság azt mondja, MELYIK figurájuk hoz gólt; a védőforma
+# szerinti hatékonyság azt, MELYIK FAL fogja meg a csapatot. A kettő
+# metszete a felkészülés konkrét kérdése: a fő figurájuk ELLEN milyen
+# falban álljunk fel — ha a beúszós keresztjük a 6-0 ellen 40%, az 5-1
+# ellen 0%, akkor arra a figurára 5-1-ben kell várni.
+FVF_MIN_ATTACKS = 3        # ennyi támadás kell egy (figura, forma) cellához
+FVF_GAP_PP = 25.0          # ekkora gólarány-különbség a két forma közt: érdemi
+FVF_LOOKBACK_S = 0.5       # a szakasz vége előtt ennyivel olvassuk a formát
+
+
+def _forma_itelet(zone: str, forms: dict, nev: str | None = None):
+    """Egy figura formánkénti celláiból az ítélet: a legjobb és a
+    leggyengébb forma, ha mindkettő elég mintás és a rés érdemi."""
+    ertekes = [(f, v) for f, v in forms.items()
+               if v["attacks"] >= FVF_MIN_ATTACKS]
+    if len(ertekes) < 2:
+        return None
+    legjobb = max(ertekes, key=lambda kv: kv[1]["goal_pct"])
+    leggyengebb = min(ertekes, key=lambda kv: kv[1]["goal_pct"])
+    if legjobb[1]["goal_pct"] - leggyengebb[1]["goal_pct"] < FVF_GAP_PP:
+        return None
+    cimke = f"„{nev}”" if nev else zone
+    return (f"a(z) {cimke} figurájuk a {leggyengebb[0]} ellen "
+            f"{leggyengebb[1]['goal_pct']:.0f}% "
+            f"({leggyengebb[1]['goals']}/{leggyengebb[1]['attacks']}), a "
+            f"{legjobb[0]} ellen {legjobb[1]['goal_pct']:.0f}% "
+            f"({legjobb[1]['goals']}/{legjobb[1]['attacks']}) — erre a "
+            f"figurára {leggyengebb[0]}-ban álljatok fel")
+
+
+def figure_vs_formation(match: Match, config: TacticsConfig | None = None,
+                        threshold: float = SPL_MERGE_THRESHOLD,
+                        min_length: int = 5) -> dict:
+    """Figura × védőforma: MELYIK FAL ELLEN MŰKÖDIK a figurájuk.
+
+    A támadás-szakaszokat irány-normált alakkal klaszterezzük (mint a
+    setplay_shapes), és minden szakasznál a VÉDEKEZŐ csapat formáját a
+    szakasz vége előtt FVF_LOOKBACK_S másodperccel olvassuk le
+    (detect_formation; a "?" és a 4-nél kevesebb látott védő kimarad).
+    Figuránként formánként számoljuk a támadásokat és a gólokat (a
+    szakaszban vagy 3 mp-en belül utána esett gól).
+
+    Edzőileg: a felkészülés konkrét válasza — "a fő figurájuk ellen
+    5-1-ben álljatok fel", mert ott a hozamuk a legkisebb. Az ítélet csak
+    akkor szólal meg, ha KÉT forma is legalább FVF_MIN_ATTACKS támadást
+    kapott, és a gólarányuk közt legalább FVF_GAP_PP százalékpont a rés.
+
+    Visszatérés csapatonként: [{"shape", "zone", "attacks", "forms":
+    {forma: {"attacks", "goals", "goal_pct"}}, "verdict"|None}] — csak a
+    legalább SPL_MIN_ATTACKS támadásból álló figurák, támadás szerint
+    csökkenő; kevés mintánál a lista üres (sose hallgatólagos 0).
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import detect_formation
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(3.0 * fps)
+    lookback = max(0, round(FVF_LOOKBACK_S * fps))
+    frames_by_t = {f.t: f for f in match.frames}
+    shots_ev = [e for e in detect_shots(match, config)
+                if e.type in (EventType.SHOT, EventType.GOAL)]
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        vedo = Team.AWAY if team == Team.HOME else Team.HOME
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        sigs = [normalized_signature(s_) for s_ in seqs]
+        labels = cluster_signatures(sigs, threshold=threshold)
+        agg: dict = {}
+        for seq, sig, lab in zip(seqs, sigs, labels):
+            rec = agg.setdefault(lab, {"sum": [0.0] * len(sig),
+                                       "attacks": 0, "forms": {}})
+            rec["sum"] = [a + b for a, b in zip(rec["sum"], sig)]
+            rec["attacks"] += 1
+            fr = frames_by_t.get(max(seq.start_t, seq.end_t - lookback))
+            if fr is None:
+                continue
+            forma = detect_formation(fr, vedo, config)
+            if not forma.label or forma.label == "?" or forma.defenders < 4:
+                continue
+            cella = rec["forms"].setdefault(forma.label,
+                                            {"attacks": 0, "goals": 0,
+                                             "goal_pct": 0.0})
+            cella["attacks"] += 1
+            if any(e.team == team and e.type == EventType.GOAL
+                   and seq.start_t <= e.t <= seq.end_t + tail
+                   for e in shots_ev):
+                cella["goals"] += 1
+        rows = []
+        for rec in agg.values():
+            if rec["attacks"] < SPL_MIN_ATTACKS:
+                continue
+            for cella in rec["forms"].values():
+                cella["goal_pct"] = round(
+                    100.0 * cella["goals"] / max(1, cella["attacks"]), 1)
+            shape = [round(v / rec["attacks"], 4) for v in rec["sum"]]
+            zone = shape_zone(shape)
+            rows.append({"shape": shape, "zone": zone,
+                         "attacks": rec["attacks"], "forms": rec["forms"],
+                         "verdict": _forma_itelet(zone, rec["forms"])})
+        rows.sort(key=lambda r: -r["attacks"])
+        out[team.value] = rows
+    return out
+
+
+def figure_formation_summary(rows: list,
+                             threshold: float = SPL_MERGE_THRESHOLD) -> dict:
+    """Több meccs (alak, forma) sorai összefésülve — a felderítés képe.
+
+    `rows`: [{"shape", "formation", "attacks", "goals", ...}] (a
+    ScoutingReport lapos, összegezhető sorai). Az alakokat a könyvtári
+    küszöbbel vonjuk össze (súlyozott középpont), formánként összegezve.
+    Visszatérés: {"figures": [{"zone", "shape", "attacks", "forms",
+    "verdict"}] (támadás szerint csökkenő), "verdict": a legtöbbet
+    játszott, ítélettel bíró figura mondata | None}.
+    """
+    konyv: list = []
+    for row in sorted(rows or [], key=lambda r: -int(r.get("attacks", 0))):
+        shape = list(row.get("shape") or [])
+        forma = row.get("formation")
+        if not shape or not forma:
+            continue
+        legjobb, legjobb_d = None, threshold
+        for k in konyv:
+            d = _distance(shape, k["shape"])
+            if d <= legjobb_d:
+                legjobb, legjobb_d = k, d
+        n = int(row.get("attacks", 0))
+        if legjobb is None:
+            legjobb = {"shape": shape, "attacks": 0, "forms": {}}
+            konyv.append(legjobb)
+        m = legjobb["attacks"]
+        legjobb["shape"] = [(a * m + b * n) / max(1, m + n)
+                            for a, b in zip(legjobb["shape"], shape)]
+        legjobb["attacks"] += n
+        cella = legjobb["forms"].setdefault(forma, {"attacks": 0, "goals": 0,
+                                                    "goal_pct": 0.0})
+        cella["attacks"] += n
+        cella["goals"] += int(row.get("goals", 0))
+    figures = []
+    for k in konyv:
+        for cella in k["forms"].values():
+            cella["goal_pct"] = round(
+                100.0 * cella["goals"] / max(1, cella["attacks"]), 1)
+        zone = shape_zone(k["shape"])
+        figures.append({"zone": zone,
+                        "shape": [round(v, 4) for v in k["shape"]],
+                        "attacks": k["attacks"], "forms": k["forms"],
+                        "verdict": _forma_itelet(zone, k["forms"],
+                                                 k.get("name"))})
+    figures.sort(key=lambda r: -r["attacks"])
+    verdict = next((f["verdict"] for f in figures if f["verdict"]), None)
+    return {"figures": figures, "verdict": verdict}

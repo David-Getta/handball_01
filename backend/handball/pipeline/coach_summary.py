@@ -1183,6 +1183,18 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"({fo['attacks']} támadás, {fo['goals']} gól).")
     except Exception:
         pass
+    # Figura × védőforma: melyik fal ellen működik a figurájuk (a
+    # motor ítélete — FVF_MIN_ATTACKS / FVF_GAP_PP küszöbökkel).
+    try:
+        from .setplays import figure_vs_formation
+        fvf = figure_vs_formation(match)
+        for side, name in (("home", home), ("away", away)):
+            mondat = next((r["verdict"] for r in (fvf.get(side) or [])
+                           if r.get("verdict")), None)
+            if mondat:
+                body += f" A(z) {name}: {mondat}."
+    except Exception:
+        pass
     # Lepattanó-szedő poszt: védés után kinél marad a labda.
     try:
         from .defense import defensive_rebound_roles

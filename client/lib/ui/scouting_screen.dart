@@ -9998,6 +9998,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "bejátszott védekezés, a súlypont sávjának lezárása";
   }
 
+  // Figura × védőforma: melyik falban álljunk a fő figurájuk ellen. Az
+  // ítéletet a backend hozza (figure_formation_summary: legalább három
+  // támadás mindkét formánál, 25 százalékpont rés — a küszöbök a
+  // motorban élnek), a kliens a kész mondatot mutatja.
+  String? _figureVsFormation(Map<String, dynamic> r) {
+    final ff = r["figure_formation"];
+    if (ff is! Map) return null;
+    final v = ff["verdict"];
+    if (v is! String || v.isEmpty) return null;
+    return v;
+  }
+
   // Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak (6+
   // védekezett támadás, 30% váltás-arány / 80% fő forma; a
   // backend-kulccsal azonos küszöbök).
@@ -11642,6 +11654,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_ballCarry(r) != null) ["Labdavezetés", _ballCarry(r)!],
       if (_setplayLibrary(r) != null)
         ["Figura-könyvtár", _setplayLibrary(r)!],
+      if (_figureVsFormation(r) != null)
+        ["Figura × védőforma", _figureVsFormation(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],

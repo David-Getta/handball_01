@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.120 óta)
 
+- **Figura × védőforma** (új réteg): MELYIK FAL ELLEN működik a
+  figurájuk — a támadás-szakaszokat figurák szerint, a védekező csapat
+  formáját a szakasz végén olvasva, figuránként és formánként a
+  támadás / gól. Az ítélet a felkészülés konkrét válasza: "a beúszós
+  keresztjük a 6-0 ellen 40%, az 5-1 ellen 0% — erre a figurára 5-1-ben
+  álljatok fel" (csak ha két forma is elég mintás, és a rés érdemi). A
+  felderítés meccsek közt összegzi. Felületek: edzői kulcs, 460.
+  meccsterv-szabály (a gyenge formájuk × a ti fő védekezésetek —
+  maradjatok benne vagy váltsatok rá), 479. edzés-szabály (a saját
+  figuránk egy fal ellen gól nélkül → bejátszás), edzői összefoglaló,
+  kliens-csempe.
+
 - **A meccsterv rajzolja a visszatérő figurákat** (meccsterv): a terv
   alatt két új szakasz — "Az ő visszatérő figuráik" (erre készüljetek)
   és "A mi visszatérő figuráink" (ezt hozzuk, legyen második befejezés)

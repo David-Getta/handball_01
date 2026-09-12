@@ -1383,6 +1383,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 479) A figuránk egy fal ellen nem megy: ha a leggyakoribb figuránk
+    # valamelyik védőforma ellen elég mintából gól nélkül maradt, azt a
+    # falat kell bejátszani ellene edzésen — a meccsen már késő.
+    try:
+        from .setplays import FVF_MIN_ATTACKS, figure_vs_formation
+        fvf479 = figure_vs_formation(match, config)
+        for side in ("home", "away"):
+            sorok = fvf479.get(side) or []
+            if not sorok:
+                continue
+            fo = sorok[0]
+            rossz = [(f_, v) for f_, v in (fo.get("forms") or {}).items()
+                     if v["attacks"] >= FVF_MIN_ATTACKS and v["goals"] == 0]
+            if not rossz:
+                continue
+            forma, v = rossz[0]
+            add(side, "támadás",
+                f"A figuránk a {forma} ellen nem megy: {fo['zone']}",
+                f"a leggyakoribb figurátok a {forma} fal ellen {v['attacks']} "
+                f"támadásból gól nélkül maradt (küszöb: {FVF_MIN_ATTACKS} "
+                "támadás) — ez a fal kiismerte",
+                f"a figura bejátszása {forma} ellen: a védők a meccs-forma "
+                "szerint, a befejezés két változata (beálló-átadás, "
+                "átlövés a második hullámból); 6-6 ellen élesben")
+    except Exception:
+        pass
+
     # 478) Terméketlen kedvenc figura: a leggyakoribb figuránk
     # (SPL_MIN_ATTACKS támadástól) gól nélkül maradt — a mintát az
     # ellenfél is látja, új befejezést kell rá gyakorolni.

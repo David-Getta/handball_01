@@ -828,3 +828,110 @@ def test_a_meccsterv_a_visszatero_figurakat_is_adja(tmp_path):
     assert "plan" in r and r["own_figures"] == []
     assert r["opp_figures"] and r["opp_figures"][0]["matches"] == 2
     assert "name" in r["opp_figures"][0]
+
+
+# ---- Figura × védőforma ------------------------------------------------------
+
+def _fvf_match(spec, match_id="fvf"):
+    """`spec`: [(forma, gól?), …] — minden támadás ugyanaz a bal oldali
+    figura (+x kapu), a vendég fal a forma szerint: 6-0 = hat védő a
+    6 m-en (x=35), 5-1 = öt a 6 m-en + egy előretolt (x=30.5). Gólnál a
+    labda a kapuba megy (y=10, a kapu közepe); egyébként a támadás
+    ugyanolyan hosszú, csak lövés nélkül (az alak azonos marad)."""
+    frames = []
+    t = 0
+    for forma, gol in spec:
+        xs_v = [35.0] * 6 if forma == "6-0" else [35.0] * 5 + [30.5]
+        ys_v = [0.5, 8.0, 10.0, 12.0, 14.0, 19.0]
+
+        def fal():
+            return [_pl(20 + j, Team.AWAY, xs_v[j], ys_v[j]) for j in range(6)]
+
+        for _ in range(8):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 28.0, 4.0),
+                              _pl(2, Team.HOME, 31.0, 4.0),
+                              _pl(3, Team.HOME, 34.0, 4.0)] + fal(),
+                ball=Ball(x=28.0, y=4.0, confidence=1.0)))
+            t += 1
+        # Lövés mindkét esetben (az alak és a szakasz azonos): gólnál a
+        # kapu közepére (y=10), különben a kapu mellé (y=3 — kívül a
+        # 8,5–11,5 közti kapun).
+        for i in range(7):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 33.0, 10.0),
+                              _pl(2, Team.HOME, 31.0, 4.0),
+                              _pl(3, Team.HOME, 34.0, 4.0)] + fal(),
+                ball=Ball(x=34.0 + i, y=10.0 if gol else 3.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(4):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id=match_id, home_team="A",
+                           away_team="B", fps=25.0), frames)
+
+
+def test_a_figura_x_vedoforma_megmondja_melyik_fal_fogja():
+    """Ugyanaz a figura a 6-0 ellen négyből négy gól, az 5-1 ellen négyből
+    nulla: az ítélet az 5-1-et ajánlja ellene. Egy formánál (vagy kevés
+    mintánál) nincs ítélet."""
+    from handball.pipeline.setplays import (
+        FVF_GAP_PP, FVF_MIN_ATTACKS, figure_vs_formation)
+
+    m = _fvf_match([("6-0", True)] * 4 + [("5-1", False)] * 4)
+    rows = figure_vs_formation(m)["home"]
+    assert len(rows) == 1, rows
+    fo = rows[0]
+    assert fo["attacks"] == 8
+    assert fo["forms"]["6-0"]["attacks"] == 4 and fo["forms"]["6-0"]["goals"] == 4
+    assert fo["forms"]["5-1"]["attacks"] == 4 and fo["forms"]["5-1"]["goals"] == 0
+    assert fo["forms"]["6-0"]["goal_pct"] - fo["forms"]["5-1"]["goal_pct"] >= FVF_GAP_PP
+    assert fo["verdict"] and "5-1 ellen 0%" in fo["verdict"]
+    assert "5-1-ban álljatok fel" in fo["verdict"]
+    # A vendég nem támadott: üres lista (nem hallgatólagos 0).
+    assert figure_vs_formation(m)["away"] == []
+    # Egyetlen forma: nincs mihez mérni → nincs ítélet.
+    egy = figure_vs_formation(_fvf_match([("6-0", True)] * 4))["home"]
+    assert egy and egy[0]["verdict"] is None
+    # Kevés minta a második formánál: nincs ítélet.
+    keves = figure_vs_formation(
+        _fvf_match([("6-0", True)] * 4 + [("5-1", False)] * (FVF_MIN_ATTACKS - 1)))["home"]
+    assert keves and keves[0]["verdict"] is None
+
+
+def test_a_figura_x_vedoforma_a_felderitesen_meccsek_kozt_osszeadodik():
+    """Két meccs: az egyikben csak 6-0, a másikban csak 5-1 ellen jött a
+    figura — külön-külön nincs ítélet, összefésülve van. A VALÓDI
+    felderítés-úton (scout_team → combine_reports), az edzői kulcs is
+    megszólal, és a 460-as meccsterv-szabály a saját fő formával."""
+    from handball.pipeline.scouting import (
+        _coach_keys, combine_reports, matchup_plan, scout_team)
+
+    r1 = scout_team(_fvf_match([("6-0", True)] * 4, "f1"), Team.HOME)
+    r2 = scout_team(_fvf_match([("5-1", False)] * 4, "f2"), Team.HOME)
+    assert r1.figure_formation["verdict"] is None
+    assert len(r1.setplay_formation_rows) == 1
+    ossz = combine_reports([r1, r2])
+    assert len(ossz.setplay_formation_rows) == 2
+    assert ossz.figure_formation["verdict"] and "5-1" in ossz.figure_formation["verdict"]
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "5-1-ban álljatok fel" in kulcsok
+    # 460: ha mi 5-1-ben védekezünk, "maradjatok benne"; ha 6-0-ban, váltás.
+    sajat = scout_team(_fvf_match([("6-0", True)] * 4, "s1"), Team.HOME)
+    sajat.defense_main = "5-1"
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "maradjatok benne" in terv
+    sajat.defense_main = "6-0"
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "váltsatok 5-1-ra" in terv2
+
+
+def test_a_figura_x_vedoforma_edzes_szabaly_valodi_retegbol():
+    """479: a saját leggyakoribb figura egy fal ellen gól nélkül → tétel."""
+    from handball.pipeline.training import training_focus
+
+    tetelek = training_focus(_fvf_match([("5-1", False)] * 4, "t1"))["home"]
+    assert any(t["title"].startswith("A figuránk a 5-1 ellen nem megy")
+               for t in tetelek), [t["title"] for t in tetelek]

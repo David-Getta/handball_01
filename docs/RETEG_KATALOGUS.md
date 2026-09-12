@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **505 réteg**, modulonként csoportosítva; a
+Összesen **506 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (98)
@@ -487,10 +487,11 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `key_players` | Kulcsemberek egy meccsből: kinél dől el a játék — szereponként a |
 
-## setplays (6)
+## setplays (7)
 
 | Réteg | Mit mér |
 |---|---|
+| `figure_vs_formation` | Figura × védőforma: MELYIK FAL ELLEN MŰKÖDIK a figurájuk. |
 | `setplay_concentration` | Figura-koncentráció: EGY FIGURÁRA épül-e a támadójátékuk. |
 | `setplay_decay` | Figura-kopás: MŰKÖDIK-E MÉG a figura a második ismétlésre. |
 | `setplay_efficiency` | Melyik figura működik: klaszterenként támadás / lövés / gól. |

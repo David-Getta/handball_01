@@ -673,6 +673,12 @@ class ScoutingReport:
     # vissza meccsről meccsre. Nem összegződik — a combine_reports az
     # összefésült sorokból ÚJRASZÁMOLJA (így pontos marad).
     setplay_library: dict = field(default_factory=dict)
+    # Figura × védőforma (setplays.figure_vs_formation): lapos,
+    # összegezhető sorok — {"shape", "formation", "attacks", "goals",
+    # "match_id"} — meccsek közt egymás mögé; az összefésült kép
+    # (figure_formation) a combine_reports-ban ÚJRASZÁMOLVA.
+    setplay_formation_rows: list = field(default_factory=list)
+    figure_formation: dict = field(default_factory=dict)
     # Lövőerő-esésük: félidőnként a mért lövések száma + a
     # sebesség-összeg (km/h) — darabszámok és összegek, meccsek közt
     # pontosan összegződnek (félidő-átlag = összeg / darab).
@@ -8430,6 +8436,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # Figura × védőforma: melyik falban álljunk a fő figurájuk ellen.
+    try:
+        _ffv = (rep.figure_formation or {}).get("verdict")
+        if _ffv:
+            keys.append(_ffv[0].upper() + _ffv[1:] + ".")
+    except Exception:
+        pass
+
     # Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak.
     if rep.fsw_attacks >= 6 and rep.fsw_pairs > 0 and rep.fsw_labels:
         _fsw_main = max(rep.fsw_labels.items(), key=lambda kv: kv[1])[0]
@@ -12324,6 +12338,15 @@ def _scout_team_cached(match: Match, team: Team,
             for row in _sps(match, config)[team.value]]
         from .setplays import setplay_library as _spl_fill
         rep.setplay_library = _spl_fill(rep.setplay_shapes)
+        from .setplays import figure_formation_summary as _ffs
+        from .setplays import figure_vs_formation as _fvf
+        rep.setplay_formation_rows = [
+            {"shape": r["shape"], "formation": forma,
+             "attacks": cella["attacks"], "goals": cella["goals"],
+             "match_id": match.meta.match_id}
+            for r in _fvf(match, config)[team.value]
+            for forma, cella in (r.get("forms") or {}).items()]
+        rep.figure_formation = _ffs(rep.setplay_formation_rows)
         rep.fsw_labels = dict(fswrec["labels"])
         rep.fsw_attacks = fswrec["attacks"]
         rep.fsw_pairs = max(0, fswrec["attacks"] - 1)
@@ -13490,6 +13513,13 @@ def _merge_hold_players(reports) -> list:
                                  / max(1, kv[1]["holds"])))]
 
 
+def _figure_formation_of(reports) -> dict:
+    """Figura × védőforma az összefésült sorokból újraszámolva."""
+    from .setplays import figure_formation_summary
+    return figure_formation_summary([row for r in reports
+                                     for row in (r.setplay_formation_rows or [])])
+
+
 def _setplay_library_of(reports) -> dict:
     """Figura-könyvtár az összefésült alak-sorokból újraszámolva."""
     from .setplays import setplay_library
@@ -14553,6 +14583,36 @@ def matchup_plan(own: "ScoutingReport",
                 "kapott lövésből) — játsszátok be ezt a figurát edzésen, "
                 "és a súlypont sávjában előre megbeszélt kilépéssel "
                 "zárjatok: ismert minta ellen nem lehet szabadon lőni.")
+    except Exception:
+        pass
+
+    # 460) Az ő figurájuk gyenge formája × a ti fő védekezésetek: ha a
+    # fal, amiben amúgy is álltok, fogja a fő figurájukat, maradjatok
+    # benne; ha más fal fogja, arra a figurára váltsatok.
+    try:
+        from .setplays import FVF_MIN_ATTACKS as _FVF460
+        _ff460 = (opp.figure_formation or {}).get("figures") or []
+        _fo460 = next((f for f in _ff460 if f.get("verdict")), None)
+        if _fo460 is not None and own.defense_main not in ("—", "", None):
+            _cellak = [(f_, v) for f_, v in _fo460["forms"].items()
+                       if v["attacks"] >= _FVF460]
+            _gyenge = min(_cellak, key=lambda kv: kv[1]["goal_pct"])
+            _cimke = _fo460.get("name") or _fo460["zone"]
+            if _gyenge[0] == own.defense_main:
+                plan.append(
+                    f"A fő figurájuk ({_cimke}) a {_gyenge[0]} ellen csak "
+                    f"{_gyenge[1]['goal_pct']:.0f}%-ot hoz "
+                    f"({_gyenge[1]['goals']}/{_gyenge[1]['attacks']}), és "
+                    f"ti pont {own.defense_main}-ban védekeztek — "
+                    "maradjatok benne, a figurájukra ne váltsatok formát.")
+            else:
+                plan.append(
+                    f"A fő figurájuk ({_cimke}) a {_gyenge[0]} ellen csak "
+                    f"{_gyenge[1]['goal_pct']:.0f}%-ot hoz "
+                    f"({_gyenge[1]['goals']}/{_gyenge[1]['attacks']}), ti "
+                    f"viszont {own.defense_main}-ban álltok — a figurájuk "
+                    f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
+                    "vissza.")
     except Exception:
         pass
 
@@ -22877,6 +22937,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         setplay_shapes=[row for r in reports
                         for row in (r.setplay_shapes or [])],
         setplay_library=_setplay_library_of(reports),
+        setplay_formation_rows=[row for r in reports
+                                for row in (r.setplay_formation_rows or [])],
+        figure_formation=_figure_formation_of(reports),
         fsw_labels=_merge_fsw_labels(reports),
         fsw_attacks=sum(r.fsw_attacks for r in reports),
         fsw_pairs=sum(r.fsw_pairs for r in reports),
