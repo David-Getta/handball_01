@@ -3,13 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.122 óta)
+## Kiadatlan (a v0.1.123 óta)
 
 - **Repertoár-változás a szezon-riportban** (szezon): a szezon első és
   második felének figurái összevetve — mi jött be (új figura), mi tűnt
   el, mi maradt (a két fél támadás- és gólarányával), rajzzal. A saját
   csapatnál "él-e még a beúszós kereszt", az ellenfélnél "van-e új
   figurájuk, amire a régi felderítés nem készít fel".
+
+## v0.1.123 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: gyorsabb felderítés (meccsenként egyszer fut) és a
+> visszatérő figurák a Szezon képernyőn.
 
 - **Gyorsabb felderítés, meccsterv és szezon** (teljesítmény): egy
   meccs felderítése (ötszáz réteg) eddig minden kérésnél újra lefutott
