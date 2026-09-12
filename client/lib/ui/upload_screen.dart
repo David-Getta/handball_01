@@ -302,9 +302,14 @@ class _UploadScreenState extends State<UploadScreen> {
         children: [
           Text("INDÍTÁS ELŐTT", style: AppText.sectionLabel),
           const SizedBox(height: 4),
-          sor(kalib, false, "Pálya-kalibráció",
+          // A mért illeszkedés is ide kerül: egy szabályos, de a vonalak
+          // mellé húzott négyszög "bejelölve" lenne — a szám mondja meg.
+          sor(kalib && !(_calib?.fitWeak ?? false), kalib && (_calib?.fitWeak ?? false),
+              "Pálya-kalibráció",
               kalib
                   ? "bejelölve (${_calib!.label})"
+                      "${_calib!.fitNote != null ? " · ${_calib!.fitNote}" : ""}"
+                      "${(_calib!.fitWeak) ? " — a rajz nem ül a pályavonalakon, igazítsd" : ""}"
                   : "nincs — enélkül a nézőtér is a pályára kerül"),
           sor(probaJo, probaFutott && !probaJo, "Detektálás-próba",
               !probaFutott

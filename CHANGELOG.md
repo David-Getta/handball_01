@@ -3,12 +3,23 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.116 óta)
+## Kiadatlan (a v0.1.117 óta)
+
+- **Az indítás előtti lista az illeszkedést is mondja** (új elemzés): a
+  "Pálya-kalibráció — bejelölve" sor a mentéskor mért illeszkedést is
+  kiírja ("illeszkedés 0,62 — jó"), gyengénél pirosan és teendővel —
+  egy szabályos, de a vonalak mellé húzott négyszög eddig "bejelölve"
+  volt.
 
 - **A visszatérő figura 3D-ben** (3D pálya, böngészős 3D/VR): az
   esemény-ugrás (⏮/⏭) a visszatérő figura kezdetére is ugrik, és a
   felirat mondja: "Ismert figura (bal oldal, a kapuelőtér előtt) —
   csapat". A könyvtárból jön, több elemzett meccs kell hozzá.
+
+## v0.1.117 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: a figurák rajzzal a meccs-elemzőben és a
+> meccsjelentésben.
 
 - **A meccsjelentés is rajzolja a figurákat** (jelentés): a nyomtatható
   meccsjelentés új "Figuráik (alakkal)" szakasza csapatonként a három

@@ -39,11 +39,19 @@ class CalibrationResult {
   /// indulnia, mert a pásztázás-követés ehhez az álláshoz igazítja a kamerát.
   final int startFrame;
 
+  /// A mentéskor mért illeszkedés (0..1) és ítélete ("jó" / "közepes" /
+  /// "gyenge") — null, ha nem volt mérés (nincs motor, vagy összenézet).
+  /// Az indítás előtti ellenőrző lista ebből mondja, ül-e a kalibráció.
+  final double? fit;
+  final String? fitVerdict;
+
   const CalibrationResult({
     required this.corners,
     required this.region,
     required this.rotate,
     required this.startFrame,
+    this.fit,
+    this.fitVerdict,
   });
 }
 
@@ -71,6 +79,22 @@ class CalibrationSet {
     }
     return "bal + jobb térfél";
   }
+
+  /// A leggyengébb mért illeszkedés szövege ("illeszkedés 0,62 — jó"),
+  /// vagy null, ha egyik bejegyzésnél sem volt mérés.
+  String? get fitNote {
+    CalibrationResult? rossz;
+    for (final c in items) {
+      if (c.fit == null) continue;
+      if (rossz == null || c.fit! < rossz.fit!) rossz = c;
+    }
+    if (rossz == null) return null;
+    return "illeszkedés ${rossz.fit!.toStringAsFixed(2).replaceAll(".", ",")}"
+        " — ${rossz.fitVerdict ?? "?"}";
+  }
+
+  /// Igaz, ha valamelyik bejegyzés mért illeszkedése "gyenge".
+  bool get fitWeak => items.any((c) => c.fitVerdict == "gyenge");
 }
 
 class CalibrationScreen extends StatefulWidget {
@@ -1021,6 +1045,9 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     // tartomány felel meg a képkockának. A sávba húzott pont képen KÍVÜLI
     // (negatív vagy W/H fölötti) képpontot ad — a homográfiának ez így jó.
     double toImg(double v) => (v - _margin) / (1 - 2 * _margin);
+    // A friss mérés eredménye is megy a bejegyzésbe — az indítás előtti
+    // lista ebből mondja, ül-e a kalibráció (elavult mérés nem).
+    final friss = (_fit != null && !_fitElavult) ? _fit : null;
     return CalibrationResult(
       corners: [
         for (final cn in _corners)
@@ -1029,6 +1056,8 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       region: _region,
       rotate: _rotate,
       startFrame: _frameIdx,
+      fit: (friss?["fit"] as num?)?.toDouble(),
+      fitVerdict: friss?["itelet"] as String?,
     );
   }
 

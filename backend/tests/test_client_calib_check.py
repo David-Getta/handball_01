@@ -296,3 +296,17 @@ def test_a_3d_nezet_a_visszatero_figurahoz_is_ugrik():
     view = (gyoker / "backend" / "handball" / "pipeline"
             / "view3d_html.py").read_text(encoding="utf-8")
     assert 'f: "Ismert figura"' in view
+
+
+def test_az_inditas_elotti_lista_az_illeszkedest_is_mondja():
+    """A "Pálya-kalibráció — bejelölve" kevés: egy szabályos, de a vonalak
+    mellé húzott négyszög is "bejelölve". A mentéskor mért illeszkedés a
+    bejegyzésben utazik, és a lista mondja (gyengénél pirosan)."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    calib = (gyoker / "client" / "lib" / "ui"
+             / "calibration_screen.dart").read_text(encoding="utf-8")
+    assert "final double? fit;" in calib and "fitVerdict" in calib
+    assert "String? get fitNote" in calib and "bool get fitWeak" in calib
+    assert 'fit: (friss?["fit"] as num?)?.toDouble()' in calib
+    upload = _upload_src()
+    assert "_calib!.fitNote" in upload and "fitWeak" in upload
