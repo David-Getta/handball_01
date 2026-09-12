@@ -4396,13 +4396,13 @@ def create_app():
             team_a, team_b, stats, timeline, matchup=matchup,
             scorers=scorers))
 
-    @app.get("/season/report")
-    def get_season_report(team: str):
-        """Szezon-riport egy kattintásra: a csapat meccsei időrendben
-        két időszakra bontva (fejlődés-tábla) + visszatérő edzés-
-        fókuszok — nyomtatható HTML-ben. 404, ha 2-nél kevesebb meccs
-        van a csapattól."""
-        from fastapi.responses import HTMLResponse
+    def _season_halves(team: str):
+        """A csapat szezon-meccsei időrendben, két félre vágva.
+
+        Visszatérés: (entries, older_items, newer_items) — az entries
+        (dátum, meccs-azonosító, oldal) hármasok rendezve, a két items-
+        lista a _combined_report törzs-alakjában. Egy meccsnél a
+        "régebbi" fél az az egy meccs, az "újabb" üres."""
         entries = []
         for m in _season_matches():
             side = ("home" if m.meta.home_team == team
@@ -4411,14 +4411,54 @@ def create_app():
                 continue
             entries.append((m.meta.date or "", m.meta.match_id, side))
         entries.sort()
-        if len(entries) < 2:
-            raise HTTPException(status_code=404,
-                                detail="too few matches for team")
         cut = max(1, len(entries) // 2)
         older_items = [{"match_id": e[1], "team": e[2]}
                        for e in entries[:cut]]
         newer_items = [{"match_id": e[1], "team": e[2]}
                        for e in entries[cut:]]
+        return entries, older_items, newer_items
+
+    def _repertoire_change(team: str, rep_older, rep_newer) -> dict:
+        """A figura-repertoár változása a két fél felderítéséből, névvel."""
+        from ..pipeline.setplays import figure_repertoire_change
+        rep = figure_repertoire_change(rep_older.setplay_shapes,
+                                       rep_newer.setplay_shapes)
+        for k in ("kept", "new", "dropped"):
+            rep[k] = _nevesit(team, rep.get(k))
+        return rep
+
+    @app.get("/library/figure-repertoire")
+    def get_library_figure_repertoire(team: str):
+        """Egy csapat REPERTOÁR-VÁLTOZÁSA a szezon két fele között:
+        {"team", "matches", "older_matches", "newer_matches", "kept",
+        "new", "dropped", "verdict"} — a Szezon képernyő szakasza. Két
+        meccsnél kevesebbnél a listák üresek, az ítélet None (nincs
+        hiba: a képernyő csendben kihagyja)."""
+        team = str(team or "").strip()
+        if not team:
+            raise HTTPException(status_code=400, detail="team required")
+        entries, older_items, newer_items = _season_halves(team)
+        ures = {"team": team, "matches": len(entries),
+                "older_matches": len(older_items),
+                "newer_matches": len(newer_items),
+                "kept": [], "new": [], "dropped": [], "verdict": None}
+        if len(entries) < 2:
+            return ures
+        rep_older = _combined_report({"items": older_items})
+        rep_newer = _combined_report({"items": newer_items})
+        return {**ures, **_repertoire_change(team, rep_older, rep_newer)}
+
+    @app.get("/season/report")
+    def get_season_report(team: str):
+        """Szezon-riport egy kattintásra: a csapat meccsei időrendben
+        két időszakra bontva (fejlődés-tábla) + visszatérő edzés-
+        fókuszok — nyomtatható HTML-ben. 404, ha 2-nél kevesebb meccs
+        van a csapattól."""
+        from fastapi.responses import HTMLResponse
+        entries, older_items, newer_items = _season_halves(team)
+        if len(entries) < 2:
+            raise HTTPException(status_code=404,
+                                detail="too few matches for team")
         rep_older = _combined_report({"items": older_items})
         rep_newer = _combined_report({"items": newer_items})
         tr = trend_report(rep_older, rep_newer)
@@ -4426,11 +4466,7 @@ def create_app():
         # — hibatűrően, névvel.
         repertoire = None
         try:
-            from ..pipeline.setplays import figure_repertoire_change
-            repertoire = figure_repertoire_change(rep_older.setplay_shapes,
-                                                  rep_newer.setplay_shapes)
-            for k in ("kept", "new", "dropped"):
-                repertoire[k] = _nevesit(team, repertoire.get(k))
+            repertoire = _repertoire_change(team, rep_older, rep_newer)
         except Exception:
             repertoire = None
         focuses = []

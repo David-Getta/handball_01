@@ -106,6 +106,7 @@ class _SeasonScreenState extends State<SeasonScreen> {
               const SizedBox(height: AppSpacing.sm),
               _leaderBoards(),
               ..._figureLibraries(),
+              ..._repertoireChanges(),
               const SizedBox(height: AppSpacing.lg),
               Text("RIPORTOK", style: AppText.sectionLabel),
               const SizedBox(height: AppSpacing.sm),
@@ -135,7 +136,103 @@ class _SeasonScreenState extends State<SeasonScreen> {
         if (!mounted) return;
         if (rec.isNotEmpty) setState(() => _figures[t] = rec);
       } catch (_) {}
+      try {
+        final rep = await _api.fetchTeamFigureRepertoire(t);
+        if (!mounted) return;
+        // Csak a VÁLTOZÁST mutatjuk: új vagy eltűnt figura kell hozzá
+        // (a "maradt" sorok a változás mellé kerülnek, hozammal).
+        final vanValtozas = ((rep["new"] as List?) ?? const []).isNotEmpty ||
+            ((rep["dropped"] as List?) ?? const []).isNotEmpty;
+        if (vanValtozas) setState(() => _repertoire[t] = rep);
+      } catch (_) {}
     }
+  }
+
+  // Csapatonként a repertoár-változás a szezon két fele között — csak
+  // ahol új vagy eltűnt figura van.
+  final Map<String, Map<String, dynamic>> _repertoire = {};
+
+  /// REPERTOÁR-VÁLTOZÁS csapatonként: ÚJ / ELTŰNT / maradt (a két fél
+  /// gólarányával), rajzzal. Nincs változó csapat → a szakasz elmarad.
+  List<Widget> _repertoireChanges() {
+    if (_repertoire.isEmpty) return const [];
+    List<Map<String, dynamic>> lista(Map<String, dynamic> rep, String k) =>
+        ((rep[k] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+    String nev(Map<String, dynamic> f) =>
+        (f["name"] as String?)?.isNotEmpty == true
+            ? "${f["name"]}"
+            : "${f["zone"] ?? "?"}";
+    String pct(dynamic v) => "${((v as num?) ?? 0).round()}%";
+    Widget csempe(Map<String, dynamic> f, String cimke, Color szin,
+        String reszlet) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: szin.withOpacity(0.6)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(
+              width: 96, height: 48,
+              child: CustomPaint(
+                  painter: FigureShapePainter(
+                      ((f["shape"] as List?) ?? const [])
+                          .map((v) => (v as num).toDouble())
+                          .toList()))),
+          const SizedBox(width: AppSpacing.sm),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(cimke,
+                  style: AppText.label
+                      .copyWith(fontSize: 10.5, color: szin, letterSpacing: 0.6)),
+              Text(nev(f), style: AppText.value.copyWith(fontSize: 12.5)),
+              Text(reszlet, style: AppText.label.copyWith(fontSize: 11.5)),
+            ],
+          ),
+        ]),
+      );
+    }
+    return [
+      const SizedBox(height: AppSpacing.lg),
+      Text("REPERTOÁR-VÁLTOZÁS", style: AppText.sectionLabel),
+      const SizedBox(height: 4),
+      Text("A szezon első és második felének figurái összevetve — mi jött "
+          "be, mi tűnt el, mi maradt. A saját csapatnál: él-e még a "
+          "figura; az ellenfélnél: van-e új, amire a régi felderítés nem "
+          "készít fel.",
+          style: AppText.label),
+      const SizedBox(height: AppSpacing.sm),
+      for (final e in _repertoire.entries) ...[
+        Text(e.key, style: AppText.value.copyWith(fontSize: 13)),
+        if ((e.value["verdict"] as String?)?.isNotEmpty == true)
+          Text("${e.value["verdict"]}",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        const SizedBox(height: 4),
+        Wrap(spacing: AppSpacing.md, runSpacing: AppSpacing.sm, children: [
+          for (final f in lista(e.value, "new").take(3))
+            csempe(f, "ÚJ A MÁSODIK FÉLBEN", AppColors.accent,
+                "${f["attacks"]} támadás · ${f["goals"]} gól"),
+          for (final f in lista(e.value, "dropped").take(3))
+            csempe(f, "ELTŰNT", AppColors.away,
+                "${f["attacks"]} támadás · ${f["goals"]} gól az első félben"),
+          for (final f in lista(e.value, "kept").take(3))
+            csempe(
+                f,
+                "MARADT",
+                AppColors.textFaint,
+                "${(f["older"] as Map?)?["attacks"]} támadás "
+                "(${pct((f["older"] as Map?)?["goal_pct"])}) → "
+                "${(f["newer"] as Map?)?["attacks"]} támadás "
+                "(${pct((f["newer"] as Map?)?["goal_pct"])})"),
+        ]),
+        const SizedBox(height: AppSpacing.sm),
+      ],
+    ];
   }
 
   /// VISSZATÉRŐ FIGURÁK csapatonként, rajzzal — amit meccsről meccsre

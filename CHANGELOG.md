@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.123 óta)
+## Kiadatlan (a v0.1.124 óta)
+
+- **Repertoár-változás a Szezon képernyőn** (szezon): csapatonként az
+  ÚJ / ELTŰNT / MARADT figurák rajzzal, névvel és a két fél hozamával
+  — egy helyen az appban, nem csak a nyomtatható szezon-riportban.
+  Csak ott jelenik meg, ahol tényleg változott valami (új vagy eltűnt
+  figura); egy meccsből nincs mit összevetni, a szakasz elmarad.
+
+## v0.1.124 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: repertoár-változás a szezon-riportban — mi jött be,
+> mi tűnt el, mi maradt a szezon két fele között.
 
 - **Repertoár-változás a szezon-riportban** (szezon): a szezon első és
   második felének figurái összevetve — mi jött be (új figura), mi tűnt

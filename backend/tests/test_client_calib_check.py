@@ -369,3 +369,19 @@ def test_a_szezon_kepernyo_mutatja_a_visszatero_figurakat():
     api = (gyoker / "client" / "lib" / "services"
            / "api_client.dart").read_text(encoding="utf-8")
     assert "/library/figure-library" in api
+
+
+def test_a_szezon_kepernyo_mutatja_a_repertoar_valtozast():
+    """A Szezon képernyő csapatonként mutatja a repertoár-változást (ÚJ /
+    ELTŰNT / maradt, rajzzal) — csak ahol van új vagy eltűnt figura."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "season_screen.dart").read_text(encoding="utf-8")
+    assert "_repertoireChanges" in src and "REPERTOÁR-VÁLTOZÁS" in src
+    assert "fetchTeamFigureRepertoire" in src
+    for k in ('"new"', '"dropped"', '"kept"', '"verdict"'):
+        assert k in src
+    assert "ELTŰNT" in src and "MARADT" in src
+    api = (gyoker / "client" / "lib" / "services"
+           / "api_client.dart").read_text(encoding="utf-8")
+    assert "/library/figure-repertoire" in api

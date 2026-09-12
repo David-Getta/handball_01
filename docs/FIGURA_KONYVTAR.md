@@ -107,7 +107,9 @@ támadással) és "eltűnt" (csak az elsőben). A saját csapatnál a
 kérdés "él-e még a beúszós kereszt", az ellenfélnél "van-e új
 figurájuk, amire a régi felderítés nem készít fel". Felülete a
 szezon-riport "Repertoár-változás (első fél → második fél)" szakasza,
-rajzzal és névvel.
+rajzzal és névvel, és a Szezon képernyő azonos nevű szakasza
+(`GET /library/figure-repertoire?team=` — csak ahol van új vagy eltűnt
+figura).
 
 ## Korlátok
 

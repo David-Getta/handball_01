@@ -1044,6 +1044,45 @@ def test_a_repertoar_valtozas_uj_eltunt_maradt():
     assert figure_repertoire_change([], [])["kept"] == []
 
 
+def test_a_repertoar_valtozas_vegpont(tmp_path):
+    """/library/figure-repertoire?team=: üres név 400; egy meccsnél üres
+    listák, ítélet nélkül (nem hiba); két meccsnél (az első bal + jobb,
+    a második csak bal) a jobb eltűnt, a bal maradt — névvel."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    m1 = _spl_match(["bal"] * 4 + ["jobb"] * 3, "m1")
+    m1.meta.date = "2026-01-01"
+    (d / "m1.json").write_text(json.dumps(m1.to_dict()), encoding="utf-8")
+    c = TestClient(create_app())
+    assert c.get("/library/figure-repertoire",
+                 params={"team": ""}).status_code == 400
+    r = c.get("/library/figure-repertoire", params={"team": "A"})
+    assert r.status_code == 200
+    r = r.json()
+    assert r["matches"] == 1 and r["verdict"] is None
+    assert r["kept"] == [] and r["new"] == [] and r["dropped"] == []
+    m2 = _spl_match(["bal"] * 3, "m2")
+    m2.meta.date = "2026-02-01"
+    (d / "m2.json").write_text(json.dumps(m2.to_dict()), encoding="utf-8")
+    r = TestClient(create_app()).get("/library/figure-repertoire",
+                                     params={"team": "A"}).json()
+    assert r["matches"] == 2 and r["older_matches"] == 1
+    assert [f["zone"] for f in r["dropped"]] == ["jobb oldal, a kapuelőtér előtt"]
+    assert len(r["kept"]) == 1 and "name" in r["kept"][0]
+    assert r["kept"][0]["older"]["attacks"] == 4
+    assert "eltűnt" in r["verdict"]
+
+
 def test_a_szezon_riport_repertoar_szakasza(tmp_path):
     """A szezon-riport a repertoár-változást is hozza (két meccs, az
     első bal + jobb, a második csak bal → a jobb eltűnt)."""
