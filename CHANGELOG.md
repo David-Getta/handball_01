@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.120 óta)
+## Kiadatlan (a v0.1.121 óta)
 
 - **Figura × védőforma** (új réteg): MELYIK FAL ELLEN működik a
   figurájuk — a támadás-szakaszokat figurák szerint, a védekező csapat
@@ -16,6 +16,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   maradjatok benne vagy váltsatok rá), 479. edzés-szabály (a saját
   figuránk egy fal ellen gól nélkül → bejátszás), edzői összefoglaló,
   kliens-csempe.
+
+## v0.1.121 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: a meccsterv rajzolja a visszatérő figurákat — az
+> övék és a miénk.
 
 - **A meccsterv rajzolja a visszatérő figurákat** (meccsterv): a terv
   alatt két új szakasz — "Az ő visszatérő figuráik" (erre készüljetek)

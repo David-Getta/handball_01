@@ -58,6 +58,24 @@ A csapat könyvtárát az API a könyvtár ÖSSZES elemzett meccséből építi
 alak-gyorsítótárral: (meccs-azonosító, kockaszám) kulccsal, hogy az
 újrafeldolgozott meccs ne olvasson elavult alakot.
 
+## Figura × védőforma
+
+A könyvtár azt mondja, MELYIK figurát hozzák; a `figure_vs_formation`
+réteg azt, MELYIK FAL ELLEN működik: a támadás-szakaszokat figurák
+szerint, a védekező csapat formáját a szakasz vége előtt
+`FVF_LOOKBACK_S` (0,5 mp) másodperccel leolvasva, figuránként és
+formánként számolja a támadást és a gólt. Az ítélet csak akkor szólal
+meg, ha KÉT forma is legalább `FVF_MIN_ATTACKS` (3) támadást kapott, és
+a gólarányuk közt legalább `FVF_GAP_PP` (25) százalékpont a rés: "a
+beúszós keresztjük a 6-0 ellen 100%, az 5-1 ellen 0% — erre a figurára
+5-1-ben álljatok fel". A felderítés lapos sorokat tárol
+(`setplay_formation_rows`), és a `figure_formation_summary` az
+összefésült sorokból alak szerint újraszámolja — két meccs, amelyben
+külön-külön csak egy forma jött elő, együtt már ítéletet ad. A 460.
+meccsterv-szabály a ti fő védekezésetekkel veti össze (maradjatok benne
+/ váltsatok rá), a 479. edzés-szabály a saját figurátok gól nélküli
+formáját adja bejátszásra.
+
 ## Figura-nevek
 
 A könyvtár zóna-neve ("bal oldal, a kapuelőtér előtt") helyett az edző
