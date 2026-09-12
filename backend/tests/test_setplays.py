@@ -657,3 +657,38 @@ def test_a_visszatero_figura_kezdokockai_klip_exporthoz():
     assert recurring_figure_starts(m1, tavol, Team.HOME) == []
     assert recurring_figure_starts(m1, [], Team.HOME) == []
     assert recurring_figure_starts(m1, fo["shape"], Team.AWAY) == []
+
+
+def test_a_figura_riasztas_vegpontja_a_konyvtarbol_epul(tmp_path):
+    """/figure-alerts: a csapat könyvtára a könyvtár ÖSSZES meccséből —
+    egyetlen meccsnél nincs riasztás, két meccsnél a visszatérő figura
+    szakaszai jönnek (t, t_end), a védekező csapat nevével."""
+    import json
+    import os
+
+    import pytest
+
+    from handball.pipeline.setplays import recurring_figure_segments
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    m1 = _spl_match(["bal"] * 4 + ["jobb"] * 3, "m1")
+    (d / "m1.json").write_text(json.dumps(m1.to_dict()), encoding="utf-8")
+    c = TestClient(create_app())
+    assert c.get("/matches/nincs/figure-alerts").status_code == 404
+    assert c.get("/matches/m1/figure-alerts").json()["alerts"] == []
+    m2 = _spl_match(["bal"] * 3, "m2")
+    (d / "m2.json").write_text(json.dumps(m2.to_dict()), encoding="utf-8")
+    c = TestClient(create_app())
+    r = c.get("/matches/m1/figure-alerts").json()["alerts"]
+    assert [a["t"] for a in r] == [0, 12, 24, 36]
+    assert all(a["t_end"] >= a["t"] and a["team"] == "home" for a in r)
+    assert r[0]["team_name"] == "A" and r[0]["zone"].startswith("bal oldal")
+    assert "B: kettőzés" in r[0]["text"]
+    # Üres alakra a motor-függvény sem ad szakaszt.
+    assert recurring_figure_segments(m1, [], Team.HOME) == []

@@ -1191,6 +1191,20 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// ÉLŐ figura-riasztások (GET /matches/{id}/figure-alerts): mikor
+  /// játssza valamelyik csapat a meccsről meccsre visszatérő figuráját —
+  /// a csapat könyvtára a könyvtár összes elemzett meccséből épül.
+  Future<List<Map<String, dynamic>>> fetchFigureAlerts(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/figure-alerts"))
+        .timeout(const Duration(seconds: 20));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a figura-riasztásokat", resp));
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["alerts"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// 7 a 6 elleni (üres kapus) szakaszok (GET /matches/{id}/empty-net).
   Future<List<Map<String, dynamic>>> fetchEmptyNet(String matchId) async {
     final resp = await http

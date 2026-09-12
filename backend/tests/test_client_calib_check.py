@@ -225,3 +225,15 @@ def test_a_visszatero_figura_klip_tipus_mindket_oldalon_letezik():
     assert '("recurring_figure", "A visszatérő figura"' in dart
     assert '"recurring_figure" in types' in api
     assert "recurring_figure_starts(" in api
+
+
+def test_az_elo_nezet_figura_riasztast_ad():
+    """Az élő követés időzített jelzései közé a visszatérő figura is
+    bekerül — a kliens a /figure-alerts végpontot kérdezi."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    live = (gyoker / "client" / "lib" / "ui"
+            / "live_screen.dart").read_text(encoding="utf-8")
+    api = (gyoker / "client" / "lib" / "services"
+           / "api_client.dart").read_text(encoding="utf-8")
+    assert "fetchFigureAlerts" in live and '"figura"' in live
+    assert "/figure-alerts" in api

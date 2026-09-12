@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.113 óta)
 
+- **Élő figura-riasztás** (élő követés): az élő nézet időzített jelzései
+  közé bekerül, amikor valamelyik csapat a meccsről meccsre visszatérő
+  figuráját kezdi játszani — a védekező oldalnak szól ("kettőzés a
+  súlypontnál, kilépés a lövőre"). A csapat könyvtára a könyvtár összes
+  elemzett meccséből épül; egy meccsnél még nincs riasztás.
+
 - **A visszatérő figura videón** (klipek): új klip-típus, "A visszatérő
   figura" — a csapat könyvtárából (az összes elemzett meccséből) a
   meccsről meccsre visszatérő fő figurát veszi, és ebből a meccsből

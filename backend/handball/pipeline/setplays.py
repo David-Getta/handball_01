@@ -928,14 +928,14 @@ def setplay_library(shapes: list, threshold: float = SPL_MERGE_THRESHOLD,
     return {"figures": figures, "recurring": recurring, "verdict": verdict}
 
 
-def recurring_figure_starts(match: Match, shape: list, team: Team,
-                            config: TacticsConfig | None = None,
-                            threshold: float = SPL_MERGE_THRESHOLD,
-                            min_length: int = 5) -> list[int]:
-    """E meccs támadásai közül azoknak a kezdő-kockái, amelyek alakja a
-    megadott (könyvtári) alakhoz illik — "mutasd a figurát, amit mindig
-    hoznak" klip-exporthoz. A könyvtár alakja irány-normált, ezért az
-    illesztés is az; a küszöb a könyvtári összevonásé."""
+def recurring_figure_segments(match: Match, shape: list, team: Team,
+                              config: TacticsConfig | None = None,
+                              threshold: float = SPL_MERGE_THRESHOLD,
+                              min_length: int = 5) -> list[tuple[int, int]]:
+    """E meccs támadás-szakaszai közül azok (kezdő, záró kocka), amelyek
+    alakja a megadott (könyvtári) alakhoz illik. A könyvtár alakja
+    irány-normált, ezért az illesztés is az; a küszöb a könyvtári
+    összevonásé. Az élő figura-riasztás és a klip-export közös alapja."""
     if not shape:
         return []
     config = config or TacticsConfig()
@@ -944,5 +944,16 @@ def recurring_figure_starts(match: Match, shape: list, team: Team,
         if seq.team != team:
             continue
         if _distance(normalized_signature(seq), shape) <= threshold:
-            ki.append(int(seq.start_t))
+            ki.append((int(seq.start_t), int(seq.end_t)))
     return ki
+
+
+def recurring_figure_starts(match: Match, shape: list, team: Team,
+                            config: TacticsConfig | None = None,
+                            threshold: float = SPL_MERGE_THRESHOLD,
+                            min_length: int = 5) -> list[int]:
+    """A könyvtári alakhoz illő támadások kezdő-kockái — "mutasd a
+    figurát, amit mindig hoznak" klip-exporthoz (lásd
+    recurring_figure_segments)."""
+    return [a for a, _b in recurring_figure_segments(
+        match, shape, team, config, threshold, min_length)]

@@ -3126,6 +3126,22 @@ def create_app():
             headers={"Content-Disposition":
                      f'attachment; filename="statisztika_{match_id}.csv"'})
 
+    def _team_figure_library(team_name: str) -> dict:
+        """Egy csapat FIGURA-KÖNYVTÁRA a könyvtár összes elemzett
+        meccséből (setplays.setplay_library): mi tér vissza meccsről
+        meccsre. A klip-export és az élő figura-riasztás közös alapja."""
+        from ..pipeline.setplays import setplay_library, setplay_shapes
+        sorok = []
+        for m_ in _season_matches():
+            oldal = ("home" if m_.meta.home_team == team_name
+                     else "away" if m_.meta.away_team == team_name
+                     else None)
+            if oldal is None:
+                continue
+            sorok += [{**r, "match_id": m_.meta.match_id}
+                      for r in setplay_shapes(m_)[oldal]]
+        return setplay_library(sorok)
+
     def _clip_events(match, match_id: str, types: set) -> list:
         """A klipvágás esemény-listája a kért típusokra — EGY helyen.
 
@@ -3261,24 +3277,12 @@ def create_app():
             # figura, és e meccs azon támadásai, amelyek ezt játsszák —
             # "ezt hozzák mindig", videón. Egy meccsből nincs könyvtár.
             try:
-                from ..pipeline.setplays import (
-                    recurring_figure_starts, setplay_library,
-                    setplay_shapes)
+                from ..pipeline.setplays import recurring_figure_starts
                 for side in ("home", "away"):
                     nev_rf = (match.meta.home_team if side == "home"
                               else match.meta.away_team)
-                    sorok_rf = []
-                    for m_rf in _season_matches():
-                        oldal_rf = ("home" if m_rf.meta.home_team == nev_rf
-                                    else "away"
-                                    if m_rf.meta.away_team == nev_rf
-                                    else None)
-                        if oldal_rf is None:
-                            continue
-                        sorok_rf += [
-                            {**r, "match_id": m_rf.meta.match_id}
-                            for r in setplay_shapes(m_rf)[oldal_rf]]
-                    rec_rf = setplay_library(sorok_rf).get("recurring") or []
+                    rec_rf = (_team_figure_library(nev_rf)
+                              .get("recurring") or [])
                     if not rec_rf:
                         continue
                     fo_rf = rec_rf[0]
@@ -9595,6 +9599,50 @@ def create_app():
         prev = match.frames[t - 1] if t > 0 else None
         sugg = suggest_for_frame(match.frames[t], cfg, prev_frame=prev, fps=fps)
         return {"t": t, "suggestions": [vars(s) for s in sugg]}
+
+    @app.get("/matches/{match_id}/figure-alerts")
+    def get_figure_alerts(match_id: str):
+        """ÉLŐ figura-riasztás: mikor játssza valamelyik csapat a
+        meccsről meccsre visszatérő figuráját ezen a meccsen.
+
+        A csapat könyvtára a könyvtár ÖSSZES elemzett meccséből épül
+        (több meccs kell hozzá; egy meccsből nincs visszatérő figura),
+        és ennek a meccsnek azok a támadás-szakaszai kerülnek a listába,
+        amelyek a fő visszatérő alakot játsszák. Az élő nézet a szakasz
+        kezdetén szól: "ismert figura jön — kettőzés a súlypontnál".
+
+        Válasz: {"alerts": [{"t", "t_end", "team", "team_name", "zone",
+        "text"}]} — t szerint növekvő. 404: nincs ilyen meccs.
+        """
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.setplays import recurring_figure_segments
+        alerts = []
+        for side in ("home", "away"):
+            nev = (match.meta.home_team if side == "home"
+                   else match.meta.away_team)
+            masik = (match.meta.away_team if side == "home"
+                     else match.meta.home_team)
+            try:
+                rec = _team_figure_library(nev).get("recurring") or []
+            except Exception:
+                rec = []
+            if not rec:
+                continue
+            fo = rec[0]
+            for a, b in recurring_figure_segments(
+                    match, fo["shape"],
+                    Team.HOME if side == "home" else Team.AWAY):
+                alerts.append({
+                    "t": a, "t_end": b, "team": side, "team_name": nev,
+                    "zone": fo["zone"],
+                    "text": (f"Ismert figura: {nev} a visszatérő figuráját "
+                             f"játssza ({fo['zone']}, {fo['matches']} "
+                             f"meccsen {fo['goals']} gól) — {masik}: "
+                             "kettőzés a súlypontnál, kilépés a lövőre!")})
+        alerts.sort(key=lambda r: r["t"])
+        return {"alerts": alerts}
 
     @app.get("/matches/{match_id}/setplays")
     def get_setplays(match_id: str, threshold: float = 0.15):
