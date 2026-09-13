@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.127 óta)
 
+- **Új márkajel az egész terméken** (márka): a Sport Machine logója
+  lecserélve a végleges jelre — négy ék két átlós sávban, sötét csempén
+  (Signal Teal / Court Ink, a nyomtatott fejlécekben kétszínűen, arany
+  alsó átlóval). Mindenhol ugyanaz a geometria: a Windows-telepítő és a
+  parancsikon ikonja, a macOS alkalmazás-ikon, az app fejléce, a
+  nyitóképernyő és a nyomtatható jelentések fejléce. A vektoros forrás a
+  repóban (`packaging/brand/`), és őr-teszt hasonlítja össze a márka
+  SVG-jét, az ikon-rajzolót és a kliens rajzát — ha egy pont elcsúszik,
+  a teszt elbukik.
+
+- **Összeálló logó a nyitóképernyőn** (megjelenés): amíg az elemző motor
+  indul, a jel négy éke a saját átlója mentén beúszik, majd egy halvány
+  fénysáv fut végig rajta. A fejlécben a jel statikus marad.
+
 - **Fal-alak** (új réteg): HOGYAN ÁLL A FALUK valójában. A védőforma-
   címke (6-0, 5-1) a sávok számát mondja; ez a réteg minden védekezett
   támadásban a védők tényleges eloszlását nézi (kapus nélkül), a hasonló

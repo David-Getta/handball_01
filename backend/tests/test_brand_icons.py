@@ -73,6 +73,13 @@ def test_a_jelkep_ujragenerálhato(tmp_path):
     assert kep.shape == (64, 64, 4)
     # A sarok átlátszó (lekerekített ikon-alak), a közép nem.
     assert kep[0, 0, 3] < 40 and kep[32, 32, 3] == 255
+    # A jel rajta van: a teal ékek pixelei megjelennek (csak csempe nem elég).
+    teal = ((kep[:, :, 0] > 150) & (kep[:, :, 1] > 150) & (kep[:, :, 2] < 120)
+            & (kep[:, :, 3] > 200)).sum()
+    assert teal > 200, f"a jel nem látszik a csempén ({teal} teal pixel)"
+    # Háttér nélkül csak a jel marad (a csempe nem festi be a sarkokat).
+    csupasz = make_icons.draw(64, background=False)
+    assert csupasz[32, 4, 3] == 0
     ki = make_icons.main(tmp_path)
     assert (ki / "sportmachine.ico").stat().st_size > 1000
 
@@ -85,18 +92,59 @@ def test_a_kliens_a_valodi_jelkepet_rajzolja():
     assert "class SportMachineLogo" in logo
     # A geometria a Python-rajzoló konstansaival egyezik.
     py = (GYOKER / "packaging" / "make_icons.py").read_text(encoding="utf-8")
-    for nev, dart in (("CORNER_R", "cornerR"), ("GOAL_R", "goalR"),
-                      ("BALL_R", "ballR"), ("LINE_W", "lineW")):
+    for nev, dart in (("CORNER_R", "cornerR"), ("MARK_BOX", "markBox"),
+                      ("MARK_INSET", "markInset")):
         ertek = [s for s in py.split("\n") if s.startswith(f"{nev} = ")]
         assert ertek, f"{nev} eltűnt a rajzolóból"
         szam = ertek[0].split("=")[1].split("#")[0].strip()
         assert f"{dart} = {szam}" in logo, (
             f"a kliens {dart} értéke nem a motoré ({nev} = {szam})")
+    # A jel NÉGY ÉKE: ugyanazok a pontok a rajzdobozban (a márka
+    # vektoros forrásából). Ha az egyik oldalon elcsúszik egy pont, a
+    # tálcán és az appban két különböző jel látszik — ezért a számokat
+    # SORRENDBEN vetjük össze.
+    import ast
+    import re
+
+    py_mark = ast.literal_eval(
+        re.search(r"^MARK = (\(.*?^\))", py, re.S | re.M).group(1))
+    py_szamok = [int(v) for ek in py_mark for pont in ek for v in pont]
+    dart_blokk = re.search(
+        r"mark = \[(.*?)\n  \];", logo, re.S).group(1)
+    dart_szamok = [int(v) for v in re.findall(r"-?\d+", dart_blokk)]
+    assert dart_szamok == py_szamok, (
+        "a kliens jele és az ikon-rajzoló jele eltér "
+        f"({len(dart_szamok)} vs {len(py_szamok)} szám)")
+    assert len(py_mark) == 4 and all(len(ek) == 5 for ek in py_mark)
+    # A márka vektoros forrása is ugyanez (packaging/brand): ha a
+    # dizájner új SVG-t ad, a rajzolóknak követniük kell.
+    svg = (GYOKER / "packaging" / "brand"
+           / "sportmachine-mark-teal.svg").read_text(encoding="utf-8")
+    svg_szamok = [int(v) for d in re.findall(r'<path d="([^"]+)"', svg)
+                  for v in re.findall(r"-?\d+", d)]
+    assert svg_szamok == py_szamok, (
+        "a rajzolók geometriája eltér a márka SVG-jétől")
     for f in ("shell/app_shell.dart", "bootstrap_screen.dart"):
         src = (ui / f).read_text(encoding="utf-8")
         assert "SportMachineLogo" in src, f"{f}: nincs benne a jelkép"
         assert "Icons.change_history_rounded" not in src, (
             f"{f}: még mindig az általános helyettesítő ikon van ott")
+
+
+def test_a_nyitokepernyon_osszeall_a_jel():
+    """A motor indítása alatt a jel ÖSSZEÁLL (a négy ék beúszik, majd
+    fénysáv fut végig rajta) — a várakozás ne üres képernyő legyen. A
+    fejlécben viszont a STATIKUS jel marad: egy folyton mozgó logó a
+    munkaképernyőn zavarna."""
+    ui = GYOKER / "client" / "lib" / "ui"
+    logo = (ui / "logo.dart").read_text(encoding="utf-8")
+    assert "class SportMachineLogoAnimated" in logo
+    assert "AnimationController" in logo and "repeat()" in logo
+    boot = (ui / "bootstrap_screen.dart").read_text(encoding="utf-8")
+    assert "SportMachineLogoAnimated" in boot, "a nyitóképernyő nem animál"
+    shell = (ui / "shell" / "app_shell.dart").read_text(encoding="utf-8")
+    assert "SportMachineLogoAnimated" not in shell, (
+        "a fejlécben ne mozogjon a jel")
 
 
 def test_a_kiadas_beteszi_az_ikonokat():
@@ -121,8 +169,8 @@ def test_a_nyomtathato_jelentes_is_viseli_a_jelkepet():
     svg = brand_svg(20)
     assert svg.startswith("<svg") and 'width="20"' in svg
     assert "<img" not in svg and "src=" not in svg, "külső kép a jelentésben"
-    # A márka három színe (pályavonal, kapuelőtér, labda).
-    for szin in ("#2FD9C4", "#D8B36B", "#FFC857"):
+    # A márka színei a fejlécben: kétszínű jel sötét csempén.
+    for szin in ("#2FD9C4", "#D8B36B", "#06121F"):
         assert szin in svg, f"hiányzó márka-szín: {szin}"
     src = (GYOKER / "backend" / "handball" / "pipeline"
            / "report_html.py").read_text(encoding="utf-8")

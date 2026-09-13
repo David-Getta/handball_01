@@ -20,30 +20,36 @@ from .quality import LOW_SCORE_WARN, clock_label
 from .scouting import ScoutingReport
 
 # A Sport Machine JELKÉPE inline SVG-ként — ugyanaz a geometria, mint a
-# kliens rajzolt logója (client/lib/ui/logo.dart) és a gépen látszó ikonok
-# (packaging/make_icons.py): felülnézeti pálya, a két kapuelőtér arany
-# félköre, labda a mozgás-nyomával. INLINE, mert a jelentés ÖNÁLLÓ fájl:
-# külső képre hivatkozva a kinyomtatott/továbbküldött lapon üres keret
-# maradna. A világos, nyomtatóbarát fejlécben is olvasható marad.
+# kliens rajzolt logója (client/lib/ui/logo.dart), a gépen látszó ikonok
+# (packaging/make_icons.py) és a márka vektoros forrása
+# (packaging/brand/sportmachine-mark-*.svg): négy ék két átlós sávban,
+# sötét csempén. A fejlécben a KÉTSZÍNŰ változat áll (felső átló teal,
+# alsó arany). INLINE, mert a jelentés ÖNÁLLÓ fájl: külső képre
+# hivatkozva a kinyomtatott/továbbküldött lapon üres keret maradna. A
+# világos, nyomtatóbarát fejlécben is olvasható marad.
+#
+# A négy ék a 64-es rajzdobozban; a csempén 8% peremmel ül (a márkakönyv
+# védett területe), ezért a transzformáció: eltolás 5.12, nagyítás 0.84.
+_MARK_PATHS = (
+    "M 23 7 L 49 7 L 28 28 L 28 15 L 15 15 Z",
+    "M 11 19 L 24 19 L 24 32 L 7 49 L 7 23 Z",
+    "M 57 15 L 57 41 L 49 49 L 49 36 L 36 36 Z",
+    "M 32 40 L 45 40 L 45 53 L 41 57 L 15 57 Z",
+)
+
+
 def brand_svg(size: int = 16) -> str:
     """A jelkép SVG-je `size` képpont oldalhosszal (fejlécekbe)."""
+    ekek = "".join(
+        f'<path d="{d}" fill="{"#D8B36B" if i >= 2 else "#2FD9C4"}"/>'
+        for i, d in enumerate(_MARK_PATHS))
     return (
-        f'<svg width="{size}" height="{size}" viewBox="0 0 100 100" '
+        f'<svg width="{size}" height="{size}" viewBox="0 0 64 64" '
         'style="vertical-align:-3px;margin-right:6px" '
         'xmlns="http://www.w3.org/2000/svg">'
-        '<rect x="0" y="0" width="100" height="100" rx="22" fill="#0E141C"/>'
-        '<rect x="10" y="24.5" width="80" height="51" rx="6" '
-        'fill="#0B1C24" stroke="#2FD9C4" stroke-width="4.5"/>'
-        '<path d="M50 24.5 V75.5" stroke="#2FD9C4" stroke-width="4.5"/>'
-        '<path d="M10 34.5 A15.5 15.5 0 0 1 10 65.5" fill="none" '
-        'stroke="#D8B36B" stroke-width="4.5"/>'
-        '<path d="M90 34.5 A15.5 15.5 0 0 0 90 65.5" fill="none" '
-        'stroke="#D8B36B" stroke-width="4.5"/>'
-        '<circle cx="50.5" cy="56" r="2.8" fill="#2FD9C4" opacity="0.35"/>'
-        '<circle cx="56.5" cy="48.5" r="3.8" fill="#2FD9C4" opacity="0.55"/>'
-        '<circle cx="61.5" cy="42.5" r="5" fill="#2FD9C4" opacity="0.75"/>'
-        '<circle cx="65.5" cy="37.5" r="7.5" fill="#FFC857"/>'
-        '</svg>')
+        '<rect x="0" y="0" width="64" height="64" rx="14" fill="#06121F"/>'
+        '<g transform="translate(5.12 5.12) scale(0.84)">'
+        f'{ekek}</g></svg>')
 
 
 # Ennyi szekció alatt nincs tartalomjegyzék: két-három címhez nem kell

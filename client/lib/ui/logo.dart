@@ -1,16 +1,15 @@
-import "dart:math" as math;
-
 import "package:flutter/material.dart";
-
-import "../theme/app_theme.dart";
 
 /// A Sport Machine JELKÉPE (logó) — rajzolva, nem képfájlból.
 ///
 /// UGYANAZ a geometria, mint a gépen látszó ikonoké
-/// (`packaging/make_icons.py`: telepítő, asztali parancsikon, ablak-ikon),
-/// hogy a márka az appban és az operációs rendszerben egy család legyen:
-/// felülnézeti pálya (a termék fő képe), a két kapuelőtér arany félköre,
-/// és egy labda a mozgás-nyomával (a gépi követés).
+/// (`packaging/make_icons.py`: telepítő, asztali parancsikon, ablak-ikon)
+/// és a márka vektoros forrásáé (`packaging/brand/sportmachine-mark-*.svg`),
+/// hogy a márka az appban és az operációs rendszerben egy család legyen.
+///
+/// A jel négy ék egy 64 x 64-es rajzdobozban, két átlós sávba rendezve —
+/// a mozgás és az elemzés iránya. Középpontosan szimmetrikus: 180 fokkal
+/// elforgatva önmaga. A jelet nem forgatjuk és nem tükrözzük.
 ///
 /// Rajzolt jelkép, mert a Flutter platform-mappái a kiadáskor generálódnak
 /// (nincs a repóban asset-könyvtár): így a logó minden felületen ott van,
@@ -19,11 +18,15 @@ class SportMachineLogo extends StatelessWidget {
   /// A jelkép oldalhossza képpontban.
   final double size;
 
-  /// Lekerekített sötét háttér (ikon-alak). Ha false, csak a pálya-rajz
+  /// Lekerekített sötét háttér (ikon-alak). Ha false, csak a jel
   /// látszik — átlátszó háttéren.
   final bool background;
 
-  const SportMachineLogo({super.key, this.size = 28, this.background = true});
+  /// Kétszínű változat: az alsó átló arany (a nyomtatott fejlécek jele).
+  final bool duo;
+
+  const SportMachineLogo(
+      {super.key, this.size = 28, this.background = true, this.duo = false});
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +34,70 @@ class SportMachineLogo extends StatelessWidget {
       width: size,
       height: size,
       child: CustomPaint(
-        painter: _LogoPainter(background: background),
+        painter: _LogoPainter(background: background, duo: duo),
         isComplex: false,
+      ),
+    );
+  }
+}
+
+/// A jelkép ÖSSZEÁLLÓ változata: a négy ék a saját átlója mentén úszik be
+/// (felső-bal pár fentről-balról, alsó-jobb pár lentről-jobbról), majd egy
+/// halvány fénysáv végigfut rajta — a "gép dolgozik" jelzése.
+///
+/// A nyitóképernyőn (a motor indítása alatt) ismétlődik, máshol egyszer
+/// fut le. Külön widget, hogy a fejlécben maradhasson a statikus jel:
+/// egy folyton mozgó logó a munkaképernyőn zavaró lenne.
+class SportMachineLogoAnimated extends StatefulWidget {
+  final double size;
+  final bool background;
+
+  /// Ismétlődjön-e (várakozás alatt igen, egyszeri bemutatáskor nem).
+  final bool loop;
+
+  const SportMachineLogoAnimated(
+      {super.key, this.size = 66, this.background = true, this.loop = true});
+
+  @override
+  State<SportMachineLogoAnimated> createState() =>
+      _SportMachineLogoAnimatedState();
+}
+
+class _SportMachineLogoAnimatedState extends State<SportMachineLogoAnimated>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2200),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.loop) {
+      _c.repeat();
+    } else {
+      _c.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, __) => CustomPaint(
+          painter: _LogoPainter(
+              background: widget.background, progress: _c.value),
+          isComplex: false,
+        ),
       ),
     );
   }
@@ -42,73 +107,134 @@ class SportMachineLogo extends StatelessWidget {
 /// azonos nevű konstansaival egyeznek (ha itt változik, ott is kell).
 class _LogoPainter extends CustomPainter {
   final bool background;
-  _LogoPainter({required this.background});
+  final bool duo;
+
+  /// 0..1 — az összeállás állapota. 1 = kész jel (statikus rajz).
+  final double progress;
+
+  _LogoPainter(
+      {required this.background, this.duo = false, this.progress = 1.0});
+
+  // Márka-színek (packaging/brand/README.txt).
+  static const Color ink = Color(0xFF06121F); // Court Ink
+  static const Color teal = Color(0xFF2FD9C4); // Signal Teal
+  static const Color gold = Color(0xFFD8B36B); // Medal Gold
+  static const Color paper = Color(0xFFEAEEF5); // Paper
 
   static const double cornerR = 0.22;
-  static const double courtX0 = 0.10, courtX1 = 0.90;
-  static const double courtY0 = 0.245, courtY1 = 0.755;
-  static const double courtR = 0.06;
-  static const double lineW = 0.045;
-  static const double goalR = 0.155;
-  static const double ballCx = 0.655, ballCy = 0.375, ballR = 0.075;
+  static const double markBox = 64.0;
+  static const double markInset = 0.08;
+
+  /// A négy ék a 64-es rajzdobozban (a márka SVG-jének pontjai).
+  static const List<List<List<double>>> mark = [
+    [
+      [23, 7],
+      [49, 7],
+      [28, 28],
+      [28, 15],
+      [15, 15]
+    ],
+    [
+      [11, 19],
+      [24, 19],
+      [24, 32],
+      [7, 49],
+      [7, 23]
+    ],
+    [
+      [57, 15],
+      [57, 41],
+      [49, 49],
+      [49, 36],
+      [36, 36]
+    ],
+    [
+      [32, 40],
+      [45, 40],
+      [45, 53],
+      [41, 57],
+      [15, 57]
+    ],
+  ];
 
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.shortestSide;
     double u(double v) => v * s;
-    final courtRect = RRect.fromLTRBR(u(courtX0), u(courtY0), u(courtX1),
-        u(courtY1), Radius.circular(u(courtR)));
 
     if (background) {
       canvas.drawRRect(
         RRect.fromLTRBR(0, 0, u(1), u(1), Radius.circular(u(cornerR))),
-        Paint()..color = const Color(0xFF0E141C),
+        Paint()..color = ink,
       );
     }
-    // A pálya sötét kitöltése.
-    canvas.drawRRect(courtRect, Paint()..color = const Color(0xFF0B1C24));
 
-    // Kapuelőtér-ívek: a két alapvonalról benyúló arany félkörök. A
-    // pályán kívülre eső részüket levágjuk (a rajz így "beépül").
-    canvas.save();
-    canvas.clipRRect(courtRect);
-    final ivPaint = Paint()
-      ..color = AppColors.gold
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = u(lineW);
-    final cy = u((courtY0 + courtY1) / 2);
-    canvas.drawArc(
-        Rect.fromCircle(center: Offset(u(courtX0), cy), radius: u(goalR)),
-        -80 * math.pi / 180, 160 * math.pi / 180, false, ivPaint);
-    canvas.drawArc(
-        Rect.fromCircle(center: Offset(u(courtX1), cy), radius: u(goalR)),
-        100 * math.pi / 180, 160 * math.pi / 180, false, ivPaint);
-    canvas.restore();
-
-    // Pálya-keret + felezővonal.
-    final vonal = Paint()
-      ..color = AppColors.accent
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = u(lineW);
-    canvas.drawLine(Offset(u(0.5), u(courtY0)), Offset(u(0.5), u(courtY1)),
-        vonal);
-    canvas.drawRRect(courtRect, vonal);
-
-    // A labda mozgás-nyoma (a gépi követés), majd maga a labda.
-    const nyom = [
-      [0.505, 0.560, 0.028, 0.35],
-      [0.565, 0.485, 0.038, 0.55],
-      [0.615, 0.425, 0.050, 0.75],
-    ];
-    for (final p in nyom) {
-      canvas.drawCircle(Offset(u(p[0]), u(p[1])), u(p[2]),
-          Paint()..color = AppColors.accent.withOpacity(p[3]));
+    // Összeállás közben az ékek a csempén KÍVÜLRŐL érkeznek: a csempe
+    // alakjára vágunk, hogy a jel a saját keretén belül maradjon (a kész,
+    // háttér nélküli jelnél nincs mit vágni).
+    final vag = background || progress < 1.0;
+    if (vag) {
+      canvas.save();
+      canvas.clipRRect(
+          RRect.fromLTRBR(0, 0, u(1), u(1), Radius.circular(u(cornerR))));
     }
-    canvas.drawCircle(Offset(u(ballCx), u(ballCy)), u(ballR),
-        Paint()..color = AppColors.ball);
+
+    final belso = s * (1.0 - 2 * markInset);
+    final perem = s * markInset;
+    Offset pont(List<double> p) => Offset(
+        perem + p[0] / markBox * belso, perem + p[1] / markBox * belso);
+
+    Path ekPath(List<List<double>> ek) {
+      final path = Path()..moveTo(pont(ek[0]).dx, pont(ek[0]).dy);
+      for (var i = 1; i < ek.length; i++) {
+        path.lineTo(pont(ek[i]).dx, pont(ek[i]).dy);
+      }
+      return path..close();
+    }
+
+    // Összeállás: minden ék a SAJÁT átlója felől úszik be, késleltetve.
+    // A felső-bal pár (0, 1) fentről-balról, az alsó-jobb (2, 3)
+    // lentről-jobbról — a jel két sávja így "összezár".
+    final teljes = Path();
+    for (var i = 0; i < mark.length; i++) {
+      final kesleltetes = i * 0.10;
+      final nyers = ((progress - kesleltetes) / 0.45).clamp(0.0, 1.0);
+      final p = Curves.easeOutCubic.transform(nyers);
+      final irany = i < 2 ? -1.0 : 1.0;
+      final el = (1.0 - p) * s * 0.28 * irany;
+      final path = ekPath(mark[i]).shift(Offset(el, el));
+      teljes.addPath(path, Offset.zero);
+      canvas.drawPath(
+          path,
+          Paint()
+            ..color = (duo && i >= 2 ? gold : teal)
+                .withOpacity(0.15 + 0.85 * p));
+    }
+
+    // Fénysáv: az összeállás után egyszer végigfut a jelen (a "gép
+    // beolvas" mozdulat). Csak a jelre látszik: a négy ékre vágjuk.
+    if (progress > 0.55 && progress < 1.0) {
+      final t = ((progress - 0.55) / 0.45).clamp(0.0, 1.0);
+      canvas.save();
+      canvas.clipPath(teljes);
+      final x = -0.4 * s + t * 1.8 * s;
+      canvas.drawRect(
+        Rect.fromLTWH(x, -s, s * 0.22, s * 3),
+        Paint()
+          ..color = paper.withOpacity(0.35 * (1.0 - (t - 0.5).abs() * 2))
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+      canvas.restore();
+    }
+
+    if (vag) {
+      canvas.restore();
+    }
   }
 
   @override
   bool shouldRepaint(covariant _LogoPainter old) =>
-      old.background != background;
+      old.background != background ||
+      old.duo != duo ||
+      old.progress != progress;
 }

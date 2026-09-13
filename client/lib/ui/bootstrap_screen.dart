@@ -131,8 +131,14 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Márka-logó.
-                const SportMachineLogo(size: 66),
+                // Márka-logó: amíg a motor indul, a jel ÖSSZEÁLL (a négy
+                // ék beúszik, majd egy fénysáv végigfut rajta) — a
+                // várakozás így nem üres képernyő. Ha az indítás
+                // befejeződött (hiba vagy kész), a statikus jel marad.
+                if (busy)
+                  const SportMachineLogoAnimated(size: 66)
+                else
+                  const SportMachineLogo(size: 66),
                 const SizedBox(height: AppSpacing.lg),
                 const Text("SPORT MACHINE", style: AppText.brand),
                 const SizedBox(height: 4),

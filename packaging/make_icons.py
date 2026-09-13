@@ -6,11 +6,14 @@ szkript állítja elő UGYANAZZAL a geometriával — így a telepítő, az
 asztali parancsikon, az ablak ikonja és az appban látható jel egy
 családba tartozik.
 
-A rajz (egység-négyzetben, 0..1) a termék fő képe, a FELÜLNÉZETI PÁLYA:
-  - lekerekített sötét háttér,
-  - teal keretű pálya felülnézetből, felezővonallal,
-  - a két kapuelőtér arany félköre,
-  - világos labda a jobb félen, mögötte halvány mozgás-ív.
+A JEL (packaging/brand/, `sportmachine-mark-*.svg`): négy ék egy
+64 x 64-es négyzetben, két átlós sávba rendezve — a mozgás és az
+elemzés iránya. Középpontosan szimmetrikus: 180 fokkal elforgatva
+önmaga. A nyíl mindig jobbra fölé mutat, a jelet nem forgatjuk.
+
+  - lekerekített sötét csempe (Court Ink),
+  - négy teal ék (Signal Teal); a kétszínű változatban az alsó átló
+    arany (Medal Gold) — a nyomtatott jelentések fejlécében ez áll.
 
 Futtatás (a repó gyökeréből):
 
@@ -31,23 +34,30 @@ from __future__ import annotations
 import struct
 from pathlib import Path
 
-# A kliens színei (client/lib/theme/app_theme.dart) — BGRA sorrendben,
-# hogy a jelkép a gépen és az appban ugyanúgy nézzen ki.
-BG = (0x1C, 0x14, 0x0E)          # #0E141C — sötét háttér
-COURT_FILL = (0x24, 0x1C, 0x0B)  # #0B1C24 — a pálya sötét kitöltése
-ACCENT = (0xC4, 0xD9, 0x2F)      # #2FD9C4 — teal pályavonalak
-GOLD = (0x6B, 0xB3, 0xD8)        # #D8B36B — arany kapuelőtér-ívek
-BALL = (0x57, 0xC8, 0xFF)        # #FFC857 — a labda
+# A márka színei (packaging/brand/README.txt; a kliens palettája
+# ugyanezeket használja) — BGRA sorrendben, hogy a jelkép a gépen és az
+# appban ugyanúgy nézzen ki.
+INK = (0x1F, 0x12, 0x06)         # #06121F — Court Ink (a csempe)
+TEAL = (0xC4, 0xD9, 0x2F)        # #2FD9C4 — Signal Teal (a jel)
+GOLD = (0x6B, 0xB3, 0xD8)        # #D8B36B — Medal Gold (kétszínű változat)
 
-# A rajz arányai az egység-négyzetben (a Dart-oldali logó ugyanezek).
-CORNER_R = 0.22       # a háttér lekerekítése
-COURT_X0, COURT_X1 = 0.10, 0.90   # a pálya (felülnézet) kerete
-COURT_Y0, COURT_Y1 = 0.245, 0.755
-COURT_R = 0.06        # a pálya-keret lekerekítése
-LINE_W = 0.045        # a pályavonalak vastagsága
-GOAL_R = 0.155        # a kapuelőtér félkörének sugara
-BALL_CX, BALL_CY = 0.655, 0.375
-BALL_R = 0.075
+# A csempe lekerekítése az egység-négyzetben (a Dart-oldali logó ugyanez).
+CORNER_R = 0.22
+
+# A JEL négy éke a 64 x 64-es rajzdobozban (a márka SVG-jének pontjai).
+# Az első kettő a felső-bal átló, a második kettő az alsó-jobb — a
+# kétszínű változatban ez utóbbi kettő arany.
+MARK_BOX = 64.0
+# A jel VÉDETT TERÜLETE a csempén belül (a márkakönyv szerint a jel
+# magasságának negyede jár körbe): a rajzdoboz ekkora peremmel ül a
+# csempén, az egység-négyzet arányában.
+MARK_INSET = 0.08
+MARK = (
+    ((23, 7), (49, 7), (28, 28), (28, 15), (15, 15)),
+    ((11, 19), (24, 19), (24, 32), (7, 49), (7, 23)),
+    ((57, 15), (57, 41), (49, 49), (49, 36), (36, 36)),
+    ((32, 40), (45, 40), (45, 53), (41, 57), (15, 57)),
+)
 
 # Az ikon-fájlba kerülő méretek.
 ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
@@ -55,15 +65,19 @@ MAC_SIZES = (16, 32, 64, 128, 256, 512, 1024)
 SS = 4                # ennyiszeres túlmintavételezés (élsimítás)
 
 
-def draw(size: int):
-    """A jelkép BGRA képe `size` x `size` pixelen (numpy tömb)."""
+def draw(size: int, background: bool = True, duo: bool = False):
+    """A jelkép BGRA képe `size` x `size` pixelen (numpy tömb).
+
+    `background`: lekerekített sötét csempe (ikon-alak); ha False, csak a
+    négy ék marad átlátszó háttéren. `duo`: az alsó átló arany.
+    """
     import cv2
     import numpy as np
 
     n = size * SS
     img = np.zeros((n, n, 4), np.uint8)
 
-    # Lekerekített háttér: téglalapok + sarok-körök (a maszkra rajzolunk,
+    # Lekerekített csempe: téglalapok + sarok-körök (a maszkra rajzolunk,
     # így az átlátszó sarkok is élsimítottak lesznek a kicsinyítéskor).
     r = int(round(CORNER_R * n))
     mask = np.zeros((n, n), np.uint8)
@@ -71,54 +85,24 @@ def draw(size: int):
     cv2.rectangle(mask, (0, r), (n, n - r), 255, -1)
     for cx, cy in ((r, r), (n - r, r), (r, n - r), (n - r, n - r)):
         cv2.circle(mask, (cx, cy), r, 255, -1)
-    img[mask > 0] = (*BG, 255)
+    if background:
+        img[mask > 0] = (*INK, 255)
 
-    def px(v):
-        return int(round(v * n))
+    # A négy ék: a rajzdoboz (64) a teljes csempére feszítve. Külön
+    # maszkra rajzoljuk, hogy az él élsimított legyen a kicsinyítéskor.
+    belso = n * (1.0 - 2 * MARK_INSET)
+    perem = n * MARK_INSET
 
-    vonal = max(1, px(LINE_W))
-    x0, x1, y0, y1 = px(COURT_X0), px(COURT_X1), px(COURT_Y0), px(COURT_Y1)
-    kr = px(COURT_R)
+    def poly(pontok):
+        return np.array([[int(round(perem + x / MARK_BOX * belso)),
+                          int(round(perem + y / MARK_BOX * belso))]
+                         for x, y in pontok], np.int32)
 
-    # A pálya sötét kitöltése (lekerekített téglalap).
-    cv2.rectangle(img, (x0 + kr, y0), (x1 - kr, y1), (*COURT_FILL, 255), -1)
-    cv2.rectangle(img, (x0, y0 + kr), (x1, y1 - kr), (*COURT_FILL, 255), -1)
-    for cx, cy in ((x0 + kr, y0 + kr), (x1 - kr, y0 + kr),
-                   (x0 + kr, y1 - kr), (x1 - kr, y1 - kr)):
-        cv2.circle(img, (cx, cy), kr, (*COURT_FILL, 255), -1, cv2.LINE_AA)
+    for i, ek in enumerate(MARK):
+        szin = GOLD if (duo and i >= 2) else TEAL
+        cv2.fillPoly(img, [poly(ek)], (*szin, 255), cv2.LINE_AA)
 
-    # Kapuelőtér-ívek: a két alapvonalról benyúló arany félkörök.
-    gr = px(GOAL_R)
-    cy = (y0 + y1) // 2
-    cv2.ellipse(img, (x0, cy), (gr, gr), 0, -80, 80, (*GOLD, 255),
-                vonal, cv2.LINE_AA)
-    cv2.ellipse(img, (x1, cy), (gr, gr), 0, 100, 260, (*GOLD, 255),
-                vonal, cv2.LINE_AA)
-
-    # A pálya kerete + felezővonal (teal).
-    cv2.line(img, (px(0.5), y0), (px(0.5), y1), (*ACCENT, 255), vonal,
-             cv2.LINE_AA)
-    ker = np.zeros((n, n), np.uint8)
-    cv2.rectangle(ker, (x0 + kr, y0), (x1 - kr, y1), 255, -1)
-    cv2.rectangle(ker, (x0, y0 + kr), (x1, y1 - kr), 255, -1)
-    for cx, cyy in ((x0 + kr, y0 + kr), (x1 - kr, y0 + kr),
-                    (x0 + kr, y1 - kr), (x1 - kr, y1 - kr)):
-        cv2.circle(ker, (cx, cyy), kr, 255, -1)
-    kontur, _ = cv2.findContours(ker, cv2.RETR_EXTERNAL,
-                                 cv2.CHAIN_APPROX_NONE)
-    cv2.drawContours(img, kontur, -1, (*ACCENT, 255), vonal, cv2.LINE_AA)
-
-    # A labda a jobb félen, mögötte halvány mozgás-ív (a "gépi elemzés"
-    # nyoma: a rendszer a labda útját követi).
-    bc = (px(BALL_CX), px(BALL_CY))
-    for (tx, ty), tr, alfa in (((0.505, 0.560), 0.028, 90),
-                               ((0.565, 0.485), 0.038, 150),
-                               ((0.615, 0.425), 0.050, 200)):
-        cv2.circle(img, (px(tx), px(ty)), px(tr), (*ACCENT, alfa), -1,
-                   cv2.LINE_AA)
-    cv2.circle(img, bc, px(BALL_R), (*BALL, 255), -1, cv2.LINE_AA)
-
-    # A háttéren KÍVÜLI pixelek átlátszók maradnak (a lekerekített sarok).
+    # A csempén KÍVÜLI pixelek átlátszók maradnak (a lekerekített sarok).
     img[mask == 0] = (0, 0, 0, 0)
     return cv2.resize(img, (size, size), interpolation=cv2.INTER_AREA)
 
