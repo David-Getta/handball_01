@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.127 óta)
+## Kiadatlan (a v0.1.128 óta)
 
 - **Új márkajel az egész terméken** (márka): a Sport Machine logója
   lecserélve a végleges jelre — négy ék két átlós sávban, sötét csempén
@@ -18,6 +18,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Összeálló logó a nyitóképernyőn** (megjelenés): amíg az elemző motor
   indul, a jel négy éke a saját átlója mentén beúszik, majd egy halvány
   fénysáv fut végig rajta. A fejlécben a jel statikus marad.
+
+## v0.1.128 — kiadva (2026-09-13)
+
+> Kiadás-jegyzet: új réteg — melyik fal-alakjuk ellen terem a gól.
 
 - **Fal-alak** (új réteg): HOGYAN ÁLL A FALUK valójában. A védőforma-
   címke (6-0, 5-1) a sávok számát mondja; ez a réteg minden védekezett
