@@ -647,19 +647,41 @@ def create_app():
 
             from ..pipeline import calib_overlay as co
             from ..pipeline._homography import homography_from_points
-            pts_m = _calib_court_points(region, bool(rotate))
-            # kép → pálya (H0), ahogy a feldolgozás is tárolja
-            h0 = homography_from_points(
-                [tuple(map(float, p)) for p in corners], pts_m)
+            sarkok = [tuple(map(float, p)) for p in corners]
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             h, w = gray.shape[:2]
             sav, alap = co.edge_map(gray)
-            fit = co.fit_on_edge_map(
-                sav, alap,
-                co.overlay_pixels(h0, None, w, h, region)).get("fit")
+
+            def _meres(reg: str, rot: bool):
+                """Egy beállítás illeszkedése + a mintapontok száma."""
+                h_ = homography_from_points(
+                    sarkok, _calib_court_points(reg, bool(rot)))
+                poly = co.overlay_pixels(h_, None, w, h, reg)
+                r_ = co.fit_on_edge_map(sav, alap, poly)
+                return h_, r_, len(co.sample_points(poly))
+
+            h0, res, ossz = _meres(region, bool(rotate))
+            fit = res.get("fit")
+            minta = int(res.get("samples") or 0)
+            coverage = (minta / ossz) if ossz else None
+            # A NÉMA hiba felderítése: ugyanezekre a sarkokra megmérjük a
+            # többi terület/forgatás beállítást is — ha egy másik érdemben
+            # jobban ül, a felhasználó azt kapja tanácsul (a leggyakoribb
+            # ok nem a pontatlan sarok, hanem az elállított választó).
+            masok = {}
+            for reg in ("full", "left", "right"):
+                for rot in (False, True):
+                    if (reg, rot) == (region, bool(rotate)):
+                        continue
+                    try:
+                        masok[(reg, rot)] = _meres(reg, rot)[1].get("fit")
+                    except Exception:
+                        masok[(reg, rot)] = None
+            alt = co.better_setting(masok, region, bool(rotate), fit)
             shift = (co.refine_shift(sav, alap, h0, None, w, h, region)
                      if fit is not None else None)
-            ki = co.calib_verdict(fit, shift)
+            ki = co.calib_verdict(fit, shift, alternativ=alt,
+                                  coverage=coverage, samples=minta)
         except Exception as e:
             raise HTTPException(
                 status_code=400,

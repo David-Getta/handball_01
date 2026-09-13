@@ -5,6 +5,31 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.129 óta)
 
+- **Az illeszkedés-mérés jó kalibrációra is „nem mérhető"-t mondott**
+  (hibajavítás): a homográfia skálázás erejéig határozott, tehát a
+  megoldó a mátrix (−1)-szeresét is visszaadhatja — ugyanaz a leképezés.
+  A horizont-vizsgálat viszont az előjelre épült, így a negatív alaknál
+  MINDEN pontot a kamera mögöttinek látott: a rajzolt pálya-modell
+  üresen maradt, és a kalibráló képernyő „nem mérhető: a pálya a képen
+  kívülre esik" üzenetet adott egy hibátlanul bejelölt kalibrációra.
+  Ugyanez vitte el a feldolgozás közbeni ÖNKORREKCIÓT (a pályavonalakra
+  igazítást) és az előnézet rávetített pálya-modelljét is. Mostantól a
+  mátrix előjelét a kalibrált terület közepére normáljuk.
+
+- **A „nem mérhető" megmondja, mi a baj** (kalibráció): az üzenet
+  kiírja, hány pont esett a képre, és — ugyanazokra a sarkokra
+  megmérve — azt is, ha MÁSIK beállítás (másik térfél vagy a 180°-os
+  forgatás) érdemben jobban ülne. A kalibráló képernyőn egy gombbal át
+  lehet állni rá, és a mérés magától megismétlődik.
+
+- **Egy megbicsakló lekérdezés nem „öli meg" a futó feldolgozást**
+  (hibajavítás): a képernyő az első sikertelen állapot-lekérdezésnél
+  végzetes hibára váltott és leállította a figyelést — miközben a munka
+  a motorban rendben futott tovább (a haladás-kör nőtt a hibaüzenet
+  alatt). Mostantól kitart, többszöri hiba után is csak jegyzetet ír, a
+  következő sikeres lekérdezés pedig törli. A lekérdezésnek időkorlátja
+  is van, hogy egy beragadt kérés ne állítsa meg a figyelést.
+
 ## v0.1.129 — kiadva (2026-09-13)
 
 > Kiadás-jegyzet: megújult dizájn — az új márkajel a telepítőtől a

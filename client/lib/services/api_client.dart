@@ -1759,7 +1759,11 @@ class ApiClient {
   /// Lekéri egy feldolgozási munka állapotát (GET /jobs/{id}):
   /// {status, stage, progress, message, match_id, error}.
   Future<Map<String, dynamic>> fetchJob(String jobId) async {
-    final resp = await http.get(Uri.parse("$baseUrl/jobs/$jobId"));
+    // Időkorlát: a motor egy nehéz kockán elidőzhet; ha a kérés beragad,
+    // a figyelő hurok is megállna. Inkább eldobjuk és újrapróbáljuk.
+    final resp = await http
+        .get(Uri.parse("$baseUrl/jobs/$jobId"))
+        .timeout(const Duration(seconds: 15));
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült lekérni a munka állapotát", resp));
     }

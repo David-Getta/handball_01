@@ -496,7 +496,7 @@ def test_a_kalibracio_itelete_a_mert_illeszkedesbol():
     # Nem mérhető: a rajz a képen kívül — teendővel.
     nincs = calib_verdict(None)
     assert nincs["itelet"] is None and nincs["javasolt"] is False
-    assert "képen" in nincs["uzenet"]
+    assert "képre" in nincs["uzenet"] and "térfél" in nincs["uzenet"]
     assert calib_verdict(CALIB_FIT_GOOD + 0.1)["itelet"] == "jó"
     assert calib_verdict(CALIB_FIT_WEAK + 0.05)["itelet"] == "közepes"
     assert calib_verdict(CALIB_FIT_WEAK - 0.05)["itelet"] == "gyenge"
@@ -577,3 +577,91 @@ def test_a_kalibralo_kepernyo_meri_es_igazitja_az_illeszkedest(tmp_path):
         "calib": json.dumps(jo_sarkok)}).status_code == 404
     assert c.get("/calib-score", params={
         "path": str(video), "t": 1, "calib": "[[0,0]]"}).status_code == 400
+
+
+# ---- Előjel-normálás (a homográfia skálázás erejéig határozott) -------------
+
+
+def _valos_kalibracio(region="left", W=1920, H=1080):
+    """Egy ÉRVÉNYES, kézzel bejelölt kalibráció a fél pályára — a
+    sarkok a kép látható részén, ferde kameraállásból (a képernyőképen
+    látott arányokkal)."""
+    from handball.pipeline._homography import homography_from_points
+    from scripts.process_video import _calib_court_points
+
+    sarkok = [(0.40 * W, 0.41 * H), (0.72 * W, 0.48 * H),
+              (0.70 * W, 0.71 * H), (0.16 * W, 0.53 * H)]
+    return homography_from_points(
+        [tuple(map(float, p)) for p in sarkok],
+        _calib_court_points(region, False)), W, H
+
+
+def test_az_ervenyes_kalibracio_nem_marad_rajz_nelkul():
+    """REGRESSZIÓ: a homográfia skálázás erejéig határozott, tehát a
+    megoldó a (−1)-szeresét is visszaadhatja — ugyanaz a leképezés. A
+    horizont-vizsgálat viszont az előjelre épült, így a negatív alaknál
+    MINDEN pontot a kamera mögöttinek látott: a rajz üres lett, a
+    kalibráló képernyő pedig "nem mérhető"-t mondott egy hibátlan,
+    kézzel bejelölt kalibrációra."""
+    from handball.pipeline.calib_overlay import sample_points
+
+    h0, W, H = _valos_kalibracio("left")
+    vonalak = overlay_pixels(h0, None, W, H, "left")
+    assert vonalak, "az érvényes kalibráció üres rajzot adott"
+    # Az illeszkedés-mérés a vonalak menti MINTAPONTOKAT nézi: ezekből
+    # kell húsz fölött a képre esnie, különben "nem mérhető" a válasz.
+    mp = sample_points(vonalak)
+    bent = int(((mp[:, 0] >= 0) & (mp[:, 0] < W)
+                & (mp[:, 1] >= 0) & (mp[:, 1] < H)).sum())
+    assert bent > 500, f"csak {bent} mintapont esik a képre"
+
+
+def test_a_homografia_elojele_nem_szamit():
+    """A mátrix és a (−1)-szerese UGYANAZ a leképezés — a rajznak is
+    ugyanannak kell lennie (ez az előjel-normálás lényege)."""
+    h0, W, H = _valos_kalibracio("full")
+    negativ = [[-v for v in sor] for sor in h0]
+    a = overlay_pixels(h0, None, W, H, "full")
+    b = overlay_pixels(negativ, None, W, H, "full")
+    assert a and b and len(a) == len(b)
+    for va, vb in zip(a, b):
+        assert len(va) == len(vb)
+        for (ax, ay), (bx, by) in zip(va, vb):
+            assert abs(ax - bx) < 1e-6 and abs(ay - by) < 1e-6
+
+
+def test_a_kameramatrix_elojele_sem_szamit():
+    """Ugyanez a kamera-mozgás mátrixára (G): a pásztázás közben mért
+    kockákon sem tűnhet el a rajz a mátrix előjelétől."""
+    h0, W, H = _valos_kalibracio("left")
+    g = [[1.0, 0.0, 25.0], [0.0, 1.0, -8.0], [0.0, 0.0, 1.0]]
+    negativ_g = [[-v for v in sor] for sor in g]
+    a = overlay_pixels(h0, g, W, H, "left")
+    b = overlay_pixels(h0, negativ_g, W, H, "left")
+    assert a and len(a) == len(b)
+    for va, vb in zip(a, b):
+        for (ax, ay), (bx, by) in zip(va, vb):
+            assert abs(ax - bx) < 1e-6 and abs(ay - by) < 1e-6
+
+
+def test_a_kamera_mogotti_pont_tovabbra_is_kimarad():
+    """Az előjel-normálás NEM kapcsolja ki a horizont-szűrést: a kamera
+    mögé eső pontok továbbra sem kerülnek a rajzba (különben a vonal
+    átugrana a kép túloldalára).
+
+    A fixture-ben a nevező a pálya x=20 m-es vonalánál vált előjelet: a
+    bal térfél a kamera MÖGÖTT van, a jobb előtte."""
+    from handball.pipeline.calib_overlay import invert_3x3
+
+    W, H = 1920, 1080
+    # pálya → kép mátrix: w = 0.05·x − 1 (x < 20 m-nél negatív).
+    h_inv = [[30.0, 0.0, 100.0], [0.0, 30.0, 200.0], [0.05, 0.0, -1.0]]
+    h0 = invert_3x3(h_inv)
+    vonalak = overlay_pixels(h0, None, W, H, "full")
+    pontok = [p for v in vonalak for p in v]
+    assert pontok, "minden pont kiesett — az előjel-normálás elromlott"
+    # A megmaradt pontok a kamera ELŐTTI (x > 20 m) térfélről valók: a
+    # visszavetítésük a kép jobb oldalára esik.
+    assert all(x > 0 for x, _y in pontok)
+    # És tényleg maradt ki pont: a teljes rajz több csúcsból állna.
+    assert len(pontok) < sum(len(v) for v in court_polylines("full"))

@@ -935,6 +935,29 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     }
   }
 
+  /// A terület-választó emberi neve (a motor üzeneteivel egyezik).
+  String _regioNev(String? region) => switch (region) {
+        "left" => "bal térfél",
+        "right" => "jobb térfél",
+        _ => "teljes pálya",
+      };
+
+  /// A motor által javasolt BEÁLLÍTÁS (térfél / 180°-os forgatás)
+  /// alkalmazása: a sarkok maradnak, csak azt mondjuk meg, MIRE
+  /// illesztjük őket — majd újramérünk.
+  Future<void> _applyAltSetting(Map<String, dynamic> alt) async {
+    final r = alt["region"] as String?;
+    final ro = alt["rotate"] == true;
+    setState(() {
+      if (r != null) _region = r;
+      _rotate = ro;
+      _saved = false;
+      _fit = null;
+      _fitKey = null;
+    });
+    await _measureFit();
+  }
+
   /// A javasolt eltolás alkalmazása: MIND A NÉGY sarkot ugyanannyival
   /// toljuk (a négy sarok azonos eltolása pontosan a rajzolt vonalak
   /// eltolása), majd újramérünk, hogy a szám is a friss rajzé legyen.
@@ -1022,6 +1045,30 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                   side: const BorderSide(color: AppColors.gold)),
               icon: const Icon(Icons.open_with, size: 16),
               label: const Text("Igazítsd rá (mind a 4 sarkot)"),
+            ),
+          ],
+          // MÁSIK BEÁLLÍTÁS: a gyenge (vagy mérhetetlen) illeszkedés
+          // leggyakoribb oka nem a pontatlan sarok, hanem az elállított
+          // térfél-választó vagy a 180°-os forgatás. A motor ugyanezekre
+          // a sarkokra mindegyik beállítást megméri — ha egy érdemben
+          // jobban ül, egy gombbal átállunk rá.
+          if (m["alternativ"] is Map) ...[
+            const SizedBox(height: 6),
+            OutlinedButton.icon(
+              onPressed: _fitting
+                  ? null
+                  : () => _applyAltSetting(
+                      Map<String, dynamic>.from(m["alternativ"] as Map)),
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.accent,
+                  side: const BorderSide(color: AppColors.accent)),
+              icon: const Icon(Icons.swap_horiz, size: 16),
+              label: Text("Átállítás: "
+                  "${_regioNev((m["alternativ"] as Map)["region"] as String?)}"
+                  "${((m["alternativ"] as Map)["rotate"] == true) != _rotate
+                      ? ((m["alternativ"] as Map)["rotate"] == true
+                          ? " + 180°" : " (forgatás ki)")
+                      : ""}"),
             ),
           ],
           if (_fitElavult) ...[

@@ -397,3 +397,45 @@ def test_a_szezon_kepernyo_mutatja_a_repertoar_valtozast():
     api = (gyoker / "client" / "lib" / "services"
            / "api_client.dart").read_text(encoding="utf-8")
     assert "/library/figure-repertoire" in api
+
+
+def test_a_munka_figyelese_kitart_egy_megbicsaklo_lekerdezesnel():
+    """REGRESSZIÓ: egyetlen sikertelen állapot-lekérdezés NEM jelenti azt,
+    hogy a feldolgozás elszállt — a munka a motorban fut tovább. A
+    képernyő korábban az első hibánál végzetes hibára váltott ÉS leállította
+    a figyelést, így a haladó feldolgozás fölött ott maradt a "Nem érem el a
+    háttérmotort" felirat."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "upload_screen.dart").read_text(encoding="utf-8")
+    hurok = src.split("Future<void> _pollJob()")[1].split(
+        "Futó feldolgozás megszakítása")[0]
+    assert "_pollFails" in hurok and "_connNote" in hurok
+    # A hibaágban NINCS se végzetes állapot, se a figyelés leállítása.
+    hibaag = hurok.split("} catch (e) {")[1]
+    assert '_status = "error"' not in hibaag, (
+        "egy sikertelen lekérdezés végzetes hibára állítja a nézetet")
+    assert "_poll?.cancel()" not in hibaag, (
+        "egy sikertelen lekérdezés leállítja a figyelést")
+    # A sikeres ág nullázza a számlálót és törli a jegyzetet.
+    sikeres = hurok.split("} catch (e) {")[0]
+    assert "_pollFails = 0" in sikeres and "_connNote = null" in sikeres
+    api = (gyoker / "client" / "lib" / "services"
+           / "api_client.dart").read_text(encoding="utf-8")
+    job = api.split("Future<Map<String, dynamic>> fetchJob(")[1][:400]
+    assert ".timeout(" in job, "a job-lekérdezésnek nincs időkorlátja"
+
+
+def test_a_masik_beallitast_egy_gombbal_at_lehet_venni():
+    """Ha a motor szerint MÁSIK beállítás (térfél / 180°-os forgatás) ül
+    jobban ugyanazokra a sarkokra, a kliens egy gombbal átáll rá és
+    újramér — a gyenge illeszkedés leggyakoribb oka ugyanis nem a
+    pontatlan sarok, hanem az elállított választó."""
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "calibration_screen.dart").read_text(encoding="utf-8")
+    assert '"alternativ"' in src and "_applyAltSetting" in src
+    assert "Átállítás:" in src
+    fn = src.split("Future<void> _applyAltSetting(")[1][:600]
+    assert "_region = r" in fn and "_rotate = ro" in fn
+    assert "_measureFit()" in fn, "az átállítás után nincs újramérés"

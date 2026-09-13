@@ -128,6 +128,31 @@ def court_polylines(region: str = "full") -> list:
     return vonalak
 
 
+def _sign_normalized(mat: list, x: float, y: float) -> list:
+    """A homográfia ELŐJELÉNEK normálása egy referencia-pontra.
+
+    A homográfia skálázás erejéig határozott: ugyanazt a leképezést adja
+    a mátrix és a (−1)-szerese (a nevező is előjelet vált, x/w és y/w
+    változatlan). A HORIZONT-vizsgálat viszont az előjelre épül ("a
+    kamera mögötti pontot a negatív nevező jelzi") — ha a megoldó éppen
+    a negatív előjelű mátrixot adta vissza, a vizsgálat MINDEN pontot a
+    kamera mögöttinek lát, és a rajz (meg az illeszkedés-mérés) üresen
+    marad. Ezért a mátrixot úgy forgatjuk, hogy a megadott, biztosan a
+    kamera ELŐTT lévő referencia-pontnál a nevező pozitív legyen.
+    """
+    w = mat[2][0] * x + mat[2][1] * y + mat[2][2]
+    if w >= 0:
+        return mat
+    return [[-v for v in sor] for sor in mat]
+
+
+def _region_center(region: str = "full") -> tuple:
+    """A kalibrált terület középpontja méterben (előjel-referenciának)."""
+    H, W = COURT_LENGTH_M, COURT_WIDTH_M
+    x = {"left": H / 4, "right": 3 * H / 4}.get(region or "full", H / 2)
+    return (x, W / 2)
+
+
 def overlay_pixels(court_homography: list, g_at_t: Optional[list] = None,
                    width: Optional[int] = None,
                    height: Optional[int] = None,
@@ -137,10 +162,17 @@ def overlay_pixels(court_homography: list, g_at_t: Optional[list] = None,
     A kép mögé (a homográfia horizontja mögé) eső pontokat — ahol a
     nevező előjelet vált — kihagyjuk, hogy ne húzzon vonalat a kép
     túloldalára; a kép méretét ismerve a messze kívül eső pontokat is.
+    A két mátrix előjelét előbb a kalibrált terület közepére (illetve a
+    kép közepére) normáljuk: enélkül egy érvényes kalibráció is üres
+    rajzot adhat, ha a megoldó a negatív előjelű mátrixot adta vissza.
     Visszatérés: [[(px, py), …], …] — polyline-onként.
     """
-    h_inv = invert_3x3(court_homography)
+    h_inv = _sign_normalized(invert_3x3(court_homography),
+                             *_region_center(region))
     g_inv = invert_3x3(g_at_t) if g_at_t is not None else None
+    if g_inv is not None:
+        g_inv = _sign_normalized(
+            g_inv, (width or 1920) / 2.0, (height or 1080) / 2.0)
     ki = []
     for vonal in court_polylines(region):
         pontok = []
@@ -451,9 +483,56 @@ CALIB_FIT_WEAK = 0.3
 # elcsúszás a sarok-húzás pontosságán belül van), és tényleg javuljon.
 CALIB_SHIFT_MIN_PX = 4.0
 CALIB_SHIFT_GAIN = 0.05
+# Ennyivel kell jobban ülnie egy MÁSIK beállításnak (térfél / 180°-os
+# forgatás), hogy felkínáljuk: a leggyakoribb néma hiba az, hogy a 4
+# pont a másik térfél sarkaira került, vagy a kamera a túloldalról néz.
+CALIB_ALT_GAIN = 0.10
+
+_REGIO_NEV = {"full": "teljes pálya", "left": "bal térfél",
+              "right": "jobb térfél"}
 
 
-def calib_verdict(fit: Optional[float], shift: Optional[dict] = None) -> dict:
+def region_label(region: str) -> str:
+    """A terület-választó emberi neve (üzenetekhez)."""
+    return _REGIO_NEV.get(region or "full", region or "full")
+
+
+def better_setting(measured: dict, region: str, rotate: bool,
+                   fit: Optional[float]) -> Optional[dict]:
+    """Van-e ÉRDEMBEN jobban illeszkedő terület/forgatás beállítás?
+
+    `measured`: {(régió, forgatás): fit|None} — ugyanazon a kockán, a
+    SAME négy sarokra mért illeszkedések. A mostani beállításnál
+    legalább CALIB_ALT_GAIN-nel jobb jelölt közül a legjobbat adjuk
+    vissza: {"region", "rotate", "fit", "uzenet"} — különben None.
+    """
+    jeloltek = [(f, r, ro) for (r, ro), f in (measured or {}).items()
+                if f is not None and (r, ro) != (region, rotate)]
+    if not jeloltek:
+        return None
+    f_best, r_best, ro_best = max(jeloltek)
+    alap = fit if fit is not None else 0.0
+    if f_best < alap + CALIB_ALT_GAIN:
+        return None
+    mit = []
+    if r_best != region:
+        mit.append(f"a térfél-választó legyen \"{region_label(r_best)}\"")
+    if ro_best != rotate:
+        mit.append("kapcsold be a 180°-os forgatást" if ro_best
+                   else "kapcsold ki a 180°-os forgatást")
+    return {"region": r_best, "rotate": bool(ro_best),
+            "fit": round(float(f_best), 3),
+            "uzenet": ("A bejelölt négyszög MÁS beállításra ül jobban: "
+                       + " és ".join(mit)
+                       + f" (illeszkedés {f_best:.2f} a mostani "
+                       + (f"{alap:.2f}" if fit is not None else "mérhetetlen")
+                       + " helyett).").replace(".", ",", 2)}
+
+
+def calib_verdict(fit: Optional[float], shift: Optional[dict] = None,
+                  alternativ: Optional[dict] = None,
+                  coverage: Optional[float] = None,
+                  samples: Optional[int] = None) -> dict:
     """Edzőnyelvű ítélet a kalibráció illeszkedéséről + eltolás-javaslat.
 
     - `fit`: a mért illeszkedés (0..1) az eltolás nélküli rajzra, vagy
@@ -466,12 +545,28 @@ def calib_verdict(fit: Optional[float], shift: Optional[dict] = None) -> dict:
     kliens ennyivel tolja el mind a négy sarkot). Tiszta függvény: kép
     nélkül tesztelhető.
     """
+    alt = alternativ or None
     if fit is None:
+        # A "nem mérhető" MINDIG mondja meg, mi hiányzik: hány mintapont
+        # esett a képre, és van-e olyan beállítás, ami ülne. Enélkül a
+        # felhasználó azt látja, hogy a jól bejelölt sarkaira a program
+        # ok nélkül nemet mond.
+        reszlet = ""
+        if samples is not None:
+            reszlet = (f" A rajzolt modellből {samples} pont esett a "
+                       "képre (legalább 20 kell a méréshez).")
+        uzenet = ("Nem mérhető: a rajzolt pálya-modell nem esik a képre."
+                  + reszlet)
+        if alt:
+            uzenet += " " + alt["uzenet"]
+        else:
+            uzenet += (" Ellenőrizd a térfél-választót és a 180°-os "
+                       "forgatást, vagy húzd a sarkokat a látható "
+                       "pályaszélekre.")
         return {"fit": None, "itelet": None, "dx": 0.0, "dy": 0.0,
-                "fit_javitva": None, "javasolt": False,
-                "uzenet": "Nem mérhető: a bejelölt pálya nagyrészt a képen "
-                          "kívülre esik — húzd a sarkokat a látható "
-                          "pályaszélekre."}
+                "fit_javitva": None, "javasolt": False, "uzenet": uzenet,
+                "coverage": coverage, "samples": samples,
+                "alternativ": alt}
     if fit >= CALIB_FIT_GOOD:
         itelet = "jó"
         uzenet = "A rajzolt vonalak ülnek a valódi pályavonalakon."
@@ -491,7 +586,15 @@ def calib_verdict(fit: Optional[float], shift: Optional[dict] = None) -> dict:
     javasolt = bool(
         uj is not None and uj >= fit + CALIB_SHIFT_GAIN
         and math.hypot(dx, dy) >= CALIB_SHIFT_MIN_PX)
+    # Ha egy MÁSIK beállítás (térfél / forgatás) érdemben jobban ül, azt
+    # az ítélet mellé mondjuk: a gyenge illeszkedés leggyakoribb oka nem
+    # a pontatlan sarok, hanem az elállított terület-választó.
+    if alt:
+        uzenet += " " + alt["uzenet"]
     return {"fit": round(fit, 3), "itelet": itelet, "uzenet": uzenet,
             "dx": dx if javasolt else 0.0, "dy": dy if javasolt else 0.0,
             "fit_javitva": round(float(uj), 3) if uj is not None else None,
-            "javasolt": javasolt}
+            "javasolt": javasolt,
+            "coverage": (round(float(coverage), 3)
+                         if coverage is not None else None),
+            "samples": samples, "alternativ": alt}

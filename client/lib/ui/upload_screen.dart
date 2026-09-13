@@ -70,6 +70,15 @@ class _UploadScreenState extends State<UploadScreen> {
   String? _error;
   Timer? _poll;
 
+  /// Egymás UTÁN hányszor nem sikerült lekérdezni a munka állapotát, és a
+  /// közben kiírt jegyzet. Egyetlen megbicsakló kérés (a motor épp egy
+  /// nehéz kockán dolgozik, a gép altatásból ébred) NEM jelenti azt, hogy
+  /// a feldolgozás elszállt: a munka a motorban fut tovább. Ezért csak
+  /// többszöri hiba után szólunk, és akkor sem állítjuk le a figyelést.
+  int _pollFails = 0;
+  String? _connNote;
+  static const int _pollFailsToWarn = 4;
+
   // Feltöltés állapota (a dropzone folyamatjelzőjéhez).
   bool _uploading = false;
   double _uploadProgress = 0.0;
@@ -934,6 +943,8 @@ class _UploadScreenState extends State<UploadScreen> {
       final j = await _api.fetchJob(id);
       if (!mounted) return;
       setState(() {
+        _pollFails = 0;
+        _connNote = null;
         _status = (j["status"] as String?) ?? "running";
         _stage = (j["stage"] as String?) ?? _stage;
         _progress = (j["progress"] as num?)?.toDouble() ?? _progress;
@@ -949,12 +960,19 @@ class _UploadScreenState extends State<UploadScreen> {
         _openResult();
       }
     } catch (e) {
+      // A lekérdezés bicsaklott meg, NEM a feldolgozás: a munka a
+      // motorban fut tovább. Kitartunk, és csak többszöri hiba után
+      // írunk ki jegyzetet — a következő sikeres lekérdezés törli.
       if (!mounted) return;
       setState(() {
-        _status = "error";
-        _error = "${humanError(e)}";
+        _pollFails += 1;
+        _connNote = _pollFails >= _pollFailsToWarn
+            ? "A motor épp nem válaszol ($_pollFails sikertelen "
+                "lekérdezés) — a feldolgozás valószínűleg fut tovább, "
+                "újrapróbálkozom. Ha percekig így marad, a nyitóképernyőn "
+                "indítsd újra a motort."
+            : null;
       });
-      _poll?.cancel();
     }
   }
 
@@ -1928,7 +1946,9 @@ class _UploadScreenState extends State<UploadScreen> {
       case "queued":
         return "Sorban áll — előtte másik feldolgozás fut.";
       case "running":
-        return "Feldolgozás… ${(_progress * 100).round()}% · $_message";
+        return _connNote != null
+            ? "Feldolgozás… ${(_progress * 100).round()}% · $_connNote"
+            : "Feldolgozás… ${(_progress * 100).round()}% · $_message";
       case "done":
         return "Kész · $_message";
       case "cancelled":
