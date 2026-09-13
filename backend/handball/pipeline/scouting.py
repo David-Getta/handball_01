@@ -679,6 +679,14 @@ class ScoutingReport:
     # (figure_formation) a combine_reports-ban ÚJRASZÁMOLVA.
     setplay_formation_rows: list = field(default_factory=list)
     figure_formation: dict = field(default_factory=dict)
+    # Figura-ismétlés döntése (setplays.setplay_repeat_choice): CSAK
+    # darabszámok — a gól utáni és a gól nélküli előző támadások száma,
+    # és hányszor jött rá UGYANAZ a figura. Meccsek közt pontosan
+    # összegződik (az arány a két számból bármikor visszaszámolható).
+    setplay_repeat_after_goal: int = 0
+    setplay_repeat_after_goal_same: int = 0
+    setplay_repeat_after_miss: int = 0
+    setplay_repeat_after_miss_same: int = 0
     # Lövőerő-esésük: félidőnként a mért lövések száma + a
     # sebesség-összeg (km/h) — darabszámok és összegek, meccsek közt
     # pontosan összegződnek (félidő-átlag = összeg / darab).
@@ -8444,6 +8452,35 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # Figura-ismétlés döntése: a bejött figurát rögtön újra hozzák-e (a
+    # meccsek darabszámai összegezve — a motorral azonos küszöbök).
+    try:
+        from .setplays import SRC_GAP_PP, SRC_HIGH_PCT, SRC_MIN_ATTACKS
+        _sg, _sm = rep.setplay_repeat_after_goal, rep.setplay_repeat_after_miss
+        if _sg >= SRC_MIN_ATTACKS and _sm >= SRC_MIN_ATTACKS:
+            _sgp = 100.0 * rep.setplay_repeat_after_goal_same / _sg
+            _smp = 100.0 * rep.setplay_repeat_after_miss_same / _sm
+            if _sgp - _smp >= SRC_GAP_PP:
+                keys.append(
+                    f"A bejött figurájukat rögtön újra hozzák (gól után "
+                    f"{_sgp:.0f}%, gól nélkül {_smp:.0f}% ismétlés) — "
+                    "kapott gól után álljatok fel előre ugyanarra, ne "
+                    "várjátok ki a felismerést.")
+            elif _smp - _sgp >= SRC_GAP_PP:
+                keys.append(
+                    f"A bejött figurájuk után váltanak (gól után "
+                    f"{_sgp:.0f}%, gól nélkül {_smp:.0f}% ismétlés) — "
+                    "kapott gól után ne arra a figurára készüljetek, "
+                    "tartsátok az alaphelyzetet.")
+            elif _sgp >= SRC_HIGH_PCT and _smp >= SRC_HIGH_PCT:
+                keys.append(
+                    f"Kiszámítható a play-callingjuk: a következő "
+                    f"támadásban ugyanazt hozzák (gól után {_sgp:.0f}%, "
+                    f"gól nélkül {_smp:.0f}% ismétlés) — egy bejátszott "
+                    "válasz a teljes sorozatra elég.")
+    except Exception:
+        pass
+
     # Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak.
     if rep.fsw_attacks >= 6 and rep.fsw_pairs > 0 and rep.fsw_labels:
         _fsw_main = max(rep.fsw_labels.items(), key=lambda kv: kv[1])[0]
@@ -12347,6 +12384,12 @@ def _scout_team_cached(match: Match, team: Team,
             for r in _fvf(match, config)[team.value]
             for forma, cella in (r.get("forms") or {}).items()]
         rep.figure_formation = _ffs(rep.setplay_formation_rows)
+        from .setplays import setplay_repeat_choice as _src
+        _srcrec = _src(match, config)[team.value]
+        rep.setplay_repeat_after_goal = _srcrec["after_goal_attacks"]
+        rep.setplay_repeat_after_goal_same = _srcrec["after_goal_repeats"]
+        rep.setplay_repeat_after_miss = _srcrec["after_miss_attacks"]
+        rep.setplay_repeat_after_miss_same = _srcrec["after_miss_repeats"]
         rep.fsw_labels = dict(fswrec["labels"])
         rep.fsw_attacks = fswrec["attacks"]
         rep.fsw_pairs = max(0, fswrec["attacks"] - 1)
@@ -14613,6 +14656,38 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 461) Az ő kiszámítható figura-ismétlésük × a ti fal-váltásaitok: ha
+    # a bejött figurát rögtön újra hozzák, a védekezés előre felállhat rá
+    # — a kérdés csak az, van-e a ti falatokban kész váltás.
+    try:
+        from .setplays import SRC_GAP_PP as _S461G
+        from .setplays import SRC_HIGH_PCT as _S461H
+        from .setplays import SRC_MIN_ATTACKS as _S461M
+        _g461, _m461 = (opp.setplay_repeat_after_goal,
+                        opp.setplay_repeat_after_miss)
+        if (_g461 >= _S461M and _m461 >= _S461M and own.fsw_pairs >= 5):
+            _gp461 = 100.0 * opp.setplay_repeat_after_goal_same / _g461
+            _mp461 = 100.0 * opp.setplay_repeat_after_miss_same / _m461
+            _sw461 = 100.0 * own.fsw_switches / own.fsw_pairs
+            _elore461 = (_gp461 - _mp461 >= _S461G
+                         or (_gp461 >= _S461H and _mp461 >= _S461H))
+            if _elore461 and _sw461 >= 30.0:
+                plan.append(
+                    f"A gólja után {_gp461:.0f}%-ban ugyanazt a figurát "
+                    f"hozzák újra, ti pedig amúgy is váltogatjátok a falat "
+                    f"(a támadásaik {_sw461:.0f}%-a után) — időzítsétek a "
+                    "váltást a kapott gól UTÁNI támadásukra: ott tudjátok "
+                    "előre, mi jön, és a váltás pont akkor éri őket.")
+            elif _elore461:
+                plan.append(
+                    f"A gólja után {_gp461:.0f}%-ban ugyanazt a figurát "
+                    f"hozzák újra, ti viszont végig egy falat játszotok (a "
+                    f"támadásaik {_sw461:.0f}%-a után váltotok) — egyetlen "
+                    "bejátszott váltás kell, és pont a kapott gól utáni "
+                    "támadásukra: az az egy támadás kiszámítható.")
     except Exception:
         pass
 
@@ -22940,6 +23015,14 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         setplay_formation_rows=[row for r in reports
                                 for row in (r.setplay_formation_rows or [])],
         figure_formation=_figure_formation_of(reports),
+        setplay_repeat_after_goal=sum(r.setplay_repeat_after_goal
+                                      for r in reports),
+        setplay_repeat_after_goal_same=sum(r.setplay_repeat_after_goal_same
+                                           for r in reports),
+        setplay_repeat_after_miss=sum(r.setplay_repeat_after_miss
+                                      for r in reports),
+        setplay_repeat_after_miss_same=sum(r.setplay_repeat_after_miss_same
+                                           for r in reports),
         fsw_labels=_merge_fsw_labels(reports),
         fsw_attacks=sum(r.fsw_attacks for r in reports),
         fsw_pairs=sum(r.fsw_pairs for r in reports),

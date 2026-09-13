@@ -1383,6 +1383,43 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 480) Kiszámítható a saját play-callingunk: ha a gólunk után rögtön
+    # ugyanazt a figurát hozzuk (vagy mindig ismétlünk), az ellenfél
+    # védekezése előre felállhat rá — a gól utáni támadásra kell egy
+    # MÁSODIK, bejátszott változat.
+    try:
+        from .setplays import (SRC_GAP_PP, SRC_HIGH_PCT, SRC_MIN_ATTACKS,
+                               setplay_repeat_choice)
+        src480 = setplay_repeat_choice(match, config)
+        for side in ("home", "away"):
+            rec480 = src480.get(side) or {}
+            gp = rec480.get("after_goal_pct")
+            mp = rec480.get("after_miss_pct")
+            if gp is None or mp is None:
+                continue
+            if gp - mp >= SRC_GAP_PP:
+                miert = (f"a gólotok utáni támadásban {gp:.0f}%-ban "
+                         f"ugyanazt a figurát hozzátok, gól nélkül csak "
+                         f"{mp:.0f}%-ban (küszöb: {SRC_MIN_ATTACKS} mért "
+                         "támadás sávonként) — a gól után kiszámíthatóak "
+                         "vagytok")
+            elif gp >= SRC_HIGH_PCT and mp >= SRC_HIGH_PCT:
+                miert = (f"a következő támadásban szinte mindig ugyanazt a "
+                         f"figurát hozzátok (gól után {gp:.0f}%, gól nélkül "
+                         f"{mp:.0f}%) — egy bejátszott válasz az egész "
+                         "sorozatotokat megfogja")
+            else:
+                continue
+            add(side, "támadás",
+                "Kiszámítható a figura-sorrendünk a gól után",
+                miert,
+                "gól utáni támadás gyakorlása két nyitással: ugyanaz a "
+                "kezdő mozgás, két különböző befejezés (a megszokott és "
+                "egy ellen-mozgás), a kapott jelre váltva; 6-6 ellen, a "
+                "védők a mi meccs-formánkban")
+    except Exception:
+        pass
+
     # 479) A figuránk egy fal ellen nem megy: ha a leggyakoribb figuránk
     # valamelyik védőforma ellen elég mintából gól nélkül maradt, azt a
     # falat kell bejátszani ellene edzésen — a meccsen már késő.

@@ -3,7 +3,25 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.125 óta)
+## Kiadatlan (a v0.1.126 óta)
+
+- **Figura-ismétlés a gól után** (új réteg): a bejött figurát rögtön
+  újra hozzák-e. A csapat egymást követő támadásait figurák szerint
+  nézve megszámoljuk, milyen gyakran jön UGYANAZ a figura a következő
+  támadásban, aszerint, hogy az előző gólt hozott-e. Edzői olvasat: "a
+  gólja után 80%-ban ugyanazt hozzák, gól nélkül 20%-ban — kapott gól
+  után álljatok fel előre ugyanarra, ne várjátok ki a felismerést". Ha
+  mindkét sávban magas az ismétlés, a play-callingjuk kiszámítható: egy
+  bejátszott válasz az egész sorozatra elég. Felületek: elemzés-válasz
+  és meccs-csomag, edzői összefoglaló, felderítés (edzői kulcs,
+  461. meccsterv-szabály a fal-váltás időzítésére), 480. edzés-szabály
+  (a saját gól utáni kiszámíthatóság ellen második nyitás), kliens-
+  csempe.
+
+## v0.1.126 — kiadva (2026-09-12)
+
+> Kiadás-jegyzet: a meccsterv megmutatja, melyik figurát vezette be az
+> ellenfél az utóbbi meccseken.
 
 - **Az ellenfél új figurája a meccstervben** (meccsterv): az ellenfél
   kijelölt meccsei dátum szerint két félre vágva — "Új figurájuk az

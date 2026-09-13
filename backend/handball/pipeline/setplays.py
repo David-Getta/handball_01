@@ -417,6 +417,103 @@ def setplay_decay(match: Match, config: TacticsConfig | None = None,
     return out
 
 
+# Figura-ismétlés DÖNTÉSE: sávonként (gól után / gól nélkül után) ennyi
+# mért "előző támadás" kell az ítélethez, ekkora (százalékpontos) rés
+# számít érdeminek a két sáv között, és ettől az ismétlés-aránytól
+# kiszámítható a következő támadásuk akkor is, ha nincs rés.
+SRC_MIN_ATTACKS = 4
+SRC_GAP_PP = 20.0
+SRC_HIGH_PCT = 60.0
+# A figura lövései: a szakaszban vagy ennyi másodpercen belül utána
+# esett gól tartozik a figurához (mint a többi figura-rétegben).
+SRC_SHOT_TAIL_S = 3.0
+
+
+def setplay_repeat_choice(match: Match, config: TacticsConfig | None = None,
+                          threshold: float = 0.15,
+                          min_length: int = 5) -> dict:
+    """Figura-ismétlés döntése: GÓL UTÁN UGYANAZT hozzák-e újra.
+
+    A figura-kopás (`setplay_decay`) azt mérte, MENNYIT ÉR az ismétlés; a
+    befejező-váltás (`finisher_rotation`) azt, ugyanaz az EMBER fejez-e
+    be. Ez a réteg a DÖNTÉST mutatja: a csapat egymást követő támadásait
+    figurák szerint klaszterezzük, és megszámoljuk, milyen gyakran
+    játsszák a következő támadásban UGYANAZT a figurát — aszerint, hogy
+    az előző támadás gólt hozott-e.
+
+    Edzőileg ez a védekezés előre-lépése. Ha a bejött figurát rögtön újra
+    hozzák, a gól után nem kell kivárni a felismerést: a fal előre
+    felállhat ugyanarra, és a második próbálkozás eleve zárt sávba fut.
+    Ha a gól után VÁLTANAK, a gól utáni támadásnál nem érdemes a bejött
+    figurára várni — inkább az alaphelyzetet kell tartani. Ha pedig
+    mindkét sávban magas az ismétlés, a play-calling kiszámítható:
+    minden támadásuk előtt ugyanaz a válasz készíthető elő.
+
+    Visszatérés csapatonként: {"after_goal_attacks", "after_goal_repeats",
+    "after_miss_attacks", "after_miss_repeats", "after_goal_pct",
+    "after_miss_pct", "gap_pp", "verdict"} — a pct/gap/verdict None, ha
+    valamelyik sávban SRC_MIN_ATTACKS alatt van a mért előző támadás
+    (sose hallgatólagos 0).
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(SRC_SHOT_TAIL_S * fps)
+    shots_ev = [e for e in detect_shots(match, config)
+                if e.type in (EventType.SHOT, EventType.GOAL)]
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        seqs.sort(key=lambda s_: s_.start_t)
+        labels = cluster_signatures([attack_signature(s_) for s_ in seqs],
+                                    threshold=threshold)
+        golos = [any(e.team == team and e.type == EventType.GOAL
+                     and s_.start_t <= e.t <= s_.end_t + tail
+                     for e in shots_ev)
+                 for s_ in seqs]
+        rec = {"after_goal_attacks": 0, "after_goal_repeats": 0,
+               "after_miss_attacks": 0, "after_miss_repeats": 0,
+               "after_goal_pct": None, "after_miss_pct": None,
+               "gap_pp": None, "verdict": None}
+        for i in range(1, len(seqs)):
+            kulcs = "after_goal" if golos[i - 1] else "after_miss"
+            rec[f"{kulcs}_attacks"] += 1
+            if labels[i] == labels[i - 1]:
+                rec[f"{kulcs}_repeats"] += 1
+        if (rec["after_goal_attacks"] >= SRC_MIN_ATTACKS
+                and rec["after_miss_attacks"] >= SRC_MIN_ATTACKS):
+            gp = (100.0 * rec["after_goal_repeats"]
+                  / rec["after_goal_attacks"])
+            mp = (100.0 * rec["after_miss_repeats"]
+                  / rec["after_miss_attacks"])
+            rec["after_goal_pct"] = round(gp, 1)
+            rec["after_miss_pct"] = round(mp, 1)
+            rec["gap_pp"] = round(gp - mp, 1)
+            if gp - mp >= SRC_GAP_PP:
+                rec["verdict"] = (
+                    f"a bejött figurát rögtön újra hozzák (gól után "
+                    f"{gp:.0f}%, gól nélkül {mp:.0f}% ismétlés) — a "
+                    "kapott gól után ne a felismerésre várjatok: álljatok "
+                    "fel előre ugyanarra a figurára")
+            elif mp - gp >= SRC_GAP_PP:
+                rec["verdict"] = (
+                    f"a bejött figura után VÁLTANAK (gól után "
+                    f"{gp:.0f}%, gól nélkül {mp:.0f}% ismétlés) — a "
+                    "kapott gól után ne arra a figurára készüljetek, "
+                    "hanem tartsátok az alaphelyzetet")
+            elif gp >= SRC_HIGH_PCT and mp >= SRC_HIGH_PCT:
+                rec["verdict"] = (
+                    f"kiszámítható a play-callingjuk: a következő "
+                    f"támadásban ugyanazt hozzák (gól után {gp:.0f}%, "
+                    f"gól nélkül {mp:.0f}% ismétlés) — egy válasz "
+                    "elkészítve a teljes sorozatra elég")
+        out[team.value] = rec
+    return out
+
+
 # Figura-befejező: egy figurához ennyi mért lövés kell az ítélethez, és
 # ekkora részarány számít kiszámíthatónak. A 60% azt jelenti, hogy öt
 # lövésből három ugyanarra a posztra fut ki — a falnak ennyiből már

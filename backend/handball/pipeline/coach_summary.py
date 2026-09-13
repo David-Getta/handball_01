@@ -1195,6 +1195,17 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 body += f" A(z) {name}: {mondat}."
     except Exception:
         pass
+    # Figura-ismétlés döntése: gól után ugyanazt hozzák-e újra (a motor
+    # ítélete — SRC_MIN_ATTACKS / SRC_GAP_PP küszöbökkel).
+    try:
+        from .setplays import setplay_repeat_choice
+        src = setplay_repeat_choice(match)
+        for side, name in (("home", home), ("away", away)):
+            mondat = (src.get(side) or {}).get("verdict")
+            if mondat:
+                body += f" A(z) {name}: {mondat}."
+    except Exception:
+        pass
     # Lepattanó-szedő poszt: védés után kinél marad a labda.
     try:
         from .defense import defensive_rebound_roles

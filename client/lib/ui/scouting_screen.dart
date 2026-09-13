@@ -10010,6 +10010,38 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return v;
   }
 
+  // Figura-ismétlés döntése: a bejött figurát rögtön újra hozzák-e. A
+  // darabszámokból itt számolunk arányt (a mezők meccsek közt
+  // összegződnek); a küszöbök a backenddel azonosak: sávonként legalább
+  // 4 mért előző támadás, 20 százalékpont rés, és 60% fölött mindkét
+  // sávban kiszámítható a sorrend.
+  String? _setplayRepeatChoice(Map<String, dynamic> r) {
+    final g = ((r["setplay_repeat_after_goal"] as num?) ?? 0).toInt();
+    final m = ((r["setplay_repeat_after_miss"] as num?) ?? 0).toInt();
+    final gs = ((r["setplay_repeat_after_goal_same"] as num?) ?? 0).toInt();
+    final ms = ((r["setplay_repeat_after_miss_same"] as num?) ?? 0).toInt();
+    if (g < 4 || m < 4) return null;
+    final gp = 100.0 * gs / g;
+    final mp = 100.0 * ms / m;
+    if (gp - mp >= 20.0) {
+      return "a bejött figurát rögtön újra hozzák: gól után "
+          "${gp.toStringAsFixed(0)}%, gól nélkül ${mp.toStringAsFixed(0)}% "
+          "ismétlés · kapott gól után álljatok fel előre ugyanarra";
+    }
+    if (mp - gp >= 20.0) {
+      return "a bejött figura után váltanak: gól után "
+          "${gp.toStringAsFixed(0)}%, gól nélkül ${mp.toStringAsFixed(0)}% "
+          "ismétlés · kapott gól után tartsátok az alaphelyzetet";
+    }
+    if (gp >= 60.0 && mp >= 60.0) {
+      return "kiszámítható a sorrendjük: a következő támadásban ugyanazt "
+          "hozzák (gól után ${gp.toStringAsFixed(0)}%, gól nélkül "
+          "${mp.toStringAsFixed(0)}%) · egy bejátszott válasz elég a "
+          "sorozatra";
+    }
+    return null;
+  }
+
   // Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak (6+
   // védekezett támadás, 30% váltás-arány / 80% fő forma; a
   // backend-kulccsal azonos küszöbök).
@@ -11656,6 +11688,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Figura-könyvtár", _setplayLibrary(r)!],
       if (_figureVsFormation(r) != null)
         ["Figura × védőforma", _figureVsFormation(r)!],
+      if (_setplayRepeatChoice(r) != null)
+        ["Figura-ismétlés a gól után", _setplayRepeatChoice(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],

@@ -426,6 +426,135 @@ def test_setplay_decay_silent_with_few_attacks():
     assert rec["gap_pp"] is None and rec["verdict"] is None, rec
 
 
+# ---- Figura-ismétlés döntése (setplay_repeat_choice) -----------------------
+
+
+def _src_match(goal_first=True, blocks=5, match_id="src", one_figure=False):
+    """Figurapárok: minden figurát KÉTSZER egymás után játszanak, a
+    párban az egyik támadás gólos.
+
+    `goal_first=True` → a pár GÓLOS támadása jön elöl, tehát a gól UTÁNI
+    támadás az ismétlés (gól után ismételnek, gól nélkül váltanak);
+    False → fordítva. `one_figure=True` → mindig ugyanaz az alak, tehát
+    mindkét sávban ismételnek (kiszámítható sorrend).
+    """
+    pats = ([_SPD_PATTERNS[0]] * blocks if one_figure
+            else [_SPD_PATTERNS[i % len(_SPD_PATTERNS)]
+                  for i in range(blocks)])
+    frames = []
+    t = 0
+
+    def _attack(xs, goal):
+        """A két változat KÉPE azonos (ugyanazok a játékos-pozíciók, tehát
+        ugyanaz a figura-alak), csak a befejezés más: gólnál a labda a
+        kapuba fut, gól nélkül a támadóknál marad. Az üresjárat hosszabb
+        a gól-hozzárendelés 3 másodperces ablakánál, hogy a következő
+        támadás gólja ne számítson ehhez."""
+        nonlocal t
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, xs))
+            t += 1
+        for i in range(6):
+            bx = min(34.0 + i * 1.2, 40.0) if goal else xs[0]
+            frames.append(Frame(
+                t=t,
+                players=[_pl(j + 1, Team.HOME, xs[j], 10.0)
+                         for j in range(len(xs))],
+                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(120):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    for xs in pats:
+        _attack(xs, goal_first)
+        _attack(xs, not goal_first)
+    return Match(MatchMeta(match_id=match_id, home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_a_figura_ismetles_dontese_gol_utan_ugyanazt_hozzak():
+    """A gólos támadás után ugyanaz a figura jön, gól nélkül más — az
+    ítélet a védekezésnek szól: a kapott gól után előre fel lehet állni
+    ugyanarra."""
+    from handball.pipeline.setplays import (SRC_GAP_PP, SRC_MIN_ATTACKS,
+                                            setplay_repeat_choice)
+
+    rec = setplay_repeat_choice(_src_match())["home"]
+    assert rec["after_goal_attacks"] >= SRC_MIN_ATTACKS, rec
+    assert rec["after_miss_attacks"] >= SRC_MIN_ATTACKS, rec
+    assert rec["after_goal_repeats"] == rec["after_goal_attacks"], rec
+    assert rec["after_miss_repeats"] == 0, rec
+    assert rec["gap_pp"] is not None and rec["gap_pp"] >= SRC_GAP_PP, rec
+    assert rec["verdict"] and "rögtön újra hozzák" in rec["verdict"], rec
+    assert "álljatok fel előre" in rec["verdict"], rec
+    # A vendégnek nincs mért támadása: nincs ítélet, nem hallgatólagos 0.
+    ures = setplay_repeat_choice(_src_match())["away"]
+    assert ures["after_goal_attacks"] == 0 and ures["verdict"] is None
+
+
+def test_a_figura_ismetles_dontese_gol_utan_valtas_es_kiszamithatosag():
+    """Fordított pár: a gól után VÁLTANAK. Egyetlen alaknál mindkét
+    sávban ismételnek → kiszámítható a play-calling."""
+    from handball.pipeline.setplays import setplay_repeat_choice
+
+    valt = setplay_repeat_choice(_src_match(goal_first=False))["home"]
+    assert valt["after_goal_repeats"] == 0, valt
+    assert valt["after_miss_repeats"] == valt["after_miss_attacks"], valt
+    assert valt["verdict"] and "VÁLTANAK" in valt["verdict"], valt
+    assert "alaphelyzetet" in valt["verdict"], valt
+    egy = setplay_repeat_choice(_src_match(one_figure=True))["home"]
+    assert egy["after_goal_pct"] == 100.0 and egy["after_miss_pct"] == 100.0
+    assert egy["verdict"] and "kiszámítható" in egy["verdict"], egy
+
+
+def test_a_figura_ismetles_dontese_keves_mintanal_hallgat():
+    """Két figurapár: sávonként kevés az előző támadás → nincs arány és
+    nincs ítélet (sose hallgatólagos 0)."""
+    from handball.pipeline.setplays import setplay_repeat_choice
+
+    rec = setplay_repeat_choice(_src_match(blocks=2))["home"]
+    assert rec["after_goal_attacks"] < 4 or rec["after_miss_attacks"] < 4
+    assert rec["after_goal_pct"] is None and rec["gap_pp"] is None
+    assert rec["verdict"] is None, rec
+
+
+def test_a_figura_ismetles_a_felderitesen_meccsek_kozt_osszeadodik():
+    """A VALÓDI felderítés-úton (scout_team → combine_reports) a
+    darabszámok összeadódnak, és az edzői kulcs megszólal — a mezőnevek
+    is valódiak (a try/except különben elnyelné az elgépelést)."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            scout_team)
+
+    r1 = scout_team(_src_match(blocks=3, match_id="s1"), Team.HOME)
+    r2 = scout_team(_src_match(blocks=3, match_id="s2"), Team.HOME)
+    assert r1.setplay_repeat_after_goal > 0
+    assert r1.setplay_repeat_after_goal_same == r1.setplay_repeat_after_goal
+    assert r1.setplay_repeat_after_miss_same == 0
+    ossz = combine_reports([r1, r2])
+    assert (ossz.setplay_repeat_after_goal
+            == r1.setplay_repeat_after_goal + r2.setplay_repeat_after_goal)
+    assert (ossz.setplay_repeat_after_miss
+            == r1.setplay_repeat_after_miss + r2.setplay_repeat_after_miss)
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "rögtön újra hozzák" in kulcsok
+    assert "álljatok fel előre ugyanarra" in kulcsok
+
+
+def test_a_figura_ismetles_edzes_szabaly_valodi_retegbol_szolal_meg():
+    """480: a saját gól utáni kiszámítható ismétlés edzés-tétele a
+    VALÓDI rétegből (nem monkeypatch-elt alakból)."""
+    from handball.pipeline.training import training_focus
+
+    tetelek = training_focus(_src_match(match_id="t480"))["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "Kiszámítható a figura-sorrendünk a gól után" in cimek
+    tetel = next(t for t in tetelek
+                 if t["title"].startswith("Kiszámítható a figura-sorrend"))
+    assert "két nyitással" in tetel["drill"]
+
+
 # ---- Figura-indító (setplay_openers) ---------------------------------------
 
 

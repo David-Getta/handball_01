@@ -62,6 +62,22 @@ A csapat könyvtárát az API a könyvtár ÖSSZES elemzett meccséből építi
 alak-gyorsítótárral: (meccs-azonosító, kockaszám) kulccsal, hogy az
 újrafeldolgozott meccs ne olvasson elavult alakot.
 
+## Figura-ismétlés a gól után
+
+A könyvtár és a figura-kopás azt mondja, MENNYIT ÉR a figura; a
+`setplay_repeat_choice` azt, MIKOR hozzák: a csapat egymást követő
+támadásait figurák szerint nézve megszámolja, milyen gyakran jön
+UGYANAZ a figura a következő támadásban, aszerint, hogy az előző gólt
+hozott-e. A felderítés CSAK a darabszámokat tárolja (gól utáni és gól
+nélküli előző támadás, és ebből hány ismétlés), így meccsek közt
+pontosan összeadódik. Ítélet csak sávonként legalább `SRC_MIN_ATTACKS`
+(4) mért támadásnál: `SRC_GAP_PP` (20 százalékpont) rés esetén "a
+bejött figurát rögtön újra hozzák" vagy "a bejött figura után
+váltanak"; rés nélkül, de mindkét sávban `SRC_HIGH_PCT` (60%) fölött
+"kiszámítható a play-callingjuk". A 461. meccsterv-szabály ezt a saját
+fal-váltásaitokkal köti össze (mikor időzítsétek a váltást), a 480.
+edzés-szabály a saját kiszámíthatóságunkra ad második nyitást.
+
 ## Figura × védőforma
 
 A könyvtár azt mondja, MELYIK figurát hozzák; a `figure_vs_formation`
@@ -128,7 +144,9 @@ meccseken" az, amire a régi felderítés nem készít fel.
 szakasz): a tükörkép irány-normálva egy alak; edzői nevek; a könyvtár két
 meccs (a másodikban a másik kapura támadva) között visszatérő figurát
 talál, egy meccsből nem; a VALÓDI felderítés-út; a riasztás- és a
-setplays-végpont; a meccsenkénti gyorsítótár; a repertoár-változás
+setplays-végpont; a meccsenkénti gyorsítótár; a gól utáni figura-
+ismétlés (előre-lépés, váltás, kiszámíthatóság, kevés minta, a valódi
+felderítés-út és a 480. edzés-szabály); a repertoár-változás
 (új / eltűnt / maradt) és a szezon-riport szakasza. A rajz-felületek őrei a
 `test_client_calib_check.py`-ban, a jelentések a `test_report_html.py` és
 `test_match_report.py` fájlokban.
