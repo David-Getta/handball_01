@@ -4799,3 +4799,165 @@ def test_az_orzes_kuszob_valos_masodpercben_ertendo():
     parok = rec["home"]["pairs"]
     assert parok, "a valós egy másodperces őrzésnek meg kell jelennie"
     assert parok[0]["defender"] == 1 and parok[0]["attacker"] == 21
+
+
+# ---- Fal-alak (defense_shapes) ---------------------------------------------
+
+
+def _dsh_match(spec, match_id="dsh", mirror=False):
+    """`spec`: [(fal, gól?), …] — a hazai mindig ugyanazt a támadást
+    játssza a +x kapura, a VENDÉG fala a megadott alakban áll:
+
+    - "tömör": hat védő a 6 m-es vonalon (x=35), egyenletesen elosztva;
+    - "kilépő": ugyanaz az alak 4 méterrel előrébb (x=31);
+    - "oldalra": tömör fal, de a TÁMADÓ bal oldalára csúszva (kis y) —
+      ez a VÉDEKEZŐ csapat JOBB oldala.
+
+    `mirror=True`: a pálya hossztengelyére tükrözve (y → 20−y) — minden
+    oldal-névnek fordulnia kell.
+    """
+    frames = []
+    t = 0
+    for fal, gol in spec:
+        if fal == "kilepo":
+            xs_v, ys_v = [31.0] * 6, [2.0, 6.0, 9.0, 11.0, 14.0, 18.0]
+        elif fal == "oldalra":
+            xs_v, ys_v = [35.0] * 6, [1.0, 2.5, 4.0, 5.5, 7.0, 8.5]
+        else:
+            xs_v, ys_v = [35.0] * 6, [2.0, 6.0, 9.0, 11.0, 14.0, 18.0]
+
+        def _y(v):
+            return 20.0 - v if mirror else v
+
+        def fal_jatekosok():
+            return [_pl(20 + j, Team.AWAY, xs_v[j], _y(ys_v[j]))
+                    for j in range(6)]
+
+        # Kapus a saját kapujában (a fal alakjából kimarad).
+        def kapus():
+            return [_pl(30, Team.AWAY, 39.5, _y(10.0))]
+
+        for _ in range(8):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 28.0, _y(10.0)),
+                              _pl(2, Team.HOME, 31.0, _y(8.0)),
+                              _pl(3, Team.HOME, 30.0, _y(12.0))]
+                + fal_jatekosok() + kapus(),
+                ball=Ball(x=28.0, y=_y(10.0), confidence=1.0)))
+            t += 1
+        # Lövés mindkét esetben (a szakasz azonos hosszú): gólnál a kapu
+        # közepére, egyébként a kapu mellé.
+        for i in range(7):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 33.0, _y(10.0)),
+                              _pl(2, Team.HOME, 31.0, _y(8.0)),
+                              _pl(3, Team.HOME, 30.0, _y(12.0))]
+                + fal_jatekosok() + kapus(),
+                ball=Ball(x=34.0 + i, y=_y(10.0) if gol else _y(3.0),
+                          confidence=1.0)))
+            t += 1
+        for _ in range(4):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 8.0,
+                                                  _y(10.0))],
+                                ball=Ball(x=8.0, y=_y(10.0),
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id=match_id, home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_a_fal_alak_megmondja_melyik_alakjuk_ellen_terem_a_gol():
+    """A kilépő faluk ellen négyből négy gól, a tömör ellen nulla: az
+    ítélet a gyengébb alakot nevezi meg, és a korai befejezést kéri."""
+    from handball.pipeline.defense import (DSH_GAP_PP, DSH_MIN_ATTACKS,
+                                           defense_shapes)
+
+    rec = defense_shapes(_dsh_match([("kilepo", True)] * 4
+                                    + [("tomor", False)] * 4))["away"]
+    assert len(rec["shapes"]) == 2, rec["shapes"]
+    jo = min(rec["shapes"], key=lambda r: r["goal_pct"])
+    rossz = max(rec["shapes"], key=lambda r: r["goal_pct"])
+    assert jo["attacks"] >= DSH_MIN_ATTACKS and jo["goal_pct"] == 0.0
+    assert rossz["goal_pct"] == 100.0
+    assert rossz["goal_pct"] - jo["goal_pct"] >= DSH_GAP_PP
+    assert rec["verdict"] and "kétféle falat" in rec["verdict"]
+    assert "korai befejezés" in rec["verdict"]
+    # A kilépő fal mélyebben áll a saját kaputól, mint a tömör.
+    assert "9-es vonalon" in rossz["zone"] or "előrehúzva" in rossz["zone"]
+    assert "hatoson" in jo["zone"]
+    # A HAZAI nem védekezett (nincs vendég-támadás): üres, nem hallgatólagos 0.
+    ures = defense_shapes(_dsh_match([("tomor", False)] * 4))["home"]
+    assert ures["shapes"] == [] and ures["verdict"] is None
+
+
+def test_a_fal_alak_egy_alaknal_vagy_keves_mintanal_hallgat():
+    """Egy alak: nincs mihez mérni. Kevés védekezett támadás: nincs
+    ítélet (a számok viszont látszanak)."""
+    from handball.pipeline.defense import DSH_MIN_ATTACKS, defense_shapes
+
+    egy = defense_shapes(_dsh_match([("tomor", True)] * 5))["away"]
+    assert egy["shapes"] and egy["verdict"] is None
+    keves = defense_shapes(
+        _dsh_match([("kilepo", True)] * (DSH_MIN_ATTACKS - 1)
+                   + [("tomor", False)] * (DSH_MIN_ATTACKS - 1)))["away"]
+    assert keves["shapes"] and keves["verdict"] is None
+
+
+def test_a_fal_alak_oldala_a_vedekezo_szemszogebol_szol_es_tukrozodik():
+    """A támadó BAL oldalára csúszott fal a VÉDEKEZŐ csapat JOBB oldala —
+    a két csapat szemben áll. A pályára tükrözött meccsen az oldal-névnek
+    fordulnia kell (ezt nézi a tükrözés-őr is)."""
+    from handball.pipeline.defense import defense_shapes
+
+    sorok = defense_shapes(_dsh_match([("oldalra", True)] * 4))["away"]["shapes"]
+    assert sorok and "jobb oldal" in sorok[0]["zone"], sorok
+    tukor = defense_shapes(
+        _dsh_match([("oldalra", True)] * 4, mirror=True))["away"]["shapes"]
+    assert tukor and "bal oldal" in tukor[0]["zone"], tukor
+
+
+def test_a_fal_alak_a_felderitesen_meccsek_kozt_osszeadodik():
+    """Két meccs: az egyikben csak a kilépő, a másikban csak a tömör fal
+    állt — külön-külön nincs ítélet, összefésülve van. A VALÓDI
+    felderítés-úton (scout_team → combine_reports), és az edzői kulcs is
+    megszólal."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            scout_team)
+
+    r1 = scout_team(_dsh_match([("kilepo", True)] * 4, "d1"), Team.AWAY)
+    r2 = scout_team(_dsh_match([("tomor", False)] * 4, "d2"), Team.AWAY)
+    assert r1.defense_shapes["verdict"] is None
+    assert len(r1.defense_shape_rows) == 1
+    ossz = combine_reports([r1, r2])
+    assert len(ossz.defense_shape_rows) == 2
+    assert ossz.defense_shapes["verdict"], ossz.defense_shapes
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "Kétféle falat" in kulcsok
+    # 462: a gyengébb alakjuk × a mi kontra-hajlandóságunk — mindkét ág.
+    from handball.pipeline.scouting import matchup_plan
+    sajat = scout_team(_dsh_match([("tomor", False)] * 4, "s1"), Team.HOME)
+    sajat.fast_break_pct = 35.0
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "tartsátok a tempót" in terv
+    sajat.fast_break_pct = 5.0
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "minden labdaszerzés után induljatok" in terv2
+
+
+def test_a_fal_alak_edzes_szabalya_valodi_retegbol_szolal_meg(monkeypatch):
+    """481: a saját falunk két alakja közti szakadék edzés-tétele a
+    VALÓDI rétegből (nem monkeypatch-elt alakból). A tétel-korlátot
+    feloldjuk: ezen a fixture-ön a régebbi védekezés-szabályok kitöltenék
+    az öt helyet, és a rétegbe kötés nem látszana."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.training import training_focus
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    tetelek = training_focus(_dsh_match([("kilepo", True)] * 4
+                                        + [("tomor", False)] * 4,
+                                        "t481"))["away"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "A falunk másik alakja ellen sokkal többet kapunk" in cimek
+    tetel = next(t for t in tetelek
+                 if t["title"].startswith("A falunk másik alakja"))
+    assert "visszarendeződés-gyakorlat" in tetel["drill"]

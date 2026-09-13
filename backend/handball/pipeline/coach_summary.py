@@ -1206,6 +1206,17 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 body += f" A(z) {name}: {mondat}."
     except Exception:
         pass
+    # Fal-alak: melyik falukat éri meg kihozni (a motor ítélete —
+    # DSH_MIN_ATTACKS / DSH_GAP_PP küszöbökkel).
+    try:
+        from .defense import defense_shapes
+        dsh = defense_shapes(match)
+        for side, name in (("home", home), ("away", away)):
+            mondat = (dsh.get(side) or {}).get("verdict")
+            if mondat:
+                body += f" A(z) {name} falairól: {mondat}."
+    except Exception:
+        pass
     # Lepattanó-szedő poszt: védés után kinél marad a labda.
     try:
         from .defense import defensive_rebound_roles

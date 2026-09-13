@@ -683,6 +683,12 @@ class ScoutingReport:
     # darabszámok — a gól utáni és a gól nélküli előző támadások száma,
     # és hányszor jött rá UGYANAZ a figura. Meccsek közt pontosan
     # összegződik (az arány a két számból bármikor visszaszámolható).
+    # Fal-alakjaik (defense.defense_shapes): lapos, összegezhető sorok —
+    # {"shape", "attacks", "goals", "match_id"} — meccsek közt egymás
+    # mögé; az összefésült kép (defense_shapes) a combine_reports-ban
+    # ÚJRASZÁMOLVA (arányt sose tárolunk).
+    defense_shape_rows: list = field(default_factory=list)
+    defense_shapes: dict = field(default_factory=dict)
     setplay_repeat_after_goal: int = 0
     setplay_repeat_after_goal_same: int = 0
     setplay_repeat_after_miss: int = 0
@@ -8452,6 +8458,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # Fal-alak: melyik falukat éri meg kihozni (a motor ítélete).
+    try:
+        _dshv = (rep.defense_shapes or {}).get("verdict")
+        if _dshv:
+            keys.append(_dshv[0].upper() + _dshv[1:] + ".")
+    except Exception:
+        pass
+
     # Figura-ismétlés döntése: a bejött figurát rögtön újra hozzák-e (a
     # meccsek darabszámai összegezve — a motorral azonos küszöbök).
     try:
@@ -12384,6 +12398,13 @@ def _scout_team_cached(match: Match, team: Team,
             for r in _fvf(match, config)[team.value]
             for forma, cella in (r.get("forms") or {}).items()]
         rep.figure_formation = _ffs(rep.setplay_formation_rows)
+        from .defense import defense_shape_summary as _dss
+        from .defense import defense_shapes as _dsh
+        rep.defense_shape_rows = [
+            {"shape": r["shape"], "attacks": r["attacks"],
+             "goals": r["goals"], "match_id": match.meta.match_id}
+            for r in _dsh(match, config)[team.value]["shapes"]]
+        rep.defense_shapes = _dss(rep.defense_shape_rows)
         from .setplays import setplay_repeat_choice as _src
         _srcrec = _src(match, config)[team.value]
         rep.setplay_repeat_after_goal = _srcrec["after_goal_attacks"]
@@ -13556,6 +13577,13 @@ def _merge_hold_players(reports) -> list:
                                  / max(1, kv[1]["holds"])))]
 
 
+def _defense_shapes_of(reports) -> dict:
+    """A fal-alak sorok meccsek közti összefésülése (a felderítés képe)."""
+    from .defense import defense_shape_summary
+    return defense_shape_summary([row for r in reports
+                                  for row in (r.defense_shape_rows or [])])
+
+
 def _figure_formation_of(reports) -> dict:
     """Figura × védőforma az összefésült sorokból újraszámolva."""
     from .setplays import figure_formation_summary
@@ -14656,6 +14684,41 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 462) Az ő gyengébb fal-ALAKJUK × a ti kontra-hajlandóságotok: a
+    # gyengébb alakjukat a korai befejezés hozza elő, mielőtt a másik
+    # alak felállna — ezt csak az tudja kihasználni, aki fut.
+    try:
+        from .defense import DSH_GAP_PP as _D462G
+        from .defense import DSH_MIN_ATTACKS as _D462M
+        _sh462 = [x for x in ((opp.defense_shapes or {}).get("shapes") or [])
+                  if x["attacks"] >= _D462M]
+        if len(_sh462) >= 2:
+            _jo462 = min(_sh462, key=lambda x: x["goal_pct"])
+            _gy462 = max(_sh462, key=lambda x: x["goal_pct"])
+            if _gy462["goal_pct"] - _jo462["goal_pct"] >= _D462G:
+                if own.fast_break_pct >= 20.0:
+                    plan.append(
+                        f"A falaik közül a(z) \"{_gy462['zone']}\" alak "
+                        f"ellen {_gy462['goal_pct']:.0f}%-ot kapnak, a(z) "
+                        f"\"{_jo462['zone']}\" ellen csak "
+                        f"{_jo462['goal_pct']:.0f}%-ot, ti pedig a "
+                        f"támadásaitok {own.fast_break_pct:.0f}%-át már most "
+                        "kontrából futjátok — tartsátok a tempót: a korai "
+                        "befejezés a gyengébb alakjukat kapja el.")
+                else:
+                    plan.append(
+                        f"A falaik közül a(z) \"{_gy462['zone']}\" alak "
+                        f"ellen {_gy462['goal_pct']:.0f}%-ot kapnak, a(z) "
+                        f"\"{_jo462['zone']}\" ellen csak "
+                        f"{_jo462['goal_pct']:.0f}%-ot, ti viszont alig "
+                        f"futtok kontrát (a támadásaitok "
+                        f"{own.fast_break_pct:.0f}%-a) — a felállt faluk "
+                        "ellen nehéz lesz: minden labdaszerzés után "
+                        "induljatok, a gyengébb alakjuk csak korai "
+                        "befejezéssel jön elő.")
     except Exception:
         pass
 
@@ -23015,6 +23078,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         setplay_formation_rows=[row for r in reports
                                 for row in (r.setplay_formation_rows or [])],
         figure_formation=_figure_formation_of(reports),
+        defense_shape_rows=[row for r in reports
+                            for row in (r.defense_shape_rows or [])],
+        defense_shapes=_defense_shapes_of(reports),
         setplay_repeat_after_goal=sum(r.setplay_repeat_after_goal
                                       for r in reports),
         setplay_repeat_after_goal_same=sum(r.setplay_repeat_after_goal_same

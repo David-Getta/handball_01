@@ -96,6 +96,27 @@ meccsterv-szabály a ti fő védekezésetekkel veti össze (maradjatok benne
 / váltsatok rá), a 479. edzés-szabály a saját figurátok gól nélküli
 formáját adja bejátszásra.
 
+## Fal-alak (a védekező tükre)
+
+Ugyanez a gépezet a VÉDEKEZŐ oldalon: a `defense.defense_shapes` minden
+védekezett támadásban a védők (kapus nélkül) eloszlását veti 6×3-as
+rácsra, a támadó irányához normálva, és a hasonló alakokat egy falnak
+veszi (`DSH_MERGE_THRESHOLD`). A védőforma-címke (6-0, 5-1) a sávok
+számát mondja, az alak azt, hogy a fal hova tömörül: két ugyanúgy
+"6-0"-nak címkézett fal lehet a hatoson tömör és a 9-esen kilépő is. Az
+ítélet a két legszélsőbb hozamú, elég mintás alakot veti össze
+(`DSH_MIN_ATTACKS`, `DSH_GAP_PP`), és a gyengébb alak kihozását kéri
+(gyors indítás, korai befejezés). A felderítés lapos sorokat tárol
+(`defense_shape_rows`), a `defense_shape_summary` a meccsek közt
+összefésült képet adja; a 462. meccsterv-szabály a saját kontra-
+hajlandósággal párosítja, a 481. edzés-szabály a saját falunk két alakja
+közti szakadékra ad visszarendeződés-gyakorlatot.
+
+**Oldal-megnevezés:** a fal oldalát a VÉDEKEZŐ csapat szemszögéből
+nevezzük (a rács a támadó irányához normált, a két csapat szemben áll,
+ezért a sávokat tükrözzük). A tükrözés-őr pont ezt nézi: a pályára
+tükrözött meccsen minden oldal-névnek fordulnia kell.
+
 ## Figura-nevek
 
 A könyvtár zóna-neve ("bal oldal, a kapuelőtér előtt") helyett az edző

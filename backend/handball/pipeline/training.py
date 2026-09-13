@@ -1383,6 +1383,39 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 481) A saját falunk két alakja közt szakadék van: ha az egyik
+    # alakunk ellen sokkal többet kapunk, nem a rendszert kell cserélni,
+    # hanem azt az alakot kell felállítani minden támadásnál.
+    try:
+        from .defense import (DSH_GAP_PP, DSH_MIN_ATTACKS, defense_shapes)
+        dsh481 = defense_shapes(match, config)
+        for side in ("home", "away"):
+            sorok = [x for x in ((dsh481.get(side) or {}).get("shapes") or [])
+                     if x["attacks"] >= DSH_MIN_ATTACKS]
+            if len(sorok) < 2:
+                continue
+            jo = min(sorok, key=lambda x: x["goal_pct"])
+            rossz = max(sorok, key=lambda x: x["goal_pct"])
+            if rossz["goal_pct"] - jo["goal_pct"] < DSH_GAP_PP:
+                continue
+            add(side, "védekezés",
+                "A falunk másik alakja ellen sokkal többet kapunk",
+                f"a(z) \"{jo['zone']}\" alakunk ellen "
+                f"{jo['goal_pct']:.0f}%-ot kapunk "
+                f"({jo['goals']}/{jo['attacks']} támadás), a(z) "
+                f"\"{rossz['zone']}\" ellen viszont "
+                f"{rossz['goal_pct']:.0f}%-ot "
+                f"({rossz['goals']}/{rossz['attacks']}) — nem a rendszer a "
+                f"baj, hanem hogy nem mindig az elsőt állítjuk fel "
+                f"(küszöb: {DSH_MIN_ATTACKS} támadás alakonként, "
+                f"{DSH_GAP_PP:.0f} százalékpont rés)",
+                "visszarendeződés-gyakorlat: labdavesztés után a fal "
+                "felállítása jelre, a kijelölt alakban (hat védő a "
+                "helyére, kilépés csak a labdás emberre); mérjétek, hány "
+                "másodperc alatt áll fel, és élesben is így játsszátok")
+    except Exception:
+        pass
+
     # 480) Kiszámítható a saját play-callingunk: ha a gólunk után rögtön
     # ugyanazt a figurát hozzuk (vagy mindig ismétlünk), az ellenfél
     # védekezése előre felállhat rá — a gól utáni támadásra kell egy

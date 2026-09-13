@@ -6527,3 +6527,231 @@ def marking_shift(match, config=None) -> dict:
                 "fogott emberünk visszakapja a labdát, rá lehet "
                 "építeni a második félidőt")
     return out
+
+
+# ---- Fal-alak (defense_shapes) ---------------------------------------------
+# A védőforma-CÍMKE (6-0, 5-1) azt mondja, hány sávban állnak; a fal
+# ALAKJA azt, hogy a valóságban hova tömörülnek. Két ugyanúgy "6-0"-nak
+# címkézett fal teljesen más lehet: az egyik a hatoson tömör, a másik a
+# 9-esen lép ki, a harmadik az egyik oldalra csúszik. A támadó-oldali
+# figura-alakok (setplays.setplay_shapes) tükre a védekező csapatra.
+DSH_MERGE_THRESHOLD = 0.15   # ekkora rács-távolságon belül egy fal-alak
+DSH_MIN_ATTACKS = 4          # alakonként ennyi védekezett támadás kell
+DSH_GAP_PP = 20.0            # ekkora (százalékpontos) rés számít érdeminek
+DSH_GK_MAX_M = 2.0           # ennél közelebb a SAJÁT kapuhoz: kapus, kimarad
+DSH_MIN_DEFENDERS = 3        # ennyi mért védő alatt a szakasz nem mérhető
+# A fal MÉLYSÉGÉNEK nevei: a súlypont távolsága a SAJÁT kaputól (m).
+DSH_DEEP_M = 9.0             # ezen belül tömör, a hatoson álló fal
+DSH_MID_M = 13.0             # eddig a 9-es vonalon, fölötte előrehúzott fal
+# Az oldal-név küszöbe: a súlypont ennyivel a felezővonalon túl kap oldalt.
+DSH_SIDE_Y_M = 2.0
+# A gól a szakaszhoz tartozik, ha a szakaszban vagy ennyi másodpercen
+# belül utána esett (a figura-rétegekkel azonos ablak).
+DSH_SHOT_TAIL_S = 3.0
+
+
+def _wall_metrics(shape: list, bins_x: int = 6, bins_y: int = 3) -> tuple:
+    """A fal alakjának mérőszámai: (mélység a SAJÁT kaputól méterben,
+    oldalirányú széthúzottság méterben, a súlypont y-ja)."""
+    from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+
+    w = sum(shape) or 1.0
+    cx = cy = 0.0
+    for i, v in enumerate(shape):
+        ix, iy = i % bins_x, i // bins_x
+        cx += v * (ix + 0.5) / bins_x * COURT_LENGTH_M
+        cy += v * (iy + 0.5) / bins_y * COURT_WIDTH_M
+    cx /= w
+    cy /= w
+    szoras = 0.0
+    for i, v in enumerate(shape):
+        iy = i // bins_x
+        y = (iy + 0.5) / bins_y * COURT_WIDTH_M
+        szoras += v * (y - cy) ** 2
+    szoras = (szoras / w) ** 0.5
+    return (COURT_LENGTH_M - cx, szoras, cy)
+
+
+def _wall_zone(shape: list, bins_x: int = 6, bins_y: int = 3) -> str:
+    """Edzői név a fal alakjához, a VÉDEKEZŐ csapat szemszögéből.
+
+    A rács a TÁMADÓ irányához normált (a védett kapu a +x oldalon), a két
+    csapat pedig szemben áll — ezért az oldal-nevet TÜKRÖZZÜK: ami a
+    támadó bal oldala, az a védekezőnek jobb. (A tükrözés-őr pont ezt
+    nézi: a pályára tükrözött meccsen minden oldal-névnek fordulnia
+    kell.)
+    """
+    from .calibration import COURT_WIDTH_M
+
+    tavolsag, _szoras, cy = _wall_metrics(shape, bins_x, bins_y)
+    fel = COURT_WIDTH_M / 2
+    # Tükrözött oldal: a támadó jobb oldala (cy > fel) a védő BAL oldala.
+    oldal = ("bal oldal" if cy > fel + DSH_SIDE_Y_M
+             else "jobb oldal" if cy < fel - DSH_SIDE_Y_M else "közép")
+    melyseg = ("tömören a hatoson" if tavolsag <= DSH_DEEP_M
+               else "a 9-es vonalon" if tavolsag <= DSH_MID_M
+               else "előrehúzva")
+    return f"{melyseg} ({tavolsag:.1f} m), {oldal}"
+
+
+def _wall_signature(seq, defending_team, config, bins_x: int = 6,
+                    bins_y: int = 3):
+    """A védekező csapat rácsa egy támadás-szakaszban, a TÁMADÓ irányához
+    normálva (mindig a +x kapu felé), kapus nélkül. None, ha nincs elég
+    mért védő."""
+    from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+    from .setplays import attack_direction
+
+    dirn = attack_direction(seq)
+    goal_x = config.own_goal_x(defending_team)
+    grid = [0.0] * (bins_x * bins_y)
+    total = 0.0
+    vedok = set()
+    for f in seq.frames:
+        for p in f.players:
+            if p.team != defending_team:
+                continue
+            if abs(p.x - goal_x) <= DSH_GK_MAX_M:
+                continue                      # kapus
+            x, y = ((p.x, p.y) if dirn > 0
+                    else (COURT_LENGTH_M - p.x, COURT_WIDTH_M - p.y))
+            ix = min(bins_x - 1, max(0, int(x / COURT_LENGTH_M * bins_x)))
+            iy = min(bins_y - 1, max(0, int(y / COURT_WIDTH_M * bins_y)))
+            grid[iy * bins_x + ix] += 1.0
+            total += 1.0
+            vedok.add(getattr(p, "track_id", None))
+    if total <= 0 or len(vedok) < DSH_MIN_DEFENDERS:
+        return None
+    return [v / total for v in grid]
+
+
+def _wall_verdict(rows: list) -> Optional[str]:
+    """A két legtöbbet használt, elég mintás fal-alak hozam-különbsége."""
+    eleg = [r for r in rows if r["attacks"] >= DSH_MIN_ATTACKS]
+    if len(eleg) < 2:
+        return None
+    jo = min(eleg, key=lambda r: r["goal_pct"])       # nekik jó fal
+    rossz = max(eleg, key=lambda r: r["goal_pct"])    # ellenük jó fal
+    if rossz["goal_pct"] - jo["goal_pct"] < DSH_GAP_PP:
+        return None
+    return (f"kétféle falat állítanak: {jo['zone']} ellen "
+            f"{jo['goal_pct']:.0f}%-ot kapnak ({jo['goals']}/"
+            f"{jo['attacks']} támadás), {rossz['zone']} ellen viszont "
+            f"{rossz['goal_pct']:.0f}%-ot ({rossz['goals']}/"
+            f"{rossz['attacks']}) — a gyengébb falukat kell kihozni "
+            "belőlük: gyors indítás, korai befejezés, mielőtt a másik "
+            "alak felállna")
+
+
+def defense_shapes(match: Match, config: Optional[TacticsConfig] = None,
+                   threshold: float = DSH_MERGE_THRESHOLD,
+                   min_length: int = 5) -> dict:
+    """Fal-alak: HOGYAN ÁLL A FALUK valójában — alak szerint, hozammal.
+
+    A védőforma-címke (`tactics.detect_formation`: 6-0, 5-1) a sávok
+    számát mondja, a `vs_formation` réteg e címkék szerint méri a
+    hozamot. Ez a réteg a fal TÉNYLEGES ALAKJÁT nézi: minden védekezett
+    támadás-szakaszban a védők (kapus nélkül) eloszlását 6×3-as rácsra
+    vetjük a TÁMADÓ irányához normálva, és a hasonló alakokat egy falnak
+    vesszük (`threshold`). Falanként megszámoljuk a védekezett
+    támadásokat és a kapott gólokat.
+
+    Edzőileg ez a "melyik falukat keressük" kérdés. Ugyanaz a 6-0 lehet a
+    hatoson tömör (nehéz bejutni) és lehet a 9-esen kilépő vagy oldalra
+    csúszott (ott van a hozam) — az ítélet azt mondja meg, melyik
+    alakjuk ellen terem a gól, és hogy azt a gyors, korai befejezéssel
+    lehet kikényszeríteni, mielőtt a másik alak felállna.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ csapat): {"shapes":
+    [{"shape", "zone", "attacks", "goals", "goal_pct"}] (védekezett
+    támadás szerint csökkenő), "verdict": mondat | None} — ítélet csak
+    KÉT, legalább DSH_MIN_ATTACKS támadást védekezett alaknál és
+    DSH_GAP_PP százalékpontos résnél (sose hallgatólagos 0).
+    """
+    from .event_detection import EventType, detect_shots
+    from .setplays import cluster_signatures, segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(DSH_SHOT_TAIL_S * fps)
+    shots_ev = [e for e in detect_shots(match, config)
+                if e.type in (EventType.SHOT, EventType.GOAL)]
+    out: dict = {}
+    for defending in (Team.HOME, Team.AWAY):
+        tamado = Team.AWAY if defending == Team.HOME else Team.HOME
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == tamado]
+        merheto, sigs = [], []
+        for s_ in seqs:
+            sig = _wall_signature(s_, defending, config)
+            if sig is None:
+                continue
+            merheto.append(s_)
+            sigs.append(sig)
+        rows: list = []
+        if sigs:
+            labels = cluster_signatures(sigs, threshold=threshold)
+            agg: dict = {}
+            for s_, sig, lab in zip(merheto, sigs, labels):
+                rec = agg.setdefault(lab, {"sum": [0.0] * len(sig),
+                                           "attacks": 0, "goals": 0})
+                rec["sum"] = [a + b for a, b in zip(rec["sum"], sig)]
+                rec["attacks"] += 1
+                if any(e.team == tamado and e.type == EventType.GOAL
+                       and s_.start_t <= e.t <= s_.end_t + tail
+                       for e in shots_ev):
+                    rec["goals"] += 1
+            for rec in agg.values():
+                shape = [round(v / rec["attacks"], 4) for v in rec["sum"]]
+                rows.append({
+                    "shape": shape, "zone": _wall_zone(shape),
+                    "attacks": rec["attacks"], "goals": rec["goals"],
+                    "goal_pct": round(100.0 * rec["goals"]
+                                      / max(1, rec["attacks"]), 1)})
+            rows.sort(key=lambda r: -r["attacks"])
+        out[defending.value] = {"shapes": rows, "verdict": _wall_verdict(rows)}
+    return out
+
+
+def defense_shape_summary(rows: list,
+                          threshold: float = DSH_MERGE_THRESHOLD) -> dict:
+    """Több meccs fal-alak sorai összefésülve — a felderítés képe.
+
+    `rows`: [{"shape", "attacks", "goals", ...}] (a ScoutingReport lapos,
+    összegezhető sorai). A hasonló alakokat súlyozott középponttal
+    vonjuk össze, a darabszámokat összeadjuk — így két meccs, amelyben
+    külön-külön kevés volt a minta, együtt már ítéletet ad.
+
+    Visszatérés: {"shapes": [...], "verdict": mondat | None}.
+    """
+    from .setplays import _distance
+
+    konyv: list = []
+    for row in sorted(rows or [], key=lambda r: -int(r.get("attacks", 0))):
+        shape = list(row.get("shape") or [])
+        if not shape:
+            continue
+        legjobb, legjobb_d = None, threshold
+        for k in konyv:
+            d = _distance(shape, k["shape"])
+            if d <= legjobb_d:
+                legjobb, legjobb_d = k, d
+        n = int(row.get("attacks", 0))
+        if legjobb is None:
+            legjobb = {"shape": shape, "attacks": 0, "goals": 0}
+            konyv.append(legjobb)
+        m = legjobb["attacks"]
+        legjobb["shape"] = [(a * m + b * n) / max(1, m + n)
+                            for a, b in zip(legjobb["shape"], shape)]
+        legjobb["attacks"] += n
+        legjobb["goals"] += int(row.get("goals", 0))
+    shapes = []
+    for k in konyv:
+        shape = [round(v, 4) for v in k["shape"]]
+        shapes.append({"shape": shape, "zone": _wall_zone(shape),
+                       "attacks": k["attacks"], "goals": k["goals"],
+                       "goal_pct": round(100.0 * k["goals"]
+                                         / max(1, k["attacks"]), 1)})
+    shapes.sort(key=lambda r: -r["attacks"])
+    return {"shapes": shapes, "verdict": _wall_verdict(shapes)}

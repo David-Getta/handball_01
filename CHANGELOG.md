@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.127 óta)
 
+- **Fal-alak** (új réteg): HOGYAN ÁLL A FALUK valójában. A védőforma-
+  címke (6-0, 5-1) a sávok számát mondja; ez a réteg minden védekezett
+  támadásban a védők tényleges eloszlását nézi (kapus nélkül), a hasonló
+  alakokat egy falnak veszi, és falanként számolja a védekezett
+  támadásokat és a kapott gólokat. Edzői olvasat: "a tömör, hatoson álló
+  faluk ellen 0%-ot, a 9-es vonalon álló ellen 100%-ot hoztunk — a
+  gyengébb alakjukat gyors indítással, korai befejezéssel lehet
+  kihozni". A fal oldalát a VÉDEKEZŐ csapat szemszögéből nevezi meg.
+  Felületek: elemzés-válasz és meccs-csomag, edzői összefoglaló,
+  felderítés (lapos, összegezhető sorok, edzői kulcs, 462. meccsterv-
+  szabály a kontra-hajlandósággal párosítva), 481. edzés-szabály (a
+  saját falunk két alakja közti szakadékra visszarendeződés-gyakorlat),
+  kliens-csempe.
+
 ## v0.1.127 — kiadva (2026-09-13)
 
 > Kiadás-jegyzet: új réteg — a bejött figurát rögtön újra hozzák-e a

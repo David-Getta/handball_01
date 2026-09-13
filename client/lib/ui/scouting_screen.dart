@@ -10010,6 +10010,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return v;
   }
 
+  // Fal-alak: a védőforma-címke (6-0, 5-1) mellett az alak — hova
+  // tömörül a faluk valójában, és melyik alakjuk ellen terem a gól. Az
+  // ítéletet a backend hozza (legalább 4 védekezett támadás alakonként,
+  // 20 százalékpont rés — a küszöbök a motorban élnek).
+  String? _defenseShapes(Map<String, dynamic> r) {
+    final d = r["defense_shapes"];
+    if (d is! Map) return null;
+    final v = d["verdict"];
+    if (v is! String || v.isEmpty) return null;
+    return v;
+  }
+
   // Figura-ismétlés döntése: a bejött figurát rögtön újra hozzák-e. A
   // darabszámokból itt számolunk arányt (a mezők meccsek közt
   // összegződnek); a küszöbök a backenddel azonosak: sávonként legalább
@@ -11690,6 +11702,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Figura × védőforma", _figureVsFormation(r)!],
       if (_setplayRepeatChoice(r) != null)
         ["Figura-ismétlés a gól után", _setplayRepeatChoice(r)!],
+      if (_defenseShapes(r) != null)
+        ["Fal-alak", _defenseShapes(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],
