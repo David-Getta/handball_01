@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.128 óta)
+## Kiadatlan (a v0.1.129 óta)
+
+## v0.1.129 — kiadva (2026-09-13)
+
+> Kiadás-jegyzet: megújult dizájn — az új márkajel a telepítőtől a
+> nyomtatható jelentésig, és összeálló logó a nyitóképernyőn.
 
 - **Új márkajel az egész terméken** (márka): a Sport Machine logója
   lecserélve a végleges jelre — négy ék két átlós sávban, sötét csempén
