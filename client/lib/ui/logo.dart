@@ -238,3 +238,119 @@ class _LogoPainter extends CustomPainter {
       old.duo != duo ||
       old.progress != progress;
 }
+
+/// A SPORTMACHINE SZÓKÉP — RAJZOLT betűkkel, nem fonttal.
+///
+/// A márka forrása `packaging/brand/sportmachine-wordmark-*.svg`, és
+/// ugyanezek a betű-útvonalak élnek a nyomtatható jelentésekben is
+/// (`report_html.WORDMARK_LETTERS`). Verzálmagasság 72, a SPORT vonala
+/// 14, a MACHINE-é 6; minden sarok 45°-ra letörve, a végződések laposak,
+/// a sarkok mitráltak. Így a szókép betűtípus nélkül, minden gépen és
+/// minden méretben ugyanaz — és nem lehet véletlenül "újraszedni".
+class SportMachineWordmark extends StatelessWidget {
+  /// A szókép MAGASSÁGA képpontban (a szélesség ebből adódik).
+  final double height;
+
+  /// Sötét felületre (papír-fehér + halvány szürke) vagy világosra
+  /// (tinta + szürke).
+  final bool dark;
+
+  /// Egy súly: a MACHINE is a vastag vonallal — kis méretre, ahol a
+  /// vékony szár eltűnne (a márkakönyv "single-weight" változata).
+  final bool singleWeight;
+
+  const SportMachineWordmark(
+      {super.key,
+      this.height = 22,
+      this.dark = true,
+      this.singleWeight = false});
+
+  static const double boxW = 840.0;
+  static const double boxH = 72.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: height * boxW / boxH,
+      height: height,
+      child: CustomPaint(
+        painter: _WordmarkPainter(dark: dark, singleWeight: singleWeight),
+        isComplex: false,
+      ),
+    );
+  }
+}
+
+class _WordmarkPainter extends CustomPainter {
+  final bool dark;
+  final bool singleWeight;
+  _WordmarkPainter({required this.dark, required this.singleWeight});
+
+  /// (útvonal, vízszintes eltolás a 840-es sorban, vonalvastagság).
+  /// A betűk CSAK M (mozgás) és L (vonal) parancsokból állnak.
+  static const List<(String, double, double)> letters = [
+    ("M53 21 L39 7 L21 7 L7 21 L7 29 L14 36 L46 36 L53 43 L53 51 L39 65 "
+        "L21 65 L7 51", 0, 14),
+    ("M7 65 L7 7 L39 7 L53 21 L53 26 L39 40 L7 40", 72, 14),
+    ("M7 23 L23 7 L37 7 L53 23 L53 49 L37 65 L23 65 L7 49 Z", 144, 14),
+    ("M7 65 L7 7 L39 7 L53 21 L53 26 L39 40 L7 40 M33 40 L53 65", 216, 14),
+    ("M7 7 L53 7 M30 7 L30 65", 288, 14),
+    ("M7 65 L7 7 L34 40 L61 7 L61 65", 370, 6),
+    ("M7 65 L7 21 L21 7 L39 7 L53 21 L53 65 M7 44 L53 44", 450, 6),
+    ("M53 21 L39 7 L21 7 L7 21 L7 51 L21 65 L39 65 L53 51", 522, 6),
+    ("M7 7 L7 65 M53 7 L53 65 M7 36 L53 36", 594, 6),
+    ("M15 7 L15 65", 666, 6),
+    ("M7 65 L7 7 L53 65 L53 7", 708, 6),
+    ("M53 7 L7 7 L7 65 L53 65 M7 36 L41 36", 780, 6),
+  ];
+
+  /// A betű útvonalának felépítése: "M x y L x y … [Z]" — a márka
+  /// SVG-jében csak ez a három parancs szerepel.
+  Path _parse(String d, double dx, double s) {
+    final path = Path();
+    var i = 0;
+    final darabok = d.split(RegExp(r"[\s,]+"));
+    while (i < darabok.length) {
+      final t = darabok[i];
+      if (t == "Z" || t == "z") {
+        path.close();
+        i += 1;
+        continue;
+      }
+      final parancs = t[0];
+      final elso = t.length > 1 ? t.substring(1) : darabok[++i];
+      final x = (double.parse(elso) + dx) * s;
+      final y = double.parse(darabok[++i]) * s;
+      if (parancs == "M") {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+      i += 1;
+    }
+    return path;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.height / SportMachineWordmark.boxH;
+    final eros = dark ? _LogoPainter.paper : _LogoPainter.ink;
+    final halk = dark ? const Color(0xFF93A0B4) : const Color(0xFF5C6676);
+    for (final (d, dx, vastag) in letters) {
+      final egySuly = singleWeight;
+      canvas.drawPath(
+        _parse(d, dx, s),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (egySuly ? 14.0 : vastag) * s
+          ..strokeCap = StrokeCap.butt
+          ..strokeJoin = StrokeJoin.miter
+          ..color = (vastag == 14 || egySuly) ? eros : halk,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WordmarkPainter old) =>
+      old.dark != dark || old.singleWeight != singleWeight;
+}

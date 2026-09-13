@@ -52,6 +52,59 @@ def brand_svg(size: int = 16) -> str:
         f'{ekek}</g></svg>')
 
 
+# A SZÓKÉP (SPORTMACHINE) RAJZOLT betűkkel — nem font, hanem vonalak: a
+# márka forrása packaging/brand/sportmachine-wordmark-*.svg. Verzálmagasság
+# 72, a SPORT vonala 14, a MACHINE-é 6; minden sarok 45°-ra letörve. A
+# betűk csak M (mozgás) és L (vonal) parancsokból állnak, a `translate` a
+# betű helye a 840 széles sorban.
+WORDMARK_BOX = (840.0, 72.0)
+WORDMARK_LETTERS = (
+    ("M53 21 L39 7 L21 7 L7 21 L7 29 L14 36 L46 36 L53 43 L53 51 L39 65 "
+     "L21 65 L7 51", 0, 14),
+    ("M7 65 L7 7 L39 7 L53 21 L53 26 L39 40 L7 40", 72, 14),
+    ("M7 23 L23 7 L37 7 L53 23 L53 49 L37 65 L23 65 L7 49 Z", 144, 14),
+    ("M7 65 L7 7 L39 7 L53 21 L53 26 L39 40 L7 40 M33 40 L53 65", 216, 14),
+    ("M7 7 L53 7 M30 7 L30 65", 288, 14),
+    ("M7 65 L7 7 L34 40 L61 7 L61 65", 370, 6),
+    ("M7 65 L7 21 L21 7 L39 7 L53 21 L53 65 M7 44 L53 44", 450, 6),
+    ("M53 21 L39 7 L21 7 L7 21 L7 51 L21 65 L39 65 L53 51", 522, 6),
+    ("M7 7 L7 65 M53 7 L53 65 M7 36 L53 36", 594, 6),
+    ("M15 7 L15 65", 666, 6),
+    ("M7 65 L7 7 L53 65 L53 7", 708, 6),
+    ("M53 7 L7 7 L7 65 L53 65 M7 36 L41 36", 780, 6),
+)
+
+
+def wordmark_svg(height: int = 22, dark: bool = False) -> str:
+    """A SPORTMACHINE szókép SVG-je adott magassággal.
+
+    `dark=False`: világos (nyomtatható) háttérre — SPORT tintával,
+    MACHINE szürkével; `dark=True`: sötét felületre (papír-fehér és
+    halvány szürke). A betűk RAJZOLTAK: a jelentés önálló fájl, betűtípus
+    nélkül is ugyanígy néz ki minden gépen.
+    """
+    eros = "#EAEEF5" if dark else "#06121F"
+    halk = "#93A0B4" if dark else "#5C6676"
+    w = round(WORDMARK_BOX[0] * height / WORDMARK_BOX[1])
+    betuk = "".join(
+        f'<path d="{d}" transform="translate({dx} 0)" fill="none" '
+        f'stroke="{eros if sw == 14 else halk}" stroke-width="{sw}" '
+        'stroke-linecap="butt" stroke-linejoin="miter"/>'
+        for d, dx, sw in WORDMARK_LETTERS)
+    return (f'<svg width="{w}" height="{height}" '
+            f'viewBox="0 0 {WORDMARK_BOX[0]:.0f} {WORDMARK_BOX[1]:.0f}" '
+            'style="vertical-align:-3px" '
+            f'xmlns="http://www.w3.org/2000/svg">{betuk}</svg>')
+
+
+def lockup_svg(height: int = 22, dark: bool = False) -> str:
+    """JEL + SZÓKÉP egymás mellett (a márka vízszintes lockupja)."""
+    return (f'<span style="display:inline-flex;align-items:center;gap:'
+            f'{max(4, height // 3)}px;vertical-align:-3px">'
+            + brand_svg(int(round(height * 1.15)))
+            + wordmark_svg(height, dark) + '</span>')
+
+
 # Ennyi szekció alatt nincs tartalomjegyzék: két-három címhez nem kell
 # navigáció, a jegyzék csak elveszi a helyet az első oldalról.
 TOC_MIN_SECTIONS = 4
@@ -665,7 +718,7 @@ def scouting_report_html(rep: ScoutingReport,
 <body>
 <div class="page">
   <header>
-    <div class="brand">{brand_svg()}Sport Machine · Felderítő jelentés</div>
+    <div class="brand">{lockup_svg(18)}<span class="brand-lap"> · Felderítő jelentés</span></div>
     <h1>{name}</h1>
     <div class="sub">{escape(matches)} · fő védekezés: <b>{escape(rep.defense_main)}</b></div>
   </header>
@@ -3454,7 +3507,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
 <body>
 <div class="page">
   <header>
-    <div class="brand">{brand_svg()}Sport Machine · Meccsjelentés</div>
+    <div class="brand">{lockup_svg(18)}<span class="brand-lap"> · Meccsjelentés</span></div>
     <h1>{home} <span style="color:#8492A6">vs</span> {away}</h1>
     <div class="sub">Elemzett szakasz: {dur_s / 60:.1f} perc · felismert gólok: {goals_h}–{goals_a}</div>
     {header_extra}
@@ -4029,7 +4082,7 @@ def player_report_html(match, track_id: int) -> str:
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">{brand_svg()}SPORT MACHINE · JÁTÉKOS-LAP</div>
+  <div class="brand">{lockup_svg(18)}<span class="brand-lap"> · JÁTÉKOS-LAP</span></div>
   <h1>{escape(row['label'])} — {escape(team_name)}</h1>
   <div class="sub">{escape(sub)}</div>
 </header>
@@ -4113,7 +4166,7 @@ def trend_report_html(tr: dict) -> str:
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">{brand_svg()}SPORT MACHINE · FEJLŐDÉS-RIPORT</div>
+  <div class="brand">{lockup_svg(18)}<span class="brand-lap"> · FEJLŐDÉS-RIPORT</span></div>
   <h1>{escape(name)}</h1>
   <div class="sub">Régebbi időszak: {tr.get("older_matches", 0)} meccs ·
   Újabb időszak: {tr.get("newer_matches", 0)} meccs — a darabszám-mutatók
@@ -4327,7 +4380,7 @@ def player_season_html(team: str, jersey: int, points: list[dict],
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">{brand_svg()}SPORT MACHINE · SZEZON-LAP</div>
+  <div class="brand">{lockup_svg(18)}<span class="brand-lap"> · SZEZON-LAP</span></div>
   <h1>{escape(ki)} — {escape(team)}</h1>
   <div class="sub">{n} elemzett meccs, időrendben.</div>
 </header>
@@ -4423,7 +4476,7 @@ def training_plan_html(team: str, n_matches: int,
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">{brand_svg()}SPORT MACHINE · EDZÉSTERV</div>
+  <div class="brand">{lockup_svg(18)}<span class="brand-lap"> · EDZÉSTERV</span></div>
   <h1>{escape(team)}</h1>
   <div class="sub">{n_matches} elemzett meccs alapján.</div>
 </header>
@@ -4597,7 +4650,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">{brand_svg()}SPORT MACHINE · SZEZON-RIPORT</div>
+  <div class="brand">{lockup_svg(18)}<span class="brand-lap"> · SZEZON-RIPORT</span></div>
   <h1>{escape(team)}</h1>
   <div class="sub">{n_matches} elemzett meccs — az első és a második
   fele automatikusan összevetve ({tr.get("older_matches", 0)} vs
@@ -4686,7 +4739,7 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
 </head>
 <body><div class="page">
 <header>
-  <div class="brand">{brand_svg()}SPORT MACHINE · EGYMÁS ELLEN</div>
+  <div class="brand">{lockup_svg(18)}<span class="brand-lap"> · EGYMÁS ELLEN</span></div>
   <h1>{escape(team_a)} vs {escape(team_b)}</h1>
   <div class="sub">{stats.get("matches", 0)} elemzett egymás elleni
   meccs a könyvtárból.</div>

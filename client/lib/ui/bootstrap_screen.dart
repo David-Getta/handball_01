@@ -140,7 +140,9 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
                 else
                   const SportMachineLogo(size: 66),
                 const SizedBox(height: AppSpacing.lg),
-                const Text("SPORT MACHINE", style: AppText.brand),
+                // A márka RAJZOLT szóképe (nem font): minden gépen
+                // ugyanaz a betűkép, méretfüggetlenül éles.
+                const SportMachineWordmark(height: 26),
                 const SizedBox(height: 4),
                 Text("Kézilabda-elemző", style: AppText.subtitle),
                 const SizedBox(height: AppSpacing.xl),

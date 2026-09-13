@@ -793,9 +793,13 @@ class _SideNavState extends State<_SideNav> {
     return Row(children: [
       logo,
       const SizedBox(width: AppSpacing.md),
+      // A márka RAJZOLT szóképe a gépelt név helyett — a fejlécben a
+      // kis magasság miatt EGY SÚLLYAL (a vékony MACHINE-szár ekkora
+      // méretben eltűnne).
       const Expanded(
-          child: Text("SPORT MACHINE",
-              style: AppText.brand, overflow: TextOverflow.ellipsis)),
+          child: Align(
+              alignment: Alignment.centerLeft,
+              child: SportMachineWordmark(height: 14, singleWeight: true))),
     ]);
   }
 

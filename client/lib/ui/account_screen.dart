@@ -15,6 +15,7 @@ import "anim.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
 import "error_text.dart";
+import "logo.dart";
 import "update_flow.dart";
 import "terms_screen.dart";
 
@@ -209,7 +210,7 @@ class _AccountScreenState extends State<AccountScreen> {
                         color: AppColors.onAccent, size: 30),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  const Text("SPORT MACHINE", style: AppText.brand),
+                  const SportMachineWordmark(height: 22),
                   const SizedBox(height: 4),
                   Text(
                     _registerMode ? "Fiók létrehozása" : "Belépés",

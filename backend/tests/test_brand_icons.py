@@ -174,5 +174,67 @@ def test_a_nyomtathato_jelentes_is_viseli_a_jelkepet():
         assert szin in svg, f"hiányzó márka-szín: {szin}"
     src = (GYOKER / "backend" / "handball" / "pipeline"
            / "report_html.py").read_text(encoding="utf-8")
-    assert src.count('class="brand"') == src.count("{brand_svg()}"), (
+    # Minden fejléc a márka LOCKUPJÁT viseli (jel + rajzolt szókép).
+    assert src.count('class="brand"') == src.count("{lockup_svg(18)}"), (
         "van olyan jelentés-fejléc, ami nem viseli a jelképet")
+
+
+def test_a_szokep_rajzolt_es_egyezik_a_marka_forrasaval():
+    """A SPORTMACHINE szókép RAJZOLT betű, nem font: a jelentés önálló
+    fájl, és betűtípus nélkül is ugyanígy kell kinéznie. A betűk
+    geometriája a márka SVG-jéből való — ha a dizájner újat ad, a
+    rajzolóknak követniük kell."""
+    import re
+
+    from handball.pipeline.report_html import (WORDMARK_LETTERS,
+                                               wordmark_svg)
+
+    svg = (GYOKER / "packaging" / "brand"
+           / "sportmachine-wordmark-ink.svg").read_text(encoding="utf-8")
+    svg_betuk = re.findall(
+        r'<path d="([^"]+)"\s+transform="translate\(([-\d.]+)[^)]*\)"'
+        r'[^>]*stroke-width="([^"]+)"', svg)
+    assert len(svg_betuk) == 12, "a szókép 12 betűből áll (SPORTMACHINE)"
+    sajat = [(d, float(dx), float(sw)) for d, dx, sw in WORDMARK_LETTERS]
+    forras = [(d, float(dx), float(sw)) for d, dx, sw in svg_betuk]
+    assert sajat == forras, "a rajzolt szókép eltér a márka SVG-jétől"
+    # A SPORT vastag, a MACHINE vékony — a két súly a márka lényege.
+    assert [sw for _d, _dx, sw in sajat][:5] == [14] * 5
+    assert [sw for _d, _dx, sw in sajat][5:] == [6] * 7
+    ki = wordmark_svg(20)
+    assert ki.startswith("<svg") and 'height="20"' in ki
+    assert "<img" not in ki and "src=" not in ki, "külső kép a jelentésben"
+    # Világos háttéren tinta, sötéten papír-fehér.
+    assert "#06121F" in ki and "#EAEEF5" in wordmark_svg(20, dark=True)
+
+
+def test_a_kliens_a_rajzolt_szokepet_hasznalja():
+    """A SPORTMACHINE név a felületen is RAJZOLT betű, nem rendszer-font:
+    a nyitóképernyőn, a fiók-lapon és az oldalsávban. A betűk geometriája
+    ugyanaz, mint a nyomtatható jelentésekben — sorrendben összevetve."""
+    import re
+
+    from handball.pipeline.report_html import WORDMARK_LETTERS
+
+    ui = GYOKER / "client" / "lib" / "ui"
+    logo = (ui / "logo.dart").read_text(encoding="utf-8")
+    assert "class SportMachineWordmark" in logo
+    blokk = logo.split("letters = [")[1].split("\n  ];")[0]
+    # A Dart a hosszú útvonalat két idézőjeles darabra tördeli (szomszédos
+    # sztringek összefűzése) — előbb összevonjuk, majd SORRENDBEN vetjük
+    # össze a motor betűivel.
+    blokk = re.sub(r'"\s*\n\s*"', "", blokk)
+    dart_utak = re.findall(r'"((?:M|L)[^"]*)"', blokk)
+    py_utak = [d for d, _dx, _sw in WORDMARK_LETTERS]
+    assert len(dart_utak) == len(py_utak) == 12
+    for d_, p_ in zip(dart_utak, py_utak):
+        assert d_.replace(" ", "") == p_.replace(" ", ""), (d_, p_)
+    for f in ("bootstrap_screen.dart", "account_screen.dart",
+              "shell/app_shell.dart"):
+        src = (ui / f).read_text(encoding="utf-8")
+        assert "SportMachineWordmark" in src, f"{f}: nincs benne a szókép"
+        assert 'Text("SPORT MACHINE"' not in src, (
+            f"{f}: még mindig gépelt névvel írja a márkát")
+    # Az oldalsávban egy súllyal (a vékony szár kis méretben eltűnne).
+    shell = (ui / "shell" / "app_shell.dart").read_text(encoding="utf-8")
+    assert "singleWeight: true" in shell

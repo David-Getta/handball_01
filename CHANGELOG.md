@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.129 óta)
 
+- **Márka-szókép: a SPORTMACHINE név is rajzolt betű** (márka): a
+  dizájner új csomagjából a szókép (SPORT vastagon, MACHINE vékonyan,
+  45°-ra letört sarkokkal) és a vízszintes lockup is bekerült. A
+  nyomtatható jelentések fejlécében mostantól a jel + szókép áll a
+  gépelt név helyett, az appban pedig a nyitóképernyőn, a fiók-lapon és
+  az oldalsávban (ott egy súllyal, mert a vékony szár kis méretben
+  eltűnne). A betűk VONALAK, nem betűtípus: minden gépen és minden
+  méretben ugyanaz a kép, és őr-teszt veti össze a márka SVG-jét, a
+  jelentés-rajzolót és a kliens rajzát.
+
 - **Az illeszkedés-mérés jó kalibrációra is „nem mérhető"-t mondott**
   (hibajavítás): a homográfia skálázás erejéig határozott, tehát a
   megoldó a mátrix (−1)-szeresét is visszaadhatja — ugyanaz a leképezés.
