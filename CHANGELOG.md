@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.126 óta)
+## Kiadatlan (a v0.1.127 óta)
+
+## v0.1.127 — kiadva (2026-09-13)
+
+> Kiadás-jegyzet: új réteg — a bejött figurát rögtön újra hozzák-e a
+> gól után.
 
 - **Figura-ismétlés a gól után** (új réteg): a bejött figurát rögtön
   újra hozzák-e. A csapat egymást követő támadásait figurák szerint
