@@ -78,6 +78,24 @@ váltanak"; rés nélkül, de mindkét sávban `SRC_HIGH_PCT` (60%) fölött
 fal-váltásaitokkal köti össze (mikor időzítsétek a váltást), a 480.
 edzés-szabály a saját kiszámíthatóságunkra ad második nyitást.
 
+## Figura-állás (mit hoznak vezetve, mit hátrányban)
+
+A `setplay_by_score` a figura-alakokat az EREDMÉNYJELZŐVEL keresztezi: a
+támadás-szakaszokat alak szerint klaszterezi, és minden szakaszt a
+KEZDETÉNEK állására ír (vezet / döntetlen / hátrányban), majd
+állapotonként számolja a támadást, a gólt és a figura részarányát. Az
+ítélet akkor szólal meg, ha egy figura részaránya két állapot között
+legalább `SBS_GAP_PP` (25) százalékponttal tér el, és mindkét
+állapotban van legalább `SBS_MIN_ATTACKS` (5) mért figura-támadás.
+
+Edzőileg ez az állásfüggő felkészülés: ha tudjuk, hogy hátrányban a
+gyors szélső-játékra váltanak, a fal a meccs állapota szerint készülhet,
+és a hajrában nem kell kitalálni, mi jön. A felderítés lapos sorokat
+tárol (`setplay_score_rows`), a `setplay_score_summary` a meccsek közt
+összefésült képet adja; a 463. meccsterv-szabály a saját
+fal-váltásaitokkal köti össze, a 482. edzés-szabály a saját
+kiszámíthatóságunkra ad hajrá-gyakorlatot két megoldással.
+
 ## Figura × védőforma
 
 A könyvtár azt mondja, MELYIK figurát hozzák; a `figure_vs_formation`
@@ -165,7 +183,7 @@ meccseken" az, amire a régi felderítés nem készít fel.
 szakasz): a tükörkép irány-normálva egy alak; edzői nevek; a könyvtár két
 meccs (a másodikban a másik kapura támadva) között visszatérő figurát
 talál, egy meccsből nem; a VALÓDI felderítés-út; a riasztás- és a
-setplays-végpont; a meccsenkénti gyorsítótár; a gól utáni figura-
+setplays-végpont; a meccsenkénti gyorsítótár; a figura-állás (vezetve / hátrányban, kevés minta, valódi felderítés-út); a gól utáni figura-
 ismétlés (előre-lépés, váltás, kiszámíthatóság, kevés minta, a valódi
 felderítés-út és a 480. edzés-szabály); a repertoár-változás
 (új / eltűnt / maradt) és a szezon-riport szakasza. A rajz-felületek őrei a
