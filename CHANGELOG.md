@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.129 óta)
+## Kiadatlan (a v0.1.130 óta)
 
 - **Márka-szókép: a SPORTMACHINE név is rajzolt betű** (márka): a
   dizájner új csomagjából a szókép (SPORT vastagon, MACHINE vékonyan,
@@ -14,6 +14,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   eltűnne). A betűk VONALAK, nem betűtípus: minden gépen és minden
   méretben ugyanaz a kép, és őr-teszt veti össze a márka SVG-jét, a
   jelentés-rajzolót és a kliens rajzát.
+
+## v0.1.130 — kiadva (2026-09-13)
+
+> Kiadás-jegyzet: a kalibráció illeszkedés-mérése jó bejelölésre is „nem mérhető"-t mondott — javítva, és a
+> futó feldolgozás sem tűnik el egy megbicsakló lekérdezéstől.
 
 - **Az illeszkedés-mérés jó kalibrációra is „nem mérhető"-t mondott**
   (hibajavítás): a homográfia skálázás erejéig határozott, tehát a
