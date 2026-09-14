@@ -10010,6 +10010,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return v;
   }
 
+  // Figura-állás: melyik figurát hozzák vezetésnél és hátrányban. Az
+  // ítéletet a backend hozza (állapotonként legalább 5 mért
+  // figura-támadás, 25 százalékpont részarány-rés — a küszöbök a
+  // motorban élnek), a kliens a kész mondatot mutatja.
+  String? _setplayByScore(Map<String, dynamic> r) {
+    final d = r["setplay_score"];
+    if (d is! Map) return null;
+    final v = d["verdict"];
+    if (v is! String || v.isEmpty) return null;
+    return v;
+  }
+
   // Fal-alak: a védőforma-címke (6-0, 5-1) mellett az alak — hova
   // tömörül a faluk valójában, és melyik alakjuk ellen terem a gól. Az
   // ítéletet a backend hozza (legalább 4 védekezett támadás alakonként,
@@ -11704,6 +11716,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Figura-ismétlés a gól után", _setplayRepeatChoice(r)!],
       if (_defenseShapes(r) != null)
         ["Fal-alak", _defenseShapes(r)!],
+      if (_setplayByScore(r) != null)
+        ["Figura-állás", _setplayByScore(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],

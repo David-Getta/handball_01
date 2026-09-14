@@ -1260,3 +1260,133 @@ def test_a_szezon_riport_repertoar_szakasza(tmp_path):
     r = TestClient(create_app()).get("/season/report", params={"team": "A"})
     assert r.status_code == 200
     assert "Repertoár-változás" in r.text and "ELTŰNT" in r.text
+
+
+# ---- Figura-állás (setplay_by_score) ---------------------------------------
+
+
+def _sbs_match(match_id="sbs", hatrany_oldal="bal", vezetes_oldal="jobb",
+               db=5):
+    """A hazai HÁTRÁNYBAN az egyik figurát játssza, VEZETÉSNÉL a másikat.
+
+    Az állást rövid "gól-injektálásokkal" állítjuk (a labda a kapuba fut,
+    a szakasz rövidebb a támadás-küszöbnél, tehát nem lesz belőle mért
+    figura-támadás) — így a figurák tiszta állapotokba esnek.
+    """
+    frames = []
+    t = 0
+
+    def gol(hazai: bool):
+        nonlocal t
+        kapu_x, honnan = (40.0, 34.0) if hazai else (0.0, 6.0)
+        csapat = Team.HOME if hazai else Team.AWAY
+        for i in range(6):
+            x = honnan + (kapu_x - honnan) * (i + 1) / 6.0
+            frames.append(Frame(
+                t=t, players=[_pl(1, csapat, honnan, 10.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def tamadas(side: str):
+        nonlocal t
+        y = 4.0 if side == "bal" else 16.0
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, [28.0, 31.0, 34.0],
+                                             [y, y, y]))
+            t += 1
+        for _ in range(6):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    for _ in range(3):            # a vendég elhúz: a hazai hátrányban van
+        gol(hazai=False)
+    for _ in range(db):
+        tamadas(hatrany_oldal)
+    for _ in range(6):            # a hazai fordít: vezet
+        gol(hazai=True)
+    for _ in range(db):
+        tamadas(vezetes_oldal)
+    return Match(MatchMeta(match_id=match_id, home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_a_figura_allas_megmondja_mit_hoznak_vezetve_es_hatranyban():
+    """Hátrányban a bal oldali figurát játsszák, vezetésnél a jobb
+    oldalit — az ítélet ezt mondja ki, a fal az állás szerint készülhet."""
+    from handball.pipeline.setplays import (SBS_GAP_PP, SBS_MIN_ATTACKS,
+                                            setplay_by_score)
+
+    rec = setplay_by_score(_sbs_match())["home"]
+    allapotok = rec["states"]
+    assert allapotok["trailing"]["attacks"] >= SBS_MIN_ATTACKS
+    assert allapotok["leading"]["attacks"] >= SBS_MIN_ATTACKS
+    h = allapotok["trailing"]["figures"][0]
+    v = allapotok["leading"]["figures"][0]
+    assert h["zone"].startswith("bal oldal") and h["share_pct"] == 100.0
+    assert v["zone"].startswith("jobb oldal") and v["share_pct"] == 100.0
+    assert rec["verdict"] and "állásfüggően váltanak figurát" in rec["verdict"]
+    assert "hátrányban" in rec["verdict"] or "vezetésnél" in rec["verdict"]
+    assert SBS_GAP_PP <= 100.0
+    # A vendégnek nincs mért támadása: üres állapotok, nincs ítélet.
+    ures = setplay_by_score(_sbs_match())["away"]
+    assert ures["states"]["leading"]["attacks"] == 0
+    assert ures["verdict"] is None
+
+
+def test_a_figura_allas_kevés_mintanal_es_valtas_nelkul_hallgat():
+    """Kevés támadás egy állapotban → nincs ítélet. Ugyanaz a figura
+    mindkét állásban → nincs mit mondani (a részarány-rés nulla)."""
+    from handball.pipeline.setplays import setplay_by_score
+
+    keves = setplay_by_score(_sbs_match(db=2))["home"]
+    assert keves["verdict"] is None
+    ugyanaz = setplay_by_score(
+        _sbs_match(hatrany_oldal="bal", vezetes_oldal="bal"))["home"]
+    assert ugyanaz["states"]["trailing"]["attacks"] >= 5
+    assert ugyanaz["verdict"] is None
+
+
+def test_a_figura_allas_a_felderitesen_meccsek_kozt_osszeadodik():
+    """A VALÓDI felderítés-úton (scout_team → combine_reports) a lapos
+    sorok összeadódnak, és az edzői kulcs megszólal — a mezőnevek is
+    valódiak."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            scout_team)
+
+    r1 = scout_team(_sbs_match("s1", db=3), Team.HOME)
+    r2 = scout_team(_sbs_match("s2", db=3), Team.HOME)
+    assert r1.setplay_score_rows, "nincsenek lapos sorok"
+    assert r1.setplay_score["verdict"] is None, "három támadás még kevés"
+    ossz = combine_reports([r1, r2])
+    assert (len(ossz.setplay_score_rows)
+            == len(r1.setplay_score_rows) + len(r2.setplay_score_rows))
+    assert ossz.setplay_score["verdict"], ossz.setplay_score
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "llásfüggően váltanak figurát" in kulcsok
+    # 463: az ő állásfüggő váltásuk × a mi fal-váltásaink — mindkét ág.
+    from handball.pipeline.scouting import matchup_plan
+    sajat = scout_team(_sbs_match("m1", db=3), Team.HOME)
+    sajat.fsw_pairs, sajat.fsw_switches = 10, 5      # sokat váltunk
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "kössétek a váltást az ÁLLÁSHOZ" in terv
+    sajat.fsw_switches = 1                            # alig váltunk
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "az állás szerint kell behívni" in terv2
+
+
+def test_a_figura_allas_edzes_szabalya_valodi_retegbol(monkeypatch):
+    """482: a saját állásfüggő kiszámíthatóság edzés-tétele a VALÓDI
+    rétegből. A tétel-korlátot feloldjuk (ezen a fixture-ön a régebbi
+    szabályok kitöltenék az öt helyet)."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.training import training_focus
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    tetelek = training_focus(_sbs_match("t482"))["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "Az állásunkból kiolvasható, melyik figuránk jön" in cimek

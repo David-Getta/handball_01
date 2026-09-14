@@ -2952,3 +2952,15 @@ def test_a_demoban_is_van_kapus():
     harom = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
              / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
     assert 'kapus: p.role == "kapus"' in harom
+
+
+def test_a_figura_allas_csempe_a_felderitesen():
+    """Figura-állás: melyik figurát hozzák vezetésnél és hátrányban — a
+    felderítő képernyő csempéje a motor kész mondatát mutatja, a
+    ScoutingReport VALÓDI mezőjéből."""
+    from pathlib import Path as _P
+    gyoker = _P(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "scouting_screen.dart").read_text(encoding="utf-8")
+    assert "_setplayByScore" in src and "Figura-állás" in src
+    assert 'r["setplay_score"]' in src

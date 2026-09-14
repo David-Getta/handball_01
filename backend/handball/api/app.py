@@ -6821,6 +6821,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.setplays import setplay_by_score
+            res["setplay_by_score"] = setplay_by_score(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_rebound_roles
             res["defensive_rebound_roles"] = \
                 defensive_rebound_roles(match)
@@ -9147,6 +9152,8 @@ def create_app():
                        lambda: setplay_repeat_choice(match))
                 from ..pipeline.defense import defense_shapes
                 _layer("defense_shapes", lambda: defense_shapes(match))
+                from ..pipeline.setplays import setplay_by_score
+                _layer("setplay_by_score", lambda: setplay_by_score(match))
                 from ..pipeline.defense import defensive_rebound_roles
                 _layer("defensive_rebound_roles",
                        lambda: defensive_rebound_roles(match))

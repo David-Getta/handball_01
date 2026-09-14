@@ -1383,6 +1383,27 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 482) Állásfüggően kiszámítható a támadójátékunk: ha vezetésnél és
+    # hátrányban MÁS figurára épülünk, az ellenfél az eredményjelzőről
+    # olvassa le, mi jön — a hajrára kell egy második megoldás.
+    try:
+        from .setplays import setplay_by_score
+        sbs482 = setplay_by_score(match, config)
+        for side in ("home", "away"):
+            mondat = (sbs482.get(side) or {}).get("verdict")
+            if not mondat:
+                continue
+            add(side, "támadás",
+                "Az állásunkból kiolvasható, melyik figuránk jön",
+                f"a saját játékunkban {mondat} — ezt az ellenfél is "
+                "leolvassa az eredményjelzőről",
+                "hajrá-gyakorlat két megoldással: ugyanabból az "
+                "alaphelyzetből a megszokott figura ÉS egy második "
+                "befejezés, a kispadról bekiabált jelre váltva; "
+                "vezetéses és hátrányos állást is játsszatok le")
+    except Exception:
+        pass
+
     # 481) A saját falunk két alakja közt szakadék van: ha az egyik
     # alakunk ellen sokkal többet kapunk, nem a rendszert kell cserélni,
     # hanem azt az alakot kell felállítani minden támadásnál.

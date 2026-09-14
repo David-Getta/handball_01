@@ -1214,6 +1214,196 @@ def figure_formation_summary(rows: list,
     return {"figures": figures, "verdict": verdict}
 
 
+# Figura-ÁLLÁS: az ítélethez állapotonként ennyi mért figura-támadás kell,
+# és ekkora (százalékpontos) rés számít érdeminek a figura részarányában.
+SBS_MIN_ATTACKS = 5
+SBS_GAP_PP = 25.0
+# A gól a szakaszhoz tartozik, ha a szakaszban vagy ennyi másodpercen
+# belül utána esett (a többi figura-réteggel azonos ablak).
+SBS_SHOT_TAIL_S = 3.0
+
+
+def setplay_by_score(match: Match, config: TacticsConfig | None = None,
+                     threshold: float = SPL_MERGE_THRESHOLD,
+                     min_length: int = 5) -> dict:
+    """Figura-állás: MELYIK FIGURÁT hozzák VEZETÉSNÉL és HÁTRÁNYBAN.
+
+    A figura-alakok (`setplay_shapes`) azt mondják meg, mit játszanak a
+    meccs egészén; az "állás szerint" rétegek (sprint, lövésválasztás,
+    hetes) azt, hogyan változik a játékuk az eredményjelzőtől. Ez a kettő
+    metszete: a támadás-szakaszokat irány-normált alakkal klaszterezzük,
+    és minden szakaszt a KEZDETÉNEK állására írunk (vezet / döntetlen /
+    hátrányban).
+
+    Edzőileg ez az állásfüggő felkészülés. Egy csapat vezetésnél a
+    biztos, lassú figurájára vált, hátrányban a gyors szélső-játékra —
+    ha ezt előre tudjuk, a fal a meccs állapota szerint készülhet, és a
+    hajrában nem kell kitalálni, mi jön. Az ítélet csak akkor szólal
+    meg, ha egy figura részaránya a két állapot között legalább
+    SBS_GAP_PP százalékponttal tér el, és mindkét állapotban van
+    legalább SBS_MIN_ATTACKS mért figura-támadás.
+
+    Visszatérés csapatonként: {"states": {"leading"/"level"/"trailing":
+    {"attacks", "figures": [{"shape", "zone", "attacks", "goals",
+    "share_pct"}]}}, "verdict": mondat | None} — kevés mintánál üres
+    listák és None ítélet (sose hallgatólagos 0).
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(SBS_SHOT_TAIL_S * fps)
+    esemenyek = [e for e in detect_shots(match, config)
+                 if e.type in (EventType.SHOT, EventType.GOAL)]
+    golok = sorted((e.t, getattr(e.team, "value", e.team))
+                   for e in esemenyek if e.type == EventType.GOAL)
+
+    def _allas(t: int, side: str) -> str:
+        """A hazai-vendég gólkülönbség a t kockáig, a csapat szemszögéből."""
+        h = a = 0
+        for gt, gside in golok:
+            if gt > t:
+                break
+            if gside == "home":
+                h += 1
+            else:
+                a += 1
+        d = (h - a) if side == "home" else (a - h)
+        return "leading" if d > 0 else "trailing" if d < 0 else "level"
+
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        sigs = [normalized_signature(s_) for s_ in seqs]
+        labels = cluster_signatures(sigs, threshold=threshold)
+        agg: dict = {}
+        for seq, sig, lab in zip(seqs, sigs, labels):
+            allapot = _allas(int(seq.start_t), team.value)
+            rec = agg.setdefault((lab, allapot),
+                                 {"sum": [0.0] * len(sig), "attacks": 0,
+                                  "goals": 0})
+            rec["sum"] = [x + y for x, y in zip(rec["sum"], sig)]
+            rec["attacks"] += 1
+            if any(e.team == team and e.type == EventType.GOAL
+                   and seq.start_t <= e.t <= seq.end_t + tail
+                   for e in esemenyek):
+                rec["goals"] += 1
+        states: dict = {}
+        for allapot in ("leading", "level", "trailing"):
+            sorok = []
+            ossz = sum(r["attacks"] for (l_, a_), r in agg.items()
+                       if a_ == allapot)
+            for (lab, a_), rec in agg.items():
+                if a_ != allapot:
+                    continue
+                shape = [round(v / rec["attacks"], 4) for v in rec["sum"]]
+                sorok.append({"shape": shape, "zone": shape_zone(shape),
+                              "label": int(lab),
+                              "attacks": rec["attacks"],
+                              "goals": rec["goals"],
+                              "share_pct": round(
+                                  100.0 * rec["attacks"] / max(1, ossz), 1)})
+            sorok.sort(key=lambda r: -r["attacks"])
+            states[allapot] = {"attacks": ossz, "figures": sorok}
+        out[team.value] = {"states": states,
+                           "verdict": _allas_itelet(states)}
+    return out
+
+
+def _allas_itelet(states: dict) -> Optional[str]:
+    """A legnagyobb részarány-eltérésű figura mondata két állapot között.
+
+    Csak akkor szólal meg, ha MINDKÉT összevetett állapotban van legalább
+    SBS_MIN_ATTACKS mért figura-támadás, és a részarány-rés legalább
+    SBS_GAP_PP százalékpont.
+    """
+    nevek = {"leading": "vezetésnél", "level": "döntetlennél",
+             "trailing": "hátrányban"}
+    eleg = [a for a in ("leading", "level", "trailing")
+            if (states.get(a) or {}).get("attacks", 0) >= SBS_MIN_ATTACKS]
+    if len(eleg) < 2:
+        return None
+    # Alak szerint párosítjuk az állapotokat (a klaszter-címke közös).
+    legjobb = None
+    for i, a1 in enumerate(eleg):
+        for a2 in eleg[i + 1:]:
+            f1 = {f["label"]: f for f in states[a1]["figures"]}
+            f2 = {f["label"]: f for f in states[a2]["figures"]}
+            for lab in set(f1) | set(f2):
+                r1 = f1.get(lab, {}).get("share_pct", 0.0)
+                r2 = f2.get(lab, {}).get("share_pct", 0.0)
+                res = abs(r1 - r2)
+                if legjobb is None or res > legjobb[0]:
+                    legjobb = (res, lab, a1, r1, a2, r2,
+                               (f1.get(lab) or f2.get(lab))["zone"])
+    if legjobb is None or legjobb[0] < SBS_GAP_PP:
+        return None
+    _res, _lab, a1, r1, a2, r2, zone = legjobb
+    tobb, keves = ((a1, r1), (a2, r2)) if r1 >= r2 else ((a2, r2), (a1, r1))
+    return (f"állásfüggően váltanak figurát: a(z) \"{zone}\" figurájuk "
+            f"{nevek[tobb[0]]} a támadásaik {tobb[1]:.0f}%-a, "
+            f"{nevek[keves[0]]} csak {keves[1]:.0f}% — a fal a meccs "
+            "állása szerint készülhet rá (a hajrában nem kell kitalálni, "
+            "mi jön)")
+
+
+def setplay_score_summary(rows: list,
+                          threshold: float = SPL_MERGE_THRESHOLD) -> dict:
+    """Több meccs figura-állás sorai összefésülve — a felderítés képe.
+
+    `rows`: [{"shape", "state", "attacks", "goals", …}] (a ScoutingReport
+    lapos sorai). A hasonló alakokat súlyozott középponttal vonjuk össze,
+    állapotonként összeadva a darabszámokat — így két meccs, amelyben
+    külön-külön kevés volt a minta, együtt már ítéletet ad.
+
+    Visszatérés: {"states": {állapot: {"attacks", "figures": [...]}},
+    "verdict": mondat | None} — a motoréval azonos alakban.
+    """
+    konyv: list = []
+    for row in sorted(rows or [], key=lambda r: -int(r.get("attacks", 0))):
+        shape = list(row.get("shape") or [])
+        allapot = row.get("state")
+        if not shape or not allapot:
+            continue
+        legjobb, legjobb_d = None, threshold
+        for k in konyv:
+            d = _distance(shape, k["shape"])
+            if d <= legjobb_d:
+                legjobb, legjobb_d = k, d
+        n = int(row.get("attacks", 0))
+        if legjobb is None:
+            legjobb = {"shape": shape, "attacks": 0, "states": {}}
+            konyv.append(legjobb)
+        m = legjobb["attacks"]
+        legjobb["shape"] = [(a * m + b * n) / max(1, m + n)
+                            for a, b in zip(legjobb["shape"], shape)]
+        legjobb["attacks"] += n
+        cella = legjobb["states"].setdefault(allapot,
+                                             {"attacks": 0, "goals": 0})
+        cella["attacks"] += n
+        cella["goals"] += int(row.get("goals", 0))
+    states: dict = {}
+    for allapot in ("leading", "level", "trailing"):
+        ossz = sum((k["states"].get(allapot) or {}).get("attacks", 0)
+                   for k in konyv)
+        sorok = []
+        for i, k in enumerate(konyv):
+            cella = k["states"].get(allapot)
+            if not cella or not cella["attacks"]:
+                continue
+            shape = [round(v, 4) for v in k["shape"]]
+            sorok.append({"shape": shape, "zone": shape_zone(shape),
+                          "label": i, "attacks": cella["attacks"],
+                          "goals": cella["goals"],
+                          "share_pct": round(
+                              100.0 * cella["attacks"] / max(1, ossz), 1)})
+        sorok.sort(key=lambda r: -r["attacks"])
+        states[allapot] = {"attacks": ossz, "figures": sorok}
+    return {"states": states, "verdict": _allas_itelet(states)}
+
+
 # ---- Repertoár-változás -----------------------------------------------------
 # A szezon két fele közt mi jött be és mi tűnt el a figurák közül: a saját
 # csapatnál "él-e még a beúszós kereszt", az ellenfélnél "van-e új

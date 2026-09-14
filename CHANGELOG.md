@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.131 óta)
 
+- **Figura-állás** (új réteg): MELYIK FIGURÁT hozzák vezetésnél és
+  hátrányban. A támadás-szakaszokat figurák szerint klaszterezzük, és
+  minden szakaszt a kezdetének állására írunk (vezet / döntetlen /
+  hátrányban), majd állapotonként számoljuk a támadást, a gólt és a
+  figura részarányát. Edzői olvasat: "hátrányban a bal oldali beúszós
+  figurájuk a támadásaik 80%-a, vezetésnél csak 20% — a fal az
+  eredményjelző szerint készülhet, a hajrában nem kell kitalálni, mi
+  jön". Felületek: elemzés-válasz és meccs-csomag, edzői összefoglaló,
+  felderítés (lapos, összegezhető sorok, edzői kulcs, 463. meccsterv-
+  szabály a saját fal-váltásokkal párosítva), 482. edzés-szabály (a
+  saját állásfüggő kiszámíthatóságra hajrá-gyakorlat két megoldással),
+  kliens-csempe.
+
 - **A jelentés kimondja, ha a pályavonal-ellenőrzés meg sem tudott
   szólalni** (megbízhatóság): eddig csak a GYENGE illeszkedésre
   figyelmeztetett; ha a mérés a kulcs-kockákon egyáltalán nem sikerült
