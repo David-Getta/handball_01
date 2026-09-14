@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.131 óta)
+## Kiadatlan (a v0.1.132 óta)
 
 - **Figura-állás** (új réteg): MELYIK FIGURÁT hozzák vezetésnél és
   hátrányban. A támadás-szakaszokat figurák szerint klaszterezzük, és
@@ -17,6 +17,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   szabály a saját fal-váltásokkal párosítva), 482. edzés-szabály (a
   saját állásfüggő kiszámíthatóságra hajrá-gyakorlat két megoldással),
   kliens-csempe.
+
+## v0.1.132 — kiadva (2026-09-14)
+
+> Kiadás-jegyzet: a jelentés már azt is kimondja, ha a
+> pályavonal-ellenőrzés meg sem tudott szólalni.
 
 - **A jelentés kimondja, ha a pályavonal-ellenőrzés meg sem tudott
   szólalni** (megbízhatóság): eddig csak a GYENGE illeszkedésre
