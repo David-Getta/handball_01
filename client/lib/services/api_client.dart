@@ -1056,15 +1056,19 @@ class ApiClient {
   /// megmondja, mire jutott. Kézi felülbírálás: "feher", "piros",
   /// "kek", "zold", "sarga".
   Future<Map<String, dynamic>> fetchBroadcastLines(String path,
-      {int frame = 0, String lineColor = "auto"}) async {
+      {int frame = 0, String lineColor = "auto",
+      double searchSeconds = 0}) async {
     final resp = await http
         .get(Uri.parse("$baseUrl/broadcast/lines").replace(
             queryParameters: {
               "path": path,
               "frame": "$frame",
               "line_color": lineColor,
+              // Ha ezen a kockán nem áll össze a négyszög, a motor ennyi
+              // MÁSODPERC sugarú körben keres jobb kockát (0 = nincs).
+              "search_s": "$searchSeconds",
             }))
-        .timeout(const Duration(seconds: 60));
+        .timeout(const Duration(seconds: 120));
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült a vonal-felismerés", resp));
     }

@@ -676,3 +676,64 @@ def test_a_kamera_mogotti_pont_tovabbra_is_kimarad():
     assert all(x > 0 for x, _y in pontok)
     # És tényleg maradt ki pont: a teljes rajz több csúcsból állna.
     assert len(pontok) < sum(len(v) for v in court_polylines("full"))
+
+
+def test_a_sarok_javaslat_kockat_keres_ha_kell(tmp_path):
+    """A sarok-javaslat NEM egyetlen kockán áll vagy bukik: ha a kért
+    kockán nem áll össze a négyszög (tömeg, felirat, rossz pillanat), a
+    motor a környező másodpercekben keres tisztább kockát. A válasz
+    megmondja, hány kockát nézett meg és melyiket használta — a kliens
+    oda léptet, különben a javasolt sarkok más képhez tartoznának."""
+    import numpy as np
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    cv2 = pytest.importorskip("cv2")
+    from handball.api.app import create_app
+
+    # Rövid, üres videó: vonal nincs rajta, tehát a keresés VÉGIGMEGY a
+    # jelölteken (ez a lényeg: nem az első kockánál adja fel).
+    video = tmp_path / "v.mp4"
+    iro = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"mp4v"),
+                          25.0, (320, 180))
+    if not iro.isOpened():
+        pytest.skip("nincs mp4-író a gépen")
+    for _ in range(200):
+        iro.write(np.zeros((180, 320, 3), np.uint8))
+    iro.release()
+
+    c = TestClient(create_app())
+    keres = c.get("/broadcast/lines",
+                  params={"path": str(video), "frame": 100,
+                          "search_s": 20}).json()
+    assert keres["searched"] > 1, "nem nézett meg több kockát"
+    assert keres["requested_frame"] == 100
+    assert keres["suggested_quad"] is None    # üres képen nincs mit ajánlani
+    # Keresés nélkül EGY kocka: a régi viselkedés megmarad.
+    egy = c.get("/broadcast/lines",
+                params={"path": str(video), "frame": 100,
+                        "search_s": 0}).json()
+    assert egy["searched"] == 1 and egy["frame"] == 100
+    # A keresés a videó határain belül marad (a nulladik kocka körül is).
+    szel = c.get("/broadcast/lines",
+                 params={"path": str(video), "frame": 0,
+                         "search_s": 20}).json()
+    assert szel["searched"] >= 1 and szel["frame"] >= 0
+
+
+def test_a_kliens_a_talalt_kockara_leptet():
+    """A javaslat a TALÁLT kockához tartozik: a képernyőnek oda kell
+    léptetnie, különben a sarkok más képre vonatkoznának."""
+    from pathlib import Path as _P
+
+    gyoker = _P(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "calibration_screen.dart").read_text(encoding="utf-8")
+    fn = src.split("Future<void> _suggestCorners()")[1][:3000]
+    assert "searchSeconds: 20" in fn, "a kliens nem kér kockakeresést"
+    assert "_frameIdx = talalt" in fn, "nem lép a talált kockára"
+    assert "_loadReferenceFrame()" in fn, "nem tölti újra a képet"
+    api = (gyoker / "client" / "lib" / "services"
+           / "api_client.dart").read_text(encoding="utf-8")
+    assert '"search_s"' in api

@@ -842,21 +842,30 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     });
     try {
       final api = ApiClient(baseUrl: widget.baseUrl);
-      final r = await api.fetchBroadcastLines(path, frame: _frameIdx);
+      // A javaslat NEM egyetlen kockán áll vagy bukik: ha ezen nem áll
+      // össze a négyszög, a motor a környező húsz másodpercben keres
+      // tisztább kockát (tömeg, felirat, rossz pillanat miatt gyakori).
+      final r = await api.fetchBroadcastLines(path, frame: _frameIdx,
+          searchSeconds: 20);
       final quad = r["suggested_quad"] as List?;
       final w = (r["width"] as num?)?.toDouble() ??
           _frameSize?.width ?? 1920.0;
       final h = (r["height"] as num?)?.toDouble() ??
           _frameSize?.height ?? 1080.0;
+      final nezett = ((r["searched"] as num?) ?? 1).toInt();
       if (quad == null || quad.length != 4) {
         if (!mounted) return;
         setState(() => _suggestNote =
-            "Ezen a képkockán nem találtam elég pályavonalat a "
-            "javaslathoz. Léptess olyan kockára, ahol a pálya vonalai "
-            "tisztán látszanak (nincs rajta tömeg, felirat), vagy jelöld "
-            "be kézzel a 4 sarkot.");
+            "Nem találtam elég pályavonalat a javaslathoz — $nezett "
+            "képkockát néztem meg a környéken. Léptess olyan részre, ahol "
+            "a pálya vonalai tisztán látszanak (nincs rajta tömeg, "
+            "felirat), vagy jelöld be kézzel a 4 sarkot.");
         return;
       }
+      // A motor MÁSIK kockán találta meg: oda léptetünk, különben a
+      // javasolt sarkok nem ahhoz a képhez tartoznának, amit látunk.
+      final talalt = ((r["frame"] as num?) ?? _frameIdx).toInt();
+      final masikKocka = talalt != _frameIdx;
       final ujak = <Offset>[];
       for (final p in quad) {
         final pt = (p as List);
@@ -870,12 +879,17 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       final nLines = ((r["lines"] as List?) ?? const []).length;
       setState(() {
         _corners = ujak;
+        _frameIdx = talalt;
         _saved = false;
         _suggestNote =
-            "Javaslat betöltve ($nLines felismert vonalból). ELLENŐRIZD: "
-            "a négyszög a JÁTÉKTÉR négy sarkán álljon — húzd a pontokat "
-            "a helyükre, mielőtt mentesz.";
+            "Javaslat betöltve ($nLines felismert vonalból"
+            "${masikKocka ? ", a $talalt. képkockáról — oda léptettem" : ""}"
+            "). ELLENŐRIZD: a négyszög a JÁTÉKTÉR négy sarkán álljon — "
+            "húzd a pontokat a helyükre, mielőtt mentesz.";
       });
+      if (masikKocka) {
+        await _loadReferenceFrame();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _suggestNote =

@@ -539,9 +539,19 @@ def create_app():
             raise HTTPException(status_code=500,
                                 detail=f"a közvetítés-elemzés nem sikerült: {e}")
 
+    # A sarok-javaslat KOCKAKERESÉSE: ha a kért kockán nem áll össze a
+    # négyszög (tömeg, felirat, rossz pillanat), ennyi másodperces
+    # sugarú körben keresünk jobb kockát, ekkora lépésekkel. IDŐTARTAM,
+    # tehát másodpercben — a kocka-lépést a videó fps-éből számoljuk. A
+    # jelöltek száma korlátos, hogy a keresés pár másodperc maradjon.
+    BL_SEARCH_S = 20.0
+    BL_SEARCH_STEP_S = 2.0
+    BL_SEARCH_MAX_FRAMES = 14
+
     @app.get("/broadcast/lines")
     def broadcast_lines(path: str, frame: int = 0,
-                        line_color: str = "auto"):
+                        line_color: str = "auto",
+                        search_s: float = 0.0):
         """Pályavonal-jelöltek egy közvetítés-képkockából.
 
         A vonal-alapú auto-kalibráció első fele: a megadott képkockán
@@ -549,6 +559,11 @@ def create_app():
         párhuzamos párjaik képen belüli metszéspontjai (sarok-jelöltek).
         A kliens ezt rárajzolhatja a képre — így ellenőrizhető, mit lát
         a rendszer, mielőtt a pálya-modell megfeleltetés elkészül.
+
+        `search_s`: ha a kért kockán nem áll össze a négyszög, ennyi
+        MÁSODPERC sugarú körben keresünk jobb kockát (0 = nincs
+        keresés). A válasz "frame" mezője a TÉNYLEGESEN használt kocka,
+        a "searched" a megnézett kockák száma — a kliens ide léptet.
 
         404: a videó nem olvasható / nincs ilyen képkocka."""
         import os
@@ -562,31 +577,66 @@ def create_app():
                 cap = open_capture(path)
             except VideoOpenError as e:
                 raise HTTPException(status_code=400, detail=str(e))
-            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame))
-            ok, img = cap.read()
-            cap.release()
-            if not ok or img is None:
-                raise HTTPException(status_code=404,
-                                    detail="frame not readable")
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             from ..pipeline.broadcast_lines import (
                 detect_court_lines_color, line_intersections,
                 suggest_calibration_quad)
-            # A több sportot kiszolgáló csarnokokban a kézilabda-pálya
-            # vonala gyakran NEM fehér (pl. piros, a kosár/futsal kék-zöld
-            # vonalai mellett) — az "auto" a képből dönti el, melyiket
-            # kövesse; a kliens felül is bírálhatja (line_color).
-            rgb = img[:, :, ::-1]          # OpenCV BGR → RGB
-            found = detect_court_lines_color(rgb, line_color)
-            lines = found["lines"]
-            h, w = gray.shape[:2]
-            corners = line_intersections(lines, w, h)
-            return {"frame": int(frame), "width": w, "height": h,
-                    "line_color": found["color"],
-                    "line_pixels": found["pixels"],
-                    "lines": lines, "corners": corners,
-                    "suggested_quad": suggest_calibration_quad(corners,
-                                                               w, h)}
+
+            fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 25.0
+            hossz = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            sugar = max(0.0, min(float(search_s or 0.0), BL_SEARCH_S))
+            lepes = max(1, int(round(BL_SEARCH_STEP_S * fps)))
+            jeloltek = [int(frame)]
+            if sugar > 0:
+                maxlep = int(round(sugar * fps))
+                d = lepes
+                while d <= maxlep and len(jeloltek) < BL_SEARCH_MAX_FRAMES:
+                    for elojel in (1, -1):
+                        t = int(frame) + elojel * d
+                        if t < 0 or (hossz and t >= hossz):
+                            continue
+                        jeloltek.append(t)
+                    d += lepes
+
+            def _egy_kocka(t: int):
+                """Egy kocka vonal-felismerése; None, ha nem olvasható."""
+                cap.set(cv2.CAP_PROP_POS_FRAMES, t)
+                ok, img = cap.read()
+                if not ok or img is None:
+                    return None
+                h_, w_ = img.shape[:2]
+                found = detect_court_lines_color(img[:, :, ::-1], line_color)
+                lines = found["lines"]
+                corners = line_intersections(lines, w_, h_)
+                return {"frame": int(t), "width": w_, "height": h_,
+                        "line_color": found["color"],
+                        "line_pixels": found["pixels"],
+                        "lines": lines, "corners": corners,
+                        "suggested_quad": suggest_calibration_quad(
+                            corners, w_, h_)}
+
+            elso, legjobb = None, None
+            nezett = 0
+            for t in jeloltek:
+                r = _egy_kocka(t)
+                nezett += 1
+                if r is None:
+                    continue
+                if elso is None:
+                    elso = r
+                # A NÉGYSZÖG a cél; ha több kocka is ad, a több felismert
+                # vonalú nyer (tisztább kép, megbízhatóbb sarkok).
+                if r["suggested_quad"]:
+                    if legjobb is None or len(r["lines"]) > len(legjobb["lines"]):
+                        legjobb = r
+                    break
+            cap.release()
+            if elso is None:
+                raise HTTPException(status_code=404,
+                                    detail="frame not readable")
+            ki = legjobb or elso
+            ki["searched"] = nezett
+            ki["requested_frame"] = int(frame)
+            return ki
         except HTTPException:
             raise
         except Exception as e:

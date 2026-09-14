@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.132 óta)
 
+- **A sarok-javaslat magától keres jó képkockát** (kalibráció): eddig
+  ha a kijelölt kockán tömeg, felirat vagy rossz pillanat takarta a
+  vonalakat, a javaslat egyszerűen nemet mondott, és a felhasználóra
+  bízta, hogy kockáról kockára keressen jobbat. Mostantól a motor a
+  környező húsz másodpercben (kétmásodperces lépésekkel, legfeljebb
+  tizennégy kockán) keres tisztább képet, és a képernyő ARRA a kockára
+  is léptet — így a javasolt sarkok ahhoz a képhez tartoznak, amit
+  látsz. Ha semmi nem jön össze, az üzenet megmondja, hány kockát
+  néztünk meg.
+
 - **Figura-állás** (új réteg): MELYIK FIGURÁT hozzák vezetésnél és
   hátrányban. A támadás-szakaszokat figurák szerint klaszterezzük, és
   minden szakaszt a kezdetének állására írunk (vezet / döntetlen /
