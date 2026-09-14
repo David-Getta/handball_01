@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.130 óta)
+## Kiadatlan (a v0.1.131 óta)
 
 - **A jelentés kimondja, ha a pályavonal-ellenőrzés meg sem tudott
   szólalni** (megbízhatóság): eddig csak a GYENGE illeszkedésre
@@ -12,6 +12,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   pedig ilyenkor a pályavonalakra igazítás (önkorrekció) sem fut, tehát
   a kamera-mozgás követése magára marad. Mostantól a jelentés kiírja,
   a kulcs-kockák hány százalékán nem volt mérhető, és a teendőt is.
+
+## v0.1.131 — kiadva (2026-09-14)
+
+> Kiadás-jegyzet: a márka szóképe rajzolt betűvel a jelentések
+> fejlécében és az appban.
 
 - **Márka-szókép: a SPORTMACHINE név is rajzolt betű** (márka): a
   dizájner új csomagjából a szókép (SPORT vastagon, MACHINE vékonyan,
