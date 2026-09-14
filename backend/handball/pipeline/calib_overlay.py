@@ -323,16 +323,27 @@ def line_fit_score(gray, polylines: list) -> dict:
 
 def fit_summary(points: list) -> Optional[dict]:
     """A feldolgozás alatt mért illeszkedés-pontok [(t, fit|None), …]
-    összegzése a meta-ba: {"mean_fit", "min_fit", "worst_t", "points"} —
-    a minőség-jelentés a leggyengébb kockából ítél. None, ha nincs
-    mérhető pont."""
-    ertekes = [(int(t), float(f)) for t, f in points if f is not None]
-    if not ertekes:
+    összegzése a meta-ba: {"mean_fit", "min_fit", "worst_t", "points",
+    "measured", "total"} — a minőség-jelentés a leggyengébb kockából ítél.
+
+    Ha egyetlen kockán sem sikerült MÉRNI (a rajzolt pálya nem esett a
+    képre), az összegzés akkor sem None: a "measured": 0 maga is fontos
+    jelzés. Némán elnyelve a felhasználó sosem tudná meg, hogy a
+    pályavonalakra igazítás (önkorrekció) végig nem is futott. Üres
+    bemenetnél viszont None (nem volt mit mérni).
+    """
+    if not points:
         return None
+    ertekes = [(int(t), float(f)) for t, f in points if f is not None]
+    ossz = len(points)
+    if not ertekes:
+        return {"mean_fit": None, "min_fit": None, "worst_t": None,
+                "points": [], "measured": 0, "total": ossz}
     rossz_t, rossz = min(ertekes, key=lambda p: p[1])
     return {"mean_fit": round(sum(f for _, f in ertekes) / len(ertekes), 3),
             "min_fit": round(rossz, 3), "worst_t": rossz_t,
-            "points": [[t, round(f, 3)] for t, f in ertekes]}
+            "points": [[t, round(f, 3)] for t, f in ertekes],
+            "measured": len(ertekes), "total": ossz}
 
 
 # ÖNKORREKCIÓ a pályavonalak alapján: ha egy kulcs-kockán az illeszkedés

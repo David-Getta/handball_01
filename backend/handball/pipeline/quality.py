@@ -103,6 +103,10 @@ GW_HEAD_WARN_S = 120.0
 # már nem ül a kép valódi vonalain — a helyek elcsúsztak. A leggyengébb
 # kocka dönt (a meccs közepén elcsúszó követés az átlagban elveszne).
 CALIB_FIT_WARN = 0.3
+# A kulcs-kockák ekkora hányadán MÉRHETŐNEK kell lennie az
+# illeszkedésnek; ez alatt nem a rajz gyenge, hanem meg sem mérhető (a
+# pálya-modell nem esik a képre) — és az önkorrekció sem futott.
+CALIB_FIT_MEASURED_MIN = 0.5
 
 # Pásztázás-követés horgonyzás-aránya: a feldolgozott kockák ekkora
 # hányada alatt mondjuk ki, hogy a kamera-mozgást ritkán sikerült a
@@ -621,6 +625,22 @@ def compute_quality_report(match: Match) -> dict:
                 f"{100 * float(_cf.get('mean_fit') or 0):.0f}%) — ott a "
                 "játékosok helye elcsúszott: vagy a 4 sarok rossz, vagy a "
                 "kamera-mozgás követése vesztette el a kalibrált képet.")
+        # A mérés MAGA sem sikerült: a rajzolt pálya-modell nem esett a
+        # képre a kulcs-kockák nagy részén. Ez eddig NÉMA volt (a
+        # jelentés csak a gyenge illeszkedést ismerte), pedig ilyenkor a
+        # pályavonalakra igazítás (önkorrekció) végig nem is futott.
+        if _cf and _cf.get("total"):
+            _m = int(_cf.get("measured") or 0)
+            _t = int(_cf["total"])
+            if _t > 0 and _m < CALIB_FIT_MEASURED_MIN * _t:
+                warnings.append(
+                    "A pályavonal-ellenőrzés a kulcs-kockák "
+                    f"{100 * (1 - _m / _t):.0f}%-án nem tudott mérni: ott a "
+                    "visszarajzolt pálya nem esett a képre. Ilyenkor a "
+                    "pályavonalakra igazítás (önkorrekció) sem fut, tehát "
+                    "a kamera-mozgás követése magára marad — ellenőrizd a "
+                    "kalibrációt (a térfél-választót és a 4 sarkot) az Új "
+                    "elemzés lapon.")
     except (TypeError, ValueError):
         pass
 

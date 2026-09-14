@@ -245,8 +245,12 @@ def test_az_illeszkedes_osszegzese_es_a_minoseg_jelzes():
     from handball.pipeline.quality import (CALIB_FIT_WARN,
                                            compute_quality_report)
 
+    # Üres bemenet: nem volt mit mérni. Ha VOLT kulcs-kocka, de egyiken
+    # sem sikerült a mérés, az önmagában fontos jelzés — nem None.
     assert fit_summary([]) is None
-    assert fit_summary([(0, None)]) is None
+    semmi = fit_summary([(0, None), (16, None)])
+    assert semmi["measured"] == 0 and semmi["total"] == 2
+    assert semmi["min_fit"] is None
     o = fit_summary([(0, 0.8), (16, None), (32, 0.2), (48, 0.7)])
     assert o["min_fit"] == 0.2 and o["worst_t"] == 32
     assert abs(o["mean_fit"] - 0.567) < 0.001
@@ -267,6 +271,13 @@ def test_az_illeszkedes_osszegzese_es_a_minoseg_jelzes():
     for cf in (jo, None):
         q2 = compute_quality_report(_meccs(cf))
         assert not [w for w in q2["warnings"] if "pályavonal" in w]
+    # Ha a kulcs-kockák nagy részén NEM MÉRHETŐ, arról is szólni kell: a
+    # pályavonalakra igazítás (önkorrekció) ilyenkor végig nem futott.
+    nem = fit_summary([(0, None)] * 7 + [(70, 0.8)])
+    q3 = compute_quality_report(_meccs(nem))
+    talalat3 = [w for w in q3["warnings"] if "nem tudott mérni" in w]
+    assert talalat3, q3["warnings"]
+    assert "88%" in talalat3[0] and "önkorrekció" in talalat3[0]
 
 
 def test_az_onkorrekcio_megtalalja_az_eltolast():
