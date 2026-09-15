@@ -1227,6 +1227,16 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 body += f" A(z) {name} {mondat}."
     except Exception:
         pass
+    # Emberelőny-figura: mit hoznak a két perc alatt.
+    try:
+        from .setplays import powerplay_setplay
+        ppf = powerplay_setplay(match)
+        for side, name in (("home", home), ("away", away)):
+            mondat = (ppf.get(side) or {}).get("verdict")
+            if mondat:
+                body += f" A(z) {name} {mondat}."
+    except Exception:
+        pass
     # Lepattanó-szedő poszt: védés után kinél marad a labda.
     try:
         from .defense import defensive_rebound_roles

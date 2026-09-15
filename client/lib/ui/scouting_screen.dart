@@ -10010,6 +10010,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return v;
   }
 
+  // Emberelőny-figura: mit hoznak a két perc alatt. Az ítéletet a
+  // backend hozza (legalább 4 emberelőnyben mért figura-támadás, 50%
+  // fölötti részarány — a küszöbök a motorban élnek).
+  String? _powerplayFigure(Map<String, dynamic> r) {
+    final d = r["powerplay_figures"];
+    if (d is! Map) return null;
+    final v = d["verdict"];
+    if (v is! String || v.isEmpty) return null;
+    return v;
+  }
+
   // Figura-állás: melyik figurát hozzák vezetésnél és hátrányban. Az
   // ítéletet a backend hozza (állapotonként legalább 5 mért
   // figura-támadás, 25 százalékpont részarány-rés — a küszöbök a
@@ -11718,6 +11729,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fal-alak", _defenseShapes(r)!],
       if (_setplayByScore(r) != null)
         ["Figura-állás", _setplayByScore(r)!],
+      if (_powerplayFigure(r) != null)
+        ["Emberelőny-figura", _powerplayFigure(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],

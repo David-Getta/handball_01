@@ -1390,3 +1390,125 @@ def test_a_figura_allas_edzes_szabalya_valodi_retegbol(monkeypatch):
     tetelek = training_focus(_sbs_match("t482"))["home"]
     cimek = " ".join(t["title"] for t in tetelek)
     assert "Az állásunkból kiolvasható, melyik figuránk jön" in cimek
+
+
+# ---- Emberelőny-figura (powerplay_setplay) ---------------------------------
+
+
+def _ppf_match(match_id="ppf", db=5, side="bal", elonyben=True):
+    """A hazai EMBERELŐNYBEN (a vendég öt mezőnyjátékossal) játssza
+    ugyanazt a figurát.
+
+    A létszám-felismerés ablakokban számol, ezért MINDEN kockán ott a
+    teljes keret: három hazai a figurában, három hátul, és öt (vagy
+    `elonyben=False` esetén hat) vendég a falban. A támadások közé
+    üresjárat kerül, hogy az emberhátrány elérje a felismerés
+    küszöbét (45 mp).
+    """
+    frames = []
+    t = 0
+    y = 4.0 if side == "bal" else 16.0
+
+    def hazai(xs, ys):
+        p = [_pl(1, Team.HOME, xs[0], ys[0]), _pl(2, Team.HOME, xs[1], ys[1]),
+             _pl(3, Team.HOME, xs[2], ys[2])]
+        p += [_pl(4 + k, Team.HOME, 14.0 + k, 10.0) for k in range(3)]
+        return p
+
+    def vendeg(n):
+        return [_pl(20 + k, Team.AWAY, 35.0, 2.0 + 3.5 * k) for k in range(n)]
+
+    n_vendeg = 5 if elonyben else 6
+    for _ in range(750):                       # 30 mp teljes létszám
+        frames.append(Frame(
+            t=t, players=hazai([12.0, 13.0, 14.0], [6.0] * 3) + vendeg(6),
+            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(db):
+        for _ in range(8):                     # a figura
+            frames.append(Frame(
+                t=t, players=hazai([28.0, 31.0, 34.0], [y] * 3)
+                + vendeg(n_vendeg),
+                ball=Ball(x=28.0, y=y, confidence=1.0)))
+            t += 1
+        for _ in range(6):                     # átmenet a saját térfélre
+            frames.append(Frame(
+                t=t, players=hazai([8.0, 9.0, 10.0], [10.0] * 3)
+                + vendeg(n_vendeg),
+                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(280):                   # üresjárat (a két perc telik)
+            frames.append(Frame(
+                t=t, players=hazai([12.0, 13.0, 14.0], [10.0] * 3)
+                + vendeg(n_vendeg),
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id=match_id, home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_az_emberelony_figura_megmondja_mit_hoznak_a_ket_perc_alatt():
+    """A kiállítás alatt mindig ugyanaz a figura jön: az ítélet ezt
+    mondja ki, és a védekezésnek szóló teendőt is."""
+    from handball.pipeline.setplays import (PPF_MIN_ATTACKS, PPF_SHARE_PCT,
+                                            powerplay_setplay)
+
+    rec = powerplay_setplay(_ppf_match())["home"]
+    assert rec["attacks"] >= PPF_MIN_ATTACKS
+    assert rec["figures"] and rec["figures"][0]["share_pct"] >= PPF_SHARE_PCT
+    assert rec["figures"][0]["zone"].startswith("bal oldal")
+    assert rec["verdict"] and "egy figurára építenek" in rec["verdict"]
+    assert "erre rendezni az öt embert" in rec["verdict"]
+    # A vendég nem volt emberelőnyben: üres, nem hallgatólagos 0.
+    ures = powerplay_setplay(_ppf_match())["away"]
+    assert ures["attacks"] == 0 and ures["verdict"] is None
+
+
+def test_az_emberelony_figura_kiallitas_nelkul_es_keves_mintanal_hallgat():
+    """Teljes létszámnál nincs mit mérni; kevés emberelőnyös támadásnál
+    nincs ítélet (a számok viszont látszanak)."""
+    from handball.pipeline.setplays import PPF_MIN_ATTACKS, powerplay_setplay
+
+    teljes = powerplay_setplay(_ppf_match(elonyben=False))["home"]
+    assert teljes["attacks"] == 0 and teljes["verdict"] is None
+    keves = powerplay_setplay(
+        _ppf_match(db=PPF_MIN_ATTACKS - 1))["home"]
+    assert keves["attacks"] < PPF_MIN_ATTACKS
+    assert keves["verdict"] is None
+
+
+def test_az_emberelony_figura_meccsek_kozt_all_ossze():
+    """A kiállítás RITKA: egy meccsen kevés a minta, több meccsen áll
+    össze. A VALÓDI felderítés-úton (scout_team → combine_reports), az
+    edzői kulccsal és a 464-es meccsterv-szabállyal."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+
+    r1 = scout_team(_ppf_match("p1", db=2), Team.HOME)
+    r2 = scout_team(_ppf_match("p2", db=3), Team.HOME)
+    assert r1.powerplay_figures["verdict"] is None, "két támadás még kevés"
+    ossz = combine_reports([r1, r2])
+    assert ossz.powerplay_figures["attacks"] >= 4
+    assert ossz.powerplay_figures["verdict"], ossz.powerplay_figures
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "mberelőnyben egy figurára építenek" in kulcsok
+    # 464: sok kiállítást szedünk → konkrétan erre játsszuk be a falat.
+    sajat = scout_team(_ppf_match("s1", db=2), Team.HOME)
+    sajat.suspensions, sajat.matches = 4, 2
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "KONKRÉTAN erre a figurára" in terv
+    sajat.suspensions = 1
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "ne improvizáljatok" in terv2
+
+
+def test_az_emberelony_figura_edzes_szabalya_valodi_retegbol(monkeypatch):
+    """483: a saját emberelőnyünk egyetlen figurára épül — a tétel a
+    VALÓDI rétegből jön (a tétel-korlátot feloldjuk)."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.training import training_focus
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    tetelek = training_focus(_ppf_match("t483"))["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "Az emberelőnyünk egyetlen figurára épül" in cimek

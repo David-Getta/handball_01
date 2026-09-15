@@ -1383,6 +1383,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 483) A saját emberelőnyünk EGY figurára épül: a két perc a
+    # legdrágább támadási idő — ha a fal kiismeri az egyetlen megoldást,
+    # a fölény elvész. Második befejezés kell rá, bejátszva.
+    try:
+        from .setplays import powerplay_setplay
+        ppf483 = powerplay_setplay(match, config)
+        for side in ("home", "away"):
+            rec483 = ppf483.get(side) or {}
+            if not rec483.get("verdict") or not rec483.get("figures"):
+                continue
+            fo = rec483["figures"][0]
+            add(side, "támadás",
+                "Az emberelőnyünk egyetlen figurára épül",
+                f"a két perc alatti támadásaink {fo['share_pct']:.0f}%-a "
+                f"ugyanaz a figura (\"{fo['zone']}\", {fo['attacks']} "
+                f"támadás, {fo['goals']} gól) — a fal ezt a második "
+                "kiállításnál már ismeri",
+                "6-5 gyakorlat két befejezéssel: ugyanaz a kezdő mozgás, "
+                "de a fal reakciójától függően beálló-átadás VAGY "
+                "átlövés a másik oldalról; a kapott jelre váltva, "
+                "időre játszva (a két perc rövid)")
+    except Exception:
+        pass
+
     # 482) Állásfüggően kiszámítható a támadójátékunk: ha vezetésnél és
     # hátrányban MÁS figurára épülünk, az ellenfél az eredményjelzőről
     # olvassa le, mi jön — a hajrára kell egy második megoldás.

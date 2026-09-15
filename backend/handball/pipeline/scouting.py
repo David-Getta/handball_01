@@ -679,6 +679,12 @@ class ScoutingReport:
     # (figure_formation) a combine_reports-ban ÚJRASZÁMOLVA.
     setplay_formation_rows: list = field(default_factory=list)
     figure_formation: dict = field(default_factory=dict)
+    # Emberelőny-figura (setplays.powerplay_setplay): lapos,
+    # összegezhető sorok — {"shape", "attacks", "goals", "match_id"} —
+    # meccsek közt egymás mögé; az összefésült kép (powerplay_figures) a
+    # combine_reports-ban ÚJRASZÁMOLVA (arányt sose tárolunk).
+    powerplay_figure_rows: list = field(default_factory=list)
+    powerplay_figures: dict = field(default_factory=dict)
     # Figura-állás (setplays.setplay_by_score): lapos, összegezhető
     # sorok — {"shape", "state", "attacks", "goals", "match_id"} —
     # meccsek közt egymás mögé; az összefésült kép (setplay_score) a
@@ -8464,6 +8470,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # Emberelőny-figura: mit hoznak a két perc alatt.
+    try:
+        _ppfv = (rep.powerplay_figures or {}).get("verdict")
+        if _ppfv:
+            keys.append(_ppfv[0].upper() + _ppfv[1:] + ".")
+    except Exception:
+        pass
+
     # Figura-állás: állásfüggően váltanak-e figurát.
     try:
         _sbsv = (rep.setplay_score or {}).get("verdict")
@@ -12412,6 +12426,13 @@ def _scout_team_cached(match: Match, team: Team,
             for r in _fvf(match, config)[team.value]
             for forma, cella in (r.get("forms") or {}).items()]
         rep.figure_formation = _ffs(rep.setplay_formation_rows)
+        from .setplays import powerplay_setplay as _ppf
+        rep.powerplay_figure_rows = [
+            {"shape": f_["shape"], "attacks": f_["attacks"],
+             "goals": f_["goals"], "match_id": match.meta.match_id}
+            for f_ in _ppf(match, config)[team.value]["figures"]]
+        from .setplays import powerplay_figures_summary as _ppfs
+        rep.powerplay_figures = _ppfs(rep.powerplay_figure_rows)
         from .setplays import setplay_by_score as _sbs
         _sbsrec = _sbs(match, config)[team.value]["states"]
         rep.setplay_score_rows = [
@@ -13600,6 +13621,14 @@ def _merge_hold_players(reports) -> list:
                                  / max(1, kv[1]["holds"])))]
 
 
+def _powerplay_figures_of(reports) -> dict:
+    """Az emberelőny-figura sorok meccsek közti összefésülése."""
+    from .setplays import powerplay_figures_summary
+    return powerplay_figures_summary([row for r in reports
+                                      for row in (r.powerplay_figure_rows
+                                                  or [])])
+
+
 def _setplay_score_of(reports) -> dict:
     """A figura-állás sorok meccsek közti összefésülése."""
     from .setplays import setplay_score_summary
@@ -14714,6 +14743,29 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 464) Az ő emberelőny-figurájuk × a ti fegyelmetek: a két perc a
+    # legdrágább — ha tudjuk, mi jön, az öt embert arra lehet rendezni.
+    # Minél több kiállítást szedtek, annál többször éri meg bejátszani.
+    try:
+        _ppf464 = (opp.powerplay_figures or {}).get("verdict")
+        _fo464 = ((opp.powerplay_figures or {}).get("figures") or [None])[0]
+        _kiall = own.suspensions / max(1, own.matches)
+        if _ppf464 and _fo464:
+            if _kiall >= 2.0:
+                plan.append(
+                    f"Az ellenfél {_ppf464} — ti pedig meccsenként "
+                    f"{_kiall:.1f} kiállítást szedtek, tehát ez a helyzet "
+                    "biztosan előjön: az emberhátrányos falat KONKRÉTAN "
+                    "erre a figurára játsszátok be edzésen.")
+            else:
+                plan.append(
+                    f"Az ellenfél {_ppf464} — ti keveset hibáztok "
+                    f"(meccsenként {_kiall:.1f} kiállítás), de ha mégis "
+                    "hátrányba kerültök, ne improvizáljatok: ez az egy "
+                    "figura jön, arra álljatok fel.")
     except Exception:
         pass
 
@@ -23130,6 +23182,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         setplay_formation_rows=[row for r in reports
                                 for row in (r.setplay_formation_rows or [])],
         figure_formation=_figure_formation_of(reports),
+        powerplay_figure_rows=[row for r in reports
+                               for row in (r.powerplay_figure_rows or [])],
+        powerplay_figures=_powerplay_figures_of(reports),
         setplay_score_rows=[row for r in reports
                             for row in (r.setplay_score_rows or [])],
         setplay_score=_setplay_score_of(reports),

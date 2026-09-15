@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.134 óta)
 
+- **Emberelőny-figura** (új réteg): MELYIK FIGURÁT hozzák a két perc
+  alatt. Az emberelőny-rétegek eddig azt mondták meg, ki fejez be,
+  milyen tempóban és mennyit ér a kiállítás — ez azt, MIT játszanak: a
+  kiállítás-ablakokba eső támadásokat alak szerint klaszterezzük, és
+  figuránként számoljuk a támadást meg a gólt. Edzői olvasat:
+  "emberelőnyben a két perc alatti támadásaik 80%-a ugyanaz a figura —
+  emberhátrányban ezt kell bejátszani és erre rendezni az öt embert, a
+  többit rá lehet engedni". A kiállítás ritka, ezért a réteg meccsek
+  közt áll össze igazán. Felületek: elemzés-válasz és meccs-csomag,
+  edzői összefoglaló, felderítés (lapos, összegezhető sorok, edzői
+  kulcs, 464. meccsterv-szabály a saját fegyelemmel párosítva),
+  483. edzés-szabály (a saját emberelőnyünk egyetlen figurájára második
+  befejezés), kliens-csempe.
+
 ## v0.1.134 — kiadva (2026-09-14)
 
 > Kiadás-jegyzet: a sarok-javaslat magától megkeresi a jó
