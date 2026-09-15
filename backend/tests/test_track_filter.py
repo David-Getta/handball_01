@@ -112,3 +112,54 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+# --- Kispad- és néző-szűrés (drop_bench_tracks) --------------------------
+
+def _bench_match(n=120):
+    """Egy JÁTÉKOS a pályán, egy ÜLŐ ember az oldalvonalon kívül (kispad),
+    és egy KILÉPŐ játékos, aki kint is mozog (partdobás)."""
+    from handball.models.tracking import (
+        Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    frames = []
+    for t in range(n):
+        players = [
+            # Pályán, mozog.
+            PlayerPosition(track_id=1, team=Team.HOME,
+                           x=10.0 + 0.05 * t, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+            # Kispad: a vonalon kívül (y = −1,2 m), végig egy helyben.
+            PlayerPosition(track_id=2, team=Team.HOME, x=18.0, y=-1.2,
+                           source=PositionSource.MEASURED, confidence=1.0),
+            # Kilépő játékos: kint van, DE végigfut az oldalvonal mellett.
+            PlayerPosition(track_id=3, team=Team.AWAY,
+                           x=5.0 + 0.25 * t, y=-0.8,
+                           source=PositionSource.MEASURED, confidence=1.0),
+        ]
+        frames.append(Frame(t=t, players=players))
+    return Match(MatchMeta(match_id="bench", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_drop_bench_tracks_removes_the_sitting_bench():
+    """Az oldalvonalon kívül VÉGIG EGY HELYBEN ülő track kispad — kikerül;
+    a pályán játszó és a kint MOZGÓ játékos marad."""
+    from handball.pipeline.track_filter import drop_bench_tracks
+
+    m = _bench_match()
+    info = drop_bench_tracks(m)
+    assert info["tracks"] == [2], info
+    assert info["removed"] == 120
+    ids = {p.track_id for f in m.frames for p in f.players}
+    assert ids == {1, 3}
+
+
+def test_drop_bench_tracks_keeps_short_tracks():
+    """Kevés kockás track-ről nem mondunk ítéletet (lehet takarásból
+    előbukkanó játékos)."""
+    from handball.pipeline.track_filter import drop_bench_tracks
+
+    m = _bench_match(n=20)
+    assert drop_bench_tracks(m)["tracks"] == []

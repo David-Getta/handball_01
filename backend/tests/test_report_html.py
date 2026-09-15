@@ -100,6 +100,50 @@ def test_playbook_section_rendering():
     assert "Ismert figuráik" not in scouting_report_html(_rep())
 
 
+def test_a_visszatero_figurak_szakasza_rajzzal():
+    """A meccsről meccsre visszatérő figurák alakkal (inline SVG) és
+    edzői névvel; visszatérő figura nélkül a szakasz nincs."""
+    shape = [0.0] * 18
+    shape[5] = 0.6
+    shape[4] = 0.4
+    lib = {"figures": [], "recurring": [
+        {"zone": "bal oldal, a kapuelőtér előtt", "matches": 3,
+         "attacks": 11, "shots": 8, "goals": 4, "goal_pct": 36.4,
+         "shape": shape}], "verdict": "x"}
+    html = scouting_report_html(_rep(setplay_library=lib))
+    assert "Visszatérő figuráik" in html
+    assert "bal oldal, a kapuelőtér előtt" in html
+    # Elnevezett figura: a név elöl, a zóna zárójelben.
+    lib["recurring"][0]["name"] = "Beúszós <kereszt>"
+    nevvel = scouting_report_html(_rep(setplay_library=lib))
+    assert "<b>Beúszós &lt;kereszt&gt;</b> (bal oldal, a kapuelőtér előtt)" in nevvel
+    assert "3 meccsen 11 támadás, 4 gól (36%)" in html
+    assert html.count("<svg") >= 2 and "<img" not in html   # jelkép + alak
+    ures = scouting_report_html(_rep(setplay_library={"recurring": []}))
+    assert "Visszatérő figuráik" not in ures
+
+
+def test_a_szezon_riport_a_sajat_visszatero_figurakat_is_rajzolja():
+    """A szezon-riportban a SAJÁT csapat meccsről meccsre visszatérő
+    figurái is ott vannak (rajzzal, hozammal); könyvtár nélkül a
+    szakasz elmarad."""
+    from handball.pipeline.report_html import season_report_html
+
+    shape = [0.0] * 18
+    shape[4] = 1.0
+    lib = {"figures": [], "recurring": [
+        {"zone": "közép, a 9-es körül", "matches": 4, "attacks": 15,
+         "shots": 10, "goals": 6, "goal_pct": 40.0, "shape": shape}],
+        "verdict": "x"}
+    tr = {"metrics": [], "summary": [], "older_matches": 2,
+          "newer_matches": 2}
+    html = season_report_html("Szeged", tr, [], 4, figure_library=lib)
+    assert "Saját visszatérő figuráink" in html
+    assert "4 meccsen 15 támadás, 6 gól (40%)" in html
+    assert "Saját visszatérő figuráink" not in season_report_html(
+        "Szeged", tr, [], 4)
+
+
 def test_playbook_section_empty_states():
     """Üres egyezésnél tájékoztató szöveg (nem üres blokk)."""
     html = scouting_report_html(_rep(), playbook_match={"total_attacks": 4, "matched": {}, "unmatched": 4})
@@ -350,3 +394,81 @@ def test_scouting_report_break_lanes_table():
                                                    {"entries": 3,
                                                     "goals": 1}}))
     assert "Betörés-sávjaik" not in html2
+
+
+def test_kapus_felkeszites_tabla():
+    """A poszt-lencse három lövés-rétege EGY táblában.
+
+    Külön csempeként a kapusedző háromszor keresi meg ugyanazt a
+    posztot; együtt egy pillantás: milyen messziről, milyen keményen,
+    merre lő.
+    """
+    import re
+
+    html = scouting_report_html(_rep(
+        rsd_shots_by_role={"irányító": 6, "beálló": 5},
+        rsd_dist_sum_by_role={"irányító": 72.0, "beálló": 32.5},
+        rsp_shots_by_role={"irányító": 6},
+        rsp_kmh_sum_by_role={"irányító": 780.0},
+        rgp_goals_by_role_side={"irányító|bal": 4, "irányító|jobb": 1}))
+    m = re.search(r"<h2[^>]*>Kapus-felkészítés posztonként</h2>(.*?)</table>",
+                  html, re.S)
+    assert m, "hiányzik a kapus-tábla"
+    body = m.group(1)
+    assert "12.0 m" in body and "130 km/h" in body and "bal (80%)" in body
+    # A beállónál nincs erő- és oldal-adat: ott KIMONDOTT hiány-jel áll,
+    # nem nulla vagy üres cella.
+    assert "6.5 m" in body and "—" in body
+
+
+def test_kapus_tabla_elmarad_ha_nincs_adat():
+    """Adat nélkül nincs tábla — üres fejléc rosszabb, mint a hiánya."""
+    assert "Kapus-felkészítés posztonként" not in scouting_report_html(_rep())
+
+
+
+def test_a_felderito_lap_elol_szol_a_gyenge_alapanyagrol():
+    """Egy nyomtatott meccstervet fentről lefelé olvasnak: aki a végén
+    tudja meg, hogy az adat gyenge, addig már eldöntötte, kit állít a
+    beállóra. A figyelmeztetés ezért a narratíva ELŐTT áll."""
+    rep = ScoutingReport(team="home", team_name="Alfa")
+    rep.q_matches = 1
+    rep.q_score_sum = 28.0
+    rep.q_weak_matches = 1
+    html = scouting_report_html(rep)
+    assert '<div class="warnbox">' in html
+    assert "28/100" in html
+    # A doboz az első TARTALMI szakasz előtt áll (a tartalomjegyzék
+    # után — ugyanott, ahol a meccsjelentésben).
+    assert html.index('<div class="warnbox">') < html.index(
+        '<h2 id="sz1">')
+
+
+def test_jo_alapanyagnal_nincs_doboz_a_felderito_lapon():
+    """Jó feldolgozásnál (és régi, adat nélküli jelentésnél) a lap
+    tiszta marad — nem riogatunk ok nélkül."""
+    jo = ScoutingReport(team="home", team_name="Alfa")
+    jo.q_matches = 2
+    jo.q_score_sum = 2 * 90.0
+    jo.q_weak_matches = 0
+    assert '<div class="warnbox">' not in scouting_report_html(jo)
+    assert '<div class="warnbox">' not in scouting_report_html(
+        ScoutingReport(team="home", team_name="Alfa"))
+
+
+def test_a_meccsterv_megelozi_az_altalanos_kulcsokat():
+    """A PÁROSÍTOTT meccsterv menjen elöl.
+
+    Az "ő gyengéjük × a ti erősségetek" szabályok kifejezetten ERRE a
+    párosításra szólnak, míg a "Hogyan játssz ellenük" kulcsok
+    általános, SZÁZ FÖLÖTTI listát adnak (mérve: 123 kulcs, közel
+    húszezer karakter). Aki két percet szán a felkészülésre, a
+    konkrétat kell hogy elsőként lássa — ezért a nyomtatott lapon is
+    a meccsterv áll előbb.
+    """
+    rep = ScoutingReport(team="home", team_name="Alfa")
+    html = scouting_report_html(
+        rep, matchup=["Az ő lassuló visszaállásuk × a ti kontrátok."])
+    assert "Meccsterv (a kettőnk párosítása)" in html
+    assert (html.index("Meccsterv (a kettőnk párosítása)")
+            < html.index("Hogyan játssz ellenük</h2>"))

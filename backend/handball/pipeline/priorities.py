@@ -15,7 +15,12 @@ sorrend — épp ez a magyarázható lánc lényege:
    döntést írja felül, tehát előre kell tudni;
 4. **fáradás** — időfüggő romlás; az utolsó húsz perc tervezése;
 5. **állás** — eredményjelző-függő minta; feltételes, csak akkor él,
-   ha az adott állás előáll.
+   ha az adott állás előáll;
+6. **felkészülés** — poszt-profil: nem hiba és nem is romlás, hanem
+   állandó tulajdonság ("a beállójuk hat méterről fejez be"). Ezért
+   van a sor VÉGÉN: sürgősség nélkül, de kiosztható feladatként — és
+   ha a fenti öt család hallgat (rövid felvétel, kevés esemény),
+   akkor legalább ez a lista nem marad üresen.
 
 Családon belül a nyilvántartás sorrendje dönt (stabil, determinisztikus
 kimenet). A modul csak olvassa a többi réteget — mindegyiket külön
@@ -27,12 +32,14 @@ from __future__ import annotations
 from typing import Optional
 
 from ..models.tracking import Match
+from .primitive_cache import memoize_primitive
 
 # Ennyi teendőt adunk vissza a rangsor tetejéről.
 PRF_TOP_N = 5
 
 # A családok sorrendje = a rangsor sorrendje (lásd a modul-docstringet).
-PRF_FAMILY_ORDER = ("ár", "ember", "szünet", "fáradás", "állás")
+PRF_FAMILY_ORDER = ("ár", "ember", "szünet", "fáradás", "állás",
+                    "felkészülés")
 
 
 def _registry() -> list[tuple[str, str, str, str]]:
@@ -48,10 +55,21 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("ár", "Kihagyás ára", "xg", "miss_punishment"),
         ("ár", "Kihagyás-büntetés", "momentum", "punished_misses"),
         ("ár", "Csere-lyuk ára", "substitutions", "gap_punishment"),
+        ("ár", "Csere-hozam", "substitutions",
+         "substitution_yield"),
         ("ár", "Kettőzés ára", "defense", "double_punishment"),
         ("ár", "Kilépés ára", "defense", "stepout_punishment"),
         ("ár", "Indítás-hiba ára", "goalkeeper", "outlet_punishment"),
         ("ár", "Elhúzódó támadás ára", "tactics", "slow_attack_cost"),
+        ("ár", "Visszaállás ára", "defense", "retreat_punishment"),
+        ("ár", "Kipattanó ára", "goalkeeper", "rebound_punishment"),
+        ("ár", "Kapus-visszaérés", "goalkeeper", "keeper_return"),
+        ("ár", "7a6 eladás ára", "goalkeeper",
+         "empty_net_turnovers"),
+        ("ár", "Kétperc ára", "rules", "suspension_cost"),
+        ("ár", "Emberelőny-hozam", "rules", "powerplay_yield"),
+        ("ár", "Emberhátrány-túlélés", "rules",
+         "shorthanded_survival"),
         ("ár", "Eladás-ár posztonként", "roles", "role_turnover_cost"),
         # --- ember: néven nevezett minta -----------------------------
         ("ember", "Tüzes kéz", "momentum", "hot_hands"),
@@ -60,6 +78,68 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("ember", "Eltűnő ember", "momentum", "fading_scorers"),
         ("ember", "Eltűnő védő", "defense", "fading_defenders"),
         ("ember", "Felzárkózás-húzó", "momentum", "comeback_carriers"),
+        ("ember", "Fáradt-eladó", "decisions",
+         "tired_turnover_players"),
+        ("ember", "Visszafutás-lemaradó", "defense",
+         "slow_retreat_players"),
+        ("ember", "Fáradt-fal ember", "defense",
+         "tired_conceder_players"),
+        ("ember", "Indítás-vadász", "goalkeeper", "outlet_hunters"),
+        ("ember", "Kiszolgált befejező", "roles",
+         "assisted_scorers"),
+        ("ember", "Kétperc-gyűjtő", "rules",
+         "suspension_collectors"),
+        ("ember", "Felhozatal-ember", "goalkeeper",
+         "outlet_targets"),
+        ("ember", "Kettőzött ember", "defense", "doubled_targets"),
+        ("ember", "Ziccerhagyó ember", "xg",
+         "missed_chance_players"),
+        ("ember", "Fáradt lövő", "xg", "tired_shooters"),
+        ("ember", "Lágy passzoló", "decisions", "soft_passers"),
+        ("ember", "Passzív-birtokló", "rules", "passive_holders"),
+        ("ember", "Előkészítő ember", "attack_types",
+         "last_passers"),
+        ("ember", "Válaszoló ember", "momentum",
+         "response_scorers"),
+        ("ember", "Rajt-ember", "momentum", "opening_scorers"),
+        ("ember", "Újrakezdő ember", "momentum",
+         "second_start_scorers"),
+        ("ember", "Előnyben-ember", "momentum", "lead_scorers"),
+        ("ember", "Elzárt védő", "defense", "screened_defenders"),
+        ("ember", "Futtatott szélső", "attack_types",
+         "wing_runners"),
+        ("ember", "Keresztjáró ember", "attack_types",
+         "crossing_runners"),
+        ("ember", "Leforduló beálló", "attack_types",
+         "pivot_runners"),
+        ("ember", "Befutó ember", "attack_types",
+         "second_wave_finishers"),
+        ("ember", "Egálbontó ember", "momentum",
+         "parity_break_scorers"),
+        ("ember", "Balkezes lövő", "event_detection",
+         "shooting_hand"),
+        ("ember", "7a6-befejező", "goalkeeper",
+         "seven_six_finishers"),
+        ("ember", "Hátrapasszoló", "attack_types",
+         "backward_passers"),
+        ("ember", "Térnyerő", "decisions", "ball_carriers"),
+        ("ember", "Sávváltó", "attack_types", "lane_switchers"),
+        ("ember", "Menekülő", "decisions", "press_outlets"),
+        ("ember", "Vég-birtokos", "attack_types", "last_holders"),
+        ("ember", "Ziccer-előkészítő", "xg", "big_chance_feeders"),
+        ("ember", "Válaszhiba-ember", "momentum",
+         "response_turnover_players"),
+        ("ember", "Időkérés-hibázó", "stoppages",
+         "timeout_turnover_players"),
+        ("ember", "Hetesdobó", "rules", "seven_taker_players"),
+        ("ember", "Hetes-kihagyó", "rules", "seven_miss_players"),
+        ("ember", "Kipattanó-szedő", "defense",
+         "defensive_rebound_players"),
+        ("ember", "Emberelőny-hibázó", "rules",
+         "powerplay_turnover_players"),
+        ("ember", "Emberhátrány-hibázó", "rules",
+         "shorthanded_turnover_players"),
+        ("ember", "Kulcs-ember", "priorities", "key_player"),
         # --- szünet: ami a félidőben megváltozik ---------------------
         ("szünet", "Szünet-váltás", "attack_types", "attack_mix_shift"),
         ("szünet", "Fal-váltás a szünetre", "tactics",
@@ -68,6 +148,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "attack_side_shift"),
         ("szünet", "Poszt-váltás a szünetre", "roles",
          "role_share_shift"),
+        ("szünet", "Emberfogás-váltás", "defense", "marking_shift"),
         # --- fáradás: időfüggő romlás --------------------------------
         ("fáradás", "Tempó-esés", "attack_types", "team_pace_fade"),
         ("fáradás", "Lövőerő-esés", "event_detection",
@@ -76,8 +157,14 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("fáradás", "Lepattanó-esés", "attack_types",
          "second_chance_fade"),
         ("fáradás", "Fal-fáradás", "xg", "wall_fade"),
+        ("fáradás", "Blokk-fáradás", "defense", "block_fade"),
         ("fáradás", "Kapus-forma", "goalkeeper", "gk_save_fade"),
+        ("fáradás", "Kapus a kapott gól után", "goalkeeper",
+         "gk_after_goal"),
         ("fáradás", "Fegyelem-esés", "rules", "discipline_fade"),
+        ("fáradás", "Sprint-esés", "stats", "sprint_fade"),
+        ("fáradás", "Futómunka-eloszlás", "stats",
+         "running_load_balance"),
         # --- állás: eredményjelző-függő minta ------------------------
         ("állás", "Hiba-állás", "attack_types", "turnovers_by_score"),
         ("állás", "Kontra-állás", "attack_types", "breaks_by_score"),
@@ -86,10 +173,235 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("állás", "7a6-állás", "goalkeeper", "empty_net_by_score"),
         ("állás", "Sprint-állás", "stats", "sprints_by_score"),
         ("állás", "Poszt-állás", "roles", "role_share_by_score"),
+        ("állás", "Óralopás", "momentum", "clock_management"),
+        ("állás", "Kontroll-idővonal", "momentum",
+         "control_timeline"),
+        # --- felkészülés: poszt-profil (állandó tulajdonság) ---------
+        ("felkészülés", "Poszt-lövéstávolság", "roles",
+         "role_shot_distance"),
+        ("felkészülés", "Poszt-kapuoldal", "roles", "role_goal_placement"),
+        ("felkészülés", "Poszt-lövéserő", "roles", "role_shot_power"),
+        ("felkészülés", "Poszt-lövésidőzítés", "roles", "role_shot_timing"),
+        ("felkészülés", "Poszt-eladási zóna", "roles",
+         "role_turnover_zones"),
+        ("felkészülés", "Poszt-labdatartás", "roles", "role_hold_time"),
+        ("felkészülés", "Poszt-nyomás", "roles", "role_pressure_finish"),
+        ("felkészülés", "Figura-befejező", "setplays",
+         "setplay_finishers"),
+        ("felkészülés", "Figura-indító", "setplays",
+         "setplay_openers"),
+        ("felkészülés", "Figura-kopás", "setplays", "setplay_decay"),
+        ("felkészülés", "Időkérés-befejező", "stoppages",
+         "timeout_finisher"),
+        ("felkészülés", "Kontra-poszt", "roles", "role_fast_breaks"),
+        ("felkészülés", "Gólpassz-poszt", "roles",
+         "role_assist_sources"),
+        ("felkészülés", "Lövésválasztás", "decisions",
+         "shot_choice_quality"),
+        ("felkészülés", "Elzárás-hozam", "attack_types",
+         "screen_yield"),
+        ("felkészülés", "Hetes-hozam", "rules", "seven_yield"),
+        ("felkészülés", "Hetes-forrás", "rules", "seven_sources"),
+        ("felkészülés", "Gólpassz-duó", "event_detection",
+         "assist_duos"),
+        ("felkészülés", "Időkérés-hozam", "stoppages",
+         "timeout_yield"),
+        ("felkészülés", "Kapuscsere-hozam", "goalkeeper",
+         "gk_change_yield"),
+        ("felkészülés", "Középkezdés-hozam", "momentum",
+         "restart_yield"),
+        ("felkészülés", "Passzív-kockázat", "rules", "passive_risk"),
+        ("felkészülés", "Labdaszerző-poszt", "defense",
+         "role_steal_sources"),
+        ("felkészülés", "Lepattanó-poszt", "attack_types",
+         "second_chance_roles"),
+        ("felkészülés", "Blokk-poszt", "defense",
+         "role_block_sources"),
+        ("felkészülés", "7a6-befejező", "goalkeeper",
+         "seven_six_finisher_roles"),
+        ("felkészülés", "Hetes-okozó poszt", "rules",
+         "seven_conceder_roles"),
+        ("felkészülés", "Kiülő-poszt", "rules",
+         "suspended_roles"),
+        ("felkészülés", "Visszafutás-poszt", "defense",
+         "slow_retreat_roles"),
+        ("felkészülés", "Átvert-poszt", "defense",
+         "beaten_defender_roles"),
+        ("felkészülés", "Elzáró-poszt", "attack_types",
+         "screen_setter_roles"),
+        ("felkészülés", "Indítás-vadász poszt", "goalkeeper",
+         "outlet_hunter_roles"),
+        ("felkészülés", "Bejátszó-poszt", "attack_types",
+         "pivot_feeder_roles"),
+        ("felkészülés", "Vasember-poszt", "stats", "iron_man_roles"),
+        ("felkészülés", "Kockáztató-poszt", "attack_types",
+         "risky_passer_roles"),
+        ("felkészülés", "Kettőző-poszt", "defense",
+         "doubling_defender_roles"),
+        ("felkészülés", "Kiosztás-poszt", "attack_types",
+         "kickout_target_roles"),
+        ("felkészülés", "Emberelőny-poszt", "rules",
+         "powerplay_shooter_roles"),
+        ("felkészülés", "Emberhátrány-poszt", "rules",
+         "shorthanded_shooter_roles"),
+        ("felkészülés", "Hajrá-poszt", "momentum",
+         "clutch_scorer_roles"),
+        ("felkészülés", "Felzárkózás-poszt", "momentum",
+         "comeback_carrier_roles"),
+        ("felkészülés", "Pazarló-poszt", "xg",
+         "wasteful_shooter_roles"),
+        ("felkészülés", "Ziccer-poszt", "xg",
+         "big_chance_roles"),
+        ("felkészülés", "Labdatartó-poszt", "decisions",
+         "hold_time_roles"),
+        ("felkészülés", "Pressz-poszt", "decisions",
+         "press_sensitive_roles"),
+        ("felkészülés", "Csendtörő-poszt", "momentum",
+         "drought_breaker_roles"),
+        ("felkészülés", "Eltűnő-poszt", "momentum",
+         "fading_scorer_roles"),
+        ("felkészülés", "Hajráhiba-poszt", "momentum",
+         "clutch_turnover_roles"),
+        ("felkészülés", "Forró-poszt", "momentum",
+         "hot_hand_roles"),
+        ("felkészülés", "Középkezdő-poszt", "momentum",
+         "restart_taker_roles"),
+        ("felkészülés", "Sprint-poszt", "stats",
+         "sprint_threat_roles"),
+        ("felkészülés", "Lágypassz-poszt", "decisions",
+         "soft_pass_roles"),
+        ("felkészülés", "Hajrákéz-poszt", "momentum",
+         "clutch_hog_roles"),
+        ("felkészülés", "Kiszolgált-poszt", "roles",
+         "assisted_scorer_roles"),
+        ("felkészülés", "Rajt-poszt", "momentum",
+         "opening_scorer_roles"),
+        ("felkészülés", "Passzív-poszt", "rules",
+         "passive_holder_roles"),
+        ("felkészülés", "Fáradó-poszt", "stats",
+         "fatigue_roles"),
+        ("felkészülés", "Kettőzött-poszt", "defense",
+         "doubled_target_roles"),
+        ("felkészülés", "Elzárt-poszt", "defense",
+         "screened_defender_roles"),
+        ("felkészülés", "Újrakezdő-poszt", "momentum",
+         "second_start_roles"),
+        ("felkészülés", "Hetesdobó-poszt", "rules",
+         "seven_taker_roles"),
+        ("felkészülés", "Blokkolt-poszt", "defense",
+         "blocked_shooter_roles"),
+        ("felkészülés", "Ziccerhagyó-poszt", "xg",
+         "missed_chance_roles"),
+        ("felkészülés", "Kilépő-poszt", "defense",
+         "advanced_defender_roles"),
+        ("felkészülés", "Beállóőr-poszt", "defense",
+         "pivot_guard_roles"),
+        ("felkészülés", "Indító-poszt", "roles",
+         "attack_starter_roles"),
+        ("felkészülés", "Előkészítő-poszt", "attack_types",
+         "last_pass_roles"),
+        ("felkészülés", "Előnyben-poszt", "momentum",
+         "lead_scorer_roles"),
+        ("felkészülés", "Térnyerő-poszt", "decisions",
+         "ball_carrier_roles"),
+        ("felkészülés", "Hátrapassz-poszt", "attack_types",
+         "backward_pass_roles"),
+        ("felkészülés", "Fáradt-eladó poszt", "decisions",
+         "tired_turnover_roles"),
+        ("felkészülés", "Fáradt-lövő poszt", "xg",
+         "tired_shooter_roles"),
+        ("felkészülés", "Fáradt-fal poszt", "defense",
+         "tired_conceder_roles"),
+        ("felkészülés", "Forgatott-poszt", "substitutions",
+         "substituted_roles"),
+        ("felkészülés", "Beérkező-poszt", "substitutions",
+         "sub_in_roles"),
+        ("felkészülés", "Drága-eladó poszt", "defense",
+         "costly_turnover_roles"),
+        ("felkészülés", "Áttörő-poszt", "attack_types",
+         "breakthrough_roles"),
+        ("felkészülés", "Védőmotor-poszt", "defense",
+         "fading_defender_roles"),
+        ("felkészülés", "Fedezett-lövő poszt", "defense",
+         "covered_shooter_roles"),
+        ("felkészülés", "Célkereszt-poszt", "defense",
+         "targeted_defender_roles"),
+        ("felkészülés", "Letámadó-poszt", "defense",
+         "high_steal_roles"),
+        ("felkészülés", "Álló-poszt", "tactics",
+         "static_attacker_roles"),
+        ("felkészülés", "Elzárópáros-poszt", "attack_types",
+         "screen_pair_roles"),
+        ("felkészülés", "Csere-stílus", "substitutions",
+         "swap_style"),
+        ("felkészülés", "Hetespáros-poszt", "rules",
+         "seven_pair_roles"),
+        ("felkészülés", "Kontrapáros-poszt", "attack_types",
+         "fast_break_pair_roles"),
+        ("felkészülés", "Gólpasszpáros-poszt", "roles",
+         "assist_pair_roles"),
+        ("felkészülés", "Kettőzőpáros-poszt", "defense",
+         "doubling_pair_roles"),
+        ("felkészülés", "Lepattanópáros-poszt", "attack_types",
+         "rebound_pair_roles"),
+        ("felkészülés", "Kulcs-poszt", "priorities", "key_post"),
+        ("felkészülés", "Kulcs-páros", "priorities", "key_pair"),
+        ("felkészülés", "Specialista-poszt", "roles",
+         "specialist_roles"),
+        ("felkészülés", "Emberelőnypáros-poszt", "rules",
+         "powerplay_pair_roles"),
+        ("felkészülés", "Válasz-poszt", "momentum",
+         "response_scorer_roles"),
+        ("felkészülés", "Elöl lógó poszt", "defense",
+         "recovery_roles"),
+        ("felkészülés", "Sávváltó-poszt", "attack_types",
+         "lane_switch_roles"),
+        ("felkészülés", "Időkéréspáros-poszt", "stoppages",
+         "timeout_pair_roles"),
+        ("felkészülés", "Menekülő-poszt", "decisions",
+         "press_outlet_roles"),
+        ("felkészülés", "Vég-birtokos poszt", "attack_types",
+         "last_holder_roles"),
+        ("felkészülés", "Ziccer-előkészítő poszt", "xg",
+         "big_chance_feeder_roles"),
+        ("felkészülés", "Hetes-kihagyó poszt", "rules",
+         "seven_miss_roles"),
+        ("felkészülés", "Ziccerpáros-poszt", "xg",
+         "big_chance_pair_roles"),
+        ("felkészülés", "Emberelőny-hiba poszt", "rules",
+         "powerplay_turnover_roles"),
+        ("felkészülés", "Válaszhiba-poszt", "momentum",
+         "response_turnover_roles"),
+        ("felkészülés", "Időkérés-hiba poszt", "stoppages",
+         "timeout_turnover_roles"),
+        ("felkészülés", "Visszaállás-idő", "defense", "retreat_time"),
+        ("felkészülés", "Kapkodás-index", "attack_types",
+         "post_goal_rush"),
+        ("felkészülés", "Emberhátrány-hiba poszt", "rules",
+         "shorthanded_turnover_roles"),
+        ("felkészülés", "Hajrá-kapus", "goalkeeper",
+         "gk_clutch_saves"),
+        ("felkészülés", "Figura-koncentráció", "setplays",
+         "setplay_concentration"),
+        ("felkészülés", "Lepattanó-szedő poszt", "defense",
+         "defensive_rebound_roles"),
+        ("felkészülés", "Kétperc-páros", "rules",
+         "suspension_chain_roles"),
+        ("felkészülés", "Áttörés-hozam", "attack_types",
+         "breakthrough_yield"),
     ]
 
 
-def priority_findings(match: Match, config=None) -> dict:
+def _prf_copy(val: dict) -> dict:
+    """Védő-másolat a gyorsítótárazott rangsorhoz (a hívó módosíthatja)."""
+    return {side: {"top": [dict(it) for it in rec["top"]],
+                   "total": rec["total"],
+                   "families": dict(rec["families"])}
+            for side, rec in val.items()}
+
+
+@memoize_primitive("priority_findings", copy=_prf_copy)
+def _priority_findings_cached(match: Match, config=None) -> dict:
     """Teendő-rangsor: a megszólaló ítéletek fontossági sorrendben.
 
     Végigolvassa a rangsorba vont rétegeket, összegyűjti a nem-None
@@ -148,4 +460,729 @@ def priority_findings(match: Match, config=None) -> dict:
             "total": len(items),
             "families": families,
         }
+    return out
+
+
+def priority_findings(match: Match, config=None) -> dict:
+    """Teendő-rangsor (lásd `_priority_findings_cached`).
+
+    A számolás a `primitive_cache` hatókörön belül meccsenként EGYSZER
+    fut le: az ellenszer-lap és a meccs-csomag is ezt olvassa, így a
+    rangsor nem számolódik újra rétegenként.
+    """
+    return _priority_findings_cached(match, config)
+
+
+# Kulcs-poszt: ennyi rétegnek kell ugyanarra a posztra mutatnia, hogy
+# a posztot a meccsterv első lapjának mondjuk ki.
+KP_MIN_LAYERS = 3
+
+# A poszt-ítéletes rétegek: mindegyik csapatonkénti dictet ad
+# "main_role" és "verdict" kulccsal ("egy réteg, sok felület" minta).
+KP_LAYERS: tuple = (
+    ("Figura-befejező", "setplays", "setplay_finishers"),
+    ("Figura-indító", "setplays", "setplay_openers"),
+    ("Időkérés-befejező", "stoppages", "timeout_finisher"),
+    ("Kontra-poszt", "roles", "role_fast_breaks"),
+    ("Gólpassz-poszt", "roles", "role_assist_sources"),
+    ("Lepattanó-poszt", "attack_types", "second_chance_roles"),
+    ("Elzáró-poszt", "attack_types", "screen_setter_roles"),
+    ("7a6-befejező", "goalkeeper", "seven_six_finisher_roles"),
+    ("Labdaszerző-poszt", "defense", "role_steal_sources"),
+    ("Blokk-poszt", "defense", "role_block_sources"),
+    ("Visszafutás-poszt", "defense", "slow_retreat_roles"),
+    ("Átvert-poszt", "defense", "beaten_defender_roles"),
+    ("Hetes-okozó poszt", "rules", "seven_conceder_roles"),
+    ("Kiülő-poszt", "rules", "suspended_roles"),
+    ("Indítás-vadász poszt", "goalkeeper", "outlet_hunter_roles"),
+    ("Bejátszó-poszt", "attack_types", "pivot_feeder_roles"),
+    ("Kockáztató-poszt", "attack_types", "risky_passer_roles"),
+    ("Vasember-poszt", "stats", "iron_man_roles"),
+    ("Kettőző-poszt", "defense", "doubling_defender_roles"),
+    ("Kiosztás-poszt", "attack_types", "kickout_target_roles"),
+    ("Emberelőny-poszt", "rules", "powerplay_shooter_roles"),
+    ("Emberhátrány-poszt", "rules", "shorthanded_shooter_roles"),
+    ("Hajrá-poszt", "momentum", "clutch_scorer_roles"),
+    ("Szuper-csere poszt", "momentum", "super_sub_roles"),
+    ("Rejtett szervező poszt", "event_detection", "pre_assist_roles"),
+    ("Egálbontó poszt", "momentum", "parity_break_roles"),
+    ("Befutó poszt", "attack_types", "second_wave_roles"),
+    ("Felzárkózás-poszt", "momentum", "comeback_carrier_roles"),
+    ("Pazarló-poszt", "xg", "wasteful_shooter_roles"),
+    ("Ziccer-poszt", "xg", "big_chance_roles"),
+    ("Labdatartó-poszt", "decisions", "hold_time_roles"),
+    ("Pressz-poszt", "decisions", "press_sensitive_roles"),
+    ("Csendtörő-poszt", "momentum", "drought_breaker_roles"),
+    ("Eltűnő-poszt", "momentum", "fading_scorer_roles"),
+    ("Hajráhiba-poszt", "momentum", "clutch_turnover_roles"),
+    ("Forró-poszt", "momentum", "hot_hand_roles"),
+    ("Középkezdő-poszt", "momentum", "restart_taker_roles"),
+    ("Sprint-poszt", "stats", "sprint_threat_roles"),
+    ("Lágypassz-poszt", "decisions", "soft_pass_roles"),
+    ("Hajrákéz-poszt", "momentum", "clutch_hog_roles"),
+    ("Kiszolgált-poszt", "roles", "assisted_scorer_roles"),
+    ("Rajt-poszt", "momentum", "opening_scorer_roles"),
+    ("Passzív-poszt", "rules", "passive_holder_roles"),
+    ("Fáradó-poszt", "stats", "fatigue_roles"),
+    ("Kettőzött-poszt", "defense", "doubled_target_roles"),
+    ("Elzárt-poszt", "defense", "screened_defender_roles"),
+    ("Újrakezdő-poszt", "momentum", "second_start_roles"),
+    ("Hetesdobó-poszt", "rules", "seven_taker_roles"),
+    ("Blokkolt-poszt", "defense", "blocked_shooter_roles"),
+    ("Ziccerhagyó-poszt", "xg", "missed_chance_roles"),
+    ("Kilépő-poszt", "defense", "advanced_defender_roles"),
+    ("Beállóőr-poszt", "defense", "pivot_guard_roles"),
+    ("Indító-poszt", "roles", "attack_starter_roles"),
+    ("Előkészítő-poszt", "attack_types", "last_pass_roles"),
+    ("Előnyben-poszt", "momentum", "lead_scorer_roles"),
+    ("Térnyerő-poszt", "decisions", "ball_carrier_roles"),
+    ("Hátrapassz-poszt", "attack_types", "backward_pass_roles"),
+    ("Fáradt-eladó poszt", "decisions", "tired_turnover_roles"),
+    ("Fáradt-lövő poszt", "xg", "tired_shooter_roles"),
+    ("Fáradt-fal poszt", "defense", "tired_conceder_roles"),
+    ("Forgatott-poszt", "substitutions", "substituted_roles"),
+    ("Beérkező-poszt", "substitutions", "sub_in_roles"),
+    ("Drága-eladó poszt", "defense", "costly_turnover_roles"),
+    ("Áttörő-poszt", "attack_types", "breakthrough_roles"),
+    ("Védőmotor-poszt", "defense", "fading_defender_roles"),
+    ("Fedezett-lövő poszt", "defense", "covered_shooter_roles"),
+    ("Célkereszt-poszt", "defense", "targeted_defender_roles"),
+    ("Letámadó-poszt", "defense", "high_steal_roles"),
+    ("Álló-poszt", "tactics", "static_attacker_roles"),
+    ("Specialista-poszt", "roles", "specialist_roles"),
+    ("Válasz-poszt", "momentum", "response_scorer_roles"),
+    ("Elöl lógó poszt", "defense", "recovery_roles"),
+    ("Sávváltó-poszt", "attack_types", "lane_switch_roles"),
+    ("Menekülő-poszt", "decisions", "press_outlet_roles"),
+    ("Vég-birtokos poszt", "attack_types", "last_holder_roles"),
+    ("Ziccer-előkészítő poszt", "xg", "big_chance_feeder_roles"),
+    ("Hetes-kihagyó poszt", "rules", "seven_miss_roles"),
+    ("Emberelőny-hiba poszt", "rules", "powerplay_turnover_roles"),
+    ("Válaszhiba-poszt", "momentum", "response_turnover_roles"),
+    ("Időkérés-hiba poszt", "stoppages", "timeout_turnover_roles"),
+    ("Emberhátrány-hiba poszt", "rules",
+     "shorthanded_turnover_roles"),
+    ("Lepattanó-szedő poszt", "defense", "defensive_rebound_roles"),
+)
+
+
+# Kulcs-páros: a PÁROS-lencse rétegek (két posztot megnevező minták)
+# névsora, és ennyi egyező réteg kell a kulcs-páros kimondásához. A
+# páros-rétegek szándékosan NEM a KP_LAYERS-ben vannak: a kulcs-poszt
+# egy embert keres, a kulcs-páros egy kettőst — a kettő keverése
+# mindkét számot hígítaná.
+KPR_MIN_LAYERS = 2
+KP_PAIRS: tuple = (
+    ("Elzárópáros-poszt", "attack_types", "screen_pair_roles"),
+    ("Hetespáros-poszt", "rules", "seven_pair_roles"),
+    ("Kontrapáros-poszt", "attack_types", "fast_break_pair_roles"),
+    ("Gólpasszpáros-poszt", "roles", "assist_pair_roles"),
+    ("Kettőzőpáros-poszt", "defense", "doubling_pair_roles"),
+    ("Lepattanópáros-poszt", "attack_types", "rebound_pair_roles"),
+    ("Emberelőnypáros-poszt", "rules", "powerplay_pair_roles"),
+    ("Időkéréspáros-poszt", "stoppages", "timeout_pair_roles"),
+    ("Ziccerpáros-poszt", "xg", "big_chance_pair_roles"),
+    ("Kétperc-páros", "rules", "suspension_chain_roles"),
+)
+
+# A Specialista-poszt a KP_LAYERS-be tartozik (egy posztot nevez meg).
+
+
+def key_pair(match: Match, config=None) -> dict:
+    """Kulcs-páros: HÁNY RÉTEG mutat ugyanarra a POSZTPÁRRA.
+
+    A páros-lencse rétegek (ki zár kinek, ki indít kinek, ki érkezik
+    a lepattanóra, melyik kettős kettőz) egyenként egy-egy bejáratott
+    kettőst neveznek meg — ez a réteg összeszámolja őket: ha több
+    ítélet ugyanazt a párost adja vissza, az a csapat KULCS-PÁROSA.
+
+    Edzőileg ez a meccsterv második lapja (a kulcs-poszt után): a
+    kulcs-poszt EGY embert jelöl ki, a kulcs-páros egy TENGELYT — a
+    kettejük közti passzsáv és a hozzájuk tartozó figura az, amit
+    szét kell választani. Ha a kettőst megbontjuk (a sávot zárva, az
+    egyiket kivéve), több minta hal el egyszerre. Saját csapatnál a
+    kulcs-páros a kiszámíthatóság mérője: a figuráinknak másik
+    tengelyen is futniuk kell.
+
+    Visszatérés csapatonként: {"layers" (megszólaló páros-réteg),
+    "pairs": {páros: réteg-darab}, "named": [{"layer", "pair"}],
+    "top", "verdict"} — a top/verdict None, ha nincs KPR_MIN_LAYERS
+    egyező réteg, vagy az élen holtverseny áll.
+    """
+    import importlib
+
+    from .primitive_cache import primitive_cache
+
+    out: dict = {side: {"layers": 0, "pairs": {}, "named": [],
+                        "top": None, "verdict": None}
+                 for side in ("home", "away")}
+    with primitive_cache(match):
+        for label, mod_name, fn_name in KP_PAIRS:
+            try:
+                mod = importlib.import_module(f".{mod_name}", __package__)
+                rec_all = getattr(mod, fn_name)(match)
+            except Exception:
+                continue
+            for side in ("home", "away"):
+                rec = rec_all.get(side) or {}
+                par = rec.get("main_role")
+                if rec.get("verdict") is None or par is None:
+                    continue
+                o = out[side]
+                o["layers"] += 1
+                o["pairs"][par] = o["pairs"].get(par, 0) + 1
+                o["named"].append({"layer": label, "pair": par})
+    for o in out.values():
+        o["pairs"] = dict(sorted(o["pairs"].items(),
+                                 key=lambda kv: -kv[1]))
+        if not o["pairs"]:
+            continue
+        vals = list(o["pairs"].values())
+        top_n = vals[0]
+        tie = len(vals) > 1 and vals[1] == top_n
+        if top_n >= KPR_MIN_LAYERS and not tie:
+            par = next(iter(o["pairs"]))
+            o["top"] = par
+            o["verdict"] = (
+                f"a kulcs-párosuk a(z) {par}: {top_n} réteg ítélete "
+                f"mutat rá (a {o['layers']} megszólalóból) — a "
+                "kettejük közti sávot kell szétvágni, mert azzal "
+                "több mintájuk hal el egyszerre")
+    return out
+
+
+def key_post(match: Match, config=None) -> dict:
+    """Kulcs-poszt: HÁNY RÉTEG mutat ugyanarra a posztra.
+
+    A poszt-lencse rétegek (kire fut ki a játékuk, hol sebezhető a
+    védekezésük) egyenként egy-egy mintát mondanak ki — ez a réteg
+    összeszámolja őket: ha a megszólaló ítéletek zöme ugyanazt a
+    posztot nevezi meg, az a csapat KULCS-POSZTJA.
+
+    Edzőileg ez a meccsterv első lapja. Az ellenfélnél: ha náluk a
+    beállóra mutat a lepattanó-, a blokk- és az elzáró-réteg is, nem
+    három külön feladat van, hanem EGY — az ő kezelése (fogás, zárás,
+    kettőzés) többet old meg, mint bármely részszabály. Saját
+    csapatnál: ha a mintáink egy emberre futnak ki, a játékunk
+    kiszámítható — tehermentesítés és variáció kell.
+
+    Visszatérés csapatonként: {"layers" (megszólaló poszt-réteg),
+    "posts": {poszt: réteg-darab}, "named": [{"layer", "poszt"}],
+    "top", "verdict"} — a top/verdict None, ha nincs KP_MIN_LAYERS
+    egyező réteg, vagy az élen holtverseny áll.
+    """
+    import importlib
+
+    from .primitive_cache import primitive_cache
+
+    out: dict = {side: {"layers": 0, "posts": {}, "named": [],
+                        "top": None, "verdict": None}
+                 for side in ("home", "away")}
+    with primitive_cache(match):
+        for label, mod_name, fn_name in KP_LAYERS:
+            try:
+                mod = importlib.import_module(f".{mod_name}", __package__)
+                rec_all = getattr(mod, fn_name)(match)
+            except Exception:
+                continue
+            for side in ("home", "away"):
+                rec = rec_all.get(side) or {}
+                poszt = rec.get("main_role")
+                if rec.get("verdict") is None or poszt is None:
+                    continue
+                o = out[side]
+                o["layers"] += 1
+                o["posts"][poszt] = o["posts"].get(poszt, 0) + 1
+                o["named"].append({"layer": label, "poszt": poszt})
+    for o in out.values():
+        o["posts"] = dict(sorted(o["posts"].items(),
+                                 key=lambda kv: -kv[1]))
+        if not o["posts"]:
+            continue
+        vals = list(o["posts"].values())
+        top_n = vals[0]
+        tie = len(vals) > 1 and vals[1] == top_n
+        if top_n >= KP_MIN_LAYERS and not tie:
+            poszt = next(iter(o["posts"]))
+            o["top"] = poszt
+            o["verdict"] = (
+                f"a kulcs-posztjuk a(z) {poszt}: {top_n} réteg "
+                f"ítélete fut ki rá (a {o['layers']} megszólalóból) — "
+                "az ő kezelése nem részfeladat, hanem a meccsterv "
+                "első lapja")
+    return out
+
+
+# Kulcs-ember: az EMBERT (nem posztot) megnevező rétegek névsora, és
+# ennyi egyező réteg kell a kulcs-ember kimondásához. A poszt-lencse
+# küszöbénél magasabb, mert emberből több forrás van, és egy sztár
+# természetes módon több listán szerepel — a jelzés akkor érdekes, ha
+# több különböző szempont ugyanoda mutat.
+#
+# A küszöb a lencse MÉRETÉVEL nő: ahogy új ember-rétegek jönnek, négy
+# egyezés egyre kevesebbet jelent (több lista → könnyebb véletlenül
+# négyszer az élre kerülni). Ezért a tényleges küszöb a padló és a
+# lista tizede közül a nagyobbik — a kis lencsénél marad a régi
+# viselkedés, a nagy lencsénél szigorodik.
+KPL_MIN_LAYERS = 4
+KPL_MIN_SHARE = 0.10
+
+KPL_LAYERS: tuple = (
+    ("Tüzes kéz", "momentum", "hot_hands"),
+    ("Aszály-törő", "momentum", "drought_breakers"),
+    ("Hajrá-birtokló", "momentum", "clutch_ball_hogs"),
+    ("Eltűnő ember", "momentum", "fading_scorers"),
+    ("Felzárkózás-húzó", "momentum", "comeback_carriers"),
+    ("Hajrá-hibázó", "momentum", "clutch_turnover_players"),
+    ("Középkezdés-átvevő", "momentum", "restart_targets"),
+    ("Eltűnő védő", "defense", "fading_defenders"),
+    ("Letámadó", "defense", "high_steal_players"),
+    ("Átvert védő", "defense", "beaten_defenders"),
+    ("Kettőző védő", "defense", "doubling_defenders"),
+    ("Blokkolt lövő", "defense", "blocked_shooters"),
+    ("Fedezett lövő", "defense", "covered_shooters"),
+    ("Beállóőr", "defense", "pivot_guards"),
+    ("Kilépő védő", "defense", "advanced_defender"),
+    ("Kipattanó-szedő", "defense", "defensive_rebound_players"),
+    ("Támadás-indító", "attack_types", "attack_starters"),
+    ("Beálló-bejátszó", "attack_types", "pivot_feeders"),
+    ("Áttörő", "attack_types", "breakthrough_players"),
+    ("Elzáró", "attack_types", "screen_setters"),
+    ("Kockázatos passzoló", "attack_types", "risky_passers"),
+    ("Kiosztás-célpont", "attack_types", "kickout_targets"),
+    ("Pressz-érzékeny", "decisions", "pressure_sensitive_players"),
+    ("Emberelőny-lövő", "rules", "powerplay_shooters"),
+    ("Emberhátrány-lövő", "rules", "shorthanded_shooters"),
+    ("Fáradt-eladó", "decisions", "tired_turnover_players"),
+    ("Visszafutás-lemaradó", "defense", "slow_retreat_players"),
+    ("Fáradt-fal ember", "defense", "tired_conceder_players"),
+    ("Indítás-vadász", "goalkeeper", "outlet_hunters"),
+    ("Kiszolgált befejező", "roles", "assisted_scorers"),
+    ("Rejtett szervező", "event_detection", "pre_assists"),
+    ("Szuper-csere", "momentum", "super_sub"),
+    ("Hetes-dobó", "rules", "seven_taker_corners"),
+    ("Hetes-ismétlő", "rules", "seven_taker_repeat"),
+    ("Kétperc-gyűjtő", "rules", "suspension_collectors"),
+    ("Felhozatal-ember", "goalkeeper", "outlet_targets"),
+    ("Kettőzött ember", "defense", "doubled_targets"),
+    ("Ziccerhagyó ember", "xg", "missed_chance_players"),
+    ("Fáradt lövő", "xg", "tired_shooters"),
+    ("Lágy passzoló", "decisions", "soft_passers"),
+    ("Passzív-birtokló", "rules", "passive_holders"),
+    ("Előkészítő ember", "attack_types", "last_passers"),
+    ("Válaszoló ember", "momentum", "response_scorers"),
+    ("Rajt-ember", "momentum", "opening_scorers"),
+    ("Újrakezdő ember", "momentum", "second_start_scorers"),
+    ("Előnyben-ember", "momentum", "lead_scorers"),
+    ("Elzárt védő", "defense", "screened_defenders"),
+    ("Futtatott szélső", "attack_types", "wing_runners"),
+    ("Keresztjáró ember", "attack_types", "crossing_runners"),
+    ("Leforduló beálló", "attack_types", "pivot_runners"),
+    ("Befutó ember", "attack_types", "second_wave_finishers"),
+    ("Egálbontó ember", "momentum", "parity_break_scorers"),
+    ("Balkezes lövő", "event_detection", "shooting_hand"),
+    ("7a6-befejező", "goalkeeper", "seven_six_finishers"),
+    ("Hátrapasszoló", "attack_types", "backward_passers"),
+    ("Térnyerő", "decisions", "ball_carriers"),
+    ("Sávváltó", "attack_types", "lane_switchers"),
+    ("Menekülő", "decisions", "press_outlets"),
+    ("Vég-birtokos", "attack_types", "last_holders"),
+    ("Ziccer-előkészítő", "xg", "big_chance_feeders"),
+    ("Válaszhiba-ember", "momentum", "response_turnover_players"),
+    ("Időkérés-hibázó", "stoppages", "timeout_turnover_players"),
+    ("Hetesdobó", "rules", "seven_taker_players"),
+    ("Hetes-kihagyó", "rules", "seven_miss_players"),
+    ("Emberelőny-hibázó", "rules", "powerplay_turnover_players"),
+    ("Emberhátrány-hibázó", "rules",
+     "shorthanded_turnover_players"),
+    ("Hetes-okozó", "rules", "seven_meter_conceders"),
+    ("Sprint-veszély", "stats", "sprint_threats"),
+    ("Pazarló lövő", "xg", "wasteful_shooters"),
+)
+
+
+def key_player(match: Match, config=None) -> dict:
+    """Kulcs-ember: HÁNY RÉTEG mutat ugyanarra a JÁTÉKOSRA.
+
+    A Kulcs-poszt a posztot, a Kulcs-páros a kettőst nevezi meg — ez
+    az EMBERT: a néven nevező rétegek (tüzes kéz, aszály-törő,
+    hajrá-birtokló, letámadó, áttörő, elzáró, kipattanó-szedő,
+    hetes-kihagyó, …) élén álló játékosokat számolja össze
+    csapatonként. A három szintézis szándékosan külön áll: a "melyik
+    poszt", a "melyik kettős" és a "melyik EMBER" kérdés más-más
+    választ ad, és nem szabad hígítaniuk egymást.
+
+    Edzőileg ez a személyre szóló feladat lapja. Az ellenfélnél: ha
+    négy különböző szempont ugyanazt az embert dobja ki, ő nem egy a
+    hét mezőnyjátékos közül — az ő kezelése (emberfogás, kettőzés,
+    tudatos fárasztás, a labdaútjának elvágása) önmagában
+    meccstervnyi. Saját csapatnál ugyanez a figyelmeztetés: ha
+    minden rajta fut keresztül, egy jó ellenfél egy emberrel
+    megfogja a játékunkat — tehermentesítés és második út kell.
+
+    Visszatérés csapatonként: {"layers" (megszólaló ember-réteg),
+    "players": {játékos-kulcs: réteg-darab}, "named": [{"layer",
+    "player"}], "top", "verdict"} — a top/verdict None, ha nincs
+    a szükséges egyezés (max(KPL_MIN_LAYERS, a lista tizede)), vagy
+    az élen holtverseny áll. A
+    játékos-kulcs a mezszám, ha ismert; különben a track-azonosító.
+    """
+    import importlib
+
+    from .primitive_cache import primitive_cache
+
+    out: dict = {side: {"layers": 0, "players": {}, "named": [],
+                        "top": None, "verdict": None}
+                 for side in ("home", "away")}
+    with primitive_cache(match):
+        for label, mod_name, fn_name in KPL_LAYERS:
+            try:
+                mod = importlib.import_module(f".{mod_name}", __package__)
+                rec_all = getattr(mod, fn_name)(match)
+            except Exception:
+                continue
+            for side in ("home", "away"):
+                rec = rec_all.get(side) or {}
+                top = rec.get("top")
+                if not isinstance(top, dict):
+                    continue
+                pid = top.get("player_id")
+                if pid is None:
+                    continue
+                jersey = top.get("jersey")
+                kulcs = str(jersey if jersey is not None else pid)
+                o = out[side]
+                o["layers"] += 1
+                o["players"][kulcs] = o["players"].get(kulcs, 0) + 1
+                o["named"].append({"layer": label, "player": kulcs})
+    for o in out.values():
+        o["players"] = dict(sorted(o["players"].items(),
+                                   key=lambda kv: -kv[1]))
+        if not o["players"]:
+            continue
+        vals = list(o["players"].values())
+        top_n = vals[0]
+        tie = len(vals) > 1 and vals[1] == top_n
+        kell = max(KPL_MIN_LAYERS,
+                   round(KPL_MIN_SHARE * len(KPL_LAYERS)))
+        if top_n >= kell and not tie:
+            kulcs = next(iter(o["players"]))
+            o["top"] = kulcs
+            o["verdict"] = (
+                f"a kulcs-emberük a(z) {kulcs}. számú: {top_n} réteg "
+                f"ítélete mutat rá (a {o['layers']} megszólalóból) — "
+                "ő nem egy a hét mezőnyjátékos közül, az ő kezelése "
+                "önmagában meccstervnyi feladat")
+    return out
+
+
+
+# Ellenszer-lap: ennyi közös kulcsszó kell a teendő és a gyakorlat
+# párosításához, és a szavakat ennyi karakterre csonkolva hasonlítjuk
+# (a magyar toldalékok miatt).
+CPL_MIN_OVERLAP = 1
+CPL_STEM = 6
+
+
+def _cpl_words(text: str) -> set:
+    """Összehasonlítható szótövek: kisbetűs, CPL_STEM hosszú előtagok.
+
+    A magyar toldalékok miatt teljes szó-egyezésre nem lehet építeni
+    ("kettőzés" / "kettőzését" / "kettőzés-elleni"), ezért a szavakat
+    az első CPL_STEM karakterükre csonkoljuk.
+    """
+    out = set()
+    szo = ""
+    for ch in text.lower():
+        if ch.isalnum():
+            szo += ch
+        else:
+            if len(szo) >= CPL_STEM:
+                out.add(szo[:CPL_STEM])
+            szo = ""
+    if len(szo) >= CPL_STEM:
+        out.add(szo[:CPL_STEM])
+    return out
+
+
+def counter_plan(match: Match, config=None) -> dict:
+    """Ellenszer-lap: a teendő-rangsor mellé a HOZZÁ TARTOZÓ gyakorlat.
+
+    A teendő-rangsor (priority_findings) megmondja, MI a baj; az
+    edzés-fókusz (training_focus) azt, MIT lehet gyakorolni — de a
+    kettő eddig két külön lista volt, és az edzőnek fejben kellett
+    összekötnie. Ez a réteg elvégzi a párosítást: minden teendőhöz
+    megkeresi a legjobban illeszkedő edzés-tételt (közös szótövek a
+    címke/ítélet és a gyakorlat címe/indoklása között), és egy
+    gyakorlatot csak egyszer használ fel.
+
+    Edzőileg ez a hétfő reggeli lap: probléma → gyakorlat, sorrendben.
+    Ahol nincs párja egy teendőnek, az őszinte jelzés: arra a
+    problémára még nincs kész edzés-válaszunk, ott a vezetőedző
+    döntése kell.
+
+    Visszatérés csapatonként: {"pairs": [{"family", "label",
+    "verdict", "drill_title", "drill"}], "matched", "total",
+    "verdict"} — a drill_title/drill None, ha nincs illeszkedő
+    gyakorlat; a verdict None, ha egyetlen teendő sincs.
+    """
+    from .training import training_focus
+
+    findings = priority_findings(match, config)
+    focus = training_focus(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        top = (findings.get(side) or {}).get("top") or []
+        items = list(focus.get(side) or [])
+        pairs: list = []
+        used: set = set()
+        for f in top:
+            szavak = _cpl_words(f"{f.get('label', '')} "
+                                f"{f.get('verdict', '')}")
+            best, best_score = None, 0
+            for i, it in enumerate(items):
+                if i in used:
+                    continue
+                score = len(szavak & _cpl_words(
+                    f"{it.get('title', '')} {it.get('why', '')}"))
+                if score > best_score:
+                    best, best_score = i, score
+            row = {"family": f.get("family"), "label": f.get("label"),
+                   "verdict": f.get("verdict"), "drill_title": None,
+                   "drill": None}
+            if best is not None and best_score >= CPL_MIN_OVERLAP:
+                used.add(best)
+                row["drill_title"] = items[best].get("title")
+                row["drill"] = items[best].get("drill")
+            pairs.append(row)
+        matched = sum(1 for r in pairs if r["drill"] is not None)
+        rec = {"pairs": pairs, "matched": matched, "total": len(pairs),
+               "verdict": None}
+        if pairs:
+            if matched == len(pairs):
+                rec["verdict"] = (
+                    f"mind a(z) {len(pairs)} teendőhöz van kész "
+                    "gyakorlat — a hétfői edzés összeállítható a "
+                    "listából")
+            elif matched:
+                rec["verdict"] = (
+                    f"a(z) {len(pairs)} teendőből {matched}-hez van "
+                    f"kész gyakorlat; a maradék "
+                    f"{len(pairs) - matched} edzői döntést kíván")
+            else:
+                rec["verdict"] = (
+                    f"a(z) {len(pairs)} teendőhöz nincs illeszkedő "
+                    "gyakorlat a fókusz-listán — ezekre a vezetőedző "
+                    "saját megoldása kell")
+        out[side] = rec
+    return out
+
+
+# Hajrá-profil: ennyi fáradás-jel fölött már nem egy-egy szám, hanem
+# MINTÁZAT — a csapat egészében kifogy a meccs végére. Kettő még lehet
+# a mintavétel szeszélye; három azonos irányú jel egy meccsen már a
+# felkészülés kérdése.
+FATIGUE_PATTERN_MIN = 3
+
+
+def _copy_fatigue(data: dict) -> dict:
+    """A hajrá-profil másolata: a jel-listát elemenként is másoljuk,
+    hogy a gyorsítótár értékét a hívó ne írhassa át."""
+    ki = {}
+    for side, rec in (data or {}).items():
+        uj = dict(rec or {})
+        uj["signals"] = [dict(j) for j in (uj.get("signals") or [])]
+        ki[side] = uj
+    return ki
+
+
+@memoize_primitive("fatigue_profile", copy=_copy_fatigue)
+def fatigue_profile(match: Match, config=None) -> dict:
+    """Hajrá-profil: MI romlik a leginkább a meccs végére — egy lapon.
+
+    A csomagban egy tucat "esés"-réteg méri, mi változik a 2. félidőre
+    (visszaállás, labdabiztonság, fal-mélység, védekezési nyomás,
+    blokk, beálló- és szélső-bevonás, támadás-mélység, befejezés,
+    sprint). Külön-külön mindegyik egy szám; együtt viszont az edző nem
+    tudja, MIVEL kezdje — pontosan az a gond, amit a minőség-
+    jelentésben az "első teendő" old meg.
+
+    Ez a réteg összegyűjti a MEGSZÓLALÓ eséseket, és edzői leverage
+    szerint rangsorolja őket. A sorrend nem tanult súlyozás, hanem
+    kimondott, vitatható edzői döntés, két elv mentén:
+
+    - előre kerül, ami KÖZVETLENÜL gólt ér (a lassuló visszaállás
+      minden lövés után kontra-ablakot nyit, az eladott labda pedig
+      azonnali kontra), utána a fal munkája (hely, nyomás, blokk),
+      és csak azután a támadó-oldali beszűkülés;
+    - hátra kerül, ami INKÁBB TÜNET, mint ok: a beragadó befejezés és
+      a fogyó sprint a fentiek következménye, nem önálló teendő.
+
+    Edzőileg ez a hajrá egy lapja: ha a lista üres, a csapat kibírja a
+    hatvan percet — ez önmagában értékes információ, nem hiányzó adat.
+
+    Visszatérés csapatonként: {"signals": [{"layer", "label",
+    "detail"}], "top", "count", "verdict"} — a top a legfontosabb EGY
+    jel címkéje, a verdict a hozzá tartozó edzői mondat; mindkettő
+    None, ha egyetlen esés sem szólalt meg.
+    """
+    from .attack_types import (ADEPTH_FADE_DROP_M, PIVOT_FADE_DROP_PCT,
+                               WING_INV_FADE_DROP_PCT, attack_depth_fade,
+                               pivot_usage_fade, wing_involvement_fade)
+    from .defense import (BLF_GAP_PP, LINE_FADE_DROP_M,
+                          PRESSURE_FADE_LOOSEN_M, RETREAT_FADE_SLOW_S,
+                          TURNOVER_FADE_RISE_PER_MIN, block_fade,
+                          line_height_fade, pressure_fade, retreat_fade,
+                          turnover_fade)
+    from .stats import SFD_DROP_RATIO, sprint_fade
+    from .xg import FINISH_FADE_DROP_PP, finish_fade
+
+    # (réteg, magyar címke, betöltő, a "romlott" irány kiolvasása,
+    #  edzői mondat-sablon). A SORREND a rangsor.
+    def _retreat(rec):
+        if rec.get("slow_s") is None or rec["slow_s"] < RETREAT_FADE_SLOW_S:
+            return None
+        return (f"{rec['fh_s']:.1f} → {rec['sh_s']:.1f} mp a hazaérés",
+                "a hajrában minden lövésetek után kontra-ablak nyílik — a "
+                "lövés PILLANATÁBAN kijelölt első visszafutó a teendő")
+
+    def _line(rec):
+        if rec.get("drop_m") is None or rec["drop_m"] < LINE_FADE_DROP_M:
+            return None
+        return (f"{rec['fh_m']:.1f} → {rec['sh_m']:.1f} m a fal helye",
+                "a hajrában nem lép ki senki az átlövőre — kilépés-gyakorlat "
+                "FÁRADTAN, a kondi-blokk után")
+
+    def _pressure(rec):
+        if (rec.get("loosen_m") is None
+                or rec["loosen_m"] < PRESSURE_FADE_LOOSEN_M):
+            return None
+        return (f"{rec['fh_m']:.1f} → {rec['sh_m']:.1f} m a labdástól",
+                "a hajrában lazul a fal: a szabad lövő a másik oldal első "
+                "számú fegyvere lesz")
+
+    def _pivot(rec):
+        if (rec.get("drop_pct") is None
+                or rec["drop_pct"] < PIVOT_FADE_DROP_PCT):
+            return None
+        return (f"{rec['fh_pct']:.0f}% → {rec['sh_pct']:.0f}% a beállós "
+                "támadás",
+                "a hajrában elárvul a hatos vonal, és a fal nyugodtan "
+                "dolgozhat kifelé — nem a beálló mozgása hiányzik, hanem "
+                "a bátor bejátszás")
+
+    def _depth(rec):
+        if rec.get("drop_m") is None or rec["drop_m"] < ADEPTH_FADE_DROP_M:
+            return None
+        return (f"{rec['fh_m']:.1f} → {rec['sh_m']:.1f} m a kaputól",
+                "a hajrában már nem mennek be a hatosra, és onnan csak a "
+                "kényelmes, de nehéz átlövés jön — a teendő a hajrá-"
+                "támadások ELSŐ mozdulatának kikötése")
+
+    def _wing(rec):
+        if (rec.get("drop_pct") is None
+                or rec["drop_pct"] < WING_INV_FADE_DROP_PCT):
+            return None
+        return (f"{rec['fh_pct']:.0f}% → {rec['sh_pct']:.0f}% jut el a szélre",
+                "a hajrában középen ragad a labda, és onnan csak a nehéz "
+                "átlövés marad — kösd ki, hogy az első passz a szélre megy")
+
+    def _turnover(rec):
+        # A saját rétege ÜTEMET (eladás/perc a SAJÁT birtoklás-időre)
+        # hasonlít: a két félidőben eltérő birtoklás mellett a nyers
+        # darabszám félrevezetne.
+        rise = rec.get("rise_per_min")
+        if rise is None or rise < TURNOVER_FADE_RISE_PER_MIN:
+            return None
+        return (f"{rec['fh_per_min']:.1f} → {rec['sh_per_min']:.1f} "
+                "eladás/perc",
+                "a hajrában elszáll a labda a kezükből, és az eladás "
+                "azonnali kontra — nem a taktika, hanem a döntés-"
+                "kényszer gyorsul: fáradtan gyakorlandó befejezés-"
+                "helyzetek a teendő")
+
+    def _block(rec):
+        fh, sh = rec.get("fh_pct"), rec.get("sh_pct")
+        if fh is None or sh is None or fh - sh < BLF_GAP_PP:
+            return None
+        return (f"{fh:.0f}% → {sh:.0f}% blokk-arány",
+                "a hajrára elfogy a blokk-munka, és a távoli lövés "
+                "ellenük szinte ingyen lesz — a blokkoló emberek "
+                "pihentetése és a fáradt lábmunka az edzés-téma")
+
+    def _finish(rec):
+        drop = rec.get("drop_pp")
+        if drop is None or drop < FINISH_FADE_DROP_PP:
+            return None
+        fh = 100.0 * rec["fh_goals"] / rec["fh_shots"]
+        sh = 100.0 * rec["sh_goals"] / rec["sh_shots"]
+        return (f"{fh:.0f}% → {sh:.0f}% a gólra váltás",
+                "a hajrában már nem ül a befejezés — a végén a "
+                "kidolgozott ziccerig kell játszani, a félkész helyzet "
+                "fáradtan nem megy be")
+
+    def _sprint(rec):
+        # A saját rétege ÜTEMET (sprint/perc) hasonlít, nem darabszámot:
+        # a két félidő hossza eltérhet, a nyers darab félrevezetne.
+        ratio = rec.get("ratio")
+        if ratio is None or ratio > SFD_DROP_RATIO:
+            return None
+        return (f"{rec['fh_per_min']:.1f} → {rec['sh_per_min']:.1f} "
+                "sprint/perc",
+                "a láb fogy el a meccs végére — a cserék időzítése és a "
+                "hajrá-blokk edzésen is fáradtan gyakorlandó")
+
+    rangsor = (
+        ("retreat_fade", "Lassuló visszaállás", retreat_fade, _retreat),
+        ("turnover_fade", "Elszálló labdák", turnover_fade, _turnover),
+        ("line_height_fade", "Visszahúzódó fal", line_height_fade, _line),
+        ("pressure_fade", "Lazuló fal", pressure_fade, _pressure),
+        ("block_fade", "Elfogyó blokk", block_fade, _block),
+        ("pivot_usage_fade", "Elfogyó beálló", pivot_usage_fade, _pivot),
+        ("attack_depth_fade", "Hátrébb kerülő támadás",
+         attack_depth_fade, _depth),
+        ("wing_involvement_fade", "Beszűkülő támadás",
+         wing_involvement_fade, _wing),
+        ("finish_fade", "Beragadó befejezés", finish_fade, _finish),
+        ("sprint_fade", "Fogyó sprint", sprint_fade, _sprint),
+    )
+
+    # A rétegeket EGYSZER kérdezzük le (mindegyiket külön try/except-tel:
+    # egy réteg hibája nem viheti el a profilt).
+    eredmenyek: list = []
+    for nev, cimke, fn, olvaso in rangsor:
+        try:
+            eredmenyek.append((nev, cimke, fn(match, config), olvaso))
+        except Exception:
+            continue
+
+    out: dict = {}
+    for side in ("home", "away"):
+        jelek: list = []
+        mondatok: list = []
+        for nev, cimke, adat, olvaso in eredmenyek:
+            try:
+                rec = (adat or {}).get(side) or {}
+                kiolvasott = olvaso(rec)
+            except Exception:
+                continue
+            if kiolvasott is None:
+                continue
+            reszlet, mondat = kiolvasott
+            jelek.append({"layer": nev, "label": cimke, "detail": reszlet})
+            mondatok.append(mondat)
+        rec_out = {"signals": jelek, "count": len(jelek),
+                   "top": None, "verdict": None}
+        if jelek:
+            rec_out["top"] = jelek[0]["label"]
+            elso = f"{jelek[0]['label'].lower()} ({jelek[0]['detail']}): "
+            if len(jelek) >= FATIGUE_PATTERN_MIN:
+                rec_out["verdict"] = (
+                    f"{len(jelek)} fáradás-jel egy meccsen — ez már nem "
+                    f"véletlen, hanem a hatvan perc kérdése. Kezdd itt: "
+                    f"{elso}{mondatok[0]}")
+            else:
+                rec_out["verdict"] = f"{elso}{mondatok[0]}"
+        out[side] = rec_out
     return out

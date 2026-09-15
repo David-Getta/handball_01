@@ -25,6 +25,10 @@ from typing import Optional
 from ..models.tracking import Match, Frame, PlayerPosition, Team
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
 from .tactics import TacticsConfig
+# A kocka-szintű gyorsítótár a LEGFORRÓBB úton hívódik (a
+# birtoklás-mérés kockánként, egy összeállítás alatt milliószor): a
+# függvényen belüli import ennyi hívásnál már mérhető költség.
+from .primitive_cache import cached_frame, copy_events, memoize_primitive
 
 GOAL_Y = COURT_WIDTH_M / 2.0  # a kapu közepe y-ban (10 m)
 
@@ -92,7 +96,6 @@ class Option:
 
 def ball_holder(frame: Frame, config: TacticsConfig) -> Optional[PlayerPosition]:
     """A labdát épp birtokló JÁTÉKOS (a labdához legközelebbi, sugáron belül)."""
-    from .primitive_cache import cached_frame
     return cached_frame("ball_holder", frame, config,
                         lambda: _ball_holder(frame, config))
 
@@ -202,6 +205,9 @@ class PassEvent:
     passer_pos: PlayerPosition
 
 
+# A passz-felismerés a TELJES felvételt végigjárja, és egy összeállítás
+# alatt a passz-, gólpassz- és szervezés-rétegek tucatja kéri.
+@memoize_primitive("detect_passes", copy=copy_events)
 def detect_passes(match: Match, config: Optional[TacticsConfig] = None) -> list[PassEvent]:
     """Passzok felismerése: a labdabirtokos csapaton belüli VÁLTÁSA egy passz.
 
@@ -377,6 +383,14 @@ def pass_security_under_pressure(match: Match,
 # Labdatartás-idő: ennél rövidebb birtoklás csak érintés (zaj), ennyi
 # labdás szakasztól ítélünk egy játékost, és ennyi másodperccel a
 # csapatátlag felett labdatartó a játékos.
+#
+# Az érintés-küszöb MÁSODPERCBEN: a feldolgozás ritkít (a termék alapja
+# minden 3. kocka), tehát 5 kocka a profiltól függően 0,2 és 0,6
+# másodperc között bármit jelentene. Ez valódi időtartam: mennyi az,
+# ami "csak érintés". Két tized másodperc alatt tényleg nem lehet
+# birtokolni a labdát.
+HOLD_MIN_S = 0.2
+# Visszafelé kompatibilis kocka-alapérték (25 fps-en pontosan 0,2 mp).
 HOLD_MIN_FRAMES = 5
 HOLD_MIN_HOLDS = 5
 HOLD_GAP_S = 0.8
@@ -389,7 +403,7 @@ def hold_time_players(match: Match,
     A passz-tempó (pass_tempo) és a támadás-ritmus csapatszinten mondja
     meg, pörög-e a játék — ez a névre szóló olvasata: minden labdás
     szakasz hosszát a birtokoshoz írjuk, és nézzük, kinél áll meg a
-    labda. Az érintésnyi (HOLD_MIN_FRAMES alatti) birtoklás zaj, azt
+    labda. Az érintésnyi (HOLD_MIN_S alatti) birtoklás zaj, azt
     nem számoljuk.
 
     Edzőileg két irányba szól: ellenfélnél a hosszan tartó labdás a
@@ -405,6 +419,8 @@ def hold_time_players(match: Match,
     """
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    # Az érintés-küszöb a meccs SAJÁT képrátájából (lásd HOLD_MIN_S).
+    hold_min = max(1, int(round(HOLD_MIN_S * fps)))
     jersey: dict[int, int] = {}
     tally: dict[str, dict[int, list]] = {"home": {}, "away": {}}
     run_id = run_team = None
@@ -414,7 +430,7 @@ def hold_time_players(match: Match,
         """A lezáruló labdás szakasz jóváírása a birtokosnál."""
         if run_id is None or run_team is None:
             return
-        if run_len < HOLD_MIN_FRAMES:
+        if run_len < hold_min:
             return
         rec = tally[run_team].setdefault(run_id, [0, 0])
         rec[0] += 1
@@ -459,6 +475,110 @@ def hold_time_players(match: Match,
                   "avg_s": (team_avg if n_holds >= HOLD_MIN_HOLDS
                             else None),
                   "players": players, "slowest": slowest}
+    return out
+
+
+# Labdavezetés-táv: az érintés-küszöb és a minta-minimum a
+# labdatartáséval közös (HOLD_MIN_S, HOLD_MIN_HOLDS — ugyanaz a
+# "mi számít birtoklásnak" kérdés); e feletti lépés-sebesség
+# követés-ugrás, nem futás (méter/másodpercben — a kockánkénti alak a
+# ritkítástól függne); és ennyi méterrel a csapatátlag feletti
+# átlagos labdás út tesz valakit labdahordóvá.
+CARRY_MAX_STEP_MS = 10.0
+CARRY_LONG_GAP_M = 3.0
+
+
+def ball_carry_players(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Labdavezetés-táv: KI mennyit MOZOG a labdával.
+
+    A labdatartás-idő (hold_time_players) azt méri, meddig van valakinél
+    a labda — ez azt, hogy közben mennyi utat tesz meg vele. A kettő
+    nem ugyanaz: az egy helyben passzra váró beálló sokáig tartja, de
+    nem viszi; a labdával kifelé-befelé húzogató átlövő keveset tart
+    egyszerre, de sok métert cipeli. Minden labdás szakaszban a
+    birtokos elmozdulását összegezzük (a követés-ugrásnyi, CARRY_MAX_
+    STEP_MS feletti lépést kihagyva), és a szakasz métereit a
+    birtokoshoz írjuk.
+
+    Edzőileg: az ellenfél labdahordója a LESZÚRÁS és a halászás
+    célpontja — aki sokat fut a labdával, az sokáig van elvehető
+    helyzetben, és nála lassul le a támadás-szervezés. Saját oldalon a
+    "vidd kevesebbet, add korábban" téma névre szólóan.
+
+    Visszatérés csapatonként:
+      {"holds", "meters", "avg_m", "players": [{"player_id", "jersey",
+       "holds", "meters", "avg_m"}], "carrier": {..., "gap_m"}|None}
+    — players az átlagos labdás út szerint csökkenően; avg_m és
+    carrier None, ha kevés a minta (HOLD_MIN_HOLDS).
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    hold_min = max(1, int(round(HOLD_MIN_S * fps)))
+    max_step = CARRY_MAX_STEP_MS / fps  # méter/kocka
+    jersey: dict[int, int] = {}
+    tally: dict[str, dict[int, list]] = {"home": {}, "away": {}}
+    run_id = run_team = None
+    run_len = 0
+    run_m = 0.0
+    prev_xy = None
+
+    def _close():
+        """A lezáruló labdás szakasz métereinek jóváírása."""
+        if run_id is None or run_team is None:
+            return
+        if run_len < hold_min:
+            return
+        rec = tally[run_team].setdefault(run_id, [0, 0.0])
+        rec[0] += 1
+        rec[1] += run_m
+
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        pid = holder.track_id if holder is not None else None
+        side = (holder.team.value
+                if holder is not None and holder.team is not None
+                else None)
+        if holder is not None and holder.jersey_number is not None:
+            jersey.setdefault(holder.track_id, holder.jersey_number)
+        if pid != run_id or side != run_team:
+            _close()
+            run_id, run_team, run_len, run_m = pid, side, 0, 0.0
+            prev_xy = None
+        if pid is not None and side is not None:
+            run_len += 1
+            if prev_xy is not None:
+                lepes = math.hypot(holder.x - prev_xy[0],
+                                   holder.y - prev_xy[1])
+                if lepes <= max_step:  # a nagyobb ugrás nem futás
+                    run_m += lepes
+            prev_xy = (holder.x, holder.y)
+    _close()
+
+    out: dict = {}
+    for s in ("home", "away"):
+        players = []
+        for pid, (holds, meters) in tally[s].items():
+            players.append({"player_id": pid, "jersey": jersey.get(pid),
+                            "holds": holds,
+                            "meters": round(meters, 1),
+                            "avg_m": round(meters / holds, 2)})
+        players.sort(key=lambda p: -p["avg_m"])
+        n_holds = sum(p["holds"] for p in players)
+        n_m = round(sum(p["meters"] for p in players), 1)
+        team_avg = (round(n_m / n_holds, 2) if n_holds else None)
+        carrier = None
+        if n_holds >= HOLD_MIN_HOLDS and team_avg is not None:
+            cands = [{**p, "gap_m": round(p["avg_m"] - team_avg, 2)}
+                     for p in players
+                     if p["holds"] >= HOLD_MIN_HOLDS
+                     and p["avg_m"] - team_avg >= CARRY_LONG_GAP_M]
+            if cands:
+                carrier = max(cands, key=lambda p: p["gap_m"])
+        out[s] = {"holds": n_holds, "meters": n_m,
+                  "avg_m": (team_avg if n_holds >= HOLD_MIN_HOLDS
+                            else None),
+                  "players": players, "carrier": carrier}
     return out
 
 
@@ -631,4 +751,834 @@ def pressure_sensitive_players(match: Match,
                 top = row
                 break
         out[side] = {"players": rows, "top": top}
+    return out
+
+
+# Lövésválasztás: ennyi mért lövés kell az ítélethez; ekkora
+# xG-különbség számít "érdemben jobb helyzetnek" (0.10 nagyjából minden
+# tizedik lövésnyi gólkülönbség); és e fölött/alatt mondunk ítéletet a
+# jobb helyzetet eldobó lövések arányára.
+SCQ_MIN_SHOTS = 6
+SCQ_GAP_XG = 0.10
+SCQ_HIGH_PCT = 45.0
+SCQ_LOW_PCT = 15.0
+
+
+def shot_choice_quality(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Lövésválasztás: LŐNEK-E, AMIKOR JOBB HELYZET VAN a pályán.
+
+    A helyzetminőség (xg) azt mondja meg, MILYEN helyzetekből lőnek —
+    ez azt, hogy a lövés pillanatában volt-e JOBB. Minden lövésnél
+    kiszámoljuk az elengedő játékos helyzetértékét, és összevetjük a
+    legjobb SZABAD csapattársáéval (szabad = a legközelebbi mezőny-védő
+    FREE_DEF_RADIUS_M-nél távolabb). Ha a társé legalább SCQ_GAP_XG-vel
+    nagyobb, a lövés "eldobott jobb helyzet".
+
+    Edzőileg ez a támadó-játék fegyelme. A magas arány nem azt jelenti,
+    hogy rosszul lőnek — hanem hogy NEM NÉZNEK FEL: a fal ellenük
+    tudatosan hagyhatja a rossz szögű lövést, mert úgyis elveszik. Ellene
+    a saját oldalon a labdás fejét kell felhozni (utolsó passz keresése
+    kényszerrel), a másikon a védekezés kap tervet: aki eldobja a jobb
+    helyzetet, arra RÁ LEHET engedni, a jobb helyzetben lévő társát
+    viszont zárni kell — az a lövés amúgy sem jönne meg.
+
+    Visszatérés csapatonként: {"shots" (mért lövés), "better_options"
+    (eldobott jobb helyzet), "pct", "avg_gap_xg", "verdict"} — a
+    pct/verdict None SCQ_MIN_SHOTS alatt; a verdict csak a magas
+    (SCQ_HIGH_PCT feletti) vagy a kifejezetten fegyelmezett
+    (SCQ_LOW_PCT alatti) esetben szólal meg.
+    """
+    from ..models.tracking import Team as _Team
+    from .defense import FREE_DEF_RADIUS_M
+    from .event_detection import EventType, detect_shots
+    from .xg import xg_of_position
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+
+    out: dict = {side: {"shots": 0, "better_options": 0, "pct": None,
+                        "avg_gap_xg": None, "verdict": None}
+                 for side in ("home", "away")}
+    gaps: dict = {"home": [], "away": []}
+
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        # A lövés-döntés az ELENGEDÉS pillanatában született — a lövőt,
+        # a védőket és a jobb passz-opciókat is onnan mérjük (release_t;
+        # az esemény kockáján mindenki elmozdult már).
+        f = by_t.get((e.detail or {}).get("release_t")) or by_t.get(e.t)
+        if f is None:
+            continue
+        shooter = next((p for p in f.players
+                        if p.track_id == e.player_id), None)
+        if shooter is None:
+            continue
+        goal_x = config.attacks_toward_x(e.team)
+        defender_team = (_Team.AWAY if e.team == _Team.HOME
+                         else _Team.HOME)
+        defenders = [p for p in f.players
+                     if p.team == defender_team and p.role != "kapus"]
+        if not defenders:
+            continue
+        own_xg = xg_of_position(shooter.x, shooter.y, goal_x)
+        best_alt = None
+        for p in f.players:
+            if p.team != e.team or p.track_id == shooter.track_id:
+                continue
+            if p.role == "kapus":
+                continue
+            near = min(math.hypot(d.x - p.x, d.y - p.y) for d in defenders)
+            if near <= FREE_DEF_RADIUS_M:
+                continue          # a társ sincs szabadon — nem opció
+            alt = xg_of_position(p.x, p.y, goal_x)
+            if best_alt is None or alt > best_alt:
+                best_alt = alt
+
+        rec = out[e.team.value]
+        rec["shots"] += 1
+        if best_alt is not None and best_alt - own_xg >= SCQ_GAP_XG:
+            rec["better_options"] += 1
+            gaps[e.team.value].append(best_alt - own_xg)
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["shots"] < SCQ_MIN_SHOTS:
+            continue
+        pct = 100.0 * rec["better_options"] / rec["shots"]
+        rec["pct"] = round(pct, 1)
+        if gaps[side]:
+            rec["avg_gap_xg"] = round(sum(gaps[side]) / len(gaps[side]), 3)
+        if pct >= SCQ_HIGH_PCT:
+            rec["verdict"] = (
+                f"a lövéseik {pct:.0f}%-ánál volt jobb SZABAD helyzet a "
+                "pályán — nem néznek fel: rájuk lehet engedni a rossz "
+                "szögű lövést, a szabad társukat kell zárni")
+        elif pct <= SCQ_LOW_PCT:
+            rec["verdict"] = (
+                f"fegyelmezett lövésválasztás (csak {pct:.0f}%-nál volt "
+                "jobb szabad helyzet) — ellenük a helyzet-teremtést "
+                "kell zárni, a lövés-pillanatban már késő")
+    return out
+
+
+# Labdatartó-poszt: ennyi poszthoz kötött labdatartás-másodperc kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a labda
+# egy posztnál áll meg.
+HTR_MIN_S = 60.0
+HTR_SHARE_PCT = 60.0
+
+
+def hold_time_roles(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Labdatartó-poszt: MELYIK POSZTJUKNÁL áll meg a labda.
+
+    A labdatartás-idő rétege (hold_time_players) az embert nevezi
+    meg — ez a posztot: minden mért labdás szakasz idejét a birtokos
+    posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kettőzés időzítése: amelyik posztjuknál rendre
+    megáll a labda, ott van idő odaérni a kettőzéssel, és ott lassul
+    a támadásuk — a nyomást oda kell szervezni. Saját csapatra: ha a
+    labda egy posztunknál ragad, a gyorsabb továbbítás az edzés-téma.
+
+    Visszatérés csapatonként: {"seconds" (poszthoz kötött mért
+    tartás, mp), "roles": {poszt: mp}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a HTR_MIN_S, vagy
+    egyik poszt sem éri el a HTR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    ht = hold_time_players(match, config)
+
+    out: dict = {side: {"seconds": 0.0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in ht[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = round(
+                rec["roles"].get(poszt, 0.0) + row["seconds"], 1)
+            rec["seconds"] = round(rec["seconds"] + row["seconds"], 1)
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["seconds"] >= HTR_MIN_S:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["seconds"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= HTR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a labda a(z) {poszt} posztjuknál áll meg: a "
+                    f"mért labdatartásuk {share:.0f}%-a nála telik "
+                    f"({rec['seconds']:.0f} mp-ből) — a kettőzést rá "
+                    "kell időzíteni, nála lassul a támadásuk")
+    return out
+
+
+# Pressz-poszt: ennyi poszthoz kötött nyomott eladás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy szorításban
+# egy posztjuk ejti a labdát.
+PSR_MIN_TO = 3
+PSR_SHARE_PCT = 60.0
+
+
+def press_sensitive_roles(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Pressz-poszt: MELYIK POSZTJUK ejti a labdát szorításban.
+
+    A pressz-érzékeny játékosok rétege (pressure_sensitive_players)
+    az embert nevezi meg — ez a posztot: a nyomott (testközeli védő
+    melletti) eladásokat a labdavesztő posztjához írja. Így a minta
+    akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kettőzés iránya: amelyik posztjuk szorításban
+    rendre eladja a labdát, oda a kettőzés nem kockázat, hanem
+    labdaszerzés. Saját csapatra: annak a posztnak a nyomás alatti
+    kiadás a gyakorlandó.
+
+    Visszatérés csapatonként: {"press_to" (poszthoz kötött nyomott
+    eladás), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a PSR_MIN_TO, vagy
+    egyik poszt sem éri el a PSR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    psp = pressure_sensitive_players(match, config)
+
+    out: dict = {side: {"press_to": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in psp[side]["players"]:
+            if not row["press_to"]:
+                continue
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["press_to"])
+            rec["press_to"] += row["press_to"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["press_to"] >= PSR_MIN_TO:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["press_to"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PSR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"szorításban a(z) {poszt} posztjuk ejti a "
+                    f"labdát ({share:.0f}%, {rec['press_to']} nyomott"
+                    " eladásból) — a kettőzést rá kell küldeni: az ő "
+                    "szorítása nem kockázat, hanem labdaszerzés")
+    return out
+
+
+# Lágypassz-poszt: e sebesség alatt lágy (beleérhető) egy passz;
+# ennyi poszthoz kötött lágy passz kell az ítélethez, és ekkora
+# részarány fölött mondjuk ki, hogy a lágy labdák egy posztról
+# jönnek.
+SPS_SOFT_MS = 8.0
+SPS_MIN_SOFT = 5
+SPS_SHARE_PCT = 60.0
+
+
+# Lágy passzolók: ennyi lágy passz kell a névhez, és ekkora
+# részarány fölött mondjuk ki, hogy a lágy labdák egy emberhez
+# kötődnek.
+SPP_MIN_SOFT = 4
+SPP_SHARE_PCT = 50.0
+
+
+def soft_passers(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Lágy passzolók: KINEK a labdáiba lehet belenyúlni.
+
+    A lágypassz-poszt (soft_pass_roles) a POSZTOT nevezi meg — ez az
+    EMBERT: az SPS_SOFT_MS alatti sebességű (lágy, ívelt) passzokat a
+    passzoló nevéhez írja.
+
+    Edzőileg ez a beleérő védekezés címzettje: akinek lágyak a
+    passzai, annak a labdáiba bele lehet nyúlni — kilépés és
+    passzsáv-támadás az ő sávjában azonnal termel; a letámadásnál az
+    ő átadásait kell megcélozni, nem a labdást szorítani. Saját
+    csapatra: neki a passz-élesség (csuklós, feszes átadás) az
+    edzés-témája.
+
+    Visszatérés csapatonként: {"soft", "players": [{"player_id",
+    "jersey", "soft"}], "top"} — a "top" az első játékos, ha
+    legalább SPP_MIN_SOFT lágy passza van, és ez a csapat lágy
+    passzainak legalább SPP_SHARE_PCT-a, különben None.
+    """
+    import math
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    by_t = {f.t: f for f in match.frames}
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for p in detect_passes(match, config):
+        if p.decision_frame is None:
+            continue
+        dt = p.t - p.decision_frame.t
+        if dt < 2:
+            continue
+        fr = by_t.get(p.t)
+        if fr is None:
+            continue
+        receiver = next((q for q in fr.players
+                         if q.track_id == p.receiver_id), None)
+        if receiver is None:
+            continue
+        dist = math.hypot(receiver.x - p.passer_pos.x,
+                          receiver.y - p.passer_pos.y)
+        speed = dist / (dt / fps)
+        if speed > PASS_SPEED_MAX_MS or speed >= SPS_SOFT_MS:
+            continue
+        side = p.team.value
+        if side not in tally:
+            continue
+        tally[side][p.passer_id] = tally[side].get(p.passer_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "soft": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["soft"] for r in rows)
+        top = None
+        if rows and rows[0]["soft"] >= SPP_MIN_SOFT:
+            share = 100.0 * rows[0]["soft"] / max(1, total)
+            if share >= SPP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"soft": total, "players": rows, "top": top}
+    return out
+
+
+def soft_pass_roles(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Lágypassz-poszt: MELYIK POSZTJUK passzol lágyan.
+
+    A passz-sebesség rétege (pass_speed) csapat-szinten mondja meg,
+    éles-e a labdajáratás — ez posztonként: az SPS_SOFT_MS alatti
+    sebességű (lágy, ívelt) passzokat a passzoló posztjához írja. A
+    mérhetetlen (egy kockán belüli) váltást és a PASS_SPEED_MAX_MS
+    feletti értékeket (követés-ugrás) itt is kihagyjuk.
+
+    Edzőileg ez a beleérő védekezés iránya: amelyik posztjuk lágyan
+    passzol, annak a labdáiba bele lehet nyúlni — kilépés és
+    passzsáv-támadás az ő sávjában azonnal termel. Saját csapatra:
+    annak a posztnak a passz-élesség (csuklós, feszes átadás) az
+    edzés-témája.
+
+    Visszatérés csapatonként: {"soft" (poszthoz kötött lágy passz),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az SPS_MIN_SOFT, vagy egyik poszt
+    sem éri el az SPS_SHARE_PCT-t.
+    """
+    import math
+
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    by_t = {f.t: f for f in match.frames}
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"soft": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for p in detect_passes(match, config):
+        if p.decision_frame is None:
+            continue
+        dt = p.t - p.decision_frame.t
+        if dt < 2:
+            continue
+        fr = by_t.get(p.t)
+        if fr is None:
+            continue
+        receiver = next((q for q in fr.players
+                         if q.track_id == p.receiver_id), None)
+        if receiver is None:
+            continue
+        dist = math.hypot(receiver.x - p.passer_pos.x,
+                          receiver.y - p.passer_pos.y)
+        speed = dist / (dt / fps)
+        if speed > PASS_SPEED_MAX_MS or speed >= SPS_SOFT_MS:
+            continue
+        side = p.team.value
+        rec_role = roles[side].get(p.passer_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["soft"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["soft"] >= SPS_MIN_SOFT:
+            poszt = max(rec["roles"], key=lambda p2: rec["roles"][p2])
+            share = 100.0 * rec["roles"][poszt] / rec["soft"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SPS_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a lágy passzaik {share:.0f}%-a a(z) {poszt} "
+                    f"posztról jön ({rec['soft']} lágy passzból) — "
+                    "az ő labdáiba bele lehet nyúlni: kilépés és "
+                    "passzsáv-támadás az ő sávjában azonnal termel")
+    return out
+
+
+# Térnyerő-poszt: ennyi poszthoz kötött, labdával megtett előre-métert
+# kell mérni az ítélethez, és ekkora részarány fölött mondjuk ki,
+# hogy a térnyerésük egy poszt lábán van.
+TNR_MIN_M = 50.0
+TNR_SHARE_PCT = 60.0
+
+
+def ball_carrier_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Térnyerő-poszt: MELYIK POSZTJUK viszi előre a labdát.
+
+    A labdatartó-poszt azt méri, kinél ÁLL a labda — ez azt, kinél
+    HALAD: a labdás játékos egymást követő kockái közt a támadott
+    kapu felé megtett métereket a birtokos posztjához összegzi. Így
+    látszik, kinek a lábán van a térnyerésük.
+
+    Edzőileg ez a lendület-fék terve: amelyik posztjuk labdával
+    rendre teret nyer, azt nem a hatosnál kell fogadni, hanem a
+    felezőtől hátrálva — lendületbe engedni tilos, mert onnan már
+    csak szabálytalansággal állítható meg. Saját csapatra: a
+    felhozatal-teher eloszlása a rotáció-tervezés bemenete.
+
+    Visszatérés csapatonként: {"meters" (poszthoz kötött előre-
+    méter), "roles": {poszt: méter}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a TNR_MIN_M, vagy
+    egyik poszt sem éri el a TNR_SHARE_PCT-t.
+    """
+    import math
+
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"meters": 0.0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    prev = None   # (track_id, side, x, elore-irany)
+    for f in match.frames:
+        h = ball_holder(f, config)
+        if h is None or h.team is None or h.role == "kapus":
+            prev = None
+            continue
+        side = h.team.value
+        goal_x = config.attacks_toward_x(h.team)
+        ahead = 1.0 if goal_x > COURT_LENGTH_M / 2.0 else -1.0
+        if prev is not None and prev[0] == h.track_id \
+                and prev[1] == side:
+            dx = (h.x - prev[2]) * ahead
+            if 0.0 < dx < 2.0:   # előre-mozgás (követés-ugrás nélkül)
+                rec_role = roles[side].get(h.track_id)
+                if rec_role is not None:
+                    poszt = rec_role["poszt"]
+                    rec = out[side]
+                    rec["roles"][poszt] = round(
+                        rec["roles"].get(poszt, 0.0) + dx, 2)
+                    rec["meters"] = round(rec["meters"] + dx, 2)
+        prev = (h.track_id, side, h.x, ahead)
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["meters"] >= TNR_MIN_M:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["meters"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= TNR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a térnyerésük a(z) {poszt} poszt lábán van "
+                    f"({share:.0f}%-a a labdával megtett "
+                    f"{rec['meters']:.0f} előre-méternek) — őt a "
+                    "felezőtől hátrálva kell fogadni: lendületbe "
+                    "engedni tilos")
+    return out
+
+
+# Fáradt-eladó poszt: legalább ennyi 2. félidei eladás kell, és
+# ennyiszerese az első félideinek, hogy a posztot fáradt-eladónak
+# mondjuk ki.
+FTO_MIN_SH = 3
+FTO_FACTOR = 2.0
+
+
+def tired_turnover_roles(match: Match,
+                         config: Optional[TacticsConfig] = None
+                         ) -> dict:
+    """Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan.
+
+    Az eladás-rétegek a teljes meccset nézik — ez a fáradást: a
+    labdaeladásokat félidőnként a vesztes posztjához írja, és
+    megkeresi, melyik posztjuk eladásai ugranak meg a második
+    félidőre. Így látszik, kinél nyílik ki fáradtan a kéz.
+
+    Edzőileg ez a második félidei pressz-terv: akinek az eladásai
+    fáradtan megugranak, azt a szünet után kell nyomás alá tenni — a
+    friss védő rajta olcsó labdákat szerez. Saját csapatra: a poszt
+    terhelés-menedzsmentje és fáradt labdabiztonság-edzése a téma.
+
+    Visszatérés csapatonként: {"fh_roles": {poszt: darab},
+    "sh_roles": {poszt: darab}, "main_role", "fh", "sh", "verdict"}
+    — az ítélet None, ha nincs felismert szünet, vagy egyik poszt
+    sem éri el az FTO_MIN_SH-t az FTO_FACTOR-os ugrással.
+    """
+    from .event_detection import EventType, detect_events
+    from .halftime import detect_halftime
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    out: dict = {side: {"fh_roles": {}, "sh_roles": {},
+                        "main_role": None, "fh": None, "sh": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    roles = estimate_positions(match, config)
+
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = getattr(e.team, "value", e.team)
+        key = "fh_roles" if e.t <= ht else "sh_roles"
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        out[side][key][poszt] = out[side][key].get(poszt, 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        fader = None
+        for poszt, sh in sorted(rec["sh_roles"].items(),
+                                key=lambda kv: -kv[1]):
+            fh = rec["fh_roles"].get(poszt, 0)
+            if sh >= FTO_MIN_SH and sh >= FTO_FACTOR * max(1, fh):
+                fader = (poszt, fh, sh)
+                break
+        if fader is not None:
+            poszt, fh, sh = fader
+            rec["main_role"] = poszt
+            rec["fh"], rec["sh"] = fh, sh
+            rec["verdict"] = (
+                f"a(z) {poszt} posztjuk eladásai a második félidőre"
+                f" megugranak ({fh} → {sh}) — fáradtan nála nyílik "
+                "ki a kéz: a szünet után friss védővel őt kell "
+                "nyomás alá tenni, rajta olcsó a labdaszerzés")
+    return out
+
+
+# Menekülő-poszt: ennyi poszthoz kötött nyomás alatti passz kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy szorításban
+# mindig ugyanahhoz a poszthoz menekül a labda.
+ESC_MIN_PASSES = 5
+ESC_SHARE_PCT = 60.0
+
+
+def press_outlet_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Menekülő-poszt: NYOMÁS ALATT KIHEZ megy a labda.
+
+    A pressz-poszt azt mondja meg, melyik posztjuk VESZÍTI el a
+    labdát szorításban — ez azt, hová MENEKÜL: a testközeli védő
+    mellett (PRESS_TIGHT_M-en belül) meghozott passzokat a FOGADÓ
+    posztjához írja.
+
+    Edzőileg ez teszi a presszt labdaszerzéssé: ha szorításban a
+    labda rendre ugyanahhoz a poszthoz megy, a kettőző mögötti
+    harmadik ember előre tudja, hol kell lesben állnia — a menekülő
+    passz így nem kiút, hanem elfogott labda. Saját csapatra: ha a
+    kiút egy emberre szűkül, a pressz-elleni kiadásunk
+    kiszámítható.
+
+    Visszatérés csapatonként: {"passes" (poszthoz kötött nyomás
+    alatti passz), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    ESC_MIN_PASSES, vagy egyik poszt sem éri el az ESC_SHARE_PCT-t.
+    """
+    import math
+
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    def _tight(frame, pos, team) -> bool:
+        dists = [math.hypot(p.x - pos.x, p.y - pos.y)
+                 for p in frame.players
+                 if p.team != team and p.role != "kapus"]
+        return bool(dists) and min(dists) <= PRESS_TIGHT_M
+
+    out: dict = {side: {"passes": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for pe in detect_passes(match, config):
+        if pe.decision_frame is None or pe.passer_pos is None:
+            continue
+        if not _tight(pe.decision_frame, pe.passer_pos, pe.team):
+            continue
+        side = pe.team.value
+        rec_role = roles[side].get(pe.receiver_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["passes"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["passes"] >= ESC_MIN_PASSES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["passes"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= ESC_SHARE_PCT:
+                rec["verdict"] = (
+                    f"szorításban a labda a(z) {poszt} poszthoz "
+                    f"menekül ({share:.0f}%, {rec['passes']} nyomás "
+                    "alatti passzból) — a kettőzés mögötti harmadik "
+                    "ember ott álljon lesben: a menekülő passz így "
+                    "nem kiút, hanem elfogott labda")
+    return out
+
+
+# Menekülők: ennyi nyomás alatti passztól emeljük ki a fogadót.
+ESCP_MIN_PASSES = 3
+
+
+def press_outlets(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Menekülők: NYOMÁS ALATT KIHEZ megy a labda.
+
+    A menekülő-poszt (press_outlet_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: a testközeli védő mellett (PRESS_TIGHT_M-en belül)
+    meghozott passzokat a FOGADÓ játékoshoz írja.
+
+    Edzőileg ez teszi a presszt labdaszerzéssé névre szólóan: ha
+    szorításban a labda rendre ugyanahhoz az emberhez megy, a
+    kettőző mögötti harmadik előre tudja, hol kell lesben állnia — a
+    menekülő passz így nem kiút, hanem elfogott labda. Saját
+    csapatra: ha a kiút egy emberre szűkül, a pressz-elleni
+    kiadásunk kiszámítható.
+
+    Visszatérés csapatonként: {"passes" (emberhez kötött nyomás
+    alatti passz), "players": [{"player_id", "jersey", "passes"}],
+    "top"} — a "top" az első játékos, ha legalább ESCP_MIN_PASSES
+    ilyen passzt kapott, különben None.
+    """
+    import math
+
+    config = config or TacticsConfig()
+
+    def _tight(frame, pos, team) -> bool:
+        dists = [math.hypot(p.x - pos.x, p.y - pos.y)
+                 for p in frame.players
+                 if p.team != team and p.role != "kapus"]
+        return bool(dists) and min(dists) <= PRESS_TIGHT_M
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for pe in detect_passes(match, config):
+        if pe.decision_frame is None or pe.passer_pos is None:
+            continue
+        if not _tight(pe.decision_frame, pe.passer_pos, pe.team):
+            continue
+        side = pe.team.value
+        if pe.receiver_id is None:
+            continue
+        tally[side][pe.receiver_id] = (
+            tally[side].get(pe.receiver_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "passes": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["passes"] >= ESCP_MIN_PASSES
+               else None)
+        out[side] = {"passes": sum(r["passes"] for r in rows),
+                     "players": rows, "top": top}
+    return out
+
+
+# Térnyerők: ennyi labdával megtett előre-métertől emeljük ki a
+# játékost.
+TNRP_MIN_M = 25.0
+
+
+def ball_carriers(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Térnyerők: KI VISZI ELŐRE a labdát.
+
+    A térnyerő-poszt (ball_carrier_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: a labdás játékos egymást követő kockái közt a
+    támadott kapu felé megtett métereket játékosonként összegzi.
+
+    Edzőileg ez a lendület-fék névre szóló terve: őt nem a hatosnál
+    kell fogadni, hanem a felezőtől hátrálva — lendületbe engedni
+    tilos, mert onnan már csak szabálytalansággal állítható meg.
+    Saját csapatra: ha a térnyerés egy emberen áll, a kiesésével a
+    felhozatalunk is leáll.
+
+    Visszatérés csapatonként: {"meters" (emberhez kötött
+    előre-méter), "players": [{"player_id", "jersey", "meters"}],
+    "top"} — a "top" az első játékos, ha legalább TNRP_MIN_M métert
+    vitt előre, különben None.
+    """
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    prev = None   # (track_id, side, x, elore-irany)
+    for f in match.frames:
+        h = ball_holder(f, config)
+        if h is None or h.team is None or h.role == "kapus":
+            prev = None
+            continue
+        side = h.team.value
+        goal_x = config.attacks_toward_x(h.team)
+        ahead = 1.0 if goal_x > COURT_LENGTH_M / 2.0 else -1.0
+        if prev is not None and prev[0] == h.track_id \
+                and prev[1] == side:
+            dx = (h.x - prev[2]) * ahead
+            if 0.0 < dx < 2.0:   # előre-mozgás (követés-ugrás nélkül)
+                tally[side][h.track_id] = round(
+                    tally[side].get(h.track_id, 0.0) + dx, 2)
+        prev = (h.track_id, side, h.x, ahead)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "meters": round(m, 1)}
+                for pid, m in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["meters"] >= TNRP_MIN_M else None)
+        out[side] = {"meters": round(sum(r["meters"] for r in rows), 1),
+                     "players": rows, "top": top}
+    return out
+
+
+# Fáradt-eladók: a második félidőben ennyi eladástól emeljük ki a
+# játékost, és ekkora ugrás számít fáradás-jelnek.
+FTOP_MIN_SH = 2
+FTOP_FACTOR = 2.0
+
+
+def tired_turnover_players(match: Match,
+                           config: Optional[TacticsConfig] = None
+                           ) -> dict:
+    """Fáradt-eladók: KINEK a labdái vesznek el fáradtan.
+
+    A fáradt-eladó poszt (tired_turnover_roles) a POSZTOT nevezi meg
+    — ez az EMBERT: a labdaeladásokat félidőnként a vesztes
+    játékoshoz írja, és megkeresi, kinek ugranak meg az eladásai a
+    második félidőre.
+
+    Edzőileg ez a második félidei pressz-terv névre szólóan: akinek
+    az eladásai fáradtan megugranak, azt a szünet után kell nyomás
+    alá tenni — a friss védő rajta olcsó labdákat szerez. Saját
+    csapatra: az ő terhelés-menedzsmentje (pihentetés, csere-ritmus)
+    és a fáradt labdabiztonság-edzés a téma.
+
+    Visszatérés csapatonként: {"fh": {játékos-kulcs: darab}, "sh":
+    {...}, "top"} — a "top" az a játékos, akinek a második félidei
+    eladásai elérik az FTOP_MIN_SH-t, és legalább FTOP_FACTOR-szorosai
+    az elsőnek; szünet-jel nélkül üres a kép.
+    """
+    from .event_detection import EventType, detect_events
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    out: dict = {side: {"fh": {}, "sh": {}, "top": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = getattr(e.team, "value", e.team)
+        rec = tally[side].setdefault(e.player_id, [0, 0])
+        rec[0 if e.t <= ht else 1] += 1
+
+    for side in ("home", "away"):
+        rows = sorted(tally[side].items(), key=lambda kv: -kv[1][1])
+        out[side]["fh"] = {
+            str(jersey.get(pid, pid)): n[0]
+            for pid, n in rows if n[0]}
+        out[side]["sh"] = {
+            str(jersey.get(pid, pid)): n[1]
+            for pid, n in rows if n[1]}
+        for pid, (fh, sh) in rows:
+            if sh >= FTOP_MIN_SH and sh >= FTOP_FACTOR * max(1, fh):
+                out[side]["top"] = {
+                    "player_id": pid, "jersey": jersey.get(pid),
+                    "fh": fh, "sh": sh}
+                break
     return out
