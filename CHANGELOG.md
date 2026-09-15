@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.132 óta)
+## Kiadatlan (a v0.1.134 óta)
+
+## v0.1.134 — kiadva (2026-09-14)
+
+> Kiadás-jegyzet: a sarok-javaslat magától megkeresi a jó
+> képkockát.
 
 - **A sarok-javaslat magától keres jó képkockát** (kalibráció): eddig
   ha a kijelölt kockán tömeg, felirat vagy rossz pillanat takarta a
@@ -14,6 +19,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   is léptet — így a javasolt sarkok ahhoz a képhez tartoznak, amit
   látsz. Ha semmi nem jön össze, az üzenet megmondja, hány kockát
   néztünk meg.
+
+## v0.1.133 — kiadva (2026-09-14)
+
+> Kiadás-jegyzet: új réteg — melyik figurát hozzák vezetésnél és
+> hátrányban.
 
 - **Figura-állás** (új réteg): MELYIK FIGURÁT hozzák vezetésnél és
   hátrányban. A támadás-szakaszokat figurák szerint klaszterezzük, és
