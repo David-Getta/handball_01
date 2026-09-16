@@ -3,7 +3,11 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.134 óta)
+## Kiadatlan (a v0.1.135 óta)
+
+## v0.1.135 — kiadva (2026-09-15)
+
+> Kiadás-jegyzet: új réteg — melyik figurát hozzák a két perc alatt.
 
 - **Emberelőny-figura** (új réteg): MELYIK FIGURÁT hozzák a két perc
   alatt. Az emberelőny-rétegek eddig azt mondták meg, ki fejez be,
