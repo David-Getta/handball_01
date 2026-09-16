@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.135 óta)
 
+- **Figura-dosszié: egy figuráról minden, egy lapon** (felderítés): a
+  figura-rétegek külön-külön egy-egy kérdésre felelnek — mit hoznak,
+  melyik fal ellen megy, mikor jön, ismétlik-e gól után —, az edző
+  viszont EGY figurára készül fel. Az új dosszié ALAK szerint fésüli
+  össze őket: a rajz mellé odakerül a hozam (hány meccsen, hány
+  támadás, hány gól), hogy MIKOR jön (vezetésnél, hátrányban,
+  emberelőnyben) és MELYIK FAL ellen működik, a végén pedig a
+  sorrend-mondat (gól után ugyanazt hozzák-e). Felületek: a felderítő
+  képernyő "Figura-dosszié" kártyája rajzzal és az ugró-sávban, és a
+  nyomtatható felderítő jelentés azonos szakasza.
+
 ## v0.1.135 — kiadva (2026-09-15)
 
 > Kiadás-jegyzet: új réteg — melyik figurát hozzák a két perc alatt.

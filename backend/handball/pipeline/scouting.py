@@ -679,6 +679,11 @@ class ScoutingReport:
     # (figure_formation) a combine_reports-ban ÚJRASZÁMOLVA.
     setplay_formation_rows: list = field(default_factory=list)
     figure_formation: dict = field(default_factory=dict)
+    # Figura-DOSSZIÉ (setplays.figure_dossier): a fenti figura-mezők
+    # ALAK szerint összefésült képe — figuránként egy lap. Származtatott,
+    # nem összegződik: a scout_team és a combine_reports is ÚJRASZÁMOLJA
+    # a (már összegzett) forrás-mezőkből.
+    figure_dossier: dict = field(default_factory=dict)
     # Emberelőny-figura (setplays.powerplay_setplay): lapos,
     # összegezhető sorok — {"shape", "attacks", "goals", "match_id"} —
     # meccsek közt egymás mögé; az összefésült kép (powerplay_figures) a
@@ -12855,6 +12860,10 @@ def _scout_team_cached(match: Match, team: Team,
             rep.sh_seconds = eff["sh_seconds"]
     except Exception:
         pass
+    try:
+        rep.figure_dossier = _figure_dossier_of(rep)
+    except Exception:
+        rep.figure_dossier = {}
     s, w, k = _coach_keys(rep)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep
@@ -13619,6 +13628,38 @@ def _merge_hold_players(reports) -> list:
                 tally.items(),
                 key=lambda kv: -(kv[1]["frames"]
                                  / max(1, kv[1]["holds"])))]
+
+
+def _figure_dossier_of(rep) -> dict:
+    """A figura-dosszié egy KÉSZ jelentésből (a figura-mezőkből).
+
+    A figura-ismétlés a jelentésben darabszámként él (hogy meccsek közt
+    összeadódjon), a dosszié viszont mondatot vár — a motor küszöbeivel
+    számoljuk ki itt.
+    """
+    from .setplays import (SRC_GAP_PP, SRC_HIGH_PCT, SRC_MIN_ATTACKS,
+                           figure_dossier)
+    ismetles = None
+    g = rep.setplay_repeat_after_goal
+    m = rep.setplay_repeat_after_miss
+    if g >= SRC_MIN_ATTACKS and m >= SRC_MIN_ATTACKS:
+        gp = 100.0 * rep.setplay_repeat_after_goal_same / g
+        mp = 100.0 * rep.setplay_repeat_after_miss_same / m
+        if gp - mp >= SRC_GAP_PP:
+            ismetles = (f"a bejött figurát rögtön újra hozzák (gól után "
+                        f"{gp:.0f}%, gól nélkül {mp:.0f}% ismétlés)")
+        elif mp - gp >= SRC_GAP_PP:
+            ismetles = (f"a bejött figura után váltanak (gól után "
+                        f"{gp:.0f}%, gól nélkül {mp:.0f}% ismétlés)")
+        elif gp >= SRC_HIGH_PCT and mp >= SRC_HIGH_PCT:
+            ismetles = (f"kiszámítható a sorrendjük: a következő "
+                        f"támadásban ugyanazt hozzák (gól után {gp:.0f}%, "
+                        f"gól nélkül {mp:.0f}%)")
+    return figure_dossier(library=rep.setplay_library,
+                          formation=rep.figure_formation,
+                          powerplay=rep.powerplay_figures,
+                          by_score=rep.setplay_score,
+                          repeat={"verdict": ismetles})
 
 
 def _powerplay_figures_of(reports) -> dict:
@@ -23411,6 +23452,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rec["shot_pct"] = round(100.0 * rec["shots"] / n, 1)
         rec["goal_pct"] = round(100.0 * rec["goals"] / n, 1)
     rep.attack_efficiency = eff
+    try:
+        rep.figure_dossier = _figure_dossier_of(rep)
+    except Exception:
+        rep.figure_dossier = {}
     s, w, k = _coach_keys(rep)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep

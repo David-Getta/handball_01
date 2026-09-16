@@ -308,6 +308,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_playbookMatch != null) ("Ismert figuráik", Icons.route_outlined),
       if (_figureLibraryCard(r) != null)
         ("Visszatérő figuráik", Icons.replay_outlined),
+      if (_figureDossierCard(r) != null)
+        ("Figura-dosszié", Icons.fact_check_outlined),
       ("Védekezésük", Icons.security),
       if (keeperCard != null)
         ("Kapus-felkészítés", Icons.sports_kabaddi),
@@ -386,6 +388,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                   KeyedSubtree(
                       key: _sectionKey("Visszatérő figuráik"),
                       child: _figureLibraryCard(r)!),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                if (_figureDossierCard(r) != null) ...[
+                  KeyedSubtree(
+                      key: _sectionKey("Figura-dosszié"),
+                      child: _figureDossierCard(r)!),
                   const SizedBox(height: AppSpacing.lg),
                 ],
                 KeyedSubtree(
@@ -12903,6 +12911,93 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   /// (mini pálya, a támadó szemszögéből, jobbra a megtámadott kapu). A
   /// könyvtárat a backend fésüli össze (setplay_library); itt csak a
   /// kész "recurring" sorok — null, ha nincs visszatérő figura.
+  /// FIGURA-DOSSZIÉ: egy figuráról minden, amit tudunk — egy lapon.
+  ///
+  /// A figura-rétegek külön-külön egy-egy kérdésre felelnek (mit hoznak,
+  /// melyik fal ellen megy, mikor jön, ismétlik-e gól után); az edző
+  /// viszont EGY figurára készül fel. A backend alak szerint fésüli
+  /// össze őket (figure_dossier), a kártya a kész sorokat rajzolja.
+  Widget? _figureDossierCard(Map<String, dynamic> r) {
+    final d = r["figure_dossier"];
+    if (d is! Map) return null;
+    final figs = (d["figures"] as List?) ?? const [];
+    if (figs.isEmpty) return null;
+    final rows = <Widget>[];
+    for (final f in figs) {
+      if (f is! Map) continue;
+      final shape = (f["shape"] as List?)
+              ?.map((v) => (v as num).toDouble())
+              .toList() ??
+          const <double>[];
+      final nev = (f["name"] as String?)?.isNotEmpty == true
+          ? "${f["name"]}"
+          : "${f["zone"] ?? "?"}";
+      final mikor = ((f["when"] as List?) ?? const []).join(" · ");
+      final fal = f["formation"] as String?;
+      rows.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+              width: 132, height: 66,
+              child: CustomPaint(painter: FigureShapePainter(shape))),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nev, style: AppText.value.copyWith(fontSize: 13)),
+                const SizedBox(height: 2),
+                Text("${f["attacks"] ?? 0} támadás, ${f["goals"] ?? 0} gól"
+                    "${f["matches"] != null ? " (${f["matches"]} meccsen)" : ""}",
+                    style: AppText.label),
+                if (mikor.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text("MIKOR: $mikor",
+                      style: AppText.label.copyWith(fontSize: 11.5)),
+                ],
+                if (fal != null && fal.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text("FAL: $fal",
+                      style: AppText.label
+                          .copyWith(fontSize: 11.5, color: AppColors.gold)),
+                ],
+              ],
+            ),
+          ),
+        ]),
+      ));
+    }
+    if (rows.isEmpty) return null;
+    final ismetles = d["repeat"] as String?;
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.fact_check_outlined, size: 16,
+                color: AppColors.accent),
+            const SizedBox(width: 8),
+            Text("FIGURA-DOSSZIÉ", style: AppText.sectionLabel),
+          ]),
+          const SizedBox(height: 4),
+          Text("A fő figuráikról minden egy lapon: mennyit hoz, MIKOR jön "
+              "(vezetve, hátrányban, emberelőnyben) és MELYIK FAL ellen "
+              "működik — ennyit kell tudni a meccstervhez.",
+              style: AppText.label),
+          const SizedBox(height: AppSpacing.md),
+          ...rows,
+          if (ismetles != null && ismetles.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text("SORREND: $ismetles",
+                style: AppText.label.copyWith(fontSize: 11.5)),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget? _figureLibraryCard(Map<String, dynamic> r) {
     final lib = r["setplay_library"];
     if (lib is! Map) return null;

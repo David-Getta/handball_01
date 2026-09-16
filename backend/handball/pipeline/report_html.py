@@ -389,6 +389,35 @@ def _setplay_library_rows(lib: dict) -> str:
     return "".join(out)
 
 
+def _figure_dossier_rows(dossier: dict) -> str:
+    """Figura-dosszié: figuránként egy blokk — alak, hozam, MIKOR jön,
+    MELYIK FAL ellen működik; a végén a sorrend-mondat."""
+    figs = (dossier or {}).get("figures") or []
+    if not figs:
+        return ('<p class="empty">Még nincs elég figura-minta a '
+                'dossziéhoz (több meccs felderítése kell hozzá).</p>')
+    out = []
+    for f in figs:
+        nev = str(f.get("name") or f.get("zone") or "")
+        reszek = [f'{int(f.get("attacks", 0))} támadás, '
+                  f'{int(f.get("goals", 0))} gól']
+        if f.get("matches") is not None:
+            reszek.append(f'{int(f["matches"])} meccsen')
+        mikor = "; ".join(str(x) for x in (f.get("when") or []))
+        sor = ('<div class="bar-row" style="align-items:center">'
+               f'{_figure_svg(f.get("shape") or [])}'
+               f'<span><b>{escape(nev)}</b> — {escape(", ".join(reszek))}')
+        if mikor:
+            sor += f'<br><i>Mikor:</i> {escape(mikor)}'
+        if f.get("formation"):
+            sor += f'<br><i>Fal:</i> {escape(str(f["formation"]))}'
+        out.append(sor + "</span></div>")
+    if (dossier or {}).get("repeat"):
+        out.append(f'<p class="note">Sorrend: '
+                   f'{escape(str(dossier["repeat"]))}</p>')
+    return "".join(out)
+
+
 def _players(key_players: list) -> str:
     if not key_players:
         return '<p class="empty">Több meccs felderítése pontosítja a játékos-profilt.</p>'
@@ -762,6 +791,10 @@ def scouting_report_html(rep: ScoutingReport,
   {("<h2>Visszatérő figuráik (meccsről meccsre)</h2>"
     + _setplay_library_rows(getattr(rep, "setplay_library", None) or {}))
    if (getattr(rep, "setplay_library", None) or {}).get("recurring") else ""}
+
+  {("<h2>Figura-dosszié (a fő figuráik egy lapon)</h2>"
+    + _figure_dossier_rows(getattr(rep, "figure_dossier", None) or {}))
+   if (getattr(rep, "figure_dossier", None) or {}).get("figures") else ""}
 
   <h2>Támadás-mix (típus szerint)</h2>
   {_defense_bars(rep.attack_mix, empty="Nincs elég támadás-minta.")}

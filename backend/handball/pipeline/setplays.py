@@ -1552,6 +1552,97 @@ def powerplay_figures_summary(rows: list,
             "verdict": _elony_itelet(ossz, figures)}
 
 
+# Figura-DOSSZIÉ: az egy figuráról tudott dolgok egy lapon. A
+# figura-rétegek külön-külön mind egy-egy kérdésre felelnek (mit hoznak,
+# melyik fal ellen megy, ismétlik-e gól után, mit játszanak vezetve és
+# emberelőnyben) — az edző viszont EGY figurára készül fel, és a
+# válaszokat egyben akarja látni.
+FDS_MIN_ATTACKS = SPL_MIN_ATTACKS
+# A dosszié ennyi figurát mutat (a leggyakoribbakat): egy meccsterv nem
+# tud öt figurára egyszerre készülni.
+FDS_MAX_FIGURES = 3
+
+
+def figure_dossier(library: Optional[dict] = None,
+                   formation: Optional[dict] = None,
+                   powerplay: Optional[dict] = None,
+                   by_score: Optional[dict] = None,
+                   repeat: Optional[dict] = None,
+                   threshold: float = SPL_MERGE_THRESHOLD) -> dict:
+    """Figura-dosszié: EGY FIGURÁRÓL minden, amit tudunk — egy lapon.
+
+    A figura-rétegek külön-külön felelnek egy-egy kérdésre; ez a réteg
+    ALAK szerint párosítja őket, hogy a felkészülés ne öt listából
+    álljon össze. Bemenet a felderítés kész mezői (`setplay_library`,
+    `figure_formation`, `powerplay_figures`, `setplay_score`) és a
+    figura-ismétlés darabszámai — mindegyik elhagyható.
+
+    Edzőileg ez a meccsterv lapja: a figura rajza mellé odakerül, hányszor
+    jött és mit hozott, MELYIK FAL ellen működik, MIKOR jön (vezetve,
+    hátrányban, emberelőnyben), és hogy a gólja után rögtön újra hozzák-e.
+
+    Visszatérés: {"figures": [{"shape", "zone", "name", "matches",
+    "attacks", "goals", "goal_pct", "formation" (a gyenge/erős fal
+    mondata | None), "when": [mondat, …], "verdict"}],
+    "repeat": a figura-ismétlés mondata | None} — legfeljebb
+    FDS_MAX_FIGURES figura, támadás szerint csökkenő; kevés mintánál üres
+    lista (sose hallgatólagos 0).
+    """
+    alap = [f for f in ((library or {}).get("figures") or [])
+            if f.get("attacks", 0) >= FDS_MIN_ATTACKS]
+    if not alap:
+        alap = [f for f in ((library or {}).get("recurring") or [])
+                if f.get("attacks", 0) >= FDS_MIN_ATTACKS]
+    alap = sorted(alap, key=lambda f: -int(f.get("attacks", 0)))
+
+    def _parja(sorok, shape):
+        """A legközelebbi alakú sor a listából (a küszöbön belül)."""
+        legjobb, legjobb_d = None, threshold
+        for r in sorok or []:
+            sh = r.get("shape")
+            if not sh:
+                continue
+            d = _distance(shape, sh)
+            if d <= legjobb_d:
+                legjobb, legjobb_d = r, d
+        return legjobb
+
+    ki = []
+    for f in alap[:FDS_MAX_FIGURES]:
+        shape = f.get("shape") or []
+        sor = {"shape": shape, "zone": f.get("zone"), "name": f.get("name"),
+               "matches": f.get("matches"), "attacks": f.get("attacks"),
+               "goals": f.get("goals"), "goal_pct": f.get("goal_pct"),
+               "formation": None, "when": [], "verdict": None}
+        # MELYIK FAL ellen: a figura × védőforma réteg kész mondata.
+        ff = _parja((formation or {}).get("figures"), shape)
+        if ff and ff.get("verdict"):
+            sor["formation"] = ff["verdict"]
+        # MIKOR jön: állás szerinti részarányok és az emberelőny.
+        for allapot, nev in (("leading", "vezetésnél"),
+                             ("trailing", "hátrányban")):
+            allapot_rec = ((by_score or {}).get("states") or {}).get(allapot)
+            par = _parja((allapot_rec or {}).get("figures"), shape)
+            if par and par.get("share_pct"):
+                sor["when"].append(
+                    f"{nev} a támadásaik {par['share_pct']:.0f}%-a")
+        pp = _parja((powerplay or {}).get("figures"), shape)
+        if pp and pp.get("attacks"):
+            sor["when"].append(
+                f"emberelőnyben {pp['attacks']} támadás, {pp['goals']} gól")
+        reszek = []
+        if sor["attacks"]:
+            reszek.append(f"{sor['attacks']} támadás")
+        if sor["goals"] is not None:
+            reszek.append(f"{sor['goals']} gól")
+        if sor["when"]:
+            reszek.append("; ".join(sor["when"]))
+        sor["verdict"] = (f"{sor['name'] or sor['zone']}: "
+                          + ", ".join(reszek)) if reszek else None
+        ki.append(sor)
+    return {"figures": ki, "repeat": (repeat or {}).get("verdict")}
+
+
 # ---- Repertoár-változás -----------------------------------------------------
 # A szezon két fele közt mi jött be és mi tűnt el a figurák közül: a saját
 # csapatnál "él-e még a beúszós kereszt", az ellenfélnél "van-e új

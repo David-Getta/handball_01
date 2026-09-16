@@ -1512,3 +1512,92 @@ def test_az_emberelony_figura_edzes_szabalya_valodi_retegbol(monkeypatch):
     tetelek = training_focus(_ppf_match("t483"))["home"]
     cimek = " ".join(t["title"] for t in tetelek)
     assert "Az emberelőnyünk egyetlen figurára épül" in cimek
+
+
+# ---- Figura-dosszié (figure_dossier) ---------------------------------------
+
+
+def test_a_figura_dosszie_egy_lapra_hozza_amit_a_figurarol_tudunk():
+    """A dosszié ALAK szerint fésüli össze a figura-rétegeket: a rajz
+    mellé odakerül a hozam, hogy MIKOR jön (vezetve, hátrányban,
+    emberelőnyben) és MELYIK FAL ellen működik."""
+    from handball.pipeline.setplays import FDS_MAX_FIGURES, figure_dossier
+
+    alak = [0.0] * 18
+    alak[3] = 1.0
+    masik = [0.0] * 18
+    masik[14] = 1.0
+    lib = {"figures": [
+        {"shape": alak, "zone": "bal oldal, a 9-es körül", "name": "Kereszt",
+         "matches": 3, "attacks": 9, "goals": 5, "goal_pct": 55.6},
+        {"shape": masik, "zone": "jobb oldal, távolról", "matches": 2,
+         "attacks": 4, "goals": 1, "goal_pct": 25.0}]}
+    forma = {"figures": [{"shape": alak, "verdict": "6-0 ellen 70%, 5-1 "
+                          "ellen 10% — 5-1-ben álljatok fel"}]}
+    elony = {"figures": [{"shape": alak, "attacks": 5, "goals": 3}]}
+    allas = {"states": {
+        "leading": {"attacks": 10, "figures": [
+            {"shape": masik, "share_pct": 80.0}]},
+        "trailing": {"attacks": 10, "figures": [
+            {"shape": alak, "share_pct": 70.0}]}}}
+    d = figure_dossier(library=lib, formation=forma, powerplay=elony,
+                       by_score=allas,
+                       repeat={"verdict": "a bejött figurát újra hozzák"})
+    assert len(d["figures"]) <= FDS_MAX_FIGURES
+    fo = d["figures"][0]
+    assert fo["name"] == "Kereszt" and fo["attacks"] == 9
+    # A FAL mondata a figura × védőforma rétegből, alak szerint párosítva.
+    assert fo["formation"] and "5-1-ben álljatok fel" in fo["formation"]
+    # MIKOR: hátrányban ez a figura jön, emberelőnyben is ezt játsszák.
+    mikor = " ".join(fo["when"])
+    assert "hátrányban a támadásaik 70%" in mikor
+    assert "emberelőnyben 5 támadás" in mikor
+    # A másik figurához a VEZETÉSNÉLI részarány tartozik, nem ez.
+    masodik = d["figures"][1]
+    assert "vezetésnél a támadásaik 80%" in " ".join(masodik["when"])
+    assert masodik["formation"] is None
+    assert d["repeat"] == "a bejött figurát újra hozzák"
+    # Üres bemenet: üres lista, nem hiba.
+    assert figure_dossier()["figures"] == []
+
+
+def test_a_figura_dosszie_a_valodi_felderitesbol_all_ossze():
+    """A VALÓDI felderítés-úton (scout_team) a dosszié a jelentés
+    mezőiből épül — a mezőnevek is valódiak (a try/except különben
+    elnyelné az elgépelést)."""
+    from handball.pipeline.scouting import combine_reports, scout_team
+
+    r1 = scout_team(_spl_match(["bal"] * 4 + ["jobb"] * 3, "d1"), Team.HOME)
+    d = r1.figure_dossier
+    assert d["figures"], "a dosszié üres maradt a valódi felderítésen"
+    assert d["figures"][0]["attacks"] == 4
+    assert d["figures"][0]["verdict"], "nincs edzői mondat a figurához"
+    # Egyesített jelentésben is újraszámolódik (nem a részjelentésé marad).
+    r2 = scout_team(_spl_match(["bal"] * 3, "d2"), Team.HOME)
+    ossz = combine_reports([r1, r2])
+    assert ossz.figure_dossier["figures"]
+    assert ossz.figure_dossier["figures"][0]["attacks"] == 7
+
+
+def test_a_dosszie_a_kliensen_es_a_jelentesben_is_ott_van():
+    """Egy lap: a felderítő képernyő kártyája és a nyomtatható jelentés
+    szakasza ugyanabból a mezőből dolgozik."""
+    from pathlib import Path as _P
+
+    from handball.pipeline.report_html import _figure_dossier_rows
+
+    gyoker = _P(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "scouting_screen.dart").read_text(encoding="utf-8")
+    assert "_figureDossierCard" in src and "FIGURA-DOSSZIÉ" in src
+    assert 'r["figure_dossier"]' in src
+    assert "Figura-dosszié" in src, "nincs benne az ugró-sávban"
+    html = _figure_dossier_rows({
+        "figures": [{"shape": [0.0] * 18, "zone": "bal oldal",
+                     "attacks": 5, "goals": 2, "matches": 2,
+                     "when": ["hátrányban a támadásaik 60%-a"],
+                     "formation": "5-1 ellen 0%"}],
+        "repeat": "a bejött figurát újra hozzák"})
+    assert "bal oldal" in html and "Mikor:" in html and "Fal:" in html
+    assert "Sorrend:" in html
+    assert _figure_dossier_rows({}).startswith('<p class="empty"')
