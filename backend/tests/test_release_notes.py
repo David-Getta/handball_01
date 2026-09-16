@@ -127,6 +127,16 @@ def test_a_workflow_a_szkriptbol_veszi_a_leirast():
         "a kiadás nem a generált fájlt kapja")
     assert "Újdonságok e kiadásban: lásd a CHANGELOG.md-t" not in text, (
         "a régi sablonszöveg még bent van a workflow-ban")
+    # MINDEN feltöltő job adja a leírást. A két platform-job UGYANAZT a
+    # kiadást frissíti; ha az egyik leírás NÉLKÜL tölt fel, és ő fut le
+    # utoljára, KIÜTI a másik által beírt változás-listát — a kiadás
+    # leírás nélkül marad (így járt a v0.1.136), és az app
+    # "Újdonságok" ablaka üresen jön elő a frissítés után.
+    kiadok = text.count("uses: softprops/action-gh-release")
+    assert kiadok == text.count("body_path: release_notes.md"), (
+        f"{kiadok} feltöltő job van, de nem mind adja a kiadás leírását")
+    assert text.count("scripts.release_notes") == kiadok, (
+        "van olyan feltöltő job, amelyik nem generálja a jegyzetet")
 
 
 def test_fajlba_iras_utf8(tmp_path):

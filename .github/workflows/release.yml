@@ -454,9 +454,25 @@ jobs:
           path: SportMachine-macOS.zip
           retention-days: 7
 
+      # A kiadás leírását MINDKÉT job összeállítja, és mindkettő fel is
+      # tölti. Enélkül versenyhelyzet van: a két job ugyanazt a kiadást
+      # frissíti, és ha a macOS-é fut LE UTOLJÁRA (előfordult:
+      # v0.1.136), a leírás nélküli feltöltése KIÜTI a Windows-job által
+      # beírt változás-listát — a kiadás leírás nélkül marad, és az app
+      # "Újdonságok" ablaka üresen jön elő a frissítés után.
+      - name: Kiadás-jegyzet összeállítása a CHANGELOG-ból
+        if: env.RELEASE_TAG != ''
+        run: |
+          cd backend
+          python3 -m scripts.release_notes "${RELEASE_TAG#v}" \
+            --out ../release_notes.md
+          echo "--- a kiadás leírása ---"
+          head -40 ../release_notes.md
+
       - name: Kiadás a Releases oldalra
         if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           files: SportMachine-macOS.zip
+          body_path: release_notes.md

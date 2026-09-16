@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.135 óta)
+## Kiadatlan (a v0.1.136 óta)
+
+- **A kiadás leírása nem veszhet el** (kiadás): a Windows- és a
+  macOS-job UGYANAZT a kiadást frissíti; a leírást eddig csak a
+  Windows-job adta. Amikor a két job egyszerre ért célba (v0.1.136), a
+  macOS-é futott le utoljára, és a leírás nélküli feltöltése KIÜTÖTTE a
+  változás-listát — a kiadás üres leírással maradt, és az app
+  "Újdonságok" ablaka üresen jött volna elő a frissítés után. Mostantól
+  mindkét job a CHANGELOG-ból állítja össze és fel is tölti a leírást,
+  őr-teszt pedig ellenőrzi, hogy MINDEN feltöltő job adja.
+
+## v0.1.136 — kiadva (2026-09-16)
+
+> Kiadás-jegyzet: figura-dosszié — a fő figuráikról minden egy lapon.
 
 - **Figura-dosszié: egy figuráról minden, egy lapon** (felderítés): a
   figura-rétegek külön-külön egy-egy kérdésre felelnek — mit hoznak,
