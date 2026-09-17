@@ -111,6 +111,22 @@ fegyelemmel párosítja (meccsenként hány kiállítást szedtek), a 483.
 edzés-szabály a saját emberelőnyünk egyetlen figurájára ad második
 befejezést.
 
+## Hajrá-figura (mire szűkülnek az utolsó percekben)
+
+A `clutch_setplay` a támadás-szakaszokat alak szerint klaszterezi, és a
+hajrába (az utolsó `CLUTCH_WINDOW_S`, 300 mp) esőket a meccs többi
+részével veti össze figuránként: hajrá-részarány és törzs-részarány.
+Ítélet csak `CSP_MIN_ATTACKS` (4) hajrá-támadástól, `CSP_SHARE_PCT` (50%)
+fölötti részaránynál és `CSP_GAP_PP` (25 százalékpont) résnél a törzshöz
+képest: "a hajrában egy figurára szűkülnek — a végjátékban a fal ne
+tippeljen: erre álljon fel". A lista a csak a törzsben hozott figurákat
+is tartalmazza (0 hajrá-támadással), hogy a törzs részaránya meccsek közt
+is újraszámolható legyen (`clutch_figure_rows`, `clutch_figures_summary`).
+A 465. meccsterv-szabály a saját hajrá-mérleggel párosítja (lyukas a
+hajránk → konkrétan erre bejátszani; bírjuk → ezt elvéve nincs B-tervük),
+a 484. edzés-szabály a saját hajránk egyetlen figurájára ad második
+befejezést.
+
 ## Figura-dosszié (egy figuráról minden, egy lapon)
 
 A fenti rétegek külön-külön egy-egy kérdésre felelnek; az edző viszont
@@ -212,7 +228,7 @@ meccseken" az, amire a régi felderítés nem készít fel.
 szakasz): a tükörkép irány-normálva egy alak; edzői nevek; a könyvtár két
 meccs (a másodikban a másik kapura támadva) között visszatérő figurát
 talál, egy meccsből nem; a VALÓDI felderítés-út; a riasztás- és a
-setplays-végpont; a meccsenkénti gyorsítótár; a figura-állás (vezetve / hátrányban, kevés minta, valódi felderítés-út); az emberelőny-figura (kiállítás alatt, teljes létszámnál nincs, meccsek közt áll össze); a dosszié (alak szerinti párosítás, valódi felderítés-út, kliens és jelentés); a gól utáni figura-
+setplays-végpont; a meccsenkénti gyorsítótár; a figura-állás (vezetve / hátrányban, kevés minta, valódi felderítés-út); az emberelőny-figura (kiállítás alatt, teljes létszámnál nincs, meccsek közt áll össze); a hajrá-figura (szűkülés, rövid felvétel / kevés minta / nincs szűkülés, meccsek közt áll össze, a 484. edzés-szabály és az összefoglaló valódi rétegből); a dosszié (alak szerinti párosítás, valódi felderítés-út, kliens és jelentés); a gól utáni figura-
 ismétlés (előre-lépés, váltás, kiszámíthatóság, kevés minta, a valódi
 felderítés-út és a 480. edzés-szabály); a repertoár-változás
 (új / eltűnt / maradt) és a szezon-riport szakasza. A rajz-felületek őrei a

@@ -1383,6 +1383,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 484) A saját hajránk EGY figurára szűkül: a végjátékban az ellenfél
+    # fala nem tippel, hanem arra áll fel, amit mindig hozunk — a hajrára
+    # kell egy második, ugyanabból a mozgásból induló befejezés.
+    try:
+        from .setplays import clutch_setplay
+        csp484 = clutch_setplay(match, config)
+        for side in ("home", "away"):
+            rec484 = csp484.get(side) or {}
+            if not rec484.get("verdict") or not rec484.get("figures"):
+                continue
+            fo = rec484["figures"][0]
+            add(side, "támadás",
+                "A hajránk egyetlen figurára szűkül",
+                f"az utolsó öt perc támadásaink {fo['share_pct']:.0f}%-a "
+                f"ugyanaz a figura (\"{fo['zone']}\", {fo['attacks']} "
+                f"támadás, {fo['goals']} gól), a meccs többi részén csak "
+                f"{fo['rest_share_pct']:.0f}% — a fal a végjátékban erre "
+                "áll fel",
+                "hajrá-figura két befejezéssel: ugyanaz a kezdő mozgás, "
+                "de a fal reakciójától függően a második megoldás (a "
+                "másik oldal átlövése VAGY beálló-átadás); az edzés végén, "
+                "fáradtan és órára játszva (utolsó 5 perc, egy gól "
+                "hátrány) gyakorolva")
+    except Exception:
+        pass
+
     # 483) A saját emberelőnyünk EGY figurára épül: a két perc a
     # legdrágább támadási idő — ha a fal kiismeri az egyetlen megoldást,
     # a fölény elvész. Második befejezés kell rá, bejátszva.

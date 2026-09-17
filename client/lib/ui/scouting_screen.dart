@@ -10029,6 +10029,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return v;
   }
 
+  // Hajrá-figura: mire szűkülnek az utolsó öt percben. Az ítéletet a
+  // backend hozza (legalább 4 hajrában mért figura-támadás, 50% fölötti
+  // részarány, 25 százalékpont rés a meccs többi részéhez képest — a
+  // küszöbök a motorban élnek), a kliens a kész mondatot mutatja.
+  String? _clutchFigure(Map<String, dynamic> r) {
+    final d = r["clutch_figures"];
+    if (d is! Map) return null;
+    final v = d["verdict"];
+    if (v is! String || v.isEmpty) return null;
+    return v;
+  }
+
   // Figura-állás: melyik figurát hozzák vezetésnél és hátrányban. Az
   // ítéletet a backend hozza (állapotonként legalább 5 mért
   // figura-támadás, 25 százalékpont részarány-rés — a küszöbök a
@@ -11739,6 +11751,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Figura-állás", _setplayByScore(r)!],
       if (_powerplayFigure(r) != null)
         ["Emberelőny-figura", _powerplayFigure(r)!],
+      if (_clutchFigure(r) != null)
+        ["Hajrá-figura", _clutchFigure(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],

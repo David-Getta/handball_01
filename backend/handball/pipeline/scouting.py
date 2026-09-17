@@ -690,6 +690,12 @@ class ScoutingReport:
     # combine_reports-ban ÚJRASZÁMOLVA (arányt sose tárolunk).
     powerplay_figure_rows: list = field(default_factory=list)
     powerplay_figures: dict = field(default_factory=dict)
+    # Hajrá-figura (setplays.clutch_setplay): lapos, összegezhető sorok
+    # — {"shape", "attacks", "goals", "rest_attacks", "match_id"} —
+    # meccsek közt egymás mögé; az összefésült kép (clutch_figures) a
+    # combine_reports-ban ÚJRASZÁMOLVA (arányt sose tárolunk).
+    clutch_figure_rows: list = field(default_factory=list)
+    clutch_figures: dict = field(default_factory=dict)
     # Figura-állás (setplays.setplay_by_score): lapos, összegezhető
     # sorok — {"shape", "state", "attacks", "goals", "match_id"} —
     # meccsek közt egymás mögé; az összefésült kép (setplay_score) a
@@ -8483,6 +8489,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # Hajrá-figura: mire szűkülnek az utolsó percekben.
+    try:
+        _cspv = (rep.clutch_figures or {}).get("verdict")
+        if _cspv:
+            keys.append(_cspv[0].upper() + _cspv[1:] + ".")
+    except Exception:
+        pass
+
     # Figura-állás: állásfüggően váltanak-e figurát.
     try:
         _sbsv = (rep.setplay_score or {}).get("verdict")
@@ -12438,6 +12452,14 @@ def _scout_team_cached(match: Match, team: Team,
             for f_ in _ppf(match, config)[team.value]["figures"]]
         from .setplays import powerplay_figures_summary as _ppfs
         rep.powerplay_figures = _ppfs(rep.powerplay_figure_rows)
+        from .setplays import clutch_setplay as _csp
+        rep.clutch_figure_rows = [
+            {"shape": f_["shape"], "attacks": f_["attacks"],
+             "goals": f_["goals"], "rest_attacks": f_["rest_attacks"],
+             "match_id": match.meta.match_id}
+            for f_ in _csp(match, config)[team.value]["figures"]]
+        from .setplays import clutch_figures_summary as _csps
+        rep.clutch_figures = _csps(rep.clutch_figure_rows)
         from .setplays import setplay_by_score as _sbs
         _sbsrec = _sbs(match, config)[team.value]["states"]
         rep.setplay_score_rows = [
@@ -13670,6 +13692,14 @@ def _powerplay_figures_of(reports) -> dict:
                                                   or [])])
 
 
+def _clutch_figures_of(reports) -> dict:
+    """A hajrá-figura sorok meccsek közti összefésülése."""
+    from .setplays import clutch_figures_summary
+    return clutch_figures_summary([row for r in reports
+                                   for row in (r.clutch_figure_rows
+                                               or [])])
+
+
 def _setplay_score_of(reports) -> dict:
     """A figura-állás sorok meccsek közti összefésülése."""
     from .setplays import setplay_score_summary
@@ -14784,6 +14814,29 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 465) Az ő hajrá-figurájuk × a ti hajrá-mérlegetek: a végjátékban
+    # egy figurára szűkülnek — ha a ti hajrátok lyukas, ez az EGY figura
+    # a javítanivaló; ha bírjátok a végét, ezzel lehet le is zárni.
+    try:
+        _csp465 = (opp.clutch_figures or {}).get("verdict")
+        if _csp465 and own.clutch_matches >= 1:
+            if own.clutch_goals_against > own.clutch_goals_for:
+                plan.append(
+                    f"Az ellenfél {_csp465} — ti pedig a hajrákban "
+                    f"veszítitek a gólokat ({own.clutch_goals_for}–"
+                    f"{own.clutch_goals_against} a meccsek végén): a "
+                    "végjáték-védekezést KONKRÉTAN erre az egy figurára "
+                    "játsszátok be, a többi hajrá-helyzetet rá lehet "
+                    "engedni.")
+            else:
+                plan.append(
+                    f"Az ellenfél {_csp465} — ti bírjátok a végjátékot "
+                    f"({own.clutch_goals_for}–{own.clutch_goals_against} "
+                    "a meccsek végén), tehát ha az utolsó öt percben ezt "
+                    "az egy figurát elveszitek tőlük, nincs B-tervük.")
     except Exception:
         pass
 
@@ -23226,6 +23279,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         powerplay_figure_rows=[row for r in reports
                                for row in (r.powerplay_figure_rows or [])],
         powerplay_figures=_powerplay_figures_of(reports),
+        clutch_figure_rows=[row for r in reports
+                            for row in (r.clutch_figure_rows or [])],
+        clutch_figures=_clutch_figures_of(reports),
         setplay_score_rows=[row for r in reports
                             for row in (r.setplay_score_rows or [])],
         setplay_score=_setplay_score_of(reports),

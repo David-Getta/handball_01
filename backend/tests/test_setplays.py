@@ -1514,6 +1514,147 @@ def test_az_emberelony_figura_edzes_szabalya_valodi_retegbol(monkeypatch):
     assert "Az emberelőnyünk egyetlen figurára épül" in cimek
 
 
+# ---- Hajrá-figura (clutch_setplay) -----------------------------------------
+
+
+def _csp_match(match_id="csp", db=5, hajra_oldal="bal", szukul=True,
+               fps=5.0, hossz_s=640.0):
+    """A hazai a meccs törzsében FELVÁLTVA hozza a két figurát, az utolsó
+    öt percben (a hajrában) csak az egyiket.
+
+    A felvétel `hossz_s` másodperc (a hajrá-rétegek 600 mp-es
+    minimumánál hosszabb), ritka fps-sel, hogy a teszt gyors maradjon:
+    a hajrá az utolsó 300 mp. `szukul=False` esetén a hajrában is
+    felváltva jönnek — nincs szűkülés, nincs ítélet.
+    """
+    from handball.pipeline.momentum import CLUTCH_WINDOW_S
+
+    frames = []
+    t = 0
+
+    def tamadas(side: str):
+        nonlocal t
+        y = 4.0 if side == "bal" else 16.0
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, [28.0, 31.0, 34.0],
+                                             [y, y, y]))
+            t += 1
+        for _ in range(6):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def ures(n: int):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 12.0, 10.0)],
+                                ball=Ball(x=12.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    masik = "jobb" if hajra_oldal == "bal" else "bal"
+    hajra_n = int(CLUTCH_WINDOW_S * fps)
+    torzs_n = int(hossz_s * fps) - hajra_n
+    # Törzs: 2*db támadás felváltva, közte üresjárat.
+    szunet = max(0, (torzs_n - 2 * db * 14) // (2 * db))
+    for _ in range(db):
+        tamadas(hajra_oldal)
+        ures(szunet)
+        tamadas(masik)
+        ures(szunet)
+    ures(max(0, torzs_n - t))
+    # Hajrá: db támadás — csak a hajrá-figura, vagy felváltva.
+    kezdet = t
+    szunet = max(0, (hajra_n - db * 14) // db)
+    for i in range(db):
+        ures(2)
+        tamadas(hajra_oldal if szukul or i % 2 == 0 else masik)
+        ures(szunet - 2)
+    ures(max(0, kezdet + hajra_n - t))
+    return Match(MatchMeta(match_id=match_id, home_team="A", away_team="B",
+                           fps=fps), frames)
+
+
+def test_a_hajra_figura_megmondja_mire_szukulnek_a_vegen():
+    """A törzsben két figura felváltva, a hajrában csak az egyik: az
+    ítélet a szűkülést mondja ki, és a védekezésnek szóló teendőt."""
+    from handball.pipeline.setplays import (CSP_GAP_PP, CSP_MIN_ATTACKS,
+                                            CSP_SHARE_PCT, clutch_setplay)
+
+    rec = clutch_setplay(_csp_match())["home"]
+    assert rec["attacks"] >= CSP_MIN_ATTACKS
+    fo = rec["figures"][0]
+    assert fo["zone"].startswith("bal oldal")
+    assert fo["share_pct"] >= CSP_SHARE_PCT
+    assert fo["share_pct"] - fo["rest_share_pct"] >= CSP_GAP_PP
+    assert fo["rest_attacks"] >= 1, "a törzsben is hozták, csak ritkábban"
+    assert rec["verdict"] and "egy figurára szűkülnek" in rec["verdict"]
+    assert "a fal ne tippeljen" in rec["verdict"]
+    # Tükrözve a másik oldal a hajrá-figura.
+    jobb = clutch_setplay(_csp_match(hajra_oldal="jobb"))["home"]
+    assert jobb["figures"][0]["zone"].startswith("jobb oldal")
+    # A vendégnek nincs mért támadása: üres, nem hallgatólagos 0.
+    ures = clutch_setplay(_csp_match())["away"]
+    assert ures["attacks"] == 0 and ures["verdict"] is None
+
+
+def test_a_hajra_figura_rovid_felvetelen_es_keves_mintanal_hallgat():
+    """Rövid felvételen nincs hajrá; kevés hajrá-támadásnál nincs ítélet;
+    ha a hajrában is felváltva jönnek, nincs szűkülés."""
+    from handball.pipeline.setplays import CSP_MIN_ATTACKS, clutch_setplay
+
+    rovid = clutch_setplay(_csp_match(hossz_s=400.0))["home"]
+    assert rovid["attacks"] == 0 and rovid["verdict"] is None
+    keves = clutch_setplay(_csp_match(db=CSP_MIN_ATTACKS - 1))["home"]
+    assert 0 < keves["attacks"] < CSP_MIN_ATTACKS
+    assert keves["verdict"] is None
+    nem = clutch_setplay(_csp_match(db=6, szukul=False))["home"]
+    assert nem["attacks"] >= CSP_MIN_ATTACKS
+    assert nem["verdict"] is None, nem
+
+
+def test_a_hajra_figura_meccsek_kozt_all_ossze():
+    """A hajrá rövid: egy meccsen kevés a minta, több meccsen áll össze.
+    A VALÓDI felderítés-úton (scout_team → combine_reports), az edzői
+    kulccsal és a 465-ös meccsterv-szabállyal."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+
+    r1 = scout_team(_csp_match("c1", db=2), Team.HOME)
+    r2 = scout_team(_csp_match("c2", db=2), Team.HOME)
+    assert r1.clutch_figure_rows and r1.clutch_figures["verdict"] is None
+    ossz = combine_reports([r1, r2])
+    assert ossz.clutch_figures["attacks"] >= 4
+    assert ossz.clutch_figures["verdict"], ossz.clutch_figures
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "hajrában egy figurára szűkülnek" in kulcsok
+    # 465: lyukas a saját hajránk → konkrétan erre játsszuk be.
+    sajat = scout_team(_csp_match("s1", db=2), Team.HOME)
+    sajat.clutch_matches = 2
+    sajat.clutch_goals_for, sajat.clutch_goals_against = 3, 6
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "KONKRÉTAN erre az egy figurára" in terv
+    sajat.clutch_goals_for, sajat.clutch_goals_against = 6, 3
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "nincs B-tervük" in terv2
+
+
+def test_a_hajra_figura_edzes_szabalya_es_osszefoglaloja_valodi_retegbol(
+        monkeypatch):
+    """484: a saját hajránk egyetlen figurára szűkül — a tétel és az
+    edzői összefoglaló mondata a VALÓDI rétegből jön."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.training import training_focus
+    from handball.pipeline.coach_summary import coach_summary
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    meccs = _csp_match("t484")
+    tetelek = training_focus(meccs)["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "A hajránk egyetlen figurára szűkül" in cimek
+    szoveg = str(coach_summary(meccs))
+    assert "egy figurára szűkülnek" in szoveg
+
+
 # ---- Figura-dosszié (figure_dossier) ---------------------------------------
 
 

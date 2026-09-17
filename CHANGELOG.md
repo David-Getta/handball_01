@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.137 óta)
 
+- **Hajrá-figura** (új réteg): MIRE SZŰKÜLNEK az utolsó öt percben. A
+  hajrá-rétegek eddig azt mondták meg, KI és MILYEN helyzetből fejez be
+  a végén — ez azt, MIT játszanak: a támadás-szakaszokat alak szerint
+  klaszterezzük, és a hajrába esőket a meccs többi részével vetjük
+  össze figuránként. Edzői olvasat: "a hajrában egy figurára szűkülnek:
+  az utolsó öt perc támadásainak 80%-a ugyanaz, a meccs többi részén
+  csak 40% — a végjátékban a fal ne tippeljen, erre álljon fel". Ítélet
+  csak legalább 4 hajrá-támadástól, 50% fölötti részaránynál és 25
+  százalékpont résnél a törzshöz képest (a szokásos játékuk nem
+  szűkülés). A hajrá rövid, ezért a réteg meccsek közt áll össze
+  igazán. Felületek: elemzés-válasz és meccs-csomag, edzői összefoglaló,
+  felderítés (lapos, összegezhető sorok, edzői kulcs, 465. meccsterv-
+  szabály a saját hajrá-mérleggel párosítva), 484. edzés-szabály (a
+  saját hajránk egyetlen figurájára második befejezés), kliens-csempe.
+
 ## v0.1.137 — kiadva (2026-09-16)
 
 > Kiadás-jegyzet: a kiadás leírása mindkét platform-jobból feltöltődik

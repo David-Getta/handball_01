@@ -1643,6 +1643,168 @@ def figure_dossier(library: Optional[dict] = None,
     return {"figures": ki, "repeat": (repeat or {}).get("verdict")}
 
 
+# HAJRÁ-figura: az ítélethez ennyi hajrában mért figura-támadás kell, a
+# fő figura részaránya legalább ennyi legyen a hajrában, és ennyivel
+# (százalékpontban) haladja meg a meccs többi részének részarányát.
+CSP_MIN_ATTACKS = 4
+CSP_SHARE_PCT = 50.0
+CSP_GAP_PP = 25.0
+# A gól a szakaszhoz tartozik, ha a szakaszban vagy ennyi másodpercen
+# belül utána esett (a többi figura-réteggel azonos ablak).
+CSP_SHOT_TAIL_S = 3.0
+
+
+def clutch_setplay(match: Match, config: TacticsConfig | None = None,
+                   threshold: float = SPL_MERGE_THRESHOLD,
+                   min_length: int = 5) -> dict:
+    """Hajrá-figura: MELYIK FIGURÁRA SZŰKÜLNEK a meccs utolsó perceiben.
+
+    A hajrá-rétegek (`clutch_scorers`, `clutch_shot_quality`,
+    `clutch_lineup`) azt mondják meg, KI és MILYEN helyzetből fejez be a
+    végén — ez azt, MIT játszanak: a támadás-szakaszokat alak szerint
+    klaszterezzük, és a hajrába (az utolsó CLUTCH_WINDOW_S másodperc)
+    esőket a meccs többi részével vetjük össze figuránként.
+
+    Edzőileg ez a végjáték felkészülése. Szoros meccs végén a legtöbb
+    csapat a legbiztosabb egy-két figurájára szűkül — ha ezt tudjuk, a
+    fal a hajrában nem tippel, hanem arra áll fel. Az ítélet csak akkor
+    szólal meg, ha a hajrában legalább CSP_MIN_ATTACKS mért
+    figura-támadás van, a fő figura részaránya eléri a CSP_SHARE_PCT-t,
+    és legalább CSP_GAP_PP százalékponttal több, mint a meccs többi
+    részén (különben nem szűkülés, csak a szokásos játékuk).
+
+    Visszatérés csapatonként: {"attacks" (hajrá-támadások),
+    "figures": [{"shape", "zone", "attacks", "goals", "goal_pct",
+    "share_pct", "rest_attacks", "rest_share_pct"}], "verdict":
+    mondat | None} — a lista a csak a törzsben hozott figurákat is
+    tartalmazza (0 hajrá-támadással), hogy a törzs részaránya meccsek
+    közt is újraszámolható legyen; rövid felvételen
+    (CLUTCH_MIN_DURATION_S alatt) és kevés mintánál üres lista, None
+    ítélet (sose hallgatólagos 0).
+    """
+    from .event_detection import EventType, detect_shots
+    from .momentum import CLUTCH_MIN_DURATION_S, CLUTCH_WINDOW_S
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    ures = {side: {"attacks": 0, "figures": [], "verdict": None}
+            for side in ("home", "away")}
+    if not match.frames or len(match.frames) / fps < CLUTCH_MIN_DURATION_S:
+        return ures
+    tail = round(CSP_SHOT_TAIL_S * fps)
+    win_start = match.frames[-1].t - CLUTCH_WINDOW_S * fps
+    esemenyek = [e for e in detect_shots(match, config)
+                 if e.type in (EventType.SHOT, EventType.GOAL)]
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        sigs = [normalized_signature(s_) for s_ in seqs]
+        labels = cluster_signatures(sigs, threshold=threshold)
+        agg: dict = {}
+        for seq, sig, lab in zip(seqs, sigs, labels):
+            rec = agg.setdefault(lab, {"sum": [0.0] * len(sig), "n": 0,
+                                       "attacks": 0, "goals": 0,
+                                       "rest_attacks": 0})
+            rec["sum"] = [a + b for a, b in zip(rec["sum"], sig)]
+            rec["n"] += 1
+            if seq.start_t >= win_start:
+                rec["attacks"] += 1
+                if any(e.team == team and e.type == EventType.GOAL
+                       and seq.start_t <= e.t <= seq.end_t + tail
+                       for e in esemenyek):
+                    rec["goals"] += 1
+            else:
+                rec["rest_attacks"] += 1
+        hajra = sum(r["attacks"] for r in agg.values())
+        tobbi = sum(r["rest_attacks"] for r in agg.values())
+        sorok = []
+        for rec in agg.values():
+            # A csak a törzsben hozott figura is a listában marad (0
+            # hajrá-támadással): a meccsek közti összefésülés a törzs
+            # részarányát csak így tudja újraszámolni.
+            shape = [round(v / rec["n"], 4) for v in rec["sum"]]
+            sorok.append({
+                "shape": shape, "zone": shape_zone(shape),
+                "attacks": rec["attacks"], "goals": rec["goals"],
+                "goal_pct": round(100.0 * rec["goals"]
+                                  / max(1, rec["attacks"]), 1),
+                "share_pct": round(100.0 * rec["attacks"] / max(1, hajra), 1),
+                "rest_attacks": rec["rest_attacks"],
+                "rest_share_pct": round(100.0 * rec["rest_attacks"]
+                                        / max(1, tobbi), 1)})
+        sorok.sort(key=lambda r: (-r["attacks"], -r["rest_attacks"]))
+        out[team.value] = {"attacks": hajra, "figures": sorok,
+                           "verdict": _hajra_itelet(hajra, sorok)}
+    return out
+
+
+def _hajra_itelet(hajra: int, sorok: list) -> Optional[str]:
+    """Egy figurára szűkülnek-e a hajrában — a védekezésnek szóló mondat."""
+    if hajra < CSP_MIN_ATTACKS or not sorok:
+        return None
+    fo = sorok[0]
+    if fo["share_pct"] < CSP_SHARE_PCT:
+        return None
+    if fo["share_pct"] - fo["rest_share_pct"] < CSP_GAP_PP:
+        return None
+    return (f"a hajrában egy figurára szűkülnek: \"{fo['zone']}\" az "
+            f"utolsó öt perc támadásainak {fo['share_pct']:.0f}%-a "
+            f"({fo['attacks']}/{hajra}, {fo['goals']} gól), a meccs többi "
+            f"részén csak {fo['rest_share_pct']:.0f}% — a végjátékban a "
+            "fal ne tippeljen: erre álljon fel")
+
+
+def clutch_figures_summary(rows: list,
+                           threshold: float = SPL_MERGE_THRESHOLD) -> dict:
+    """Több meccs hajrá-figura sorai összefésülve — a felderítés képe.
+
+    `rows`: [{"shape", "attacks", "goals", "rest_attacks", …}] (a
+    ScoutingReport lapos sorai). A hasonló alakokat súlyozott
+    középponttal vonjuk össze, a darabszámokat összeadjuk; a
+    részarányok az összegekből számolódnak újra.
+    """
+    konyv: list = []
+    for row in sorted(rows or [], key=lambda r: -int(r.get("attacks", 0))):
+        shape = list(row.get("shape") or [])
+        if not shape:
+            continue
+        legjobb, legjobb_d = None, threshold
+        for k in konyv:
+            d = _distance(shape, k["shape"])
+            if d <= legjobb_d:
+                legjobb, legjobb_d = k, d
+        n = int(row.get("attacks", 0)) + int(row.get("rest_attacks", 0))
+        if legjobb is None:
+            legjobb = {"shape": shape, "n": 0, "attacks": 0, "goals": 0,
+                       "rest_attacks": 0}
+            konyv.append(legjobb)
+        m = legjobb["n"]
+        legjobb["shape"] = [(a * m + b * n) / max(1, m + n)
+                            for a, b in zip(legjobb["shape"], shape)]
+        legjobb["n"] += n
+        legjobb["attacks"] += int(row.get("attacks", 0))
+        legjobb["goals"] += int(row.get("goals", 0))
+        legjobb["rest_attacks"] += int(row.get("rest_attacks", 0))
+    hajra = sum(k["attacks"] for k in konyv)
+    tobbi = sum(k["rest_attacks"] for k in konyv)
+    figures = []
+    for k in konyv:
+        shape = [round(v, 4) for v in k["shape"]]
+        figures.append({
+            "shape": shape, "zone": shape_zone(shape),
+            "attacks": k["attacks"], "goals": k["goals"],
+            "goal_pct": round(100.0 * k["goals"] / max(1, k["attacks"]), 1),
+            "share_pct": round(100.0 * k["attacks"] / max(1, hajra), 1),
+            "rest_attacks": k["rest_attacks"],
+            "rest_share_pct": round(100.0 * k["rest_attacks"]
+                                    / max(1, tobbi), 1)})
+    figures.sort(key=lambda r: (-r["attacks"], -r["rest_attacks"]))
+    return {"attacks": hajra, "figures": figures,
+            "verdict": _hajra_itelet(hajra, figures)}
+
+
 # ---- Repertoár-változás -----------------------------------------------------
 # A szezon két fele közt mi jött be és mi tűnt el a figurák közül: a saját
 # csapatnál "él-e még a beúszós kereszt", az ellenfélnél "van-e új

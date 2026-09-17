@@ -2976,3 +2976,15 @@ def test_az_emberelony_figura_csempe_a_felderitesen():
            / "scouting_screen.dart").read_text(encoding="utf-8")
     assert "_powerplayFigure" in src and "Emberelőny-figura" in src
     assert 'r["powerplay_figures"]' in src
+
+
+def test_a_hajra_figura_csempe_a_felderitesen():
+    """Hajrá-figura: mire szűkülnek az utolsó percekben — a felderítő
+    képernyő csempéje a motor kész mondatát mutatja, a ScoutingReport
+    VALÓDI mezőjéből."""
+    from pathlib import Path as _P
+    gyoker = _P(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "scouting_screen.dart").read_text(encoding="utf-8")
+    assert "_clutchFigure" in src and "Hajrá-figura" in src
+    assert 'r["clutch_figures"]' in src
