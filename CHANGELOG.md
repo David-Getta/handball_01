@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.136 óta)
+## Kiadatlan (a v0.1.137 óta)
+
+## v0.1.137 — kiadva (2026-09-16)
+
+> Kiadás-jegyzet: a kiadás leírása mindkét platform-jobból feltöltődik
+> — a v0.1.136 üres leírása nem ismétlődhet meg.
 
 - **A kiadás leírása nem veszhet el** (kiadás): a Windows- és a
   macOS-job UGYANAZT a kiadást frissíti; a leírást eddig csak a
