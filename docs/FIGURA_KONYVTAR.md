@@ -96,6 +96,35 @@ tárol (`setplay_score_rows`), a `setplay_score_summary` a meccsek közt
 fal-váltásaitokkal köti össze, a 482. edzés-szabály a saját
 kiszámíthatóságunkra ad hajrá-gyakorlatot két megoldással.
 
+## Emberelőny-figura (mit hoznak a két perc alatt)
+
+A `powerplay_setplay` a kiállítás-ablakokba (`rules.detect_powerplay`)
+eső támadás-szakaszokat klaszterezi alak szerint, és figuránként számolja
+a támadást, a gólt és a részarányt. Ítélet csak `PPF_MIN_ATTACKS` (4)
+mért emberelőnyös támadástól és `PPF_SHARE_PCT` (50%) fölötti
+részaránynál: "emberelőnyben egy figurára építenek — emberhátrányban
+ezt kell bejátszani és erre rendezni az öt embert, a többit rá lehet
+engedni". A kiállítás RITKA, ezért a felderítés lapos sorai
+(`powerplay_figure_rows`) és a `powerplay_figures_summary` összefésülése
+meccsek közt teszi használhatóvá. A 464. meccsterv-szabály a saját
+fegyelemmel párosítja (meccsenként hány kiállítást szedtek), a 483.
+edzés-szabály a saját emberelőnyünk egyetlen figurájára ad második
+befejezést.
+
+## Figura-dosszié (egy figuráról minden, egy lapon)
+
+A fenti rétegek külön-külön egy-egy kérdésre felelnek; az edző viszont
+EGY figurára készül fel. A `figure_dossier` a könyvtár fő figuráihoz
+(legfeljebb `FDS_MAX_FIGURES`, 3) ALAK szerint hozzápárosítja a
+védőforma-mondatot (`figure_formation`), az állás szerinti részarányokat
+(`setplay_score`), az emberelőnyös darabszámot (`powerplay_figures`) és
+a sorrend-mondatot (a figura-ismétlés darabszámaiból). Származtatott
+mező (`ScoutingReport.figure_dossier`): a `scout_team` és a
+`combine_reports` is a már összegzett forrás-mezőkből számolja újra, így
+az egyesített jelentésben nem a részjelentésé marad. Felülete a
+felderítő képernyő "Figura-dosszié" kártyája rajzzal és a nyomtatható
+felderítő jelentés azonos szakasza.
+
 ## Figura × védőforma
 
 A könyvtár azt mondja, MELYIK figurát hozzák; a `figure_vs_formation`
@@ -183,7 +212,7 @@ meccseken" az, amire a régi felderítés nem készít fel.
 szakasz): a tükörkép irány-normálva egy alak; edzői nevek; a könyvtár két
 meccs (a másodikban a másik kapura támadva) között visszatérő figurát
 talál, egy meccsből nem; a VALÓDI felderítés-út; a riasztás- és a
-setplays-végpont; a meccsenkénti gyorsítótár; a figura-állás (vezetve / hátrányban, kevés minta, valódi felderítés-út); a gól utáni figura-
+setplays-végpont; a meccsenkénti gyorsítótár; a figura-állás (vezetve / hátrányban, kevés minta, valódi felderítés-út); az emberelőny-figura (kiállítás alatt, teljes létszámnál nincs, meccsek közt áll össze); a dosszié (alak szerinti párosítás, valódi felderítés-út, kliens és jelentés); a gól utáni figura-
 ismétlés (előre-lépés, váltás, kiszámíthatóság, kevés minta, a valódi
 felderítés-út és a 480. edzés-szabály); a repertoár-változás
 (új / eltűnt / maradt) és a szezon-riport szakasza. A rajz-felületek őrei a
