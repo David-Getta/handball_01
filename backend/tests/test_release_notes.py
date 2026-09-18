@@ -63,16 +63,31 @@ def test_a_teljes_leiras_tartalmazza_a_telepitest():
     assert "Első újdonság" in text
 
 
-def test_hianyzo_szakasznal_is_kimegy_a_kiadas():
-    """Ha a verzió szakasza hiányzik, a telepítési rész akkor is kimegy.
-
-    Egy hiányzó changelog-szakasz miatt nem maradhat el a kiadás — a
-    felhasználó a telepítéshez akkor is kap útmutatót.
-    """
+def test_a_kiadatlan_szakasz_a_friss_kiadas_leirasa():
+    """A kiadás készítésekor a verzió saját szakasza még NEM létezik (a
+    munkarend utána zárja le) — a "Kiadatlan" szakasz a frissen kiadott
+    tartalom. E nélkül minden kiadás leírása sablonszöveg volt, pedig az
+    app pont ezt mutatja a frissítés előtt."""
     text = build("9.9.9", _SAMPLE)
+    assert "SportMachine-Setup.exe" in text
+    assert "Mi változott a v9.9.9-ben" in text
+    assert "Egy még ki nem adott dolog" in text
+    assert "Első újdonság" not in text          # az a v0.1.24-é
+    assert "CHANGELOG.md" in text
+
+
+def test_hianyzo_szakasznal_is_kimegy_a_kiadas():
+    """Ha se a verzió szakasza, se Kiadatlan szakasz nincs, a telepítési
+    rész akkor is kimegy — egy hiányzó changelog-szakasz miatt nem
+    maradhat el a kiadás.
+    """
+    nincs = _SAMPLE.replace("## Kiadatlan (a v0.1.24 óta)\n\n"
+                            "- Egy még ki nem adott dolog.\n\n", "")
+    text = build("9.9.9", nincs)
     assert "SportMachine-Setup.exe" in text
     assert "CHANGELOG.md" in text
     assert "Első újdonság" not in text
+    assert "ki nem adott" not in text
 
 
 def test_tul_hosszu_szakasz_vagodik():
@@ -112,6 +127,16 @@ def test_a_workflow_a_szkriptbol_veszi_a_leirast():
         "a kiadás nem a generált fájlt kapja")
     assert "Újdonságok e kiadásban: lásd a CHANGELOG.md-t" not in text, (
         "a régi sablonszöveg még bent van a workflow-ban")
+    # MINDEN feltöltő job adja a leírást. A két platform-job UGYANAZT a
+    # kiadást frissíti; ha az egyik leírás NÉLKÜL tölt fel, és ő fut le
+    # utoljára, KIÜTI a másik által beírt változás-listát — a kiadás
+    # leírás nélkül marad (így járt a v0.1.136), és az app
+    # "Újdonságok" ablaka üresen jön elő a frissítés után.
+    kiadok = text.count("uses: softprops/action-gh-release")
+    assert kiadok == text.count("body_path: release_notes.md"), (
+        f"{kiadok} feltöltő job van, de nem mind adja a kiadás leírását")
+    assert text.count("scripts.release_notes") == kiadok, (
+        "van olyan feltöltő job, amelyik nem generálja a jegyzetet")
 
 
 def test_fajlba_iras_utf8(tmp_path):

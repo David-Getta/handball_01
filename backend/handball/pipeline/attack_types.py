@@ -24,7 +24,7 @@ from typing import Optional
 from ..models.tracking import Match
 from .setplays import segment_attacks
 from .tactics import TacticsConfig
-from .primitive_cache import copy_rows, memoize_primitive
+from .primitive_cache import copy_rows, copy_sides, memoize_primitive
 
 # Küszöbök (magyarázható, mért szabályok):
 FAST_BREAK_MAX_S = 6.0     # lerohanás: legfeljebb ennyi ideig tart
@@ -606,7 +606,13 @@ def attack_width(match, config=None) -> dict:
 
 
 # Beálló-terhelés: a támadás akkor "beállós", ha a labda legalább ennyi
-# kockán át a becsült beállónál járt a szakasz alatt (villanás ellen).
+# ideig a becsült beállónál járt a szakasz alatt (villanás ellen).
+#
+# MÁSODPERCBEN: a feldolgozás ritkít, tehát 3 kocka a profiltól függően
+# 0,12 és 0,36 másodperc között bármit jelentene — a villanás-szűrő
+# szigora nem függhet a minőségi profiltól.
+PIVOT_TOUCH_MIN_S = 0.12
+# Visszafelé kompatibilis kocka-alapérték (25 fps-en ~3 kocka).
 PIVOT_TOUCH_MIN_FRAMES = 3
 
 
@@ -634,6 +640,8 @@ def pivot_usage(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     tail = round(ATTACK_TAIL_S * fps)
+    # A villanás-szűrő a meccs SAJÁT képrátájából (lásd PIVOT_TOUCH_MIN_S).
+    _pivot_touch_min = max(1, int(round(PIVOT_TOUCH_MIN_S * fps)))
     posts = estimate_positions(match, config)
     pivots = {side: {tid for tid, r in posts.get(side, {}).items()
                      if r["poszt"] == "beálló"}
@@ -655,7 +663,7 @@ def pivot_usage(match: Match, config: Optional[TacticsConfig] = None) -> dict:
             h = ball_holder(fr, config)
             if h is not None and h.track_id in pivots[side]:
                 touch += 1
-        is_pivot = touch >= PIVOT_TOUCH_MIN_FRAMES
+        is_pivot = touch >= _pivot_touch_min
         goal_t = next((t for (t, tm, g) in shots
                        if tm == side and g
                        and seq.start_t <= t <= seq.end_t + tail), None)
@@ -1778,7 +1786,7 @@ def screen_usage(match: Match,
               "away": {"shots": 0, "screened": 0}}
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]
@@ -1816,6 +1824,200 @@ def screen_usage(match: Match,
                 r["style"] = "elzárásos"
             elif pct <= SCREEN_LOW_PCT:
                 r["style"] = "elzárás nélküli"
+        out[side] = r
+    return out
+
+
+# Elzárás-fáradás: félidőnként ennyi őrzött (védővel fedett) lövés
+# kell az ítélethez, és ekkora (százalékpontos) elzárás-arány változás
+# számít érdeminek.
+SCRF_MIN_SHOTS = 4
+SCRF_GAP_PP = 15.0
+
+
+def screen_fade(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Elzárás-fáradás: ELFOGY-E az elzárás-munka a második félidőre.
+
+    Az elzárás-használat (screen_usage) a meccs-szintű stílust adja —
+    ez a KITARTÁST: félidőnként megnézzük, az őrzött lövéseik mekkora
+    hányada elé érkezett elzárás. Az elzárás a legfizikálisabb támadó
+    munka (ütközés, tartás, újra felállás) — ha a második félidőre
+    érdemben visszaesik, a lövőik magukra maradnak.
+
+    Edzőileg: az elfogyó elzárású csapat ellen a hajrában bátrabban
+    léphet ki a fal — a lövő már fedetlen elzárás nélkül érkezik, a
+    kilépés és a blokk szinte ingyen van. Saját oldalon az elzárók
+    forgatása és a törzs-állóképesség az edzés-téma: az elzárás
+    elfogyása nem taktika, hanem kondíció kérdése.
+
+    Visszatérés csapatonként: {"fh_shots", "fh_screened", "sh_shots",
+    "sh_screened", "fh_pct", "sh_pct", "gap_pp", "verdict"} — a pct az
+    elzárásos lövések aránya a félidő őrzött lövéseihez képest; a
+    pct/gap/verdict None, ha nincs félidő-jel, vagy valamelyik
+    félidőben kevés (SCRF_MIN_SHOTS alatti) az őrzött lövés.
+    """
+    import math
+
+    from .halftime import detect_halftime
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    empty = {"fh_shots": 0, "fh_screened": 0, "sh_shots": 0,
+             "sh_screened": 0, "fh_pct": None, "sh_pct": None,
+             "gap_pp": None, "verdict": None}
+    out = {side: dict(empty) for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
+        if pid is None or i0 is None:
+            continue
+        f = match.frames[i0]
+        shooter = next((p for p in f.players if p.track_id == pid),
+                       None)
+        if shooter is None:
+            continue
+        defenders = [p for p in f.players
+                     if p.team is not None and p.team != shooter.team]
+        marker = None
+        best = SCREEN_MARKER_MAX_M
+        for d in defenders:
+            dist = math.hypot(d.x - shooter.x, d.y - shooter.y)
+            if dist <= best:
+                marker, best = d, dist
+        if marker is None:
+            continue  # szabad lövés: nincs kit elzárni
+        half = "fh" if sh["t"] <= ht else "sh"
+        rec = out[sh["team"]]
+        rec[f"{half}_shots"] += 1
+        screened = any(
+            p.track_id != pid and p.team == shooter.team
+            and math.hypot(p.x - marker.x, p.y - marker.y)
+            <= SCREEN_DIST_M
+            for p in f.players)
+        if screened:
+            rec[f"{half}_screened"] += 1
+
+    for rec in out.values():
+        if rec["fh_shots"] >= SCRF_MIN_SHOTS                 and rec["sh_shots"] >= SCRF_MIN_SHOTS:
+            fh = 100.0 * rec["fh_screened"] / rec["fh_shots"]
+            sh_ = 100.0 * rec["sh_screened"] / rec["sh_shots"]
+            rec["fh_pct"] = round(fh, 1)
+            rec["sh_pct"] = round(sh_, 1)
+            rec["gap_pp"] = round(sh_ - fh, 1)
+            if fh - sh_ >= SCRF_GAP_PP:
+                rec["verdict"] = (
+                    f"elfogy az elzárás-munkájuk ({fh:.0f}% → "
+                    f"{sh_:.0f}% elzárásos lövés) — a hajrában a "
+                    "lövőik magukra maradnak: a fal bátrabban "
+                    "kiléphet, a kilépés és a blokk szinte ingyen van")
+            elif sh_ - fh >= SCRF_GAP_PP:
+                rec["verdict"] = (
+                    f"a hajrára erősödik az elzárás-játékuk "
+                    f"({fh:.0f}% → {sh_:.0f}% elzárásos lövés) — a "
+                    "végjátékra a váltás-kommunikációt kell élesíteni: "
+                    "hangos váltás vagy átcsúszás az elzárás alatt")
+    return out
+
+
+# Elzárás-hozam: sávonként ennyi őrzött lövés kell az ítélethez, és
+# ekkora (százalékpontos) különbség számít érdemi hozamnak.
+SCY_MIN_SHOTS = 4
+SCY_GAP_PP = 15.0
+
+
+def screen_yield(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Elzárás-hozam: MEGÉRI-E nekik az elzárás.
+
+    Az elzárás-használat (screen_usage) a GYAKORISÁGOT méri — ez a
+    HOZAMOT: az őrzött lövéseket két sávra bontja (elzárásból lőtt
+    vagy tisztán, elzárás nélkül), és sávonként számol gólarányt.
+
+    Edzőileg ez dönti el, hova megy a védekező munka. Ha az
+    elzárásos lövéseik érdemben jobban mennek be, a váltás-
+    kommunikáció (hangos váltás, átcsúszás) a meccs kulcsa — az
+    elzárás megtörése többet ér, mint a lövő szorítása. Ha az
+    elzárásból ugyanannyi vagy kevesebb gól esik, hagyni kell őket
+    elzárni, és a lövő-vonalra kell menni. Saját csapatra: az
+    elzárás-játékunk hozama mérhető, nem hitkérdés.
+
+    Visszatérés csapatonként: {"screened_shots", "screened_goals",
+    "clean_shots", "clean_goals", "screened_pct", "clean_pct",
+    "gap_pp", "verdict"} — a pct/gap/verdict None, ha bármelyik
+    sávban kevés (SCY_MIN_SHOTS alatti) a lövés; a verdict
+    "az elzárás hozza a gólt" / "az elzárás nem fizet" / None.
+    """
+    import math
+
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    counts = {side: {"screened_shots": 0, "screened_goals": 0,
+                     "clean_shots": 0, "clean_goals": 0}
+              for side in ("home", "away")}
+
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
+        if pid is None or i0 is None:
+            continue
+        f = match.frames[i0]
+        shooter = next((p for p in f.players if p.track_id == pid),
+                       None)
+        if shooter is None:
+            continue
+        marker = None
+        best = SCREEN_MARKER_MAX_M
+        for d in f.players:
+            if d.team is None or d.team == shooter.team:
+                continue
+            dist = math.hypot(d.x - shooter.x, d.y - shooter.y)
+            if dist <= best:
+                marker, best = d, dist
+        if marker is None:
+            continue  # szabad lövés: nincs kit elzárni
+        screened = any(
+            p.track_id != pid and p.team == shooter.team
+            and math.hypot(p.x - marker.x, p.y - marker.y)
+            <= SCREEN_DIST_M
+            for p in f.players)
+        rec = counts[sh["team"]]
+        key = "screened" if screened else "clean"
+        rec[f"{key}_shots"] += 1
+        if sh.get("outcome") == "goal":
+            rec[f"{key}_goals"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "screened_pct": None, "clean_pct": None,
+             "gap_pp": None, "verdict": None}
+        if (rec["screened_shots"] >= SCY_MIN_SHOTS
+                and rec["clean_shots"] >= SCY_MIN_SHOTS):
+            sp = 100.0 * rec["screened_goals"] / rec["screened_shots"]
+            cp = 100.0 * rec["clean_goals"] / rec["clean_shots"]
+            r["screened_pct"] = round(sp, 1)
+            r["clean_pct"] = round(cp, 1)
+            r["gap_pp"] = round(sp - cp, 1)
+            if sp - cp >= SCY_GAP_PP:
+                r["verdict"] = (
+                    f"az elzárás hozza a gólt ({sp:.0f}% elzárásból, "
+                    f"{cp:.0f}% tisztán) — a váltás-kommunikáció a "
+                    "meccs: hangos váltás vagy átcsúszás az elzárás "
+                    "alatt, mert a lövő szorítása önmagában kevés")
+            elif cp - sp >= SCY_GAP_PP:
+                r["verdict"] = (
+                    f"az elzárás nem fizet nekik ({sp:.0f}% "
+                    f"elzárásból, {cp:.0f}% tisztán) — hagyni kell "
+                    "őket elzárni, és a lövő-vonalra kell menni: a "
+                    "váltásra fordított energia máshol többet ér")
         out[side] = r
     return out
 
@@ -2013,8 +2215,8 @@ def shooter_placement(match: Match,
     """
     from ..models.tracking import Team
     from .calibration import COURT_LENGTH_M
-    from .event_detection import (GOAL_LOOKAHEAD, GOAL_TOL_M, EventType,
-                                  _GOAL_Y_HIGH, _GOAL_Y_LOW, detect_shots)
+    from .event_detection import (EventType, _GOAL_Y_HIGH, _GOAL_Y_LOW,
+                                  detect_shots, goal_crossing_y)
 
     config = config or TacticsConfig()
     lo, hi = _GOAL_Y_LOW, _GOAL_Y_HIGH
@@ -2026,22 +2228,20 @@ def shooter_placement(match: Match,
         i0 = idx_of.get(e.t)
         if i0 is None:
             return None
-        end = min(len(match.frames), i0 + GOAL_LOOKAHEAD)
-        for j in range(i0, end):
-            b = match.frames[j].ball
-            if b is None:
-                continue
-            if abs(b.x - goal_x) <= GOAL_TOL_M and lo <= b.y <= hi:
-                rel = (b.y - lo) / span
-                # A lövő szemszögéhez igazítva (a két kaput tükrözzük).
-                leftness = (rel if goal_x >= COURT_LENGTH_M / 2
-                            else 1.0 - rel)
-                if leftness >= 2.0 / 3.0:
-                    return "bal"
-                if leftness <= 1.0 / 3.0:
-                    return "jobb"
-                return "közép"
-        return None
+        # A beérkezés y-ja a közös metszéspont-logikából: ritkított
+        # felvételen is a TÉNYLEGES gólvonal-átlépést kapjuk (a sávba
+        # eső minta híján a szakasz-metszés vagy az extrapolált pont).
+        yc = goal_crossing_y(match, i0, goal_x)
+        if yc is None:
+            return None
+        rel = (yc - lo) / span
+        # A lövő szemszögéhez igazítva (a két kaput tükrözzük).
+        leftness = rel if goal_x >= COURT_LENGTH_M / 2 else 1.0 - rel
+        if leftness >= 2.0 / 3.0:
+            return "bal"
+        if leftness <= 1.0 / 3.0:
+            return "jobb"
+        return "közép"
 
     tally: dict = {"home": {}, "away": {}}
     for e in detect_shots(match, config):
@@ -2278,6 +2478,208 @@ def wing_involvement(match: Match,
                 rec["verdict"] = "széthúzzák a támadást"
             elif share <= WING_INV_LOW:
                 rec["verdict"] = "közép-központú"
+    return out
+
+
+# Támadás-mélység esése: félidőnként ennyi mért kocka kell az
+# ítélethez, és ennyi méterrel kell hátrébb kerülnie a támadásnak,
+# hogy visszahúzódásról beszéljünk. A fél méter a felállt támadás
+# kockánkénti ingadozásának a nagyságrendje — ennél kisebb eltérés a
+# mérés zaja.
+ADEPTH_FADE_MIN_FRAMES = 100
+ADEPTH_FADE_DROP_M = 0.5
+
+
+@memoize_primitive("attack_depth_fade", copy=copy_sides)
+def attack_depth_fade(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Támadás-mélység esése: HÁTRÉBB ÁLLNAK-E a hajrában.
+
+    A támadás-mélység (`attack_depth`) megmondja, milyen messze állnak
+    a kaputól felállt támadásban; ez a réteg azt teszi hozzá, hogy
+    VÁLTOZIK-E a meccs alatt. A felismert félidő mentén kettébontva.
+
+    Edzőileg ez a fáradás egyik legőszintébb jele: a hatos elleni
+    munka (betörés, beugrás, elzárás után leválás) lábat kíván, és aki
+    elfárad, az egy lépéssel hátrébb marad — onnan viszont már csak a
+    kényelmes, de nehéz átlövés jön. A `shot_distance_fade` a LÖVÉS
+    helyét méri, ez a FELÁLLÁSÉT: a kettő oka ugyanaz, de a második
+    hamarabb látszik, mert nem kell hozzá lövés.
+
+    Ellenfélként a hajrára a fal nyugodtan beljebb tömörülhet
+    (kilépésre nincs szükség, ha úgysem jönnek be); saját csapatra a
+    teendő nem futóedzés, hanem a hajrá-támadások első mozdulatának
+    kikötése: valakinek BE kell indulnia, különben mindenki hátra
+    marad.
+
+    Visszatérés csapatonként: {"fh_m", "fh_frames", "sh_m",
+    "sh_frames", "drop_m"} — az 1./2. félidei átlagos kapu-távolság és
+    a mért kockaszám; drop_m a hátrébb kerülés méterben (POZITÍV =
+    hátrébb álltak), None, ha nincs félidő-jel vagy kevés a minta.
+    """
+    from ..models.tracking import Match as _M
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_m": None, "fh_frames": 0, "sh_m": None, "sh_frames": 0,
+             "drop_m": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out          # félidő-jel nélkül nincs mihez viszonyítani
+    for elotag, felido in (("fh", True), ("sh", False)):
+        resz = _M(match.meta, [f for f in match.frames
+                               if (f.t <= ht) == felido])
+        ad = attack_depth(resz, config)
+        for side in ("home", "away"):
+            rec = ad[side]
+            out[side][f"{elotag}_frames"] = rec["frames"]
+            out[side][f"{elotag}_m"] = rec["avg_depth_m"]
+    for side in ("home", "away"):
+        rec = out[side]
+        if (rec["fh_m"] is not None and rec["sh_m"] is not None
+                and rec["fh_frames"] >= ADEPTH_FADE_MIN_FRAMES
+                and rec["sh_frames"] >= ADEPTH_FADE_MIN_FRAMES):
+            # Pozitív = hátrébb álltak (nagyobb kapu-távolság).
+            rec["drop_m"] = round(rec["sh_m"] - rec["fh_m"], 2)
+    return out
+
+
+# Beálló-bevonás esése: félidőnként ennyi mért támadás kell az
+# ítélethez, és ennyi százalékponttal kell esnie a beállós támadások
+# arányának. Ugyanaz a küszöb-logika, mint a szélső-bevonásnál: húsz
+# támadásból kettő különbség még a mintavétel zaja.
+PIVOT_FADE_MIN_ATTACKS = 6
+PIVOT_FADE_DROP_PCT = 10.0
+
+
+@memoize_primitive("pivot_usage_fade", copy=copy_sides)
+def pivot_usage_fade(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Beálló-bevonás esése: ELJUT-E MÉG A LABDA a beállóhoz a hajrában.
+
+    A beálló-terhelés (`pivot_usage`) megmondja, a támadásaik mekkora
+    része megy át a beállón; ez a réteg azt teszi hozzá, hogy
+    ELFOGY-E a meccs alatt. A felismert félidő mentén kettébontva.
+
+    Edzőileg: a beállóba adott labda a kézilabda legnehezebb passza —
+    takarásba, testek közé, pontos időzítéssel kell érkeznie. Fáradtan
+    ez fogy el először, és nem azért, mert a beálló nem dolgozik,
+    hanem mert a KISZOLGÁLÓ nem meri (vagy nem látja) beadni. A
+    következmény: a hatos vonal elárvul, a fal nyugodtan kifelé
+    dolgozhat, és a támadás átlövésekbe szorul.
+
+    Ez más kérdés, mint a szélső-bevonás esése
+    (`wing_involvement_fade`): az a labda SZÉLES ívű járatásáról szól
+    (lábmunka), ez a MÉLYSÉGI bejátszásról (bátorság és időzítés). Egy
+    csapat elveszítheti a beállóját úgy is, hogy közben végig
+    széthúzva játszik.
+
+    Ellenfélként a hajrára a fal középső hármasa kifelé segíthet;
+    saját csapatra a teendő a kiszolgáló-poszt kijelölése a hajrára —
+    fáradtan nem a beálló mozgása hiányzik, hanem a bátor passz.
+
+    Visszatérés csapatonként: {"fh_pct", "fh_attacks", "sh_pct",
+    "sh_attacks", "drop_pct"} — az 1./2. félidei beállós arány és a
+    mért támadások száma; drop_pct az esés százalékpontban (POZITÍV =
+    elfogy a beálló), None, ha nincs félidő-jel vagy kevés a támadás.
+    """
+    from ..models.tracking import Match as _M
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_pct": None, "fh_attacks": 0, "sh_pct": None,
+             "sh_attacks": 0, "drop_pct": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out          # félidő-jel nélkül nincs mihez viszonyítani
+    for elotag, felido in (("fh", True), ("sh", False)):
+        resz = _M(match.meta, [f for f in match.frames
+                               if (f.t <= ht) == felido])
+        pu = pivot_usage(resz, config)
+        for side in ("home", "away"):
+            rec = pu[side]
+            out[side][f"{elotag}_attacks"] = rec["attacks"]
+            if rec["attacks"] > 0:
+                out[side][f"{elotag}_pct"] = round(
+                    100.0 * rec["pivot_attacks"] / rec["attacks"], 1)
+    for side in ("home", "away"):
+        rec = out[side]
+        if (rec["fh_pct"] is not None and rec["sh_pct"] is not None
+                and rec["fh_attacks"] >= PIVOT_FADE_MIN_ATTACKS
+                and rec["sh_attacks"] >= PIVOT_FADE_MIN_ATTACKS):
+            # Pozitív = elfogy a beálló (a 2. félidőben KEVESEBB
+            # támadás megy át rajta).
+            rec["drop_pct"] = round(rec["fh_pct"] - rec["sh_pct"], 1)
+    return out
+
+
+# Szélső-bevonás esése: félidőnként ennyi mért támadás kell az
+# ítélethez (kevesebb, mint az alap-rétegé — egy félidőben nincs is
+# annyi), és ennyi százalékponttal kell esnie a szél-bevonásnak, hogy
+# beszűkülésről beszéljünk. A tíz pont nem véletlen: húsz támadásból
+# kettő különbség még a mintavétel zaja, a harmadik már mintázat.
+WING_INV_FADE_MIN_ATTACKS = 6
+WING_INV_FADE_DROP_PCT = 10.0
+
+
+@memoize_primitive("wing_involvement_fade", copy=copy_sides)
+def wing_involvement_fade(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Szélső-bevonás esése: ELJUT-E MÉG A LABDA a szélre a hajrában.
+
+    A szélső-bevonás (`wing_involvement`) megmondja, a támadásaik hány
+    százalékában jár a labda a szél-sávban; ez a réteg azt teszi hozzá,
+    hogy BESZŰKÜLNEK-E a meccs alatt. A felismert félidő mentén
+    kettébontva mérjük ugyanazt.
+
+    Edzőileg ez a fáradás egyik legkorábbi jele, és a lövés-távolság
+    esésének (`shot_distance_fade`) az OKA: a fáradó csapatban a
+    lábmunka fogy el először, a labda nem megy át a széles ívben,
+    minden támadás középen ragad — és onnan már csak a nehéz átlövés
+    marad. Ellenfélként a hajrára a szélső-védők beljebb húzhatók
+    (tömör fallal a beállót és az átlövést kell elzárni, mert a szélt
+    úgysem játsszák meg); saját csapatra a teendő a hajrá-támadások
+    ELSŐ passzának kikötése a szélre — a labda gyorsabb, mint a láb.
+
+    Visszatérés csapatonként: {"fh_pct", "fh_attacks", "sh_pct",
+    "sh_attacks", "drop_pct"} — az 1./2. félidei szél-arány és a mért
+    támadások száma; drop_pct az esés százalékpontban (POZITÍV =
+    beszűkültek), None, ha nincs félidő-jel vagy kevés a támadás
+    valamelyik félidőben.
+    """
+    from ..models.tracking import Match as _M
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_pct": None, "fh_attacks": 0, "sh_pct": None,
+             "sh_attacks": 0, "drop_pct": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out          # félidő-jel nélkül nincs mihez viszonyítani
+    for oldal, felido in (("fh", True), ("sh", False)):
+        resz = _M(match.meta, [f for f in match.frames
+                               if (f.t <= ht) == felido])
+        wi = wing_involvement(resz, config)
+        for side in ("home", "away"):
+            rec = wi[side]
+            out[side][f"{oldal}_attacks"] = rec["attacks"]
+            # Az alap-réteg a saját (magasabb) küszöbe alatt None-t ad;
+            # itt félidőnként kevesebb támadás is elég, ezért magunk
+            # számoljuk az arányt a darabszámokból.
+            if rec["attacks"] > 0:
+                out[side][f"{oldal}_pct"] = round(
+                    100.0 * rec["with_wing"] / rec["attacks"], 1)
+    for side in ("home", "away"):
+        rec = out[side]
+        if (rec["fh_pct"] is not None and rec["sh_pct"] is not None
+                and rec["fh_attacks"] >= WING_INV_FADE_MIN_ATTACKS
+                and rec["sh_attacks"] >= WING_INV_FADE_MIN_ATTACKS):
+            # Pozitív = beszűkültek (a 2. félidőben KEVESEBBSZER ér ki
+            # a labda a szélre).
+            rec["drop_pct"] = round(rec["fh_pct"] - rec["sh_pct"], 1)
     return out
 
 
@@ -3093,7 +3495,7 @@ def screen_setters(match: Match,
     tally: dict = {"home": {}, "away": {}}
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]
@@ -3728,7 +4130,7 @@ def screen_pairs(match: Match,
     tally: dict = {"home": {}, "away": {}}
     for sh in match_xg(match, config).get("shots", []):
         pid = sh.get("player_id")
-        i0 = idx_of.get(sh["t"])
+        i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
         if pid is None or i0 is None:
             continue
         f = match.frames[i0]
@@ -4036,6 +4438,87 @@ def wing_service(match: Match,
     return out
 
 
+# Futtatott szélsők: ennyi lendületes átvétel kell egy szélsőtől az
+# ítélethez, és a csapat futó átvételeiből e feletti részarány teszi
+# őt a futtatás első számú címzettjévé.
+WRP_MIN_RUNNING = 2
+WRP_SHARE_PCT = 50.0
+
+
+def wing_runners(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Futtatott szélsők: MELYIK szélső kapja lendületből a labdát.
+
+    A szélső-futtatás (wing_service) azt méri, HOGYAN érkezik a labda
+    a szélre — ez azt, KIHEZ: a szélső-posztú játékosok lendületes
+    (WSV_RUN_MS feletti sebességű) átvételeit emberre bontjuk. Akinél
+    a futó átvételek zöme landol, ő a futtatás címzettje — az ő
+    beindulására épül a szélső játékuk.
+
+    Edzőileg: a futtatott szélső ellen nem a kifutás véd, hanem a
+    futópassz sávjának zárása — és ezt az ő oldalán kell begyakorolni:
+    a mellette lévő védő lép a passzvonalba, mielőtt a szélső
+    lendületet vesz.
+
+    Visszatérés csapatonként: {"running", "players": [{"player_id",
+    "jersey", "running", "share_pct"}], "top"} — a lista futó átvétel
+    szerint csökkenő; a "top" az első játékos, ha legalább
+    WRP_MIN_RUNNING futó átvétele van és a részaránya eléri a
+    WRP_SHARE_PCT-t (egyébként None).
+    """
+    import math
+
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    posts = estimate_positions(match, config)
+    wings = {side: {tid for tid, r in posts.get(side, {}).items()
+                    if r["poszt"] == "szélső"}
+             for side in ("home", "away")}
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for pe in detect_passes(match, config):
+        side = pe.team.value
+        if pe.receiver_id not in wings[side]:
+            continue
+        i0 = idx_of.get(pe.t)
+        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+            continue
+        p_before = next((p for p in match.frames[i0 - 2].players
+                         if p.track_id == pe.receiver_id), None)
+        p_after = next((p for p in match.frames[i0 + 2].players
+                        if p.track_id == pe.receiver_id), None)
+        if p_before is None or p_after is None:
+            continue
+        speed = (math.hypot(p_after.x - p_before.x,
+                            p_after.y - p_before.y) * fps / 4.0)
+        if speed < WSV_RUN_MS:
+            continue
+        if getattr(p_after, "jersey_number", None) is not None:
+            jersey.setdefault(pe.receiver_id, p_after.jersey_number)
+        tally[side][pe.receiver_id] = \
+            tally[side].get(pe.receiver_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = sum(tally[side].values())
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "running": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if players and players[0]["running"] >= WRP_MIN_RUNNING \
+                and (players[0]["share_pct"] or 0.0) >= WRP_SHARE_PCT:
+            top = players[0]
+        out[side] = {"running": n, "players": players, "top": top}
+    return out
+
+
 # Keresztjáték: a hátsó sor két játékosának oldalcseréje számít
 # keresztnek, ennyi mért támadás kell az ítélethez, és e feletti /
 # alatti kereszt-átlag a mozgásos, illetve a statikus hátsó sor jele.
@@ -4104,6 +4587,91 @@ def crossing_runs(match: Match,
                 rec["verdict"] = "sokat kereszteznek"
             elif per <= CRX_LOW_PER_ATTACK:
                 rec["verdict"] = "statikus a hátsó soruk"
+    return out
+
+
+# Keresztjáró emberek: ennyi keresztben-részvétel kell az ítélethez,
+# és a keresztek e feletti részében kell benne lennie ahhoz, hogy a
+# keresztjáték motorjának jelöljük.
+CRP_MIN_CROSSES = 3
+CRP_SHARE_PCT = 60.0
+
+
+def crossing_runners(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Keresztjáró emberek: KI futja a kereszteket.
+
+    A keresztjáték (crossing_runs) azt méri, MENNYIT kereszteznek —
+    ez azt, KIN keresztül: minden hátsó-sori oldalcserénél a helyet
+    cserélő játékosokat írjuk fel. Akin a keresztek zöme átfut, ő a
+    keresztjáték motorja — az ő indulása húzza be a védőt, és az ő
+    kivételével a szerkezet statikussá válik.
+
+    Edzőileg: a kereszt-motor sávjában kell a váltás-fegyelem —
+    hangos, korai átadás pont az ő keresztjeinél; a saját csapatnak:
+    ha a keresztek egy emberen át futnak, a szerkezet kiszámítható —
+    a másik átlövőnek is futnia kell keresztet.
+
+    Visszatérés csapatonként: {"crosses", "players": [{"player_id",
+    "jersey", "runs", "share_pct"}], "top"} — a "crosses" a mért
+    keresztek száma, a "runs" a játékos keresztben-részvételei, a
+    share_pct a keresztek hány részében volt benne; a "top" az első
+    játékos, ha legalább CRP_MIN_CROSSES keresztben volt benne, a
+    részaránya eléri a CRP_SHARE_PCT-t, ÉS nem holtverseny
+    (két hátsó embernél mindenki minden keresztben benne van).
+    """
+    from .roles import estimate_positions
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    posts = estimate_positions(match, config)
+    backs = {side: [tid for tid, r in posts.get(side, {}).items()
+                    if r["poszt"] in ("irányító", "átlövő")]
+             for side in ("home", "away")}
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    events = {"home": 0, "away": 0}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        ids = backs[side]
+        if len(ids) < 2:
+            continue
+        prev_order = None
+        for f in seq.frames:
+            ys = {}
+            for p in f.players:
+                if p.track_id in ids:
+                    ys[p.track_id] = p.y
+                    if getattr(p, "jersey_number", None) is not None:
+                        jersey.setdefault(p.track_id, p.jersey_number)
+            if len(ys) < 2:
+                continue
+            order = tuple(sorted(ys, key=lambda k: ys[k]))
+            if prev_order is not None and order != prev_order:
+                events[side] += 1
+                # A helyet cserélő (rangot váltó) játékosoké a kereszt.
+                prev_rank = {tid: i for i, tid in enumerate(prev_order)}
+                for i, tid in enumerate(order):
+                    if tid in prev_rank and prev_rank[tid] != i:
+                        tally[side][tid] = tally[side].get(tid, 0) + 1
+            prev_order = order
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = events[side]
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "runs": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if players and players[0]["runs"] >= CRP_MIN_CROSSES \
+                and (players[0]["share_pct"] or 0.0) >= CRP_SHARE_PCT \
+                and (len(players) < 2
+                     or players[0]["runs"] > players[1]["runs"]):
+            top = players[0]
+        out[side] = {"crosses": n, "players": players, "top": top}
     return out
 
 # Beálló-futtatás: e feletti átvételi sebesség számít mozgásból
@@ -4185,6 +4753,88 @@ def pivot_service(match: Match,
                 rec["verdict"] = "állva kapja a beálló"
     return out
 
+
+# Leforduló beállók: ennyi mozgásból hozott átvétel kell egy beállótól
+# az ítélethez, és a csapat mozgásos beálló-átvételeiből e feletti
+# részarány teszi őt a lefordulós játék címzettjévé.
+LFB_MIN_RUNNING = 2
+LFB_SHARE_PCT = 50.0
+
+
+def pivot_runners(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Leforduló beállók: MELYIK beálló kapja mozgásból a labdát.
+
+    A beálló-futtatás (pivot_service) azt méri, HOGYAN érkezik a
+    labda a beállóra — ez azt, KIHEZ: a beálló-posztú játékosok
+    mozgásból (PSV_RUN_MS feletti sebességgel) hozott átvételeit
+    emberre bontjuk. Akinél a lefordulós átvételek zöme landol, ő a
+    beálló-játék motorja — az ő elzárás-lefordulására épül a
+    bejátszás.
+
+    Edzőileg: a lefordulós beálló ellen a bejátszás ELŐTT kell elé
+    lépni — és ezt az ő emberénél kell begyakorolni: hangos váltás,
+    a passzsáv zárása még a lefordulás előtt; az átvétel utáni
+    birkózás nála mindig késő.
+
+    Visszatérés csapatonként: {"running", "players": [{"player_id",
+    "jersey", "running", "share_pct"}], "top"} — a lista mozgásos
+    átvétel szerint csökkenő; a "top" az első játékos, ha legalább
+    LFB_MIN_RUNNING mozgásos átvétele van és a részaránya eléri az
+    LFB_SHARE_PCT-t (egyébként None).
+    """
+    import math
+
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    posts = estimate_positions(match, config)
+    pivots = {side: {tid for tid, r in posts.get(side, {}).items()
+                     if r["poszt"] == "beálló"}
+              for side in ("home", "away")}
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for pe in detect_passes(match, config):
+        side = pe.team.value
+        if pe.receiver_id not in pivots[side]:
+            continue
+        i0 = idx_of.get(pe.t)
+        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+            continue
+        p_before = next((p for p in match.frames[i0 - 2].players
+                         if p.track_id == pe.receiver_id), None)
+        p_after = next((p for p in match.frames[i0 + 2].players
+                        if p.track_id == pe.receiver_id), None)
+        if p_before is None or p_after is None:
+            continue
+        speed = (math.hypot(p_after.x - p_before.x,
+                            p_after.y - p_before.y) * fps / 4.0)
+        if speed < PSV_RUN_MS:
+            continue
+        if getattr(p_after, "jersey_number", None) is not None:
+            jersey.setdefault(pe.receiver_id, p_after.jersey_number)
+        tally[side][pe.receiver_id] = \
+            tally[side].get(pe.receiver_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = sum(tally[side].values())
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "running": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if players and players[0]["running"] >= LFB_MIN_RUNNING \
+                and (players[0]["share_pct"] or 0.0) >= LFB_SHARE_PCT:
+            top = players[0]
+        out[side] = {"running": n, "players": players, "top": top}
+    return out
+
 # Kontra-hullámok: ennyi lövésig jutó lerohanás kell az ítélethez, és
 # e feletti / alatti második-hullám arány jelenti, hogy a befutó,
 # illetve az első ember fejezi be a kontráikat.
@@ -4262,6 +4912,94 @@ def fast_break_waves(match: Match,
                 rec["verdict"] = "az első ember fejezi be a kontrát"
     return out
 
+
+# Befutó emberek: ennyi második hullámos kontra-befejezés kell egy
+# játékostól az ítélethez, és a csapat befutós befejezéseiből e
+# feletti részarány teszi őt a kontra befutó emberévé.
+BFW_MIN_SECOND = 2
+BFW_SHARE_PCT = 50.0
+
+
+def second_wave_finishers(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Befutó emberek: KI a második hullám embere a kontráikban.
+
+    A kontra-hullámok (fast_break_waves) azt méri, az első ember vagy
+    a második hullám fejezi-e be a lerohanást — ez azt, KI a befutó:
+    a második hullámos (nem a legelöl lévő által lőtt) kontra-
+    befejezéseket emberre bontjuk. Akinél a zömük landol, ő a befutó
+    ember — a kontrájuk gólja nem az első embertől, hanem tőle jön.
+
+    Edzőileg: az ő felvétele a visszafutás kulcsa — az első ember
+    felvétele után NEM szabad megállni: a középső sávban hátra kell
+    lépni, és a befutót megtalálni, mielőtt labdát kap. A
+    visszafutó szélső dolga az ő keresztezése, nem az első emberé.
+
+    Visszatérés csapatonként: {"second", "players": [{"player_id",
+    "jersey", "shots", "share_pct"}], "top"} — a lista befejezés
+    szerint csökkenő; a "top" az első játékos, ha legalább
+    BFW_MIN_SECOND befutós befejezése van és a részaránya eléri a
+    BFW_SHARE_PCT-t (egyébként None).
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)
+             and e.player_id is not None]
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        side = a["team"]
+        shot = next((e for e in shots if e.team.value == side
+                     and a["start_frame"] <= e.t
+                     <= a["end_frame"] + tail), None)
+        if shot is None:
+            continue
+        i0 = idx_of.get(a["start_frame"])
+        if i0 is None:
+            continue
+        goal_x = config.attacks_toward_x(Team(side))
+        runners = [p for p in match.frames[i0].players
+                   if p.team.value == side and p.role != "kapus"]
+        if len(runners) < 2:
+            continue
+        first_id = min(runners,
+                       key=lambda p: abs(p.x - goal_x)).track_id
+        if shot.player_id == first_id:
+            continue
+        si = idx_of.get(shot.t)
+        if si is not None:
+            sp = next((p for p in match.frames[si].players
+                       if p.track_id == shot.player_id), None)
+            if sp is not None \
+                    and getattr(sp, "jersey_number", None) is not None:
+                jersey.setdefault(shot.player_id, sp.jersey_number)
+        tally[side][shot.player_id] = \
+            tally[side].get(shot.player_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = sum(tally[side].values())
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "shots": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if players and players[0]["shots"] >= BFW_MIN_SECOND \
+                and (players[0]["share_pct"] or 0.0) >= BFW_SHARE_PCT:
+            top = players[0]
+        out[side] = {"second": n, "players": players, "top": top}
+    return out
+
 # Kontra-elszökés: a labdánál legalább ennyivel előrébb álló ember
 # számít elszököttnek a kontra indulásakor; ennyi lerohanás kell az
 # ítélethez, és e feletti / alatti elszökött arány a szökős, illetve
@@ -4270,6 +5008,68 @@ FBH_GAP_M = 6.0
 FBH_MIN_BREAKS = 5
 FBH_AHEAD_PCT = 40.0
 FBH_TOGETHER_PCT = 10.0
+
+
+# Befutó poszt: ennyi poszthoz kötött második hullámos befejezés kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# befutójuk posztról olvasható.
+SWR_MIN_SECOND = 3
+SWR_SHARE_PCT = 60.0
+
+
+def second_wave_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Befutó poszt: MELYIK POSZT a második hullám a kontráikban.
+
+    A befutó emberek rétege (second_wave_finishers) az embert nevezi
+    meg — ez a posztot: a második hullámos kontra-befejezéseket a lövő
+    posztjához írja. Így a minta akkor is látszik, ha a nevek meccsről
+    meccsre cserélődnek — a "mindig az átlövő fut be másodikként"
+    típusú kontra-szokás posztról ismerszik meg.
+
+    Edzőileg: a visszafutás-parancs posztra szól — az első ember
+    felvétele után a középső sávban hátralépve a POSZT befutóját kell
+    keresni, akárki játssza éppen. Saját oldalon: az egy posztra épülő
+    második hullám kiszámítható — a befutót variálni kell.
+
+    Visszatérés csapatonként: {"second" (poszthoz kötött második
+    hullámos befejezés), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    SWR_MIN_SECOND, vagy egyik poszt sem éri el az SWR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    swf = second_wave_finishers(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = {"second": 0, "roles": {}, "main_role": None,
+               "share_pct": None, "verdict": None}
+        for row in swf[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["shots"])
+            rec["second"] += row["shots"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["second"] >= SWR_MIN_SECOND:
+            poszt = max(rec["roles"], key=lambda k: rec["roles"][k])
+            share = 100.0 * rec["roles"][poszt] / rec["second"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SWR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kontráik második hulláma a(z) {poszt} poszt "
+                    f"({share:.0f}%, {rec['second']} befutós "
+                    "befejezésből) — a visszafutásnál az első ember "
+                    "után az ő sávját kell felvenni, akárki játssza")
+        out[side] = rec
+    return out
 
 
 def fast_break_headstart(match: Match,
@@ -4846,4 +5646,1458 @@ def kickout_targets(match: Match,
                        else "változatos a kiosztás")
         out[side] = {"kickouts": total, "targets": rows, "top": top,
                      "top_pct": top_pct, "verdict": verdict}
+    return out
+
+
+# Lepattanó-poszt: ennyi poszthoz kötött második lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a második
+# rohamukat egy poszt viszi.
+SCR_MIN_SHOTS = 3
+SCR_SHARE_PCT = 60.0
+
+
+def second_chance_roles(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Lepattanó-poszt: KI LŐ MÁSODSZOR — melyik posztjuk viszi a
+    második rohamot.
+
+    A második roham rétege (second_chance) csapat-szinten mondja meg,
+    harcolnak-e a lepattanóért — ez azt, KI: minden megnyert második
+    rohamnál a MÁSODIK lövést az elengedő játékos posztjához írja.
+
+    Edzőileg ez a zárás sorrendje. A lövés pillanatában a fal dolga
+    nem ér véget: a lepattanónál dől el, jön-e második roham. Ha a
+    második lövéseik rendre ugyanarról a posztról jönnek (tipikusan a
+    beálló vagy a berobbanó átlövő), a zárásnál ŐT kell kivenni — a
+    lövő kizárása helyett a lepattanó-emberre kell fordulni. Ha szórt,
+    a szokásos poszt-tartás a jobb.
+
+    Visszatérés csapatonként: {"second_shots" (poszthoz kötött második
+    lövés), "roles": {poszt: lövés}, "main_role", "share_pct",
+    "verdict"} — a main_role/share_pct/verdict None, ha nincs meg az
+    SCR_MIN_SHOTS, vagy egyik poszt sem éri el az SCR_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = SECOND_CHANCE_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {"second_shots": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for i, e in enumerate(shots):
+        if e.type == EventType.GOAL:
+            continue
+        for nxt in shots[i + 1:]:
+            if nxt.t - e.t > win:
+                break
+            if nxt.team != e.team:
+                break
+            if nxt.player_id is not None:
+                rec_role = roles[nxt.team.value].get(nxt.player_id)
+                if rec_role is not None:
+                    rec = out[nxt.team.value]
+                    poszt = rec_role["poszt"]
+                    rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+                    rec["second_shots"] += 1
+            break
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["second_shots"] >= SCR_MIN_SHOTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["second_shots"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SCR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a második rohamukat a(z) {poszt} viszi "
+                    f"({share:.0f}%, {rec['second_shots']} második "
+                    "lövésből) — a lövésünk zárása után az ELSŐ dolog "
+                    "őt kivenni a lepattanóból, nem a lövőt nézni")
+    return out
+
+
+# Elzáró-poszt: ennyi poszthoz kötött elzárás kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy az elzárás-játékuk egy
+# posztra épül.
+SCR2_MIN_SCREENS = 3
+SCR2_SHARE_PCT = 60.0
+
+
+def screen_setter_roles(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Elzáró-poszt: MELYIK POSZTJUK áll elzárásba.
+
+    Az elzárók rétege (screen_setters) az embert nevezi meg — ez a
+    posztot: az elzárásokat az elzáró játékos posztjához írja. Így a
+    minta akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a váltás-terv: ha az elzárásaik rendre ugyanarról a
+    posztról jönnek (tipikusan a beálló), a védekezés előre tudja,
+    honnan érkezik a test — az ő oldalán hangos váltás vagy átcsúszás
+    kell, és őt elölről kell fogni, mert nélküle a lövőjük nem marad
+    tisztán. Ha az elzáró-játékuk szórt, poszt-szintű terv helyett a
+    váltás-kommunikáció általános fegyelme véd.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"screens" (poszthoz
+    kötött elzárás), "roles": {poszt: elzárás}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    SCR2_MIN_SCREENS, vagy egyik poszt sem éri el az SCR2_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    scs = screen_setters(match, config)
+
+    out: dict = {side: {"screens": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in scs[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["screens"])
+            rec["screens"] += row["screens"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["screens"] >= SCR2_MIN_SCREENS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["screens"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SCR2_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az elzárásaik a(z) {poszt} posztról jönnek "
+                    f"({share:.0f}%, {rec['screens']} elzárásból) — az"
+                    " ő oldalán hangos váltás vagy átcsúszás kell, és"
+                    " őt elölről kell fogni")
+    return out
+
+
+# Bejátszó-poszt: ennyi poszthoz kötött beálló-beadás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# beálló-játékuk egy posztról fut.
+PFR_MIN_FEEDS = 4
+PFR_SHARE_PCT = 60.0
+
+
+def pivot_feeder_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Bejátszó-poszt: MELYIK POSZTJUK játssza be a beállót.
+
+    A beálló-kiszolgálók rétege (pivot_feeders) az embert nevezi meg
+    — ez a posztot: a beállóhoz futó beadásokat a passzoló játékos
+    posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a beálló-vonal zárásának térképe: ha a beadásaik
+    rendre ugyanarról a posztról jönnek (tipikusan az irányítótól),
+    az ő kezén kell a beálló-vonalba lépni, és az ő oldalán indul a
+    kettőzés — a bejátszó zárása többet ér, mint a beálló birkózása.
+    Ha a bejátszásuk szórt, a beállót magát kell elöl fogni.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"feeds" (poszthoz
+    kötött beadás), "roles": {poszt: beadás}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    PFR_MIN_FEEDS, vagy egyik poszt sem éri el a PFR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    pf = pivot_feeders(match, config)
+
+    out: dict = {side: {"feeds": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in pf[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["feeds"])
+            rec["feeds"] += row["feeds"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["feeds"] >= PFR_MIN_FEEDS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["feeds"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PFR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a beálló-beadásaik a(z) {poszt} posztról jönnek "
+                    f"({share:.0f}%, {rec['feeds']} beadásból) — az ő "
+                    "kezén kell a beálló-vonalba lépni, és az ő "
+                    "oldalán induljon a kettőzés")
+    return out
+
+
+# Kockáztató-poszt: ennyi poszthoz kötött hosszú-passz eladás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a hazárd
+# labdáik egy posztról jönnek.
+RPR_MIN_TO = 3
+RPR_SHARE_PCT = 60.0
+
+
+def risky_passer_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Kockáztató-poszt: MELYIK POSZTJUK szórja el a hosszú labdákat.
+
+    A kockázatos passzolók rétege (risky_passers) az embert nevezi
+    meg — ez a posztot: a hosszú passzokból lett eladásokat a
+    kiinduló játékos posztjához írja. Így a minta akkor is látszik,
+    ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a labdaszerzés-terv: ha a hazárd labdáik rendre
+    ugyanarról a posztról indulnak (tipikusan az irányítótól), az ő
+    hosszú passzsávjába kell beállni — a sávba lépés nála azonnal
+    labdát hoz, és minden szerzés mögött nyitott pálya van. Saját
+    csapatra: az egy poszton gyűlő eladás passz-technika edzés-téma.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"turnovers" (poszthoz
+    kötött hosszú-passz eladás), "roles": {poszt: eladás},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg az RPR_MIN_TO, vagy egyik poszt sem éri el az RPR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    rp = risky_passers(match, config)
+
+    out: dict = {side: {"turnovers": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in rp[side]["players"]:
+            if not row["turnovers"]:
+                continue
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["turnovers"])
+            rec["turnovers"] += row["turnovers"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["turnovers"] >= RPR_MIN_TO:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["turnovers"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= RPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a hazárd hosszú labdáik a(z) {poszt} posztról "
+                    f"indulnak ({share:.0f}%, {rec['turnovers']} "
+                    "elszórt hosszú passzból) — az ő passzsávjába "
+                    "kell beállni: a sávba lépés nála azonnal labdát "
+                    "hoz")
+    return out
+
+
+# Kiosztás-poszt: ennyi poszthoz kötött kiosztás kell az ítélethez,
+# és ekkora részarány fölött mondjuk ki, hogy a betörés utáni labda
+# egy posztra jár.
+KOR_MIN_KICKOUTS = 4
+KOR_SHARE_PCT = 60.0
+
+
+def kickout_target_roles(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Kiosztás-poszt: MELYIK POSZTRA jár a betörés utáni labda.
+
+    A kiosztás-célpont rétege (kickout_targets) az embert nevezi meg
+    — ez a posztot: a betörés utáni kiosztásokat a fogadó játékos
+    posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a passzsáv-terv: ha a betöréseik után a labda rendre
+    ugyanarra a posztra megy (tipikusan a túloldali átlövőre), annak
+    a posztnak a védője előre elmozdulhat a passzsávba, és a
+    betörésre indulhat a kettőzés — a kiosztás elveszti az értelmét.
+    Ha a célpont szórt, a betörést magát kell megállítani.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"kickouts" (poszthoz
+    kötött kiosztás), "roles": {poszt: kiosztás}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    KOR_MIN_KICKOUTS, vagy egyik poszt sem éri el a KOR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    ko = kickout_targets(match, config)
+
+    out: dict = {side: {"kickouts": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in ko[side]["targets"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["count"])
+            rec["kickouts"] += row["count"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["kickouts"] >= KOR_MIN_KICKOUTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["kickouts"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= KOR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a betöréseik utáni labda a(z) {poszt} posztra "
+                    f"jár ({share:.0f}%, {rec['kickouts']} "
+                    "kiosztásból) — az ő védője előre elmozdulhat a "
+                    "passzsávba, a betörésre pedig indulhat a "
+                    "kettőzés")
+    return out
+
+
+# Előkészítő-poszt: ennyi poszthoz kötött lövés-előkészítő passz kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# lövéseik előkészítése egy posztról jön.
+EPR_MIN_PASSES = 5
+EPR_SHARE_PCT = 60.0
+EPR_WINDOW_S = 4.0
+
+
+# Előkészítő emberek: ennyi előkészítés kell a névhez, és ekkora
+# részarány fölött mondjuk ki, hogy a lövés-előkészítés egy kézen
+# fut.
+EPP_MIN_PASSES = 4
+EPP_SHARE_PCT = 50.0
+
+
+def last_passers(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Előkészítő emberek: KI készíti elő a lövéseiket.
+
+    Az előkészítő-poszt (last_pass_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: minden felismert lövéshez megkeresi a lövő felé menő
+    utolsó passzt, és a lövést a PASSZOLÓ nevéhez írja. A
+    gólpassz-listával szemben itt minden lövés számít, nem csak a
+    beérett gólok.
+
+    Edzőileg ez a passzsáv-zárás címzettje: ha a lövéseik
+    előkészítése egy kézen fut, az ő sávjának lezárásával (kilépés,
+    átadás-vonal elvágása) a lövőik előkészítetlenül maradnak — nem
+    a lövőt kell fogni, hanem a kiszolgálót. Saját csapatra: a
+    szervezés ne egy emberen fusson, kell a második előkészítő.
+
+    Visszatérés csapatonként: {"passes", "players": [{"player_id",
+    "jersey", "passes"}], "top"} — a "top" az első játékos, ha
+    legalább EPP_MIN_PASSES előkészítése van, és ez a csapat
+    előkészítéseinek legalább EPP_SHARE_PCT-a, különben None.
+    """
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = EPR_WINDOW_S * fps
+    passes = detect_passes(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        best = None
+        for p in passes:
+            if not (0 <= e.t - p.t <= win) or p.team != e.team:
+                continue
+            if (p.receiver_id != e.player_id
+                    or p.passer_id == e.player_id):
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        side = e.team.value
+        if side not in tally:
+            continue
+        tally[side][best.passer_id] = (
+            tally[side].get(best.passer_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "passes": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["passes"] for r in rows)
+        top = None
+        if rows and rows[0]["passes"] >= EPP_MIN_PASSES:
+            share = 100.0 * rows[0]["passes"] / max(1, total)
+            if share >= EPP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"passes": total, "players": rows, "top": top}
+    return out
+
+
+def last_pass_roles(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Előkészítő-poszt: MELYIK POSZTJUK készíti elő a lövéseket.
+
+    A gólpassz-poszt (role_assist_sources) csak a GÓLOK passzait
+    nézi — ez minden lövését: minden felismert lövéshez megkeresi a
+    lövő felé menő utolsó passzt az EPR_WINDOW_S ablakban, és a
+    lövést a PASSZOLÓ posztjához írja. Így a teljes előkészítő
+    munka látszik, nem csak a beérett gólok.
+
+    Edzőileg ez a passzsáv-zárás nagyobb képe: ha a lövéseik
+    előkészítése rendre egy posztról jön, az ő sávjának a zárásával
+    a lövéseik előkészítetlenné válnak — a lövők maguktól elhalnak.
+    Saját csapatra: a szervezés ne egy kézen fusson, kell a második
+    előkészítő.
+
+    Visszatérés csapatonként: {"passes" (poszthoz kötött
+    előkészítés), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az EPR_MIN_PASSES,
+    vagy egyik poszt sem éri el az EPR_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = EPR_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    passes = detect_passes(match, config)
+
+    out: dict = {side: {"passes": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        best = None
+        for p in passes:
+            if not (0 <= e.t - p.t <= win) or p.team != e.team:
+                continue
+            if (p.receiver_id != e.player_id
+                    or p.passer_id == e.player_id):
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(best.passer_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["passes"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["passes"] >= EPR_MIN_PASSES:
+            poszt = max(rec["roles"], key=lambda p2: rec["roles"][p2])
+            share = 100.0 * rec["roles"][poszt] / rec["passes"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= EPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a lövéseik előkészítése {share:.0f}%-ban a(z) "
+                    f"{poszt} posztról jön ({rec['passes']} "
+                    "előkészítő passzból) — az ő sávjának zárásával"
+                    " a lövéseik előkészítetlenné válnak, és a "
+                    "lövők maguktól elhalnak")
+    return out
+
+
+# Hátrapassz-poszt: e méternyi kapu-távolság-növekedés fölött hátra-
+# passz egy átadás; ennyi poszthoz kötött hátra-passz kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a játék egy
+# posztnál fordul vissza.
+BPR_BACK_M = 1.0
+BPR_MIN_PASSES = 5
+BPR_SHARE_PCT = 60.0
+
+
+def backward_pass_roles(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Hátrapassz-poszt: MELYIK POSZTJUKNÁL fordul vissza a játék.
+
+    A passz-irány rétege (pass_direction) csapat-szinten mondja meg,
+    mennyit játszanak hátrafelé — ez posztonként: a kaputól
+    BPR_BACK_M méterrel távolabbi társhoz menő passzokat a passzoló
+    posztjához írja. Így látszik, kinél fordul rendre vissza a
+    lendület.
+
+    Edzőileg ez a pressz-jutalom: amelyik posztjuk nyomás alatt
+    hátrafelé menekül, arra rá lehet menni — a hátra-passza után a
+    fal feljebb tolható, és a támadásuk újraindul nulláról. Saját
+    csapatra: a posztnak előre-játék bátorság kell (betörés vagy
+    beadás hátra-passz helyett).
+
+    Visszatérés csapatonként: {"passes" (poszthoz kötött
+    hátra-passz), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a BPR_MIN_PASSES, vagy
+    egyik poszt sem éri el a BPR_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"passes": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    frames_by_t = {f.t: f for f in match.frames}
+    for p in detect_passes(match, config):
+        if p.passer_pos is None:
+            continue
+        fr = frames_by_t.get(p.t)
+        if fr is None:
+            continue
+        receiver = next((q for q in fr.players
+                         if q.track_id == p.receiver_id), None)
+        if receiver is None:
+            continue
+        goal_x = config.attacks_toward_x(p.team)
+        d_passer = abs(p.passer_pos.x - goal_x)
+        d_receiver = abs(receiver.x - goal_x)
+        if d_receiver - d_passer < BPR_BACK_M:
+            continue
+        side = p.team.value
+        rec_role = roles[side].get(p.passer_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["passes"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["passes"] >= BPR_MIN_PASSES:
+            poszt = max(rec["roles"], key=lambda p2: rec["roles"][p2])
+            share = 100.0 * rec["roles"][poszt] / rec["passes"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= BPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a játék {share:.0f}%-ban a(z) {poszt} "
+                    f"posztjuknál fordul vissza ({rec['passes']} "
+                    "hátra-passzból) — nyomás alatt hátrafelé "
+                    "menekül: a pressz rá jutalmat hoz, a "
+                    "hátra-passza után a fal feljebb tolható")
+    return out
+
+
+# Áttörő-poszt: ennyi poszthoz kötött betörés kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a falat egy posztjuk
+# nyitja szét.
+BTR_MIN_ENTRIES = 4
+BTR_SHARE_PCT = 60.0
+
+
+def breakthrough_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Áttörő-poszt: MELYIK POSZTJUK jut be labdával a falba.
+
+    Az áttörő játékosok rétege (breakthrough_players) az embert
+    nevezi meg — ez a posztot: a labdás betöréseket (a kapu közeli
+    körzetébe lépés) a betörő posztjához írja. Így a minta akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kettőzés-terv belső köre: amelyik posztjuk rendre
+    szétnyitja a falat, annak a védője segítőt kap, a betörés
+    vonalát pedig testtel kell zárni — nélküle a többiek kívül
+    rekednek. Saját csapatra: az egy emberen álló betörés-játék
+    kockázat, kell a második áttörő.
+
+    Visszatérés csapatonként: {"entries" (poszthoz kötött betörés),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg a BTR_MIN_ENTRIES, vagy egyik
+    poszt sem éri el a BTR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    bp = breakthrough_players(match, config)
+
+    out: dict = {side: {"entries": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in bp[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["entries"])
+            rec["entries"] += row["entries"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["entries"] >= BTR_MIN_ENTRIES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["entries"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= BTR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a falat {share:.0f}%-ban a(z) {poszt} "
+                    f"posztjuk nyitja szét ({rec['entries']} labdás"
+                    " betörésből) — a védője segítőt kapjon, és a "
+                    "betörés vonalát testtel kell zárni: nélküle a "
+                    "többiek kívül rekednek")
+    return out
+
+
+# Elzárópáros-poszt: ennyi posztpárhoz kötött elzárt lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy az
+# elzárás-játékuk egy posztpárra jár.
+SPP_MIN_SHOTS = 3
+SPP_SHARE_PCT = 60.0
+
+
+def screen_pair_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Elzárópáros-poszt: MELYIK POSZTPÁRRA jár az elzárás-játékuk.
+
+    Az elzárás-páros rétege (screen_pairs) a két embert nevezi meg —
+    ez a posztpárt: minden elzárásból leadott lövést az (elzáró
+    poszt → lövő poszt) párhoz ír. Így a bejáratott kettős akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg a páros ellen párban készül a védekezés: az elzáró
+    posztjának őrzője előre szól, a lövő posztjának őrzője pedig az
+    elzárás ELŐTT lép ki, hogy ne szoruljon mögé. Saját csapatra: a
+    figura másik oldalra is járjon, különben kiszámítható.
+
+    Visszatérés csapatonként: {"shots" (párhoz kötött elzárt lövés),
+    "roles": {"elzáró→lövő": darab}, "main_role" (a fő posztpár),
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    SPP_MIN_SHOTS, vagy egyik pár sem éri el az SPP_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    sp = screen_pairs(match, config)
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in sp[side]["pairs"]:
+            setter = roles[side].get(row["setter_id"])
+            shooter = roles[side].get(row["shooter_id"])
+            if setter is None or shooter is None:
+                continue
+            kulcs = f"{setter['poszt']}→{shooter['poszt']}"
+            rec["roles"][kulcs] = (rec["roles"].get(kulcs, 0)
+                                   + row["shots"])
+            rec["shots"] += row["shots"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= SPP_MIN_SHOTS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["shots"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= SPP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az elzárás-játékuk a(z) {par} posztpárra jár "
+                    f"({share:.0f}%, {rec['shots']} elzárt "
+                    "lövésből) — a védekezés párban készül: az "
+                    "elzáró őrzője előre szól, a lövőé az elzárás "
+                    "előtt lép ki")
+    return out
+
+
+# Kontrapáros-poszt: ennyi poszthoz kötött lerohanás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a kontráik
+# egy (indító → befejező) posztpáron futnak.
+FBP_MIN_BREAKS = 3
+FBP_SHARE_PCT = 60.0
+
+
+def fast_break_pair_roles(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Kontrapáros-poszt: MELYIK TENGELYEN futnak a kontráik.
+
+    A kontra-poszt a befejezőt nevezi meg — ez a teljes tengelyt:
+    minden lerohanásnál az ELSŐ labdabirtokos (az indító) és a
+    szakasz lövését elengedő (a befejező) posztját párba állítja.
+    Így a kontra-gépezet akkor is látszik, ha a nevek meccsről
+    meccsre cserélődnek.
+
+    Edzőileg a kontra két ponton fogható: az indító posztját már a
+    labdavesztés pillanatában nyomás alá kell tenni (az első passz
+    késleltetése), a befejező posztjának sávját pedig a
+    visszarendeződés első embere zárja. Saját csapatra: a tengely
+    kiszámíthatósága ellen második kifutó-sáv kell.
+
+    Visszatérés csapatonként: {"breaks" (párhoz kötött lerohanás),
+    "roles": {"indító→befejező": darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az FBP_MIN_BREAKS,
+    vagy egyik pár sem éri el az FBP_SHARE_PCT-t.
+    """
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    roles = estimate_positions(match, config)
+    by_t = {f.t: f for f in match.frames}
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)
+             and e.player_id is not None]
+    fast = [(a["team"], a["start_frame"], a["end_frame"])
+            for a in classify_attacks(match, config)
+            if a["type"] == AttackType.FAST_BREAK.value]
+
+    out: dict = {side: {"breaks": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for (side, a0, a1) in fast:
+        starter = None
+        for t in range(a0, a1 + 1):
+            f = by_t.get(t)
+            if f is None:
+                continue
+            h = ball_holder(f, config)
+            if h is not None and h.team is not None \
+                    and h.team.value == side and h.role != "kapus":
+                starter = h.track_id
+                break
+        finisher = next((e.player_id for e in shots
+                         if e.team.value == side
+                         and a0 <= e.t <= a1 + tail), None)
+        if starter is None or finisher is None:
+            continue
+        r_st = roles[side].get(starter)
+        r_fi = roles[side].get(finisher)
+        if r_st is None or r_fi is None:
+            continue
+        kulcs = f"{r_st['poszt']}→{r_fi['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["breaks"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["breaks"] >= FBP_MIN_BREAKS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["breaks"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= FBP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kontráik a(z) {par} tengelyen futnak "
+                    f"({share:.0f}%, {rec['breaks']} lerohanásból) "
+                    "— az indítót már a labdavesztés pillanatában "
+                    "nyomás alá kell tenni, a befejező sávját a "
+                    "visszarendeződés első embere zárja")
+    return out
+
+
+# Lepattanópáros-poszt: ennyi párhoz kötött második roham kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# lepattanó-játékuk egy (lövő → érkező) posztpárra jár.
+RBP_MIN_SHOTS = 3
+RBP_SHARE_PCT = 60.0
+
+
+def rebound_pair_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Lepattanópáros-poszt: MELYIK LÖVÉSRE KI érkezik a lepattanóra.
+
+    A lepattanó-poszt az érkezőt nevezi meg — ez a párost: minden
+    megnyert második rohamnál az EREDETI lövő és az újra lövő
+    posztját párba állítja. Így látszik, melyik lövésük hozza
+    mozgásba melyik posztot.
+
+    Edzőileg ez a zárás sorrendje: ha az egyik posztjuk lövésére
+    rendre ugyanaz a másik poszt indul be, a lövés zárása UTÁN
+    azonnal az ő útját kell elállni — a lepattanó-harcban a
+    másodperc dönt. Saját csapatra: a lepattanó-érkezés ne egy
+    útvonalon fusson, mert kiszámítható és elzárható.
+
+    Visszatérés csapatonként: {"second_shots" (párhoz kötött második
+    roham), "roles": {"lövő→érkező": darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    RBP_MIN_SHOTS, vagy egyik pár sem éri el az RBP_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = SECOND_CHANCE_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {"second_shots": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for i, e in enumerate(shots):
+        if e.type == EventType.GOAL or e.player_id is None:
+            continue
+        for nxt in shots[i + 1:]:
+            if nxt.t - e.t > win:
+                break
+            if nxt.team != e.team:
+                break
+            if nxt.player_id is not None:
+                side = nxt.team.value
+                r_first = roles[side].get(e.player_id)
+                r_next = roles[side].get(nxt.player_id)
+                if r_first is not None and r_next is not None:
+                    kulcs = f"{r_first['poszt']}→{r_next['poszt']}"
+                    rec = out[side]
+                    rec["roles"][kulcs] = (rec["roles"].get(kulcs, 0)
+                                           + 1)
+                    rec["second_shots"] += 1
+            break
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["second_shots"] >= RBP_MIN_SHOTS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["second_shots"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= RBP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a lepattanó-játékuk a(z) {par} párra jár "
+                    f"({share:.0f}%, {rec['second_shots']} második "
+                    "rohamból) — az első lövés zárása UTÁN azonnal "
+                    "az érkező útját kell elállni")
+    return out
+
+
+# Sávváltó-poszt: a pálya szélességét három sávra osztjuk; egy
+# sávváltás akkor számít, ha a játékos legalább ennyi ideig marad az
+# új sávban. Ennyi poszthoz kötött sávváltás kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a keresztmozgásuk egy
+# posztra épül.
+LSW_HOLD_S = 1.0
+LSW_MIN_SWITCHES = 5
+LSW_SHARE_PCT = 60.0
+
+
+def lane_switch_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Sávváltó-poszt: MELYIK POSZTJUK vált sávot a támadásban.
+
+    A támadás-szélesség (attack_width) csapat-szinten mondja meg,
+    mennyire húzzák szét a pályát — ez a keresztmozgást méri
+    posztonként: a saját támadás közben megszámoljuk, hányszor lép
+    át egy játékos a pálya szélességének másik harmadába (bal /
+    közép / jobb sáv) úgy, hogy ott legalább LSW_HOLD_S ideig marad.
+
+    Edzőileg ez a védekezés váltás-szabálya: ha a keresztmozgásuk egy
+    posztra épül, előre el kell dönteni, hogy a védője KÖVETI-e a
+    sávváltáson át, vagy ÁTADJA a szomszédnak — a bizonytalan
+    átadásból nyílik a lyuk. Saját csapatra: a keresztmozgás
+    eloszlása a figura-repertoár mérője; ha egy ember viszi, könnyű
+    követni.
+
+    Visszatérés csapatonként: {"switches" (poszthoz kötött
+    sávváltás), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az LSW_MIN_SWITCHES,
+    vagy egyik poszt sem éri el az LSW_SHARE_PCT-t.
+    """
+    from .calibration import COURT_WIDTH_M
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    hold = max(1, round(LSW_HOLD_S * fps))
+    third = COURT_WIDTH_M / 3.0
+    roles = estimate_positions(match, config)
+
+    def _lane(y: float) -> int:
+        if y < third:
+            return 0
+        return 1 if y < 2 * third else 2
+
+    # Játékosonként: az utolsó MEGERŐSÍTETT sáv, a futó jelölt sáv és
+    # az abban töltött kockák.
+    state: dict = {}
+    out: dict = {side: {"switches": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None:
+            continue
+        atk = holder.team
+        for p in f.players:
+            if p.team != atk or p.role == "kapus":
+                continue
+            lane = _lane(p.y)
+            st = state.get(p.track_id)
+            if st is None:
+                state[p.track_id] = [lane, lane, 0]
+                continue
+            confirmed, cand, n = st
+            if lane != cand:
+                st[1], st[2] = lane, 1
+                continue
+            st[2] = n + 1
+            if lane != confirmed and st[2] >= hold:
+                st[0] = lane
+                side = atk.value
+                rec_role = roles[side].get(p.track_id)
+                if rec_role is None:
+                    continue
+                poszt = rec_role["poszt"]
+                rec = out[side]
+                rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+                rec["switches"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["switches"] >= LSW_MIN_SWITCHES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["switches"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= LSW_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a keresztmozgásuk a(z) {poszt} posztra épül "
+                    f"({share:.0f}%, {rec['switches']} sávváltásból)"
+                    " — előre döntsétek el, hogy a védője KÖVETI a "
+                    "sávváltáson át, vagy ÁTADJA a szomszédnak: a "
+                    "bizonytalan átadásból nyílik a lyuk")
+    return out
+
+
+# Vég-birtokos poszt: ennyi poszthoz kötött, lövés NÉLKÜL záruló
+# támadás kell az ítélethez, és ekkora részarány fölött mondjuk ki,
+# hogy a terméketlen támadásaik egy poszt kezében halnak el.
+LST_MIN_ATTACKS = 4
+LST_SHARE_PCT = 60.0
+
+
+def last_holder_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Vég-birtokos poszt: KINÉL ÉR VÉGET a támadásuk lövés nélkül.
+
+    A passzív-poszt csak a HOSSZÚ, felállt támadásokat nézi — ez
+    minden lövés nélkül záruló támadást: a szakasz UTOLSÓ
+    labdabirtokosát a posztjához írja. Így a rövid, eladásba fulladó
+    támadások vége is látszik.
+
+    Edzőileg ez a nyomás címzettje: ha a terméketlen támadásaik
+    rendre ugyanannak a posztnak a kezében halnak el, rá kell tolni
+    a nyomást a támadás második felében — nála zárul a támadás, és
+    ott a legolcsóbb a labdaszerzés. Saját csapatra: ha nálunk mindig
+    ugyanaz a poszt marad a labdával, a befejezés-felelősség
+    tisztázatlan.
+
+    Visszatérés csapatonként: {"attacks" (poszthoz kötött, lövés
+    nélkül záruló támadás), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    LST_MIN_ATTACKS, vagy egyik poszt sem éri el az LST_SHARE_PCT-t.
+    """
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    roles = estimate_positions(match, config)
+    by_t = {f.t: f for f in match.frames}
+    shots = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {"attacks": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        if any(s == side and seq.start_t <= t <= seq.end_t + tail
+               for (t, s) in shots):
+            continue   # lövéssel zárult: nem terméketlen
+        last_id = None
+        for t in range(seq.end_t, seq.start_t - 1, -1):
+            f = by_t.get(t)
+            if f is None:
+                continue
+            h = ball_holder(f, config)
+            if h is not None and h.team is not None \
+                    and h.team.value == side and h.role != "kapus":
+                last_id = h.track_id
+                break
+        if last_id is None:
+            continue
+        rec_role = roles[side].get(last_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["attacks"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["attacks"] >= LST_MIN_ATTACKS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["attacks"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= LST_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a lövés nélkül záruló támadásaik {share:.0f}"
+                    f"%-a a(z) {poszt} poszt kezében hal el "
+                    f"({rec['attacks']} terméketlen támadásból) — a "
+                    "támadás második felében rá toljátok a nyomást: "
+                    "nála zárul a támadás, ott a legolcsóbb a "
+                    "labdaszerzés")
+    return out
+
+
+# Kapkodás-index küszöbei: a kapott gól utáni ablak, ennyi
+# válasz-támadás kell az ítélethez, ennyi a "többi" támadás
+# minimuma, és ennyi másodperc eltérés számít érdemi változásnak.
+RUS_WINDOW_S = 60.0
+RUS_MIN_ATTACKS = 3
+RUS_MIN_BASE = 4
+RUS_DIFF_S = 3.0
+
+
+def post_goal_rush(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Kapkodás-index: KAPOTT GÓL UTÁN rövidül vagy nyúlik a támadásuk.
+
+    A válasz-poszt és a válaszhiba-poszt embert nevez meg — ez a
+    tempót: a kapott gólt RUS_WINDOW_S-en belül követő támadásaik
+    átlagos hosszát veti össze a TÖBBI támadásukéval. A különbség
+    előjele mondja meg, mit csinálnak a bekapott góllal: RUS_DIFF_S
+    másodperccel rövidebb támadás = kapkodás, ennyivel hosszabb =
+    befagyás (biztonsági játék).
+
+    Edzőileg ez a saját gólunk utáni terv egy mondata. Ha kapkodnak,
+    a gólunk után vissza kell állni és nem szabad hibára csábulni:
+    az elsietett lövés nekünk termel labdát. Ha befagynak, épp
+    fordítva: a gólunk után előre kell tolni a védekezést, mert az
+    óra nekik ketyeg. Saját csapatra: a bekapott gól utáni első
+    támadásnak kötelező figurája legyen.
+
+    Visszatérés csapatonként: {"after" (válasz-támadás), "after_s"
+    (átlagos hossz), "base" (a többi támadás), "base_s", "diff_s"
+    (after - base), "verdict"} — az ítélet None, ha nincs meg a
+    RUS_MIN_ATTACKS / RUS_MIN_BASE, vagy a különbség a
+    RUS_DIFF_S-en belül marad.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig as _TC
+
+    config = config or _TC()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = RUS_WINDOW_S * fps
+
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out: dict = {side: {"after": 0, "after_s": None, "base": 0,
+                        "base_s": None, "diff_s": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    sums = {"home": [0.0, 0.0], "away": [0.0, 0.0]}   # [after, base]
+    for a in classify_attacks(match, config):
+        side = a["team"]
+        t0 = a["start_frame"]
+        # Volt-e az ablakon belül ELŐTTE kapott gól?
+        kapott = any(tg < t0 and t0 - tg <= win and sg != side
+                     for (tg, sg) in goals)
+        rec = out[side]
+        if kapott:
+            rec["after"] += 1
+            sums[side][0] += a["duration_s"]
+        else:
+            rec["base"] += 1
+            sums[side][1] += a["duration_s"]
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["after"] > 0:
+            rec["after_s"] = round(sums[side][0] / rec["after"], 1)
+        if rec["base"] > 0:
+            rec["base_s"] = round(sums[side][1] / rec["base"], 1)
+        if rec["after_s"] is None or rec["base_s"] is None:
+            continue
+        diff = rec["after_s"] - rec["base_s"]
+        rec["diff_s"] = round(diff, 1)
+        if (rec["after"] < RUS_MIN_ATTACKS
+                or rec["base"] < RUS_MIN_BASE
+                or abs(diff) < RUS_DIFF_S):
+            continue
+        if diff < 0:
+            rec["verdict"] = (
+                f"kapott gól után {abs(diff):.1f} másodperccel "
+                f"rövidebb a támadásuk ({rec['after_s']:.1f} mp a "
+                f"{rec['base_s']:.1f} mp helyett, {rec['after']} "
+                "válasz-támadásból) — kapkodnak: a gólunk után "
+                "vissza kell állni, az elsietett lövés nekünk "
+                "termel labdát")
+        else:
+            rec["verdict"] = (
+                f"kapott gól után {diff:.1f} másodperccel hosszabb "
+                f"a támadásuk ({rec['after_s']:.1f} mp a "
+                f"{rec['base_s']:.1f} mp helyett, {rec['after']} "
+                "válasz-támadásból) — befagynak: a gólunk után "
+                "előre kell tolni a védekezést, az óra nekik "
+                "ketyeg")
+    return out
+
+
+# Áttörés-hozam küszöbei: ennyi mért betörés kell az ítélethez, e
+# fölötti gól/betörés arány a "büntetnek is", ez alatti a "bejutnak,
+# de nem büntetnek".
+BTY_MIN_ENTRIES = 5
+BTY_HIGH_PCT = 40.0
+BTY_LOW_PCT = 15.0
+
+
+def breakthrough_yield(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Áttörés-hozam: BEJUTNAK-E a falba, és BÜNTETNEK-E onnan.
+
+    Az áttörő játékosok rétege azt mondja meg, KI viszi be a labdát,
+    az áttörő-poszt azt, melyik posztjuk — ez a hozamot: a betörések
+    hány százaléka végződik góllal, és hány betörés jut egy
+    támadásra. A két szám együtt más-más tervet ír elő.
+
+    Edzőileg: ha sokat jutnak be ÉS büntetnek is, a falat előbb kell
+    zárni — kilépés a lövő elé, a betörés vonalának testtel való
+    lezárása, mert a hatoson belül már késő. Ha bejutnak, de nem
+    büntetnek, a záró-fal és a kapus dolgozik: nem a rendszert kell
+    átszabni, hanem tartani a fegyelmet, és a kipattanóra küldeni
+    embert.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"entries" (mért
+    betörés), "goals" (belőlük gól), "goal_pct", "attacks",
+    "per_attack", "verdict"} — a goal_pct/verdict None
+    BTY_MIN_ENTRIES alatt.
+    """
+    config = config or TacticsConfig()
+    btp = breakthrough_players(match, config)
+    attacks: dict = {"home": 0, "away": 0}
+    for a in classify_attacks(match, config):
+        attacks[a["team"]] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec_all = btp.get(side) or {}
+        rows = rec_all.get("players") or []
+        entries = int(rec_all.get("entries") or 0)
+        goals = sum(int(r.get("goals") or 0) for r in rows)
+        n_att = attacks[side]
+        rec = {"entries": entries, "goals": goals, "goal_pct": None,
+               "attacks": n_att,
+               "per_attack": (round(entries / n_att, 2)
+                              if n_att else None),
+               "verdict": None}
+        if entries >= BTY_MIN_ENTRIES:
+            pct = 100.0 * goals / entries
+            rec["goal_pct"] = round(pct, 1)
+            if pct >= BTY_HIGH_PCT:
+                rec["verdict"] = (
+                    f"a betöréseik {pct:.0f}%-a gólba fut "
+                    f"({goals} gól {entries} betörésből) — bejutnak "
+                    "ÉS büntetnek is: a falat előbb kell zárni, "
+                    "kilépéssel a lövő elé, mert a hatoson belül már "
+                    "késő")
+            elif pct <= BTY_LOW_PCT:
+                rec["verdict"] = (
+                    f"a betöréseik csak {pct:.0f}%-a gólba fut "
+                    f"({goals} gól {entries} betörésből) — bejutnak, "
+                    "de nem büntetnek: a záró-fal és a kapus "
+                    "dolgozik, nem a rendszert kell átszabni, hanem "
+                    "a kipattanóra küldeni embert")
+        out[side] = rec
+    return out
+
+
+# Vég-birtokosok: ennyi lövés nélkül záruló támadástól emeljük ki a
+# játékost.
+LSTP_MIN_ATTACKS = 3
+
+
+def last_holders(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Vég-birtokosok: KINEK A KEZÉBEN hal el a támadásuk.
+
+    A vég-birtokos poszt (last_holder_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: minden lövés nélkül záruló támadás UTOLSÓ
+    labdabirtokosát számolja játékosonként.
+
+    Edzőileg ez a nyomás névre szóló címzettje: ha a terméketlen
+    támadásaik rendre ugyanannak a kezében halnak el, a támadás
+    második felében rá kell tolni a nyomást — nála zárul a támadás,
+    és ott a legolcsóbb a labdaszerzés. Saját csapatra: ha nálunk
+    mindig ugyanaz marad a labdával, a befejezés-felelősség
+    tisztázatlan.
+
+    Visszatérés csapatonként: {"attacks" (emberhez kötött, lövés
+    nélkül záruló támadás), "players": [{"player_id", "jersey",
+    "attacks"}], "top"} — a "top" az első játékos, ha legalább
+    LSTP_MIN_ATTACKS ilyen támadása van, különben None.
+    """
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    by_t = {f.t: f for f in match.frames}
+    shots = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        if any(s == side and seq.start_t <= t <= seq.end_t + tail
+               for (t, s) in shots):
+            continue   # lövéssel zárult: nem terméketlen
+        last_id = None
+        for t in range(seq.end_t, seq.start_t - 1, -1):
+            f = by_t.get(t)
+            if f is None:
+                continue
+            h = ball_holder(f, config)
+            if h is not None and h.team is not None \
+                    and h.team.value == side and h.role != "kapus":
+                last_id = h.track_id
+                break
+        if last_id is None:
+            continue
+        tally[side][last_id] = tally[side].get(last_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "attacks": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["attacks"] >= LSTP_MIN_ATTACKS
+               else None)
+        out[side] = {"attacks": sum(r["attacks"] for r in rows),
+                     "players": rows, "top": top}
+    return out
+
+
+# Sávváltók: ennyi sávváltástól emeljük ki a játékost.
+LSWP_MIN_SWITCHES = 4
+
+
+def lane_switchers(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Sávváltók: KI VÁLT SÁVOT a támadásban.
+
+    A sávváltó-poszt (lane_switch_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: ugyanazokat a megerősített (LSW_HOLD_S-ig tartott)
+    sávváltásokat számolja játékosonként.
+
+    Edzőileg ez a keresztmozgás névre szóló kezelése: az ő védőjéről
+    előre el kell dönteni, hogy KÖVETI a sávváltáson át, vagy ÁTADJA
+    a szomszédnak — a bizonytalan átadásból nyílik a lyuk. Saját
+    csapatra: ha a keresztmozgás egy emberen áll, a fal egy
+    döntéssel felkészül rá.
+
+    Visszatérés csapatonként: {"switches" (emberhez kötött
+    sávváltás), "players": [{"player_id", "jersey", "switches"}],
+    "top"} — a "top" az első játékos, ha legalább LSWP_MIN_SWITCHES
+    sávváltása van, különben None.
+    """
+    from .calibration import COURT_WIDTH_M
+    from .decisions import ball_holder
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    hold = max(1, round(LSW_HOLD_S * fps))
+    third = COURT_WIDTH_M / 3.0
+
+    def _lane(y: float) -> int:
+        if y < third:
+            return 0
+        return 1 if y < 2 * third else 2
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    state: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None:
+            continue
+        atk = holder.team
+        for p in f.players:
+            if p.team != atk or p.role == "kapus":
+                continue
+            lane = _lane(p.y)
+            st = state.get(p.track_id)
+            if st is None:
+                state[p.track_id] = [lane, lane, 0]
+                continue
+            confirmed, cand, n = st
+            if lane != cand:
+                st[1], st[2] = lane, 1
+                continue
+            st[2] = n + 1
+            if lane != confirmed and st[2] >= hold:
+                st[0] = lane
+                side = atk.value
+                tally[side][p.track_id] = (
+                    tally[side].get(p.track_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "switches": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["switches"] >= LSWP_MIN_SWITCHES
+               else None)
+        out[side] = {"switches": sum(r["switches"] for r in rows),
+                     "players": rows, "top": top}
+    return out
+
+
+# Hátrapasszolók: ennyi hátra-passztól emeljük ki a játékost.
+BPRP_MIN_PASSES = 3
+
+
+def backward_passers(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Hátrapasszolók: KINÉL FORDUL VISSZA a játék.
+
+    A hátrapassz-poszt (backward_pass_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: a kaputól BPR_BACK_M méterrel távolabbi társhoz
+    menő passzokat a PASSZOLÓ játékoshoz írja.
+
+    Edzőileg ez a pressz jutalma névre szólóan: ha nyomás alatt
+    rendre ugyanaz fordítja vissza a labdát, rá érdemes kimenni — a
+    hátrapassz időt ad a falnak, és a támadásukat újraindítja. Saját
+    csapatra: a visszafordulás a bátorság hiánya vagy rossz
+    felkínálás jele; a labdás mögé kell érkező társ.
+
+    Visszatérés csapatonként: {"passes" (emberhez kötött hátra-passz),
+    "players": [{"player_id", "jersey", "passes"}], "top"} — a "top"
+    az első játékos, ha legalább BPRP_MIN_PASSES hátra-passza van,
+    különben None.
+    """
+    from .decisions import detect_passes
+
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    frames_by_t = {f.t: f for f in match.frames}
+    tally: dict = {"home": {}, "away": {}}
+    for p in detect_passes(match, config):
+        if p.passer_pos is None or p.passer_id is None:
+            continue
+        fr = frames_by_t.get(p.t)
+        if fr is None:
+            continue
+        receiver = next((q for q in fr.players
+                         if q.track_id == p.receiver_id), None)
+        if receiver is None:
+            continue
+        goal_x = config.attacks_toward_x(p.team)
+        d_passer = abs(p.passer_pos.x - goal_x)
+        d_receiver = abs(receiver.x - goal_x)
+        if d_receiver - d_passer < BPR_BACK_M:
+            continue
+        side = p.team.value
+        tally[side][p.passer_id] = tally[side].get(p.passer_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "passes": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["passes"] >= BPRP_MIN_PASSES
+               else None)
+        out[side] = {"passes": sum(r["passes"] for r in rows),
+                     "players": rows, "top": top}
     return out

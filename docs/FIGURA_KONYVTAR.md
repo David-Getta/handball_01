@@ -1,0 +1,249 @@
+# Figura-könyvtár — mi tér vissza meccsről meccsre
+
+A meccsen belüli figura-rétegek (`setplay_efficiency`, `setplay_finishers`,
+`setplay_concentration`, …) EGY meccs támadásait klaszterezik, és sorszámmal
+nevezik a figurát ("2. figura"). Két meccs "2. figurája" nem ugyanaz. A
+könyvtár azt kérdezi: **melyik figurájuk tér vissza meccsről meccsre** —
+ez a felderítés legbiztosabb lapja, mert amit minden meccsen hoznak, arra
+biztosan lehet készülni. (`handball/pipeline/setplays.py`, a
+"Figura-könyvtár MECCSEK KÖZÖTT" szakasz.)
+
+## Hogyan épül
+
+1. **Irány-normált ujjlenyomat** (`normalized_signature`). A támadás
+   mozgás-ujjlenyomata a támadó csapat térbeli eloszlása egy 6×3-as
+   rácson. Félidőben térfelet cserélnek, más meccsen más oldalról
+   támadnak — a nyers alak tükörképként jönne ki. Ezért a −x kapura
+   támadó szakaszt 180°-kal forgatjuk (x → 40−x, y → 20−y): mindig a +x
+   kapu felé nézünk, és a támadó saját bal/jobb oldala marad (a
+   lanes-rétegek oldal-egyezménye). Az irányt a támadók átlagos x-e adja
+   (`attack_direction`).
+2. **Alakok meccsenként** (`setplay_shapes`). A támadás-szakaszokat
+   csapatonként klaszterezzük; minden legalább `SPL_MIN_ATTACKS` (3)
+   támadásból álló klaszterből egy sor lesz: a középpont (`shape`), a
+   támadások, a bennük (vagy 3 mp-en belül utánuk) esett lövések és
+   gólok, a kezdő-kockák (`starts`, klip-exporthoz), és az **edzői név**.
+3. **Edzői név** (`shape_zone`). A súlypont oldala és mélysége — "bal
+   oldal, a kapuelőtér előtt": `SPL_DEEP_X_M` (31 m) fölött a kapuelőtér
+   előtt, `SPL_MID_X_M` (24 m) fölött a 9-es körül, alatta távolról; a
+   felezőtől `SPL_SIDE_Y_M` (2 m) odébb már oldal. "3. klaszter" senkinek
+   nem mond semmit.
+4. **Könyvtár** (`setplay_library`). Több meccs sorait fésüli össze: a
+   `SPL_MERGE_THRESHOLD` (0,15) távolságon belüli alakok egy figurává
+   olvadnak (a középpont a támadás-számmal súlyozott átlag), a
+   darabszámok összeadódnak, és megszámoljuk, hány KÜLÖN meccsen fordult
+   elő (a sorok `match_id`-je szerint). A legalább `SPL_MIN_MATCHES` (2)
+   meccsen látott alak a **visszatérő figura**; az ítélet egy mondat.
+
+## Hol jelenik meg
+
+- **Felderítés** (`scouting.py`): a `ScoutingReport.setplay_shapes` a nyers
+  sorokat tárolja (meccsek közt egymás mögé kerülnek — pontos), a
+  `setplay_library` mezőt a `combine_reports` az összefésült sorokból
+  ÚJRASZÁMOLJA. Edzői kulcs, 459. meccsterv-szabály (a visszatérő
+  figurájuk × a ti szabad lövést engedő falatok), "Visszatérő figuráik"
+  szakasz rajzzal a felderítő képernyőn és a nyomtatható jelentésben.
+- **Szezon-riport**: "Saját visszatérő figuráink" — a saját csapat
+  könyvtára a szezon összes meccséből, hozammal; és a "Repertoár-
+  változás" szakasz (lásd lejjebb).
+- **Szezon képernyő**: `GET /library/figure-library?team=` — csapatonként
+  a visszatérő figurák rajzzal, névvel (a saját csapatnál a repertoár, az
+  ellenfélnél a felkészülés lapja).
+- **Meccs-elemző** és **meccsjelentés**: a meccs figurái alakkal (mini-
+  pálya, edzői név), a 478. edzés-szabály (a leggyakoribb saját figura gól
+  nélkül → új befejezés), edzői összefoglaló mondat.
+- **Élő követés**: `GET /matches/{id}/figure-alerts` — amikor egy csapat a
+  visszatérő figuráját kezdi játszani, jelzés a védekező oldalnak.
+- **Klipek**: a "visszatérő figura" klip-típus — e meccs azon támadásai,
+  amelyek a könyvtári alakot játsszák (`recurring_figure_segments`).
+
+A csapat könyvtárát az API a könyvtár ÖSSZES elemzett meccséből építi
+(`_team_figure_library`, a csapat NEVE szerint), meccsenkénti
+alak-gyorsítótárral: (meccs-azonosító, kockaszám) kulccsal, hogy az
+újrafeldolgozott meccs ne olvasson elavult alakot.
+
+## Figura-ismétlés a gól után
+
+A könyvtár és a figura-kopás azt mondja, MENNYIT ÉR a figura; a
+`setplay_repeat_choice` azt, MIKOR hozzák: a csapat egymást követő
+támadásait figurák szerint nézve megszámolja, milyen gyakran jön
+UGYANAZ a figura a következő támadásban, aszerint, hogy az előző gólt
+hozott-e. A felderítés CSAK a darabszámokat tárolja (gól utáni és gól
+nélküli előző támadás, és ebből hány ismétlés), így meccsek közt
+pontosan összeadódik. Ítélet csak sávonként legalább `SRC_MIN_ATTACKS`
+(4) mért támadásnál: `SRC_GAP_PP` (20 százalékpont) rés esetén "a
+bejött figurát rögtön újra hozzák" vagy "a bejött figura után
+váltanak"; rés nélkül, de mindkét sávban `SRC_HIGH_PCT` (60%) fölött
+"kiszámítható a play-callingjuk". A 461. meccsterv-szabály ezt a saját
+fal-váltásaitokkal köti össze (mikor időzítsétek a váltást), a 480.
+edzés-szabály a saját kiszámíthatóságunkra ad második nyitást.
+
+## Figura-állás (mit hoznak vezetve, mit hátrányban)
+
+A `setplay_by_score` a figura-alakokat az EREDMÉNYJELZŐVEL keresztezi: a
+támadás-szakaszokat alak szerint klaszterezi, és minden szakaszt a
+KEZDETÉNEK állására ír (vezet / döntetlen / hátrányban), majd
+állapotonként számolja a támadást, a gólt és a figura részarányát. Az
+ítélet akkor szólal meg, ha egy figura részaránya két állapot között
+legalább `SBS_GAP_PP` (25) százalékponttal tér el, és mindkét
+állapotban van legalább `SBS_MIN_ATTACKS` (5) mért figura-támadás.
+
+Edzőileg ez az állásfüggő felkészülés: ha tudjuk, hogy hátrányban a
+gyors szélső-játékra váltanak, a fal a meccs állapota szerint készülhet,
+és a hajrában nem kell kitalálni, mi jön. A felderítés lapos sorokat
+tárol (`setplay_score_rows`), a `setplay_score_summary` a meccsek közt
+összefésült képet adja; a 463. meccsterv-szabály a saját
+fal-váltásaitokkal köti össze, a 482. edzés-szabály a saját
+kiszámíthatóságunkra ad hajrá-gyakorlatot két megoldással.
+
+## Emberelőny-figura (mit hoznak a két perc alatt)
+
+A `powerplay_setplay` a kiállítás-ablakokba (`rules.detect_powerplay`)
+eső támadás-szakaszokat klaszterezi alak szerint, és figuránként számolja
+a támadást, a gólt és a részarányt. Ítélet csak `PPF_MIN_ATTACKS` (4)
+mért emberelőnyös támadástól és `PPF_SHARE_PCT` (50%) fölötti
+részaránynál: "emberelőnyben egy figurára építenek — emberhátrányban
+ezt kell bejátszani és erre rendezni az öt embert, a többit rá lehet
+engedni". A kiállítás RITKA, ezért a felderítés lapos sorai
+(`powerplay_figure_rows`) és a `powerplay_figures_summary` összefésülése
+meccsek közt teszi használhatóvá. A 464. meccsterv-szabály a saját
+fegyelemmel párosítja (meccsenként hány kiállítást szedtek), a 483.
+edzés-szabály a saját emberelőnyünk egyetlen figurájára ad második
+befejezést.
+
+## Hajrá-figura (mire szűkülnek az utolsó percekben)
+
+A `clutch_setplay` a támadás-szakaszokat alak szerint klaszterezi, és a
+hajrába (az utolsó `CLUTCH_WINDOW_S`, 300 mp) esőket a meccs többi
+részével veti össze figuránként: hajrá-részarány és törzs-részarány.
+Ítélet csak `CSP_MIN_ATTACKS` (4) hajrá-támadástól, `CSP_SHARE_PCT` (50%)
+fölötti részaránynál és `CSP_GAP_PP` (25 százalékpont) résnél a törzshöz
+képest: "a hajrában egy figurára szűkülnek — a végjátékban a fal ne
+tippeljen: erre álljon fel". A lista a csak a törzsben hozott figurákat
+is tartalmazza (0 hajrá-támadással), hogy a törzs részaránya meccsek közt
+is újraszámolható legyen (`clutch_figure_rows`, `clutch_figures_summary`).
+A 465. meccsterv-szabály a saját hajrá-mérleggel párosítja (lyukas a
+hajránk → konkrétan erre bejátszani; bírjuk → ezt elvéve nincs B-tervük),
+a 484. edzés-szabály a saját hajránk egyetlen figurájára ad második
+befejezést.
+
+### Hajrá-fal (a hajrá-figura tükre a védekező csapatra)
+
+A `defense.clutch_defense_shape` ugyanezt a kérdést a FALRA teszi fel:
+más falat hoznak-e az utolsó öt percben. A védekezett támadás-szakaszok
+fal-alakjait (`_wall_signature`, a fal-alak réteggel azonos rács) a
+hajrában és a törzsben veti össze alakonként; ítélet `CDS_MIN_ATTACKS`
+(4) hajrában védekezett támadástól, `CDS_SHARE_PCT` (50%) és `CDS_GAP_PP`
+(25 százalékpont) fölött, a mélység-név szerinti tanáccsal (tömör hatos →
+távoli befejezés; kilépő → a fal mögé). Lapos sorai
+(`clutch_wall_rows`) a `clutch_wall_summary`-val fésülődnek össze; a 466.
+meccsterv-szabály a saját hajrá-figurával párosítja, a 485. edzés-szabály
+a saját hajrá-falunk begyakorlását kéri.
+
+## Figura-dosszié (egy figuráról minden, egy lapon)
+
+A fenti rétegek külön-külön egy-egy kérdésre felelnek; az edző viszont
+EGY figurára készül fel. A `figure_dossier` a könyvtár fő figuráihoz
+(legfeljebb `FDS_MAX_FIGURES`, 3) ALAK szerint hozzápárosítja a
+védőforma-mondatot (`figure_formation`), az állás szerinti részarányokat
+(`setplay_score`), az emberelőnyös darabszámot (`powerplay_figures`) és
+a sorrend-mondatot (a figura-ismétlés darabszámaiból). Származtatott
+mező (`ScoutingReport.figure_dossier`): a `scout_team` és a
+`combine_reports` is a már összegzett forrás-mezőkből számolja újra, így
+az egyesített jelentésben nem a részjelentésé marad. Felülete a
+felderítő képernyő "Figura-dosszié" kártyája rajzzal és a nyomtatható
+felderítő jelentés azonos szakasza.
+
+## Figura × védőforma
+
+A könyvtár azt mondja, MELYIK figurát hozzák; a `figure_vs_formation`
+réteg azt, MELYIK FAL ELLEN működik: a támadás-szakaszokat figurák
+szerint, a védekező csapat formáját a szakasz vége előtt
+`FVF_LOOKBACK_S` (0,5 mp) másodperccel leolvasva, figuránként és
+formánként számolja a támadást és a gólt. Az ítélet csak akkor szólal
+meg, ha KÉT forma is legalább `FVF_MIN_ATTACKS` (3) támadást kapott, és
+a gólarányuk közt legalább `FVF_GAP_PP` (25) százalékpont a rés: "a
+beúszós keresztjük a 6-0 ellen 100%, az 5-1 ellen 0% — erre a figurára
+5-1-ben álljatok fel". A felderítés lapos sorokat tárol
+(`setplay_formation_rows`), és a `figure_formation_summary` az
+összefésült sorokból alak szerint újraszámolja — két meccs, amelyben
+külön-külön csak egy forma jött elő, együtt már ítéletet ad. A 460.
+meccsterv-szabály a ti fő védekezésetekkel veti össze (maradjatok benne
+/ váltsatok rá), a 479. edzés-szabály a saját figurátok gól nélküli
+formáját adja bejátszásra.
+
+## Fal-alak (a védekező tükre)
+
+Ugyanez a gépezet a VÉDEKEZŐ oldalon: a `defense.defense_shapes` minden
+védekezett támadásban a védők (kapus nélkül) eloszlását veti 6×3-as
+rácsra, a támadó irányához normálva, és a hasonló alakokat egy falnak
+veszi (`DSH_MERGE_THRESHOLD`). A védőforma-címke (6-0, 5-1) a sávok
+számát mondja, az alak azt, hogy a fal hova tömörül: két ugyanúgy
+"6-0"-nak címkézett fal lehet a hatoson tömör és a 9-esen kilépő is. Az
+ítélet a két legszélsőbb hozamú, elég mintás alakot veti össze
+(`DSH_MIN_ATTACKS`, `DSH_GAP_PP`), és a gyengébb alak kihozását kéri
+(gyors indítás, korai befejezés). A felderítés lapos sorokat tárol
+(`defense_shape_rows`), a `defense_shape_summary` a meccsek közt
+összefésült képet adja; a 462. meccsterv-szabály a saját kontra-
+hajlandósággal párosítja, a 481. edzés-szabály a saját falunk két alakja
+közti szakadékra ad visszarendeződés-gyakorlatot.
+
+**Oldal-megnevezés:** a fal oldalát a VÉDEKEZŐ csapat szemszögéből
+nevezzük (a rács a támadó irányához normált, a két csapat szemben áll,
+ezért a sávokat tükrözzük). A tükrözés-őr pont ezt nézi: a pályára
+tükrözött meccsen minden oldal-névnek fordulnia kell.
+
+## Figura-nevek
+
+A könyvtár zóna-neve ("bal oldal, a kapuelőtér előtt") helyett az edző
+a saját szavával nevezheti a figurát ("beúszós kereszt"). A név
+könyvtár-szintű (`figures.json` a meccs-mappa mellett, mint a
+játékos-nevek), csapatonként az ALAKHOZ tartozik: a
+`SPL_MERGE_THRESHOLD`-on belüli alak kapja — így a következő meccs
+ugyanazon figurája is a nevét viseli. Végpontok: `GET/POST
+/library/figures` (közeli alak átnevez, üres név töröl). Az API minden
+figura-sort névvel ad (`_nevesit`): felderítés, `/setplays`, élő
+riasztás szövege, klip-címke, és a nyomtatható jelentések
+(`figure_namer` a meccsjelentésben). A kliens a felderítés figura-
+sorának ceruza-gombjával nevez.
+
+## Repertoár-változás
+
+A könyvtár a szezon EGÉSZÉRE mondja, mit hoznak; a
+`figure_repertoire_change` azt, mi VÁLTOZOTT: a szezon-riport a csapat
+meccseit időrendben két félre vágja, mindkét fél alak-soraiból könyvtár
+épül, és az újabb fél figuráit a régebbiéhez párosítja
+(`SPL_MERGE_THRESHOLD`-on belüli alak = ugyanaz a figura). Három lista:
+"maradt" (a két fél támadás- és gólarányával — él-e még, hoz-e még
+gólt), "új" (csak a második félben, legalább `SPR_MIN_ATTACKS`
+támadással) és "eltűnt" (csak az elsőben). A saját csapatnál a
+kérdés "él-e még a beúszós kereszt", az ellenfélnél "van-e új
+figurájuk, amire a régi felderítés nem készít fel". Felülete a
+szezon-riport "Repertoár-változás (első fél → második fél)" szakasza,
+rajzzal és névvel, és a Szezon képernyő azonos nevű szakasza
+(`GET /library/figure-repertoire?team=` — csak ahol van új vagy eltűnt
+figura). A meccsterv (`/scouting/matchup`, `opp_repertoire`) az ellenfél
+KIJELÖLT meccseit vágja dátum szerint két félre: "Új figurájuk az utóbbi
+meccseken" az, amire a régi felderítés nem készít fel.
+
+## Korlátok
+
+- Egy meccsből nincs könyvtár: a felderítés-választó ezért kettőt kér.
+- A csapat azonosítása a NÉV szerint megy: az "MTK" és az "MTK Budapest"
+  két csapat.
+- Az alak egy 6×3-as eloszlás, nem mozgáspálya: a "hol tömörülnek"
+  kérdésre válaszol, a "ki hova fut" kérdésre a figura-tervező könyvtára
+  (mentett figurák, `match_attacks_to_playbook`).
+
+## Tesztek
+
+`backend/tests/test_setplays.py` (a "Figura-könyvtár meccsek között"
+szakasz): a tükörkép irány-normálva egy alak; edzői nevek; a könyvtár két
+meccs (a másodikban a másik kapura támadva) között visszatérő figurát
+talál, egy meccsből nem; a VALÓDI felderítés-út; a riasztás- és a
+setplays-végpont; a meccsenkénti gyorsítótár; a figura-állás (vezetve / hátrányban, kevés minta, valódi felderítés-út); az emberelőny-figura (kiállítás alatt, teljes létszámnál nincs, meccsek közt áll össze); a hajrá-figura (szűkülés, rövid felvétel / kevés minta / nincs szűkülés, meccsek közt áll össze, a 484. edzés-szabály és az összefoglaló valódi rétegből); a dosszié (alak szerinti párosítás, valódi felderítés-út, kliens és jelentés); a gól utáni figura-
+ismétlés (előre-lépés, váltás, kiszámíthatóság, kevés minta, a valódi
+felderítés-út és a 480. edzés-szabály); a repertoár-változás
+(új / eltűnt / maradt) és a szezon-riport szakasza. A rajz-felületek őrei a
+`test_client_calib_check.py`-ban, a jelentések a `test_report_html.py` és
+`test_match_report.py` fájlokban.
