@@ -4961,3 +4961,162 @@ def test_a_fal_alak_edzes_szabalya_valodi_retegbol_szolal_meg(monkeypatch):
     tetel = next(t for t in tetelek
                  if t["title"].startswith("A falunk másik alakja"))
     assert "visszarendeződés-gyakorlat" in tetel["drill"]
+
+
+# ---- Hajrá-fal (clutch_defense_shape) ---------------------------------------
+
+
+def _cds_match(match_id="cds", db=5, hajra_fal="kilepo", valt=True,
+               fps=5.0, hossz_s=640.0):
+    """A VENDÉG fala a meccs törzsében FELVÁLTVA tömör és kilépő, az
+    utolsó öt percben (a hajrában) csak a `hajra_fal` alakot hozza.
+
+    A felvétel `hossz_s` másodperc (a hajrá-rétegek 600 mp-es
+    minimumánál hosszabb), ritka fps-sel; a hajrá az utolsó 300 mp.
+    `valt=False`: a hajrában is felváltva — nincs váltás, nincs ítélet.
+    A hazai mindig ugyanazt a támadást játssza a +x kapura (nem gól).
+    """
+    from handball.pipeline.momentum import CLUTCH_WINDOW_S
+
+    frames = []
+    t = 0
+
+    def fal(alak):
+        if alak == "kilepo":
+            xs_v, ys_v = [31.0] * 6, [2.0, 6.0, 9.0, 11.0, 14.0, 18.0]
+        else:
+            xs_v, ys_v = [35.0] * 6, [2.0, 6.0, 9.0, 11.0, 14.0, 18.0]
+        return [_pl(20 + j, Team.AWAY, xs_v[j], ys_v[j]) for j in range(6)] \
+            + [_pl(30, Team.AWAY, 39.5, 10.0)]
+
+    def tamadas(alak):
+        nonlocal t
+        for _ in range(8):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 28.0, 10.0),
+                              _pl(2, Team.HOME, 31.0, 8.0),
+                              _pl(3, Team.HOME, 30.0, 12.0)] + fal(alak),
+                ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(4):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 8.0, 10.0)]
+                                + fal("tomor"),
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def ures(n):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 12.0, 10.0)]
+                                + fal("tomor"),
+                                ball=Ball(x=12.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    masik = "tomor" if hajra_fal == "kilepo" else "kilepo"
+    hajra_n = int(CLUTCH_WINDOW_S * fps)
+    torzs_n = int(hossz_s * fps) - hajra_n
+    szunet = max(0, (torzs_n - 2 * db * 12) // (2 * db))
+    for _ in range(db):
+        tamadas(hajra_fal)
+        ures(szunet)
+        tamadas(masik)
+        ures(szunet)
+    ures(max(0, torzs_n - t))
+    kezdet = t
+    szunet = max(0, (hajra_n - db * 12) // db)
+    for i in range(db):
+        ures(2)
+        tamadas(hajra_fal if valt or i % 2 == 0 else masik)
+        ures(szunet - 2)
+    ures(max(0, kezdet + hajra_n - t))
+    return Match(MatchMeta(match_id=match_id, home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_a_hajra_fal_megmondja_mas_falat_hoznak_e_a_vegen():
+    """A törzsben tömör és kilépő fal felváltva, a hajrában csak a
+    kilépő: az ítélet a váltást mondja ki, és a támadásnak szóló
+    teendőt (a kilépő fal mögé)."""
+    from handball.pipeline.defense import (CDS_GAP_PP, CDS_MIN_ATTACKS,
+                                           CDS_SHARE_PCT,
+                                           clutch_defense_shape)
+
+    rec = clutch_defense_shape(_cds_match())["away"]
+    assert rec["attacks"] >= CDS_MIN_ATTACKS
+    fo = rec["shapes"][0]
+    assert "9-es vonalon" in fo["zone"] or "előrehúzva" in fo["zone"]
+    assert fo["share_pct"] >= CDS_SHARE_PCT
+    assert fo["share_pct"] - fo["rest_share_pct"] >= CDS_GAP_PP
+    assert fo["rest_attacks"] >= 1, "a törzsben is állt, csak ritkábban"
+    assert rec["verdict"] and "másik falat hoznak" in rec["verdict"]
+    # A 9-esen álló (kilépő) fal ellen a fal mögé szóló tanács jár.
+    assert "kilépő" in rec["verdict"] and "mögé" in rec["verdict"]
+    # Fordítva: a hajrában a tömör hatosra húznak → távoli befejezés.
+    tomor = clutch_defense_shape(_cds_match(hajra_fal="tomor"))["away"]
+    assert tomor["verdict"] and "hatoson" in tomor["shapes"][0]["zone"]
+    assert "távoli befejezés" in tomor["verdict"]
+    # A HAZAI nem védekezett: üres, nem hallgatólagos 0.
+    ures = clutch_defense_shape(_cds_match())["home"]
+    assert ures["attacks"] == 0 and ures["verdict"] is None
+
+
+def test_a_hajra_fal_rovid_felvetelen_es_keves_mintanal_hallgat():
+    """Rövid felvételen nincs hajrá; kevés hajrá-támadásnál nincs ítélet;
+    ha a hajrában is felváltva állnak, nincs váltás."""
+    from handball.pipeline.defense import (CDS_MIN_ATTACKS,
+                                           clutch_defense_shape)
+
+    rovid = clutch_defense_shape(_cds_match(hossz_s=400.0))["away"]
+    assert rovid["attacks"] == 0 and rovid["verdict"] is None
+    keves = clutch_defense_shape(
+        _cds_match(db=CDS_MIN_ATTACKS - 1))["away"]
+    assert 0 < keves["attacks"] < CDS_MIN_ATTACKS
+    assert keves["verdict"] is None
+    nem = clutch_defense_shape(_cds_match(db=6, valt=False))["away"]
+    assert nem["attacks"] >= CDS_MIN_ATTACKS
+    assert nem["verdict"] is None, nem
+
+
+def test_a_hajra_fal_a_felderitesen_meccsek_kozt_all_ossze():
+    """A hajrá rövid: egy meccsen kevés a minta, több meccsen áll össze.
+    A VALÓDI felderítés-úton (scout_team → combine_reports), az edzői
+    kulccsal és a 466-os meccsterv-szabály mindkét ágával."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+
+    r1 = scout_team(_cds_match("w1", db=2), Team.AWAY)
+    r2 = scout_team(_cds_match("w2", db=2), Team.AWAY)
+    assert r1.clutch_wall_rows and r1.clutch_wall["verdict"] is None
+    ossz = combine_reports([r1, r2])
+    assert ossz.clutch_wall["attacks"] >= 4
+    assert ossz.clutch_wall["verdict"], ossz.clutch_wall
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "hajrában másik falat hoznak" in kulcsok
+    # 466: nincs saját hajrá-figuránk → ebből a falból tervezzünk.
+    sajat = scout_team(_cds_match("s1", db=2), Team.HOME)
+    assert not (sajat.clutch_figures or {}).get("verdict")
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "ebből a falból tervezzétek" in terv
+    # Van saját hajrá-figuránk → azt próbáljuk ki ez ellen a fal ellen.
+    sajat.clutch_figures = {"verdict": "a hajrában egy figurára szűkülnek",
+                            "figures": [{"zone": "bal oldal, a 9-es körül",
+                                         "share_pct": 80.0}]}
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "fal ellen próbáljátok ki" in terv2
+
+
+def test_a_hajra_fal_edzes_szabalya_es_osszefoglaloja_valodi_retegbol(
+        monkeypatch):
+    """485: a saját hajrá-falunk más, mint a törzsben — a tétel és az
+    edzői összefoglaló mondata a VALÓDI rétegből jön."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.training import training_focus
+    from handball.pipeline.coach_summary import coach_summary
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    meccs = _cds_match("t485")
+    tetelek = training_focus(meccs)["away"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "A hajrában másik falat hozunk" in cimek
+    szoveg = str(coach_summary(meccs))
+    assert "másik falat hoznak" in szoveg

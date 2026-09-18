@@ -5,6 +5,7 @@
 /// match_id-vel. Backend nélkül/üres tárnál barátságos állapotot mutat.
 library;
 
+import "dart:async";
 import "dart:io";
 
 import "package:file_picker/file_picker.dart";
@@ -100,6 +101,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    _libraryRepoll?.cancel();
     JobsMonitor.instance.jobs.removeListener(_onJobsChanged);
     JobsMonitor.instance.finishedTick.removeListener(_onJobsFinished);
     _searchCtrl.dispose();
@@ -690,6 +692,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) setState(() => _jobHistory = h);
       });
       _refreshSummary();
+      // A motor a mentett meccseket HÁTTÉRBEN olvassa be (meccsenként
+      // több másodperc): amíg töltődik, a lista részleges — pár
+      // másodpercenként újrakérdezünk, hogy a sorok maguktól
+      // megjelenjenek, és a sáv mutassa, hol tart.
+      if (ApiClient.libraryLoading) _scheduleLibraryRepoll();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -698,6 +705,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _loading = false;
       });
     }
+  }
+
+  Timer? _libraryRepoll;
+
+  void _scheduleLibraryRepoll() {
+    _libraryRepoll?.cancel();
+    _libraryRepoll = Timer(const Duration(seconds: 2), () async {
+      _libraryRepoll = null;
+      if (!mounted) return;
+      try {
+        final matches = await _api.listMatches();
+        if (!mounted) return;
+        setState(() => _matches = matches);
+        if (ApiClient.libraryLoading) {
+          _scheduleLibraryRepoll();
+        } else {
+          _refreshSummary(); // a teljes könyvtárból számolt szezon-kép
+        }
+      } catch (_) {
+        // A következő kézi frissítés újra megpróbálja.
+      }
+    });
+  }
+
+  /// Betöltés-sáv: a könyvtár még töltődik — a lista részleges, de a
+  /// már bent lévő meccsek nyithatók.
+  Widget _libraryLoadingBanner() {
+    final total = ApiClient.libraryTotal;
+    final loaded = ApiClient.libraryLoaded;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.accent),
+      ),
+      child: Row(children: [
+        const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: AppColors.accent)),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Text(
+            total > 0
+                ? "A könyvtár betöltése: $loaded/$total meccs. A már "
+                    "megjelent meccsek nyithatók, a többi magától jön."
+                : "A könyvtár betöltése folyik — a meccsek maguktól "
+                    "megjelennek.",
+            style: AppText.label,
+          ),
+        ),
+      ]),
+    );
   }
 
   /// Szezon-összkép betöltése — a lista után, hogy a könyvtár ne várjon rá.
@@ -2074,6 +2137,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             if (SessionStore.guestMode) _guestBanner(),
             // Fél-frissült telepítés: az app és a motor verziója eltér.
             if (_versionMismatch()) _versionMismatchBanner(),
+            // A könyvtár háttér-betöltése még tart: a lista részleges.
+            if (!_offline && !_loading && ApiClient.libraryLoading)
+              _libraryLoadingBanner(),
             Row(
               children: [
                 Expanded(

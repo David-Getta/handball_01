@@ -153,6 +153,150 @@ def should_install(uj: dict, regi: dict) -> dict:
                       "rosszabb lett, a mostani modell marad"}
 
 
+class _MatchStore(dict):
+    """Meccs-tár, amely a lemezről HÁTTÉRBEN töltődik.
+
+    A motor induláskor eddig az ÖSSZES mentett meccset beolvasta, mielőtt
+    a portot megnyitotta volna. Egy teljes meccs ~75 MB JSON, több
+    másodperc — húsz meccsnél ez percekig zárva tartotta a motort: a
+    kliens "nem érem el a háttérmotort"-ot mondott, a könyvtár nem nyílt,
+    és minden újraindítás (frissítés, őrkutya) elölről kezdte.
+
+    Ez a tár szótár marad (a több száz végpont változatlanul `_store[id]`,
+    `.get`, `in`, `.values()` alakban használja), de a betöltés alatt:
+
+    - a `/health` és a `/matches` NEM vár (`status()`, `snapshot()`):
+      a motor azonnal válaszol, a lista a már betöltött meccseket adja
+      a betöltés állásával;
+    - a KÉRT meccs igény szerint, soron kívül töltődik (`loader`): amit
+      az edző most nyit, ahhoz nem kell megvárni a többit;
+    - minden más olvasás (`values`, `keys`, `items`, iterálás, `len`)
+      megvárja a betöltés végét — a szezon-összesítések így teljes
+      könyvtárból dolgoznak, nem féllel.
+
+    Írás közben nem vár: a futó feldolgozás eredménye azonnal bekerül, a
+    háttér-betöltő pedig a már bent lévőt nem írja felül.
+    """
+
+    def __init__(self):
+        super().__init__()
+        import threading
+        self._ready = threading.Event()
+        self._ready.set()                 # amíg nincs betöltés, kész
+        self._lock = threading.RLock()
+        self.loader = None                # match_id -> Match | None
+        self.progress = {"loaded": 0, "total": 0, "current": None}
+
+    # ---- a betöltő oldala --------------------------------------------
+    @property
+    def loading(self) -> bool:
+        return not self._ready.is_set()
+
+    def begin_loading(self, total: int) -> None:
+        self.progress = {"loaded": 0, "total": int(total), "current": None}
+        if total > 0:
+            self._ready.clear()
+
+    def finish_loading(self) -> None:
+        self.progress["current"] = None
+        self._ready.set()
+
+    def put_raw(self, key, value, overwrite: bool = True) -> None:
+        with self._lock:
+            if overwrite or not dict.__contains__(self, key):
+                dict.__setitem__(self, key, value)
+
+    def status(self) -> dict:
+        """A betöltés állása — NEM vár (a /health-nek)."""
+        return {"loading": self.loading,
+                "loaded": int(self.progress.get("loaded", 0)),
+                "total": int(self.progress.get("total", 0))}
+
+    def snapshot(self) -> list:
+        """A már betöltött meccsek listája — NEM vár (a /matches-nek)."""
+        with self._lock:
+            return list(dict.values(self))
+
+    # ---- igény szerinti betöltés ---------------------------------------
+    def _try_load(self, key):
+        """A kért meccs soron kívüli betöltése a betöltés alatt."""
+        with self._lock:
+            if dict.__contains__(self, key):
+                return dict.__getitem__(self, key)
+            if self.loader is None:
+                return None
+            try:
+                m = self.loader(key)
+            except Exception:
+                m = None
+            if m is not None:
+                dict.__setitem__(self, key, m)
+            return m
+
+    # ---- olvasás -------------------------------------------------------
+    def __getitem__(self, key):
+        if dict.__contains__(self, key):
+            return dict.__getitem__(self, key)
+        if self.loading:
+            m = self._try_load(key)
+            if m is not None:
+                return m
+            self._ready.wait()
+        return dict.__getitem__(self, key)
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __contains__(self, key) -> bool:
+        if dict.__contains__(self, key):
+            return True
+        if self.loading:
+            if self._try_load(key) is not None:
+                return True
+            self._ready.wait()
+        return dict.__contains__(self, key)
+
+    def values(self):
+        self._ready.wait()
+        return dict.values(self)
+
+    def keys(self):
+        self._ready.wait()
+        return dict.keys(self)
+
+    def items(self):
+        self._ready.wait()
+        return dict.items(self)
+
+    def __iter__(self):
+        self._ready.wait()
+        return dict.__iter__(self)
+
+    def __len__(self) -> int:
+        self._ready.wait()
+        return dict.__len__(self)
+
+    # ---- írás ----------------------------------------------------------
+    def __setitem__(self, key, value) -> None:
+        with self._lock:
+            dict.__setitem__(self, key, value)
+
+    def __delitem__(self, key) -> None:
+        # A törlés legyen végleges: ha a háttér-betöltő még nem ért oda,
+        # a törlés után hozná be — ezért megvárjuk.
+        self._ready.wait()
+        with self._lock:
+            dict.__delitem__(self, key)
+
+    def pop(self, key, *default):
+        self._ready.wait()
+        with self._lock:
+            return dict.pop(self, key, *default)
+
+
 def create_app():
     """Létrehozza és visszaadja a FastAPI alkalmazást.
 
@@ -170,7 +314,12 @@ def create_app():
     # Meccs-tár: memóriában (match_id -> Match), lemezre TÜKRÖZVE, hogy a szerver
     # újraindítása ne veszítse el a feldolgozott meccseket (data/matches/{id}.json).
     # Ez az MVP-perzisztencia; később adatbázis + objektumtár.
-    _store: dict[str, Match] = {}
+    #
+    # A betöltés HÁTTÉRBEN fut (lásd _MatchStore): egy teljes meccs
+    # ~75 MB JSON, több másodperc — húsz meccsnél a régi, induláskor
+    # blokkoló betöltés PERCEKIG tartotta a portot zárva, a kliens pedig
+    # "nem érem el a háttérmotort"-ot mondott, és a könyvtár nem nyílt.
+    _store = _MatchStore()
     # A minőség-pontszám kiszámítása végigjárja a meccs összes kockáját,
     # a "korábbi feldolgozásaid" listát viszont minden jelentés-nyitás
     # kéri. Kulcs: (match_id, kockaszám) — egy újrafeldolgozott meccs
@@ -214,30 +363,95 @@ def create_app():
                 pass
         return []
 
-    def _load_store_from_disk() -> int:
-        """A lemezen lévő meccsek betöltése a memóriába (indulás + könyvtár-
-        visszaállítás után). A jegyzet/mezszám/roster kísérőfájlokat a nevük
-        különbözteti meg (*.notes.json stb.) — azok nem meccsek."""
-        loaded = 0
-        for f in sorted(_data_dir.glob("*.json")):
-            if any(f.name.endswith(s) for s in
-                   (".notes.json", ".jerseys.json", ".roster.json",
-                    ".params.json", ".events.json")):
-                continue
-            try:
-                m = Match.from_json(f.read_text(encoding="utf-8"))
-                # A kézi esemény-javítások a meccs mellett, külön
-                # fájlban élnek — a felismerés a meta-ból olvassa őket,
-                # tehát betöltéskor ide kell tenni.
-                m.meta.event_overrides = _load_overrides(m.meta.match_id)
-                _store[m.meta.match_id] = m
-                loaded += 1
-            except Exception:
-                pass  # sérült fájlt átugrunk, ne akadályozza az indulást
-        return loaded
+    def _match_files() -> list:
+        """A könyvtár meccs-fájljai, a LEGFRISSEBB elöl — a háttér-betöltés
+        ebben a sorrendben halad, hogy amit az edző most nyitna, az
+        legyen kész először. A jegyzet/mezszám/roster kísérőfájlokat a
+        nevük különbözteti meg (*.notes.json stb.) — azok nem meccsek."""
+        files = [f for f in _data_dir.glob("*.json")
+                 if not any(f.name.endswith(s) for s in
+                            (".notes.json", ".jerseys.json", ".roster.json",
+                             ".params.json", ".events.json"))]
 
-    # Indításkor betöltjük a korábban lementett meccseket a memóriába.
-    _load_store_from_disk()
+        def _mtime(f):
+            try:
+                return f.stat().st_mtime
+            except OSError:
+                return 0.0
+        return sorted(files, key=lambda f: (-_mtime(f), f.name))
+
+    def _read_match_file(f) -> Optional[Match]:
+        """Egy meccs-fájl beolvasása (a kézi esemény-javításokkal együtt);
+        sérült fájlra None — ne akadályozza a többit."""
+        try:
+            m = Match.from_json(f.read_text(encoding="utf-8"))
+            # A kézi esemény-javítások a meccs mellett, külön
+            # fájlban élnek — a felismerés a meta-ból olvassa őket,
+            # tehát betöltéskor ide kell tenni.
+            m.meta.event_overrides = _load_overrides(m.meta.match_id)
+            return m
+        except Exception:
+            return None
+
+    def _load_one_from_disk(match_id: str) -> Optional[Match]:
+        """Egy meccs betöltése IGÉNY SZERINT a betöltés közben: a kliens
+        kérte, a háttér-betöltő még nem ért oda. A fájlnév a fertőtlenített
+        azonosító — ha a fájl belső azonosítója más, az nem ez a meccs."""
+        p = _match_path(match_id)
+        if not p.exists():
+            return None
+        m = _read_match_file(p)
+        if m is None or m.meta.match_id != match_id:
+            return None
+        return m
+
+    _store.loader = _load_one_from_disk
+
+    def _load_store_from_disk(background: bool = False) -> int:
+        """A lemezen lévő meccsek betöltése a memóriába (indulás + könyvtár-
+        visszaállítás után).
+
+        `background=True`: a betöltés külön szálon fut, a hívó azonnal
+        visszatér (a visszaadott szám a talált fájloké). A tár addig
+        "töltődik": a /health és a /matches azonnal válaszol, a többi
+        olvasás megvárja a végét, a kért meccs pedig igény szerint,
+        soron kívül töltődik (lásd _MatchStore). Háttérben a már bent
+        lévő (igény szerint betöltött vagy közben feldolgozott) meccset
+        nem írjuk felül; a szinkron (visszaállítás utáni) betöltés
+        felülír, mert ott a lemez a friss.
+        """
+        files = _match_files()
+
+        def _run() -> int:
+            loaded = 0
+            try:
+                for f in files:
+                    _store.progress["current"] = f.stem
+                    m = _read_match_file(f)
+                    if m is not None:
+                        _store.put_raw(m.meta.match_id, m,
+                                       overwrite=not background)
+                        loaded += 1
+                    _store.progress["loaded"] += 1
+            finally:
+                _store.finish_loading()
+            return loaded
+
+        _store.begin_loading(len(files))
+        if not background:
+            return _run()
+        import threading
+        threading.Thread(target=_run, name="match-store-loader",
+                         daemon=True).start()
+        return len(files)
+
+    # Indításkor betöltjük a korábban lementett meccseket a memóriába —
+    # HÁTTÉRBEN, hogy a motor azonnal válaszoljon. A tesztek (és aki a
+    # determinisztikus indulást kéri) a HANDBALL_STORE_SYNC=1 változóval
+    # a régi, blokkoló betöltést kapják.
+    import os as _os
+    _load_store_from_disk(
+        background=_os.environ.get("HANDBALL_STORE_SYNC", "") != "1")
 
     @app.get("/health")
     def health():
@@ -245,9 +459,12 @@ def create_app():
 
         A verziót is kiadja: a kliens összeveti a sajátjával, és a
         FÉL-FRISSÜLT telepítés (új app + régi motor, vagy fordítva) így
-        azonnal látszik, nem rejtélyes hibákként."""
+        azonnal látszik, nem rejtélyes hibákként. A könyvtár háttér-
+        betöltésének állását is mutatja ("library": loading/loaded/total),
+        hogy a kliens meg tudja mondani, mire vár."""
         from .. import __version__
-        return {"status": "ok", "version": __version__}
+        return {"status": "ok", "version": __version__,
+                "library": _store.status()}
 
     # A kilépés-függvény cserélhető: a tesztben nem állhat le a folyamat.
     app.state.exit_fn = None  # None = os._exit
@@ -1583,15 +1800,21 @@ def create_app():
         képkocka-szám, fps és becsült hossz. Idő szerint (fps-alapú hossz) rendezve.
         """
         out = []
+        # A betöltés ALATT is válaszol: a már bent lévő meccseket adja,
+        # és jelzi, hogy még töltődik (a kliens újrakérdez) — a régi,
+        # végét megváró lista percekig "nem érem el"-t mutatott.
+        allas = _store.status()
+        meccsek = _store.snapshot() if allas["loading"] else \
+            list(_store.values())
         # MELYIK meccs darabja: összefűzés után a darab és az egész is a
         # listában van, azonos csapatnevekkel — jelölés nélkül három
         # egyforma "Mi vs Ők" sor lenne, és a felhasználó nem tudná,
         # melyiket nyissa meg.
         resze: dict = {}
-        for m in _store.values():
+        for m in meccsek:
             for rid in (getattr(m.meta, "merged_from", None) or []):
                 resze[str(rid)] = m.meta.match_id
-        for m in _store.values():
+        for m in meccsek:
             fps = m.meta.fps if m.meta.fps > 0 else 25.0
             merged_from = list(getattr(m.meta, "merged_from", None) or [])
             out.append({
@@ -1627,7 +1850,9 @@ def create_app():
                                   or {}).get("min_fit"),
             })
         out.sort(key=lambda d: d["match_id"])
-        return {"matches": out}
+        # "library": a háttér-betöltés állása — a kliens ebből tudja,
+        # hogy a lista még nem teljes, és újrakérdez.
+        return {"matches": out, "library": allas}
 
     @app.get("/matches/{match_id}")
     def get_match(match_id: str):
@@ -6886,6 +7111,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import clutch_defense_shape
+            res["clutch_defense_shape"] = clutch_defense_shape(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_rebound_roles
             res["defensive_rebound_roles"] = \
                 defensive_rebound_roles(match)
@@ -9219,6 +9449,9 @@ def create_app():
                        lambda: powerplay_setplay(match))
                 from ..pipeline.setplays import clutch_setplay
                 _layer("clutch_setplay", lambda: clutch_setplay(match))
+                from ..pipeline.defense import clutch_defense_shape
+                _layer("clutch_defense_shape",
+                       lambda: clutch_defense_shape(match))
                 from ..pipeline.defense import defensive_rebound_roles
                 _layer("defensive_rebound_roles",
                        lambda: defensive_rebound_roles(match))

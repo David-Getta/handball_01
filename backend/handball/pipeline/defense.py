@@ -6755,3 +6755,193 @@ def defense_shape_summary(rows: list,
                                          / max(1, k["attacks"]), 1)})
     shapes.sort(key=lambda r: -r["attacks"])
     return {"shapes": shapes, "verdict": _wall_verdict(shapes)}
+
+
+# ---- Hajrá-fal (clutch_defense_shape) --------------------------------------
+# A fal-alak a MECCS EGÉSZÉN mondja meg, hogyan állnak; ez azt, hogy az
+# utolsó percekben MÁS FALAT hoznak-e. Szoros hajrában sok csapat átáll:
+# a tömör hatosról kilépő, letámadó falra (labdát kell szerezni) vagy
+# épp fordítva, mindent a hatosra húz (nem szabad gólt kapni). Aki ezt
+# tudja, a végjáték támadását nem a szokásos, hanem a HAJRÁ-fal ellen
+# készíti elő. A támadó-oldali hajrá-figura (setplays.clutch_setplay)
+# tükre a védekező csapatra.
+CDS_MIN_ATTACKS = 4      # ennyi hajrában védekezett támadás kell
+CDS_SHARE_PCT = 50.0     # a hajrá-fal részaránya a hajrában legalább ennyi
+CDS_GAP_PP = 25.0        # és ennyivel (százalékpont) több, mint a törzsben
+
+
+def _hajra_fal_tanacs(zone: str) -> str:
+    """Mit hozzon a támadás a hajrá-fal ellen — a mélység-név alapján."""
+    if "hatoson" in zone:
+        return ("távoli befejezés: átlövés a 9-esről és a szélső "
+                "sarkai, a beállót ne erőltessétek a tömör fal ellen")
+    if "előrehúzva" in zone:
+        return ("a kilépő fal mögé: beálló-bejátszás és betörés az "
+                "egy-egy mögött, a hosszú átlövés helyett")
+    return ("a 9-esen álló fal két résére: beálló-bejátszás a kilépő "
+            "mögé, és átlövés, amikor a fal nem ér ki")
+
+
+def _hajra_fal_itelet(hajra: int, rows: list) -> Optional[str]:
+    """Más falat hoznak-e a hajrában — a támadásnak szóló mondat."""
+    if hajra < CDS_MIN_ATTACKS or not rows:
+        return None
+    fo = rows[0]
+    if fo["share_pct"] < CDS_SHARE_PCT:
+        return None
+    if fo["share_pct"] - fo["rest_share_pct"] < CDS_GAP_PP:
+        return None
+    return (f"a hajrában másik falat hoznak: az utolsó öt percben a(z) "
+            f"\"{fo['zone']}\" alak a védekezett támadásaik "
+            f"{fo['share_pct']:.0f}%-a ({fo['attacks']}/{hajra}, "
+            f"{fo['goals']} kapott gól), a meccs többi részén csak "
+            f"{fo['rest_share_pct']:.0f}% — a végjáték támadását erre a "
+            f"falra készítsétek: {_hajra_fal_tanacs(fo['zone'])}")
+
+
+def clutch_defense_shape(match: Match,
+                         config: Optional[TacticsConfig] = None,
+                         threshold: float = DSH_MERGE_THRESHOLD,
+                         min_length: int = 5) -> dict:
+    """Hajrá-fal: MÁS FALAT HOZNAK-E az utolsó öt percben.
+
+    A védekezett támadás-szakaszok fal-alakjait (`_wall_signature`, a
+    fal-alak réteggel azonos rács és klaszterezés) a meccs egészén
+    vonjuk össze, majd a hajrába (az utolsó CLUTCH_WINDOW_S másodperc)
+    esőket a meccs többi részével vetjük össze alakonként: a hajrá-fal
+    részaránya a hajrában és ugyanannak az alaknak a részaránya a
+    törzsben. Alakonként a hajrában kapott gólt is számoljuk.
+
+    Edzőileg ez a végjáték támadásának felkészítése: ha az utolsó
+    percekben más falat hoznak (kilépő, letámadó — vagy épp tömör
+    hatos), a bejátszott hajrá-figurát NEM a szokásos, hanem a hajrá-fal
+    ellen kell megtervezni. Az ítélet csak akkor szólal meg, ha a
+    hajrában legalább CDS_MIN_ATTACKS védekezett támadás van, a fő alak
+    részaránya eléri a CDS_SHARE_PCT-t, és legalább CDS_GAP_PP
+    százalékponttal több, mint a törzsben (különben nem váltás, csak a
+    szokásos faluk).
+
+    Visszatérés csapatonként (a VÉDEKEZŐ csapat): {"attacks" (hajrában
+    védekezett támadások), "shapes": [{"shape", "zone", "attacks",
+    "goals", "goal_pct", "share_pct", "rest_attacks", "rest_share_pct"}],
+    "verdict": mondat | None} — a lista a csak a törzsben állt alakokat
+    is tartalmazza (0 hajrá-támadással), hogy a törzs részaránya meccsek
+    közt is újraszámolható legyen; rövid felvételen
+    (CLUTCH_MIN_DURATION_S alatt) és kevés mintánál üres lista, None
+    ítélet (sose hallgatólagos 0).
+    """
+    from .event_detection import EventType, detect_shots
+    from .momentum import CLUTCH_MIN_DURATION_S, CLUTCH_WINDOW_S
+    from .setplays import cluster_signatures, segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    ures = {side: {"attacks": 0, "shapes": [], "verdict": None}
+            for side in ("home", "away")}
+    if not match.frames or len(match.frames) / fps < CLUTCH_MIN_DURATION_S:
+        return ures
+    tail = round(DSH_SHOT_TAIL_S * fps)
+    win_start = match.frames[-1].t - CLUTCH_WINDOW_S * fps
+    shots_ev = [e for e in detect_shots(match, config)
+                if e.type in (EventType.SHOT, EventType.GOAL)]
+    out: dict = {}
+    for defending in (Team.HOME, Team.AWAY):
+        tamado = Team.AWAY if defending == Team.HOME else Team.HOME
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == tamado]
+        merheto, sigs = [], []
+        for s_ in seqs:
+            sig = _wall_signature(s_, defending, config)
+            if sig is None:
+                continue
+            merheto.append(s_)
+            sigs.append(sig)
+        rows: list = []
+        hajra = tobbi = 0
+        if sigs:
+            labels = cluster_signatures(sigs, threshold=threshold)
+            agg: dict = {}
+            for s_, sig, lab in zip(merheto, sigs, labels):
+                rec = agg.setdefault(lab, {"sum": [0.0] * len(sig), "n": 0,
+                                           "attacks": 0, "goals": 0,
+                                           "rest_attacks": 0})
+                rec["sum"] = [a + b for a, b in zip(rec["sum"], sig)]
+                rec["n"] += 1
+                if s_.start_t >= win_start:
+                    rec["attacks"] += 1
+                    if any(e.team == tamado and e.type == EventType.GOAL
+                           and s_.start_t <= e.t <= s_.end_t + tail
+                           for e in shots_ev):
+                        rec["goals"] += 1
+                else:
+                    rec["rest_attacks"] += 1
+            hajra = sum(r["attacks"] for r in agg.values())
+            tobbi = sum(r["rest_attacks"] for r in agg.values())
+            for rec in agg.values():
+                shape = [round(v / rec["n"], 4) for v in rec["sum"]]
+                rows.append({
+                    "shape": shape, "zone": _wall_zone(shape),
+                    "attacks": rec["attacks"], "goals": rec["goals"],
+                    "goal_pct": round(100.0 * rec["goals"]
+                                      / max(1, rec["attacks"]), 1),
+                    "share_pct": round(100.0 * rec["attacks"]
+                                       / max(1, hajra), 1),
+                    "rest_attacks": rec["rest_attacks"],
+                    "rest_share_pct": round(100.0 * rec["rest_attacks"]
+                                            / max(1, tobbi), 1)})
+            rows.sort(key=lambda r: (-r["attacks"], -r["rest_attacks"]))
+        out[defending.value] = {"attacks": hajra, "shapes": rows,
+                                "verdict": _hajra_fal_itelet(hajra, rows)}
+    return out
+
+
+def clutch_wall_summary(rows: list,
+                        threshold: float = DSH_MERGE_THRESHOLD) -> dict:
+    """Több meccs hajrá-fal sorai összefésülve — a felderítés képe.
+
+    `rows`: [{"shape", "attacks", "goals", "rest_attacks", …}] (a
+    ScoutingReport lapos sorai). A hasonló alakokat súlyozott
+    középponttal vonjuk össze, a darabszámokat összeadjuk; a részarányok
+    az összegekből számolódnak újra.
+    """
+    from .setplays import _distance
+
+    konyv: list = []
+    for row in sorted(rows or [], key=lambda r: -int(r.get("attacks", 0))):
+        shape = list(row.get("shape") or [])
+        if not shape:
+            continue
+        legjobb, legjobb_d = None, threshold
+        for k in konyv:
+            d = _distance(shape, k["shape"])
+            if d <= legjobb_d:
+                legjobb, legjobb_d = k, d
+        n = int(row.get("attacks", 0)) + int(row.get("rest_attacks", 0))
+        if legjobb is None:
+            legjobb = {"shape": shape, "n": 0, "attacks": 0, "goals": 0,
+                       "rest_attacks": 0}
+            konyv.append(legjobb)
+        m = legjobb["n"]
+        legjobb["shape"] = [(a * m + b * n) / max(1, m + n)
+                            for a, b in zip(legjobb["shape"], shape)]
+        legjobb["n"] += n
+        legjobb["attacks"] += int(row.get("attacks", 0))
+        legjobb["goals"] += int(row.get("goals", 0))
+        legjobb["rest_attacks"] += int(row.get("rest_attacks", 0))
+    hajra = sum(k["attacks"] for k in konyv)
+    tobbi = sum(k["rest_attacks"] for k in konyv)
+    shapes = []
+    for k in konyv:
+        shape = [round(v, 4) for v in k["shape"]]
+        shapes.append({
+            "shape": shape, "zone": _wall_zone(shape),
+            "attacks": k["attacks"], "goals": k["goals"],
+            "goal_pct": round(100.0 * k["goals"] / max(1, k["attacks"]), 1),
+            "share_pct": round(100.0 * k["attacks"] / max(1, hajra), 1),
+            "rest_attacks": k["rest_attacks"],
+            "rest_share_pct": round(100.0 * k["rest_attacks"]
+                                    / max(1, tobbi), 1)})
+    shapes.sort(key=lambda r: (-r["attacks"], -r["rest_attacks"]))
+    return {"attacks": hajra, "shapes": shapes,
+            "verdict": _hajra_fal_itelet(hajra, shapes)}

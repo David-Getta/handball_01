@@ -1247,6 +1247,16 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 body += f" A(z) {name} {mondat}."
     except Exception:
         pass
+    # Hajrá-fal: más falat hoznak-e az utolsó percekben.
+    try:
+        from .defense import clutch_defense_shape
+        cds = clutch_defense_shape(match)
+        for side, name in (("home", home), ("away", away)):
+            mondat = (cds.get(side) or {}).get("verdict")
+            if mondat:
+                body += f" A(z) {name} {mondat}."
+    except Exception:
+        pass
     # Lepattanó-szedő poszt: védés után kinél marad a labda.
     try:
         from .defense import defensive_rebound_roles

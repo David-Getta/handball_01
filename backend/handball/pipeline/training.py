@@ -1383,6 +1383,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 485) A saját hajrá-falunk MÁS, mint a törzsben: a váltás csak akkor
+    # ér valamit, ha be van gyakorolva — a hajrában felálló alakot
+    # fáradtan, órára kell tudni felállítani, különben lyukas.
+    try:
+        from .defense import clutch_defense_shape
+        cds485 = clutch_defense_shape(match, config)
+        for side in ("home", "away"):
+            rec485 = cds485.get(side) or {}
+            if not rec485.get("verdict") or not rec485.get("shapes"):
+                continue
+            fo = rec485["shapes"][0]
+            add(side, "védekezés",
+                "A hajrában másik falat hozunk",
+                f"az utolsó öt percben a(z) \"{fo['zone']}\" alakunk a "
+                f"védekezett támadások {fo['share_pct']:.0f}%-a "
+                f"({fo['attacks']} támadás, {fo['goals']} kapott gól), a "
+                f"meccs többi részén csak {fo['rest_share_pct']:.0f}% — a "
+                "váltás csak begyakorolva ér valamit",
+                "hajrá-fal felállítása jelre: az edzés végén, fáradtan, "
+                "órára játszva (utolsó 5 perc, egy gól előny) a szokásos "
+                "falból a hajrá-alakba váltás labdavesztés után, "
+                "a ki-kilépő védő és a mögötte záró pár külön "
+                "begyakorolva")
+    except Exception:
+        pass
+
     # 484) A saját hajránk EGY figurára szűkül: a végjátékban az ellenfél
     # fala nem tippel, hanem arra áll fel, amit mindig hozunk — a hajrára
     # kell egy második, ugyanabból a mozgásból induló befejezés.

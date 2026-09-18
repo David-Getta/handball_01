@@ -712,6 +712,12 @@ class ScoutingReport:
     # ÚJRASZÁMOLVA (arányt sose tárolunk).
     defense_shape_rows: list = field(default_factory=list)
     defense_shapes: dict = field(default_factory=dict)
+    # Hajrá-fal (defense.clutch_defense_shape): lapos, összegezhető
+    # sorok — {"shape", "attacks", "goals", "rest_attacks", "match_id"}
+    # — meccsek közt egymás mögé; az összefésült kép (clutch_wall) a
+    # combine_reports-ban ÚJRASZÁMOLVA (arányt sose tárolunk).
+    clutch_wall_rows: list = field(default_factory=list)
+    clutch_wall: dict = field(default_factory=dict)
     setplay_repeat_after_goal: int = 0
     setplay_repeat_after_goal_same: int = 0
     setplay_repeat_after_miss: int = 0
@@ -8505,6 +8511,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # Hajrá-fal: más falat hoznak-e az utolsó percekben.
+    try:
+        _cdsv = (rep.clutch_wall or {}).get("verdict")
+        if _cdsv:
+            keys.append(_cdsv[0].upper() + _cdsv[1:] + ".")
+    except Exception:
+        pass
+
     # Fal-alak: melyik falukat éri meg kihozni (a motor ítélete).
     try:
         _dshv = (rep.defense_shapes or {}).get("verdict")
@@ -12476,6 +12490,14 @@ def _scout_team_cached(match: Match, team: Team,
              "goals": r["goals"], "match_id": match.meta.match_id}
             for r in _dsh(match, config)[team.value]["shapes"]]
         rep.defense_shapes = _dss(rep.defense_shape_rows)
+        from .defense import clutch_defense_shape as _cds
+        rep.clutch_wall_rows = [
+            {"shape": r["shape"], "attacks": r["attacks"],
+             "goals": r["goals"], "rest_attacks": r["rest_attacks"],
+             "match_id": match.meta.match_id}
+            for r in _cds(match, config)[team.value]["shapes"]]
+        from .defense import clutch_wall_summary as _cws
+        rep.clutch_wall = _cws(rep.clutch_wall_rows)
         from .setplays import setplay_repeat_choice as _src
         _srcrec = _src(match, config)[team.value]
         rep.setplay_repeat_after_goal = _srcrec["after_goal_attacks"]
@@ -13707,6 +13729,13 @@ def _setplay_score_of(reports) -> dict:
                                   for row in (r.setplay_score_rows or [])])
 
 
+def _clutch_wall_of(reports) -> dict:
+    """A hajrá-fal sorok meccsek közti összefésülése."""
+    from .defense import clutch_wall_summary
+    return clutch_wall_summary([row for r in reports
+                                for row in (r.clutch_wall_rows or [])])
+
+
 def _defense_shapes_of(reports) -> dict:
     """A fal-alak sorok meccsek közti összefésülése (a felderítés képe)."""
     from .defense import defense_shape_summary
@@ -14814,6 +14843,33 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 466) Az ő hajrá-faluk × a ti hajrá-figurátok: ha a végjátékban más
+    # falat hoznak, a bejátszott hajrá-figurátokat NEM a szokásos, hanem
+    # a hajrá-fal ellen kell megtervezni — ha van ilyen figurátok, arra;
+    # ha nincs, ez a fal a kiindulópont.
+    try:
+        _cds466 = (opp.clutch_wall or {}).get("verdict")
+        _fo466 = ((opp.clutch_wall or {}).get("shapes") or [None])[0]
+        if _cds466 and _fo466:
+            _sajat466 = ((own.clutch_figures or {}).get("figures")
+                         or [None])[0]
+            if (own.clutch_figures or {}).get("verdict") and _sajat466:
+                plan.append(
+                    f"Az ellenfél {_cds466} — a ti hajrá-figurátok "
+                    f"(\"{_sajat466['zone']}\", az utolsó öt perc "
+                    f"támadásaitok {_sajat466['share_pct']:.0f}%-a) a "
+                    "szokásos faluk ellen van bejátszva: edzésen a(z) "
+                    f"\"{_fo466['zone']}\" fal ellen próbáljátok ki, és "
+                    "ha nem megy, ott a második befejezés.")
+            else:
+                plan.append(
+                    f"Az ellenfél {_cds466} — nektek nincs kiforrott "
+                    "hajrá-figurátok, tehát ne a szokásos játékotokból "
+                    "induljatok ki: a végjáték támadását ebből a falból "
+                    "tervezzétek meg.")
     except Exception:
         pass
 
@@ -23288,6 +23344,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         defense_shape_rows=[row for r in reports
                             for row in (r.defense_shape_rows or [])],
         defense_shapes=_defense_shapes_of(reports),
+        clutch_wall_rows=[row for r in reports
+                          for row in (r.clutch_wall_rows or [])],
+        clutch_wall=_clutch_wall_of(reports),
         setplay_repeat_after_goal=sum(r.setplay_repeat_after_goal
                                       for r in reports),
         setplay_repeat_after_goal_same=sum(r.setplay_repeat_after_goal_same

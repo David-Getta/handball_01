@@ -3,7 +3,40 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.137 óta)
+## Kiadatlan (a v0.1.138 óta)
+
+- **A motor azonnal válaszol, a könyvtár háttérben töltődik** (javítás):
+  a motor induláskor eddig az ÖSSZES mentett meccset beolvasta, mielőtt
+  a portot megnyitotta volna. Egy teljes meccs ~75 MB JSON, több
+  másodperc — húsz meccsnél ez percekig zárva tartotta a motort: az app
+  "Nem érem el a háttérmotort"-ot írt, a könyvtár nem nyílt, a korábbi
+  elemzések nehezen vagy egyáltalán nem jöttek elő, és minden
+  újraindítás (frissítés, őrkutya, "Motor újraindítása") elölről
+  kezdte. Mostantól a motor azonnal válaszol, a meccseket háttérben, a
+  legfrissebbel kezdve olvassa be; a kezdőlap a már betöltötteket
+  mutatja egy "könyvtár betöltése: 3/12" sávval, és magától frissül; a
+  kiválasztott meccs soron kívül töltődik (nem kell megvárni a többit);
+  a szezon-összesítések a teljes könyvtárat várják meg. A `/health` és a
+  `/matches` a betöltés állását is kiadja.
+- **Hajrá-fal** (új réteg): MÁS FALAT HOZNAK-E az utolsó öt percben. A
+  fal-alak a meccs egészén mondja meg, hogyan állnak; ez azt, hogy a
+  végjátékban átállnak-e (a tömör hatosról kilépő, letámadó falra —
+  vagy épp fordítva, mindent a hatosra húznak). A hajrá-figura tükre a
+  védekező csapatra: a védekezett támadások fal-alakjait a hajrában és
+  a törzsben vetjük össze alakonként. Edzői olvasat: "a hajrában másik
+  falat hoznak: az utolsó öt percben a kilépő fal a védekezett
+  támadásaik 80%-a, a meccs többi részén csak 40% — a végjáték
+  támadását erre a falra készítsétek: a kilépő fal mögé, beálló-
+  bejátszás és betörés". Ítélet csak legalább 4 hajrában védekezett
+  támadástól, 50% fölötti részaránynál és 25 százalékpont résnél.
+  Felületek: elemzés-válasz és meccs-csomag, edzői összefoglaló,
+  felderítés (lapos, összegezhető sorok, edzői kulcs, 466. meccsterv-
+  szabály a saját hajrá-figurával párosítva), 485. edzés-szabály (a
+  saját hajrá-falunk begyakorlása jelre), kliens-csempe.
+
+## v0.1.138 — kiadva (2026-09-18)
+
+> Kiadás-jegyzet: új réteg — mire szűkülnek az utolsó öt percben.
 
 - **Hajrá-figura** (új réteg): MIRE SZŰKÜLNEK az utolsó öt percben. A
   hajrá-rétegek eddig azt mondták meg, KI és MILYEN helyzetből fejez be

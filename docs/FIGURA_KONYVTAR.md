@@ -127,6 +127,19 @@ hajránk → konkrétan erre bejátszani; bírjuk → ezt elvéve nincs B-tervü
 a 484. edzés-szabály a saját hajránk egyetlen figurájára ad második
 befejezést.
 
+### Hajrá-fal (a hajrá-figura tükre a védekező csapatra)
+
+A `defense.clutch_defense_shape` ugyanezt a kérdést a FALRA teszi fel:
+más falat hoznak-e az utolsó öt percben. A védekezett támadás-szakaszok
+fal-alakjait (`_wall_signature`, a fal-alak réteggel azonos rács) a
+hajrában és a törzsben veti össze alakonként; ítélet `CDS_MIN_ATTACKS`
+(4) hajrában védekezett támadástól, `CDS_SHARE_PCT` (50%) és `CDS_GAP_PP`
+(25 százalékpont) fölött, a mélység-név szerinti tanáccsal (tömör hatos →
+távoli befejezés; kilépő → a fal mögé). Lapos sorai
+(`clutch_wall_rows`) a `clutch_wall_summary`-val fésülődnek össze; a 466.
+meccsterv-szabály a saját hajrá-figurával párosítja, a 485. edzés-szabály
+a saját hajrá-falunk begyakorlását kéri.
+
 ## Figura-dosszié (egy figuráról minden, egy lapon)
 
 A fenti rétegek külön-külön egy-egy kérdésre felelnek; az edző viszont

@@ -119,6 +119,7 @@ class ApiClient {
         final body = jsonDecode(utf8.decode(resp.bodyBytes));
         final v = body is Map ? body["version"] : null;
         if (v is String && v.isNotEmpty) engineVersion = v;
+        if (body is Map) _noteLibraryStatus(body["library"]);
       } catch (_) {}
       return true;
     } catch (_) {
@@ -947,6 +948,22 @@ class ApiClient {
     return resp.bodyBytes;
   }
 
+  /// A könyvtár háttér-betöltésének állása a legutóbbi /matches (vagy
+  /// /health) válaszból: a motor induláskor a mentett meccseket
+  /// HÁTTÉRBEN olvassa be (meccsenként több másodperc), és addig a
+  /// lista részleges. A kezdőlap ebből tudja, hogy újra kell kérdeznie,
+  /// és mit írjon ki ("könyvtár betöltése: 3/12").
+  static bool libraryLoading = false;
+  static int libraryLoaded = 0;
+  static int libraryTotal = 0;
+
+  static void _noteLibraryStatus(Object? lib) {
+    if (lib is! Map) return;
+    libraryLoading = lib["loading"] == true;
+    libraryLoaded = (lib["loaded"] as num?)?.toInt() ?? 0;
+    libraryTotal = (lib["total"] as num?)?.toInt() ?? 0;
+  }
+
   /// A tárolt meccsek listája (könyvtár/áttekintő nézethez). Minden elem összegző
   /// szótár: match_id, home_team, away_team, num_frames, fps, duration_s.
   Future<List<Map<String, dynamic>>> listMatches() async {
@@ -967,6 +984,7 @@ class ApiClient {
           }
           final json =
               jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+          _noteLibraryStatus(json["library"]);
           return (json["matches"] as List).cast<Map<String, dynamic>>();
         } on SocketException catch (e) {
           lastError = e;

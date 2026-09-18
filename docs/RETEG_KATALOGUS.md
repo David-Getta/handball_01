@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **511 réteg**, modulonként csoportosítva; a
+Összesen **512 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (98)
@@ -137,7 +137,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `tired_turnover_players` | Fáradt-eladók: KINEK a labdái vesznek el fáradtan. |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (90)
+## defense (91)
 
 | Réteg | Mit mér |
 |---|---|
@@ -154,6 +154,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `blocked_shot_rate` | Falba lövés (támadó-oldali blokk-arány): a csapat lövés-kísérleteinek |
 | `blocks` | Blokkolt lövések: a mezőnyvédőn elakadó lövés felismerése. |
 | `breakthroughs` | Betörés-folyosók: támadásonként hol lép be a labdás ember a |
+| `clutch_defense_shape` | Hajrá-fal: MÁS FALAT HOZNAK-E az utolsó öt percben. |
 | `conceded_by_attack_type` | Kapott gólok támadás-típus szerint: MILYEN TÁMADÁSBÓL kapják a |
 | `conceded_by_role` | Kapott gólok posztonként: MELYIK POSZT ELLEN szivárognak. |
 | `conceded_momentum` | Lendület-gólok: MOZGÁSBÓL ÉRKEZŐ lövőktől kapják-e a gólokat. |
