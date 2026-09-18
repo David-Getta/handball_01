@@ -583,6 +583,29 @@ def test_motor_ujraelesztes_ujra_is_indit():
     assert "rediscoverEngine()" not in scr
 
 
+def test_a_konyvtar_gomb_a_meccs_kepernyon_maga_eleszti_a_motort():
+    """ŐR: a meccs-képernyő könyvtár-gombja nem a nyitóképernyőre küldi
+    az edzőt, ha a motor nem válaszol — helyben újraéleszti (mély
+    öngyógyítás), és csak utána kéri a listát. A kezdőlap pedig a
+    háttérben töltődő könyvtárat újrakérdezi, és a betöltés állását
+    mutatja."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    ms = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    kezdet = ms.index("Future<void> _openLibrary()")
+    torzs = ms[kezdet:kezdet + 2500]
+    assert "ApiClient.reviveEngine()" in torzs
+    assert torzs.index("reviveEngine") < torzs.index("listMatches()")
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "libraryLoading" in api and 'json["library"]' in api
+    dash = (lib / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
+    assert "_libraryLoadingBanner" in dash and "_scheduleLibraryRepoll" in dash
+    assert "A könyvtár betöltése" in dash
+
+
 def test_hibajelentes_lathato_verzioval():
     """ŐR: a fiók-képernyő és a motor-hiba képernyő kiírja a futó kiadás
     számát — egy hibajelentő képernyőképből így azonnal látszik, MELYIK

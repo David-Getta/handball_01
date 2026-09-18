@@ -1745,6 +1745,26 @@ class _MatchScreenState extends State<MatchScreen> {
   /// nézetet kap (az addig feldolgozott részből), és innen törölhető is.
   Future<void> _openLibrary() async {
     List<Map<String, dynamic>> items;
+    // Ha a motor nem válaszol, NE a nyitóképernyőre küldjük az edzőt:
+    // itt helyben keressük meg újra (másik portra költözhetett), és ha
+    // sehol nincs, újra is indítjuk — a könyvtár-gomb az elemzés
+    // közben a leggyakoribb út a korábbi meccsekhez.
+    if (!await _api.isHealthy()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("A motor nem válaszol — újraindítom, egy "
+              "pillanat…")));
+      final ok = await ApiClient.reviveEngine();
+      if (!mounted) return;
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text("A motort nem sikerült újraindítani. A "
+                "nyitóképernyőn a \"Diagnosztika\" gomb megmutatja, min "
+                "akadt el; ha az sem segít, zárd be és nyisd meg újra a "
+                "programot.")));
+        return;
+      }
+    }
     try {
       items = await _api.listMatches();
     } catch (e) {

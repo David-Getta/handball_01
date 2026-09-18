@@ -3,7 +3,23 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.138 óta)
+## Kiadatlan (a v0.1.139 óta)
+
+- **A könyvtár-gomb a meccs-képernyőn maga éleszti a motort** (javítás):
+  ha az elemzés közben a "Elemzés-könyvtár" gombra a motor nem
+  válaszolt, az app csak annyit írt, hogy "A könyvtár nem érhető el:
+  Nem érem el a háttérmotort", és a nyitóképernyőre küldte az edzőt a
+  "Motor újraindítása" gombért. Mostantól a gomb helyben megkeresi a
+  motort (másik portra költözhetett), ha sehol nincs, újra is indítja,
+  és csak utána kéri a listát — a nyitóképernyőre csak akkor mutat, ha
+  az újraindítás sem sikerült (ott a "Diagnosztika" mondja meg, min
+  akadt el).
+
+## v0.1.139 — kiadva (2026-09-18)
+
+> Kiadás-jegyzet: a motor azonnal válaszol, a könyvtár háttérben
+> töltődik — a "Nem érem el a háttérmotort" a korábbi elemzések
+> nyitásánál megszűnik; új réteg: hajrá-fal.
 
 - **A motor azonnal válaszol, a könyvtár háttérben töltődik** (javítás):
   a motor induláskor eddig az ÖSSZES mentett meccset beolvasta, mielőtt
