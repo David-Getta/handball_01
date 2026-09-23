@@ -10029,6 +10029,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return v;
   }
 
+  // 7a6-figura: mit hoznak a hetedik emberrel (lehozott kapus). Az
+  // ítéletet a backend hozza (legalább 4 mért üres-kapus figura-támadás,
+  // 50% fölötti részarány — a küszöbök a motorban élnek), a kliens a
+  // kész mondatot mutatja.
+  String? _emptyNetFigure(Map<String, dynamic> r) {
+    final d = r["empty_net_figures"];
+    if (d is! Map) return null;
+    final v = d["verdict"];
+    if (v is! String || v.isEmpty) return null;
+    return v;
+  }
+
   // Hajrá-fal: más falat hoznak-e az utolsó öt percben. Az ítéletet a
   // backend hozza (legalább 4 hajrában védekezett támadás, 50% fölötti
   // részarány, 25 százalékpont rés a meccs többi részéhez képest — a
@@ -11767,6 +11779,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hajrá-figura", _clutchFigure(r)!],
       if (_clutchWall(r) != null)
         ["Hajrá-fal", _clutchWall(r)!],
+      if (_emptyNetFigure(r) != null)
+        ["7a6-figura", _emptyNetFigure(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],

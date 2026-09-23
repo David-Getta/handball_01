@@ -1805,6 +1805,154 @@ def clutch_figures_summary(rows: list,
             "verdict": _hajra_itelet(hajra, figures)}
 
 
+# 7a6-FIGURA: az ítélethez ennyi üres-kapus figura-támadás kell, és a
+# fő figura részaránya legalább ennyi legyen. A 7 a 6 RITKA (néhány
+# szakasz meccsenként), ezért a réteg meccsek közt áll össze igazán.
+ENF_MIN_ATTACKS = 4
+ENF_SHARE_PCT = 50.0
+# A gól a szakaszhoz tartozik, ha a szakaszban vagy ennyi másodpercen
+# belül utána esett (a többi figura-réteggel azonos ablak).
+ENF_SHOT_TAIL_S = 3.0
+
+
+def empty_net_setplay(match: Match, config: TacticsConfig | None = None,
+                      threshold: float = SPL_MERGE_THRESHOLD,
+                      min_length: int = 5) -> dict:
+    """7a6-figura: MELYIK FIGURÁT hozzák a HETEDIK emberrel.
+
+    A 7a6-rétegek (`seven_six_finishers`, `empty_net_by_score`,
+    `empty_net_turnovers`) azt mondják meg, KI fejez be, MILYEN
+    ÁLLÁSNÁL vállalják és mennyibe kerül egy eladás — ez azt, MIT
+    JÁTSZANAK: a `goalkeeper.detect_empty_net` ablakaiba eső
+    támadás-szakaszokat irány-normált alakkal klaszterezzük (mint a
+    setplay_shapes), és figuránként számoljuk a támadást meg a gólt.
+
+    Edzőileg ez a legdrágább labda a meccsen: a lehozott kapus mellett
+    minden elvesztett labda üres kapus gól. Ha a hetedik emberrel
+    mindig ugyanazt hozzák, a fal nem tippel: arra az egy figurára
+    rendezhető a hat védő, és az elvett labda azonnal pont. Az ítélet
+    csak akkor szólal meg, ha legalább ENF_MIN_ATTACKS mért
+    üres-kapus figura-támadás van, és a leggyakoribb figura részaránya
+    legalább ENF_SHARE_PCT.
+
+    Visszatérés csapatonként (a TÁMADÓ, kapust lehozó csapat):
+    {"attacks", "figures": [{"shape", "zone", "attacks", "goals",
+    "goal_pct", "share_pct"}], "verdict": mondat | None} — 7a6 nélkül
+    és kevés mintánál üres lista, None ítélet (sose hallgatólagos 0).
+    """
+    from .event_detection import EventType, detect_shots
+    from .goalkeeper import detect_empty_net
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ENF_SHOT_TAIL_S * fps)
+    ures = {side: {"attacks": 0, "figures": [], "verdict": None}
+            for side in ("home", "away")}
+    try:
+        ablakok = detect_empty_net(match, config)
+    except Exception:
+        ablakok = []
+    if not ablakok:
+        return ures
+    esemenyek = [e for e in detect_shots(match, config)
+                 if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    def _hetedikkel(t: int, side: str) -> bool:
+        """Üres kapuval támad-e a csapat a t kockában."""
+        return any(w["team"] == side
+                   and w["start_frame"] <= t <= w["end_frame"]
+                   for w in ablakok)
+
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team
+                and _hetedikkel(int(s_.start_t), team.value)]
+        sigs = [normalized_signature(s_) for s_ in seqs]
+        labels = cluster_signatures(sigs, threshold=threshold)
+        agg: dict = {}
+        for seq, sig, lab in zip(seqs, sigs, labels):
+            rec = agg.setdefault(lab, {"sum": [0.0] * len(sig),
+                                       "attacks": 0, "goals": 0})
+            rec["sum"] = [a + b for a, b in zip(rec["sum"], sig)]
+            rec["attacks"] += 1
+            if any(e.team == team and e.type == EventType.GOAL
+                   and seq.start_t <= e.t <= seq.end_t + tail
+                   for e in esemenyek):
+                rec["goals"] += 1
+        ossz = sum(r["attacks"] for r in agg.values())
+        sorok = []
+        for rec in agg.values():
+            shape = [round(v / rec["attacks"], 4) for v in rec["sum"]]
+            sorok.append({
+                "shape": shape, "zone": shape_zone(shape),
+                "attacks": rec["attacks"], "goals": rec["goals"],
+                "goal_pct": round(100.0 * rec["goals"]
+                                  / max(1, rec["attacks"]), 1),
+                "share_pct": round(100.0 * rec["attacks"] / max(1, ossz), 1)})
+        sorok.sort(key=lambda r: -r["attacks"])
+        out[team.value] = {"attacks": ossz, "figures": sorok,
+                           "verdict": _hetedik_itelet(ossz, sorok)}
+    return out
+
+
+def _hetedik_itelet(ossz: int, sorok: list) -> Optional[str]:
+    """Egy figurára épül-e a 7a6-juk — a védekezésnek szóló mondat."""
+    if ossz < ENF_MIN_ATTACKS or not sorok:
+        return None
+    fo = sorok[0]
+    if fo["share_pct"] < ENF_SHARE_PCT:
+        return None
+    return (f"a hetedik emberrel egy figurára építenek: \"{fo['zone']}\" az "
+            f"üres kapus támadásaik {fo['share_pct']:.0f}%-a "
+            f"({fo['attacks']}/{ossz}, {fo['goals']} gól) — erre kell "
+            "rendezni a hat védőt, és a megszerzett labdával AZONNAL az "
+            "üres kapura nézni")
+
+
+def empty_net_figures_summary(rows: list,
+                              threshold: float = SPL_MERGE_THRESHOLD) -> dict:
+    """Több meccs 7a6-figura sorai összefésülve — a felderítés képe.
+
+    `rows`: [{"shape", "attacks", "goals", …}] (a ScoutingReport lapos
+    sorai). A hasonló alakokat súlyozott középponttal vonjuk össze, a
+    darabszámokat összeadjuk; a részarányok az összegekből számolódnak
+    újra — a 7 a 6 ritka, egy meccsen ritkán van elég minta.
+    """
+    konyv: list = []
+    for row in sorted(rows or [], key=lambda r: -int(r.get("attacks", 0))):
+        shape = list(row.get("shape") or [])
+        if not shape:
+            continue
+        legjobb, legjobb_d = None, threshold
+        for k in konyv:
+            d = _distance(shape, k["shape"])
+            if d <= legjobb_d:
+                legjobb, legjobb_d = k, d
+        n = int(row.get("attacks", 0))
+        if legjobb is None:
+            legjobb = {"shape": shape, "attacks": 0, "goals": 0}
+            konyv.append(legjobb)
+        m = legjobb["attacks"]
+        legjobb["shape"] = [(a * m + b * n) / max(1, m + n)
+                            for a, b in zip(legjobb["shape"], shape)]
+        legjobb["attacks"] += n
+        legjobb["goals"] += int(row.get("goals", 0))
+    ossz = sum(k["attacks"] for k in konyv)
+    figures = []
+    for k in konyv:
+        shape = [round(v, 4) for v in k["shape"]]
+        figures.append({
+            "shape": shape, "zone": shape_zone(shape),
+            "attacks": k["attacks"], "goals": k["goals"],
+            "goal_pct": round(100.0 * k["goals"] / max(1, k["attacks"]), 1),
+            "share_pct": round(100.0 * k["attacks"] / max(1, ossz), 1)})
+    figures.sort(key=lambda r: -r["attacks"])
+    return {"attacks": ossz, "figures": figures,
+            "verdict": _hetedik_itelet(ossz, figures)}
+
+
 # ---- Repertoár-változás -----------------------------------------------------
 # A szezon két fele közt mi jött be és mi tűnt el a figurák közül: a saját
 # csapatnál "él-e még a beúszós kereszt", az ellenfélnél "van-e új

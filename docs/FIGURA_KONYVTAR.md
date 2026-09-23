@@ -111,6 +111,23 @@ fegyelemmel párosítja (meccsenként hány kiállítást szedtek), a 483.
 edzés-szabály a saját emberelőnyünk egyetlen figurájára ad második
 befejezést.
 
+## 7a6-figura (mit hoznak a hetedik emberrel)
+
+Az `empty_net_setplay` ugyanezt a kérdést a LEHOZOTT KAPUS melletti
+támadásokra teszi fel: a `goalkeeper.detect_empty_net` ablakaiba eső
+szakaszokat klaszterezi alak szerint, és figuránként számolja a
+támadást, a gólt és a részarányt. Ítélet csak `ENF_MIN_ATTACKS` (4)
+mért üres-kapus támadástól és `ENF_SHARE_PCT` (50%) fölötti
+részaránynál: "a hetedik emberrel egy figurára építenek — erre kell
+rendezni a hat védőt, és a megszerzett labdával AZONNAL az üres kapura
+nézni". A 7 a 6 a legdrágább labda a meccsen (minden eladás üres kapus
+gól), de RITKA, ezért a lapos sorok (`empty_net_figure_rows`) és az
+`empty_net_figures_summary` összefésülése teszi meccsek közt
+használhatóvá. A 467. meccsterv-szabály a saját szerzés utáni
+indításunkkal párosítja (aki felállna a szerzéssel, annak a 7a6-juk
+büntetlen marad), a 486. edzés-szabály a saját 7a6-unkra ad második
+megoldást.
+
 ## Hajrá-figura (mire szűkülnek az utolsó percekben)
 
 A `clutch_setplay` a támadás-szakaszokat alak szerint klaszterezi, és a
@@ -241,7 +258,7 @@ meccseken" az, amire a régi felderítés nem készít fel.
 szakasz): a tükörkép irány-normálva egy alak; edzői nevek; a könyvtár két
 meccs (a másodikban a másik kapura támadva) között visszatérő figurát
 talál, egy meccsből nem; a VALÓDI felderítés-út; a riasztás- és a
-setplays-végpont; a meccsenkénti gyorsítótár; a figura-állás (vezetve / hátrányban, kevés minta, valódi felderítés-út); az emberelőny-figura (kiállítás alatt, teljes létszámnál nincs, meccsek közt áll össze); a hajrá-figura (szűkülés, rövid felvétel / kevés minta / nincs szűkülés, meccsek közt áll össze, a 484. edzés-szabály és az összefoglaló valódi rétegből); a dosszié (alak szerinti párosítás, valódi felderítés-út, kliens és jelentés); a gól utáni figura-
+setplays-végpont; a meccsenkénti gyorsítótár; a figura-állás (vezetve / hátrányban, kevés minta, valódi felderítés-út); az emberelőny-figura (kiállítás alatt, teljes létszámnál nincs, meccsek közt áll össze); a 7a6-figura (lehozott kapus, kapus nélkül / kevés minta, meccsek közt áll össze, a 486. edzés-szabály és az összefoglaló valódi rétegből); a hajrá-figura (szűkülés, rövid felvétel / kevés minta / nincs szűkülés, meccsek közt áll össze, a 484. edzés-szabály és az összefoglaló valódi rétegből); a dosszié (alak szerinti párosítás, valódi felderítés-út, kliens és jelentés); a gól utáni figura-
 ismétlés (előre-lépés, váltás, kiszámíthatóság, kevés minta, a valódi
 felderítés-út és a 480. edzés-szabály); a repertoár-változás
 (új / eltűnt / maradt) és a szezon-riport szakasza. A rajz-felületek őrei a

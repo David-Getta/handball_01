@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.139 óta)
 
+- **7a6-figura** (új réteg): MELYIK FIGURÁT hozzák a hetedik emberrel.
+  A 7a6-rétegek eddig azt mondták meg, KI fejez be, MILYEN ÁLLÁSNÁL
+  hozzák le a kapust és mennyibe kerül egy eladás — ez azt, MIT
+  játszanak: a lehozott kapus melletti támadásokat alak szerint
+  klaszterezzük, és figuránként számoljuk a támadást meg a gólt. Edzői
+  olvasat: "a hetedik emberrel egy figurára építenek — erre kell
+  rendezni a hat védőt, és a megszerzett labdával AZONNAL az üres
+  kapura nézni". A 7 a 6 a legdrágább labda a meccsen, de ritka, ezért
+  a réteg meccsek közt áll össze igazán. Felületek: elemzés-válasz és
+  meccs-csomag, edzői összefoglaló, felderítés (lapos, összegezhető
+  sorok, edzői kulcs, 467. meccsterv-szabály a saját szerzés utáni
+  indítással párosítva), 486. edzés-szabály (a saját 7a6-unkra második
+  megoldás), kliens-csempe.
+
 - **A könyvtár-gomb a meccs-képernyőn maga éleszti a motort** (javítás):
   ha az elemzés közben a "Elemzés-könyvtár" gombra a motor nem
   válaszolt, az app csak annyit írt, hogy "A könyvtár nem érhető el:

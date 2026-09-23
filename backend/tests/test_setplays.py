@@ -1514,6 +1514,129 @@ def test_az_emberelony_figura_edzes_szabalya_valodi_retegbol(monkeypatch):
     assert "Az emberelőnyünk egyetlen figurára épül" in cimek
 
 
+# ---- 7a6-figura (empty_net_setplay) ----------------------------------------
+
+
+def _enf_match(match_id="enf", db=5, side="bal", ures=True):
+    """A hazai LEHOZOTT KAPUSSAL (7 a 6) játssza ugyanazt a figurát.
+
+    A kapus a pálya közepén (x=20) áll, tehát több mint 12 méterre a
+    saját kapujától — ez a 7a6 jele —, és a labda végig a hazaiaknál
+    van, így egyetlen összefüggő üres-kapus szakasz keletkezik. A
+    támadások közé üresjárat kerül (a szakaszok szétválnak), az elejére
+    pedig egy hosszabb, hogy a szakasz a 3 másodperces küszöb fölé
+    érjen. `ures=False`: a kapus a kapujában áll — nincs 7a6.
+    """
+    frames = []
+    t = 0
+    y = 4.0 if side == "bal" else 16.0
+    kapus_x = 20.0 if ures else 1.5
+
+    def kapus():
+        return [PlayerPosition(track_id=9, team=Team.HOME, x=kapus_x, y=10.0,
+                               source=PositionSource.MEASURED,
+                               confidence=1.0, role="kapus")]
+
+    def vendeg():
+        return [_pl(20 + k, Team.AWAY, 35.0, 2.0 + 3.5 * k) for k in range(6)]
+
+    def ures_jarat(n):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 12.0, 10.0)] + kapus()
+                + vendeg(),
+                ball=Ball(x=12.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    ures_jarat(30)
+    for _ in range(db):
+        for _ in range(8):                      # a figura
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 28.0, y),
+                              _pl(2, Team.HOME, 31.0, y),
+                              _pl(3, Team.HOME, 34.0, y)] + kapus()
+                + vendeg(),
+                ball=Ball(x=28.0, y=y, confidence=1.0)))
+            t += 1
+        ures_jarat(20)
+    return Match(MatchMeta(match_id=match_id, home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_a_7a6_figura_megmondja_mit_hoznak_a_hetedik_emberrel():
+    """A lehozott kapus mellett mindig ugyanaz a figura jön: az ítélet
+    ezt mondja ki, és a védekezésnek szóló teendőt is."""
+    from handball.pipeline.setplays import (ENF_MIN_ATTACKS, ENF_SHARE_PCT,
+                                            empty_net_setplay)
+
+    rec = empty_net_setplay(_enf_match())["home"]
+    assert rec["attacks"] >= ENF_MIN_ATTACKS
+    assert rec["figures"] and rec["figures"][0]["share_pct"] >= ENF_SHARE_PCT
+    assert rec["figures"][0]["zone"].startswith("bal oldal")
+    assert rec["verdict"] and "hetedik emberrel egy figurára" in rec["verdict"]
+    assert "AZONNAL az üres kapura" in rec["verdict"]
+    # A vendég nem hozta le a kapust: üres, nem hallgatólagos 0.
+    ures = empty_net_setplay(_enf_match())["away"]
+    assert ures["attacks"] == 0 and ures["verdict"] is None
+
+
+def test_a_7a6_figura_kapus_nelkul_es_keves_mintanal_hallgat():
+    """Ha a kapus a kapujában áll, nincs mit mérni; kevés üres-kapus
+    támadásnál nincs ítélet (a számok viszont látszanak)."""
+    from handball.pipeline.setplays import ENF_MIN_ATTACKS, empty_net_setplay
+
+    otthon = empty_net_setplay(_enf_match(ures=False))["home"]
+    assert otthon["attacks"] == 0 and otthon["verdict"] is None
+    keves = empty_net_setplay(
+        _enf_match(db=ENF_MIN_ATTACKS - 1))["home"]
+    assert 0 < keves["attacks"] < ENF_MIN_ATTACKS
+    assert keves["verdict"] is None
+
+
+def test_a_7a6_figura_meccsek_kozt_all_ossze():
+    """A 7 a 6 RITKA: egy meccsen kevés a minta, több meccsen áll össze.
+    A VALÓDI felderítés-úton (scout_team → combine_reports), az edzői
+    kulccsal és a 467-es meccsterv-szabály mindkét ágával."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+
+    r1 = scout_team(_enf_match("e1", db=2), Team.HOME)
+    r2 = scout_team(_enf_match("e2", db=2), Team.HOME)
+    assert r1.empty_net_figure_rows
+    assert r1.empty_net_figures["verdict"] is None, "két támadás még kevés"
+    ossz = combine_reports([r1, r2])
+    assert ossz.empty_net_figures["attacks"] >= 4
+    assert ossz.empty_net_figures["verdict"], ossz.empty_net_figures
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "hetedik emberrel egy figurára építenek" in kulcsok
+    # 467: gyorsan indítunk a szerzés után → az üres kapu a jutalom.
+    sajat = scout_team(_enf_match("s1", db=2), Team.HOME)
+    sajat.stl_steals, sajat.stl_fwd = 10, 7
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "az ELSŐ nézés az üres kapu" in terv
+    sajat.stl_fwd = 2
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "büntetlen marad" in terv2
+
+
+def test_a_7a6_figura_edzes_szabalya_es_osszefoglaloja_valodi_retegbol(
+        monkeypatch):
+    """486: a saját 7a6-unk egyetlen figurára épül — a tétel és az edzői
+    összefoglaló mondata a VALÓDI rétegből jön."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.training import training_focus
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    meccs = _enf_match("t486")
+    tetelek = training_focus(meccs)["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "A 7a6-unk egyetlen figurára épül" in cimek
+    szoveg = str(coach_summary(meccs))
+    assert "hetedik emberrel egy figurára építenek" in szoveg
+
+
 # ---- Hajrá-figura (clutch_setplay) -----------------------------------------
 
 

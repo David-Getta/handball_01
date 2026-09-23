@@ -7116,6 +7116,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.setplays import empty_net_setplay
+            res["empty_net_setplay"] = empty_net_setplay(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_rebound_roles
             res["defensive_rebound_roles"] = \
                 defensive_rebound_roles(match)
@@ -9452,6 +9457,9 @@ def create_app():
                 from ..pipeline.defense import clutch_defense_shape
                 _layer("clutch_defense_shape",
                        lambda: clutch_defense_shape(match))
+                from ..pipeline.setplays import empty_net_setplay
+                _layer("empty_net_setplay",
+                       lambda: empty_net_setplay(match))
                 from ..pipeline.defense import defensive_rebound_roles
                 _layer("defensive_rebound_roles",
                        lambda: defensive_rebound_roles(match))

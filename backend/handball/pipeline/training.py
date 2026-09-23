@@ -1383,6 +1383,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 486) A saját 7a6-unk EGY figurára épül: a lehozott kapus mellett a
+    # kiszámíthatóság a legdrágább hiba — a hat védő rááll, az elvett
+    # labda pedig azonnal gól az üres kapuba. Második megoldás kell.
+    try:
+        from .setplays import empty_net_setplay
+        enf486 = empty_net_setplay(match, config)
+        for side in ("home", "away"):
+            rec486 = enf486.get(side) or {}
+            if not rec486.get("verdict") or not rec486.get("figures"):
+                continue
+            fo = rec486["figures"][0]
+            add(side, "támadás",
+                "A 7a6-unk egyetlen figurára épül",
+                f"az üres kapus támadásaink {fo['share_pct']:.0f}%-a "
+                f"ugyanaz a figura (\"{fo['zone']}\", {fo['attacks']} "
+                f"támadás, {fo['goals']} gól) — a hat védő rááll, és a "
+                "lehozott kapus mellett minden elvett labda gól",
+                "7a6 két megoldással: ugyanabból a felállásból a "
+                "bejátszott figura MELLETT egy második befejezés (a "
+                "túloldali átlövés vagy a beálló-leválás), a jelre "
+                "váltva; a gyakorlat végén mindig labdaszerzéssel zárva, "
+                "hogy a kockázat is érezhető legyen (az elvesztett labda "
+                "után a csapat fusson vissza az üres kapuhoz)")
+    except Exception:
+        pass
+
     # 485) A saját hajrá-falunk MÁS, mint a törzsben: a váltás csak akkor
     # ér valamit, ha be van gyakorolva — a hajrában felálló alakot
     # fáradtan, órára kell tudni felállítani, különben lyukas.

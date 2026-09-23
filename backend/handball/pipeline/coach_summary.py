@@ -1257,6 +1257,16 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 body += f" A(z) {name} {mondat}."
     except Exception:
         pass
+    # 7a6-figura: mit hoznak a hetedik emberrel.
+    try:
+        from .setplays import empty_net_setplay
+        enf = empty_net_setplay(match)
+        for side, name in (("home", home), ("away", away)):
+            mondat = (enf.get(side) or {}).get("verdict")
+            if mondat:
+                body += f" A(z) {name} {mondat}."
+    except Exception:
+        pass
     # Lepattanó-szedő poszt: védés után kinél marad a labda.
     try:
         from .defense import defensive_rebound_roles

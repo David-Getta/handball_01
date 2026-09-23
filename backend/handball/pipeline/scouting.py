@@ -690,6 +690,12 @@ class ScoutingReport:
     # combine_reports-ban ÚJRASZÁMOLVA (arányt sose tárolunk).
     powerplay_figure_rows: list = field(default_factory=list)
     powerplay_figures: dict = field(default_factory=dict)
+    # 7a6-figura (setplays.empty_net_setplay): lapos, összegezhető
+    # sorok — {"shape", "attacks", "goals", "match_id"} — meccsek közt
+    # egymás mögé; az összefésült kép (empty_net_figures) a
+    # combine_reports-ban ÚJRASZÁMOLVA (arányt sose tárolunk).
+    empty_net_figure_rows: list = field(default_factory=list)
+    empty_net_figures: dict = field(default_factory=dict)
     # Hajrá-figura (setplays.clutch_setplay): lapos, összegezhető sorok
     # — {"shape", "attacks", "goals", "rest_attacks", "match_id"} —
     # meccsek közt egymás mögé; az összefésült kép (clutch_figures) a
@@ -8495,6 +8501,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     except Exception:
         pass
 
+    # 7a6-figura: mit hoznak a hetedik emberrel.
+    try:
+        _enfv = (rep.empty_net_figures or {}).get("verdict")
+        if _enfv:
+            keys.append(_enfv[0].upper() + _enfv[1:] + ".")
+    except Exception:
+        pass
+
     # Hajrá-figura: mire szűkülnek az utolsó percekben.
     try:
         _cspv = (rep.clutch_figures or {}).get("verdict")
@@ -12466,6 +12480,13 @@ def _scout_team_cached(match: Match, team: Team,
             for f_ in _ppf(match, config)[team.value]["figures"]]
         from .setplays import powerplay_figures_summary as _ppfs
         rep.powerplay_figures = _ppfs(rep.powerplay_figure_rows)
+        from .setplays import empty_net_setplay as _enf
+        rep.empty_net_figure_rows = [
+            {"shape": f_["shape"], "attacks": f_["attacks"],
+             "goals": f_["goals"], "match_id": match.meta.match_id}
+            for f_ in _enf(match, config)[team.value]["figures"]]
+        from .setplays import empty_net_figures_summary as _enfs
+        rep.empty_net_figures = _enfs(rep.empty_net_figure_rows)
         from .setplays import clutch_setplay as _csp
         rep.clutch_figure_rows = [
             {"shape": f_["shape"], "attacks": f_["attacks"],
@@ -13706,6 +13727,14 @@ def _figure_dossier_of(rep) -> dict:
                           repeat={"verdict": ismetles})
 
 
+def _empty_net_figures_of(reports) -> dict:
+    """A 7a6-figura sorok meccsek közti összefésülése."""
+    from .setplays import empty_net_figures_summary
+    return empty_net_figures_summary([row for r in reports
+                                      for row in (r.empty_net_figure_rows
+                                                  or [])])
+
+
 def _powerplay_figures_of(reports) -> dict:
     """Az emberelőny-figura sorok meccsek közti összefésülése."""
     from .setplays import powerplay_figures_summary
@@ -14843,6 +14872,32 @@ def matchup_plan(own: "ScoutingReport",
                     f"viszont {own.defense_main}-ban álltok — a figurájuk "
                     f"indulásakor váltsatok {_gyenge[0]}-ra, és utána "
                     "vissza.")
+    except Exception:
+        pass
+
+    # 467) Az ő 7a6-figurájuk × a ti szerzés utáni indításotok: a
+    # lehozott kapus mellett minden elvett labda üres kapus gól — de
+    # csak annak, aki a szerzés után AZONNAL előre néz. Ha ti felálltok
+    # a szerzéssel, a 7a6-juk büntetlen marad.
+    try:
+        _enf467 = (opp.empty_net_figures or {}).get("verdict")
+        _fo467 = ((opp.empty_net_figures or {}).get("figures") or [None])[0]
+        if _enf467 and _fo467 and own.stl_steals >= 6:
+            _gyors = 100.0 * own.stl_fwd / max(1, own.stl_steals)
+            if _gyors >= 50.0:
+                plan.append(
+                    f"Az ellenfél {_enf467} — ti pedig a szerzéseitek "
+                    f"{_gyors:.0f}%-a után azonnal előre indultok: a hat "
+                    f"védőt a(z) \"{_fo467['zone']}\" figurára rendezzétek, "
+                    "és a labdaszerzés pillanatában az ELSŐ nézés az üres "
+                    "kapu — ez a legolcsóbb góljaitok forrása.")
+            else:
+                plan.append(
+                    f"Az ellenfél {_enf467} — ti viszont a szerzéseitek "
+                    f"után csak {_gyors:.0f}%-ban indultok azonnal előre, "
+                    "tehát a 7a6-juk ma büntetlen marad: edzésen a "
+                    "szerzés utáni ELSŐ mozdulat a fejre dobás legyen, ne "
+                    "a felállás.")
     except Exception:
         pass
 
@@ -23335,6 +23390,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         powerplay_figure_rows=[row for r in reports
                                for row in (r.powerplay_figure_rows or [])],
         powerplay_figures=_powerplay_figures_of(reports),
+        empty_net_figure_rows=[row for r in reports
+                               for row in (r.empty_net_figure_rows or [])],
+        empty_net_figures=_empty_net_figures_of(reports),
         clutch_figure_rows=[row for r in reports
                             for row in (r.clutch_figure_rows or [])],
         clutch_figures=_clutch_figures_of(reports),

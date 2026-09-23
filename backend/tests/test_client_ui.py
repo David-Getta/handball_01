@@ -3023,3 +3023,15 @@ def test_a_hajra_fal_csempe_a_felderitesen():
            / "scouting_screen.dart").read_text(encoding="utf-8")
     assert "_clutchWall" in src and "Hajrá-fal" in src
     assert 'r["clutch_wall"]' in src
+
+
+def test_a_7a6_figura_csempe_a_felderitesen():
+    """7a6-figura: mit hoznak a hetedik emberrel — a felderítő képernyő
+    csempéje a motor kész mondatát mutatja, a ScoutingReport VALÓDI
+    mezőjéből."""
+    from pathlib import Path as _P
+    gyoker = _P(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "scouting_screen.dart").read_text(encoding="utf-8")
+    assert "_emptyNetFigure" in src and "7a6-figura" in src
+    assert 'r["empty_net_figures"]' in src
