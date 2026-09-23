@@ -22,6 +22,7 @@ import "../services/session_store.dart";
 import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
 import "anim.dart";
+import "annotation_screen.dart";
 import "court3d_screen.dart";
 import "court_geometry.dart";
 import "court_painter.dart";
@@ -1646,6 +1647,37 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
           icon: const Icon(Icons.architecture, size: 18),
           label: const Text("Figura-tervező"),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        // Kézi elemzés: az edző saját esemény-naplója és taktikai táblái
+        // (mozgatható bábuk, passz-nyilak) — félkészen is menthető.
+        OutlinedButton.icon(
+          onPressed: () {
+            final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+            final now = match.frames.isEmpty
+                ? 0.0
+                : match.frames[_frameIndex
+                            .clamp(0, match.frames.length - 1)
+                            .toInt()]
+                        .t /
+                    fps;
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => AnnotationScreen(
+                matchId: match.meta.matchId,
+                homeName: match.meta.homeTeam,
+                awayName: match.meta.awayTeam,
+                match: match,
+                startSeconds: now,
+                offline: _sourceLabel == "demó",
+              ),
+            ));
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.gold,
+            side: const BorderSide(color: AppColors.gold),
+          ),
+          icon: const Icon(Icons.edit_note, size: 18),
+          label: const Text("Kézi elemzés"),
         ),
         const SizedBox(width: AppSpacing.sm),
         // Jelenet-lejátszó ki/be (csak ha az eredeti videó elérhető).

@@ -3035,3 +3035,53 @@ def test_a_7a6_figura_csempe_a_felderitesen():
            / "scouting_screen.dart").read_text(encoding="utf-8")
     assert "_emptyNetFigure" in src and "7a6-figura" in src
     assert 'r["empty_net_figures"]' in src
+
+
+def test_kezi_elemzes_kepernyo_a_meccs_nezetbol():
+    """ŐR: a meccs-nézetből nyílik a KÉZI ELEMZÉS (esemény-napló +
+    taktikai tábla mozgatható bábukkal és passz-nyilakkal), a munka
+    félkészen is megmarad: magától ment, helyi piszkozatot ír (a motor
+    elérhetetlensége sem viheti el), kilépéskor is."""
+    import re
+
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    scr = (lib / "ui" / "annotation_screen.dart").read_text(encoding="utf-8")
+    ms = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert 'import "annotation_screen.dart";' in ms
+    assert "AnnotationScreen(" in ms and "Kézi elemzés" in ms
+    # API: a backend útvonalaival egyező hívások.
+    for nev, ut in (("fetchAnnotations", "/annotations\")"),
+                    ("saveAnnotations", "/annotations\"),"),
+                    ("fetchAnnotationsCsv", "/annotations.csv\")")):
+        assert f"{nev}(" in api, nev
+        assert ut in api, ut
+    assert "http\n        .put(" in api or ".put(" in api
+    # Mentés: autosave, helyi piszkozat, kilépéskori szinkron írás.
+    assert "kAnnAutosave" in scr and "Timer(kAnnAutosave" in scr
+    assert "BackendLauncher.appDataDir()" in scr
+    assert "_writeDraftSync(synced: false)" in scr
+    dispose = scr[scr.index("void dispose()"):scr.index("super.dispose();")]
+    assert "_writeDraftSync" in dispose, "kilépéskor is írjunk piszkozatot"
+    # Tábla: húzható bábuk, passz/futás/lövés nyilak, felismert pozíciók.
+    assert "onPanUpdate" in scr and "CustomPaint(" in scr
+    for eszkoz in ("_Tool.pass", "_Tool.run", "_Tool.shot", "_Tool.move"):
+        assert eszkoz in scr, eszkoz
+    assert "Pozíciók a meccsből" in scr
+    # A Dart-oldali listák és korlátok a backendével egyeznek.
+    from handball.annotations import (ANN_EVENT_TYPES, ANN_MAX_ARROWS,
+                                      ANN_MAX_TOKENS, ANN_SHOT_OUTCOMES)
+
+    def _lista(nev):
+        m = re.search(nev + r"\s*=\s*\[(.*?)\];", scr, re.S)
+        assert m, nev
+        return tuple(re.findall(r'"([^"]+)"', m.group(1)))
+
+    assert _lista("kAnnEventTypes") == ANN_EVENT_TYPES
+    assert _lista("kAnnShotOutcomes") == ANN_SHOT_OUTCOMES
+    assert f"kAnnMaxTokens = {ANN_MAX_TOKENS};" in scr
+    assert f"kAnnMaxArrows = {ANN_MAX_ARROWS};" in scr

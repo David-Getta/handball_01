@@ -331,6 +331,49 @@ class ApiClient {
   }
 
   /// Játékos-statisztika CSV-ben (GET .../stats/export) — Excel-barát.
+  /// Az edző KÉZI elemzése a meccshez (GET .../annotations): esemény-napló
+  /// + taktikai táblák. Még el nem kezdett elemzésnél üres dokumentum
+  /// ("updated_at": null).
+  Future<Map<String, dynamic>> fetchAnnotations(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/annotations"))
+        .timeout(const Duration(seconds: 10));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült betölteni a kézi elemzést", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A kézi elemzés mentése (PUT .../annotations) — a TELJES dokumentum
+  /// cseréje, félkészen is. A motor a normalizált dokumentumot adja
+  /// vissza (időrendben, az "updated_at" mentési időponttal).
+  Future<Map<String, dynamic>> saveAnnotations(
+      String matchId, Map<String, dynamic> doc) async {
+    final resp = await http
+        .put(
+          Uri.parse("$baseUrl/matches/$matchId/annotations"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode(doc),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült menteni a kézi elemzést", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A kézi esemény-napló CSV-ben (GET .../annotations.csv) — Excelben
+  /// nyitható; ez a program kimenetével való összevetés formátuma.
+  Future<Uint8List> fetchAnnotationsCsv(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/annotations.csv"))
+        .timeout(const Duration(seconds: 15));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a kézi napló exportja", resp));
+    }
+    return resp.bodyBytes;
+  }
+
   Future<Uint8List> fetchStatsCsv(String matchId) async {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/stats/export"));

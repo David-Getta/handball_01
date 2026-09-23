@@ -140,9 +140,10 @@ class BackendLauncher {
     } catch (_) {}
   }
 
-  /// A motor kimenetének naplófájlja a felhasználói adatmappában — ha a motor
-  /// nem indul, ebből látszik, miért (engine-app.log).
-  static File _logFile() {
+  /// A felhasználói adatmappa (ugyanaz, ahová a motor is ír) — a kliens
+  /// saját helyi mentései (pl. a kézi elemzés piszkozata) is ide kerülnek,
+  /// hogy a motor elérhetetlensége se vigye el a munkát.
+  static Directory appDataDir() {
     final home = Platform.environment["HOME"] ?? "";
     final String dir;
     if (Platform.isWindows) {
@@ -153,7 +154,13 @@ class BackendLauncher {
     } else {
       dir = "$home/.local/share/sportmachine";
     }
-    return File("$dir${Platform.pathSeparator}engine-app.log");
+    return Directory(dir);
+  }
+
+  /// A motor kimenetének naplófájlja a felhasználói adatmappában — ha a motor
+  /// nem indul, ebből látszik, miért (engine-app.log).
+  static File _logFile() {
+    return File("${appDataDir().path}${Platform.pathSeparator}engine-app.log");
   }
 
   IOSink? _log;

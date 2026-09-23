@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.139 óta)
 
+- **Kézi elemzés: saját esemény-napló és taktikai tábla** (új funkció):
+  a meccs-nézet új "Kézi elemzés" gombja egy külön munkafelületet nyit,
+  ahol az edző maga rögzíti, mi történt. Az ESEMÉNY-NAPLÓBAN soronként
+  egy esemény: a videó ideje, csapat, esemény (lövés, passz, eladás,
+  szerzés, kiállítás, hetes…), mezszám, passznál a címzett, lövésnél a
+  kimenetel, megjegyzés. A TAKTIKAI TÁBLÁN felülnézeti pályán mozgathatók
+  a bábuk, és sorszámozott nyilakkal rajzolható meg a támadás: ki kinek
+  passzolt (a labda a címzetthez ugrik), ki hova futott, honnan jött a
+  lövés. Egy támadás több táblán, lépésenként is felépíthető, a bábuk a
+  felismert helyükről is indíthatók, és a tábla utolsó passzából egy
+  kattintással esemény lesz a naplóban. A munka FÉLKÉSZEN is megmarad:
+  magától ment, előbb helyben, aztán a motorba — ha a motor épp nem
+  érhető el, a helyi piszkozat őrzi, és később feltölti. A napló
+  CSV-ben is menthető: ez a program kimenetével való összevetés
+  formátuma. Részletek: docs/KEZI_ELEMZES.md.
+
 - **7a6-figura** (új réteg): MELYIK FIGURÁT hozzák a hetedik emberrel.
   A 7a6-rétegek eddig azt mondták meg, KI fejez be, MILYEN ÁLLÁSNÁL
   hozzák le a kapust és mennyibe kerül egy eladás — ez azt, MIT

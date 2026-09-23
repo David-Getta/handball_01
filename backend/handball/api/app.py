@@ -371,7 +371,8 @@ def create_app():
         files = [f for f in _data_dir.glob("*.json")
                  if not any(f.name.endswith(s) for s in
                             (".notes.json", ".jerseys.json", ".roster.json",
-                             ".params.json", ".events.json"))]
+                             ".params.json", ".events.json",
+                             ".annotations.json"))]
 
         def _mtime(f):
             try:
@@ -3065,6 +3066,79 @@ def create_app():
         notes = _load_notes(match_id)
         notes.sort(key=lambda n: n.get("frame", 0))
         return {"notes": notes}
+
+    # --- Kézi elemzés (az edző saját esemény-naplója + taktikai táblák) --
+
+    def _annotations_path(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.annotations.json"
+
+    def _load_annotations(match_id: str) -> dict:
+        """A tárolt kézi elemzés; ha nincs (vagy sérült), az üres."""
+        from ..annotations import empty_annotations
+        p = _annotations_path(match_id)
+        if p.exists():
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(d, dict):
+                    d["match_id"] = match_id
+                    return d
+            except Exception:
+                pass
+        return empty_annotations(match_id)
+
+    @app.get("/matches/{match_id}/annotations")
+    def get_annotations(match_id: str):
+        """Az edző KÉZI elemzése a meccshez: esemény-napló + taktikai
+        táblák (mozgatható bábuk, passz-/futás-/lövés-nyilak). Ha még nem
+        kezdte el, az üres dokumentum jön (updated_at: null)."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _load_annotations(match_id)
+
+    @app.put("/matches/{match_id}/annotations")
+    def put_annotations(match_id: str, body: dict):
+        """A kézi elemzés mentése (a TELJES dokumentum cseréje).
+
+        FÉLKÉSZEN is menthető ("status": "in_progress"), a kliens menet
+        közben automatikusan menti. A dokumentumot normalizáljuk (lásd
+        handball.annotations): szöveg-hosszak, pálya-koordináták és
+        darabszámok korlátozva, az események időrendben. Az írás
+        atomikus (ideiglenes fájl + csere), tehát egy megszakadt mentés
+        sem teszi tönkre az előzőt."""
+        from ..annotations import normalize_annotations
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            doc = normalize_annotations(body, match_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        p = _annotations_path(match_id)
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1),
+                       encoding="utf-8")
+        tmp.replace(p)
+        return doc
+
+    @app.get("/matches/{match_id}/annotations.csv")
+    def export_annotations_csv(match_id: str):
+        """A kézi esemény-napló CSV-ben (Excelben nyitható; ez a program
+        kimenetével való összevetés alap-formátuma)."""
+        from fastapi.responses import Response
+        from ..annotations import annotations_csv
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        csv_text = annotations_csv(_load_annotations(match_id),
+                                   home=match.meta.home_team,
+                                   away=match.meta.away_team)
+        # BOM: az Excel így ismeri fel az UTF-8-at (ékezetek).
+        return Response(
+            content="﻿" + csv_text,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition":
+                     f'attachment; filename="kezi_elemzes_{match_id}.csv"'})
 
     # --- Kézi esemény-javítások (a felismerés edzői korrekciója) ------
 
