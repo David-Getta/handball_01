@@ -3,7 +3,11 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.146 óta)
+## v0.1.147 — kiadva (2026-09-24)
+
+> Kiadás-jegyzet: a kézi napló egy gombbal a program javításaiba
+> vezethető — az eredmény, az xG és a felderítés is a naplód szerint
+> számol.
 
 - **Kézi elemzés: a gép javítása a napló szerint**: az összevetés
   dialógusában egy gomb a naplót a program esemény-javításaiba vezeti
