@@ -15,6 +15,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   gól/lövés hatékonysággal, védett lövés, hetes, eladás, szerzés,
   kiállítás, és a legjobb góllövők mezszám szerint — a kézi napló így
   statisztika-lap is, mentés nélkül, azonnal frissül.
+- **Kézi elemzés: szűrhető napló**: a napló csapat (mind / hazai /
+  vendég) és esemény-típus szerint szűrhető — egy teljes meccs több száz
+  sorában is gyorsan megvan, amit keresel. A szűrő csak a listát
+  szűkíti; a mentés mindig a teljes napló.
 
 ## v0.1.145 — kiadva (2026-09-24)
 

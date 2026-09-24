@@ -3182,6 +3182,12 @@ def test_kezi_elemzes_gyors_rogzites():
     assert 'type == "lövés" || type == "hetes"' in stat
     assert 'outcome == "gól"' in stat
     assert "_statsPanel()" in scr[scr.index("Widget _logCard()"):]
+    # A napló szűrője csak a MEGJELENÍTÉST szűkíti: a mentés a teljes
+    # naplót viszi (a _toJson az _events-ből dolgozik, nem a szűrtből).
+    assert "_shownEvents()" in scr[scr.index("Widget _logCard()"):]
+    tojson = scr[scr.index("Map<String, dynamic> _toJson()"):]
+    tojson = tojson[:tojson.index(";")]
+    assert "_shownEvents" not in tojson
 
 
 def test_kezi_elemzes_billentyuk_es_lassitas():

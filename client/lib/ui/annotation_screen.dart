@@ -360,6 +360,10 @@ class _AnnotationScreenState extends State<AnnotationScreen>
   String _formSceneId = "";
   String? _editingEventId;
 
+  // --- napló-szűrő (csak a megjelenítés; a mentés mindig a teljes napló) ---
+  String _logTeam = ""; // "" = mind, "home", "away"
+  String _logType = ""; // "" = minden esemény
+
   late final TabController _tabs;
   bool _wide = true;
 
@@ -2060,10 +2064,63 @@ class _AnnotationScreenState extends State<AnnotationScreen>
                 style: AppText.label,
               ),
             )
-          else
-            for (final e in _events) _eventTile(e),
+          else ...[
+            _logFilter(),
+            const SizedBox(height: AppSpacing.sm),
+            if (_shownEvents().isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                child: Text("Nincs a szűrőnek megfelelő esemény.",
+                    style: AppText.label),
+              ),
+            for (final e in _shownEvents()) _eventTile(e),
+          ],
         ],
       ),
+    );
+  }
+
+  /// A napló szűrt nézete (a szűrő csak a listát szűkíti).
+  List<Map<String, dynamic>> _shownEvents() => _events
+      .where((e) =>
+          (_logTeam.isEmpty || e["team"] == _logTeam) &&
+          (_logType.isEmpty || _str(e["type"]) == _logType))
+      .toList();
+
+  Widget _logFilter() {
+    final shown = _shownEvents().length;
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (final f in [
+          ("", "Mind"),
+          ("home", _short(widget.homeName)),
+          ("away", _short(widget.awayName)),
+        ])
+          ChoiceChip(
+            label: Text(f.$2, style: const TextStyle(fontSize: 12)),
+            selected: _logTeam == f.$1,
+            visualDensity: VisualDensity.compact,
+            onSelected: (_) => setState(() => _logTeam = f.$1),
+          ),
+        DropdownButton<String>(
+          value: kAnnEventTypes.contains(_logType) ? _logType : "",
+          dropdownColor: AppColors.surface,
+          underline: const SizedBox.shrink(),
+          style: AppText.value.copyWith(fontSize: 12.5),
+          items: [
+            const DropdownMenuItem(value: "", child: Text("minden esemény")),
+            for (final t in kAnnEventTypes)
+              DropdownMenuItem(value: t, child: Text(t)),
+          ],
+          onChanged: (v) => setState(() => _logType = v ?? ""),
+        ),
+        if (shown != _events.length)
+          Text("$shown / ${_events.length}",
+              style: AppText.label.copyWith(fontSize: 12)),
+      ],
     );
   }
 
