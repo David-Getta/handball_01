@@ -132,8 +132,100 @@ def test_a_feldolgozas_vegen_elore_kiszamolja(konyvtar, monkeypatch):
     assert (tar / "attacks.json").exists(), "a háttér-előszámolás lefutott"
     for ut in ("team-stats", "training", "coach-summary", "defense"):
         assert (tar / f"{ut}.json").exists(), ut
+    hatarido = time.time() + 30
+    while time.time() < hatarido and not (tar / "player-tallies.json").exists():
+        time.sleep(0.1)
+    assert (tar / "library-summary.json").exists()
+    assert (tar / "player-tallies.json").exists()
     assert n["db"] == 1
     TestClient(app).get("/matches/rc1/coach-summary")
     assert n["db"] == 1, "a megnyitás a kész előszámolást kapja"
     forras = inspect.getsource(app_mod.create_app)
     assert "_maybe_merge_group(job)\n                    _warm_results(" in forras
+
+
+def test_a_kezdolap_szezon_szamolasai_is_a_tarbol_jonnek(konyvtar, monkeypatch):
+    """A kezdőlap minden indításkor az EGÉSZ könyvtárra kéri a szezon-
+    összképet, a szezon-fókuszt és a toplistát. Meccsenként ezek
+    másodpercekig (a fókusz fél percig) számoltak, újraindítás után
+    mindig elölről — húsz meccsnél ez percek. Újraindítás után a
+    meccsenkénti rész a lemezes tárból jön."""
+    from handball.api.app import create_app
+    from handball.pipeline import training as tr_mod
+    from handball.pipeline import xg as xg_mod
+    n = {"tf": 0, "xg": 0}
+    tf0, xg0 = tr_mod.training_focus, xg_mod.match_xg
+
+    def _tf(match, config=None):
+        n["tf"] += 1
+        return tf0(match, config)
+
+    def _xg(match, config=None):
+        n["xg"] += 1
+        return xg0(match, config)
+
+    monkeypatch.setattr(tr_mod, "training_focus", _tf)
+    monkeypatch.setattr(xg_mod, "match_xg", _xg)
+    client = TestClient(create_app())
+    utak = ("/library/summary", "/library/training-focus", "/library/leaders")
+    elso = {u: client.get(u).json() for u in utak}
+    tf1, xg1 = n["tf"], n["xg"]
+    assert tf1 >= 1 and xg1 >= 1
+    ujra = TestClient(create_app())
+    for u in utak:
+        assert ujra.get(u).json() == elso[u], u
+    assert n["tf"] == tf1, "a szezon-fókusz a tárból jött"
+    assert n["xg"] == xg1, "a toplista meccsenkénti része a tárból jött"
+    tar = konyvtar / "data" / "cache" / "rc1"
+    for nev in ("library-summary", "training", "player-tallies"):
+        assert (tar / f"{nev}.json").exists(), nev
+
+
+def test_a_felderites_ujrainditas_utan_a_tarbol_jon_es_zipbol_nem_jon_tar(
+        konyvtar, monkeypatch):
+    """A felderítő jelentés (csapatonként ~50 mp egy teljes meccsen) a
+    lemezen is megmarad, PONTOSAN visszaolvasva; a könyvtár-visszaállítás
+    viszont kívülről kapott zipből sosem ír a gyorsítótárba."""
+    from handball.api.app import create_app
+    from handball.pipeline import scouting as sc_mod
+    import handball.api.app as app_mod
+    n = {"db": 0}
+    eredeti = app_mod.scout_team
+
+    def _szamolo(match, team, config=None):
+        n["db"] += 1
+        return eredeti(match, team, config)
+
+    monkeypatch.setattr(app_mod, "scout_team", _szamolo)
+    client = TestClient(create_app())
+    elso = client.get("/matches/rc1/scouting?team=away").json()
+    assert n["db"] == 1
+    assert (konyvtar / "data" / "cache" / "rc1" / "scout-away.json").exists()
+    ujra = TestClient(create_app())
+    assert ujra.get("/matches/rc1/scouting?team=away").json() == elso
+    assert n["db"] == 1, "újraindítás után a lemezi tárból"
+    # Kívülről kapott zip: a cache/ ág nem csomagolódik ki.
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("cache/rc1/scout-home.json", '{"fp": "x", "report": {}}')
+        z.writestr("notes_extra.txt", "ok")
+    r = ujra.post("/library/import", content=buf.getvalue())
+    assert r.status_code == 200, r.text
+    assert not (konyvtar / "data" / "cache" / "rc1" / "scout-home.json").exists()
+    assert (konyvtar / "data" / "notes_extra.txt").exists()
+    assert sc_mod.ScoutingReport  # a modul él
+
+
+def test_a_tipusmegorzo_json_pontosan_visszaolvas():
+    """A felderítő jelentésben egész kulcsú szótár is van (mezszám →
+    poszt): a sima JSON ebből szöveg-kulcsot csinálna, és a visszaolvasott
+    jelentés már nem ugyanaz. A címkés alak mindent pontosan visszaad."""
+    from handball.api.app import typed_json_decode, typed_json_encode
+    minta = {"positions": {1: "szélső", 7: "beálló"},
+             "par": (3, "x"), "halmaz": {1, 2},
+             "__t__": "ütköző kulcs", "lista": [(1, 2), {"a": None}],
+             "szam": 1.5, "igaz": True}
+    szoveg = json.dumps(typed_json_encode(minta))
+    assert typed_json_decode(json.loads(szoveg)) == minta
+    with pytest.raises(TypeError):
+        typed_json_encode(object())

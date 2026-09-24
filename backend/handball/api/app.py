@@ -153,6 +153,47 @@ def should_install(uj: dict, regi: dict) -> dict:
                       "rosszabb lett, a mostani modell marad"}
 
 
+_TJ_TAGS = ("__kv__", "__t__", "__s__")
+
+
+def typed_json_encode(o):
+    """Típus-megőrző JSON-alak: a nem-szöveg kulcsú szótár, a tuple és
+    a halmaz címkét kap (a sima JSON ezeket csendben átírná — pl. a
+    mezszám→poszt szótár egész kulcsaiból szöveg lenne). Ismeretlen
+    típusra TypeError: az ilyen jelentést nem tároljuk."""
+    if o is None or isinstance(o, (bool, int, float, str)):
+        return o
+    if isinstance(o, list):
+        return [typed_json_encode(v) for v in o]
+    if isinstance(o, tuple):
+        return {"__t__": [typed_json_encode(v) for v in o]}
+    if isinstance(o, (set, frozenset)):
+        return {"__s__": [typed_json_encode(v) for v in o]}
+    if isinstance(o, dict):
+        if all(isinstance(k, str) and k not in _TJ_TAGS for k in o):
+            return {k: typed_json_encode(v) for k, v in o.items()}
+        return {"__kv__": [[typed_json_encode(k), typed_json_encode(v)]
+                           for k, v in o.items()]}
+    raise TypeError(type(o).__name__)
+
+
+def typed_json_decode(o):
+    if isinstance(o, list):
+        return [typed_json_decode(v) for v in o]
+    if isinstance(o, dict):
+        if len(o) == 1:
+            (k, v), = o.items()
+            if k == "__kv__":
+                return {typed_json_decode(a): typed_json_decode(b)
+                        for a, b in v}
+            if k == "__t__":
+                return tuple(typed_json_decode(x) for x in v)
+            if k == "__s__":
+                return {typed_json_decode(x) for x in v}
+        return {k: typed_json_decode(v) for k, v in o.items()}
+    return o
+
+
 class _MatchStore(dict):
     """Meccs-tár, amely a lemezről HÁTTÉRBEN töltődik.
 
@@ -2086,6 +2127,22 @@ def create_app():
                                    lambda fn=fn: fn(match_id))
                 except Exception:
                     pass                 # a kérés maga majd hibát ad
+            # A kezdőlap szezon-kártyáinak meccsenkénti része is (kivonat,
+            # toplista-hozzájárulás) — a friss meccs után azonnal kész.
+            m = _store.get(match_id)
+            if m is None:
+                return
+            for fn in (lambda: _match_summary(m),
+                       lambda: _cached_result(match_id, "player-tallies",
+                                              lambda: _player_tally_of(m)),
+                       # A felderítés a legdrágább (csapatonként ~50 mp),
+                       # ezért a sor végén.
+                       lambda: _scout_cached(m, Team.AWAY),
+                       lambda: _scout_cached(m, Team.HOME)):
+                try:
+                    fn()
+                except Exception:
+                    pass
 
         _threading.Thread(target=_run, name=f"warm-{match_id}",
                           daemon=True).start()
@@ -4564,6 +4621,10 @@ def create_app():
         for info in z.infolist():
             if info.is_dir():
                 continue
+            # A számolt eredmények tára a zipből SOSEM jön (újraépül): egy
+            # kívülről kapott mentés ne írhasson a gyorsítótárba.
+            if info.filename.replace("\\", "/").lstrip("/").startswith("cache/"):
+                continue
             dest = (root / info.filename).resolve()
             if not str(dest).startswith(str(root)):
                 continue  # kitörési kísérlet (../ vagy abszolút út) — kihagyjuk
@@ -5140,8 +5201,28 @@ def create_app():
     # _apply_overrides_to_match).
     _ptf_cache: dict = {}
 
+    def _training_of(m) -> dict:
+        """Egy meccs TELJES edzés-fókusza (csapat + "players") a KÖZÖS,
+        lemezre is írt eredmény-tárból: a meccs-nézet, a szezon-fókusz és
+        az egyéni szezon-fókusz ugyanazt az egy számolást használja (egy
+        60 perces meccsen ~30 mp — húsz meccsnél ez eddig minden indítás
+        után tíz perc volt)."""
+        mid = m.meta.match_id
+        return _cached_result(mid, "training", lambda: _get_training_raw(mid))
+
     def _player_focus_of(m) -> dict:
-        """Egy meccs egyéni edzés-fókusza, gyorsítótárazva."""
+        """Egy meccs egyéni edzés-fókusza, a lemezes eredmény-tárból
+        (saját bejegyzés: csak az egyéni réteget futtatja, a csapat-
+        fókuszt nem)."""
+        mid = m.meta.match_id
+        try:
+            return _cached_result(mid, "player-focus",
+                                  lambda: _player_focus_of_mem(m))
+        except Exception:
+            return _player_focus_of_mem(m)
+
+    def _player_focus_of_mem(m) -> dict:
+        """Tartalék: memóriabeli tár (a tár nem használható)."""
         from ..pipeline.training import player_training_focus
         kulcs = (len(m.frames), m.meta.home_team, m.meta.away_team)
         cached = _ptf_cache.get(m.meta.match_id)
@@ -5208,6 +5289,17 @@ def create_app():
     _summary_cache: dict = {}
 
     def _match_summary(m) -> dict:
+        """A meccs szezon-kivonata a lemezes eredmény-tárból (a
+        kezdőlap minden indításkor az egész könyvtárra kéri — meccsenként
+        ~4 mp volt, újraindítás után mindig elölről)."""
+        mid = m.meta.match_id
+        try:
+            return _cached_result(mid, "library-summary",
+                                  lambda: _match_summary_mem(m))
+        except Exception:
+            return _match_summary_mem(m)
+
+    def _match_summary_mem(m) -> dict:
         # Érvényesség: frame-szám + csapatnevek + dátum — átnevezés vagy
         # újrafeldolgozás után a kivonat újraszámolódik.
         key = (len(m.frames), m.meta.home_team, m.meta.away_team, m.meta.date)
@@ -5443,6 +5535,111 @@ def create_app():
             "per_match": per,
         }
 
+    _TALLY_CATS = ("goals", "assists", "blocks", "steals", "saves",
+                   "matches")
+
+    def _player_tally_of(m) -> dict:
+        """EGY meccs hozzájárulása a szezon-összegekhez:
+        {kategória: [[csapatnév, mezszám, darab], …]} — JSON-barát alak,
+        hogy a lemezes eredmény-tárba kerülhessen (a toplista eddig MINDEN
+        hívásnál végigjárta az összes meccs összes kockáját)."""
+        goals_t: dict = {}
+        blocks_t: dict = {}
+        steals_t: dict = {}
+        saves_t: dict = {}
+        assists_t: dict = {}
+        matches_t: dict = {}
+        jersey_of: dict = {}
+        team_name = {"home": m.meta.home_team,
+                     "away": m.meta.away_team}
+        for fr in m.frames:
+            for p in fr.players:
+                if p.jersey_number is not None:
+                    jersey_of.setdefault(p.track_id,
+                                         p.jersey_number)
+        team_of: dict = {}
+        for fr in m.frames:
+            for p in fr.players:
+                team_of.setdefault(p.track_id,
+                                   getattr(p.team, "value", p.team))
+
+        def _key(tid):
+            j = jersey_of.get(tid)
+            if j is None:
+                return None
+            tname = team_name.get(team_of.get(tid))
+            if not tname:
+                return None
+            return (tname, j)
+
+        # Hány meccsen szerepelt: a keret-lapon ez mondja meg, hogy
+        # egy alacsony gólszám kevés játékot vagy gyenge formát
+        # takar-e. (Meccsenként egyszer, akkor is, ha a követés
+        # megszakadt és több track viselte ugyanazt a számot.)
+        for _tid in set(jersey_of):
+            k_m = _key(_tid)
+            if k_m:
+                matches_t[k_m] = matches_t.get(k_m, 0) + 1
+
+        try:
+            from ..pipeline.xg import match_xg
+            for r_ in match_xg(m).get("shooters", []):
+                k = _key(r_["player_id"])
+                if k and r_["goals"]:
+                    goals_t[k] = goals_t.get(k, 0) + r_["goals"]
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import detect_blocks
+            blk = detect_blocks(m)
+            for side in ("home", "away"):
+                for e_ in blk[side].get("events", []):
+                    k = _key(e_.get("player_id"))
+                    if k:
+                        blocks_t[k] = blocks_t.get(k, 0) + 1
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import ball_winners
+            bw = ball_winners(m)
+            for side in ("home", "away"):
+                for w_ in bw[side]["players"]:
+                    k = _key(w_["player_id"])
+                    if k:
+                        steals_t[k] = (steals_t.get(k, 0)
+                                       + w_["steals"])
+        except Exception:
+            pass
+        try:
+            from ..pipeline.goalkeeper import goalkeeper_timeline
+            tl = goalkeeper_timeline(m)
+            for side in ("home", "away"):
+                pk = (tl.get(side) or {}).get("per_keeper", {})
+                for tid, rec in pk.items():
+                    k = _key(tid)
+                    if k and rec.get("saves"):
+                        saves_t[k] = (saves_t.get(k, 0)
+                                      + rec["saves"])
+        except Exception:
+            pass
+        try:
+            from ..pipeline.event_detection import (EventType,
+                                                    detect_events)
+            for e_ in detect_events(m):
+                if e_.type != EventType.GOAL:
+                    continue
+                aid = (e_.detail or {}).get("assist_id")
+                k = _key(aid) if aid is not None else None
+                if k:
+                    assists_t[k] = assists_t.get(k, 0) + 1
+        except Exception:
+            pass
+
+        ki = {"goals": goals_t, "assists": assists_t, "blocks": blocks_t,
+              "steals": steals_t, "saves": saves_t, "matches": matches_t}
+        return {cat: [[k[0], k[1], v] for k, v in d.items()]
+                for cat, d in ki.items()}
+
     def _library_player_tallies() -> dict:
         """Játékosonkénti szezon-összegek a teljes könyvtárból.
 
@@ -5455,102 +5652,21 @@ def create_app():
         TELJES sora). Egy helyen számoljuk, hogy a kettő ne tudjon
         széttartani.
         """
-        goals_t: dict = {}
-        blocks_t: dict = {}
-        steals_t: dict = {}
-        saves_t: dict = {}
-        assists_t: dict = {}
-        matches_t: dict = {}
+        osszes: dict = {cat: {} for cat in _TALLY_CATS}
         for m in _season_matches():
-            jersey_of: dict = {}
-            team_name = {"home": m.meta.home_team,
-                         "away": m.meta.away_team}
-            for fr in m.frames:
-                for p in fr.players:
-                    if p.jersey_number is not None:
-                        jersey_of.setdefault(p.track_id,
-                                             p.jersey_number)
-            team_of: dict = {}
-            for fr in m.frames:
-                for p in fr.players:
-                    team_of.setdefault(p.track_id,
-                                       getattr(p.team, "value", p.team))
+            mid = m.meta.match_id
+            try:
+                rec = _cached_result(mid, "player-tallies",
+                                     lambda m=m: _player_tally_of(m))
+            except Exception:
+                rec = _player_tally_of(m)
+            for cat in _TALLY_CATS:
+                d = osszes[cat]
+                for sor in rec.get(cat) or []:
+                    k = (sor[0], sor[1])
+                    d[k] = d.get(k, 0) + sor[2]
+        return osszes
 
-            def _key(tid):
-                j = jersey_of.get(tid)
-                if j is None:
-                    return None
-                tname = team_name.get(team_of.get(tid))
-                if not tname:
-                    return None
-                return (tname, j)
-
-            # Hány meccsen szerepelt: a keret-lapon ez mondja meg, hogy
-            # egy alacsony gólszám kevés játékot vagy gyenge formát
-            # takar-e. (Meccsenként egyszer, akkor is, ha a követés
-            # megszakadt és több track viselte ugyanazt a számot.)
-            for _tid in set(jersey_of):
-                k_m = _key(_tid)
-                if k_m:
-                    matches_t[k_m] = matches_t.get(k_m, 0) + 1
-
-            try:
-                from ..pipeline.xg import match_xg
-                for r_ in match_xg(m).get("shooters", []):
-                    k = _key(r_["player_id"])
-                    if k and r_["goals"]:
-                        goals_t[k] = goals_t.get(k, 0) + r_["goals"]
-            except Exception:
-                pass
-            try:
-                from ..pipeline.defense import detect_blocks
-                blk = detect_blocks(m)
-                for side in ("home", "away"):
-                    for e_ in blk[side].get("events", []):
-                        k = _key(e_.get("player_id"))
-                        if k:
-                            blocks_t[k] = blocks_t.get(k, 0) + 1
-            except Exception:
-                pass
-            try:
-                from ..pipeline.defense import ball_winners
-                bw = ball_winners(m)
-                for side in ("home", "away"):
-                    for w_ in bw[side]["players"]:
-                        k = _key(w_["player_id"])
-                        if k:
-                            steals_t[k] = (steals_t.get(k, 0)
-                                           + w_["steals"])
-            except Exception:
-                pass
-            try:
-                from ..pipeline.goalkeeper import goalkeeper_timeline
-                tl = goalkeeper_timeline(m)
-                for side in ("home", "away"):
-                    pk = (tl.get(side) or {}).get("per_keeper", {})
-                    for tid, rec in pk.items():
-                        k = _key(tid)
-                        if k and rec.get("saves"):
-                            saves_t[k] = (saves_t.get(k, 0)
-                                          + rec["saves"])
-            except Exception:
-                pass
-            try:
-                from ..pipeline.event_detection import (EventType,
-                                                        detect_events)
-                for e_ in detect_events(m):
-                    if e_.type != EventType.GOAL:
-                        continue
-                    aid = (e_.detail or {}).get("assist_id")
-                    k = _key(aid) if aid is not None else None
-                    if k:
-                        assists_t[k] = assists_t.get(k, 0) + 1
-            except Exception:
-                pass
-
-        return {"goals": goals_t, "assists": assists_t,
-                "blocks": blocks_t, "steals": steals_t,
-                "saves": saves_t, "matches": matches_t}
 
     @app.get("/library/leaders")
     def library_leaders():
@@ -5671,9 +5787,12 @@ def create_app():
                 tf = cached[1]
             else:
                 try:
-                    tf = training_focus(m)
+                    tf = _training_of(m)       # a közös, lemezes tárból
                 except Exception:
-                    tf = {"home": [], "away": []}
+                    try:
+                        tf = training_focus(m)
+                    except Exception:
+                        tf = {"home": [], "away": []}
                 _training_cache[m.meta.match_id] = (key, tf)
             for side, name in (("home", m.meta.home_team),
                                ("away", m.meta.away_team)):
@@ -10359,9 +10478,61 @@ def create_app():
                  match.meta.home_team, match.meta.away_team, hash(ov))
         rep = _scout_cache.get(kulcs)
         if rep is None:
-            rep = scout_team(match, team, TacticsConfig())
+            rep = _scout_from_disk(match.meta.match_id, team)
+            if rep is None:
+                rep = scout_team(match, team, TacticsConfig())
+                _scout_to_disk(match.meta.match_id, team, rep)
             _scout_cache[kulcs] = rep
         return copy.deepcopy(rep)
+
+    # A felderítő jelentés a LEMEZEN is megmarad (egy 60 perces meccsen
+    # csapatonként ~50 mp, újraindítás után eddig mindig elölről; öt
+    # meccs egyesített felderítése így percekig tartott). Ugyanaz az
+    # ujjlenyomat, mint az eredmény-táré. SZÁNDÉKOSAN JSON, nem pickle: a
+    # könyvtár-visszaállítás kívülről kapott zipet csomagol ki az
+    # adatmappába — egy pickle-fájl ott kódot futtathatna.
+    def _scout_file(match_id: str, team) -> Path:
+        return _result_dir(match_id) / f"scout-{team.value}.json"
+
+    def _scout_from_disk(match_id: str, team):
+        import dataclasses
+        from ..pipeline.scouting import ScoutingReport
+        fp = _result_fingerprint(match_id)
+        if fp is None:
+            return None
+        try:
+            d = json.loads(_scout_file(match_id, team).read_text(
+                encoding="utf-8"))
+            if not isinstance(d, dict) or d.get("fp") != fp:
+                return None
+            mezok = {f.name for f in dataclasses.fields(ScoutingReport)}
+            adat = typed_json_decode(d["report"])
+            return ScoutingReport(**{k: v for k, v in adat.items()
+                                     if k in mezok})
+        except Exception:
+            return None
+
+    def _scout_to_disk(match_id: str, team, rep) -> None:
+        import dataclasses
+        from ..pipeline.scouting import ScoutingReport
+        fp = _result_fingerprint(match_id)
+        if fp is None:
+            return
+        try:
+            adat = {f.name: getattr(rep, f.name)
+                    for f in dataclasses.fields(rep)}
+            szoveg = json.dumps({"fp": fp, "report": typed_json_encode(adat)},
+                                ensure_ascii=False)
+            # Csak a PONTOSAN visszaolvasható jelentést tároljuk.
+            if ScoutingReport(**typed_json_decode(json.loads(szoveg)["report"])) != rep:
+                return
+            f = _scout_file(match_id, team)
+            f.parent.mkdir(parents=True, exist_ok=True)
+            tmp = f.with_suffix(".json.tmp")
+            tmp.write_text(szoveg, encoding="utf-8")
+            tmp.replace(f)
+        except Exception:
+            pass
 
     def _combined_report(body: dict):
         """Közös segéd: a törzs items-eiből egyesített ScoutingReport-ot épít."""

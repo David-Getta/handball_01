@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.141 óta)
 
+- **A kezdőlap és a felderítés sem számol elölről minden indításkor**
+  (javítás): a kezdőlap szezon-kártyái az egész könyvtárra számoltak —
+  a szezon edzés-fókusz meccsenként ~30 mp (húsz meccsnél ~10 perc), a
+  szezon-összkép ~4 mp, a toplista minden híváskor végigjárta az összes
+  meccs összes kockáját —, és a felderítő jelentés csapatonként ~50 mp
+  volt, mindez a program minden újraindítása után elölről. Mostantól a
+  meccsenkénti rész a lemezes eredmény-tárban marad (három meccsen a
+  szezon-fókusz 99 mp helyett, a szezon-összkép 12 mp helyett
+  újraindítás után azonnal jön, a felderítés 50 mp helyett ~3 mp), a
+  friss feldolgozás után pedig ezeket is előre kiszámolja. A felderítés
+  tára típus-megőrző JSON (nem pickle): a könyvtár-visszaállítás
+  kívülről kapott zipből sosem ír a gyorsítótárba.
 - **Az elveszett feldolgozás felismerése és folytatása** (javítás): ha a
   motor feldolgozás közben újraindult, a futó munka elveszett — a
   képernyő mégis percekig (egy bejelentésben 406 lekérdezésen át) azt

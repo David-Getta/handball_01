@@ -408,10 +408,14 @@ def test_a_munka_figyelese_kitart_egy_megbicsaklo_lekerdezesnel():
     gyoker = Path(__file__).resolve().parent.parent.parent
     src = (gyoker / "client" / "lib" / "ui"
            / "upload_screen.dart").read_text(encoding="utf-8")
+    # A lekérdezés-hurok a folytatás-segéd (`_resumeLost`) előtt ér
+    # véget: az jogosan indítja újra az időzítőt, és nem a hibaág része.
     hurok = src.split("Future<void> _pollJob()")[1].split(
-        "Futó feldolgozás megszakítása")[0]
+        "Future<void> _resumeLost()")[0]
     assert "_pollFails" in hurok and "_connNote" in hurok
-    # A hibaágban NINCS se végzetes állapot, se a figyelés leállítása.
+    # Az ÁLTALÁNOS hibaágban (lassú / nem felelő motor) NINCS se végzetes
+    # állapot, se a figyelés leállítása. (A 404-es "munka elveszett" ág
+    # külön van — az jogosan zár le; lásd test_client_ui.)
     hibaag = hurok.split("} catch (e) {")[1]
     assert '_status = "error"' not in hibaag, (
         "egy sikertelen lekérdezés végzetes hibára állítja a nézetet")
