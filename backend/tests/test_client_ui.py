@@ -3161,3 +3161,35 @@ def test_a_nyitokepernyo_nem_allitja_le_a_motort_a_belepeskor():
     assert sd.index("_stopRunningJobs(") < sd.index(
         "BackendLauncher.instance?.stop()")
     assert re.search(r"_exitSaveWait\s*=\s*Duration\(seconds:\s*\d+\)", main)
+
+
+def test_a_meccs_nezet_azonnal_megjelenik_a_nehez_panelek_utana_jonnek():
+    """ŐR: egy 60 perces meccsen a támadások / védekezés / összefoglaló /
+    edzés első számolása percekig tart. A meccs-nézet nem várhatja meg
+    őket (korábban ~4 percig üres volt): az első fázis csak a meccset és
+    a gyors adatokat kéri, a nehezek a háttérben, egyenként jönnek, és
+    egy újabb betöltés után a régi eredmény nem írhatja felül az újat.
+    A kért kezdő-képkockát sem írhatja felül egy későbbi nullázás."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    ms = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    load = ms[ms.index("Future<void> _load() async {"):]
+    load = load[:load.index("\n  }\n")]
+    for nehez in ("fetchCoachSummary(", "fetchAttacks(", "fetchDefense(",
+                  "fetchTraining(", "fetchPlayerFatigue("):
+        assert nehez not in load, f"{nehez} ne az első fázisban legyen"
+    assert "final gen = ++_loadGen;" in load
+    assert "unawaited(_loadHeavyPanels(gen, match))" in load
+    heavy = ms[ms.index("Future<void> _loadHeavyPanels("):]
+    heavy = heavy[:heavy.index("\n  }\n")]
+    for nehez in ("fetchCoachSummary(", "fetchAttacks(", "fetchDefense(",
+                  "fetchTraining(", "fetchPlayerFatigue("):
+        assert nehez in heavy, nehez
+    assert "gen != _loadGen" in heavy
+    # A kezdő-képkocka: a nullázás a kért kocka ELŐTT van, nem utána.
+    assert load.index("_frameIndex = 0;") < load.index(
+        "_frameIndex = _indexOfT(match, widget.initialFrame!)")
+    assert load.count("_frameIndex = 0;") == 1

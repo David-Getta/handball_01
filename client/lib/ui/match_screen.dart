@@ -136,6 +136,18 @@ class _MatchScreenState extends State<MatchScreen> {
 
   /// A motor újraélesztése folyik (a betöltés várakozó felirata ehhez).
   bool _reviving = false;
+
+  /// A betöltés sorszáma: egy újabb betöltés (újratöltés gomb) után a régi
+  /// háttér-panelek eredménye már nem írhatja felül az újat.
+  int _loadGen = 0;
+
+  /// A nehéz panelek (összefoglaló, támadások, védekezés, edzés) még
+  /// töltődnek a háttérben — a fejléc ezt jelzi.
+  bool _panelsLoading = false;
+
+  /// A lövés-jelölők xG-forrása (a védekezés-panel később érkezik, akkor
+  /// a jelölőket ezzel együtt újraszámoljuk).
+  Map<int, double> _xgByT = {};
   bool _playing = false;
   String _sourceLabel = "betöltés…";
   Timer? _timer;
@@ -178,6 +190,7 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   Future<void> _load() async {
+    final gen = ++_loadGen;
     Match match;
     String label;
     List<Map<String, dynamic>> events = [];
@@ -261,23 +274,6 @@ class _MatchScreenState extends State<MatchScreen> {
           shotSpeeds = {}; // sebesség nélkül is teljes a nézet
         }
         try {
-          playerFatigue = await _api.fetchPlayerFatigue(_mid);
-        } catch (_) {
-          playerFatigue = {}; // fáradás-adat nélkül is teljes a nézet
-        }
-        try {
-          coach = await _api.fetchCoachSummary(_mid);
-        } catch (_) {
-          coach = null; // az összefoglaló nélkül is teljes a nézet
-        }
-        try {
-          final r = await _api.fetchAttacks(_mid);
-          attacks = (r["attacks"] as List).cast<Map<String, dynamic>>();
-          attackEff = (r["efficiency"] as Map?)?.cast<String, dynamic>() ?? {};
-        } catch (_) {
-          attacks = []; // támadás-címkék nélkül is teljes a nézet
-        }
-        try {
           rules = await _api.fetchRules(_mid);
         } catch (_) {
           rules = {}; // szabály-réteg nélkül is teljes a nézet
@@ -298,11 +294,6 @@ class _MatchScreenState extends State<MatchScreen> {
           stoppages = await _api.fetchStoppages(_mid);
         } catch (_) {
           stoppages = []; // megszakítás-réteg nélkül is teljes a nézet
-        }
-        try {
-          training = await _api.fetchTraining(_mid);
-        } catch (_) {
-          training = null; // edzés-fókusz nélkül is teljes a nézet
         }
         try {
           progression = await _api.fetchProgression(_mid);
@@ -334,26 +325,6 @@ class _MatchScreenState extends State<MatchScreen> {
         } catch (_) {
           xgByT = {}; // helyzetminőség nélkül is teljes a nézet
           xgShooters = {};
-        }
-        try {
-          final d = await _api.fetchDefense(_mid);
-          for (final side in ["home", "away"]) {
-            for (final sh in (((d[side] as Map?)?["shots"] as List?) ?? const [])
-                .cast<Map<String, dynamic>>()) {
-              final t = (sh["t"] as num?)?.toInt();
-              final fr = sh["free"] as bool?;
-              if (t != null && fr != null) freeByT[t] = fr;
-            }
-          }
-          marking = (d["marking"] as Map?)?.cast<String, dynamic>();
-          blocks = (d["blocks"] as Map?)?.cast<String, dynamic>();
-          ballWinners =
-              (d["ball_winners"] as Map?)?.cast<String, dynamic>();
-        } catch (_) {
-          freeByT = {}; // védekezés-réteg nélkül is teljes a nézet
-          marking = null;
-          blocks = null;
-          ballWinners = null;
         }
         try {
           quality = await _api.fetchQuality(_mid);
@@ -400,11 +371,14 @@ class _MatchScreenState extends State<MatchScreen> {
       match = buildDemoMatch();
       label = "demó";
     }
-    if (!mounted) return;
+    if (!mounted || gen != _loadGen) return;
     setState(() {
       _match = match;
+      _frameIndex = 0;
       // A hívó által kért kezdő-képkocka (jegyzet-lista, kulcs-pillanat)
       // — csak most, a hossz ismeretében tudjuk határok közé szorítani.
+      // (Korábban egy későbbi `_frameIndex = 0` ezt felülírta: a jegyzetből
+      // nyitott meccs mindig az elejéről indult.)
       if (!_initialFrameApplied && widget.initialFrame != null) {
         _initialFrameApplied = true;
         _frameIndex = _indexOfT(match, widget.initialFrame!);
@@ -416,6 +390,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _events = events;
       _overrides = overrides;
       _shots = _computeShotMarkers(match, events, xgByT, freeByT);
+      _xgByT = xgByT;
       _xgShooters = xgShooters;
       _passNetwork = computePassNetwork(match, events, _passTeam);
       _quality = quality;
@@ -441,9 +416,64 @@ class _MatchScreenState extends State<MatchScreen> {
       _playerFatigue = playerFatigue;
       _goalTimeline = goalTimeline;
       _sourceLabel = label;
-      _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
+      _panelsLoading = label != "demó";
     });
+    // A NEHÉZ elemzések (összefoglaló, támadások, védekezés, edzés,
+    // fáradás) a háttérben, egyenként érkeznek — a meccs addig is látszik.
+    if (label != "demó") unawaited(_loadHeavyPanels(gen, match));
+  }
+
+  /// A nehéz panelek betöltése a meccs megjelenése UTÁN, egyenként: egy
+  /// 60 perces meccsen ezek először akár percekig számolnak (utána a motor
+  /// gyorsítótárából azonnal jönnek). Korábban a képernyő ezek végéig
+  /// üres volt — "nehezen nyitja meg a korábbi elemzéseket".
+  Future<void> _loadHeavyPanels(int gen, Match match) async {
+    bool elavult() => !mounted || gen != _loadGen;
+    try {
+      final c = await _api.fetchCoachSummary(_mid);
+      if (elavult()) return;
+      setState(() => _coach = c);
+    } catch (_) {}
+    try {
+      final r = await _api.fetchAttacks(_mid);
+      if (elavult()) return;
+      setState(() {
+        _attacks = (r["attacks"] as List).cast<Map<String, dynamic>>();
+        _attackEff =
+            (r["efficiency"] as Map?)?.cast<String, dynamic>() ?? {};
+      });
+    } catch (_) {}
+    try {
+      final d = await _api.fetchDefense(_mid);
+      if (elavult()) return;
+      final freeByT = <int, bool>{};
+      for (final side in ["home", "away"]) {
+        for (final sh in (((d[side] as Map?)?["shots"] as List?) ?? const [])
+            .cast<Map<String, dynamic>>()) {
+          final t = (sh["t"] as num?)?.toInt();
+          final fr = sh["free"] as bool?;
+          if (t != null && fr != null) freeByT[t] = fr;
+        }
+      }
+      setState(() {
+        _shots = _computeShotMarkers(match, _events, _xgByT, freeByT);
+        _marking = (d["marking"] as Map?)?.cast<String, dynamic>();
+        _blocks = (d["blocks"] as Map?)?.cast<String, dynamic>();
+        _ballWinners = (d["ball_winners"] as Map?)?.cast<String, dynamic>();
+      });
+    } catch (_) {}
+    try {
+      final t = await _api.fetchTraining(_mid);
+      if (elavult()) return;
+      setState(() => _training = t);
+    } catch (_) {}
+    try {
+      final f = await _api.fetchPlayerFatigue(_mid);
+      if (elavult()) return;
+      setState(() => _playerFatigue = f);
+    } catch (_) {}
+    if (!elavult()) setState(() => _panelsLoading = false);
   }
 
   /// A lövés/gól események helye a pályán. A lövő játékos pozícióját
@@ -1721,6 +1751,24 @@ class _MatchScreenState extends State<MatchScreen> {
         if (_quality != null) ...[
           const SizedBox(width: AppSpacing.sm),
           _qualityChip(_quality!),
+        ],
+        // A nehéz elemzések még a háttérben számolnak (első megnyitáskor
+        // percek is lehetnek; utána a motor tárából azonnal jönnek).
+        if (_panelsLoading) ...[
+          const SizedBox(width: AppSpacing.sm),
+          Tooltip(
+            message: "Az összefoglaló, a támadások, a védekezés és az "
+                "edzés-fókusz még számol — a panelek maguktól megtelnek.",
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 1.6)),
+              const SizedBox(width: 6),
+              Text("elemzések számolása…",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            ]),
+          ),
         ],
         const Spacer(),
         FilledButton.icon(

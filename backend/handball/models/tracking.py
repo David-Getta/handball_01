@@ -46,7 +46,7 @@ class PositionSource(str, Enum):
     ESTIMATED = "estimated"   # képen kívül volt → becsült pozíció
 
 
-@dataclass
+@dataclass(slots=True)
 class PlayerPosition:
     """Egyetlen játékos egyetlen frame-en, a pálya valós koordinátáin.
 
@@ -74,7 +74,7 @@ class PlayerPosition:
     role: Optional[str] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class Ball:
     """A labda pozíciója egy frame-en, pálya-koordinátán (méter).
 
@@ -86,7 +86,7 @@ class Ball:
     confidence: float = 1.0
 
 
-@dataclass
+@dataclass(slots=True)
 class Frame:
     """A meccs egy időpillanata (egy feldolgozott videó-képkocka).
 
@@ -295,12 +295,26 @@ class Match:
         Kézzel járjuk be a szerkezetet, hogy az Enumokat és a beágyazott
         dataclass-okat helyesen állítsuk vissza.
         """
+        return cls._from_parsed(d, consume=False)
+
+    @classmethod
+    def _from_parsed(cls, d: dict, consume: bool) -> "Match":
+        """A `from_dict` magja. `consume=True`: a bemeneti szótár kocka-
+        listáját menet közben ELENGEDJÜK (a már átalakított kockát None-ra
+        cseréljük) — így a betöltés csúcs-memóriája nem a JSON-fa ÉS a
+        kész objektumok összege (egy teljes meccsen ~260 MB), hanem csak
+        a nagyobbik. Csak a saját, eldobható szótárunkon szabad (from_json).
+        """
         # Csak az ismert mezőket vesszük át — így a régebbi/újabb JSON-ok is
         # gond nélkül betölthetők (előre- és visszafelé kompatibilitás).
         known = MatchMeta.__dataclass_fields__.keys()
         meta = MatchMeta(**{k: v for k, v in d["meta"].items() if k in known})
         frames: list[Frame] = []
-        for fr in d.get("frames", []):
+        raw_frames = d.get("frames", [])
+        for idx in range(len(raw_frames)):
+            fr = raw_frames[idx]
+            if consume:
+                raw_frames[idx] = None
             players = [
                 PlayerPosition(
                     track_id=p["track_id"],
@@ -321,8 +335,9 @@ class Match:
 
     @classmethod
     def from_json(cls, text: str) -> "Match":
-        """JSON szövegből épít Match objektumot."""
-        return cls.from_dict(json.loads(text))
+        """JSON szövegből épít Match objektumot (a köztes szótár a mienk,
+        tehát menet közben elengedhető — lásd `_from_parsed`)."""
+        return cls._from_parsed(json.loads(text), consume=True)
 
 
 def _ev(v):

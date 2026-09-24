@@ -1542,6 +1542,7 @@ def create_app():
                     else:
                         job["message"] = f"kész ({len(match.frames)} frame)"
                     _maybe_merge_group(job)
+                    _warm_results(match.meta.match_id)
             except Exception as e:  # a hibát a kliensnek is megmutatjuk
                 msg = str(e)
                 # A nyers zlib-hiba ("Error -3 ... incorrect header check")
@@ -1970,6 +1971,124 @@ def create_app():
         _clip_players_cache.pop(match_id, None)
         for k in [k for k in _quality_score_cache if k[0] == match_id]:
             _quality_score_cache.pop(k, None)
+        _drop_results(match_id)
+
+    # --- Eredmény-gyorsítótár a NEHÉZ meccs-végpontokhoz -----------------
+    # Egy 60 perces meccsen a támadások 80, a védekezés 50, az edzői
+    # összefoglaló 45, az edzés-fókusz 30 másodperc volt — MINDEN
+    # megnyitáskor, a program újraindítása után is. Az eredményt ezért
+    # memóriában ÉS lemezen (data/cache/<meccs>/<végpont>.json) tartjuk.
+    # Az ujjlenyomat mindent tartalmaz, ami az eredményt befolyásolja: a
+    # motor verzióját (frissítés után újraszámol), a meccs-fájlt és a
+    # kísérő-fájlokat (kézi javítás, mezszám, keret), valamint a
+    # könyvtár-szintű neveket (játékos-, figuranevek). Ha a meccs nincs
+    # lemezen, nem gyorsítunk (nincs mihez kötni).
+    _result_mem: dict = {}
+    _results_root = data_root() / "data" / "cache"
+
+    def _result_fingerprint(match_id: str):
+        from .. import __version__
+        fajlok = [_match_path(match_id), _overrides_path(match_id),
+                  _jerseys_path(match_id), _roster_path(match_id),
+                  _data_dir.parent / "players.json",
+                  _data_dir.parent / "figures.json"]
+        reszek = [str(__version__)]
+        for i, f in enumerate(fajlok):
+            try:
+                st = f.stat()
+                reszek.append(f"{st.st_mtime_ns}:{st.st_size}")
+            except OSError:
+                if i == 0:
+                    return None          # a meccs nincs lemezen
+                reszek.append("-")
+        return "|".join(reszek)
+
+    def _result_dir(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _results_root / safe
+
+    def _drop_results(match_id: str) -> None:
+        import shutil
+        _result_mem.pop(match_id, None)
+        try:
+            shutil.rmtree(_result_dir(match_id), ignore_errors=True)
+        except Exception:
+            pass
+
+    import threading as _threading
+    _result_locks: dict = {}
+    _result_locks_guard = _threading.Lock()
+
+    def _cached_result(match_id: str, name: str, compute):
+        """A `compute()` eredménye gyorsítótárazva (lásd fent). A kimenet
+        JSON-körbejárt alakú — pontosan az, amit a kliens is megkapna.
+
+        Egy (meccs, végpont) párt egyszerre csak EGY szál számol: ha a
+        háttér-előszámolás épp dolgozik rajta, a kliens kérése megvárja, és
+        a kész eredményt kapja (nem számolja újra párhuzamosan)."""
+        with _result_locks_guard:
+            zar = _result_locks.setdefault((match_id, name), _threading.Lock())
+        with zar:
+            return _cached_result_locked(match_id, name, compute)
+
+    def _cached_result_locked(match_id: str, name: str, compute):
+        fp = _result_fingerprint(match_id)
+        if fp is None:
+            return compute()
+        mem = _result_mem.setdefault(match_id, {})
+        hit = mem.get(name)
+        if hit is not None and hit[0] == fp:
+            return hit[1]
+        f = _result_dir(match_id) / f"{name}.json"
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(d, dict) and d.get("fp") == fp:
+                mem[name] = (fp, d["result"])
+                return d["result"]
+        except Exception:
+            pass
+        res = compute()
+        try:
+            szoveg = json.dumps({"fp": fp, "result": res}, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return res                   # nem JSON-barát: nem tároljuk
+        try:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            tmp = f.with_suffix(".json.tmp")
+            tmp.write_text(szoveg, encoding="utf-8")
+            tmp.replace(f)
+        except Exception:
+            pass                         # a lemez nem írható: csak memória
+        kesz = json.loads(szoveg)["result"]
+        mem[name] = (fp, kesz)
+        return kesz
+
+    def _warm_results(match_id: str) -> None:
+        """A nehéz végpontok ELŐSZÁMOLÁSA a háttérben, egy feldolgozás
+        végén: az edző jellemzően azonnal megnyitja a kész meccset — így az
+        első megnyitás sem négy perc. Egy szál, sorban (a legolcsóbbal
+        kezdve); a tesztek a HANDBALL_WARM_RESULTS=0 kapcsolóval kérik ki."""
+        import os
+        if os.environ.get("HANDBALL_WARM_RESULTS", "1") == "0":
+            return
+
+        def _run():
+            for name, fn in (("team-stats", _get_team_stats_raw),
+                             ("training", _get_training_raw),
+                             ("coach-summary", _get_coach_summary_raw),
+                             ("defense", _get_defense_raw),
+                             ("attacks", _get_attacks_raw)):
+                if match_id not in _store:
+                    return               # közben törölték
+                try:
+                    _cached_result(match_id, name,
+                                   lambda fn=fn: fn(match_id))
+                except Exception:
+                    pass                 # a kérés maga majd hibát ad
+
+        _threading.Thread(target=_run, name=f"warm-{match_id}",
+                          daemon=True).start()
 
     def _segment_summary(match) -> list:
         """A forrás-szakaszok emberi olvasatban (a kliens szakasz-listája)."""
@@ -2955,6 +3074,7 @@ def create_app():
         if match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
         del _store[match_id]
+        _drop_results(match_id)
         try:
             _match_path(match_id).unlink(missing_ok=True)
             _roster_path(match_id).unlink(missing_ok=True)
@@ -4410,8 +4530,13 @@ def create_app():
         n = 0
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
             for f in sorted(root.rglob("*")):
+                rel = f.relative_to(root).as_posix()
+                # A számolt eredmények gyorsítótára újraépül (nem mentjük),
+                # a félbe maradt ideiglenes írás pedig nem adat.
+                if rel.startswith("cache/") or f.suffix == ".tmp":
+                    continue
                 if f.is_file():
-                    z.write(f, f.relative_to(root).as_posix())
+                    z.write(f, rel)
                     n += 1
         if n == 0:
             raise HTTPException(status_code=404, detail="nincs még adat")
@@ -5713,6 +5838,14 @@ def create_app():
 
     @app.get("/matches/{match_id}/attacks")
     def get_attacks(match_id: str):
+        """Gyorsítótárazva (lásd `_cached_result`): az első számolás
+        után a megnyitás azonnali, a program újraindítása után is."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "attacks",
+                              lambda: _get_attacks_raw(match_id))
+
+    def _get_attacks_raw(match_id: str):
         """Támadás-szakaszok típus-címkével (lerohanás / gyors indítás /
         felállt / 7 a 6) + csapatonkénti támadás-mix százalékban."""
         match = _store.get(match_id)
@@ -7899,6 +8032,14 @@ def create_app():
 
     @app.get("/matches/{match_id}/defense")
     def get_defense(match_id: str):
+        """Gyorsítótárazva (lásd `_cached_result`): az első számolás
+        után a megnyitás azonnali, a program újraindítása után is."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "defense",
+                              lambda: _get_defense_raw(match_id))
+
+    def _get_defense_raw(match_id: str):
         """Védekezés-elemzés: kapott lövések — szabadon hagyott lövők,
         zóna-lyukak, kapott xG (csapatonként, a védekező szemszögéből)."""
         from ..pipeline.defense import (defense_analysis,
@@ -8283,6 +8424,14 @@ def create_app():
 
     @app.get("/matches/{match_id}/training")
     def get_training(match_id: str):
+        """Gyorsítótárazva (lásd `_cached_result`): az első számolás
+        után a megnyitás azonnali, a program újraindítása után is."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "training",
+                              lambda: _get_training_raw(match_id))
+
+    def _get_training_raw(match_id: str):
         """Edzés-fókusz javaslatok a meccs gyengeségeiből, csapatonként
         rangsorolva (terület, fókusz, indoklás, gyakorlat-típus)."""
         from ..pipeline.training import (player_training_focus,
@@ -8304,6 +8453,14 @@ def create_app():
 
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
+        """Gyorsítótárazva (lásd `_cached_result`): az első számolás
+        után a megnyitás azonnali, a program újraindítása után is."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "coach-summary",
+                              lambda: _get_coach_summary_raw(match_id))
+
+    def _get_coach_summary_raw(match_id: str):
         """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,
         mi volt feltűnő, mire érdemes ránézni. Sablon-alapú (minden mondat
         mögött kiszámolt szám áll), determinisztikus."""
@@ -10015,6 +10172,14 @@ def create_app():
 
     @app.get("/matches/{match_id}/team-stats")
     def get_team_stats(match_id: str):
+        """Gyorsítótárazva (lásd `_cached_result`): az első számolás
+        után a megnyitás azonnali, a program újraindítása után is."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "team-stats",
+                              lambda: _get_team_stats_raw(match_id))
+
+    def _get_team_stats_raw(match_id: str):
         """Mindkét csapat összegzése (súlypont, kiterjedés)."""
         match = _store.get(match_id)
         if match is None:
@@ -10669,6 +10834,7 @@ def create_app():
             pass  # a memóriabeli tár akkor is működik, ha a lemezre írás elakad
 
     app.state.put_match = _put_match  # elérhetővé tesszük indítás után
+    app.state.warm_results = _warm_results  # (teszt: előszámolás)
     # A forma-irány számolója: a küszöbei ÍTÉLETET hoznak a játékosról
     # ("javulsz"/"romlasz"), ezért közvetlenül is tesztelhetőnek kell
     # lennie — hat meccsnyi valódi lövés-adatot előállítani ehhez

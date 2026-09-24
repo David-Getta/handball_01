@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.140 óta)
 
+- **A korábbi elemzések azonnal megnyílnak** (javítás): egy 60 perces
+  meccs megnyitása közel NÉGY PERC volt, és a képernyő addig üres
+  maradt — a támadások (80 mp), a védekezés (50 mp), az edzői
+  összefoglaló (45 mp) és az edzés-fókusz (30 mp) minden megnyitáskor
+  elölről számolt, a program újraindítása után is. Mostantól: (1) a
+  meccs pár másodperc alatt megjelenik, a nehéz panelek a háttérben,
+  egyenként töltődnek (a fejlécben "elemzések számolása…" jelzi); (2) a
+  motor az eredményt eltárolja (memóriában és lemezen), így a második
+  megnyitás — újraindítás után is — azonnali; minden változás (kézi
+  javítás, mezszám, keret, nevek, motor-frissítés) után magától
+  újraszámol; (3) a feldolgozás végén a motor a háttérben előre
+  kiszámolja ezeket, így már az első megnyitás is gyors. A meccsek
+  memória-igénye ~20%-kal, a betöltés csúcsa ~20%-kal kisebb. A
+  jegyzetből / kulcs-pillanatból nyitott meccs a kért pillanatnál
+  nyílik (eddig mindig az elejéről indult). A könyvtár-mentés (zip) a
+  számolt eredmények tárát nem viszi magával.
 - **A program nem lövi le a saját motorját belépéskor** (javítás, a
   "nem nyílik a könyvtár, nem indul el a motor" GYÖKÉROKA): a
   nyitóképernyő a belépéskor lecserélődik, és a lecseréléskor —

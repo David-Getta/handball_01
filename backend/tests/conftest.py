@@ -11,3 +11,6 @@ kikapcsolt kapcsolóval teszteli.
 import os
 
 os.environ.setdefault("HANDBALL_STORE_SYNC", "1")
+# A feldolgozás végi háttér-előszámolás a teszteknél ki: a számláló-alapú
+# tesztek (hányszor fut egy réteg) különben a háttérszállal versenyeznének.
+os.environ.setdefault("HANDBALL_WARM_RESULTS", "0")
