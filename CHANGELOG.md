@@ -3,7 +3,10 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.144 óta)
+## v0.1.145 — kiadva (2026-09-24)
+
+> Kiadás-jegyzet: a kézi elemzés videója billentyűről is vezérelhető
+> (szóköz, ← / →, T), és a lejátszó lassítható (0,25×–2×).
 
 - **Kézi elemzés: billentyűk és lassítás**: a videó billentyűről is
   vezérelhető — szóköz: lejátszás/szünet, ← / →: 2 mp (Shifttel 10 mp),
