@@ -208,7 +208,12 @@ def validate_events(match: Match, truth: list,
             continue
         team = e.get("team")
         team = team.strip().lower() if isinstance(team, str) else None
-        tru.append({"t_s": float(e["t_s"]), "type": ty, "team": team})
+        rec = {"t_s": float(e["t_s"]), "type": ty, "team": team}
+        # A mezszám (ha a kézi rekord megadja) a kimaradt-tételben
+        # továbbmegy: a javítás így a lövőhöz is köthető.
+        if str(e.get("jersey") or "").strip():
+            rec["jersey"] = str(e["jersey"]).strip()
+        tru.append(rec)
 
     # Felismert gólok + lövések (idő másodpercben).
     det: list = []
@@ -252,8 +257,10 @@ def validate_events(match: Match, truth: list,
         # Az ELTÉRÉSEK tételesen: enélkül a 80%-os recall csak egy
         # szám; így megmondható, MELYIK eseményt kell megnézni a
         # felvételen (annotálás-javítás vagy motor-hiba).
-        out["missed"] = [{"t_s": t["t_s"], "type": dtype,
-                          "team": t["team"]}
+        out["missed"] = [dict({"t_s": t["t_s"], "type": dtype,
+                               "team": t["team"]},
+                              **({"jersey": t["jersey"]}
+                                 if t.get("jersey") else {}))
                          for t in t_list if t.get("_paired") is not True]
         out["spurious"] = [{"t_s": d["t_s"], "type": dtype,
                             "team": d["team"]}

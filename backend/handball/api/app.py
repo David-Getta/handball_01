@@ -3356,7 +3356,11 @@ def create_app():
         doc = _load_annotations(match_id)
         with primitive_cache(match):
             res = compare_with_detection(match, doc, tol_s=ANN_CMP_TOL_S)
-        ops = plan_overrides(res, match.meta.fps)
+        from ..annotations import track_of_jersey
+        ops = plan_overrides(
+            res, match.meta.fps,
+            player_of=lambda csapat, t, mez: track_of_jersey(
+                match, csapat, t, mez))
         osszeg = {k: sum(1 for o in ops if o["op"] == k)
                   for k in ("set_type", "add", "remove")}
         if dry_run or not ops:

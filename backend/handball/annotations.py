@@ -293,8 +293,12 @@ def annotations_to_truth(doc: dict) -> list:
             continue
         gol = str(e.get("outcome") or "").strip().lower() == "gól"
         team = e.get("team") if e.get("team") in ANN_TEAMS else None
-        out.append({"t_s": float(t), "type": "gól" if gol else "lövés",
-                    "team": team})
+        rec = {"t_s": float(t), "type": "gól" if gol else "lövés",
+               "team": team}
+        jersey = str(e.get("jersey") or "").strip()
+        if jersey:
+            rec["jersey"] = jersey
+        out.append(rec)
     return out
 
 
@@ -355,7 +359,43 @@ def compare_with_detection(match, doc: dict,
     return res
 
 
-def plan_overrides(res: dict, fps: float) -> list:
+# A naplóbeli mezszámot ennyi másodperces környezetben keressük a
+# felismert játékosok között (a felvett gól lövőjéhez).
+ANN_JERSEY_WINDOW_S = 5.0
+
+
+def track_of_jersey(match, team: str, t: int, jersey) -> Optional[int]:
+    """A mezszámhoz tartozó játékos (track_id) a t. kocka környékén.
+
+    A csapat játékosai közül az, akin a mezszám a legtöbb kockán
+    látszik ±ANN_JERSEY_WINDOW_S másodpercen belül; None, ha a mezszám
+    nem szám, vagy senkin sem látszik.
+    """
+    import bisect
+
+    try:
+        j = int(str(jersey).strip().lstrip("#"))
+    except (TypeError, ValueError):
+        return None
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    ablak = max(1, int(round(ANN_JERSEY_WINDOW_S * fps)))
+    frames = match.frames
+    ts = [f.t for f in frames]
+    lo = bisect.bisect_left(ts, t - ablak)
+    hi = bisect.bisect_right(ts, t + ablak)
+    counts: dict = {}
+    for f in frames[lo:hi]:
+        for p in f.players:
+            if getattr(p.team, "value", p.team) != team:
+                continue
+            if p.jersey_number == j:
+                counts[p.track_id] = counts.get(p.track_id, 0) + 1
+    if not counts:
+        return None
+    return max(counts.items(), key=lambda kv: (kv[1], -kv[0]))[0]
+
+
+def plan_overrides(res: dict, fps: float, player_of=None) -> list:
     """A kézi napló szerinti JAVÍTÁS-lista az összevetés eredményéből.
 
     A motor esemény-javítás formátumában (event_detection
@@ -364,7 +404,8 @@ def plan_overrides(res: dict, fps: float) -> list:
     - Egy kimaradt GÓL és egy mellette (tűrésen belül, azonos csapat)
       TÉVES LÖVÉS ugyanaz a pillanat, csak a típus rossz → "set_type"
       (és fordítva: kimaradt lövés + téves gól);
-    - a többi kimaradt tétel → "add" (a naplóbeli csapattal),
+    - a többi kimaradt tétel → "add" (a naplóbeli csapattal; ha a
+      naplóban mezszám is van, és [player_of] megtalálja, a lövővel),
     - a többi téves tétel → "remove".
 
     A res a compare_with_detection kimenete (videó-idő + offset_s).
@@ -399,8 +440,15 @@ def plan_overrides(res: dict, fps: float) -> list:
                         "t": _kocka(spurious[best[1]]["t_s"]),
                         "type": m["type"]})
         elif m.get("team") in ANN_TEAMS:
-            ops.append({"op": "add", "t": _kocka(m["t_s"]),
-                        "type": m["type"], "team": m["team"]})
+            op = {"op": "add", "t": _kocka(m["t_s"]),
+                  "type": m["type"], "team": m["team"]}
+            # A lövő (ha a naplóban van mezszám, és a felvételen látszik):
+            # enélkül a felvett gól a góllövő-listákból kimaradna.
+            if player_of is not None and m.get("jersey"):
+                pid = player_of(m["team"], op["t"], m["jersey"])
+                if pid is not None:
+                    op["player_id"] = int(pid)
+            ops.append(op)
     for i, sp in enumerate(spurious):
         if i not in used_sp:
             ops.append({"op": "remove", "t": _kocka(sp["t_s"]),

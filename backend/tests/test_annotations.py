@@ -344,3 +344,38 @@ def test_a_naplo_javitaskent_atvezetheto_a_motorba(gol_kliens):
     assert utana["overrides"] == 1
     # Másodszor nincs mit átvezetni (nem duplázódik).
     assert client.post("/matches/g1/annotations/apply").json()["ops"] == []
+
+
+def test_a_felvett_gol_a_naplobeli_mezszamu_lovohoz_kerul():
+    """A kimaradt gól felvételekor a naplóbeli mezszám a felvételen
+    látszó játékoshoz (track_id) köti a gólt — enélkül a góllövő-listából
+    kimaradna. Ismeretlen/nem látszó mezszámnál a gól lövő nélkül megy."""
+    from handball.annotations import (compare_with_detection, plan_overrides,
+                                      track_of_jersey)
+    frames = []
+    for t in range(0, 200):
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=5, team=Team.HOME, x=20.0, y=5.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           jersey_number=7),
+            PlayerPosition(track_id=9, team=Team.AWAY, x=22.0, y=5.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           jersey_number=7)],
+            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="j", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    assert track_of_jersey(m, "home", 100, "7") == 5
+    assert track_of_jersey(m, "away", 100, "#7") == 9
+    assert track_of_jersey(m, "home", 100, "12") is None
+    assert track_of_jersey(m, "home", 100, "hét") is None
+    doc = {"status": "done", "events": [
+        {"t_s": 4.0, "type": "lövés", "team": "home", "outcome": "gól",
+         "jersey": "7"},
+        {"t_s": 6.0, "type": "lövés", "team": "home", "outcome": "gól",
+         "jersey": "12"}]}
+    res = compare_with_detection(m, doc)
+    ops = plan_overrides(res, m.meta.fps,
+                         player_of=lambda c, t, j: track_of_jersey(m, c, t, j))
+    assert ops[0] == {"op": "add", "t": 100, "type": "goal", "team": "home",
+                      "player_id": 5}
+    assert "player_id" not in ops[1]

@@ -123,7 +123,9 @@ azonos típus (és ha megadtad, azonos csapat) ±3 mp-en belül.
 **Gép javítása a napló szerint**: ha van eltérés, a dialógus gombja a
 naplót a motor esemény-javításaiba vezeti át — egy kimaradt gól és
 mellette egy téves lövés típus-csere (gól ↔ lövés), a többi kimaradt
-tétel felvétel, a többi téves törlés. Előbb megmutatja, mi változna, és
+tétel felvétel, a többi téves törlés. Ha a felvett gólnál mezszám is
+van a naplóban, a gól ahhoz a játékoshoz kerül, akin a felvételen az a
+mezszám látszik (±5 mp). Előbb megmutatja, mi változna, és
 csak megerősítés után ír. Utána az eredmény, az xG, a lövő-listák és a
 felderítés is a javított listából számol; a meccs-nézet a kilépéskor
 újratölt. Visszavonás: a meccs-nézet "Minden javítás visszavonása".

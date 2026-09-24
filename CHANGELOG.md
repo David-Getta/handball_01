@@ -3,6 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.147 óta)
+
+- **Kézi elemzés: a felvett gól a lövőhöz kerül**: ha a naplóban a
+  gólnál mezszám is van, a "Gép javítása a napló szerint" a felvett
+  gólt a felvételen azzal a mezszámmal látszó játékoshoz köti (±5 mp-en
+  belül a legtöbbször látott) — így a góllövő-listákban és a
+  toplistán is megjelenik, nem csak az eredményben.
+
 ## v0.1.147 — kiadva (2026-09-24)
 
 > Kiadás-jegyzet: a kézi napló egy gombbal a program javításaiba
