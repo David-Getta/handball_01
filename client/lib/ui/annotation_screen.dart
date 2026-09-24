@@ -67,6 +67,19 @@ const double kAnnVideoFrac = 0.42;
 const double kAnnVideoMinFrac = 0.18;
 const double kAnnVideoMaxFrac = 0.75;
 
+/// A gyors-rögzítés gombjai: (felirat, esemény-típus, kimenetel). Egy
+/// kattintás = egy esemény a videó mostani idejével, a kijelölt csapatnak.
+const List<(String, String, String)> kAnnQuickEvents = [
+  ("Gól", "lövés", "gól"),
+  ("Védés", "lövés", "védés"),
+  ("Mellé", "lövés", "mellé"),
+  ("Blokk", "lövés", "blokk"),
+  ("Hetes-gól", "hetes", "gól"),
+  ("Eladás", "eladás", ""),
+  ("Szerzés", "szerzés", ""),
+  ("Kiállítás", "kiállítás", ""),
+];
+
 /// A videó billentyűs léptetése (← / →), és Shifttel a nagy lépés.
 const double kAnnKeySeekS = 2.0;
 const double kAnnKeySeekLongS = 10.0;
@@ -788,6 +801,75 @@ class _AnnotationScreenState extends State<AnnotationScreen>
       _noteCtrl.clear();
       _touch();
     });
+  }
+
+  /// Gyors rögzítés: egy kattintás = egy esemény a videó mostani idejével
+  /// (videó nélkül az idő-mezőével), a kijelölt csapatnak; ha a mez-mezőbe
+  /// már írtál, az is bekerül. Utólag a naplóban szerkeszthető.
+  void _quickEvent(String type, String outcome) {
+    final t = _videoNow ?? parseAnnTime(_timeCtrl.text) ?? widget.startSeconds;
+    final e = <String, dynamic>{
+      "id": _newId("e"),
+      "t_s": (t * 10).roundToDouble() / 10,
+      "team": _formTeam,
+      "type": type,
+      "jersey": _jerseyCtrl.text.trim(),
+      "to_jersey": "",
+      "outcome": _hasOutcome(type) ? outcome : "",
+      "note": "",
+      "scene_id": "",
+    };
+    setState(() {
+      _events.add(e);
+      _sortEvents();
+      if (_editingEventId == null) _jerseyCtrl.clear();
+      _touch();
+    });
+    if (!mounted) return;
+    final team = _formTeam == "home" ? widget.homeName : widget.awayName;
+    final m = ScaffoldMessenger.of(context);
+    m.hideCurrentSnackBar();
+    m.showSnackBar(SnackBar(
+      duration: const Duration(seconds: 2),
+      content: Text("Rögzítve: ${formatAnnTime(t)} · $type"
+          "${outcome.isEmpty ? "" : " ($outcome)"} · $team"),
+      action: SnackBarAction(label: "Szerkesztés", onPressed: () => _startEdit(e)),
+    ));
+  }
+
+  Widget _quickRow() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _videoOn
+              ? "GYORS RÖGZÍTÉS — a videó idejével, a kijelölt csapatnak"
+              : "GYORS RÖGZÍTÉS — az idő-mező idejével, a kijelölt csapatnak",
+          style: AppText.label.copyWith(fontSize: 10.5),
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final q in kAnnQuickEvents)
+              ActionChip(
+                visualDensity: VisualDensity.compact,
+                label: Text(q.$1, style: const TextStyle(fontSize: 12)),
+                avatar: Icon(
+                    q.$3 == "gól"
+                        ? Icons.sports_score
+                        : q.$2 == "lövés"
+                            ? Icons.sports_handball
+                            : Icons.bolt,
+                    size: 14,
+                    color: _formTeam == "home" ? AppColors.home : AppColors.away),
+                onPressed: () => _quickEvent(q.$2, q.$3),
+              ),
+          ],
+        ),
+      ],
+    );
   }
 
   void _startEdit(Map<String, dynamic> e) {
@@ -1963,6 +2045,11 @@ class _AnnotationScreenState extends State<AnnotationScreen>
             onSelectionChanged: (v) => setState(() => _formTeam = v.first),
           ),
         ]),
+        if (!editing) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _quickRow(),
+          const Divider(color: AppColors.border, height: AppSpacing.lg),
+        ],
         const SizedBox(height: AppSpacing.sm),
         Wrap(
           spacing: 6,

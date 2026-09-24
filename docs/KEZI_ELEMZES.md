@@ -12,6 +12,12 @@ hetesnél a **kimenetel** (gól, védés, mellé, kapufa, blokk), és egy
 **megjegyzés**. Egy esemény táblához is köthető. Koppintásra szerkeszthető,
 a törlés visszavonható.
 
+**Gyors rögzítés**: az űrlap tetején lévő gombok (Gól, Védés, Mellé,
+Blokk, Hetes-gól, Eladás, Szerzés, Kiállítás) egy kattintással rögzítenek
+egy eseményt a videó mostani idejével, a kijelölt csapatnak (ha a
+mez-mezőbe már írtál, az is bekerül). A felugró "Szerkesztés"-sel vagy a
+naplóban utólag pontosítható.
+
 Az idő mező a meccs-nézet aktuális idejével indul; a mellette lévő gomb
 oda állítja vissza, a kamera-gomb pedig a lejátszó mostani helyét veszi
 át. A napló egy idejére kattintva a videó oda ugrik.

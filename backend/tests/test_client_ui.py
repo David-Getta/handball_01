@@ -3150,6 +3150,33 @@ def test_kezi_elemzes_kozben_latszik_a_nagyithato_meccs_video():
             assert math.hypot(x1 - x2, y1 - y2) >= 1.8, (x1, y1, x2, y2)
 
 
+def test_kezi_elemzes_gyors_rogzites():
+    """ŐR: a gyors-rögzítés gombjai a backend által ismert esemény-típust
+    és kimenetelt adnak (különben az összevetés nem ismerné fel őket), a
+    videó idejével rögzítenek, és utólag szerkeszthetők."""
+    import re
+
+    import pytest
+
+    from handball.annotations import ANN_EVENT_TYPES, ANN_SHOT_OUTCOMES
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    scr = (lib / "ui" / "annotation_screen.dart").read_text(encoding="utf-8")
+    blokk = scr[scr.index("kAnnQuickEvents = ["):]
+    blokk = blokk[:blokk.index("];")]
+    gombok = re.findall(r'\("([^"]+)", "([^"]+)", "([^"]*)"\)', blokk)
+    assert len(gombok) >= 6
+    for felirat, tipus, kimenetel in gombok:
+        assert tipus in ANN_EVENT_TYPES, felirat
+        assert kimenetel == "" or kimenetel in ANN_SHOT_OUTCOMES, felirat
+    assert any(k == "gól" for _, _, k in gombok)
+    gyors = scr[scr.index("void _quickEvent("):scr.index("Widget _quickRow()")]
+    assert "_videoNow" in gyors and "_startEdit(e)" in gyors
+    assert "_quickRow()" in scr[scr.index("Widget _eventForm()"):]
+
+
 def test_kezi_elemzes_billentyuk_es_lassitas():
     """ŐR: a kézi elemzés videója billentyűről vezérelhető (szóköz,
     ←/→, T), de SOSEM gépelés közben és nem nyitott dialógus alatt; a
