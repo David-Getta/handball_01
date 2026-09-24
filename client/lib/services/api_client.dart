@@ -19,6 +19,16 @@ import "session_store.dart";
 /// Egy motor-port állapota (lásd `ApiClient.probePort`).
 enum EngineProbe { ok, busy, down }
 
+/// A motor nem ismeri a munkát (404): a motor közben ÚJRAINDULT, a futó
+/// feldolgozás elveszett. Nem "lassú felelet" — újrapróbálni hiába.
+class JobLostException implements Exception {
+  final String jobId;
+  JobLostException(this.jobId);
+  @override
+  String toString() => "A feldolgozás ($jobId) már nem fut a motorban — a "
+      "motor közben újraindult.";
+}
+
 /// A meccs JSON-jának dekódolása — HÁTTÉR-szálon fut (`compute`): egy
 /// teljes meccs 60–70 MB, a felület szálán a dekódolás másodpercekre
 /// lefagyasztaná az ablakot.
@@ -1915,6 +1925,7 @@ class ApiClient {
     final resp = await http
         .get(Uri.parse("$baseUrl/jobs/$jobId"))
         .timeout(const Duration(seconds: 15));
+    if (resp.statusCode == 404) throw JobLostException(jobId);
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült lekérni a munka állapotát", resp));
     }

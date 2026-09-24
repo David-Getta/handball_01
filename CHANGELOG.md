@@ -3,8 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.140 óta)
+## Kiadatlan (a v0.1.141 óta)
 
+- **Az elveszett feldolgozás felismerése és folytatása** (javítás): ha a
+  motor feldolgozás közben újraindult, a futó munka elveszett — a
+  képernyő mégis percekig (egy bejelentésben 406 lekérdezésen át) azt
+  írta, hogy "a feldolgozás valószínűleg fut tovább". Mostantól
+  felismeri, hogy a munka elveszett, és ha a motor ellenőrző-mentése
+  megvan, a "Folytatás az utolsó mentéstől" gombbal onnan viszi tovább
+  (nem kell elölről kezdeni). A nem felelő motort magától újraéleszti (a
+  dolgozót kivárja, nem lövi le), és a lekérdezések nem halmozódnak
+  egymásra, ha a motor lassan felel.
 - **A korábbi elemzések azonnal megnyílnak** (javítás): egy 60 perces
   meccs megnyitása közel NÉGY PERC volt, és a képernyő addig üres
   maradt — a támadások (80 mp), a védekezés (50 mp), az edzői
@@ -21,6 +30,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   jegyzetből / kulcs-pillanatból nyitott meccs a kért pillanatnál
   nyílik (eddig mindig az elejéről indult). A könyvtár-mentés (zip) a
   számolt eredmények tárát nem viszi magával.
+## v0.1.141 — kiadva (2026-09-24)
+
+> Kiadás-jegyzet: a program nem lövi le a saját motorját belépéskor, és a
+> lassú motort sem hiszi halottnak — a könyvtár és a korábbi elemzések
+> megnyílnak.
+
 - **A program nem lövi le a saját motorját belépéskor** (javítás, a
   "nem nyílik a könyvtár, nem indul el a motor" GYÖKÉROKA): a
   nyitóképernyő a belépéskor lecserélődik, és a lecseréléskor —

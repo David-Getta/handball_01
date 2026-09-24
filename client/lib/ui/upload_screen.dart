@@ -79,6 +79,20 @@ class _UploadScreenState extends State<UploadScreen> {
   String? _connNote;
   static const int _pollFailsToWarn = 4;
 
+  /// Épp fut-e egy lekérdezés — a 800 ms-os időzítő nem indít újat, amíg
+  /// az előző (lassú motornál akár 15 mp-es) kérés tart; különben a
+  /// kérések egymásra halmozódnának, és még jobban terhelnék a motort.
+  bool _pollInFlight = false;
+
+  /// A motor újraélesztése folyik a lekérdezés-hibák miatt (egyszerre egy).
+  bool _pollReviving = false;
+  DateTime? _lastPollRevive;
+
+  /// A motor közben újraindult, a munka ELVESZETT: ha az ellenőrző-mentés
+  /// megvan a könyvtárban, innen folytatható (`resumeMatch`).
+  bool _jobLost = false;
+  bool _resumable = false;
+
   // Feltöltés állapota (a dropzone folyamatjelzőjéhez).
   bool _uploading = false;
   double _uploadProgress = 0.0;
@@ -938,7 +952,16 @@ class _UploadScreenState extends State<UploadScreen> {
   /// Egy lekérdezés a job állapotára; leállítja az időzítőt, ha vége.
   Future<void> _pollJob() async {
     final id = _jobId;
-    if (id == null) return;
+    if (id == null || _pollInFlight) return;
+    _pollInFlight = true;
+    try {
+      await _pollJobOnce(id);
+    } finally {
+      _pollInFlight = false;
+    }
+  }
+
+  Future<void> _pollJobOnce(String id) async {
     try {
       final j = await _api.fetchJob(id);
       if (!mounted) return;
@@ -959,6 +982,35 @@ class _UploadScreenState extends State<UploadScreen> {
         _navigated = true;
         _openResult();
       }
+    } on JobLostException {
+      // A motor NEM ismeri a munkát: közben újraindult, a feldolgozás
+      // elveszett. Ezt hiába próbálnánk újra (korábban a képernyő
+      // örökké azt írta, hogy "valószínűleg fut tovább"). Megnézzük, van-e
+      // ellenőrző-mentés, és ha van, felajánljuk a folytatást.
+      _poll?.cancel();
+      var resumable = false;
+      final mid = _matchId;
+      if (mid != null) {
+        try {
+          final lista = await _api.listMatches();
+          resumable = lista.any((m) =>
+              m["match_id"] == mid && ((m["partial"] as bool?) ?? false));
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      setState(() {
+        _jobLost = true;
+        _resumable = resumable;
+        _connNote = null;
+        _status = "error";
+        _error = resumable
+            ? "a motor feldolgozás közben újraindult, a futó munka "
+                "elveszett — az utolsó ellenőrző-mentésig kész rész viszont "
+                "megvan: a \"Folytatás\" gomb onnan viszi tovább."
+            : "a motor feldolgozás közben újraindult, a futó munka "
+                "elveszett, és még nem készült belőle ellenőrző-mentés — "
+                "indítsd újra a feldolgozást.";
+      });
     } catch (e) {
       // A lekérdezés bicsaklott meg, NEM a feldolgozás: a munka a
       // motorban fut tovább. Kitartunk, és csak többszöri hiba után
@@ -968,11 +1020,56 @@ class _UploadScreenState extends State<UploadScreen> {
         _pollFails += 1;
         _connNote = _pollFails >= _pollFailsToWarn
             ? "A motor épp nem válaszol ($_pollFails sikertelen "
-                "lekérdezés) — a feldolgozás valószínűleg fut tovább, "
-                "újrapróbálkozom. Ha percekig így marad, a nyitóképernyőn "
-                "indítsd újra a motort."
+                "lekérdezés) — ha dolgozik, kivárom; ha leállt, "
+                "újraindítom."
             : null;
       });
+      // Többszöri hiba után megnézzük, él-e a motor: a DOLGOZÓT a revive
+      // kivárja (nem lövi le), a halottat újraindítja — utána a következő
+      // lekérdezés vagy a munkát kapja, vagy a "munka elveszett" választ.
+      final most = DateTime.now();
+      if (_pollFails >= _pollFailsToWarn &&
+          !_pollReviving &&
+          (_lastPollRevive == null ||
+              most.difference(_lastPollRevive!) > const Duration(minutes: 1))) {
+        _pollReviving = true;
+        _lastPollRevive = most;
+        try {
+          await ApiClient.reviveEngine();
+        } finally {
+          _pollReviving = false;
+        }
+      }
+    }
+  }
+
+  /// Az elveszett munka FOLYTATÁSA az utolsó ellenőrző-mentéstől: a motor
+  /// a mentett beállításokkal új feldolgozást indít onnan, ahol
+  /// megszakadt (a kész rész nem vész el, nem kell elölről kezdeni).
+  Future<void> _resumeLost() async {
+    final mid = _matchId;
+    if (mid == null) return;
+    try {
+      final r = await _api.resumeMatch(mid);
+      if (!mounted) return;
+      setState(() {
+        _jobId = r["job_id"] as String?;
+        _matchId = (r["match_id"] as String?) ?? mid;
+        _jobLost = false;
+        _resumable = false;
+        _pollFails = 0;
+        _connNote = null;
+        _error = null;
+        _status = "running";
+        _message = "folytatás az utolsó mentéstől…";
+      });
+      _poll?.cancel();
+      _poll = Timer.periodic(
+          const Duration(milliseconds: 800), (_) => _pollJob());
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A folytatás nem indult el: ${humanError(e)}")));
     }
   }
 
@@ -1908,6 +2005,18 @@ class _UploadScreenState extends State<UploadScreen> {
                     Text(_statusLine(), style: AppText.label.copyWith(
                         fontSize: 12,
                         color: _status == "error" ? AppColors.away : AppColors.textSecondary)),
+                    // Az elveszett munka folytatható az ellenőrző-mentéstől.
+                    if (_jobLost && _resumable) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      FilledButton.icon(
+                        onPressed: _resumeLost,
+                        style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.accent,
+                            foregroundColor: AppColors.onAccent),
+                        icon: const Icon(Icons.play_arrow, size: 18),
+                        label: const Text("Folytatás az utolsó mentéstől"),
+                      ),
+                    ],
                     // A motor az apppal együtt áll le — hosszú feldolgozásnál
                     // ez sok elveszett munka lenne, ezért kiírjuk.
                     if (_status == "running") ...[

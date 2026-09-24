@@ -3193,3 +3193,30 @@ def test_a_meccs_nezet_azonnal_megjelenik_a_nehez_panelek_utana_jonnek():
     assert load.index("_frameIndex = 0;") < load.index(
         "_frameIndex = _indexOfT(match, widget.initialFrame!)")
     assert load.count("_frameIndex = 0;") == 1
+
+
+def test_a_feldolgozas_kepernyo_felismeri_az_elveszett_munkat():
+    """ŐR: a "406 sikertelen lekérdezés" képernyő. Ha a motor közben
+    újraindult, a munka ELVESZETT (404) — ezt nem szabad örökké "fut
+    tovább"-ként újrapróbálni: a képernyő felismeri, és az ellenőrző-
+    mentéstől FOLYTATÁST ajánl. A halott motort magától újraéleszti (a
+    dolgozót a revive kivárja), és a lekérdezések nem halmozódnak."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    up = (lib / "ui" / "upload_screen.dart").read_text(encoding="utf-8")
+    fj = api[api.index("Future<Map<String, dynamic>> fetchJob("):]
+    fj = fj[:fj.index("\n  }\n")]
+    assert "statusCode == 404) throw JobLostException" in fj
+    poll = up[up.index("Future<void> _pollJob()"):]
+    poll = poll[:poll.index("Future<void> _resumeLost()")]
+    assert "_pollInFlight" in poll, "a lekérdezések ne halmozódjanak"
+    assert "on JobLostException" in poll
+    assert "ApiClient.reviveEngine()" in poll
+    kod = "\n".join(l for l in up.splitlines()
+                    if not l.strip().startswith("//"))
+    assert "valószínűleg fut tovább" not in kod
+    assert "_api.resumeMatch(" in up and "Folytatás az utolsó mentéstől" in up
