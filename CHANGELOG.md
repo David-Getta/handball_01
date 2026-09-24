@@ -3,7 +3,11 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.145 óta)
+## v0.1.146 — kiadva (2026-09-24)
+
+> Kiadás-jegyzet: a kézi elemzésben egy kattintásos gyors rögzítés
+> (Gól, Védés, Mellé, …), összesítés a naplóból (gól/lövés,
+> góllövők), és szűrhető napló.
 
 - **Kézi elemzés: gyors rögzítés**: az esemény-űrlap tetején egy
   kattintásos gombok (Gól, Védés, Mellé, Blokk, Hetes-gól, Eladás,
