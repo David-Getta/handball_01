@@ -67,6 +67,10 @@ const double kAnnVideoFrac = 0.42;
 const double kAnnVideoMinFrac = 0.18;
 const double kAnnVideoMaxFrac = 0.75;
 
+/// A videó billentyűs léptetése (← / →), és Shifttel a nagy lépés.
+const double kAnnKeySeekS = 2.0;
+const double kAnnKeySeekLongS = 10.0;
+
 /// Az összevetés eltérés-tételére kattintva a videó ennyivel ELŐTTE
 /// indul (a lövés előzménye is látsszon).
 const double kAnnCompareLeadS = 3.0;
@@ -380,10 +384,53 @@ class _AnnotationScreenState extends State<AnnotationScreen>
     _retry = Timer.periodic(kAnnRetry, (_) {
       if (!widget.offline && _unsynced && !_saving && !_loading) _save();
     });
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  /// Billentyűk a videóhoz — hogy a naplózás közben ne kelljen egérrel
+  /// a lejátszóhoz nyúlni. SOSEM gépelés közben (szövegmezőben a szóköz
+  /// szóköz), és csak ha ez a képernyő van elöl (nyitott dialógus,
+  /// lenyíló menü alatt nem).
+  ///  * Szóköz: lejátszás / szünet,
+  ///  * ← / →: 2 mp vissza / előre (Shifttel 10 mp),
+  ///  * T: a lejátszó ideje az esemény-űrlapba.
+  bool _onKey(KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return false;
+    if (!mounted || !_videoOn) return false;
+    if (ModalRoute.of(context)?.isCurrent != true) return false;
+    final focus = FocusManager.instance.primaryFocus?.context;
+    if (focus != null &&
+        (focus.widget is EditableText ||
+            focus.findAncestorWidgetOfExactType<EditableText>() != null)) {
+      return false;
+    }
+    final v = _videoKey.currentState;
+    if (v == null) return false;
+    final kb = HardwareKeyboard.instance;
+    if (kb.isControlPressed || kb.isMetaPressed || kb.isAltPressed) {
+      return false; // a rendszer- és menü-kombinációk maradjanak érintetlenek
+    }
+    final key = e.logicalKey;
+    if (key == LogicalKeyboardKey.space) {
+      if (e is KeyDownEvent) v.togglePlay();
+      return true;
+    }
+    if (key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.arrowRight) {
+      final step = kb.isShiftPressed ? kAnnKeySeekLongS : kAnnKeySeekS;
+      v.seekBy(key == LogicalKeyboardKey.arrowLeft ? -step : step);
+      return true;
+    }
+    if (key == LogicalKeyboardKey.keyT && e is KeyDownEvent) {
+      _takeVideoTime(_timeCtrl);
+      return true;
+    }
+    return false;
   }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
     _autosave?.cancel();
     _retry?.cancel();
     if (!_loading && (_dirty || _unsynced)) {
@@ -1353,8 +1400,8 @@ class _AnnotationScreenState extends State<AnnotationScreen>
               videoPath: widget.match!.meta.videoPath!,
               initialSeconds: _lastVideoS ?? widget.startSeconds,
               zoomButtons: true,
-              hint: "Nagyítás: csippentés (touchpad), Ctrl/⌘+görgő vagy a "
-                  "sarok-gombok · dupla kattintás: vissza",
+              hint: "Szóköz: lejátszás · ←/→: 2 mp (Shift: 10 mp) · T: idő "
+                  "a naplóba · nagyítás: csippentés, Ctrl/⌘+görgő, gombok",
             ),
           ),
           _videoSplitter(total),

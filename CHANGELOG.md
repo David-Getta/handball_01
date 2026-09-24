@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.144 óta)
+
+- **Kézi elemzés: billentyűk és lassítás**: a videó billentyűről is
+  vezérelhető — szóköz: lejátszás/szünet, ← / →: 2 mp (Shifttel 10 mp),
+  T: a lejátszó ideje az esemény-űrlapba —, így naplózás közben nem kell
+  az egérrel a lejátszóhoz nyúlni. Gépelés közben a billentyűk a
+  szövegmezőé maradnak. A lejátszó lassítható és gyorsítható (0,25×–2×)
+  a kézi elemzésben és a meccs-nézetben is.
+
 ## v0.1.144 — kiadva (2026-09-24)
 
 > Kiadás-jegyzet: a kézi elemzés lövései/gólai egy gombnyomással

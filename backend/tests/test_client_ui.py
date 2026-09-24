@@ -3150,6 +3150,33 @@ def test_kezi_elemzes_kozben_latszik_a_nagyithato_meccs_video():
             assert math.hypot(x1 - x2, y1 - y2) >= 1.8, (x1, y1, x2, y2)
 
 
+def test_kezi_elemzes_billentyuk_es_lassitas():
+    """ŐR: a kézi elemzés videója billentyűről vezérelhető (szóköz,
+    ←/→, T), de SOSEM gépelés közben és nem nyitott dialógus alatt; a
+    kezelő kilépéskor leiratkozik; a lejátszó lassítható (0,25×–2×)."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    scr = (lib / "ui" / "annotation_screen.dart").read_text(encoding="utf-8")
+    vp = (lib / "ui" / "video_panel.dart").read_text(encoding="utf-8")
+    assert "HardwareKeyboard.instance.addHandler(_onKey)" in scr
+    dispose = scr[scr.index("void dispose()"):scr.index("super.dispose();")]
+    assert "HardwareKeyboard.instance.removeHandler(_onKey)" in dispose
+    kezelo = scr[scr.index("bool _onKey(KeyEvent e)"):]
+    kezelo = kezelo[:kezelo.index("\n  }\n")]
+    assert "EditableText" in kezelo, "gépelés közben a szóköz szóköz"
+    assert "isCurrent" in kezelo, "dialógus alatt ne vezéreljen"
+    for kulcs in ("LogicalKeyboardKey.space", "LogicalKeyboardKey.arrowLeft",
+                  "LogicalKeyboardKey.keyT"):
+        assert kulcs in kezelo, kulcs
+    for fn in ("Future<void> togglePlay()", "Future<void> seekBy(",
+               "Future<void> setSpeed(", "setPlaybackSpeed(", "setRate("):
+        assert fn in vp, fn
+    assert "speeds = [0.25, 0.5, 1.0, 1.5, 2.0]" in vp
+
+
 def test_kezi_elemzes_osszevetes_a_geppel():
     """ŐR: a kézi elemzés "Összevetés a géppel" gombja a motor
     /annotations/compare végpontját hívja (a backend útvonalával egyezően),

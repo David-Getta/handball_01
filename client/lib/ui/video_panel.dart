@@ -62,6 +62,10 @@ class VideoPanelState extends State<VideoPanel> {
   mk.Player? _mk;
   mkv.VideoController? _mkView;
   String? _error;
+  /// A választható lejátszási sebességek (elemzéshez a lassítás kell).
+  static const List<double> speeds = [0.25, 0.5, 1.0, 1.5, 2.0];
+  double _speed = 1.0;
+
   // Ha a seek a betöltés BEFEJEZÉSE előtt érkezik (pl. eseményre kattintva
   // nyílt meg a panel), eltesszük, és betöltés után ugrunk oda.
   double? _pendingSeekS;
@@ -139,6 +143,77 @@ class VideoPanelState extends State<VideoPanel> {
     if (play) await c.play();
   }
 
+  /// Megy-e most a lejátszás.
+  bool get isPlaying {
+    final p = _mk;
+    if (p != null) return p.state.playing;
+    final c = _c;
+    return c != null && c.value.isInitialized && c.value.isPlaying;
+  }
+
+  /// Lejátszás / szünet váltása (billentyűről is).
+  Future<void> togglePlay() async {
+    final p = _mk;
+    if (p != null) {
+      await p.playOrPause();
+      return;
+    }
+    final c = _c;
+    if (c == null || !c.value.isInitialized) return;
+    if (c.value.isPlaying) {
+      await c.pause();
+    } else {
+      await c.play();
+    }
+  }
+
+  /// Ugrás a mostani helyhez képest (a lejátszás állapota marad).
+  Future<void> seekBy(double deltaS) async {
+    final now = positionSeconds;
+    if (now == null) return;
+    final t = now + deltaS;
+    await seekTo(t < 0 ? 0 : t, play: isPlaying);
+  }
+
+  /// Lejátszási sebesség (0,25× … 2×).
+  Future<void> setSpeed(double v) async {
+    setState(() => _speed = v);
+    final p = _mk;
+    if (p != null) {
+      await p.setRate(v);
+      return;
+    }
+    final c = _c;
+    if (c != null && c.value.isInitialized) await c.setPlaybackSpeed(v);
+  }
+
+  static String _speedLabel(double v) =>
+      "${v == v.roundToDouble() ? v.toInt() : v.toString().replaceAll(".", ",")}×";
+
+  Widget _speedButton() {
+    return PopupMenuButton<double>(
+      tooltip: "Lejátszási sebesség",
+      initialValue: _speed,
+      onSelected: setSpeed,
+      itemBuilder: (_) => [
+        for (final v in speeds)
+          PopupMenuItem<double>(value: v, child: Text(_speedLabel(v))),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: _speed == 1.0 ? AppColors.border : AppColors.accent),
+        ),
+        child: Text(_speedLabel(_speed),
+            style: AppText.label.copyWith(
+                fontSize: 12,
+                color: _speed == 1.0 ? null : AppColors.accent)),
+      ),
+    );
+  }
+
   /// A lejátszó aktuális helye (másodperc) — null, amíg nem töltött be.
   double? get positionSeconds {
     final p = _mk;
@@ -192,6 +267,8 @@ class VideoPanelState extends State<VideoPanel> {
         const SizedBox(width: AppSpacing.sm),
         Text("${_fmt(position)} / ${_fmt(duration)}",
             style: AppText.label.copyWith(fontSize: 12)),
+        const SizedBox(width: AppSpacing.sm),
+        _speedButton(),
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Text(widget.hint,
@@ -233,6 +310,8 @@ class VideoPanelState extends State<VideoPanel> {
                 color: AppColors.textSecondary),
             tooltip: "5 mp előre",
           ),
+          const SizedBox(width: AppSpacing.sm),
+          _speedButton(),
         ]),
         const SizedBox(height: AppSpacing.sm),
         Text(

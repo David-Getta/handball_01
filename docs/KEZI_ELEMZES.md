@@ -31,6 +31,11 @@ tábla sarkában + / − / teljes pálya); nagyítva az üres helyről húzás �
 a görgő mozgatja. A touchpad-gesztus nem húz bábut — azt kattintva-húzva
 mozgatod, mint eddig.
 
+**Billentyűk** (ha nem szövegmezőben gépelsz): szóköz — lejátszás /
+szünet; ← / → — 2 mp vissza / előre (Shifttel 10 mp); T — a lejátszó
+ideje az esemény-űrlapba. A lejátszó **lassítható** (0,25×, 0,5×, 1×,
+1,5×, 2× — a vezérlő melletti sebesség-gomb).
+
 Az idő mindenhol az **eredeti videó ideje** — ugyanaz, amit a lejátszó
 mutat; a "Pozíciók a meccsből" a feldolgozás kezdő-kockájával számol
 vissza.
