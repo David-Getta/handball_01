@@ -49,6 +49,10 @@ class SessionStore {
   /// csak az ezután készülteket törli.
   static List<String> guestBaseline = [];
 
+  /// A legutóbb megnyitott (valódi) meccs azonosítója: a menü
+  /// "Meccs-elemző" pontja ezt nyitja meg a demó helyett, ha még megvan.
+  static String lastMatchId = "";
+
   static File _file() {
     Directory base;
     if (Platform.isWindows) {
@@ -89,6 +93,8 @@ class SessionStore {
       guestBaseline = gb is List
           ? gb.whereType<String>().toList()
           : <String>[];
+      final lm = data["last_match_id"];
+      lastMatchId = lm is String ? lm : "";
     } catch (_) {
       token = null;
       offlineTermsVersion = 0;
@@ -97,6 +103,7 @@ class SessionStore {
       guestMode = false;
       lastSeenVersion = "";
       guestBaseline = [];
+      lastMatchId = "";
     }
   }
 
@@ -114,6 +121,7 @@ class SessionStore {
         "guest_mode": guestMode,
         "last_seen_version": lastSeenVersion,
         "guest_baseline": guestBaseline,
+        "last_match_id": lastMatchId,
       }));
     } catch (_) {}
   }
@@ -139,6 +147,13 @@ class SessionStore {
   /// Az "Újdonságok" ablak megnézett verziójának rögzítése.
   static Future<void> setLastSeenVersion(String value) async {
     lastSeenVersion = value;
+    await save();
+  }
+
+  /// A legutóbb megnyitott meccs rögzítése (csak ha változott).
+  static Future<void> setLastMatchId(String value) async {
+    if (value == lastMatchId) return;
+    lastMatchId = value;
     await save();
   }
 

@@ -122,6 +122,20 @@ class _MatchScreenState extends State<MatchScreen> {
   // Egyszer használatos: a hívó által kért kezdő-képkocka, amint a
   // meccs betöltött (előtte nincs mihez képest határt szabni).
   bool _initialFrameApplied = false;
+
+  /// A TÉNYLEGESEN megnyitott meccs azonosítója. A menü "Meccs-elemző"
+  /// pontja azonosító nélkül (demó) nyílik — ilyenkor a legutóbb
+  /// megnyitott valódi meccsre oldjuk fel, ha még megvan.
+  String? _resolvedId;
+  String get _mid => _resolvedId ?? widget.matchId;
+
+  /// Betöltési hiba (a motor nem válaszol / a meccs nem jött le): a
+  /// képernyő ezt mutatja újrapróbálással — NEM tesz a helyére csendben
+  /// demót, ami a felhasználó meccsének látszana.
+  String? _loadError;
+
+  /// A motor újraélesztése folyik (a betöltés várakozó felirata ehhez).
+  bool _reviving = false;
   bool _playing = false;
   String _sourceLabel = "betöltés…";
   Timer? _timer;
@@ -193,86 +207,120 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<String, dynamic>? marking;
     Map<String, dynamic>? blocks;
     Map<String, dynamic>? ballWinners;
-    if (await _api.isHealthy()) {
+    if (_loadError != null && mounted) setState(() => _loadError = null);
+    // A demó a menü azonosító nélküli nyitása ("sim-0"). Valódi meccsnél
+    // a motor nélkül NINCS értelmes tartalom — nem teszünk a helyére demót.
+    final wantDemo = widget.matchId == "sim-0";
+    var engineUp = await _api.isHealthy();
+    if (!engineUp && !wantDemo) {
+      // A motor épp nem felel: megkeressük / megvárjuk / újraindítjuk.
+      // A DOLGOZÓ motort a revive nem lövi le, csak kivárja.
+      if (mounted) setState(() => _reviving = true);
+      engineUp = await ApiClient.reviveEngine();
+      if (!mounted) return;
+      setState(() => _reviving = false);
+    }
+    if (!engineUp && !wantDemo) {
+      if (!mounted) return;
+      setState(() => _loadError =
+          "A motor nem válaszol, és az újraindítása sem sikerült. A "
+          "kezdőlap \"Motor újraindítása\" gombja és a \"Diagnosztika\" "
+          "megmutatja, min akadt el.");
+      return;
+    }
+    // A menüből (azonosító nélkül) nyitva: a legutóbbi valódi meccs.
+    if (wantDemo && engineUp && SessionStore.lastMatchId.isNotEmpty) {
+      _resolvedId = SessionStore.lastMatchId;
+    }
+    if (engineUp) {
       try {
-        match = await _api.fetchMatch(widget.matchId);
-        label = "motor · ${match.meta.matchId}";
         try {
-          events = await _api.fetchEvents(widget.matchId);
+          match = await _api.fetchMatch(_mid);
+        } catch (e) {
+          // A megjegyzett meccs közben törlődhetett: akkor a demó jön.
+          if (_resolvedId == null) rethrow;
+          _resolvedId = null;
+          await SessionStore.setLastMatchId("");
+          match = await _api.fetchMatch(_mid);
+        }
+        label = "motor · ${match.meta.matchId}";
+        if (_mid != "sim-0") unawaited(SessionStore.setLastMatchId(_mid));
+        try {
+          events = await _api.fetchEvents(_mid);
         } catch (_) {
           events = []; // esemény nélkül is működik a nézet
         }
         try {
-          overrides = await _api.fetchEventOverrides(widget.matchId);
+          overrides = await _api.fetchEventOverrides(_mid);
         } catch (_) {
           overrides = []; // javítás nélkül is működik a nézet
         }
         try {
-          shotSpeeds = await _api.fetchShotSpeeds(widget.matchId);
+          shotSpeeds = await _api.fetchShotSpeeds(_mid);
         } catch (_) {
           shotSpeeds = {}; // sebesség nélkül is teljes a nézet
         }
         try {
-          playerFatigue = await _api.fetchPlayerFatigue(widget.matchId);
+          playerFatigue = await _api.fetchPlayerFatigue(_mid);
         } catch (_) {
           playerFatigue = {}; // fáradás-adat nélkül is teljes a nézet
         }
         try {
-          coach = await _api.fetchCoachSummary(widget.matchId);
+          coach = await _api.fetchCoachSummary(_mid);
         } catch (_) {
           coach = null; // az összefoglaló nélkül is teljes a nézet
         }
         try {
-          final r = await _api.fetchAttacks(widget.matchId);
+          final r = await _api.fetchAttacks(_mid);
           attacks = (r["attacks"] as List).cast<Map<String, dynamic>>();
           attackEff = (r["efficiency"] as Map?)?.cast<String, dynamic>() ?? {};
         } catch (_) {
           attacks = []; // támadás-címkék nélkül is teljes a nézet
         }
         try {
-          rules = await _api.fetchRules(widget.matchId);
+          rules = await _api.fetchRules(_mid);
         } catch (_) {
           rules = {}; // szabály-réteg nélkül is teljes a nézet
         }
         try {
-          emptyNet = await _api.fetchEmptyNet(widget.matchId);
+          emptyNet = await _api.fetchEmptyNet(_mid);
         } catch (_) {
           emptyNet = []; // 7 a 6 réteg nélkül is teljes a nézet
         }
         try {
-          final si = await _api.fetchSubstitutions(widget.matchId);
+          final si = await _api.fetchSubstitutions(_mid);
           subs = ((si["events"] as List?) ?? const [])
               .cast<Map<String, dynamic>>();
         } catch (_) {
           subs = []; // csere-réteg nélkül is teljes a nézet
         }
         try {
-          stoppages = await _api.fetchStoppages(widget.matchId);
+          stoppages = await _api.fetchStoppages(_mid);
         } catch (_) {
           stoppages = []; // megszakítás-réteg nélkül is teljes a nézet
         }
         try {
-          training = await _api.fetchTraining(widget.matchId);
+          training = await _api.fetchTraining(_mid);
         } catch (_) {
           training = null; // edzés-fókusz nélkül is teljes a nézet
         }
         try {
-          progression = await _api.fetchProgression(widget.matchId);
+          progression = await _api.fetchProgression(_mid);
         } catch (_) {
           progression = {}; // állás-menet nélkül is teljes a nézet
         }
         try {
-          goalTimeline = await _api.fetchScoringTimeline(widget.matchId);
+          goalTimeline = await _api.fetchScoringTimeline(_mid);
         } catch (_) {
           goalTimeline = []; // gól-idővonal nélkül is teljes a nézet
         }
         try {
-          momentum = await _api.fetchMomentum(widget.matchId);
+          momentum = await _api.fetchMomentum(_mid);
         } catch (_) {
           momentum = []; // sorozatok nélkül is teljes a nézet
         }
         try {
-          final xg = await _api.fetchXg(widget.matchId);
+          final xg = await _api.fetchXg(_mid);
           for (final sh in (xg["shots"] as List).cast<Map<String, dynamic>>()) {
             final t = (sh["t"] as num?)?.toInt();
             final v = (sh["xg"] as num?)?.toDouble();
@@ -288,7 +336,7 @@ class _MatchScreenState extends State<MatchScreen> {
           xgShooters = {};
         }
         try {
-          final d = await _api.fetchDefense(widget.matchId);
+          final d = await _api.fetchDefense(_mid);
           for (final side in ["home", "away"]) {
             for (final sh in (((d[side] as Map?)?["shots"] as List?) ?? const [])
                 .cast<Map<String, dynamic>>()) {
@@ -308,23 +356,23 @@ class _MatchScreenState extends State<MatchScreen> {
           ballWinners = null;
         }
         try {
-          quality = await _api.fetchQuality(widget.matchId);
+          quality = await _api.fetchQuality(_mid);
         } catch (_) {
           quality = null; // minőség-jelentés nélkül is teljes a nézet
         }
         try {
-          keyPlayers = (await _api.fetchKeyPlayers(widget.matchId))["key_players"]
+          keyPlayers = (await _api.fetchKeyPlayers(_mid))["key_players"]
               as Map<String, dynamic>?;
         } catch (_) {
           keyPlayers = null; // kulcsemberek nélkül is teljes a nézet
         }
         try {
-          keyMoments = await _api.fetchKeyMoments(widget.matchId);
+          keyMoments = await _api.fetchKeyMoments(_mid);
         } catch (_) {
           keyMoments = const []; // kulcs-pillanatok nélkül is teljes
         }
         try {
-          final sp = await _api.fetchSetplays(widget.matchId);
+          final sp = await _api.fetchSetplays(_mid);
           setplayEff = sp["efficiency"] as Map<String, dynamic>?;
           setplayShapes = sp["shapes"] as Map<String, dynamic>?;
         } catch (_) {
@@ -332,11 +380,19 @@ class _MatchScreenState extends State<MatchScreen> {
           setplayShapes = null;
         }
         try {
-          notes = await _api.fetchNotes(widget.matchId);
+          notes = await _api.fetchNotes(_mid);
         } catch (_) {
           notes = []; // jegyzetek nélkül is teljes a nézet
         }
       } catch (e) {
+        if (!wantDemo) {
+          // A valódi meccs nem jött le: a hibát mutatjuk (újrapróbálással),
+          // nem egy demót, ami a felhasználó meccsének látszana.
+          if (!mounted) return;
+          setState(() => _loadError =
+              "A meccs nem töltődött be: ${humanError(e)}");
+          return;
+        }
         match = buildDemoMatch();
         label = "demó";
       }
@@ -344,6 +400,7 @@ class _MatchScreenState extends State<MatchScreen> {
       match = buildDemoMatch();
       label = "demó";
     }
+    if (!mounted) return;
     setState(() {
       _match = match;
       // A hívó által kért kezdő-képkocka (jegyzet-lista, kulcs-pillanat)
@@ -472,6 +529,44 @@ class _MatchScreenState extends State<MatchScreen> {
     });
   }
 
+  /// Betöltési hiba: mi történt, és két kiút — újrapróbálás, vagy a
+  /// könyvtár (másik meccs). Demót NEM teszünk a meccs helyére.
+  Widget _loadErrorView(String msg) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Container(
+          decoration: AppTheme.card(),
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.cloud_off, size: 40, color: AppColors.gold),
+            const SizedBox(height: AppSpacing.md),
+            Text("A meccs most nem nyitható meg", style: AppText.title),
+            const SizedBox(height: AppSpacing.sm),
+            Text(msg, textAlign: TextAlign.center, style: AppText.label),
+            const SizedBox(height: AppSpacing.lg),
+            Wrap(spacing: AppSpacing.md, runSpacing: AppSpacing.sm,
+                alignment: WrapAlignment.center, children: [
+              FilledButton.icon(
+                onPressed: _load,
+                style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: AppColors.onAccent),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text("Újrapróbálom"),
+              ),
+              OutlinedButton.icon(
+                onPressed: _openLibrary,
+                icon: const Icon(Icons.folder_open, size: 18),
+                label: const Text("Elemzés-könyvtár"),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final match = _match;
@@ -481,10 +576,18 @@ class _MatchScreenState extends State<MatchScreen> {
       crumbPath: "MECCS-ELEMZŐ · FELÜLNÉZETI TAKTIKAI NÉZET",
       collapsed: true,
       child: match == null
-          ? const WaitingView("Meccs betöltése…",
-              hint: "A képkockák és az események beolvasása. Hosszú "
-                  "felvételnél ez eltarthat egy ideig.",
-              icon: Icons.sports_handball)
+          ? (_loadError != null
+              ? _loadErrorView(_loadError!)
+              : WaitingView(
+                  _reviving
+                      ? "A motor keresése / újraindítása…"
+                      : "Meccs betöltése…",
+                  hint: _reviving
+                      ? "Ha a motor épp dolgozik, megvárjuk; ha leállt, "
+                          "újraindítjuk — ez fél-egy perc is lehet."
+                      : "A képkockák és az események beolvasása. Hosszú "
+                          "felvételnél ez eltarthat egy ideig.",
+                  icon: Icons.sports_handball))
           : match.frames.isEmpty
               ? _emptyState()
               : _withShortcuts(match, Column(
@@ -1115,7 +1218,7 @@ class _MatchScreenState extends State<MatchScreen> {
     }
     setState(() => _exportingClips = true);
     try {
-      final jobId = await _api.startClipExport(widget.matchId, types);
+      final jobId = await _api.startClipExport(_mid, types);
       // A vágás haladásának követése (másodpercenként). A záró üzenet
       // a mentés-visszajelzőbe kerül (pl. "12 jelenet kimaradt").
       String doneMsg = "";
@@ -1132,7 +1235,7 @@ class _MatchScreenState extends State<MatchScreen> {
         }
         if (!mounted) return; // közben elnavigáltak — a job magától befejeződik
       }
-      final bytes = await _api.fetchClipsZip(widget.matchId);
+      final bytes = await _api.fetchClipsZip(_mid);
       if (!mounted) return;
       final name = "${match.meta.homeTeam}_${match.meta.awayTeam}"
           .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
@@ -1163,7 +1266,7 @@ class _MatchScreenState extends State<MatchScreen> {
   Future<void> _savePlayerReport(
       Match match, int trackId, String label) async {
     try {
-      final bytes = await _api.fetchPlayerReport(widget.matchId, trackId);
+      final bytes = await _api.fetchPlayerReport(_mid, trackId);
       if (!mounted) return;
       final safe = label.replaceAll(
           RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
@@ -1194,7 +1297,7 @@ class _MatchScreenState extends State<MatchScreen> {
     setState(() => _exportingPackage = true);
     try {
       final jobId =
-          await _api.startPackageExport(widget.matchId, const ["goal"]);
+          await _api.startPackageExport(_mid, const ["goal"]);
       while (true) {
         await Future.delayed(const Duration(seconds: 1));
         final job = await _api.fetchJob(jobId);
@@ -1205,7 +1308,7 @@ class _MatchScreenState extends State<MatchScreen> {
         }
         if (!mounted) return;
       }
-      final bytes = await _api.fetchPackageZip(widget.matchId);
+      final bytes = await _api.fetchPackageZip(_mid);
       if (!mounted) return;
       final name = "${match.meta.homeTeam}_${match.meta.awayTeam}"
           .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
@@ -1323,7 +1426,7 @@ class _MatchScreenState extends State<MatchScreen> {
               } else if (v == "3d") {
                 Navigator.of(context).pushReplacement(MaterialPageRoute(
                     builder: (_) => Court3DScreen(
-                        matchId: widget.matchId, startS: t / fps)));
+                        matchId: _mid, startS: t / fps)));
               }
             },
             itemBuilder: (_) => [
@@ -1385,7 +1488,7 @@ class _MatchScreenState extends State<MatchScreen> {
           if (playerId != null) "player_id": playerId,
         },
       ];
-      await _api.saveEventOverrides(widget.matchId, uj);
+      await _api.saveEventOverrides(_mid, uj);
       if (!mounted) return;
       await _load();
       if (!mounted) return;
@@ -1406,7 +1509,7 @@ class _MatchScreenState extends State<MatchScreen> {
     if (_correcting) return;
     setState(() => _correcting = true);
     try {
-      await _api.saveEventOverrides(widget.matchId, const []);
+      await _api.saveEventOverrides(_mid, const []);
       if (!mounted) return;
       await _load();
     } catch (e) {
@@ -1539,8 +1642,8 @@ class _MatchScreenState extends State<MatchScreen> {
   /// címkéjével) — a jegyzet a lejátszóból és a csomagból is látszik.
   Future<void> _noteKeyMoment(Match match, int t, String label) async {
     try {
-      await _api.addNote(widget.matchId, t, label);
-      final notes = await _api.fetchNotes(widget.matchId);
+      await _api.addNote(_mid, t, label);
+      final notes = await _api.fetchNotes(_mid);
       if (!mounted) return;
       setState(() => _notes = notes);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1557,8 +1660,8 @@ class _MatchScreenState extends State<MatchScreen> {
     if (text.isEmpty || _savingNote) return;
     setState(() => _savingNote = true);
     try {
-      await _api.addNote(widget.matchId, _tOf(match), text);
-      final notes = await _api.fetchNotes(widget.matchId);
+      await _api.addNote(_mid, _tOf(match), text);
+      final notes = await _api.fetchNotes(_mid);
       if (!mounted) return;
       setState(() {
         _notes = notes;
@@ -1577,7 +1680,7 @@ class _MatchScreenState extends State<MatchScreen> {
     final id = (n["id"] as String?) ?? "";
     if (id.isEmpty) return;
     try {
-      await _api.deleteNote(widget.matchId, id);
+      await _api.deleteNote(_mid, id);
       if (!mounted) return;
       setState(() => _notes.removeWhere((x) => x["id"] == id));
     } catch (e) {
@@ -1784,8 +1887,8 @@ class _MatchScreenState extends State<MatchScreen> {
     if (!await _api.isHealthy()) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("A motor nem válaszol — újraindítom, egy "
-              "pillanat…")));
+          content: Text("A motor épp nem felel — megkeresem: ha dolgozik, "
+              "megvárom, ha leállt, újraindítom…")));
       final ok = await ApiClient.reviveEngine();
       if (!mounted) return;
       if (!ok) {
@@ -1955,7 +2058,7 @@ class _MatchScreenState extends State<MatchScreen> {
       ),
       onTap: () {
         Navigator.of(ctx).pop();
-        if (id == widget.matchId) return; // már ez van nyitva
+        if (id == _mid) return; // már ez van nyitva
         Navigator.of(context).pushReplacement(MaterialPageRoute(
             builder: (_) => MatchScreen(matchId: id)));
       },
@@ -1967,7 +2070,7 @@ class _MatchScreenState extends State<MatchScreen> {
     final match = _match;
     if (match == null) return;
     try {
-      final bytes = await _api.fetchStatsCsv(widget.matchId);
+      final bytes = await _api.fetchStatsCsv(_mid);
       final name = "${match.meta.homeTeam}_${match.meta.awayTeam}"
           .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
       final path = await FilePicker.platform.saveFile(
@@ -1993,7 +2096,7 @@ class _MatchScreenState extends State<MatchScreen> {
     final match = _match;
     if (match == null) return;
     try {
-      final bytes = await _api.fetchMatchReportExport(widget.matchId);
+      final bytes = await _api.fetchMatchReportExport(_mid);
       final name = "${match.meta.homeTeam}_${match.meta.awayTeam}"
           .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
       final path = await FilePicker.platform.saveFile(
@@ -2050,7 +2153,7 @@ class _MatchScreenState extends State<MatchScreen> {
     String? javaslat; // a mutatott sor; null = még számol
     var javaslatVan = false;
     void Function(void Function())? frissit;
-    _api.fetchGameWindow(widget.matchId).then((r) {
+    _api.fetchGameWindow(_mid).then((r) {
       final start = (r["start_s"] as num?)?.toDouble();
       final end = (r["end_s"] as num?)?.toDouble();
       final head = (r["head_s"] as num?)?.toDouble() ?? 0;
@@ -2154,7 +2257,7 @@ class _MatchScreenState extends State<MatchScreen> {
     frissit = null; // a késve érkező javaslat már ne frissítsen semmit
     if (ok != true) return;
     try {
-      final r = await _api.trimMatch(widget.matchId,
+      final r = await _api.trimMatch(_mid,
           _parseIdo(fromCtrl.text) ?? 0.0,
           toS: _parseIdo(toCtrl.text));
       if (!mounted) return;
@@ -2242,7 +2345,7 @@ class _MatchScreenState extends State<MatchScreen> {
               // motor nyolc kockán méri, mennyire ül a rajz a valódi
               // vonalakon (0..1), és megmondja, hol a leggyengébb.
               FutureBuilder<Map<String, dynamic>>(
-                future: _api.fetchCalibFit(widget.matchId),
+                future: _api.fetchCalibFit(_mid),
                 builder: (ctx2, snap) {
                   if (snap.connectionState != ConnectionState.done) {
                     return Text("Illeszkedés mérése a videón…",
@@ -2286,7 +2389,7 @@ class _MatchScreenState extends State<MatchScreen> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.network(
-                              _api.calibOverlayUrl(widget.matchId, t),
+                              _api.calibOverlayUrl(_mid, t),
                               fit: BoxFit.contain,
                               errorBuilder: (_, __, ___) => Container(
                                 padding: const EdgeInsets.all(12),
@@ -2322,11 +2425,11 @@ class _MatchScreenState extends State<MatchScreen> {
   /// Videót, képet, személyes adatot nem tartalmaz.
   Future<void> _saveDiagnostics() async {
     try {
-      final diag = await _api.fetchDiagnostics(widget.matchId);
+      final diag = await _api.fetchDiagnostics(_mid);
       if (!mounted) return;
       final path = await FilePicker.platform.saveFile(
         dialogTitle: "Diagnosztika mentése (JSON)",
-        fileName: "diagnosztika_${widget.matchId}.json",
+        fileName: "diagnosztika_${_mid}.json",
         type: FileType.custom,
         allowedExtensions: const ["json"],
       );
@@ -2371,7 +2474,7 @@ class _MatchScreenState extends State<MatchScreen> {
     );
     if (ok != true || !mounted) return;
     try {
-      await _api.swapTeams(widget.matchId);
+      await _api.swapTeams(_mid);
       await _load();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2392,7 +2495,7 @@ class _MatchScreenState extends State<MatchScreen> {
     // Betöltjük a meglévő rostert (szerkeszthető munkapéldány).
     List<Map<String, dynamic>> entries = [];
     try {
-      final r = await _api.fetchRoster(widget.matchId);
+      final r = await _api.fetchRoster(_mid);
       entries = ((r["suspensions"] as List?) ?? [])
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
@@ -2450,7 +2553,7 @@ class _MatchScreenState extends State<MatchScreen> {
     );
     if (saved != true || !mounted) return;
     try {
-      final r = await _api.saveRoster(widget.matchId, entries);
+      final r = await _api.saveRoster(_mid, entries);
       await _load(); // a frissített (újrabecsült) Tracking betöltése
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -2824,7 +2927,7 @@ class _MatchScreenState extends State<MatchScreen> {
           // MENTETT (tehát a frissen javított) kalibrációval indul, nem
           // a régi job-beállítással: különben ugyanazt a rossz
           // eredményt adná még egyszer, egy újabb óra árán.
-          if (q["next_action"] != null && !widget.matchId.startsWith("sim-"))
+          if (q["next_action"] != null && !_mid.startsWith("sim-"))
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
@@ -2836,7 +2939,7 @@ class _MatchScreenState extends State<MatchScreen> {
           // — a ✂ párbeszéd elő is tölti; innen egy kattintás, nem kell
           // a könyvtárba vagy az eszköztárba menni érte.
           if (warnings.any((w) => "$w".contains("nem-játéknak látszik")) &&
-              !widget.matchId.startsWith("sim-"))
+              !_mid.startsWith("sim-"))
             TextButton.icon(
               onPressed: () {
                 Navigator.pop(ctx);
@@ -2848,7 +2951,7 @@ class _MatchScreenState extends State<MatchScreen> {
           // ELCSÚSZÓ KALIBRÁCIÓ: a jelentés megmérte, hogy a visszarajzolt
           // vonal valahol nem ül a valódin — innen egy kattintás a képekig.
           if (warnings.any((w) => "$w".contains("pályavonal nem ül")) &&
-              !widget.matchId.startsWith("sim-"))
+              !_mid.startsWith("sim-"))
             TextButton.icon(
               onPressed: () {
                 Navigator.pop(ctx);
@@ -2919,7 +3022,7 @@ class _MatchScreenState extends State<MatchScreen> {
     );
     if (rendben != true) return;
     try {
-      await _api.reprocessMatch(widget.matchId);
+      await _api.reprocessMatch(_mid);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
@@ -3609,7 +3712,7 @@ class _MatchScreenState extends State<MatchScreen> {
       return;
     }
     try {
-      await _api.setJersey(widget.matchId, trackId, jersey);
+      await _api.setJersey(_mid, trackId, jersey);
       // Helyi frissítés: a szám ráírása minden kockára + a származtatott
       // nézetek (statisztika, passzháló) újraszámítása.
       for (final f in match.frames) {
@@ -3750,7 +3853,7 @@ class _MatchScreenState extends State<MatchScreen> {
       }
       if (uj == st.jerseyNumber) continue;
       try {
-        await _api.setJersey(widget.matchId, st.trackId, uj);
+        await _api.setJersey(_mid, st.trackId, uj);
         for (final f in match.frames) {
           for (final p in f.players) {
             if (p.trackId == st.trackId) p.jerseyNumber = uj;

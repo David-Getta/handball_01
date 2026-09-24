@@ -250,14 +250,41 @@ class Match:
     def to_dict(self) -> dict:
         """Beágyazott szótárrá alakít (Enumokat is szöveggé old fel).
 
-        Az `asdict` rekurzívan bejárja a dataclass-okat; az Enum értékeket utána
-        a `_enums_to_str` cseréli olvasható szövegre, hogy a JSON tiszta legyen.
+        A fejléc kicsi: azt az `asdict` járja be (mély másolat, a listák
+        nem osztoznak a meccsel). A kockák viszont egy egész meccsen
+        százezres nagyságrendű játékos-pozíciót jelentenek — az `asdict`
+        rekurziója és a mély másolás ott egy 60 perces meccsen 9
+        másodperc volt, és ennyi ideig a motor alig válaszolt. A kockákat
+        ezért KÉZZEL írjuk ki, ugyanazzal a kulcs-sorrenddel és
+        ugyanazokkal az értékekkel (a JSON bájtra azonos marad).
         """
-        return _enums_to_str(asdict(self))
+        return {"meta": _enums_to_str(asdict(self.meta)),
+                "frames": [frame_to_dict(fr) for fr in self.frames]}
 
     def to_json(self, indent: Optional[int] = None) -> str:
         """JSON szöveggé alakít. `indent=2`-vel ember által olvasható."""
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
+
+    def iter_json_chunks(self, frames_per_chunk: int = 400):
+        """A meccs JSON-ja DARABOKBAN (tömör, a `to_dict`-tel azonos tartalom).
+
+        A motor így adja ki a meccset a kliensnek: nem épít egyben egy
+        70 MB-os szöveget (ami alatt a JSON-író C-kódja végig fogja az
+        értelmezőt, és a motor más kérésre — életjelre — sem felel), hanem
+        kockák csoportjaiként. A darabok közt a többi kérés is sorra kerül.
+        """
+        meta = json.dumps(_enums_to_str(asdict(self.meta)),
+                          ensure_ascii=False, separators=(",", ":"))
+        yield '{"meta":' + meta + ',"frames":['
+        frames = self.frames
+        step = max(1, int(frames_per_chunk))
+        for i in range(0, len(frames), step):
+            chunk = ",".join(
+                json.dumps(frame_to_dict(fr), ensure_ascii=False,
+                           separators=(",", ":"))
+                for fr in frames[i:i + step])
+            yield ("," + chunk) if i else chunk
+        yield "]}"
 
     # ---- Deszerializáció: JSON -> Python objektum ------------------------------
 
@@ -296,6 +323,31 @@ class Match:
     def from_json(cls, text: str) -> "Match":
         """JSON szövegből épít Match objektumot."""
         return cls.from_dict(json.loads(text))
+
+
+def _ev(v):
+    """Enum → a szöveges értéke; minden más változatlan."""
+    return v.value if isinstance(v, Enum) else v
+
+
+def frame_to_dict(fr: "Frame") -> dict:
+    """Egy kocka szótára — az `asdict` + `_enums_to_str` kimenetével
+    AZONOS kulcs-sorrendben és értékekkel, csak mély másolás és kétszeri
+    rekurzív bejárás nélkül (egy teljes meccsen ez a szerializálás
+    idejének nagy része volt)."""
+    b = fr.ball
+    return {
+        "t": fr.t,
+        "players": [
+            {"track_id": p.track_id, "team": _ev(p.team), "x": p.x,
+             "y": p.y, "source": _ev(p.source),
+             "confidence": p.confidence,
+             "jersey_number": p.jersey_number, "role": _ev(p.role)}
+            for p in fr.players
+        ],
+        "ball": (None if b is None
+                 else {"x": b.x, "y": b.y, "confidence": b.confidence}),
+    }
 
 
 def _enums_to_str(obj):

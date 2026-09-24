@@ -3085,3 +3085,79 @@ def test_kezi_elemzes_kepernyo_a_meccs_nezetbol():
     assert _lista("kAnnShotOutcomes") == ANN_SHOT_OUTCOMES
     assert f"kAnnMaxTokens = {ANN_MAX_TOKENS};" in scr
     assert f"kAnnMaxArrows = {ANN_MAX_ARROWS};" in scr
+
+
+def test_a_dolgozo_motort_nem_lojuk_le_es_nem_teszunk_demot_a_meccs_helyere():
+    """ŐR: a "nem nyílik a könyvtár, nem indul a motor" hiba láncszemei.
+
+    1. Az életjel-próba megkülönbözteti a HALOTT (nem fogad kapcsolatot)
+       és a DOLGOZÓ (fogadja, de lassan felel) motort — a dolgozót a mély
+       öngyógyítás nem állítja le, hanem kivárja.
+    2. Az indító a dolgozó motor mellé nem indít második példányt.
+    3. A meccs-nézet valódi meccs helyett SOSEM mutat csendben demót.
+    4. A meccs letöltése háttér-szálon dekódol, időkorláttal; a könyvtár-
+       lista a lassú feleletet (időtúllépést) újrapróbálja.
+    """
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    lau = (lib / "services" / "backend_launcher.dart").read_text(encoding="utf-8")
+    ms = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    # 1) busy ≠ down, és a revive a leállítás ELŐTT keres/kivár.
+    assert "enum EngineProbe { ok, busy, down }" in api
+    assert "Socket.connect(" in api and "EngineProbe.busy" in api
+    rev = api[api.index("static Future<bool> reviveEngine("):]
+    rev = rev[:rev.index("\n  }\n")]
+    assert rev.index("findEnginePort()") < rev.index("launcher.stop()")
+    assert "EngineProbe.ok" in rev and "busyWait" in rev
+    # 2) az indító a dolgozó motort is élőnek veszi.
+    fhp = lau[lau.index("Future<int?> _findHealthyPort()"):]
+    assert "ApiClient.findEnginePort(" in fhp[:400]
+    # 3) nincs csendes demó a valódi meccs helyett.
+    assert "wantDemo" in ms and "_loadErrorView(" in ms
+    assert 'widget.matchId == "sim-0"' in ms
+    # 4) háttér-dekódolás + időkorlát; a lista a timeoutot újrapróbálja.
+    fm = api[api.index("Future<Match> fetchMatch("):]
+    fm = fm[:fm.index("\n  }\n")]
+    assert "compute(_decodeMatch" in fm and ".timeout(" in fm
+    lm = api[api.index("Future<List<Map<String, dynamic>>> listMatches()"):]
+    lm = lm[:lm.index("\n  }\n")]
+    assert "on TimeoutException" in lm
+
+
+def test_a_nyitokepernyo_nem_allitja_le_a_motort_a_belepeskor():
+    """ŐR — a "nem indul el a motor" GYÖKÉROKA.
+
+    A nyitóképernyő a belépéskor lecserélődik (pushReplacement), és a
+    lecserélés `dispose`-t hív. A régi kód a `dispose`-ban állította le a
+    motort ("az app bezárásakor"), vagyis a frissen indított motort a
+    belépés után fél másodperccel lelőtte, "mi kértük" jelöléssel — az
+    őrkutya sem indította újra. A kilépéskori leállításnak az APP
+    szintjén (main.dart) a helye, a teljes futás alatt élő figyelővel.
+    """
+    import re
+
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    boot = (lib / "ui" / "bootstrap_screen.dart").read_text(encoding="utf-8")
+    main = (lib / "main.dart").read_text(encoding="utf-8")
+    disp = boot[boot.index("void dispose()"):]
+    disp = disp[:disp.index("super.dispose();")]
+    kod = "\n".join(l for l in disp.splitlines()
+                    if not l.strip().startswith("//"))
+    assert ".stop()" not in kod, "a dispose NEM állíthatja le a motort"
+    assert "didRequestAppExit" not in boot
+    assert "pushReplacement" in boot, "a nyitóképernyő lecserélődik"
+    # Az app-szintű kilépés: előbb a mentés, aztán a motor.
+    assert "didRequestAppExit" in main and "addObserver(this)" in main
+    sd = main[main.index("Future<void> _shutdown("):]
+    sd = sd[:sd.index("\n  }\n")]
+    assert sd.index("_stopRunningJobs(") < sd.index(
+        "BackendLauncher.instance?.stop()")
+    assert re.search(r"_exitSaveWait\s*=\s*Duration\(seconds:\s*\d+\)", main)

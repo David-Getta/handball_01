@@ -7,7 +7,6 @@
 library;
 
 import "dart:async";
-import "dart:ui" show AppExitResponse;
 
 import "package:flutter/material.dart";
 
@@ -25,7 +24,7 @@ class BootstrapScreen extends StatefulWidget {
   State<BootstrapScreen> createState() => _BootstrapScreenState();
 }
 
-class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingObserver {
+class _BootstrapScreenState extends State<BootstrapScreen> {
   final BackendLauncher _launcher = BackendLauncher();
   String _message = "Motor indítása…";
   BackendPhase? _phase;
@@ -49,22 +48,20 @@ class _BootstrapScreenState extends State<BootstrapScreen> with WidgetsBindingOb
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _start();
   }
 
   @override
   void dispose() {
     _tick?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    _launcher.stop(); // az app bezárásakor a motort is leállítjuk
+    // FONTOS: itt NEM állítjuk le a motort. Ez a képernyő a belépéskor
+    // lecserélődik (pushReplacement), és a lecserélés is `dispose`-t
+    // hív — a régi kód itt állította le a motort, vagyis a frissen
+    // indított motort a belépés után fél másodperccel LELŐTTE, "mi
+    // kértük" jelöléssel (az őrkutya sem indította újra). Ebből jött a
+    // "nem nyílik a könyvtár, nem indul el a motor". A kilépéskori
+    // leállítás az app szintjén él (main.dart), az egész futás alatt.
     super.dispose();
-  }
-
-  @override
-  Future<AppExitResponse> didRequestAppExit() async {
-    _launcher.stop();
-    return AppExitResponse.exit;
   }
 
   Future<void> _start() async {

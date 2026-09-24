@@ -5,14 +5,25 @@
 /// Végpontok: GET /matches/{id} (Tracking JSON), GET /matches/{id}/stats.
 library;
 
+import "dart:async";
 import "dart:convert";
 import "dart:io";
 import "dart:typed_data";
+import "package:flutter/foundation.dart";
 import "package:http/http.dart" as http;
 
 import "../models/tracking.dart";
 import "backend_launcher.dart";
 import "session_store.dart";
+
+/// Egy motor-port állapota (lásd `ApiClient.probePort`).
+enum EngineProbe { ok, busy, down }
+
+/// A meccs JSON-jának dekódolása — HÁTTÉR-szálon fut (`compute`): egy
+/// teljes meccs 60–70 MB, a felület szálán a dekódolás másodpercekre
+/// lefagyasztaná az ablakot.
+Match _decodeMatch(Uint8List bytes) =>
+    Match.fromJson(jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>);
 
 class ApiClient {
   /// Kimondott cím-felülbírálás (port-próbákhoz). Ha null, a kliens az
@@ -38,38 +49,100 @@ class ApiClient {
 
   ApiClient({String? baseUrl}) : _baseUrlOverride = baseUrl;
 
-  /// Megkeresi ÚJRA, melyik porton válaszol a motor, és átállítja az
+  /// Megkeresi ÚJRA, melyik porton él a motor, és átállítja az
   /// alapértelmezett címet. Akkor kell, ha egy hívás hálózati hibára
   /// futott: a motor közben újraindulhatott másik porton (pl. két
   /// példány közül az egyik kilépett). Igaz, ha talált motort.
+  ///
+  /// A DOLGOZÓ (a kapcsolatot fogadó, de épp lassan felelő) motor is
+  /// találat: az él, csak elfoglalt — ha nem-élőnek vennénk, a hívó
+  /// leállítaná és újraindítaná, és a felhasználó percekig várna egy
+  /// motorra, ami egyébként másodpercek múlva felelt volna.
   static Future<bool> rediscoverEngine() async {
-    final probes = [
-      for (var p = 8000; p < 8000 + portRange; p++)
-        ApiClient(baseUrl: "http://127.0.0.1:$p")
-            .isHealthy()
-            .then((ok) => ok ? p : null)
-    ];
-    for (final p in await Future.wait(probes)) {
-      if (p != null) {
-        defaultBaseUrl = "http://127.0.0.1:$p";
-        return true;
-      }
+    final found = await findEnginePort();
+    if (found == null) return false;
+    defaultBaseUrl = "http://127.0.0.1:$found";
+    return true;
+  }
+
+  /// A legkisebb porton élő motor (válaszol VAGY dolgozik), vagy null.
+  /// Előbb a válaszolót keressük, és ha egy sincs, a dolgozót.
+  static Future<int?> findEnginePort({int from = 8000}) async {
+    final ports = [for (var p = from; p < from + portRange; p++) p];
+    final results = await Future.wait(ports.map((p) => probePort(p)));
+    for (var i = 0; i < ports.length; i++) {
+      if (results[i] == EngineProbe.ok) return ports[i];
     }
-    return false;
+    for (var i = 0; i < ports.length; i++) {
+      if (results[i] == EngineProbe.busy) return ports[i];
+    }
+    return null;
+  }
+
+  /// Egy port állapota: válaszol-e rajta a motor (`ok`), fogadja-e a
+  /// kapcsolatot, de épp nem felel időben (`busy` — él, dolgozik), vagy
+  /// senki sem figyel rajta (`down`).
+  ///
+  /// A különbség a lényeg: a régi életjel-próba 2 másodperc után
+  /// halottnak nyilvánította az épp számoló motort, a mély öngyógyítás
+  /// pedig ilyenkor LEÁLLÍTOTTA és újraindította — pont azt a motort
+  /// lőttük le, amelyik dolgozott, és az újraindulása (a könyvtár
+  /// betöltésével) hosszabb volt, mint a várakozás lett volna.
+  static Future<EngineProbe> probePort(int port,
+      {Duration httpTimeout = const Duration(seconds: 6)}) async {
+    try {
+      final s = await Socket.connect("127.0.0.1", port,
+          timeout: const Duration(milliseconds: 1500));
+      s.destroy();
+    } catch (_) {
+      return EngineProbe.down; // senki nem figyel ezen a porton
+    }
+    try {
+      final resp = await http
+          .get(Uri.parse("http://127.0.0.1:$port/health"))
+          .timeout(httpTimeout);
+      if (resp.statusCode != 200) return EngineProbe.down; // nem a miénk
+      try {
+        final body = jsonDecode(utf8.decode(resp.bodyBytes));
+        final v = body is Map ? body["version"] : null;
+        if (v is String && v.isNotEmpty) engineVersion = v;
+        if (body is Map) _noteLibraryStatus(body["library"]);
+      } catch (_) {}
+      return EngineProbe.ok;
+    } on TimeoutException {
+      return EngineProbe.busy; // él, de épp nem felel időben
+    } catch (_) {
+      return EngineProbe.down;
+    }
   }
 
   /// Mélyebb öngyógyítás hálózati hibánál: előbb ÚJRA MEGKERESSÜK a
   /// motort a port-tartományban (elmozdulhatott), és ha SEHOL nem
-  /// válaszol, ÚJRA IS INDÍTJUK a motor-indítón keresztül — a
+  /// fogad kapcsolatot, ÚJRA IS INDÍTJUK a motor-indítón keresztül — a
   /// motor-folyamat el is halhatott (frissítés utáni fájlcsere, a gép
   /// altatása, belső hiba), olyankor a port-keresés önmagában kevés,
   /// és a felhasználót eddig csak a program teljes újraindítása
   /// mentette meg. Igaz, ha a végén válaszol a motor.
-  static Future<bool> reviveEngine() async {
-    if (await rediscoverEngine()) return true;
+  ///
+  /// A DOLGOZÓ motort sosem állítjuk le: megvárjuk (legfeljebb
+  /// `busyWait`), amíg felel.
+  static Future<bool> reviveEngine(
+      {Duration busyWait = const Duration(seconds: 90)}) async {
+    final found = await findEnginePort();
+    if (found != null) {
+      defaultBaseUrl = "http://127.0.0.1:$found";
+      final deadline = DateTime.now().add(busyWait);
+      while (true) {
+        final st = await probePort(found);
+        if (st == EngineProbe.ok) return true;
+        if (st == EngineProbe.down) break; // közben leállt: indítjuk
+        if (DateTime.now().isAfter(deadline)) return false;
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
+    }
     final launcher = BackendLauncher.instance;
     if (launcher == null) return false; // web/teszt: nincs mit indítani
-    launcher.stop(); // a félholt (élő, de nem válaszoló) példány elengedése
+    launcher.stop(); // a saját (már nem figyelő) folyamat elengedése
     final st = await launcher.ensureRunning();
     return st.phase == BackendPhase.ready;
   }
@@ -110,10 +183,12 @@ class ApiClient {
 
   /// Életjel: igaz, ha a backend elérhető (GET /health).
   Future<bool> isHealthy() async {
+    // 6 mp: a dolgozó motor (egy teljes meccs kiadása, elemzés) is
+    // feleljen — a korábbi 2 mp-nél a számoló motort halottnak hittük.
     try {
       final resp = await http
           .get(Uri.parse("$baseUrl/health"))
-          .timeout(const Duration(seconds: 2));
+          .timeout(const Duration(seconds: 6));
       if (resp.statusCode != 200) return false;
       try {
         final body = jsonDecode(utf8.decode(resp.bodyBytes));
@@ -1020,8 +1095,10 @@ class ApiClient {
     while (true) {
       for (final base in {baseUrl, ApiClient.defaultBaseUrl}) {
         try {
+          // 10 mp: a lista kicsi, de a motor épp dolgozhat (meccs
+          // kiadása, elemzés) — a lassú felelet nem halál.
           final resp = await http.get(Uri.parse("$base/matches"))
-              .timeout(const Duration(seconds: 4));
+              .timeout(const Duration(seconds: 10));
           if (resp.statusCode != 200) {
             throw Exception(_hiba("Nem sikerült lekérni a meccslistát", resp));
           }
@@ -1033,8 +1110,13 @@ class ApiClient {
           lastError = e;
         } on http.ClientException catch (e) {
           lastError = e;
+        } on TimeoutException catch (e) {
+          // A motor él, csak épp dolgozik: újrapróbáljuk, nem hibázunk.
+          lastError = e;
         }
       }
+      // Ha közben másik portra költözött (újraindult), megkeressük.
+      if (lastError is SocketException) await rediscoverEngine();
       if (DateTime.now().isAfter(deadline)) {
         throw Exception(
             "A motor (elemző szolgáltatás) nem válaszol. Ha az app most "
@@ -1686,12 +1768,16 @@ class ApiClient {
 
   /// Lekéri egy meccs Tracking-jét és Match objektummá alakítja.
   Future<Match> fetchMatch(String matchId) async {
-    final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId"));
+    // Egy teljes meccs 60–70 MB: a motor darabolva adja, mi háttér-
+    // szálon dekódoljuk (a felület közben nem fagy le). Az időkorlát
+    // bőséges — lassú gépen, épp dolgozó motor mellett is kiférjen.
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId"))
+        .timeout(const Duration(minutes: 3));
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült lekérni a meccset", resp));
     }
-    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
-    return Match.fromJson(json);
+    return compute(_decodeMatch, resp.bodyBytes);
   }
 
   /// Feltölti a videót a backendre a LEMEZRŐL STREAM-elve (POST /upload) — a
@@ -1905,19 +1991,27 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
-  Future<List<Map<String, dynamic>>> fetchJobs() async {
+  Future<List<Map<String, dynamic>>> fetchJobs() async =>
+      (await tryFetchJobs()) ?? const [];
+
+  /// A munkák listája — NULL, ha most nem sikerült lekérni (a motor
+  /// dolgozik vagy épp nem fut). A figyelő ezt nem keverheti össze az
+  /// üres listával: az "nincs futó munka" lenne, és egy lassú felelet
+  /// miatt kész-nek hinné a futó feldolgozást (eltűnne a jelvény, és a
+  /// kezdőlap feleslegesen újratöltené a könyvtárat).
+  Future<List<Map<String, dynamic>>?> tryFetchJobs() async {
     try {
       final resp = await http
           .get(Uri.parse("$baseUrl/jobs"))
-          .timeout(const Duration(seconds: 4));
-      if (resp.statusCode != 200) return const [];
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return null;
       final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
       return ((json["jobs"] as List?) ?? const [])
           .whereType<Map>()
           .map((m) => Map<String, dynamic>.from(m))
           .toList();
     } catch (_) {
-      return const [];
+      return null;
     }
   }
 

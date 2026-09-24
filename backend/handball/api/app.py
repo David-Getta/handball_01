@@ -455,14 +455,19 @@ def create_app():
         background=_os.environ.get("HANDBALL_STORE_SYNC", "") != "1")
 
     @app.get("/health")
-    def health():
+    async def health():
         """Életjel — a kliens ezzel ellenőrzi, hogy a backend elérhető.
 
         A verziót is kiadja: a kliens összeveti a sajátjával, és a
         FÉL-FRISSÜLT telepítés (új app + régi motor, vagy fordítva) így
         azonnal látszik, nem rejtélyes hibákként. A könyvtár háttér-
         betöltésének állását is mutatja ("library": loading/loaded/total),
-        hogy a kliens meg tudja mondani, mire vár."""
+        hogy a kliens meg tudja mondani, mire vár.
+
+        SZÁNDÉKOSAN `async`: az eseményhurkon fut, nem a szál-készletben
+        — így akkor sem áll sorba a nehéz (elemző) kérések mögött, ha
+        azok épp lefoglalták a készletet. A törzs nem blokkol (a tár
+        állása nem vár a betöltésre)."""
         from .. import __version__
         return {"status": "ok", "version": __version__,
                 "library": _store.status()}
@@ -1857,11 +1862,24 @@ def create_app():
 
     @app.get("/matches/{match_id}")
     def get_match(match_id: str):
-        """Visszaadja a kért meccs Tracking JSON-ját (ezt rajzolja ki a kliens)."""
+        """Visszaadja a kért meccs Tracking JSON-ját (ezt rajzolja ki a kliens).
+
+        DARABOLVA (streamelve) adjuk ki, nem egy szótárként: egy teljes
+        meccs 60–70 MB JSON. A szótár-visszaadás a FastAPI saját
+        kódolóján is végigment (egy 60 perces meccsen 9 + 9 másodperc), és
+        ez alatt a motor az életjelre sem felelt időben — a kliens ilyenkor
+        halottnak hitte, és újraindította. A darabok közt a többi kérés is
+        sorra kerül, és a memóriában sincs egyszerre a teljes szöveg."""
+        from fastapi.responses import StreamingResponse
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return match.to_dict()
+
+        def _bajtok():
+            for darab in match.iter_json_chunks():
+                yield darab.encode("utf-8")
+
+        return StreamingResponse(_bajtok(), media_type="application/json")
 
     @app.patch("/matches/{match_id}")
     def update_match(match_id: str, body: dict):
@@ -10622,7 +10640,7 @@ def create_app():
         fused.meta.match_id = new_id
         _store[new_id] = fused
         try:
-            _match_path(new_id).write_text(fused.to_json(indent=2),
+            _match_path(new_id).write_text(fused.to_json(),
                                            encoding="utf-8")
         except Exception:
             pass
@@ -10633,10 +10651,20 @@ def create_app():
 
     # Segéd a feltöltéshez/teszteléshez: memóriába tesz ÉS lemezre tükröz.
     def _put_match(match: Match) -> None:
+        """Memóriába tesz ÉS lemezre tükröz.
+
+        TÖMÖR JSON-nal (behúzás nélkül): egy teljes meccs behúzva 114 MB
+        és 11 mp volt (a behúzásos kiírás a lassú, tisztán Python kódolón
+        megy), tömören 71 MB és 1,5 mp — a betöltés is ennyivel gyorsabb.
+        Az írás ATOMIKUS (ideiglenes fájl + csere): egy megszakadt mentés
+        (a gép alvása, a program bezárása) nem hagy félig írt, betölthetetlen
+        meccs-fájlt maga után."""
         _store[match.meta.match_id] = match
         try:
-            _match_path(match.meta.match_id).write_text(
-                match.to_json(indent=2), encoding="utf-8")
+            p = _match_path(match.meta.match_id)
+            tmp = p.with_suffix(".json.tmp")
+            tmp.write_text(match.to_json(), encoding="utf-8")
+            tmp.replace(p)
         except Exception:
             pass  # a memóriabeli tár akkor is működik, ha a lemezre írás elakad
 

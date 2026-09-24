@@ -3,7 +3,49 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.139 óta)
+## Kiadatlan (a v0.1.140 óta)
+
+- **A program nem lövi le a saját motorját belépéskor** (javítás, a
+  "nem nyílik a könyvtár, nem indul el a motor" GYÖKÉROKA): a
+  nyitóképernyő a belépéskor lecserélődik, és a lecseréléskor —
+  tévesen "az app bezárásának" hitt eseményre — LEÁLLÍTOTTA a motort,
+  "mi kértük" jelöléssel, így az őrkutya sem indította újra. A frissen
+  indított motor tehát a belépés után fél másodperccel meghalt, és a
+  "Motor újraindítása" gombig halott maradt. Azért csak "általában"
+  jött elő, mert ha az előző futásból egy árva motor még élt, azt a
+  program nem lőtte le — frissítés vagy a gép újraindítása után viszont
+  mindig. A kilépéskori leállítás mostantól az app szintjén él: előbb a
+  futó feldolgozás szelíd leállítása és a rész-eredmény mentése
+  (legfeljebb 25 mp-ig kivárva), utána a motor — így árva motor sem
+  marad a program után.
+- **A motor nem hal meg és nem lövődik le, a könyvtár megnyílik**
+  (javítás): a lassú motor is egy láncreakciót indított. (1) Egy teljes meccs megnyitásakor a motor 21
+  másodpercig alig felelt (a meccs szótárrá alakítása és a webkeret
+  saját kódolója), ez alatt az életjel is 12 másodpercig állt. (2) A
+  kliens az életjelre 2 másodpercet várt, utána HALOTTNAK hitte a
+  motort, a valódi meccs helyére csendben DEMÓT tett ("Demó Hazai –
+  Demó Vendég"), a könyvtár-gomb pedig "újraélesztette" — vagyis
+  LELŐTTE a dolgozó motort, és újraindította, ami a könyvtár
+  betöltésével együtt sokkal tovább tartott. Javítások: a meccs
+  kiírása ötször gyorsabb és darabolva megy (a meccs megnyitása 21 mp
+  helyett 3 mp, közben az életjel 0,03 mp alatt felel); az életjel nem
+  áll sorba a nehéz kérések mögött; a kliens megkülönbözteti a HALOTT
+  (nem fogad kapcsolatot) és a DOLGOZÓ motort — a dolgozót kivárja,
+  sosem lövi le, és mellé sem indít második példányt; a meccs a felület
+  szála helyett háttérben dekódolódik (nem fagy le az ablak); a
+  könyvtár-lista a lassú feleletet újrapróbálja; valódi meccs helyett
+  soha nincs csendes demó — a képernyő megmondja, mi a baj, és
+  "Újrapróbálom" / "Elemzés-könyvtár" gombot ad; a menü "Meccs-elemző"
+  pontja a legutóbb megnyitott meccset nyitja a demó helyett. A meccsek
+  mentése tömör és atomikus (behúzva 114 MB és 11 mp volt, most 71 MB és
+  1,5 mp; egy megszakadt mentés nem hagy betölthetetlen fájlt). A
+  feldolgozás-figyelő a lassú feleletnél nem hiszi késznek a futó munkát
+  (eddig ilyenkor eltűnt a jelvény, és a kezdőlap feleslegesen újratöltött).
+
+## v0.1.140 — kiadva (2026-09-23)
+
+> Kiadás-jegyzet: kézi elemzés (saját napló + taktikai tábla), 7a6-figura,
+> és a meccs-nézet könyvtár-gombja maga éleszti a motort.
 
 - **Kézi elemzés: saját esemény-napló és taktikai tábla** (új funkció):
   a meccs-nézet új "Kézi elemzés" gombja egy külön munkafelületet nyit,

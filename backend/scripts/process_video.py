@@ -1332,7 +1332,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
 
     if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
         with open(out_path, "w", encoding="utf-8") as f:
-            f.write(match.to_json(indent=2))
+            f.write(match.to_json())
         print(f"Tracking JSON kiírva: {out_path} ({len(match.frames)} frame)")
     return match
 

@@ -64,23 +64,15 @@ class BackendLauncher {
   /// Megkeresi, melyik porton válaszol a motor (a kezdőtől felfelé), és
   /// TALÁLATKOR átállítja az alapértelmezett kliens-címet is — az ezután
   /// létrejövő ApiClient-ek automatikusan a jó portra beszélnek.
+  ///
+  /// A DOLGOZÓ motor (fogadja a kapcsolatot, de épp lassan felel) is
+  /// találat: különben egy számoló motor mellé egy MÁSODIK példányt
+  /// indítanánk egy másik porton — kétszeres memória, és a kliens a
+  /// kettő között ugrálna.
   Future<int?> _findHealthyPort() async {
-    // Párhuzamos próbák (a nem futó portok azonnal elutasítanak) — a
-    // legkisebb válaszoló portot választjuk.
-    final probes = [
-      for (var p = port; p < port + portRange; p++)
-        ApiClient(baseUrl: "http://127.0.0.1:$p")
-            .isHealthy()
-            .then((ok) => ok ? p : null)
-    ];
-    final results = await Future.wait(probes);
-    for (final p in results) {
-      if (p != null) {
-        ApiClient.defaultBaseUrl = "http://127.0.0.1:$p";
-        return p;
-      }
-    }
-    return null;
+    final p = await ApiClient.findEnginePort(from: port);
+    if (p != null) ApiClient.defaultBaseUrl = "http://127.0.0.1:$p";
+    return p;
   }
 
   /// A megadott porton futó motor verziója a /health-ből (null: nem
@@ -108,9 +100,7 @@ class BackendLauncher {
     } catch (_) {}
     for (var i = 0; i < 10; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 400));
-      if (!await ApiClient(baseUrl: "http://127.0.0.1:$p").isHealthy()) {
-        return;
-      }
+      if (await ApiClient.probePort(p) == EngineProbe.down) return;
       if (i == 3) await _killPortProcess(p); // a /shutdown nem ment
     }
   }
@@ -489,15 +479,17 @@ class BackendLauncher {
     }
 
     // 3) Válaszol-e valamelyik porton?
-    final answering = <int>[];
-    final probes = [
-      for (var p = 8000; p < 8000 + portRange; p++)
-        ApiClient(baseUrl: "http://127.0.0.1:$p")
-            .isHealthy()
-            .then((ok) => ok ? p : null)
-    ];
-    for (final p in await Future.wait(probes)) {
-      if (p != null) answering.add(p);
+    // A "dolgozik" (a kapcsolatot fogadja, de épp nem felel időben)
+    // külön jelölést kap: az a motor él, csak számol.
+    final answering = <String>[];
+    final ports = [for (var p = 8000; p < 8000 + portRange; p++) p];
+    final states =
+        await Future.wait(ports.map((p) => ApiClient.probePort(p)));
+    for (var i = 0; i < ports.length; i++) {
+      if (states[i] == EngineProbe.ok) answering.add("${ports[i]}");
+      if (states[i] == EngineProbe.busy) {
+        answering.add("${ports[i]} (dolgozik, lassan felel)");
+      }
     }
     b.writeln("portok:     ${answering.isEmpty ? "egyik sem válaszol "
         "(8000–${8000 + portRange - 1})" : answering.join(", ")}");

@@ -105,7 +105,15 @@ class JobsMonitor {
 
   Future<void> _poll() async {
     if (!_running) return;
-    final friss = await _api.fetchJobs();
+    final lekert = await _api.tryFetchJobs();
+    if (lekert == null) {
+      // Nem sikerült lekérni (a motor dolgozik / épp nem fut): a MOSTANI
+      // állapot marad — nem "fejeződött be" semmi —, és hamar újra kérdezünk.
+      _timer?.cancel();
+      _timer = Timer(const Duration(seconds: 5), () => unawaited(_poll()));
+      return;
+    }
+    final friss = lekert;
     final voltAktiv = jobs.value.any(isActive);
     final vanAktiv = friss.any(isActive);
     _jeloldMegAzUjonnanKeszet(friss);

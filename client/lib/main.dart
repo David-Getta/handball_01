@@ -6,11 +6,13 @@ library;
 
 import "dart:async";
 import "dart:io";
+import "dart:ui" show AppExitResponse;
 
 import "package:flutter/material.dart";
 import "package:media_kit/media_kit.dart";
 
 import "services/api_client.dart";
+import "services/backend_launcher.dart";
 import "theme/app_theme.dart";
 import "ui/bootstrap_screen.dart";
 
@@ -37,7 +39,8 @@ class HandballApp extends StatefulWidget {
   State<HandballApp> createState() => _HandballAppState();
 }
 
-class _HandballAppState extends State<HandballApp> {
+class _HandballAppState extends State<HandballApp>
+    with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late final AppLifecycleListener _lifecycle;
 
@@ -57,35 +60,70 @@ class _HandballAppState extends State<HandballApp> {
     // futó feldolgozást — a szerver a részt szelíden elmenti; a maradék
     // kockázatot a 3 percenkénti checkpoint amúgy is fedezi.
     _lifecycle = AppLifecycleListener(onDetach: _onDetach);
+    // A kilépés-kérés (ablak bezárása, Cmd+Q) az APP szintjén él, az
+    // egész futás alatt. Korábban az indító képernyőhöz volt kötve, ami
+    // a belépéskor lecserélődik — a kilépéskori motor-leállítás így
+    // sosem futott le, és a motor árván maradt a program után.
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _lifecycle.dispose();
     super.dispose();
   }
 
-  // Bezáráskor (a platform az ablak zárásakor detach-eli az appot):
-  // ha épp feldolgozás fut, kérjük a szelíd leállítást — a szerver az
-  // addig kész részt elmenti. Fire-and-forget: a detach után nincs mód
-  // megvárni, de a kérés elindul, és a checkpoint fedezi a maradékot.
-  void _onDetach() {
-    if (_exitHandled) return;
-    _exitHandled = true;
-    unawaited(_stopRunningJobs());
+  /// Kilépés-kérés: előbb a futó feldolgozás szelíd leállítása (a szerver
+  /// az addig kész részt ELMENTI — ezt meg is várjuk, legfeljebb
+  /// `_exitSaveWait`-ig), utána a motor leállítása. A kilépést a mentés
+  /// idejére halasztjuk: különben az órákig gyűjtött munka veszne el.
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    await _shutdown(waitForSave: true);
+    return AppExitResponse.exit;
   }
 
-  Future<void> _stopRunningJobs() async {
+  static const Duration _exitSaveWait = Duration(seconds: 25);
+
+  // Bezáráskor (a platform az ablak zárásakor detach-eli az appot), ha a
+  // kilépés-kérés nem jött meg: best-effort, várakozás nélkül.
+  void _onDetach() {
+    unawaited(_shutdown(waitForSave: false));
+  }
+
+  Future<void> _shutdown({required bool waitForSave}) async {
+    if (_exitHandled) return;
+    _exitHandled = true;
+    await _stopRunningJobs(waitForSave: waitForSave);
+    // A motor leállítása: a KILÉPÉSKOR, nem korábban (lásd fent).
+    BackendLauncher.instance?.stop();
+  }
+
+  Future<void> _stopRunningJobs({required bool waitForSave}) async {
     try {
       final api = ApiClient();
       final jobs =
-          await api.fetchJobs().timeout(const Duration(seconds: 2));
-      for (final j in jobs) {
-        if (j["status"] == "running") {
-          try {
-            await api.cancelJob(j["job_id"] as String);
-          } catch (_) {}
-        }
+          await api.fetchJobs().timeout(const Duration(seconds: 3));
+      final futok = [
+        for (final j in jobs)
+          if (j["status"] == "running") j["job_id"] as String,
+      ];
+      for (final id in futok) {
+        try {
+          await api.cancelJob(id);
+        } catch (_) {}
+      }
+      if (!waitForSave || futok.isEmpty) return;
+      // Megvárjuk, amíg a futó munka lezárul (a rész-eredmény mentése).
+      final hatarido = DateTime.now().add(_exitSaveWait);
+      while (DateTime.now().isBefore(hatarido)) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        final most = await api.tryFetchJobs();
+        if (most == null) return; // a motor már nem felel — nincs mit várni
+        final meg = most.any(
+            (j) => futok.contains(j["job_id"]) && j["status"] == "running");
+        if (!meg) return;
       }
     } catch (_) {
       // A motor már nem válaszol vagy nincs futó munka — nincs teendő.
