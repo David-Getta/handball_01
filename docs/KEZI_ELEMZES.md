@@ -13,7 +13,22 @@ hetesnél a **kimenetel** (gól, védés, mellé, kapufa, blokk), és egy
 a törlés visszavonható.
 
 Az idő mező a meccs-nézet aktuális idejével indul; a mellette lévő gomb
-oda állítja vissza.
+oda állítja vissza, a kamera-gomb pedig a lejátszó mostani helyét veszi
+át. A napló egy idejére kattintva a videó oda ugrik.
+
+## A meccs videója közben
+
+Ha a meccs eredeti videója ezen a gépen van, a képernyő tetején lejátszó
+fut (a meccs-nézet idejéről indul, magától nem játszik). A kép
+**nagyítható**: MacBook-touchpaden két ujjas csippentéssel (két ujjas
+húzással mozgatható), egérrel Ctrl+görgővel (Macen ⌘+görgővel is), vagy
+a kép sarkában a + / − / 1× gombokkal; dupla kattintás visszaállítja. A
+videó-sáv magassága a sáv alatti elválasztó húzásával állítható (dupla
+kattintás: alap-arány), a fejléc "Videó" kapcsolójával elrejthető.
+
+Az idő mindenhol az **eredeti videó ideje** — ugyanaz, amit a lejátszó
+mutat; a "Pozíciók a meccsből" a feldolgozás kezdő-kockájával számol
+vissza.
 
 ## Taktikai táblák
 

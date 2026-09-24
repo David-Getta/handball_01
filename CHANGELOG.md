@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.141 óta)
 
+- **Kézi elemzés: közben látszik a meccs, és nagyítható**: ha a meccs
+  videója ezen a gépen van, a kézi elemzés tetején lejátszó fut (a
+  meccs-nézet idejéről indul). A kép nagyítható és kicsinyíthető
+  MacBook-touchpad csippentéssel, Ctrl/⌘+görgővel vagy a sarok
+  + / − / 1× gombjaival; a videó-sáv magassága húzással állítható, a
+  "Videó" kapcsolóval elrejthető. Az idő egy kattintással átvehető a
+  lejátszóból (esemény és tábla), és a napló egy idejére kattintva a
+  videó oda ugrik. Javítás: az alap-felállásban a "4"-es védő eltakarta a
+  beállót; az idő mindenhol az eredeti videó ideje (korábban a
+  feldolgozás kezdetétől mért idő volt, ami eltolt kezdésnél elcsúszott).
+  A meccs-nézet videója is ⌘+görgővel nagyítható.
 - **A kezdőlap és a felderítés sem számol elölről minden indításkor**
   (javítás): a kezdőlap szezon-kártyái az egész könyvtárra számoltak —
   a szezon edzés-fókusz meccsenként ~30 mp (húsz meccsnél ~10 perc), a

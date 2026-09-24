@@ -3087,6 +3087,54 @@ def test_kezi_elemzes_kepernyo_a_meccs_nezetbol():
     assert f"kAnnMaxArrows = {ANN_MAX_ARROWS};" in scr
 
 
+def test_kezi_elemzes_kozben_latszik_a_nagyithato_meccs_video():
+    """ŐR: a kézi elemzés közben a meccs videója is látszik, és nagyítható
+    — MacBook-touchpaddal (csippentés), Ctrl/⌘+görgővel és gombokkal;
+    az idő a lejátszóból átvehető, a napló idejére kattintva a videó oda
+    ugrik. Az idő mindenhol az EREDETI videó ideje. Az alap-felállás
+    bábui nem fedik egymást (a "4" eltakarta a beállót)."""
+    import math
+    import re
+
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    scr = (lib / "ui" / "annotation_screen.dart").read_text(encoding="utf-8")
+    vp = (lib / "ui" / "video_panel.dart").read_text(encoding="utf-8")
+    zp = (lib / "ui" / "zoomable.dart").read_text(encoding="utf-8")
+    ms = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    # A videó a kézi elemzésben: nagyítás-gombokkal, átméretezhető sávval.
+    assert 'import "video_panel.dart";' in scr
+    assert "VideoPanel(" in scr and "zoomButtons: true" in scr
+    assert "initialSeconds:" in scr and "_videoSplitter(" in scr
+    assert "_takeVideoTime(" in scr and "_seekVideo(" in scr
+    assert "positionSeconds" in vp and "final double? initialSeconds;" in vp
+    assert "seekTo(initial, play: false)" in vp
+    # Nagyítás: csippentés (scale-gesztus), Ctrl ÉS ⌘ + görgő, gombok —
+    # a gombok a gesztus-figyelőn KÍVÜL (gyors "+ +" ne legyen dupla
+    # koppintás = visszaállítás).
+    assert "onScaleUpdate" in zp and "isMetaPressed" in zp
+    assert "final bool showButtons;" in zp
+    kivul = zp[zp.index("if (!widget.showButtons) return view;"):]
+    assert "_buttons(size)" in kivul
+    # Idő: a meccs-nézet az eredeti videó idejét adja át, a "Pozíciók a
+    # meccsből" pedig visszaszámol a kezdő-kockával.
+    blokk = ms[ms.index("AnnotationScreen(") - 900:ms.index("AnnotationScreen(")]
+    assert "videoSecondsOfFrame(" in blokk
+    assert "m.meta.startFrame" in scr
+    # Az alap-felállás bábui (0,8 m sugár) nem fedhetik egymást.
+    alap = scr[scr.index("List<_Token> _defaultTokens()"):]
+    alap = alap[:alap.index("];")]
+    pontok = [(csapat, float(x), float(y)) for csapat, x, y in re.findall(
+        r'\b(h|a)\("[^"]+", "[^"]*", ([\d.]+), ([\d.]+)\)', alap)]
+    assert len(pontok) >= 14
+    for i, (_, x1, y1) in enumerate(pontok):
+        for _, x2, y2 in pontok[i + 1:]:
+            assert math.hypot(x1 - x2, y1 - y2) >= 1.8, (x1, y1, x2, y2)
+
+
 def test_a_dolgozo_motort_nem_lojuk_le_es_nem_teszunk_demot_a_meccs_helyere():
     """ŐR: a "nem nyílik a könyvtár, nem indul a motor" hiba láncszemei.
 

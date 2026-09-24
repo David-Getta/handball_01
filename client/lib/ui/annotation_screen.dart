@@ -6,6 +6,16 @@
 ///    sorszámozott nyilakkal (passz, futás, lövés) — így mutatható meg,
 ///    ki kinek passzolt, ki hova futott.
 ///
+/// Közben a MECCS IS LÁTSZIK: ha a meccs eredeti videója ezen a gépen van,
+/// a képernyő tetején lejátszó fut, ami nagyítható (MacBook-touchpad
+/// csippentés, Ctrl/⌘+görgő vagy a sarok-gombok), a sávja pedig az
+/// elválasztó húzásával átméretezhető. Az idő a lejátszóból egy
+/// kattintással átvehető, és a napló egy idejére kattintva a videó oda ugrik.
+///
+/// Az IDŐ mindenhol az eredeti videó ideje (másodperc) — ugyanaz, amit a
+/// lejátszó mutat; a felismert pozíciókhoz a meccs kezdő-kockájával
+/// számolunk át (MatchMeta.videoSecondsOfFrame).
+///
 /// A munka FÉLKÉSZEN is megmarad: minden változás után pár másodperccel
 /// magától mentünk — előbb HELYBEN (a felhasználói adatmappába), aztán a
 /// motorba. Ha a motor épp nem érhető el, a helyi piszkozat őrzi a munkát,
@@ -27,6 +37,7 @@ import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
 import "court_geometry.dart";
 import "error_text.dart";
+import "video_panel.dart";
 import "waiting.dart";
 
 /// A napló esemény-típusai (a backend ANN_EVENT_TYPES-ával azonos).
@@ -47,6 +58,12 @@ const Duration kAnnAutosave = Duration(seconds: 3);
 
 /// Ha a motor nem érhető el, ennyi időnként próbáljuk újra a feltöltést.
 const Duration kAnnRetry = Duration(seconds: 30);
+
+/// A videó-sáv alap-magassága (a munkaterület hányada), és a húzással
+/// beállítható határai — alul marad hely a táblának.
+const double kAnnVideoFrac = 0.42;
+const double kAnnVideoMinFrac = 0.18;
+const double kAnnVideoMaxFrac = 0.75;
 
 double _toD(Object? v, double d) {
   if (v is num) return v.toDouble();
@@ -187,8 +204,8 @@ class AnnotationScreen extends StatefulWidget {
   /// A felismert meccs (a "Pozíciók a meccsből" gombhoz); lehet null.
   final Match? match;
 
-  /// A meccs-nézet aktuális ideje (másodperc) — az új események és
-  /// táblák ezzel az idővel indulnak.
+  /// A meccs-nézet aktuális ideje (az EREDETI videó másodperce) — az új
+  /// események és táblák ezzel az idővel indulnak, a videó innen indul.
   final double startSeconds;
 
   /// Motor nélkül (demó): csak helyi mentés.
@@ -253,6 +270,53 @@ class _AnnotationScreenState extends State<AnnotationScreen>
 
   late final TabController _tabs;
   bool _wide = true;
+
+  // --- videó ---
+  final GlobalKey<VideoPanelState> _videoKey = GlobalKey<VideoPanelState>();
+  bool _showVideo = true;
+  double _videoFrac = kAnnVideoFrac;
+  double? _lastVideoS; // elrejtéskor ide tesszük, hogy onnan folytassa
+
+  /// Van-e ezen a gépen lejátszható eredeti videó ehhez a meccshez.
+  bool get _hasVideo {
+    final p = widget.match?.meta.videoPath;
+    return p != null && p.isNotEmpty && VideoPanel.supported;
+  }
+
+  bool get _videoOn => _hasVideo && _showVideo;
+
+  /// A lejátszó mostani helye (másodperc) — null, ha nincs videó.
+  double? get _videoNow =>
+      _videoOn ? _videoKey.currentState?.positionSeconds : null;
+
+  /// A videó adott idejére ugrás (ha rejtve van, előbb megmutatjuk).
+  void _seekVideo(double s) {
+    if (!_hasVideo) return;
+    if (!_showVideo) {
+      setState(() {
+        _showVideo = true;
+        _lastVideoS = s; // a felépülő lejátszó innen indul
+      });
+      return;
+    }
+    _videoKey.currentState?.seekTo(s);
+  }
+
+  /// Az idő-mező kitöltése a lejátszó mostani helyével.
+  void _takeVideoTime(TextEditingController ctrl, {_Scene? scene}) {
+    final t = _videoNow;
+    if (t == null) {
+      _snack("A videó még töltődik — pár másodperc múlva próbáld újra.");
+      return;
+    }
+    setState(() {
+      ctrl.text = formatAnnTime(t);
+      if (scene != null) {
+        scene.tS = t;
+        _touch();
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -713,14 +777,16 @@ class _AnnotationScreenState extends State<AnnotationScreen>
       h("h_ir", "IR", 25.5, 10.0),
       h("h_ja", "JÁ", 26.5, 15.0),
       h("h_jsz", "JSZ", 30.0, 18.5),
-      h("h_be", "BE", 33.5, 10.8),
+      // A beálló a két középső védő KÖZÖTT, a 6 m-es vonalon: a bábuk
+      // (0,8 m sugár) nem fedhetik egymást — korábban a "4" eltakarta.
+      h("h_be", "BE", 33.8, 10.0),
       a("a_k", "K", 38.8, 10.0),
       a("a_1", "1", 34.3, 3.0),
-      a("a_2", "2", 33.3, 6.3),
-      a("a_3", "3", 32.9, 9.0),
-      a("a_4", "4", 32.9, 11.4),
-      a("a_5", "5", 33.3, 14.0),
-      a("a_6", "6", 34.3, 17.2),
+      a("a_2", "2", 33.1, 6.0),
+      a("a_3", "3", 32.3, 8.6),
+      a("a_4", "4", 32.3, 11.4),
+      a("a_5", "5", 33.1, 14.0),
+      a("a_6", "6", 34.3, 17.0),
       _Token(id: "ball", team: "ball", label: "", x: 26.3, y: 10.6),
     ];
   }
@@ -851,7 +917,10 @@ class _AnnotationScreenState extends State<AnnotationScreen>
       if (ok != true || !mounted) return;
     }
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
-    final target = (s.tS ?? widget.startSeconds) * fps;
+    // Videó-másodperc → tracking-kocka: a feldolgozás a videó
+    // startFrame-jétől indult (a videoSecondsOfFrame fordítottja).
+    final offsetS = m.meta.startFrame / (fps * math.max(1, m.meta.stride));
+    final target = ((s.tS ?? widget.startSeconds) - offsetS) * fps;
     Frame best = m.frames.first;
     var bestD = double.infinity;
     for (final f in m.frames) {
@@ -1123,16 +1192,18 @@ class _AnnotationScreenState extends State<AnnotationScreen>
                     : LayoutBuilder(builder: (ctx, cons) {
                         _wide = cons.maxWidth >= 1000;
                         if (_wide) {
+                          // Széles ablak: a videó a tábla FÖLÖTT, a napló
+                          // teljes magasságban mellette (az űrlap hosszú).
                           return Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Expanded(child: _boardCard()),
+                              Expanded(child: _withVideo(_boardCard())),
                               const SizedBox(width: AppSpacing.lg),
                               SizedBox(width: 430, child: _logCard()),
                             ],
                           );
                         }
-                        return Column(
+                        return _withVideo(Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             TabBar(
@@ -1155,10 +1226,74 @@ class _AnnotationScreenState extends State<AnnotationScreen>
                               ),
                             ),
                           ],
-                        );
+                        ));
                       }),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A videó-sáv a munkaterület fölött, köztük húzható elválasztóval.
+  Widget _withVideo(Widget below) {
+    if (!_videoOn) return below;
+    return LayoutBuilder(builder: (ctx, cons) {
+      final total = cons.maxHeight;
+      final videoH = (total * _videoFrac)
+          .clamp(120.0, math.max(120.0, total - 220.0))
+          .toDouble();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: videoH,
+            child: VideoPanel(
+              key: _videoKey,
+              videoPath: widget.match!.meta.videoPath!,
+              initialSeconds: _lastVideoS ?? widget.startSeconds,
+              zoomButtons: true,
+              hint: "Nagyítás: csippentés (touchpad), Ctrl/⌘+görgő vagy a "
+                  "sarok-gombok · dupla kattintás: vissza",
+            ),
+          ),
+          _videoSplitter(total),
+          Expanded(child: below),
+        ],
+      );
+    });
+  }
+
+  /// Húzható elválasztó a videó és a tábla között (dupla kattintás:
+  /// alap-arány).
+  Widget _videoSplitter(double total) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeRow,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onVerticalDragUpdate: (d) => setState(() {
+          if (total <= 0) return;
+          _videoFrac = (_videoFrac + d.delta.dy / total)
+              .clamp(kAnnVideoMinFrac, kAnnVideoMaxFrac)
+              .toDouble();
+        }),
+        onDoubleTap: () => setState(() => _videoFrac = kAnnVideoFrac),
+        child: Tooltip(
+          message: "Húzd a videó-sáv átméretezéséhez",
+          waitDuration: const Duration(milliseconds: 600),
+          child: SizedBox(
+            height: 16,
+            child: Center(
+              child: Container(
+                width: 56,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -1180,6 +1315,20 @@ class _AnnotationScreenState extends State<AnnotationScreen>
         Text("· ${widget.homeName} – ${widget.awayName}", style: AppText.label),
         const SizedBox(width: AppSpacing.lg),
         _saveChip(),
+        if (_hasVideo)
+          FilterChip(
+            avatar: const Icon(Icons.movie_outlined, size: 16),
+            label: const Text("Videó"),
+            tooltip: "A meccs videója a tábla fölött (nagyítható)",
+            selected: _showVideo,
+            onSelected: (v) => setState(() {
+              if (!v) {
+                _lastVideoS =
+                    _videoKey.currentState?.positionSeconds ?? _lastVideoS;
+              }
+              _showVideo = v;
+            }),
+          ),
         FilterChip(
           label: const Text("Kész"),
           tooltip: "Jelöld késznek, ha végeztél — addig félkészként menthető",
@@ -1460,6 +1609,13 @@ class _AnnotationScreenState extends State<AnnotationScreen>
             },
           ),
         ),
+        if (_videoOn)
+          IconButton(
+            onPressed: () => _takeVideoTime(_sceneTimeCtrl, scene: s),
+            tooltip: "Idő a videóból (a lejátszó mostani helye)",
+            icon: const Icon(Icons.videocam_outlined,
+                size: 18, color: AppColors.accent),
+          ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: TextField(
@@ -1540,6 +1696,13 @@ class _AnnotationScreenState extends State<AnnotationScreen>
             tooltip: "A meccs-nézet ideje",
             icon: const Icon(Icons.history, size: 18, color: AppColors.textSecondary),
           ),
+          if (_videoOn)
+            IconButton(
+              onPressed: () => _takeVideoTime(_timeCtrl),
+              tooltip: "Idő a videóból (a lejátszó mostani helye)",
+              icon: const Icon(Icons.videocam_outlined,
+                  size: 18, color: AppColors.accent),
+            ),
           const Spacer(),
           SegmentedButton<String>(
             showSelectedIcon: false,
@@ -1697,8 +1860,21 @@ class _AnnotationScreenState extends State<AnnotationScreen>
             children: [
               SizedBox(
                 width: 50,
-                child: Text(formatAnnTime(_toD(e["t_s"], 0)),
-                    style: AppText.value.copyWith(fontSize: 13)),
+                child: _hasVideo
+                    // Az időre kattintva a videó oda ugrik.
+                    ? Tooltip(
+                        message: "Ugrás ide a videóban",
+                        child: InkWell(
+                          onTap: () => _seekVideo(_toD(e["t_s"], 0)),
+                          child: Text(formatAnnTime(_toD(e["t_s"], 0)),
+                              style: AppText.value.copyWith(
+                                  fontSize: 13,
+                                  color: AppColors.accent,
+                                  decoration: TextDecoration.underline)),
+                        ),
+                      )
+                    : Text(formatAnnTime(_toD(e["t_s"], 0)),
+                        style: AppText.value.copyWith(fontSize: 13)),
               ),
               Padding(
                 padding: const EdgeInsets.only(top: 5),

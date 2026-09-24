@@ -4,9 +4,11 @@
 /// Viselkedés:
 /// - touchpad-csippentés (vagy érintőkijelzős csípés): nagyítás a
 ///   csippentés középpontja körül; két ujjas húzás: mozgatás,
-/// - Ctrl + egérgörgő: nagyítás a kurzor körül (görgő felfelé =
-///   közelítés) — a sima görgő szándékosan érintetlen marad, hogy a
-///   görgethető felületek viselkedése ne változzon,
+/// - Ctrl + egérgörgő (Macen ⌘ + görgő is): nagyítás a kurzor körül
+///   (görgő felfelé = közelítés) — a sima görgő szándékosan érintetlen
+///   marad, hogy a görgethető felületek viselkedése ne változzon,
+/// - [showButtons] esetén + / − / alaphelyzet gombok a jobb felső
+///   sarokban (aki nem csippent, annak is legyen kézzelfogható módja),
 /// - dupla kattintás/koppintás: vissza az alaphelyzetbe (1x).
 ///
 /// A tartalom sosem szakad el a szélektől (a nagyított kép széle nem
@@ -33,7 +35,15 @@ class ZoomPanView extends StatefulWidget {
   /// Legnagyobb nagyítás (az alapméret szorzója).
   final double maxScale;
 
-  const ZoomPanView({super.key, required this.child, this.maxScale = 6.0});
+  /// Látszódjanak-e a nagyítás-gombok (+ / − / alaphelyzet).
+  final bool showButtons;
+
+  const ZoomPanView({
+    super.key,
+    required this.child,
+    this.maxScale = 6.0,
+    this.showButtons = false,
+  });
 
   @override
   State<ZoomPanView> createState() => _ZoomPanViewState();
@@ -79,6 +89,9 @@ class _ZoomPanViewState extends State<ZoomPanView> {
     });
   }
 
+  /// Egy gomb-lépés szorzója (+ és − gomb): két lépés ~ kétszeres.
+  static const double _buttonStep = 1.4142;
+
   void _reset() {
     setState(() {
       _scale = 1.0;
@@ -93,7 +106,7 @@ class _ZoomPanViewState extends State<ZoomPanView> {
     final zoomed = _scale > 1.01;
     final text = zoomed
         ? "×${_scale.toStringAsFixed(1)} · dupla kattintás: vissza"
-        : "csippentés vagy Ctrl+görgő: nagyítás";
+        : "csippentés vagy Ctrl/⌘+görgő: nagyítás";
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: zoomed
@@ -122,18 +135,61 @@ class _ZoomPanViewState extends State<ZoomPanView> {
     );
   }
 
+  Widget _zoomButton(IconData icon, String tip, VoidCallback? onTap) {
+    return Tooltip(
+      message: tip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: Icon(icon,
+              size: 16,
+              color: onTap == null
+                  ? AppColors.textFaint.withOpacity(0.4)
+                  : AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+
+  /// A nagyítás-gombsor: + / − a nézet KÖZEPE körül, és alaphelyzet.
+  Widget _buttons(Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final zoomed = _scale > 1.01;
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.82),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        _zoomButton(Icons.zoom_in, "Nagyítás",
+            _scale >= widget.maxScale - 0.01
+                ? null
+                : () => _zoomAt(center, _buttonStep, size)),
+        _zoomButton(Icons.zoom_out, "Kicsinyítés",
+            zoomed ? () => _zoomAt(center, 1 / _buttonStep, size) : null),
+        _zoomButton(Icons.fit_screen, "Alaphelyzet (1×)",
+            zoomed ? _reset : null),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, c) {
       final size = Size(c.maxWidth, c.maxHeight);
-      return MouseRegion(
+      final view = MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: Listener(
           onPointerSignal: (e) {
-            // Csak a Ctrl+görgő nagyít — a sima görgőt nem fogjuk el.
+            // Csak a Ctrl+görgő (Macen a ⌘+görgő is) nagyít — a sima
+            // görgőt nem fogjuk el.
+            final kb = HardwareKeyboard.instance;
             if (e is! PointerScrollEvent ||
-                !HardwareKeyboard.instance.isControlPressed) {
+                !(kb.isControlPressed || kb.isMetaPressed)) {
               return;
             }
             // Görgő felfelé (negatív dy) = közelítés; a exp() adja a
@@ -180,6 +236,13 @@ class _ZoomPanViewState extends State<ZoomPanView> {
           ),
         ),
       );
+      if (!widget.showButtons) return view;
+      // A gombok a gesztus-figyelőn KÍVÜL ülnek: különben a gyors
+      // kétszeri "+" dupla koppintásnak számítana, és visszaállítana.
+      return Stack(children: [
+        Positioned.fill(child: view),
+        Positioned(right: 6, top: 6, child: _buttons(size)),
+      ]);
     });
   }
 }

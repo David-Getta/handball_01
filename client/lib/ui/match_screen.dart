@@ -1804,14 +1804,15 @@ class _MatchScreenState extends State<MatchScreen> {
         // (mozgatható bábuk, passz-nyilak) — félkészen is menthető.
         OutlinedButton.icon(
           onPressed: () {
-            final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+            // Az EREDETI videó ideje (a kézi elemzés lejátszója is ezt
+            // mutatja), nem a feldolgozás kezdetétől mért idő.
             final now = match.frames.isEmpty
                 ? 0.0
-                : match.frames[_frameIndex
-                            .clamp(0, match.frames.length - 1)
-                            .toInt()]
-                        .t /
-                    fps;
+                : match.meta.videoSecondsOfFrame(match
+                    .frames[_frameIndex
+                        .clamp(0, match.frames.length - 1)
+                        .toInt()]
+                    .t);
             Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => AnnotationScreen(
                 matchId: match.meta.matchId,

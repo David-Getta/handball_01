@@ -25,7 +25,25 @@ class VideoPanel extends StatefulWidget {
   /// Az eredeti videófájl útja (a Tracking meta.video_path mezőjéből).
   final String videoPath;
 
-  const VideoPanel({super.key, required this.videoPath});
+  /// A vezérlők alatti súgó-sor (a meccs-nézetben az Események-lista
+  /// kattintására utal; máshol más a használat).
+  final String hint;
+
+  /// Látszódjanak-e a videókép sarkában a nagyítás-gombok (+ / − / 1×).
+  final bool zoomButtons;
+
+  /// Betöltés után ide áll (másodperc), lejátszás NÉLKÜL — pl. a kézi
+  /// elemzés a meccs-nézet idejéről nyílik.
+  final double? initialSeconds;
+
+  const VideoPanel({
+    super.key,
+    required this.videoPath,
+    this.hint = "Az Események-listában egy elemre kattintva a "
+        "videó a jelenetre ugrik.",
+    this.zoomButtons = false,
+    this.initialSeconds,
+  });
 
   /// Támogatott-e a beépített videó-lejátszás ezen a platformon.
   static bool get supported =>
@@ -90,23 +108,26 @@ class VideoPanelState extends State<VideoPanel> {
         setState(() => _c = c);
       }
       final pending = _pendingSeekS;
+      final initial = widget.initialSeconds;
       if (pending != null) {
         _pendingSeekS = null;
         await seekTo(pending);
+      } else if (initial != null && initial > 0) {
+        await seekTo(initial, play: false);
       }
     } catch (e) {
       if (mounted) setState(() => _error = "A videó nem játszható le: ${humanError(e)}");
     }
   }
 
-  /// A megadott másodpercre ugrik, és elindítja a lejátszást.
-  Future<void> seekTo(double seconds) async {
+  /// A megadott másodpercre ugrik, és (alapból) elindítja a lejátszást.
+  Future<void> seekTo(double seconds, {bool play = true}) async {
     final ms = (seconds * 1000).round();
     final d = Duration(milliseconds: ms < 0 ? 0 : ms);
     final p = _mk;
     if (p != null) {
       await p.seek(d);
-      await p.play();
+      if (play) await p.play();
       return;
     }
     final c = _c;
@@ -115,7 +136,16 @@ class VideoPanelState extends State<VideoPanel> {
       return;
     }
     await c.seekTo(d);
-    await c.play();
+    if (play) await c.play();
+  }
+
+  /// A lejátszó aktuális helye (másodperc) — null, amíg nem töltött be.
+  double? get positionSeconds {
+    final p = _mk;
+    if (p != null) return p.state.position.inMilliseconds / 1000.0;
+    final c = _c;
+    if (c == null || !c.value.isInitialized) return null;
+    return c.value.position.inMilliseconds / 1000.0;
   }
 
   @override
@@ -138,7 +168,39 @@ class VideoPanelState extends State<VideoPanel> {
     required Duration position,
     required Duration duration,
     required Future<void> Function() onToggle,
+    bool compact = false,
   }) {
+    if (compact) {
+      // Keskeny/magas helyen a vezérlő egyetlen sor a kép ALATT.
+      return Row(children: [
+        IconButton(
+          onPressed: () => seekTo(position.inMilliseconds / 1000.0 - 5),
+          icon: const Icon(Icons.replay_5, color: AppColors.textSecondary),
+          tooltip: "5 mp vissza",
+        ),
+        IconButton(
+          onPressed: onToggle,
+          icon: Icon(playing ? Icons.pause_circle : Icons.play_circle,
+              color: AppColors.accent, size: 28),
+          tooltip: playing ? "Szünet" : "Lejátszás",
+        ),
+        IconButton(
+          onPressed: () => seekTo(position.inMilliseconds / 1000.0 + 5),
+          icon: const Icon(Icons.forward_5, color: AppColors.textSecondary),
+          tooltip: "5 mp előre",
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Text("${_fmt(position)} / ${_fmt(duration)}",
+            style: AppText.label.copyWith(fontSize: 12)),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Text(widget.hint,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.label.copyWith(fontSize: 11)),
+        ),
+      ]);
+    }
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,81 +240,89 @@ class VideoPanelState extends State<VideoPanel> {
           style: AppText.label.copyWith(fontSize: 12),
         ),
         const SizedBox(height: 4),
-        Text(
-          "Az Események-listában egy elemre kattintva a "
-          "videó a jelenetre ugrik.",
-          style: AppText.label.copyWith(fontSize: 11),
-        ),
+        Text(widget.hint, style: AppText.label.copyWith(fontSize: 11)),
       ],
     );
+  }
+
+  /// A kép + vezérlők elrendezése. Széles, lapos helyen (a meccs-nézet
+  /// sávja) a vezérlő a kép MELLETT áll; ha a hely inkább magas (a kézi
+  /// elemzés videó-sávja, keskeny ablak), a kép kitölti a helyet, és a
+  /// vezérlő egy sor ALATTA — így a kép a lehető legnagyobb.
+  Widget _layout(double aspect, Widget video,
+      Widget Function(bool compact) controls) {
+    final zoomable = AspectRatio(
+      aspectRatio: aspect,
+      // Nagyítható: csippentés (MacBook touchpad is), Ctrl/⌘+görgő,
+      // vagy a sarok-gombok.
+      child: ZoomPanView(showButtons: widget.zoomButtons, child: video),
+    );
+    return LayoutBuilder(builder: (ctx, cons) {
+      final sideBySide = cons.maxWidth >= cons.maxHeight * aspect + 260;
+      if (sideBySide) {
+        return Row(children: [
+          zoomable,
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(child: controls(false)),
+        ]);
+      }
+      return Column(children: [
+        Expanded(child: Center(child: zoomable)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          child: controls(true),
+        ),
+      ]);
+    });
   }
 
   /// A media_kit (Windows) lejátszó felülete.
   Widget _mediaKitBody(mk.Player p, mkv.VideoController view) {
     final w = p.state.width ?? 16;
     final h = p.state.height ?? 9;
-    return Row(
-      children: [
-        // Maga a videókép (a panel magasságához igazítva).
-        // Nagyítható: csippentés vagy Ctrl+görgő.
-        AspectRatio(
-          aspectRatio: h == 0 ? 16 / 9 : w / h,
-          child: ZoomPanView(
-              child: mkv.Video(
-                  controller: view, controls: mkv.NoVideoControls)),
-        ),
-        const SizedBox(width: AppSpacing.lg),
-        // Vezérlők: a lejátszó állapot-folyamaiból frissülnek.
-        Expanded(
-          child: StreamBuilder<bool>(
-            stream: p.stream.playing,
-            initialData: p.state.playing,
-            builder: (_, playing) => StreamBuilder<Duration>(
-              stream: p.stream.position,
-              initialData: p.state.position,
-              builder: (_, pos) => _controls(
-                playing: playing.data ?? false,
-                position: pos.data ?? Duration.zero,
-                duration: p.state.duration,
-                onToggle: () => p.playOrPause(),
-              ),
-            ),
+    return _layout(
+      h == 0 ? 16 / 9 : w / h,
+      mkv.Video(controller: view, controls: mkv.NoVideoControls),
+      // Vezérlők: a lejátszó állapot-folyamaiból frissülnek.
+      (compact) => StreamBuilder<bool>(
+        stream: p.stream.playing,
+        initialData: p.state.playing,
+        builder: (_, playing) => StreamBuilder<Duration>(
+          stream: p.stream.position,
+          initialData: p.state.position,
+          builder: (_, pos) => _controls(
+            playing: playing.data ?? false,
+            position: pos.data ?? Duration.zero,
+            duration: p.state.duration,
+            onToggle: () => p.playOrPause(),
+            compact: compact,
           ),
         ),
-      ],
+      ),
     );
   }
 
   /// A video_player (macOS/iOS/Android) lejátszó felülete.
   Widget _videoPlayerBody(VideoPlayerController c) {
-    return Row(
-      children: [
-        // Maga a videókép (a panel magasságához igazítva).
-        // Nagyítható: csippentés vagy Ctrl+görgő.
-        AspectRatio(
-          aspectRatio:
-              c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
-          child: ZoomPanView(child: VideoPlayer(c)),
+    return _layout(
+      c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
+      VideoPlayer(c),
+      (compact) => ValueListenableBuilder<VideoPlayerValue>(
+        valueListenable: c,
+        builder: (_, v, __) => _controls(
+          playing: v.isPlaying,
+          position: v.position,
+          duration: v.duration,
+          onToggle: () async {
+            if (v.isPlaying) {
+              await c.pause();
+            } else {
+              await c.play();
+            }
+          },
+          compact: compact,
         ),
-        const SizedBox(width: AppSpacing.lg),
-        Expanded(
-          child: ValueListenableBuilder<VideoPlayerValue>(
-            valueListenable: c,
-            builder: (_, v, __) => _controls(
-              playing: v.isPlaying,
-              position: v.position,
-              duration: v.duration,
-              onToggle: () async {
-                if (v.isPlaying) {
-                  await c.pause();
-                } else {
-                  await c.play();
-                }
-              },
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
