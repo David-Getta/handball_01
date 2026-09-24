@@ -259,3 +259,97 @@ def annotations_csv(doc: dict, home: str = "hazai",
                     e.get("to_jersey", ""), e.get("outcome", ""),
                     e.get("note", ""), tablak.get(e.get("scene_id", ""), "")])
     return buf.getvalue()
+
+
+# --- Összevetés a géppel ---------------------------------------------------
+#
+# A kézi napló a motor mérőrúdja: a kézzel rögzített lövések/gólok és a
+# felismert lövések/gólok időre párosítva (validation.validate_events).
+
+# Ennyi másodpercen belül egyezik egy kézi és egy felismert esemény.
+ANN_CMP_TOL_S = 3.0
+# Ennyi kézi lövés/gól alatt nincs ítélet (két lövésből nem mondható meg,
+# mennyire pontos a felismerés).
+ANN_CMP_MIN_SHOTS = 3
+# A kézi napló lövés-jellegű eseményei: a lövés és a hetes.
+ANN_CMP_SHOT_TYPES = ("lövés", "hetes")
+
+
+def annotations_to_truth(doc: dict) -> list:
+    """A kézi napló lövései/gólai ground-truth listaként (videó-idő).
+
+    A "lövés" és a "hetes" esemény "gól" kimenetellel gól, más (vagy
+    üres) kimenetellel lövés — a motor is így bontja (a gól NEM lövés
+    is egyben). Idő nélküli sor kimarad.
+    """
+    out = []
+    for e in (doc or {}).get("events") or []:
+        if not isinstance(e, dict):
+            continue
+        if str(e.get("type") or "").strip().lower() not in ANN_CMP_SHOT_TYPES:
+            continue
+        t = _num(e.get("t_s"))
+        if t is None:
+            continue
+        gol = str(e.get("outcome") or "").strip().lower() == "gól"
+        team = e.get("team") if e.get("team") in ANN_TEAMS else None
+        out.append({"t_s": float(t), "type": "gól" if gol else "lövés",
+                    "team": team})
+    return out
+
+
+def compare_with_detection(match, doc: dict,
+                           tol_s: float = ANN_CMP_TOL_S) -> dict:
+    """A kézi napló lövései/gólai a motor felismerésével összevetve.
+
+    Az idők a VIDEÓ idejében jönnek és mennek (a kliens lejátszója ezt
+    mutatja); a motor a feldolgozás kezdetétől számol, ezért a kezdő-kocka
+    eltolásával számolunk át. Ha az elemzés nincs "kész"-re jelölve, csak
+    a kézi napló által lefedett időszakot nézzük (az első és az utolsó
+    esemény között, tűréssel) — a még nem annotált rész felismerései nem
+    számítanak téves-nek.
+
+    Visszaadja a validate_events eredményét (by_type, overall, verdict,
+    missed/spurious tételek "t_s" = videó-idő), kiegészítve:
+    "manual_shots" (kézi lövés+gól), "window_s" ([tól, ig] videó-idő vagy
+    None = az egész meccs), "offset_s", "enough" (van-e elég minta; ha
+    nincs, az ítélet None).
+    """
+    from .pipeline.validation import validate_events
+
+    meta = match.meta
+    fps = meta.fps if meta.fps and meta.fps > 0 else 25.0
+    stride = max(1, int(getattr(meta, "stride", 1) or 1))
+    offset = float(getattr(meta, "start_frame", 0) or 0) / (fps * stride)
+
+    truth = annotations_to_truth(doc)
+    for t in truth:
+        t["t_s"] -= offset
+
+    window = None
+    if (doc or {}).get("status") != "done":
+        times = [_num(e.get("t_s")) for e in (doc or {}).get("events") or []
+                 if isinstance(e, dict)]
+        times = [t - offset for t in times if t is not None]
+        if times:
+            window = (min(times) - tol_s, max(times) + tol_s)
+
+    res = validate_events(match, truth, tol_s=tol_s, window=window)
+    for blokk in res["by_type"].values():
+        for tetel in blokk.get("missed", []) + blokk.get("spurious", []):
+            tetel["t_s"] = round(tetel["t_s"] + offset, 2)
+    n = len(truth)
+    res["manual_shots"] = n
+    res["offset_s"] = round(offset, 3)
+    res["window_s"] = (None if window is None else
+                       [round(max(0.0, window[0] + offset), 2),
+                        round(window[1] + offset, 2)])
+    res["enough"] = n >= ANN_CMP_MIN_SHOTS
+    if not res["enough"]:
+        res["verdict"] = {
+            "pass": None,
+            "text": (f"Kevés a kézi lövés ({n}) — legalább "
+                     f"{ANN_CMP_MIN_SHOTS} kell az ítélethez. A párosítás "
+                     "tételei így is látszanak."),
+        }
+    return res

@@ -197,3 +197,90 @@ def test_a_kezi_elemzes_csv_exportja(kliens):
     assert szoveg.startswith("﻿ido;ido_mp;csapat;")
     assert "Hazai FC;passz;7;11" in szoveg
     assert "attachment" in r.headers.get("content-disposition", "")
+
+
+# ---- Összevetés a géppel -------------------------------------------------------
+
+
+def _gol_meccs(start_frame: int = 0) -> Match:
+    """Egy felismerhető hazai gól a +x kapura a meccs elején (a
+    test_validation mintája), utána üresjárat."""
+    def _pl(x):
+        return PlayerPosition(track_id=1, team=Team.HOME, x=x, y=10.0,
+                              source=PositionSource.MEASURED, confidence=1.0)
+    frames = [Frame(t=i, players=[_pl(33.0)],
+                    ball=Ball(x=33.0, y=10.0, confidence=1.0))
+              for i in range(3)]
+    for i in range(9):
+        frames.append(Frame(t=3 + i, players=[_pl(33.0)],
+                            ball=Ball(x=min(33.0 + 1.6 * (i + 1), 40.0),
+                                      y=10.0, confidence=1.0)))
+    for i in range(30):
+        frames.append(Frame(t=12 + i, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    return Match(MatchMeta(match_id="g", home_team="H", away_team="A",
+                           fps=25.0, start_frame=start_frame), frames)
+
+
+def test_a_kezi_naplo_lovesei_ground_truth_kent():
+    from handball.annotations import annotations_to_truth
+    doc = {"events": [
+        {"t_s": 5, "type": "lövés", "team": "home", "outcome": "gól"},
+        {"t_s": 9, "type": "hetes", "team": "away", "outcome": "védés"},
+        {"t_s": 12, "type": "lövés", "team": "home", "outcome": ""},
+        {"t_s": 14, "type": "passz", "team": "home"},
+        {"type": "lövés", "team": "home"},  # idő nélkül: kimarad
+    ]}
+    assert annotations_to_truth(doc) == [
+        {"t_s": 5.0, "type": "gól", "team": "home"},
+        {"t_s": 9.0, "type": "lövés", "team": "away"},
+        {"t_s": 12.0, "type": "lövés", "team": "home"},
+    ]
+
+
+def test_az_osszevetes_videoidoben_par_es_keves_mintanal_nincs_itelet():
+    """A kézi idő a VIDEÓ ideje: a feldolgozás 10 mp-nél indult (250.
+    kocka), a gól a videóban ~10,4 mp-nél van — ezzel párosul, a
+    kimaradt tétel ideje is videó-idő. Két kézi lövésből nincs ítélet."""
+    from handball.annotations import compare_with_detection
+    m = _gol_meccs(start_frame=250)
+    doc = {"status": "done", "events": [
+        {"t_s": 10.4, "type": "lövés", "team": "home", "outcome": "gól"},
+        {"t_s": 40.0, "type": "lövés", "team": "home", "outcome": "gól"},
+    ]}
+    res = compare_with_detection(m, doc)
+    g = res["by_type"]["goal"]
+    assert g["tp"] == 1 and g["fn"] == 1 and g["fp"] == 0
+    assert g["missed"][0]["t_s"] == 40.0
+    assert res["offset_s"] == 10.0 and res["window_s"] is None
+    assert res["manual_shots"] == 2 and res["enough"] is False
+    assert res["verdict"]["pass"] is None
+
+
+def test_a_felkesz_elemzes_csak_a_lefedett_idoszakot_veti_ossze():
+    """Félkész elemzés: a még nem annotált rész felismerése (a gól az
+    elején) nem számít TÉVES-nek, ha a napló később kezdődik."""
+    from handball.annotations import compare_with_detection
+    m = _gol_meccs()
+    doc = {"status": "in_progress", "events": [
+        {"t_s": 60.0 + i, "type": "lövés", "team": "home",
+         "outcome": "védés"} for i in range(3)]}
+    res = compare_with_detection(m, doc)
+    assert res["overall"]["fp"] == 0
+    assert res["window_s"][0] > 50.0
+    assert res["enough"] is True
+    # Késznek jelölve már az egész meccs számít: a gól téves-nek látszik.
+    doc["status"] = "done"
+    assert compare_with_detection(m, doc)["by_type"]["goal"]["fp"] == 1
+
+
+def test_az_osszevetes_vegpontja(kliens):
+    client, _d = kliens
+    assert client.get("/matches/nincs/annotations/compare").status_code == 404
+    client.put("/matches/k1/annotations", json=_dok())
+    r = client.get("/matches/k1/annotations/compare")
+    assert r.status_code == 200
+    res = r.json()
+    for kulcs in ("by_type", "overall", "verdict", "manual_shots",
+                  "window_s", "enough"):
+        assert kulcs in res, kulcs

@@ -3150,6 +3150,30 @@ def test_kezi_elemzes_kozben_latszik_a_nagyithato_meccs_video():
             assert math.hypot(x1 - x2, y1 - y2) >= 1.8, (x1, y1, x2, y2)
 
 
+def test_kezi_elemzes_osszevetes_a_geppel():
+    """ŐR: a kézi elemzés "Összevetés a géppel" gombja a motor
+    /annotations/compare végpontját hívja (a backend útvonalával egyezően),
+    előtte ment, és az eltérés-tételre kattintva a videóba ugrik."""
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    scr = (lib / "ui" / "annotation_screen.dart").read_text(encoding="utf-8")
+    api = (lib / "services" / "api_client.dart").read_text(encoding="utf-8")
+    app = (Path(__file__).resolve().parents[1] / "handball" / "api"
+           / "app.py").read_text(encoding="utf-8")
+    assert '@app.get("/matches/{match_id}/annotations/compare")' in app
+    assert "compareAnnotations(" in api
+    assert '/annotations/compare"' in api
+    osszevet = scr[scr.index("Future<void> _compare()"):]
+    osszevet = osszevet[:osszevet.index("Future<void> _exportCsv()")]
+    assert osszevet.index("await _save();") < osszevet.index(
+        "compareAnnotations("), "előbb mentünk, aztán vetünk össze"
+    assert "_seekVideo(" in osszevet
+    assert "class _CompareDialog" in scr and "Összevetés a géppel" in scr
+
+
 def test_a_dolgozo_motort_nem_lojuk_le_es_nem_teszunk_demot_a_meccs_helyere():
     """ŐR: a "nem nyílik a könyvtár, nem indul a motor" hiba láncszemei.
 

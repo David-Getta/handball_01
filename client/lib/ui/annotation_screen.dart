@@ -67,6 +67,10 @@ const double kAnnVideoFrac = 0.42;
 const double kAnnVideoMinFrac = 0.18;
 const double kAnnVideoMaxFrac = 0.75;
 
+/// Az összevetés eltérés-tételére kattintva a videó ennyivel ELŐTTE
+/// indul (a lövés előzménye is látsszon).
+const double kAnnCompareLeadS = 3.0;
+
 /// A taktikai tábla legnagyobb nagyítása (1× = a teljes pálya látszik).
 const double kAnnBoardMaxZoom = 5.0;
 
@@ -251,6 +255,7 @@ class _AnnotationScreenState extends State<AnnotationScreen>
   // --- mentés-állapot ---
   bool _loading = true;
   bool _saving = false;
+  bool _comparing = false; // az összevetés a géppel fut
   bool _saveAgain = false;
   bool _dirty = false; // van helyben még ki nem írt változás
   bool _unsynced = false; // a motorban lévő változat régebbi a helyinél
@@ -611,6 +616,46 @@ class _AnnotationScreenState extends State<AnnotationScreen>
     if (!_loading && (_dirty || _unsynced)) await _save();
     if (!mounted) return;
     Navigator.of(context).pop();
+  }
+
+  /// A kézi napló lövései/gólai a motor felismerésével összevetve. Előbb
+  /// ment (a motor a mentett naplót veti össze), az eltérés-tételre
+  /// kattintva a videó pár másodperccel előtte indul.
+  Future<void> _compare() async {
+    await _save();
+    if (!mounted) return;
+    if (_unsynced) {
+      _snack("A napló még nincs a motorban (nem érhető el) — az összevetés "
+          "akkor megy, amikor a mentés sikerült.");
+      return;
+    }
+    setState(() => _comparing = true);
+    Map<String, dynamic>? res;
+    String? err;
+    try {
+      res = await _api.compareAnnotations(widget.matchId);
+    } catch (e) {
+      err = humanError(e);
+    }
+    if (!mounted) return;
+    setState(() => _comparing = false);
+    final r = res;
+    if (r == null) {
+      _snack("Az összevetés nem sikerült: $err");
+      return;
+    }
+    final seek = await showDialog<double>(
+      context: context,
+      builder: (ctx) => _CompareDialog(
+        res: r,
+        homeName: widget.homeName,
+        awayName: widget.awayName,
+        canSeek: _hasVideo,
+      ),
+    );
+    if (seek != null && mounted) {
+      _seekVideo(math.max(0.0, seek - kAnnCompareLeadS));
+    }
   }
 
   Future<void> _exportCsv() async {
@@ -1395,6 +1440,17 @@ class _AnnotationScreenState extends State<AnnotationScreen>
                   }),
         ),
         OutlinedButton.icon(
+          onPressed:
+              (_loading || widget.offline || _comparing) ? null : _compare,
+          icon: _comparing
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.fact_check_outlined, size: 16),
+          label: Text(_comparing ? "Összevetés…" : "Összevetés a géppel"),
+        ),
+        OutlinedButton.icon(
           onPressed: (_loading || widget.offline) ? null : _exportCsv,
           icon: const Icon(Icons.table_chart_outlined, size: 16),
           label: const Text("Napló CSV-ben"),
@@ -2059,6 +2115,171 @@ class _AnnotationScreenState extends State<AnnotationScreen>
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Az összevetés eredménye: ítélet, típusonkénti egyezés, és a kimaradt /
+/// téves tételek — a tételre kattintva a dialógus a tétel idejével zárul
+/// (a hívó oda tekeri a videót).
+class _CompareDialog extends StatelessWidget {
+  final Map<String, dynamic> res;
+  final String homeName;
+  final String awayName;
+  final bool canSeek;
+
+  const _CompareDialog({
+    required this.res,
+    required this.homeName,
+    required this.awayName,
+    required this.canSeek,
+  });
+
+  static const Map<String, String> _typeHu = {"goal": "gól", "shot": "lövés"};
+
+  String _team(Object? t) =>
+      t == "home" ? homeName : (t == "away" ? awayName : "?");
+
+  String _pct(Object? v) => v is num ? "${(v * 100).round()}%" : "–";
+
+  Map<String, dynamic> _block(String ty) {
+    final bt = res["by_type"];
+    if (bt is Map && bt[ty] is Map) {
+      return Map<String, dynamic>.from(bt[ty] as Map);
+    }
+    return const {};
+  }
+
+  Widget _row(String ty) {
+    final b = _block(ty);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Text(
+        "${_typeHu[ty]!.toUpperCase()}: ${b["tp"] ?? 0} egyezik · "
+        "${b["fn"] ?? 0} kimaradt · ${b["fp"] ?? 0} téves  "
+        "(visszahívás ${_pct(b["recall"])}, precizitás ${_pct(b["precision"])})",
+        style: AppText.value.copyWith(fontSize: 13),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _items(String key) {
+    final out = <Map<String, dynamic>>[];
+    for (final ty in const ["goal", "shot"]) {
+      final l = _block(ty)[key];
+      if (l is List) {
+        for (final e in l) {
+          if (e is Map) out.add(Map<String, dynamic>.from(e));
+        }
+      }
+    }
+    out.sort((a, b) => _toD(a["t_s"], 0).compareTo(_toD(b["t_s"], 0)));
+    return out;
+  }
+
+  Widget _list(BuildContext context, String title, String key) {
+    final items = _items(key);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.md),
+        Text("$title (${items.length})", style: AppText.sectionLabel),
+        if (items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text("nincs", style: AppText.label),
+          ),
+        for (final e in items)
+          InkWell(
+            onTap: canSeek
+                ? () => Navigator.of(context).pop(_toD(e["t_s"], 0))
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                SizedBox(
+                  width: 56,
+                  child: Text(formatAnnTime(_toD(e["t_s"], 0)),
+                      style: AppText.value.copyWith(
+                          fontSize: 13,
+                          color: canSeek ? AppColors.accent : null)),
+                ),
+                Expanded(
+                  child: Text(
+                      "${_typeHu[_str(e["type"])] ?? _str(e["type"])} · "
+                      "${_team(e["team"])}",
+                      style: AppText.label.copyWith(fontSize: 12.5)),
+                ),
+                if (canSeek)
+                  const Icon(Icons.play_arrow,
+                      size: 16, color: AppColors.textSecondary),
+              ]),
+            ),
+          ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final verdict = res["verdict"] is Map
+        ? Map<String, dynamic>.from(res["verdict"] as Map)
+        : const <String, dynamic>{};
+    final pass = verdict["pass"];
+    final color = pass == true
+        ? AppColors.accent
+        : pass == false
+            ? AppColors.gold
+            : AppColors.textSecondary;
+    final win = res["window_s"];
+    final String scope;
+    if (win is List && win.length == 2) {
+      scope = "A napló által lefedett rész: ${formatAnnTime(_toD(win[0], 0))}"
+          " – ${formatAnnTime(_toD(win[1], 0))} (félkész elemzés; a "
+          "\"Kész\" jelölés után az egész meccs számít).";
+    } else {
+      scope = "Az egész meccs (az elemzés késznek jelölve).";
+    }
+    final tol = _toD(res["tol_s"], 3);
+    return AlertDialog(
+      title: const Text("Összevetés a géppel"),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_str(verdict["text"]),
+                  style: AppText.value.copyWith(color: color, fontSize: 14)),
+              const SizedBox(height: AppSpacing.sm),
+              Text("Kézi lövés/gól: ${res["manual_shots"] ?? 0} · $scope",
+                  style: AppText.label.copyWith(fontSize: 12)),
+              const SizedBox(height: AppSpacing.sm),
+              _row("goal"),
+              _row("shot"),
+              _list(context, "KIMARADT — a naplóban van, a gép nem látta",
+                  "missed"),
+              _list(context, "TÉVES — a gép látta, a naplóban nincs",
+                  "spurious"),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                "Egyezés: azonos típus (és ha megadtad, csapat) "
+                "±${tol.toStringAsFixed(0)} mp-en belül. "
+                "${canSeek ? "A tételre kattintva a videó "
+                    "${kAnnCompareLeadS.toStringAsFixed(0)} mp-cel előtte "
+                    "indul — így megnézheted, ki tévedett." : ""}",
+                style: AppText.label.copyWith(fontSize: 11.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("Bezárás")),
+      ],
     );
   }
 }

@@ -180,8 +180,14 @@ def validation_template_csv(match: Match,
 
 def validate_events(match: Match, truth: list,
                     tol_s: float = VALIDATION_TOL_S,
-                    config: Optional[TacticsConfig] = None) -> dict:
+                    config: Optional[TacticsConfig] = None,
+                    window: Optional[tuple] = None) -> dict:
     """A felismert gólok/lövések összevetése a kézi ground-truth-tal.
+
+    window: (tól, ig) másodpercben (a tracking idejében) — csak az ebbe
+    eső kézi és felismert eseményeket vetjük össze. A félig kész kézi
+    elemzésnél így a még nem annotált rész felismerései nem számítanak
+    TÉVES-nek.
 
     Visszatérés:
       {"tol_s", "by_type": {"goal": {...}, "shot": {...}},
@@ -211,6 +217,11 @@ def validate_events(match: Match, truth: list,
         if v in ("goal", "shot"):
             det.append({"t_s": ev.t / fps, "type": v,
                         "team": getattr(ev.team, "value", ev.team)})
+
+    if window is not None:
+        lo, hi = window
+        det = [d for d in det if lo <= d["t_s"] <= hi]
+        tru = [t for t in tru if lo <= t["t_s"] <= hi]
 
     def _match_type(dtype: str) -> dict:
         d_list = sorted((d for d in det if d["type"] == dtype),

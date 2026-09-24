@@ -88,6 +88,24 @@ ido;ido_mp;csapat;esemeny;mez;kinek;kimenetel;megjegyzes;tabla
 Ez a program mérőrúdja: a kézzel rögzített események a felismerés
 kimenetével időre párosíthatók. Az idő a VIDEÓ ideje, nem a meccs órája.
 
+## Összevetés a géppel
+
+Az "Összevetés a géppel" gomb (előbb ment) a napló **lövéseit és
+góljait** veti össze azzal, amit a program felismert: a "lövés" és a
+"hetes" esemény "gól" kimenetellel gól, más kimenetellel lövés. Egyezés:
+azonos típus (és ha megadtad, azonos csapat) ±3 mp-en belül.
+
+- Az eredmény: ítélet (visszahívás ≥90%, precizitás ≥85% a cél),
+  típusonként egyezik / kimaradt / téves, és a tételes lista.
+- **Kimaradt**: a naplóban van, a gép nem látta; **téves**: a gép látta,
+  a naplóban nincs. A tételre kattintva a videó 3 mp-cel előtte indul —
+  így megnézhető, ki tévedett (a gép vagy a napló).
+- Félkész elemzésnél csak a napló által lefedett időszak számít (az első
+  és az utolsó bejegyzés között); "Kész"-re jelölve az egész meccs.
+- 3 kézi lövés/gól alatt nincs ítélet, csak a tételek.
+
+A motor oldalán: `GET /matches/{id}/annotations/compare`.
+
 ## Technika
 
 - Backend: `handball/annotations.py` (normalizálás, korlátok, CSV),

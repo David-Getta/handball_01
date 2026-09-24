@@ -429,6 +429,20 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A kézi napló lövései/gólai a motor felismerésével összevetve (GET
+  /// .../annotations/compare): egyezés, kimaradt és téves tételek
+  /// videó-idővel. A motor ehhez a felismerést számolja — hosszú meccsnél
+  /// ez fél perc is lehet, ezért bő az időkorlát.
+  Future<Map<String, dynamic>> compareAnnotations(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/annotations/compare"))
+        .timeout(const Duration(seconds: 120));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült az összevetés", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A kézi elemzés mentése (PUT .../annotations) — a TELJES dokumentum
   /// cseréje, félkészen is. A motor a normalizált dokumentumot adja
   /// vissza (időrendben, az "updated_at" mentési időponttal).

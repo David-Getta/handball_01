@@ -3,6 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.143 óta)
+
+- **Kézi elemzés: összevetés a géppel**: az új gomb a kézi napló
+  lövéseit és góljait összeveti azzal, amit a program felismert (±3 mp,
+  azonos típus és csapat): ítélet (visszahívás / precizitás a célokhoz
+  mérve), típusonként egyezik / kimaradt / téves, és a tételes lista — a
+  tételre kattintva a videó 3 mp-cel előtte indul, így rögtön látszik,
+  ki tévedett. Félkész elemzésnél csak a már annotált időszak számít;
+  3 kézi lövés alatt nincs ítélet. Ezzel a saját elemzésed a program
+  mérőrúdja lesz, CSV-bütykölés nélkül.
+
 ## v0.1.143 — kiadva (2026-09-24)
 
 > Kiadás-jegyzet: a kézi elemzés taktikai táblája is nagyítható

@@ -3316,6 +3316,24 @@ def create_app():
         tmp.replace(p)
         return doc
 
+    @app.get("/matches/{match_id}/annotations/compare")
+    def compare_annotations(match_id: str, tol_s: Optional[float] = None):
+        """A kézi napló lövései/gólai a motor felismerésével összevetve
+        (precizitás / visszahívás, a kimaradt és a téves tételek
+        videó-idővel — a kliens ezekre ugrik a lejátszóban)."""
+        from ..annotations import ANN_CMP_TOL_S, compare_with_detection
+        from ..pipeline.primitive_cache import primitive_cache
+
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        tol = ANN_CMP_TOL_S
+        if tol_s is not None and 0.5 <= tol_s <= 15.0:
+            tol = float(tol_s)
+        doc = _load_annotations(match_id)
+        with primitive_cache(match):
+            return compare_with_detection(match, doc, tol_s=tol)
+
     @app.get("/matches/{match_id}/annotations.csv")
     def export_annotations_csv(match_id: str):
         """A kézi esemény-napló CSV-ben (Excelben nyitható; ez a program
