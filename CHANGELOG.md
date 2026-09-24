@@ -3,7 +3,11 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.143 óta)
+## v0.1.144 — kiadva (2026-09-24)
+
+> Kiadás-jegyzet: a kézi elemzés lövései/gólai egy gombnyomással
+> összevethetők a program felismerésével; az eltérésekre kattintva a
+> videó oda ugrik.
 
 - **Kézi elemzés: összevetés a géppel**: az új gomb a kézi napló
   lövéseit és góljait összeveti azzal, amit a program felismert (±3 mp,
