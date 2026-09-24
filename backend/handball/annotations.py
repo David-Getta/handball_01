@@ -353,3 +353,57 @@ def compare_with_detection(match, doc: dict,
                      "tételei így is látszanak."),
         }
     return res
+
+
+def plan_overrides(res: dict, fps: float) -> list:
+    """A kézi napló szerinti JAVÍTÁS-lista az összevetés eredményéből.
+
+    A motor esemény-javítás formátumában (event_detection
+    ._apply_event_overrides): a "t" tracking-kocka, a "type" goal/shot.
+
+    - Egy kimaradt GÓL és egy mellette (tűrésen belül, azonos csapat)
+      TÉVES LÖVÉS ugyanaz a pillanat, csak a típus rossz → "set_type"
+      (és fordítva: kimaradt lövés + téves gól);
+    - a többi kimaradt tétel → "add" (a naplóbeli csapattal),
+    - a többi téves tétel → "remove".
+
+    A res a compare_with_detection kimenete (videó-idő + offset_s).
+    """
+    fps = fps if fps and fps > 0 else 25.0
+    offset = float(res.get("offset_s") or 0.0)
+    tol = float(res.get("tol_s") or ANN_CMP_TOL_S)
+    bt = res.get("by_type") or {}
+
+    def _kocka(t_s: float) -> int:
+        return max(0, int(round((float(t_s) - offset) * fps)))
+
+    missed = [dict(x) for ty in ("goal", "shot")
+              for x in (bt.get(ty) or {}).get("missed", [])]
+    spurious = [dict(x) for ty in ("goal", "shot")
+                for x in (bt.get(ty) or {}).get("spurious", [])]
+    ops = []
+    used_sp: set = set()
+    for m in sorted(missed, key=lambda x: x["t_s"]):
+        best = None
+        for i, sp in enumerate(spurious):
+            if i in used_sp or sp["type"] == m["type"]:
+                continue
+            if m.get("team") and sp.get("team") != m.get("team"):
+                continue
+            dt = abs(sp["t_s"] - m["t_s"])
+            if dt <= tol and (best is None or dt < best[0]):
+                best = (dt, i)
+        if best is not None:
+            used_sp.add(best[1])
+            ops.append({"op": "set_type",
+                        "t": _kocka(spurious[best[1]]["t_s"]),
+                        "type": m["type"]})
+        elif m.get("team") in ANN_TEAMS:
+            ops.append({"op": "add", "t": _kocka(m["t_s"]),
+                        "type": m["type"], "team": m["team"]})
+    for i, sp in enumerate(spurious):
+        if i not in used_sp:
+            ops.append({"op": "remove", "t": _kocka(sp["t_s"]),
+                        "type": sp["type"]})
+    ops.sort(key=lambda o: o["t"])
+    return ops

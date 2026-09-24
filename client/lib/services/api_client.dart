@@ -443,6 +443,22 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A kézi napló eltérései JAVÍTÁSKÉNT a motorba (POST
+  /// .../annotations/apply). [dryRun]: csak a terv (mi változna), írás
+  /// nélkül. Válasz: {"ops": [...], "counts": {set_type, add, remove},
+  /// "applied": bool}.
+  Future<Map<String, dynamic>> applyAnnotations(String matchId,
+      {bool dryRun = false}) async {
+    final resp = await http
+        .post(Uri.parse("$baseUrl/matches/$matchId/annotations/apply"
+            "${dryRun ? "?dry_run=true" : ""}"))
+        .timeout(const Duration(seconds: 120));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a javítás átvezetése", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A kézi elemzés mentése (PUT .../annotations) — a TELJES dokumentum
   /// cseréje, félkészen is. A motor a normalizált dokumentumot adja
   /// vissza (időrendben, az "updated_at" mentési időponttal).

@@ -284,3 +284,63 @@ def test_az_osszevetes_vegpontja(kliens):
     for kulcs in ("by_type", "overall", "verdict", "manual_shots",
                   "window_s", "enough"):
         assert kulcs in res, kulcs
+
+
+def test_a_javitas_terv_tipus_csere_felvetel_torles():
+    """Kimaradt gól + mellette téves lövés = típus-csere; a többi
+    kimaradt felvétel, a többi téves törlés — tracking-kockában."""
+    from handball.annotations import plan_overrides
+    res = {"offset_s": 10.0, "tol_s": 3.0, "by_type": {
+        "goal": {"missed": [{"t_s": 20.0, "type": "goal", "team": "home"}],
+                 "spurious": [{"t_s": 70.0, "type": "goal",
+                               "team": "away"}]},
+        "shot": {"missed": [{"t_s": 40.0, "type": "shot", "team": "away"}],
+                 "spurious": [{"t_s": 21.0, "type": "shot",
+                               "team": "home"}]},
+    }}
+    ops = plan_overrides(res, fps=10.0)
+    assert ops == [
+        {"op": "set_type", "t": 110, "type": "goal"},
+        {"op": "add", "t": 300, "type": "shot", "team": "away"},
+        {"op": "remove", "t": 600, "type": "goal"},
+    ]
+
+
+@pytest.fixture()
+def gol_kliens(monkeypatch):
+    tmp = tempfile.mkdtemp(prefix="hb_ann_gol_")
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True)
+    m = _gol_meccs()
+    m.meta.match_id = "g1"
+    (d / "g1.json").write_text(json.dumps(m.to_dict()), encoding="utf-8")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", tmp)
+    monkeypatch.setenv("HANDBALL_STORE_SYNC", "1")
+    from handball.api.app import create_app
+    return TestClient(create_app())
+
+
+def test_a_naplo_javitaskent_atvezetheto_a_motorba(gol_kliens):
+    """A gép gólt lát, a napló szerint védett lövés volt: a terv
+    típus-csere, az átvezetés után a gép is lövést lát (az összevetés
+    egyezik), és a próba-futás nem ír."""
+    client = gol_kliens
+    doc = {"status": "done", "events": [
+        {"id": f"e{i}", "t_s": t, "type": "lövés", "team": "home",
+         "outcome": o}
+        for i, (t, o) in enumerate([(0.2, "védés")])]}
+    assert client.put("/matches/g1/annotations", json=doc).status_code == 200
+    elotte = client.get("/matches/g1/annotations/compare").json()
+    assert elotte["by_type"]["goal"]["fp"] == 1
+    assert elotte["by_type"]["shot"]["fn"] == 1
+    terv = client.post("/matches/g1/annotations/apply?dry_run=true").json()
+    assert terv["applied"] is False
+    assert terv["counts"] == {"set_type": 1, "add": 0, "remove": 0}
+    assert client.get("/matches/g1/event-overrides").json()["overrides"] == []
+    kesz = client.post("/matches/g1/annotations/apply").json()
+    assert kesz["applied"] is True
+    utana = client.get("/matches/g1/annotations/compare").json()
+    assert utana["overall"]["tp"] == 1 and utana["overall"]["fp"] == 0
+    assert utana["overrides"] == 1
+    # Másodszor nincs mit átvezetni (nem duplázódik).
+    assert client.post("/matches/g1/annotations/apply").json()["ops"] == []

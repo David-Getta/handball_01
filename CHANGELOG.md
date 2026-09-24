@@ -3,6 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.146 óta)
+
+- **Kézi elemzés: a gép javítása a napló szerint**: az összevetés
+  dialógusában egy gomb a naplót a program esemény-javításaiba vezeti
+  át — a kimaradt gól és a mellette látott "lövés" típus-csere, a többi
+  kimaradt tétel felvétel, a többi téves törlés. Előbb megmutatja, mi
+  változna (típus-csere / felvétel / törlés darabszáma), és csak
+  megerősítés után ír. Ezután az eredmény, az xG, a lövő-listák és a
+  felderítés is a te naplód szerint számol; a meccs-nézet kilépéskor
+  újratölt, a "Minden javítás visszavonása" visszaállítja.
+
 ## v0.1.146 — kiadva (2026-09-24)
 
 > Kiadás-jegyzet: a kézi elemzésben egy kattintásos gyors rögzítés

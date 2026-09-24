@@ -3332,7 +3332,46 @@ def create_app():
             tol = float(tol_s)
         doc = _load_annotations(match_id)
         with primitive_cache(match):
-            return compare_with_detection(match, doc, tol_s=tol)
+            osszevetes = compare_with_detection(match, doc, tol_s=tol)
+        # A gépi oldal a MÁR felvitt kézi javításokkal együtt értendő.
+        # (Nem "res" a neve: a réteg-őr a res[...] kulcsokat rétegnek nézi.)
+        osszevetes["overrides"] = len(getattr(match.meta, "event_overrides",
+                                              None) or [])
+        return osszevetes
+
+    @app.post("/matches/{match_id}/annotations/apply")
+    def apply_annotations(match_id: str, dry_run: bool = False):
+        """A kézi napló lövései/gólai JAVÍTÁSKÉNT a motorba: az eltérések
+        esemény-javítássá alakulnak (típus-csere / felvétel / törlés), és
+        a meglévő javítások mellé kerülnek — így az eredmény, az xG, a
+        lövő-listák és a felderítés is a napló szerint számol.
+        dry_run=true: csak a terv (mi változna), írás nélkül."""
+        from ..annotations import (ANN_CMP_TOL_S, compare_with_detection,
+                                   plan_overrides)
+        from ..pipeline.primitive_cache import primitive_cache
+
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        doc = _load_annotations(match_id)
+        with primitive_cache(match):
+            res = compare_with_detection(match, doc, tol_s=ANN_CMP_TOL_S)
+        ops = plan_overrides(res, match.meta.fps)
+        osszeg = {k: sum(1 for o in ops if o["op"] == k)
+                  for k in ("set_type", "add", "remove")}
+        if dry_run or not ops:
+            return {"ops": ops, "counts": osszeg, "applied": False}
+        regi = _load_overrides(match_id)
+        latott = {(o.get("op"), o.get("t"), o.get("type"), o.get("team"))
+                  for o in regi}
+        uj = [o for o in ops
+              if (o["op"], o["t"], o["type"], o.get("team")) not in latott]
+        if len(regi) + len(uj) > 200:
+            raise HTTPException(
+                status_code=400,
+                detail="túl sok javítás (legfeljebb 200 fér el egy meccshez)")
+        set_event_overrides(match_id, {"overrides": regi + uj})
+        return {"ops": ops, "counts": osszeg, "applied": True}
 
     @app.get("/matches/{match_id}/annotations.csv")
     def export_annotations_csv(match_id: str):

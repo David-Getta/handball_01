@@ -330,6 +330,9 @@ class _AnnotationScreenState extends State<AnnotationScreen>
   bool _loading = true;
   bool _saving = false;
   bool _comparing = false; // az összevetés a géppel fut
+  // A gép lövés/gól-listája a napló szerint javítva: kilépéskor a
+  // meccs-nézet újratölt (különben a régi eredményt mutatná).
+  bool _appliedCorrections = false;
   bool _saveAgain = false;
   bool _dirty = false; // van helyben még ki nem írt változás
   bool _unsynced = false; // a motorban lévő változat régebbi a helyinél
@@ -736,7 +739,7 @@ class _AnnotationScreenState extends State<AnnotationScreen>
   Future<void> _close() async {
     if (!_loading && (_dirty || _unsynced)) await _save();
     if (!mounted) return;
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(_appliedCorrections);
   }
 
   /// A kézi napló lövései/gólai a motor felismerésével összevetve. Előbb
@@ -765,7 +768,7 @@ class _AnnotationScreenState extends State<AnnotationScreen>
       _snack("Az összevetés nem sikerült: $err");
       return;
     }
-    final seek = await showDialog<double>(
+    final choice = await showDialog<Object>(
       context: context,
       builder: (ctx) => _CompareDialog(
         res: r,
@@ -774,9 +777,68 @@ class _AnnotationScreenState extends State<AnnotationScreen>
         canSeek: _hasVideo,
       ),
     );
-    if (seek != null && mounted) {
-      _seekVideo(math.max(0.0, seek - kAnnCompareLeadS));
+    if (!mounted) return;
+    if (choice is double) {
+      _seekVideo(math.max(0.0, choice - kAnnCompareLeadS));
+    } else if (choice == _CompareDialog.applyChoice) {
+      await _applyToEngine();
     }
+  }
+
+  /// A napló eltérései javításként a motorba: előbb a terv (mi változna),
+  /// megerősítés után az írás; utána az összevetés újra (egyeznie kell).
+  Future<void> _applyToEngine() async {
+    Map<String, dynamic> plan;
+    try {
+      plan = await _api.applyAnnotations(widget.matchId, dryRun: true);
+    } catch (e) {
+      _snack("A javítás-terv nem készült el: ${humanError(e)}");
+      return;
+    }
+    if (!mounted) return;
+    final c = plan["counts"] is Map
+        ? Map<String, dynamic>.from(plan["counts"] as Map)
+        : const <String, dynamic>{};
+    final n = ((c["set_type"] ?? 0) as num) +
+        ((c["add"] ?? 0) as num) +
+        ((c["remove"] ?? 0) as num);
+    if (n == 0) {
+      _snack("Nincs mit javítani — a gép a napló szerint lát.");
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Gép javítása a napló szerint"),
+        content: Text(
+          "A program lövés/gól-listája a naplód szerint módosul:\n"
+          "• típus-csere (gól ↔ lövés): ${c["set_type"] ?? 0}\n"
+          "• felvétel (a gép nem látta): ${c["add"] ?? 0}\n"
+          "• törlés (a gép tévesen látta): ${c["remove"] ?? 0}\n\n"
+          "Az eredmény, az xG, a lövő-listák és a felderítés ezután a "
+          "javított listából számol. Visszavonás: a meccs-nézetben a "
+          "\"Minden javítás visszavonása\".",
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text("Mégse")),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text("Javítás")),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await _api.applyAnnotations(widget.matchId);
+    } catch (e) {
+      _snack("A javítás átvezetése nem sikerült: ${humanError(e)}");
+      return;
+    }
+    if (!mounted) return;
+    _appliedCorrections = true;
+    _snack("A gép lövés/gól-listája a napló szerint javítva ($n tétel).");
   }
 
   Future<void> _exportCsv() async {
@@ -2441,6 +2503,9 @@ class _CompareDialog extends StatelessWidget {
 
   static const Map<String, String> _typeHu = {"goal": "gól", "shot": "lövés"};
 
+  /// A dialógus e válasszal zárul, ha a "javítás a napló szerint" kell.
+  static const String applyChoice = "apply";
+
   String _team(Object? t) =>
       t == "home" ? homeName : (t == "away" ? awayName : "?");
 
@@ -2545,6 +2610,12 @@ class _CompareDialog extends StatelessWidget {
       scope = "Az egész meccs (az elemzés késznek jelölve).";
     }
     final tol = _toD(res["tol_s"], 3);
+    final overall = res["overall"] is Map
+        ? Map<String, dynamic>.from(res["overall"] as Map)
+        : const <String, dynamic>{};
+    final mismatches =
+        ((overall["fp"] ?? 0) as num) + ((overall["fn"] ?? 0) as num);
+    final ovCount = ((res["overrides"] ?? 0) as num).toInt();
     return AlertDialog(
       title: const Text("Összevetés a géppel"),
       content: SizedBox(
@@ -2566,6 +2637,13 @@ class _CompareDialog extends StatelessWidget {
                   "missed"),
               _list(context, "TÉVES — a gép látta, a naplóban nincs",
                   "spurious"),
+              if (ovCount > 0) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                    "A gépi oldal $ovCount kézi javítással együtt értendő "
+                    "(esemény-javítások).",
+                    style: AppText.label.copyWith(fontSize: 11.5)),
+              ],
               const SizedBox(height: AppSpacing.md),
               Text(
                 "Egyezés: azonos típus (és ha megadtad, csapat) "
@@ -2580,6 +2658,12 @@ class _CompareDialog extends StatelessWidget {
         ),
       ),
       actions: [
+        if (mismatches > 0)
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).pop(applyChoice),
+            icon: const Icon(Icons.build_outlined, size: 16),
+            label: const Text("Gép javítása a napló szerint"),
+          ),
         TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text("Bezárás")),

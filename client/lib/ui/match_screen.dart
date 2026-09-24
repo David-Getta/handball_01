@@ -1813,7 +1813,7 @@ class _MatchScreenState extends State<MatchScreen> {
                         .clamp(0, match.frames.length - 1)
                         .toInt()]
                     .t);
-            Navigator.of(context).push(MaterialPageRoute(
+            Navigator.of(context).push<bool>(MaterialPageRoute(
               builder: (_) => AnnotationScreen(
                 matchId: match.meta.matchId,
                 homeName: match.meta.homeTeam,
@@ -1822,7 +1822,11 @@ class _MatchScreenState extends State<MatchScreen> {
                 startSeconds: now,
                 offline: _sourceLabel == "demó",
               ),
-            ));
+            )).then((javitva) {
+              // A kézi napló szerint javított lövés/gól-lista: a
+              // meccs-nézet eredménye is frissüljön.
+              if (javitva == true && mounted) _load();
+            });
           },
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.gold,

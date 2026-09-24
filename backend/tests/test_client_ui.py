@@ -3239,6 +3239,17 @@ def test_kezi_elemzes_osszevetes_a_geppel():
         "compareAnnotations("), "előbb mentünk, aztán vetünk össze"
     assert "_seekVideo(" in osszevet
     assert "class _CompareDialog" in scr and "Összevetés a géppel" in scr
+    # "Gép javítása a napló szerint": előbb próba-futás (terv), megerősítés
+    # után írás; a backend útvonalával egyezően; kilépéskor a meccs-nézet
+    # újratölt, ha javítás történt.
+    assert '@app.post("/matches/{match_id}/annotations/apply")' in app
+    assert "applyAnnotations(" in api and '/annotations/apply"' in api
+    atvez = scr[scr.index("Future<void> _applyToEngine()"):]
+    atvez = atvez[:atvez.index("\n  }\n")]
+    assert atvez.index("dryRun: true") < atvez.index("showDialog<bool>")
+    assert "Navigator.of(context).pop(_appliedCorrections)" in scr
+    ms = (lib / "ui" / "match_screen.dart").read_text(encoding="utf-8")
+    assert "javitva == true && mounted" in ms
 
 
 def test_a_dolgozo_motort_nem_lojuk_le_es_nem_teszunk_demot_a_meccs_helyere():
