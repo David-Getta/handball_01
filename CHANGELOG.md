@@ -25,7 +25,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   megvan, a "Folytatás az utolsó mentéstől" gombbal onnan viszi tovább
   (nem kell elölről kezdeni). A nem felelő motort magától újraéleszti (a
   dolgozót kivárja, nem lövi le), és a lekérdezések nem halmozódnak
-  egymásra, ha a motor lassan felel.
+  egymásra, ha a motor lassan felel. A "Megszakítás" gomb ugyanezt
+  teszi: "job not found" (a motor nem ismeri a munkát) helyett az
+  elveszett munka képét mutatja a folytatás lehetőségével.
 - **A korábbi elemzések azonnal megnyílnak** (javítás): egy 60 perces
   meccs megnyitása közel NÉGY PERC volt, és a képernyő addig üres
   maradt — a támadások (80 mp), a védekezés (50 mp), az edzői

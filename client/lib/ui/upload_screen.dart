@@ -987,30 +987,7 @@ class _UploadScreenState extends State<UploadScreen> {
       // elveszett. Ezt hiába próbálnánk újra (korábban a képernyő
       // örökké azt írta, hogy "valószínűleg fut tovább"). Megnézzük, van-e
       // ellenőrző-mentés, és ha van, felajánljuk a folytatást.
-      _poll?.cancel();
-      var resumable = false;
-      final mid = _matchId;
-      if (mid != null) {
-        try {
-          final lista = await _api.listMatches();
-          resumable = lista.any((m) =>
-              m["match_id"] == mid && ((m["partial"] as bool?) ?? false));
-        } catch (_) {}
-      }
-      if (!mounted) return;
-      setState(() {
-        _jobLost = true;
-        _resumable = resumable;
-        _connNote = null;
-        _status = "error";
-        _error = resumable
-            ? "a motor feldolgozás közben újraindult, a futó munka "
-                "elveszett — az utolsó ellenőrző-mentésig kész rész viszont "
-                "megvan: a \"Folytatás\" gomb onnan viszi tovább."
-            : "a motor feldolgozás közben újraindult, a futó munka "
-                "elveszett, és még nem készült belőle ellenőrző-mentés — "
-                "indítsd újra a feldolgozást.";
-      });
+      await _onJobLost();
     } catch (e) {
       // A lekérdezés bicsaklott meg, NEM a feldolgozás: a munka a
       // motorban fut tovább. Kitartunk, és csak többszöri hiba után
@@ -1041,6 +1018,35 @@ class _UploadScreenState extends State<UploadScreen> {
         }
       }
     }
+  }
+
+  /// A motor nem ismeri a munkát (újraindult): a figyelés leáll, és ha
+  /// a meccs ellenőrző-mentése megvan, a folytatást ajánljuk fel.
+  Future<void> _onJobLost() async {
+    _poll?.cancel();
+    var resumable = false;
+    final mid = _matchId;
+    if (mid != null) {
+      try {
+        final lista = await _api.listMatches();
+        resumable = lista.any((m) =>
+            m["match_id"] == mid && ((m["partial"] as bool?) ?? false));
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _jobLost = true;
+      _resumable = resumable;
+      _connNote = null;
+      _status = "error";
+      _error = resumable
+          ? "a motor feldolgozás közben újraindult, a futó munka "
+              "elveszett — az utolsó ellenőrző-mentésig kész rész viszont "
+              "megvan: a \"Folytatás\" gomb onnan viszi tovább."
+          : "a motor feldolgozás közben újraindult, a futó munka "
+              "elveszett, és még nem készült belőle ellenőrző-mentés — "
+              "indítsd újra a feldolgozást.";
+    });
   }
 
   /// Az elveszett munka FOLYTATÁSA az utolsó ellenőrző-mentéstől: a motor
@@ -1081,6 +1087,10 @@ class _UploadScreenState extends State<UploadScreen> {
       await _api.cancelJob(id);
       if (!mounted) return;
       setState(() => _message = "leállítás — az eddigi rész mentése…");
+    } on JobLostException {
+      // "job not found": a munka már nem fut (a motor újraindult) — nincs
+      // mit megszakítani; az elveszett munka képét mutatjuk folytatással.
+      await _onJobLost();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)

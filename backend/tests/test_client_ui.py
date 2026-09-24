@@ -3220,3 +3220,10 @@ def test_a_feldolgozas_kepernyo_felismeri_az_elveszett_munkat():
                     if not l.strip().startswith("//"))
     assert "valószínűleg fut tovább" not in kod
     assert "_api.resumeMatch(" in up and "Folytatás az utolsó mentéstől" in up
+    # A Megszakítás is: "job not found" → elveszett munka, nem hibaüzenet.
+    cj = api[api.index("Future<Map<String, dynamic>> cancelJob("):]
+    cj = cj[:cj.index("\n  }\n")]
+    assert "statusCode == 404) throw JobLostException" in cj
+    cp = up[up.index("Future<void> _cancelProcessing()"):]
+    cp = cp[:cp.index("\n  }\n")]
+    assert "on JobLostException" in cp and "_onJobLost()" in cp

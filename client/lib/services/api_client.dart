@@ -2029,7 +2029,12 @@ class ApiClient {
   /// Megszakít egy futó feldolgozást (POST /jobs/{id}/cancel). A leállás nem
   /// azonnali: a feldolgozó a következő képkockánál veszi észre (másodpercek).
   Future<Map<String, dynamic>> cancelJob(String jobId) async {
-    final resp = await http.post(Uri.parse("$baseUrl/jobs/$jobId/cancel"));
+    final resp = await http
+        .post(Uri.parse("$baseUrl/jobs/$jobId/cancel"))
+        .timeout(const Duration(seconds: 15));
+    // 404: a motor nem ismeri a munkát — közben újraindult (a hívó ezt
+    // "elveszett munkaként" kezeli, nem "megszakítási hibaként").
+    if (resp.statusCode == 404) throw JobLostException(jobId);
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült megszakítani", resp));
     }
