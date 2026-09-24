@@ -3089,6 +3089,7 @@ def test_kezi_elemzes_kepernyo_a_meccs_nezetbol():
 
 def test_kezi_elemzes_kozben_latszik_a_nagyithato_meccs_video():
     """ŐR: a kézi elemzés közben a meccs videója is látszik, és nagyítható
+    (a taktikai táblával együtt)
     — MacBook-touchpaddal (csippentés), Ctrl/⌘+görgővel és gombokkal;
     az idő a lejátszóból átvehető, a napló idejére kattintva a videó oda
     ugrik. Az idő mindenhol az EREDETI videó ideje. Az alap-felállás
@@ -3119,6 +3120,20 @@ def test_kezi_elemzes_kozben_latszik_a_nagyithato_meccs_video():
     assert "final bool showButtons;" in zp
     kivul = zp[zp.index("if (!widget.showButtons) return view;"):]
     assert "_buttons(size)" in kivul
+    # A taktikai tábla is nagyítható (touchpad-csippentés, Ctrl/⌘+görgő,
+    # gombok), és a touchpad-gesztus NEM húz bábut: az a Listeneré, a
+    # bábu-húzó GestureDetector a touchpadot nem fogadja.
+    assert "onPointerPanZoomUpdate" in scr and "annBoardTransform(" in scr
+    vaszon = scr[scr.index("Widget _boardCanvas("):scr.index("Widget _sceneFooter(")]
+    assert "supportedDevices:" in vaszon
+    eszkozok = vaszon[vaszon.index("supportedDevices:"):]
+    eszkozok = eszkozok[:eszkozok.index("}")]
+    assert "PointerDeviceKind.trackpad" not in eszkozok
+    assert "PointerDeviceKind.mouse" in eszkozok
+    # Minden pálya→képernyő átváltás a nagyított vetítést használja (a
+    # koppintás/húzás ugyanott találjon, ahol a rajz van).
+    assert scr.count("CourtTransform.fit(size)") == 1
+    assert "annBoardTransform(size, zoom, pan)" in scr
     # Idő: a meccs-nézet az eredeti videó idejét adja át, a "Pozíciók a
     # meccsből" pedig visszaszámol a kezdő-kockával.
     blokk = ms[ms.index("AnnotationScreen(") - 900:ms.index("AnnotationScreen(")]

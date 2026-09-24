@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.142 óta)
+
+- **Kézi elemzés: a taktikai tábla is nagyítható**: MacBook-touchpad
+  csippentéssel (két ujjas húzással mozgatható), Ctrl/⌘+görgővel vagy a
+  tábla sarkában a + / − / teljes pálya gombokkal; nagyítva az üres
+  helyről húzás és a görgő is mozgatja. A bábuk húzása és a nyilak
+  rajzolása nagyítva is pontosan oda talál, ahová kattintasz; a
+  touchpad-gesztus nem mozdít el véletlenül bábut.
+
 ## v0.1.142 — kiadva (2026-09-24)
 
 > Kiadás-jegyzet: a kézi elemzés közben látszik a meccs videója, és

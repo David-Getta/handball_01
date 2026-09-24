@@ -26,6 +26,11 @@ a kép sarkában a + / − / 1× gombokkal; dupla kattintás visszaállítja. A
 videó-sáv magassága a sáv alatti elválasztó húzásával állítható (dupla
 kattintás: alap-arány), a fejléc "Videó" kapcsolójával elrejthető.
 
+A **taktikai tábla** ugyanígy nagyítható (csippentés, Ctrl/⌘+görgő, a
+tábla sarkában + / − / teljes pálya); nagyítva az üres helyről húzás és
+a görgő mozgatja. A touchpad-gesztus nem húz bábut — azt kattintva-húzva
+mozgatod, mint eddig.
+
 Az idő mindenhol az **eredeti videó ideje** — ugyanaz, amit a lejátszó
 mutat; a "Pozíciók a meccsből" a feldolgozás kezdő-kockájával számol
 vissza.

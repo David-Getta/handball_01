@@ -29,7 +29,9 @@ import "dart:math" as math;
 
 import "package:file_picker/file_picker.dart";
 import "package:flutter/foundation.dart";
+import "package:flutter/gestures.dart";
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 
 import "../models/tracking.dart";
 import "../services/api_client.dart";
@@ -64,6 +66,17 @@ const Duration kAnnRetry = Duration(seconds: 30);
 const double kAnnVideoFrac = 0.42;
 const double kAnnVideoMinFrac = 0.18;
 const double kAnnVideoMaxFrac = 0.75;
+
+/// A taktikai tábla legnagyobb nagyítása (1× = a teljes pálya látszik).
+const double kAnnBoardMaxZoom = 5.0;
+
+/// A nagyított tábla pálya→képernyő vetítése: a teljes pályára illesztett
+/// vetítés [zoom]-szorosa, [pan] képpontnyi eltolással.
+CourtTransform annBoardTransform(Size size, double zoom, Offset pan) {
+  final base = CourtTransform.fit(size);
+  return CourtTransform(base.scale * zoom, base.originX * zoom + pan.dx,
+      base.originY * zoom + pan.dy);
+}
 
 double _toD(Object? v, double d) {
   if (v is num) return v.toDouble();
@@ -270,6 +283,41 @@ class _AnnotationScreenState extends State<AnnotationScreen>
 
   late final TabController _tabs;
   bool _wide = true;
+
+  // --- tábla-nagyítás ---
+  double _boardZoom = 1.0;
+  Offset _boardPan = Offset.zero; // képpontban, (1 - zoom)·méret … 0
+  bool _panningBoard = false; // üres helyről húzva a nagyított táblát
+  double _pinchLast = 1.0; // a touchpad-csippentés előző szorzója
+
+  CourtTransform _boardTr(Size size) =>
+      annBoardTransform(size, _boardZoom, _boardPan);
+
+  Offset _clampBoardPan(Offset o, Size size) => Offset(
+        o.dx.clamp(size.width * (1 - _boardZoom), 0.0).toDouble(),
+        o.dy.clamp(size.height * (1 - _boardZoom), 0.0).toDouble(),
+      );
+
+  /// Nagyítás a [focal] pont körül: a pont alatti pálya-hely a helyén marad.
+  void _zoomBoard(Offset focal, double factor, Size size) {
+    final nz = (_boardZoom * factor).clamp(1.0, kAnnBoardMaxZoom).toDouble();
+    if (nz == _boardZoom) return;
+    final f = nz / _boardZoom;
+    setState(() {
+      _boardZoom = nz;
+      _boardPan = _clampBoardPan(focal - (focal - _boardPan) * f, size);
+    });
+  }
+
+  void _panBoard(Offset delta, Size size) {
+    if (_boardZoom <= 1.0) return;
+    setState(() => _boardPan = _clampBoardPan(_boardPan + delta, size));
+  }
+
+  void _resetBoardZoom() => setState(() {
+        _boardZoom = 1.0;
+        _boardPan = Offset.zero;
+      });
 
   // --- videó ---
   final GlobalKey<VideoPanelState> _videoKey = GlobalKey<VideoPanelState>();
@@ -1052,7 +1100,7 @@ class _AnnotationScreenState extends State<AnnotationScreen>
   void _onTapUp(TapUpDetails d, Size size) {
     final s = _scene;
     if (s == null) return;
-    final tr = CourtTransform.fit(size);
+    final tr = _boardTr(size);
     final p = _clampCourt(tr.toCourt(d.localPosition.dx, d.localPosition.dy));
     final hit = _hitToken(s, p);
     if (_tool == _Tool.move) {
@@ -1104,20 +1152,26 @@ class _AnnotationScreenState extends State<AnnotationScreen>
   void _onPanStart(DragStartDetails d, Size size) {
     final s = _scene;
     if (s == null) return;
-    final tr = CourtTransform.fit(size);
+    final tr = _boardTr(size);
     final p = tr.toCourt(d.localPosition.dx, d.localPosition.dy);
     final hit = _hitToken(s, p, ballLast: false);
     _dragId = hit?.id;
+    // Nagyítva az üres helyről indított húzás a táblát mozgatja.
+    _panningBoard = hit == null && _boardZoom > 1.0;
     if (hit != null) setState(() => _selected = hit.id);
   }
 
   void _onPanUpdate(DragUpdateDetails d, Size size) {
+    if (_panningBoard) {
+      _panBoard(d.delta, size);
+      return;
+    }
     final s = _scene;
     final id = _dragId;
     if (s == null || id == null) return;
     final t = _tokenById(s, id);
     if (t == null) return;
-    final tr = CourtTransform.fit(size);
+    final tr = _boardTr(size);
     final p = _clampCourt(tr.toCourt(d.localPosition.dx, d.localPosition.dy));
     setState(() {
       t.x = p.dx;
@@ -1129,7 +1183,7 @@ class _AnnotationScreenState extends State<AnnotationScreen>
   void _onLongPress(LongPressStartDetails d, Size size) {
     final s = _scene;
     if (s == null) return;
-    final tr = CourtTransform.fit(size);
+    final tr = _boardTr(size);
     final p = tr.toCourt(d.localPosition.dx, d.localPosition.dy);
     final hit = _hitToken(s, p);
     if (hit != null) _tokenMenu(hit);
@@ -1566,27 +1620,119 @@ class _AnnotationScreenState extends State<AnnotationScreen>
     );
   }
 
+  /// A pálya-rajz. Nagyítható: MacBook-touchpad csippentés (két ujjas
+  /// húzás: mozgatás), Ctrl/⌘+görgő, vagy a sarok-gombok; nagyítva az
+  /// üres helyről húzás és a sima görgő is mozgatja. A bábuk húzása
+  /// közben ugyanúgy működik — a touchpad-gesztusok (csippentés, két
+  /// ujjas húzás) NEM érik el a bábu-húzást, azokat a Listener kapja.
   Widget _boardCanvas(_Scene s) {
     return LayoutBuilder(builder: (ctx, cons) {
       final size = Size(cons.maxWidth, cons.maxHeight);
+      // Ablak-átméretezés után is maradjon a pályán az eltolás.
+      _boardPan = _clampBoardPan(_boardPan, size);
       final moving = _tool == _Tool.move;
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapUp: (d) => _onTapUp(d, size),
-        onLongPressStart: (d) => _onLongPress(d, size),
-        onPanStart: moving ? (d) => _onPanStart(d, size) : null,
-        onPanUpdate: moving ? (d) => _onPanUpdate(d, size) : null,
-        onPanEnd: moving ? (_) => _dragId = null : null,
-        child: CustomPaint(
-          size: size,
-          painter: _BoardPainter(
-            scene: s,
-            selected: _selected,
-            pending: _pendingFrom,
-            rev: _rev,
+      final zoomed = _boardZoom > 1.01;
+      final board = Listener(
+        onPointerSignal: (e) {
+          if (e is! PointerScrollEvent) return;
+          final kb = HardwareKeyboard.instance;
+          if (kb.isControlPressed || kb.isMetaPressed) {
+            _zoomBoard(e.localPosition, math.exp(-e.scrollDelta.dy / 240.0), size);
+          } else {
+            _panBoard(-e.scrollDelta, size);
+          }
+        },
+        onPointerPanZoomStart: (_) => _pinchLast = 1.0,
+        onPointerPanZoomUpdate: (e) {
+          final factor = e.scale / _pinchLast;
+          _pinchLast = e.scale;
+          if ((factor - 1.0).abs() > 1e-4) {
+            _zoomBoard(e.localPosition, factor, size);
+          }
+          if (e.localPanDelta != Offset.zero) _panBoard(e.localPanDelta, size);
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          // A touchpad-gesztus a Listeneré (nagyítás/mozgatás), ne húzzon
+          // bábut; a touchpad-KATTINTÁS egér-eseményként érkezik.
+          supportedDevices: const {
+            PointerDeviceKind.touch,
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.stylus,
+            PointerDeviceKind.invertedStylus,
+            PointerDeviceKind.unknown,
+          },
+          onTapUp: (d) => _onTapUp(d, size),
+          onLongPressStart: (d) => _onLongPress(d, size),
+          onPanStart: moving ? (d) => _onPanStart(d, size) : null,
+          onPanUpdate: moving ? (d) => _onPanUpdate(d, size) : null,
+          onPanEnd: moving
+              ? (_) {
+                  _dragId = null;
+                  _panningBoard = false;
+                }
+              : null,
+          child: ClipRect(
+            child: CustomPaint(
+              size: size,
+              painter: _BoardPainter(
+                scene: s,
+                selected: _selected,
+                pending: _pendingFrom,
+                rev: _rev,
+                zoom: _boardZoom,
+                pan: _boardPan,
+              ),
+            ),
           ),
         ),
       );
+      final center = Offset(size.width / 2, size.height / 2);
+      // A gombok a gesztus-figyelőn KÍVÜL: a kattintásuk ne legyen
+      // pálya-koppintás (nyíl-rajzolás, kijelölés).
+      return Stack(children: [
+        Positioned.fill(child: board),
+        Positioned(
+          right: 4,
+          top: 4,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface.withOpacity(0.82),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: "Tábla nagyítása (csippentés, Ctrl/⌘+görgő)",
+                onPressed: _boardZoom >= kAnnBoardMaxZoom - 0.01
+                    ? null
+                    : () => _zoomBoard(center, 1.4142, size),
+                icon: const Icon(Icons.zoom_in, size: 18),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: "Tábla kicsinyítése",
+                onPressed:
+                    zoomed ? () => _zoomBoard(center, 1 / 1.4142, size) : null,
+                icon: const Icon(Icons.zoom_out, size: 18),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: "Teljes pálya (1×)",
+                onPressed: zoomed ? _resetBoardZoom : null,
+                icon: const Icon(Icons.fit_screen, size: 18),
+              ),
+              if (zoomed)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text("×${_boardZoom.toStringAsFixed(1)}",
+                      style: AppText.label.copyWith(fontSize: 11)),
+                ),
+            ]),
+          ),
+        ),
+      ]);
     });
   }
 
@@ -1923,12 +2069,21 @@ class _BoardPainter extends CustomPainter {
   final String? selected;
   final String? pending;
   final int rev; // a változás-számláló: a bábuk helyben változnak
+  final double zoom; // a tábla nagyítása (1× = teljes pálya)
+  final Offset pan; // a nagyított tábla eltolása képpontban
 
-  _BoardPainter({required this.scene, this.selected, this.pending, required this.rev});
+  _BoardPainter({
+    required this.scene,
+    this.selected,
+    this.pending,
+    required this.rev,
+    this.zoom = 1.0,
+    this.pan = Offset.zero,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final tr = CourtTransform.fit(size);
+    final tr = annBoardTransform(size, zoom, pan);
     _court(canvas, tr);
     final r = 0.8 * tr.scale;
 
@@ -2136,5 +2291,7 @@ class _BoardPainter extends CustomPainter {
       old.rev != rev ||
       old.scene != scene ||
       old.selected != selected ||
-      old.pending != pending;
+      old.pending != pending ||
+      old.zoom != zoom ||
+      old.pan != pan;
 }
