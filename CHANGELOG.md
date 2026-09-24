@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.141 óta)
+## v0.1.142 — kiadva (2026-09-24)
+
+> Kiadás-jegyzet: a kézi elemzés közben látszik a meccs videója, és
+> nagyítható (MacBook-touchpad csippentés, Ctrl/⌘+görgő, gombok); a
+> kezdőlap és a felderítés újraindítás után azonnal jön; az elveszett
+> feldolgozás felismerhető és az utolsó mentéstől folytatható.
 
 - **Kézi elemzés: közben látszik a meccs, és nagyítható**: ha a meccs
   videója ezen a gépen van, a kézi elemzés tetején lejátszó fut (a
