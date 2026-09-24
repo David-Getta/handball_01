@@ -111,6 +111,63 @@ double? _toDn(Object? v) {
   return null;
 }
 
+/// Egy csapat összesítése a kézi naplóból.
+class AnnTeamStats {
+  int shots = 0; // lövés + hetes, bármilyen kimenetellel
+  int goals = 0;
+  int saves = 0;
+  int sevenM = 0; // hetesek
+  int turnovers = 0;
+  int steals = 0;
+  int suspensions = 0;
+  // mezszám → [gól, lövés]
+  final Map<String, List<int>> shooters = {};
+
+  /// Lövés-hatékonyság százalékban (null, ha nincs lövés).
+  int? get pct => shots == 0 ? null : (goals * 100 / shots).round();
+
+  /// A legtöbb gólt szerzők (gól, majd kevesebb lövés szerint).
+  List<MapEntry<String, List<int>>> topScorers(int n) {
+    final l = shooters.entries.where((e) => e.value[0] > 0).toList()
+      ..sort((a, b) => b.value[0] != a.value[0]
+          ? b.value[0].compareTo(a.value[0])
+          : a.value[1].compareTo(b.value[1]));
+    return l.take(n).toList();
+  }
+}
+
+/// A kézi napló összesítése csapatonként — a napló így statisztika-lap
+/// is (a "lövés" és a "hetes" lövésnek számít, a "gól" kimenetel gólnak).
+Map<String, AnnTeamStats> annLogStats(List<Map<String, dynamic>> events) {
+  final out = {"home": AnnTeamStats(), "away": AnnTeamStats()};
+  for (final e in events) {
+    final st = out[e["team"]];
+    if (st == null) continue;
+    final type = "${e["type"] ?? ""}";
+    final outcome = "${e["outcome"] ?? ""}";
+    if (type == "lövés" || type == "hetes") {
+      st.shots += 1;
+      if (type == "hetes") st.sevenM += 1;
+      final goal = outcome == "gól";
+      if (goal) st.goals += 1;
+      if (outcome == "védés") st.saves += 1;
+      final j = "${e["jersey"] ?? ""}".trim();
+      if (j.isNotEmpty) {
+        final row = st.shooters.putIfAbsent(j, () => [0, 0]);
+        row[1] += 1;
+        if (goal) row[0] += 1;
+      }
+    } else if (type == "eladás") {
+      st.turnovers += 1;
+    } else if (type == "szerzés") {
+      st.steals += 1;
+    } else if (type == "kiállítás") {
+      st.suspensions += 1;
+    }
+  }
+  return out;
+}
+
 double _r2(double v) => (v * 100).roundToDouble() / 100;
 
 String _str(Object? v) => v == null ? "" : "$v";
@@ -1989,6 +2046,10 @@ class _AnnotationScreenState extends State<AnnotationScreen>
           ]),
           const SizedBox(height: AppSpacing.sm),
           _eventForm(),
+          if (_events.isNotEmpty) ...[
+            const Divider(color: AppColors.border, height: AppSpacing.xl),
+            _statsPanel(),
+          ],
           const Divider(color: AppColors.border, height: AppSpacing.xl),
           if (_events.isEmpty)
             Padding(
@@ -2003,6 +2064,58 @@ class _AnnotationScreenState extends State<AnnotationScreen>
             for (final e in _events) _eventTile(e),
         ],
       ),
+    );
+  }
+
+  /// Összesítés a naplóból (csapatonként lövés/gól/hatékonyság, eladás,
+  /// szerzés, kiállítás, és a legjobb góllövők mezszám szerint).
+  Widget _statsPanel() {
+    final stats = annLogStats(_events);
+    Widget col(String team, String name, Color color) {
+      final st = stats[team]!;
+      final top = st.topScorers(3);
+      return Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_short(name),
+                style: AppText.value.copyWith(fontSize: 13, color: color)),
+            const SizedBox(height: 2),
+            Text(
+              "Gól/lövés: ${st.goals}/${st.shots}"
+              "${st.pct == null ? "" : " (${st.pct}%)"}",
+              style: AppText.label.copyWith(fontSize: 12),
+            ),
+            if (st.saves > 0 || st.sevenM > 0)
+              Text("Védett: ${st.saves} · hetes: ${st.sevenM}",
+                  style: AppText.label.copyWith(fontSize: 12)),
+            Text(
+                "Eladás: ${st.turnovers} · szerzés: ${st.steals}"
+                "${st.suspensions > 0 ? " · kiállítás: ${st.suspensions}" : ""}",
+                style: AppText.label.copyWith(fontSize: 12)),
+            if (top.isNotEmpty)
+              Text(
+                  "Góllövők: ${top.map((e) => "#${e.key} ${e.value[0]}/${e.value[1]}").join(", ")}",
+                  style: AppText.label.copyWith(fontSize: 12)),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("ÖSSZESÍTÉS A NAPLÓBÓL", style: AppText.sectionLabel),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            col("home", widget.homeName, AppColors.home),
+            const SizedBox(width: AppSpacing.md),
+            col("away", widget.awayName, AppColors.away),
+          ],
+        ),
+      ],
     );
   }
 

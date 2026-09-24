@@ -11,6 +11,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   idejével, a kijelölt csapatnak; a felugró "Szerkesztés"-sel
   pontosítható. Egy meccs lövéseinek naplózása így a videó mellett,
   megállás nélkül megy.
+- **Kézi elemzés: összesítés a naplóból**: a napló fölött csapatonként
+  gól/lövés hatékonysággal, védett lövés, hetes, eladás, szerzés,
+  kiállítás, és a legjobb góllövők mezszám szerint — a kézi napló így
+  statisztika-lap is, mentés nélkül, azonnal frissül.
 
 ## v0.1.145 — kiadva (2026-09-24)
 

@@ -3175,6 +3175,13 @@ def test_kezi_elemzes_gyors_rogzites():
     gyors = scr[scr.index("void _quickEvent("):scr.index("Widget _quickRow()")]
     assert "_videoNow" in gyors and "_startEdit(e)" in gyors
     assert "_quickRow()" in scr[scr.index("Widget _eventForm()"):]
+    # Az összesítés a naplóból: a lövés és a hetes lövésnek, a "gól"
+    # kimenetel gólnak számít (ugyanúgy, mint az összevetésben).
+    stat = scr[scr.index("Map<String, AnnTeamStats> annLogStats("):]
+    stat = stat[:stat.index("\n}\n")]
+    assert 'type == "lövés" || type == "hetes"' in stat
+    assert 'outcome == "gól"' in stat
+    assert "_statsPanel()" in scr[scr.index("Widget _logCard()"):]
 
 
 def test_kezi_elemzes_billentyuk_es_lassitas():
