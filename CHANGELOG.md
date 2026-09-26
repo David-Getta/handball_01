@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.148 óta)
+## v0.1.149 — kiadva (2026-09-26)
+
+> Kiadás-jegyzet: a motor memóriája nem nő a könyvtárral — csak a
+> legutóbb használt meccsek maradnak teljesen a memóriában, a többi
+> pár másodperc alatt jön vissza a lemezről; a kezdőlap ehhez nem tölt
+> vissza semmit.
 
 - **A motor memóriája nem nő a könyvtárral** (javítás): eddig a motor
   a könyvtár MINDEN meccsét teljesen a memóriában tartotta — egy meccs
@@ -12,11 +17,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   vezethetett ("nem érem el a motort"). Mostantól csak a legutóbb
   használt hat meccs marad teljesen a memóriában (HANDBALL_STORE_HOT),
   a többinek a fejléce; a hideg meccs a megnyitáskor a lemezről jön
-  vissza (~2–3 mp egy teljes meccsnél). A betöltés maga is gyorsabb
-  (a csapat- és forrás-címkék szótárból, nem enum-hívással). A kezdőlap könyvtár-kártyái és a
-  meccs-lista ehhez nem töltenek vissza semmit (a lemezes eredmény-
-  tárból dolgoznak). Mérés nyolc 60 perces meccsen: állandó memória
-  852 MB → 320 MB.
+  vissza (~2–3 mp egy teljes meccsnél), és ez nem tartja fel a motort:
+  közben az életjel, a lista és a többi meccs ugyanúgy válaszol. A
+  betöltés maga is gyorsabb (a csapat- és forrás-címkék szótárból, nem
+  enum-hívással). A kezdőlap könyvtár-kártyái és a meccs-lista ehhez
+  nem töltenek vissza semmit (a lemezes eredmény-tárból dolgoznak).
+  Mérés nyolc 60 perces meccsen: állandó memória 852 MB → 320 MB.
 
 ## v0.1.148 — kiadva (2026-09-24)
 
