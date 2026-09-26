@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.150 óta)
+## v0.1.151 — kiadva (2026-09-26)
+
+> Kiadás-jegyzet: hét réteg mozgás-mérése ritkítás-független lett
+> (sebesség-ablak, birtoklás, blokk-szünet másodpercben; a támadó-mozgás
+> és a térnyerés remegés-mentes) — a támadó-mozgás ítélete sűrű
+> felvételen eddig tévesen "mozgásos" lehetett.
 
 - **Ritkítás-független mozgás-mérés** (javítás, hét réteg): a
   stride-jelentés szerint ugyanaz a meccs sűrűn (25 fps) és a termék
