@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from handball.models.tracking import (
     Match, MatchMeta, Frame, PlayerPosition, Ball, Team, PositionSource,
 )
+from handball.pipeline.tactics import TacticsConfig
 from handball.pipeline.setplays import (
     segment_attacks, attack_signature, cluster_signatures, discover_setplays,
     AttackSequence, interpolate_play, play_signature, match_attacks_to_playbook,
@@ -252,3 +253,1615 @@ def test_setplay_efficiency_counts_goals_per_figure():
     assert len(top["starts"]) == top["attacks"]
     assert all(isinstance(t_, int) for t_ in top["starts"])
     assert eff["away"] == []
+
+
+def _spf_match(plan, ys=None):
+    """`plan` = a lövést leadó hazai játékos azonosítói, támadásonként.
+
+    Minden támadás UGYANAZZAL a mozgás-mintázattal indul (egy figura),
+    csak a befejező más. A labda előbb a lövő KEZÉBEN van (ez az
+    elengedés pillanata, innen jön a lövő-hozzárendelés), majd a +x
+    kapuba repül.
+    """
+    xs = [30.0, 28.0, 32.0]
+    ys = ys or [10.0, 4.0, 16.0]
+    pos = {i + 1: (xs[i], ys[i]) for i in range(3)}
+    frames = []
+    t = 0
+    for tid in plan:
+        for _ in range(20):      # a figura mozgás-mintázata
+            frames.append(_home_attack_frame(t, xs, ys))
+            t += 1
+        sx, sy = pos[tid]
+        cast = [_pl(i + 1, Team.HOME, xs[i], ys[i]) for i in range(3)]
+        for _ in range(6):       # a lövő kezében a labda
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        steps = 10
+        for i in range(1, steps + 1):
+            f = i / steps
+            frames.append(Frame(
+                t=t, players=cast,
+                ball=Ball(x=sx + 0.2 + (40.4 - sx - 0.2) * f,
+                          y=sy + (10.0 - sy) * f, confidence=1.0)))
+            t += 1
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=5.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="spf", home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_setplay_finishers_finds_the_telegraphed_figure():
+    """Ha a figura lövéseinek négyötöde ugyanarra a posztra fut ki, a
+    falnak már a figura indulásakor arra az oldalra kell csúsznia."""
+    from handball.pipeline.setplays import (SPF_MIN_SHOTS,
+                                            setplay_finishers)
+
+    rec = setplay_finishers(_spf_match([1, 1, 1, 1, 2]))["home"]
+    assert rec["figures"], rec
+    top = rec["figures"][0]
+    assert sum(top["roles"].values()) >= SPF_MIN_SHOTS, rec
+    assert rec["telegraphed"] is not None, rec
+    assert rec["telegraphed"]["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "INDULÁSAKOR" in rec["verdict"], rec
+
+
+def test_setplay_finishers_silent_with_few_shots():
+    """Két lövésből nincs ítélet — a figura befejezője még nem minta."""
+    from handball.pipeline.setplays import setplay_finishers
+
+    rec = setplay_finishers(_spf_match([1, 2]))["home"]
+    assert rec["telegraphed"] is None and rec["verdict"] is None, rec
+    assert all(r["main_role"] is None for r in rec["figures"]), rec
+
+
+# ---- Figura-koncentráció (egy figurára épül-e a támadójáték) ---------------
+
+
+def _spk_match(sides, fps=25.0):
+    """`sides` = támadásonként a tömörülés oldala ("bal"/"jobb"): a
+    két oldal két külön figurát ad. Támadások közt átmenet."""
+    frames = []
+    t = 0
+    for side in sides:
+        y = 4.0 if side == "bal" else 16.0
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, [28.0, 31.0, 34.0],
+                                             [y, y, y]))
+            t += 1
+        for _ in range(4):     # átmenet: a hazai a saját térfelén
+            frames.append(Frame(t=t,
+                                players=[_pl(1, Team.HOME, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="spk", home_team="A", away_team="B",
+                           fps=fps), frames)
+
+
+def test_setplay_concentration_flags_the_one_figure_team():
+    """Ha a támadások nagy része egyetlen mintából jön, konkrét
+    figurára lehet készülni."""
+    from handball.pipeline.setplays import (SPK_MIN_ATTACKS,
+                                            setplay_concentration)
+
+    rec = setplay_concentration(_spk_match(["bal"] * 6 + ["jobb"]))["home"]
+    assert rec["attacks"] >= SPK_MIN_ATTACKS, rec
+    assert rec["figures"] == 2, rec
+    assert rec["top_pct"] and rec["top_pct"] >= 40.0, rec
+    assert rec["cover_figures"] and rec["cover_figures"] >= 1, rec
+    assert rec["verdict"] and "konkrét figurára" in rec["verdict"], rec
+
+
+def test_setplay_concentration_silent_with_few_attacks():
+    """Néhány támadásból nincs ítélet — a szám viszont látszik."""
+    from handball.pipeline.setplays import setplay_concentration
+
+    rec = setplay_concentration(_spk_match(["bal", "jobb"]))["home"]
+    assert rec["attacks"] == 2, rec
+    assert rec["verdict"] is None, rec
+    assert setplay_concentration(
+        _spk_match(["bal", "jobb"]))["away"]["attacks"] == 0
+
+
+_SPD_PATTERNS = [[30.0, 28.0, 32.0], [26.0, 34.0, 30.0],
+                 [33.0, 25.0, 29.0], [24.0, 31.0, 35.0]]
+
+
+def _spd_match(first_goal=True, repeat_goal=False, patterns=None):
+    """Négy különböző hazai figura: előbb mind egyszer (ELSŐ
+    előfordulás), majd mind újra (ISMÉTLÉS) — sávonként a megadott
+    kimenetellel (gól vagy befejezés nélkül)."""
+    pats = patterns or _SPD_PATTERNS
+    frames = []
+    t = 0
+
+    def _attack(xs, goal):
+        nonlocal t
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, xs))
+            t += 1
+        if goal:
+            for i in range(8):
+                frames.append(Frame(
+                    t=t, players=[_pl(1, Team.HOME, 33.5, 10.0)],
+                    ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for _ in range(25):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for xs in pats:
+        _attack(xs, first_goal)
+    for xs in pats:
+        _attack(xs, repeat_goal)
+    return Match(MatchMeta(match_id="spd", home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_setplay_decay_shows_the_value_of_recognition():
+    """Ha az ismétlésre esik a figurák hozama, a fal maga megoldja a
+    felismerést."""
+    from handball.pipeline.setplays import SPD_GAP_PP, setplay_decay
+
+    rec = setplay_decay(_spd_match())["home"]
+    assert rec["first_attacks"] >= 4 and rec["repeat_attacks"] >= 4, rec
+    assert rec["gap_pp"] is not None
+    assert rec["first_pct"] - rec["repeat_pct"] >= SPD_GAP_PP, rec
+    assert rec["verdict"] and "felismerést" in rec["verdict"], rec
+
+
+def test_setplay_decay_silent_with_few_attacks():
+    """Kevés figura-támadásból nincs ítélet."""
+    from handball.pipeline.setplays import setplay_decay
+
+    rec = setplay_decay(_spd_match(patterns=_SPD_PATTERNS[:2]))["home"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None, rec
+
+
+# ---- Figura-ismétlés döntése (setplay_repeat_choice) -----------------------
+
+
+def _src_match(goal_first=True, blocks=5, match_id="src", one_figure=False):
+    """Figurapárok: minden figurát KÉTSZER egymás után játszanak, a
+    párban az egyik támadás gólos.
+
+    `goal_first=True` → a pár GÓLOS támadása jön elöl, tehát a gól UTÁNI
+    támadás az ismétlés (gól után ismételnek, gól nélkül váltanak);
+    False → fordítva. `one_figure=True` → mindig ugyanaz az alak, tehát
+    mindkét sávban ismételnek (kiszámítható sorrend).
+    """
+    pats = ([_SPD_PATTERNS[0]] * blocks if one_figure
+            else [_SPD_PATTERNS[i % len(_SPD_PATTERNS)]
+                  for i in range(blocks)])
+    frames = []
+    t = 0
+
+    def _attack(xs, goal):
+        """A két változat KÉPE azonos (ugyanazok a játékos-pozíciók, tehát
+        ugyanaz a figura-alak), csak a befejezés más: gólnál a labda a
+        kapuba fut, gól nélkül a támadóknál marad. Az üresjárat hosszabb
+        a gól-hozzárendelés 3 másodperces ablakánál, hogy a következő
+        támadás gólja ne számítson ehhez."""
+        nonlocal t
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, xs))
+            t += 1
+        for i in range(6):
+            bx = min(34.0 + i * 1.2, 40.0) if goal else xs[0]
+            frames.append(Frame(
+                t=t,
+                players=[_pl(j + 1, Team.HOME, xs[j], 10.0)
+                         for j in range(len(xs))],
+                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(120):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    for xs in pats:
+        _attack(xs, goal_first)
+        _attack(xs, not goal_first)
+    return Match(MatchMeta(match_id=match_id, home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_a_figura_ismetles_dontese_gol_utan_ugyanazt_hozzak():
+    """A gólos támadás után ugyanaz a figura jön, gól nélkül más — az
+    ítélet a védekezésnek szól: a kapott gól után előre fel lehet állni
+    ugyanarra."""
+    from handball.pipeline.setplays import (SRC_GAP_PP, SRC_MIN_ATTACKS,
+                                            setplay_repeat_choice)
+
+    rec = setplay_repeat_choice(_src_match())["home"]
+    assert rec["after_goal_attacks"] >= SRC_MIN_ATTACKS, rec
+    assert rec["after_miss_attacks"] >= SRC_MIN_ATTACKS, rec
+    assert rec["after_goal_repeats"] == rec["after_goal_attacks"], rec
+    assert rec["after_miss_repeats"] == 0, rec
+    assert rec["gap_pp"] is not None and rec["gap_pp"] >= SRC_GAP_PP, rec
+    assert rec["verdict"] and "rögtön újra hozzák" in rec["verdict"], rec
+    assert "álljatok fel előre" in rec["verdict"], rec
+    # A vendégnek nincs mért támadása: nincs ítélet, nem hallgatólagos 0.
+    ures = setplay_repeat_choice(_src_match())["away"]
+    assert ures["after_goal_attacks"] == 0 and ures["verdict"] is None
+
+
+def test_a_figura_ismetles_dontese_gol_utan_valtas_es_kiszamithatosag():
+    """Fordított pár: a gól után VÁLTANAK. Egyetlen alaknál mindkét
+    sávban ismételnek → kiszámítható a play-calling."""
+    from handball.pipeline.setplays import setplay_repeat_choice
+
+    valt = setplay_repeat_choice(_src_match(goal_first=False))["home"]
+    assert valt["after_goal_repeats"] == 0, valt
+    assert valt["after_miss_repeats"] == valt["after_miss_attacks"], valt
+    assert valt["verdict"] and "VÁLTANAK" in valt["verdict"], valt
+    assert "alaphelyzetet" in valt["verdict"], valt
+    egy = setplay_repeat_choice(_src_match(one_figure=True))["home"]
+    assert egy["after_goal_pct"] == 100.0 and egy["after_miss_pct"] == 100.0
+    assert egy["verdict"] and "kiszámítható" in egy["verdict"], egy
+
+
+def test_a_figura_ismetles_dontese_keves_mintanal_hallgat():
+    """Két figurapár: sávonként kevés az előző támadás → nincs arány és
+    nincs ítélet (sose hallgatólagos 0)."""
+    from handball.pipeline.setplays import setplay_repeat_choice
+
+    rec = setplay_repeat_choice(_src_match(blocks=2))["home"]
+    assert rec["after_goal_attacks"] < 4 or rec["after_miss_attacks"] < 4
+    assert rec["after_goal_pct"] is None and rec["gap_pp"] is None
+    assert rec["verdict"] is None, rec
+
+
+def test_a_figura_ismetles_a_felderitesen_meccsek_kozt_osszeadodik():
+    """A VALÓDI felderítés-úton (scout_team → combine_reports) a
+    darabszámok összeadódnak, és az edzői kulcs megszólal — a mezőnevek
+    is valódiak (a try/except különben elnyelné az elgépelést)."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            scout_team)
+
+    r1 = scout_team(_src_match(blocks=3, match_id="s1"), Team.HOME)
+    r2 = scout_team(_src_match(blocks=3, match_id="s2"), Team.HOME)
+    assert r1.setplay_repeat_after_goal > 0
+    assert r1.setplay_repeat_after_goal_same == r1.setplay_repeat_after_goal
+    assert r1.setplay_repeat_after_miss_same == 0
+    ossz = combine_reports([r1, r2])
+    assert (ossz.setplay_repeat_after_goal
+            == r1.setplay_repeat_after_goal + r2.setplay_repeat_after_goal)
+    assert (ossz.setplay_repeat_after_miss
+            == r1.setplay_repeat_after_miss + r2.setplay_repeat_after_miss)
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "rögtön újra hozzák" in kulcsok
+    assert "álljatok fel előre ugyanarra" in kulcsok
+
+
+def test_a_figura_ismetles_edzes_szabaly_valodi_retegbol_szolal_meg():
+    """480: a saját gól utáni kiszámítható ismétlés edzés-tétele a
+    VALÓDI rétegből (nem monkeypatch-elt alakból)."""
+    from handball.pipeline.training import training_focus
+
+    tetelek = training_focus(_src_match(match_id="t480"))["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "Kiszámítható a figura-sorrendünk a gól után" in cimek
+    tetel = next(t for t in tetelek
+                 if t["title"].startswith("Kiszámítható a figura-sorrend"))
+    assert "két nyitással" in tetel["drill"]
+
+
+# ---- Figura-indító (setplay_openers) ---------------------------------------
+
+
+def _spo_match(openers, ys=None):
+    """`openers` = támadásonként az a hazai játékos, AKINÉL a labda van
+    a szakasz elején.
+
+    A mozgás-mintázat minden támadásban UGYANAZ (a három játékos
+    ugyanott áll), tehát egyetlen figura-klaszter jön létre — csak az
+    INDÍTÓ ember más. Pont ezt méri a réteg.
+    """
+    xs = [30.0, 28.0, 32.0]
+    ys = ys or [10.0, 4.0, 16.0]
+    pos = {i + 1: (xs[i], ys[i]) for i in range(3)}
+    frames = []
+    t = 0
+    for tid in openers:
+        ox, oy = pos[tid]
+        cast = [_pl(i + 1, Team.HOME, xs[i], ys[i]) for i in range(3)]
+        for _ in range(20):      # a figura: a labda az INDÍTÓ kezében
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=ox + 0.2, y=oy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(30):      # átmenet a következő támadásig
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=5.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="spo", home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_setplay_openers_finds_the_readable_start():
+    """Ha a figura indításainak négyötöde ugyanarról a posztról jön, a
+    fal már az ELSŐ passznál tudja, mi következik."""
+    from handball.pipeline.setplays import (SPO_MIN_STARTS,
+                                            setplay_openers)
+
+    rec = setplay_openers(_spo_match([1, 1, 1, 1, 2]))["home"]
+    assert rec["figures"], rec
+    top = rec["figures"][0]
+    assert sum(top["roles"].values()) >= SPO_MIN_STARTS, rec
+    assert rec["telegraphed"] is not None, rec
+    assert rec["telegraphed"]["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "passzsávot" in rec["verdict"], rec
+
+
+def test_setplay_openers_silent_when_the_start_varies():
+    """Váltogatott indítással nincs előjel — a figurát nem lehet az
+    első passzból felismerni (sose hallgatólagos előjel)."""
+    from handball.pipeline.setplays import setplay_openers
+
+    # A 2-es és a 3-as ugyanazt a posztot (szélső) kapja a becsléstől,
+    # ezért a váltogatást az 1-es (átlövő) és a 2-es között mérjük.
+    rec = setplay_openers(_spo_match([1, 2, 1, 2, 1, 2]))["home"]
+    assert rec["figures"][0]["roles"] == {"átlövő": 3, "szélső": 3}, rec
+    assert rec["telegraphed"] is None and rec["verdict"] is None, rec
+
+
+def test_setplay_openers_silent_on_thin_samples():
+    """Két indításból még nem minta — a figura ítélete None."""
+    from handball.pipeline.setplays import setplay_openers
+
+    rec = setplay_openers(_spo_match([1, 2]))["home"]
+    assert rec["telegraphed"] is None and rec["verdict"] is None, rec
+    assert all(r["main_role"] is None for r in rec["figures"]), rec
+
+
+# ---- Figura-könyvtár meccsek között ------------------------------------------
+
+def _spl_match(sides, match_id="spl", goal=False, toward="right"):
+    """`sides` = támadásonként a tömörülés oldala ("bal"/"jobb") a
+    TÁMADÓ szemszögéből. `toward`: melyik kapura támad a hazai ("right"
+    = +x, "left" = −x — a másik térfélről, tükrözve). Ha `goal`, minden
+    támadás végén a labda a kapuba megy."""
+    from handball.pipeline.setplays import attack_direction  # noqa: F401
+    frames = []
+    t = 0
+    for side in sides:
+        y = 4.0 if side == "bal" else 16.0
+        xs = [28.0, 31.0, 34.0]
+        if toward == "left":       # 180°-os forgatás: x → 40−x, y → 20−y
+            xs = [40.0 - x for x in xs]
+            y = 20.0 - y
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, xs, [y, y, y]))
+            t += 1
+        sajat_x = 32.0 if toward == "left" else 8.0
+        for _ in range(4):     # átmenet: a hazai a SAJÁT térfelén
+            frames.append(Frame(t=t,
+                                players=[_pl(1, Team.HOME, sajat_x, 10.0)],
+                                ball=Ball(x=sajat_x, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id=match_id, home_team="A",
+                           away_team="B", fps=25.0), frames)
+
+
+def test_az_iranynormalt_ujjlenyomat_a_tukorkepet_egynek_veszi():
+    """Félidőben térfelet cserélnek: ugyanaz a figura a −x kapunál a
+    nyers ujjlenyomatban tükörkép. Az irány-normált alaknak egyeznie
+    kell — különben a könyvtár két figurát látna egy helyett."""
+    from handball.pipeline.setplays import (
+        _distance, attack_direction, normalized_signature, segment_attacks)
+
+    # A modellben a támadás iránya a konfiguráció dolga (a félidei
+    # térfélcserét a halftime-réteg a csapat-címkék cseréjével kezeli):
+    # a −x kapura támadó hazai külön konfigurációval szegmentálódik.
+    balra_cfg = TacticsConfig(home_attacks_positive=False)
+    jobbra = segment_attacks(_spl_match(["bal"]), min_length=5)
+    balra = segment_attacks(_spl_match(["bal"], toward="left"), balra_cfg,
+                            min_length=5)
+    assert len(jobbra) == 1 and len(balra) == 1
+    assert attack_direction(jobbra[0]) == 1
+    assert attack_direction(balra[0]) == -1
+    a = normalized_signature(jobbra[0])
+    b = normalized_signature(balra[0])
+    assert _distance(a, b) < 1e-9, (a, b)
+    # A nyers ujjlenyomat viszont eltér (ez a hiba, amit kikerülünk).
+    assert _distance(attack_signature(jobbra[0]),
+                     attack_signature(balra[0])) > 0.5
+
+
+def test_a_figura_alakok_edzoi_nevet_kapnak():
+    from handball.pipeline.setplays import (
+        SPL_MIN_ATTACKS, setplay_shapes, shape_zone)
+
+    m = _spl_match(["bal"] * 4 + ["jobb"] * 3)
+    rows = setplay_shapes(m)["home"]
+    assert len(rows) == 2
+    assert rows[0]["attacks"] == 4 and rows[1]["attacks"] == 3
+    assert rows[0]["attacks"] >= SPL_MIN_ATTACKS
+    assert rows[0]["zone"].startswith("bal oldal")
+    assert rows[1]["zone"].startswith("jobb oldal")
+    # A vendégnek nincs mért támadása: üres lista, nem hiba.
+    assert setplay_shapes(m)["away"] == []
+    # Kevés támadás (2) nem kerül be.
+    assert setplay_shapes(_spl_match(["bal"] * 2))["home"] == []
+    # A név mélysége a súlypontból: a kapu előtti tömörülés "kapuelőtér".
+    kozel = [0.0] * 18
+    kozel[5] = 1.0          # ix=5 (a +x kapu előtt), iy=0 (bal)
+    assert shape_zone(kozel) == "bal oldal, a kapuelőtér előtt"
+    tavol = [0.0] * 18
+    tavol[6 + 2] = 1.0      # ix=2 (a saját térfél), iy=1 (közép)
+    assert shape_zone(tavol) == "közép, távolról"
+
+
+def test_a_figura_konyvtar_a_meccsek_kozott_visszatero_alakot_talalja():
+    """Két meccs — a másodikban a másik kapura támadnak —, mindkettőben
+    a bal oldali figura a fő minta: a könyvtár EGY visszatérő figurát
+    ad 2 meccsen, a csak egyszer látott jobb oldali nem "visszatérő"."""
+    from handball.pipeline.setplays import (
+        SPL_MIN_MATCHES, setplay_library, setplay_shapes)
+
+    m1 = setplay_shapes(_spl_match(["bal"] * 4 + ["jobb"] * 3, "m1"))
+    m2 = setplay_shapes(_spl_match(["bal"] * 3, "m2", toward="left"),
+                        TacticsConfig(home_attacks_positive=False))
+    sorok = ([{**r, "match_id": "m1"} for r in m1["home"]]
+             + [{**r, "match_id": "m2"} for r in m2["home"]])
+    lib = setplay_library(sorok)
+    assert len(lib["figures"]) == 2
+    fo = lib["figures"][0]
+    assert fo["matches"] == 2 and fo["attacks"] == 7
+    assert fo["zone"].startswith("bal oldal")
+    assert [f["matches"] for f in lib["recurring"]] == [2]
+    assert SPL_MIN_MATCHES == 2
+    assert lib["verdict"] and "2 meccsen 7 támadás" in lib["verdict"]
+    # Egy meccs adata: nincs visszatérő figura, nincs ítélet.
+    egy = setplay_library([{**r, "match_id": "m1"} for r in m1["home"]])
+    assert egy["recurring"] == [] and egy["verdict"] is None
+    assert setplay_library([]) == {"figures": [], "recurring": [],
+                                   "verdict": None}
+
+
+def test_a_figura_konyvtar_a_valodi_felderitesen_at_is_megszolal():
+    """A felderítés a VALÓDI rétegen keresztül: két meccs jelentése
+    összefésülve visszatérő figurát ad, az edzői kulcs és a jelentés-
+    szótár is viszi (a try/except-be zárt felület elgépelt mezőnevet
+    némán nyelne el — ez a teszt ezért a valódi utat járja)."""
+    from handball.pipeline.scouting import (
+        _coach_keys, combine_reports, report_to_dict, scout_team)
+
+    r1 = scout_team(_spl_match(["bal"] * 4 + ["jobb"] * 3, "m1"), Team.HOME)
+    r2 = scout_team(_spl_match(["bal"] * 3, "m2"), Team.HOME)
+    assert r1.setplay_shapes and r1.setplay_shapes[0]["match_id"] == "m1"
+    egy = report_to_dict(r1)["setplay_library"]
+    assert egy["recurring"] == []          # egy meccs még nem könyvtár
+    ossz = combine_reports([r1, r2])
+    assert len(ossz.setplay_shapes) == 3   # a sorok egymás mögé kerülnek
+    lib = report_to_dict(ossz)["setplay_library"]
+    assert lib["recurring"] and lib["recurring"][0]["matches"] == 2
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "meccsről meccsre visszatérő figurájuk" in kulcsok.lower()
+
+
+def test_a_termeketlen_kedvenc_figura_edzes_szabaly_valodi_retegbol():
+    """Az edzés-fókusz 478-as szabálya a valódi setplay_shapes rétegből:
+    a leggyakoribb figura gól nélkül → megszólal; ha van gól, nem."""
+    from handball.pipeline.training import training_focus
+
+    m = _spl_match(["bal"] * 4 + ["jobb"] * 3, "tf")
+    tetelek = training_focus(m)["home"]
+    cimek = [t["title"] for t in tetelek]
+    assert any(c.startswith("Terméketlen kedvenc figura") for c in cimek), cimek
+
+
+def test_a_visszatero_figura_kezdokockai_klip_exporthoz():
+    """A könyvtári alakhoz illő támadások kezdő-kockái — "mutasd a
+    figurát, amit mindig hoznak". Az alak irány-normált: a másik kapura
+    támadó meccsen is megtalálja."""
+    from handball.pipeline.setplays import (
+        recurring_figure_starts, setplay_library, setplay_shapes)
+
+    m1 = _spl_match(["bal"] * 4 + ["jobb"] * 3, "m1")
+    m2 = _spl_match(["bal"] * 3, "m2", toward="left")
+    cfg2 = TacticsConfig(home_attacks_positive=False)
+    sorok = ([{**r, "match_id": "m1"} for r in setplay_shapes(m1)["home"]]
+             + [{**r, "match_id": "m2"}
+                for r in setplay_shapes(m2, cfg2)["home"]])
+    assert all("starts" in r for r in sorok)
+    fo = setplay_library(sorok)["recurring"][0]
+    # Az m1-ben 4 bal oldali támadás (12 kockánként), a jobb oldaliak nem.
+    assert recurring_figure_starts(m1, fo["shape"], Team.HOME) == [0, 12, 24, 36]
+    # Az m2-ben (a másik kapura) is megvan mind a három.
+    assert recurring_figure_starts(m2, fo["shape"], Team.HOME, cfg2) == [0, 12, 24]
+    # Idegen alakhoz semmi; üres alakhoz semmi; a vendégnek nincs támadása.
+    tavol = [0.0] * 18
+    tavol[2] = 1.0
+    assert recurring_figure_starts(m1, tavol, Team.HOME) == []
+    assert recurring_figure_starts(m1, [], Team.HOME) == []
+    assert recurring_figure_starts(m1, fo["shape"], Team.AWAY) == []
+
+
+def test_a_figura_riasztas_vegpontja_a_konyvtarbol_epul(tmp_path):
+    """/figure-alerts: a csapat könyvtára a könyvtár ÖSSZES meccséből —
+    egyetlen meccsnél nincs riasztás, két meccsnél a visszatérő figura
+    szakaszai jönnek (t, t_end), a védekező csapat nevével."""
+    import json
+    import os
+
+    import pytest
+
+    from handball.pipeline.setplays import recurring_figure_segments
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    m1 = _spl_match(["bal"] * 4 + ["jobb"] * 3, "m1")
+    (d / "m1.json").write_text(json.dumps(m1.to_dict()), encoding="utf-8")
+    c = TestClient(create_app())
+    assert c.get("/matches/nincs/figure-alerts").status_code == 404
+    assert c.get("/matches/m1/figure-alerts").json()["alerts"] == []
+    m2 = _spl_match(["bal"] * 3, "m2")
+    (d / "m2.json").write_text(json.dumps(m2.to_dict()), encoding="utf-8")
+    c = TestClient(create_app())
+    r = c.get("/matches/m1/figure-alerts").json()["alerts"]
+    assert [a["t"] for a in r] == [0, 12, 24, 36]
+    assert all(a["t_end"] >= a["t"] and a["team"] == "home" for a in r)
+    assert r[0]["team_name"] == "A" and r[0]["zone"].startswith("bal oldal")
+    assert "B: kettőzés" in r[0]["text"]
+    # Üres alakra a motor-függvény sem ad szakaszt.
+    assert recurring_figure_segments(m1, [], Team.HOME) == []
+
+
+def test_a_csapat_konyvtara_meccsenkent_egyszer_szamol(tmp_path, monkeypatch):
+    """A /figure-alerts (és a klip-számlálás) a csapat ÖSSZES meccsén
+    számolna alakot minden híváskor — a primitív-gyorsítótár hatókörös,
+    nem véd. A meccsenkénti alak-gyorsítótár: két hívás, meccsenként
+    EGY számolás; az újrafeldolgozott (más hosszú) meccs újraszámol."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+    from handball.pipeline import setplays as sp
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    for mid, sides in (("m1", ["bal"] * 4), ("m2", ["bal"] * 3)):
+        (d / f"{mid}.json").write_text(
+            json.dumps(_spl_match(sides, mid).to_dict()), encoding="utf-8")
+    hivasok = []
+    eredeti = sp.setplay_shapes
+    monkeypatch.setattr(sp, "setplay_shapes",
+                        lambda m, *a, **k: (hivasok.append(m.meta.match_id)
+                                            or eredeti(m, *a, **k)))
+    c = TestClient(create_app())
+    r1 = c.get("/matches/m1/figure-alerts").json()["alerts"]
+    r2 = c.get("/matches/m1/figure-alerts").json()["alerts"]
+    assert r1 == r2 and len(r1) == 4
+    assert sorted(hivasok) == ["m1", "m2"], hivasok
+
+
+def test_a_setplays_vegpont_az_alakokat_is_adja(tmp_path):
+    """A meccs-összefoglaló a figurák ALAKJÁT rajzolja: a /setplays
+    válaszban ott a "shapes" (edzői névvel), a hatékonyság mellett."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    (d / "m1.json").write_text(
+        json.dumps(_spl_match(["bal"] * 4 + ["jobb"] * 3, "m1").to_dict()),
+        encoding="utf-8")
+    r = TestClient(create_app()).get("/matches/m1/setplays").json()
+    assert "efficiency" in r and r["shapes"] is not None
+    assert [x["attacks"] for x in r["shapes"]["home"]] == [4, 3]
+    assert r["shapes"]["home"][0]["zone"].startswith("bal oldal")
+
+
+def test_a_figura_nevek_a_konyvtar_minden_feluleten_megjelennek(tmp_path):
+    """Az edző elnevezi az alakot ("Beúszós kereszt"): a név a
+    könyvtár-szintű tárban él, az alakhoz kötve (a könyvtári küszöbön
+    belül), és a /setplays, a /scouting, a /figure-alerts is viszi;
+    közeli alak átnevez (nem dupláz), üres név töröl."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    for mid, sides in (("m1", ["bal"] * 4 + ["jobb"] * 3), ("m2", ["bal"] * 3)):
+        (d / f"{mid}.json").write_text(
+            json.dumps(_spl_match(sides, mid).to_dict()), encoding="utf-8")
+    c = TestClient(create_app())
+    alak = c.get("/matches/m1/setplays").json()["shapes"]["home"][0]
+    assert alak["name"] is None
+    # Hibás törzsek.
+    assert c.post("/library/figures", json={"team": "", "shape": alak["shape"],
+                                            "name": "x"}).status_code == 400
+    assert c.post("/library/figures", json={"team": "A", "shape": [1, 2],
+                                            "name": "x"}).status_code == 400
+    r = c.post("/library/figures", json={"team": "A", "shape": alak["shape"],
+                                         "name": "Beúszós kereszt"})
+    assert r.status_code == 200 and len(r.json()["figures"]) == 1
+    assert c.get("/library/figures", params={"team": "A"}).json()["figures"]["A"][0]["name"] == "Beúszós kereszt"
+    # Minden felület viszi.
+    assert c.get("/matches/m1/setplays").json()["shapes"]["home"][0]["name"] == "Beúszós kereszt"
+    sc = c.get("/matches/m1/scouting", params={"team": "home"}).json()
+    assert sc["setplay_library"]["figures"][0]["name"] == "Beúszós kereszt"
+    al = c.get("/matches/m1/figure-alerts").json()["alerts"]
+    assert al and al[0]["name"] == "Beúszós kereszt" and "Beúszós kereszt" in al[0]["text"]
+    # Közeli alak (kis eltérés) → átnevezés, nem új tétel.
+    kozeli = [v + 0.01 for v in alak["shape"]]
+    r = c.post("/library/figures", json={"team": "A", "shape": kozeli,
+                                         "name": "Kereszt bal"})
+    assert [f["name"] for f in r.json()["figures"]] == ["Kereszt bal"]
+    # Üres név töröl.
+    r = c.post("/library/figures", json={"team": "A", "shape": alak["shape"],
+                                         "name": ""})
+    assert r.json()["figures"] == []
+    assert c.get("/matches/m1/setplays").json()["shapes"]["home"][0]["name"] is None
+
+
+def test_a_meccsterv_a_visszatero_figurakat_is_adja(tmp_path):
+    """A /scouting/matchup válasza a két csapat visszatérő figuráit is
+    viszi (névvel): az ellenfélé "erre készüljetek", a miénk "ezt
+    hozzuk". Egy meccsből üres lista."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    for mid, sides, datum in (("m1", ["bal"] * 4 + ["jobb"] * 3, "2026-01-01"),
+                              ("m2", ["bal"] * 3, "2026-02-01")):
+        m = _spl_match(sides, mid)
+        m.meta.date = datum
+        (d / f"{mid}.json").write_text(json.dumps(m.to_dict()),
+                                       encoding="utf-8")
+    c = TestClient(create_app())
+    r = c.post("/scouting/matchup", json={
+        "own": {"items": [{"match_id": "m1", "team": "home"}]},
+        "opp": {"items": [{"match_id": "m2", "team": "home"},
+                          {"match_id": "m1", "team": "home"}]}}).json()
+    assert "plan" in r and r["own_figures"] == []
+    assert r["opp_figures"] and r["opp_figures"][0]["matches"] == 2
+    assert "name" in r["opp_figures"][0]
+    # Az ellenfél repertoár-változása a kijelölt meccsei két fele között
+    # (DÁTUM szerint rendezve, nem a kijelölés sorrendjében): a jobb
+    # figura az első meccsen volt, a másodikon már nem → eltűnt.
+    rep = r["opp_repertoire"]
+    assert [f["zone"] for f in rep["dropped"]] == ["jobb oldal, a kapuelőtér előtt"]
+    assert rep["new"] == [] and len(rep["kept"]) == 1 and "name" in rep["kept"][0]
+    # Egy meccsből nincs mit összevetni.
+    r1 = c.post("/scouting/matchup", json={
+        "own": {"items": [{"match_id": "m1", "team": "home"}]},
+        "opp": {"items": [{"match_id": "m1", "team": "home"}]}}).json()
+    assert r1["opp_repertoire"] is None
+
+
+# ---- Figura × védőforma ------------------------------------------------------
+
+def _fvf_match(spec, match_id="fvf"):
+    """`spec`: [(forma, gól?), …] — minden támadás ugyanaz a bal oldali
+    figura (+x kapu), a vendég fal a forma szerint: 6-0 = hat védő a
+    6 m-en (x=35), 5-1 = öt a 6 m-en + egy előretolt (x=30.5). Gólnál a
+    labda a kapuba megy (y=10, a kapu közepe); egyébként a támadás
+    ugyanolyan hosszú, csak lövés nélkül (az alak azonos marad)."""
+    frames = []
+    t = 0
+    for forma, gol in spec:
+        xs_v = [35.0] * 6 if forma == "6-0" else [35.0] * 5 + [30.5]
+        ys_v = [0.5, 8.0, 10.0, 12.0, 14.0, 19.0]
+
+        def fal():
+            return [_pl(20 + j, Team.AWAY, xs_v[j], ys_v[j]) for j in range(6)]
+
+        for _ in range(8):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 28.0, 4.0),
+                              _pl(2, Team.HOME, 31.0, 4.0),
+                              _pl(3, Team.HOME, 34.0, 4.0)] + fal(),
+                ball=Ball(x=28.0, y=4.0, confidence=1.0)))
+            t += 1
+        # Lövés mindkét esetben (az alak és a szakasz azonos): gólnál a
+        # kapu közepére (y=10), különben a kapu mellé (y=3 — kívül a
+        # 8,5–11,5 közti kapun).
+        for i in range(7):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 33.0, 10.0),
+                              _pl(2, Team.HOME, 31.0, 4.0),
+                              _pl(3, Team.HOME, 34.0, 4.0)] + fal(),
+                ball=Ball(x=34.0 + i, y=10.0 if gol else 3.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(4):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id=match_id, home_team="A",
+                           away_team="B", fps=25.0), frames)
+
+
+def test_a_figura_x_vedoforma_megmondja_melyik_fal_fogja():
+    """Ugyanaz a figura a 6-0 ellen négyből négy gól, az 5-1 ellen négyből
+    nulla: az ítélet az 5-1-et ajánlja ellene. Egy formánál (vagy kevés
+    mintánál) nincs ítélet."""
+    from handball.pipeline.setplays import (
+        FVF_GAP_PP, FVF_MIN_ATTACKS, figure_vs_formation)
+
+    m = _fvf_match([("6-0", True)] * 4 + [("5-1", False)] * 4)
+    rows = figure_vs_formation(m)["home"]
+    assert len(rows) == 1, rows
+    fo = rows[0]
+    assert fo["attacks"] == 8
+    assert fo["forms"]["6-0"]["attacks"] == 4 and fo["forms"]["6-0"]["goals"] == 4
+    assert fo["forms"]["5-1"]["attacks"] == 4 and fo["forms"]["5-1"]["goals"] == 0
+    assert fo["forms"]["6-0"]["goal_pct"] - fo["forms"]["5-1"]["goal_pct"] >= FVF_GAP_PP
+    assert fo["verdict"] and "5-1 ellen 0%" in fo["verdict"]
+    assert "5-1-ban álljatok fel" in fo["verdict"]
+    # A vendég nem támadott: üres lista (nem hallgatólagos 0).
+    assert figure_vs_formation(m)["away"] == []
+    # Egyetlen forma: nincs mihez mérni → nincs ítélet.
+    egy = figure_vs_formation(_fvf_match([("6-0", True)] * 4))["home"]
+    assert egy and egy[0]["verdict"] is None
+    # Kevés minta a második formánál: nincs ítélet.
+    keves = figure_vs_formation(
+        _fvf_match([("6-0", True)] * 4 + [("5-1", False)] * (FVF_MIN_ATTACKS - 1)))["home"]
+    assert keves and keves[0]["verdict"] is None
+
+
+def test_a_figura_x_vedoforma_a_felderitesen_meccsek_kozt_osszeadodik():
+    """Két meccs: az egyikben csak 6-0, a másikban csak 5-1 ellen jött a
+    figura — külön-külön nincs ítélet, összefésülve van. A VALÓDI
+    felderítés-úton (scout_team → combine_reports), az edzői kulcs is
+    megszólal, és a 460-as meccsterv-szabály a saját fő formával."""
+    from handball.pipeline.scouting import (
+        _coach_keys, combine_reports, matchup_plan, scout_team)
+
+    r1 = scout_team(_fvf_match([("6-0", True)] * 4, "f1"), Team.HOME)
+    r2 = scout_team(_fvf_match([("5-1", False)] * 4, "f2"), Team.HOME)
+    assert r1.figure_formation["verdict"] is None
+    assert len(r1.setplay_formation_rows) == 1
+    ossz = combine_reports([r1, r2])
+    assert len(ossz.setplay_formation_rows) == 2
+    assert ossz.figure_formation["verdict"] and "5-1" in ossz.figure_formation["verdict"]
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "5-1-ban álljatok fel" in kulcsok
+    # 460: ha mi 5-1-ben védekezünk, "maradjatok benne"; ha 6-0-ban, váltás.
+    sajat = scout_team(_fvf_match([("6-0", True)] * 4, "s1"), Team.HOME)
+    sajat.defense_main = "5-1"
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "maradjatok benne" in terv
+    sajat.defense_main = "6-0"
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "váltsatok 5-1-ra" in terv2
+
+
+def test_a_figura_x_vedoforma_edzes_szabaly_valodi_retegbol():
+    """479: a saját leggyakoribb figura egy fal ellen gól nélkül → tétel."""
+    from handball.pipeline.training import training_focus
+
+    tetelek = training_focus(_fvf_match([("5-1", False)] * 4, "t1"))["home"]
+    assert any(t["title"].startswith("A figuránk a 5-1 ellen nem megy")
+               for t in tetelek), [t["title"] for t in tetelek]
+
+
+def test_a_csapat_figura_konyvtara_vegpont(tmp_path):
+    """/library/figure-library?team=: a csapat könyvtára az összes
+    elemzett meccséből (névvel); egy meccsnél nincs visszatérő figura;
+    üres csapatnév 400."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    (d / "m1.json").write_text(
+        json.dumps(_spl_match(["bal"] * 4 + ["jobb"] * 3, "m1").to_dict()),
+        encoding="utf-8")
+    c = TestClient(create_app())
+    assert c.get("/library/figure-library", params={"team": ""}).status_code == 400
+    r = c.get("/library/figure-library", params={"team": "A"}).json()
+    assert r["team"] == "A" and r["recurring"] == [] and len(r["figures"]) == 2
+    (d / "m2.json").write_text(
+        json.dumps(_spl_match(["bal"] * 3, "m2").to_dict()), encoding="utf-8")
+    r = TestClient(create_app()).get("/library/figure-library",
+                                     params={"team": "A"}).json()
+    assert r["recurring"] and r["recurring"][0]["matches"] == 2
+    assert "name" in r["recurring"][0]
+
+
+def test_a_felderites_gyorsitotara_meccsenkent_egyszer_derit_fel(tmp_path, monkeypatch):
+    """A felderítés (500+ réteg) meccsenként és csapatonként EGYSZER fut:
+    a második kérés a gyorsítótárból jön (másolatként — a névesítés nem
+    szivárog vissza), az esemény-felülírás után viszont újraszámol."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api import app as app_mod
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    (d / "m1.json").write_text(
+        json.dumps(_spl_match(["bal"] * 4 + ["jobb"] * 3, "m1").to_dict()),
+        encoding="utf-8")
+    hivasok = []
+    eredeti = app_mod.scout_team
+    monkeypatch.setattr(app_mod, "scout_team",
+                        lambda m, t, c=None: (hivasok.append((m.meta.match_id, t.value))
+                                              or eredeti(m, t, c)))
+    c = TestClient(app_mod.create_app())
+    r1 = c.get("/matches/m1/scouting", params={"team": "home"}).json()
+    r2 = c.get("/matches/m1/scouting", params={"team": "home"}).json()
+    assert r1["team_name"] == "A" and r1["setplay_shapes"] == r2["setplay_shapes"]
+    assert hivasok == [("m1", "home")]
+    # A meccsterv is ugyanabból a jelentésből dolgozik (nem derít fel újra).
+    c.post("/scouting/matchup", json={
+        "own": {"items": [{"match_id": "m1", "team": "home"}]},
+        "opp": {"items": [{"match_id": "m1", "team": "away"}]}})
+    assert hivasok == [("m1", "home"), ("m1", "away")]
+    # Esemény-felülírás: a meccs tartalma változott → újraszámol.
+    r = c.post("/matches/m1/events/overrides",
+               json={"overrides": [{"t": 3, "type": "goal", "team": "home"}]})
+    if r.status_code == 200:
+        c.get("/matches/m1/scouting", params={"team": "home"})
+        assert hivasok[-1] == ("m1", "home") and len(hivasok) == 3
+
+
+def test_a_repertoar_valtozas_uj_eltunt_maradt():
+    """Első fél: bal + jobb figura; második fél: bal + közép — a jobb
+    eltűnt, a közép új, a bal maradt (a két fél hozamával). Változás
+    nélkül nincs ítélet."""
+    from handball.pipeline.setplays import (
+        figure_repertoire_change, setplay_shapes)
+    from handball.pipeline.tactics import TacticsConfig  # noqa: F401
+
+    def sorok(m):
+        return [{**r, "match_id": m.meta.match_id}
+                for r in setplay_shapes(m)["home"]]
+
+    regi = sorok(_spl_match(["bal"] * 4 + ["jobb"] * 3, "r1"))
+    # A második félben a "közép" figura: y=10 (a felező-sáv).
+    ujm = _spl_match(["bal"] * 3, "u1")
+    kozep = _spl_match(["bal"] * 3, "u2")
+    for f in kozep.frames:
+        for p_ in f.players:
+            if p_.team == Team.HOME and p_.y == 4.0:
+                p_.y = 10.0
+        if f.ball is not None and f.ball.y == 4.0:
+            f.ball.y = 10.0
+    uj = sorok(ujm) + sorok(kozep)
+    v = figure_repertoire_change(regi, uj)
+    assert [f["zone"] for f in v["dropped"]] == ["jobb oldal, a kapuelőtér előtt"]
+    assert len(v["new"]) == 1 and v["new"][0]["zone"].startswith("közép")
+    assert len(v["kept"]) == 1 and v["kept"][0]["zone"].startswith("bal oldal")
+    assert v["kept"][0]["older"]["attacks"] == 4 and v["kept"][0]["newer"]["attacks"] == 3
+    assert "új figura a második félben" in v["verdict"] and "eltűnt" in v["verdict"]
+    # Változatlan repertoár: nincs ítélet.
+    assert figure_repertoire_change(regi, regi)["verdict"] is None
+    assert figure_repertoire_change([], [])["kept"] == []
+
+
+def test_a_repertoar_valtozas_vegpont(tmp_path):
+    """/library/figure-repertoire?team=: üres név 400; egy meccsnél üres
+    listák, ítélet nélkül (nem hiba); két meccsnél (az első bal + jobb,
+    a második csak bal) a jobb eltűnt, a bal maradt — névvel."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    m1 = _spl_match(["bal"] * 4 + ["jobb"] * 3, "m1")
+    m1.meta.date = "2026-01-01"
+    (d / "m1.json").write_text(json.dumps(m1.to_dict()), encoding="utf-8")
+    c = TestClient(create_app())
+    assert c.get("/library/figure-repertoire",
+                 params={"team": ""}).status_code == 400
+    r = c.get("/library/figure-repertoire", params={"team": "A"})
+    assert r.status_code == 200
+    r = r.json()
+    assert r["matches"] == 1 and r["verdict"] is None
+    assert r["kept"] == [] and r["new"] == [] and r["dropped"] == []
+    m2 = _spl_match(["bal"] * 3, "m2")
+    m2.meta.date = "2026-02-01"
+    (d / "m2.json").write_text(json.dumps(m2.to_dict()), encoding="utf-8")
+    r = TestClient(create_app()).get("/library/figure-repertoire",
+                                     params={"team": "A"}).json()
+    assert r["matches"] == 2 and r["older_matches"] == 1
+    assert [f["zone"] for f in r["dropped"]] == ["jobb oldal, a kapuelőtér előtt"]
+    assert len(r["kept"]) == 1 and "name" in r["kept"][0]
+    assert r["kept"][0]["older"]["attacks"] == 4
+    assert "eltűnt" in r["verdict"]
+
+
+def test_a_szezon_riport_repertoar_szakasza(tmp_path):
+    """A szezon-riport a repertoár-változást is hozza (két meccs, az
+    első bal + jobb, a második csak bal → a jobb eltűnt)."""
+    import json
+    import os
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+    from handball.pipeline.report_html import season_report_html
+
+    html = season_report_html("A", {"metrics": [], "summary": []}, [], 2,
+                              repertoire={"kept": [], "new": [],
+                                          "dropped": [{"zone": "jobb oldal, a 9-es körül",
+                                                       "shape": [0.0] * 18,
+                                                       "attacks": 3, "goals": 1,
+                                                       "goal_pct": 33.3}],
+                                          "verdict": "x"})
+    assert "Repertoár-változás" in html and "ELTŰNT a második félre" in html
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    d = tmp_path / "data" / "matches"
+    d.mkdir(parents=True)
+    m1 = _spl_match(["bal"] * 4 + ["jobb"] * 3, "m1")
+    m2 = _spl_match(["bal"] * 3, "m2")
+    m1.meta.date = "2026-01-01"
+    m2.meta.date = "2026-02-01"
+    for m in (m1, m2):
+        (d / f"{m.meta.match_id}.json").write_text(json.dumps(m.to_dict()),
+                                                   encoding="utf-8")
+    r = TestClient(create_app()).get("/season/report", params={"team": "A"})
+    assert r.status_code == 200
+    assert "Repertoár-változás" in r.text and "ELTŰNT" in r.text
+
+
+# ---- Figura-állás (setplay_by_score) ---------------------------------------
+
+
+def _sbs_match(match_id="sbs", hatrany_oldal="bal", vezetes_oldal="jobb",
+               db=5):
+    """A hazai HÁTRÁNYBAN az egyik figurát játssza, VEZETÉSNÉL a másikat.
+
+    Az állást rövid "gól-injektálásokkal" állítjuk (a labda a kapuba fut,
+    a szakasz rövidebb a támadás-küszöbnél, tehát nem lesz belőle mért
+    figura-támadás) — így a figurák tiszta állapotokba esnek.
+    """
+    frames = []
+    t = 0
+
+    def gol(hazai: bool):
+        nonlocal t
+        kapu_x, honnan = (40.0, 34.0) if hazai else (0.0, 6.0)
+        csapat = Team.HOME if hazai else Team.AWAY
+        for i in range(6):
+            x = honnan + (kapu_x - honnan) * (i + 1) / 6.0
+            frames.append(Frame(
+                t=t, players=[_pl(1, csapat, honnan, 10.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def tamadas(side: str):
+        nonlocal t
+        y = 4.0 if side == "bal" else 16.0
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, [28.0, 31.0, 34.0],
+                                             [y, y, y]))
+            t += 1
+        for _ in range(6):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    for _ in range(3):            # a vendég elhúz: a hazai hátrányban van
+        gol(hazai=False)
+    for _ in range(db):
+        tamadas(hatrany_oldal)
+    for _ in range(6):            # a hazai fordít: vezet
+        gol(hazai=True)
+    for _ in range(db):
+        tamadas(vezetes_oldal)
+    return Match(MatchMeta(match_id=match_id, home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_a_figura_allas_megmondja_mit_hoznak_vezetve_es_hatranyban():
+    """Hátrányban a bal oldali figurát játsszák, vezetésnél a jobb
+    oldalit — az ítélet ezt mondja ki, a fal az állás szerint készülhet."""
+    from handball.pipeline.setplays import (SBS_GAP_PP, SBS_MIN_ATTACKS,
+                                            setplay_by_score)
+
+    rec = setplay_by_score(_sbs_match())["home"]
+    allapotok = rec["states"]
+    assert allapotok["trailing"]["attacks"] >= SBS_MIN_ATTACKS
+    assert allapotok["leading"]["attacks"] >= SBS_MIN_ATTACKS
+    h = allapotok["trailing"]["figures"][0]
+    v = allapotok["leading"]["figures"][0]
+    assert h["zone"].startswith("bal oldal") and h["share_pct"] == 100.0
+    assert v["zone"].startswith("jobb oldal") and v["share_pct"] == 100.0
+    assert rec["verdict"] and "állásfüggően váltanak figurát" in rec["verdict"]
+    assert "hátrányban" in rec["verdict"] or "vezetésnél" in rec["verdict"]
+    assert SBS_GAP_PP <= 100.0
+    # A vendégnek nincs mért támadása: üres állapotok, nincs ítélet.
+    ures = setplay_by_score(_sbs_match())["away"]
+    assert ures["states"]["leading"]["attacks"] == 0
+    assert ures["verdict"] is None
+
+
+def test_a_figura_allas_kevés_mintanal_es_valtas_nelkul_hallgat():
+    """Kevés támadás egy állapotban → nincs ítélet. Ugyanaz a figura
+    mindkét állásban → nincs mit mondani (a részarány-rés nulla)."""
+    from handball.pipeline.setplays import setplay_by_score
+
+    keves = setplay_by_score(_sbs_match(db=2))["home"]
+    assert keves["verdict"] is None
+    ugyanaz = setplay_by_score(
+        _sbs_match(hatrany_oldal="bal", vezetes_oldal="bal"))["home"]
+    assert ugyanaz["states"]["trailing"]["attacks"] >= 5
+    assert ugyanaz["verdict"] is None
+
+
+def test_a_figura_allas_a_felderitesen_meccsek_kozt_osszeadodik():
+    """A VALÓDI felderítés-úton (scout_team → combine_reports) a lapos
+    sorok összeadódnak, és az edzői kulcs megszólal — a mezőnevek is
+    valódiak."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            scout_team)
+
+    r1 = scout_team(_sbs_match("s1", db=3), Team.HOME)
+    r2 = scout_team(_sbs_match("s2", db=3), Team.HOME)
+    assert r1.setplay_score_rows, "nincsenek lapos sorok"
+    assert r1.setplay_score["verdict"] is None, "három támadás még kevés"
+    ossz = combine_reports([r1, r2])
+    assert (len(ossz.setplay_score_rows)
+            == len(r1.setplay_score_rows) + len(r2.setplay_score_rows))
+    assert ossz.setplay_score["verdict"], ossz.setplay_score
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "llásfüggően váltanak figurát" in kulcsok
+    # 463: az ő állásfüggő váltásuk × a mi fal-váltásaink — mindkét ág.
+    from handball.pipeline.scouting import matchup_plan
+    sajat = scout_team(_sbs_match("m1", db=3), Team.HOME)
+    sajat.fsw_pairs, sajat.fsw_switches = 10, 5      # sokat váltunk
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "kössétek a váltást az ÁLLÁSHOZ" in terv
+    sajat.fsw_switches = 1                            # alig váltunk
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "az állás szerint kell behívni" in terv2
+
+
+def test_a_figura_allas_edzes_szabalya_valodi_retegbol(monkeypatch):
+    """482: a saját állásfüggő kiszámíthatóság edzés-tétele a VALÓDI
+    rétegből. A tétel-korlátot feloldjuk (ezen a fixture-ön a régebbi
+    szabályok kitöltenék az öt helyet)."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.training import training_focus
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    tetelek = training_focus(_sbs_match("t482"))["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "Az állásunkból kiolvasható, melyik figuránk jön" in cimek
+
+
+# ---- Emberelőny-figura (powerplay_setplay) ---------------------------------
+
+
+def _ppf_match(match_id="ppf", db=5, side="bal", elonyben=True):
+    """A hazai EMBERELŐNYBEN (a vendég öt mezőnyjátékossal) játssza
+    ugyanazt a figurát.
+
+    A létszám-felismerés ablakokban számol, ezért MINDEN kockán ott a
+    teljes keret: három hazai a figurában, három hátul, és öt (vagy
+    `elonyben=False` esetén hat) vendég a falban. A támadások közé
+    üresjárat kerül, hogy az emberhátrány elérje a felismerés
+    küszöbét (45 mp).
+    """
+    frames = []
+    t = 0
+    y = 4.0 if side == "bal" else 16.0
+
+    def hazai(xs, ys):
+        p = [_pl(1, Team.HOME, xs[0], ys[0]), _pl(2, Team.HOME, xs[1], ys[1]),
+             _pl(3, Team.HOME, xs[2], ys[2])]
+        p += [_pl(4 + k, Team.HOME, 14.0 + k, 10.0) for k in range(3)]
+        return p
+
+    def vendeg(n):
+        return [_pl(20 + k, Team.AWAY, 35.0, 2.0 + 3.5 * k) for k in range(n)]
+
+    n_vendeg = 5 if elonyben else 6
+    for _ in range(750):                       # 30 mp teljes létszám
+        frames.append(Frame(
+            t=t, players=hazai([12.0, 13.0, 14.0], [6.0] * 3) + vendeg(6),
+            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(db):
+        for _ in range(8):                     # a figura
+            frames.append(Frame(
+                t=t, players=hazai([28.0, 31.0, 34.0], [y] * 3)
+                + vendeg(n_vendeg),
+                ball=Ball(x=28.0, y=y, confidence=1.0)))
+            t += 1
+        for _ in range(6):                     # átmenet a saját térfélre
+            frames.append(Frame(
+                t=t, players=hazai([8.0, 9.0, 10.0], [10.0] * 3)
+                + vendeg(n_vendeg),
+                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(280):                   # üresjárat (a két perc telik)
+            frames.append(Frame(
+                t=t, players=hazai([12.0, 13.0, 14.0], [10.0] * 3)
+                + vendeg(n_vendeg),
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id=match_id, home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_az_emberelony_figura_megmondja_mit_hoznak_a_ket_perc_alatt():
+    """A kiállítás alatt mindig ugyanaz a figura jön: az ítélet ezt
+    mondja ki, és a védekezésnek szóló teendőt is."""
+    from handball.pipeline.setplays import (PPF_MIN_ATTACKS, PPF_SHARE_PCT,
+                                            powerplay_setplay)
+
+    rec = powerplay_setplay(_ppf_match())["home"]
+    assert rec["attacks"] >= PPF_MIN_ATTACKS
+    assert rec["figures"] and rec["figures"][0]["share_pct"] >= PPF_SHARE_PCT
+    assert rec["figures"][0]["zone"].startswith("bal oldal")
+    assert rec["verdict"] and "egy figurára építenek" in rec["verdict"]
+    assert "erre rendezni az öt embert" in rec["verdict"]
+    # A vendég nem volt emberelőnyben: üres, nem hallgatólagos 0.
+    ures = powerplay_setplay(_ppf_match())["away"]
+    assert ures["attacks"] == 0 and ures["verdict"] is None
+
+
+def test_az_emberelony_figura_kiallitas_nelkul_es_keves_mintanal_hallgat():
+    """Teljes létszámnál nincs mit mérni; kevés emberelőnyös támadásnál
+    nincs ítélet (a számok viszont látszanak)."""
+    from handball.pipeline.setplays import PPF_MIN_ATTACKS, powerplay_setplay
+
+    teljes = powerplay_setplay(_ppf_match(elonyben=False))["home"]
+    assert teljes["attacks"] == 0 and teljes["verdict"] is None
+    keves = powerplay_setplay(
+        _ppf_match(db=PPF_MIN_ATTACKS - 1))["home"]
+    assert keves["attacks"] < PPF_MIN_ATTACKS
+    assert keves["verdict"] is None
+
+
+def test_az_emberelony_figura_meccsek_kozt_all_ossze():
+    """A kiállítás RITKA: egy meccsen kevés a minta, több meccsen áll
+    össze. A VALÓDI felderítés-úton (scout_team → combine_reports), az
+    edzői kulccsal és a 464-es meccsterv-szabállyal."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+
+    r1 = scout_team(_ppf_match("p1", db=2), Team.HOME)
+    r2 = scout_team(_ppf_match("p2", db=3), Team.HOME)
+    assert r1.powerplay_figures["verdict"] is None, "két támadás még kevés"
+    ossz = combine_reports([r1, r2])
+    assert ossz.powerplay_figures["attacks"] >= 4
+    assert ossz.powerplay_figures["verdict"], ossz.powerplay_figures
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "mberelőnyben egy figurára építenek" in kulcsok
+    # 464: sok kiállítást szedünk → konkrétan erre játsszuk be a falat.
+    sajat = scout_team(_ppf_match("s1", db=2), Team.HOME)
+    sajat.suspensions, sajat.matches = 4, 2
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "KONKRÉTAN erre a figurára" in terv
+    sajat.suspensions = 1
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "ne improvizáljatok" in terv2
+
+
+def test_az_emberelony_figura_edzes_szabalya_valodi_retegbol(monkeypatch):
+    """483: a saját emberelőnyünk egyetlen figurára épül — a tétel a
+    VALÓDI rétegből jön (a tétel-korlátot feloldjuk)."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.training import training_focus
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    tetelek = training_focus(_ppf_match("t483"))["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "Az emberelőnyünk egyetlen figurára épül" in cimek
+
+
+# ---- 7a6-figura (empty_net_setplay) ----------------------------------------
+
+
+def _enf_match(match_id="enf", db=5, side="bal", ures=True):
+    """A hazai LEHOZOTT KAPUSSAL (7 a 6) játssza ugyanazt a figurát.
+
+    A kapus a pálya közepén (x=20) áll, tehát több mint 12 méterre a
+    saját kapujától — ez a 7a6 jele —, és a labda végig a hazaiaknál
+    van, így egyetlen összefüggő üres-kapus szakasz keletkezik. A
+    támadások közé üresjárat kerül (a szakaszok szétválnak), az elejére
+    pedig egy hosszabb, hogy a szakasz a 3 másodperces küszöb fölé
+    érjen. `ures=False`: a kapus a kapujában áll — nincs 7a6.
+    """
+    frames = []
+    t = 0
+    y = 4.0 if side == "bal" else 16.0
+    kapus_x = 20.0 if ures else 1.5
+
+    def kapus():
+        return [PlayerPosition(track_id=9, team=Team.HOME, x=kapus_x, y=10.0,
+                               source=PositionSource.MEASURED,
+                               confidence=1.0, role="kapus")]
+
+    def vendeg():
+        return [_pl(20 + k, Team.AWAY, 35.0, 2.0 + 3.5 * k) for k in range(6)]
+
+    def ures_jarat(n):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 12.0, 10.0)] + kapus()
+                + vendeg(),
+                ball=Ball(x=12.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    ures_jarat(30)
+    for _ in range(db):
+        for _ in range(8):                      # a figura
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 28.0, y),
+                              _pl(2, Team.HOME, 31.0, y),
+                              _pl(3, Team.HOME, 34.0, y)] + kapus()
+                + vendeg(),
+                ball=Ball(x=28.0, y=y, confidence=1.0)))
+            t += 1
+        ures_jarat(20)
+    return Match(MatchMeta(match_id=match_id, home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_a_7a6_figura_megmondja_mit_hoznak_a_hetedik_emberrel():
+    """A lehozott kapus mellett mindig ugyanaz a figura jön: az ítélet
+    ezt mondja ki, és a védekezésnek szóló teendőt is."""
+    from handball.pipeline.setplays import (ENF_MIN_ATTACKS, ENF_SHARE_PCT,
+                                            empty_net_setplay)
+
+    rec = empty_net_setplay(_enf_match())["home"]
+    assert rec["attacks"] >= ENF_MIN_ATTACKS
+    assert rec["figures"] and rec["figures"][0]["share_pct"] >= ENF_SHARE_PCT
+    assert rec["figures"][0]["zone"].startswith("bal oldal")
+    assert rec["verdict"] and "hetedik emberrel egy figurára" in rec["verdict"]
+    assert "AZONNAL az üres kapura" in rec["verdict"]
+    # A vendég nem hozta le a kapust: üres, nem hallgatólagos 0.
+    ures = empty_net_setplay(_enf_match())["away"]
+    assert ures["attacks"] == 0 and ures["verdict"] is None
+
+
+def test_a_7a6_figura_kapus_nelkul_es_keves_mintanal_hallgat():
+    """Ha a kapus a kapujában áll, nincs mit mérni; kevés üres-kapus
+    támadásnál nincs ítélet (a számok viszont látszanak)."""
+    from handball.pipeline.setplays import ENF_MIN_ATTACKS, empty_net_setplay
+
+    otthon = empty_net_setplay(_enf_match(ures=False))["home"]
+    assert otthon["attacks"] == 0 and otthon["verdict"] is None
+    keves = empty_net_setplay(
+        _enf_match(db=ENF_MIN_ATTACKS - 1))["home"]
+    assert 0 < keves["attacks"] < ENF_MIN_ATTACKS
+    assert keves["verdict"] is None
+
+
+def test_a_7a6_figura_meccsek_kozt_all_ossze():
+    """A 7 a 6 RITKA: egy meccsen kevés a minta, több meccsen áll össze.
+    A VALÓDI felderítés-úton (scout_team → combine_reports), az edzői
+    kulccsal és a 467-es meccsterv-szabály mindkét ágával."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+
+    r1 = scout_team(_enf_match("e1", db=2), Team.HOME)
+    r2 = scout_team(_enf_match("e2", db=2), Team.HOME)
+    assert r1.empty_net_figure_rows
+    assert r1.empty_net_figures["verdict"] is None, "két támadás még kevés"
+    ossz = combine_reports([r1, r2])
+    assert ossz.empty_net_figures["attacks"] >= 4
+    assert ossz.empty_net_figures["verdict"], ossz.empty_net_figures
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "hetedik emberrel egy figurára építenek" in kulcsok
+    # 467: gyorsan indítunk a szerzés után → az üres kapu a jutalom.
+    sajat = scout_team(_enf_match("s1", db=2), Team.HOME)
+    sajat.stl_steals, sajat.stl_fwd = 10, 7
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "az ELSŐ nézés az üres kapu" in terv
+    sajat.stl_fwd = 2
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "büntetlen marad" in terv2
+
+
+def test_a_7a6_figura_edzes_szabalya_es_osszefoglaloja_valodi_retegbol(
+        monkeypatch):
+    """486: a saját 7a6-unk egyetlen figurára épül — a tétel és az edzői
+    összefoglaló mondata a VALÓDI rétegből jön."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.pipeline.training import training_focus
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    meccs = _enf_match("t486")
+    tetelek = training_focus(meccs)["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "A 7a6-unk egyetlen figurára épül" in cimek
+    szoveg = str(coach_summary(meccs))
+    assert "hetedik emberrel egy figurára építenek" in szoveg
+
+
+# ---- Hajrá-figura (clutch_setplay) -----------------------------------------
+
+
+def _csp_match(match_id="csp", db=5, hajra_oldal="bal", szukul=True,
+               fps=5.0, hossz_s=640.0):
+    """A hazai a meccs törzsében FELVÁLTVA hozza a két figurát, az utolsó
+    öt percben (a hajrában) csak az egyiket.
+
+    A felvétel `hossz_s` másodperc (a hajrá-rétegek 600 mp-es
+    minimumánál hosszabb), ritka fps-sel, hogy a teszt gyors maradjon:
+    a hajrá az utolsó 300 mp. `szukul=False` esetén a hajrában is
+    felváltva jönnek — nincs szűkülés, nincs ítélet.
+    """
+    from handball.pipeline.momentum import CLUTCH_WINDOW_S
+
+    frames = []
+    t = 0
+
+    def tamadas(side: str):
+        nonlocal t
+        y = 4.0 if side == "bal" else 16.0
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, [28.0, 31.0, 34.0],
+                                             [y, y, y]))
+            t += 1
+        for _ in range(6):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def ures(n: int):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 12.0, 10.0)],
+                                ball=Ball(x=12.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    masik = "jobb" if hajra_oldal == "bal" else "bal"
+    hajra_n = int(CLUTCH_WINDOW_S * fps)
+    torzs_n = int(hossz_s * fps) - hajra_n
+    # Törzs: 2*db támadás felváltva, közte üresjárat.
+    szunet = max(0, (torzs_n - 2 * db * 14) // (2 * db))
+    for _ in range(db):
+        tamadas(hajra_oldal)
+        ures(szunet)
+        tamadas(masik)
+        ures(szunet)
+    ures(max(0, torzs_n - t))
+    # Hajrá: db támadás — csak a hajrá-figura, vagy felváltva.
+    kezdet = t
+    szunet = max(0, (hajra_n - db * 14) // db)
+    for i in range(db):
+        ures(2)
+        tamadas(hajra_oldal if szukul or i % 2 == 0 else masik)
+        ures(szunet - 2)
+    ures(max(0, kezdet + hajra_n - t))
+    return Match(MatchMeta(match_id=match_id, home_team="A", away_team="B",
+                           fps=fps), frames)
+
+
+def test_a_hajra_figura_megmondja_mire_szukulnek_a_vegen():
+    """A törzsben két figura felváltva, a hajrában csak az egyik: az
+    ítélet a szűkülést mondja ki, és a védekezésnek szóló teendőt."""
+    from handball.pipeline.setplays import (CSP_GAP_PP, CSP_MIN_ATTACKS,
+                                            CSP_SHARE_PCT, clutch_setplay)
+
+    rec = clutch_setplay(_csp_match())["home"]
+    assert rec["attacks"] >= CSP_MIN_ATTACKS
+    fo = rec["figures"][0]
+    assert fo["zone"].startswith("bal oldal")
+    assert fo["share_pct"] >= CSP_SHARE_PCT
+    assert fo["share_pct"] - fo["rest_share_pct"] >= CSP_GAP_PP
+    assert fo["rest_attacks"] >= 1, "a törzsben is hozták, csak ritkábban"
+    assert rec["verdict"] and "egy figurára szűkülnek" in rec["verdict"]
+    assert "a fal ne tippeljen" in rec["verdict"]
+    # Tükrözve a másik oldal a hajrá-figura.
+    jobb = clutch_setplay(_csp_match(hajra_oldal="jobb"))["home"]
+    assert jobb["figures"][0]["zone"].startswith("jobb oldal")
+    # A vendégnek nincs mért támadása: üres, nem hallgatólagos 0.
+    ures = clutch_setplay(_csp_match())["away"]
+    assert ures["attacks"] == 0 and ures["verdict"] is None
+
+
+def test_a_hajra_figura_rovid_felvetelen_es_keves_mintanal_hallgat():
+    """Rövid felvételen nincs hajrá; kevés hajrá-támadásnál nincs ítélet;
+    ha a hajrában is felváltva jönnek, nincs szűkülés."""
+    from handball.pipeline.setplays import CSP_MIN_ATTACKS, clutch_setplay
+
+    rovid = clutch_setplay(_csp_match(hossz_s=400.0))["home"]
+    assert rovid["attacks"] == 0 and rovid["verdict"] is None
+    keves = clutch_setplay(_csp_match(db=CSP_MIN_ATTACKS - 1))["home"]
+    assert 0 < keves["attacks"] < CSP_MIN_ATTACKS
+    assert keves["verdict"] is None
+    nem = clutch_setplay(_csp_match(db=6, szukul=False))["home"]
+    assert nem["attacks"] >= CSP_MIN_ATTACKS
+    assert nem["verdict"] is None, nem
+
+
+def test_a_hajra_figura_meccsek_kozt_all_ossze():
+    """A hajrá rövid: egy meccsen kevés a minta, több meccsen áll össze.
+    A VALÓDI felderítés-úton (scout_team → combine_reports), az edzői
+    kulccsal és a 465-ös meccsterv-szabállyal."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan, scout_team)
+
+    r1 = scout_team(_csp_match("c1", db=2), Team.HOME)
+    r2 = scout_team(_csp_match("c2", db=2), Team.HOME)
+    assert r1.clutch_figure_rows and r1.clutch_figures["verdict"] is None
+    ossz = combine_reports([r1, r2])
+    assert ossz.clutch_figures["attacks"] >= 4
+    assert ossz.clutch_figures["verdict"], ossz.clutch_figures
+    kulcsok = " ".join(" ".join(k) for k in _coach_keys(ossz))
+    assert "hajrában egy figurára szűkülnek" in kulcsok
+    # 465: lyukas a saját hajránk → konkrétan erre játsszuk be.
+    sajat = scout_team(_csp_match("s1", db=2), Team.HOME)
+    sajat.clutch_matches = 2
+    sajat.clutch_goals_for, sajat.clutch_goals_against = 3, 6
+    terv = " ".join(matchup_plan(sajat, ossz))
+    assert "KONKRÉTAN erre az egy figurára" in terv
+    sajat.clutch_goals_for, sajat.clutch_goals_against = 6, 3
+    terv2 = " ".join(matchup_plan(sajat, ossz))
+    assert "nincs B-tervük" in terv2
+
+
+def test_a_hajra_figura_edzes_szabalya_es_osszefoglaloja_valodi_retegbol(
+        monkeypatch):
+    """484: a saját hajránk egyetlen figurára szűkül — a tétel és az
+    edzői összefoglaló mondata a VALÓDI rétegből jön."""
+    from handball.pipeline import training as training_mod
+    from handball.pipeline.training import training_focus
+    from handball.pipeline.coach_summary import coach_summary
+
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
+    meccs = _csp_match("t484")
+    tetelek = training_focus(meccs)["home"]
+    cimek = " ".join(t["title"] for t in tetelek)
+    assert "A hajránk egyetlen figurára szűkül" in cimek
+    szoveg = str(coach_summary(meccs))
+    assert "egy figurára szűkülnek" in szoveg
+
+
+# ---- Figura-dosszié (figure_dossier) ---------------------------------------
+
+
+def test_a_figura_dosszie_egy_lapra_hozza_amit_a_figurarol_tudunk():
+    """A dosszié ALAK szerint fésüli össze a figura-rétegeket: a rajz
+    mellé odakerül a hozam, hogy MIKOR jön (vezetve, hátrányban,
+    emberelőnyben) és MELYIK FAL ellen működik."""
+    from handball.pipeline.setplays import FDS_MAX_FIGURES, figure_dossier
+
+    alak = [0.0] * 18
+    alak[3] = 1.0
+    masik = [0.0] * 18
+    masik[14] = 1.0
+    lib = {"figures": [
+        {"shape": alak, "zone": "bal oldal, a 9-es körül", "name": "Kereszt",
+         "matches": 3, "attacks": 9, "goals": 5, "goal_pct": 55.6},
+        {"shape": masik, "zone": "jobb oldal, távolról", "matches": 2,
+         "attacks": 4, "goals": 1, "goal_pct": 25.0}]}
+    forma = {"figures": [{"shape": alak, "verdict": "6-0 ellen 70%, 5-1 "
+                          "ellen 10% — 5-1-ben álljatok fel"}]}
+    elony = {"figures": [{"shape": alak, "attacks": 5, "goals": 3}]}
+    allas = {"states": {
+        "leading": {"attacks": 10, "figures": [
+            {"shape": masik, "share_pct": 80.0}]},
+        "trailing": {"attacks": 10, "figures": [
+            {"shape": alak, "share_pct": 70.0}]}}}
+    d = figure_dossier(library=lib, formation=forma, powerplay=elony,
+                       by_score=allas,
+                       repeat={"verdict": "a bejött figurát újra hozzák"})
+    assert len(d["figures"]) <= FDS_MAX_FIGURES
+    fo = d["figures"][0]
+    assert fo["name"] == "Kereszt" and fo["attacks"] == 9
+    # A FAL mondata a figura × védőforma rétegből, alak szerint párosítva.
+    assert fo["formation"] and "5-1-ben álljatok fel" in fo["formation"]
+    # MIKOR: hátrányban ez a figura jön, emberelőnyben is ezt játsszák.
+    mikor = " ".join(fo["when"])
+    assert "hátrányban a támadásaik 70%" in mikor
+    assert "emberelőnyben 5 támadás" in mikor
+    # A másik figurához a VEZETÉSNÉLI részarány tartozik, nem ez.
+    masodik = d["figures"][1]
+    assert "vezetésnél a támadásaik 80%" in " ".join(masodik["when"])
+    assert masodik["formation"] is None
+    assert d["repeat"] == "a bejött figurát újra hozzák"
+    # Üres bemenet: üres lista, nem hiba.
+    assert figure_dossier()["figures"] == []
+
+
+def test_a_figura_dosszie_a_valodi_felderitesbol_all_ossze():
+    """A VALÓDI felderítés-úton (scout_team) a dosszié a jelentés
+    mezőiből épül — a mezőnevek is valódiak (a try/except különben
+    elnyelné az elgépelést)."""
+    from handball.pipeline.scouting import combine_reports, scout_team
+
+    r1 = scout_team(_spl_match(["bal"] * 4 + ["jobb"] * 3, "d1"), Team.HOME)
+    d = r1.figure_dossier
+    assert d["figures"], "a dosszié üres maradt a valódi felderítésen"
+    assert d["figures"][0]["attacks"] == 4
+    assert d["figures"][0]["verdict"], "nincs edzői mondat a figurához"
+    # Egyesített jelentésben is újraszámolódik (nem a részjelentésé marad).
+    r2 = scout_team(_spl_match(["bal"] * 3, "d2"), Team.HOME)
+    ossz = combine_reports([r1, r2])
+    assert ossz.figure_dossier["figures"]
+    assert ossz.figure_dossier["figures"][0]["attacks"] == 7
+
+
+def test_a_dosszie_a_kliensen_es_a_jelentesben_is_ott_van():
+    """Egy lap: a felderítő képernyő kártyája és a nyomtatható jelentés
+    szakasza ugyanabból a mezőből dolgozik."""
+    from pathlib import Path as _P
+
+    from handball.pipeline.report_html import _figure_dossier_rows
+
+    gyoker = _P(__file__).resolve().parent.parent.parent
+    src = (gyoker / "client" / "lib" / "ui"
+           / "scouting_screen.dart").read_text(encoding="utf-8")
+    assert "_figureDossierCard" in src and "FIGURA-DOSSZIÉ" in src
+    assert 'r["figure_dossier"]' in src
+    assert "Figura-dosszié" in src, "nincs benne az ugró-sávban"
+    html = _figure_dossier_rows({
+        "figures": [{"shape": [0.0] * 18, "zone": "bal oldal",
+                     "attacks": 5, "goals": 2, "matches": 2,
+                     "when": ["hátrányban a támadásaik 60%-a"],
+                     "formation": "5-1 ellen 0%"}],
+        "repeat": "a bejött figurát újra hozzák"})
+    assert "bal oldal" in html and "Mikor:" in html and "Fal:" in html
+    assert "Sorrend:" in html
+    assert _figure_dossier_rows({}).startswith('<p class="empty"')

@@ -19,6 +19,9 @@ dependencies:
   crypto: ^3.0.3        # a letöltött frissítés sha256-ellenőrzéséhez
   file_picker: ^8.0.0   # meccsvideó kiválasztása (desktop/tablet natív fájlválasztó)
   video_player: ^2.9.0  # jelenet-visszajátszás az elemzés mellett (macOS/iOS/Android)
+  media_kit: ^1.1.10    # jelenet-visszajátszás Windowson (libmpv-alapú lejátszó)
+  media_kit_video: ^1.2.4                # a media_kit videó-felülete
+  media_kit_libs_windows_video: ^1.0.9   # a natív lejátszó-könyvtárak (csak Windows)
 
 dev_dependencies:
   flutter_lints: ^4.0.0
