@@ -3,6 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.149 óta)
+
+- **Gyors indulás nagy könyvtárral: fejléc-index** (javítás): a motor
+  indításkor eddig a könyvtár minden meccs-fájlját beolvasta (meccsenként
+  ~2 mp, egy harminc meccses könyvtáron egy perc) — a memória-plafon óta
+  ráadásul csak azért, hogy a legtöbbet rögtön ki is dobja. Mostantól a
+  könyvtár mellett egy fejléc-index (`.index.json`) őrzi minden meccs
+  fejlécét (csapatok, dátum, kockaszám) a fájl méretével és idejével: a
+  meleg kereten túli meccsek fejléce ebből jön beolvasás nélkül, egy
+  közben módosult fájl mindig frissen olvasódik. A könyvtár-lista így
+  indulás után azonnal teljes.
+
 ## v0.1.149 — kiadva (2026-09-26)
 
 > Kiadás-jegyzet: a motor memóriája nem nő a könyvtárral — csak a

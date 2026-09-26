@@ -223,3 +223,60 @@ def test_a_visszatoltes_alatt_a_tar_tobbi_olvasasa_nem_var():
     assert time.time() - t0 < 0.3, "a visszatöltés blokkolta a tárat"
     th.join(3.0)
     assert eredmeny and eredmeny[0] is lemez[hideg]
+
+
+def test_a_fejlec_index_miatt_az_indulas_nem_olvas_be_minden_meccset(monkeypatch):
+    """Második indításkor a meleg kereten túli meccsek fejléce az
+    indexből jön (nincs 70 MB-os beolvasás csak azért, hogy kidobjuk);
+    a lista mégis teljes és pontos, a hideg meccs megnyitható. Az
+    elavult (a fájllal nem egyező) index-bejegyzés nem számít."""
+    from handball.models import tracking as tr
+
+    tmp = tempfile.mkdtemp(prefix="hb_index_")
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True)
+    for i in range(4):
+        (d / f"i{i}.json").write_text(json.dumps(_meccs(f"i{i}", n=20 + i).to_dict()),
+                                      encoding="utf-8")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", tmp)
+    monkeypatch.setenv("HANDBALL_STORE_SYNC", "1")
+    monkeypatch.setenv("HANDBALL_STORE_HOT", "2")
+    from handball.api.app import create_app
+
+    eredeti = tr.Match.from_json
+    olvasasok = []
+
+    def szamlalt(txt):
+        olvasasok.append(1)
+        return eredeti(txt)
+
+    monkeypatch.setattr(tr.Match, "from_json", staticmethod(szamlalt))
+
+    # 1. indítás: nincs index → mind a négy beolvasva, az index elkészül.
+    app = create_app()
+    assert len(olvasasok) == 4
+    assert (d / ".index.json").exists()
+    assert dict.__len__(app.state.store) == 2 and len(app.state.store) == 4
+    # 2. indítás: csak a meleg keret (2) olvasódik be, a másik kettő az indexből.
+    olvasasok.clear()
+    app = create_app()
+    client = TestClient(app)
+    assert len(olvasasok) == 2
+    lista = client.get("/matches").json()["matches"]
+    assert {m["match_id"]: m["num_frames"] for m in lista} == {
+        f"i{i}": 20 + i for i in range(4)}
+    hideg = [k for k in app.state.store._cold][0]
+    r = client.get(f"/matches/{hideg}")
+    assert r.status_code == 200 and len(r.json()["frames"]) == \
+        20 + int(hideg[1:])
+    assert len(olvasasok) == 3                     # a hideg megnyitása
+    # 3. indítás: elavult index-bejegyzések (más méret) → azokat beolvassa.
+    idx = json.loads((d / ".index.json").read_text(encoding="utf-8"))
+    assert sorted(idx) == [f"i{i}.json" for i in range(4)]
+    for ent in idx.values():
+        ent["size"] = 1
+    (d / ".index.json").write_text(json.dumps(idx), encoding="utf-8")
+    olvasasok.clear()
+    app = create_app()
+    assert len(olvasasok) == 4
+    assert len(app.state.store) == 4

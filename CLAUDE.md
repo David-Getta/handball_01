@@ -14,8 +14,14 @@ pipeline-rétegek a `Tracking`/`Match` adatmodellen) + Flutter kliens
 ## Parancsok
 
 ```bash
-# Teljes backend teszt (kb. 5 perc, 1300+ teszt) — commit előtt kötelező:
-cd backend && python3 -m pytest -q
+# Friss (üres) környezetben előbb a függőségek — a tesztek egy része
+# cv2-t importál, enélkül a GYŰJTÉS hibázik, és a csomag NEM fut le:
+pip install fastapi uvicorn pytest httpx numpy opencv-python-headless
+
+# Teljes backend teszt (kb. 7 perc, 2400+ teszt) — commit előtt kötelező.
+# FIGYELEM: a `| tail` elnyeli a pytest kilépési kódját — a "zöld"
+# ítélethez a PIPESTATUS-t (vagy a "N passed" sort) nézd, ne a pipe-ét:
+cd backend && python3 -m pytest -q 2>&1 | tail -3; echo "exit ${PIPESTATUS[0]}"
 
 # Gyors kör fejlesztés közben (csak az érintett fájlok):
 cd backend && python3 -m pytest tests/test_xg.py -q

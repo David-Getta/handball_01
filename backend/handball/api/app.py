@@ -275,6 +275,19 @@ class _MatchStore(dict):
                                  or key in self._cold):
                 self._store(key, value)
 
+    def put_cold(self, key, meta, num_frames: int,
+                 overwrite: bool = True) -> None:
+        """Egy meccs FEJLÉCÉNEK beírása hidegként (a fejléc-indexből,
+        betöltés nélkül). `overwrite=False`: a már bent lévőt (meleget
+        vagy hideget) nem bántja."""
+        with self._lock:
+            if not overwrite and (dict.__contains__(self, key)
+                                  or key in self._cold):
+                return
+            if dict.__contains__(self, key):
+                dict.__delitem__(self, key)
+            self._cold[key] = (meta, int(num_frames))
+
     def status(self) -> dict:
         """A betöltés állása — NEM vár (a /health-nek)."""
         return {"loading": self.loading,
@@ -572,11 +585,14 @@ def create_app():
         ebben a sorrendben halad, hogy amit az edző most nyitna, az
         legyen kész először. A jegyzet/mezszám/roster kísérőfájlokat a
         nevük különbözteti meg (*.notes.json stb.) — azok nem meccsek."""
+        # A ponttal kezdődő fájl (a fejléc-index) nem meccs — a pathlib
+        # `*` mintája a rejtett fájlt is találja, a shell-lel ellentétben.
         files = [f for f in _data_dir.glob("*.json")
-                 if not any(f.name.endswith(s) for s in
-                            (".notes.json", ".jerseys.json", ".roster.json",
-                             ".params.json", ".events.json",
-                             ".annotations.json"))]
+                 if not f.name.startswith(".")
+                 and not any(f.name.endswith(s) for s in
+                             (".notes.json", ".jerseys.json", ".roster.json",
+                              ".params.json", ".events.json",
+                              ".annotations.json"))]
 
         def _mtime(f):
             try:
@@ -613,6 +629,62 @@ def create_app():
     _store.loader = _load_one_from_disk
     _store.exists = lambda mid: _match_path(mid).exists()
 
+    # --- Fejléc-index: a könyvtár meccseinek meta + kockaszám, a fájl
+    # méretével és idejével. Indításkor a meleg kereten túli meccsekhez
+    # ebből jön a fejléc (nem kell 70 MB JSON-t beolvasni, csak azért,
+    # hogy ki is dobjuk). Egy módosított fájl (más méret/idő) mindig
+    # frissen olvasódik be. A név ponttal kezdődik: a `*.json` glob
+    # (a meccs-fájlok listája) így nem látja meccsnek.
+    _index_path = _data_dir / ".index.json"
+
+    def _read_index() -> dict:
+        try:
+            d = json.loads(_index_path.read_text(encoding="utf-8"))
+            return d if isinstance(d, dict) else {}
+        except Exception:
+            return {}
+
+    def _index_header(index: dict, f: Path):
+        """(meta, kockaszám) az indexből, ha a bejegyzés a fájllal egyezik;
+        különben None (be kell olvasni)."""
+        ent = index.get(f.name)
+        if not isinstance(ent, dict):
+            return None
+        try:
+            st = f.stat()
+            if int(ent.get("size", -1)) != st.st_size or \
+                    int(ent.get("mtime", -1)) != int(st.st_mtime):
+                return None
+            known = MatchMeta.__dataclass_fields__.keys()
+            meta = MatchMeta(**{k: v for k, v in ent["meta"].items()
+                                if k in known})
+            if meta.match_id != f.stem:
+                return None
+            meta.event_overrides = _load_overrides(meta.match_id)
+            return meta, int(ent["n"])
+        except Exception:
+            return None
+
+    def _write_index() -> None:
+        """Az index újraírása a tár fejléceiből (atomikusan). Hiba esetén
+        csendben elmarad: az index csak gyorsítás, a forrás a meccs-fájl."""
+        from dataclasses import asdict
+        try:
+            out = {}
+            for meta, n in _store.summaries():
+                p = _match_path(meta.match_id)
+                if not p.exists():
+                    continue
+                st = p.stat()
+                out[p.name] = {"meta": asdict(meta), "n": int(n),
+                               "size": st.st_size, "mtime": int(st.st_mtime)}
+            tmp = _index_path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(out, ensure_ascii=False),
+                           encoding="utf-8")
+            tmp.replace(_index_path)
+        except Exception:
+            pass
+
     def _load_store_from_disk(background: bool = False) -> int:
         """A lemezen lévő meccsek betöltése a memóriába (indulás + könyvtár-
         visszaállítás után).
@@ -627,20 +699,39 @@ def create_app():
         felülír, mert ott a lemez a friss.
         """
         files = _match_files()
+        index = _read_index()
+        # A meleg keret: ennyi meccset olvasunk be teljesen (a
+        # legfrissebbeket); a többinek a fejléce az indexből jön, ha az
+        # a fájllal egyezik — a beolvasás (meccsenként ~2 mp) így nem
+        # ismétlődik minden indításkor egy harminc meccses könyvtáron,
+        # csak azért, hogy utána ki is dobjuk.
+        keret = _store.hot_limit if _store.hot_limit > 0 else None
 
         def _run() -> int:
             loaded = 0
+            meleg = 0
             try:
                 for f in files:
                     _store.progress["current"] = f.stem
-                    m = _read_match_file(f)
-                    if m is not None:
-                        _store.put_raw(m.meta.match_id, m,
-                                       overwrite=not background)
+                    fejlec = None
+                    if keret is not None and meleg >= keret:
+                        fejlec = _index_header(index, f)
+                    if fejlec is not None:
+                        meta, n = fejlec
+                        _store.put_cold(meta.match_id, meta, n,
+                                        overwrite=not background)
                         loaded += 1
+                    else:
+                        m = _read_match_file(f)
+                        if m is not None:
+                            _store.put_raw(m.meta.match_id, m,
+                                           overwrite=not background)
+                            loaded += 1
+                            meleg += 1
                     _store.progress["loaded"] += 1
             finally:
                 _store.finish_loading()
+                _write_index()
             return loaded
 
         _store.begin_loading(len(files))
@@ -3312,6 +3403,7 @@ def create_app():
             _match_path(match_id).unlink(missing_ok=True)
             _roster_path(match_id).unlink(missing_ok=True)
             _params_path(match_id).unlink(missing_ok=True)
+            _write_index()
         except Exception:
             pass
         return {"deleted": match_id}
@@ -11292,6 +11384,7 @@ def create_app():
             tmp.replace(p)
         except Exception:
             pass  # a memóriabeli tár akkor is működik, ha a lemezre írás elakad
+        _write_index()
 
     app.state.put_match = _put_match  # elérhetővé tesszük indítás után
     app.state.store = _store  # (teszt: a memória-plafon viselkedése)
