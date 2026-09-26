@@ -195,7 +195,8 @@ def typed_json_decode(o):
 
 
 class _MatchStore(dict):
-    """Meccs-tár, amely a lemezről HÁTTÉRBEN töltődik.
+    """Meccs-tár, amely a lemezről HÁTTÉRBEN töltődik, és a memóriában
+    csak a LEGUTÓBB HASZNÁLT meccseket tartja.
 
     A motor induláskor eddig az ÖSSZES mentett meccset beolvasta, mielőtt
     a portot megnyitotta volna. Egy teljes meccs ~75 MB JSON, több
@@ -206,27 +207,53 @@ class _MatchStore(dict):
     Ez a tár szótár marad (a több száz végpont változatlanul `_store[id]`,
     `.get`, `in`, `.values()` alakban használja), de a betöltés alatt:
 
-    - a `/health` és a `/matches` NEM vár (`status()`, `snapshot()`):
-      a motor azonnal válaszol, a lista a már betöltött meccseket adja
-      a betöltés állásával;
+    - a `/health` és a `/matches` NEM vár (`status()`, `snapshot()`,
+      `summaries()`): a motor azonnal válaszol, a lista a már betöltött
+      meccseket adja a betöltés állásával;
     - a KÉRT meccs igény szerint, soron kívül töltődik (`loader`): amit
       az edző most nyit, ahhoz nem kell megvárni a többit;
     - minden más olvasás (`values`, `keys`, `items`, iterálás, `len`)
       megvárja a betöltés végét — a szezon-összesítések így teljes
       könyvtárból dolgoznak, nem féllel.
 
+    MEMÓRIA-PLAFON (`hot_limit`, HANDBALL_STORE_HOT, alap 6): egy
+    betöltött meccs ~85 MB memóriát foglal, egy harminc meccses könyvtár
+    tehát 2,5 GB-ot — egy laptopon a motor mellett futó felismeréssel
+    együtt ez lapozáshoz, végső soron a motor kilövéséhez vezet ("nem
+    érem el a motort"). Ezért a tár csak a legutóbb használt `hot_limit`
+    meccset tartja teljesen a memóriában; a többinek csak a FEJLÉCÉT
+    (meta + kockaszám) őrzi ("hideg" meccs), és a következő
+    hozzáféréskor a lemezről tölti vissza (`loader`). A lemez mindig
+    friss (minden módosítás a `_put_match`-en át ír), ezért a kidobás
+    nem veszít adatot. Csak olyan meccset dobunk ki, amelyik a lemezen
+    megvan (`exists`); a könyvtár-szintű olvasások (`values`, `items`)
+    a hideg meccseket átmenetileg visszatöltik.
+
     Írás közben nem vár: a futó feldolgozás eredménye azonnal bekerül, a
     háttér-betöltő pedig a már bent lévőt nem írja felül.
     """
 
-    def __init__(self):
+    def __init__(self, hot_limit: Optional[int] = None):
         super().__init__()
+        import os
         import threading
         self._ready = threading.Event()
         self._ready.set()                 # amíg nincs betöltés, kész
         self._lock = threading.RLock()
         self.loader = None                # match_id -> Match | None
+        self.exists = None                # match_id -> bool (lemezen van-e)
         self.progress = {"loaded": 0, "total": 0, "current": None}
+        if hot_limit is None:
+            try:
+                hot_limit = int(os.environ.get("HANDBALL_STORE_HOT", "6"))
+            except ValueError:
+                hot_limit = 6
+        self.hot_limit = hot_limit        # <= 0: nincs plafon
+        self._cold: dict = {}             # match_id -> (meta, kockaszám)
+        self._touch: dict = {}            # match_id -> használat-sorszám
+        self._tick = 0
+        self._bulk = 0                    # >0: könyvtár-szintű olvasás fut
+        self.evictions = 0                # méréshez/teszthez
 
     # ---- a betöltő oldala --------------------------------------------
     @property
@@ -244,8 +271,9 @@ class _MatchStore(dict):
 
     def put_raw(self, key, value, overwrite: bool = True) -> None:
         with self._lock:
-            if overwrite or not dict.__contains__(self, key):
-                dict.__setitem__(self, key, value)
+            if overwrite or not (dict.__contains__(self, key)
+                                 or key in self._cold):
+                self._store(key, value)
 
     def status(self) -> dict:
         """A betöltés állása — NEM vár (a /health-nek)."""
@@ -254,15 +282,80 @@ class _MatchStore(dict):
                 "total": int(self.progress.get("total", 0))}
 
     def snapshot(self) -> list:
-        """A már betöltött meccsek listája — NEM vár (a /matches-nek)."""
+        """A már betöltött (meleg) meccsek listája — NEM vár."""
         with self._lock:
             return list(dict.values(self))
+
+    def summaries(self) -> list:
+        """MINDEN ismert meccs fejléce (meta, kockaszám) — NEM vár, és a
+        hideg meccseket NEM tölti vissza (a könyvtár-listának)."""
+        with self._lock:
+            out = [(m.meta, len(m.frames)) for m in dict.values(self)]
+            out.extend(self._cold.values())
+            return out
+
+    # ---- meleg/hideg kezelés -----------------------------------------
+    def _store(self, key, value) -> None:
+        """Beírás a meleg tárba (a hívó tartja a zárat)."""
+        dict.__setitem__(self, key, value)
+        self._cold.pop(key, None)
+        self._tick += 1
+        self._touch[key] = self._tick
+        self._evict()
+
+    def _mark(self, key) -> None:
+        self._tick += 1
+        self._touch[key] = self._tick
+
+    def _evict(self) -> None:
+        """A legrégebben használt meleg meccsek kidobása a plafon fölött
+        — csak a lemezen meglévőket, és könyvtár-szintű olvasás alatt
+        nem (az visszatöltené)."""
+        if self.hot_limit <= 0 or self._bulk > 0 or self.loader is None \
+                or self.exists is None:
+            return
+        while dict.__len__(self) > self.hot_limit:
+            jeloltek = sorted(dict.keys(self), key=lambda k: self._touch.get(k, 0))
+            kidobva = False
+            for k in jeloltek:
+                if dict.__len__(self) <= self.hot_limit:
+                    break
+                try:
+                    lemezen = bool(self.exists(k))
+                except Exception:
+                    lemezen = False
+                if not lemezen:
+                    continue
+                m = dict.__getitem__(self, k)
+                self._cold[k] = (m.meta, len(m.frames))
+                dict.__delitem__(self, k)
+                self.evictions += 1
+                kidobva = True
+            if not kidobva:
+                break  # semmi sem dobható ki (nincs a lemezen)
+
+    def _revive(self, key):
+        """Hideg meccs visszatöltése a lemezről (a hívó tartja a zárat)."""
+        if self.loader is None:
+            return None
+        try:
+            m = self.loader(key)
+        except Exception:
+            m = None
+        if m is None:
+            # A fájl közben eltűnt: a fejléc se maradjon — különben a
+            # könyvtár egy megnyithatatlan meccset mutatna örökké.
+            self._cold.pop(key, None)
+            return None
+        self._store(key, m)
+        return m
 
     # ---- igény szerinti betöltés ---------------------------------------
     def _try_load(self, key):
         """A kért meccs soron kívüli betöltése a betöltés alatt."""
         with self._lock:
             if dict.__contains__(self, key):
+                self._mark(key)
                 return dict.__getitem__(self, key)
             if self.loader is None:
                 return None
@@ -271,19 +364,31 @@ class _MatchStore(dict):
             except Exception:
                 m = None
             if m is not None:
-                dict.__setitem__(self, key, m)
+                self._store(key, m)
             return m
 
     # ---- olvasás -------------------------------------------------------
     def __getitem__(self, key):
-        if dict.__contains__(self, key):
-            return dict.__getitem__(self, key)
+        with self._lock:
+            if dict.__contains__(self, key):
+                self._mark(key)
+                return dict.__getitem__(self, key)
+            if key in self._cold:
+                m = self._revive(key)
+                if m is not None:
+                    return m
         if self.loading:
             m = self._try_load(key)
             if m is not None:
                 return m
             self._ready.wait()
-        return dict.__getitem__(self, key)
+        with self._lock:
+            if key in self._cold:
+                m = self._revive(key)
+                if m is not None:
+                    return m
+            self._mark(key)
+            return dict.__getitem__(self, key)
 
     def get(self, key, default=None):
         try:
@@ -292,50 +397,91 @@ class _MatchStore(dict):
             return default
 
     def __contains__(self, key) -> bool:
-        if dict.__contains__(self, key):
+        if dict.__contains__(self, key) or key in self._cold:
             return True
         if self.loading:
             if self._try_load(key) is not None:
                 return True
             self._ready.wait()
-        return dict.__contains__(self, key)
+        return dict.__contains__(self, key) or key in self._cold
+
+    def _all_keys(self) -> list:
+        with self._lock:
+            return list(dict.keys(self)) + [k for k in self._cold
+                                            if not dict.__contains__(self, k)]
+
+    def _all_values(self) -> list:
+        """MINDEN meccs betöltve (a hidegek visszatöltve) — a kidobás a
+        felsorolás végéig szünetel, utána egyszer fut le."""
+        with self._lock:
+            self._bulk += 1
+            try:
+                out = []
+                for k in self._all_keys():
+                    if dict.__contains__(self, k):
+                        out.append((k, dict.__getitem__(self, k)))
+                    else:
+                        m = self._revive(k)
+                        if m is not None:
+                            out.append((k, m))
+                return out
+            finally:
+                self._bulk -= 1
+                self._evict()
 
     def values(self):
         self._ready.wait()
-        return dict.values(self)
+        return [m for _, m in self._all_values()]
 
     def keys(self):
         self._ready.wait()
-        return dict.keys(self)
+        return self._all_keys()
 
     def items(self):
         self._ready.wait()
-        return dict.items(self)
+        return self._all_values()
 
     def __iter__(self):
         self._ready.wait()
-        return dict.__iter__(self)
+        return iter(self._all_keys())
 
     def __len__(self) -> int:
         self._ready.wait()
-        return dict.__len__(self)
+        return len(self._all_keys())
 
     # ---- írás ----------------------------------------------------------
     def __setitem__(self, key, value) -> None:
         with self._lock:
-            dict.__setitem__(self, key, value)
+            self._store(key, value)
 
     def __delitem__(self, key) -> None:
         # A törlés legyen végleges: ha a háttér-betöltő még nem ért oda,
         # a törlés után hozná be — ezért megvárjuk.
         self._ready.wait()
         with self._lock:
-            dict.__delitem__(self, key)
+            volt_hideg = self._cold.pop(key, None) is not None
+            self._touch.pop(key, None)
+            if dict.__contains__(self, key):
+                dict.__delitem__(self, key)
+            elif not volt_hideg:
+                raise KeyError(key)
 
     def pop(self, key, *default):
         self._ready.wait()
         with self._lock:
-            return dict.pop(self, key, *default)
+            if dict.__contains__(self, key):
+                self._cold.pop(key, None)
+                self._touch.pop(key, None)
+                return dict.pop(self, key)
+            if key in self._cold:
+                m = self._revive(key)
+                self._cold.pop(key, None)
+                self._touch.pop(key, None)
+                if m is not None:
+                    return dict.pop(self, key)
+            if default:
+                return default[0]
+            raise KeyError(key)
 
 
 def create_app():
@@ -448,6 +594,7 @@ def create_app():
         return m
 
     _store.loader = _load_one_from_disk
+    _store.exists = lambda mid: _match_path(mid).exists()
 
     def _load_store_from_disk(background: bool = False) -> int:
         """A lemezen lévő meccsek betöltése a memóriába (indulás + könyvtár-
@@ -1840,6 +1987,15 @@ def create_app():
             job["message"] = "leállítás — az eddigi rész mentése…"
         return job
 
+    class _Fejlec:
+        """Meccs-fejléc a listázáshoz (meta + kockaszám), a teljes meccs
+        betöltése nélkül — a `len(x.frames)` alakot szolgálja ki."""
+        __slots__ = ("meta", "frames")
+
+        def __init__(self, meta, n):
+            self.meta = meta
+            self.frames = range(n)
+
     @app.get("/matches")
     def list_matches():
         """A tárolt meccsek listája (a kliens áttekintő/könyvtár nézetéhez).
@@ -1852,8 +2008,11 @@ def create_app():
         # és jelzi, hogy még töltődik (a kliens újrakérdez) — a régi,
         # végét megváró lista percekig "nem érem el"-t mutatott.
         allas = _store.status()
-        meccsek = _store.snapshot() if allas["loading"] else \
-            list(_store.values())
+        if not allas["loading"]:
+            _store.keys()  # a háttér-betöltés végét megvárja (teljes lista)
+        # Csak a FEJLÉC kell: a hideg (kidobott) meccseket nem töltjük
+        # vissza a listázáshoz — egy nagy könyvtár listája így is azonnali.
+        meccsek = [_Fejlec(meta, n) for meta, n in _store.summaries()]
         # MELYIK meccs darabja: összefűzés után a darab és az egész is a
         # listában van, azonos csapatnevekkel — jelölés nélkül három
         # egyforma "Mi vs Ők" sor lenne, és a felhasználó nem tudná,
@@ -3568,12 +3727,12 @@ def create_app():
         from ..pipeline.quality import compute_quality_report
 
         sorrend = sorted(
-            (m for mid, m in _store.items() if mid != match_id),
+            (m for m in _library_matches() if m.meta.match_id != match_id),
             key=lambda m: (m.meta.date or "", m.meta.match_id),
             reverse=True)
         ki = []
         for m in sorrend[:limit]:
-            kulcs = (m.meta.match_id, len(m.frames))
+            kulcs = (m.meta.match_id, _kockaszam(m))
             pont = _quality_score_cache.get(kulcs)
             if pont is None:
                 try:
@@ -3920,7 +4079,7 @@ def create_app():
                      else None)
             if oldal is None:
                 continue
-            kulcs = (m_.meta.match_id, len(m_.frames))
+            kulcs = (m_.meta.match_id, _kockaszam(m_))
             alakok = _shapes_cache.get(kulcs)
             if alakok is None:
                 with primitive_cache(m_):
@@ -4698,9 +4857,61 @@ def create_app():
     import_library.__annotations__["request"] = Request
     app.post("/library/import")(import_library)
 
+    class _LazyMatch:
+        """Meccs-KILINCS a könyvtár-szintű bejárásokhoz: a fejléc (meta,
+        kockaszám) azonnal megvan, a teljes meccs (a kockák) csak akkor
+        töltődik be, ha valaki hozzányúl.
+
+        A szezon-végpontok a könyvtár MINDEN meccsét végigjárják, de a
+        meccsenkénti eredmény a lemezes tárban van, tehát a legtöbb
+        meccshez a kockák nem is kellenek. A memória-plafon miatt a
+        hideg meccs visszatöltése ~10 mp — ha a bejárás mindig mindent
+        visszatöltene, a kezdőlap egy húsz meccses könyvtárnál percekig
+        nyílna. A kilincs a `meta` és a `num_frames` mezőt betöltés
+        nélkül adja; a `frames` és minden más tulajdonság a valódi
+        meccshez nyúl (és a betöltött példányt megtartja, hogy a bejárás
+        alatt ne cserélődjön)."""
+        __slots__ = ("meta", "num_frames", "_mid", "_m")
+
+        def __init__(self, meta, num_frames: int):
+            self.meta = meta
+            self.num_frames = int(num_frames)
+            self._mid = meta.match_id
+            self._m = None
+
+        def _real(self):
+            m = self._m
+            if m is None:
+                m = _store.get(self._mid)
+                if m is None:
+                    raise KeyError(self._mid)  # közben eltűnt a lemezről
+                self._m = m
+                self.meta = m.meta
+                self.num_frames = len(m.frames)
+            return m
+
+        @property
+        def frames(self):
+            return self._real().frames
+
+        def __getattr__(self, name):
+            return getattr(self._real(), name)
+
+    def _kockaszam(m) -> int:
+        """A meccs kockaszáma — kilincsnél betöltés nélkül."""
+        n = getattr(m, "num_frames", None) if isinstance(m, _LazyMatch) else None
+        return int(n) if n is not None else len(m.frames)
+
+    def _library_matches() -> list:
+        """A könyvtár MINDEN meccse kilincsként (a darabokkal együtt) —
+        megvárja a háttér-betöltés végét, de a hideg meccseket nem tölti
+        vissza."""
+        _store.keys()  # vár a betöltés végére
+        return [_LazyMatch(meta, n) for meta, n in _store.summaries()]
+
     def _season_matches() -> list:
         """A könyvtár meccsei SZEZON-számoláshoz: az összefűzött meccsek
-        DARABJAI nélkül.
+        DARABJAI nélkül — kilincsként (lásd _LazyMatch).
 
         Összefűzés után a darabok és az egész is a könyvtárban van (a
         darab szándékosan megmarad: törölhető, újrafeldolgozható). A
@@ -4710,12 +4921,12 @@ def create_app():
         darabokat; a könyvtár-LISTA (a kezelő nézet) továbbra is
         mindent mutat.
         """
+        osszes = _library_matches()
         reszek: set = set()
-        for m in _store.values():
+        for m in osszes:
             for rid in (getattr(m.meta, "merged_from", None) or []):
                 reszek.add(str(rid))
-        return [m for m in _store.values()
-                if m.meta.match_id not in reszek]
+        return [m for m in osszes if m.meta.match_id not in reszek]
 
     # A keret-viszonyítás küszöbei: ennyi játékidő alatt valaki nem
     # "játszott" (a fél percre beálló csere lehúzná az átlagot), és
@@ -5842,7 +6053,7 @@ def create_app():
         agg: dict = {}
         counts: dict = {}
         for m in _season_matches():
-            key = (len(m.frames), m.meta.home_team, m.meta.away_team)
+            key = (_kockaszam(m), m.meta.home_team, m.meta.away_team)
             cached = _training_cache.get(m.meta.match_id)
             if cached is not None and cached[0] == key:
                 tf = cached[1]
@@ -11066,6 +11277,7 @@ def create_app():
             pass  # a memóriabeli tár akkor is működik, ha a lemezre írás elakad
 
     app.state.put_match = _put_match  # elérhetővé tesszük indítás után
+    app.state.store = _store  # (teszt: a memória-plafon viselkedése)
     app.state.warm_results = _warm_results  # (teszt: előszámolás)
     # A forma-irány számolója: a küszöbei ÍTÉLETET hoznak a játékosról
     # ("javulsz"/"romlasz"), ezért közvetlenül is tesztelhetőnek kell
