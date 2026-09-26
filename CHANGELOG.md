@@ -3,7 +3,11 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.149 óta)
+## v0.1.150 — kiadva (2026-09-26)
+
+> Kiadás-jegyzet: a motor nagy könyvtárral is azonnal indul — a
+> meccsek fejlécét egy index őrzi, nem kell minden indításkor minden
+> meccs-fájlt beolvasni.
 
 - **Gyors indulás nagy könyvtárral: fejléc-index** (javítás): a motor
   indításkor eddig a könyvtár minden meccs-fájlját beolvasta (meccsenként
