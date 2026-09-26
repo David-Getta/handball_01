@@ -1160,9 +1160,17 @@ def soft_pass_roles(match: Match,
 
 # Térnyerő-poszt: ennyi poszthoz kötött, labdával megtett előre-métert
 # kell mérni az ítélethez, és ekkora részarány fölött mondjuk ki,
-# hogy a térnyerésük egy poszt lábán van.
+# hogy a térnyerésük egy poszt lábán van. Egy birtoklási futam
+# térnyerése a futam ELEJE és VÉGE közti előre-elmozdulás (nettó): a
+# kockánkénti pozitív lépések összege a detektálási remegést is
+# térnyerésnek számolta — sűrű felvételen háromszoros métert adott,
+# mint ritkítva ugyanaz a meccs. A követés-ugrást lépésenkénti
+# méter-korlát szűri: egy valódi lépés ritkítva sem több 1–2 m-nél,
+# az ugrás több méter (a m/s-korlát a sűrű felvétel remegését is
+# kiszűrte volna).
 TNR_MIN_M = 50.0
 TNR_SHARE_PCT = 60.0
+TNR_MAX_STEP_M = 3.0
 
 
 def ball_carrier_roles(match: Match,
@@ -1190,33 +1198,46 @@ def ball_carrier_roles(match: Match,
     from .roles import estimate_positions
 
     config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
     roles = estimate_positions(match, config)
 
     out: dict = {side: {"meters": 0.0, "roles": {},
                         "main_role": None, "share_pct": None,
                         "verdict": None}
                  for side in ("home", "away")}
-    prev = None   # (track_id, side, x, elore-irany)
+    # Futam: ugyanaz a birtokos egymást követő kockákon; a térnyerése a
+    # futam nettó előre-elmozdulása (ugrás-szűrt lépésekből).
+    run = None   # [track_id, side, poszt, prev_x, prev_t, ahead, dx_sum]
+
+    def _close():
+        nonlocal run
+        if run is not None and run[6] > 0.0 and run[2] is not None:
+            rec = out[run[1]]
+            rec["roles"][run[2]] = round(
+                rec["roles"].get(run[2], 0.0) + run[6], 2)
+            rec["meters"] = round(rec["meters"] + run[6], 2)
+        run = None
+
     for f in match.frames:
         h = ball_holder(f, config)
         if h is None or h.team is None or h.role == "kapus":
-            prev = None
+            _close()
             continue
         side = h.team.value
         goal_x = config.attacks_toward_x(h.team)
         ahead = 1.0 if goal_x > COURT_LENGTH_M / 2.0 else -1.0
-        if prev is not None and prev[0] == h.track_id \
-                and prev[1] == side:
-            dx = (h.x - prev[2]) * ahead
-            if 0.0 < dx < 2.0:   # előre-mozgás (követés-ugrás nélkül)
-                rec_role = roles[side].get(h.track_id)
-                if rec_role is not None:
-                    poszt = rec_role["poszt"]
-                    rec = out[side]
-                    rec["roles"][poszt] = round(
-                        rec["roles"].get(poszt, 0.0) + dx, 2)
-                    rec["meters"] = round(rec["meters"] + dx, 2)
-        prev = (h.track_id, side, h.x, ahead)
+        if run is not None and run[0] == h.track_id and run[1] == side:
+            dx = (h.x - run[3]) * ahead
+            if abs(dx) <= TNR_MAX_STEP_M:
+                run[6] += dx
+            run[3], run[4] = h.x, f.t
+        else:
+            _close()
+            rec_role = roles[side].get(h.track_id)
+            run = [h.track_id, side,
+                   rec_role["poszt"] if rec_role is not None else None,
+                   h.x, f.t, ahead, 0.0]
+    _close()
 
     for side in ("home", "away"):
         rec = out[side]

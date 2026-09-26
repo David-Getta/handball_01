@@ -128,6 +128,21 @@ beálló-villanás). Az őr-teszt
 (`test_az_ido_kuszobok_nem_esnek_vissza_kockara`) elkapja, ha egy
 átállított küszöb kocka-alakja újra futó kódba kerül.
 
+Két rokon hibafajta, amit a stride-jelentés (`docs/STRIDE_ERZEKENYSEG.md`)
+hozott elő:
+
+- **"±2 kocka" sebesség-ablak** (`frames[i0 - 2]`, `frames[i0 + 2]`,
+  `* fps / 4`): ritkítva háromszor hosszabb ablak. Helyette a
+  `tactics.displacement_at(frames, i0, fps, pick)` (SPEED_WINDOW_S)
+  — a sebesség `hypot(Δx, Δy) / dt`, az oldalsebesség `Δy / dt`.
+- **Kockánkénti összeg** (távolság, "pozitív lépések"): a detektálási
+  remegést is összeadja, sűrű felvételen felfújja (egy ÁLLÓ csapat
+  25 fps-en "mozgásos" lett). Helyette időablakos elmozdulás
+  (`attack_motion`: ATTACK_MOTION_WINDOW_S) vagy a futam nettó
+  elmozdulása (`ball_carrier_roles`); az ugrás-szűrő lépésenkénti
+  MÉTER-korlát legyen, nem m/s (a m/s-korlát a sűrű remegést is
+  kidobja).
+
 ### A try/except és a néma mezőnév
 
 A recept szerint minden felület `try/except`-ben ül, hogy egy réteg

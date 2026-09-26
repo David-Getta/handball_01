@@ -18,7 +18,7 @@ from typing import Optional
 
 from ..models.tracking import Match, Team
 from .primitive_cache import copy_sides, memoize_primitive
-from .tactics import TacticsConfig
+from .tactics import TacticsConfig, displacement_at
 
 # Ha a lövés pillanatában ennél messzebb van a legközelebbi védő a lövőtől,
 # a lövést SZABADNAK számoljuk (kézilabdában a fedezés 1-2 m-en belül él).
@@ -390,7 +390,11 @@ BLOCK_SPEED_MS = 8.0          # lövés-szerű tempó (mint a lövés-detektorba
 BLOCK_MAX_GOAL_DIST_M = 14.0  # a repülés a kapu előtti térben történik
 BLOCK_MIN_GOAL_DIST_M = 5.5   # a visszafordulás nem a kapusnál van
 BLOCK_RADIUS_M = 1.5          # a blokkoló legfeljebb ennyire a labdától
-BLOCK_COOLDOWN = 12           # két blokk közt legalább ennyi kocka
+BLOCK_COOLDOWN_FRAMES = 12    # (örökölt kocka-alak; a motor a _S párt használja)
+# Két blokk közt legalább ennyi idő — MÁSODPERCBEN, mert kockában a
+# termék ritkításánál (fps/3) háromszoros szünet lett volna, és egy
+# gyors visszalövés blokkja elveszett.
+BLOCK_COOLDOWN_S = 0.5
 
 
 def detect_blocks(match, config=None) -> dict:
@@ -415,6 +419,7 @@ def detect_blocks(match, config=None) -> dict:
     out = {side: {"blocks": 0, "blockers": {}, "events": []}
            for side in ("home", "away")}
     last_block_t = -10**9
+    cooldown = max(1, int(round(BLOCK_COOLDOWN_S * fps)))
 
     for i in range(1, len(frames) - 1):
         f0, f1, f2 = frames[i - 1], frames[i], frames[i + 1]
@@ -429,7 +434,7 @@ def detect_blocks(match, config=None) -> dict:
             dist = abs(f1.ball.x - goal_x)
             if not (toward_in and reversed_out
                     and BLOCK_MIN_GOAL_DIST_M <= dist <= BLOCK_MAX_GOAL_DIST_M
-                    and f1.t - last_block_t >= BLOCK_COOLDOWN):
+                    and f1.t - last_block_t >= cooldown):
                 continue
             attacking = _attacking_team_for_goal(goal_x, config)
             defending = Team.AWAY if attacking == Team.HOME else Team.HOME
@@ -4241,16 +4246,16 @@ def conceded_momentum(match, config=None) -> dict:
             continue
         deff = "away" if sh["team"] == "home" else "home"
         i0 = idx_of.get(sh.get("release_t"), idx_of.get(sh["t"]))
-        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+        if i0 is None:
             continue
-        p_before = next((p for p in match.frames[i0 - 2].players
-                         if p.track_id == sh["player_id"]), None)
-        p_after = next((p for p in match.frames[i0 + 2].players
-                        if p.track_id == sh["player_id"]), None)
-        if p_before is None or p_after is None:
+        # Időablakos sebesség (SPEED_WINDOW_S), nem "±2 kocka".
+        mozgas = displacement_at(match.frames, i0, fps,
+                                 lambda p: p.track_id == sh["player_id"])
+        if mozgas is None:
             continue
-        speed = (math.hypot(p_after.x - p_before.x,
-                            p_after.y - p_before.y) * fps / 4.0)
+        p_before, p_after, dt = mozgas
+        speed = math.hypot(p_after.x - p_before.x,
+                           p_after.y - p_before.y) / dt
         rec = out[deff]
         rec["goals"] += 1
         if speed >= CGM_RUN_MS:

@@ -3,6 +3,24 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.150 óta)
+
+- **Ritkítás-független mozgás-mérés** (javítás, hét réteg): a
+  stride-jelentés szerint ugyanaz a meccs sűrűn (25 fps) és a termék
+  ritkításával (minden 3. kocka) másképp ítélt. Az okok: a sebességet
+  "±2 kockán" mértük (ritkítva háromszor hosszabb ablak — a
+  szélső-/beálló-futtatás, a leforduló beállók, a mozgásból lőtt gólok,
+  a becsapott és a helyén maradó kapus rétegeiben), a kapus-bevonás
+  birtoklási minimuma "5 kocka" volt, a blokk-szünet "12 kocka"; a
+  térnyerő-poszt és a támadó-mozgás pedig kockánkénti összeget
+  számolt, amit a detektálási remegés sűrű felvételen felfújt — egy
+  ÁLLÓ csapat 25 fps-en "mozgásosnak" látszott, a térnyerés pedig
+  háromszoros volt. Mostantól a sebesség-ablak, a birtoklási minimum
+  és a blokk-szünet másodpercben van, a támadó-mozgás egy másodperces
+  ablakok elmozdulásából, a térnyerés a birtoklási futam nettó
+  elmozdulásából számol. A stride-jelentés eltérő ítéletű rétegei:
+  24 → 20.
+
 ## v0.1.150 — kiadva (2026-09-26)
 
 > Kiadás-jegyzet: a motor nagy könyvtárral is azonnal indul — a

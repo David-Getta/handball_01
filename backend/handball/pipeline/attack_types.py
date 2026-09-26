@@ -23,7 +23,7 @@ from typing import Optional
 
 from ..models.tracking import Match
 from .setplays import segment_attacks
-from .tactics import TacticsConfig
+from .tactics import TacticsConfig, displacement_at
 from .primitive_cache import copy_rows, copy_sides, memoize_primitive
 
 # Küszöbök (magyarázható, mért szabályok):
@@ -4411,16 +4411,17 @@ def wing_service(match: Match,
         if pe.receiver_id not in wings[side]:
             continue
         i0 = idx_of.get(pe.t)
-        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+        if i0 is None:
             continue
-        p_before = next((p for p in match.frames[i0 - 2].players
-                         if p.track_id == pe.receiver_id), None)
-        p_after = next((p for p in match.frames[i0 + 2].players
-                        if p.track_id == pe.receiver_id), None)
-        if p_before is None or p_after is None:
+        # Időablakos sebesség (SPEED_WINDOW_S): ritkított felvételen is
+        # ugyanannyi idő az átvétel körül, nem "±2 kocka".
+        mozgas = displacement_at(match.frames, i0, fps,
+                                 lambda p: p.track_id == pe.receiver_id)
+        if mozgas is None:
             continue
-        speed = (math.hypot(p_after.x - p_before.x,
-                            p_after.y - p_before.y) * fps / 4.0)
+        p_before, p_after, dt = mozgas
+        speed = math.hypot(p_after.x - p_before.x,
+                           p_after.y - p_before.y) / dt
         rec = out[side]
         rec["receptions"] += 1
         if speed >= WSV_RUN_MS:
@@ -4486,16 +4487,17 @@ def wing_runners(match: Match,
         if pe.receiver_id not in wings[side]:
             continue
         i0 = idx_of.get(pe.t)
-        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+        if i0 is None:
             continue
-        p_before = next((p for p in match.frames[i0 - 2].players
-                         if p.track_id == pe.receiver_id), None)
-        p_after = next((p for p in match.frames[i0 + 2].players
-                        if p.track_id == pe.receiver_id), None)
-        if p_before is None or p_after is None:
+        # Időablakos sebesség (SPEED_WINDOW_S): ritkított felvételen is
+        # ugyanannyi idő az átvétel körül, nem "±2 kocka".
+        mozgas = displacement_at(match.frames, i0, fps,
+                                 lambda p: p.track_id == pe.receiver_id)
+        if mozgas is None:
             continue
-        speed = (math.hypot(p_after.x - p_before.x,
-                            p_after.y - p_before.y) * fps / 4.0)
+        p_before, p_after, dt = mozgas
+        speed = math.hypot(p_after.x - p_before.x,
+                           p_after.y - p_before.y) / dt
         if speed < WSV_RUN_MS:
             continue
         if getattr(p_after, "jersey_number", None) is not None:
@@ -4727,16 +4729,17 @@ def pivot_service(match: Match,
         if pe.receiver_id not in pivots[side]:
             continue
         i0 = idx_of.get(pe.t)
-        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+        if i0 is None:
             continue
-        p_before = next((p for p in match.frames[i0 - 2].players
-                         if p.track_id == pe.receiver_id), None)
-        p_after = next((p for p in match.frames[i0 + 2].players
-                        if p.track_id == pe.receiver_id), None)
-        if p_before is None or p_after is None:
+        # Időablakos sebesség (SPEED_WINDOW_S): ritkított felvételen is
+        # ugyanannyi idő az átvétel körül, nem "±2 kocka".
+        mozgas = displacement_at(match.frames, i0, fps,
+                                 lambda p: p.track_id == pe.receiver_id)
+        if mozgas is None:
             continue
-        speed = (math.hypot(p_after.x - p_before.x,
-                            p_after.y - p_before.y) * fps / 4.0)
+        p_before, p_after, dt = mozgas
+        speed = math.hypot(p_after.x - p_before.x,
+                           p_after.y - p_before.y) / dt
         rec = out[side]
         rec["receptions"] += 1
         if speed >= PSV_RUN_MS:
@@ -4803,16 +4806,17 @@ def pivot_runners(match: Match,
         if pe.receiver_id not in pivots[side]:
             continue
         i0 = idx_of.get(pe.t)
-        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+        if i0 is None:
             continue
-        p_before = next((p for p in match.frames[i0 - 2].players
-                         if p.track_id == pe.receiver_id), None)
-        p_after = next((p for p in match.frames[i0 + 2].players
-                        if p.track_id == pe.receiver_id), None)
-        if p_before is None or p_after is None:
+        # Időablakos sebesség (SPEED_WINDOW_S): ritkított felvételen is
+        # ugyanannyi idő az átvétel körül, nem "±2 kocka".
+        mozgas = displacement_at(match.frames, i0, fps,
+                                 lambda p: p.track_id == pe.receiver_id)
+        if mozgas is None:
             continue
-        speed = (math.hypot(p_after.x - p_before.x,
-                            p_after.y - p_before.y) * fps / 4.0)
+        p_before, p_after, dt = mozgas
+        speed = math.hypot(p_after.x - p_before.x,
+                           p_after.y - p_before.y) / dt
         if speed < PSV_RUN_MS:
             continue
         if getattr(p_after, "jersey_number", None) is not None:

@@ -1964,10 +1964,13 @@ def gk_early_saves(match: Match, config=None) -> dict:
 
 
 # Kapus-bevonás: ennyi mért támadástól ítélünk, és e feletti arányban
-# járják meg a kapust a támadásaik.
+# járják meg a kapust a támadásaik. Egy birtoklási szakasz legalább
+# KIV_MIN_POSS_S hosszú (MÁSODPERC — kockában "5 kocka" a termék
+# ritkításánál 0,6 mp lett volna, sűrűn 0,2 mp).
 KIV_MIN_ATTACKS = 8
 KIV_HIGH_PCT = 25.0
 KIV_LOW_PCT = 5.0
+KIV_MIN_POSS_S = 0.3
 
 
 def keeper_involvement(match: Match, config=None) -> dict:
@@ -1993,6 +1996,8 @@ def keeper_involvement(match: Match, config=None) -> dict:
     from .tactics import TacticsConfig
 
     config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    min_len = max(1, int(round(KIV_MIN_POSS_S * fps)))
     out: dict = {side: {"attacks": 0, "with_keeper": 0,
                         "share_pct": None, "verdict": None}
                  for side in ("home", "away")}
@@ -2005,7 +2010,7 @@ def keeper_involvement(match: Match, config=None) -> dict:
 
     def _close():
         nonlocal cur_team, length, keeper_seen
-        if cur_team is not None and length >= 5:
+        if cur_team is not None and length >= min_len:
             rec = out[cur_team.value]
             rec["attacks"] += 1
             if keeper_seen:
@@ -2684,7 +2689,7 @@ def wrongfooted_keeper(match: Match, config=None) -> dict:
     "elmozdítható a kapusuk" / "a kapusuk állja a cseleket" / None.
     """
     from ..models.tracking import Team
-    from .tactics import TacticsConfig
+    from .tactics import TacticsConfig, displacement_at
     from .xg import match_xg
 
     config = config or TacticsConfig()
@@ -2713,13 +2718,14 @@ def wrongfooted_keeper(match: Match, config=None) -> dict:
                 break
         if target_y is None:
             continue
-        gk0 = next((p for p in frames[i0 - 2].players
-                    if p.team.value == deff and p.role == "kapus"), None)
-        gk1 = next((p for p in frames[min(i0 + 2, len(frames) - 1)].players
-                    if p.team.value == deff and p.role == "kapus"), None)
-        if gk0 is None or gk1 is None:
+        # Időablakos oldalsebesség (SPEED_WINDOW_S), nem "±2 kocka".
+        mozgas = displacement_at(
+            frames, i0, fps,
+            lambda p: p.team.value == deff and p.role == "kapus")
+        if mozgas is None:
             continue
-        vy = (gk1.y - gk0.y) * fps / 4.0
+        gk0, gk1, dt = mozgas
+        vy = (gk1.y - gk0.y) / dt
         side_dir = target_y - gk0.y
         rec = out[deff]
         rec["goals"] += 1
@@ -2768,7 +2774,7 @@ def reading_keeper(match: Match, config=None) -> dict:
     "reflexből véd" / None.
     """
     from ..models.tracking import Team
-    from .tactics import TacticsConfig
+    from .tactics import TacticsConfig, displacement_at
     from .xg import match_xg
 
     config = config or TacticsConfig()
@@ -2799,13 +2805,14 @@ def reading_keeper(match: Match, config=None) -> dict:
                 target_y = b.y
         if target_y is None:
             continue
-        gk0 = next((p for p in frames[i0 - 2].players
-                    if p.team.value == deff and p.role == "kapus"), None)
-        gk1 = next((p for p in frames[min(i0 + 2, len(frames) - 1)].players
-                    if p.team.value == deff and p.role == "kapus"), None)
-        if gk0 is None or gk1 is None:
+        # Időablakos oldalsebesség (SPEED_WINDOW_S), nem "±2 kocka".
+        mozgas = displacement_at(
+            frames, i0, fps,
+            lambda p: p.team.value == deff and p.role == "kapus")
+        if mozgas is None:
             continue
-        vy = (gk1.y - gk0.y) * fps / 4.0
+        gk0, gk1, dt = mozgas
+        vy = (gk1.y - gk0.y) / dt
         side_dir = target_y - gk0.y
         rec = out[deff]
         rec["saves"] += 1

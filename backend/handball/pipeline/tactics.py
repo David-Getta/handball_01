@@ -930,12 +930,55 @@ def pass_tempo(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     return out
 
 
+# Pillanatnyi sebesség ablaka MÁSODPERCBEN: az esemény kockája körül
+# összesen ennyi idő (25 fps-nél ±2 kocka). Kockában megadva ("±2
+# kocka") a termék ritkításánál (fps/3) háromszoros időablak lett
+# volna — a sebesség ugyanaz, de a lövés/átvétel pillanatától messzebb
+# mérve.
+SPEED_WINDOW_S = 0.16
+
+
+def speed_window_frames(fps: float, window_s: float = SPEED_WINDOW_S) -> int:
+    """A sebesség-ablak FÉL-szélessége kockában (legalább 1)."""
+    return max(1, int(round(window_s * (fps if fps > 0 else 25.0) / 2.0)))
+
+
+def displacement_at(frames, i0: int, fps: float, pick,
+                    window_s: float = SPEED_WINDOW_S):
+    """Egy játékos elmozdulása az i0. kocka körüli időablakban.
+
+    `pick(player)` választja ki a játékost (track_id vagy csapat+szerep
+    szerint). Visszatérés (p_előtte, p_utána, dt_másodperc) vagy None,
+    ha az ablak kilóg a meccsből, vagy a játékos valamelyik szélén
+    nincs meg. A sebesség: hypot(Δx, Δy) / dt; az oldalirányú
+    sebesség: Δy / dt.
+    """
+    k = speed_window_frames(fps, window_s)
+    if i0 is None or i0 - k < 0 or i0 + k >= len(frames):
+        return None
+    f0, f1 = frames[i0 - k], frames[i0 + k]
+    p0 = next((p for p in f0.players if pick(p)), None)
+    p1 = next((p for p in f1.players if pick(p)), None)
+    if p0 is None or p1 is None:
+        return None
+    dt = (f1.t - f0.t) / (fps if fps > 0 else 25.0)
+    if dt <= 0:
+        return None
+    return p0, p1, dt
+
+
 # Támadó-mozgás: szervezett támadásban ennyi mért játékos-másodperctől
 # ítélünk; ez alatti átlagsebesség álló, e feletti mozgásos támadás;
-# az irreálisan nagy elmozdulás track-ugrás, kihagyjuk.
+# az irreálisan nagy elmozdulás track-ugrás, kihagyjuk. A sebességet
+# ATTACK_MOTION_WINDOW_S hosszú, egymást nem fedő ablakokon mérjük
+# (az ablak két végpontja közti elmozdulás): a kockánkénti
+# távolság-összeg a detektálási remegést is mozgásnak számolta — sűrű
+# (25 fps) felvételen egy ÁLLÓ csapat is "mozgásosnak" látszott, a
+# ritkított ugyanaz a meccs pedig másképp ítélt.
 ATTACK_MOTION_MIN_S = 120.0
 ATTACK_MOTION_STATIC_MPS = 0.9
 ATTACK_MOTION_FLUID_MPS = 1.6
+ATTACK_MOTION_WINDOW_S = 1.0
 _MOTION_MAX_MPS = 9.0
 
 
@@ -962,34 +1005,45 @@ def attack_motion(match: Match,
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     sums = {"home": {"dist": 0.0, "time": 0.0},
             "away": {"dist": 0.0, "time": 0.0}}
-    prev = None
+    # Ablak-kezdő kocka oldalanként: az ablak a támadó fázis
+    # megszakadásával elvész (nem ér át két támadáson).
+    start = {"home": None, "away": None}
     for f in match.frames:
         ph = classify_phase(f, config)
         side = ("home" if ph == Phase.HOME_ATTACK
                 else "away" if ph == Phase.AWAY_ATTACK else None)
-        if prev is not None and side is not None:
-            dt = (f.t - prev.t) / fps
-            if 0.0 < dt <= 0.5:
-                team = Team.HOME if side == "home" else Team.AWAY
-                prev_pos = {
-                    p.track_id: (p.x, p.y) for p in prev.players
-                    if p.team == team
-                    and p.source == PositionSource.MEASURED
-                    and p.role != "kapus"}
-                for p in f.players:
-                    if (p.team != team
-                            or p.source != PositionSource.MEASURED
-                            or p.role == "kapus"):
-                        continue
-                    pp = prev_pos.get(p.track_id)
-                    if pp is None:
-                        continue
-                    d = math.hypot(p.x - pp[0], p.y - pp[1])
-                    if d / dt > _MOTION_MAX_MPS:
-                        continue
-                    sums[side]["dist"] += d
-                    sums[side]["time"] += dt
-        prev = f
+        for s in ("home", "away"):
+            if s != side:
+                start[s] = None
+        if side is None:
+            continue
+        prev = start[side]
+        if prev is None:
+            start[side] = f
+            continue
+        dt = (f.t - prev.t) / fps
+        if dt < ATTACK_MOTION_WINDOW_S:
+            continue
+        team = Team.HOME if side == "home" else Team.AWAY
+        prev_pos = {
+            p.track_id: (p.x, p.y) for p in prev.players
+            if p.team == team
+            and p.source == PositionSource.MEASURED
+            and p.role != "kapus"}
+        for p in f.players:
+            if (p.team != team
+                    or p.source != PositionSource.MEASURED
+                    or p.role == "kapus"):
+                continue
+            pp = prev_pos.get(p.track_id)
+            if pp is None:
+                continue
+            d = math.hypot(p.x - pp[0], p.y - pp[1])
+            if d / dt > _MOTION_MAX_MPS:
+                continue
+            sums[side]["dist"] += d
+            sums[side]["time"] += dt
+        start[side] = f
     out = {}
     for side in ("home", "away"):
         rec = sums[side]

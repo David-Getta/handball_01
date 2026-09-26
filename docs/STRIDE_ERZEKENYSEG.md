@@ -9,7 +9,7 @@ rétegek ugyanarról a meccsről ritkítva másképp — jellemzően
 óvatosabban — ítélhetnek. Ez a lista a döntés alapja, hol
 érdemes a kockaszám-küszöböt másodperc-alapúra váltani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **513 réteg** összevetve, ebből **24 eltérő ítéletű**.
+Mérés: 240 mp-es szimulált meccs (mag: 7), sűrű (25 fps) vs 3-as ritkítás; **513 réteg** összevetve, ebből **20 eltérő ítéletű**.
 
 ## Fontos: mit jelent az eltérés
 
@@ -21,10 +21,6 @@ háromszor annyi valós időt követelnek.
 
 ## Eltérő ítéletű rétegek
 
-### `attack_motion`
-
-- `home.style`: sűrűn `mozgásos` → ritkítva `None`
-
 ### `attack_starter_roles`
 
 - `home.verdict`: sűrűn `None` → ritkítva `a támadásaik 63%-a a(z) irányító posztnál indul (38 szakaszból) — a felhozatalt őt presszingelve lehet borítani: korai nyomás rá már a felezőnél, és a szervezésük el sem kezdődik`
@@ -32,10 +28,6 @@ háromszor annyi valós időt követelnek.
 ### `backward_passers`
 
 - `away.top`: sűrűn `13` → ritkítva `14`
-
-### `ball_carrier_roles`
-
-- `home.verdict`: sűrűn `a térnyerésük a(z) irányító poszt lábán van (72%-a a labdával megtett 279 előre-méternek) — őt a felezőtől hátrálva kell fogadni: lendületbe engedni tilos` → ritkítva `a térnyerésük a(z) irányító poszt lábán van (74%-a a labdával megtett 91 előre-méternek) — őt a felezőtől hátrálva kell fogadni: lendületbe engedni tilos`
 
 ### `beaten_defenders`
 
@@ -60,17 +52,13 @@ háromszor annyi valós időt követelnek.
 
 - `home.verdict`: sűrűn `az elöl-szerzéseik 92%-a a(z) irányító posztjuknál születik (25 letámadás-szerzésből) — az ő oldalán tilos a kihozatalt vezetni: a kapus a másik oldalra indítson` → ritkítva `az elöl-szerzéseik 100%-a a(z) irányító posztjuknál születik (23 letámadás-szerzésből) — az ő oldalán tilos a kihozatalt vezetni: a kapus a másik oldalra indítson`
 
-### `keeper_involvement`
-
-- `away.verdict`: sűrűn `sokat játszanak vissza` → ritkítva `None`
-
 ### `key_player`
 
 - `home.verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 15 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
 
 ### `key_post`
 
-- `home.verdict`: sűrűn `a kulcs-posztjuk a(z) irányító: 10 réteg ítélete fut ki rá (a 17 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja` → ritkítva `a kulcs-posztjuk a(z) irányító: 11 réteg ítélete fut ki rá (a 18 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja`
+- `home.verdict`: sűrűn `a kulcs-posztjuk a(z) irányító: 9 réteg ítélete fut ki rá (a 16 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja` → ritkítva `a kulcs-posztjuk a(z) irányító: 10 réteg ítélete fut ki rá (a 17 megszólalóból) — az ő kezelése nem részfeladat, hanem a meccsterv első lapja`
 
 ### `last_pass_roles`
 
@@ -121,8 +109,4 @@ háromszor annyi valós időt követelnek.
 ### `shooting_hand`
 
 - `home.lefty`: sűrűn `6` → ritkítva `4`
-
-### `wrongfooted_keeper`
-
-- `away.verdict`: sűrűn `None` → ritkítva `a kapusuk állja a cseleket`
 
