@@ -3,6 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.151 óta)
+
+- **A támadás-szakasz minimuma másodpercben** (javítás): a meccs
+  támadás-szakaszokra bontása (amire a figura-felismerés, az
+  indító-poszt, a támadás-számlálók és tucatnyi réteg épül) eddig "5
+  kockánál" rövidebb szakaszt dobott el — sűrű felvételen a 0,2 mp-es
+  fázis-villanásokat is támadásnak számolta, a termék ritkításánál
+  viszont a 0,5 mp-es valódi rövid támadásokat is eldobta. Mostantól
+  a minimum 0,2 másodperc, a meccs saját képrátájából. A blokkolt
+  lövés felismerése a szomszédos mintákon marad (a blokk ~0,1 mp-es
+  esemény; mérés szerint hosszabb ablak nem hozza közelebb a sűrű és
+  a ritkított számot, csak a holt-labdás blokkot vesztené el).
+
 ## v0.1.151 — kiadva (2026-09-26)
 
 > Kiadás-jegyzet: hét réteg mozgás-mérése ritkítás-független lett

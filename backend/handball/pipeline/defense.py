@@ -390,6 +390,11 @@ BLOCK_SPEED_MS = 8.0          # lövés-szerű tempó (mint a lövés-detektorba
 BLOCK_MAX_GOAL_DIST_M = 14.0  # a repülés a kapu előtti térben történik
 BLOCK_MIN_GOAL_DIST_M = 5.5   # a visszafordulás nem a kapusnál van
 BLOCK_RADIUS_M = 1.5          # a blokkoló legfeljebb ennyire a labdától
+# A fordulópontot a SZOMSZÉDOS mintákon nézzük (be- és kirepülés a
+# két szomszéd kockához mérve, Δx/dt): a blokk ~0,1 mp-es esemény, a
+# termék ritkítása (0,12 mp) ennek a határán van — hosszabb ablak nem
+# javít rajta, csak a holt-labdás blokkot vesztené el (mértük: a
+# 0,12 mp-es ablak sem hozta közelebb a sűrű és a ritkított számot).
 BLOCK_COOLDOWN_FRAMES = 12    # (örökölt kocka-alak; a motor a _S párt használja)
 # Két blokk közt legalább ennyi idő — MÁSODPERCBEN, mert kockában a
 # termék ritkításánál (fps/3) háromszoros szünet lett volna, és egy
@@ -425,8 +430,12 @@ def detect_blocks(match, config=None) -> dict:
         f0, f1, f2 = frames[i - 1], frames[i], frames[i + 1]
         if any(fr.ball is None for fr in (f0, f1, f2)):
             continue
-        vx_in = (f1.ball.x - f0.ball.x) * fps
-        vx_out = (f2.ball.x - f1.ball.x) * fps
+        dt_in = (f1.t - f0.t) / fps
+        dt_out = (f2.t - f1.t) / fps
+        if dt_in <= 0 or dt_out <= 0:
+            continue
+        vx_in = (f1.ball.x - f0.ball.x) / dt_in
+        vx_out = (f2.ball.x - f1.ball.x) / dt_out
         for goal_x in (0.0, COURT_LENGTH_M):
             toward_in = (vx_in < -BLOCK_SPEED_MS if goal_x == 0.0
                          else vx_in > BLOCK_SPEED_MS)

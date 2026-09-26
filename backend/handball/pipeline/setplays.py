@@ -45,15 +45,34 @@ class AttackSequence:
         return len(self.frames)
 
 
+# A támadás-szakasz minimális hossza MÁSODPERCBEN: ennél rövidebb
+# azonos-fázisú futam zaj (fázis-villanás), nem támadás. Kockában
+# ("5 kocka") a termék ritkításánál háromszoros hossz lett volna —
+# sűrűn a 0,2 mp-es villanások is szakasznak számítottak, ritkítva a
+# 0,5 mp-es valódi rövid támadások sem, és minden erre épülő réteg
+# (figurák, indító-poszt, támadás-szám) másképp ítélt.
+SEGMENT_MIN_S = 0.2
+SEGMENT_MIN_FRAMES = 5   # örökölt kocka-alak (25 fps); a motor a _S-t használja
+
+
+def segment_min_length(match: Match) -> int:
+    """A szakasz-minimum kockában, a meccs saját képrátájából."""
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    return max(1, int(round(SEGMENT_MIN_S * fps)))
+
+
 @memoize_primitive("segment_attacks")
 def segment_attacks(match: Match, config: TacticsConfig | None = None,
-                    min_length: int = 5) -> list[AttackSequence]:
+                    min_length: int | None = None) -> list[AttackSequence]:
     """A meccset szervezett támadás-szakaszokra bontja.
 
     Az egymást követő, AZONOS támadó-fázisú (HAZAI/VENDÉG_TÁMADÁS) frame-ek egy
-    szakaszt alkotnak. A `min_length`-nél rövidebb szakaszokat eldobjuk (zaj).
+    szakaszt alkotnak. A `min_length`-nél rövidebb szakaszokat eldobjuk (zaj);
+    alapból SEGMENT_MIN_S másodpercnyi kocka (a képrátából).
     """
     config = config or TacticsConfig()
+    if min_length is None:
+        min_length = segment_min_length(match)
     sequences: list[AttackSequence] = []
     current: AttackSequence | None = None
 
@@ -161,7 +180,7 @@ def match_attacks_to_playbook(match: Match, plays: list[dict],
                               config: TacticsConfig | None = None,
                               team: Team | None = None,
                               threshold: float = 0.2,
-                              min_length: int = 5) -> dict:
+                              min_length: int | None = None) -> dict:
     """A meccs támadásait a MENTETT figurákhoz (playbook) rendeli.
 
     `plays` elemei: {"name": ..., "attackers": [[[x,y],...], ...]}. Minden
@@ -257,7 +276,8 @@ class SetPlayReport:
 
 
 def discover_setplays(match: Match, config: TacticsConfig | None = None,
-                      threshold: float = 0.15, min_length: int = 5) -> SetPlayReport:
+                      threshold: float = 0.15,
+                      min_length: int | None = None) -> SetPlayReport:
     """Végpontok közötti figura-felismerés: támadások → ujjlenyomat → klaszterek.
 
     Megmondja, hány visszatérő figurát játszott a csapat és milyen gyakorisággal.
@@ -1028,7 +1048,8 @@ def setplay_library(shapes: list, threshold: float = SPL_MERGE_THRESHOLD,
 def recurring_figure_segments(match: Match, shape: list, team: Team,
                               config: TacticsConfig | None = None,
                               threshold: float = SPL_MERGE_THRESHOLD,
-                              min_length: int = 5) -> list[tuple[int, int]]:
+                              min_length: int | None = None
+                              ) -> list[tuple[int, int]]:
     """E meccs támadás-szakaszai közül azok (kezdő, záró kocka), amelyek
     alakja a megadott (könyvtári) alakhoz illik. A könyvtár alakja
     irány-normált, ezért az illesztés is az; a küszöb a könyvtári

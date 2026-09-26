@@ -91,35 +91,35 @@ def test_a_kapus_bevonas_birtoklasi_minimuma_masodpercben():
         "sokat játszanak vissza"
 
 
-def _block_match(fps, gap_s):
-    """Két blokk `gap_s` másodperccel egymás után: a labda lövés-tempóban
-    repül a bal kapu felé, egy védőnél visszafordul."""
+def _block_match(fps, gap_s, blocks=2):
+    """Blokkolt lövések `gap_s` másodpercenként: a labda 12 m/s-mal repül
+    a bal kapu felé (x: 15,76 → 10, 0,48 mp), a védőnél visszafordul, és
+    6 m/s-mal jön vissza; közte a labda a mezőnyben áll. A fordulópont
+    (0,48 mp) mindkét képrátán (0,04 és 0,12 mp-es minták) MINTÁRA
+    esik: a blokk ~0,1 mp-es esemény, a felismerés a szomszédos
+    mintákon nézi a fordulást."""
     frames = []
     t = 0
-
-    def _shot_block(t0):
-        out = []
-        # 3 kocka: közelít (gyors), fordulópont (védő mellett), távolodik
-        speed = 12.0 / fps  # 12 m/s
-        xs = [10.0 + speed, 10.0, 10.0 + speed]
-        for k, x in enumerate(xs):
-            out.append(Frame(t=t0 + k, players=[
-                _pl(1, Team.HOME, 2.0, 10.0, role="kapus"),
-                _pl(5, Team.HOME, 10.0, 10.3),        # a blokkoló védő
-                _pl(9, Team.AWAY, 14.0, 10.0)],
-                ball=Ball(x=x, y=10.0, confidence=1.0)))
-        return out
-
-    frames += _shot_block(t)
-    t += 3
-    idle = max(0, int(round(gap_s * fps)) - 3)
-    for _ in range(idle):
+    seconds = 0.0
+    events = []
+    for b in range(blocks):
+        events.append(b * gap_s)
+    total = (blocks - 1) * gap_s + 1.5
+    while seconds <= total:
+        x = 20.0
+        for t0 in events:
+            u = seconds - t0
+            if 0.0 <= u < 0.48 - 1e-9:
+                x = 15.76 - 12.0 * u         # berepülés a védőig (x = 10)
+            elif 0.48 - 1e-9 <= u < 1.0:
+                x = 10.0 + 6.0 * (u - 0.48)  # visszapattanás
         frames.append(Frame(t=t, players=[
             _pl(1, Team.HOME, 2.0, 10.0, role="kapus"),
-            _pl(5, Team.HOME, 10.0, 10.3), _pl(9, Team.AWAY, 14.0, 10.0)],
-            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            _pl(5, Team.HOME, 10.0, 10.3),        # a blokkoló védő
+            _pl(9, Team.AWAY, 14.0, 10.0)],
+            ball=Ball(x=x, y=10.0, confidence=1.0)))
         t += 1
-    frames += _shot_block(t)
+        seconds = t / fps
     return _match(frames, fps)
 
 
@@ -130,8 +130,10 @@ def test_a_blokk_szunet_masodpercben():
 
     assert 0 < BLOCK_COOLDOWN_S < 0.9
     for fps in (25.0, 25.0 / 3):
-        res = detect_blocks(_block_match(fps, 0.9))
-        assert res["home"]["blocks"] == 2, fps
+        res = detect_blocks(_block_match(fps, 1.44))
+        assert res["home"]["blocks"] == 2, (fps, res)
+    # Sűrűn a lassuló labda apró irányváltásai sem szaporítják a blokkot.
+    assert detect_blocks(_block_match(25.0, 1.44, blocks=3))["home"]["blocks"] == 3
 
 
 def test_a_ternyeres_a_futam_netto_elmozdulasa_nem_remeges_osszeg(monkeypatch):
@@ -186,3 +188,42 @@ def test_az_allo_tamadas_remegessel_sem_mozgasos():
         assert res["time_s"] >= ATTACK_MOTION_MIN_S, (fps, res)
         assert res["avg_mps"] is not None and res["avg_mps"] < 0.5, (fps, res)
         assert res["style"] == "álló", (fps, res)
+
+
+
+def test_a_tamadas_szakasz_minimuma_masodpercben():
+    """0,3 mp-es támadás-szakaszok: sűrűn (7-8 kocka) és ritkítva (2-3
+    kocka) is ugyanannyi szakasz — a régi "5 kocka" ritkítva mindet
+    eldobta, sűrűn viszont a 0,2 mp-es villanásokat is elfogadta."""
+    from handball.pipeline.setplays import (SEGMENT_MIN_S, segment_attacks,
+                                            segment_min_length)
+
+    assert 0 < SEGMENT_MIN_S <= 0.3
+    counts = {}
+    for fps in (25.0, 25.0 / 3):
+        frames = []
+        t = 0
+        n = max(1, int(round(0.3 * fps)))
+        for k in range(12):
+            home = k % 2 == 0
+            for _ in range(n):
+                if home:
+                    players = [_pl(1, Team.HOME, 2.0, 10.0, role="kapus"),
+                               _pl(2, Team.HOME, 30.0, 8.0),
+                               _pl(3, Team.HOME, 28.0, 12.0),
+                               _pl(20, Team.AWAY, 38.0, 10.0, role="kapus"),
+                               _pl(21, Team.AWAY, 33.0, 10.0)]
+                    ball = Ball(x=30.0, y=8.0, confidence=1.0)
+                else:
+                    players = [_pl(1, Team.HOME, 2.0, 10.0, role="kapus"),
+                               _pl(2, Team.HOME, 7.0, 10.0),
+                               _pl(20, Team.AWAY, 38.0, 10.0, role="kapus"),
+                               _pl(21, Team.AWAY, 10.0, 8.0),
+                               _pl(22, Team.AWAY, 12.0, 12.0)]
+                    ball = Ball(x=10.0, y=8.0, confidence=1.0)
+                frames.append(Frame(t=t, players=players, ball=ball))
+                t += 1
+        m = _match(frames, fps)
+        assert segment_min_length(m) == max(1, int(round(SEGMENT_MIN_S * fps)))
+        counts[fps] = len(segment_attacks(m))
+    assert counts[25.0] == counts[25.0 / 3] == 12, counts
