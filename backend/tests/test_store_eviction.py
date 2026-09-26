@@ -188,3 +188,38 @@ def test_a_szezon_vegpontok_nem_toltik_vissza_a_hideg_meccseket(monkeypatch):
         assert client.get(ut).status_code == 200, ut
     assert len(hivasok) == elso, "a második körben nincs visszatöltés"
     assert dict.__len__(store) == 1
+
+
+def test_a_visszatoltes_alatt_a_tar_tobbi_olvasasa_nem_var():
+    """A lemezről visszatöltés másodpercekig tart: közben a /health-nek
+    (len, status), a listának (summaries) és a meleg meccseknek azonnal
+    válaszolnia kell — a betöltés nem tarthatja a tár zárát."""
+    import threading
+    import time
+
+    lemez = {f"m{i}": _meccs(f"m{i}") for i in range(3)}
+    store, _ = _tar(1, lemez)
+    for mid, m in lemez.items():
+        store[mid] = m
+    hideg = "m0"
+    assert hideg not in dict.keys(store)
+    elindult = threading.Event()
+
+    def lassu_loader(mid):
+        elindult.set()
+        time.sleep(0.8)
+        return lemez.get(mid)
+
+    store.loader = lassu_loader
+    eredmeny = []
+    th = threading.Thread(target=lambda: eredmeny.append(store[hideg]))
+    th.start()
+    assert elindult.wait(2.0)
+    t0 = time.time()
+    assert len(store) == 3
+    assert len(store.summaries()) == 3
+    assert store.status()["loading"] is False
+    assert store["m2"] is lemez["m2"]          # meleg meccs: azonnal
+    assert time.time() - t0 < 0.3, "a visszatöltés blokkolta a tárat"
+    th.join(3.0)
+    assert eredmeny and eredmeny[0] is lemez[hideg]

@@ -334,21 +334,37 @@ class _MatchStore(dict):
             if not kidobva:
                 break  # semmi sem dobható ki (nincs a lemezen)
 
-    def _revive(self, key):
-        """Hideg meccs visszatöltése a lemezről (a hívó tartja a zárat)."""
-        if self.loader is None:
+    def _load(self, key, cold: bool):
+        """Meccs betöltése a lemezről ZÁR NÉLKÜL — a beolvasás egy teljes
+        meccsnél másodpercek, és közben a /health, a lista és a többi
+        olvasás nem várhat rá (a kliens a lassú motort "dolgozónak"
+        látja, a nem felelőt halottnak). A zár csak a beírásra kell.
+
+        `cold=True`: hideg meccs visszatöltése — ha a fájl közben
+        eltűnt, a fejléc se maradjon (a könyvtár különben egy
+        megnyithatatlan meccset mutatna örökké)."""
+        loader = self.loader
+        if loader is None:
             return None
         try:
-            m = self.loader(key)
+            m = loader(key)
         except Exception:
             m = None
-        if m is None:
-            # A fájl közben eltűnt: a fejléc se maradjon — különben a
-            # könyvtár egy megnyithatatlan meccset mutatna örökké.
-            self._cold.pop(key, None)
-            return None
-        self._store(key, m)
-        return m
+        with self._lock:
+            if dict.__contains__(self, key):
+                # Közben más szál is betöltötte: az övé marad (egy példány).
+                self._mark(key)
+                return dict.__getitem__(self, key)
+            if m is None:
+                if cold:
+                    self._cold.pop(key, None)
+                return None
+            self._store(key, m)
+            return m
+
+    def _revive(self, key):
+        """Hideg meccs visszatöltése a lemezről (zár nélkül)."""
+        return self._load(key, cold=True)
 
     # ---- igény szerinti betöltés ---------------------------------------
     def _try_load(self, key):
@@ -357,38 +373,38 @@ class _MatchStore(dict):
             if dict.__contains__(self, key):
                 self._mark(key)
                 return dict.__getitem__(self, key)
-            if self.loader is None:
-                return None
-            try:
-                m = self.loader(key)
-            except Exception:
-                m = None
-            if m is not None:
-                self._store(key, m)
-            return m
+        return self._load(key, cold=False)
 
     # ---- olvasás -------------------------------------------------------
-    def __getitem__(self, key):
+    def _hot(self, key):
+        """A meleg meccs (használat-jelöléssel) vagy None — zárral."""
         with self._lock:
             if dict.__contains__(self, key):
                 self._mark(key)
                 return dict.__getitem__(self, key)
-            if key in self._cold:
-                m = self._revive(key)
-                if m is not None:
-                    return m
+            return None
+
+    def __getitem__(self, key):
+        m = self._hot(key)
+        if m is not None:
+            return m
+        if key in self._cold:
+            m = self._revive(key)
+            if m is not None:
+                return m
         if self.loading:
             m = self._try_load(key)
             if m is not None:
                 return m
             self._ready.wait()
-        with self._lock:
-            if key in self._cold:
-                m = self._revive(key)
-                if m is not None:
-                    return m
-            self._mark(key)
-            return dict.__getitem__(self, key)
+        m = self._hot(key)
+        if m is not None:
+            return m
+        if key in self._cold:
+            m = self._revive(key)
+            if m is not None:
+                return m
+        raise KeyError(key)
 
     def get(self, key, default=None):
         try:
@@ -412,20 +428,21 @@ class _MatchStore(dict):
 
     def _all_values(self) -> list:
         """MINDEN meccs betöltve (a hidegek visszatöltve) — a kidobás a
-        felsorolás végéig szünetel, utána egyszer fut le."""
+        felsorolás végéig szünetel, utána egyszer fut le. A visszatöltés
+        zár nélkül megy (lásd _load), így a többi olvasás közben sem vár."""
         with self._lock:
             self._bulk += 1
-            try:
-                out = []
-                for k in self._all_keys():
-                    if dict.__contains__(self, k):
-                        out.append((k, dict.__getitem__(self, k)))
-                    else:
-                        m = self._revive(k)
-                        if m is not None:
-                            out.append((k, m))
-                return out
-            finally:
+        try:
+            out = []
+            for k in self._all_keys():
+                m = self._hot(k)
+                if m is None:
+                    m = self._revive(k)
+                if m is not None:
+                    out.append((k, m))
+            return out
+        finally:
+            with self._lock:
                 self._bulk -= 1
                 self._evict()
 
