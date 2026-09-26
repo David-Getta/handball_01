@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.151 óta)
 
+- **A labdavezetés-táv remegés-mentes** (javítás): a "ki mennyit
+  mozog a labdával" réteg a kockánkénti elmozdulást összegezte, amit a
+  detektálási remegés sűrű felvételen felfújt — a szimulált meccsen
+  25 fps-en 897 m, a termék ritkításával 297 m jött ki ugyanarra a
+  meccsre. Mostantól fél másodperces szakaszok elmozdulásából
+  számol (145 és 138 m), így a labdahordó megnevezése nem a
+  képrátától függ.
 - **A támadás-szakasz minimuma másodpercben** (javítás): a meccs
   támadás-szakaszokra bontása (amire a figura-felismerés, az
   indító-poszt, a támadás-számlálók és tucatnyi réteg épül) eddig "5

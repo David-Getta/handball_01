@@ -480,12 +480,16 @@ def hold_time_players(match: Match,
 
 # Labdavezetés-táv: az érintés-küszöb és a minta-minimum a
 # labdatartáséval közös (HOLD_MIN_S, HOLD_MIN_HOLDS — ugyanaz a
-# "mi számít birtoklásnak" kérdés); e feletti lépés-sebesség
-# követés-ugrás, nem futás (méter/másodpercben — a kockánkénti alak a
-# ritkítástól függne); és ennyi méterrel a csapatátlag feletti
-# átlagos labdás út tesz valakit labdahordóvá.
+# "mi számít birtoklásnak" kérdés); e feletti sebesség követés-ugrás,
+# nem futás (méter/másodpercben); és ennyi méterrel a csapatátlag
+# feletti átlagos labdás út tesz valakit labdahordóvá. Az utat
+# CARRY_WINDOW_S hosszú szakaszok elmozdulásából összegezzük, nem
+# kockánként: a kockánkénti összeg a detektálási remegést is útnak
+# számolta — a szimulált meccsen sűrűn (25 fps) háromszor annyi
+# métert adott, mint ritkítva ugyanaz a meccs.
 CARRY_MAX_STEP_MS = 10.0
 CARRY_LONG_GAP_M = 3.0
+CARRY_WINDOW_S = 0.5
 
 
 def ball_carry_players(match: Match,
@@ -515,18 +519,31 @@ def ball_carry_players(match: Match,
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     hold_min = max(1, int(round(HOLD_MIN_S * fps)))
-    max_step = CARRY_MAX_STEP_MS / fps  # méter/kocka
     jersey: dict[int, int] = {}
     tally: dict[str, dict[int, list]] = {"home": {}, "away": {}}
     run_id = run_team = None
     run_len = 0
     run_m = 0.0
-    prev_xy = None
+    anchor = None   # (x, y, t): az aktuális ablak kezdete
+    last = None     # (x, y, t): a szakasz utolsó kockája
+
+    def _segment(a, b) -> float:
+        """Egy ablak elmozdulása — a követés-ugrásnyi (CARRY_MAX_STEP_MS
+        feletti) sebességű ablak nem futás, kimarad."""
+        dt = (b[2] - a[2]) / fps
+        if dt <= 0:
+            return 0.0
+        d = math.hypot(b[0] - a[0], b[1] - a[1])
+        return d if d / dt <= CARRY_MAX_STEP_MS else 0.0
 
     def _close():
-        """A lezáruló labdás szakasz métereinek jóváírása."""
+        """A lezáruló labdás szakasz métereinek jóváírása (a nyitott
+        ablak maradékával együtt)."""
+        nonlocal run_m
         if run_id is None or run_team is None:
             return
+        if anchor is not None and last is not None and last[2] > anchor[2]:
+            run_m += _segment(anchor, last)
         if run_len < hold_min:
             return
         rec = tally[run_team].setdefault(run_id, [0, 0.0])
@@ -544,15 +561,16 @@ def ball_carry_players(match: Match,
         if pid != run_id or side != run_team:
             _close()
             run_id, run_team, run_len, run_m = pid, side, 0, 0.0
-            prev_xy = None
+            anchor = last = None
         if pid is not None and side is not None:
             run_len += 1
-            if prev_xy is not None:
-                lepes = math.hypot(holder.x - prev_xy[0],
-                                   holder.y - prev_xy[1])
-                if lepes <= max_step:  # a nagyobb ugrás nem futás
-                    run_m += lepes
-            prev_xy = (holder.x, holder.y)
+            now = (holder.x, holder.y, f.t)
+            if anchor is None:
+                anchor = now
+            elif (f.t - anchor[2]) / fps >= CARRY_WINDOW_S:
+                run_m += _segment(anchor, now)
+                anchor = now
+            last = now
     _close()
 
     out: dict = {}

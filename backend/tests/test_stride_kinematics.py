@@ -227,3 +227,33 @@ def test_a_tamadas_szakasz_minimuma_masodpercben():
         assert segment_min_length(m) == max(1, int(round(SEGMENT_MIN_S * fps)))
         counts[fps] = len(segment_attacks(m))
     assert counts[25.0] == counts[25.0 / 3] == 12, counts
+
+
+def test_a_labdavezetes_tav_ablakos_nem_remeges_osszeg():
+    """Egy labdás játékos 6 m-t fut 2 mp alatt kockánként ±0,3 m
+    remegéssel: sűrűn a kockánkénti összeg ~6 + 50·0,3 m lett volna;
+    az ablakos mérés ~6 m mindkét ritkításnál, a holds-szám azonos."""
+    from handball.pipeline.decisions import CARRY_WINDOW_S, ball_carry_players
+
+    assert 0.3 <= CARRY_WINDOW_S <= 1.0
+    res = {}
+    for fps in (25.0, 25.0 / 3):
+        frames = []
+        t = 0
+        for _hold in range(6):
+            n = int(round(2.0 * fps))
+            for i in range(n + 1):
+                x = 20.0 + 6.0 * i / n + (0.3 if i % 2 else -0.3)
+                frames.append(Frame(t=t, players=[
+                    _pl(7, Team.HOME, x, 10.0),
+                    _pl(1, Team.HOME, 2.0, 10.0, role="kapus")],
+                    ball=Ball(x=x + 0.2, y=10.0, confidence=1.0)))
+                t += 1
+            for _ in range(max(2, int(round(0.5 * fps)))):
+                frames.append(Frame(t=t, players=[], ball=None))
+                t += 1
+        res[fps] = ball_carry_players(_match(frames, fps))["home"]
+    for fps, r in res.items():
+        assert r["holds"] == 6, (fps, r)
+        assert 5.0 <= r["avg_m"] <= 7.5, (fps, r)
+    assert abs(res[25.0]["avg_m"] - res[25.0 / 3]["avg_m"]) <= 1.0, res
