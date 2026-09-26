@@ -658,7 +658,10 @@ def create_app():
             known = MatchMeta.__dataclass_fields__.keys()
             meta = MatchMeta(**{k: v for k, v in ent["meta"].items()
                                 if k in known})
-            if meta.match_id != f.stem:
+            # A fájlnév a FERTŐTLENÍTETT azonosító (szóköz, ékezet → "_"):
+            # ugyanazzal a szabállyal hasonlítunk, különben az ilyen
+            # azonosítójú meccs sosem jönne az indexből.
+            if _match_path(meta.match_id).name != f.name:
                 return None
             meta.event_overrides = _load_overrides(meta.match_id)
             return meta, int(ent["n"])

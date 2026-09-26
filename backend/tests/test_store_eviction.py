@@ -280,3 +280,37 @@ def test_a_fejlec_index_miatt_az_indulas_nem_olvas_be_minden_meccset(monkeypatch
     app = create_app()
     assert len(olvasasok) == 4
     assert len(app.state.store) == 4
+
+
+def test_a_konyvtar_szintu_vegpontok_hideg_meccsekkel_is_mennek(monkeypatch):
+    """Egyes plafon (minden szezon-bejárás hideg meccseket lát): a
+    könyvtár-, szezon-, játékos- és felderítés-végpontok kilinccsel
+    (_LazyMatch) is lefutnak — nem 500-as hiba a válasz."""
+    tmp = tempfile.mkdtemp(prefix="hb_cold_ep_")
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True)
+    for i in range(3):
+        m = _meccs(f"c{i}", n=30)
+        m.meta.date = f"2026-09-0{i + 1}"
+        (d / f"c{i}.json").write_text(json.dumps(m.to_dict()), encoding="utf-8")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", tmp)
+    monkeypatch.setenv("HANDBALL_STORE_SYNC", "1")
+    monkeypatch.setenv("HANDBALL_STORE_HOT", "1")
+    from handball.api.app import create_app
+    app = create_app()
+    client = TestClient(app)
+    assert dict.__len__(app.state.store) == 1
+    hideg = sorted(app.state.store._cold)[0]
+    for ut in (
+        "/library/notes", "/library/players", "/library/roster?team=H",
+        "/library/figure-repertoire?team=H", "/library/summary",
+        "/library/leaders", "/library/training-focus",
+        "/library/training-focus/export?team=H", "/season/report?team=H",
+        "/players/trend?team=H&jersey=1", "/players/focus?team=H&jersey=1",
+        "/head-to-head/report?team_a=H&team_b=A",
+        f"/matches/{hideg}/scouting?team=away",
+        f"/matches/{hideg}/attacks", f"/matches/{hideg}/coach-summary",
+    ):
+        r = client.get(ut)
+        assert r.status_code == 200, (ut, r.status_code, r.text[:200])
+    assert dict.__len__(app.state.store) == 1
