@@ -12,7 +12,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   vezethetett ("nem érem el a motort"). Mostantól csak a legutóbb
   használt hat meccs marad teljesen a memóriában (HANDBALL_STORE_HOT),
   a többinek a fejléce; a hideg meccs a megnyitáskor a lemezről jön
-  vissza (~10 mp egy teljes meccsnél). A kezdőlap könyvtár-kártyái és a
+  vissza (~2–3 mp egy teljes meccsnél). A betöltés maga is gyorsabb
+  (a csapat- és forrás-címkék szótárból, nem enum-hívással). A kezdőlap könyvtár-kártyái és a
   meccs-lista ehhez nem töltenek vissza semmit (a lemezes eredmény-
   tárból dolgoznak). Mérés nyolc 60 perces meccsen: állandó memória
   852 MB → 320 MB.

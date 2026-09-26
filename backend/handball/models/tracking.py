@@ -311,6 +311,11 @@ class Match:
         meta = MatchMeta(**{k: v for k, v in d["meta"].items() if k in known})
         frames: list[Frame] = []
         raw_frames = d.get("frames", [])
+        # Az enum-értékek szótárból: a `Team(...)` hívás egy teljes meccsen
+        # (~400 ezer játékos-sor) a betöltés harmada volt; az ismeretlen
+        # érték továbbra is az enum-hívás hibáját adja.
+        team_of = {t.value: t for t in Team}
+        source_of = {ps.value: ps for ps in PositionSource}
         for idx in range(len(raw_frames)):
             fr = raw_frames[idx]
             if consume:
@@ -318,10 +323,11 @@ class Match:
             players = [
                 PlayerPosition(
                     track_id=p["track_id"],
-                    team=Team(p["team"]),
+                    team=team_of.get(p["team"]) or Team(p["team"]),
                     x=p["x"],
                     y=p["y"],
-                    source=PositionSource(p.get("source", "measured")),
+                    source=(source_of.get(p.get("source", "measured"))
+                            or PositionSource(p.get("source", "measured"))),
                     confidence=p.get("confidence", 1.0),
                     jersey_number=p.get("jersey_number"),
                     role=p.get("role"),
