@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.153 óta)
 
+- **Edzés-fókusz terület-címkéi egységesen ékezetesek** (javítás): az
+  edzés-tételek területe a kliensben nagybetűs címke, a HTML-riportban
+  zárójeles jelző — 77 szabály ékezet nélkül ("TAMADAS", "VEDEKEZES",
+  egy "JATEK") adta, így a támadás- és védekezés-tételek két külön
+  feliratú csoportként jelentek meg. Mostantól minden tétel a kánonból
+  vesz területet (támadás, védekezés, kapus, taktika, befejezés,
+  átmenet, fáradás, erőnlét, kondíció, mentális, végjáték, labdás,
+  csoportos); a "Félidő-nyitás" a taktika területre került. Őr-teszt
+  a forráson: az `add(...)` hívások terület-literálja csak kanonikus
+  lehet.
+
 - **Néma, dupla edzés-szabály kivéve** (javítás): az edzés-fókusz 118.
   szabálya ("Lövőerő a hajrában") egy nem létező függvényt importált a
   `xg` modulból, ezért a `try/except` alatt némán sosem szólalt meg —

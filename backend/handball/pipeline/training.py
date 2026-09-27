@@ -6698,7 +6698,7 @@ def _training_focus_cached(match: Match,
             rec271 = frt271[side]
             if rec271["verdict"] != "ugyanaz fejez be sorozatban":
                 continue
-            add(side, "tamadas", "Befejezés-rotáció",
+            add(side, "támadás", "Befejezés-rotáció",
                 f"ugyanaz fejez be sorozatban nálunk "
                 f"({rec271['repeat_pct']:.0f}% ismétlés "
                 f"{rec271['shots']} lövésből) — a védekezés a "
@@ -6719,7 +6719,7 @@ def _training_focus_cached(match: Match,
             rec270 = gpt270[side]
             if rec270["verdict"] is None:
                 continue
-            add(side, "tamadas", "Befejezés-szórás",
+            add(side, "támadás", "Befejezés-szórás",
                 f"a góljaink egy képre járnak ({rec270['top']}, "
                 f"{rec270['patterns'][rec270['top']]}/"
                 f"{rec270['goals']}) — egy fal-igazítással "
@@ -6739,7 +6739,7 @@ def _training_focus_cached(match: Match,
             rec269 = dsh269[side]
             if rec269["verdict"] != "a kettős emberhátrány végzetes nekik":
                 continue
-            add(side, "vedekezes", "Négyfős fal",
+            add(side, "védekezés", "Négyfős fal",
                 f"a kettős emberhátrány végzetes nekünk "
                 f"({rec269['conceded']} kapott gól "
                 f"{rec269['seconds']:.0f} mp alatt) — a 4 fős "
@@ -6798,7 +6798,7 @@ def _training_focus_cached(match: Match,
             rec266 = fdd266[side]
             if rec266["verdict"] is None:
                 continue
-            add(side, "vedekezes", "Védő-motor rotáció",
+            add(side, "védekezés", "Védő-motor rotáció",
                 f"{rec266['verdict']} — a hajrában az ő zónája "
                 "nyílik ki",
                 "védő-motor rotáció: a legtöbbet dolgozó védő a "
@@ -6876,7 +6876,7 @@ def _training_focus_cached(match: Match,
             rec262 = sds262[other]
             if rec262["verdict"] is None:
                 continue
-            add(side, "vedekezes", "Súlypont-olvasás a szünet után",
+            add(side, "védekezés", "Súlypont-olvasás a szünet után",
                 f"az ellenfél a szünetben szárnyat váltott ellenünk "
                 f"({rec262['fh_main']} → {rec262['sh_main']}) — a "
                 "falunk súlypontja a rossz oldalon maradt",
@@ -6897,7 +6897,7 @@ def _training_focus_cached(match: Match,
             if rec261["verdict"] is None \
                     or "falat váltanak" not in rec261["verdict"]:
                 continue
-            add(side, "tamadas", "Fal-felismerés a szünet után",
+            add(side, "támadás", "Fal-felismerés a szünet után",
                 f"az ellenfél a szünetben falat váltott ellenünk "
                 f"({rec261['fh_main']} → {rec261['sh_main']}) — az "
                 "első félidei támadó-tervünk a másodikban már nem "
@@ -6917,7 +6917,7 @@ def _training_focus_cached(match: Match,
             rec260 = pls260[side]
             if rec260["verdict"] != "hátrányban hosszú labdákra váltanak":
                 continue
-            add(side, "tamadas", "Rövid kombináció hátrányban",
+            add(side, "támadás", "Rövid kombináció hátrányban",
                 f"hátrányban hosszú labdákra váltunk "
                 f"({rec260['trailing']['long']} hosszú passz "
                 f"{rec260['trailing']['passes']} hátrányban adottból) "
@@ -6937,7 +6937,7 @@ def _training_focus_cached(match: Match,
             rec259 = gka259[other]
             if rec259["verdict"] is None:
                 continue
-            add(side, "vedekezes", "Kapus-indítás sávzárás",
+            add(side, "védekezés", "Kapus-indítás sávzárás",
                 f"az ellenfél kapusa {rec259['assists']} gólpasszt "
                 "ért ellenünk — a lövésünk után senki nem vágta el "
                 "a hosszú indítás sávját",
@@ -6958,7 +6958,7 @@ def _training_focus_cached(match: Match,
             if rec258["verdict"] != \
                     "előnyben hátrafelé járatják a labdát":
                 continue
-            add(side, "vedekezes", "Letámadás a hátrajáratás ellen",
+            add(side, "védekezés", "Letámadás a hátrajáratás ellen",
                 "az ellenfél előnyben hátrafelé járatta a labdát, és "
                 "hagytuk: az időölésük ellen nem léptünk fel",
                 "letámadás-gyakorlat vezető ellenfél ellen: az első "
@@ -6997,7 +6997,7 @@ def _training_focus_cached(match: Match,
             rec256 = scf256[side]
             if rec256["verdict"] != "a hajrára elfogy a lepattanó-harcuk":
                 continue
-            add(side, "tamadas", "Lepattanó-harc fáradtan",
+            add(side, "támadás", "Lepattanó-harc fáradtan",
                 f"a hajrára elfogy a lepattanó-harcunk (visszaharcolt "
                 f"lepattanó {rec256['fh_won']}/{rec256['fh_misses']} → "
                 f"{rec256['sh_won']}/{rec256['sh_misses']}) — a "
@@ -7017,7 +7017,7 @@ def _training_focus_cached(match: Match,
             rec255 = asf255[side]
             if rec255["verdict"] != "a hajrában megáll a labda":
                 continue
-            add(side, "tamadas", "Hajra-csapatjáték",
+            add(side, "támadás", "Hajra-csapatjáték",
                 f"a hajrában megáll nálunk a labda (gólpasszos gól "
                 f"{rec255['fh_assisted']}/{rec255['fh_goals']} → "
                 f"{rec255['sh_assisted']}/{rec255['sh_goals']}) — "
@@ -7037,7 +7037,7 @@ def _training_focus_cached(match: Match,
             rec254 = gst254[other]
             if rec254["verdict"] is None:
                 continue
-            add(side, "tamadas", "Lövés-kép váltás",
+            add(side, "támadás", "Lövés-kép váltás",
                 f"az ellenfél kapusa sorozatban védett ellenünk "
                 f"({rec254['streaks']} hármas széria, leghosszabb: "
                 f"{rec254['longest']}) — hagytuk rákapni: ugyanazt "
@@ -7079,7 +7079,7 @@ def _training_focus_cached(match: Match,
             rec252 = bks252[side]
             if rec252["verdict"] != "hátrányban kontrába menekülnek":
                 continue
-            add(side, "tamadas", "Szervezett visszajövetel",
+            add(side, "támadás", "Szervezett visszajövetel",
                 f"hátrányban kontrába menekülünk (hátrányban "
                 f"{rec252['trailing']['breaks']} lerohanás "
                 f"{rec252['trailing']['attacks']} támadásból) — a "
@@ -7100,7 +7100,7 @@ def _training_focus_cached(match: Match,
             if rec251["verdict"] != \
                     "hátrányban harcolják ki a heteseiket":
                 continue
-            add(side, "vedekezes", "Vezetés-őrző lábmunka",
+            add(side, "védekezés", "Vezetés-őrző lábmunka",
                 f"az ellenfél hátrányból {rec251['trailing']} hetest "
                 "harcolt ki ellenünk — vezetésnél kézzel ütünk a "
                 "betörőre, és visszaadjuk a legolcsóbb gólt",
@@ -7139,7 +7139,7 @@ def _training_focus_cached(match: Match,
             rec249 = obt249[side]
             if rec249["out"] < OBT_MIN:
                 continue
-            add(side, "tamadas", "Oldalvonal-fegyelem",
+            add(side, "támadás", "Oldalvonal-fegyelem",
                 f"{rec249['out']} labdát dobtunk ki az oldalvonalon — "
                 "a legolcsóbb eladás: ehhez ellenfél sem kellett",
                 "szélső-passz pontosság: átadások a szélső sávban "
@@ -7159,7 +7159,7 @@ def _training_focus_cached(match: Match,
             if rec248["verdict"] != \
                     "az elhúzódó támadásaik üresen zárulnak":
                 continue
-            add(side, "tamadas", "Támadás-lezárás időre",
+            add(side, "támadás", "Támadás-lezárás időre",
                 f"az elhúzódó támadásaink üresen zárulnak "
                 f"({rec248['scored']}/{rec248['slow']} hosszú akció "
                 "ért gólt) — a passzív jel árnyékában körbejáratunk "
@@ -7180,7 +7180,7 @@ def _training_focus_cached(match: Match,
             if rec247["verdict"] != \
                     "az elszórt indításaik gólba kerülnek":
                 continue
-            add(side, "vedekezes", "Indítás-biztonság",
+            add(side, "védekezés", "Indítás-biztonság",
                 f"az elszórt indításaink gólba kerülnek "
                 f"({rec247['punished']}/{rec247['lost']} elveszett "
                 "kihozatal után jött gyors gól) — a rossz első "
@@ -7202,7 +7202,7 @@ def _training_focus_cached(match: Match,
             if rec246["verdict"] != \
                     "a kihagyásaik után azonnal büntetik őket":
                 continue
-            add(side, "vedekezes", "Kihagyás utáni fél perc",
+            add(side, "védekezés", "Kihagyás utáni fél perc",
                 f"a kihagyott ziccereink után rendre azonnal gólt "
                 f"kapunk ({rec246['punished']}/{rec246['misses']}) — "
                 "a fejünk a kihagyásnál marad, a visszarendeződés "
@@ -7223,7 +7223,7 @@ def _training_focus_cached(match: Match,
             rec245 = sop245[side]
             if rec245["verdict"] != "a kilépésük mögé betalálnak":
                 continue
-            add(side, "vedekezes", "Mögé csúszás",
+            add(side, "védekezés", "Mögé csúszás",
                 f"a kilépéseink mögé betalálnak ({rec245['behind_stepout']}"
                 f"/{rec245['goals']} kapott gólnál volt kiugró "
                 "védőnk) — a kilépés mögötti rést rendre megjátsszák",
@@ -7244,7 +7244,7 @@ def _training_focus_cached(match: Match,
             rec244 = dbp244[side]
             if rec244["verdict"] != "a kettőzésük gólba kerül":
                 continue
-            add(side, "vedekezes", "Kettőzés-visszazárás",
+            add(side, "védekezés", "Kettőzés-visszazárás",
                 f"a kettőzésünk gólba kerül ({rec244['conceded_after']}"
                 " gól esett közvetlenül kettőzés után) — az üresen "
                 "hagyott embert rendre megtalálják",
@@ -7265,7 +7265,7 @@ def _training_focus_cached(match: Match,
             rec243 = rdk243[side]
             if rec243["verdict"] != "reflexből véd":
                 continue
-            add(side, "vedekezes", "Kapus-olvasás",
+            add(side, "védekezés", "Kapus-olvasás",
                 f"a kapusunk reflexből véd (csak {rec243['read']}/"
                 f"{rec243['saves']} védésnél indult előre) — a "
                 "reflex a közeli ziccernél kevés, az olvasott "
@@ -7286,7 +7286,7 @@ def _training_focus_cached(match: Match,
             rec242 = wfk242[side]
             if rec242["verdict"] != "elmozdítható a kapusuk":
                 continue
-            add(side, "vedekezes", "Kapus csel-állás",
+            add(side, "védekezés", "Kapus csel-állás",
                 f"a kapusunk elmozdítható: {rec242['fooled']}/"
                 f"{rec242['goals']} kapott gólnál ellenirányba "
                 "mozdult — a lövéscsel rendre beviszi",
@@ -7306,7 +7306,7 @@ def _training_focus_cached(match: Match,
             rec241 = cgm241[side]
             if rec241["verdict"] != "mozgásból kapják a gólokat":
                 continue
-            add(side, "vedekezes", "Bekísérés",
+            add(side, "védekezés", "Bekísérés",
                 f"a kapott góljaink zöménél lendületből érkezett a "
                 f"lövő ({rec241['running']}/{rec241['goals']}) — az "
                 "érkező embert senki nem veszi fel időben, a "
@@ -7327,7 +7327,7 @@ def _training_focus_cached(match: Match,
             rec240 = ctm240[side]
             if rec240["verdict"] != "a járatás szedi szét őket":
                 continue
-            add(side, "vedekezes", "Váltás tempó alatt",
+            add(side, "védekezés", "Váltás tempó alatt",
                 f"a kapott góljaink előtt átlag "
                 f"{rec240['avg_passes']:.1f} passz megy 8 mp-en "
                 "belül — a pörgő járatásnál a váltásaink késnek, és "
@@ -7348,7 +7348,7 @@ def _training_focus_cached(match: Match,
             rec239 = crg239[side]
             if rec239["verdict"] != "nyitott folyosókon kapják a gólokat":
                 continue
-            add(side, "vedekezes", "Folyosó-zárás",
+            add(side, "védekezés", "Folyosó-zárás",
                 f"a kapott góljaink zöménél senki nem állt a "
                 f"lövésvonalban ({rec239['open']}/{rec239['goals']}) "
                 "— a fal nem ér oda vagy szétnyílik, a kapus "
@@ -7369,7 +7369,7 @@ def _training_focus_cached(match: Match,
             rec238 = gpn238[side]
             if rec238["verdict"] != "a csere-lyukaik gólba kerülnek":
                 continue
-            add(side, "vedekezes", "Csere-ütem",
+            add(side, "védekezés", "Csere-ütem",
                 f"a csere-lyukaink gólba kerülnek ({rec238['conceded']}"
                 f" kapott gól {rec238['gap_s']:.0f} mp öt fős játék "
                 "alatt) — a lassú csere már nem kockázat, hanem "
@@ -7390,7 +7390,7 @@ def _training_focus_cached(match: Match,
             rec237 = upa237[side]
             if rec237["verdict"] != "az előkészítőt hagyják dolgozni":
                 continue
-            add(side, "vedekezes", "Nyomás a kiadóra",
+            add(side, "védekezés", "Nyomás a kiadóra",
                 f"a kapott gólpasszaink zöme zavartalan kiadásból jön "
                 f"({rec237['unpressured']}/{rec237['assisted']}) — a "
                 "gól már a passznál eldől, mi pedig csak a lövőnél "
@@ -7414,7 +7414,7 @@ def _training_focus_cached(match: Match,
             mez236 = (f"{top236['jersey']} mezszámú"
                       if top236["jersey"] is not None
                       else f"{top236['player_id']} azonosítójú")
-            add(side, "vedekezes", "Párharc-segítés",
+            add(side, "védekezés", "Párharc-segítés",
                 f"a kapott góljainknál rendre a(z) {mez236} "
                 f"játékosunk veszíti a párharcot ({top236['beaten']}/"
                 f"{btn236[side]['goals']}) — az ellenfél előbb-utóbb "
@@ -7435,7 +7435,7 @@ def _training_focus_cached(match: Match,
             rec235 = ops235[side]
             if rec235["verdict"] != "előnyben is pörgetik":
                 continue
-            add(side, "vedekezes", "Indítás-kontroll előnyben",
+            add(side, "védekezés", "Indítás-kontroll előnyben",
                 f"előnyben is pörgetjük az indítást (átlag "
                 f"{rec235['lead']['avg_s']:.1f} mp kihozatal "
                 "vezetve) — ez fegyver, de kétélű: a gyors indítás "
@@ -7457,7 +7457,7 @@ def _training_focus_cached(match: Match,
             rec234 = sbs234[side]
             if rec234["verdict"] != "vezetve sem nyúlnak a sorhoz":
                 continue
-            add(side, "vedekezes", "A pad bizalma",
+            add(side, "védekezés", "A pad bizalma",
                 f"vezetve sem cserélünk (csak {rec234['lead_subs']} "
                 f"cserehullám előnyben, {rec234['rest_subs']} "
                 "egyébként) — a kulcsembereink előnyben is végig "
@@ -7478,7 +7478,7 @@ def _training_focus_cached(match: Match,
             rec233 = dbs233[side]
             if rec233["verdict"] != "előnyben leül a faluk":
                 continue
-            add(side, "vedekezes", "Előny-védekezés",
+            add(side, "védekezés", "Előny-védekezés",
                 f"vezetve leül a falunk: a kapott átlag-xG "
                 f"{rec233['rest']['avg_xg']:.2f}-ról "
                 f"{rec233['leading']['avg_xg']:.2f}-ra nő, amikor "
@@ -7502,7 +7502,7 @@ def _training_focus_cached(match: Match,
             if rec232["verdict"] != "hátrányban kapkodnak":
                 continue
             tr232 = rec232["trailing"]
-            add(side, "tamadas", "Rendezettség hátrányban",
+            add(side, "támadás", "Rendezettség hátrányban",
                 f"hátrányban kapkodunk: {tr232['turnovers']}/"
                 f"{tr232['attacks']} hátrányban futott támadásunk "
                 "zárult eladással — a sietség több labdát ad el, "
@@ -7527,7 +7527,7 @@ def _training_focus_cached(match: Match,
             mez231 = (f"{top231['jersey']} mezszámú"
                       if top231["jersey"] is not None
                       else f"{top231['player_id']} azonosítójú")
-            add(side, "vedekezes", "Kettőzés-forgatás",
+            add(side, "védekezés", "Kettőzés-forgatás",
                 f"a kettőzésünk kiszámítható: a kettőzött idő "
                 f"{top231['share_pct']:.0f}%-ában a(z) {mez231} "
                 "játékosunk a második ember — az ellenfél előre "
@@ -7549,7 +7549,7 @@ def _training_focus_cached(match: Match,
             rec230 = wsd230[side]
             if rec230["verdict"] != "messziről lövő szélsők":
                 continue
-            add(side, "tamadas", "Szélső-befutás",
+            add(side, "támadás", "Szélső-befutás",
                 f"a szélsőink átlag {rec230['avg_m']:.1f} m-ről "
                 "eresztik el a lövést — rossz szögből, kényszerből "
                 "lövünk, a kapus bátran jöhet ki ránk",
@@ -7572,7 +7572,7 @@ def _training_focus_cached(match: Match,
                 continue
             _fh229 = 100.0 * rec229["fh_breaks"] / rec229["fh_attacks"]
             _sh229 = 100.0 * rec229["sh_breaks"] / rec229["sh_attacks"]
-            add(side, "tamadas", "Kontra a második félidőben is",
+            add(side, "támadás", "Kontra a második félidőben is",
                 f"a lerohanás-arányunk {_fh229:.0f}%-ról "
                 f"{_sh229:.0f}%-ra esik a második félidőre — fáradva "
                 "már nem indulunk el, pedig a helyzet ugyanúgy ott "
@@ -7594,7 +7594,7 @@ def _training_focus_cached(match: Match,
             top228 = rec228["top"]
             if top228 is None or top228["share_pct"] < 60.0:
                 continue
-            add(side, "tamadas", "Második felhozatal-út",
+            add(side, "támadás", "Második felhozatal-út",
                 f"a felhozatalunk {top228['share_pct']:.0f}%-a a(z) "
                 f"{top228['poszt']} posztra megy ({top228['count']}/"
                 f"{rec228['outlets']} indítás-célpont) — ha őt "
@@ -7615,7 +7615,7 @@ def _training_focus_cached(match: Match,
             top227 = bbr227[side]["top"]
             if top227 is None:
                 continue
-            add(side, "tamadas", "Lövés-előkészítés",
+            add(side, "támadás", "Lövés-előkészítés",
                 f"a falba lőtt lövéseink a(z) {top227['poszt']} "
                 f"posztról jönnek ({top227['blocked']}/"
                 f"{bbr227[side]['blocked']} lefogott lövés) — a "
@@ -7637,7 +7637,7 @@ def _training_focus_cached(match: Match,
             top226 = sur226[side]["top"]
             if top226 is None:
                 continue
-            add(side, "tamadas", "Kiállítás-kiharcolás",
+            add(side, "támadás", "Kiállítás-kiharcolás",
                 f"a kétperceseinket a(z) {top226['poszt']} poszt "
                 f"hozza ({top226['count']}/"
                 f"{sur226[side]['suspensions']} kiharcolt "
@@ -7661,7 +7661,7 @@ def _training_focus_cached(match: Match,
             top225 = rec225["top"]
             if top225 is None or top225["share_pct"] < 60.0:
                 continue
-            add(side, "tamadas", "Második előkészítő-út",
+            add(side, "támadás", "Második előkészítő-út",
                 f"a góljaink {top225['share_pct']:.0f}%-át a(z) "
                 f"{top225['poszt']} poszt készíti elő "
                 f"({top225['assists']}/{rec225['assists']} gólpassz) "
@@ -7685,7 +7685,7 @@ def _training_focus_cached(match: Match,
             mez224 = (f"{top224['jersey']} mezszámú"
                       if top224["jersey"] is not None
                       else f"{top224['player_id']} azonosítójú")
-            add(side, "tamadas", "Lövő-variációk",
+            add(side, "támadás", "Lövő-variációk",
                 f"a(z) {mez224} játékosunk lövését rendre elviszi a "
                 f"fal ({top224['blocked']}/{bsh224[side]['blocked']} "
                 "lefogott lövés az övé) — a védők már olvassák az "
@@ -7706,7 +7706,7 @@ def _training_focus_cached(match: Match,
             rec223 = fbh223[side]
             if rec223["verdict"] != "együtt futnak fel":
                 continue
-            add(side, "tamadas", "Elszökő ember",
+            add(side, "támadás", "Elszökő ember",
                 f"a kontráink mindig együtt futnak fel (csak "
                 f"{rec223['ahead']}/{rec223['breaks']} lerohanás "
                 "indult a labda előtt váró emberrel) — a védelem "
@@ -7727,7 +7727,7 @@ def _training_focus_cached(match: Match,
             rec222 = fbw222[side]
             if rec222["verdict"] != "az első ember fejezi be a kontrát":
                 continue
-            add(side, "tamadas", "Kontra második hulláma",
+            add(side, "támadás", "Kontra második hulláma",
                 f"a lerohanásainkat szinte csak az első ember fejezi "
                 f"be ({rec222['second']}/{rec222['breaks']} kontra "
                 "zárult a befutó lövésével) — ha az első embert "
@@ -7748,7 +7748,7 @@ def _training_focus_cached(match: Match,
             rec221 = psv221[side]
             if rec221["verdict"] != "állva kapja a beálló":
                 continue
-            add(side, "tamadas", "Lefordulós beálló",
+            add(side, "támadás", "Lefordulós beálló",
                 f"a beállónk beragadva, állva kapja a labdát (csak "
                 f"{rec221['running']}/{rec221['receptions']} átvétel "
                 "mozgásból) — az álló beállót a védője lezárja, "
@@ -7769,7 +7769,7 @@ def _training_focus_cached(match: Match,
             rec220 = crx220[side]
             if rec220["verdict"] != "statikus a hátsó soruk":
                 continue
-            add(side, "tamadas", "Keresztmozgások",
+            add(side, "támadás", "Keresztmozgások",
                 f"támadásonként csak {rec220['per_attack']:.1f} "
                 "keresztezést futunk a hátsó sorban — a védők végig "
                 "a saját emberükön maradhatnak, és soha nem kerülnek "
@@ -7792,7 +7792,7 @@ def _training_focus_cached(match: Match,
             rec219 = wsv219[side]
             if rec219["verdict"] != "állva kapják a szélsők":
                 continue
-            add(side, "tamadas", "Futtatott széljáték",
+            add(side, "támadás", "Futtatott széljáték",
                 f"csak {rec219['running']}/{rec219['receptions']} "
                 "szélső-átvételünk jött mozgásból — az álló szélsőt "
                 "a kifutó védő lezárja, mielőtt lendületet venne, és "
@@ -7838,7 +7838,7 @@ def _training_focus_cached(match: Match,
             rec217 = asr217[side]
             if rec217["verdict"] != "rövid kombinációkból élnek":
                 continue
-            add(side, "tamadas", "Hosszú előkészítés",
+            add(side, "támadás", "Hosszú előkészítés",
                 f"csak {rec217['long']}/{rec217['assisted']} "
                 "gólpasszunk jött 8 méteren túlról — minden gólunk "
                 "kis területen születik, és egy jól tömörítő fal az "
@@ -7883,7 +7883,7 @@ def _training_focus_cached(match: Match,
             rec215 = lao215[side]
             if rec215["verdict"] != "a hosszú támadásaik elhalnak":
                 continue
-            add(side, "tamadas", "Figura-zárás időben",
+            add(side, "támadás", "Figura-zárás időben",
                 f"{rec215['died']}/{rec215['long_attacks']} hosszú "
                 "támadásunk lövés nélkül halt el — a kivárásunk nem "
                 "türelem, hanem terv-hiány: a passzív jel előtt nem "
@@ -7929,7 +7929,7 @@ def _training_focus_cached(match: Match,
             rec213 = brc213[side]
             if rec213["verdict"] != "a blokkjaik visszahullanak":
                 continue
-            add(side, "vedekezes", "Blokk utáni lepattanó",
+            add(side, "védekezés", "Blokk utáni lepattanó",
                 f"csak {rec213['recovered']}/{rec213['blocks']} "
                 "blokk-lepattanót szereztünk meg — a jó blokk után a "
                 "támadó második esélyt kap, sokszor még jobb "
@@ -7951,7 +7951,7 @@ def _training_focus_cached(match: Match,
             shaky212 = bcf212[side]["shaky"]
             if shaky212 is None:
                 continue
-            add(side, "tamadas", "Ziccer-rutin",
+            add(side, "támadás", "Ziccer-rutin",
                 f"a(z) {shaky212['player_id']} azonosítójú a nagy "
                 f"helyzeteit is kihagyja "
                 f"({shaky212['goals']}/{shaky212['chances']}) — a "
@@ -7975,7 +7975,7 @@ def _training_focus_cached(match: Match,
             rec211 = psl211[side]
             if rec211["verdict"] is None:
                 continue
-            add(side, "vedekezes", "Hetes utáni újrarendeződés",
+            add(side, "védekezés", "Hetes utáni újrarendeződés",
                 f"{rec211['sevens_against']} adott hetesünk után "
                 f"{rec211['extra_conceded']} további gólt kaptunk — a "
                 "hetes körüli leállás alatt reklamálunk és "
@@ -8001,7 +8001,7 @@ def _training_focus_cached(match: Match,
                 continue
             _dir210 = ("balra" if rec210["verdict"] == "balra forgatnak"
                        else "jobbra")
-            add(side, "tamadas", "Kétirányú forgatás",
+            add(side, "támadás", "Kétirányú forgatás",
                 f"a forgásunk egyirányú ({rec210['left']} balra, "
                 f"{rec210['right']} jobbra tartó oldalpassz) — a "
                 "felkészült ellenfél a megszokott sávunkat zárja, és "
@@ -8023,7 +8023,7 @@ def _training_focus_cached(match: Match,
             top209 = scp209[side]["top"]
             if top209 is None:
                 continue
-            add(side, "tamadas", "Elzárás-variálás",
+            add(side, "támadás", "Elzárás-variálás",
                 f"az elzárásaink egy párosra járnak (a(z) "
                 f"{top209['setter_id']} zár a(z) "
                 f"{top209['shooter_id']} azonosítójúnak, "
@@ -8048,7 +8048,7 @@ def _training_focus_cached(match: Match,
             rec208 = wco208[side]
             if rec208["verdict"] != "későn érnek ki a szélre":
                 continue
-            add(side, "vedekezes", "Szél-kifutás időzítése",
+            add(side, "védekezés", "Szél-kifutás időzítése",
                 f"átlag {rec208['avg_m']:.1f} m-re volt a védőnk a "
                 "lövő szélsőtől — a szélső kényelmesen, teljes "
                 "szögből lőhetett, és ez nem a kapus hibája",
@@ -8070,7 +8070,7 @@ def _training_focus_cached(match: Match,
             rec207 = drb207[side]
             if rec207["droughts_broken"] < 2 or rec207["top"] is not None:
                 continue
-            add(side, "tamadas", "Válság-lövő kijelölése",
+            add(side, "támadás", "Válság-lövő kijelölése",
                 f"{rec207['droughts_broken']} hosszú gólcsendünk volt, "
                 "és mindig más törte meg — vész-helyzetben nincs "
                 "kijelölt megoldásunk, a csend ezért nyúlik hosszúra",
@@ -8092,7 +8092,7 @@ def _training_focus_cached(match: Match,
             top206 = hh206["away" if side == "home" else "home"]["top"]
             if top206 is None:
                 continue
-            add(side, "vedekezes", "Sorozat-törő reakció",
+            add(side, "védekezés", "Sorozat-törő reakció",
                 f"az ellenfél sorozatlövője ({top206['player_id']} "
                 f"azonosító) {top206['streaks']} gólsorozatot dobott "
                 f"ránk (leghosszabb: {top206['longest']}) — az első "
@@ -8139,7 +8139,7 @@ def _training_focus_cached(match: Match,
             rec204 = avw204[side]
             if rec204["verdict"] != "a felfutó fal megfogja őket":
                 continue
-            add(side, "tamadas", "Prés elleni játék",
+            add(side, "támadás", "Prés elleni játék",
                 f"felfutó fal ellen {rec204['high']['goal_pct']:.0f}%, "
                 f"mély fal ellen {rec204['deep']['goal_pct']:.0f}% a "
                 "gólarányunk — a kilépő, agresszív védekezésre nincs "
@@ -8164,7 +8164,7 @@ def _training_focus_cached(match: Match,
             top203 = other203["top"]
             if top203 is None:
                 continue
-            add(side, "vedekezes", "Kontra-forrás zárása",
+            add(side, "védekezés", "Kontra-forrás zárása",
                 f"az ellenfél kontráinak fő forrása a(z) "
                 f"{top203['source']} volt ({top203['breaks']}/"
                 f"{other203['breaks']} lerohanás) — a visszarendeződés "
@@ -8234,7 +8234,7 @@ def _training_focus_cached(match: Match,
             top200 = cbh200[side]["top"]
             if top200 is None:
                 continue
-            add(side, "tamadas", "Második játékszervező",
+            add(side, "támadás", "Második játékszervező",
                 f"a hajrá labdás idejének nagy részét egy ember viszi "
                 f"(a(z) {top200['player_id']} azonosítójú) — ha őt a "
                 "végjátékban kettőzik vagy kipontozódik, nincs, aki "
@@ -8281,7 +8281,7 @@ def _training_focus_cached(match: Match,
             top198 = pvg198[side]["top"]
             if top198 is None:
                 continue
-            add(side, "vedekezes", "Beálló-őrzés váltásban",
+            add(side, "védekezés", "Beálló-őrzés váltásban",
                 f"a beálló-őrzésünk egy emberen áll (a(z) "
                 f"{top198['player_id']} azonosítójú viszi az őrzés-idő "
                 "nagy részét) — ha őt elzárással kihúzzák vagy "
@@ -8328,7 +8328,7 @@ def _training_focus_cached(match: Match,
             rec196 = sqs196[side]
             if rec196["verdict"] != "hátrányban elkapkodják a lövéseket":
                 continue
-            add(side, "tamadas", "Helyzet-válogatás nyomás alatt",
+            add(side, "támadás", "Helyzet-válogatás nyomás alatt",
                 f"hátrányban {rec196['other_avg_xg']:.2f}-ról "
                 f"{rec196['trail_avg_xg']:.2f}-ra esik a lövéseink "
                 "átlagos helyzet-értéke — pont akkor lövünk rosszat, "
@@ -8377,7 +8377,7 @@ def _training_focus_cached(match: Match,
             rec194 = wbs194[side]
             if rec194["verdict"] != "hátrányban beszűkülnek":
                 continue
-            add(side, "tamadas", "Szélesség nyomás alatt",
+            add(side, "támadás", "Szélesség nyomás alatt",
                 f"hátrányban {rec194['other_avg_m']:.0f} m-ről "
                 f"{rec194['trail_avg_m']:.0f} m-re szűkül a "
                 "támadásunk — pont akkor játszunk egy csatornába, "
@@ -8424,7 +8424,7 @@ def _training_focus_cached(match: Match,
             top192 = tbr192[side]["top"]
             if top192 is None:
                 continue
-            add(side, "tamadas", "Poszt-labdabiztonság",
+            add(side, "támadás", "Poszt-labdabiztonság",
                 f"a labdaeladásaink {top192['share_pct']:.0f}%-a a(z) "
                 f"{top192['poszt']} posztról jön "
                 f"({top192['turnovers']} eladás) — nem szétszórt "
@@ -8496,7 +8496,7 @@ def _training_focus_cached(match: Match,
             if rec189["verdict"] != "kijelölt kontra-emberük van":
                 continue
             top189 = rec189["top"]
-            add(side, "tamadas", "Kontra második hulláma",
+            add(side, "támadás", "Kontra második hulláma",
                 f"a csapat {rec189['team_sprints']} sprintjéből "
                 f"{top189['sprints']} egy emberé (a(z) "
                 f"{top189['player_id']} azonosítójú) — ha őt lezárják "
@@ -8544,7 +8544,7 @@ def _training_focus_cached(match: Match,
             top187 = adv187[side]["top"]
             if top187 is None:
                 continue
-            add(side, "vedekezes", "Kilépő mögötti biztosítás",
+            add(side, "védekezés", "Kilépő mögötti biztosítás",
                 f"kilépő védővel játszunk (a(z) "
                 f"{top187['player_id']} azonosítójú "
                 f"{adv187[side]['gap_m']:.1f} méterrel a sor előtt "
@@ -8617,7 +8617,7 @@ def _training_focus_cached(match: Match,
             rec184 = pb184[side]
             if rec184["verdict"] != "behúzzák, aztán visszahozzák":
                 continue
-            add(side, "tamadas", "Betörés-lezárás",
+            add(side, "támadás", "Betörés-lezárás",
                 f"a {rec184['entries']} betörésünkből "
                 f"{rec184['pullbacks']} lövés nélküli visszahozás — "
                 "bejutunk a 9-esen belülre, de nem merjük lezárni, "
@@ -8640,7 +8640,7 @@ def _training_focus_cached(match: Match,
             rec183 = stl183[side]
             if rec183["verdict"] != "szerzés után biztosítanak":
                 continue
-            add(side, "tamadas", "Szerzésből indítás",
+            add(side, "támadás", "Szerzésből indítás",
                 f"a {rec183['steals']} szerzésünkből csak "
                 f"{rec183['forward']} után ment azonnal előre a labda "
                 "— a megszerzett labda helyben ragad, mire felnézünk, "
@@ -8663,7 +8663,7 @@ def _training_focus_cached(match: Match,
             rec182 = s7f182[side]
             if rec182["verdict"] != "a második félidőben adják a heteseket":
                 continue
-            add(side, "vedekezes", "Hetes nélküli hajrá",
+            add(side, "védekezés", "Hetes nélküli hajrá",
                 f"az adott heteseink zöme a második félidőre esik "
                 f"({rec182['fh']} az elsőben, {rec182['sh']} a "
                 "másodikban) — fáradva már kézzel védünk, és a "
@@ -8687,7 +8687,7 @@ def _training_focus_cached(match: Match,
             rec181 = wf181[side]
             if rec181["verdict"] != "a második félidőre kinyílik a faluk":
                 continue
-            add(side, "vedekezes", "Fal-állóképesség",
+            add(side, "védekezés", "Fal-állóképesség",
                 f"a kapott lövések átlagos helyzet-értéke "
                 f"{rec181['fh_avg_xga']:.2f}-ról "
                 f"{rec181['sh_avg_xga']:.2f}-ra nő a szünet után — "
@@ -8712,7 +8712,7 @@ def _training_focus_cached(match: Match,
             rec180 = ben180[side]
             if rec180["verdict"] != "csak a kezdők termelnek":
                 continue
-            add(side, "tamadas", "Pad-termelés",
+            add(side, "támadás", "Pad-termelés",
                 f"a {rec180['goals']} lövőhöz köthető gólunkból csak "
                 f"{rec180['bench_goals']} jött a padról — ha a kezdő "
                 "sor elfárad vagy kipontozódik, nincs, aki átvegye a "
@@ -8735,7 +8735,7 @@ def _training_focus_cached(match: Match,
             rec179 = stt179[side]
             if rec179["verdict"] != "testre mennek":
                 continue
-            add(side, "vedekezes", "Passzsáv-olvasás",
+            add(side, "védekezés", "Passzsáv-olvasás",
                 f"a {rec179['steals']} labdaszerzésünkből csak "
                 f"{rec179['interceptions']} röptében elfogott passz — "
                 "mindent kontaktból szerzünk, ami fault és kiállítást "
@@ -8759,7 +8759,7 @@ def _training_focus_cached(match: Match,
             rec178 = ccq178[side]
             if rec178["verdict"] != "nagy helyzeteket engednek":
                 continue
-            add(side, "vedekezes", "Hatos előtti tér",
+            add(side, "védekezés", "Hatos előtti tér",
                 f"a ránk jövő {rec178['shots']} lövés átlagos "
                 f"helyzet-értéke {rec178['avg_xga']:.2f} — nem a "
                 "lövések SZÁMA a baj, hanem hogy közelről és "
@@ -8783,7 +8783,7 @@ def _training_focus_cached(match: Match,
             rec177 = clo177[side]
             if rec177["verdict"] != "elpuskázzák a záró labdát":
                 continue
-            add(side, "tamadas", "Záró labda",
+            add(side, "támadás", "Záró labda",
                 f"a félidők utolsó percében {rec177['attacks']} "
                 f"támadásunkból csak {rec177['goals']} lett gól — az "
                 "ingyen kapott utolsó labdát dobjuk el, pedig ott "
@@ -8806,7 +8806,7 @@ def _training_focus_cached(match: Match,
             rec176 = fbc176[side]
             if rec176["verdict"] != "elpuskázzák a kontrát":
                 continue
-            add(side, "tamadas", "Kontra-befejezés",
+            add(side, "támadás", "Kontra-befejezés",
                 f"{rec176['breaks']} lerohanásból csak "
                 f"{rec176['goals']} lett gól "
                 f"({rec176['share_pct']:.0f}%) — a legolcsóbb "
@@ -8830,7 +8830,7 @@ def _training_focus_cached(match: Match,
             rec175 = hop175[side]
             if rec175["verdict"] != "lassan indulnak":
                 continue
-            add(side, "jatek", "Félidő-nyitás",
+            add(side, "taktika", "Félidő-nyitás",
                 f"a félidők első öt percében {rec175['goals_for']}-"
                 f"{rec175['goals_against']} a mérlegünk — a meccs "
                 "elején és a szünet után hideg lábbal, kész terv "
@@ -8853,7 +8853,7 @@ def _training_focus_cached(match: Match,
             rec174 = tfd174[side]
             if rec174["verdict"] != "időkérés után szivárgó fal":
                 continue
-            add(side, "vedekezes", "Időkérés utáni védekezés",
+            add(side, "védekezés", "Időkérés utáni védekezés",
                 f"az időkéréseink {rec174['share_pct']:.0f}%-a után "
                 "gólt kaptunk az ellenfél első rohamából — a "
                 "megszakítás alatt a támadást beszéljük meg, a "
@@ -8877,7 +8877,7 @@ def _training_focus_cached(match: Match,
             rec173 = pag173[side]
             if rec173["verdict"] != "gól után letámadnak":
                 continue
-            add(side, "vedekezes", "Gól utáni letámadás",
+            add(side, "védekezés", "Gól utáni letámadás",
                 f"saját gólunk után {rec173['after_m']:.1f} m-en áll a "
                 f"falunk a szokásos {rec173['base_m']:.1f} m helyett — "
                 "ez jó lendület, de a mögöttünk lévő tér ilyenkor a "
@@ -8901,7 +8901,7 @@ def _training_focus_cached(match: Match,
             rec172 = but172[side]
             if rec172["verdict"] != "lassan hozzák fel":
                 continue
-            add(side, "tamadas", "Gyors felhozatal",
+            add(side, "támadás", "Gyors felhozatal",
                 f"átlag {rec172['avg_s']:.1f} mp alatt érünk át a "
                 "támadó térfélre — ennyi idő alatt bármelyik "
                 "ellenfél rendezetten felállhat, így minden "

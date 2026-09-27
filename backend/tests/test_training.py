@@ -1045,3 +1045,42 @@ def test_a_lovoero_eses_szabaly_valodi_retegbol_is_megszolal():
     assert tetel is not None, [it["title"] for it in tf["home"]]
     assert tetel["area"] == "kondíció"
     assert not any(it["title"] == "Lövőerő a hajrában" for it in tf["home"])
+
+
+# A terület-címkék kánonja: az edzés-fókusz tételének "area" mezője a
+# kliensben NAGYBETŰS csempeként jelenik meg, a HTML-riportban zárójelben.
+# Egy ékezet nélküli változat ("tamadas", "vedekezes", "jatek") külön
+# csoportnak látszik — 77 ilyen tétel volt, mielőtt ez az őr megszületett
+# (a "jatek" egyetlen tétele a taktika területre került).
+TERULET_KANON = {
+    "támadás", "védekezés", "kapus", "taktika", "befejezés", "átmenet",
+    "fáradás", "erőnlét", "kondíció", "mentális", "végjáték", "labdás",
+    "csoportos",
+    # a játékos-fókusz (player_training_focus) területei
+    "labdabiztonság", "hajrá",
+}
+
+
+def test_az_edzes_teruletek_ekezetes_kanont_kovetnek():
+    """Minden `add(..., "<terület>", "<Cím>", ...)` területe a kánonból van.
+
+    A tétel területe a kliensben nagybetűs címke, a riportban zárójeles
+    jelző, és a közös-gyengeség szabály cím szerint csoportosít — egy
+    ékezet nélküli változat ("tamadas") tehát külön csoportként és rossz
+    felirattal jelenik meg. Az őr a FORRÁST nézi: az `add(...)` hívások
+    kisbetűs szöveg-literálja (a Cím nagybetűvel kezdődik, ezért nem
+    illeszkedik) csak kanonikus terület lehet.
+    """
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+           / "training.py").read_text(encoding="utf-8")
+    talalt = set(re.findall(
+        r'add\((?:[^,\n]+,\s*){1,3}"([a-záéíóöőúüű][a-záéíóöőúüű\- ]*)",',
+        src))
+    assert talalt, "az őr nem talált terület-literált — a minta elavult?"
+    idegen = sorted(talalt - TERULET_KANON)
+    assert not idegen, (
+        "nem kanonikus (pl. ékezet nélküli) terület-címke az edzés-"
+        f"fókuszban: {idegen} — a kánon: {sorted(TERULET_KANON)}")
