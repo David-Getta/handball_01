@@ -50,6 +50,13 @@ class PlayerStats:
 SPRINT_SPEED_MS = 5.0      # e fölött számít sprintnek a mozgás (m/s)
 SPRINT_MIN_S = 0.5         # legalább ennyi ideig kell tartania (mp)
 MAX_PLAUSIBLE_MS = 11.0    # efölötti "sebesség" követési hiba (ugrás) — kihagyjuk
+# A sebesség-szakaszok: ekkora időbeli lyukat hidalunk át két mért pont
+# közt, és legalább ekkora idő-ablakon simítjuk a sebességet —
+# MÁSODPERCBEN (a "3 kocka" a termék ritkításánál 0,36 mp, sűrűn
+# 0,12 mp volt). A simító ablak legalább három szakasz (a zaj ellen
+# ritkítva is kell), sűrűbb felvételen az idő-ablaknyi szakasz.
+SPEED_GAP_MAX_S = 0.36
+SPEED_SMOOTH_S = 0.12
 # Sebesség-zónák határai (m/s): séta < 1.4 <= kocogás < 3.0 <= futás < 5.0 <= sprint
 ZONE_EDGES = ((1.4, "seta"), (3.0, "kocogas"), (5.0, "futas"))
 
@@ -63,20 +70,24 @@ def _speed_segments(samples: list, dt: float) -> list[tuple[float, float, float]
     pozíció ne dobjon fals csúcssebességet."""
     raw: list[tuple[float, float]] = []  # (szakasz-idő mp, táv m)
     prev = None
+    max_gap = max(1, int(round(SPEED_GAP_MAX_S / dt))) if dt > 0 else 3
     for (t, x, y, source) in samples:
         if source != PositionSource.MEASURED:
             continue
         if prev is not None:
             gap = t - prev[0]
-            if 0 < gap <= 3:
+            if 0 < gap <= max_gap:
                 seconds = gap * dt
                 dist = math.hypot(x - prev[1], y - prev[2])
                 if seconds > 0 and dist / seconds <= MAX_PLAUSIBLE_MS:
                     raw.append((seconds, dist))
         prev = (t, x, y)
     out: list[tuple[float, float, float]] = []
+    # Simító ablak: ± ennyi szakasz (legalább ±1), hogy az ablak ideje
+    # legalább SPEED_SMOOTH_S legyen.
+    half = max(1, int(SPEED_SMOOTH_S / dt / 2)) if dt > 0 else 1
     for i, (seconds, dist) in enumerate(raw):
-        window = raw[max(0, i - 1):i + 2]
+        window = raw[max(0, i - half):i + half + 1]
         wsec = sum(s for s, _ in window)
         wdist = sum(d for _, d in window)
         out.append((seconds, dist, (wdist / wsec) if wsec > 0 else 0.0))

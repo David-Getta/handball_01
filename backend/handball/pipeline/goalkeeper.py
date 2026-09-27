@@ -2374,6 +2374,10 @@ def gk_cold_streaks(match: Match, config=None) -> dict:
 # megfogás-arány a fogó, illetve a kiütő kapus jele.
 GRC_WINDOW_S = 2.5
 GRC_SETTLE_S = 0.08   # ennyi idővel később is nála legyen (megült labda)
+# E feletti labdasebességnél a labda röptében van (a mellette álló nem
+# birtokos) — m/s-ban, mert a "0,3 m kockánként" ritkítva 2,5 m/s-ot,
+# sűrűn 7,5 m/s-ot jelentett.
+GRC_FLYING_MS = 7.5
 GRC_MIN_SAVES = 4
 GRC_CATCH_PCT = 70.0
 GRC_PARRY_PCT = 40.0
@@ -2432,7 +2436,7 @@ def gk_rebound_control(match: Match, config=None) -> dict:
                     continue
                 # Csak megült labda: röptében a mellette álló nem
                 # birtokos.
-                if abs(fj1.ball.x - fj.ball.x) > 0.3:
+                if abs(fj1.ball.x - fj.ball.x) * fps > GRC_FLYING_MS:
                     continue
                 h = ball_holder(fj, config)
                 if h is None:

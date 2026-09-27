@@ -349,3 +349,28 @@ def test_a_pressz_visszanezes_es_a_megult_labda_ideje_masodpercben():
     assert press_lookback_frames(_match([], 25.0)) == 12
     assert press_lookback_frames(_match([], 25.0 / 3)) == 4
     assert press_lookback_frames(_match([], 0.0)) == 12
+
+
+def test_a_sebesseg_simitas_es_a_lyukathidalas_masodpercben():
+    """Egy 7 m/s-os, 1 mp-es sprint sűrűn és ritkítva is ~7 m/s
+    csúcssebesség és egy sprint — a "3 kocka" lyuk/ablak helyett
+    SPEED_GAP_MAX_S / SPEED_SMOOTH_S."""
+    from handball.pipeline.stats import (SPEED_GAP_MAX_S, SPEED_SMOOTH_S,
+                                         compute_player_stats)
+
+    assert SPEED_GAP_MAX_S == 0.36 and SPEED_SMOOTH_S == 0.12
+    res = {}
+    for fps in (25.0, 25.0 / 3):
+        frames = []
+        t = 0
+        for phase, (speed, secs) in enumerate([(1.0, 2.0), (7.0, 1.0), (1.0, 2.0)]):
+            n = int(round(secs * fps))
+            for _ in range(n):
+                x = 10.0 + (t / fps) * 1.0 + (6.0 * max(0.0, min(1.0, (t / fps) - 2.0)) if phase >= 1 else 0.0)
+                frames.append(Frame(t=t, players=[_pl(3, Team.HOME, min(39.0, x), 10.0)], ball=None))
+                t += 1
+        st = compute_player_stats(_match(frames, fps))[3]
+        res[fps] = (round(st.top_speed_ms, 1), st.sprint_count)
+    for fps, (top, sprints) in res.items():
+        assert 5.5 <= top <= 7.5, (fps, res)
+        assert sprints == 1, (fps, res)

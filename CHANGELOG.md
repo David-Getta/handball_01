@@ -3,6 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.153 óta)
+
+- **Sebesség-simítás és a röpülő labda képráta-függetlenül** (javítás):
+  a játékos-terhelés (csúcssebesség, sprintek, zóna-idők) a
+  sebességet "3 kockás" ablakon simította és "3 kockás" lyukat hidalt
+  át — sűrű felvételen 0,12 mp, a termék ritkításánál 0,36 mp, így a
+  csúcssebesség és a sprint-szám a képrátától függött; mostantól a
+  lyuk-áthidalás 0,36 mp, a simítás legalább 0,12 mp (és legalább
+  három szakasz) a meccs képrátájából. A kapus-kipattanó "megült labda" szűrője
+  "0,3 m kockánként" volt (ritkítva 2,5 m/s, sűrűn 7,5 m/s) — mostantól
+  7,5 m/s.
+
 ## v0.1.153 — kiadva (2026-09-27)
 
 > Kiadás-jegyzet: a gól eldöntése, a lövés utáni eladás-elnyomás és a
