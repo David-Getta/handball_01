@@ -997,3 +997,51 @@ def test_az_edzes_tetelek_alakja_a_mintameccsen_is_helyes():
             assert isinstance(tetel, dict), tetel
             assert set(tetel) == {"area", "title", "why", "drill"}, tetel
             assert all(isinstance(v, str) and v for v in tetel.values()), tetel
+
+
+def test_a_lovoero_eses_szabaly_valodi_retegbol_is_megszolal():
+    """A 45. szabály (Lövőerő-állóképesség) a VALÓDI shot_speed_fade
+    rétegből szólal meg: 1. félidőben gyors, 2.-ban lassú hazai lövések
+    → a hazai csapat kondíció-fókuszt kap. (A 118. szabály ugyanezt
+    duplázta egy nem létező `shot_power_fade` importtal — némán sosem
+    szólalt meg; törölve.)"""
+    fps = 25.0
+
+    def idle(t0, seconds):
+        return [Frame(t=t0 + i,
+                      players=[_pl(10 + k, Team.HOME, 15.0 + k, 6.0 + k)
+                               for k in range(6)],
+                      ball=Ball(x=20.0, y=10.0, confidence=1.0))
+                for i in range(int(seconds * fps))]
+
+    def shot(t0, step):
+        fr = [Frame(t=t0 + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                    ball=Ball(x=33.0, y=10.0, confidence=1.0))
+              for i in range(3)]
+        for i in range(8):
+            bx = min(33.0 + step * (i + 1), 40.0)
+            fr.append(Frame(t=t0 + 3 + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = []
+    for _ in range(3):
+        frames += idle(len(frames), 20)
+        frames += shot(len(frames), 1.6)
+    frames += idle(len(frames), 15)
+    frames += [Frame(t=len(frames) + i, players=[], ball=None)
+               for i in range(int(90 * fps))]
+    for _ in range(3):
+        frames += idle(len(frames), 20)
+        frames += shot(len(frames), 0.5)
+    frames += idle(len(frames), 15)
+
+    from handball.pipeline.event_detection import shot_speed_fade
+    m = Match(_meta(), frames)
+    assert shot_speed_fade(m)["home"]["drop_pct"] >= 8.0  # a réteg maga
+    tf = training_focus(m)
+    tetel = next((it for it in tf["home"]
+                  if it["title"] == "Lövőerő-állóképesség"), None)
+    assert tetel is not None, [it["title"] for it in tf["home"]]
+    assert tetel["area"] == "kondíció"
+    assert not any(it["title"] == "Lövőerő a hajrában" for it in tf["home"])

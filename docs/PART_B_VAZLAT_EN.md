@@ -36,7 +36,7 @@ extra hardware and fully on-premise processing.
 ### 1.3 Current status (TRL) and evidence
 
 - End-to-end prototype working on simulated and real footage (TRL 3–4).
-- Evidence infrastructure already in place: 2,416 automated tests,
+- Evidence infrastructure already in place: 2,418 automated tests,
   reproducible benchmark (`python -m scripts.benchmark`), built-in
   precision/recall validation against human annotation
   (`scripts/validate_match`), and a dated, versioned measurement

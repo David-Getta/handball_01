@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.153 óta)
 
+- **Néma, dupla edzés-szabály kivéve** (javítás): az edzés-fókusz 118.
+  szabálya ("Lövőerő a hajrában") egy nem létező függvényt importált a
+  `xg` modulból, ezért a `try/except` alatt némán sosem szólalt meg —
+  miközben a 45. szabály ("Lövőerő-állóképesség") ugyanazt a kérdést
+  ugyanabból a rétegből (`shot_speed_fade`) már lefedte. A dupla,
+  halott szabály kikerült. Új őr-teszt: minden felület-modul
+  (összefoglaló, edzés, felderítés, prioritás, angol összefoglaló,
+  HTML-riport) függvényen belüli `from .x import y` importja létező
+  névre kell mutasson — így a következő ilyen elgépelés a csomagban
+  bukik meg, nem a terméken. Külön teszt igazolja, hogy a 45. szabály
+  a VALÓDI `shot_speed_fade` rétegből tényleg megszólal.
+
 - **Sebesség-simítás és a röpülő labda képráta-függetlenül** (javítás):
   a játékos-terhelés (csúcssebesség, sprintek, zóna-idők) a
   sebességet "3 kockás" ablakon simította és "3 kockás" lyukat hidalt

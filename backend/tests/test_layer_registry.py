@@ -872,3 +872,40 @@ def test_nincs_olvasott_de_soha_ki_nem_toltott_felderites_mezo():
         "NEM LÉTEZŐ felderítés-mezőt olvasunk (a try/except elnyelné az "
         "AttributeError-t, a szabály némán kimaradna): "
         + ", ".join(ismeretlen))
+
+
+def test_a_felulet_modulok_helyi_importjai_leteznek():
+    """ŐR a "néma mezőnév" hibaosztály import-alakjára: a felületek
+    (edzői összefoglaló, edzés-fókusz, felderítés) minden helyi
+    `from .modul import (nevek)` importja `try/except`-ben ül, tehát egy
+    elgépelt vagy átnevezett függvény-/konstansnév NÉMÁN kikapcsolja a
+    szabályt — a teszt zöld marad, az edző sosem látja a mondatot. Így
+    halt meg az edzés-fókusz 118. szabálya (`shot_power_fade`, ami
+    sosem létezett: a réteg neve `shot_speed_fade`). Minden importált
+    névnek léteznie kell a célmodulban."""
+    import ast
+    import importlib
+
+    pipeline = Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+    hianyzo: list = []
+    for modul in ("coach_summary", "training", "scouting", "priorities",
+                  "summary_en", "report_html"):
+        fajl = pipeline / f"{modul}.py"
+        if not fajl.exists():
+            continue
+        fa = ast.parse(fajl.read_text(encoding="utf-8"))
+        for node in ast.walk(fa):
+            if not isinstance(node, ast.ImportFrom) or not node.level:
+                continue
+            base = "handball.pipeline" if node.level == 1 else "handball"
+            cel = f"{base}.{node.module}" if node.module else base
+            try:
+                m = importlib.import_module(cel)
+            except Exception as e:  # noqa: BLE001
+                hianyzo.append(f"{modul}.py:{node.lineno}: {cel} ({e})")
+                continue
+            for alias in node.names:
+                if alias.name != "*" and not hasattr(m, alias.name):
+                    hianyzo.append(
+                        f"{modul}.py:{node.lineno}: {cel}.{alias.name}")
+    assert not hianyzo, "nem létező importált név: " + "; ".join(hianyzo)
