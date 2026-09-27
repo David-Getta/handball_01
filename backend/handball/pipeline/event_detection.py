@@ -46,8 +46,23 @@ APPROACH_X_M = 4.0       # a kaputól (x-ben) ekkora közelségben "kapu-megköz
 # zaj-sorozat oka a hibás pálya-vetítés, nem a küszöb.
 SHOT_COOLDOWN_S = 0.5
 GOAL_TOL_M = 0.7         # a gólvonalat ennyire megközelítve számít elértnek
-GOAL_LOOKAHEAD = 12      # a góldöntéshez ennyi frame-et nézünk előre
-TURNOVER_SUPPRESS = 12   # lövés után ennyi frame-en belüli labdaeladást elnyomunk
+# A góldöntéshez ennyi IDŐT nézünk előre a lövés után, és lövés után
+# ennyi időn belüli labdaeladást nyomunk el — MÁSODPERCBEN: a "12
+# kocka" a termék ritkításánál (fps/3) 1,44 mp-es előrenézés lett
+# volna (egy 0,5 mp-cel későbbi MÁSIK lövés gólja is idekeveredett),
+# sűrűn 0,48 mp.
+GOAL_LOOKAHEAD_S = 0.48
+TURNOVER_SUPPRESS_S = 0.48
+GOAL_LOOKAHEAD_FRAMES = 12      # örökölt kocka-alak (25 fps)
+TURNOVER_SUPPRESS_FRAMES = 12   # örökölt kocka-alak (25 fps)
+
+
+def goal_lookahead_frames(match: Match) -> int:
+    """A gól-előrenézés kockában, a meccs saját képrátájából — legalább
+    két kocka (a lövés kockája és a következő), hogy nagyon ritka
+    mintavételnél is a következő mintáig lássunk."""
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    return max(2, int(round(GOAL_LOOKAHEAD_S * fps)))
 
 _GOAL_Y_LOW = COURT_WIDTH_M / 2.0 - 1.5   # 8.5 — alsó kapufa
 _GOAL_Y_HIGH = COURT_WIDTH_M / 2.0 + 1.5  # 11.5 — felső kapufa
@@ -260,7 +275,7 @@ def _save_by_goalkeeper(match: Match, idx: int, goal_x: float) -> Optional[int]:
     ablakban a SAJÁT kapujánál álló kapus közelébe ér, az védés.
 
     Visszatérés: a védő kapus track_id-ja, vagy None (mellé/blokk)."""
-    end = min(len(match.frames), idx + GOAL_LOOKAHEAD)
+    end = min(len(match.frames), idx + goal_lookahead_frames(match))
     for j in range(idx, end):
         f = match.frames[j]
         b = f.ball
@@ -317,7 +332,7 @@ def goal_crossing_y(match: Match, idx: int, goal_x: float):
     """
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     max_step = GOAL_CROSS_MAX_SPEED_MS / fps
-    end = min(len(match.frames), idx + GOAL_LOOKAHEAD)
+    end = min(len(match.frames), idx + goal_lookahead_frames(match))
     lo = max(0, idx - 1)
     balls = [match.frames[j].ball for j in range(lo, end)]
 
@@ -671,10 +686,12 @@ def detect_events(match: Match, config: Optional[TacticsConfig] = None) -> list[
     shots = detect_shots(match, config)
     changes = detect_possession_changes(match, config)
     shot_times = [e.t for e in shots if e.type in (EventType.SHOT, EventType.GOAL)]
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    suppress = max(1, int(round(TURNOVER_SUPPRESS_S * fps)))
 
     filtered_changes = []
     for e in changes:
-        if e.type == EventType.TURNOVER and any(abs(e.t - st) <= TURNOVER_SUPPRESS for st in shot_times):
+        if e.type == EventType.TURNOVER and any(abs(e.t - st) <= suppress for st in shot_times):
             continue  # lövés után — nem külön labdaeladás
         filtered_changes.append(e)
 
@@ -1137,9 +1154,12 @@ def pass_length(match: Match, config: Optional[TacticsConfig] = None) -> dict:
 
 
 # Lövés-sebesség: hihetőségi plafon (követési hiba fölötte) és a
-# sebesség-méréshez nézett ablak a lövés-esemény után (kockában).
+# sebesség-méréshez nézett ablak a lövés-esemény után — MÁSODPERCBEN
+# (a "8 kocka" ritkítva egy másodperc lett volna, amibe a kipattanó
+# és a következő passz is belefért; a csúcs-sebesség nem a lövésé).
 SHOT_SPEED_MAX_MS = 45.0     # ~160 km/h fölött mérési hiba
-SHOT_SPEED_WINDOW = 8
+SHOT_SPEED_WINDOW_S = 0.32
+SHOT_SPEED_WINDOW_FRAMES = 8  # örökölt kocka-alak (25 fps)
 
 
 def shot_speeds(match: Match, config: Optional[TacticsConfig] = None) -> dict:
@@ -1156,12 +1176,13 @@ def shot_speeds(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     frames_by_t = {f.t: f for f in match.frames}
+    window = max(1, int(round(SHOT_SPEED_WINDOW_S * fps)))
 
     out_shots = []
     for e in detect_shots(match, config):
         peak = 0.0
         prev = None
-        for dt in range(SHOT_SPEED_WINDOW + 1):
+        for dt in range(window + 1):
             fr = frames_by_t.get(e.t + dt)
             if fr is None or fr.ball is None:
                 prev = None

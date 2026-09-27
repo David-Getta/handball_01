@@ -3,6 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.152 óta)
+
+- **Gól-előrenézés, lövés-sebesség és eladás-elnyomás másodpercben**
+  (javítás): az eseményfelismerés három ablaka kockában volt — a gól
+  eldöntéséhez a lövés után "12 kockát" néztünk előre (a termék
+  ritkításánál 1,44 mp: egy fél másodperccel későbbi MÁSIK lövés gólja
+  is az elsőhöz keveredhetett), a lövés utáni labdaeladást "12 kockán"
+  belül nyomtuk el, a lövés-sebességet "8 kockán" mértük (ritkítva egy
+  másodperc, amibe a kipattanó és a következő passz is belefért — a
+  csúcs nem a lövésé volt). Mostantól 0,48 / 0,48 / 0,32 másodperc a
+  meccs saját képrátájából; a kapu-sarok (elhelyezés) réteg ugyanezt
+  az előrenézést használja.
+
 ## v0.1.152 — kiadva (2026-09-27)
 
 > Kiadás-jegyzet: a labdavezetés-táv és a támadás-szakaszok

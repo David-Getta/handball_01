@@ -894,8 +894,9 @@ def goal_placement(match: Match, config: Optional[TacticsConfig] = None) -> dict
     """
     from ..models.tracking import Team
     from .calibration import COURT_LENGTH_M
-    from .event_detection import (GOAL_LOOKAHEAD, GOAL_TOL_M, EventType,
-                                  _GOAL_Y_HIGH, _GOAL_Y_LOW, detect_shots)
+    from .event_detection import (GOAL_TOL_M, EventType, _GOAL_Y_HIGH,
+                                  _GOAL_Y_LOW, detect_shots,
+                                  goal_lookahead_frames)
 
     config = config or TacticsConfig()
     lo, hi = _GOAL_Y_LOW, _GOAL_Y_HIGH
@@ -907,7 +908,7 @@ def goal_placement(match: Match, config: Optional[TacticsConfig] = None) -> dict
         i0 = idx_of.get(e.t)
         if i0 is None:
             return None
-        end = min(len(match.frames), i0 + GOAL_LOOKAHEAD)
+        end = min(len(match.frames), i0 + goal_lookahead_frames(match))
         for j in range(i0, end):
             b = match.frames[j].ball
             if b is None:

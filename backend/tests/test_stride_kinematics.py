@@ -288,3 +288,48 @@ def test_a_fal_csuszas_kesese_a_tenyleges_minta_eltolas_ideje():
         assert rec["frames"] >= int(round(SHIFT_MIN_S * fps)), fps
         assert abs(rec["lag_s"] - lag / fps) < 1e-6, (fps, rec)
         assert rec["verdict"] == "lassan csúsznak", (fps, rec)
+
+
+def test_a_gol_elorenezes_es_a_loves_sebesseg_ablaka_masodpercben():
+    """Egy 20 m/s-os lövés 0,55 mp alatt ér a kapuba: sűrűn és ritkítva
+    is gól, és a mért lövés-sebesség ~72 km/h mindkét képrátán (a
+    "8 kocka" ablak ritkítva egy másodperc lett volna, a "12 kocka"
+    előrenézés 1,44 mp)."""
+    from handball.pipeline.event_detection import (GOAL_LOOKAHEAD_S,
+                                                   SHOT_SPEED_WINDOW_S,
+                                                   EventType, detect_shots,
+                                                   goal_lookahead_frames,
+                                                   shot_speeds)
+
+    assert GOAL_LOOKAHEAD_S == 0.48 and SHOT_SPEED_WINDOW_S == 0.32
+    for fps in (25.0, 25.0 / 3):
+        frames = []
+        n_hold = int(round(1.0 * fps))
+        n_fly = int(round(0.55 * fps))
+        t = 0
+        for _ in range(n_hold):                      # a lövő tartja a labdát
+            frames.append(Frame(t=t, players=[
+                _pl(7, Team.HOME, 28.0, 10.0),
+                _pl(20, Team.AWAY, 39.0, 4.0, role="kapus")],
+                ball=Ball(x=28.3, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(1, n_fly + 1):                 # 20 m/s a kapu felé
+            x = min(39.9, 28.3 + 20.0 * i / fps)
+            frames.append(Frame(t=t, players=[
+                _pl(7, Team.HOME, 28.0, 10.0),
+                _pl(20, Team.AWAY, 39.0, 4.0, role="kapus")],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(round(1.5 * fps))):        # a labda a hálóban
+            frames.append(Frame(t=t, players=[
+                _pl(7, Team.HOME, 28.0, 10.0),
+                _pl(20, Team.AWAY, 39.0, 4.0, role="kapus")],
+                ball=Ball(x=39.9, y=10.0, confidence=1.0)))
+            t += 1
+        m = _match(frames, fps)
+        assert goal_lookahead_frames(m) == max(1, int(round(0.48 * fps)))
+        events = detect_shots(m)
+        assert any(e.type == EventType.GOAL for e in events), (fps, events)
+        sp = shot_speeds(m)["shots"]
+        assert sp, fps
+        assert 60.0 <= max(s_["speed_kmh"] for s_ in sp) <= 80.0, (fps, sp)
