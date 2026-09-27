@@ -2373,6 +2373,7 @@ def gk_cold_streaks(match: Match, config=None) -> dict:
 # birtokost, ennyi mért védés kell az ítélethez, és e feletti / alatti
 # megfogás-arány a fogó, illetve a kiütő kapus jele.
 GRC_WINDOW_S = 2.5
+GRC_SETTLE_S = 0.08   # ennyi idővel később is nála legyen (megült labda)
 GRC_MIN_SAVES = 4
 GRC_CATCH_PCT = 70.0
 GRC_PARRY_PCT = 40.0
@@ -2404,6 +2405,7 @@ def gk_rebound_control(match: Match, config=None) -> dict:
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     win = round(GRC_WINDOW_S * fps)
+    settle = max(1, int(round(GRC_SETTLE_S * fps)))
     idx_of = {f.t: i for i, f in enumerate(match.frames)}
 
     keepers: set = set()
@@ -2423,7 +2425,7 @@ def gk_rebound_control(match: Match, config=None) -> dict:
             i0 = idx_of.get(sh["t"])
             if i0 is None:
                 continue
-            for j in range(i0 + 1, min(len(match.frames) - 2,
+            for j in range(i0 + 1, min(len(match.frames) - max(2, settle),
                                        i0 + 1 + win)):
                 fj, fj1 = match.frames[j], match.frames[j + 1]
                 if fj.ball is None or fj1.ball is None:
@@ -2435,7 +2437,7 @@ def gk_rebound_control(match: Match, config=None) -> dict:
                 h = ball_holder(fj, config)
                 if h is None:
                     continue
-                h2 = ball_holder(match.frames[j + 2], config)
+                h2 = ball_holder(match.frames[j + settle], config)
                 if h2 is None or h2.track_id != h.track_id:
                     continue
                 measured += 1

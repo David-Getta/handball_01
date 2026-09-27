@@ -3624,6 +3624,7 @@ def wing_closeouts(match, config=None) -> dict:
 # birtokost, ennyi blokk kell az ítélethez, és e feletti / alatti
 # visszaszerzés-arány a teljes értékű, illetve a visszahulló blokk jele.
 BRC_WINDOW_S = 3.0
+BRC_SETTLE_S = 0.08   # ennyi idővel később is nála legyen (megült labda)
 BRC_MIN_BLOCKS = 4
 BRC_GOOD_PCT = 60.0
 BRC_POOR_PCT = 30.0
@@ -3655,6 +3656,7 @@ def block_recoveries(match, config=None) -> dict:
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     win = round(BRC_WINDOW_S * fps)
+    settle = max(1, int(round(BRC_SETTLE_S * fps)))
     idx_of = {f.t: i for i, f in enumerate(match.frames)}
     blocks = detect_blocks(match, config)
 
@@ -3666,14 +3668,14 @@ def block_recoveries(match, config=None) -> dict:
             i0 = idx_of.get(ev["t"])
             if i0 is None:
                 continue
-            for j in range(i0 + 1, min(len(match.frames) - 2,
+            for j in range(i0 + 1, min(len(match.frames) - settle,
                                        i0 + 1 + win)):
                 h = ball_holder(match.frames[j], config)
                 if h is None:
                     continue
                 # Csak megült labda: a röptében elsuhanó lepattanó
-                # nem birtoklás — két kockával később is nála legyen.
-                h2 = ball_holder(match.frames[j + 2], config)
+                # nem birtoklás — BRC_SETTLE_S-sel később is nála legyen.
+                h2 = ball_holder(match.frames[j + settle], config)
                 if h2 is None or h2.track_id != h.track_id:
                     continue
                 measured += 1

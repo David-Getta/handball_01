@@ -333,3 +333,19 @@ def test_a_gol_elorenezes_es_a_loves_sebesseg_ablaka_masodpercben():
         sp = shot_speeds(m)["shots"]
         assert sp, fps
         assert 60.0 <= max(s_["speed_kmh"] for s_ in sp) <= 80.0, (fps, sp)
+
+
+def test_a_pressz_visszanezes_es_a_megult_labda_ideje_masodpercben():
+    """Az eladás előtti pressz-helyzet visszanézése 0,48 mp (sűrűn 12,
+    ritkítva 4 kocka — nem "12 kocka" = 1,44 mp ritkítva); a
+    blokk-/védés-lepattanó "megült labda" ellenőrzése is idő-alapú."""
+    from handball.pipeline.decisions import (PRESS_LOOKBACK_S,
+                                             press_lookback_frames)
+    from handball.pipeline.defense import BRC_SETTLE_S
+    from handball.pipeline.goalkeeper import GRC_SETTLE_S
+
+    assert PRESS_LOOKBACK_S == 0.48
+    assert 0 < BRC_SETTLE_S <= 0.12 and 0 < GRC_SETTLE_S <= 0.12
+    assert press_lookback_frames(_match([], 25.0)) == 12
+    assert press_lookback_frames(_match([], 25.0 / 3)) == 4
+    assert press_lookback_frames(_match([], 0.0)) == 12

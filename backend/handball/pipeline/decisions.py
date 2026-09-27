@@ -294,6 +294,16 @@ def analyze_player_decisions(match: Match, player_id: int,
 PRESS_TIGHT_M = 2.0
 PRESS_MIN_EVENTS = 10
 PRESS_TO_RISE_PP = 15.0
+# A labdavesztő utolsó ismert helyét ennyi idővel az eladás előttről
+# keressük — MÁSODPERCBEN (a "12 kocka" ritkítva 1,44 mp lett volna,
+# és az eladás előtti másodperc pressz-helyzete már nem az eladásé).
+PRESS_LOOKBACK_S = 0.48
+
+
+def press_lookback_frames(match: Match) -> int:
+    """A visszanézés kockában, a meccs saját képrátájából."""
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    return max(1, int(round(PRESS_LOOKBACK_S * fps)))
 
 
 def pass_security_under_pressure(match: Match,
@@ -355,7 +365,7 @@ def pass_security_under_pressure(match: Match,
             continue
         # A vesztes utolsó ismert pozíciója az esemény előtti kockákon.
         placed = False
-        for j in range(i0 - 1, max(-1, i0 - 13), -1):
+        for j in range(i0 - 1, max(-1, i0 - 1 - press_lookback_frames(match)), -1):
             loser = next((p for p in frames[j].players
                           if p.track_id == e.player_id), None)
             if loser is None:
@@ -740,7 +750,7 @@ def pressure_sensitive_players(match: Match,
         if i0 is None:
             continue
         # A vesztes utolsó ismert pozíciója az esemény előtti kockákon.
-        for j in range(i0 - 1, max(-1, i0 - 13), -1):
+        for j in range(i0 - 1, max(-1, i0 - 1 - press_lookback_frames(match)), -1):
             loser = next((p for p in frames[j].players
                           if p.track_id == e.player_id), None)
             if loser is None:

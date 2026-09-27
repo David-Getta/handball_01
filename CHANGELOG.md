@@ -3,7 +3,21 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.152 óta)
+## v0.1.153 — kiadva (2026-09-27)
+
+> Kiadás-jegyzet: a gól eldöntése, a lövés utáni eladás-elnyomás és a
+> lövés-sebesség mérése másodperc-alapú lett — a termék ritkításánál
+> eddig két közeli lövés gólja összekeveredhetett, és a lövés-sebesség
+> a kipattanót is mérte.
+
+- **Pressz-visszanézés és "megült labda" másodpercben** (javítás): a
+  labdaeladás előtti pressz-helyzetet a vesztő "12 kockával" korábbi
+  helyén kerestük (a termék ritkításánál 1,44 mp — az eladás előtti
+  másodperc helyzete már nem az eladásé), a blokk- és védés-lepattanó
+  megszerzésénél a "két kockával később is nála" ellenőrzés ritkítva
+  háromszoros időt kért. Mostantól 0,48 mp, illetve 0,08 mp a meccs
+  saját képrátájából (a pressz-tűrés, a pressz-érzékeny játékosok,
+  a blokk- és a védés-lepattanó rétegei).
 
 - **Gól-előrenézés, lövés-sebesség és eladás-elnyomás másodpercben**
   (javítás): az eseményfelismerés három ablaka kockában volt — a gól
