@@ -257,3 +257,34 @@ def test_a_labdavezetes_tav_ablakos_nem_remeges_osszeg():
         assert r["holds"] == 6, (fps, r)
         assert 5.0 <= r["avg_m"] <= 7.5, (fps, r)
     assert abs(res[25.0]["avg_m"] - res[25.0 / 3]["avg_m"]) <= 1.0, res
+
+
+def test_a_fal_csuszas_kesese_a_tenyleges_minta_eltolas_ideje():
+    """A vendég fal 0,72 mp késéssel követi a labdát: sűrűn (18 kocka)
+    és ritkítva (6 kocka) is ~0,72 mp és "lassan csúsznak"; a rács a
+    minták ideje (ritkítva 0,12 mp-es lépések), nem névleges 0,1 mp. A
+    védekezett-idő minimum másodpercben: 8 mp sűrűn 200, ritkítva 67
+    kocka."""
+    import math
+
+    from handball.pipeline.defense import SHIFT_MIN_S, defensive_shift_lag
+
+    assert SHIFT_MIN_S == 8.0
+    for fps in (25.0, 25.0 / 3):
+        lag = int(round(0.72 * fps))
+        period = int(round(2.0 * fps))
+        frames = []
+        for i in range(8 * period + lag):
+            ball_y = 10.0 + 6.0 * math.sin(2 * math.pi * i / period)
+            wall_y = 10.0 + 6.0 * math.sin(2 * math.pi * (i - lag) / period)
+            gk = _pl(29, Team.AWAY, 39.5, 10.0, role="kapus")
+            frames.append(Frame(t=i, players=[
+                _pl(1, Team.HOME, 32.0, ball_y),
+                _pl(21, Team.AWAY, 36.0, wall_y - 2.0),
+                _pl(22, Team.AWAY, 36.0, wall_y),
+                _pl(23, Team.AWAY, 36.0, wall_y + 2.0), gk],
+                ball=Ball(x=32.0, y=ball_y, confidence=1.0)))
+        rec = defensive_shift_lag(_match(frames, fps))["away"]
+        assert rec["frames"] >= int(round(SHIFT_MIN_S * fps)), fps
+        assert abs(rec["lag_s"] - lag / fps) < 1e-6, (fps, rec)
+        assert rec["verdict"] == "lassan csúsznak", (fps, rec)

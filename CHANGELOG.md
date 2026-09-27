@@ -3,8 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.151 óta)
+## v0.1.152 — kiadva (2026-09-27)
 
+> Kiadás-jegyzet: a labdavezetés-táv és a támadás-szakaszok
+> felismerése is ritkítás-független (a labdahordó megnevezése és a
+> figura-számlálók nem függenek a képrátától).
+
+- **A fal-csúszás késése a tényleges minta-eltolás ideje** (javítás):
+  a "milyen gyorsan igazodik a faluk az oldalváltáshoz" réteg a
+  késleltetést névleges 0,1 mp-es rácson kereste, de a rács a meccs
+  mintáin jár — a termék ritkításánál egy lépés 0,12 mp, és a névleges
+  érték hamis ítéletet adott ("gyorsan igazodnak" 0,24 mp-es
+  késésre). Mostantól a mért késés a tényleges minta-eltolás ideje, és
+  a védekezett-idő minimum is másodpercben van (8 mp), nem "200
+  kocka" (ritkítva 24 mp lett volna).
 - **A labdavezetés-táv remegés-mentes** (javítás): a "ki mennyit
   mozog a labdával" réteg a kockánkénti elmozdulást összegezte, amit a
   detektálási remegés sűrű felvételen felfújt — a szimulált meccsen

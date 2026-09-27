@@ -2628,10 +2628,15 @@ def line_height_by_score(match, config=None) -> dict:
     return out
 
 
-# Fal-csúszás késése: ennyi védekezett kocka kell az ítélethez, ekkora
-# késleltetésekig nézünk (mp), és e felett lassú, e alatt gyors a
-# csúszásuk.
-SHIFT_MIN_FRAMES = 200
+# Fal-csúszás késése: ennyi védekezett IDŐ kell az ítélethez
+# (MÁSODPERC — a "200 kocka" ritkítva 24 mp, sűrűn 8 mp lett volna),
+# ekkora késleltetésekig nézünk (mp), és e felett lassú, e alatt gyors
+# a csúszásuk. A késleltetés-rács a meccs MINTÁIN jár (egy kocka a
+# legkisebb lépés): a mért késés a tényleges minta-eltolás ideje, nem
+# a rács névleges értéke — ritkítva egy "0,1 mp-es" lépés valójában
+# 0,12 mp, és a névleges érték hamis ítéletet adott.
+SHIFT_MIN_S = 8.0
+SHIFT_MIN_FRAMES = 200   # örökölt kocka-alak (25 fps); a motor a _S-t használja
 SHIFT_MAX_LAG_S = 1.2
 SHIFT_STEP_S = 0.1
 SHIFT_SLOW_S = 0.6
@@ -2656,7 +2661,7 @@ def defensive_shift_lag(match, config=None) -> dict:
     válasz.
 
     Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"frames", "lag_s",
-    "verdict"} — a lag_s/verdict None SHIFT_MIN_FRAMES alatt; a verdict
+    "verdict"} — a lag_s/verdict None SHIFT_MIN_S védekezett mp alatt; a verdict
     "lassan csúsznak" / "gyorsan igazodnak" / None.
     """
     from ..models.tracking import Team
@@ -2692,11 +2697,13 @@ def defensive_shift_lag(match, config=None) -> dict:
     for side in ("home", "away"):
         rows = series[side]
         rec = {"frames": len(rows), "lag_s": None, "verdict": None}
-        if len(rows) >= SHIFT_MIN_FRAMES:
+        if len(rows) >= max(1, int(round(SHIFT_MIN_S * fps))):
             best = None
-            lag = 0.0
-            while lag <= SHIFT_MAX_LAG_S + 1e-9:
-                shift = round(lag * fps)
+            # Minden minta-eltolás a legnagyobb késleltetésig (a rács a
+            # meccs mintáin jár; a névleges 0,1 mp-es lépés ritkítva
+            # nem létezik).
+            max_shift = int(round(SHIFT_MAX_LAG_S * fps))
+            for shift in range(0, max_shift + 1):
                 if shift >= len(rows):
                     break
                 # A fal `shift` kockával későbbi helye a labdáéhoz mérve.
@@ -2704,10 +2711,9 @@ def defensive_shift_lag(match, config=None) -> dict:
                          for i in range(len(rows) - shift)]
                 score = sum(diffs) / len(diffs)
                 if best is None or score < best[1]:
-                    best = (lag, score)
-                lag += SHIFT_STEP_S
+                    best = (shift / fps, score)
             if best is not None:
-                rec["lag_s"] = round(best[0], 1)
+                rec["lag_s"] = round(best[0], 2)
                 rec["verdict"] = ("lassan csúsznak"
                                   if rec["lag_s"] >= SHIFT_SLOW_S
                                   else "gyorsan igazodnak"
