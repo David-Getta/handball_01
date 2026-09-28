@@ -1084,3 +1084,44 @@ def test_az_edzes_teruletek_ekezetes_kanont_kovetnek():
     assert not idegen, (
         "nem kanonikus (pl. ékezet nélküli) terület-címke az edzés-"
         f"fókuszban: {idegen} — a kánon: {sorted(TERULET_KANON)}")
+
+
+def test_az_edzes_cimek_szabalyonkent_egyediek():
+    """Két KÜLÖNBÖZŐ szabály nem adhat ugyanolyan című tételt.
+
+    A cím a csempe fejléce: ha két különböző mérés ugyanazt a címet
+    viseli ("Kontra-befejezés" a labdaszerzés-váltásból ÉS a
+    lerohanás-váltásból), a csapat két azonos fejlécű, más indoklású
+    kártyát kap, és a címből nem tudja, melyik mérésről szól. Tizenhárom ilyen pár volt,
+    mielőtt ez az őr megszületett. Egy szabályon BELÜL (if/else ágak)
+    az azonos cím rendben van.
+
+    A forrást nézi: a `training_focus` törzsében a szabály-blokkokat a
+    `# N)` sorszám-komment nyitja; egy cím csak egy sorszámhoz tartozhat.
+    """
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+           / "training.py").read_text(encoding="utf-8")
+    kezdet = src.index("def training_focus(")
+    veg = src.index("def player_training_focus(")
+    torzs = src[kezdet:veg].split("\n")
+    cim_szabaly: dict = {}
+    szabaly = None
+    minta = re.compile(
+        r'add\((?:[^,\n]+,\s*){1,3}"[a-záéíóöőúüű][a-záéíóöőúüű\- ]*",\s*'
+        r'(?:\n\s*)?f?"([^"\n]+)"')
+    for i, sor in enumerate(torzs):
+        m = re.match(r"\s*#\s*(\d+)\)", sor)
+        if m:
+            szabaly = m.group(1)
+        m = minta.search(sor + "\n" + (torzs[i + 1] if i + 1 < len(torzs) else ""))
+        if m and 'add(' in sor:
+            cim_szabaly.setdefault(m.group(1), set()).add(szabaly)
+    assert cim_szabaly, "az őr nem talált címet — a minta elavult?"
+    dupla = {c: sorted(s, key=lambda x: int(x or 0))
+             for c, s in cim_szabaly.items() if len(s) > 1}
+    assert not dupla, (
+        "ugyanaz az edzés-cím több különböző szabályból: "
+        + "; ".join(f"{c!r} ← {s}" for c, s in sorted(dupla.items())))

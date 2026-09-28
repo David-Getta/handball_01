@@ -1001,7 +1001,7 @@ def _training_focus_cached(match: Match,
                 continue
             who42 = (f"{top42['jersey']}-es" if top42["jersey"] is not None
                      else f"{top42['player_id']}. játékos")
-            add(side, "támadás", "Labdabiztonság",
+            add(side, "támadás", "Labdabiztonság névre szólóan",
                 f"a(z) {who42} veszíti a legtöbb labdát "
                 f"({top42['losses']} eladás a csapat {rec42['total']}-ből) "
                 "— rá fognak presselni",
@@ -1826,7 +1826,7 @@ def _training_focus_cached(match: Match,
             nev469 = {"fast": "12 mp-en belül lezárt",
                       "mid": "közepes hosszú",
                       "slow": "30 mp fölötti"}[top469]
-            add(side, "támadás", "Ritmus-váltás",
+            add(side, "támadás", "Egy tempó a támadásban",
                 f"a támadásaink {ar469[top469]:.0f}%-a {nev469} "
                 f"({rec469[top469]}/{rec469['attacks']}; "
                 f"{ATV_ONE_TEMPO_PCT:.0f}% fölött jelezzük) — egy "
@@ -2864,7 +2864,7 @@ def _training_focus_cached(match: Match,
             _ki427 = (f"a(z) {top427['jersey']}. számú"
                       if top427.get("jersey") is not None
                       else f"a(z) {top427['player_id']}. játékos")
-            add(side, "támadás", "Ziccer-befejezés",
+            add(side, "támadás", "Ziccer-kihagyó névre szólóan",
                 f"a kihagyott ziccereink {_ki427} kezéhez kötődnek "
                 f"({top427['misses']} kihagyás; {MCP_MIN_MISSES} "
                 "kihagyástól már jelezzük) — a ziccer a legdrágább "
@@ -2934,7 +2934,7 @@ def _training_focus_cached(match: Match,
                 continue
             if rec424["gap_pp"] > -GKA_GAP_PP:
                 continue
-            add(side, "kapus", "Újraindulás kapott gól után",
+            add(side, "kapus", "Kapus a kapott gól után",
                 f"a kapusunk a kapott gól utáni két lövésen "
                 f"{rec424['fresh_pct']:.0f}%-ot véd, egyébként "
                 f"{rec424['rest_pct']:.0f}%-ot — a friss seb "
@@ -3291,7 +3291,7 @@ def _training_focus_cached(match: Match,
                 continue
             if rec410["punish_pct"] < ENT_PUNISH_PCT:
                 continue
-            add(side, "támadás", "7 a 6 labdabiztonság",
+            add(side, "támadás", "7 a 6 eladás-büntetés",
                 f"a lehozott kapus mellett {rec410['turnovers']} "
                 f"labdát vesztünk, ebből {rec410['punished']} lett "
                 f"gól ({rec410['punish_pct']:.0f}%; "
@@ -4230,7 +4230,7 @@ def _training_focus_cached(match: Match,
             rec377 = toe377[side]
             if rec377.get("verdict") is None:
                 continue
-            add(side, "támadás", "Időkérés utáni figura",
+            add(side, "támadás", "Időkérés utáni labdavesztés",
                 f"az időkérés utáni labdánk {rec377['share_pct']:.0f}"
                 f"%-ban a(z) {rec377['main_role']} kezén vész el "
                 f"({rec377['turnovers']} eladásból; "
@@ -7180,7 +7180,7 @@ def _training_focus_cached(match: Match,
             if rec247["verdict"] != \
                     "az elszórt indításaik gólba kerülnek":
                 continue
-            add(side, "védekezés", "Indítás-biztonság",
+            add(side, "védekezés", "Elszórt indítás ára",
                 f"az elszórt indításaink gólba kerülnek "
                 f"({rec247['punished']}/{rec247['lost']} elveszett "
                 "kihozatal után jött gyors gól) — a rossz első "
@@ -7369,7 +7369,7 @@ def _training_focus_cached(match: Match,
             rec238 = gpn238[side]
             if rec238["verdict"] != "a csere-lyukaik gólba kerülnek":
                 continue
-            add(side, "védekezés", "Csere-ütem",
+            add(side, "védekezés", "Csere-lyuk ára",
                 f"a csere-lyukaink gólba kerülnek ({rec238['conceded']}"
                 f" kapott gól {rec238['gap_s']:.0f} mp öt fős játék "
                 "alatt) — a lassú csere már nem kockázat, hanem "
@@ -7615,7 +7615,7 @@ def _training_focus_cached(match: Match,
             top227 = bbr227[side]["top"]
             if top227 is None:
                 continue
-            add(side, "támadás", "Lövés-előkészítés",
+            add(side, "támadás", "Lövés-előkészítés posztonként",
                 f"a falba lőtt lövéseink a(z) {top227['poszt']} "
                 f"posztról jönnek ({top227['blocked']}/"
                 f"{bbr227[side]['blocked']} lefogott lövés) — a "
@@ -8496,7 +8496,7 @@ def _training_focus_cached(match: Match,
             if rec189["verdict"] != "kijelölt kontra-emberük van":
                 continue
             top189 = rec189["top"]
-            add(side, "támadás", "Kontra második hulláma",
+            add(side, "támadás", "Kontra-sprint egy emberen",
                 f"a csapat {rec189['team_sprints']} sprintjéből "
                 f"{top189['sprints']} egy emberé (a(z) "
                 f"{top189['player_id']} azonosítójú) — ha őt lezárják "
@@ -8806,7 +8806,7 @@ def _training_focus_cached(match: Match,
             rec176 = fbc176[side]
             if rec176["verdict"] != "elpuskázzák a kontrát":
                 continue
-            add(side, "támadás", "Kontra-befejezés",
+            add(side, "támadás", "Lerohanás-befejezés",
                 f"{rec176['breaks']} lerohanásból csak "
                 f"{rec176['goals']} lett gól "
                 f"({rec176['share_pct']:.0f}%) — a legolcsóbb "
@@ -9351,7 +9351,7 @@ def _training_focus_cached(match: Match,
             rec154 = sdf154[side]
             if rec154["verdict"] != "kifelé szorulnak":
                 continue
-            add(side, "erőnlét", "Fáradt befejezés",
+            add(side, "erőnlét", "Fáradt lövőtávolság",
                 f"a lövéseink átlagos távolsága "
                 f"{rec154['fh_avg_m']:.1f} m-ről "
                 f"{rec154['sh_avg_m']:.1f} m-re nőtt a második "
@@ -10869,7 +10869,7 @@ def _training_focus_cached(match: Match,
                     or rec94["assists"] < ASSIST_CONC_MIN \
                     or rec94["share"] < ASSIST_CONC_TOP_SHARE:
                 continue
-            add(side, "támadás", "Második játékszervező",
+            add(side, "támadás", "Gólpassz egy emberen",
                 f"az előkészítésünk egy emberen múlik: a gólpasszaink "
                 f"{100.0 * rec94['share']:.0f}%-a a(z) "
                 f"{rec94['top_player_id']}. játékostól jön "

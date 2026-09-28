@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.153 óta)
 
+- **Egyedi edzés-címek szabályonként** (javítás): tizenhárom címet két
+  KÜLÖNBÖZŐ mérés is viselt — a "Kontra-befejezés" a labdaszerzés
+  gólra váltásából ÉS a lerohanások gólra váltásából, a "Fáradt
+  befejezés" a lövőtávolság növekedéséből ÉS a gólra váltás eséséből,
+  és így tovább —, ezért a csapat két azonos fejlécű, más indoklású
+  kártyát kapott, és a cím alapján nem lehetett tudni, melyik mérésről
+  szól. A második mérés minden párban saját, beszédes
+  címet kapott (pl. "Lerohanás-befejezés", "Fáradt lövőtávolság",
+  "Csere-lyuk ára", "Kapus a kapott gól után"). Őr-teszt a forráson:
+  egy cím csak egy szabály-sorszámhoz tartozhat (a szabályon belüli
+  if/else ágak azonos címe rendben van).
+
 - **Edzés-fókusz terület-címkéi egységesen ékezetesek** (javítás): az
   edzés-tételek területe a kliensben nagybetűs címke, a HTML-riportban
   zárójeles jelző — 77 szabály ékezet nélkül ("TAMADAS", "VEDEKEZES",
