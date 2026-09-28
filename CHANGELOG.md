@@ -3,7 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.153 óta)
+## v0.1.154 — kiadva (2026-09-28)
+
+> Kiadás-jegyzet: az edzés-fókusz kártyái tisztultak — egységes,
+> ékezetes terület-címkék, szabályonként egyedi címek, egy némán halott
+> dupla szabály kikerült —, a játékos-terhelés sebesség-simítása pedig
+> képráta-független lett. Három új őr-teszt tartja ezt a helyén.
 
 - **Egyedi edzés-címek szabályonként** (javítás): tizenhárom címet két
   KÜLÖNBÖZŐ mérés is viselt — a "Kontra-befejezés" a labdaszerzés
