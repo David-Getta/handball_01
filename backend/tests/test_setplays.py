@@ -542,11 +542,15 @@ def test_a_figura_ismetles_a_felderitesen_meccsek_kozt_osszeadodik():
     assert "álljatok fel előre ugyanarra" in kulcsok
 
 
-def test_a_figura_ismetles_edzes_szabaly_valodi_retegbol_szolal_meg():
+def test_a_figura_ismetles_edzes_szabaly_valodi_retegbol_szolal_meg(monkeypatch):
     """480: a saját gól utáni kiszámítható ismétlés edzés-tétele a
     VALÓDI rétegből (nem monkeypatch-elt alakból)."""
     from handball.pipeline.training import training_focus
 
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     tetelek = training_focus(_src_match(match_id="t480"))["home"]
     cimek = " ".join(t["title"] for t in tetelek)
     assert "Kiszámítható a figura-sorrendünk a gól után" in cimek
@@ -750,12 +754,16 @@ def test_a_figura_konyvtar_a_valodi_felderitesen_at_is_megszolal():
     assert "meccsről meccsre visszatérő figurájuk" in kulcsok.lower()
 
 
-def test_a_termeketlen_kedvenc_figura_edzes_szabaly_valodi_retegbol():
+def test_a_termeketlen_kedvenc_figura_edzes_szabaly_valodi_retegbol(monkeypatch):
     """Az edzés-fókusz 478-as szabálya a valódi setplay_shapes rétegből:
     a leggyakoribb figura gól nélkül → megszólal; ha van gól, nem."""
     from handball.pipeline.training import training_focus
 
     m = _spl_match(["bal"] * 4 + ["jobb"] * 3, "tf")
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     tetelek = training_focus(m)["home"]
     cimek = [t["title"] for t in tetelek]
     assert any(c.startswith("Terméketlen kedvenc figura") for c in cimek), cimek
@@ -1071,10 +1079,14 @@ def test_a_figura_x_vedoforma_a_felderitesen_meccsek_kozt_osszeadodik():
     assert "váltsatok 5-1-ra" in terv2
 
 
-def test_a_figura_x_vedoforma_edzes_szabaly_valodi_retegbol():
+def test_a_figura_x_vedoforma_edzes_szabaly_valodi_retegbol(monkeypatch):
     """479: a saját leggyakoribb figura egy fal ellen gól nélkül → tétel."""
     from handball.pipeline.training import training_focus
 
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     tetelek = training_focus(_fvf_match([("5-1", False)] * 4, "t1"))["home"]
     assert any(t["title"].startswith("A figuránk a 5-1 ellen nem megy")
                for t in tetelek), [t["title"] for t in tetelek]

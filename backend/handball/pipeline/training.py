@@ -13,6 +13,17 @@ hetesek, labdabiztonság, erőnlét, emberelőny, irányító-függés) állít
 Szándékosan szabály-alapú (nem nyelvi modell): minden javaslat mögött
 kiszámolt szám áll, így az edző ellenőrizheti. A lista rangsorolt, és
 legfeljebb MAX_ITEMS elemű — a fókusz attól fókusz, hogy kevés.
+
+A rangsor (`rank_focus`) kimondott, vitatható edzői sorrend, nem a
+szabályok forrás-sorrendje: egy meccsen 60–90 szabály is megszólal,
+és a forrás-sorrend a fejlesztés ideje szerint ("az újak felülre")
+válogatott volna — a legutóbb írt öt szabály, csupa támadás-tétel. A
+rangsor helyette TERÜLETEK KÖZÖTT forog (TF_AREA_ORDER: védekezés,
+támadás, kapus, befejezés, taktika, …): előbb minden területről a
+legfontosabb tétel, aztán a második — így az edzés kiegyensúlyozott.
+Egy területen belül az alap-szabályok (fedezés-fegyelem,
+labdabiztonság, ziccer, hetes — a lista legrégebbi, legáltalánosabb
+kérdései) előzik a finomabb, később hozzáadott mintákat.
 """
 
 from __future__ import annotations
@@ -24,6 +35,17 @@ from .primitive_cache import memoize_primitive
 from .tactics import TacticsConfig
 
 MAX_ITEMS = 5
+
+# A terület-rangsor: a fókusz-lista a területek között FOROGVA válogat
+# (lásd `rank_focus`) — előbb minden területről a legfontosabb tétel,
+# aztán a második. A sorrend kimondott edzői sorrend: a kapott gól
+# (védekezés) előzi a saját befejezést, a kapus és a befejezés a
+# taktikát, az állapot-témák (átmenet, kondíció, fáradás, mentális) a
+# végére. A listán nem szereplő terület a megjelenés sorrendjében,
+# a legvégére kerül.
+TF_AREA_ORDER = ("védekezés", "támadás", "kapus", "befejezés", "taktika",
+                 "átmenet", "kondíció", "erőnlét", "fáradás", "mentális",
+                 "végjáték", "labdás", "csoportos")
 
 # Egyéni edzés-fókusz: emberenként legfeljebb ennyi tétel (a fókusz
 # attól fókusz, hogy kevés), és a befejezés-szabály küszöbei.
@@ -41,6 +63,58 @@ PTF_FATIGUE_DROP_PCT = 25.0
 # formahiánynak — az 1,0 nagyjából egy "bevédhető" gól.
 PTF_GK_MIN_ON_TARGET = 6
 PTF_GK_GSAX = -1.0
+
+
+def rank_focus(items: list, limit: Optional[int] = None) -> list:
+    """A megszólalt tételekből a fókusz: területek között forogva.
+
+    A `items` a szabályok forrás-sorrendjében érkezik, és minden tétel
+    hordozhatja a szabálya sorszámát ("_szabaly" — a kimenetből ki
+    lesz véve). A rangsor:
+
+    1. területenként csoportosítunk (TF_AREA_ORDER sorrendjében; a
+       listán nem szereplő terület a megjelenés sorrendjében utána);
+    2. egy területen belül az alap-szabályok előre: a szabály-sorszám
+       szerint növekvően, mert a kis sorszámok a legrégebbi,
+       legáltalánosabb kérdések (fedezés-fegyelem, labdabiztonság,
+       ziccer, hetes), a nagyok a később hozzáadott finom minták —
+       a forrás-sorrend erre nem jó, mert "az újak felülre" szokás
+       miatt az sem növekvő, sem csökkenő (sorszám nélküli tétel a
+       forrás-sorrendben marad, a számozottak után);
+    3. körbejárva veszünk egy-egy tételt területenként, amíg a
+       `limit` (alapból MAX_ITEMS) betelik.
+
+    Így öt tételből nem lehet mind az öt támadás-tétel, ha védekezés-
+    vagy kapus-tétel is megszólalt — az edzés kiegyensúlyozott.
+    """
+    if limit is None:
+        limit = MAX_ITEMS
+    by_area: dict = {}
+    for i, it in enumerate(items):
+        szam = it.get("_szabaly")
+        kulcs = (0, szam, i) if szam else (1, 0, i)
+        by_area.setdefault(it["area"], []).append((kulcs, it))
+    for area in by_area:
+        by_area[area] = [
+            {k: v for k, v in it.items() if k != "_szabaly"}
+            for _, it in sorted(by_area[area], key=lambda kv: kv[0])]
+    ismert = [a for a in TF_AREA_ORDER if a in by_area]
+    ismeretlen = [a for a in by_area if a not in TF_AREA_ORDER]
+    sorrend = ismert + ismeretlen
+    out: list = []
+    kor = 0
+    while len(out) < limit:
+        talalt = False
+        for area in sorrend:
+            if kor < len(by_area[area]):
+                out.append(by_area[area][kor])
+                talalt = True
+                if len(out) >= limit:
+                    break
+        if not talalt:
+            break
+        kor += 1
+    return out
 
 
 def training_focus(match: Match,
@@ -69,14 +143,22 @@ def _training_focus_cached(match: Match,
     A `primitive_cache` hatókörön belül meccsenként EGYSZER fut le —
     az ellenszer-lap és az edzői összefoglaló is ezt olvassa."""
     config = config or TacticsConfig()
+    # Minden megszólaló tétel ide gyűlik (korlát nélkül); a fókuszt a
+    # végén a `rank_focus` válogatja ki — a korlát NEM a forrás-sorrend
+    # első öt tétele, hanem területek között forgó rangsor.
     out: dict = {"home": [], "away": []}
+    # A `_szabaly` a szabály sorszáma (minden blokk a `try:` előtt
+    # beállítja) — a rangsor területen belüli kulcsa; a kimenetből a
+    # `rank_focus` kiveszi.
+    _szabaly = 0
 
     def add(side, area, title, why, drill):
-        if len(out[side]) < MAX_ITEMS:
-            out[side].append({"area": area, "title": title,
-                              "why": why, "drill": drill})
+        out[side].append({"area": area, "title": title,
+                          "why": why, "drill": drill,
+                          "_szabaly": _szabaly})
 
     # 1) Fedezés-fegyelem: sok szabadon hagyott lövő.
+    _szabaly = 1
     try:
         from .defense import defense_analysis
         d = defense_analysis(match, config)
@@ -100,6 +182,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 2) Befejezés: a helyzetek megvoltak, a gólok nem.
+    _szabaly = 2
     try:
         from .xg import match_xg
         tx = match_xg(match, config)["teams"]
@@ -115,6 +198,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 3) Hetesek: kihagyott büntetők.
+    _szabaly = 3
     try:
         from .rules import seven_meter_summary
         s7 = seven_meter_summary(match, config)
@@ -130,6 +214,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 4) Labdabiztonság: több eladott labda, mint lövés.
+    _szabaly = 4
     try:
         from .event_detection import EventType, detect_events
         ev = detect_events(match, config)
@@ -148,6 +233,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 5) Erőnlét: nagy intenzitás-esés a hajrára.
+    _szabaly = 5
     try:
         from .stats import compute_intensity_timeline
         windows = compute_intensity_timeline(match)
@@ -172,6 +258,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 6) Emberelőny: a létszámfölény nem hozott jobb gólarányt.
+    _szabaly = 6
     try:
         from .rules import powerplay_efficiency
         eff = powerplay_efficiency(match, config)
@@ -212,6 +299,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 7) Irányító-függés: a saját támadás egyetlen emberen múlik.
+    _szabaly = 7
     try:
         from .playmaker import playmaker_dependency
         pd = playmaker_dependency(match, config)
@@ -228,6 +316,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 8) Átmenet-védekezés: sok gyors kapott gól labdavesztés után.
+    _szabaly = 8
     try:
         from .defense import transition_defense
         td = transition_defense(match, config)
@@ -243,6 +332,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 9) Laza védekezés: sok tér a lövőnek (magas engedett xG mellett).
+    _szabaly = 9
     try:
         from .defense import defense_analysis, defensive_pressure
         dp = defensive_pressure(match, config)
@@ -261,6 +351,7 @@ def _training_focus_cached(match: Match,
 
     # 10) Sok elöl (támadó harmadban) elvesztett labda: a befejezés
     # kapkodó/kockázatos — az ellenfél kontrája ezekből indul.
+    _szabaly = 10
     try:
         from .defense import turnover_zones
         tz = turnover_zones(match, config)
@@ -277,6 +368,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 11) Elvesztett szoros hajrá: a végjáték-helyzeteket gyakorolni kell.
+    _szabaly = 11
     try:
         from .momentum import clutch_performance
         cp = clutch_performance(match, config)
@@ -293,6 +385,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 12) Sok lövésüket blokkolják: a lövés-előkészítésen kell dolgozni.
+    _szabaly = 12
     try:
         from .defense import detect_blocks
         bl = detect_blocks(match, config)
@@ -309,6 +402,7 @@ def _training_focus_cached(match: Match,
 
     # 13) Második félidei gól-visszaesés: a mérleg félidők közt romlik
     # (gól-alapú jel, a tempó-alapú fáradás-szabály kiegészítője).
+    _szabaly = 13
     try:
         from .momentum import halftime_score, score_progression
         hs = halftime_score(match, config)
@@ -329,6 +423,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 14) Lassú válasz a kapott gólra: az újraindulást kell gyakorolni.
+    _szabaly = 14
     try:
         from .momentum import goal_responses
         gr = goal_responses(match, config)
@@ -345,6 +440,7 @@ def _training_focus_cached(match: Match,
 
     # 15) Egy védőforma ellen elakadnak: fal elleni figurákat kell
     # gyakorolni (a felderítés tükör-szabálya a SAJÁT csapatra).
+    _szabaly = 15
     try:
         from .tactics import efficiency_vs_formation
         ef = efficiency_vs_formation(match, config)
@@ -369,6 +465,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 16) Terméketlen hosszú támadások: időkorlátos befejezés-gyakorlás.
+    _szabaly = 16
     try:
         from .attack_types import attack_duration_efficiency
         de = attack_duration_efficiency(match, config)
@@ -392,6 +489,7 @@ def _training_focus_cached(match: Match,
 
     # 17) Kihagyott ziccerek: nagy xG-jű helyzetek gól nélkül —
     # a helyzetkihasználást célzottan kell gyakorolni.
+    _szabaly = 17
     try:
         from .xg import missed_big_chances
         miss: dict[str, int] = {"home": 0, "away": 0}
@@ -410,6 +508,7 @@ def _training_focus_cached(match: Match,
 
     # 18) Lassú kapus-indítás: a védés utáni felhozatal gyakorlása —
     # a gyors kidobás kontra-fegyver (a felderítési kulcs tükör-szabálya).
+    _szabaly = 18
     try:
         from .goalkeeper import outlet_speed
         osp = outlet_speed(match, config)
@@ -428,6 +527,7 @@ def _training_focus_cached(match: Match,
 
     # 19) A 7 a 6 ára: ha többször kaptak gólt az üresen hagyott kapuba,
     # a lehozott kapusos játék labdabiztonságát kell gyakorolni.
+    _szabaly = 19
     try:
         from .goalkeeper import empty_net_goals
         eng = empty_net_goals(match, config)
@@ -445,6 +545,7 @@ def _training_focus_cached(match: Match,
 
     # 20) Egy-tengelyű támadás: ha a gólok zöme egyetlen (gólpasszoló ->
     # lövő) párosból jön, az ellenfél elvágja — B-tervet kell építeni.
+    _szabaly = 20
     try:
         from .event_detection import (EventType, assist_network,
                                       detect_shots)
@@ -471,6 +572,7 @@ def _training_focus_cached(match: Match,
 
     # 24) Szélső-játék: ha vannak szélsők a felállásban, de a gólokból
     # kimaradnak, a támadás beszűkült — szélesíteni kell.
+    _szabaly = 24
     try:
         from .roles import estimate_positions
         from .xg import match_xg
@@ -498,6 +600,7 @@ def _training_focus_cached(match: Match,
 
     # 23) Visszarendeződés-tempó: ha méréssel is lassú a visszaérés,
     # nem kell kontra-gólt várni a jelzéshez — korai figyelmeztetés.
+    _szabaly = 23
     try:
         from .defense import RECOVERY_SLOW_S, transition_recovery
         trr = transition_recovery(match, config)
@@ -516,6 +619,7 @@ def _training_focus_cached(match: Match,
 
     # 22) Kapus-forma: ha a kapus a helyzetekhez képest sokat kap
     # (negatív GSAx), célzott kapus-edzés kell — nem a fal a hibás.
+    _szabaly = 22
     try:
         from .xg import xg_prevented
         xp = xg_prevented(match, config)
@@ -534,6 +638,7 @@ def _training_focus_cached(match: Match,
 
     # 21) Rotáció-tervezés: ha többen is nagyot esnek a tempóból és
     # cserét sem kapnak, a pad használatát kell megtervezni.
+    _szabaly = 21
     try:
         from .substitutions import late_sub_flags
         per_side: dict[str, int] = {"home": 0, "away": 0}
@@ -552,6 +657,7 @@ def _training_focus_cached(match: Match,
     # 25) Fegyelem: ha a csapat többször kiül (2+ felismert kiállítás),
     # a védekezés-technikán kell dolgozni — az emberhátrány a
     # leggyorsabb módja a meccs elvesztésének.
+    _szabaly = 25
     try:
         from .rules import detect_powerplay
         n_susp = {"home": 0, "away": 0}
@@ -570,6 +676,7 @@ def _training_focus_cached(match: Match,
 
     # 26) Szünet utáni kezdés: ha a 2. félidő első 5 percében 2+ gólos
     # mínuszba kerül a csapat, a visszatérés-protokollon kell dolgozni.
+    _szabaly = 26
     try:
         from .halftime import second_half_start
         shs = second_half_start(match, config)
@@ -588,6 +695,7 @@ def _training_focus_cached(match: Match,
     # 27) Figura-frissítés: ha a leggyakoribb figura terméketlen (4+
     # támadásból legfeljebb 20% gól), az ellenfelek már olvassák —
     # variáció kell.
+    _szabaly = 27
     try:
         from .setplays import setplay_efficiency
         eff_tf = setplay_efficiency(match)
@@ -610,6 +718,7 @@ def _training_focus_cached(match: Match,
     # 28) Hetes-variáció: ha a fő dobónk irány-képe kiszámítható (2+
     # mért heteséből 75%+ egy sávba megy), az ellenfél kapusa készülni
     # fog rá — váltogatás kell.
+    _szabaly = 28
     try:
         from .rules import seven_meter_outcomes
         by_taker: dict = {}
@@ -637,6 +746,7 @@ def _training_focus_cached(match: Match,
     # rajta át (15% alatt), vagy a beállós játék terméketlen (a gólarány
     # 15+ ponttal rosszabb, mint nélküle), a beadás-játékot kell
     # gyakorolni.
+    _szabaly = 30
     try:
         from .attack_types import pivot_usage
         pu30 = pivot_usage(match, config)
@@ -672,6 +782,7 @@ def _training_focus_cached(match: Match,
     # 32) Passz-lánc: ha a hosszú körbejáratás terméketlen (6+ passzos
     # támadások gólarány nélkül), vagy a rövid játék elkapkodott (a
     # támadások zöme 0–2 passz, gyenge gólaránnyal), célzott gyakorlat.
+    _szabaly = 32
     try:
         from .attack_types import pass_chains
         pc32 = pass_chains(match, config)
@@ -706,6 +817,7 @@ def _training_focus_cached(match: Match,
     # 31) Sáv-védelem: ha az ellenfél betörései egy sávban
     # koncentrálódnak ellenünk (40%+, 2+ gól onnan), a segítő védő
     # csúszását kell gyakorolni abban a sávban.
+    _szabaly = 31
     try:
         from .defense import breakthrough_lanes
         bl31 = breakthrough_lanes(match, config)
@@ -729,6 +841,7 @@ def _training_focus_cached(match: Match,
 
     # 33) Kapus-helyezkedés: ha a saját kapus túl kint áll (átlag 1,5 m+
     # a gólvonaltól), az átemelés ellen sebezhető — helyezkedés-gyakorlat.
+    _szabaly = 33
     try:
         from .goalkeeper import gk_positioning
         gp33 = gk_positioning(match, config)
@@ -750,6 +863,7 @@ def _training_focus_cached(match: Match,
     # 34) Kontra-befejezés: ha a csapat sok labdát szerez, de alig
     # váltja gyors gólra (4+ szerzés, 20% alatti konverzió), a
     # lerohanás-befejezést kell gyakorolni.
+    _szabaly = 34
     try:
         from .attack_types import transition_offense
         to34 = transition_offense(match, config)
@@ -773,6 +887,7 @@ def _training_focus_cached(match: Match,
     # 29) Emberfogás-tapadás: ha van lazán őrző védőnk (a leglazább
     # emberfogó 2,5 m+ átlagtávról kíséri az emberét), az egy-egy
     # elleni védekezést kell gyakorolni — névre szólóan.
+    _szabaly = 29
     try:
         from .defense import MARK_LOOSE_M, marking_pairs
         mk29 = marking_pairs(match, config)
@@ -801,6 +916,7 @@ def _training_focus_cached(match: Match,
     # gyenge a gólarány (5+ távoli lövés, a lövések 40%+-a távoli,
     # 25% alatti gólarány), a lövésválasztást és az átlövő-technikát
     # kell gyakorolni.
+    _szabaly = 35
     try:
         from .attack_types import shot_ranges
         sr35 = shot_ranges(match, config)
@@ -827,6 +943,7 @@ def _training_focus_cached(match: Match,
     # 36) Kapus-védés sáv szerint: ha a SAJÁT kapusunk egy távolság-sávra
     # feltűnően gyenge (elég kaputra érkezett lövés, 50% alatti védés), azt
     # a sávot kell célzottan gyakorolni.
+    _szabaly = 36
     try:
         from .goalkeeper import GK_RANGE_MIN_FACED, gk_save_ranges
         gsr36 = gk_save_ranges(match, config)
@@ -858,6 +975,7 @@ def _training_focus_cached(match: Match,
     # 37) Befejezés-változatosság: ha a góljaink zöme (6+ gólból 55%+)
     # ugyanarra a kapuoldalra megy, kiszámíthatóak vagyunk — a
     # hely-változtatást kell gyakorolni.
+    _szabaly = 37
     try:
         from .attack_types import goal_placement
         gp37 = goal_placement(match, config)
@@ -883,6 +1001,7 @@ def _training_focus_cached(match: Match,
     # 38) Szélső-befejezés: ha a szélső (éles) szögből gyengén fejeznek be
     # (4+ szélső-lövés, 30% alatti gólarány), a szélső-befejezést kell
     # gyakorolni.
+    _szabaly = 38
     try:
         from .attack_types import wing_finishing
         wf38 = wing_finishing(match, config)
@@ -904,6 +1023,7 @@ def _training_focus_cached(match: Match,
     # 39) Védekezési vonal: ha felfutó/agresszív falat húzunk, a mögöttes
     # teret kell tudni zárni (visszafutás), mély falnál a türelmes felállt
     # védekezést és a beálló-őrzést gyakorolni.
+    _szabaly = 39
     try:
         from .defense import (DEF_LINE_DEEP_M, DEF_LINE_HIGH_M,
                               DEF_LINE_MIN_FRAMES, defensive_line_height)
@@ -935,6 +1055,7 @@ def _training_focus_cached(match: Match,
     # 40) Vertikális építkezés: ha nagyon türelmesen köröztetünk (30+
     # passz, 20% alatti előre-passz), a mélységi, penetráló játékot kell
     # gyakorolni — különben kiszámítható és könnyen védhető a támadás.
+    _szabaly = 40
     try:
         from .attack_types import PASS_FORWARD_MIN_M, pass_direction
         pd40 = pass_direction(match, config)
@@ -956,6 +1077,7 @@ def _training_focus_cached(match: Match,
     # 41) Gól-előkészítés változatossága: ha a gólpasszaink zöme (4+
     # gólpasszból 60%+) egyetlen forrásból (szél/közép/hátsó) jön, a
     # támadás kiszámítható — több irányból kell tudni gólt előkészíteni.
+    _szabaly = 41
     try:
         from .attack_types import ASSIST_SOURCE_MIN, assist_sources
         asr41 = assist_sources(match, config)
@@ -988,6 +1110,7 @@ def _training_focus_cached(match: Match,
     # 42) Labdabiztonság: ha egy játékosunk feltűnően sok labdát elveszít
     # (4+ eladás, és a csapat eladásainak jó része tőle), névre szóló
     # labdabiztonság-gyakorlás.
+    _szabaly = 42
     try:
         from .defense import turnover_players
         tp42 = turnover_players(match, config)
@@ -1014,6 +1137,7 @@ def _training_focus_cached(match: Match,
     # 43) Második roham: ha a kimaradt lövések (6+) után ritkán megyünk a
     # lepattanóra (8% alatt), a második esélyeket adjuk el — a beállós
     # lepattanó-harcot és a lövés utáni bemozgást kell gyakorolni.
+    _szabaly = 43
     try:
         from .attack_types import SECOND_CHANCE_MIN, second_chance
         sc43 = second_chance(match, config)
@@ -1036,6 +1160,7 @@ def _training_focus_cached(match: Match,
     # 44) Kezdés: ha a meccs nyitányát rendre elveszítjük (a korai — első 6
     # gólos — mérleg 2+ góllal negatív), a koncentrált, tervezett kezdést
     # kell gyakorolni (bemelegített első támadások, kész nyitó-figurák).
+    _szabaly = 44
     try:
         from .momentum import opening_profile
         op44 = opening_profile(match, config)
@@ -1059,6 +1184,7 @@ def _training_focus_cached(match: Match,
 
     # 45) Lövőerő-esés: ha a 2. félidőre érdemben lassulnak a lövéseink
     # (fáradás-jel), lövőerő-állóképességet kell építeni.
+    _szabaly = 45
     try:
         from .event_detection import FADE_DROP_PCT, shot_speed_fade
         sf45 = shot_speed_fade(match, config)
@@ -1080,6 +1206,7 @@ def _training_focus_cached(match: Match,
     # 46) Gól-koncentráció: ha a góljaink zöme (5+ gólból 40%+) egy embertől
     # jön, az ellenfél őt fogja kikapcsolni — másodlagos befejezőket kell
     # építeni, hogy a csapat ne álljon le vele együtt.
+    _szabaly = 46
     try:
         from .event_detection import goal_concentration
         gc46 = goal_concentration(match, config)
@@ -1102,6 +1229,7 @@ def _training_focus_cached(match: Match,
     # 47) Támogatás-távolság: ha a labdásunk rendre magára marad (átlag 7 m+
     # vagy 35%+ izolált kocka), a présjáték szétszed minket — a labda
     # melletti bemozgást kell gyakorolni.
+    _szabaly = 47
     try:
         from .decisions import (SUPPORT_ISO_M, SUPPORT_MIN_FRAMES,
                                 support_distance)
@@ -1127,6 +1255,7 @@ def _training_focus_cached(match: Match,
     # 48) Területi fölény: ha a birtoklásunk a saját térfelünkön ragad
     # (45% alatti elöl-arány), a labdakihozatalt kell gyakorolni — prés
     # ellen nem jutunk el a kapuig.
+    _szabaly = 48
     try:
         from .tactics import TILT_LOW_PCT, TILT_MIN_FRAMES, field_tilt
         ft48 = field_tilt(match, config)
@@ -1149,6 +1278,7 @@ def _training_focus_cached(match: Match,
 
     # 49) Védelmi tömörség: ha a falunk széthúzott (a közép nyitva), a
     # belső zárást kell gyakorolni — betörésekből és beállóból kapunk.
+    _szabaly = 49
     try:
         from .defense import (DEF_WIDTH_MIN_FRAMES, DEF_WIDTH_WIDE_M,
                               defensive_width)
@@ -1173,6 +1303,7 @@ def _training_focus_cached(match: Match,
     # 50) Engedett lövésminőség: ha a falunk átlagosan nagy értékű (ziccer-
     # közeli) lövéseket enged (8+ kapott lövésből 0,38+ xG/lövés), a
     # helyzet-megelőzést kell gyakorolni — a kapus egyedül kevés.
+    _szabaly = 50
     try:
         from .defense import defense_analysis
         da50 = defense_analysis(match, config)
@@ -1197,6 +1328,7 @@ def _training_focus_cached(match: Match,
     # 51) Passz-tempó: ha állva, lassan járatjuk a labdát (12 passz/perc
     # alatt), a fal békében felállhat ellenünk — a labdajáratás sebességét
     # kell növelni.
+    _szabaly = 51
     try:
         from .tactics import (PT_MIN_POSS_S, PT_SLOW_PER_MIN, pass_tempo)
         pt51 = pass_tempo(match, config)
@@ -1219,6 +1351,7 @@ def _training_focus_cached(match: Match,
 
     # 52) Falba lövés: ha a lövéseink nagy része (4+ blokkból 20%+) az
     # ellenfél blokkján akad el, a lövés-előkészítést kell gyakorolni.
+    _szabaly = 52
     try:
         from .defense import (BLOCKED_HIGH_PCT, BLOCKED_MIN,
                               blocked_shot_rate)
@@ -1243,6 +1376,7 @@ def _training_focus_cached(match: Match,
     # 53) Szerzés-magasság: ha a szerzéseink kizárólag hátul születnek
     # (6+ szerzésből 10% alatti elöl-arány), a letámadás mint fegyver
     # hiányzik — az elöl-zavarást kell gyakorolni.
+    _szabaly = 53
     try:
         from .defense import STEAL_HEIGHT_MIN, steal_height
         st53 = steal_height(match, config)
@@ -1266,6 +1400,7 @@ def _training_focus_cached(match: Match,
     # 54) Passz-hossz: ha hosszú passzokra épül a játékunk (15+ passzból
     # 30%+ 10 m fölötti) ÉS sokat adunk el, a passz-szerkezetet kell
     # biztonságosabbra hangolni.
+    _szabaly = 54
     try:
         from .event_detection import (PLEN_LONG_PCT, PLEN_MIN_PASSES,
                                       pass_length)
@@ -1295,6 +1430,7 @@ def _training_focus_cached(match: Match,
     # 55) Lövés-időzítés: ha rendre kivárunk (5+ lőtt támadásból 22+ mp-es
     # átlag lövésig-idő), a támadás-lezárást kell gyakorolni — a passzív
     # jel és a kapkodás ellenünk dolgozik.
+    _szabaly = 55
     try:
         from .attack_types import (SHTIM_LATE_AVG_S, SHTIM_MIN_SHOTS,
                                    shot_timing)
@@ -1319,6 +1455,7 @@ def _training_focus_cached(match: Match,
     # 56) Védekezés-fellazulás: ha a falunk a 2. félidőre érdemben lazul
     # (0,5 m+), a védekezés-állóképességet és a hajrá-fegyelmet kell
     # építeni — a meccs végi szabad lövők ebből születnek.
+    _szabaly = 56
     try:
         from .defense import (PRESSURE_FADE_LOOSEN_M,
                               PRESSURE_FADE_MIN_FRAMES, pressure_fade)
@@ -1344,6 +1481,7 @@ def _training_focus_cached(match: Match,
     # 57) Időkérés-forgatókönyv: ha az időkéréseink rendre nem hoznak
     # fordulatot (2+ hatástalan, és több, mint a sikeres), az időkérés
     # utáni újraindulást kell begyakorolni.
+    _szabaly = 57
     try:
         from .stoppages import timeout_record
         tr57 = timeout_record(match, config)
@@ -1364,6 +1502,7 @@ def _training_focus_cached(match: Match,
 
     # 58) Labdabiztonság-esés: ha a 2. félidőre érdemben nő az eladás-
     # ütemünk (+0,2/perc), a fáradt kéz labdabiztonságát kell építeni.
+    _szabaly = 58
     try:
         from .defense import TURNOVER_FADE_RISE_PER_MIN, turnover_fade
         tf58 = turnover_fade(match, config)
@@ -1386,6 +1525,7 @@ def _training_focus_cached(match: Match,
     # 486) A saját 7a6-unk EGY figurára épül: a lehozott kapus mellett a
     # kiszámíthatóság a legdrágább hiba — a hat védő rááll, az elvett
     # labda pedig azonnal gól az üres kapuba. Második megoldás kell.
+    _szabaly = 486
     try:
         from .setplays import empty_net_setplay
         enf486 = empty_net_setplay(match, config)
@@ -1412,6 +1552,7 @@ def _training_focus_cached(match: Match,
     # 485) A saját hajrá-falunk MÁS, mint a törzsben: a váltás csak akkor
     # ér valamit, ha be van gyakorolva — a hajrában felálló alakot
     # fáradtan, órára kell tudni felállítani, különben lyukas.
+    _szabaly = 485
     try:
         from .defense import clutch_defense_shape
         cds485 = clutch_defense_shape(match, config)
@@ -1438,6 +1579,7 @@ def _training_focus_cached(match: Match,
     # 484) A saját hajránk EGY figurára szűkül: a végjátékban az ellenfél
     # fala nem tippel, hanem arra áll fel, amit mindig hozunk — a hajrára
     # kell egy második, ugyanabból a mozgásból induló befejezés.
+    _szabaly = 484
     try:
         from .setplays import clutch_setplay
         csp484 = clutch_setplay(match, config)
@@ -1464,6 +1606,7 @@ def _training_focus_cached(match: Match,
     # 483) A saját emberelőnyünk EGY figurára épül: a két perc a
     # legdrágább támadási idő — ha a fal kiismeri az egyetlen megoldást,
     # a fölény elvész. Második befejezés kell rá, bejátszva.
+    _szabaly = 483
     try:
         from .setplays import powerplay_setplay
         ppf483 = powerplay_setplay(match, config)
@@ -1488,6 +1631,7 @@ def _training_focus_cached(match: Match,
     # 482) Állásfüggően kiszámítható a támadójátékunk: ha vezetésnél és
     # hátrányban MÁS figurára épülünk, az ellenfél az eredményjelzőről
     # olvassa le, mi jön — a hajrára kell egy második megoldás.
+    _szabaly = 482
     try:
         from .setplays import setplay_by_score
         sbs482 = setplay_by_score(match, config)
@@ -1509,6 +1653,7 @@ def _training_focus_cached(match: Match,
     # 481) A saját falunk két alakja közt szakadék van: ha az egyik
     # alakunk ellen sokkal többet kapunk, nem a rendszert kell cserélni,
     # hanem azt az alakot kell felállítani minden támadásnál.
+    _szabaly = 481
     try:
         from .defense import (DSH_GAP_PP, DSH_MIN_ATTACKS, defense_shapes)
         dsh481 = defense_shapes(match, config)
@@ -1543,6 +1688,7 @@ def _training_focus_cached(match: Match,
     # ugyanazt a figurát hozzuk (vagy mindig ismétlünk), az ellenfél
     # védekezése előre felállhat rá — a gól utáni támadásra kell egy
     # MÁSODIK, bejátszott változat.
+    _szabaly = 480
     try:
         from .setplays import (SRC_GAP_PP, SRC_HIGH_PCT, SRC_MIN_ATTACKS,
                                setplay_repeat_choice)
@@ -1579,6 +1725,7 @@ def _training_focus_cached(match: Match,
     # 479) A figuránk egy fal ellen nem megy: ha a leggyakoribb figuránk
     # valamelyik védőforma ellen elég mintából gól nélkül maradt, azt a
     # falat kell bejátszani ellene edzésen — a meccsen már késő.
+    _szabaly = 479
     try:
         from .setplays import FVF_MIN_ATTACKS, figure_vs_formation
         fvf479 = figure_vs_formation(match, config)
@@ -1606,6 +1753,7 @@ def _training_focus_cached(match: Match,
     # 478) Terméketlen kedvenc figura: a leggyakoribb figuránk
     # (SPL_MIN_ATTACKS támadástól) gól nélkül maradt — a mintát az
     # ellenfél is látja, új befejezést kell rá gyakorolni.
+    _szabaly = 478
     try:
         from .setplays import SPL_MIN_ATTACKS, setplay_shapes
         sps478 = setplay_shapes(match, config)
@@ -1630,6 +1778,7 @@ def _training_focus_cached(match: Match,
     # 477) Labdahordó: ha valakink a csapatátlagnál sokkal többet fut a
     # labdával, az ellenfél leszúrása őt fogja megtalálni — a "vidd
     # kevesebbet, add korábban" edzés-téma, mielőtt meccsen derül ki.
+    _szabaly = 477
     try:
         from .decisions import CARRY_LONG_GAP_M, ball_carry_players
         bcp477 = ball_carry_players(match, config)
@@ -1653,6 +1802,7 @@ def _training_focus_cached(match: Match,
 
     # 476) Egyéni fókusz a csapat-tervben: ha ugyanaz a terület TÖBB
     # emberünknél jön elő, az már nem egyéni ügy, hanem edzés-téma.
+    _szabaly = 476
     try:
         # Ugyanebben a modulban van — a hatókör újra-belépő, tehát a
         # mérések nem futnak le még egyszer.
@@ -1682,6 +1832,7 @@ def _training_focus_cached(match: Match,
 
     # 475) Hátrébb kerülő támadás: ha a SAJÁT felállásunk a 2. félidőre
     # eltávolodik a kaputól, a hajrában csak a nehéz átlövés marad.
+    _szabaly = 475
     try:
         from .attack_types import ADEPTH_FADE_DROP_M, attack_depth_fade
         adf475 = attack_depth_fade(match, config)
@@ -1704,6 +1855,7 @@ def _training_focus_cached(match: Match,
 
     # 474) Elfogyó beálló: ha a SAJÁT labdánk a 2. félidőre nem megy be
     # a hatosra, a fal nyugodtan dolgozhat kifelé ellenünk.
+    _szabaly = 474
     try:
         from .attack_types import PIVOT_FADE_DROP_PCT, pivot_usage_fade
         puf474 = pivot_usage_fade(match, config)
@@ -1726,6 +1878,7 @@ def _training_focus_cached(match: Match,
 
     # 473) Halmozott fáradás: ha egy meccsen HÁROM fáradás-jel is
     # megszólal, az nem egy-egy szám, hanem a hatvan perc kérdése.
+    _szabaly = 473
     try:
         from .priorities import FATIGUE_PATTERN_MIN, fatigue_profile
         fpr473 = fatigue_profile(match, config)
@@ -1747,6 +1900,7 @@ def _training_focus_cached(match: Match,
 
     # 472) Beszűkülő támadás: ha a SAJÁT labdánk a 2. félidőre nem megy
     # ki a szélre, a hajrában csak a nehéz átlövés marad.
+    _szabaly = 472
     try:
         from .attack_types import (WING_INV_FADE_DROP_PCT,
                                    wing_involvement_fade)
@@ -1769,6 +1923,7 @@ def _training_focus_cached(match: Match,
 
     # 471) Lassuló visszaállás: ha a SAJÁT hazaérésünk a 2. félidőre
     # lassul, a hajrában minden lövésünk után kontra-ablakot nyitunk.
+    _szabaly = 471
     try:
         from .defense import RETREAT_FADE_SLOW_S, retreat_fade
         rtf471 = retreat_fade(match, config)
@@ -1789,6 +1944,7 @@ def _training_focus_cached(match: Match,
 
     # 470) Visszahúzódó fal: ha a SAJÁT falunk a 2. félidőre beszorul a
     # 6-os köré, a hajrában zavartalanul lőnek ránk 9 méterről.
+    _szabaly = 470
     try:
         from .defense import LINE_FADE_DROP_M, line_height_fade
         lhf470 = line_height_fade(match, config)
@@ -1809,6 +1965,7 @@ def _training_focus_cached(match: Match,
 
     # 469) Kiszámítható ritmus: ha a SAJÁT támadásaink mind egy
     # tempóban futnak, az ellenfél fala rá tud állni.
+    _szabaly = 469
     try:
         from .tactics import (ATV_MIN_ATTACKS, ATV_ONE_TEMPO_PCT,
                               attack_tempo_variety)
@@ -1843,6 +2000,7 @@ def _training_focus_cached(match: Match,
 
     # 468) Magától jövő eladás: ha a labdáink NYOMÁS NÉLKÜL vesznek el,
     # az technika- és döntés-kérdés, nem taktikai.
+    _szabaly = 468
     try:
         from .defense import (PTO_PRESSURE_M, PTO_UNFORCED_PCT,
                               pressured_turnovers)
@@ -1873,6 +2031,7 @@ def _training_focus_cached(match: Match,
 
     # 467) Figura-indító: ha a saját figuránk mindig ugyanarról a
     # posztról indul, az ellenfél ugyanezt látja a felvételen.
+    _szabaly = 467
     try:
         from .setplays import SPO_SHARE_PCT, setplay_openers
         spo467 = setplay_openers(match, config)
@@ -1901,6 +2060,7 @@ def _training_focus_cached(match: Match,
 
     # 466) Hetes-ismétlés: ha a saját hetesdobóink másodszorra is
     # ugyanoda dobnak, kiszámíthatók — a sarok-váltás edzés-téma.
+    _szabaly = 466
     try:
         from .rules import SREP_REPEAT_PCT, seven_taker_repeat
         srep466 = seven_taker_repeat(match, config)
@@ -1928,6 +2088,7 @@ def _training_focus_cached(match: Match,
 
     # 465) Elzárás-fáradás: ha az elzárás-munkánk a 2. félidőre elfogy,
     # az elzárók forgatása és a törzs-állóképesség az edzés-téma.
+    _szabaly = 465
     try:
         from .attack_types import SCRF_GAP_PP, screen_fade
         scrf465 = screen_fade(match, config)
@@ -1954,6 +2115,7 @@ def _training_focus_cached(match: Match,
 
     # 464) Befutó poszt: ha a kontráink második hulláma egy poszton áll,
     # a felkészült ellenfél a sávot zárja — a befutót variálni kell.
+    _szabaly = 464
     try:
         from .attack_types import SWR_SHARE_PCT, second_wave_roles
         swr464 = second_wave_roles(match, config)
@@ -1979,6 +2141,7 @@ def _training_focus_cached(match: Match,
 
     # 463) Egálbontó poszt: ha a holtpont-tervünk egy poszton áll, a
     # felkészült ellenfél egálnál pont azt zárja — második ág kell.
+    _szabaly = 463
     try:
         from .momentum import PBR_SHARE_PCT, parity_break_roles
         pbr463 = parity_break_roles(match, config)
@@ -2003,6 +2166,7 @@ def _training_focus_cached(match: Match,
 
     # 462) Rejtett szervező poszt: ha a szervezésünk egy poszton fut, a
     # felkészült ellenfél a sávot zárja — második indító-forrás kell.
+    _szabaly = 462
     try:
         from .event_detection import PREAR_SHARE_PCT, pre_assist_roles
         prr462 = pre_assist_roles(match, config)
@@ -2027,6 +2191,7 @@ def _training_focus_cached(match: Match,
 
     # 461) Szuper-csere poszt: ha a padunk egy posztról termel, a
     # cserénk olvasható — második pad-megoldást kell építeni.
+    _szabaly = 461
     try:
         from .momentum import SSPR_SHARE_PCT, super_sub_roles
         ssr461 = super_sub_roles(match, config)
@@ -2051,6 +2216,7 @@ def _training_focus_cached(match: Match,
 
     # 460) Szuper-csere: ha a padról egy emberünk termel, a beállása
     # tudatos fegyver legyen — időzítve, ne csak pihentetésként.
+    _szabaly = 460
     try:
         from .momentum import super_sub
         ssu460 = super_sub(match, config)
@@ -2076,6 +2242,7 @@ def _training_focus_cached(match: Match,
 
     # 459) Fal-rés fáradás: ha a saját közeink a 2. félidőre nyílnak, a
     # belső védőket kell forgatni — ez frissesség-kérdés, nem technika.
+    _szabaly = 459
     try:
         from .defense import GFD_RISE_M, gap_fade
         gfd459 = gap_fade(match, config)
@@ -2100,6 +2267,7 @@ def _training_focus_cached(match: Match,
 
     # 458) Hetes-sarok: ha a dobónk kiszámítható, a kapusok olvasni
     # fogják — variálni kell, vagy második dobót építeni.
+    _szabaly = 458
     try:
         from .rules import STC_MIN_ATTEMPTS, STC_SHARE_PCT, \
             seven_taker_corners
@@ -2127,6 +2295,7 @@ def _training_focus_cached(match: Match,
 
     # 457) Hoki-assziszt: ha a támadás-szervezés egy rejtett emberen
     # fordul, az ő kiiktatása a gólgyárat állítja le — variálni kell.
+    _szabaly = 457
     try:
         from .event_detection import PREA_MIN, pre_assists
         pra457 = pre_assists(match, config)
@@ -2153,6 +2322,7 @@ def _training_focus_cached(match: Match,
 
     # 456) Vasemberek: a csere nélkül végigjátszó emberünk hajrá-hibái
     # nem formahanyatlás, hanem terhelés — tervezett pihentetés kell.
+    _szabaly = 456
     try:
         from .stats import IRONMEN_SHARE_PCT, iron_men
         imn456 = iron_men(match, config)
@@ -2177,6 +2347,7 @@ def _training_focus_cached(match: Match,
 
     # 455) Poszt-kezesség: a balkezes posztunkra külön figurát kell
     # építeni — a bal kéz a jobb oldali posztokon fegyver.
+    _szabaly = 455
     try:
         from .roles import RSH_MIN_SHOTS, role_shooting_hand
         rsh455 = role_shooting_hand(match, config)
@@ -2201,6 +2372,7 @@ def _training_focus_cached(match: Match,
 
     # 454) Fal-rés: ha a saját falunkban állandó nagy köz nyílik, a
     # szomszédok átadás-rendjét kell gyakorolni.
+    _szabaly = 454
     try:
         from .defense import DGAP_WIDE_M, defensive_gaps
         dgp454 = defensive_gaps(match, config)
@@ -2227,6 +2399,7 @@ def _training_focus_cached(match: Match,
 
     # 453) Kapus a kezesség szerint: ha a kapusunk a balkezesek ellen
     # esik vissza, tükrözött dobó-gyakorlat kell.
+    _szabaly = 453
     try:
         from .goalkeeper import GKH_GAP_PP, gk_saves_by_hand
         gkh453 = gk_saves_by_hand(match, config)
@@ -2255,6 +2428,7 @@ def _training_focus_cached(match: Match,
 
     # 452) Befejezés-mérleg: ha a helyzeteink ALATT teljesítünk, a
     # befejezés a hiány — a helyzet-teremtés már megvan.
+    _szabaly = 452
     try:
         from .xg import FBAL_DIFF_GOALS, finishing_balance
         fbal452 = finishing_balance(match, config)
@@ -2278,6 +2452,7 @@ def _training_focus_cached(match: Match,
 
     # 451) Csere-fázis: ha az ellenfél birtoklása közben cserélünk, a
     # csere-fegyelmet kell építeni — a fal különben emberhátrányban áll fel.
+    _szabaly = 451
     try:
         from .substitutions import SUBPH_RISKY_PCT, substitution_phase
         sph451 = substitution_phase(match, config)
@@ -2305,6 +2480,7 @@ def _training_focus_cached(match: Match,
 
     # 449) Védekezési formáció: ha egyetlen fal-alakot tartunk, az a
     # kiszámíthatóság — a második formációt is be kell gyakorolni.
+    _szabaly = 449
     try:
         from .defense import DFORM_SHARE_PCT, defensive_formation
         dfm449 = defensive_formation(match, config)
@@ -2334,6 +2510,7 @@ def _training_focus_cached(match: Match,
 
     # 448) Kezesség: a balkezes lövő a saját csapatban is tükör-feladat —
     # a hozzá tartozó posztot és a beadásokat rá kell szabni.
+    _szabaly = 448
     try:
         from .event_detection import HANDED_MIN_SHOTS, shooting_hand
         hnd448 = shooting_hand(match, config)
@@ -2361,6 +2538,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 447) Egálbontó emberek: a holtpont ne egy emberen álljon.
+    _szabaly = 447
     try:
         from .momentum import PBP_MIN_BREAKS, parity_break_scorers
         pbp447 = parity_break_scorers(match, config)
@@ -2387,6 +2565,7 @@ def _training_focus_cached(match: Match,
 
     # 446) Befutó emberek: az egy befutóra épülő második hullám
     # kiszámítható — a visszafutás megtanulja őt.
+    _szabaly = 446
     try:
         from .attack_types import BFW_MIN_SECOND, second_wave_finishers
         bfw446 = second_wave_finishers(match, config)
@@ -2414,6 +2593,7 @@ def _training_focus_cached(match: Match,
 
     # 445) Leforduló beállók: az egy beállóra épülő lefordulós játék
     # kiszámítható — az elé lépés ellene készen áll.
+    _szabaly = 445
     try:
         from .attack_types import LFB_MIN_RUNNING, pivot_runners
         lfb445 = pivot_runners(match, config)
@@ -2440,6 +2620,7 @@ def _training_focus_cached(match: Match,
 
     # 444) Keresztjáró emberek: az egy emberen át futó keresztjáték
     # kiszámítható — a váltás ellene készen áll.
+    _szabaly = 444
     try:
         from .attack_types import CRP_MIN_CROSSES, crossing_runners
         crp444 = crossing_runners(match, config)
@@ -2466,6 +2647,7 @@ def _training_focus_cached(match: Match,
 
     # 443) Futtatott szélsők: az egy szélsőre járó futtatás
     # kiszámítható — a sávzárás ellene készen áll.
+    _szabaly = 443
     try:
         from .attack_types import WRP_MIN_RUNNING, wing_runners
         wrp443 = wing_runners(match, config)
@@ -2490,6 +2672,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 442) Középkezdés-hozam: a gyors kezdés csak góllal ér valamit.
+    _szabaly = 442
     try:
         from .momentum import RSY_MIN_RESTARTS, restart_yield
         rsy442 = restart_yield(match, config)
@@ -2514,6 +2697,7 @@ def _training_focus_cached(match: Match,
 
     # 441) Emberhátrány-túlélés: a hátrány-védekezés rendszer, nem
     # hősiesség.
+    _szabaly = 441
     try:
         from .rules import SHS_BAD_PER_2MIN, shorthanded_survival
         shs441 = shorthanded_survival(match, config)
@@ -2538,6 +2722,7 @@ def _training_focus_cached(match: Match,
 
     # 440) Kapuscsere-hozam: a második kapus beállás-rutinja
     # edzhető.
+    _szabaly = 440
     try:
         from .goalkeeper import GCY_GAP_PP, gk_change_yield
         gcy440 = gk_change_yield(match, config)
@@ -2561,6 +2746,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 439) Időkérés-hozam: a hatástalan időkérés tartalom-kérdés.
+    _szabaly = 439
     try:
         from .stoppages import TOY_MIN_JUDGED, timeout_yield
         toy439 = timeout_yield(match, config)
@@ -2585,6 +2771,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 438) Gólpassz-duó: a bejáratott kettős kiszámíthatóság is.
+    _szabaly = 438
     try:
         from .event_detection import ADU_MIN_GOALS, assist_duos
         adu438 = assist_duos(match, config)
@@ -2605,6 +2792,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 437) 7a6-befejező emberek: a 7 a 6-nak két kifutása legyen.
+    _szabaly = 437
     try:
         from .goalkeeper import EN7P_MIN_SHOTS, seven_six_finishers
         en7437 = seven_six_finishers(match, config)
@@ -2629,6 +2817,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 436) Elzárt védők: az elakadás nem alkat, hanem technika.
+    _szabaly = 436
     try:
         from .defense import SDP_MIN_SCREENS, screened_defenders
         sdp436 = screened_defenders(match, config)
@@ -2655,6 +2844,7 @@ def _training_focus_cached(match: Match,
 
     # 435) Előnyben-emberek: a vezetés-tartás ne egy emberen
     # álljon.
+    _szabaly = 435
     try:
         from .momentum import LGP_MIN_GOALS, lead_scorers
         lgp435 = lead_scorers(match, config)
@@ -2680,6 +2870,7 @@ def _training_focus_cached(match: Match,
 
     # 434) Újrakezdő emberek: a szünet utáni nyitás ne egy emberen
     # álljon.
+    _szabaly = 434
     try:
         from .momentum import SSP_MIN_GOALS, second_start_scorers
         ssp434 = second_start_scorers(match, config)
@@ -2704,6 +2895,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 433) Rajt-emberek: az egy emberre épülő rajt kockázat.
+    _szabaly = 433
     try:
         from .momentum import OSP_MIN_GOALS, opening_scorers
         osp433 = opening_scorers(match, config)
@@ -2729,6 +2921,7 @@ def _training_focus_cached(match: Match,
 
     # 432) Válaszoló emberek: ha a válasz egy emberen áll, a
     # bekapott gól után kiszámíthatók vagyunk.
+    _szabaly = 432
     try:
         from .momentum import RSPP_MIN_GOALS, response_scorers
         rspp432 = response_scorers(match, config)
@@ -2753,6 +2946,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 431) Előkészítő emberek: a szervezés ne egy kézen fusson.
+    _szabaly = 431
     try:
         from .attack_types import EPP_MIN_PASSES, last_passers
         epp431 = last_passers(match, config)
@@ -2778,6 +2972,7 @@ def _training_focus_cached(match: Match,
 
     # 430) Passzív-birtoklók: a passzív jelzés előtti utolsó
     # megoldás gyakorolható.
+    _szabaly = 430
     try:
         from .rules import PVP_MIN_FRAMES, passive_holders
         pvp430 = passive_holders(match, config)
@@ -2804,6 +2999,7 @@ def _training_focus_cached(match: Match,
 
     # 429) Lágy passzolók: az ívelt átadás a legolcsóbb labda az
     # ellenfélnek.
+    _szabaly = 429
     try:
         from .decisions import SPP_MIN_SOFT, soft_passers
         spp429 = soft_passers(match, config)
@@ -2829,6 +3025,7 @@ def _training_focus_cached(match: Match,
 
     # 428) Fáradt lövők: a fáradtan szétmenő lövés célzás- és
     # terhelés-kérdés.
+    _szabaly = 428
     try:
         from .xg import FSP_MIN_SH, tired_shooters
         fsp428 = tired_shooters(match, config)
@@ -2854,6 +3051,7 @@ def _training_focus_cached(match: Match,
 
     # 427) Ziccerhagyó emberek: a kihagyott ziccer a legdrágább
     # hiba, és befejezés-gyakorlással javítható.
+    _szabaly = 427
     try:
         from .xg import MCP_MIN_MISSES, missed_chance_players
         mcp427 = missed_chance_players(match, config)
@@ -2879,6 +3077,7 @@ def _training_focus_cached(match: Match,
 
     # 426) Kontroll-idővonal: a birtoklás-vesztés szakaszos, tehát
     # edzhető (felállás-fegyelem, támadás-hossz).
+    _szabaly = 426
     try:
         from .momentum import CTL_MIN_BLOCKS, control_timeline
         ctl426 = control_timeline(match, config)
@@ -2903,6 +3102,7 @@ def _training_focus_cached(match: Match,
 
     # 425) Hetes-forrás: a hetes ára helyzet-függő, és a fegyelem
     # ott a legfontosabb, ahol a hetes születik.
+    _szabaly = 425
     try:
         from .rules import SVS_SHARE_PCT, seven_sources
         svs425 = seven_sources(match, config)
@@ -2925,6 +3125,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 424) Kapus a kapott gól után: a újraindulás rutin-kérdés.
+    _szabaly = 424
     try:
         from .goalkeeper import GKA_GAP_PP, gk_after_goal
         gka424 = gk_after_goal(match, config)
@@ -2950,6 +3151,7 @@ def _training_focus_cached(match: Match,
 
     # 423) Futómunka-eloszlás: a koncentrált futás csere- és
     # terhelés-kérdés.
+    _szabaly = 423
     try:
         from .stats import LBL_TOP3_PCT, running_load_balance
         lbl423 = running_load_balance(match, config)
@@ -2974,6 +3176,7 @@ def _training_focus_cached(match: Match,
 
     # 422) Figura-kopás: a figura akkor ér valamit, ha ismételve is
     # működik (variáció, nem újabb figura).
+    _szabaly = 422
     try:
         from .setplays import SPD_GAP_PP, setplay_decay
         spd422 = setplay_decay(match, config)
@@ -2999,6 +3202,7 @@ def _training_focus_cached(match: Match,
 
     # 421) Kapus-visszaérés: a 7 a 6 csak akkor vállalható, ha a
     # hazafutás megy.
+    _szabaly = 421
     try:
         from .goalkeeper import KRT_SLOW_S, keeper_return
         krt421 = keeper_return(match, config)
@@ -3024,6 +3228,7 @@ def _training_focus_cached(match: Match,
 
     # 420) Kettőzött emberek: akit rendre kettőznek, annak
     # lekapcsolódó társ és begyakorolt leadás kell.
+    _szabaly = 420
     try:
         from .defense import DTG_MIN_FRAMES, doubled_targets
         dtp420 = doubled_targets(match, config)
@@ -3049,6 +3254,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 419) Csere-hozam: a csere-pillanat is játékhelyzet.
+    _szabaly = 419
     try:
         from .substitutions import SBY_GAP_GOALS, substitution_yield
         sby419 = substitution_yield(match, config)
@@ -3073,6 +3279,7 @@ def _training_focus_cached(match: Match,
 
     # 418) Passzív-kockázat: a lövés nélkül elnyúló támadás
     # befejezés-hiány, nem stílus.
+    _szabaly = 418
     try:
         from .rules import PSR_SHARE_PCT, passive_risk
         psr418 = passive_risk(match, config)
@@ -3096,6 +3303,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 417) Hetes-hozam: a hetes a legolcsóbb gól — ha bemegy.
+    _szabaly = 417
     try:
         from .rules import SVY_LOW_PCT, seven_yield
         svy417 = seven_yield(match, config)
@@ -3120,6 +3328,7 @@ def _training_focus_cached(match: Match,
 
     # 416) Emberelőny-hozam: a két perc akkor ér valamit, ha gól
     # lesz belőle.
+    _szabaly = 416
     try:
         from .rules import PPY_GAP_PP, powerplay_yield
         ppy416 = powerplay_yield(match, config)
@@ -3144,6 +3353,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 415) Blokk-fáradás: a blokk akarat- és kondíció-munka.
+    _szabaly = 415
     try:
         from .defense import BLF_GAP_PP, block_fade
         blf415 = block_fade(match, config)
@@ -3169,6 +3379,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 414) Elzárás-hozam: mérhető, hogy fizet-e az elzárás-játékunk.
+    _szabaly = 414
     try:
         from .attack_types import SCY_GAP_PP, screen_yield
         scy414 = screen_yield(match, config)
@@ -3204,6 +3415,7 @@ def _training_focus_cached(match: Match,
 
     # 413) Felhozatal-emberek: az egy emberre épülő kihozatal egy
     # emberrel megfogható.
+    _szabaly = 413
     try:
         from .goalkeeper import OTP_MIN_OUTLETS, outlet_targets
         otp413 = outlet_targets(match, config)
@@ -3229,6 +3441,7 @@ def _training_focus_cached(match: Match,
 
     # 412) Kétperc-gyűjtők: az egy emberre gyűlő kiállítás
     # rendszer-hiba, nem pech.
+    _szabaly = 412
     try:
         from .rules import STC_MIN_SUSP, suspension_collectors
         stc412 = suspension_collectors(match, config)
@@ -3255,6 +3468,7 @@ def _training_focus_cached(match: Match,
 
     # 411) Kiszolgált befejezők: aki csak bejátszásból él, a
     # kiszolgálója kiesésekor terv nélkül marad.
+    _szabaly = 411
     try:
         from .roles import ASP_MIN_ASSISTED, assisted_scorers
         asp411 = assisted_scorers(match, config)
@@ -3281,6 +3495,7 @@ def _training_focus_cached(match: Match,
 
     # 410) 7a6 eladás: a lehozott kapus kockázata labdakezelés-,
     # nem létszám-kérdés.
+    _szabaly = 410
     try:
         from .goalkeeper import (ENT_MIN_TURNOVERS, ENT_PUNISH_PCT,
                                  empty_net_turnovers)
@@ -3307,6 +3522,7 @@ def _training_focus_cached(match: Match,
 
     # 409) Indítás-vadász emberek: az egy emberre épülő letámadás
     # egy cserével hatástalanítható.
+    _szabaly = 409
     try:
         from .goalkeeper import OHP_MIN_STEALS, outlet_hunters
         ohp409 = outlet_hunters(match, config)
@@ -3333,6 +3549,7 @@ def _training_focus_cached(match: Match,
 
     # 408) Fáradt-fal emberek: a második félidőre megnyíló fal
     # csere- és besegítés-kérdés.
+    _szabaly = 408
     try:
         from .defense import TCP_MIN_SH, tired_conceder_players
         tcp408 = tired_conceder_players(match, config)
@@ -3358,6 +3575,7 @@ def _training_focus_cached(match: Match,
 
     # 407) Visszafutás-lemaradók: az első visszafutó kijelölés, nem
     # alkat kérdése.
+    _szabaly = 407
     try:
         from .defense import SRP_MIN_LAGS, slow_retreat_players
         srp407 = slow_retreat_players(match, config)
@@ -3383,6 +3601,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 406) Fáradt-eladók: a fáradtan kinyíló kéz terhelés-kérdés.
+    _szabaly = 406
     try:
         from .decisions import FTOP_MIN_SH, tired_turnover_players
         ftop406 = tired_turnover_players(match, config)
@@ -3409,6 +3628,7 @@ def _training_focus_cached(match: Match,
 
     # 405) Hátrapasszolók: a visszafordulás a bátorság hiánya vagy
     # a rossz felkínálás jele.
+    _szabaly = 405
     try:
         from .attack_types import BPRP_MIN_PASSES, backward_passers
         bprp405 = backward_passers(match, config)
@@ -3436,6 +3656,7 @@ def _training_focus_cached(match: Match,
 
     # 404) Térnyerők: ha a térnyerés egy emberen áll, a kiesésével a
     # felhozatalunk is leáll.
+    _szabaly = 404
     try:
         from .decisions import TNRP_MIN_M, ball_carriers
         tnrp404 = ball_carriers(match, config)
@@ -3461,6 +3682,7 @@ def _training_focus_cached(match: Match,
 
     # 403) Sávváltók: ha a keresztmozgás egy emberen áll, a fal egy
     # döntéssel felkészül rá.
+    _szabaly = 403
     try:
         from .attack_types import LSWP_MIN_SWITCHES, lane_switchers
         lswp403 = lane_switchers(match, config)
@@ -3487,6 +3709,7 @@ def _training_focus_cached(match: Match,
 
     # 402) Menekülők: ha a pressz-elleni kiút egy emberre szűkül,
     # kiszámíthatók vagyunk.
+    _szabaly = 402
     try:
         from .decisions import ESCP_MIN_PASSES, press_outlets
         escp402 = press_outlets(match, config)
@@ -3513,6 +3736,7 @@ def _training_focus_cached(match: Match,
 
     # 401) Vég-birtokosok: ha mindig ugyanaz marad a labdával, a
     # befejezés-felelősség tisztázatlan.
+    _szabaly = 401
     try:
         from .attack_types import LSTP_MIN_ATTACKS, last_holders
         lstp401 = last_holders(match, config)
@@ -3539,6 +3763,7 @@ def _training_focus_cached(match: Match,
 
     # 400) Ziccer-előkészítők: ha a helyzeteink egy ember kezéből
     # indulnak, a kiesésével eltűnnek.
+    _szabaly = 400
     try:
         from .xg import BCFP_MIN_FEEDS, big_chance_feeders
         bcfp400 = big_chance_feeders(match, config)
@@ -3565,6 +3790,7 @@ def _training_focus_cached(match: Match,
 
     # 399) Válaszhiba-emberek: a bekapott gól utáni első támadást ki
     # kell venni a kapkodó kezéből.
+    _szabaly = 399
     try:
         from .momentum import (RTOP_MIN_TURNOVERS,
                                response_turnover_players)
@@ -3591,6 +3817,7 @@ def _training_focus_cached(match: Match,
 
     # 398) Időkérés-hibázók: a megbeszélés utáni feszültségben ne az
     # kapja a kulcspasszt, aki rendre elrontja.
+    _szabaly = 398
     try:
         from .stoppages import (TOEP_MIN_TURNOVERS,
                                 timeout_turnover_players)
@@ -3617,6 +3844,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 397) Hetesdobók: egyetlen hetesdobó kockázat.
+    _szabaly = 397
     try:
         from .rules import STP_MIN_SEVENS, seven_taker_players
         stp397 = seven_taker_players(match, config)
@@ -3643,6 +3871,7 @@ def _training_focus_cached(match: Match,
 
     # 396) Áttörés-hozam: a betörés akkor ér valamit, ha be is
     # fejezzük.
+    _szabaly = 396
     try:
         from .attack_types import (BTY_HIGH_PCT, BTY_LOW_PCT,
                                    breakthrough_yield)
@@ -3680,6 +3909,7 @@ def _training_focus_cached(match: Match,
 
     # 395) Emberhátrány-hibázók: öt emberrel a labda a legbiztosabb
     # kézben maradjon.
+    _szabaly = 395
     try:
         from .rules import (SHTP_MIN_TURNOVERS,
                             shorthanded_turnover_players)
@@ -3707,6 +3937,7 @@ def _training_focus_cached(match: Match,
 
     # 394) Emberelőny-hibázók: a két perc alatt elvesztett labda a
     # legdrágább, mert onnan üres kapura indul az ellenfél.
+    _szabaly = 394
     try:
         from .rules import (PPTP_MIN_TURNOVERS,
                             powerplay_turnover_players)
@@ -3734,6 +3965,7 @@ def _training_focus_cached(match: Match,
 
     # 393) Kulcs-ember: ha minden szál egy emberen fut keresztül, egy
     # jó ellenfél egy emberrel megfog minket.
+    _szabaly = 393
     try:
         from .priorities import KPL_MIN_LAYERS, key_player
         kpl393 = key_player(match, config)
@@ -3759,6 +3991,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 392) Kétperc ára: a hátrány-védekezés forintosítva.
+    _szabaly = 392
     try:
         from .rules import SCT_CHEAP, SCT_COSTLY, suspension_cost
         sct392 = suspension_cost(match, config)
@@ -3796,6 +4029,7 @@ def _training_focus_cached(match: Match,
 
     # 391) Emberfogás-váltás: a szünetben hozott emberfogás a
     # legdrágább meglepetés — nekünk is legyen rá válaszunk.
+    _szabaly = 391
     try:
         from .defense import MSH_TIGHT_M, marking_shift
         msh391 = marking_shift(match, config)
@@ -3832,6 +4066,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 390) Kipattanó-szedők: a kipattanó-munka kiosztható feladat.
+    _szabaly = 390
     try:
         from .defense import (RBCP_MIN_REBOUNDS,
                               defensive_rebound_players)
@@ -3858,6 +4093,7 @@ def _training_focus_cached(match: Match,
 
     # 389) Kétperc-páros: ha a kiharcolás és az emberelőny-
     # befejezés is egy-egy poszton áll, mindkettő kiszámítható.
+    _szabaly = 389
     try:
         from .rules import SCH_SHARE_PCT, suspension_chain_roles
         sup389 = suspension_chain_roles(match, config)
@@ -3881,6 +4117,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 388) Hetes-kihagyók: névre szóló hetes-rutin.
+    _szabaly = 388
     try:
         from .rules import SVMP_MIN_MISSES, seven_miss_players
         svmp388 = seven_miss_players(match, config)
@@ -3908,6 +4145,7 @@ def _training_focus_cached(match: Match,
 
     # 387) Sprint-esés: ha a második félidőre megfogy a láb, a
     # kontra-játékunk a szünettel eltűnik.
+    _szabaly = 387
     try:
         from .stats import SFD_DROP_RATIO, sprint_fade
         sfd387 = sprint_fade(match, config)
@@ -3943,6 +4181,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 386) Óralopás: a végjáték óra-kezelése vezetésben.
+    _szabaly = 386
     try:
         from .momentum import CLK_DIFF_S, clock_management
         clk386 = clock_management(match, config)
@@ -3981,6 +4220,7 @@ def _training_focus_cached(match: Match,
 
     # 385) Kipattanó ára: a védés nem megúszott helyzet, ha a
     # kipattanó gólt ér.
+    _szabaly = 385
     try:
         from .goalkeeper import (RPN_COSTLY_PCT, RPN_WINDOW_S,
                                  rebound_punishment)
@@ -4007,6 +4247,7 @@ def _training_focus_cached(match: Match,
 
     # 384) Visszaállás ára: a lövésünk után kapott gyors gólok
     # számlája — nem a fal minősége, hanem a jelenléte a kérdés.
+    _szabaly = 384
     try:
         from .defense import (RTP_COSTLY_PCT, RTP_WINDOW_S,
                               retreat_punishment)
@@ -4034,6 +4275,7 @@ def _training_focus_cached(match: Match,
 
     # 383) Lepattanó-szedő poszt: ha a kipattanókat mindig ugyanaz
     # szedi, a többiek nem indulnak el.
+    _szabaly = 383
     try:
         from .defense import (RBC_SHARE_PCT, defensive_rebound_roles)
         rbc383 = defensive_rebound_roles(match, config)
@@ -4058,6 +4300,7 @@ def _training_focus_cached(match: Match,
 
     # 382) Figura-koncentráció: ha a támadásaink egyetlen mintából
     # jönnek, egy jó felkészülés kifog minket.
+    _szabaly = 382
     try:
         from .setplays import SPK_TOP_PCT, setplay_concentration
         spk382 = setplay_concentration(match, config)
@@ -4097,6 +4340,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 381) Hajrá-kapus: a saját kapusunk végjáték-formája.
+    _szabaly = 381
     try:
         from .goalkeeper import GKC_GAP_PP, gk_clutch_saves
         gkc381 = gk_clutch_saves(match, config)
@@ -4136,6 +4380,7 @@ def _training_focus_cached(match: Match,
 
     # 380) Emberhátrány-hiba poszt: öt emberrel egy elvesztett
     # labda azonnal gólt ér.
+    _szabaly = 380
     try:
         from .rules import (SHT_SHARE_PCT, shorthanded_turnover_roles)
         sht380 = shorthanded_turnover_roles(match, config)
@@ -4160,6 +4405,7 @@ def _training_focus_cached(match: Match,
 
     # 379) Kapkodás-index: ha a kapott gól után elsietjük a
     # támadást, a hátrányból sorozat lesz.
+    _szabaly = 379
     try:
         from .attack_types import RUS_DIFF_S, post_goal_rush
         rus379 = post_goal_rush(match, config)
@@ -4198,6 +4444,7 @@ def _training_focus_cached(match: Match,
 
     # 378) Visszaállás-idő: ha a lövésünk után lassan áll össze a
     # fal, minden lövésünk kockázat.
+    _szabaly = 378
     try:
         from .defense import RTT_SLOW_S, retreat_time
         rtt378 = retreat_time(match, config)
@@ -4223,6 +4470,7 @@ def _training_focus_cached(match: Match,
 
     # 377) Időkérés-hiba poszt: ha a táblára rajzolt figura mindig
     # ugyanannak a kezén hal el, egyszerűbb kezdés kell.
+    _szabaly = 377
     try:
         from .stoppages import (TOE_SHARE_PCT, timeout_turnover_roles)
         toe377 = timeout_turnover_roles(match, config)
@@ -4246,6 +4494,7 @@ def _training_focus_cached(match: Match,
 
     # 376) Válaszhiba-poszt: ha a kapott gól után mindig ugyanannak
     # a kezén vész el a labda, a hátrány sorozattá nő.
+    _szabaly = 376
     try:
         from .momentum import (RTO_SHARE_PCT, response_turnover_roles)
         rto376 = response_turnover_roles(match, config)
@@ -4270,6 +4519,7 @@ def _training_focus_cached(match: Match,
 
     # 375) Emberelőny-hiba poszt: ha az emberelőnyünk mindig
     # ugyanannak a kezén akad el, a két perc kárba vész.
+    _szabaly = 375
     try:
         from .rules import (PPT_SHARE_PCT, powerplay_turnover_roles)
         ppt375 = powerplay_turnover_roles(match, config)
@@ -4294,6 +4544,7 @@ def _training_focus_cached(match: Match,
 
     # 374) Ziccerpáros-poszt: ha a helyzeteink egyetlen kettősön
     # állnak, egy ember mindkettőt kifogja.
+    _szabaly = 374
     try:
         from .xg import BCP_PAIR_SHARE_PCT, big_chance_pair_roles
         bcp374 = big_chance_pair_roles(match, config)
@@ -4319,6 +4570,7 @@ def _training_focus_cached(match: Match,
 
     # 373) Hetes-kihagyó poszt: ha a kihagyott heteseink egy poszthoz
     # kötődnek, a hetes-sorrend és a rutin a téma.
+    _szabaly = 373
     try:
         from .rules import SVM_SHARE_PCT, seven_miss_roles
         svm373 = seven_miss_roles(match, config)
@@ -4343,6 +4595,7 @@ def _training_focus_cached(match: Match,
 
     # 372) Ziccer-előkészítő poszt: ha a ziccereinket egy poszt
     # teremti, a kiesésével a helyzeteink is eltűnnek.
+    _szabaly = 372
     try:
         from .xg import (BCF_FEED_SHARE_PCT,
                          big_chance_feeder_roles)
@@ -4369,6 +4622,7 @@ def _training_focus_cached(match: Match,
     # 371) Vég-birtokos poszt: ha a terméketlen támadásaink mindig
     # ugyanannak a kezében halnak el, a befejezés-felelősség
     # tisztázatlan.
+    _szabaly = 371
     try:
         from .attack_types import LST_SHARE_PCT, last_holder_roles
         lst371 = last_holder_roles(match, config)
@@ -4394,6 +4648,7 @@ def _training_focus_cached(match: Match,
 
     # 370) Menekülő-poszt: ha szorításban mindig ugyanahhoz a
     # poszthoz megy a labda, a kiútunk kiszámítható és elfogható.
+    _szabaly = 370
     try:
         from .decisions import ESC_SHARE_PCT, press_outlet_roles
         esc370 = press_outlet_roles(match, config)
@@ -4418,6 +4673,7 @@ def _training_focus_cached(match: Match,
 
     # 369) Időkéréspáros-poszt: ha az időkérés utáni figuránk mindig
     # ugyanazon a tengelyen fut, a fal az első passznál elvágja.
+    _szabaly = 369
     try:
         from .stoppages import TOP_SHARE_PCT, timeout_pair_roles
         top369 = timeout_pair_roles(match, config)
@@ -4441,6 +4697,7 @@ def _training_focus_cached(match: Match,
 
     # 368) Sávváltó-poszt: ha a keresztmozgásunkat egy poszt viszi, a
     # felkészült fal egyszerűen követi.
+    _szabaly = 368
     try:
         from .attack_types import LSW_SHARE_PCT, lane_switch_roles
         lsw368 = lane_switch_roles(match, config)
@@ -4465,6 +4722,7 @@ def _training_focus_cached(match: Match,
 
     # 367) Elöl lógó poszt: ha egy posztunk nem ér haza, mögötte üres
     # a pálya — az ellenfél oda fogja vezetni a gyors indítást.
+    _szabaly = 367
     try:
         from .defense import recovery_roles
         rcr367 = recovery_roles(match, config)
@@ -4487,6 +4745,7 @@ def _training_focus_cached(match: Match,
 
     # 366) Válasz-poszt: ha a kapott gól utáni válaszunk egy posztra
     # épül, az ellenfél a saját gólja után azonnal ráállhat.
+    _szabaly = 366
     try:
         from .momentum import RSP_SHARE_PCT, response_scorer_roles
         rsp366 = response_scorer_roles(match, config)
@@ -4511,6 +4770,7 @@ def _training_focus_cached(match: Match,
 
     # 365) Emberelőnypáros-poszt: ha a 6-5-ünk egy tengelyen fut, öt
     # emberrel is kiszámíthatók vagyunk.
+    _szabaly = 365
     try:
         from .rules import PWP_SHARE_PCT, powerplay_pair_roles
         pwp365 = powerplay_pair_roles(match, config)
@@ -4535,6 +4795,7 @@ def _training_focus_cached(match: Match,
 
     # 364) Specialista-poszt: ha egy posztunkat váltott sorban
     # játsszuk, a csere-pillanatunk sebezhető.
+    _szabaly = 364
     try:
         from .roles import specialist_roles
         spc364 = specialist_roles(match, config)
@@ -4558,6 +4819,7 @@ def _training_focus_cached(match: Match,
 
     # 363) Kulcs-páros: ha több páros-rétegünk ugyanarra a kettősre
     # mutat, a játékunk egyetlen tengelyen áll.
+    _szabaly = 363
     try:
         from .priorities import KPR_MIN_LAYERS, key_pair
         kpr363 = key_pair(match, config)
@@ -4583,6 +4845,7 @@ def _training_focus_cached(match: Match,
 
     # 362) Lepattanópáros-poszt: ha a lepattanó-érkezésünk egy
     # útvonalon fut, a felkészült fal elzárja.
+    _szabaly = 362
     try:
         from .attack_types import RBP_SHARE_PCT, rebound_pair_roles
         rbp362 = rebound_pair_roles(match, config)
@@ -4607,6 +4870,7 @@ def _training_focus_cached(match: Match,
 
     # 361) Kettőzőpáros-poszt: ha a kettőzésünk egy védő-pároson áll,
     # az elhagyott ember kiszámítható — a kioldó passz ingyen jön.
+    _szabaly = 361
     try:
         from .defense import DPP_SHARE_PCT, doubling_pair_roles
         dpp361 = doubling_pair_roles(match, config)
@@ -4630,6 +4894,7 @@ def _training_focus_cached(match: Match,
 
     # 360) Gólpasszpáros-poszt: ha a góljaink egy tengelyen
     # születnek, egy sávzárás a gól-gépezetünket állítja le.
+    _szabaly = 360
     try:
         from .roles import APR_SHARE_PCT, assist_pair_roles
         apr360 = assist_pair_roles(match, config)
@@ -4653,6 +4918,7 @@ def _training_focus_cached(match: Match,
 
     # 359) Kontrapáros-poszt: ha a kontráink egy tengelyen futnak, a
     # felkészült ellenfél két ponton fogja őket.
+    _szabaly = 359
     try:
         from .attack_types import (FBP_SHARE_PCT,
                                    fast_break_pair_roles)
@@ -4677,6 +4943,7 @@ def _training_focus_cached(match: Match,
 
     # 358) Hetespáros-poszt: ha a kiharcolás és a dobás is egy-egy
     # emberen áll, mindkettőhöz tartalék kell.
+    _szabaly = 358
     try:
         from .rules import SVP_SHARE_PCT, seven_pair_roles
         svp358 = seven_pair_roles(match, config)
@@ -4699,6 +4966,7 @@ def _training_focus_cached(match: Match,
 
     # 357) Csere-stílus: az átszabó cserehullám után a saját
     # védekezésünknek is újra kell rendeződnie — gyakorolni kell.
+    _szabaly = 357
     try:
         from .substitutions import swap_style
         sws357 = swap_style(match, config)
@@ -4722,6 +4990,7 @@ def _training_focus_cached(match: Match,
 
     # 356) Elzárópáros-poszt: ha az elzárás-játékunk egy posztpárra
     # jár, a felkészült fal párban fogja — kell a másik oldal.
+    _szabaly = 356
     try:
         from .attack_types import SPP_SHARE_PCT, screen_pair_roles
         spp356 = screen_pair_roles(match, config)
@@ -4745,6 +5014,7 @@ def _training_focus_cached(match: Match,
 
     # 355) Álló-poszt: ha egy posztunk áll labda nélkül, a védője
     # ellenünk fordul — labda nélküli munka kell.
+    _szabaly = 355
     try:
         from .tactics import static_attacker_roles
         sar355 = static_attacker_roles(match, config)
@@ -4766,6 +5036,7 @@ def _training_focus_cached(match: Match,
 
     # 354) Letámadó-poszt: ha a letámadásunk egy poszton áll, a
     # felkészült ellenfél kikerüli — és mögötte nyílik a tér.
+    _szabaly = 354
     try:
         from .defense import HSR_SHARE_PCT, high_steal_roles
         hsr354 = high_steal_roles(match, config)
@@ -4790,6 +5061,7 @@ def _training_focus_cached(match: Match,
 
     # 353) Célkereszt-poszt: ha az ellenfelek rendre egy posztunk
     # előtt fejeznek be, oda segítség és elzárás-védés kell.
+    _szabaly = 353
     try:
         from .defense import TGR_SHARE_PCT, targeted_defender_roles
         tgr353 = targeted_defender_roles(match, config)
@@ -4814,6 +5086,7 @@ def _training_focus_cached(match: Match,
 
     # 352) Fedezett-lövő poszt: ha egy posztunk fedezetten is lő, a
     # lövés-szelekció az edzés-téma.
+    _szabaly = 352
     try:
         from .defense import CVR_SHARE_PCT, covered_shooter_roles
         cvr352 = covered_shooter_roles(match, config)
@@ -4838,6 +5111,7 @@ def _training_focus_cached(match: Match,
 
     # 351) Védőmotor-poszt: ha a védő-motorunk egy poszton a második
     # félidőre leáll, tervezett pihenő kell a szünet körül.
+    _szabaly = 351
     try:
         from .defense import fading_defender_roles
         fdd351 = fading_defender_roles(match, config)
@@ -4861,6 +5135,7 @@ def _training_focus_cached(match: Match,
 
     # 350) Áttörő-poszt: ha a betörés-játékunk egy emberen áll, egy
     # időzített kettőzés az egész belső játékunkat lezárja.
+    _szabaly = 350
     try:
         from .attack_types import BTR_SHARE_PCT, breakthrough_roles
         btr350 = breakthrough_roles(match, config)
@@ -4885,6 +5160,7 @@ def _training_focus_cached(match: Match,
 
     # 349) Drága-eladó poszt: ha egy posztunk hibái rendre gólba
     # kerülnek, nyomás alatti labdakezelés és visszazárás kell.
+    _szabaly = 349
     try:
         from .defense import DTO_SHARE_PCT, costly_turnover_roles
         dto349 = costly_turnover_roles(match, config)
@@ -4909,6 +5185,7 @@ def _training_focus_cached(match: Match,
 
     # 348) Beérkező-poszt: ha a padunk csak egy posztra hoz
     # frissítést, a második sorunk féloldalas.
+    _szabaly = 348
     try:
         from .substitutions import IBR_SHARE_PCT, sub_in_roles
         ibr348 = sub_in_roles(match, config)
@@ -4933,6 +5210,7 @@ def _training_focus_cached(match: Match,
 
     # 347) Forgatott-poszt: ha a forgatásunk egy posztra jár, a többi
     # poszton felhalmozódik a fáradtság.
+    _szabaly = 347
     try:
         from .substitutions import SBR_SHARE_PCT, substituted_roles
         sbr347 = substituted_roles(match, config)
@@ -4957,6 +5235,7 @@ def _training_focus_cached(match: Match,
 
     # 346) Fáradt-fal poszt: ha a falunk a második félidőre egy poszt
     # ellen leül, csere- és kondíció-terv kell arra a sávra.
+    _szabaly = 346
     try:
         from .defense import tired_conceder_roles
         tcr346 = tired_conceder_roles(match, config)
@@ -4980,6 +5259,7 @@ def _training_focus_cached(match: Match,
 
     # 345) Fáradt-lövő poszt: ha egy posztunk lövései a második
     # félidőre szétmennek, fáradt célzás-blokk és átosztás kell.
+    _szabaly = 345
     try:
         from .xg import tired_shooter_roles
         fsa345 = tired_shooter_roles(match, config)
@@ -5003,6 +5283,7 @@ def _training_focus_cached(match: Match,
     # 344) Fáradt-eladó poszt: ha egy posztunk eladásai a második
     # félidőre megugranak, terhelés-menedzsment és fáradt
     # labdabiztonság kell.
+    _szabaly = 344
     try:
         from .decisions import tired_turnover_roles
         fto344 = tired_turnover_roles(match, config)
@@ -5025,6 +5306,7 @@ def _training_focus_cached(match: Match,
 
     # 343) Hátrapassz-poszt: ha a játékunk mindig ugyanannál a
     # posztnál fordul vissza, a pressz ellenünk jutalmat hoz.
+    _szabaly = 343
     try:
         from .attack_types import (BPR_SHARE_PCT,
                                    backward_pass_roles)
@@ -5051,6 +5333,7 @@ def _training_focus_cached(match: Match,
 
     # 342) Térnyerő-poszt: ha a térnyerésünk egy poszt lábán van, a
     # felhozatal-teher aránytalan, és egy korai kontakt lefékez.
+    _szabaly = 342
     try:
         from .decisions import TNR_SHARE_PCT, ball_carrier_roles
         tnr342 = ball_carrier_roles(match, config)
@@ -5073,6 +5356,7 @@ def _training_focus_cached(match: Match,
 
     # 341) Előnyben-poszt: ha a vezetés-tartásunk egy posztra épül,
     # az ellenfél a kivételével gyorsan visszajön.
+    _szabaly = 341
     try:
         from .momentum import LGR_SHARE_PCT, lead_scorer_roles
         lgr341 = lead_scorer_roles(match, config)
@@ -5097,6 +5381,7 @@ def _training_focus_cached(match: Match,
     # 340) Előkészítő-poszt: ha a lövéseinket mindig ugyanaz a
     # posztunk készíti elő, egy sávzárás az egész lövő-játékunkat
     # lekapcsolja.
+    _szabaly = 340
     try:
         from .attack_types import EPR_SHARE_PCT, last_pass_roles
         epr340 = last_pass_roles(match, config)
@@ -5122,6 +5407,7 @@ def _training_focus_cached(match: Match,
     # 339) Indító-poszt: ha a támadásaink mindig ugyanannál a
     # posztnál indulnak, egy jó pressz az egész szervezésünket
     # megfojtja.
+    _szabaly = 339
     try:
         from .roles import ATS_SHARE_PCT, attack_starter_roles
         ats339 = attack_starter_roles(match, config)
@@ -5146,6 +5432,7 @@ def _training_focus_cached(match: Match,
 
     # 338) Beállóőr-poszt: ha a beálló-őrzésünk egy posztunkon áll,
     # egy elzárással kihúzható — kell a váltás-szabály.
+    _szabaly = 338
     try:
         from .defense import PGR_SHARE_PCT, pivot_guard_roles
         pgr338 = pivot_guard_roles(match, config)
@@ -5168,6 +5455,7 @@ def _training_focus_cached(match: Match,
 
     # 337) Kilépő-poszt: ha a falunk mindig ugyanannál a posztnál
     # lép ki, a mögötte nyíló teret a felkészült ellenfél bejátssza.
+    _szabaly = 337
     try:
         from .defense import advanced_defender_roles
         adr337 = advanced_defender_roles(match, config)
@@ -5190,6 +5478,7 @@ def _training_focus_cached(match: Match,
 
     # 336) Ziccerhagyó-poszt: ha a ziccereinket mindig ugyanaz a
     # posztunk hagyja ki, a helyzeteink egy része kárba vész.
+    _szabaly = 336
     try:
         from .xg import MCR_SHARE_PCT, missed_chance_roles
         mcr336 = missed_chance_roles(match, config)
@@ -5213,6 +5502,7 @@ def _training_focus_cached(match: Match,
 
     # 335) Blokkolt-poszt: ha egy posztunk lövéseit rendre blokkolják,
     # a lövés-előkészítés hiányzik — elmozgatás nélkül falba lövünk.
+    _szabaly = 335
     try:
         from .defense import BSR_SHARE_PCT, blocked_shooter_roles
         bsr335 = blocked_shooter_roles(match, config)
@@ -5237,6 +5527,7 @@ def _training_focus_cached(match: Match,
 
     # 334) Hetesdobó-poszt: ha a heteseinket mindig ugyanaz a posztunk
     # dobja, az ellenfél kapusa egyetlen dobó szokásaira készülhet.
+    _szabaly = 334
     try:
         from .rules import STK_SHARE_PCT, seven_taker_roles
         stk334 = seven_taker_roles(match, config)
@@ -5260,6 +5551,7 @@ def _training_focus_cached(match: Match,
     # 333) Újrakezdő-poszt: ha a szünet utáni rajtunk egy posztra
     # épül, a felkészült ellenfél a második félidőt az ő fogásával
     # kezdi.
+    _szabaly = 333
     try:
         from .momentum import SSR_SHARE_PCT, second_start_roles
         ssr333 = second_start_roles(match, config)
@@ -5284,6 +5576,7 @@ def _training_focus_cached(match: Match,
 
     # 332) Elzárt-poszt: ha egy védőnk rendre elakad az
     # elzárásokban, oda fogja hozni a figuráit minden ellenfél.
+    _szabaly = 332
     try:
         from .defense import SDR_SHARE_PCT, screened_defender_roles
         sdr332 = screened_defender_roles(match, config)
@@ -5307,6 +5600,7 @@ def _training_focus_cached(match: Match,
 
     # 331) Kettőzött-poszt: ha egy posztunkat rendre kettőzik, neki
     # lekapcsolódó társ és kettőzés-elleni leadás kell.
+    _szabaly = 331
     try:
         from .defense import DTR_SHARE_PCT, doubled_target_roles
         dtr331 = doubled_target_roles(match, config)
@@ -5331,6 +5625,7 @@ def _training_focus_cached(match: Match,
     # 330) Fáradó-poszt: ha egy posztunk tempója a második félidőre
     # rendre visszaesik, kondicionális blokk és korábbi pihentetés
     # kell neki.
+    _szabaly = 330
     try:
         from .stats import FTR_DROP_PCT, fatigue_roles
         ftr330 = fatigue_roles(match, config)
@@ -5355,6 +5650,7 @@ def _training_focus_cached(match: Match,
     # 329) Passzív-poszt: ha a terméketlen támadásaink egy posztnál
     # halnak el, oda kész befejező megoldás kell a passzív jelzés
     # előttre.
+    _szabaly = 329
     try:
         from .rules import PVR_SHARE_PCT, passive_holder_roles
         pvr329 = passive_holder_roles(match, config)
@@ -5380,6 +5676,7 @@ def _training_focus_cached(match: Match,
     # 328) Rajt-poszt: ha a meccs-nyitásunk egy posztra épül, a
     # felkészült ellenfél az első perctől rá áll — kell a második
     # nyitó-megoldás.
+    _szabaly = 328
     try:
         from .momentum import OSR_SHARE_PCT, opening_scorer_roles
         osr328 = opening_scorer_roles(match, config)
@@ -5403,6 +5700,7 @@ def _training_focus_cached(match: Match,
 
     # 327) Kiszolgált-poszt: ha egy posztunk csak kiszolgálásból él,
     # a passzsáv-zárás ellen tervre van szüksége.
+    _szabaly = 327
     try:
         from .roles import ASR_SHARE_PCT, assisted_scorer_roles
         asr327 = assisted_scorer_roles(match, config)
@@ -5426,6 +5724,7 @@ def _training_focus_cached(match: Match,
 
     # 326) Hajrákéz-poszt: ha a végjátékunk egy kézen fut, egy jó
     # kettőzés az egész záró tervünket megfojtja.
+    _szabaly = 326
     try:
         from .momentum import CHR_SHARE_PCT, clutch_hog_roles
         chr326 = clutch_hog_roles(match, config)
@@ -5449,6 +5748,7 @@ def _training_focus_cached(match: Match,
 
     # 325) Lágypassz-poszt: ha egy posztunk lágyan passzol, az ő
     # labdáiba az ellenfél beleér — passz-élesség a téma.
+    _szabaly = 325
     try:
         from .decisions import SPS_SHARE_PCT, soft_pass_roles
         sps325 = soft_pass_roles(match, config)
@@ -5472,6 +5772,7 @@ def _training_focus_cached(match: Match,
 
     # 324) Sprint-poszt: ha a sprint-teher egy posztunkon áll, a
     # kontránk kiszámítható, és az az ember hamarabb fárad el.
+    _szabaly = 324
     try:
         from .stats import SPR_SHARE_PCT, sprint_threat_roles
         spr324 = sprint_threat_roles(match, config)
@@ -5495,6 +5796,7 @@ def _training_focus_cached(match: Match,
 
     # 323) Középkezdő-poszt: ha a középkezdésünk mindig ugyanannál a
     # posztnál indul, a felkészült ellenfél letámadása pont őt fogja.
+    _szabaly = 323
     try:
         from .momentum import RTR_SHARE_PCT, restart_taker_roles
         rtr323 = restart_taker_roles(match, config)
@@ -5520,6 +5822,7 @@ def _training_focus_cached(match: Match,
     # 322) Forró-poszt: ha a sorozatainkat mindig ugyanaz a posztunk
     # lövi, az ellenfél az első gól után rá fog állni — kell a
     # második lendület-vivő.
+    _szabaly = 322
     try:
         from .momentum import HHR_SHARE_PCT, hot_hand_roles
         hhr322 = hot_hand_roles(match, config)
@@ -5544,6 +5847,7 @@ def _training_focus_cached(match: Match,
 
     # 321) Hajráhiba-poszt: ha a hajrában mindig ugyanannál a
     # posztunknál megy el a labda, az ellenfél záró pressze oda jön.
+    _szabaly = 321
     try:
         from .momentum import CTR_SHARE_PCT, clutch_turnover_roles
         ctr321 = clutch_turnover_roles(match, config)
@@ -5567,6 +5871,7 @@ def _training_focus_cached(match: Match,
 
     # 320) Eltűnő-poszt: ha egy posztunk termelése a második félidőre
     # elhal, a terhelés-menedzsment és a kondíció a téma.
+    _szabaly = 320
     try:
         from .momentum import fading_scorer_roles
         fdp320 = fading_scorer_roles(match, config)
@@ -5589,6 +5894,7 @@ def _training_focus_cached(match: Match,
 
     # 319) Csendtörő-poszt: ha a gólcsendjeinket mindig ugyanaz a
     # posztunk töri meg, a válság-megoldásunk kiszámítható és fogható.
+    _szabaly = 319
     try:
         from .momentum import GCT_SHARE_PCT, drought_breaker_roles
         gct319 = drought_breaker_roles(match, config)
@@ -5613,6 +5919,7 @@ def _training_focus_cached(match: Match,
 
     # 318) Pressz-poszt: ha szorításban mindig ugyanaz a posztunk
     # veszíti a labdát, az ellenfél kettőzése oda fog érkezni.
+    _szabaly = 318
     try:
         from .decisions import PSR_SHARE_PCT, press_sensitive_roles
         psr318 = press_sensitive_roles(match, config)
@@ -5636,6 +5943,7 @@ def _training_focus_cached(match: Match,
 
     # 317) Labdatartó-poszt: ha a labda egy posztunknál ragad, oda
     # időzíti az ellenfél a kettőzést, és ott lassul a támadásunk.
+    _szabaly = 317
     try:
         from .decisions import HTR_SHARE_PCT, hold_time_roles
         htr317 = hold_time_roles(match, config)
@@ -5660,6 +5968,7 @@ def _training_focus_cached(match: Match,
 
     # 316) Ziccer-poszt: ha a nagy helyzeteink egy posztnál alakulnak
     # ki, a helyzet-teremtésünk egysíkú, és egy besegítéssel lezárható.
+    _szabaly = 316
     try:
         from .xg import BCR_SHARE_PCT, big_chance_roles
         bcr316 = big_chance_roles(match, config)
@@ -5684,6 +5993,7 @@ def _training_focus_cached(match: Match,
 
     # 315) Pazarló-poszt: ha a mellé lövéseink egy posztra sűrűsödnek,
     # az ellenfél ráengedi a lövést, és a kidobásból minket kontráz.
+    _szabaly = 315
     try:
         from .xg import WSR_SHARE_PCT, wasteful_shooter_roles
         wsr315 = wasteful_shooter_roles(match)
@@ -5707,6 +6017,7 @@ def _training_focus_cached(match: Match,
 
     # 314) Felzárkózás-poszt: ha hátrányból mindig ugyanaz a posztunk
     # ment minket, egy jó fogással beragasztható a hátrányunk.
+    _szabaly = 314
     try:
         from .momentum import CBR_SHARE_PCT, comeback_carrier_roles
         cbr314 = comeback_carrier_roles(match, config)
@@ -5730,6 +6041,7 @@ def _training_focus_cached(match: Match,
 
     # 313) Hajrá-poszt: ha a végjátékunk egy posztra fut ki, a záró
     # percekben egyetlen jó emberfogás megfojt minket.
+    _szabaly = 313
     try:
         from .momentum import CSR_SHARE_PCT, clutch_scorer_roles
         csr313 = clutch_scorer_roles(match, config)
@@ -5752,6 +6064,7 @@ def _training_focus_cached(match: Match,
 
     # 312) Emberhátrány-poszt: ha öt emberrel mindig ugyanaz a
     # posztunk vállal be, a hátrány-játékunk kiszámítható.
+    _szabaly = 312
     try:
         from .rules import SHR_SHARE_PCT, shorthanded_shooter_roles
         shr312 = shorthanded_shooter_roles(match, config)
@@ -5773,6 +6086,7 @@ def _training_focus_cached(match: Match,
 
     # 311) Emberelőny-poszt: ha az emberelőnyünk mindig ugyanarra a
     # posztra fut ki, öt védő is elég ellene.
+    _szabaly = 311
     try:
         from .rules import PPR_SHARE_PCT, powerplay_shooter_roles
         ppr311 = powerplay_shooter_roles(match, config)
@@ -5795,6 +6109,7 @@ def _training_focus_cached(match: Match,
 
     # 310) Kiosztás-poszt: ha a betörésünk utáni labda mindig
     # ugyanoda megy, az ellenfél a sávot előre zárja.
+    _szabaly = 310
     try:
         from .attack_types import KOR_SHARE_PCT, kickout_target_roles
         kor310 = kickout_target_roles(match, config)
@@ -5818,6 +6133,7 @@ def _training_focus_cached(match: Match,
 
     # 309) Kettőző-poszt: ha a kettőzésünk mindig ugyanarról a
     # posztról érkezik, az ellenfél előre tudja, hol nyílik a pálya.
+    _szabaly = 309
     try:
         from .defense import DDR_SHARE_PCT, doubling_defender_roles
         ddr309 = doubling_defender_roles(match, config)
@@ -5838,6 +6154,7 @@ def _training_focus_cached(match: Match,
 
     # 308) Kockáztató-poszt: ha a hosszú eladásaink egy posztról
     # jönnek, az ellenfél a sávjába áll, és kontrát kap belőle.
+    _szabaly = 308
     try:
         from .attack_types import RPR_SHARE_PCT, risky_passer_roles
         rpr308 = risky_passer_roles(match, config)
@@ -5862,6 +6179,7 @@ def _training_focus_cached(match: Match,
 
     # 307) Vasember-poszt: ha egy posztunk csere nélkül végigmegy, a
     # hajrában ott fáradunk el — az ellenfél oda viszi majd a tempót.
+    _szabaly = 307
     try:
         from .stats import IRM_SHARE_PCT, iron_man_roles
         irm307 = iron_man_roles(match, config)
@@ -5884,6 +6202,7 @@ def _training_focus_cached(match: Match,
 
     # 306) Bejátszó-poszt: ha a beálló-játékunk egy kézen fut, a
     # bejátszónk zárásával az egész belső játékunk leáll.
+    _szabaly = 306
     try:
         from .attack_types import PFR_SHARE_PCT, pivot_feeder_roles
         pfr306 = pivot_feeder_roles(match, config)
@@ -5908,6 +6227,7 @@ def _training_focus_cached(match: Match,
 
     # 305) Indítás-vadász poszt: ha a letámadásunk egy emberen fut, az
     # ellenfél az indítását egyszerűen a sávján kívül nyitja.
+    _szabaly = 305
     try:
         from .goalkeeper import OHR_SHARE_PCT, outlet_hunter_roles
         ohr305 = outlet_hunter_roles(match, config)
@@ -5931,6 +6251,7 @@ def _training_focus_cached(match: Match,
 
     # 304) Kulcs-poszt: ha az elemzés rétegei ugyanarra a posztunkra
     # mutatnak, a játékunk egy emberen áll — az ellenfél is látja.
+    _szabaly = 304
     try:
         from .priorities import KP_MIN_LAYERS, key_post
         kp304 = key_post(match, config)
@@ -5953,6 +6274,7 @@ def _training_focus_cached(match: Match,
 
     # 303) Elzáró-poszt: ha az elzárás-játékunk egy emberre épül, a
     # kivétele után a lövőink fedve maradnak.
+    _szabaly = 303
     try:
         from .attack_types import SCR2_SHARE_PCT, screen_setter_roles
         sc2_303 = screen_setter_roles(match, config)
@@ -5976,6 +6298,7 @@ def _training_focus_cached(match: Match,
 
     # 302) Átvert-poszt: ha a kapott góljaink egy poszt
     # párharc-vereségéből esnek, az ellenfél is oda fogja vinni.
+    _szabaly = 302
     try:
         from .defense import BTR_SHARE_PCT, beaten_defender_roles
         btr302 = beaten_defender_roles(match, config)
@@ -5999,6 +6322,7 @@ def _training_focus_cached(match: Match,
 
     # 301) Visszafutás-poszt: ha a visszarendeződésünk mindig ugyanott
     # szakad el, az ellenfél kontrái menetrend szerint jönnek.
+    _szabaly = 301
     try:
         from .defense import RTR_SHARE_PCT, slow_retreat_roles
         rtr301 = slow_retreat_roles(match, config)
@@ -6022,6 +6346,7 @@ def _training_focus_cached(match: Match,
 
     # 300) Kiülő-poszt: ha a kétperceink egy posztra járnak, a
     # létszámhátrányunk menetrend szerint érkezik.
+    _szabaly = 300
     try:
         from .rules import SUP_SHARE_PCT, suspended_roles
         sup300 = suspended_roles(match, config)
@@ -6045,6 +6370,7 @@ def _training_focus_cached(match: Match,
 
     # 299) Hetes-okozó poszt: ha a heteseink egy sávban szakadnak be,
     # ott a védőnk kézzel áll meg — az ellenfél oda fog betörni.
+    _szabaly = 299
     try:
         from .rules import SVR_SHARE_PCT, seven_conceder_roles
         svr299 = seven_conceder_roles(match, config)
@@ -6067,6 +6393,7 @@ def _training_focus_cached(match: Match,
 
     # 298) 7a6-befejező poszt: ha a hetedik emberrel is mindig
     # ugyanoda lyukadunk ki, az emberelőnyünk kiszámítható.
+    _szabaly = 298
     try:
         from .goalkeeper import EN7_SHARE_PCT, seven_six_finisher_roles
         en7_298 = seven_six_finisher_roles(match, config)
@@ -6089,6 +6416,7 @@ def _training_focus_cached(match: Match,
 
     # 297) Blokk-poszt: ha a blokk-munkánk egy emberen áll, az
     # elmozgatása után a faltól nincs védelmünk az átlövés ellen.
+    _szabaly = 297
     try:
         from .defense import RBK_SHARE_PCT, role_block_sources
         rbk297 = role_block_sources(match, config)
@@ -6112,6 +6440,7 @@ def _training_focus_cached(match: Match,
 
     # 296) Lepattanó-poszt: ha a második rohamunk egy emberen múlik, a
     # kizárása után nincs második esélyünk.
+    _szabaly = 296
     try:
         from .attack_types import SCR_SHARE_PCT, second_chance_roles
         scr296 = second_chance_roles(match, config)
@@ -6134,6 +6463,7 @@ def _training_focus_cached(match: Match,
 
     # 295) Labdaszerző-poszt: ha a szerzéseink egy emberen múlnak, a
     # letámadásunk egyetlen cserével hatástalanítható.
+    _szabaly = 295
     try:
         from .defense import RSW_SHARE_PCT, role_steal_sources
         rsw295 = role_steal_sources(match, config)
@@ -6156,6 +6486,7 @@ def _training_focus_cached(match: Match,
 
     # 294) Gólpassz-poszt: ha a góljaink egy poszt kezéből indulnak, az
     # ellenfél a passzt veszi el, és az egész támadásunk megáll.
+    _szabaly = 294
     try:
         from .roles import RAS_SHARE_PCT, role_assist_sources
         ras294 = role_assist_sources(match, config)
@@ -6179,6 +6510,7 @@ def _training_focus_cached(match: Match,
     # 293) Hetes-oldal: ha a heteseink mindig ugyanarra az oldalra
     # mennek, egy felkészült kapus előre eldöntött vetődéssel fogja
     # őket — a legtisztább helyzetünk válik kiszámíthatóvá.
+    _szabaly = 293
     try:
         from .rules import SVD_SHARE_PCT, seven_shot_directions
         svd293 = seven_shot_directions(match, config)
@@ -6201,6 +6533,7 @@ def _training_focus_cached(match: Match,
 
     # 292) Kontra-poszt: ha a lerohanásaink egy poszton záródnak, az
     # ellenfél egy emberrel hatástalanítja a leggyorsabb fegyverünket.
+    _szabaly = 292
     try:
         from .roles import RFB_SHARE_PCT, role_fast_breaks
         rfb292 = role_fast_breaks(match, config)
@@ -6224,6 +6557,7 @@ def _training_focus_cached(match: Match,
     # 291) Lövésválasztás: ha a lövéseink nagy részénél volt jobb
     # szabad helyzet a pályán, nem a lövéstechnika a gond — a fejet
     # kell felhozni a lövés előtt.
+    _szabaly = 291
     try:
         from .decisions import SCQ_HIGH_PCT, shot_choice_quality
         scq291 = shot_choice_quality(match, config)
@@ -6247,6 +6581,7 @@ def _training_focus_cached(match: Match,
     # 290) Időkérés-befejező: ha az időkérés utáni támadásunk mindig
     # ugyanarra a posztra fut ki, az ellenfél elé áll — pont a
     # legfontosabb támadásunkat fogják meg.
+    _szabaly = 290
     try:
         from .stoppages import TOF_SHARE_PCT, timeout_finisher
         tof290 = timeout_finisher(match, config)
@@ -6269,6 +6604,7 @@ def _training_focus_cached(match: Match,
 
     # 289) Figura-befejező: ha a figuránk mindig ugyanarra a posztra
     # fut ki, egy felkészült fal a figura indulásakor odacsúszik.
+    _szabaly = 289
     try:
         from .setplays import SPF_SHARE_PCT, setplay_finishers
         spf289 = setplay_finishers(match, config)
@@ -6291,6 +6627,7 @@ def _training_focus_cached(match: Match,
 
     # 288) Poszt-nyomás: ha egy posztunk fedezetten beesik, a nyomás
     # alatti befejezést kell gyakorolnia — az ellenfél épp rá lép ki.
+    _szabaly = 288
     try:
         from .roles import RPF_GAP_PCT, role_pressure_finish
         rpf288 = role_pressure_finish(match, config)
@@ -6315,6 +6652,7 @@ def _training_focus_cached(match: Match,
 
     # 287) Poszt-kapuoldal: ha egy posztunk mindig ugyanoda lő, az
     # ellenfél kapusa ráállhat — a kapuoldal-váltás gyakorlandó.
+    _szabaly = 287
     try:
         from .roles import RGP_SHARE_PCT, role_goal_placement
         rgp287 = role_goal_placement(match, config)
@@ -6337,6 +6675,7 @@ def _training_focus_cached(match: Match,
         pass
     # 286) Poszt-lövéserő: ha az egyik posztunk lövése kiugróan
     # kemény, a többié viszont nem, a befejezés egy emberre szűkül.
+    _szabaly = 286
     try:
         from .roles import RSP_GAP_KMH, role_shot_power
         rsp286 = role_shot_power(match, config)
@@ -6361,6 +6700,7 @@ def _training_focus_cached(match: Match,
         pass
     # 285) Poszt-lövésidőzítés: ha egy posztunk a támadás végén lő, az
     # a passzív-jel kockázata és a kifáradt befejezés.
+    _szabaly = 285
     try:
         from .roles import RST_GAP_S, role_shot_timing
         rst285 = role_shot_timing(match, config)
@@ -6385,6 +6725,7 @@ def _training_focus_cached(match: Match,
         pass
     # 284) Poszt-lövéstávolság: ha egy posztunk rendre messziről lő,
     # az a kapusnak dolgozik — a befejezést közelebb kell hozni.
+    _szabaly = 284
     try:
         from .roles import RSD_GAP_M, role_shot_distance
         rsd284 = role_shot_distance(match, config)
@@ -6409,6 +6750,7 @@ def _training_focus_cached(match: Match,
         pass
     # 283) Poszt-eladási zóna: ha egy posztunk a támadó harmadban ad
     # el, abból kontra lesz.
+    _szabaly = 283
     try:
         from .roles import RTZ_GAP_PP, role_turnover_zones
         rtz283 = role_turnover_zones(match, config)
@@ -6433,6 +6775,7 @@ def _training_focus_cached(match: Match,
         pass
     # 282) Poszt-labdatartás: ha egy posztunknál megáll a labda, az
     # ellenfél oda küldi a második embert.
+    _szabaly = 282
     try:
         from .roles import RHT_GAP_S, role_hold_time
         rht282 = role_hold_time(match, config)
@@ -6456,6 +6799,7 @@ def _training_focus_cached(match: Match,
         pass
     # 281) Poszt-átvételi zóna: ha egy posztunk messze veszi át a
     # labdát, onnan nehéz befejezni.
+    _szabaly = 281
     try:
         from .roles import RRZ_GAP_M, role_receive_zones
         rrz281 = role_receive_zones(match, config)
@@ -6479,6 +6823,7 @@ def _training_focus_cached(match: Match,
         pass
     # 280) Poszt-passzháló: ha a passzaink egy vonalon mennek, az
     # elfogás kiszámítható.
+    _szabaly = 280
     try:
         from .roles import RPM_SHARE, role_pass_map
         rpm280 = role_pass_map(match, config)
@@ -6502,6 +6847,7 @@ def _training_focus_cached(match: Match,
         pass
     # 279) Poszt-birtoklás: ha a labda idejének több mint felét egy
     # poszt tartja, a játékunk egy emberen áll.
+    _szabaly = 279
     try:
         from .roles import RPS_DOMINANT_PCT, role_possession_share
         rps279 = role_possession_share(match, config)
@@ -6524,6 +6870,7 @@ def _training_focus_cached(match: Match,
         pass
     # 278) Poszt-állás: ha hátrányban egyetlen posztra szűkül a
     # befejezésünk, azt az ellenfél lezárja.
+    _szabaly = 278
     try:
         from .roles import RBS_GAP_PP, role_share_by_score
         rbs278 = role_share_by_score(match, config)
@@ -6547,6 +6894,7 @@ def _training_focus_cached(match: Match,
         pass
     # 277) Eladás-ár poszt szerint: ha egy posztunk eladásai rendre
     # gólba kerülnek, ott a visszarendeződés hiányzik.
+    _szabaly = 277
     try:
         from .roles import RTC_QUICK_S, role_turnover_cost
         rtc277 = role_turnover_cost(match, config)
@@ -6570,6 +6918,7 @@ def _training_focus_cached(match: Match,
         pass
     # 276) Poszt-váltás a szünetre: ha a befejezésünk átrendeződik,
     # tudatosítani kell — ne véletlen legyen.
+    _szabaly = 276
     try:
         from .roles import RSS_GAP_PP, role_share_shift
         rss276 = role_share_shift(match, config)
@@ -6592,6 +6941,7 @@ def _training_focus_cached(match: Match,
         pass
     # 275) Gólpassz-tengely: ha a góljaink egy vonalon esnek, azt az
     # ellenfél elvágja — több tengely kell.
+    _szabaly = 275
     try:
         from .roles import ARP_MIN_PAIRS, ARP_SHARE, assist_role_pairs
         arp275 = assist_role_pairs(match, config)
@@ -6614,6 +6964,7 @@ def _training_focus_cached(match: Match,
         pass
     # 274) Poszt-hatékonyság: ha egy posztunkról alig megy be a lövés,
     # az a poszt befejezés-gyakorlata a heti téma.
+    _szabaly = 274
     try:
         from .roles import (SER_GAP_PP, SER_MIN_SHOTS,
                             shot_efficiency_by_role)
@@ -6639,6 +6990,7 @@ def _training_focus_cached(match: Match,
         pass
     # 273) Kiosztás-célpont: ha a betörés után mindig ugyanoda megy a
     # labda, a védekezés előre tudja — a kiosztást variálni kell.
+    _szabaly = 273
     try:
         from .attack_types import (KOT_CONCENTRATION_PCT,
                                    KOT_MIN_KICKOUTS, kickout_targets)
@@ -6667,6 +7019,7 @@ def _training_focus_cached(match: Match,
         pass
     # 272) Teendő-rangsor: ha egy területről jön a jelzések többsége,
     # a heti edzés súlypontját is oda kell tenni.
+    _szabaly = 272
     try:
         from .priorities import priority_findings
         prf272 = priority_findings(match, config)
@@ -6691,6 +7044,7 @@ def _training_focus_cached(match: Match,
         pass
     # 271) Befejező-váltás: ha ugyanaz fejez be sorozatban, a
     # befejezés-rotáció a téma — a védekezés ráállhat a lövőnkre.
+    _szabaly = 271
     try:
         from .xg import finisher_rotation
         frt271 = finisher_rotation(match, config)
@@ -6712,6 +7066,7 @@ def _training_focus_cached(match: Match,
         pass
     # 270) Gól-minta: ha a góljaink egy képre járnak, a befejezés-
     # szórás a téma — a kiszámítható minta egy igazítással elzárható.
+    _szabaly = 270
     try:
         from .xg import GPT_MIN_GOALS, GPT_SHARE_PCT, goal_patterns
         gpt270 = goal_patterns(match, config)
@@ -6732,6 +7087,7 @@ def _training_focus_cached(match: Match,
         pass
     # 269) Kettős emberhátrány: ha a négyfős játékunk gólesőt hoz, a
     # 4 fős fal és az időhúzó labdatartás a téma.
+    _szabaly = 269
     try:
         from .rules import double_shorthand
         dsh269 = double_shorthand(match, config)
@@ -6753,6 +7109,7 @@ def _training_focus_cached(match: Match,
         pass
     # 268) Létszám-hiba: ha a cseréink átfednek, a cserefolyosó-
     # fegyelem a téma — a hetedik ember ingyen kiállítást ér.
+    _szabaly = 268
     try:
         from .rules import excess_players
         xsp268 = excess_players(match, config)
@@ -6773,6 +7130,7 @@ def _training_focus_cached(match: Match,
         pass
     # 267) Felzárkózás-húzó: ha egy emberen áll a mentésünk, a
     # hátrány-teher szétosztása a téma.
+    _szabaly = 267
     try:
         from .momentum import comeback_carriers
         cbc267 = comeback_carriers(match, config)
@@ -6791,6 +7149,7 @@ def _training_focus_cached(match: Match,
         pass
     # 266) Eltűnő védő: ha a védő-motorunk a második félidőre leáll,
     # a védő-rotáció a téma.
+    _szabaly = 266
     try:
         from .defense import fading_defenders
         fdd266 = fading_defenders(match, config)
@@ -6810,6 +7169,7 @@ def _training_focus_cached(match: Match,
         pass
     # 265) Sprint-állás: ha hátrányban sprintbe menekülünk, az
     # ütemtartó felzárkózás a téma — a pánik-futás a hajrát viszi el.
+    _szabaly = 265
     try:
         from .stats import sprints_by_score
         spb265 = sprints_by_score(match, config)
@@ -6830,6 +7190,7 @@ def _training_focus_cached(match: Match,
         pass
     # 264) Eltűnő ember: ha a kulcsemberünk a második félidőre elhal,
     # a terhelés-menedzsment a téma.
+    _szabaly = 264
     try:
         from .momentum import fading_scorers
         fdr264 = fading_scorers(match, config)
@@ -6849,6 +7210,7 @@ def _training_focus_cached(match: Match,
         pass
     # 263) Fekete ötperc: ha egy öt perces ablakunk rendre elúszik, a
     # tervezett csere-blokk és az időkérés-készenlét a téma.
+    _szabaly = 263
     try:
         from .momentum import black_window
         blw263 = black_window(match, config)
@@ -6869,6 +7231,7 @@ def _training_focus_cached(match: Match,
         pass
     # 262) Oldal-váltás a szünetre: ha az ellenfél a szünetben szárnyat
     # váltott ellenünk, a súlypont-olvasás a téma.
+    _szabaly = 262
     try:
         from .tactics import attack_side_shift
         sds262 = attack_side_shift(match, config)
@@ -6889,6 +7252,7 @@ def _training_focus_cached(match: Match,
         pass
     # 261) Fal-váltás a szünetre: ha az ellenfél a szünetben falat
     # váltott ellenünk, a felismerés-rutin a téma.
+    _szabaly = 261
     try:
         from .tactics import defense_form_shift
         dfs261 = defense_form_shift(match, config)
@@ -6910,6 +7274,7 @@ def _training_focus_cached(match: Match,
         pass
     # 260) Passz-hossz-állás: ha hátrányban hosszú labdákra váltunk,
     # a rövid kombináció hátrányban is a téma — az átdobálás elfogható.
+    _szabaly = 260
     try:
         from .event_detection import pass_length_by_score
         pls260 = pass_length_by_score(match, config)
@@ -6930,6 +7295,7 @@ def _training_focus_cached(match: Match,
         pass
     # 259) Kapus-gólpassz: ha az ellenfél kapusa gólpasszt ért
     # ellenünk, a lövés utáni azonnali hátraindulás a téma.
+    _szabaly = 259
     try:
         from .goalkeeper import gk_assists
         gka259 = gk_assists(match, config)
@@ -6950,6 +7316,7 @@ def _training_focus_cached(match: Match,
         pass
     # 258) Passz-irány-állás: ha az ellenfél előnyben hátrajáratott
     # ellenünk, a vezetés elleni letámadás a téma.
+    _szabaly = 258
     try:
         from .attack_types import pass_direction_by_score
         pds258 = pass_direction_by_score(match, config)
@@ -6970,6 +7337,7 @@ def _training_focus_cached(match: Match,
         pass
     # 257) Szünet-váltás: ha félidőn át ugyanazt játsszuk, a B-terv a
     # téma — a kiszámítható mixre az ellenfél ráállhat.
+    _szabaly = 257
     try:
         from .attack_types import attack_mix_shift
         ams257 = attack_mix_shift(match, config)
@@ -6990,6 +7358,7 @@ def _training_focus_cached(match: Match,
         pass
     # 256) Lepattanó-esés: ha a hajrára elfogy a lepattanó-harcunk, a
     # fáradásos lepattanó-munka a téma — a második labda akarat-játék.
+    _szabaly = 256
     try:
         from .attack_types import second_chance_fade
         scf256 = second_chance_fade(match, config)
@@ -7010,6 +7379,7 @@ def _training_focus_cached(match: Match,
         pass
     # 255) Gólpassz-esés: ha a hajrában megáll nálunk a labda, a
     # fáradt csapatjáték a téma — az egyéni megoldás védekezhetőbb.
+    _szabaly = 255
     try:
         from .attack_types import assist_fade
         asf255 = assist_fade(match, config)
@@ -7030,6 +7400,7 @@ def _training_focus_cached(match: Match,
         pass
     # 254) Kapus-sorozat: ha az ellenfél kapusa sorozatban védett
     # ellenünk, a lövés-kép váltás a téma — ugyanazt lőttük neki.
+    _szabaly = 254
     try:
         from .goalkeeper import gk_save_streaks
         gst254 = gk_save_streaks(match, config)
@@ -7050,6 +7421,7 @@ def _training_focus_cached(match: Match,
         pass
     # 253) 7a6-állás: ha az ellenfél rendszerszinten üres kapuval
     # játszik, az üres-kapus átkapcsolás a téma.
+    _szabaly = 253
     try:
         from .goalkeeper import empty_net_by_score
         ens253 = empty_net_by_score(match, config)
@@ -7072,6 +7444,7 @@ def _training_focus_cached(match: Match,
         pass
     # 252) Kontra-állás: ha hátrányban kontrába menekülünk, a
     # szervezett visszajövetel a téma — a kapkodó futás labdát ad el.
+    _szabaly = 252
     try:
         from .attack_types import breaks_by_score
         bks252 = breaks_by_score(match, config)
@@ -7092,6 +7465,7 @@ def _training_focus_cached(match: Match,
         pass
     # 251) Hetes-állás: ha vezetésnél sorra adjuk az olcsó heteseket a
     # hátrányban lévőnek, a vezetés-őrző lábmunka a téma.
+    _szabaly = 251
     try:
         from .rules import sevens_by_score
         svs251 = sevens_by_score(match, config)
@@ -7112,6 +7486,7 @@ def _training_focus_cached(match: Match,
         pass
     # 250) Fegyelem-állás: ha a kiállításaink hátrányban sűrűsödnek,
     # a hideg fej a téma — a frusztrációs kiállítás dupla ár.
+    _szabaly = 250
     try:
         from .rules import suspensions_by_score
         sps250 = suspensions_by_score(match, config)
@@ -7132,6 +7507,7 @@ def _training_focus_cached(match: Match,
         pass
     # 249) Kidobott labda: ha sok labdát dobunk ki magunktól, a
     # szélső-passz pontossága és az indítás-hossz kontrollja a téma.
+    _szabaly = 249
     try:
         from .attack_types import OBT_MIN, balls_out
         obt249 = balls_out(match, config)
@@ -7151,6 +7527,7 @@ def _training_focus_cached(match: Match,
         pass
     # 248) Elhúzódó támadás ára: ha a hosszú akcióink üresen zárulnak,
     # a támadás-lezárás időre a téma — a türelem most nem terem gólt.
+    _szabaly = 248
     try:
         from .tactics import slow_attack_cost
         sac248 = slow_attack_cost(match, config)
@@ -7172,6 +7549,7 @@ def _training_focus_cached(match: Match,
         pass
     # 247) Indítás-hiba ára: ha az elszórt indításaink gólba kerülnek,
     # az indítás-biztonság sürgős — az ár már bizonyított.
+    _szabaly = 247
     try:
         from .goalkeeper import outlet_punishment
         olp247 = outlet_punishment(match, config)
@@ -7194,6 +7572,7 @@ def _training_focus_cached(match: Match,
         pass
     # 246) Kihagyás-büntetés: ha a kihagyásaink után azonnal büntetnek,
     # a kihagyás utáni fél perc a téma — előbb védekezni, aztán bánkódni.
+    _szabaly = 246
     try:
         from .momentum import punished_misses
         pmb246 = punished_misses(match, config)
@@ -7216,6 +7595,7 @@ def _training_focus_cached(match: Match,
         pass
     # 245) Kilépés-büntetés: ha a kilépésünk mögé betalálnak, a mögé
     # csúszás a téma — a szomszéd zárja a rést.
+    _szabaly = 245
     try:
         from .defense import stepout_punishment
         sop245 = stepout_punishment(match, config)
@@ -7237,6 +7617,7 @@ def _training_focus_cached(match: Match,
         pass
     # 244) Kettőzés-büntetés: ha a kettőzésünk gólba kerül, a
     # kettőzés-visszazárás a téma — vagy vissza kell fogni.
+    _szabaly = 244
     try:
         from .defense import double_punishment
         dbp244 = double_punishment(match, config)
@@ -7258,6 +7639,7 @@ def _training_focus_cached(match: Match,
         pass
     # 243) Olvasó kapus: ha a kapusunk csak reflexből véd, az
     # olvasás-készség a téma — a lövő teste elárulja a sarkot.
+    _szabaly = 243
     try:
         from .goalkeeper import reading_keeper
         rdk243 = reading_keeper(match, config)
@@ -7279,6 +7661,7 @@ def _training_focus_cached(match: Match,
         pass
     # 242) Becsapott kapus: ha a kapusunk elmozdítható, a csel-állás
     # a téma — kivárás, nem korai vetődés.
+    _szabaly = 242
     try:
         from .goalkeeper import wrongfooted_keeper
         wfk242 = wrongfooted_keeper(match, config)
@@ -7299,6 +7682,7 @@ def _training_focus_cached(match: Match,
         pass
     # 241) Lendület-gólok: ha mozgásból kapjuk a gólokat, a bekísérés
     # a téma — az érkező embert időben fel kell venni.
+    _szabaly = 241
     try:
         from .defense import conceded_momentum
         cgm241 = conceded_momentum(match, config)
@@ -7320,6 +7704,7 @@ def _training_focus_cached(match: Match,
         pass
     # 240) Bontó tempó: ha a járatás szed szét minket, a váltás-
     # fegyelem tempó alatt a téma.
+    _szabaly = 240
     try:
         from .defense import conceded_tempo
         ctm240 = conceded_tempo(match, config)
@@ -7341,6 +7726,7 @@ def _training_focus_cached(match: Match,
         pass
     # 239) Folyosó-gólok: ha nyitott folyosókon kapjuk a gólokat, a
     # visszazárás és a fal-zárás a téma.
+    _szabaly = 239
     try:
         from .defense import corridor_goals
         crg239 = corridor_goals(match, config)
@@ -7362,6 +7748,7 @@ def _training_focus_cached(match: Match,
         pass
     # 238) Csere-büntetés: ha a csere-lyukaink már gólba kerültek, a
     # csere-ütem javítása sürgős — nem mért kockázat, megfizetett ár.
+    _szabaly = 238
     try:
         from .substitutions import gap_punishment
         gpn238 = gap_punishment(match, config)
@@ -7383,6 +7770,7 @@ def _training_focus_cached(match: Match,
         pass
     # 237) Zavartalan előkészítők: ha a gólpassz-adót hagyjuk
     # dolgozni, a passzsáv-nyomás a téma.
+    _szabaly = 237
     try:
         from .defense import unpressured_assists
         upa237 = unpressured_assists(match, config)
@@ -7404,6 +7792,7 @@ def _training_focus_cached(match: Match,
         pass
     # 236) Átvert védők: ha egy emberünk rendre elveszíti a párharcot
     # a kapott góloknál, segítés-rend és párharc-edzés a téma.
+    _szabaly = 236
     try:
         from .defense import beaten_defenders
         btn236 = beaten_defenders(match, config)
@@ -7428,6 +7817,7 @@ def _training_focus_cached(match: Match,
         pass
     # 235) Indítás-állás: ha vezetve mi is leülünk az indítással, az
     # előny-menedzsment tudatosítása a téma — de ne álljon le a láb.
+    _szabaly = 235
     try:
         from .goalkeeper import outlet_pace_by_score
         ops235 = outlet_pace_by_score(match, config)
@@ -7450,6 +7840,7 @@ def _training_focus_cached(match: Match,
         pass
     # 234) Csere-állás: ha vezetve sem pihentetünk, a pad bizalma a
     # téma — a kulcsember nem bírja végig a szezont.
+    _szabaly = 234
     try:
         from .substitutions import subs_by_score
         sbs234 = subs_by_score(match, config)
@@ -7471,6 +7862,7 @@ def _training_focus_cached(match: Match,
         pass
     # 233) Előny-védekezés: ha vezetve leül a falunk, az előny
     # megtartása a téma — a fal nem pihenhet.
+    _szabaly = 233
     try:
         from .xg import defense_by_score
         dbs233 = defense_by_score(match, config)
@@ -7494,6 +7886,7 @@ def _training_focus_cached(match: Match,
         pass
     # 232) Hiba-állás: ha hátrányban kapkodunk, a nyomás alatti
     # rendezettség a téma.
+    _szabaly = 232
     try:
         from .attack_types import turnovers_by_score
         tbs232 = turnovers_by_score(match, config)
@@ -7517,6 +7910,7 @@ def _training_focus_cached(match: Match,
         pass
     # 231) Kettőző emberek: ha mindig ugyanaz az emberünk kettőz, a
     # kettőzés-forgatás a téma — ne legyen kiolvasható.
+    _szabaly = 231
     try:
         from .defense import doubling_defenders
         dtp231 = doubling_defenders(match, config)
@@ -7542,6 +7936,7 @@ def _training_focus_cached(match: Match,
         pass
     # 230) Szélső-mélység: ha messziről lőnek a szélsőink, a befutás
     # begyakorlása a téma, nem a lövőerő.
+    _szabaly = 230
     try:
         from .attack_types import wing_shot_depth
         wsd230 = wing_shot_depth(match, config)
@@ -7562,6 +7957,7 @@ def _training_focus_cached(match: Match,
         pass
     # 229) Kontra-esés: ha a második félidőre eláll a kontránk, a
     # láb és a kontra-döntés kondicionálása a téma.
+    _szabaly = 229
     try:
         from .attack_types import break_share_fade
         brf229 = break_share_fade(match, config)
@@ -7586,6 +7982,7 @@ def _training_focus_cached(match: Match,
         pass
     # 228) Felhozatal-posztok: ha egyetlen posztra épül a
     # felhozatalunk, a második felhozatal-út beépítése a téma.
+    _szabaly = 228
     try:
         from .goalkeeper import outlet_target_roles
         otr228 = outlet_target_roles(match, config)
@@ -7608,6 +8005,7 @@ def _training_focus_cached(match: Match,
         pass
     # 227) Falba lövő posztok: ha egy posztunk rendre a falba lő, a
     # lövés-előkészítés a téma, nem a lövő ereje.
+    _szabaly = 227
     try:
         from .defense import blocked_by_role
         bbr227 = blocked_by_role(match, config)
@@ -7630,6 +8028,7 @@ def _training_focus_cached(match: Match,
         pass
     # 226) Kiállítás-posztok: ha egy posztunk ellen sok a kiállításig
     # menő fogás, a kiharcolás tudatosítása a téma — nekünk fegyver.
+    _szabaly = 226
     try:
         from .rules import susp_earner_roles
         sur226 = susp_earner_roles(match, config)
@@ -7653,6 +8052,7 @@ def _training_focus_cached(match: Match,
         pass
     # 225) Gólpassz-posztok: ha egyetlen posztról készítjük elő a
     # gólokat, a második előkészítő-út beépítése a téma.
+    _szabaly = 225
     try:
         from .roles import assists_by_role
         abr225 = assists_by_role(match, config)
@@ -7675,6 +8075,7 @@ def _training_focus_cached(match: Match,
         pass
     # 224) Lefogott lövők: ha egy emberünk lövését rendre elviszi a
     # fal, lövő-variáció kell neki, nem több ugyanolyan lövés.
+    _szabaly = 224
     try:
         from .defense import blocked_shooters
         bsh224 = blocked_shooters(match, config)
@@ -7699,6 +8100,7 @@ def _training_focus_cached(match: Match,
         pass
     # 223) Kontra-elszökés: ha mindig együtt futunk fel, az elszökő
     # ember beépítése a téma.
+    _szabaly = 223
     try:
         from .attack_types import fast_break_headstart
         fbh223 = fast_break_headstart(match, config)
@@ -7720,6 +8122,7 @@ def _training_focus_cached(match: Match,
         pass
     # 222) Kontra-hullámok: ha csak az első ember fejezi be a
     # kontránkat, a második hullám beépítése a téma.
+    _szabaly = 222
     try:
         from .attack_types import fast_break_waves
         fbw222 = fast_break_waves(match, config)
@@ -7741,6 +8144,7 @@ def _training_focus_cached(match: Match,
         pass
     # 221) Beálló-futtatás: ha állva kap a beállónk, a lefordulós
     # átvétel begyakorlása a téma.
+    _szabaly = 221
     try:
         from .attack_types import pivot_service
         psv221 = pivot_service(match, config)
@@ -7762,6 +8166,7 @@ def _training_focus_cached(match: Match,
         pass
     # 220) Keresztjáték: ha statikus a hátsó sorunk, a kereszt-
     # mozgások beépítése a téma.
+    _szabaly = 220
     try:
         from .attack_types import crossing_runs
         crx220 = crossing_runs(match, config)
@@ -7785,6 +8190,7 @@ def _training_focus_cached(match: Match,
 
     # 219) Szélső-futtatás: ha a szélsőink állva kapják a labdát, a
     # futtatott széljáték a téma.
+    _szabaly = 219
     try:
         from .attack_types import wing_service
         wsv219 = wing_service(match, config)
@@ -7808,6 +8214,7 @@ def _training_focus_cached(match: Match,
 
     # 218) Csere-lyukak: ha csere közben öten maradunk, a csere-ütem
     # a téma.
+    _szabaly = 218
     try:
         from .substitutions import sub_gaps
         sbg218 = sub_gaps(match, config)
@@ -7831,6 +8238,7 @@ def _training_focus_cached(match: Match,
 
     # 217) Gólpassz-hossz: ha csak rövid kombinációkból élünk, a
     # hosszú indítás beépítése a téma.
+    _szabaly = 217
     try:
         from .event_detection import assist_ranges
         asr217 = assist_ranges(match, config)
@@ -7853,6 +8261,7 @@ def _training_focus_cached(match: Match,
 
     # 216) Kapus-kipattanó: ha a kapusunk kiüti a labdát, a kipattanó-
     # irányítás a téma.
+    _szabaly = 216
     try:
         from .goalkeeper import gk_rebound_control
         grc216 = gk_rebound_control(match, config)
@@ -7876,6 +8285,7 @@ def _training_focus_cached(match: Match,
 
     # 215) Kivárás-csapda: ha a hosszú támadásaink elhalnak, a
     # figura-zárás időzítése a téma.
+    _szabaly = 215
     try:
         from .attack_types import long_attack_outcomes
         lao215 = long_attack_outcomes(match, config)
@@ -7899,6 +8309,7 @@ def _training_focus_cached(match: Match,
 
     # 214) Felfutási létszám: ha mindenkit felküldünk, a biztosítás-
     # rend a téma.
+    _szabaly = 214
     try:
         from .attack_types import attack_headcount
         ahc214 = attack_headcount(match, config)
@@ -7922,6 +8333,7 @@ def _training_focus_cached(match: Match,
 
     # 213) Blokk-lepattanó: ha a blokkjaink visszahullanak, a blokk
     # utáni második mozdulat a téma.
+    _szabaly = 213
     try:
         from .defense import block_recoveries
         brc213 = block_recoveries(match, config)
@@ -7944,6 +8356,7 @@ def _training_focus_cached(match: Match,
 
     # 212) Ziccer-befejezők: ha egy emberünk a nagy helyzeteket is
     # kihagyja, a ziccer-rutin a téma.
+    _szabaly = 212
     try:
         from .xg import big_chance_finishers
         bcf212 = big_chance_finishers(match, config)
@@ -7968,6 +8381,7 @@ def _training_focus_cached(match: Match,
 
     # 211) Hetes utáni percek: ha az adott hetes után is kapunk rá, a
     # hetes körüli újrarendeződés a téma.
+    _szabaly = 211
     try:
         from .rules import post_seven_lapses
         psl211 = post_seven_lapses(match, config)
@@ -7992,6 +8406,7 @@ def _training_focus_cached(match: Match,
 
     # 210) Labda-forgatás: ha egy irányba forgatunk, a kétirányú
     # játék a téma.
+    _szabaly = 210
     try:
         from .attack_types import circulation_direction
         cir210 = circulation_direction(match, config)
@@ -8016,6 +8431,7 @@ def _training_focus_cached(match: Match,
 
     # 209) Elzárás-páros: ha a párosunk kiszámítható, a figura
     # variálása a téma.
+    _szabaly = 209
     try:
         from .attack_types import screen_pairs
         scp209 = screen_pairs(match, config)
@@ -8041,6 +8457,7 @@ def _training_focus_cached(match: Match,
 
     # 208) Szélső-kifutás: ha későn érünk ki a szélre, a kifutás-
     # időzítés a téma.
+    _szabaly = 208
     try:
         from .defense import wing_closeouts
         wco208 = wing_closeouts(match, config)
@@ -8063,6 +8480,7 @@ def _training_focus_cached(match: Match,
 
     # 207) Csend-törők: ha a gólcsendjeinket mindig más töri meg
     # (nincs válság-lövőnk), a vész-megoldás kijelölése a téma.
+    _szabaly = 207
     try:
         from .momentum import drought_breakers
         drb207 = drought_breakers(match, config)
@@ -8085,6 +8503,7 @@ def _training_focus_cached(match: Match,
 
     # 206) Forró kéz: ha az ellenfélnél sorozatlövő volt, a sorozat-
     # törő reakció a téma. (Saját oldalról: a forró kéz etetése.)
+    _szabaly = 206
     try:
         from .momentum import hot_hands
         hh206 = hot_hands(match, config)
@@ -8109,6 +8528,7 @@ def _training_focus_cached(match: Match,
 
     # 205) Kapus-hidegedés: ha a kapusunk hidegen sebezhető, a csendes
     # percek rutinja a téma.
+    _szabaly = 205
     try:
         from .goalkeeper import gk_cold_streaks
         gcs205 = gk_cold_streaks(match, config)
@@ -8132,6 +8552,7 @@ def _training_focus_cached(match: Match,
 
     # 204) Fal-magasság elleni játék: ha a felfutó fal megfog minket,
     # a prés elleni megoldások a téma.
+    _szabaly = 204
     try:
         from .attack_types import attack_vs_wall_height
         avw204 = attack_vs_wall_height(match, config)
@@ -8156,6 +8577,7 @@ def _training_focus_cached(match: Match,
 
     # 203) Kontra-forrás: ha a kapott kontrák egy forrásból jönnek, a
     # forrás-specifikus visszarendeződés a téma.
+    _szabaly = 203
     try:
         from .attack_types import break_sources
         bsrc203 = break_sources(match, config)
@@ -8181,6 +8603,7 @@ def _training_focus_cached(match: Match,
 
     # 202) Kapus-gól veszély: ha az ellenfél kapusa dobott már ránk,
     # az üres kapu védése a téma. (Saját oldalon: gyakorolható fegyver.)
+    _szabaly = 202
     try:
         from .goalkeeper import gk_goal_threat
         gkg202 = gk_goal_threat(match, config)
@@ -8204,6 +8627,7 @@ def _training_focus_cached(match: Match,
 
     # 201) Hosszú állás utáni játék: ha a megszakítások kizökkentenek
     # minket, az újraindulás-rutin a téma.
+    _szabaly = 201
     try:
         from .stoppages import long_break_response
         lbr201 = long_break_response(match, config)
@@ -8227,6 +8651,7 @@ def _training_focus_cached(match: Match,
 
     # 200) Hajrá-labdabirtoklás: ha a végjátékunk egy kézben van, a
     # másodlagos játékszervezés a téma.
+    _szabaly = 200
     try:
         from .momentum import clutch_ball_hogs
         cbh200 = clutch_ball_hogs(match, config)
@@ -8250,6 +8675,7 @@ def _training_focus_cached(match: Match,
 
     # 199) Negyedóra-profil: ha van visszatérő hullámvölgyünk, a
     # szakasz-terv a téma.
+    _szabaly = 199
     try:
         from .momentum import quarter_profile
         qp199 = quarter_profile(match, config)
@@ -8274,6 +8700,7 @@ def _training_focus_cached(match: Match,
 
     # 198) Beálló-őr: ha a beálló-őrzésünk egy emberen áll, az
     # őrzés-váltás a téma.
+    _szabaly = 198
     try:
         from .defense import pivot_guards
         pvg198 = pivot_guards(match, config)
@@ -8298,6 +8725,7 @@ def _training_focus_cached(match: Match,
 
     # 197) Időkérés-csomag: ha az időkérésünk sosem jár cserével, a
     # kispad-eszköztár bővítése a téma.
+    _szabaly = 197
     try:
         from .stoppages import timeout_sub_combo
         tsc197 = timeout_sub_combo(match, config)
@@ -8321,6 +8749,7 @@ def _training_focus_cached(match: Match,
 
     # 196) Lövés-választás állás szerint: ha hátrányban elkapkodjuk a
     # lövéseket, a nyomás alatti helyzet-válogatás a téma.
+    _szabaly = 196
     try:
         from .xg import shot_quality_by_score
         sqs196 = shot_quality_by_score(match, config)
@@ -8346,6 +8775,7 @@ def _training_focus_cached(match: Match,
 
     # 195) Kapus állás szerint: ha a kapusunk hátrányban összeesik, a
     # mentális újraindítás a téma.
+    _szabaly = 195
     try:
         from .goalkeeper import gk_saves_by_score
         gks195 = gk_saves_by_score(match, config)
@@ -8370,6 +8800,7 @@ def _training_focus_cached(match: Match,
 
     # 194) Szorult játék: ha hátrányban beszűkülünk, a nyomás alatti
     # szélesség-tartás a téma.
+    _szabaly = 194
     try:
         from .attack_types import width_by_score
         wbs194 = width_by_score(match, config)
@@ -8393,6 +8824,7 @@ def _training_focus_cached(match: Match,
 
     # 193) Visszaállás: ha a kiállításunk leteltekor megzavarodunk, a
     # visszaérkezés koreográfiája a téma.
+    _szabaly = 193
     try:
         from .rules import post_powerplay
         ppp193 = post_powerplay(match, config)
@@ -8417,6 +8849,7 @@ def _training_focus_cached(match: Match,
 
     # 192) Poszt-hibák: ha egy posztunk szórja a labdát, a poszt-
     # specifikus labdabiztonság a téma.
+    _szabaly = 192
     try:
         from .roles import turnovers_by_role
         tbr192 = turnovers_by_role(match, config)
@@ -8440,6 +8873,7 @@ def _training_focus_cached(match: Match,
 
     # 191) Futás-mérleg: ha az ellenfél túlfut minket, az alap-
     # állóképesség és az okos futás a téma.
+    _szabaly = 191
     try:
         from .stats import distance_battle
         dbt191 = distance_battle(match, config)
@@ -8464,6 +8898,7 @@ def _training_focus_cached(match: Match,
 
     # 190) Egyirányú játékosok: ha váltott sorokkal játszunk, a
     # váltás-ütem a téma.
+    _szabaly = 190
     try:
         from .roles import phase_specialists
         phs190 = phase_specialists(match, config)
@@ -8488,6 +8923,7 @@ def _training_focus_cached(match: Match,
 
     # 189) Sprint-veszély: ha a kontra-teher egy emberen van, a
     # második hullám bekapcsolása a téma.
+    _szabaly = 189
     try:
         from .stats import sprint_threats
         spt189 = sprint_threats(match, config)
@@ -8513,6 +8949,7 @@ def _training_focus_cached(match: Match,
 
     # 188) Hetesre cserélt kapus: ha specialistát hozunk a büntetőkre,
     # a beugró kapus bemelegítése és a visszaállás a téma.
+    _szabaly = 188
     try:
         from .goalkeeper import seven_keeper_swaps
         svk188 = seven_keeper_swaps(match, config)
@@ -8537,6 +8974,7 @@ def _training_focus_cached(match: Match,
 
     # 187) Kilépő védő: ha előretolt emberrel védekezünk, a mögötte
     # lévő tér biztosítása a téma.
+    _szabaly = 187
     try:
         from .defense import advanced_defender
         adv187 = advanced_defender(match, config)
@@ -8562,6 +9000,7 @@ def _training_focus_cached(match: Match,
 
     # 186) Középkezdés-átvevő: ha a saját újraindításunk egy emberre
     # jár, a középkezdés-variálás a téma.
+    _szabaly = 186
     try:
         from .momentum import restart_targets
         rst186 = restart_targets(match, config)
@@ -8586,6 +9025,7 @@ def _training_focus_cached(match: Match,
 
     # 185) Váltópárok: ha a cserénk kiszámítható, a csere-variálás a
     # téma.
+    _szabaly = 185
     try:
         from .substitutions import swap_pairs
         swp185 = swap_pairs(match, config)
@@ -8610,6 +9050,7 @@ def _training_focus_cached(match: Match,
 
     # 184) Visszahozott támadások: ha minden betörésünket visszahozzuk,
     # a lezárás-bátorság a téma.
+    _szabaly = 184
     try:
         from .attack_types import pullback_rate
         pb184 = pullback_rate(match, config)
@@ -8633,6 +9074,7 @@ def _training_focus_cached(match: Match,
 
     # 183) Szerzés utáni indítás: ha a szerzett labda helyben ragad, az
     # átmenet-gyorsaság a téma.
+    _szabaly = 183
     try:
         from .defense import steal_launch
         stl183 = steal_launch(match, config)
@@ -8656,6 +9098,7 @@ def _training_focus_cached(match: Match,
 
     # 182) Hetes-fáradás: ha fáradtan adjuk a heteseket, a kéz nélküli
     # test-védekezés a téma.
+    _szabaly = 182
     try:
         from .rules import sevens_fade
         s7f182 = sevens_fade(match, config)
@@ -8680,6 +9123,7 @@ def _training_focus_cached(match: Match,
 
     # 181) Fal-fáradás: ha a falunk a második félidőre kinyílik, a
     # védekezés állóképessége a téma.
+    _szabaly = 181
     try:
         from .xg import wall_fade
         wf181 = wall_fade(match, config)
@@ -8705,6 +9149,7 @@ def _training_focus_cached(match: Match,
 
     # 180) Pad-gólok: ha csak a kezdők termelnek, a második sor
     # gólbátorsága a téma.
+    _szabaly = 180
     try:
         from .momentum import bench_scoring
         ben180 = bench_scoring(match, config)
@@ -8728,6 +9173,7 @@ def _training_focus_cached(match: Match,
 
     # 179) Labdaszerzés-típus: ha minden szerzésünk testre menő
     # szerelés, a passzsáv-olvasás a téma.
+    _szabaly = 179
     try:
         from .defense import steal_types
         stt179 = steal_types(match, config)
@@ -8752,6 +9198,7 @@ def _training_focus_cached(match: Match,
 
     # 178) Kapott helyzetek minősége: ha a falunk nagy helyzeteket
     # enged, a hatos előtti tér védése a téma.
+    _szabaly = 178
     try:
         from .xg import conceded_chance_quality
         ccq178 = conceded_chance_quality(match, config)
@@ -8776,6 +9223,7 @@ def _training_focus_cached(match: Match,
 
     # 177) Félidő-zárás: ha a dudaszó előtti utolsó labda elhal, a
     # záró támadás rutinja a téma.
+    _szabaly = 177
     try:
         from .momentum import closing_attacks
         clo177 = closing_attacks(match, config)
@@ -8799,6 +9247,7 @@ def _training_focus_cached(match: Match,
 
     # 176) Lerohanás-hatékonyság: ha a kontráink nem érnek gólt, a
     # befejezés-döntés a téma.
+    _szabaly = 176
     try:
         from .attack_types import fast_break_conversion
         fbc176 = fast_break_conversion(match, config)
@@ -8823,6 +9272,7 @@ def _training_focus_cached(match: Match,
 
     # 175) Félidő-nyitás: ha a félidők első perceiben rendre
     # hátrányba kerülünk, a kezdés rutinja a téma.
+    _szabaly = 175
     try:
         from .momentum import half_openings
         hop175 = half_openings(match, config)
@@ -8846,6 +9296,7 @@ def _training_focus_cached(match: Match,
 
     # 174) Időkérés utáni védekezés: ha az időkérésünk után rendre
     # gólt kapunk, a megszakítás utáni védekezés-rend a téma.
+    _szabaly = 174
     try:
         from .stoppages import timeout_first_defense
         tfd174 = timeout_first_defense(match, config)
@@ -8870,6 +9321,7 @@ def _training_focus_cached(match: Match,
 
     # 173) Gól utáni letámadás: ha a saját gólunk után magasabban
     # védekezünk, a letámadás-rend és a mögötte lévő tér a téma.
+    _szabaly = 173
     try:
         from .defense import press_after_goal
         pag173 = press_after_goal(match, config)
@@ -8894,6 +9346,7 @@ def _training_focus_cached(match: Match,
 
     # 172) Felhozatal-idő: ha lassan hozzuk fel a labdát, az ellenfél
     # rendezetten felállhat — a gyors kihozatal a téma.
+    _szabaly = 172
     try:
         from .attack_types import buildup_time
         but172 = buildup_time(match, config)
@@ -8918,6 +9371,7 @@ def _training_focus_cached(match: Match,
 
     # 171) Kapus-bevonás: ha sokat játszunk vissza, a kapus
     # labdabiztonsága és a kihozatal-rend a téma.
+    _szabaly = 171
     try:
         from .goalkeeper import keeper_involvement
         kiv171 = keeper_involvement(match, config)
@@ -8941,6 +9395,7 @@ def _training_focus_cached(match: Match,
 
     # 170) Fedezetten lövők: ha valaki nyomás alatt is elhúzza a
     # ravaszt, a lövés-választás a téma.
+    _szabaly = 170
     try:
         from .defense import covered_shooters
         cov170 = covered_shooters(match, config)
@@ -8968,6 +9423,7 @@ def _training_focus_cached(match: Match,
 
     # 169) Pressz-érzékeny játékosok: ha valakinél a szorítás eladás,
     # a nyomás alatti kiadás a téma.
+    _szabaly = 169
     try:
         from .decisions import pressure_sensitive_players
         psp169 = pressure_sensitive_players(match, config)
@@ -8995,6 +9451,7 @@ def _training_focus_cached(match: Match,
 
     # 168) Elöl szerző védők: ha van ilyen emberünk, a letámadás
     # köré lehet védekezést építeni.
+    _szabaly = 168
     try:
         from .defense import high_steal_players
         hsp168 = high_steal_players(match, config)
@@ -9020,6 +9477,7 @@ def _training_focus_cached(match: Match,
 
     # 167) Pontatlan lövők: ha valakinek a lövései elkerülik a kaput,
     # a célzás a téma.
+    _szabaly = 167
     try:
         from .xg import wasteful_shooters
         wst167 = wasteful_shooters(match, config)
@@ -9046,6 +9504,7 @@ def _training_focus_cached(match: Match,
 
     # 166) Kezdő hatos: a nyitó emberek együtt gyakorolják a meccs
     # első támadásait (az első öt perc beárazza a mérkőzést).
+    _szabaly = 166
     try:
         from .momentum import opening_lineup
         opl166 = opening_lineup(match, config)
@@ -9072,6 +9531,7 @@ def _training_focus_cached(match: Match,
 
     # 165) Hetes-kiharcolás poszt szerint: az ellenfél hetes-forrása
     # megmondja, melyik posztunkon kell a legfegyelmezettebb kéz.
+    _szabaly = 165
     try:
         from .rules import seven_earner_roles
         ser165 = seven_earner_roles(match, config)
@@ -9098,6 +9558,7 @@ def _training_focus_cached(match: Match,
 
     # 164) Időkérés utáni első támadás: ha nem hoz gólt, a kész
     # figura a téma.
+    _szabaly = 164
     try:
         from .stoppages import timeout_first_attack
         tfa164 = timeout_first_attack(match, config)
@@ -9121,6 +9582,7 @@ def _training_focus_cached(match: Match,
 
     # 163) Kockázatos passzolók: ha valakinek a hosszú labdái
     # elvesznek, a passz-technika a téma.
+    _szabaly = 163
     try:
         from .attack_types import risky_passers
         rsk163 = risky_passers(match, config)
@@ -9147,6 +9609,7 @@ def _training_focus_cached(match: Match,
 
     # 162) Elzárók: ha egy ember állítja az elzárásainkat, a
     # változatos elzárás-játék a téma.
+    _szabaly = 162
     try:
         from .attack_types import screen_setters
         scs162 = screen_setters(match, config)
@@ -9173,6 +9636,7 @@ def _training_focus_cached(match: Match,
 
     # 161) Kapus-bemelegedés: ha a kapusunk lassan melegszik be, a
     # meccs eleji készenlét a téma.
+    _szabaly = 161
     try:
         from .goalkeeper import gk_early_saves
         gke161 = gk_early_saves(match, config)
@@ -9196,6 +9660,7 @@ def _training_focus_cached(match: Match,
 
     # 160) Emberhátrány-lövők: ha egy ember viszi a hátrányos
     # befejezést, a hátrányos támadás szélesítése a téma.
+    _szabaly = 160
     try:
         from .rules import shorthanded_shooters
         shs160 = shorthanded_shooters(match, config)
@@ -9223,6 +9688,7 @@ def _training_focus_cached(match: Match,
 
     # 159) Hajrá-hibázók: ha egy emberünknél megy el a labda a végén,
     # a nyomás alatti döntés a téma.
+    _szabaly = 159
     try:
         from .momentum import clutch_turnover_players
         ctp159 = clutch_turnover_players(match, config)
@@ -9249,6 +9715,7 @@ def _training_focus_cached(match: Match,
 
     # 158) Csere-kiváltók: ha kapott gólra cserélünk, a tervezett
     # csere-rend a téma.
+    _szabaly = 158
     try:
         from .substitutions import substitution_triggers
         stg158 = substitution_triggers(match, config)
@@ -9272,6 +9739,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 157) Falépítés-idő: ha lassan állunk fel, a rendeződés a téma.
+    _szabaly = 157
     try:
         from .defense import defense_setup_time
         dst157 = defense_setup_time(match, config)
@@ -9294,6 +9762,7 @@ def _training_focus_cached(match: Match,
 
     # 156) Kapus emberhátrányban: ha a kapusunk ilyenkor visszaesik, a
     # fal nélküli helyzetek védése a téma.
+    _szabaly = 156
     try:
         from .goalkeeper import gk_shorthanded_saves
         gsh156 = gk_shorthanded_saves(match, config)
@@ -9317,6 +9786,7 @@ def _training_focus_cached(match: Match,
 
     # 155) Emberelőny-lövők: ha egy emberre épül az emberelőnyünk, a
     # befejezés szélesítése a téma.
+    _szabaly = 155
     try:
         from .rules import powerplay_shooters
         pps155 = powerplay_shooters(match, config)
@@ -9344,6 +9814,7 @@ def _training_focus_cached(match: Match,
 
     # 154) Lövés-távolság esése: ha a hajrára kifelé szorulunk, a
     # fáradt befejezés a téma.
+    _szabaly = 154
     try:
         from .attack_types import shot_distance_fade
         sdf154 = shot_distance_fade(match, config)
@@ -9367,6 +9838,7 @@ def _training_focus_cached(match: Match,
 
     # 153) Kapott gólok támadás-típus szerint: ha a gólok nagy része
     # lerohanásból jön, a visszarendeződés a téma.
+    _szabaly = 153
     try:
         from .defense import conceded_by_attack_type
         cat153 = conceded_by_attack_type(match, config)
@@ -9403,6 +9875,7 @@ def _training_focus_cached(match: Match,
 
     # 152) Áttörő játékosok: ha az ellenfél egy embere sorozatban
     # betör, a duplázás és a vonal-zárás a téma.
+    _szabaly = 152
     try:
         from .attack_types import breakthrough_players
         btp152 = breakthrough_players(match, config)
@@ -9426,6 +9899,7 @@ def _training_focus_cached(match: Match,
 
     # 151) Két beállós játék: ha az ellenfél két beállóval játszik, a
     # közép-tömörítés a téma (a saját oldalon a felállás variálása).
+    _szabaly = 151
     try:
         from .attack_types import double_pivot_usage
         dpv151 = double_pivot_usage(match, config)
@@ -9450,6 +9924,7 @@ def _training_focus_cached(match: Match,
 
     # 150) Hajrá-ötös: a záró szakasz emberei együtt gyakorolják a
     # befejezést (a hajrában nincs idő ismerkedni).
+    _szabaly = 150
     try:
         from .momentum import clutch_lineup
         cll150 = clutch_lineup(match, config)
@@ -9477,6 +9952,7 @@ def _training_focus_cached(match: Match,
 
     # 149) Kontra-kíséret: ha magányos kontrát futunk, a kíséret a
     # téma (a lerohanás nem egyemberes műfaj).
+    _szabaly = 149
     try:
         from .attack_types import fast_break_support
         fbs149 = fast_break_support(match, config)
@@ -9501,6 +9977,7 @@ def _training_focus_cached(match: Match,
 
     # 148) Kapus-hetesvédés iránya: ha egy sarokra későn érünk, az a
     # sarok a téma.
+    _szabaly = 148
     try:
         from .rules import gk_seven_directions
         g7d148 = gk_seven_directions(match, config)
@@ -9524,6 +10001,7 @@ def _training_focus_cached(match: Match,
 
     # 147) Kihozatal-oldal: ha mindig ugyanarról az oldalról indítunk,
     # a kihozatal kiszámítható — az oldalváltó indítás a téma.
+    _szabaly = 147
     try:
         from .attack_types import buildup_side
         bus147 = buildup_side(match, config)
@@ -9546,6 +10024,7 @@ def _training_focus_cached(match: Match,
 
     # 146) Lepattanó-szerzők: ha az ellenfél gyűjti a kipattanókat, a
     # kipattanó-kísérés a téma (a saját oldalon a védekező lepattanó).
+    _szabaly = 146
     try:
         from .attack_types import rebound_winners
         rbw146 = rebound_winners(match, config)
@@ -9570,6 +10049,7 @@ def _training_focus_cached(match: Match,
 
     # 145) Lövő-távolság: ha valaki csak távolról lő, a befejezés
     # közelebb hozása a téma.
+    _szabaly = 145
     try:
         from .attack_types import shooter_ranges
         shr145 = shooter_ranges(match, config)
@@ -9595,6 +10075,7 @@ def _training_focus_cached(match: Match,
 
     # 144) Emberhátrány-forma: ha öt emberrel egy formát húzunk, a
     # forma elleni tipikus megoldásokat kell begyakorolni.
+    _szabaly = 144
     try:
         from .rules import shorthanded_shape
         shs144 = shorthanded_shape(match, config)
@@ -9618,6 +10099,7 @@ def _training_focus_cached(match: Match,
 
     # 143) Emberelőny-tempó: ha emberelőnyben kapkodunk, a
     # helyzet-kivárás a téma.
+    _szabaly = 143
     try:
         from .rules import powerplay_pace
         ppp143 = powerplay_pace(match, config)
@@ -9643,6 +10125,7 @@ def _training_focus_cached(match: Match,
 
     # 142) Effektív játékidő: szakadozott meccsnél a ritmus-tartás a
     # téma (a leállások utáni újraindulás).
+    _szabaly = 142
     try:
         from .stoppages import playing_time_profile
         ptp142 = playing_time_profile(match, config)["home"]
@@ -9666,6 +10149,7 @@ def _training_focus_cached(match: Match,
 
     # 141) Védekezés-keménység: ha a falunk sok büntetést hoz, a
     # szabályos keménység a téma.
+    _szabaly = 141
     try:
         from .defense import defensive_aggression
         agr141 = defensive_aggression(match, config)
@@ -9689,6 +10173,7 @@ def _training_focus_cached(match: Match,
 
     # 140) Visszaérés-fegyelem: ha valaki elöl lóg védekezéskor, a
     # visszafutás a téma.
+    _szabaly = 140
     try:
         from .defense import recovery_discipline
         rcd140 = recovery_discipline(match, config)
@@ -9715,6 +10200,7 @@ def _training_focus_cached(match: Match,
 
     # 139) Kapus-védés lövés-tempó szerint: ha az egyik sávban
     # sebezhető a kapusunk, az a sáv a téma.
+    _szabaly = 139
     try:
         from .goalkeeper import gk_saves_by_speed
         gsp139 = gk_saves_by_speed(match, config)
@@ -9749,6 +10235,7 @@ def _training_focus_cached(match: Match,
 
     # 138) Álló támadók: ha valaki labda nélkül alig mozog, a labda
     # nélküli munka a téma.
+    _szabaly = 138
     try:
         from .tactics import static_attackers
         sta138 = static_attackers(match, config)
@@ -9776,6 +10263,7 @@ def _training_focus_cached(match: Match,
 
     # 137) Szélső-befejezés oldalanként: ha az egyik szélsőnk érdemben
     # gyengébben fejez be, az ő szög-befejezése a téma.
+    _szabaly = 137
     try:
         from .attack_types import wing_finishing_by_side
         wfs137 = wing_finishing_by_side(match, config)
@@ -9802,6 +10290,7 @@ def _training_focus_cached(match: Match,
 
     # 136) Beálló-oldal: ha a beállónk mindig ugyanoda áll be,
     # kiszámítható — az oldalváltó beállózás a téma.
+    _szabaly = 136
     try:
         from .attack_types import pivot_side
         pvs136 = pivot_side(match, config)
@@ -9825,6 +10314,7 @@ def _training_focus_cached(match: Match,
 
     # 135) Fal-csúszás: ha lassan követjük az oldalváltást, az eltolás
     # a téma.
+    _szabaly = 135
     try:
         from .defense import defensive_shift_lag
         dsl135 = defensive_shift_lag(match, config)
@@ -9847,6 +10337,7 @@ def _training_focus_cached(match: Match,
 
     # 134) Passz-sebesség: ha lágy a labdajáratásunk, a feszes passz a
     # téma.
+    _szabaly = 134
     try:
         from .decisions import pass_speed
         psp134 = pass_speed(match, config)
@@ -9870,6 +10361,7 @@ def _training_focus_cached(match: Match,
 
     # 133) Beálló-kiszolgálók: ha egy ember adja a beadások felét, a
     # kiszolgálás szélesítése a téma.
+    _szabaly = 133
     try:
         from .attack_types import pivot_feeders
         pf133 = pivot_feeders(match, config)
@@ -9897,6 +10389,7 @@ def _training_focus_cached(match: Match,
 
     # 132) Hetes-okozó védők: ha egy védőnk sorozatban okoz hetest, a
     # lábbal védekezés a téma.
+    _szabaly = 132
     try:
         from .rules import seven_meter_conceders
         smc132 = seven_meter_conceders(match, config)
@@ -9921,6 +10414,7 @@ def _training_focus_cached(match: Match,
 
     # 131) Támadás-mélység: ha mélyen, hátrahúzódva támadunk, a
     # vonalra lépés a téma.
+    _szabaly = 131
     try:
         from .attack_types import attack_depth
         adp131 = attack_depth(match, config)
@@ -9944,6 +10438,7 @@ def _training_focus_cached(match: Match,
 
     # 130) Szélső-bevonás: ha a labda ki sem megy a szélre, a
     # szélesség-tartás a téma.
+    _szabaly = 130
     try:
         from .attack_types import wing_involvement
         wi130 = wing_involvement(match, config)
@@ -9968,6 +10463,7 @@ def _training_focus_cached(match: Match,
 
     # 129) Védekezési mélység állás szerint: ha vezetve visszaülünk, a
     # vezetés-védés a téma (a fal helye ne az eredménytől függjön).
+    _szabaly = 129
     try:
         from .defense import line_height_by_score
         lhs129 = line_height_by_score(match, config)
@@ -9992,6 +10488,7 @@ def _training_focus_cached(match: Match,
 
     # 128) Támadás-kimenetel: ha a támadásaink lövés nélkül halnak el,
     # a befejezésig vitel a téma.
+    _szabaly = 128
     try:
         from .attack_types import attack_outcomes
         ao128 = attack_outcomes(match, config)
@@ -10016,6 +10513,7 @@ def _training_focus_cached(match: Match,
 
     # 127) Kapus-védés posztonként: ha egy szögből sebezhető a
     # kapusunk, az adott szög védése a téma.
+    _szabaly = 127
     try:
         from .goalkeeper import gk_saves_by_role
         gsr127 = gk_saves_by_role(match, config)
@@ -10052,6 +10550,7 @@ def _training_focus_cached(match: Match,
 
     # 126) Hiba-sorozatok: ha egy eladás után jön a következő, a
     # hiba utáni rendezés a téma.
+    _szabaly = 126
     try:
         from .defense import turnover_clusters
         tc126 = turnover_clusters(match, config)
@@ -10076,6 +10575,7 @@ def _training_focus_cached(match: Match,
 
     # 125) Kapott gólok posztonként: ha egy poszt ellen szivárgunk, az
     # adott poszt védekezése a téma.
+    _szabaly = 125
     try:
         from .defense import conceded_by_role
         cbr125 = conceded_by_role(match, config)
@@ -10115,6 +10615,7 @@ def _training_focus_cached(match: Match,
 
     # 124) Poszt szerinti gólmegoszlás: ha egy posztra épül a
     # befejezésünk, a poszt-váltogatás a téma.
+    _szabaly = 124
     try:
         from .roles import goals_by_role
         gbr124 = goals_by_role(match, config)
@@ -10139,6 +10640,7 @@ def _training_focus_cached(match: Match,
 
     # 123) Gólpassz-zónák: ha minden előkészítés egy vonalról jön, a
     # támadásunk kiszámítható — a második vonal nyitása a téma.
+    _szabaly = 123
     try:
         from .event_detection import assist_zones
         az123 = assist_zones(match, config)
@@ -10163,6 +10665,7 @@ def _training_focus_cached(match: Match,
 
     # 122) Támadás-indítók: ha egy ember hozza fel a labdát, a
     # kihozatal letámadás-állóvá tétele a téma.
+    _szabaly = 122
     try:
         from .attack_types import attack_starters
         st122 = attack_starters(match, config)
@@ -10190,6 +10693,7 @@ def _training_focus_cached(match: Match,
 
     # 121) Időkérés-időzítés: ha későn fékezünk, a sorozat-kezelés
     # (mikor kérünk időt) a téma.
+    _szabaly = 121
     try:
         from .stoppages import TOT_LATE_MIN, timeout_timing
         tot121 = timeout_timing(match, config)
@@ -10212,6 +10716,7 @@ def _training_focus_cached(match: Match,
 
     # 120) Páros-mérleg: ha egy kettősünk együtt érdemben rosszabb, az
     # egység-építés (kivel kivel) a téma.
+    _szabaly = 120
     try:
         from .stats import PAIR_MIN_MINUTES, pair_plus_minus
         prm120 = pair_plus_minus(match, config)
@@ -10238,6 +10743,7 @@ def _training_focus_cached(match: Match,
 
     # 119) Csere-blokkok: ha egységekben cserélünk, a csere-fegyelem
     # (a váltás ütemének védelme) a téma.
+    _szabaly = 119
     try:
         from .substitutions import (SUBBLK_BLOCK_PCT,
                                     substitution_blocks)
@@ -10266,6 +10772,7 @@ def _training_focus_cached(match: Match,
 
     # 117) Labdatartás-idő: ha valakinél érdemben megáll a labda, a
     # gyorsabb továbbítás a téma.
+    _szabaly = 117
     try:
         from .decisions import HOLD_GAP_S, hold_time_players
         htp117 = hold_time_players(match, config)
@@ -10293,6 +10800,7 @@ def _training_focus_cached(match: Match,
 
     # 116) Védekezés-váltás: ha végig egy rendszert játszunk, a
     # második változat betanítása a téma.
+    _szabaly = 116
     try:
         from .tactics import FSW_ONE_SYSTEM_PCT, formation_switching
         fsw116 = formation_switching(match, config)
@@ -10314,6 +10822,7 @@ def _training_focus_cached(match: Match,
 
     # 115) Célba vett védő: ha egy védőnk előtt a csapatátlagnál
     # érdemben többször megy be a lövés, a segítség-rendszer a téma.
+    _szabaly = 115
     try:
         from .defense import (TDEF_GAP_PP, TDEF_MIN_SHOTS,
                               targeted_defenders)
@@ -10342,6 +10851,7 @@ def _training_focus_cached(match: Match,
 
     # 114) Játékos-mérleg: ha valakinek a pályán léte alatt érdemben
     # rosszabb a gólkülönbségünk, a szerep-tisztázás a téma.
+    _szabaly = 114
     try:
         from .stats import PM_MIN_MINUTES, player_plus_minus
         pm114 = player_plus_minus(match, config)
@@ -10368,6 +10878,7 @@ def _training_focus_cached(match: Match,
 
     # 113) Lövő-erő: ha van a csapatátlag felett bombázónk, a távoli
     # befejezés köré épített figura a téma.
+    _szabaly = 113
     try:
         from .event_detection import (SHOOTER_POWER_MIN_SHOTS,
                                       shooter_power)
@@ -10393,6 +10904,7 @@ def _training_focus_cached(match: Match,
 
     # 112) Lövő-kapuoldal: ha egy befejezőnk mindig ugyanoda lő, a
     # kapuoldal-váltás a téma.
+    _szabaly = 112
     try:
         from .attack_types import (SHOOTER_SIDE_MIN_GOALS,
                                    shooter_placement)
@@ -10418,6 +10930,7 @@ def _training_focus_cached(match: Match,
 
     # 111) Szélső-védekezés: ha a szélről kapjuk a gólokat, a
     # szélső-őrzés és a kapus szöge a téma.
+    _szabaly = 111
     try:
         from .defense import (WINGDEF_GAP_PP, WINGDEF_MIN_SHOTS,
                               wing_defense)
@@ -10444,6 +10957,7 @@ def _training_focus_cached(match: Match,
 
     # 110) Drága eladók: ha egy játékosunk eladásai rendre gólba
     # kerülnek, vele a nyomás alatti labdakezelés a téma.
+    _szabaly = 110
     try:
         from .defense import TO_COST_MIN, costly_turnover_players
         ctp110 = costly_turnover_players(match, config)
@@ -10467,6 +10981,7 @@ def _training_focus_cached(match: Match,
 
     # 109) Emberelőny-védekezés: ha emberelőnyben is kapunk gólt, a
     # befejezés utáni visszarendeződés a téma.
+    _szabaly = 109
     try:
         from .rules import PPDEF_MIN_S, powerplay_defense
         ppd109 = powerplay_defense(match, config)
@@ -10493,6 +11008,7 @@ def _training_focus_cached(match: Match,
 
     # 108) Kapus szabad lövés ellen: ha a kapusunk csak a fal mögött
     # véd, a szabad lövés elleni kapusmunka a téma.
+    _szabaly = 108
     try:
         from .goalkeeper import GKFREE_MIN_SHOTS, gk_free_shot_saves
         gkf108 = gk_free_shot_saves(match, config)
@@ -10518,6 +11034,7 @@ def _training_focus_cached(match: Match,
 
     # 107) Kettőzés: ha nem lép rá második védő a labdásra, a
     # kettőzés-mechanizmus és a mögötte lévő zárás a téma.
+    _szabaly = 107
     try:
         from .defense import (DOUBLE_MIN_FRAMES, double_teams)
         dbl107 = double_teams(match, config)
@@ -10542,6 +11059,7 @@ def _training_focus_cached(match: Match,
 
     # 106) Kapus-indítás iránya: ha a kapusunk mindig ugyanarra az
     # oldalra nyit, az indítás-irány variálása a téma.
+    _szabaly = 106
     try:
         from .goalkeeper import GK_SIDE_MIN_PASSES, gk_outlet_side
         gos106 = gk_outlet_side(match, config)
@@ -10567,6 +11085,7 @@ def _training_focus_cached(match: Match,
 
     # 105) Hajrá-eladás: ha a végén megugrik az eladás-ütemünk, a
     # nyomás alatti döntés és a hajrá-felállás a téma.
+    _szabaly = 105
     try:
         from .momentum import (CLUTCH_TO_MIN_EARLY, CLUTCH_TO_RISE_PER_MIN,
                                clutch_turnovers)
@@ -10595,6 +11114,7 @@ def _training_focus_cached(match: Match,
 
     # 104) Hátrány-támadás: ha a kiállítás alatt megbénul a
     # támadójátékunk, a hátrányos labdatartás a téma.
+    _szabaly = 104
     try:
         from .rules import SHATK_MIN_S, shorthanded_attack
         sha104 = shorthanded_attack(match, config)
@@ -10619,6 +11139,7 @@ def _training_focus_cached(match: Match,
 
     # 103) Fölény-befejezés: ha csak létszámfölényben vagyunk
     # eredményesek, a felállt támadás befejezése a téma.
+    _szabaly = 103
     try:
         from .attack_types import (OVERLOAD_GAP_PP, OVERLOAD_MIN_SHOTS,
                                    overload_finishing)
@@ -10646,6 +11167,7 @@ def _training_focus_cached(match: Match,
 
     # 102) Ellen-press: ha az eladott labdára nem támadunk rá, a
     # szerzés utáni első három másodperc a téma.
+    _szabaly = 102
     try:
         from .defense import (COUNTERPRESS_MIN_TO, COUNTERPRESS_WINDOW_S,
                               counter_press)
@@ -10672,6 +11194,7 @@ def _training_focus_cached(match: Match,
 
     # 101) Hajrá-lövésválasztás: ha a végén romlik a lövéseink
     # helyzetértéke, a hajrá-figurák és a türelem a téma.
+    _szabaly = 101
     try:
         from .momentum import (CLUTCH_SQ_DROP, CLUTCH_SQ_MIN_SHOTS,
                                clutch_shot_quality)
@@ -10701,6 +11224,7 @@ def _training_focus_cached(match: Match,
 
     # 100) Passz-kockázat: ha a hosszú passzaink elvesznek, a hosszú
     # passz technikája és a bejátszás-döntés a téma.
+    _szabaly = 100
     try:
         from .attack_types import (PASSRISK_GAP_PP,
                                    PASSRISK_MIN_TRIES, pass_risk)
@@ -10727,6 +11251,7 @@ def _training_focus_cached(match: Match,
 
     # 99) Elzárás-védekezés: ha az elzárásokon szétesik a váltásunk,
     # a váltás-kommunikáció a téma.
+    _szabaly = 99
     try:
         from .defense import (SCRDEF_GAP_PP, SCRDEF_MIN_SCREENED,
                               screen_defense)
@@ -10756,6 +11281,7 @@ def _training_focus_cached(match: Match,
 
     # 98) Elzárás-használat: ha elzárás nélkül lövünk, a lövőnk
     # magára marad — az elzárás-játék a téma.
+    _szabaly = 98
     try:
         from .attack_types import (SCREEN_LOW_PCT, SCREEN_MIN_SHOTS,
                                    screen_usage)
@@ -10781,6 +11307,7 @@ def _training_focus_cached(match: Match,
 
     # 97) Oldalváltás: ha egy oldalon ragadunk, a fal ellenünk
     # nyugodtan eltolható — a keresztjáték a téma.
+    _szabaly = 97
     try:
         from .attack_types import (SWITCH_LOW_PCT, SWITCH_MIN_PASSES,
                                    side_switching)
@@ -10806,6 +11333,7 @@ def _training_focus_cached(match: Match,
 
     # 96) Lerohanás-védés: ha a kapusunk gyorsindítás ellen szakad
     # be, a kapus-edzés és a visszarendeződés együtt a téma.
+    _szabaly = 96
     try:
         from .goalkeeper import (GKBR_GAP_PP, GKBR_MIN_FACED,
                                  gk_break_response)
@@ -10833,6 +11361,7 @@ def _training_focus_cached(match: Match,
 
     # 95) Gól-előkészítés hossza: ha csak hosszú akcióból van gólunk,
     # az első hullámunk fogatlan — a direkt befejezés a téma.
+    _szabaly = 95
     try:
         from .attack_types import (BUILDUP_LONG_SHARE,
                                    BUILDUP_MIN_GOALS, goal_buildup)
@@ -10858,6 +11387,7 @@ def _training_focus_cached(match: Match,
 
     # 94) Előkészítő-függés: ha a gólpasszaink egy emberen múlnak, az
     # ellenfél őt vágja el — második játékszervező kell.
+    _szabaly = 94
     try:
         from .attack_types import (ASSIST_CONC_MIN,
                                    ASSIST_CONC_TOP_SHARE,
@@ -10885,6 +11415,7 @@ def _training_focus_cached(match: Match,
 
     # 93) Középkezdés-tempó: ha kapott gól után lassan indítunk, az
     # ellenfél falja rendezetten vár — a gyors középkezdés a téma.
+    _szabaly = 93
     try:
         from .momentum import (RESTART_MIN_GOALS, RESTART_SLOW_SHARE,
                                restart_speed)
@@ -10910,6 +11441,7 @@ def _training_focus_cached(match: Match,
 
     # 92) Elsütés-idő: ha a lövőink sokáig fogják a labdát, a blokk
     # és a kilépés mindig odaér — a gyors elsütés a téma.
+    _szabaly = 92
     try:
         from .xg import (RELEASE_MIN_SHOTS, RELEASE_SLOW_SHARE,
                          shot_release)
@@ -10935,6 +11467,7 @@ def _training_focus_cached(match: Match,
 
     # 91) Beálló-védekezés: ha az ellenfél beállója ellen szakad be a
     # falunk, a beálló-őrzés (elöl-mögött, kettőzés) a téma.
+    _szabaly = 91
     try:
         from .defense import PIVOT_DEF_MIN_ATTACKS, pivot_defense
         pd91 = pivot_defense(match, config)
@@ -10958,6 +11491,7 @@ def _training_focus_cached(match: Match,
 
     # 90) Indítás-biztonság: ha a kapus-indításunk az ellenfélnél köt
     # ki, a kihozatalunk letámadható — a biztos első passz a téma.
+    _szabaly = 90
     try:
         from .goalkeeper import (GK_OUTLET_LOST_PCT, GK_OUTLET_SEC_MIN,
                                  gk_outlet_security)
@@ -10983,6 +11517,7 @@ def _training_focus_cached(match: Match,
 
     # 89) Támadó-mozgás: ha áll a támadásunk, a védő ingyen léphet ki
     # ránk — a labda nélküli mozgás (passzolj és fuss) a téma.
+    _szabaly = 89
     try:
         from .tactics import (ATTACK_MOTION_MIN_S,
                               ATTACK_MOTION_STATIC_MPS, attack_motion)
@@ -11008,6 +11543,7 @@ def _training_focus_cached(match: Match,
 
     # 88) Fal-rés: ha a rendezett falunk réseket hagy, a betörés és a
     # beúszó beálló ellenünk terv — a zárás-távolság a téma.
+    _szabaly = 88
     try:
         from .defense import (WALL_GAP_M, WALL_GAP_MIN_FRAMES,
                               WALL_GAP_SHARE_PCT, wall_gaps)
@@ -11033,6 +11569,7 @@ def _training_focus_cached(match: Match,
 
     # 87) Gólcsend-anatómia: a néma csend szervezés-gond (lövésig sem
     # jutunk), a kihagyós csend befejezés-gond — más-más edzés-téma.
+    _szabaly = 87
     try:
         from .momentum import (DROUGHT_ANATOMY_MIN_S,
                                DROUGHT_SHOOTING_PER_MIN,
@@ -11068,6 +11605,7 @@ def _training_focus_cached(match: Match,
 
     # 86) Engedett-oldal: ha a falunk egyik oldala átjárható, az
     # ellenfél oda szervez — az oldal-védő és a segítő-csúszás a téma.
+    _szabaly = 86
     try:
         from .defense import (CONCEDED_SIDE_MIN_SHOTS, CONCEDED_SIDE_PCT,
                               conceded_side_bias)
@@ -11093,6 +11631,7 @@ def _training_focus_cached(match: Match,
 
     # 85) Eladás-büntetés: ha az eladásaink gyors gólba kerülnek, a
     # váltás-sprint hiányzik — az eladás utáni visszarendeződés a téma.
+    _szabaly = 85
     try:
         from .defense import (TO_PUNISH_HIGH_PCT, TO_PUNISH_MIN,
                               turnover_punishment)
@@ -11117,6 +11656,7 @@ def _training_focus_cached(match: Match,
 
     # 84) Kapus-indítás hossza: ha a kapusunk egysíkúan indít, az
     # ellenfél ráállhat — az indítás-variancia a téma.
+    _szabaly = 84
     try:
         from .goalkeeper import gk_outlet_length
         go84 = gk_outlet_length(match, config)
@@ -11142,6 +11682,7 @@ def _training_focus_cached(match: Match,
     # 83) Területi-fölény-esés: ha a 2. félidőre hátracsúszik a
     # játékunk, fáradtan nem tartjuk elöl a labdát — a téma a
     # labdakihozatal és a magas birtoklás fáradtan.
+    _szabaly = 83
     try:
         from .tactics import TILT_FADE_DROP_PP, tilt_fade
         tf83 = tilt_fade(match, config)
@@ -11165,6 +11706,7 @@ def _training_focus_cached(match: Match,
 
     # 82) Asszist-függés: ha minden gólunk egyéni villanás, a
     # kulcsember kettőzésével levehetők rólunk — a kiadás a téma.
+    _szabaly = 82
     try:
         from .attack_types import (ASSIST_DEP_LOW_PCT,
                                    ASSIST_DEP_MIN_GOALS,
@@ -11190,6 +11732,7 @@ def _training_focus_cached(match: Match,
 
     # 81) Lepattanó-fal: ha a lövések után nem zárunk, az ellenfél
     # második hulláma jár — a box-out és a zárás a téma.
+    _szabaly = 81
     try:
         from .defense import (SC_ALLOW_HIGH_PCT, SC_ALLOW_MIN,
                               second_chance_allowed)
@@ -11214,6 +11757,7 @@ def _training_focus_cached(match: Match,
 
     # 80) Pressz-tűrés: ha testközeli védőnél megugrik az eladásunk,
     # az agresszív fal ellenünk termel — a nyomás alatti passz a téma.
+    _szabaly = 80
     try:
         from .decisions import (PRESS_TO_RISE_PP,
                                 pass_security_under_pressure)
@@ -11238,6 +11782,7 @@ def _training_focus_cached(match: Match,
 
     # 79) Eladás-időzítés: ha a birtoklás elején adjuk el a labdát, a
     # letámadás ellenünk termel — a kihozatal nyomás alatt a téma.
+    _szabaly = 79
     try:
         from .defense import (TO_EARLY_S, TO_EARLY_SHARE, TO_TIMING_MIN,
                               turnover_timing)
@@ -11262,6 +11807,7 @@ def _training_focus_cached(match: Match,
 
     # 78) Kapus-gyengeoldal: ha egy oldalra kapjuk a gólokat, az
     # ellenfél lövő-terve kész — a kapus oldal-technikája a téma.
+    _szabaly = 78
     try:
         from .goalkeeper import gk_weak_side
         gw78 = gk_weak_side(match, config)
@@ -11284,6 +11830,7 @@ def _training_focus_cached(match: Match,
 
     # 77) Lövő-koncentráció: ha a lövés-terhelésünk egy emberre épül,
     # az ellenfél kettőzéssel lefejezheti — a lövés-elosztás a téma.
+    _szabaly = 77
     try:
         from .xg import shot_concentration
         sc77 = shot_concentration(match, config)
@@ -11305,6 +11852,7 @@ def _training_focus_cached(match: Match,
 
     # 76) Ritmus-egyhangúság: ha belső órán játszunk, az ellenfél
     # ráállhat — a tudatos ritmus-váltás a téma.
+    _szabaly = 76
     try:
         from .attack_types import (RHYTHM_CV_LOW, RHYTHM_MIN_ATTACKS,
                                    attack_rhythm)
@@ -11329,6 +11877,7 @@ def _training_focus_cached(match: Match,
 
     # 75) Oldal-részrehajlás: ha a támadásunk fél-oldalas, ellenünk
     # eltolt fallal védekeznek — az oldal-egyensúly a téma.
+    _szabaly = 75
     try:
         from .attack_types import attack_side_bias
         sb75 = attack_side_bias(match, config)
@@ -11350,6 +11899,7 @@ def _training_focus_cached(match: Match,
 
     # 74) Célzás-pontosság: ha a lövéseink fele mellé megy, a lövés
     # ára nálunk dupla — technikai célzás-edzés a téma.
+    _szabaly = 74
     try:
         from .xg import (ACCURACY_LOW_PCT, ACCURACY_MIN_SHOTS,
                          shot_accuracy)
@@ -11374,6 +11924,7 @@ def _training_focus_cached(match: Match,
 
     # 73) Befejezés-esés: ha a gólra váltásunk a 2. félidőre esik, a
     # fáradt befejezés a téma.
+    _szabaly = 73
     try:
         from .xg import FINISH_FADE_DROP_PP, finish_fade
         ff73 = finish_fade(match, config)
@@ -11396,6 +11947,7 @@ def _training_focus_cached(match: Match,
 
     # 72) Bravúr utáni lendület: ha a kapusbravúrjaink elhalnak, a
     # védés utáni azonnali indítás a téma.
+    _szabaly = 72
     try:
         from .xg import BIG_SAVE_SPARK_MIN, big_save_momentum
         bs72 = big_save_momentum(match, config)
@@ -11417,6 +11969,7 @@ def _training_focus_cached(match: Match,
 
     # 71) Sorozat-törés: ha az elszenvedett sorozatok rendre elfutnak,
     # a sorozat-törés protokollja a téma.
+    _szabaly = 71
     try:
         from .momentum import (RUN_CONTAIN_LONG, RUN_CONTAIN_MIN,
                                run_containment)
@@ -11441,6 +11994,7 @@ def _training_focus_cached(match: Match,
 
     # 70) Holtpont-mérleg: ha az egál-pillanatokat rendre elengedjük,
     # a nyomás alatti befejezés a téma.
+    _szabaly = 70
     try:
         from .momentum import PARITY_MIN_TIES, parity_breaks
         pb70 = parity_breaks(match, config)
@@ -11463,6 +12017,7 @@ def _training_focus_cached(match: Match,
 
     # 69) Félidei hátrányból fordítás: ha hátrányból nem tudtunk
     # visszajönni, a szünet utáni fordítás-protokoll a téma.
+    _szabaly = 69
     try:
         from .momentum import halftime_comeback
         htc69 = halftime_comeback(match, config)
@@ -11482,6 +12037,7 @@ def _training_focus_cached(match: Match,
 
     # 68) Tempó-esés: ha a 2. félidőre érdemben esik a támadás/perc,
     # elfogy a láb — a futó-állóképesség és a rotáció a téma.
+    _szabaly = 68
     try:
         from .attack_types import PACE_FADE_DROP_PER_MIN, team_pace_fade
         tpf68 = team_pace_fade(match, config)
@@ -11505,6 +12061,7 @@ def _training_focus_cached(match: Match,
 
     # 67) Kihagyott ziccer ára: ha a kihagyásainkat rendre azonnal
     # büntetik, a kihagyás utáni visszarendeződés a téma.
+    _szabaly = 67
     try:
         from .xg import miss_punishment
         mp67 = miss_punishment(match, config)
@@ -11527,6 +12084,7 @@ def _training_focus_cached(match: Match,
 
     # 66) Kapuscsere-hatás: ha a csere sem segített (mindkét kapus
     # nehéz napja), a kapus-alapok és a fal-kapus összhang a téma.
+    _szabaly = 66
     try:
         from .goalkeeper import GK_CHANGE_DELTA_PP, gk_change_effect
         gce66 = gk_change_effect(match, config)
@@ -11549,6 +12107,7 @@ def _training_focus_cached(match: Match,
 
     # 65) Hetes-védés: ha a kapusunk a rá dobott heteseket rendre kapja,
     # a hetes-készülés a kapus-edzés témája.
+    _szabaly = 65
     try:
         from .rules import seven_meter_defense
         s7d65 = seven_meter_defense(match, config)
@@ -11569,6 +12128,7 @@ def _training_focus_cached(match: Match,
 
     # 64) Félidő-zárás: ha a szünet előtti perceket érdemben elvesztettük,
     # az 1. félidő végi koncentráció a téma.
+    _szabaly = 64
     try:
         from .halftime import first_half_close
         fhc64 = first_half_close(match, config)
@@ -11591,6 +12151,7 @@ def _training_focus_cached(match: Match,
 
     # 63) Szoros vereség: ha ez a meccs 1-2 gólon úszott el, a
     # hajrá-forgatókönyv a következő edzés témája.
+    _szabaly = 63
     try:
         from .momentum import close_game_record
         cg63 = close_game_record(match, config)
@@ -11609,6 +12170,7 @@ def _training_focus_cached(match: Match,
 
     # 62) Gól utáni elalvás: ha a góljaink után rendre azonnali választ
     # kapunk, a középkezdés elleni visszarendeződés a téma.
+    _szabaly = 62
     try:
         from .momentum import post_goal_lapses
         pgl62 = post_goal_lapses(match, config)
@@ -11631,6 +12193,7 @@ def _training_focus_cached(match: Match,
     # 61) Fegyelem-esés: ha a kiállításaink a 2. félidőre sűrűsödnek,
     # a fáradt védekezés-technika a téma — a hajrában nem szabad
     # emberhátrányba kerülni.
+    _szabaly = 61
     try:
         from .rules import discipline_fade
         df61 = discipline_fade(match, config)
@@ -11651,6 +12214,7 @@ def _training_focus_cached(match: Match,
 
     # 60) Előny-őrzés: ha ezen a meccsen 3+ gólos vezetés ment el, a
     # vezetés-menedzsment a következő edzés témája.
+    _szabaly = 60
     try:
         from .momentum import lead_protection
         lp60 = lead_protection(match, config)
@@ -11671,6 +12235,7 @@ def _training_focus_cached(match: Match,
     # 59) Kapus-forma félidőnként: ha a kapusunk a 2. félidőre érdemben
     # esik (15+ százalékpont), a kapus-terhelést és a csere-időzítést kell
     # átgondolni.
+    _szabaly = 59
     try:
         from .goalkeeper import GK_FADE_DROP_PP, gk_save_fade
         gf59 = gk_save_fade(match, config)
@@ -11691,7 +12256,7 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
-    return out
+    return {side: rank_focus(items) for side, items in out.items()}
 
 
 def player_training_focus(match: Match,

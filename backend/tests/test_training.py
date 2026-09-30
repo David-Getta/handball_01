@@ -117,7 +117,7 @@ def test_library_recurring_focus_endpoint(tmp_path):
         it["title"] != "Fedezés-fegyelem" for it in r["teams"]["Veszprém"])
 
 
-def test_front_turnovers_trigger_safe_finishing_focus():
+def test_front_turnovers_trigger_safe_finishing_focus(monkeypatch):
     """6 hazai labdaeladás a támadó harmadban (x=35, a +x kapu előtt) →
     'Biztonságos befejezés' fókusz a hazaiaknak."""
     frames = []
@@ -134,6 +134,10 @@ def test_front_turnovers_trigger_safe_finishing_focus():
             frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 35.0, 10.0)],
                                 ball=Ball(x=35.0, y=10.0, confidence=1.0)))
             t += 1
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     focus = training_focus(Match(_meta(), frames))
     assert any("Biztonságos befejezés" in f_["title"] for f_ in focus["home"])
     # A vendég ugyanitt a SAJÁT harmadában veszít labdát → nála nem szól.
@@ -284,7 +288,7 @@ def test_slow_response_triggers_mental_focus():
     assert not any("jraindul" in f_["title"] for f_ in focus["away"])
 
 
-def test_barren_long_attacks_trigger_shot_clock_focus():
+def test_barren_long_attacks_trigger_shot_clock_focus(monkeypatch):
     """4 rövid gólos + 4 hosszú gól nélküli hazai támadás → 'Befejezés
     időkorláttal' fókusz."""
     from handball.models.tracking import Ball
@@ -312,6 +316,10 @@ def test_barren_long_attacks_trigger_shot_clock_focus():
         for _ in range(25):
             frames.append(Frame(t=t, players=[], ball=None))
             t += 1
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     focus = training_focus(Match(_meta(), frames))
     assert any("időkorlát" in f_["title"].lower() for f_ in focus["home"])
     assert not any("időkorlát" in f_["title"].lower()
@@ -758,7 +766,7 @@ def test_training_flags_loose_marking():
                    for it in out2["away"])
 
 
-def test_training_flags_underused_pivot():
+def test_training_flags_underused_pivot(monkeypatch):
     """30) Ha van beálló, de a támadások alig mennek rajta át,
     Beálló-kapcsolat fókusz születik; beálló-központú játéknál nem."""
     def scene(ball_at_pivot):
@@ -800,6 +808,10 @@ def test_training_flags_underused_pivot():
                 t += 1
         return Match(_meta(), frames)
 
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     out = training_focus(scene(False))
     items = [it for it in out["home"]
              if it["title"] == "Beálló-kapcsolat"]
@@ -809,7 +821,7 @@ def test_training_flags_underused_pivot():
                    for it in out2["home"])
 
 
-def test_training_flags_lane_defense():
+def test_training_flags_lane_defense(monkeypatch):
     """31) Ha az ellenfél betörései egy sávban jönnek és gólokat is
     hoznak, a védekező oldal Sáv-védelem fókuszt kap."""
     def frames_scene():
@@ -848,12 +860,16 @@ def test_training_flags_lane_defense():
                 t += 1
         return Match(_meta(), frames)
 
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     out = training_focus(frames_scene())
     items = [it for it in out["away"] if it["title"] == "Sáv-védelem"]
     assert items and "közép sávban jött" in items[0]["why"]
 
 
-def test_training_flags_unproductive_long_chains():
+def test_training_flags_unproductive_long_chains(monkeypatch):
     """32) Ha a 6+ passzos támadások terméketlenek, Passz-lánc fókusz
     születik időkorlátos gyakorlattal."""
     from handball.pipeline.training import training_focus as tf32
@@ -882,6 +898,10 @@ def test_training_flags_unproductive_long_chains():
                 t += 1
         return Match(_meta(), frames)
 
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     out = tf32(scene())
     items = [it for it in out["home"] if it["title"] == "Passz-lánc"]
     assert items and "terméketlenek" in items[0]["why"]
@@ -1125,3 +1145,96 @@ def test_az_edzes_cimek_szabalyonkent_egyediek():
     assert not dupla, (
         "ugyanaz az edzés-cím több különböző szabályból: "
         + "; ".join(f"{c!r} ← {s}" for c, s in sorted(dupla.items())))
+
+
+def test_a_fokusz_rangsor_teruletek_kozott_forog():
+    """A fókusz nem a forrás-sorrend első öt tétele, hanem területek
+    között forgó rangsor — és egy területen belül az alap-szabály előre.
+
+    A tételek a forrás-sorrendben érkeznek ("az újak felülre": az első
+    a legutóbb írt szabály). Nyolc támadás-tétel után egy védekezés és
+    egy kapus is megszólalt — a régi korlát (az első öt) csupa támadást
+    adott volna, a védekezés és a kapus le sem jutott az edzőhöz.
+    """
+    from handball.pipeline.training import MAX_ITEMS, rank_focus
+
+    def tetel(area, cim, szabaly):
+        return {"area": area, "title": cim, "why": "w", "drill": "d",
+                "_szabaly": szabaly}
+
+    # forrás-sorrend ("az újak felülre"): a támadás-8 (480. szabály) az
+    # első, a támadás-1 (1. szabály, alap) az utolsó; a szabály-sorszám
+    # a kulcs, nem a helyzet
+    items = ([tetel("támadás", f"támadás-{i}", 60 * i) for i in range(8, 0, -1)]
+             + [tetel("védekezés", "védekezés-alap", 2),
+                tetel("kapus", "kapus-alap", 9)])
+    top = rank_focus(items)
+    assert len(top) == MAX_ITEMS
+    cimek = [t["title"] for t in top]
+    # 1. kör: területenként a legkisebb sorszámú (alap) tétel, a
+    # terület-rangsor sorrendjében; 2. kör: a támadás következő kettő.
+    assert cimek == ["védekezés-alap", "támadás-1", "kapus-alap",
+                     "támadás-2", "támadás-3"], cimek
+    # a kimenet a közös alak — a sorszám belső kulcs, nem jut ki
+    assert all(set(t) == {"area", "title", "why", "drill"} for t in top)
+    # kevesebb tétel a korlátnál → mind
+    assert [t["title"] for t in rank_focus(items[-2:])] == \
+        ["védekezés-alap", "kapus-alap"]
+    assert rank_focus([]) == []
+    # a listán nem szereplő terület a végére, de nem vész el; a sorszám
+    # nélküli tétel a számozottak után, forrás-sorrendben
+    extra = items + [tetel("különleges", "x", None),
+                     {"area": "támadás", "title": "számozatlan",
+                      "why": "w", "drill": "d"}]
+    mind = [t["title"] for t in rank_focus(extra, limit=20)]
+    assert "x" in mind and mind.index("számozatlan") > mind.index("támadás-8")
+
+
+def test_a_fokusz_a_mintameccsen_is_tobb_teruletet_fed():
+    """A rangsor párja a valódi listán: ha a megszólaló tételek több
+    területet fednek, az öt fókusz sem lehet egyetlen területű."""
+    from handball.pipeline import training as training_mod
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    tf = training_mod.training_focus(m)
+    for side in ("home", "away"):
+        top = tf[side]
+        assert len(top) <= training_mod.MAX_ITEMS
+        teruletek = {t["area"] for t in top}
+        if len(top) >= 3:
+            assert len(teruletek) >= 2, (side, [t["area"] for t in top])
+
+
+def test_minden_edzes_szabaly_beallitja_a_sorszamat():
+    """Minden `# N)` szabály-blokk a `try:` előtt beállítja `_szabaly = N`-t.
+
+    A sorszám a rangsor területen belüli kulcsa (`rank_focus`): nélküle
+    a tétel némán az ELŐZŐ szabály számát örökli, és rossz helyre kerül
+    a fókuszban. A forrást nézzük: a sorszám-komment utáni első nem-
+    komment sor `_szabaly = <ugyanaz a szám>` kell legyen.
+    """
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+           / "training.py").read_text(encoding="utf-8")
+    kezdet = src.index("def _training_focus_cached(")
+    veg = src.index("def player_training_focus(")
+    sorok = src[kezdet:veg].split("\n")
+    hibak = []
+    talalt = 0
+    for i, sor in enumerate(sorok):
+        m = re.match(r"\s*#\s*(\d+)\)", sor)
+        if not m:
+            continue
+        talalt += 1
+        j = i + 1
+        while j < len(sorok) and sorok[j].strip().startswith("#"):
+            j += 1
+        vart = f"_szabaly = {m.group(1)}"
+        if j >= len(sorok) or sorok[j].strip() != vart:
+            hibak.append(f"{m.group(1)}. szabály: {sorok[j].strip()!r}")
+    assert talalt > 400, "az őr nem talált szabály-blokkot — a minta elavult?"
+    assert not hibak, "hiányzó vagy rossz sorszám-sor: " + "; ".join(hibak)

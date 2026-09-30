@@ -3,6 +3,25 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.154 óta)
+
+- **Edzés-fókusz: rangsor a forrás-sorrend helyett** (javítás): az
+  öt-tételes fókuszt eddig a szabályok FORRÁS-sorrendjének első öt
+  megszólalója adta — a fejlesztési szokás ("az újak felülre") miatt
+  ez a legutóbb írt öt szabály volt, egy 30 perces meccsen 60–90
+  megszólalóból, jellemzően csupa támadás-tétel; a fedezés-fegyelem, a
+  labdabiztonság vagy a kapus-tétel le sem jutott az edzőhöz. Mostantól
+  a rangsor területek között forog (védekezés, támadás, kapus,
+  befejezés, taktika, …): előbb minden területről a legfontosabb,
+  aztán a második — egy területen belül az alap-szabályok előzik a
+  finomabb mintákat (minden szabály-blokk a sorszámát a `try:` előtt
+  `_szabaly = N` sorral adja meg; őr-teszt figyeli). A felületek
+  (kliens edzés-terv, összefoglaló, HTML-riport, szezon-könyvtár)
+  változatlan alakban kapják. Három teszt: a forgó rangsor szintetikus
+  listán, a mintameccsen a fókusz több területet fed, és a sorszám-sor
+  minden szabálynál ott van; a szabály-tesztek a megszólalást nézik,
+  ezért a korlátot emelve futnak.
+
 ## v0.1.154 — kiadva (2026-09-28)
 
 > Kiadás-jegyzet: az edzés-fókusz kártyái tisztultak — egységes,

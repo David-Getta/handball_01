@@ -94,6 +94,11 @@ Sorrendben (kb. 200–280 sor összesen):
    - `combine_reports`: a mezők összegzése.
 5. **Edzés-fókusz** (`pipeline/training.py`, `training_focus`) — új
    sorszámozott szabály, az újak felülre — a KÖVETKEZŐ szám: 487.
+   A blokk alakja: `# N) …` komment, alatta `_szabaly = N`, aztán a
+   `try:`. A sorszám a rangsor kulcsa (`rank_focus`: területek között
+   forog, területen belül a kisebb sorszám — az alap-szabály — előre);
+   a sorszám-sor nélkül a tétel némán az ELŐZŐ szabály számát örökli
+   (őr-teszt: `test_minden_edzes_szabaly_beallitja_a_sorszamat`).
 6. **Kliens** (`client/lib/ui/scouting_screen.dart`) — `_xxx(r)`
    helper (a backenddel azonos küszöbök, kommentben jelezve) + csempe
    a listában.
