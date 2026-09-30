@@ -397,3 +397,41 @@ def test_az_egymas_elleni_riport_nem_tolti_vissza_a_hideg_meccseket(monkeypatch)
     assert r.status_code == 200
     assert len(hivasok) == elso, "a második hívás nem tölt vissza"
     assert dict.__len__(store) == 1
+
+
+def test_a_figura_konyvtar_ujrainditas_utan_sem_tolti_vissza_a_hideg_meccseket(monkeypatch):
+    """A csapat figura-könyvtára (/library/figure-library) a meccsenkénti
+    figura-alakokat a LEMEZES eredmény-tárban tartja: egy ÚJ motor-példány
+    (újraindítás) a második hívásra egyetlen hideg meccset sem tölt
+    vissza. Korábban az alakok csak memóriában éltek, így minden
+    újraindítás után a könyvtár összes meccsét újraszámolta."""
+    tmp = tempfile.mkdtemp(prefix="hb_fig_cold_")
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True)
+    for i in range(3):
+        (d / f"f{i}.json").write_text(json.dumps(_meccs(f"f{i}", n=8).to_dict()),
+                                      encoding="utf-8")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", tmp)
+    monkeypatch.setenv("HANDBALL_STORE_SYNC", "1")
+    monkeypatch.setenv("HANDBALL_STORE_HOT", "1")
+    from handball.api.app import create_app
+    ut = "/library/figure-library?team=H"
+    # Első példány: számol és a lemezre ír.
+    assert TestClient(create_app()).get(ut).status_code == 200
+    # Második példány (újraindítás): a lemezes tárból, betöltés nélkül.
+    app = create_app()
+    client = TestClient(app)
+    store = app.state.store
+    assert dict.__len__(store) == 1 and len(store) == 3
+    eredeti = store.loader
+    hivasok = []
+
+    def szamlalo(mid):
+        hivasok.append(mid)
+        return eredeti(mid)
+
+    store.loader = szamlalo
+    r = client.get(ut)
+    assert r.status_code == 200
+    assert hivasok == [], "újraindítás után sincs visszatöltés"
+    assert dict.__len__(store) == 1

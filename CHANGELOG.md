@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.154 óta)
 
+- **Figura-könyvtár: a figura-alakok a lemezes eredmény-tárban**
+  (javítás, teljesítmény): a csapat figura-könyvtára (visszatérő
+  figurák, az élő figura-riasztás és a klip-export közös alapja) a
+  meccsenkénti figura-alakokat csak memóriában jegyezte meg, ezért
+  minden újraindítás után a könyvtár összes hideg meccsét
+  visszatöltötte és a figurákat újraszámolta. Mostantól az alakok a
+  lemezes eredmény-tárba kerülnek (ugyanoda, ahová a meccs-kivonat és
+  a gól-tally); a memória-jegyzet a tartalék. Teszt: új motor-példány
+  a második hívásra egyetlen meccset sem tölt vissza.
+
 - **Egymás-elleni riport: nem tölti vissza a hideg meccseket**
   (javítás, teljesítmény): a két csapat egymás-elleni lapja a
   gólfelelősökért a közös meccsek minden kockáját bejárta minden

@@ -4178,12 +4178,25 @@ def create_app():
             pass
         return d
 
+    def _shapes_of(m) -> dict:
+        """EGY meccs figura-alakjai (setplays.setplay_shapes), memóriában
+        is megjegyezve — a lemezes tár tartaléka (pl. lemezen nem lévő
+        meccsnél)."""
+        from ..pipeline.primitive_cache import primitive_cache
+        from ..pipeline.setplays import setplay_shapes
+        kulcs = (m.meta.match_id, _kockaszam(m))
+        alakok = _shapes_cache.get(kulcs)
+        if alakok is None:
+            with primitive_cache(m):
+                alakok = setplay_shapes(m)
+            _shapes_cache[kulcs] = alakok
+        return alakok
+
     def _team_figure_library(team_name: str) -> dict:
         """Egy csapat FIGURA-KÖNYVTÁRA a könyvtár összes elemzett
         meccséből (setplays.setplay_library): mi tér vissza meccsről
         meccsre. A klip-export és az élő figura-riasztás közös alapja."""
-        from ..pipeline.primitive_cache import primitive_cache
-        from ..pipeline.setplays import setplay_library, setplay_shapes
+        from ..pipeline.setplays import setplay_library
         sorok = []
         for m_ in _season_matches():
             oldal = ("home" if m_.meta.home_team == team_name
@@ -4191,12 +4204,15 @@ def create_app():
                      else None)
             if oldal is None:
                 continue
-            kulcs = (m_.meta.match_id, _kockaszam(m_))
-            alakok = _shapes_cache.get(kulcs)
-            if alakok is None:
-                with primitive_cache(m_):
-                    alakok = setplay_shapes(m_)
-                _shapes_cache[kulcs] = alakok
+            # A meccs figura-alakjai a LEMEZES eredmény-tárból: eddig csak
+            # memóriában éltek, így minden újraindítás után a
+            # figura-könyvtár (és az élő figura-riasztás) a könyvtár
+            # összes hideg meccsét visszatöltötte és újraszámolta.
+            try:
+                alakok = _cached_result(m_.meta.match_id, "setplay-shapes",
+                                        lambda m_=m_: _shapes_of(m_))
+            except Exception:
+                alakok = _shapes_of(m_)
             sorok += [{**r, "match_id": m_.meta.match_id}
                       for r in alakok[oldal]]
         lib = setplay_library(sorok)
