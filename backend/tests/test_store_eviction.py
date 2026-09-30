@@ -314,3 +314,47 @@ def test_a_konyvtar_szintu_vegpontok_hideg_meccsekkel_is_mennek(monkeypatch):
         r = client.get(ut)
         assert r.status_code == 200, (ut, r.status_code, r.text[:200])
     assert dict.__len__(app.state.store) == 1
+
+
+def test_az_egyeni_edzes_terv_nem_tolti_vissza_a_hideg_meccseket(monkeypatch):
+    """A csapat egyéni edzés-terve (/library/training-focus/players és a
+    nyomtatható lap) a tárolt játékos-fókuszból veszi a mezszámokat: a
+    MÁSODIK hívás egyetlen hideg meccset sem tölt vissza. Korábban a
+    meccsek minden kockáját bejárta a mezszámokért, és egy húsz meccses
+    könyvtárnál az edzés-terv lap percekig nyílt."""
+    tmp = tempfile.mkdtemp(prefix="hb_plan_cold_")
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True)
+    for i in range(3):
+        (d / f"p{i}.json").write_text(json.dumps(_meccs(f"p{i}", n=8).to_dict()),
+                                      encoding="utf-8")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", tmp)
+    monkeypatch.setenv("HANDBALL_STORE_SYNC", "1")
+    monkeypatch.setenv("HANDBALL_STORE_HOT", "1")
+    from handball.api.app import create_app
+    app = create_app()
+    client = TestClient(app)
+    store = app.state.store
+    assert dict.__len__(store) == 1 and len(store) == 3
+    eredeti = store.loader
+    hivasok = []
+
+    def szamlalo(mid):
+        hivasok.append(mid)
+        return eredeti(mid)
+
+    store.loader = szamlalo
+    utak = ("/library/training-focus/players?team=H",
+            "/library/training-focus/players?team=A",
+            "/library/training-focus/export?team=H")
+    # Első kör: a fókuszok számolása jogosan betölti a hideg meccseket.
+    for ut in utak:
+        assert client.get(ut).status_code == 200, ut
+    elso = len(hivasok)
+    assert elso >= 2, "az első számolás a hideg meccseket betölti"
+    # Második kör: minden a tárolt eredményből — egyetlen betöltés sem.
+    for ut in utak:
+        r = client.get(ut)
+        assert r.status_code == 200, (ut, r.status_code)
+    assert len(hivasok) == elso, "a második körben nincs visszatöltés"
+    assert dict.__len__(store) == 1

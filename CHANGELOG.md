@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.154 óta)
 
+- **Egyéni edzés-terv: nem tölti vissza a hideg meccseket** (javítás,
+  teljesítmény): a csapat egyéni edzés-terve (képernyős lista és a
+  nyomtatható export) a mezszámokat a szezon minden meccsének minden
+  kockáját bejárva gyűjtötte — ehhez a könyvtár összes hideg meccsét
+  visszatöltötte, húsz meccses könyvtárnál percekig nyílt a lap, és a
+  memória-plafon itt semmit sem ért. Mostantól a mezszámok a tárolt
+  játékos-fókuszból jönnek (csak annak van sora, akinek tétele van),
+  a kimenet változatlan. Teszt: egyes plafonnál a második hívás
+  egyetlen hideg meccset sem tölt vissza.
+
 - **Szezon-könyvtár: a visszatérő gyengeség indoka tényleg a legutóbbi
   meccsé** (javítás): a csapat- és a játékos-szintű edzés-könyvtár a
   "hány meccsen tért vissza" szám mellé az utoljára bejárt meccs

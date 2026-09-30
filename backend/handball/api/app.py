@@ -6236,18 +6236,23 @@ def create_app():
         csak a szám köti össze a játékost. Elöl, akinek több
         gyakorlandója van: az edző ott kezdi a hetet.
         """
+        # A mezszámok a GYORSÍTÓTÁRAZOTT játékos-fókuszból jönnek, nem a
+        # meccsek minden kockájának bejárásából: az utóbbi a könyvtár
+        # összes hideg meccsét visszatöltötte (húsz meccsnél percekig
+        # nyílt az edzés-terv), miközben csak annak van sora, akinek
+        # fókusz-tétele van — az pedig a tárolt eredményben ott a mezszám.
         mezek: set = set()
         for m_ in _season_matches():
             if m_.meta.home_team == team:
-                oldal = Team.HOME
+                oldal = "home"
             elif m_.meta.away_team == team:
-                oldal = Team.AWAY
+                oldal = "away"
             else:
                 continue
-            for fr in m_.frames:
-                for p_ in fr.players:
-                    if p_.team == oldal and p_.jersey_number is not None:
-                        mezek.add(p_.jersey_number)
+            ptf = _player_focus_of(m_)
+            for p_ in (ptf.get(oldal) or {}).get("players") or []:
+                if p_.get("jersey") is not None:
+                    mezek.add(int(p_["jersey"]))
         emberek = []
         for j in sorted(mezek):
             tetelek = _season_player_focus(team, j)
