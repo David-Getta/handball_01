@@ -42,7 +42,6 @@ háromszor annyi valós időt követelnek.
 - `home.pairs[0].verdict`: sűrűn `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 16 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat` → ritkítva `a kulcs-emberük a(z) 10. számú: 9 réteg ítélete mutat rá (a 15 megszólalóból) — ő nem egy a hét mezőnyjátékos közül, az ő kezelése önmagában meccstervnyi feladat`
 - `home.pairs[2].verdict`: sűrűn `a(z) beálló közelről fejez be (átl. 6.0 m) — őt ki kell zárni` → ritkítva `a(z) beálló közelről fejez be (átl. 5.9 m) — őt ki kell zárni`
 - `home.pairs[4].verdict`: sűrűn `a(z) 1. figurájuk lövéseinek 61%-a a(z) irányító posztra fut ki — a figura INDULÁSAKOR arra az oldalra kell csúszni, nem a lövésnél` → ritkítva `a(z) 1. figurájuk indításainak 100%-a a(z) beálló posztról jön — amint a labda odaér, zárni kell a kiinduló passzsávot, és a figura el sem indul`
-- `home.verdict`: sűrűn `a(z) 5 teendőből 1-hez van kész gyakorlat; a maradék 4 edzői döntést kíván` → ritkítva `a(z) 5 teendőből 2-hez van kész gyakorlat; a maradék 3 edzői döntést kíván`
 
 ### `high_steal_roles`
 

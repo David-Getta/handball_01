@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.154 óta)
+## v0.1.155 — kiadva (2026-09-30)
+
+> Kiadás-jegyzet: az edzés-fókusz mostantól rangsor, nem a legutóbb
+> írt öt szabály — területek között forogva (védekezés, támadás, kapus,
+> befejezés, taktika…), az egyéni lapon is; a szezon-könyvtár indoka
+> tényleg a legutóbbi meccsé. A szezon-lapok (egyéni edzés-terv,
+> egymás-elleni, figura-könyvtár, minőség-összevetés) nem töltik vissza
+> a hideg meccseket, az előszámolás ezeket is elkészíti, és a
+> felderítés memória-tára nem nő hívásonként.
 
 - **Felderítés memória-tára: nem nő hívásonként** (javítás, memória):
   a felderítő jelentés memória-tárának kulcsában az objektum-azonosító
