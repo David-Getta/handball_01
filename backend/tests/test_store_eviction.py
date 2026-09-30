@@ -435,3 +435,41 @@ def test_a_figura_konyvtar_ujrainditas_utan_sem_tolti_vissza_a_hideg_meccseket(m
     assert r.status_code == 200
     assert hivasok == [], "újraindítás után sincs visszatöltés"
     assert dict.__len__(store) == 1
+
+
+def test_a_minoseg_lap_korabbi_pontszamai_ujrainditas_utan_a_tarbol(monkeypatch):
+    """A minőség-lap "javult-e a legutóbbihoz képest" része a korábbi
+    meccsek pontszámát a LEMEZES eredmény-tárból veszi: egy új
+    motor-példány csak a kért meccset tölti be, a korábbiakat nem.
+    Korábban a pontszám csak memóriában élt, és minden újraindítás után
+    a korábbi meccseket a pontszámért vissza kellett tölteni."""
+    tmp = tempfile.mkdtemp(prefix="hb_q_cold_")
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True)
+    for i in range(3):
+        m = _meccs(f"q{i}", n=8)
+        m.meta.date = f"2026-09-0{i + 1}"
+        (d / f"q{i}.json").write_text(json.dumps(m.to_dict()), encoding="utf-8")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", tmp)
+    monkeypatch.setenv("HANDBALL_STORE_SYNC", "1")
+    monkeypatch.setenv("HANDBALL_STORE_HOT", "1")
+    from handball.api.app import create_app
+    ut = "/matches/q2/quality"
+    r = TestClient(create_app()).get(ut)
+    assert r.status_code == 200
+    assert len(r.json().get("previous") or []) == 2
+    app = create_app()
+    client = TestClient(app)
+    store = app.state.store
+    eredeti = store.loader
+    hivasok = []
+
+    def szamlalo(mid):
+        hivasok.append(mid)
+        return eredeti(mid)
+
+    store.loader = szamlalo
+    r = client.get(ut)
+    assert r.status_code == 200
+    assert len(r.json().get("previous") or []) == 2
+    assert set(hivasok) <= {"q2"}, hivasok

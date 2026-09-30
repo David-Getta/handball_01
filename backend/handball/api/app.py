@@ -2405,6 +2405,13 @@ def create_app():
             for fn in (lambda: _match_summary(m),
                        lambda: _cached_result(match_id, "player-tallies",
                                               lambda: _player_tally_of(m)),
+                       # Az egyéni edzés-terv és a figura-könyvtár
+                       # meccsenkénti része is — különben a szezon-lapok
+                       # első megnyitása számolná, a hideg meccseket
+                       # visszatöltve.
+                       lambda: _player_focus_of(m),
+                       lambda: _cached_result(match_id, "setplay-shapes",
+                                              lambda: _shapes_of(m)),
                        # A felderítés a legdrágább (csapatonként ~50 mp),
                        # ezért a sor végén.
                        lambda: _scout_cached(m, Team.AWAY),
@@ -3843,17 +3850,26 @@ def create_app():
             key=lambda m: (m.meta.date or "", m.meta.match_id),
             reverse=True)
         ki = []
-        for m in sorrend[:limit]:
+        def _pont_of(m):
             kulcs = (m.meta.match_id, _kockaszam(m))
             pont = _quality_score_cache.get(kulcs)
             if pont is None:
-                try:
-                    pont = compute_quality_report(m).get("score")
-                except Exception:
-                    continue
-                if pont is None:
-                    continue
-                _quality_score_cache[kulcs] = pont
+                pont = compute_quality_report(m).get("score")
+                if pont is not None:
+                    _quality_score_cache[kulcs] = pont
+            return pont
+
+        for m in sorrend[:limit]:
+            # A pontszám a LEMEZES eredmény-tárból is: eddig csak
+            # memóriában élt, és minden újraindítás után a korábbi
+            # meccseket a pontszámért vissza kellett tölteni.
+            try:
+                pont = _cached_result(m.meta.match_id, "quality-score",
+                                      lambda m=m: _pont_of(m))
+            except Exception:
+                continue
+            if pont is None:
+                continue
             ki.append({"match_id": m.meta.match_id,
                        "home_team": m.meta.home_team,
                        "away_team": m.meta.away_team,

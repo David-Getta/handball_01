@@ -137,6 +137,13 @@ def test_a_feldolgozas_vegen_elore_kiszamolja(konyvtar, monkeypatch):
         time.sleep(0.1)
     assert (tar / "library-summary.json").exists()
     assert (tar / "player-tallies.json").exists()
+    # Az egyéni edzés-terv és a figura-könyvtár meccsenkénti része is
+    # kész — a szezon-lapok első megnyitása se számoljon.
+    hatarido = time.time() + 30
+    while time.time() < hatarido and not (tar / "setplay-shapes.json").exists():
+        time.sleep(0.1)
+    assert (tar / "player-focus.json").exists()
+    assert (tar / "setplay-shapes.json").exists()
     assert n["db"] == 1
     TestClient(app).get("/matches/rc1/coach-summary")
     assert n["db"] == 1, "a megnyitás a kész előszámolást kapja"

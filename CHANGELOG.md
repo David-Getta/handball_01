@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.154 óta)
 
+- **Minőség-pontszám a lemezes tárban; az előszámolás a szezon-lapokat
+  is elkészíti** (javítás, teljesítmény): a minőség-lap "javult-e a
+  legutóbbihoz képest" része a korábbi meccsek pontszámát csak
+  memóriában jegyezte, ezért minden újraindítás után a korábbi
+  meccseket a pontszámért vissza kellett tölteni — most a lemezes
+  eredmény-tárban van. A feldolgozás végi háttér-előszámolás az egyéni
+  edzés-terv és a figura-könyvtár meccsenkénti részét is elkészíti, így
+  a szezon-lapok első megnyitása sem számol. Teszt: új motor-példány a
+  minőség-lapért csak a kért meccset tölti be; az előszámolás a két új
+  fájlt is írja.
+
 - **Figura-könyvtár: a figura-alakok a lemezes eredmény-tárban**
   (javítás, teljesítmény): a csapat figura-könyvtára (visszatérő
   figurák, az élő figura-riasztás és a klip-export közös alapja) a
