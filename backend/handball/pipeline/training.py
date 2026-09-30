@@ -42,10 +42,12 @@ MAX_ITEMS = 5
 # (védekezés) előzi a saját befejezést, a kapus és a befejezés a
 # taktikát, az állapot-témák (átmenet, kondíció, fáradás, mentális) a
 # végére. A listán nem szereplő terület a megjelenés sorrendjében,
-# a legvégére kerül.
-TF_AREA_ORDER = ("védekezés", "támadás", "kapus", "befejezés", "taktika",
-                 "átmenet", "kondíció", "erőnlét", "fáradás", "mentális",
-                 "végjáték", "labdás", "csoportos")
+# a legvégére kerül. Az egyéni lap (player_training_focus) ugyanezt
+# a rangsort használja: a labdabiztonság és a hajrá az ő területei.
+TF_AREA_ORDER = ("védekezés", "támadás", "labdabiztonság", "kapus",
+                 "befejezés", "taktika", "hajrá", "átmenet", "kondíció",
+                 "erőnlét", "fáradás", "mentális", "végjáték", "labdás",
+                 "csoportos")
 
 # Egyéni edzés-fókusz: emberenként legfeljebb ennyi tétel (a fókusz
 # attól fókusz, hogy kevés), és a befejezés-szabály küszöbei.
@@ -12348,10 +12350,12 @@ def _player_training_focus_cached(match: Match,
         rec = tar[side].setdefault(pid, {"jersey": jersey, "items": []})
         if jersey is not None:
             rec["jersey"] = jersey
-        if len(rec["items"]) < PLAYER_MAX_ITEMS:
-            rec["items"].append({"area": area, "title": title,
-                                 "why": why, "drill": drill,
-                                 "clips": list(clips)})
+        # Korlát nélkül gyűjtünk; a PLAYER_MAX_ITEMS tételt a végén a
+        # `rank_focus` válogatja (területek között forogva), hogy két
+        # labdabiztonság-jel ne szorítsa ki a befejezést vagy a kondíciót.
+        rec["items"].append({"area": area, "title": title,
+                             "why": why, "drill": drill,
+                             "clips": list(clips)})
 
     # (a) Nyomás alatti labdakezelés — az ő szorítása az ellenfélnek
     #    labdaszerzés, tehát neki a kiadás a gyakorlandó.
@@ -12545,7 +12549,7 @@ def _player_training_focus_cached(match: Match,
     out: dict = {}
     for side in ("home", "away"):
         sorok = [{"player_id": pid, "jersey": rec["jersey"],
-                  "items": rec["items"]}
+                  "items": rank_focus(rec["items"], PLAYER_MAX_ITEMS)}
                  for pid, rec in tar[side].items() if rec["items"]]
         sorok.sort(key=lambda r: (-len(r["items"]),
                                   r["jersey"] if r["jersey"] is not None

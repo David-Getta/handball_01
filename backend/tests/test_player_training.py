@@ -155,6 +155,11 @@ def test_emberenkent_legfeljebb_ket_tetel(monkeypatch):
     rec = player_training_focus(_match())["home"]["players"]
     assert len(rec) == 1
     assert len(rec[0]["items"]) == PLAYER_MAX_ITEMS
+    # A két hely nem a forrás-sorrend első kettője (két labdabiztonság-
+    # jel), hanem területek között forogva: labdabiztonság + befejezés
+    # — a rangsor (rank_focus) az egyéni lapon is érvényes.
+    assert [it["area"] for it in rec[0]["items"]] == \
+        ["labdabiztonság", "befejezés"]
 
 
 def test_ures_lista_ervenyes_eredmeny():

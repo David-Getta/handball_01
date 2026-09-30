@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.154 óta)
 
+- **Köteg-összefűzés tesztje versenymentes** (teszt): a "megszakított
+  darabbal nem lesz teljes meccs" teszt terhelt gépen (párhuzamos
+  tesztfutás) néha elbukott, mert a tíz kockás első darab a két
+  beküldés között elkészült, a második azonnal lefutott, mire a
+  megszakítás odaért. Most az első darab feldolgozása egy kapu mögött
+  vár, amíg a teszt a másodikat a sorból ki nem veszi — a termék
+  viselkedése változatlan.
+
 - **Edzés-fókusz: rangsor a forrás-sorrend helyett** (javítás): az
   öt-tételes fókuszt eddig a szabályok FORRÁS-sorrendjének első öt
   megszólalója adta — a fejlesztési szokás ("az újak felülre") miatt
@@ -20,7 +28,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   változatlan alakban kapják. Három teszt: a forgó rangsor szintetikus
   listán, a mintameccsen a fókusz több területet fed, és a sorszám-sor
   minden szabálynál ott van; a szabály-tesztek a megszólalást nézik,
-  ezért a korlátot emelve futnak.
+  ezért a korlátot emelve futnak. Az egyéni lap (játékosonként két
+  tétel) ugyanígy forog: két labdabiztonság-jel nem szorítja ki a
+  befejezést vagy a kondíciót.
 
 ## v0.1.154 — kiadva (2026-09-28)
 

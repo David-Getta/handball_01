@@ -106,14 +106,33 @@ def test_csoport_nelkul_nincs_osszefuzes(tmp_path):
     assert not any(n.startswith("teljes-") for n in nevek), nevek
 
 
-def test_megszakitott_darabbal_nem_lesz_teljes_meccs(tmp_path):
+def test_megszakitott_darabbal_nem_lesz_teljes_meccs(tmp_path, monkeypatch):
     """Ha a csoport egyik darabját megszakították, a többi kész
     darabból NEM lesz "teljes" meccs — fél meccset összefűzni rosszabb,
     mint szólni. Az ok ki van mondva."""
+    import threading
+
+    import scripts.process_video as pv
+
     client = _client()
     v1, v2 = tmp_path / "megvan.mp4", tmp_path / "leallitott.mp4"
     _video(v1)
     _video(v2)
+
+    # Az első darab feldolgozása addig "tart", míg a teszt el nem engedi:
+    # így a második darab BIZTOSAN a sorban áll, amikor megszakítjuk.
+    # Kapu nélkül verseny volt: terhelt gépen (párhuzamos tesztfutás) a
+    # 10 kockás első darab a két beküldés között elkészült, a második
+    # azonnal indult és lefutott, mire a megszakítás odaért — és a két
+    # kész darabból "teljes" meccs lett.
+    kapu = threading.Event()
+    eredeti = pv.process
+
+    def kapus_process(*args, **kwargs):
+        kapu.wait(60.0)
+        return eredeti(*args, **kwargs)
+
+    monkeypatch.setattr(pv, "process", kapus_process)
 
     r1 = client.post("/matches/process", json={
         "path": str(v1), "max": 10,
@@ -124,8 +143,11 @@ def test_megszakitott_darabbal_nem_lesz_teljes_meccs(tmp_path):
         "merge_group": "proba-2", "merge_order": 1, "merge_total": 2,
         "queue_behind": True})
     jobs = [r1.json()["job_id"], r2.json()["job_id"]]
-    # A második darabot azonnal megszakítjuk (még a sorban áll).
+    # A második darabot megszakítjuk, amíg a sorban áll — az első még
+    # a kapu mögött dolgozik.
+    assert client.get(f"/jobs/{jobs[1]}").json()["status"] == "queued"
     client.post(f"/jobs/{jobs[1]}/cancel")
+    kapu.set()
     kesz = _bevar(client, jobs)
     nevek = [m["match_id"] for m in client.get("/matches").json()["matches"]]
     assert not any(n.startswith("teljes-") for n in nevek), nevek
