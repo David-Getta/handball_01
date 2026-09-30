@@ -358,3 +358,42 @@ def test_az_egyeni_edzes_terv_nem_tolti_vissza_a_hideg_meccseket(monkeypatch):
         assert r.status_code == 200, (ut, r.status_code)
     assert len(hivasok) == elso, "a második körben nincs visszatöltés"
     assert dict.__len__(store) == 1
+
+
+def test_az_egymas_elleni_riport_nem_tolti_vissza_a_hideg_meccseket(monkeypatch):
+    """Az egymás-elleni riport a tárolt meccs-kivonatból, gól-tallyból és
+    felderítésből áll össze: a MÁSODIK hívás egyetlen hideg meccset sem
+    tölt vissza. Korábban a gólfelelősökért a közös meccsek minden
+    kockáját bejárta, és a felderítés-gyorsítótár kulcsa is a
+    kockaszámért betöltötte a meccset."""
+    tmp = tempfile.mkdtemp(prefix="hb_h2h_cold_")
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True)
+    for i in range(3):
+        m = _meccs(f"h{i}", n=8)
+        m.meta.date = f"2026-09-0{i + 1}"
+        (d / f"h{i}.json").write_text(json.dumps(m.to_dict()), encoding="utf-8")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", tmp)
+    monkeypatch.setenv("HANDBALL_STORE_SYNC", "1")
+    monkeypatch.setenv("HANDBALL_STORE_HOT", "1")
+    from handball.api.app import create_app
+    app = create_app()
+    client = TestClient(app)
+    store = app.state.store
+    assert dict.__len__(store) == 1 and len(store) == 3
+    eredeti = store.loader
+    hivasok = []
+
+    def szamlalo(mid):
+        hivasok.append(mid)
+        return eredeti(mid)
+
+    store.loader = szamlalo
+    ut = "/head-to-head/report?team_a=H&team_b=A"
+    assert client.get(ut).status_code == 200
+    elso = len(hivasok)
+    assert elso >= 2, "az első számolás a hideg meccseket betölti"
+    r = client.get(ut)
+    assert r.status_code == 200
+    assert len(hivasok) == elso, "a második hívás nem tölt vissza"
+    assert dict.__len__(store) == 1

@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.154 óta)
 
+- **Egymás-elleni riport: nem tölti vissza a hideg meccseket**
+  (javítás, teljesítmény): a két csapat egymás-elleni lapja a
+  gólfelelősökért a közös meccsek minden kockáját bejárta minden
+  hívásnál, és a felderítés-gyorsítótár kulcsa is a kockaszámért
+  betöltötte a meccset — húsz közös meccsnél percekig nyílt a lap.
+  Mostantól a gólfelelősök a tárolt meccsenkénti gól-tallyból jönnek
+  (ugyanabból, amiből a szezon-toplista él), a felderítés kulcsa pedig
+  a kilincs kockaszámát veszi. Teszt: egyes plafonnál a második hívás
+  egyetlen hideg meccset sem tölt vissza.
+
 - **Egyéni edzés-terv: nem tölti vissza a hideg meccseket** (javítás,
   teljesítmény): a csapat egyéni edzés-terve (képernyős lista és a
   nyomtatható export) a mezszámokat a szezon minden meccsének minden

@@ -5307,29 +5307,20 @@ def create_app():
         # csapatonként (mezszám-alapú összegzés) — hibatűrően.
         scorers = None
         try:
+            # A meccsenkénti gól-tally a lemezes eredmény-tárból (ugyanaz,
+            # amiből a szezon-toplista él): csapatnév, mezszám, gól. Eddig
+            # a riport minden hívásnál a közös meccsek minden kockáját
+            # bejárta a mezszámokért — és ehhez a hideg meccseket
+            # visszatöltötte.
             sc_acc: dict = {}
             for date_, m_ in entries:
-                jersey_of: dict = {}
-                team_of: dict = {}
-                for fr in m_.frames:
-                    for p in fr.players:
-                        if p.jersey_number is not None:
-                            jersey_of.setdefault(p.track_id,
-                                                 p.jersey_number)
-                        team_of.setdefault(
-                            p.track_id, getattr(p.team, "value", p.team))
-                tn_ = {"home": m_.meta.home_team,
-                       "away": m_.meta.away_team}
-                from ..pipeline.xg import match_xg
-                for r_ in match_xg(m_).get("shooters", []):
-                    if not r_["goals"]:
-                        continue
-                    j_ = jersey_of.get(r_["player_id"])
-                    t_ = tn_.get(team_of.get(r_["player_id"]))
-                    if j_ is None or not t_:
-                        continue
-                    sc_acc[(t_, j_)] = (sc_acc.get((t_, j_), 0)
-                                        + r_["goals"])
+                try:
+                    rec_t = _cached_result(m_.meta.match_id, "player-tallies",
+                                           lambda m_=m_: _player_tally_of(m_))
+                except Exception:
+                    rec_t = _player_tally_of(m_)
+                for t_, j_, n_ in rec_t.get("goals") or []:
+                    sc_acc[(t_, j_)] = sc_acc.get((t_, j_), 0) + n_
             if sc_acc:
                 scorers = {}
                 for tname in (team_a, team_b):
@@ -10875,7 +10866,7 @@ def create_app():
                             sort_keys=True, default=str)
         except Exception:
             ov = ""
-        kulcs = (match.meta.match_id, id(match), team.value, len(match.frames),
+        kulcs = (match.meta.match_id, id(match), team.value, _kockaszam(match),
                  match.meta.home_team, match.meta.away_team, hash(ov))
         rep = _scout_cache.get(kulcs)
         if rep is None:
