@@ -5040,6 +5040,13 @@ def create_app():
                 reszek.add(str(rid))
         return [m for m in osszes if m.meta.match_id not in reszek]
 
+    def _idorendben(meccsek: list) -> list:
+        """Meccsek dátum szerint NÖVEKVŐ sorrendben (dátum nélküli elöl,
+        azonos dátumnál azonosító szerint) — ahol "az utolsó a
+        legutóbbi" a szabály (pl. a visszatérő gyengeség indoka)."""
+        return sorted(meccsek,
+                      key=lambda m: ((m.meta.date or ""), m.meta.match_id))
+
     # A keret-viszonyítás küszöbei: ennyi játékidő alatt valaki nem
     # "játszott" (a fél percre beálló csere lehúzná az átlagot), és
     # ennyi ember alatt nincs értelmes keret-átlag.
@@ -5629,7 +5636,8 @@ def create_app():
         """
         fokusz: dict = {}
         try:
-            for m_ in _season_matches():
+            # Dátum szerint növekvően, hogy a beírt indok a legutóbbié legyen.
+            for m_ in _idorendben(_season_matches()):
                 if m_.meta.home_team == team:
                     oldal = "home"
                 elif m_.meta.away_team == team:
@@ -6164,7 +6172,11 @@ def create_app():
         from ..pipeline.training import training_focus
         agg: dict = {}
         counts: dict = {}
-        for m in _season_matches():
+        # Dátum szerint növekvően: az utoljára beírt indok ("a legutóbbi
+        # meccs indoka") csak így a legutóbbi meccsé — a könyvtár
+        # természetes sorrendje a fájl frissessége (a legfrissebb ELÖL),
+        # abban az utolsó a legrégebbi lett volna.
+        for m in _idorendben(_season_matches()):
             key = (_kockaszam(m), m.meta.home_team, m.meta.away_team)
             cached = _training_cache.get(m.meta.match_id)
             if cached is not None and cached[0] == key:

@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.154 óta)
 
+- **Szezon-könyvtár: a visszatérő gyengeség indoka tényleg a legutóbbi
+  meccsé** (javítás): a csapat- és a játékos-szintű edzés-könyvtár a
+  "hány meccsen tért vissza" szám mellé az utoljára bejárt meccs
+  indokát írja — de a könyvtár a fájl frissessége szerint, a
+  LEGFRISSEBBEL kezdve jár be, így az utoljára bejárt a LEGRÉGEBBI
+  meccs volt: a januári 4 kapott gól szerepelt a márciusi 6 helyett.
+  Mostantól az összesítés dátum szerint növekvően megy (dátum nélküli
+  elöl, azonos dátumnál azonosító szerint). Teszt: két meccs, a
+  márciusi a frissebb fájl, az indok mégis a márciusié.
+
 - **Köteg-összefűzés tesztje versenymentes** (teszt): a "megszakított
   darabbal nem lesz teljes meccs" teszt terhelt gépen (párhuzamos
   tesztfutás) néha elbukott, mert a tíz kockás első darab a két

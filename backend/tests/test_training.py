@@ -1238,3 +1238,52 @@ def test_minden_edzes_szabaly_beallitja_a_sorszamat():
             hibak.append(f"{m.group(1)}. szabály: {sorok[j].strip()!r}")
     assert talalt > 400, "az őr nem talált szabály-blokkot — a minta elavult?"
     assert not hibak, "hiányzó vagy rossz sorszám-sor: " + "; ".join(hibak)
+
+
+def test_a_visszatero_gyengeseg_indoka_a_legutobbi_meccse():
+    """A szezon-könyvtár visszatérő tételének indoka a LEGUTÓBBI (dátum
+    szerinti) meccsé — nem a legrégebbié.
+
+    A könyvtár természetes sorrendje a fájl frissessége (a legfrissebb
+    ELÖL), és az összesítés az utoljára bejárt meccs indokát tartotta
+    meg: így a "legutóbbi meccs indoka" a LEGRÉGEBBI meccsé volt. A
+    szokásos eset: a márciusi (6 gólos) meccset dolgozták fel utoljára,
+    az övé a frissebb fájl — a bejárás vele kezdett, a januári (4 gólos)
+    indokával végzett. Az indoknak a márciusi 6 gólról kell szólnia.
+    """
+    import json
+    import os
+    import tempfile
+    import time
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+
+    tmp = tempfile.mkdtemp(prefix="hb_focus_utolso_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp
+    from pathlib import Path as _P
+
+    from handball.api.app import create_app
+
+    mdir = _P(tmp) / "data" / "matches"
+    mdir.mkdir(parents=True, exist_ok=True)
+    most = time.time()
+    for mid, n, datum, kor in (("januar", 4, "2026-01-10", 100.0),
+                               ("marcius", 6, "2026-03-10", 0.0)):
+        m = _shots_match(n=n, goal=True, defender_far=True)
+        m.meta.match_id = mid
+        m.meta.date = datum
+        m.meta.home_team = "Veszprém"
+        m.meta.away_team = "Szeged"
+        ut = mdir / f"{mid}.json"
+        ut.write_text(m.to_json(), encoding="utf-8")
+        os.utime(ut, (most - kor, most - kor))  # a márciusi a frissebb fájl
+
+    client = TestClient(create_app())
+    r = client.get("/library/training-focus").json()
+    szeged = r["teams"]["Szeged"]
+    zona = next(it for it in szeged if it["title"].startswith("Zóna-védekezés"))
+    assert zona["count"] == 2
+    assert zona["why"].startswith("6 kapott gól"), zona["why"]
