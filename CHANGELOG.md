@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.154 óta)
 
+- **Felderítés memória-tára: nem nő hívásonként** (javítás, memória):
+  a felderítő jelentés memória-tárának kulcsában az objektum-azonosító
+  is benne volt; a szezon-lapok (egymás-elleni, egyesített felderítés,
+  szezon-riport) kilinccsel hívnak, ami minden kérésnél új objektum —
+  így a tár sosem talált, és hívásonként új bejegyzést tett le, korlát
+  nélkül: a motor memóriája a szezon-lapok nyitogatásával nőtt. A kulcs
+  mostantól a meccs, az oldal, a kockaszám, a csapatnevek és az
+  esemény-felülírások lenyomata; a tár legfeljebb 64 bejegyzés. Teszt:
+  három egymás-elleni hívás után legfeljebb meccs × oldal bejegyzés.
+
 - **Minőség-pontszám a lemezes tárban; az előszámolás a szezon-lapokat
   is elkészíti** (javítás, teljesítmény): a minőség-lap "javult-e a
   legutóbbihoz képest" része a korábbi meccsek pontszámát csak

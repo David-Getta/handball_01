@@ -473,3 +473,31 @@ def test_a_minoseg_lap_korabbi_pontszamai_ujrainditas_utan_a_tarbol(monkeypatch)
     assert r.status_code == 200
     assert len(r.json().get("previous") or []) == 2
     assert set(hivasok) <= {"q2"}, hivasok
+
+
+def test_a_felderites_memoria_tara_kilincsnel_sem_no_hivasonkent(monkeypatch):
+    """A felderítés memória-tára a kilinccsel (_LazyMatch) hívó
+    szezon-végpontoknál is TALÁL, és nem nő hívásonként: három
+    egymás-elleni hívás után legfeljebb meccs × oldal bejegyzés van.
+    Korábban a kulcsban az objektum-azonosító is benne volt — a kilincs
+    minden kérésnél új objektum, így hívásonként két új bejegyzés
+    került a tárba, és az sosem talált."""
+    tmp = tempfile.mkdtemp(prefix="hb_scout_cache_")
+    d = Path(tmp) / "data" / "matches"
+    d.mkdir(parents=True)
+    for i in range(2):
+        m = _meccs(f"s{i}", n=8)
+        m.meta.date = f"2026-09-0{i + 1}"
+        (d / f"s{i}.json").write_text(json.dumps(m.to_dict()), encoding="utf-8")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", tmp)
+    monkeypatch.setenv("HANDBALL_STORE_SYNC", "1")
+    monkeypatch.setenv("HANDBALL_STORE_HOT", "1")
+    from handball.api.app import create_app
+    app = create_app()
+    client = TestClient(app)
+    ut = "/head-to-head/report?team_a=H&team_b=A"
+    for _ in range(3):
+        assert client.get(ut).status_code == 200
+    tar = app.state.scout_cache
+    assert len(tar) <= 2 * 2, sorted(tar)
+    assert len(tar) >= 1

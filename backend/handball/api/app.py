@@ -10890,6 +10890,9 @@ def create_app():
     # levágott vagy felülírt meccs nem olvas elavult jelentést. A hívó
     # mindig MÁSOLATOT kap: a névesítés és a meccsterv helyben módosít.
     _scout_cache: dict = {}
+    app.state.scout_cache = _scout_cache
+    # A felderítés memória-tárának plafonja (bejegyzés = meccs × oldal).
+    SCOUT_CACHE_MAX = 64
 
     def _scout_cached(match, team):
         import copy
@@ -10898,7 +10901,14 @@ def create_app():
                             sort_keys=True, default=str)
         except Exception:
             ov = ""
-        kulcs = (match.meta.match_id, id(match), team.value, _kockaszam(match),
+        # A kulcsban NINCS az objektum-azonosító: a szezon-végpontok
+        # kilinccsel (_LazyMatch) hívnak, ami minden kérésnél új objektum
+        # — az `id(match)` mellett minden hívás új bejegyzést tett le, a
+        # tár korlátlanul nőtt (egymás-elleni lapnál hívásonként kettő),
+        # és a memória-tár sosem talált. A kockaszám, a csapatnevek és az
+        # esemény-felülírások lenyomata elég a frissesség-ellenőrzéshez;
+        # a lemezes tár ujjlenyomata a fájl-változást is nézi.
+        kulcs = (match.meta.match_id, team.value, _kockaszam(match),
                  match.meta.home_team, match.meta.away_team, hash(ov))
         rep = _scout_cache.get(kulcs)
         if rep is None:
@@ -10906,6 +10916,10 @@ def create_app():
             if rep is None:
                 rep = scout_team(match, team, TacticsConfig())
                 _scout_to_disk(match.meta.match_id, team, rep)
+            # Korlátos tár: a legrégebbi bejegyzés kiesik a plafon fölött
+            # (egy jelentés ~ezer mező; húsz meccs két oldala bőven belefér).
+            while len(_scout_cache) >= SCOUT_CACHE_MAX:
+                _scout_cache.pop(next(iter(_scout_cache)))
             _scout_cache[kulcs] = rep
         return copy.deepcopy(rep)
 
