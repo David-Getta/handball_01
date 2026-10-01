@@ -236,3 +236,21 @@ def test_a_tipusmegorzo_json_pontosan_visszaolvas():
     assert typed_json_decode(json.loads(szoveg)) == minta
     with pytest.raises(TypeError):
         typed_json_encode(object())
+
+
+def test_torleskor_a_kiserofajlok_is_mennek_es_a_mentesbe_sem_kerulnek(konyvtar):
+    """A meccs törlése a meccs MINDEN kísérőfájlját viszi: esemény-javítás,
+    jegyzet, kézi napló, mezszám-tábla. Korábban ezek árván maradtak a
+    lemezen, és a könyvtár-mentés (zip) minden árva fájlt is elvitt."""
+    from handball.api.app import create_app
+    client = TestClient(create_app())
+    d = konyvtar / "data" / "matches"
+    kiserok = ("rc1.events.json", "rc1.notes.json", "rc1.annotations.json",
+               "rc1.jerseys.json")
+    for nev in kiserok:
+        (d / nev).write_text("[]", encoding="utf-8")
+    assert client.delete("/matches/rc1").status_code == 200
+    for nev in kiserok:
+        assert not (d / nev).exists(), nev
+    z = zipfile.ZipFile(io.BytesIO(client.get("/library/export").content))
+    assert not [n for n in z.namelist() if "rc1" in n], z.namelist()

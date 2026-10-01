@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.155 óta)
 
+- **Meccs-törlés: a kísérőfájlok is mennek** (javítás): a meccs
+  törlése a meccs-, a keret- és a paraméter-fájlt vitte, de az
+  esemény-javítás, a jegyzet, a kézi napló és a mezszám-tábla árván
+  maradt a lemezen — és mivel a könyvtár-mentés az adatmappa minden
+  fájlját becsomagolja, az árva fájlok minden mentésbe és
+  visszaállításba is bekerültek. A memóriabeli kivonatok (felderítés,
+  kivonat, fókusz) sem ürültek. Mostantól a törlés a meccs minden
+  kísérőfájlját és a származtatott kivonatait is viszi. Teszt: törlés
+  után a négy kísérőfájl eltűnik, és a mentésben sincs nyomuk.
+
 - **Nézet-fúzió: a közös tár-íráson át** (javítás): a több nézetből
   egyesített meccset a fúziós végpont közvetlenül, nem atomikusan írta
   ki — így kimaradt a fejléc-indexből (a következő indulás teljesen

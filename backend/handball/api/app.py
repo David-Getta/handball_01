@@ -3415,14 +3415,20 @@ def create_app():
         if match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
         del _store[match_id]
-        _drop_results(match_id)
-        try:
-            _match_path(match_id).unlink(missing_ok=True)
-            _roster_path(match_id).unlink(missing_ok=True)
-            _params_path(match_id).unlink(missing_ok=True)
-            _write_index()
-        except Exception:
-            pass
+        # A származtatott kivonatok (memória + lemezes eredmény-tár).
+        _drop_derived_caches(match_id)
+        # A meccs MINDEN kísérőfájlja: eddig az esemény-javítás, a
+        # jegyzet, a kézi napló és a mezszám-tábla árván maradt — a
+        # könyvtár-mentés (zip) minden árva fájlt is elvitt és
+        # visszaállított, a lemezen pedig gyűltek.
+        for utvonal in (_match_path, _roster_path, _params_path,
+                        _overrides_path, _notes_path, _annotations_path,
+                        _jerseys_path):
+            try:
+                utvonal(match_id).unlink(missing_ok=True)
+            except Exception:
+                pass
+        _write_index()
         return {"deleted": match_id}
 
     @app.post("/matches/{match_id}/reprocess")
