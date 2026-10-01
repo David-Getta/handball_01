@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.155 óta)
 
+- **Nézet-fúzió: a közös tár-íráson át** (javítás): a több nézetből
+  egyesített meccset a fúziós végpont közvetlenül, nem atomikusan írta
+  ki — így kimaradt a fejléc-indexből (a következő indulás teljesen
+  beolvasta), egy megszakadt írás félkész fájlt hagyhatott, és az
+  azonos néven újra fűzött meccsnél a felderítés memória-tára a régi
+  jelentést adta. Mostantól a fúzió is a közös tár-íráson megy
+  (atomikus csere, index, a származtatott kivonatok eldobása). Teszt:
+  a fúzió az indexben van, és újrafűzés után a régi jelentés kiesik.
+
 - **Csapatcsere és kocka-javítás után a felderítés is frissül**
   (javítás): a felderítő jelentés, a figura-alakok, a könyvtár-kivonat
   és az edzés-fókusz memória-tárai a kockaszám és a csapatnevek szerint

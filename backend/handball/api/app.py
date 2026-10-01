@@ -11419,12 +11419,12 @@ def create_app():
         fused = fuse_matches(views)
         new_id = payload.get("match_id") or ("fuzio-" + "-".join(ids)[:40])
         fused.meta.match_id = new_id
-        _store[new_id] = fused
-        try:
-            _match_path(new_id).write_text(fused.to_json(),
-                                           encoding="utf-8")
-        except Exception:
-            pass
+        # A közös tár-írás: atomikus fájl-csere, fejléc-index, és a
+        # származtatott kivonatok eldobása. Eddig közvetlen (nem
+        # atomikus) írás volt: a fúzió kimaradt az indexből (a következő
+        # indulás teljesen beolvasta), és az azonos néven ÚJRA fűzött
+        # meccsre a memória-tár (felderítés, kivonat) a régit adta.
+        _put_match(fused)
         from ..pipeline.fusion import fusion_gain
         return {"match_id": new_id, "n_views": len(ids),
                 "offsets": offsets, "frames": len(fused.frames),
