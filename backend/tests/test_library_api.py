@@ -81,6 +81,30 @@ def test_import_skips_path_traversal_entries():
     assert (Path(tmp) / "data" / "matches" / "jo.txt").exists()
 
 
+def test_import_a_testver_mappaba_es_a_tarba_sem_ir():
+    """A visszaállítás a FELOLDOTT úton, útvonal-szinten szűr.
+
+    Két kerülőút volt: (1) a "../data-masik/x" a "data" melletti
+    testvér-mappára mutat, de a szöveges előtag-összevetés ("…/data" a
+    "…/data-masik" eleje) átengedte; (2) a gyorsítótár-tilalom a nyers
+    nevet nézte, így a "matches/../cache/…" a számolt eredmények tárába
+    írt."""
+    tmp = tempfile.mkdtemp(prefix="handball_lib5_")
+    client, _ = _fresh_client(tmp)
+    evil = io.BytesIO()
+    with zipfile.ZipFile(evil, "w") as z:
+        z.writestr("../data-masik/kitores.txt", "kitores")
+        z.writestr("matches/../cache/x/coach-summary.json", "{}")
+        z.writestr("./cache/y/defense.json", "{}")
+        z.writestr("matches/jo2.txt", "rendben")
+    r = client.post("/library/import", content=evil.getvalue()).json()
+    assert r["restored_files"] == 1, r
+    assert not (Path(tmp) / "data-masik" / "kitores.txt").exists()
+    assert not (Path(tmp) / "data" / "cache" / "x").exists()
+    assert not (Path(tmp) / "data" / "cache" / "y").exists()
+    assert (Path(tmp) / "data" / "matches" / "jo2.txt").exists()
+
+
 if __name__ == "__main__":
     test_export_then_import_on_new_machine_roundtrip()
     test_import_rejects_invalid_zip()

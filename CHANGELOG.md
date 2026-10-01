@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.155 óta)
 
+- **Könyvtár-visszaállítás: útvonal-szintű szűrés** (javítás,
+  biztonság): a kívülről kapott mentés-zip kicsomagolásakor a
+  kitörés-szűrő szöveges előtaggal vetett össze, így a "data" melletti
+  testvér-mappába ("../data-masik/…") írni lehetett; a gyorsítótár-
+  tilalom pedig a nyers bejegyzés-nevet nézte, így a
+  "matches/../cache/…" a számolt eredmények tárába írhatott (hamis
+  elemzés kerülhetett a kiszolgált eredmények közé). Mostantól a
+  szűrés a feloldott úton, útvonal-szinten megy. Teszt: négy
+  bejegyzésből csak a szabályos kerül ki.
+
 - **Meccs-törlés: a kísérőfájlok is mennek** (javítás): a meccs
   törlése a meccs-, a keret- és a paraméter-fájlt vitte, de az
   esemény-javítás, a jegyzet, a kézi napló és a mezszám-tábla árván

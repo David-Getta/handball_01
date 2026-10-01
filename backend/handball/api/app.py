@@ -4998,13 +4998,21 @@ def create_app():
         for info in z.infolist():
             if info.is_dir():
                 continue
-            # A számolt eredmények tára a zipből SOSEM jön (újraépül): egy
-            # kívülről kapott mentés ne írhasson a gyorsítótárba.
-            if info.filename.replace("\\", "/").lstrip("/").startswith("cache/"):
-                continue
             dest = (root / info.filename).resolve()
-            if not str(dest).startswith(str(root)):
-                continue  # kitörési kísérlet (../ vagy abszolút út) — kihagyjuk
+            # Kitörési kísérlet (../ vagy abszolút út) — kihagyjuk. A
+            # FELOLDOTT úton, útvonal-szinten nézzük: a szöveges előtag-
+            # összevetés a "data-masik/" testvér-mappát is a "data" alá
+            # valónak hitte.
+            try:
+                rel = dest.relative_to(root)
+            except ValueError:
+                continue
+            # A számolt eredmények tára a zipből SOSEM jön (újraépül): egy
+            # kívülről kapott mentés ne írhasson a gyorsítótárba — a
+            # feloldott úton nézve, hogy a "matches/../cache/..." se
+            # kerülje meg.
+            if not rel.parts or rel.parts[0] == "cache":
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(z.read(info))
             restored += 1
