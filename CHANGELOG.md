@@ -3,6 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.155 óta)
+
+- **Csapatcsere és kocka-javítás után a felderítés is frissül**
+  (javítás): a felderítő jelentés, a figura-alakok, a könyvtár-kivonat
+  és az edzés-fókusz memória-tárai a kockaszám és a csapatnevek szerint
+  kulcsolnak — a csapatcsere (és az azonos kockaszámú újrafeldolgozás
+  vagy kocka-javítás) ezeket nem változtatja, ezért a csere után a
+  hazai oldal felderítése a RÉGI jelentést adta, pedig a végpont azt
+  ígérte, hogy a friss adatból számol. Mostantól minden tár-írás
+  eldobja a meccs származtatott kivonatait (memóriában és lemezen), a
+  felderítés és a figura-alak tárát is. Teszt: csapatcsere után a hazai
+  oldal gólszerző-listája és fedezetlen befejezései a friss címkékből
+  számolnak (a régi jelentés nem jön vissza).
+
 ## v0.1.155 — kiadva (2026-09-30)
 
 > Kiadás-jegyzet: az edzés-fókusz mostantól rangsor, nem a legutóbb

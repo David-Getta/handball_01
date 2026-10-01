@@ -2282,6 +2282,13 @@ def create_app():
         _clip_players_cache.pop(match_id, None)
         for k in [k for k in _quality_score_cache if k[0] == match_id]:
             _quality_score_cache.pop(k, None)
+        # A felderítés és a figura-alakok memória-tára is a kockaszám /
+        # csapatnevek szerint kulcsol — a csapatcsere vagy az azonos
+        # kockaszámú újrafeldolgozás után a régi jelentést adta volna.
+        for k in [k for k in _scout_cache if k[0] == match_id]:
+            _scout_cache.pop(k, None)
+        for k in [k for k in _shapes_cache if k[0] == match_id]:
+            _shapes_cache.pop(k, None)
         _drop_results(match_id)
 
     # --- Eredmény-gyorsítótár a NEHÉZ meccs-végpontokhoz -----------------
@@ -11432,7 +11439,15 @@ def create_app():
         megy), tömören 71 MB és 1,5 mp — a betöltés is ennyivel gyorsabb.
         Az írás ATOMIKUS (ideiglenes fájl + csere): egy megszakadt mentés
         (a gép alvása, a program bezárása) nem hagy félig írt, betölthetetlen
-        meccs-fájlt maga után."""
+        meccs-fájlt maga után.
+
+        Minden tár-írás a meccs SZÁRMAZTATOTT kivonatait is eldobja: a
+        csapatcsere, a kockák javítása vagy az azonos kockaszámú
+        újrafeldolgozás után a kockaszám/csapatnév szerint kulcsolt
+        memória-tárak (kivonat, fókusz, felderítés, figura-alakok,
+        minőség-pont) a RÉGI eredményt adták volna — a lemezes tár
+        ujjlenyomata ezt csak a lemezen vette észre, a memóriában nem."""
+        _drop_derived_caches(match.meta.match_id)
         _store[match.meta.match_id] = match
         try:
             p = _match_path(match.meta.match_id)
