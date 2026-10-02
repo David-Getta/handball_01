@@ -1451,6 +1451,19 @@ class ApiClient {
     return (json["alerts"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// A 3D pálya védekezés-panelje (GET /matches/{id}/defence-timeline):
+  /// {"rows": [{"t","s","defending","label","goal_x"}], "formations":
+  /// {név: [[mélység, y], …]}} — a sablonok a bal kapu előtt.
+  Future<Map<String, dynamic>> fetchDefenceTimeline(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/defence-timeline"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a védekezés-idővonalat", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// 7 a 6 elleni (üres kapus) szakaszok (GET /matches/{id}/empty-net).
   Future<List<Map<String, dynamic>>> fetchEmptyNet(String matchId) async {
     final resp = await http

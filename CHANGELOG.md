@@ -22,6 +22,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   védekezés-idővonal; új végpont: /matches/{id}/defence-timeline); a
   böngésző mérése node-dal futtatva ugyanazt adja, mint a backend, a
   sablonokat a fal-felismerő a saját nevükön ismeri fel.
+  Az APPBELI 3D pálya ugyanezt tudja: Keringés gomb (O), húzás és
+  trackpad-csípés, dupla koppintás egy játékosra (szemével, vele
+  együtt), koppintás a padlóra (lövés-mérés dobozzal és háromszöggel),
+  Védekezés-választó (élő fal a végpontból, sablonok, védett/bal/jobb
+  kapu, eltérés), cserevonal-jelek. A Dart-geometria egységtesztje
+  (flutter test) a backend számaival fut.
 
 - **Könyvtár-visszaállítás: útvonal-szintű szűrés** (javítás,
   biztonság): a kívülről kapott mentés-zip kicsomagolásakor a

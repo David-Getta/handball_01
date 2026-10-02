@@ -26,10 +26,22 @@ cd backend && python3 -m pytest -q 2>&1 | tail -3; echo "exit ${PIPESTATUS[0]}"
 # Gyors kör fejlesztés közben (csak az érintett fájlok):
 cd backend && python3 -m pytest tests/test_xg.py -q
 
-# Dart-ellenőrzés (nincs Flutter a gépen — zárójel-egyensúly):
+# Dart-ellenőrzés — gyors: zárójel-egyensúly (Flutter nélkül is megy):
 awk 'BEGIN{b=0} {n=gsub(/\{/,"x"); m=gsub(/\}/,"x"); b+=n-m} \
   END{print "braces: "b}' client/lib/ui/scouting_screen.dart   # 0 a jó
+
+# Dart-ellenőrzés — VALÓDI: a Flutter SDK letölthető (storage.googleapis.com
+# és pub.dev elérhető), és a fordító-szintű hibákat is elkapja. A gépen
+# nincs előre telepítve; a scratchpadba bontva (kb. 1 GB):
+#   curl -o flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_<VERZIÓ>-stable.tar.xz
+#   tar -xJf flutter.tar.xz            # → ./flutter/bin/flutter
+cd client && flutter pub get && flutter analyze --no-pub   # hiba (error) ne legyen
+cd client && flutter test                                 # test/*_test.dart
 ```
+
+A tiszta Dart-logika (geometria, számolás) egységtesztje a
+`client/test/` alatt él (minta: `court_geometry_test.dart` — a várt
+értékek a backend függvényéből számolva, hogy a két oldal ne térjen el).
 
 ## Új réteg receptje: "egy réteg, sok felület"
 

@@ -1754,7 +1754,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           content: SizedBox(
             width: 480,
             child: err != null
-                ? Text(err!)
+                ? Text(err)
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,

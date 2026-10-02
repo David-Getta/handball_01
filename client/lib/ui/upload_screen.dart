@@ -612,11 +612,6 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
-  String _mb(Object? bytes) {
-    final b = (bytes is num) ? bytes.toDouble() : 0.0;
-    return "${(b / (1024 * 1024)).toStringAsFixed(1)} MB";
-  }
-
   /// A kalibrációk hálózati (JSON) alakja — mentéshez és feldolgozáshoz.
   List<Map<String, dynamic>> _calibMaps(CalibrationSet set) => [
         for (final c in set.items)

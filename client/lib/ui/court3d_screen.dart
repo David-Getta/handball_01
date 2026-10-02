@@ -81,6 +81,30 @@ class _Court3DScreenState extends State<Court3DScreen>
   // kelljen az Események listához visszajárni.
   List<Map<String, dynamic>> _esemenyek = const [];
 
+  // KERINGÉS: a pálya közepe körül — húzás keringtet, görgetés vagy
+  // csípés (trackpad, két ujj) közelít. WASD-re szabad módba vált.
+  bool _kering = false;
+  double _kTheta = 0, _kPhi = 0.6, _kR = 30;
+  double _csipesR0 = 30;
+  // JÁTÉKOS SZEMÉVEL: dupla koppintás egy figurára — a kamera a fejében
+  // ül, és vele együtt halad; húzás körülnéz, Esc kilép. A célpont a
+  // mezszám (ha van), különben a legutóbbi helyéhez legközelebbi
+  // csapattárs 3 m-en belül (a követés-azonosítók töredezettek).
+  bool _szemevel = false;
+  bool _szemHome = true;
+  int? _szemMez;
+  double _szemX = 0, _szemY = 0;
+  double _szemIrany = 0; // simított haladás-irány (yaw)
+  double _szemYaw = 0, _szemPitch = -0.05; // körülnézés a fejben
+  Offset? _dupla; // a dupla koppintás helye
+  // LÖVÉS-MÉRÉS: koppintás a padlóra → távolság, kapu-szög, sáv.
+  Offset? _meres;
+  // VÉDEKEZÉS-PANEL: tankönyvi fal a kapu előtt / az élő fal.
+  String _fal = ""; // "" | "elo" | sablonnév
+  String _falOldal = "auto"; // "auto" | "bal" | "jobb"
+  List<Map<String, dynamic>> _falSorok = const [];
+  Size _nezetMeret = Size.zero;
+
   late final Ticker _ticker;
   Duration _last = Duration.zero;
   final Set<LogicalKeyboardKey> _keys = {};
@@ -151,6 +175,14 @@ class _Court3DScreenState extends State<Court3DScreen>
         esemenyek = const [];
       }
       if (!mounted) return;
+      // A védekezés-panel élő fala — hibája nem viheti el a nézetet.
+      List<Map<String, dynamic>> falSorok = const [];
+      try {
+        final d = await _api.fetchDefenceTimeline(id);
+        falSorok = ((d["rows"] as List?) ?? const [])
+            .cast<Map<String, dynamic>>();
+      } catch (_) {}
+      if (!mounted) return;
       final h = <int>{}, a = <int>{};
       for (final f in m.frames) {
         for (final p in f.players) {
@@ -182,6 +214,10 @@ class _Court3DScreenState extends State<Court3DScreen>
         _mezekAway = a.toList()..sort();
         _kovTeam = null;
         _kovMez = null;
+        _falSorok = falSorok;
+        _meres = null;
+        _szemevel = false;
+        _kering = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -232,7 +268,8 @@ class _Court3DScreenState extends State<Court3DScreen>
       _cz += sp;
       valtozott = true;
     }
-    if (_keys.contains(LogicalKeyboardKey.keyF)) {
+    if (_keys.contains(LogicalKeyboardKey.keyF) ||
+        _keys.contains(LogicalKeyboardKey.keyC)) {
       _cz -= sp;
       valtozott = true;
     }
@@ -326,7 +363,136 @@ class _Court3DScreenState extends State<Court3DScreen>
         valtozott = true;
       }
     }
+    // Keringés: a kamera a pálya közepe körüli gömbön, a közép felé néz.
+    if (_kering) {
+      final cp = math.cos(_kPhi);
+      _cx = courtLength / 2 - _kR * math.sin(_kTheta) * cp;
+      _cy = courtWidth / 2 - _kR * math.cos(_kTheta) * cp;
+      _cz = _kR * math.sin(_kPhi);
+      _yaw = _kTheta;
+      _pitch = -_kPhi;
+      valtozott = true;
+    }
+    // Játékos szemével: a fejében ülünk, a haladási irányába nézünk.
+    if (_szemevel && m != null && m.frames.isNotEmpty && dt > 0) {
+      final cel = _szemCel(_aktualisAllapot(m));
+      if (cel != null) {
+        _szemX = cel.x;
+        _szemY = cel.y;
+        if (cel.speed > 0.6) {
+          final celIrany = math.atan2(cel.dirX, cel.dirY);
+          var d = celIrany - _szemIrany;
+          while (d > math.pi) {
+            d -= 2 * math.pi;
+          }
+          while (d < -math.pi) {
+            d += 2 * math.pi;
+          }
+          _szemIrany += d * (dt * 3).clamp(0.0, 1.0);
+        }
+      }
+      _cx = _szemX + math.sin(_szemIrany) * 0.12;
+      _cy = _szemY + math.cos(_szemIrany) * 0.12;
+      _cz = 1.62;
+      _yaw = _szemIrany + _szemYaw;
+      _pitch = _szemPitch;
+      valtozott = true;
+    }
     if (valtozott && mounted) setState(() {});
+  }
+
+  /// A szemével-nézet célpontja a mostani állásban: azonos mezszám (ha
+  /// van), különben a legutóbbi helyéhez legközelebbi csapattárs 3 m-en
+  /// belül — null, ha épp nem látszik (a kamera ilyenkor marad).
+  _Jatekos? _szemCel(_Allapot all) {
+    if (_szemMez != null) {
+      for (final j in all.jatekosok) {
+        if (j.home == _szemHome && j.mez == _szemMez) return j;
+      }
+    }
+    _Jatekos? legjobb;
+    var tav = 3.0;
+    for (final j in all.jatekosok) {
+      if (j.home != _szemHome) continue;
+      final d = math.sqrt(
+          (j.x - _szemX) * (j.x - _szemX) + (j.y - _szemY) * (j.y - _szemY));
+      if (d < tav) {
+        tav = d;
+        legjobb = j;
+      }
+    }
+    return legjobb;
+  }
+
+  _Vetites _vetites() =>
+      _Vetites(_cx, _cy, _cz, _yaw, _pitch, _nezetMeret);
+
+  /// Keringés be/ki — onnan indul, ahol a kamera áll (nem ugrik).
+  void _keringValt() {
+    setState(() {
+      if (_kering) {
+        _kering = false;
+        return;
+      }
+      final ox = _cx - courtLength / 2, oy = _cy - courtWidth / 2, oz = _cz;
+      final r = math.sqrt(ox * ox + oy * oy + oz * oz).clamp(4.0, 80.0);
+      _kR = r;
+      _kPhi = math.asin((oz / r).clamp(-1.0, 1.0)).clamp(0.08, 1.5);
+      _kTheta = math.atan2(-ox, -oy);
+      _kering = true;
+      _szemevel = false;
+      _tvKamera = false;
+      _kovMez = null;
+    });
+    _focus.requestFocus();
+  }
+
+  /// Koppintás a padlóra: lövés-mérés a pontból.
+  void _meresKoppintas(Offset p) {
+    if (_nezetMeret == Size.zero) return;
+    final pont = _vetites().padlo(p);
+    if (pont == null ||
+        pont.dx < -3 ||
+        pont.dx > courtLength + 3 ||
+        pont.dy < -3 ||
+        pont.dy > courtWidth + 3) {
+      return;
+    }
+    setState(() => _meres = pont);
+  }
+
+  /// Dupla koppintás egy figurára: az ő szemével, vele együtt.
+  void _szemValasztas(Match m, Offset p) {
+    if (_nezetMeret == Size.zero) return;
+    final v = _vetites();
+    _Jatekos? cel;
+    var tav = 45.0; // képpont
+    for (final j in _aktualisAllapot(m).jatekosok) {
+      final o = v.kepernyo(j.x, j.y, 1.0);
+      if (o == null) continue;
+      final d = (o - p).distance;
+      if (d < tav) {
+        tav = d;
+        cel = j;
+      }
+    }
+    final c = cel;
+    if (c == null) return;
+    setState(() {
+      _szemevel = true;
+      _szemHome = c.home;
+      _szemMez = c.mez;
+      _szemX = c.x;
+      _szemY = c.y;
+      _szemIrany = c.speed > 0.6 ? math.atan2(c.dirX, c.dirY) : _yaw;
+      _szemYaw = 0;
+      _szemPitch = -0.05;
+      _kering = false;
+      _tvKamera = false;
+      _kovMez = null;
+      _playing = true;
+    });
+    _focus.requestFocus();
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
@@ -334,6 +500,21 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (e is KeyDownEvent) {
       if (k == LogicalKeyboardKey.space) {
         setState(() => _playing = !_playing);
+        return KeyEventResult.handled;
+      }
+      if (k == LogicalKeyboardKey.keyO) {
+        _keringValt();
+        return KeyEventResult.handled;
+      }
+      if (k == LogicalKeyboardKey.escape) {
+        setState(() {
+          if (_szemevel) {
+            _szemevel = false;
+            _cz = math.max(_cz, 1.7);
+          } else {
+            _meres = null;
+          }
+        });
         return KeyEventResult.handled;
       }
       _keys.add(k);
@@ -345,9 +526,12 @@ class _Court3DScreenState extends State<Court3DScreen>
         LogicalKeyboardKey.keyD,
         LogicalKeyboardKey.keyR,
         LogicalKeyboardKey.keyF,
+        LogicalKeyboardKey.keyC,
       ].contains(k)) {
         _tvKamera = false;
         _kovMez = null;
+        _kering = false;
+        _szemevel = false;
       }
     } else if (e is KeyUpEvent) {
       _keys.remove(k);
@@ -359,6 +543,7 @@ class _Court3DScreenState extends State<Court3DScreen>
       LogicalKeyboardKey.keyD,
       LogicalKeyboardKey.keyR,
       LogicalKeyboardKey.keyF,
+      LogicalKeyboardKey.keyC,
     ];
     return sajat.contains(k)
         ? KeyEventResult.handled
@@ -369,6 +554,8 @@ class _Court3DScreenState extends State<Court3DScreen>
     setState(() {
       _tvKamera = false;
       _kovMez = null;
+      _kering = false;
+      _szemevel = false;
       _cx = x;
       _cy = y;
       _cz = z;
@@ -459,8 +646,10 @@ class _Court3DScreenState extends State<Court3DScreen>
             ],
           ]),
           Text(
-              "WASD — mozgás · egér-húzás — nézelődés · R/F — fel/le · "
-              "Shift — gyors · Szóköz — lejátszás",
+              "WASD — mozgás · egér-húzás — nézelődés · R/F (C) — fel/le · "
+              "Shift — gyors · Szóköz — lejátszás · O — keringés · "
+              "dupla katt egy játékosra — az ő szemével (Esc) · "
+              "katt a padlóra — lövés-mérés",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -505,74 +694,130 @@ class _Court3DScreenState extends State<Court3DScreen>
       focusNode: _focus,
       autofocus: true,
       onKeyEvent: _onKey,
-      child: GestureDetector(
-        onTapDown: (_) => _focus.requestFocus(),
-        onPanUpdate: (d) {
-          setState(() {
-            _tvKamera = false;
-            _kovMez = null;
-            _yaw += d.delta.dx * 0.005;
-            _pitch = (_pitch - d.delta.dy * 0.005).clamp(-1.45, 1.45);
-          });
-        },
-        child: Listener(
-          onPointerSignal: (s) {
-            if (s is PointerScrollEvent) {
-              // Görgetés: előre/hátra a nézés irányában (zoom-érzés).
-              final lep = -s.scrollDelta.dy / 120.0;
-              setState(() {
-                _cx += math.sin(_yaw) * math.cos(_pitch) * lep;
-                _cy += math.cos(_yaw) * math.cos(_pitch) * lep;
-                _cz = (_cz + math.sin(_pitch) * lep).clamp(0.4, 45.0);
-              });
-            }
-          },
-          child: ClipRRect(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A0E14),
+            border: Border.all(color: AppColors.border),
             borderRadius: BorderRadius.circular(14),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF0A0E14),
-                border: Border.all(color: AppColors.border),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Stack(children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _Court3DPainter(
-                      frame: _aktualisAllapot(m),
-                      cx: _cx,
-                      cy: _cy,
-                      cz: _cz,
-                      yaw: _yaw,
-                      pitch: _pitch,
+          ),
+          child: LayoutBuilder(builder: (context, korlat) {
+            _nezetMeret = Size(korlat.maxWidth, korlat.maxHeight);
+            final allapot = _aktualisAllapot(m);
+            final fal = _falAllapot(m, allapot);
+            final rejtett = _szemevel ? _szemCel(allapot) : null;
+            return Stack(children: [
+              // A gesztusok CSAK a 3D képen ülnek: a gombok testvérek
+              // fölötte — különben a dupla-koppintás felismerő minden
+              // gombnyomást a dupla-koppintás idejéig (300 ms) visszatart.
+              Positioned.fill(child: _gesztusok(m, CustomPaint(
+                painter: _Court3DPainter(
+                  frame: allapot,
+                  cx: _cx,
+                  cy: _cy,
+                  cz: _cz,
+                  yaw: _yaw,
+                  pitch: _pitch,
+                  meres: _meres,
+                  falPontok: fal.$1,
+                  rejtett: rejtett,
+                ),
+              ))),
+              Positioned(right: 10, top: 10, child: _nezetGombok()),
+              if (_meres != null)
+                Positioned(left: 12, top: 12, child: _meresDoboz(_meres!)),
+              if (fal.$2.isNotEmpty)
+                Positioned(
+                  left: 12,
+                  top: _meres != null ? 104 : 12,
+                  child: _infoDoboz(fal.$2, AppColors.gold),
+                ),
+              // Jelenet-felirat: mi történik épp (a közvetítés
+              // inzertje) — a 3D-ben a labda pályája önmagában nem
+              // mondja meg, hogy gól volt-e vagy védés.
+              if (_esemenyFelirat(m) != null)
+                Positioned(
+                  left: 12,
+                  bottom: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface.withOpacity(0.85),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.gold),
                     ),
+                    child: Text(_esemenyFelirat(m)!,
+                        style: AppText.value.copyWith(
+                            fontSize: 14, color: AppColors.gold)),
                   ),
                 ),
-                Positioned(right: 10, top: 10, child: _nezetGombok()),
-                // Jelenet-felirat: mi történik épp (a közvetítés
-                // inzertje) — a 3D-ben a labda pályája önmagában nem
-                // mondja meg, hogy gól volt-e vagy védés.
-                if (_esemenyFelirat(m) != null)
-                  Positioned(
-                    left: 12,
-                    bottom: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface.withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.gold),
-                      ),
-                      child: Text(_esemenyFelirat(m)!,
-                          style: AppText.value.copyWith(
-                              fontSize: 14, color: AppColors.gold)),
-                    ),
-                  ),
-              ]),
-            ),
-          ),
+            ]);
+          }),
         ),
+      ),
+    );
+  }
+
+  /// A 3D kép gesztusai. A húzás a skála-gesztusban (onScaleUpdate): egy
+  /// ujj/egér nézelődik vagy keringtet, két ujj vagy a trackpad csípése
+  /// közelít. Koppintás a padlóra: lövés-mérés; dupla koppintás egy
+  /// figurára: az ő szemével. Görgetés: előre ugrás / közelítés.
+  Widget _gesztusok(Match m, Widget kep) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _focus.requestFocus(),
+      onTapUp: (d) => _meresKoppintas(d.localPosition),
+      onDoubleTapDown: (d) => _dupla = d.localPosition,
+      onDoubleTap: () {
+        final p = _dupla;
+        if (p != null) _szemValasztas(m, p);
+      },
+      onScaleStart: (_) => _csipesR0 = _kR,
+      onScaleUpdate: (d) {
+        setState(() {
+          if (d.scale != 1.0 && d.pointerCount >= 2) {
+            if (_kering) {
+              _kR = (_csipesR0 / d.scale).clamp(4.0, 80.0);
+            }
+            return;
+          }
+          final dx = d.focalPointDelta.dx, dy = d.focalPointDelta.dy;
+          if (_kering) {
+            _kTheta += dx * 0.006;
+            _kPhi = (_kPhi + dy * 0.006).clamp(0.08, 1.5);
+          } else if (_szemevel) {
+            _szemYaw += dx * 0.004;
+            _szemPitch = (_szemPitch - dy * 0.004).clamp(-1.2, 1.2);
+          } else {
+            _tvKamera = false;
+            _kovMez = null;
+            _yaw += dx * 0.005;
+            _pitch = (_pitch - dy * 0.005).clamp(-1.45, 1.45);
+          }
+        });
+      },
+      child: Listener(
+        onPointerSignal: (s) {
+          if (s is PointerScrollEvent) {
+            setState(() {
+              if (_kering) {
+                // Keringésben a görgetés közelít/távolít.
+                _kR = (_kR * math.exp(s.scrollDelta.dy * 0.0012))
+                    .clamp(4.0, 80.0);
+                return;
+              }
+              if (_szemevel) return;
+              // Görgetés: előre/hátra a nézés irányában (zoom-érzés).
+              final lep = -s.scrollDelta.dy / 120.0;
+              _cx += math.sin(_yaw) * math.cos(_pitch) * lep;
+              _cy += math.cos(_yaw) * math.cos(_pitch) * lep;
+              _cz = (_cz + math.sin(_pitch) * lep).clamp(0.4, 45.0);
+            });
+          }
+        },
+        child: kep,
       ),
     );
   }
@@ -668,11 +913,199 @@ class _Court3DScreenState extends State<Court3DScreen>
             ),
           ),
         ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor:
+                _kering ? AppColors.accent : AppColors.surfaceAlt,
+            foregroundColor:
+                _kering ? AppColors.onAccent : AppColors.textSecondary,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          ),
+          onPressed: _keringValt,
+          child: Text(_kering ? "Keringés: BE (O)" : "Keringés (O)",
+              style: const TextStyle(fontSize: 11.5)),
+        ),
+      ),
+      if (_szemevel)
+        gomb("Játékos szemével ✕ (Esc)", () {
+          setState(() {
+            _szemevel = false;
+            _cz = math.max(_cz, 1.7);
+          });
+          _focus.requestFocus();
+        }),
+      // Védekezés-panel: tankönyvi fal a kapu elé, vagy az élő fal.
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: _fal.isNotEmpty
+                ? AppColors.gold.withOpacity(0.15)
+                : AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.borderStrong),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            DropdownButton<String>(
+              value: _fal,
+              underline: const SizedBox.shrink(),
+              dropdownColor: AppColors.surface,
+              style: AppText.label.copyWith(fontSize: 11.5),
+              items: const [
+                DropdownMenuItem(value: "", child: Text("Védekezés: ki")),
+                DropdownMenuItem(value: "elo", child: Text("Élő fal")),
+                DropdownMenuItem(value: "6-0", child: Text("6-0 sablon")),
+                DropdownMenuItem(value: "5-1", child: Text("5-1 sablon")),
+                DropdownMenuItem(value: "4-2", child: Text("4-2 sablon")),
+                DropdownMenuItem(value: "3-2-1", child: Text("3-2-1 sablon")),
+              ],
+              onChanged: (v) {
+                setState(() => _fal = v ?? "");
+                _focus.requestFocus();
+              },
+            ),
+            if (_fal.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              DropdownButton<String>(
+                value: _falOldal,
+                underline: const SizedBox.shrink(),
+                dropdownColor: AppColors.surface,
+                style: AppText.label.copyWith(fontSize: 11.5),
+                items: const [
+                  DropdownMenuItem(value: "auto", child: Text("védett kapu")),
+                  DropdownMenuItem(value: "bal", child: Text("bal kapu")),
+                  DropdownMenuItem(value: "jobb", child: Text("jobb kapu")),
+                ],
+                onChanged: (v) {
+                  setState(() => _falOldal = v ?? "auto");
+                  _focus.requestFocus();
+                },
+              ),
+            ],
+          ]),
+        ),
+      ),
       gomb("Lelátó", () => _nezet(20, -12, 9, 0, -0.5)),
       gomb("Kapu mögül", () => _nezet(-6, 10, 2.5, math.pi / 2, -0.12)),
       gomb("Pálya-szint", () => _nezet(20, 4, 1.7, 0, 0.0)),
       gomb("Madártávlat", () => _nezet(20, 10, 34, 0, -1.45)),
     ]);
+  }
+
+  /// Az élő fal a lejátszófejnél: a legutóbbi idővonal-sor, ha 1,5
+  /// mp-nél nem régebbi — különben épp nincs szervezett támadás.
+  Map<String, dynamic>? _eloFal(Match m) {
+    if (_falSorok.isEmpty || m.frames.isEmpty) return null;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m) / fps;
+    Map<String, dynamic>? talalt;
+    for (final r in _falSorok) {
+      final s = ((r["s"] as num?) ?? 0).toDouble();
+      if (s > most) break;
+      talalt = r;
+    }
+    if (talalt == null) return null;
+    final s = ((talalt["s"] as num?) ?? 0).toDouble();
+    return most - s <= 1.5 ? talalt : null;
+  }
+
+  /// A védekezés-panel állapota: a kirajzolandó sablon-pontok és a
+  /// kiírandó sorok (az élő fal neve, a sablon helye, az eltérés).
+  (List<Offset>, List<String>) _falAllapot(Match m, _Allapot all) {
+    if (_fal.isEmpty) return (const [], const []);
+    final elo = _eloFal(m);
+    final sorok = <String>[];
+    final eloCimke = elo?["label"] as String?;
+    final eloHazai = elo?["defending"] == "home";
+    final eloGoalX = ((elo?["goal_x"] as num?) ?? -1).toDouble();
+    if (elo != null) {
+      final csapat = eloHazai ? m.meta.homeTeam : m.meta.awayTeam;
+      sorok.add("Most: $csapat védekezik — $eloCimke");
+    } else {
+      sorok.add("Most nincs szervezett támadás — a fal nem áll.");
+    }
+    final nev = _fal == "elo" ? eloCimke : _fal;
+    double? goalX;
+    if (_falOldal == "bal") {
+      goalX = 0;
+    } else if (_falOldal == "jobb") {
+      goalX = courtLength;
+    } else if (elo != null) {
+      goalX = eloGoalX;
+    }
+    if (nev == null || !formationTemplates.containsKey(nev)) {
+      if (_fal == "elo" && elo != null) {
+        sorok.add("(ehhez a formához nincs tankönyvi sablon)");
+      }
+      return (const [], sorok);
+    }
+    if (goalX == null) {
+      sorok.add("Válassz kaput, vagy várj egy szervezett támadásra.");
+      return (const [], sorok);
+    }
+    final pontok = formationPositions(nev, goalX);
+    final jobb = goalX > courtLength / 2;
+    sorok.add("$nev sablon a ${jobb ? "jobb" : "bal"} kapu előtt "
+        "(sárga körök)");
+    if (elo != null && eloGoalX == goalX) {
+      final vedok = [
+        for (final j in all.jatekosok)
+          if (j.home == eloHazai && !j.kapus && (j.x - goalX).abs() > 2.0)
+            Offset(j.x, j.y)
+      ];
+      if (vedok.length >= 4) {
+        final e = formationDeviation(vedok, pontok);
+        if (e != null) {
+          sorok.add("Átlagos eltérés a tankönyvi faltól: "
+              "${e.toStringAsFixed(1).replaceAll(".", ",")} m");
+        }
+      }
+    }
+    return (pontok, sorok);
+  }
+
+  Widget _infoDoboz(List<String> sorok, Color szin, {Widget? zaro}) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 340),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.88),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: szin),
+      ),
+      child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Flexible(
+              child: Text(sorok.join("\n"),
+                  style: AppText.label.copyWith(
+                      fontSize: 12.5, color: AppColors.textPrimary)),
+            ),
+            if (zaro != null) zaro,
+          ]),
+    );
+  }
+
+  /// A lövés-mérés doboza: távolság, kapufa-távolság, kapu-szög, sáv.
+  Widget _meresDoboz(Offset p) {
+    final g = shotGeometry(p.dx, p.dy);
+    String sz(double v) => v.toStringAsFixed(1).replaceAll(".", ",");
+    return _infoDoboz([
+      "Lövés-mérés (${g.leftGoal ? "bal" : "jobb"} kapu)",
+      "${sz(g.distance)} m a kapu közepétől · kapufától ${sz(g.postDistance)} m",
+      "Kapu-szög: ${sz(g.angleDeg)}° · sáv: ${g.zone}",
+    ], AppColors.accent,
+        zaro: IconButton(
+          visualDensity: VisualDensity.compact,
+          iconSize: 16,
+          tooltip: "Törlés (Esc)",
+          onPressed: () => setState(() => _meres = null),
+          icon: const Icon(Icons.close),
+        ));
   }
 
   /// Videó-kocka (t címke) → frame-lista index (az első kocka, amelynek
@@ -898,16 +1331,69 @@ class _Allapot {
 /// képernyő-pixel. A kamera yaw/pitch szögekkel néz; a közeli sík előtti
 /// pontokat vágjuk (a vonalakat a síkon metszve), hogy háttal állva ne
 /// "forduljon ki" a kép.
+/// A festő vetítésének tükre a gesztusokhoz (koppintás → padló-pont,
+/// figura → képernyő-pont). UGYANAZ a kamera-bázis és fókusz, mint a
+/// `_Court3DPainter._keszit`-ben — a találat és a rajz így egyezik.
+class _Vetites {
+  final double cx, cy, cz;
+  final Size size;
+  late final double fx, fy, fz, rx, ry, ux, uy, uz, f;
+  _Vetites(this.cx, this.cy, this.cz, double yaw, double pitch, this.size) {
+    final cp = math.cos(pitch), sp = math.sin(pitch);
+    fx = math.sin(yaw) * cp;
+    fy = math.cos(yaw) * cp;
+    fz = sp;
+    rx = math.cos(yaw);
+    ry = -math.sin(yaw);
+    ux = ry * fz;
+    uy = -rx * fz;
+    uz = rx * fy - ry * fx;
+    f = (size.height / 2) / math.tan(0.5);
+  }
+
+  /// Pálya-pont (méter, z felfelé) → képernyő; null, ha a kamera mögött.
+  Offset? kepernyo(double x, double y, double z) {
+    final px = x - cx, py = y - cy, pz = z - cz;
+    final mely = px * fx + py * fy + pz * fz;
+    if (mely < 0.15) return null;
+    final jobb = px * rx + py * ry;
+    final fel = px * ux + py * uy + pz * uz;
+    return Offset(size.width / 2 + jobb * f / mely,
+        size.height / 2 - fel * f / mely);
+  }
+
+  /// Képernyő-pont → a padló (z = 0) pontja a sugár mentén; null, ha a
+  /// sugár nem a padló felé megy (a horizont fölé kattintottak).
+  Offset? padlo(Offset p) {
+    final a = (p.dx - size.width / 2) / f;
+    final b = -(p.dy - size.height / 2) / f;
+    final dx = fx + rx * a + ux * b;
+    final dy = fy + ry * a + uy * b;
+    final dz = fz + uz * b;
+    if (dz >= -1e-6) return null;
+    final t = -cz / dz;
+    return Offset(cx + dx * t, cy + dy * t);
+  }
+}
+
 class _Court3DPainter extends CustomPainter {
   final _Allapot frame;
   final double cx, cy, cz, yaw, pitch;
+  // Lövés-mérés pontja (pálya-méter), a védekezés-sablon pontjai, és a
+  // szemével-nézet játékosa (a saját testét nem rajzoljuk: a fejében ülünk).
+  final Offset? meres;
+  final List<Offset> falPontok;
+  final _Jatekos? rejtett;
   _Court3DPainter(
       {required this.frame,
       required this.cx,
       required this.cy,
       required this.cz,
       required this.yaw,
-      required this.pitch});
+      required this.pitch,
+      this.meres,
+      this.falPontok = const [],
+      this.rejtett});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
 
@@ -980,6 +1466,17 @@ class _Court3DPainter extends CustomPainter {
       if (szaggatott && i.isOdd) continue;
       _vonal(c, p, pontok[i].dx, pontok[i].dy, 0, pontok[i + 1].dx,
           pontok[i + 1].dy, 0);
+    }
+  }
+
+  /// Kör a padlón (sugár méterben), szakaszokból — a vágás így a
+  /// közeli síkon is helyes.
+  void _kor(Canvas c, Paint p, double x, double y, double r) {
+    const n = 20;
+    for (var i = 0; i < n; i++) {
+      final a1 = i / n * 2 * math.pi, a2 = (i + 1) / n * 2 * math.pi;
+      _vonal(c, p, x + math.cos(a1) * r, y + math.sin(a1) * r, 0.02,
+          x + math.cos(a2) * r, y + math.sin(a2) * r, 0.02);
     }
   }
 
@@ -1214,6 +1711,58 @@ class _Court3DPainter extends CustomPainter {
           cy0 + keeperLineHalfLen + 0.4, 0);
     }
 
+    // Cserevonal-jelek az oldalvonalon (a félpályától 4,5 m-re).
+    for (final x in [
+      courtLength / 2 - substitutionLineX,
+      courtLength / 2 + substitutionLineX
+    ]) {
+      _vonal(canvas, vonal, x, -0.15, 0, x, 0.15, 0);
+    }
+
+    // Lövés-mérés: a pontból a két kapufáig húzott "lövő-háromszög" —
+    // ennyi kaput lát a lövő —, és a kapu közepéig a távolság-vonal.
+    final mp = meres;
+    if (mp != null) {
+      final g = shotGeometry(mp.dx, mp.dy);
+      final y1 = courtWidth / 2 - goalWidth / 2;
+      final y2 = courtWidth / 2 + goalWidth / 2;
+      final kek = Paint()
+        ..color = AppColors.accent
+        ..strokeWidth = 2.0;
+      final csucsok = <Offset>[];
+      for (final (x, y) in [(mp.dx, mp.dy), (g.goalX, y1), (g.goalX, y2)]) {
+        final (jb, fe, me) = _kamera(x, y, 0.02);
+        if (me >= _kozel) csucsok.add(_kepernyo(jb, fe, me));
+      }
+      if (csucsok.length == 3) {
+        canvas.drawPath(Path()..addPolygon(csucsok, true),
+            Paint()..color = AppColors.accent.withOpacity(0.28));
+      }
+      _vonal(canvas, kek, mp.dx, mp.dy, 0.02, g.goalX, y1, 0.02);
+      _vonal(canvas, kek, mp.dx, mp.dy, 0.02, g.goalX, y2, 0.02);
+      _talajUtvonal(
+          canvas,
+          Paint()
+            ..color = Colors.white.withOpacity(0.85)
+            ..strokeWidth = 1.2,
+          [
+            for (var i = 0; i <= 20; i++)
+              Offset(mp.dx + (g.goalX - mp.dx) * i / 20,
+                  mp.dy + (courtWidth / 2 - mp.dy) * i / 20)
+          ],
+          szaggatott: true);
+      _kor(canvas, Paint()..color = Colors.white..strokeWidth = 2.0,
+          mp.dx, mp.dy, 0.3);
+    }
+
+    // Védekezés-sablon: sárga körök a tankönyvi védő-helyeken.
+    final sarga = Paint()
+      ..color = AppColors.gold.withOpacity(0.9)
+      ..strokeWidth = 2.2;
+    for (final p in falPontok) {
+      _kor(canvas, sarga, p.dx, p.dy, 0.42);
+    }
+
     // Kapuk: 3 m széles, 2 m magas keret + jelzés-háló.
     final kapu = Paint()
       ..color = AppColors.gold.withOpacity(0.85)
@@ -1235,6 +1784,7 @@ class _Court3DPainter extends CustomPainter {
     double melyseg(_Jatekos j) => _kamera(j.x, j.y, 1.0).$3;
     sorrend.sort((a, b) => melyseg(b).compareTo(melyseg(a)));
     for (final j in sorrend) {
+      if (identical(j, rejtett)) continue; // a szemével-nézet saját teste
       _figura(canvas, j, frame.tSec);
     }
 

@@ -24,6 +24,8 @@ dependencies:
   media_kit_libs_windows_video: ^1.0.9   # a natív lejátszó-könyvtárak (csak Windows)
 
 dev_dependencies:
+  flutter_test:         # a tiszta Dart-logika egységtesztjeihez (test/)
+    sdk: flutter
   flutter_lints: ^4.0.0
 
 flutter:

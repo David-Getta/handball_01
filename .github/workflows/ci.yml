@@ -50,3 +50,6 @@ jobs:
       - name: Dart-elemzés (csak a hibák buknak)
         working-directory: client
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Dart-egységtesztek (a tiszta logika, pl. a 3D-geometria)
+        working-directory: client
+        run: flutter test

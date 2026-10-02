@@ -2735,7 +2735,9 @@ def test_a_3d_palya_a_menubol_nyilik_es_jatek_szeruen_mozog():
     harom = (lib / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
     # Játék-szerű mozgás és a súgó-sor, amiből a felhasználó megtudja.
     assert "keyW" in harom and "keyD" in harom, "nincs WASD-mozgás"
-    assert "onPanUpdate" in harom, "nincs egér-nézelődés"
+    # Húzás és csípés EGY skála-gesztusban (egy ujj/egér nézelődik vagy
+    # keringtet, két ujj vagy a trackpad csípése közelít).
+    assert "onScaleUpdate" in harom, "nincs egér-nézelődés"
     assert "WASD — mozgás" in harom, "nincs kezelés-súgó a képernyőn"
     # Távlati vetítés közeli síkra vágással — enélkül a háttal lévő
     # pontok "kifordulnának" a képből.

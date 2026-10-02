@@ -145,3 +145,35 @@ def test_a_vedekezes_idovonal_vegpont(tmp_path, monkeypatch):
     assert set(d["formations"]) == {"6-0", "5-1", "4-2", "3-2-1"}
     assert c.get("/matches/v3t/defence-timeline").json() == d  # tárból is
     assert c.get("/matches/nincs/defence-timeline").status_code == 404
+
+
+def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
+    """Az appbeli 3D pálya (Dart) ugyanazokat a falsablonokat és lövés-
+    mérési képletet viszi, mint a backend `court3d` — a forrást vetjük
+    össze, hogy a két nézet ne mondhasson mást."""
+    from pathlib import Path
+
+    from handball.pipeline.court3d import FORMATION_TEMPLATES
+
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    geo = (gyoker / "client" / "lib" / "ui"
+           / "court_geometry.dart").read_text(encoding="utf-8")
+    for nev, pontok in FORMATION_TEMPLATES.items():
+        m = re.search(r'"' + re.escape(nev) + r'": \[(.*?)\],', geo)
+        assert m, f"a Dart-sablonból hiányzik: {nev}"
+        dart = [tuple(float(v) for v in par)
+                for par in re.findall(r"\(([\d.]+), ([\d.]+)\)", m.group(1))]
+        assert dart == [tuple(p) for p in pontok], nev
+    for jel in ("ShotGeometry shotGeometry", "math.acos(c)",
+                "y.clamp(y1, y2)", '"kapuelőtér"', '"6–9 m"',
+                '"9 m-en túl"', "formationDeviation"):
+        assert jel in geo, jel
+
+    kepernyo = (gyoker / "client" / "lib" / "ui"
+                / "court3d_screen.dart").read_text(encoding="utf-8")
+    for jel in ("_keringValt", "_szemValasztas", "_meresKoppintas",
+                "onDoubleTap", "onScaleUpdate", "fetchDefenceTimeline",
+                "formationPositions", "class _Vetites", "Kapu-szög",
+                "LogicalKeyboardKey.keyO", "LogicalKeyboardKey.escape",
+                "identical(j, rejtett)", "substitutionLineX"):
+        assert jel in kepernyo, jel
