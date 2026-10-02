@@ -3,7 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.155 óta)
+## v0.1.156 — kiadva (2026-10-02)
+
+> Kiadás-jegyzet: a 3D pálya új eszközei — keringés a pálya körül,
+> egy játékos szemével nézni és vele haladni (dupla katt), lövés-mérés
+> kattintásra (távolság, kapu-szög, sáv) és védekezés-panel a tankönyvi
+> falakkal és a valódi fal eltérésével, az appban és a böngészős/VR
+> nézetben is. Mellette biztonsági és tár-javítások: idegen weboldal
+> nem írhat a könyvtárba, a mentés visszaállítása útvonal-szinten
+> szűr, a törlés a kísérőfájlokat is viszi, a csapatcsere után a
+> felderítés frissül.
 
 - **Idegen weboldal nem írhat a könyvtárba** (javítás, biztonság): a
   motor a gépen (localhost) figyel, de a böngészőben nyitott bármely
