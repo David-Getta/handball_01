@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.155 óta)
 
+- **Idegen weboldal nem írhat a könyvtárba** (javítás, biztonság): a
+  motor a gépen (localhost) figyel, de a böngészőben nyitott bármely
+  weboldal küldhet ide "egyszerű" POST-ot (szöveg, űrlap, típus nélküli
+  törzs). A JSON-végpontok ezt eddig is elutasították, a könyvtár-
+  visszaállítás és a videó-feltöltés viszont elfogadta — egy idegen
+  oldal így felülírhatta a meccskönyvtárat. Mostantól ez a kettő csak
+  kimondott bináris típust fogad (zip, octet-stream, videó; az app
+  mindig ilyet küld), más esetben 415-öt ad és semmit sem ír. Teszt:
+  négy "egyszerű" kérés-fajta mindkét végponton elutasítva.
+
 - **3D pálya: keringés, játékos-szem, lövés-mérés, védekezés-panel**
   (új, böngészős/VR nézet): a pálya a szabálykönyv minden jelölését
   viszi (szaggatott 9 m-es vonal, hetes-, kapus- és cserevonal); a

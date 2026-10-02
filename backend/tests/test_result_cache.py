@@ -23,6 +23,10 @@ TestClient = pytest.importorskip(
     "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
 
 
+# Az app a visszaállítást zip-típussal küldi (a motor csak ezt fogadja).
+ZIP = {"Content-Type": "application/zip"}
+
+
 def _meccs(mid="rc1"):
     frames = [Frame(t=t, players=[
         PlayerPosition(track_id=1, team=Team.HOME, x=20.0 + t * 0.05, y=10.0,
@@ -216,7 +220,7 @@ def test_a_felderites_ujrainditas_utan_a_tarbol_jon_es_zipbol_nem_jon_tar(
     with zipfile.ZipFile(buf, "w") as z:
         z.writestr("cache/rc1/scout-home.json", '{"fp": "x", "report": {}}')
         z.writestr("notes_extra.txt", "ok")
-    r = ujra.post("/library/import", content=buf.getvalue())
+    r = ujra.post("/library/import", content=buf.getvalue(), headers=ZIP)
     assert r.status_code == 200, r.text
     assert not (konyvtar / "data" / "cache" / "rc1" / "scout-home.json").exists()
     assert (konyvtar / "data" / "notes_extra.txt").exists()

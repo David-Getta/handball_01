@@ -989,6 +989,29 @@ def create_app():
 
         return {"ok": all(c["ok"] for c in checks), "checks": checks}
 
+    def _nyers_tipus_ellenor(request, engedett: tuple) -> None:
+        """Nyers bájt-folyamos végpont (feltöltés, visszaállítás) csak
+        KIMONDOTT bináris tartalom-típussal fogad.
+
+        A motor a localhoston figyel, de a felhasználó böngészőjében
+        nyitott BÁRMELY weboldal küldhet ide "egyszerű" (előzetes
+        CORS-egyeztetés nélküli) POST-ot — text/plain, űrlap, vagy
+        típus nélküli törzs. A JSON-végpontokat a FastAPI típus-
+        ellenőrzése már megvédi; a nyers törzset olvasó végpontok
+        viszont bármit elfogadtak: egy idegen oldal így felülírhatta a
+        meccskönyvtárat. A bináris típus (application/zip,
+        application/octet-stream, video/*) nem "egyszerű": a böngésző
+        előbb CORS-egyeztetést kérne, amit a motor nem ad meg — az app
+        maga mindig ilyen típussal küld."""
+        tipus = (request.headers.get("content-type") or "").split(";")[0]
+        tipus = tipus.strip().lower()
+        if not any(tipus == e or (e.endswith("/*") and tipus.startswith(e[:-1]))
+                   for e in engedett):
+            raise HTTPException(
+                status_code=415,
+                detail=("nem támogatott tartalom-típus: "
+                        f"{tipus or '(nincs)'} — várt: {', '.join(engedett)}"))
+
     async def upload_video(request, filename: str = "match.mp4"):
         """Meccsvideó feltöltése (nyers bájt-folyam a törzsben, `filename` query).
 
@@ -999,6 +1022,7 @@ def create_app():
         """
         import re
         from pathlib import Path
+        _nyers_tipus_ellenor(request, ("application/octet-stream", "video/*"))
         uploads = data_root() / "uploads"
         uploads.mkdir(parents=True, exist_ok=True)
         # A fájlnevet fertőtlenítjük (path traversal ellen): csak biztonságos karakterek.
@@ -5005,6 +5029,9 @@ def create_app():
         """
         import io
         import zipfile
+        _nyers_tipus_ellenor(request, ("application/zip",
+                                       "application/x-zip-compressed",
+                                       "application/octet-stream"))
         body = bytearray()
         async for chunk in request.stream():
             body.extend(chunk)
