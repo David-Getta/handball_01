@@ -2800,6 +2800,27 @@ def create_app():
             riasztasok = []
         return HTMLResponse(content=view3d_html(match, riasztasok))
 
+    @app.get("/matches/{match_id}/defence-timeline")
+    def match_defence_timeline(match_id: str):
+        """A 3D pálya védekezés-panelje: ki védekezik, milyen falban.
+
+        {"rows": [{"t", "s", "defending", "label", "goal_x"}],
+        "formations": {név: [[mélység, y], …]}} — a sorok másodpercenként
+        (csak szervezett támadásban), a sablonok a bal kapu előtt
+        (a kliens tükrözi). A böngészős 3D ugyanezt beágyazva viszi."""
+        from ..pipeline.court3d import FORMATION_TEMPLATES, defence_timeline
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            sorok = _cached_result(match_id, "defence-timeline",
+                                   lambda: defence_timeline(match))
+        except Exception:
+            sorok = defence_timeline(match)
+        return {"rows": sorok,
+                "formations": {nev: [list(p) for p in pontok]
+                               for nev, pontok in FORMATION_TEMPLATES.items()}}
+
     @app.get("/matches/{match_id}/diagnostics")
     def match_diagnostics(match_id: str):
         """Gép által olvasható diagnosztika-csomag EGY meccsről — a

@@ -73,12 +73,56 @@ def _compact_data(match: Match, figure_alerts: list | None = None) -> dict:
     except Exception:
         pass
     esemenyek.sort(key=lambda x: x[0])
+    # A 3D eszközök közös számai (court3d): a tankönyvi falak (bal kapu
+    # előtt, mélység + y) és az élő fal másodpercenként: [mp, hazai
+    # védekezik?, forma-címke, a védett kapu x-e]. Hibája nem viheti el
+    # a nézetet — a védekezés-panel ilyenkor csak a sablonokat adja.
+    try:
+        from .court3d import FORMATION_TEMPLATES
+        formak = {nev: [list(p) for p in pontok]
+                  for nev, pontok in FORMATION_TEMPLATES.items()}
+    except Exception:
+        formak = {}
+    try:
+        from .court3d import defence_timeline
+        fal = [[r["s"], 1 if r["defending"] == "home" else 0, r["label"],
+                r["goal_x"]] for r in defence_timeline(match)]
+    except Exception:
+        fal = []
     return {
         "home": match.meta.home_team,
         "away": match.meta.away_team,
         "frames": frames,
         "events": esemenyek,
+        "formations": formak,
+        "defence": fal,
     }
+
+
+# A lövés-mérés a böngészőben — a `court3d.shot_geometry` PONTOS tükre
+# (a teszt node-dal futtatja, és a Python-számokkal veti össze). Külön
+# állandó, hogy a teszt az oldal nélkül is elérje.
+LOVES_MERES_JS = """
+function lovesMeres(x, y, kapu){
+  // A court3d.shot_geometry tükre: a kapu közepének távolsága, a
+  // kapufák közti szakasztól mért távolság (a 6 és 9 m-es vonal
+  // mércéje), a két kapufa között látott kapu-szög és a sáv.
+  if (kapu !== "bal" && kapu !== "jobb") kapu = x <= H/2 ? "bal" : "jobb";
+  const gx = kapu === "bal" ? 0 : H, cy = W/2;
+  const y1 = cy - KAPU_SZ/2, y2 = cy + KAPU_SZ/2;
+  const v1x = gx - x, v1y = y1 - y, v2x = gx - x, v2y = y2 - y;
+  const n1 = Math.hypot(v1x, v1y), n2 = Math.hypot(v2x, v2y);
+  let szog = 180;
+  if (n1 >= 1e-9 && n2 >= 1e-9){
+    const c = (v1x*v2x + v1y*v2y) / (n1*n2);
+    szog = Math.acos(Math.max(-1, Math.min(1, c))) * 180 / Math.PI;
+  }
+  const ny = Math.min(Math.max(y, y1), y2);
+  const kapufa = Math.hypot(x - gx, y - ny);
+  const sav = kapufa < 6 ? "kapuelőtér" : (kapufa < 9 ? "6–9 m" : "9 m-en túl");
+  return {kapu, gx, tav: Math.hypot(x - gx, y - cy), kapufa, szog, sav};
+}
+"""
 
 
 def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
@@ -101,12 +145,45 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
  button{background:#173042;color:#dfe7ef;border:1px solid #2b4a5e;border-radius:8px;padding:6px 12px;cursor:pointer}
  #sugo{position:fixed;right:12px;top:10px;font-size:11.5px;opacity:.7;text-align:right}
  #felirat{position:fixed;left:12px;bottom:56px;padding:6px 12px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.85);color:#d9b544;font-weight:600;font-size:15px;display:none}
+ #eszkoz{position:fixed;left:12px;top:34px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;font-size:12.5px;max-width:330px}
+ #eszkoz .sor{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+ select{background:#173042;color:#dfe7ef;border:1px solid #2b4a5e;border-radius:8px;padding:5px 8px}
+ button.be{background:#2f86d6;border-color:#2f86d6;color:#fff}
+ #falInfo{opacity:.92;line-height:1.35}
+ #meres{position:fixed;left:12px;bottom:100px;padding:8px 12px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;line-height:1.45}
+ #meres button{margin-left:8px;padding:2px 8px}
 </style></head><body>
 <div id="hud"><b>__CIM__</b></div>
-<div id="sugo">Kattints a képre: egér-nézelődés (Esc kilép)<br>
-WASD — mozgás · R/F — fel/le · Shift — gyors · Szóköz — lejátszás<br>
+<div id="eszkoz">
+ <div class="sor">
+  <button id="keringGomb" title="Keringés a pálya körül (O)">Keringés</button>
+  <button id="jatekosKi" style="display:none" title="Vissza a szabad nézetbe (Esc)">Játékos-nézet ✕</button>
+ </div>
+ <div class="sor">
+  <label>Védekezés
+   <select id="fal">
+    <option value="">ki</option>
+    <option value="elo">élő — a mostani fal</option>
+    <option value="6-0">6-0 sablon</option>
+    <option value="5-1">5-1 sablon</option>
+    <option value="4-2">4-2 sablon</option>
+    <option value="3-2-1">3-2-1 sablon</option>
+   </select></label>
+  <select id="falOldal" title="Melyik kapu elé">
+   <option value="auto">a védett kapu</option>
+   <option value="bal">bal kapu</option>
+   <option value="jobb">jobb kapu</option>
+  </select>
+ </div>
+ <div id="falInfo"></div>
+</div>
+<div id="sugo">Húzás — körülnézés · WASD — mozgás · R/F (C) — fel/le · Shift — gyors<br>
+Görgetés — előre ugrás (keringésben: közelítés) · O — keringés a pálya körül<br>
+Dupla katt egy játékosra — az ő szemével, vele együtt (Esc kilép)<br>
+Katt a padlóra — lövés-mérés (távolság, kapu-szög) · Szóköz — lejátszás<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
+<div id="meres"></div>
 <div id="felirat"></div>
 <div id="vez">
  <button id="elozo" title="Előző esemény">⏮</button>
@@ -124,7 +201,8 @@ import * as THREE from "three";
 import {VRButton} from "three/addons/webxr/VRButton.js";
 
 const ADAT = __ADAT__;
-const H = 40, W = 20;
+const H = 40, W = 20, KAPU_SZ = 3;
+__LOVES_JS__
 
 const szinpad = new THREE.Scene();
 szinpad.background = new THREE.Color(0x0a0e14);
@@ -186,21 +264,41 @@ function vonal(pontok){
 vonal([[0,0],[H,0],[H,W],[0,W],[0,0]]);
 vonal([[H/2,0],[H/2,W]]);
 // Szabálykönyv-hű kapuelőtér: negyedkör az alsó kapufa körül →
-// egyenes a kapu előtt → negyedkör a felső kapufa körül.
-function kapuElo(bal, r){
+// egyenes a kapu előtt → negyedkör a felső kapufa körül. A 9 m-es
+// szabaddobási vonal ugyanez az alak 9 m-rel — a pályán belüli része.
+function kapufaIv(bal, r){
   const cx = bal ? 0 : H, also = W/2-1.5, felso = W/2+1.5;
   const ut = [];
-  for (let a=-90; a<=0; a+=6){
+  for (let a=-90; a<=0; a+=3){
     const rad = a*Math.PI/180;
     ut.push([cx + (bal?1:-1)*Math.cos(rad)*r, also + Math.sin(rad)*r]);
   }
-  for (let a=0; a<=90; a+=6){
+  for (let a=0; a<=90; a+=3){
     const rad = a*Math.PI/180;
     ut.push([cx + (bal?1:-1)*Math.cos(rad)*r, felso + Math.sin(rad)*r]);
   }
-  vonal(ut);
+  return ut.filter(p => p[1] >= 0 && p[1] <= W);
 }
+function kapuElo(bal, r){ vonal(kapufaIv(bal, r)); }
 kapuElo(true, 6); kapuElo(false, 6);
+// A 9 m-es vonal SZAGGATOTT (a szabálykönyv 15 cm-es szakaszai).
+const szaggatottSzin = new THREE.LineDashedMaterial(
+  {color:0x9fb6c6, dashSize:0.3, gapSize:0.3});
+for (const bal of [true, false]){
+  const g = new THREE.BufferGeometry().setFromPoints(
+    kapufaIv(bal, 9).map(p => new THREE.Vector3(p[0], 0.01, W - p[1])));
+  const l = new THREE.Line(g, szaggatottSzin);
+  l.computeLineDistances();
+  szinpad.add(l);
+}
+// Hetes-vonal (1 m, 7 m-re), kapus-vonal (4 m-re; láthatóra nyújtva),
+// és a cserevonalak jele az oldalvonalon (a félpályától 4,5 m-re).
+for (const bal of [true, false]){
+  const x7 = bal ? 7 : H - 7, x4 = bal ? 4 : H - 4;
+  vonal([[x7, W/2 - 0.5], [x7, W/2 + 0.5]]);
+  vonal([[x4, W/2 - 0.475], [x4, W/2 + 0.475]]);
+}
+for (const x of [H/2 - 4.5, H/2 + 4.5]) vonal([[x, -0.15], [x, 0.15]]);
 // Kapuk (3 m széles, 2 m magas keret).
 const kapuSzin = new THREE.LineBasicMaterial({color:0xd9b544});
 for (const x of [0, H]){
@@ -364,12 +462,16 @@ function keres(t){
     if (frames[kozep][0] <= t) lo = kozep; else hi = kozep-1; }
   return lo;
 }
+// A legutóbb kirajzolt állás figuránként (pálya-méterben) — a
+// játékos-nézet, a védekezés-panel és a dupla kattintás ebből dolgozik.
+const allas = [];
 function rajzol(t){
   if (!frames.length) return;
   const i = keres(t), a = frames[i],
         b = frames[Math.min(i+1, frames.length-1)];
   const ar = b[0] > a[0] ? (t - a[0]) / (b[0] - a[0]) : 0;
   const jat = a[1];
+  allas.length = 0;
   while (babuk.length < jat.length) babu();
   for (let k = 0; k < babuk.length; k++){
     const cs = babuk[k];
@@ -381,6 +483,7 @@ function rajzol(t){
           q = (b[1] && b[1][k] && b[1][k][0] === p[0]) ? b[1][k] : p;
     const x = p[1] + (q[1]-p[1])*ar, y = p[2] + (q[2]-p[2])*ar;
     cs.position.set(x, 0, W - y);
+    allas.push({k, x, y, hazai: !!p[0], kapus: !!p[4], mez: p[5] || 0});
     szinez(cs, !!p[0], !!p[4]);
     // Mezszám-címke: csak ismert számnál; a textúra csapatonként/számonként egy.
     const mezszam = p[5] || 0, u = cs.userData;
@@ -413,7 +516,10 @@ function rajzol(t){
       if (d < legkozelebb){ legkozelebb = d; birtokos = babuk[k]; }
     }
     if (birtokos){
-      const irany = new THREE.Vector3(0, 0, -1)
+      // A figura ELEJE a helyi +z: a forgatás atan2(dx, -dy), így a
+      // (0,0,1) forgatva a haladás iránya. (A (0,0,-1) a háta mögé tette
+      // a labdát.)
+      const irany = new THREE.Vector3(0, 0, 1)
         .applyAxisAngle(new THREE.Vector3(0,1,0), birtokos.rotation.y);
       labda.position.set(birtokos.position.x + irany.x*0.32, 1.28,
                          birtokos.position.z + irany.z*0.32);
@@ -423,25 +529,327 @@ function rajzol(t){
   } else labda.visible = false;
 }
 
-// Asztali irányítás: pointer-lock nézelődés + WASD.
+// ---- Kamera-módok -------------------------------------------------
+// "szabad": húzás — körülnézés, WASD — mozgás, görgetés — előre ugrás.
+// "kering": a pálya közepe körül; húzás — keringés, görgetés/csípés —
+//           közelítés. WASD-re szabad módba vált (aki mozog, vezetni akar).
+// "jatekos": a kiválasztott játékos SZEMÉVEL, vele együtt halad (dupla
+//           kattintás egy figurára); húzás — körülnéz, Esc — kilép.
+let mod = "szabad";
 let yaw = 0, pitch = 0;
+const CEL = new THREE.Vector3(H/2, 0, W/2);          // a pálya közepe (three-tér)
+const kering = {theta: 0, phi: 0.6, r: 30};
+const jatekosNez = {yaw: 0, pitch: -0.05};
+let kovet = null;   // {hazai, mez, x, y, irany} — a játékos-nézet célja
+const keringGomb = document.getElementById("keringGomb");
+const jatekosKiGomb = document.getElementById("jatekosKi");
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+function modValt(uj){
+  if (uj === "kering" && mod !== "kering"){
+    // A keringés onnan indul, ahol a kamera áll — nem ugrik.
+    const off = rig.position.clone().sub(CEL);
+    kering.r = clamp(off.length(), 4, 80);
+    kering.phi = clamp(Math.asin(clamp(off.y / Math.max(1e-6, off.length()), -1, 1)), 0.08, 1.5);
+    kering.theta = Math.atan2(off.x, off.z);
+  }
+  if (uj === "szabad" && mod === "kering"){ yaw = kering.theta; pitch = -kering.phi; }
+  if (uj === "szabad" && mod === "jatekos"){
+    yaw = rig.rotation.y; pitch = jatekosNez.pitch;
+    rig.position.y = Math.max(rig.position.y, 1.6);
+  }
+  if (uj !== "jatekos") kovet = null;
+  mod = uj;
+  keringGomb.classList.toggle("be", mod === "kering");
+  jatekosKiGomb.style.display = mod === "jatekos" ? "" : "none";
+}
+keringGomb.onclick = () => modValt(mod === "kering" ? "szabad" : "kering");
+jatekosKiGomb.onclick = () => modValt("szabad");
+
+// Asztali irányítás: billentyűk.
 const gombok = new Set();
 addEventListener("keydown", e => {
+  if (e.target && e.target.tagName === "SELECT") return;
   if (e.code === "Space"){ lejatszasGomb.onclick(); e.preventDefault(); return; }
   if (e.code === "BracketLeft"){ esemenyUgras(-1); return; }
   if (e.code === "BracketRight"){ esemenyUgras(1); return; }
+  if (e.code === "KeyO"){ keringGomb.onclick(); return; }
+  if (e.code === "Escape"){ if (mod === "jatekos") modValt("szabad"); else meresTorles(); return; }
+  if (["KeyW","KeyA","KeyS","KeyD","KeyR","KeyF","KeyC"].includes(e.code)
+      && mod !== "szabad") modValt("szabad");
   gombok.add(e.code);
 });
 addEventListener("keyup", e => gombok.delete(e.code));
-fest.domElement.addEventListener("click", () => {
-  if (!fest.xr.isPresenting) fest.domElement.requestPointerLock();
+
+// Egér/érintés: húzás — nézés vagy keringés; rövid katt — mérés;
+// dupla katt — játékos-nézet; két ujj — csípés-zoom.
+const ujjak = new Map();
+let huzas = null, csipes = null, kattIdozito = null;
+const vaszon = fest.domElement;
+vaszon.style.touchAction = "none";
+vaszon.addEventListener("pointerdown", e => {
+  ujjak.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  vaszon.setPointerCapture(e.pointerId);
+  if (ujjak.size === 2){
+    const [p1, p2] = [...ujjak.values()];
+    csipes = Math.hypot(p1.x - p2.x, p1.y - p2.y); huzas = null; return;
+  }
+  huzas = {x: e.clientX, y: e.clientY, mozdult: false};
 });
-addEventListener("mousemove", e => {
-  if (document.pointerLockElement !== fest.domElement) return;
-  yaw -= e.movementX * 0.0025;
-  pitch = Math.max(-1.45, Math.min(1.45, pitch - e.movementY * 0.0025));
+vaszon.addEventListener("pointermove", e => {
+  if (!ujjak.has(e.pointerId)) return;
+  ujjak.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (ujjak.size === 2 && csipes){
+    const [p1, p2] = [...ujjak.values()];
+    const d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    if (d > 1){ zoom(csipes / d); csipes = d; }
+    return;
+  }
+  if (!huzas) return;
+  const dx = e.clientX - huzas.x, dy = e.clientY - huzas.y;
+  if (!huzas.mozdult && Math.hypot(dx, dy) < 4) return;
+  huzas.mozdult = true; huzas.x = e.clientX; huzas.y = e.clientY;
+  if (mod === "kering"){
+    kering.theta -= dx * 0.006;
+    kering.phi = clamp(kering.phi + dy * 0.006, 0.08, 1.5);
+  } else if (mod === "jatekos"){
+    jatekosNez.yaw -= dx * 0.004;
+    jatekosNez.pitch = clamp(jatekosNez.pitch - dy * 0.004, -1.2, 1.2);
+  } else {
+    yaw -= dx * 0.004;
+    pitch = clamp(pitch - dy * 0.004, -1.45, 1.45);
+  }
 });
+function ujjFel(e){
+  ujjak.delete(e.pointerId);
+  if (ujjak.size < 2) csipes = null;
+  const katt = huzas && !huzas.mozdult;
+  huzas = null;
+  if (!katt || fest.xr.isPresenting) return;
+  // A dupla kattintás első fele ne mérjen: kicsit várunk.
+  clearTimeout(kattIdozito);
+  const cx = e.clientX, cy = e.clientY;
+  kattIdozito = setTimeout(() => meresKattintas(cx, cy), 260);
+}
+vaszon.addEventListener("pointerup", ujjFel);
+vaszon.addEventListener("pointercancel", e => { ujjak.delete(e.pointerId); huzas = null; csipes = null; });
+vaszon.addEventListener("dblclick", e => {
+  clearTimeout(kattIdozito);
+  jatekosValasztas(e.clientX, e.clientY);
+});
+vaszon.addEventListener("wheel", e => {
+  e.preventDefault();
+  zoom(Math.exp(e.deltaY * 0.0012));
+}, {passive: false});
+function zoom(arany){
+  // arany > 1: távolodás. Keringésben a sugár változik; szabad módban
+  // előre/hátra ugrás a nézés irányában ("dash").
+  if (mod === "kering"){ kering.r = clamp(kering.r * arany, 4, 80); return; }
+  if (mod === "jatekos") return;
+  const lep = -Math.log(arany) * 12;
+  const irany = new THREE.Vector3();
+  kamera.getWorldDirection(irany);
+  rig.position.addScaledVector(irany, lep);
+  rig.position.y = clamp(rig.position.y, 0.4, 60);
+}
+
+// Képernyő-pont → sugár a jelenetbe.
+const sugar = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+function sugarBeallit(cx, cy){
+  const r = vaszon.getBoundingClientRect();
+  ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+  sugar.setFromCamera(ndc, kamera);
+}
+
+// ---- Játékos-nézet: dupla kattintás egy figurára -------------------
+function jatekosValasztas(cx, cy){
+  if (fest.xr.isPresenting) return;
+  sugarBeallit(cx, cy);
+  const talalat = sugar.intersectObjects(babuk.filter(b => b.visible), true)[0];
+  if (!talalat) return;
+  let o = talalat.object;
+  while (o && !babuk.includes(o)) o = o.parent;
+  const k = babuk.indexOf(o);
+  const a = allas.find(s => s.k === k);
+  if (!a) return;
+  jatekosNez.yaw = 0; jatekosNez.pitch = -0.05;
+  modValt("jatekos");
+  kovet = {hazai: a.hazai, mez: a.mez, x: a.x, y: a.y, irany: o.rotation.y, k};
+  if (!megy){ megy = true; lejatszasGomb.textContent = "⏸"; }
+}
+// A követett ember megkeresése az új kockán: azonos mezszám (ha van),
+// különben az előző helyéhez legközelebbi csapattárs 3 m-en belül —
+// a követés-azonosítók töredezettek, a mezszám és a hely a fogódzó.
+function kovetFrissit(dt){
+  if (!kovet) return;
+  let cel = null;
+  if (kovet.mez){
+    cel = allas.find(s => s.hazai === kovet.hazai && s.mez === kovet.mez) || null;
+  }
+  if (!cel){
+    let legjobb = 3.0;
+    for (const s of allas){
+      if (s.hazai !== kovet.hazai) continue;
+      const d = Math.hypot(s.x - kovet.x, s.y - kovet.y);
+      if (d < legjobb){ legjobb = d; cel = s; }
+    }
+  }
+  if (cel){
+    kovet.x = cel.x; kovet.y = cel.y; kovet.k = cel.k;
+    // Az irány simítva követi a figura haladását (a zajos követés ne
+    // rángassa a fejet); a rövidebb íven fordul.
+    const celIrany = babuk[cel.k].rotation.y;
+    let d = celIrany - kovet.irany;
+    while (d > Math.PI) d -= 2*Math.PI;
+    while (d < -Math.PI) d += 2*Math.PI;
+    kovet.irany += d * Math.min(1, dt * 3);
+    // A saját testét nem látja (a kamera a fejében ül).
+    babuk[cel.k].visible = false;
+  }
+  const fx = Math.sin(kovet.irany), fz = Math.cos(kovet.irany);
+  rig.position.set(kovet.x + fx * 0.12, 1.62, (W - kovet.y) + fz * 0.12);
+  if (!fest.xr.isPresenting){
+    rig.rotation.y = kovet.irany + Math.PI + jatekosNez.yaw;
+    kamera.rotation.set(jatekosNez.pitch, 0, 0);
+  }
+}
+
+// ---- Lövés-mérés: katt a padlóra ----------------------------------
+const meresElem = document.getElementById("meres");
+const meresCsoport = new THREE.Group();
+szinpad.add(meresCsoport);
+const padloSik = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+function szam1(v){ return v.toFixed(1).replace(".", ","); }
+function meresTorles(){
+  while (meresCsoport.children.length) meresCsoport.remove(meresCsoport.children[0]);
+  meresElem.style.display = "none";
+}
+function meresKattintas(cx, cy){
+  sugarBeallit(cx, cy);
+  const pont = new THREE.Vector3();
+  if (!sugar.ray.intersectPlane(padloSik, pont)) return;
+  const x = pont.x, y = W - pont.z;
+  if (x < -3 || x > H + 3 || y < -3 || y > W + 3) return;
+  meresRajzol(x, y);
+}
+function meresRajzol(x, y){
+  meresTorles();
+  const m = lovesMeres(x, y);
+  const v = (px, py, h) => new THREE.Vector3(px, h, W - py);
+  const p = v(x, y, 0.02);
+  const y1 = W/2 - KAPU_SZ/2, y2 = W/2 + KAPU_SZ/2;
+  // A lövő-háromszög: a pontból a két kapufáig — ennyi kapu "látszik".
+  const tri = new THREE.BufferGeometry().setFromPoints(
+    [p, v(m.gx, y1, 0.02), v(m.gx, y2, 0.02)]);
+  tri.setIndex([0, 1, 2]);
+  meresCsoport.add(new THREE.Mesh(tri, new THREE.MeshBasicMaterial(
+    {color:0x2f86d6, transparent:true, opacity:0.28, side:THREE.DoubleSide, depthWrite:false})));
+  const vonalAnyag = new THREE.LineBasicMaterial({color:0x4c9aff});
+  for (const cel of [v(m.gx, y1, 0.02), v(m.gx, y2, 0.02)]){
+    meresCsoport.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p, cel]), vonalAnyag));
+  }
+  const kozep = new THREE.Line(new THREE.BufferGeometry().setFromPoints(
+    [p, v(m.gx, W/2, 0.02)]), new THREE.LineDashedMaterial({color:0xffffff, dashSize:0.25, gapSize:0.2}));
+  kozep.computeLineDistances(); meresCsoport.add(kozep);
+  const gyuru = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 24),
+    new THREE.MeshBasicMaterial({color:0xffffff, side:THREE.DoubleSide}));
+  gyuru.rotation.x = -Math.PI/2; gyuru.position.copy(p); meresCsoport.add(gyuru);
+  meresElem.innerHTML = "<b>Lövés-mérés</b> (" + (m.kapu === "bal" ? "bal" : "jobb") +
+    " kapu)<br>" + szam1(m.tav) + " m a kapu közepétől · kapufától " + szam1(m.kapufa) +
+    " m<br>Kapu-szög: " + szam1(m.szog) + "° · sáv: " + m.sav +
+    '<button id="meresKi" title="Törlés (Esc)">✕</button>';
+  meresElem.style.display = "block";
+  document.getElementById("meresKi").onclick = meresTorles;
+}
+
+// ---- Védekezés-panel: tankönyvi fal vs a valódi -------------------
+const falValaszto = document.getElementById("fal");
+const falOldal = document.getElementById("falOldal");
+const falInfo = document.getElementById("falInfo");
+const FORMAK = ADAT.formations || {};
+const FAL = ADAT.defence || [];
+const falCsoport = new THREE.Group();
+szinpad.add(falCsoport);
+const falGyuruk = [];
+for (let i = 0; i < 6; i++){
+  const g = new THREE.Mesh(new THREE.RingGeometry(0.34, 0.46, 28),
+    new THREE.MeshBasicMaterial({color:0xd9b544, transparent:true, opacity:0.8, side:THREE.DoubleSide}));
+  g.rotation.x = -Math.PI/2; g.position.y = 0.025; g.visible = false;
+  falCsoport.add(g); falGyuruk.push(g);
+}
+// Az élő fal: a legutóbbi idővonal-sor, ha 1,5 mp-nél nem régebbi.
+function eloFal(t){
+  let lo = 0, hi = FAL.length - 1, talalt = -1;
+  while (lo <= hi){ const k = (lo + hi) >> 1; if (FAL[k][0] <= t){ talalt = k; lo = k + 1; } else hi = k - 1; }
+  if (talalt < 0 || t - FAL[talalt][0] > 1.5) return null;
+  const r = FAL[talalt];
+  return {hazai: !!r[1], cimke: r[2], goalX: r[3]};
+}
+// Átlagos eltérés a sablontól: mohó párosítás (a legközelebbi pár előbb).
+function elteres(vedok, pontok){
+  const parok = [];
+  vedok.forEach((v, i) => pontok.forEach((p, j) =>
+    parok.push([Math.hypot(v[0] - p[0], v[1] - p[1]), i, j])));
+  parok.sort((a, b) => a[0] - b[0]);
+  const vi = new Set(), pj = new Set();
+  let osszeg = 0, db = 0;
+  for (const [d, i, j] of parok){
+    if (vi.has(i) || pj.has(j)) continue;
+    vi.add(i); pj.add(j); osszeg += d; db++;
+  }
+  return db ? osszeg / db : null;
+}
+let falSzoveg = "";
+function falKiir(s){ if (s !== falSzoveg){ falSzoveg = s; falInfo.innerHTML = s; } }
+function falFrissit(t){
+  const valasztas = falValaszto.value;
+  falGyuruk.forEach(g => g.visible = false);
+  if (!valasztas){ falKiir(""); return; }
+  const elo = eloFal(t);
+  const nev = valasztas === "elo" ? (elo ? elo.cimke : null) : valasztas;
+  let goalX = null;
+  if (falOldal.value === "bal") goalX = 0;
+  else if (falOldal.value === "jobb") goalX = H;
+  else if (elo) goalX = elo.goalX;
+  const csapat = elo ? (elo.hazai ? ADAT.home : ADAT.away) : null;
+  const sorok = [];
+  if (elo) sorok.push("Most: " + csapat + " védekezik — <b>" + elo.cimke + "</b>");
+  else sorok.push("Most nincs szervezett támadás — a fal nem áll.");
+  const sablon = nev ? FORMAK[nev] : null;
+  if (sablon && goalX !== null){
+    const jobb = goalX > H/2;
+    const pontok = sablon.map(p => [jobb ? H - p[0] : p[0], p[1]]);
+    pontok.forEach((p, i) => { falGyuruk[i].visible = true;
+      falGyuruk[i].position.set(p[0], 0.025, W - p[1]); });
+    sorok.push(nev + " sablon a " + (jobb ? "jobb" : "bal") + " kapu előtt (sárga körök)");
+    // Eltérés a valódi faltól — csak ha épp az a kapu a védett.
+    if (elo && elo.goalX === goalX){
+      const vedok = allas.filter(s => s.hazai === elo.hazai && !s.kapus
+        && Math.abs(s.x - goalX) > 2.0).map(s => [s.x, s.y]);
+      if (vedok.length >= 4){
+        const e = elteres(vedok, pontok);
+        if (e !== null) sorok.push("Átlagos eltérés a tankönyvi faltól: " + szam1(e) + " m");
+      }
+    }
+  } else if (valasztas === "elo" && elo){
+    sorok.push("(ehhez a formához nincs tankönyvi sablon)");
+  } else if (sablon && goalX === null){
+    sorok.push("Válassz kaput, vagy várj egy szervezett támadásra.");
+  }
+  falKiir(sorok.join("<br>"));
+}
+
 function mozgas(dt){
+  if (mod === "kering"){
+    const cp = Math.cos(kering.phi);
+    rig.position.set(CEL.x + Math.sin(kering.theta) * cp * kering.r,
+                     CEL.y + Math.sin(kering.phi) * kering.r,
+                     CEL.z + Math.cos(kering.theta) * cp * kering.r);
+    if (!fest.xr.isPresenting){ rig.rotation.y = kering.theta; kamera.rotation.set(-kering.phi, 0, 0); }
+    return;
+  }
+  if (mod === "jatekos") return;  // a kovetFrissit viszi a kamerát
   const seb = (gombok.has("ShiftLeft")||gombok.has("ShiftRight")) ? 12 : 5;
   const ex = -Math.sin(yaw), ez = -Math.cos(yaw);
   const jx = Math.cos(yaw), jz = -Math.sin(yaw);
@@ -450,7 +858,7 @@ function mozgas(dt){
   if (gombok.has("KeyA")){ rig.position.x -= jx*seb*dt; rig.position.z -= jz*seb*dt; }
   if (gombok.has("KeyD")){ rig.position.x += jx*seb*dt; rig.position.z += jz*seb*dt; }
   if (gombok.has("KeyR")) rig.position.y += seb*dt;
-  if (gombok.has("KeyF")) rig.position.y = Math.max(0.4, rig.position.y - seb*dt);
+  if (gombok.has("KeyF") || gombok.has("KeyC")) rig.position.y = Math.max(0.4, rig.position.y - seb*dt);
   if (!fest.xr.isPresenting){ kamera.rotation.set(pitch, 0, 0); rig.rotation.y = yaw; }
 }
 // VR-locomotion: a bal kar hüvelykujj-karja a nézés iránya szerint visz.
@@ -478,7 +886,7 @@ fest.setAnimationLoop(() => {
   if (megy){ ido = Math.min(veg, ido + dt);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido); felirat(ido);
+  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); falFrissit(ido); felirat(ido);
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);
@@ -486,4 +894,5 @@ fest.setAnimationLoop(() => {
 </script></body></html>
 """
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
+                 .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))

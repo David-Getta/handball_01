@@ -5,6 +5,24 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.155 óta)
 
+- **3D pálya: keringés, játékos-szem, lövés-mérés, védekezés-panel**
+  (új, böngészős/VR nézet): a pálya a szabálykönyv minden jelölését
+  viszi (szaggatott 9 m-es vonal, hetes-, kapus- és cserevonal); a
+  nézet húzással néz körül, görgetéssel előre ugrik, az O gomb a pálya
+  körül keringtet (húzás, görgetés vagy csípés a közelítés); dupla
+  kattintás egy játékosra az ő SZEMÉVEL mutatja a játékot, és vele
+  együtt halad (Esc kilép); a padlóra kattintva lövés-mérés: távolság
+  a kapu közepétől és a kapufáktól, a kapu-szög (mennyi kapu "látszik"
+  onnan) és a sáv, kék lövő-háromszöggel a padlón. A Védekezés-panel a
+  6-0, 5-1, 4-2 és 3-2-1 tankönyvi falát teszi a kapu elé, "élő"
+  módban a pillanatnyi falat nevezi meg ("Most: Szeged védekezik —
+  5-1"), és megmondja, átlagosan hány méterre áll a valódi fal a
+  tankönyvitől. Javítva: a labda eddig a birtokos HÁTA mögött lebegett.
+  Közös számok a backendben (court3d: lövés-geometria, falsablonok,
+  védekezés-idővonal; új végpont: /matches/{id}/defence-timeline); a
+  böngésző mérése node-dal futtatva ugyanazt adja, mint a backend, a
+  sablonokat a fal-felismerő a saját nevükön ismeri fel.
+
 - **Könyvtár-visszaállítás: útvonal-szintű szűrés** (javítás,
   biztonság): a kívülről kapott mentés-zip kicsomagolásakor a
   kitörés-szűrő szöveges előtaggal vetett össze, így a "data" melletti
