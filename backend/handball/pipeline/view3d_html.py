@@ -89,6 +89,23 @@ def _compact_data(match: Match, figure_alerts: list | None = None) -> dict:
                 r["goal_x"]] for r in defence_timeline(match)]
     except Exception:
         fal = []
+    # Lövéstérkép: a meccs minden lövése a helyén (a match_xg az
+    # elengedés kockájáról mér): [mp, hazai?, x, y, xG, kimenet, a
+    # támadott kapu x-e] — a kimenet "g" gól, "v" védés, "m" mellé.
+    try:
+        from .tactics import TacticsConfig
+        from .xg import match_xg
+        cfg = TacticsConfig()
+        kimenet = {"goal": "g", "save": "v"}
+        lovesek = [
+            [round(s["t"] / fps, 2), 1 if s["team"] == "home" else 0,
+             s["x"], s["y"], round(float(s["xg"]), 3),
+             kimenet.get(s["outcome"], "m"),
+             cfg.attacks_toward_x(Team.HOME if s["team"] == "home"
+                                  else Team.AWAY)]
+            for s in match_xg(match, cfg)["shots"]]
+    except Exception:
+        lovesek = []  # lövéstérkép nélkül is működjön a nézet
     return {
         "home": match.meta.home_team,
         "away": match.meta.away_team,
@@ -96,6 +113,7 @@ def _compact_data(match: Match, figure_alerts: list | None = None) -> dict:
         "events": esemenyek,
         "formations": formak,
         "defence": fal,
+        "shots": lovesek,
     }
 
 
@@ -135,6 +153,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
     oldal = """<!DOCTYPE html>
 <html lang="hu"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <title>__CIM__</title>
 <style>
  body{margin:0;background:#0a0e14;color:#dfe7ef;font-family:system-ui,sans-serif;overflow:hidden}
@@ -149,7 +168,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
  #eszkoz .sor{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
  select{background:#173042;color:#dfe7ef;border:1px solid #2b4a5e;border-radius:8px;padding:5px 8px}
  button.be{background:#2f86d6;border-color:#2f86d6;color:#fff}
- #falInfo{opacity:.92;line-height:1.35}
+ #falInfo,#lovesInfo{opacity:.92;line-height:1.35}
  #meres{position:fixed;left:12px;bottom:100px;padding:8px 12px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;line-height:1.45}
  #meres button{margin-left:8px;padding:2px 8px}
 </style></head><body>
@@ -176,11 +195,23 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
   </select>
  </div>
  <div id="falInfo"></div>
+ <div class="sor">
+  <label>Lövéstérkép
+   <select id="lovesek" title="A meccs lövései a padlón; katt egy körre — odaugrik">
+    <option value="">ki</option>
+    <option value="mind">mind</option>
+    <option value="eddig">eddig (a lejátszásig)</option>
+    <option value="hazai">csak hazai</option>
+    <option value="vendeg">csak vendég</option>
+   </select></label>
+ </div>
+ <div id="lovesInfo"></div>
 </div>
 <div id="sugo">Húzás — körülnézés · WASD — mozgás · R/F (C) — fel/le · Shift — gyors<br>
 Görgetés — előre ugrás (keringésben: közelítés) · O — keringés a pálya körül<br>
 Dupla katt egy játékosra — az ő szemével, vele együtt (Esc kilép)<br>
 Katt a padlóra — lövés-mérés (távolság, kapu-szög) · Szóköz — lejátszás<br>
+Lövéstérkép: katt egy körre — odaugrik a lövéshez (kör = xG, arany gyűrű = gól)<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="meres"></div>
@@ -676,6 +707,9 @@ function jatekosValasztas(cx, cy){
   jatekosNez.yaw = 0; jatekosNez.pitch = -0.05;
   modValt("jatekos");
   kovet = {hazai: a.hazai, mez: a.mez, x: a.x, y: a.y, irany: o.rotation.y, k};
+  // A gomb megmondja, kinek a szemével nézünk (csapat + mezszám).
+  jatekosKiGomb.textContent = (a.hazai ? ADAT.home : ADAT.away) +
+    (a.mez ? " #" + a.mez : "") + " szemével ✕";
   if (!megy){ megy = true; lejatszasGomb.textContent = "⏸"; }
 }
 // A követett ember megkeresése az új kockán: azonos mezszám (ha van),
@@ -727,15 +761,16 @@ function meresTorles(){
 }
 function meresKattintas(cx, cy){
   sugarBeallit(cx, cy);
+  if (lovesKattintas()) return;
   const pont = new THREE.Vector3();
   if (!sugar.ray.intersectPlane(padloSik, pont)) return;
   const x = pont.x, y = W - pont.z;
   if (x < -3 || x > H + 3 || y < -3 || y > W + 3) return;
   meresRajzol(x, y);
 }
-function meresRajzol(x, y){
+function meresRajzol(x, y, kapu){
   meresTorles();
-  const m = lovesMeres(x, y);
+  const m = lovesMeres(x, y, kapu);
   const v = (px, py, h) => new THREE.Vector3(px, h, W - py);
   const p = v(x, y, 0.02);
   const y1 = W/2 - KAPU_SZ/2, y2 = W/2 + KAPU_SZ/2;
@@ -761,6 +796,77 @@ function meresRajzol(x, y){
     '<button id="meresKi" title="Törlés (Esc)">✕</button>';
   meresElem.style.display = "block";
   document.getElementById("meresKi").onclick = meresTorles;
+}
+
+// ---- Lövéstérkép: a meccs lövései a padlón --------------------------
+// Egy lövés = egy kör a lövés helyén: a csapat színével, a sugara az
+// xG-vel nő (nagy kör = nagy helyzet), a gólt arany gyűrű jelzi, a
+// védett/kihagyott halványabb. Kattintás egy körre: odaugrik a
+// jelenethez (4 mp-cel előtte, lejátszva) és kiírja a lövés számait.
+const LOVESEK = ADAT.shots || [];
+const lovesValaszto = document.getElementById("lovesek");
+const lovesInfo = document.getElementById("lovesInfo");
+const lovesCsoport = new THREE.Group();
+szinpad.add(lovesCsoport);
+const lovesJelek = [];
+const aranyGyuruAnyag = new THREE.MeshBasicMaterial(
+  {color:0xd9b544, side:THREE.DoubleSide, depthWrite:false});
+for (const l of LOVESEK){
+  const [mp, hazai, x, y, xg, kimenet] = l;
+  const r = 0.22 + 0.5 * Math.min(1, Math.max(0, xg));
+  const korong = new THREE.Mesh(new THREE.CircleGeometry(r, 20),
+    new THREE.MeshBasicMaterial({color: hazai ? 0x4c9aff : 0xff6b6b,
+      transparent:true, opacity: kimenet === "g" ? 0.9 : 0.45,
+      side:THREE.DoubleSide, depthWrite:false}));
+  korong.rotation.x = -Math.PI/2; korong.position.set(x, 0.018, W - y);
+  korong.userData.loves = l;
+  if (kimenet === "g"){
+    const gyuru = new THREE.Mesh(new THREE.RingGeometry(r + 0.04, r + 0.12, 24), aranyGyuruAnyag);
+    gyuru.rotation.x = -Math.PI/2; gyuru.position.set(x, 0.02, W - y);
+    korong.userData.gyuru = gyuru; lovesCsoport.add(gyuru);
+  }
+  lovesCsoport.add(korong); lovesJelek.push(korong);
+}
+const KIMENET = {g: "gól", v: "védés", m: "mellé/kapufa"};
+function lovesLatszik(l, t){
+  const v = lovesValaszto.value;
+  if (!v) return false;
+  if (v === "eddig") return l[0] <= t;
+  if (v === "hazai") return !!l[1];
+  if (v === "vendeg") return !l[1];
+  return true;
+}
+let lovesSzoveg = "";
+function lovesFrissit(t){
+  let db = 0, gol = 0;
+  for (const j of lovesJelek){
+    const lat = lovesLatszik(j.userData.loves, t);
+    j.visible = lat; if (j.userData.gyuru) j.userData.gyuru.visible = lat;
+    if (lat){ db++; if (j.userData.loves[5] === "g") gol++; }
+  }
+  const s = lovesValaszto.value
+    ? (LOVESEK.length ? db + " lövés, " + gol + " gól — kék: " + ADAT.home + ", piros: " + ADAT.away
+       : "Ehhez a meccshez nincs felismert lövés.")
+    : "";
+  if (s !== lovesSzoveg){ lovesSzoveg = s; lovesInfo.textContent = s; }
+}
+// Katt egy lövés-körre (a sugár már beállítva): ugrás + mérés-doboz a
+// lövés helyén, a lövés számaival. Igaz, ha talált.
+function lovesKattintas(){
+  const lathato = lovesJelek.filter(j => j.visible);
+  if (!lathato.length) return false;
+  const t = sugar.intersectObjects(lathato, false)[0];
+  if (!t) return false;
+  const [mp, hazai, x, y, xg, kimenet, goalX] = t.object.userData.loves;
+  ido = Math.max(0, mp - 4); megy = true; lejatszasGomb.textContent = "⏸";
+  csuszka.value = ido;
+  meresRajzol(x, y, goalX > H/2 ? "jobb" : "bal");
+  const o = Math.floor(mp/60), s = Math.floor(mp%60);
+  meresElem.insertAdjacentHTML("afterbegin",
+    "<b>" + (hazai ? ADAT.home : ADAT.away) + " lövése</b> " + o + ":" +
+    String(s).padStart(2, "0") + " · " + KIMENET[kimenet] + " · xG " +
+    xg.toFixed(2).replace(".", ",") + "<br>");
+  return true;
 }
 
 // ---- Védekezés-panel: tankönyvi fal vs a valódi -------------------
@@ -886,7 +992,7 @@ fest.setAnimationLoop(() => {
   if (megy){ ido = Math.min(veg, ido + dt);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); falFrissit(ido); felirat(ido);
+  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); falFrissit(ido); lovesFrissit(ido); felirat(ido);
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);

@@ -3,6 +3,25 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.156 óta)
+
+- **3D pálya: lövéstérkép** (új, böngészős/VR és appbeli nézet): a meccs
+  minden lövése a padlón, a lövés helyén — kék a hazai, piros a vendég;
+  a kör az xG-vel nő (nagy kör = nagy helyzet), a gólt arany gyűrű
+  jelzi, a védett/kihagyott halványabb. A választó: minden lövés / a
+  lejátszásig (a térkép a meccsel együtt épül) / csak hazai / csak
+  vendég; az összegző kiírja, hány lövés és gól látszik. Kattintás
+  (koppintás) egy körre: a nézet odaugrik a lövéshez (4 mp-cel előtte,
+  lejátszva), és a mérés-doboz a lövés sorával kezdődik ("Szeged lövése
+  12:40 · gól · xG 0,55"), a támadott kapura mérve. Backend: a 3D oldal
+  tömör adatában a lövés-sorok (match_xg); az app a /xg végpontról
+  olvassa, a demó-meccsnek beépített lövései vannak. A böngészős
+  nézetet headless Chromiumban (kattintás egy körre → ugrás, "eddig"
+  mód), az appbelit widget-teszttel (összegző, koppintás → ugrás)
+  ellenőriztem. A böngészős oldal üres beágyazott ikont ad (nincs
+  favicon-404 a konzolon), és a játékos-nézet gombja megnevezi, kinek a
+  szemével nézünk.
+
 ## v0.1.156 — kiadva (2026-10-02)
 
 > Kiadás-jegyzet: a 3D pálya új eszközei — keringés a pálya körül,

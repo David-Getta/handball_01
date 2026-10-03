@@ -86,3 +86,30 @@ Match buildDemoMatch({int frames = 200, double fps = 25.0}) {
 
   return Match(meta: meta, frames: frameList);
 }
+
+/// Demó-lövések a lövéstérképhez (backend nélkül): a /xg "shots"
+/// alakjában — t (kocka), team, x, y, xg, outcome. A hazai a jobb kapura
+/// lő (a demó-meccs szerint), a vendég a balra.
+List<Map<String, dynamic>> buildDemoShots({int frames = 200, double fps = 25.0}) {
+  final cy = courtWidth / 2;
+  final minta = [
+    // (hazai?, x, y, xG, kimenet) — szél, átlövés, beálló, hetes.
+    (true, 33.5, 2.8, 0.18, "miss"),
+    (true, 31.0, cy - 2.0, 0.09, "save"),
+    (true, 34.6, cy + 0.5, 0.55, "goal"),
+    (true, 33.0, 10.0, 0.72, "goal"),
+    (false, 6.5, cy + 3.0, 0.21, "goal"),
+    (false, 9.5, cy - 4.0, 0.08, "save"),
+  ];
+  return [
+    for (var i = 0; i < minta.length; i++)
+      {
+        "t": ((i + 1) * frames / (minta.length + 1)).floor(),
+        "team": minta[i].$1 ? "home" : "away",
+        "x": minta[i].$2,
+        "y": minta[i].$3,
+        "xg": minta[i].$4,
+        "outcome": minta[i].$5,
+      }
+  ];
+}

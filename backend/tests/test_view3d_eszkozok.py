@@ -53,8 +53,14 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "function kovetFrissit", "function meresKattintas",
                 "function falFrissit", '"dblclick"', '"wheel"', '"KeyO"',
                 '"KeyC"', "LineDashedMaterial", "computeLineDistances",
-                "kapufaIv(bal, 9)", "Kapu-szög"):
+                "kapufaIv(bal, 9)", "Kapu-szög", 'id="lovesek"',
+                'id="lovesInfo"', "function lovesKattintas",
+                "function lovesFrissit", "lovesFrissit(ido)"):
         assert jel in oldal, jel
+    # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
+    assert '<link rel="icon" href="data:,">' in oldal
+    # A játékos-nézet gombja megnevezi, kinek a szemével nézünk.
+    assert '" szemével ✕"' in oldal
     # A pointer-lock helyett húzással néz (a katt a mérésé).
     assert "requestPointerLock" not in oldal
     # A labda a birtokos ELŐTT: a figura eleje a helyi +z.
@@ -73,6 +79,29 @@ def test_a_tomor_adat_viszi_a_falsablonokat_es_az_elo_falat():
     s, hazai, cimke, goal_x = adat["defence"][0]
     assert hazai == 0 and cimke == "6-0" and goal_x == 40.0
     assert [r[0] for r in adat["defence"]] == [0.0, 1.0]
+
+
+def test_a_tomor_adat_viszi_a_lovesterkepet():
+    """A lövéstérkép sorai a match_xg lövéseiből: [mp, hazai?, x, y, xG,
+    kimenet, a támadott kapu x-e] — a böngésző ebből rajzolja a köröket.
+    Lövés nélküli meccsen üres lista (nem hiba)."""
+    from handball.pipeline.view3d_html import _compact_data
+    from handball.pipeline.xg import match_xg
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    assert _compact_data(_meccs())["shots"] == []
+    m = simulate_ground_truth(duration_s=60, fps=25.0, seed=3,
+                              shots_per_min=6)
+    lovesek = _compact_data(m)["shots"]
+    xg = match_xg(m)["shots"]
+    assert lovesek and len(lovesek) == len(xg)
+    for sor, s in zip(lovesek, xg):
+        mp, hazai, x, y, xg_ert, kimenet, goal_x = sor
+        assert mp == round(s["t"] / 25.0, 2)
+        assert hazai == (1 if s["team"] == "home" else 0)
+        assert (x, y) == (s["x"], s["y"]) and abs(xg_ert - s["xg"]) < 1e-3
+        assert kimenet in ("g", "v", "m") and goal_x in (0.0, 40.0)
+        assert (kimenet == "g") == (s["outcome"] == "goal")
 
 
 def _modul_szkript(oldal: str) -> str:
@@ -175,5 +204,11 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "onDoubleTap", "onScaleUpdate", "fetchDefenceTimeline",
                 "formationPositions", "class _Vetites", "Kapu-szög",
                 "LogicalKeyboardKey.keyO", "LogicalKeyboardKey.escape",
-                "identical(j, rejtett)", "substitutionLineX"):
+                "identical(j, rejtett)", "substitutionLineX",
+                "_lovesKoppintas", "_lathatoLovesek", "class _LovesJel",
+                "fetchXg", "Lövéstérkép: ki"):
         assert jel in kepernyo, jel
+    # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).
+    assert "0.22 + 0.5 *" in kepernyo and "0.22 + 0.5 * Math.min" in \
+        __import__("handball.pipeline.view3d_html",
+                   fromlist=["view3d_html"]).view3d_html(_meccs())

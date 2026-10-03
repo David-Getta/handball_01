@@ -69,4 +69,40 @@ void main() {
     expect(find.textContaining("6-0 sablon a bal kapu előtt"), findsOneWidget);
     await _zar(tester);
   });
+
+  testWidgets("lövéstérkép: összegző, koppintás egy körre — odaugrik",
+      (tester) async {
+    await _nyit(tester);
+    await tester.tap(find.text("Lövéstérkép: ki"));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text("Minden lövés").last);
+    await tester.pump(const Duration(milliseconds: 300));
+    // A demó hat lövése, három gól.
+    expect(find.textContaining("6 lövés, 3 gól"), findsOneWidget);
+    // Felülnézetből végigkoppintjuk a képet, míg egy kört eltalálunk: a
+    // mérés-doboz ilyenkor a lövés sorával kezdődik, és a lejátszó megy.
+    await tester.tap(find.text("Madártávlat"));
+    await tester.pump(const Duration(milliseconds: 100));
+    final ter = tester.getRect(_kep());
+    var talalt = false;
+    for (var i = 1; i < 24 && !talalt; i++) {
+      for (var j = 1; j < 14 && !talalt; j++) {
+        await tester.tapAt(Offset(ter.left + ter.width * i / 24,
+            ter.top + ter.height * j / 14));
+        // A dupla koppintás ablakánál hosszabb szünet két koppintás közt.
+        await tester.pump(const Duration(milliseconds: 400));
+        talalt = find.textContaining("lövése").evaluate().isNotEmpty;
+      }
+    }
+    expect(talalt, isTrue, reason: "egy lövés-kört sem talált a koppintás");
+    expect(find.textContaining("· xG "), findsOneWidget);
+    expect(find.textContaining("Lövés-mérés"), findsOneWidget);
+    // "Eddig" módban a lejátszófej előtti lövések látszanak csak.
+    await tester.tap(find.text("Minden lövés"));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text("Lövések eddig").last);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining("6 lövés, 3 gól"), findsNothing);
+    await _zar(tester);
+  });
 }

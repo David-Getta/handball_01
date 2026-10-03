@@ -103,6 +103,11 @@ class _Court3DScreenState extends State<Court3DScreen>
   String _fal = ""; // "" | "elo" | sablonnév
   String _falOldal = "auto"; // "auto" | "bal" | "jobb"
   List<Map<String, dynamic>> _falSorok = const [];
+  // LÖVÉSTÉRKÉP: a meccs lövései a padlón (a /xg lövés-sorai: t kocka,
+  // team, x, y, xg, outcome); koppintás egy körre — odaugrik.
+  List<Map<String, dynamic>> _lovesek = const [];
+  String _lovesTerkep = ""; // "" | "mind" | "eddig" | "hazai" | "vendeg"
+  Map<String, dynamic>? _lovesValasztott; // a mérés-dobozban megnevezett lövés
   Size _nezetMeret = Size.zero;
 
   late final Ticker _ticker;
@@ -136,6 +141,7 @@ class _Court3DScreenState extends State<Court3DScreen>
       // Nincs még elemzett meccs: a demó mutatja meg, mit fog tudni.
       setState(() {
         _match = buildDemoMatch();
+        _lovesek = buildDemoShots();
         _demo = true;
         _loading = false;
       });
@@ -182,6 +188,13 @@ class _Court3DScreenState extends State<Court3DScreen>
         falSorok = ((d["rows"] as List?) ?? const [])
             .cast<Map<String, dynamic>>();
       } catch (_) {}
+      // A lövéstérkép a helyzetminőség lövés-soraiból — hibája nem
+      // viheti el a nézetet (a térkép ilyenkor üres).
+      List<Map<String, dynamic>> lovesek = const [];
+      try {
+        lovesek = (((await _api.fetchXg(id))["shots"] as List?) ?? const [])
+            .cast<Map<String, dynamic>>();
+      } catch (_) {}
       if (!mounted) return;
       final h = <int>{}, a = <int>{};
       for (final f in m.frames) {
@@ -215,6 +228,8 @@ class _Court3DScreenState extends State<Court3DScreen>
         _kovTeam = null;
         _kovMez = null;
         _falSorok = falSorok;
+        _lovesek = lovesek;
+        _lovesValasztott = null;
         _meres = null;
         _szemevel = false;
         _kering = false;
@@ -447,9 +462,13 @@ class _Court3DScreenState extends State<Court3DScreen>
     _focus.requestFocus();
   }
 
-  /// Koppintás a padlóra: lövés-mérés a pontból.
+  /// Koppintás a padlóra: lövés-mérés a pontból — vagy, ha egy
+  /// lövéstérkép-körre esett, ugrás a lövéshez (4 mp-cel előtte,
+  /// lejátszva) és a lövés számai a mérés-dobozban.
   void _meresKoppintas(Offset p) {
     if (_nezetMeret == Size.zero) return;
+    final m = _match;
+    if (m != null && _lovesKoppintas(m, p)) return;
     final pont = _vetites().padlo(p);
     if (pont == null ||
         pont.dx < -3 ||
@@ -458,7 +477,64 @@ class _Court3DScreenState extends State<Court3DScreen>
         pont.dy > courtWidth + 3) {
       return;
     }
-    setState(() => _meres = pont);
+    setState(() {
+      _meres = pont;
+      _lovesValasztott = null;
+    });
+  }
+
+  /// A lejátszófejnél látható lövések (a térkép módja szerint).
+  List<Map<String, dynamic>> _lathatoLovesek(Match m) {
+    if (_lovesTerkep.isEmpty) return const [];
+    final most = _mostT(m);
+    return [
+      for (final l in _lovesek)
+        if (_lovesTerkep == "mind" ||
+            (_lovesTerkep == "eddig" && ((l["t"] as num?) ?? 0) <= most) ||
+            (_lovesTerkep == "hazai" && l["team"] == "home") ||
+            (_lovesTerkep == "vendeg" && l["team"] == "away"))
+          l
+    ];
+  }
+
+  /// A lövés-kör sugara a padlón (méter): az xG-vel nő — ugyanaz, mint
+  /// a böngészős nézetben (0,22 + 0,5·xG).
+  static double _lovesSugar(Map<String, dynamic> l) =>
+      0.22 + 0.5 * (((l["xg"] as num?) ?? 0).toDouble()).clamp(0.0, 1.0);
+
+  /// Koppintás egy lövés-körre: igaz, ha talált (és odaugrott).
+  bool _lovesKoppintas(Match m, Offset p) {
+    final v = _vetites();
+    Map<String, dynamic>? cel;
+    var legjobb = double.infinity;
+    for (final l in _lathatoLovesek(m)) {
+      final x = ((l["x"] as num?) ?? 0).toDouble();
+      final y = ((l["y"] as num?) ?? 0).toDouble();
+      final o = v.kepernyo(x, y, 0.02);
+      if (o == null) continue;
+      // A kör képernyő-sugara: a szélső pont vetítve; legalább 12 px,
+      // hogy messziről is el lehessen találni.
+      final szel = v.kepernyo(x + _lovesSugar(l), y, 0.02);
+      final r = math.max(12.0, szel == null ? 12.0 : (szel - o).distance);
+      final d = (o - p).distance;
+      if (d <= r && d < legjobb) {
+        legjobb = d;
+        cel = l;
+      }
+    }
+    final l = cel;
+    if (l == null) return false;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final t = ((l["t"] as num?) ?? 0).toDouble();
+    setState(() {
+      _meres = Offset(((l["x"] as num?) ?? 0).toDouble(),
+          ((l["y"] as num?) ?? 0).toDouble());
+      _lovesValasztott = l;
+      _playhead = _tIndex(m, t - 4.0 * fps).toDouble();
+      _playing = true;
+      _kovMez = null;
+    });
+    return true;
   }
 
   /// Dupla koppintás egy figurára: az ő szemével, vele együtt.
@@ -513,6 +589,7 @@ class _Court3DScreenState extends State<Court3DScreen>
             _cz = math.max(_cz, 1.7);
           } else {
             _meres = null;
+            _lovesValasztott = null;
           }
         });
         return KeyEventResult.handled;
@@ -649,7 +726,8 @@ class _Court3DScreenState extends State<Court3DScreen>
               "WASD — mozgás · egér-húzás — nézelődés · R/F (C) — fel/le · "
               "Shift — gyors · Szóköz — lejátszás · O — keringés · "
               "dupla katt egy játékosra — az ő szemével (Esc) · "
-              "katt a padlóra — lövés-mérés",
+              "katt a padlóra — lövés-mérés · lövéstérkép: katt egy körre — "
+              "odaugrik",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -720,7 +798,19 @@ class _Court3DScreenState extends State<Court3DScreen>
                   yaw: _yaw,
                   pitch: _pitch,
                   meres: _meres,
+                  meresBalKapu: _lovesValasztott == null
+                      ? null
+                      : _lovesValasztott!["team"] == "away",
                   falPontok: fal.$1,
+                  lovesek: [
+                    for (final l in _lathatoLovesek(m))
+                      _LovesJel(
+                          ((l["x"] as num?) ?? 0).toDouble(),
+                          ((l["y"] as num?) ?? 0).toDouble(),
+                          _lovesSugar(l),
+                          l["team"] == "home",
+                          l["outcome"] == "goal")
+                  ],
                   rejtett: rejtett,
                 ),
               ))),
@@ -732,6 +822,12 @@ class _Court3DScreenState extends State<Court3DScreen>
                   left: 12,
                   top: _meres != null ? 104 : 12,
                   child: _infoDoboz(fal.$2, AppColors.gold),
+                ),
+              if (_lovesTerkep.isNotEmpty)
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: _infoDoboz(_lovesOsszegzo(m), AppColors.accent),
                 ),
               // Jelenet-felirat: mi történik épp (a közvetítés
               // inzertje) — a 3D-ben a labda pályája önmagában nem
@@ -988,6 +1084,39 @@ class _Court3DScreenState extends State<Court3DScreen>
           ]),
         ),
       ),
+      // Lövéstérkép: a meccs lövései a padlón (kör = xG, arany gyűrű = gól).
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: _lovesTerkep.isNotEmpty
+                ? AppColors.accent.withOpacity(0.15)
+                : AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.borderStrong),
+          ),
+          child: DropdownButton<String>(
+            value: _lovesTerkep,
+            underline: const SizedBox.shrink(),
+            dropdownColor: AppColors.surface,
+            style: AppText.label.copyWith(fontSize: 11.5),
+            items: const [
+              DropdownMenuItem(value: "", child: Text("Lövéstérkép: ki")),
+              DropdownMenuItem(value: "mind", child: Text("Minden lövés")),
+              DropdownMenuItem(
+                  value: "eddig", child: Text("Lövések eddig")),
+              DropdownMenuItem(value: "hazai", child: Text("Hazai lövések")),
+              DropdownMenuItem(
+                  value: "vendeg", child: Text("Vendég lövések")),
+            ],
+            onChanged: (v) {
+              setState(() => _lovesTerkep = v ?? "");
+              _focus.requestFocus();
+            },
+          ),
+        ),
+      ),
       gomb("Lelátó", () => _nezet(20, -12, 9, 0, -0.5)),
       gomb("Kapu mögül", () => _nezet(-6, 10, 2.5, math.pi / 2, -0.12)),
       gomb("Pálya-szint", () => _nezet(20, 4, 1.7, 0, 0.0)),
@@ -1067,6 +1196,20 @@ class _Court3DScreenState extends State<Court3DScreen>
     return (pontok, sorok);
   }
 
+  /// A lövéstérkép összegzője: hány lövés látszik, ebből hány gól, és
+  /// a jelmagyarázat.
+  List<String> _lovesOsszegzo(Match m) {
+    if (_lovesek.isEmpty) return const ["Ehhez a meccshez nincs felismert lövés."];
+    final lat = _lathatoLovesek(m);
+    final gol = lat.where((l) => l["outcome"] == "goal").length;
+    return [
+      "${lat.length} lövés, $gol gól — kék: ${m.meta.homeTeam}, "
+          "piros: ${m.meta.awayTeam}",
+      "kör = xG (nagyobb = jobb helyzet), arany gyűrű = gól; "
+          "koppints egy körre — odaugrik",
+    ];
+  }
+
   Widget _infoDoboz(List<String> sorok, Color szin, {Widget? zaro}) {
     return Container(
       constraints: const BoxConstraints(maxWidth: 340),
@@ -1092,9 +1235,26 @@ class _Court3DScreenState extends State<Court3DScreen>
 
   /// A lövés-mérés doboza: távolság, kapufa-távolság, kapu-szög, sáv.
   Widget _meresDoboz(Offset p) {
-    final g = shotGeometry(p.dx, p.dy);
+    // Lövéstérkép-körről: a TÁMADOTT kapura mérünk (a vendég balra lő a
+    // backend alapértelmezése szerint), és a lövés sora áll elöl.
+    final l = _lovesValasztott;
+    final g = shotGeometry(p.dx, p.dy,
+        leftGoal: l == null ? null : l["team"] == "away");
     String sz(double v) => v.toStringAsFixed(1).replaceAll(".", ",");
+    final m = _match;
+    String? lovesSor;
+    if (l != null && m != null) {
+      final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+      final mp = (((l["t"] as num?) ?? 0) / fps).floor();
+      final kimenet = const {"goal": "gól", "save": "védés"}[l["outcome"]] ??
+          "mellé/kapufa";
+      final xg = ((l["xg"] as num?) ?? 0).toDouble();
+      lovesSor = "${l["team"] == "home" ? m.meta.homeTeam : m.meta.awayTeam}"
+          " lövése ${mp ~/ 60}:${(mp % 60).toString().padLeft(2, "0")}"
+          " · $kimenet · xG ${xg.toStringAsFixed(2).replaceAll(".", ",")}";
+    }
     return _infoDoboz([
+      if (lovesSor != null) lovesSor,
       "Lövés-mérés (${g.leftGoal ? "bal" : "jobb"} kapu)",
       "${sz(g.distance)} m a kapu közepétől · kapufától ${sz(g.postDistance)} m",
       "Kapu-szög: ${sz(g.angleDeg)}° · sáv: ${g.zone}",
@@ -1103,7 +1263,10 @@ class _Court3DScreenState extends State<Court3DScreen>
           visualDensity: VisualDensity.compact,
           iconSize: 16,
           tooltip: "Törlés (Esc)",
-          onPressed: () => setState(() => _meres = null),
+          onPressed: () => setState(() {
+            _meres = null;
+            _lovesValasztott = null;
+          }),
           icon: const Icon(Icons.close),
         ));
   }
@@ -1319,6 +1482,13 @@ class _Labda {
   _Labda(this.x, this.y);
 }
 
+/// Egy lövés a térképen: hely, sugár (méter), csapat, gól-e.
+class _LovesJel {
+  final double x, y, r;
+  final bool home, gol;
+  const _LovesJel(this.x, this.y, this.r, this.home, this.gol);
+}
+
 class _Allapot {
   final List<_Jatekos> jatekosok;
   final _Labda? labda;
@@ -1382,7 +1552,10 @@ class _Court3DPainter extends CustomPainter {
   // Lövés-mérés pontja (pálya-méter), a védekezés-sablon pontjai, és a
   // szemével-nézet játékosa (a saját testét nem rajzoljuk: a fejében ülünk).
   final Offset? meres;
+  // A mérés kapuja (null: a közelebbi); a lövéstérkép körei.
+  final bool? meresBalKapu;
   final List<Offset> falPontok;
+  final List<_LovesJel> lovesek;
   final _Jatekos? rejtett;
   _Court3DPainter(
       {required this.frame,
@@ -1392,7 +1565,9 @@ class _Court3DPainter extends CustomPainter {
       required this.yaw,
       required this.pitch,
       this.meres,
+      this.meresBalKapu,
       this.falPontok = const [],
+      this.lovesek = const [],
       this.rejtett});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
@@ -1467,6 +1642,22 @@ class _Court3DPainter extends CustomPainter {
       _vonal(c, p, pontok[i].dx, pontok[i].dy, 0, pontok[i + 1].dx,
           pontok[i + 1].dy, 0);
     }
+  }
+
+  /// Kitöltött korong a padlón (sugár méterben): a kerület vetített
+  /// pontjaiból sokszög; ha bármely pont a közeli sík mögé esik, nem
+  /// rajzoljuk (a kör-kontúr ilyenkor is megvan a `_kor`-ral).
+  void _korong(Canvas c, Paint p, double x, double y, double r) {
+    const n = 20;
+    final pontok = <Offset>[];
+    for (var i = 0; i < n; i++) {
+      final a = i / n * 2 * math.pi;
+      final (jb, fe, me) =
+          _kamera(x + math.cos(a) * r, y + math.sin(a) * r, 0.02);
+      if (me < _kozel) return;
+      pontok.add(_kepernyo(jb, fe, me));
+    }
+    c.drawPath(Path()..addPolygon(pontok, true), p);
   }
 
   /// Kör a padlón (sugár méterben), szakaszokból — a vágás így a
@@ -1721,9 +1912,27 @@ class _Court3DPainter extends CustomPainter {
 
     // Lövés-mérés: a pontból a két kapufáig húzott "lövő-háromszög" —
     // ennyi kaput lát a lövő —, és a kapu közepéig a távolság-vonal.
+    // Lövéstérkép: kitöltött korong a lövés helyén (csapatszín, az xG-vel
+    // növő sugár; gól telt + arany gyűrű, védés/mellé halvány).
+    for (final l in lovesek) {
+      final szin = l.home ? AppColors.home : AppColors.away;
+      _korong(canvas, Paint()..color = szin.withOpacity(l.gol ? 0.9 : 0.45),
+          l.x, l.y, l.r);
+      if (l.gol) {
+        _kor(
+            canvas,
+            Paint()
+              ..color = AppColors.gold
+              ..strokeWidth = 2.0,
+            l.x,
+            l.y,
+            l.r + 0.08);
+      }
+    }
+
     final mp = meres;
     if (mp != null) {
-      final g = shotGeometry(mp.dx, mp.dy);
+      final g = shotGeometry(mp.dx, mp.dy, leftGoal: meresBalKapu);
       final y1 = courtWidth / 2 - goalWidth / 2;
       final y2 = courtWidth / 2 + goalWidth / 2;
       final kek = Paint()
