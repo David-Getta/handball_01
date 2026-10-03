@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.156 óta)
 
+- **3D pálya: hőtérkép a padlón és kész kamera-állások** (új, böngészős/VR
+  és appbeli nézet): a Hőtérkép-választó (hazai / vendég / mindkettő) a
+  pályára fekteti, hol tartózkodott a csapat a meccsen — az elemzés
+  rácsa (20×10, 2 m-es cellák, csak a mért helyek), a cella a
+  legsűrűbbhöz mérten erősödik, a csapat színével; a parketta fölött, a
+  vonalak alatt, a figurák közt is olvasható. A böngészős nézet az
+  appbeli négy kész kamera-állást is megkapta (Lelátó, Kapu mögül,
+  Pálya-szint, Madártávlat). Őr-teszt: a böngésző rácsa cellánként
+  pontosan az elemzés cellába sorolását adja; widget-teszt a
+  választóra madártávlatból.
+
 - **3D pálya: lejátszás-sebesség és labda-nyom** (új, böngészős/VR és
   appbeli nézet): a böngészős nézet is kapott sebesség-választót
   (0,5× a jelenet-elemzéshez, 2–4× az átnézéshez — az appban eddig is

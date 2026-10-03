@@ -57,7 +57,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'id="lovesInfo"', "function lovesKattintas",
                 "function lovesFrissit", "lovesFrissit(ido)",
                 'id="sebesseg"', 'id="nyom"', "function nyomFrissit",
-                "ido + dt * sebesseg"):
+                "ido + dt * sebesseg", 'id="hoter"', "function hoRacs",
+                "function hoFest", 'data-n="madar"', "function nezet"):
         assert jel in oldal, jel
     # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
     assert '<link rel="icon" href="data:,">' in oldal
@@ -104,6 +105,38 @@ def test_a_tomor_adat_viszi_a_lovesterkepet():
         assert (x, y) == (s["x"], s["y"]) and abs(xg_ert - s["xg"]) < 1e-3
         assert kimenet in ("g", "v", "m") and goal_x in (0.0, 40.0)
         assert (kimenet == "g") == (s["outcome"] == "goal")
+
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_bongeszo_hoterkepe_a_backend_racsat_adja():
+    """A böngésző hőtérkép-rácsa (hoRacs) ugyanazt a cellába sorolást
+    végzi, mint az elemzés hőtérképe (`analytics._cell_index`: 20×10
+    cella, csak a MÉRT helyek) — a tömör adat (0,1 m-re kerekített)
+    kockáin futtatva, cellánként pontosan egyező számokkal."""
+    from handball.pipeline.analytics import _cell_index
+    from handball.pipeline.view3d_html import _compact_data, view3d_html
+
+    m = _meccs()
+    adat = _compact_data(m)
+    kod = _modul_szkript(view3d_html(m))
+    i0 = kod.index("function hoRacs("); i1 = kod.index("let hoRacsok")
+    js = ("const H = 40, W = 20, HO_X = 20, HO_Y = 10;\nconst frames = " +
+          json.dumps(adat["frames"]) + ";\n" + kod[i0:i1] +
+          "\nconsole.log(JSON.stringify([hoRacs(true), hoRacs(false)]));\n")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    hazai, vendeg = json.loads(r.stdout)
+    for js_r, hazai_e in ((hazai, 1), (vendeg, 0)):
+        py = [[0] * 20 for _ in range(10)]
+        for f in adat["frames"]:
+            for p in f[1]:
+                if p[0] != hazai_e or not p[3]:
+                    continue
+                ix, iy = _cell_index(p[1], p[2], 20, 10)
+                py[iy][ix] += 1
+        assert js_r["r"] == py, hazai_e
+        assert js_r["max"] == max(max(sor) for sor in py) > 0
 
 
 def _modul_szkript(oldal: str) -> str:
@@ -208,7 +241,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "LogicalKeyboardKey.keyO", "LogicalKeyboardKey.escape",
                 "identical(j, rejtett)", "substitutionLineX",
                 "_lovesKoppintas", "_lathatoLovesek", "class _LovesJel",
-                "fetchXg", "Lövéstérkép: ki", "_labdaNyom", "Labda-nyom"):
+                "fetchXg", "Lövéstérkép: ki", "_labdaNyom", "Labda-nyom",
+                "computeTeamHeatmap", "Hőtérkép: ki"):
         assert jel in kepernyo, jel
     # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).
     assert "0.22 + 0.5 *" in kepernyo and "0.22 + 0.5 * Math.min" in \

@@ -70,6 +70,20 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("hőtérkép-választó: a demó mindkét csapatára", (tester) async {
+    await _nyit(tester);
+    await tester.tap(find.text("Hőtérkép: ki"));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text("Mindkét csapat").last);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text("Mindkét csapat"), findsOneWidget);
+    // A kép továbbra is rajzol (nem dob kivételt a cellák vetítése).
+    await tester.tap(find.text("Madártávlat"));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("labda-nyom gomb: be/ki", (tester) async {
     await _nyit(tester);
     await tester.tap(find.text("Labda-nyom (3 mp)"));

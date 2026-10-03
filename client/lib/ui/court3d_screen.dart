@@ -20,6 +20,7 @@ import "package:flutter/material.dart";
 import "package:flutter/scheduler.dart";
 import "package:flutter/services.dart";
 
+import "../analytics/court_analytics.dart";
 import "../models/tracking.dart";
 import "../services/api_client.dart";
 import "../sim/demo_data.dart";
@@ -111,6 +112,11 @@ class _Court3DScreenState extends State<Court3DScreen>
   // LABDA-NYOM: a labda útja az utolsó _nyomS másodpercben (narancs vonal).
   bool _nyom = false;
   static const double _nyomS = 3.0;
+  // HŐTÉRKÉP: hol tartózkodott a csapat (az elemzés rácsa: 20×10 cella,
+  // csak a mért helyek) a pályára fektetve. Meccsenként egyszer számolva.
+  String _hoter = ""; // "" | "hazai" | "vendeg" | "mind"
+  Match? _hoMeccs;
+  Heatmap? _hoHazai, _hoVendeg;
   Size _nezetMeret = Size.zero;
 
   late final Ticker _ticker;
@@ -486,6 +492,30 @@ class _Court3DScreenState extends State<Court3DScreen>
     });
   }
 
+  /// A hőtérkép cellái a festőnek (a kiválasztott csapat(ok) rácsa, a
+  /// legsűrűbb cellához mért erősséggel). A rács meccsenként egyszer
+  /// készül; a mód-váltás csak a kiválogatást ismétli.
+  List<_HoCella> _hoCellak(Match m) {
+    if (_hoter.isEmpty) return const [];
+    if (!identical(_hoMeccs, m)) {
+      _hoMeccs = m;
+      _hoHazai = computeTeamHeatmap(m, Team.home);
+      _hoVendeg = computeTeamHeatmap(m, Team.away);
+    }
+    final cellak = <_HoCella>[];
+    for (final (hm, home) in [(_hoHazai, true), (_hoVendeg, false)]) {
+      if (hm == null || hm.maxCell <= 0) continue;
+      if (_hoter != "mind" && _hoter != (home ? "hazai" : "vendeg")) continue;
+      for (var iy = 0; iy < hm.binsY; iy++) {
+        for (var ix = 0; ix < hm.binsX; ix++) {
+          final e = hm.grid[iy][ix] / hm.maxCell;
+          if (e > 0) cellak.add(_HoCella(ix, iy, hm.binsX, hm.binsY, e, home));
+        }
+      }
+    }
+    return cellak;
+  }
+
   /// A labda útja az utolsó _nyomS másodpercben a lejátszófej előtt
   /// (pálya-méter), a kockák sorrendjében — a passz-sorozat és a lövés
   /// íve egyben látszik.
@@ -822,6 +852,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                       : _lovesValasztott!["team"] == "away",
                   falPontok: fal.$1,
                   nyom: _labdaNyom(m),
+                  hoCellak: _hoCellak(m),
                   lovesek: [
                     for (final l in _lathatoLovesek(m))
                       _LovesJel(
@@ -1102,6 +1133,37 @@ class _Court3DScreenState extends State<Court3DScreen>
               ),
             ],
           ]),
+        ),
+      ),
+      // Hőtérkép: hol tartózkodott a csapat (az elemzés rácsa a padlón).
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: _hoter.isNotEmpty
+                ? AppColors.accent.withOpacity(0.15)
+                : AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.borderStrong),
+          ),
+          child: DropdownButton<String>(
+            value: _hoter,
+            underline: const SizedBox.shrink(),
+            dropdownColor: AppColors.surface,
+            style: AppText.label.copyWith(fontSize: 11.5),
+            items: const [
+              DropdownMenuItem(value: "", child: Text("Hőtérkép: ki")),
+              DropdownMenuItem(value: "hazai", child: Text("Hazai hőtérkép")),
+              DropdownMenuItem(
+                  value: "vendeg", child: Text("Vendég hőtérkép")),
+              DropdownMenuItem(value: "mind", child: Text("Mindkét csapat")),
+            ],
+            onChanged: (v) {
+              setState(() => _hoter = v ?? "");
+              _focus.requestFocus();
+            },
+          ),
         ),
       ),
       Padding(
@@ -1519,6 +1581,15 @@ class _Labda {
   _Labda(this.x, this.y);
 }
 
+/// Egy hőtérkép-cella: rács-index és -méret, erősség (0–1), csapat.
+class _HoCella {
+  final int ix, iy, binsX, binsY;
+  final double erosseg;
+  final bool home;
+  const _HoCella(
+      this.ix, this.iy, this.binsX, this.binsY, this.erosseg, this.home);
+}
+
 /// Egy lövés a térképen: hely, sugár (méter), csapat, gól-e.
 class _LovesJel {
   final double x, y, r;
@@ -1595,6 +1666,8 @@ class _Court3DPainter extends CustomPainter {
   final List<_LovesJel> lovesek;
   // A labda útja az utolsó másodpercekben (pálya-méter, időrendben).
   final List<Offset> nyom;
+  // A hőtérkép cellái a padlón (a parketta fölött, a vonalak alatt).
+  final List<_HoCella> hoCellak;
   final _Jatekos? rejtett;
   _Court3DPainter(
       {required this.frame,
@@ -1608,6 +1681,7 @@ class _Court3DPainter extends CustomPainter {
       this.falPontok = const [],
       this.lovesek = const [],
       this.nyom = const [],
+      this.hoCellak = const [],
       this.rejtett});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
@@ -1914,6 +1988,29 @@ class _Court3DPainter extends CustomPainter {
               ..color = (sotet ? const Color(0xFF6E4728) : const Color(0xFF7A5030))
                   .withOpacity(0.55));
       }
+    }
+
+    // Hőtérkép-cellák: áttetsző, a csapat színével, a legsűrűbb cellához
+    // mért erősséggel — a parketta fölött, a vonalak alatt.
+    for (final c in hoCellak) {
+      final w = courtLength / c.binsX, h = courtWidth / c.binsY;
+      final x0 = c.ix * w, y0 = c.iy * h;
+      final sarkok = <Offset>[];
+      var jo = true;
+      for (final (dx, dy) in [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]) {
+        final (jb, fe, me) = _kamera(x0 + dx, y0 + dy, 0.005);
+        if (me < _kozel) {
+          jo = false;
+          break;
+        }
+        sarkok.add(_kepernyo(jb, fe, me));
+      }
+      if (!jo) continue;
+      canvas.drawPath(
+          Path()..addPolygon(sarkok, true),
+          Paint()
+            ..color = (c.home ? AppColors.home : AppColors.away)
+                .withOpacity(0.1 + 0.65 * c.erosseg));
     }
 
     // Pálya-vonalak (méretek: court_geometry — a szabálykönyvből).

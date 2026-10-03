@@ -206,6 +206,21 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
    </select></label>
  </div>
  <div id="lovesInfo"></div>
+ <div class="sor">
+  <label>Hőtérkép
+   <select id="hoter" title="Hol tartózkodott a csapat a meccsen (mért helyek, 2 m-es cellák)">
+    <option value="">ki</option>
+    <option value="hazai">hazai</option>
+    <option value="vendeg">vendég</option>
+    <option value="mind">mindkettő</option>
+   </select></label>
+ </div>
+ <div class="sor">
+  <button class="nezet" data-n="lelato">Lelátó</button>
+  <button class="nezet" data-n="kapu">Kapu mögül</button>
+  <button class="nezet" data-n="palya">Pálya-szint</button>
+  <button class="nezet" data-n="madar">Madártávlat</button>
+ </div>
 </div>
 <div id="sugo">Húzás — körülnézés · WASD — mozgás · R/F (C) — fel/le · Shift — gyors<br>
 Görgetés — előre ugrás (keringésben: közelítés) · O — keringés a pálya körül<br>
@@ -213,6 +228,7 @@ Dupla katt egy játékosra — az ő szemével, vele együtt (Esc kilép)<br>
 Katt a padlóra — lövés-mérés (távolság, kapu-szög) · Szóköz — lejátszás<br>
 Lövéstérkép: katt egy körre — odaugrik a lövéshez (kör = xG, arany gyűrű = gól)<br>
 Lent: sebesség (0,5–4×) · Labda-nyom — a labda útja az utolsó 3 mp-ben<br>
+Hőtérkép — hol tartózkodott a csapat (2 m-es cellák) · Nézet-gombok — kész kamera-állások<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="meres"></div>
@@ -810,6 +826,72 @@ function meresRajzol(x, y, kapu){
   meresElem.style.display = "block";
   document.getElementById("meresKi").onclick = meresTorles;
 }
+
+// ---- Hőtérkép: hol tartózkodott a csapat a meccsen -------------------
+// A pályára fektetett, áttetsző textúra: 20×10 cella (2 m), a cella
+// erőssége a MÉRT helyek száma a legsűrűbb cellához képest (ugyanaz a
+// rács, mint az elemzés hőtérképe). Egyszer számoljuk, a váltás csak
+// újrafesti a vásznat.
+const HO_X = 20, HO_Y = 10;
+const hoValaszto = document.getElementById("hoter");
+const hoVaszon = document.createElement("canvas"); hoVaszon.width = 400; hoVaszon.height = 200;
+const hoTextura = new THREE.CanvasTexture(hoVaszon);
+const hoSik = new THREE.Mesh(new THREE.PlaneGeometry(H, W),
+  new THREE.MeshBasicMaterial({map: hoTextura, transparent: true, depthWrite: false}));
+hoSik.rotation.x = -Math.PI/2; hoSik.position.set(H/2, 0.008, W/2); hoSik.visible = false;
+szinpad.add(hoSik);
+function hoRacs(hazai){
+  const r = Array.from({length: HO_Y}, () => new Array(HO_X).fill(0));
+  let max = 0;
+  for (const f of frames) for (const p of f[1]){
+    if (!!p[0] !== hazai || !p[3]) continue;
+    const ix = Math.min(HO_X-1, Math.max(0, Math.floor(p[1] / H * HO_X)));
+    const iy = Math.min(HO_Y-1, Math.max(0, Math.floor(p[2] / W * HO_Y)));
+    r[iy][ix]++; if (r[iy][ix] > max) max = r[iy][ix];
+  }
+  return {r, max};
+}
+let hoRacsok = null;
+function hoFest(){
+  const v = hoValaszto.value;
+  hoSik.visible = !!v;
+  if (!v) return;
+  if (!hoRacsok) hoRacsok = {hazai: hoRacs(true), vendeg: hoRacs(false)};
+  const g = hoVaszon.getContext("2d");
+  g.clearRect(0, 0, hoVaszon.width, hoVaszon.height);
+  const cw = hoVaszon.width / HO_X, ch = hoVaszon.height / HO_Y;
+  for (const [nev, rgb] of [["hazai", "76,154,255"], ["vendeg", "255,107,107"]]){
+    if (v !== "mind" && v !== nev) continue;
+    const {r, max} = hoRacsok[nev];
+    if (!max) continue;
+    for (let iy = 0; iy < HO_Y; iy++) for (let ix = 0; ix < HO_X; ix++){
+      const e = r[iy][ix] / max;
+      if (e <= 0) continue;
+      // A textúra teteje a pálya y = W széle (a sík a three x/z-re fekszik).
+      g.fillStyle = "rgba(" + rgb + "," + (0.1 + 0.65*e).toFixed(2) + ")";
+      g.fillRect(ix*cw, (HO_Y-1-iy)*ch, cw, ch);
+    }
+  }
+  hoTextura.needsUpdate = true;
+}
+hoValaszto.onchange = hoFest;
+
+// ---- Kész kamera-állások (az appbeli 3D pálya gombjainak párja) ------
+// Pálya-koordinátában (x, y, magasság, irány, dőlés) → a rig helye a
+// three-térben (x, h, W − y); az irány előjele a tükrözés miatt fordul.
+const NEZETEK = {
+  lelato: [20, -12, 9, 0, -0.5],
+  kapu:   [-6, 10, 2.5, Math.PI/2, -0.12],
+  palya:  [20, 4, 1.7, 0, 0],
+  madar:  [20, 10, 34, 0, -1.45],
+};
+function nezet(nev){
+  const [x, y, h, irany, doles] = NEZETEK[nev];
+  modValt("szabad");
+  rig.position.set(x, h, W - y);
+  yaw = -irany; pitch = doles;
+}
+for (const b of document.querySelectorAll("button.nezet")) b.onclick = () => nezet(b.dataset.n);
 
 // ---- Labda-nyom: a labda útja az utolsó NYOM_S másodpercben ----------
 // Narancs vonal a labda-magasságban: a passz-sorozat és a lövés íve
