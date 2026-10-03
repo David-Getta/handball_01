@@ -61,7 +61,9 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "function hoFest", 'data-n="madar"', "function nezet",
                 'id="jatekosHud"', "function tavTabla", "function hudFrissit",
                 "TAV_UGRAS_M = 3", 'id="passz"', "function passzFrissit",
-                "passzFrissit(ido)"):
+                "passzFrissit(ido)", 'id="jatekosKamera"',
+                "function kovetesFrissit", "kovetesFrissit(dt)",
+                'mod === "kovetes"'):
         assert jel in oldal, jel
     # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
     assert '<link rel="icon" href="data:,">' in oldal

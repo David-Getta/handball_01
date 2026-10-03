@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.156 óta)
 
+- **Böngészős 3D: Játékos-kamera** (új): az appbeli Játékos-kamera
+  párja a böngészős/VR nézetben — a választóból egy mezszámot kijelölve
+  a kamera a játékos mögé áll (4 m-re, 2,2 m magasan), a simított
+  haladási irányában, és a fejére néz; a zajos követés nem rángatja.
+  Húzás vagy WASD visszavált a szabad nézetre. A mezszámok a kockákból
+  jönnek, csapatonként rendezve. Headless Chromiumban ellenőrizve.
+
 - **3D pálya: passz-vonalak és passz-háló** (új, böngészős/VR és
   appbeli nézet): a Passzok-választó "élő" módban a futó passzt húzza
   az adótól a fogadóig mellmagasságban (egy másodpercig, halványodva —

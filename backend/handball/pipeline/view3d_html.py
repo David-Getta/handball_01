@@ -204,6 +204,9 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
  <div class="sor">
   <button id="keringGomb" title="Keringés a pálya körül (O)">Keringés</button>
   <button id="jatekosKi" style="display:none" title="Vissza a szabad nézetbe (Esc)">Játékos-nézet ✕</button>
+  <select id="jatekosKamera" title="Játékos-kamera: a kamera egy mezszámot követ hátulról (az appbeli Játékos-kamera párja)">
+   <option value="">Játékos-kamera: ki</option>
+  </select>
  </div>
  <div class="sor">
   <label>Védekezés
@@ -262,6 +265,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
 <div id="sugo">Húzás — körülnézés · WASD — mozgás · R/F (C) — fel/le · Shift — gyors<br>
 Görgetés — előre ugrás (keringésben: közelítés) · O — keringés a pálya körül<br>
 Dupla katt egy játékosra — az ő szemével, vele együtt (Esc kilép); fent: a sebessége és a megtett útja<br>
+Játékos-kamera — egy mezszám hátulról, simítva követve (húzás/WASD visszavált)<br>
 Katt a padlóra — lövés-mérés (távolság, kapu-szög) · Szóköz — lejátszás<br>
 Lövéstérkép: katt egy körre — odaugrik a lövéshez (kör = xG, arany gyűrű = gól)<br>
 Lent: sebesség (0,5–4×) · Labda-nyom — a labda útja az utolsó 3 mp-ben<br>
@@ -635,6 +639,9 @@ function rajzol(t){
 //           közelítés. WASD-re szabad módba vált (aki mozog, vezetni akar).
 // "jatekos": a kiválasztott játékos SZEMÉVEL, vele együtt halad (dupla
 //           kattintás egy figurára); húzás — körülnéz, Esc — kilép.
+// "kovetes": JÁTÉKOS-KAMERA — egy mezszámot hátulról, 4 m-ről, 2,2 m
+//           magasból, simítva követ (az appbeli Játékos-kamera párja);
+//           húzás vagy WASD visszavált szabadra.
 let mod = "szabad";
 let yaw = 0, pitch = 0;
 const CEL = new THREE.Vector3(H/2, 0, W/2);          // a pálya közepe (three-tér)
@@ -659,11 +666,68 @@ function modValt(uj){
     rig.position.y = Math.max(rig.position.y, 1.6);
   }
   if (uj !== "jatekos"){ kovet = null; jatekosHud.style.display = "none"; }
+  if (uj === "szabad" && mod === "kovetes"){ yaw = rig.rotation.y; pitch = kamera.rotation.x; }
+  if (uj !== "kovetes"){ kovetKam = null; jatekosKameraValaszto.value = ""; }
   mod = uj;
   keringGomb.classList.toggle("be", mod === "kering");
   jatekosKiGomb.style.display = mod === "jatekos" ? "" : "none";
 }
 keringGomb.onclick = () => modValt(mod === "kering" ? "szabad" : "kering");
+
+// ---- Játékos-kamera: egy mezszám hátulról követve ---------------------
+// A mezszámok a kockákból (csapatonként, rendezve); a kamera a játékos
+// mögé áll a simított haladási irányában, és a fejére néz. A zajos
+// követés ne rángassa: erős simítás az irányon és a helyen is.
+const jatekosKameraValaszto = document.getElementById("jatekosKamera");
+let kovetKam = null;  // {hazai, mez, ix, iy, ex, ey}
+{
+  const mezek = {1: new Set(), 0: new Set()};
+  for (const f of frames) for (const p of f[1]) if (p[5]) mezek[p[0]].add(p[5]);
+  for (const cs of [1, 0]){
+    for (const mez of [...mezek[cs]].sort((a, b) => a - b)){
+      const o = document.createElement("option");
+      o.value = (cs ? "h" : "v") + mez;
+      o.textContent = (cs ? ADAT.home : ADAT.away) + " " + mez;
+      jatekosKameraValaszto.appendChild(o);
+    }
+  }
+}
+jatekosKameraValaszto.onchange = () => {
+  const v = jatekosKameraValaszto.value;
+  if (!v){ if (mod === "kovetes") modValt("szabad"); return; }
+  modValt("kovetes");
+  kovetKam = {hazai: v[0] === "h", mez: parseInt(v.slice(1), 10), ix: 0, iy: 0, ex: null, ey: null};
+  jatekosKameraValaszto.value = v;
+  if (!megy){ megy = true; lejatszasGomb.textContent = "⏸"; }
+};
+function kovetesFrissit(dt){
+  if (mod !== "kovetes" || !kovetKam) return;
+  const cel = allas.find(s => s.hazai === kovetKam.hazai && s.mez === kovetKam.mez);
+  if (!cel) return;
+  const k = kovetKam;
+  if (k.ex !== null && dt > 0){
+    const vx = (cel.x - k.ex) / dt, vy = (cel.y - k.ey) / dt, seb = Math.hypot(vx, vy);
+    if (seb > 0.6){
+      const ks = clamp(dt * 1.5, 0, 1);
+      k.ix += (vx / seb - k.ix) * ks; k.iy += (vy / seb - k.iy) * ks;
+      const h = Math.hypot(k.ix, k.iy);
+      if (h > 1e-6){ k.ix /= h; k.iy /= h; }
+    }
+  }
+  k.ex = cel.x; k.ey = cel.y;
+  // Cél-hely pálya-térben (a játékos mögött 4 m, 2,2 m magasan) → three.
+  const cx = cel.x - k.ix * 4.0, cy = cel.y - k.iy * 4.0;
+  const ka = clamp(dt * 3.0, 0, 1);
+  rig.position.x += (cx - rig.position.x) * ka;
+  rig.position.z += ((W - cy) - rig.position.z) * ka;
+  rig.position.y += (2.2 - rig.position.y) * ka;
+  if (!fest.xr.isPresenting){
+    // A fejére néz: az előre-irány three-ben (−sin yaw, −cos yaw).
+    const dx = cel.x - rig.position.x, dz = (W - cel.y) - rig.position.z, dy = 1.3 - rig.position.y;
+    rig.rotation.y = Math.atan2(-dx, -dz);
+    kamera.rotation.set(Math.atan2(dy, Math.hypot(dx, dz)), 0, 0);
+  }
+}
 jatekosKiGomb.onclick = () => modValt("szabad");
 
 // Asztali irányítás: billentyűk.
@@ -716,6 +780,7 @@ vaszon.addEventListener("pointermove", e => {
     jatekosNez.yaw -= dx * 0.004;
     jatekosNez.pitch = clamp(jatekosNez.pitch - dy * 0.004, -1.2, 1.2);
   } else {
+    if (mod === "kovetes") modValt("szabad");  // aki húz, vezetni akar
     yaw -= dx * 0.004;
     pitch = clamp(pitch - dy * 0.004, -1.45, 1.45);
   }
@@ -745,7 +810,7 @@ function zoom(arany){
   // arany > 1: távolodás. Keringésben a sugár változik; szabad módban
   // előre/hátra ugrás a nézés irányában ("dash").
   if (mod === "kering"){ kering.r = clamp(kering.r * arany, 4, 80); return; }
-  if (mod === "jatekos") return;
+  if (mod === "jatekos" || mod === "kovetes") return;
   const lep = -Math.log(arany) * 12;
   const irany = new THREE.Vector3();
   kamera.getWorldDirection(irany);
@@ -1197,7 +1262,7 @@ function mozgas(dt){
     if (!fest.xr.isPresenting){ rig.rotation.y = kering.theta; kamera.rotation.set(-kering.phi, 0, 0); }
     return;
   }
-  if (mod === "jatekos") return;  // a kovetFrissit viszi a kamerát
+  if (mod === "jatekos" || mod === "kovetes") return;  // a kovet(es)Frissit viszi a kamerát
   const seb = (gombok.has("ShiftLeft")||gombok.has("ShiftRight")) ? 12 : 5;
   const ex = -Math.sin(yaw), ez = -Math.cos(yaw);
   const jx = Math.cos(yaw), jz = -Math.sin(yaw);
@@ -1234,7 +1299,7 @@ fest.setAnimationLoop(() => {
   if (megy){ ido = Math.min(veg, ido + dt * sebesseg);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); felirat(ido);
+  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); felirat(ido);
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);
