@@ -55,7 +55,9 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 '"KeyC"', "LineDashedMaterial", "computeLineDistances",
                 "kapufaIv(bal, 9)", "Kapu-szög", 'id="lovesek"',
                 'id="lovesInfo"', "function lovesKattintas",
-                "function lovesFrissit", "lovesFrissit(ido)"):
+                "function lovesFrissit", "lovesFrissit(ido)",
+                'id="sebesseg"', 'id="nyom"', "function nyomFrissit",
+                "ido + dt * sebesseg"):
         assert jel in oldal, jel
     # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
     assert '<link rel="icon" href="data:,">' in oldal
@@ -206,7 +208,7 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "LogicalKeyboardKey.keyO", "LogicalKeyboardKey.escape",
                 "identical(j, rejtett)", "substitutionLineX",
                 "_lovesKoppintas", "_lathatoLovesek", "class _LovesJel",
-                "fetchXg", "Lövéstérkép: ki"):
+                "fetchXg", "Lövéstérkép: ki", "_labdaNyom", "Labda-nyom"):
         assert jel in kepernyo, jel
     # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).
     assert "0.22 + 0.5 *" in kepernyo and "0.22 + 0.5 * Math.min" in \

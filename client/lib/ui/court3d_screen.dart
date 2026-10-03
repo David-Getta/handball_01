@@ -108,6 +108,9 @@ class _Court3DScreenState extends State<Court3DScreen>
   List<Map<String, dynamic>> _lovesek = const [];
   String _lovesTerkep = ""; // "" | "mind" | "eddig" | "hazai" | "vendeg"
   Map<String, dynamic>? _lovesValasztott; // a mérés-dobozban megnevezett lövés
+  // LABDA-NYOM: a labda útja az utolsó _nyomS másodpercben (narancs vonal).
+  bool _nyom = false;
+  static const double _nyomS = 3.0;
   Size _nezetMeret = Size.zero;
 
   late final Ticker _ticker;
@@ -483,6 +486,22 @@ class _Court3DScreenState extends State<Court3DScreen>
     });
   }
 
+  /// A labda útja az utolsó _nyomS másodpercben a lejátszófej előtt
+  /// (pálya-méter), a kockák sorrendjében — a passz-sorozat és a lövés
+  /// íve egyben látszik.
+  List<Offset> _labdaNyom(Match m) {
+    if (!_nyom || m.frames.isEmpty) return const [];
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m);
+    final elso = _tIndex(m, most - _nyomS * fps);
+    final pontok = <Offset>[];
+    for (var i = elso; i < m.frames.length && m.frames[i].t <= most; i++) {
+      final l = m.frames[i].ball;
+      if (l != null) pontok.add(Offset(l.x, l.y));
+    }
+    return pontok;
+  }
+
   /// A lejátszófejnél látható lövések (a térkép módja szerint).
   List<Map<String, dynamic>> _lathatoLovesek(Match m) {
     if (_lovesTerkep.isEmpty) return const [];
@@ -802,6 +821,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                       ? null
                       : _lovesValasztott!["team"] == "away",
                   falPontok: fal.$1,
+                  nyom: _labdaNyom(m),
                   lovesek: [
                     for (final l in _lathatoLovesek(m))
                       _LovesJel(
@@ -1082,6 +1102,23 @@ class _Court3DScreenState extends State<Court3DScreen>
               ),
             ],
           ]),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: _nyom ? AppColors.accent : AppColors.surfaceAlt,
+            foregroundColor:
+                _nyom ? AppColors.onAccent : AppColors.textSecondary,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          ),
+          onPressed: () {
+            setState(() => _nyom = !_nyom);
+            _focus.requestFocus();
+          },
+          child: Text(_nyom ? "Labda-nyom: BE" : "Labda-nyom (3 mp)",
+              style: const TextStyle(fontSize: 11.5)),
         ),
       ),
       // Lövéstérkép: a meccs lövései a padlón (kör = xG, arany gyűrű = gól).
@@ -1556,6 +1593,8 @@ class _Court3DPainter extends CustomPainter {
   final bool? meresBalKapu;
   final List<Offset> falPontok;
   final List<_LovesJel> lovesek;
+  // A labda útja az utolsó másodpercekben (pálya-méter, időrendben).
+  final List<Offset> nyom;
   final _Jatekos? rejtett;
   _Court3DPainter(
       {required this.frame,
@@ -1568,6 +1607,7 @@ class _Court3DPainter extends CustomPainter {
       this.meresBalKapu,
       this.falPontok = const [],
       this.lovesek = const [],
+      this.nyom = const [],
       this.rejtett});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
@@ -1928,6 +1968,23 @@ class _Court3DPainter extends CustomPainter {
             l.y,
             l.r + 0.08);
       }
+    }
+
+    // Labda-nyom: narancs vonal labda-magasságban, a régebbi szakasz
+    // halványabb — az irány így olvasható (honnan hová).
+    for (var i = 0; i + 1 < nyom.length; i++) {
+      final a = (0.25 + 0.75 * (i + 1) / nyom.length).clamp(0.0, 1.0);
+      _vonal(
+          canvas,
+          Paint()
+            ..color = AppColors.ball.withOpacity(a)
+            ..strokeWidth = 2.2,
+          nyom[i].dx,
+          nyom[i].dy,
+          0.45,
+          nyom[i + 1].dx,
+          nyom[i + 1].dy,
+          0.45);
     }
 
     final mp = meres;

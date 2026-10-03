@@ -70,6 +70,17 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("labda-nyom gomb: be/ki", (tester) async {
+    await _nyit(tester);
+    await tester.tap(find.text("Labda-nyom (3 mp)"));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text("Labda-nyom: BE"), findsOneWidget);
+    await tester.tap(find.text("Labda-nyom: BE"));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text("Labda-nyom (3 mp)"), findsOneWidget);
+    await _zar(tester);
+  });
+
   testWidgets("lövéstérkép: összegző, koppintás egy körre — odaugrik",
       (tester) async {
     await _nyit(tester);

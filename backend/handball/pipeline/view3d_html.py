@@ -212,6 +212,7 @@ Görgetés — előre ugrás (keringésben: közelítés) · O — keringés a p
 Dupla katt egy játékosra — az ő szemével, vele együtt (Esc kilép)<br>
 Katt a padlóra — lövés-mérés (távolság, kapu-szög) · Szóköz — lejátszás<br>
 Lövéstérkép: katt egy körre — odaugrik a lövéshez (kör = xG, arany gyűrű = gól)<br>
+Lent: sebesség (0,5–4×) · Labda-nyom — a labda útja az utolsó 3 mp-ben<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="meres"></div>
@@ -222,6 +223,13 @@ VR-headsetben: a lenti "ENTER VR" gomb</div>
  <button id="kov" title="Következő esemény">⏭</button>
  <input type="range" id="csuszka" min="0" max="0" step="0.01" value="0">
  <span id="ido">0:00</span>
+ <select id="sebesseg" title="Lejátszás sebessége">
+  <option value="0.5">0,5×</option>
+  <option value="1" selected>1×</option>
+  <option value="2">2×</option>
+  <option value="4">4×</option>
+ </select>
+ <label title="A labda útja az utolsó 3 másodpercben"><input type="checkbox" id="nyom"> Labda-nyom</label>
 </div>
 <script type="importmap">{"imports":{
  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -460,6 +468,11 @@ lejatszasGomb.onclick = () => { megy = !megy; lejatszasGomb.textContent = megy ?
 if (megy) lejatszasGomb.textContent = "⏸";
 csuszka.value = ido;
 csuszka.oninput = () => { ido = parseFloat(csuszka.value); };
+// Lejátszás sebessége (0,5–4×): a lassítás a jelenet-elemzésé, a
+// gyorsítás az átnézésé.
+const sebessegValaszto = document.getElementById("sebesseg");
+let sebesseg = 1;
+sebessegValaszto.onchange = () => { sebesseg = parseFloat(sebessegValaszto.value) || 1; };
 // Esemény-ugrás (⏮/⏭ és [ / ]): a jelenet előtt 4 mp-cel, lejátszva —
 // mint az appból érkezve. Egy másodpercnyi holt sáv, hogy az épp nézett
 // esemény ne "ragadjon". A felirat a jelenet közben mondja, mi történik.
@@ -600,7 +613,7 @@ jatekosKiGomb.onclick = () => modValt("szabad");
 // Asztali irányítás: billentyűk.
 const gombok = new Set();
 addEventListener("keydown", e => {
-  if (e.target && e.target.tagName === "SELECT") return;
+  if (e.target && (e.target.tagName === "SELECT" || e.target.tagName === "INPUT")) return;
   if (e.code === "Space"){ lejatszasGomb.onclick(); e.preventDefault(); return; }
   if (e.code === "BracketLeft"){ esemenyUgras(-1); return; }
   if (e.code === "BracketRight"){ esemenyUgras(1); return; }
@@ -798,6 +811,28 @@ function meresRajzol(x, y, kapu){
   document.getElementById("meresKi").onclick = meresTorles;
 }
 
+// ---- Labda-nyom: a labda útja az utolsó NYOM_S másodpercben ----------
+// Narancs vonal a labda-magasságban: a passz-sorozat és a lövés íve
+// egyben látszik, nem csak a pillanatnyi hely.
+const NYOM_S = 3;
+const nyomKapcsolo = document.getElementById("nyom");
+const nyomGeom = new THREE.BufferGeometry();
+const nyomVonal = new THREE.Line(nyomGeom,
+  new THREE.LineBasicMaterial({color:0xe8a33d, transparent:true, opacity:0.85}));
+nyomVonal.visible = false;
+szinpad.add(nyomVonal);
+function nyomFrissit(t){
+  if (!nyomKapcsolo.checked || !frames.length){ nyomVonal.visible = false; return; }
+  const pontok = [];
+  for (let i = keres(Math.max(0, t - NYOM_S)); i < frames.length && frames[i][0] <= t; i++){
+    const l = frames[i][2];
+    if (l) pontok.push(new THREE.Vector3(l[0], 0.45, W - l[1]));
+  }
+  if (pontok.length < 2){ nyomVonal.visible = false; return; }
+  nyomGeom.setFromPoints(pontok);
+  nyomVonal.visible = true;
+}
+
 // ---- Lövéstérkép: a meccs lövései a padlón --------------------------
 // Egy lövés = egy kör a lövés helyén: a csapat színével, a sugara az
 // xG-vel nő (nagy kör = nagy helyzet), a gólt arany gyűrű jelzi, a
@@ -989,10 +1024,10 @@ const idoCimke = document.getElementById("ido");
 fest.setAnimationLoop(() => {
   const most = performance.now();
   const dt = Math.min(0.1, (most - utolso)/1000); utolso = most;
-  if (megy){ ido = Math.min(veg, ido + dt);
+  if (megy){ ido = Math.min(veg, ido + dt * sebesseg);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); falFrissit(ido); lovesFrissit(ido); felirat(ido);
+  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); felirat(ido);
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);

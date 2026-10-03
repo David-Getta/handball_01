@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.156 óta)
 
+- **3D pálya: lejátszás-sebesség és labda-nyom** (új, böngészős/VR és
+  appbeli nézet): a böngészős nézet is kapott sebesség-választót
+  (0,5× a jelenet-elemzéshez, 2–4× az átnézéshez — az appban eddig is
+  volt); és mindkét nézetben bekapcsolható a labda-nyom: a labda útja
+  az utolsó 3 másodpercben narancs vonalként, labda-magasságban (az
+  appban a régebbi szakasz halványabb) — a passz-sorozat és a lövés
+  íve egyben látszik, nem csak a pillanatnyi hely. Headless Chromiumban
+  mérve: 4×-en 2 mp alatt ~8 mp, 0,5×-en 1 mp telik; widget-teszt a
+  gomb be/ki állására.
+
 - **3D pálya: lövéstérkép** (új, böngészős/VR és appbeli nézet): a meccs
   minden lövése a padlón, a lövés helyén — kék a hazai, piros a vendég;
   a kör az xG-vel nő (nagy kör = nagy helyzet), a gólt arany gyűrű
