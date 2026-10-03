@@ -261,6 +261,10 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
   <button class="nezet" data-n="palya">Pálya-szint</button>
   <button class="nezet" data-n="madar">Madártávlat</button>
  </div>
+ <div class="sor">
+  <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
+  <span id="linkInfo"></span>
+ </div>
 </div>
 <div id="sugo">Húzás — körülnézés · WASD — mozgás · R/F (C) — fel/le · Shift — gyors<br>
 Görgetés — előre ugrás (keringésben: közelítés) · O — keringés a pálya körül<br>
@@ -271,6 +275,7 @@ Lövéstérkép: katt egy körre — odaugrik a lövéshez (kör = xG, arany gy�
 Lent: sebesség (0,5–4×) · Labda-nyom — a labda útja az utolsó 3 mp-ben<br>
 Hőtérkép — hol tartózkodott a csapat (2 m-es cellák) · Nézet-gombok — kész kamera-állások<br>
 Passzok — a futó passz vonala (adótól a fogadóig), vagy a csapat passz-hálója a padlón<br>
+Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="meres"></div>
@@ -1078,10 +1083,53 @@ const NEZETEK = {
 function nezet(nev){
   const [x, y, h, irany, doles] = NEZETEK[nev];
   modValt("szabad");
+  utolsoNezet = nev;
   rig.position.set(x, h, W - y);
   yaw = -irany; pitch = doles;
 }
 for (const b of document.querySelectorAll("button.nezet")) b.onclick = () => nezet(b.dataset.n);
+
+// ---- Megosztható link: a mostani jelenet címként -----------------------
+// ?t=349&nezet=madar&kamera=h7&hoter=mind&loves=mind&passz=hazai&fal=elo
+// — az oldal nyitáskor visszaállítja (a t-t a lejátszó-indítás már
+// kezeli). Az edző így EGY jelenetet küld, nem egy meccset.
+const URL_PARAM = new URLSearchParams(location.search);
+let utolsoNezet = null;
+function linkEpit(){
+  const q = new URLSearchParams();
+  q.set("t", Math.round(ido));
+  if (mod === "kovetes" && kovetKam) q.set("kamera", (kovetKam.hazai ? "h" : "v") + kovetKam.mez);
+  else if (utolsoNezet && mod === "szabad") q.set("nezet", utolsoNezet);
+  for (const [nev, el] of [["hoter", hoValaszto], ["loves", lovesValaszto],
+                           ["passz", passzValaszto], ["fal", falValaszto]]){
+    if (el.value) q.set(nev, el.value);
+  }
+  if (falOldal.value !== "auto") q.set("falOldal", falOldal.value);
+  if (nyomKapcsolo.checked) q.set("nyom", "1");
+  if (sebesseg !== 1) q.set("seb", String(sebesseg));
+  return location.origin + location.pathname + "?" + q.toString();
+}
+const linkInfo = document.getElementById("linkInfo");
+document.getElementById("linkGomb").onclick = async () => {
+  const url = linkEpit();
+  try { await navigator.clipboard.writeText(url); linkInfo.textContent = "másolva"; }
+  catch (e) { linkInfo.textContent = url; }
+  setTimeout(() => { linkInfo.textContent = ""; }, 4000);
+};
+function linkAlkalmaz(){
+  const v = (k) => URL_PARAM.get(k) || "";
+  for (const [nev, el] of [["hoter", hoValaszto], ["loves", lovesValaszto],
+                           ["passz", passzValaszto], ["fal", falValaszto]]){
+    if (v(nev) && [...el.options].some(o => o.value === v(nev))){ el.value = v(nev); el.onchange && el.onchange(); }
+  }
+  if (v("falOldal")) falOldal.value = v("falOldal");
+  if (v("nyom") === "1") nyomKapcsolo.checked = true;
+  if (v("seb")){ sebessegValaszto.value = v("seb"); sebessegValaszto.onchange(); }
+  if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
+  if (v("kamera") && [...jatekosKameraValaszto.options].some(o => o.value === v("kamera"))){
+    jatekosKameraValaszto.value = v("kamera"); jatekosKameraValaszto.onchange();
+  }
+}
 
 // ---- Labda-nyom: a labda útja az utolsó NYOM_S másodpercben ----------
 // Narancs vonal a labda-magasságban: a passz-sorozat és a lövés íve
@@ -1293,6 +1341,7 @@ function vrMozgas(dt){
 }
 
 const idoCimke = document.getElementById("ido");
+linkAlkalmaz();
 fest.setAnimationLoop(() => {
   const most = performance.now();
   const dt = Math.min(0.1, (most - utolso)/1000); utolso = most;

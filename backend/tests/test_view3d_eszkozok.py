@@ -63,7 +63,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "TAV_UGRAS_M = 3", 'id="passz"', "function passzFrissit",
                 "passzFrissit(ido)", 'id="jatekosKamera"',
                 "function kovetesFrissit", "kovetesFrissit(dt)",
-                'mod === "kovetes"'):
+                'mod === "kovetes"', 'id="linkGomb"', "function linkEpit",
+                "function linkAlkalmaz", "linkAlkalmaz();"):
         assert jel in oldal, jel
     # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
     assert '<link rel="icon" href="data:,">' in oldal
@@ -324,7 +325,9 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "fetchXg", "Lövéstérkép: ki", "_labdaNyom", "Labda-nyom",
                 "computeTeamHeatmap", "Hőtérkép: ki", "_tavTabla",
                 "_tavUgrasM = 3.0", "km/h", "_passzok", "Passzok: ki",
-                "class _PasszVonal", "_passzVonalak"):
+                "class _PasszVonal", "_passzVonalak", 'q["kamera"]',
+                'q["hoter"]', 'q["loves"]', 'q["passz"]', 'q["fal"]',
+                "_mostT(m) / fpsB", "this.lovesTerkep"):
         assert jel in kepernyo, jel
     # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).
     assert "0.22 + 0.5 *" in kepernyo and "0.22 + 0.5 * Math.min" in \

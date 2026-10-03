@@ -36,7 +36,12 @@ class Court3DScreen extends StatefulWidget {
   /// Ha eseményből jövünk ("Megnézem 3D-ben"), a jelenet kezdete
   /// másodpercben: a lejátszó ide ugrik, és TV-kamerával indul.
   final double? startS;
-  const Court3DScreen({super.key, this.matchId, this.startS});
+
+  /// Lövés/gól sorból jövünk: a lövéstérkép induló módja ("mind"), hogy
+  /// a jelenet lövése a többi közt, a helyén látszódjon.
+  final String? lovesTerkep;
+  const Court3DScreen(
+      {super.key, this.matchId, this.startS, this.lovesTerkep});
 
   @override
   State<Court3DScreen> createState() => _Court3DScreenState();
@@ -256,6 +261,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _lovesek = lovesek;
         _passzok = passzok;
         _lovesValasztott = null;
+        if (widget.lovesTerkep != null) _lovesTerkep = widget.lovesTerkep!;
         _meres = null;
         _szemevel = false;
         _kering = false;
@@ -859,12 +865,25 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// biztonságos környezetet kér, a localhost az — Quest-féle headsetről
   /// USB-kábellel és "adb reverse"-szel érhető el.
   Future<void> _bongeszos3d() async {
-    // A 3D fül AKTUÁLIS pillanatát visszük át (?t=mp): a böngészős
-    // nézet ugyanott folytatja, ahol az appban tartasz.
+    // A 3D fül AKTUÁLIS pillanatát és beállításait visszük át: a
+    // böngészős nézet ugyanott, ugyanazzal a kamerával és rétegekkel
+    // folytatja, ahol az appban tartasz. Az idő a kocka t címkéjéből
+    // (videó-mp) — a lejátszófej lista-INDEX, vágott meccsen nem ugyanaz.
     final m = _match;
     final fpsB = (m != null && m.meta.fps > 0) ? m.meta.fps : 25.0;
-    final tS = (_playhead / fpsB).toStringAsFixed(1);
-    final url = "${_api.baseUrl}/matches/$_matchId/view3d?t=$tS";
+    final tS = (m == null ? 0.0 : _mostT(m) / fpsB).toStringAsFixed(1);
+    final q = <String, String>{"t": tS};
+    if (_kovMez != null) q["kamera"] = "${_kovTeam == "home" ? "h" : "v"}$_kovMez";
+    if (_hoter.isNotEmpty) q["hoter"] = _hoter;
+    if (_lovesTerkep.isNotEmpty) q["loves"] = _lovesTerkep;
+    if (_passz.isNotEmpty) q["passz"] = _passz;
+    if (_fal.isNotEmpty) q["fal"] = _fal;
+    if (_falOldal != "auto") q["falOldal"] = _falOldal;
+    if (_nyom) q["nyom"] = "1";
+    if (_speed != 1.0) q["seb"] = _speed.toString();
+    final url = Uri.parse("${_api.baseUrl}/matches/$_matchId/view3d")
+        .replace(queryParameters: q)
+        .toString();
     try {
       if (Platform.isMacOS) {
         await Process.run("open", [url]);

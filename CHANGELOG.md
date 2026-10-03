@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.156 óta)
 
+- **3D: megosztható jelenet-link** (új): a böngészős nézet "Link
+  másolása" gombja a MOSTANI jelenetet adja címként — idő, kamera-állás
+  vagy Játékos-kamera, és a bekapcsolt rétegek (hőtérkép, lövéstérkép,
+  passzok, védekezés-fal és kapu, labda-nyom, sebesség) —, és a cím
+  megnyitva mindezt visszaállítja: az edző egy JELENETET küld, nem egy
+  meccset. Az app "Böngészős 3D / VR" gombja ugyanígy a saját
+  beállításait viszi át, és az időt a kocka címkéjéből veszi (vágott
+  meccsen a lejátszófej indexe rossz jelenetre vitt). Headless
+  Chromiumban ellenőrizve: a paraméterek visszaállnak, a vágólapra a
+  teljes cím kerül. Az Események lista lövés/gól sorának "Megnézem
+  3D-ben" gombja a lövéstérképet is bekapcsolja: a jelenet lövése a
+  többi közt, a helyén látszik.
+
 - **Böngészős 3D: Játékos-kamera** (új): az appbeli Játékos-kamera
   párja a böngészős/VR nézetben — a választóból egy mezszámot kijelölve
   a kamera a játékos mögé áll (4 m-re, 2,2 m magasan), a simított

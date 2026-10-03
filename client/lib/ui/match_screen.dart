@@ -1456,7 +1456,12 @@ class _MatchScreenState extends State<MatchScreen> {
               } else if (v == "3d") {
                 Navigator.of(context).pushReplacement(MaterialPageRoute(
                     builder: (_) => Court3DScreen(
-                        matchId: _mid, startS: t / fps)));
+                        matchId: _mid,
+                        startS: t / fps,
+                        // Lövés/gól sorból a lövéstérkép is bekapcsol.
+                        lovesTerkep: (type == "shot" || type == "goal")
+                            ? "mind"
+                            : null)));
               }
             },
             itemBuilder: (_) => [
