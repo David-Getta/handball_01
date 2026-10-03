@@ -98,6 +98,12 @@ class _Court3DScreenState extends State<Court3DScreen>
   double _szemIrany = 0; // simított haladás-irány (yaw)
   double _szemYaw = 0, _szemPitch = -0.05; // körülnézés a fejben
   Offset? _dupla; // a dupla koppintás helye
+  // A játékos megtett útja kockánként összegezve (méter), mezszámonként
+  // — a HUD-nak; a lépésenkénti ugrás-szűrő MÉTER-korlát (követés-ugrás
+  // nem számít, a sűrű remegés nem esik ki). Meccsenként egyszer.
+  static const double _tavUgrasM = 3.0;
+  Match? _tavMeccs;
+  final Map<String, List<double>> _tavTabla = {};
   // LÖVÉS-MÉRÉS: koppintás a padlóra → távolság, kapu-szög, sáv.
   Offset? _meres;
   // VÉDEKEZÉS-PANEL: tankönyvi fal a kapu előtt / az élő fal.
@@ -450,6 +456,57 @@ class _Court3DScreenState extends State<Court3DScreen>
 
   _Vetites _vetites() =>
       _Vetites(_cx, _cy, _cz, _yaw, _pitch, _nezetMeret);
+
+  /// A mezszámos játékos megtett útja a kockák mentén (méter, kockánként
+  /// a kezdettől). A tábla meccsenként, mezszámonként egyszer készül.
+  List<double> _megtettUt(Match m, bool home, int mez) {
+    if (!identical(_tavMeccs, m)) {
+      _tavMeccs = m;
+      _tavTabla.clear();
+    }
+    final kulcs = "${home ? "h" : "v"}$mez";
+    return _tavTabla.putIfAbsent(kulcs, () {
+      final ki = <double>[];
+      double? ex, ey;
+      var ossz = 0.0;
+      final team = home ? Team.home : Team.away;
+      for (final f in m.frames) {
+        for (final p in f.players) {
+          if (p.team != team || p.jerseyNumber != mez) continue;
+          if (ex != null) {
+            final d = math.sqrt((p.x - ex) * (p.x - ex) + (p.y - ey!) * (p.y - ey));
+            if (d <= _tavUgrasM) ossz += d;
+          }
+          ex = p.x;
+          ey = p.y;
+          break;
+        }
+        ki.add(ossz);
+      }
+      return ki;
+    });
+  }
+
+  /// A játékos-nézet HUD-ja: kinek a szemével, a sebessége (km/h) és a
+  /// megtett útja eddig (csak mezszámmal — azonosító nélkül nincs út).
+  String? _szemHud(Match m, _Allapot all) {
+    if (!_szemevel) return null;
+    final cel = _szemCel(all);
+    if (cel == null) return null;
+    final csapat = _szemHome ? m.meta.homeTeam : m.meta.awayTeam;
+    final mez = _szemMez;
+    var s = "$csapat${mez != null ? " #$mez" : ""} · "
+        "${(cel.speed * 3.6).toStringAsFixed(1).replaceAll(".", ",")} km/h";
+    if (mez != null && m.frames.isNotEmpty) {
+      final ut = _megtettUt(m, _szemHome, mez);
+      final i = _playhead.floor().clamp(0, ut.length - 1);
+      final d = ut[i];
+      s += d >= 1000
+          ? " · ${(d / 1000).toStringAsFixed(2).replaceAll(".", ",")} km eddig"
+          : " · ${d.round()} m eddig";
+    }
+    return s;
+  }
 
   /// Keringés be/ki — onnan indul, ahol a kamera áll (nem ugrik).
   void _keringValt() {
@@ -866,6 +923,15 @@ class _Court3DScreenState extends State<Court3DScreen>
                 ),
               ))),
               Positioned(right: 10, top: 10, child: _nezetGombok()),
+              if (_szemHud(m, allapot) != null)
+                Positioned(
+                  top: 12,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                      child: _infoDoboz([_szemHud(m, allapot)!],
+                          AppColors.accent)),
+                ),
               if (_meres != null)
                 Positioned(left: 12, top: 12, child: _meresDoboz(_meres!)),
               if (fal.$2.isNotEmpty)

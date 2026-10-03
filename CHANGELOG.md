@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.156 óta)
 
+- **3D pálya: a játékos szemével — sebesség és megtett út** (új,
+  böngészős/VR és appbeli nézet): akinek a szemével nézünk, annak a
+  HUD-ja a kép tetején mutatja a pillanatnyi sebességét (km/h) és az
+  addig megtett útját ("Szeged #7 · 14,2 km/h · 1,18 km eddig") — a
+  megtett út a mezszám mentén kockánként összegezve, a 3 m-nél nagyobb
+  lépés (követés-ugrás) kihagyva; mezszám nélkül csak a sebesség.
+  Őr-teszt (node): a böngésző összege a Python-referenciával egyezik, az
+  ugrás tényleg kimarad.
+
 - **3D pálya: hőtérkép a padlón és kész kamera-állások** (új, böngészős/VR
   és appbeli nézet): a Hőtérkép-választó (hazai / vendég / mindkettő) a
   pályára fekteti, hol tartózkodott a csapat a meccsen — az elemzés

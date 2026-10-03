@@ -171,6 +171,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
  #falInfo,#lovesInfo{opacity:.92;line-height:1.35}
  #meres{position:fixed;left:12px;bottom:100px;padding:8px 12px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;line-height:1.45}
  #meres button{margin-left:8px;padding:2px 8px}
+ #jatekosHud{position:fixed;left:50%;top:12px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.85);font-size:14px;font-variant-numeric:tabular-nums;display:none}
 </style></head><body>
 <div id="hud"><b>__CIM__</b></div>
 <div id="eszkoz">
@@ -224,7 +225,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
 </div>
 <div id="sugo">Húzás — körülnézés · WASD — mozgás · R/F (C) — fel/le · Shift — gyors<br>
 Görgetés — előre ugrás (keringésben: közelítés) · O — keringés a pálya körül<br>
-Dupla katt egy játékosra — az ő szemével, vele együtt (Esc kilép)<br>
+Dupla katt egy játékosra — az ő szemével, vele együtt (Esc kilép); fent: a sebessége és a megtett útja<br>
 Katt a padlóra — lövés-mérés (távolság, kapu-szög) · Szóköz — lejátszás<br>
 Lövéstérkép: katt egy körre — odaugrik a lövéshez (kör = xG, arany gyűrű = gól)<br>
 Lent: sebesség (0,5–4×) · Labda-nyom — a labda útja az utolsó 3 mp-ben<br>
@@ -232,6 +233,7 @@ Hőtérkép — hol tartózkodott a csapat (2 m-es cellák) · Nézet-gombok —
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="meres"></div>
+<div id="jatekosHud"></div>
 <div id="felirat"></div>
 <div id="vez">
  <button id="elozo" title="Előző esemény">⏮</button>
@@ -543,7 +545,7 @@ function rajzol(t){
           q = (b[1] && b[1][k] && b[1][k][0] === p[0]) ? b[1][k] : p;
     const x = p[1] + (q[1]-p[1])*ar, y = p[2] + (q[2]-p[2])*ar;
     cs.position.set(x, 0, W - y);
-    allas.push({k, x, y, hazai: !!p[0], kapus: !!p[4], mez: p[5] || 0});
+    allas.push({k, x, y, hazai: !!p[0], kapus: !!p[4], mez: p[5] || 0, seb: 0});
     szinez(cs, !!p[0], !!p[4]);
     // Mezszám-címke: csak ismert számnál; a textúra csapatonként/számonként egy.
     const mezszam = p[5] || 0, u = cs.userData;
@@ -559,6 +561,7 @@ function rajzol(t){
     // kiszűrve); álló játékos tartja az előző irányát.
     const dx = q[1]-p[1], dy = q[2]-p[2], dt = Math.max(0.05, b[0]-a[0]);
     const seb = Math.hypot(dx, dy)/dt;
+    allas[allas.length-1].seb = seb <= 8 ? seb : 0;
     if (seb > 0.3 && seb <= 8){ cs.rotation.y = Math.atan2(dx, -dy); }
     lendit(cs, seb <= 8 ? seb : 0, t, k);
     cs.scale.setScalar(p[3] ? 1 : 0.92);
@@ -618,7 +621,7 @@ function modValt(uj){
     yaw = rig.rotation.y; pitch = jatekosNez.pitch;
     rig.position.y = Math.max(rig.position.y, 1.6);
   }
-  if (uj !== "jatekos") kovet = null;
+  if (uj !== "jatekos"){ kovet = null; jatekosHud.style.display = "none"; }
   mod = uj;
   keringGomb.classList.toggle("be", mod === "kering");
   jatekosKiGomb.style.display = mod === "jatekos" ? "" : "none";
@@ -741,6 +744,43 @@ function jatekosValasztas(cx, cy){
     (a.mez ? " #" + a.mez : "") + " szemével ✕";
   if (!megy){ megy = true; lejatszasGomb.textContent = "⏸"; }
 }
+// A játékos megtett útja kockánként összegezve (méter): a mezszám a
+// fogódzó (azonosító nélkül nincs út); a lépésenkénti ugrás-szűrő
+// MÉTER-korlát (TAV_UGRAS_M), hogy a követés-ugrás ne számítson, a
+// sűrű remegés viszont ne essen ki. Meccsenként egyszer, mezszámonként.
+const TAV_UGRAS_M = 3;
+const tavTablak = new Map();
+function tavTabla(hazai, mez){
+  const kulcs = (hazai ? "h" : "v") + mez;
+  if (tavTablak.has(kulcs)) return tavTablak.get(kulcs);
+  const t = new Float64Array(frames.length);
+  const cs = hazai ? 1 : 0;
+  let ex = null, ey = null, ossz = 0;
+  for (let i = 0; i < frames.length; i++){
+    const p = frames[i][1].find(q => q[0] === cs && q[5] === mez);
+    if (p){
+      if (ex !== null){
+        const d = Math.hypot(p[1] - ex, p[2] - ey);
+        if (d <= TAV_UGRAS_M) ossz += d;
+      }
+      ex = p[1]; ey = p[2];
+    }
+    t[i] = ossz;
+  }
+  tavTablak.set(kulcs, t);
+  return t;
+}
+const jatekosHud = document.getElementById("jatekosHud");
+function hudFrissit(cel){
+  if (!kovet || !cel){ jatekosHud.style.display = "none"; return; }
+  let s = (kovet.hazai ? ADAT.home : ADAT.away) + (kovet.mez ? " #" + kovet.mez : "") +
+    " · " + szam1(cel.seb * 3.6) + " km/h";
+  if (kovet.mez){
+    const m = tavTabla(kovet.hazai, kovet.mez)[keres(ido)];
+    s += " · " + (m >= 1000 ? (m/1000).toFixed(2).replace(".", ",") + " km" : Math.round(m) + " m") + " eddig";
+  }
+  jatekosHud.textContent = s; jatekosHud.style.display = "block";
+}
 // A követett ember megkeresése az új kockán: azonos mezszám (ha van),
 // különben az előző helyéhez legközelebbi csapattárs 3 m-en belül —
 // a követés-azonosítók töredezettek, a mezszám és a hely a fogódzó.
@@ -758,6 +798,7 @@ function kovetFrissit(dt){
       if (d < legjobb){ legjobb = d; cel = s; }
     }
   }
+  hudFrissit(cel);
   if (cel){
     kovet.x = cel.x; kovet.y = cel.y; kovet.k = cel.k;
     // Az irány simítva követi a figura haladását (a zajos követés ne

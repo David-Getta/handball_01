@@ -58,7 +58,9 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "function lovesFrissit", "lovesFrissit(ido)",
                 'id="sebesseg"', 'id="nyom"', "function nyomFrissit",
                 "ido + dt * sebesseg", 'id="hoter"', "function hoRacs",
-                "function hoFest", 'data-n="madar"', "function nezet"):
+                "function hoFest", 'data-n="madar"', "function nezet",
+                'id="jatekosHud"', "function tavTabla", "function hudFrissit",
+                "TAV_UGRAS_M = 3"):
         assert jel in oldal, jel
     # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
     assert '<link rel="icon" href="data:,">' in oldal
@@ -137,6 +139,51 @@ def test_a_bongeszo_hoterkepe_a_backend_racsat_adja():
                 py[iy][ix] += 1
         assert js_r["r"] == py, hazai_e
         assert js_r["max"] == max(max(sor) for sor in py) > 0
+
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_bongeszo_megtett_utja_a_python_osszeget_adja():
+    """A játékos-nézet HUD-jának megtett útja (tavTabla): kockánként
+    összegzett elmozdulás a mezszám szerint, a 3 m-nél nagyobb lépés
+    (követés-ugrás) kihagyva — a Python-referenciával egyezik, a
+    kihagyott lépés tényleg kimarad."""
+    from handball.pipeline.view3d_html import _compact_data, view3d_html
+
+    m = _meccs()
+    # Egy ugrás a hazai 7-esnek a 20. kockán (követés-hiba): nem számít.
+    m.frames[20].players[0].x += 10.0
+    adat = _compact_data(m)
+    kod = _modul_szkript(view3d_html(m))
+    i0 = kod.index("const TAV_UGRAS_M"); i1 = kod.index("const jatekosHud")
+    js = ("const frames = " + json.dumps(adat["frames"]) + ";\n" + kod[i0:i1] +
+          "\nconsole.log(JSON.stringify([Array.from(tavTabla(true, 7)),"
+          " Array.from(tavTabla(false, 2))]));\n")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    hazai7, vendeg2 = json.loads(r.stdout)
+
+    def ref(cs, mez):
+        import math
+        ossz, ex, ki = 0.0, None, []
+        for f in adat["frames"]:
+            p = next((q for q in f[1] if q[0] == cs and q[5] == mez), None)
+            if p is not None:
+                if ex is not None:
+                    d = math.hypot(p[1] - ex[0], p[2] - ex[1])
+                    if d <= 3:
+                        ossz += d
+                ex = (p[1], p[2])
+            ki.append(ossz)
+        return ki
+
+    assert all(abs(a - b) < 1e-9 for a, b in zip(hazai7, ref(1, 7)))
+    assert all(abs(a - b) < 1e-9 for a, b in zip(vendeg2, ref(0, 2)))
+    # A 7-es 50 kockán 0,02 m-t lép kockánként (a tömör adat 0,1 m-re
+    # kerekít: 0,8 m), az ugrás 10 m-e és a visszaugrás nélkül — nem
+    # 20 m fölött.
+    assert 0.5 < hazai7[-1] < 1.0, hazai7[-1]
+    assert vendeg2[-1] == 0.0  # a fal áll
 
 
 def _modul_szkript(oldal: str) -> str:
@@ -242,7 +289,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "identical(j, rejtett)", "substitutionLineX",
                 "_lovesKoppintas", "_lathatoLovesek", "class _LovesJel",
                 "fetchXg", "Lövéstérkép: ki", "_labdaNyom", "Labda-nyom",
-                "computeTeamHeatmap", "Hőtérkép: ki"):
+                "computeTeamHeatmap", "Hőtérkép: ki", "_tavTabla",
+                "_tavUgrasM = 3.0", "km/h"):
         assert jel in kepernyo, jel
     # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).
     assert "0.22 + 0.5 *" in kepernyo and "0.22 + 0.5 * Math.min" in \
