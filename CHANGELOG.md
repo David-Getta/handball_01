@@ -16,7 +16,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   a bizonyíték ereje szerint sorrendben; kevés mintánál üres. Minden
   felderítés-válaszban (egy meccs és összevont) `defence_breakpoints`
   néven, és a nyomtatható (PDF-be menthető) felderítő jelentésben is.
-  Teszt: rangsor, kevés minta, a valódi felderítésből is megszólal.
+  KIT is megmondja: a leglazább emberfogójuk oldala, a védő, aki előtt
+  a legtöbb lövés megy be, a hetes-okozó és a fegyelmezetlen védő —
+  mezszámmal. Teszt: rangsor, kevés minta, a védőnkénti tételek, a
+  valódi felderítésből is megszólal.
 
 - **Böngészős 3D: TV-kamera** (új): az appbeli TV-kamera párja — a T
   gomb (vagy a TV-kamera gomb) az oldalvonal felől, 4,5 m magasról a

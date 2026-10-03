@@ -2480,7 +2480,7 @@ def _key_players(match: Match, team: Team, config: TacticsConfig, top: int = 4) 
 # "Hol törhető fel a védekezésük": a bizonyíték erejének alsó határa
 # (pont), ami alatt egy tétel nem kerül a listára, és a lista hossza.
 DBP_MIN_POINTS = 1.0
-DBP_MAX_ITEMS = 6
+DBP_MAX_ITEMS = 8
 
 
 def defence_breakpoints(rep: ScoutingReport) -> list[dict]:
@@ -2603,6 +2603,64 @@ def defence_breakpoints(rep: ScoutingReport) -> list[dict]:
                   "sok kapura lövés: a helyzeteikhez képest sokat kap",
                   f"{gsax:+.1f} gól/meccs a várthoz képest",
                   min(4.0, -gsax))
+    except Exception:
+        pass
+
+    # — KIT támadjatok: a védőnkénti rétegek — a leglazább emberfogó, a
+    # védő, aki előtt a legtöbb lövés megy be, a hetes-okozó és a
+    # fegyelmezetlen védő. A küszöbök a kulcs-mondatokéival azonosak.
+    def _ki(sor):
+        return (f"{sor['jersey']}-es mezszámú" if sor.get("jersey") is not None
+                else f"{sor.get('player_id')} azonosítójú")
+
+    try:
+        if rep.markers:
+            laza = max(rep.markers, key=lambda m_: m_["dist_sum"] / m_["frames"])
+            laza_avg = laza["dist_sum"] / laza["frames"]
+            if laza["frames"] >= 50 and laza_avg >= 2.5:
+                tetel(f"a(z) {laza['player_id']}-es védőjük oldalán",
+                      "egy-egy elleni játék az ő oldalára — lazán őrzi az "
+                      "emberét, ott van tér",
+                      f"átlag {laza_avg:.1f} m-re áll az emberétől",
+                      1.0 + (laza_avg - 2.5) * 2.0)
+    except Exception:
+        pass
+    try:
+        if rep.tdf_shots >= 4:
+            atlag = 100.0 * rep.tdf_goals / rep.tdf_shots
+            gyenge = None
+            for sor in (rep.targeted_defenders or []):
+                if sor["shots"] < 4:
+                    continue
+                gap = 100.0 * sor["goals"] / sor["shots"] - atlag
+                if gap >= 15.0 and (gyenge is None or gap > gyenge[1]):
+                    gyenge = (sor, gap)
+            if gyenge is not None:
+                sor, gap = gyenge
+                tetel(f"a(z) {_ki(sor)} védőjük előtt",
+                      "a befejezéseket oda vinni: elzárással rá, és az ő "
+                      "oldalán a beálló",
+                      f"előtte megy be a legtöbb lövés ({sor['goals']}/"
+                      f"{sor['shots']}, a csapatátlaguk felett {gap:.0f} "
+                      "százalékponttal)", 1.0 + gap / 15.0)
+    except Exception:
+        pass
+    try:
+        hetes = rep.seven_conceders or []
+        if hetes and hetes[0]["conceded"] >= 2:
+            tetel(f"a(z) {_ki(hetes[0])} védőjüknél",
+                  "betörés és beugrás ellene — vagy áthaladtok, vagy hetest ér",
+                  f"{hetes[0]['conceded']} hetest okozott",
+                  1.0 + hetes[0]["conceded"] / 2.0)
+    except Exception:
+        pass
+    try:
+        if rep.susp_players and rep.susp_players[0]["suspensions"] >= 2:
+            top = rep.susp_players[0]
+            tetel(f"a(z) {top['player_id']}. játékosuk ellen egy az egyben",
+                  "nyomás alatt szabálytalankodik — a következő belemenése "
+                  "újabb emberelőny",
+                  f"{top['suspensions']} kiállítás", 1.0 + top["suspensions"] / 2.0)
     except Exception:
         pass
 

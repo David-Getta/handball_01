@@ -73,3 +73,31 @@ def test_a_valodi_felderitesbol_is_a_jelentesbe_kerul():
     assert d["defence_breakpoints"], d["weaknesses"]
     assert all({"hol", "mivel", "miert", "pont"} <= set(t)
                for t in d["defence_breakpoints"])
+
+
+def test_a_vedonkenti_tetelek_is_megszolalnak():
+    """KIT támadjatok: a leglazább emberfogó, a védő, aki előtt a
+    legtöbb lövés megy be, a hetes-okozó és a fegyelmezetlen védő — a
+    kulcs-mondatok küszöbeivel; alattuk nincs tétel."""
+    rep = ScoutingReport(team="away", team_name="Ellenfél", matches=1)
+    rep.markers = [{"player_id": 4, "dist_sum": 300.0, "frames": 100},
+                   {"player_id": 6, "dist_sum": 80.0, "frames": 100}]
+    rep.tdf_shots = 20
+    rep.tdf_goals = 8
+    rep.targeted_defenders = [
+        {"player_id": 3, "jersey": 3, "shots": 6, "goals": 5},
+        {"player_id": 5, "jersey": 5, "shots": 6, "goals": 2}]
+    rep.seven_conceders = [{"player_id": 9, "jersey": 9, "conceded": 3}]
+    rep.susp_players = [{"player_id": 11, "suspensions": 2}]
+    holok = [t["hol"] for t in defence_breakpoints(rep)]
+    assert any("4-es védőjük oldalán" in h for h in holok), holok
+    assert any("3-es mezszámú védőjük előtt" in h for h in holok), holok
+    assert any("9-es mezszámú védőjüknél" in h for h in holok), holok
+    assert any("11. játékosuk ellen" in h for h in holok), holok
+    # Küszöb alatt: szoros emberfogó (0,8 m), kevés lövés, egy hetes.
+    rep2 = ScoutingReport(team="away", team_name="Rendben", matches=1)
+    rep2.markers = [{"player_id": 6, "dist_sum": 80.0, "frames": 100}]
+    rep2.tdf_shots = 3
+    rep2.seven_conceders = [{"player_id": 9, "conceded": 1}]
+    rep2.susp_players = [{"player_id": 11, "suspensions": 1}]
+    assert defence_breakpoints(rep2) == []
