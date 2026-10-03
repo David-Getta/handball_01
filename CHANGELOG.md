@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.157 óta)
 
+- **Hol törhető fel a védekezésük** (új, felderítés): a felderítő
+  jelentés tetején egy rangsorolt kártya, ami tételenként megmondja,
+  HOL (a fal mely sávjában / mely helyzetben), MIVEL (milyen támadó
+  eszközzel) és MIÉRT (a mért bizonyíték) törhető fel az ellenfél
+  védekezése — a fal-rés és hol nyílik, a szabadon hagyott lövők, az
+  átjárható fal-oldal, a lyukas zóna, a kapus gyenge oldala és formája,
+  a késő visszazárás, végül az alak ellenszere. A már mért
+  védekezés-rétegek kivonata, a kulcs-mondatokkal azonos küszöbökkel,
+  a bizonyíték ereje szerint sorrendben; kevés mintánál üres. Minden
+  felderítés-válaszban (egy meccs és összevont) `defence_breakpoints`
+  néven, és a nyomtatható (PDF-be menthető) felderítő jelentésben is.
+  Teszt: rangsor, kevés minta, a valódi felderítésből is megszólal.
+
 - **Böngészős 3D: TV-kamera** (új): az appbeli TV-kamera párja — a T
   gomb (vagy a TV-kamera gomb) az oldalvonal felől, 4,5 m magasról a
   labdát tartja képben, x-ben simítva követi, mint a közvetítés; húzás

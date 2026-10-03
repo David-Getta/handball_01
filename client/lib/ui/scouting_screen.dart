@@ -300,6 +300,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     // egy üresbe ugró gomb rosszabb, mint a hiánya.
     final jumps = <(String, IconData)>[
       if (hasNarrative) ("Így játszanak", Icons.menu_book_outlined),
+      if (((r["defence_breakpoints"] as List?) ?? const []).isNotEmpty)
+        ("Hol törhető fel a védekezésük", Icons.lock_open),
       ("Hogyan játssz ellenük", Icons.gps_fixed),
       ("Erősségek / gyengeségek", Icons.compare_arrows),
       ("Mutatók", Icons.grid_view),
@@ -346,6 +348,15 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                 // felkészülésre, a konkrétat kell hogy elsőként lássa.
                 if (_matchup.isNotEmpty) ...[
                   _matchupCard(),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                // A védekezés feltörése: HOL / MIVEL / MIÉRT — a százas
+                // kulcs-lista védekezés-specifikus, rangsorolt kivonata.
+                if (((r["defence_breakpoints"] as List?) ?? const [])
+                    .isNotEmpty) ...[
+                  KeyedSubtree(
+                      key: _sectionKey("Hol törhető fel a védekezésük"),
+                      child: _breakCard(r)),
                   const SizedBox(height: AppSpacing.lg),
                 ],
                 KeyedSubtree(
@@ -594,6 +605,69 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
             ),
           _moreToggle(keys.length, _allKeys,
               () => setState(() => _allKeys = !_allKeys)),
+        ],
+      ),
+    );
+  }
+
+  /// Hol törhető fel a védekezésük: tételenként HOL (sáv/helyzet), MIVEL
+  /// (támadó eszköz) és MIÉRT (a mért bizonyíték), a backend
+  /// `defence_breakpoints` rangsorában (a legerősebb bizonyíték elöl).
+  Widget _breakCard(Map<String, dynamic> r) {
+    final tetelek = ((r["defence_breakpoints"] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.away.withOpacity(0.55)),
+      ),
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.lock_open, size: 18, color: AppColors.away),
+            const SizedBox(width: 8),
+            Text("HOL TÖRHETŐ FEL A VÉDEKEZÉSÜK",
+                style: AppText.sectionLabel.copyWith(color: AppColors.away)),
+          ]),
+          const SizedBox(height: 4),
+          Text("A legerősebb bizonyíték elöl — hol, mivel, és miért.",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+          const SizedBox(height: AppSpacing.md),
+          for (var i = 0; i < tetelek.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 22,
+                  height: 22,
+                  margin: const EdgeInsets.only(right: 10, top: 1),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.away.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Text("${i + 1}",
+                      style: AppText.value
+                          .copyWith(fontSize: 12, color: AppColors.away)),
+                ),
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Hol: ${tetelek[i]["hol"]}",
+                            style: AppText.value.copyWith(fontSize: 14)),
+                        Text("Mivel: ${tetelek[i]["mivel"]}",
+                            style: AppText.value.copyWith(
+                                fontSize: 13, color: AppColors.textSecondary)),
+                        Text("Miért: ${tetelek[i]["miert"]}",
+                            style: AppText.label.copyWith(fontSize: 12)),
+                      ]),
+                ),
+              ]),
+            ),
         ],
       ),
     );

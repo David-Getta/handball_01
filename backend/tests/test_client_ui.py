@@ -39,6 +39,9 @@ _DART_ROW_KEYS = {
     "breaks", "caveat", "chances", "count", "def_frames", "depth_sum_m",
     "frames", "jersey", "narrative", "player_id", "setter_id",
     "shooter_id", "sprints", "takes",
+    # A report_to_dict számolt kulcsa (nem jelentés-mező): a védekezés
+    # feltörésének rangsorolt kivonata.
+    "defence_breakpoints",
 }
 
 def test_kliens_kulcsok_letezo_mezok():

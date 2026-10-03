@@ -258,6 +258,26 @@ def with_toc(html: str, min_sections: int = TOC_MIN_SECTIONS) -> str:
     return html  # nincs fejléc — inkább ne nyúljunk hozzá
 
 
+def _breakpoints_block(rep) -> str:
+    """"Hol törhető fel a védekezésük": a felderítés rangsorolt kivonata
+    (scouting.defence_breakpoints) sorszámozott Hol / Mivel / Miért
+    sorokkal — üres listánál nincs blokk (nem ígérünk ítéletet 0-ból)."""
+    try:
+        from .scouting import defence_breakpoints
+        tetelek = defence_breakpoints(rep)
+    except Exception:
+        tetelek = []
+    if not tetelek:
+        return ""
+    sorok = "".join(
+        f"<li><b>Hol:</b> {escape(t['hol'])}<br>"
+        f"<b>Mivel:</b> {escape(t['mivel'])}<br>"
+        f"<span class=\"miert\">Miért: {escape(t['miert'])}</span></li>"
+        for t in tetelek)
+    return (f'<div class="keys break"><h2>Hol törhető fel a védekezésük</h2>'
+            f'<ol>{sorok}</ol></div>')
+
+
 def _rows(items: list, empty: str) -> str:
     """Felsorolás <li>-kbe, escape-elve; üres listánál szürke tájékoztató sor."""
     if not items:
@@ -759,6 +779,8 @@ def scouting_report_html(rep: ScoutingReport,
   {("<h2>Meccsterv (a kettőnk párosítása)</h2><ul>"
      + "".join(f"<li>{escape(p_)}</li>" for p_ in matchup) + "</ul>")
     if matchup else ""}
+
+  {_breakpoints_block(rep)}
 
   <div class="keys">
     <h2>Hogyan játssz ellenük</h2>

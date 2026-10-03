@@ -2477,6 +2477,152 @@ def _key_players(match: Match, team: Team, config: TacticsConfig, top: int = 4) 
     return rows[:top]
 
 
+# "Hol törhető fel a védekezésük": a bizonyíték erejének alsó határa
+# (pont), ami alatt egy tétel nem kerül a listára, és a lista hossza.
+DBP_MIN_POINTS = 1.0
+DBP_MAX_ITEMS = 6
+
+
+def defence_breakpoints(rep: ScoutingReport) -> list[dict]:
+    """Hol és mivel törhető fel a felderített csapat VÉDEKEZÉSE — egy
+    rangsorolt lista a már mért védekezés-rétegekből (fal-rés, szabadon
+    hagyott lövők, átjárható fal-oldal, lyukas zóna, a kapus gyenge
+    oldala és formája, a visszazárás). A szöveges kulcsok ("Hogyan
+    játssz ellenük") százas listájából ez a védekezés-specifikus,
+    sorrendbe tett kivonat: minden tétel megmondja, HOL (a pálya mely
+    sávjában / mely helyzetben), MIVEL (milyen támadó eszközzel) és
+    MIÉRT (a mért bizonyíték). A küszöbök a kulcs-mondatokéival
+    azonosak; a sorrend a bizonyíték ereje (pont).
+
+    Visszatérés: [{"hol", "mivel", "miert", "pont"}] a legerősebbtől,
+    legfeljebb DBP_MAX_ITEMS; üres, ha nincs elég minta (sose 0-ból
+    mondott ítélet)."""
+    tetelek: list[dict] = []
+
+    def tetel(hol, mivel, miert, pont):
+        if pont >= DBP_MIN_POINTS:
+            tetelek.append({"hol": hol, "mivel": mivel, "miert": miert,
+                            "pont": round(float(pont), 2)})
+
+    # — Fal-rés: a legnagyobb köz két szomszédos védő közt, és hol nyílik.
+    try:
+        from .defense import DGAP_MIN_FRAMES, DGAP_WIDE_M, DGAP_ZONE_SHARE_PCT
+        if rep.dgap_frames >= DGAP_MIN_FRAMES and rep.dgap_sum_m > 0:
+            avg = rep.dgap_sum_m / rep.dgap_frames
+            zona, share = None, 0.0
+            if rep.dgap_zones:
+                zona, n = max(rep.dgap_zones.items(), key=lambda kv: kv[1])
+                share = 100.0 * n / rep.dgap_frames
+                if share < DGAP_ZONE_SHARE_PCT:
+                    zona = None
+            if avg >= DGAP_WIDE_M:
+                tetel(f"a {zona} sávban (a fal nézőpontjából)" if zona
+                      else "a fal közeiben (nincs állandó sáv)",
+                      "lendületből induló betörés a résbe, elzárás a rés "
+                      "MELLÉ, hogy ne záródjon; ha a védő kilép, kiosztás "
+                      "a beállóra",
+                      f"átlag {avg:.1f} m a legnagyobb rés"
+                      + (f", {share:.0f}%-ban ott nyílik" if zona else ""),
+                      2.0 + (avg - DGAP_WIDE_M) + (share / 50.0 if zona else 0))
+            elif zona:
+                tetel(f"a {zona} sávban (a fal nézőpontjából)",
+                      "a figurát arra az oldalra építeni, elzárással a "
+                      "rés mellé",
+                      f"a faluk zárt ({avg:.1f} m), de a rés {share:.0f}%-ban "
+                      "ott nyílik", 1.0 + share / 50.0)
+    except Exception:
+        pass
+
+    # — Szabadon hagyott lövők.
+    if rep.def_shots_against >= 4:
+        free_pct = 100.0 * rep.def_free_shots / rep.def_shots_against
+        if free_pct >= 40.0:
+            tetel("9 m-en, a körbejátszás végén",
+                  "türelmes körbejátszás a tiszta lövésig, átlövés — a lövő "
+                  "gyakran marad őrizetlen",
+                  f"a lövők {free_pct:.0f}%-át szabadon hagyják "
+                  f"({rep.def_free_shots}/{rep.def_shots_against})",
+                  free_pct / 20.0)
+        # — Lyukas zóna: ahonnan a legtöbb gólt kapják.
+        if rep.def_zones:
+            zona, v = max(rep.def_zones.items(),
+                          key=lambda kv: (kv[1].get("goals", 0),
+                                          kv[1].get("shots", 0)))
+            if v.get("goals", 0) >= 2:
+                tetel(f"{zona}", "ide szervezett befejezés (a figura "
+                      "záró lövése ebből a zónából)",
+                      f"{v['goals']} kapott gól innen ({v.get('shots', 0)} "
+                      "lövésből)", min(5.0, 1.0 + v["goals"] / 2.0))
+
+    # — Átjárható fal-oldal.
+    wings = rep.csb_left + rep.csb_right
+    if wings >= 8:
+        pct = 100.0 * max(rep.csb_left, rep.csb_right) / wings
+        if pct >= 65.0:
+            oldal = "bal" if rep.csb_left >= rep.csb_right else "jobb"
+            tetel(f"a faluk {oldal} oldalán (a fal nézőpontjából)",
+                  "oda szervezett befejezés: szélső–átlövő váltás, 2:2, és "
+                  "onnan széthúzni a segítő-csúszásukat",
+                  f"a szélső-sávos kapott lövések {pct:.0f}%-a arról jön "
+                  f"({max(rep.csb_left, rep.csb_right)}/{wings})",
+                  (pct - 50.0) / 10.0)
+
+    # — A kapus gyenge oldala.
+    gw = rep.gw_bal + rep.gw_kozep + rep.gw_jobb
+    if gw >= 6:
+        tally = {"bal": rep.gw_bal, "közép": rep.gw_kozep, "jobb": rep.gw_jobb}
+        gyenge = max(tally, key=lambda k: tally[k])
+        pct = 100.0 * tally[gyenge] / gw
+        if pct >= 45.0:
+            tetel(f"a kapu {gyenge} oldala (a kapus szemszögéből)",
+                  "a befejezők tudatosan arra az oldalra célozzanak",
+                  f"oda kapták a gólok {pct:.0f}%-át ({tally[gyenge]}/{gw})",
+                  pct / 25.0)
+
+    # — Gyenge visszazárás: labdaszerzés után.
+    if rep.transition_turnovers >= 4 and rep.transition_goals_against >= 2:
+        pct = 100.0 * rep.transition_goals_against / rep.transition_turnovers
+        tetel("labdaszerzés után, az első hullámban",
+              "azonnali indítás, lerohanás — a visszazárásuk késik",
+              f"a labdavesztéseik {pct:.0f}%-a gyors kapott gól "
+              f"({rep.transition_goals_against}/{rep.transition_turnovers})",
+              pct / 20.0)
+
+    # — A kapus formája: bizonytalan, vagy a vártnál többet kap.
+    if rep.gk_on_target >= 4:
+        save_pct = 100.0 * rep.gk_saves / rep.gk_on_target
+        if save_pct <= 20.0:
+            tetel("a kapura — bármely zónából",
+                  "vállalni a kapura lövést, a rossz helyzetből is",
+                  f"{save_pct:.0f}% védés ({rep.gk_saves}/{rep.gk_on_target})",
+                  (40.0 - save_pct) / 10.0)
+    try:
+        gsax = rep.gk_xg_prevented / max(1, rep.matches)
+        if gsax <= -1.0 and rep.gk_on_target >= 4:
+            tetel("a kapura — a kis esélyű lövés is",
+                  "sok kapura lövés: a helyzeteikhez képest sokat kap",
+                  f"{gsax:+.1f} gól/meccs a várthoz képest",
+                  min(4.0, -gsax))
+    except Exception:
+        pass
+
+    # — Az ALAK ellenszere — a leggyengébb bizonyíték, csak kiegészítésnek.
+    alak = {"6-0": ("a 9 m-es sáv és a beúszás", "9 m-es lövés a kicsalt "
+                    "védő mellett, beúszó a beállóra"),
+            "5-1": ("az előretolt védő mögött", "az előretolt védő "
+                    "kicselezése, gyors lefordulás a résbe"),
+            "3-2-1": ("a beálló és a szélső rések", "a beálló terhelése, "
+                      "szélső–beálló kapcsolat"),
+            "4-2": ("a két kilépő védő mögött", "gyors oldalváltás, a "
+                    "kilépés mögé beúszás")}.get(rep.defense_main)
+    if alak and rep.attacks >= 5:
+        tetel(alak[0], alak[1], f"főleg {rep.defense_main}-ban védekeznek",
+              1.0)
+
+    tetelek.sort(key=lambda t: -t["pont"])
+    return tetelek[:DBP_MAX_ITEMS]
+
+
 def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     """Edzői kulcsok: erősségek, gyengeségek, és "hogyan játssz ellenük"."""
     strengths, weaknesses, keys = [], [], []
@@ -23985,6 +24131,12 @@ def report_to_dict(rep: ScoutingReport) -> dict:
     d["narrative"] = scouting_narrative(rep)
     # Mennyire hihető a jelentés alapanyaga (None = nincs mit mondani).
     d["caveat"] = scouting_caveat(rep)
+    # Hol és mivel törhető fel a védekezésük — rangsorolt kivonat; hibája
+    # nem viheti el a jelentést.
+    try:
+        d["defence_breakpoints"] = defence_breakpoints(rep)
+    except Exception:
+        d["defence_breakpoints"] = []
     return d
 
 

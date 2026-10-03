@@ -472,3 +472,18 @@ def test_a_meccsterv_megelozi_az_altalanos_kulcsokat():
     assert "Meccsterv (a kettőnk párosítása)" in html
     assert (html.index("Meccsterv (a kettőnk párosítása)")
             < html.index("Hogyan játssz ellenük</h2>"))
+
+
+def test_a_nyomtathato_jelentes_viszi_a_vedekezes_feltoreset():
+    """A "Hol törhető fel a védekezésük" blokk a nyomtatható jelentésben
+    is ott van, ha van tétel — és nincs, ha a jelentés üres."""
+    from handball.pipeline.scouting import ScoutingReport
+
+    ures = ScoutingReport(team="away", team_name="Üres", matches=1)
+    assert "Hol törhető fel a védekezésük" not in scouting_report_html(ures)
+    rep2 = ScoutingReport(team="away", team_name="Ellenfél", matches=1)
+    rep2.def_shots_against = 20
+    rep2.def_free_shots = 12
+    html = scouting_report_html(rep2)
+    assert "Hol törhető fel a védekezésük" in html
+    assert "<b>Hol:</b> 9 m-en" in html and "Mivel:" in html and "Miért:" in html
