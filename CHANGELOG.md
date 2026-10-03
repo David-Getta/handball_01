@@ -3,6 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.157 óta)
+
+- **Böngészős 3D: TV-kamera** (új): az appbeli TV-kamera párja — a T
+  gomb (vagy a TV-kamera gomb) az oldalvonal felől, 4,5 m magasról a
+  labdát tartja képben, x-ben simítva követi, mint a közvetítés; húzás
+  vagy WASD visszavált. A jelenet-link is viszi (tv=1), az appból
+  indítva is; az appban is a T billentyű kapcsolja. Headless
+  Chromiumban és widget-teszttel ellenőrizve. Új edzői útmutató:
+  `docs/3D_PALYA.md` — mozgás, rétegek, jelenet-link, VR egy helyen.
+
 ## v0.1.157 — kiadva (2026-10-03)
 
 > Kiadás-jegyzet: a 3D pálya elemző rétegei — lövéstérkép a padlón

@@ -1,6 +1,7 @@
 // Az appbeli 3D pálya eszközei a demó-meccsen (backend nélkül): lövés-
 // mérés koppintásra, keringés gombra, játékos-szem dupla koppintásra.
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 import "package:flutter_test/flutter_test.dart";
 import "package:handball_client/services/jobs_monitor.dart";
 import "package:handball_client/ui/court3d_screen.dart";
@@ -95,6 +96,18 @@ void main() {
     await tester.tap(find.text("Madártávlat"));
     await tester.pump(const Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
+  testWidgets("T billentyű: TV-kamera be/ki", (tester) async {
+    await _nyit(tester);
+    expect(find.text("TV-kamera (labda)"), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text("TV-kamera: BE"), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text("TV-kamera (labda)"), findsOneWidget);
     await _zar(tester);
   });
 

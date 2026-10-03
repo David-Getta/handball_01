@@ -773,6 +773,17 @@ class _Court3DScreenState extends State<Court3DScreen>
         _keringValt();
         return KeyEventResult.handled;
       }
+      // T — TV-kamera be/ki (a böngészős nézet T gombjának párja).
+      if (k == LogicalKeyboardKey.keyT) {
+        setState(() {
+          _tvKamera = !_tvKamera;
+          _kovMez = null;
+          _kering = false;
+          _szemevel = false;
+          if (_tvKamera && !_playing) _playing = true;
+        });
+        return KeyEventResult.handled;
+      }
       if (k == LogicalKeyboardKey.escape) {
         setState(() {
           if (_szemevel) {
@@ -874,6 +885,7 @@ class _Court3DScreenState extends State<Court3DScreen>
     final tS = (m == null ? 0.0 : _mostT(m) / fpsB).toStringAsFixed(1);
     final q = <String, String>{"t": tS};
     if (_kovMez != null) q["kamera"] = "${_kovTeam == "home" ? "h" : "v"}$_kovMez";
+    if (_tvKamera && _kovMez == null) q["tv"] = "1";
     if (_hoter.isNotEmpty) q["hoter"] = _hoter;
     if (_lovesTerkep.isNotEmpty) q["loves"] = _lovesTerkep;
     if (_passz.isNotEmpty) q["passz"] = _passz;

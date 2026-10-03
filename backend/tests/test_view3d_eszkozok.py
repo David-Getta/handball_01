@@ -64,7 +64,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "passzFrissit(ido)", 'id="jatekosKamera"',
                 "function kovetesFrissit", "kovetesFrissit(dt)",
                 'mod === "kovetes"', 'id="linkGomb"', "function linkEpit",
-                "function linkAlkalmaz", "linkAlkalmaz();"):
+                "function linkAlkalmaz", "linkAlkalmaz();", 'id="tvGomb"',
+                "function tvFrissit", "tvFrissit(dt)", '"KeyT"'):
         assert jel in oldal, jel
     # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
     assert '<link rel="icon" href="data:,">' in oldal

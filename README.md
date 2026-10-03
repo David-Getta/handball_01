@@ -25,6 +25,7 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — fázisokra bontott útiterv.
 - [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) — az 1. fázis (MVP) részletes terve.
 - [`docs/RULES.md`](docs/RULES.md) — a követéshez releváns szabály-kivonat.
+- [`docs/3D_PALYA.md`](docs/3D_PALYA.md) — a 3D pálya edzői útmutatója (mozgás, rétegek, jelenet-link, VR).
 - [`docs/FOOTAGE_NOTES.md`](docs/FOOTAGE_NOTES.md) — a valódi felvétel megfigyelései
   és azok hatása a tervre (pásztázó kamera, sárga 6 m, több-vonal, kosárpalánk,
   sárga bírók, GoPro-torzítás).
