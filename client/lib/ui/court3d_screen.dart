@@ -115,6 +115,12 @@ class _Court3DScreenState extends State<Court3DScreen>
   List<Map<String, dynamic>> _lovesek = const [];
   String _lovesTerkep = ""; // "" | "mind" | "eddig" | "hazai" | "vendeg"
   Map<String, dynamic>? _lovesValasztott; // a mérés-dobozban megnevezett lövés
+  // PASSZOK: a futó passz vonala (adótól a fogadóig, mellmagasságban,
+  // halványodva) vagy a csapat passz-hálója a padlón. Egy sor: t (kocka),
+  // team, x1, y1, x2, y2 — az események passzaiból a kocka játékosaival.
+  List<Map<String, dynamic>> _passzok = const [];
+  String _passz = ""; // "" | "elo" | "hazai" | "vendeg"
+  static const double _passzS = 1.0;
   // LABDA-NYOM: a labda útja az utolsó _nyomS másodpercben (narancs vonal).
   bool _nyom = false;
   static const double _nyomS = 3.0;
@@ -157,6 +163,7 @@ class _Court3DScreenState extends State<Court3DScreen>
       setState(() {
         _match = buildDemoMatch();
         _lovesek = buildDemoShots();
+        _passzok = buildDemoPasses(_match!);
         _demo = true;
         _loading = false;
       });
@@ -175,11 +182,14 @@ class _Court3DScreenState extends State<Court3DScreen>
       if (!mounted) return;
       // Az események külön kérés — hibája nem viheti el a 3D nézetet.
       List<Map<String, dynamic>> esemenyek = const [];
+      List<Map<String, dynamic>> passzok = const [];
       try {
-        esemenyek = (await _api.fetchEvents(id))
+        final mind = await _api.fetchEvents(id);
+        esemenyek = mind
             .where((e) => const {"goal", "shot", "turnover"}
                 .contains(e["type"]))
             .toList();
+        passzok = _passzSorok(m, mind);
         // A visszatérő figura kezdete is ugrópont ("Ismert figura") —
         // a könyvtárból, több meccs kell hozzá; hibája nem viszi el a nézetet.
         try {
@@ -244,6 +254,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _kovMez = null;
         _falSorok = falSorok;
         _lovesek = lovesek;
+        _passzok = passzok;
         _lovesValasztott = null;
         _meres = null;
         _szemevel = false;
@@ -547,6 +558,74 @@ class _Court3DScreenState extends State<Court3DScreen>
       _meres = pont;
       _lovesValasztott = null;
     });
+  }
+
+  /// A passz-események sorai az adó és a fogadó helyével (a passz
+  /// kockájának játékosai, track_id szerint) — csak amelyiknek mindkét
+  /// vége megvan.
+  static List<Map<String, dynamic>> _passzSorok(
+      Match m, List<Map<String, dynamic>> esemenyek) {
+    final byT = {for (final f in m.frames) f.t: f};
+    final ki = <Map<String, dynamic>>[];
+    for (final e in esemenyek) {
+      if (e["type"] != "pass") continue;
+      final t = (e["t"] as num?)?.toInt();
+      final ado = (e["player_id"] as num?)?.toInt();
+      final fogado = ((e["detail"] as Map?)?["receiver_id"] as num?)?.toInt();
+      final f = t == null ? null : byT[t];
+      if (f == null || ado == null || fogado == null) continue;
+      PlayerPosition? a, b;
+      for (final p in f.players) {
+        if (p.trackId == ado) a = p;
+        if (p.trackId == fogado) b = p;
+      }
+      if (a == null || b == null) continue;
+      ki.add({
+        "t": t, "team": e["team"],
+        "x1": a.x, "y1": a.y, "x2": b.x, "y2": b.y,
+      });
+    }
+    return ki;
+  }
+
+  /// A passz-vonalak a festőnek: élő módban a PASSZ_S-en belüli passzok
+  /// mellmagasságban, halványodva; háló módban a csapat minden passza a
+  /// padlón, vékonyan.
+  List<_PasszVonal> _passzVonalak(Match m) {
+    if (_passz.isEmpty || m.frames.isEmpty) return const [];
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m);
+    final ki = <_PasszVonal>[];
+    for (final p in _passzok) {
+      final home = p["team"] == "home";
+      final t = ((p["t"] as num?) ?? 0).toDouble();
+      double alpha, z;
+      if (_passz == "elo") {
+        final kora = (most - t) / fps;
+        if (kora < 0 || kora > _passzS) continue;
+        alpha = 1 - kora / _passzS;
+        z = 1.0;
+      } else {
+        if (home != (_passz == "hazai")) continue;
+        alpha = 0.35;
+        z = 0.015;
+      }
+      ki.add(_PasszVonal(
+          ((p["x1"] as num?) ?? 0).toDouble(),
+          ((p["y1"] as num?) ?? 0).toDouble(),
+          ((p["x2"] as num?) ?? 0).toDouble(),
+          ((p["y2"] as num?) ?? 0).toDouble(),
+          z, home, alpha));
+    }
+    return ki;
+  }
+
+  /// A passz-háló összegzője ("38 passz — Szeged").
+  String? _passzOsszegzo(Match m) {
+    if (_passz != "hazai" && _passz != "vendeg") return null;
+    final home = _passz == "hazai";
+    final n = _passzok.where((p) => (p["team"] == "home") == home).length;
+    return "$n passz — ${home ? m.meta.homeTeam : m.meta.awayTeam}";
   }
 
   /// A hőtérkép cellái a festőnek (a kiválasztott csapat(ok) rácsa, a
@@ -910,6 +989,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                   falPontok: fal.$1,
                   nyom: _labdaNyom(m),
                   hoCellak: _hoCellak(m),
+                  passzok: _passzVonalak(m),
                   lovesek: [
                     for (final l in _lathatoLovesek(m))
                       _LovesJel(
@@ -945,6 +1025,12 @@ class _Court3DScreenState extends State<Court3DScreen>
                   right: 12,
                   bottom: 12,
                   child: _infoDoboz(_lovesOsszegzo(m), AppColors.accent),
+                ),
+              if (_passzOsszegzo(m) != null)
+                Positioned(
+                  right: 12,
+                  bottom: _lovesTerkep.isNotEmpty ? 76 : 12,
+                  child: _infoDoboz([_passzOsszegzo(m)!], AppColors.accent),
                 ),
               // Jelenet-felirat: mi történik épp (a közvetítés
               // inzertje) — a 3D-ben a labda pályája önmagában nem
@@ -1199,6 +1285,38 @@ class _Court3DScreenState extends State<Court3DScreen>
               ),
             ],
           ]),
+        ),
+      ),
+      // Passzok: a futó passz vonala, vagy a csapat passz-hálója a padlón.
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: _passz.isNotEmpty
+                ? AppColors.accent.withOpacity(0.15)
+                : AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.borderStrong),
+          ),
+          child: DropdownButton<String>(
+            value: _passz,
+            underline: const SizedBox.shrink(),
+            dropdownColor: AppColors.surface,
+            style: AppText.label.copyWith(fontSize: 11.5),
+            items: const [
+              DropdownMenuItem(value: "", child: Text("Passzok: ki")),
+              DropdownMenuItem(value: "elo", child: Text("Élő passz")),
+              DropdownMenuItem(
+                  value: "hazai", child: Text("Hazai passz-háló")),
+              DropdownMenuItem(
+                  value: "vendeg", child: Text("Vendég passz-háló")),
+            ],
+            onChanged: (v) {
+              setState(() => _passz = v ?? "");
+              _focus.requestFocus();
+            },
+          ),
         ),
       ),
       // Hőtérkép: hol tartózkodott a csapat (az elemzés rácsa a padlón).
@@ -1647,6 +1765,14 @@ class _Labda {
   _Labda(this.x, this.y);
 }
 
+/// Egy passz-vonal: az adó és a fogadó helye, magasság, csapat, átlátszóság.
+class _PasszVonal {
+  final double x1, y1, x2, y2, z, alpha;
+  final bool home;
+  const _PasszVonal(
+      this.x1, this.y1, this.x2, this.y2, this.z, this.home, this.alpha);
+}
+
 /// Egy hőtérkép-cella: rács-index és -méret, erősség (0–1), csapat.
 class _HoCella {
   final int ix, iy, binsX, binsY;
@@ -1734,6 +1860,8 @@ class _Court3DPainter extends CustomPainter {
   final List<Offset> nyom;
   // A hőtérkép cellái a padlón (a parketta fölött, a vonalak alatt).
   final List<_HoCella> hoCellak;
+  // Passz-vonalak (élő: mellmagasságban; háló: a padlón).
+  final List<_PasszVonal> passzok;
   final _Jatekos? rejtett;
   _Court3DPainter(
       {required this.frame,
@@ -1748,6 +1876,7 @@ class _Court3DPainter extends CustomPainter {
       this.lovesek = const [],
       this.nyom = const [],
       this.hoCellak = const [],
+      this.passzok = const [],
       this.rejtett});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
@@ -2131,6 +2260,22 @@ class _Court3DPainter extends CustomPainter {
             l.y,
             l.r + 0.08);
       }
+    }
+
+    // Passz-vonalak: az adótól a fogadóig, a csapat színével.
+    for (final p in passzok) {
+      _vonal(
+          canvas,
+          Paint()
+            ..color = (p.home ? AppColors.home : AppColors.away)
+                .withOpacity(p.alpha)
+            ..strokeWidth = p.z > 0.5 ? 2.4 : 1.2,
+          p.x1,
+          p.y1,
+          p.z,
+          p.x2,
+          p.y2,
+          p.z);
     }
 
     // Labda-nyom: narancs vonal labda-magasságban, a régebbi szakasz

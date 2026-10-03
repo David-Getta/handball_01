@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.156 óta)
 
+- **3D pálya: passz-vonalak és passz-háló** (új, böngészős/VR és
+  appbeli nézet): a Passzok-választó "élő" módban a futó passzt húzza
+  az adótól a fogadóig mellmagasságban (egy másodpercig, halványodva —
+  látszik, kinek ment a labda), "háló" módban a csapat minden passzát
+  vékony vonalként a padlóra teszi, összegzővel ("255 passz — Szeged"):
+  a játékszervezés fő tengelyei (szél–átlövő–beálló) egyben látszanak.
+  Backend: a 3D oldal tömör adatában a passz-sorok (az adó és a fogadó
+  helye a passz kockáján); az app az események passzaiból a kocka
+  játékosaival építi, a demó-meccsnek beépített passzai vannak.
+  Headless Chromiumban és widget-teszttel ellenőrizve.
+
 - **3D pálya: a játékos szemével — sebesség és megtett út** (új,
   böngészős/VR és appbeli nézet): akinek a szemével nézünk, annak a
   HUD-ja a kép tetején mutatja a pillanatnyi sebességét (km/h) és az

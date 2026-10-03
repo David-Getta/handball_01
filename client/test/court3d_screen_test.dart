@@ -84,6 +84,20 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("passz-háló: a demó hazai passzai, összegzővel", (tester) async {
+    await _nyit(tester);
+    await tester.tap(find.text("Passzok: ki"));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text("Hazai passz-háló").last);
+    await tester.pump(const Duration(milliseconds: 300));
+    // A demó 200 kockáján 25-ösével vált a birtokos: 7 passz.
+    expect(find.textContaining("7 passz — Demó Hazai"), findsOneWidget);
+    await tester.tap(find.text("Madártávlat"));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("labda-nyom gomb: be/ki", (tester) async {
     await _nyit(tester);
     await tester.tap(find.text("Labda-nyom (3 mp)"));

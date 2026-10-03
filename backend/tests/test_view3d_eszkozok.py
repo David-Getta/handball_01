@@ -60,7 +60,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "ido + dt * sebesseg", 'id="hoter"', "function hoRacs",
                 "function hoFest", 'data-n="madar"', "function nezet",
                 'id="jatekosHud"', "function tavTabla", "function hudFrissit",
-                "TAV_UGRAS_M = 3"):
+                "TAV_UGRAS_M = 3", 'id="passz"', "function passzFrissit",
+                "passzFrissit(ido)"):
         assert jel in oldal, jel
     # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
     assert '<link rel="icon" href="data:,">' in oldal
@@ -84,6 +85,36 @@ def test_a_tomor_adat_viszi_a_falsablonokat_es_az_elo_falat():
     s, hazai, cimke, goal_x = adat["defence"][0]
     assert hazai == 0 and cimke == "6-0" and goal_x == 40.0
     assert [r[0] for r in adat["defence"]] == [0.0, 1.0]
+
+
+def test_a_tomor_adat_viszi_a_passzokat():
+    """A passz-sorok: [mp, hazai?, adó x, y, fogadó x, y] a felismerés
+    PASS eseményeiből — annyi, ahánynak az adója és a fogadója is a
+    passz kockáján van. Passz nélküli meccsen üres (nem hiba)."""
+    from handball.pipeline.event_detection import EventType, detect_events
+    from handball.pipeline.view3d_html import _compact_data
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    assert _compact_data(_meccs())["passes"] == []
+    m = simulate_ground_truth(duration_s=60, fps=25.0, seed=3,
+                              shots_per_min=6)
+    passzok = _compact_data(m)["passes"]
+    assert passzok, "a szimuláció passzol"
+    by_t = {f.t: f for f in m.frames}
+    vart = 0
+    for e in detect_events(m):
+        if e.type != EventType.PASS or e.player_id is None:
+            continue
+        f = by_t.get(e.t)
+        ids = {p.track_id for p in f.players} if f else set()
+        rid = (e.detail or {}).get("receiver_id")
+        if rid is not None and e.player_id in ids and rid in ids:
+            vart += 1
+    assert len(passzok) == vart
+    for mp, hazai, x1, y1, x2, y2 in passzok:
+        assert hazai in (0, 1) and 0 <= x1 <= 40 and 0 <= x2 <= 40
+        assert 0 <= y1 <= 20 and 0 <= y2 <= 20
+    assert [r[0] for r in passzok] == sorted(r[0] for r in passzok)
 
 
 def test_a_tomor_adat_viszi_a_lovesterkepet():
@@ -290,7 +321,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "_lovesKoppintas", "_lathatoLovesek", "class _LovesJel",
                 "fetchXg", "Lövéstérkép: ki", "_labdaNyom", "Labda-nyom",
                 "computeTeamHeatmap", "Hőtérkép: ki", "_tavTabla",
-                "_tavUgrasM = 3.0", "km/h"):
+                "_tavUgrasM = 3.0", "km/h", "_passzok", "Passzok: ki",
+                "class _PasszVonal", "_passzVonalak"):
         assert jel in kepernyo, jel
     # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).
     assert "0.22 + 0.5 *" in kepernyo and "0.22 + 0.5 * Math.min" in \

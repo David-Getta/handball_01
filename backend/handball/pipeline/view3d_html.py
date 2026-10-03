@@ -106,6 +106,31 @@ def _compact_data(match: Match, figure_alerts: list | None = None) -> dict:
             for s in match_xg(match, cfg)["shots"]]
     except Exception:
         lovesek = []  # lövéstérkép nélkül is működjön a nézet
+    # Passzok: [mp, hazai?, x1, y1, x2, y2] — az adó és a fogadó helye a
+    # passz kockáján; a futó passz vonala és a csapat passz-hálója ebből.
+    try:
+        from .event_detection import EventType, detect_events
+        by_t = {f.t: f for f in match.frames}
+        passzok = []
+        for e in detect_events(match):
+            if e.type != EventType.PASS or e.player_id is None:
+                continue
+            rid = (e.detail or {}).get("receiver_id")
+            f = by_t.get(e.t)
+            if rid is None or f is None:
+                continue
+            ado = next((p for p in f.players if p.track_id == e.player_id),
+                       None)
+            fogado = next((p for p in f.players if p.track_id == rid), None)
+            if ado is None or fogado is None:
+                continue
+            passzok.append([round(e.t / fps, 2),
+                            1 if getattr(e.team, "value", e.team) == "home"
+                            else 0,
+                            round(ado.x, 1), round(ado.y, 1),
+                            round(fogado.x, 1), round(fogado.y, 1)])
+    except Exception:
+        passzok = []  # passz-vonalak nélkül is működjön a nézet
     return {
         "home": match.meta.home_team,
         "away": match.meta.away_team,
@@ -114,6 +139,7 @@ def _compact_data(match: Match, figure_alerts: list | None = None) -> dict:
         "formations": formak,
         "defence": fal,
         "shots": lovesek,
+        "passes": passzok,
     }
 
 
@@ -208,6 +234,16 @@ def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
  </div>
  <div id="lovesInfo"></div>
  <div class="sor">
+  <label>Passzok
+   <select id="passz" title="A futó passz vonala, vagy a csapat minden passza a padlón">
+    <option value="">ki</option>
+    <option value="elo">élő — a futó passz</option>
+    <option value="hazai">hazai passz-háló</option>
+    <option value="vendeg">vendég passz-háló</option>
+   </select></label>
+  <span id="passzInfo"></span>
+ </div>
+ <div class="sor">
   <label>Hőtérkép
    <select id="hoter" title="Hol tartózkodott a csapat a meccsen (mért helyek, 2 m-es cellák)">
     <option value="">ki</option>
@@ -230,6 +266,7 @@ Katt a padlóra — lövés-mérés (távolság, kapu-szög) · Szóköz — lej
 Lövéstérkép: katt egy körre — odaugrik a lövéshez (kör = xG, arany gyűrű = gól)<br>
 Lent: sebesség (0,5–4×) · Labda-nyom — a labda útja az utolsó 3 mp-ben<br>
 Hőtérkép — hol tartózkodott a csapat (2 m-es cellák) · Nézet-gombok — kész kamera-állások<br>
+Passzok — a futó passz vonala (adótól a fogadóig), vagy a csapat passz-hálója a padlón<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="meres"></div>
@@ -868,6 +905,53 @@ function meresRajzol(x, y, kapu){
   document.getElementById("meresKi").onclick = meresTorles;
 }
 
+// ---- Passzok: a futó passz vonala / a csapat passz-hálója -------------
+// Élő: a passz kockájától PASSZ_S másodpercig vonal mellmagasságban az
+// adótól a fogadóig (halványodva). Háló: a csapat minden passza vékony
+// vonalként a padlón — a játékszervezés fő tengelyei látszanak.
+const PASSZOK = ADAT.passes || [];
+const PASSZ_S = 1.0;
+const passzValaszto = document.getElementById("passz");
+const passzInfo = document.getElementById("passzInfo");
+const passzElo = new THREE.Group(), passzHalo = new THREE.Group();
+szinpad.add(passzElo); szinpad.add(passzHalo);
+let passzHaloNev = null;
+function passzSzin(hazai){ return hazai ? 0x4c9aff : 0xff6b6b; }
+function passzFrissit(t){
+  const v = passzValaszto.value;
+  while (passzElo.children.length) passzElo.remove(passzElo.children[0]);
+  passzHalo.visible = v === "hazai" || v === "vendeg";
+  if (!v){ passzInfo.textContent = ""; return; }
+  if (v === "elo"){
+    let db = 0;
+    for (const [mp, hazai, x1, y1, x2, y2] of PASSZOK){
+      if (mp > t || t - mp > PASSZ_S) continue;
+      const g = new THREE.BufferGeometry().setFromPoints(
+        [new THREE.Vector3(x1, 1.0, W - y1), new THREE.Vector3(x2, 1.0, W - y2)]);
+      passzElo.add(new THREE.Line(g, new THREE.LineBasicMaterial(
+        {color: passzSzin(hazai), transparent: true, opacity: 1 - (t - mp) / PASSZ_S})));
+      db++;
+    }
+    passzInfo.textContent = db ? "passz úton" : "";
+    return;
+  }
+  const hazai = v === "hazai" ? 1 : 0;
+  if (passzHaloNev !== v){
+    while (passzHalo.children.length) passzHalo.remove(passzHalo.children[0]);
+    const pontok = [];
+    for (const [mp, h, x1, y1, x2, y2] of PASSZOK){
+      if (h !== hazai) continue;
+      pontok.push(new THREE.Vector3(x1, 0.015, W - y1), new THREE.Vector3(x2, 0.015, W - y2));
+    }
+    if (pontok.length){
+      passzHalo.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pontok),
+        new THREE.LineBasicMaterial({color: passzSzin(hazai), transparent: true, opacity: 0.35})));
+    }
+    passzHaloNev = v;
+    passzInfo.textContent = (pontok.length / 2) + " passz — " + (hazai ? ADAT.home : ADAT.away);
+  }
+}
+
 // ---- Hőtérkép: hol tartózkodott a csapat a meccsen -------------------
 // A pályára fektetett, áttetsző textúra: 20×10 cella (2 m), a cella
 // erőssége a MÉRT helyek száma a legsűrűbb cellához képest (ugyanaz a
@@ -1150,7 +1234,7 @@ fest.setAnimationLoop(() => {
   if (megy){ ido = Math.min(veg, ido + dt * sebesseg);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); felirat(ido);
+  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); felirat(ido);
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);

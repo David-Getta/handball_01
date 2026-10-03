@@ -113,3 +113,28 @@ List<Map<String, dynamic>> buildDemoShots({int frames = 200, double fps = 25.0})
       }
   ];
 }
+
+/// Demó-passzok a 3D passz-vonalakhoz (backend nélkül): a demó-labda
+/// ~1 mp-enként vált birtokost a hazai útvonalon; egy passz = az előző
+/// és az új birtokos helye a váltás kockáján. Alak: t, team, x1, y1, x2, y2.
+List<Map<String, dynamic>> buildDemoPasses(Match m, {int lepes = 25}) {
+  const route = [2, 1, 0, 3, 4, 5];
+  final ki = <Map<String, dynamic>>[];
+  for (var t = lepes; t < m.frames.length; t += lepes) {
+    final f = m.frames[t];
+    final elozo = route[(t ~/ lepes - 1) % route.length];
+    final uj = route[(t ~/ lepes) % route.length];
+    PlayerPosition? ado, fogado;
+    for (final p in f.players) {
+      if (p.team != Team.home) continue;
+      if (p.trackId == elozo + 1) ado = p;
+      if (p.trackId == uj + 1) fogado = p;
+    }
+    if (ado == null || fogado == null) continue;
+    ki.add({
+      "t": t, "team": "home",
+      "x1": ado.x, "y1": ado.y, "x2": fogado.x, "y2": fogado.y,
+    });
+  }
+  return ki;
+}
