@@ -22,6 +22,9 @@ os.environ["HANDBALL_DATA_DIR"] = _tmp
 
 import pytest  # noqa: E402
 
+# Az app a visszaállítást zip-típussal küldi (a motor csak ezt fogadja).
+ZIP = {"Content-Type": "application/zip"}
+
 TestClient = pytest.importorskip(
     "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
 
@@ -53,7 +56,7 @@ def test_export_then_import_on_new_machine_roundtrip():
     os.environ["HANDBALL_DATA_DIR"] = tmp2
     client2 = TestClient(create_app())
     assert client2.get("/matches").json()["matches"] == []
-    r = client2.post("/library/import", content=zip_bytes).json()
+    r = client2.post("/library/import", content=zip_bytes, headers=ZIP).json()
     assert r["matches"] >= 1 and r["restored_files"] >= 2
     ids = [m["match_id"] for m in client2.get("/matches").json()["matches"]]
     assert mid in ids
@@ -63,7 +66,7 @@ def test_export_then_import_on_new_machine_roundtrip():
 
 def test_import_rejects_invalid_zip():
     client, _ = _fresh_client(tempfile.mkdtemp(prefix="handball_lib3_"))
-    r = client.post("/library/import", content=b"ez nem zip")
+    r = client.post("/library/import", content=b"ez nem zip", headers=ZIP)
     assert r.status_code == 400
 
 
@@ -74,11 +77,35 @@ def test_import_skips_path_traversal_entries():
     with zipfile.ZipFile(evil, "w") as z:
         z.writestr("../../evil.txt", "kitores")
         z.writestr("matches/jo.txt", "rendben")
-    r = client.post("/library/import", content=evil.getvalue()).json()
+    r = client.post("/library/import", content=evil.getvalue(), headers=ZIP).json()
     assert r["restored_files"] == 1  # csak a data/ alá eső fájl
     assert not (Path(tmp) / "evil.txt").exists()
     assert not (Path(tmp).parent / "evil.txt").exists()
     assert (Path(tmp) / "data" / "matches" / "jo.txt").exists()
+
+
+def test_import_a_testver_mappaba_es_a_tarba_sem_ir():
+    """A visszaállítás a FELOLDOTT úton, útvonal-szinten szűr.
+
+    Két kerülőút volt: (1) a "../data-masik/x" a "data" melletti
+    testvér-mappára mutat, de a szöveges előtag-összevetés ("…/data" a
+    "…/data-masik" eleje) átengedte; (2) a gyorsítótár-tilalom a nyers
+    nevet nézte, így a "matches/../cache/…" a számolt eredmények tárába
+    írt."""
+    tmp = tempfile.mkdtemp(prefix="handball_lib5_")
+    client, _ = _fresh_client(tmp)
+    evil = io.BytesIO()
+    with zipfile.ZipFile(evil, "w") as z:
+        z.writestr("../data-masik/kitores.txt", "kitores")
+        z.writestr("matches/../cache/x/coach-summary.json", "{}")
+        z.writestr("./cache/y/defense.json", "{}")
+        z.writestr("matches/jo2.txt", "rendben")
+    r = client.post("/library/import", content=evil.getvalue(), headers=ZIP).json()
+    assert r["restored_files"] == 1, r
+    assert not (Path(tmp) / "data-masik" / "kitores.txt").exists()
+    assert not (Path(tmp) / "data" / "cache" / "x").exists()
+    assert not (Path(tmp) / "data" / "cache" / "y").exists()
+    assert (Path(tmp) / "data" / "matches" / "jo2.txt").exists()
 
 
 if __name__ == "__main__":
@@ -86,3 +113,77 @@ if __name__ == "__main__":
     test_import_rejects_invalid_zip()
     test_import_skips_path_traversal_entries()
     print("Minden könyvtár-mentés teszt OK.")
+
+
+def test_a_mentes_viszi_a_neveket_es_a_kezi_javitasokat():
+    """A gépváltás nem veszíthet el EMBERI munkát.
+
+    A mezszám-nevek és a kézi esemény-javítások nem a videóból jönnek:
+    valaki beírta őket. Ha a mentés ezeket nem viszi, az új gépen
+    elölről kell kezdeni — pont azt a munkát, amit a program nem tud
+    újratermelni.
+    """
+    tmp = tempfile.mkdtemp(prefix="handball_lib_emberi_")
+    client, mid = _fresh_client(tmp)
+    csapat = client.get("/matches").json()["matches"][0]["home_team"]
+    client.post("/library/players",
+                json={"team": csapat, "jersey": 7, "name": "Kovács"})
+    # FELVÉTEL (add) a javítás: ez akkor is él, ha a rövid
+    # szimuláción egyáltalán nincs felismert lövés — így a próba
+    # tényleg a mentést méri, nem a felismerést.
+    client.post(f"/matches/{mid}/event-overrides",
+                json={"overrides": [{"op": "add", "t": 2, "type": "goal",
+                                     "team": "home"}]})
+
+    zip_bytes = client.get("/library/export").content
+    names = zipfile.ZipFile(io.BytesIO(zip_bytes)).namelist()
+    assert any(n.endswith("players.json") for n in names), names
+    assert any(n.endswith(f"{mid}.events.json") for n in names), names
+
+    # "Új gép".
+    tmp2 = tempfile.mkdtemp(prefix="handball_lib_emberi2_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp2
+    client2 = TestClient(create_app())
+    client2.post("/library/import", content=zip_bytes, headers=ZIP)
+
+    nevek = client2.get("/library/players").json()["players"]
+    assert (nevek.get(csapat) or {}).get("7") == "Kovács"
+    ov = client2.get(f"/matches/{mid}/event-overrides").json()["overrides"]
+    assert ov and ov[0]["op"] == "add"
+    # És a javítás ÉL is: a betöltő a meccs meta-jába teszi, tehát a
+    # felvett gól ott van az esemény-listán.
+    esemenyek = client2.get(f"/matches/{mid}/events").json()["events"]
+    assert any(e["type"] == "goal" and e["t"] == 2 for e in esemenyek), \
+        esemenyek
+
+
+def test_a_nyers_vegpontok_idegen_oldal_egyszeru_kereset_nem_fogadjak():
+    """Egy idegen weboldal a böngészőből "egyszerű" (CORS-egyeztetés
+    nélküli) POST-ot küldhet a localhostra: text/plain, űrlap vagy típus
+    nélküli törzs. A visszaállítás és a feltöltés ilyet NEM fogad (415),
+    és semmit sem ír — csak a kimondott bináris típust, amit az app küld."""
+    tmp = tempfile.mkdtemp(prefix="handball_lib_csrf_")
+    client, _ = _fresh_client(tmp)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("matches/idegen.txt", "felülírnám")
+    for tipus in ("text/plain", "application/x-www-form-urlencoded",
+                  "multipart/form-data; boundary=x", None):
+        fejlec = {"Content-Type": tipus} if tipus else {}
+        r = client.post("/library/import", content=buf.getvalue(),
+                        headers=fejlec)
+        assert r.status_code == 415, (tipus, r.status_code)
+        r = client.post("/upload?filename=idegen.mp4", content=b"xx",
+                        headers=fejlec)
+        assert r.status_code == 415, (tipus, r.status_code)
+    assert not (Path(tmp) / "data" / "matches" / "idegen.txt").exists()
+    assert not (Path(tmp) / "uploads" / "idegen.mp4").exists()
+    # Az app típusaival megy.
+    assert client.post("/library/import", content=buf.getvalue(),
+                       headers=ZIP).status_code == 200
+    r = client.post("/upload?filename=jo.mp4", content=b"xx",
+                    headers={"Content-Type": "application/octet-stream"})
+    assert r.status_code == 200 and r.json()["size"] == 2
+    r = client.post("/upload?filename=jo2.mp4", content=b"xx",
+                    headers={"Content-Type": "video/mp4"})
+    assert r.status_code == 200

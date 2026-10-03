@@ -46,7 +46,7 @@ class PositionSource(str, Enum):
     ESTIMATED = "estimated"   # képen kívül volt → becsült pozíció
 
 
-@dataclass
+@dataclass(slots=True)
 class PlayerPosition:
     """Egyetlen játékos egyetlen frame-en, a pálya valós koordinátáin.
 
@@ -74,7 +74,7 @@ class PlayerPosition:
     role: Optional[str] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class Ball:
     """A labda pozíciója egy frame-en, pálya-koordinátán (méter).
 
@@ -86,7 +86,7 @@ class Ball:
     confidence: float = 1.0
 
 
-@dataclass
+@dataclass(slots=True)
 class Frame:
     """A meccs egy időpillanata (egy feldolgozott videó-képkocka).
 
@@ -132,6 +132,96 @@ class MatchMeta:
     # videóbeli kép-index, ahonnan a feldolgozás FOLYTATHATÓ.
     partial: bool = False
     next_start_frame: int = 0
+    # A FORRÁSVIDEÓ teljes hossza másodpercben (ha kiolvasható). Ebből
+    # derül ki, hogy a feldolgozás a felvétel mekkora részét fedte le —
+    # egy megvágott/félbeszakadt feltöltésnél a felhasználó egyébként
+    # csak annyit lát, hogy "csak az első félidőt elemezte ki".
+    video_seconds: Optional[float] = None
+    # Volt-e PÁLYA-KALIBRÁCIÓ a feldolgozáskor. Enélkül a koordináták
+    # csak arányos becslések (a képet nyújtjuk a pályára), és a pályán
+    # kívüli embereket — kispad, edző, NÉZŐTÉR — nem lehet kiszűrni.
+    # A jelentésnek ezt ki kell mondania, különben a felhasználó a
+    # számokból nem tudja, mennyire bízhat bennük.
+    # None = nem tudjuk (RÉGI mentés, a mező előtti időkből) — ilyenkor
+    # nem állítunk semmit; False = biztosan nem volt kalibráció.
+    calibrated: Optional[bool] = None
+    # AUTOMATIKUS meccs-ablak (game_window.trim_to_game): talált-e a
+    # felismerés összefüggő JÁTÉKOT a felvételen, és mennyit vágott le
+    # az elejéből/végéből másodpercben. Enélkül a felhasználó nem tudja
+    # meg, hogy a bemelegítés és a csapatbemutatás kimaradt-e — pedig
+    # ha bennmaradt, az álldogálást a motor eladott labdának látja.
+    # None = nem tudjuk (RÉGI mentés, a mezők előttről); False = a
+    # felismerés NEM talált elég hosszú összefüggő játékot.
+    game_window_found: Optional[bool] = None
+    game_trim_head_s: Optional[float] = None
+    game_trim_tail_s: Optional[float] = None
+    # PÁSZTÁZÁS-KÖVETÉS horgonyzás-aránya (%): a feldolgozott kockák
+    # hányadán sikerült a kamera-mozgást közvetlenül a KALIBRÁLT
+    # alap-kockához mérni (pan_tracking.PanTracker). Alacsony aránynál
+    # a svenkelés alatt a helyek elcsúszhatnak — a minőség-jelentés
+    # ebből szól. None = régi mentés vagy pásztázás-követés nélkül.
+    pan_anchor_pct: Optional[float] = None
+    # KALIBRÁCIÓ-ELLENŐRZÉSHEZ: az elsődleges kalibráció homográfiája
+    # (alap-kocka pixel → pálya méter, 3x3) és a kamera-mozgás ritkított
+    # sora [[t, G 3x3], …] (G: aktuális kocka → alap-kocka). Ezekből a
+    # pályavonalak utólag bármelyik kockára visszarajzolhatók — a
+    # felhasználó a szemével ellenőrzi, tartja-e a kalibráció a
+    # svenkelés alatt. None = régi mentés vagy kalibráció nélkül.
+    court_homography: Optional[list] = None
+    # Az elsődleges kalibráció TERÜLETE: "full" | "left" | "right"
+    # — fél-pályás kalibrációnál a rárajzolás és az illeszkedés-mérés
+    # csak a kalibrált térfél vonalait használja (a másik félen a
+    # homográfia erősen extrapolál). None = régi mentés (teljes).
+    calib_region: Optional[str] = None
+    # MINDEN kalibráció [[H0 3x3, régió], …] — két térfél-kalibrációnál
+    # a rárajzolás és a mérés mindkettőt használja (a svenkelő kamera
+    # hol az egyiket, hol a másikat nézi). None = régi mentés: ilyenkor
+    # a court_homography + calib_region párost használjuk.
+    calib_pairs: Optional[list] = None
+    pan_keyframes: Optional[list] = None
+    # KALIBRÁCIÓ-ILLESZKEDÉS a feldolgozás alatt mérve (calib_overlay
+    # .line_fit_score a kulcs-kockákon): {"mean_fit", "min_fit",
+    # "worst_t", "points"} — a minőség-jelentés ebből mondja ki, ha a
+    # kalibráció a meccs közben elcsúszik. None = régi mentés vagy
+    # kalibráció nélkül.
+    calib_fit: Optional[dict] = None
+    # KÉZI esemény-javítások: amit az edző a felismerésen kijavít.
+    # Elemenként {"op": "add"|"remove"|"set_type", "t": kocka,
+    # "type": "goal"|"shot", "team": "home"|"away"}. A lövés-felismerés
+    # a lista alapján javítja a saját eredményét, tehát a javítás MINDEN
+    # rétegen átüt (eredmény, xG, lövő-listák, felderítés).
+    #
+    # Miért a meta-ban: a felismerés hibája nem a videó hibája — a
+    # javítás a MECCS tulajdonsága, nem egy képernyőé, és
+    # újrafeldolgozás nélkül is meg kell maradnia.
+    event_overrides: list = field(default_factory=list)
+    # ÖSSZEFŰZÖTT meccs forrás-szakaszai. Aki darabokban vesz fel (a
+    # telefon négy gigánál vagy tíz percnél elvágja a felvételt), hat
+    # klipből rak össze egy meccset — az összefűzött meccsnek nincs
+    # EGY videófájlja, tehát a `video_path` üres.
+    #
+    # Enélkül a klipvágás azt mondaná, hogy "a videó nem érhető el",
+    # ami félrevezető: a fájl megvan, csak több van belőle. Ez a
+    # térkép mondja meg, melyik játékidő melyik fájl melyik
+    # kép-indexén van.
+    #
+    # Elemenként: {"t_from", "t_to" (kizárólagos), "video_path",
+    # "start_frame", "stride"} — a t a MERGE UTÁNI játékidő kockákban.
+    source_segments: list = field(default_factory=list)
+    # MIBŐL lett összefűzve (a darabok match_id-jei). A szezon-szintű
+    # számolás ebből tudja, hogy a darabokat KI KELL hagynia: az
+    # összefűzött meccs és a hat darabja együtt ugyanazt a meccset
+    # kétszer számolná — a góllövő-lista, a szezon-mérleg és a
+    # jegyzet-lista is duplázna.
+    merged_from: list = field(default_factory=list)
+    # A VALÓDI végeredmény, ahogy az edző a jegyzőkönyvből tudja.
+    # A felismerés ehhez MÉRHETI magát: a minőség-jelentés kimondja, ha
+    # a felismert eredmény messze van tőle (vagy épp fordítva áll), és
+    # megmondja a teendőt. None = nincs megadva — ilyenkor nem állítunk
+    # semmit. Ez a pontosság-visszajelzés legolcsóbb formája: két szám,
+    # amit az edző fejből tud.
+    real_goals_home: Optional[int] = None
+    real_goals_away: Optional[int] = None
 
 
 @dataclass
@@ -160,14 +250,41 @@ class Match:
     def to_dict(self) -> dict:
         """Beágyazott szótárrá alakít (Enumokat is szöveggé old fel).
 
-        Az `asdict` rekurzívan bejárja a dataclass-okat; az Enum értékeket utána
-        a `_enums_to_str` cseréli olvasható szövegre, hogy a JSON tiszta legyen.
+        A fejléc kicsi: azt az `asdict` járja be (mély másolat, a listák
+        nem osztoznak a meccsel). A kockák viszont egy egész meccsen
+        százezres nagyságrendű játékos-pozíciót jelentenek — az `asdict`
+        rekurziója és a mély másolás ott egy 60 perces meccsen 9
+        másodperc volt, és ennyi ideig a motor alig válaszolt. A kockákat
+        ezért KÉZZEL írjuk ki, ugyanazzal a kulcs-sorrenddel és
+        ugyanazokkal az értékekkel (a JSON bájtra azonos marad).
         """
-        return _enums_to_str(asdict(self))
+        return {"meta": _enums_to_str(asdict(self.meta)),
+                "frames": [frame_to_dict(fr) for fr in self.frames]}
 
     def to_json(self, indent: Optional[int] = None) -> str:
         """JSON szöveggé alakít. `indent=2`-vel ember által olvasható."""
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
+
+    def iter_json_chunks(self, frames_per_chunk: int = 400):
+        """A meccs JSON-ja DARABOKBAN (tömör, a `to_dict`-tel azonos tartalom).
+
+        A motor így adja ki a meccset a kliensnek: nem épít egyben egy
+        70 MB-os szöveget (ami alatt a JSON-író C-kódja végig fogja az
+        értelmezőt, és a motor más kérésre — életjelre — sem felel), hanem
+        kockák csoportjaiként. A darabok közt a többi kérés is sorra kerül.
+        """
+        meta = json.dumps(_enums_to_str(asdict(self.meta)),
+                          ensure_ascii=False, separators=(",", ":"))
+        yield '{"meta":' + meta + ',"frames":['
+        frames = self.frames
+        step = max(1, int(frames_per_chunk))
+        for i in range(0, len(frames), step):
+            chunk = ",".join(
+                json.dumps(frame_to_dict(fr), ensure_ascii=False,
+                           separators=(",", ":"))
+                for fr in frames[i:i + step])
+            yield ("," + chunk) if i else chunk
+        yield "]}"
 
     # ---- Deszerializáció: JSON -> Python objektum ------------------------------
 
@@ -178,19 +295,39 @@ class Match:
         Kézzel járjuk be a szerkezetet, hogy az Enumokat és a beágyazott
         dataclass-okat helyesen állítsuk vissza.
         """
+        return cls._from_parsed(d, consume=False)
+
+    @classmethod
+    def _from_parsed(cls, d: dict, consume: bool) -> "Match":
+        """A `from_dict` magja. `consume=True`: a bemeneti szótár kocka-
+        listáját menet közben ELENGEDJÜK (a már átalakított kockát None-ra
+        cseréljük) — így a betöltés csúcs-memóriája nem a JSON-fa ÉS a
+        kész objektumok összege (egy teljes meccsen ~260 MB), hanem csak
+        a nagyobbik. Csak a saját, eldobható szótárunkon szabad (from_json).
+        """
         # Csak az ismert mezőket vesszük át — így a régebbi/újabb JSON-ok is
         # gond nélkül betölthetők (előre- és visszafelé kompatibilitás).
         known = MatchMeta.__dataclass_fields__.keys()
         meta = MatchMeta(**{k: v for k, v in d["meta"].items() if k in known})
         frames: list[Frame] = []
-        for fr in d.get("frames", []):
+        raw_frames = d.get("frames", [])
+        # Az enum-értékek szótárból: a `Team(...)` hívás egy teljes meccsen
+        # (~400 ezer játékos-sor) a betöltés harmada volt; az ismeretlen
+        # érték továbbra is az enum-hívás hibáját adja.
+        team_of = {t.value: t for t in Team}
+        source_of = {ps.value: ps for ps in PositionSource}
+        for idx in range(len(raw_frames)):
+            fr = raw_frames[idx]
+            if consume:
+                raw_frames[idx] = None
             players = [
                 PlayerPosition(
                     track_id=p["track_id"],
-                    team=Team(p["team"]),
+                    team=team_of.get(p["team"]) or Team(p["team"]),
                     x=p["x"],
                     y=p["y"],
-                    source=PositionSource(p.get("source", "measured")),
+                    source=(source_of.get(p.get("source", "measured"))
+                            or PositionSource(p.get("source", "measured"))),
                     confidence=p.get("confidence", 1.0),
                     jersey_number=p.get("jersey_number"),
                     role=p.get("role"),
@@ -204,8 +341,34 @@ class Match:
 
     @classmethod
     def from_json(cls, text: str) -> "Match":
-        """JSON szövegből épít Match objektumot."""
-        return cls.from_dict(json.loads(text))
+        """JSON szövegből épít Match objektumot (a köztes szótár a mienk,
+        tehát menet közben elengedhető — lásd `_from_parsed`)."""
+        return cls._from_parsed(json.loads(text), consume=True)
+
+
+def _ev(v):
+    """Enum → a szöveges értéke; minden más változatlan."""
+    return v.value if isinstance(v, Enum) else v
+
+
+def frame_to_dict(fr: "Frame") -> dict:
+    """Egy kocka szótára — az `asdict` + `_enums_to_str` kimenetével
+    AZONOS kulcs-sorrendben és értékekkel, csak mély másolás és kétszeri
+    rekurzív bejárás nélkül (egy teljes meccsen ez a szerializálás
+    idejének nagy része volt)."""
+    b = fr.ball
+    return {
+        "t": fr.t,
+        "players": [
+            {"track_id": p.track_id, "team": _ev(p.team), "x": p.x,
+             "y": p.y, "source": _ev(p.source),
+             "confidence": p.confidence,
+             "jersey_number": p.jersey_number, "role": _ev(p.role)}
+            for p in fr.players
+        ],
+        "ball": (None if b is None
+                 else {"x": b.x, "y": b.y, "confidence": b.confidence}),
+    }
 
 
 def _enums_to_str(obj):

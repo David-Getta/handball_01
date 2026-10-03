@@ -13,6 +13,17 @@ hetesek, labdabiztonság, erőnlét, emberelőny, irányító-függés) állít
 Szándékosan szabály-alapú (nem nyelvi modell): minden javaslat mögött
 kiszámolt szám áll, így az edző ellenőrizheti. A lista rangsorolt, és
 legfeljebb MAX_ITEMS elemű — a fókusz attól fókusz, hogy kevés.
+
+A rangsor (`rank_focus`) kimondott, vitatható edzői sorrend, nem a
+szabályok forrás-sorrendje: egy meccsen 60–90 szabály is megszólal,
+és a forrás-sorrend a fejlesztés ideje szerint ("az újak felülre")
+válogatott volna — a legutóbb írt öt szabály, csupa támadás-tétel. A
+rangsor helyette TERÜLETEK KÖZÖTT forog (TF_AREA_ORDER: védekezés,
+támadás, kapus, befejezés, taktika, …): előbb minden területről a
+legfontosabb tétel, aztán a második — így az edzés kiegyensúlyozott.
+Egy területen belül az alap-szabályok (fedezés-fegyelem,
+labdabiztonság, ziccer, hetes — a lista legrégebbi, legáltalánosabb
+kérdései) előzik a finomabb, később hozzáadott mintákat.
 """
 
 from __future__ import annotations
@@ -20,9 +31,92 @@ from __future__ import annotations
 from typing import Optional
 
 from ..models.tracking import Match, Team
+from .primitive_cache import memoize_primitive
 from .tactics import TacticsConfig
 
 MAX_ITEMS = 5
+
+# A terület-rangsor: a fókusz-lista a területek között FOROGVA válogat
+# (lásd `rank_focus`) — előbb minden területről a legfontosabb tétel,
+# aztán a második. A sorrend kimondott edzői sorrend: a kapott gól
+# (védekezés) előzi a saját befejezést, a kapus és a befejezés a
+# taktikát, az állapot-témák (átmenet, kondíció, fáradás, mentális) a
+# végére. A listán nem szereplő terület a megjelenés sorrendjében,
+# a legvégére kerül. Az egyéni lap (player_training_focus) ugyanezt
+# a rangsort használja: a labdabiztonság és a hajrá az ő területei.
+TF_AREA_ORDER = ("védekezés", "támadás", "labdabiztonság", "kapus",
+                 "befejezés", "taktika", "hajrá", "átmenet", "kondíció",
+                 "erőnlét", "fáradás", "mentális", "végjáték", "labdás",
+                 "csoportos")
+
+# Egyéni edzés-fókusz: emberenként legfeljebb ennyi tétel (a fókusz
+# attól fókusz, hogy kevés), és a befejezés-szabály küszöbei.
+PLAYER_MAX_ITEMS = 2
+# Befejezés: ennyi mért lövés kell az ítélethez, és ekkora gól−xG
+# hiány számít érdeminek. A 0,8 nagyjából egy elmaradt gól — ennél
+# kisebb elmaradás egy meccsen belül a szórás.
+PTF_MIN_SHOTS = 5
+PTF_XG_GAP = 0.8
+# Kondíció: ekkora (százalékos) második félidei tempó-esés fölött
+# beszélünk a LÁBRÓL, nem a napi formáról.
+PTF_FATIGUE_DROP_PCT = 25.0
+# Kapus: ennyi kapura tartó lövés kell az ítélethez (kevesebből a
+# védés-arány szórás), és ekkora várható-alatti mérleg (GSAx) számít
+# formahiánynak — az 1,0 nagyjából egy "bevédhető" gól.
+PTF_GK_MIN_ON_TARGET = 6
+PTF_GK_GSAX = -1.0
+
+
+def rank_focus(items: list, limit: Optional[int] = None) -> list:
+    """A megszólalt tételekből a fókusz: területek között forogva.
+
+    A `items` a szabályok forrás-sorrendjében érkezik, és minden tétel
+    hordozhatja a szabálya sorszámát ("_szabaly" — a kimenetből ki
+    lesz véve). A rangsor:
+
+    1. területenként csoportosítunk (TF_AREA_ORDER sorrendjében; a
+       listán nem szereplő terület a megjelenés sorrendjében utána);
+    2. egy területen belül az alap-szabályok előre: a szabály-sorszám
+       szerint növekvően, mert a kis sorszámok a legrégebbi,
+       legáltalánosabb kérdések (fedezés-fegyelem, labdabiztonság,
+       ziccer, hetes), a nagyok a később hozzáadott finom minták —
+       a forrás-sorrend erre nem jó, mert "az újak felülre" szokás
+       miatt az sem növekvő, sem csökkenő (sorszám nélküli tétel a
+       forrás-sorrendben marad, a számozottak után);
+    3. körbejárva veszünk egy-egy tételt területenként, amíg a
+       `limit` (alapból MAX_ITEMS) betelik.
+
+    Így öt tételből nem lehet mind az öt támadás-tétel, ha védekezés-
+    vagy kapus-tétel is megszólalt — az edzés kiegyensúlyozott.
+    """
+    if limit is None:
+        limit = MAX_ITEMS
+    by_area: dict = {}
+    for i, it in enumerate(items):
+        szam = it.get("_szabaly")
+        kulcs = (0, szam, i) if szam else (1, 0, i)
+        by_area.setdefault(it["area"], []).append((kulcs, it))
+    for area in by_area:
+        by_area[area] = [
+            {k: v for k, v in it.items() if k != "_szabaly"}
+            for _, it in sorted(by_area[area], key=lambda kv: kv[0])]
+    ismert = [a for a in TF_AREA_ORDER if a in by_area]
+    ismeretlen = [a for a in by_area if a not in TF_AREA_ORDER]
+    sorrend = ismert + ismeretlen
+    out: list = []
+    kor = 0
+    while len(out) < limit:
+        talalt = False
+        for area in sorrend:
+            if kor < len(by_area[area]):
+                out.append(by_area[area][kor])
+                talalt = True
+                if len(out) >= limit:
+                    break
+        if not talalt:
+            break
+        kor += 1
+    return out
 
 
 def training_focus(match: Match,
@@ -37,18 +131,36 @@ def training_focus(match: Match,
         return _training_focus_cached(match, config)
 
 
+def _tf_copy(val: dict) -> dict:
+    """Védő-másolat a gyorsítótárazott fókusz-listához."""
+    return {side: [dict(item) for item in items]
+            for side, items in val.items()}
+
+
+@memoize_primitive("training_focus", copy=_tf_copy)
 def _training_focus_cached(match: Match,
                            config: Optional[TacticsConfig] = None) -> dict:
-    """Az edzés-fókusz tényleges felépítése (lásd `training_focus`)."""
+    """Az edzés-fókusz tényleges felépítése (lásd `training_focus`).
+
+    A `primitive_cache` hatókörön belül meccsenként EGYSZER fut le —
+    az ellenszer-lap és az edzői összefoglaló is ezt olvassa."""
     config = config or TacticsConfig()
+    # Minden megszólaló tétel ide gyűlik (korlát nélkül); a fókuszt a
+    # végén a `rank_focus` válogatja ki — a korlát NEM a forrás-sorrend
+    # első öt tétele, hanem területek között forgó rangsor.
     out: dict = {"home": [], "away": []}
+    # A `_szabaly` a szabály sorszáma (minden blokk a `try:` előtt
+    # beállítja) — a rangsor területen belüli kulcsa; a kimenetből a
+    # `rank_focus` kiveszi.
+    _szabaly = 0
 
     def add(side, area, title, why, drill):
-        if len(out[side]) < MAX_ITEMS:
-            out[side].append({"area": area, "title": title,
-                              "why": why, "drill": drill})
+        out[side].append({"area": area, "title": title,
+                          "why": why, "drill": drill,
+                          "_szabaly": _szabaly})
 
     # 1) Fedezés-fegyelem: sok szabadon hagyott lövő.
+    _szabaly = 1
     try:
         from .defense import defense_analysis
         d = defense_analysis(match, config)
@@ -72,6 +184,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 2) Befejezés: a helyzetek megvoltak, a gólok nem.
+    _szabaly = 2
     try:
         from .xg import match_xg
         tx = match_xg(match, config)["teams"]
@@ -87,6 +200,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 3) Hetesek: kihagyott büntetők.
+    _szabaly = 3
     try:
         from .rules import seven_meter_summary
         s7 = seven_meter_summary(match, config)
@@ -102,6 +216,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 4) Labdabiztonság: több eladott labda, mint lövés.
+    _szabaly = 4
     try:
         from .event_detection import EventType, detect_events
         ev = detect_events(match, config)
@@ -120,6 +235,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 5) Erőnlét: nagy intenzitás-esés a hajrára.
+    _szabaly = 5
     try:
         from .stats import compute_intensity_timeline
         windows = compute_intensity_timeline(match)
@@ -144,6 +260,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 6) Emberelőny: a létszámfölény nem hozott jobb gólarányt.
+    _szabaly = 6
     try:
         from .rules import powerplay_efficiency
         eff = powerplay_efficiency(match, config)
@@ -184,6 +301,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 7) Irányító-függés: a saját támadás egyetlen emberen múlik.
+    _szabaly = 7
     try:
         from .playmaker import playmaker_dependency
         pd = playmaker_dependency(match, config)
@@ -200,6 +318,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 8) Átmenet-védekezés: sok gyors kapott gól labdavesztés után.
+    _szabaly = 8
     try:
         from .defense import transition_defense
         td = transition_defense(match, config)
@@ -215,6 +334,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 9) Laza védekezés: sok tér a lövőnek (magas engedett xG mellett).
+    _szabaly = 9
     try:
         from .defense import defense_analysis, defensive_pressure
         dp = defensive_pressure(match, config)
@@ -233,6 +353,7 @@ def _training_focus_cached(match: Match,
 
     # 10) Sok elöl (támadó harmadban) elvesztett labda: a befejezés
     # kapkodó/kockázatos — az ellenfél kontrája ezekből indul.
+    _szabaly = 10
     try:
         from .defense import turnover_zones
         tz = turnover_zones(match, config)
@@ -249,6 +370,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 11) Elvesztett szoros hajrá: a végjáték-helyzeteket gyakorolni kell.
+    _szabaly = 11
     try:
         from .momentum import clutch_performance
         cp = clutch_performance(match, config)
@@ -265,6 +387,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 12) Sok lövésüket blokkolják: a lövés-előkészítésen kell dolgozni.
+    _szabaly = 12
     try:
         from .defense import detect_blocks
         bl = detect_blocks(match, config)
@@ -281,6 +404,7 @@ def _training_focus_cached(match: Match,
 
     # 13) Második félidei gól-visszaesés: a mérleg félidők közt romlik
     # (gól-alapú jel, a tempó-alapú fáradás-szabály kiegészítője).
+    _szabaly = 13
     try:
         from .momentum import halftime_score, score_progression
         hs = halftime_score(match, config)
@@ -301,6 +425,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 14) Lassú válasz a kapott gólra: az újraindulást kell gyakorolni.
+    _szabaly = 14
     try:
         from .momentum import goal_responses
         gr = goal_responses(match, config)
@@ -317,6 +442,7 @@ def _training_focus_cached(match: Match,
 
     # 15) Egy védőforma ellen elakadnak: fal elleni figurákat kell
     # gyakorolni (a felderítés tükör-szabálya a SAJÁT csapatra).
+    _szabaly = 15
     try:
         from .tactics import efficiency_vs_formation
         ef = efficiency_vs_formation(match, config)
@@ -341,6 +467,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 16) Terméketlen hosszú támadások: időkorlátos befejezés-gyakorlás.
+    _szabaly = 16
     try:
         from .attack_types import attack_duration_efficiency
         de = attack_duration_efficiency(match, config)
@@ -364,6 +491,7 @@ def _training_focus_cached(match: Match,
 
     # 17) Kihagyott ziccerek: nagy xG-jű helyzetek gól nélkül —
     # a helyzetkihasználást célzottan kell gyakorolni.
+    _szabaly = 17
     try:
         from .xg import missed_big_chances
         miss: dict[str, int] = {"home": 0, "away": 0}
@@ -382,6 +510,7 @@ def _training_focus_cached(match: Match,
 
     # 18) Lassú kapus-indítás: a védés utáni felhozatal gyakorlása —
     # a gyors kidobás kontra-fegyver (a felderítési kulcs tükör-szabálya).
+    _szabaly = 18
     try:
         from .goalkeeper import outlet_speed
         osp = outlet_speed(match, config)
@@ -400,6 +529,7 @@ def _training_focus_cached(match: Match,
 
     # 19) A 7 a 6 ára: ha többször kaptak gólt az üresen hagyott kapuba,
     # a lehozott kapusos játék labdabiztonságát kell gyakorolni.
+    _szabaly = 19
     try:
         from .goalkeeper import empty_net_goals
         eng = empty_net_goals(match, config)
@@ -417,6 +547,7 @@ def _training_focus_cached(match: Match,
 
     # 20) Egy-tengelyű támadás: ha a gólok zöme egyetlen (gólpasszoló ->
     # lövő) párosból jön, az ellenfél elvágja — B-tervet kell építeni.
+    _szabaly = 20
     try:
         from .event_detection import (EventType, assist_network,
                                       detect_shots)
@@ -443,6 +574,7 @@ def _training_focus_cached(match: Match,
 
     # 24) Szélső-játék: ha vannak szélsők a felállásban, de a gólokból
     # kimaradnak, a támadás beszűkült — szélesíteni kell.
+    _szabaly = 24
     try:
         from .roles import estimate_positions
         from .xg import match_xg
@@ -470,6 +602,7 @@ def _training_focus_cached(match: Match,
 
     # 23) Visszarendeződés-tempó: ha méréssel is lassú a visszaérés,
     # nem kell kontra-gólt várni a jelzéshez — korai figyelmeztetés.
+    _szabaly = 23
     try:
         from .defense import RECOVERY_SLOW_S, transition_recovery
         trr = transition_recovery(match, config)
@@ -488,6 +621,7 @@ def _training_focus_cached(match: Match,
 
     # 22) Kapus-forma: ha a kapus a helyzetekhez képest sokat kap
     # (negatív GSAx), célzott kapus-edzés kell — nem a fal a hibás.
+    _szabaly = 22
     try:
         from .xg import xg_prevented
         xp = xg_prevented(match, config)
@@ -506,6 +640,7 @@ def _training_focus_cached(match: Match,
 
     # 21) Rotáció-tervezés: ha többen is nagyot esnek a tempóból és
     # cserét sem kapnak, a pad használatát kell megtervezni.
+    _szabaly = 21
     try:
         from .substitutions import late_sub_flags
         per_side: dict[str, int] = {"home": 0, "away": 0}
@@ -524,6 +659,7 @@ def _training_focus_cached(match: Match,
     # 25) Fegyelem: ha a csapat többször kiül (2+ felismert kiállítás),
     # a védekezés-technikán kell dolgozni — az emberhátrány a
     # leggyorsabb módja a meccs elvesztésének.
+    _szabaly = 25
     try:
         from .rules import detect_powerplay
         n_susp = {"home": 0, "away": 0}
@@ -542,6 +678,7 @@ def _training_focus_cached(match: Match,
 
     # 26) Szünet utáni kezdés: ha a 2. félidő első 5 percében 2+ gólos
     # mínuszba kerül a csapat, a visszatérés-protokollon kell dolgozni.
+    _szabaly = 26
     try:
         from .halftime import second_half_start
         shs = second_half_start(match, config)
@@ -560,6 +697,7 @@ def _training_focus_cached(match: Match,
     # 27) Figura-frissítés: ha a leggyakoribb figura terméketlen (4+
     # támadásból legfeljebb 20% gól), az ellenfelek már olvassák —
     # variáció kell.
+    _szabaly = 27
     try:
         from .setplays import setplay_efficiency
         eff_tf = setplay_efficiency(match)
@@ -582,6 +720,7 @@ def _training_focus_cached(match: Match,
     # 28) Hetes-variáció: ha a fő dobónk irány-képe kiszámítható (2+
     # mért heteséből 75%+ egy sávba megy), az ellenfél kapusa készülni
     # fog rá — váltogatás kell.
+    _szabaly = 28
     try:
         from .rules import seven_meter_outcomes
         by_taker: dict = {}
@@ -609,6 +748,7 @@ def _training_focus_cached(match: Match,
     # rajta át (15% alatt), vagy a beállós játék terméketlen (a gólarány
     # 15+ ponttal rosszabb, mint nélküle), a beadás-játékot kell
     # gyakorolni.
+    _szabaly = 30
     try:
         from .attack_types import pivot_usage
         pu30 = pivot_usage(match, config)
@@ -644,6 +784,7 @@ def _training_focus_cached(match: Match,
     # 32) Passz-lánc: ha a hosszú körbejáratás terméketlen (6+ passzos
     # támadások gólarány nélkül), vagy a rövid játék elkapkodott (a
     # támadások zöme 0–2 passz, gyenge gólaránnyal), célzott gyakorlat.
+    _szabaly = 32
     try:
         from .attack_types import pass_chains
         pc32 = pass_chains(match, config)
@@ -678,6 +819,7 @@ def _training_focus_cached(match: Match,
     # 31) Sáv-védelem: ha az ellenfél betörései egy sávban
     # koncentrálódnak ellenünk (40%+, 2+ gól onnan), a segítő védő
     # csúszását kell gyakorolni abban a sávban.
+    _szabaly = 31
     try:
         from .defense import breakthrough_lanes
         bl31 = breakthrough_lanes(match, config)
@@ -701,6 +843,7 @@ def _training_focus_cached(match: Match,
 
     # 33) Kapus-helyezkedés: ha a saját kapus túl kint áll (átlag 1,5 m+
     # a gólvonaltól), az átemelés ellen sebezhető — helyezkedés-gyakorlat.
+    _szabaly = 33
     try:
         from .goalkeeper import gk_positioning
         gp33 = gk_positioning(match, config)
@@ -722,6 +865,7 @@ def _training_focus_cached(match: Match,
     # 34) Kontra-befejezés: ha a csapat sok labdát szerez, de alig
     # váltja gyors gólra (4+ szerzés, 20% alatti konverzió), a
     # lerohanás-befejezést kell gyakorolni.
+    _szabaly = 34
     try:
         from .attack_types import transition_offense
         to34 = transition_offense(match, config)
@@ -745,6 +889,7 @@ def _training_focus_cached(match: Match,
     # 29) Emberfogás-tapadás: ha van lazán őrző védőnk (a leglazább
     # emberfogó 2,5 m+ átlagtávról kíséri az emberét), az egy-egy
     # elleni védekezést kell gyakorolni — névre szólóan.
+    _szabaly = 29
     try:
         from .defense import MARK_LOOSE_M, marking_pairs
         mk29 = marking_pairs(match, config)
@@ -773,6 +918,7 @@ def _training_focus_cached(match: Match,
     # gyenge a gólarány (5+ távoli lövés, a lövések 40%+-a távoli,
     # 25% alatti gólarány), a lövésválasztást és az átlövő-technikát
     # kell gyakorolni.
+    _szabaly = 35
     try:
         from .attack_types import shot_ranges
         sr35 = shot_ranges(match, config)
@@ -799,6 +945,7 @@ def _training_focus_cached(match: Match,
     # 36) Kapus-védés sáv szerint: ha a SAJÁT kapusunk egy távolság-sávra
     # feltűnően gyenge (elég kaputra érkezett lövés, 50% alatti védés), azt
     # a sávot kell célzottan gyakorolni.
+    _szabaly = 36
     try:
         from .goalkeeper import GK_RANGE_MIN_FACED, gk_save_ranges
         gsr36 = gk_save_ranges(match, config)
@@ -830,6 +977,7 @@ def _training_focus_cached(match: Match,
     # 37) Befejezés-változatosság: ha a góljaink zöme (6+ gólból 55%+)
     # ugyanarra a kapuoldalra megy, kiszámíthatóak vagyunk — a
     # hely-változtatást kell gyakorolni.
+    _szabaly = 37
     try:
         from .attack_types import goal_placement
         gp37 = goal_placement(match, config)
@@ -855,6 +1003,7 @@ def _training_focus_cached(match: Match,
     # 38) Szélső-befejezés: ha a szélső (éles) szögből gyengén fejeznek be
     # (4+ szélső-lövés, 30% alatti gólarány), a szélső-befejezést kell
     # gyakorolni.
+    _szabaly = 38
     try:
         from .attack_types import wing_finishing
         wf38 = wing_finishing(match, config)
@@ -876,6 +1025,7 @@ def _training_focus_cached(match: Match,
     # 39) Védekezési vonal: ha felfutó/agresszív falat húzunk, a mögöttes
     # teret kell tudni zárni (visszafutás), mély falnál a türelmes felállt
     # védekezést és a beálló-őrzést gyakorolni.
+    _szabaly = 39
     try:
         from .defense import (DEF_LINE_DEEP_M, DEF_LINE_HIGH_M,
                               DEF_LINE_MIN_FRAMES, defensive_line_height)
@@ -907,6 +1057,7 @@ def _training_focus_cached(match: Match,
     # 40) Vertikális építkezés: ha nagyon türelmesen köröztetünk (30+
     # passz, 20% alatti előre-passz), a mélységi, penetráló játékot kell
     # gyakorolni — különben kiszámítható és könnyen védhető a támadás.
+    _szabaly = 40
     try:
         from .attack_types import PASS_FORWARD_MIN_M, pass_direction
         pd40 = pass_direction(match, config)
@@ -928,6 +1079,7 @@ def _training_focus_cached(match: Match,
     # 41) Gól-előkészítés változatossága: ha a gólpasszaink zöme (4+
     # gólpasszból 60%+) egyetlen forrásból (szél/közép/hátsó) jön, a
     # támadás kiszámítható — több irányból kell tudni gólt előkészíteni.
+    _szabaly = 41
     try:
         from .attack_types import ASSIST_SOURCE_MIN, assist_sources
         asr41 = assist_sources(match, config)
@@ -960,6 +1112,7 @@ def _training_focus_cached(match: Match,
     # 42) Labdabiztonság: ha egy játékosunk feltűnően sok labdát elveszít
     # (4+ eladás, és a csapat eladásainak jó része tőle), névre szóló
     # labdabiztonság-gyakorlás.
+    _szabaly = 42
     try:
         from .defense import turnover_players
         tp42 = turnover_players(match, config)
@@ -973,7 +1126,7 @@ def _training_focus_cached(match: Match,
                 continue
             who42 = (f"{top42['jersey']}-es" if top42["jersey"] is not None
                      else f"{top42['player_id']}. játékos")
-            add(side, "támadás", "Labdabiztonság",
+            add(side, "támadás", "Labdabiztonság névre szólóan",
                 f"a(z) {who42} veszíti a legtöbb labdát "
                 f"({top42['losses']} eladás a csapat {rec42['total']}-ből) "
                 "— rá fognak presselni",
@@ -986,6 +1139,7 @@ def _training_focus_cached(match: Match,
     # 43) Második roham: ha a kimaradt lövések (6+) után ritkán megyünk a
     # lepattanóra (8% alatt), a második esélyeket adjuk el — a beállós
     # lepattanó-harcot és a lövés utáni bemozgást kell gyakorolni.
+    _szabaly = 43
     try:
         from .attack_types import SECOND_CHANCE_MIN, second_chance
         sc43 = second_chance(match, config)
@@ -1008,6 +1162,7 @@ def _training_focus_cached(match: Match,
     # 44) Kezdés: ha a meccs nyitányát rendre elveszítjük (a korai — első 6
     # gólos — mérleg 2+ góllal negatív), a koncentrált, tervezett kezdést
     # kell gyakorolni (bemelegített első támadások, kész nyitó-figurák).
+    _szabaly = 44
     try:
         from .momentum import opening_profile
         op44 = opening_profile(match, config)
@@ -1031,6 +1186,7 @@ def _training_focus_cached(match: Match,
 
     # 45) Lövőerő-esés: ha a 2. félidőre érdemben lassulnak a lövéseink
     # (fáradás-jel), lövőerő-állóképességet kell építeni.
+    _szabaly = 45
     try:
         from .event_detection import FADE_DROP_PCT, shot_speed_fade
         sf45 = shot_speed_fade(match, config)
@@ -1052,6 +1208,7 @@ def _training_focus_cached(match: Match,
     # 46) Gól-koncentráció: ha a góljaink zöme (5+ gólból 40%+) egy embertől
     # jön, az ellenfél őt fogja kikapcsolni — másodlagos befejezőket kell
     # építeni, hogy a csapat ne álljon le vele együtt.
+    _szabaly = 46
     try:
         from .event_detection import goal_concentration
         gc46 = goal_concentration(match, config)
@@ -1074,6 +1231,7 @@ def _training_focus_cached(match: Match,
     # 47) Támogatás-távolság: ha a labdásunk rendre magára marad (átlag 7 m+
     # vagy 35%+ izolált kocka), a présjáték szétszed minket — a labda
     # melletti bemozgást kell gyakorolni.
+    _szabaly = 47
     try:
         from .decisions import (SUPPORT_ISO_M, SUPPORT_MIN_FRAMES,
                                 support_distance)
@@ -1099,6 +1257,7 @@ def _training_focus_cached(match: Match,
     # 48) Területi fölény: ha a birtoklásunk a saját térfelünkön ragad
     # (45% alatti elöl-arány), a labdakihozatalt kell gyakorolni — prés
     # ellen nem jutunk el a kapuig.
+    _szabaly = 48
     try:
         from .tactics import TILT_LOW_PCT, TILT_MIN_FRAMES, field_tilt
         ft48 = field_tilt(match, config)
@@ -1121,6 +1280,7 @@ def _training_focus_cached(match: Match,
 
     # 49) Védelmi tömörség: ha a falunk széthúzott (a közép nyitva), a
     # belső zárást kell gyakorolni — betörésekből és beállóból kapunk.
+    _szabaly = 49
     try:
         from .defense import (DEF_WIDTH_MIN_FRAMES, DEF_WIDTH_WIDE_M,
                               defensive_width)
@@ -1145,6 +1305,7 @@ def _training_focus_cached(match: Match,
     # 50) Engedett lövésminőség: ha a falunk átlagosan nagy értékű (ziccer-
     # közeli) lövéseket enged (8+ kapott lövésből 0,38+ xG/lövés), a
     # helyzet-megelőzést kell gyakorolni — a kapus egyedül kevés.
+    _szabaly = 50
     try:
         from .defense import defense_analysis
         da50 = defense_analysis(match, config)
@@ -1169,6 +1330,7 @@ def _training_focus_cached(match: Match,
     # 51) Passz-tempó: ha állva, lassan járatjuk a labdát (12 passz/perc
     # alatt), a fal békében felállhat ellenünk — a labdajáratás sebességét
     # kell növelni.
+    _szabaly = 51
     try:
         from .tactics import (PT_MIN_POSS_S, PT_SLOW_PER_MIN, pass_tempo)
         pt51 = pass_tempo(match, config)
@@ -1191,6 +1353,7 @@ def _training_focus_cached(match: Match,
 
     # 52) Falba lövés: ha a lövéseink nagy része (4+ blokkból 20%+) az
     # ellenfél blokkján akad el, a lövés-előkészítést kell gyakorolni.
+    _szabaly = 52
     try:
         from .defense import (BLOCKED_HIGH_PCT, BLOCKED_MIN,
                               blocked_shot_rate)
@@ -1215,6 +1378,7 @@ def _training_focus_cached(match: Match,
     # 53) Szerzés-magasság: ha a szerzéseink kizárólag hátul születnek
     # (6+ szerzésből 10% alatti elöl-arány), a letámadás mint fegyver
     # hiányzik — az elöl-zavarást kell gyakorolni.
+    _szabaly = 53
     try:
         from .defense import STEAL_HEIGHT_MIN, steal_height
         st53 = steal_height(match, config)
@@ -1238,6 +1402,7 @@ def _training_focus_cached(match: Match,
     # 54) Passz-hossz: ha hosszú passzokra épül a játékunk (15+ passzból
     # 30%+ 10 m fölötti) ÉS sokat adunk el, a passz-szerkezetet kell
     # biztonságosabbra hangolni.
+    _szabaly = 54
     try:
         from .event_detection import (PLEN_LONG_PCT, PLEN_MIN_PASSES,
                                       pass_length)
@@ -1267,6 +1432,7 @@ def _training_focus_cached(match: Match,
     # 55) Lövés-időzítés: ha rendre kivárunk (5+ lőtt támadásból 22+ mp-es
     # átlag lövésig-idő), a támadás-lezárást kell gyakorolni — a passzív
     # jel és a kapkodás ellenünk dolgozik.
+    _szabaly = 55
     try:
         from .attack_types import (SHTIM_LATE_AVG_S, SHTIM_MIN_SHOTS,
                                    shot_timing)
@@ -1291,6 +1457,7 @@ def _training_focus_cached(match: Match,
     # 56) Védekezés-fellazulás: ha a falunk a 2. félidőre érdemben lazul
     # (0,5 m+), a védekezés-állóképességet és a hajrá-fegyelmet kell
     # építeni — a meccs végi szabad lövők ebből születnek.
+    _szabaly = 56
     try:
         from .defense import (PRESSURE_FADE_LOOSEN_M,
                               PRESSURE_FADE_MIN_FRAMES, pressure_fade)
@@ -1316,6 +1483,7 @@ def _training_focus_cached(match: Match,
     # 57) Időkérés-forgatókönyv: ha az időkéréseink rendre nem hoznak
     # fordulatot (2+ hatástalan, és több, mint a sikeres), az időkérés
     # utáni újraindulást kell begyakorolni.
+    _szabaly = 57
     try:
         from .stoppages import timeout_record
         tr57 = timeout_record(match, config)
@@ -1336,6 +1504,7 @@ def _training_focus_cached(match: Match,
 
     # 58) Labdabiztonság-esés: ha a 2. félidőre érdemben nő az eladás-
     # ütemünk (+0,2/perc), a fáradt kéz labdabiztonságát kell építeni.
+    _szabaly = 58
     try:
         from .defense import TURNOVER_FADE_RISE_PER_MIN, turnover_fade
         tf58 = turnover_fade(match, config)
@@ -1355,8 +1524,5160 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 486) A saját 7a6-unk EGY figurára épül: a lehozott kapus mellett a
+    # kiszámíthatóság a legdrágább hiba — a hat védő rááll, az elvett
+    # labda pedig azonnal gól az üres kapuba. Második megoldás kell.
+    _szabaly = 486
+    try:
+        from .setplays import empty_net_setplay
+        enf486 = empty_net_setplay(match, config)
+        for side in ("home", "away"):
+            rec486 = enf486.get(side) or {}
+            if not rec486.get("verdict") or not rec486.get("figures"):
+                continue
+            fo = rec486["figures"][0]
+            add(side, "támadás",
+                "A 7a6-unk egyetlen figurára épül",
+                f"az üres kapus támadásaink {fo['share_pct']:.0f}%-a "
+                f"ugyanaz a figura (\"{fo['zone']}\", {fo['attacks']} "
+                f"támadás, {fo['goals']} gól) — a hat védő rááll, és a "
+                "lehozott kapus mellett minden elvett labda gól",
+                "7a6 két megoldással: ugyanabból a felállásból a "
+                "bejátszott figura MELLETT egy második befejezés (a "
+                "túloldali átlövés vagy a beálló-leválás), a jelre "
+                "váltva; a gyakorlat végén mindig labdaszerzéssel zárva, "
+                "hogy a kockázat is érezhető legyen (az elvesztett labda "
+                "után a csapat fusson vissza az üres kapuhoz)")
+    except Exception:
+        pass
+
+    # 485) A saját hajrá-falunk MÁS, mint a törzsben: a váltás csak akkor
+    # ér valamit, ha be van gyakorolva — a hajrában felálló alakot
+    # fáradtan, órára kell tudni felállítani, különben lyukas.
+    _szabaly = 485
+    try:
+        from .defense import clutch_defense_shape
+        cds485 = clutch_defense_shape(match, config)
+        for side in ("home", "away"):
+            rec485 = cds485.get(side) or {}
+            if not rec485.get("verdict") or not rec485.get("shapes"):
+                continue
+            fo = rec485["shapes"][0]
+            add(side, "védekezés",
+                "A hajrában másik falat hozunk",
+                f"az utolsó öt percben a(z) \"{fo['zone']}\" alakunk a "
+                f"védekezett támadások {fo['share_pct']:.0f}%-a "
+                f"({fo['attacks']} támadás, {fo['goals']} kapott gól), a "
+                f"meccs többi részén csak {fo['rest_share_pct']:.0f}% — a "
+                "váltás csak begyakorolva ér valamit",
+                "hajrá-fal felállítása jelre: az edzés végén, fáradtan, "
+                "órára játszva (utolsó 5 perc, egy gól előny) a szokásos "
+                "falból a hajrá-alakba váltás labdavesztés után, "
+                "a ki-kilépő védő és a mögötte záró pár külön "
+                "begyakorolva")
+    except Exception:
+        pass
+
+    # 484) A saját hajránk EGY figurára szűkül: a végjátékban az ellenfél
+    # fala nem tippel, hanem arra áll fel, amit mindig hozunk — a hajrára
+    # kell egy második, ugyanabból a mozgásból induló befejezés.
+    _szabaly = 484
+    try:
+        from .setplays import clutch_setplay
+        csp484 = clutch_setplay(match, config)
+        for side in ("home", "away"):
+            rec484 = csp484.get(side) or {}
+            if not rec484.get("verdict") or not rec484.get("figures"):
+                continue
+            fo = rec484["figures"][0]
+            add(side, "támadás",
+                "A hajránk egyetlen figurára szűkül",
+                f"az utolsó öt perc támadásaink {fo['share_pct']:.0f}%-a "
+                f"ugyanaz a figura (\"{fo['zone']}\", {fo['attacks']} "
+                f"támadás, {fo['goals']} gól), a meccs többi részén csak "
+                f"{fo['rest_share_pct']:.0f}% — a fal a végjátékban erre "
+                "áll fel",
+                "hajrá-figura két befejezéssel: ugyanaz a kezdő mozgás, "
+                "de a fal reakciójától függően a második megoldás (a "
+                "másik oldal átlövése VAGY beálló-átadás); az edzés végén, "
+                "fáradtan és órára játszva (utolsó 5 perc, egy gól "
+                "hátrány) gyakorolva")
+    except Exception:
+        pass
+
+    # 483) A saját emberelőnyünk EGY figurára épül: a két perc a
+    # legdrágább támadási idő — ha a fal kiismeri az egyetlen megoldást,
+    # a fölény elvész. Második befejezés kell rá, bejátszva.
+    _szabaly = 483
+    try:
+        from .setplays import powerplay_setplay
+        ppf483 = powerplay_setplay(match, config)
+        for side in ("home", "away"):
+            rec483 = ppf483.get(side) or {}
+            if not rec483.get("verdict") or not rec483.get("figures"):
+                continue
+            fo = rec483["figures"][0]
+            add(side, "támadás",
+                "Az emberelőnyünk egyetlen figurára épül",
+                f"a két perc alatti támadásaink {fo['share_pct']:.0f}%-a "
+                f"ugyanaz a figura (\"{fo['zone']}\", {fo['attacks']} "
+                f"támadás, {fo['goals']} gól) — a fal ezt a második "
+                "kiállításnál már ismeri",
+                "6-5 gyakorlat két befejezéssel: ugyanaz a kezdő mozgás, "
+                "de a fal reakciójától függően beálló-átadás VAGY "
+                "átlövés a másik oldalról; a kapott jelre váltva, "
+                "időre játszva (a két perc rövid)")
+    except Exception:
+        pass
+
+    # 482) Állásfüggően kiszámítható a támadójátékunk: ha vezetésnél és
+    # hátrányban MÁS figurára épülünk, az ellenfél az eredményjelzőről
+    # olvassa le, mi jön — a hajrára kell egy második megoldás.
+    _szabaly = 482
+    try:
+        from .setplays import setplay_by_score
+        sbs482 = setplay_by_score(match, config)
+        for side in ("home", "away"):
+            mondat = (sbs482.get(side) or {}).get("verdict")
+            if not mondat:
+                continue
+            add(side, "támadás",
+                "Az állásunkból kiolvasható, melyik figuránk jön",
+                f"a saját játékunkban {mondat} — ezt az ellenfél is "
+                "leolvassa az eredményjelzőről",
+                "hajrá-gyakorlat két megoldással: ugyanabból az "
+                "alaphelyzetből a megszokott figura ÉS egy második "
+                "befejezés, a kispadról bekiabált jelre váltva; "
+                "vezetéses és hátrányos állást is játsszatok le")
+    except Exception:
+        pass
+
+    # 481) A saját falunk két alakja közt szakadék van: ha az egyik
+    # alakunk ellen sokkal többet kapunk, nem a rendszert kell cserélni,
+    # hanem azt az alakot kell felállítani minden támadásnál.
+    _szabaly = 481
+    try:
+        from .defense import (DSH_GAP_PP, DSH_MIN_ATTACKS, defense_shapes)
+        dsh481 = defense_shapes(match, config)
+        for side in ("home", "away"):
+            sorok = [x for x in ((dsh481.get(side) or {}).get("shapes") or [])
+                     if x["attacks"] >= DSH_MIN_ATTACKS]
+            if len(sorok) < 2:
+                continue
+            jo = min(sorok, key=lambda x: x["goal_pct"])
+            rossz = max(sorok, key=lambda x: x["goal_pct"])
+            if rossz["goal_pct"] - jo["goal_pct"] < DSH_GAP_PP:
+                continue
+            add(side, "védekezés",
+                "A falunk másik alakja ellen sokkal többet kapunk",
+                f"a(z) \"{jo['zone']}\" alakunk ellen "
+                f"{jo['goal_pct']:.0f}%-ot kapunk "
+                f"({jo['goals']}/{jo['attacks']} támadás), a(z) "
+                f"\"{rossz['zone']}\" ellen viszont "
+                f"{rossz['goal_pct']:.0f}%-ot "
+                f"({rossz['goals']}/{rossz['attacks']}) — nem a rendszer a "
+                f"baj, hanem hogy nem mindig az elsőt állítjuk fel "
+                f"(küszöb: {DSH_MIN_ATTACKS} támadás alakonként, "
+                f"{DSH_GAP_PP:.0f} százalékpont rés)",
+                "visszarendeződés-gyakorlat: labdavesztés után a fal "
+                "felállítása jelre, a kijelölt alakban (hat védő a "
+                "helyére, kilépés csak a labdás emberre); mérjétek, hány "
+                "másodperc alatt áll fel, és élesben is így játsszátok")
+    except Exception:
+        pass
+
+    # 480) Kiszámítható a saját play-callingunk: ha a gólunk után rögtön
+    # ugyanazt a figurát hozzuk (vagy mindig ismétlünk), az ellenfél
+    # védekezése előre felállhat rá — a gól utáni támadásra kell egy
+    # MÁSODIK, bejátszott változat.
+    _szabaly = 480
+    try:
+        from .setplays import (SRC_GAP_PP, SRC_HIGH_PCT, SRC_MIN_ATTACKS,
+                               setplay_repeat_choice)
+        src480 = setplay_repeat_choice(match, config)
+        for side in ("home", "away"):
+            rec480 = src480.get(side) or {}
+            gp = rec480.get("after_goal_pct")
+            mp = rec480.get("after_miss_pct")
+            if gp is None or mp is None:
+                continue
+            if gp - mp >= SRC_GAP_PP:
+                miert = (f"a gólotok utáni támadásban {gp:.0f}%-ban "
+                         f"ugyanazt a figurát hozzátok, gól nélkül csak "
+                         f"{mp:.0f}%-ban (küszöb: {SRC_MIN_ATTACKS} mért "
+                         "támadás sávonként) — a gól után kiszámíthatóak "
+                         "vagytok")
+            elif gp >= SRC_HIGH_PCT and mp >= SRC_HIGH_PCT:
+                miert = (f"a következő támadásban szinte mindig ugyanazt a "
+                         f"figurát hozzátok (gól után {gp:.0f}%, gól nélkül "
+                         f"{mp:.0f}%) — egy bejátszott válasz az egész "
+                         "sorozatotokat megfogja")
+            else:
+                continue
+            add(side, "támadás",
+                "Kiszámítható a figura-sorrendünk a gól után",
+                miert,
+                "gól utáni támadás gyakorlása két nyitással: ugyanaz a "
+                "kezdő mozgás, két különböző befejezés (a megszokott és "
+                "egy ellen-mozgás), a kapott jelre váltva; 6-6 ellen, a "
+                "védők a mi meccs-formánkban")
+    except Exception:
+        pass
+
+    # 479) A figuránk egy fal ellen nem megy: ha a leggyakoribb figuránk
+    # valamelyik védőforma ellen elég mintából gól nélkül maradt, azt a
+    # falat kell bejátszani ellene edzésen — a meccsen már késő.
+    _szabaly = 479
+    try:
+        from .setplays import FVF_MIN_ATTACKS, figure_vs_formation
+        fvf479 = figure_vs_formation(match, config)
+        for side in ("home", "away"):
+            sorok = fvf479.get(side) or []
+            if not sorok:
+                continue
+            fo = sorok[0]
+            rossz = [(f_, v) for f_, v in (fo.get("forms") or {}).items()
+                     if v["attacks"] >= FVF_MIN_ATTACKS and v["goals"] == 0]
+            if not rossz:
+                continue
+            forma, v = rossz[0]
+            add(side, "támadás",
+                f"A figuránk a {forma} ellen nem megy: {fo['zone']}",
+                f"a leggyakoribb figurátok a {forma} fal ellen {v['attacks']} "
+                f"támadásból gól nélkül maradt (küszöb: {FVF_MIN_ATTACKS} "
+                "támadás) — ez a fal kiismerte",
+                f"a figura bejátszása {forma} ellen: a védők a meccs-forma "
+                "szerint, a befejezés két változata (beálló-átadás, "
+                "átlövés a második hullámból); 6-6 ellen élesben")
+    except Exception:
+        pass
+
+    # 478) Terméketlen kedvenc figura: a leggyakoribb figuránk
+    # (SPL_MIN_ATTACKS támadástól) gól nélkül maradt — a mintát az
+    # ellenfél is látja, új befejezést kell rá gyakorolni.
+    _szabaly = 478
+    try:
+        from .setplays import SPL_MIN_ATTACKS, setplay_shapes
+        sps478 = setplay_shapes(match, config)
+        for side in ("home", "away"):
+            sorok = [r for r in (sps478.get(side) or [])
+                     if r["attacks"] >= SPL_MIN_ATTACKS]
+            if not sorok or sorok[0]["goals"] > 0:
+                continue
+            fo = sorok[0]
+            add(side, "támadás",
+                f"Terméketlen kedvenc figura: {fo['zone']}",
+                f"a leggyakoribb figurátok {fo['attacks']} támadásból "
+                f"{fo['shots']} lövést és NULLA gólt hozott (küszöb: "
+                f"{SPL_MIN_ATTACKS} támadás) — a mintát az ellenfél is "
+                "kiismerte",
+                "ugyanaz a figura két új befejezéssel (beálló-átadás és "
+                "szélső befutás), 6-6 ellen élesben; a régi befejezést "
+                "csak cselként indítsátok")
+    except Exception:
+        pass
+
+    # 477) Labdahordó: ha valakink a csapatátlagnál sokkal többet fut a
+    # labdával, az ellenfél leszúrása őt fogja megtalálni — a "vidd
+    # kevesebbet, add korábban" edzés-téma, mielőtt meccsen derül ki.
+    _szabaly = 477
+    try:
+        from .decisions import CARRY_LONG_GAP_M, ball_carry_players
+        bcp477 = ball_carry_players(match, config)
+        for side in ("home", "away"):
+            aki = (bcp477.get(side) or {}).get("carrier")
+            if aki is None:
+                continue
+            mez = (f"#{aki['jersey']}" if aki.get("jersey") is not None
+                   else f"({aki['player_id']} azonosító)")
+            add(side, "labdás",
+                f"Labdahordó: {mez} viszi a labdát",
+                f"átlag {aki['avg_m']:.1f} m labdás szakaszonként a "
+                f"csapatátlag {bcp477[side]['avg_m']:.1f} m helyett "
+                f"(küszöb: +{CARRY_LONG_GAP_M:.0f} m) — futó labdásnál "
+                "a labda elvehető, és nála lassul a szervezés",
+                "kétérintős / háromérintős kisjáték neki súlyozva, "
+                "passz-le-fuss szabály a fektetett támadásban; a "
+                "labdavezetés helyett kapja mozgásból a visszatöltést")
+    except Exception:
+        pass
+
+    # 476) Egyéni fókusz a csapat-tervben: ha ugyanaz a terület TÖBB
+    # emberünknél jön elő, az már nem egyéni ügy, hanem edzés-téma.
+    _szabaly = 476
+    try:
+        # Ugyanebben a modulban van — a hatókör újra-belépő, tehát a
+        # mérések nem futnak le még egyszer.
+        p476 = player_training_focus(match, config)
+        for side in ("home", "away"):
+            teruletek: dict = {}
+            for p_ in (p476.get(side) or {}).get("players") or []:
+                for it in p_.get("items") or []:
+                    teruletek.setdefault(it["title"], []).append(
+                        p_.get("jersey"))
+            for cim, kik in sorted(teruletek.items(),
+                                   key=lambda kv: -len(kv[1])):
+                if len(kik) < 2:
+                    continue
+                nevek = ", ".join(
+                    f"#{j}" if j is not None else "?" for j in kik[:4])
+                add(side, "csoportos", f"Közös gyengeség: {cim.lower()}",
+                    f"ugyanaz a hiba {len(kik)} emberünknél jött elő "
+                    f"({nevek}) — ez már nem egyéni ügy",
+                    "csoportos blokk a hét elején: ugyanaz a gyakorlat "
+                    "az érintetteknek EGYÜTT, a többieknek a saját "
+                    "fókuszuk — így a blokk nem viszi el a teljes "
+                    "edzést, de a hiba egyszerre javul")
+                break  # a legtöbb embert érintő terület elég
+    except Exception:
+        pass
+
+    # 475) Hátrébb kerülő támadás: ha a SAJÁT felállásunk a 2. félidőre
+    # eltávolodik a kaputól, a hajrában csak a nehéz átlövés marad.
+    _szabaly = 475
+    try:
+        from .attack_types import ADEPTH_FADE_DROP_M, attack_depth_fade
+        adf475 = attack_depth_fade(match, config)
+        for side in ("home", "away"):
+            r475 = adf475[side]
+            if (r475["drop_m"] is None
+                    or r475["drop_m"] < ADEPTH_FADE_DROP_M):
+                continue
+            add(side, "támadás", "Hatos elleni munka a hajrában",
+                f"a felállásunk a 2. félidőre {r475['fh_m']:.1f} → "
+                f"{r475['sh_m']:.1f} m-re került a kaputól — fáradtan "
+                "senki nem megy be, és onnan már csak a kényelmes, de "
+                "nehéz átlövés jön",
+                "a teendő nem futóedzés, hanem a hajrá-támadások ELSŐ "
+                "mozdulatának kikötése: nevezz meg támadásonként egy "
+                "embert, akinek BE kell indulnia (betörés vagy beugrás) "
+                "— 4x5 perc kötött játék FÁRADTAN, a kondi-blokk után")
+    except Exception:
+        pass
+
+    # 474) Elfogyó beálló: ha a SAJÁT labdánk a 2. félidőre nem megy be
+    # a hatosra, a fal nyugodtan dolgozhat kifelé ellenünk.
+    _szabaly = 474
+    try:
+        from .attack_types import PIVOT_FADE_DROP_PCT, pivot_usage_fade
+        puf474 = pivot_usage_fade(match, config)
+        for side in ("home", "away"):
+            r474 = puf474[side]
+            if (r474["drop_pct"] is None
+                    or r474["drop_pct"] < PIVOT_FADE_DROP_PCT):
+                continue
+            add(side, "támadás", "Beálló-bejátszás a hajrában",
+                f"a beállós támadásaink aránya a 2. félidőre "
+                f"{r474['fh_pct']:.0f}% → {r474['sh_pct']:.0f}%-ra esett "
+                "— fáradtan nem a beálló mozgása hiányzik, hanem a BÁTOR "
+                "PASSZ a kiszolgálótól (takarásba, testek közé), és a "
+                "hatos vonal elárvulásával a faluk kifelé dolgozhat",
+                "3x6 perc bejátszás-gyakorlat FÁRADTAN (a kondi-blokk "
+                "után), két passzív védővel a passzsávban; a hajrára "
+                "nevezz meg egy felelős kiszolgáló-posztot")
+    except Exception:
+        pass
+
+    # 473) Halmozott fáradás: ha egy meccsen HÁROM fáradás-jel is
+    # megszólal, az nem egy-egy szám, hanem a hatvan perc kérdése.
+    _szabaly = 473
+    try:
+        from .priorities import FATIGUE_PATTERN_MIN, fatigue_profile
+        fpr473 = fatigue_profile(match, config)
+        for side in ("home", "away"):
+            r473 = fpr473[side]
+            if r473["count"] < FATIGUE_PATTERN_MIN:
+                continue
+            _jelek = ", ".join(j["label"].lower() for j in r473["signals"])
+            add(side, "kondíció", "A hatvan perc kérdése",
+                f"egy meccsen {r473['count']} fáradás-jel szólalt meg "
+                f"egyszerre ({_jelek}) — ez már nem egy-egy gyakorlat "
+                "kérdése, hanem a heti terhelésé",
+                "a technikai blokkokat a hét második felében FÁRADT "
+                "állapotba kell tenni (a kondi UTÁN, ne előtte), mert a "
+                "hibák ott jönnek elő; kezdd a legnagyobb tétűvel: "
+                f"{r473['top'].lower()}")
+    except Exception:
+        pass
+
+    # 472) Beszűkülő támadás: ha a SAJÁT labdánk a 2. félidőre nem megy
+    # ki a szélre, a hajrában csak a nehéz átlövés marad.
+    _szabaly = 472
+    try:
+        from .attack_types import (WING_INV_FADE_DROP_PCT,
+                                   wing_involvement_fade)
+        wif472 = wing_involvement_fade(match, config)
+        for side in ("home", "away"):
+            r472 = wif472[side]
+            if (r472["drop_pct"] is None
+                    or r472["drop_pct"] < WING_INV_FADE_DROP_PCT):
+                continue
+            add(side, "támadás", "Széles játék a hajrában",
+                f"a szélre eljutó támadásaink aránya a 2. félidőre "
+                f"{r472['fh_pct']:.0f}% → {r472['sh_pct']:.0f}%-ra esett "
+                "— fáradtan középen ragad a labda, és onnan csak a nehéz "
+                "átlövés marad",
+                "4x5 perces kötött játék FÁRADTAN azzal a szabállyal, "
+                "hogy a támadás ELSŐ passza a szélre megy (a labda "
+                "gyorsabb, mint a láb)")
+    except Exception:
+        pass
+
+    # 471) Lassuló visszaállás: ha a SAJÁT hazaérésünk a 2. félidőre
+    # lassul, a hajrában minden lövésünk után kontra-ablakot nyitunk.
+    _szabaly = 471
+    try:
+        from .defense import RETREAT_FADE_SLOW_S, retreat_fade
+        rtf471 = retreat_fade(match, config)
+        for side in ("home", "away"):
+            r471 = rtf471[side]
+            if r471["slow_s"] is None or r471["slow_s"] < RETREAT_FADE_SLOW_S:
+                continue
+            add(side, "átmenet", "Visszaállás a hajrában",
+                f"a lövéseink után a 2. félidőre {r471['fh_s']:.1f} → "
+                f"{r471['sh_s']:.1f} mp lett a hazaérés — minden "
+                "lövésünk után nyitunk egy kontra-lépésnyi ablakot",
+                "a teendő NEM futóedzés, hanem a lövés PILLANATÁBAN "
+                "kijelölt első visszafutó: 10x támadás-befejezés úgy, "
+                "hogy a kijelölt ember már a kar-lendítéskor fordul "
+                "(fáradtan a fejben dől el, ki fordul meg)")
+    except Exception:
+        pass
+
+    # 470) Visszahúzódó fal: ha a SAJÁT falunk a 2. félidőre beszorul a
+    # 6-os köré, a hajrában zavartalanul lőnek ránk 9 méterről.
+    _szabaly = 470
+    try:
+        from .defense import LINE_FADE_DROP_M, line_height_fade
+        lhf470 = line_height_fade(match, config)
+        for side in ("home", "away"):
+            r470 = lhf470[side]
+            if r470["drop_m"] is None or r470["drop_m"] < LINE_FADE_DROP_M:
+                continue
+            add(side, "védekezés", "Fal-mélység a hajrában",
+                f"a falunk a 2. félidőre visszahúzódik "
+                f"({r470['fh_m']:.1f} → {r470['sh_m']:.1f} m a saját "
+                "kaputól) — a meccs végén senki nem lép ki az átlövőre, "
+                "és a 9 méteres lövés zavartalan lesz",
+                "3x4 perces kilépés-gyakorlat FÁRADTAN, a kondi-blokk "
+                "UTÁN — frissen mindenki kilép; a kérdés az, hogy az 50. "
+                "percben is")
+    except Exception:
+        pass
+
+    # 469) Kiszámítható ritmus: ha a SAJÁT támadásaink mind egy
+    # tempóban futnak, az ellenfél fala rá tud állni.
+    _szabaly = 469
+    try:
+        from .tactics import (ATV_MIN_ATTACKS, ATV_ONE_TEMPO_PCT,
+                              attack_tempo_variety)
+        atv469 = attack_tempo_variety(match, config)
+        for side in ("home", "away"):
+            rec469 = atv469[side]
+            if rec469["attacks"] < ATV_MIN_ATTACKS:
+                continue
+            ar469 = {"fast": 100.0 * rec469["fast"] / rec469["attacks"],
+                     "mid": 100.0 * rec469["mid"] / rec469["attacks"],
+                     "slow": 100.0 * rec469["slow"] / rec469["attacks"]}
+            top469 = max(ar469, key=lambda k: ar469[k])
+            if ar469[top469] < ATV_ONE_TEMPO_PCT:
+                continue  # váltogatunk — ez most nem hiányosság
+            nev469 = {"fast": "12 mp-en belül lezárt",
+                      "mid": "közepes hosszú",
+                      "slow": "30 mp fölötti"}[top469]
+            add(side, "támadás", "Egy tempó a támadásban",
+                f"a támadásaink {ar469[top469]:.0f}%-a {nev469} "
+                f"({rec469[top469]}/{rec469['attacks']}; "
+                f"{ATV_ONE_TEMPO_PCT:.0f}% fölött jelezzük) — egy "
+                "tempóban játszunk, és a felkészült ellenfél fala erre "
+                "az egy ritmusra beáll",
+                "ritmus-váltás az edzésen: ugyanaz a figura KÉT "
+                "sebességgel (korai befejezés a 8. mp-ig, illetve "
+                "kijátszott változat a 25. mp-re), és a jel a "
+                "felállásból jöjjön — a játékosok tanulják meg a váltást "
+                "ugyanabból a kezdőképből indítani; edzőmeccsen a "
+                "támadások felére órát adunk, a másik felére nem")
+    except Exception:
+        pass
+
+    # 468) Magától jövő eladás: ha a labdáink NYOMÁS NÉLKÜL vesznek el,
+    # az technika- és döntés-kérdés, nem taktikai.
+    _szabaly = 468
+    try:
+        from .defense import (PTO_PRESSURE_M, PTO_UNFORCED_PCT,
+                              pressured_turnovers)
+        pto468 = pressured_turnovers(match, config)
+        for side in ("home", "away"):
+            rec468 = pto468[side]
+            if rec468["verdict"] is None:
+                continue
+            if rec468["unforced_pct"] < PTO_UNFORCED_PCT:
+                continue  # a kipréselt eladás az ellenfél érdeme
+            add(side, "átmenet", "Labdabiztonság nyomás nélkül",
+                f"az eladásaink {rec468['unforced_pct']:.0f}%-a úgy "
+                f"történt, hogy NEM volt védő {PTO_PRESSURE_M:.1f} m-en "
+                f"belül ({rec468['unforced']}/{rec468['total']}; "
+                f"{PTO_UNFORCED_PCT:.0f}% fölött jelezzük) — ezeket nem "
+                "az ellenfél vette el, ezeket elszórtuk: rossz passz, "
+                "elrontott átvétel, kapkodó döntés üres térben",
+                "ez nem taktika, hanem alapok: az edzésen a "
+                "NYOMÁSMENTES passz-pontosság a téma — párokban, "
+                "növekvő távolságon, mozgásból (nem állva), és minden "
+                "elrontott átvétel után azonnali ismétlés. A "
+                "figura-gyakorlásban a labdának KÖTELEZŐEN meg kell "
+                "járnia a teljes láncot: aki siet, azt vissza kell "
+                "hívni. Mérd: egy edzésen hány passz megy földre "
+                "védő nélkül — ezt a számot kell hétről hétre csökkenteni")
+    except Exception:
+        pass
+
+    # 467) Figura-indító: ha a saját figuránk mindig ugyanarról a
+    # posztról indul, az ellenfél ugyanezt látja a felvételen.
+    _szabaly = 467
+    try:
+        from .setplays import SPO_SHARE_PCT, setplay_openers
+        spo467 = setplay_openers(match, config)
+        for side in ("home", "away"):
+            tel467 = spo467[side]["telegraphed"]
+            if tel467 is None:
+                continue
+            add(side, "támadás", "Figura-indítás variálása",
+                f"a(z) {tel467['figure']}. figuránk indításainak "
+                f"{tel467['share_pct']:.0f}%-a a(z) {tel467['poszt']} "
+                f"posztról jön ({tel467['starts']} támadásból; "
+                f"{SPO_SHARE_PCT:.0f}% fölött jelezzük) — a figura nem a "
+                "befejezésénél lesz olvasható, hanem már az ELSŐ "
+                "passznál, és a felkészült fal a kiinduló passzsávot "
+                "zárja, mielőtt a figura elindulna",
+                "ugyanazt a figurát KÉT-HÁROM különböző indítással kell "
+                "begyakorolni: azonos végkifejlet, más kiinduló ember "
+                "(pl. átlövő helyett szélről vagy beállótól indítva). "
+                "Az edzésen a figurát mindig más posztról hívd — a "
+                "játékosoknak a MOZDULAT-sort kell tudniuk, nem a "
+                "kiinduló pozíciót. Ellenőrzés: a védekező ötös "
+                "mondja meg, felismerte-e az első passzból; amíg igen, "
+                "az indítás még nem elég változatos")
+    except Exception:
+        pass
+
+    # 466) Hetes-ismétlés: ha a saját hetesdobóink másodszorra is
+    # ugyanoda dobnak, kiszámíthatók — a sarok-váltás edzés-téma.
+    _szabaly = 466
+    try:
+        from .rules import SREP_REPEAT_PCT, seven_taker_repeat
+        srep466 = seven_taker_repeat(match, config)
+        for side in ("home", "away"):
+            rec466 = srep466[side]
+            if rec466["verdict"] is None:
+                continue
+            if rec466["repeat_pct"] < SREP_REPEAT_PCT:
+                continue  # a váltogató dobó nem edzés-hiány
+            add(side, "támadás", "Hetes: sarok-váltás",
+                f"az egymást követő heteseink "
+                f"{rec466['repeat_pct']:.0f}%-a ugyanabba a sávba ment "
+                f"({rec466['repeats']}/{rec466['pairs']} pár; "
+                f"{SREP_REPEAT_PCT:.0f}% fölött jelezzük) — a dobóink "
+                "szokásból ismételnek, és az ellenfél kapusa ezt "
+                "ugyanígy látja a felvételen",
+                "a hetes nem rutin, hanem döntés: az edzésen minden "
+                "hetes-sorozatban TILOS kétszer egymás után ugyanoda "
+                "dobni (a kapus előre tudja, melyik sarkot védi), és "
+                "a kispadon legyen hetes-lista — ha a dobónk beragadt "
+                "egy sarokba, a következő hetest a lista második "
+                "embere dobja")
+    except Exception:
+        pass
+
+    # 465) Elzárás-fáradás: ha az elzárás-munkánk a 2. félidőre elfogy,
+    # az elzárók forgatása és a törzs-állóképesség az edzés-téma.
+    _szabaly = 465
+    try:
+        from .attack_types import SCRF_GAP_PP, screen_fade
+        scrf465 = screen_fade(match, config)
+        for side in ("home", "away"):
+            rec465 = scrf465[side]
+            if rec465["verdict"] is None:
+                continue
+            if rec465["sh_pct"] >= rec465["fh_pct"]:
+                continue  # az erősödő elzárás nem edzés-hiány
+            add(side, "támadás", "Elzárás-állóképesség",
+                f"az elzárás-munkánk a 2. félidőre elfogy "
+                f"({rec465['fh_pct']:.0f}% → {rec465['sh_pct']:.0f}% "
+                f"elzárásos lövés; {SCRF_GAP_PP:.0f} százalékpont "
+                "eséstől jelezzük) — a lövőink a hajrában magukra "
+                "maradnak, és a fal ingyen blokkol ellenünk",
+                "az elzárás elfogyása kondíció, nem taktika: forgasd "
+                "az elzáró embereket (a beálló-csere a 40. perc körül "
+                "tervezett legyen), és az edzésben a törzs-erő + "
+                "ütközés-tűrés kapjon kör-edzés UTÁNI (fáradt) "
+                "elzárás-gyakorlatot — fáradtan is fel kell állnia a "
+                "második elzárásnak")
+    except Exception:
+        pass
+
+    # 464) Befutó poszt: ha a kontráink második hulláma egy poszton áll,
+    # a felkészült ellenfél a sávot zárja — a befutót variálni kell.
+    _szabaly = 464
+    try:
+        from .attack_types import SWR_SHARE_PCT, second_wave_roles
+        swr464 = second_wave_roles(match, config)
+        for side in ("home", "away"):
+            rec464 = swr464[side]
+            if rec464["verdict"] is None:
+                continue
+            add(side, "támadás", "A befutó variálása a kontrában",
+                f"a kontráink második hulláma a(z) "
+                f"{rec464['main_role']} poszt "
+                f"({rec464['share_pct']:.0f}%; {SWR_SHARE_PCT:.0f}% "
+                "felett jelezzük) — a felkészült ellenfél a második "
+                "visszaérőjét pont ebbe a sávba lépteti, és a "
+                "kontránk második hulláma elhal",
+                "variáld a befutót: a lerohanás-figurában két "
+                "különböző poszt is tanulja meg a második hullám "
+                "szerepét, és a sáv a helyzet szerint dőljön el (ha a "
+                "fő sáv zárva, a labda a másik oldali befutóra megy); "
+                "edzésen 3-a-2 és 4-a-3 kontra-gyakorlat, ahol a "
+                "második hullám sávját az edző menet közben jelöli ki")
+    except Exception:
+        pass
+
+    # 463) Egálbontó poszt: ha a holtpont-tervünk egy poszton áll, a
+    # felkészült ellenfél egálnál pont azt zárja — második ág kell.
+    _szabaly = 463
+    try:
+        from .momentum import PBR_SHARE_PCT, parity_break_roles
+        pbr463 = parity_break_roles(match, config)
+        for side in ("home", "away"):
+            rec463 = pbr463[side]
+            if rec463["verdict"] is None:
+                continue
+            add(side, "támadás", "Holtpont-figura második ága",
+                f"a holtpontjainkat a(z) {rec463['main_role']} "
+                f"posztunk viszi el ({rec463['share_pct']:.0f}%; "
+                f"{PBR_SHARE_PCT:.0f}% felett jelezzük) — a felkészült "
+                "ellenfél egálnál pont ezt a sávot zárja, és a "
+                "holtpont-tervünk elakad",
+                "adj a holtpont-figurának MÁSODIK befejezési ágat "
+                "másik poszton: ugyanabból az indításból két különböző "
+                "sávban legyen éles befejezés, és a jel a pályán "
+                "dőljön el (ha a fő sávra kettőznek, automatikusan a "
+                "második ág jön); edzésen egál-szituációs 6-6, ahol a "
+                "védelem tudottan a fő sávot zárja")
+    except Exception:
+        pass
+
+    # 462) Rejtett szervező poszt: ha a szervezésünk egy poszton fut, a
+    # felkészült ellenfél a sávot zárja — második indító-forrás kell.
+    _szabaly = 462
+    try:
+        from .event_detection import PREAR_SHARE_PCT, pre_assist_roles
+        prr462 = pre_assist_roles(match, config)
+        for side in ("home", "away"):
+            rec462 = prr462[side]
+            if rec462["verdict"] is None:
+                continue
+            add(side, "támadás", "Második indító-forrás",
+                f"a másod-előkészítésünk a(z) {rec462['main_role']} "
+                f"poszton fut ({rec462['share_pct']:.0f}%; "
+                f"{PREAR_SHARE_PCT:.0f}% felett jelezzük) — a "
+                "felkészült ellenfél a poszt sávját zárja, és a "
+                "gólgyárunk el sem indul",
+                "építs második indító-forrást MÁSIK posztra: a "
+                "fal-mozdító passz (oldalváltás, betörés utáni "
+                "kiosztás) legalább két posztról jöjjön; edzésen 6-6 "
+                "figura, ahol az első sáv zárva van, és a szervezést "
+                "a másik oldal veszi át — a játékosok tanulják meg "
+                "felismerni, mikor kell átadni a szervező-szerepet")
+    except Exception:
+        pass
+
+    # 461) Szuper-csere poszt: ha a padunk egy posztról termel, a
+    # cserénk olvasható — második pad-megoldást kell építeni.
+    _szabaly = 461
+    try:
+        from .momentum import SSPR_SHARE_PCT, super_sub_roles
+        ssr461 = super_sub_roles(match, config)
+        for side in ("home", "away"):
+            rec461 = ssr461[side]
+            if rec461["verdict"] is None:
+                continue
+            add(side, "támadás", "Második pad-megoldás",
+                f"a padunk a(z) {rec461['main_role']} posztról termel "
+                f"({rec461['share_pct']:.0f}%, {rec461['goals']} "
+                f"pad-gól; {SSPR_SHARE_PCT:.0f}% felett jelezzük) — a "
+                "felkészült ellenfél a posztra érkező frisset azonnal "
+                "felveszi, és a pad-fegyverünk kilövve",
+                "építs második pad-megoldást MÁSIK posztra: a "
+                "cserepárokat úgy állítsd össze, hogy két különböző "
+                "poszton is legyen gólképes beálló ember, és a "
+                "kispadról beugró éles szituációkban mindkettő kapjon "
+                "befejezést — ha az elsőt felveszik, a másodikra "
+                "forduljon a figura")
+    except Exception:
+        pass
+
+    # 460) Szuper-csere: ha a padról egy emberünk termel, a beállása
+    # tudatos fegyver legyen — időzítve, ne csak pihentetésként.
+    _szabaly = 460
+    try:
+        from .momentum import super_sub
+        ssu460 = super_sub(match, config)
+        for side in ("home", "away"):
+            rec460 = ssu460[side]
+            if rec460["verdict"] is None:
+                continue
+            top460 = rec460["top"]
+            ki460 = (f"a(z) {top460['jersey']}. számú"
+                     if top460.get("jersey") is not None
+                     else f"a(z) {top460['player_id']}. játékos")
+            add(side, "támadás", "A szuper-csere időzítése",
+                f"a padról {ki460} termel ({top460['goals']}/"
+                f"{rec460['bench_goals']} pad-gól) — a beállása most "
+                "inkább véletlen pihentetés, mint kijátszott kártya",
+                "a szuper-cserét IDŐZÍTSD, ne csak pihentetésül hozd: "
+                "a 40-45. perc között, a fáradó fal ellen álljon be, "
+                "és az első három támadásban ő kapja a befejezést; "
+                "edzésen a kispadról beugró 2 perces éles szituációk "
+                "(hidegből azonnal éles lövés) szoktatják a szerephez")
+    except Exception:
+        pass
+
+    # 459) Fal-rés fáradás: ha a saját közeink a 2. félidőre nyílnak, a
+    # belső védőket kell forgatni — ez frissesség-kérdés, nem technika.
+    _szabaly = 459
+    try:
+        from .defense import GFD_RISE_M, gap_fade
+        gfd459 = gap_fade(match, config)
+        for side in ("home", "away"):
+            rec459 = gfd459[side]
+            if rec459["verdict"] is None:
+                continue
+            add(side, "védekezés", "Fal-frissesség a második félidőre",
+                f"a falunkban a 2. félidőre szétnyílnak a közök "
+                f"({rec459['fh_gap_m']:.1f} m → {rec459['sh_gap_m']:.1f} "
+                f"m a legnagyobb rés átlaga; {GFD_RISE_M:.1f} m "
+                "növekedéstől jelezzük) — a fáradt fal nem lassabban "
+                "fut, hanem később zár",
+                "a rés frissesség-kérdés, nem technika: a belső "
+                "védőpárt tervezetten forgasd (a 40. perc körül friss "
+                "láb középre), és a szünet utáni első öt percre külön "
+                "zárás-parancs — a szomszéd akkor is csússzon, ha "
+                "fáradt; edzésen kör-edzés UTÁN gyakorolt fal-csúszás "
+                "szoktatja a testet a fáradt záráshoz")
+    except Exception:
+        pass
+
+    # 458) Hetes-sarok: ha a dobónk kiszámítható, a kapusok olvasni
+    # fogják — variálni kell, vagy második dobót építeni.
+    _szabaly = 458
+    try:
+        from .rules import STC_MIN_ATTEMPTS, STC_SHARE_PCT, \
+            seven_taker_corners
+        stc458 = seven_taker_corners(match, config)
+        for side in ("home", "away"):
+            top458 = stc458[side]["top"]
+            if top458 is None:
+                continue
+            ki458 = (f"a(z) {top458['jersey']}. számú"
+                     if top458.get("jersey") is not None
+                     else f"a(z) {top458['player_id']}. játékos")
+            add(side, "támadás", "Hetes-variálás",
+                f"{ki458} emberünk a heteseit a {top458['favorite']} "
+                f"sarokba dobja ({top458['share_pct']:.0f}%, "
+                f"{top458['attempts']} dobásból; {STC_MIN_ATTEMPTS} "
+                f"dobástól és {STC_SHARE_PCT:.0f}%-tól jelezzük) — a "
+                "felkészült kapus nála előre dönthet",
+                "hetes-blokk: sarok-sorozatok VÁLTOTT parancsra (az edző "
+                "mutatja, hova), kivárás-gyakorlat (a kapus mozdulatára "
+                "dobott hetes), és épüljön második dobó — éles meccsen "
+                "kétszer kihagyott hetes után automatikusan ő "
+                "következik")
+    except Exception:
+        pass
+
+    # 457) Hoki-assziszt: ha a támadás-szervezés egy rejtett emberen
+    # fordul, az ő kiiktatása a gólgyárat állítja le — variálni kell.
+    _szabaly = 457
+    try:
+        from .event_detection import PREA_MIN, pre_assists
+        pra457 = pre_assists(match, config)
+        for side in ("home", "away"):
+            top457 = pra457[side]["top"]
+            if top457 is None:
+                continue
+            ki457 = (f"a(z) {top457['jersey']}. számú"
+                     if top457.get("jersey") is not None
+                     else f"a(z) {top457['player_id']}. játékos")
+            add(side, "támadás", "Másod-előkészítés több kézre",
+                f"a góljaink mögött {ki457} emberünk a rejtett szervező "
+                f"({top457['pre_assists']} másod-előkészítés; "
+                f"{PREA_MIN}-tól jelezzük) — az okos ellenfél nála "
+                "kezdi a zárást, és a gólgyár el sem indul",
+                "szervezés-variálás: a bejáratott figurák induljanak a "
+                "MÁSIK oldalról is (a tükör-változatot külön kell "
+                "járatni), és legyen második indító-út — a beálló-beadás "
+                "előtti oldalváltást két különböző ember is tudja "
+                "elindítani; 5-5 elleni játékban időnként tiltsd le az "
+                "első számú szervezőt, hogy a többiek is merjenek")
+    except Exception:
+        pass
+
+    # 456) Vasemberek: a csere nélkül végigjátszó emberünk hajrá-hibái
+    # nem formahanyatlás, hanem terhelés — tervezett pihentetés kell.
+    _szabaly = 456
+    try:
+        from .stats import IRONMEN_SHARE_PCT, iron_men
+        imn456 = iron_men(match, config)
+        for side in ("home", "away"):
+            rec456 = imn456[side]
+            if not rec456["players"]:
+                continue
+            nevek456 = ", ".join(p["label"] for p in rec456["players"])
+            add(side, "erőnlét", "Vasember-pihentetés a hajrára",
+                f"csere nélkül végig a pályán: {nevek456} "
+                f"({rec456['players'][0]['share_pct']:.0f}% jelenlét; "
+                f"{IRONMEN_SHARE_PCT:.0f}% felett jelezzük) — az "
+                "ellenfél a hajrában pont őt fogja futtatni",
+                "tervezett terhelés-kezelés: a meccs 40–50. perce közé "
+                "beépített 3-5 perces pihenő (a cseréje EZT a sávot "
+                "tanulja meg edzésen, nem a teljes meccset), a hajrára "
+                "pedig tudatos tempóváltás — az ő poszta kapjon "
+                "labdajáratós, nem futós szerepet; edzésen a fáradt "
+                "állapotot szimuláld: kör-edzés UTÁN jöjjön a figura")
+    except Exception:
+        pass
+
+    # 455) Poszt-kezesség: a balkezes posztunkra külön figurát kell
+    # építeni — a bal kéz a jobb oldali posztokon fegyver.
+    _szabaly = 455
+    try:
+        from .roles import RSH_MIN_SHOTS, role_shooting_hand
+        rsh455 = role_shooting_hand(match, config)
+        for side in ("home", "away"):
+            lefty455 = rsh455[side]["lefty_role"]
+            if not lefty455:
+                continue
+            rec455 = rsh455[side]["roles"][lefty455]
+            add(side, "támadás", "Balkezes poszt kihasználása",
+                f"a(z) {lefty455} posztunkon balkezes lő "
+                f"({rec455['left']}/{rec455['shots']} bal-jelű lövés; "
+                f"{RSH_MIN_SHOTS} lövéstől ítélünk) — a balkezes a JOBB "
+                "oldali posztokon a legveszélyesebb, mert befelé jövet a "
+                "megszokott sánc-kéz mellett lő el",
+                "figura-építés a posztra: jobb oldali befejezések "
+                "célzott ismétlése (szög és betörés), a hozzá menő passz "
+                "a BAL kezéhez érkezzen, és a keresztjáték is arra az "
+                "oldalra záruljon; a védekező oldalon a párja tanulja "
+                "meg, milyen tükrözött sáncot kap majd az ellenfél")
+    except Exception:
+        pass
+
+    # 454) Fal-rés: ha a saját falunkban állandó nagy köz nyílik, a
+    # szomszédok átadás-rendjét kell gyakorolni.
+    _szabaly = 454
+    try:
+        from .defense import DGAP_WIDE_M, defensive_gaps
+        dgp454 = defensive_gaps(match, config)
+        for side in ("home", "away"):
+            rec454 = dgp454[side]
+            if rec454["verdict"] is None:
+                continue
+            _hol454 = (f" — jellemzően a {rec454['worst_zone']} sávban "
+                       f"({rec454['zone_share_pct']:.0f}%)"
+                       if rec454["worst_zone"] else "")
+            add(side, "védekezés", "Fal-közök zárása",
+                f"a falunkban átlag {rec454['avg_max_gap_m']:.1f} m a "
+                f"legnagyobb köz két szomszédos védő között "
+                f"({DGAP_WIDE_M:.1f} m felett jelezzük){_hol454} — ekkora "
+                "résbe lendületből befér egy ember",
+                "szomszéd-munka gyakorlása: 6-0 falban párokban "
+                "csúszás sípszóra (a labda oldalra jár, a falnak együtt "
+                "kell mozdulnia), majd elzárás elleni átadás-gyakorlat — "
+                "a kilépő védő mellett a szomszéd ZÁR, nem néz utána; "
+                "videón mutasd meg a legnagyobb rést, és mondjátok ki, "
+                "kinek kellett volna zárnia")
+    except Exception:
+        pass
+
+    # 453) Kapus a kezesség szerint: ha a kapusunk a balkezesek ellen
+    # esik vissza, tükrözött dobó-gyakorlat kell.
+    _szabaly = 453
+    try:
+        from .goalkeeper import GKH_GAP_PP, gk_saves_by_hand
+        gkh453 = gk_saves_by_hand(match, config)
+        for side in ("home", "away"):
+            rec453 = gkh453[side]
+            if rec453["weak_hand"] is None:
+                continue
+            weak453 = rec453["hands"][rec453["weak_hand"]]
+            strong453 = rec453["hands"][
+                "jobb" if rec453["weak_hand"] == "bal" else "bal"]
+            add(side, "kapus", "Kapus-felkészítés a másik kézre",
+                f"a kapusunk a {rec453['weak_hand']}kezes lövők ellen "
+                f"{weak453['save_pct']:.0f}%-ot fogott, a másik kéz ellen "
+                f"{strong453['save_pct']:.0f}%-ot "
+                f"({weak453['faced']} kapura tartó lövésből; "
+                f"{GKH_GAP_PP:.0f} százalékpont különbségtől jelezzük) — "
+                "az alapállás és a láb-munka az egyik kézre van bejáratva",
+                f"kapus-blokk {rec453['weak_hand']}kezes dobókkal: ha "
+                "nincs ilyen a keretben, tükrözött gyakorlat (a lövő a "
+                "másik oldalról, befelé jövet lő), sarok-sorozatok "
+                "lassítva, majd élesben; a kapus HANGOSAN mondja be "
+                "minden dobás előtt, melyik kéz jön — a felismerés a "
+                "fél védés")
+    except Exception:
+        pass
+
+    # 452) Befejezés-mérleg: ha a helyzeteink ALATT teljesítünk, a
+    # befejezés a hiány — a helyzet-teremtés már megvan.
+    _szabaly = 452
+    try:
+        from .xg import FBAL_DIFF_GOALS, finishing_balance
+        fbal452 = finishing_balance(match, config)
+        for side in ("home", "away"):
+            rec452 = fbal452[side]
+            if rec452["verdict"] is None or rec452["diff"] > 0:
+                continue
+            add(side, "támadás", "Befejezés-edzés a meglévő helyzetekre",
+                f"{rec452['goals']} gólt szereztünk {rec452['xg']:.1f} "
+                f"várható gólnyi helyzetből ({rec452['diff']:.1f}; "
+                f"{FBAL_DIFF_GOALS:.1f} gólnyi eltéréstől jelezzük) — a "
+                "helyzet-teremtés rendben van, a befejezés nem ült",
+                "befejezés-blokk a SAJÁT helyzet-típusainkra: a meccsen "
+                "leggyakoribb lövés-helyekről (szél, beálló, átlövés) "
+                "10-10 ismétlés kapussal, fáradtan is; a kapus a "
+                "bejáratott sarkunkat védje, hogy más befejezést is "
+                "kelljen keresni — és minden sorozat végén élethelyzet: "
+                "sáncoló védővel, egy passzal indítva")
+    except Exception:
+        pass
+
+    # 451) Csere-fázis: ha az ellenfél birtoklása közben cserélünk, a
+    # csere-fegyelmet kell építeni — a fal különben emberhátrányban áll fel.
+    _szabaly = 451
+    try:
+        from .substitutions import SUBPH_RISKY_PCT, substitution_phase
+        sph451 = substitution_phase(match, config)
+        for side in ("home", "away"):
+            rec451 = sph451[side]
+            if rec451["risky_pct"] is None:
+                continue
+            if rec451["risky_pct"] < SUBPH_RISKY_PCT:
+                continue
+            add(side, "védekezés", "Csere-fegyelem: mikor váltunk",
+                f"a cseréink {rec451['risky_pct']:.0f}%-a az ELLENFÉL "
+                f"birtoklása közben indult "
+                f"({rec451['opp_ball']}/{rec451['subs']}) — ilyenkor a "
+                "fal egy emberrel kevesebbel áll fel, és pont a "
+                "csere-oldalon nyílik a rés",
+                "csere-szabály és gyakorlás: váltani BIRTOKLÁSBAN vagy "
+                "megszakításban lehet, az ellenfél támadása alatt nem; "
+                "edzésen 6-6 játékban sípszóra kell cserélni, de csak "
+                "akkor, ha nálunk a labda — a lecserélt ember addig "
+                "nem léphet le, amíg a beérkező be nem ért; a "
+                "csere-oldali szélső védője külön kapjon feladatot a "
+                "rés zárására")
+    except Exception:
+        pass
+
+    # 449) Védekezési formáció: ha egyetlen fal-alakot tartunk, az a
+    # kiszámíthatóság — a második formációt is be kell gyakorolni.
+    _szabaly = 449
+    try:
+        from .defense import DFORM_SHARE_PCT, defensive_formation
+        dfm449 = defensive_formation(match, config)
+        for side in ("home", "away"):
+            rec449 = dfm449[side]
+            if not rec449["formation"] or rec449["share_pct"] is None:
+                continue
+            if rec449["share_pct"] < 80.0:
+                continue
+            _alt449 = ("5-1 (a kitolt védő zavarja a lövés-előkészítést)"
+                       if rec449["formation"].startswith("6-0")
+                       else "6-0 (lapos fal a beálló-játék ellen)")
+            add(side, "védekezés", "Váltott fal-alak begyakorlása",
+                f"a falunk a felállt védekezés "
+                f"{rec449['share_pct']:.0f}%-ában ugyanazt a "
+                f"{rec449['formation']} alakot tartja "
+                f"({DFORM_SHARE_PCT:.0f}% felett már meghatározó) — egy "
+                "formáció kiszámítható, a bejáratott figurájuk mindig "
+                "ugyanazt a rést találja meg",
+                f"váltott fal-alak edzése: {_alt449} — 10 perc "
+                "sípszóra váltás (támadás közben, jelre), hogy a "
+                "kilépés-rendek és az átadások mindkét alakban "
+                "ülepedjenek; a váltást a kapus vagy a középső védő "
+                "hangos jelére indítsátok")
+    except Exception:
+        pass
+
+    # 448) Kezesség: a balkezes lövő a saját csapatban is tükör-feladat —
+    # a hozzá tartozó posztot és a beadásokat rá kell szabni.
+    _szabaly = 448
+    try:
+        from .event_detection import HANDED_MIN_SHOTS, shooting_hand
+        hnd448 = shooting_hand(match, config)
+        for side in ("home", "away"):
+            lefty448 = hnd448[side].get("lefty")
+            if lefty448 is None:
+                continue
+            _ki448 = (f"a(z) {lefty448['jersey']}. számú"
+                      if lefty448.get("jersey") is not None
+                      else f"a(z) {lefty448['player_id']}. játékos")
+            add(side, "támadás", "Balkezes fegyver kihasználása",
+                f"{_ki448} emberünk balkezes-jelű "
+                f"({lefty448['left']}/{lefty448['shots']} bal-jelű "
+                f"lövés; {HANDED_MIN_SHOTS} lövéstől ítélünk) — a "
+                "balkezes a jobb oldalról befelé jövet a legveszélyesebb, "
+                "mert a megszokott sánc-kéz mellett lő el",
+                "jobb oldali befejezések célzott ismétlése neki "
+                "(jobbszélső-szög, jobbátlövő betörés), és a "
+                "beadás-oldal beállítása: a hozzá menő passz a bal "
+                "kezéhez érkezzen, hogy ne kelljen igazítania — "
+                "sáncolt helyzetből is dobasson, hogy megszokja a "
+                "tükrözött falat",
+                )
+    except Exception:
+        pass
+
+    # 447) Egálbontó emberek: a holtpont ne egy emberen álljon.
+    _szabaly = 447
+    try:
+        from .momentum import PBP_MIN_BREAKS, parity_break_scorers
+        pbp447 = parity_break_scorers(match, config)
+        for side in ("home", "away"):
+            top447 = pbp447[side].get("top")
+            if top447 is None:
+                continue
+            _ki447 = (f"a(z) {top447['jersey']}. számú"
+                      if top447.get("jersey") is not None
+                      else f"a(z) {top447['player_id']}. játékos")
+            add(side, "támadás", "Holtpont-figura több emberre",
+                f"az egálbontó góljaink zöme {_ki447} emberünktől jön "
+                f"({top447['breaks']} elvitt holtpont; "
+                f"{PBP_MIN_BREAKS} góltól már jelezzük) — ha őt "
+                "kiveszik, a holtpontjaink elakadnak",
+                "holtpont-gyakorlás több befejezővel: az egál-figura "
+                "második és harmadik opciója is kapjon célzott "
+                "ismétlést (beálló-bejátszás, gyenge oldali átlövés), "
+                "és nyomás alatti 5-5 döntetlenről indítva — a "
+                "döntést más is merje vállalni",
+                )
+    except Exception:
+        pass
+
+    # 446) Befutó emberek: az egy befutóra épülő második hullám
+    # kiszámítható — a visszafutás megtanulja őt.
+    _szabaly = 446
+    try:
+        from .attack_types import BFW_MIN_SECOND, second_wave_finishers
+        bfw446 = second_wave_finishers(match, config)
+        for side in ("home", "away"):
+            top446 = bfw446[side].get("top")
+            if top446 is None:
+                continue
+            _ki446 = (f"a(z) {top446['jersey']}. számú"
+                      if top446.get("jersey") is not None
+                      else f"a(z) {top446['player_id']}. játékos")
+            add(side, "támadás", "Második hullám több emberrel",
+                f"a kontráink második hullámos befejezéseinek zöme "
+                f"{_ki446} emberünktől jön ({top446['shots']} "
+                f"befejezés; {BFW_MIN_SECOND} befejezéstől már "
+                "jelezzük) — az egy befutóra épülő kontra ellen a "
+                "visszafutás gyorsan megtanulja, kit kell fogni",
+                "befutó-variálás: a kontra-figurákban a második "
+                "hullám két sávból érkezzen (szélső ÉS átlövő "
+                "befutás), az első ember tanuljon visszatett labdát "
+                "mindkét irányba, és a befutó időzítése változzon "
+                "(korai és megkésett hullám vegyesen)",
+                )
+    except Exception:
+        pass
+
+    # 445) Leforduló beállók: az egy beállóra épülő lefordulós játék
+    # kiszámítható — az elé lépés ellene készen áll.
+    _szabaly = 445
+    try:
+        from .attack_types import LFB_MIN_RUNNING, pivot_runners
+        lfb445 = pivot_runners(match, config)
+        for side in ("home", "away"):
+            top445 = lfb445[side].get("top")
+            if top445 is None:
+                continue
+            _ki445 = (f"a(z) {top445['jersey']}. számú"
+                      if top445.get("jersey") is not None
+                      else f"a(z) {top445['player_id']}. játékos")
+            add(side, "támadás", "Lefordulás több vállra",
+                f"a mozgásos beálló-átvételeink zöme {_ki445} "
+                f"beállónkhoz megy ({top445['running']} mozgásos "
+                f"átvétel; {LFB_MIN_RUNNING} átvételtől már "
+                "jelezzük) — az egy emberre épülő lefordulós játék "
+                "korai elé lépéssel kivédhető",
+                "lefordulás-variálás: a második beálló(-szerep) is "
+                "kapjon lefordulós bejátszást, elzárás-lefordulás "
+                "mindkét vállra, és egy visszatett labdás változat "
+                "arra az esetre, ha a védő korán elé lép",
+                )
+    except Exception:
+        pass
+
+    # 444) Keresztjáró emberek: az egy emberen át futó keresztjáték
+    # kiszámítható — a váltás ellene készen áll.
+    _szabaly = 444
+    try:
+        from .attack_types import CRP_MIN_CROSSES, crossing_runners
+        crp444 = crossing_runners(match, config)
+        for side in ("home", "away"):
+            top444 = crp444[side].get("top")
+            if top444 is None:
+                continue
+            _ki444 = (f"a(z) {top444['jersey']}. számú"
+                      if top444.get("jersey") is not None
+                      else f"a(z) {top444['player_id']}. játékos")
+            add(side, "támadás", "Kereszt mindkét oldalra",
+                f"a keresztjeink zöme {_ki444} emberünkön át fut "
+                f"({top444['runs']}/{crp444[side]['crosses']} "
+                f"kereszt; {CRP_MIN_CROSSES} kereszttől már jelezzük) "
+                "— az egy emberre épülő keresztjáték váltással "
+                "kivédhető",
+                "kereszt-variálás: a kereszt induljon a másik "
+                "átlövőtől is (tükrözött figura), második kereszt a "
+                "visszazáráskor (dupla kereszt), és beálló-lefordulás "
+                "a kereszt mögé, hogy a váltó védő ne érjen oda",
+                )
+    except Exception:
+        pass
+
+    # 443) Futtatott szélsők: az egy szélsőre járó futtatás
+    # kiszámítható — a sávzárás ellene készen áll.
+    _szabaly = 443
+    try:
+        from .attack_types import WRP_MIN_RUNNING, wing_runners
+        wrp443 = wing_runners(match, config)
+        for side in ("home", "away"):
+            top443 = wrp443[side].get("top")
+            if top443 is None:
+                continue
+            _ki443 = (f"a(z) {top443['jersey']}. számú"
+                      if top443.get("jersey") is not None
+                      else f"a(z) {top443['player_id']}. játékos")
+            add(side, "támadás", "Futtatás mindkét szélre",
+                f"a futó szélső-átvételeink zöme {_ki443} "
+                f"szélsőnkhöz megy ({top443['running']} futó átvétel; "
+                f"{WRP_MIN_RUNNING} átvételtől már jelezzük) — az "
+                "egy oldalra járó futtatás sávzárással kivédhető",
+                "futtatás-variálás: futópassz-gyakorlat mindkét "
+                "szélre azonos figurából, a gyenge oldali szélső "
+                "beindulás-időzítése (a védő háta mögül), és egy "
+                "átemelős futópassz-változat a sávzárás fölé",
+                )
+    except Exception:
+        pass
+
+    # 442) Középkezdés-hozam: a gyors kezdés csak góllal ér valamit.
+    _szabaly = 442
+    try:
+        from .momentum import RSY_MIN_RESTARTS, restart_yield
+        rsy442 = restart_yield(match, config)
+        for side in ("home", "away"):
+            rec442 = rsy442[side]
+            if rec442["answer_pct"] is None:
+                continue
+            if rec442["answer_pct"] >= 40.0:
+                continue
+            add(side, "támadás", "Középkezdés gólra váltva",
+                f"a kapott gólra csak {rec442['answered']}/"
+                f"{rec442['restarts']} arányban válaszolunk gyors "
+                f"góllal ({RSY_MIN_RESTARTS} újraindítástól "
+                "jelezzük) — az újraindításunk üresjárat",
+                "gyors középkezdés-rutin: kijelölt kezdő-kettős, a "
+                "labda 3 másodpercen belül játékban, első passz "
+                "előre (nem oldalra), és a válasz-támadás két "
+                "begyakorolt befejezése",
+                )
+    except Exception:
+        pass
+
+    # 441) Emberhátrány-túlélés: a hátrány-védekezés rendszer, nem
+    # hősiesség.
+    _szabaly = 441
+    try:
+        from .rules import SHS_BAD_PER_2MIN, shorthanded_survival
+        shs441 = shorthanded_survival(match, config)
+        for side in ("home", "away"):
+            rec441 = shs441[side]
+            if rec441["per_2min"] is None:
+                continue
+            if rec441["per_2min"] < SHS_BAD_PER_2MIN:
+                continue
+            add(side, "védekezés", "Hátrány-védekezés",
+                f"emberhátrányban {rec441['per_2min']:.1f} gólt "
+                f"kapunk két percenként ({rec441['sh_seconds']:.0f} "
+                f"mp hátrányból; {SHS_BAD_PER_2MIN:.1f} gól/2 perc "
+                "fölött jelezzük) — a kiállításaink duplán fájnak",
+                "hátrány-védekezés edzése: 5-6 elleni zárt fal "
+                "(mély, keskeny), a szélső lövők vállalása a beálló "
+                "helyett, tudatos időhúzás támadásban, és a "
+                "kiállítás utáni első védekezés forgatókönyve",
+                )
+    except Exception:
+        pass
+
+    # 440) Kapuscsere-hozam: a második kapus beállás-rutinja
+    # edzhető.
+    _szabaly = 440
+    try:
+        from .goalkeeper import GCY_GAP_PP, gk_change_yield
+        gcy440 = gk_change_yield(match, config)
+        for side in ("home", "away"):
+            rec440 = gcy440[side]
+            if rec440["delta_pp"] is None:
+                continue
+            if rec440["delta_pp"] > -GCY_GAP_PP:
+                continue
+            add(side, "kapus", "A második kapus beállása",
+                f"a kapuscserénk után romlik a védés "
+                f"({rec440['delta_pp']:+.0f} százalékpont; "
+                f"{GCY_GAP_PP:.0f} pont romlástól már jelezzük) — a "
+                "csere így nem mentőöv, hanem újabb kockázat",
+                "beállás-rutin a második kapusnak: bemelegítő "
+                "protokoll a padon (folyamatos labdás készenlét), "
+                "az első védés forgatókönyve (mély beállás, biztos "
+                "sarok), és éles csere-helyzet gyakorlása edzésen",
+                )
+    except Exception:
+        pass
+
+    # 439) Időkérés-hozam: a hatástalan időkérés tartalom-kérdés.
+    _szabaly = 439
+    try:
+        from .stoppages import TOY_MIN_JUDGED, timeout_yield
+        toy439 = timeout_yield(match, config)
+        for side in ("home", "away"):
+            rec439 = toy439[side]
+            if rec439["broke_pct"] is None:
+                continue
+            if rec439["broke_pct"] > 33.0:
+                continue
+            add(side, "támadás", "Az időkérés tartalma",
+                f"az időkéréseink hatástalanok ({rec439['broke']}/"
+                f"{rec439['broke'] + rec439['failed']} megtört "
+                f"sorozat; {TOY_MIN_JUDGED} ítéletes időkéréstől "
+                "jelezzük) — a sorozatot nem a zöld karton töri meg, "
+                "hanem ami utána jön",
+                "időkérés-forgatókönyv: EGY kimondott első támadás "
+                "(figura + befejező), EGY védekezés-igazítás, és "
+                "semmi más — az egy perc ne általános buzdítás "
+                "legyen; a forgatókönyv edzésen próbálva",
+                )
+    except Exception:
+        pass
+
+    # 438) Gólpassz-duó: a bejáratott kettős kiszámíthatóság is.
+    _szabaly = 438
+    try:
+        from .event_detection import ADU_MIN_GOALS, assist_duos
+        adu438 = assist_duos(match, config)
+        for side in ("home", "away"):
+            rec438 = adu438[side]
+            if rec438["verdict"] is None:
+                continue
+            add(side, "támadás", "Második gól-tengely",
+                f"a gólgyártásunk a(z) {rec438['top']} kettősön fut "
+                f"({ADU_MIN_GOALS} közös góltól már jelezzük) — ha a "
+                "duót szétvágják, elakad a gólgyártásunk",
+                "második gól-tengely építése: a figurák másik "
+                "adó-befejező párossal is fussanak, a fő duó pedig "
+                "csali-szerepben (rájuk zár a fal, a gól máshol "
+                "születik)",
+                )
+    except Exception:
+        pass
+
+    # 437) 7a6-befejező emberek: a 7 a 6-nak két kifutása legyen.
+    _szabaly = 437
+    try:
+        from .goalkeeper import EN7P_MIN_SHOTS, seven_six_finishers
+        en7437 = seven_six_finishers(match, config)
+        for side in ("home", "away"):
+            top437 = en7437[side].get("top")
+            if top437 is None:
+                continue
+            _ki437 = (f"a(z) {top437['jersey']}. számú"
+                      if top437.get("jersey") is not None
+                      else f"a(z) {top437['player_id']}. játékos")
+            add(side, "támadás", "7 a 6 két kifutással",
+                f"a 7 a 6-unk {_ki437} emberre fut ki "
+                f"({top437['shots']} lövés; {EN7P_MIN_SHOTS} lövéstől "
+                "már jelezzük) — ha rá készülnek, a hetedik ember "
+                "előnye elvész",
+                "7 a 6 gyakorlása két kijelölt kifutással (második "
+                "beálló ÉS beforduló átlövő), a túloldali szélső "
+                "mint harmadik megoldás, és a bejátszás-döntés "
+                "gyakorlása a fal reakciója szerint",
+                )
+    except Exception:
+        pass
+
+    # 436) Elzárt védők: az elakadás nem alkat, hanem technika.
+    _szabaly = 436
+    try:
+        from .defense import SDP_MIN_SCREENS, screened_defenders
+        sdp436 = screened_defenders(match, config)
+        for side in ("home", "away"):
+            top436 = sdp436[side].get("top")
+            if top436 is None:
+                continue
+            _ki436 = (f"a(z) {top436['jersey']}. számú"
+                      if top436.get("jersey") is not None
+                      else f"a(z) {top436['player_id']}. játékos")
+            add(side, "védekezés", "Átcsúszás az elzárás alatt",
+                f"az ellenfél elzárásai rendre {_ki436} emberünkön "
+                f"ragadnak ({top436['screens']} elakadás; "
+                f"{SDP_MIN_SCREENS} elakadástól már jelezzük) — az ő "
+                "oldalán a zárás tisztán hagyja a lövőt",
+                "átcsúszás- és váltás-gyakorlás vele: zárás-elleni "
+                "2v2 (átcsúszás elöl és hátul is), hangos "
+                "váltás-kommunikáció begyakorolt szavakkal, és a "
+                "zárás korai felismerése (a záró beálló mozgásának "
+                "olvasása)",
+                )
+    except Exception:
+        pass
+
+    # 435) Előnyben-emberek: a vezetés-tartás ne egy emberen
+    # álljon.
+    _szabaly = 435
+    try:
+        from .momentum import LGP_MIN_GOALS, lead_scorers
+        lgp435 = lead_scorers(match, config)
+        for side in ("home", "away"):
+            top435 = lgp435[side].get("top")
+            if top435 is None:
+                continue
+            _ki435 = (f"a(z) {top435['jersey']}. számú"
+                      if top435.get("jersey") is not None
+                      else f"a(z) {top435['player_id']}. játékos")
+            add(side, "támadás", "Előny-tartás több emberrel",
+                f"a vezetésnél lőtt góljaink {_ki435} nevéhez "
+                f"kötődnek ({top435['goals']} gól; {LGP_MIN_GOALS} "
+                "góltól már jelezzük) — ha őt kiveszik, az "
+                "előny-tartásunk megáll",
+                "vezetéses játék-helyzetek gyakorlása több "
+                "befejezővel: 5-5 előny-tartás időre, tiltott "
+                "fő-befejezővel (ő csak előkészíthet), és a "
+                "vezetéses támadás-hossz tudatos nyújtása",
+                )
+    except Exception:
+        pass
+
+    # 434) Újrakezdő emberek: a szünet utáni nyitás ne egy emberen
+    # álljon.
+    _szabaly = 434
+    try:
+        from .momentum import SSP_MIN_GOALS, second_start_scorers
+        ssp434 = second_start_scorers(match, config)
+        for side in ("home", "away"):
+            top434 = ssp434[side].get("top")
+            if top434 is None:
+                continue
+            _ki434 = (f"a(z) {top434['jersey']}. számú"
+                      if top434.get("jersey") is not None
+                      else f"a(z) {top434['player_id']}. játékos")
+            add(side, "támadás", "Szünet utáni nyitás szétosztva",
+                f"a szünet utáni góljaink {_ki434} nevéhez kötődnek "
+                f"({top434['goals']} gól; {SSP_MIN_GOALS} góltól már "
+                "jelezzük) — ha rá készülnek, az újrakezdésünk "
+                "elmarad",
+                "két kidolgozott újrakezdő megoldás (más oldal, más "
+                "befejező), a szünetben KIMONDOTT első két támadás, "
+                "és a második félidő eleji felállás próbája "
+                "edzésen",
+                )
+    except Exception:
+        pass
+
+    # 433) Rajt-emberek: az egy emberre épülő rajt kockázat.
+    _szabaly = 433
+    try:
+        from .momentum import OSP_MIN_GOALS, opening_scorers
+        osp433 = opening_scorers(match, config)
+        for side in ("home", "away"):
+            top433 = osp433[side].get("top")
+            if top433 is None:
+                continue
+            _ki433 = (f"a(z) {top433['jersey']}. számú"
+                      if top433.get("jersey") is not None
+                      else f"a(z) {top433['player_id']}. játékos")
+            add(side, "támadás", "Második nyitó-megoldás",
+                f"a meccs eleji góljaink {_ki433} nevéhez kötődnek "
+                f"({top433['goals']} nyitó-gól; {OSP_MIN_GOALS} "
+                "góltól már jelezzük) — ha rá készülnek, a rajtunk "
+                "elmarad",
+                "nyitó-figurák másik befejezővel: két kidolgozott "
+                "kezdő megoldás (más oldal, más poszt), és a meccs "
+                "eleji felállás próbája edzésen — az első három "
+                "támadás legyen begyakorolt",
+                )
+    except Exception:
+        pass
+
+    # 432) Válaszoló emberek: ha a válasz egy emberen áll, a
+    # bekapott gól után kiszámíthatók vagyunk.
+    _szabaly = 432
+    try:
+        from .momentum import RSPP_MIN_GOALS, response_scorers
+        rspp432 = response_scorers(match, config)
+        for side in ("home", "away"):
+            top432 = rspp432[side].get("top")
+            if top432 is None:
+                continue
+            _ki432 = (f"a(z) {top432['jersey']}. számú"
+                      if top432.get("jersey") is not None
+                      else f"a(z) {top432['player_id']}. játékos")
+            add(side, "támadás", "Válasz több emberre osztva",
+                f"a kapott gól utáni válasz-góljaink {_ki432} nevéhez "
+                f"kötődnek ({top432['goals']} válasz-gól; "
+                f"{RSPP_MIN_GOALS} góltól már jelezzük) — a bekapott "
+                "gól után kiszámíthatók vagyunk",
+                "válasz-figurák több befejezővel: két kijelölt "
+                "megoldás a kapott gól utáni első támadásra "
+                "(gyors középkezdés és felállt figura), és a "
+                "befejező tudatos váltogatása",
+                )
+    except Exception:
+        pass
+
+    # 431) Előkészítő emberek: a szervezés ne egy kézen fusson.
+    _szabaly = 431
+    try:
+        from .attack_types import EPP_MIN_PASSES, last_passers
+        epp431 = last_passers(match, config)
+        for side in ("home", "away"):
+            top431 = epp431[side].get("top")
+            if top431 is None:
+                continue
+            _ki431 = (f"a(z) {top431['jersey']}. számú"
+                      if top431.get("jersey") is not None
+                      else f"a(z) {top431['player_id']}. játékos")
+            add(side, "támadás", "Második előkészítő",
+                f"a lövéseink előkészítése {_ki431} kezén fut "
+                f"({top431['passes']} előkészítés; {EPP_MIN_PASSES} "
+                "előkészítéstől már jelezzük) — ha őt elvágják, a "
+                "lövőink előkészítetlenül maradnak",
+                "második előkészítő kinevelése: figurák MÁSIK "
+                "kiszolgálóval (a beálló és a szélső is adjon "
+                "utolsó passzt), és lezárt fő-előkészítővel játszott "
+                "gyakorlat — a lövés így is meg kell szülessen",
+                )
+    except Exception:
+        pass
+
+    # 430) Passzív-birtoklók: a passzív jelzés előtti utolsó
+    # megoldás gyakorolható.
+    _szabaly = 430
+    try:
+        from .rules import PVP_MIN_FRAMES, passive_holders
+        pvp430 = passive_holders(match, config)
+        for side in ("home", "away"):
+            top430 = pvp430[side].get("top")
+            if top430 is None:
+                continue
+            _ki430 = (f"a(z) {top430['jersey']}. számú"
+                      if top430.get("jersey") is not None
+                      else f"a(z) {top430['player_id']}. játékos")
+            add(side, "támadás", "Kész megoldás a passzív jelzésre",
+                f"a lövés nélküli, hosszú támadásaink labdás ideje "
+                f"{_ki430} kezén telik ({top430['frames']} kocka; "
+                f"{PVP_MIN_FRAMES} kockától már jelezzük) — nála áll "
+                "meg a játék, mielőtt a bíró keze felmegy",
+                "passzív-figura gyakorlása vele: kijelölt utolsó "
+                "megoldás (beálló-bejátszás vagy szélső-kiugratás) "
+                "a passzív jel után, döntés-idő korlátozása "
+                "(3 másodperc a labdával), és a leadás utáni "
+                "azonnali újra-ajánlkozás",
+                )
+    except Exception:
+        pass
+
+    # 429) Lágy passzolók: az ívelt átadás a legolcsóbb labda az
+    # ellenfélnek.
+    _szabaly = 429
+    try:
+        from .decisions import SPP_MIN_SOFT, soft_passers
+        spp429 = soft_passers(match, config)
+        for side in ("home", "away"):
+            top429 = spp429[side].get("top")
+            if top429 is None:
+                continue
+            _ki429 = (f"a(z) {top429['jersey']}. számú"
+                      if top429.get("jersey") is not None
+                      else f"a(z) {top429['player_id']}. játékos")
+            add(side, "támadás", "Passz-élesség",
+                f"a lágy, ívelt passzaink {_ki429} kezéből jönnek "
+                f"({top429['soft']} lágy passz; {SPP_MIN_SOFT} "
+                "passztól már jelezzük) — ezekbe az ellenfél "
+                "belenyúlhat",
+                "passz-élesség gyakorlása vele: csuklós, feszes "
+                "átadás rövid távon, mellmagasságú célpont, és "
+                "passz-gyakorlat védő-árnyékkal (a labda ne ívben "
+                "menjen a védő fölött)",
+                )
+    except Exception:
+        pass
+
+    # 428) Fáradt lövők: a fáradtan szétmenő lövés célzás- és
+    # terhelés-kérdés.
+    _szabaly = 428
+    try:
+        from .xg import FSP_MIN_SH, tired_shooters
+        fsp428 = tired_shooters(match, config)
+        for side in ("home", "away"):
+            top428 = fsp428[side].get("top")
+            if top428 is None:
+                continue
+            _ki428 = (f"a(z) {top428['jersey']}. számú"
+                      if top428.get("jersey") is not None
+                      else f"a(z) {top428['player_id']}. játékos")
+            add(side, "erőnlét", "Fáradt célzás",
+                f"a pontatlan lövéseink a második félidőre {_ki428} "
+                f"kezén ugranak meg ({top428['fh']} → "
+                f"{top428['sh']}; {FSP_MIN_SH} lövéstől már "
+                "jelezzük) — fáradtan nála megy szét a célzás",
+                "fáradt célzás-blokk neki: lövés-sorozat magas "
+                "pulzuson (kör-edzés után), csökkentett erővel "
+                "pontos célzás, és a hajrában a befejezés tudatos "
+                "átosztása frissebb társra",
+                )
+    except Exception:
+        pass
+
+    # 427) Ziccerhagyó emberek: a kihagyott ziccer a legdrágább
+    # hiba, és befejezés-gyakorlással javítható.
+    _szabaly = 427
+    try:
+        from .xg import MCP_MIN_MISSES, missed_chance_players
+        mcp427 = missed_chance_players(match, config)
+        for side in ("home", "away"):
+            top427 = mcp427[side].get("top")
+            if top427 is None:
+                continue
+            _ki427 = (f"a(z) {top427['jersey']}. számú"
+                      if top427.get("jersey") is not None
+                      else f"a(z) {top427['player_id']}. játékos")
+            add(side, "támadás", "Ziccer-kihagyó névre szólóan",
+                f"a kihagyott ziccereink {_ki427} kezéhez kötődnek "
+                f"({top427['misses']} kihagyás; {MCP_MIN_MISSES} "
+                "kihagyástól már jelezzük) — a ziccer a legdrágább "
+                "hiba, mert helyzetből maradt el a gól",
+                "befejezés-gyakorlás neki: ziccer-sorozat kapussal "
+                "(mindkét oldal, mindkét ütem), fáradtan is "
+                "(kör-edzés után), és döntés-gyakorlás — kapus "
+                "olvasása lövés előtt, nem lövés közben",
+                )
+    except Exception:
+        pass
+
+    # 426) Kontroll-idővonal: a birtoklás-vesztés szakaszos, tehát
+    # edzhető (felállás-fegyelem, támadás-hossz).
+    _szabaly = 426
+    try:
+        from .momentum import CTL_MIN_BLOCKS, control_timeline
+        ctl426 = control_timeline(match, config)
+        for side in ("home", "away"):
+            rec426 = ctl426[side]
+            if rec426["verdict"] is None:
+                continue
+            if rec426["lost"] <= rec426["won"]:
+                continue
+            add(side, "támadás", "Kontroll visszavétele",
+                f"az ötperces szakaszok {rec426['lost']}/"
+                f"{len(rec426['blocks'])} részét elveszítettük "
+                f"birtoklásban ({CTL_MIN_BLOCKS} mért szakasztól "
+                "jelezzük) — a meccs a másik tempójában ment",
+                "kontroll-gyakorlás: hosszú, hibátlan támadás-"
+                "sorozatok (10 passz lövés előtt), időre játszott "
+                "birtoklás-játék 5-5-ben, és a labdaszerzés utáni "
+                "TUDATOS lassítás, ha a saját tempó kell",
+                )
+    except Exception:
+        pass
+
+    # 425) Hetes-forrás: a hetes ára helyzet-függő, és a fegyelem
+    # ott a legfontosabb, ahol a hetes születik.
+    _szabaly = 425
+    try:
+        from .rules import SVS_SHARE_PCT, seven_sources
+        svs425 = seven_sources(match, config)
+        for side in ("home", "away"):
+            rec425 = svs425[side]
+            if rec425["verdict"] is None:
+                continue
+            add(side, "védekezés", "Kéz nélküli védekezés a forrásnál",
+                f"az ellenünk ítélt hetesek "
+                f"{rec425['share_pct']:.0f}%-a {rec425['main_type']} "
+                f"helyzetből születik ({rec425['sevens']} hetesből; "
+                f"{SVS_SHARE_PCT:.0f}% fölött jelezzük) — ott "
+                "fékezünk kézzel",
+                "helyzet-specifikus párharc-edzés: visszafutásban "
+                "test-test elleni kísérés kéz nélkül, a beugró elé "
+                "lépés testtel (nem karral), és a hetest érő "
+                "helyzetek videós felismerése a csapattal",
+                )
+    except Exception:
+        pass
+
+    # 424) Kapus a kapott gól után: a újraindulás rutin-kérdés.
+    _szabaly = 424
+    try:
+        from .goalkeeper import GKA_GAP_PP, gk_after_goal
+        gka424 = gk_after_goal(match, config)
+        for side in ("home", "away"):
+            rec424 = gka424[side]
+            if rec424["gap_pp"] is None:
+                continue
+            if rec424["gap_pp"] > -GKA_GAP_PP:
+                continue
+            add(side, "kapus", "Kapus a kapott gól után",
+                f"a kapusunk a kapott gól utáni két lövésen "
+                f"{rec424['fresh_pct']:.0f}%-ot véd, egyébként "
+                f"{rec424['rest_pct']:.0f}%-ot — a friss seb "
+                "ajándék-gólokat ér",
+                "rögzített újraindulás: kapott gól után azonos rutin "
+                "(törlés, kesztyű-ütés, első labda a kezébe), "
+                "gyors-ismétléses védés-gyakorlat (két lövés 10 mp-en "
+                "belül), és a mezőny kijelölt embere hozzálép egy "
+                "mondatra",
+                )
+    except Exception:
+        pass
+
+    # 423) Futómunka-eloszlás: a koncentrált futás csere- és
+    # terhelés-kérdés.
+    _szabaly = 423
+    try:
+        from .stats import LBL_TOP3_PCT, running_load_balance
+        lbl423 = running_load_balance(match, config)
+        for side in ("home", "away"):
+            rec423 = lbl423[side]
+            if rec423["top3_pct"] is None:
+                continue
+            if rec423["top3_pct"] < LBL_TOP3_PCT:
+                continue
+            add(side, "erőnlét", "Futómunka szétosztása",
+                f"a futómunkánk {rec423['top3_pct']:.0f}%-át három "
+                f"ember adja ({rec423['players']} mért "
+                f"mezőnyjátékosból; {LBL_TOP3_PCT:.0f}% fölött "
+                "jelezzük) — ők a hajrára elfogynak",
+                "terhelés szétosztása: kontra-futások körbeadása "
+                "(nem mindig ugyanaz a második hullám), tudatos "
+                "csere-ritmus a legtöbbet futóknál, és "
+                "állóképesség-blokk a hajrá-terheléshez",
+                )
+    except Exception:
+        pass
+
+    # 422) Figura-kopás: a figura akkor ér valamit, ha ismételve is
+    # működik (variáció, nem újabb figura).
+    _szabaly = 422
+    try:
+        from .setplays import SPD_GAP_PP, setplay_decay
+        spd422 = setplay_decay(match, config)
+        for side in ("home", "away"):
+            rec422 = spd422[side]
+            if rec422["gap_pp"] is None:
+                continue
+            if rec422["gap_pp"] > -SPD_GAP_PP:
+                continue
+            add(side, "támadás", "Figura-variációk",
+                f"a figuráink első előfordulásra "
+                f"{rec422['first_pct']:.0f}%-ban, ismétlésre csak "
+                f"{rec422['repeat_pct']:.0f}%-ban hoznak gólt "
+                f"({SPD_GAP_PP:.0f} százalékpontos eséstől jelezzük) "
+                "— a fal a második ismétlésre megismer minket",
+                "variáció-edzés: minden figurához KÉT befejezés "
+                "(alap és ellen-olvasat), azonos indítás eltérő "
+                "folytatással, és a figura-sorrend tudatos keverése "
+                "(ne kétszer egymás után ugyanaz)",
+                )
+    except Exception:
+        pass
+
+    # 421) Kapus-visszaérés: a 7 a 6 csak akkor vállalható, ha a
+    # hazafutás megy.
+    _szabaly = 421
+    try:
+        from .goalkeeper import KRT_SLOW_S, keeper_return
+        krt421 = keeper_return(match, config)
+        for side in ("home", "away"):
+            rec421 = krt421[side]
+            if rec421["avg_s"] is None:
+                continue
+            if rec421["avg_s"] < KRT_SLOW_S:
+                continue
+            add(side, "erőnlét", "Kapus-hazafutás a 7 a 6 után",
+                f"a kapusunk {rec421['avg_s']:.1f} mp alatt ér haza a "
+                f"7 a 6 után ({rec421['measured']} mért szakasz; "
+                f"{KRT_SLOW_S:.0f} mp fölött jelezzük) — addig üres a "
+                "kapunk, és az ellenfél szerzése ingyen gól",
+                "hazafutás-rutin: kijelölt útvonal a kapusnak (a "
+                "rövid oldalon), a hetedik mezőnyjátékos zárja a "
+                "lövő-vonalat, amíg ő fut, és sprint-gyakorlás "
+                "kapusfelszerelésben — 7 a 6 csak akkor megy, ha ez "
+                "megy",
+                )
+    except Exception:
+        pass
+
+    # 420) Kettőzött emberek: akit rendre kettőznek, annak
+    # lekapcsolódó társ és begyakorolt leadás kell.
+    _szabaly = 420
+    try:
+        from .defense import DTG_MIN_FRAMES, doubled_targets
+        dtp420 = doubled_targets(match, config)
+        for side in ("home", "away"):
+            top420 = dtp420[side].get("top")
+            if top420 is None:
+                continue
+            _ki420 = (f"a(z) {top420['jersey']}. számú"
+                      if top420.get("jersey") is not None
+                      else f"a(z) {top420['player_id']}. játékos")
+            add(side, "támadás", "Kettőzés-elleni leadás",
+                f"az ellenfél kettőzései {_ki420} kezére járnak rá "
+                f"({top420['frames']} kettőzött kocka; "
+                f"{DTG_MIN_FRAMES} kockától már jelezzük) — ha nála "
+                "elakad a labda, az egész támadásunk elakad",
+                "kettőzés-elleni gyakorlás vele: azonnali leadás a "
+                "lekapcsolódó társnak (kijelölt kiút minden "
+                "oldalon), testtel védett labdatartás két védő "
+                "közt, és a kettőzés mögötti üres ember automatikus "
+                "befutása",
+                )
+    except Exception:
+        pass
+
+    # 419) Csere-hozam: a csere-pillanat is játékhelyzet.
+    _szabaly = 419
+    try:
+        from .substitutions import SBY_GAP_GOALS, substitution_yield
+        sby419 = substitution_yield(match, config)
+        for side in ("home", "away"):
+            rec419 = sby419[side]
+            if rec419["verdict"] is None:
+                continue
+            if rec419["diff"] > -SBY_GAP_GOALS:
+                continue
+            add(side, "erőnlét", "Csere-pillanat védelme",
+                f"a cseréink utáni percben {rec419['goals_for']}-"
+                f"{rec419['goals_against']} a mérlegünk "
+                f"({rec419['rotations']} cseréből) — a csere-pillanat "
+                "nálunk nyitott játékhelyzet",
+                "csere-fegyelem edzése: csak SAJÁT birtoklásban vagy "
+                "holt játékban cserélünk, a beérkező azonnal a "
+                "helyére fut (nem a labdához), és páros csere helyett "
+                "egyesével, hogy ne nyíljon lyuk",
+                )
+    except Exception:
+        pass
+
+    # 418) Passzív-kockázat: a lövés nélkül elnyúló támadás
+    # befejezés-hiány, nem stílus.
+    _szabaly = 418
+    try:
+        from .rules import PSR_SHARE_PCT, passive_risk
+        psr418 = passive_risk(match, config)
+        for side in ("home", "away"):
+            rec418 = psr418[side]
+            if rec418["share_pct"] is None:
+                continue
+            if rec418["share_pct"] < PSR_SHARE_PCT:
+                continue
+            add(side, "támadás", "Befejezés a passzív jel előtt",
+                f"a felállt támadásaink {rec418['share_pct']:.0f}%-a "
+                f"lövés nélkül nyúlik el ({rec418['passive']}/"
+                f"{rec418['positional']}; {PSR_SHARE_PCT:.0f}% fölött "
+                "jelezzük) — ez nem türelem, hanem befejezés-hiány",
+                "időre játszó figurák: 20 másodperces támadás-limit "
+                "az edzésen, kijelölt második hullám befejezés-"
+                "lehetőséggel, és a passzív jel utáni utolsó passz "
+                "gyakorlása (kijelölt befejező, azonnali lövés)",
+                )
+    except Exception:
+        pass
+
+    # 417) Hetes-hozam: a hetes a legolcsóbb gól — ha bemegy.
+    _szabaly = 417
+    try:
+        from .rules import SVY_LOW_PCT, seven_yield
+        svy417 = seven_yield(match, config)
+        for side in ("home", "away"):
+            rec417 = svy417[side]
+            if rec417["goal_pct"] is None:
+                continue
+            if rec417["goal_pct"] > SVY_LOW_PCT:
+                continue
+            add(side, "támadás", "Hetes-értékesítés",
+                f"a heteseinkből csak {rec417['goal_pct']:.0f}% megy "
+                f"be ({rec417['goals']}/{rec417['attempts']}; "
+                f"{SVY_LOW_PCT:.0f}% alatt jelezzük) — a legolcsóbb "
+                "gólt hagyjuk a kapuson",
+                "hetes-rutin: kijelölt 1-2 dobó, mindenkinek FIX "
+                "rutin (ugyanaz a ritmus és irány-döntés), "
+                "hetes-gyakorlás fáradtan és nyomás alatt (edzés "
+                "végén, tétre menő sorozatban)",
+                )
+    except Exception:
+        pass
+
+    # 416) Emberelőny-hozam: a két perc akkor ér valamit, ha gól
+    # lesz belőle.
+    _szabaly = 416
+    try:
+        from .rules import PPY_GAP_PP, powerplay_yield
+        ppy416 = powerplay_yield(match, config)
+        for side in ("home", "away"):
+            rec416 = ppy416[side]
+            if rec416["gap_pp"] is None:
+                continue
+            if rec416["gap_pp"] > -PPY_GAP_PP:
+                continue
+            add(side, "támadás", "Emberelőny-kihasználás",
+                f"emberelőnyben csak {rec416['pp_pct']:.0f}%-ban "
+                f"fejezünk be, egyenlő létszámnál "
+                f"{rec416['eq_pct']:.0f}%-ban — a kapott két percet "
+                "nem váltjuk gólra",
+                "emberelőny-figurák edzése kiosztott szerepekkel: "
+                "beálló-váltásos játék a fal két oldala között, "
+                "kijelölt befejező és második megoldás, valamint "
+                "idő-nyomásos gyakorlás (30 mp alatt gólt kell "
+                "szerezni)",
+                )
+    except Exception:
+        pass
+
+    # 415) Blokk-fáradás: a blokk akarat- és kondíció-munka.
+    _szabaly = 415
+    try:
+        from .defense import BLF_GAP_PP, block_fade
+        blf415 = block_fade(match, config)
+        for side in ("home", "away"):
+            rec415 = blf415[side]
+            if rec415["gap_pp"] is None:
+                continue
+            if rec415["gap_pp"] > -BLF_GAP_PP:
+                continue
+            add(side, "erőnlét", "Blokk-kitartás",
+                f"a blokk-arányunk {rec415['fh_pct']:.0f}%-ról "
+                f"{rec415['sh_pct']:.0f}%-ra esik a második félidőre "
+                f"({BLF_GAP_PP:.0f} százalékpontos eséstől már "
+                "jelezzük) — a hajrában a távoli lövés ellenünk "
+                "szinte ingyen van",
+                "blokk-állóképesség: lábmunka-sorozatok magas "
+                "pulzuson (oldalazás, kilépés-visszalépés), "
+                "blokk-technika fáradtan (kar fent, testtel a "
+                "vonalban), és a blokkoló emberek tudatos "
+                "pihentetése a hajrá előtt",
+                )
+    except Exception:
+        pass
+
+    # 414) Elzárás-hozam: mérhető, hogy fizet-e az elzárás-játékunk.
+    _szabaly = 414
+    try:
+        from .attack_types import SCY_GAP_PP, screen_yield
+        scy414 = screen_yield(match, config)
+        for side in ("home", "away"):
+            rec414 = scy414[side]
+            if rec414["gap_pp"] is None:
+                continue
+            if rec414["gap_pp"] <= -SCY_GAP_PP:
+                add(side, "támadás", "Elzárás-hozam",
+                    f"az elzárásból lőtt lövéseink csak "
+                    f"{rec414['screened_pct']:.0f}%-ban mennek be, a "
+                    f"tiszta lövéseink {rec414['clean_pct']:.0f}%-ban "
+                    "— az elzárás-játékunk jelenleg nem fizet",
+                    "elzárás-technika edzése: időzítés (a lövő "
+                    "ritmusához, nem előtte), stabil, széles test és "
+                    "azonnali leforgás a zárás után; és a figurákban "
+                    "a zárás UTÁNI második megoldás (leforduló "
+                    "beálló) gyakorlása",
+                    )
+            elif rec414["gap_pp"] >= SCY_GAP_PP:
+                add(side, "támadás", "Elzárás-hozam",
+                    f"az elzárásos lövéseink "
+                    f"{rec414['screened_pct']:.0f}%-ban mennek be, a "
+                    f"tiszták csak {rec414['clean_pct']:.0f}%-ban — "
+                    "az elzárás nálunk fizet, tehát több kell belőle",
+                    "elzárás-mennyiség növelése a figurákban: minden "
+                    "átlövés elé kijelölt zárás, kettős zárás a "
+                    "középső védőre, és a zárás utáni leforgás "
+                    "automatizmusa",
+                    )
+    except Exception:
+        pass
+
+    # 413) Felhozatal-emberek: az egy emberre épülő kihozatal egy
+    # emberrel megfogható.
+    _szabaly = 413
+    try:
+        from .goalkeeper import OTP_MIN_OUTLETS, outlet_targets
+        otp413 = outlet_targets(match, config)
+        for side in ("home", "away"):
+            top413 = otp413[side].get("top")
+            if top413 is None:
+                continue
+            _ki413 = (f"a(z) {top413['jersey']}. számú"
+                      if top413.get("jersey") is not None
+                      else f"a(z) {top413['player_id']}. játékos")
+            add(side, "támadás", "Kihozatal több felkínálással",
+                f"a kapus-indításaink {_ki413} kezén mennek át "
+                f"({top413['outlets']} átvétel; {OTP_MIN_OUTLETS} "
+                "átvételtől már jelezzük) — az ellenfél egy "
+                "rálépéssel megfogja az egész kihozatalunkat",
+                "kihozatal-edzés több felkínálással: első, második és "
+                "harmadik ajánlkozó kijelölése, hosszú indítás a "
+                "szélsőre gyakorlása, és letámadás elleni kihozatal "
+                "4-4-ben, tiltott visszapassz-sávval",
+                )
+    except Exception:
+        pass
+
+    # 412) Kétperc-gyűjtők: az egy emberre gyűlő kiállítás
+    # rendszer-hiba, nem pech.
+    _szabaly = 412
+    try:
+        from .rules import STC_MIN_SUSP, suspension_collectors
+        stc412 = suspension_collectors(match, config)
+        for side in ("home", "away"):
+            top412 = stc412[side].get("top")
+            if top412 is None:
+                continue
+            _ki412 = (f"a(z) {top412['jersey']}. számú"
+                      if top412.get("jersey") is not None
+                      else f"a(z) {top412['player_id']}. játékos")
+            add(side, "védekezés", "Fegyelem emberre szabva",
+                f"a kétperceinket {_ki412} gyűjti "
+                f"({top412['suspensions']} kiállítás; "
+                f"{STC_MIN_SUSP} kiállítástól már jelezzük) — a "
+                "harmadik már kizárás, és addig is fékezve véd",
+                "párharc-időzítés edzése neki: korán induló kar- és "
+                "testmunka (nem az utolsó pillanatban rántott "
+                "szabálytalanság), mögötte kijelölt besegítő, és "
+                "két kétperc után tudatos szerepcsere a fal "
+                "közepéről a szélre",
+                )
+    except Exception:
+        pass
+
+    # 411) Kiszolgált befejezők: aki csak bejátszásból él, a
+    # kiszolgálója kiesésekor terv nélkül marad.
+    _szabaly = 411
+    try:
+        from .roles import ASP_MIN_ASSISTED, assisted_scorers
+        asp411 = assisted_scorers(match, config)
+        for side in ("home", "away"):
+            top411 = asp411[side].get("top")
+            if top411 is None:
+                continue
+            _ki411 = (f"a(z) {top411['jersey']}. számú"
+                      if top411.get("jersey") is not None
+                      else f"a(z) {top411['player_id']}. játékos")
+            add(side, "támadás", "Önálló helyzetteremtés",
+                f"{_ki411} góljai bejátszásból esnek "
+                f"({top411['assisted']}/{top411['goals']} gólpasszos; "
+                f"{ASP_MIN_ASSISTED} kiszolgált góltól már jelezzük) "
+                "— ha a kiszolgálóját kiveszik a játékból, ő is "
+                "eltűnik vele",
+                "önálló befejezés-edzés neki: indulás labda nélkül és "
+                "átvétel mozgásban, 1v1 a saját sávban lezárt passz "
+                "mellett, és második megoldás a figurákban (ha nem "
+                "jön a bejátszás, ő legyen a kezdeményező)",
+                )
+    except Exception:
+        pass
+
+    # 410) 7a6 eladás: a lehozott kapus kockázata labdakezelés-,
+    # nem létszám-kérdés.
+    _szabaly = 410
+    try:
+        from .goalkeeper import (ENT_MIN_TURNOVERS, ENT_PUNISH_PCT,
+                                 empty_net_turnovers)
+        ent410 = empty_net_turnovers(match, config)
+        for side in ("home", "away"):
+            rec410 = ent410[side]
+            if rec410["punish_pct"] is None:
+                continue
+            if rec410["punish_pct"] < ENT_PUNISH_PCT:
+                continue
+            add(side, "támadás", "7 a 6 eladás-büntetés",
+                f"a lehozott kapus mellett {rec410['turnovers']} "
+                f"labdát vesztünk, ebből {rec410['punished']} lett "
+                f"gól ({rec410['punish_pct']:.0f}%; "
+                f"{ENT_MIN_TURNOVERS} eladástól már jelezzük) — a 7 a "
+                "6 kockázata nem a létszám, hanem a labdakezelés",
+                "7 a 6 gyakorlás élesben: kijelölt, biztos kezű ötös, "
+                "tiltott megoldások listája (zsúfoltba bejátszás, "
+                "kipattanós átlövés), és minden eladás után azonnali "
+                "visszafutás-verseny az üres kapuért",
+                )
+    except Exception:
+        pass
+
+    # 409) Indítás-vadász emberek: az egy emberre épülő letámadás
+    # egy cserével hatástalanítható.
+    _szabaly = 409
+    try:
+        from .goalkeeper import OHP_MIN_STEALS, outlet_hunters
+        ohp409 = outlet_hunters(match, config)
+        for side in ("home", "away"):
+            top409 = ohp409[side].get("top")
+            if top409 is None:
+                continue
+            _ki409 = (f"a(z) {top409['jersey']}. számú"
+                      if top409.get("jersey") is not None
+                      else f"a(z) {top409['player_id']}. játékos")
+            add(side, "védekezés", "Indítás-rablás rendszerré",
+                f"az indítás-rablásainkat {_ki409} hozza "
+                f"({top409['steals']} elcsípett indítás; "
+                f"{OHP_MIN_STEALS} rablástól már jelezzük) — ha ez "
+                "egy emberen áll, az ellenfél egy cserével "
+                "hatástalanítja",
+                "letámadás-edzés kiosztott szerepekkel: az első passz "
+                "elvágása PÁROSBAN (rálépő + hátsó lezáró), a "
+                "vadász-szerep körbeadása a szélsők és a második sor "
+                "között, és az elrabolt labda azonnali befejezése",
+                )
+    except Exception:
+        pass
+
+    # 408) Fáradt-fal emberek: a második félidőre megnyíló fal
+    # csere- és besegítés-kérdés.
+    _szabaly = 408
+    try:
+        from .defense import TCP_MIN_SH, tired_conceder_players
+        tcp408 = tired_conceder_players(match, config)
+        for side in ("home", "away"):
+            top408 = tcp408[side].get("top")
+            if top408 is None:
+                continue
+            _ki408 = (f"a(z) {top408['jersey']}. számú"
+                      if top408.get("jersey") is not None
+                      else f"a(z) {top408['player_id']}. játékos")
+            add(side, "védekezés", "Fáradó fal emberre szabva",
+                f"a második félidőre {_ki408} jár át a falunkon "
+                f"({top408['fh']} → {top408['sh']} kapott gól; "
+                f"{TCP_MIN_SH} góltól már jelezzük) — nem a rendszer, "
+                "hanem a fáradás nyitja meg ellene a falat",
+                "névre szabott terv: a szünet után friss védő és "
+                "kijelölt besegítő rá, kettőzés-jel a lövő-vonalán, "
+                "és fáradt védekezés-edzés (sorozatterhelés után "
+                "1v1 és kilépés-visszalépés a saját sávban)",
+                )
+    except Exception:
+        pass
+
+    # 407) Visszafutás-lemaradók: az első visszafutó kijelölés, nem
+    # alkat kérdése.
+    _szabaly = 407
+    try:
+        from .defense import SRP_MIN_LAGS, slow_retreat_players
+        srp407 = slow_retreat_players(match, config)
+        for side in ("home", "away"):
+            top407 = srp407[side].get("top")
+            if top407 is None:
+                continue
+            _ki407 = (f"a(z) {top407['jersey']}. számú"
+                      if top407.get("jersey") is not None
+                      else f"a(z) {top407['player_id']}. játékos")
+            add(side, "védekezés", "Visszafutás-sorrend",
+                f"az ellenfél lerohanásainál {_ki407} marad elöl a "
+                f"legtöbbször ({top407['lags']} alkalom; "
+                f"{SRP_MIN_LAGS} lemaradástól már jelezzük) — az ő "
+                "oldalán egy emberrel kevesebben érünk vissza",
+                "visszafutás-sorrend edzése: a lövés pillanatában "
+                "kijelölt első visszafutó (nem mindig ugyanaz), "
+                "kontra-elleni 4-3 és 5-4 gyakorlatok "
+                "sorrend-kiosztással, és lövés utáni azonnali "
+                "irányváltás-futások",
+                )
+    except Exception:
+        pass
+
+    # 406) Fáradt-eladók: a fáradtan kinyíló kéz terhelés-kérdés.
+    _szabaly = 406
+    try:
+        from .decisions import FTOP_MIN_SH, tired_turnover_players
+        ftop406 = tired_turnover_players(match, config)
+        for side in ("home", "away"):
+            top406 = ftop406[side].get("top")
+            if top406 is None:
+                continue
+            _ki406 = (f"a(z) {top406['jersey']}. számú"
+                      if top406.get("jersey") is not None
+                      else f"a(z) {top406['player_id']}. játékos")
+            add(side, "erőnlét", "Fáradt labdabiztonság",
+                f"az eladásaink a második félidőre {_ki406} kezén "
+                f"ugranak meg ({top406['fh']} → {top406['sh']}; "
+                f"{FTOP_MIN_SH} eladástól már jelezzük) — fáradtan "
+                "nála nyílik ki a kéz, és ez a legolcsóbb labda az "
+                "ellenfélnek",
+                "terhelés-menedzsment: pihentetés a 40. perc előtt, "
+                "és fáradt labdabiztonság-edzés (sorozatterhelés "
+                "után pontos passzgyakorlat, szorításban) — a "
+                "második félidőre kijelölt labdatartó ne ő legyen",
+                )
+    except Exception:
+        pass
+
+    # 405) Hátrapasszolók: a visszafordulás a bátorság hiánya vagy
+    # a rossz felkínálás jele.
+    _szabaly = 405
+    try:
+        from .attack_types import BPRP_MIN_PASSES, backward_passers
+        bprp405 = backward_passers(match, config)
+        for side in ("home", "away"):
+            top405 = bprp405[side].get("top")
+            if top405 is None:
+                continue
+            _ki405 = (f"a(z) {top405['jersey']}. számú"
+                      if top405.get("jersey") is not None
+                      else f"a(z) {top405['player_id']}. játékos")
+            add(side, "támadás", "Előre játék a visszafordulás "
+                "helyett",
+                f"a játékunk {_ki405} kezénél fordul vissza a "
+                f"legtöbbször ({top405['passes']} hátra-passz; "
+                f"{BPRP_MIN_PASSES} passztól már jelezzük) — a "
+                "hátrapassz időt ad az ellenfél falának, és a "
+                "támadásunkat újraindítja",
+                "felkínálás a labdás MÖGÉ és MELLÉ (ne csak vissza), "
+                "beálló-bejátszás gyakorlása szorításból, és "
+                "szabály: a visszapassz után azonnal indul a "
+                "keresztmozgás — edzésen tiltott hátrapassz-játék",
+                )
+    except Exception:
+        pass
+
+    # 404) Térnyerők: ha a térnyerés egy emberen áll, a kiesésével a
+    # felhozatalunk is leáll.
+    _szabaly = 404
+    try:
+        from .decisions import TNRP_MIN_M, ball_carriers
+        tnrp404 = ball_carriers(match, config)
+        for side in ("home", "away"):
+            top404 = tnrp404[side].get("top")
+            if top404 is None:
+                continue
+            _ki404 = (f"a(z) {top404['jersey']}. számú"
+                      if top404.get("jersey") is not None
+                      else f"a(z) {top404['player_id']}. játékos")
+            add(side, "támadás", "Térnyerés több lábon",
+                f"a térnyerésünk {_ki404} lábán van "
+                f"({top404['meters']:.0f} m labdával előre; "
+                f"{TNRP_MIN_M:.0f} m fölött már minta) — ha őt "
+                "korán fogadják vagy kiesik, a felhozatalunk leáll",
+                "felhozatal két úton: második labdavivő kijelölése, "
+                "kapus-indítás a másik oldalra, és a labdavivő "
+                "tehermentesítése rövid passzokkal — edzésen "
+                "letámadás elleni kihozatal váltott vivővel",
+                )
+    except Exception:
+        pass
+
+    # 403) Sávváltók: ha a keresztmozgás egy emberen áll, a fal egy
+    # döntéssel felkészül rá.
+    _szabaly = 403
+    try:
+        from .attack_types import LSWP_MIN_SWITCHES, lane_switchers
+        lswp403 = lane_switchers(match, config)
+        for side in ("home", "away"):
+            top403 = lswp403[side].get("top")
+            if top403 is None:
+                continue
+            _ki403 = (f"a(z) {top403['jersey']}. számú"
+                      if top403.get("jersey") is not None
+                      else f"a(z) {top403['player_id']}. játékos")
+            add(side, "támadás", "Keresztmozgás több emberrel",
+                f"a keresztmozgásunkat {_ki403} viszi a legtöbbet "
+                f"({top403['switches']} sávváltás; "
+                f"{LSWP_MIN_SWITCHES} sávváltástól már jelezzük) — "
+                "egy felkészült fal egyetlen szabállyal (követés "
+                "vagy átadás) kifogja",
+                "keresztmozgás két emberrel: ellentétes irányú "
+                "futások egyszerre, elzárással kombinált sávváltás, "
+                "és üres sávba érkező második ember — edzésen "
+                "figura-változatok jelre, felváltva",
+                )
+    except Exception:
+        pass
+
+    # 402) Menekülők: ha a pressz-elleni kiút egy emberre szűkül,
+    # kiszámíthatók vagyunk.
+    _szabaly = 402
+    try:
+        from .decisions import ESCP_MIN_PASSES, press_outlets
+        escp402 = press_outlets(match, config)
+        for side in ("home", "away"):
+            top402 = escp402[side].get("top")
+            if top402 is None:
+                continue
+            _ki402 = (f"a(z) {top402['jersey']}. számú"
+                      if top402.get("jersey") is not None
+                      else f"a(z) {top402['player_id']}. játékos")
+            add(side, "támadás", "Több kiút a pressz ellen",
+                f"szorításban a labda {_ki402} felé megy a "
+                f"leggyakrabban ({top402['passes']} nyomás alatti "
+                f"passz; {ESCP_MIN_PASSES} passztól már jelezzük) — "
+                "egy felkészült ellenfél ott áll lesben, és a "
+                "menekülő passzból lesz a kontrája",
+                "pressz-elleni kiadás két irányba: kijelölt közeli és "
+                "távoli kiút, a labdás felé mozgó társ (nem álló "
+                "cím), és kapushoz visszajátszás mint harmadik "
+                "opció — edzésen 3-2 elleni kiszabadulás jelre",
+                )
+    except Exception:
+        pass
+
+    # 401) Vég-birtokosok: ha mindig ugyanaz marad a labdával, a
+    # befejezés-felelősség tisztázatlan.
+    _szabaly = 401
+    try:
+        from .attack_types import LSTP_MIN_ATTACKS, last_holders
+        lstp401 = last_holders(match, config)
+        for side in ("home", "away"):
+            top401 = lstp401[side].get("top")
+            if top401 is None:
+                continue
+            _ki401 = (f"a(z) {top401['jersey']}. számú"
+                      if top401.get("jersey") is not None
+                      else f"a(z) {top401['player_id']}. játékos")
+            add(side, "támadás", "Befejezés-felelősség",
+                f"a terméketlen támadásaink {_ki401} kezében halnak "
+                f"el a legtöbbször ({top401['attacks']} lövés "
+                f"nélküli támadás; {LSTP_MIN_ATTACKS} támadástól már "
+                "jelezzük) — az ő kezében fogy el a támadás, és "
+                "onnan nincs megoldás",
+                "kötelező befejezés-szabály: a hetedik passz után "
+                "lövés vagy kiugratás, kijelölt második befejező, és "
+                "a labdatartó tehermentesítése — edzésen "
+                "óra-nyomással játszott 5-5",
+                )
+    except Exception:
+        pass
+
+    # 400) Ziccer-előkészítők: ha a helyzeteink egy ember kezéből
+    # indulnak, a kiesésével eltűnnek.
+    _szabaly = 400
+    try:
+        from .xg import BCFP_MIN_FEEDS, big_chance_feeders
+        bcfp400 = big_chance_feeders(match, config)
+        for side in ("home", "away"):
+            top400 = bcfp400[side].get("top")
+            if top400 is None:
+                continue
+            _ki400 = (f"a(z) {top400['jersey']}. számú"
+                      if top400.get("jersey") is not None
+                      else f"a(z) {top400['player_id']}. játékos")
+            add(side, "támadás", "Ziccer-teremtés több kézből",
+                f"a ziccereinket {_ki400} teremti a legtöbbször "
+                f"({top400['chances']} előkészítés; "
+                f"{BCFP_MIN_FEEDS} előkészítéstől már jelezzük) — az "
+                "ő bejátszó-sávjának elvágásával a helyzeteink ki "
+                "sem alakulnak",
+                "bejátszás a szélről és a hátsó sorból is, elzárás "
+                "utáni kioldó passz gyakorlása, és a fő előkészítő "
+                "tehermentesítése — ne mindig ő legyen a labdás a "
+                "figurában",
+                )
+    except Exception:
+        pass
+
+    # 399) Válaszhiba-emberek: a bekapott gól utáni első támadást ki
+    # kell venni a kapkodó kezéből.
+    _szabaly = 399
+    try:
+        from .momentum import (RTOP_MIN_TURNOVERS,
+                               response_turnover_players)
+        rtop399 = response_turnover_players(match, config)
+        for side in ("home", "away"):
+            top399 = rtop399[side].get("top")
+            if top399 is None:
+                continue
+            _ki399 = (f"a(z) {top399['jersey']}. számú"
+                      if top399.get("jersey") is not None
+                      else f"a(z) {top399['player_id']}. játékos")
+            add(side, "támadás", "Kapott gól utáni első labda",
+                f"kapott gól után {_ki399} veszítette el a legtöbb "
+                f"labdát ({top399['turnovers']} válasz-eladás; "
+                f"{RTOP_MIN_TURNOVERS} eladástól már jelezzük) — így "
+                "a bekapott gólból sorozat lesz",
+                "bekapott gól után kötelező forgatókönyv: lassú "
+                "felhozatal, két biztos passz, és a kapkodó NEM "
+                "kapja meg elsőre a labdát — edzésen kapott gól "
+                "utáni azonnali 4-4 labdaszerző-játék",
+                )
+    except Exception:
+        pass
+
+    # 398) Időkérés-hibázók: a megbeszélés utáni feszültségben ne az
+    # kapja a kulcspasszt, aki rendre elrontja.
+    _szabaly = 398
+    try:
+        from .stoppages import (TOEP_MIN_TURNOVERS,
+                                timeout_turnover_players)
+        toep398 = timeout_turnover_players(match, config)
+        for side in ("home", "away"):
+            top398 = toep398[side].get("top")
+            if top398 is None:
+                continue
+            _ki398 = (f"a(z) {top398['jersey']}. számú"
+                      if top398.get("jersey") is not None
+                      else f"a(z) {top398['player_id']}. játékos")
+            add(side, "támadás", "Időkérés utáni első labda",
+                f"az időkérés utáni labdát {_ki398} veszítette el a "
+                f"legtöbbször ({top398['turnovers']} eladás; "
+                f"{TOEP_MIN_TURNOVERS} eladástól már jelezzük) — a "
+                "táblára rajzolt figura pont ott törik meg, ahol "
+                "indul",
+                "időkérés-szimuláció edzésen: tábla, 30 másodperc "
+                "megbeszélés, majd élesben a figura — egyszerű, két "
+                "passzos kezdéssel, és a hibázó ne az első átvevő "
+                "legyen",
+                )
+    except Exception:
+        pass
+
+    # 397) Hetesdobók: egyetlen hetesdobó kockázat.
+    _szabaly = 397
+    try:
+        from .rules import STP_MIN_SEVENS, seven_taker_players
+        stp397 = seven_taker_players(match, config)
+        for side in ("home", "away"):
+            top397 = stp397[side].get("top")
+            if top397 is None:
+                continue
+            _ki397 = (f"a(z) {top397['jersey']}. számú"
+                      if top397.get("jersey") is not None
+                      else f"a(z) {top397['player_id']}. játékos")
+            add(side, "befejezés", "Második hetesdobó",
+                f"a heteseinket {_ki397} dobja ({top397['sevens']} "
+                f"hetes, {top397['goals']} gól; "
+                f"{STP_MIN_SEVENS} hetestől már jelezzük) — egyetlen "
+                "dobó kockázat: kiállítás, sérülés vagy rossz nap "
+                "esetén nincs kire bízni",
+                "hetes-verseny hetente, fáradtan (a heti győztes "
+                "dobja a meccsen), és kijelölt második ember, aki "
+                "élesben is dobott már — a hetes az egyetlen "
+                "helyzet, amit teljesen be lehet gyakorolni",
+                )
+    except Exception:
+        pass
+
+    # 396) Áttörés-hozam: a betörés akkor ér valamit, ha be is
+    # fejezzük.
+    _szabaly = 396
+    try:
+        from .attack_types import (BTY_HIGH_PCT, BTY_LOW_PCT,
+                                   breakthrough_yield)
+        bty396 = breakthrough_yield(match, config)
+        for side in ("home", "away"):
+            rec396 = bty396[side]
+            if rec396.get("verdict") is None:
+                continue
+            if rec396["goal_pct"] >= BTY_HIGH_PCT:
+                add(side, "támadás", "Betörés: erősség",
+                    f"a betöréseink {rec396['goal_pct']:.0f}%-a gólba "
+                    f"fut ({rec396['goals']} gól "
+                    f"{rec396['entries']} betörésből; "
+                    f"{BTY_HIGH_PCT:.0f}% fölött már erősség) — erre "
+                    "építeni kell, mert a legolcsóbb gólforrásunk",
+                    "több betörés-lehetőség: elzárás utáni második "
+                    "betörés gyakorlása, a szélső befutása a "
+                    "hatosra, és a betörő embernek tudatos "
+                    "labdaszerzés utáni indítás",
+                    )
+            elif rec396["goal_pct"] <= BTY_LOW_PCT:
+                add(side, "befejezés", "Betörés befejezése",
+                    f"a betöréseink csak {rec396['goal_pct']:.0f}%-a "
+                    f"fut gólba ({rec396['goals']} gól "
+                    f"{rec396['entries']} betörésből; "
+                    f"{BTY_LOW_PCT:.0f}% alatt már gond) — bejutunk, "
+                    "de a helyzetet nem váltjuk be",
+                    "befejezés a hatoson belül: esésből, testkontakt "
+                    "mellett, kapussal szemben — sorozatgyakorlás "
+                    "fáradtan, és kényszerítő szabály (kapura kell "
+                    "lőni két érintésen belül)",
+                    )
+    except Exception:
+        pass
+
+    # 395) Emberhátrány-hibázók: öt emberrel a labda a legbiztosabb
+    # kézben maradjon.
+    _szabaly = 395
+    try:
+        from .rules import (SHTP_MIN_TURNOVERS,
+                            shorthanded_turnover_players)
+        shtp395 = shorthanded_turnover_players(match, config)
+        for side in ("home", "away"):
+            top395 = shtp395[side].get("top")
+            if top395 is None:
+                continue
+            _ki395 = (f"a(z) {top395['jersey']}. számú"
+                      if top395.get("jersey") is not None
+                      else f"a(z) {top395['player_id']}. játékos")
+            add(side, "támadás", "Hátrány: labdatartó kijelölése",
+                f"hátrányban {_ki395} veszítette el a legtöbb labdát "
+                f"({top395['turnovers']} hátrány-eladás; "
+                f"{SHTP_MIN_TURNOVERS} eladástól már jelezzük) — öt "
+                "emberrel minden elvesztett labda üres kaput ér az "
+                "ellenfélnek",
+                "hátrány-figura kijelölt labdatartóval (ne ő legyen), "
+                "tiltott bejátszás-sávok, és időhúzó 5-6 elleni "
+                "játék edzésen — a cél a két perc túlélése "
+                "labdavesztés nélkül",
+                )
+    except Exception:
+        pass
+
+    # 394) Emberelőny-hibázók: a két perc alatt elvesztett labda a
+    # legdrágább, mert onnan üres kapura indul az ellenfél.
+    _szabaly = 394
+    try:
+        from .rules import (PPTP_MIN_TURNOVERS,
+                            powerplay_turnover_players)
+        pptp394 = powerplay_turnover_players(match, config)
+        for side in ("home", "away"):
+            top394 = pptp394[side].get("top")
+            if top394 is None:
+                continue
+            _ki394 = (f"a(z) {top394['jersey']}. számú"
+                      if top394.get("jersey") is not None
+                      else f"a(z) {top394['player_id']}. játékos")
+            add(side, "támadás", "Emberelőny biztos kézzel",
+                f"az emberelőnyünkben {_ki394} veszítette el a "
+                f"legtöbb labdát ({top394['turnovers']} "
+                f"emberelőny-eladás; {PPTP_MIN_TURNOVERS} eladástól "
+                "már jelezzük) — a két perc így nem előny, hanem "
+                "kockázat",
+                "6-5 figura kockázat nélkül: a hibázó ne az első "
+                "átvevő legyen, tiltott bejátszás-sávok, és két kör "
+                "biztos labdajáratás lövés előtt — edzésen "
+                "emberelőny-játék eladás-számlálóval",
+                )
+    except Exception:
+        pass
+
+    # 393) Kulcs-ember: ha minden szál egy emberen fut keresztül, egy
+    # jó ellenfél egy emberrel megfog minket.
+    _szabaly = 393
+    try:
+        from .priorities import KPL_MIN_LAYERS, key_player
+        kpl393 = key_player(match, config)
+        for side in ("home", "away"):
+            rec393 = kpl393[side]
+            if rec393.get("verdict") is None:
+                continue
+            add(side, "támadás", "Tehermentesítés és második út",
+                f"a kulcs-emberünk a(z) {rec393['top']}. számú: "
+                f"{rec393['players'][rec393['top']]} ember-réteg "
+                f"ítélete mutat rá (a {rec393['layers']} "
+                f"megszólalóból; {KPL_MIN_LAYERS} egyező rétegtől "
+                "jelezzük) — ha minden szál rajta fut keresztül, egy "
+                "jó ellenfél egy emberrel megfogja a játékunkat",
+                "második út építése: ugyanaz a figura a másik "
+                "oldalról indítva, kijelölt második befejező a "
+                "hajrára és emberelőnyre, és tudatos "
+                "tehermentesítés (ne ő legyen a labdás minden "
+                "kezdésnél) — edzésen játék úgy, hogy ő nem kaphatja "
+                "meg a labdát az első két passzban",
+                )
+    except Exception:
+        pass
+
+    # 392) Kétperc ára: a hátrány-védekezés forintosítva.
+    _szabaly = 392
+    try:
+        from .rules import SCT_CHEAP, SCT_COSTLY, suspension_cost
+        sct392 = suspension_cost(match, config)
+        for side in ("home", "away"):
+            rec392 = sct392[side]
+            if rec392.get("verdict") is None:
+                continue
+            if rec392["per_susp"] >= SCT_COSTLY:
+                add(side, "védekezés", "Hátrány-védekezés ára",
+                    f"egy kiállításunk átlag {rec392['per_susp']:.1f} "
+                    f"gólba kerül ({rec392['conceded']} gól "
+                    f"{rec392['windows']} kétperc alatt; "
+                    f"{SCT_COSTLY:.1f} fölött már drága) — a "
+                    "fegyelmezetlenség nálunk közvetlenül pontot ér",
+                    "hátrány-fal gyakorlása 5-6 ellen (kifelé "
+                    "terelés, beállós átadás, kapussal egyeztetett "
+                    "sarok-felosztás), és a kiállítás-okok "
+                    "átbeszélése videón: melyik szabálytalanság "
+                    "elkerülhető lett volna",
+                    )
+            elif rec392["per_susp"] <= SCT_CHEAP:
+                add(side, "védekezés", "A hátrány-védekezés erősség",
+                    f"egy kiállításunk csak {rec392['per_susp']:.1f} "
+                    f"gólba kerül ({rec392['conceded']} gól "
+                    f"{rec392['windows']} kétperc alatt) — a "
+                    "hátrány-védekezés a csapat erőssége, erre "
+                    "építeni lehet",
+                    "tudatos kockázat: a hátrány-fal magasabbra "
+                    "húzása labdaszerzésért, és a hátrányban "
+                    "vállalt kontra gyakorlása — a két percből így "
+                    "nettó nyereség lehet",
+                    )
+    except Exception:
+        pass
+
+    # 391) Emberfogás-váltás: a szünetben hozott emberfogás a
+    # legdrágább meglepetés — nekünk is legyen rá válaszunk.
+    _szabaly = 391
+    try:
+        from .defense import MSH_TIGHT_M, marking_shift
+        msh391 = marking_shift(match, config)
+        for side in ("home", "away"):
+            rec391 = msh391[side]
+            if rec391.get("verdict") is None:
+                continue
+            if rec391["sh_dist_m"] < rec391["fh_dist_m"]:
+                add(side, "védekezés", "Emberfogás a szünet után",
+                    f"a szünet után emberfogásra váltottunk (a "
+                    f"legszorosabb páros {rec391['sh_dist_m']:.1f} m "
+                    f"az első félidei {rec391['fh_dist_m']:.1f} m "
+                    f"helyett; {MSH_TIGHT_M:.1f} m alatt már "
+                    "emberfogás) — a váltás jó fegyver, de a mögötte "
+                    "maradó öt ember területe kinyílik",
+                    "emberfogás-gyakorlás a fal mögötti biztosítással: "
+                    "kijelölt átadás-szabály a fogott ember "
+                    "elfutásánál, és próba emberfogás után visszaállás "
+                    "zárt falra — edzésen 5+1 játék jelre váltva",
+                    )
+            else:
+                add(side, "védekezés", "Emberfogás elengedése",
+                    f"a szünet után elengedtük az emberfogást (a "
+                    f"legszorosabb páros {rec391['sh_dist_m']:.1f} m "
+                    f"az első félidei {rec391['fh_dist_m']:.1f} m "
+                    "helyett) — a korábban fogott emberük "
+                    "visszakapja a labdát",
+                    "döntsük el előre, meddig tart az emberfogás "
+                    "(állás, idő, elfáradás), és legyen jel a "
+                    "visszaállásra — a felszabaduló emberre azonnal "
+                    "menjen az új felelős",
+                    )
+    except Exception:
+        pass
+
+    # 390) Kipattanó-szedők: a kipattanó-munka kiosztható feladat.
+    _szabaly = 390
+    try:
+        from .defense import (RBCP_MIN_REBOUNDS,
+                              defensive_rebound_players)
+        rbcp390 = defensive_rebound_players(match, config)
+        for side in ("home", "away"):
+            top390 = rbcp390[side].get("top")
+            if top390 is None:
+                continue
+            _ki390 = (f"a(z) {top390['jersey']}. számú"
+                      if top390.get("jersey") is not None
+                      else f"a(z) {top390['player_id']}. játékos")
+            add(side, "védekezés", "Kipattanó-munka szétosztása",
+                f"a kipattanóinkat {_ki390} szedi össze a "
+                f"legtöbbször ({top390['rebounds']} kipattanó; "
+                f"{RBCP_MIN_REBOUNDS} kipattanótól már jelezzük) — "
+                "ha őt blokkolják, a második helyzet az ellenfélé",
+                "kipattanó-zónák kiosztása védekezésenként (rövid "
+                "sarok, hosszú sarok, kilenc méter), és minden "
+                "védés után hangos jelre indulás — edzésen "
+                "sorozatlövés kipattanó-küzdelemmel",
+                )
+    except Exception:
+        pass
+
+    # 389) Kétperc-páros: ha a kiharcolás és az emberelőny-
+    # befejezés is egy-egy poszton áll, mindkettő kiszámítható.
+    _szabaly = 389
+    try:
+        from .rules import SCH_SHARE_PCT, suspension_chain_roles
+        sup389 = suspension_chain_roles(match, config)
+        for side in ("home", "away"):
+            rec389 = sup389[side]
+            if rec389.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kétperc-lánc szélesítése",
+                f"a kétperceink {rec389['share_pct']:.0f}%-a "
+                f"ugyanazt a láncot futja ({rec389['main_role']}, "
+                f"{rec389['chains']} emberelőny-lövésből; "
+                f"{SCH_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "felkészült ellenfél a kiharcolót és a befejezőt "
+                "egyszerre kezeli, és a kétpercünk elvész",
+                "emberelőny-figura két kifutási úttal (a szokásos "
+                "befejező mellé egy második), és a kiharcolás "
+                "variálása: betörés a másik oldalról, beállós "
+                "átadás — a lánc ne legyen felismerhető",
+                )
+    except Exception:
+        pass
+
+    # 388) Hetes-kihagyók: névre szóló hetes-rutin.
+    _szabaly = 388
+    try:
+        from .rules import SVMP_MIN_MISSES, seven_miss_players
+        svmp388 = seven_miss_players(match, config)
+        for side in ("home", "away"):
+            top388 = svmp388[side].get("top")
+            if top388 is None:
+                continue
+            _ki388 = (f"a(z) {top388['jersey']}. számú"
+                      if top388.get("jersey") is not None
+                      else f"a(z) {top388['player_id']}. játékos")
+            add(side, "befejezés", "Hetes-sorrend a napi forma "
+                "szerint",
+                f"a heteseinket {_ki388} hagyta ki a legtöbbször "
+                f"({top388['misses']} gól nélküli hetes; "
+                f"{SVMP_MIN_MISSES} kihagyástól már jelezzük) — a "
+                "hetes nálunk nem automatikus gól, pedig annak "
+                "kellene lennie",
+                "hetes-verseny edzés végén, fáradtan (10-10 dobás "
+                "kapusra, előre bejelentett sarokkal), és kijelölt "
+                "második dobó: a hetest a heti forma döntse el, ne "
+                "a rangsor",
+                )
+    except Exception:
+        pass
+
+    # 387) Sprint-esés: ha a második félidőre megfogy a láb, a
+    # kontra-játékunk a szünettel eltűnik.
+    _szabaly = 387
+    try:
+        from .stats import SFD_DROP_RATIO, sprint_fade
+        sfd387 = sprint_fade(match, config)
+        for side in ("home", "away"):
+            rec387 = sfd387[side]
+            if rec387.get("verdict") is None:
+                continue
+            if rec387["ratio"] <= SFD_DROP_RATIO:
+                add(side, "erőnlét", "Második félidei futás",
+                    f"a sprint-ütemünk a második félidőre "
+                    f"{rec387['sh_per_min']:.1f} sprint/percre esik "
+                    f"az {rec387['fh_per_min']:.1f} helyett "
+                    f"({SFD_DROP_RATIO:.1f} arány alatt már minta) — "
+                    "a kontra-játékunk a szünettel eltűnik, és a "
+                    "visszarendeződés is lassul",
+                    "ismétléses sprint-blokk a hét közepén "
+                    "(10×30 m rövid pihenővel), és a második "
+                    "félidőre tervezett csere-ritmus: a "
+                    "sprint-terhelésű posztokat a 40. perc előtt "
+                    "pihentetni kell",
+                    )
+            else:
+                add(side, "erőnlét", "Kapcsolás a szünet után",
+                    f"a sprint-ütemünk a második félidőre "
+                    f"{rec387['sh_per_min']:.1f} sprint/percre nő az "
+                    f"{rec387['fh_per_min']:.1f} helyett — jó jel, "
+                    "de az első félidő így kihasználatlan marad",
+                    "korai tempó: bemelegítésben sprint-indítás, és "
+                    "az első tíz percre tudatos kontra-terv (a "
+                    "meccset ne a szünet után kelljen behozni)",
+                    )
+    except Exception:
+        pass
+
+    # 386) Óralopás: a végjáték óra-kezelése vezetésben.
+    _szabaly = 386
+    try:
+        from .momentum import CLK_DIFF_S, clock_management
+        clk386 = clock_management(match, config)
+        for side in ("home", "away"):
+            rec386 = clk386[side]
+            if rec386.get("verdict") is None:
+                continue
+            if rec386["diff_s"] > 0:
+                add(side, "támadás", "Óra-kezelés vezetésben",
+                    f"vezetve {rec386['diff_s']:.1f} másodperccel "
+                    "hosszabb a támadásunk a hajrában "
+                    f"({rec386['lead_s']:.1f} mp a "
+                    f"{rec386['base_s']:.1f} mp helyett; "
+                    f"{CLK_DIFF_S:.0f} mp fölött már minta) — az "
+                    "időhúzás jó, de a passzív jel ellenünk fordítja",
+                    "időhúzás szabályosan: mozgásos labdajáratás "
+                    "(nem álló), kötelező befejezés a passzív jel "
+                    "után négy passzon belül, és bejáratott "
+                    "gyors-figura a jelre — edzésen passzív jeles "
+                    "5-5 játék",
+                    )
+            else:
+                add(side, "támadás", "Nyugalom vezetésben",
+                    f"vezetve {abs(rec386['diff_s']):.1f} "
+                    "másodperccel rövidebb a támadásunk a hajrában "
+                    f"({rec386['lead_s']:.1f} mp a "
+                    f"{rec386['base_s']:.1f} mp helyett) — "
+                    "sietünk, pedig az idő nekünk dolgozik",
+                    "végjáték-forgatókönyv előnnyel: kötelező "
+                    "körbejátszás lövés előtt, kijelölt "
+                    "labdatartó, és csak tiszta helyzetből lövés — "
+                    "edzésen vezetéses óra ellen játszott 5-5",
+                    )
+    except Exception:
+        pass
+
+    # 385) Kipattanó ára: a védés nem megúszott helyzet, ha a
+    # kipattanó gólt ér.
+    _szabaly = 385
+    try:
+        from .goalkeeper import (RPN_COSTLY_PCT, RPN_WINDOW_S,
+                                 rebound_punishment)
+        rpn385 = rebound_punishment(match, config)
+        for side in ("home", "away"):
+            rec385 = rpn385[side]
+            if rec385.get("verdict") is None:
+                continue
+            add(side, "kapus", "Kipattanó-kezelés",
+                f"a védéseink {rec385['rate_pct']:.0f}%-a után gól "
+                f"jön a kipattanóból ({rec385['punished']} a "
+                f"{rec385['saves']} védésből, "
+                f"{RPN_WINDOW_S:.0f} másodpercen belül; "
+                f"{RPN_COSTLY_PCT:.0f}% fölött már drága) — a "
+                "bravúr így nem ér pontot, csak halasztást",
+                "kapussal egyeztetett terelés: a kiütés a szélre "
+                "menjen, ne középre; a fal két embere a "
+                "kipattanó-zónába lép a lövés pillanatában — "
+                "edzésen sorozatlövés kipattanó-küzdelemmel, "
+                "élesben megjátszott második helyzettel",
+                )
+    except Exception:
+        pass
+
+    # 384) Visszaállás ára: a lövésünk után kapott gyors gólok
+    # számlája — nem a fal minősége, hanem a jelenléte a kérdés.
+    _szabaly = 384
+    try:
+        from .defense import (RTP_COSTLY_PCT, RTP_WINDOW_S,
+                              retreat_punishment)
+        rtp384 = retreat_punishment(match, config)
+        for side in ("home", "away"):
+            rec384 = rtp384[side]
+            if rec384.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Lövés utáni első hullám",
+                f"a gól nélküli lövéseink {rec384['rate_pct']:.0f}"
+                f"%-át gyors kapott gól követi ({rec384['punished']} "
+                f"a {rec384['shots']} lövésből, "
+                f"{RTP_WINDOW_S:.0f} másodpercen belül; "
+                f"{RTP_COSTLY_PCT:.0f}% fölött már drága) — ilyenkor "
+                "nem a fal minősége a baj, hanem hogy a fal még "
+                "nincs ott",
+                "lövés utáni azonnali visszafutás jelre: a "
+                "befejezés pillanatában a labda mögötti két ember "
+                "indul, a szélsők a saját sávjukban futnak vissza; "
+                "edzésen befejezés után azonnali 5-6 elleni "
+                "védekezés (a hiányzó ember a lövő)",
+                )
+    except Exception:
+        pass
+
+    # 383) Lepattanó-szedő poszt: ha a kipattanókat mindig ugyanaz
+    # szedi, a többiek nem indulnak el.
+    _szabaly = 383
+    try:
+        from .defense import (RBC_SHARE_PCT, defensive_rebound_roles)
+        rbc383 = defensive_rebound_roles(match, config)
+        for side in ("home", "away"):
+            rec383 = rbc383[side]
+            if rec383.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Kipattanó-felelősség",
+                f"a kipattanók {rec383['share_pct']:.0f}%-át a(z) "
+                f"{rec383['main_role']} posztunk szedi össze "
+                f"({rec383['rebounds']} kipattanóból; "
+                f"{RBC_SHARE_PCT:.0f}% fölött már minta) — a többiek "
+                "nem indulnak el a labdára, így az ellenfél "
+                "berobbanó embere elviszi a második helyzetet",
+                "kipattanó-játék a kapussal: védés után kijelölt "
+                "zónák (rövid sarok, hosszú sarok, kilenc méter), és "
+                "minden védés után hangos jelre indulás — edzésen "
+                "sorozatlövés kipattanó-küzdelemmel",
+                )
+    except Exception:
+        pass
+
+    # 382) Figura-koncentráció: ha a támadásaink egyetlen mintából
+    # jönnek, egy jó felkészülés kifog minket.
+    _szabaly = 382
+    try:
+        from .setplays import SPK_TOP_PCT, setplay_concentration
+        spk382 = setplay_concentration(match, config)
+        for side in ("home", "away"):
+            rec382 = spk382[side]
+            if rec382.get("verdict") is None:
+                continue
+            if rec382["top_pct"] >= SPK_TOP_PCT:
+                add(side, "támadás", "Több figura a repertoárba",
+                    f"a támadásaink {rec382['top_pct']:.0f}%-a "
+                    "egyetlen mintából jön "
+                    f"({rec382['attacks']} mért támadás, "
+                    f"{rec382['figures']} figura; "
+                    f"{SPK_TOP_PCT:.0f}% fölött már minta) — egy jó "
+                    "felkészülés kifog minket, mert mindig ugyanazt "
+                    "látja az ellenfél",
+                    "két új kezdés a meglévő figura mellé (másik "
+                    "oldalról indított elzárás, hátsó sorból "
+                    "érkező), és ugyanaz a figura tükrözve is — a "
+                    "cél, hogy a mintánk ne legyen felismerhető az "
+                    "első két passzból",
+                    )
+            else:
+                add(side, "támadás", "Bejáratott figura a szűk "
+                    "helyzetekre",
+                    "a támadásaink sokfelé oszlanak (a legnagyobb "
+                    f"minta is csak {rec382['top_pct']:.0f}%, "
+                    f"{rec382['figures']} figura) — a változatosság "
+                    "jó, de a szoros hajrában kell egy biztos, "
+                    "bejáratott megoldás is",
+                    "válasszunk két figurát végjátékra, és azokat "
+                    "hetente gyakoroljuk élesben (fáradtan, "
+                    "időkérés után, emberelőnyben is) — a "
+                    "többi maradjon szabad játék",
+                    )
+    except Exception:
+        pass
+
+    # 381) Hajrá-kapus: a saját kapusunk végjáték-formája.
+    _szabaly = 381
+    try:
+        from .goalkeeper import GKC_GAP_PP, gk_clutch_saves
+        gkc381 = gk_clutch_saves(match, config)
+        for side in ("home", "away"):
+            rec381 = gkc381[side]
+            if rec381.get("verdict") is None:
+                continue
+            if rec381["gap_pp"] < 0:
+                add(side, "kapus", "Kapus a hajrában",
+                    f"a kapusunk a hajrában beesik "
+                    f"({rec381['clutch']['save_pct']:.0f}% a "
+                    f"{rec381['rest']['save_pct']:.0f}% helyett, "
+                    f"{rec381['clutch']['faced']} lövésből; "
+                    f"{GKC_GAP_PP:.0f} százalékpont fölött már "
+                    "minta) — a döntő percekben a kapusunk nem "
+                    "segít, pedig ott a legdrágább minden gól",
+                    "hajrá-szimuláció a kapussal: fáradtan, "
+                    "sorozatlövés után 10 éles helyzet, kijelölt "
+                    "hetes-kapus, és a végjátékra tudatos "
+                    "kapuscsere-terv (nem érzés alapján)",
+                    )
+            else:
+                add(side, "kapus", "Kapus-forma a végjátékra",
+                    f"a kapusunk a hajrában nő "
+                    f"({rec381['clutch']['save_pct']:.0f}% a "
+                    f"{rec381['rest']['save_pct']:.0f}% helyett, "
+                    f"{rec381['clutch']['faced']} lövésből) — erre "
+                    "építeni lehet: a végjátékban a védekezés "
+                    "vállalhatja a távoli lövést",
+                    "a hajrá-fal a kapusra épüljön: kifelé tereljük "
+                    "a lövéseket (távoli, szögből), a beállós és a "
+                    "szélső helyzeteket viszont ki kell venni — "
+                    "edzésen a kapussal egyeztetett sarok-felosztás",
+                    )
+    except Exception:
+        pass
+
+    # 380) Emberhátrány-hiba poszt: öt emberrel egy elvesztett
+    # labda azonnal gólt ér.
+    _szabaly = 380
+    try:
+        from .rules import (SHT_SHARE_PCT, shorthanded_turnover_roles)
+        sht380 = shorthanded_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec380 = sht380[side]
+            if rec380.get("verdict") is None:
+                continue
+            add(side, "támadás", "Öt emberrel biztos labda",
+                f"hátrányban {rec380['share_pct']:.0f}%-ban a(z) "
+                f"{rec380['main_role']} kezén vész el a labdánk "
+                f"({rec380['turnovers']} hátrány-eladásból; "
+                f"{SHT_SHARE_PCT:.0f}% fölött már minta) — öt "
+                "emberrel minden elvesztett labda üres kaput ér az "
+                "ellenfélnek",
+                "hátrány-figura kockázat nélkül: kijelölt "
+                "labdatartó, tiltott bejátszás-sávok, és "
+                "időhúzó-játék 5-6 ellen edzésen (a cél nem a gól, "
+                "hanem a két perc túlélése labdavesztés nélkül)",
+                )
+    except Exception:
+        pass
+
+    # 379) Kapkodás-index: ha a kapott gól után elsietjük a
+    # támadást, a hátrányból sorozat lesz.
+    _szabaly = 379
+    try:
+        from .attack_types import RUS_DIFF_S, post_goal_rush
+        rus379 = post_goal_rush(match, config)
+        for side in ("home", "away"):
+            rec379 = rus379[side]
+            if rec379.get("verdict") is None:
+                continue
+            if rec379["diff_s"] < 0:
+                add(side, "támadás", "Kapott gól után nyugalom",
+                    f"kapott gól után {abs(rec379['diff_s']):.1f} "
+                    "másodperccel rövidebb a támadásunk "
+                    f"({rec379['after_s']:.1f} mp a "
+                    f"{rec379['base_s']:.1f} mp helyett; "
+                    f"{RUS_DIFF_S:.0f} mp fölött már minta) — "
+                    "kapkodunk, és az elsietett lövés az ellenfélnek "
+                    "termel labdát",
+                    "bekapott gól után kötelező körbejátszás: két "
+                    "teljes oldalváltás lövés előtt, és a "
+                    "figura csak a második körben indul — edzésen "
+                    "hátrányból indított 5-5 óra ellen",
+                    )
+            else:
+                add(side, "támadás", "Kapott gól után lendület",
+                    f"kapott gól után {rec379['diff_s']:.1f} "
+                    "másodperccel hosszabb a támadásunk "
+                    f"({rec379['after_s']:.1f} mp a "
+                    f"{rec379['base_s']:.1f} mp helyett; "
+                    f"{RUS_DIFF_S:.0f} mp fölött már minta) — "
+                    "befagyunk, közben az óra ellenünk ketyeg",
+                    "bekapott gól után gyors középkezdés: bejáratott "
+                    "első hullám (kapus azonnal indít), és kijelölt "
+                    "figura az első tíz másodpercre",
+                    )
+    except Exception:
+        pass
+
+    # 378) Visszaállás-idő: ha a lövésünk után lassan áll össze a
+    # fal, minden lövésünk kockázat.
+    _szabaly = 378
+    try:
+        from .defense import RTT_SLOW_S, retreat_time
+        rtt378 = retreat_time(match, config)
+        for side in ("home", "away"):
+            rec378 = rtt378[side]
+            if rec378.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Visszaállás a lövésünk után",
+                f"a lövésünk után átlag {rec378['avg_s']:.1f} "
+                f"másodperc, míg négy emberünk hazaér "
+                f"({rec378['shots']} lövésből {rec378['slow']} volt "
+                f"{RTT_SLOW_S:.0f} mp fölött) — így minden "
+                "lövésünk kontra-kockázat, a kapott gólok egy része "
+                "nem is a falon múlik",
+                "visszafutás-sorrend a figurákba építve: a lövés "
+                "pillanatában kijelölt első visszafutó, "
+                "sprint-visszafutás edzésen (lövés után azonnal "
+                "5-0 visszafutás jelre), és labda mögötti "
+                "biztosítás minden befejezésnél",
+                )
+    except Exception:
+        pass
+
+    # 377) Időkérés-hiba poszt: ha a táblára rajzolt figura mindig
+    # ugyanannak a kezén hal el, egyszerűbb kezdés kell.
+    _szabaly = 377
+    try:
+        from .stoppages import (TOE_SHARE_PCT, timeout_turnover_roles)
+        toe377 = timeout_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec377 = toe377[side]
+            if rec377.get("verdict") is None:
+                continue
+            add(side, "támadás", "Időkérés utáni labdavesztés",
+                f"az időkérés utáni labdánk {rec377['share_pct']:.0f}"
+                f"%-ban a(z) {rec377['main_role']} kezén vész el "
+                f"({rec377['turnovers']} eladásból; "
+                f"{TOE_SHARE_PCT:.0f}% fölött már minta) — a "
+                "megbeszélt figura pont ott törik meg, ahol indul",
+                "időkérés-szimuláció edzésen: tábla, 30 másodperc "
+                "megbeszélés, majd élesben a figura — előbb "
+                "egyszerű, két passzos kezdéssel, és a hibázó poszt "
+                "ne az első átvevő legyen",
+                )
+    except Exception:
+        pass
+
+    # 376) Válaszhiba-poszt: ha a kapott gól után mindig ugyanannak
+    # a kezén vész el a labda, a hátrány sorozattá nő.
+    _szabaly = 376
+    try:
+        from .momentum import (RTO_SHARE_PCT, response_turnover_roles)
+        rto376 = response_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec376 = rto376[side]
+            if rec376.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kapott gól utáni első támadás",
+                f"kapott gól után {rec376['share_pct']:.0f}%-ban "
+                f"a(z) {rec376['main_role']} kezén vész el a "
+                f"labdánk ({rec376['turnovers']} válasz-eladásból; "
+                f"{RTO_SHARE_PCT:.0f}% fölött már minta) — így a "
+                "bekapott gólból sorozat lesz, mert a válasz-"
+                "támadásunk el sem indul",
+                "bekapott gól utáni kötelező figura: lassú "
+                "felhozatal, két biztos passz, és a kapkodó poszt "
+                "NEM kapja meg elsőre a labdát; edzésen kapott gól "
+                "után azonnali labdaszerző-játék 4-4-ben",
+                )
+    except Exception:
+        pass
+
+    # 375) Emberelőny-hiba poszt: ha az emberelőnyünk mindig
+    # ugyanannak a kezén akad el, a két perc kárba vész.
+    _szabaly = 375
+    try:
+        from .rules import (PPT_SHARE_PCT, powerplay_turnover_roles)
+        ppt375 = powerplay_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec375 = ppt375[side]
+            if rec375.get("verdict") is None:
+                continue
+            add(side, "támadás", "Emberelőny hiba nélkül",
+                f"az emberelőnyünk {rec375['share_pct']:.0f}%-ban "
+                f"a(z) {rec375['main_role']} kezén akad el "
+                f"({rec375['turnovers']} emberelőny-eladásból; "
+                f"{PPT_SHARE_PCT:.0f}% fölött már minta) — a két "
+                "perc így nem előny, hanem kockázat: az elvett "
+                "labdából ellenünk indul a kontra",
+                "6-5 figura biztonságra: lassabb labdajáratás két "
+                "körig (nincs erőltetett bejátszás), a hibázó poszt "
+                "fogadásainak gyakorlása kettőzés ellen, és "
+                "kijelölt visszabiztosító a kontra ellen",
+                )
+    except Exception:
+        pass
+
+    # 374) Ziccerpáros-poszt: ha a helyzeteink egyetlen kettősön
+    # állnak, egy ember mindkettőt kifogja.
+    _szabaly = 374
+    try:
+        from .xg import BCP_PAIR_SHARE_PCT, big_chance_pair_roles
+        bcp374 = big_chance_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec374 = bcp374[side]
+            if rec374.get("verdict") is None:
+                continue
+            add(side, "támadás", "Ziccer-gyár szétszedése",
+                f"a ziccereink {rec374['share_pct']:.0f}%-a "
+                f"ugyanabból a párosból jön ({rec374['main_role']}, "
+                f"{rec374['chances']} helyzetből; "
+                f"{BCP_PAIR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "köztük lévő passzsáv elvágásával az ellenfél egy "
+                "mozdulattal mindkét posztunkat kifogja",
+                "ugyanaz a figura három kimenettel: a bejáratott "
+                "páros mellett a másik oldal befejezésével és "
+                "visszajátszással is; és cseréljük meg a szerepeket "
+                "(a befejező adja a bejátszást) — a ziccer ne "
+                "egyetlen sávon múljon",
+                )
+    except Exception:
+        pass
+
+    # 373) Hetes-kihagyó poszt: ha a kihagyott heteseink egy poszthoz
+    # kötődnek, a hetes-sorrend és a rutin a téma.
+    _szabaly = 373
+    try:
+        from .rules import SVM_SHARE_PCT, seven_miss_roles
+        svm373 = seven_miss_roles(match, config)
+        for side in ("home", "away"):
+            rec373 = svm373[side]
+            if rec373.get("verdict") is None:
+                continue
+            add(side, "befejezés", "Hetes-rutin a kihagyó posztnál",
+                f"a kihagyott heteseink {rec373['share_pct']:.0f}%-a "
+                f"a(z) {rec373['main_role']} posztunkhoz kötődik "
+                f"({rec373['misses']} gól nélküli hetesből; "
+                f"{SVM_SHARE_PCT:.0f}% fölött már minta) — a "
+                "hetes nálunk nem automatikus gól, pedig annak "
+                "kellene lennie",
+                "hetes-rutin fáradtan: sorozat után 10 hetes "
+                "kapusra, előre bejelentett sarokkal; és jelöljünk "
+                "ki második dobót — a hetest a napi forma döntse el, "
+                "ne a megszokás",
+                )
+    except Exception:
+        pass
+
+    # 372) Ziccer-előkészítő poszt: ha a ziccereinket egy poszt
+    # teremti, a kiesésével a helyzeteink is eltűnnek.
+    _szabaly = 372
+    try:
+        from .xg import (BCF_FEED_SHARE_PCT,
+                         big_chance_feeder_roles)
+        bcf372 = big_chance_feeder_roles(match, config)
+        for side in ("home", "away"):
+            rec372 = bcf372[side]
+            if rec372.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy kézből induló ziccerek",
+                f"a ziccereink {rec372['share_pct']:.0f}%-át a(z) "
+                f"{rec372['main_role']} posztunk teremti "
+                f"({rec372['chances']} előkészítésből; "
+                f"{BCF_FEED_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ő bejátszó-sávjának elvágásával a helyzeteink ki "
+                "sem alakulnak",
+                "ziccer-teremtés több kézből: bejátszás a szélről "
+                "és a hátsó sorból is, elzárás utáni kioldó passz "
+                "gyakorlása, és a fő előkészítőnk tehermentesítése "
+                "(ne mindig ő legyen a labdás a figurában)",
+                )
+    except Exception:
+        pass
+
+    # 371) Vég-birtokos poszt: ha a terméketlen támadásaink mindig
+    # ugyanannak a kezében halnak el, a befejezés-felelősség
+    # tisztázatlan.
+    _szabaly = 371
+    try:
+        from .attack_types import LST_SHARE_PCT, last_holder_roles
+        lst371 = last_holder_roles(match, config)
+        for side in ("home", "away"):
+            rec371 = lst371[side]
+            if rec371.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy kézben elhaló támadás",
+                f"a lövés nélkül záruló támadásaink "
+                f"{rec371['share_pct']:.0f}%-a a(z) "
+                f"{rec371['main_role']} poszt kezében hal el "
+                f"({rec371['attacks']} terméketlen támadásból; "
+                f"{LST_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a támadás második felében rá tolja a "
+                "nyomást",
+                "befejezés-felelősség tisztázása: minden figurának "
+                "legyen kijelölt befejezője és határideje (hány "
+                "másodperc után kötelező a lövés vagy a bejátszás), "
+                "és a poszt kapjon kioldó megoldást nyomás alatt",
+                )
+    except Exception:
+        pass
+
+    # 370) Menekülő-poszt: ha szorításban mindig ugyanahhoz a
+    # poszthoz megy a labda, a kiútunk kiszámítható és elfogható.
+    _szabaly = 370
+    try:
+        from .decisions import ESC_SHARE_PCT, press_outlet_roles
+        esc370 = press_outlet_roles(match, config)
+        for side in ("home", "away"):
+            rec370 = esc370[side]
+            if rec370.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra szűkülő kiút",
+                f"szorításban a passzaink {rec370['share_pct']:.0f}"
+                f"%-a a(z) {rec370['main_role']} poszthoz megy "
+                f"({rec370['passes']} nyomás alatti passzból; "
+                f"{ESC_SHARE_PCT:.0f}% fölött már minta) — a "
+                "kettőzés mögötti harmadik ember erre a passzra "
+                "állhat lesbe",
+                "kiút két irányba: minden kettőzés-helyzethez KÉT "
+                "leadási irány (közeli és hosszú), pattintott passz "
+                "a lesben álló mögé, és a labdás fej-felhozása "
+                "(előbb nézni, aztán adni) 3-3-as kisjátékban",
+                )
+    except Exception:
+        pass
+
+    # 369) Időkéréspáros-poszt: ha az időkérés utáni figuránk mindig
+    # ugyanazon a tengelyen fut, a fal az első passznál elvágja.
+    _szabaly = 369
+    try:
+        from .stoppages import TOP_SHARE_PCT, timeout_pair_roles
+        top369 = timeout_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec369 = top369[side]
+            if rec369.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy tengelyen futó időkérés-figura",
+                f"az időkérés utáni lövéseink "
+                f"{rec369['share_pct']:.0f}%-a a(z) "
+                f"{rec369['main_role']} tengelyen születik "
+                f"({rec369['shots']} lövésből; "
+                f"{TOP_SHARE_PCT:.0f}% fölött már minta) — a fal "
+                "tudja, hogy figura jön, és az első passzt elvágja",
+                "időkérés-figura B-vel: két kész figura különböző "
+                "indítással (más előkészítő), álcázó első passz, és "
+                "a figura begyakorlása fáradtan is",
+                )
+    except Exception:
+        pass
+
+    # 368) Sávváltó-poszt: ha a keresztmozgásunkat egy poszt viszi, a
+    # felkészült fal egyszerűen követi.
+    _szabaly = 368
+    try:
+        from .attack_types import LSW_SHARE_PCT, lane_switch_roles
+        lsw368 = lane_switch_roles(match, config)
+        for side in ("home", "away"):
+            rec368 = lsw368[side]
+            if rec368.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő keresztmozgás",
+                f"a sávváltásaink {rec368['share_pct']:.0f}%-a a(z) "
+                f"{rec368['main_role']} posztunktól jön "
+                f"({rec368['switches']} sávváltásból; "
+                f"{LSW_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült fal egy emberrel követi, és a figuráink "
+                "nem nyitnak teret",
+                "keresztmozgás több posztról: ellenirányú kettős "
+                "keresztek (két ember egyszerre vált sávot), "
+                "elzárással kombinált átfutás, és a labda nélküli "
+                "mozgás időzítése a bejátszáshoz",
+                )
+    except Exception:
+        pass
+
+    # 367) Elöl lógó poszt: ha egy posztunk nem ér haza, mögötte üres
+    # a pálya — az ellenfél oda fogja vezetni a gyors indítást.
+    _szabaly = 367
+    try:
+        from .defense import recovery_roles
+        rcr367 = recovery_roles(match, config)
+        for side in ("home", "away"):
+            rec367 = rcr367[side]
+            if rec367.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Elöl lógó poszt",
+                f"a(z) {rec367['main_role']} posztunk a védekezett "
+                f"idő csak {rec367['share_pct']:.0f}%-ában van a "
+                "saját térfelünkön — mögötte üres a pálya, és az "
+                "ellenfél oda vezeti a gyors indítást",
+                "visszaérés-fegyelem: kijelölt első visszafutó "
+                "minden lövésnél (nem mindig ugyanaz), "
+                "visszafutás-verseny kisjátékban, és a poszt "
+                "terhelésének felülvizsgálata (csere, kondíció)",
+                )
+    except Exception:
+        pass
+
+    # 366) Válasz-poszt: ha a kapott gól utáni válaszunk egy posztra
+    # épül, az ellenfél a saját gólja után azonnal ráállhat.
+    _szabaly = 366
+    try:
+        from .momentum import RSP_SHARE_PCT, response_scorer_roles
+        rsp366 = response_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec366 = rsp366[side]
+            if rec366.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő válasz",
+                f"kapott gól után a válasz-góljaink "
+                f"{rec366['share_pct']:.0f}%-a a(z) "
+                f"{rec366['main_role']} posztról jön "
+                f"({rec366['goals']} válasz-gólból; "
+                f"{RSP_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a saját gólja után azonnal ráállhat",
+                "válasz-forgatókönyv B-vel: a kapott gól utáni első "
+                "támadásra KÉT begyakorolt figura (más-más "
+                "befejezővel), gyors középkezdés mint alapérték, és "
+                "a válasz-emberünk tehermentesítése elzárással",
+                )
+    except Exception:
+        pass
+
+    # 365) Emberelőnypáros-poszt: ha a 6-5-ünk egy tengelyen fut, öt
+    # emberrel is kiszámíthatók vagyunk.
+    _szabaly = 365
+    try:
+        from .rules import PWP_SHARE_PCT, powerplay_pair_roles
+        pwp365 = powerplay_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec365 = pwp365[side]
+            if rec365.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy tengelyen futó emberelőny",
+                f"a 6-5 lövéseink {rec365['share_pct']:.0f}%-a a(z) "
+                f"{rec365['main_role']} tengelyen születik "
+                f"({rec365['shots']} emberelőny-lövésből; "
+                f"{PWP_SHARE_PCT:.0f}% fölött már minta) — öt "
+                "emberrel védekező ellenfél is ki tudja osztani rá "
+                "a két emberét",
+                "emberelőny-repertoár: a 6-5 figura tükrözve a másik"
+                " oldalra, beálló-kioldás és szélső-befutás mint "
+                "második befejezési út, és üres kapus (7a6) "
+                "változat begyakorolva",
+                )
+    except Exception:
+        pass
+
+    # 364) Specialista-poszt: ha egy posztunkat váltott sorban
+    # játsszuk, a csere-pillanatunk sebezhető.
+    _szabaly = 364
+    try:
+        from .roles import specialist_roles
+        spc364 = specialist_roles(match, config)
+        for side in ("home", "away"):
+            rec364 = spc364[side]
+            if rec364.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Váltott sorban játszott poszt",
+                f"a(z) {rec364['main_role']} posztunk az idejét "
+                "szinte teljesen egy fázisban tölti (váltott sor) — "
+                "a csere-pillanatunkat a gyors középkezdés és a "
+                "szerzés utáni azonnali indítás bünteti",
+                "csere-fegyelem váltott sornál: a csere KÉSZ "
+                "helyzetben történjen (labda a kapusnál vagy "
+                "holtidő), gyors ellenfél ellen kétirányú ember "
+                "maradjon fent, és a csere-sorrend legyen "
+                "begyakorolva sípszóra",
+                )
+    except Exception:
+        pass
+
+    # 363) Kulcs-páros: ha több páros-rétegünk ugyanarra a kettősre
+    # mutat, a játékunk egyetlen tengelyen áll.
+    _szabaly = 363
+    try:
+        from .priorities import KPR_MIN_LAYERS, key_pair
+        kpr363 = key_pair(match, config)
+        for side in ("home", "away"):
+            rec363 = kpr363[side]
+            if rec363.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy tengelyen álló játék",
+                f"a kulcs-párosunk a(z) {rec363['top']}: "
+                f"{rec363['pairs'][rec363['top']]} páros-réteg "
+                f"ítélete mutat rá (a {rec363['layers']} "
+                f"megszólalóból; {KPR_MIN_LAYERS} egyező réteg "
+                "fölött már minta) — egy jó sávzárás több "
+                "mintánkat egyszerre viszi el",
+                "tengely-váltás gyakorlása: a fő figurák tükrözve a "
+                "másik oldalra, a kulcs-páros szétválasztása a "
+                "figurákban (egyikük indít, a másik befejez "
+                "harmadikon keresztül), és tudatos harmadik ember "
+                "bevonása a kijátszásokba",
+                )
+    except Exception:
+        pass
+
+    # 362) Lepattanópáros-poszt: ha a lepattanó-érkezésünk egy
+    # útvonalon fut, a felkészült fal elzárja.
+    _szabaly = 362
+    try:
+        from .attack_types import RBP_SHARE_PCT, rebound_pair_roles
+        rbp362 = rebound_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec362 = rbp362[side]
+            if rec362.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy útvonalon futó lepattanó",
+                f"a második rohamaink {rec362['share_pct']:.0f}%-a "
+                f"a(z) {rec362['main_role']} páron fut "
+                f"({rec362['second_shots']} második rohamból; "
+                f"{RBP_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült fal a lövés zárása után pont ezt az "
+                "útvonalat állja el",
+                "lepattanó-útvonalak bővítése: minden lövéshez KÉT "
+                "kijelölt érkező (más-más oldalról), lepattanó-harc "
+                "kisjátékban zárás ellen, és a hosszú oldali "
+                "érkezés gyakorlása",
+                )
+    except Exception:
+        pass
+
+    # 361) Kettőzőpáros-poszt: ha a kettőzésünk egy védő-pároson áll,
+    # az elhagyott ember kiszámítható — a kioldó passz ingyen jön.
+    _szabaly = 361
+    try:
+        from .defense import DPP_SHARE_PCT, doubling_pair_roles
+        dpp361 = doubling_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec361 = dpp361[side]
+            if rec361.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy pároson álló kettőzés",
+                f"a kettőzésünk {rec361['share_pct']:.0f}%-a a(z) "
+                f"{rec361['main_role']} védő-pároson áll "
+                f"({DPP_SHARE_PCT:.0f}% fölött már minta) — a "
+                "kettőzéskor elhagyott emberünk mindig ugyanaz, és "
+                "a felkészült ellenfél oda oldja ki a labdát",
+                "kettőző-páros forgatása: a kettőzés több "
+                "poszt-párosból induljon (jelre váltott felelősök), "
+                "és a kettőzés mögötti harmadik ember zárja a "
+                "kioldó passzsávot 3-3-as kisjátékban",
+                )
+    except Exception:
+        pass
+
+    # 360) Gólpasszpáros-poszt: ha a góljaink egy tengelyen
+    # születnek, egy sávzárás a gól-gépezetünket állítja le.
+    _szabaly = 360
+    try:
+        from .roles import APR_SHARE_PCT, assist_pair_roles
+        apr360 = assist_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec360 = apr360[side]
+            if rec360.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy tengelyen születő gólok",
+                f"az asszisztos góljaink {rec360['share_pct']:.0f}"
+                f"%-a a(z) {rec360['main_role']} tengelyen születik"
+                f" ({rec360['goals']} gólból; "
+                f"{APR_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "sávzárás a fő gól-forrásunkat vágja el",
+                "második gól-tengely: a fő figura tükrözése és "
+                "másik adó-befejező kettős bejáratása, a fő "
+                "tengelynek pedig sávzárás elleni variáció "
+                "(hátoldali befutás, visszatett labda)",
+                )
+    except Exception:
+        pass
+
+    # 359) Kontrapáros-poszt: ha a kontráink egy tengelyen futnak, a
+    # felkészült ellenfél két ponton fogja őket.
+    _szabaly = 359
+    try:
+        from .attack_types import (FBP_SHARE_PCT,
+                                   fast_break_pair_roles)
+        fbp359 = fast_break_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec359 = fbp359[side]
+            if rec359.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy tengelyen futó kontra",
+                f"a kontráink {rec359['share_pct']:.0f}%-a a(z) "
+                f"{rec359['main_role']} tengelyen fut "
+                f"({rec359['breaks']} lerohanásból; "
+                f"{FBP_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült ellenfél az indítónkat nyomja, a "
+                "befejezőnk sávját zárja",
+                "második kontra-tengely: másik indító és másik "
+                "kifutó-sáv bejáratása, kétsávos lerohanás-gyakorlat"
+                " és az indító nyomás alatti első passzának edzése",
+                )
+    except Exception:
+        pass
+
+    # 358) Hetespáros-poszt: ha a kiharcolás és a dobás is egy-egy
+    # emberen áll, mindkettőhöz tartalék kell.
+    _szabaly = 358
+    try:
+        from .rules import SVP_SHARE_PCT, seven_pair_roles
+        svp358 = seven_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec358 = svp358[side]
+            if rec358.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy párosra járó hetes-játék",
+                f"a hetes-játékunk {rec358['share_pct']:.0f}%-a "
+                f"a(z) {rec358['main_role']} posztpárra jár "
+                f"({rec358['sevens']} hetesből; "
+                f"{SVP_SHARE_PCT:.0f}% fölött már minta) — a "
+                "kiharcolónk és a dobónk is kiszámítható",
+                "tartalék a hetes-párosra: második betörő-figura a "
+                "kiharcoláshoz és második kijelölt dobó, heti "
+                "hetes-versennyel; a fő dobónak irány-variálás",
+                )
+    except Exception:
+        pass
+
+    # 357) Csere-stílus: az átszabó cserehullám után a saját
+    # védekezésünknek is újra kell rendeződnie — gyakorolni kell.
+    _szabaly = 357
+    try:
+        from .substitutions import swap_style
+        sws357 = swap_style(match, config)
+        for side in ("home", "away"):
+            rec357 = sws357[side]
+            if rec357.get("verdict") is None \
+                    or "átszabó" not in rec357["verdict"]:
+                continue
+            add(side, "védekezés", "Átszabó cserehullám",
+                f"a cseréink átszabják a felállást ({rec357['same']}"
+                f"/{rec357['pairs']} azonos-posztú váltás) — a "
+                "hullám utáni első védekezésünk rendezetlen, és a "
+                "felkészült ellenfél pont akkor támad",
+                "csere utáni rendeződés-gyakorlás: a hullám után "
+                "kötelező hangos fogás-osztás, az első védekezés "
+                "5-1-ből indul biztonsági alapfelállásként, és a "
+                "cserék időzítése saját támadás idejére",
+                )
+    except Exception:
+        pass
+
+    # 356) Elzárópáros-poszt: ha az elzárás-játékunk egy posztpárra
+    # jár, a felkészült fal párban fogja — kell a másik oldal.
+    _szabaly = 356
+    try:
+        from .attack_types import SPP_SHARE_PCT, screen_pair_roles
+        spp356 = screen_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec356 = spp356[side]
+            if rec356.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztpárra járó elzárás",
+                f"az elzárás-játékunk {rec356['share_pct']:.0f}%-a "
+                f"a(z) {rec356['main_role']} posztpárra jár "
+                f"({rec356['shots']} elzárt lövésből; "
+                f"{SPP_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült fal párban fogja a kettősünket",
+                "elzárás-repertoár bővítése: a figura tükrözve a "
+                "másik oldalra is, második elzáró-lövő kettős "
+                "bejáratása, és elzárás-csel (kilépő védő mögé "
+                "visszagurulás) gyakorlása",
+                )
+    except Exception:
+        pass
+
+    # 355) Álló-poszt: ha egy posztunk áll labda nélkül, a védője
+    # ellenünk fordul — labda nélküli munka kell.
+    _szabaly = 355
+    try:
+        from .tactics import static_attacker_roles
+        sar355 = static_attacker_roles(match, config)
+        for side in ("home", "away"):
+            rec355 = sar355[side]
+            if rec355.get("verdict") is None:
+                continue
+            add(side, "támadás", "Labda nélkül álló poszt",
+                f"a(z) {rec355['main_role']} posztunk áll labda "
+                "nélkül — a védője otthagyja, és ellenünk fordul: "
+                "besegít, kettőz vagy a beállónkra lép",
+                "labda nélküli munka a posztnak: befutás-minták "
+                "(hátoldali, elzárásról lekapcsolódó), üres-oldali "
+                "mozgás-szabály a figurákban, és videó-visszajelzés"
+                " a mozgás-percekről",
+                )
+    except Exception:
+        pass
+
+    # 354) Letámadó-poszt: ha a letámadásunk egy poszton áll, a
+    # felkészült ellenfél kikerüli — és mögötte nyílik a tér.
+    _szabaly = 354
+    try:
+        from .defense import HSR_SHARE_PCT, high_steal_roles
+        hsr354 = high_steal_roles(match, config)
+        for side in ("home", "away"):
+            rec354 = hsr354[side]
+            if rec354.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy poszton álló letámadás",
+                f"az elöl-szerzéseink {rec354['share_pct']:.0f}%-a "
+                f"a(z) {rec354['main_role']} posztunknál születik "
+                f"({rec354['high']} letámadás-szerzésből; "
+                f"{HSR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült ellenfél az ő oldalát kerüli, és a "
+                "háta mögé játszik",
+                "letámadás két hullámban: második elöl-szedő "
+                "kijelölése a másik oldalra, a letámadó mögötti tér"
+                " biztosítása (visszazáró társ), és csapda-jelek "
+                "gyakorlása az oldalváltásra",
+                )
+    except Exception:
+        pass
+
+    # 353) Célkereszt-poszt: ha az ellenfelek rendre egy posztunk
+    # előtt fejeznek be, oda segítség és elzárás-védés kell.
+    _szabaly = 353
+    try:
+        from .defense import TGR_SHARE_PCT, targeted_defender_roles
+        tgr353 = targeted_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec353 = tgr353[side]
+            if rec353.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Célkeresztben lévő poszt",
+                f"az ellenfelek {rec353['share_pct']:.0f}%-ban a(z) "
+                f"{rec353['main_role']} posztunk előtt fejeznek be "
+                f"({rec353['shots']} rá-lövésből; "
+                f"{TGR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "következő ellenfél is oda fogja szervezni a "
+                "támadását",
+                "segítség a célba vett posztnak: korai besegítés a "
+                "sávjába, elzárás-védés (átcsúszás-váltás) "
+                "gyakorlása, és a kapus szög-igazítása az ő "
+                "zónájára",
+                )
+    except Exception:
+        pass
+
+    # 352) Fedezett-lövő poszt: ha egy posztunk fedezetten is lő, a
+    # lövés-szelekció az edzés-téma.
+    _szabaly = 352
+    try:
+        from .defense import CVR_SHARE_PCT, covered_shooter_roles
+        cvr352 = covered_shooter_roles(match, config)
+        for side in ("home", "away"):
+            rec352 = cvr352[side]
+            if rec352.get("verdict") is None:
+                continue
+            add(side, "támadás", "Fedezett lövések egy poszton",
+                f"a fedezett lövéseink {rec352['share_pct']:.0f}%-a "
+                f"a(z) {rec352['main_role']} posztunkról jön "
+                f"({rec352['covered']} fedezett lövésből; "
+                f"{CVR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél rá sem lép ki, a lövéseink a blokkban "
+                "halnak el",
+                "lövés-szelekció a posztnak: fedezetten kötelező a "
+                "továbbjátszás (videó-szabály), lövőcsel-repertoár "
+                "bővítése, és elzárással nyitott tiszta lövő-sáv "
+                "gyakorlása",
+                )
+    except Exception:
+        pass
+
+    # 351) Védőmotor-poszt: ha a védő-motorunk egy poszton a második
+    # félidőre leáll, tervezett pihenő kell a szünet körül.
+    _szabaly = 351
+    try:
+        from .defense import fading_defender_roles
+        fdd351 = fading_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec351 = fdd351[side]
+            if rec351.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Leálló védő-motor",
+                f"a védő-motorunk a(z) {rec351['main_role']} "
+                f"poszton az első félidőben pörög ({rec351['fh']} "
+                f"szerzés+blokk), a másodikra leáll "
+                f"({rec351['sh']}) — a felkészült ellenfél a szünet"
+                " után pont ott fog támadni",
+                "védő-motor rotációja: tervezett pihenő a szünet "
+                "körüli tíz percben, a védő-akciók terhének "
+                "elosztása két posztra, és kondicionális blokk "
+                "(ismételt védekező lábmunka) az edzésen",
+                )
+    except Exception:
+        pass
+
+    # 350) Áttörő-poszt: ha a betörés-játékunk egy emberen áll, egy
+    # időzített kettőzés az egész belső játékunkat lezárja.
+    _szabaly = 350
+    try:
+        from .attack_types import BTR_SHARE_PCT, breakthrough_roles
+        btr350 = breakthrough_roles(match, config)
+        for side in ("home", "away"):
+            rec350 = btr350[side]
+            if rec350.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy emberen álló betörés-játék",
+                f"a betöréseink {rec350['share_pct']:.0f}%-a a(z) "
+                f"{rec350['main_role']} posztunktól jön "
+                f"({rec350['entries']} labdás betörésből; "
+                f"{BTR_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "időzített kettőzés az egész belső játékunkat "
+                "lezárja",
+                "második áttörő építése: 1-1 elleni betörés-"
+                "gyakorlat két posztnak, elzárás utáni lekapcsolódó"
+                " betörés, és a betörő kettőzésekor kötelező kioldó"
+                " passz gyakorlása",
+                )
+    except Exception:
+        pass
+
+    # 349) Drága-eladó poszt: ha egy posztunk hibái rendre gólba
+    # kerülnek, nyomás alatti labdakezelés és visszazárás kell.
+    _szabaly = 349
+    try:
+        from .defense import DTO_SHARE_PCT, costly_turnover_roles
+        dto349 = costly_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec349 = dto349[side]
+            if rec349.get("verdict") is None:
+                continue
+            add(side, "támadás", "Gólba forduló hibák egy poszton",
+                f"a gólba forduló eladásaink {rec349['share_pct']:.0f}"
+                f"%-a a(z) {rec349['main_role']} posztunknál "
+                f"történik ({rec349['punished']} büntetett hibából; "
+                f"{DTO_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél pontosan tudja, kinek a labdájára érdemes"
+                " startolni",
+                "nyomás alatti labdakezelés a posztnak (1+1 elleni "
+                "labdatartás, kettőzés elleni leadás), és hiba utáni"
+                " azonnali visszazárás-szabály: az eladó sprintel "
+                "elsőként vissza",
+                )
+    except Exception:
+        pass
+
+    # 348) Beérkező-poszt: ha a padunk csak egy posztra hoz
+    # frissítést, a második sorunk féloldalas.
+    _szabaly = 348
+    try:
+        from .substitutions import IBR_SHARE_PCT, sub_in_roles
+        ibr348 = sub_in_roles(match, config)
+        for side in ("home", "away"):
+            rec348 = ibr348[side]
+            if rec348.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Féloldalas második sor",
+                f"a beállásaink {rec348['share_pct']:.0f}%-a a(z) "
+                f"{rec348['main_role']} posztra érkezik "
+                f"({rec348['ins']} beállásból; "
+                f"{IBR_SHARE_PCT:.0f}% fölött már minta) — a többi "
+                "poszton nincs érdemi frissítésünk, és ott a "
+                "fáradtság dönt",
+                "második sor szélesítése: poszt-specifikus "
+                "felkészítés a ritkán cserélt posztok cseréinek, "
+                "vegyes sorok gyakorlása edzésmeccsen, és a "
+                "keret-terv felülvizsgálata a hiányposztokra",
+                )
+    except Exception:
+        pass
+
+    # 347) Forgatott-poszt: ha a forgatásunk egy posztra jár, a többi
+    # poszton felhalmozódik a fáradtság.
+    _szabaly = 347
+    try:
+        from .substitutions import SBR_SHARE_PCT, substituted_roles
+        sbr347 = substituted_roles(match, config)
+        for side in ("home", "away"):
+            rec347 = sbr347[side]
+            if rec347.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Egy posztra járó forgatás",
+                f"a cseréink {rec347['share_pct']:.0f}%-a a(z) "
+                f"{rec347['main_role']} posztot érinti "
+                f"({rec347['outs']} lecserélésből; "
+                f"{SBR_SHARE_PCT:.0f}% fölött már minta) — a többi "
+                "poszton felhalmozódik a fáradtság, és a hajrában "
+                "ott törik meg a játékunk",
+                "forgatás-terv kiegyenlítése: tervezett pihentetés "
+                "a nem forgatott posztoknak is (rövid blokkok), és "
+                "a második sor poszt-specifikus felkészítése, hogy "
+                "a csere ne jelentsen színvonal-esést",
+                )
+    except Exception:
+        pass
+
+    # 346) Fáradt-fal poszt: ha a falunk a második félidőre egy poszt
+    # ellen leül, csere- és kondíció-terv kell arra a sávra.
+    _szabaly = 346
+    try:
+        from .defense import tired_conceder_roles
+        tcr346 = tired_conceder_roles(match, config)
+        for side in ("home", "away"):
+            rec346 = tcr346[side]
+            if rec346.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Második félidőre leülő sáv",
+                f"a falunk a második félidőre a(z) "
+                f"{rec346['main_role']} poszt ellen ül le "
+                f"({rec346['fh']} → {rec346['sh']} kapott gól) — a "
+                "felkészült ellenfél a szünet után pont oda fog "
+                "nyitni",
+                "sáv-frissítés a második félidőre: tervezett "
+                "védő-csere a leülő sávban a 40. perc körül, "
+                "kondicionális blokk a belső védőknek, és a "
+                "besegítés-rend fáradt lábakkal is videóról",
+                )
+    except Exception:
+        pass
+
+    # 345) Fáradt-lövő poszt: ha egy posztunk lövései a második
+    # félidőre szétmennek, fáradt célzás-blokk és átosztás kell.
+    _szabaly = 345
+    try:
+        from .xg import tired_shooter_roles
+        fsa345 = tired_shooter_roles(match, config)
+        for side in ("home", "away"):
+            rec345 = fsa345[side]
+            if rec345.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Fáradtan szétmenő lövés",
+                f"a(z) {rec345['main_role']} posztunk kaput "
+                "elkerülő lövései a második félidőre megugranak "
+                f"({rec345['fh']} → {rec345['sh']}) — fáradtan "
+                "szétmegy a lövése, és az ellenfél rá fogja engedni",
+                "fáradt célzás-blokk a posztnak: kapura lövés magas "
+                "pulzuson (kör-edzés után), sarok-célzás kapussal, "
+                "és a második félidei figurákban a befejezés "
+                "átosztása frissebb posztra",
+                )
+    except Exception:
+        pass
+
+    # 344) Fáradt-eladó poszt: ha egy posztunk eladásai a második
+    # félidőre megugranak, terhelés-menedzsment és fáradt
+    # labdabiztonság kell.
+    _szabaly = 344
+    try:
+        from .decisions import tired_turnover_roles
+        fto344 = tired_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec344 = fto344[side]
+            if rec344.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Fáradtan kinyíló kéz",
+                f"a(z) {rec344['main_role']} posztunk eladásai a "
+                f"második félidőre megugranak ({rec344['fh']} → "
+                f"{rec344['sh']}) — fáradtan nála nyílik ki a kéz, "
+                "és az ellenfél pressze pontosan őt fogja keresni",
+                "fáradt labdabiztonság a posztnak: passz- és "
+                "átvétel-gyakorlat magas pulzuson (kör-edzés után), "
+                "korábbi pihentetés-blokk a második félidőben, és "
+                "eladás utáni azonnali visszatámadás-szabály",
+                )
+    except Exception:
+        pass
+
+    # 343) Hátrapassz-poszt: ha a játékunk mindig ugyanannál a
+    # posztnál fordul vissza, a pressz ellenünk jutalmat hoz.
+    _szabaly = 343
+    try:
+        from .attack_types import (BPR_SHARE_PCT,
+                                   backward_pass_roles)
+        bpr343 = backward_pass_roles(match, config)
+        for side in ("home", "away"):
+            rec343 = bpr343[side]
+            if rec343.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztnál visszaforduló játék",
+                f"a hátra-passzaink {rec343['share_pct']:.0f}%-a "
+                f"a(z) {rec343['main_role']} posztunknál történik "
+                f"({rec343['passes']} hátra-passzból; "
+                f"{BPR_SHARE_PCT:.0f}% fölött már minta) — nyomás "
+                "alatt nála fordul vissza a lendület, és az "
+                "ellenfél pressze jutalmat kap",
+                "előre-játék bátorság a posztnak: nyomás alatti "
+                "betörés-döntés gyakorlása (1-1 után passz előre), "
+                "hátra-passz csak kettős nyomásnál szabály a "
+                "kisjátékokban, és a lendület-megtartó átadások "
+                "videó-elemzése",
+                )
+    except Exception:
+        pass
+
+    # 342) Térnyerő-poszt: ha a térnyerésünk egy poszt lábán van, a
+    # felhozatal-teher aránytalan, és egy korai kontakt lefékez.
+    _szabaly = 342
+    try:
+        from .decisions import TNR_SHARE_PCT, ball_carrier_roles
+        tnr342 = ball_carrier_roles(match, config)
+        for side in ("home", "away"):
+            rec342 = tnr342[side]
+            if rec342.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy lábon álló térnyerés",
+                f"a térnyerésünk {rec342['share_pct']:.0f}%-a a(z) "
+                f"{rec342['main_role']} posztunk lábán van "
+                f"({rec342['meters']:.0f} labdás előre-méterből; "
+                f"{TNR_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "korai kontakt rá az egész felhozatalunkat lefékezi",
+                "térnyerés-teher elosztása: második labdavivő "
+                "gyakorlása, korai kontakt elleni átadás (ütközés "
+                "előtti leadás), és a szélső-felhozatal mint B-út",
+                )
+    except Exception:
+        pass
+
+    # 341) Előnyben-poszt: ha a vezetés-tartásunk egy posztra épül,
+    # az ellenfél a kivételével gyorsan visszajön.
+    _szabaly = 341
+    try:
+        from .momentum import LGR_SHARE_PCT, lead_scorer_roles
+        lgr341 = lead_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec341 = lgr341[side]
+            if rec341.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő előny-tartás",
+                f"vezetésnél a góljaink {rec341['share_pct']:.0f}"
+                f"%-a a(z) {rec341['main_role']} posztról jön "
+                f"({rec341['goals']} előnyben lőtt gólból; "
+                f"{LGR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél az ő kivételével gyorsan visszajöhet",
+                "előny-tartás két lábon: vezetésnél a figurák két "
+                "befejező posztra is kifuthassanak, időhúzás-figura "
+                "B-befejezővel, és a kulcs-emberünk tehermentesítése"
+                " elzárásokkal",
+                )
+    except Exception:
+        pass
+
+    # 340) Előkészítő-poszt: ha a lövéseinket mindig ugyanaz a
+    # posztunk készíti elő, egy sávzárás az egész lövő-játékunkat
+    # lekapcsolja.
+    _szabaly = 340
+    try:
+        from .attack_types import EPR_SHARE_PCT, last_pass_roles
+        epr340 = last_pass_roles(match, config)
+        for side in ("home", "away"):
+            rec340 = epr340[side]
+            if rec340.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy kézen futó előkészítés",
+                f"a lövéseinket {rec340['share_pct']:.0f}%-ban a(z)"
+                f" {rec340['main_role']} posztunk készíti elő "
+                f"({rec340['passes']} előkészítő passzból; "
+                f"{EPR_SHARE_PCT:.0f}% fölött már minta) — az ő "
+                "sávjának zárásával a lövőink előkészítés nélkül "
+                "maradnak",
+                "második előkészítő építése: a figurák utolsó "
+                "passza két posztról is jöhessen (szélső-visszatett,"
+                " beálló-kioldás), és sávzárás elleni kijátszás "
+                "gyakorlása 4-4-ben",
+                )
+    except Exception:
+        pass
+
+    # 339) Indító-poszt: ha a támadásaink mindig ugyanannál a
+    # posztnál indulnak, egy jó pressz az egész szervezésünket
+    # megfojtja.
+    _szabaly = 339
+    try:
+        from .roles import ATS_SHARE_PCT, attack_starter_roles
+        ats339 = attack_starter_roles(match, config)
+        for side in ("home", "away"):
+            rec339 = ats339[side]
+            if rec339.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztnál induló szervezés",
+                f"a támadásaink {rec339['share_pct']:.0f}%-a a(z) "
+                f"{rec339['main_role']} posztnál indul "
+                f"({rec339['attacks']} szakaszból; "
+                f"{ATS_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "korai pressz a felhozónkra az egész szervezésünket"
+                " megfojtja",
+                "második labdafelhozó: pressz elleni felhozatal "
+                "gyakorlása két indítóval, hátra-passz biztonsági "
+                "szelep a kapusnak, és a szélső-felhozatal mint "
+                "B-terv begyakorolva",
+                )
+    except Exception:
+        pass
+
+    # 338) Beállóőr-poszt: ha a beálló-őrzésünk egy posztunkon áll,
+    # egy elzárással kihúzható — kell a váltás-szabály.
+    _szabaly = 338
+    try:
+        from .defense import PGR_SHARE_PCT, pivot_guard_roles
+        pgr338 = pivot_guard_roles(match, config)
+        for side in ("home", "away"):
+            rec338 = pgr338[side]
+            if rec338.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy emberen álló beálló-őrzés",
+                f"a beálló-őrzésünk {rec338['share_pct']:.0f}%-ban "
+                f"a(z) {rec338['main_role']} posztunkon áll "
+                f"({PGR_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "elzárással kihúzható, és a beálló felszabadul",
+                "beálló-őrzés váltás-szabállyal: elzárásnál a "
+                "szomszéd védő veszi át a beállót (hangos jelzéssel),"
+                " 2-2 elleni elzárás-védés kisjátékban, és a "
+                "besegítés rendje videóról",
+                )
+    except Exception:
+        pass
+
+    # 337) Kilépő-poszt: ha a falunk mindig ugyanannál a posztnál
+    # lép ki, a mögötte nyíló teret a felkészült ellenfél bejátssza.
+    _szabaly = 337
+    try:
+        from .defense import advanced_defender_roles
+        adr337 = advanced_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec337 = adr337[side]
+            if rec337.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Kilépő mögötti tér",
+                f"a falunk a(z) {rec337['main_role']} posztnál lép "
+                f"ki (a társaknál {rec337['gap_m']:.1f} m-rel "
+                "előrébb) — a kilépőnk mögötti teret a felkészült "
+                "ellenfél elzárással és befutóval bünteti",
+                "kilépés mögötti biztosítás: a kilépő melletti két "
+                "védő zárás-gyakorlata (csúszás a beálló elé), "
+                "elzárás-lekapcsolás a kilépőnek, és 2 az 1 elleni "
+                "helyzetek védése kisjátékban",
+                )
+    except Exception:
+        pass
+
+    # 336) Ziccerhagyó-poszt: ha a ziccereinket mindig ugyanaz a
+    # posztunk hagyja ki, a helyzeteink egy része kárba vész.
+    _szabaly = 336
+    try:
+        from .xg import MCR_SHARE_PCT, missed_chance_roles
+        mcr336 = missed_chance_roles(match, config)
+        for side in ("home", "away"):
+            rec336 = mcr336[side]
+            if rec336.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztnál kieső ziccerek",
+                f"a kihagyott ziccereink {rec336['share_pct']:.0f}"
+                f"%-a a(z) {rec336['main_role']} posztnál esik "
+                f"({rec336['misses']} kihagyásból; "
+                f"{MCR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "kialakított helyzeteink egy része nála kárba vész",
+                "befejezés-gyakorlás a posztnak: ziccer-sorozatok "
+                "kapussal (fáradtan is, kör-edzés után), "
+                "hatosról-fordulós és ejtés-variációk, valamint "
+                "önbizalom-építés: sikeres sorozattal záruljon",
+                )
+    except Exception:
+        pass
+
+    # 335) Blokkolt-poszt: ha egy posztunk lövéseit rendre blokkolják,
+    # a lövés-előkészítés hiányzik — elmozgatás nélkül falba lövünk.
+    _szabaly = 335
+    try:
+        from .defense import BSR_SHARE_PCT, blocked_shooter_roles
+        bsr335 = blocked_shooter_roles(match, config)
+        for side in ("home", "away"):
+            rec335 = bsr335[side]
+            if rec335.get("verdict") is None:
+                continue
+            add(side, "támadás", "Falba lövő poszt",
+                f"a blokkolt lövéseink {rec335['share_pct']:.0f}%-a "
+                f"a(z) {rec335['main_role']} posztról jön "
+                f"({rec335['blocks']} blokkból; "
+                f"{BSR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "előkészítetlen lövésünk falba megy, és onnan "
+                "kontra indul",
+                "lövés-előkészítés a posztnak: elzárás-lövés "
+                "kombinációk, lövőcsel a záró védőre, és "
+                "lövés-szelekció videóról — zárt sávba nem lövünk, "
+                "hanem tovább járatjuk",
+                )
+    except Exception:
+        pass
+
+    # 334) Hetesdobó-poszt: ha a heteseinket mindig ugyanaz a posztunk
+    # dobja, az ellenfél kapusa egyetlen dobó szokásaira készülhet.
+    _szabaly = 334
+    try:
+        from .rules import STK_SHARE_PCT, seven_taker_roles
+        stk334 = seven_taker_roles(match, config)
+        for side in ("home", "away"):
+            rec334 = stk334[side]
+            if rec334.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy dobóra épülő hetes",
+                f"a heteseinket {rec334['share_pct']:.0f}%-ban a(z) "
+                f"{rec334['main_role']} posztunk dobja "
+                f"({rec334['attempts']} hetesből; "
+                f"{STK_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél kapusa egyetlen dobó szokásaira készülhet",
+                "második kijelölt hetes-dobó: heti hetes-verseny a "
+                "kijelöléshez, a fő dobónak pedig irány-variálás "
+                "(kapus-mozgásra dobás gyakorlása) videó-visszajelzéssel",
+                )
+    except Exception:
+        pass
+
+    # 333) Újrakezdő-poszt: ha a szünet utáni rajtunk egy posztra
+    # épül, a felkészült ellenfél a második félidőt az ő fogásával
+    # kezdi.
+    _szabaly = 333
+    try:
+        from .momentum import SSR_SHARE_PCT, second_start_roles
+        ssr333 = second_start_roles(match, config)
+        for side in ("home", "away"):
+            rec333 = ssr333[side]
+            if rec333.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő második rajt",
+                f"a szünet utáni góljaink {rec333['share_pct']:.0f}"
+                f"%-a a(z) {rec333['main_role']} posztról jön "
+                f"({rec333['goals']} gól a második félidő első tíz "
+                f"percében; {SSR_SHARE_PCT:.0f}% fölött már minta) "
+                "— az ellenfél a szünetben pontosan tudja, kire "
+                "álljon rá",
+                "második félidei nyitó-forgatókönyv B-vel: az "
+                "újrakezdés első három figurája két különböző "
+                "befejező posztra megbeszélve, és a rajt-emberünk "
+                "tehermentesítése elzárásokkal",
+                )
+    except Exception:
+        pass
+
+    # 332) Elzárt-poszt: ha egy védőnk rendre elakad az
+    # elzárásokban, oda fogja hozni a figuráit minden ellenfél.
+    _szabaly = 332
+    try:
+        from .defense import SDR_SHARE_PCT, screened_defender_roles
+        sdr332 = screened_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec332 = sdr332[side]
+            if rec332.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Elzárásban elakadó védő",
+                f"az elzárások {rec332['share_pct']:.0f}%-ban a(z) "
+                f"{rec332['main_role']} posztunkon lévő védőt "
+                f"találják meg ({rec332['screens']} elakadásból; "
+                f"{SDR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél oda fogja hozni a figuráit",
+                "elzárás-elleni csomag a védőnek: átcsúszás- és "
+                "váltás-gyakorlat hangos kommunikációval, elzárás-"
+                "felismerés videóról, és korai testkontakt az "
+                "elzáróval, mielőtt beáll a pozíciója",
+                )
+    except Exception:
+        pass
+
+    # 331) Kettőzött-poszt: ha egy posztunkat rendre kettőzik, neki
+    # lekapcsolódó társ és kettőzés-elleni leadás kell.
+    _szabaly = 331
+    try:
+        from .defense import DTR_SHARE_PCT, doubled_target_roles
+        dtr331 = doubled_target_roles(match, config)
+        for side in ("home", "away"):
+            rec331 = dtr331[side]
+            if rec331.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra járó kettőzés",
+                f"az ellenfél kettőzései {rec331['share_pct']:.0f}"
+                f"%-ban a(z) {rec331['main_role']} posztunkra "
+                f"érkeznek ({DTR_SHARE_PCT:.0f}% fölött már minta) "
+                "— a következő ellenfél is ezt a receptet fogja "
+                "követni",
+                "kettőzés-elleni csomag a posztnak: lekapcsolódó "
+                "társ (mindig legyen leadási irány), egyérintős "
+                "kijátszás kettőzés ellen 3-3-ban, és a kettőzés "
+                "mögötti üres ember tudatos keresése videóról",
+                )
+    except Exception:
+        pass
+
+    # 330) Fáradó-poszt: ha egy posztunk tempója a második félidőre
+    # rendre visszaesik, kondicionális blokk és korábbi pihentetés
+    # kell neki.
+    _szabaly = 330
+    try:
+        from .stats import FTR_DROP_PCT, fatigue_roles
+        ftr330 = fatigue_roles(match, config)
+        for side in ("home", "away"):
+            rec330 = ftr330[side]
+            if rec330.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Második félidőre visszaeső poszt",
+                f"a(z) {rec330['main_role']} posztunk tempója a "
+                f"második félidőre −{rec330['drop_pct']:.0f}%-ot "
+                f"esik ({FTR_DROP_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a szünet után pont az ő sávjában fog "
+                "támadni",
+                "kondicionális blokk a posztnak (ismételt sprint-"
+                "állóképesség, második félidőt szimuláló fáradt "
+                "játék-gyakorlat), és csere-terv: korábbi, rövidebb "
+                "pihentetés az első félidőben",
+                )
+    except Exception:
+        pass
+
+    # 329) Passzív-poszt: ha a terméketlen támadásaink egy posztnál
+    # halnak el, oda kész befejező megoldás kell a passzív jelzés
+    # előttre.
+    _szabaly = 329
+    try:
+        from .rules import PVR_SHARE_PCT, passive_holder_roles
+        pvr329 = passive_holder_roles(match, config)
+        for side in ("home", "away"):
+            rec329 = pvr329[side]
+            if rec329.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztnál elhaló támadás",
+                f"a lövés nélküli hosszú támadásaink labdás idejének"
+                f" {rec329['share_pct']:.0f}%-a a(z) "
+                f"{rec329['main_role']} posztnál telik "
+                f"({PVR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "passzív jelzés alatt nála ragad a labda, és onnan "
+                "jön a kényszer-eladás",
+                "passzív-protokoll: 25 másodperc után kötelező "
+                "figura-indítás, a posztnak kész befejező megoldás "
+                "(bejátszás vagy átlövés-elzárás), és 5-0-s "
+                "időhúzás-elleni gyakorlás sípszóra",
+                )
+    except Exception:
+        pass
+
+    # 328) Rajt-poszt: ha a meccs-nyitásunk egy posztra épül, a
+    # felkészült ellenfél az első perctől rá áll — kell a második
+    # nyitó-megoldás.
+    _szabaly = 328
+    try:
+        from .momentum import OSR_SHARE_PCT, opening_scorer_roles
+        osr328 = opening_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec328 = osr328[side]
+            if rec328.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő rajt",
+                f"a meccs eleji góljaink {rec328['share_pct']:.0f}"
+                f"%-a a(z) {rec328['main_role']} posztról jön "
+                f"({rec328['goals']} gól az első tíz percben; "
+                f"{OSR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült ellenfél az első perctől rá áll",
+                "nyitó-forgatókönyv B-vel: az első öt figura előre "
+                "megbeszélve két különböző befejező posztra, és a "
+                "rajt-emberünk tehermentesítése elzárásokkal, ha "
+                "kiemelt fogást kap",
+                )
+    except Exception:
+        pass
+
+    # 327) Kiszolgált-poszt: ha egy posztunk csak kiszolgálásból él,
+    # a passzsáv-zárás ellen tervre van szüksége.
+    _szabaly = 327
+    try:
+        from .roles import ASR_SHARE_PCT, assisted_scorer_roles
+        asr327 = assisted_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec327 = asr327[side]
+            if rec327.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kiszolgálásból élő poszt",
+                f"a kiszolgált góljaink {rec327['share_pct']:.0f}%-a"
+                f" a(z) {rec327['main_role']} posztunkon fejeződik "
+                f"be ({rec327['assisted']} asszisztos gólból; "
+                f"{ASR_SHARE_PCT:.0f}% fölött már minta) — ha a "
+                "felé futó passzt elvágják, a fő befejezőnk elhal",
+                "önálló helyzet-teremtés a posztnak: 1-1 elleni "
+                "betörés-gyakorlat, második bejátszási útvonal "
+                "(hátoldali befutás, visszatett labda), és a "
+                "figurákba beépített csere-célpont",
+                )
+    except Exception:
+        pass
+
+    # 326) Hajrákéz-poszt: ha a végjátékunk egy kézen fut, egy jó
+    # kettőzés az egész záró tervünket megfojtja.
+    _szabaly = 326
+    try:
+        from .momentum import CHR_SHARE_PCT, clutch_hog_roles
+        chr326 = clutch_hog_roles(match, config)
+        for side in ("home", "away"):
+            rec326 = chr326[side]
+            if rec326.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Egy kézen futó végjáték",
+                f"a végjátékunk labdás idejének "
+                f"{rec326['share_pct']:.0f}%-a a(z) "
+                f"{rec326['main_role']} posztunknál van "
+                f"({CHR_SHARE_PCT:.0f}% fölött már minta) — egy jó "
+                "hajrá-kettőzés az egész záró tervünket megfojtja",
+                "második labdakihozó a hajrára: a záró figurák "
+                "indítása két posztról is begyakorolva, kettőzés "
+                "elleni kijátszás (hátoldali felfutás, beálló-"
+                "leadás) a kulcs-kezünknek",
+                )
+    except Exception:
+        pass
+
+    # 325) Lágypassz-poszt: ha egy posztunk lágyan passzol, az ő
+    # labdáiba az ellenfél beleér — passz-élesség a téma.
+    _szabaly = 325
+    try:
+        from .decisions import SPS_SHARE_PCT, soft_pass_roles
+        sps325 = soft_pass_roles(match, config)
+        for side in ("home", "away"):
+            rec325 = sps325[side]
+            if rec325.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztról jövő lágy passzok",
+                f"a lágy passzaink {rec325['share_pct']:.0f}%-a a(z)"
+                f" {rec325['main_role']} posztról jön "
+                f"({rec325['soft']} lágy passzból; "
+                f"{SPS_SHARE_PCT:.0f}% fölött már minta) — az ő "
+                "labdáiba az ellenfél beleér, és abból kontra indul",
+                "passz-élesség a posztnak: csuklós, feszes átadás "
+                "gyakorlása fáradtan is (kör-edzés után), pattintott"
+                " és test melletti passz a beleérő védő ellen, és "
+                "passzsáv-nyomás alatti 3-3",
+                )
+    except Exception:
+        pass
+
+    # 324) Sprint-poszt: ha a sprint-teher egy posztunkon áll, a
+    # kontránk kiszámítható, és az az ember hamarabb fárad el.
+    _szabaly = 324
+    try:
+        from .stats import SPR_SHARE_PCT, sprint_threat_roles
+        spr324 = sprint_threat_roles(match, config)
+        for side in ("home", "away"):
+            rec324 = spr324[side]
+            if rec324.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Egy posztra jutó sprint-teher",
+                f"a sprintjeink {rec324['share_pct']:.0f}%-át a(z) "
+                f"{rec324['main_role']} posztunk futja "
+                f"({rec324['sprints']} sprintből; "
+                f"{SPR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "kontránk kiszámítható, és a motorunk hamarabb "
+                "elfárad",
+                "kontra-teher elosztása: második kifutó ember "
+                "kijelölése és gyakorlása (két sávos lerohanás), a "
+                "sprint-teher figyelése a cserék időzítésénél",
+                )
+    except Exception:
+        pass
+
+    # 323) Középkezdő-poszt: ha a középkezdésünk mindig ugyanannál a
+    # posztnál indul, a felkészült ellenfél letámadása pont őt fogja.
+    _szabaly = 323
+    try:
+        from .momentum import RTR_SHARE_PCT, restart_taker_roles
+        rtr323 = restart_taker_roles(match, config)
+        for side in ("home", "away"):
+            rec323 = rtr323[side]
+            if rec323.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kiszámítható középkezdés",
+                f"a kapott gól utáni középkezdésünk "
+                f"{rec323['share_pct']:.0f}%-ban a(z) "
+                f"{rec323['main_role']} posztnál indul "
+                f"({rec323['takes']} átvételből; "
+                f"{RTR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült ellenfél letámadása pont őt fogja le",
+                "középkezdés-variációk: legalább két begyakorolt "
+                "átvevő (poszt szerint is más), hátrafelé induló "
+                "első passz letámadás ellen, és gyors középkezdés "
+                "mint fegyver, ha az ellenfél lassan áll vissza",
+                )
+    except Exception:
+        pass
+
+    # 322) Forró-poszt: ha a sorozatainkat mindig ugyanaz a posztunk
+    # lövi, az ellenfél az első gól után rá fog állni — kell a
+    # második lendület-vivő.
+    _szabaly = 322
+    try:
+        from .momentum import HHR_SHARE_PCT, hot_hand_roles
+        hhr322 = hot_hand_roles(match, config)
+        for side in ("home", "away"):
+            rec322 = hhr322[side]
+            if rec322.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő lendület",
+                f"a gólsorozataink {rec322['share_pct']:.0f}%-a a(z)"
+                f" {rec322['main_role']} posztról jön "
+                f"({rec322['streak_goals']} sorozat-gólból; "
+                f"{HHR_SHARE_PCT:.0f}% fölött már minta) — az első "
+                "gólunk után az ellenfél pontosan tudja, kire "
+                "álljon rá",
+                "lendület-átadás gyakorlása: a sorozatban lévő "
+                "emberről induló kijátszások (róla lekapcsolódó "
+                "társ, elzárás neki, hogy másnak nyíljon tér), és "
+                "második befejező kijelölése a forró szakaszokra",
+                )
+    except Exception:
+        pass
+
+    # 321) Hajráhiba-poszt: ha a hajrában mindig ugyanannál a
+    # posztunknál megy el a labda, az ellenfél záró pressze oda jön.
+    _szabaly = 321
+    try:
+        from .momentum import CTR_SHARE_PCT, clutch_turnover_roles
+        ctr321 = clutch_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec321 = ctr321[side]
+            if rec321.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Egy posztnál elmenő hajrá-labda",
+                f"a hajrá-eladásaink {rec321['share_pct']:.0f}%-a "
+                f"a(z) {rec321['main_role']} posztnál történik "
+                f"({rec321['turnovers']} eladás az utolsó öt "
+                f"percben; {CTR_SHARE_PCT:.0f}% fölött már minta) — "
+                "az ellenfél záró pressze pontosan oda fog jönni",
+                "hajrá-labdabiztonság: a záró öt perc figuráiban a "
+                "poszt tehermentesítése (korai leadás, kettős "
+                "kijátszási irány), pressz elleni 6-6 fáradtan a "
+                "edzés végén, és időkérés-terv a beszorult labdára",
+                )
+    except Exception:
+        pass
+
+    # 320) Eltűnő-poszt: ha egy posztunk termelése a második félidőre
+    # elhal, a terhelés-menedzsment és a kondíció a téma.
+    _szabaly = 320
+    try:
+        from .momentum import fading_scorer_roles
+        fdp320 = fading_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec320 = fdp320[side]
+            if rec320.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Második félidőre eltűnő poszt",
+                f"a(z) {rec320['main_role']} posztunk az első "
+                f"félidőben él ({rec320['fh']} gól-részvétel), a "
+                f"másodikra eltűnik ({rec320['sh']}) — a termelése "
+                "fáradással vagy az ellenfél átállásával elhal",
+                "terhelés-menedzsment a posztnak: korábbi, rövidebb "
+                "pihentetés-blokkok az első félidőben, kondicionális "
+                "blokk (ismételt sprint-állóképesség) az edzésen, és "
+                "B-megoldás a második félidei figurákba",
+                )
+    except Exception:
+        pass
+
+    # 319) Csendtörő-poszt: ha a gólcsendjeinket mindig ugyanaz a
+    # posztunk töri meg, a válság-megoldásunk kiszámítható és fogható.
+    _szabaly = 319
+    try:
+        from .momentum import GCT_SHARE_PCT, drought_breaker_roles
+        gct319 = drought_breaker_roles(match, config)
+        for side in ("home", "away"):
+            rec319 = gct319[side]
+            if rec319.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra futó válság-megoldás",
+                f"a gólcsendjeinket {rec319['share_pct']:.0f}%-ban "
+                f"a(z) {rec319['main_role']} posztunk töri meg "
+                f"({rec319['breaks']} csend-törő gólból; "
+                f"{GCT_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a csendünk alatt pontosan tudja, kit "
+                "fogjon",
+                "válság-forgatókönyv B-vel: gólcsend-szituációs 6-6 "
+                "(3 perc gól nélkül → kötelező figura), amelyben a "
+                "befejezés más-más posztra van kiosztva, plusz "
+                "hetes-kiharcolás mint biztonsági szelep",
+                )
+    except Exception:
+        pass
+
+    # 318) Pressz-poszt: ha szorításban mindig ugyanaz a posztunk
+    # veszíti a labdát, az ellenfél kettőzése oda fog érkezni.
+    _szabaly = 318
+    try:
+        from .decisions import PSR_SHARE_PCT, press_sensitive_roles
+        psr318 = press_sensitive_roles(match, config)
+        for side in ("home", "away"):
+            rec318 = psr318[side]
+            if rec318.get("verdict") is None:
+                continue
+            add(side, "támadás", "Szorításban ejtett labda egy poszton",
+                f"a nyomott eladásaink {rec318['share_pct']:.0f}%-a "
+                f"a(z) {rec318['main_role']} posztnál történik "
+                f"({rec318['press_to']} nyomott eladásból; "
+                f"{PSR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél kettőzése pontosan oda fog érkezni",
+                "nyomás alatti kiadás a posztnak: 1+1 elleni "
+                "labdatartás szorításban, kettőzés elleni leadás "
+                "(bejátszás, visszajátszás) és test-test elleni "
+                "labdavédelem falra dolgozva",
+                )
+    except Exception:
+        pass
+
+    # 317) Labdatartó-poszt: ha a labda egy posztunknál ragad, oda
+    # időzíti az ellenfél a kettőzést, és ott lassul a támadásunk.
+    _szabaly = 317
+    try:
+        from .decisions import HTR_SHARE_PCT, hold_time_roles
+        htr317 = hold_time_roles(match, config)
+        for side in ("home", "away"):
+            rec317 = htr317[side]
+            if rec317.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztnál ragadó labda",
+                f"a mért labdatartásunk {rec317['share_pct']:.0f}%-a "
+                f"a(z) {rec317['main_role']} posztnál telik "
+                f"({rec317['seconds']:.0f} mp-ből; "
+                f"{HTR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél oda időzíti a kettőzést, és ott lassul a "
+                "támadásunk",
+                "tempó-szabály a posztnak: két másodperces "
+                "továbbítási limit a figurákban, egyérintős "
+                "passz-körök és kettőzés elleni leadás-gyakorlat "
+                "(bejátszás a beállónak, visszajátszás az üresnek)",
+                )
+    except Exception:
+        pass
+
+    # 316) Ziccer-poszt: ha a nagy helyzeteink egy posztnál alakulnak
+    # ki, a helyzet-teremtésünk egysíkú, és egy besegítéssel lezárható.
+    _szabaly = 316
+    try:
+        from .xg import BCR_SHARE_PCT, big_chance_roles
+        bcr316 = big_chance_roles(match, config)
+        for side in ("home", "away"):
+            rec316 = bcr316[side]
+            if rec316.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egysíkú helyzet-teremtés",
+                f"a ziccereink {rec316['share_pct']:.0f}%-a a(z) "
+                f"{rec316['main_role']} posztnál alakul ki "
+                f"({rec316['chances']} nagy helyzetből; "
+                f"{BCR_SHARE_PCT:.0f}% fölött már minta) — egy jól "
+                "időzített besegítés az egész helyzet-teremtésünket "
+                "lezárja",
+                "helyzet-teremtő variációk más posztokra: szélső "
+                "befutások, második hullámos átlövés és hetes-"
+                "kiharcolás gyakorlása, hogy a ziccer ne csak egy "
+                "poszton születhessen",
+                )
+    except Exception:
+        pass
+
+    # 315) Pazarló-poszt: ha a mellé lövéseink egy posztra sűrűsödnek,
+    # az ellenfél ráengedi a lövést, és a kidobásból minket kontráz.
+    _szabaly = 315
+    try:
+        from .xg import WSR_SHARE_PCT, wasteful_shooter_roles
+        wsr315 = wasteful_shooter_roles(match)
+        for side in ("home", "away"):
+            rec315 = wsr315[side]
+            if rec315.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra sűrűsödő pontatlanság",
+                f"a kaput elkerülő lövéseink {rec315['share_pct']:.0f}"
+                f"%-a a(z) {rec315['main_role']} posztról jön "
+                f"({rec315['off_target']} mellé/blokkolt lövésből; "
+                f"{WSR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél ráengedi a lövést, és a kidobásból kontráz",
+                "célzás-blokk a posztnak: kapura lövés fáradtan "
+                "(kör-edzés után), sarok-célzás kapussal, és "
+                "lövés-szelekció videóról — mellé lövés helyett "
+                "inkább újraszervezés vagy bejátszás",
+                )
+    except Exception:
+        pass
+
+    # 314) Felzárkózás-poszt: ha hátrányból mindig ugyanaz a posztunk
+    # ment minket, egy jó fogással beragasztható a hátrányunk.
+    _szabaly = 314
+    try:
+        from .momentum import CBR_SHARE_PCT, comeback_carrier_roles
+        cbr314 = comeback_carrier_roles(match, config)
+        for side in ("home", "away"):
+            rec314 = cbr314[side]
+            if rec314.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra futó felzárkózás",
+                f"hátrányból a gól-részvételeink {rec314['share_pct']:.0f}"
+                f"%-a a(z) {rec314['main_role']} posztról jön "
+                f"({rec314['trailing']} hátrány-gól-részvételből; "
+                f"{CBR_SHARE_PCT:.0f}% fölött már minta) — ha a "
+                "mentő-emberünket kiveszik, a hátrányunk beragad",
+                "hátrány-figurák második opcióval: a felzárkózó "
+                "játékainkban kötelező kijátszani a mentő-poszt "
+                "MELLETTI befejezőt is (bejátszás, hátoldali szélső), "
+                "és 2 perces hátrány-szituációs 6-6 minden edzésen",
+                )
+    except Exception:
+        pass
+
+    # 313) Hajrá-poszt: ha a végjátékunk egy posztra fut ki, a záró
+    # percekben egyetlen jó emberfogás megfojt minket.
+    _szabaly = 313
+    try:
+        from .momentum import CSR_SHARE_PCT, clutch_scorer_roles
+        csr313 = clutch_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec313 = csr313[side]
+            if rec313.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Egy posztra futó végjáték",
+                f"a hajrá-góljaink {rec313['share_pct']:.0f}%-a a(z) "
+                f"{rec313['main_role']} posztról esik "
+                f"({rec313['goals']} hajrá-gólból; "
+                f"{CSR_SHARE_PCT:.0f}% fölött már minta) — egy jó "
+                "emberfogás a záró percekben megfojtja a támadásunkat",
+                "hajrá-forgatókönyv B-vel: a záró öt perc figuráiban "
+                "kötelező a másodlagos befejező is, és emberfogás "
+                "elleni lekapcsolódás-gyakorlat (elzárás-átfutás, "
+                "hátoldali befutás) a kulcs-emberünknek")
+    except Exception:
+        pass
+
+    # 312) Emberhátrány-poszt: ha öt emberrel mindig ugyanaz a
+    # posztunk vállal be, a hátrány-játékunk kiszámítható.
+    _szabaly = 312
+    try:
+        from .rules import SHR_SHARE_PCT, shorthanded_shooter_roles
+        shr312 = shorthanded_shooter_roles(match, config)
+        for side in ("home", "away"):
+            rec312 = shr312[side]
+            if rec312.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra futó hátrány-játék",
+                f"öt emberrel a lövéseink {rec312['share_pct']:.0f}"
+                f"%-a a(z) {rec312['main_role']} posztról jön "
+                f"({rec312['shots']} hátrány-lövésből; "
+                f"{SHR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél emberelőnyben pontosan tudja, kit zárjon",
+                "hátrány-repertoár: öt emberre két megjátszható "
+                "befejezés (időhúzó körjáték után beálló-beadás VAGY "
+                "kilépő átlövés) — és jelre váltakozik, ki a vállaló")
+    except Exception:
+        pass
+
+    # 311) Emberelőny-poszt: ha az emberelőnyünk mindig ugyanarra a
+    # posztra fut ki, öt védő is elég ellene.
+    _szabaly = 311
+    try:
+        from .rules import PPR_SHARE_PCT, powerplay_shooter_roles
+        ppr311 = powerplay_shooter_roles(match, config)
+        for side in ("home", "away"):
+            rec311 = ppr311[side]
+            if rec311.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra futó emberelőny",
+                f"az emberelőny-lövéseink {rec311['share_pct']:.0f}"
+                f"%-a a(z) {rec311['main_role']} posztról jön "
+                f"({rec311['shots']} lövésből; {PPR_SHARE_PCT:.0f}% "
+                "fölött már minta) — a megfogyatkozott fal is tudja, "
+                "hova álljon",
+                "emberelőny-figurák két befejezési úttal: minden "
+                "gyakorlat-körben kötelező a másodlagos kifutás is "
+                "(túloldali átlövő, beálló-lecsorgás) — a hatodik "
+                "ember akkor ér valamit, ha KÉT helyen fáj")
+    except Exception:
+        pass
+
+    # 310) Kiosztás-poszt: ha a betörésünk utáni labda mindig
+    # ugyanoda megy, az ellenfél a sávot előre zárja.
+    _szabaly = 310
+    try:
+        from .attack_types import KOR_SHARE_PCT, kickout_target_roles
+        kor310 = kickout_target_roles(match, config)
+        for side in ("home", "away"):
+            rec310 = kor310[side]
+            if rec310.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra járó kiosztás",
+                f"a betöréseink utáni labda {rec310['share_pct']:.0f}"
+                f"%-ban a(z) {rec310['main_role']} posztra megy "
+                f"({rec310['kickouts']} kiosztásból; "
+                f"{KOR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a sávot előre zárja, és a betörőnkre "
+                "bátran kettőzik",
+                "kiosztás-variációk: betörés után körönként más a "
+                "kijelölt fogadó (túloldali átlövő, visszazáró "
+                "szélső, second-line beálló) — a betörő fejben két "
+                "opcióval induljon")
+    except Exception:
+        pass
+
+    # 309) Kettőző-poszt: ha a kettőzésünk mindig ugyanarról a
+    # posztról érkezik, az ellenfél előre tudja, hol nyílik a pálya.
+    _szabaly = 309
+    try:
+        from .defense import DDR_SHARE_PCT, doubling_defender_roles
+        ddr309 = doubling_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec309 = ddr309[side]
+            if rec309.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Kiolvasható kettőzés",
+                f"a kettőzött időnk {rec309['share_pct']:.0f}%-ában "
+                f"a(z) {rec309['main_role']} posztunk lép ki "
+                f"({DDR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél előre tudja, kinek az embere marad üresen",
+                "kettőzés-forgó: a második ember jelre váltakozik "
+                "(nem mindig ugyanaz lép ki), és minden kettőzésnél "
+                "kijelölt besegítő zárja az elhagyott embert")
+    except Exception:
+        pass
+
+    # 308) Kockáztató-poszt: ha a hosszú eladásaink egy posztról
+    # jönnek, az ellenfél a sávjába áll, és kontrát kap belőle.
+    _szabaly = 308
+    try:
+        from .attack_types import RPR_SHARE_PCT, risky_passer_roles
+        rpr308 = risky_passer_roles(match, config)
+        for side in ("home", "away"):
+            rec308 = rpr308[side]
+            if rec308.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztról szórt hosszú labdák",
+                f"az elszórt hosszú passzaink "
+                f"{rec308['share_pct']:.0f}%-a a(z) "
+                f"{rec308['main_role']} posztról indul "
+                f"({rec308['turnovers']} eladásból; "
+                f"{RPR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a sávjába áll, és minden elszórt labdából "
+                "kontrát kapunk",
+                "passz-technika blokk a terhelt posztra: hosszú "
+                "indítás csak feszes, előre vezetett labdával, "
+                "nyomás alatt kötelező a rövid biztonsági megoldás — "
+                "sávba lépő védővel gyakorolva")
+    except Exception:
+        pass
+
+    # 307) Vasember-poszt: ha egy posztunk csere nélkül végigmegy, a
+    # hajrában ott fáradunk el — az ellenfél oda viszi majd a tempót.
+    _szabaly = 307
+    try:
+        from .stats import IRM_SHARE_PCT, iron_man_roles
+        irm307 = iron_man_roles(match, config)
+        for side in ("home", "away"):
+            rec307 = irm307[side]
+            if rec307.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Cserétlen poszt",
+                f"a(z) {rec307['main_role']} posztunk "
+                f"{rec307['share_pct']:.0f}%-os jelenléttel "
+                "végigjátssza a meccset, miközben a többi posztot "
+                f"cseréljük ({IRM_SHARE_PCT:.0f}% fölött már minta) — "
+                "az ellenfél a hajrában oda fogja vinni a tempót",
+                "váltóember-építés: a cserétlen posztra kijelölt "
+                "második ember kap heti játékperc-célt (edzőmeccsen "
+                "és sima meccs első félidejében), hogy a hajrára "
+                "legyen valódi váltás")
+    except Exception:
+        pass
+
+    # 306) Bejátszó-poszt: ha a beálló-játékunk egy kézen fut, a
+    # bejátszónk zárásával az egész belső játékunk leáll.
+    _szabaly = 306
+    try:
+        from .attack_types import PFR_SHARE_PCT, pivot_feeder_roles
+        pfr306 = pivot_feeder_roles(match, config)
+        for side in ("home", "away"):
+            rec306 = pfr306[side]
+            if rec306.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy kézen futó beálló-játék",
+                f"a beálló-beadásaink {rec306['share_pct']:.0f}%-a "
+                f"a(z) {rec306['main_role']} posztról jön "
+                f"({rec306['feeds']} beadásból; "
+                f"{PFR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a bejátszónk zárásával az egész belső "
+                "játékunkat leállítja",
+                "beadás-forgó: a figurákban a beálló-bejátszás "
+                "felelőse körönként váltakozik (irányító, átlövő, "
+                "szélső-befutás után), és minden posztnak van "
+                "begyakorolt beadás-fajtája (pattintott, átemelt, "
+                "test mellől)")
+    except Exception:
+        pass
+
+    # 305) Indítás-vadász poszt: ha a letámadásunk egy emberen fut, az
+    # ellenfél az indítását egyszerűen a sávján kívül nyitja.
+    _szabaly = 305
+    try:
+        from .goalkeeper import OHR_SHARE_PCT, outlet_hunter_roles
+        ohr305 = outlet_hunter_roles(match, config)
+        for side in ("home", "away"):
+            rec305 = ohr305[side]
+            if rec305.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy emberen futó indítás-vadászat",
+                f"az elrabolt indításaink {rec305['share_pct']:.0f}%-a"
+                f" a(z) {rec305['main_role']} poszté "
+                f"({rec305['steals']} rablásból; "
+                f"{OHR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél kapusa a sávján kívül fog nyitni, és a "
+                "letámadásunk üresben fut",
+                "letámadás-forgó: a kapus-indítás vadásza jelre "
+                "vándorol (szélső, átlövő, beálló felváltva), a "
+                "második ember a visszapasszt zárja — a cél, hogy a "
+                "rablás a RENDSZERÉ legyen, ne egy emberé")
+    except Exception:
+        pass
+
+    # 304) Kulcs-poszt: ha az elemzés rétegei ugyanarra a posztunkra
+    # mutatnak, a játékunk egy emberen áll — az ellenfél is látja.
+    _szabaly = 304
+    try:
+        from .priorities import KP_MIN_LAYERS, key_post
+        kp304 = key_post(match, config)
+        for side in ("home", "away"):
+            rec304 = kp304[side]
+            if rec304.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra futó játék",
+                f"{rec304['posts'][rec304['top']]} poszt-réteg "
+                f"ítélete fut ki a(z) {rec304['top']} posztunkra "
+                f"({KP_MIN_LAYERS} egyező réteg fölött már minta) — "
+                "az ellenfél egyetlen ember kezelésével több "
+                "mintánkat kapcsolja ki egyszerre",
+                "tehermentesítő hét: a kulcs-poszt minden szerepére "
+                "(befejezés, lepattanó, elzárás) kijelölt második "
+                "felelős gyakorol — a cél, hogy a következő meccsen "
+                "egyik minta se egy emberen álljon")
+    except Exception:
+        pass
+
+    # 303) Elzáró-poszt: ha az elzárás-játékunk egy emberre épül, a
+    # kivétele után a lövőink fedve maradnak.
+    _szabaly = 303
+    try:
+        from .attack_types import SCR2_SHARE_PCT, screen_setter_roles
+        sc2_303 = screen_setter_roles(match, config)
+        for side in ("home", "away"):
+            rec303 = sc2_303[side]
+            if rec303.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő elzárás-játék",
+                f"az elzárásaink {rec303['share_pct']:.0f}%-a a(z) "
+                f"{rec303['main_role']} posztról jön "
+                f"({rec303['screens']} elzárásból; "
+                f"{SCR2_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél előre tudja, honnan érkezik a test, és az "
+                "elzárónkat elölről fogja",
+                "elzárás-variációk: a figurákban az elzáró posztja "
+                "körönként váltakozik (beálló, átlövő, befutó szélső)"
+                " — a cél, hogy a váltás-kommunikációjukat minden "
+                "körben újra kelljen kezdeni")
+    except Exception:
+        pass
+
+    # 302) Átvert-poszt: ha a kapott góljaink egy poszt
+    # párharc-vereségéből esnek, az ellenfél is oda fogja vinni.
+    _szabaly = 302
+    try:
+        from .defense import BTR_SHARE_PCT, beaten_defender_roles
+        btr302 = beaten_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec302 = btr302[side]
+            if rec302.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy poszton eső párharc-vereségek",
+                f"a védőhöz rendelt kapott góljaink "
+                f"{rec302['share_pct']:.0f}%-a a(z) "
+                f"{rec302['main_role']} posztunk mögött esik "
+                f"({rec302['goals']} gólból; {BTR_SHARE_PCT:.0f}% "
+                "fölött már minta) — az ellenfél tudatosan az ő "
+                "emberét fogja támadni",
+                "párharc-blokk a terhelt posztra: 1v1-sorozat "
+                "váltakozó támadókkal, mögötte kötelező besegítő "
+                "váltás — és videón közösen megnézni, MELYIK mozdulat "
+                "veri meg (lépés-előny, testcsel, elzárás)")
+    except Exception:
+        pass
+
+    # 301) Visszafutás-poszt: ha a visszarendeződésünk mindig ugyanott
+    # szakad el, az ellenfél kontrái menetrend szerint jönnek.
+    _szabaly = 301
+    try:
+        from .defense import RTR_SHARE_PCT, slow_retreat_roles
+        rtr301 = slow_retreat_roles(match, config)
+        for side in ("home", "away"):
+            rec301 = rtr301[side]
+            if rec301.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy poszton elszakadó visszafutás",
+                f"az ellenfél-kontráknál {rec301['share_pct']:.0f}%-ban"
+                f" a(z) {rec301['main_role']} posztunk maradt elöl "
+                f"({rec301['breaks']} kontrából; "
+                f"{RTR_SHARE_PCT:.0f}% fölött már minta) — az ellenfél"
+                " az ő sávjába fogja vezetni a kontráit",
+                "visszafutás-staféta: minden lövésünk pillanatában "
+                "kijelölt első visszafutó van (jelre váltakozik, hogy "
+                "ne mindig ugyanaz maradjon elöl), a második hullám a "
+                "labdás sávot zárja — sípszóra mérve, hogy a hatodik "
+                "ember hány másodperc alatt ér a felezőn túlra")
+    except Exception:
+        pass
+
+    # 300) Kiülő-poszt: ha a kétperceink egy posztra járnak, a
+    # létszámhátrányunk menetrend szerint érkezik.
+    _szabaly = 300
+    try:
+        from .rules import SUP_SHARE_PCT, suspended_roles
+        sup300 = suspended_roles(match, config)
+        for side in ("home", "away"):
+            rec300 = sup300[side]
+            if rec300.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy posztra járó kétpercek",
+                f"a kiállításaink {rec300['share_pct']:.0f}%-a a(z) "
+                f"{rec300['main_role']} poszté "
+                f"({rec300['suspensions']} kiállításból; "
+                f"{SUP_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél tudatosan az ő sávjába fogja vezetni a "
+                "játékot, és a hátrányunk menetrend szerint érkezik",
+                "szituációs 1v1 a terhelt posztra: betörés-sorozat "
+                "ellen csak elcsúszás és testes megállítás ér, mögé "
+                "kötelező besegítő áll — és a videón együtt nézzék "
+                "meg, MELYIK mozdulat hozza a sípszót")
+    except Exception:
+        pass
+
+    # 299) Hetes-okozó poszt: ha a heteseink egy sávban szakadnak be,
+    # ott a védőnk kézzel áll meg — az ellenfél oda fog betörni.
+    _szabaly = 299
+    try:
+        from .rules import SVR_SHARE_PCT, seven_conceder_roles
+        svr299 = seven_conceder_roles(match, config)
+        for side in ("home", "away"):
+            rec299 = svr299[side]
+            if rec299.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy sávban beszakadó hetesek",
+                f"az okozott heteseink {rec299['share_pct']:.0f}%-a "
+                f"a(z) {rec299['main_role']} poszté "
+                f"({rec299['sevens']} hetesből; {SVR_SHARE_PCT:.0f}% "
+                "fölött már minta) — az ellenfél tudatosan oda fogja "
+                "vezetni a betöréseket",
+                "lábmunka-gyakorlat a beszakadó sávra: 1v1 betörés "
+                "ellen tilos a kézhasználat (síppal fújva), a "
+                "megállítás csak elcsúszással és testtel érvényes — "
+                "mögötte besegítő ér, hogy ne kelljen szabálytalankodni")
+    except Exception:
+        pass
+
+    # 298) 7a6-befejező poszt: ha a hetedik emberrel is mindig
+    # ugyanoda lyukadunk ki, az emberelőnyünk kiszámítható.
+    _szabaly = 298
+    try:
+        from .goalkeeper import EN7_SHARE_PCT, seven_six_finisher_roles
+        en7_298 = seven_six_finisher_roles(match, config)
+        for side in ("home", "away"):
+            rec298 = en7_298[side]
+            if rec298.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kiszámítható 7 a 6",
+                f"a 7 a 6-os lövéseink {rec298['share_pct']:.0f}%-a "
+                f"a(z) {rec298['main_role']} posztról jön "
+                f"({rec298['shots']} lövésből; {EN7_SHARE_PCT:.0f}% "
+                "fölött már minta) — az ellenfél besűríti a sávot, és "
+                "a szerzése mögött üres a kapunk",
+                "7 a 6 két kijátszási úttal: minden gyakorlat-körben "
+                "kötelező a másodlagos befejezés is (átemelés a "
+                "túloldali beállóra, szélső-visszazárás) — a hetedik "
+                "ember akkor ér valamit, ha KÉT helyen fáj")
+    except Exception:
+        pass
+
+    # 297) Blokk-poszt: ha a blokk-munkánk egy emberen áll, az
+    # elmozgatása után a faltól nincs védelmünk az átlövés ellen.
+    _szabaly = 297
+    try:
+        from .defense import RBK_SHARE_PCT, role_block_sources
+        rbk297 = role_block_sources(match, config)
+        for side in ("home", "away"):
+            rec297 = rbk297[side]
+            if rec297.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy emberen álló blokk-munka",
+                f"a blokkjaink {rec297['share_pct']:.0f}%-a a(z) "
+                f"{rec297['main_role']} poszttól jön "
+                f"({rec297['blocks']} blokkból; "
+                f"{RBK_SHARE_PCT:.0f}% fölött már minta) — az ellenfél "
+                "egy beálló-felfutással kihúzza, és a fal mögötte "
+                "nyitva marad",
+                "blokk-staféta a falban: átlövés-sorozat ellen a "
+                "kilépő-blokkoló szerep jelre vándorol a belső hármas "
+                "között — a cél, hogy a blokk a FALÉ legyen, ne egy "
+                "emberé")
+    except Exception:
+        pass
+
+    # 296) Lepattanó-poszt: ha a második rohamunk egy emberen múlik, a
+    # kizárása után nincs második esélyünk.
+    _szabaly = 296
+    try:
+        from .attack_types import SCR_SHARE_PCT, second_chance_roles
+        scr296 = second_chance_roles(match, config)
+        for side in ("home", "away"):
+            rec296 = scr296[side]
+            if rec296.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy emberen álló második roham",
+                f"a második lövéseink {rec296['share_pct']:.0f}%-a a(z) "
+                f"{rec296['main_role']} posztról jön "
+                f"({rec296['second_shots']} második lövésből; "
+                f"{SCR_SHARE_PCT:.0f}% fölött már minta) — ha őt "
+                "kizárják a lepattanóból, nincs második esélyünk",
+                "lepattanó-játék 3v3-ban: minden lövés után KÉT "
+                "kijelölt érkező megy a lepattanóra (a lövő sosem) — a "
+                "második hullám posztja körönként váltakozik, hogy a "
+                "lepattanó-szerzés ne egy emberé legyen")
+    except Exception:
+        pass
+
+    # 295) Labdaszerző-poszt: ha a szerzéseink egy emberen múlnak, a
+    # letámadásunk egyetlen cserével hatástalanítható.
+    _szabaly = 295
+    try:
+        from .defense import RSW_SHARE_PCT, role_steal_sources
+        rsw295 = role_steal_sources(match, config)
+        for side in ("home", "away"):
+            rec295 = rsw295[side]
+            if rec295.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy emberen álló labdaszerzés",
+                f"a szerzéseink {rec295['share_pct']:.0f}%-a a(z) "
+                f"{rec295['main_role']} posztról jön "
+                f"({rec295['steals']} szerzésből; "
+                f"{RSW_SHARE_PCT:.0f}% fölött már minta) — az ellenfél "
+                "egyszerűen elkerüli a sávját, vagy kivárja a cseréjét",
+                "nyomás-váltó gyakorlat: a letámadásban a kilépő ember "
+                "posztja jelre váltakozik (nem mindig ugyanaz lép ki) — "
+                "a cél, hogy a szerzés a RENDSZERÉ legyen, ne egy "
+                "emberé")
+    except Exception:
+        pass
+
+    # 294) Gólpassz-poszt: ha a góljaink egy poszt kezéből indulnak, az
+    # ellenfél a passzt veszi el, és az egész támadásunk megáll.
+    _szabaly = 294
+    try:
+        from .roles import RAS_SHARE_PCT, role_assist_sources
+        ras294 = role_assist_sources(match, config)
+        for side in ("home", "away"):
+            rec294 = ras294[side]
+            if rec294.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy kézből induló gólgyártás",
+                f"a góljaink {rec294['share_pct']:.0f}%-a a(z) "
+                f"{rec294['main_role']} kezéből indul "
+                f"({rec294['assists']} gólpasszból; "
+                f"{RAS_SHARE_PCT:.0f}% fölött már mintázat) — ha őt "
+                "kiveszik, megáll a támadásunk",
+                "MÁSODIK ELOSZTÓ gyakorlat: a fő elosztó posztja 5 "
+                "támadásonként tiltott (edzői jel), a szomszéd poszt "
+                "veszi át az utolsó passzt — előbb lassítva, majd "
+                "teljes tempóban, védőkkel")
+    except Exception:
+        pass
+
+    # 293) Hetes-oldal: ha a heteseink mindig ugyanarra az oldalra
+    # mennek, egy felkészült kapus előre eldöntött vetődéssel fogja
+    # őket — a legtisztább helyzetünk válik kiszámíthatóvá.
+    _szabaly = 293
+    try:
+        from .rules import SVD_SHARE_PCT, seven_shot_directions
+        svd293 = seven_shot_directions(match, config)
+        for side in ("home", "away"):
+            rec293 = svd293[side]
+            if rec293.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kiszámítható hetes-oldal",
+                f"a heteseink {rec293['share_pct']:.0f}%-a "
+                f"{rec293['dominant']} oldalra megy "
+                f"({rec293['attempts']} mérhető dobásból; "
+                f"{SVD_SHARE_PCT:.0f}% fölött már mintázat) — egy "
+                "felkészült kapus előre eldöntött vetődéssel fogja",
+                "hetes-sorozat az edzés VÉGÉN, fáradtan: a dobó minden "
+                "dobás előtt kap egy oldalt (edzői jel), és oda kell "
+                "dobnia — a cél, hogy nyomás alatt se a begyakorolt "
+                "sarok jöjjön automatikusan, hanem döntés")
+    except Exception:
+        pass
+
+    # 292) Kontra-poszt: ha a lerohanásaink egy poszton záródnak, az
+    # ellenfél egy emberrel hatástalanítja a leggyorsabb fegyverünket.
+    _szabaly = 292
+    try:
+        from .roles import RFB_SHARE_PCT, role_fast_breaks
+        rfb292 = role_fast_breaks(match, config)
+        for side in ("home", "away"):
+            rec292 = rfb292[side]
+            if rec292.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy csatornás kontra",
+                f"a lerohanásaink {rec292['share_pct']:.0f}%-a a(z) "
+                f"{rec292['main_role']} poszton zárul "
+                f"({rec292['shots']} kontra-lövésből; "
+                f"{RFB_SHARE_PCT:.0f}% fölött már mintázat) — az "
+                "ellenfél egy kijelölt emberrel hatástalanítja",
+                "kétsávos kontra-gyakorlat: az indítás után a labda "
+                "kötelezően sávot vált, mielőtt kapura mehet — a "
+                "második hullám embere is kap befejezést, hogy a "
+                "kontránk ne egy emberen múljon")
+    except Exception:
+        pass
+
+    # 291) Lövésválasztás: ha a lövéseink nagy részénél volt jobb
+    # szabad helyzet a pályán, nem a lövéstechnika a gond — a fejet
+    # kell felhozni a lövés előtt.
+    _szabaly = 291
+    try:
+        from .decisions import SCQ_HIGH_PCT, shot_choice_quality
+        scq291 = shot_choice_quality(match, config)
+        for side in ("home", "away"):
+            rec291 = scq291[side]
+            if rec291["pct"] is None or rec291["pct"] < SCQ_HIGH_PCT:
+                continue
+            add(side, "támadás", "Eldobott jobb helyzet",
+                f"a lövéseink {rec291['pct']:.0f}%-ánál volt jobb SZABAD "
+                f"helyzet a pályán ({rec291['better_options']}/"
+                f"{rec291['shots']} lövés; {SCQ_HIGH_PCT:.0f}% fölött "
+                "már mintázat) — nem a lövéstechnika a gond, hanem hogy "
+                "nem nézünk fel",
+                "DÖNTÉS-JÁTÉK: 4-4 a fél pályán, a lövés csak azután "
+                "érvényes, hogy a lövő megnevezte, ki állt szabadabban; "
+                "ha rosszul nevezi meg, a gól nem számít — a cél a "
+                "felnézés reflexe, nem a passz-kényszer")
+    except Exception:
+        pass
+
+    # 290) Időkérés-befejező: ha az időkérés utáni támadásunk mindig
+    # ugyanarra a posztra fut ki, az ellenfél elé áll — pont a
+    # legfontosabb támadásunkat fogják meg.
+    _szabaly = 290
+    try:
+        from .stoppages import TOF_SHARE_PCT, timeout_finisher
+        tof290 = timeout_finisher(match, config)
+        for side in ("home", "away"):
+            rec290 = tof290[side]
+            if rec290.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kiszámítható időkérés-befejezés",
+                f"időkérés után a lövéseink {rec290['share_pct']:.0f}%-a "
+                f"a(z) {rec290['main_role']} posztról jött "
+                f"({rec290['shots']} lövésből, {rec290['timeouts']} "
+                f"időkérés után; {TOF_SHARE_PCT:.0f}% fölött már "
+                "mintázat) — az ellenfél elé áll",
+                "KÉT időkérés-figura a táblára, azonos indítással: az "
+                "egyik a szokásos befejezőre, a másik a mögé érkezőre "
+                "fut ki — az edzés végén, fáradtan, egy hívó szóra "
+                "kell mennie mindkettőnek")
+    except Exception:
+        pass
+
+    # 289) Figura-befejező: ha a figuránk mindig ugyanarra a posztra
+    # fut ki, egy felkészült fal a figura indulásakor odacsúszik.
+    _szabaly = 289
+    try:
+        from .setplays import SPF_SHARE_PCT, setplay_finishers
+        spf289 = setplay_finishers(match, config)
+        for side in ("home", "away"):
+            tel289 = spf289[side].get("telegraphed")
+            if tel289 is None:
+                continue
+            add(side, "támadás", "Kiszámítható figura-befejezés",
+                f"a(z) {tel289['figure']}. figuránk lövéseinek "
+                f"{tel289['share_pct']:.0f}%-a a(z) {tel289['poszt']} "
+                f"posztra fut ki ({tel289['shots']} lövésből; "
+                f"{SPF_SHARE_PCT:.0f}% fölött már mintázat) — egy "
+                "felkészült fal a figura indulásakor odacsúszik",
+                "MÁSODIK BEFEJEZŐ a figurába: ugyanaz az indítás, de a "
+                "harmadik passz után választható két végpont — a "
+                "döntést a fal csúszása hozza, ne az edzői utasítás; "
+                "előbb lassítva, döntés-jelre, majd teljes tempóban")
+    except Exception:
+        pass
+
+    # 288) Poszt-nyomás: ha egy posztunk fedezetten beesik, a nyomás
+    # alatti befejezést kell gyakorolnia — az ellenfél épp rá lép ki.
+    _szabaly = 288
+    try:
+        from .roles import RPF_GAP_PCT, role_pressure_finish
+        rpf288 = role_pressure_finish(match, config)
+        for side in ("home", "away"):
+            rec288 = rpf288[side]
+            shy288 = rec288.get("pressure_shy")
+            if shy288 is None:
+                continue
+            add(side, "befejezés", "Fedezetten beeső poszt",
+                f"a(z) {shy288['poszt']} posztunk a fedezett lövései "
+                f"{shy288['covered_pct']:.0f}%-át lövi be "
+                f"({shy288['covered_shots']} lövésből; ez "
+                f"{shy288['gap_pct']:.0f} százalékponttal a csapat-átlag "
+                f"alatt van, {RPF_GAP_PCT:.0f} fölött már mintázat) — az "
+                "ellenfél épp rá fog kilépni",
+                "nyomás alatti befejezés: kontakt-lövés párnával és "
+                "kinyújtott kézzel a lövősávban, kényszerített "
+                "test-érintkezés után — a cél nem az erő, hanem hogy a "
+                "kar üteme ne változzon, amikor hozzáérnek")
+    except Exception:
+        pass
+
+    # 287) Poszt-kapuoldal: ha egy posztunk mindig ugyanoda lő, az
+    # ellenfél kapusa ráállhat — a kapuoldal-váltás gyakorlandó.
+    _szabaly = 287
+    try:
+        from .roles import RGP_SHARE_PCT, role_goal_placement
+        rgp287 = role_goal_placement(match, config)
+        for side in ("home", "away"):
+            rec287 = rgp287[side]
+            pred287 = rec287.get("predictable")
+            if pred287 is None:
+                continue
+            add(side, "befejezés", "Kiszámítható kapuoldal",
+                f"a(z) {pred287['poszt']} posztunk a góljai "
+                f"{pred287['share_pct']:.0f}%-át {pred287['dominant']} "
+                f"oldalra lövi ({pred287['goals']} gólból; "
+                f"{RGP_SHARE_PCT:.0f}% fölött már mintázat) — egy "
+                "felkészült kapus erre rááll",
+                "kapuoldal-váltás gyakorlása: ugyanabból a helyzetből "
+                "váltakozó sarok, a kapus MOZDULATÁRA döntve — a cél "
+                "nem a másik sarok begyakorlása, hanem hogy a döntés az "
+                "utolsó pillanatban szülessen")
+    except Exception:
+        pass
     # 286) Poszt-lövéserő: ha az egyik posztunk lövése kiugróan
     # kemény, a többié viszont nem, a befejezés egy emberre szűkül.
+    _szabaly = 286
     try:
         from .roles import RSP_GAP_KMH, role_shot_power
         rsp286 = role_shot_power(match, config)
@@ -1381,6 +6702,7 @@ def _training_focus_cached(match: Match,
         pass
     # 285) Poszt-lövésidőzítés: ha egy posztunk a támadás végén lő, az
     # a passzív-jel kockázata és a kifáradt befejezés.
+    _szabaly = 285
     try:
         from .roles import RST_GAP_S, role_shot_timing
         rst285 = role_shot_timing(match, config)
@@ -1405,6 +6727,7 @@ def _training_focus_cached(match: Match,
         pass
     # 284) Poszt-lövéstávolság: ha egy posztunk rendre messziről lő,
     # az a kapusnak dolgozik — a befejezést közelebb kell hozni.
+    _szabaly = 284
     try:
         from .roles import RSD_GAP_M, role_shot_distance
         rsd284 = role_shot_distance(match, config)
@@ -1429,6 +6752,7 @@ def _training_focus_cached(match: Match,
         pass
     # 283) Poszt-eladási zóna: ha egy posztunk a támadó harmadban ad
     # el, abból kontra lesz.
+    _szabaly = 283
     try:
         from .roles import RTZ_GAP_PP, role_turnover_zones
         rtz283 = role_turnover_zones(match, config)
@@ -1453,6 +6777,7 @@ def _training_focus_cached(match: Match,
         pass
     # 282) Poszt-labdatartás: ha egy posztunknál megáll a labda, az
     # ellenfél oda küldi a második embert.
+    _szabaly = 282
     try:
         from .roles import RHT_GAP_S, role_hold_time
         rht282 = role_hold_time(match, config)
@@ -1476,6 +6801,7 @@ def _training_focus_cached(match: Match,
         pass
     # 281) Poszt-átvételi zóna: ha egy posztunk messze veszi át a
     # labdát, onnan nehéz befejezni.
+    _szabaly = 281
     try:
         from .roles import RRZ_GAP_M, role_receive_zones
         rrz281 = role_receive_zones(match, config)
@@ -1499,6 +6825,7 @@ def _training_focus_cached(match: Match,
         pass
     # 280) Poszt-passzháló: ha a passzaink egy vonalon mennek, az
     # elfogás kiszámítható.
+    _szabaly = 280
     try:
         from .roles import RPM_SHARE, role_pass_map
         rpm280 = role_pass_map(match, config)
@@ -1522,6 +6849,7 @@ def _training_focus_cached(match: Match,
         pass
     # 279) Poszt-birtoklás: ha a labda idejének több mint felét egy
     # poszt tartja, a játékunk egy emberen áll.
+    _szabaly = 279
     try:
         from .roles import RPS_DOMINANT_PCT, role_possession_share
         rps279 = role_possession_share(match, config)
@@ -1544,6 +6872,7 @@ def _training_focus_cached(match: Match,
         pass
     # 278) Poszt-állás: ha hátrányban egyetlen posztra szűkül a
     # befejezésünk, azt az ellenfél lezárja.
+    _szabaly = 278
     try:
         from .roles import RBS_GAP_PP, role_share_by_score
         rbs278 = role_share_by_score(match, config)
@@ -1567,6 +6896,7 @@ def _training_focus_cached(match: Match,
         pass
     # 277) Eladás-ár poszt szerint: ha egy posztunk eladásai rendre
     # gólba kerülnek, ott a visszarendeződés hiányzik.
+    _szabaly = 277
     try:
         from .roles import RTC_QUICK_S, role_turnover_cost
         rtc277 = role_turnover_cost(match, config)
@@ -1590,6 +6920,7 @@ def _training_focus_cached(match: Match,
         pass
     # 276) Poszt-váltás a szünetre: ha a befejezésünk átrendeződik,
     # tudatosítani kell — ne véletlen legyen.
+    _szabaly = 276
     try:
         from .roles import RSS_GAP_PP, role_share_shift
         rss276 = role_share_shift(match, config)
@@ -1612,6 +6943,7 @@ def _training_focus_cached(match: Match,
         pass
     # 275) Gólpassz-tengely: ha a góljaink egy vonalon esnek, azt az
     # ellenfél elvágja — több tengely kell.
+    _szabaly = 275
     try:
         from .roles import ARP_MIN_PAIRS, ARP_SHARE, assist_role_pairs
         arp275 = assist_role_pairs(match, config)
@@ -1634,6 +6966,7 @@ def _training_focus_cached(match: Match,
         pass
     # 274) Poszt-hatékonyság: ha egy posztunkról alig megy be a lövés,
     # az a poszt befejezés-gyakorlata a heti téma.
+    _szabaly = 274
     try:
         from .roles import (SER_GAP_PP, SER_MIN_SHOTS,
                             shot_efficiency_by_role)
@@ -1659,6 +6992,7 @@ def _training_focus_cached(match: Match,
         pass
     # 273) Kiosztás-célpont: ha a betörés után mindig ugyanoda megy a
     # labda, a védekezés előre tudja — a kiosztást variálni kell.
+    _szabaly = 273
     try:
         from .attack_types import (KOT_CONCENTRATION_PCT,
                                    KOT_MIN_KICKOUTS, kickout_targets)
@@ -1687,6 +7021,7 @@ def _training_focus_cached(match: Match,
         pass
     # 272) Teendő-rangsor: ha egy területről jön a jelzések többsége,
     # a heti edzés súlypontját is oda kell tenni.
+    _szabaly = 272
     try:
         from .priorities import priority_findings
         prf272 = priority_findings(match, config)
@@ -1711,6 +7046,7 @@ def _training_focus_cached(match: Match,
         pass
     # 271) Befejező-váltás: ha ugyanaz fejez be sorozatban, a
     # befejezés-rotáció a téma — a védekezés ráállhat a lövőnkre.
+    _szabaly = 271
     try:
         from .xg import finisher_rotation
         frt271 = finisher_rotation(match, config)
@@ -1718,7 +7054,7 @@ def _training_focus_cached(match: Match,
             rec271 = frt271[side]
             if rec271["verdict"] != "ugyanaz fejez be sorozatban":
                 continue
-            add(side, "tamadas", "Befejezés-rotáció",
+            add(side, "támadás", "Befejezés-rotáció",
                 f"ugyanaz fejez be sorozatban nálunk "
                 f"({rec271['repeat_pct']:.0f}% ismétlés "
                 f"{rec271['shots']} lövésből) — a védekezés a "
@@ -1732,6 +7068,7 @@ def _training_focus_cached(match: Match,
         pass
     # 270) Gól-minta: ha a góljaink egy képre járnak, a befejezés-
     # szórás a téma — a kiszámítható minta egy igazítással elzárható.
+    _szabaly = 270
     try:
         from .xg import GPT_MIN_GOALS, GPT_SHARE_PCT, goal_patterns
         gpt270 = goal_patterns(match, config)
@@ -1739,7 +7076,7 @@ def _training_focus_cached(match: Match,
             rec270 = gpt270[side]
             if rec270["verdict"] is None:
                 continue
-            add(side, "tamadas", "Befejezés-szórás",
+            add(side, "támadás", "Befejezés-szórás",
                 f"a góljaink egy képre járnak ({rec270['top']}, "
                 f"{rec270['patterns'][rec270['top']]}/"
                 f"{rec270['goals']}) — egy fal-igazítással "
@@ -1752,6 +7089,7 @@ def _training_focus_cached(match: Match,
         pass
     # 269) Kettős emberhátrány: ha a négyfős játékunk gólesőt hoz, a
     # 4 fős fal és az időhúzó labdatartás a téma.
+    _szabaly = 269
     try:
         from .rules import double_shorthand
         dsh269 = double_shorthand(match, config)
@@ -1759,7 +7097,7 @@ def _training_focus_cached(match: Match,
             rec269 = dsh269[side]
             if rec269["verdict"] != "a kettős emberhátrány végzetes nekik":
                 continue
-            add(side, "vedekezes", "Négyfős fal",
+            add(side, "védekezés", "Négyfős fal",
                 f"a kettős emberhátrány végzetes nekünk "
                 f"({rec269['conceded']} kapott gól "
                 f"{rec269['seconds']:.0f} mp alatt) — a 4 fős "
@@ -1773,6 +7111,7 @@ def _training_focus_cached(match: Match,
         pass
     # 268) Létszám-hiba: ha a cseréink átfednek, a cserefolyosó-
     # fegyelem a téma — a hetedik ember ingyen kiállítást ér.
+    _szabaly = 268
     try:
         from .rules import excess_players
         xsp268 = excess_players(match, config)
@@ -1793,6 +7132,7 @@ def _training_focus_cached(match: Match,
         pass
     # 267) Felzárkózás-húzó: ha egy emberen áll a mentésünk, a
     # hátrány-teher szétosztása a téma.
+    _szabaly = 267
     try:
         from .momentum import comeback_carriers
         cbc267 = comeback_carriers(match, config)
@@ -1811,6 +7151,7 @@ def _training_focus_cached(match: Match,
         pass
     # 266) Eltűnő védő: ha a védő-motorunk a második félidőre leáll,
     # a védő-rotáció a téma.
+    _szabaly = 266
     try:
         from .defense import fading_defenders
         fdd266 = fading_defenders(match, config)
@@ -1818,7 +7159,7 @@ def _training_focus_cached(match: Match,
             rec266 = fdd266[side]
             if rec266["verdict"] is None:
                 continue
-            add(side, "vedekezes", "Védő-motor rotáció",
+            add(side, "védekezés", "Védő-motor rotáció",
                 f"{rec266['verdict']} — a hajrában az ő zónája "
                 "nyílik ki",
                 "védő-motor rotáció: a legtöbbet dolgozó védő a "
@@ -1830,6 +7171,7 @@ def _training_focus_cached(match: Match,
         pass
     # 265) Sprint-állás: ha hátrányban sprintbe menekülünk, az
     # ütemtartó felzárkózás a téma — a pánik-futás a hajrát viszi el.
+    _szabaly = 265
     try:
         from .stats import sprints_by_score
         spb265 = sprints_by_score(match, config)
@@ -1850,6 +7192,7 @@ def _training_focus_cached(match: Match,
         pass
     # 264) Eltűnő ember: ha a kulcsemberünk a második félidőre elhal,
     # a terhelés-menedzsment a téma.
+    _szabaly = 264
     try:
         from .momentum import fading_scorers
         fdr264 = fading_scorers(match, config)
@@ -1869,6 +7212,7 @@ def _training_focus_cached(match: Match,
         pass
     # 263) Fekete ötperc: ha egy öt perces ablakunk rendre elúszik, a
     # tervezett csere-blokk és az időkérés-készenlét a téma.
+    _szabaly = 263
     try:
         from .momentum import black_window
         blw263 = black_window(match, config)
@@ -1889,6 +7233,7 @@ def _training_focus_cached(match: Match,
         pass
     # 262) Oldal-váltás a szünetre: ha az ellenfél a szünetben szárnyat
     # váltott ellenünk, a súlypont-olvasás a téma.
+    _szabaly = 262
     try:
         from .tactics import attack_side_shift
         sds262 = attack_side_shift(match, config)
@@ -1896,7 +7241,7 @@ def _training_focus_cached(match: Match,
             rec262 = sds262[other]
             if rec262["verdict"] is None:
                 continue
-            add(side, "vedekezes", "Súlypont-olvasás a szünet után",
+            add(side, "védekezés", "Súlypont-olvasás a szünet után",
                 f"az ellenfél a szünetben szárnyat váltott ellenünk "
                 f"({rec262['fh_main']} → {rec262['sh_main']}) — a "
                 "falunk súlypontja a rossz oldalon maradt",
@@ -1909,6 +7254,7 @@ def _training_focus_cached(match: Match,
         pass
     # 261) Fal-váltás a szünetre: ha az ellenfél a szünetben falat
     # váltott ellenünk, a felismerés-rutin a téma.
+    _szabaly = 261
     try:
         from .tactics import defense_form_shift
         dfs261 = defense_form_shift(match, config)
@@ -1917,7 +7263,7 @@ def _training_focus_cached(match: Match,
             if rec261["verdict"] is None \
                     or "falat váltanak" not in rec261["verdict"]:
                 continue
-            add(side, "tamadas", "Fal-felismerés a szünet után",
+            add(side, "támadás", "Fal-felismerés a szünet után",
                 f"az ellenfél a szünetben falat váltott ellenünk "
                 f"({rec261['fh_main']} → {rec261['sh_main']}) — az "
                 "első félidei támadó-tervünk a másodikban már nem "
@@ -1930,6 +7276,7 @@ def _training_focus_cached(match: Match,
         pass
     # 260) Passz-hossz-állás: ha hátrányban hosszú labdákra váltunk,
     # a rövid kombináció hátrányban is a téma — az átdobálás elfogható.
+    _szabaly = 260
     try:
         from .event_detection import pass_length_by_score
         pls260 = pass_length_by_score(match, config)
@@ -1937,7 +7284,7 @@ def _training_focus_cached(match: Match,
             rec260 = pls260[side]
             if rec260["verdict"] != "hátrányban hosszú labdákra váltanak":
                 continue
-            add(side, "tamadas", "Rövid kombináció hátrányban",
+            add(side, "támadás", "Rövid kombináció hátrányban",
                 f"hátrányban hosszú labdákra váltunk "
                 f"({rec260['trailing']['long']} hosszú passz "
                 f"{rec260['trailing']['passes']} hátrányban adottból) "
@@ -1950,6 +7297,7 @@ def _training_focus_cached(match: Match,
         pass
     # 259) Kapus-gólpassz: ha az ellenfél kapusa gólpasszt ért
     # ellenünk, a lövés utáni azonnali hátraindulás a téma.
+    _szabaly = 259
     try:
         from .goalkeeper import gk_assists
         gka259 = gk_assists(match, config)
@@ -1957,7 +7305,7 @@ def _training_focus_cached(match: Match,
             rec259 = gka259[other]
             if rec259["verdict"] is None:
                 continue
-            add(side, "vedekezes", "Kapus-indítás sávzárás",
+            add(side, "védekezés", "Kapus-indítás sávzárás",
                 f"az ellenfél kapusa {rec259['assists']} gólpasszt "
                 "ért ellenünk — a lövésünk után senki nem vágta el "
                 "a hosszú indítás sávját",
@@ -1970,6 +7318,7 @@ def _training_focus_cached(match: Match,
         pass
     # 258) Passz-irány-állás: ha az ellenfél előnyben hátrajáratott
     # ellenünk, a vezetés elleni letámadás a téma.
+    _szabaly = 258
     try:
         from .attack_types import pass_direction_by_score
         pds258 = pass_direction_by_score(match, config)
@@ -1978,7 +7327,7 @@ def _training_focus_cached(match: Match,
             if rec258["verdict"] != \
                     "előnyben hátrafelé járatják a labdát":
                 continue
-            add(side, "vedekezes", "Letámadás a hátrajáratás ellen",
+            add(side, "védekezés", "Letámadás a hátrajáratás ellen",
                 "az ellenfél előnyben hátrafelé járatta a labdát, és "
                 "hagytuk: az időölésük ellen nem léptünk fel",
                 "letámadás-gyakorlat vezető ellenfél ellen: az első "
@@ -1990,6 +7339,7 @@ def _training_focus_cached(match: Match,
         pass
     # 257) Szünet-váltás: ha félidőn át ugyanazt játsszuk, a B-terv a
     # téma — a kiszámítható mixre az ellenfél ráállhat.
+    _szabaly = 257
     try:
         from .attack_types import attack_mix_shift
         ams257 = attack_mix_shift(match, config)
@@ -2010,6 +7360,7 @@ def _training_focus_cached(match: Match,
         pass
     # 256) Lepattanó-esés: ha a hajrára elfogy a lepattanó-harcunk, a
     # fáradásos lepattanó-munka a téma — a második labda akarat-játék.
+    _szabaly = 256
     try:
         from .attack_types import second_chance_fade
         scf256 = second_chance_fade(match, config)
@@ -2017,7 +7368,7 @@ def _training_focus_cached(match: Match,
             rec256 = scf256[side]
             if rec256["verdict"] != "a hajrára elfogy a lepattanó-harcuk":
                 continue
-            add(side, "tamadas", "Lepattanó-harc fáradtan",
+            add(side, "támadás", "Lepattanó-harc fáradtan",
                 f"a hajrára elfogy a lepattanó-harcunk (visszaharcolt "
                 f"lepattanó {rec256['fh_won']}/{rec256['fh_misses']} → "
                 f"{rec256['sh_won']}/{rec256['sh_misses']}) — a "
@@ -2030,6 +7381,7 @@ def _training_focus_cached(match: Match,
         pass
     # 255) Gólpassz-esés: ha a hajrában megáll nálunk a labda, a
     # fáradt csapatjáték a téma — az egyéni megoldás védekezhetőbb.
+    _szabaly = 255
     try:
         from .attack_types import assist_fade
         asf255 = assist_fade(match, config)
@@ -2037,7 +7389,7 @@ def _training_focus_cached(match: Match,
             rec255 = asf255[side]
             if rec255["verdict"] != "a hajrában megáll a labda":
                 continue
-            add(side, "tamadas", "Hajra-csapatjáték",
+            add(side, "támadás", "Hajra-csapatjáték",
                 f"a hajrában megáll nálunk a labda (gólpasszos gól "
                 f"{rec255['fh_assisted']}/{rec255['fh_goals']} → "
                 f"{rec255['sh_assisted']}/{rec255['sh_goals']}) — "
@@ -2050,6 +7402,7 @@ def _training_focus_cached(match: Match,
         pass
     # 254) Kapus-sorozat: ha az ellenfél kapusa sorozatban védett
     # ellenünk, a lövés-kép váltás a téma — ugyanazt lőttük neki.
+    _szabaly = 254
     try:
         from .goalkeeper import gk_save_streaks
         gst254 = gk_save_streaks(match, config)
@@ -2057,7 +7410,7 @@ def _training_focus_cached(match: Match,
             rec254 = gst254[other]
             if rec254["verdict"] is None:
                 continue
-            add(side, "tamadas", "Lövés-kép váltás",
+            add(side, "támadás", "Lövés-kép váltás",
                 f"az ellenfél kapusa sorozatban védett ellenünk "
                 f"({rec254['streaks']} hármas széria, leghosszabb: "
                 f"{rec254['longest']}) — hagytuk rákapni: ugyanazt "
@@ -2070,6 +7423,7 @@ def _training_focus_cached(match: Match,
         pass
     # 253) 7a6-állás: ha az ellenfél rendszerszinten üres kapuval
     # játszik, az üres-kapus átkapcsolás a téma.
+    _szabaly = 253
     try:
         from .goalkeeper import empty_net_by_score
         ens253 = empty_net_by_score(match, config)
@@ -2092,6 +7446,7 @@ def _training_focus_cached(match: Match,
         pass
     # 252) Kontra-állás: ha hátrányban kontrába menekülünk, a
     # szervezett visszajövetel a téma — a kapkodó futás labdát ad el.
+    _szabaly = 252
     try:
         from .attack_types import breaks_by_score
         bks252 = breaks_by_score(match, config)
@@ -2099,7 +7454,7 @@ def _training_focus_cached(match: Match,
             rec252 = bks252[side]
             if rec252["verdict"] != "hátrányban kontrába menekülnek":
                 continue
-            add(side, "tamadas", "Szervezett visszajövetel",
+            add(side, "támadás", "Szervezett visszajövetel",
                 f"hátrányban kontrába menekülünk (hátrányban "
                 f"{rec252['trailing']['breaks']} lerohanás "
                 f"{rec252['trailing']['attacks']} támadásból) — a "
@@ -2112,6 +7467,7 @@ def _training_focus_cached(match: Match,
         pass
     # 251) Hetes-állás: ha vezetésnél sorra adjuk az olcsó heteseket a
     # hátrányban lévőnek, a vezetés-őrző lábmunka a téma.
+    _szabaly = 251
     try:
         from .rules import sevens_by_score
         svs251 = sevens_by_score(match, config)
@@ -2120,7 +7476,7 @@ def _training_focus_cached(match: Match,
             if rec251["verdict"] != \
                     "hátrányban harcolják ki a heteseiket":
                 continue
-            add(side, "vedekezes", "Vezetés-őrző lábmunka",
+            add(side, "védekezés", "Vezetés-őrző lábmunka",
                 f"az ellenfél hátrányból {rec251['trailing']} hetest "
                 "harcolt ki ellenünk — vezetésnél kézzel ütünk a "
                 "betörőre, és visszaadjuk a legolcsóbb gólt",
@@ -2132,6 +7488,7 @@ def _training_focus_cached(match: Match,
         pass
     # 250) Fegyelem-állás: ha a kiállításaink hátrányban sűrűsödnek,
     # a hideg fej a téma — a frusztrációs kiállítás dupla ár.
+    _szabaly = 250
     try:
         from .rules import suspensions_by_score
         sps250 = suspensions_by_score(match, config)
@@ -2152,6 +7509,7 @@ def _training_focus_cached(match: Match,
         pass
     # 249) Kidobott labda: ha sok labdát dobunk ki magunktól, a
     # szélső-passz pontossága és az indítás-hossz kontrollja a téma.
+    _szabaly = 249
     try:
         from .attack_types import OBT_MIN, balls_out
         obt249 = balls_out(match, config)
@@ -2159,7 +7517,7 @@ def _training_focus_cached(match: Match,
             rec249 = obt249[side]
             if rec249["out"] < OBT_MIN:
                 continue
-            add(side, "tamadas", "Oldalvonal-fegyelem",
+            add(side, "támadás", "Oldalvonal-fegyelem",
                 f"{rec249['out']} labdát dobtunk ki az oldalvonalon — "
                 "a legolcsóbb eladás: ehhez ellenfél sem kellett",
                 "szélső-passz pontosság: átadások a szélső sávban "
@@ -2171,6 +7529,7 @@ def _training_focus_cached(match: Match,
         pass
     # 248) Elhúzódó támadás ára: ha a hosszú akcióink üresen zárulnak,
     # a támadás-lezárás időre a téma — a türelem most nem terem gólt.
+    _szabaly = 248
     try:
         from .tactics import slow_attack_cost
         sac248 = slow_attack_cost(match, config)
@@ -2179,7 +7538,7 @@ def _training_focus_cached(match: Match,
             if rec248["verdict"] != \
                     "az elhúzódó támadásaik üresen zárulnak":
                 continue
-            add(side, "tamadas", "Támadás-lezárás időre",
+            add(side, "támadás", "Támadás-lezárás időre",
                 f"az elhúzódó támadásaink üresen zárulnak "
                 f"({rec248['scored']}/{rec248['slow']} hosszú akció "
                 "ért gólt) — a passzív jel árnyékában körbejáratunk "
@@ -2192,6 +7551,7 @@ def _training_focus_cached(match: Match,
         pass
     # 247) Indítás-hiba ára: ha az elszórt indításaink gólba kerülnek,
     # az indítás-biztonság sürgős — az ár már bizonyított.
+    _szabaly = 247
     try:
         from .goalkeeper import outlet_punishment
         olp247 = outlet_punishment(match, config)
@@ -2200,7 +7560,7 @@ def _training_focus_cached(match: Match,
             if rec247["verdict"] != \
                     "az elszórt indításaik gólba kerülnek":
                 continue
-            add(side, "vedekezes", "Indítás-biztonság",
+            add(side, "védekezés", "Elszórt indítás ára",
                 f"az elszórt indításaink gólba kerülnek "
                 f"({rec247['punished']}/{rec247['lost']} elveszett "
                 "kihozatal után jött gyors gól) — a rossz első "
@@ -2214,6 +7574,7 @@ def _training_focus_cached(match: Match,
         pass
     # 246) Kihagyás-büntetés: ha a kihagyásaink után azonnal büntetnek,
     # a kihagyás utáni fél perc a téma — előbb védekezni, aztán bánkódni.
+    _szabaly = 246
     try:
         from .momentum import punished_misses
         pmb246 = punished_misses(match, config)
@@ -2222,7 +7583,7 @@ def _training_focus_cached(match: Match,
             if rec246["verdict"] != \
                     "a kihagyásaik után azonnal büntetik őket":
                 continue
-            add(side, "vedekezes", "Kihagyás utáni fél perc",
+            add(side, "védekezés", "Kihagyás utáni fél perc",
                 f"a kihagyott ziccereink után rendre azonnal gólt "
                 f"kapunk ({rec246['punished']}/{rec246['misses']}) — "
                 "a fejünk a kihagyásnál marad, a visszarendeződés "
@@ -2236,6 +7597,7 @@ def _training_focus_cached(match: Match,
         pass
     # 245) Kilépés-büntetés: ha a kilépésünk mögé betalálnak, a mögé
     # csúszás a téma — a szomszéd zárja a rést.
+    _szabaly = 245
     try:
         from .defense import stepout_punishment
         sop245 = stepout_punishment(match, config)
@@ -2243,7 +7605,7 @@ def _training_focus_cached(match: Match,
             rec245 = sop245[side]
             if rec245["verdict"] != "a kilépésük mögé betalálnak":
                 continue
-            add(side, "vedekezes", "Mögé csúszás",
+            add(side, "védekezés", "Mögé csúszás",
                 f"a kilépéseink mögé betalálnak ({rec245['behind_stepout']}"
                 f"/{rec245['goals']} kapott gólnál volt kiugró "
                 "védőnk) — a kilépés mögötti rést rendre megjátsszák",
@@ -2257,6 +7619,7 @@ def _training_focus_cached(match: Match,
         pass
     # 244) Kettőzés-büntetés: ha a kettőzésünk gólba kerül, a
     # kettőzés-visszazárás a téma — vagy vissza kell fogni.
+    _szabaly = 244
     try:
         from .defense import double_punishment
         dbp244 = double_punishment(match, config)
@@ -2264,7 +7627,7 @@ def _training_focus_cached(match: Match,
             rec244 = dbp244[side]
             if rec244["verdict"] != "a kettőzésük gólba kerül":
                 continue
-            add(side, "vedekezes", "Kettőzés-visszazárás",
+            add(side, "védekezés", "Kettőzés-visszazárás",
                 f"a kettőzésünk gólba kerül ({rec244['conceded_after']}"
                 " gól esett közvetlenül kettőzés után) — az üresen "
                 "hagyott embert rendre megtalálják",
@@ -2278,6 +7641,7 @@ def _training_focus_cached(match: Match,
         pass
     # 243) Olvasó kapus: ha a kapusunk csak reflexből véd, az
     # olvasás-készség a téma — a lövő teste elárulja a sarkot.
+    _szabaly = 243
     try:
         from .goalkeeper import reading_keeper
         rdk243 = reading_keeper(match, config)
@@ -2285,7 +7649,7 @@ def _training_focus_cached(match: Match,
             rec243 = rdk243[side]
             if rec243["verdict"] != "reflexből véd":
                 continue
-            add(side, "vedekezes", "Kapus-olvasás",
+            add(side, "védekezés", "Kapus-olvasás",
                 f"a kapusunk reflexből véd (csak {rec243['read']}/"
                 f"{rec243['saves']} védésnél indult előre) — a "
                 "reflex a közeli ziccernél kevés, az olvasott "
@@ -2299,6 +7663,7 @@ def _training_focus_cached(match: Match,
         pass
     # 242) Becsapott kapus: ha a kapusunk elmozdítható, a csel-állás
     # a téma — kivárás, nem korai vetődés.
+    _szabaly = 242
     try:
         from .goalkeeper import wrongfooted_keeper
         wfk242 = wrongfooted_keeper(match, config)
@@ -2306,7 +7671,7 @@ def _training_focus_cached(match: Match,
             rec242 = wfk242[side]
             if rec242["verdict"] != "elmozdítható a kapusuk":
                 continue
-            add(side, "vedekezes", "Kapus csel-állás",
+            add(side, "védekezés", "Kapus csel-állás",
                 f"a kapusunk elmozdítható: {rec242['fooled']}/"
                 f"{rec242['goals']} kapott gólnál ellenirányba "
                 "mozdult — a lövéscsel rendre beviszi",
@@ -2319,6 +7684,7 @@ def _training_focus_cached(match: Match,
         pass
     # 241) Lendület-gólok: ha mozgásból kapjuk a gólokat, a bekísérés
     # a téma — az érkező embert időben fel kell venni.
+    _szabaly = 241
     try:
         from .defense import conceded_momentum
         cgm241 = conceded_momentum(match, config)
@@ -2326,7 +7692,7 @@ def _training_focus_cached(match: Match,
             rec241 = cgm241[side]
             if rec241["verdict"] != "mozgásból kapják a gólokat":
                 continue
-            add(side, "vedekezes", "Bekísérés",
+            add(side, "védekezés", "Bekísérés",
                 f"a kapott góljaink zöménél lendületből érkezett a "
                 f"lövő ({rec241['running']}/{rec241['goals']}) — az "
                 "érkező embert senki nem veszi fel időben, a "
@@ -2340,6 +7706,7 @@ def _training_focus_cached(match: Match,
         pass
     # 240) Bontó tempó: ha a járatás szed szét minket, a váltás-
     # fegyelem tempó alatt a téma.
+    _szabaly = 240
     try:
         from .defense import conceded_tempo
         ctm240 = conceded_tempo(match, config)
@@ -2347,7 +7714,7 @@ def _training_focus_cached(match: Match,
             rec240 = ctm240[side]
             if rec240["verdict"] != "a járatás szedi szét őket":
                 continue
-            add(side, "vedekezes", "Váltás tempó alatt",
+            add(side, "védekezés", "Váltás tempó alatt",
                 f"a kapott góljaink előtt átlag "
                 f"{rec240['avg_passes']:.1f} passz megy 8 mp-en "
                 "belül — a pörgő járatásnál a váltásaink késnek, és "
@@ -2361,6 +7728,7 @@ def _training_focus_cached(match: Match,
         pass
     # 239) Folyosó-gólok: ha nyitott folyosókon kapjuk a gólokat, a
     # visszazárás és a fal-zárás a téma.
+    _szabaly = 239
     try:
         from .defense import corridor_goals
         crg239 = corridor_goals(match, config)
@@ -2368,7 +7736,7 @@ def _training_focus_cached(match: Match,
             rec239 = crg239[side]
             if rec239["verdict"] != "nyitott folyosókon kapják a gólokat":
                 continue
-            add(side, "vedekezes", "Folyosó-zárás",
+            add(side, "védekezés", "Folyosó-zárás",
                 f"a kapott góljaink zöménél senki nem állt a "
                 f"lövésvonalban ({rec239['open']}/{rec239['goals']}) "
                 "— a fal nem ér oda vagy szétnyílik, a kapus "
@@ -2382,6 +7750,7 @@ def _training_focus_cached(match: Match,
         pass
     # 238) Csere-büntetés: ha a csere-lyukaink már gólba kerültek, a
     # csere-ütem javítása sürgős — nem mért kockázat, megfizetett ár.
+    _szabaly = 238
     try:
         from .substitutions import gap_punishment
         gpn238 = gap_punishment(match, config)
@@ -2389,7 +7758,7 @@ def _training_focus_cached(match: Match,
             rec238 = gpn238[side]
             if rec238["verdict"] != "a csere-lyukaik gólba kerülnek":
                 continue
-            add(side, "vedekezes", "Csere-ütem",
+            add(side, "védekezés", "Csere-lyuk ára",
                 f"a csere-lyukaink gólba kerülnek ({rec238['conceded']}"
                 f" kapott gól {rec238['gap_s']:.0f} mp öt fős játék "
                 "alatt) — a lassú csere már nem kockázat, hanem "
@@ -2403,6 +7772,7 @@ def _training_focus_cached(match: Match,
         pass
     # 237) Zavartalan előkészítők: ha a gólpassz-adót hagyjuk
     # dolgozni, a passzsáv-nyomás a téma.
+    _szabaly = 237
     try:
         from .defense import unpressured_assists
         upa237 = unpressured_assists(match, config)
@@ -2410,7 +7780,7 @@ def _training_focus_cached(match: Match,
             rec237 = upa237[side]
             if rec237["verdict"] != "az előkészítőt hagyják dolgozni":
                 continue
-            add(side, "vedekezes", "Nyomás a kiadóra",
+            add(side, "védekezés", "Nyomás a kiadóra",
                 f"a kapott gólpasszaink zöme zavartalan kiadásból jön "
                 f"({rec237['unpressured']}/{rec237['assisted']}) — a "
                 "gól már a passznál eldől, mi pedig csak a lövőnél "
@@ -2424,6 +7794,7 @@ def _training_focus_cached(match: Match,
         pass
     # 236) Átvert védők: ha egy emberünk rendre elveszíti a párharcot
     # a kapott góloknál, segítés-rend és párharc-edzés a téma.
+    _szabaly = 236
     try:
         from .defense import beaten_defenders
         btn236 = beaten_defenders(match, config)
@@ -2434,7 +7805,7 @@ def _training_focus_cached(match: Match,
             mez236 = (f"{top236['jersey']} mezszámú"
                       if top236["jersey"] is not None
                       else f"{top236['player_id']} azonosítójú")
-            add(side, "vedekezes", "Párharc-segítés",
+            add(side, "védekezés", "Párharc-segítés",
                 f"a kapott góljainknál rendre a(z) {mez236} "
                 f"játékosunk veszíti a párharcot ({top236['beaten']}/"
                 f"{btn236[side]['goals']}) — az ellenfél előbb-utóbb "
@@ -2448,6 +7819,7 @@ def _training_focus_cached(match: Match,
         pass
     # 235) Indítás-állás: ha vezetve mi is leülünk az indítással, az
     # előny-menedzsment tudatosítása a téma — de ne álljon le a láb.
+    _szabaly = 235
     try:
         from .goalkeeper import outlet_pace_by_score
         ops235 = outlet_pace_by_score(match, config)
@@ -2455,7 +7827,7 @@ def _training_focus_cached(match: Match,
             rec235 = ops235[side]
             if rec235["verdict"] != "előnyben is pörgetik":
                 continue
-            add(side, "vedekezes", "Indítás-kontroll előnyben",
+            add(side, "védekezés", "Indítás-kontroll előnyben",
                 f"előnyben is pörgetjük az indítást (átlag "
                 f"{rec235['lead']['avg_s']:.1f} mp kihozatal "
                 "vezetve) — ez fegyver, de kétélű: a gyors indítás "
@@ -2470,6 +7842,7 @@ def _training_focus_cached(match: Match,
         pass
     # 234) Csere-állás: ha vezetve sem pihentetünk, a pad bizalma a
     # téma — a kulcsember nem bírja végig a szezont.
+    _szabaly = 234
     try:
         from .substitutions import subs_by_score
         sbs234 = subs_by_score(match, config)
@@ -2477,7 +7850,7 @@ def _training_focus_cached(match: Match,
             rec234 = sbs234[side]
             if rec234["verdict"] != "vezetve sem nyúlnak a sorhoz":
                 continue
-            add(side, "vedekezes", "A pad bizalma",
+            add(side, "védekezés", "A pad bizalma",
                 f"vezetve sem cserélünk (csak {rec234['lead_subs']} "
                 f"cserehullám előnyben, {rec234['rest_subs']} "
                 "egyébként) — a kulcsembereink előnyben is végig "
@@ -2491,6 +7864,7 @@ def _training_focus_cached(match: Match,
         pass
     # 233) Előny-védekezés: ha vezetve leül a falunk, az előny
     # megtartása a téma — a fal nem pihenhet.
+    _szabaly = 233
     try:
         from .xg import defense_by_score
         dbs233 = defense_by_score(match, config)
@@ -2498,7 +7872,7 @@ def _training_focus_cached(match: Match,
             rec233 = dbs233[side]
             if rec233["verdict"] != "előnyben leül a faluk":
                 continue
-            add(side, "vedekezes", "Előny-védekezés",
+            add(side, "védekezés", "Előny-védekezés",
                 f"vezetve leül a falunk: a kapott átlag-xG "
                 f"{rec233['rest']['avg_xg']:.2f}-ról "
                 f"{rec233['leading']['avg_xg']:.2f}-ra nő, amikor "
@@ -2514,6 +7888,7 @@ def _training_focus_cached(match: Match,
         pass
     # 232) Hiba-állás: ha hátrányban kapkodunk, a nyomás alatti
     # rendezettség a téma.
+    _szabaly = 232
     try:
         from .attack_types import turnovers_by_score
         tbs232 = turnovers_by_score(match, config)
@@ -2522,7 +7897,7 @@ def _training_focus_cached(match: Match,
             if rec232["verdict"] != "hátrányban kapkodnak":
                 continue
             tr232 = rec232["trailing"]
-            add(side, "tamadas", "Rendezettség hátrányban",
+            add(side, "támadás", "Rendezettség hátrányban",
                 f"hátrányban kapkodunk: {tr232['turnovers']}/"
                 f"{tr232['attacks']} hátrányban futott támadásunk "
                 "zárult eladással — a sietség több labdát ad el, "
@@ -2537,6 +7912,7 @@ def _training_focus_cached(match: Match,
         pass
     # 231) Kettőző emberek: ha mindig ugyanaz az emberünk kettőz, a
     # kettőzés-forgatás a téma — ne legyen kiolvasható.
+    _szabaly = 231
     try:
         from .defense import doubling_defenders
         dtp231 = doubling_defenders(match, config)
@@ -2547,7 +7923,7 @@ def _training_focus_cached(match: Match,
             mez231 = (f"{top231['jersey']} mezszámú"
                       if top231["jersey"] is not None
                       else f"{top231['player_id']} azonosítójú")
-            add(side, "vedekezes", "Kettőzés-forgatás",
+            add(side, "védekezés", "Kettőzés-forgatás",
                 f"a kettőzésünk kiszámítható: a kettőzött idő "
                 f"{top231['share_pct']:.0f}%-ában a(z) {mez231} "
                 "játékosunk a második ember — az ellenfél előre "
@@ -2562,6 +7938,7 @@ def _training_focus_cached(match: Match,
         pass
     # 230) Szélső-mélység: ha messziről lőnek a szélsőink, a befutás
     # begyakorlása a téma, nem a lövőerő.
+    _szabaly = 230
     try:
         from .attack_types import wing_shot_depth
         wsd230 = wing_shot_depth(match, config)
@@ -2569,7 +7946,7 @@ def _training_focus_cached(match: Match,
             rec230 = wsd230[side]
             if rec230["verdict"] != "messziről lövő szélsők":
                 continue
-            add(side, "tamadas", "Szélső-befutás",
+            add(side, "támadás", "Szélső-befutás",
                 f"a szélsőink átlag {rec230['avg_m']:.1f} m-ről "
                 "eresztik el a lövést — rossz szögből, kényszerből "
                 "lövünk, a kapus bátran jöhet ki ránk",
@@ -2582,6 +7959,7 @@ def _training_focus_cached(match: Match,
         pass
     # 229) Kontra-esés: ha a második félidőre eláll a kontránk, a
     # láb és a kontra-döntés kondicionálása a téma.
+    _szabaly = 229
     try:
         from .attack_types import break_share_fade
         brf229 = break_share_fade(match, config)
@@ -2592,7 +7970,7 @@ def _training_focus_cached(match: Match,
                 continue
             _fh229 = 100.0 * rec229["fh_breaks"] / rec229["fh_attacks"]
             _sh229 = 100.0 * rec229["sh_breaks"] / rec229["sh_attacks"]
-            add(side, "tamadas", "Kontra a második félidőben is",
+            add(side, "támadás", "Kontra a második félidőben is",
                 f"a lerohanás-arányunk {_fh229:.0f}%-ról "
                 f"{_sh229:.0f}%-ra esik a második félidőre — fáradva "
                 "már nem indulunk el, pedig a helyzet ugyanúgy ott "
@@ -2606,6 +7984,7 @@ def _training_focus_cached(match: Match,
         pass
     # 228) Felhozatal-posztok: ha egyetlen posztra épül a
     # felhozatalunk, a második felhozatal-út beépítése a téma.
+    _szabaly = 228
     try:
         from .goalkeeper import outlet_target_roles
         otr228 = outlet_target_roles(match, config)
@@ -2614,7 +7993,7 @@ def _training_focus_cached(match: Match,
             top228 = rec228["top"]
             if top228 is None or top228["share_pct"] < 60.0:
                 continue
-            add(side, "tamadas", "Második felhozatal-út",
+            add(side, "támadás", "Második felhozatal-út",
                 f"a felhozatalunk {top228['share_pct']:.0f}%-a a(z) "
                 f"{top228['poszt']} posztra megy ({top228['count']}/"
                 f"{rec228['outlets']} indítás-célpont) — ha őt "
@@ -2628,6 +8007,7 @@ def _training_focus_cached(match: Match,
         pass
     # 227) Falba lövő posztok: ha egy posztunk rendre a falba lő, a
     # lövés-előkészítés a téma, nem a lövő ereje.
+    _szabaly = 227
     try:
         from .defense import blocked_by_role
         bbr227 = blocked_by_role(match, config)
@@ -2635,7 +8015,7 @@ def _training_focus_cached(match: Match,
             top227 = bbr227[side]["top"]
             if top227 is None:
                 continue
-            add(side, "tamadas", "Lövés-előkészítés",
+            add(side, "támadás", "Lövés-előkészítés posztonként",
                 f"a falba lőtt lövéseink a(z) {top227['poszt']} "
                 f"posztról jönnek ({top227['blocked']}/"
                 f"{bbr227[side]['blocked']} lefogott lövés) — a "
@@ -2650,6 +8030,7 @@ def _training_focus_cached(match: Match,
         pass
     # 226) Kiállítás-posztok: ha egy posztunk ellen sok a kiállításig
     # menő fogás, a kiharcolás tudatosítása a téma — nekünk fegyver.
+    _szabaly = 226
     try:
         from .rules import susp_earner_roles
         sur226 = susp_earner_roles(match, config)
@@ -2657,7 +8038,7 @@ def _training_focus_cached(match: Match,
             top226 = sur226[side]["top"]
             if top226 is None:
                 continue
-            add(side, "tamadas", "Kiállítás-kiharcolás",
+            add(side, "támadás", "Kiállítás-kiharcolás",
                 f"a kétperceseinket a(z) {top226['poszt']} poszt "
                 f"hozza ({top226['count']}/"
                 f"{sur226[side]['suspensions']} kiharcolt "
@@ -2673,6 +8054,7 @@ def _training_focus_cached(match: Match,
         pass
     # 225) Gólpassz-posztok: ha egyetlen posztról készítjük elő a
     # gólokat, a második előkészítő-út beépítése a téma.
+    _szabaly = 225
     try:
         from .roles import assists_by_role
         abr225 = assists_by_role(match, config)
@@ -2681,7 +8063,7 @@ def _training_focus_cached(match: Match,
             top225 = rec225["top"]
             if top225 is None or top225["share_pct"] < 60.0:
                 continue
-            add(side, "tamadas", "Második előkészítő-út",
+            add(side, "támadás", "Második előkészítő-út",
                 f"a góljaink {top225['share_pct']:.0f}%-át a(z) "
                 f"{top225['poszt']} poszt készíti elő "
                 f"({top225['assists']}/{rec225['assists']} gólpassz) "
@@ -2695,6 +8077,7 @@ def _training_focus_cached(match: Match,
         pass
     # 224) Lefogott lövők: ha egy emberünk lövését rendre elviszi a
     # fal, lövő-variáció kell neki, nem több ugyanolyan lövés.
+    _szabaly = 224
     try:
         from .defense import blocked_shooters
         bsh224 = blocked_shooters(match, config)
@@ -2705,7 +8088,7 @@ def _training_focus_cached(match: Match,
             mez224 = (f"{top224['jersey']} mezszámú"
                       if top224["jersey"] is not None
                       else f"{top224['player_id']} azonosítójú")
-            add(side, "tamadas", "Lövő-variációk",
+            add(side, "támadás", "Lövő-variációk",
                 f"a(z) {mez224} játékosunk lövését rendre elviszi a "
                 f"fal ({top224['blocked']}/{bsh224[side]['blocked']} "
                 "lefogott lövés az övé) — a védők már olvassák az "
@@ -2719,6 +8102,7 @@ def _training_focus_cached(match: Match,
         pass
     # 223) Kontra-elszökés: ha mindig együtt futunk fel, az elszökő
     # ember beépítése a téma.
+    _szabaly = 223
     try:
         from .attack_types import fast_break_headstart
         fbh223 = fast_break_headstart(match, config)
@@ -2726,7 +8110,7 @@ def _training_focus_cached(match: Match,
             rec223 = fbh223[side]
             if rec223["verdict"] != "együtt futnak fel":
                 continue
-            add(side, "tamadas", "Elszökő ember",
+            add(side, "támadás", "Elszökő ember",
                 f"a kontráink mindig együtt futnak fel (csak "
                 f"{rec223['ahead']}/{rec223['breaks']} lerohanás "
                 "indult a labda előtt váró emberrel) — a védelem "
@@ -2740,6 +8124,7 @@ def _training_focus_cached(match: Match,
         pass
     # 222) Kontra-hullámok: ha csak az első ember fejezi be a
     # kontránkat, a második hullám beépítése a téma.
+    _szabaly = 222
     try:
         from .attack_types import fast_break_waves
         fbw222 = fast_break_waves(match, config)
@@ -2747,7 +8132,7 @@ def _training_focus_cached(match: Match,
             rec222 = fbw222[side]
             if rec222["verdict"] != "az első ember fejezi be a kontrát":
                 continue
-            add(side, "tamadas", "Kontra második hulláma",
+            add(side, "támadás", "Kontra második hulláma",
                 f"a lerohanásainkat szinte csak az első ember fejezi "
                 f"be ({rec222['second']}/{rec222['breaks']} kontra "
                 "zárult a befutó lövésével) — ha az első embert "
@@ -2761,6 +8146,7 @@ def _training_focus_cached(match: Match,
         pass
     # 221) Beálló-futtatás: ha állva kap a beállónk, a lefordulós
     # átvétel begyakorlása a téma.
+    _szabaly = 221
     try:
         from .attack_types import pivot_service
         psv221 = pivot_service(match, config)
@@ -2768,7 +8154,7 @@ def _training_focus_cached(match: Match,
             rec221 = psv221[side]
             if rec221["verdict"] != "állva kapja a beálló":
                 continue
-            add(side, "tamadas", "Lefordulós beálló",
+            add(side, "támadás", "Lefordulós beálló",
                 f"a beállónk beragadva, állva kapja a labdát (csak "
                 f"{rec221['running']}/{rec221['receptions']} átvétel "
                 "mozgásból) — az álló beállót a védője lezárja, "
@@ -2782,6 +8168,7 @@ def _training_focus_cached(match: Match,
         pass
     # 220) Keresztjáték: ha statikus a hátsó sorunk, a kereszt-
     # mozgások beépítése a téma.
+    _szabaly = 220
     try:
         from .attack_types import crossing_runs
         crx220 = crossing_runs(match, config)
@@ -2789,7 +8176,7 @@ def _training_focus_cached(match: Match,
             rec220 = crx220[side]
             if rec220["verdict"] != "statikus a hátsó soruk":
                 continue
-            add(side, "tamadas", "Keresztmozgások",
+            add(side, "támadás", "Keresztmozgások",
                 f"támadásonként csak {rec220['per_attack']:.1f} "
                 "keresztezést futunk a hátsó sorban — a védők végig "
                 "a saját emberükön maradhatnak, és soha nem kerülnek "
@@ -2805,6 +8192,7 @@ def _training_focus_cached(match: Match,
 
     # 219) Szélső-futtatás: ha a szélsőink állva kapják a labdát, a
     # futtatott széljáték a téma.
+    _szabaly = 219
     try:
         from .attack_types import wing_service
         wsv219 = wing_service(match, config)
@@ -2812,7 +8200,7 @@ def _training_focus_cached(match: Match,
             rec219 = wsv219[side]
             if rec219["verdict"] != "állva kapják a szélsők":
                 continue
-            add(side, "tamadas", "Futtatott széljáték",
+            add(side, "támadás", "Futtatott széljáték",
                 f"csak {rec219['running']}/{rec219['receptions']} "
                 "szélső-átvételünk jött mozgásból — az álló szélsőt "
                 "a kifutó védő lezárja, mielőtt lendületet venne, és "
@@ -2828,6 +8216,7 @@ def _training_focus_cached(match: Match,
 
     # 218) Csere-lyukak: ha csere közben öten maradunk, a csere-ütem
     # a téma.
+    _szabaly = 218
     try:
         from .substitutions import sub_gaps
         sbg218 = sub_gaps(match, config)
@@ -2851,6 +8240,7 @@ def _training_focus_cached(match: Match,
 
     # 217) Gólpassz-hossz: ha csak rövid kombinációkból élünk, a
     # hosszú indítás beépítése a téma.
+    _szabaly = 217
     try:
         from .event_detection import assist_ranges
         asr217 = assist_ranges(match, config)
@@ -2858,7 +8248,7 @@ def _training_focus_cached(match: Match,
             rec217 = asr217[side]
             if rec217["verdict"] != "rövid kombinációkból élnek":
                 continue
-            add(side, "tamadas", "Hosszú előkészítés",
+            add(side, "támadás", "Hosszú előkészítés",
                 f"csak {rec217['long']}/{rec217['assisted']} "
                 "gólpasszunk jött 8 méteren túlról — minden gólunk "
                 "kis területen születik, és egy jól tömörítő fal az "
@@ -2873,6 +8263,7 @@ def _training_focus_cached(match: Match,
 
     # 216) Kapus-kipattanó: ha a kapusunk kiüti a labdát, a kipattanó-
     # irányítás a téma.
+    _szabaly = 216
     try:
         from .goalkeeper import gk_rebound_control
         grc216 = gk_rebound_control(match, config)
@@ -2896,6 +8287,7 @@ def _training_focus_cached(match: Match,
 
     # 215) Kivárás-csapda: ha a hosszú támadásaink elhalnak, a
     # figura-zárás időzítése a téma.
+    _szabaly = 215
     try:
         from .attack_types import long_attack_outcomes
         lao215 = long_attack_outcomes(match, config)
@@ -2903,7 +8295,7 @@ def _training_focus_cached(match: Match,
             rec215 = lao215[side]
             if rec215["verdict"] != "a hosszú támadásaik elhalnak":
                 continue
-            add(side, "tamadas", "Figura-zárás időben",
+            add(side, "támadás", "Figura-zárás időben",
                 f"{rec215['died']}/{rec215['long_attacks']} hosszú "
                 "támadásunk lövés nélkül halt el — a kivárásunk nem "
                 "türelem, hanem terv-hiány: a passzív jel előtt nem "
@@ -2919,6 +8311,7 @@ def _training_focus_cached(match: Match,
 
     # 214) Felfutási létszám: ha mindenkit felküldünk, a biztosítás-
     # rend a téma.
+    _szabaly = 214
     try:
         from .attack_types import attack_headcount
         ahc214 = attack_headcount(match, config)
@@ -2942,6 +8335,7 @@ def _training_focus_cached(match: Match,
 
     # 213) Blokk-lepattanó: ha a blokkjaink visszahullanak, a blokk
     # utáni második mozdulat a téma.
+    _szabaly = 213
     try:
         from .defense import block_recoveries
         brc213 = block_recoveries(match, config)
@@ -2949,7 +8343,7 @@ def _training_focus_cached(match: Match,
             rec213 = brc213[side]
             if rec213["verdict"] != "a blokkjaik visszahullanak":
                 continue
-            add(side, "vedekezes", "Blokk utáni lepattanó",
+            add(side, "védekezés", "Blokk utáni lepattanó",
                 f"csak {rec213['recovered']}/{rec213['blocks']} "
                 "blokk-lepattanót szereztünk meg — a jó blokk után a "
                 "támadó második esélyt kap, sokszor még jobb "
@@ -2964,6 +8358,7 @@ def _training_focus_cached(match: Match,
 
     # 212) Ziccer-befejezők: ha egy emberünk a nagy helyzeteket is
     # kihagyja, a ziccer-rutin a téma.
+    _szabaly = 212
     try:
         from .xg import big_chance_finishers
         bcf212 = big_chance_finishers(match, config)
@@ -2971,7 +8366,7 @@ def _training_focus_cached(match: Match,
             shaky212 = bcf212[side]["shaky"]
             if shaky212 is None:
                 continue
-            add(side, "tamadas", "Ziccer-rutin",
+            add(side, "támadás", "Ziccer-rutin",
                 f"a(z) {shaky212['player_id']} azonosítójú a nagy "
                 f"helyzeteit is kihagyja "
                 f"({shaky212['goals']}/{shaky212['chances']}) — a "
@@ -2988,6 +8383,7 @@ def _training_focus_cached(match: Match,
 
     # 211) Hetes utáni percek: ha az adott hetes után is kapunk rá, a
     # hetes körüli újrarendeződés a téma.
+    _szabaly = 211
     try:
         from .rules import post_seven_lapses
         psl211 = post_seven_lapses(match, config)
@@ -2995,7 +8391,7 @@ def _training_focus_cached(match: Match,
             rec211 = psl211[side]
             if rec211["verdict"] is None:
                 continue
-            add(side, "vedekezes", "Hetes utáni újrarendeződés",
+            add(side, "védekezés", "Hetes utáni újrarendeződés",
                 f"{rec211['sevens_against']} adott hetesünk után "
                 f"{rec211['extra_conceded']} további gólt kaptunk — a "
                 "hetes körüli leállás alatt reklamálunk és "
@@ -3012,6 +8408,7 @@ def _training_focus_cached(match: Match,
 
     # 210) Labda-forgatás: ha egy irányba forgatunk, a kétirányú
     # játék a téma.
+    _szabaly = 210
     try:
         from .attack_types import circulation_direction
         cir210 = circulation_direction(match, config)
@@ -3021,7 +8418,7 @@ def _training_focus_cached(match: Match,
                 continue
             _dir210 = ("balra" if rec210["verdict"] == "balra forgatnak"
                        else "jobbra")
-            add(side, "tamadas", "Kétirányú forgatás",
+            add(side, "támadás", "Kétirányú forgatás",
                 f"a forgásunk egyirányú ({rec210['left']} balra, "
                 f"{rec210['right']} jobbra tartó oldalpassz) — a "
                 "felkészült ellenfél a megszokott sávunkat zárja, és "
@@ -3036,6 +8433,7 @@ def _training_focus_cached(match: Match,
 
     # 209) Elzárás-páros: ha a párosunk kiszámítható, a figura
     # variálása a téma.
+    _szabaly = 209
     try:
         from .attack_types import screen_pairs
         scp209 = screen_pairs(match, config)
@@ -3043,7 +8441,7 @@ def _training_focus_cached(match: Match,
             top209 = scp209[side]["top"]
             if top209 is None:
                 continue
-            add(side, "tamadas", "Elzárás-variálás",
+            add(side, "támadás", "Elzárás-variálás",
                 f"az elzárásaink egy párosra járnak (a(z) "
                 f"{top209['setter_id']} zár a(z) "
                 f"{top209['shooter_id']} azonosítójúnak, "
@@ -3061,6 +8459,7 @@ def _training_focus_cached(match: Match,
 
     # 208) Szélső-kifutás: ha későn érünk ki a szélre, a kifutás-
     # időzítés a téma.
+    _szabaly = 208
     try:
         from .defense import wing_closeouts
         wco208 = wing_closeouts(match, config)
@@ -3068,7 +8467,7 @@ def _training_focus_cached(match: Match,
             rec208 = wco208[side]
             if rec208["verdict"] != "későn érnek ki a szélre":
                 continue
-            add(side, "vedekezes", "Szél-kifutás időzítése",
+            add(side, "védekezés", "Szél-kifutás időzítése",
                 f"átlag {rec208['avg_m']:.1f} m-re volt a védőnk a "
                 "lövő szélsőtől — a szélső kényelmesen, teljes "
                 "szögből lőhetett, és ez nem a kapus hibája",
@@ -3083,6 +8482,7 @@ def _training_focus_cached(match: Match,
 
     # 207) Csend-törők: ha a gólcsendjeinket mindig más töri meg
     # (nincs válság-lövőnk), a vész-megoldás kijelölése a téma.
+    _szabaly = 207
     try:
         from .momentum import drought_breakers
         drb207 = drought_breakers(match, config)
@@ -3090,7 +8490,7 @@ def _training_focus_cached(match: Match,
             rec207 = drb207[side]
             if rec207["droughts_broken"] < 2 or rec207["top"] is not None:
                 continue
-            add(side, "tamadas", "Válság-lövő kijelölése",
+            add(side, "támadás", "Válság-lövő kijelölése",
                 f"{rec207['droughts_broken']} hosszú gólcsendünk volt, "
                 "és mindig más törte meg — vész-helyzetben nincs "
                 "kijelölt megoldásunk, a csend ezért nyúlik hosszúra",
@@ -3105,6 +8505,7 @@ def _training_focus_cached(match: Match,
 
     # 206) Forró kéz: ha az ellenfélnél sorozatlövő volt, a sorozat-
     # törő reakció a téma. (Saját oldalról: a forró kéz etetése.)
+    _szabaly = 206
     try:
         from .momentum import hot_hands
         hh206 = hot_hands(match, config)
@@ -3112,7 +8513,7 @@ def _training_focus_cached(match: Match,
             top206 = hh206["away" if side == "home" else "home"]["top"]
             if top206 is None:
                 continue
-            add(side, "vedekezes", "Sorozat-törő reakció",
+            add(side, "védekezés", "Sorozat-törő reakció",
                 f"az ellenfél sorozatlövője ({top206['player_id']} "
                 f"azonosító) {top206['streaks']} gólsorozatot dobott "
                 f"ránk (leghosszabb: {top206['longest']}) — az első "
@@ -3129,6 +8530,7 @@ def _training_focus_cached(match: Match,
 
     # 205) Kapus-hidegedés: ha a kapusunk hidegen sebezhető, a csendes
     # percek rutinja a téma.
+    _szabaly = 205
     try:
         from .goalkeeper import gk_cold_streaks
         gcs205 = gk_cold_streaks(match, config)
@@ -3152,6 +8554,7 @@ def _training_focus_cached(match: Match,
 
     # 204) Fal-magasság elleni játék: ha a felfutó fal megfog minket,
     # a prés elleni megoldások a téma.
+    _szabaly = 204
     try:
         from .attack_types import attack_vs_wall_height
         avw204 = attack_vs_wall_height(match, config)
@@ -3159,7 +8562,7 @@ def _training_focus_cached(match: Match,
             rec204 = avw204[side]
             if rec204["verdict"] != "a felfutó fal megfogja őket":
                 continue
-            add(side, "tamadas", "Prés elleni játék",
+            add(side, "támadás", "Prés elleni játék",
                 f"felfutó fal ellen {rec204['high']['goal_pct']:.0f}%, "
                 f"mély fal ellen {rec204['deep']['goal_pct']:.0f}% a "
                 "gólarányunk — a kilépő, agresszív védekezésre nincs "
@@ -3176,6 +8579,7 @@ def _training_focus_cached(match: Match,
 
     # 203) Kontra-forrás: ha a kapott kontrák egy forrásból jönnek, a
     # forrás-specifikus visszarendeződés a téma.
+    _szabaly = 203
     try:
         from .attack_types import break_sources
         bsrc203 = break_sources(match, config)
@@ -3184,7 +8588,7 @@ def _training_focus_cached(match: Match,
             top203 = other203["top"]
             if top203 is None:
                 continue
-            add(side, "vedekezes", "Kontra-forrás zárása",
+            add(side, "védekezés", "Kontra-forrás zárása",
                 f"az ellenfél kontráinak fő forrása a(z) "
                 f"{top203['source']} volt ({top203['breaks']}/"
                 f"{other203['breaks']} lerohanás) — a visszarendeződés "
@@ -3201,6 +8605,7 @@ def _training_focus_cached(match: Match,
 
     # 202) Kapus-gól veszély: ha az ellenfél kapusa dobott már ránk,
     # az üres kapu védése a téma. (Saját oldalon: gyakorolható fegyver.)
+    _szabaly = 202
     try:
         from .goalkeeper import gk_goal_threat
         gkg202 = gk_goal_threat(match, config)
@@ -3224,6 +8629,7 @@ def _training_focus_cached(match: Match,
 
     # 201) Hosszú állás utáni játék: ha a megszakítások kizökkentenek
     # minket, az újraindulás-rutin a téma.
+    _szabaly = 201
     try:
         from .stoppages import long_break_response
         lbr201 = long_break_response(match, config)
@@ -3247,6 +8653,7 @@ def _training_focus_cached(match: Match,
 
     # 200) Hajrá-labdabirtoklás: ha a végjátékunk egy kézben van, a
     # másodlagos játékszervezés a téma.
+    _szabaly = 200
     try:
         from .momentum import clutch_ball_hogs
         cbh200 = clutch_ball_hogs(match, config)
@@ -3254,7 +8661,7 @@ def _training_focus_cached(match: Match,
             top200 = cbh200[side]["top"]
             if top200 is None:
                 continue
-            add(side, "tamadas", "Második játékszervező",
+            add(side, "támadás", "Második játékszervező",
                 f"a hajrá labdás idejének nagy részét egy ember viszi "
                 f"(a(z) {top200['player_id']} azonosítójú) — ha őt a "
                 "végjátékban kettőzik vagy kipontozódik, nincs, aki "
@@ -3270,6 +8677,7 @@ def _training_focus_cached(match: Match,
 
     # 199) Negyedóra-profil: ha van visszatérő hullámvölgyünk, a
     # szakasz-terv a téma.
+    _szabaly = 199
     try:
         from .momentum import quarter_profile
         qp199 = quarter_profile(match, config)
@@ -3294,6 +8702,7 @@ def _training_focus_cached(match: Match,
 
     # 198) Beálló-őr: ha a beálló-őrzésünk egy emberen áll, az
     # őrzés-váltás a téma.
+    _szabaly = 198
     try:
         from .defense import pivot_guards
         pvg198 = pivot_guards(match, config)
@@ -3301,7 +8710,7 @@ def _training_focus_cached(match: Match,
             top198 = pvg198[side]["top"]
             if top198 is None:
                 continue
-            add(side, "vedekezes", "Beálló-őrzés váltásban",
+            add(side, "védekezés", "Beálló-őrzés váltásban",
                 f"a beálló-őrzésünk egy emberen áll (a(z) "
                 f"{top198['player_id']} azonosítójú viszi az őrzés-idő "
                 "nagy részét) — ha őt elzárással kihúzzák vagy "
@@ -3318,6 +8727,7 @@ def _training_focus_cached(match: Match,
 
     # 197) Időkérés-csomag: ha az időkérésünk sosem jár cserével, a
     # kispad-eszköztár bővítése a téma.
+    _szabaly = 197
     try:
         from .stoppages import timeout_sub_combo
         tsc197 = timeout_sub_combo(match, config)
@@ -3341,6 +8751,7 @@ def _training_focus_cached(match: Match,
 
     # 196) Lövés-választás állás szerint: ha hátrányban elkapkodjuk a
     # lövéseket, a nyomás alatti helyzet-válogatás a téma.
+    _szabaly = 196
     try:
         from .xg import shot_quality_by_score
         sqs196 = shot_quality_by_score(match, config)
@@ -3348,7 +8759,7 @@ def _training_focus_cached(match: Match,
             rec196 = sqs196[side]
             if rec196["verdict"] != "hátrányban elkapkodják a lövéseket":
                 continue
-            add(side, "tamadas", "Helyzet-válogatás nyomás alatt",
+            add(side, "támadás", "Helyzet-válogatás nyomás alatt",
                 f"hátrányban {rec196['other_avg_xg']:.2f}-ról "
                 f"{rec196['trail_avg_xg']:.2f}-ra esik a lövéseink "
                 "átlagos helyzet-értéke — pont akkor lövünk rosszat, "
@@ -3366,6 +8777,7 @@ def _training_focus_cached(match: Match,
 
     # 195) Kapus állás szerint: ha a kapusunk hátrányban összeesik, a
     # mentális újraindítás a téma.
+    _szabaly = 195
     try:
         from .goalkeeper import gk_saves_by_score
         gks195 = gk_saves_by_score(match, config)
@@ -3390,6 +8802,7 @@ def _training_focus_cached(match: Match,
 
     # 194) Szorult játék: ha hátrányban beszűkülünk, a nyomás alatti
     # szélesség-tartás a téma.
+    _szabaly = 194
     try:
         from .attack_types import width_by_score
         wbs194 = width_by_score(match, config)
@@ -3397,7 +8810,7 @@ def _training_focus_cached(match: Match,
             rec194 = wbs194[side]
             if rec194["verdict"] != "hátrányban beszűkülnek":
                 continue
-            add(side, "tamadas", "Szélesség nyomás alatt",
+            add(side, "támadás", "Szélesség nyomás alatt",
                 f"hátrányban {rec194['other_avg_m']:.0f} m-ről "
                 f"{rec194['trail_avg_m']:.0f} m-re szűkül a "
                 "támadásunk — pont akkor játszunk egy csatornába, "
@@ -3413,6 +8826,7 @@ def _training_focus_cached(match: Match,
 
     # 193) Visszaállás: ha a kiállításunk leteltekor megzavarodunk, a
     # visszaérkezés koreográfiája a téma.
+    _szabaly = 193
     try:
         from .rules import post_powerplay
         ppp193 = post_powerplay(match, config)
@@ -3437,6 +8851,7 @@ def _training_focus_cached(match: Match,
 
     # 192) Poszt-hibák: ha egy posztunk szórja a labdát, a poszt-
     # specifikus labdabiztonság a téma.
+    _szabaly = 192
     try:
         from .roles import turnovers_by_role
         tbr192 = turnovers_by_role(match, config)
@@ -3444,7 +8859,7 @@ def _training_focus_cached(match: Match,
             top192 = tbr192[side]["top"]
             if top192 is None:
                 continue
-            add(side, "tamadas", "Poszt-labdabiztonság",
+            add(side, "támadás", "Poszt-labdabiztonság",
                 f"a labdaeladásaink {top192['share_pct']:.0f}%-a a(z) "
                 f"{top192['poszt']} posztról jön "
                 f"({top192['turnovers']} eladás) — nem szétszórt "
@@ -3460,6 +8875,7 @@ def _training_focus_cached(match: Match,
 
     # 191) Futás-mérleg: ha az ellenfél túlfut minket, az alap-
     # állóképesség és az okos futás a téma.
+    _szabaly = 191
     try:
         from .stats import distance_battle
         dbt191 = distance_battle(match, config)
@@ -3484,6 +8900,7 @@ def _training_focus_cached(match: Match,
 
     # 190) Egyirányú játékosok: ha váltott sorokkal játszunk, a
     # váltás-ütem a téma.
+    _szabaly = 190
     try:
         from .roles import phase_specialists
         phs190 = phase_specialists(match, config)
@@ -3508,6 +8925,7 @@ def _training_focus_cached(match: Match,
 
     # 189) Sprint-veszély: ha a kontra-teher egy emberen van, a
     # második hullám bekapcsolása a téma.
+    _szabaly = 189
     try:
         from .stats import sprint_threats
         spt189 = sprint_threats(match, config)
@@ -3516,7 +8934,7 @@ def _training_focus_cached(match: Match,
             if rec189["verdict"] != "kijelölt kontra-emberük van":
                 continue
             top189 = rec189["top"]
-            add(side, "tamadas", "Kontra második hulláma",
+            add(side, "támadás", "Kontra-sprint egy emberen",
                 f"a csapat {rec189['team_sprints']} sprintjéből "
                 f"{top189['sprints']} egy emberé (a(z) "
                 f"{top189['player_id']} azonosítójú) — ha őt lezárják "
@@ -3533,6 +8951,7 @@ def _training_focus_cached(match: Match,
 
     # 188) Hetesre cserélt kapus: ha specialistát hozunk a büntetőkre,
     # a beugró kapus bemelegítése és a visszaállás a téma.
+    _szabaly = 188
     try:
         from .goalkeeper import seven_keeper_swaps
         svk188 = seven_keeper_swaps(match, config)
@@ -3557,6 +8976,7 @@ def _training_focus_cached(match: Match,
 
     # 187) Kilépő védő: ha előretolt emberrel védekezünk, a mögötte
     # lévő tér biztosítása a téma.
+    _szabaly = 187
     try:
         from .defense import advanced_defender
         adv187 = advanced_defender(match, config)
@@ -3564,7 +8984,7 @@ def _training_focus_cached(match: Match,
             top187 = adv187[side]["top"]
             if top187 is None:
                 continue
-            add(side, "vedekezes", "Kilépő mögötti biztosítás",
+            add(side, "védekezés", "Kilépő mögötti biztosítás",
                 f"kilépő védővel játszunk (a(z) "
                 f"{top187['player_id']} azonosítójú "
                 f"{adv187[side]['gap_m']:.1f} méterrel a sor előtt "
@@ -3582,6 +9002,7 @@ def _training_focus_cached(match: Match,
 
     # 186) Középkezdés-átvevő: ha a saját újraindításunk egy emberre
     # jár, a középkezdés-variálás a téma.
+    _szabaly = 186
     try:
         from .momentum import restart_targets
         rst186 = restart_targets(match, config)
@@ -3606,6 +9027,7 @@ def _training_focus_cached(match: Match,
 
     # 185) Váltópárok: ha a cserénk kiszámítható, a csere-variálás a
     # téma.
+    _szabaly = 185
     try:
         from .substitutions import swap_pairs
         swp185 = swap_pairs(match, config)
@@ -3630,6 +9052,7 @@ def _training_focus_cached(match: Match,
 
     # 184) Visszahozott támadások: ha minden betörésünket visszahozzuk,
     # a lezárás-bátorság a téma.
+    _szabaly = 184
     try:
         from .attack_types import pullback_rate
         pb184 = pullback_rate(match, config)
@@ -3637,7 +9060,7 @@ def _training_focus_cached(match: Match,
             rec184 = pb184[side]
             if rec184["verdict"] != "behúzzák, aztán visszahozzák":
                 continue
-            add(side, "tamadas", "Betörés-lezárás",
+            add(side, "támadás", "Betörés-lezárás",
                 f"a {rec184['entries']} betörésünkből "
                 f"{rec184['pullbacks']} lövés nélküli visszahozás — "
                 "bejutunk a 9-esen belülre, de nem merjük lezárni, "
@@ -3653,6 +9076,7 @@ def _training_focus_cached(match: Match,
 
     # 183) Szerzés utáni indítás: ha a szerzett labda helyben ragad, az
     # átmenet-gyorsaság a téma.
+    _szabaly = 183
     try:
         from .defense import steal_launch
         stl183 = steal_launch(match, config)
@@ -3660,7 +9084,7 @@ def _training_focus_cached(match: Match,
             rec183 = stl183[side]
             if rec183["verdict"] != "szerzés után biztosítanak":
                 continue
-            add(side, "tamadas", "Szerzésből indítás",
+            add(side, "támadás", "Szerzésből indítás",
                 f"a {rec183['steals']} szerzésünkből csak "
                 f"{rec183['forward']} után ment azonnal előre a labda "
                 "— a megszerzett labda helyben ragad, mire felnézünk, "
@@ -3676,6 +9100,7 @@ def _training_focus_cached(match: Match,
 
     # 182) Hetes-fáradás: ha fáradtan adjuk a heteseket, a kéz nélküli
     # test-védekezés a téma.
+    _szabaly = 182
     try:
         from .rules import sevens_fade
         s7f182 = sevens_fade(match, config)
@@ -3683,7 +9108,7 @@ def _training_focus_cached(match: Match,
             rec182 = s7f182[side]
             if rec182["verdict"] != "a második félidőben adják a heteseket":
                 continue
-            add(side, "vedekezes", "Hetes nélküli hajrá",
+            add(side, "védekezés", "Hetes nélküli hajrá",
                 f"az adott heteseink zöme a második félidőre esik "
                 f"({rec182['fh']} az elsőben, {rec182['sh']} a "
                 "másodikban) — fáradva már kézzel védünk, és a "
@@ -3700,6 +9125,7 @@ def _training_focus_cached(match: Match,
 
     # 181) Fal-fáradás: ha a falunk a második félidőre kinyílik, a
     # védekezés állóképessége a téma.
+    _szabaly = 181
     try:
         from .xg import wall_fade
         wf181 = wall_fade(match, config)
@@ -3707,7 +9133,7 @@ def _training_focus_cached(match: Match,
             rec181 = wf181[side]
             if rec181["verdict"] != "a második félidőre kinyílik a faluk":
                 continue
-            add(side, "vedekezes", "Fal-állóképesség",
+            add(side, "védekezés", "Fal-állóképesség",
                 f"a kapott lövések átlagos helyzet-értéke "
                 f"{rec181['fh_avg_xga']:.2f}-ról "
                 f"{rec181['sh_avg_xga']:.2f}-ra nő a szünet után — "
@@ -3725,6 +9151,7 @@ def _training_focus_cached(match: Match,
 
     # 180) Pad-gólok: ha csak a kezdők termelnek, a második sor
     # gólbátorsága a téma.
+    _szabaly = 180
     try:
         from .momentum import bench_scoring
         ben180 = bench_scoring(match, config)
@@ -3732,7 +9159,7 @@ def _training_focus_cached(match: Match,
             rec180 = ben180[side]
             if rec180["verdict"] != "csak a kezdők termelnek":
                 continue
-            add(side, "tamadas", "Pad-termelés",
+            add(side, "támadás", "Pad-termelés",
                 f"a {rec180['goals']} lövőhöz köthető gólunkból csak "
                 f"{rec180['bench_goals']} jött a padról — ha a kezdő "
                 "sor elfárad vagy kipontozódik, nincs, aki átvegye a "
@@ -3748,6 +9175,7 @@ def _training_focus_cached(match: Match,
 
     # 179) Labdaszerzés-típus: ha minden szerzésünk testre menő
     # szerelés, a passzsáv-olvasás a téma.
+    _szabaly = 179
     try:
         from .defense import steal_types
         stt179 = steal_types(match, config)
@@ -3755,7 +9183,7 @@ def _training_focus_cached(match: Match,
             rec179 = stt179[side]
             if rec179["verdict"] != "testre mennek":
                 continue
-            add(side, "vedekezes", "Passzsáv-olvasás",
+            add(side, "védekezés", "Passzsáv-olvasás",
                 f"a {rec179['steals']} labdaszerzésünkből csak "
                 f"{rec179['interceptions']} röptében elfogott passz — "
                 "mindent kontaktból szerzünk, ami fault és kiállítást "
@@ -3772,6 +9200,7 @@ def _training_focus_cached(match: Match,
 
     # 178) Kapott helyzetek minősége: ha a falunk nagy helyzeteket
     # enged, a hatos előtti tér védése a téma.
+    _szabaly = 178
     try:
         from .xg import conceded_chance_quality
         ccq178 = conceded_chance_quality(match, config)
@@ -3779,7 +9208,7 @@ def _training_focus_cached(match: Match,
             rec178 = ccq178[side]
             if rec178["verdict"] != "nagy helyzeteket engednek":
                 continue
-            add(side, "vedekezes", "Hatos előtti tér",
+            add(side, "védekezés", "Hatos előtti tér",
                 f"a ránk jövő {rec178['shots']} lövés átlagos "
                 f"helyzet-értéke {rec178['avg_xga']:.2f} — nem a "
                 "lövések SZÁMA a baj, hanem hogy közelről és "
@@ -3796,6 +9225,7 @@ def _training_focus_cached(match: Match,
 
     # 177) Félidő-zárás: ha a dudaszó előtti utolsó labda elhal, a
     # záró támadás rutinja a téma.
+    _szabaly = 177
     try:
         from .momentum import closing_attacks
         clo177 = closing_attacks(match, config)
@@ -3803,7 +9233,7 @@ def _training_focus_cached(match: Match,
             rec177 = clo177[side]
             if rec177["verdict"] != "elpuskázzák a záró labdát":
                 continue
-            add(side, "tamadas", "Záró labda",
+            add(side, "támadás", "Záró labda",
                 f"a félidők utolsó percében {rec177['attacks']} "
                 f"támadásunkból csak {rec177['goals']} lett gól — az "
                 "ingyen kapott utolsó labdát dobjuk el, pedig ott "
@@ -3819,6 +9249,7 @@ def _training_focus_cached(match: Match,
 
     # 176) Lerohanás-hatékonyság: ha a kontráink nem érnek gólt, a
     # befejezés-döntés a téma.
+    _szabaly = 176
     try:
         from .attack_types import fast_break_conversion
         fbc176 = fast_break_conversion(match, config)
@@ -3826,7 +9257,7 @@ def _training_focus_cached(match: Match,
             rec176 = fbc176[side]
             if rec176["verdict"] != "elpuskázzák a kontrát":
                 continue
-            add(side, "tamadas", "Kontra-befejezés",
+            add(side, "támadás", "Lerohanás-befejezés",
                 f"{rec176['breaks']} lerohanásból csak "
                 f"{rec176['goals']} lett gól "
                 f"({rec176['share_pct']:.0f}%) — a legolcsóbb "
@@ -3843,6 +9274,7 @@ def _training_focus_cached(match: Match,
 
     # 175) Félidő-nyitás: ha a félidők első perceiben rendre
     # hátrányba kerülünk, a kezdés rutinja a téma.
+    _szabaly = 175
     try:
         from .momentum import half_openings
         hop175 = half_openings(match, config)
@@ -3850,7 +9282,7 @@ def _training_focus_cached(match: Match,
             rec175 = hop175[side]
             if rec175["verdict"] != "lassan indulnak":
                 continue
-            add(side, "jatek", "Félidő-nyitás",
+            add(side, "taktika", "Félidő-nyitás",
                 f"a félidők első öt percében {rec175['goals_for']}-"
                 f"{rec175['goals_against']} a mérlegünk — a meccs "
                 "elején és a szünet után hideg lábbal, kész terv "
@@ -3866,6 +9298,7 @@ def _training_focus_cached(match: Match,
 
     # 174) Időkérés utáni védekezés: ha az időkérésünk után rendre
     # gólt kapunk, a megszakítás utáni védekezés-rend a téma.
+    _szabaly = 174
     try:
         from .stoppages import timeout_first_defense
         tfd174 = timeout_first_defense(match, config)
@@ -3873,7 +9306,7 @@ def _training_focus_cached(match: Match,
             rec174 = tfd174[side]
             if rec174["verdict"] != "időkérés után szivárgó fal":
                 continue
-            add(side, "vedekezes", "Időkérés utáni védekezés",
+            add(side, "védekezés", "Időkérés utáni védekezés",
                 f"az időkéréseink {rec174['share_pct']:.0f}%-a után "
                 "gólt kaptunk az ellenfél első rohamából — a "
                 "megszakítás alatt a támadást beszéljük meg, a "
@@ -3890,6 +9323,7 @@ def _training_focus_cached(match: Match,
 
     # 173) Gól utáni letámadás: ha a saját gólunk után magasabban
     # védekezünk, a letámadás-rend és a mögötte lévő tér a téma.
+    _szabaly = 173
     try:
         from .defense import press_after_goal
         pag173 = press_after_goal(match, config)
@@ -3897,7 +9331,7 @@ def _training_focus_cached(match: Match,
             rec173 = pag173[side]
             if rec173["verdict"] != "gól után letámadnak":
                 continue
-            add(side, "vedekezes", "Gól utáni letámadás",
+            add(side, "védekezés", "Gól utáni letámadás",
                 f"saját gólunk után {rec173['after_m']:.1f} m-en áll a "
                 f"falunk a szokásos {rec173['base_m']:.1f} m helyett — "
                 "ez jó lendület, de a mögöttünk lévő tér ilyenkor a "
@@ -3914,6 +9348,7 @@ def _training_focus_cached(match: Match,
 
     # 172) Felhozatal-idő: ha lassan hozzuk fel a labdát, az ellenfél
     # rendezetten felállhat — a gyors kihozatal a téma.
+    _szabaly = 172
     try:
         from .attack_types import buildup_time
         but172 = buildup_time(match, config)
@@ -3921,7 +9356,7 @@ def _training_focus_cached(match: Match,
             rec172 = but172[side]
             if rec172["verdict"] != "lassan hozzák fel":
                 continue
-            add(side, "tamadas", "Gyors felhozatal",
+            add(side, "támadás", "Gyors felhozatal",
                 f"átlag {rec172['avg_s']:.1f} mp alatt érünk át a "
                 "támadó térfélre — ennyi idő alatt bármelyik "
                 "ellenfél rendezetten felállhat, így minden "
@@ -3938,6 +9373,7 @@ def _training_focus_cached(match: Match,
 
     # 171) Kapus-bevonás: ha sokat játszunk vissza, a kapus
     # labdabiztonsága és a kihozatal-rend a téma.
+    _szabaly = 171
     try:
         from .goalkeeper import keeper_involvement
         kiv171 = keeper_involvement(match, config)
@@ -3961,6 +9397,7 @@ def _training_focus_cached(match: Match,
 
     # 170) Fedezetten lövők: ha valaki nyomás alatt is elhúzza a
     # ravaszt, a lövés-választás a téma.
+    _szabaly = 170
     try:
         from .defense import covered_shooters
         cov170 = covered_shooters(match, config)
@@ -3988,6 +9425,7 @@ def _training_focus_cached(match: Match,
 
     # 169) Pressz-érzékeny játékosok: ha valakinél a szorítás eladás,
     # a nyomás alatti kiadás a téma.
+    _szabaly = 169
     try:
         from .decisions import pressure_sensitive_players
         psp169 = pressure_sensitive_players(match, config)
@@ -4015,6 +9453,7 @@ def _training_focus_cached(match: Match,
 
     # 168) Elöl szerző védők: ha van ilyen emberünk, a letámadás
     # köré lehet védekezést építeni.
+    _szabaly = 168
     try:
         from .defense import high_steal_players
         hsp168 = high_steal_players(match, config)
@@ -4040,6 +9479,7 @@ def _training_focus_cached(match: Match,
 
     # 167) Pontatlan lövők: ha valakinek a lövései elkerülik a kaput,
     # a célzás a téma.
+    _szabaly = 167
     try:
         from .xg import wasteful_shooters
         wst167 = wasteful_shooters(match, config)
@@ -4066,6 +9506,7 @@ def _training_focus_cached(match: Match,
 
     # 166) Kezdő hatos: a nyitó emberek együtt gyakorolják a meccs
     # első támadásait (az első öt perc beárazza a mérkőzést).
+    _szabaly = 166
     try:
         from .momentum import opening_lineup
         opl166 = opening_lineup(match, config)
@@ -4092,6 +9533,7 @@ def _training_focus_cached(match: Match,
 
     # 165) Hetes-kiharcolás poszt szerint: az ellenfél hetes-forrása
     # megmondja, melyik posztunkon kell a legfegyelmezettebb kéz.
+    _szabaly = 165
     try:
         from .rules import seven_earner_roles
         ser165 = seven_earner_roles(match, config)
@@ -4118,6 +9560,7 @@ def _training_focus_cached(match: Match,
 
     # 164) Időkérés utáni első támadás: ha nem hoz gólt, a kész
     # figura a téma.
+    _szabaly = 164
     try:
         from .stoppages import timeout_first_attack
         tfa164 = timeout_first_attack(match, config)
@@ -4141,6 +9584,7 @@ def _training_focus_cached(match: Match,
 
     # 163) Kockázatos passzolók: ha valakinek a hosszú labdái
     # elvesznek, a passz-technika a téma.
+    _szabaly = 163
     try:
         from .attack_types import risky_passers
         rsk163 = risky_passers(match, config)
@@ -4167,6 +9611,7 @@ def _training_focus_cached(match: Match,
 
     # 162) Elzárók: ha egy ember állítja az elzárásainkat, a
     # változatos elzárás-játék a téma.
+    _szabaly = 162
     try:
         from .attack_types import screen_setters
         scs162 = screen_setters(match, config)
@@ -4193,6 +9638,7 @@ def _training_focus_cached(match: Match,
 
     # 161) Kapus-bemelegedés: ha a kapusunk lassan melegszik be, a
     # meccs eleji készenlét a téma.
+    _szabaly = 161
     try:
         from .goalkeeper import gk_early_saves
         gke161 = gk_early_saves(match, config)
@@ -4216,6 +9662,7 @@ def _training_focus_cached(match: Match,
 
     # 160) Emberhátrány-lövők: ha egy ember viszi a hátrányos
     # befejezést, a hátrányos támadás szélesítése a téma.
+    _szabaly = 160
     try:
         from .rules import shorthanded_shooters
         shs160 = shorthanded_shooters(match, config)
@@ -4243,6 +9690,7 @@ def _training_focus_cached(match: Match,
 
     # 159) Hajrá-hibázók: ha egy emberünknél megy el a labda a végén,
     # a nyomás alatti döntés a téma.
+    _szabaly = 159
     try:
         from .momentum import clutch_turnover_players
         ctp159 = clutch_turnover_players(match, config)
@@ -4269,6 +9717,7 @@ def _training_focus_cached(match: Match,
 
     # 158) Csere-kiváltók: ha kapott gólra cserélünk, a tervezett
     # csere-rend a téma.
+    _szabaly = 158
     try:
         from .substitutions import substitution_triggers
         stg158 = substitution_triggers(match, config)
@@ -4292,6 +9741,7 @@ def _training_focus_cached(match: Match,
         pass
 
     # 157) Falépítés-idő: ha lassan állunk fel, a rendeződés a téma.
+    _szabaly = 157
     try:
         from .defense import defense_setup_time
         dst157 = defense_setup_time(match, config)
@@ -4314,6 +9764,7 @@ def _training_focus_cached(match: Match,
 
     # 156) Kapus emberhátrányban: ha a kapusunk ilyenkor visszaesik, a
     # fal nélküli helyzetek védése a téma.
+    _szabaly = 156
     try:
         from .goalkeeper import gk_shorthanded_saves
         gsh156 = gk_shorthanded_saves(match, config)
@@ -4337,6 +9788,7 @@ def _training_focus_cached(match: Match,
 
     # 155) Emberelőny-lövők: ha egy emberre épül az emberelőnyünk, a
     # befejezés szélesítése a téma.
+    _szabaly = 155
     try:
         from .rules import powerplay_shooters
         pps155 = powerplay_shooters(match, config)
@@ -4364,6 +9816,7 @@ def _training_focus_cached(match: Match,
 
     # 154) Lövés-távolság esése: ha a hajrára kifelé szorulunk, a
     # fáradt befejezés a téma.
+    _szabaly = 154
     try:
         from .attack_types import shot_distance_fade
         sdf154 = shot_distance_fade(match, config)
@@ -4371,7 +9824,7 @@ def _training_focus_cached(match: Match,
             rec154 = sdf154[side]
             if rec154["verdict"] != "kifelé szorulnak":
                 continue
-            add(side, "erőnlét", "Fáradt befejezés",
+            add(side, "erőnlét", "Fáradt lövőtávolság",
                 f"a lövéseink átlagos távolsága "
                 f"{rec154['fh_avg_m']:.1f} m-ről "
                 f"{rec154['sh_avg_m']:.1f} m-re nőtt a második "
@@ -4387,6 +9840,7 @@ def _training_focus_cached(match: Match,
 
     # 153) Kapott gólok támadás-típus szerint: ha a gólok nagy része
     # lerohanásból jön, a visszarendeződés a téma.
+    _szabaly = 153
     try:
         from .defense import conceded_by_attack_type
         cat153 = conceded_by_attack_type(match, config)
@@ -4423,6 +9877,7 @@ def _training_focus_cached(match: Match,
 
     # 152) Áttörő játékosok: ha az ellenfél egy embere sorozatban
     # betör, a duplázás és a vonal-zárás a téma.
+    _szabaly = 152
     try:
         from .attack_types import breakthrough_players
         btp152 = breakthrough_players(match, config)
@@ -4446,6 +9901,7 @@ def _training_focus_cached(match: Match,
 
     # 151) Két beállós játék: ha az ellenfél két beállóval játszik, a
     # közép-tömörítés a téma (a saját oldalon a felállás variálása).
+    _szabaly = 151
     try:
         from .attack_types import double_pivot_usage
         dpv151 = double_pivot_usage(match, config)
@@ -4470,6 +9926,7 @@ def _training_focus_cached(match: Match,
 
     # 150) Hajrá-ötös: a záró szakasz emberei együtt gyakorolják a
     # befejezést (a hajrában nincs idő ismerkedni).
+    _szabaly = 150
     try:
         from .momentum import clutch_lineup
         cll150 = clutch_lineup(match, config)
@@ -4497,6 +9954,7 @@ def _training_focus_cached(match: Match,
 
     # 149) Kontra-kíséret: ha magányos kontrát futunk, a kíséret a
     # téma (a lerohanás nem egyemberes műfaj).
+    _szabaly = 149
     try:
         from .attack_types import fast_break_support
         fbs149 = fast_break_support(match, config)
@@ -4521,6 +9979,7 @@ def _training_focus_cached(match: Match,
 
     # 148) Kapus-hetesvédés iránya: ha egy sarokra későn érünk, az a
     # sarok a téma.
+    _szabaly = 148
     try:
         from .rules import gk_seven_directions
         g7d148 = gk_seven_directions(match, config)
@@ -4544,6 +10003,7 @@ def _training_focus_cached(match: Match,
 
     # 147) Kihozatal-oldal: ha mindig ugyanarról az oldalról indítunk,
     # a kihozatal kiszámítható — az oldalváltó indítás a téma.
+    _szabaly = 147
     try:
         from .attack_types import buildup_side
         bus147 = buildup_side(match, config)
@@ -4566,6 +10026,7 @@ def _training_focus_cached(match: Match,
 
     # 146) Lepattanó-szerzők: ha az ellenfél gyűjti a kipattanókat, a
     # kipattanó-kísérés a téma (a saját oldalon a védekező lepattanó).
+    _szabaly = 146
     try:
         from .attack_types import rebound_winners
         rbw146 = rebound_winners(match, config)
@@ -4590,6 +10051,7 @@ def _training_focus_cached(match: Match,
 
     # 145) Lövő-távolság: ha valaki csak távolról lő, a befejezés
     # közelebb hozása a téma.
+    _szabaly = 145
     try:
         from .attack_types import shooter_ranges
         shr145 = shooter_ranges(match, config)
@@ -4615,6 +10077,7 @@ def _training_focus_cached(match: Match,
 
     # 144) Emberhátrány-forma: ha öt emberrel egy formát húzunk, a
     # forma elleni tipikus megoldásokat kell begyakorolni.
+    _szabaly = 144
     try:
         from .rules import shorthanded_shape
         shs144 = shorthanded_shape(match, config)
@@ -4638,6 +10101,7 @@ def _training_focus_cached(match: Match,
 
     # 143) Emberelőny-tempó: ha emberelőnyben kapkodunk, a
     # helyzet-kivárás a téma.
+    _szabaly = 143
     try:
         from .rules import powerplay_pace
         ppp143 = powerplay_pace(match, config)
@@ -4663,6 +10127,7 @@ def _training_focus_cached(match: Match,
 
     # 142) Effektív játékidő: szakadozott meccsnél a ritmus-tartás a
     # téma (a leállások utáni újraindulás).
+    _szabaly = 142
     try:
         from .stoppages import playing_time_profile
         ptp142 = playing_time_profile(match, config)["home"]
@@ -4686,6 +10151,7 @@ def _training_focus_cached(match: Match,
 
     # 141) Védekezés-keménység: ha a falunk sok büntetést hoz, a
     # szabályos keménység a téma.
+    _szabaly = 141
     try:
         from .defense import defensive_aggression
         agr141 = defensive_aggression(match, config)
@@ -4709,6 +10175,7 @@ def _training_focus_cached(match: Match,
 
     # 140) Visszaérés-fegyelem: ha valaki elöl lóg védekezéskor, a
     # visszafutás a téma.
+    _szabaly = 140
     try:
         from .defense import recovery_discipline
         rcd140 = recovery_discipline(match, config)
@@ -4735,6 +10202,7 @@ def _training_focus_cached(match: Match,
 
     # 139) Kapus-védés lövés-tempó szerint: ha az egyik sávban
     # sebezhető a kapusunk, az a sáv a téma.
+    _szabaly = 139
     try:
         from .goalkeeper import gk_saves_by_speed
         gsp139 = gk_saves_by_speed(match, config)
@@ -4769,6 +10237,7 @@ def _training_focus_cached(match: Match,
 
     # 138) Álló támadók: ha valaki labda nélkül alig mozog, a labda
     # nélküli munka a téma.
+    _szabaly = 138
     try:
         from .tactics import static_attackers
         sta138 = static_attackers(match, config)
@@ -4796,6 +10265,7 @@ def _training_focus_cached(match: Match,
 
     # 137) Szélső-befejezés oldalanként: ha az egyik szélsőnk érdemben
     # gyengébben fejez be, az ő szög-befejezése a téma.
+    _szabaly = 137
     try:
         from .attack_types import wing_finishing_by_side
         wfs137 = wing_finishing_by_side(match, config)
@@ -4822,6 +10292,7 @@ def _training_focus_cached(match: Match,
 
     # 136) Beálló-oldal: ha a beállónk mindig ugyanoda áll be,
     # kiszámítható — az oldalváltó beállózás a téma.
+    _szabaly = 136
     try:
         from .attack_types import pivot_side
         pvs136 = pivot_side(match, config)
@@ -4845,6 +10316,7 @@ def _training_focus_cached(match: Match,
 
     # 135) Fal-csúszás: ha lassan követjük az oldalváltást, az eltolás
     # a téma.
+    _szabaly = 135
     try:
         from .defense import defensive_shift_lag
         dsl135 = defensive_shift_lag(match, config)
@@ -4867,6 +10339,7 @@ def _training_focus_cached(match: Match,
 
     # 134) Passz-sebesség: ha lágy a labdajáratásunk, a feszes passz a
     # téma.
+    _szabaly = 134
     try:
         from .decisions import pass_speed
         psp134 = pass_speed(match, config)
@@ -4890,6 +10363,7 @@ def _training_focus_cached(match: Match,
 
     # 133) Beálló-kiszolgálók: ha egy ember adja a beadások felét, a
     # kiszolgálás szélesítése a téma.
+    _szabaly = 133
     try:
         from .attack_types import pivot_feeders
         pf133 = pivot_feeders(match, config)
@@ -4917,6 +10391,7 @@ def _training_focus_cached(match: Match,
 
     # 132) Hetes-okozó védők: ha egy védőnk sorozatban okoz hetest, a
     # lábbal védekezés a téma.
+    _szabaly = 132
     try:
         from .rules import seven_meter_conceders
         smc132 = seven_meter_conceders(match, config)
@@ -4941,6 +10416,7 @@ def _training_focus_cached(match: Match,
 
     # 131) Támadás-mélység: ha mélyen, hátrahúzódva támadunk, a
     # vonalra lépés a téma.
+    _szabaly = 131
     try:
         from .attack_types import attack_depth
         adp131 = attack_depth(match, config)
@@ -4964,6 +10440,7 @@ def _training_focus_cached(match: Match,
 
     # 130) Szélső-bevonás: ha a labda ki sem megy a szélre, a
     # szélesség-tartás a téma.
+    _szabaly = 130
     try:
         from .attack_types import wing_involvement
         wi130 = wing_involvement(match, config)
@@ -4988,6 +10465,7 @@ def _training_focus_cached(match: Match,
 
     # 129) Védekezési mélység állás szerint: ha vezetve visszaülünk, a
     # vezetés-védés a téma (a fal helye ne az eredménytől függjön).
+    _szabaly = 129
     try:
         from .defense import line_height_by_score
         lhs129 = line_height_by_score(match, config)
@@ -5012,6 +10490,7 @@ def _training_focus_cached(match: Match,
 
     # 128) Támadás-kimenetel: ha a támadásaink lövés nélkül halnak el,
     # a befejezésig vitel a téma.
+    _szabaly = 128
     try:
         from .attack_types import attack_outcomes
         ao128 = attack_outcomes(match, config)
@@ -5036,6 +10515,7 @@ def _training_focus_cached(match: Match,
 
     # 127) Kapus-védés posztonként: ha egy szögből sebezhető a
     # kapusunk, az adott szög védése a téma.
+    _szabaly = 127
     try:
         from .goalkeeper import gk_saves_by_role
         gsr127 = gk_saves_by_role(match, config)
@@ -5072,6 +10552,7 @@ def _training_focus_cached(match: Match,
 
     # 126) Hiba-sorozatok: ha egy eladás után jön a következő, a
     # hiba utáni rendezés a téma.
+    _szabaly = 126
     try:
         from .defense import turnover_clusters
         tc126 = turnover_clusters(match, config)
@@ -5096,6 +10577,7 @@ def _training_focus_cached(match: Match,
 
     # 125) Kapott gólok posztonként: ha egy poszt ellen szivárgunk, az
     # adott poszt védekezése a téma.
+    _szabaly = 125
     try:
         from .defense import conceded_by_role
         cbr125 = conceded_by_role(match, config)
@@ -5135,6 +10617,7 @@ def _training_focus_cached(match: Match,
 
     # 124) Poszt szerinti gólmegoszlás: ha egy posztra épül a
     # befejezésünk, a poszt-váltogatás a téma.
+    _szabaly = 124
     try:
         from .roles import goals_by_role
         gbr124 = goals_by_role(match, config)
@@ -5159,6 +10642,7 @@ def _training_focus_cached(match: Match,
 
     # 123) Gólpassz-zónák: ha minden előkészítés egy vonalról jön, a
     # támadásunk kiszámítható — a második vonal nyitása a téma.
+    _szabaly = 123
     try:
         from .event_detection import assist_zones
         az123 = assist_zones(match, config)
@@ -5183,6 +10667,7 @@ def _training_focus_cached(match: Match,
 
     # 122) Támadás-indítók: ha egy ember hozza fel a labdát, a
     # kihozatal letámadás-állóvá tétele a téma.
+    _szabaly = 122
     try:
         from .attack_types import attack_starters
         st122 = attack_starters(match, config)
@@ -5210,6 +10695,7 @@ def _training_focus_cached(match: Match,
 
     # 121) Időkérés-időzítés: ha későn fékezünk, a sorozat-kezelés
     # (mikor kérünk időt) a téma.
+    _szabaly = 121
     try:
         from .stoppages import TOT_LATE_MIN, timeout_timing
         tot121 = timeout_timing(match, config)
@@ -5232,6 +10718,7 @@ def _training_focus_cached(match: Match,
 
     # 120) Páros-mérleg: ha egy kettősünk együtt érdemben rosszabb, az
     # egység-építés (kivel kivel) a téma.
+    _szabaly = 120
     try:
         from .stats import PAIR_MIN_MINUTES, pair_plus_minus
         prm120 = pair_plus_minus(match, config)
@@ -5258,6 +10745,7 @@ def _training_focus_cached(match: Match,
 
     # 119) Csere-blokkok: ha egységekben cserélünk, a csere-fegyelem
     # (a váltás ütemének védelme) a téma.
+    _szabaly = 119
     try:
         from .substitutions import (SUBBLK_BLOCK_PCT,
                                     substitution_blocks)
@@ -5280,33 +10768,13 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
-    # 118) Lövőerő-esés: ha a 2. félidőre esik a lövéserőnk, a fáradt
-    # állapotban gyakorolt befejezés a téma.
-    try:
-        from .event_detection import (POWER_FADE_DROP_KMH,
-                                      shot_power_fade)
-        spf118 = shot_power_fade(match, config)
-        for side in ("home", "away"):
-            rec118 = spf118[side]
-            if rec118["drop_kmh"] is None \
-                    or rec118["drop_kmh"] < POWER_FADE_DROP_KMH:
-                continue
-            add(side, "erőnlét", "Lövőerő a hajrában",
-                f"a 2. félidőre {rec118['drop_kmh']:.0f} km/h-t "
-                f"vesztett a lövésünk ({rec118['fh_avg_kmh']:.0f} → "
-                f"{rec118['sh_avg_kmh']:.0f} km/h, a küszöb "
-                f"{POWER_FADE_DROP_KMH:.0f}) — a hajrában az átlövés "
-                "már nem fegyver",
-                "fáradt befejezés: minden edzés végén 10 perc "
-                "lövőgyakorlat magas pulzuson (sprint után azonnal "
-                "lövés), a törzs- és vállerő heti két külön körrel; a "
-                "hajrá-figurákban pedig a kidolgozott ziccer legyen a "
-                "cél, ne a távoli bomba")
-    except Exception:
-        pass
+    # (118: törölve — a lövőerő-esést a 45. szabály fedi le a
+    # shot_speed_fade rétegből; ez a duplum egy nem létező függvényt
+    # importált, és némán sosem szólalt meg.)
 
     # 117) Labdatartás-idő: ha valakinél érdemben megáll a labda, a
     # gyorsabb továbbítás a téma.
+    _szabaly = 117
     try:
         from .decisions import HOLD_GAP_S, hold_time_players
         htp117 = hold_time_players(match, config)
@@ -5334,6 +10802,7 @@ def _training_focus_cached(match: Match,
 
     # 116) Védekezés-váltás: ha végig egy rendszert játszunk, a
     # második változat betanítása a téma.
+    _szabaly = 116
     try:
         from .tactics import FSW_ONE_SYSTEM_PCT, formation_switching
         fsw116 = formation_switching(match, config)
@@ -5355,6 +10824,7 @@ def _training_focus_cached(match: Match,
 
     # 115) Célba vett védő: ha egy védőnk előtt a csapatátlagnál
     # érdemben többször megy be a lövés, a segítség-rendszer a téma.
+    _szabaly = 115
     try:
         from .defense import (TDEF_GAP_PP, TDEF_MIN_SHOTS,
                               targeted_defenders)
@@ -5383,6 +10853,7 @@ def _training_focus_cached(match: Match,
 
     # 114) Játékos-mérleg: ha valakinek a pályán léte alatt érdemben
     # rosszabb a gólkülönbségünk, a szerep-tisztázás a téma.
+    _szabaly = 114
     try:
         from .stats import PM_MIN_MINUTES, player_plus_minus
         pm114 = player_plus_minus(match, config)
@@ -5409,6 +10880,7 @@ def _training_focus_cached(match: Match,
 
     # 113) Lövő-erő: ha van a csapatátlag felett bombázónk, a távoli
     # befejezés köré épített figura a téma.
+    _szabaly = 113
     try:
         from .event_detection import (SHOOTER_POWER_MIN_SHOTS,
                                       shooter_power)
@@ -5434,6 +10906,7 @@ def _training_focus_cached(match: Match,
 
     # 112) Lövő-kapuoldal: ha egy befejezőnk mindig ugyanoda lő, a
     # kapuoldal-váltás a téma.
+    _szabaly = 112
     try:
         from .attack_types import (SHOOTER_SIDE_MIN_GOALS,
                                    shooter_placement)
@@ -5459,6 +10932,7 @@ def _training_focus_cached(match: Match,
 
     # 111) Szélső-védekezés: ha a szélről kapjuk a gólokat, a
     # szélső-őrzés és a kapus szöge a téma.
+    _szabaly = 111
     try:
         from .defense import (WINGDEF_GAP_PP, WINGDEF_MIN_SHOTS,
                               wing_defense)
@@ -5485,6 +10959,7 @@ def _training_focus_cached(match: Match,
 
     # 110) Drága eladók: ha egy játékosunk eladásai rendre gólba
     # kerülnek, vele a nyomás alatti labdakezelés a téma.
+    _szabaly = 110
     try:
         from .defense import TO_COST_MIN, costly_turnover_players
         ctp110 = costly_turnover_players(match, config)
@@ -5508,6 +10983,7 @@ def _training_focus_cached(match: Match,
 
     # 109) Emberelőny-védekezés: ha emberelőnyben is kapunk gólt, a
     # befejezés utáni visszarendeződés a téma.
+    _szabaly = 109
     try:
         from .rules import PPDEF_MIN_S, powerplay_defense
         ppd109 = powerplay_defense(match, config)
@@ -5534,6 +11010,7 @@ def _training_focus_cached(match: Match,
 
     # 108) Kapus szabad lövés ellen: ha a kapusunk csak a fal mögött
     # véd, a szabad lövés elleni kapusmunka a téma.
+    _szabaly = 108
     try:
         from .goalkeeper import GKFREE_MIN_SHOTS, gk_free_shot_saves
         gkf108 = gk_free_shot_saves(match, config)
@@ -5559,6 +11036,7 @@ def _training_focus_cached(match: Match,
 
     # 107) Kettőzés: ha nem lép rá második védő a labdásra, a
     # kettőzés-mechanizmus és a mögötte lévő zárás a téma.
+    _szabaly = 107
     try:
         from .defense import (DOUBLE_MIN_FRAMES, double_teams)
         dbl107 = double_teams(match, config)
@@ -5583,6 +11061,7 @@ def _training_focus_cached(match: Match,
 
     # 106) Kapus-indítás iránya: ha a kapusunk mindig ugyanarra az
     # oldalra nyit, az indítás-irány variálása a téma.
+    _szabaly = 106
     try:
         from .goalkeeper import GK_SIDE_MIN_PASSES, gk_outlet_side
         gos106 = gk_outlet_side(match, config)
@@ -5608,6 +11087,7 @@ def _training_focus_cached(match: Match,
 
     # 105) Hajrá-eladás: ha a végén megugrik az eladás-ütemünk, a
     # nyomás alatti döntés és a hajrá-felállás a téma.
+    _szabaly = 105
     try:
         from .momentum import (CLUTCH_TO_MIN_EARLY, CLUTCH_TO_RISE_PER_MIN,
                                clutch_turnovers)
@@ -5636,6 +11116,7 @@ def _training_focus_cached(match: Match,
 
     # 104) Hátrány-támadás: ha a kiállítás alatt megbénul a
     # támadójátékunk, a hátrányos labdatartás a téma.
+    _szabaly = 104
     try:
         from .rules import SHATK_MIN_S, shorthanded_attack
         sha104 = shorthanded_attack(match, config)
@@ -5660,6 +11141,7 @@ def _training_focus_cached(match: Match,
 
     # 103) Fölény-befejezés: ha csak létszámfölényben vagyunk
     # eredményesek, a felállt támadás befejezése a téma.
+    _szabaly = 103
     try:
         from .attack_types import (OVERLOAD_GAP_PP, OVERLOAD_MIN_SHOTS,
                                    overload_finishing)
@@ -5687,6 +11169,7 @@ def _training_focus_cached(match: Match,
 
     # 102) Ellen-press: ha az eladott labdára nem támadunk rá, a
     # szerzés utáni első három másodperc a téma.
+    _szabaly = 102
     try:
         from .defense import (COUNTERPRESS_MIN_TO, COUNTERPRESS_WINDOW_S,
                               counter_press)
@@ -5713,6 +11196,7 @@ def _training_focus_cached(match: Match,
 
     # 101) Hajrá-lövésválasztás: ha a végén romlik a lövéseink
     # helyzetértéke, a hajrá-figurák és a türelem a téma.
+    _szabaly = 101
     try:
         from .momentum import (CLUTCH_SQ_DROP, CLUTCH_SQ_MIN_SHOTS,
                                clutch_shot_quality)
@@ -5742,6 +11226,7 @@ def _training_focus_cached(match: Match,
 
     # 100) Passz-kockázat: ha a hosszú passzaink elvesznek, a hosszú
     # passz technikája és a bejátszás-döntés a téma.
+    _szabaly = 100
     try:
         from .attack_types import (PASSRISK_GAP_PP,
                                    PASSRISK_MIN_TRIES, pass_risk)
@@ -5768,6 +11253,7 @@ def _training_focus_cached(match: Match,
 
     # 99) Elzárás-védekezés: ha az elzárásokon szétesik a váltásunk,
     # a váltás-kommunikáció a téma.
+    _szabaly = 99
     try:
         from .defense import (SCRDEF_GAP_PP, SCRDEF_MIN_SCREENED,
                               screen_defense)
@@ -5797,6 +11283,7 @@ def _training_focus_cached(match: Match,
 
     # 98) Elzárás-használat: ha elzárás nélkül lövünk, a lövőnk
     # magára marad — az elzárás-játék a téma.
+    _szabaly = 98
     try:
         from .attack_types import (SCREEN_LOW_PCT, SCREEN_MIN_SHOTS,
                                    screen_usage)
@@ -5822,6 +11309,7 @@ def _training_focus_cached(match: Match,
 
     # 97) Oldalváltás: ha egy oldalon ragadunk, a fal ellenünk
     # nyugodtan eltolható — a keresztjáték a téma.
+    _szabaly = 97
     try:
         from .attack_types import (SWITCH_LOW_PCT, SWITCH_MIN_PASSES,
                                    side_switching)
@@ -5847,6 +11335,7 @@ def _training_focus_cached(match: Match,
 
     # 96) Lerohanás-védés: ha a kapusunk gyorsindítás ellen szakad
     # be, a kapus-edzés és a visszarendeződés együtt a téma.
+    _szabaly = 96
     try:
         from .goalkeeper import (GKBR_GAP_PP, GKBR_MIN_FACED,
                                  gk_break_response)
@@ -5874,6 +11363,7 @@ def _training_focus_cached(match: Match,
 
     # 95) Gól-előkészítés hossza: ha csak hosszú akcióból van gólunk,
     # az első hullámunk fogatlan — a direkt befejezés a téma.
+    _szabaly = 95
     try:
         from .attack_types import (BUILDUP_LONG_SHARE,
                                    BUILDUP_MIN_GOALS, goal_buildup)
@@ -5899,6 +11389,7 @@ def _training_focus_cached(match: Match,
 
     # 94) Előkészítő-függés: ha a gólpasszaink egy emberen múlnak, az
     # ellenfél őt vágja el — második játékszervező kell.
+    _szabaly = 94
     try:
         from .attack_types import (ASSIST_CONC_MIN,
                                    ASSIST_CONC_TOP_SHARE,
@@ -5910,7 +11401,7 @@ def _training_focus_cached(match: Match,
                     or rec94["assists"] < ASSIST_CONC_MIN \
                     or rec94["share"] < ASSIST_CONC_TOP_SHARE:
                 continue
-            add(side, "támadás", "Második játékszervező",
+            add(side, "támadás", "Gólpassz egy emberen",
                 f"az előkészítésünk egy emberen múlik: a gólpasszaink "
                 f"{100.0 * rec94['share']:.0f}%-a a(z) "
                 f"{rec94['top_player_id']}. játékostól jön "
@@ -5926,6 +11417,7 @@ def _training_focus_cached(match: Match,
 
     # 93) Középkezdés-tempó: ha kapott gól után lassan indítunk, az
     # ellenfél falja rendezetten vár — a gyors középkezdés a téma.
+    _szabaly = 93
     try:
         from .momentum import (RESTART_MIN_GOALS, RESTART_SLOW_SHARE,
                                restart_speed)
@@ -5951,6 +11443,7 @@ def _training_focus_cached(match: Match,
 
     # 92) Elsütés-idő: ha a lövőink sokáig fogják a labdát, a blokk
     # és a kilépés mindig odaér — a gyors elsütés a téma.
+    _szabaly = 92
     try:
         from .xg import (RELEASE_MIN_SHOTS, RELEASE_SLOW_SHARE,
                          shot_release)
@@ -5976,6 +11469,7 @@ def _training_focus_cached(match: Match,
 
     # 91) Beálló-védekezés: ha az ellenfél beállója ellen szakad be a
     # falunk, a beálló-őrzés (elöl-mögött, kettőzés) a téma.
+    _szabaly = 91
     try:
         from .defense import PIVOT_DEF_MIN_ATTACKS, pivot_defense
         pd91 = pivot_defense(match, config)
@@ -5999,6 +11493,7 @@ def _training_focus_cached(match: Match,
 
     # 90) Indítás-biztonság: ha a kapus-indításunk az ellenfélnél köt
     # ki, a kihozatalunk letámadható — a biztos első passz a téma.
+    _szabaly = 90
     try:
         from .goalkeeper import (GK_OUTLET_LOST_PCT, GK_OUTLET_SEC_MIN,
                                  gk_outlet_security)
@@ -6024,6 +11519,7 @@ def _training_focus_cached(match: Match,
 
     # 89) Támadó-mozgás: ha áll a támadásunk, a védő ingyen léphet ki
     # ránk — a labda nélküli mozgás (passzolj és fuss) a téma.
+    _szabaly = 89
     try:
         from .tactics import (ATTACK_MOTION_MIN_S,
                               ATTACK_MOTION_STATIC_MPS, attack_motion)
@@ -6049,6 +11545,7 @@ def _training_focus_cached(match: Match,
 
     # 88) Fal-rés: ha a rendezett falunk réseket hagy, a betörés és a
     # beúszó beálló ellenünk terv — a zárás-távolság a téma.
+    _szabaly = 88
     try:
         from .defense import (WALL_GAP_M, WALL_GAP_MIN_FRAMES,
                               WALL_GAP_SHARE_PCT, wall_gaps)
@@ -6074,6 +11571,7 @@ def _training_focus_cached(match: Match,
 
     # 87) Gólcsend-anatómia: a néma csend szervezés-gond (lövésig sem
     # jutunk), a kihagyós csend befejezés-gond — más-más edzés-téma.
+    _szabaly = 87
     try:
         from .momentum import (DROUGHT_ANATOMY_MIN_S,
                                DROUGHT_SHOOTING_PER_MIN,
@@ -6109,6 +11607,7 @@ def _training_focus_cached(match: Match,
 
     # 86) Engedett-oldal: ha a falunk egyik oldala átjárható, az
     # ellenfél oda szervez — az oldal-védő és a segítő-csúszás a téma.
+    _szabaly = 86
     try:
         from .defense import (CONCEDED_SIDE_MIN_SHOTS, CONCEDED_SIDE_PCT,
                               conceded_side_bias)
@@ -6134,6 +11633,7 @@ def _training_focus_cached(match: Match,
 
     # 85) Eladás-büntetés: ha az eladásaink gyors gólba kerülnek, a
     # váltás-sprint hiányzik — az eladás utáni visszarendeződés a téma.
+    _szabaly = 85
     try:
         from .defense import (TO_PUNISH_HIGH_PCT, TO_PUNISH_MIN,
                               turnover_punishment)
@@ -6158,6 +11658,7 @@ def _training_focus_cached(match: Match,
 
     # 84) Kapus-indítás hossza: ha a kapusunk egysíkúan indít, az
     # ellenfél ráállhat — az indítás-variancia a téma.
+    _szabaly = 84
     try:
         from .goalkeeper import gk_outlet_length
         go84 = gk_outlet_length(match, config)
@@ -6183,6 +11684,7 @@ def _training_focus_cached(match: Match,
     # 83) Területi-fölény-esés: ha a 2. félidőre hátracsúszik a
     # játékunk, fáradtan nem tartjuk elöl a labdát — a téma a
     # labdakihozatal és a magas birtoklás fáradtan.
+    _szabaly = 83
     try:
         from .tactics import TILT_FADE_DROP_PP, tilt_fade
         tf83 = tilt_fade(match, config)
@@ -6206,6 +11708,7 @@ def _training_focus_cached(match: Match,
 
     # 82) Asszist-függés: ha minden gólunk egyéni villanás, a
     # kulcsember kettőzésével levehetők rólunk — a kiadás a téma.
+    _szabaly = 82
     try:
         from .attack_types import (ASSIST_DEP_LOW_PCT,
                                    ASSIST_DEP_MIN_GOALS,
@@ -6231,6 +11734,7 @@ def _training_focus_cached(match: Match,
 
     # 81) Lepattanó-fal: ha a lövések után nem zárunk, az ellenfél
     # második hulláma jár — a box-out és a zárás a téma.
+    _szabaly = 81
     try:
         from .defense import (SC_ALLOW_HIGH_PCT, SC_ALLOW_MIN,
                               second_chance_allowed)
@@ -6255,6 +11759,7 @@ def _training_focus_cached(match: Match,
 
     # 80) Pressz-tűrés: ha testközeli védőnél megugrik az eladásunk,
     # az agresszív fal ellenünk termel — a nyomás alatti passz a téma.
+    _szabaly = 80
     try:
         from .decisions import (PRESS_TO_RISE_PP,
                                 pass_security_under_pressure)
@@ -6279,6 +11784,7 @@ def _training_focus_cached(match: Match,
 
     # 79) Eladás-időzítés: ha a birtoklás elején adjuk el a labdát, a
     # letámadás ellenünk termel — a kihozatal nyomás alatt a téma.
+    _szabaly = 79
     try:
         from .defense import (TO_EARLY_S, TO_EARLY_SHARE, TO_TIMING_MIN,
                               turnover_timing)
@@ -6303,6 +11809,7 @@ def _training_focus_cached(match: Match,
 
     # 78) Kapus-gyengeoldal: ha egy oldalra kapjuk a gólokat, az
     # ellenfél lövő-terve kész — a kapus oldal-technikája a téma.
+    _szabaly = 78
     try:
         from .goalkeeper import gk_weak_side
         gw78 = gk_weak_side(match, config)
@@ -6325,6 +11832,7 @@ def _training_focus_cached(match: Match,
 
     # 77) Lövő-koncentráció: ha a lövés-terhelésünk egy emberre épül,
     # az ellenfél kettőzéssel lefejezheti — a lövés-elosztás a téma.
+    _szabaly = 77
     try:
         from .xg import shot_concentration
         sc77 = shot_concentration(match, config)
@@ -6346,6 +11854,7 @@ def _training_focus_cached(match: Match,
 
     # 76) Ritmus-egyhangúság: ha belső órán játszunk, az ellenfél
     # ráállhat — a tudatos ritmus-váltás a téma.
+    _szabaly = 76
     try:
         from .attack_types import (RHYTHM_CV_LOW, RHYTHM_MIN_ATTACKS,
                                    attack_rhythm)
@@ -6370,6 +11879,7 @@ def _training_focus_cached(match: Match,
 
     # 75) Oldal-részrehajlás: ha a támadásunk fél-oldalas, ellenünk
     # eltolt fallal védekeznek — az oldal-egyensúly a téma.
+    _szabaly = 75
     try:
         from .attack_types import attack_side_bias
         sb75 = attack_side_bias(match, config)
@@ -6391,6 +11901,7 @@ def _training_focus_cached(match: Match,
 
     # 74) Célzás-pontosság: ha a lövéseink fele mellé megy, a lövés
     # ára nálunk dupla — technikai célzás-edzés a téma.
+    _szabaly = 74
     try:
         from .xg import (ACCURACY_LOW_PCT, ACCURACY_MIN_SHOTS,
                          shot_accuracy)
@@ -6415,6 +11926,7 @@ def _training_focus_cached(match: Match,
 
     # 73) Befejezés-esés: ha a gólra váltásunk a 2. félidőre esik, a
     # fáradt befejezés a téma.
+    _szabaly = 73
     try:
         from .xg import FINISH_FADE_DROP_PP, finish_fade
         ff73 = finish_fade(match, config)
@@ -6437,6 +11949,7 @@ def _training_focus_cached(match: Match,
 
     # 72) Bravúr utáni lendület: ha a kapusbravúrjaink elhalnak, a
     # védés utáni azonnali indítás a téma.
+    _szabaly = 72
     try:
         from .xg import BIG_SAVE_SPARK_MIN, big_save_momentum
         bs72 = big_save_momentum(match, config)
@@ -6458,6 +11971,7 @@ def _training_focus_cached(match: Match,
 
     # 71) Sorozat-törés: ha az elszenvedett sorozatok rendre elfutnak,
     # a sorozat-törés protokollja a téma.
+    _szabaly = 71
     try:
         from .momentum import (RUN_CONTAIN_LONG, RUN_CONTAIN_MIN,
                                run_containment)
@@ -6482,6 +11996,7 @@ def _training_focus_cached(match: Match,
 
     # 70) Holtpont-mérleg: ha az egál-pillanatokat rendre elengedjük,
     # a nyomás alatti befejezés a téma.
+    _szabaly = 70
     try:
         from .momentum import PARITY_MIN_TIES, parity_breaks
         pb70 = parity_breaks(match, config)
@@ -6504,6 +12019,7 @@ def _training_focus_cached(match: Match,
 
     # 69) Félidei hátrányból fordítás: ha hátrányból nem tudtunk
     # visszajönni, a szünet utáni fordítás-protokoll a téma.
+    _szabaly = 69
     try:
         from .momentum import halftime_comeback
         htc69 = halftime_comeback(match, config)
@@ -6523,6 +12039,7 @@ def _training_focus_cached(match: Match,
 
     # 68) Tempó-esés: ha a 2. félidőre érdemben esik a támadás/perc,
     # elfogy a láb — a futó-állóképesség és a rotáció a téma.
+    _szabaly = 68
     try:
         from .attack_types import PACE_FADE_DROP_PER_MIN, team_pace_fade
         tpf68 = team_pace_fade(match, config)
@@ -6546,6 +12063,7 @@ def _training_focus_cached(match: Match,
 
     # 67) Kihagyott ziccer ára: ha a kihagyásainkat rendre azonnal
     # büntetik, a kihagyás utáni visszarendeződés a téma.
+    _szabaly = 67
     try:
         from .xg import miss_punishment
         mp67 = miss_punishment(match, config)
@@ -6568,6 +12086,7 @@ def _training_focus_cached(match: Match,
 
     # 66) Kapuscsere-hatás: ha a csere sem segített (mindkét kapus
     # nehéz napja), a kapus-alapok és a fal-kapus összhang a téma.
+    _szabaly = 66
     try:
         from .goalkeeper import GK_CHANGE_DELTA_PP, gk_change_effect
         gce66 = gk_change_effect(match, config)
@@ -6590,6 +12109,7 @@ def _training_focus_cached(match: Match,
 
     # 65) Hetes-védés: ha a kapusunk a rá dobott heteseket rendre kapja,
     # a hetes-készülés a kapus-edzés témája.
+    _szabaly = 65
     try:
         from .rules import seven_meter_defense
         s7d65 = seven_meter_defense(match, config)
@@ -6610,6 +12130,7 @@ def _training_focus_cached(match: Match,
 
     # 64) Félidő-zárás: ha a szünet előtti perceket érdemben elvesztettük,
     # az 1. félidő végi koncentráció a téma.
+    _szabaly = 64
     try:
         from .halftime import first_half_close
         fhc64 = first_half_close(match, config)
@@ -6632,6 +12153,7 @@ def _training_focus_cached(match: Match,
 
     # 63) Szoros vereség: ha ez a meccs 1-2 gólon úszott el, a
     # hajrá-forgatókönyv a következő edzés témája.
+    _szabaly = 63
     try:
         from .momentum import close_game_record
         cg63 = close_game_record(match, config)
@@ -6650,6 +12172,7 @@ def _training_focus_cached(match: Match,
 
     # 62) Gól utáni elalvás: ha a góljaink után rendre azonnali választ
     # kapunk, a középkezdés elleni visszarendeződés a téma.
+    _szabaly = 62
     try:
         from .momentum import post_goal_lapses
         pgl62 = post_goal_lapses(match, config)
@@ -6672,6 +12195,7 @@ def _training_focus_cached(match: Match,
     # 61) Fegyelem-esés: ha a kiállításaink a 2. félidőre sűrűsödnek,
     # a fáradt védekezés-technika a téma — a hajrában nem szabad
     # emberhátrányba kerülni.
+    _szabaly = 61
     try:
         from .rules import discipline_fade
         df61 = discipline_fade(match, config)
@@ -6692,6 +12216,7 @@ def _training_focus_cached(match: Match,
 
     # 60) Előny-őrzés: ha ezen a meccsen 3+ gólos vezetés ment el, a
     # vezetés-menedzsment a következő edzés témája.
+    _szabaly = 60
     try:
         from .momentum import lead_protection
         lp60 = lead_protection(match, config)
@@ -6712,6 +12237,7 @@ def _training_focus_cached(match: Match,
     # 59) Kapus-forma félidőnként: ha a kapusunk a 2. félidőre érdemben
     # esik (15+ százalékpont), a kapus-terhelést és a csere-időzítést kell
     # átgondolni.
+    _szabaly = 59
     try:
         from .goalkeeper import GK_FADE_DROP_PP, gk_save_fade
         gf59 = gk_save_fade(match, config)
@@ -6732,4 +12258,301 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    return {side: rank_focus(items) for side, items in out.items()}
+
+
+def player_training_focus(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Egyéni edzés-fókusz: KINEK MIT kell gyakorolnia.
+
+    A csapat-szintű edzés-fókusz (`training_focus`) megmondja, mit
+    gyakoroljon a CSAPAT — a játékos viszont a saját nevét keresi, és
+    az edző is emberre bontva osztja ki a hét feladatait. Ez a réteg a
+    már meglévő JÁTÉKOS-szintű mérésekből állít össze személyes
+    fókuszokat, ugyanabban az alakban, mint a csapat-lista (terület,
+    fókusz, indok, gyakorlat).
+
+    Nyolc forrás, mind a maga küszöbével (egy forrás hibája nem viheti
+    el a többit):
+      - nyomás alatti labdakezelés (pressure_sensitive_players),
+      - fáradt eladás (tired_turnover_players),
+      - befejezés: gól ELMARADÁSA a helyzetminőségtől (match_xg),
+      - hosszú labda kockázata (risky_passers),
+      - döntés a hajrában (clutch_turnover_players),
+      - egy az egy elleni védekezés (beaten_defenders),
+      - kondíció: második félidei tempó-esés (player_fatigue),
+      - kapus: várható alatti védés-mérleg (goalkeeper_timeline) — a
+        kapus is játékos, az ő lapja sem maradhat üres.
+
+    A védekezés szándékosan benne van: e nélkül a lap csak a
+    támadó-oldali hibákat sorolná, és a védekező munkát végző emberek
+    úgy néznék, hogy nincs mit gyakorolniuk.
+
+    Edzőileg ez az egyéni beszélgetés lapja: nem "a csapat rosszul
+    fejez be", hanem "neked ez a kettő". Emberenként legfeljebb
+    PLAYER_MAX_ITEMS tétel — a fókusz attól fókusz, hogy kevés.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "items": [{"area", "title", "why", "drill", "clips"}]}]} — a
+    "clips" azok a klip-típusok, amelyeken a hiba LÁTSZIK (üres, ha a
+    területet egyetlen jelenet sem mutatja meg). A lista a
+    tételek száma szerint csökkenő. Üres lista érvényes eredmény: ez
+    azt jelenti, hogy a mért területeken senkinél nincs kilógó
+    gyengeség, nem azt, hogy nincs adat.
+    """
+    from .primitive_cache import primitive_cache
+    with primitive_cache(match):
+        return _player_training_focus_cached(match, config)
+
+
+def _ptf_copy(val: dict) -> dict:
+    return {side: {"players": [{**p, "items": [
+        {**i, "clips": list(i.get("clips") or [])} for i in p["items"]]}
+                               for p in rec["players"]]}
+            for side, rec in val.items()}
+
+
+@memoize_primitive("player_training_focus", copy=_ptf_copy)
+def _player_training_focus_cached(match: Match,
+                                  config: Optional[TacticsConfig] = None
+                                  ) -> dict:
+    """Az egyéni fókusz tényleges felépítése (lásd
+    `player_training_focus`)."""
+    config = config or TacticsConfig()
+    # {oldal: {játékos-azonosító: {"jersey": ..., "items": [...]}}}
+    tar: dict = {"home": {}, "away": {}}
+
+    # Mezszám track-enként: több forrás-réteg csak a track-azonosítót
+    # adja, a JÁTÉKOS viszont a saját számát keresi a lapon.
+    mez: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                mez.setdefault(p.track_id, p.jersey_number)
+
+    def _oldal(ertek):
+        """"home"/"away" a nyers mezőből (Enum és sztring is jöhet)."""
+        v = getattr(ertek, "value", ertek)
+        return v if v in ("home", "away") else None
+
+    def add(side, pid, jersey, area, title, why, drill, clips=()):
+        """A `clips` az a klip-típus-lista, amelyen a hiba LÁTSZIK.
+
+        A gyakorlat leírása elmondja, mit kell csinálni — a felvétel
+        viszont megmutatja, MIÉRT. Enélkül a játékos elolvassa, hogy
+        "nyomás alatt eladod", és nem tudja, melyik pillanatról van
+        szó; a klip-válogatáshoz pedig ki kellene találnia, melyik
+        csomagot kérje. Üres lista érvényes: az erőnlétet egyetlen
+        jelenet sem mutatja meg.
+        """
+        if pid is None:
+            return
+        rec = tar[side].setdefault(pid, {"jersey": jersey, "items": []})
+        if jersey is not None:
+            rec["jersey"] = jersey
+        # Korlát nélkül gyűjtünk; a PLAYER_MAX_ITEMS tételt a végén a
+        # `rank_focus` válogatja (területek között forogva), hogy két
+        # labdabiztonság-jel ne szorítsa ki a befejezést vagy a kondíciót.
+        rec["items"].append({"area": area, "title": title,
+                             "why": why, "drill": drill,
+                             "clips": list(clips)})
+
+    # (a) Nyomás alatti labdakezelés — az ő szorítása az ellenfélnek
+    #    labdaszerzés, tehát neki a kiadás a gyakorlandó.
+    try:
+        from .decisions import pressure_sensitive_players
+        psp = pressure_sensitive_players(match, config)
+        for side in ("home", "away"):
+            top = (psp.get(side) or {}).get("top")
+            if not top:
+                continue
+            arany = (100.0 * top["press_to"] / top["press_events"]
+                     if top["press_events"] else 0.0)
+            add(side, top["player_id"],
+                top.get("jersey") or mez.get(top["player_id"]),
+                "labdabiztonság", "Kiadás nyomás alatt",
+                f"a testközeli védő mellett hozott {top['press_events']} "
+                f"döntéséből {top['press_to']} eladás lett "
+                f"({arany:.0f}%)",
+                "kettőzés elleni kiadás: háttal-felvétel + azonnali "
+                "kipasszolás, két védő közé zárva; testcsel után "
+                "gyors átadás, gyakorlás fáradtan is",
+                clips=["turnover"])
+    except Exception:
+        pass
+
+    # (b) Fáradt eladás — nem a technika, hanem a hatvan perc kérdése.
+    try:
+        from .decisions import tired_turnover_players
+        ttp = tired_turnover_players(match, config)
+        for side in ("home", "away"):
+            top = (ttp.get(side) or {}).get("top")
+            if not top:
+                continue
+            add(side, top["player_id"],
+                top.get("jersey") or mez.get(top["player_id"]),
+                "labdabiztonság", "Fáradt labdakezelés",
+                f"a labdaeladásai a 2. félidőre {top['fh']} → {top['sh']} "
+                "értékre nőttek",
+                "labdakezelés-sorozat a kondi-blokk UTÁN: a technikát "
+                "fáradt állapotban kell rögzíteni, mert a hajrában is "
+                "úgy kell működnie",
+                clips=["turnover"])
+    except Exception:
+        pass
+
+    # (c) Befejezés — a helyzetei jobbak, mint amennyi gólt szerez.
+    try:
+        from .xg import match_xg
+        xg = match_xg(match, config)
+        for row in xg.get("shooters") or []:
+            pid = row.get("player_id")
+            shots = row.get("shots") or 0
+            if pid is None or shots < PTF_MIN_SHOTS:
+                continue
+            hiany = (row.get("xg") or 0.0) - (row.get("goals") or 0)
+            if hiany < PTF_XG_GAP:
+                continue
+            side = _oldal(row.get("team"))
+            if side is None:
+                continue
+            add(side, pid, mez.get(pid), "befejezés",
+                "Befejezés a helyzeteihez képest",
+                f"{shots} lövésből {row.get('goals', 0)} gól, miközben a "
+                f"helyzetei {row.get('xg', 0.0):.1f} várható gólt értek "
+                f"(−{hiany:.1f})",
+                "befejezés-sorozat ugyanabból a pozícióból: helyezett "
+                "lövés a kapus mozdulása UTÁN, és ziccer-befejezés "
+                "fáradtan (a hiány jellemzően ott keletkezik)",
+                clips=["missed_chance", "shot"])
+    except Exception:
+        pass
+
+    # (c2) Hosszú labda — az ő indításai foghatók el.
+    try:
+        from .attack_types import risky_passers
+        rp = risky_passers(match, config)
+        for side in ("home", "away"):
+            top = (rp.get(side) or {}).get("top")
+            if not top:
+                continue
+            arany = (100.0 * top["turnovers"] / top["tries"]
+                     if top.get("tries") else 0.0)
+            add(side, top["player_id"],
+                top.get("jersey") or mez.get(top["player_id"]),
+                "labdabiztonság", "Hosszú labda döntése",
+                f"{top['tries']} hosszú kísérletéből {top['turnovers']} "
+                f"elveszett ({arany:.0f}%)",
+                "döntés-gyakorlat: a hosszú indítás CSAK szabad "
+                "futóra megy; zárt kép esetén rövid kiadás — "
+                "kényszerítő gyakorlat két lehetőséggel",
+                clips=["turnover"])
+    except Exception:
+        pass
+
+    # (c3) Hajrá-döntés — a döntő szakaszban nála szakad el a labda.
+    try:
+        from .momentum import clutch_turnover_players
+        ctp = clutch_turnover_players(match, config)
+        for side in ("home", "away"):
+            top = (ctp.get(side) or {}).get("top")
+            if not top:
+                continue
+            add(side, top["player_id"],
+                top.get("jersey") or mez.get(top["player_id"]),
+                "hajrá", "Döntés a hajrában",
+                f"{top['turnovers']} labdaeladás a meccs döntő "
+                "szakaszában",
+                "hajrá-szituációk gyakorlása fáradtan és zajban: "
+                "kimondott első opció, és megbeszélt kiút, ha az zárt "
+                "— a hajrában nem a technika, hanem a döntés akad meg",
+                clips=["turnover", "key_moment"])
+    except Exception:
+        pass
+
+    # (c4) Védekezés — rajta mennek át a góljaik.
+    try:
+        from .defense import beaten_defenders
+        bd = beaten_defenders(match, config)
+        for side in ("home", "away"):
+            top = (bd.get(side) or {}).get("top")
+            if not top:
+                continue
+            add(side, top["player_id"],
+                top.get("jersey") or mez.get(top["player_id"]),
+                "védekezés", "Egy az egy elleni védekezés",
+                f"a hozzá rendelhető kapott gólok {top['share_pct']:.0f}%-a "
+                f"nála esett ({top['beaten']} gól)",
+                "lábmunka és testhelyzet 1v1-ben: oldalazó lecsúszás "
+                "kar-kontaktussal, a lövő KEZE felőli oldal zárása; "
+                "párban, váltott szerepben, sorozatban",
+                clips=["breakthrough", "free_shot"])
+    except Exception:
+        pass
+
+    # (d) Kondíció — a második félidei tempó-esés.
+    try:
+        from .stats import player_fatigue
+        for row in player_fatigue(match) or []:
+            esés = row.get("drop_pct")
+            if esés is None or esés < PTF_FATIGUE_DROP_PCT:
+                continue
+            side = _oldal(row.get("team"))
+            if side is None:
+                continue
+            add(side, row.get("track_id"), mez.get(row.get("track_id")),
+                "kondíció",
+                "Második félidei tempó",
+                f"az átlagtempója {esés:.0f}%-kal esik a 2. félidőre",
+                "intervallum-futás a hajrá ritmusában (30/30), és "
+                "cserével tervezett terhelés a meccsen — a lábat nem "
+                "meccsen kell megszerezni")
+    except Exception:
+        pass
+
+    # (e) Kapus — a várható alatti védés-mérleg (GSAx).
+    #
+    # A KAPUS IS JÁTÉKOS: a hét mezőnyforrás egyike sem szól róla, és
+    # a kapus lapja e nélkül üresen maradt — miközben a csapat-szintű
+    # edzés-fókusznak van kapus-szabálya. A lapot a játékos azért
+    # teszi el, mert RÓLA szól; az üres lap azt mondja neki, hogy a
+    # program nem látja.
+    try:
+        from .goalkeeper import goalkeeper_timeline
+        gtl = goalkeeper_timeline(match)
+        for side in ("home", "away"):
+            per_keeper = (gtl.get(side) or {}).get("per_keeper") or {}
+            for tid, rec in per_keeper.items():
+                on = rec.get("on_target") or 0
+                gsax = rec.get("prevented")
+                if on < PTF_GK_MIN_ON_TARGET or gsax is None:
+                    continue
+                if gsax > PTF_GK_GSAX:
+                    continue
+                add(side, tid, mez.get(tid),
+                    "kapus",
+                    "Védés-forma",
+                    f"a kapura tartó {on} lövésből {rec.get('saves', 0)} "
+                    f"védés — a várhatónál {abs(gsax):.1f} góllal "
+                    "kevesebbet fogott",
+                    "helyezkedés-sor: alap-pozíció a lövő szöge szerint, "
+                    "majd reakció-sor közelről (5-7 m) váltott sarokra; "
+                    "a hosszú sarok zárása tudatosan — a mérleg ott "
+                    "szokott elfolyni",
+                    # A kapott gól a MÁSIK csapat eseménye — mezszám
+                    # szerint nem szűrhető rá; a jelenet-ajánlás itt
+                    # üres, nem hazudunk "nézd meg" gombot.
+                    clips=[])
+    except Exception:
+        pass
+
+    out: dict = {}
+    for side in ("home", "away"):
+        sorok = [{"player_id": pid, "jersey": rec["jersey"],
+                  "items": rank_focus(rec["items"], PLAYER_MAX_ITEMS)}
+                 for pid, rec in tar[side].items() if rec["items"]]
+        sorok.sort(key=lambda r: (-len(r["items"]),
+                                  r["jersey"] if r["jersey"] is not None
+                                  else 999))
+        out[side] = {"players": sorok}
     return out

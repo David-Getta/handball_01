@@ -27,6 +27,9 @@ weights/
 
 # Flutter / Dart (kliens)
 .dart_tool/
+# A kliens csomag-zára: a kiadás (release.yml) mindig frissen old fel,
+# a helyi `flutter analyze`/`flutter test` által írt zár ne kerüljön be.
+client/pubspec.lock
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages

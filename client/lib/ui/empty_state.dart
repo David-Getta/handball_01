@@ -15,6 +15,7 @@ library;
 import "package:flutter/material.dart";
 
 import "../theme/app_theme.dart";
+import "anim.dart";
 
 /// Üres állapot egy panel közepén.
 ///
@@ -35,9 +36,22 @@ class EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon ?? Icons.inbox_outlined, size: 34,
-              color: AppColors.textFaint),
+        // Finom belépő animáció: az üres állapot is "megérkezik", nem
+        // csak ott terem — kevésbé érződik hibának.
+        child: FadeSlideIn(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // Az ikon puha korong-háttéren ül: hangsúlyos, de nem rideg.
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.surfaceAlt,
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Icon(icon ?? Icons.inbox_outlined, size: 26,
+                color: AppColors.textSecondary),
+          ),
           const SizedBox(height: AppSpacing.md),
           Text(what, style: AppText.value.copyWith(fontSize: 15),
               textAlign: TextAlign.center),
@@ -53,7 +67,7 @@ class EmptyState extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             action!,
           ],
-        ]),
+        ])),
       ),
     );
   }

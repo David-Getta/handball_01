@@ -117,20 +117,27 @@ def test_library_recurring_focus_endpoint(tmp_path):
         it["title"] != "Fedezés-fegyelem" for it in r["teams"]["Veszprém"])
 
 
-def test_front_turnovers_trigger_safe_finishing_focus():
+def test_front_turnovers_trigger_safe_finishing_focus(monkeypatch):
     """6 hazai labdaeladás a támadó harmadban (x=35, a +x kapu előtt) →
     'Biztonságos befejezés' fókusz a hazaiaknak."""
     frames = []
     t = 0
+    # A birtoklás KITART (10 kocka @ 25 fps = 0,4 mp): az eladott labda
+    # felismerése ezt megköveteli (TURNOVER_MIN_HOLD_S), mert a
+    # kockánként átbillenő birtokos zaj, nem labdaszerzés.
     for _ in range(6):
-        for _ in range(3):
+        for _ in range(10):
             frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 35.0, 10.0)],
                                 ball=Ball(x=35.0, y=10.0, confidence=1.0)))
             t += 1
-        for _ in range(3):
+        for _ in range(10):
             frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 35.0, 10.0)],
                                 ball=Ball(x=35.0, y=10.0, confidence=1.0)))
             t += 1
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     focus = training_focus(Match(_meta(), frames))
     assert any("Biztonságos befejezés" in f_["title"] for f_ in focus["home"])
     # A vendég ugyanitt a SAJÁT harmadában veszít labdát → nála nem szól.
@@ -281,7 +288,7 @@ def test_slow_response_triggers_mental_focus():
     assert not any("jraindul" in f_["title"] for f_ in focus["away"])
 
 
-def test_barren_long_attacks_trigger_shot_clock_focus():
+def test_barren_long_attacks_trigger_shot_clock_focus(monkeypatch):
     """4 rövid gólos + 4 hosszú gól nélküli hazai támadás → 'Befejezés
     időkorláttal' fókusz."""
     from handball.models.tracking import Ball
@@ -309,6 +316,10 @@ def test_barren_long_attacks_trigger_shot_clock_focus():
         for _ in range(25):
             frames.append(Frame(t=t, players=[], ball=None))
             t += 1
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     focus = training_focus(Match(_meta(), frames))
     assert any("időkorlát" in f_["title"].lower() for f_ in focus["home"])
     assert not any("időkorlát" in f_["title"].lower()
@@ -755,7 +766,7 @@ def test_training_flags_loose_marking():
                    for it in out2["away"])
 
 
-def test_training_flags_underused_pivot():
+def test_training_flags_underused_pivot(monkeypatch):
     """30) Ha van beálló, de a támadások alig mennek rajta át,
     Beálló-kapcsolat fókusz születik; beálló-központú játéknál nem."""
     def scene(ball_at_pivot):
@@ -797,6 +808,10 @@ def test_training_flags_underused_pivot():
                 t += 1
         return Match(_meta(), frames)
 
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     out = training_focus(scene(False))
     items = [it for it in out["home"]
              if it["title"] == "Beálló-kapcsolat"]
@@ -806,7 +821,7 @@ def test_training_flags_underused_pivot():
                    for it in out2["home"])
 
 
-def test_training_flags_lane_defense():
+def test_training_flags_lane_defense(monkeypatch):
     """31) Ha az ellenfél betörései egy sávban jönnek és gólokat is
     hoznak, a védekező oldal Sáv-védelem fókuszt kap."""
     def frames_scene():
@@ -845,12 +860,16 @@ def test_training_flags_lane_defense():
                 t += 1
         return Match(_meta(), frames)
 
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     out = training_focus(frames_scene())
     items = [it for it in out["away"] if it["title"] == "Sáv-védelem"]
     assert items and "közép sávban jött" in items[0]["why"]
 
 
-def test_training_flags_unproductive_long_chains():
+def test_training_flags_unproductive_long_chains(monkeypatch):
     """32) Ha a 6+ passzos támadások terméketlenek, Passz-lánc fókusz
     születik időkorlátos gyakorlattal."""
     from handball.pipeline.training import training_focus as tf32
@@ -879,6 +898,10 @@ def test_training_flags_unproductive_long_chains():
                 t += 1
         return Match(_meta(), frames)
 
+    # A szabály-teszt a MEGSZÓLALÁST nézi, nem a rangsort: a fókusz
+    # öt helyét ezen a fixture-ön más szabályok is kitöltenék.
+    from handball.pipeline import training as training_mod
+    monkeypatch.setattr(training_mod, "MAX_ITEMS", 50)
     out = tf32(scene())
     items = [it for it in out["home"] if it["title"] == "Passz-lánc"]
     assert items and "terméketlenek" in items[0]["why"]
@@ -947,3 +970,320 @@ def test_training_flags_weak_transition_finish():
     items = [it for it in out["away"]
              if it["title"] == "Kontra-befejezés"]
     assert items and "gyors gól" in items[0]["why"]
+
+
+def test_minden_edzes_tetel_a_kozos_alakot_koveti():
+    """Az edzés-fókusz tételei {area, title, why, drill} dictek.
+
+    Ez nem formalitás: a szabályokat `try/except Exception: pass`
+    védi, hogy egy elromló réteg ne vigye el a listát — a hátulütő,
+    hogy egy ROSSZ ALAKÚ tétel (vagy egy elgépelt változónév) NÉMÁN
+    eltűnik. Pontosan ez történt öt új szabállyal: nem létező
+    változóra hivatkoztak, a NameError elveszett a try/except-ben, és
+    a szabályok soha nem futottak le — a tesztek mégis zöldek voltak,
+    mert a mintameccsen nem szólaltak volna meg amúgy sem.
+
+    Az őr ezért NEM a mintameccsre néz, hanem a FORRÁSRA: az egyetlen
+    megengedett hozzáadás az `add(...)` segéd, ami a közös alakot
+    garantálja és a darabszám-korlátot is betartja.
+    """
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+           / "training.py").read_text(encoding="utf-8")
+    tiltott = [f"{i + 1}: {sor.strip()}"
+               for i, sor in enumerate(src.split("\n"))
+               if re.search(r"\b(out|focus|items)\s*\[\s*side\s*\]\s*\."
+                            r"append\s*\(", sor)
+               # Az `add(...)` segéd SAJÁT sora a kivétel: ő építi a
+               # közös alakot, ezért benne van a mezőnév.
+               and '"area"' not in sor]
+    assert not tiltott, (
+        "az edzés-fókusz tételeit CSAK az add(...) segéddel szabad "
+        "hozzáadni (közös alak + darabszám-korlát); nyers append: "
+        + "; ".join(tiltott))
+
+
+def test_az_edzes_tetelek_alakja_a_mintameccsen_is_helyes():
+    """A forrás-ellenőrzés párja: a tényleges kimenet is a közös alak."""
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    tf = training_focus(m)
+    for side in ("home", "away"):
+        for tetel in tf[side]:
+            assert isinstance(tetel, dict), tetel
+            assert set(tetel) == {"area", "title", "why", "drill"}, tetel
+            assert all(isinstance(v, str) and v for v in tetel.values()), tetel
+
+
+def test_a_lovoero_eses_szabaly_valodi_retegbol_is_megszolal():
+    """A 45. szabály (Lövőerő-állóképesség) a VALÓDI shot_speed_fade
+    rétegből szólal meg: 1. félidőben gyors, 2.-ban lassú hazai lövések
+    → a hazai csapat kondíció-fókuszt kap. (A 118. szabály ugyanezt
+    duplázta egy nem létező `shot_power_fade` importtal — némán sosem
+    szólalt meg; törölve.)"""
+    fps = 25.0
+
+    def idle(t0, seconds):
+        return [Frame(t=t0 + i,
+                      players=[_pl(10 + k, Team.HOME, 15.0 + k, 6.0 + k)
+                               for k in range(6)],
+                      ball=Ball(x=20.0, y=10.0, confidence=1.0))
+                for i in range(int(seconds * fps))]
+
+    def shot(t0, step):
+        fr = [Frame(t=t0 + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                    ball=Ball(x=33.0, y=10.0, confidence=1.0))
+              for i in range(3)]
+        for i in range(8):
+            bx = min(33.0 + step * (i + 1), 40.0)
+            fr.append(Frame(t=t0 + 3 + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = []
+    for _ in range(3):
+        frames += idle(len(frames), 20)
+        frames += shot(len(frames), 1.6)
+    frames += idle(len(frames), 15)
+    frames += [Frame(t=len(frames) + i, players=[], ball=None)
+               for i in range(int(90 * fps))]
+    for _ in range(3):
+        frames += idle(len(frames), 20)
+        frames += shot(len(frames), 0.5)
+    frames += idle(len(frames), 15)
+
+    from handball.pipeline.event_detection import shot_speed_fade
+    m = Match(_meta(), frames)
+    assert shot_speed_fade(m)["home"]["drop_pct"] >= 8.0  # a réteg maga
+    tf = training_focus(m)
+    tetel = next((it for it in tf["home"]
+                  if it["title"] == "Lövőerő-állóképesség"), None)
+    assert tetel is not None, [it["title"] for it in tf["home"]]
+    assert tetel["area"] == "kondíció"
+    assert not any(it["title"] == "Lövőerő a hajrában" for it in tf["home"])
+
+
+# A terület-címkék kánonja: az edzés-fókusz tételének "area" mezője a
+# kliensben NAGYBETŰS csempeként jelenik meg, a HTML-riportban zárójelben.
+# Egy ékezet nélküli változat ("tamadas", "vedekezes", "jatek") külön
+# csoportnak látszik — 77 ilyen tétel volt, mielőtt ez az őr megszületett
+# (a "jatek" egyetlen tétele a taktika területre került).
+TERULET_KANON = {
+    "támadás", "védekezés", "kapus", "taktika", "befejezés", "átmenet",
+    "fáradás", "erőnlét", "kondíció", "mentális", "végjáték", "labdás",
+    "csoportos",
+    # a játékos-fókusz (player_training_focus) területei
+    "labdabiztonság", "hajrá",
+}
+
+
+def test_az_edzes_teruletek_ekezetes_kanont_kovetnek():
+    """Minden `add(..., "<terület>", "<Cím>", ...)` területe a kánonból van.
+
+    A tétel területe a kliensben nagybetűs címke, a riportban zárójeles
+    jelző, és a közös-gyengeség szabály cím szerint csoportosít — egy
+    ékezet nélküli változat ("tamadas") tehát külön csoportként és rossz
+    felirattal jelenik meg. Az őr a FORRÁST nézi: az `add(...)` hívások
+    kisbetűs szöveg-literálja (a Cím nagybetűvel kezdődik, ezért nem
+    illeszkedik) csak kanonikus terület lehet.
+    """
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+           / "training.py").read_text(encoding="utf-8")
+    talalt = set(re.findall(
+        r'add\((?:[^,\n]+,\s*){1,3}"([a-záéíóöőúüű][a-záéíóöőúüű\- ]*)",',
+        src))
+    assert talalt, "az őr nem talált terület-literált — a minta elavult?"
+    idegen = sorted(talalt - TERULET_KANON)
+    assert not idegen, (
+        "nem kanonikus (pl. ékezet nélküli) terület-címke az edzés-"
+        f"fókuszban: {idegen} — a kánon: {sorted(TERULET_KANON)}")
+
+
+def test_az_edzes_cimek_szabalyonkent_egyediek():
+    """Két KÜLÖNBÖZŐ szabály nem adhat ugyanolyan című tételt.
+
+    A cím a csempe fejléce: ha két különböző mérés ugyanazt a címet
+    viseli ("Kontra-befejezés" a labdaszerzés-váltásból ÉS a
+    lerohanás-váltásból), a csapat két azonos fejlécű, más indoklású
+    kártyát kap, és a címből nem tudja, melyik mérésről szól. Tizenhárom ilyen pár volt,
+    mielőtt ez az őr megszületett. Egy szabályon BELÜL (if/else ágak)
+    az azonos cím rendben van.
+
+    A forrást nézi: a `training_focus` törzsében a szabály-blokkokat a
+    `# N)` sorszám-komment nyitja; egy cím csak egy sorszámhoz tartozhat.
+    """
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+           / "training.py").read_text(encoding="utf-8")
+    kezdet = src.index("def training_focus(")
+    veg = src.index("def player_training_focus(")
+    torzs = src[kezdet:veg].split("\n")
+    cim_szabaly: dict = {}
+    szabaly = None
+    minta = re.compile(
+        r'add\((?:[^,\n]+,\s*){1,3}"[a-záéíóöőúüű][a-záéíóöőúüű\- ]*",\s*'
+        r'(?:\n\s*)?f?"([^"\n]+)"')
+    for i, sor in enumerate(torzs):
+        m = re.match(r"\s*#\s*(\d+)\)", sor)
+        if m:
+            szabaly = m.group(1)
+        m = minta.search(sor + "\n" + (torzs[i + 1] if i + 1 < len(torzs) else ""))
+        if m and 'add(' in sor:
+            cim_szabaly.setdefault(m.group(1), set()).add(szabaly)
+    assert cim_szabaly, "az őr nem talált címet — a minta elavult?"
+    dupla = {c: sorted(s, key=lambda x: int(x or 0))
+             for c, s in cim_szabaly.items() if len(s) > 1}
+    assert not dupla, (
+        "ugyanaz az edzés-cím több különböző szabályból: "
+        + "; ".join(f"{c!r} ← {s}" for c, s in sorted(dupla.items())))
+
+
+def test_a_fokusz_rangsor_teruletek_kozott_forog():
+    """A fókusz nem a forrás-sorrend első öt tétele, hanem területek
+    között forgó rangsor — és egy területen belül az alap-szabály előre.
+
+    A tételek a forrás-sorrendben érkeznek ("az újak felülre": az első
+    a legutóbb írt szabály). Nyolc támadás-tétel után egy védekezés és
+    egy kapus is megszólalt — a régi korlát (az első öt) csupa támadást
+    adott volna, a védekezés és a kapus le sem jutott az edzőhöz.
+    """
+    from handball.pipeline.training import MAX_ITEMS, rank_focus
+
+    def tetel(area, cim, szabaly):
+        return {"area": area, "title": cim, "why": "w", "drill": "d",
+                "_szabaly": szabaly}
+
+    # forrás-sorrend ("az újak felülre"): a támadás-8 (480. szabály) az
+    # első, a támadás-1 (1. szabály, alap) az utolsó; a szabály-sorszám
+    # a kulcs, nem a helyzet
+    items = ([tetel("támadás", f"támadás-{i}", 60 * i) for i in range(8, 0, -1)]
+             + [tetel("védekezés", "védekezés-alap", 2),
+                tetel("kapus", "kapus-alap", 9)])
+    top = rank_focus(items)
+    assert len(top) == MAX_ITEMS
+    cimek = [t["title"] for t in top]
+    # 1. kör: területenként a legkisebb sorszámú (alap) tétel, a
+    # terület-rangsor sorrendjében; 2. kör: a támadás következő kettő.
+    assert cimek == ["védekezés-alap", "támadás-1", "kapus-alap",
+                     "támadás-2", "támadás-3"], cimek
+    # a kimenet a közös alak — a sorszám belső kulcs, nem jut ki
+    assert all(set(t) == {"area", "title", "why", "drill"} for t in top)
+    # kevesebb tétel a korlátnál → mind
+    assert [t["title"] for t in rank_focus(items[-2:])] == \
+        ["védekezés-alap", "kapus-alap"]
+    assert rank_focus([]) == []
+    # a listán nem szereplő terület a végére, de nem vész el; a sorszám
+    # nélküli tétel a számozottak után, forrás-sorrendben
+    extra = items + [tetel("különleges", "x", None),
+                     {"area": "támadás", "title": "számozatlan",
+                      "why": "w", "drill": "d"}]
+    mind = [t["title"] for t in rank_focus(extra, limit=20)]
+    assert "x" in mind and mind.index("számozatlan") > mind.index("támadás-8")
+
+
+def test_a_fokusz_a_mintameccsen_is_tobb_teruletet_fed():
+    """A rangsor párja a valódi listán: ha a megszólaló tételek több
+    területet fednek, az öt fókusz sem lehet egyetlen területű."""
+    from handball.pipeline import training as training_mod
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    tf = training_mod.training_focus(m)
+    for side in ("home", "away"):
+        top = tf[side]
+        assert len(top) <= training_mod.MAX_ITEMS
+        teruletek = {t["area"] for t in top}
+        if len(top) >= 3:
+            assert len(teruletek) >= 2, (side, [t["area"] for t in top])
+
+
+def test_minden_edzes_szabaly_beallitja_a_sorszamat():
+    """Minden `# N)` szabály-blokk a `try:` előtt beállítja `_szabaly = N`-t.
+
+    A sorszám a rangsor területen belüli kulcsa (`rank_focus`): nélküle
+    a tétel némán az ELŐZŐ szabály számát örökli, és rossz helyre kerül
+    a fókuszban. A forrást nézzük: a sorszám-komment utáni első nem-
+    komment sor `_szabaly = <ugyanaz a szám>` kell legyen.
+    """
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "handball" / "pipeline"
+           / "training.py").read_text(encoding="utf-8")
+    kezdet = src.index("def _training_focus_cached(")
+    veg = src.index("def player_training_focus(")
+    sorok = src[kezdet:veg].split("\n")
+    hibak = []
+    talalt = 0
+    for i, sor in enumerate(sorok):
+        m = re.match(r"\s*#\s*(\d+)\)", sor)
+        if not m:
+            continue
+        talalt += 1
+        j = i + 1
+        while j < len(sorok) and sorok[j].strip().startswith("#"):
+            j += 1
+        vart = f"_szabaly = {m.group(1)}"
+        if j >= len(sorok) or sorok[j].strip() != vart:
+            hibak.append(f"{m.group(1)}. szabály: {sorok[j].strip()!r}")
+    assert talalt > 400, "az őr nem talált szabály-blokkot — a minta elavult?"
+    assert not hibak, "hiányzó vagy rossz sorszám-sor: " + "; ".join(hibak)
+
+
+def test_a_visszatero_gyengeseg_indoka_a_legutobbi_meccse():
+    """A szezon-könyvtár visszatérő tételének indoka a LEGUTÓBBI (dátum
+    szerinti) meccsé — nem a legrégebbié.
+
+    A könyvtár természetes sorrendje a fájl frissessége (a legfrissebb
+    ELÖL), és az összesítés az utoljára bejárt meccs indokát tartotta
+    meg: így a "legutóbbi meccs indoka" a LEGRÉGEBBI meccsé volt. A
+    szokásos eset: a márciusi (6 gólos) meccset dolgozták fel utoljára,
+    az övé a frissebb fájl — a bejárás vele kezdett, a januári (4 gólos)
+    indokával végzett. Az indoknak a márciusi 6 gólról kell szólnia.
+    """
+    import json
+    import os
+    import tempfile
+    import time
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+
+    tmp = tempfile.mkdtemp(prefix="hb_focus_utolso_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp
+    from pathlib import Path as _P
+
+    from handball.api.app import create_app
+
+    mdir = _P(tmp) / "data" / "matches"
+    mdir.mkdir(parents=True, exist_ok=True)
+    most = time.time()
+    for mid, n, datum, kor in (("januar", 4, "2026-01-10", 100.0),
+                               ("marcius", 6, "2026-03-10", 0.0)):
+        m = _shots_match(n=n, goal=True, defender_far=True)
+        m.meta.match_id = mid
+        m.meta.date = datum
+        m.meta.home_team = "Veszprém"
+        m.meta.away_team = "Szeged"
+        ut = mdir / f"{mid}.json"
+        ut.write_text(m.to_json(), encoding="utf-8")
+        os.utime(ut, (most - kor, most - kor))  # a márciusi a frissebb fájl
+
+    client = TestClient(create_app())
+    r = client.get("/library/training-focus").json()
+    szeged = r["teams"]["Szeged"]
+    zona = next(it for it in szeged if it["title"].startswith("Zóna-védekezés"))
+    assert zona["count"] == 2
+    assert zona["why"].startswith("6 kapott gól"), zona["why"]

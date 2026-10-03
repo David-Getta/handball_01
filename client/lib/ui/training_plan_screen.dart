@@ -1,0 +1,482 @@
+/// Edzésterv — az edző HETI munkalapja, saját menüponttal.
+///
+/// Eddig az edzés-fókusz csak egy meccs mélyén (összefoglaló-panel), a
+/// szezon-szintű, VISSZATÉRŐ fókusz pedig a kezdőlap egyik kártyáján
+/// élt. Az edző munkarendjében viszont ez önálló feladat: "mit
+/// gyakorolunk a héten" — ezért kap saját menüpontot.
+///
+/// Két nézet egy lapon:
+///   SZEZON: ami legalább KÉT meccsen előjött (`/library/training-focus`)
+///           — ez nem egyszeri kisiklás, hanem edzhető gyengeség;
+///   EGY MECCS: a kiválasztott meccs fókuszai (`/matches/{id}/training`).
+///
+/// A csapatot a felhasználó választja: a saját csapatra edzéstervnek, az
+/// ellenfélre "mit fognak ellenünk gyakorolni" olvasatnak jó.
+library;
+
+import "dart:io";
+
+import "package:file_picker/file_picker.dart";
+import "package:flutter/material.dart";
+
+import "../services/api_client.dart";
+import "../theme/app_theme.dart";
+import "error_text.dart";
+import "shell/app_shell.dart";
+import "waiting.dart";
+
+class TrainingPlanScreen extends StatefulWidget {
+  const TrainingPlanScreen({super.key});
+
+  @override
+  State<TrainingPlanScreen> createState() => _TrainingPlanScreenState();
+}
+
+class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
+  final ApiClient _api = ApiClient();
+
+  bool _loading = true;
+  String? _error;
+
+  // Szezon-nézet: csapatnév → visszatérő fókuszok, és meccs-darabszám.
+  Map<String, List<Map<String, dynamic>>> _teams = {};
+  Map<String, int> _matchCounts = {};
+  String? _team;
+
+  // Egy-meccs nézet.
+  List<Map<String, dynamic>> _matches = [];
+  String? _matchId;
+  Map<String, dynamic>? _matchFocus; // {"home": [...], "away": [...]}
+  bool _matchLoading = false;
+
+  bool _seasonView = true;
+
+  // A csapat EGYÉNI terve (mezszámonként) — a nyomtatható lap ezt is
+  // viszi, tehát a képernyőnek is mutatnia kell, különben a papír
+  // többet mond, mint a program.
+  List<Map<String, dynamic>> _playerPlan = [];
+  bool _planLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final lib = await _api.fetchLibraryTrainingFocus();
+      final ms = await _api.listMatches();
+      if (!mounted) return;
+      final teams = <String, List<Map<String, dynamic>>>{};
+      for (final e in ((lib["teams"] as Map?) ?? {}).entries) {
+        teams[e.key as String] = [
+          for (final it in (e.value as List? ?? []))
+            Map<String, dynamic>.from(it as Map)
+        ];
+      }
+      final counts = <String, int>{};
+      for (final e in ((lib["matches"] as Map?) ?? {}).entries) {
+        counts[e.key as String] = (e.value as num).toInt();
+      }
+      setState(() {
+        _teams = teams;
+        _matchCounts = counts;
+        _matches = ms;
+        // A csapat-választó MINDEN csapatot kínál, nem csak azokat,
+        // akiknek van visszatérő csapat-fókusza: egyéni feladat akkor
+        // is lehet, ha csapat-szinten nincs kilógó gyengeség.
+        _team = teams.keys.isNotEmpty
+            ? teams.keys.first
+            : (counts.keys.isNotEmpty ? counts.keys.first : null);
+        _matchId = ms.isNotEmpty ? ms.first["match_id"] as String : null;
+        _loading = false;
+      });
+      if (_team != null) _loadPlayerPlan();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = "Az edzésterv nem érhető el: ${humanError(e)}";
+        _loading = false;
+      });
+    }
+  }
+
+  /// A csapat egyéni terve — KÜLÖN kérés: minden meccset átnéz, a
+  /// csapat-lista pedig nélküle is teljes.
+  Future<void> _loadPlayerPlan() async {
+    final team = _team;
+    if (team == null) return;
+    setState(() {
+      _planLoading = true;
+      _playerPlan = [];
+    });
+    try {
+      final p = await _api.fetchTeamPlayerPlan(team);
+      if (!mounted) return;
+      setState(() {
+        _playerPlan = p;
+        _planLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _planLoading = false);
+    }
+  }
+
+  Future<void> _loadMatchFocus() async {
+    final id = _matchId;
+    if (id == null) return;
+    setState(() {
+      _matchLoading = true;
+      _matchFocus = null;
+    });
+    try {
+      final r = await _api.fetchTraining(id);
+      if (!mounted) return;
+      setState(() {
+        _matchFocus = r;
+        _matchLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _matchLoading = false;
+        _error = "A meccs edzés-fókusza nem érhető el: ${humanError(e)}";
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppShell(
+      active: NavId.training,
+      crumbPath: "CSAPAT · EDZÉSTERV",
+      child: _loading
+          ? const WaitingView("Edzés-fókuszok összegyűjtése…",
+              hint: "Minden tárolt meccs fókuszait összesítjük.",
+              icon: Icons.fitness_center)
+          : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text("Edzésterv", style: AppText.title),
+              const SizedBox(height: 4),
+              Text(
+                  "amit a MECCSEK mondanak: mit kell gyakorolni — "
+                  "területenként, indokkal és konkrét gyakorlattal",
+                  style: AppText.subtitle),
+              const SizedBox(height: AppSpacing.lg),
+              _viewSwitch(),
+              const SizedBox(height: AppSpacing.md),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Text(_error!,
+                      style: AppText.label.copyWith(color: AppColors.away)),
+                ),
+              Expanded(
+                  child: _seasonView ? _seasonBody() : _matchBody()),
+            ]),
+    );
+  }
+
+  /// A heti edzésterv nyomtatható lapja — a pályán nincs képernyő.
+  Future<void> _exportPlan() async {
+    final team = _team;
+    if (team == null) return;
+    try {
+      final bytes = await _api.fetchTrainingPlanExport(team);
+      if (!mounted) return;
+      final safe = team.replaceAll(
+          RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Edzésterv mentése (HTML)",
+        fileName: "edzesterv_$safe.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Edzésterv mentve: $path — böngészőből "
+              "nyomtatható")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Edzésterv-lap hiba: ${humanError(e)}")));
+    }
+  }
+
+  Widget _viewSwitch() {
+    Widget tab(String label, bool season, IconData icon) {
+      final on = _seasonView == season;
+      return OutlinedButton.icon(
+        onPressed: () {
+          setState(() => _seasonView = season);
+          if (!season && _matchFocus == null) _loadMatchFocus();
+        },
+        icon: Icon(icon, size: 16),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(
+              color: on ? AppColors.accent : AppColors.border,
+              width: on ? 2 : 1),
+          backgroundColor: on ? AppColors.accentSoft : null,
+          foregroundColor:
+              on ? AppColors.textPrimary : AppColors.textSecondary,
+        ),
+        label: Text(label),
+      );
+    }
+
+    return Row(children: [
+      tab("Szezon (visszatérő)", true, Icons.repeat),
+      const SizedBox(width: AppSpacing.sm),
+      tab("Egy meccs", false, Icons.play_circle_outline),
+      const Spacer(),
+      // A lapot le lehet vinni az edzésre, ki lehet tenni az öltözőben
+      // — a csapat gyakorlandói ÉS az egyéni feladatok egy oldalon.
+      if (_seasonView && _team != null)
+        OutlinedButton.icon(
+          onPressed: _exportPlan,
+          icon: const Icon(Icons.print_outlined, size: 16),
+          label: const Text("Nyomtatható edzésterv"),
+        ),
+    ]);
+  }
+
+  // ---- Szezon-nézet --------------------------------------------------
+
+  Widget _seasonBody() {
+    if (_matchCounts.isEmpty) {
+      return Text(
+          "Még nincs elemzett meccs — előbb dolgozz fel egy videót az "
+          "Új elemzés menüben.",
+          style: AppText.label);
+    }
+    final items = _teams[_team] ?? const [];
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: [
+          for (final name in _matchCounts.keys)
+            ChoiceChip(
+              selected: name == _team,
+              onSelected: (_) {
+                setState(() => _team = name);
+                _loadPlayerPlan();
+              },
+              label: Text("$name (${_matchCounts[name] ?? 0} meccs)"),
+              selectedColor: AppColors.accentSoft,
+              backgroundColor: AppColors.surfaceAlt,
+              labelStyle: AppText.value.copyWith(fontSize: 12.5),
+            ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.md),
+      Expanded(
+        child: ListView(children: [
+          if (items.isEmpty)
+            Text(
+                "Ennél a csapatnál nincs VISSZATÉRŐ csapat-gyengeség — "
+                "ide az kerül, ami legalább két meccsen előjött. Egy "
+                "meccs fókuszait az \"Egy meccs\" nézetben látod.",
+                style: AppText.label),
+          for (final it in items) ...[
+            _focusCard(it, badge: "${it["count"]} meccsen"),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          ..._playerPlanSection(),
+        ]),
+      ),
+    ]);
+  }
+
+  /// EGYÉNI feladatok a szezonból — ugyanaz, ami a nyomtatható lapon
+  /// van. Ha csak a papíron lenne rajta, a program kevesebbet mondana,
+  /// mint a saját nyomtatványa.
+  List<Widget> _playerPlanSection() {
+    if (_planLoading) {
+      return [
+        const SizedBox(height: AppSpacing.md),
+        Text("Egyéni feladatok készülnek…",
+            style: AppText.label.copyWith(fontSize: 12)),
+      ];
+    }
+    if (_playerPlan.isEmpty) return const [];
+    return [
+      const SizedBox(height: AppSpacing.lg),
+      Text("EGYÉNI FELADATOK", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      for (final p in _playerPlan) ...[
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Text(
+              p["name"] != null && "${p["name"]}".isNotEmpty
+                  ? "#${p["jersey"]} ${p["name"]}"
+                  : "#${p["jersey"]}",
+              style: AppText.value.copyWith(
+                  fontSize: 13, color: AppColors.gold)),
+        ),
+        for (final it in ((p["items"] as List)
+            .cast<Map<String, dynamic>>())) ...[
+          _focusCard(it,
+              badge: it["count"] != null ? "${it["count"]} meccsen" : null),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ],
+    ];
+  }
+
+  // ---- Egy meccs nézet -----------------------------------------------
+
+  Widget _matchBody() {
+    if (_matches.isEmpty) {
+      return Text(
+          "Még nincs elemzett meccs — előbb dolgozz fel egy videót az "
+          "Új elemzés menüben.",
+          style: AppText.label);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      DropdownButton<String>(
+        value: _matchId,
+        dropdownColor: AppColors.surface,
+        style: AppText.value.copyWith(fontSize: 13),
+        items: [
+          for (final m in _matches)
+            DropdownMenuItem(
+              value: m["match_id"] as String,
+              child: Text(
+                  "${m["home_team"] ?? "Hazai"} – ${m["away_team"] ?? "Vendég"}",
+                  overflow: TextOverflow.ellipsis),
+            ),
+        ],
+        onChanged: (v) {
+          setState(() => _matchId = v);
+          _loadMatchFocus();
+        },
+      ),
+      const SizedBox(height: AppSpacing.md),
+      if (_matchLoading)
+        // Expanded: a WaitingView Center-re épül, korlátlan magasságú
+        // Column-ban túlcsordulna.
+        const Expanded(
+            child: WaitingView("Edzés-fókusz számítása…",
+                icon: Icons.fitness_center))
+      else if (_matchFocus == null)
+        FilledButton.icon(
+          onPressed: _loadMatchFocus,
+          icon: const Icon(Icons.download_outlined, size: 18),
+          label: const Text("Fókuszok lekérése"),
+        )
+      else
+        Expanded(child: _matchFocusList()),
+    ]);
+  }
+
+  Widget _matchFocusList() {
+    final m = _matches.firstWhere((e) => e["match_id"] == _matchId,
+        orElse: () => const <String, dynamic>{});
+    final rows = <Widget>[];
+    for (final side in const ["home", "away"]) {
+      final name = (m[side == "home" ? "home_team" : "away_team"]
+              as String?) ??
+          (side == "home" ? "Hazai" : "Vendég");
+      final list = (_matchFocus?[side] as List?) ?? const [];
+      rows.add(Padding(
+        padding: const EdgeInsets.only(
+            top: AppSpacing.md, bottom: AppSpacing.xs),
+        child: Text(name.toUpperCase(), style: AppText.sectionLabel),
+      ));
+      if (list.isEmpty) {
+        rows.add(Text(
+            "Ebből a meccsből nem jött ki edzés-fókusz — ez jó hír: a "
+            "mért területeken nincs kilógó gyengeség.",
+            style: AppText.label));
+      }
+      for (final it in list) {
+        rows.add(Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: _focusCard(Map<String, dynamic>.from(it as Map)),
+        ));
+      }
+      // EGYÉNI feladatok ebből a meccsből: a végpont a csapat-lista
+      // mellett ezt is adja, és a szezon-nézet is mutatja — ha itt
+      // kimaradna, a két nézet mást mondana ugyanarról.
+      final egyeni = (((_matchFocus?["players"] as Map?) ?? const {})[side]
+              as Map?)?["players"] as List? ??
+          const [];
+      for (final p in egyeni) {
+        final pm = Map<String, dynamic>.from(p as Map);
+        rows.add(Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 2),
+          child: Text(
+              pm["jersey"] != null
+                  ? "#${pm["jersey"]}"
+                  : "${pm["player_id"]}. játékos",
+              style: AppText.value
+                  .copyWith(fontSize: 12.5, color: AppColors.gold)),
+        ));
+        for (final it in (pm["items"] as List)) {
+          rows.add(Padding(
+            padding: const EdgeInsets.only(
+                left: 8, bottom: AppSpacing.sm),
+            child: _focusCard(Map<String, dynamic>.from(it as Map)),
+          ));
+        }
+      }
+    }
+    return ListView(children: rows);
+  }
+
+  // ---- Közös csempe --------------------------------------------------
+
+  Widget _focusCard(Map<String, dynamic> it, {String? badge}) {
+    final area = (it["area"] as String?) ?? "";
+    final title = (it["title"] as String?) ?? "";
+    final why = (it["why"] as String?) ?? "";
+    final drill = (it["drill"] as String?) ?? "";
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: AppTheme.card(),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          if (area.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppColors.borderStrong),
+              ),
+              child: Text(area.toUpperCase(),
+                  style: AppText.label.copyWith(fontSize: 10.5)),
+            ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(title, style: AppText.value)),
+          if (badge != null)
+            Text(badge,
+                style: AppText.label
+                    .copyWith(fontSize: 11, color: AppColors.gold)),
+        ]),
+        if (why.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(why,
+              style: AppText.label
+                  .copyWith(fontSize: 12.5, color: AppColors.textSecondary)),
+        ],
+        if (drill.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.sports_handball,
+                size: 15, color: AppColors.accent),
+            const SizedBox(width: 6),
+            Expanded(
+                child: Text(drill,
+                    style: AppText.label.copyWith(
+                        fontSize: 12.5, color: AppColors.textPrimary))),
+          ]),
+        ],
+      ]),
+    );
+  }
+}

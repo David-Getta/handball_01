@@ -24,6 +24,10 @@ from typing import Optional
 
 from ..models.tracking import Match, Frame, Team
 from .calibration import COURT_LENGTH_M
+# A kocka-szintű gyorsítótár a LEGFORRÓBB úton hívódik (a birtoklás- és
+# fázis-mérés kockánként, egy összeállítás alatt milliószor): a
+# függvényen belüli import ennyi hívásnál már mérhető költség.
+from .primitive_cache import cached_frame
 
 
 # ---- Konfiguráció ----------------------------------------------------------
@@ -59,7 +63,6 @@ def possession_team(frame: Frame, config: TacticsConfig) -> Optional[Team]:
     Ha nincs labda, vagy a legközelebbi játékos is távolabb van a sugárnál,
     None ("szabad labda" / nincs egyértelmű birtokos).
     """
-    from .primitive_cache import cached_frame
     return cached_frame("possession_team", frame, config,
                         lambda: _possession_team(frame, config))
 
@@ -96,7 +99,6 @@ def classify_phase(frame: Frame, config: TacticsConfig) -> Phase:
     labda az ő TÁMADÓ térfelén van. Minden más (szabad labda, saját térfélen
     felépítés) ÁTMENET. Labda nélkül UNKNOWN.
     """
-    from .primitive_cache import cached_frame
     return cached_frame("classify_phase", frame, config,
                         lambda: _classify_phase(frame, config))
 
@@ -256,6 +258,102 @@ def slow_attacks(match: Match, config: Optional[TacticsConfig] = None) -> dict:
         rec["longest_s"] = round(rec["longest_s"], 1)
         if rec["attacks"]:
             rec["slow_pct"] = round(100.0 * rec["slow"] / rec["attacks"], 1)
+    return out
+
+
+# Támadás-ritmus: mennyire változatos a tempójuk.
+ATV_MIN_SPAN_S = 3.0     # ennél rövidebb szakasz zaj (fázis-váltás), nem támadás
+ATV_FAST_S = 12.0        # ez alatt "gyors" (kontra, korai befejezés)
+ATV_SLOW_S = 30.0        # e felett "hosszú" (kijátszott, passzív-közeli)
+ATV_MIN_ATTACKS = 8      # ennyi támadás alatt nincs ítélet
+ATV_ONE_TEMPO_PCT = 60.0  # egy sáv ekkora többsége: EGY tempó
+ATV_MIXED_MIN_PCT = 20.0  # mindhárom sáv ekkora fölött: váltogatják
+
+
+def attack_tempo_variety(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Támadás-ritmus: EGY tempóban játszanak-e, vagy váltogatják.
+
+    A támadó-fázis szakaszok HOSSZÁT soroljuk három sávba: gyors
+    (ATV_FAST_S alatt — kontra, korai befejezés), közepes, hosszú
+    (ATV_SLOW_S felett — kijátszott, passzív-közeli akció). Nem az a
+    kérdés, melyik a jobb: az, hogy egyfélék-e.
+
+    Edzőileg ez a felkészülés RITMUSA. Aki egy tempóban játszik,
+    kiszámítható: ha mindig gyorsan fejeznek be, a védekezés a
+    labdavesztés pillanatában már álljon készen, és a visszarendeződés
+    a mérkőzés-terv első pontja; ha mindig hosszan járatják, türelmes,
+    hibátlan fal kell, a passzív jel a védőnek dolgozik, és nem szabad
+    beleugrani a csali-mozgásokba. Aki VÁLTOGAT, az ellen a fal nem
+    állhat rá egy ritmusra — ott a jelzésekre (ki hozza fel a labdát,
+    milyen gyorsan indul az első keresztmozgás) kell edzeni a
+    felismerést.
+
+    Visszatérés csapatonként: {"attacks", "fast", "mid", "slow",
+    "top_share_pct", "verdict"} — a verdict "egy tempóban játszanak"
+    (ha egy sáv ATV_ONE_TEMPO_PCT fölött van, a sáv nevével),
+    "váltogatják a tempót" (ha mindhárom sáv ATV_MIXED_MIN_PCT
+    fölött van); kevés mintánál (ATV_MIN_ATTACKS alatt) és a köztes
+    esetben None.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    out = {side: {"attacks": 0, "fast": 0, "mid": 0, "slow": 0,
+                  "top_share_pct": None, "verdict": None}
+           for side in ("home", "away")}
+
+    current = 0
+    current_phase: Optional[Phase] = None
+
+    def close_run():
+        nonlocal current, current_phase
+        if current > 0 and current_phase is not None:
+            dur = current / fps
+            # A nagyon rövid szakasz nem támadás, hanem fázis-billegés
+            # (a labda-átadás körüli bizonytalanság) — beszámítva
+            # mindenkit "gyorsnak" mutatna.
+            if dur >= ATV_MIN_SPAN_S:
+                side = ("home" if current_phase == Phase.HOME_ATTACK
+                        else "away")
+                rec = out[side]
+                rec["attacks"] += 1
+                if dur < ATV_FAST_S:
+                    rec["fast"] += 1
+                elif dur > ATV_SLOW_S:
+                    rec["slow"] += 1
+                else:
+                    rec["mid"] += 1
+        current = 0
+        current_phase = None
+
+    attack_phases = {Phase.HOME_ATTACK, Phase.AWAY_ATTACK}
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        if ph in attack_phases:
+            if ph == current_phase:
+                current += 1
+            else:
+                close_run()
+                current = 1
+                current_phase = ph
+        else:
+            close_run()
+    close_run()
+
+    nevek = {"fast": "gyorsan fejeznek be",
+             "mid": "közepes tempóban játszanak",
+             "slow": "hosszan járatják a támadást"}
+    for rec in out.values():
+        if rec["attacks"] < ATV_MIN_ATTACKS:
+            continue
+        aranyok = {k: 100.0 * rec[k] / rec["attacks"]
+                   for k in ("fast", "mid", "slow")}
+        top = max(aranyok, key=lambda k: aranyok[k])
+        rec["top_share_pct"] = round(aranyok[top], 1)
+        if aranyok[top] >= ATV_ONE_TEMPO_PCT:
+            rec["verdict"] = f"egy tempóban játszanak — {nevek[top]}"
+        elif all(v >= ATV_MIXED_MIN_PCT for v in aranyok.values()):
+            rec["verdict"] = "váltogatják a tempót"
     return out
 
 
@@ -832,12 +930,55 @@ def pass_tempo(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     return out
 
 
+# Pillanatnyi sebesség ablaka MÁSODPERCBEN: az esemény kockája körül
+# összesen ennyi idő (25 fps-nél ±2 kocka). Kockában megadva ("±2
+# kocka") a termék ritkításánál (fps/3) háromszoros időablak lett
+# volna — a sebesség ugyanaz, de a lövés/átvétel pillanatától messzebb
+# mérve.
+SPEED_WINDOW_S = 0.16
+
+
+def speed_window_frames(fps: float, window_s: float = SPEED_WINDOW_S) -> int:
+    """A sebesség-ablak FÉL-szélessége kockában (legalább 1)."""
+    return max(1, int(round(window_s * (fps if fps > 0 else 25.0) / 2.0)))
+
+
+def displacement_at(frames, i0: int, fps: float, pick,
+                    window_s: float = SPEED_WINDOW_S):
+    """Egy játékos elmozdulása az i0. kocka körüli időablakban.
+
+    `pick(player)` választja ki a játékost (track_id vagy csapat+szerep
+    szerint). Visszatérés (p_előtte, p_utána, dt_másodperc) vagy None,
+    ha az ablak kilóg a meccsből, vagy a játékos valamelyik szélén
+    nincs meg. A sebesség: hypot(Δx, Δy) / dt; az oldalirányú
+    sebesség: Δy / dt.
+    """
+    k = speed_window_frames(fps, window_s)
+    if i0 is None or i0 - k < 0 or i0 + k >= len(frames):
+        return None
+    f0, f1 = frames[i0 - k], frames[i0 + k]
+    p0 = next((p for p in f0.players if pick(p)), None)
+    p1 = next((p for p in f1.players if pick(p)), None)
+    if p0 is None or p1 is None:
+        return None
+    dt = (f1.t - f0.t) / (fps if fps > 0 else 25.0)
+    if dt <= 0:
+        return None
+    return p0, p1, dt
+
+
 # Támadó-mozgás: szervezett támadásban ennyi mért játékos-másodperctől
 # ítélünk; ez alatti átlagsebesség álló, e feletti mozgásos támadás;
-# az irreálisan nagy elmozdulás track-ugrás, kihagyjuk.
+# az irreálisan nagy elmozdulás track-ugrás, kihagyjuk. A sebességet
+# ATTACK_MOTION_WINDOW_S hosszú, egymást nem fedő ablakokon mérjük
+# (az ablak két végpontja közti elmozdulás): a kockánkénti
+# távolság-összeg a detektálási remegést is mozgásnak számolta — sűrű
+# (25 fps) felvételen egy ÁLLÓ csapat is "mozgásosnak" látszott, a
+# ritkított ugyanaz a meccs pedig másképp ítélt.
 ATTACK_MOTION_MIN_S = 120.0
 ATTACK_MOTION_STATIC_MPS = 0.9
 ATTACK_MOTION_FLUID_MPS = 1.6
+ATTACK_MOTION_WINDOW_S = 1.0
 _MOTION_MAX_MPS = 9.0
 
 
@@ -864,34 +1005,45 @@ def attack_motion(match: Match,
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     sums = {"home": {"dist": 0.0, "time": 0.0},
             "away": {"dist": 0.0, "time": 0.0}}
-    prev = None
+    # Ablak-kezdő kocka oldalanként: az ablak a támadó fázis
+    # megszakadásával elvész (nem ér át két támadáson).
+    start = {"home": None, "away": None}
     for f in match.frames:
         ph = classify_phase(f, config)
         side = ("home" if ph == Phase.HOME_ATTACK
                 else "away" if ph == Phase.AWAY_ATTACK else None)
-        if prev is not None and side is not None:
-            dt = (f.t - prev.t) / fps
-            if 0.0 < dt <= 0.5:
-                team = Team.HOME if side == "home" else Team.AWAY
-                prev_pos = {
-                    p.track_id: (p.x, p.y) for p in prev.players
-                    if p.team == team
-                    and p.source == PositionSource.MEASURED
-                    and p.role != "kapus"}
-                for p in f.players:
-                    if (p.team != team
-                            or p.source != PositionSource.MEASURED
-                            or p.role == "kapus"):
-                        continue
-                    pp = prev_pos.get(p.track_id)
-                    if pp is None:
-                        continue
-                    d = math.hypot(p.x - pp[0], p.y - pp[1])
-                    if d / dt > _MOTION_MAX_MPS:
-                        continue
-                    sums[side]["dist"] += d
-                    sums[side]["time"] += dt
-        prev = f
+        for s in ("home", "away"):
+            if s != side:
+                start[s] = None
+        if side is None:
+            continue
+        prev = start[side]
+        if prev is None:
+            start[side] = f
+            continue
+        dt = (f.t - prev.t) / fps
+        if dt < ATTACK_MOTION_WINDOW_S:
+            continue
+        team = Team.HOME if side == "home" else Team.AWAY
+        prev_pos = {
+            p.track_id: (p.x, p.y) for p in prev.players
+            if p.team == team
+            and p.source == PositionSource.MEASURED
+            and p.role != "kapus"}
+        for p in f.players:
+            if (p.team != team
+                    or p.source != PositionSource.MEASURED
+                    or p.role == "kapus"):
+                continue
+            pp = prev_pos.get(p.track_id)
+            if pp is None:
+                continue
+            d = math.hypot(p.x - pp[0], p.y - pp[1])
+            if d / dt > _MOTION_MAX_MPS:
+                continue
+            sums[side]["dist"] += d
+            sums[side]["time"] += dt
+        start[side] = f
     out = {}
     for side in ("home", "away"):
         rec = sums[side]
@@ -1144,4 +1296,80 @@ def static_attackers(match: Match,
                     static = slowest
         out[side] = {"team_avg_mps": team_avg, "players": rows,
                      "static": static}
+    return out
+
+
+# Álló-poszt: posztonként ennyi mért másodperc kell, és a
+# csapatátlagnál ekkora (százalékos) lassabb labda nélküli mozgás,
+# hogy a posztot állónak mondjuk ki.
+SAR_MIN_S = 20.0
+SAR_GAP_PCT = 20.0
+
+
+def static_attacker_roles(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Álló-poszt: MELYIK POSZTJUK áll labda nélkül.
+
+    Az álló támadók rétege (static_attackers) az embert nevezi meg —
+    ez a posztot: a szervezett támadásban mért mozgás-másodperceket
+    és métereket a játékos posztjához összegzi, és megnézi, melyik
+    posztjuk mozog érdemben a csapatátlag alatt.
+
+    Edzőileg ez a besegítés-forrás: az álló posztot a védője
+    nyugodtan otthagyhatja — befelé segíthet, kettőzhet vagy a
+    beállóra léphet, mert az álló ember nem bünteti meg. Saját
+    csapatra: a poszt labda nélküli munkája kész edzés-téma.
+
+    Visszatérés csapatonként: {"roles": {poszt: {"seconds",
+    "meters", "avg_mps"}}, "team_avg_mps", "main_role", "verdict"} —
+    az ítélet None, ha egyik poszt sem éri el a SAR_MIN_S-t a
+    SAR_GAP_PCT-s lemaradással.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    sa = static_attackers(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        agg: dict = {}
+        for row in sa[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec = agg.setdefault(poszt, {"seconds": 0.0,
+                                         "meters": 0.0})
+            rec["seconds"] += row["seconds"]
+            rec["meters"] += row["seconds"] * row["avg_mps"]
+        total_s = sum(r["seconds"] for r in agg.values())
+        total_m = sum(r["meters"] for r in agg.values())
+        team_avg = (total_m / total_s) if total_s > 0 else None
+        for r in agg.values():
+            r["seconds"] = round(r["seconds"], 1)
+            r["avg_mps"] = (round(r["meters"] / r["seconds"], 2)
+                            if r["seconds"] > 0 else None)
+            r["meters"] = round(r["meters"], 1)
+        rec_out = {"roles": dict(sorted(
+                       agg.items(),
+                       key=lambda kv: kv[1]["avg_mps"] or 0.0)),
+                   "team_avg_mps": (round(team_avg, 2)
+                                    if team_avg else None),
+                   "main_role": None, "verdict": None}
+        if team_avg:
+            for poszt, r in rec_out["roles"].items():
+                if r["seconds"] < SAR_MIN_S or r["avg_mps"] is None:
+                    continue
+                if r["avg_mps"] <= team_avg * (1 - SAR_GAP_PCT / 100.0):
+                    rec_out["main_role"] = poszt
+                    rec_out["verdict"] = (
+                        f"a(z) {poszt} posztjuk áll labda nélkül "
+                        f"({r['avg_mps']:.1f} m/s a "
+                        f"{team_avg:.1f} m/s csapatátlag mellett) —"
+                        " a védője otthagyhatja: befelé segíthet, "
+                        "kettőzhet vagy a beállóra léphet")
+                    break
+        out[side] = rec_out
     return out

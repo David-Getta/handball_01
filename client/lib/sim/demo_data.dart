@@ -50,6 +50,9 @@ Match buildDemoMatch({int frames = 200, double fps = 25.0}) {
         source: PositionSource.measured,
         confidence: 1.0,
         jerseyNumber: i + 1,
+        // A sor UTOLSÓ embere a kapus (a saját kapujában áll) — a 3D
+        // nézet ettől mutatja őt eltérő mezben, mint a valóságban.
+        role: i == home.length - 1 ? "kapus" : null,
       ));
     }
     for (int i = 0; i < away.length; i++) {
@@ -65,6 +68,7 @@ Match buildDemoMatch({int frames = 200, double fps = 25.0}) {
         source: estimated ? PositionSource.estimated : PositionSource.measured,
         confidence: estimated ? 0.5 : 1.0,
         jerseyNumber: 11 + i,
+        role: i == away.length - 1 ? "kapus" : null,
       ));
     }
 
@@ -81,4 +85,56 @@ Match buildDemoMatch({int frames = 200, double fps = 25.0}) {
   }
 
   return Match(meta: meta, frames: frameList);
+}
+
+/// Demó-lövések a lövéstérképhez (backend nélkül): a /xg "shots"
+/// alakjában — t (kocka), team, x, y, xg, outcome. A hazai a jobb kapura
+/// lő (a demó-meccs szerint), a vendég a balra.
+List<Map<String, dynamic>> buildDemoShots({int frames = 200, double fps = 25.0}) {
+  final cy = courtWidth / 2;
+  final minta = [
+    // (hazai?, x, y, xG, kimenet) — szél, átlövés, beálló, hetes.
+    (true, 33.5, 2.8, 0.18, "miss"),
+    (true, 31.0, cy - 2.0, 0.09, "save"),
+    (true, 34.6, cy + 0.5, 0.55, "goal"),
+    (true, 33.0, 10.0, 0.72, "goal"),
+    (false, 6.5, cy + 3.0, 0.21, "goal"),
+    (false, 9.5, cy - 4.0, 0.08, "save"),
+  ];
+  return [
+    for (var i = 0; i < minta.length; i++)
+      {
+        "t": ((i + 1) * frames / (minta.length + 1)).floor(),
+        "team": minta[i].$1 ? "home" : "away",
+        "x": minta[i].$2,
+        "y": minta[i].$3,
+        "xg": minta[i].$4,
+        "outcome": minta[i].$5,
+      }
+  ];
+}
+
+/// Demó-passzok a 3D passz-vonalakhoz (backend nélkül): a demó-labda
+/// ~1 mp-enként vált birtokost a hazai útvonalon; egy passz = az előző
+/// és az új birtokos helye a váltás kockáján. Alak: t, team, x1, y1, x2, y2.
+List<Map<String, dynamic>> buildDemoPasses(Match m, {int lepes = 25}) {
+  const route = [2, 1, 0, 3, 4, 5];
+  final ki = <Map<String, dynamic>>[];
+  for (var t = lepes; t < m.frames.length; t += lepes) {
+    final f = m.frames[t];
+    final elozo = route[(t ~/ lepes - 1) % route.length];
+    final uj = route[(t ~/ lepes) % route.length];
+    PlayerPosition? ado, fogado;
+    for (final p in f.players) {
+      if (p.team != Team.home) continue;
+      if (p.trackId == elozo + 1) ado = p;
+      if (p.trackId == uj + 1) fogado = p;
+    }
+    if (ado == null || fogado == null) continue;
+    ki.add({
+      "t": t, "team": "home",
+      "x1": ado.x, "y1": ado.y, "x2": fogado.x, "y2": fogado.y,
+    });
+  }
+  return ki;
 }

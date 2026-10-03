@@ -680,6 +680,22 @@ class _DesignerPainter extends CustomPainter {
       canvas.drawPath(path, Paint()..color = AppColors.accent.withOpacity(0.07));
       canvas.drawPath(path, line);
     }
+    // 9 m-es szaggatott szabaddobási vonal — a figura-tervezőben ez a
+    // vonatkoztatás: a fal és az indulási helyek ehhez képest olvashatók
+    // (a felülnézeti meccs-kép ugyanezt rajzolja).
+    final dash = Paint()
+      ..color = AppColors.courtLine.withOpacity(0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+    for (final leftSide in [true, false]) {
+      final pts = freeThrowBoundary(leftSide: leftSide, segments: 22)
+          .map((o) => tr.toScreen(o.dx, o.dy))
+          .toList();
+      for (var i = 0; i + 1 < pts.length; i += 2) {
+        canvas.drawLine(pts[i], pts[i + 1], dash);
+      }
+    }
   }
 
   void _label(Canvas canvas, Offset center, String text, double radius) {

@@ -63,6 +63,17 @@ def _arg_key(value):
         return tuple(sorted((k, _arg_key(v)) for k, v in value.items()))
     data = getattr(value, "__dict__", None)
     if isinstance(data, dict):
+        # Az ALAPÉRTELMEZETT beállítás kulcsa ugyanaz, mint a None-é.
+        # A rétegek `config=None` esetén maguk állítanak elő egy
+        # alapértelmezett TacticsConfig-ot, tehát a két hívás
+        # SZÓ SZERINT ugyanazt számolja — külön kulccsal viszont
+        # kétszer futna le. Mérve: az edzői összefoglalóban a
+        # teendő-rangsor emiatt számolódott újra.
+        try:
+            if data == getattr(type(value)(), "__dict__", None):
+                return None
+        except Exception:
+            pass                       # kötelező mezős osztály: marad a régi
         return (type(value).__name__,
                 tuple(sorted((k, repr(v)) for k, v in data.items())))
     return repr(value)
@@ -86,6 +97,16 @@ def copy_by_id(data: dict) -> dict:
     return {k: (replace(v) if is_dataclass(v) and not isinstance(v, type)
                 else v)
             for k, v in (data or {}).items()}
+
+
+def copy_sides(data: dict) -> dict:
+    """{oldal: {kulcs: szám/szöveg}} másolata — a rétegek leggyakoribb
+    alakja (csapatonkénti mérés-szótár).
+
+    A `copy_nested` ennél egy szinttel mélyebbre megy; itt a belső
+    értékek skalárok, nem szótárak.
+    """
+    return {side: dict(rec or {}) for side, rec in (data or {}).items()}
 
 
 def copy_nested(data: dict) -> dict:
@@ -188,8 +209,21 @@ def memoize_primitive(name: str, copy: Optional[Callable] = None):
     def deco(fn):
         @functools.wraps(fn)
         def wrapper(match, *args, **kwargs):
+            # A KULCS normalizálása: a záró "nincs megadva" jelentésű
+            # argumentumokat elhagyjuk, hogy a `réteg(meccs)`, a
+            # `réteg(meccs, None)` és a `réteg(meccs, alapbeállítás)`
+            # UGYANAZT az eredményt olvassa — mindhárom szó szerint
+            # ugyanazt számolja, külön kulccsal viszont többször futna
+            # le. A HÍVÁS maga változatlan marad (az eredeti
+            # argumentumokkal megy tovább), csak a kulcs rövidül.
+            kulcs_args = list(args)
+            while kulcs_args and _arg_key(kulcs_args[-1]) is None:
+                kulcs_args.pop()
+            kulcs_kw = {k: v for k, v in kwargs.items()
+                        if _arg_key(v) is not None}
             return cached(
-                name, match, (args, tuple(sorted(kwargs.items()))),
+                name, match,
+                (tuple(kulcs_args), tuple(sorted(kulcs_kw.items()))),
                 lambda: fn(match, *args, **kwargs), copy=copy)
         wrapper.uncached = fn  # méréshez/teszthez: a nyers függvény
         return wrapper

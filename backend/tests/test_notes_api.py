@@ -95,3 +95,73 @@ if __name__ == "__main__":
     test_notes_validation()
     test_notes_persist_to_disk()
     print("Minden jegyzet-API teszt OK.")
+
+
+def test_library_notes_osszes_meccsbol():
+    """A könyvtár-szintű jegyzet-lista meccs-környezettel.
+
+    A jegyzetelés eddig egyirányú volt: a meccs közben meg lehetett
+    jelölni egy pillanatot, de utána csak ANNAK a meccsnek a
+    lejátszójában lehetett megtalálni. Az edző fejében viszont a
+    jegyzetek egyetlen listát alkotnak ("amit vissza akarok nézni") —
+    a hét közbeni munka ebből indul.
+    """
+    client, mid = _client_with_match()
+    client.post(f"/matches/{mid}/notes",
+                json={"frame": 60, "text": "második hullám"})
+    client.post(f"/matches/{mid}/notes",
+                json={"frame": 20, "text": "beállós elzárás"})
+
+    r = client.get("/library/notes")
+    assert r.status_code == 200
+    notes = r.json()["notes"]
+    assert len(notes) == 2
+    # Meccsen belül képkocka-sorrendben — a lista időrendben olvasható.
+    assert [n["frame"] for n in notes] == [20, 60]
+    for n in notes:
+        assert n["match_id"] == mid
+        assert n["home_team"] and n["away_team"]
+        assert n["text"]
+        # A t_s a jegyzet JÁTÉKIDEJE: enélkül a lista csak
+        # képkocka-indexet tudna mutatni, ami az edzőnek semmit sem
+        # mond.
+        assert n["t_s"] >= 0
+    gyors = {n["frame"]: n["t_s"] for n in notes}
+    assert gyors[60] > gyors[20]
+
+
+def test_library_notes_ures_ha_nincs_jegyzet():
+    """Jegyzet nélkül üres lista jár, nem hiba — a képernyő ebből
+    tudja kiírni, hogy még nincs mit visszanézni."""
+    client, mid = _client_with_match()
+    assert client.get("/library/notes").json() == {"notes": []}
+
+
+def test_a_legujabb_meccs_jegyzetei_elol():
+    """A hét közbeni munka a LEGUTÓBBI meccsből indul.
+
+    Húsz meccs jegyzetei közt a felvételi sorrend semmit nem mond;
+    meccsen belül viszont marad az időrend, mert a jegyzetek a meccs
+    menetét követik.
+    """
+    import json
+    from pathlib import Path
+
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
+    matches_dir = Path(_tmp) / "data" / "matches"
+    matches_dir.mkdir(parents=True, exist_ok=True)
+    for old in matches_dir.glob("*"):
+        old.unlink()
+    for mid, datum in (("regi", "2026-01-05"), ("uj", "2026-03-20")):
+        m = simulate_ground_truth(duration_s=3, fps=25.0, seed=1)
+        m.meta.match_id = mid
+        m.meta.date = datum
+        (matches_dir / f"{mid}.json").write_text(
+            json.dumps(m.to_dict()), encoding="utf-8")
+    client = TestClient(create_app())
+    client.post("/matches/regi/notes", json={"frame": 5, "text": "régi"})
+    client.post("/matches/uj/notes", json={"frame": 30, "text": "új-2"})
+    client.post("/matches/uj/notes", json={"frame": 10, "text": "új-1"})
+
+    notes = client.get("/library/notes").json()["notes"]
+    assert [n["text"] for n in notes] == ["új-1", "új-2", "régi"]
