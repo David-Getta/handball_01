@@ -25,12 +25,17 @@ from ..models.tracking import Match, PositionSource, Team
 VIEW3D_MAX_FPS = 6.0
 
 
-def _compact_data(match: Match, figure_alerts: list | None = None) -> dict:
+def _compact_data(match: Match, figure_alerts: list | None = None,
+                  breakpoints: dict | None = None) -> dict:
     """A követés tömör alakja: [[t_s, [[csapat,x,y],…], [bx,by]|0],…].
 
     `figure_alerts` (opcionális): a figura-riasztások ({"t", "team"}, a
     /figure-alerts alakja) — "f" típusú eseményként a jelenet-ugrásba és a
     feliratba: a visszatérő figura 3D-ben is megnézhető.
+    `breakpoints` (opcionális): a két csapat "feltörés"-listája (a
+    court3d.defence_breakpoints_by_team alakja) — a végpont a lemezes
+    tárból adja át, hogy a két teljes felderítés ne fusson le minden
+    oldal-nyitásnál; None-nál itt számoljuk.
     """
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     lepes = max(1, int(round(fps / VIEW3D_MAX_FPS)))
@@ -131,6 +136,16 @@ def _compact_data(match: Match, figure_alerts: list | None = None) -> dict:
                             round(fogado.x, 1), round(fogado.y, 1)])
     except Exception:
         passzok = []  # passz-vonalak nélkül is működjön a nézet
+    # Feltörés: hol és mivel törhető fel a két csapat védekezése (a
+    # felderítés rangsorának teteje) — a védekezés-panel a fal mellé írja.
+    try:
+        if breakpoints is None:
+            from .court3d import defence_breakpoints_by_team
+            breakpoints = defence_breakpoints_by_team(match)
+        feltores = {"home": list(breakpoints.get("home") or []),
+                    "away": list(breakpoints.get("away") or [])}
+    except Exception:
+        feltores = {"home": [], "away": []}
     return {
         "home": match.meta.home_team,
         "away": match.meta.away_team,
@@ -140,6 +155,7 @@ def _compact_data(match: Match, figure_alerts: list | None = None) -> dict:
         "defence": fal,
         "shots": lovesek,
         "passes": passzok,
+        "breakpoints": feltores,
     }
 
 
@@ -169,10 +185,11 @@ function lovesMeres(x, y, kapu){
 """
 
 
-def view3d_html(match: Match, figure_alerts: list | None = None) -> str:
+def view3d_html(match: Match, figure_alerts: list | None = None,
+                breakpoints: dict | None = None) -> str:
     """A teljes, önálló HTML-oldal (three.js CDN-ről, adat beágyazva)."""
-    adat = json.dumps(_compact_data(match, figure_alerts), ensure_ascii=False,
-                      separators=(",", ":"))
+    adat = json.dumps(_compact_data(match, figure_alerts, breakpoints),
+                      ensure_ascii=False, separators=(",", ":"))
     cim = f"{match.meta.home_team} vs {match.meta.away_team} — 3D"
     # Nem f-string: a JS tele van kapcsos zárójellel; a beszúrás
     # helyőrző-cserével megy.
@@ -1260,6 +1277,7 @@ const falOldal = document.getElementById("falOldal");
 const falInfo = document.getElementById("falInfo");
 const FORMAK = ADAT.formations || {};
 const FAL = ADAT.defence || [];
+const FELTORES = ADAT.breakpoints || {home: [], away: []};
 const falCsoport = new THREE.Group();
 szinpad.add(falCsoport);
 const falGyuruk = [];
@@ -1307,6 +1325,13 @@ function falFrissit(t){
   const sorok = [];
   if (elo) sorok.push("Most: " + csapat + " védekezik — <b>" + elo.cimke + "</b>");
   else sorok.push("Most nincs szervezett támadás — a fal nem áll.");
+  // Feltörés: a védekező csapat falának leggyengébb pontja (a felderítés
+  // rangsorának teteje) — hol és mivel kell támadni ellene.
+  if (elo){
+    const f = (elo.hazai ? FELTORES.home : FELTORES.away) || [];
+    if (f.length) sorok.push("Feltörés: <b>" + f[0].hol + "</b> — " + f[0].mivel +
+      " <span style='opacity:.7'>(" + f[0].miert + ")</span>");
+  }
   const sablon = nev ? FORMAK[nev] : null;
   if (sablon && goalX !== null){
     const jobb = goalX > H/2;

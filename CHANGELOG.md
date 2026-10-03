@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.157 óta)
 
+- **3D védekezés-panel: „Feltörés” sor** (új, böngészős/VR és appbeli
+  nézet): amikor a panel az élő falat mutatja, a tankönyvi faltól mért
+  eltérés mellé azt is kiírja, HOL és MIVEL törhető fel a védekező
+  csapat fala ("Feltörés: a bal szél sávban — lendületből betörés a
+  résbe, elzárás a rés mellé…") — a felderítés rangsorolt kivonatának
+  teteje csapatonként. Így a 3D-ben a fal MELLETT látszik a terv is
+  ellene. Backend: `court3d.defence_breakpoints_by_team`, a
+  `/defence-timeline` válaszban `breakpoints`, a böngészős oldal tömör
+  adatában ugyanez (gyorsítótárazva). Teszt: a lövős szimuláción
+  megszólal, a végpont viszi, a két nézet a sort mutatja.
+
 - **Hol törhető fel a védekezésük** (új, felderítés): a felderítő
   jelentés tetején egy rangsorolt kártya, ami tételenként megmondja,
   HOL (a fal mely sávjában / mely helyzetben), MIVEL (milyen támadó

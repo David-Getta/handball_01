@@ -65,7 +65,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "function kovetesFrissit", "kovetesFrissit(dt)",
                 'mod === "kovetes"', 'id="linkGomb"', "function linkEpit",
                 "function linkAlkalmaz", "linkAlkalmaz();", 'id="tvGomb"',
-                "function tvFrissit", "tvFrissit(dt)", '"KeyT"'):
+                "function tvFrissit", "tvFrissit(dt)", '"KeyT"',
+                "const FELTORES = ADAT.breakpoints", '"Feltörés: <b>"'):
         assert jel in oldal, jel
     # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
     assert '<link rel="icon" href="data:,">' in oldal
@@ -89,6 +90,31 @@ def test_a_tomor_adat_viszi_a_falsablonokat_es_az_elo_falat():
     s, hazai, cimke, goal_x = adat["defence"][0]
     assert hazai == 0 and cimke == "6-0" and goal_x == 40.0
     assert [r[0] for r in adat["defence"]] == [0.0, 1.0]
+
+
+def test_a_tomor_adat_viszi_a_feltorest():
+    """A védekezés-panel "Feltörés" sora: csapatonként a felderítés
+    rangsorának teteje (legfeljebb DEFENCE_BREAKPOINTS_TOP), a lövős
+    szimuláción a vendégre meg is szólal; a kis fixtúrán csak az alak."""
+    from handball.pipeline.court3d import (DEFENCE_BREAKPOINTS_TOP,
+                                           defence_breakpoints_by_team)
+    from handball.pipeline.view3d_html import _compact_data
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=240, fps=25.0, seed=5,
+                              shots_per_min=8)
+    f = defence_breakpoints_by_team(m)
+    assert set(f) == {"home", "away"}
+    assert f["away"], "a lövős szimuláció vendég-védekezése feltörhető"
+    assert len(f["away"]) <= DEFENCE_BREAKPOINTS_TOP
+    assert {"hol", "mivel", "miert", "pont"} <= set(f["away"][0])
+    assert _compact_data(m)["breakpoints"] == f
+    # A végpont a tárból adja át — a tömör adat azt viszi, nem számol újra.
+    atadott = {"home": [{"hol": "x", "mivel": "y", "miert": "z", "pont": 1.0}],
+               "away": []}
+    assert _compact_data(_meccs(), None, atadott)["breakpoints"] == atadott
+    kicsi = defence_breakpoints_by_team(_meccs())
+    assert isinstance(kicsi["home"], list) and isinstance(kicsi["away"], list)
 
 
 def test_a_tomor_adat_viszi_a_passzokat():
@@ -289,6 +315,9 @@ def test_a_vedekezes_idovonal_vegpont(tmp_path, monkeypatch):
     assert d["rows"][0]["defending"] == "away" and d["rows"][0]["label"] == "6-0"
     assert d["rows"][0]["goal_x"] == 40.0
     assert set(d["formations"]) == {"6-0", "5-1", "4-2", "3-2-1"}
+    # Feltörés csapatonként: lista (a kis fixtúrán üres is lehet).
+    assert set(d["breakpoints"]) == {"home", "away"}
+    assert all(isinstance(v, list) for v in d["breakpoints"].values())
     assert c.get("/matches/v3t/defence-timeline").json() == d  # tárból is
     assert c.get("/matches/nincs/defence-timeline").status_code == 404
 
@@ -328,7 +357,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "_tavUgrasM = 3.0", "km/h", "_passzok", "Passzok: ki",
                 "class _PasszVonal", "_passzVonalak", 'q["kamera"]',
                 'q["hoter"]', 'q["loves"]', 'q["passz"]', 'q["fal"]',
-                "_mostT(m) / fpsB", "this.lovesTerkep"):
+                "_mostT(m) / fpsB", "this.lovesTerkep", "_falBreak",
+                '"Feltörés: ${f.first["hol"]}'):
         assert jel in kepernyo, jel
     # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).
     assert "0.22 + 0.5 *" in kepernyo and "0.22 + 0.5 * Math.min" in \

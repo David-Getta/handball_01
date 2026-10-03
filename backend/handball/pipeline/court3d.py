@@ -158,3 +158,27 @@ def defence_timeline(match: Match, config: Optional[TacticsConfig] = None,
                     "label": detect_formation(f, vedo, config).label,
                     "goal_x": config.own_goal_x(vedo)})
     return out
+
+
+# A 3D védekezés-paneljének "feltörés" sora: csapatonként ennyi tételt
+# viszünk a felderítés rangsorából.
+DEFENCE_BREAKPOINTS_TOP = 3
+
+
+def defence_breakpoints_by_team(match: Match, top: int = DEFENCE_BREAKPOINTS_TOP) -> dict:
+    """Hol törhető fel a két csapat védekezése — a felderítés rangsorolt
+    kivonatának (scouting.defence_breakpoints) teteje csapatonként, hogy
+    a 3D védekezés-panel a fal mellé írhassa: "Feltörés: a bal szél
+    sávban — lendületből betörés…". Edzőileg: a tankönyvi fal és a
+    valódi fal eltérése mellett az is látszik, HOL és MIVEL kell
+    támadni. Visszatérés: {"home": [{"hol","mivel","miert","pont"}],
+    "away": [...]} — csapatonként üres lista, ha nincs elég minta vagy a
+    felderítés hibázik (egy csapat hibája nem viszi el a másikat)."""
+    from .scouting import defence_breakpoints, scout_team
+    ki = {}
+    for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+        try:
+            ki[side] = defence_breakpoints(scout_team(match, team))[:top]
+        except Exception:
+            ki[side] = []
+    return ki

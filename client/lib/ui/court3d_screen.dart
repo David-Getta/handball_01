@@ -115,6 +115,9 @@ class _Court3DScreenState extends State<Court3DScreen>
   String _fal = ""; // "" | "elo" | sablonnév
   String _falOldal = "auto"; // "auto" | "bal" | "jobb"
   List<Map<String, dynamic>> _falSorok = const [];
+  // Feltörés: hol és mivel törhető fel a csapatok védekezése (a
+  // felderítés rangsorának teteje, csapatonként) — a fal mellé írjuk.
+  Map<String, dynamic> _falBreak = const {};
   // LÖVÉSTÉRKÉP: a meccs lövései a padlón (a /xg lövés-sorai: t kocka,
   // team, x, y, xg, outcome); koppintás egy körre — odaugrik.
   List<Map<String, dynamic>> _lovesek = const [];
@@ -213,10 +216,13 @@ class _Court3DScreenState extends State<Court3DScreen>
       if (!mounted) return;
       // A védekezés-panel élő fala — hibája nem viheti el a nézetet.
       List<Map<String, dynamic>> falSorok = const [];
+      Map<String, dynamic> falBreak = const {};
       try {
         final d = await _api.fetchDefenceTimeline(id);
         falSorok = ((d["rows"] as List?) ?? const [])
             .cast<Map<String, dynamic>>();
+        falBreak = (d["breakpoints"] as Map?)?.cast<String, dynamic>() ??
+            const {};
       } catch (_) {}
       // A lövéstérkép a helyzetminőség lövés-soraiból — hibája nem
       // viheti el a nézetet (a térkép ilyenkor üres).
@@ -258,6 +264,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _kovTeam = null;
         _kovMez = null;
         _falSorok = falSorok;
+        _falBreak = falBreak;
         _lovesek = lovesek;
         _passzok = passzok;
         _lovesValasztott = null;
@@ -1469,6 +1476,15 @@ class _Court3DScreenState extends State<Court3DScreen>
       sorok.add("Most: $csapat védekezik — $eloCimke");
     } else {
       sorok.add("Most nincs szervezett támadás — a fal nem áll.");
+    }
+    // Feltörés: a védekező csapat falának leggyengébb pontja — hol és
+    // mivel kell támadni ellene (a felderítés rangsorának teteje).
+    if (elo != null) {
+      final f = ((_falBreak[eloHazai ? "home" : "away"] as List?) ?? const [])
+          .cast<Map<String, dynamic>>();
+      if (f.isNotEmpty) {
+        sorok.add("Feltörés: ${f.first["hol"]} — ${f.first["mivel"]}");
+      }
     }
     final nev = _fal == "elo" ? eloCimke : _fal;
     double? goalX;
