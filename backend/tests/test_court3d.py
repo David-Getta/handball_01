@@ -103,3 +103,21 @@ def test_a_vedekezes_idovonal_a_szervezett_tamadast_koveti():
     assert all(r["defending"] == "away" and r["label"] == "5-1"
                and r["goal_x"] == goal_x for r in sorok)
     assert sorok[1]["s"] == 1.0
+
+
+def test_a_feltores_sav_a_vedo_nezopontjabol_fordul():
+    """A feltörés-sáv téglalapja: a 9 m-es vonalig a kapu elől, a sáv a
+    VÉDŐ nézőpontjából — a 0-s kaput védőnek a bal szél a nagyobb y, a
+    40-es kaput védőnek a kisebb (a defense.defensive_gaps szabálya);
+    közép a középső harmad; sáv nélkül None."""
+    from handball.pipeline.court3d import breakpoint_zone_band
+
+    bal0 = breakpoint_zone_band("bal szél", 0.0)
+    assert bal0 == {"x0": 0.0, "x1": 9.0, "y0": 13.333, "y1": 20.0}
+    bal40 = breakpoint_zone_band("bal szél", 40.0)
+    assert bal40 == {"x0": 31.0, "x1": 40.0, "y0": 0.0, "y1": 6.667}
+    assert breakpoint_zone_band("jobb szél", 0.0)["y0"] == 0.0
+    assert breakpoint_zone_band("közép", 40.0) == {"x0": 31.0, "x1": 40.0,
+                                                   "y0": 6.667, "y1": 13.333}
+    assert breakpoint_zone_band(None, 0.0) is None
+    assert breakpoint_zone_band("átlövés közép", 0.0) is None

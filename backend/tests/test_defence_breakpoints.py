@@ -39,6 +39,10 @@ def test_a_tetelek_a_bizonyitek_ereje_szerint_rangsorolva():
     pontok = [t["pont"] for t in tetelek]
     assert pontok == sorted(pontok, reverse=True)
     assert "bal szél" in tetelek[0]["hol"] and "4,5" in tetelek[0]["miert"].replace(".", ",")
+    # A sávos tételek a 3D-nek gépi sávot is adnak (a védő nézőpontjából).
+    assert tetelek[0]["sav"] == "bal szél"
+    assert any(t["sav"] == "jobb szél" and "jobb oldalán" in t["hol"] for t in tetelek)
+    assert all("sav" in t for t in tetelek)
     holok = " | ".join(t["hol"] for t in tetelek)
     assert "jobb oldalán" in holok and "9 m-en" in holok
     assert "labdaszerzés után" in holok

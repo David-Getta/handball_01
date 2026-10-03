@@ -66,7 +66,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'mod === "kovetes"', 'id="linkGomb"', "function linkEpit",
                 "function linkAlkalmaz", "linkAlkalmaz();", 'id="tvGomb"',
                 "function tvFrissit", "tvFrissit(dt)", '"KeyT"',
-                "const FELTORES = ADAT.breakpoints", '"Feltörés: <b>"'):
+                "const FELTORES = ADAT.breakpoints", '"Feltörés: <b>"',
+                "function feltoresSav", "feltoresSik.visible = true"):
         assert jel in oldal, jel
     # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
     assert '<link rel="icon" href="data:,">' in oldal
@@ -247,6 +248,34 @@ def test_a_bongeszo_megtett_utja_a_python_osszeget_adja():
     assert vendeg2[-1] == 0.0  # a fal áll
 
 
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_bongeszo_feltores_savja_a_backendet_tukrozi():
+    """A böngésző feltörés-sávja (feltoresSav) ugyanazt a téglalapot adja,
+    mint a court3d.breakpoint_zone_band — mindkét kapura, mindhárom sávra."""
+    from handball.pipeline.court3d import breakpoint_zone_band
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("function feltoresSav(")
+    i1 = kod.index("\n}\n", i0) + 2   # a függvény záró kapcsos zárójele
+    js = ("const H = 40, W = 20;\n" + kod[i0:i1] +
+          "\nconst ki = [];\nfor (const g of [0, 40]) for (const s of "
+          "['bal szél', 'közép', 'jobb szél', 'x']) ki.push(feltoresSav(s, g));"
+          "\nconsole.log(JSON.stringify(ki));\n")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    js_ki = json.loads(r.stdout)
+    py_ki = [breakpoint_zone_band(s, g) for g in (0.0, 40.0)
+             for s in ("bal szél", "közép", "jobb szél", "x")]
+    for a, b in zip(js_ki, py_ki):
+        if b is None:
+            assert a is None
+            continue
+        for k in ("x0", "x1", "y0", "y1"):
+            assert abs(a[k] - b[k]) < 0.01, (a, b)
+
+
 def _modul_szkript(oldal: str) -> str:
     m = re.search(r'<script type="module">(.*?)</script>', oldal, re.S)
     assert m, "nincs modul-szkript"
@@ -339,6 +368,7 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
         dart = [tuple(float(v) for v in par)
                 for par in re.findall(r"\(([\d.]+), ([\d.]+)\)", m.group(1))]
         assert dart == [tuple(p) for p in pontok], nev
+    assert "Rect? breakpointZoneBand(String? sav, double goalX)" in geo
     for jel in ("ShotGeometry shotGeometry", "math.acos(c)",
                 "y.clamp(y1, y2)", '"kapuelőtér"', '"6–9 m"',
                 '"9 m-en túl"', "formationDeviation"):
@@ -358,7 +388,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "class _PasszVonal", "_passzVonalak", 'q["kamera"]',
                 'q["hoter"]', 'q["loves"]', 'q["passz"]', 'q["fal"]',
                 "_mostT(m) / fpsB", "this.lovesTerkep", "_falBreak",
-                '"Feltörés: ${f.first["hol"]}'):
+                '"Feltörés: ${f.first["hol"]}', "breakpointZoneBand",
+                "feltoresSav: fal.$3"):
         assert jel in kepernyo, jel
     # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).
     assert "0.22 + 0.5 *" in kepernyo and "0.22 + 0.5 * Math.min" in \

@@ -1025,6 +1025,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                       ? null
                       : _lovesValasztott!["team"] == "away",
                   falPontok: fal.$1,
+                  feltoresSav: fal.$3,
                   nyom: _labdaNyom(m),
                   hoCellak: _hoCellak(m),
                   passzok: _passzVonalak(m),
@@ -1464,8 +1465,8 @@ class _Court3DScreenState extends State<Court3DScreen>
 
   /// A védekezés-panel állapota: a kirajzolandó sablon-pontok és a
   /// kiírandó sorok (az élő fal neve, a sablon helye, az eltérés).
-  (List<Offset>, List<String>) _falAllapot(Match m, _Allapot all) {
-    if (_fal.isEmpty) return (const [], const []);
+  (List<Offset>, List<String>, Rect?) _falAllapot(Match m, _Allapot all) {
+    if (_fal.isEmpty) return (const [], const [], null);
     final elo = _eloFal(m);
     final sorok = <String>[];
     final eloCimke = elo?["label"] as String?;
@@ -1479,11 +1480,20 @@ class _Court3DScreenState extends State<Court3DScreen>
     }
     // Feltörés: a védekező csapat falának leggyengébb pontja — hol és
     // mivel kell támadni ellene (a felderítés rangsorának teteje).
+    Rect? sav;
     if (elo != null) {
       final f = ((_falBreak[eloHazai ? "home" : "away"] as List?) ?? const [])
           .cast<Map<String, dynamic>>();
       if (f.isNotEmpty) {
         sorok.add("Feltörés: ${f.first["hol"]} — ${f.first["mivel"]}");
+      }
+      // Az első sávos tétel piros sávként a padlón, a védett kapu előtt.
+      for (final t in f) {
+        sav = breakpointZoneBand(t["sav"] as String?, eloGoalX);
+        if (sav != null) {
+          sorok.add("piros sáv: ide kell betörni");
+          break;
+        }
       }
     }
     final nev = _fal == "elo" ? eloCimke : _fal;
@@ -1499,11 +1509,11 @@ class _Court3DScreenState extends State<Court3DScreen>
       if (_fal == "elo" && elo != null) {
         sorok.add("(ehhez a formához nincs tankönyvi sablon)");
       }
-      return (const [], sorok);
+      return (const [], sorok, sav);
     }
     if (goalX == null) {
       sorok.add("Válassz kaput, vagy várj egy szervezett támadásra.");
-      return (const [], sorok);
+      return (const [], sorok, sav);
     }
     final pontok = formationPositions(nev, goalX);
     final jobb = goalX > courtLength / 2;
@@ -1523,7 +1533,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         }
       }
     }
-    return (pontok, sorok);
+    return (pontok, sorok, sav);
   }
 
   /// A lövéstérkép összegzője: hány lövés látszik, ebből hány gól, és
@@ -1902,6 +1912,8 @@ class _Court3DPainter extends CustomPainter {
   // A mérés kapuja (null: a közelebbi); a lövéstérkép körei.
   final bool? meresBalKapu;
   final List<Offset> falPontok;
+  // A feltörés sávja a padlón (pálya-méter): piros, áttetsző téglalap.
+  final Rect? feltoresSav;
   final List<_LovesJel> lovesek;
   // A labda útja az utolsó másodpercekben (pálya-méter, időrendben).
   final List<Offset> nyom;
@@ -1920,6 +1932,7 @@ class _Court3DPainter extends CustomPainter {
       this.meres,
       this.meresBalKapu,
       this.falPontok = const [],
+      this.feltoresSav,
       this.lovesek = const [],
       this.nyom = const [],
       this.hoCellak = const [],
@@ -2374,6 +2387,28 @@ class _Court3DPainter extends CustomPainter {
           szaggatott: true);
       _kor(canvas, Paint()..color = Colors.white..strokeWidth = 2.0,
           mp.dx, mp.dy, 0.3);
+    }
+
+    // A feltörés sávja: piros, áttetsző téglalap a védett kapu előtt.
+    final fs = feltoresSav;
+    if (fs != null) {
+      final sarkok = <Offset>[];
+      var jo = true;
+      for (final (x, y) in [
+        (fs.left, fs.top), (fs.right, fs.top), (fs.right, fs.bottom),
+        (fs.left, fs.bottom)
+      ]) {
+        final (jb, fe, me) = _kamera(x, y, 0.012);
+        if (me < _kozel) {
+          jo = false;
+          break;
+        }
+        sarkok.add(_kepernyo(jb, fe, me));
+      }
+      if (jo) {
+        canvas.drawPath(Path()..addPolygon(sarkok, true),
+            Paint()..color = AppColors.away.withOpacity(0.22));
+      }
     }
 
     // Védekezés-sablon: sárga körök a tankönyvi védő-helyeken.

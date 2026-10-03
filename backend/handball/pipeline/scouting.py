@@ -2499,10 +2499,13 @@ def defence_breakpoints(rep: ScoutingReport) -> list[dict]:
     mondott ítélet)."""
     tetelek: list[dict] = []
 
-    def tetel(hol, mivel, miert, pont):
+    def tetel(hol, mivel, miert, pont, sav=None):
+        # `sav`: a fal sávja a VÉDŐ nézőpontjából ("bal szél" / "közép" /
+        # "jobb szél"), ha a tétel egy sávra mutat — a 3D pálya ebből
+        # festi a padlóra a feltörés sávját.
         if pont >= DBP_MIN_POINTS:
             tetelek.append({"hol": hol, "mivel": mivel, "miert": miert,
-                            "pont": round(float(pont), 2)})
+                            "pont": round(float(pont), 2), "sav": sav})
 
     # — Fal-rés: a legnagyobb köz két szomszédos védő közt, és hol nyílik.
     try:
@@ -2523,13 +2526,14 @@ def defence_breakpoints(rep: ScoutingReport) -> list[dict]:
                       "a beállóra",
                       f"átlag {avg:.1f} m a legnagyobb rés"
                       + (f", {share:.0f}%-ban ott nyílik" if zona else ""),
-                      2.0 + (avg - DGAP_WIDE_M) + (share / 50.0 if zona else 0))
+                      2.0 + (avg - DGAP_WIDE_M) + (share / 50.0 if zona else 0),
+                      sav=zona)
             elif zona:
                 tetel(f"a {zona} sávban (a fal nézőpontjából)",
                       "a figurát arra az oldalra építeni, elzárással a "
                       "rés mellé",
                       f"a faluk zárt ({avg:.1f} m), de a rés {share:.0f}%-ban "
-                      "ott nyílik", 1.0 + share / 50.0)
+                      "ott nyílik", 1.0 + share / 50.0, sav=zona)
     except Exception:
         pass
 
@@ -2565,7 +2569,7 @@ def defence_breakpoints(rep: ScoutingReport) -> list[dict]:
                   "onnan széthúzni a segítő-csúszásukat",
                   f"a szélső-sávos kapott lövések {pct:.0f}%-a arról jön "
                   f"({max(rep.csb_left, rep.csb_right)}/{wings})",
-                  (pct - 50.0) / 10.0)
+                  (pct - 50.0) / 10.0, sav=f"{oldal} szél")
 
     # — A kapus gyenge oldala.
     gw = rep.gw_bal + rep.gw_kozep + rep.gw_jobb

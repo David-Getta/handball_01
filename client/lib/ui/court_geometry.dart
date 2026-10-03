@@ -175,3 +175,27 @@ double? formationDeviation(List<Offset> vedok, List<Offset> pontok) {
   }
   return db == 0 ? null : osszeg / db;
 }
+
+/// A feltörés sávjának padló-téglalapja a `goalX` kaput védő fal előtt
+/// (a backend `court3d.breakpoint_zone_band` tükre): a 9 m-es vonalig,
+/// a sáv harmadában; a sáv a VÉDŐ nézőpontjából ("bal szél" / "közép" /
+/// "jobb szél") — a 0-s kaput védőnek a nagyobb y a bal keze.
+Rect? breakpointZoneBand(String? sav, double goalX) {
+  if (sav != "bal szél" && sav != "közép" && sav != "jobb szél") return null;
+  final harmad = courtWidth / 3.0;
+  final balKapu = goalX < courtLength / 2;
+  double y0, y1;
+  if (sav == "közép") {
+    y0 = harmad;
+    y1 = 2 * harmad;
+  } else if ((sav == "bal szél") == balKapu) {
+    y0 = 2 * harmad;
+    y1 = courtWidth;
+  } else {
+    y0 = 0.0;
+    y1 = harmad;
+  }
+  final x0 = balKapu ? 0.0 : courtLength - freeThrowRadius;
+  final x1 = balKapu ? freeThrowRadius : courtLength;
+  return Rect.fromLTRB(x0, y0, x1, y1);
+}

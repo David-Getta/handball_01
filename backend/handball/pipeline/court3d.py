@@ -182,3 +182,32 @@ def defence_breakpoints_by_team(match: Match, top: int = DEFENCE_BREAKPOINTS_TOP
         except Exception:
             ki[side] = []
     return ki
+
+
+# A feltörés-sáv hossza a kaputól (a 9 m-es vonalig: a fal és a lövő
+# tere) és a sáv-harmadok — ugyanaz a felosztás, mint a fal-rés térképé
+# (defense.DGAP_ZONES, a VÉDŐ nézőpontjából).
+BREAK_BAND_DEPTH_M = FREE_THROW_LINE_M
+
+
+def breakpoint_zone_band(sav: str | None, goal_x: float) -> dict | None:
+    """A feltörés sávjának padló-téglalapja a `goal_x` kaput védő fal
+    előtt, pálya-méterben: {"x0","x1","y0","y1"} — None, ha nincs sáv.
+
+    A sáv a VÉDŐ nézőpontjából ("bal szél" / "közép" / "jobb szél"): a
+    0-s kapuját védő a +x felé néz, neki a nagyobb y a bal keze; a másik
+    kapunál fordítva (a defense.defensive_gaps szabálya). A 3D pálya ezt
+    festi piros sávként a padlóra: "ide kell betörni"."""
+    if sav not in ("bal szél", "közép", "jobb szél"):
+        return None
+    harmad = COURT_WIDTH_M / 3.0
+    bal_kapu = goal_x < COURT_LENGTH_M / 2
+    if sav == "közép":
+        y0, y1 = harmad, 2 * harmad
+    elif (sav == "bal szél") == bal_kapu:
+        y0, y1 = 2 * harmad, COURT_WIDTH_M   # a nagyobb y
+    else:
+        y0, y1 = 0.0, harmad
+    x0 = 0.0 if bal_kapu else COURT_LENGTH_M - BREAK_BAND_DEPTH_M
+    x1 = BREAK_BAND_DEPTH_M if bal_kapu else COURT_LENGTH_M
+    return {"x0": x0, "x1": x1, "y0": round(y0, 3), "y1": round(y1, 3)}

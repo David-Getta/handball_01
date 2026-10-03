@@ -14,7 +14,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   ellene. Backend: `court3d.defence_breakpoints_by_team`, a
   `/defence-timeline` válaszban `breakpoints`, a böngészős oldal tömör
   adatában ugyanez (gyorsítótárazva). Teszt: a lövős szimuláción
-  megszólal, a végpont viszi, a két nézet a sort mutatja.
+  megszólal, a végpont viszi, a két nézet a sort mutatja. Ha a tétel
+  egy SÁVRA mutat (fal-rés, átjárható fal-oldal), a sáv piros,
+  áttetsző téglalapként a padlóra is kerül a védett kapu előtt, a 9
+  m-es vonalig — "ide kell betörni"; a sáv a védő nézőpontjából fordul
+  (a backend és a két nézet ugyanazt a téglalapot adja — őr-teszt).
 
 - **Hol törhető fel a védekezésük** (új, felderítés): a felderítő
   jelentés tetején egy rangsorolt kártya, ami tételenként megmondja,

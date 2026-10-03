@@ -1278,6 +1278,23 @@ const falInfo = document.getElementById("falInfo");
 const FORMAK = ADAT.formations || {};
 const FAL = ADAT.defence || [];
 const FELTORES = ADAT.breakpoints || {home: [], away: []};
+// A feltörés sávja a padlón (court3d.breakpoint_zone_band tükre): piros,
+// áttetsző téglalap a védett kapu előtt, a 9 m-es vonalig, a sáv
+// harmadában — a sáv a VÉDŐ nézőpontjából (a 0-s kaput védőnek a
+// nagyobb y a bal keze).
+const feltoresSik = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({color:0xff6b6b, transparent:true, opacity:0.22, depthWrite:false, side:THREE.DoubleSide}));
+feltoresSik.rotation.x = -Math.PI/2; feltoresSik.visible = false;
+szinpad.add(feltoresSik);
+function feltoresSav(sav, goalX){
+  if (!["bal szél", "közép", "jobb szél"].includes(sav)) return null;
+  const harmad = W / 3, balKapu = goalX < H / 2;
+  let y0, y1;
+  if (sav === "közép"){ y0 = harmad; y1 = 2*harmad; }
+  else if ((sav === "bal szél") === balKapu){ y0 = 2*harmad; y1 = W; }
+  else { y0 = 0; y1 = harmad; }
+  return {x0: balKapu ? 0 : H - 9, x1: balKapu ? 9 : H, y0, y1};
+}
 const falCsoport = new THREE.Group();
 szinpad.add(falCsoport);
 const falGyuruk = [];
@@ -1327,10 +1344,20 @@ function falFrissit(t){
   else sorok.push("Most nincs szervezett támadás — a fal nem áll.");
   // Feltörés: a védekező csapat falának leggyengébb pontja (a felderítés
   // rangsorának teteje) — hol és mivel kell támadni ellene.
+  feltoresSik.visible = false;
   if (elo){
     const f = (elo.hazai ? FELTORES.home : FELTORES.away) || [];
     if (f.length) sorok.push("Feltörés: <b>" + f[0].hol + "</b> — " + f[0].mivel +
       " <span style='opacity:.7'>(" + f[0].miert + ")</span>");
+    // Az első sávos tétel piros sávként a padlón, a védett kapu előtt.
+    const savos = f.find(t => t.sav);
+    const sav = savos ? feltoresSav(savos.sav, elo.goalX) : null;
+    if (sav){
+      feltoresSik.scale.set(sav.x1 - sav.x0, sav.y1 - sav.y0, 1);
+      feltoresSik.position.set((sav.x0 + sav.x1)/2, 0.012, W - (sav.y0 + sav.y1)/2);
+      feltoresSik.visible = true;
+      sorok.push("<span style='color:#ff6b6b'>piros sáv: ide kell betörni</span>");
+    }
   }
   const sablon = nev ? FORMAK[nev] : null;
   if (sablon && goalX !== null){
