@@ -302,6 +302,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (hasNarrative) ("Így játszanak", Icons.menu_book_outlined),
       if (((r["defence_breakpoints"] as List?) ?? const []).isNotEmpty)
         ("Hol törhető fel a védekezésük", Icons.lock_open),
+      if (((r["attack_stoppers"] as List?) ?? const []).isNotEmpty)
+        ("Hogyan állítsd meg a támadásukat", Icons.back_hand_outlined),
       ("Hogyan játssz ellenük", Icons.gps_fixed),
       ("Erősségek / gyengeségek", Icons.compare_arrows),
       ("Mutatók", Icons.grid_view),
@@ -357,6 +359,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                   KeyedSubtree(
                       key: _sectionKey("Hol törhető fel a védekezésük"),
                       child: _breakCard(r)),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                // A párja: hogyan állítható meg a támadásuk — HOL / MIVEL
+                // / MIÉRT, a backend `attack_stoppers` rangsorában.
+                if (((r["attack_stoppers"] as List?) ?? const [])
+                    .isNotEmpty) ...[
+                  KeyedSubtree(
+                      key: _sectionKey("Hogyan állítsd meg a támadásukat"),
+                      child: _rankedCard(
+                          r["attack_stoppers"],
+                          "HOGYAN ÁLLÍTSD MEG A TÁMADÁSUKAT",
+                          Icons.back_hand_outlined,
+                          AppColors.accent)),
                   const SizedBox(height: AppSpacing.lg),
                 ],
                 KeyedSubtree(
@@ -613,24 +628,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   /// Hol törhető fel a védekezésük: tételenként HOL (sáv/helyzet), MIVEL
   /// (támadó eszköz) és MIÉRT (a mért bizonyíték), a backend
   /// `defence_breakpoints` rangsorában (a legerősebb bizonyíték elöl).
-  Widget _breakCard(Map<String, dynamic> r) {
-    final tetelek = ((r["defence_breakpoints"] as List?) ?? const [])
-        .cast<Map<String, dynamic>>();
+  Widget _breakCard(Map<String, dynamic> r) => _rankedCard(
+      r["defence_breakpoints"],
+      "HOL TÖRHETŐ FEL A VÉDEKEZÉSÜK",
+      Icons.lock_open,
+      AppColors.away);
+
+  /// Rangsorolt Hol / Mivel / Miért kártya (a feltörés- és a megállítás-
+  /// lista közös alakja): sorszám, a legerősebb bizonyíték elöl.
+  Widget _rankedCard(
+      dynamic lista, String cim, IconData ikon, Color szin) {
+    final tetelek =
+        ((lista as List?) ?? const []).cast<Map<String, dynamic>>();
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.away.withOpacity(0.55)),
+        border: Border.all(color: szin.withOpacity(0.55)),
       ),
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.lock_open, size: 18, color: AppColors.away),
+            Icon(ikon, size: 18, color: szin),
             const SizedBox(width: 8),
-            Text("HOL TÖRHETŐ FEL A VÉDEKEZÉSÜK",
-                style: AppText.sectionLabel.copyWith(color: AppColors.away)),
+            Text(cim, style: AppText.sectionLabel.copyWith(color: szin)),
           ]),
           const SizedBox(height: 4),
           Text("A legerősebb bizonyíték elöl — hol, mivel, és miért.",
@@ -646,12 +669,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                   margin: const EdgeInsets.only(right: 10, top: 1),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.away.withOpacity(0.18),
+                    color: szin.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(11),
                   ),
                   child: Text("${i + 1}",
                       style: AppText.value
-                          .copyWith(fontSize: 12, color: AppColors.away)),
+                          .copyWith(fontSize: 12, color: szin)),
                 ),
                 Expanded(
                   child: Column(

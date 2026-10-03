@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.157 óta)
 
+- **Hogyan állítsd meg a támadásukat** (új, felderítés): a "Hol
+  törhető fel a védekezésük" kártya párja a másik térfélre — rangsorolt
+  tételek Hol / Mivel / Miért alakban: a fő lövő-zónájuk és a
+  leghatékonyabb, a lerohanás (és ki futja ki), a beálló-terhelés, a
+  veszélyes szélső, a gól-tengely (gólpasszoló → lövő) és a helyzetei
+  felett teljesítő lövő. A kulcs-mondatokkal azonos küszöbök, a
+  bizonyíték ereje szerinti sorrend; kevés mintánál üres. A Felderítés
+  képernyőn külön kártya (ugró-gombbal), a nyomtatható jelentésben
+  blokk, a válaszban `attack_stoppers`. Teszt: rangsor, kevés minta, a
+  valódi felderítésből is megszólal, a nyomtatható lap viszi.
+
 - **3D védekezés-panel: „Feltörés” sor** (új, böngészős/VR és appbeli
   nézet): amikor a panel az élő falat mutatja, a tankönyvi faltól mért
   eltérés mellé azt is kiírja, HOL és MIVEL törhető fel a védekező

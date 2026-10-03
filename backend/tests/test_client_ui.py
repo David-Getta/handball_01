@@ -41,7 +41,7 @@ _DART_ROW_KEYS = {
     "shooter_id", "sprints", "takes",
     # A report_to_dict számolt kulcsa (nem jelentés-mező): a védekezés
     # feltörésének rangsorolt kivonata.
-    "defence_breakpoints",
+    "defence_breakpoints", "attack_stoppers",
 }
 
 def test_kliens_kulcsok_letezo_mezok():

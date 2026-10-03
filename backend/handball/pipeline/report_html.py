@@ -258,6 +258,26 @@ def with_toc(html: str, min_sections: int = TOC_MIN_SECTIONS) -> str:
     return html  # nincs fejléc — inkább ne nyúljunk hozzá
 
 
+def _stoppers_block(rep) -> str:
+    """"Hogyan állítsd meg a támadásukat": a felderítés rangsorolt
+    kivonata (scouting.attack_stoppers) Hol / Mivel / Miért sorokkal —
+    üres listánál nincs blokk."""
+    try:
+        from .scouting import attack_stoppers
+        tetelek = attack_stoppers(rep)
+    except Exception:
+        tetelek = []
+    if not tetelek:
+        return ""
+    sorok = "".join(
+        f"<li><b>Hol:</b> {escape(t['hol'])}<br>"
+        f"<b>Mivel:</b> {escape(t['mivel'])}<br>"
+        f"<span class=\"miert\">Miért: {escape(t['miert'])}</span></li>"
+        for t in tetelek)
+    return (f'<div class="keys stop"><h2>Hogyan állítsd meg a támadásukat</h2>'
+            f'<ol>{sorok}</ol></div>')
+
+
 def _breakpoints_block(rep) -> str:
     """"Hol törhető fel a védekezésük": a felderítés rangsorolt kivonata
     (scouting.defence_breakpoints) sorszámozott Hol / Mivel / Miért
@@ -781,6 +801,8 @@ def scouting_report_html(rep: ScoutingReport,
     if matchup else ""}
 
   {_breakpoints_block(rep)}
+
+  {_stoppers_block(rep)}
 
   <div class="keys">
     <h2>Hogyan játssz ellenük</h2>

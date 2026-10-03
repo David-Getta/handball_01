@@ -2483,6 +2483,134 @@ DBP_MIN_POINTS = 1.0
 DBP_MAX_ITEMS = 8
 
 
+# "Hogyan állítsd meg a támadásukat": a bizonyíték erejének alsó határa
+# és a lista hossza (a feltörés-listáéval azonos).
+ATS_MIN_POINTS = 1.0
+ATS_MAX_ITEMS = 8
+
+
+def attack_stoppers(rep: ScoutingReport) -> list[dict]:
+    """Hogyan állítható meg a felderített csapat TÁMADÁSA — a
+    defence_breakpoints párja a másik térfélre: rangsorolt lista a már
+    mért támadás-rétegekből (a fő lövő-zónájuk és a leghatékonyabb, a
+    lerohanás és a befejezője, a beálló-terhelés, a veszélyes szélső, a
+    gól-tengely és a helyzetei felett teljesítő lövő). Minden tétel
+    megmondja, HOL (melyik zóna / helyzet / ember), MIVEL (milyen
+    védekező eszközzel) és MIÉRT (a mért bizonyíték). A küszöbök a
+    "Hogyan játssz ellenük" kulcs-mondatokéival azonosak; a sorrend a
+    bizonyíték ereje (pont).
+
+    Visszatérés: [{"hol", "mivel", "miert", "pont"}] a legerősebbtől,
+    legfeljebb ATS_MAX_ITEMS; üres, ha nincs elég minta (sose 0-ból
+    mondott ítélet)."""
+    tetelek: list[dict] = []
+
+    def tetel(hol, mivel, miert, pont):
+        if pont >= ATS_MIN_POINTS:
+            tetelek.append({"hol": hol, "mivel": mivel, "miert": miert,
+                            "pont": round(float(pont), 2)})
+
+    # — A fő lövő-zónájuk (a lövések ≥40%-a) és a leghatékonyabb zónájuk
+    # (≥3 lövésből ≥60% gól) — a shot_zones gól/lövés darabszámaiból.
+    try:
+        zonak = rep.shot_zones or {}
+        osszes = sum(z.get("shots", 0) for z in zonak.values())
+        if osszes >= 3:
+            fo, fo_rec = max(zonak.items(), key=lambda kv: kv[1].get("shots", 0))
+            arany = 100.0 * fo_rec.get("shots", 0) / osszes
+            if arany >= 40.0:
+                tetel(f"{fo}", "ott zárj szorosabban: a lövőre időben kilépő "
+                      "védő, a kapus erre az oldalra áll",
+                      f"a lövéseik {arany:.0f}%-a innen jön "
+                      f"({fo_rec.get('shots', 0)}/{osszes}, "
+                      f"{fo_rec.get('goals', 0)} gól)", arany / 20.0)
+            hatekony = [(z, r) for z, r in zonak.items()
+                        if r.get("shots", 0) >= 3
+                        and r.get("goals", 0) / r["shots"] >= 0.6]
+            if hatekony:
+                z, r = max(hatekony, key=lambda kv: (kv[1]["goals"] / kv[1]["shots"],
+                                                     kv[1]["shots"]))
+                if z != fo or arany < 40.0:
+                    tetel(f"{z}", "ezt a lövést kell elvenni: elé lépés "
+                          "a beadás előtt, blokk a lövő karjára",
+                          f"innen nagyon eredményesek ({r['goals']}/{r['shots']} gól)",
+                          min(5.0, 1.0 + r["goals"] / 2.0))
+    except Exception:
+        pass
+
+    # — Lerohanás: gyors indítás (≥12%), és ki futja ki.
+    if rep.fast_break_pct >= 12.0:
+        ki = ""
+        try:
+            if rep.fb_finishers and rep.fb_finishers[0]["goals"] >= 2:
+                ki = (f" — először a(z) {rep.fb_finishers[0]['player_id']}. "
+                      "játékost keresd meg")
+        except Exception:
+            ki = ""
+        tetel("lövés vagy labdavesztés után, a visszafutásnál",
+              "azonnali visszazárás, a középső sáv elvágása" + ki,
+              f"a támadásaik {rep.fast_break_pct:.0f}%-a gyors indítás",
+              rep.fast_break_pct / 6.0)
+    elif rep.fb_finishers and rep.fb_finishers[0].get("goals", 0) >= 2:
+        f0 = rep.fb_finishers[0]
+        tetel(f"a(z) {f0['player_id']}. játékos a visszafutásnál",
+              "labdavesztés után őt keresd meg először",
+              f"{f0['goals']} lerohanás-gól tőle", 1.0 + f0["goals"] / 2.0)
+
+    # — Beálló-terhelés: a támadásaik ≥40%-a a beállón át (≥6 támadásból).
+    if rep.pivot_total_attacks >= 6:
+        pshare = 100.0 * rep.pivot_attacks / rep.pivot_total_attacks
+        if pshare >= 40.0:
+            extra = ""
+            if rep.pivot_attacks >= 3:
+                extra = f", {rep.pivot_goals} gól a beállón át"
+            tetel("a beállójuk — a 6 m-en",
+                  "szendvics a beállóra, és előzd meg a beadást: a kapott "
+                  "labdája már veszély",
+                  f"a támadásaik {pshare:.0f}%-a a beállón át megy{extra}",
+                  pshare / 20.0)
+
+    # — A veszélyes szélső: oldalanként ≥3 lövés, ≥25 százalékpont eltérés.
+    if rep.wfs_left_shots >= 3 and rep.wfs_right_shots >= 3:
+        bal = 100.0 * rep.wfs_left_goals / rep.wfs_left_shots
+        jobb = 100.0 * rep.wfs_right_goals / rep.wfs_right_shots
+        if abs(bal - jobb) >= 25.0:
+            eros = "bal" if bal > jobb else "jobb"
+            tetel(f"a {eros} szélsőjük",
+                  "időben kifutni és zárni a szöget; a kapus a rövid "
+                  "sarkot veszi",
+                  f"{max(bal, jobb):.0f}%-os befejezés (a másik oldalon "
+                  f"{min(bal, jobb):.0f}%)", abs(bal - jobb) / 12.0)
+
+    # — A gól-tengely: egy (gólpasszoló → lövő) páros ≥3 gólt hozott.
+    try:
+        if rep.assist_pairs:
+            ap = max(rep.assist_pairs, key=lambda pr: pr["goals"])
+            if ap["goals"] >= 3:
+                tetel(f"a(z) {ap['from']}. → {ap['to']}. passzsáv",
+                      "a passzsáv elvágása (elé lépés, letámadás) többet ér, "
+                      "mint a lövő önálló fogása",
+                      f"{ap['goals']} gól ezen a tengelyen",
+                      min(5.0, 1.0 + ap["goals"] / 2.0))
+    except Exception:
+        pass
+
+    # — A helyzetei felett teljesítő lövő (gól − xG ≥ 1).
+    try:
+        if rep.shooter_overperf and rep.shooter_overperf[0]["diff"] >= 1.0:
+            o = rep.shooter_overperf[0]
+            tetel(f"a(z) {o['player_id']}. játékosuk",
+                  "ne hagyd tisztán: a fél-helyzetét is belövi — szoros "
+                  "őrzés, a beadás elé lépés",
+                  f"{o['diff']:+.1f} gól a helyzetei (xG) felett",
+                  min(5.0, 1.0 + o["diff"]))
+    except Exception:
+        pass
+
+    tetelek.sort(key=lambda t: -t["pont"])
+    return tetelek[:ATS_MAX_ITEMS]
+
+
 def defence_breakpoints(rep: ScoutingReport) -> list[dict]:
     """Hol és mivel törhető fel a felderített csapat VÉDEKEZÉSE — egy
     rangsorolt lista a már mért védekezés-rétegekből (fal-rés, szabadon
@@ -24199,6 +24327,11 @@ def report_to_dict(rep: ScoutingReport) -> dict:
         d["defence_breakpoints"] = defence_breakpoints(rep)
     except Exception:
         d["defence_breakpoints"] = []
+    # A párja: hogyan állítható meg a támadásuk — szintén rangsorolt.
+    try:
+        d["attack_stoppers"] = attack_stoppers(rep)
+    except Exception:
+        d["attack_stoppers"] = []
     return d
 
 
