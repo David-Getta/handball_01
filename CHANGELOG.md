@@ -3,7 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.156 óta)
+## v0.1.157 — kiadva (2026-10-03)
+
+> Kiadás-jegyzet: a 3D pálya elemző rétegei — lövéstérkép a padlón
+> (katt egy körre, odaugrik), passz-vonalak és passz-háló, hőtérkép a
+> csapat tartózkodásáról, labda-nyom, lejátszás-sebesség, a játékos
+> szemével nézve a sebessége és a megtett útja a HUD-on, a böngészős
+> nézetben a kész kamera-állások és a Játékos-kamera, és megosztható
+> jelenet-link (idő, kamera, rétegek a címben) — az appban és a
+> böngészős/VR nézetben egyaránt. Minden új eszközt valódi böngészőben
+> (headless Chromium) és widget-teszttel is kipróbáltunk.
 
 - **3D: megosztható jelenet-link** (új): a böngészős nézet "Link
   másolása" gombja a MOSTANI jelenetet adja címként — idő, kamera-állás
