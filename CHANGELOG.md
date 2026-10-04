@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.157 óta)
+## v0.1.158 — kiadva (2026-10-04)
+
+> Kiadás-jegyzet: a felderítés megmondja, HOL és MIVEL törhető fel az
+> ellenfél védekezése (fal-rés és sávja, szabadon hagyott lövők,
+> átjárható oldal, a kapus gyenge oldala, és név szerint a támadható
+> védők), és HOGYAN állítható meg a támadásuk (fő lövő-zóna, lerohanás
+> és befejezője, beálló, veszélyes szélső, gól-tengely, a helyzetei
+> felett lövő) — rangsorolt Hol / Mivel / Miért kártyákon, a
+> nyomtatható jelentésben is. A 3D pálya védekezés-panelje élőben
+> mutatja mindkettőt, a feltörés sávját piros sávként a padlóra festi,
+> és a böngészős nézet TV-kamerát kapott.
 
 - **Hogyan állítsd meg a támadásukat** (új, felderítés): a "Hol
   törhető fel a védekezésük" kártya párja a másik térfélre — rangsorolt
