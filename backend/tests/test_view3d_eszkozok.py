@@ -67,7 +67,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "function linkAlkalmaz", "linkAlkalmaz();", 'id="tvGomb"',
                 "function tvFrissit", "tvFrissit(dt)", '"KeyT"',
                 "const FELTORES = ADAT.breakpoints", '"Feltörés: <b>"',
-                "function feltoresSav", "feltoresSik.visible = true"):
+                "function feltoresSav", "feltoresSik.visible = true",
+                "const MEGALLITAS = ADAT.stoppers", '"Megállítás: <b>"'):
         assert jel in oldal, jel
     # Üres beágyazott ikon: a böngésző nem kér /favicon.ico-t (404 a konzolon).
     assert '<link rel="icon" href="data:,">' in oldal
@@ -116,6 +117,32 @@ def test_a_tomor_adat_viszi_a_feltorest():
     assert _compact_data(_meccs(), None, atadott)["breakpoints"] == atadott
     kicsi = defence_breakpoints_by_team(_meccs())
     assert isinstance(kicsi["home"], list) and isinstance(kicsi["away"], list)
+
+
+def test_a_tomor_adat_viszi_a_megallitast():
+    """A "Megállítás" sor: csapatonként az attack_stoppers teteje, EGY
+    felderítésből a feltöréssel együtt (tactical_keys_by_team); a
+    lövős szimuláción a hazai támadásra megszólal; az átadott lista
+    nem számolódik újra."""
+    from handball.pipeline.court3d import (DEFENCE_BREAKPOINTS_TOP,
+                                           defence_breakpoints_by_team,
+                                           tactical_keys_by_team)
+    from handball.pipeline.view3d_html import _compact_data
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=240, fps=25.0, seed=5,
+                              shots_per_min=8)
+    k = tactical_keys_by_team(m)
+    assert set(k) == {"breakpoints", "stoppers"}
+    assert k["stoppers"]["home"], "a lövős hazai támadás megállítható"
+    assert len(k["stoppers"]["home"]) <= DEFENCE_BREAKPOINTS_TOP
+    assert k["breakpoints"] == defence_breakpoints_by_team(m)
+    adat = _compact_data(m)
+    assert adat["stoppers"] == k["stoppers"]
+    atadott = {"home": [{"hol": "x", "mivel": "y", "miert": "z", "pont": 1.0}],
+               "away": []}
+    assert _compact_data(_meccs(), None, {"home": [], "away": []},
+                         atadott)["stoppers"] == atadott
 
 
 def test_a_tomor_adat_viszi_a_passzokat():
@@ -347,6 +374,8 @@ def test_a_vedekezes_idovonal_vegpont(tmp_path, monkeypatch):
     # Feltörés csapatonként: lista (a kis fixtúrán üres is lehet).
     assert set(d["breakpoints"]) == {"home", "away"}
     assert all(isinstance(v, list) for v in d["breakpoints"].values())
+    assert set(d["stoppers"]) == {"home", "away"}
+    assert all(isinstance(v, list) for v in d["stoppers"].values())
     assert c.get("/matches/v3t/defence-timeline").json() == d  # tárból is
     assert c.get("/matches/nincs/defence-timeline").status_code == 404
 
@@ -389,6 +418,7 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 'q["hoter"]', 'q["loves"]', 'q["passz"]', 'q["fal"]',
                 "_mostT(m) / fpsB", "this.lovesTerkep", "_falBreak",
                 '"Feltörés: ${f.first["hol"]}', "breakpointZoneBand",
+                "_falStop", '"Megállítás: ${st.first["hol"]}',
                 "feltoresSav: fal.$3"):
         assert jel in kepernyo, jel
     # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).

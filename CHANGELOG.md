@@ -14,7 +14,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   bizonyíték ereje szerinti sorrend; kevés mintánál üres. A Felderítés
   képernyőn külön kártya (ugró-gombbal), a nyomtatható jelentésben
   blokk, a válaszban `attack_stoppers`. Teszt: rangsor, kevés minta, a
-  valódi felderítésből is megszólal, a nyomtatható lap viszi.
+  valódi felderítésből is megszólal, a nyomtatható lap viszi. A 3D
+  védekezés-panel élő módban a "Feltörés" mellé "Megállítás" sort is
+  ír: mivel állíthatja meg a védekező csapat a most támadó csapatot —
+  mindkettő EGY felderítésből (a két lista közös tárban).
 
 - **3D védekezés-panel: „Feltörés” sor** (új, böngészős/VR és appbeli
   nézet): amikor a panel az élő falat mutatja, a tankönyvi faltól mért

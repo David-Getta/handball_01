@@ -174,13 +174,35 @@ def defence_breakpoints_by_team(match: Match, top: int = DEFENCE_BREAKPOINTS_TOP
     támadni. Visszatérés: {"home": [{"hol","mivel","miert","pont"}],
     "away": [...]} — csapatonként üres lista, ha nincs elég minta vagy a
     felderítés hibázik (egy csapat hibája nem viszi el a másikat)."""
-    from .scouting import defence_breakpoints, scout_team
-    ki = {}
+    return tactical_keys_by_team(match, top)["breakpoints"]
+
+
+def tactical_keys_by_team(match: Match, top: int = DEFENCE_BREAKPOINTS_TOP) -> dict:
+    """A 3D védekezés-panel két sora EGY felderítésből csapatonként:
+    "breakpoints" — hol törhető fel a csapat VÉDEKEZÉSE
+    (scouting.defence_breakpoints), és "stoppers" — hogyan állítható
+    meg a csapat TÁMADÁSA (scouting.attack_stoppers), mindkettő a
+    rangsor teteje. Egy szervezett támadásban a panel a védekező csapat
+    "breakpoints"-ját (mivel törjük fel) és a támadó csapat
+    "stoppers"-ét (mivel állítjuk meg) írja. Visszatérés:
+    {"breakpoints": {"home": [...], "away": [...]}, "stoppers": {...}}
+    — csapatonként üres lista, ha nincs elég minta vagy a felderítés
+    hibázik (egy csapat hibája nem viszi el a másikat)."""
+    from .scouting import attack_stoppers, defence_breakpoints, scout_team
+    ki = {"breakpoints": {}, "stoppers": {}}
     for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
         try:
-            ki[side] = defence_breakpoints(scout_team(match, team))[:top]
+            rep = scout_team(match, team)
         except Exception:
-            ki[side] = []
+            ki["breakpoints"][side] = []
+            ki["stoppers"][side] = []
+            continue
+        for kulcs, fn in (("breakpoints", defence_breakpoints),
+                          ("stoppers", attack_stoppers)):
+            try:
+                ki[kulcs][side] = fn(rep)[:top]
+            except Exception:
+                ki[kulcs][side] = []
     return ki
 
 

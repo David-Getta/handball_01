@@ -2822,16 +2822,18 @@ def create_app():
             riasztasok = _figure_alerts_for(match)
         except Exception:
             riasztasok = []
-        # A "feltörés" a lemezes tárból (a /defence-timeline-nal közös
-        # kulcs): két teljes felderítés nem futhat le minden nyitásnál.
+        # A feltörés és a megállítás a lemezes tárból (a /defence-
+        # timeline-nal közös kulcs): két teljes felderítés nem futhat le
+        # minden nyitásnál.
         try:
-            from ..pipeline.court3d import defence_breakpoints_by_team
-            feltores = _cached_result(
-                match_id, "defence-breakpoints",
-                lambda: defence_breakpoints_by_team(match))
+            from ..pipeline.court3d import tactical_keys_by_team
+            kulcsok = _cached_result(match_id, "tactical-keys",
+                                     lambda: tactical_keys_by_team(match))
+            feltores, megallitas = kulcsok["breakpoints"], kulcsok["stoppers"]
         except Exception:
-            feltores = None
-        return HTMLResponse(content=view3d_html(match, riasztasok, feltores))
+            feltores = megallitas = None
+        return HTMLResponse(content=view3d_html(match, riasztasok, feltores,
+                                                megallitas))
 
     @app.get("/matches/{match_id}/defence-timeline")
     def match_defence_timeline(match_id: str):
@@ -2842,8 +2844,8 @@ def create_app():
         (csak szervezett támadásban), a sablonok a bal kapu előtt
         (a kliens tükrözi). A böngészős 3D ugyanezt beágyazva viszi."""
         from ..pipeline.court3d import (FORMATION_TEMPLATES,
-                                        defence_breakpoints_by_team,
-                                        defence_timeline)
+                                        defence_timeline,
+                                        tactical_keys_by_team)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -2852,18 +2854,20 @@ def create_app():
                                    lambda: defence_timeline(match))
         except Exception:
             sorok = defence_timeline(match)
-        # Feltörés csapatonként (a felderítés rangsorának teteje) — a
-        # panel a fal mellé írja; hibája nem viheti el a végpontot.
+        # Feltörés és megállítás csapatonként (a felderítés rangsorainak
+        # teteje, EGY felderítésből) — a panel a fal mellé írja; hibája
+        # nem viheti el a végpontot.
         try:
-            feltores = _cached_result(
-                match_id, "defence-breakpoints",
-                lambda: defence_breakpoints_by_team(match))
+            kulcsok = _cached_result(match_id, "tactical-keys",
+                                     lambda: tactical_keys_by_team(match))
         except Exception:
-            feltores = {"home": [], "away": []}
+            kulcsok = {"breakpoints": {"home": [], "away": []},
+                       "stoppers": {"home": [], "away": []}}
         return {"rows": sorok,
                 "formations": {nev: [list(p) for p in pontok]
                                for nev, pontok in FORMATION_TEMPLATES.items()},
-                "breakpoints": feltores}
+                "breakpoints": kulcsok["breakpoints"],
+                "stoppers": kulcsok["stoppers"]}
 
     @app.get("/matches/{match_id}/diagnostics")
     def match_diagnostics(match_id: str):

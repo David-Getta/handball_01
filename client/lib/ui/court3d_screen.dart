@@ -118,6 +118,8 @@ class _Court3DScreenState extends State<Court3DScreen>
   // Feltörés: hol és mivel törhető fel a csapatok védekezése (a
   // felderítés rangsorának teteje, csapatonként) — a fal mellé írjuk.
   Map<String, dynamic> _falBreak = const {};
+  // Megállítás: hogyan állítható meg a csapatok támadása (a párja).
+  Map<String, dynamic> _falStop = const {};
   // LÖVÉSTÉRKÉP: a meccs lövései a padlón (a /xg lövés-sorai: t kocka,
   // team, x, y, xg, outcome); koppintás egy körre — odaugrik.
   List<Map<String, dynamic>> _lovesek = const [];
@@ -217,11 +219,14 @@ class _Court3DScreenState extends State<Court3DScreen>
       // A védekezés-panel élő fala — hibája nem viheti el a nézetet.
       List<Map<String, dynamic>> falSorok = const [];
       Map<String, dynamic> falBreak = const {};
+      Map<String, dynamic> falStop = const {};
       try {
         final d = await _api.fetchDefenceTimeline(id);
         falSorok = ((d["rows"] as List?) ?? const [])
             .cast<Map<String, dynamic>>();
         falBreak = (d["breakpoints"] as Map?)?.cast<String, dynamic>() ??
+            const {};
+        falStop = (d["stoppers"] as Map?)?.cast<String, dynamic>() ??
             const {};
       } catch (_) {}
       // A lövéstérkép a helyzetminőség lövés-soraiból — hibája nem
@@ -265,6 +270,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _kovMez = null;
         _falSorok = falSorok;
         _falBreak = falBreak;
+        _falStop = falStop;
         _lovesek = lovesek;
         _passzok = passzok;
         _lovesValasztott = null;
@@ -1486,6 +1492,13 @@ class _Court3DScreenState extends State<Court3DScreen>
           .cast<Map<String, dynamic>>();
       if (f.isNotEmpty) {
         sorok.add("Feltörés: ${f.first["hol"]} — ${f.first["mivel"]}");
+      }
+      // Megállítás: a TÁMADÓ csapat támadásának leggyengébb pontja — mivel
+      // állíthatja meg a védekező csapat.
+      final st = ((_falStop[eloHazai ? "away" : "home"] as List?) ?? const [])
+          .cast<Map<String, dynamic>>();
+      if (st.isNotEmpty) {
+        sorok.add("Megállítás: ${st.first["hol"]} — ${st.first["mivel"]}");
       }
       // Az első sávos tétel piros sávként a padlón, a védett kapu előtt.
       for (final t in f) {
