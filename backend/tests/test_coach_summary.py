@@ -449,6 +449,37 @@ def test_a_lenyeg_szakaszt_a_kliens_nem_csukja_ossze():
     lenyeg = next(s for s in cs["sections"] if s["title"] == "A lényeg")
     assert lenyeg.get("show_all") is True
     # A többi szakasz NEM kap ilyen jelölést (különben az egész
-    # összecsukás értelmét vesztené).
-    tobbi = [s for s in cs["sections"] if s["title"] != "A lényeg"]
+    # összecsukás értelmét vesztené) — kivéve a másik RANGSOROLT
+    # szakaszt, a "Gyenge pontok"-at: ott is a sorrend a lényeg, és öt
+    # sor után a második csapat tételei tűnnének el.
+    rangsorolt = {"A lényeg", "Gyenge pontok"}
+    tobbi = [s for s in cs["sections"] if s["title"] not in rangsorolt]
     assert not any(s.get("show_all") for s in tobbi)
+
+
+def test_a_meccselemzes_kiirja_a_gyenge_pontokat():
+    """A meccs összefoglalója maga mondja ki a csapatok gyenge pontjait:
+    hol törhető fel a védekezésük és hogyan állítható meg a támadásuk —
+    "A lényeg" után, Hol / Mivel / Miért sorokban, összecsukás nélkül;
+    csapatonként és oldalanként legfeljebb WEAK_POINTS_PER_SIDE tétel."""
+    from handball.pipeline.coach_summary import WEAK_POINTS_PER_SIDE
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    cs = coach_summary(m)
+    cimek = [s["title"] for s in cs["sections"]]
+    assert "Gyenge pontok" in cimek, cimek
+    assert cimek.index("Gyenge pontok") == cimek.index("A lényeg") + 1
+    gp = cs["sections"][cimek.index("Gyenge pontok")]
+    assert gp["show_all"] is True and gp["lines"]
+    assert all("Hol: " in s and "Mivel: " in s and "Miért: " in s
+               for s in gp["lines"])
+    assert any("védekezése így törhető fel" in s for s in gp["lines"])
+    assert any("támadása így állítható meg" in s for s in gp["lines"])
+    assert len(gp["lines"]) <= 4 * WEAK_POINTS_PER_SIDE
+
+
+def test_ures_meccsen_nincs_gyenge_pont_szakasz():
+    meta = MatchMeta(match_id="ures2", home_team="A", away_team="B", fps=25.0)
+    cimek = [s["title"] for s in coach_summary(Match(meta, [])).get("sections", [])]
+    assert "Gyenge pontok" not in cimek

@@ -3,6 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.158 óta)
+
+- **A meccselemzés kiírja a gyenge pontokat** (új, edzői
+  összefoglaló): a meccs összefoglalója "A lényeg" után egy "Gyenge
+  pontok" szakaszt kap — csapatonként a három legerősebb bizonyítékú
+  módja annak, hogy a védekezésük feltörhető, és hogy a támadásuk
+  megállítható, Hol / Mivel / Miért sorokban ("Szeged védekezése így
+  törhető fel / 1. Hol: a bal szél sávban — Mivel: lendületből betörés
+  … (Miért: átlag 4,3 m a legnagyobb rés)"). Eddig ez csak a
+  Felderítés képernyőn volt; mostantól a meccs-elemzés maga mondja ki.
+  A szakasz nem csukható össze; kevés mintánál kimarad. Teszt: a
+  szakasz helye, alakja, mindkét oldal, üres meccsen nincs.
+
 ## v0.1.158 — kiadva (2026-10-04)
 
 > Kiadás-jegyzet: a felderítés megmondja, HOL és MIVEL törhető fel az

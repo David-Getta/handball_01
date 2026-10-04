@@ -8033,6 +8033,33 @@ def _quality_caveat(match: Match) -> str | None:
     return body
 
 
+# A "Gyenge pontok" szakaszban csapatonként és oldalanként ennyi tétel
+# (a rangsor teteje — a teljes lista a Felderítés képernyőn van).
+WEAK_POINTS_PER_SIDE = 3
+
+
+def _weak_points_section(match: Match, home: str, away: str) -> dict | None:
+    """"Gyenge pontok": csapatonként a védekezés feltörése és a támadás
+    megállítása (a rangsorok teteje, WEAK_POINTS_PER_SIDE tétel), egy-egy
+    sor tételenként: "Szeged védekezése / 1. Hol: … — Mivel: … (Miért:
+    …)". None, ha egyik csapatra sincs elég minta (sose 0-ból mondott
+    ítélet). A szakasz nem csukható össze (show_all): a rangsor
+    sorrendje maga a lényeg."""
+    from .court3d import tactical_keys_by_team
+    kulcsok = tactical_keys_by_team(match, top=WEAK_POINTS_PER_SIDE)
+    sorok: list[str] = []
+    for side, nev in (("home", home), ("away", away)):
+        for kulcs, cim in (("breakpoints", "védekezése így törhető fel"),
+                           ("stoppers", "támadása így állítható meg")):
+            for i, t in enumerate(kulcsok[kulcs].get(side) or [], 1):
+                sorok.append(f"{nev} {cim} / {i}. Hol: {t['hol']} — "
+                             f"Mivel: {t['mivel']} (Miért: {t['miert']})")
+    if not sorok:
+        return None
+    return {"title": "Gyenge pontok", "body": " ".join(sorok),
+            "lines": sorok, "show_all": True}
+
+
 def _coach_summary_cached(match: Match) -> dict:
     """Az összefoglaló tényleges felépítése (lásd `coach_summary`)."""
     home, away = _team_names(match)
@@ -8482,6 +8509,26 @@ def _coach_summary_cached(match: Match) -> dict:
                 # pont az a dolga, hogy egyben olvasható legyen.
                 "show_all": True,
             })
+    except Exception:
+        pass
+
+    # GYENGE PONTOK: csapatonként hol törhető fel a védekezésük és
+    # hogyan állítható meg a támadásuk — a felderítés két rangsorolt
+    # kivonatának teteje (scouting.defence_breakpoints /
+    # attack_stoppers), Hol / Mivel / Miért sorokban. A meccselemzés így
+    # maga mondja ki a meccs gyenge pontjait, nem csak a Felderítés
+    # képernyő. "A lényeg" után jön (vagy a történet után, ha az nincs).
+    try:
+        _gp = _weak_points_section(match, home, away)
+        if _gp:
+            _cimek = [sec.get("title") for sec in sections]
+            if "A lényeg" in _cimek:
+                _hova = _cimek.index("A lényeg") + 1
+            elif _cimek and _cimek[0] == "A meccs története":
+                _hova = 1
+            else:
+                _hova = 0
+            sections.insert(_hova, _gp)
     except Exception:
         pass
 
