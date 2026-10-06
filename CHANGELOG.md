@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.158 óta)
+## v0.1.159 — kiadva (2026-10-06)
+
+> Kiadás-jegyzet: a meccselemzés maga kiírja a csapatok gyenge pontjait
+> — csapatonként hol és mivel törhető fel a védekezésük, és hogyan
+> állítható meg a támadásuk, Hol / Mivel / Miért sorokban, az edzői
+> összefoglaló elején. Gyorsabb lett az összefoglaló (41 → 31 mp) és a
+> felderítés (23 → 18 mp csapatonként), és javítva: ugyanaz a meccs
+> eddig két megnyitáskor eltérő "fekete ötpercet" mondhatott — most
+> minden indításkor ugyanazt.
 
 - **Ugyanaz a meccs, ugyanaz a jelentés — minden indításkor** (javítás):
   a felderítés "fekete ötperc" kulcsa (és a meccsterv 242. szabálya)
