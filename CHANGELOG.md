@@ -5,6 +5,29 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.158 óta)
 
+- **Ugyanaz a meccs, ugyanaz a jelentés — minden indításkor** (javítás):
+  a felderítés "fekete ötperc" kulcsa (és a meccsterv 242. szabálya)
+  holtversenynél — két öt perces ablak ugyanazzal a bukással —
+  indításonként mást mondott (egyszer a 0–5., máskor az 5–10. percet),
+  mert a Python a szöveg-halmazok sorrendjét folyamatonként
+  véletlenszerűen keveri. Mostantól az ablakokat időrendben nézzük, és
+  holtversenyben a korábbi nyer (ahogy a mögöttes réteg is). Négy
+  különböző keveréssel futtatva két meccs összes felderítő jelentése és
+  összefoglalója mezőről mezőre összevetve ez volt az EGYETLEN eltérés.
+  Őr-teszt: két külön folyamat, két keverés — a felderítés és a
+  meccsterv bitre azonos (a hibás kódon a teszt elbukik — ellenőrizve).
+
+- **Gyorsabb összefoglaló és felderítés** (teljesítmény): tizennégy
+  sokszor hívott elemző réteg (sprint-veszély, kilépő védő, beálló-őr,
+  kettőzés, blokkok, őrzési párok, páros-mérleg, statikus támadók,
+  specialista-posztok, minőség-jelentés, intenzitás-idővonal, …)
+  eddig minden hívásra újraszámolt — az edzői összefoglalóban egyesek
+  10–19-szer futottak le. Mostantól meccsenként egyszer (mély
+  védő-másolattal, hogy egy hívó módosítása ne szivárogjon át a
+  következőhöz). Mérve egy 10 perces meccsen: az összefoglaló 41 →
+  31 mp, a felderítés csapatonként 23 → 18 mp; az összefoglaló és a
+  felderítés kimenete bitre azonos a korábbival.
+
 - **A meccselemzés kiírja a gyenge pontokat** (új, edzői
   összefoglaló): a meccs összefoglalója "A lényeg" után egy "Gyenge
   pontok" szakaszt kap — csapatonként a három legerősebb bizonyítékú

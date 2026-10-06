@@ -17,6 +17,7 @@ Tiszta adatfeldolgozás, videó nélkül tesztelhető.
 from __future__ import annotations
 
 from ..models.tracking import Match, PositionSource
+from .primitive_cache import copy_deep, memoize_primitive
 
 # Elvárások (teljes létszámú kézilabda): 2x7 játékos van a pályán.
 EXPECTED_PLAYERS = 14
@@ -259,6 +260,9 @@ OUT_OF_COURT_TOL_M = 2.0
 OUT_OF_COURT_WARN_PCT = 12.0
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("compute_quality_report", copy=copy_deep)
 def compute_quality_report(match: Match) -> dict:
     """A feldolgozás minőség-jelentése a kész Tracking-ből.
 

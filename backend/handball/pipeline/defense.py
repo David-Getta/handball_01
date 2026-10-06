@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ..models.tracking import Match, Team
-from .primitive_cache import copy_sides, memoize_primitive
+from .primitive_cache import copy_deep, copy_sides, memoize_primitive
 from .tactics import TacticsConfig, displacement_at
 
 # Ha a lövés pillanatában ennél messzebb van a legközelebbi védő a lövőtől,
@@ -402,6 +402,9 @@ BLOCK_COOLDOWN_FRAMES = 12    # (örökölt kocka-alak; a motor a _S párt haszn
 BLOCK_COOLDOWN_S = 0.5
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("detect_blocks", copy=copy_deep)
 def detect_blocks(match, config=None) -> dict:
     """Blokkolt lövések: a mezőnyvédőn elakadó lövés felismerése.
 
@@ -1290,6 +1293,9 @@ MARK_LOOSE_M = 2.5
 MARK_TIGHT_M = 1.5
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("marking_pairs", copy=copy_deep)
 def marking_pairs(match, config=None, until_t=None) -> dict:
     """Őrzési párok: ki kit fogott a védekezésben.
 
@@ -3381,6 +3387,9 @@ ADV_MIN_FRAMES = 100
 ADV_GAP_M = 2.5
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("advanced_defender", copy=copy_deep)
 def advanced_defender(match, config=None) -> dict:
     """Kilépő védő: VAN-E ELŐRETOLT EMBERÜK a falban, és ki az.
 
@@ -3461,6 +3470,9 @@ PVG_MIN_FRAMES = 300
 PVG_TOP_PCT = 60.0
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("pivot_guards", copy=copy_deep)
 def pivot_guards(match, config=None) -> dict:
     """Beálló-őr: KI ŐRZI az ellenfél beállóját.
 
@@ -3838,6 +3850,9 @@ DTP_MIN_FRAMES = 50
 DTP_TOP_SHARE = 40.0
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("doubling_defenders", copy=copy_deep)
 def doubling_defenders(match, config=None) -> dict:
     """Kettőző emberek: KI JÖN MÁSODIKNAK a labdásra.
 

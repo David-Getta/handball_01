@@ -16,7 +16,7 @@ from typing import Optional
 from ..models.tracking import Match, Team
 from .calibration import COURT_WIDTH_M
 from .tactics import COURT_LENGTH_M, TacticsConfig, possession_team
-from .primitive_cache import copy_nested, memoize_primitive
+from .primitive_cache import copy_deep, copy_nested, memoize_primitive
 
 # Legalább ennyi támadó-fázisú kocka kell egy játékos poszt-becsléséhez.
 ROLE_MIN_SAMPLES = 100
@@ -2184,6 +2184,9 @@ SPC_MIN_PHASE_S = 60.0
 SPC_SPEC_PCT = 80.0
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("specialist_roles", copy=copy_deep)
 def specialist_roles(match: Match,
                      config: Optional[TacticsConfig] = None) -> dict:
     """Specialista-poszt: MELYIK POSZTOT játsszák váltott sorban.

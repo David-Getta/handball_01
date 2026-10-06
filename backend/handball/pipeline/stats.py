@@ -18,7 +18,7 @@ import math
 from dataclasses import dataclass, field
 
 from ..models.tracking import Match, PositionSource, Team
-from .primitive_cache import copy_by_id, memoize_primitive, copy_rows
+from .primitive_cache import copy_by_id, copy_deep, memoize_primitive, copy_rows
 
 
 @dataclass
@@ -168,6 +168,9 @@ def compute_player_stats(match: Match) -> dict[int, PlayerStats]:
     return result
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("compute_intensity_timeline", copy=copy_deep)
 def compute_intensity_timeline(match: Match, window_s: float = 300.0) -> list[dict]:
     """Intenzitás-idővonal: a meccset idő-ablakokra bontva csapatonként az
     átlagos mozgás-sebesség (m/s) — ebből látszik, mikor esett vissza a
@@ -303,6 +306,9 @@ SPB_MIN_SPRINTS = 8      # ennyi hátrány-sprint kell az ítélethez
 SPB_RATIO = 1.5          # ekkora ütem-többlet hátrányban = menekülés
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("sprints_by_score", copy=copy_deep)
 def sprints_by_score(match: Match, config=None) -> dict:
     """Sprint-állás: MIKOR sprintel a csapat — vezetésnél vagy hátrányban.
 
@@ -741,6 +747,9 @@ PAIR_MIN_MINUTES = 4.0
 PAIR_GAP_PER_MIN = 0.2
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("pair_plus_minus", copy=copy_deep)
 def pair_plus_minus(match, config=None) -> dict:
     """Páros-mérleg: MELYIK KETTŐ megy jól EGYÜTT a pályán.
 
@@ -839,6 +848,9 @@ SPT_MIN_TEAM_SPRINTS = 10
 SPT_TOP_SHARE_PCT = 30.0
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("sprint_threats", copy=copy_deep)
 def sprint_threats(match: Match, config=None) -> dict:
     """Sprint-veszély: KI VISZI A KONTRÁT — a legtöbbet sprintelő ember.
 
@@ -1034,6 +1046,9 @@ IRM_SHARE_PCT = 85.0
 IRM_GAP_PP = 15.0
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("iron_man_roles", copy=copy_deep)
 def iron_man_roles(match, config=None) -> dict:
     """Vasember-poszt: MELYIK POSZTJUK játszik végig csere nélkül.
 

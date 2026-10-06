@@ -2483,6 +2483,17 @@ DBP_MIN_POINTS = 1.0
 DBP_MAX_ITEMS = 8
 
 
+def _window_order(label: str) -> tuple:
+    """Idő-ablak címke ("5–10", "55–60") rendezési kulcsa: a kezdő perc
+    számként (nem szövegként: "10–15" a "5–10" UTÁN jön), a nem szabványos
+    címke a végére, önmagán belül betűrendben — determinisztikus
+    sorrend, a hash-véletlenítéstől függetlenül."""
+    try:
+        return (0, int(str(label).split("–")[0]), str(label))
+    except (ValueError, IndexError):
+        return (1, 0, str(label))
+
+
 # "Hogyan állítsd meg a támadásukat": a bizonyíték erejének alsó határa
 # és a lista hossza (a feltörés-listáéval azonos).
 ATS_MIN_POINTS = 1.0
@@ -4057,7 +4068,13 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             "a másik oldalra.")
 
     # Fekete ötperc: a visszatérő lyukra kell időzíteni a nyomást.
-    _blw_keys = set(rep.blw_scored) | set(rep.blw_conceded)
+    # IDŐRENDBEN járjuk be (_window_order): a halmaz bejárási sorrendje a
+    # folyamatonkénti hash-véletlenítéstől függ, így holtversenynél
+    # (két ablak ugyanazzal a mérleggel) a jelentés indításonként mást
+    # mondott. Holtversenyben a KORÁBBI ablak nyer — ahogy a
+    # momentum.black_window is időrendben választ.
+    _blw_keys = sorted(set(rep.blw_scored) | set(rep.blw_conceded),
+                       key=_window_order)
     _blw_worst = None
     _blw_diff = 0
     for _b in _blw_keys:
@@ -19015,7 +19032,8 @@ def matchup_plan(own: "ScoutingReport",
 
     # 242) Az ő fekete ötpercük × a ti arany-ablakotok: időzített
     # nyomás oda, ahol ők rendre elsüllyednek.
-    _blw242_keys = set(opp.blw_scored) | set(opp.blw_conceded)
+    _blw242_keys = sorted(set(opp.blw_scored) | set(opp.blw_conceded),
+                          key=_window_order)  # időrendben (lásd fent)
     _blw242_worst = None
     _blw242_diff = 0
     for _b242 in _blw242_keys:

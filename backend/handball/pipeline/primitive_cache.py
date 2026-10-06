@@ -109,6 +109,15 @@ def copy_sides(data: dict) -> dict:
     return {side: dict(rec or {}) for side, rec in (data or {}).items()}
 
 
+def copy_deep(data):
+    """Tetszőleges mélységű védő-másolat — a beágyazott listás/szótáras
+    réteg-eredményekhez (pl. {oldal: {"players": [...], …}}), ahol a
+    sekély másolat a belső listát megosztaná, és egy hívó módosítása a
+    következő hívó eredményét rontaná el."""
+    import copy as _copy
+    return _copy.deepcopy(data)
+
+
 def copy_nested(data: dict) -> dict:
     """{oldal: {azonosító: dict}} kétszintű másolata (poszt-becslés)."""
     return {side: {tid: dict(rec) for tid, rec in (per or {}).items()}

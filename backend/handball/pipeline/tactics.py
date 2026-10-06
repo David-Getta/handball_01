@@ -27,7 +27,7 @@ from .calibration import COURT_LENGTH_M
 # A kocka-szintű gyorsítótár a LEGFORRÓBB úton hívódik (a birtoklás- és
 # fázis-mérés kockánként, egy összeállítás alatt milliószor): a
 # függvényen belüli import ennyi hívásnál már mérhető költség.
-from .primitive_cache import cached_frame
+from .primitive_cache import cached_frame, copy_deep, memoize_primitive
 
 
 # ---- Konfiguráció ----------------------------------------------------------
@@ -1218,6 +1218,9 @@ STATIC_ATT_MIN_S = 60.0
 STATIC_ATT_GAP_PCT = 30.0
 
 
+# Meccsenként egyszer (primitive_cache): sok réteg és a felderítés
+# is olvassa — mérve az edzői összefoglalóban 10–19-szer futott le.
+@memoize_primitive("static_attackers", copy=copy_deep)
 def static_attackers(match: Match,
                      config: Optional[TacticsConfig] = None) -> dict:
     """Álló támadók: KI mozog labda nélkül a legkevesebbet.

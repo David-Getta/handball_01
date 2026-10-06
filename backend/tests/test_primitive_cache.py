@@ -312,3 +312,41 @@ def test_a_hatokor_egyszer_szamol_akkor_is_ha_az_egyik_hivo_atadja():
         proba(m, None)                 # kifejezett None
         proba(m, TacticsConfig())      # kifejezett alapértelmezés
     assert len(hivasok) == 1, f"{len(hivasok)} számolás egy helyett"
+
+
+def test_a_melyen_masolt_reteg_egyszer_fut_es_nem_szivarog():
+    """A sokszor hívott rétegek (pl. sprint_threats) a hatókörben
+    meccsenként egyszer futnak, és MÉLY védő-másolatot adnak: ha egy
+    hívó a beágyazott listát módosítja, a következő hívó eredménye
+    érintetlen marad (a sekély másolat a belső listát megosztaná)."""
+    import copy as _copy
+
+    from handball.pipeline import stats
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=3,
+                              shots_per_min=8.0)
+    hivasok = []
+    eredeti = stats.sprint_threats.uncached
+
+    def szamlalo(*a, **k):
+        hivasok.append(1)
+        return eredeti(*a, **k)
+
+    with primitive_cache(m):
+        stats.sprint_threats.__wrapped__ = szamlalo  # noqa: B010
+        try:
+            elso = stats.sprint_threats(m)
+            tiszta = _copy.deepcopy(elso)
+            # Mély módosítás az első hívó példányán.
+            for side in elso.values():
+                if isinstance(side, dict):
+                    for v in side.values():
+                        if isinstance(v, list):
+                            v.append({"szennyezes": True})
+                    side["szennyezes"] = True
+            masodik = stats.sprint_threats(m)
+        finally:
+            del stats.sprint_threats.__wrapped__
+    assert masodik == tiszta
