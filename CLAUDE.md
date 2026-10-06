@@ -221,6 +221,24 @@ a két csapat szemben áll. Ha új réteged oldal-címkét ad, a védekező
 oldal nézőpontjából nevezd (minta: defensive_gaps, conceded_side_bias),
 és futtasd le ezt kiadás előtt. A hibás-lista ÜRES, maradjon is az.
 
+A hash-függés jelentése (`docs/HASH_FUGGES.md`) szintén jelentés-szintű
+(~8 perc, három párhuzamos folyamat):
+
+```bash
+cd backend && python3 -m scripts.hash_sensitivity
+cd backend && python3 -m scripts.hash_sensitivity --only reteg_nev   # egy réteg, gyorsan
+```
+
+Amit néz: minden réteg három KÜLÖN folyamatban, különböző
+PYTHONHASHSEED-del — ugyanaz a meccs ugyanazt kell adja. A Python a
+szöveg-halmazok bejárását folyamatonként keveri: aki halmazon iterálva
+választ (holtversenyben az elsőt) vagy halmaz-sorrendben épít listát,
+annál a jelentés indításonként "magától" változik. Így viselkedett a
+felderítés "fekete ötperc" kulcsa (0–5. vagy 5–10. perc, ugyanazzal a
+mérleggel). A lista ÜRES, maradjon is az: halmazt `sorted(...)`
+determinisztikus kulccsal (időrend, szám, név) járj be. A felderítés és
+a meccsterv saját őr-tesztje: `tests/test_hash_determinism.py`.
+
 A stride-érzékenység jelentése (`docs/STRIDE_ERZEKENYSEG.md`) szintén
 jelentés-szintű (~1,5 perc):
 
