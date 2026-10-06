@@ -18,7 +18,7 @@ pipeline-rétegek a `Tracking`/`Match` adatmodellen) + Flutter kliens
 # cv2-t importál, enélkül a GYŰJTÉS hibázik, és a csomag NEM fut le:
 pip install fastapi uvicorn pytest httpx numpy opencv-python-headless
 
-# Teljes backend teszt (kb. 7 perc, 2400+ teszt) — commit előtt kötelező.
+# Teljes backend teszt (kb. 15 perc, 2400+ teszt) — commit előtt kötelező.
 # FIGYELEM: a `| tail` elnyeli a pytest kilépési kódját — a "zöld"
 # ítélethez a PIPESTATUS-t (vagy a "N passed" sort) nézd, ne a pipe-ét:
 cd backend && python3 -m pytest -q 2>&1 | tail -3; echo "exit ${PIPESTATUS[0]}"

@@ -44,7 +44,11 @@ jobs:
   # Gyors ellenőrzés: a backend tesztjei (olcsó ubuntu-gépen).
   tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # A csomag ~2500 teszt, helyben ~15 perc (a hash-determinizmus őr
+    # külön folyamatokban fut). A 15 perces korlát a v0.1.159-nél már
+    # a futás KÖZBEN állította le a tesztet ("cancelled", nem hiba) —
+    # ezért bőven fölé: 30 perc.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
