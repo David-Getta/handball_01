@@ -150,3 +150,49 @@ def test_a_passzsav_a_dontes_elemzes_modelljet_adja():
     assert pass_lane_grade(0.6) == "nyitott"
     assert pass_lane_grade(0.35) == "kockázatos"
     assert pass_lane_grade(0.34) == "zárt"
+
+
+def test_dontes_pillanatok_a_dontes_elemzes_modelljevel():
+    """A döntés-pillanatok: ahol a legjobb opció (decisions.best_option)
+    legalább DECISION_GAP_MIN-nel jobb a választott passznál — a
+    döntés-elemzés modelljével újraszámolva ugyanaz a különbség;
+    lövésnél a cél a támadott kapu közepe; időrendben."""
+    from handball.pipeline.court3d import DECISION_GAP_MIN, decision_moments
+    from handball.pipeline.decisions import (best_option, detect_passes,
+                                             evaluate_options)
+    from handball.pipeline.tactics import TacticsConfig
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    d = decision_moments(m)
+    assert d["moments"], "a szimuláción van jobb opciós pillanat"
+    assert [x["s"] for x in d["moments"]] == sorted(x["s"] for x in d["moments"])
+    assert sum(d["flagged"].values()) == len(d["moments"])
+    assert all(d["flagged"][k] <= d["passes"][k] for k in ("home", "away"))
+    cfg = TacticsConfig()
+    by_s = {}
+    for pe in detect_passes(m, cfg):
+        opts = evaluate_options(pe.decision_frame, pe.passer_pos, cfg)
+        best = best_option(opts)
+        ch = next(o for o in opts if o.kind == "pass"
+                  and o.target_id == pe.receiver_id)
+        by_s.setdefault(round(pe.decision_frame.t / 25.0, 2), []).append(
+            round(best.value - ch.value, 3))
+    for x in d["moments"]:
+        assert x["gap"] >= DECISION_GAP_MIN
+        assert x["gap"] in by_s[x["s"]]
+        # A két érték külön kerekítve: a különbségük ±0,001-en belül.
+        assert abs((x["best_value"] - x["chosen_value"]) - x["gap"]) <= 0.0015
+        if x["best_kind"] == "shoot":
+            assert x["best"] in ([0.0, 10.0], [40.0, 10.0])
+
+
+def test_kevés_passznal_nincs_dontes_pillanat():
+    from handball.models.tracking import Match, MatchMeta
+    from handball.pipeline.court3d import decision_moments
+
+    d = decision_moments(Match(MatchMeta(match_id="u", home_team="A",
+                                         away_team="B", fps=25.0), []))
+    assert d == {"moments": [], "passes": {"home": 0, "away": 0},
+                 "flagged": {"home": 0, "away": 0}}

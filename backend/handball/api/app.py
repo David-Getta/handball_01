@@ -2869,6 +2869,18 @@ def create_app():
                 "breakpoints": kulcsok["breakpoints"],
                 "stoppers": kulcsok["stoppers"]}
 
+    @app.get("/matches/{match_id}/decision-moments")
+    def match_decision_moments(match_id: str):
+        """A passz-döntések, ahol a modell szerint érdemben jobb opció is
+        volt (court3d.decision_moments) — a 3D pálya "Döntések" lapozója
+        ebből dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import decision_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "decision-moments",
+                              lambda: decision_moments(match))
+
     @app.get("/matches/{match_id}/diagnostics")
     def match_diagnostics(match_id: str):
         """Gép által olvasható diagnosztika-csomag EGY meccsről — a

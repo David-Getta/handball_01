@@ -295,3 +295,79 @@ def pass_lanes(players, ball, possession_radius_m: Optional[float] = None) -> Op
         lanes.append({"x": t.x, "y": t.y, "p": round(p, 4),
                       "blockers": blockers, "grade": pass_lane_grade(p)})
     return {"holder": [holder.x, holder.y, holder.team], "lanes": lanes}
+
+
+# ---- Döntés-pillanatok: ahol jobb opció is volt -------------------------
+#
+# A döntés-elemzés (decisions.analyze_player_decisions) minden passz
+# döntés-pillanatában kiértékeli az opciókat (lövés, passz minden
+# társhoz: shot_value × pass_completion), és összeveti a legjobbat a
+# választottal — de csak átlagot ad ("60%-ban optimális"). Itt a
+# PILLANATOK: a 3D nézet odaugrik, és megmutatja a választott passzt és
+# a jobb opciót. Ugyanaz a modell, mint az elemzésé.
+DECISION_GAP_MIN = 0.10   # ennyi érték-különbség felett "jobb opció is volt"
+
+
+def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """A passz-döntések, ahol a modell szerint ÉRDEMBEN jobb opció is volt.
+
+    Minden felismert passznál (decisions.detect_passes) a döntés-kockán
+    az opciók (decisions.evaluate_options) közül a legjobbat
+    (best_option) összevetjük a választottal; ha a különbség eléri a
+    DECISION_GAP_MIN-t, a pillanat bekerül.
+
+    Edzőileg: ezek a videózandó jelenetek — "itt a beálló szabad volt",
+    "itt lövés kellett volna". Az átlagos optimalitás nem mutatja meg,
+    HOL és MI volt a jobb választás; ez igen.
+
+    Visszatérés: {"moments": [{"s", "team", "passer": [x, y],
+    "chosen": [x, y], "chosen_value", "best_kind", "best": [x, y],
+    "best_value", "gap"}] időrendben, "passes": {"home"/"away": db},
+    "flagged": {"home"/"away": db}} — a "best" passznál a jobb társ
+    helye, lövésnél a támadott kapu közepe."""
+    from .decisions import best_option, detect_passes, evaluate_options
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    moments: list[dict] = []
+    passes = {"home": 0, "away": 0}
+    flagged = {"home": 0, "away": 0}
+    for pe in detect_passes(match, config):
+        side = getattr(pe.team, "value", pe.team)
+        if side not in passes:
+            continue
+        passes[side] += 1
+        opts = evaluate_options(pe.decision_frame, pe.passer_pos, config)
+        best = best_option(opts)
+        chosen = next((o for o in opts if o.kind == "pass"
+                       and o.target_id == pe.receiver_id), None)
+        if best is None or chosen is None:
+            continue
+        gap = best.value - chosen.value
+        if gap < DECISION_GAP_MIN:
+            continue
+        pos = {p.track_id: p for p in pe.decision_frame.players}
+        rec = pos.get(pe.receiver_id)
+        if rec is None:
+            continue
+        if best.kind == "pass":
+            tgt = pos.get(best.target_id)
+            if tgt is None:
+                continue
+            cel = [round(tgt.x, 1), round(tgt.y, 1)]
+        else:
+            # Lövés: a cél a TÁMADOTT kapu közepe (a vonal a kapura mutat).
+            cel = [float(config.attacks_toward_x(pe.team)), COURT_WIDTH_M / 2.0]
+        flagged[side] += 1
+        moments.append({
+            "s": round(pe.decision_frame.t / fps, 2), "team": side,
+            "passer": [round(pe.passer_pos.x, 1), round(pe.passer_pos.y, 1)],
+            "chosen": [round(rec.x, 1), round(rec.y, 1)],
+            "chosen_value": round(chosen.value, 3),
+            "best_kind": best.kind,
+            "best": cel,
+            "best_value": round(best.value, 3),
+            "gap": round(gap, 3),
+        })
+    moments.sort(key=lambda m_: m_["s"])
+    return {"moments": moments, "passes": passes, "flagged": flagged}

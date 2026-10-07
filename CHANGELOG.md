@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.159 óta)
 
+- **3D pálya: döntés-pillanatok — ahol jobb opció is volt** (új,
+  böngészős/VR nézet; az appbeli a következő lépés): a "Döntések ◀ ▶"
+  gombok azokra a passz-döntésekre ugranak, ahol a döntés-elemzés
+  modellje szerint érdemben (legalább 0,10 értékkel) jobb opció is volt
+  — a pillanat körül a választott passz FEHÉR, a jobb opció ARANY vonal
+  (a másik társhoz, vagy lövésnél a kapura), és a felirat megnevezi:
+  "jobb opció is volt: LÖVÉS (0,38) a választott passz (0,24) helyett".
+  Az elemzés eddig csak átlagot adott ("60%-ban optimális"); mostantól
+  a videózandó jelenetek is megvannak. Ugyanaz a modell (evaluate_options,
+  best_option), mint a döntés-elemzésé. Új végpont az appnak:
+  `/matches/{id}/decision-moments`. Teszt: a különbség a modellel
+  újraszámolva egyezik, időrend, a tömör adat és a végpont alakja.
+
 - **3D pálya: passzsávok** (új, böngészős/VR és appbeli nézet): a
   "Passzsávok" kapcsolóval a pillanatnyi labdástól minden
   csapattársához vonal húzódik mellmagasságban — zöld a nyitott, sárga

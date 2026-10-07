@@ -137,6 +137,19 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
                             round(fogado.x, 1), round(fogado.y, 1)])
     except Exception:
         passzok = []  # passz-vonalak nélkül is működjön a nézet
+    # Döntés-pillanatok: ahol a modell szerint érdemben jobb opció is volt
+    # — [mp, hazai?, passzoló x, y, választott x, y, érték, "s"/"p",
+    # a jobb cél x, y, érték, különbség] időrendben (court3d).
+    try:
+        from .court3d import decision_moments
+        dontesek = [
+            [d["s"], 1 if d["team"] == "home" else 0, *d["passer"],
+             *d["chosen"], d["chosen_value"],
+             "s" if d["best_kind"] == "shoot" else "p", *d["best"],
+             d["best_value"], d["gap"]]
+            for d in decision_moments(match)["moments"]]
+    except Exception:
+        dontesek = []  # döntés-pillanatok nélkül is működjön a nézet
     # Feltörés: hol és mivel törhető fel a két csapat védekezése (a
     # felderítés rangsorának teteje) — a védekezés-panel a fal mellé írja.
     try:
@@ -165,6 +178,7 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         "passes": passzok,
         "breakpoints": feltores,
         "stoppers": megallitas,
+        "decisions": dontesek,
     }
 
 
@@ -267,6 +281,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #falInfo,#lovesInfo{opacity:.92;line-height:1.35}
  #meres{position:fixed;left:12px;bottom:100px;padding:8px 12px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;line-height:1.45}
  #meres button{margin-left:8px;padding:2px 8px}
+ #dontesFelirat{position:fixed;left:50%;top:52px;transform:translateX(-50%);padding:6px 14px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jatekosHud{position:fixed;left:50%;top:12px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.85);font-size:14px;font-variant-numeric:tabular-nums;display:none}
 </style></head><body>
 <div id="hud"><b>__CIM__</b></div>
@@ -333,6 +348,12 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <button class="nezet" data-n="madar">Madártávlat</button>
  </div>
  <div class="sor">
+  <span title="Passz-döntések, ahol a modell szerint jobb opció is volt">Döntések:</span>
+  <button id="dontesElozo" title="Előző döntés-pillanat">◀</button>
+  <button id="dontesKov" title="Következő döntés-pillanat">▶</button>
+  <span id="dontesInfo"></span>
+ </div>
+ <div class="sor">
   <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
   <span id="linkInfo"></span>
  </div>
@@ -348,11 +369,13 @@ Lent: sebesség (0,5–4×) · Labda-nyom — a labda útja az utolsó 3 mp-ben<
 Hőtérkép — hol tartózkodott a csapat (2 m-es cellák) · Nézet-gombok — kész kamera-állások<br>
 Passzok — a futó passz vonala (adótól a fogadóig), vagy a csapat passz-hálója a padlón<br>
 Passzsávok — a labdástól a társakig: zöld nyitott, sárga kockázatos, piros zárt (az elemzés modellje)<br>
+Döntések ◀ ▶ — ahol jobb opció is volt: fehér a választott passz, arany a jobb (passz vagy lövés)<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
+<div id="dontesFelirat"></div>
 <div id="felirat"></div>
 <div id="vez">
  <button id="elozo" title="Előző esemény">⏮</button>
@@ -1289,6 +1312,47 @@ function passzsavFrissit(){
   passzsavInfo.style.display = "block";
 }
 
+// ---- Döntés-pillanatok: ahol jobb opció is volt -----------------------
+// ◀ ▶ a pillanatok közt ugrik (1,5 mp-cel előtte, lejátszva); a pillanat
+// körül a választott passz FEHÉR, a jobb opció ARANY vonal, a felirat
+// megnevezi (court3d.decision_moments — a döntés-elemzés modellje).
+const DONTESEK = ADAT.decisions || [];
+const dontesCsoport = new THREE.Group();
+szinpad.add(dontesCsoport);
+const dontesFelirat = document.getElementById("dontesFelirat");
+const dontesInfo = document.getElementById("dontesInfo");
+dontesInfo.textContent = DONTESEK.length ? DONTESEK.length + " pillanat" : "nincs ilyen pillanat";
+function dontesUgras(irany){
+  if (!DONTESEK.length) return;
+  let cel = null;
+  if (irany > 0){ for (const d of DONTESEK){ if (d[0] > ido + 1.6){ cel = d; break; } } }
+  else { for (let i = DONTESEK.length - 1; i >= 0; i--){ if (DONTESEK[i][0] < ido - 0.5){ cel = DONTESEK[i]; break; } } }
+  if (!cel) return;
+  ido = Math.max(0, cel[0] - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
+  csuszka.value = ido;
+}
+document.getElementById("dontesElozo").onclick = () => dontesUgras(-1);
+document.getElementById("dontesKov").onclick = () => dontesUgras(1);
+function szam2(v){ return v.toFixed(2).replace(".", ","); }
+function dontesFrissit(t){
+  while (dontesCsoport.children.length) dontesCsoport.remove(dontesCsoport.children[0]);
+  const d = DONTESEK.find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  if (!d){ dontesFelirat.style.display = "none"; return; }
+  const [mp, hazai, px, py, cx, cy, cval, fajta, bx, by, bval, gap] = d;
+  const vonalD = (x2, y2, szin) => {
+    const g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(px, 1.15, W - py), new THREE.Vector3(x2, 1.15, W - y2)]);
+    dontesCsoport.add(new THREE.Line(g, new THREE.LineBasicMaterial({color: szin})));
+  };
+  vonalD(cx, cy, 0xffffff);
+  vonalD(bx, by, 0xd9b544);
+  const jobb = fajta === "s" ? "LÖVÉS (" + szam2(bval) + ")" : "passz a másik társhoz (" + szam2(bval) + ")";
+  dontesFelirat.innerHTML = "<b>" + (hazai ? ADAT.home : ADAT.away) + "</b> — jobb opció is volt: " +
+    "<span style='color:#d9b544'>" + jobb + "</span> a választott passz (" + szam2(cval) +
+    ") helyett · különbség " + szam2(gap);
+  dontesFelirat.style.display = "block";
+}
+
 // ---- Lövéstérkép: a meccs lövései a padlón --------------------------
 // Egy lövés = egy kör a lövés helyén: a csapat színével, a sugara az
 // xG-vel nő (nagy kör = nagy helyzet), a gólt arany gyűrű jelzi, a
@@ -1525,7 +1589,7 @@ fest.setAnimationLoop(() => {
   if (megy){ ido = Math.min(veg, ido + dt * sebesseg);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); felirat(ido);
+  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); dontesFrissit(ido); felirat(ido);
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);

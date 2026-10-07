@@ -67,6 +67,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "function linkAlkalmaz", "linkAlkalmaz();", 'id="tvGomb"',
                 "function tvFrissit", "tvFrissit(dt)", '"KeyT"',
                 'id="passzsav"', "function passzSavok",
+                'id="dontesKov"', 'id="dontesElozo"', "function dontesUgras",
+                "function dontesFrissit", "dontesFrissit(ido)",
                 "function passzsavFrissit", "passzsavFrissit();",
                 "const FELTORES = ADAT.breakpoints", '"Feltörés: <b>"',
                 "function feltoresSav", "feltoresSik.visible = true",
@@ -145,6 +147,34 @@ def test_a_tomor_adat_viszi_a_megallitast():
                "away": []}
     assert _compact_data(_meccs(), None, {"home": [], "away": []},
                          atadott)["stoppers"] == atadott
+
+
+def test_a_tomor_adat_viszi_a_dontes_pillanatokat(tmp_path, monkeypatch):
+    """A tömör adat "decisions" sorai a decision_moments pillanatai
+    (azonos sorrendben, a 12 mezős alakban); a végpont ugyanazt adja."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import decision_moments
+    from handball.pipeline.view3d_html import _compact_data
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    sorok = _compact_data(m, None, {"home": [], "away": []},
+                          {"home": [], "away": []})["decisions"]
+    d = decision_moments(m)["moments"]
+    assert len(sorok) == len(d) > 0
+    for r, x in zip(sorok, d):
+        assert len(r) == 12 and r[0] == x["s"] and r[-1] == x["gap"]
+        assert r[7] == ("s" if x["best_kind"] == "shoot" else "p")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    v = c.get(f"/matches/{m.meta.match_id}/decision-moments").json()
+    assert len(v["moments"]) == len(d)
+    assert c.get("/matches/nincs/decision-moments").status_code == 404
 
 
 def test_a_tomor_adat_viszi_a_passzokat():
