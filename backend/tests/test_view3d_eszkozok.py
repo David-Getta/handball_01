@@ -494,6 +494,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 '"Feltörés: ${f.first["hol"]}', "breakpointZoneBand",
                 "_falStop", '"Megállítás: ${st.first["hol"]}',
                 "_passzsavok(", "passzsavok: _passzsav", "Passzsávok",
+                "fetchDecisionMoments", "_dontesUgras", "_aktivDontes",
+                "dontes: _aktivDontes(m)",
                 "feltoresSav: fal.$3"):
         assert jel in kepernyo, jel
     # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).

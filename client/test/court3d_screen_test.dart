@@ -79,6 +79,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text("Mindkét csapat"), findsOneWidget);
     // A kép továbbra is rajzol (nem dob kivételt a cellák vetítése).
+    await tester.ensureVisible(find.text("Madártávlat"));
+    await tester.pump();
     await tester.tap(find.text("Madártávlat"));
     await tester.pump(const Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
@@ -93,6 +95,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     // A demó 200 kockáján 25-ösével vált a birtokos: 7 passz.
     expect(find.textContaining("7 passz — Demó Hazai"), findsOneWidget);
+    await tester.ensureVisible(find.text("Madártávlat"));
+    await tester.pump();
     await tester.tap(find.text("Madártávlat"));
     await tester.pump(const Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
@@ -108,6 +112,47 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.text("TV-kamera (labda)"), findsOneWidget);
+    await _zar(tester);
+  });
+
+  testWidgets("döntés-pillanat: ▶ odaugrik, felirat a jobb opcióval",
+      (tester) async {
+    await _nyit(tester);
+    expect(find.text("2"), findsWidgets); // a demó két pillanata
+    await tester.tap(find.byTooltip("Következő döntés-pillanat"));
+    // A pillanat 1,5 mp-cel előtte indul, lejátszva: ~2 mp múlva aktív.
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("jobb opció is volt").evaluate().isNotEmpty) {
+        break;
+      }
+    }
+    expect(find.textContaining("jobb opció is volt: LÖVÉS (0,36)"),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
+  testWidgets("az eszköz-panel minden gombja elérhető, és összecsukható",
+      (tester) async {
+    await _nyit(tester);
+    // Görgetéssel minden panel-gomb kattintható helyre hozható (a panel
+    // korábban a kép alá lógott — a Madártávlat nem volt kattintható).
+    for (final cimke in ["Lelátó", "Kapu mögül", "Pálya-szint",
+        "Madártávlat", "Labda-nyom (3 mp)", "Passzsávok"]) {
+      final f = find.text(cimke);
+      await tester.ensureVisible(f);
+      await tester.pump();
+      expect(f.hitTestable(), findsOneWidget, reason: cimke);
+    }
+    // Összecsukva csak a kapcsoló marad, a pálya szabad.
+    await tester.tap(find.text("Eszközök ▴"));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text("Madártávlat"), findsNothing);
+    expect(find.text("Eszközök ▾"), findsOneWidget);
+    await tester.tap(find.text("Eszközök ▾"));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text("Madártávlat"), findsOneWidget);
     await _zar(tester);
   });
 
@@ -133,6 +178,8 @@ void main() {
     expect(find.textContaining("6 lövés, 3 gól"), findsOneWidget);
     // Felülnézetből végigkoppintjuk a képet, míg egy kört eltalálunk: a
     // mérés-doboz ilyenkor a lövés sorával kezdődik, és a lejátszó megy.
+    await tester.ensureVisible(find.text("Madártávlat"));
+    await tester.pump();
     await tester.tap(find.text("Madártávlat"));
     await tester.pump(const Duration(milliseconds: 100));
     final ter = tester.getRect(_kep());

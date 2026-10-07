@@ -138,3 +138,26 @@ List<Map<String, dynamic>> buildDemoPasses(Match m, {int lepes = 25}) {
   }
   return ki;
 }
+
+/// Demó döntés-pillanatok a 3D "Döntések" lapozójához (backend nélkül):
+/// a /decision-moments "moments" alakjában. A demó-passzokból épül — a
+/// jobb opció lövés a jobb kapura (a demóban a hazai arra támad);
+/// SZINTETIKUS, csak a felület bemutatására.
+List<Map<String, dynamic>> buildDemoDecisions(Match m, {int lepes = 25}) {
+  final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+  final ki = <Map<String, dynamic>>[];
+  for (final p in buildDemoPasses(m, lepes: lepes).take(2)) {
+    ki.add({
+      "s": ((p["t"] as int) - 1) / fps,
+      "team": "home",
+      "passer": [p["x1"], p["y1"]],
+      "chosen": [p["x2"], p["y2"]],
+      "chosen_value": 0.18,
+      "best_kind": "shoot",
+      "best": [courtLength, courtWidth / 2],
+      "best_value": 0.36,
+      "gap": 0.18,
+    });
+  }
+  return ki;
+}

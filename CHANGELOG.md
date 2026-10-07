@@ -5,8 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.159 óta)
 
+- **Appbeli 3D: az eszköz-panel nem lóg le a képről** (javítás): a
+  rétegek szaporodtával (hőtérkép, passzok, passzsávok, döntések…) a
+  jobb oldali eszköz-panel magasabb lett a 3D képnél — az alsó gombok
+  (Lelátó, Kapu mögül, Pálya-szint, Madártávlat) a látható részen
+  KÍVÜL kerültek, és nem lehetett rájuk kattintani. Mostantól a panel a
+  kép magasságán belül GÖRGETHETŐ, és egy rögzített "Eszközök ▴/▾"
+  kapcsolóval összecsukható, hogy ne takarja a pályát. Widget-teszt:
+  minden panel-gomb kattintható helyre görgethető, és az összecsukás
+  működik (a régi teszt a Madártávlatra "kattintott" — a kattintás
+  némán célt tévesztett, és a teszt mégis átment; most a cél előbb
+  láthatóvá görgetődik).
+
 - **3D pálya: döntés-pillanatok — ahol jobb opció is volt** (új,
-  böngészős/VR nézet; az appbeli a következő lépés): a "Döntések ◀ ▶"
+  böngészős/VR és appbeli nézet): a "Döntések ◀ ▶"
   gombok azokra a passz-döntésekre ugranak, ahol a döntés-elemzés
   modellje szerint érdemben (legalább 0,10 értékkel) jobb opció is volt
   — a pillanat körül a választott passz FEHÉR, a jobb opció ARANY vonal
@@ -14,9 +26,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   "jobb opció is volt: LÖVÉS (0,38) a választott passz (0,24) helyett".
   Az elemzés eddig csak átlagot adott ("60%-ban optimális"); mostantól
   a videózandó jelenetek is megvannak. Ugyanaz a modell (evaluate_options,
-  best_option), mint a döntés-elemzésé. Új végpont az appnak:
-  `/matches/{id}/decision-moments`. Teszt: a különbség a modellel
-  újraszámolva egyezik, időrend, a tömör adat és a végpont alakja.
+  best_option), mint a döntés-elemzésé. Új végpont:
+  `/matches/{id}/decision-moments` — az appbeli 3D pálya ebből lapoz
+  (◀ ▶ a panelen, a vonalak a festőben, felirat felül; a demó-meccsnek
+  két bemutató pillanata van). Teszt: a különbség a modellel
+  újraszámolva egyezik, időrend, a tömör adat és a végpont alakja;
+  widget-teszt: ▶ odaugrik, a felirat megnevezi a jobb opciót.
 
 - **3D pálya: passzsávok** (új, böngészős/VR és appbeli nézet): a
   "Passzsávok" kapcsolóval a pillanatnyi labdástól minden

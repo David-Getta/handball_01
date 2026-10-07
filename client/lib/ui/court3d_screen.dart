@@ -136,6 +136,11 @@ class _Court3DScreenState extends State<Court3DScreen>
   static const double _nyomS = 3.0;
   // PASSZSÁVOK: a labdástól a társakig (a döntés-elemzés modellje).
   bool _passzsav = false;
+  // Az eszköz-panel nyitva van-e (összecsukva csak a kapcsoló látszik).
+  bool _eszkozokNyitva = true;
+  // DÖNTÉS-PILLANATOK: ahol jobb opció is volt (a /decision-moments
+  // pillanatai) — ◀ ▶ lapoz, a pillanat körül fehér/arany vonal.
+  List<Map<String, dynamic>> _dontesek = const [];
   // HŐTÉRKÉP: hol tartózkodott a csapat (az elemzés rácsa: 20×10 cella,
   // csak a mért helyek) a pályára fektetve. Meccsenként egyszer számolva.
   String _hoter = ""; // "" | "hazai" | "vendeg" | "mind"
@@ -176,6 +181,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _match = buildDemoMatch();
         _lovesek = buildDemoShots();
         _passzok = buildDemoPasses(_match!);
+        _dontesek = buildDemoDecisions(_match!);
         _demo = true;
         _loading = false;
       });
@@ -231,6 +237,14 @@ class _Court3DScreenState extends State<Court3DScreen>
         falStop = (d["stoppers"] as Map?)?.cast<String, dynamic>() ??
             const {};
       } catch (_) {}
+      // A döntés-pillanatok — hibája nem viheti el a nézetet.
+      List<Map<String, dynamic>> dontesek = const [];
+      try {
+        dontesek = (((await _api.fetchDecisionMoments(id))["moments"]
+                    as List?) ??
+                const [])
+            .cast<Map<String, dynamic>>();
+      } catch (_) {}
       // A lövéstérkép a helyzetminőség lövés-soraiból — hibája nem
       // viheti el a nézetet (a térkép ilyenkor üres).
       List<Map<String, dynamic>> lovesek = const [];
@@ -275,6 +289,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _falStop = falStop;
         _lovesek = lovesek;
         _passzok = passzok;
+        _dontesek = dontesek;
         _lovesValasztott = null;
         if (widget.lovesTerkep != null) _lovesTerkep = widget.lovesTerkep!;
         _meres = null;
@@ -639,6 +654,64 @@ class _Court3DScreenState extends State<Court3DScreen>
           z, home, alpha));
     }
     return ki;
+  }
+
+  /// A lejátszófejnél aktív döntés-pillanat (−0,3…+2,5 mp a döntés körül),
+  /// vagy null.
+  Map<String, dynamic>? _aktivDontes(Match m) {
+    if (_dontesek.isEmpty || m.frames.isEmpty) return null;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m) / fps;
+    for (final d in _dontesek) {
+      final s = ((d["s"] as num?) ?? 0).toDouble();
+      if (most >= s - 0.3 && most <= s + 2.5) return d;
+    }
+    return null;
+  }
+
+  /// Ugrás az előző/következő döntés-pillanatra (1,5 mp-cel előtte,
+  /// lejátszva) — a böngészős nézet ◀ ▶ gombjainak párja.
+  void _dontesUgras(Match m, int irany) {
+    if (_dontesek.isEmpty || m.frames.isEmpty) return;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m) / fps;
+    Map<String, dynamic>? cel;
+    if (irany > 0) {
+      for (final d in _dontesek) {
+        if (((d["s"] as num?) ?? 0) > most + 1.6) {
+          cel = d;
+          break;
+        }
+      }
+    } else {
+      for (final d in _dontesek.reversed) {
+        if (((d["s"] as num?) ?? 0) < most - 0.5) {
+          cel = d;
+          break;
+        }
+      }
+    }
+    if (cel == null) return;
+    final s = ((cel["s"] as num?) ?? 0).toDouble();
+    setState(() {
+      _playhead = _tIndex(m, (s - 1.5) * fps).toDouble();
+      _playing = true;
+    });
+    _focus.requestFocus();
+  }
+
+  /// A döntés-pillanat felirata ("jobb opció is volt: LÖVÉS (0,36) …").
+  String? _dontesFelirat(Match m) {
+    final d = _aktivDontes(m);
+    if (d == null) return null;
+    String sz(dynamic v) =>
+        ((v as num?) ?? 0).toDouble().toStringAsFixed(2).replaceAll(".", ",");
+    final jobb = d["best_kind"] == "shoot"
+        ? "LÖVÉS (${sz(d["best_value"])})"
+        : "passz a másik társhoz (${sz(d["best_value"])})";
+    final csapat = d["team"] == "home" ? m.meta.homeTeam : m.meta.awayTeam;
+    return "$csapat — jobb opció is volt: $jobb a választott passz "
+        "(${sz(d["chosen_value"])}) helyett · különbség ${sz(d["gap"])}";
   }
 
   /// A labdás passzsávjai a pillanatnyi állásból (court_geometry.passLanes).
@@ -1059,6 +1132,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                   hoCellak: _hoCellak(m),
                   passzok: _passzVonalak(m),
                   passzsavok: _passzsav ? _passzsavok(allapot) : null,
+                  dontes: _aktivDontes(m),
                   lovesek: [
                     for (final l in _lathatoLovesek(m))
                       _LovesJel(
@@ -1071,7 +1145,44 @@ class _Court3DScreenState extends State<Court3DScreen>
                   rejtett: rejtett,
                 ),
               ))),
-              Positioned(right: 10, top: 10, child: _nezetGombok()),
+              // Az eszköz-panel a kép jobb szélén: magasság-korláttal
+              // GÖRGETHETŐ (a rétegek szaporodtával a kép alá lógott, és
+              // az alsó gombok — Madártávlat, … — kattinthatatlanok
+              // lettek), és összecsukható, hogy ne takarja a pályát.
+              Positioned(
+                right: 10,
+                top: 10,
+                bottom: 10,
+                // A kapcsoló RÖGZÍTETT (nem görög el a panellel), alatta
+                // a görgethető gomb-oszlop.
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: TextButton.icon(
+                          onPressed: () {
+                            setState(
+                                () => _eszkozokNyitva = !_eszkozokNyitva);
+                            _focus.requestFocus();
+                          },
+                          icon: Icon(
+                              _eszkozokNyitva
+                                  ? Icons.expand_less
+                                  : Icons.expand_more,
+                              size: 18),
+                          label: Text(
+                              _eszkozokNyitva ? "Eszközök ▴" : "Eszközök ▾",
+                              style: const TextStyle(fontSize: 11.5)),
+                        ),
+                      ),
+                      if (_eszkozokNyitva)
+                        Flexible(
+                            child: SingleChildScrollView(
+                                child: _nezetGombok())),
+                    ]),
+              ),
               if (_szemHud(m, allapot) != null)
                 Positioned(
                   top: 12,
@@ -1111,6 +1222,15 @@ class _Court3DScreenState extends State<Court3DScreen>
               // Jelenet-felirat: mi történik épp (a közvetítés
               // inzertje) — a 3D-ben a labda pályája önmagában nem
               // mondja meg, hogy gól volt-e vagy védés.
+              if (_dontesFelirat(m) != null)
+                Positioned(
+                  top: 12,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                      child: _infoDoboz(
+                          [_dontesFelirat(m)!], AppColors.gold)),
+                ),
               if (_esemenyFelirat(m) != null)
                 Positioned(
                   left: 12,
@@ -1493,6 +1613,31 @@ class _Court3DScreenState extends State<Court3DScreen>
             },
           ),
         ),
+      ),
+      // Döntés-pillanatok: ahol jobb opció is volt (◀ ▶).
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text("Döntések:", style: AppText.label.copyWith(fontSize: 11.5)),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Előző döntés-pillanat",
+            onPressed: _dontesek.isEmpty || _match == null
+                ? null
+                : () => _dontesUgras(_match!, -1),
+            icon: const Icon(Icons.chevron_left, size: 20),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Következő döntés-pillanat",
+            onPressed: _dontesek.isEmpty || _match == null
+                ? null
+                : () => _dontesUgras(_match!, 1),
+            icon: const Icon(Icons.chevron_right, size: 20),
+          ),
+          Text(_dontesek.isEmpty ? "nincs" : "${_dontesek.length}",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ]),
       ),
       gomb("Lelátó", () => _nezet(20, -12, 9, 0, -0.5)),
       gomb("Kapu mögül", () => _nezet(-6, 10, 2.5, math.pi / 2, -0.12)),
@@ -1985,6 +2130,8 @@ class _Court3DPainter extends CustomPainter {
   final List<_PasszVonal> passzok;
   // A labdás passzsávjai (labdás, sávok) — null: kikapcsolva / nincs labdás.
   final ((bool, double, double), List<PassLane>)? passzsavok;
+  // Az aktív döntés-pillanat (a /decision-moments egy sora) vagy null.
+  final Map<String, dynamic>? dontes;
   final _Jatekos? rejtett;
   _Court3DPainter(
       {required this.frame,
@@ -2002,6 +2149,7 @@ class _Court3DPainter extends CustomPainter {
       this.hoCellak = const [],
       this.passzok = const [],
       this.passzsavok,
+      this.dontes,
       this.rejtett});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
@@ -2406,6 +2554,27 @@ class _Court3DPainter extends CustomPainter {
             l.y,
             1.1);
       }
+    }
+
+    // Döntés-pillanat: a választott passz FEHÉR, a jobb opció ARANY vonal
+    // a passzolótól (lövésnél a kapu közepére).
+    final dn = dontes;
+    if (dn != null) {
+      List<double> xy(dynamic v) =>
+          [for (final e in (v as List)) (e as num).toDouble()];
+      final p0 = xy(dn["passer"]), ch = xy(dn["chosen"]), be = xy(dn["best"]);
+      _vonal(
+          canvas,
+          Paint()
+            ..color = Colors.white
+            ..strokeWidth = 2.6,
+          p0[0], p0[1], 1.15, ch[0], ch[1], 1.15);
+      _vonal(
+          canvas,
+          Paint()
+            ..color = AppColors.gold
+            ..strokeWidth = 2.8,
+          p0[0], p0[1], 1.15, be[0], be[1], 1.15);
     }
 
     // Passz-vonalak: az adótól a fogadóig, a csapat színével.

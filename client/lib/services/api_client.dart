@@ -1464,6 +1464,20 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Döntés-pillanatok (GET /matches/{id}/decision-moments): a passzok,
+  /// ahol a döntés-elemzés modellje szerint érdemben jobb opció is volt —
+  /// {"moments": [{"s","team","passer","chosen","chosen_value",
+  /// "best_kind","best","best_value","gap"}], "passes", "flagged"}.
+  Future<Map<String, dynamic>> fetchDecisionMoments(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/decision-moments"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a döntés-pillanatokat", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// 7 a 6 elleni (üres kapus) szakaszok (GET /matches/{id}/empty-net).
   Future<List<Map<String, dynamic>>> fetchEmptyNet(String matchId) async {
     final resp = await http
