@@ -199,3 +199,72 @@ Rect? breakpointZoneBand(String? sav, double goalX) {
   final x1 = balKapu ? freeThrowRadius : courtLength;
   return Rect.fromLTRB(x0, y0, x1, y1);
 }
+
+/// A passzsávok küszöbei (a backend `court3d` és a döntés-elemzés
+/// `decisions.pass_completion` tükre).
+const double passLaneWidthM = 1.5;
+const double passLaneGood = 0.6;
+const double passLaneRisky = 0.35;
+
+/// A pillanatnyi labdás birtoklás-sugara (TacticsConfig.possession_radius_m).
+const double possessionRadiusM = 3.0;
+
+/// Egy passzsáv: a fogadó helye, a passz-esély, a sávban álló ellenfelek
+/// száma és a fokozat ("nyitott" / "kockázatos" / "zárt").
+class PassLane {
+  final double x, y, p;
+  final int blockers;
+  final String grade;
+  const PassLane(this.x, this.y, this.p, this.blockers, this.grade);
+}
+
+String passLaneGrade(double p) => p >= passLaneGood
+    ? "nyitott"
+    : (p >= passLaneRisky ? "kockázatos" : "zárt");
+
+double _pontSzakasz(
+    double px, double py, double ax, double ay, double bx, double by) {
+  final dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  if (l2 == 0) return math.sqrt((px - ax) * (px - ax) + (py - ay) * (py - ay));
+  final t = (((px - ax) * dx + (py - ay) * dy) / l2).clamp(0.0, 1.0);
+  final cx = ax + t * dx, cy = ay + t * dy;
+  return math.sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+}
+
+/// A labdás passzsávjai (a backend `court3d.pass_lanes` tükre). `players`:
+/// (hazai?, x, y); null, ha nincs labda vagy a legközelebbi játékos a
+/// birtoklás-sugáron kívül van. Visszatérés: (labdás, sávok).
+((bool, double, double), List<PassLane>)? passLanes(
+    List<(bool, double, double)> players, Offset? ball) {
+  if (ball == null || players.isEmpty) return null;
+  (bool, double, double)? h;
+  var hd = double.infinity;
+  for (final p in players) {
+    final d = math.sqrt(
+        (p.$2 - ball.dx) * (p.$2 - ball.dx) + (p.$3 - ball.dy) * (p.$3 - ball.dy));
+    if (d < hd) {
+      hd = d;
+      h = p;
+    }
+  }
+  final holder = h!;
+  if (hd > possessionRadiusM) return null;
+  final lanes = <PassLane>[];
+  for (final t in players) {
+    if (identical(t, holder) || t.$1 != holder.$1) continue;
+    final tav = math.sqrt((holder.$2 - t.$2) * (holder.$2 - t.$2) +
+        (holder.$3 - t.$3) * (holder.$3 - t.$3));
+    final alap = math.max(0.1, 1 - tav / 35);
+    var blokk = 0;
+    for (final o in players) {
+      if (o.$1 == holder.$1) continue;
+      if (_pontSzakasz(o.$2, o.$3, holder.$2, holder.$3, t.$2, t.$3) <=
+          passLaneWidthM) {
+        blokk++;
+      }
+    }
+    final p = (alap - 0.3 * blokk).clamp(0.05, 0.99).toDouble();
+    lanes.add(PassLane(t.$2, t.$3, p, blokk, passLaneGrade(p)));
+  }
+  return (holder, lanes);
+}

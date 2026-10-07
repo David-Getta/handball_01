@@ -3,6 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.159 óta)
+
+- **3D pálya: passzsávok** (új, böngészős/VR és appbeli nézet): a
+  "Passzsávok" kapcsolóval a pillanatnyi labdástól minden
+  csapattársához vonal húzódik mellmagasságban — zöld a nyitott, sárga
+  a kockázatos, piros a zárt sáv —, és egy sor összegzi ("Labdás
+  (Szeged): 4 nyitott, 0 kockázatos, 2 zárt sáv"). A színezés a
+  döntés-elemzés passz-modellje (a távolság és a sávban 1,5 m-en belül
+  álló ellenfelek), és a labdás is az elemzés birtoklás-sugarával (3 m)
+  dől el — a 3D nem mondhat mást a passzról, mint az elemzés. A
+  jelenet-link is viszi (passzsav=1). Ellenőrizve: a backend-függvény
+  maga a döntés-elemzés modelljét hívja; a böngésző-tükör 300 véletlen
+  álláson, az appbeli tükör 40 álláson adja a backend számait (node,
+  flutter test); headless Chromiumban madártávlatból a sávok és az
+  összegző.
+
 ## v0.1.159 — kiadva (2026-10-06)
 
 > Kiadás-jegyzet: a meccselemzés maga kiírja a csapatok gyenge pontjait

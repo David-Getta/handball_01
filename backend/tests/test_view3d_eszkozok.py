@@ -66,6 +66,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'mod === "kovetes"', 'id="linkGomb"', "function linkEpit",
                 "function linkAlkalmaz", "linkAlkalmaz();", 'id="tvGomb"',
                 "function tvFrissit", "tvFrissit(dt)", '"KeyT"',
+                'id="passzsav"', "function passzSavok",
+                "function passzsavFrissit", "passzsavFrissit();",
                 "const FELTORES = ADAT.breakpoints", '"Feltörés: <b>"',
                 "function feltoresSav", "feltoresSik.visible = true",
                 "const MEGALLITAS = ADAT.stoppers", '"Megállítás: <b>"'):
@@ -303,6 +305,48 @@ def test_a_bongeszo_feltores_savja_a_backendet_tukrozi():
             assert abs(a[k] - b[k]) < 0.01, (a, b)
 
 
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_bongeszo_passzsavjai_a_backendet_tukrozik():
+    """A böngésző passzsávjai (passzSavok) ugyanazt adják, mint a
+    court3d.pass_lanes — 300 véletlen álláson (labdás, esélyek, blokkolók,
+    fokozat), a backend-konstansokkal beágyazva."""
+    import random
+
+    from handball.pipeline.court3d import pass_lanes
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("const PS_SUGAR"); i1 = kod.index("\n}\n", kod.index("function passzSavok")) + 2
+    rnd = random.Random(7)
+    esetek = []
+    for _ in range(300):
+        jat = [[rnd.randint(0, 1), round(rnd.uniform(0, 40), 1),
+                round(rnd.uniform(0, 20), 1)] for _ in range(rnd.randint(2, 14))]
+        h = rnd.choice(jat)
+        labda = [h[1] + rnd.uniform(-3.5, 3.5), h[2] + rnd.uniform(-3.5, 3.5)]
+        esetek.append([jat, labda])
+    js = (kod[i0:i1] + "\nconst E = " + json.dumps(esetek) + ";\n"
+          "console.log(JSON.stringify(E.map(e => passzSavok(e[0], e[1]))));\n")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    js_ki = json.loads(r.stdout)
+    volt = 0
+    for (jat, labda), j in zip(esetek, js_ki):
+        py = pass_lanes([tuple(p) for p in jat], tuple(labda))
+        if py is None:
+            assert j is None
+            continue
+        volt += 1
+        assert j["holder"][:2] == py["holder"][:2]
+        assert bool(j["holder"][2]) == bool(py["holder"][2])
+        assert len(j["lanes"]) == len(py["lanes"])
+        for a, b in zip(j["lanes"], py["lanes"]):
+            assert abs(a["p"] - b["p"]) < 1e-3, (a, b)
+            assert a["blockers"] == b["blockers"] and a["grade"] == b["grade"]
+    assert volt > 100, "kevés eset jutott labdáshoz"
+
+
 def _modul_szkript(oldal: str) -> str:
     m = re.search(r'<script type="module">(.*?)</script>', oldal, re.S)
     assert m, "nincs modul-szkript"
@@ -419,6 +463,7 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "_mostT(m) / fpsB", "this.lovesTerkep", "_falBreak",
                 '"Feltörés: ${f.first["hol"]}', "breakpointZoneBand",
                 "_falStop", '"Megállítás: ${st.first["hol"]}',
+                "_passzsavok(", "passzsavok: _passzsav", "Passzsávok",
                 "feltoresSav: fal.$3"):
         assert jel in kepernyo, jel
     # A kör sugara ugyanaz a képlet, mint a böngészőben (0,22 + 0,5·xG).

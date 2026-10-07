@@ -233,3 +233,65 @@ def breakpoint_zone_band(sav: str | None, goal_x: float) -> dict | None:
     x0 = 0.0 if bal_kapu else COURT_LENGTH_M - BREAK_BAND_DEPTH_M
     x1 = BREAK_BAND_DEPTH_M if bal_kapu else COURT_LENGTH_M
     return {"x0": x0, "x1": x1, "y0": round(y0, 3), "y1": round(y1, 3)}
+
+
+# ---- Passzsávok: a labdás játékos opciói a 3D pályán ---------------------
+#
+# A 3D nézet a pillanatnyi labdástól minden csapattársához vonalat húz, a
+# döntés-elemzés passz-modelljével (decisions.pass_completion: a távolság
+# és a sávban — 1,5 m-en belül — álló ellenfelek) színezve. Ugyanaz a
+# modell, mint a döntés-elemzésé: a 3D nem mondhat mást a passzról, mint
+# az elemzés.
+# A sáv szélessége: a decisions.pass_completion alapértéke (1,5 m).
+PASS_LANE_WIDTH_M = 1.5
+PASS_LANE_GOOD = 0.6     # e fölött nyitott (zöld) a sáv
+PASS_LANE_RISKY = 0.35   # e fölött kockázatos (sárga), alatta zárt (piros)
+
+
+def pass_lane_grade(p: float) -> str:
+    """A passz-esély fokozata: "nyitott" / "kockázatos" / "zárt"."""
+    if p >= PASS_LANE_GOOD:
+        return "nyitott"
+    if p >= PASS_LANE_RISKY:
+        return "kockázatos"
+    return "zárt"
+
+
+def pass_lanes(players, ball, possession_radius_m: Optional[float] = None) -> Optional[dict]:
+    """A labdás játékos passzsávjai egy pillanatban.
+
+    `players`: [(hazai?, x, y), …] pálya-méterben; `ball`: (x, y) vagy
+    None. A labdás a labdához legközelebbi játékos, ha a döntés-elemzés
+    birtoklás-sugarán (TacticsConfig.possession_radius_m) belül van —
+    különben nincs labdás, és nincs sáv (None).
+
+    Visszatérés: {"holder": [x, y, hazai?], "lanes": [{"x", "y", "p",
+    "blockers", "grade"}]} — csapattársanként a passz-esély (p, 0..1,
+    decisions.pass_completion), a sávban álló ellenfelek száma
+    (PASS_LANE_WIDTH_M-en belül) és a fokozat (pass_lane_grade)."""
+    from types import SimpleNamespace
+
+    from .decisions import _point_segment_distance, pass_completion
+
+    if ball is None or not players:
+        return None
+    radius = (possession_radius_m if possession_radius_m is not None
+              else TacticsConfig().possession_radius_m)
+    bx, by = ball
+    pl = [SimpleNamespace(team=bool(h), x=float(x), y=float(y))
+          for h, x, y in players]
+    holder = min(pl, key=lambda p: math.hypot(p.x - bx, p.y - by))
+    if math.hypot(holder.x - bx, holder.y - by) > radius:
+        return None
+    frame = SimpleNamespace(players=pl)
+    lanes = []
+    for t in pl:
+        if t is holder or t.team != holder.team:
+            continue
+        p = pass_completion(holder, t, frame, lane_width_m=PASS_LANE_WIDTH_M)
+        blockers = sum(1 for o in pl if o.team != holder.team and
+                       _point_segment_distance(o.x, o.y, holder.x, holder.y,
+                                               t.x, t.y) <= PASS_LANE_WIDTH_M)
+        lanes.append({"x": t.x, "y": t.y, "p": round(p, 4),
+                      "blockers": blockers, "grade": pass_lane_grade(p)})
+    return {"holder": [holder.x, holder.y, holder.team], "lanes": lanes}

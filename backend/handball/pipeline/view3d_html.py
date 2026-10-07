@@ -194,6 +194,48 @@ function lovesMeres(x, y, kapu){
 """
 
 
+# A passzsávok a böngészőben — a `court3d.pass_lanes` PONTOS tükre (a
+# decisions.pass_completion modellje; a teszt node-dal futtatja és a
+# Python-számokkal veti össze). A konstansok a backendből jönnek.
+PASSZSAV_JS = """
+function passzSavok(jat, labda){
+  // jat: [[hazai?, x, y], …]; labda: [x, y] | null. A court3d.pass_lanes
+  // tükre: labdás a labdához legközelebbi, ha PS_SUGAR-on belül van;
+  // csapattársanként a passz-esély a távolságból és a sávban (PS_SZEL)
+  // álló ellenfelekből.
+  if (!labda || !jat.length) return null;
+  let h = null, hd = Infinity;
+  for (const p of jat){
+    const d = Math.hypot(p[1] - labda[0], p[2] - labda[1]);
+    if (d < hd){ hd = d; h = p; }
+  }
+  if (hd > PS_SUGAR) return null;
+  const szakasz = (px, py, ax, ay, bx, by) => {
+    const dx = bx - ax, dy = by - ay, l2 = dx*dx + dy*dy;
+    if (l2 === 0) return Math.hypot(px - ax, py - ay);
+    let t = ((px - ax)*dx + (py - ay)*dy) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (ax + t*dx), py - (ay + t*dy));
+  };
+  const lanes = [];
+  for (const t of jat){
+    if (t === h || !!t[0] !== !!h[0]) continue;
+    const tav = Math.hypot(h[1] - t[1], h[2] - t[2]);
+    const alap = Math.max(0.1, 1 - tav / 35);
+    let blokk = 0;
+    for (const o of jat){
+      if (!!o[0] === !!h[0]) continue;
+      if (szakasz(o[1], o[2], h[1], h[2], t[1], t[2]) <= PS_SZEL) blokk++;
+    }
+    const p = Math.max(0.05, Math.min(0.99, alap - 0.3 * blokk));
+    const grade = p >= PS_JO ? "nyitott" : (p >= PS_KOCK ? "kockázatos" : "zárt");
+    lanes.push({x: t[1], y: t[2], p, blockers: blokk, grade});
+  }
+  return {holder: [h[1], h[2], !!h[0]], lanes};
+}
+"""
+
+
 def view3d_html(match: Match, figure_alerts: list | None = None,
                 breakpoints: dict | None = None,
                 stoppers: dict | None = None) -> str:
@@ -305,6 +347,7 @@ Lövéstérkép: katt egy körre — odaugrik a lövéshez (kör = xG, arany gy�
 Lent: sebesség (0,5–4×) · Labda-nyom — a labda útja az utolsó 3 mp-ben<br>
 Hőtérkép — hol tartózkodott a csapat (2 m-es cellák) · Nézet-gombok — kész kamera-állások<br>
 Passzok — a futó passz vonala (adótól a fogadóig), vagy a csapat passz-hálója a padlón<br>
+Passzsávok — a labdástól a társakig: zöld nyitott, sárga kockázatos, piros zárt (az elemzés modellje)<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
@@ -324,6 +367,7 @@ VR-headsetben: a lenti "ENTER VR" gomb</div>
   <option value="4">4×</option>
  </select>
  <label title="A labda útja az utolsó 3 másodpercben"><input type="checkbox" id="nyom"> Labda-nyom</label>
+ <label title="A labdás passzsávjai a csapattársakhoz (zöld nyitott, sárga kockázatos, piros zárt)"><input type="checkbox" id="passzsav"> Passzsávok</label>
 </div>
 <script type="importmap">{"imports":{
  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -336,6 +380,7 @@ import {VRButton} from "three/addons/webxr/VRButton.js";
 const ADAT = __ADAT__;
 const H = 40, W = 20, KAPU_SZ = 3;
 __LOVES_JS__
+__PASSZSAV_JS__
 
 const szinpad = new THREE.Scene();
 szinpad.background = new THREE.Color(0x0a0e14);
@@ -1163,6 +1208,7 @@ function linkEpit(){
   }
   if (falOldal.value !== "auto") q.set("falOldal", falOldal.value);
   if (nyomKapcsolo.checked) q.set("nyom", "1");
+  if (passzsavKapcsolo.checked) q.set("passzsav", "1");
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -1181,6 +1227,7 @@ function linkAlkalmaz(){
   }
   if (v("falOldal")) falOldal.value = v("falOldal");
   if (v("nyom") === "1") nyomKapcsolo.checked = true;
+  if (v("passzsav") === "1") passzsavKapcsolo.checked = true;
   if (v("seb")){ sebessegValaszto.value = v("seb"); sebessegValaszto.onchange(); }
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
   if (v("tv") === "1") modValt("tv");
@@ -1209,6 +1256,37 @@ function nyomFrissit(t){
   if (pontok.length < 2){ nyomVonal.visible = false; return; }
   nyomGeom.setFromPoints(pontok);
   nyomVonal.visible = true;
+}
+
+// ---- Passzsávok: a labdás opciói ------------------------------------
+// A labdástól minden csapattársához egy vonal mellmagasságban, a passz-
+// esély szerint színezve (a döntés-elemzés modellje, lásd passzSavok).
+const passzsavKapcsolo = document.getElementById("passzsav");
+const passzsavCsoport = new THREE.Group();
+szinpad.add(passzsavCsoport);
+const PS_SZIN = {"nyitott": 0x3fbf6f, "kockázatos": 0xd9b544, "zárt": 0xff6b6b};
+const passzsavInfo = document.createElement("div");
+passzsavInfo.style.cssText = "position:fixed;right:12px;bottom:56px;padding:6px 12px;border:1px solid #2b4a5e;border-radius:8px;background:rgba(16,24,32,.85);font-size:13px;display:none";
+document.body.appendChild(passzsavInfo);
+function passzsavFrissit(){
+  while (passzsavCsoport.children.length) passzsavCsoport.remove(passzsavCsoport.children[0]);
+  if (!passzsavKapcsolo.checked){ passzsavInfo.style.display = "none"; return; }
+  const jat = allas.map(s => [s.hazai ? 1 : 0, s.x, s.y]);
+  const lb = labda.visible ? [labda.position.x, W - labda.position.z] : null;
+  const r = passzSavok(jat, lb);
+  if (!r){ passzsavInfo.textContent = "Most nincs labdás játékos."; passzsavInfo.style.display = "block"; return; }
+  const db = {"nyitott": 0, "kockázatos": 0, "zárt": 0};
+  for (const l of r.lanes){
+    db[l.grade]++;
+    const g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(r.holder[0], 1.1, W - r.holder[1]),
+      new THREE.Vector3(l.x, 1.1, W - l.y)]);
+    passzsavCsoport.add(new THREE.Line(g, new THREE.LineBasicMaterial(
+      {color: PS_SZIN[l.grade], transparent: true, opacity: 0.85})));
+  }
+  passzsavInfo.textContent = "Labdás (" + (r.holder[2] ? ADAT.home : ADAT.away) + "): " +
+    db["nyitott"] + " nyitott, " + db["kockázatos"] + " kockázatos, " + db["zárt"] + " zárt sáv";
+  passzsavInfo.style.display = "block";
 }
 
 // ---- Lövéstérkép: a meccs lövései a padlón --------------------------
@@ -1447,13 +1525,20 @@ fest.setAnimationLoop(() => {
   if (megy){ ido = Math.min(veg, ido + dt * sebesseg);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); felirat(ido);
+  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); felirat(ido);
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);
 });
 </script></body></html>
 """
+    from .court3d import (PASS_LANE_GOOD, PASS_LANE_RISKY,
+                          PASS_LANE_WIDTH_M)
+    from .tactics import TacticsConfig
+    ps_kod = (f"const PS_SUGAR = {TacticsConfig().possession_radius_m}, "
+              f"PS_SZEL = {PASS_LANE_WIDTH_M}, PS_JO = {PASS_LANE_GOOD}, "
+              f"PS_KOCK = {PASS_LANE_RISKY};" + PASSZSAV_JS)
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
+                 .replace("__PASSZSAV_JS__", ps_kod)
                  .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))

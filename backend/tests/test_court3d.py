@@ -121,3 +121,32 @@ def test_a_feltores_sav_a_vedo_nezopontjabol_fordul():
                                                    "y0": 6.667, "y1": 13.333}
     assert breakpoint_zone_band(None, 0.0) is None
     assert breakpoint_zone_band("átlövés közép", 0.0) is None
+
+
+def test_a_passzsav_a_dontes_elemzes_modelljet_adja():
+    """A 3D passzsávjai a döntés-elemzés passz-modellje
+    (decisions.pass_completion, 1,5 m-es sáv) — a labdás a labdához
+    legközelebbi, ha a birtoklás-sugáron (TacticsConfig) belül van."""
+    from types import SimpleNamespace
+
+    from handball.pipeline.court3d import pass_lane_grade, pass_lanes
+    from handball.pipeline.decisions import pass_completion
+
+    jat = [(1, 30.0, 10.0), (1, 25.0, 4.0), (1, 26.0, 16.0),
+           (0, 33.0, 10.0), (0, 28.0, 7.0)]
+    r = pass_lanes(jat, (30.5, 10.2))
+    assert r["holder"] == [30.0, 10.0, True]
+    assert len(r["lanes"]) == 2          # csak a csapattársak
+    pl = [SimpleNamespace(team=bool(h), x=x, y=y) for h, x, y in jat]
+    for lane, t in zip(r["lanes"], pl[1:3]):
+        vart = pass_completion(pl[0], t, SimpleNamespace(players=pl))
+        assert abs(lane["p"] - vart) < 1e-4
+        assert lane["grade"] == pass_lane_grade(lane["p"])
+    zart = next(l for l in r["lanes"] if (l["x"], l["y"]) == (25.0, 4.0))
+    assert zart["blockers"] == 1          # a (28, 7) védő a sávban
+    # Nincs labdás: a labda a birtoklás-sugáron kívül, vagy nincs labda.
+    assert pass_lanes(jat, (40.0, 0.0)) is None
+    assert pass_lanes(jat, None) is None
+    assert pass_lane_grade(0.6) == "nyitott"
+    assert pass_lane_grade(0.35) == "kockázatos"
+    assert pass_lane_grade(0.34) == "zárt"
