@@ -1877,6 +1877,22 @@ WALL_GAP_M = 3.5
 WALL_GAP_DEPTH_M = 12.0
 WALL_GAP_MIN_FRAMES = 100
 WALL_GAP_SHARE_PCT = 40.0
+# Legalább ennyi fős falat ítélünk meg (kevesebb védő még nem fal).
+WALL_GAP_MIN_DEFENDERS = 4
+
+
+def wall_line(players, team, goal_x: float) -> list:
+    """A védőfal egy kockán: a csapat MÉRT, kapus nélküli játékosai a
+    saját kaputól WALL_GAP_DEPTH_M-en belül, y szerint rendezve —
+    [(y, x), …]. A wall_gaps és a 3D pálya fal-rés rétege
+    (court3d.wall_gap_segments) EGYARÁNT ebből dolgozik, hogy a kettő ne
+    mondjon mást."""
+    from ..models.tracking import PositionSource
+
+    return sorted(
+        (p.y, p.x) for p in players
+        if p.team == team and p.source == PositionSource.MEASURED
+        and p.role != "kapus" and abs(p.x - goal_x) <= WALL_GAP_DEPTH_M)
 
 
 def wall_gaps(match, config=None) -> dict:
@@ -1896,7 +1912,7 @@ def wall_gaps(match, config=None) -> dict:
     "avg_gap_m"} — share_pct/avg_gap_m None, ha kevés
     (WALL_GAP_MIN_FRAMES alatti) a mért falkocka.
     """
-    from ..models.tracking import PositionSource, Team
+    from ..models.tracking import Team
     from .tactics import Phase, TacticsConfig, classify_phase
 
     config = config or TacticsConfig()
@@ -1909,12 +1925,9 @@ def wall_gaps(match, config=None) -> dict:
         for side, team, needed in plan:
             if ph != needed:
                 continue
-            gx = config.own_goal_x(team)
-            wall = sorted(
-                p.y for p in f.players
-                if p.team == team and p.source == PositionSource.MEASURED
-                and p.role != "kapus" and abs(p.x - gx) <= WALL_GAP_DEPTH_M)
-            if len(wall) < 4:
+            wall = [y for y, _x in
+                    wall_line(f.players, team, config.own_goal_x(team))]
+            if len(wall) < WALL_GAP_MIN_DEFENDERS:
                 continue
             gap = max(b - a for a, b in zip(wall, wall[1:]))
             rec = counts[side]

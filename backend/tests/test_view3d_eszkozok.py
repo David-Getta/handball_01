@@ -71,6 +71,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'id="szabadKov"', 'id="szabadElozo"', "function szabadUgras",
                 "function szabadFrissit",
                 'id="eladasKov"', 'id="eladasElozo"', "function eladasUgras",
+                'id="falres"', "function falResek", "function falresFrissit",
+                "falresFrissit(ido)", 'q.set("falres", "1")',
                 "function eladasFrissit", 'id="eladasFelirat"',
                 "function dontesFrissit", "dontesFrissit(ido)",
                 "function passzsavFrissit", "passzsavFrissit();",
@@ -442,6 +444,63 @@ def test_a_bongeszo_passzsavjai_a_backendet_tukrozik():
     assert volt > 100, "kevés eset jutott labdáshoz"
 
 
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_bongeszo_fal_resei_a_backendet_tukrozik():
+    """A böngésző fal-rései (falResek) ugyanazt adják, mint a
+    court3d.wall_gap_segments — 400 véletlen álláson (mért/becsült,
+    kapus, a 12 m-es mélység két oldalán, y-holtversennyel), a
+    backend-konstansokkal beágyazva."""
+    import random
+
+    from handball.models.tracking import (PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.court3d import wall_gap_segments
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("const FR_RES")
+    i1 = kod.index("\n}\n", kod.index("function falResek")) + 2
+    rnd = random.Random(11)
+    esetek = []
+    for _ in range(400):
+        goal_x = rnd.choice([0.0, 40.0])
+        jat = []
+        for _ in range(rnd.randint(4, 16)):
+            x = round(abs(goal_x - rnd.uniform(1, 16)), 1)
+            # durva y-rács: gyakori holtverseny (a rendezés x-szel dönt)
+            y = round(rnd.choice([rnd.uniform(1, 19), rnd.randint(2, 18)]), 1)
+            jat.append([rnd.randint(0, 1), x, y,
+                        1 if rnd.random() < 0.85 else 0,
+                        1 if rnd.random() < 0.08 else 0])
+        esetek.append([jat, rnd.randint(0, 1), goal_x])
+    js = (kod[i0:i1] + "\nconst E = " + json.dumps(esetek) + ";\n"
+          "console.log(JSON.stringify(E.map(e => falResek(e[0], !!e[1], e[2]))));\n")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    volt = 0
+    for (jat, hazai, goal_x), j in zip(esetek, json.loads(r.stdout)):
+        jatekosok = [PlayerPosition(
+            track_id=i, team=Team.HOME if p[0] else Team.AWAY, x=p[1], y=p[2],
+            source=(PositionSource.MEASURED if p[3]
+                    else PositionSource.ESTIMATED),
+            confidence=1.0, role="kapus" if p[4] else None)
+            for i, p in enumerate(jat)]
+        py = wall_gap_segments(jatekosok, Team.HOME if hazai else Team.AWAY,
+                               goal_x)
+        if py is None:
+            assert j is None
+            continue
+        volt += 1
+        assert len(j["fal"]) == len(py["wall"])
+        for a, b in zip(j["fal"], py["wall"]):
+            assert abs(a[0] - b[0]) < 0.01 and abs(a[1] - b[1]) < 0.01
+        assert j["szeles"] == py["wide"]
+        assert j["maxI"] == py["max_index"]
+        assert abs(j["max"] - py["max_gap"]) < 0.01
+    assert volt > 100, "kevés esetben állt fal"
+
 # A lapozó elvárt viselkedése — a böngésző (node) és az app (Dart) ugyanezt
 # a táblát futtatja: (idők, most, utolsó, irány) → cél.
 LAPOZO_ESETEK = [
@@ -485,6 +544,77 @@ def test_az_app_lapozoja_ugyanazt_a_tablat_futtatja():
                f"{'isNull' if cel is None else float(cel)}")
         assert sor in teszt, sor
 
+
+
+def _fal_dart_sorok() -> list:
+    """A Dart-tükör (court_geometry.wallGapSegments) esettáblájának sorai
+    — a várt értékek a backend wall_gap_segments-éből (rögzített mag,
+    holtversenyes y-okkal, mért/becsült és kapus játékosokkal)."""
+    import random
+
+    from handball.models.tracking import (PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.court3d import wall_gap_segments
+
+    def b(v):
+        return "true" if v else "false"
+
+    rnd = random.Random(23)
+    sorok = []
+    for _ in range(24):
+        goal_x = rnd.choice([0.0, 40.0])
+        hazai = rnd.random() < 0.5
+        jat = []
+        for _ in range(rnd.randint(4, 10)):
+            x = round(abs(goal_x - rnd.uniform(1, 14)), 1)
+            y = float(rnd.randint(2, 18)) if rnd.random() < 0.3 \
+                else round(rnd.uniform(1, 19), 1)
+            sajat = rnd.random() < 0.8
+            jat.append((hazai if sajat else not hazai, x, y,
+                        rnd.random() < 0.9, rnd.random() < 0.06))
+        py = wall_gap_segments(
+            [PlayerPosition(track_id=i, team=Team.HOME if h else Team.AWAY,
+                            x=x, y=y,
+                            source=(PositionSource.MEASURED if m
+                                    else PositionSource.ESTIMATED),
+                            confidence=1.0, role="kapus" if k else None)
+             for i, (h, x, y, m, k) in enumerate(jat)],
+            Team.HOME if hazai else Team.AWAY, goal_x)
+        bemenet = ("[" + ", ".join(f"({b(h)}, {x}, {y}, {b(m)}, {b(k)})"
+                                   for h, x, y, m, k in jat)
+                   + f"], {b(hazai)}, {goal_x}")
+        if py is None:
+            sorok.append(f"expect(wallGapSegments({bemenet}), isNull);")
+        else:
+            fal = ", ".join(f"({float(x)}, {float(y)})" for x, y in py["wall"])
+            szeles = ", ".join(b(w) for w in py["wide"])
+            sorok.append(f"_falEllenoriz({bemenet}, [{fal}], [{szeles}], "
+                         f"{py['max_index']}, {py['max_gap']});")
+    return sorok
+
+
+def test_az_app_fal_resei_a_backend_tablajat_futtatjak():
+    """A Dart fal-rés tükrének tesztje (court_geometry_test.dart) a backend
+    wall_gap_segments-éből számolt esettáblát futtatja — a sorokat itt
+    újraszámoljuk és megkeressük a Dart-tesztben; a Dart-küszöbök a
+    backend konstansai."""
+    from pathlib import Path
+
+    from handball.pipeline.defense import (WALL_GAP_DEPTH_M, WALL_GAP_M,
+                                           WALL_GAP_MIN_DEFENDERS)
+
+    gyoker = Path(__file__).resolve().parent.parent.parent
+    teszt = (gyoker / "client" / "test" /
+             "court_geometry_test.dart").read_text(encoding="utf-8")
+    sorok = _fal_dart_sorok()
+    assert sum(1 for s in sorok if s.startswith("_falEllenoriz")) >= 8
+    for sor in sorok:
+        assert sor in teszt, sor
+    geo = (gyoker / "client" / "lib" / "ui" /
+           "court_geometry.dart").read_text(encoding="utf-8")
+    assert f"const double wallGapM = {WALL_GAP_M};" in geo
+    assert f"const double wallGapDepthM = {WALL_GAP_DEPTH_M};" in geo
+    assert f"const int wallGapMinDefenders = {WALL_GAP_MIN_DEFENDERS};" in geo
 
 def _modul_szkript(oldal: str) -> str:
     m = re.search(r'<script type="module">(.*?)</script>', oldal, re.S)
@@ -607,6 +737,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "fetchFreeShots", "_szabadUgras", "_aktivSzabad",
                 "szabad: _aktivSzabad(m)",
                 "fetchTurnoverMoments", "_eladasUgras", "_aktivEladas",
+                "wallGapSegments", "falresek: _falresek(m, allapot)?.$1",
+                '"Fal-rések"', 'q["passzsav"]', 'q["falres"]',
                 "eladas: _aktivEladas(m)", "_pillanatFeliratok(m)",
                 "dontes: _aktivDontes(m)",
                 "feltoresSav: fal.$3"):

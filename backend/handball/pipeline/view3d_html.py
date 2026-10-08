@@ -287,6 +287,32 @@ function passzSavok(jat, labda){
 """
 
 
+# A fal-rések a böngészőben — a `court3d.wall_gap_segments` PONTOS tükre
+# (a küszöböket a backend konstansaiból fűzzük elé, a teszt node-dal
+# veti össze): a fal a mért, kapus nélküli védők a saját kaputól
+# FR_MELY-en belül, y szerint (holtversenyben x szerint, mint a Python
+# tuple-rendezése); a rés a szomszédok y-távolsága, a FR_RES-t elérő
+# rés "széles"; a legnagyobb rés holtversenyben az első.
+FALRES_JS = """
+function falResek(jat, hazai, goalX){
+  // jat: [[hazai (1/0), x, y, mért (1/0), kapus (1/0)], …]
+  const fal = jat.filter(p => (!!p[0]) === hazai && p[3] && !p[4]
+      && Math.abs(p[1] - goalX) <= FR_MELY)
+    .map(p => [p[2], p[1]])
+    .sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
+  if (fal.length < FR_MIN) return null;
+  const resek = [], szeles = [];
+  let maxI = 0;
+  for (let i = 0; i + 1 < fal.length; i++){
+    const g = fal[i + 1][0] - fal[i][0];
+    resek.push(g); szeles.push(g >= FR_RES);
+    if (g > resek[maxI]) maxI = i;
+  }
+  return {fal: fal.map(p => [p[1], p[0]]), resek, szeles, max: resek[maxI], maxI};
+}
+"""
+
+
 # A pillanat-lapozó (Döntések, Szabad lövők ◀ ▶) közös logikája — külön
 # állandó, hogy a teszt node-dal futtathassa. A "következő" az UTOLJÁRA
 # ugrott pillanattól számít, amíg annak ablakában vagyunk (különben a
@@ -443,6 +469,7 @@ Lent: sebesség (0,5–4×) · Labda-nyom — a labda útja az utolsó 3 mp-ben<
 Hőtérkép — hol tartózkodott a csapat (2 m-es cellák) · Nézet-gombok — kész kamera-állások<br>
 Passzok — a futó passz vonala (adótól a fogadóig), vagy a csapat passz-hálója a padlón<br>
 Passzsávok — a labdástól a társakig: zöld nyitott, sárga kockázatos, piros zárt (az elemzés modellje)<br>
+Fal-rések — a védőfal szomszédos védői közt: zöld zárt, piros a 3,5 m-es rés (ott nyílik a fal)<br>
 Döntések ◀ ▶ — ahol jobb opció is volt: fehér a választott passz, arany a jobb (passz vagy lövés)<br>
 Szabad lövők ◀ ▶ — a fedezés-hibák: piros kör a lövő körül (2 m), vonal a legközelebbi védőhöz<br>
 Labdavesztések ◀ ▶ — narancs kör a vesztő körül (a nyomás-sugár), vonal a legközelebbi ellenfélhez, X a labdánál<br>
@@ -469,6 +496,7 @@ VR-headsetben: a lenti "ENTER VR" gomb</div>
  </select>
  <label title="A labda útja az utolsó 3 másodpercben"><input type="checkbox" id="nyom"> Labda-nyom</label>
  <label title="A labdás passzsávjai a csapattársakhoz (zöld nyitott, sárga kockázatos, piros zárt)"><input type="checkbox" id="passzsav"> Passzsávok</label>
+ <label title="A védőfal rései szervezett védekezésben: zöld zárt, piros a 3,5 m-es vagy nagyobb rés — ott nyílik a fal"><input type="checkbox" id="falres"> Fal-rések</label>
 </div>
 <script type="importmap">{"imports":{
  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -767,7 +795,7 @@ function rajzol(t){
           q = (b[1] && b[1][k] && b[1][k][0] === p[0]) ? b[1][k] : p;
     const x = p[1] + (q[1]-p[1])*ar, y = p[2] + (q[2]-p[2])*ar;
     cs.position.set(x, 0, W - y);
-    allas.push({k, x, y, hazai: !!p[0], kapus: !!p[4], mez: p[5] || 0, seb: 0});
+    allas.push({k, x, y, hazai: !!p[0], mert: !!p[3], kapus: !!p[4], mez: p[5] || 0, seb: 0});
     szinez(cs, !!p[0], !!p[4]);
     // Mezszám-címke: csak ismert számnál; a textúra csapatonként/számonként egy.
     const mezszam = p[5] || 0, u = cs.userData;
@@ -1310,6 +1338,7 @@ function linkEpit(){
   if (falOldal.value !== "auto") q.set("falOldal", falOldal.value);
   if (nyomKapcsolo.checked) q.set("nyom", "1");
   if (passzsavKapcsolo.checked) q.set("passzsav", "1");
+  if (falresKapcsolo.checked) q.set("falres", "1");
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -1329,6 +1358,7 @@ function linkAlkalmaz(){
   if (v("falOldal")) falOldal.value = v("falOldal");
   if (v("nyom") === "1") nyomKapcsolo.checked = true;
   if (v("passzsav") === "1") passzsavKapcsolo.checked = true;
+  if (v("falres") === "1") falresKapcsolo.checked = true;
   if (v("seb")){ sebessegValaszto.value = v("seb"); sebessegValaszto.onchange(); }
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
   if (v("tv") === "1") modValt("tv");
@@ -1388,6 +1418,47 @@ function passzsavFrissit(){
   passzsavInfo.textContent = "Labdás (" + (r.holder[2] ? ADAT.home : ADAT.away) + "): " +
     db["nyitott"] + " nyitott, " + db["kockázatos"] + " kockázatos, " + db["zárt"] + " zárt sáv";
   passzsavInfo.style.display = "block";
+}
+
+// ---- Fal-rések: hol nyílik a védőfal ---------------------------------
+// Szervezett védekezésben (az élő fal sora él) a védőfal szomszédos védői
+// közt sáv a padlón: zöld, ha zárt, piros, ha a rés eléri a 3,5 m-t (a
+// wall_gaps réteg mércéje) — ott kell betörni, oda úszik be a beálló.
+const falresKapcsolo = document.getElementById("falres");
+const falresCsoport = new THREE.Group();
+szinpad.add(falresCsoport);
+const falresInfo = document.createElement("div");
+falresInfo.style.cssText = "position:fixed;right:12px;bottom:100px;padding:6px 12px;border:1px solid #2b4a5e;border-radius:8px;background:rgba(16,24,32,.85);font-size:13px;display:none";
+document.body.appendChild(falresInfo);
+const FR_ZOLD = new THREE.MeshBasicMaterial({color: 0x3ddc84, transparent: true, opacity: 0.85});
+const FR_PIROS = new THREE.MeshBasicMaterial({color: 0xff6b6b, transparent: true, opacity: 0.95});
+function falresFrissit(t){
+  while (falresCsoport.children.length){
+    const c = falresCsoport.children[0]; falresCsoport.remove(c); c.geometry.dispose();
+  }
+  if (!falresKapcsolo.checked){ falresInfo.style.display = "none"; return; }
+  falresInfo.style.display = "block";
+  const elo = eloFal(t);
+  if (!elo){ falresInfo.textContent = "Most nincs szervezett támadás — a fal nem áll."; return; }
+  const jat = allas.map(s => [s.hazai ? 1 : 0, s.x, s.y, s.mert ? 1 : 0, s.kapus ? 1 : 0]);
+  const r = falResek(jat, elo.hazai, elo.goalX);
+  const csapat = elo.hazai ? ADAT.home : ADAT.away;
+  if (!r){ falresInfo.textContent = "Fal (" + csapat + "): nem áll — " + FR_MIN + " mért védőnél kevesebb a kapu előtt."; return; }
+  for (let i = 0; i + 1 < r.fal.length; i++){
+    const [x1, y1] = r.fal[i], [x2, y2] = r.fal[i + 1];
+    const dx = x2 - x1, dz = (W - y2) - (W - y1), hossz = Math.hypot(dx, dz);
+    if (hossz < 0.05) continue;
+    // Lapos sáv a padlón (a vonal 1 px-es volna — messziről nem látszik).
+    const sav = new THREE.Mesh(new THREE.BoxGeometry(hossz, 0.03, r.szeles[i] ? 0.28 : 0.16),
+      r.szeles[i] ? FR_PIROS : FR_ZOLD);
+    sav.position.set((x1 + x2) / 2, 0.04, W - (y1 + y2) / 2);
+    sav.rotation.y = -Math.atan2(dz, dx);
+    falresCsoport.add(sav);
+  }
+  const nyilt = r.szeles.filter(Boolean).length;
+  falresInfo.innerHTML = "Fal (" + csapat + ", " + r.fal.length + " védő): " + (nyilt
+    ? "<span style='color:#ff6b6b'>" + nyilt + " nyitott rés</span> — a legnagyobb " + szam1(r.max) + " m"
+    : "zárt — a legnagyobb rés " + szam1(r.max) + " m");
 }
 
 // ---- Döntés-pillanatok: ahol jobb opció is volt -----------------------
@@ -1781,7 +1852,7 @@ fest.setAnimationLoop(() => {
   if (megy){ ido = Math.min(veg, ido + dt * sebesseg);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); dontesFrissit(ido); felirat(ido);
+  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); felirat(ido);
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);
@@ -1790,10 +1861,13 @@ fest.setAnimationLoop(() => {
 """
     from .court3d import (PASS_LANE_GOOD, PASS_LANE_RISKY,
                           PASS_LANE_WIDTH_M)
+    from .defense import WALL_GAP_DEPTH_M, WALL_GAP_M, WALL_GAP_MIN_DEFENDERS
     from .tactics import TacticsConfig
     ps_kod = (f"const PS_SUGAR = {TacticsConfig().possession_radius_m}, "
               f"PS_SZEL = {PASS_LANE_WIDTH_M}, PS_JO = {PASS_LANE_GOOD}, "
-              f"PS_KOCK = {PASS_LANE_RISKY};" + PASSZSAV_JS)
+              f"PS_KOCK = {PASS_LANE_RISKY};" + PASSZSAV_JS
+              + f"const FR_RES = {WALL_GAP_M}, FR_MELY = {WALL_GAP_DEPTH_M}, "
+              f"FR_MIN = {WALL_GAP_MIN_DEFENDERS};" + FALRES_JS)
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS)
                  .replace("__LOVES_JS__", LOVES_MERES_JS)

@@ -162,6 +162,25 @@ List<Map<String, dynamic>> buildDemoDecisions(Match m, {int lepes = 25}) {
   return ki;
 }
 
+/// Demó védekezés-idővonal a 3D védekezés-paneljéhez és a fal-résekhez
+/// (backend nélkül): a /defence-timeline "rows" alakjában — a demóban a
+/// vendég végig a jobb kapu előtt védekezik (hat mezőnyvédő ~5 m-re a
+/// kaputól: 6-0). SZINTETIKUS, csak a felület bemutatására.
+List<Map<String, dynamic>> buildDemoDefenceTimeline(Match m) {
+  final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+  final hossz = m.frames.length / fps;
+  return [
+    for (var s = 0; s < hossz; s++)
+      {
+        "t": (s * fps).round(),
+        "s": s.toDouble(),
+        "defending": "away",
+        "label": "6-0",
+        "goal_x": courtLength,
+      }
+  ];
+}
+
 /// Demó labdavesztések a 3D "Labdavesztések" lapozójához (backend nélkül):
 /// a /turnover-moments "moments" alakjában, a demó-meccs két kockájából (a
 /// hazai labdás veszít, a legközelebbi vendég a nyomás) — SZINTETIKUS,

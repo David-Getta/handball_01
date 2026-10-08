@@ -102,6 +102,55 @@ void main() {
     expect(passLanes([(false, 7.7, 0.7), (true, 23.7, 1.8), (false, 1.3, 19.7), (true, 16.3, 1.5)], const Offset(19.29, -1.03)), isNull);
     _ellenoriz([(false, 32.8, 7.7), (true, 36.9, 12.5), (true, 24.5, 6.4), (false, 26.4, 12.2), (false, 10.4, 3.8)], const Offset(25.56, 3.64), (24.5, 6.4), [(0.6052, 0, "nyitott")]);
   });
+
+  // A fal-rés tükör a backend wall_gap_segments-éből számolt táblát futtatja
+  // (a backend-teszt a sorokat újraszámolja és itt megkeresi).
+  test("wallGapSegments = a backend wall_gap_segments", () {
+    expect(wallGapSegments([(false, 38.8, 7.8, true, false), (false, 38.8, 17.2, false, false), (false, 38.7, 8.8, true, true), (true, 34.2, 8.0, true, false)], false, 40.0), isNull);
+    _falEllenoriz([(false, 30.4, 2.5, true, false), (false, 33.2, 4.3, true, false), (false, 36.5, 5.0, true, false), (true, 35.4, 3.0, true, false), (false, 33.1, 6.0, true, false), (true, 28.2, 6.0, true, false)], false, 40.0, [(30.4, 2.5), (33.2, 4.3), (36.5, 5.0), (33.1, 6.0)], [false, false, false], 0, 1.8);
+    expect(wallGapSegments([(false, 1.7, 1.4, true, false), (false, 11.5, 10.7, true, false), (true, 13.7, 4.5, true, false), (true, 13.1, 4.9, true, false)], true, 0.0), isNull);
+    _falEllenoriz([(true, 3.1, 12.0, true, false), (false, 9.0, 2.3, true, false), (false, 8.1, 6.4, true, true), (true, 4.7, 6.0, true, false), (true, 4.2, 2.4, true, false), (true, 8.3, 9.1, true, false), (true, 11.2, 14.0, true, false)], true, 0.0, [(4.2, 2.4), (4.7, 6.0), (8.3, 9.1), (3.1, 12.0), (11.2, 14.0)], [true, false, false, false], 0, 3.6);
+    expect(wallGapSegments([(false, 33.5, 7.0, true, false), (false, 37.9, 16.5, true, false), (false, 31.1, 12.0, true, false), (false, 26.9, 3.0, true, false)], false, 40.0), isNull);
+    _falEllenoriz([(true, 37.8, 10.0, true, false), (false, 30.9, 6.0, true, true), (false, 28.8, 17.0, true, false), (false, 34.3, 4.0, true, false), (false, 34.3, 12.2, true, true), (false, 37.4, 18.7, true, false), (false, 35.2, 6.3, true, true), (false, 29.1, 2.0, true, false), (false, 36.3, 6.7, true, false)], false, 40.0, [(29.1, 2.0), (34.3, 4.0), (36.3, 6.7), (28.8, 17.0), (37.4, 18.7)], [false, false, true, false], 2, 10.3);
+    _falEllenoriz([(false, 30.5, 17.7, true, false), (true, 26.2, 14.0, true, false), (false, 32.6, 4.8, true, false), (false, 33.5, 15.0, true, false), (false, 34.2, 1.6, true, false), (true, 34.2, 1.3, true, false), (false, 36.6, 4.4, false, false), (false, 39.0, 5.6, true, false)], false, 40.0, [(34.2, 1.6), (32.6, 4.8), (39.0, 5.6), (33.5, 15.0), (30.5, 17.7)], [false, false, true, false], 2, 9.4);
+    expect(wallGapSegments([(false, 31.2, 18.0, true, false), (false, 33.5, 18.6, true, true), (true, 32.2, 8.0, true, false), (true, 29.9, 17.4, true, false), (false, 29.4, 6.0, true, false)], false, 40.0), isNull);
+    _falEllenoriz([(true, 13.6, 4.0, false, true), (false, 7.2, 1.6, true, false), (true, 9.3, 8.0, true, false), (false, 9.5, 8.0, true, false), (false, 4.4, 11.8, true, false), (false, 6.5, 2.0, true, false)], false, 0.0, [(7.2, 1.6), (6.5, 2.0), (9.5, 8.0), (4.4, 11.8)], [false, true, true], 1, 6.0);
+    _falEllenoriz([(true, 37.9, 13.1, true, false), (true, 28.5, 3.6, true, false), (false, 31.0, 10.1, true, false), (false, 31.3, 15.4, true, false), (false, 28.3, 18.1, true, false), (true, 34.3, 18.0, true, false), (true, 29.8, 15.0, true, false)], true, 40.0, [(28.5, 3.6), (37.9, 13.1), (29.8, 15.0), (34.3, 18.0)], [true, false, false], 0, 9.5);
+    _falEllenoriz([(true, 8.7, 15.0, true, false), (true, 9.3, 9.0, false, false), (true, 10.6, 15.0, true, false), (true, 7.2, 8.3, true, false), (true, 3.3, 18.0, true, false), (false, 10.0, 12.0, true, false), (true, 2.9, 18.0, true, false), (true, 11.6, 12.4, true, false)], true, 0.0, [(7.2, 8.3), (11.6, 12.4), (8.7, 15.0), (10.6, 15.0), (2.9, 18.0), (3.3, 18.0)], [true, false, false, false, false], 0, 4.1);
+    _falEllenoriz([(true, 29.5, 17.1, true, false), (true, 32.8, 2.0, true, false), (false, 36.7, 9.0, true, false), (true, 28.2, 15.7, true, false), (false, 36.4, 7.0, false, false), (true, 29.5, 14.2, true, false)], true, 40.0, [(32.8, 2.0), (29.5, 14.2), (28.2, 15.7), (29.5, 17.1)], [true, false, false], 0, 12.2);
+    _falEllenoriz([(false, 8.7, 2.2, true, false), (false, 4.7, 7.0, true, false), (false, 8.4, 9.2, true, false), (false, 10.9, 14.4, true, false), (true, 11.2, 16.2, true, false), (true, 1.6, 14.1, true, false)], false, 0.0, [(8.7, 2.2), (4.7, 7.0), (8.4, 9.2), (10.9, 14.4)], [true, false, true], 2, 5.2);
+    _falEllenoriz([(false, 9.5, 3.0, true, false), (false, 5.0, 17.0, true, false), (false, 7.2, 18.8, true, false), (false, 13.2, 16.6, true, false), (false, 4.5, 4.9, true, false)], false, 0.0, [(9.5, 3.0), (4.5, 4.9), (5.0, 17.0), (7.2, 18.8)], [false, true, false], 1, 12.1);
+    expect(wallGapSegments([(false, 33.6, 3.0, true, false), (true, 38.7, 3.0, true, false), (true, 34.8, 12.3, true, false), (true, 29.0, 5.0, true, false), (true, 26.7, 13.5, true, false)], true, 40.0), isNull);
+    expect(wallGapSegments([(true, 9.7, 18.0, true, false), (false, 8.4, 3.0, false, false), (true, 12.0, 10.1, true, false), (false, 3.7, 12.0, true, false), (false, 4.8, 8.6, true, false), (false, 5.3, 7.8, false, false), (false, 12.7, 8.0, true, false), (false, 8.4, 10.0, true, false)], false, 0.0), isNull);
+    _falEllenoriz([(true, 13.5, 7.9, false, false), (false, 13.3, 6.0, true, false), (false, 12.7, 18.2, true, false), (true, 1.3, 15.0, true, false), (true, 7.0, 11.5, true, false), (true, 11.4, 15.7, true, false), (false, 7.0, 18.1, true, false), (true, 12.1, 13.2, true, true), (true, 8.4, 16.9, true, false), (true, 1.5, 15.1, true, false)], true, 0.0, [(7.0, 11.5), (1.3, 15.0), (1.5, 15.1), (11.4, 15.7), (8.4, 16.9)], [true, false, false, false], 0, 3.5);
+    expect(wallGapSegments([(true, 5.5, 13.4, true, false), (true, 13.2, 11.0, true, false), (true, 12.8, 15.0, true, false), (true, 12.3, 13.9, true, false)], true, 0.0), isNull);
+    expect(wallGapSegments([(true, 33.9, 11.7, true, false), (true, 39.0, 4.3, true, false), (false, 34.6, 13.0, true, false), (false, 35.7, 4.8, true, false), (false, 34.0, 15.0, true, true)], false, 40.0), isNull);
+    expect(wallGapSegments([(true, 26.5, 15.5, true, false), (false, 33.1, 2.0, true, false), (true, 37.5, 9.6, true, false), (false, 33.6, 1.1, true, false)], false, 40.0), isNull);
+    _falEllenoriz([(true, 10.0, 4.0, true, false), (false, 10.4, 2.0, true, false), (true, 10.4, 13.0, true, false), (false, 14.0, 15.2, true, false), (true, 4.0, 8.9, true, false), (true, 9.4, 10.5, true, false), (true, 9.6, 8.2, true, false)], true, 0.0, [(10.0, 4.0), (9.6, 8.2), (4.0, 8.9), (9.4, 10.5), (10.4, 13.0)], [true, false, false, false], 0, 4.2);
+    _falEllenoriz([(true, 1.7, 13.0, true, false), (true, 2.8, 5.0, true, false), (false, 10.9, 2.0, true, false), (true, 8.6, 11.9, true, false), (true, 9.9, 10.9, true, true), (true, 14.0, 1.8, true, false), (true, 8.4, 13.8, true, false), (false, 12.3, 7.4, true, true)], true, 0.0, [(2.8, 5.0), (8.6, 11.9), (1.7, 13.0), (8.4, 13.8)], [true, false, false], 0, 6.9);
+    _falEllenoriz([(true, 5.3, 4.0, true, false), (false, 8.6, 10.0, true, false), (false, 1.7, 2.9, true, false), (true, 4.1, 12.0, true, false), (false, 2.8, 7.2, true, false), (false, 6.3, 4.0, true, false), (false, 4.1, 6.0, true, false), (false, 7.9, 6.1, true, false), (false, 12.5, 9.9, true, false), (false, 11.2, 7.0, false, false)], false, 0.0, [(1.7, 2.9), (6.3, 4.0), (4.1, 6.0), (7.9, 6.1), (2.8, 7.2), (8.6, 10.0)], [false, false, false, false, false], 4, 2.8);
+    _falEllenoriz([(false, 32.4, 8.4, true, false), (false, 34.5, 18.5, true, false), (false, 30.7, 12.0, true, false), (false, 31.1, 10.0, true, false), (false, 36.9, 15.0, true, false), (true, 37.0, 18.8, false, false)], false, 40.0, [(32.4, 8.4), (31.1, 10.0), (30.7, 12.0), (36.9, 15.0), (34.5, 18.5)], [false, false, false, true], 3, 3.5);
+  });
+}
+
+void _falEllenoriz(
+    List<(bool, double, double, bool, bool)> jat,
+    bool home,
+    double goalX,
+    List<(double, double)> fal,
+    List<bool> szeles,
+    int maxI,
+    double maxRes) {
+  final r = wallGapSegments(jat, home, goalX);
+  expect(r, isNotNull);
+  expect(r!.wall.length, fal.length);
+  for (var i = 0; i < fal.length; i++) {
+    expect(r.wall[i].dx, closeTo(fal[i].$1, 0.006));
+    expect(r.wall[i].dy, closeTo(fal[i].$2, 0.006));
+  }
+  expect(r.wide, szeles);
+  expect(r.maxIndex, maxI);
+  expect(r.maxGap, closeTo(maxRes, 0.006));
 }
 
 void _ellenoriz(List<(bool, double, double)> jat, Offset labda,

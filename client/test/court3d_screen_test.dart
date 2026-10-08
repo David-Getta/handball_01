@@ -207,6 +207,26 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("fal-rések: a demó vendég-falának rései, összegzővel",
+      (tester) async {
+    await _nyit(tester);
+    final gomb = find.text("Fal-rések");
+    await tester.ensureVisible(gomb);
+    await tester.pump();
+    await tester.tap(gomb);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text("Fal-rések: BE"), findsOneWidget);
+    // A demó vendége a jobb kapu előtt védekezik (hat mezőnyvédő): a fal
+    // áll, az összegző megnevezi a csapatot és a legnagyobb rést.
+    expect(find.textContaining("Fal (Demó Vendég, 6 védő)"), findsOneWidget);
+    expect(find.textContaining("a legnagyobb"), findsOneWidget);
+    await tester.tap(find.text("Fal-rések: BE"));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.textContaining("Fal (Demó Vendég"), findsNothing);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("labda-nyom gomb: be/ki", (tester) async {
     await _nyit(tester);
     await tester.tap(find.text("Labda-nyom (3 mp)"));

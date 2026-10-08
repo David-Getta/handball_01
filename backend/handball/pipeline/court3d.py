@@ -517,3 +517,32 @@ def turnover_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
             **{k: {side: counts[side][k] for side in ("home", "away")}
                for k in ("turnovers", "forced", "unforced", "punished")},
             "pressure_m": PTO_PRESSURE_M, "quick_s": TO_PUNISH_QUICK_S}
+
+
+def wall_gap_segments(players, team: Team, goal_x: float) -> Optional[dict]:
+    """A védőfal rései EGY kockán — a 3D pálya "Fal-rések" rétege.
+
+    A wall_gaps réteg arányt mond ("a kockák 40%-ában 3,5 m-nél nagyobb
+    rés tátong a falban"); ez a pillanatot mutatja: a fal védői y szerint
+    sorban (defense.wall_line — UGYANAZ a kiválogatás: mért, kapus
+    nélküli védők a saját kaputól WALL_GAP_DEPTH_M-en belül), a
+    szomszédok közti rés (az y-irányú távolság, mint a rétegben), és hogy
+    melyik rés éri el a WALL_GAP_M-et — ott nyílik a fal: oda kell
+    betörni, a beálló oda úszik be.
+
+    Visszatérés: None, ha a fal nem áll (WALL_GAP_MIN_DEFENDERS alatti
+    védő); különben {"wall": [[x, y], …] y szerint, "gaps": [m, …] (a
+    szomszéd-párok rései), "wide": [bool, …] (a rés ≥ WALL_GAP_M),
+    "max_gap", "max_index" (a legnagyobb rés — holtversenyben az első)}.
+    """
+    from .defense import WALL_GAP_M, WALL_GAP_MIN_DEFENDERS, wall_line
+
+    fal = wall_line(players, team, goal_x)
+    if len(fal) < WALL_GAP_MIN_DEFENDERS:
+        return None
+    nyers = [b[0] - a[0] for a, b in zip(fal, fal[1:])]
+    i = max(range(len(nyers)), key=lambda k: (nyers[k], -k))
+    return {"wall": [[round(x, 2), round(y, 2)] for y, x in fal],
+            "gaps": [round(g, 2) for g in nyers],
+            "wide": [g >= WALL_GAP_M for g in nyers],
+            "max_gap": round(nyers[i], 2), "max_index": i}

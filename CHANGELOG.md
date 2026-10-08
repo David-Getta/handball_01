@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.159 óta)
 
+- **3D pálya: fal-rések** (új, böngészős/VR és appbeli nézet): a
+  "Fal-rések" kapcsolóval szervezett védekezésben a védőfal szomszédos
+  védői közt sáv fut a padlón — zöld, ha zárt, piros, ha a rés eléri a
+  3,5 m-t: ott nyílik a fal, oda kell betörni, oda úszik be a beálló.
+  Összegző: "Fal (Szeged, 6 védő): 2 nyitott rés — a legnagyobb 4,1 m".
+  A wall_gaps réteg eddig arányt mondott ("a kockák 40%-ában tátong
+  rés"); mostantól a pillanat is látszik. UGYANAZ a kiválogatás és
+  mérce (a falat a rétegből kiemelt defense.wall_line adja, a 3D a
+  court3d.wall_gap_segments-ből dolgozik — a réteg kimenete változatlan);
+  a böngésző (JS) és az app (Dart) tükrét a backendből számolt
+  esettábla őrzi (400 véletlen állás node-dal, 24 sor a Dart-tesztben,
+  holtversenyekkel és a küszöb-esetekkel). Link-paraméter: `falres=1`.
+  Közben javítva: az app "böngészőben" gombja nem vitte át a
+  Passzsávok réteget — most azt és a fal-réseket is átviszi.
+
 - **3D pálya: labdavesztések** (új, böngészős/VR és appbeli nézet): a
   "Labdavesztések ◀ ▶" gombok az elvesztett labdákra ugranak, és a
   négy labdaeladás-réteg válaszát (KI veszít, HOL, kipréselik-e vagy

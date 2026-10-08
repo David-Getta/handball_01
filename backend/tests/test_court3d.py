@@ -363,3 +363,60 @@ def test_labdavesztes_pillanatok_ures_meccsen():
     assert tm["moments"] == []
     assert tm["turnovers"] == {"home": 0, "away": 0}
     assert tm["punished"] == {"home": 0, "away": 0}
+
+
+def test_fal_resek_a_wall_gaps_mercejevel():
+    """A fal-rés réteg ugyanazt a falat látja, mint a wall_gaps: mért,
+    kapus nélküli védők a saját kaputól 12 m-en belül, y szerint; a rés a
+    szomszédok y-távolsága, a 3,5 m-es rés "széles"; 4 védő alatt nincs
+    fal. A szimuláción a széles-kockák száma kockánként újraszámolva
+    egyezik a wall_gaps "wide" számával."""
+    from handball.pipeline.court3d import wall_gap_segments
+    from handball.pipeline.defense import WALL_GAP_M, wall_gaps
+    from handball.pipeline.tactics import (Phase, TacticsConfig,
+                                           classify_phase)
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    vedok = [_pl(1, Team.AWAY, 34.0, 4.0), _pl(2, Team.AWAY, 35.0, 6.5),
+             _pl(3, Team.AWAY, 34.5, 11.0), _pl(4, Team.AWAY, 34.0, 13.0),
+             # a kapus és a 12 m-en túli védő nem fal; a becsült sem
+             PlayerPosition(track_id=5, team=Team.AWAY, x=39.0, y=10.0,
+                            source=PositionSource.MEASURED, confidence=1.0,
+                            role="kapus"),
+             _pl(6, Team.AWAY, 26.0, 9.0),
+             PlayerPosition(track_id=7, team=Team.AWAY, x=34.0, y=8.0,
+                            source=PositionSource.ESTIMATED,
+                            confidence=0.5),
+             _pl(11, Team.HOME, 30.0, 10.0)]
+    r = wall_gap_segments(vedok, Team.AWAY, 40.0)
+    assert r["wall"] == [[34.0, 4.0], [35.0, 6.5], [34.5, 11.0], [34.0, 13.0]]
+    assert r["gaps"] == [2.5, 4.5, 2.0]
+    assert r["wide"] == [False, True, False]
+    assert r["max_gap"] == 4.5 and r["max_index"] == 1
+    # Három védő még nem fal.
+    assert wall_gap_segments(vedok[:3], Team.AWAY, 40.0) is None
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    cfg = TacticsConfig()
+    wg = wall_gaps(m, cfg)
+    for side, team, kell in (("home", Team.HOME, Phase.AWAY_ATTACK),
+                             ("away", Team.AWAY, Phase.HOME_ATTACK)):
+        db = szeles = 0
+        for f in m.frames:
+            if classify_phase(f, cfg) != kell:
+                continue
+            x = wall_gap_segments(f.players, team, cfg.own_goal_x(team))
+            if x is None:
+                continue
+            db += 1
+            szeles += any(x["wide"])
+            assert x["max_gap"] == max(x["gaps"])
+            # A "széles" a kerekítetlen résből (mint a rétegben): a kiírt,
+            # két tizedesre kerekített rés a küszöbön billenhet.
+            if any(x["wide"]):
+                assert x["max_gap"] >= WALL_GAP_M - 0.005
+            else:
+                assert x["max_gap"] <= WALL_GAP_M + 0.005
+        assert db == wg[side]["frames"]
+        assert szeles == wg[side]["wide"]

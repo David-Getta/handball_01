@@ -136,6 +136,9 @@ class _Court3DScreenState extends State<Court3DScreen>
   static const double _nyomS = 3.0;
   // PASSZSÁVOK: a labdástól a társakig (a döntés-elemzés modellje).
   bool _passzsav = false;
+  // FAL-RÉSEK: szervezett védekezésben a védőfal szomszédos védői közt
+  // sáv a padlón — zöld zárt, piros a wallGapM-es (3,5 m) rés.
+  bool _falres = false;
   // Az eszköz-panel nyitva van-e (összecsukva csak a kapcsoló látszik).
   bool _eszkozokNyitva = true;
   // DÖNTÉS-PILLANATOK: ahol jobb opció is volt (a /decision-moments
@@ -196,6 +199,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _dontesek = buildDemoDecisions(_match!);
         _szabadok = buildDemoFreeShots();
         _eladasok = buildDemoTurnovers(_match!);
+        _falSorok = buildDemoDefenceTimeline(_match!);
         _demo = true;
         _loading = false;
       });
@@ -838,6 +842,42 @@ class _Court3DScreenState extends State<Court3DScreen>
         l == null ? null : Offset(l.x, l.y));
   }
 
+  /// A fal-rések az aktuális állásra: (rések, a védekező hazai?) — null,
+  /// ha ki van kapcsolva, nincs szervezett támadás, vagy nem áll a fal.
+  (WallGaps, bool)? _falresek(Match m, _Allapot all) {
+    if (!_falres) return null;
+    final elo = _eloFal(m);
+    if (elo == null) return null;
+    final home = elo["defending"] == "home";
+    final r = wallGapSegments([
+      for (final j in all.jatekosok) (j.home, j.x, j.y, !j.becsult, j.kapus)
+    ], home, ((elo["goal_x"] as num?) ?? 0).toDouble());
+    return r == null ? null : (r, home);
+  }
+
+  /// A fal-rés összegző ("Fal (Szeged, 6 védő): 2 nyitott rés — a
+  /// legnagyobb 4,1 m") — a böngészős nézet összegzőjének párja.
+  String? _falresOsszegzo(Match m, _Allapot all) {
+    if (!_falres) return null;
+    final elo = _eloFal(m);
+    if (elo == null) return "Most nincs szervezett támadás — a fal nem áll.";
+    final csapat =
+        elo["defending"] == "home" ? m.meta.homeTeam : m.meta.awayTeam;
+    final r = _falresek(m, all);
+    if (r == null) {
+      return "Fal ($csapat): nem áll — $wallGapMinDefenders mért védőnél "
+          "kevesebb a kapu előtt.";
+    }
+    final g = r.$1;
+    final nyilt = g.wide.where((w) => w).length;
+    final max = g.maxGap.toStringAsFixed(1).replaceAll(".", ",");
+    return nyilt > 0
+        ? "Fal ($csapat, ${g.wall.length} védő): $nyilt nyitott rés — "
+            "a legnagyobb $max m"
+        : "Fal ($csapat, ${g.wall.length} védő): zárt — a legnagyobb rés "
+            "$max m";
+  }
+
   /// A passzsáv-összegző ("Labdás (Szeged): 3 nyitott, 1 kockázatos …").
   String? _passzsavOsszegzo(Match m, _Allapot all) {
     if (!_passzsav) return null;
@@ -1118,6 +1158,8 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (_fal.isNotEmpty) q["fal"] = _fal;
     if (_falOldal != "auto") q["falOldal"] = _falOldal;
     if (_nyom) q["nyom"] = "1";
+    if (_passzsav) q["passzsav"] = "1";
+    if (_falres) q["falres"] = "1";
     if (_speed != 1.0) q["seb"] = _speed.toString();
     final url = Uri.parse("${_api.baseUrl}/matches/$_matchId/view3d")
         .replace(queryParameters: q)
@@ -1249,6 +1291,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                   hoCellak: _hoCellak(m),
                   passzok: _passzVonalak(m),
                   passzsavok: _passzsav ? _passzsavok(allapot) : null,
+                  falresek: _falresek(m, allapot)?.$1,
                   dontes: _aktivDontes(m),
                   szabad: _aktivSzabad(m),
                   szabadSugar: _szabadSugar,
@@ -1339,12 +1382,23 @@ class _Court3DScreenState extends State<Court3DScreen>
                   top: _meres != null ? 104 : 12,
                   child: _infoDoboz(fal.$2, AppColors.gold),
                 ),
-              if (_passzsavOsszegzo(m, allapot) != null)
+              if (_passzsavOsszegzo(m, allapot) != null ||
+                  _falresOsszegzo(m, allapot) != null)
                 Positioned(
                   left: 12,
                   bottom: 56,
-                  child: _infoDoboz(
-                      [_passzsavOsszegzo(m, allapot)!], AppColors.accent),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_falresOsszegzo(m, allapot) case final f?)
+                          _infoDoboz([f], AppColors.away),
+                        if (_falresOsszegzo(m, allapot) != null &&
+                            _passzsavOsszegzo(m, allapot) != null)
+                          const SizedBox(height: 6),
+                        if (_passzsavOsszegzo(m, allapot) case final ps?)
+                          _infoDoboz([ps], AppColors.accent),
+                      ]),
                 ),
               // Jelenet-felirat: mi történik épp (a közvetítés
               // inzertje) — a 3D-ben a labda pályája önmagában nem
@@ -1696,6 +1750,24 @@ class _Court3DScreenState extends State<Court3DScreen>
             _focus.requestFocus();
           },
           child: Text(_passzsav ? "Passzsávok: BE" : "Passzsávok",
+              style: const TextStyle(fontSize: 11.5)),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor:
+                _falres ? AppColors.accent : AppColors.surfaceAlt,
+            foregroundColor:
+                _falres ? AppColors.onAccent : AppColors.textSecondary,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          ),
+          onPressed: () {
+            setState(() => _falres = !_falres);
+            _focus.requestFocus();
+          },
+          child: Text(_falres ? "Fal-rések: BE" : "Fal-rések",
               style: const TextStyle(fontSize: 11.5)),
         ),
       ),
@@ -2319,6 +2391,8 @@ class _Court3DPainter extends CustomPainter {
   final List<_PasszVonal> passzok;
   // A labdás passzsávjai (labdás, sávok) — null: kikapcsolva / nincs labdás.
   final ((bool, double, double), List<PassLane>)? passzsavok;
+  // A védőfal rései (court_geometry.wallGapSegments) — null: nincs.
+  final WallGaps? falresek;
   // Az aktív döntés-pillanat (a /decision-moments egy sora) vagy null.
   final Map<String, dynamic>? dontes;
   // Az aktív szabad lövés (a /free-shots egy sora) és a fedezés-sugár.
@@ -2344,6 +2418,7 @@ class _Court3DPainter extends CustomPainter {
       this.hoCellak = const [],
       this.passzok = const [],
       this.passzsavok,
+      this.falresek,
       this.dontes,
       this.szabad,
       this.szabadSugar = 2.0,
@@ -2735,6 +2810,28 @@ class _Court3DPainter extends CustomPainter {
     }
 
     // Passzsávok: a labdástól a társakig, a passz-esély fokozata szerint.
+    // Fal-rések: a fal szomszédos védői közt vastag vonal a padlón — zöld
+    // zárt, piros a wallGapM-es rés (ott nyílik a fal).
+    final fr = falresek;
+    if (fr != null) {
+      for (var i = 0; i + 1 < fr.wall.length; i++) {
+        final a = fr.wall[i], b = fr.wall[i + 1];
+        _vonal(
+            canvas,
+            Paint()
+              ..color = (fr.wide[i] ? AppColors.away : AppColors.accent)
+                  .withOpacity(0.9)
+              ..strokeWidth = fr.wide[i] ? 5.0 : 3.0
+              ..strokeCap = StrokeCap.round,
+            a.dx,
+            a.dy,
+            0.04,
+            b.dx,
+            b.dy,
+            0.04);
+      }
+    }
+
     final ps = passzsavok;
     if (ps != null) {
       for (final l in ps.$2) {

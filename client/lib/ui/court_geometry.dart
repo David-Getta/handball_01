@@ -289,3 +289,48 @@ double? lapozCel(List<double> idok, double most, double? utolso, int irany) {
   }
   return null;
 }
+
+/// A fal-rés réteg küszöbei (a backend defense.WALL_GAP_M,
+/// WALL_GAP_DEPTH_M és WALL_GAP_MIN_DEFENDERS — teszt veti össze).
+const double wallGapM = 3.5;
+const double wallGapDepthM = 12.0;
+const int wallGapMinDefenders = 4;
+
+/// A védőfal rései EGY kockán: a fal védői (x, y) y szerint, a
+/// szomszéd-párok y-rései, a széles (≥ wallGapM) rések jele és a
+/// legnagyobb rés indexe (holtversenyben az első).
+class WallGaps {
+  final List<Offset> wall;
+  final List<double> gaps;
+  final List<bool> wide;
+  final int maxIndex;
+  const WallGaps(this.wall, this.gaps, this.wide, this.maxIndex);
+  double get maxGap => gaps[maxIndex];
+}
+
+/// A védőfal rései (a backend `court3d.wall_gap_segments` tükre — UGYANAZ
+/// a kiválogatás, mint a `wall_gaps` rétegben: a csapat mért, kapus
+/// nélküli védői a saját kaputól wallGapDepthM-en belül, y szerint,
+/// holtversenyben x szerint). `players`: (hazai?, x, y, mért?, kapus?);
+/// null, ha a fal nem áll (wallGapMinDefenders alatti védő).
+WallGaps? wallGapSegments(List<(bool, double, double, bool, bool)> players,
+    bool home, double goalX) {
+  final fal = [
+    for (final p in players)
+      if (p.$1 == home && p.$4 && !p.$5 && (p.$2 - goalX).abs() <= wallGapDepthM)
+        (p.$3, p.$2)
+  ]..sort((a, b) {
+      final c = a.$1.compareTo(b.$1);
+      return c != 0 ? c : a.$2.compareTo(b.$2);
+    });
+  if (fal.length < wallGapMinDefenders) return null;
+  final gaps = <double>[], wide = <bool>[];
+  var maxI = 0;
+  for (var i = 0; i + 1 < fal.length; i++) {
+    final g = fal[i + 1].$1 - fal[i].$1;
+    gaps.add(g);
+    wide.add(g >= wallGapM);
+    if (g > gaps[maxI]) maxI = i;
+  }
+  return WallGaps([for (final p in fal) Offset(p.$2, p.$1)], gaps, wide, maxI);
+}

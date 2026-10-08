@@ -68,6 +68,12 @@ Mindegyik külön kapcsolható, egymásra is tehetők.
   A színezés a döntés-elemzés passz-modellje (a távolság és a sávban
   1,5 m-en belül álló ellenfelek), a labdás az elemzés birtoklás-
   sugarával (3 m) dől el — a 3D nem mond mást, mint az elemzés.
+- **Fal-rések** — szervezett védekezésben a védőfal szomszédos védői
+  közt sáv a padlón: **zöld**, ha zárt, **piros**, ha a rés eléri a
+  3,5 m-t — ott nyílik a fal (oda kell betörni, oda úszik be a beálló).
+  Összegző: "Fal (Szeged, 6 védő): 2 nyitott rés — a legnagyobb 4,1 m".
+  A fal ugyanaz, mint a fal-rés rétegben: a mért, kapus nélküli védők a
+  saját kaputól 12 m-en belül, a rés az oldalirányú távolság.
 - **Feltörés és Megállítás** (a Védekezés "élő" módjában) — a fal
   mellé a felderítés két rangsorának teteje: HOL és MIVEL törhető fel a
   védekező csapat fala, és mivel állíthatja meg a most támadó csapatot;
@@ -111,7 +117,7 @@ küldesz a stábnak, nem egy meccset. A paraméterek:
 /matches/<meccs>/view3d?t=349&nezet=madar
    &kamera=h7 | &tv=1
    &hoter=mind&loves=hazai&passz=vendeg&fal=6-0&falOldal=jobb
-   &nyom=1&passzsav=1&seb=2
+   &nyom=1&passzsav=1&falres=1&seb=2
 ```
 
 ## VR-headset
@@ -127,7 +133,7 @@ headsetről USB-kábellel és `adb reverse`-szel érhető el az app gépe.
   falsablonok, védekezés-idővonal, `tactical_keys_by_team` — feltörés
   és megállítás, `pass_lanes` — passzsávok, `decision_moments` —
   döntés-pillanatok, `free_shot_moments` — szabadon hagyott lövők,
-  `turnover_moments` — labdavesztések),
+  `turnover_moments` — labdavesztések, `wall_gap_segments` — fal-rések),
   `view3d_html.py` (a böngészős oldal és a tömör adat), végpontok:
   `/matches/{id}/view3d`, `/matches/{id}/defence-timeline`,
   `/matches/{id}/decision-moments`, `/matches/{id}/free-shots`,
