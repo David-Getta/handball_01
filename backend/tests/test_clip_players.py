@@ -310,3 +310,48 @@ def test_a_szamlalo_gyorsitotara_frissul_a_valtozasra():
                                                "text": "friss"})
     utana = client.get(f"/matches/{mid}/clip-players").json()
     assert utana["totals"].get("note", 0) == volt + 1, utana["totals"]
+
+
+def test_a_draga_eladas_csomag_a_3d_labdavesztesebol_jon(tmp_path,
+                                                        monkeypatch):
+    """A "Drága eladások" csomag ugyanazokat a jeleneteket vágja, amiket
+    a 3D Labdavesztések lapozója gólosnak mutat — a vesztő mezszámához
+    írva (enélkül a játékos-szűrés némán üres csomagot adna)."""
+    from test_court3d import _eladasos_meccs
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import turnover_moments
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _eladasos_meccs()
+    app = create_app()
+    app.state.put_match(m)
+    r = TestClient(app).get(f"/matches/{m.meta.match_id}/clip-players").json()
+    gol = [x for x in turnover_moments(m)["moments"] if x["punished"]]
+    assert len(gol) == 1 and gol[0]["jersey"] == 7
+    assert r["totals"].get("costly_turnover") == 1
+    hetes = next(p for p in r["players"]
+                 if p["jersey"] == 7 and p["team"] == "home")
+    assert hetes["counts"].get("costly_turnover") == 1
+
+
+def test_a_dontes_hiba_csomag_a_3d_dontes_pillanataibol_jon(tmp_path,
+                                                           monkeypatch):
+    """A "Döntés-hibák" csomag a 3D Döntések lapozójának pillanatai — a
+    passzolóhoz írva (a mezszámos sorok összege = a pillanatok száma)."""
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import decision_moments
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = simulate_ground_truth(duration_s=60, fps=25.0, seed=5,
+                              shots_per_min=8)
+    for f in m.frames:
+        for p in f.players:
+            p.jersey_number = (p.track_id % 14) + 1
+    app = create_app()
+    app.state.put_match(m)
+    r = TestClient(app).get(f"/matches/{m.meta.match_id}/clip-players").json()
+    n = len(decision_moments(m)["moments"])
+    assert n > 0, "a szimuláción van döntés-pillanat"
+    assert r["totals"].get("bad_decision") == n
+    assert sum(p["counts"].get("bad_decision", 0) for p in r["players"]) == n

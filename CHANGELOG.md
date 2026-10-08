@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.159 óta)
 
+- **Klipek: "Drága eladások" és "Döntés-hibák" csomag** (új): a 3D
+  pálya két jelenet-lapozója a videóvágóba is bekerült. A "Drága
+  eladások" azok a labdavesztések, amelyekből fél percen belül kapott
+  gól lett (a Labdavesztések lapozó gólos jelenetei), a "Döntés-hibák"
+  a passz-döntések, ahol érdemben jobb opció is volt (a Döntések
+  lapozó pillanatai; a fájlnévben: "loves-kellett" vagy "jobb-passz").
+  Mindkettő a vesztőhöz, illetve a passzolóhoz van írva, így
+  mezszámra is vágható ("a #7 drága eladásai"); a Támadás-csomag
+  mindkettőt, a Teljes videó-dosszié a drága eladásokat is viszi.
+  Teszt: a csomagok a 3D-rétegek pillanataiból jönnek (darabszám és
+  mezszám), magyar fájl- és mappanév.
+
 - **3D pálya: "Kinek a hibái" szűrő a jelenet-lapozókhoz** (új,
   böngészős/VR és appbeli nézet): a három lapozó (Döntések, Szabad
   lövők, Labdavesztések) mind egy csapat HIBÁJÁT mutatja — a rossz

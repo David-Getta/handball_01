@@ -320,7 +320,8 @@ def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
     "itt lövés kellett volna". Az átlagos optimalitás nem mutatja meg,
     HOL és MI volt a jobb választás; ez igen.
 
-    Visszatérés: {"moments": [{"s", "team", "passer": [x, y],
+    Visszatérés: {"moments": [{"s", "t" (a döntés kockája), "team",
+    "player_id" (a passzoló), "passer": [x, y],
     "chosen": [x, y], "chosen_value", "best_kind", "best": [x, y],
     "best_value", "gap"}] időrendben, "passes": {"home"/"away": db},
     "flagged": {"home"/"away": db}} — a "best" passznál a jobb társ
@@ -360,7 +361,9 @@ def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
             cel = [float(config.attacks_toward_x(pe.team)), COURT_WIDTH_M / 2.0]
         flagged[side] += 1
         moments.append({
-            "s": round(pe.decision_frame.t / fps, 2), "team": side,
+            "s": round(pe.decision_frame.t / fps, 2),
+            "t": pe.decision_frame.t, "team": side,
+            "player_id": pe.passer_id,
             "passer": [round(pe.passer_pos.x, 1), round(pe.passer_pos.y, 1)],
             "chosen": [round(rec.x, 1), round(rec.y, 1)],
             "chosen_value": round(chosen.value, 3),
@@ -435,7 +438,8 @@ def turnover_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
     és ugyanazokkal a küszöbökkel, mint a négy réteg — a 3D nem mondhat
     mást, mint az elemzés.
 
-    Visszatérés: {"moments": [{"s", "team", "jersey", "loser": [x, y] |
+    Visszatérés: {"moments": [{"s", "t" (videó-kocka), "team",
+    "player_id" (a vesztő), "jersey", "loser": [x, y] |
     None, "ball": [x, y] | None, "zone" | None, "opponent": [x, y] |
     None, "dist" | None, "forced": bool | None, "punished",
     "goal_after_s" | None}] időrendben, "turnovers", "forced",
@@ -502,8 +506,8 @@ def turnover_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
         if goal_t is not None:
             rec["punished"] += 1
         moments.append({
-            "s": round(e.t / fps, 2), "team": side,
-            "jersey": jersey.get(e.player_id),
+            "s": round(e.t / fps, 2), "t": e.t, "team": side,
+            "player_id": e.player_id, "jersey": jersey.get(e.player_id),
             "loser": ([round(loser.x, 2), round(loser.y, 2)]
                       if loser is not None else None),
             "ball": ([round(ball.x, 2), round(ball.y, 2)]

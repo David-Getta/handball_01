@@ -106,6 +106,10 @@ feliratok egymás alatt):
 A ▶ az utoljára nézett jelenettől lép tovább (nem ragad le, és a meccs
 legelső pillanatai is elérhetők).
 
+Két lapozó jelenetei a **Klipek** képernyőn videóként is kivághatók:
+a "Drága eladások" (a gólba került labdavesztések) és a "Döntés-hibák"
+csomag — mezszámra szűkítve is ("a #7 drága eladásai").
+
 A **Kinek a hibái** választó a három lapozót egy csapatra szűri: mind
 a három egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott
 lövőt, az elvesztett labdát) — a saját csapatra szűrve videóelemzés a

@@ -50,6 +50,10 @@ const List<(String, List<ClipKind>)> kClipGroups = [
         "amit meccsről meccsre hoznak — több elemzett meccs kell hozzá"),
     ("pivot_goal", "Beállós gólok", "a beadás-játék videón"),
     ("turnover", "Labdaeladások", "hol veszik el a labda"),
+    ("costly_turnover", "Drága eladások",
+        "eladás, amiből fél percen belül gól lett — a legtöbbe kerül"),
+    ("bad_decision", "Döntés-hibák",
+        "ahol jobb opció is volt: lövés vagy egy szabadabb társ"),
   ]),
   ("VÉDEKEZÉS", [
     ("block", "Blokkok", "a fal munkája"),
@@ -80,10 +84,11 @@ const List<(String, List<String>)> kClipPresets = [
   ("Teljes videó-dosszié", [
     "goal", "key_moment", "turning_point", "missed_chance", "big_save",
     "top_shooter", "free_shot", "best_figure", "pivot_goal",
-    "breakthrough", "steal", "block", "empty_net",
+    "breakthrough", "steal", "block", "empty_net", "costly_turnover",
   ]),
   ("Támadás-csomag", [
     "goal", "missed_chance", "best_figure", "pivot_goal", "turnover",
+    "costly_turnover", "bad_decision",
   ]),
   ("Védekezés-csomag", [
     "block", "steal", "free_shot", "breakthrough", "big_save",

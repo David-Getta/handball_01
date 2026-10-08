@@ -657,3 +657,22 @@ def test_az_egy_videos_meccs_utja_valtozatlan(tmp_path):
     assert szakaszok[0]["start_frame"] == 100
     assert szakaszok[0]["stride"] == 2
     assert szakaszok[0]["t_to"] is None   # a végéig
+
+
+def test_draga_eladas_es_dontes_hiba_magyar_nevet_kap(tmp_path):
+    """A 3D jelenet-lapozók két csomagja (drága eladás, döntés-hiba)
+    magyar fájlnevet és típus-mappát kap (draga-eladas, dontes-hiba)."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "costly_turnover", "team": "home",
+               "label": "közép"},
+              {"t": 120, "type": "bad_decision", "team": "away",
+               "label": "loves-kellett"}]
+    res = export_event_clips(m, events, {"costly_turnover", "bad_decision"},
+                             tmp_path / "ki")
+    assert res.count == 2
+    assert res.by_type == {"draga-eladas": 1, "dontes-hiba": 1}
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = " ".join(z.namelist())
+    assert "draga-eladas/" in names and "dontes-hiba/" in names

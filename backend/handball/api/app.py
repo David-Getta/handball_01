@@ -4548,6 +4548,33 @@ def create_app():
                            for e_bw in bw_cl[side]["ts"]]
             except Exception:
                 pass
+        if "costly_turnover" in types:
+            # Drága eladások: a labdavesztések, amelyekből fél percen
+            # belül kapott gól lett (court3d.turnover_moments — a 3D
+            # "Labdavesztések" lapozó ugyanezeket mutatja) — a vesztő
+            # csapathoz és játékoshoz írva, a pálya-harmad a címkében.
+            try:
+                from ..pipeline.court3d import turnover_moments
+                ev += [{"t": m_["t"], "type": "costly_turnover",
+                        "team": m_["team"], "player_id": m_["player_id"],
+                        "label": m_["zone"] or ""}
+                       for m_ in turnover_moments(match)["moments"]
+                       if m_["punished"]]
+            except Exception:
+                pass
+        if "bad_decision" in types:
+            # Döntés-hibák: a passz-döntések, ahol érdemben jobb opció is
+            # volt (court3d.decision_moments — a 3D "Döntések" lapozója)
+            # — a passzolóhoz írva; a címke a jobb opció.
+            try:
+                from ..pipeline.court3d import decision_moments
+                ev += [{"t": d_["t"], "type": "bad_decision",
+                        "team": d_["team"], "player_id": d_["player_id"],
+                        "label": ("loves-kellett" if d_["best_kind"] == "shoot"
+                                  else "jobb-passz")}
+                       for d_ in decision_moments(match)["moments"]]
+            except Exception:
+                pass
         if "key_moment" in types:
             # A meccs gerince videóban: a key_moments réteg
             # pillanataiból egy-egy klip, a címkével a
