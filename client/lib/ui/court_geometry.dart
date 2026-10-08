@@ -268,3 +268,24 @@ double _pontSzakasz(
   }
   return (holder, lanes);
 }
+
+/// A pillanat-lapozó (Döntések, Szabad lövők ◀ ▶) közös logikája — a
+/// böngészős nézet `lapozCel`-jének tükre. `idok`: a pillanatok ideje
+/// (mp, növekvő); `utolso`: az utoljára ugrott pillanat ideje vagy null.
+/// A "következő" az utolsó ugrástól számít, amíg annak ablakában
+/// (−1,6…+2,5 mp) vagyunk, különben a lejátszófejtől (az első 1,6 mp
+/// pillanatai is elérhetők, és nem ragad le az épp nézett pillanaton).
+double? lapozCel(List<double> idok, double most, double? utolso, int irany) {
+  final benne = utolso != null && most >= utolso - 1.6 && most <= utolso + 2.5;
+  final alap = benne ? utolso : most;
+  if (irany > 0) {
+    for (final s in idok) {
+      if (benne ? s > alap + 1e-6 : s >= alap - 1e-6) return s;
+    }
+    return null;
+  }
+  for (var i = idok.length - 1; i >= 0; i--) {
+    if (benne ? idok[i] < alap - 1e-6 : idok[i] < alap - 0.5) return idok[i];
+  }
+  return null;
+}

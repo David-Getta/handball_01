@@ -5,6 +5,26 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.159 óta)
 
+- **3D pálya: szabadon hagyott lövők** (új, böngészős/VR és appbeli
+  nézet): a "Szabad lövők ◀ ▶" gombok a fedezés-hibákra ugranak — azokra
+  a kapott lövésekre, ahol a lövőtől 2 m-en belül nem volt mezőnyvédő
+  (a védekezés-elemzés ítélete). A pillanat körül piros kör a lövő körül
+  (a 2 m-es fedezés-sugár) és szaggatott vonal a legközelebbi védőhöz,
+  a felirat megnevezi: "Szeged védekezése: szabadon hagyott lövő — a
+  legközelebbi védő 3,4 m-re (GÓL, xG 0,42)". A felderítés eddig csak
+  arányt mondott ("a lövők 84%-át szabadon hagyják"); mostantól a
+  jelenetek is megnézhetők. A védekezés-elemzés lövés-sorai ehhez a
+  lövés helyét, a mért kockát és a legközelebbi védőt is viszik; új
+  végpont: `/matches/{id}/free-shots`. Teszt: a pillanatok száma = az
+  elemzés szabad lövései, a távolság a védő helyéből újraszámolva
+  egyezik, a tömör adat és a végpont alakja; widget-teszt a demón.
+  Közben javítva a pillanat-lapozó (Döntések és Szabad lövők, mindkét
+  nézetben): a meccs első 1,6 másodpercének pillanatai nem voltak
+  elérhetők a ▶ gombbal, és két egyszerre aktív pillanat felirata
+  eltakarta egymást — mostantól a lapozó az utoljára ugrott pillanattól
+  lép tovább, a két felirat egymás alatt jelenik meg (közös esettábla a
+  böngésző és az app tesztjében).
+
 - **Appbeli 3D: az eszköz-panel nem lóg le a képről** (javítás): a
   rétegek szaporodtával (hőtérkép, passzok, passzsávok, döntések…) a
   jobb oldali eszköz-panel magasabb lett a 3D képnél — az alsó gombok

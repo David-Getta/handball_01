@@ -156,6 +156,24 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("szabad lövő: ▶ odaugrik, felirat a védő távolságával",
+      (tester) async {
+    await _nyit(tester);
+    final kov = find.byTooltip("Következő szabadon hagyott lövő");
+    await tester.ensureVisible(kov);
+    await tester.pump();
+    await tester.tap(kov);
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("szabadon hagyott lövő").evaluate().isNotEmpty) {
+        break;
+      }
+    }
+    expect(find.textContaining("a legközelebbi védő 2,9 m-re"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("labda-nyom gomb: be/ki", (tester) async {
     await _nyit(tester);
     await tester.tap(find.text("Labda-nyom (3 mp)"));

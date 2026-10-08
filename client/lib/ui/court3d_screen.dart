@@ -141,6 +141,13 @@ class _Court3DScreenState extends State<Court3DScreen>
   // DÖNTÉS-PILLANATOK: ahol jobb opció is volt (a /decision-moments
   // pillanatai) — ◀ ▶ lapoz, a pillanat körül fehér/arany vonal.
   List<Map<String, dynamic>> _dontesek = const [];
+  // SZABAD LÖVŐK: a fedezés-hibák (a /free-shots pillanatai) — ◀ ▶ lapoz,
+  // a pillanat körül piros kör a lövő körül és vonal a legközelebbi védőhöz.
+  List<Map<String, dynamic>> _szabadok = const [];
+  double _szabadSugar = 2.0;
+  // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
+  // amíg annak ablakában vagyunk — lásd lapozCel).
+  double? _dontesUtolso, _szabadUtolso;
   // HŐTÉRKÉP: hol tartózkodott a csapat (az elemzés rácsa: 20×10 cella,
   // csak a mért helyek) a pályára fektetve. Meccsenként egyszer számolva.
   String _hoter = ""; // "" | "hazai" | "vendeg" | "mind"
@@ -182,6 +189,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _lovesek = buildDemoShots();
         _passzok = buildDemoPasses(_match!);
         _dontesek = buildDemoDecisions(_match!);
+        _szabadok = buildDemoFreeShots();
         _demo = true;
         _loading = false;
       });
@@ -237,6 +245,15 @@ class _Court3DScreenState extends State<Court3DScreen>
         falStop = (d["stoppers"] as Map?)?.cast<String, dynamic>() ??
             const {};
       } catch (_) {}
+      // A szabad lövők — hibája nem viheti el a nézetet.
+      List<Map<String, dynamic>> szabadok = const [];
+      double szabadSugar = 2.0;
+      try {
+        final fs = await _api.fetchFreeShots(id);
+        szabadok = ((fs["moments"] as List?) ?? const [])
+            .cast<Map<String, dynamic>>();
+        szabadSugar = ((fs["radius_m"] as num?) ?? 2.0).toDouble();
+      } catch (_) {}
       // A döntés-pillanatok — hibája nem viheti el a nézetet.
       List<Map<String, dynamic>> dontesek = const [];
       try {
@@ -290,6 +307,8 @@ class _Court3DScreenState extends State<Court3DScreen>
         _lovesek = lovesek;
         _passzok = passzok;
         _dontesek = dontesek;
+        _szabadok = szabadok;
+        _szabadSugar = szabadSugar;
         _lovesValasztott = null;
         if (widget.lovesTerkep != null) _lovesTerkep = widget.lovesTerkep!;
         _meres = null;
@@ -672,32 +691,60 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// Ugrás az előző/következő döntés-pillanatra (1,5 mp-cel előtte,
   /// lejátszva) — a böngészős nézet ◀ ▶ gombjainak párja.
   void _dontesUgras(Match m, int irany) {
-    if (_dontesek.isEmpty || m.frames.isEmpty) return;
+    final cel = _pillanatUgras(m, _dontesek, _dontesUtolso, irany);
+    if (cel != null) _dontesUtolso = cel;
+  }
+
+  /// A közös pillanat-ugrás: a cél a lapozCel szerint (court_geometry),
+  /// a lejátszófej 1,5 mp-cel elé, lejátszva. Visszaadja a cél idejét.
+  double? _pillanatUgras(Match m, List<Map<String, dynamic>> lista,
+      double? utolso, int irany) {
+    if (lista.isEmpty || m.frames.isEmpty) return null;
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
     final most = _mostT(m) / fps;
-    Map<String, dynamic>? cel;
-    if (irany > 0) {
-      for (final d in _dontesek) {
-        if (((d["s"] as num?) ?? 0) > most + 1.6) {
-          cel = d;
-          break;
-        }
-      }
-    } else {
-      for (final d in _dontesek.reversed) {
-        if (((d["s"] as num?) ?? 0) < most - 0.5) {
-          cel = d;
-          break;
-        }
-      }
-    }
-    if (cel == null) return;
-    final s = ((cel["s"] as num?) ?? 0).toDouble();
+    final cel = lapozCel(
+        [for (final d in lista) ((d["s"] as num?) ?? 0).toDouble()],
+        most, utolso, irany);
+    if (cel == null) return null;
     setState(() {
-      _playhead = _tIndex(m, (s - 1.5) * fps).toDouble();
+      _playhead = _tIndex(m, (cel - 1.5) * fps).toDouble();
       _playing = true;
     });
     _focus.requestFocus();
+    return cel;
+  }
+
+  /// A lejátszófejnél aktív szabad lövés (−0,3…+2,5 mp), vagy null.
+  Map<String, dynamic>? _aktivSzabad(Match m) {
+    if (_szabadok.isEmpty || m.frames.isEmpty) return null;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m) / fps;
+    for (final d in _szabadok) {
+      final s = ((d["s"] as num?) ?? 0).toDouble();
+      if (most >= s - 0.3 && most <= s + 2.5) return d;
+    }
+    return null;
+  }
+
+  /// Ugrás az előző/következő szabad lövésre (1,5 mp-cel előtte).
+  void _szabadUgras(Match m, int irany) {
+    final cel = _pillanatUgras(m, _szabadok, _szabadUtolso, irany);
+    if (cel != null) _szabadUtolso = cel;
+  }
+
+  /// A szabad lövés felirata ("… szabadon hagyott lövő — a legközelebbi
+  /// védő 3,4 m-re (GÓL, xG 0,42)").
+  String? _szabadFelirat(Match m) {
+    final d = _aktivSzabad(m);
+    if (d == null) return null;
+    final csapat =
+        d["defending"] == "home" ? m.meta.homeTeam : m.meta.awayTeam;
+    final tav = (d["dist"] as num?)?.toDouble();
+    final xg = ((d["xg"] as num?) ?? 0).toDouble();
+    return "$csapat védekezése: szabadon hagyott lövő — a legközelebbi védő "
+        "${tav == null ? "nem mérhető" : "${tav.toStringAsFixed(1).replaceAll(".", ",")} m-re"}"
+        " (${d["goal"] == true ? "GÓL" : "nem gól"}, xG "
+        "${xg.toStringAsFixed(2).replaceAll(".", ",")})";
   }
 
   /// A döntés-pillanat felirata ("jobb opció is volt: LÖVÉS (0,36) …").
@@ -1133,6 +1180,8 @@ class _Court3DScreenState extends State<Court3DScreen>
                   passzok: _passzVonalak(m),
                   passzsavok: _passzsav ? _passzsavok(allapot) : null,
                   dontes: _aktivDontes(m),
+                  szabad: _aktivSzabad(m),
+                  szabadSugar: _szabadSugar,
                   lovesek: [
                     for (final l in _lathatoLovesek(m))
                       _LovesJel(
@@ -1222,14 +1271,22 @@ class _Court3DScreenState extends State<Court3DScreen>
               // Jelenet-felirat: mi történik épp (a közvetítés
               // inzertje) — a 3D-ben a labda pályája önmagában nem
               // mondja meg, hogy gól volt-e vagy védés.
-              if (_dontesFelirat(m) != null)
+              // A döntés- és a szabad-lövés felirat EGYMÁS ALATT: két
+              // egyszerre aktív pillanat nem takarhatja el egymást.
+              if (_dontesFelirat(m) != null || _szabadFelirat(m) != null)
                 Positioned(
                   top: 12,
                   left: 0,
                   right: 0,
                   child: Center(
-                      child: _infoDoboz(
-                          [_dontesFelirat(m)!], AppColors.gold)),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    if (_dontesFelirat(m) != null)
+                      _infoDoboz([_dontesFelirat(m)!], AppColors.gold),
+                    if (_dontesFelirat(m) != null && _szabadFelirat(m) != null)
+                      const SizedBox(height: 6),
+                    if (_szabadFelirat(m) != null)
+                      _infoDoboz([_szabadFelirat(m)!], AppColors.away),
+                  ])),
                 ),
               if (_esemenyFelirat(m) != null)
                 Positioned(
@@ -1636,6 +1693,31 @@ class _Court3DScreenState extends State<Court3DScreen>
             icon: const Icon(Icons.chevron_right, size: 20),
           ),
           Text(_dontesek.isEmpty ? "nincs" : "${_dontesek.length}",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ]),
+      ),
+      // Szabad lövők: a fedezés-hibák (◀ ▶).
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text("Szabad lövők:", style: AppText.label.copyWith(fontSize: 11.5)),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Előző szabadon hagyott lövő",
+            onPressed: _szabadok.isEmpty || _match == null
+                ? null
+                : () => _szabadUgras(_match!, -1),
+            icon: const Icon(Icons.chevron_left, size: 20),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Következő szabadon hagyott lövő",
+            onPressed: _szabadok.isEmpty || _match == null
+                ? null
+                : () => _szabadUgras(_match!, 1),
+            icon: const Icon(Icons.chevron_right, size: 20),
+          ),
+          Text(_szabadok.isEmpty ? "nincs" : "${_szabadok.length}",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -2132,6 +2214,9 @@ class _Court3DPainter extends CustomPainter {
   final ((bool, double, double), List<PassLane>)? passzsavok;
   // Az aktív döntés-pillanat (a /decision-moments egy sora) vagy null.
   final Map<String, dynamic>? dontes;
+  // Az aktív szabad lövés (a /free-shots egy sora) és a fedezés-sugár.
+  final Map<String, dynamic>? szabad;
+  final double szabadSugar;
   final _Jatekos? rejtett;
   _Court3DPainter(
       {required this.frame,
@@ -2150,6 +2235,8 @@ class _Court3DPainter extends CustomPainter {
       this.passzok = const [],
       this.passzsavok,
       this.dontes,
+      this.szabad,
+      this.szabadSugar = 2.0,
       this.rejtett});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
@@ -2553,6 +2640,30 @@ class _Court3DPainter extends CustomPainter {
             l.x,
             l.y,
             1.1);
+      }
+    }
+
+    // Szabad lövés: piros kör a lövő körül (a fedezés-sugár) és szaggatott
+    // vonal a legközelebbi mezőnyvédőhöz.
+    final sz = szabad;
+    if (sz != null) {
+      final lo = [for (final e in (sz["shooter"] as List)) (e as num).toDouble()];
+      final piros = Paint()
+        ..color = AppColors.away
+        ..strokeWidth = 2.4;
+      _kor(canvas, piros, lo[0], lo[1], szabadSugar);
+      final ve = sz["defender"] as List?;
+      if (ve != null) {
+        _talajUtvonal(
+            canvas,
+            piros,
+            [
+              for (var i = 0; i <= 12; i++)
+                Offset(
+                    lo[0] + ((ve[0] as num).toDouble() - lo[0]) * i / 12,
+                    lo[1] + ((ve[1] as num).toDouble() - lo[1]) * i / 12)
+            ],
+            szaggatott: true);
       }
     }
 

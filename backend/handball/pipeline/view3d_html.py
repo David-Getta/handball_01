@@ -150,6 +150,20 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
             for d in decision_moments(match)["moments"]]
     except Exception:
         dontesek = []  # döntés-pillanatok nélkül is működjön a nézet
+    # Szabad lövők: [mp, a védekező hazai?, lövő x, y, védő x, y | null,
+    # távolság | null, gól?, xG] időrendben (court3d.free_shot_moments).
+    try:
+        from .court3d import free_shot_moments
+        _fs = free_shot_moments(match)
+        szabad_sugar = _fs["radius_m"]
+        szabadok = [
+            [m_["s"], 1 if m_["defending"] == "home" else 0,
+             *m_["shooter"],
+             *(m_["defender"] if m_["defender"] else [None, None]),
+             m_["dist"], 1 if m_["goal"] else 0, m_["xg"]]
+            for m_ in _fs["moments"]]
+    except Exception:
+        szabadok, szabad_sugar = [], 2.0
     # Feltörés: hol és mivel törhető fel a két csapat védekezése (a
     # felderítés rangsorának teteje) — a védekezés-panel a fal mellé írja.
     try:
@@ -179,6 +193,8 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         "breakpoints": feltores,
         "stoppers": megallitas,
         "decisions": dontesek,
+        "free_shots": szabadok,
+        "free_radius": szabad_sugar,
     }
 
 
@@ -250,6 +266,29 @@ function passzSavok(jat, labda){
 """
 
 
+# A pillanat-lapozó (Döntések, Szabad lövők ◀ ▶) közös logikája — külön
+# állandó, hogy a teszt node-dal futtathassa. A "következő" az UTOLJÁRA
+# ugrott pillanattól számít, amíg annak ablakában vagyunk (különben a
+# lejátszófejtől): így az első 1,6 mp pillanatai is elérhetők, és a
+# lapozó nem ragad le az épp nézett pillanaton.
+LAPOZO_JS = """
+function lapozCel(idok, most, utolso, irany){
+  // idok: a pillanatok ideje (mp), növekvő; utolso: az utoljára ugrott
+  // pillanat ideje vagy null. Visszaad: a cél ideje vagy null.
+  const benne = utolso !== null && most >= utolso - 1.6 && most <= utolso + 2.5;
+  const alap = benne ? utolso : most;
+  if (irany > 0){
+    for (const s of idok){ if (benne ? s > alap + 1e-6 : s >= alap - 1e-6) return s; }
+    return null;
+  }
+  for (let i = idok.length - 1; i >= 0; i--){
+    if (benne ? idok[i] < alap - 1e-6 : idok[i] < alap - 0.5) return idok[i];
+  }
+  return null;
+}
+"""
+
+
 def view3d_html(match: Match, figure_alerts: list | None = None,
                 breakpoints: dict | None = None,
                 stoppers: dict | None = None) -> str:
@@ -282,6 +321,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #meres{position:fixed;left:12px;bottom:100px;padding:8px 12px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;line-height:1.45}
  #meres button{margin-left:8px;padding:2px 8px}
  #dontesFelirat{position:fixed;left:50%;top:52px;transform:translateX(-50%);padding:6px 14px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #szabadFelirat{position:fixed;left:50%;top:98px;transform:translateX(-50%);padding:6px 14px;border:1px solid #ff6b6b;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jatekosHud{position:fixed;left:50%;top:12px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.85);font-size:14px;font-variant-numeric:tabular-nums;display:none}
 </style></head><body>
 <div id="hud"><b>__CIM__</b></div>
@@ -354,6 +394,12 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="dontesInfo"></span>
  </div>
  <div class="sor">
+  <span title="Kapott lövések, ahol a lövőtől 2 m-en belül nem volt védő">Szabad lövők:</span>
+  <button id="szabadElozo" title="Előző szabadon hagyott lövő">◀</button>
+  <button id="szabadKov" title="Következő szabadon hagyott lövő">▶</button>
+  <span id="szabadInfo"></span>
+ </div>
+ <div class="sor">
   <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
   <span id="linkInfo"></span>
  </div>
@@ -370,12 +416,14 @@ Hőtérkép — hol tartózkodott a csapat (2 m-es cellák) · Nézet-gombok —
 Passzok — a futó passz vonala (adótól a fogadóig), vagy a csapat passz-hálója a padlón<br>
 Passzsávok — a labdástól a társakig: zöld nyitott, sárga kockázatos, piros zárt (az elemzés modellje)<br>
 Döntések ◀ ▶ — ahol jobb opció is volt: fehér a választott passz, arany a jobb (passz vagy lövés)<br>
+Szabad lövők ◀ ▶ — a fedezés-hibák: piros kör a lövő körül (2 m), vonal a legközelebbi védőhöz<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
 <div id="dontesFelirat"></div>
+<div id="szabadFelirat"></div>
 <div id="felirat"></div>
 <div id="vez">
  <button id="elozo" title="Előző esemény">⏮</button>
@@ -1322,13 +1370,13 @@ szinpad.add(dontesCsoport);
 const dontesFelirat = document.getElementById("dontesFelirat");
 const dontesInfo = document.getElementById("dontesInfo");
 dontesInfo.textContent = DONTESEK.length ? DONTESEK.length + " pillanat" : "nincs ilyen pillanat";
+let dontesUtolso = null;
 function dontesUgras(irany){
   if (!DONTESEK.length) return;
-  let cel = null;
-  if (irany > 0){ for (const d of DONTESEK){ if (d[0] > ido + 1.6){ cel = d; break; } } }
-  else { for (let i = DONTESEK.length - 1; i >= 0; i--){ if (DONTESEK[i][0] < ido - 0.5){ cel = DONTESEK[i]; break; } } }
-  if (!cel) return;
-  ido = Math.max(0, cel[0] - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
+  const cel = lapozCel(DONTESEK.map(d => d[0]), ido, dontesUtolso, irany);
+  if (cel === null) return;
+  dontesUtolso = cel;
+  ido = Math.max(0, cel - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
   csuszka.value = ido;
 }
 document.getElementById("dontesElozo").onclick = () => dontesUgras(-1);
@@ -1337,6 +1385,12 @@ function szam2(v){ return v.toFixed(2).replace(".", ","); }
 function dontesFrissit(t){
   while (dontesCsoport.children.length) dontesCsoport.remove(dontesCsoport.children[0]);
   const d = DONTESEK.find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  // A szabad lövés felirata KÜLÖN dobozban (a döntés-felirat alatt): két
+  // egyszerre aktív pillanat nem takarhatja el egymást.
+  const szabadSzoveg = szabadFrissit(t);
+  const szabadFelirat = document.getElementById("szabadFelirat");
+  if (szabadSzoveg){ szabadFelirat.textContent = szabadSzoveg; szabadFelirat.style.display = "block"; }
+  else szabadFelirat.style.display = "none";
   if (!d){ dontesFelirat.style.display = "none"; return; }
   const [mp, hazai, px, py, cx, cy, cval, fajta, bx, by, bval, gap] = d;
   const vonalD = (x2, y2, szin) => {
@@ -1351,6 +1405,48 @@ function dontesFrissit(t){
     "<span style='color:#d9b544'>" + jobb + "</span> a választott passz (" + szam2(cval) +
     ") helyett · különbség " + szam2(gap);
   dontesFelirat.style.display = "block";
+}
+
+// ---- Szabad lövők: a fedezés-hibák pillanatai --------------------------
+// ◀ ▶ a szabadon hagyott lövők közt ugrik (1,5 mp-cel előtte, lejátszva);
+// a pillanat körül piros kör a lövő körül (a fedezés-sugár, 2 m) és vonal
+// a legközelebbi mezőnyvédőhöz, a felirat megnevezi a távolságot
+// (court3d.free_shot_moments — a védekezés-elemzés ítélete).
+const SZABADOK = ADAT.free_shots || [];
+const SZ_SUGAR = ADAT.free_radius || 2.0;
+const szabadCsoport = new THREE.Group();
+szinpad.add(szabadCsoport);
+const szabadKor = new THREE.Mesh(new THREE.RingGeometry(SZ_SUGAR - 0.08, SZ_SUGAR + 0.04, 40),
+  new THREE.MeshBasicMaterial({color: 0xff6b6b, side: THREE.DoubleSide, transparent: true, opacity: 0.9}));
+szabadKor.rotation.x = -Math.PI/2; szabadKor.visible = false;
+szinpad.add(szabadKor);
+document.getElementById("szabadInfo").textContent = SZABADOK.length ? SZABADOK.length + " lövés" : "nincs ilyen";
+let szabadUtolso = null;
+function szabadUgras(irany){
+  if (!SZABADOK.length) return;
+  const cel = lapozCel(SZABADOK.map(d => d[0]), ido, szabadUtolso, irany);
+  if (cel === null) return;
+  szabadUtolso = cel;
+  ido = Math.max(0, cel - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
+  csuszka.value = ido;
+}
+document.getElementById("szabadElozo").onclick = () => szabadUgras(-1);
+document.getElementById("szabadKov").onclick = () => szabadUgras(1);
+function szabadFrissit(t){
+  while (szabadCsoport.children.length) szabadCsoport.remove(szabadCsoport.children[0]);
+  const d = SZABADOK.find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  if (!d){ szabadKor.visible = false; return null; }
+  const [mp, vedHazai, sx, sy, dx, dy, tav, gol, xg] = d;
+  szabadKor.position.set(sx, 0.03, W - sy); szabadKor.visible = true;
+  if (dx !== null && dy !== null){
+    const g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(sx, 0.05, W - sy), new THREE.Vector3(dx, 0.05, W - dy)]);
+    const l = new THREE.Line(g, new THREE.LineDashedMaterial({color: 0xff6b6b, dashSize: 0.3, gapSize: 0.2}));
+    l.computeLineDistances(); szabadCsoport.add(l);
+  }
+  return (vedHazai ? ADAT.home : ADAT.away) + " védekezése: szabadon hagyott lövő — a legközelebbi védő " +
+    (tav !== null ? szam1(tav) + " m-re" : "nem mérhető") + " (" + (gol ? "GÓL" : "nem gól") +
+    ", xG " + szam2(xg) + ")";
 }
 
 // ---- Lövéstérkép: a meccs lövései a padlón --------------------------
@@ -1603,6 +1699,6 @@ fest.setAnimationLoop(() => {
               f"PS_SZEL = {PASS_LANE_WIDTH_M}, PS_JO = {PASS_LANE_GOOD}, "
               f"PS_KOCK = {PASS_LANE_RISKY};" + PASSZSAV_JS)
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
-                 .replace("__PASSZSAV_JS__", ps_kod)
+                 .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS)
                  .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))

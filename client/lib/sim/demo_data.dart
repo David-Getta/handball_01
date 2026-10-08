@@ -161,3 +161,24 @@ List<Map<String, dynamic>> buildDemoDecisions(Match m, {int lepes = 25}) {
   }
   return ki;
 }
+
+/// Demó szabad lövők a 3D "Szabad lövők" lapozójához (backend nélkül): a
+/// /free-shots "moments" alakjában, a demó-lövésekből (a hazai lő, a
+/// vendég védekezik) — SZINTETIKUS, csak a felület bemutatására.
+List<Map<String, dynamic>> buildDemoFreeShots({int frames = 200, double fps = 25.0}) {
+  return [
+    for (final l in buildDemoShots(frames: frames, fps: fps)
+        .where((l) => l["team"] == "home")
+        .take(2))
+      {
+        "s": (l["t"] as int) / fps,
+        "defending": "away",
+        "shooter": [l["x"], l["y"]],
+        "defender": [(l["x"] as double) + 2.6, (l["y"] as double) + 1.2],
+        "dist": 2.86,
+        "goal": l["outcome"] == "goal",
+        "xg": l["xg"],
+        "zone": "demó",
+      }
+  ];
+}

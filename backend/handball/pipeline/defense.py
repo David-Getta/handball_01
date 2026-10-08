@@ -32,8 +32,12 @@ def defense_analysis(match: Match,
     Visszatérés csapatonként ("home"/"away" = a VÉDEKEZŐ csapat):
     {"shots_against", "goals_against", "xg_against", "free_shots",
      "free_pct", "zones": {zóna: {"shots","goals","free"}}, "worst_zone",
-     "shots": [{"t","zone","free","xg","goal"}]}
+     "shots": [{"t","zone","free","xg","goal","x","y","release_t",
+                "defender","def_dist"}]}
     — free None, ha a lövő nem azonosítható (ott fedezést sem tudunk mérni).
+    A lövés-sor a 3D "Szabad lövők" lapozójának is forrása: x/y a lövés
+    helye, release_t a mért kocka, defender a legközelebbi mezőnyvédő
+    helye ([x, y] vagy None), def_dist a távolsága (m, vagy None).
     """
     import math
 
@@ -81,12 +85,17 @@ def defense_analysis(match: Match,
 
         # Szabad lövés: a legközelebbi VÉDŐ távolsága a lövőtől.
         free = None
+        nearest = None
+        nearest_d = None
         if shooter is not None:
-            dists = [math.hypot(p.x - shooter.x, p.y - shooter.y)
-                     for p in f.players
-                     if p.team == defender_team and p.role != "kapus"]
-            if dists:
-                free = min(dists) > FREE_DEF_RADIUS_M
+            for p in f.players:
+                if p.team != defender_team or p.role == "kapus":
+                    continue
+                d = math.hypot(p.x - shooter.x, p.y - shooter.y)
+                if nearest_d is None or d < nearest_d:
+                    nearest, nearest_d = p, d
+            if nearest_d is not None:
+                free = nearest_d > FREE_DEF_RADIUS_M
 
         rec["shots_against"] += 1
         rec["xg_against"] += xg
@@ -100,8 +109,13 @@ def defense_analysis(match: Match,
             z["goals"] += 1
         if free:
             z["free"] += 1
-        rec["shots"].append({"t": e.t, "zone": zone, "free": free,
-                             "xg": xg, "goal": is_goal})
+        rec["shots"].append({
+            "t": e.t, "zone": zone, "free": free, "xg": xg, "goal": is_goal,
+            "x": round(x, 2), "y": round(y, 2), "release_t": f.t,
+            "defender": ([round(nearest.x, 2), round(nearest.y, 2)]
+                         if nearest is not None else None),
+            "def_dist": (round(nearest_d, 2) if nearest_d is not None
+                         else None)})
 
     for rec in out.values():
         rec["xg_against"] = round(rec["xg_against"], 2)

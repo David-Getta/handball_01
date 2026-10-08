@@ -68,6 +68,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "function tvFrissit", "tvFrissit(dt)", '"KeyT"',
                 'id="passzsav"', "function passzSavok",
                 'id="dontesKov"', 'id="dontesElozo"', "function dontesUgras",
+                'id="szabadKov"', 'id="szabadElozo"', "function szabadUgras",
+                "function szabadFrissit",
                 "function dontesFrissit", "dontesFrissit(ido)",
                 "function passzsavFrissit", "passzsavFrissit();",
                 "const FELTORES = ADAT.breakpoints", '"Feltörés: <b>"',
@@ -175,6 +177,34 @@ def test_a_tomor_adat_viszi_a_dontes_pillanatokat(tmp_path, monkeypatch):
     v = c.get(f"/matches/{m.meta.match_id}/decision-moments").json()
     assert len(v["moments"]) == len(d)
     assert c.get("/matches/nincs/decision-moments").status_code == 404
+
+
+def test_a_tomor_adat_es_a_vegpont_viszi_a_szabad_lovoket(tmp_path, monkeypatch):
+    """A tömör adat "free_shots" sorai a free_shot_moments pillanatai (9
+    mezős alak, a fedezés-sugárral); a /free-shots végpont ugyanazt adja."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import free_shot_moments
+    from handball.pipeline.view3d_html import _compact_data
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=240, fps=25.0, seed=5,
+                              shots_per_min=8)
+    adat = _compact_data(m, None, {"home": [], "away": []},
+                         {"home": [], "away": []})
+    fs = free_shot_moments(m)
+    assert adat["free_radius"] == fs["radius_m"]
+    assert len(adat["free_shots"]) == len(fs["moments"]) > 0
+    for r, x in zip(adat["free_shots"], fs["moments"]):
+        assert len(r) == 9 and r[0] == x["s"] and r[6] == x["dist"]
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    v = c.get(f"/matches/{m.meta.match_id}/free-shots").json()
+    assert len(v["moments"]) == len(fs["moments"])
+    assert c.get("/matches/nincs/free-shots").status_code == 404
 
 
 def test_a_tomor_adat_viszi_a_passzokat():
@@ -377,6 +407,50 @@ def test_a_bongeszo_passzsavjai_a_backendet_tukrozik():
     assert volt > 100, "kevés eset jutott labdáshoz"
 
 
+# A lapozó elvárt viselkedése — a böngésző (node) és az app (Dart) ugyanezt
+# a táblát futtatja: (idők, most, utolsó, irány) → cél.
+LAPOZO_ESETEK = [
+    ([1.12, 2.28, 6.0], 0.0, None, 1, 1.12),     # az első 1,6 mp is elérhető
+    ([1.12, 2.28, 6.0], 0.0, 1.12, 1, 2.28),     # ugrás után a következőre
+    ([1.12, 2.28, 6.0], 0.78, 2.28, 1, 6.0),     # a 2,28 ablakában: tovább
+    ([1.12, 2.28, 6.0], 4.5, 6.0, -1, 2.28),     # vissza az ugrott elől
+    ([1.12, 2.28, 6.0], 20.0, 6.0, -1, 6.0),     # ablakon kívül: a fejtől
+    ([1.12, 2.28, 6.0], 20.0, 6.0, 1, None),     # nincs több előre
+    ([1.12, 2.28, 6.0], 0.0, None, -1, None),    # nincs korábbi
+    ([5.0], 3.4, None, 1, 5.0),                  # a lejátszófej után
+]
+
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_bongeszo_lapozoja_eleri_az_elso_pillanatot_es_nem_ragad():
+    """A pillanat-lapozó (lapozCel): az első 1,6 mp pillanata is elérhető
+    (a régi "> most + 1,6" szabály a meccs elején kihagyta), ugrás után
+    a KÖVETKEZŐRE lép (nem ragad le), vissza az ugrott elől lép."""
+    from handball.pipeline.view3d_html import LAPOZO_JS
+
+    js = (LAPOZO_JS + "\nconst E = " + json.dumps(
+        [list(e[:4]) for e in LAPOZO_ESETEK]) + ";\n"
+        "console.log(JSON.stringify(E.map(e => lapozCel(e[0], e[1], e[2], e[3]))));\n")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [e[4] for e in LAPOZO_ESETEK]
+
+
+def test_az_app_lapozoja_ugyanazt_a_tablat_futtatja():
+    """A Dart-tükör (court_geometry.lapozCel) tesztje ugyanazt az
+    esettáblát futtatja — a táblát innen olvassuk ki és vetjük össze."""
+    from pathlib import Path
+
+    teszt = (Path(__file__).resolve().parent.parent.parent / "client" /
+             "test" / "court_geometry_test.dart").read_text(encoding="utf-8")
+    for idok, most, utolso, irany, cel in LAPOZO_ESETEK:
+        sor = (f"lapozCel({[float(x) for x in idok]}, {float(most)}, "
+               f"{'null' if utolso is None else float(utolso)}, {irany}), "
+               f"{'isNull' if cel is None else float(cel)}")
+        assert sor in teszt, sor
+
+
 def _modul_szkript(oldal: str) -> str:
     m = re.search(r'<script type="module">(.*?)</script>', oldal, re.S)
     assert m, "nincs modul-szkript"
@@ -495,6 +569,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "_falStop", '"Megállítás: ${st.first["hol"]}',
                 "_passzsavok(", "passzsavok: _passzsav", "Passzsávok",
                 "fetchDecisionMoments", "_dontesUgras", "_aktivDontes",
+                "fetchFreeShots", "_szabadUgras", "_aktivSzabad",
+                "szabad: _aktivSzabad(m)",
                 "dontes: _aktivDontes(m)",
                 "feltoresSav: fal.$3"):
         assert jel in kepernyo, jel

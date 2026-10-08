@@ -1478,6 +1478,20 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Szabad lövők (GET /matches/{id}/free-shots): a kapott lövések, ahol
+  /// a lövőtől 2 m-en belül nem volt mezőnyvédő — {"moments": [{"s",
+  /// "defending","shooter","defender","dist","goal","xg","zone"}],
+  /// "shots_against", "free_shots", "radius_m"}.
+  Future<Map<String, dynamic>> fetchFreeShots(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/free-shots"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a szabad lövéseket", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// 7 a 6 elleni (üres kapus) szakaszok (GET /matches/{id}/empty-net).
   Future<List<Map<String, dynamic>>> fetchEmptyNet(String matchId) async {
     final resp = await http

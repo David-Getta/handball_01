@@ -47,6 +47,19 @@ void main() {
 
   // A passzsávok a backend `court3d.pass_lanes` számait adják — a várt
   // értékek a Python-függvényből (decisions.pass_completion modellje).
+  // A pillanat-lapozó a böngésző lapozCel-jével azonos esettáblát futtat
+  // (a backend-teszt LAPOZO_ESETEK táblája).
+  test("lapozCel: az első pillanat elérhető, nem ragad le", () {
+    expect(lapozCel([1.12, 2.28, 6.0], 0.0, null, 1), 1.12);
+    expect(lapozCel([1.12, 2.28, 6.0], 0.0, 1.12, 1), 2.28);
+    expect(lapozCel([1.12, 2.28, 6.0], 0.78, 2.28, 1), 6.0);
+    expect(lapozCel([1.12, 2.28, 6.0], 4.5, 6.0, -1), 2.28);
+    expect(lapozCel([1.12, 2.28, 6.0], 20.0, 6.0, -1), 6.0);
+    expect(lapozCel([1.12, 2.28, 6.0], 20.0, 6.0, 1), isNull);
+    expect(lapozCel([1.12, 2.28, 6.0], 0.0, null, -1), isNull);
+    expect(lapozCel([5.0], 3.4, null, 1), 5.0);
+  });
+
   test("passLanes = a backend pass_lanes", () {
     _ellenoriz([(true, 18.1, 17.1), (false, 7.4, 10.2), (false, 3.8, 6.1), (false, 21.5, 17.8), (false, 23.8, 7.9), (true, 26.2, 12.3), (false, 24.9, 16.6), (false, 2.4, 3.8), (false, 24.0, 15.6)], const Offset(25.78, 14.7), (24.0, 15.6), [(0.5013, 0, "kockázatos"), (0.3622, 0, "kockázatos"), (0.9049, 0, "nyitott"), (0.7799, 0, "nyitott"), (0.9616, 0, "nyitott"), (0.2968, 0, "zárt")]);
     expect(passLanes([(false, 25.6, 10.0), (false, 18.3, 5.6), (false, 28.3, 6.3), (false, 20.5, 0.6), (false, 16.0, 16.9), (true, 2.7, 0.3), (false, 8.5, 18.5), (false, 18.8, 19.6), (true, 16.8, 11.3), (false, 31.1, 5.4)], const Offset(16.98, 2.21)), isNull);

@@ -196,3 +196,51 @@ def test_kevés_passznal_nincs_dontes_pillanat():
                                          away_team="B", fps=25.0), []))
     assert d == {"moments": [], "passes": {"home": 0, "away": 0},
                  "flagged": {"home": 0, "away": 0}}
+
+
+def test_szabad_lovok_a_vedekezes_elemzes_iteletevel():
+    """A szabad lövők pillanatai a defense_analysis lövés-soraiból: annyi,
+    ahány szabad lövést a védekezés-elemzés számolt, a távolság a
+    fedezés-sugár fölött, a védő helyéből újraszámolva egyezik."""
+    import math
+
+    from handball.pipeline.court3d import free_shot_moments
+    from handball.pipeline.defense import FREE_DEF_RADIUS_M, defense_analysis
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=240, fps=25.0, seed=5,
+                              shots_per_min=8)
+    fs = free_shot_moments(m)
+    da = defense_analysis(m)
+    assert fs["radius_m"] == FREE_DEF_RADIUS_M
+    for side in ("home", "away"):
+        assert fs["free_shots"][side] == da[side]["free_shots"]
+        assert sum(1 for x in fs["moments"] if x["defending"] == side) == \
+            da[side]["free_shots"]
+    assert fs["moments"], "a szimuláción van szabad lövés"
+    assert [x["s"] for x in fs["moments"]] == sorted(x["s"] for x in fs["moments"])
+    for x in fs["moments"]:
+        assert x["dist"] > FREE_DEF_RADIUS_M
+        if x["defender"] is not None:
+            d = math.hypot(x["defender"][0] - x["shooter"][0],
+                           x["defender"][1] - x["shooter"][1])
+            assert abs(d - x["dist"]) < 0.02
+
+
+def test_a_vedekezes_elemzes_lovessorai_viszik_a_helyet_es_a_vedot():
+    """A defense_analysis lövés-sorai a régi mezők mellett a helyet, a
+    mért kockát és a legközelebbi védőt is viszik; fedezett lövésnél a
+    távolság a sugáron belül van."""
+    from handball.pipeline.defense import FREE_DEF_RADIUS_M, defense_analysis
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=240, fps=25.0, seed=5,
+                              shots_per_min=8)
+    sorok = [sh for side in ("home", "away")
+             for sh in defense_analysis(m)[side]["shots"]]
+    assert sorok
+    for sh in sorok:
+        assert {"t", "zone", "free", "xg", "goal", "x", "y", "release_t",
+                "defender", "def_dist"} <= set(sh)
+        if sh["free"] is False:
+            assert sh["def_dist"] <= FREE_DEF_RADIUS_M

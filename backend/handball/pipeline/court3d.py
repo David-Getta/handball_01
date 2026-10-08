@@ -371,3 +371,45 @@ def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
         })
     moments.sort(key=lambda m_: m_["s"])
     return {"moments": moments, "passes": passes, "flagged": flagged}
+
+
+
+# ---- Szabad lövők: a fedezés-hibák pillanatai ----------------------------
+#
+# A védekezés-elemzés (defense.defense_analysis) minden kapott lövésnél
+# megméri a legközelebbi mezőnyvédő távolságát, és SZABADNAK mondja, ha az
+# FREE_DEF_RADIUS_M (2 m) fölött van — de csak arányt ad ("a lövők 84%-át
+# szabadon hagyják"). Itt a PILLANATOK: a 3D odaugrik, és megmutatja a
+# lövőt, a 2 m-es fedezés-kört és a legközelebbi védőt.
+
+
+def free_shot_moments(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """A szabadon hagyott lövők pillanatai (a VÉDEKEZŐ csapat szerint).
+
+    Forrás: a defense_analysis lövés-sorai (ugyanaz a "szabad" ítélet és
+    távolság, ugyanazon az elengedési kockán) — a 3D nem mondhat mást,
+    mint a védekezés-elemzés.
+
+    Visszatérés: {"moments": [{"s", "defending", "shooter": [x, y],
+    "defender": [x, y] | None, "dist", "goal", "xg", "zone"}] időrendben,
+    "shots_against": {"home"/"away": db}, "free_shots": {...: db},
+    "radius_m": FREE_DEF_RADIUS_M}."""
+    from .defense import FREE_DEF_RADIUS_M, defense_analysis
+
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    d = defense_analysis(match, config)
+    moments = []
+    for side in ("home", "away"):
+        for sh in d[side]["shots"]:
+            if sh.get("free") is not True:
+                continue
+            moments.append({
+                "s": round(sh["release_t"] / fps, 2), "defending": side,
+                "shooter": [sh["x"], sh["y"]], "defender": sh["defender"],
+                "dist": sh["def_dist"], "goal": bool(sh["goal"]),
+                "xg": round(float(sh["xg"]), 3), "zone": sh["zone"]})
+    moments.sort(key=lambda m_: (m_["s"], m_["defending"]))
+    return {"moments": moments,
+            "shots_against": {k: d[k]["shots_against"] for k in ("home", "away")},
+            "free_shots": {k: d[k]["free_shots"] for k in ("home", "away")},
+            "radius_m": FREE_DEF_RADIUS_M}
