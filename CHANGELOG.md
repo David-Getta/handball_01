@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.159 óta)
+## v0.1.160 — kiadva (2026-10-08)
+
+> Kiadás-jegyzet: a 3D pályán mostantól a hibák JELENETEI is
+> megnézhetők — ◀ ▶ lapozóval a rossz döntések (ahol jobb opció is
+> volt), a szabadon hagyott lövők és a labdavesztések (ki, hol,
+> kipréselve vagy magától, gól lett-e belőle), csapatra szűrve ("Kinek
+> a hibái"). Új élő rétegek: passzsávok (nyitott / kockázatos / zárt)
+> és fal-rések (hol nyílik a védőfal). A Klipek képernyőn két új
+> csomag: drága eladások és döntés-hibák. Javítva: a felderítés
+> posztonkénti gól-eloszlása és a rá épülő meccsterv-szabályok eddig
+> sosem jelentek meg; az appban az eszköz-panel nem lóg le a képről.
 
 - **Felderítés: a szélső- és a poszt-gólok eddig mindig üresek
   voltak** (javítás): a felderítés a match_xg-t a saját, a függvényben
