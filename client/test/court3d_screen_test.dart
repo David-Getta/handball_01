@@ -227,6 +227,32 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("kinek a hibái: a szűrő a lapozók számát és célját szűri",
+      (tester) async {
+    await _nyit(tester);
+    // A demóban a döntések és a labdavesztések a hazaié, a szabad lövők a
+    // vendég védekezéséé: vendégre szűrve csak a szabad lövők maradnak.
+    final szuro = find.text("Hibák: mindkét csapat");
+    await tester.ensureVisible(szuro);
+    await tester.pump();
+    await tester.tap(szuro);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text("Hibák: Demó Vendég").last);
+    await tester.pump(const Duration(milliseconds: 300));
+    final kovEladas = find.byTooltip("Következő labdavesztés");
+    final gomb = tester.widget<IconButton>(find.ancestor(
+        of: find.byIcon(Icons.chevron_right),
+        matching: find.byType(IconButton)).at(2));
+    expect(gomb.onPressed, isNull, reason: "a vendégnek nincs eladása");
+    expect(tester.widget<IconButton>(find.ancestor(
+            of: find.byIcon(Icons.chevron_right),
+            matching: find.byType(IconButton)).at(1)).onPressed,
+        isNotNull, reason: "a vendég szabad lövései maradnak");
+    expect(kovEladas, findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("labda-nyom gomb: be/ki", (tester) async {
     await _nyit(tester);
     await tester.tap(find.text("Labda-nyom (3 mp)"));
@@ -267,7 +293,11 @@ void main() {
     expect(talalt, isTrue, reason: "egy lövés-kört sem talált a koppintás");
     expect(find.textContaining("· xG "), findsOneWidget);
     expect(find.textContaining("Lövés-mérés"), findsOneWidget);
-    // "Eddig" módban a lejátszófej előtti lövések látszanak csak.
+    // "Eddig" módban a lejátszófej előtti lövések látszanak csak. (A
+    // panel a Madártávlathoz görgetve — a választót előbb láthatóvá kell
+    // görgetni, ahogy a felhasználó is tenné.)
+    await tester.ensureVisible(find.text("Minden lövés"));
+    await tester.pump();
     await tester.tap(find.text("Minden lövés"));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text("Lövések eddig").last);

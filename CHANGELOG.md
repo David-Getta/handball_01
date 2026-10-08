@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.159 óta)
 
+- **3D pálya: "Kinek a hibái" szűrő a jelenet-lapozókhoz** (új,
+  böngészős/VR és appbeli nézet): a három lapozó (Döntések, Szabad
+  lövők, Labdavesztések) mind egy csapat HIBÁJÁT mutatja — a rossz
+  döntést hozó, a lövőt szabadon hagyó, a labdát elvesztő csapatét. A
+  szűrővel csak a saját (videóelemzés a csapatnak) vagy csak az
+  ellenfél jelenetei (felkészülés ellenük) lapozhatók és rajzolódnak
+  ki; a számlálók a szűrt számot mutatják. Link-paraméter:
+  `jelenet=hazai|vendeg`. Közben a lövéstérkép widget-tesztje
+  stabilabb lett: a hosszabb panelen a választót kattintás előtt
+  láthatóvá görgeti (a célt tévesztő koppintás azóta hiba).
+
 - **3D pálya: fal-rések** (új, böngészős/VR és appbeli nézet): a
   "Fal-rések" kapcsolóval szervezett védekezésben a védőfal szomszédos
   védői közt sáv fut a padlón — zöld, ha zárt, piros, ha a rés eléri a

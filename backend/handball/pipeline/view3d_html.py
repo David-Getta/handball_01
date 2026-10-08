@@ -436,6 +436,9 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <button class="nezet" data-n="madar">Madártávlat</button>
  </div>
  <div class="sor">
+  <label title="A jelenet-lapozók (Döntések, Szabad lövők, Labdavesztések) csak ennek a csapatnak a hibáit mutatják: a rossz döntést, a szabadon hagyott lövőt, az elvesztett labdát">Kinek a hibái: <select id="jelenetCsapat"><option value="mind">mindkét csapat</option><option value="hazai">hazai</option><option value="vendeg">vendég</option></select></label>
+ </div>
+ <div class="sor">
   <span title="Passz-döntések, ahol a modell szerint jobb opció is volt">Döntések:</span>
   <button id="dontesElozo" title="Előző döntés-pillanat">◀</button>
   <button id="dontesKov" title="Következő döntés-pillanat">▶</button>
@@ -473,6 +476,7 @@ Fal-rések — a védőfal szomszédos védői közt: zöld zárt, piros a 3,5 m
 Döntések ◀ ▶ — ahol jobb opció is volt: fehér a választott passz, arany a jobb (passz vagy lövés)<br>
 Szabad lövők ◀ ▶ — a fedezés-hibák: piros kör a lövő körül (2 m), vonal a legközelebbi védőhöz<br>
 Labdavesztések ◀ ▶ — narancs kör a vesztő körül (a nyomás-sugár), vonal a legközelebbi ellenfélhez, X a labdánál<br>
+Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
@@ -1339,6 +1343,7 @@ function linkEpit(){
   if (nyomKapcsolo.checked) q.set("nyom", "1");
   if (passzsavKapcsolo.checked) q.set("passzsav", "1");
   if (falresKapcsolo.checked) q.set("falres", "1");
+  if (jelenetCsapat.value !== "mind") q.set("jelenet", jelenetCsapat.value);
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -1359,6 +1364,9 @@ function linkAlkalmaz(){
   if (v("nyom") === "1") nyomKapcsolo.checked = true;
   if (v("passzsav") === "1") passzsavKapcsolo.checked = true;
   if (v("falres") === "1") falresKapcsolo.checked = true;
+  if (v("jelenet") === "hazai" || v("jelenet") === "vendeg"){
+    jelenetCsapat.value = v("jelenet"); jelenetInfok();
+  }
   if (v("seb")){ sebessegValaszto.value = v("seb"); sebessegValaszto.onchange(); }
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
   if (v("tv") === "1") modValt("tv");
@@ -1461,6 +1469,29 @@ function falresFrissit(t){
     : "zárt — a legnagyobb rés " + szam1(r.max) + " m");
 }
 
+// ---- Jelenet-szűrő: kinek a hibái ---------------------------------------
+// A három lapozó mind egy csapat HIBÁJÁT mutatja — a rossz döntést hozó, a
+// lövőt szabadon hagyó és a labdát elvesztő csapatét; a sorok 2. eleme
+// (hazai?) épp ez a csapat. A szűrővel csak a saját vagy csak az ellenfél
+// jelenetei lapozhatók (és rajzolódnak ki).
+const jelenetCsapat = document.getElementById("jelenetCsapat");
+jelenetCsapat.options[1].textContent = ADAT.home;
+jelenetCsapat.options[2].textContent = ADAT.away;
+function szurt(lista){
+  const v = jelenetCsapat.value;
+  return v === "mind" ? lista : lista.filter(d => !!d[1] === (v === "hazai"));
+}
+function jelenetInfok(){
+  const n = (lista) => szurt(lista).length;
+  dontesInfo.textContent = n(DONTESEK) ? n(DONTESEK) + " pillanat" : "nincs ilyen pillanat";
+  document.getElementById("szabadInfo").textContent = n(SZABADOK) ? n(SZABADOK) + " lövés" : "nincs ilyen";
+  document.getElementById("eladasInfo").textContent = n(ELADASOK) ? n(ELADASOK) + " eladás" : "nincs ilyen";
+}
+jelenetCsapat.onchange = () => {
+  jelenetInfok();
+  dontesUtolso = null; szabadUtolso = null; eladasUtolso = null;
+};
+
 // ---- Döntés-pillanatok: ahol jobb opció is volt -----------------------
 // ◀ ▶ a pillanatok közt ugrik (1,5 mp-cel előtte, lejátszva); a pillanat
 // körül a választott passz FEHÉR, a jobb opció ARANY vonal, a felirat
@@ -1470,11 +1501,10 @@ const dontesCsoport = new THREE.Group();
 szinpad.add(dontesCsoport);
 const dontesFelirat = document.getElementById("dontesFelirat");
 const dontesInfo = document.getElementById("dontesInfo");
-dontesInfo.textContent = DONTESEK.length ? DONTESEK.length + " pillanat" : "nincs ilyen pillanat";
 let dontesUtolso = null;
 function dontesUgras(irany){
-  if (!DONTESEK.length) return;
-  const cel = lapozCel(DONTESEK.map(d => d[0]), ido, dontesUtolso, irany);
+  if (!szurt(DONTESEK).length) return;
+  const cel = lapozCel(szurt(DONTESEK).map(d => d[0]), ido, dontesUtolso, irany);
   if (cel === null) return;
   dontesUtolso = cel;
   ido = Math.max(0, cel - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
@@ -1485,7 +1515,7 @@ document.getElementById("dontesKov").onclick = () => dontesUgras(1);
 function szam2(v){ return v.toFixed(2).replace(".", ","); }
 function dontesFrissit(t){
   while (dontesCsoport.children.length) dontesCsoport.remove(dontesCsoport.children[0]);
-  const d = DONTESEK.find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  const d = szurt(DONTESEK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
   // A szabad lövés felirata KÜLÖN dobozban (a döntés-felirat alatt): két
   // egyszerre aktív pillanat nem takarhatja el egymást.
   const szabadSzoveg = szabadFrissit(t);
@@ -1525,11 +1555,10 @@ const szabadKor = new THREE.Mesh(new THREE.RingGeometry(SZ_SUGAR - 0.08, SZ_SUGA
   new THREE.MeshBasicMaterial({color: 0xff6b6b, side: THREE.DoubleSide, transparent: true, opacity: 0.9}));
 szabadKor.rotation.x = -Math.PI/2; szabadKor.visible = false;
 szinpad.add(szabadKor);
-document.getElementById("szabadInfo").textContent = SZABADOK.length ? SZABADOK.length + " lövés" : "nincs ilyen";
 let szabadUtolso = null;
 function szabadUgras(irany){
-  if (!SZABADOK.length) return;
-  const cel = lapozCel(SZABADOK.map(d => d[0]), ido, szabadUtolso, irany);
+  if (!szurt(SZABADOK).length) return;
+  const cel = lapozCel(szurt(SZABADOK).map(d => d[0]), ido, szabadUtolso, irany);
   if (cel === null) return;
   szabadUtolso = cel;
   ido = Math.max(0, cel - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
@@ -1539,7 +1568,7 @@ document.getElementById("szabadElozo").onclick = () => szabadUgras(-1);
 document.getElementById("szabadKov").onclick = () => szabadUgras(1);
 function szabadFrissit(t){
   while (szabadCsoport.children.length) szabadCsoport.remove(szabadCsoport.children[0]);
-  const d = SZABADOK.find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  const d = szurt(SZABADOK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
   if (!d){ szabadKor.visible = false; return null; }
   const [mp, vedHazai, sx, sy, dx, dy, tav, gol, xg] = d;
   szabadKor.position.set(sx, 0.03, W - sy); szabadKor.visible = true;
@@ -1570,11 +1599,10 @@ const eladasKor = new THREE.Mesh(new THREE.RingGeometry(EL_SUGAR - 0.08, EL_SUGA
   new THREE.MeshBasicMaterial({color: 0xff9f43, side: THREE.DoubleSide, transparent: true, opacity: 0.9}));
 eladasKor.rotation.x = -Math.PI/2; eladasKor.visible = false;
 szinpad.add(eladasKor);
-document.getElementById("eladasInfo").textContent = ELADASOK.length ? ELADASOK.length + " eladás" : "nincs ilyen";
 let eladasUtolso = null;
 function eladasUgras(irany){
-  if (!ELADASOK.length) return;
-  const cel = lapozCel(ELADASOK.map(d => d[0]), ido, eladasUtolso, irany);
+  if (!szurt(ELADASOK).length) return;
+  const cel = lapozCel(szurt(ELADASOK).map(d => d[0]), ido, eladasUtolso, irany);
   if (cel === null) return;
   eladasUtolso = cel;
   ido = Math.max(0, cel - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
@@ -1584,7 +1612,7 @@ document.getElementById("eladasElozo").onclick = () => eladasUgras(-1);
 document.getElementById("eladasKov").onclick = () => eladasUgras(1);
 function eladasFrissit(t){
   while (eladasCsoport.children.length) eladasCsoport.remove(eladasCsoport.children[0]);
-  const d = ELADASOK.find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  const d = szurt(ELADASOK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
   if (!d){ eladasKor.visible = false; return null; }
   const [mp, hazai, mez, lx, ly, bx, by, harmad, ox, oy, tav, kipres, golMp] = d;
   const szin = 0xff9f43;
@@ -1615,6 +1643,8 @@ function eladasFrissit(t){
   return "<b>" + (hazai ? ADAT.home : ADAT.away) + "</b> labdavesztés — " + ki + " · " + hol +
     " · " + nyomas + gol;
 }
+
+jelenetInfok();
 
 // ---- Lövéstérkép: a meccs lövései a padlón --------------------------
 // Egy lövés = egy kör a lövés helyén: a csapat színével, a sugara az

@@ -153,6 +153,10 @@ class _Court3DScreenState extends State<Court3DScreen>
   // (a nyomás-sugár), vonal a legközelebbi ellenfélhez, X a labdánál.
   List<Map<String, dynamic>> _eladasok = const [];
   double _eladasSugar = 2.5;
+  // KINEK A HIBÁI: a három lapozó (Döntések, Szabad lövők, Labdavesztések)
+  // mind egy csapat hibáját mutatja — "" mindkettő, "home" / "away" csak
+  // az egyiké (a böngészős nézet jelenet-szűrőjének párja).
+  String _jelenetCsapat = "";
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
@@ -699,10 +703,10 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// A lejátszófejnél aktív döntés-pillanat (−0,3…+2,5 mp a döntés körül),
   /// vagy null.
   Map<String, dynamic>? _aktivDontes(Match m) {
-    if (_dontesek.isEmpty || m.frames.isEmpty) return null;
+    if (_dontesekSz.isEmpty || m.frames.isEmpty) return null;
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
     final most = _mostT(m) / fps;
-    for (final d in _dontesek) {
+    for (final d in _dontesekSz) {
       final s = ((d["s"] as num?) ?? 0).toDouble();
       if (most >= s - 0.3 && most <= s + 2.5) return d;
     }
@@ -712,9 +716,21 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// Ugrás az előző/következő döntés-pillanatra (1,5 mp-cel előtte,
   /// lejátszva) — a böngészős nézet ◀ ▶ gombjainak párja.
   void _dontesUgras(Match m, int irany) {
-    final cel = _pillanatUgras(m, _dontesek, _dontesUtolso, irany);
+    final cel = _pillanatUgras(m, _dontesekSz, _dontesUtolso, irany);
     if (cel != null) _dontesUtolso = cel;
   }
+
+  /// A szűrt pillanat-lista: a hibát elkövető csapat a `kulcs` mezőben
+  /// (döntés: "team", szabad lövés: "defending", labdavesztés: "team").
+  List<Map<String, dynamic>> _szurt(
+          List<Map<String, dynamic>> lista, String kulcs) =>
+      _jelenetCsapat.isEmpty
+          ? lista
+          : [for (final d in lista) if (d[kulcs] == _jelenetCsapat) d];
+  List<Map<String, dynamic>> get _dontesekSz => _szurt(_dontesek, "team");
+  List<Map<String, dynamic>> get _szabadokSz =>
+      _szurt(_szabadok, "defending");
+  List<Map<String, dynamic>> get _eladasokSz => _szurt(_eladasok, "team");
 
   /// A közös pillanat-ugrás: a cél a lapozCel szerint (court_geometry),
   /// a lejátszófej 1,5 mp-cel elé, lejátszva. Visszaadja a cél idejét.
@@ -737,10 +753,10 @@ class _Court3DScreenState extends State<Court3DScreen>
 
   /// A lejátszófejnél aktív szabad lövés (−0,3…+2,5 mp), vagy null.
   Map<String, dynamic>? _aktivSzabad(Match m) {
-    if (_szabadok.isEmpty || m.frames.isEmpty) return null;
+    if (_szabadokSz.isEmpty || m.frames.isEmpty) return null;
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
     final most = _mostT(m) / fps;
-    for (final d in _szabadok) {
+    for (final d in _szabadokSz) {
       final s = ((d["s"] as num?) ?? 0).toDouble();
       if (most >= s - 0.3 && most <= s + 2.5) return d;
     }
@@ -749,7 +765,7 @@ class _Court3DScreenState extends State<Court3DScreen>
 
   /// Ugrás az előző/következő szabad lövésre (1,5 mp-cel előtte).
   void _szabadUgras(Match m, int irany) {
-    final cel = _pillanatUgras(m, _szabadok, _szabadUtolso, irany);
+    final cel = _pillanatUgras(m, _szabadokSz, _szabadUtolso, irany);
     if (cel != null) _szabadUtolso = cel;
   }
 
@@ -770,10 +786,10 @@ class _Court3DScreenState extends State<Court3DScreen>
 
   /// A lejátszófejnél aktív labdavesztés (−0,3…+2,5 mp), vagy null.
   Map<String, dynamic>? _aktivEladas(Match m) {
-    if (_eladasok.isEmpty || m.frames.isEmpty) return null;
+    if (_eladasokSz.isEmpty || m.frames.isEmpty) return null;
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
     final most = _mostT(m) / fps;
-    for (final d in _eladasok) {
+    for (final d in _eladasokSz) {
       final s = ((d["s"] as num?) ?? 0).toDouble();
       if (most >= s - 0.3 && most <= s + 2.5) return d;
     }
@@ -782,7 +798,7 @@ class _Court3DScreenState extends State<Court3DScreen>
 
   /// Ugrás az előző/következő labdavesztésre (1,5 mp-cel előtte).
   void _eladasUgras(Match m, int irany) {
-    final cel = _pillanatUgras(m, _eladasok, _eladasUtolso, irany);
+    final cel = _pillanatUgras(m, _eladasokSz, _eladasUtolso, irany);
     if (cel != null) _eladasUtolso = cel;
   }
 
@@ -1821,6 +1837,45 @@ class _Court3DScreenState extends State<Court3DScreen>
           ),
         ),
       ),
+      // Kinek a hibái: a jelenet-lapozók csapat-szűrője.
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: _jelenetCsapat.isNotEmpty
+                ? AppColors.accent.withOpacity(0.15)
+                : AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.borderStrong),
+          ),
+          child: DropdownButton<String>(
+            value: _jelenetCsapat,
+            underline: const SizedBox.shrink(),
+            dropdownColor: AppColors.surface,
+            style: AppText.label.copyWith(fontSize: 11.5),
+            items: [
+              const DropdownMenuItem(
+                  value: "", child: Text("Hibák: mindkét csapat")),
+              DropdownMenuItem(
+                  value: "home",
+                  child: Text("Hibák: ${_match?.meta.homeTeam ?? "hazai"}")),
+              DropdownMenuItem(
+                  value: "away",
+                  child: Text("Hibák: ${_match?.meta.awayTeam ?? "vendég"}")),
+            ],
+            onChanged: (v) {
+              setState(() {
+                _jelenetCsapat = v ?? "";
+                _dontesUtolso = null;
+                _szabadUtolso = null;
+                _eladasUtolso = null;
+              });
+              _focus.requestFocus();
+            },
+          ),
+        ),
+      ),
       // Döntés-pillanatok: ahol jobb opció is volt (◀ ▶).
       Padding(
         padding: const EdgeInsets.only(bottom: 6),
@@ -1829,7 +1884,7 @@ class _Court3DScreenState extends State<Court3DScreen>
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: "Előző döntés-pillanat",
-            onPressed: _dontesek.isEmpty || _match == null
+            onPressed: _dontesekSz.isEmpty || _match == null
                 ? null
                 : () => _dontesUgras(_match!, -1),
             icon: const Icon(Icons.chevron_left, size: 20),
@@ -1837,12 +1892,12 @@ class _Court3DScreenState extends State<Court3DScreen>
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: "Következő döntés-pillanat",
-            onPressed: _dontesek.isEmpty || _match == null
+            onPressed: _dontesekSz.isEmpty || _match == null
                 ? null
                 : () => _dontesUgras(_match!, 1),
             icon: const Icon(Icons.chevron_right, size: 20),
           ),
-          Text(_dontesek.isEmpty ? "nincs" : "${_dontesek.length}",
+          Text(_dontesekSz.isEmpty ? "nincs" : "${_dontesekSz.length}",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -1854,7 +1909,7 @@ class _Court3DScreenState extends State<Court3DScreen>
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: "Előző szabadon hagyott lövő",
-            onPressed: _szabadok.isEmpty || _match == null
+            onPressed: _szabadokSz.isEmpty || _match == null
                 ? null
                 : () => _szabadUgras(_match!, -1),
             icon: const Icon(Icons.chevron_left, size: 20),
@@ -1862,12 +1917,12 @@ class _Court3DScreenState extends State<Court3DScreen>
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: "Következő szabadon hagyott lövő",
-            onPressed: _szabadok.isEmpty || _match == null
+            onPressed: _szabadokSz.isEmpty || _match == null
                 ? null
                 : () => _szabadUgras(_match!, 1),
             icon: const Icon(Icons.chevron_right, size: 20),
           ),
-          Text(_szabadok.isEmpty ? "nincs" : "${_szabadok.length}",
+          Text(_szabadokSz.isEmpty ? "nincs" : "${_szabadokSz.length}",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -1880,7 +1935,7 @@ class _Court3DScreenState extends State<Court3DScreen>
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: "Előző labdavesztés",
-            onPressed: _eladasok.isEmpty || _match == null
+            onPressed: _eladasokSz.isEmpty || _match == null
                 ? null
                 : () => _eladasUgras(_match!, -1),
             icon: const Icon(Icons.chevron_left, size: 20),
@@ -1888,12 +1943,12 @@ class _Court3DScreenState extends State<Court3DScreen>
           IconButton(
             visualDensity: VisualDensity.compact,
             tooltip: "Következő labdavesztés",
-            onPressed: _eladasok.isEmpty || _match == null
+            onPressed: _eladasokSz.isEmpty || _match == null
                 ? null
                 : () => _eladasUgras(_match!, 1),
             icon: const Icon(Icons.chevron_right, size: 20),
           ),
-          Text(_eladasok.isEmpty ? "nincs" : "${_eladasok.length}",
+          Text(_eladasokSz.isEmpty ? "nincs" : "${_eladasokSz.length}",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),

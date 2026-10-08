@@ -106,6 +106,11 @@ feliratok egymás alatt):
 A ▶ az utoljára nézett jelenettől lép tovább (nem ragad le, és a meccs
 legelső pillanatai is elérhetők).
 
+A **Kinek a hibái** választó a három lapozót egy csapatra szűri: mind
+a három egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott
+lövőt, az elvesztett labdát) — a saját csapatra szűrve videóelemzés a
+játékosoknak, az ellenfélre szűrve felkészülés ellenük.
+
 ## Jelenet megosztása
 
 A böngészős nézet **Link másolása** gombja a MOSTANI jelenetet adja
@@ -117,7 +122,7 @@ küldesz a stábnak, nem egy meccset. A paraméterek:
 /matches/<meccs>/view3d?t=349&nezet=madar
    &kamera=h7 | &tv=1
    &hoter=mind&loves=hazai&passz=vendeg&fal=6-0&falOldal=jobb
-   &nyom=1&passzsav=1&falres=1&seb=2
+   &nyom=1&passzsav=1&falres=1&jelenet=vendeg&seb=2
 ```
 
 ## VR-headset
