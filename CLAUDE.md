@@ -176,6 +176,16 @@ a szabály tényleg megszólal. A `tests/test_player_training.py`
 menet közben el is kapott egy ilyet (a `match_xg` lövő-sorai nem
 tartalmaznak `jersey` mezőt, a `player_fatigue` sorai sem).
 
+Az elnyelt KIVÉTEL ellen külön őr van: a `tests/test_nema_kivetelek.py`
+nyomkövetővel lefuttatja az összefoglalót, a felderítést, a meccstervet
+és az edzés-fókuszt, és minden kivételt összegyűjt, ami a handball-kódban
+születik — elnyelve is. Ez fogta meg, hogy a felderítés a `match_xg`-t
+a saját, a függvényben KÉSŐBB álló helyi importja előtt használta: a
+függvényben BÁRHOL importált név az EGÉSZ függvényben lokális, a korai
+sor UnboundLocalError-t dob (a szélső- és poszt-gólok így minden
+jelentésben üresek voltak). Tehát: a helyi import a HASZNÁLAT ELŐTT
+álljon, ugyanabban a blokkban.
+
 ## Számláló-frissítés (recept végén)
 
 Réteg-commit után frissítsd ITT: meccsterv-szabály következő száma,

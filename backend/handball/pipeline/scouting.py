@@ -10708,6 +10708,12 @@ def _scout_team_cached(match: Match, team: Team,
                          .get(team.value, {}).items()}
         wings = {tid for tid, p_ in rep.positions.items()
                  if p_ == "szélső"}
+        # Helyi import ITT: a függvény egy későbbi blokkja is importálja
+        # a match_xg-t, ezért a Python az EGÉSZ függvényben lokális
+        # névnek veszi — import nélkül ez a sor UnboundLocalError-t
+        # dobott, amit a try/except némán elnyelt (a szélső- és poszt-
+        # gólok minden felderítésben üresek maradtak).
+        from .xg import match_xg
         for rec_sh in match_xg(match, config).get("shooters", []):
             if rec_sh["team"] != team.value:
                 continue

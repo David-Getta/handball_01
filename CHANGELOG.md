@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.159 óta)
 
+- **Felderítés: a szélső- és a poszt-gólok eddig mindig üresek
+  voltak** (javítás): a felderítés a match_xg-t a saját, a függvényben
+  KÉSŐBB álló helyi importja előtt használta — a Python ezért az egész
+  függvényben lokális névnek vette, a sor hibát dobott, és a try/except
+  némán elnyelte. Következmény: a "Gól-eloszlás posztok szerint"
+  mondat sosem jelent meg a jelentésben, és a rá épülő edzői kulcs (a
+  szélső-függés) meg öt meccsterv-szabály (pl. "a szélekről jön a
+  góljaitok harmada…") sosem szólalhatott meg. Új őr-teszt a hibafajta
+  ellen: nyomkövetővel lefuttatja a négy nagy felületet (összefoglaló,
+  felderítés, meccsterv, edzés-fókusz) egy szimulált meccsen, és MINDEN
+  kivételt összegyűjt, ami a handball-kódban születik — akkor is, ha
+  elnyelték. Egy sem lehet (a régi kódon az őr pontos sorral megnevezi
+  a hibát). A végpontok (~470 réteg) ugyanilyen átvizsgálása tiszta volt.
+
 - **Klipek: "Drága eladások" és "Döntés-hibák" csomag** (új): a 3D
   pálya két jelenet-lapozója a videóvágóba is bekerült. A "Drága
   eladások" azok a labdavesztések, amelyekből fél percen belül kapott
