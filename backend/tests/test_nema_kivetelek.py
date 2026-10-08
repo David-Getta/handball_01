@@ -144,3 +144,34 @@ def test_a_felderites_kitolti_a_szelso_es_poszt_golokat():
     assert r.post_goals, "a poszt-gólok üresek"
     assert 0 < sum(r.post_goals.values()) <= r.wing_total_goals
     assert r.post_goals.get("szélső", 0) == r.wing_goals
+
+
+def test_a_beirt_elnyelt_kivetel_jelentes_ures():
+    """A kiadás előtti jelentés (scripts.swallowed_exceptions →
+    docs/ELNYELT_KIVETELEK.md) ÜRES listát mond: ha a futtatás talált
+    valamit, és a jelentés úgy került be, ez a teszt megállítja."""
+    from pathlib import Path
+
+    doc = (Path(__file__).resolve().parents[2] / "docs"
+           / "ELNYELT_KIVETELEK.md")
+    assert doc.exists(), "nincs elnyelt-kivétel jelentés — futtasd a szkriptet"
+    szoveg = doc.read_text(encoding="utf-8")
+    assert "Az elnyelt-kivétel lista üres" in szoveg
+    assert "JAVÍTANDÓ" not in szoveg and "Elbukott felületek" not in szoveg
+
+
+def test_a_jelentes_megnevezi_a_helyet_es_a_feluletet():
+    """A jelentés-építő a találatot hellyel (fájl:sor, függvény) és a
+    felülettel írja ki — ebből indul a javítás."""
+    from scripts.swallowed_exceptions import build_report
+
+    res = {"feluletek": 3, "elbukott": [("GET /x", "KeyError: 'a'")],
+           "talalat": {("UnboundLocalError", "pipeline/scouting.py", 10711,
+                        "_scout_team_cached"): {
+                            "n": 4, "uzenet": "match_xg",
+                            "feluletek": ["felderítés+meccsterv"]}}}
+    s = build_report(res, 120)
+    assert "JAVÍTANDÓ" in s
+    assert "`pipeline/scouting.py:10711` (_scout_team_cached), 4×" in s
+    assert "felderítés+meccsterv" in s and "GET /x: KeyError" in s
+    assert "lista üres" not in s

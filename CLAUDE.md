@@ -261,6 +261,22 @@ effektív fps = fps/3) másképp ítél-e. Az eltérés nem feltétlenül hiba
 (kevesebb minta → óvatosabb ítélet), de kocka-küszöbű új rétegnél
 tudd: a küszöböd valós időben HÁROMSZOROSÁT követeli a termékben.
 
+Az elnyelt-kivétel jelentése (`docs/ELNYELT_KIVETELEK.md`) szintén
+jelentés-szintű (~10 perc):
+
+```bash
+cd backend && python3 -m scripts.swallowed_exceptions
+```
+
+Amit néz: minden regisztrált réteg, a négy nagy felület (összefoglaló,
+felderítés + meccsterv, edzés-fókusz), az API meccs-szintű
+GET-végpontjai és a több meccses felületek (összevont felderítés,
+szezon- és egymás-elleni riport, könyvtár, játékos-trend) nyomkövetővel
+— minden kivétel, ami a handball-kódban születik, akkor is, ha egy
+try/except elnyelte (a szándékos HTTP-hibaválasz és a gyorsítótár
+fájl-hiánya nem hiba). A lista ÜRES, maradjon is az: a beírt jelentést
+teszt őrzi, a gyors, egy meccses párja a `tests/test_nema_kivetelek.py`.
+
 ## Commit-stílus
 
 - Cím: `<Réteg magyar neve>: egy réteg, sok felület`.
