@@ -5,6 +5,24 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.159 óta)
 
+- **3D pálya: labdavesztések** (új, böngészős/VR és appbeli nézet): a
+  "Labdavesztések ◀ ▶" gombok az elvesztett labdákra ugranak, és a
+  négy labdaeladás-réteg válaszát (KI veszít, HOL, kipréselik-e vagy
+  magától jön, mennyibe kerül) EGY jelenetre teszik: narancs kör a
+  vesztő körül (a 2,5 m-es nyomás-sugár — ezen belül álló ellenfél =
+  kipréselt eladás), szaggatott vonal a legközelebbi mezőnybeli
+  ellenfélhez, X a labdánál; a felirat: "Szeged labdavesztés — 7-es ·
+  a támadó harmadban · kipréselve (ellenfél 0,6 m-re) · 6,0 mp múlva
+  kapott gól". Ugyanazokból az eseményekből és küszöbökkel, mint a
+  turnover_zones, a pressured_turnovers és a turnover_punishment — teszt
+  őrzi, hogy a számok egyeznek. Új végpont:
+  `/matches/{id}/turnover-moments`. Közben javítva (app): a lövéstérkép
+  és a passz-háló összegzője a jobb alsó sarokban a panel ALJÁRA
+  rajzolódott, és eltakarta az alsó gombokat (Madártávlat…) — két
+  widget-teszt kattintása némán mellément. Az összegzők mostantól a
+  panel oszlopában, a gombok alatt ülnek, és a 3D-képernyő tesztjeiben
+  a célt tévesztő koppintás HIBA, nem csak figyelmeztetés.
+
 - **3D pálya: szabadon hagyott lövők** (új, böngészős/VR és appbeli
   nézet): a "Szabad lövők ◀ ▶" gombok a fedezés-hibákra ugranak — azokra
   a kapott lövésekre, ahol a lövőtől 2 m-en belül nem volt mezőnyvédő

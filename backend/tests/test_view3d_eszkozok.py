@@ -70,6 +70,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'id="dontesKov"', 'id="dontesElozo"', "function dontesUgras",
                 'id="szabadKov"', 'id="szabadElozo"', "function szabadUgras",
                 "function szabadFrissit",
+                'id="eladasKov"', 'id="eladasElozo"', "function eladasUgras",
+                "function eladasFrissit", 'id="eladasFelirat"',
                 "function dontesFrissit", "dontesFrissit(ido)",
                 "function passzsavFrissit", "passzsavFrissit();",
                 "const FELTORES = ADAT.breakpoints", '"Feltörés: <b>"',
@@ -206,6 +208,39 @@ def test_a_tomor_adat_es_a_vegpont_viszi_a_szabad_lovoket(tmp_path, monkeypatch)
     assert len(v["moments"]) == len(fs["moments"])
     assert c.get("/matches/nincs/free-shots").status_code == 404
 
+
+def test_a_tomor_adat_es_a_vegpont_viszi_a_labdavesztest(tmp_path, monkeypatch):
+    """A tömör adat "turnovers" sorai a turnover_moments pillanatai (13
+    mezős alak: a harmad indexe, a kipréselt 1/0/null), a nyomás-sugárral;
+    a /turnover-moments végpont ugyanazt adja, ismeretlen meccsre 404."""
+    from fastapi.testclient import TestClient
+    from test_court3d import _eladasos_meccs
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import turnover_moments
+    from handball.pipeline.view3d_html import _compact_data
+
+    m = _eladasos_meccs()
+    adat = _compact_data(m, None, {"home": [], "away": []},
+                         {"home": [], "away": []})
+    tm = turnover_moments(m)
+    assert adat["turnover_pressure"] == tm["pressure_m"]
+    assert len(adat["turnovers"]) == len(tm["moments"]) > 0
+    harmad = {"saját": 0, "közép": 1, "támadó": 2, None: None}
+    for r, x in zip(adat["turnovers"], tm["moments"]):
+        assert len(r) == 13 and r[0] == x["s"]
+        assert r[1] == (1 if x["team"] == "home" else 0)
+        assert r[2] == x["jersey"] and r[7] == harmad[x["zone"]]
+        assert r[10] == x["dist"] and r[12] == x["goal_after_s"]
+        assert r[11] == (None if x["forced"] is None else int(x["forced"]))
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    v = c.get(f"/matches/{m.meta.match_id}/turnover-moments").json()
+    assert len(v["moments"]) == len(tm["moments"])
+    assert v["punished"] == tm["punished"]
+    assert c.get("/matches/nincs/turnover-moments").status_code == 404
 
 def test_a_tomor_adat_viszi_a_passzokat():
     """A passz-sorok: [mp, hazai?, adó x, y, fogadó x, y] a felismerés
@@ -571,6 +606,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "fetchDecisionMoments", "_dontesUgras", "_aktivDontes",
                 "fetchFreeShots", "_szabadUgras", "_aktivSzabad",
                 "szabad: _aktivSzabad(m)",
+                "fetchTurnoverMoments", "_eladasUgras", "_aktivEladas",
+                "eladas: _aktivEladas(m)", "_pillanatFeliratok(m)",
                 "dontes: _aktivDontes(m)",
                 "feltoresSav: fal.$3"):
         assert jel in kepernyo, jel

@@ -162,6 +162,49 @@ List<Map<String, dynamic>> buildDemoDecisions(Match m, {int lepes = 25}) {
   return ki;
 }
 
+/// Demó labdavesztések a 3D "Labdavesztések" lapozójához (backend nélkül):
+/// a /turnover-moments "moments" alakjában, a demó-meccs két kockájából (a
+/// hazai labdás veszít, a legközelebbi vendég a nyomás) — SZINTETIKUS,
+/// csak a felület bemutatására.
+List<Map<String, dynamic>> buildDemoTurnovers(Match m) {
+  final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+  final ki = <Map<String, dynamic>>[];
+  for (final i in [m.frames.length * 3 ~/ 5, m.frames.length * 17 ~/ 20]) {
+    if (i <= 0 || i >= m.frames.length) continue;
+    final f = m.frames[i];
+    PlayerPosition? vesztes, ellen;
+    for (final p in f.players) {
+      if (p.team == Team.home && p.trackId == 2) vesztes = p;
+    }
+    if (vesztes == null) continue;
+    var legjobb = double.infinity;
+    for (final p in f.players) {
+      if (p.team != Team.away) continue;
+      final d = math.sqrt(math.pow(p.x - vesztes.x, 2) + math.pow(p.y - vesztes.y, 2));
+      if (d < legjobb) {
+        legjobb = d;
+        ellen = p;
+      }
+    }
+    if (ellen == null) continue;
+    final tav = (legjobb * 100).round() / 100;
+    ki.add({
+      "s": i / fps,
+      "team": "home",
+      "jersey": vesztes.jerseyNumber,
+      "loser": [vesztes.x, vesztes.y],
+      "ball": [vesztes.x + 0.4, vesztes.y],
+      "zone": "közép",
+      "opponent": [ellen.x, ellen.y],
+      "dist": tav,
+      "forced": tav <= 2.5,
+      "punished": ki.isEmpty,
+      "goal_after_s": ki.isEmpty ? 6.0 : null,
+    });
+  }
+  return ki;
+}
+
 /// Demó szabad lövők a 3D "Szabad lövők" lapozójához (backend nélkül): a
 /// /free-shots "moments" alakjában, a demó-lövésekből (a hazai lő, a
 /// vendég védekezik) — SZINTETIKUS, csak a felület bemutatására.

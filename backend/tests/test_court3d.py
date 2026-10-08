@@ -244,3 +244,122 @@ def test_a_vedekezes_elemzes_lovessorai_viszik_a_helyet_es_a_vedot():
                 "defender", "def_dist"} <= set(sh)
         if sh["free"] is False:
             assert sh["def_dist"] <= FREE_DEF_RADIUS_M
+
+
+def _eladasos_meccs():
+    """Szintetikus meccs labdavesztésekkel (a szimulátor lövés-környéki
+    váltásait az esemény-felismerés kiszűri, ezért itt építjük): a
+    hazai 7-es a középső harmadban kipréselve veszít, és a vendég fél
+    percen belül gólt lő belőle; a támadó harmadban magától (az ellenfél
+    4 m-re, OLDALT — a kapu felé ugró labda lövésnek látszana); a saját
+    harmadban kipréselve. A körök közti váltások (a vendég labdája a
+    következő kör hazai birtoklásához) maguk is eladások — a vendég
+    oldalán; azokat a négy réteg is ugyanígy látja."""
+    def jat(tid, team, x, y, mez=None):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0, jersey_number=mez)
+
+    frames = []
+    t = 0
+
+    def ciklus(vesztes_hazai, x, tav, gol):
+        nonlocal t
+        v = (jat(1, Team.HOME, x, 10.0, 7) if vesztes_hazai
+             else jat(11, Team.AWAY, x, 10.0, 4))
+        sz = (jat(11, Team.AWAY, x, 10.0 + tav, 4) if vesztes_hazai
+              else jat(1, Team.HOME, x, 10.0 + tav, 7))
+        both = [v, sz]
+        for _ in range(10):
+            frames.append(Frame(t=t, players=both,
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=both,
+                                ball=Ball(x=x, y=10.0 + tav, confidence=1.0)))
+            t += 1
+        if gol:
+            for _ in range(50):  # a lövés-elnyomó ablakon kívülre
+                frames.append(Frame(t=t, players=both,
+                                    ball=Ball(x=x, y=10.0 + tav,
+                                              confidence=1.0)))
+                t += 1
+            lovo = [jat(12, Team.AWAY, 7.0, 10.0, 9)]
+            for i in range(9):
+                frames.append(Frame(t=t, players=lovo,
+                                    ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
+                                              confidence=1.0)))
+                t += 1
+        for _ in range(900):  # hosszú szünet: a következő kör önálló
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    ciklus(True, 20.0, 0.6, True)
+    ciklus(True, 35.0, 4.0, False)
+    ciklus(True, 8.0, 0.6, False)
+    return Match(MatchMeta(match_id="to", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_labdavesztes_pillanatok_a_negy_eladas_reteggel_egyeznek():
+    """A labdavesztés-pillanatok ugyanazt mondják, mint a négy
+    labdaeladás-réteg: a csapatonkénti szám a turnover_punishment
+    eladásai, a gólba került a büntetettek, a harmadok a turnover_zones
+    zónái, a kipréselt/magától a pressured_turnovers számai; a
+    távolság a vesztő és a jelölt ellenfél helyéből újraszámolható."""
+    from handball.pipeline.court3d import turnover_moments
+    from handball.pipeline.defense import (PTO_PRESSURE_M,
+                                           pressured_turnovers,
+                                           turnover_punishment,
+                                           turnover_zones)
+
+    m = _eladasos_meccs()
+    tm = turnover_moments(m)
+    tp = turnover_punishment(m)
+    tz = turnover_zones(m)
+    pt = pressured_turnovers(m)
+    assert tm["pressure_m"] == PTO_PRESSURE_M
+    assert tm["turnovers"]["home"] == 3
+    assert tm["punished"]["home"] == 1
+    assert tm["forced"]["home"] == 2 and tm["unforced"]["home"] == 1
+    assert [x["s"] for x in tm["moments"]] == sorted(x["s"] for x in tm["moments"])
+    for side in ("home", "away"):
+        sajat = [x for x in tm["moments"] if x["team"] == side]
+        assert tm["turnovers"][side] == len(sajat) == tp[side]["turnovers"]
+        assert tm["punished"][side] == tp[side]["punished"] == \
+            sum(1 for x in sajat if x["punished"])
+        zonak: dict = {}
+        for x in sajat:
+            if x["zone"] is not None:
+                zonak[x["zone"]] = zonak.get(x["zone"], 0) + 1
+        assert zonak == tz[side]["zones"]
+        assert tm["forced"][side] == pt[side]["pressured"]
+        assert tm["unforced"][side] == pt[side]["unforced"]
+    for x in tm["moments"]:
+        if x["forced"] is None:
+            assert x["dist"] is None and x["opponent"] is None
+            continue
+        d = math.hypot(x["opponent"][0] - x["loser"][0],
+                       x["opponent"][1] - x["loser"][1])
+        assert abs(d - x["dist"]) < 0.02
+        assert x["forced"] == (x["dist"] <= PTO_PRESSURE_M)
+        assert (x["goal_after_s"] is not None) == x["punished"]
+        if x["punished"]:
+            assert 0 <= x["goal_after_s"] <= tm["quick_s"]
+    hazai = [x for x in tm["moments"] if x["team"] == "home"]
+    assert [x["zone"] for x in hazai] == ["közép", "támadó", "saját"]
+    assert [x["forced"] for x in hazai] == [True, False, True]
+    assert [x["punished"] for x in hazai] == [True, False, False]
+    assert all(x["jersey"] == 7 for x in hazai)
+
+def test_labdavesztes_pillanatok_ures_meccsen():
+    """Eladás nélküli (labdátlan) meccsen üres a lista, a számok nullák."""
+    from handball.pipeline.court3d import turnover_moments
+
+    m = Match(MatchMeta(match_id="u", home_team="A", away_team="B",
+                        fps=25.0),
+              [Frame(t=i, players=[], ball=None) for i in range(50)])
+    tm = turnover_moments(m)
+    assert tm["moments"] == []
+    assert tm["turnovers"] == {"home": 0, "away": 0}
+    assert tm["punished"] == {"home": 0, "away": 0}

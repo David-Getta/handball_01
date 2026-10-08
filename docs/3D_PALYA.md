@@ -62,6 +62,43 @@ Mindegyik külön kapcsolható, egymásra is tehetők.
   csak a mért helyek), a legsűrűbb cellához mért erősséggel.
 - **Labda-nyom** — a labda útja az utolsó 3 másodpercben narancs
   vonalként (a passz-sorozat és a lövés íve egyben).
+- **Passzsávok** — a pillanatnyi labdástól minden csapattársához egy
+  vonal: **zöld** nyitott, **sárga** kockázatos, **piros** zárt sáv,
+  összegzővel ("Labdás (Szeged): 4 nyitott, 0 kockázatos, 2 zárt").
+  A színezés a döntés-elemzés passz-modellje (a távolság és a sávban
+  1,5 m-en belül álló ellenfelek), a labdás az elemzés birtoklás-
+  sugarával (3 m) dől el — a 3D nem mond mást, mint az elemzés.
+- **Feltörés és Megállítás** (a Védekezés "élő" módjában) — a fal
+  mellé a felderítés két rangsorának teteje: HOL és MIVEL törhető fel a
+  védekező csapat fala, és mivel állíthatja meg a most támadó csapatot;
+  ha a feltörés egy sávra mutat, az **piros sávként** a padlón is
+  megjelenik a védett kapu előtt ("ide kell betörni").
+
+## Jelenetek lapozása
+
+A felderítés és az elemzés arányokat mond ("60%-ban optimális
+döntés", "a lövők 84%-át szabadon hagyják"). A lapozók a mögöttük
+lévő JELENETEKRE ugranak — a jelenet előtt 1,5 mp-cel, lejátszva, a
+pillanat körül rajzolva és felirattal (ha több egyszerre aktív, a
+feliratok egymás alatt):
+
+- **Döntések ◀ ▶** — a passz-döntések, ahol a döntés-elemzés modellje
+  szerint érdemben (legalább 0,10 értékkel) jobb opció is volt: a
+  választott passz **fehér**, a jobb opció **arany** vonal (egy másik
+  társhoz, vagy lövésnél a kapura).
+- **Szabad lövők ◀ ▶** — a kapott lövések, ahol a lövőtől 2 m-en belül
+  nem volt mezőnyvédő: **piros kör** a lövő körül (a fedezés-sugár) és
+  szaggatott vonal a legközelebbi védőhöz, a felirat a távolsággal.
+- **Labdavesztések ◀ ▶** — az elvesztett labdák: **narancs kör** a
+  vesztő körül (a 2,5 m-es nyomás-sugár: ha ezen belül állt ellenfél,
+  az eladás KIPRÉSELT, különben MAGÁTÓL jött), szaggatott vonal a
+  legközelebbi mezőnybeli ellenfélhez, **X** a labdánál; a felirat a
+  vesztő mezszámával, a pálya-harmaddal, a nyomással, és ha fél percen
+  belül gól lett belőle, azzal is. Ugyanaz a négy válasz, amit a
+  labdaeladás-rétegek számokban mondanak — itt egy jeleneten.
+
+A ▶ az utoljára nézett jelenettől lép tovább (nem ragad le, és a meccs
+legelső pillanatai is elérhetők).
 
 ## Jelenet megosztása
 
@@ -74,7 +111,7 @@ küldesz a stábnak, nem egy meccset. A paraméterek:
 /matches/<meccs>/view3d?t=349&nezet=madar
    &kamera=h7 | &tv=1
    &hoter=mind&loves=hazai&passz=vendeg&fal=6-0&falOldal=jobb
-   &nyom=1&seb=2
+   &nyom=1&passzsav=1&seb=2
 ```
 
 ## VR-headset
@@ -87,9 +124,14 @@ headsetről USB-kábellel és `adb reverse`-szel érhető el az app gépe.
 ## Hol él a kód
 
 - Backend: `backend/handball/pipeline/court3d.py` (lövés-geometria,
-  falsablonok, védekezés-idővonal), `view3d_html.py` (a böngészős
-  oldal és a tömör adat), végpontok: `/matches/{id}/view3d`,
-  `/matches/{id}/defence-timeline`.
+  falsablonok, védekezés-idővonal, `tactical_keys_by_team` — feltörés
+  és megállítás, `pass_lanes` — passzsávok, `decision_moments` —
+  döntés-pillanatok, `free_shot_moments` — szabadon hagyott lövők,
+  `turnover_moments` — labdavesztések),
+  `view3d_html.py` (a böngészős oldal és a tömör adat), végpontok:
+  `/matches/{id}/view3d`, `/matches/{id}/defence-timeline`,
+  `/matches/{id}/decision-moments`, `/matches/{id}/free-shots`,
+  `/matches/{id}/turnover-moments`.
 - App: `client/lib/ui/court3d_screen.dart` (szoftveres vetítés,
   gesztusok, rétegek), `court_geometry.dart` (a backend tükre).
 - Tesztek: `backend/tests/test_view3d_eszkozok.py`,

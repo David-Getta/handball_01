@@ -42,6 +42,10 @@ Future<void> _zar(WidgetTester tester) async {
 }
 
 void main() {
+  // A célt tévesztő koppintás HIBA, ne csak figyelmeztetés: a panel alját
+  // egyszer egy összegző-doboz takarta, és a teszt "rákattintott" a
+  // Madártávlatra — a koppintás némán mellément, a teszt mégis átment.
+  setUpAll(() => WidgetController.hitTestWarningShouldBeFatal = true);
   testWidgets("koppintás a padlóra: lövés-mérés doboz", (tester) async {
     await _nyit(tester);
     expect(find.textContaining("DEMÓ"), findsOneWidget);
@@ -170,6 +174,35 @@ void main() {
       }
     }
     expect(find.textContaining("a legközelebbi védő 2,9 m-re"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
+  testWidgets("labdavesztés: ▶ odaugrik, felirat a vesztővel és a góllal",
+      (tester) async {
+    await _nyit(tester);
+    final kov = find.byTooltip("Következő labdavesztés");
+    await tester.ensureVisible(kov);
+    await tester.pump();
+    await tester.tap(kov);
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("labdavesztés —").evaluate().isNotEmpty) break;
+    }
+    // A demó első labdavesztése a középső harmadban, és gól lett belőle.
+    expect(find.textContaining("a középső harmadban"), findsOneWidget);
+    expect(find.textContaining("6,0 mp múlva kapott gól"), findsOneWidget);
+    // A második ▶ továbblép: a második eladásból már nem lett gól.
+    await tester.tap(kov);
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("labdavesztés —").evaluate().isNotEmpty &&
+          find.textContaining("kapott gól").evaluate().isEmpty) {
+        break;
+      }
+    }
+    expect(find.textContaining("labdavesztés —"), findsOneWidget);
+    expect(find.textContaining("kapott gól"), findsNothing);
     expect(tester.takeException(), isNull);
     await _zar(tester);
   });

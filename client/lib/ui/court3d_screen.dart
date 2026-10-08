@@ -145,9 +145,14 @@ class _Court3DScreenState extends State<Court3DScreen>
   // a pillanat körül piros kör a lövő körül és vonal a legközelebbi védőhöz.
   List<Map<String, dynamic>> _szabadok = const [];
   double _szabadSugar = 2.0;
+  // LABDAVESZTÉSEK: ki, hol, kipréselve vagy magától (a /turnover-moments
+  // pillanatai) — ◀ ▶ lapoz, a pillanat körül narancs kör a vesztő körül
+  // (a nyomás-sugár), vonal a legközelebbi ellenfélhez, X a labdánál.
+  List<Map<String, dynamic>> _eladasok = const [];
+  double _eladasSugar = 2.5;
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
-  double? _dontesUtolso, _szabadUtolso;
+  double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
   // HŐTÉRKÉP: hol tartózkodott a csapat (az elemzés rácsa: 20×10 cella,
   // csak a mért helyek) a pályára fektetve. Meccsenként egyszer számolva.
   String _hoter = ""; // "" | "hazai" | "vendeg" | "mind"
@@ -190,6 +195,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _passzok = buildDemoPasses(_match!);
         _dontesek = buildDemoDecisions(_match!);
         _szabadok = buildDemoFreeShots();
+        _eladasok = buildDemoTurnovers(_match!);
         _demo = true;
         _loading = false;
       });
@@ -254,6 +260,15 @@ class _Court3DScreenState extends State<Court3DScreen>
             .cast<Map<String, dynamic>>();
         szabadSugar = ((fs["radius_m"] as num?) ?? 2.0).toDouble();
       } catch (_) {}
+      // A labdavesztések — hibája nem viheti el a nézetet.
+      List<Map<String, dynamic>> eladasok = const [];
+      double eladasSugar = 2.5;
+      try {
+        final tm = await _api.fetchTurnoverMoments(id);
+        eladasok = ((tm["moments"] as List?) ?? const [])
+            .cast<Map<String, dynamic>>();
+        eladasSugar = ((tm["pressure_m"] as num?) ?? 2.5).toDouble();
+      } catch (_) {}
       // A döntés-pillanatok — hibája nem viheti el a nézetet.
       List<Map<String, dynamic>> dontesek = const [];
       try {
@@ -309,6 +324,8 @@ class _Court3DScreenState extends State<Court3DScreen>
         _dontesek = dontesek;
         _szabadok = szabadok;
         _szabadSugar = szabadSugar;
+        _eladasok = eladasok;
+        _eladasSugar = eladasSugar;
         _lovesValasztott = null;
         if (widget.lovesTerkep != null) _lovesTerkep = widget.lovesTerkep!;
         _meres = null;
@@ -747,6 +764,59 @@ class _Court3DScreenState extends State<Court3DScreen>
         "${xg.toStringAsFixed(2).replaceAll(".", ",")})";
   }
 
+  /// A lejátszófejnél aktív labdavesztés (−0,3…+2,5 mp), vagy null.
+  Map<String, dynamic>? _aktivEladas(Match m) {
+    if (_eladasok.isEmpty || m.frames.isEmpty) return null;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m) / fps;
+    for (final d in _eladasok) {
+      final s = ((d["s"] as num?) ?? 0).toDouble();
+      if (most >= s - 0.3 && most <= s + 2.5) return d;
+    }
+    return null;
+  }
+
+  /// Ugrás az előző/következő labdavesztésre (1,5 mp-cel előtte).
+  void _eladasUgras(Match m, int irany) {
+    final cel = _pillanatUgras(m, _eladasok, _eladasUtolso, irany);
+    if (cel != null) _eladasUtolso = cel;
+  }
+
+  /// A labdavesztés felirata ("Szeged labdavesztés — 7-es · a támadó
+  /// harmadban · kipréselve (ellenfél 0,6 m-re) · 6,0 mp múlva kapott
+  /// gól") — a böngészős nézet feliratának párja.
+  String? _eladasFelirat(Match m) {
+    final d = _aktivEladas(m);
+    if (d == null) return null;
+    String sz1(num v) => v.toDouble().toStringAsFixed(1).replaceAll(".", ",");
+    final csapat = d["team"] == "home" ? m.meta.homeTeam : m.meta.awayTeam;
+    final mez = d["jersey"];
+    final ki = mez != null ? "$mez-es" : "ismeretlen játékos";
+    const harmadok = {
+      "saját": "a saját harmadban",
+      "közép": "a középső harmadban",
+      "támadó": "a támadó harmadban",
+    };
+    final hol = harmadok[d["zone"]] ?? "ismeretlen helyen";
+    final tav = d["dist"] as num?;
+    final nyomas = d["forced"] == null || tav == null
+        ? "a nyomás nem mérhető"
+        : (d["forced"] == true
+            ? "kipréselve (ellenfél ${sz1(tav)} m-re)"
+            : "magától (a legközelebbi ellenfél ${sz1(tav)} m-re)");
+    final golMp = d["goal_after_s"] as num?;
+    final gol = golMp != null ? " · ${sz1(golMp)} mp múlva kapott gól" : "";
+    return "$csapat labdavesztés — $ki · $hol · $nyomas$gol";
+  }
+
+  /// Az épp aktív pillanat-feliratok (szöveg, keretszín) a megjelenés
+  /// sorrendjében: döntés, szabad lövés, labdavesztés.
+  List<(String, Color)> _pillanatFeliratok(Match m) => [
+        if (_dontesFelirat(m) case final d?) (d, AppColors.gold),
+        if (_szabadFelirat(m) case final sz?) (sz, AppColors.away),
+        if (_eladasFelirat(m) case final el?) (el, eladasSzin),
+      ];
+
   /// A döntés-pillanat felirata ("jobb opció is volt: LÖVÉS (0,36) …").
   String? _dontesFelirat(Match m) {
     final d = _aktivDontes(m);
@@ -1182,6 +1252,8 @@ class _Court3DScreenState extends State<Court3DScreen>
                   dontes: _aktivDontes(m),
                   szabad: _aktivSzabad(m),
                   szabadSugar: _szabadSugar,
+                  eladas: _aktivEladas(m),
+                  eladasSugar: _eladasSugar,
                   lovesek: [
                     for (final l in _lathatoLovesek(m))
                       _LovesJel(
@@ -1197,7 +1269,10 @@ class _Court3DScreenState extends State<Court3DScreen>
               // Az eszköz-panel a kép jobb szélén: magasság-korláttal
               // GÖRGETHETŐ (a rétegek szaporodtával a kép alá lógott, és
               // az alsó gombok — Madártávlat, … — kattinthatatlanok
-              // lettek), és összecsukható, hogy ne takarja a pályát.
+              // lettek), és összecsukható, hogy ne takarja a pályát. A
+              // lövéstérkép és a passz-háló összegzője a panel ALATT, az
+              // oszlop alján ül: korábban külön rétegként a panel aljára
+              // rajzolódott, és eltakarta az alsó gombokat.
               Positioned(
                 right: 10,
                 top: 10,
@@ -1226,10 +1301,25 @@ class _Court3DScreenState extends State<Court3DScreen>
                               style: const TextStyle(fontSize: 11.5)),
                         ),
                       ),
-                      if (_eszkozokNyitva)
-                        Flexible(
-                            child: SingleChildScrollView(
-                                child: _nezetGombok())),
+                      Expanded(
+                          child: Align(
+                              alignment: Alignment.topRight,
+                              child: _eszkozokNyitva
+                                  ? SingleChildScrollView(
+                                      child: _nezetGombok())
+                                  : const SizedBox.shrink())),
+                      if (_passzOsszegzo(m) != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: _infoDoboz(
+                              [_passzOsszegzo(m)!], AppColors.accent),
+                        ),
+                      if (_lovesTerkep.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: _infoDoboz(
+                              _lovesOsszegzo(m), AppColors.accent),
+                        ),
                     ]),
               ),
               if (_szemHud(m, allapot) != null)
@@ -1249,12 +1339,6 @@ class _Court3DScreenState extends State<Court3DScreen>
                   top: _meres != null ? 104 : 12,
                   child: _infoDoboz(fal.$2, AppColors.gold),
                 ),
-              if (_lovesTerkep.isNotEmpty)
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  child: _infoDoboz(_lovesOsszegzo(m), AppColors.accent),
-                ),
               if (_passzsavOsszegzo(m, allapot) != null)
                 Positioned(
                   left: 12,
@@ -1262,30 +1346,24 @@ class _Court3DScreenState extends State<Court3DScreen>
                   child: _infoDoboz(
                       [_passzsavOsszegzo(m, allapot)!], AppColors.accent),
                 ),
-              if (_passzOsszegzo(m) != null)
-                Positioned(
-                  right: 12,
-                  bottom: _lovesTerkep.isNotEmpty ? 76 : 12,
-                  child: _infoDoboz([_passzOsszegzo(m)!], AppColors.accent),
-                ),
               // Jelenet-felirat: mi történik épp (a közvetítés
               // inzertje) — a 3D-ben a labda pályája önmagában nem
               // mondja meg, hogy gól volt-e vagy védés.
-              // A döntés- és a szabad-lövés felirat EGYMÁS ALATT: két
-              // egyszerre aktív pillanat nem takarhatja el egymást.
-              if (_dontesFelirat(m) != null || _szabadFelirat(m) != null)
+              // A döntés-, a szabad-lövés és a labdavesztés felirat EGYMÁS
+              // ALATT: egyszerre aktív pillanatok nem takarhatják el
+              // egymást.
+              if (_pillanatFeliratok(m).isNotEmpty)
                 Positioned(
                   top: 12,
                   left: 0,
                   right: 0,
                   child: Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    if (_dontesFelirat(m) != null)
-                      _infoDoboz([_dontesFelirat(m)!], AppColors.gold),
-                    if (_dontesFelirat(m) != null && _szabadFelirat(m) != null)
-                      const SizedBox(height: 6),
-                    if (_szabadFelirat(m) != null)
-                      _infoDoboz([_szabadFelirat(m)!], AppColors.away),
+                    for (final (i, (szoveg, szin))
+                        in _pillanatFeliratok(m).indexed) ...[
+                      if (i > 0) const SizedBox(height: 6),
+                      _infoDoboz([szoveg], szin),
+                    ],
                   ])),
                 ),
               if (_esemenyFelirat(m) != null)
@@ -1718,6 +1796,32 @@ class _Court3DScreenState extends State<Court3DScreen>
             icon: const Icon(Icons.chevron_right, size: 20),
           ),
           Text(_szabadok.isEmpty ? "nincs" : "${_szabadok.length}",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ]),
+      ),
+      // Labdavesztések: ki, hol, kipréselve vagy magától (◀ ▶).
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text("Labdavesztések:",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Előző labdavesztés",
+            onPressed: _eladasok.isEmpty || _match == null
+                ? null
+                : () => _eladasUgras(_match!, -1),
+            icon: const Icon(Icons.chevron_left, size: 20),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Következő labdavesztés",
+            onPressed: _eladasok.isEmpty || _match == null
+                ? null
+                : () => _eladasUgras(_match!, 1),
+            icon: const Icon(Icons.chevron_right, size: 20),
+          ),
+          Text(_eladasok.isEmpty ? "nincs" : "${_eladasok.length}",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -2192,6 +2296,9 @@ class _Vetites {
   }
 }
 
+/// A labdavesztés-réteg színe (narancs) — a böngészős nézet 0xff9f43-ja.
+const Color eladasSzin = Color(0xFFFF9F43);
+
 class _Court3DPainter extends CustomPainter {
   final _Allapot frame;
   final double cx, cy, cz, yaw, pitch;
@@ -2217,6 +2324,9 @@ class _Court3DPainter extends CustomPainter {
   // Az aktív szabad lövés (a /free-shots egy sora) és a fedezés-sugár.
   final Map<String, dynamic>? szabad;
   final double szabadSugar;
+  // Az aktív labdavesztés (a /turnover-moments egy sora) és a nyomás-sugár.
+  final Map<String, dynamic>? eladas;
+  final double eladasSugar;
   final _Jatekos? rejtett;
   _Court3DPainter(
       {required this.frame,
@@ -2237,6 +2347,8 @@ class _Court3DPainter extends CustomPainter {
       this.dontes,
       this.szabad,
       this.szabadSugar = 2.0,
+      this.eladas,
+      this.eladasSugar = 2.5,
       this.rejtett});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
@@ -2664,6 +2776,41 @@ class _Court3DPainter extends CustomPainter {
                     lo[1] + ((ve[1] as num).toDouble() - lo[1]) * i / 12)
             ],
             szaggatott: true);
+      }
+    }
+
+    // Labdavesztés: narancs kör a vesztő körül (a nyomás-sugár: ezen belül
+    // álló ellenfél = kipréselt eladás), szaggatott vonal a legközelebbi
+    // ellenfélhez, X a labda helyén.
+    final el = eladas;
+    if (el != null) {
+      final narancs = Paint()
+        ..color = eladasSzin
+        ..strokeWidth = 2.4;
+      final ve = el["loser"] as List?;
+      final ell = el["opponent"] as List?;
+      if (ve != null) {
+        final vx = (ve[0] as num).toDouble(), vy = (ve[1] as num).toDouble();
+        _kor(canvas, narancs, vx, vy, eladasSugar);
+        if (ell != null) {
+          final ox = (ell[0] as num).toDouble(), oy = (ell[1] as num).toDouble();
+          _talajUtvonal(
+              canvas,
+              narancs,
+              [
+                for (var i = 0; i <= 12; i++)
+                  Offset(vx + (ox - vx) * i / 12, vy + (oy - vy) * i / 12)
+              ],
+              szaggatott: true);
+        }
+      }
+      final lb = el["ball"] as List?;
+      if (lb != null) {
+        final bx = (lb[0] as num).toDouble(), by = (lb[1] as num).toDouble();
+        _vonal(canvas, narancs, bx - 0.45, by - 0.45, 0.06, bx + 0.45,
+            by + 0.45, 0.06);
+        _vonal(canvas, narancs, bx - 0.45, by + 0.45, 0.06, bx + 0.45,
+            by - 0.45, 0.06);
       }
     }
 

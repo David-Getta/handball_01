@@ -164,6 +164,25 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
             for m_ in _fs["moments"]]
     except Exception:
         szabadok, szabad_sugar = [], 2.0
+    # Labdavesztések: [mp, a vesztő hazai?, mez | null, vesztő x, y | null,
+    # labda x, y | null, harmad (0 saját, 1 közép, 2 támadó) | null,
+    # ellenfél x, y | null, távolság | null, kipréselt (1/0) | null,
+    # gól ennyi mp múlva | null] időrendben (court3d.turnover_moments).
+    try:
+        from .court3d import turnover_moments
+        _tm = turnover_moments(match)
+        eladas_sugar = _tm["pressure_m"]
+        _harmad = {"saját": 0, "közép": 1, "támadó": 2}
+        eladasok = [
+            [m_["s"], 1 if m_["team"] == "home" else 0, m_["jersey"],
+             *(m_["loser"] or [None, None]), *(m_["ball"] or [None, None]),
+             _harmad.get(m_["zone"]), *(m_["opponent"] or [None, None]),
+             m_["dist"],
+             None if m_["forced"] is None else (1 if m_["forced"] else 0),
+             m_["goal_after_s"]]
+            for m_ in _tm["moments"]]
+    except Exception:
+        eladasok, eladas_sugar = [], 2.5
     # Feltörés: hol és mivel törhető fel a két csapat védekezése (a
     # felderítés rangsorának teteje) — a védekezés-panel a fal mellé írja.
     try:
@@ -195,6 +214,8 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         "decisions": dontesek,
         "free_shots": szabadok,
         "free_radius": szabad_sugar,
+        "turnovers": eladasok,
+        "turnover_pressure": eladas_sugar,
     }
 
 
@@ -322,6 +343,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #meres button{margin-left:8px;padding:2px 8px}
  #dontesFelirat{position:fixed;left:50%;top:52px;transform:translateX(-50%);padding:6px 14px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #szabadFelirat{position:fixed;left:50%;top:98px;transform:translateX(-50%);padding:6px 14px;border:1px solid #ff6b6b;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #eladasFelirat{position:fixed;left:50%;top:144px;transform:translateX(-50%);padding:6px 14px;border:1px solid #ff9f43;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jatekosHud{position:fixed;left:50%;top:12px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.85);font-size:14px;font-variant-numeric:tabular-nums;display:none}
 </style></head><body>
 <div id="hud"><b>__CIM__</b></div>
@@ -400,6 +422,12 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="szabadInfo"></span>
  </div>
  <div class="sor">
+  <span title="Elvesztett labdák: ki, hol, kipréselve vagy magától, és gól lett-e belőle">Labdavesztések:</span>
+  <button id="eladasElozo" title="Előző labdavesztés">◀</button>
+  <button id="eladasKov" title="Következő labdavesztés">▶</button>
+  <span id="eladasInfo"></span>
+ </div>
+ <div class="sor">
   <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
   <span id="linkInfo"></span>
  </div>
@@ -417,6 +445,7 @@ Passzok — a futó passz vonala (adótól a fogadóig), vagy a csapat passz-há
 Passzsávok — a labdástól a társakig: zöld nyitott, sárga kockázatos, piros zárt (az elemzés modellje)<br>
 Döntések ◀ ▶ — ahol jobb opció is volt: fehér a választott passz, arany a jobb (passz vagy lövés)<br>
 Szabad lövők ◀ ▶ — a fedezés-hibák: piros kör a lövő körül (2 m), vonal a legközelebbi védőhöz<br>
+Labdavesztések ◀ ▶ — narancs kör a vesztő körül (a nyomás-sugár), vonal a legközelebbi ellenfélhez, X a labdánál<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb</div>
@@ -424,6 +453,7 @@ VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="jatekosHud"></div>
 <div id="dontesFelirat"></div>
 <div id="szabadFelirat"></div>
+<div id="eladasFelirat"></div>
 <div id="felirat"></div>
 <div id="vez">
  <button id="elozo" title="Előző esemény">⏮</button>
@@ -1391,6 +1421,10 @@ function dontesFrissit(t){
   const szabadFelirat = document.getElementById("szabadFelirat");
   if (szabadSzoveg){ szabadFelirat.textContent = szabadSzoveg; szabadFelirat.style.display = "block"; }
   else szabadFelirat.style.display = "none";
+  const eladasSzoveg = eladasFrissit(t);
+  const eladasFelirat = document.getElementById("eladasFelirat");
+  if (eladasSzoveg){ eladasFelirat.innerHTML = eladasSzoveg; eladasFelirat.style.display = "block"; }
+  else eladasFelirat.style.display = "none";
   if (!d){ dontesFelirat.style.display = "none"; return; }
   const [mp, hazai, px, py, cx, cy, cval, fajta, bx, by, bval, gap] = d;
   const vonalD = (x2, y2, szin) => {
@@ -1447,6 +1481,68 @@ function szabadFrissit(t){
   return (vedHazai ? ADAT.home : ADAT.away) + " védekezése: szabadon hagyott lövő — a legközelebbi védő " +
     (tav !== null ? szam1(tav) + " m-re" : "nem mérhető") + " (" + (gol ? "GÓL" : "nem gól") +
     ", xG " + szam2(xg) + ")";
+}
+
+// ---- Labdavesztések: ki, hol, kipréselve vagy magától ------------------
+// ◀ ▶ a labdavesztések közt ugrik (1,5 mp-cel előtte, lejátszva); a
+// pillanat körül narancs kör a vesztő körül (a nyomás-sugár: ezen belül
+// álló ellenfél = kipréselt eladás), szaggatott vonal a legközelebbi
+// mezőnybeli ellenfélhez, X a labdánál; a felirat megnevezi a vesztőt,
+// a harmadot, a nyomást és hogy gól lett-e belőle (court3d.turnover_moments
+// — ugyanaz, mint a négy labdaeladás-réteg).
+const ELADASOK = ADAT.turnovers || [];
+const EL_SUGAR = ADAT.turnover_pressure || 2.5;
+const EL_HARMAD = ["a saját harmadban", "a középső harmadban", "a támadó harmadban"];
+const eladasCsoport = new THREE.Group();
+szinpad.add(eladasCsoport);
+const eladasKor = new THREE.Mesh(new THREE.RingGeometry(EL_SUGAR - 0.08, EL_SUGAR + 0.04, 40),
+  new THREE.MeshBasicMaterial({color: 0xff9f43, side: THREE.DoubleSide, transparent: true, opacity: 0.9}));
+eladasKor.rotation.x = -Math.PI/2; eladasKor.visible = false;
+szinpad.add(eladasKor);
+document.getElementById("eladasInfo").textContent = ELADASOK.length ? ELADASOK.length + " eladás" : "nincs ilyen";
+let eladasUtolso = null;
+function eladasUgras(irany){
+  if (!ELADASOK.length) return;
+  const cel = lapozCel(ELADASOK.map(d => d[0]), ido, eladasUtolso, irany);
+  if (cel === null) return;
+  eladasUtolso = cel;
+  ido = Math.max(0, cel - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
+  csuszka.value = ido;
+}
+document.getElementById("eladasElozo").onclick = () => eladasUgras(-1);
+document.getElementById("eladasKov").onclick = () => eladasUgras(1);
+function eladasFrissit(t){
+  while (eladasCsoport.children.length) eladasCsoport.remove(eladasCsoport.children[0]);
+  const d = ELADASOK.find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  if (!d){ eladasKor.visible = false; return null; }
+  const [mp, hazai, mez, lx, ly, bx, by, harmad, ox, oy, tav, kipres, golMp] = d;
+  const szin = 0xff9f43;
+  if (lx !== null){
+    eladasKor.position.set(lx, 0.03, W - ly); eladasKor.visible = true;
+    if (ox !== null){
+      const g = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(lx, 0.05, W - ly), new THREE.Vector3(ox, 0.05, W - oy)]);
+      const l = new THREE.Line(g, new THREE.LineDashedMaterial({color: szin, dashSize: 0.3, gapSize: 0.2}));
+      l.computeLineDistances(); eladasCsoport.add(l);
+    }
+  } else eladasKor.visible = false;
+  if (bx !== null){
+    // X a labda helyén (két keresztbe tett szakasz a padlón).
+    for (const [ax, ay, cx, cy] of [[-0.45, -0.45, 0.45, 0.45], [-0.45, 0.45, 0.45, -0.45]]){
+      const g = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(bx + ax, 0.06, W - (by + ay)), new THREE.Vector3(bx + cx, 0.06, W - (by + cy))]);
+      eladasCsoport.add(new THREE.Line(g, new THREE.LineBasicMaterial({color: szin})));
+    }
+  }
+  const ki = mez !== null ? mez + "-es" : "ismeretlen játékos";
+  const hol = harmad !== null ? EL_HARMAD[harmad] : "ismeretlen helyen";
+  const nyomas = kipres === null ? "a nyomás nem mérhető"
+    : (kipres ? "kipréselve (ellenfél " + szam1(tav) + " m-re)"
+              : "magától (a legközelebbi ellenfél " + szam1(tav) + " m-re)");
+  const gol = golMp !== null
+    ? " · <span style='color:#ff6b6b'>" + szam1(golMp) + " mp múlva kapott gól</span>" : "";
+  return "<b>" + (hazai ? ADAT.home : ADAT.away) + "</b> labdavesztés — " + ki + " · " + hol +
+    " · " + nyomas + gol;
 }
 
 // ---- Lövéstérkép: a meccs lövései a padlón --------------------------

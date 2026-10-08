@@ -413,3 +413,107 @@ def free_shot_moments(match: Match, config: Optional[TacticsConfig] = None) -> d
             "shots_against": {k: d[k]["shots_against"] for k in ("home", "away")},
             "free_shots": {k: d[k]["free_shots"] for k in ("home", "away")},
             "radius_m": FREE_DEF_RADIUS_M}
+
+
+def _third(ball_x: float, goal_x: float) -> str:
+    """A pálya-harmad a TÁMADÁSI irány szerint — a defense.turnover_zones
+    képlete (0 = saját kapu környéke, 1 = a megtámadott kapu)."""
+    frac = 1.0 - abs(ball_x - goal_x) / COURT_LENGTH_M
+    return "saját" if frac < 1 / 3 else ("közép" if frac < 2 / 3 else "támadó")
+
+
+def turnover_moments(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """A labdavesztések pillanatai (a labdát ELVESZTŐ csapat szerint).
+
+    A labdaeladás-rétegek eddig számokat mondtak (KI veszít — turnover_
+    players, HOL — turnover_zones, kipréselik-e — pressured_turnovers,
+    mennyibe kerül — turnover_punishment); a 3D pálya a jeleneteket is
+    megmutatja, és mind a négy választ EGY pillanatra teszi: a vesztő
+    mezszáma, a pálya-harmad, a legközelebbi ellenfél távolsága (a
+    nyomás-sugáron belül KIPRÉSELT, azon túl MAGÁTÓL jött) és hogy a
+    labda fél percen belül gólba került-e. Ugyanazokból az eseményekből
+    és ugyanazokkal a küszöbökkel, mint a négy réteg — a 3D nem mondhat
+    mást, mint az elemzés.
+
+    Visszatérés: {"moments": [{"s", "team", "jersey", "loser": [x, y] |
+    None, "ball": [x, y] | None, "zone" | None, "opponent": [x, y] |
+    None, "dist" | None, "forced": bool | None, "punished",
+    "goal_after_s" | None}] időrendben, "turnovers", "forced",
+    "unforced", "punished" (csapatonként: db), "pressure_m", "quick_s"}.
+    A "forced" None, ha nem mérhető (a vesztő a kapus, nem látszik, vagy
+    nincs látott mezőnybeli ellenfél) — mint a pressured_turnovers-nél."""
+    from .defense import PTO_PRESSURE_M, TO_PUNISH_QUICK_S
+    from .event_detection import EventType, detect_events, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    win = round(TO_PUNISH_QUICK_S * fps)
+    gk_tracks: set = set()
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.role == "kapus":
+                gk_tracks.add(p.track_id)
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+    events = [e for e in detect_events(match, config)
+              if e.type == EventType.TURNOVER]
+    want = {e.t for e in events}
+    frames_at = {f.t: f for f in match.frames if f.t in want}
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    moments = []
+    counts = {side: {"turnovers": 0, "forced": 0, "unforced": 0,
+                     "punished": 0} for side in ("home", "away")}
+    for e in events:
+        side = e.team.value
+        other = "away" if side == "home" else "home"
+        f = frames_at.get(e.t)
+        loser = None
+        if f is not None and e.player_id is not None:
+            loser = next((p for p in f.players if p.track_id == e.player_id),
+                         None)
+        ball = f.ball if f is not None else None
+        zone = (_third(ball.x, config.attacks_toward_x(e.team))
+                if ball is not None else None)
+        opp_xy, dist, forced = None, None, None
+        if loser is not None and e.player_id not in gk_tracks:
+            # A legközelebbi mezőnybeli ellenfél (a kapusuk nem nyomás).
+            best = None
+            for p in f.players:
+                if p.team == loser.team or p.track_id in gk_tracks:
+                    continue
+                d = math.hypot(p.x - loser.x, p.y - loser.y)
+                if best is None or d < best[0]:
+                    best = (d, p)
+            if best is not None:
+                dist = round(best[0], 2)
+                opp_xy = [round(best[1].x, 2), round(best[1].y, 2)]
+                forced = best[0] <= PTO_PRESSURE_M
+        goal_t = next((gt for (gt, gs) in goals
+                       if gs == other and 0 <= gt - e.t <= win), None)
+        rec = counts[side]
+        rec["turnovers"] += 1
+        if forced is True:
+            rec["forced"] += 1
+        elif forced is False:
+            rec["unforced"] += 1
+        if goal_t is not None:
+            rec["punished"] += 1
+        moments.append({
+            "s": round(e.t / fps, 2), "team": side,
+            "jersey": jersey.get(e.player_id),
+            "loser": ([round(loser.x, 2), round(loser.y, 2)]
+                      if loser is not None else None),
+            "ball": ([round(ball.x, 2), round(ball.y, 2)]
+                     if ball is not None else None),
+            "zone": zone, "opponent": opp_xy, "dist": dist,
+            "forced": forced, "punished": goal_t is not None,
+            "goal_after_s": (round((goal_t - e.t) / fps, 1)
+                             if goal_t is not None else None)})
+    moments.sort(key=lambda m_: (m_["s"], m_["team"]))
+    return {"moments": moments,
+            **{k: {side: counts[side][k] for side in ("home", "away")}
+               for k in ("turnovers", "forced", "unforced", "punished")},
+            "pressure_m": PTO_PRESSURE_M, "quick_s": TO_PUNISH_QUICK_S}

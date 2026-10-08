@@ -2893,6 +2893,18 @@ def create_app():
         return _cached_result(match_id, "free-shots",
                               lambda: free_shot_moments(match))
 
+    @app.get("/matches/{match_id}/turnover-moments")
+    def match_turnover_moments(match_id: str):
+        """A labdavesztések pillanatai (court3d.turnover_moments) — a 3D
+        pálya "Labdavesztések" lapozója ebből dolgozik: ki, hol,
+        kipréselve vagy magától, és gól lett-e belőle. Gyorsítótárazva."""
+        from ..pipeline.court3d import turnover_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "turnover-moments",
+                              lambda: turnover_moments(match))
+
     @app.get("/matches/{match_id}/diagnostics")
     def match_diagnostics(match_id: str):
         """Gép által olvasható diagnosztika-csomag EGY meccsről — a

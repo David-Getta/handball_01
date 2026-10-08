@@ -1482,6 +1482,19 @@ class ApiClient {
   /// a lövőtől 2 m-en belül nem volt mezőnyvédő — {"moments": [{"s",
   /// "defending","shooter","defender","dist","goal","xg","zone"}],
   /// "shots_against", "free_shots", "radius_m"}.
+  /// A labdavesztések pillanatai (court3d.turnover_moments) — a 3D pálya
+  /// "Labdavesztések" lapozója: ki, hol, kipréselve vagy magától, és gól
+  /// lett-e belőle.
+  Future<Map<String, dynamic>> fetchTurnoverMoments(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/turnover-moments"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a labdavesztéseket", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> fetchFreeShots(String matchId) async {
     final resp = await http
         .get(Uri.parse("$baseUrl/matches/$matchId/free-shots"))
