@@ -131,6 +131,32 @@ void main() {
     expect([for (final x in r) x.gol], [true, false, true, false, false, false]);
   });
 
+  // A gól-akció felirata a böngésző golAkcioFelirat-jával AZONOS (a
+  // backend node-os tesztje ugyanezt a három esetet futtatja).
+  test("goalBuildUpCaption = a böngésző golAkcioFelirat-ja", () {
+    Map<String, dynamic> p(int a, int b) =>
+        {"from_jersey": a, "to_jersey": b};
+    expect(
+        goalBuildUpCaption({
+          "team": "home", "passes": [p(10, 9), p(9, 7), p(7, 10)],
+          "shooter_jersey": 10, "n_passes": 3, "duration_s": 6.5,
+        }, "Szeged", "Veszprém"),
+        "Szeged gólja — #10 → #9 → #7 → #10 lő · 3 passz, 6,5 mp");
+    expect(
+        goalBuildUpCaption({
+          "team": "away",
+          "passes": [p(2, 3), p(3, 4), p(4, 5), p(5, 6), p(6, 2)],
+          "shooter_jersey": 2, "n_passes": 5, "duration_s": 11.0,
+        }, "Szeged", "Veszprém"),
+        "Veszprém gólja — #2 → #3 → … → #5 → #6 → #2 lő · 5 passz, 11,0 mp");
+    expect(
+        goalBuildUpCaption({
+          "team": "home", "passes": [], "shooter_jersey": null,
+          "n_passes": 0, "duration_s": 0.0,
+        }, "Szeged", "Veszprém"),
+        "Szeged gólja — ? lő · passz nélkül");
+  });
+
   // A fal-rés tükör a backend wall_gap_segments-éből számolt táblát futtatja
   // (a backend-teszt a sorokat újraszámolja és itt megkeresi).
   test("wallGapSegments = a backend wall_gap_segments", () {

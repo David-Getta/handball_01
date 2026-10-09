@@ -396,3 +396,22 @@ List<SceneRow> sceneRows(
     for (final r in sorok) SceneRow(r.s, ido(r.s), r.tipus, r.szoveg, r.gol)
   ];
 }
+
+/// A gól-akció felirata (a böngészős nézet `golAkcioFelirat`-jának
+/// tükre, UGYANAZZAL a szöveggel): "Szeged gólja — #10 → #9 → #7 → #10
+/// lő · 3 passz, 6,5 mp"; hosszú láncnál az első kettő és az utolsó két
+/// passzoló marad. `g`: a /goal-build-ups egy sora.
+String goalBuildUpCaption(Map<String, dynamic> g, String nevH, String nevV) {
+  String m(dynamic j) => j != null ? "#$j" : "?";
+  final passzok = ((g["passes"] as List?) ?? const []).cast<Map>();
+  var nevek = [for (final p in passzok) m(p["from_jersey"])];
+  if (nevek.length > 4) {
+    nevek = [...nevek.take(2), "…", ...nevek.skip(nevek.length - 2)];
+  }
+  final lanc = nevek.isEmpty ? "" : "${nevek.join(" → ")} → ";
+  final n = ((g["n_passes"] as num?) ?? 0).toInt();
+  final hossz = ((g["duration_s"] as num?) ?? 0).toDouble();
+  final csapat = g["team"] == "home" ? nevH : nevV;
+  return "$csapat gólja — $lanc${m(g["shooter_jersey"])} lő · "
+      "${n > 0 ? "$n passz, ${hossz.toStringAsFixed(1).replaceAll(".", ",")} mp" : "passz nélkül"}";
+}

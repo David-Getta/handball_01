@@ -162,6 +162,39 @@ List<Map<String, dynamic>> buildDemoDecisions(Match m, {int lepes = 25}) {
   return ki;
 }
 
+/// Demó gól-akció a 3D "Gól-akciók" lapozójához (backend nélkül): a
+/// /goal-build-ups "moments" alakjában — a demó-passzok első háromból
+/// álló lánca, a végén lövés a jobb kapura (a demóban a hazai arra
+/// támad). SZINTETIKUS, csak a felület bemutatására.
+List<Map<String, dynamic>> buildDemoGoalBuildUps(Match m) {
+  final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+  final passzok = buildDemoPasses(m).take(3).toList();
+  if (passzok.length < 3) return const [];
+  final utolso = passzok.last;
+  final golT = (utolso["t"] as int) + 20;
+  return [
+    {
+      "s": (passzok.first["t"] as int) / fps,
+      "goal_s": golT / fps,
+      "team": "home",
+      "passes": [
+        for (final p in passzok)
+          {
+            "from": [p["x1"], p["y1"]],
+            "to": [p["x2"], p["y2"]],
+            "from_jersey": null,
+            "to_jersey": null,
+          }
+      ],
+      "shooter": [utolso["x2"], utolso["y2"]],
+      "shooter_jersey": null,
+      "goal": [courtLength, courtWidth / 2],
+      "n_passes": 3,
+      "duration_s": ((golT - (passzok.first["t"] as int)) / fps * 10).round() / 10,
+    }
+  ];
+}
+
 /// Demó védekezés-idővonal a 3D védekezés-paneljéhez és a fal-résekhez
 /// (backend nélkül): a /defence-timeline "rows" alakjában — a demóban a
 /// vendég végig a jobb kapu előtt védekezik (hat mezőnyvédő ~5 m-re a

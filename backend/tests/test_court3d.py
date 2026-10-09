@@ -420,3 +420,36 @@ def test_fal_resek_a_wall_gaps_mercejevel():
                 assert x["max_gap"] <= WALL_GAP_M + 0.005
         assert db == wg[side]["frames"]
         assert szeles == wg[side]["wide"]
+
+
+def test_gol_akciok_a_goal_buildup_lanc_szabalyaval():
+    """A gól-akciók a goal_buildup réteg lánc-szabályával: gólonként a
+    passzok száma adja a réteg rövid (≤ 2) és hosszú (≥ 5) számait; a
+    lánc időrendben a gól előtt, legfeljebb BUILDUP_WINDOW_S hosszan;
+    a cél a támadott kapu közepe."""
+    from handball.pipeline.attack_types import (BUILDUP_LONG_PASSES,
+                                                BUILDUP_SHORT_PASSES,
+                                                BUILDUP_WINDOW_S,
+                                                goal_buildup)
+    from handball.pipeline.court3d import goal_build_ups
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=180, fps=25.0, seed=5,
+                              shots_per_min=8)
+    r = goal_build_ups(m)
+    gb = goal_buildup(m)
+    assert r["moments"], "a szimuláción van gól"
+    for side in ("home", "away"):
+        sajat = [x for x in r["moments"] if x["team"] == side]
+        assert r["goals"][side] == len(sajat) == gb[side]["goals"]
+        assert sum(1 for x in sajat
+                   if x["n_passes"] <= BUILDUP_SHORT_PASSES) == gb[side]["short"]
+        assert sum(1 for x in sajat
+                   if x["n_passes"] >= BUILDUP_LONG_PASSES) == gb[side]["long"]
+    for x in r["moments"]:
+        assert x["n_passes"] == len(x["passes"])
+        assert x["s"] <= x["goal_s"]
+        assert 0 <= x["duration_s"] <= BUILDUP_WINDOW_S
+        assert x["goal"][1] == 10.0 and x["goal"][0] in (0.0, 40.0)
+    assert [x["goal_s"] for x in r["moments"]] == \
+        sorted(x["goal_s"] for x in r["moments"])

@@ -153,6 +153,10 @@ class _Court3DScreenState extends State<Court3DScreen>
   // (a nyomás-sugár), vonal a legközelebbi ellenfélhez, X a labdánál.
   List<Map<String, dynamic>> _eladasok = const [];
   double _eladasSugar = 2.5;
+  // GÓL-AKCIÓK: a gólt megelőző passz-lánc (a /goal-build-ups góljai) —
+  // ◀ ▶ lapoz, a lánc a csapat színével, arany vonal a lövéstől a kapuig.
+  List<Map<String, dynamic>> _golok = const [];
+  double? _golUtolso;
   // KINEK A HIBÁI: a három lapozó (Döntések, Szabad lövők, Labdavesztések)
   // mind egy csapat hibáját mutatja — "" mindkettő, "home" / "away" csak
   // az egyiké (a böngészős nézet jelenet-szűrőjének párja).
@@ -206,6 +210,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _dontesek = buildDemoDecisions(_match!);
         _szabadok = buildDemoFreeShots();
         _eladasok = buildDemoTurnovers(_match!);
+        _golok = buildDemoGoalBuildUps(_match!);
         _falSorok = buildDemoDefenceTimeline(_match!);
         _demo = true;
         _loading = false;
@@ -270,6 +275,13 @@ class _Court3DScreenState extends State<Court3DScreen>
         szabadok = ((fs["moments"] as List?) ?? const [])
             .cast<Map<String, dynamic>>();
         szabadSugar = ((fs["radius_m"] as num?) ?? 2.0).toDouble();
+      } catch (_) {}
+      // A gól-akciók — hibája nem viheti el a nézetet.
+      List<Map<String, dynamic>> golok = const [];
+      try {
+        golok = (((await _api.fetchGoalBuildUps(id))["moments"] as List?) ??
+                const [])
+            .cast<Map<String, dynamic>>();
       } catch (_) {}
       // A labdavesztések — hibája nem viheti el a nézetet.
       List<Map<String, dynamic>> eladasok = const [];
@@ -337,6 +349,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _szabadSugar = szabadSugar;
         _eladasok = eladasok;
         _eladasSugar = eladasSugar;
+        _golok = golok;
         _lovesValasztott = null;
         if (widget.lovesTerkep != null) _lovesTerkep = widget.lovesTerkep!;
         _meres = null;
@@ -908,12 +921,35 @@ class _Court3DScreenState extends State<Court3DScreen>
     return "$csapat labdavesztés — $ki · $hol · $nyomas$gol";
   }
 
+  /// A lejátszófejnél aktív gól-akció (az első passz −0,3 mp-étől a gól
+  /// +2,5 mp-éig), vagy null.
+  Map<String, dynamic>? _aktivGol(Match m) {
+    if (_golok.isEmpty || m.frames.isEmpty) return null;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m) / fps;
+    for (final g in _golok) {
+      final s = ((g["s"] as num?) ?? 0).toDouble();
+      final sg = ((g["goal_s"] as num?) ?? s).toDouble();
+      if (most >= s - 0.3 && most <= sg + 2.5) return g;
+    }
+    return null;
+  }
+
+  /// Ugrás az előző/következő gól-akcióra (1,5 mp-cel az első passz előtt).
+  void _golUgras(Match m, int irany) {
+    final cel = _pillanatUgras(m, _golok, _golUtolso, irany);
+    if (cel != null) _golUtolso = cel;
+  }
+
   /// Az épp aktív pillanat-feliratok (szöveg, keretszín) a megjelenés
   /// sorrendjében: döntés, szabad lövés, labdavesztés.
   List<(String, Color)> _pillanatFeliratok(Match m) => [
         if (_dontesFelirat(m) case final d?) (d, AppColors.gold),
         if (_szabadFelirat(m) case final sz?) (sz, AppColors.away),
         if (_eladasFelirat(m) case final el?) (el, eladasSzin),
+        if (_aktivGol(m) case final g?)
+          (goalBuildUpCaption(g, m.meta.homeTeam, m.meta.awayTeam),
+              AppColors.accent),
       ];
 
   /// A döntés-pillanat felirata ("jobb opció is volt: LÖVÉS (0,36) …").
@@ -1391,6 +1427,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                   szabad: _aktivSzabad(m),
                   szabadSugar: _szabadSugar,
                   eladas: _aktivEladas(m),
+                  gol: _aktivGol(m),
                   eladasSugar: _eladasSugar,
                   lovesek: [
                     for (final l in _lathatoLovesek(m))
@@ -2058,6 +2095,31 @@ class _Court3DScreenState extends State<Court3DScreen>
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
+      // Gól-akciók: a gólt megelőző passz-lánc (◀ ▶).
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text("Gól-akciók:", style: AppText.label.copyWith(fontSize: 11.5)),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Előző gól-akció",
+            onPressed: _golok.isEmpty || _match == null
+                ? null
+                : () => _golUgras(_match!, -1),
+            icon: const Icon(Icons.chevron_left, size: 20),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Következő gól-akció",
+            onPressed: _golok.isEmpty || _match == null
+                ? null
+                : () => _golUgras(_match!, 1),
+            icon: const Icon(Icons.chevron_right, size: 20),
+          ),
+          Text(_golok.isEmpty ? "nincs" : "${_golok.length}",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ]),
+      ),
       gomb("Lelátó", () => _nezet(20, -12, 9, 0, -0.5)),
       gomb("Kapu mögül", () => _nezet(-6, 10, 2.5, math.pi / 2, -0.12)),
       gomb("Pálya-szint", () => _nezet(20, 4, 1.7, 0, 0.0)),
@@ -2559,6 +2621,8 @@ class _Court3DPainter extends CustomPainter {
   // Az aktív szabad lövés (a /free-shots egy sora) és a fedezés-sugár.
   final Map<String, dynamic>? szabad;
   final double szabadSugar;
+  // Az aktív gól-akció (a /goal-build-ups egy sora) vagy null.
+  final Map<String, dynamic>? gol;
   // Az aktív labdavesztés (a /turnover-moments egy sora) és a nyomás-sugár.
   final Map<String, dynamic>? eladas;
   final double eladasSugar;
@@ -2583,6 +2647,7 @@ class _Court3DPainter extends CustomPainter {
       this.dontes,
       this.szabad,
       this.szabadSugar = 2.0,
+      this.gol,
       this.eladas,
       this.eladasSugar = 2.5,
       this.rejtett});
@@ -3034,6 +3099,35 @@ class _Court3DPainter extends CustomPainter {
                     lo[1] + ((ve[1] as num).toDouble() - lo[1]) * i / 12)
             ],
             szaggatott: true);
+      }
+    }
+
+    // Gól-akció: a lánc passzai mellmagasságban a csapat színével (a
+    // régebbi halványabb), arany vonal a lövőtől a kapu közepéig.
+    final gk = gol;
+    if (gk != null) {
+      final szin = gk["team"] == "home" ? AppColors.home : AppColors.away;
+      final lanc = ((gk["passes"] as List?) ?? const []).cast<Map>();
+      for (var i = 0; i < lanc.length; i++) {
+        final a = lanc[i]["from"] as List?, b = lanc[i]["to"] as List?;
+        if (a == null || b == null) continue;
+        _vonal(
+            canvas,
+            Paint()
+              ..color = szin.withOpacity(0.35 + 0.65 * (i + 1) / lanc.length)
+              ..strokeWidth = 2.4,
+            (a[0] as num).toDouble(), (a[1] as num).toDouble(), 1.0,
+            (b[0] as num).toDouble(), (b[1] as num).toDouble(), 1.0);
+      }
+      final lo = gk["shooter"] as List?, kapu = gk["goal"] as List?;
+      if (lo != null && kapu != null) {
+        _vonal(
+            canvas,
+            Paint()
+              ..color = AppColors.gold
+              ..strokeWidth = 2.8,
+            (lo[0] as num).toDouble(), (lo[1] as num).toDouble(), 1.2,
+            (kapu[0] as num).toDouble(), (kapu[1] as num).toDouble(), 1.0);
       }
     }
 

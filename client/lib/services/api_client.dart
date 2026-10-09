@@ -1485,6 +1485,18 @@ class ApiClient {
   /// A labdavesztések pillanatai (court3d.turnover_moments) — a 3D pálya
   /// "Labdavesztések" lapozója: ki, hol, kipréselve vagy magától, és gól
   /// lett-e belőle.
+  /// A gólok előkészítése (court3d.goal_build_ups) — a 3D pálya
+  /// "Gól-akciók" lapozója: a gólt megelőző passz-lánc és a lövés.
+  Future<Map<String, dynamic>> fetchGoalBuildUps(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/goal-build-ups"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a gól-akciókat", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> fetchTurnoverMoments(String matchId) async {
     final resp = await http
         .get(Uri.parse("$baseUrl/matches/$matchId/turnover-moments"))

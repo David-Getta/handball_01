@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.160 óta)
 
+- **3D pálya: gól-akciók** (új, böngészős/VR és appbeli nézet): a
+  "Gól-akciók ◀ ▶" gombok a gólokra ugranak, és kirajzolják a gólt
+  megelőző saját passz-láncot (a csapat színével, a régebbi passz
+  halványabb) és arany vonallal a lövést a kapuig; a felirat:
+  "Szeged gólja — #10 → #9 → … → #4 → #10 lő · 8 passz, 6,5 mp". A
+  goal_buildup réteg ("direkt vagy kombinatív gólokból élnek") eddig
+  csak a passzok számát mondta; most a lánc is látszik — UGYANAZZAL a
+  lánc-szabállyal (a gól előtti 20 mp saját passzai, vissza a
+  birtoklás-határig), teszt őrzi, hogy a rövid/hosszú gólok száma
+  egyezik. Új végpont: `/matches/{id}/goal-build-ups`.
+
 - **Meccs-jelentés: a csapatnév kettős escape-je** (javítás): a
   nyomtatható meccs-jelentés 25 szakasza (a fejlécet is beleértve) a
   már HTML-biztos csapatnevet még egyszer escape-elte — egy "&"-et,

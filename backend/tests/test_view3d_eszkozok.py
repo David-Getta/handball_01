@@ -74,6 +74,9 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'id="falres"', "function falResek", "function falresFrissit",
                 'id="jelenetCsapat"', "function szurt(lista)",
                 'id="jelenetGomb"', 'id="jelenetLista"',
+                'id="golKov"', 'id="golElozo"', "function golUgras",
+                "function golFrissit", 'id="golFelirat"',
+                "function golAkcioFelirat",
                 "function jelenetListaEpit", "jelenetListaJelol(ido)",
                 'q.set("lista", "1")',
                 "function jelenetInfok", 'q.set("jelenet"',
@@ -658,6 +661,73 @@ def test_a_jelenet_lista_a_python_forrast_tukrozi():
             volt[x["tipus"]] += 1
     assert all(volt.values()), volt
 
+
+def test_a_tomor_adat_es_a_vegpont_viszi_a_gol_akciokat(tmp_path,
+                                                         monkeypatch):
+    """A tömör adat "goal_build_ups" sorai a goal_build_ups góljai (11
+    mezős alak, a lánc 6 mezős passz-sorokkal); a /goal-build-ups
+    végpont ugyanazt adja, ismeretlen meccsre 404."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import goal_build_ups
+    from handball.pipeline.view3d_html import _compact_data
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    adat = _compact_data(m, None, {"home": [], "away": []},
+                         {"home": [], "away": []})
+    gb = goal_build_ups(m)
+    assert len(adat["goal_build_ups"]) == len(gb["moments"]) > 0
+    for r, x in zip(adat["goal_build_ups"], gb["moments"]):
+        assert len(r) == 11 and r[0] == x["s"] and r[1] == x["goal_s"]
+        assert len(r[3]) == x["n_passes"] == r[9]
+        assert all(len(p) == 6 for p in r[3])
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    v = c.get(f"/matches/{m.meta.match_id}/goal-build-ups").json()
+    assert len(v["moments"]) == len(gb["moments"])
+    assert c.get("/matches/nincs/goal-build-ups").status_code == 404
+
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_gol_akcio_felirata():
+    """A gól-akció felirata: a passzolók mezszámai nyíllal, hosszú
+    láncnál az első kettő és az utolsó kettő, a lövő, a passzok száma és
+    az időtartam; passz nélkül és ismeretlen mezszámmal is."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("function golAkcioFelirat")
+    i1 = kod.index("\n}\n", i0) + 2
+    p = lambda a, b: [1, 1, 2, 2, a, b]  # noqa: E731
+    esetek = [
+        [3.0, 9.5, 1, [p(10, 9), p(9, 7), p(7, 10)], 30, 10, 10, 40, 10, 3,
+         6.5],
+        [1.0, 12.0, 0, [p(2, 3), p(3, 4), p(4, 5), p(5, 6), p(6, 2)], 8, 9,
+         2, 0, 10, 5, 11.0],
+        [20.0, 20.0, 1, [], 35, 10, None, 40, 10, 0, 0.0],
+    ]
+    js = (kod[i0:i1] + "\nconsole.log(JSON.stringify(" + json.dumps(esetek)
+          + '.map(d => golAkcioFelirat(d, "Szeged", "Veszprém"))));\n')
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [
+        "Szeged gólja — #10 → #9 → #7 → #10 lő · 3 passz, 6,5 mp",
+        "Veszprém gólja — #2 → #3 → … → #5 → #6 → #2 lő · 5 passz, 11,0 mp",
+        "Szeged gólja — ? lő · passz nélkül"]
+    # Az app tükre (court_geometry.goalBuildUpCaption) ugyanezt a három
+    # esetet futtatja ugyanezekkel a várt feliratokkal.
+    from pathlib import Path
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" /
+            "test" / "court_geometry_test.dart").read_text(encoding="utf-8")
+    for felirat in json.loads(r.stdout):
+        assert f'"{felirat}"' in dart, felirat
+
 def _fal_dart_sorok() -> list:
     """A Dart-tükör (court_geometry.wallGapSegments) esettáblájának sorai
     — a várt értékek a backend wall_gap_segments-éből (rögzített mag,
@@ -852,6 +922,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "wallGapSegments", "falresek: _falresek(m, allapot)?.$1",
                 "_jelenetCsapat", '_szurt(_szabadok, "defending")',
                 "_jelenetListaPanel(m)", "sceneRows(", "_jelenetUgras(m, r)",
+                "fetchGoalBuildUps", "_golUgras", "_aktivGol",
+                "gol: _aktivGol(m)", "goalBuildUpCaption(",
                 '"Jelenet-lista"',
                 '_szurt(_dontesek, "team")', '_szurt(_eladasok, "team")',
                 "Hibák: mindkét csapat",

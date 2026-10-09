@@ -605,3 +605,77 @@ def scene_rows(decisions: list, free_shots: list, turnovers: list,
         t = max(0, math.floor(r["s"]))
         r["ido"] = f"{t // 60}:{t % 60:02d}"
     return sorok
+
+
+def goal_build_ups(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """A gólok előkészítése: a gólt megelőző saját passz-lánc a pályán.
+
+    A goal_buildup réteg ("direkt vagy kombinatív gólokból élnek")
+    gólonként csak a passzok SZÁMÁT méri; a 3D pálya a láncot magát
+    rajzolja ki — ki kinek adta, honnan lőtt a befejező. UGYANAZ a
+    lánc-szabály: a gól előtti BUILDUP_WINDOW_S saját passzai, vissza az
+    előző gólig vagy az ellenfél utolsó eseményéig (birtoklás-határ).
+
+    Visszatérés: {"moments": [{"s" (az első passz, passz nélkül a gól
+    ideje), "goal_s", "team", "passes": [{"from": [x, y], "to": [x, y],
+    "from_jersey", "to_jersey"}], "shooter": [x, y] | None,
+    "shooter_jersey", "goal": [x, y] (a támadott kapu közepe),
+    "n_passes", "duration_s"}] a gólok időrendjében,
+    "goals": {"home"/"away": db}}."""
+    from .attack_types import BUILDUP_WINDOW_S
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    win = round(BUILDUP_WINDOW_S * fps)
+    events = sorted(detect_events(match, config), key=lambda e: e.t)
+    by_t = {f.t: f for f in match.frames}
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+
+    def hely(t, tid):
+        f = by_t.get(t)
+        if f is None or tid is None:
+            return None
+        p = next((q for q in f.players if q.track_id == tid), None)
+        return [round(p.x, 2), round(p.y, 2)] if p is not None else None
+
+    moments = []
+    goals = {"home": 0, "away": 0}
+    for gi, g in enumerate(events):
+        if g.type != EventType.GOAL:
+            continue
+        side = g.team.value
+        goals[side] += 1
+        lanc = []
+        for e in reversed(events[:gi]):
+            if g.t - e.t > win:
+                break
+            # Birtoklás-határ: korábbi gól vagy az ellenfél eseménye
+            # (a goal_buildup szabálya).
+            if e.type == EventType.GOAL or e.team != g.team:
+                break
+            if e.type == EventType.PASS:
+                lanc.append(e)
+        lanc.reverse()
+        passzok = []
+        for e in lanc:
+            rid = (e.detail or {}).get("receiver_id")
+            passzok.append({"from": hely(e.t, e.player_id),
+                            "to": hely(e.t, rid),
+                            "from_jersey": jersey.get(e.player_id),
+                            "to_jersey": jersey.get(rid)})
+        t0 = lanc[0].t if lanc else g.t
+        moments.append({
+            "s": round(t0 / fps, 2), "goal_s": round(g.t / fps, 2),
+            "team": side, "passes": passzok,
+            "shooter": hely(g.t, g.player_id),
+            "shooter_jersey": jersey.get(g.player_id),
+            "goal": [float(config.attacks_toward_x(g.team)),
+                     COURT_WIDTH_M / 2.0],
+            "n_passes": len(lanc),
+            "duration_s": round((g.t - t0) / fps, 1)})
+    return {"moments": moments, "goals": goals}

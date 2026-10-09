@@ -281,6 +281,23 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("gól-akció: ▶ odaugrik, felirat a lánccal", (tester) async {
+    await _nyit(tester);
+    final kov = find.byTooltip("Következő gól-akció");
+    await tester.ensureVisible(kov);
+    await tester.pump();
+    await tester.tap(kov);
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("gólja —").evaluate().isNotEmpty) break;
+    }
+    // A demó gól-akciója: három passz, a végén lövés.
+    expect(find.textContaining("Demó Hazai gólja —"), findsOneWidget);
+    expect(find.textContaining("· 3 passz,"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("labda-nyom gomb: be/ki", (tester) async {
     await _nyit(tester);
     await tester.tap(find.text("Labda-nyom (3 mp)"));

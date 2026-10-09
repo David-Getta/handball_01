@@ -2893,6 +2893,18 @@ def create_app():
         return _cached_result(match_id, "free-shots",
                               lambda: free_shot_moments(match))
 
+    @app.get("/matches/{match_id}/goal-build-ups")
+    def match_goal_build_ups(match_id: str):
+        """A gólok előkészítése (court3d.goal_build_ups): gólonként a
+        gólt megelőző saját passz-lánc — a 3D pálya "Gól-akciók"
+        lapozója ebből dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import goal_build_ups
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "goal-build-ups",
+                              lambda: goal_build_ups(match))
+
     @app.get("/matches/{match_id}/turnover-moments")
     def match_turnover_moments(match_id: str):
         """A labdavesztések pillanatai (court3d.turnover_moments) — a 3D

@@ -183,6 +183,23 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
             for m_ in _tm["moments"]]
     except Exception:
         eladasok, eladas_sugar = [], 2.5
+    # Gól-akciók: [kezdet mp, gól mp, hazai?, [[ado x, y, fogado x, y,
+    # ado mez, fogado mez], …], lövő x, y | null, lövő mez, kapu x, y,
+    # passzok száma, időtartam] a gólok időrendjében (court3d).
+    try:
+        from .court3d import goal_build_ups
+        golakciok = []
+        for g in goal_build_ups(match)["moments"]:
+            lanc = [[*(p["from"] or [None, None]), *(p["to"] or [None, None]),
+                     p["from_jersey"], p["to_jersey"]]
+                    for p in g["passes"]]
+            golakciok.append([g["s"], g["goal_s"],
+                              1 if g["team"] == "home" else 0, lanc,
+                              *(g["shooter"] or [None, None]),
+                              g["shooter_jersey"], *g["goal"],
+                              g["n_passes"], g["duration_s"]])
+    except Exception:
+        golakciok = []
     # Feltörés: hol és mivel törhető fel a két csapat védekezése (a
     # felderítés rangsorának teteje) — a védekezés-panel a fal mellé írja.
     try:
@@ -215,6 +232,7 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         "free_shots": szabadok,
         "free_radius": szabad_sugar,
         "turnovers": eladasok,
+        "goal_build_ups": golakciok,
         "turnover_pressure": eladas_sugar,
     }
 
@@ -336,6 +354,23 @@ function lapozCel(idok, most, utolso, irany){
 """
 
 
+# A gól-akció felirata — tiszta függvény (a teszt node-dal futtatja):
+# "Szeged gólja — #10 → #9 → … → #4 → #10 lő · 8 passz, 6,5 mp"; hosszú
+# láncnál az első kettő és az utolsó két passzoló marad.
+GOLAKCIO_JS = """
+function golAkcioFelirat(d, nevH, nevV){
+  const [s0, sg, hazai, lanc, lx, ly, lmez, gx, gy, n, hossz] = d;
+  const m = (j) => j !== null && j !== undefined ? "#" + j : "?";
+  let nevek = lanc.map(p => m(p[4]));
+  if (nevek.length > 4) nevek = [...nevek.slice(0, 2), "…", ...nevek.slice(-2)];
+  const lanct = nevek.length ? nevek.join(" → ") + " → " : "";
+  const sz1 = (v) => v.toFixed(1).replace(".", ",");
+  return (hazai ? nevH : nevV) + " gólja — " + lanct + m(lmez) + " lő · " +
+    (n ? n + " passz, " + sz1(hossz) + " mp" : "passz nélkül");
+}
+"""
+
+
 # A jelenet-lista sorai: a három lapozó (Döntések, Szabad lövők,
 # Labdavesztések) jelenetei EGY időrendi listában, rövid magyar
 # felirattal — tiszta függvény, hogy a teszt node-dal futtathassa.
@@ -413,6 +448,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #jelenetLista .jsor.aktiv{background:#2f86d6;color:#fff}
  #jelenetLista .jido{font-variant-numeric:tabular-nums;opacity:.8;min-width:38px}
  #jelenetLista .jpont{width:9px;height:9px;border-radius:50%;flex:none}
+ #golFelirat{position:fixed;left:50%;top:190px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2fd9c4;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #eladasFelirat{position:fixed;left:50%;top:144px;transform:translateX(-50%);padding:6px 14px;border:1px solid #ff9f43;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jatekosHud{position:fixed;left:50%;top:12px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.85);font-size:14px;font-variant-numeric:tabular-nums;display:none}
 </style></head><body>
@@ -502,6 +538,12 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="eladasInfo"></span>
  </div>
  <div class="sor">
+  <span title="A gólok előkészítése: a gólt megelőző saját passz-lánc, a lövéssel">Gól-akciók:</span>
+  <button id="golElozo" title="Előző gól-akció">◀</button>
+  <button id="golKov" title="Következő gól-akció">▶</button>
+  <span id="golInfo"></span>
+ </div>
+ <div class="sor">
   <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
   <span id="linkInfo"></span>
  </div>
@@ -521,6 +563,7 @@ Fal-rések — a védőfal szomszédos védői közt: zöld zárt, piros a 3,5 m
 Döntések ◀ ▶ — ahol jobb opció is volt: fehér a választott passz, arany a jobb (passz vagy lövés)<br>
 Szabad lövők ◀ ▶ — a fedezés-hibák: piros kör a lövő körül (2 m), vonal a legközelebbi védőhöz<br>
 Labdavesztések ◀ ▶ — narancs kör a vesztő körül (a nyomás-sugár), vonal a legközelebbi ellenfélhez, X a labdánál<br>
+Gól-akciók ◀ ▶ — a gólt megelőző passz-lánc (a régebbi passz halványabb), arany vonal a lövéstől a kapuig<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
@@ -531,6 +574,7 @@ VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="dontesFelirat"></div>
 <div id="szabadFelirat"></div>
 <div id="eladasFelirat"></div>
+<div id="golFelirat"></div>
 <div id="jelenetLista"></div>
 <div id="felirat"></div>
 <div id="vez">
@@ -1518,6 +1562,47 @@ function falresFrissit(t){
     : "zárt — a legnagyobb rés " + szam1(r.max) + " m");
 }
 
+// ---- Gól-akciók: a gólt megelőző passz-lánc ------------------------------
+// ◀ ▶ a gólok közt ugrik (1,5 mp-cel az első passz előtt, lejátszva); a
+// lánc a csapat színével (a régebbi passz halványabb), arany vonal a
+// lövőtől a kapu közepéig; a felirat a mezszámokkal (court3d.
+// goal_build_ups — a goal_buildup réteg lánc-szabályával).
+const GOLAKCIOK = ADAT.goal_build_ups || [];
+const golCsoport = new THREE.Group();
+szinpad.add(golCsoport);
+document.getElementById("golInfo").textContent = GOLAKCIOK.length ? GOLAKCIOK.length + " gól" : "nincs ilyen";
+let golUtolso = null;
+function golUgras(irany){
+  if (!GOLAKCIOK.length) return;
+  const cel = lapozCel(GOLAKCIOK.map(d => d[0]), ido, golUtolso, irany);
+  if (cel === null) return;
+  golUtolso = cel;
+  ido = Math.max(0, cel - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
+  csuszka.value = ido;
+}
+document.getElementById("golElozo").onclick = () => golUgras(-1);
+document.getElementById("golKov").onclick = () => golUgras(1);
+function golFrissit(t){
+  while (golCsoport.children.length) golCsoport.remove(golCsoport.children[0]);
+  const d = GOLAKCIOK.find(x => t >= x[0] - 0.3 && t <= x[1] + 2.5);
+  if (!d) return null;
+  const [s0, sg, hazai, lanc, lx, ly, lmez, gx, gy, n, hossz] = d;
+  const szin = hazai ? 0x4c9aff : 0xff6b6b;
+  lanc.forEach((p, i) => {
+    if (p[0] === null || p[2] === null) return;
+    const g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(p[0], 1.0, W - p[1]), new THREE.Vector3(p[2], 1.0, W - p[3])]);
+    golCsoport.add(new THREE.Line(g, new THREE.LineBasicMaterial(
+      {color: szin, transparent: true, opacity: 0.35 + 0.65 * (i + 1) / lanc.length})));
+  });
+  if (lx !== null){
+    const g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(lx, 1.2, W - ly), new THREE.Vector3(gx, 1.0, W - gy)]);
+    golCsoport.add(new THREE.Line(g, new THREE.LineBasicMaterial({color: 0xd9b544})));
+  }
+  return golAkcioFelirat(d, ADAT.home, ADAT.away);
+}
+
 // ---- Jelenet-szűrő: kinek a hibái ---------------------------------------
 // A három lapozó mind egy csapat HIBÁJÁT mutatja — a rossz döntést hozó, a
 // lövőt szabadon hagyó és a labdát elvesztő csapatét; a sorok 2. eleme
@@ -1572,6 +1657,10 @@ function dontesFrissit(t){
   const szabadFelirat = document.getElementById("szabadFelirat");
   if (szabadSzoveg){ szabadFelirat.textContent = szabadSzoveg; szabadFelirat.style.display = "block"; }
   else szabadFelirat.style.display = "none";
+  const golSzoveg = golFrissit(t);
+  const golFelirat = document.getElementById("golFelirat");
+  if (golSzoveg){ golFelirat.textContent = golSzoveg; golFelirat.style.display = "block"; }
+  else golFelirat.style.display = "none";
   const eladasSzoveg = eladasFrissit(t);
   const eladasFelirat = document.getElementById("eladasFelirat");
   if (eladasSzoveg){ eladasFelirat.innerHTML = eladasSzoveg; eladasFelirat.style.display = "block"; }
@@ -2003,6 +2092,6 @@ fest.setAnimationLoop(() => {
               f"FR_MIN = {WALL_GAP_MIN_DEFENDERS};" + FALRES_JS)
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
-                          + JELENETLISTA_JS)
+                          + JELENETLISTA_JS + GOLAKCIO_JS)
                  .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))
