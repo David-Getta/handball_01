@@ -157,6 +157,27 @@ void main() {
         "Szeged gólja — ? lő · passz nélkül");
   });
 
+  // Az emberelőny-jelző a böngésző emberSzoveg-ével AZONOS (a backend
+  // node-os tesztje ugyanezt a négy esetet futtatja).
+  test("powerplayCaption = a böngésző emberSzoveg-e", () {
+    final w = {
+      "s": 30.0, "e": 110.0, "team_down": "away", "team_up": "home",
+      "goals": [[40.0, "home"], [55.5, "away"], [90.0, "home"]],
+    };
+    expect(powerplayCaption(w, 37.9, "Szeged", "Veszprém"),
+        "Emberelőny: Szeged (Veszprém kiállítás miatt hiányos) · még 1:13 · az előny alatt eddig 0–0");
+    expect(powerplayCaption(w, 60.0, "Szeged", "Veszprém"),
+        "Emberelőny: Szeged (Veszprém kiállítás miatt hiányos) · még 0:50 · az előny alatt eddig 1–1");
+    expect(powerplayCaption(w, 100.0, "Szeged", "Veszprém"),
+        "Emberelőny: Szeged (Veszprém kiállítás miatt hiányos) · még 0:10 · az előny alatt eddig 2–1");
+    expect(
+        powerplayCaption({
+          "s": 200.0, "e": 290.4, "team_down": "home", "team_up": "away",
+          "goals": [],
+        }, 200.0, "Szeged", "Veszprém"),
+        "Emberelőny: Veszprém (Szeged kiállítás miatt hiányos) · még 1:31 · az előny alatt eddig 0–0");
+  });
+
   // A fal-rés tükör a backend wall_gap_segments-éből számolt táblát futtatja
   // (a backend-teszt a sorokat újraszámolja és itt megkeresi).
   test("wallGapSegments = a backend wall_gap_segments", () {

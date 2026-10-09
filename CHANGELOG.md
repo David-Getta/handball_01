@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.160 óta)
 
+- **3D pálya: emberelőny** (új, böngészős/VR és appbeli nézet): amíg a
+  lejátszás egy kiállítás miatti emberelőny-szakaszban jár, élő jelző
+  mondja: "Emberelőny: Szeged (Veszprém kiállítás miatt hiányos) · még
+  1:13 · az előny alatt eddig 1–0"; az "Emberelőny ◀ ▶" gombok a
+  szakaszok elejére ugranak. A kiállítás-felismerés és a lövés-szabály
+  a powerplay_efficiency rétegé (kapura tartó lövés a szakaszon belül)
+  — teszt őrzi, hogy az előny- és hátrány-számok egyeznek. Új végpont:
+  `/matches/{id}/powerplay-moments`.
+
 - **3D pálya: gól-akciók** (új, böngészős/VR és appbeli nézet): a
   "Gól-akciók ◀ ▶" gombok a gólokra ugranak, és kirajzolják a gólt
   megelőző saját passz-láncot (a csapat színével, a régebbi passz

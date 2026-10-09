@@ -453,3 +453,54 @@ def test_gol_akciok_a_goal_buildup_lanc_szabalyaval():
         assert x["goal"][1] == 10.0 and x["goal"][0] in (0.0, 40.0)
     assert [x["goal_s"] for x in r["moments"]] == \
         sorted(x["goal_s"] for x in r["moments"])
+
+
+def _kiallitasos_meccs():
+    """Lövéses szimuláció, amelyben a vendég egyik mezőnyjátékosa a 30. és
+    a 110. másodperc között nincs a pályán (kiállítás lenyomata)."""
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=240, fps=25.0, seed=5,
+                              shots_per_min=8)
+    ki = min(p.track_id for f in m.frames for p in f.players
+             if p.team == Team.AWAY and p.role != "kapus")
+    for f in m.frames:
+        if 30 * 25 <= f.t <= 110 * 25:
+            f.players = [p for p in f.players if p.track_id != ki]
+    return m
+
+
+def test_emberelony_szakaszok_a_powerplay_efficiency_szabalyaval():
+    """Az emberelőny-szakaszok a detect_powerplay szakaszai; a szakaszon
+    belüli kapura lövések és gólok csapatonként EGYEZNEK a
+    powerplay_efficiency előny- és hátrány-számaival."""
+    from handball.pipeline.court3d import powerplay_moments
+    from handball.pipeline.rules import (detect_powerplay,
+                                         powerplay_efficiency)
+
+    m = _kiallitasos_meccs()
+    pm = powerplay_moments(m)
+    ab = detect_powerplay(m)
+    pe = powerplay_efficiency(m)
+    assert pm["windows"] == len(ab) == 1
+    w = pm["moments"][0]
+    assert w["team_down"] == "away" and w["team_up"] == "home"
+    assert 29.0 <= w["s"] <= 31.0 and w["e"] > w["s"]
+    for side in ("home", "away"):
+        fel = [x for x in pm["moments"] if x["team_up"] == side]
+        le = [x for x in pm["moments"] if x["team_down"] == side]
+        assert sum(x["shots_up"] for x in fel) == pe[side]["pp_shots"]
+        assert sum(x["goals_up"] for x in fel) == pe[side]["pp_goals"]
+        assert sum(x["goals_up"] for x in le) == pe[side]["sh_conceded"]
+    assert len(w["goals"]) == w["goals_up"] + w["goals_down"] > 0
+    assert all(w["s"] <= g[0] <= w["e"] for g in w["goals"])
+
+
+def test_emberelony_nelkul_ures():
+    """Teljes létszámú meccsen nincs emberelőny-szakasz."""
+    from handball.pipeline.court3d import powerplay_moments
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    pm = powerplay_moments(simulate_ground_truth(duration_s=120, fps=25.0,
+                                                 seed=5, shots_per_min=8))
+    assert pm == {"moments": [], "windows": 0}

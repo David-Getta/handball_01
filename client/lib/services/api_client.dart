@@ -1487,6 +1487,18 @@ class ApiClient {
   /// lett-e belőle.
   /// A gólok előkészítése (court3d.goal_build_ups) — a 3D pálya
   /// "Gól-akciók" lapozója: a gólt megelőző passz-lánc és a lövés.
+  /// Az emberelőny-szakaszok (court3d.powerplay_moments) — a 3D pálya
+  /// élő emberelőny-jelzője és "Emberelőny" lapozója.
+  Future<Map<String, dynamic>> fetchPowerplayMoments(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/powerplay-moments"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni az emberelőnyöket", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> fetchGoalBuildUps(String matchId) async {
     final resp = await http
         .get(Uri.parse("$baseUrl/matches/$matchId/goal-build-ups"))

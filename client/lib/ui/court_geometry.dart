@@ -415,3 +415,28 @@ String goalBuildUpCaption(Map<String, dynamic> g, String nevH, String nevV) {
   return "$csapat gólja — $lanc${m(g["shooter_jersey"])} lő · "
       "${n > 0 ? "$n passz, ${hossz.toStringAsFixed(1).replaceAll(".", ",")} mp" : "passz nélkül"}";
 }
+
+/// Az emberelőny-jelző szövege (a böngészős nézet `emberSzoveg`-ének
+/// tükre, UGYANAZZAL a szöveggel): "Emberelőny: Szeged (Veszprém
+/// kiállítás miatt hiányos) · még 1:13 · az előny alatt eddig 1–0".
+/// `w`: a /powerplay-moments egy sora, `t`: a lejátszófej (mp).
+String powerplayCaption(
+    Map<String, dynamic> w, double t, String nevH, String nevV) {
+  final downH = w["team_down"] == "home";
+  final elony = downH ? nevV : nevH, hatrany = downH ? nevH : nevV;
+  final e = ((w["e"] as num?) ?? t).toDouble();
+  final hatra = math.max(0, (e - t).ceil());
+  final ido = "${hatra ~/ 60}:${(hatra % 60).toString().padLeft(2, "0")}";
+  var fel = 0, le = 0;
+  for (final g in ((w["goals"] as List?) ?? const [])) {
+    final mp = ((g as List)[0] as num).toDouble();
+    if (mp > t) continue;
+    if (g[1] == w["team_up"]) {
+      fel++;
+    } else {
+      le++;
+    }
+  }
+  return "Emberelőny: $elony ($hatrany kiállítás miatt hiányos) · még $ido "
+      "· az előny alatt eddig $fel–$le";
+}

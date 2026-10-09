@@ -298,6 +298,26 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("emberelőny: ▶ a szakaszra ugrik, élő jelzővel", (tester) async {
+    await _nyit(tester);
+    final kov = find.byTooltip("Következő emberelőny");
+    await tester.ensureVisible(kov);
+    await tester.pump();
+    await tester.tap(kov);
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("Emberelőny: Demó Hazai").evaluate().isNotEmpty) {
+        break;
+      }
+    }
+    expect(
+        find.textContaining(
+            "Emberelőny: Demó Hazai (Demó Vendég kiállítás miatt hiányos)"),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("labda-nyom gomb: be/ki", (tester) async {
     await _nyit(tester);
     await tester.tap(find.text("Labda-nyom (3 mp)"));

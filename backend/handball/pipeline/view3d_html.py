@@ -200,6 +200,17 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
                               g["n_passes"], g["duration_s"]])
     except Exception:
         golakciok = []
+    # Emberelőny-szakaszok: [kezdet mp, vég mp, a hátrányban lévő hazai?,
+    # az előnyben lévő góljai, a hátrányban lévő góljai, az előnyben
+    # lévő kapura lövései, [[gól mp, hazai?], …]] (court3d).
+    try:
+        from .court3d import powerplay_moments
+        emberek = [[w["s"], w["e"], 1 if w["team_down"] == "home" else 0,
+                    w["goals_up"], w["goals_down"], w["shots_up"],
+                    [[g[0], 1 if g[1] == "home" else 0] for g in w["goals"]]]
+                   for w in powerplay_moments(match)["moments"]]
+    except Exception:
+        emberek = []
     # Feltörés: hol és mivel törhető fel a két csapat védekezése (a
     # felderítés rangsorának teteje) — a védekezés-panel a fal mellé írja.
     try:
@@ -233,6 +244,7 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         "free_radius": szabad_sugar,
         "turnovers": eladasok,
         "goal_build_ups": golakciok,
+        "powerplays": emberek,
         "turnover_pressure": eladas_sugar,
     }
 
@@ -354,6 +366,26 @@ function lapozCel(idok, most, utolso, irany){
 """
 
 
+# Az emberelőny-jelző szövege — tiszta függvény (a teszt node-dal
+# futtatja): "Emberelőny: Szeged (Veszprém kiállítás miatt hiányos) ·
+# még 1:12 · az előny alatt eddig 2–0".
+EMBERELONY_JS = """
+function emberSzoveg(d, t, nevH, nevV){
+  const [s, e, downH, gu, gd, su, golok] = d;
+  const elony = downH ? nevV : nevH, hatrany = downH ? nevH : nevV;
+  const hatra = Math.max(0, Math.ceil(e - t));
+  const ido = Math.floor(hatra / 60) + ":" + String(hatra % 60).padStart(2, "0");
+  let fel = 0, le = 0;
+  for (const [mp, h] of golok){
+    if (mp > t) continue;
+    if (!!h === !downH) fel++; else le++;
+  }
+  return "Emberelőny: " + elony + " (" + hatrany + " kiállítás miatt hiányos) · még " +
+    ido + " · az előny alatt eddig " + fel + "–" + le;
+}
+"""
+
+
 # A gól-akció felirata — tiszta függvény (a teszt node-dal futtatja):
 # "Szeged gólja — #10 → #9 → … → #4 → #10 lő · 8 passz, 6,5 mp"; hosszú
 # láncnál az első kettő és az utolsó két passzoló marad.
@@ -448,6 +480,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #jelenetLista .jsor.aktiv{background:#2f86d6;color:#fff}
  #jelenetLista .jido{font-variant-numeric:tabular-nums;opacity:.8;min-width:38px}
  #jelenetLista .jpont{width:9px;height:9px;border-radius:50%;flex:none}
+ #emberJelzo{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);padding:6px 12px;border:1px solid #ffc857;border-radius:8px;background:rgba(16,24,32,.88);color:#ffc857;font-size:13px;display:none}
  #golFelirat{position:fixed;left:50%;top:190px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2fd9c4;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #eladasFelirat{position:fixed;left:50%;top:144px;transform:translateX(-50%);padding:6px 14px;border:1px solid #ff9f43;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jatekosHud{position:fixed;left:50%;top:12px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.85);font-size:14px;font-variant-numeric:tabular-nums;display:none}
@@ -544,6 +577,12 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="golInfo"></span>
  </div>
  <div class="sor">
+  <span title="Kiállítás miatti emberelőny-szakaszok: ki van hátrányban, meddig, és mi történt közben">Emberelőny:</span>
+  <button id="emberElozo" title="Előző emberelőny">◀</button>
+  <button id="emberKov" title="Következő emberelőny">▶</button>
+  <span id="emberInfo"></span>
+ </div>
+ <div class="sor">
   <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
   <span id="linkInfo"></span>
  </div>
@@ -564,6 +603,7 @@ Döntések ◀ ▶ — ahol jobb opció is volt: fehér a választott passz, ara
 Szabad lövők ◀ ▶ — a fedezés-hibák: piros kör a lövő körül (2 m), vonal a legközelebbi védőhöz<br>
 Labdavesztések ◀ ▶ — narancs kör a vesztő körül (a nyomás-sugár), vonal a legközelebbi ellenfélhez, X a labdánál<br>
 Gól-akciók ◀ ▶ — a gólt megelőző passz-lánc (a régebbi passz halványabb), arany vonal a lövéstől a kapuig<br>
+Emberelőny ◀ ▶ — a kiállítások szakaszai; közben lent középen élő jelző: ki van előnyben, mennyi van hátra, mi az állás az előny alatt<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
@@ -575,6 +615,7 @@ VR-headsetben: a lenti "ENTER VR" gomb</div>
 <div id="szabadFelirat"></div>
 <div id="eladasFelirat"></div>
 <div id="golFelirat"></div>
+<div id="emberJelzo"></div>
 <div id="jelenetLista"></div>
 <div id="felirat"></div>
 <div id="vez">
@@ -1562,6 +1603,32 @@ function falresFrissit(t){
     : "zárt — a legnagyobb rés " + szam1(r.max) + " m");
 }
 
+// ---- Emberelőny: a kiállítások szakaszai ---------------------------------
+// Élő jelző (lent középen), amíg egy szakaszon belül vagyunk: ki van
+// előnyben, mennyi van hátra, és az előny alatti állás eddig; ◀ ▶ a
+// szakaszok elejére ugrik (court3d.powerplay_moments — a
+// powerplay_efficiency réteg szakaszai és lövés-szabálya).
+const EMBEREK = ADAT.powerplays || [];
+const emberJelzo = document.getElementById("emberJelzo");
+document.getElementById("emberInfo").textContent = EMBEREK.length ? EMBEREK.length + " szakasz" : "nincs ilyen";
+let emberUtolso = null;
+function emberUgras(irany){
+  if (!EMBEREK.length) return;
+  const cel = lapozCel(EMBEREK.map(d => d[0]), ido, emberUtolso, irany);
+  if (cel === null) return;
+  emberUtolso = cel;
+  ido = Math.max(0, cel - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
+  csuszka.value = ido;
+}
+document.getElementById("emberElozo").onclick = () => emberUgras(-1);
+document.getElementById("emberKov").onclick = () => emberUgras(1);
+function emberFrissit(t){
+  const d = EMBEREK.find(x => t >= x[0] && t <= x[1]);
+  if (!d){ emberJelzo.style.display = "none"; return; }
+  emberJelzo.textContent = emberSzoveg(d, t, ADAT.home, ADAT.away);
+  emberJelzo.style.display = "block";
+}
+
 // ---- Gól-akciók: a gólt megelőző passz-lánc ------------------------------
 // ◀ ▶ a gólok közt ugrik (1,5 mp-cel az első passz előtt, lejátszva); a
 // lánc a csapat színével (a régebbi passz halványabb), arany vonal a
@@ -1657,6 +1724,7 @@ function dontesFrissit(t){
   const szabadFelirat = document.getElementById("szabadFelirat");
   if (szabadSzoveg){ szabadFelirat.textContent = szabadSzoveg; szabadFelirat.style.display = "block"; }
   else szabadFelirat.style.display = "none";
+  emberFrissit(t);
   const golSzoveg = golFrissit(t);
   const golFelirat = document.getElementById("golFelirat");
   if (golSzoveg){ golFelirat.textContent = golSzoveg; golFelirat.style.display = "block"; }
@@ -2092,6 +2160,6 @@ fest.setAnimationLoop(() => {
               f"FR_MIN = {WALL_GAP_MIN_DEFENDERS};" + FALRES_JS)
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
-                          + JELENETLISTA_JS + GOLAKCIO_JS)
+                          + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS)
                  .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))

@@ -157,6 +157,10 @@ class _Court3DScreenState extends State<Court3DScreen>
   // ◀ ▶ lapoz, a lánc a csapat színével, arany vonal a lövéstől a kapuig.
   List<Map<String, dynamic>> _golok = const [];
   double? _golUtolso;
+  // EMBERELŐNY: a kiállítások szakaszai (a /powerplay-moments) — élő
+  // jelző, amíg egy szakaszon belül vagyunk, és ◀ ▶ lapozó.
+  List<Map<String, dynamic>> _emberek = const [];
+  double? _emberUtolso;
   // KINEK A HIBÁI: a három lapozó (Döntések, Szabad lövők, Labdavesztések)
   // mind egy csapat hibáját mutatja — "" mindkettő, "home" / "away" csak
   // az egyiké (a böngészős nézet jelenet-szűrőjének párja).
@@ -211,6 +215,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _szabadok = buildDemoFreeShots();
         _eladasok = buildDemoTurnovers(_match!);
         _golok = buildDemoGoalBuildUps(_match!);
+        _emberek = buildDemoPowerplays(_match!);
         _falSorok = buildDemoDefenceTimeline(_match!);
         _demo = true;
         _loading = false;
@@ -275,6 +280,14 @@ class _Court3DScreenState extends State<Court3DScreen>
         szabadok = ((fs["moments"] as List?) ?? const [])
             .cast<Map<String, dynamic>>();
         szabadSugar = ((fs["radius_m"] as num?) ?? 2.0).toDouble();
+      } catch (_) {}
+      // Az emberelőny-szakaszok — hibája nem viheti el a nézetet.
+      List<Map<String, dynamic>> emberek = const [];
+      try {
+        emberek = (((await _api.fetchPowerplayMoments(id))["moments"]
+                    as List?) ??
+                const [])
+            .cast<Map<String, dynamic>>();
       } catch (_) {}
       // A gól-akciók — hibája nem viheti el a nézetet.
       List<Map<String, dynamic>> golok = const [];
@@ -350,6 +363,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _eladasok = eladasok;
         _eladasSugar = eladasSugar;
         _golok = golok;
+        _emberek = emberek;
         _lovesValasztott = null;
         if (widget.lovesTerkep != null) _lovesTerkep = widget.lovesTerkep!;
         _meres = null;
@@ -941,12 +955,35 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (cel != null) _golUtolso = cel;
   }
 
+  /// Az emberelőny-jelző szövege, ha a lejátszófej egy szakaszon belül
+  /// van (court_geometry.powerplayCaption — a böngésző szövegével).
+  String? _emberJelzo(Match m) {
+    if (_emberek.isEmpty || m.frames.isEmpty) return null;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m) / fps;
+    for (final w in _emberek) {
+      final s = ((w["s"] as num?) ?? 0).toDouble();
+      final e = ((w["e"] as num?) ?? s).toDouble();
+      if (most >= s && most <= e) {
+        return powerplayCaption(w, most, m.meta.homeTeam, m.meta.awayTeam);
+      }
+    }
+    return null;
+  }
+
+  /// Ugrás az előző/következő emberelőny-szakasz elejére.
+  void _emberUgras(Match m, int irany) {
+    final cel = _pillanatUgras(m, _emberek, _emberUtolso, irany);
+    if (cel != null) _emberUtolso = cel;
+  }
+
   /// Az épp aktív pillanat-feliratok (szöveg, keretszín) a megjelenés
   /// sorrendjében: döntés, szabad lövés, labdavesztés.
   List<(String, Color)> _pillanatFeliratok(Match m) => [
         if (_dontesFelirat(m) case final d?) (d, AppColors.gold),
         if (_szabadFelirat(m) case final sz?) (sz, AppColors.away),
         if (_eladasFelirat(m) case final el?) (el, eladasSzin),
+        if (_emberJelzo(m) case final em?) (em, AppColors.ball),
         if (_aktivGol(m) case final g?)
           (goalBuildUpCaption(g, m.meta.homeTeam, m.meta.awayTeam),
               AppColors.accent),
@@ -2092,6 +2129,31 @@ class _Court3DScreenState extends State<Court3DScreen>
             icon: const Icon(Icons.chevron_right, size: 20),
           ),
           Text(_eladasokSz.isEmpty ? "nincs" : "${_eladasokSz.length}",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ]),
+      ),
+      // Emberelőny: a kiállítások szakaszai (◀ ▶).
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text("Emberelőny:", style: AppText.label.copyWith(fontSize: 11.5)),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Előző emberelőny",
+            onPressed: _emberek.isEmpty || _match == null
+                ? null
+                : () => _emberUgras(_match!, -1),
+            icon: const Icon(Icons.chevron_left, size: 20),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Következő emberelőny",
+            onPressed: _emberek.isEmpty || _match == null
+                ? null
+                : () => _emberUgras(_match!, 1),
+            icon: const Icon(Icons.chevron_right, size: 20),
+          ),
+          Text(_emberek.isEmpty ? "nincs" : "${_emberek.length}",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),

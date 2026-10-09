@@ -95,6 +95,10 @@ feliratok egymás alatt):
 - **Szabad lövők ◀ ▶** — a kapott lövések, ahol a lövőtől 2 m-en belül
   nem volt mezőnyvédő: **piros kör** a lövő körül (a fedezés-sugár) és
   szaggatott vonal a legközelebbi védőhöz, a felirat a távolsággal.
+- **Emberelőny ◀ ▶** — a kiállítások szakaszai; amíg a lejátszás egy
+  ilyenben jár, lent középen élő jelző: ki van előnyben, ki hiányos,
+  mennyi van hátra, és az előny alatti állás eddig. A kiállítás-
+  felismerés és a lövés-szabály az emberelőny-hatékonyság rétegé.
 - **Gól-akciók ◀ ▶** — a gólok előkészítése: a gólt megelőző saját
   passz-lánc a csapat színével (a régebbi passz halványabb), **arany**
   vonal a lövőtől a kapuig; a felirat a mezszámokkal ("#10 → #9 → … →
@@ -153,11 +157,13 @@ headsetről USB-kábellel és `adb reverse`-szel érhető el az app gépe.
   és megállítás, `pass_lanes` — passzsávok, `decision_moments` —
   döntés-pillanatok, `free_shot_moments` — szabadon hagyott lövők,
   `turnover_moments` — labdavesztések, `wall_gap_segments` — fal-rések,
-  `goal_build_ups` — gól-akciók, `scene_rows` — a jelenet-lista sorai),
+  `goal_build_ups` — gól-akciók, `powerplay_moments` — emberelőny,
+  `scene_rows` — a jelenet-lista sorai),
   `view3d_html.py` (a böngészős oldal és a tömör adat), végpontok:
   `/matches/{id}/view3d`, `/matches/{id}/defence-timeline`,
   `/matches/{id}/decision-moments`, `/matches/{id}/free-shots`,
-  `/matches/{id}/turnover-moments`, `/matches/{id}/goal-build-ups`.
+  `/matches/{id}/turnover-moments`, `/matches/{id}/goal-build-ups`,
+  `/matches/{id}/powerplay-moments`.
 - App: `client/lib/ui/court3d_screen.dart` (szoftveres vetítés,
   gesztusok, rétegek), `court_geometry.dart` (a backend tükre).
 - Tesztek: `backend/tests/test_view3d_eszkozok.py`,

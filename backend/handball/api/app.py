@@ -2893,6 +2893,18 @@ def create_app():
         return _cached_result(match_id, "free-shots",
                               lambda: free_shot_moments(match))
 
+    @app.get("/matches/{match_id}/powerplay-moments")
+    def match_powerplay_moments(match_id: str):
+        """Az emberelőny-szakaszok (court3d.powerplay_moments) — a 3D
+        pálya élő emberelőny-jelzője és "Emberelőny" lapozója ebből
+        dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import powerplay_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "powerplay-moments",
+                              lambda: powerplay_moments(match))
+
     @app.get("/matches/{match_id}/goal-build-ups")
     def match_goal_build_ups(match_id: str):
         """A gólok előkészítése (court3d.goal_build_ups): gólonként a

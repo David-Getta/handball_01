@@ -75,6 +75,9 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'id="jelenetCsapat"', "function szurt(lista)",
                 'id="jelenetGomb"', 'id="jelenetLista"',
                 'id="golKov"', 'id="golElozo"', "function golUgras",
+                'id="emberKov"', 'id="emberElozo"', 'id="emberJelzo"',
+                "function emberFrissit", "function emberSzoveg",
+                "emberFrissit(t)",
                 "function golFrissit", 'id="golFelirat"',
                 "function golAkcioFelirat",
                 "function jelenetListaEpit", "jelenetListaJelol(ido)",
@@ -728,6 +731,71 @@ def test_a_gol_akcio_felirata():
     for felirat in json.loads(r.stdout):
         assert f'"{felirat}"' in dart, felirat
 
+
+def test_a_tomor_adat_es_a_vegpont_viszi_az_emberelonyt(tmp_path,
+                                                        monkeypatch):
+    """A tömör adat "powerplays" sorai a powerplay_moments szakaszai (7
+    mezős alak); a /powerplay-moments végpont ugyanazt adja, 404."""
+    from fastapi.testclient import TestClient
+    from test_court3d import _kiallitasos_meccs
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import powerplay_moments
+    from handball.pipeline.view3d_html import _compact_data
+
+    m = _kiallitasos_meccs()
+    adat = _compact_data(m, None, {"home": [], "away": []},
+                         {"home": [], "away": []})
+    pm = powerplay_moments(m)
+    assert len(adat["powerplays"]) == len(pm["moments"]) == 1
+    r, w = adat["powerplays"][0], pm["moments"][0]
+    assert len(r) == 7 and r[:6] == [w["s"], w["e"], 0, w["goals_up"],
+                                     w["goals_down"], w["shots_up"]]
+    assert len(r[6]) == len(w["goals"])
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    v = c.get(f"/matches/{m.meta.match_id}/powerplay-moments").json()
+    assert v["windows"] == 1
+    assert c.get("/matches/nincs/powerplay-moments").status_code == 404
+
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_az_emberelony_jelzo_szovege():
+    """Az élő jelző: ki van előnyben, ki hiányos, mennyi van hátra (p:mm,
+    felfelé kerekítve), és az előny alatti állás a lejátszófejig — a
+    későbbi gól még nem számít."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("function emberSzoveg")
+    i1 = kod.index("\n}\n", i0) + 2
+    d = [30.0, 110.0, 0, 2, 1, 5, [[40.0, 1], [55.5, 0], [90.0, 1]]]
+    esetek = [[d, 37.9], [d, 60.0], [d, 100.0],
+              [[200.0, 290.4, 1, 0, 0, 0, []], 200.0]]
+    js = (kod[i0:i1] + "\nconsole.log(JSON.stringify(" + json.dumps(esetek)
+          + '.map(([d, t]) => emberSzoveg(d, t, "Szeged", "Veszprém"))));\n')
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [
+        "Emberelőny: Szeged (Veszprém kiállítás miatt hiányos) · még 1:13 · "
+        "az előny alatt eddig 0–0",
+        "Emberelőny: Szeged (Veszprém kiállítás miatt hiányos) · még 0:50 · "
+        "az előny alatt eddig 1–1",
+        "Emberelőny: Szeged (Veszprém kiállítás miatt hiányos) · még 0:10 · "
+        "az előny alatt eddig 2–1",
+        "Emberelőny: Veszprém (Szeged kiállítás miatt hiányos) · még 1:31 · "
+        "az előny alatt eddig 0–0"]
+    # Az app tükre (court_geometry.powerplayCaption) ugyanezt a négy
+    # esetet futtatja ugyanezekkel a várt szövegekkel.
+    from pathlib import Path
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" /
+            "test" / "court_geometry_test.dart").read_text(encoding="utf-8")
+    for szoveg in json.loads(r.stdout):
+        assert f'"{szoveg}"' in dart, szoveg
+
 def _fal_dart_sorok() -> list:
     """A Dart-tükör (court_geometry.wallGapSegments) esettáblájának sorai
     — a várt értékek a backend wall_gap_segments-éből (rögzített mag,
@@ -923,6 +991,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "_jelenetCsapat", '_szurt(_szabadok, "defending")',
                 "_jelenetListaPanel(m)", "sceneRows(", "_jelenetUgras(m, r)",
                 "fetchGoalBuildUps", "_golUgras", "_aktivGol",
+                "fetchPowerplayMoments", "_emberUgras", "_emberJelzo(m)",
+                "powerplayCaption(",
                 "gol: _aktivGol(m)", "goalBuildUpCaption(",
                 '"Jelenet-lista"',
                 '_szurt(_dontesek, "team")', '_szurt(_eladasok, "team")',

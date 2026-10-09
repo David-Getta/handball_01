@@ -679,3 +679,46 @@ def goal_build_ups(match: Match, config: Optional[TacticsConfig] = None) -> dict
             "n_passes": len(lanc),
             "duration_s": round((g.t - t0) / fps, 1)})
     return {"moments": moments, "goals": goals}
+
+
+def powerplay_moments(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Az emberelőny-szakaszok a 3D pályán: ki van hátrányban, meddig, és
+    mi történt közben.
+
+    Forrás: a rules.detect_powerplay szakaszai (ugyanaz a kiállítás-
+    felismerés), a lövések pedig a rules.powerplay_efficiency
+    szabályával: kapura tartó lövés (gól vagy védés) a szakaszon belül;
+    az előnyben lévő csapat lövései és góljai, és ha a HÁTRÁNYBAN lévő
+    talál be, az is (ritka, de a meccset fordítja).
+
+    Visszatérés: {"moments": [{"s", "e" (kezdet/vég mp), "team_down",
+    "team_up", "duration_s", "shots_up", "goals_up", "goals_down",
+    "goals": [[mp, csapat], …]}] időrendben, "windows": db}."""
+    from .event_detection import detect_shots
+    from .rules import detect_powerplay
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    windows = detect_powerplay(match)
+    lovesek = []
+    for e in detect_shots(match, config):
+        outcome = (e.detail or {}).get("outcome")
+        if outcome in ("goal", "save"):
+            lovesek.append((e.t, e.team.value, outcome == "goal"))
+    moments = []
+    for w in windows:
+        down = w["team_down"]
+        up = "away" if down == "home" else "home"
+        bent = [(t, tm, gol) for (t, tm, gol) in lovesek
+                if w["start_frame"] <= t <= w["end_frame"]]
+        moments.append({
+            "s": round(w["start_frame"] / fps, 2),
+            "e": round(w["end_frame"] / fps, 2),
+            "team_down": down, "team_up": up,
+            "duration_s": w["duration_s"],
+            "shots_up": sum(1 for (_t, tm, _g) in bent if tm == up),
+            "goals_up": sum(1 for (_t, tm, g) in bent if tm == up and g),
+            "goals_down": sum(1 for (_t, tm, g) in bent if tm == down and g),
+            "goals": [[round(t / fps, 2), tm] for (t, tm, g) in bent if g]})
+    moments.sort(key=lambda m_: (m_["s"], m_["team_down"]))
+    return {"moments": moments, "windows": len(moments)}

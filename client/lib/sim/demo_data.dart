@@ -162,6 +162,24 @@ List<Map<String, dynamic>> buildDemoDecisions(Match m, {int lepes = 25}) {
   return ki;
 }
 
+/// Demó emberelőny-szakasz a 3D "Emberelőny" lapozójához és élő
+/// jelzőjéhez (backend nélkül): a /powerplay-moments "moments" alakjában
+/// — a vendég a meccs második harmadában hiányos, közben egy hazai gól.
+/// SZINTETIKUS, csak a felület bemutatására.
+List<Map<String, dynamic>> buildDemoPowerplays(Match m) {
+  final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+  final hossz = m.frames.length / fps;
+  final s = (hossz / 3 * 10).round() / 10, e = (hossz * 2 / 3 * 10).round() / 10;
+  return [
+    {
+      "s": s, "e": e, "team_down": "away", "team_up": "home",
+      "duration_s": ((e - s) * 10).round() / 10,
+      "shots_up": 1, "goals_up": 1, "goals_down": 0,
+      "goals": [[((s + e) / 2 * 10).round() / 10, "home"]],
+    }
+  ];
+}
+
 /// Demó gól-akció a 3D "Gól-akciók" lapozójához (backend nélkül): a
 /// /goal-build-ups "moments" alakjában — a demó-passzok első háromból
 /// álló lánca, a végén lövés a jobb kapura (a demóban a hazai arra
