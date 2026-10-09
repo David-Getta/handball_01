@@ -1055,6 +1055,50 @@ def _pass_pairs(match, events, team_value: str, top: int = 5):
     return total, [(label(a), label(b), n) for (a, b), n in ranked]
 
 
+# A "Videózandó jelenetek" szakasz: a legnagyobb döntés-hibákból ennyi,
+# és összesen legfeljebb ennyi sor (a gólba került eladások és a gólt
+# érő szabad lövések mind bekerülnek, amíg a plafon engedi).
+REPORT_DECISION_TOP = 5
+REPORT_SCENES_MAX = 15
+
+
+def _scenes_section(match) -> str:
+    """A "Videózandó jelenetek" szakasz HTML-je (üres, ha nincs ilyen).
+
+    A 3D jelenet-lista (court3d.scene_rows — ugyanazok a feliratok) a
+    jelentésben: a gólba került labdavesztések, a gólt érő szabadon
+    hagyott lövések és a REPORT_DECISION_TOP legnagyobb döntés-hiba,
+    időrendben, legfeljebb REPORT_SCENES_MAX sor. Edzőileg: ezek a
+    videózandó pillanatok — a papírral a kézben is visszakereshetők."""
+    from .court3d import (decision_moments, free_shot_moments, scene_rows,
+                          turnover_moments)
+
+    dontesek = sorted(decision_moments(match)["moments"],
+                      key=lambda d: (-d["gap"], d["s"]))[:REPORT_DECISION_TOP]
+    szabadok = [d for d in free_shot_moments(match)["moments"] if d["goal"]]
+    eladasok = [d for d in turnover_moments(match)["moments"]
+                if d["punished"]]
+    # A NYERS csapatnevekkel (a sor-szöveget itt escape-eljük — a
+    # jelentés escape-elt nevei kettős escape-et adnának).
+    sorok = scene_rows(dontesek, szabadok, eladasok,
+                       match.meta.home_team, match.meta.away_team)
+    if not sorok:
+        return ""
+    # A plafon a gólos jeleneteket hagyja meg előbb, aztán az időrend.
+    if len(sorok) > REPORT_SCENES_MAX:
+        tart = sorted(range(len(sorok)),
+                      key=lambda i: (not sorok[i]["gol"], i))[:REPORT_SCENES_MAX]
+        sorok = [sorok[i] for i in sorted(tart)]
+    lis = "".join(f"<li><b>{r['ido']}</b> — {escape(r['szoveg'])}</li>"
+                  for r in sorok)
+    return ("<h2>Videózandó jelenetek</h2>"
+            "<p>A gólba került labdavesztések, a gólt érő szabadon hagyott "
+            "lövések és a legnagyobb döntés-hibák (ahol jobb opció is volt) "
+            "— a 3D pálya Jelenet-listájában és a Klipek \"Drága eladások\" "
+            "/ \"Döntés-hibák\" csomagjában ugyanezek.</p>"
+            "<ul>" + lis + "</ul>")
+
+
 def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                       heatmaps: dict | None = None,
                       player_stats: dict | None = None,
@@ -1730,6 +1774,15 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     + escape(" → ".join(PRF_FAMILY_ORDER))
                     + ".</p>"
                     '<div class="cols">' + "".join(cols) + "</div>")
+        except Exception:
+            pass
+
+        # Videózandó jelenetek: a 3D jelenet-lista legfontosabb sorai
+        # időbélyeggel — a papírral a kézben is visszakereshető a videón.
+        try:
+            jel_html = _scenes_section(match)
+            if jel_html:
+                parts_html.append(jel_html)
         except Exception:
             pass
 

@@ -1893,3 +1893,61 @@ def test_a_jelentes_rajzolja_a_figurakat_ha_vannak():
     rovid = match_report_html(simulate_ground_truth(duration_s=5, fps=25.0,
                                                     seed=1), {}, [], None)
     assert "Figuráik (alakkal)" not in rovid
+
+
+def test_a_videozando_jelenetek_a_3d_jelenet_listabol():
+    """A "Videózandó jelenetek" szakasz a 3D jelenet-lista (court3d.
+    scene_rows) soraiból: a gólba került labdavesztés időbélyeggel és
+    UGYANAZZAL a felirattal; a csapatnév egyszer escape-elve."""
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_court3d import _eladasos_meccs
+
+    m = _eladasos_meccs()
+    m.meta.home_team = "<b>Injekt</b>"
+    html = match_report_html(m, {}, [], None)
+    assert ">Videózandó jelenetek</h2>" in html  # (a címsor horgonyt kap)
+    assert ("<li><b>0:00</b> — &lt;b&gt;Injekt&lt;/b&gt; — labdavesztés #7 "
+            "(középső harmad) · gól lett belőle</li>") in html
+    szakasz = html.split(">Videózandó jelenetek</h2>", 1)[1].split("<h2", 1)[0]
+    assert "&amp;lt;" not in szakasz  # nincs kettős escape
+
+
+def test_jelenet_nelkul_nincs_videozando_szakasz():
+    """Jelenet nélküli (játékos- és labda-mentes) meccsen a szakasz
+    elmarad — nem üres címsor."""
+    from handball.models.tracking import Frame, Match, MatchMeta
+
+    m = Match(MatchMeta(match_id="u", home_team="A", away_team="B",
+                        fps=25.0),
+              [Frame(t=i, players=[], ball=None) for i in range(50)])
+    html = match_report_html(m, {}, [], None)
+    assert "Videózandó jelenetek" not in html
+
+
+def test_a_plafon_a_golos_jeleneteket_tartja_meg(monkeypatch):
+    """Sok jelenetnél a plafon (REPORT_SCENES_MAX) előbb a gólosakat
+    tartja meg, a sorrend időrendi marad."""
+    from handball.pipeline import report_html as rh
+
+    monkeypatch.setattr(rh, "REPORT_SCENES_MAX", 3)
+    monkeypatch.setattr(
+        "handball.pipeline.court3d.decision_moments",
+        lambda m: {"moments": [{"s": float(i), "team": "home",
+                                "best_kind": "shoot", "gap": 0.2}
+                               for i in range(1, 5)]})
+    monkeypatch.setattr(
+        "handball.pipeline.court3d.free_shot_moments",
+        lambda m: {"moments": [{"s": 50.0, "defending": "away",
+                                "dist": 4.0, "goal": True}]})
+    monkeypatch.setattr(
+        "handball.pipeline.court3d.turnover_moments",
+        lambda m: {"moments": [{"s": 20.0, "team": "away", "jersey": 9,
+                                "zone": "támadó", "punished": True,
+                                "goal_after_s": 5.0}]})
+    m = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    html = rh._scenes_section(m)
+    import re
+    idok = re.findall(r"<li><b>(\d+:\d\d)</b>", html)
+    assert idok == ["0:01", "0:20", "0:50"]

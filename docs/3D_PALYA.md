@@ -110,6 +110,11 @@ Két lapozó jelenetei a **Klipek** képernyőn videóként is kivághatók:
 a "Drága eladások" (a gólba került labdavesztések) és a "Döntés-hibák"
 csomag — mezszámra szűkítve is ("a #7 drága eladásai").
 
+A **Jelenet-lista** a három lapozó összes jelenetét egy időrendi
+listában mutatja ("12:40 · Szeged — labdavesztés #7 (támadó harmad) ·
+gól lett belőle"); koppintás egy sorra: odaugrik, az épp futó jelenet
+sora kiemelve. Meccs-elemzéshez gyorsabb, mint a ◀ ▶ lapozás.
+
 A **Kinek a hibái** választó a három lapozót egy csapatra szűri: mind
 a három egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott
 lövőt, az elvesztett labdát) — a saját csapatra szűrve videóelemzés a
@@ -126,7 +131,7 @@ küldesz a stábnak, nem egy meccset. A paraméterek:
 /matches/<meccs>/view3d?t=349&nezet=madar
    &kamera=h7 | &tv=1
    &hoter=mind&loves=hazai&passz=vendeg&fal=6-0&falOldal=jobb
-   &nyom=1&passzsav=1&falres=1&jelenet=vendeg&seb=2
+   &nyom=1&passzsav=1&falres=1&jelenet=vendeg&lista=1&seb=2
 ```
 
 ## VR-headset

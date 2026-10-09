@@ -157,6 +157,9 @@ class _Court3DScreenState extends State<Court3DScreen>
   // mind egy csapat hibáját mutatja — "" mindkettő, "home" / "away" csak
   // az egyiké (a böngészős nézet jelenet-szűrőjének párja).
   String _jelenetCsapat = "";
+  // JELENET-LISTA: a három lapozó jelenetei egy időrendi listában (a bal
+  // oldalon) — koppintás egy sorra: odaugrik.
+  bool _jelenetListaNyitva = false;
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
@@ -731,6 +734,82 @@ class _Court3DScreenState extends State<Court3DScreen>
   List<Map<String, dynamic>> get _szabadokSz =>
       _szurt(_szabadok, "defending");
   List<Map<String, dynamic>> get _eladasokSz => _szurt(_eladasok, "team");
+
+  /// Ugrás a jelenet-lista egy sorára (1,5 mp-cel előtte, lejátszva); a
+  /// sor lapozója onnan lép tovább.
+  void _jelenetUgras(Match m, SceneRow r) {
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    setState(() {
+      if (r.tipus == "d") {
+        _dontesUtolso = r.s;
+      } else if (r.tipus == "sz") {
+        _szabadUtolso = r.s;
+      } else {
+        _eladasUtolso = r.s;
+      }
+      _playhead = _tIndex(m, (r.s - 1.5) * fps).toDouble();
+      _playing = true;
+    });
+    _focus.requestFocus();
+  }
+
+  /// A jelenet-lista panel: a szűrt jelenetek időrendben, a lapozók
+  /// színével; az épp aktív (a legkésőbb indult) sor kiemelve.
+  Widget _jelenetListaPanel(Match m) {
+    final sorok = sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
+        m.meta.homeTeam, m.meta.awayTeam);
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = m.frames.isEmpty ? 0.0 : _mostT(m) / fps;
+    var aktiv = -1;
+    for (var k = 0; k < sorok.length; k++) {
+      if (most >= sorok[k].s - 0.3 && most <= sorok[k].s + 2.5) aktiv = k;
+    }
+    const szin = {"d": AppColors.gold, "sz": AppColors.away, "e": eladasSzin};
+    return Container(
+      width: 360,
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.94),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderStrong),
+      ),
+      child: sorok.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(10),
+              child: Text("Nincs ilyen jelenet.",
+                  style: AppText.label.copyWith(fontSize: 11.5)))
+          : ListView.builder(
+              padding: const EdgeInsets.all(6),
+              itemCount: sorok.length,
+              itemBuilder: (_, k) {
+                final r = sorok[k];
+                return InkWell(
+                  onTap: () => _jelenetUgras(m, r),
+                  child: Container(
+                    color: k == aktiv ? AppColors.home.withOpacity(0.45) : null,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Row(children: [
+                      SizedBox(
+                          width: 38,
+                          child: Text(r.ido,
+                              style: AppText.label.copyWith(fontSize: 11.5))),
+                      Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                              color: szin[r.tipus], shape: BoxShape.circle)),
+                      const SizedBox(width: 7),
+                      Expanded(
+                          child: Text(r.szoveg,
+                              style: AppText.label.copyWith(
+                                  fontSize: 11.5,
+                                  color: AppColors.textPrimary))),
+                    ]),
+                  ),
+                );
+              }),
+    );
+  }
 
   /// A közös pillanat-ugrás: a cél a lapozCel szerint (court_geometry),
   /// a lejátszófej 1,5 mp-cel elé, lejátszva. Visszaadja a cél idejét.
@@ -1419,6 +1498,12 @@ class _Court3DScreenState extends State<Court3DScreen>
               // Jelenet-felirat: mi történik épp (a közvetítés
               // inzertje) — a 3D-ben a labda pályája önmagában nem
               // mondja meg, hogy gól volt-e vagy védés.
+              if (_jelenetListaNyitva)
+                Positioned(
+                    left: 12,
+                    top: 12,
+                    bottom: 60,
+                    child: _jelenetListaPanel(m)),
               // A döntés-, a szabad-lövés és a labdavesztés felirat EGYMÁS
               // ALATT: egyszerre aktív pillanatok nem takarhatják el
               // egymást.
@@ -1874,6 +1959,27 @@ class _Court3DScreenState extends State<Court3DScreen>
               _focus.requestFocus();
             },
           ),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: _jelenetListaNyitva
+                ? AppColors.accent
+                : AppColors.surfaceAlt,
+            foregroundColor: _jelenetListaNyitva
+                ? AppColors.onAccent
+                : AppColors.textSecondary,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          ),
+          onPressed: () {
+            setState(() => _jelenetListaNyitva = !_jelenetListaNyitva);
+            _focus.requestFocus();
+          },
+          child: Text(
+              _jelenetListaNyitva ? "Jelenet-lista: BE" : "Jelenet-lista",
+              style: const TextStyle(fontSize: 11.5)),
         ),
       ),
       // Döntés-pillanatok: ahol jobb opció is volt (◀ ▶).

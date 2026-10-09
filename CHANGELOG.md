@@ -3,6 +3,24 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.160 óta)
+
+- **3D pálya: jelenet-lista** (új, böngészős/VR és appbeli nézet): a
+  három jelenet-lapozó (Döntések, Szabad lövők, Labdavesztések) MINDEN
+  jelenete egy időrendi listában, a "Kinek a hibái" szűrő szerint —
+  "12:40 · Szeged — labdavesztés #7 (támadó harmad) · gól lett
+  belőle". Koppintás egy sorra: odaugrik (1,5 mp-cel előtte,
+  lejátszva), és a sor lapozója onnan lép tovább; az épp futó jelenet
+  sora kiemelve (átfedésnél a frissebb). A ◀ ▶ lapozásnál gyorsabb
+  áttekintés a meccs-elemzéshez. A böngésző (jelenetSorok) és az app
+  (sceneRows) ugyanazokat a sorokat adja, a kanonikus forrás a
+  backend (court3d.scene_rows) — valódi meccseken sorról sorra
+  ellenőrizve. Link-paraméter: `lista=1`. A nyomtatható
+  meccs-jelentésbe is bekerült "Videózandó jelenetek" néven: a gólba
+  került labdavesztések, a gólt érő szabadon hagyott lövések és az öt
+  legnagyobb döntés-hiba időbélyeggel (legfeljebb 15 sor, a gólosak
+  előnyben) — a papírral a kézben is visszakereshetők a videón.
+
 ## v0.1.160 — kiadva (2026-10-08)
 
 > Kiadás-jegyzet: a 3D pályán mostantól a hibák JELENETEI is

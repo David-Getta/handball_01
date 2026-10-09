@@ -550,3 +550,58 @@ def wall_gap_segments(players, team: Team, goal_x: float) -> Optional[dict]:
             "gaps": [round(g, 2) for g in nyers],
             "wide": [g >= WALL_GAP_M for g in nyers],
             "max_gap": round(nyers[i], 2), "max_index": i}
+
+
+def _szam1_js(v: float) -> str:
+    """Egy tizedes, vesszővel — a JS toFixed(1) (és a Dart
+    toStringAsFixed(1)) kerekítésével: a pontos bináris érték felé
+    legközelebbi, döntetlennél a NAGYOBB (0,25 → "0,3"; a Python
+    formázása itt párosra kerekítene: "0,2")."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    d = Decimal(float(v)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return f"{d:.1f}".replace(".", ",")
+
+
+def scene_rows(decisions: list, free_shots: list, turnovers: list,
+               home: str, away: str) -> list[dict]:
+    """A 3D jelenet-lista sorai — a böngésző (jelenetSorok) és az app
+    (sceneRows) KANONIKUS forrása, a nyomtatható jelentés is ebből ír.
+
+    Bemenet: a decision_moments / free_shot_moments / turnover_moments
+    "moments" listái. Visszatérés: [{"s", "ido" ("p:mm"), "tipus" ("d"
+    döntés, "sz" szabad lövés, "e" labdavesztés), "szoveg", "gol"}]
+    időrendben; holtversenyben döntés, szabad lövés, labdavesztés."""
+    def csapat(side):
+        return home if side == "home" else away
+
+    harmad = {"saját": "saját", "közép": "középső", "támadó": "támadó"}
+    sorok = []
+    for d in decisions:
+        sorok.append({"s": d["s"], "tipus": "d", "gol": False,
+                      "szoveg": f"{csapat(d['team'])} — jobb opció is volt: "
+                                + ("lövés" if d["best_kind"] == "shoot"
+                                   else "passz egy szabadabb társhoz")})
+    for d in free_shots:
+        tav = d.get("dist")
+        sorok.append({"s": d["s"], "tipus": "sz", "gol": bool(d["goal"]),
+                      "szoveg": f"{csapat(d['defending'])} védekezése — "
+                                "szabad lövő"
+                                + (f" ({_szam1_js(tav)} m)" if tav is not None
+                                   else "")
+                                + (" · GÓL" if d["goal"] else "")})
+    for d in turnovers:
+        gol = d.get("goal_after_s") is not None
+        h = harmad.get(d.get("zone"))
+        sorok.append({"s": d["s"], "tipus": "e", "gol": gol,
+                      "szoveg": f"{csapat(d['team'])} — labdavesztés"
+                                + (f" #{d['jersey']}" if d.get("jersey") is not None
+                                   else "")
+                                + (f" ({h} harmad)" if h else "")
+                                + (" · gól lett belőle" if gol else "")})
+    rend = {"d": 0, "sz": 1, "e": 2}
+    sorok.sort(key=lambda r: (r["s"], rend[r["tipus"]]))
+    for r in sorok:
+        t = max(0, math.floor(r["s"]))
+        r["ido"] = f"{t // 60}:{t % 60:02d}"
+    return sorok

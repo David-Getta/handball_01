@@ -123,7 +123,10 @@ void main() {
       (tester) async {
     await _nyit(tester);
     expect(find.text("2"), findsWidgets); // a demó két pillanata
-    await tester.tap(find.byTooltip("Következő döntés-pillanat"));
+    final kov = find.byTooltip("Következő döntés-pillanat");
+    await tester.ensureVisible(kov);
+    await tester.pump();
+    await tester.tap(kov);
     // A pillanat 1,5 mp-cel előtte indul, lejátszva: ~2 mp múlva aktív.
     for (var i = 0; i < 30; i++) {
       await tester.pump(const Duration(milliseconds: 100));
@@ -249,6 +252,31 @@ void main() {
             matching: find.byType(IconButton)).at(1)).onPressed,
         isNotNull, reason: "a vendég szabad lövései maradnak");
     expect(kovEladas, findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
+  testWidgets("jelenet-lista: a demó jelenetei, koppintásra odaugrik",
+      (tester) async {
+    await _nyit(tester);
+    final gomb = find.text("Jelenet-lista");
+    await tester.ensureVisible(gomb);
+    await tester.pump();
+    await tester.tap(gomb);
+    await tester.pump(const Duration(milliseconds: 200));
+    // A demó két döntése, két szabad lövése és két labdavesztése.
+    expect(find.textContaining("jobb opció is volt: lövés"), findsNWidgets(2));
+    expect(find.textContaining("védekezése — szabad lövő"), findsNWidgets(2));
+    final golos = find.textContaining("· gól lett belőle");
+    expect(golos, findsOneWidget);
+    await tester.tap(golos);
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("6,0 mp múlva kapott gól").evaluate().isNotEmpty) {
+        break;
+      }
+    }
+    expect(find.textContaining("6,0 mp múlva kapott gól"), findsOneWidget);
     expect(tester.takeException(), isNull);
     await _zar(tester);
   });

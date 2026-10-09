@@ -103,6 +103,34 @@ void main() {
     _ellenoriz([(false, 32.8, 7.7), (true, 36.9, 12.5), (true, 24.5, 6.4), (false, 26.4, 12.2), (false, 10.4, 3.8)], const Offset(25.56, 3.64), (24.5, 6.4), [(0.6052, 0, "nyitott")]);
   });
 
+  // A jelenet-lista a böngésző jelenetSorok-jával AZONOS sorokat ad (a
+  // backend node-os tesztje ugyanezt a helyzetet futtatja).
+  test("sceneRows = a böngésző jelenetSorok-ja", () {
+    final r = sceneRows([
+      {"s": 5.0, "team": "home", "best_kind": "shoot"},
+      {"s": 61.5, "team": "away", "best_kind": "pass"},
+    ], [
+      {"s": 5.0, "defending": "away", "dist": 3.64, "goal": true},
+      {"s": 70.0, "defending": "home", "dist": null, "goal": false},
+    ], [
+      {"s": 3.25, "team": "home", "jersey": 7, "zone": "közép",
+       "goal_after_s": 6.0},
+      {"s": 65.0, "team": "away", "jersey": null, "zone": null,
+       "goal_after_s": null},
+    ], "Szeged", "Veszprém");
+    expect([for (final x in r) "${x.ido} ${x.tipus}"],
+        ["0:03 e", "0:05 d", "0:05 sz", "1:01 d", "1:05 e", "1:10 sz"]);
+    expect(r[0].szoveg,
+        "Szeged — labdavesztés #7 (középső harmad) · gól lett belőle");
+    expect(r[1].szoveg, "Szeged — jobb opció is volt: lövés");
+    expect(r[2].szoveg, "Veszprém védekezése — szabad lövő (3,6 m) · GÓL");
+    expect(r[3].szoveg,
+        "Veszprém — jobb opció is volt: passz egy szabadabb társhoz");
+    expect(r[4].szoveg, "Veszprém — labdavesztés");
+    expect(r[5].szoveg, "Szeged védekezése — szabad lövő");
+    expect([for (final x in r) x.gol], [true, false, true, false, false, false]);
+  });
+
   // A fal-rés tükör a backend wall_gap_segments-éből számolt táblát futtatja
   // (a backend-teszt a sorokat újraszámolja és itt megkeresi).
   test("wallGapSegments = a backend wall_gap_segments", () {

@@ -73,6 +73,9 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'id="eladasKov"', 'id="eladasElozo"', "function eladasUgras",
                 'id="falres"', "function falResek", "function falresFrissit",
                 'id="jelenetCsapat"', "function szurt(lista)",
+                'id="jelenetGomb"', 'id="jelenetLista"',
+                "function jelenetListaEpit", "jelenetListaJelol(ido)",
+                'q.set("lista", "1")',
                 "function jelenetInfok", 'q.set("jelenet"',
                 "lapozCel(szurt(DONTESEK)", "lapozCel(szurt(SZABADOK)",
                 "lapozCel(szurt(ELADASOK)", "szurt(ELADASOK).find(",
@@ -550,6 +553,111 @@ def test_az_app_lapozoja_ugyanazt_a_tablat_futtatja():
 
 
 
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_jelenet_lista_sorai_idorendben_magyar_felirattal():
+    """A jelenet-lista (jelenetSorok) a három lapozó tömör soraiból egy
+    időrendi listát épít: holtversenyben döntés, szabad lövés,
+    labdavesztés; a felirat a csapattal, a jobb opcióval, a védő
+    távolságával, a mezszámmal, a harmaddal és a góllal."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("function jelenetSorok")
+    i1 = kod.index("\n}\n", i0) + 2
+    dontesek = [[5.0, 1, 30, 5, 34, 8, 0.18, "s", 40, 10, 0.36, 0.18],
+                [61.5, 0, 12, 5, 9, 8, 0.2, "p", 6, 14, 0.4, 0.2]]
+    szabadok = [[5.0, 0, 33, 12, 36, 15, 3.64, 1, 0.42],
+                [70.0, 1, 8, 9, None, None, None, 0, 0.1]]
+    eladasok = [[3.25, 1, 7, 20, 10, 20, 10.6, 1, 20, 10.6, 0.6, 1, 6.0],
+                [65.0, 0, None, None, None, 35, 10, None, None, None, None,
+                 None, None]]
+    js = (kod[i0:i1] + "\nconsole.log(JSON.stringify(jelenetSorok(" +
+          json.dumps(dontesek) + ", " + json.dumps(szabadok) + ", " +
+          json.dumps(eladasok) + ', "Szeged", "Veszprém")));\n')
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    sorok = json.loads(r.stdout)
+    assert [(x["ido"], x["tipus"]) for x in sorok] == [
+        ("0:03", "e"), ("0:05", "d"), ("0:05", "sz"), ("1:01", "d"),
+        ("1:05", "e"), ("1:10", "sz")]
+    sz = [x["szoveg"] for x in sorok]
+    assert sz[0] == ("Szeged — labdavesztés #7 (középső harmad) · gól lett "
+                     "belőle")
+    assert sz[1] == "Szeged — jobb opció is volt: lövés"
+    assert sz[2] == "Veszprém védekezése — szabad lövő (3,6 m) · GÓL"
+    assert sz[3] == "Veszprém — jobb opció is volt: passz egy szabadabb társhoz"
+    assert sz[4] == "Veszprém — labdavesztés"
+    assert sz[5] == "Szeged védekezése — szabad lövő"
+    assert [x["gol"] for x in sorok] == [True, False, True, False, False,
+                                         False]
+    # A kanonikus Python-forrás (court3d.scene_rows) ugyanerre a helyzetre
+    # (az API sorainak alakjában) ugyanezt adja.
+    from handball.pipeline.court3d import scene_rows
+    py = scene_rows(
+        [{"s": 5.0, "team": "home", "best_kind": "shoot"},
+         {"s": 61.5, "team": "away", "best_kind": "pass"}],
+        [{"s": 5.0, "defending": "away", "dist": 3.64, "goal": True},
+         {"s": 70.0, "defending": "home", "dist": None, "goal": False}],
+        [{"s": 3.25, "team": "home", "jersey": 7, "zone": "közép",
+          "goal_after_s": 6.0},
+         {"s": 65.0, "team": "away", "jersey": None, "zone": None,
+          "goal_after_s": None}],
+        "Szeged", "Veszprém")
+    assert [(x["ido"], x["tipus"], x["szoveg"], x["gol"]) for x in py] == \
+        [(x["ido"], x["tipus"], x["szoveg"], x["gol"]) for x in sorok]
+    # Az app tükre (court_geometry.sceneRows) UGYANEZT a helyzetet
+    # futtatja ugyanezekkel a várt feliratokkal — itt keressük meg őket.
+    from pathlib import Path
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" /
+            "test" / "court_geometry_test.dart").read_text(encoding="utf-8")
+    for felirat in sz:
+        assert f'"{felirat}"' in dart, felirat
+
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_jelenet_lista_a_python_forrast_tukrozi():
+    """Valódi meccseken (lövésekkel teli szimuláció: döntések és szabad
+    lövések; az eladásos meccs: labdavesztések) a böngésző jelenetSorok-ja
+    a tömör adatból sorról sorra ugyanazt adja, mint a court3d.scene_rows
+    a végpontok soraiból — idő, fajta, felirat, gól."""
+    from test_court3d import _eladasos_meccs
+
+    from handball.pipeline.court3d import (decision_moments,
+                                           free_shot_moments, scene_rows,
+                                           turnover_moments)
+    from handball.pipeline.view3d_html import _compact_data, view3d_html
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("function jelenetSorok")
+    i1 = kod.index("\n}\n", i0) + 2
+    volt = {"d": 0, "sz": 0, "e": 0}
+    for m in (simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                                    shots_per_min=8), _eladasos_meccs()):
+        adat = _compact_data(m, None, {"home": [], "away": []},
+                             {"home": [], "away": []})
+        js = (kod[i0:i1] + "\nconsole.log(JSON.stringify(jelenetSorok(" +
+              json.dumps(adat["decisions"]) + ", " +
+              json.dumps(adat["free_shots"]) + ", " +
+              json.dumps(adat["turnovers"]) + ", " +
+              json.dumps(m.meta.home_team) + ", " +
+              json.dumps(m.meta.away_team) + ")));\n")
+        r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                           timeout=60)
+        assert r.returncode == 0, r.stderr
+        py = scene_rows(decision_moments(m)["moments"],
+                        free_shot_moments(m)["moments"],
+                        turnover_moments(m)["moments"],
+                        m.meta.home_team, m.meta.away_team)
+        jsk = json.loads(r.stdout)
+        assert [(x["ido"], x["tipus"], x["szoveg"], x["gol"]) for x in jsk] \
+            == [(x["ido"], x["tipus"], x["szoveg"], x["gol"]) for x in py]
+        for x in py:
+            volt[x["tipus"]] += 1
+    assert all(volt.values()), volt
+
 def _fal_dart_sorok() -> list:
     """A Dart-tükör (court_geometry.wallGapSegments) esettáblájának sorai
     — a várt értékek a backend wall_gap_segments-éből (rögzített mag,
@@ -743,6 +851,8 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "fetchTurnoverMoments", "_eladasUgras", "_aktivEladas",
                 "wallGapSegments", "falresek: _falresek(m, allapot)?.$1",
                 "_jelenetCsapat", '_szurt(_szabadok, "defending")',
+                "_jelenetListaPanel(m)", "sceneRows(", "_jelenetUgras(m, r)",
+                '"Jelenet-lista"',
                 '_szurt(_dontesek, "team")', '_szurt(_eladasok, "team")',
                 "Hibák: mindkét csapat",
                 '"Fal-rések"', 'q["passzsav"]', 'q["falres"]',

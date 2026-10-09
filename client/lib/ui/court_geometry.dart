@@ -334,3 +334,65 @@ WallGaps? wallGapSegments(List<(bool, double, double, bool, bool)> players,
   }
   return WallGaps([for (final p in fal) Offset(p.$2, p.$1)], gaps, wide, maxI);
 }
+
+/// A jelenet-lista egy sora: idő (mp és "p:mm"), fajta ("d" döntés, "sz"
+/// szabad lövés, "e" labdavesztés), felirat, és hogy gól lett-e.
+class SceneRow {
+  final double s;
+  final String ido, tipus, szoveg;
+  final bool gol;
+  const SceneRow(this.s, this.ido, this.tipus, this.szoveg, this.gol);
+}
+
+/// A jelenet-lista sorai (a böngészős nézet `jelenetSorok`-jának tükre,
+/// UGYANAZOKKAL a feliratokkal): a döntés-, szabad-lövés- és
+/// labdavesztés-pillanatok (az API sorai) időrendben; holtversenyben
+/// döntés, szabad lövés, labdavesztés.
+List<SceneRow> sceneRows(
+    List<Map<String, dynamic>> dontesek,
+    List<Map<String, dynamic>> szabadok,
+    List<Map<String, dynamic>> eladasok,
+    String nevH,
+    String nevV) {
+  String sz1(num v) => v.toDouble().toStringAsFixed(1).replaceAll(".", ",");
+  String csapat(dynamic side) => side == "home" ? nevH : nevV;
+  String ido(double s) {
+    final t = math.max(0, s.floor());
+    return "${t ~/ 60}:${(t % 60).toString().padLeft(2, "0")}";
+  }
+
+  const harmad = {"saját": "saját", "közép": "középső", "támadó": "támadó"};
+  final sorok = <SceneRow>[];
+  double sOf(Map<String, dynamic> d) => ((d["s"] as num?) ?? 0).toDouble();
+  for (final d in dontesek) {
+    sorok.add(SceneRow(sOf(d), "", "d",
+        "${csapat(d["team"])} — jobb opció is volt: "
+            "${d["best_kind"] == "shoot" ? "lövés" : "passz egy szabadabb társhoz"}",
+        false));
+  }
+  for (final d in szabadok) {
+    final tav = d["dist"] as num?;
+    final gol = d["goal"] == true;
+    sorok.add(SceneRow(sOf(d), "", "sz",
+        "${csapat(d["defending"])} védekezése — szabad lövő"
+            "${tav != null ? " (${sz1(tav)} m)" : ""}${gol ? " · GÓL" : ""}",
+        gol));
+  }
+  for (final d in eladasok) {
+    final gol = d["goal_after_s"] != null;
+    final mez = d["jersey"];
+    final h = harmad[d["zone"]];
+    sorok.add(SceneRow(sOf(d), "", "e",
+        "${csapat(d["team"])} — labdavesztés${mez != null ? " #$mez" : ""}"
+            "${h != null ? " ($h harmad)" : ""}${gol ? " · gól lett belőle" : ""}",
+        gol));
+  }
+  const rend = {"d": 0, "sz": 1, "e": 2};
+  sorok.sort((a, b) {
+    final c = a.s.compareTo(b.s);
+    return c != 0 ? c : rend[a.tipus]!.compareTo(rend[b.tipus]!);
+  });
+  return [
+    for (final r in sorok) SceneRow(r.s, ido(r.s), r.tipus, r.szoveg, r.gol)
+  ];
+}
