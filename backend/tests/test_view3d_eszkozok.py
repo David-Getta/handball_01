@@ -76,6 +76,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'id="jelenetGomb"', 'id="jelenetLista"',
                 'id="golKov"', 'id="golElozo"', "function golUgras",
                 'id="emberKov"', 'id="emberElozo"', 'id="emberJelzo"',
+                # a panel alacsony ablakban görgethető (nem lóg a sáv alá)
+                "max-height:calc(100vh - 110px);overflow-y:auto",
                 "function emberFrissit", "function emberSzoveg",
                 "emberFrissit(t)",
                 "function golFrissit", 'id="golFelirat"',

@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.160 óta)
 
+- **3D pálya (böngésző): a bal panel alacsony ablakban görgethető**
+  (javítás): a rétegek szaporodtával a bal oldali eszköz-panel
+  1024×600-as ablakban a lejátszó-sáv alá lógott, és az alsó gombjai
+  (Gól-akciók, Emberelőny, Link másolása) nem voltak kattinthatók. A
+  panel most a sáv fölött véget ér és görgethető.
+
 - **App: elrendezési hibák hat képernyőn** (javítás): új füstteszt
   megnyit minden képernyőt backend nélkül, két ablakméretben — és hét
   rejtett elrendezési hibát talált. A kezdőlap szezon-kártyasora és az

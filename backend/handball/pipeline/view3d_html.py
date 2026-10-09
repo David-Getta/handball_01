@@ -465,7 +465,10 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  button{background:#173042;color:#dfe7ef;border:1px solid #2b4a5e;border-radius:8px;padding:6px 12px;cursor:pointer}
  #sugo{position:fixed;right:12px;top:10px;font-size:11.5px;opacity:.7;text-align:right}
  #felirat{position:fixed;left:12px;bottom:56px;padding:6px 12px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.85);color:#d9b544;font-weight:600;font-size:15px;display:none}
- #eszkoz{position:fixed;left:12px;top:34px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;font-size:12.5px;max-width:330px}
+ /* A panel a lejátszó-sáv fölött véget ér és görgethető: a rétegek
+    szaporodtával alacsony ablakban (1024×600) a sáv alá lógott, és az
+    alsó gombok (Link másolása) nem voltak kattinthatók. */
+ #eszkoz{position:fixed;left:12px;top:34px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;font-size:12.5px;max-width:330px;max-height:calc(100vh - 110px);overflow-y:auto;overflow-x:hidden;padding-right:4px;scrollbar-width:thin}
  #eszkoz .sor{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
  select{background:#173042;color:#dfe7ef;border:1px solid #2b4a5e;border-radius:8px;padding:5px 8px}
  button.be{background:#2f86d6;border-color:#2f86d6;color:#fff}
