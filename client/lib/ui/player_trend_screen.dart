@@ -276,7 +276,13 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
               "(a meccs-nézetben rendelj számot a játékoshoz)",
               style: AppText.subtitle),
           const SizedBox(height: AppSpacing.xl),
-          Row(children: [
+          // Tördelhető vezérlősor: keskeny ablakban a gombok új sorba
+          // kerülnek (egyetlen Row-ban 900 px-en túlcsordult).
+          Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.sm,
+              children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
@@ -296,7 +302,6 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                 onChanged: (t) => setState(() => _team = t),
               ),
             ),
-            const SizedBox(width: AppSpacing.md),
             SizedBox(
               width: 120,
               child: TextField(
@@ -311,7 +316,6 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                 onSubmitted: (_) => _load(),
               ),
             ),
-            const SizedBox(width: AppSpacing.md),
             FilledButton.icon(
               onPressed: _loading ? null : _load,
               icon: _loading
@@ -323,7 +327,6 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
             // A SAJÁT klipek: a játékos a számok után a videót akarja
             // látni. Enélkül a Klipek menüben újra ki kellene keresnie
             // magát a keretből.
-            const SizedBox(width: AppSpacing.md),
             OutlinedButton.icon(
               onPressed: _openMyClips,
               icon: const Icon(Icons.movie_creation_outlined, size: 17),
@@ -332,7 +335,6 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
             // SZEZON-válogatás: az összes meccs góljai egy zip-ben. A
             // meccsenkénti csomag a "Klipjeim"; ez a szezon egésze —
             // amit a játékos megoszt, eltesz, visszanéz.
-            const SizedBox(width: AppSpacing.sm),
             OutlinedButton.icon(
               onPressed: _seasonWorking ? null : _seasonClips,
               icon: _seasonWorking
@@ -345,7 +347,6 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
             ),
             // Szezon-lap mentése (HTML) — csak ha van megjelenített adat.
             if (_points.isNotEmpty) ...[
-              const SizedBox(width: AppSpacing.md),
               IconButton(
                 tooltip: "Szezon-lap mentése (HTML)",
                 onPressed: _saveSeasonReport,

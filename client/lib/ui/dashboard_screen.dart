@@ -2140,10 +2140,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // A könyvtár háttér-betöltése még tart: a lista részleges.
             if (!_offline && !_loading && ApiClient.libraryLoading)
               _libraryLoadingBanner(),
-            Row(
+            // Tördelhető fejléc: keskeny ablakban az eszköz-gombok a cím
+            // alá kerülnek (egyetlen Row-ban 900 px-en túlcsordult).
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.lg,
+              runSpacing: AppSpacing.sm,
               children: [
-                Expanded(
-                  child: Column(
+                Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text("Áttekintés", style: AppText.title),
@@ -2153,19 +2159,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Text("Sport Machine · elemzett meccsek könyvtára · v$appVersion",
                           style: AppText.subtitle),
                     ],
-                  ),
                 ),
                 // Elemző műveletek NÉVVEL — nyolc egyforma szürke ikon
                 // helyett három olvasható gomb és egy gyűjtő-menü.
+                Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
                 _toolButton(Icons.timeline, "Játékos-fejlődés",
                     _openPlayerTrend),
-                const SizedBox(width: AppSpacing.sm),
                 _toolButton(Icons.compare_arrows, "Egymás ellen",
                     _saveHeadToHead),
-                const SizedBox(width: AppSpacing.sm),
                 _toolButton(Icons.assessment_outlined, "Szezon-riport",
                     _pickTeamForSeasonReport),
-                const SizedBox(width: AppSpacing.sm),
                 // Karbantartás egy helyen: ezeket ritkán kell elővenni,
                 // de ha kell, névvel keresi az ember.
                 PopupMenuButton<String>(
@@ -2273,6 +2280,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ]),
                   ),
                 ),
+                ]),
               ],
             ),
             const SizedBox(height: AppSpacing.xl),
@@ -2294,9 +2302,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _jobHistoryCard(),
             ],
             const SizedBox(height: AppSpacing.xl),
-            Row(children: [
+            // Tördelhető fejléc: balra a cím, a szűrő és a kereső, jobbra a
+            // több-meccses gombok. Korábban egyetlen Row volt — 1400 px-es
+            // ablakban is ~1500 px-lel túlcsordult, és a jobb oldali
+            // gombok (Fejlődés, Szakaszok összefűzése, Egyesített
+            // felderítés…) nem látszottak.
+            Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.lg,
+                runSpacing: AppSpacing.sm,
+                children: [
+            Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.lg,
+                runSpacing: AppSpacing.sm,
+                children: [
               Text("Elemzéseim", style: AppText.value.copyWith(fontSize: 17)),
-              const SizedBox(width: AppSpacing.lg),
               // Dedikált fül: mind / befejezett / befejezetlen — a korábbi
               // elemzések egy koppintással, szétválasztva.
               SegmentedButton<String>(
@@ -2318,7 +2340,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onSelectionChanged: (s) =>
                     setState(() => _libFilter = s.first),
               ),
-              const SizedBox(width: AppSpacing.lg),
               // Gyorskereső: csapatnévre vagy azonosítóra szűr, élőben.
               SizedBox(
                 width: 220,
@@ -2363,7 +2384,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       PopupMenuItem(value: t, child: Text(t)),
                   ],
                 ),
-              const Spacer(),
+            ]),
+            Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
               // Több meccsből egyesített ellenfél-jelentés (zajmentesebb profil).
               OutlinedButton.icon(
                 onPressed: _matches.length < 2 ? null : _compareFlow,
@@ -2377,7 +2403,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: const Icon(Icons.compare_arrows, size: 18),
                 label: const Text("Összevetés"),
               ),
-              const SizedBox(width: AppSpacing.sm),
               OutlinedButton.icon(
                 onPressed: _matches.length < 2 ? null : _fuseFlow,
                 style: OutlinedButton.styleFrom(
@@ -2390,7 +2415,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: const Icon(Icons.merge_type, size: 18),
                 label: const Text("Nézet-egyesítés"),
               ),
-              const SizedBox(width: AppSpacing.sm),
               OutlinedButton.icon(
                 onPressed: _matches.length < 2 ? null : _trendFlow,
                 style: OutlinedButton.styleFrom(
@@ -2401,7 +2425,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: const Icon(Icons.trending_up, size: 18),
                 label: const Text("Fejlődés"),
               ),
-              const SizedBox(width: AppSpacing.sm),
               // Két feldolgozott félidő összefűzése egyetlen teljes meccsé.
               OutlinedButton.icon(
                 onPressed: _matches.length < 2 ? null : _mergeFlow,
@@ -2417,7 +2440,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 // darabot kap, nem kettőt.
                 label: const Text("Szakaszok összefűzése"),
               ),
-              const SizedBox(width: AppSpacing.sm),
               OutlinedButton.icon(
                 onPressed: _matches.length < 2 ? null : _combinedScouting,
                 style: OutlinedButton.styleFrom(
@@ -2430,6 +2452,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: const Icon(Icons.assignment_outlined, size: 18),
                 label: const Text("Egyesített felderítés"),
               ),
+            ]),
             ]),
             const SizedBox(height: AppSpacing.md),
             if (_loading)
@@ -2892,7 +2915,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             "${s["sprints"]} sprint összesen",
             icon: Icons.directions_run),
     ];
-    return Row(
+    // IntrinsicHeight: a kártyasor egy ListView-ban ül (végtelen
+    // magasság), ott a stretch-igazítású Row "végtelen magasságra"
+    // kényszerítené a kártyákat — a kiadott appban a sor helyén szürke
+    // hibadoboz jelent meg. Így a legmagasabb kártyához igazodnak.
+    return IntrinsicHeight(
+        child: Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < cards.length; i++) ...[
@@ -2902,7 +2930,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Expanded(child: FadeSlideIn(index: i, child: cards[i])),
         ],
       ],
-    );
+    ));
   }
 
   /// Szezon-toplisták kártya: gól/blokk/szerzés/védés vezérei a teljes

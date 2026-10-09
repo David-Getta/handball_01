@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.160 óta)
 
+- **App: elrendezési hibák hat képernyőn** (javítás): új füstteszt
+  megnyit minden képernyőt backend nélkül, két ablakméretben — és hét
+  rejtett elrendezési hibát talált. A kezdőlap szezon-kártyasora és az
+  élő nézet javaslat-sorai a kiadott appban szürke hibadobozként
+  jelentek meg; a kezdőlap "Elemzéseim" fejlécének öt gombja
+  (Összevetés, Nézet-egyesítés, Fejlődés, Szakaszok összefűzése,
+  Egyesített felderítés) és a meccs-nézet fejlécének jobb szélső gombjai
+  (jelentés, csomag, statisztika, könyvtár, újratöltés) normál
+  ablakméretben is lecsúsztak a képről, kattinthatatlanul; a
+  meccs-eszköztár, a játékos-fejlődés és a felderítés fejléce keskeny
+  ablakban csordult túl. Mostantól tördelődnek (ami nem fér ki, új
+  sorba kerül), és egy őr gondoskodik róla, hogy minden új képernyő a
+  füsttesztbe kerüljön.
+
 - **3D pálya: emberelőny** (új, böngészős/VR és appbeli nézet): amíg a
   lejátszás egy kiállítás miatti emberelőny-szakaszban jár, élő jelző
   mondja: "Emberelőny: Szeged (Veszprém kiállítás miatt hiányos) · még

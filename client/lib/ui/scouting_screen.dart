@@ -208,8 +208,15 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   Widget _header() {
     final r = _report;
-    return Row(
+    // Tördelhető: balra a vissza-gomb és a cím, jobbra a műveletek és a
+    // csapat-választó — egyetlen Row-ban keskeny ablakban túlcsordult.
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: AppSpacing.md,
+      runSpacing: AppSpacing.sm,
       children: [
+        Row(mainAxisSize: MainAxisSize.min, children: [
         IconButton(
           onPressed: () => Navigator.of(context).maybePop(),
           tooltip: "Vissza",
@@ -228,7 +235,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
             ),
           ],
         ),
-        const Spacer(),
+        ]),
+        Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
         // Nyomtatható jelentés mentése (HTML → böngészőből PDF).
         OutlinedButton.icon(
           onPressed: _report == null ? null : _export,
@@ -239,7 +251,6 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           icon: const Icon(Icons.print_outlined, size: 18),
           label: const Text("Mentés / nyomtatás"),
         ),
-        const SizedBox(width: AppSpacing.sm),
         // CÉLPONT-VIDEÓ: a kulcs-mondat ("a #7-esükre kettőzz") mellé
         // a bizonyíték — az ő eladásaik videón, az összes elemzett
         // meccsükből. A mondat meggyőz; a felvétel felkészít.
@@ -252,7 +263,6 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                 : const Icon(Icons.gps_fixed, size: 18),
             label: Text(_targetWorking ? _targetMsg : "Célpont-videó"),
           ),
-        const SizedBox(width: AppSpacing.md),
         // Melyik csapatot derítsük fel (egyesített módban meccsenként rögzített).
         if (widget.items == null)
           SegmentedButton<String>(
@@ -267,6 +277,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
               _load();
             },
           ),
+        ]),
       ],
     );
   }

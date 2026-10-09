@@ -1744,23 +1744,30 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   Widget _matchTitle(Match match) {
-    return Row(
+    // KÉT tördelhető blokk (balra a csapatnevek és a chipek, jobbra a
+    // gombok): egy sorban, ha kifér, különben a gombok a következő
+    // sorba kerülnek. Korábban egyetlen Row volt — 1400 px-es ablakban is
+    // ~500 px-lel túlcsordult, és a jobb szélső gombok (mentés, csomag,
+    // könyvtár, újratöltés) lecsúsztak a képről, kattinthatatlanul.
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: AppSpacing.lg,
+      runSpacing: AppSpacing.sm,
       children: [
+        Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: AppSpacing.sm,
+            children: [
         Text(match.meta.homeTeam, style: AppText.title.copyWith(fontSize: 24, color: AppColors.home)),
-        const SizedBox(width: 12),
         Text("vs", style: AppText.label),
-        const SizedBox(width: 12),
         Text(match.meta.awayTeam, style: AppText.title.copyWith(fontSize: 24, color: AppColors.away)),
-        const SizedBox(width: AppSpacing.lg),
         _chip(_sourceLabel),
-        if (_quality != null) ...[
-          const SizedBox(width: AppSpacing.sm),
-          _qualityChip(_quality!),
-        ],
+        if (_quality != null) _qualityChip(_quality!),
         // A nehéz elemzések még a háttérben számolnak (első megnyitáskor
         // percek is lehetnek; utána a motor tárából azonnal jönnek).
         if (_panelsLoading) ...[
-          const SizedBox(width: AppSpacing.sm),
           Tooltip(
             message: "Az összefoglaló, a támadások, a védekezés és az "
                 "edzés-fókusz még számol — a panelek maguktól megtelnek.",
@@ -1775,7 +1782,12 @@ class _MatchScreenState extends State<MatchScreen> {
             ]),
           ),
         ],
-        const Spacer(),
+        ]),
+        Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
         FilledButton.icon(
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(
@@ -1792,7 +1804,6 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.assignment_outlined, size: 18),
           label: const Text("Felderítés"),
         ),
-        const SizedBox(width: AppSpacing.sm),
         OutlinedButton.icon(
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => DesignerScreen(match: match)),
@@ -1840,7 +1851,6 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.edit_note, size: 18),
           label: const Text("Kézi elemzés"),
         ),
-        const SizedBox(width: AppSpacing.sm),
         // Jelenet-lejátszó ki/be (csak ha az eredeti videó elérhető).
         if (match.meta.videoPath != null)
           IconButton(
@@ -1929,6 +1939,7 @@ class _MatchScreenState extends State<MatchScreen> {
               tooltip: "Meccs újratöltése",
               icon: const Icon(Icons.refresh,
                   color: AppColors.textSecondary)),
+        ]),
       ],
     );
   }
@@ -3134,20 +3145,35 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   Widget _toolbar(Match match) {
-    return Row(
+    // Tördelhető: balra a nézet-váltó és a választók, jobbra a jelmagyarázat
+    // — korábban egyetlen Row volt, ami keskenyebb ablakban túlcsordult (a
+    // jobb szélső választó és a jelmagyarázat lecsúszott). Szűk helyen a
+    // nézet-váltó csak ikonokat mutat (a nevük a súgóban).
+    return LayoutBuilder(builder: (context, c) {
+    final szuk = c.maxWidth < 760;
+    Widget? cimke(String t) => szuk ? null : Text(t);
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: AppSpacing.md,
+      runSpacing: AppSpacing.sm,
       children: [
+        Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
         SegmentedButton<ViewMode>(
           showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: ViewMode.players, label: Text("Játékosok"), icon: Icon(Icons.groups, size: 18)),
-            ButtonSegment(value: ViewMode.heatmap, label: Text("Hőtérkép"), icon: Icon(Icons.whatshot, size: 18)),
-            ButtonSegment(value: ViewMode.shots, label: Text("Lövések"), icon: Icon(Icons.sports_handball, size: 18)),
-            ButtonSegment(value: ViewMode.passes, label: Text("Passzháló"), icon: Icon(Icons.hub_outlined, size: 18)),
+          segments: [
+            ButtonSegment(value: ViewMode.players, label: cimke("Játékosok"), tooltip: "Játékosok", icon: const Icon(Icons.groups, size: 18)),
+            ButtonSegment(value: ViewMode.heatmap, label: cimke("Hőtérkép"), tooltip: "Hőtérkép", icon: const Icon(Icons.whatshot, size: 18)),
+            ButtonSegment(value: ViewMode.shots, label: cimke("Lövések"), tooltip: "Lövések", icon: const Icon(Icons.sports_handball, size: 18)),
+            ButtonSegment(value: ViewMode.passes, label: cimke("Passzháló"), tooltip: "Passzháló", icon: const Icon(Icons.hub_outlined, size: 18)),
           ],
           selected: {_viewMode},
           onSelectionChanged: (s) => setState(() => _viewMode = s.first),
         ),
-        const SizedBox(width: AppSpacing.md),
         if (_viewMode == ViewMode.passes)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -3221,7 +3247,6 @@ class _MatchScreenState extends State<MatchScreen> {
         if (_viewMode == ViewMode.shots ||
             _viewMode == ViewMode.heatmap ||
             _viewMode == ViewMode.passes) ...[
-          const SizedBox(width: AppSpacing.sm),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
@@ -3255,15 +3280,16 @@ class _MatchScreenState extends State<MatchScreen> {
             ),
           ),
         ],
-        const Spacer(),
+        ]),
         _legend(),
       ],
     );
+    });
   }
 
   Widget _legend() {
     Widget dot(Color c) => Container(width: 9, height: 9, decoration: BoxDecoration(color: c, shape: BoxShape.circle));
-    return Row(children: [
+    return Row(mainAxisSize: MainAxisSize.min, children: [
       dot(AppColors.home), const SizedBox(width: 4), Text(_match!.meta.homeTeam, style: AppText.label.copyWith(fontSize: 11)),
       const SizedBox(width: 12),
       dot(AppColors.away), const SizedBox(width: 4), Text(_match!.meta.awayTeam, style: AppText.label.copyWith(fontSize: 11)),
@@ -3960,7 +3986,11 @@ class _MatchScreenState extends State<MatchScreen> {
         ),
         if (formation != null) ...[
           const SizedBox(width: AppSpacing.sm),
-          Text("véd: $formation", style: AppText.label),
+          // Rugalmas: hosszú csapatnévnél keskeny ablakban elhalványul a
+          // vége, nem csordul túl.
+          Flexible(
+              child: Text("véd: $formation",
+                  style: AppText.label, overflow: TextOverflow.ellipsis)),
         ],
       ],
     );

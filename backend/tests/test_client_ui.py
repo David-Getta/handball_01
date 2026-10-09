@@ -3397,3 +3397,32 @@ def test_a_feldolgozas_kepernyo_felismeri_az_elveszett_munkat():
     cp = up[up.index("Future<void> _cancelProcessing()"):]
     cp = cp[:cp.index("\n  }\n")]
     assert "on JobLostException" in cp and "_onJobLost()" in cp
+
+
+def test_minden_parameter_nelkuli_kepernyo_benne_van_a_fusttesztben():
+    """A kliens füsttesztje (client/test/screens_smoke_test.dart) minden
+    paraméter nélkül nyitható képernyőt megnyit backend nélkül, két
+    ablakméretben — a túlcsordulás és az elrendezési hiba ott derül ki
+    (így kerültek elő a kezdőlap, az élő nézet és a meccs-nézet fejléc-
+    és kártyasor-hibái). Új képernyő ne maradhasson ki belőle."""
+    import re
+
+    import pytest
+
+    lib = _client_lib()
+    if not lib.exists():
+        pytest.skip("nincs kliens a fában")
+    smoke = (lib.parent / "test" / "screens_smoke_test.dart").read_text(
+        encoding="utf-8")
+    hianyzik = []
+    for f in sorted((lib / "ui").glob("*.dart")):
+        src = f.read_text(encoding="utf-8")
+        for m in re.finditer(r"const (\w+Screen)\(\{([^}]*)\}\)", src):
+            nev, parameterek = m.group(1), m.group(2)
+            if "required" in parameterek or nev == "Court3DScreen":
+                continue  # paraméter kell / külön widget-tesztje van
+            if f"const {nev}()" not in smoke:
+                hianyzik.append(nev)
+    assert not hianyzik, (
+        f"a füstteszt nem nyitja meg: {hianyzik} — vedd fel a "
+        "client/test/screens_smoke_test.dart listájába")

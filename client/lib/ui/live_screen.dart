@@ -842,7 +842,11 @@ class _LiveScreenState extends State<LiveScreen> {
         color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
+      // IntrinsicHeight: a sor oszlopban és listában ül (végtelen
+      // magasság) — a stretch-igazítás nélküle "végtelen magasságra"
+      // kényszerítene, és a javaslat helyén hibadoboz jelent meg.
+      child: IntrinsicHeight(
+          child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(width: 3, color: color), // prioritás-színcsík
@@ -865,7 +869,7 @@ class _LiveScreenState extends State<LiveScreen> {
           ),
           const SizedBox(width: 12),
         ],
-      ),
+      )),
     );
   }
 
