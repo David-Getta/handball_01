@@ -105,11 +105,15 @@ class ClipsScreen extends StatefulWidget {
   /// Az `initialTypes` a "Mit gyakorolj" egy tételéhez tartozó
   /// csomagok: a játékos nem találgat, melyik csomag mutatja meg a
   /// hibát, amit épp elolvasott.
+  ///
+  /// Az `initialMatchId` a 3D pálya jelenet-listájából érkezve a NÉZETT
+  /// meccs: a klipek arról készüljenek, ne a könyvtár első meccséről.
   const ClipsScreen({super.key, this.initialJersey,
-                     this.initialTypes = const []});
+                     this.initialTypes = const [], this.initialMatchId});
 
   final int? initialJersey;
   final List<String> initialTypes;
+  final String? initialMatchId;
 
   @override
   State<ClipsScreen> createState() => _ClipsScreenState();
@@ -160,7 +164,11 @@ class _ClipsScreenState extends State<ClipsScreen> {
       if (!mounted) return;
       setState(() {
         _matches = ms;
-        _matchId = ms.isNotEmpty ? ms.first["match_id"] as String : null;
+        // A kért meccs, ha a könyvtárban van; különben az első.
+        final kert = widget.initialMatchId;
+        _matchId = kert != null && ms.any((e) => e["match_id"] == kert)
+            ? kert
+            : (ms.isNotEmpty ? ms.first["match_id"] as String : null);
         _loading = false;
       });
       _loadNoteCount();

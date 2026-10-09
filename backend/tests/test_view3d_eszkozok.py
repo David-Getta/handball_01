@@ -801,6 +801,18 @@ def test_az_emberelony_jelzo_szovege():
     for szoveg in json.loads(r.stdout):
         assert f'"{szoveg}"' in dart, szoveg
 
+
+def test_a_klipek_kepernyo_a_kert_meccset_valasztja():
+    """A Klipek képernyő a 3D jelenet-listából a NÉZETT meccsel nyílik:
+    az initialMatchId-t a könyvtárban megkeresi, és azt választja (nem
+    az első meccset) — a forrásban a választás ott van."""
+    from pathlib import Path
+
+    klip = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
+    assert "this.initialMatchId" in klip
+    assert 'ms.any((e) => e["match_id"] == kert)' in klip
+
 def _fal_dart_sorok() -> list:
     """A Dart-tükör (court_geometry.wallGapSegments) esettáblájának sorai
     — a várt értékek a backend wall_gap_segments-éből (rögzített mag,
@@ -1012,6 +1024,9 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "_jelenetListaPanel(m)", "sceneRows(", "_jelenetUgras(m, r)",
                 "fetchGoalBuildUps", "_golUgras", "_aktivGol",
                 "fetchPowerplayMoments", "_emberUgras", "_emberJelzo(m)",
+                # a jelenet-listából a Klipek képernyő a nézett meccsel
+                "ClipsScreen(", "initialMatchId: _matchId",
+                '"bad_decision", "free_shot", "costly_turnover"',
                 "powerplayCaption(",
                 "gol: _aktivGol(m)", "goalBuildUpCaption(",
                 '"Jelenet-lista"',

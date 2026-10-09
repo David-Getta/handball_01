@@ -25,6 +25,7 @@ import "../models/tracking.dart";
 import "../services/api_client.dart";
 import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
+import "clips_screen.dart";
 import "court_geometry.dart";
 import "error_text.dart";
 import "shell/app_shell.dart";
@@ -792,14 +793,34 @@ class _Court3DScreenState extends State<Court3DScreen>
       if (most >= sorok[k].s - 0.3 && most <= sorok[k].s + 2.5) aktiv = k;
     }
     const szin = {"d": AppColors.gold, "sz": AppColors.away, "e": eladasSzin};
-    return Container(
-      width: 360,
-      decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.94),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.borderStrong),
-      ),
-      child: sorok.isEmpty
+    // A lista fejléce: a jelenetek száma és a "Klipek" gomb — a három
+    // lapozó jelenetei a Klipek képernyőn videóként is kivághatók
+    // (döntés-hibák, szabad lövők, drága eladások), a NÉZETT meccsről.
+    // A demó-meccs nincs a könyvtárban: ott a gomb tiltott.
+    final fejlec = Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 6, 4),
+      child: Row(children: [
+        Expanded(
+            child: Text("Jelenetek · ${sorok.length}",
+                style: AppText.label.copyWith(fontSize: 11.5))),
+        OutlinedButton.icon(
+          onPressed: _demo || _matchId == null
+              ? null
+              : () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => ClipsScreen(
+                      initialMatchId: _matchId,
+                      initialTypes: const [
+                        "bad_decision", "free_shot", "costly_turnover",
+                      ]))),
+          style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              visualDensity: VisualDensity.compact),
+          icon: const Icon(Icons.movie_creation_outlined, size: 15),
+          label: const Text("Klipek", style: TextStyle(fontSize: 11.5)),
+        ),
+      ]),
+    );
+    final lista = sorok.isEmpty
           ? Padding(
               padding: const EdgeInsets.all(10),
               child: Text("Nincs ilyen jelenet.",
@@ -834,7 +855,15 @@ class _Court3DScreenState extends State<Court3DScreen>
                     ]),
                   ),
                 );
-              }),
+              });
+    return Container(
+      width: 360,
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.94),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderStrong),
+      ),
+      child: Column(children: [fejlec, Expanded(child: lista)]),
     );
   }
 

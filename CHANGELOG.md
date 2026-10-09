@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.160 óta)
 
+- **Appbeli 3D: a jelenet-listából egy kattintással a Klipek** (új): a
+  jelenet-lista fejlécében "Klipek" gomb — a Klipek képernyő a NÉZETT
+  meccsel és a három hiba-csomaggal (döntés-hibák, szabad lövők, drága
+  eladások) előre kijelölve nyílik, így a megnézett jelenetekből azonnal
+  edzésre vihető videó lesz. (A Klipek képernyő eddig mindig a könyvtár
+  első meccsét választotta; most a kért meccset.)
+
 - **3D pálya (VR): a jelenet-feliratok a headsetben is látszanak**
   (új): az esemény-, döntés-, szabad-lövő-, labdavesztés-, gól-akció-
   és emberelőny-felirat eddig csak a böngésző-ablakban jelent meg (a

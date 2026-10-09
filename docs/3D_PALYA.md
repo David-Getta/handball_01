@@ -115,9 +115,12 @@ feliratok egymás alatt):
 A ▶ az utoljára nézett jelenettől lép tovább (nem ragad le, és a meccs
 legelső pillanatai is elérhetők).
 
-Két lapozó jelenetei a **Klipek** képernyőn videóként is kivághatók:
-a "Drága eladások" (a gólba került labdavesztések) és a "Döntés-hibák"
-csomag — mezszámra szűkítve is ("a #7 drága eladásai").
+A lapozók jelenetei a **Klipek** képernyőn videóként is kivághatók: a
+"Döntés-hibák", a "Szabad lövők" és a "Drága eladások" (a gólba került
+labdavesztások) csomag — az appban a jelenet-lista fejlécének
+**Klipek** gombja a nézett meccsel és e három csomaggal előre
+kijelölve nyitja a képernyőt; mezszámra is szűkíthető ("a #7 drága
+eladásai").
 
 A **Jelenet-lista** a három lapozó összes jelenetét egy időrendi
 listában mutatja ("12:40 · Szeged — labdavesztés #7 (támadó harmad) ·

@@ -264,6 +264,12 @@ void main() {
     await tester.pump();
     await tester.tap(gomb);
     await tester.pump(const Duration(milliseconds: 200));
+    // A fejléc: a jelenetek száma és a Klipek gomb (a demó-meccs nincs a
+    // könyvtárban: tiltott).
+    expect(find.text("Jelenetek · 6"), findsOneWidget);
+    final klipek = find.widgetWithText(OutlinedButton, "Klipek");
+    expect(klipek, findsOneWidget);
+    expect(tester.widget<OutlinedButton>(klipek).onPressed, isNull);
     // A demó két döntése, két szabad lövése és két labdavesztése.
     expect(find.textContaining("jobb opció is volt: lövés"), findsNWidgets(2));
     expect(find.textContaining("védekezése — szabad lövő"), findsNWidgets(2));
