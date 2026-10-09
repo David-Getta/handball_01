@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.160 óta)
 
+- **3D pálya (böngésző/VR): "Klipek" gomb a jelenet-listában** (új): a
+  jelenet-lista fejlécében "Jelenetek · N" és egy "Klipek" gomb — a
+  motor klip-exportját kéri a nézett meccsről a három hiba-csomaggal
+  (döntés-hibák, szabad lövők, drága eladások), az állapotot a
+  feladat-követőről mutatja ("Klipek vágása… 3/12 jelenet", "kész: 5
+  klip"), és kész zipre letöltő linket ad; hibát (pl. nincs forrás-
+  videó) szöveggel mond. Az appbeli jelenet-lista "Klipek" gombjának
+  böngészős párja.
+
 - **Appbeli 3D: a jelenet-listából egy kattintással a Klipek** (új): a
   jelenet-lista fejlécében "Klipek" gomb — a Klipek képernyő a NÉZETT
   meccsel és a három hiba-csomaggal (döntés-hibák, szabad lövők, drága

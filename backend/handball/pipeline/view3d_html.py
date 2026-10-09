@@ -229,6 +229,7 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         feltores = {"home": [], "away": []}
         megallitas = {"home": [], "away": []}
     return {
+        "match_id": match.meta.match_id,
         "home": match.meta.home_team,
         "away": match.meta.away_team,
         "frames": frames,
@@ -386,6 +387,18 @@ function emberSzoveg(d, t, nevH, nevV){
 """
 
 
+# A klip-munka állapot-szövege — tiszta függvény (a teszt node-dal
+# futtatja): a /jobs válasz status/message mezőiből.
+KLIPALLAPOT_JS = """
+function klipAllapotSzoveg(job){
+  if (!job) return "";
+  if (job.status === "running") return "Klipek vágása… " + (job.message || "");
+  if (job.status === "done") return job.message || "kész";
+  return job.message || ("hiba: " + (job.error || "ismeretlen"));
+}
+"""
+
+
 # A gól-akció felirata — tiszta függvény (a teszt node-dal futtatja):
 # "Szeged gólja — #10 → #9 → … → #4 → #10 lő · 8 passz, 6,5 mp"; hosszú
 # láncnál az első kettő és az utolsó két passzoló marad.
@@ -481,6 +494,11 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #dontesFelirat{position:fixed;left:50%;top:52px;transform:translateX(-50%);padding:6px 14px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #szabadFelirat{position:fixed;left:50%;top:98px;transform:translateX(-50%);padding:6px 14px;border:1px solid #ff6b6b;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jelenetLista{position:fixed;right:12px;top:40px;width:380px;max-height:calc(100vh - 170px);overflow-y:auto;padding:6px;border:1px solid #2b4a5e;border-radius:8px;background:rgba(16,24,32,.94);font-size:12.5px;display:none}
+ #jelenetLista .jfej{display:flex;gap:8px;align-items:center;padding:2px 6px 8px;border-bottom:1px solid #2b4a5e;margin-bottom:4px}
+ #jelenetLista .jfej .n{flex:1;opacity:.85}
+ #jelenetLista .jfej button{padding:3px 9px;font-size:11.5px}
+ #klipInfo{font-size:11px;opacity:.9;max-width:170px;text-align:right}
+ #klipLetolt{color:#2fd9c4;font-size:11.5px}
  #jelenetLista .jsor{padding:4px 6px;border-radius:6px;cursor:pointer;display:flex;gap:7px;align-items:center}
  #jelenetLista .jsor:hover{background:#173042}
  #jelenetLista .jsor.aktiv{background:#2f86d6;color:#fff}
@@ -612,7 +630,7 @@ Labdavesztések ◀ ▶ — narancs kör a vesztő körül (a nyomás-sugár), v
 Gól-akciók ◀ ▶ — a gólt megelőző passz-lánc (a régebbi passz halványabb), arany vonal a lövéstől a kapuig<br>
 Emberelőny ◀ ▶ — a kiállítások szakaszai; közben lent középen élő jelző: ki van előnyben, mennyi van hátra, mi az állás az előny alatt<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
-Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik<br>
+Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
 VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a headsetben is látszanak (a szem előtt)</div>
@@ -1879,6 +1897,7 @@ sugoGomb.onclick = () => { sugoNyitva = !sugoNyitva; sugoAllit(); };
 sugoAllit();
 const JL_SZIN = {d: "#d9b544", sz: "#ff6b6b", e: "#ff9f43"};
 let jelenetSorokAkt = [], jelenetAktiv = -2;
+const jelenetSorokElem = document.createElement("div");  // a sorok (a fejléc alatt)
 function jelenetUgras(r){
   if (r.tipus === "d") dontesUtolso = r.s;
   else if (r.tipus === "sz") szabadUtolso = r.s;
@@ -1891,7 +1910,22 @@ function jelenetListaEpit(){
     ADAT.home, ADAT.away);
   jelenetAktiv = -2;
   jelenetLista.textContent = "";
-  if (!jelenetSorokAkt.length){ jelenetLista.textContent = "Nincs ilyen jelenet."; return; }
+  jelenetSorokElem.textContent = "";
+  // Fejléc: a jelenetek száma és a Klipek gomb (a jelenetek videóként).
+  const fej = document.createElement("div"); fej.className = "jfej";
+  const n = document.createElement("span"); n.className = "n";
+  n.textContent = "Jelenetek · " + jelenetSorokAkt.length;
+  const g = document.createElement("button"); g.id = "klipGomb"; g.textContent = "Klipek";
+  g.title = "A lapozók jelenetei videóként (döntés-hibák, szabad lövők, drága eladások) — a motor vágja, kész zipre letöltő link";
+  g.onclick = klipKer;
+  const info = document.createElement("span"); info.id = "klipInfo";
+  const link = document.createElement("a"); link.id = "klipLetolt"; link.textContent = "Letöltés";
+  link.href = "/matches/" + encodeURIComponent(ADAT.match_id || "") + "/clips/download";
+  link.style.display = "none";
+  fej.append(n, g, info, link);
+  jelenetLista.append(fej, jelenetSorokElem);
+  klipFrissit();
+  if (!jelenetSorokAkt.length){ jelenetSorokElem.textContent = "Nincs ilyen jelenet."; return; }
   jelenetSorokAkt.forEach((r) => {
     const sor = document.createElement("div");
     sor.className = "jsor";
@@ -1900,8 +1934,46 @@ function jelenetListaEpit(){
     const t = document.createElement("span"); t.textContent = r.szoveg;
     sor.append(i, p, t);
     sor.onclick = () => jelenetUgras(r);
-    jelenetLista.appendChild(sor);
+    jelenetSorokElem.appendChild(sor);
   });
+}
+
+// ---- Klipek a jelenet-listából ------------------------------------------
+// A három lapozó jelenetei videóként: a gomb a motor klip-exportját kéri
+// (döntés-hibák, szabad lövők, drága eladások — a nézett meccsről), az
+// állapotot a /jobs végpontról követi, és kész zipre letöltő linket ad.
+// Az oldalt a motor szolgálja ki, ezért a kérések relatív címre mennek.
+const KLIP_TIPUSOK = ["bad_decision", "free_shot", "costly_turnover"];
+let klipJob = null, klipIdozito = null;
+function klipFrissit(){
+  const info = document.getElementById("klipInfo");
+  if (!info) return;
+  info.textContent = klipAllapotSzoveg(klipJob);
+  const gomb = document.getElementById("klipGomb");
+  if (gomb) gomb.disabled = !!(klipJob && klipJob.status === "running");
+  const link = document.getElementById("klipLetolt");
+  if (link) link.style.display = (klipJob && klipJob.status === "done") ? "" : "none";
+}
+async function klipKer(){
+  if (!ADAT.match_id || (klipJob && klipJob.status === "running")) return;
+  klipJob = {status: "running", message: "kérés…"}; klipFrissit();
+  try {
+    const v = await fetch("/matches/" + encodeURIComponent(ADAT.match_id) + "/clips/export",
+      {method: "POST", headers: {"Content-Type": "application/json"},
+       body: JSON.stringify({types: KLIP_TIPUSOK})});
+    if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
+    const {job_id} = await v.json();
+    const kovet = async () => {
+      try {
+        const j = await (await fetch("/jobs/" + job_id)).json();
+        klipJob = j; klipFrissit();
+        if (j.status === "running") klipIdozito = setTimeout(kovet, 1500);
+      } catch (e) { klipJob = {status: "error", message: "hiba: " + e.message}; klipFrissit(); }
+    };
+    kovet();
+  } catch (e) {
+    klipJob = {status: "error", message: "hiba: a motor nem érhető el (" + e.message + ")"}; klipFrissit();
+  }
 }
 function jelenetListaNyit(be){
   jelenetLista.style.display = be ? "block" : "none";
@@ -1917,7 +1989,7 @@ function jelenetListaJelol(t){
   let i = -1;
   jelenetSorokAkt.forEach((r, k) => { if (t >= r.s - 0.3 && t <= r.s + 2.5) i = k; });
   if (i === jelenetAktiv) return;
-  const sorok = jelenetLista.children;
+  const sorok = jelenetSorokElem.children;
   if (jelenetAktiv >= 0 && sorok[jelenetAktiv]) sorok[jelenetAktiv].classList.remove("aktiv");
   jelenetAktiv = i;
   if (i >= 0 && sorok[i]){ sorok[i].classList.add("aktiv"); sorok[i].scrollIntoView({block: "nearest"}); }
@@ -2230,6 +2302,7 @@ fest.setAnimationLoop(() => {
               f"FR_MIN = {WALL_GAP_MIN_DEFENDERS};" + FALRES_JS)
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
-                          + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS)
+                          + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
+                          + KLIPALLAPOT_JS)
                  .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))

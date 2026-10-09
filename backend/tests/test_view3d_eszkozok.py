@@ -80,6 +80,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 "max-height:calc(100vh - 110px);overflow-y:auto",
                 'id="sugoGomb"', "function sugoAllit", "innerWidth >= 1200",
                 "function vrFeliratFrissit", "kamera.add(vrTabla)",
+                'g.id = "klipGomb"', "function klipKer", "function klipAllapotSzoveg",
+                '"/clips/export"', '"/jobs/" + job_id', '"/clips/download"',
                 "vrFeliratFrissit();", "fest.xr.isPresenting || VR_FELIRAT_KENYSZER",
                 "function emberFrissit", "function emberSzoveg",
                 "emberFrissit(t)",
@@ -687,6 +689,7 @@ def test_a_tomor_adat_es_a_vegpont_viszi_a_gol_akciokat(tmp_path,
     adat = _compact_data(m, None, {"home": [], "away": []},
                          {"home": [], "away": []})
     gb = goal_build_ups(m)
+    assert adat["match_id"] == m.meta.match_id  # a Klipek gomb kéréséhez
     assert len(adat["goal_build_ups"]) == len(gb["moments"]) > 0
     for r, x in zip(adat["goal_build_ups"], gb["moments"]):
         assert len(r) == 11 and r[0] == x["s"] and r[1] == x["goal_s"]
@@ -812,6 +815,30 @@ def test_a_klipek_kepernyo_a_kert_meccset_valasztja():
             / "ui" / "clips_screen.dart").read_text(encoding="utf-8")
     assert "this.initialMatchId" in klip
     assert 'ms.any((e) => e["match_id"] == kert)' in klip
+
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_klip_munka_allapot_szovege():
+    """A böngészős Klipek gomb állapota a /jobs válaszból: futás közben a
+    haladás-üzenet, készen a motor összegzése ("kész: 5 klip …"), hibánál
+    az üzenet vagy a hiba."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("function klipAllapotSzoveg")
+    i1 = kod.index("\n}\n", i0) + 2
+    esetek = [None, {"status": "running", "message": "3/12 jelenet"},
+              {"status": "done", "message": "kész: 5 klip"},
+              {"status": "error", "message": "hiba: nincs videó"},
+              {"status": "error", "error": "x"}]
+    js = (kod[i0:i1] + "\nconsole.log(JSON.stringify(" + json.dumps(esetek)
+          + ".map(klipAllapotSzoveg)));\n")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == ["", "Klipek vágása… 3/12 jelenet",
+                                    "kész: 5 klip", "hiba: nincs videó",
+                                    "hiba: x"]
 
 def _fal_dart_sorok() -> list:
     """A Dart-tükör (court_geometry.wallGapSegments) esettáblájának sorai
