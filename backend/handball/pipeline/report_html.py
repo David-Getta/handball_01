@@ -1137,6 +1137,11 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     """A jelentés tényleges felépítése (lásd `match_report_html`)."""
 
     meta = match.meta
+    # A csapatnevek EGYSZER escape-elve: a függvényben a home/away (és a
+    # belőlük épített team_names, a csapat-ciklusok `name`-je) már HTML-
+    # biztos — escape() helyett közvetlenül kerülnek a HTML-be (kettős
+    # escape-nél egy "&" "&amp;amp;"-ként látszott). Ami szöveget NYERS
+    # névvel építünk (ítélet, történet), azt a végén escape-eljük.
     home, away = escape(meta.home_team), escape(meta.away_team)
     fps = meta.fps if meta.fps > 0 else 25.0
     dur_s = len(match.frames) / fps
@@ -1229,8 +1234,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     f'<span class="bar-pct"></span></div>')
             goals_html += ('<h3>Mikor estek a g\u00f3lok</h3>'
                            + "".join(rows)
-                           + f'<p class="note">fels\u0151 s\u00e1v (k\u00e9k): {escape(home)}'
-                             f' \u00b7 als\u00f3 (piros): {escape(away)}</p>')
+                           + f'<p class="note">fels\u0151 s\u00e1v (k\u00e9k): {home}'
+                             f' \u00b7 als\u00f3 (piros): {away}</p>')
     except Exception:
         pass
 
@@ -1443,7 +1448,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             rows = "".join(
                 f'<tr><td>{escape(_lab(pr["from"]))} → {escape(_lab(pr["to"]))}</td>'
                 f'<td class="num">{pr["goals"]} gól</td></tr>' for pr in pairs)
-            gcols.append(f'<div class="col"><b>{escape(name)}</b>'
+            gcols.append(f'<div class="col"><b>{name}</b>'
                          f'<table>{rows}</table></div>')
         if gcols:
             passes_html += ('<h2>Legerősebb gól-párosok</h2>'
@@ -1520,7 +1525,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 if rec["attacks"] < 2:
                     continue
                 erows.append(
-                    f"<tr><td>{escape(name)}</td><td>{escape(typ)}</td>"
+                    f"<tr><td>{name}</td><td>{escape(typ)}</td>"
                     f'<td class="num">{rec["attacks"]}</td>'
                     f'<td class="num">{rec["shots"]}</td>'
                     f'<td class="num">{rec["goals"]}</td>'
@@ -1540,7 +1545,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             for origin, rec in sorted((ao_rep.get(side) or {}).items(),
                                       key=lambda kv: -kv[1]["attacks"]):
                 orows.append(
-                    f"<tr><td>{escape(name)}</td>"
+                    f"<tr><td>{name}</td>"
                     f"<td>{escape(origin)}</td>"
                     f'<td class="num">{rec["attacks"]}</td>'
                     f'<td class="num">{rec["goals"]}</td></tr>')
@@ -1587,7 +1592,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 second = (f"{sc['second_chances']}/{sc['misses']} "
                           f"({sc['rebound_pct']:.0f}%)")
             frows.append(
-                f"<tr><td>{escape(name)}</td>"
+                f"<tr><td>{name}</td>"
                 f'<td class="num">{_band_cell(sr["close"])}</td>'
                 f'<td class="num">{_band_cell(sr["mid"])}</td>'
                 f'<td class="num">{_band_cell(sr["far"])}</td>'
@@ -1638,7 +1643,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 if all(c is None for c in cells):
                     continue
                 prows.append(
-                    f"<tr><td>{escape(name)}</td>"
+                    f"<tr><td>{name}</td>"
                     + "".join(f'<td class="num">{escape(_cell(c))}</td>'
                               for c in cells)
                     + "</tr>")
@@ -1763,7 +1768,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     f"<small>({escape(it['family'])})</small><br>"
                     f"{escape(it['verdict'])}</li>"
                     for it in rec["top"])
-                cols.append(f'<div class="col"><b>{escape(name)}</b>'
+                cols.append(f'<div class="col"><b>{name}</b>'
                             f"<ol>{lis}</ol>"
                             f"<small>{rec['total']} megszólaló "
                             f"jelzésből</small></div>")
@@ -1983,7 +1988,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 for key, name in (("home", home), ("away", away)):
                     v = (res_a.get(key) or {}).get("verdict")
                     if v:
-                        arows.append(f"<tr><td>{escape(name)}</td>"
+                        arows.append(f"<tr><td>{name}</td>"
                                      f"<td>{escape(label)}</td>"
                                      f"<td>{escape(str(v))}</td></tr>")
             if arows:
@@ -2023,7 +2028,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 for key, name in (("home", home), ("away", away)):
                     v = (res_m.get(key) or {}).get("verdict")
                     if v:
-                        mrows.append(f"<tr><td>{escape(name)}</td>"
+                        mrows.append(f"<tr><td>{name}</td>"
                                      f"<td>{escape(label)}</td>"
                                      f"<td>{escape(str(v))}</td></tr>")
             if mrows:
@@ -2122,7 +2127,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         for side, name in (("home", home), ("away", away)):
             for r_sp in (eff_sp.get(side) or [])[:4]:
                 sp_rows.append(
-                    f"<tr><td>{escape(name)}</td>"
+                    f"<tr><td>{name}</td>"
                     f'<td class="num">{r_sp["figure"] + 1}.</td>'
                     f'<td class="num">{r_sp["attacks"]}</td>'
                     f'<td class="num">{r_sp["shots"]}</td>'
@@ -2169,7 +2174,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             tail = (' <span class="note">(rétegek: '
                     + escape(", ".join(evidence)) + ")</span>"
                     if evidence else "")
-            kp_lines.append(f"<li><b>{escape(name)}</b>: "
+            kp_lines.append(f"<li><b>{name}</b>: "
                             f"{escape(v)}{tail}</li>")
         if kp_lines:
             key_post_html = ("<h2>Kulcs-poszt</h2><ul>"
@@ -2251,7 +2256,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             for side, name in (("home", home), ("away", away)):
                 v = (rec_fin.get(side) or {}).get("verdict")
                 if v:
-                    rows.append(f"<tr><td>{escape(name)}</td>"
+                    rows.append(f"<tr><td>{name}</td>"
                                 f"<td>{escape(label)}</td>"
                                 f"<td>{escape(v)}</td></tr>")
         return rows
@@ -2530,7 +2535,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     ki = top_pl.get("jersey") or top_pl.get("player_id")
                 else:
                     ki = top_pl
-                pl_rows.append(f"<tr><td>{escape(name)}</td>"
+                pl_rows.append(f"<tr><td>{name}</td>"
                                f"<td>{escape(label)}</td>"
                                f"<td>{escape(str(ki))}.</td></tr>")
         if pl_rows:
@@ -2618,7 +2623,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                            if bz else '<td class="num">–</td>')
                 srows.append(
                     f"<tr><td>{escape(_lab(rec['player_id']))}</td>"
-                    f"<td>{escape(name)}</td>"
+                    f"<td>{name}</td>"
                     f'<td class="num">{rec["shots"]}</td>'
                     f'<td class="num">{rec["goals"]}</td>'
                     f'<td class="num">{rec["xg"]:.1f}</td>'
@@ -2627,8 +2632,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             xg_html = (
                 "<h2>Helyzetminőség (várható gól)</h2>"
                 "<table><tr><th></th>"
-                f'<th class="num">{escape(home)}</th>'
-                f'<th class="num">{escape(away)}</th></tr>'
+                f'<th class="num">{home}</th>'
+                f'<th class="num">{away}</th></tr>'
                 f'<tr><td>Várható gól (xG)</td>'
                 f'<td class="num"><b>{th["xg"]:.1f}</b></td>'
                 f'<td class="num"><b>{ta["xg"]:.1f}</b></td></tr>'
@@ -2652,7 +2657,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             # Ítélet: a helyzetek alapján is az nyert-e, aki a táblán?
             try:
                 from .coach_summary import _xg_verdict
-                verdict = _xg_verdict(th, ta, home, away)
+                verdict = _xg_verdict(th, ta, meta.home_team,
+                                      meta.away_team)
                 if verdict:
                     xg_html += (f'<p class="note"><b>{escape(verdict.strip())}'
                                 "</b></p>")
@@ -2677,7 +2683,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             if rec["worst_zone"]:
                 wz = rec["zones"][rec["worst_zone"]]
                 worst = f'{rec["worst_zone"]} ({wz["goals"]} gól)'
-            drows.append(f"<tr><td>{escape(name)}</td>"
+            drows.append(f"<tr><td>{name}</td>"
                          f'<td class="num">{rec["shots_against"]}</td>'
                          f'<td class="num">{rec["goals_against"]}</td>'
                          f'<td class="num">{rec["xg_against"]:.1f}</td>'
@@ -2687,7 +2693,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         for side, name in (("home", home), ("away", away)):
             rec = dres[side]
             if rec["shots_against"] >= 4 and rec["zones"]:
-                dcols.append(f'<div class="col"><b>{escape(name)}</b>'
+                dcols.append(f'<div class="col"><b>{name}</b>'
                              + _def_zone_bars(rec["zones"]) + "</div>")
         if drows:
             defense_html = (
@@ -2716,7 +2722,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                                     f"({bl[0]['blocks']} blokk)")
                 if tops:
                     defense_html += ('<p class="note">A fal kulcsembere — '
-                                     + escape(" · ".join(tops)) + "</p>")
+                                     + " · ".join(tops) + "</p>")
             except Exception:
                 pass
         # Egyéni védekezés: blokk + labdaszerzés + őrzés egy táblában
@@ -2767,7 +2773,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                                  if r_["mark_d"] is not None else "")
                               if r_["mark_s"] >= 10.0 else "—")
                     pd_rows.append(
-                        f"<tr><td>{escape(name)}</td>"
+                        f"<tr><td>{name}</td>"
                         f"<td>{escape(lab_)}</td>"
                         f'<td class="num">{r_["blocks"] or "—"}</td>'
                         f'<td class="num">{r_["steals"] or "—"}</td>'
@@ -2801,7 +2807,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     alab = (f"{aj}-es" if aj is not None
                             else f"{pr_['attacker']}. játékos")
                     mrows.append(
-                        f"<tr><td>{escape(name)}</td>"
+                        f"<tr><td>{name}</td>"
                         f"<td>{escape(dlab)}</td>"
                         f"<td>{escape(alab)}</td>"
                         f'<td class="num">{pr_["share_pct"]:.0f}%</td>'
@@ -3147,8 +3153,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             for (lab, h, a) in rows)
         team_metrics_html = (
             "<h2>Csapat-mutatók</h2><table>"
-            f'<tr><th></th><th class="num">{escape(home)}</th>'
-            f'<th class="num">{escape(away)}</th></tr>' + body + "</table>")
+            f'<tr><th></th><th class="num">{home}</th>'
+            f'<th class="num">{away}</th></tr>' + body + "</table>")
     except Exception:
         pass
 
@@ -3264,9 +3270,9 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             hi_o = max(oh["early_for"], oh["early_against"])
             lo_o = min(oh["early_for"], oh["early_against"])
             lead_name = home if d_open >= 0 else away
-            bal = (f' · korai állás: {escape(lead_name)} {hi_o}–{lo_o}'
+            bal = (f' · korai állás: {lead_name} {hi_o}–{lo_o}'
                    if abs(d_open) >= 2 else ' · kiegyenlített nyitány')
-            open_line = (f'<div class="sub">Első gól: {escape(first_name)}'
+            open_line = (f'<div class="sub">Első gól: {first_name}'
                          f'{bal}</div>')
     except Exception:
         pass
@@ -3276,7 +3282,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     story_html = ""
     try:
         from .coach_summary import _story_section
-        st = _story_section(match, home, away)
+        st = _story_section(match, meta.home_team, meta.away_team)
         if st:
             story_html = ('<p class="cs"><b>A meccs története.</b> '
                           + escape(st["body"]) + "</p>")
@@ -3415,7 +3421,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 continue
             parts_lu = [f"{p_}: {', '.join(by_post[p_])}"
                         for p_ in order_lu if p_ in by_post]
-            lu_rows.append(f"<tr><td>{escape(name)}</td>"
+            lu_rows.append(f"<tr><td>{name}</td>"
                            f"<td>{escape(' · '.join(parts_lu))}</td></tr>")
         if lu_rows:
             lineups_html = (
@@ -3437,7 +3443,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         for side, name in (("home", home), ("away", away)):
             for it in kp.get(side, []):
                 rows_kp.append(
-                    f"<tr><td>{escape(name)}</td>"
+                    f"<tr><td>{name}</td>"
                     f"<td>{escape(it['role'])}</td>"
                     f"<td>{it['player_id']}. játékos</td>"
                     f"<td>{escape(it['detail'])}</td></tr>")
@@ -3467,7 +3473,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 f"{escape(it['why'])}.<br>"
                 f"<span class='note'>Gyakorlat: {escape(it['drill'])}.</span></li>"
                 for it in items)
-            tparts.append(f"<h3>{escape(name)}</h3><ul>{lis}</ul>")
+            tparts.append(f"<h3>{name}</h3><ul>{lis}</ul>")
         if tparts:
             training_html = ("<h2>Edzés-fókusz a meccs alapján</h2>"
                              + "".join(tparts)
@@ -3500,7 +3506,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     f"{escape(it['drill'])}.</span></li>"
                     for it in p_["items"])
                 lis += f"<li><b>{escape(ki)}</b><ul>{temak}</ul></li>"
-            pparts.append(f"<h3>{escape(name)}</h3><ul>{lis}</ul>")
+            pparts.append(f"<h3>{name}</h3><ul>{lis}</ul>")
         if pparts:
             player_training_html = (
                 "<h2>Egyéni edzés-fókusz</h2>" + "".join(pparts)

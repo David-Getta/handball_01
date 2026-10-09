@@ -1951,3 +1951,26 @@ def test_a_plafon_a_golos_jeleneteket_tartja_meg(monkeypatch):
     import re
     idok = re.findall(r"<li><b>(\d+:\d\d)</b>", html)
     assert idok == ["0:01", "0:20", "0:50"]
+
+
+def test_a_csapatnev_a_teljes_jelentesben_pontosan_egyszer_escape_elve():
+    """'&', '<', '>' és idézőjel a csapatnévben: a jelentés MINDEN
+    szakaszában egyszer escape-elve. Korábban 25 szakasz (a fejlécet is
+    beleértve) a már escape-elt nevet még egyszer escape-elte — egy "&"
+    "&amp;"-ként látszott a nyomtatott lapon. Nyersen (escape nélkül)
+    sehol sem kerülhet a HTML-be."""
+    from html import escape
+
+    H, V = "H<&>'\"", "V<&>"
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8, halftime_break_s=30)
+    for f in m.frames:
+        for p in f.players:
+            p.jersey_number = (p.track_id % 14) + 1
+    m.meta.home_team, m.meta.away_team = H, V
+    html = match_report_html(m, team_style_profile(m), detect_events(m),
+                             compute_quality_report(m))
+    for nev in (H, V):
+        assert escape(nev) in html
+        assert escape(escape(nev)) not in html, "kettős escape"
+        assert nev not in html, "nyers (escape nélküli) csapatnév"

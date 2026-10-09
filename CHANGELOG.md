@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.160 óta)
 
+- **Meccs-jelentés: a csapatnév kettős escape-je** (javítás): a
+  nyomtatható meccs-jelentés 25 szakasza (a fejlécet is beleértve) a
+  már HTML-biztos csapatnevet még egyszer escape-elte — egy "&"-et,
+  "<"-t vagy idézőjelet tartalmazó csapatnév ("Győr & Co") "Győr &amp;
+  Co"-ként látszott a lapon. Most minden szakaszban pontosan egyszer
+  escape-elt; az ítélet- és a történet-szöveg nyers névvel épül, és a
+  kész szöveg kap escape-et. Teszt: speciális karakteres
+  csapatnevekkel a teljes jelentésben se kettős, se nyers előfordulás.
+
 - **3D pálya: jelenet-lista** (új, böngészős/VR és appbeli nézet): a
   három jelenet-lapozó (Döntések, Szabad lövők, Labdavesztések) MINDEN
   jelenete egy időrendi listában, a "Kinek a hibái" szűrő szerint —
