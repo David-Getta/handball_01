@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.160 óta)
 
+- **3D pálya (VR): a jelenet-feliratok a headsetben is látszanak**
+  (új): az esemény-, döntés-, szabad-lövő-, labdavesztés-, gól-akció-
+  és emberelőny-felirat eddig csak a böngésző-ablakban jelent meg (a
+  headset a weboldal szövegeit nem mutatja). VR-ben ugyanezek egy, a
+  fejhez rögzített táblán olvashatók (mindig szem előtt, a pálya nem
+  takarja); a `?vrfelirat=1` paraméterrel headset nélkül is
+  kipróbálható.
+
 - **3D pálya (böngésző): a bal panel alacsony ablakban görgethető**
   (javítás): a rétegek szaporodtával a bal oldali eszköz-panel
   1024×600-as ablakban a lejátszó-sáv alá lógott, és az alsó gombjai

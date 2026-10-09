@@ -79,6 +79,8 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 # a panel alacsony ablakban görgethető (nem lóg a sáv alá)
                 "max-height:calc(100vh - 110px);overflow-y:auto",
                 'id="sugoGomb"', "function sugoAllit", "innerWidth >= 1200",
+                "function vrFeliratFrissit", "kamera.add(vrTabla)",
+                "vrFeliratFrissit();", "fest.xr.isPresenting || VR_FELIRAT_KENYSZER",
                 "function emberFrissit", "function emberSzoveg",
                 "emberFrissit(t)",
                 "function golFrissit", 'id="golFelirat"',
@@ -868,6 +870,21 @@ def test_az_app_fal_resei_a_backend_tablajat_futtatjak():
     assert f"const double wallGapM = {WALL_GAP_M};" in geo
     assert f"const double wallGapDepthM = {WALL_GAP_DEPTH_M};" in geo
     assert f"const int wallGapMinDefenders = {WALL_GAP_MIN_DEFENDERS};" in geo
+
+def test_az_oldal_sablonja_escape_nelkul_toltodik():
+    """A böngészős oldal sablonja NEM raw string: egy egyszeres "\\n" a
+    beszúrt JS-ben valódi sortöréssé válik (az egész modul-szkript
+    elhal), az egyszeres "\\s" DeprecationWarning. A modul
+    figyelmeztetés nélkül importálható — a sablonba kettőzött escape
+    kell."""
+    import importlib
+    import warnings
+
+    import handball.pipeline.view3d_html as v
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        importlib.reload(v)
 
 def _modul_szkript(oldal: str) -> str:
     m = re.search(r'<script type="module">(.*?)</script>', oldal, re.S)

@@ -147,7 +147,10 @@ küldesz a stábnak, nem egy meccset. A paraméterek:
 
 A böngészős oldal WebXR-képes: a lenti "ENTER VR" gombbal a csarnok
 headsetben nyílik, a bal kar hüvelykujj-karja a nézés iránya szerint
-visz. A WebXR biztonságos környezetet kér — a localhost az; Quest-féle
+visz. A jelenet-feliratok (esemény, döntés, szabad lövő,
+labdavesztés, gól-akció, emberelőny) a headsetben egy fejhez rögzített
+táblán látszanak — a lapozók VR-ben is használhatók (a gombokat a VR
+előtt, az ablakban nyomd meg, vagy a jelenet-linkkel indíts). A WebXR biztonságos környezetet kér — a localhost az; Quest-féle
 headsetről USB-kábellel és `adb reverse`-szel érhető el az app gépe.
 
 ## Hol él a kód

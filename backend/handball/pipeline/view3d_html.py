@@ -615,7 +615,7 @@ Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a 
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás)<br>
-VR-headsetben: a lenti "ENTER VR" gomb</div>
+VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a headsetben is látszanak (a szem előtt)</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
 <div id="dontesFelirat"></div>
@@ -2153,6 +2153,57 @@ function vrMozgas(dt){
   }
 }
 
+// ---- VR-felirat: a jelenet-feliratok a headsetben ----------------------
+// A DOM-feliratok (esemény, döntés, szabad lövő, labdavesztés, gól-akció,
+// emberelőny) a headsetben nem látszanak: VR-ben ugyanezeket egy, a
+// fejhez rögzített táblára rajzoljuk (a kamera gyermeke — mindig szem
+// előtt, a padló-vonalak nem takarják). A ?vrfelirat=1 headset nélkül
+// is bekapcsolja (próbához).
+const VR_FELIRAT_FORRASOK = ["felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "emberJelzo"];
+const vrVaszon = document.createElement("canvas"); vrVaszon.width = 1024; vrVaszon.height = 320;
+const vrTextura = new THREE.CanvasTexture(vrVaszon);
+const vrTabla = new THREE.Sprite(new THREE.SpriteMaterial({map: vrTextura, transparent: true, depthTest: false}));
+vrTabla.position.set(0, -0.42, -1.4); vrTabla.scale.set(1.28, 0.4, 1); vrTabla.visible = false;
+kamera.add(vrTabla);
+const VR_FELIRAT_KENYSZER = new URLSearchParams(location.search).get("vrfelirat") === "1";
+let vrFeliratUtolso = null;
+function vrFeliratSzoveg(){
+  return VR_FELIRAT_FORRASOK.map(id => document.getElementById(id))
+    .filter(e => e && e.style.display === "block")
+    .map(e => e.textContent.replace(/\\s+/g, " ").trim()).filter(Boolean);
+}
+function vrSorok(szoveg, max){
+  const ki = []; let sor = "";
+  for (const szo of szoveg.split(" ")){
+    if (sor && (sor + " " + szo).length > max){ ki.push(sor); sor = szo; }
+    else sor = sor ? sor + " " + szo : szo;
+  }
+  if (sor) ki.push(sor);
+  return ki;
+}
+function vrFeliratFrissit(){
+  if (!(fest.xr.isPresenting || VR_FELIRAT_KENYSZER)){ vrTabla.visible = false; vrFeliratUtolso = null; return; }
+  const sorok = vrFeliratSzoveg();
+  const kulcs = sorok.join("\\n");
+  if (kulcs === vrFeliratUtolso) return;
+  vrFeliratUtolso = kulcs;
+  if (!sorok.length){ vrTabla.visible = false; return; }
+  const tordelt = [];
+  for (const sz of sorok) tordelt.push(...vrSorok(sz, 56));
+  const sorokKesz = tordelt.slice(0, 6);
+  const g = vrVaszon.getContext("2d");
+  g.clearRect(0, 0, vrVaszon.width, vrVaszon.height);
+  const mag = 44 * sorokKesz.length + 30;
+  g.fillStyle = "rgba(16,24,32,0.9)";
+  g.beginPath(); g.roundRect(8, 8, vrVaszon.width - 16, mag, 18); g.fill();
+  g.strokeStyle = "#d9b544"; g.lineWidth = 3; g.stroke();
+  g.fillStyle = "#eaeef5"; g.font = "30px sans-serif"; g.textBaseline = "top";
+  sorokKesz.forEach((sz, i) => g.fillText(sz, 28, 26 + i * 44));
+  vrTextura.needsUpdate = true;
+  vrTabla.visible = true;
+}
+window.vrFeliratProba = () => ({latszik: vrTabla.visible, sorok: vrFeliratSzoveg()});
+
 const idoCimke = document.getElementById("ido");
 linkAlkalmaz();
 fest.setAnimationLoop(() => {
@@ -2161,7 +2212,7 @@ fest.setAnimationLoop(() => {
   if (megy){ ido = Math.min(veg, ido + dt * sebesseg);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); felirat(ido);
+  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); felirat(ido); vrFeliratFrissit();
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);
