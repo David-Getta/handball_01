@@ -10,6 +10,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   1024×600-as ablakban a lejátszó-sáv alá lógott, és az alsó gombjai
   (Gól-akciók, Emberelőny, Link másolása) nem voltak kattinthatók. A
   panel most a sáv fölött véget ér és görgethető.
+  A jobb felső súgó-szöveg egy "Súgó ▴/▾" gombbal csukható, és keskeny
+  ablakban (1200 px alatt) alapból csukva van — nyitva a pálya jobb
+  harmadát takarta.
 
 - **App: elrendezési hibák hat képernyőn** (javítás): új füstteszt
   megnyit minden képernyőt backend nélkül, két ablakméretben — és hét

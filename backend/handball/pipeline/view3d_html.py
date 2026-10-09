@@ -463,7 +463,10 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #ido{font-variant-numeric:tabular-nums}
  input[type=range]{flex:1}
  button{background:#173042;color:#dfe7ef;border:1px solid #2b4a5e;border-radius:8px;padding:6px 12px;cursor:pointer}
- #sugo{position:fixed;right:12px;top:10px;font-size:11.5px;opacity:.7;text-align:right}
+ #sugo{position:fixed;right:12px;top:36px;font-size:11.5px;opacity:.7;text-align:right;max-width:min(62vw,900px)}
+ /* A súgó gombbal csukható: keskeny ablakban (1200 px alatt) alapból
+    csukva — nyitva a pálya jobb harmadát takarta. */
+ #sugoGomb{position:fixed;right:12px;top:8px;padding:3px 10px;font-size:11.5px;opacity:.85}
  #felirat{position:fixed;left:12px;bottom:56px;padding:6px 12px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.85);color:#d9b544;font-weight:600;font-size:15px;display:none}
  /* A panel a lejátszó-sáv fölött véget ér és görgethető: a rétegek
     szaporodtával alacsony ablakban (1024×600) a sáv alá lógott, és az
@@ -590,6 +593,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="linkInfo"></span>
  </div>
 </div>
+<button id="sugoGomb" title="Billentyűk és rétegek — a súgó ki/be">Súgó ▴</button>
 <div id="sugo">Húzás — körülnézés · WASD — mozgás · R/F (C) — fel/le · Shift — gyors<br>
 Görgetés — előre ugrás (keringésben: közelítés) · O — keringés a pálya körül<br>
 Dupla katt egy játékosra — az ő szemével, vele együtt (Esc kilép); fent: a sebessége és a megtett útja<br>
@@ -1861,6 +1865,18 @@ function eladasFrissit(t){
 const jelenetLista = document.getElementById("jelenetLista");
 const jelenetGomb = document.getElementById("jelenetGomb");
 const sugoElem = document.getElementById("sugo");
+// A súgó ki/be: keskeny ablakban alapból csukva (a pálya jobb harmadát
+// takarta); a jelenet-lista a helyén nyílik, addig a súgó rejtve marad,
+// de a lista bezárása után a felhasználó állapota tér vissza.
+const sugoGomb = document.getElementById("sugoGomb");
+let sugoNyitva = innerWidth >= 1200;
+function sugoAllit(){
+  const lathato = sugoNyitva && jelenetLista.style.display !== "block";
+  sugoElem.style.display = lathato ? "" : "none";
+  sugoGomb.textContent = sugoNyitva ? "Súgó ▴" : "Súgó ▾";
+}
+sugoGomb.onclick = () => { sugoNyitva = !sugoNyitva; sugoAllit(); };
+sugoAllit();
 const JL_SZIN = {d: "#d9b544", sz: "#ff6b6b", e: "#ff9f43"};
 let jelenetSorokAkt = [], jelenetAktiv = -2;
 function jelenetUgras(r){
@@ -1889,7 +1905,7 @@ function jelenetListaEpit(){
 }
 function jelenetListaNyit(be){
   jelenetLista.style.display = be ? "block" : "none";
-  sugoElem.style.display = be ? "none" : "";  // a súgó helyén nyílik
+  sugoAllit();  // a súgó helyén nyílik; bezárva a súgó állapota tér vissza
   jelenetGomb.classList.toggle("be", be);
   if (be) jelenetListaEpit();
 }

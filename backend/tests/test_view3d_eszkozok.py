@@ -78,6 +78,7 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'id="emberKov"', 'id="emberElozo"', 'id="emberJelzo"',
                 # a panel alacsony ablakban görgethető (nem lóg a sáv alá)
                 "max-height:calc(100vh - 110px);overflow-y:auto",
+                'id="sugoGomb"', "function sugoAllit", "innerWidth >= 1200",
                 "function emberFrissit", "function emberSzoveg",
                 "emberFrissit(t)",
                 "function golFrissit", 'id="golFelirat"',
