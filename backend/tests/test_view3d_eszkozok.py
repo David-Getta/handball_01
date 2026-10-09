@@ -81,6 +81,9 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'id="sugoGomb"', "function sugoAllit", "innerWidth >= 1200",
                 "function vrFeliratFrissit", "kamera.add(vrTabla)",
                 'g.id = "klipGomb"', "function klipKer", "function klipAllapotSzoveg",
+                "function vrGombEl", "function jelenetLep", "function vrGombok",
+                'e.code === "KeyN"', 'e.code === "KeyP"',
+                "vrGombok();", "vrGombEl(kulcs, 4, nyom(4))",
                 '"/clips/export"', '"/jobs/" + job_id', '"/clips/download"',
                 "vrFeliratFrissit();", "fest.xr.isPresenting || VR_FELIRAT_KENYSZER",
                 "function emberFrissit", "function emberSzoveg",
@@ -840,6 +843,31 @@ def test_a_klip_munka_allapot_szovege():
                                     "kész: 5 klip", "hiba: nincs videó",
                                     "hiba: x"]
 
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_vr_kontroller_gomb_el_erzekelese():
+    """A kontroller-gomb él-érzékelése: egy lenyomás EGY lépés — a nyomva
+    tartott gomb nem pörget, az elengedés után az új lenyomás megint
+    lép; a két kontroller és a gombok egymástól függetlenek."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("const vrGombElozo = new Map();")
+    i1 = kod.index("\n}\n", kod.index("function vrGombEl")) + 2
+    js = (kod[i0:i1] + """
+const ki = [];
+for (const [k, i, l] of [["bal1", 4, true], ["bal1", 4, true], ["bal1", 4, false],
+                         ["bal1", 4, true], ["jobb2", 4, true], ["bal1", 5, true],
+                         ["bal1", 5, true], ["bal1", 4, false], ["bal1", 4, true]])
+  ki.push(vrGombEl(k, i, l));
+console.log(JSON.stringify(ki));
+""")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [True, False, False, True, True, True,
+                                    False, False, True]
+
 def _fal_dart_sorok() -> list:
     """A Dart-tükör (court_geometry.wallGapSegments) esettáblájának sorai
     — a várt értékek a backend wall_gap_segments-éből (rögzített mag,
@@ -1053,6 +1081,7 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
                 "fetchPowerplayMoments", "_emberUgras", "_emberJelzo(m)",
                 # a jelenet-listából a Klipek képernyő a nézett meccsel
                 "ClipsScreen(", "initialMatchId: _matchId",
+                "LogicalKeyboardKey.keyN", "_jelenetLep(m,",
                 '"bad_decision", "free_shot", "costly_turnover"',
                 "powerplayCaption(",
                 "gol: _aktivGol(m)", "goalBuildUpCaption(",

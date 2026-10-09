@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.160 óta)
 
+- **3D pálya (VR): jelenet-lapozás a kontrollerrel** (új): a
+  headsetben a weboldal gombjai nem érhetők el — mostantól a
+  kontroller A/X gombja a következő, B/Y gombja az előző jelenetre
+  ugrik (a jelenet-lista sorai, a "Kinek a hibái" szűrő szerint), a
+  ravasz lejátszás/szünet; a felirat a szem előtti táblán olvasható.
+  Egy lenyomás egy lépés (a nyomva tartás nem pörget). Asztali gépen
+  — a böngészőben és az appban is — ugyanez az N / P billentyűvel
+  (következő / előző jelenet).
+
 - **3D pálya (böngésző/VR): "Klipek" gomb a jelenet-listában** (új): a
   jelenet-lista fejlécében "Jelenetek · N" és egy "Klipek" gomb — a
   motor klip-exportját kéri a nézett meccsről a három hiba-csomaggal

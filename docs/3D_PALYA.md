@@ -30,6 +30,7 @@ tükre — őr-tesztek ellenőrzik, hogy nem térhetnek el).
 | A játékos SZEMÉVEL, vele együtt | dupla koppintás a figurára · Esc kilép | dupla katt · Esc |
 | Lejátszás / sebesség | Szóköz · 0,5–4× | ugyanaz |
 | Előző / következő esemény | ⏮ ⏭ | ⏮ ⏭ vagy [ / ] |
+| Előző / következő jelenet (a jelenet-lista sorai) | ◀ ▶ a panelen vagy P / N | ◀ ▶ vagy P / N; VR-ben B/Y · A/X |
 
 A játékos szemével nézve a kép tetején a HUD mutatja a **sebességét
 (km/h)** és az addig **megtett útját** ("Szeged #7 · 14,2 km/h ·
@@ -95,15 +96,6 @@ feliratok egymás alatt):
 - **Szabad lövők ◀ ▶** — a kapott lövések, ahol a lövőtől 2 m-en belül
   nem volt mezőnyvédő: **piros kör** a lövő körül (a fedezés-sugár) és
   szaggatott vonal a legközelebbi védőhöz, a felirat a távolsággal.
-- **Emberelőny ◀ ▶** — a kiállítások szakaszai; amíg a lejátszás egy
-  ilyenben jár, lent középen élő jelző: ki van előnyben, ki hiányos,
-  mennyi van hátra, és az előny alatti állás eddig. A kiállítás-
-  felismerés és a lövés-szabály az emberelőny-hatékonyság rétegé.
-- **Gól-akciók ◀ ▶** — a gólok előkészítése: a gólt megelőző saját
-  passz-lánc a csapat színével (a régebbi passz halványabb), **arany**
-  vonal a lövőtől a kapuig; a felirat a mezszámokkal ("#10 → #9 → … →
-  #4 → #10 lő · 8 passz, 6,5 mp"). A lánc-szabály a gól-előkészítés
-  rétegé: a gól előtti 20 mp saját passzai, a birtoklás-határig.
 - **Labdavesztések ◀ ▶** — az elvesztett labdák: **narancs kör** a
   vesztő körül (a 2,5 m-es nyomás-sugár: ha ezen belül állt ellenfél,
   az eladás KIPRÉSELT, különben MAGÁTÓL jött), szaggatott vonal a
@@ -111,16 +103,26 @@ feliratok egymás alatt):
   vesztő mezszámával, a pálya-harmaddal, a nyomással, és ha fél percen
   belül gól lett belőle, azzal is. Ugyanaz a négy válasz, amit a
   labdaeladás-rétegek számokban mondanak — itt egy jeleneten.
+- **Gól-akciók ◀ ▶** — a gólok előkészítése: a gólt megelőző saját
+  passz-lánc a csapat színével (a régebbi passz halványabb), **arany**
+  vonal a lövőtől a kapuig; a felirat a mezszámokkal ("#10 → #9 → … →
+  #4 → #10 lő · 8 passz, 6,5 mp"). A lánc-szabály a gól-előkészítés
+  rétegé: a gól előtti 20 mp saját passzai, a birtoklás-határig.
+- **Emberelőny ◀ ▶** — a kiállítások szakaszai; amíg a lejátszás egy
+  ilyenben jár, lent középen élő jelző: ki van előnyben, ki hiányos,
+  mennyi van hátra, és az előny alatti állás eddig. A kiállítás-
+  felismerés és a lövés-szabály az emberelőny-hatékonyság rétegé.
 
 A ▶ az utoljára nézett jelenettől lép tovább (nem ragad le, és a meccs
 legelső pillanatai is elérhetők).
 
-A lapozók jelenetei a **Klipek** képernyőn videóként is kivághatók: a
-"Döntés-hibák", a "Szabad lövők" és a "Drága eladások" (a gólba került
-labdavesztások) csomag — az appban a jelenet-lista fejlécének
-**Klipek** gombja a nézett meccsel és e három csomaggal előre
-kijelölve nyitja a képernyőt; mezszámra is szűkíthető ("a #7 drága
-eladásai").
+A lapozók jelenetei videóként is kivághatók: a "Döntés-hibák", a
+"Szabad lövők" és a "Drága eladások" (a gólba került labdavesztések)
+csomag. A jelenet-lista fejlécének **Klipek** gombja az appban a Klipek
+képernyőt nyitja a nézett meccsel és e három csomaggal előre kijelölve
+(ott mezszámra is szűkíthető: "a #7 drága eladásai"); a böngészőben
+ugyanez a gomb a motortól kéri a vágást, mutatja az állapotát, és a
+kész zipre letöltő linket ad.
 
 A **Jelenet-lista** a három lapozó összes jelenetét egy időrendi
 listában mutatja ("12:40 · Szeged — labdavesztés #7 (támadó harmad) ·
@@ -152,9 +154,10 @@ A böngészős oldal WebXR-képes: a lenti "ENTER VR" gombbal a csarnok
 headsetben nyílik, a bal kar hüvelykujj-karja a nézés iránya szerint
 visz. A jelenet-feliratok (esemény, döntés, szabad lövő,
 labdavesztés, gól-akció, emberelőny) a headsetben egy fejhez rögzített
-táblán látszanak — a lapozók VR-ben is használhatók (a gombokat a VR
-előtt, az ablakban nyomd meg, vagy a jelenet-linkkel indíts). A WebXR biztonságos környezetet kér — a localhost az; Quest-féle
-headsetről USB-kábellel és `adb reverse`-szel érhető el az app gépe.
+táblán látszanak, és a jelenetek a kontrollerrel lapozhatók: A/X — a
+következő, B/Y — az előző jelenet, ravasz — lejátszás/szünet. A WebXR
+biztonságos környezetet kér — a localhost az; Quest-féle headsetről
+USB-kábellel és `adb reverse`-szel érhető el az app gépe.
 
 ## Hol él a kód
 

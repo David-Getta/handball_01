@@ -632,8 +632,8 @@ Emberelőny ◀ ▶ — a kiállítások szakaszai; közben lent középen élő
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
-[ / ] — előző / következő esemény (gól, lövés, eladás)<br>
-VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a headsetben is látszanak (a szem előtt)</div>
+[ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai)<br>
+VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
 <div id="dontesFelirat"></div>
@@ -1132,6 +1132,8 @@ addEventListener("keydown", e => {
   if (e.code === "Space"){ lejatszasGomb.onclick(); e.preventDefault(); return; }
   if (e.code === "BracketLeft"){ esemenyUgras(-1); return; }
   if (e.code === "BracketRight"){ esemenyUgras(1); return; }
+  if (e.code === "KeyN"){ jelenetLep(1); return; }   // következő jelenet
+  if (e.code === "KeyP"){ jelenetLep(-1); return; }  // előző jelenet
   if (e.code === "KeyO"){ keringGomb.onclick(); return; }
   if (e.code === "KeyT"){ tvGomb.onclick(); return; }
   if (e.code === "Escape"){ if (mod === "jatekos") modValt("szabad"); else meresTorles(); return; }
@@ -2225,6 +2227,48 @@ function vrMozgas(dt){
   }
 }
 
+// ---- VR-kontroller: jelenet-lapozás a headsetben -------------------------
+// A DOM-gombok VR-ben nem érhetők el: a kontroller A/X gombja (4) a
+// következő, B/Y gombja (5) az előző jelenetre ugrik (a jelenet-lista
+// sorai, a "Kinek a hibái" szűrő szerint), a ravasz (0) lejátszás/szünet.
+// Él-érzékelés: egy lenyomás egy lépés, a nyomva tartás nem pörget.
+const vrGombElozo = new Map();
+function vrGombEl(kulcs, index, lenyomva){
+  // Igaz, ha a gomb MOST lett lenyomva (az előző kockán nem volt).
+  const regi = vrGombElozo.get(kulcs) || [];
+  const el = !!lenyomva && !regi[index];
+  regi[index] = !!lenyomva; vrGombElozo.set(kulcs, regi);
+  return el;
+}
+// A jelenet-lépés KÖZÖS a kontroller-gombokkal és az N/P billentyűkkel.
+let vrJelenetUtolso = null;
+function jelenetLep(irany){
+  const sorok = jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK), ADAT.home, ADAT.away);
+  if (!sorok.length) return null;
+  const cel = lapozCel(sorok.map(r => r.s), ido, vrJelenetUtolso, irany);
+  if (cel === null) return null;
+  vrJelenetUtolso = cel;
+  const r = sorok.find(x => x.s === cel);
+  jelenetUgras(r);
+  return r;
+}
+function vrGombok(){
+  const munkamenet = fest.xr.getSession && fest.xr.getSession();
+  if (!munkamenet) return;
+  let k = 0;
+  for (const forras of munkamenet.inputSources){
+    k++;
+    const gp = forras.gamepad;
+    if (!gp || !gp.buttons) continue;
+    const kulcs = (forras.handedness || "") + k;
+    const nyom = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed);
+    if (vrGombEl(kulcs, 4, nyom(4))) jelenetLep(1);
+    if (vrGombEl(kulcs, 5, nyom(5))) jelenetLep(-1);
+    if (vrGombEl(kulcs, 0, nyom(0))){ megy = !megy; lejatszasGomb.textContent = megy ? "⏸" : "▶"; }
+  }
+}
+window.vrJelenetLep = jelenetLep;  // a próbához: a kontroller-gomb párja
+
 // ---- VR-felirat: a jelenet-feliratok a headsetben ----------------------
 // A DOM-feliratok (esemény, döntés, szabad lövő, labdavesztés, gól-akció,
 // emberelőny) a headsetben nem látszanak: VR-ben ugyanezeket egy, a
@@ -2284,7 +2328,7 @@ fest.setAnimationLoop(() => {
   if (megy){ ido = Math.min(veg, ido + dt * sebesseg);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); felirat(ido); vrFeliratFrissit();
+  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); felirat(ido); vrFeliratFrissit();
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);

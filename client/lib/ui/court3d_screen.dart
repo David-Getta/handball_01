@@ -172,6 +172,8 @@ class _Court3DScreenState extends State<Court3DScreen>
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
+  // Az N / P billentyűs jelenet-lépés utolsó célja (a jelenet-lista sorain).
+  double? _jelenetUtolso;
   // HŐTÉRKÉP: hol tartózkodott a csapat (az elemzés rácsa: 20×10 cella,
   // csak a mért helyek) a pályára fektetve. Meccsenként egyszer számolva.
   String _hoter = ""; // "" | "hazai" | "vendeg" | "mind"
@@ -763,6 +765,20 @@ class _Court3DScreenState extends State<Court3DScreen>
       _szurt(_szabadok, "defending");
   List<Map<String, dynamic>> get _eladasokSz => _szurt(_eladasok, "team");
 
+  /// Jelenet-lépés (N / P): a jelenet-lista sorain, a "Kinek a hibái"
+  /// szűrő szerint, a közös lapozCel-lel — az utoljára lépett jelenettől.
+  void _jelenetLep(Match m, int irany) {
+    final sorok = sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
+        m.meta.homeTeam, m.meta.awayTeam);
+    if (sorok.isEmpty || m.frames.isEmpty) return;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final cel = lapozCel([for (final r in sorok) r.s], _mostT(m) / fps,
+        _jelenetUtolso, irany);
+    if (cel == null) return;
+    _jelenetUtolso = cel;
+    _jelenetUgras(m, sorok.firstWhere((r) => r.s == cel));
+  }
+
   /// Ugrás a jelenet-lista egy sorára (1,5 mp-cel előtte, lejátszva); a
   /// sor lapozója onnan lép tovább.
   void _jelenetUgras(Match m, SceneRow r) {
@@ -1236,6 +1252,13 @@ class _Court3DScreenState extends State<Court3DScreen>
         _keringValt();
         return KeyEventResult.handled;
       }
+      // N / P — következő / előző jelenet (a jelenet-lista sorai; a
+      // böngésző N/P-jének és a VR-kontroller A/X · B/Y-jának párja).
+      if (k == LogicalKeyboardKey.keyN || k == LogicalKeyboardKey.keyP) {
+        final m = _match;
+        if (m != null) _jelenetLep(m, k == LogicalKeyboardKey.keyN ? 1 : -1);
+        return KeyEventResult.handled;
+      }
       // T — TV-kamera be/ki (a böngészős nézet T gombjának párja).
       if (k == LogicalKeyboardKey.keyT) {
         setState(() {
@@ -1408,7 +1431,7 @@ class _Court3DScreenState extends State<Court3DScreen>
               "Shift — gyors · Szóköz — lejátszás · O — keringés · "
               "dupla katt egy játékosra — az ő szemével (Esc) · "
               "katt a padlóra — lövés-mérés · lövéstérkép: katt egy körre — "
-              "odaugrik",
+              "odaugrik · N / P — következő / előző jelenet",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),

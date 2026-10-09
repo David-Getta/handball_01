@@ -324,6 +324,26 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("N / P billentyű: jelenet-lépés a lista sorain", (tester) async {
+    await _nyit(tester);
+    // N: az első jelenet (a demó első döntése) — a felirat megjelenik.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("jobb opció is volt").evaluate().isNotEmpty) {
+        break;
+      }
+    }
+    expect(find.textContaining("jobb opció is volt"), findsOneWidget);
+    // Újabb N: a következő jelenetre lép (nem ragad le az elsőn).
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("labda-nyom gomb: be/ki", (tester) async {
     await _nyit(tester);
     await tester.tap(find.text("Labda-nyom (3 mp)"));
