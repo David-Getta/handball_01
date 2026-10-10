@@ -591,9 +591,10 @@ def test_kapott_golok_a_vedekezes_elemzes_es_a_kapus_kimozdulas_szabalyaval():
     hely, védő-távolság, szabad-ítélet, xG), a sáv és a kapu-szög a
     lövés-mérésé, a kapus mélysége a kapus-kimozdulás szabálya (a kapus
     távolsága a saját kapu közepétől az elengedés kockáján)."""
-    from handball.pipeline.court3d import conceded_goal_moments, shot_geometry
+    from handball.pipeline.court3d import (CG_KEEPER_OUT_M,
+                                           conceded_goal_moments,
+                                           shot_geometry)
     from handball.pipeline.defense import FREE_DEF_RADIUS_M, defense_analysis
-    from handball.pipeline.goalkeeper import GK_DEPTH_OUT_M
     from handball.sim.match_simulator import simulate_ground_truth
 
     m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
@@ -601,7 +602,7 @@ def test_kapott_golok_a_vedekezes_elemzes_es_a_kapus_kimozdulas_szabalyaval():
     r = conceded_goal_moments(m)
     d = defense_analysis(m)
     assert r["moments"], "a szimuláción van kapott gól"
-    assert r["depth_out_m"] == GK_DEPTH_OUT_M and r["radius_m"] == FREE_DEF_RADIUS_M
+    assert r["depth_out_m"] == CG_KEEPER_OUT_M and r["radius_m"] == FREE_DEF_RADIUS_M
     by_t = {f.t: f for f in m.frames}
     for side in ("home", "away"):
         sajat = [x for x in r["moments"] if x["defending"] == side]
@@ -625,8 +626,13 @@ def test_kapott_golok_a_vedekezes_elemzes_es_a_kapus_kimozdulas_szabalyaval():
             else:
                 mely = math.hypot(kapus.x - x["goal"][0], kapus.y - 10.0)
                 assert abs(x["keeper_depth"] - mely) < 0.01
-                assert x["keeper_out"] == (mely >= GK_DEPTH_OUT_M)
+                assert x["keeper_out"] == (mely >= CG_KEEPER_OUT_M)
             assert x["team"] != side and x["shooter_jersey"] is not None
+            # A lövő a védekezés-elemzés track-jéből (nem koordinátából).
+            assert sh["player_id"] is not None
+            assert x["shooter_jersey"] == next(
+                p.jersey_number for f in m.frames for p in f.players
+                if p.track_id == sh["player_id"])
     assert [x["s"] for x in r["moments"]] == sorted(x["s"] for x in r["moments"])
 
 
@@ -730,3 +736,25 @@ def test_a_kulcs_jelenetek_vegpontja(tmp_path, monkeypatch):
     assert v["total"] == r["total"] and len(v["rows"]) == len(r["rows"])
     assert v["rows"][0]["tipus"] == r["rows"][0]["tipus"]
     assert c.get("/matches/nincs/key-scenes").status_code == 404
+
+
+
+def test_a_lerohanas_horgonya_a_gol_esemenye():
+    """Ha a kontra gól lett, a klip-horgony (t) és a befejező (shooter_id)
+    a GÓL eseményé — kipattanóból a második lövő —, nem az első azonosított
+    lövésé; gól nélkül az első lövésé; lövés nélkül a szakasz vége."""
+    from handball.pipeline.court3d import fast_break_moments
+    from handball.pipeline.event_detection import EventType, detect_shots
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=7,
+                              shots_per_min=8)
+    golok = {e.t: e for e in detect_shots(m) if e.type == EventType.GOAL}
+    r = fast_break_moments(m)
+    assert r["moments"]
+    for x in r["moments"]:
+        if x["outcome"] == "goal":
+            assert x["t"] in golok and golok[x["t"]].team.value == x["team"]
+            assert x["shooter_id"] == golok[x["t"]].player_id
+        elif x["outcome"] is None:
+            assert x["shooter_id"] is None

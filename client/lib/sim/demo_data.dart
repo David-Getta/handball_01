@@ -251,8 +251,9 @@ List<Map<String, dynamic>> buildDemoFastBreaks(Match m) {
 
 /// Demó kapott gól a 3D "Kapott gólok" lapozójához (backend nélkül): a
 /// /conceded-goals "moments" alakjában — a hazai lő a jobb kapura 9 m-en
-/// túlról, a legközelebbi vendég védő 1,7 m-re, a vendég kapus 2,2 m-re
-/// kint (a sáv és a kapu-szög a backend shot_geometry-jéből számolva).
+/// túlról, a legközelebbi vendég védő 1,7 m-re, a vendég kapus 2,7 m-re
+/// kint (a sáv és a kapu-szög a backend shot_geometry-jéből számolva, a
+/// "kint" a backend CG_KEEPER_OUT_M = 2,5 m küszöbe).
 /// SZINTETIKUS, csak a felület bemutatására.
 List<Map<String, dynamic>> buildDemoConcededGoals(Match m) {
   final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
@@ -271,8 +272,8 @@ List<Map<String, dynamic>> buildDemoConcededGoals(Match m) {
       "defender": [29.0, 9.8],
       "def_dist": 1.7,
       "free": false,
-      "keeper": [37.8, 10.4],
-      "keeper_depth": 2.24,
+      "keeper": [37.3, 10.4],
+      "keeper_depth": 2.73,
       "keeper_out": true,
       "xg": 0.31,
       "goal": [courtLength, courtWidth / 2],

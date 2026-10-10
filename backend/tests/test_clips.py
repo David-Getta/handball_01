@@ -213,21 +213,25 @@ def test_block_clip_gets_hungarian_name(tmp_path):
 
 
 def test_duplicate_moments_deduplicated_and_reported(tmp_path):
-    """Az azonos pillanatra eső (több csomagban is szereplő) jelenet
-    csak egyszer kerül a zip-be, és a skipped számolja a kimaradókat."""
+    """Az azonos pillanatra eső ismétlés egy csomagon BELÜL csak egyszer
+    kerül a zip-be (a skipped számolja); két csomagban ugyanaz a pillanat
+    két klip — a gól, ami egyben kulcs-pillanat, mindkét mappába kell
+    (korábban a második csomag némán elvesztette, amit a számláló ígért)."""
     video = tmp_path / "meccs.mp4"
     _make_video(video)
     m = _match(video)
     events = [
         {"t": 60, "type": "goal", "team": "home"},
+        {"t": 61, "type": "goal", "team": "home"},  # ismétlés (1 kockán belül)
         {"t": 60, "type": "key_moment", "team": "home",
          "label": "Vezetés-váltás"},
         {"t": 120, "type": "goal", "team": "away"},
     ]
     res = export_event_clips(m, events, {"goal", "key_moment"},
                              tmp_path / "ki")
-    assert res.count == 2
+    assert res.count == 3
     assert res.skipped == 1
+    assert res.by_type == {"gol": 2, "kulcs-pillanat": 1}
 
 
 def test_pivot_goal_clip_gets_hungarian_name(tmp_path):
@@ -680,15 +684,15 @@ def test_draga_eladas_es_dontes_hiba_magyar_nevet_kap(tmp_path):
 
 def test_a_lerohanas_csomagok_magyar_nevet_kapnak(tmp_path):
     """A lerohanás-csomagok (a támadóé és a kapott) magyar fájlnevet és
-    típus-mappát kapnak (lerohanas, kapott-lerohanas), a címke a kimenet.
-    (Ugyanarra a pillanatra a két csomag EGY klipet ad — az azonos
-    pillanat ismétlés-szűrője —, ezért itt két külön jelenet.)"""
+    típus-mappát kapnak (lerohanas, kapott-lerohanas), a címke a kimenet;
+    ugyanaz a pillanat a két csomagban két klip (az ismétlés-szűrő
+    típusonként dolgozik)."""
     video = tmp_path / "meccs.mp4"
     _make_video(video)
     m = _match(video)
     events = [{"t": 60, "type": "fast_break", "team": "home", "label": "gol"},
-              {"t": 120, "type": "conceded_fast_break", "team": "away",
-               "label": "loves"}]
+              {"t": 60, "type": "conceded_fast_break", "team": "away",
+               "label": "gol"}]
     res = export_event_clips(m, events, {"fast_break", "conceded_fast_break"},
                              tmp_path / "ki")
     assert res.count == 2

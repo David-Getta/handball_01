@@ -261,16 +261,20 @@ def export_event_clips(match: Match, events: list, types: set[str],
                   if mez_of_ev.get(_field(e, "player_id")) in kert_mezek]
     picked.sort(key=lambda e: _field(e, "t") or 0)
     n_requested = len(picked)
-    # Azonos pillanatra eső ismétlések ki (több csomagban is szereplő
-    # jelenet — pl. gól, ami egyben vezetés-váltás — csak egyszer kell).
+    # Azonos pillanatra eső ismétlések ki — TÍPUSONKÉNT: ugyanaz a
+    # jelenet egy csomagon belül egyszer kell (két "gól" esemény ugyanarra
+    # a kockára), de két csomagban két klip jár (a gólos lerohanás a
+    # "gól" ÉS a "lerohanás" mappába is — korábban a második csomag némán
+    # elvesztette, amit a csomag-számláló ígért).
     dedup = []
-    last_t = None
+    last_t: dict = {}
     for e in picked:
         t_e = int(_field(e, "t") or 0)
-        if last_t is not None and abs(t_e - last_t) < 2:
+        tip_e = str(_field(e, "type"))
+        if tip_e in last_t and abs(t_e - last_t[tip_e]) < 2:
             continue
         dedup.append(e)
-        last_t = t_e
+        last_t[tip_e] = t_e
     # Több kijelölt játékosnál a keret JÁTÉKOSONKÉNT ÉS típusonként
     # oszlik, hogy senki mappája ne maradjon két klippel.
     if len(kert_mezek) > 1:

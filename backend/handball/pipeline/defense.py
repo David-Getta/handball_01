@@ -25,6 +25,7 @@ from .tactics import TacticsConfig, displacement_at
 FREE_DEF_RADIUS_M = 2.0
 
 
+@memoize_primitive("defense_analysis", copy=copy_deep)
 def defense_analysis(match: Match,
                      config: Optional[TacticsConfig] = None) -> dict:
     """Mindkét csapat VÉDEKEZÉSÉNEK képe a kapott lövésekből.
@@ -33,8 +34,9 @@ def defense_analysis(match: Match,
     {"shots_against", "goals_against", "xg_against", "free_shots",
      "free_pct", "zones": {zóna: {"shots","goals","free"}}, "worst_zone",
      "shots": [{"t","zone","free","xg","goal","x","y","release_t",
-                "defender","def_dist"}]}
-    — free None, ha a lövő nem azonosítható (ott fedezést sem tudunk mérni).
+                "defender","def_dist","player_id"}]}
+    — free None, ha a lövő nem azonosítható (ott fedezést sem tudunk mérni);
+    player_id a lövő track-je (None, ha a hely a labdáé).
     A lövés-sor a 3D "Szabad lövők" lapozójának is forrása: x/y a lövés
     helye, release_t a mért kocka, defender a legközelebbi mezőnyvédő
     helye ([x, y] vagy None), def_dist a távolsága (m, vagy None).
@@ -112,6 +114,7 @@ def defense_analysis(match: Match,
         rec["shots"].append({
             "t": e.t, "zone": zone, "free": free, "xg": xg, "goal": is_goal,
             "x": round(x, 2), "y": round(y, 2), "release_t": f.t,
+            "player_id": shooter.track_id if shooter is not None else None,
             "defender": ([round(nearest.x, 2), round(nearest.y, 2)]
                          if nearest is not None else None),
             "def_dist": (round(nearest_d, 2) if nearest_d is not None

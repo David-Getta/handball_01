@@ -545,8 +545,9 @@ function jelenetSorok(dontesek, szabadok, eladasok, nevH, nevV, lerohanasok, kap
   }
   const szabadGolIdok = szabadok.filter(d => d[7]).map(d => d[0]);
   const SAV = ["kapuelőtér", "6–9 m", "9 m-en túl"];
+  const JL_AZONOS_S = 0.05;  // court3d.SCENE_SAME_MOMENT_S tükre (őr-teszt)
   for (const d of (kapottak || [])){
-    if (szabadGolIdok.some(s0 => Math.abs(d[0] - s0) < 0.05)) continue;
+    if (szabadGolIdok.some(s0 => Math.abs(d[0] - s0) < JL_AZONOS_S)) continue;
     sorok.push({s: d[0], tipus: "kg", gol: true,
       szoveg: csapat(d[1]) + " védekezése — kapott gól: " + csapat(!d[1]) +
         (d[2] !== null ? " #" + d[2] : "") + " (" + SAV[d[5]] + ")" +

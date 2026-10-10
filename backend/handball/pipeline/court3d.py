@@ -563,6 +563,13 @@ def _szam1_js(v: float) -> str:
     return f"{d:.1f}".replace(".", ",")
 
 
+# A jelenet-lista "ugyanaz a pillanat" tűrése (másodperc): a kapott gól
+# sora elmarad, ha ennyin belül szabad lövő GÓL-sor van — a két sor
+# ugyanarról az elengedési kockáról jön, a tűrés a kerekítést fedi. A
+# böngésző (JL_AZONOS_S) és az app (sceneSameMomentS) ugyanezt viszi.
+SCENE_SAME_MOMENT_S = 0.05
+
+
 def scene_rows(decisions: list, free_shots: list, turnovers: list,
                home: str, away: str,
                fast_breaks: Optional[list] = None,
@@ -625,7 +632,7 @@ def scene_rows(decisions: list, free_shots: list, turnovers: list,
                                    else " · lövés nélkül")})
     szabad_gol_idok = [d["s"] for d in free_shots if d["goal"]]
     for d in conceded_goals or []:
-        if any(abs(d["s"] - s0) < 0.05 for s0 in szabad_gol_idok):
+        if any(abs(d["s"] - s0) < SCENE_SAME_MOMENT_S for s0 in szabad_gol_idok):
             continue
         tav = d.get("def_dist")
         mely = d.get("keeper_depth")
@@ -787,9 +794,10 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
     előrébb váró ember.
 
     Visszatérés: {"moments": [{"s", "e" (a szakasz kezdete/vége mp),
-    "shot_s" (a lövés mp | None), "t" (a befejezés kockája: a lövésé,
-    lövés nélkül a szakasz végéé — a klipvágás e köré vág), "shooter_id"
-    (a befejező track-je | None), "team" (a támadó), "defending",
+    "shot_s" (a lövés mp | None), "t" (a befejezés kockája: a gólé, ha
+    gól lett, különben az első azonosított lövésé, lövés nélkül a szakasz
+    végéé — a klipvágás e köré vág), "shooter_id" (a befejező track-je
+    ugyanígy | None), "team" (a támadó), "defending",
     "duration_s", "advance_ms", "outcome" ("goal" / "shot" / None),
     "shooter_jersey", "first_jersey", "wave" ("first" / "second" / None —
     kettőnél kevesebb futóval vagy lövő nélkül None), "ahead" (bool |
@@ -842,6 +850,11 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
         if gol:
             goals[side] += 1
         shot = next((e for e in bent if e.player_id is not None), None)
+        # A klip-horgony és a befejező: ha a kontra gól lett, a GÓL
+        # eseményé (kipattanóból a második lövő is lehet), különben az
+        # első azonosított lövésé; lövés nélkül a szakasz vége.
+        gol_ev = next((e for e in bent if e.type == EventType.GOAL), None)
+        horgony = gol_ev if gol_ev is not None else shot
         i0 = idx_of.get(a["start_frame"])
         fr0 = match.frames[i0] if i0 is not None else None
         runners = [p for p in fr0.players
@@ -874,8 +887,9 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
             "advance_ms": (round(_advance_speed(seq, goal_x, fps), 2)
                            if seq is not None else None),
             "outcome": "goal" if gol else ("shot" if bent else None),
-            "t": shot.t if shot is not None else a["end_frame"],
-            "shooter_id": shot.player_id if shot is not None else None,
+            "t": horgony.t if horgony is not None else a["end_frame"],
+            "shooter_id": (horgony.player_id if horgony is not None
+                           else None),
             "shooter_jersey": jersey.get(shot.player_id) if shot else None,
             "first_jersey": jersey.get(first_id),
             "wave": wave, "ahead": ahead, "path": path,
@@ -933,6 +947,14 @@ def key_scene_rows(match: Match, config: Optional[TacticsConfig] = None,
     return {"rows": sorok, "total": total}
 
 
+# Kapott gól: a kapus "kint állt" a lövés pillanatában, ha ennyinél
+# messzebb volt a saját kapu közepétől. A kapus-kimozdulás réteg 1,5 m-e
+# a MECCS-ÁTLAG küszöbe (a kapus egy lövésnél rendesen 1–2 m-re áll a
+# vonaltól); egy pillanatra a 2,5 m feletti kint állás az átemelhető,
+# "kijött elé" helyzet.
+CG_KEEPER_OUT_M = 2.5
+
+
 def conceded_goal_moments(match: Match,
                           config: Optional[TacticsConfig] = None) -> dict:
     """A kapott gólok a 3D pályán — a VÉDEKEZŐ csapat szerint: ki lőtte,
@@ -941,11 +963,12 @@ def conceded_goal_moments(match: Match,
     helyzet (xG). A "minden kapott gól egy listában" videóelemzés.
 
     Forrás: a defense_analysis gól-sorai (ugyanaz az elengedési kocka,
-    lövő-hely, legközelebbi védő, szabad-ítélet és xG — a 3D nem mondhat
-    mást, mint a védekezés-elemzés); a sáv és a kapu-szög a shot_geometry
-    mérése; a kapus mélysége a gk_positioning szabálya (a kapus-jelölésű
-    játékos távolsága a saját kapu közepétől, GK_DEPTH_OUT_M felett "kint
-    állt"). Saját küszöb nincs.
+    lövő, lövő-hely, legközelebbi védő, szabad-ítélet és xG — a 3D nem
+    mondhat mást, mint a védekezés-elemzés); a sáv és a kapu-szög a
+    shot_geometry mérése; a kapus mélysége a gk_positioning mérése (a
+    kapus-jelölésű — több ilyennél a saját kapuhoz legközelebbi — játékos
+    távolsága a saját kapu közepétől), a "kint állt" ítélet a pillanatra
+    szabott CG_KEEPER_OUT_M.
 
     Visszatérés: {"moments": [{"s", "t" (az elengedés kockája), "team"
     (a lövő csapat), "defending", "shooter": [x, y], "shooter_jersey",
@@ -955,10 +978,9 @@ def conceded_goal_moments(match: Match,
     None — kapus nélkül None), "xg", "goal": [x, y] (a támadott kapu
     közepe)}] időrendben, "conceded": {"home"/"away": db} (a védekező
     szerint — a védekezés-elemzés goals_against-ja), "free": {...},
-    "keeper_out": {...}, "depth_out_m": GK_DEPTH_OUT_M, "radius_m":
+    "keeper_out": {...}, "depth_out_m": CG_KEEPER_OUT_M, "radius_m":
     FREE_DEF_RADIUS_M}."""
     from .defense import FREE_DEF_RADIUS_M, defense_analysis
-    from .goalkeeper import GK_DEPTH_OUT_M
 
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
@@ -983,20 +1005,19 @@ def conceded_goal_moments(match: Match,
                 continue
             conceded[side] += 1
             f = by_t.get(sh["release_t"])
-            lovo = kapus = None
-            for p in (f.players if f is not None else []):
-                # A lövő: a támadó játékos a védekezés-elemzés lövés-helyén
-                # (ha a lövőt azonosította; labda-helynél senki).
-                if (p.team == tamado and round(p.x, 2) == sh["x"]
-                        and round(p.y, 2) == sh["y"]):
-                    lovo = p
-                if p.team == vedo and p.role == "kapus":
-                    kapus = p
+            # A kapus: a védekező csapat kapus-jelölésű játékosa az
+            # elengedés kockáján — több ilyennél (cserés átfedés, hibás
+            # jelölés) a saját kapuhoz legközelebbi.
+            kapusok = [p for p in (f.players if f is not None else [])
+                       if p.team == vedo and p.role == "kapus"]
+            kapus = (min(kapusok, key=lambda p: math.hypot(p.x - own_x,
+                                                            p.y - cy))
+                     if kapusok else None)
             geo = shot_geometry(sh["x"], sh["y"],
                                 "bal" if own_x == 0.0 else "jobb")
             mely = (round(math.hypot(kapus.x - own_x, kapus.y - cy), 2)
                     if kapus is not None else None)
-            kint = (mely >= GK_DEPTH_OUT_M) if mely is not None else None
+            kint = (mely >= CG_KEEPER_OUT_M) if mely is not None else None
             if kint:
                 keeper_out[side] += 1
             if sh["free"]:
@@ -1005,8 +1026,7 @@ def conceded_goal_moments(match: Match,
                 "s": round(sh["release_t"] / fps, 2), "t": sh["release_t"],
                 "team": tamado.value, "defending": side,
                 "shooter": [sh["x"], sh["y"]],
-                "shooter_jersey": (jersey.get(lovo.track_id)
-                                   if lovo is not None else None),
+                "shooter_jersey": jersey.get(sh.get("player_id")),
                 "zone": geo["zone"], "angle_deg": geo["angle_deg"],
                 "dist_m": geo["distance_m"],
                 "defender": sh["defender"], "def_dist": sh["def_dist"],
@@ -1018,5 +1038,5 @@ def conceded_goal_moments(match: Match,
                 "goal": [own_x, cy]})
     moments.sort(key=lambda m_: (m_["s"], m_["defending"]))
     return {"moments": moments, "conceded": conceded, "free": free,
-            "keeper_out": keeper_out, "depth_out_m": GK_DEPTH_OUT_M,
+            "keeper_out": keeper_out, "depth_out_m": CG_KEEPER_OUT_M,
             "radius_m": FREE_DEF_RADIUS_M}

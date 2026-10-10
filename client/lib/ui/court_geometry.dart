@@ -335,6 +335,11 @@ WallGaps? wallGapSegments(List<(bool, double, double, bool, bool)> players,
   return WallGaps([for (final p in fal) Offset(p.$2, p.$1)], gaps, wide, maxI);
 }
 
+/// A jelenet-lista "ugyanaz a pillanat" tűrése (mp) — a backend
+/// court3d.SCENE_SAME_MOMENT_S tükre (őr-teszt): a kapott gól sora
+/// elmarad, ha ennyin belül szabad lövő GÓL-sor van.
+const double sceneSameMomentS = 0.05;
+
 /// A jelenet-lista egy sora: idő (mp és "p:mm"), fajta ("d" döntés, "sz"
 /// szabad lövés, "e" labdavesztés), felirat, és hogy gól lett-e.
 class SceneRow {
@@ -410,7 +415,7 @@ List<SceneRow> sceneRows(
   ];
   for (final d in kapottGolok) {
     final s = sOf(d);
-    if (szabadGolIdok.any((s0) => (s - s0).abs() < 0.05)) continue;
+    if (szabadGolIdok.any((s0) => (s - s0).abs() < sceneSameMomentS)) continue;
     final mez = d["shooter_jersey"];
     final tav = d["def_dist"] as num?;
     final mely = d["keeper_depth"] as num?;

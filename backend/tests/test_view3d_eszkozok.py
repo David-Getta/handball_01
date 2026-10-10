@@ -1310,3 +1310,24 @@ def test_a_kapott_golok_lapozo_az_oldalon_es_az_appban():
                  "kapott: _aktivKapott(m),", "fetchConcededGoals(id)",
                  "buildDemoConcededGoals(_match!)", "_kontrakSz, _kapottakSz)"):
         assert kell in dart, kell
+
+
+
+def test_a_jelenet_lista_azonos_pillanat_turese_tukrozve():
+    """A jelenet-lista "ugyanaz a pillanat" tűrése (court3d.SCENE_SAME_MOMENT_S)
+    a böngésző (JL_AZONOS_S) és az app (sceneSameMomentS) tükrében is
+    ugyanaz a szám — egy oldalon változtatva a listák széttartanának."""
+    import re
+    from pathlib import Path
+
+    from handball.pipeline.court3d import SCENE_SAME_MOMENT_S
+    from handball.pipeline.view3d_html import JELENETLISTA_JS
+
+    js = re.search(r"const JL_AZONOS_S = ([0-9.]+);", JELENETLISTA_JS)
+    assert js and float(js.group(1)) == SCENE_SAME_MOMENT_S
+    assert "< JL_AZONOS_S" in JELENETLISTA_JS
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "ui" / "court_geometry.dart").read_text(encoding="utf-8")
+    d = re.search(r"const double sceneSameMomentS = ([0-9.]+);", dart)
+    assert d and float(d.group(1)) == SCENE_SAME_MOMENT_S
+    assert "< sceneSameMomentS" in dart

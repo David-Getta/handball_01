@@ -133,7 +133,8 @@ feliratok egymás alatt):
   0,9 m-re a vonalon · xG 0,09". A forrás a védekezés-elemzés gól-sorai
   (ugyanaz az elengedési kocka, lövő-hely, védő-távolság és xG), a sáv
   és a kapu-szög a lövés-mérésé, a kapus mélysége a kapus-kimozdulás
-  rétegé (1,5 m felett "kint").
+  mérése (a "kint" a pillanatra szabott 2,5 m-es küszöb — a réteg 1,5
+  m-e a meccs-átlagé).
 
 A ▶ az utoljára nézett jelenettől lép tovább (nem ragad le, és a meccs
 legelső pillanatai is elérhetők).

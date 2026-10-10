@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.161 óta)
 
+- **Kód-átnézés javításai: klip-csomagok, kapott gólok, lerohanás**
+  (javítás): a klipvágás ismétlés-szűrője típusonként dolgozik — a
+  gólos lerohanás a "gól" ÉS a "lerohanás" mappába is kerül (eddig a
+  második csomag némán elvesztette, amit a csomag-számláló ígért); a
+  kapott gól lövője a védekezés-elemzés track-jéből jön (nem
+  koordináta-egyezésből — két egymáson álló támadónál tévedhetett); a
+  lerohanás klip-horgonya és befejezője a gól eseményé, ha gól lett
+  (kipattanóból a második lövő); a kapus "kint állt" ítélete a lövés
+  pillanatára szabott 2,5 m-es küszöb (a kapus-kimozdulás 1,5 m-e a
+  meccs-átlagé), több kapus-jelölésnél a kapuhoz legközelebbi; a
+  jelenet-lista "ugyanaz a pillanat" tűrése nevesített állandó, a
+  böngésző és az app tükrében őr-teszttel; a védekezés-elemzés
+  memoizálva (egy oldal-építés nem számolja kétszer).
+
 - **Kezdőlap: "Videózandó: N jelenet · 3D-ben" a meccs-kártyán** (új):
   minden meccs kártyája mondja, hány videózandó jelenet vár (a gólba
   került labdavesztések és kapott lerohanások, a gólt érő szabad lövők,
