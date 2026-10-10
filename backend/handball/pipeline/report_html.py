@@ -1062,8 +1062,20 @@ REPORT_DECISION_TOP = 5
 REPORT_SCENES_MAX = 15
 
 
-def _scenes_section(match) -> str:
+# A jelenet-sor 3D-linkje ennyivel a jelenet ELŐTT indítja a lejátszót
+# (a 3D lapozók felvezetése) — másodpercben.
+REPORT_SCENE_LEAD_S = 1.5
+
+
+def _scenes_section(match, base_url: str | None = None) -> str:
     """A "Videózandó jelenetek" szakasz HTML-je (üres, ha nincs ilyen).
+
+    `base_url`: a motor címe (pl. "http://127.0.0.1:8000/"), ha ismert —
+    ekkor minden sor végén "3D ↗" link nyitja a böngészős 3D pályát a
+    jelenet előtt REPORT_SCENE_LEAD_S mp-cel, a hibázó csapatra szűrve,
+    nyitott jelenet-listával. A jelentés önálló fájl (nem a motor
+    szolgálja ki), ezért a link csak abszolút címmel él; cím nélkül a
+    szakasz link nélkül, papírra ugyanúgy készül.
 
     A 3D jelenet-lista (court3d.scene_rows — ugyanazok a feliratok) a
     jelentésben: a gólba került labdavesztések és kapott lerohanások, a
@@ -1092,7 +1104,18 @@ def _scenes_section(match) -> str:
         tart = sorted(range(len(sorok)),
                       key=lambda i: (not sorok[i]["gol"], i))[:REPORT_SCENES_MAX]
         sorok = [sorok[i] for i in sorted(tart)]
-    lis = "".join(f"<li><b>{r['ido']}</b> — {escape(r['szoveg'])}</li>"
+    def link(r):
+        if not base_url:
+            return ""
+        t = max(0.0, float(r["s"]) - REPORT_SCENE_LEAD_S)
+        oldal = "hazai" if r.get("side") == "home" else "vendeg"
+        cim = (f"{base_url.rstrip('/')}/matches/"
+               f"{escape(match.meta.match_id)}/view3d?t={t:.1f}"
+               f"&lista=1&jelenet={oldal}")
+        return (f' <a href="{cim}" style="font-size:11px;'
+                'text-decoration:none">3D ↗</a>')
+
+    lis = "".join(f"<li><b>{r['ido']}</b> — {escape(r['szoveg'])}{link(r)}</li>"
                   for r in sorok)
     return ("<h2>Videózandó jelenetek</h2>"
             "<p>A gólba került labdavesztések és kapott lerohanások, a gólt "
@@ -1107,7 +1130,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                       heatmaps: dict | None = None,
                       player_stats: dict | None = None,
                       notes: list | None = None,
-                      figure_namer=None) -> str:
+                      figure_namer=None,
+                      base_url: str | None = None) -> str:
     """A meccs egyoldalas edzői jelentése (önálló HTML; böngészőből PDF).
 
     Bemenetek: a Match objektum + a taktikai profil (team_style_profile),
@@ -1116,7 +1140,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     ({"home": Heatmap, "away": Heatmap}), a játékos-statisztikák
     (compute_player_stats — terhelés-tábla), az edzői jegyzetek és a
     `figure_namer(csapatnév, alak) -> név|None` — az elnevezett figurák
-    neve a "Figuráik (alakkal)" szakaszban.
+    neve a "Figuráik (alakkal)" szakaszban; a `base_url` a motor címe (a
+    videózandó jelenetek "3D ↗" linkjéhez — None: link nélkül).
     Minden szakasz hiányzó adatnál is értelmes szöveget ad — a jelentés
     sosem "törik el".
 
@@ -1129,7 +1154,7 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         return _match_report_html_cached(
             match, tactics, events, quality, heatmaps=heatmaps,
             player_stats=player_stats, notes=notes,
-            figure_namer=figure_namer)
+            figure_namer=figure_namer, base_url=base_url)
 
 
 def _match_report_html_cached(match, tactics: dict, events: list,
@@ -1137,7 +1162,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                               heatmaps: dict | None = None,
                               player_stats: dict | None = None,
                               notes: list | None = None,
-                              figure_namer=None) -> str:
+                              figure_namer=None,
+                              base_url: str | None = None) -> str:
     """A jelentés tényleges felépítése (lásd `match_report_html`)."""
 
     meta = match.meta
@@ -1789,7 +1815,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         # Videózandó jelenetek: a 3D jelenet-lista legfontosabb sorai
         # időbélyeggel — a papírral a kézben is visszakereshető a videón.
         try:
-            jel_html = _scenes_section(match)
+            jel_html = _scenes_section(match, base_url)
             if jel_html:
                 parts_html.append(jel_html)
         except Exception:

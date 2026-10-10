@@ -657,3 +657,25 @@ def test_a_jelenet_lista_kapott_gol_sora_es_a_szabad_lovo_mellett_elmarad():
     # A hatodik paraméter nélkül a hívás a régi alakkal azonos.
     assert scene_rows([], szabadok, [], "Szeged", "Veszprém") == \
         scene_rows([], szabadok, [], "Szeged", "Veszprém", [], [])
+
+
+def test_a_jelenet_sorok_side_mezoje_a_hibazo_csapat():
+    """Minden jelenet-sor "side" mezője a hibázó csapat (döntés és
+    labdavesztés: a csapat; szabad lövő, kapott lerohanás, kapott gól: a
+    védekező) — a jelentés 3D-linkje ezzel szűr."""
+    from handball.pipeline.court3d import scene_rows
+
+    sorok = scene_rows(
+        [{"s": 1.0, "team": "away", "best_kind": "shoot"}],
+        [{"s": 2.0, "defending": "home", "dist": 3.0, "goal": True}],
+        [{"s": 3.0, "team": "home", "jersey": 7, "zone": "közép",
+          "goal_after_s": None}],
+        "Szeged", "Veszprém",
+        [{"s": 4.0, "team": "home", "defending": "away", "outcome": "goal",
+          "shooter_jersey": 13}],
+        [{"s": 5.0, "team": "away", "defending": "home", "shooter_jersey": 9,
+          "zone": "6–9 m", "def_dist": 1.0, "keeper_depth": 0.5,
+          "keeper_out": False}])
+    assert [(r["tipus"], r["side"]) for r in sorok] == [
+        ("d", "away"), ("sz", "home"), ("e", "home"), ("k", "away"),
+        ("kg", "home")]

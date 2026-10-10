@@ -2004,3 +2004,48 @@ def test_a_csapatnev_a_teljes_jelentesben_pontosan_egyszer_escape_elve():
         assert escape(nev) in html
         assert escape(escape(nev)) not in html, "kettős escape"
         assert nev not in html, "nyers (escape nélküli) csapatnév"
+
+
+def test_a_videozando_jelenetek_3d_linkje_a_motor_cimevel():
+    """A jelentés jelenet-sorai "3D ↗" linket kapnak, ha ismert a motor
+    címe: a böngészős 3D pálya a jelenet előtt 1,5 mp-cel, a HIBÁZÓ
+    csapatra szűrve, nyitott listával; cím nélkül nincs link."""
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_court3d import _eladasos_meccs
+
+    from handball.pipeline import report_html as rh
+
+    m = _eladasos_meccs()
+    nincs = rh._scenes_section(m)
+    assert "view3d?" not in nincs and "3D ↗" not in nincs
+    van = rh._scenes_section(m, "http://127.0.0.1:8000/")
+    # A gólba került labdavesztés a hazaié, a 0. másodpercben: a lejátszó
+    # 0,0-nál indul (nem negatív), a hazai hibáira szűrve.
+    assert (f'<a href="http://127.0.0.1:8000/matches/{m.meta.match_id}/view3d'
+            '?t=0.0&lista=1&jelenet=hazai"') in van
+    assert van.count("3D ↗") == van.count("<li>")
+    html = match_report_html(m, {}, [], None, base_url="http://127.0.0.1:8000")
+    assert "/view3d?t=0.0&lista=1&jelenet=hazai" in html
+
+
+def test_a_jelentes_export_a_keres_cimevel_linkel(tmp_path, monkeypatch):
+    """A /report/export válasza a kérés címével készült 3D-linkeket visz."""
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from fastapi.testclient import TestClient
+    from test_court3d import _eladasos_meccs
+
+    from handball.api.app import create_app
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _eladasos_meccs()
+    app = create_app()
+    app.state.put_match(m)
+    r = TestClient(app, base_url="http://motor:8123").get(
+        f"/matches/{m.meta.match_id}/report/export")
+    assert r.status_code == 200
+    assert (f'href="http://motor:8123/matches/{m.meta.match_id}/view3d?t=0.0'
+            '&lista=1&jelenet=hazai"') in r.text

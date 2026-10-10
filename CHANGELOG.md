@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.161 óta)
 
+- **Meccs-jelentés: "3D ↗" link a videózandó jeleneteken** (új): a
+  nyomtatható jelentés "Videózandó jelenetek" sorai végén link, amely a
+  böngészős 3D pályát a jelenet előtt 1,5 mp-cel, a hibázó csapatra
+  szűrve és nyitott jelenet-listával nyitja — képernyőn olvasva a
+  papír-lista egy kattintással jelenet. A link a motor címét a
+  jelentés-exportból kapja (a meccs-csomag jelentése link nélkül, papírra
+  ugyanúgy készül).
+
 - **Edzésterv → 3D jelenetek** (új): az Edzésterv egy-meccs nézetében a
   fókusz-tételek mellett "Szabad lövők 3D-ben", "Kapott gólok 3D-ben",
   "Labdavesztések 3D-ben", "Döntés-hibák 3D-ben", "Kapott lerohanások

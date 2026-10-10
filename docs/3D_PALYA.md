@@ -174,6 +174,11 @@ videóelemzés a játékosoknak, az ellenfélre szűrve felkészülés ellenük.
 
 ## Jelenet megosztása
 
+A nyomtatható meccs-jelentés "Videózandó jelenetek" sorai végén "3D ↗"
+link ugyanerre a címre mutat (a jelenet előtt 1,5 mp-cel, a hibázó
+csapatra szűrve, nyitott listával) — a jelentés-export a motor címével
+készíti, a meccs-csomag jelentése link nélkül.
+
 A böngészős nézet **Link másolása** gombja a MOSTANI jelenetet adja
 címként: idő, kamera-állás vagy Játékos-/TV-kamera és a bekapcsolt
 rétegek. A címet megnyitva mindez visszaáll — így egy JELENETET

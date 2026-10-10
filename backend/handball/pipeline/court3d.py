@@ -574,7 +574,9 @@ def scene_rows(decisions: list, free_shots: list, turnovers: list,
     fast_break_moments / conceded_goal_moments "moments" listái.
     Visszatérés: [{"s", "ido" ("p:mm"), "tipus" ("d" döntés, "sz" szabad
     lövés, "e" labdavesztés, "k" kapott lerohanás, "kg" kapott gól),
-    "szoveg", "gol"}] időrendben; holtversenyben döntés, szabad lövés,
+    "szoveg", "gol", "side" (a hibázó csapat: "home"/"away" — a jelentés
+    3D-linkje szűr vele; a böngésző- és app-tükör nem viszi)}] időrendben;
+    holtversenyben döntés, szabad lövés,
     labdavesztés, lerohanás, kapott gól. A lerohanás és a kapott gól sora
     a VÉDEKEZŐ csapaté ("kinek a hibája"). A kapott gól sora ELMARAD, ha
     ugyanarra a pillanatra szabad lövő GÓL-sor van (az már megnevezi) —
@@ -586,12 +588,14 @@ def scene_rows(decisions: list, free_shots: list, turnovers: list,
     sorok = []
     for d in decisions:
         sorok.append({"s": d["s"], "tipus": "d", "gol": False,
+                      "side": d["team"],
                       "szoveg": f"{csapat(d['team'])} — jobb opció is volt: "
                                 + ("lövés" if d["best_kind"] == "shoot"
                                    else "passz egy szabadabb társhoz")})
     for d in free_shots:
         tav = d.get("dist")
         sorok.append({"s": d["s"], "tipus": "sz", "gol": bool(d["goal"]),
+                      "side": d["defending"],
                       "szoveg": f"{csapat(d['defending'])} védekezése — "
                                 "szabad lövő"
                                 + (f" ({_szam1_js(tav)} m)" if tav is not None
@@ -601,6 +605,7 @@ def scene_rows(decisions: list, free_shots: list, turnovers: list,
         gol = d.get("goal_after_s") is not None
         h = harmad.get(d.get("zone"))
         sorok.append({"s": d["s"], "tipus": "e", "gol": gol,
+                      "side": d["team"],
                       "szoveg": f"{csapat(d['team'])} — labdavesztés"
                                 + (f" #{d['jersey']}" if d.get("jersey") is not None
                                    else "")
@@ -609,6 +614,7 @@ def scene_rows(decisions: list, free_shots: list, turnovers: list,
     for d in fast_breaks or []:
         gol = d.get("outcome") == "goal"
         sorok.append({"s": d["s"], "tipus": "k", "gol": gol,
+                      "side": d["defending"],
                       "szoveg": f"{csapat(d['defending'])} védekezése — "
                                 f"kapott lerohanás: {csapat(d['team'])}"
                                 + (f" #{d['shooter_jersey']}"
@@ -624,6 +630,7 @@ def scene_rows(decisions: list, free_shots: list, turnovers: list,
         tav = d.get("def_dist")
         mely = d.get("keeper_depth")
         sorok.append({"s": d["s"], "tipus": "kg", "gol": True,
+                      "side": d["defending"],
                       "szoveg": f"{csapat(d['defending'])} védekezése — "
                                 f"kapott gól: {csapat(d['team'])}"
                                 + (f" #{d['shooter_jersey']}"

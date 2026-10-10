@@ -11020,8 +11020,7 @@ def create_app():
             pass
         return res
 
-    @app.get("/matches/{match_id}/report/export")
-    def export_match_report(match_id: str):
+    def export_match_report(match_id: str, request: Request):
         """A meccs egyoldalas edzői jelentése NYOMTATHATÓ HTML-ként.
 
         Tartalma: mutatók, esemény-összesítő (gól/lövés/labdaeladás),
@@ -11051,8 +11050,18 @@ def create_app():
         html = match_report_html(match, tactics, events, quality,
                                  heatmaps=heatmaps, player_stats=player_stats,
                                  notes=_load_notes(match_id),
-                                 figure_namer=_figure_name_for)
+                                 figure_namer=_figure_name_for,
+                                 # A kérés címe: ezen éri el a kliens a
+                                 # motort — a jelentés "3D ↗" linkjei ide
+                                 # mutatnak (önálló fájlból is).
+                                 base_url=str(request.base_url))
         return Response(content=html, media_type="text/html; charset=utf-8")
+
+    # A `request` típusát KÉZZEL állítjuk be (a modul `from __future__
+    # import annotations` miatt a sztring-annotáció nem oldódna fel), majd
+    # regisztráljuk az útvonalat — így a FastAPI a nyers Request-et adja.
+    export_match_report.__annotations__["request"] = Request
+    app.get("/matches/{match_id}/report/export")(export_match_report)
 
     @app.get("/matches/{match_id}/scouting")
     def get_scouting(match_id: str, team: str = "away"):
