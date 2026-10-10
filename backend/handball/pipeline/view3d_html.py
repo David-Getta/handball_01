@@ -636,8 +636,9 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #falInfo,#lovesInfo{opacity:.92;line-height:1.35}
  #meres{position:fixed;left:12px;bottom:100px;padding:8px 12px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;line-height:1.45}
  #meres button{margin-left:8px;padding:2px 8px}
- #dontesFelirat{position:fixed;left:50%;top:52px;transform:translateX(-50%);padding:6px 14px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
- #szabadFelirat{position:fixed;left:50%;top:98px;transform:translateX(-50%);padding:6px 14px;border:1px solid #ff6b6b;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #feliratOszlop{position:fixed;left:50%;top:52px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;max-width:70vw;pointer-events:none}
+ #dontesFelirat{padding:6px 14px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #szabadFelirat{padding:6px 14px;border:1px solid #ff6b6b;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jelenetLista{position:fixed;right:12px;top:40px;width:380px;max-height:calc(100vh - 170px);overflow-y:auto;padding:6px;border:1px solid #2b4a5e;border-radius:8px;background:rgba(16,24,32,.94);font-size:12.5px;display:none}
  #jelenetLista .jfej{display:flex;gap:8px;align-items:center;padding:2px 6px 8px;border-bottom:1px solid #2b4a5e;margin-bottom:4px}
  #jelenetLista .jfej .n{flex:1;opacity:.85}
@@ -650,11 +651,11 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #jelenetLista .jido{font-variant-numeric:tabular-nums;opacity:.8;min-width:38px}
  #jelenetLista .jpont{width:9px;height:9px;border-radius:50%;flex:none}
  #emberJelzo{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);padding:6px 12px;border:1px solid #ffc857;border-radius:8px;background:rgba(16,24,32,.88);color:#ffc857;font-size:13px;display:none}
- #golFelirat{position:fixed;left:50%;top:190px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2fd9c4;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
- #hetesFelirat{position:fixed;left:50%;top:328px;transform:translateX(-50%);padding:6px 14px;border:1px solid #7dd3fc;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
- #kapottFelirat{position:fixed;left:50%;top:282px;transform:translateX(-50%);padding:6px 14px;border:1px solid #c084fc;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
- #kontraFelirat{position:fixed;left:50%;top:236px;transform:translateX(-50%);padding:6px 14px;border:1px solid #59d98c;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
- #eladasFelirat{position:fixed;left:50%;top:144px;transform:translateX(-50%);padding:6px 14px;border:1px solid #ff9f43;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #golFelirat{padding:6px 14px;border:1px solid #2fd9c4;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #hetesFelirat{padding:6px 14px;border:1px solid #7dd3fc;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #kapottFelirat{padding:6px 14px;border:1px solid #c084fc;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #kontraFelirat{padding:6px 14px;border:1px solid #59d98c;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #eladasFelirat{padding:6px 14px;border:1px solid #ff9f43;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jatekosHud{position:fixed;left:50%;top:12px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.85);font-size:14px;font-variant-numeric:tabular-nums;display:none}
 </style></head><body>
 <div id="hud"><b>__CIM__</b></div>
@@ -805,13 +806,15 @@ Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható cím
 VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
-<div id="dontesFelirat"></div>
-<div id="szabadFelirat"></div>
-<div id="eladasFelirat"></div>
-<div id="golFelirat"></div>
-<div id="kontraFelirat"></div>
-<div id="kapottFelirat"></div>
-<div id="hetesFelirat"></div>
+<div id="feliratOszlop">
+ <div id="dontesFelirat"></div>
+ <div id="szabadFelirat"></div>
+ <div id="eladasFelirat"></div>
+ <div id="golFelirat"></div>
+ <div id="kontraFelirat"></div>
+ <div id="kapottFelirat"></div>
+ <div id="hetesFelirat"></div>
+</div>
 <div id="emberJelzo"></div>
 <div id="jelenetLista"></div>
 <div id="felirat"></div>

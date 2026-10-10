@@ -1428,3 +1428,26 @@ def test_a_hetes_lapozo_az_oldalon_es_az_appban():
                  "sevenMeterCaption(h,", "hetes: _aktivHetes(m),",
                  "fetchSevenMeterMoments(id)", "buildDemoSevens(_match!)"):
         assert kell in dart, kell
+
+
+
+def test_a_jelenet_feliratok_egy_oszlopban_rendezodnek():
+    """A jelenet-feliratok (döntés, szabad lövő, labdavesztés, gól-akció,
+    lerohanás, kapott gól, hetes) egy közös oszlopban állnak: a láthatók
+    fentről, hézag nélkül rendeződnek, és egyiknek sincs rögzített
+    függőleges helye (korábban egy magányos felirat a képernyő közepén
+    lógott, fölötte üres sávokkal); az oszlop nem fogja el a kattintást."""
+    import re
+
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    oszlop = oldal.split('<div id="feliratOszlop">', 1)[1].split("\n</div>\n", 1)[0]
+    for fid in ("dontesFelirat", "szabadFelirat", "eladasFelirat",
+                "golFelirat", "kontraFelirat", "kapottFelirat",
+                "hetesFelirat"):
+        assert f'<div id="{fid}"></div>' in oszlop, fid
+        css = re.search(r" #" + fid + r"\{([^}]*)\}", oldal).group(1)
+        assert "position:fixed" not in css and "top:" not in css, fid
+    css = re.search(r" #feliratOszlop\{([^}]*)\}", oldal).group(1)
+    assert "flex-direction:column" in css and "pointer-events:none" in css

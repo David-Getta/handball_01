@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.161 óta)
 
+- **3D pálya (böngésző): a jelenet-feliratok egy oszlopban** (javítás):
+  a hét jelenet-felirat (döntés, szabad lövő, labdavesztés, gól-akció,
+  lerohanás, kapott gól, hetes) eddig rögzített függőleges helyen állt —
+  egy magányos hetes-felirat a pálya közepén lógott, fölötte üres
+  sávokkal, és a dobozok elfogták a kattintást a pálya elől. Most egy
+  közös oszlopban fentről, hézag nélkül rendeződnek, és átengedik a
+  kattintást (a lövés-mérés a felirat alatt is működik).
+
 - **3D pálya: Hétméteresek lapozó** (új, böngészős/VR és appbeli nézet):
   ◀ ▶ a hetesek közt — X a 7 m-es ponton, arany vonal a dobótól a
   célzott kapu-harmadba (a dobó szemszögéből bal / közép / jobb), a
