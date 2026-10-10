@@ -463,6 +463,24 @@ String fastBreakCaption(Map<String, dynamic> k, String nevH, String nevV) {
   return "Lerohanás ($csapat): ${reszek.join(" · ")}";
 }
 
+/// A hétméteres felirata (a böngészős nézet `hetesFelirat`-jának tükre,
+/// UGYANAZZAL a szöveggel): "Hetes (Szeged): #7 · középre · GÓL · kapus
+/// 0,9 m-re a kaputól". `h`: a /seven-meter-moments egy sora.
+String sevenMeterCaption(Map<String, dynamic> h, String nevH, String nevV) {
+  const irany = {"bal": "balra", "közép": "középre", "jobb": "jobbra"};
+  const kim = {"gól": "GÓL", "védés": "védés", "kihagyva": "kihagyva"};
+  final mely = h["keeper_depth"] as num?;
+  final reszek = <String>[
+    if (h["shooter_jersey"] != null) "#${h["shooter_jersey"]}",
+    if (irany[h["irany"]] != null) irany[h["irany"]]!,
+    kim[h["outcome"]] ?? "kimenet ismeretlen",
+    mely == null
+        ? "kapus nem mérhető"
+        : "kapus ${mely.toDouble().toStringAsFixed(1).replaceAll(".", ",")} m-re a kaputól",
+  ];
+  return "Hetes (${h["team"] == "home" ? nevH : nevV}): ${reszek.join(" · ")}";
+}
+
 /// A kapott gól felirata (a böngészős nézet `kapottFelirat`-jának tükre,
 /// UGYANAZZAL a szöveggel): "Kapott gól (Veszprém): Szeged #10 · 9 m-en
 /// túl, kapu-szög 13,8° · védő 6,2 m-re — szabadon · kapus 0,9 m-re a

@@ -404,6 +404,24 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("hétméteres: ▶ odaugrik, felirat az iránnyal és a kapussal",
+      (tester) async {
+    await _nyit(tester);
+    final kov = find.byTooltip("Következő hétméteres");
+    await tester.ensureVisible(kov);
+    await tester.pump();
+    await tester.tap(kov);
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("Hetes (").evaluate().isNotEmpty) break;
+    }
+    // A demó hetese: a hazai dob középre, gól, a kapus 1,0 m-re.
+    expect(find.textContaining("Hetes (Demó Hazai): középre · GÓL · kapus 1,0 m-re a kaputól"),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("N / P billentyű: jelenet-lépés a lista sorain", (tester) async {
     await _nyit(tester);
     // N: az első jelenet (a demó első döntése) — a felirat megjelenik.

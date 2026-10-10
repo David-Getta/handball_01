@@ -1521,6 +1521,18 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A hétméteresek (court3d.seven_meter_moments) — a 3D pálya
+  /// "Hétméteresek" lapozója: dobó, irány, kimenet, kapus.
+  Future<Map<String, dynamic>> fetchSevenMeterMoments(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/seven-meter-moments"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a hétmétereseket", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A kapott gólok (court3d.conceded_goal_moments) — a 3D pálya
   /// "Kapott gólok" lapozója: lövő, sáv, védő, kapus-mélység, xG.
   Future<Map<String, dynamic>> fetchConcededGoals(String matchId) async {

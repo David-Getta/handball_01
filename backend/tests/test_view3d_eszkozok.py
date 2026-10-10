@@ -1192,7 +1192,7 @@ def test_a_lerohanas_lapozo_az_oldalon_es_az_appban():
                  '<div id="kontraFelirat"></div>', "function kontraFelirat",
                  "function kontraFrissit", "function kontraUgras",
                  "const KONTRAK = ADAT.fast_breaks || [];",
-                 "kontraFrissit(t)", '"kontraFelirat", "kapottFelirat", "emberJelzo"',
+                 "kontraFrissit(t)", '"kontraFelirat", "kapottFelirat", "hetesFelirat", "emberJelzo"',
                  "Lerohanások ◀ ▶", "ADAT.home, ADAT.away, szurt(KONTRAK)",
                  'k: "#59d98c"'):
         assert kell in oldal, kell
@@ -1299,7 +1299,7 @@ def test_a_kapott_golok_lapozo_az_oldalon_es_az_appban():
                  '<div id="kapottFelirat"></div>', "function kapottFelirat",
                  "function kapottFrissit", "function kapottUgras",
                  "const KAPOTTAK = ADAT.conceded_goals || [];",
-                 "kapottFrissit(t)", '"kapottFelirat", "emberJelzo"',
+                 "kapottFrissit(t)", '"kapottFelirat", "hetesFelirat", "emberJelzo"',
                  "Kapott gólok ◀ ▶", "szurt(KONTRAK), szurt(KAPOTTAK)",
                  'kg: "#c084fc"', "szabadGolIdok"):
         assert kell in oldal, kell
@@ -1331,3 +1331,100 @@ def test_a_jelenet_lista_azonos_pillanat_turese_tukrozve():
     d = re.search(r"const double sceneSameMomentS = ([0-9.]+);", dart)
     assert d and float(d.group(1)) == SCENE_SAME_MOMENT_S
     assert "< sceneSameMomentS" in dart
+
+
+
+def test_a_tomor_adat_es_a_vegpont_viszi_a_heteseket(tmp_path, monkeypatch):
+    """A tömör adat "sevens" sorai a seven_meter_moments hetesei (17 mezős
+    alak: a pont, a dobó, a kimenet- és az irány-kód, a cél, a kapus, a
+    kapu, a lövés ideje); a /seven-meter-moments végpont ugyanazt adja,
+    ismeretlen meccsre 404."""
+    from fastapi.testclient import TestClient
+    from test_court3d import _hetes_meccs
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import seven_meter_moments
+    from handball.pipeline.view3d_html import _compact_data
+
+    m = _hetes_meccs()
+    adat = _compact_data(m, None, {"home": [], "away": []},
+                         {"home": [], "away": []})
+    sm = seven_meter_moments(m)
+    assert len(adat["sevens"]) == len(sm["moments"]) > 0
+    for r, x in zip(adat["sevens"], sm["moments"]):
+        assert len(r) == 17 and r[0] == x["s"]
+        assert r[1] == (1 if x["team"] == "home" else 0)
+        assert r[3:5] == (x["spot"] or [None, None])
+        assert r[7] == {"gól": "g", "védés": "v", "kihagyva": "k"}.get(x["outcome"], "?")
+        assert r[8] == {"bal": 0, "közép": 1, "jobb": 2}.get(x["irany"])
+        assert r[9:11] == (x["aim"] or [None, None])
+        assert r[13] == x["keeper_depth"] and r[14:16] == x["goal"]
+        assert r[16] == x["shot_s"]
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    v = c.get(f"/matches/{m.meta.match_id}/seven-meter-moments").json()
+    assert len(v["moments"]) == len(sm["moments"])
+    assert v["attempts"] == sm["attempts"]
+    assert c.get("/matches/nincs/seven-meter-moments").status_code == 404
+
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_hetes_felirata():
+    """A hétméteres felirata: a dobó csapat, a mezszám, az irány, a
+    kimenet és a kapus mélysége; a hiányzó részek kimaradnak vagy
+    szöveggel. Az app tükre (court_geometry.sevenMeterCaption) ugyanezt a
+    három esetet futtatja ugyanezekkel a feliratokkal."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("function hetesFelirat")
+    i1 = kod.index("\n}\n", i0) + 2
+    # [s, hazai, mez, pont x, y, dobó x, y, kim, irány, cél x, y, kapus x,
+    #  y, mélység, kapu x, y, lövés mp]
+    esetek = [
+        [17.72, 1, 7, 33, 10, 32.6, 10, "g", 1, 40, 10, 39.1, 9.6, 0.98,
+         40, 10, 18.3],
+        [40.0, 0, 13, 7, 10, 7.4, 10, "v", 0, 0, 11, 1.2, 10.4, 1.26, 0,
+         10, 41.0],
+        [60.0, 1, None, 33, 10, None, None, "?", None, None, None, None,
+         None, None, 40, 10, None],
+    ]
+    js = (kod[i0:i1] + "\nconsole.log(JSON.stringify(" + json.dumps(esetek)
+          + '.map(d => hetesFelirat(d, "Szeged", "Veszprém"))));\n')
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [
+        "Hetes (Szeged): #7 · középre · GÓL · kapus 1,0 m-re a kaputól",
+        "Hetes (Veszprém): #13 · balra · védés · kapus 1,3 m-re a kaputól",
+        "Hetes (Szeged): kimenet ismeretlen · kapus nem mérhető"]
+    from pathlib import Path
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" /
+            "test" / "court_geometry_test.dart").read_text(encoding="utf-8")
+    for felirat in json.loads(r.stdout):
+        assert f'"{felirat}"' in dart, felirat
+
+
+def test_a_hetes_lapozo_az_oldalon_es_az_appban():
+    """A Hétméteresek lapozó a böngészős oldalon (sor, felirat-doboz, a
+    rajzoló és a felirat-függvény, a VR-tábla forrása, a súgó) és az
+    appban (lapozó, felirat, festő, demó)."""
+    from pathlib import Path
+
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="hetesElozo"', 'id="hetesKov"', 'id="hetesInfo"',
+                 '<div id="hetesFelirat"></div>', "function hetesFelirat",
+                 "function hetesFrissit", "function hetesUgras",
+                 "const HETESEK = ADAT.sevens || [];", "hetesFrissit(t)",
+                 '"hetesFelirat", "emberJelzo"', "Hétméteresek ◀ ▶"):
+        assert kell in oldal, kell
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ('tooltip: "Következő hétméteres"', "_aktivHetes(m)",
+                 "sevenMeterCaption(h,", "hetes: _aktivHetes(m),",
+                 "fetchSevenMeterMoments(id)", "buildDemoSevens(_match!)"):
+        assert kell in dart, kell

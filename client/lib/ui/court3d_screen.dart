@@ -171,6 +171,10 @@ class _Court3DScreenState extends State<Court3DScreen>
   // jelző, amíg egy szakaszon belül vagyunk, és ◀ ▶ lapozó.
   List<Map<String, dynamic>> _emberek = const [];
   double? _emberUtolso;
+  // HÉTMÉTERESEK: a dobó, a célzott kapu-harmad, a kimenet és a kapus (a
+  // /seven-meter-moments) — ◀ ▶ lapoz; nem hiba-lapozó, a szűrő nem érinti.
+  List<Map<String, dynamic>> _hetesek = const [];
+  double? _hetesUtolso;
   // LEROHANÁSOK: a befejező útja az indulástól a lövésig (a
   // /fast-break-moments) — ◀ ▶ lapoz; a kapott lerohanás a VÉDEKEZŐ
   // csapat hibája (a "Kinek a hibái" szűrő a "defending" mezőre szűr).
@@ -238,6 +242,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _eladasok = buildDemoTurnovers(_match!);
         _golok = buildDemoGoalBuildUps(_match!);
         _emberek = buildDemoPowerplays(_match!);
+        _hetesek = buildDemoSevens(_match!);
         _kontrak = buildDemoFastBreaks(_match!);
         _kapottak = buildDemoConcededGoals(_match!);
         _falSorok = buildDemoDefenceTimeline(_match!);
@@ -306,6 +311,14 @@ class _Court3DScreenState extends State<Court3DScreen>
         szabadok = ((fs["moments"] as List?) ?? const [])
             .cast<Map<String, dynamic>>();
         szabadSugar = ((fs["radius_m"] as num?) ?? 2.0).toDouble();
+      } catch (_) {}
+      // A hétméteresek — hibája nem viheti el a nézetet.
+      List<Map<String, dynamic>> hetesek = const [];
+      try {
+        hetesek = (((await _api.fetchSevenMeterMoments(id))["moments"]
+                    as List?) ??
+                const [])
+            .cast<Map<String, dynamic>>();
       } catch (_) {}
       // Az emberelőny-szakaszok — hibája nem viheti el a nézetet.
       List<Map<String, dynamic>> emberek = const [];
@@ -406,6 +419,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _eladasSugar = eladasSugar;
         _golok = golok;
         _emberek = emberek;
+        _hetesek = hetesek;
         _kontrak = kontrak;
         _kapottak = kapottak;
         _lovesValasztott = null;
@@ -1136,6 +1150,26 @@ class _Court3DScreenState extends State<Court3DScreen>
     return null;
   }
 
+  /// A lejátszófejnél aktív hétméteres (az álló labda −0,3 mp-étől a
+  /// lövés — lövés nélkül a kezdet — +2,5 mp-éig), vagy null.
+  Map<String, dynamic>? _aktivHetes(Match m) {
+    if (_hetesek.isEmpty || m.frames.isEmpty) return null;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m) / fps;
+    for (final h in _hetesek) {
+      final s = ((h["s"] as num?) ?? 0).toDouble();
+      final veg = ((h["shot_s"] as num?) ?? s).toDouble();
+      if (most >= s - 0.3 && most <= veg + 2.5) return h;
+    }
+    return null;
+  }
+
+  /// Ugrás az előző/következő hétméteresre (1,5 mp-cel az álló labda előtt).
+  void _hetesUgras(Match m, int irany) {
+    final cel = _pillanatUgras(m, _hetesek, _hetesUtolso, irany);
+    if (cel != null) _hetesUtolso = cel;
+  }
+
   /// Ugrás az előző/következő emberelőny-szakasz elejére.
   void _emberUgras(Match m, int irany) {
     final cel = _pillanatUgras(m, _emberek, _emberUtolso, irany);
@@ -1149,6 +1183,8 @@ class _Court3DScreenState extends State<Court3DScreen>
         if (_szabadFelirat(m) case final sz?) (sz, AppColors.away),
         if (_eladasFelirat(m) case final el?) (el, eladasSzin),
         if (_emberJelzo(m) case final em?) (em, AppColors.ball),
+        if (_aktivHetes(m) case final h?)
+          (sevenMeterCaption(h, m.meta.homeTeam, m.meta.awayTeam), hetesSzin),
         if (_aktivGol(m) case final g?)
           (goalBuildUpCaption(g, m.meta.homeTeam, m.meta.awayTeam),
               AppColors.accent),
@@ -1642,6 +1678,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                   szabadSugar: _szabadSugar,
                   eladas: _aktivEladas(m),
                   gol: _aktivGol(m),
+                  hetes: _aktivHetes(m),
                   kontra: _aktivKontra(m),
                   kapott: _aktivKapott(m),
                   eladasSugar: _eladasSugar,
@@ -2313,6 +2350,31 @@ class _Court3DScreenState extends State<Court3DScreen>
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
+      // Hétméteresek: a dobó, az irány, a kimenet és a kapus (◀ ▶).
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text("Hétméteresek:", style: AppText.label.copyWith(fontSize: 11.5)),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Előző hétméteres",
+            onPressed: _hetesek.isEmpty || _match == null
+                ? null
+                : () => _hetesUgras(_match!, -1),
+            icon: const Icon(Icons.chevron_left, size: 20),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: "Következő hétméteres",
+            onPressed: _hetesek.isEmpty || _match == null
+                ? null
+                : () => _hetesUgras(_match!, 1),
+            icon: const Icon(Icons.chevron_right, size: 20),
+          ),
+          Text(_hetesek.isEmpty ? "nincs" : "${_hetesek.length}",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ]),
+      ),
       // Emberelőny: a kiállítások szakaszai (◀ ▶).
       Padding(
         padding: const EdgeInsets.only(bottom: 6),
@@ -2891,6 +2953,10 @@ const Color eladasSzin = Color(0xFFFF9F43);
 /// az út maga a támadó csapat színével megy.
 const Color kontraSzin = Color(0xFF59D98C);
 
+/// A hétméteres-réteg színe (világoskék: a 7 m-es pont) — a böngészős
+/// nézet 0x7dd3fc-je.
+const Color hetesSzin = Color(0xFF7DD3FC);
+
 /// A kapott-gól-réteg színe (lila: a kapus helye és mélysége) — a
 /// böngészős nézet 0xc084fc-je; a lövő gyűrűje a lövő csapat színével.
 const Color kapottSzin = Color(0xFFC084FC);
@@ -2924,6 +2990,8 @@ class _Court3DPainter extends CustomPainter {
   final double szabadSugar;
   // Az aktív gól-akció (a /goal-build-ups egy sora) vagy null.
   final Map<String, dynamic>? gol;
+  // Az aktív hétméteres (a /seven-meter-moments egy sora) vagy null.
+  final Map<String, dynamic>? hetes;
   // Az aktív labdavesztés (a /turnover-moments egy sora) és a nyomás-sugár.
   final Map<String, dynamic>? eladas;
   final double eladasSugar;
@@ -2953,6 +3021,7 @@ class _Court3DPainter extends CustomPainter {
       this.szabad,
       this.szabadSugar = 2.0,
       this.gol,
+      this.hetes,
       this.eladas,
       this.eladasSugar = 2.5,
       this.kontra,
@@ -3406,6 +3475,47 @@ class _Court3DPainter extends CustomPainter {
                     lo[1] + ((ve[1] as num).toDouble() - lo[1]) * i / 12)
             ],
             szaggatott: true);
+      }
+    }
+
+    // Hétméteres: X a 7 m-es ponton, arany vonal a dobótól (vagy a
+    // ponttól) a célzott kapu-harmadba, a kapus lila gyűrűvel és vonal a
+    // kapu közepéig — a böngészős nézet rajzának párja.
+    final ht = hetes;
+    if (ht != null) {
+      List<double>? xy(dynamic v) => v == null
+          ? null
+          : [for (final e in (v as List)) (e as num).toDouble()];
+      final pont = xy(ht["spot"]), lovo = xy(ht["shooter"]);
+      final cel = xy(ht["aim"]), kapus = xy(ht["keeper"]), kapu = xy(ht["goal"]);
+      final kek = Paint()
+        ..color = hetesSzin
+        ..strokeWidth = 2.2;
+      if (pont != null) {
+        _vonal(canvas, kek, pont[0] - 0.4, pont[1] - 0.4, 0.06, pont[0] + 0.4,
+            pont[1] + 0.4, 0.06);
+        _vonal(canvas, kek, pont[0] - 0.4, pont[1] + 0.4, 0.06, pont[0] + 0.4,
+            pont[1] - 0.4, 0.06);
+      }
+      final ki = lovo ?? pont;
+      if (ki != null && cel != null) {
+        _vonal(
+            canvas,
+            Paint()
+              ..color = AppColors.gold
+              ..strokeWidth = 2.8,
+            ki[0], ki[1], 1.2, cel[0], cel[1], 1.0);
+      }
+      if (kapus != null && kapu != null) {
+        final lila = Paint()
+          ..color = kapottSzin
+          ..strokeWidth = 2.4;
+        _kor(canvas, lila, kapus[0], kapus[1], 0.5);
+        _talajUtvonal(canvas, lila, [
+          for (var i = 0; i <= 8; i++)
+            Offset(kapus[0] + (kapu[0] - kapus[0]) * i / 8,
+                kapus[1] + (kapu[1] - kapus[1]) * i / 8)
+        ]);
       }
     }
 

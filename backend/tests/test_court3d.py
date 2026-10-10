@@ -758,3 +758,65 @@ def test_a_lerohanas_horgonya_a_gol_esemenye():
             assert x["shooter_id"] == golok[x["t"]].player_id
         elif x["outcome"] is None:
             assert x["shooter_id"] is None
+
+
+
+def _hetes_meccs():
+    """Az ismert hetes-fixtúra (a demó-epizódok: hazai hetes a +x kapura,
+    középre, gól; a vendég kapus a vonal előtt)."""
+    from handball.sim import (append_demo_episodes, simulate_ground_truth,
+                              simulate_with_panning_camera)
+
+    ground = simulate_ground_truth(duration_s=10, fps=25.0, seed=1)
+    match = simulate_with_panning_camera(ground)
+    append_demo_episodes(match)
+    return match
+
+
+def test_hetesek_a_hetes_retegek_szabalyaval():
+    """A hétméteresek a seven_meter_outcomes párosításával és irányával: a
+    kísérletek és a gólok száma a seven_meter_summary-é; a 7 m-es pont a
+    labda a kezdő kockán; a cél a célzott kapu-harmad közepe a DOBÓ
+    szemszögéből; a kapus mélysége a kapu közepétől mért távolság."""
+    from handball.pipeline.court3d import (SEVEN_AIM_OFFSET_M,
+                                           seven_meter_moments)
+    from handball.pipeline.rules import (seven_meter_outcomes,
+                                         seven_meter_summary)
+
+    m = _hetes_meccs()
+    r = seven_meter_moments(m)
+    ki = seven_meter_outcomes(m)
+    osz = seven_meter_summary(m)
+    assert r["moments"] and len(r["moments"]) == len(ki)
+    for side in ("home", "away"):
+        assert r["attempts"][side] == osz.get(side, {}).get("attempts", 0)
+        assert r["goals"][side] == osz.get(side, {}).get("goals", 0)
+    by_t = {f.t: f for f in m.frames}
+    for x, k in zip(r["moments"], sorted(ki, key=lambda q: q["t"])):
+        assert x["t"] == k["t"] and x["outcome"] == k["outcome"]
+        assert x["irany"] == k["irany"] and x["defending"] != x["team"]
+        f0 = by_t[k["t"]]
+        assert x["spot"] == [round(f0.ball.x, 2), round(f0.ball.y, 2)]
+        assert abs(abs(x["spot"][0] - x["goal"][0]) - 7.0) < 1.3
+        if x["irany"] is not None:
+            jel = 1.0 if x["goal"][0] > 20 else -1.0
+            d = {"bal": -1.0, "közép": 0.0, "jobb": 1.0}[x["irany"]]
+            assert x["aim"] == [x["goal"][0], round(10.0 + jel * d * SEVEN_AIM_OFFSET_M, 2)]
+        if x["keeper"] is not None:
+            assert abs(x["keeper_depth"] - math.hypot(
+                x["keeper"][0] - x["goal"][0], x["keeper"][1] - 10.0)) < 0.01
+    h = r["moments"][0]
+    assert h["team"] == "home" and h["outcome"] == "gól" and h["irany"] == "közép"
+    assert h["aim"] == [40.0, 10.0] and h["keeper"] is not None
+    assert h["shot_s"] is not None and h["shot_s"] >= h["s"]
+
+
+def test_hetes_nelkul_ures():
+    """Hetes nélküli meccsen üres a lista, a számok nullák."""
+    from handball.pipeline.court3d import seven_meter_moments
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    r = seven_meter_moments(simulate_ground_truth(duration_s=60, fps=25.0,
+                                                  seed=5, shots_per_min=8))
+    assert r == {"moments": [], "attempts": {"home": 0, "away": 0},
+                 "goals": {"home": 0, "away": 0}}

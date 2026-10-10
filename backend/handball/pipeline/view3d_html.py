@@ -256,6 +256,24 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
             for g in conceded_goal_moments(match)["moments"]]
     except Exception:
         kapottak = []
+    # Hétméteresek: [mp, a dobó hazai?, mez | null, pont x, y | null,
+    # dobó x, y | null, kimenet ("g" gól / "v" védés / "k" kihagyva / "?"),
+    # irány (0 bal / 1 közép / 2 jobb) | null, cél x, y | null, kapus x, y
+    # | null, kapus-mélység | null, kapu x, y, a lövés mp | null]
+    # időrendben (court3d.seven_meter_moments).
+    try:
+        from .court3d import seven_meter_moments
+        _kim = {"gól": "g", "védés": "v", "kihagyva": "k"}
+        _ir = {"bal": 0, "közép": 1, "jobb": 2}
+        hetesek = [
+            [h["s"], 1 if h["team"] == "home" else 0, h["shooter_jersey"],
+             *(h["spot"] or [None, None]), *(h["shooter"] or [None, None]),
+             _kim.get(h["outcome"], "?"), _ir.get(h["irany"]),
+             *(h["aim"] or [None, None]), *(h["keeper"] or [None, None]),
+             h["keeper_depth"], *h["goal"], h["shot_s"]]
+            for h in seven_meter_moments(match)["moments"]]
+    except Exception:
+        hetesek = []
     # Feltörés: hol és mivel törhető fel a két csapat védekezése (a
     # felderítés rangsorának teteje) — a védekezés-panel a fal mellé írja.
     try:
@@ -293,6 +311,7 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         "powerplays": emberek,
         "fast_breaks": kontrak,
         "conceded_goals": kapottak,
+        "sevens": hetesek,
         "turnover_pressure": eladas_sugar,
     }
 
@@ -503,6 +522,24 @@ function kapottFelirat(d, nevH, nevV){
 """
 
 
+# A hétméteres felirata — tiszta függvény (a teszt node-dal futtatja):
+# "Hetes (Szeged): #7 · középre · GÓL · kapus 0,9 m-re a kaputól".
+HETES_JS = """
+function hetesFelirat(d, nevH, nevV){
+  const [s, hazai, mez, px, py, lx, ly, kim, ir, cx, cy, kx, ky, mely] = d;
+  const IRANY = ["balra", "középre", "jobbra"];
+  const KIM = {g: "GÓL", v: "védés", k: "kihagyva"};
+  const reszek = [];
+  if (mez !== null && mez !== undefined) reszek.push("#" + mez);
+  if (ir !== null && ir !== undefined) reszek.push(IRANY[ir]);
+  reszek.push(KIM[kim] || "kimenet ismeretlen");
+  reszek.push(mely === null || mely === undefined ? "kapus nem mérhető"
+    : "kapus " + mely.toFixed(1).replace(".", ",") + " m-re a kaputól");
+  return "Hetes (" + (hazai ? nevH : nevV) + "): " + reszek.join(" · ");
+}
+"""
+
+
 # A jelenet-lista sorai: a jelenet-lapozók (Döntések, Szabad lövők,
 # Labdavesztések, Lerohanások, Kapott gólok) jelenetei EGY időrendi
 # listában, rövid magyar felirattal — tiszta függvény, hogy a teszt
@@ -614,6 +651,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #jelenetLista .jpont{width:9px;height:9px;border-radius:50%;flex:none}
  #emberJelzo{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);padding:6px 12px;border:1px solid #ffc857;border-radius:8px;background:rgba(16,24,32,.88);color:#ffc857;font-size:13px;display:none}
  #golFelirat{position:fixed;left:50%;top:190px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2fd9c4;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #hetesFelirat{position:fixed;left:50%;top:328px;transform:translateX(-50%);padding:6px 14px;border:1px solid #7dd3fc;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #kapottFelirat{position:fixed;left:50%;top:282px;transform:translateX(-50%);padding:6px 14px;border:1px solid #c084fc;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #kontraFelirat{position:fixed;left:50%;top:236px;transform:translateX(-50%);padding:6px 14px;border:1px solid #59d98c;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #eladasFelirat{position:fixed;left:50%;top:144px;transform:translateX(-50%);padding:6px 14px;border:1px solid #ff9f43;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
@@ -729,6 +767,12 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="kapottInfo"></span>
  </div>
  <div class="sor">
+  <span title="Hétméteresek: a dobó, a célzott kapu-harmad, a kimenet és a kapus helye">Hétméteresek:</span>
+  <button id="hetesElozo" title="Előző hétméteres">◀</button>
+  <button id="hetesKov" title="Következő hétméteres">▶</button>
+  <span id="hetesInfo"></span>
+ </div>
+ <div class="sor">
   <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
   <span id="linkInfo"></span>
  </div>
@@ -752,6 +796,7 @@ Labdavesztések ◀ ▶ — narancs kör a vesztő körül (a nyomás-sugár), v
 Gól-akciók ◀ ▶ — a gólt megelőző passz-lánc (a régebbi passz halványabb), arany vonal a lövéstől a kapuig<br>
 Emberelőny ◀ ▶ — a kiállítások szakaszai; közben lent középen élő jelző: ki van előnyben, mennyi van hátra, mi az állás az előny alatt<br>
 Lerohanások ◀ ▶ — a befejező útja az indulástól a lövésig (a csapat színével, pont fél mp-enként), fehér az indítópassz, arany vonal a kapura<br>
+Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmadba, a kapus helye és mélysége lilával<br>
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
@@ -766,6 +811,7 @@ VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; ko
 <div id="golFelirat"></div>
 <div id="kontraFelirat"></div>
 <div id="kapottFelirat"></div>
+<div id="hetesFelirat"></div>
 <div id="emberJelzo"></div>
 <div id="jelenetLista"></div>
 <div id="felirat"></div>
@@ -1896,6 +1942,10 @@ function dontesFrissit(t){
   const kapottDoboz = document.getElementById("kapottFelirat");
   if (kapottSzoveg){ kapottDoboz.textContent = kapottSzoveg; kapottDoboz.style.display = "block"; }
   else kapottDoboz.style.display = "none";
+  const hetesSzoveg = hetesFrissit(t);
+  const hetesDoboz = document.getElementById("hetesFelirat");
+  if (hetesSzoveg){ hetesDoboz.textContent = hetesSzoveg; hetesDoboz.style.display = "block"; }
+  else hetesDoboz.style.display = "none";
   if (!d){ dontesFelirat.style.display = "none"; return; }
   const [mp, hazai, px, py, cx, cy, cval, fajta, bx, by, bval, gap] = d;
   const vonalD = (x2, y2, szin) => {
@@ -2119,6 +2169,54 @@ function kapottFrissit(t){
   }
   vonal(lx, ly, 1.2, gx, gy, 1.0, new THREE.LineBasicMaterial({color: 0xd9b544}));
   return kapottFelirat(d, ADAT.home, ADAT.away);
+}
+
+// ---- Hétméteresek: a dobó, az irány, a kimenet és a kapus ---------------
+// ◀ ▶ a hetesek közt ugrik (1,5 mp-cel az álló labda előtt, lejátszva); a
+// pillanat körül X a 7 m-es ponton, arany vonal a dobótól (vagy a ponttól)
+// a célzott kapu-harmadba, a kapus lila gyűrűvel és vonal a kapu közepéig
+// (a mélysége); a felirat a mezszámmal, az iránnyal, a kimenettel és a
+// kapus mélységével (court3d.seven_meter_moments — a seven_meter_outcomes
+// párosítása és iránya). Nem hiba-lapozó: a szűrő nem érinti.
+const HETESEK = ADAT.sevens || [];
+const hetesCsoport = new THREE.Group();
+szinpad.add(hetesCsoport);
+document.getElementById("hetesInfo").textContent = HETESEK.length ? HETESEK.length + " hetes" : "nincs ilyen";
+let hetesUtolso = null;
+function hetesUgras(irany){
+  if (!HETESEK.length) return;
+  const cel = lapozCel(HETESEK.map(d => d[0]), ido, hetesUtolso, irany);
+  if (cel === null) return;
+  hetesUtolso = cel;
+  ido = Math.max(0, cel - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
+  csuszka.value = ido;
+}
+document.getElementById("hetesElozo").onclick = () => hetesUgras(-1);
+document.getElementById("hetesKov").onclick = () => hetesUgras(1);
+function hetesFrissit(t){
+  while (hetesCsoport.children.length) hetesCsoport.remove(hetesCsoport.children[0]);
+  const d = HETESEK.find(x => t >= x[0] - 0.3 && t <= (x[16] !== null ? x[16] : x[0]) + 2.5);
+  if (!d) return null;
+  const [s, hazai, mez, px, py, lx, ly, kim, ir, cx, cy, kx, ky, mely, gx, gy] = d;
+  const vonal = (x1, y1, h1, x2, y2, h2, szin) => {
+    const g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(x1, h1, W - y1), new THREE.Vector3(x2, h2, W - y2)]);
+    hetesCsoport.add(new THREE.Line(g, new THREE.LineBasicMaterial({color: szin})));
+  };
+  if (px !== null){
+    for (const [ax, ay, bx, by] of [[-0.4, -0.4, 0.4, 0.4], [-0.4, 0.4, 0.4, -0.4]])
+      vonal(px + ax, py + ay, 0.06, px + bx, py + by, 0.06, 0x7dd3fc);
+  }
+  const ox = lx !== null ? lx : px, oy = lx !== null ? ly : py;
+  if (ox !== null && cx !== null) vonal(ox, oy, 1.2, cx, cy, 1.0, 0xd9b544);
+  if (kx !== null){
+    const gy0 = new THREE.Mesh(new THREE.RingGeometry(0.44, 0.54, 36),
+      new THREE.MeshBasicMaterial({color: 0xc084fc, side: THREE.DoubleSide, transparent: true, opacity: 0.9}));
+    gy0.rotation.x = -Math.PI/2; gy0.position.set(kx, 0.04, W - ky);
+    hetesCsoport.add(gy0);
+    vonal(kx, ky, 0.05, gx, gy, 0.05, 0xc084fc);
+  }
+  return hetesFelirat(d, ADAT.home, ADAT.away);
 }
 
 // ---- Jelenet-lista: a jelenet-lapozók jelenetei egy listában -----------
@@ -2521,7 +2619,7 @@ window.vrJelenetLep = jelenetLep;  // a próbához: a kontroller-gomb párja
 // fejhez rögzített táblára rajzoljuk (a kamera gyermeke — mindig szem
 // előtt, a padló-vonalak nem takarják). A ?vrfelirat=1 headset nélkül
 // is bekapcsolja (próbához).
-const VR_FELIRAT_FORRASOK = ["felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "kontraFelirat", "kapottFelirat", "emberJelzo"];
+const VR_FELIRAT_FORRASOK = ["felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "kontraFelirat", "kapottFelirat", "hetesFelirat", "emberJelzo"];
 const vrVaszon = document.createElement("canvas"); vrVaszon.width = 1024; vrVaszon.height = 320;
 const vrTextura = new THREE.CanvasTexture(vrVaszon);
 const vrTabla = new THREE.Sprite(new THREE.SpriteMaterial({map: vrTextura, transparent: true, depthTest: false}));
@@ -2593,6 +2691,7 @@ fest.setAnimationLoop(() => {
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
                           + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
-                          + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS)
+                          + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS
+                          + HETES_JS)
                  .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))

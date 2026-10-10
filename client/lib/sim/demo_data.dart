@@ -281,6 +281,33 @@ List<Map<String, dynamic>> buildDemoConcededGoals(Match m) {
   ];
 }
 
+/// Demó hétméteres a 3D "Hétméteresek" lapozójához (backend nélkül): a
+/// /seven-meter-moments "moments" alakjában — a hazai dob a jobb kapura,
+/// középre, gól; a vendég kapus 0,9 m-re a kaputól. SZINTETIKUS, csak a
+/// felület bemutatására.
+List<Map<String, dynamic>> buildDemoSevens(Match m) {
+  final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+  final t = math.min(200, math.max(0, m.frames.length - 1));
+  return [
+    {
+      "s": t / fps,
+      "t": t,
+      "shot_s": (t + 25) / fps,
+      "team": "home",
+      "defending": "away",
+      "spot": [33.0, 10.0],
+      "shooter": [32.6, 10.0],
+      "shooter_jersey": null,
+      "outcome": "gól",
+      "irany": "közép",
+      "aim": [courtLength, courtWidth / 2],
+      "keeper": [39.1, 9.6],
+      "keeper_depth": 0.98,
+      "goal": [courtLength, courtWidth / 2],
+    }
+  ];
+}
+
 /// Demó védekezés-idővonal a 3D védekezés-paneljéhez és a fal-résekhez
 /// (backend nélkül): a /defence-timeline "rows" alakjában — a demóban a
 /// vendég végig a jobb kapu előtt védekezik (hat mezőnyvédő ~5 m-re a

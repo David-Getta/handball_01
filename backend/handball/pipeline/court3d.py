@@ -900,6 +900,109 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
     return {"moments": moments, "breaks": breaks, "goals": goals}
 
 
+# Hétméteres: a célzott kapu-harmad közepe ennyire van a kapu közepétől
+# (a 3 m-es kapu harmadai: a bal és a jobb harmad közepe 1 m-re).
+SEVEN_AIM_OFFSET_M = 1.0
+
+
+def seven_meter_moments(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """A hétméteresek a 3D pályán: ki dobta, merre, mi lett belőle, és hol
+    állt a kapus.
+
+    A hetes-rétegek (seven_meter_outcomes: kimenet és irány;
+    gk_seven_directions: a kapus gyenge oldala) számokban mondják — a 3D
+    a jelenetet mutatja. UGYANAZOK a szabályok: a hetes a
+    detect_seven_meters felismerése (álló labda a 7 m-es ponton), a lövés
+    az utána SEVEN_OUTCOME_WINDOW_S-en belüli első saját lövés (ugyanaz,
+    amit a seven_meter_outcomes párosít), az irány a _seven_direction
+    sávja (bal / közép / jobb a DOBÓ szemszögéből). A kapus a védekező
+    csapat kapus-jelölésű — több ilyennél a saját kapuhoz legközelebbi —
+    játékosa a lövés (elengedés) kockáján; a mélysége a kapu közepétől
+    mért távolság (mint a kapus-kimozdulás rétegben). Saját küszöb nincs.
+
+    Visszatérés: {"moments": [{"s" (a hetes kezdete — az álló labda),
+    "t", "shot_s" (a lövés mp | None), "team" (a dobó), "defending",
+    "spot": [x, y] (a labda a 7 m-es ponton), "shooter": [x, y] | None,
+    "shooter_jersey", "outcome" ("gól" / "védés" / "kihagyva" /
+    "ismeretlen"), "irany" ("bal" / "közép" / "jobb" | None), "aim":
+    [x, y] | None (a célzott kapu-harmad közepe), "keeper": [x, y] |
+    None, "keeper_depth", "goal": [x, y] (a támadott kapu közepe)}]
+    időrendben, "attempts": {"home"/"away": db}, "goals": {...}} — a
+    számok a seven_meter_summary kísérlet- és gól-számaival egyeznek."""
+    from .event_detection import EventType, detect_shots
+    from .rules import SEVEN_OUTCOME_WINDOW_S, seven_meter_outcomes
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    win = round(SEVEN_OUTCOME_WINDOW_S * fps)
+    by_t = {f.t: f for f in match.frames}
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+    cy = COURT_WIDTH_M / 2.0
+
+    moments = []
+    attempts = {"home": 0, "away": 0}
+    goals = {"home": 0, "away": 0}
+    for sm in seven_meter_outcomes(match, config):
+        side = sm["team"]
+        vedo = Team.AWAY if side == "home" else Team.HOME
+        goal_x = float(sm["goal_x"])
+        attempts[side] += 1
+        if sm["outcome"] == "gól":
+            goals[side] += 1
+        # A lövés: ugyanaz a párosítás, mint a seven_meter_outcomes-ban.
+        shot = next((e for e in shots if sm["t"] <= e.t <= sm["t"] + win
+                     and e.team.value == side), None)
+        rel_t = None
+        if shot is not None:
+            rel_t = (shot.detail or {}).get("release_t")
+            if rel_t not in by_t:
+                rel_t = shot.t
+        f0 = by_t.get(sm["t"])
+        fl = by_t.get(rel_t) if rel_t is not None else f0
+        spot = ([round(f0.ball.x, 2), round(f0.ball.y, 2)]
+                if f0 is not None and f0.ball is not None else None)
+        lovo = None
+        if fl is not None and sm["shooter_id"] is not None:
+            lovo = next((p for p in fl.players
+                         if p.track_id == sm["shooter_id"]), None)
+        kapusok = [p for p in (fl.players if fl is not None else [])
+                   if p.team == vedo and p.role == "kapus"]
+        kapus = (min(kapusok, key=lambda p: math.hypot(p.x - goal_x,
+                                                        p.y - cy))
+                 if kapusok else None)
+        aim = None
+        if sm["irany"] is not None:
+            # A dobó szemszögéből: a +x kapura a bal az alacsony y (a
+            # _seven_direction tükre), a -x kapura fordítva.
+            d = {"bal": -1.0, "közép": 0.0, "jobb": 1.0}[sm["irany"]]
+            jel = 1.0 if goal_x > COURT_LENGTH_M / 2.0 else -1.0
+            aim = [goal_x, round(cy + jel * d * SEVEN_AIM_OFFSET_M, 2)]
+        moments.append({
+            "s": round(sm["t"] / fps, 2), "t": sm["t"],
+            "shot_s": round(rel_t / fps, 2) if rel_t is not None else None,
+            "team": side, "defending": vedo.value,
+            "spot": spot,
+            "shooter": ([round(lovo.x, 2), round(lovo.y, 2)]
+                        if lovo is not None else None),
+            "shooter_jersey": jersey.get(sm["shooter_id"]),
+            "outcome": sm["outcome"], "irany": sm["irany"], "aim": aim,
+            "keeper": ([round(kapus.x, 2), round(kapus.y, 2)]
+                       if kapus is not None else None),
+            "keeper_depth": (round(math.hypot(kapus.x - goal_x,
+                                              kapus.y - cy), 2)
+                             if kapus is not None else None),
+            "goal": [goal_x, cy]})
+    moments.sort(key=lambda m_: (m_["s"], m_["team"]))
+    return {"moments": moments, "attempts": attempts, "goals": goals}
+
+
 # Kulcs-jelenetek: a legnagyobb döntés-hibákból ennyi, és összesen
 # legfeljebb ennyi sor (a gólba került eladások és kapott lerohanások, a
 # gólt érő szabad lövők és a kapott gólok mind bekerülnek, amíg a plafon

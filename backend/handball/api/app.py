@@ -2943,6 +2943,18 @@ def create_app():
         return _cached_result(match_id, "key-scenes",
                               lambda: key_scene_rows(match))
 
+    @app.get("/matches/{match_id}/seven-meter-moments")
+    def match_seven_meter_moments(match_id: str):
+        """A hétméteresek (court3d.seven_meter_moments): a dobó, a 7 m-es
+        pont, a célzott kapu-harmad, a kimenet és a kapus helye — a 3D
+        pálya "Hétméteresek" lapozója ebből dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import seven_meter_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "seven-meter-moments",
+                              lambda: seven_meter_moments(match))
+
     @app.get("/matches/{match_id}/conceded-goals")
     def match_conceded_goals(match_id: str):
         """A kapott gólok (court3d.conceded_goal_moments): ki lőtte,

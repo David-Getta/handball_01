@@ -136,6 +136,14 @@ feliratok egymás alatt):
   mérése (a "kint" a pillanatra szabott 2,5 m-es küszöb — a réteg 1,5
   m-e a meccs-átlagé).
 
+- **Hétméteresek ◀ ▶** — a hetesek: **X** a 7 m-es ponton, **arany**
+  vonal a dobótól a célzott kapu-harmadba (a dobó szemszögéből bal /
+  közép / jobb), a kapus helye **lila** gyűrűvel és vonal a kapu
+  közepéig (a mélysége); a felirat: "Hetes (Szeged): #7 · középre · GÓL
+  · kapus 1,0 m-re a kaputól". A felismerés, a lövés-párosítás és az
+  irány a hetes-rétegeké (a kísérletek és a gólok száma a hetes-mérleggel
+  egyezik). Nem hiba-lapozó: a "Kinek a hibái" szűrő nem érinti.
+
 A ▶ az utoljára nézett jelenettől lép tovább (nem ragad le, és a meccs
 legelső pillanatai is elérhetők).
 
@@ -204,7 +212,7 @@ küldesz a stábnak, nem egy meccset. A paraméterek:
 A böngészős oldal WebXR-képes: a lenti "ENTER VR" gombbal a csarnok
 headsetben nyílik, a bal kar hüvelykujj-karja a nézés iránya szerint
 visz. A jelenet-feliratok (esemény, döntés, szabad lövő,
-labdavesztés, gól-akció, lerohanás, kapott gól, emberelőny) a headsetben
+labdavesztés, gól-akció, lerohanás, kapott gól, hetes, emberelőny) a headsetben
 egy fejhez rögzített
 táblán látszanak, és a jelenetek a kontrollerrel lapozhatók: A/X — a
 következő, B/Y — az előző jelenet, ravasz — lejátszás/szünet. A WebXR
@@ -220,13 +228,15 @@ USB-kábellel és `adb reverse`-szel érhető el az app gépe.
   `turnover_moments` — labdavesztések, `wall_gap_segments` — fal-rések,
   `goal_build_ups` — gól-akciók, `powerplay_moments` — emberelőny,
   `fast_break_moments` — lerohanások, `conceded_goal_moments` — kapott
-  gólok, `scene_rows` — a jelenet-lista sorai, `key_scene_rows` — a
+  gólok, `seven_meter_moments` — hétméteresek, `scene_rows` — a
+  jelenet-lista sorai, `key_scene_rows` — a
   videózandó jelenetek válogatása), `view3d_html.py` (a
   böngészős oldal és a tömör adat), végpontok: `/matches/{id}/view3d`,
   `/matches/{id}/defence-timeline`, `/matches/{id}/decision-moments`,
   `/matches/{id}/free-shots`, `/matches/{id}/turnover-moments`,
   `/matches/{id}/goal-build-ups`, `/matches/{id}/powerplay-moments`,
   `/matches/{id}/fast-break-moments`, `/matches/{id}/conceded-goals`,
+  `/matches/{id}/seven-meter-moments`,
   `/matches/{id}/key-scenes`.
 - App: `client/lib/ui/court3d_screen.dart` (szoftveres vetítés,
   gesztusok, rétegek), `court_geometry.dart` (a backend tükre).

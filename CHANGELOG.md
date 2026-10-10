@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.161 óta)
 
+- **3D pálya: Hétméteresek lapozó** (új, böngészős/VR és appbeli nézet):
+  ◀ ▶ a hetesek közt — X a 7 m-es ponton, arany vonal a dobótól a
+  célzott kapu-harmadba (a dobó szemszögéből bal / közép / jobb), a
+  kapus helye és mélysége lilával; a felirat: "Hetes (Szeged): #7 ·
+  középre · GÓL · kapus 1,0 m-re a kaputól". A felismerés, a
+  lövés-párosítás és az irány a hetes-rétegeké — a kísérletek és a gólok
+  száma a hetes-mérleggel egyezik (teszt). Új végpont:
+  /matches/{id}/seven-meter-moments; az app demója egy szintetikus
+  hetessel.
+
 - **Kód-átnézés javításai: klip-csomagok, kapott gólok, lerohanás**
   (javítás): a klipvágás ismétlés-szűrője típusonként dolgozik — a
   gólos lerohanás a "gól" ÉS a "lerohanás" mappába is kerül (eddig a

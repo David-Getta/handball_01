@@ -181,6 +181,29 @@ void main() {
         "Szeged védekezése — kapott gól: Veszprém (6–9 m)");
   });
 
+  // A hétméteres felirata a böngésző hetesFelirat-jával AZONOS (a backend
+  // node-os tesztje ugyanezt a három esetet futtatja).
+  test("sevenMeterCaption = a böngésző hetesFelirat-ja", () {
+    expect(
+        sevenMeterCaption({
+          "team": "home", "shooter_jersey": 7, "irany": "közép",
+          "outcome": "gól", "keeper_depth": 0.98,
+        }, "Szeged", "Veszprém"),
+        "Hetes (Szeged): #7 · középre · GÓL · kapus 1,0 m-re a kaputól");
+    expect(
+        sevenMeterCaption({
+          "team": "away", "shooter_jersey": 13, "irany": "bal",
+          "outcome": "védés", "keeper_depth": 1.26,
+        }, "Szeged", "Veszprém"),
+        "Hetes (Veszprém): #13 · balra · védés · kapus 1,3 m-re a kaputól");
+    expect(
+        sevenMeterCaption({
+          "team": "home", "shooter_jersey": null, "irany": null,
+          "outcome": "ismeretlen", "keeper_depth": null,
+        }, "Szeged", "Veszprém"),
+        "Hetes (Szeged): kimenet ismeretlen · kapus nem mérhető");
+  });
+
   // A kapott gól felirata a böngésző kapottFelirat-jával AZONOS (a backend
   // node-os tesztje ugyanezt a három esetet futtatja).
   test("concededGoalCaption = a böngésző kapottFelirat-ja", () {
