@@ -3,7 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.160 óta)
+## v0.1.161 — kiadva (2026-10-10)
+
+> Kiadás-jegyzet: a 3D pálya jelenet-listát kapott — a hibák (rossz
+> döntések, szabadon hagyott lövők, labdavesztések, kapott lerohanások)
+> egy időrendi listában, koppintásra odaugrik, és egy kattintással
+> (az appban és a böngészőben is) a jelenetek videóként kivághatók; a
+> gól-akciók (a gólt megelőző passz-lánc), az emberelőny-szakaszok (élő
+> jelzővel) és a lerohanások (a befejező útja az indulástól a lövésig)
+> is lapozhatók; a nyomtatott meccs-jelentésbe bekerültek a videózandó
+> jelenetek. VR-headsetben a jelenet-feliratok a szem előtt látszanak,
+> és a kontrollerrel lapozhatók a jelenetek (asztali gépen N / P).
+> Javítva: a meccs-jelentés csapatneveinek kettős escape-je, a
+> felderítés üres szélső- és beálló-gól listája (egy elnyelt kivétel —
+> új őr fogja az elnyelt kivételeket), hat app-képernyő elrendezési
+> hibája (lecsúszott, kattinthatatlan gombok), és a böngészős 3D panel
+> és súgó alacsony/keskeny ablakban.
 
 - **3D pálya: Lerohanások lapozó** (új, böngészős/VR és appbeli nézet):
   a kontra-rétegek számokban mondják (lerohanás-hatékonyság,
