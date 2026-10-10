@@ -2930,6 +2930,19 @@ def create_app():
         return _cached_result(match_id, "fast-break-moments",
                               lambda: fast_break_moments(match))
 
+    @app.get("/matches/{match_id}/key-scenes")
+    def match_key_scenes(match_id: str):
+        """A meccs videózandó jelenetei (court3d.key_scene_rows): a
+        jelentés "Videózandó jelenetek" szakaszának sorai — a kezdőlap
+        meccs-kártyája ebből mondja, hány jelenet vár, és a 3D pályát az
+        elsőn nyitja. Gyorsítótárazva."""
+        from ..pipeline.court3d import key_scene_rows
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "key-scenes",
+                              lambda: key_scene_rows(match))
+
     @app.get("/matches/{match_id}/conceded-goals")
     def match_conceded_goals(match_id: str):
         """A kapott gólok (court3d.conceded_goal_moments): ki lőtte,

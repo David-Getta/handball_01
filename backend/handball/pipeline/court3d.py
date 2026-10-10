@@ -886,6 +886,53 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
     return {"moments": moments, "breaks": breaks, "goals": goals}
 
 
+# Kulcs-jelenetek: a legnagyobb döntés-hibákból ennyi, és összesen
+# legfeljebb ennyi sor (a gólba került eladások és kapott lerohanások, a
+# gólt érő szabad lövők és a kapott gólok mind bekerülnek, amíg a plafon
+# engedi; a plafon a gólos jeleneteket tartja meg előbb).
+KEY_SCENES_DECISION_TOP = 5
+KEY_SCENES_MAX = 15
+
+
+def key_scene_rows(match: Match, config: Optional[TacticsConfig] = None,
+                   decision_top: int = KEY_SCENES_DECISION_TOP,
+                   max_rows: int = KEY_SCENES_MAX) -> dict:
+    """A meccs VIDEÓZANDÓ jelenetei — a jelenet-lista legfontosabb sorai.
+
+    A 3D jelenet-lista minden hibát mutat; ez a válogatás az edző
+    "mit nézzünk vissza" listája: a gólba került labdavesztések és kapott
+    lerohanások, a gólt érő szabadon hagyott lövők, a kapott gólok és a
+    `decision_top` legnagyobb döntés-hiba, időrendben, legfeljebb
+    `max_rows` sor — a plafon a gólos jeleneteket tartja meg előbb. A
+    nyomtatott jelentés "Videózandó jelenetek" szakasza és a kezdőlap
+    meccs-kártyája UGYANEZT adja.
+
+    Visszatérés: {"rows": [scene_rows-sor: "s", "ido", "tipus", "side",
+    "szoveg", "gol"], "total": a válogatás előtti sorok száma}."""
+    # A config csak megadva megy tovább: a rétegek alapértelmezése a
+    # közös TacticsConfig (a jelentés tesztjei a rétegeket egy-paraméteres
+    # helyettesítővel cserélik).
+    kw = {} if config is None else {"config": config}
+    dontesek = sorted(decision_moments(match, **kw)["moments"],
+                      key=lambda d: (-d["gap"], d["s"]))[:decision_top]
+    szabadok = [d for d in free_shot_moments(match, **kw)["moments"]
+                if d["goal"]]
+    eladasok = [d for d in turnover_moments(match, **kw)["moments"]
+                if d["punished"]]
+    kontrak = [d for d in fast_break_moments(match, **kw)["moments"]
+               if d["outcome"] == "goal"]
+    kapottak = conceded_goal_moments(match, **kw)["moments"]
+    sorok = scene_rows(dontesek, szabadok, eladasok,
+                       match.meta.home_team, match.meta.away_team,
+                       kontrak, kapottak)
+    total = len(sorok)
+    if len(sorok) > max_rows:
+        tart = sorted(range(len(sorok)),
+                      key=lambda i: (not sorok[i]["gol"], i))[:max_rows]
+        sorok = [sorok[i] for i in sorted(tart)]
+    return {"rows": sorok, "total": total}
+
+
 def conceded_goal_moments(match: Match,
                           config: Optional[TacticsConfig] = None) -> dict:
     """A kapott gólok a 3D pályán — a VÉDEKEZŐ csapat szerint: ki lőtte,

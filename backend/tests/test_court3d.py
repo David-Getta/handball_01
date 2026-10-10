@@ -679,3 +679,54 @@ def test_a_jelenet_sorok_side_mezoje_a_hibazo_csapat():
     assert [(r["tipus"], r["side"]) for r in sorok] == [
         ("d", "away"), ("sz", "home"), ("e", "home"), ("k", "away"),
         ("kg", "home")]
+
+
+
+def test_a_kulcs_jelenetek_a_jelentes_valogatasa(monkeypatch):
+    """A kulcs-jelenetek (key_scene_rows) a jelentés "Videózandó jelenetek"
+    válogatása: a gólba került eladások és kapott lerohanások, a gólt érő
+    szabad lövők, a kapott gólok és a legnagyobb döntés-hibák; a plafon a
+    gólos sorokat tartja meg előbb, a sorrend időrendi; a "total" a
+    válogatás előtti szám."""
+    from handball.pipeline import court3d
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    r = court3d.key_scene_rows(m)
+    assert r["rows"] and r["total"] >= len(r["rows"])
+    assert len(r["rows"]) <= court3d.KEY_SCENES_MAX
+    assert [x["s"] for x in r["rows"]] == sorted(x["s"] for x in r["rows"])
+    assert all(x["side"] in ("home", "away") for x in r["rows"])
+    # Szűk plafonnal csak gólos sorok maradnak (van elég gólos jelenet).
+    szuk = court3d.key_scene_rows(m, max_rows=3)
+    assert len(szuk["rows"]) == 3 and all(x["gol"] for x in szuk["rows"])
+    assert szuk["total"] == r["total"]
+    # A döntés-hibák száma a plafonjukig: decision_top=0 → nincs "d" sor.
+    nincs_d = court3d.key_scene_rows(m, decision_top=0, max_rows=500)
+    assert all(x["tipus"] != "d" for x in nincs_d["rows"])
+    assert any(x["tipus"] == "d" for x in
+               court3d.key_scene_rows(m, decision_top=5, max_rows=500)["rows"])
+
+
+def test_a_kulcs_jelenetek_vegpontja(tmp_path, monkeypatch):
+    """A /key-scenes végpont a kulcs-jelenetek sorait és a teljes számot
+    adja (a kezdőlap kártyája ebből mond "Videózandó: N jelenet"-et);
+    ismeretlen meccsre 404."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import key_scene_rows
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    v = c.get(f"/matches/{m.meta.match_id}/key-scenes").json()
+    r = key_scene_rows(m)
+    assert v["total"] == r["total"] and len(v["rows"]) == len(r["rows"])
+    assert v["rows"][0]["tipus"] == r["rows"][0]["tipus"]
+    assert c.get("/matches/nincs/key-scenes").status_code == 404

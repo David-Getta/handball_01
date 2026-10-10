@@ -20,6 +20,7 @@ import "../services/update_service.dart";
 import "anim.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
+import "court3d_screen.dart";
 import "label_screen.dart";
 import "match_screen.dart";
 import "player_trend_screen.dart";
@@ -50,6 +51,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _summary;
   Map<String, dynamic>? _leaders;
   Map<String, Map<String, dynamic>> _perMatch = {};
+  // Meccsenként a videózandó jelenetek (a /key-scenes válasza: "rows",
+  // "total") — a kártya "Videózandó: N jelenet · 3D-ben" sora; külön,
+  // nem blokkolóan töltődik (a motor gyorsítótárazza).
+  final Map<String, Map<String, dynamic>> _keyScenes = {};
   // Visszatérő edzés-fókuszok csapatonként (a könyvtár-összesítésből).
   Map<String, dynamic> _seasonFocus = {};
 
@@ -787,9 +792,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
             d["match_id"] as String: d,
         };
       });
+      _loadKeyScenes();
     } catch (_) {
       // a kártyák a helyi (lista-alapú) számokat mutatják tovább
     }
+  }
+
+  /// A videózandó jelenetek meccsenként, egymás után, nem blokkolóan — a
+  /// kártya a válasz után mutatja a sort; hiba esetén a kártya sor nélkül
+  /// marad (a többi adat nem függ tőle).
+  Future<void> _loadKeyScenes() async {
+    for (final m in List<Map<String, dynamic>>.from(_matches)) {
+      final id = m["match_id"] as String;
+      if (_keyScenes.containsKey(id)) continue;
+      try {
+        final r = await _api.fetchKeyScenes(id);
+        if (!mounted) return;
+        setState(() => _keyScenes[id] = r);
+      } catch (_) {
+        // sor nélkül
+      }
+    }
+  }
+
+  /// A kártya "Videózandó: N jelenet · 3D-ben" sora: a jelenetek száma és
+  /// egy gomb, amely a 3D pályát az ELSŐ jeleneten nyitja (a hibázó
+  /// csapatra szűrve, nyitott listával) — a jelentés "Videózandó
+  /// jelenetek" szakaszának párja a kezdőlapon.
+  Widget? _keyScenesRow(String id) {
+    final ks = _keyScenes[id];
+    if (ks == null) return null;
+    final rows = ((ks["rows"] as List?) ?? const []).cast<Map>();
+    final total = ((ks["total"] as num?) ?? rows.length).toInt();
+    if (rows.isEmpty) {
+      return Text("Videózandó jelenet nincs — a mért területeken nincs kilógó hiba.",
+          style: AppText.label.copyWith(fontSize: 11.5));
+    }
+    final elso = rows.first;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      const Icon(Icons.movie_outlined, size: 14, color: AppColors.gold),
+      const SizedBox(width: 6),
+      Text("Videózandó: $total jelenet",
+          style: AppText.label.copyWith(fontSize: 11.5)),
+      const SizedBox(width: AppSpacing.sm),
+      TextButton.icon(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => Court3DScreen(
+                matchId: id,
+                initialScene: elso["tipus"] as String?,
+                initialTeam: elso["side"] as String?))),
+        style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            visualDensity: VisualDensity.compact),
+        icon: const Icon(Icons.view_in_ar, size: 14),
+        label: const Text("3D-ben", style: TextStyle(fontSize: 11.5)),
+      ),
+    ]);
   }
 
   /// Közös meccs-kiválasztó: pipa + meccsenként a FIGYELT csapat oldala.
@@ -3495,6 +3553,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_keyScenesRow(id) case final ks?)
+                    Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: ks),
                   Row(children: [
                     Text(home, style: AppText.value.copyWith(fontSize: 17, color: AppColors.home)),
                     Text("  vs  ", style: AppText.label),

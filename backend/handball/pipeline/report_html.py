@@ -1057,9 +1057,10 @@ def _pass_pairs(match, events, team_value: str, top: int = 5):
 
 # A "Videózandó jelenetek" szakasz: a legnagyobb döntés-hibákból ennyi,
 # és összesen legfeljebb ennyi sor (a gólba került eladások és a gólt
-# érő szabad lövések mind bekerülnek, amíg a plafon engedi).
-REPORT_DECISION_TOP = 5
-REPORT_SCENES_MAX = 15
+# érő szabad lövések mind bekerülnek, amíg a plafon engedi) — a
+# válogatás a court3d.key_scene_rows-é, a kezdőlap kártyájával közös.
+from .court3d import KEY_SCENES_DECISION_TOP as REPORT_DECISION_TOP  # noqa: E402
+from .court3d import KEY_SCENES_MAX as REPORT_SCENES_MAX  # noqa: E402
 
 
 # A jelenet-sor 3D-linkje ennyivel a jelenet ELŐTT indítja a lejátszót
@@ -1083,27 +1084,15 @@ def _scenes_section(match, base_url: str | None = None) -> str:
     döntés-hiba, időrendben, legfeljebb REPORT_SCENES_MAX sor. Edzőileg:
     ezek a videózandó pillanatok — a papírral a kézben is
     visszakereshetők."""
-    from .court3d import (decision_moments, fast_break_moments,
-                          free_shot_moments, scene_rows, turnover_moments)
+    from .court3d import key_scene_rows
 
-    dontesek = sorted(decision_moments(match)["moments"],
-                      key=lambda d: (-d["gap"], d["s"]))[:REPORT_DECISION_TOP]
-    szabadok = [d for d in free_shot_moments(match)["moments"] if d["goal"]]
-    eladasok = [d for d in turnover_moments(match)["moments"]
-                if d["punished"]]
-    kontrak = [d for d in fast_break_moments(match)["moments"]
-               if d["outcome"] == "goal"]
-    # A NYERS csapatnevekkel (a sor-szöveget itt escape-eljük — a
-    # jelentés escape-elt nevei kettős escape-et adnának).
-    sorok = scene_rows(dontesek, szabadok, eladasok,
-                       match.meta.home_team, match.meta.away_team, kontrak)
+    # A NYERS csapatnevekkel épül (a sor-szöveget itt escape-eljük — a
+    # jelentés escape-elt nevei kettős escape-et adnának); a válogatás
+    # (gólos jelenetek előbb, aztán időrend, a plafonig) a közös motoré.
+    sorok = key_scene_rows(match, decision_top=REPORT_DECISION_TOP,
+                           max_rows=REPORT_SCENES_MAX)["rows"]
     if not sorok:
         return ""
-    # A plafon a gólos jeleneteket hagyja meg előbb, aztán az időrend.
-    if len(sorok) > REPORT_SCENES_MAX:
-        tart = sorted(range(len(sorok)),
-                      key=lambda i: (not sorok[i]["gol"], i))[:REPORT_SCENES_MAX]
-        sorok = [sorok[i] for i in sorted(tart)]
     def link(r):
         if not base_url:
             return ""

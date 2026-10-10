@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.161 óta)
 
+- **Kezdőlap: "Videózandó: N jelenet · 3D-ben" a meccs-kártyán** (új):
+  minden meccs kártyája mondja, hány videózandó jelenet vár (a gólba
+  került labdavesztések és kapott lerohanások, a gólt érő szabad lövők,
+  a kapott gólok és a legnagyobb döntés-hibák — ugyanaz a válogatás, mint
+  a nyomtatott jelentés "Videózandó jelenetek" szakasza), és a "3D-ben"
+  gomb a 3D pályát az első jeleneten nyitja, a hibázó csapatra szűrve,
+  nyitott listával. A válogatás egy helyen él (court3d.key_scene_rows,
+  új végpont: /matches/{id}/key-scenes); a kártyák sora külön, nem
+  blokkolóan töltődik.
+
 - **Meccs-jelentés: "3D ↗" link a videózandó jeleneteken** (új): a
   nyomtatható jelentés "Videózandó jelenetek" sorai végén link, amely a
   böngészős 3D pályát a jelenet előtt 1,5 mp-cel, a hibázó csapatra

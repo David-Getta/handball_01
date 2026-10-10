@@ -3448,3 +3448,20 @@ def test_az_edzesterv_fokusz_tetele_a_3d_jelenetekre_visz():
                  "_jelenetCsapat = widget.initialTeam!;",
                  "if (r.tipus == tipus) {"):
         assert kell in palya, kell
+
+
+
+def test_a_kezdolap_meccs_kartyaja_a_videozando_jelenetekre_visz():
+    """A kezdőlap meccs-kártyája a /key-scenes válaszából "Videózandó: N
+    jelenet · 3D-ben" sort mutat, és a 3D pályát az első jeleneten (a
+    hibázó csapatra szűrve) nyitja."""
+    from pathlib import Path
+
+    gyoker = Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+    kezdolap = (gyoker / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
+    for kell in ("_loadKeyScenes()", "fetchKeyScenes(id)", "_keyScenesRow(id)",
+                 '"Videózandó: $total jelenet"', 'initialScene: elso["tipus"]',
+                 'initialTeam: elso["side"]', 'import "court3d_screen.dart";'):
+        assert kell in kezdolap, kell
+    api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "/matches/$matchId/key-scenes" in api

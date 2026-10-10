@@ -167,6 +167,13 @@ nyitott jelenet-listával, a típus első jelenetén nyitja — a tétel és a
 lapozó párosítása a backend `training.scene_for_focus` táblázata (a
 tétel területe és címe szerint).
 
+A **kezdőlap** meccs-kártyája mondja, hány videózandó jelenet vár ("Videózandó:
+N jelenet") — a gólba került labdavesztések és kapott lerohanások, a gólt
+érő szabad lövők, a kapott gólok és a legnagyobb döntés-hibák; a "3D-ben"
+gomb a pályát az első jeleneten nyitja, a hibázó csapatra szűrve. Ugyanez
+a válogatás a nyomtatott jelentés "Videózandó jelenetek" szakasza
+(`court3d.key_scene_rows`, végpont: `/matches/{id}/key-scenes`).
+
 A **Kinek a hibái** választó a hiba-lapozókat egy csapatra szűri: mind
 egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott lövőt,
 az elvesztett labdát, a kapott lerohanást, a kapott gólt) — a saját csapatra szűrve
@@ -196,7 +203,8 @@ küldesz a stábnak, nem egy meccset. A paraméterek:
 A böngészős oldal WebXR-képes: a lenti "ENTER VR" gombbal a csarnok
 headsetben nyílik, a bal kar hüvelykujj-karja a nézés iránya szerint
 visz. A jelenet-feliratok (esemény, döntés, szabad lövő,
-labdavesztés, gól-akció, emberelőny) a headsetben egy fejhez rögzített
+labdavesztés, gól-akció, lerohanás, kapott gól, emberelőny) a headsetben
+egy fejhez rögzített
 táblán látszanak, és a jelenetek a kontrollerrel lapozhatók: A/X — a
 következő, B/Y — az előző jelenet, ravasz — lejátszás/szünet. A WebXR
 biztonságos környezetet kér — a localhost az; Quest-féle headsetről
@@ -211,12 +219,14 @@ USB-kábellel és `adb reverse`-szel érhető el az app gépe.
   `turnover_moments` — labdavesztések, `wall_gap_segments` — fal-rések,
   `goal_build_ups` — gól-akciók, `powerplay_moments` — emberelőny,
   `fast_break_moments` — lerohanások, `conceded_goal_moments` — kapott
-  gólok, `scene_rows` — a jelenet-lista sorai), `view3d_html.py` (a
+  gólok, `scene_rows` — a jelenet-lista sorai, `key_scene_rows` — a
+  videózandó jelenetek válogatása), `view3d_html.py` (a
   böngészős oldal és a tömör adat), végpontok: `/matches/{id}/view3d`,
   `/matches/{id}/defence-timeline`, `/matches/{id}/decision-moments`,
   `/matches/{id}/free-shots`, `/matches/{id}/turnover-moments`,
   `/matches/{id}/goal-build-ups`, `/matches/{id}/powerplay-moments`,
-  `/matches/{id}/fast-break-moments`, `/matches/{id}/conceded-goals`.
+  `/matches/{id}/fast-break-moments`, `/matches/{id}/conceded-goals`,
+  `/matches/{id}/key-scenes`.
 - App: `client/lib/ui/court3d_screen.dart` (szoftveres vetítés,
   gesztusok, rétegek), `court_geometry.dart` (a backend tükre).
 - Tesztek: `backend/tests/test_view3d_eszkozok.py`,
