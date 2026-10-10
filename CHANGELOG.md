@@ -3,6 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.161 óta)
+
+- **Klipek: "Lerohanások" és "Kapott lerohanások" csomag** (új): a 3D
+  Lerohanások lapozójának jelenetei videóként — a saját kontrák a
+  befejező mezszámához írva ("a #13 lerohanásai"), a kapott lerohanások
+  a védekező csapaté (a visszarendeződés anyaga), a címke a kimenet
+  (gól / lövés / lövés nélkül). A 3D jelenet-lista Klipek gombja a
+  kapott lerohanásokat is viszi; a nyomtatott meccs-jelentés
+  "Videózandó jelenetek" szakaszában a gólba került kapott lerohanások
+  is sorok.
+
 ## v0.1.161 — kiadva (2026-10-10)
 
 > Kiadás-jegyzet: a 3D pálya jelenet-listát kapott — a hibák (rossz

@@ -54,6 +54,8 @@ const List<(String, List<ClipKind>)> kClipGroups = [
         "eladás, amiből fél percen belül gól lett — a legtöbbe kerül"),
     ("bad_decision", "Döntés-hibák",
         "ahol jobb opció is volt: lövés vagy egy szabadabb társ"),
+    ("fast_break", "Lerohanások",
+        "a kontráink: az indítópassz, a felfutás és a befejezés"),
   ]),
   ("VÉDEKEZÉS", [
     ("block", "Blokkok", "a fal munkája"),
@@ -61,6 +63,8 @@ const List<(String, List<ClipKind>)> kClipGroups = [
     ("free_shot", "Szabad lövők",
         "fedezés-hibák — kit hagytunk üresen"),
     ("breakthrough", "Betörések", "a sáv a fájlnévben van"),
+    ("conceded_fast_break", "Kapott lerohanások",
+        "ahol nem futottunk vissza — a visszarendeződés anyaga"),
   ]),
   ("KAPUS ÉS HELYZETEK", [
     ("big_save", "Nagy védések", "a kapus bravúrjai"),
@@ -85,13 +89,15 @@ const List<(String, List<String>)> kClipPresets = [
     "goal", "key_moment", "turning_point", "missed_chance", "big_save",
     "top_shooter", "free_shot", "best_figure", "pivot_goal",
     "breakthrough", "steal", "block", "empty_net", "costly_turnover",
+    "conceded_fast_break",
   ]),
   ("Támadás-csomag", [
     "goal", "missed_chance", "best_figure", "pivot_goal", "turnover",
-    "costly_turnover", "bad_decision",
+    "costly_turnover", "bad_decision", "fast_break",
   ]),
   ("Védekezés-csomag", [
     "block", "steal", "free_shot", "breakthrough", "big_save",
+    "conceded_fast_break",
   ]),
   ("Csak gólok", ["goal"]),
 ];

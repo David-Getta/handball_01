@@ -39,7 +39,9 @@ _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
             "key_moment": "kulcs-pillanat", "best_figure": "figura",
             "free_shot": "szabad-lovo", "pivot_goal": "beallo-gol",
             "breakthrough": "betores", "steal": "labdaszerzes",
-            "costly_turnover": "draga-eladas", "bad_decision": "dontes-hiba"}
+            "costly_turnover": "draga-eladas", "bad_decision": "dontes-hiba",
+            "fast_break": "lerohanas",
+            "conceded_fast_break": "kapott-lerohanas"}
 
 
 @dataclass

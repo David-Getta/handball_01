@@ -2039,7 +2039,7 @@ function jelenetListaEpit(){
   const n = document.createElement("span"); n.className = "n";
   n.textContent = "Jelenetek · " + jelenetSorokAkt.length;
   const g = document.createElement("button"); g.id = "klipGomb"; g.textContent = "Klipek";
-  g.title = "A lapozók jelenetei videóként (döntés-hibák, szabad lövők, drága eladások) — a motor vágja, kész zipre letöltő link";
+  g.title = "A lapozók jelenetei videóként (döntés-hibák, szabad lövők, drága eladások, kapott lerohanások) — a motor vágja, kész zipre letöltő link";
   g.onclick = klipKer;
   const info = document.createElement("span"); info.id = "klipInfo";
   const link = document.createElement("a"); link.id = "klipLetolt"; link.textContent = "Letöltés";
@@ -2063,10 +2063,11 @@ function jelenetListaEpit(){
 
 // ---- Klipek a jelenet-listából ------------------------------------------
 // A három lapozó jelenetei videóként: a gomb a motor klip-exportját kéri
-// (döntés-hibák, szabad lövők, drága eladások — a nézett meccsről), az
+// (döntés-hibák, szabad lövők, drága eladások, kapott lerohanások — a
+// nézett meccsről), az
 // állapotot a /jobs végpontról követi, és kész zipre letöltő linket ad.
 // Az oldalt a motor szolgálja ki, ezért a kérések relatív címre mennek.
-const KLIP_TIPUSOK = ["bad_decision", "free_shot", "costly_turnover"];
+const KLIP_TIPUSOK = ["bad_decision", "free_shot", "costly_turnover", "conceded_fast_break"];
 let klipJob = null, klipIdozito = null;
 function klipFrissit(){
   const info = document.getElementById("klipInfo");

@@ -833,7 +833,8 @@ class _Court3DScreenState extends State<Court3DScreen>
     };
     // A lista fejléce: a jelenetek száma és a "Klipek" gomb — a három
     // lapozó jelenetei a Klipek képernyőn videóként is kivághatók
-    // (döntés-hibák, szabad lövők, drága eladások), a NÉZETT meccsről.
+    // (döntés-hibák, szabad lövők, drága eladások, kapott lerohanások), a
+    // NÉZETT meccsről.
     // A demó-meccs nincs a könyvtárban: ott a gomb tiltott.
     final fejlec = Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 6, 4),
@@ -849,6 +850,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                       initialMatchId: _matchId,
                       initialTypes: const [
                         "bad_decision", "free_shot", "costly_turnover",
+                        "conceded_fast_break",
                       ]))),
           style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8),

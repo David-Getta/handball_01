@@ -4612,6 +4612,30 @@ def create_app():
                        for d_ in decision_moments(match)["moments"]]
             except Exception:
                 pass
+        if "fast_break" in types or "conceded_fast_break" in types:
+            # Lerohanások (court3d.fast_break_moments — a 3D "Lerohanások"
+            # lapozója ugyanezeket mutatja): a támadó csapat csomagja a
+            # befejezőhöz írva ("a #7 lerohanásai" szűréshez), a kapott
+            # lerohanás a VÉDEKEZŐ csapaté (nem egy védő hibája: nincs
+            # player_id); a címke a kimenet. A klip a befejezés kockája
+            # köré kerül, így a felfutás is benne van.
+            try:
+                from ..pipeline.court3d import fast_break_moments
+                _kimenet = {"goal": "gol", "shot": "loves",
+                            None: "loves-nelkul"}
+                for k_ in fast_break_moments(match)["moments"]:
+                    if "fast_break" in types:
+                        ev.append({"t": k_["t"], "type": "fast_break",
+                                   "team": k_["team"],
+                                   "player_id": k_["shooter_id"],
+                                   "label": _kimenet[k_["outcome"]]})
+                    if "conceded_fast_break" in types:
+                        ev.append({"t": k_["t"],
+                                   "type": "conceded_fast_break",
+                                   "team": k_["defending"],
+                                   "label": _kimenet[k_["outcome"]]})
+            except Exception:
+                pass
         if "key_moment" in types:
             # A meccs gerince videóban: a key_moments réteg
             # pillanataiból egy-egy klip, a címkével a

@@ -128,10 +128,12 @@ A ▶ az utoljára nézett jelenettől lép tovább (nem ragad le, és a meccs
 legelső pillanatai is elérhetők).
 
 A lapozók jelenetei videóként is kivághatók: a "Döntés-hibák", a
-"Szabad lövők" és a "Drága eladások" (a gólba került labdavesztések)
-csomag. A jelenet-lista fejlécének **Klipek** gombja az appban a Klipek
-képernyőt nyitja a nézett meccsel és e három csomaggal előre kijelölve
-(ott mezszámra is szűkíthető: "a #7 drága eladásai"); a böngészőben
+"Szabad lövők", a "Drága eladások" (a gólba került labdavesztések) és a
+"Kapott lerohanások" csomag (a saját kontrák a "Lerohanások" csomagban,
+a befejező mezszámához írva). A jelenet-lista fejlécének **Klipek**
+gombja az appban a Klipek képernyőt nyitja a nézett meccsel és e négy
+csomaggal előre kijelölve (ott mezszámra is szűkíthető: "a #7 drága
+eladásai"); a böngészőben
 ugyanez a gomb a motortól kéri a vágást, mutatja az állapotát, és a
 kész zipre letöltő linket ad.
 

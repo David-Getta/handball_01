@@ -335,6 +335,35 @@ def test_a_draga_eladas_csomag_a_3d_labdavesztesebol_jon(tmp_path,
     assert hetes["counts"].get("costly_turnover") == 1
 
 
+def test_a_lerohanas_csomagok_a_3d_lerohanasaibol_jonnek(tmp_path,
+                                                         monkeypatch):
+    """A "Lerohanások" és a "Kapott lerohanások" csomag ugyanazokat a
+    jeleneteket vágja, amiket a 3D Lerohanások lapozója mutat: a támadóé
+    a befejező mezszámához írva (a "#13 lerohanásai" szűréshez), a
+    kapott a védekező csapaté, mezszám nélkül (nem egy védő hibája)."""
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import fast_break_moments
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=7,
+                              shots_per_min=8)
+    app = create_app()
+    app.state.put_match(m)
+    r = TestClient(app).get(f"/matches/{m.meta.match_id}/clip-players").json()
+    kontrak = fast_break_moments(m)["moments"]
+    assert len(kontrak) == 4 and all(k["team"] == "home" for k in kontrak)
+    assert r["totals"].get("fast_break") == 4
+    assert r["totals"].get("conceded_fast_break") == 4
+    mezek = [k["shooter_jersey"] for k in kontrak]
+    for mez in set(mezek):
+        p = next(p for p in r["players"]
+                 if p["jersey"] == mez and p["team"] == "home")
+        assert p["counts"].get("fast_break") == mezek.count(mez)
+    # A kapott lerohanás egyetlen játékoshoz sem íródik.
+    assert all("conceded_fast_break" not in p["counts"] for p in r["players"])
+
+
 def test_a_dontes_hiba_csomag_a_3d_dontes_pillanataibol_jon(tmp_path,
                                                            monkeypatch):
     """A "Döntés-hibák" csomag a 3D Döntések lapozójának pillanatai — a

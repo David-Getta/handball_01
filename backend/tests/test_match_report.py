@@ -1946,11 +1946,41 @@ def test_a_plafon_a_golos_jeleneteket_tartja_meg(monkeypatch):
         lambda m: {"moments": [{"s": 20.0, "team": "away", "jersey": 9,
                                 "zone": "támadó", "punished": True,
                                 "goal_after_s": 5.0}]})
+    monkeypatch.setattr(
+        "handball.pipeline.court3d.fast_break_moments",
+        lambda m: {"moments": [{"s": 30.0, "team": "home",
+                                "defending": "away", "outcome": "goal",
+                                "shooter_jersey": 13},
+                               {"s": 40.0, "team": "home",
+                                "defending": "away", "outcome": "shot",
+                                "shooter_jersey": 4}]})
     m = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
     html = rh._scenes_section(m)
     import re
     idok = re.findall(r"<li><b>(\d+:\d\d)</b>", html)
-    assert idok == ["0:01", "0:20", "0:50"]
+    assert idok == ["0:20", "0:30", "0:50"]
+
+
+def test_a_videozando_jelenetek_kozt_a_kapott_lerohanas(monkeypatch):
+    """A gólba került kapott lerohanás a videózandó jelenetek közt, a
+    VÉDEKEZŐ csapat soraként (a 3D jelenet-lista feliratával); a lövés
+    nélküli vagy védett kontra nem. (A plafon itt felengedve — a lövéses
+    szimuláció sok gólos szabad lövése különben kiszorítaná őket.)"""
+    from handball.pipeline import report_html as rh
+    from handball.pipeline.court3d import fast_break_moments
+
+    monkeypatch.setattr(rh, "REPORT_SCENES_MAX", 500)
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=7,
+                              shots_per_min=8)
+    kontrak = fast_break_moments(m)["moments"]
+    golos = [k for k in kontrak if k["outcome"] == "goal"]
+    assert golos, "a szimuláción van gólba került lerohanás"
+    html = rh._scenes_section(m)
+    assert html.count("kapott lerohanás: ") == len(golos)
+    k = golos[0]
+    assert (f"{m.meta.away_team} védekezése — kapott lerohanás: "
+            f"{m.meta.home_team} #{k['shooter_jersey']} · GÓL") in html
+    assert "Kapott lerohanások" in html
 
 
 def test_a_csapatnev_a_teljes_jelentesben_pontosan_egyszer_escape_elve():

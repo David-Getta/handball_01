@@ -1066,22 +1066,25 @@ def _scenes_section(match) -> str:
     """A "Videózandó jelenetek" szakasz HTML-je (üres, ha nincs ilyen).
 
     A 3D jelenet-lista (court3d.scene_rows — ugyanazok a feliratok) a
-    jelentésben: a gólba került labdavesztések, a gólt érő szabadon
-    hagyott lövések és a REPORT_DECISION_TOP legnagyobb döntés-hiba,
-    időrendben, legfeljebb REPORT_SCENES_MAX sor. Edzőileg: ezek a
-    videózandó pillanatok — a papírral a kézben is visszakereshetők."""
-    from .court3d import (decision_moments, free_shot_moments, scene_rows,
-                          turnover_moments)
+    jelentésben: a gólba került labdavesztések és kapott lerohanások, a
+    gólt érő szabadon hagyott lövések és a REPORT_DECISION_TOP legnagyobb
+    döntés-hiba, időrendben, legfeljebb REPORT_SCENES_MAX sor. Edzőileg:
+    ezek a videózandó pillanatok — a papírral a kézben is
+    visszakereshetők."""
+    from .court3d import (decision_moments, fast_break_moments,
+                          free_shot_moments, scene_rows, turnover_moments)
 
     dontesek = sorted(decision_moments(match)["moments"],
                       key=lambda d: (-d["gap"], d["s"]))[:REPORT_DECISION_TOP]
     szabadok = [d for d in free_shot_moments(match)["moments"] if d["goal"]]
     eladasok = [d for d in turnover_moments(match)["moments"]
                 if d["punished"]]
+    kontrak = [d for d in fast_break_moments(match)["moments"]
+               if d["outcome"] == "goal"]
     # A NYERS csapatnevekkel (a sor-szöveget itt escape-eljük — a
     # jelentés escape-elt nevei kettős escape-et adnának).
     sorok = scene_rows(dontesek, szabadok, eladasok,
-                       match.meta.home_team, match.meta.away_team)
+                       match.meta.home_team, match.meta.away_team, kontrak)
     if not sorok:
         return ""
     # A plafon a gólos jeleneteket hagyja meg előbb, aztán az időrend.
@@ -1092,10 +1095,11 @@ def _scenes_section(match) -> str:
     lis = "".join(f"<li><b>{r['ido']}</b> — {escape(r['szoveg'])}</li>"
                   for r in sorok)
     return ("<h2>Videózandó jelenetek</h2>"
-            "<p>A gólba került labdavesztések, a gólt érő szabadon hagyott "
-            "lövések és a legnagyobb döntés-hibák (ahol jobb opció is volt) "
-            "— a 3D pálya Jelenet-listájában és a Klipek \"Drága eladások\" "
-            "/ \"Döntés-hibák\" csomagjában ugyanezek.</p>"
+            "<p>A gólba került labdavesztések és kapott lerohanások, a gólt "
+            "érő szabadon hagyott lövések és a legnagyobb döntés-hibák (ahol "
+            "jobb opció is volt) — a 3D pálya Jelenet-listájában és a Klipek "
+            "\"Drága eladások\" / \"Kapott lerohanások\" / \"Döntés-hibák\" "
+            "csomagjában ugyanezek.</p>"
             "<ul>" + lis + "</ul>")
 
 

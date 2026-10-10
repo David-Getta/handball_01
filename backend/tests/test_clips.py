@@ -676,3 +676,23 @@ def test_draga_eladas_es_dontes_hiba_magyar_nevet_kap(tmp_path):
     with zipfile.ZipFile(res.zip_path) as z:
         names = " ".join(z.namelist())
     assert "draga-eladas/" in names and "dontes-hiba/" in names
+
+
+def test_a_lerohanas_csomagok_magyar_nevet_kapnak(tmp_path):
+    """A lerohanás-csomagok (a támadóé és a kapott) magyar fájlnevet és
+    típus-mappát kapnak (lerohanas, kapott-lerohanas), a címke a kimenet.
+    (Ugyanarra a pillanatra a két csomag EGY klipet ad — az azonos
+    pillanat ismétlés-szűrője —, ezért itt két külön jelenet.)"""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "fast_break", "team": "home", "label": "gol"},
+              {"t": 120, "type": "conceded_fast_break", "team": "away",
+               "label": "loves"}]
+    res = export_event_clips(m, events, {"fast_break", "conceded_fast_break"},
+                             tmp_path / "ki")
+    assert res.count == 2
+    assert res.by_type == {"lerohanas": 1, "kapott-lerohanas": 1}
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = " ".join(z.namelist())
+    assert "lerohanas/" in names and "kapott-lerohanas/" in names

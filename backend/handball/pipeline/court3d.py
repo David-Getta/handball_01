@@ -758,7 +758,9 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
     előrébb váró ember.
 
     Visszatérés: {"moments": [{"s", "e" (a szakasz kezdete/vége mp),
-    "shot_s" (a lövés mp | None), "team" (a támadó), "defending",
+    "shot_s" (a lövés mp | None), "t" (a befejezés kockája: a lövésé,
+    lövés nélkül a szakasz végéé — a klipvágás e köré vág), "shooter_id"
+    (a befejező track-je | None), "team" (a támadó), "defending",
     "duration_s", "advance_ms", "outcome" ("goal" / "shot" / None),
     "shooter_jersey", "first_jersey", "wave" ("first" / "second" / None —
     kettőnél kevesebb futóval vagy lövő nélkül None), "ahead" (bool |
@@ -843,6 +845,8 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
             "advance_ms": (round(_advance_speed(seq, goal_x, fps), 2)
                            if seq is not None else None),
             "outcome": "goal" if gol else ("shot" if bent else None),
+            "t": shot.t if shot is not None else a["end_frame"],
+            "shooter_id": shot.player_id if shot is not None else None,
             "shooter_jersey": jersey.get(shot.player_id) if shot else None,
             "first_jersey": jersey.get(first_id),
             "wave": wave, "ahead": ahead, "path": path,
