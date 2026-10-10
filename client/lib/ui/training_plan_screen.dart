@@ -21,6 +21,7 @@ import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
+import "court3d_screen.dart";
 import "error_text.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
@@ -403,7 +404,7 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       for (final it in list) {
         rows.add(Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: _focusCard(Map<String, dynamic>.from(it as Map)),
+          child: _focusCard(Map<String, dynamic>.from(it as Map), side: side),
         ));
       }
       // EGYÉNI feladatok ebből a meccsből: a végpont a csapat-lista
@@ -437,11 +438,39 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
 
   // ---- Közös csempe --------------------------------------------------
 
-  Widget _focusCard(Map<String, dynamic> it, {String? badge}) {
+  /// A 3D jelenet-lapozók neve a tétel "scene" kulcsához (a backend
+  /// training.scene_for_focus típusai) — a gomb felirata.
+  static const Map<String, String> _jelenetNev = {
+    "sz": "Szabad lövők",
+    "kg": "Kapott gólok",
+    "e": "Labdavesztések",
+    "d": "Döntés-hibák",
+    "k": "Kapott lerohanások",
+  };
+
+  Widget _focusCard(Map<String, dynamic> it, {String? badge, String? side}) {
     final area = (it["area"] as String?) ?? "";
     final title = (it["title"] as String?) ?? "";
     final why = (it["why"] as String?) ?? "";
     final drill = (it["drill"] as String?) ?? "";
+    // Egy-meccs nézetben a tétel hibái a 3D pályán: a jelenet-lapozó a
+    // csapatra szűrve, a lista nyitva, az első jelenetre ugorva.
+    final scene = it["scene"] as String?;
+    final jelenetNev = scene != null ? _jelenetNev[scene] : null;
+    final meccs = _matchId;
+    final jelenetGomb = jelenetNev != null && side != null && meccs != null
+        ? OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => Court3DScreen(
+                    matchId: meccs, initialScene: scene, initialTeam: side))),
+            style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                visualDensity: VisualDensity.compact),
+            icon: const Icon(Icons.view_in_ar, size: 15),
+            label: Text("$jelenetNev 3D-ben",
+                style: const TextStyle(fontSize: 11.5)),
+          )
+        : null;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: AppTheme.card(),
@@ -482,6 +511,10 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
                     style: AppText.label.copyWith(
                         fontSize: 12.5, color: AppColors.textPrimary))),
           ]),
+        ],
+        if (jelenetGomb != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Align(alignment: Alignment.centerLeft, child: jelenetGomb),
         ],
       ]),
     );

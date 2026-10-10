@@ -41,8 +41,17 @@ class Court3DScreen extends StatefulWidget {
   /// Lövés/gól sorból jövünk: a lövéstérkép induló módja ("mind"), hogy
   /// a jelenet lövése a többi közt, a helyén látszódjon.
   final String? lovesTerkep;
+
+  /// Az Edzésterv "… 3D-ben" gombjától jövünk: a jelenet-lista típusa
+  /// ("d" döntés, "sz" szabad lövő, "e" labdavesztés, "k" kapott
+  /// lerohanás, "kg" kapott gól) és a csapat ("home"/"away"), akinek a
+  /// hibáit nézzük — a lista nyitva, a lapozó erre a csapatra szűrve, a
+  /// lejátszó a típus ELSŐ jelenetén.
+  final String? initialScene;
+  final String? initialTeam;
   const Court3DScreen(
-      {super.key, this.matchId, this.startS, this.lovesTerkep});
+      {super.key, this.matchId, this.startS, this.lovesTerkep,
+      this.initialScene, this.initialTeam});
 
   @override
   State<Court3DScreen> createState() => _Court3DScreenState();
@@ -234,7 +243,9 @@ class _Court3DScreenState extends State<Court3DScreen>
         _falSorok = buildDemoDefenceTimeline(_match!);
         _demo = true;
         _loading = false;
+        _kezdoSzuro();
       });
+      _kezdoJelenet();
       return;
     }
     await _open(kert);
@@ -402,7 +413,9 @@ class _Court3DScreenState extends State<Court3DScreen>
         _meres = null;
         _szemevel = false;
         _kering = false;
+        _kezdoSzuro();
       });
+      _kezdoJelenet();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -798,6 +811,32 @@ class _Court3DScreenState extends State<Court3DScreen>
       _szurt(_kontrak, "defending");
   List<Map<String, dynamic>> get _kapottakSz =>
       _szurt(_kapottak, "defending");
+
+  /// Az Edzésterv felől érkezve: a "Kinek a hibái" szűrő a kért csapatra,
+  /// a jelenet-lista nyitva (setState-en belül hívandó).
+  void _kezdoSzuro() {
+    if (widget.initialTeam == "home" || widget.initialTeam == "away") {
+      _jelenetCsapat = widget.initialTeam!;
+    }
+    if (widget.initialScene != null) _jelenetListaNyitva = true;
+  }
+
+  /// Az Edzésterv felől érkezve: ugrás a kért típus ELSŐ jelenetére (a
+  /// szűrt lista sorain); ha nincs ilyen, a lejátszó az elején marad.
+  void _kezdoJelenet() {
+    final m = _match;
+    final tipus = widget.initialScene;
+    if (m == null || tipus == null) return;
+    final sorok = sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
+        m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz);
+    for (final r in sorok) {
+      if (r.tipus == tipus) {
+        _jelenetUtolso = r.s;
+        _jelenetUgras(m, r);
+        return;
+      }
+    }
+  }
 
   /// Jelenet-lépés (N / P): a jelenet-lista sorain, a "Kinek a hibái"
   /// szűrő szerint, a közös lapozCel-lel — az utoljára lépett jelenettől.

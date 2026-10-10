@@ -1015,8 +1015,12 @@ def test_az_edzes_tetelek_alakja_a_mintameccsen_is_helyes():
     for side in ("home", "away"):
         for tetel in tf[side]:
             assert isinstance(tetel, dict), tetel
-            assert set(tetel) == {"area", "title", "why", "drill"}, tetel
-            assert all(isinstance(v, str) and v for v in tetel.values()), tetel
+            # A "scene" a 3D jelenet-lapozó kulcsa (vagy None) — az Edzésterv
+            # "… 3D-ben" gombja; a többi mező nem üres szöveg.
+            assert set(tetel) == {"area", "title", "why", "drill", "scene"}, tetel
+            assert all(isinstance(v, str) and v
+                       for k, v in tetel.items() if k != "scene"), tetel
+            assert tetel["scene"] in (None, "sz", "kg", "e", "d", "k"), tetel
 
 
 def test_a_lovoero_eses_szabaly_valodi_retegbol_is_megszolal():
@@ -1287,3 +1291,41 @@ def test_a_visszatero_gyengeseg_indoka_a_legutobbi_meccse():
     zona = next(it for it in szeged if it["title"].startswith("Zóna-védekezés"))
     assert zona["count"] == 2
     assert zona["why"].startswith("6 kapott gól"), zona["why"]
+
+
+def test_az_edzes_fokusz_tetelei_3d_jelenet_tipust_kapnak():
+    """Minden fókusz-tétel "scene" kulcsot visel: a 3D jelenet-lapozó, amely
+    a tétel hibáit mutatja (sz / kg / e / d / k), vagy None. A kulcsszó-
+    táblázat a terület szerint szűkít: a visszarendeződés csak
+    védekezés-oldalon kapott lerohanás, a támadó "kontra" nem; a fedezés
+    és a zóna csak védekezésnél; a labdavesztés és a döntés bárhol."""
+    from handball.pipeline.training import scene_for_focus, training_focus
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    esetek = [
+        ({"area": "védekezés", "title": "Fedezés-fegyelem"}, "sz"),
+        ({"area": "védekezés", "title": "Zóna-védekezés: 6–9 m"}, "kg"),
+        ({"area": "védekezés", "title": "Visszarendeződés a kontra ellen"}, "k"),
+        ({"area": "védekezés", "title": "Lerohanás-védés"}, "k"),
+        ({"area": "támadás", "title": "Kontra-befejezés"}, None),
+        ({"area": "támadás", "title": "Labdabiztonság nyomás nélkül"}, "e"),
+        ({"area": "labdabiztonság", "title": "Kockázatos eladási zóna"}, "e"),
+        ({"area": "taktika", "title": "Döntés-fegyelem lövés előtt"}, "d"),
+        ({"area": "kapus", "title": "Kimozdulás-fegyelem"}, "kg"),
+        ({"area": "támadás", "title": "Lövő-választás"}, None),
+        ({"area": "erőnlét", "title": "Második félidei tempó"}, None),
+        ({"area": "védekezés", "title": ""}, None),
+    ]
+    for tetel, vart in esetek:
+        assert scene_for_focus(tetel) == vart, (tetel, scene_for_focus(tetel))
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    tf = training_focus(m)
+    tetelek = [it for side in ("home", "away") for it in tf[side]]
+    assert tetelek
+    assert all("scene" in it for it in tetelek)
+    assert all(it["scene"] in (None, "sz", "kg", "e", "d", "k") for it in tetelek)
+    assert any(it["scene"] is not None for it in tetelek), \
+        "a lövéses szimuláció fedezés-tétele jelenetet kap"
+    for it in tetelek:
+        assert it["scene"] == scene_for_focus(it)

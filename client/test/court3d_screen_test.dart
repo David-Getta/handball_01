@@ -382,6 +382,28 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("edzéstervből érkezve: szűrő a csapatra, lista nyitva, az első jelenet",
+      (tester) async {
+    // Az Edzésterv "Labdavesztések 3D-ben" gombja: a hazai hibáira szűrve,
+    // a jelenet-lista nyitva, a lejátszó a demó első labdavesztésén.
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const MaterialApp(
+        home: Court3DScreen(initialScene: "e", initialTeam: "home")));
+    for (var i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("labdavesztés —").evaluate().isNotEmpty) break;
+    }
+    expect(find.textContaining("Demó Hazai labdavesztés —"), findsOneWidget);
+    expect(find.text("Hibák: Demó Hazai"), findsOneWidget);
+    expect(find.textContaining("Jelenetek · "), findsOneWidget);
+    // A demó első labdavesztése a középső harmadban, gól lett belőle.
+    expect(find.textContaining("6,0 mp múlva kapott gól"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("N / P billentyű: jelenet-lépés a lista sorain", (tester) async {
     await _nyit(tester);
     // N: az első jelenet (a demó első döntése) — a felirat megjelenik.

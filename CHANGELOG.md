@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.161 óta)
 
+- **Edzésterv → 3D jelenetek** (új): az Edzésterv egy-meccs nézetében a
+  fókusz-tételek mellett "Szabad lövők 3D-ben", "Kapott gólok 3D-ben",
+  "Labdavesztések 3D-ben", "Döntés-hibák 3D-ben", "Kapott lerohanások
+  3D-ben" gomb — a 3D pálya a tétel csapatának hibáira szűrve, nyitott
+  jelenet-listával, a típus első jelenetén nyílik. A tétel és a
+  jelenet-lapozó párosítása a backendé (a tétel területe és címe
+  szerint: a fedezés → szabad lövők, a zóna-védekezés és a kapus →
+  kapott gólok, a labdabiztonság → labdavesztések, a döntés →
+  döntés-hibák, a visszarendeződés → kapott lerohanások); aminek nincs
+  jelenete, ott nincs gomb. A gyakorlandó hiba így egy kattintással
+  videón is nézhető.
+
 - **App: elrendezési hibák keskeny ablakban (700×600) — nyolc
   képernyő** (javítás): a füstteszt harmadik ablakmérete (700×600 —
   fél képernyőnyi ablak) nyolc képernyőn talált túlcsordulást: a közös

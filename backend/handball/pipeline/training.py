@@ -66,6 +66,40 @@ PTF_FATIGUE_DROP_PCT = 25.0
 PTF_GK_MIN_ON_TARGET = 6
 PTF_GK_GSAX = -1.0
 
+# Edzés-fókusz → 3D jelenet: melyik jelenet-lapozó mutatja a tétel mögötti
+# hibákat ("sz" szabadon hagyott lövők, "kg" kapott gólok, "e"
+# labdavesztések, "d" döntés-hibák, "k" kapott lerohanások). A tétel címének
+# KULCSSZAVAI döntenek (a több száz szabály címe nem kódolt egyenként), a
+# terület szűkít: a visszarendeződés csak védekezés-oldali tételnél
+# jelent kapott lerohanást (a támadó "kontra" a saját lerohanásuk), a
+# fedezés és a kapott gól csak védekezés/kapus tételnél; a labdavesztés
+# és a döntés bármelyik területen a csapat saját hibája. Az első találat
+# nyer; tartalék a terület (labdabiztonság → labdavesztések, kapus →
+# kapott gólok); másnak nincs jelenete (None).
+TF_SCENE_KEYWORDS = (
+    (("védekezés", "átmenet", "taktika"), "k",
+     ("visszarendeződ", "visszafutás", "lerohanás", "kontra")),
+    (("védekezés",), "sz",
+     ("fedezés", "szabad löv", "szabadon hagyott", "lövő")),
+    (("védekezés", "kapus"), "kg", ("zóna-védekezés", "kapott gól", "kapus")),
+    (None, "e", ("labdabiztonság", "eladás", "labdaveszt")),
+    (None, "d", ("döntés", "lövés-választás", "passz-választás")),
+)
+TF_SCENE_AREA = {"labdabiztonság": "e", "kapus": "kg"}
+
+
+def scene_for_focus(item: dict) -> Optional[str]:
+    """Egy edzés-fókusz tétel 3D jelenet-típusa (lásd TF_SCENE_KEYWORDS),
+    vagy None, ha a tételhez nincs jelenet-lapozó."""
+    cim = (item.get("title") or "").lower()
+    area = item.get("area") or ""
+    for teruletek, scene, szavak in TF_SCENE_KEYWORDS:
+        if teruletek is not None and area not in teruletek:
+            continue
+        if any(sz in cim for sz in szavak):
+            return scene
+    return TF_SCENE_AREA.get(area)
+
 
 def rank_focus(items: list, limit: Optional[int] = None) -> list:
     """A megszólalt tételekből a fókusz: területek között forogva.
@@ -155,8 +189,12 @@ def _training_focus_cached(match: Match,
     _szabaly = 0
 
     def add(side, area, title, why, drill):
+        # A "scene" a 3D jelenet-lapozó, amely a tétel hibáit mutatja (az
+        # Edzésterv "… 3D-ben" gombja) — vagy None.
         out[side].append({"area": area, "title": title,
                           "why": why, "drill": drill,
+                          "scene": scene_for_focus({"area": area,
+                                                    "title": title}),
                           "_szabaly": _szabaly})
 
     # 1) Fedezés-fegyelem: sok szabadon hagyott lövő.

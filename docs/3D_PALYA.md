@@ -160,6 +160,13 @@ gól: Szeged #13 (kapuelőtér) · védő 0,7 m · kapus kint") — de ha
 ugyanarra a pillanatra szabad lövő GÓL-sor van, a kapott gól sora
 elmarad (az már megnevezi; a lapozóban minden kapott gól ott van).
 
+Az **Edzésterv** lap egy-meccs nézetéből a fókusz-tételek "… 3D-ben"
+gombja (Szabad lövők, Kapott gólok, Labdavesztések, Döntés-hibák,
+Kapott lerohanások) a 3D pályát a tétel csapatának hibáira szűrve,
+nyitott jelenet-listával, a típus első jelenetén nyitja — a tétel és a
+lapozó párosítása a backend `training.scene_for_focus` táblázata (a
+tétel területe és címe szerint).
+
 A **Kinek a hibái** választó a hiba-lapozókat egy csapatra szűri: mind
 egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott lövőt,
 az elvesztett labdát, a kapott lerohanást, a kapott gólt) — a saját csapatra szűrve

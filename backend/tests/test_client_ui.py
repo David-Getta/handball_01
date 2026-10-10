@@ -3426,3 +3426,25 @@ def test_minden_parameter_nelkuli_kepernyo_benne_van_a_fusttesztben():
     assert not hianyzik, (
         f"a füstteszt nem nyitja meg: {hianyzik} — vedd fel a "
         "client/test/screens_smoke_test.dart listájába")
+
+
+def test_az_edzesterv_fokusz_tetele_a_3d_jelenetekre_visz():
+    """Az Edzésterv egy-meccs nézetének fókusz-kártyája a tétel "scene"
+    kulcsával a 3D pályát nyitja (a csapatra szűrve, nyitott listával, az
+    első jelenetre ugorva); a 3D képernyő ezt a két paramétert fogadja."""
+    from pathlib import Path
+
+    gyoker = Path(__file__).resolve().parent.parent.parent / "client" / "lib" / "ui"
+    terv = (gyoker / "training_plan_screen.dart").read_text(encoding="utf-8")
+    for kell in ('it["scene"] as String?', "Court3DScreen(",
+                 "initialScene: scene, initialTeam: side", '"$jelenetNev 3D-ben"',
+                 '"sz": "Szabad lövők"', '"kg": "Kapott gólok"',
+                 '"e": "Labdavesztések"', '"d": "Döntés-hibák"',
+                 '"k": "Kapott lerohanások"'):
+        assert kell in terv, kell
+    palya = (gyoker / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ("final String? initialScene;", "final String? initialTeam;",
+                 "void _kezdoSzuro()", "void _kezdoJelenet()",
+                 "_jelenetCsapat = widget.initialTeam!;",
+                 "if (r.tipus == tipus) {"):
+        assert kell in palya, kell
