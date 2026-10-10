@@ -14,6 +14,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
+import "anim.dart";
 import "error_text.dart";
 import "waiting.dart";
 
@@ -63,7 +64,9 @@ class _TrendScreenState extends State<TrendScreen> {
   @override
   Widget build(BuildContext context) {
     return AppShell(
-      active: NavId.dashboard,
+      // A fejlődés-követésnek saját menüpontja van (Csapat-fejlődés) —
+      // a kijelölés ott maradjon, akárhonnan nyílt meg a nézet.
+      active: NavId.teamTrend,
       crumbTag: "1g",
       crumbPath: "FEJLŐDÉS · KÉT IDŐSZAK ÖSSZEVETÉSE",
       collapsed: true,
@@ -161,28 +164,43 @@ class _TrendScreenState extends State<TrendScreen> {
     return ListView(
       children: [
         // Összegzés (a lényeg, kiemelve).
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.gold.withOpacity(0.5)),
-          ),
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                const Icon(Icons.insights, size: 18, color: AppColors.gold),
-                const SizedBox(width: 8),
-                Text("ÖSSZEGZÉS", style: AppText.sectionLabel.copyWith(color: AppColors.gold)),
-              ]),
-              const SizedBox(height: AppSpacing.md),
-              for (final s in summary)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text("$s", style: AppText.value.copyWith(fontSize: 14)),
-                ),
-            ],
+        FadeSlideIn(
+          child: Container(
+            decoration: BoxDecoration(
+              // Halk arany fény a bal felső sarokból: az összegzés a lap
+              // legfontosabb doboza, ránézésre is annak kell látszania.
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.gold.withOpacity(0.10),
+                  AppColors.surface,
+                ],
+                stops: const [0.0, 0.55],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.gold.withOpacity(0.5)),
+            ),
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Icon(Icons.insights, size: 18, color: AppColors.gold),
+                  const SizedBox(width: 8),
+                  Text("ÖSSZEGZÉS", style: AppText.sectionLabel.copyWith(color: AppColors.gold)),
+                ]),
+                const SizedBox(height: AppSpacing.md),
+                for (final (i, s) in summary.indexed)
+                  FadeSlideIn(
+                    index: i + 1,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text("$s", style: AppText.value.copyWith(fontSize: 14)),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -195,7 +213,8 @@ class _TrendScreenState extends State<TrendScreen> {
             children: [
               Text("MUTATÓK (korábbi → újabb)", style: AppText.sectionLabel),
               const SizedBox(height: AppSpacing.md),
-              for (final m in metrics) _metricRow(m),
+              for (final (i, m) in metrics.indexed)
+                FadeSlideIn(index: i + 2, child: _metricRow(m)),
             ],
           ),
         ),
@@ -217,25 +236,164 @@ class _TrendScreenState extends State<TrendScreen> {
             ? Icons.trending_up
             : Icons.trending_down;
     final unit = (m["unit"] as String?) ?? "";
+    final older = (m["older"] as num?)?.toDouble() ?? 0.0;
+    final newer = (m["newer"] as num?)?.toDouble() ?? 0.0;
     // A segédfüggvény neve nem lehet "num" (kitakarná a beépített típust).
-    String fmt(dynamic v) {
-      final d = (v as num?)?.toDouble() ?? 0.0;
-      return d % 1 == 0 ? d.toInt().toString() : d.toStringAsFixed(1);
-    }
+    String fmt(double d) =>
+        d % 1 == 0 ? d.toInt().toString() : d.toStringAsFixed(1);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(children: [
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
         Icon(icon, size: 18, color: color),
         const SizedBox(width: AppSpacing.md),
-        Expanded(child: Text("${m["label"]}", style: AppText.value.copyWith(fontSize: 13.5))),
-        Text("${fmt(m["older"])}$unit", style: AppText.label.copyWith(fontSize: 13)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Icon(Icons.arrow_forward, size: 13, color: AppColors.textFaint),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("${m["label"]}",
+                  style: AppText.value.copyWith(fontSize: 13.5)),
+              const SizedBox(height: 5),
+              // Változás-sáv: a hossz a nagyságrend, a színes farok maga a
+              // változás — a szám elolvasása ELŐTT látszik, mennyit mozdult.
+              _DeltaBar(older: older, newer: newer, color: color),
+            ],
+          ),
         ),
-        Text("${fmt(m["newer"])}$unit",
-            style: AppText.value.copyWith(fontSize: 13.5, color: color)),
+        const SizedBox(width: AppSpacing.md),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Row(children: [
+            Text("${fmt(older)}$unit",
+                style: AppText.label.copyWith(fontSize: 12.5)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Icon(Icons.arrow_forward,
+                  size: 12, color: AppColors.textFaint),
+            ),
+            // A friss érték felpörög: a szem oda néz, ahol mozgás van.
+            CountUp(
+              value: newer,
+              format: (v) => "${fmt(v)}$unit",
+              style: AppText.value
+                  .copyWith(fontSize: 14.5, color: color, fontWeight: FontWeight.w700),
+            ),
+          ]),
+          const SizedBox(height: 3),
+          _changeChip(older, newer, color),
+        ]),
       ]),
     );
   }
+
+  /// Relatív változás jelvénye ("+23%"). Nulláról indulva nincs értelmes
+  /// százalék — ilyenkor az abszolút különbséget mondjuk ki.
+  Widget _changeChip(double older, double newer, Color color) {
+    final diff = newer - older;
+    final String text;
+    if (diff == 0) {
+      text = "változatlan";
+    } else if (older == 0) {
+      text = "${diff > 0 ? "+" : ""}${diff % 1 == 0 ? diff.toInt() : diff.toStringAsFixed(1)}";
+    } else {
+      final pct = diff / older.abs() * 100;
+      text = "${pct > 0 ? "+" : ""}${pct.toStringAsFixed(0)}%";
+    }
+    final dim = diff == 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: (dim ? AppColors.textFaint : color).withOpacity(0.14),
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Text(text,
+          style: AppText.label.copyWith(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: dim ? AppColors.textFaint : color)),
+    );
+  }
+}
+
+/// Változás-sáv: a közös alap halvány, a KÜLÖNBSÉG színes.
+///
+/// A sáv teljes hossza a nagyobbik érték (a mutatók egymáshoz képest is
+/// összemérhetők maradnak a soron belül), a halvány rész a kisebbik érték,
+/// a színes farok a változás. Így egy pillantással látszik, hogy a mutató
+/// sokat vagy alig mozdult — a puszta "12,3 → 15,1" ezt nem mutatja meg.
+class _DeltaBar extends StatelessWidget {
+  final double older;
+  final double newer;
+  final Color color;
+
+  const _DeltaBar({required this.older, required this.newer, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 6,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: reduceMotion(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 750),
+        curve: Curves.easeOutCubic,
+        builder: (context, t, _) => CustomPaint(
+          painter: _DeltaBarPainter(
+              older: older, newer: newer, color: color, progress: t),
+          size: Size.infinite,
+        ),
+      ),
+    );
+  }
+}
+
+class _DeltaBarPainter extends CustomPainter {
+  final double older;
+  final double newer;
+  final Color color;
+  final double progress;
+
+  _DeltaBarPainter(
+      {required this.older,
+      required this.newer,
+      required this.color,
+      required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final lo = older.abs() < newer.abs() ? older.abs() : newer.abs();
+    final hi = older.abs() > newer.abs() ? older.abs() : newer.abs();
+    if (hi <= 0) return;
+    const r = Radius.circular(3);
+
+    // Pálya (a teljes szélesség) — a sáv akkor is látszik, ha kicsi az érték.
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(0, 0, size.width, size.height), r),
+        Paint()..color = AppColors.surfaceAlt);
+
+    final hiW = size.width * progress;
+    final loW = hiW * (lo / hi);
+
+    // A színes farok: a közös alaptól a nagyobbik értékig.
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, hiW, size.height), r),
+        Paint()
+          ..shader = LinearGradient(colors: [
+            color.withOpacity(0.55),
+            color,
+          ]).createShader(Rect.fromLTWH(0, 0, hiW, size.height)));
+
+    // A közös alap halványan — a különbség így "kilóg" belőle.
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, loW, size.height), r),
+        Paint()..color = AppColors.textFaint.withOpacity(0.45));
+  }
+
+  @override
+  bool shouldRepaint(covariant _DeltaBarPainter old) =>
+      old.older != older ||
+      old.newer != newer ||
+      old.color != color ||
+      old.progress != progress;
 }

@@ -25,6 +25,7 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — fázisokra bontott útiterv.
 - [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) — az 1. fázis (MVP) részletes terve.
 - [`docs/RULES.md`](docs/RULES.md) — a követéshez releváns szabály-kivonat.
+- [`docs/3D_PALYA.md`](docs/3D_PALYA.md) — a 3D pálya edzői útmutatója (mozgás, rétegek, jelenet-link, VR).
 - [`docs/FOOTAGE_NOTES.md`](docs/FOOTAGE_NOTES.md) — a valódi felvétel megfigyelései
   és azok hatása a tervre (pásztázó kamera, sárga 6 m, több-vonal, kosárpalánk,
   sárga bírók, GoPro-torzítás).
@@ -41,7 +42,7 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
   demóval is fut). Lásd [`client/README.md`](client/README.md).
 
 ## Hol tartunk
-A rendszer **működő, telepíthető alkalmazás** (v0.1.24 kiadva Windows- és
+A rendszer **működő, telepíthető alkalmazás** (v0.1.83 kiadva Windows- és
 macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
 
 - **Feldolgozás**: YOLO + ByteTrack követés, kézi 4-sarkos kalibráció
@@ -96,7 +97,7 @@ macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
   (vágás/totálkép-szűrő, pályavonal-felismerés), több-nézetes fúzió
   (`POST /matches/fuse`) és lidar-finomítás — részletek a
   [`docs/BROADCAST_AND_SENSORS.md`](docs/BROADCAST_AND_SENSORS.md)-ben.
-- **Minőség**: 1312 automata teszt; pontosság-validáció kézi eseménylista
+- **Minőség**: 2542 automata teszt; pontosság-validáció kézi eseménylista
   ellen (API + parancssori eszköz); réteg-megbízhatósági önjelentés
   (mihez van elég minta az adott meccsen).
 

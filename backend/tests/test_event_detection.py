@@ -30,6 +30,36 @@ def _pl(track_id, team, x, y):
                           source=PositionSource.MEASURED, confidence=1.0)
 
 
+def _hold(frames, n=3):
+    """Minden kockát n-szer ismétel, ÚJRA-IDŐZÍTVE (t = 0, 1, 2, ...).
+
+    Miért kell: a birtoklás-fixture-ök kockánként váltó birtokost
+    modelleznek (1 → 2 → 11, kockánként egy). Valódi meccsen ez nem
+    fordul elő: aki megkapja a labdát, legalább néhány tized
+    másodpercig tartja is. A kockánkénti váltás azért fontos
+    különbség, mert éppen ez a KÜLÖNBSÉG választja el a valódi
+    passz-sorozatot a "legközelebbi játékos" szabály zajától
+    (tömörülésnél a jel kockánként ide-oda billeg) — lásd
+    docs/ROADMAP.md, "Birtoklás-váltás billegése".
+
+    A segéd a fixture-ök szemantikáját nem érinti: ugyanaz a
+    birtokos-SORREND, csak valósághű tartással. A jelenlegi
+    felismeréssel az események száma változatlan — ezt a zöld
+    teszt-csomag igazolja.
+
+    KORLÁT: LÖVÉS-fixture-re nem alkalmazható. A lövés-felismerés a
+    labda SEBESSÉGÉBŐL dolgozik, az ismételt kocka pedig álló labdát
+    jelent — a 25 m/s-os röppályából 8,3 m/s lenne, épp a
+    lövés-küszöb környékén. Csak TISZTA birtoklás-fixture-höz."""
+    ki = []
+    t = 0
+    for f in frames:
+        for _ in range(n):
+            ki.append(Frame(t=t, players=list(f.players), ball=f.ball))
+            t += 1
+    return ki
+
+
 def test_detect_goal():
     """A labda gyorsan a +x kapuhoz tart és a kapufák között eléri → GÓL (hazai)."""
     # x = 34..40 (1 m/frame = 25 m/s), y=10 (kapu közepe).
@@ -57,7 +87,9 @@ def test_pass_vs_turnover():
         Frame(t=1, players=[_pl(2, Team.HOME, 28.0, 10.0)], ball=Ball(x=28.0, y=10.0, confidence=1.0)),  # passz 1->2
         Frame(t=2, players=[_pl(11, Team.AWAY, 20.0, 10.0)], ball=Ball(x=20.0, y=10.0, confidence=1.0)),  # eladás
     ]
-    evs = detect_possession_changes(Match(_meta(), frames))
+    # Tartás: 10 kocka @ 25 fps = 0,4 mp birtoklásonként — valódi
+    # meccsen a birtokos nem kockánként vált (lásd _hold).
+    evs = detect_possession_changes(Match(_meta(), _hold(frames, 10)))
     assert [e.type for e in evs] == [EventType.PASS, EventType.TURNOVER]
     assert evs[0].detail == {"receiver_id": 2}
     assert evs[1].team == Team.HOME   # a HAZAI vesztette el
@@ -86,7 +118,7 @@ def test_event_counts():
         Frame(t=0, players=[_pl(1, Team.HOME, 25.0, 10.0)], ball=Ball(x=25.0, y=10.0, confidence=1.0)),
         Frame(t=1, players=[_pl(2, Team.HOME, 28.0, 10.0)], ball=Ball(x=28.0, y=10.0, confidence=1.0)),
     ]
-    c = event_counts(Match(_meta(), frames))
+    c = event_counts(Match(_meta(), _hold(frames)))
     assert c["total"] == 1
     assert c["by_type"]["pass"] == 1
 
@@ -250,6 +282,170 @@ def test_assist_network_pairs_and_leaders():
     assert net["pairs"] and net["pairs"][0]["from"] == 1
     assert net["pairs"][0]["to"] == 2 and net["pairs"][0]["goals"] == 2
     assert net["leaders"][0]["player_id"] == 1 and net["leaders"][0]["assists"] == 2
+
+
+# ---- Hoki-assziszt (a gólpassz előtti passz) --------------------------------
+
+
+def _prea_frames(n, with_pre=True):
+    """`n` hazai gól: passz 3→1 (másod-előkészítés, ha `with_pre`),
+    majd passz 1→2, és a 2-es gólja a +x kapura."""
+    frames = []
+    t = 0
+    for _ in range(n):
+        cast = [_pl(3, Team.HOME, 20.0, 10.0),
+                _pl(1, Team.HOME, 25.0, 10.0),
+                _pl(2, Team.HOME, 30.0, 10.0)]
+        if with_pre:
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=cast,
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        frames.append(Frame(t=t, players=cast,
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        frames.append(Frame(t=t, players=cast,
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # Középkezdés: a labda az ELLENFÉLHEZ kerül (mint élesben) — a
+        # két hazai támadás közt így nincs hamis csapaton belüli passz.
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[_pl(30, Team.AWAY,
+                                                  20.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=15.0, y=10.0, confidence=1.0)))
+            t += 1
+    return frames
+
+
+def _prear_match(n):
+    """Mint a _prea_frames, de a 3-as (másod-előkészítő) poszt-becsléshez
+    elegendő mért kockát kap a beálló helyén (34, 10) — a réteg így
+    posztra tudja írni a másod-előkészítéseit."""
+    frames = []
+    t = 0
+    for _ in range(160):     # poszt-minta: a 3-as a vonalon, labda nála
+        frames.append(Frame(t=t, players=[
+            _pl(3, Team.HOME, 34.0, 10.0),
+            _pl(1, Team.HOME, 30.0, 14.0),
+            _pl(2, Team.HOME, 30.0, 6.0)],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    tail = _prea_frames(n)
+    for f in tail:
+        f.t += t
+    return Match(_meta(), frames + tail)
+
+
+def test_pre_assist_roles_names_the_organizing_post():
+    """Ha a másod-előkészítések zöme egy posztról jön, a szervezésük
+    posztról olvasható — a sáv-zárás a posztra megy, akárki játssza."""
+    from handball.pipeline.event_detection import pre_assist_roles
+
+    rec = pre_assist_roles(_prear_match(3))["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "poszton fut" in rec["verdict"], rec
+
+
+def test_pre_assist_roles_silent_with_few_chains():
+    """Kevés poszthoz kötött másod-előkészítésnél nincs ítélet."""
+    from handball.pipeline.event_detection import pre_assist_roles
+
+    rec = pre_assist_roles(_prear_match(2))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def test_pre_assists_names_the_hidden_organizer():
+    """A 3→1→2→gól láncban a 3-as a rejtett szervező: ő adja a gólpassz
+    előtti passzt."""
+    from handball.pipeline.event_detection import PREA_MIN, pre_assists
+
+    rec = pre_assists(Match(_meta(), _prea_frames(2)))["home"]
+    assert rec["assisted_goals"] == 2 and rec["chained"] == 2, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 3, rec
+    assert rec["top"]["pre_assists"] >= PREA_MIN
+
+    # A gólpasszoló (1-es) és a lövő (2-es) NEM másod-előkészítő.
+    pids = [p["player_id"] for p in rec["players"]]
+    assert 1 not in pids and 2 not in pids, rec
+
+
+def test_pre_assists_silent_without_a_chain():
+    """Ha a gólpassz előtt nincs korábbi passz (kétszemélyes akció),
+    nincs lánc — és kevés mintánál nincs ítélet."""
+    from handball.pipeline.event_detection import pre_assists
+
+    rec = pre_assists(Match(_meta(), _prea_frames(2,
+                                                  with_pre=False)))["home"]
+    assert rec["assisted_goals"] == 2, rec
+    assert rec["chained"] == 0 and rec["top"] is None, rec
+
+    egy = pre_assists(Match(_meta(), _prea_frames(1)))["home"]
+    assert egy["chained"] == 1 and egy["top"] is None, egy
+
+
+def _adu_frames(n_pairs):
+    """`n_pairs` darab 1→2 asszisztos hazai gól kockái."""
+    frames = []
+    t = 0
+    for _ in range(n_pairs):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(20):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return frames
+
+
+def test_assist_duos_names_the_goal_machine():
+    """Ha az asszisztos gólok egy kettősön születnek, a duó ellen
+    párban kell védekezni."""
+    from handball.pipeline.event_detection import (ADU_MIN_GOALS,
+                                                   assist_duos)
+
+    rec = assist_duos(Match(_meta(), _adu_frames(2)))["home"]
+    assert rec["assisted"] >= ADU_MIN_GOALS, rec
+    assert rec["top"] == "1→2", rec
+    assert rec["verdict"] and "párban kell védekezni" in rec["verdict"], rec
+
+
+def test_assist_duos_silent_with_one_goal():
+    """Egyetlen asszisztos gólból nincs ítélet."""
+    from handball.pipeline.event_detection import assist_duos
+
+    rec = assist_duos(Match(_meta(), _adu_frames(1)))["home"]
+    assert rec["top"] is None and rec["verdict"] is None, rec
 
 
 def test_goal_concentration_top_share():
@@ -421,7 +617,7 @@ def test_pass_network_pairs_and_hubs():
                                           _pl(2, Team.HOME, 30.0, 10.0)],
                             ball=Ball(x=25.0, y=10.0, confidence=1.0)))
         t += 1
-    net = pass_network(Match(_meta(), frames))["home"]
+    net = pass_network(Match(_meta(), _hold(frames)))["home"]
     assert net["total_passes"] >= 4
     assert net["pairs"][0]["from"] == 1 and net["pairs"][0]["to"] == 2
     assert net["pairs"][0]["passes"] == 3
@@ -705,3 +901,342 @@ def test_shooter_is_the_releasing_player_not_the_nearest_to_goal():
     assert goals[0].player_id == 3, (
         "a lövés a kapuhoz közeli játékoshoz került — visszatért a "
         "kapu-felé torzítás")
+
+
+# --- Kezesség-becslés (shooting_hand) --------------------------------
+
+
+def _hand_shot(t0, pid, ball_dy, goals_x=40.0):
+    """Egy hazai lövés kockái, a lövő a labdához képest ball_dy-nal:
+    a labda a lövő testétől y-ban ennyivel eltolva indul (a dobó kéz
+    oldala). A +x kapu felé tart, a kapufák között → gól."""
+    frames = []
+    sx, sy = 33.0, 10.0
+    for i in range(4):
+        # Az elengedés ELŐTTI kockán a labda a lövő kezében (eltolva),
+        # utána a kapu felé gyorsul.
+        bx = sx + (0.0 if i == 0 else 2.0 + 2.0 * i)
+        by = sy + (ball_dy if i == 0 else 0.0)
+        frames.append(Frame(
+            t=t0 + i, players=[_pl(pid, Team.HOME, sx, sy)],
+            ball=Ball(x=min(bx, goals_x), y=by, confidence=1.0)))
+    return frames
+
+
+def _hand_match(pid, ball_dy, n):
+    """n darab egyforma kezességű lövés egy játékostól, szünetekkel."""
+    frames = []
+    t = 0
+    for _ in range(n):
+        frames += _hand_shot(t, pid, ball_dy)
+        t += 4
+        frames.append(Frame(t=t, players=[_pl(pid, Team.HOME, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    return Match(_meta(fps=25.0), frames)
+
+
+def test_shooting_hand_flags_the_lefty():
+    """A kapu felé nézve a labda következetesen a bal kéz oldalán indul
+    → balkezes ítélet, és ő a csapat 'lefty'-je."""
+    from handball.pipeline.event_detection import shooting_hand
+
+    # Felülnézetben a +x kapu felé forduló lövő bal keze a NAGYOBB y felé
+    # esik (mint a térképen kelet felé nézve a bal kéz észak felé).
+    m = _hand_match(7, ball_dy=0.5, n=5)
+    rec = shooting_hand(m)["home"]
+    assert rec["lefty"] is not None
+    assert rec["lefty"]["player_id"] == 7
+    assert rec["lefty"]["hand"] == "bal"
+    assert rec["lefty"]["left"] >= 4
+
+
+def test_shooting_hand_needs_enough_shots():
+    """Kevés lövésből (2) nincs kezesség-ítélet — a jel megvan, de a
+    minta kevés (nincs hallgatólagos 'balkezes')."""
+    from handball.pipeline.event_detection import shooting_hand
+
+    m = _hand_match(7, ball_dy=0.5, n=2)
+    rec = shooting_hand(m)["home"]
+    assert rec["lefty"] is None
+    assert all(p["hand"] is None for p in rec["players"])
+
+
+# ---- Gól-felismerés ritkított felvételen (stride) ---------------------------
+
+
+def _sparse_goal_frames(fps, behind_line=False):
+    """Egy hazai lövés RITKA mintavétellel: a labda kockánként ~2,4 m-t
+    lép, és a gólvonal 0,7 m-es sávját ÁTUGORJA. `behind_line`: van-e
+    minta a vonalon túlról (ha nincs, a követés a vonal előtt szakad
+    meg — élesben a hálóba érő labdát a háló kitakarja)."""
+    frames = []
+    xs = [30.0, 32.4, 34.8, 37.2, 39.6]
+    if behind_line:
+        xs.append(42.0)
+    t = 0
+    for _ in range(3):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 29.8, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+    for x in xs:
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 29.8, 10.0)],
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(10):   # középkezdés (teleport)
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames
+
+
+def test_sparse_sampling_goal_is_still_a_goal():
+    """A termék alap-ritkításánál (effektív ~8 fps) a labda átugorja a
+    gólvonal-sávot — a két minta közti átlépés (vonalon túli mintával)
+    és a megszakadó követés előtti extrapoláció (anélkül) is gól."""
+    meta = MatchMeta(match_id="sg", home_team="H", away_team="A",
+                     fps=8.33)
+    crossed = detect_shots(Match(meta, _sparse_goal_frames(
+        8.33, behind_line=True)))
+    assert [e.type for e in crossed] == [EventType.GOAL], crossed
+
+    vanished = detect_shots(Match(meta, _sparse_goal_frames(
+        8.33, behind_line=False)))
+    assert [e.type for e in vanished] == [EventType.GOAL], vanished
+
+
+def test_dense_sampling_keeps_the_old_stopping_shot_a_miss():
+    """SŰRŰ (25 fps) felvételen az extrapoláció nem él: a vonal előtt
+    megálló, majd eltűnő labda továbbra sem gól — a sűrű mintavételnél
+    a valódi gólt a sáv- vagy az átlépés-jel úgyis megfogja."""
+    frames = []
+    t = 0
+    for _ in range(3):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+        t += 1
+    for x in (34.0, 35.0, 36.0, 37.0, 38.0, 39.0):  # megáll a vonal előtt
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(10):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    evs = detect_shots(Match(_meta(), frames))
+    assert [e.type for e in evs] == [EventType.SHOT], evs
+    assert (evs[0].detail or {}).get("outcome") != "goal"
+
+
+def test_sparse_one_timer_shooter_is_the_kink_player():
+    """Ritkított felvételen az EGYÜTEMŰ (elkapásból azonnali) lövésnél a
+    labda kézben-tartott kockája eltűnhet a minták közül — a régi
+    szabály ilyenkor a PASSZOLÓT nevezné lövőnek. A röppálya
+    töréspontja (passz-szár → lövés-szár) melletti játékos a lövő."""
+    from handball.pipeline.event_detection import EventType, detect_shots
+
+    fps = 8.33
+    frames = []
+    t = 0
+    # A 6-os (passzoló) középen tartja a labdát, a 2-es szélső lent áll.
+    for _ in range(4):
+        frames.append(Frame(t=t, players=[
+            _pl(6, Team.HOME, 28.0, 10.0), _pl(2, Team.HOME, 36.0, 3.0)],
+            ball=Ball(x=28.2, y=10.0, confidence=1.0)))
+        t += 1
+    # Passz-szár: a labda a szélső felé repül (két gyors minta), majd
+    # lövés-szár: a szélsőtől a kapuba — kézben-tartott kocka NINCS.
+    path = [(31.0, 7.5), (34.0, 4.5), (36.0, 3.0),   # passz a 2-eshez
+            (38.0, 6.5), (40.0, 10.0)]               # együtemű lövés
+    for x, y in path:
+        frames.append(Frame(t=t, players=[
+            _pl(6, Team.HOME, 28.0, 10.0), _pl(2, Team.HOME, 36.0, 3.0)],
+            ball=Ball(x=x, y=y, confidence=1.0)))
+        t += 1
+    for _ in range(6):    # középkezdés
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="kink", home_team="H", away_team="A",
+                        fps=fps), frames)
+    evs = [e for e in detect_shots(m)
+           if e.type in (EventType.SHOT, EventType.GOAL)]
+    assert len(evs) == 1, evs
+    assert evs[0].player_id == 2, evs[0]  # a szélső, nem a passzoló
+
+
+def test_lovest_nem_ismetel_a_csendidon_belul():
+    """Zaj-sorozatból EGY lövés lesz, nem négy.
+
+    Éles meccsen a hibás pálya-vetítés miatt a labda ki-be billegett a
+    kapu-zóna szélén, és egyetlen lövésből négy esemény lett (1264,6 /
+    1265,9 / 1266,3 / 1267,1 mp). A hely-alapú debounce ezt nem fogja
+    meg — a csendidő igen.
+    """
+    from handball.pipeline.event_detection import (EventType,
+                                                   SHOT_COOLDOWN_S,
+                                                   detect_shots)
+
+    fps = 25.0
+    frames = []
+    t = 0
+    # Négy egymást követő "kapu-megközelítés", köztük rövid kilépéssel a
+    # zónából — tehát a hely-alapú debounce mindegyiket átengedné.
+    for _ in range(4):
+        for i in range(4):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(2):   # kilépés a zónából (x < 35 m), rövid ideig
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    ev = [e for e in detect_shots(Match(_meta(fps=fps), frames))
+          if e.type in (EventType.SHOT, EventType.GOAL)]
+    # A négy jelölt összesen ~1 másodpercen belül van: egy eseménnyé olvad.
+    assert len(ev) == 1, [e.t for e in ev]
+    assert SHOT_COOLDOWN_S > 0
+
+
+def test_a_csendido_utan_uj_loves_johet():
+    """A csendidő nem nyeli el a KÉSŐBBI, valódi lövést."""
+    from handball.pipeline.event_detection import (EventType,
+                                                   SHOT_COOLDOWN_S,
+                                                   detect_shots)
+
+    fps = 25.0
+
+    def megkozelites(t0):
+        fr = []
+        for i in range(4):
+            fr.append(Frame(t=t0 + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = megkozelites(0)
+    t = len(frames)
+    # Bőven a csendidőn túl (és a zónán kívül) — ez külön lövés.
+    varakozas = int(SHOT_COOLDOWN_S * fps) + 20
+    for i in range(varakozas):
+        frames.append(Frame(t=t + i, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += megkozelites(t + varakozas)
+
+    ev = [e for e in detect_shots(Match(_meta(fps=fps), frames))
+          if e.type in (EventType.SHOT, EventType.GOAL)]
+    assert len(ev) == 2, [e.t for e in ev]
+
+
+def test_eladott_labda_nem_szuletik_billegesbol():
+    """Kockánként átbillenő birtokos NEM eladott labda.
+
+    A birtokos a labdához legközelebbi játékos. Tömörülésnél (elzárás,
+    beállós harc) és ritka labda-észlelésnél két SZEMBEN álló ember
+    távolsága kockánként átbillen — éles meccsen ez a meccs ELŐTTI
+    felállásnál is eladásokat termelt, miközben senki nem játszott.
+    """
+    frames = []
+    for t in range(200):
+        # A labda áll; a két játékos felváltva a legközelebbi hozzá.
+        kozel, tavol = ((10.6, 13.0) if t % 2 == 0 else (13.0, 10.6))
+        frames.append(Frame(
+            t=t,
+            players=[_pl(1, Team.HOME, kozel, 10.0),
+                     _pl(11, Team.AWAY, tavol, 10.0)],
+            ball=Ball(x=11.0, y=10.0, confidence=1.0)))
+    evs = detect_possession_changes(Match(_meta(), frames))
+    eladas = [e for e in evs if e.type == EventType.TURNOVER]
+    assert eladas == [], [e.t for e in eladas]
+
+
+def test_valodi_eladott_labda_megmarad():
+    """A kitartó csapatváltás továbbra is eladott labda."""
+    from handball.pipeline.event_detection import TURNOVER_MIN_HOLD_S
+
+    fps = 25.0
+    tart = int(TURNOVER_MIN_HOLD_S * fps) + 5
+    frames = []
+    t = 0
+    for _ in range(tart):   # a hazai birtokolja
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 10.6, 10.0),
+                                          _pl(11, Team.AWAY, 13.0, 10.0)],
+                            ball=Ball(x=11.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(tart):   # majd tartósan a vendég
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 13.0, 10.0),
+                                          _pl(11, Team.AWAY, 10.6, 10.0)],
+                            ball=Ball(x=11.0, y=10.0, confidence=1.0)))
+        t += 1
+    evs = detect_possession_changes(Match(_meta(fps=fps), frames))
+    eladas = [e for e in evs if e.type == EventType.TURNOVER]
+    assert len(eladas) == 1, [e.t for e in eladas]
+    assert eladas[0].team == Team.HOME       # a HAZAI vesztette el
+    assert eladas[0].player_id == 1
+
+
+def test_csapaton_beluli_passz_valtozatlan():
+    """A passzra NEM vonatkozik a kitartás-követelmény.
+
+    A csapaton belüli birtokosváltás kisebb állítás (a labda nem hagyta
+    el a csapatot), és a passz-alapú rétegek a régi viselkedésre
+    épülnek — ezt szándékosan nem bántjuk.
+    """
+    frames = [
+        Frame(t=0, players=[_pl(1, Team.HOME, 25.0, 10.0)],
+              ball=Ball(x=25.0, y=10.0, confidence=1.0)),
+        Frame(t=1, players=[_pl(2, Team.HOME, 28.0, 10.0)],
+              ball=Ball(x=28.0, y=10.0, confidence=1.0)),
+    ]
+    evs = detect_possession_changes(Match(_meta(), frames))
+    assert [e.type for e in evs] == [EventType.PASS]
+
+
+def test_a_masik_csapat_passzai_nem_nyelik_el_a_szerzest():
+    """A kitartást a CSAPATRA mérjük, nem az egyes játékosra.
+
+    Ha az ellenfél megszerzi a labdát, és rögtön TOVÁBB is passzolja a
+    társának, a labda attól még náluk van: a szerzés valódi. Ha a
+    kitartást játékosonként néznénk, az ő passzaik elnyelnék a
+    jelöltet, és a labdaszerzés sosem születne meg.
+    """
+    frames = []
+    t = 0
+    for _ in range(12):     # a hazai birtokol
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for pid in (11, 12, 13):   # a vendégek egymásnak adogatnak, 5-5 kocka
+        for _ in range(5):
+            frames.append(Frame(t=t, players=[_pl(pid, Team.AWAY, 20.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    evs = detect_possession_changes(Match(_meta(), frames))
+    eladas = [e for e in evs if e.type == EventType.TURNOVER]
+    passzok = [e for e in evs if e.type == EventType.PASS]
+    assert len(eladas) == 1 and eladas[0].team == Team.HOME
+    assert len(passzok) == 2      # 11→12 és 12→13
+
+
+def test_a_felvetel_elejen_allo_villanasbol_nincs_eladas():
+    """Egy-kockás nyitó villanásból ne írjunk labdavesztést senki nevére.
+
+    A felvétel SZÉLEIN álló rövid futam sosem igazolja magát: nincs
+    mellette mindkét oldalon szomszéd, ami megerősítené. A végén álló
+    villanásból labdaSZERZÉST, az elején állóból labdaVESZTÉST nem
+    csinálunk.
+    """
+    frames = []
+    t = 0
+    # Egyetlen kocka a hazaié...
+    frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    t += 1
+    # ...aztán tartósan a vendégé.
+    for _ in range(30):
+        frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    evs = detect_possession_changes(Match(_meta(), frames))
+    assert [e for e in evs if e.type == EventType.TURNOVER] == []

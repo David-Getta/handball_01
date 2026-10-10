@@ -176,3 +176,46 @@ def test_fusion_gain_reports_coverage_lift():
     assert g["per_view"] == [0.5, 1.0]
     assert g["fused_avg"] >= 1.0
     assert g["gain_pct"] >= 0.0
+
+
+def test_a_fuzio_a_kozos_tar_irason_megy(tmp_path, monkeypatch):
+    """A fúzió eredménye a közös tár-íráson megy át: bekerül a fejléc-
+    indexbe, és az azonos néven ÚJRA fűzött meccsnél a felderítés
+    memória-tára nem adja a régi jelentést.
+
+    Korábban a végpont közvetlenül (nem atomikusan) írta a fájlt: a fúzió
+    kimaradt az indexből (a következő indulás teljesen beolvasta), és az
+    újrafűzés után a memória-tár a régi meccs jelentését adta vissza."""
+    import json
+
+    import pytest
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+    from handball.api.app import create_app
+
+    app = create_app()
+    client = TestClient(app)
+    a = Match(_meta(), [Frame(t=t, players=[_pl(1, Team.HOME,
+                                                20.0 + 0.1 * t, 10.0)])
+                        for t in range(30)])
+    b = Match(MatchMeta(match_id="fu-b", home_team="H", away_team="A",
+                        fps=25.0),
+              [Frame(t=t, players=[_pl(5, Team.HOME, 20.0 + 0.1 * t, 10.2)])
+               for t in range(30)])
+    app.state.put_match(a)
+    app.state.put_match(b)
+    keres = {"match_ids": ["fu", "fu-b"], "match_id": "fuzio-tar",
+             "auto_sync": False}
+    assert client.post("/matches/fuse", json=keres).status_code == 200
+
+    index = json.loads((tmp_path / "data" / "matches" / ".index.json")
+                       .read_text(encoding="utf-8"))
+    assert "fuzio-tar.json" in index, sorted(index)
+
+    assert client.get("/matches/fuzio-tar/scouting?team=home").status_code == 200
+    tar = app.state.scout_cache
+    assert any(k[0] == "fuzio-tar" for k in tar)
+    # Újrafűzés ugyanazon a néven: a régi jelentés kiesik a tárból.
+    assert client.post("/matches/fuse", json=keres).status_code == 200
+    assert not any(k[0] == "fuzio-tar" for k in tar), sorted(tar)

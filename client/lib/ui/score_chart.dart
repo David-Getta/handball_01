@@ -10,6 +10,7 @@ library;
 import "package:flutter/material.dart";
 
 import "../theme/app_theme.dart";
+import "anim.dart";
 
 class ScoreChart extends StatelessWidget {
   /// A gól-események: {"t": képkocka, "team": "home"|"away"} (időrendben).
@@ -53,10 +54,20 @@ class ScoreChart extends StatelessWidget {
         child: LayoutBuilder(builder: (context, constraints) {
           return GestureDetector(
             onTapUp: (d) => _handleTap(d.localPosition, constraints.biggest),
-            child: CustomPaint(
-              size: Size(constraints.maxWidth, 120),
-              painter: _ScoreChartPainter(
-                  goals: goals, totalFrames: totalFrames, fps: fps, runs: runs),
+            // Berajzolás-animáció: a vonalak balról jobbra "íródnak ki"
+            // (mint egy élő közvetítés idővonala) — egyszer, betöltéskor.
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: reduceMotion(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 900),
+              curve: Curves.easeInOutCubic,
+              builder: (context, t, _) => CustomPaint(
+                size: Size(constraints.maxWidth, 120),
+                painter: _ScoreChartPainter(
+                    goals: goals, totalFrames: totalFrames, fps: fps,
+                    runs: runs, progress: t),
+              ),
             ),
           );
         }),
@@ -64,8 +75,10 @@ class ScoreChart extends StatelessWidget {
       const SizedBox(height: 2),
       Text(
           runs.isEmpty
-              ? "koppints egy gólra — a lejátszó odaugrik"
-              : "a sávok gól-sorozatok — koppints egy gólra vagy sávra",
+              ? "a színes mező a vezetés (szín = ki vezet, vastagság = "
+                  "mennyivel) · koppints egy gólra — a lejátszó odaugrik"
+              : "a színes mező a vezetés, a függőleges sávok gól-sorozatok "
+                  "· koppints egy gólra vagy sávra",
           style: AppText.label.copyWith(fontSize: 10, color: AppColors.textFaint)),
     ]);
   }
@@ -139,14 +152,24 @@ class _ScoreChartPainter extends CustomPainter {
   final int totalFrames;
   final double fps;
   final List<Map<String, dynamic>> runs;
+
+  /// Berajzolás-állapot (0..1): ekkora hányadáig látszik a grafikon
+  /// balról — a betöltő animáció hajtja.
+  final double progress;
+
   _ScoreChartPainter(
       {required this.goals, required this.totalFrames, required this.fps,
-       this.runs = const []});
+       this.runs = const [], this.progress = 1.0});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (totalFrames <= 1) return;
     final geom = _ChartGeom(size, goals, totalFrames);
+
+    // A berajzolás-animáció: a vászon jobb széle még "üres".
+    if (progress < 1.0) {
+      canvas.clipRect(Rect.fromLTRB(0, 0, size.width * progress, size.height));
+    }
 
     // Gól-sorozatok: halvány csapatszínű sáv a teljes magasságban, a rács
     // és a vonalak MÖGÉ. Így a fordulópontok ránézésre kirajzolódnak.
@@ -171,6 +194,36 @@ class _ScoreChartPainter extends CustomPainter {
       }
     }
 
+    // Vezetés-sáv: a két lépcső KÖZÖTTI terület a VEZETŐ színével, a
+    // fedettség a különbséggel nő. Eddig a "ki vezetett és mennyivel"
+    // kérdést a néző fejben vonta ki a két vonalból — most a szem
+    // szintjén dől el: ahol kék a mező, a hazai vezetett, és minél
+    // vastagabb, annál nagyobb volt az előny.
+    {
+      var h = 0, a = 0;
+      var prevX = geom.x(0);
+      void band(double x0, double x1, int hh, int aa) {
+        if (hh == aa || x1 <= x0) return;
+        final leader = hh > aa ? AppColors.home : AppColors.away;
+        final gap = (hh - aa).abs();
+        canvas.drawRect(
+            Rect.fromLTRB(x0, geom.y(hh > aa ? hh : aa), x1,
+                geom.y(hh > aa ? aa : hh)),
+            Paint()
+              ..color = leader
+                  .withOpacity((0.09 + 0.04 * gap).clamp(0.09, 0.32)));
+      }
+
+      for (final g in goals) {
+        final gx = geom.x(((g["t"] as num?)?.toInt() ?? 0)
+            .clamp(0, totalFrames - 1));
+        band(prevX, gx, h, a);
+        if (g["team"] == "home") { h++; } else { a++; }
+        prevX = gx;
+      }
+      band(prevX, geom.x(totalFrames - 1), h, a);
+    }
+
     // Visszafogott rács: legfeljebb 4 vízszintes vonal, egész gól-értékeknél.
     final grid = Paint()..color = AppColors.border.withOpacity(0.5)..strokeWidth = 1;
     final step = (geom.maxGoals / 4).ceil().clamp(1, 1 << 30);
@@ -191,7 +244,9 @@ class _ScoreChartPainter extends CustomPainter {
     for (final (team, color) in [("home", AppColors.home), ("away", AppColors.away)]) {
       final line = Paint()
         ..color = color
-        ..strokeWidth = 2
+        ..strokeWidth = 2.2
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round
         ..style = PaintingStyle.stroke;
       final path = Path()..moveTo(geom.x(0), geom.y(0));
       var count = 0;
@@ -205,15 +260,46 @@ class _ScoreChartPainter extends CustomPainter {
         markers.add(geom.point(t, count));
       }
       path.lineTo(geom.x(totalFrames - 1), geom.y(count)); // kifutás a végéig
+
+      // Terület-kitöltés a vonal alatt: csapatszínű, lefelé elhalványuló
+      // színátmenet — a "ki uralta a meccset" ránézésre is látszik.
+      final fill = Path.from(path)
+        ..lineTo(geom.x(totalFrames - 1), geom.y(0))
+        ..lineTo(geom.x(0), geom.y(0))
+        ..close();
+      canvas.drawPath(
+          fill,
+          Paint()
+            ..shader = LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [color.withOpacity(0.07), color.withOpacity(0.0)],
+            ).createShader(Rect.fromLTRB(0, _ChartGeom.padT, size.width,
+                size.height - _ChartGeom.padB)));
       canvas.drawPath(path, line);
-      // Gól-pontok: felület-színű gyűrűvel, hogy metszésnél is elváljanak.
-      // (A végállást a jelmagyarázat mutatja — a vonalvégi felirat egyenlő
-      // állásnál ütközne, ezért nem duplikáljuk ide.)
+      // Gól-pontok: puha ragyogással és felület-színű gyűrűvel, hogy
+      // metszésnél is elváljanak. (A végállást a jelmagyarázat mutatja.)
       for (final m in markers) {
+        _softGlow(canvas, m, 9.5, color.withOpacity(0.32));
         canvas.drawCircle(m, 5.5, Paint()..color = AppColors.surface);
         canvas.drawCircle(m, 3.5, Paint()..color = color);
       }
     }
+  }
+
+  /// Puha kör-ragyogás elmosás nélkül. A grafikon a berajzolás-animáció
+  /// alatt képkockánként újrarajzolódik, és gólonként egy-egy elmosás
+  /// külön rajz-menetet kényszerítene ki — gólgazdag meccsen ez
+  /// képkockánként több tucat menet.
+  void _softGlow(Canvas canvas, Offset center, double radius, Color color) {
+    canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [color, color.withOpacity(0)],
+            stops: const [0.40, 1.0],
+          ).createShader(Rect.fromCircle(center: center, radius: radius)));
   }
 
   void _text(Canvas canvas, String s, Offset pos, TextStyle style) {
@@ -227,5 +313,5 @@ class _ScoreChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ScoreChartPainter old) =>
       old.goals != goals || old.totalFrames != totalFrames ||
-      old.fps != fps || old.runs != runs;
+      old.fps != fps || old.runs != runs || old.progress != progress;
 }

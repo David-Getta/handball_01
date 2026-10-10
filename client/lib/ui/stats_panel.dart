@@ -7,6 +7,7 @@ library;
 
 import "package:flutter/material.dart";
 
+import "anim.dart";
 import "../analytics/court_analytics.dart";
 import "../models/tracking.dart";
 import "../theme/app_theme.dart";
@@ -98,13 +99,19 @@ class _StatsPanelState extends State<StatsPanel> {
         if (home.isEmpty)
           emptyRow("Ennél a csapatnál nincs felismert játékos.")
         else
-          ...home.map((s) => _row(s, maxDist)),
+          for (final (i, st) in home.indexed)
+            FadeSlideIn(
+                index: i,
+                child: _row(st, maxDist, widget.homeColor, leader: i == 0)),
         const SizedBox(height: AppSpacing.lg),
         _teamHeader(widget.awayName, widget.awayColor),
         if (away.isEmpty)
           emptyRow("Ennél a csapatnál nincs felismert játékos.")
         else
-          ...away.map((s) => _row(s, maxDist)),
+          for (final (i, st) in away.indexed)
+            FadeSlideIn(
+                index: i,
+                child: _row(st, maxDist, widget.awayColor, leader: i == 0)),
       ],
     );
   }
@@ -154,7 +161,13 @@ class _StatsPanelState extends State<StatsPanel> {
         ]),
       );
 
-  Widget _row(PlayerStat s, double maxDist) {
+  /// Egy játékos sora. A [color] a CSAPAT színe — a táv-csík is azt
+  /// viseli, mint a pályán a token, így a tábla és a kép ugyanazt a
+  /// nyelvet beszéli. A [leader] az aktuális rendezés élén álló ember:
+  /// az ő mezszáma mellett kis jel áll, hogy a lista tetején ne kelljen
+  /// külön keresni, kiről van szó.
+  Widget _row(PlayerStat s, double maxDist, Color color,
+      {bool leader = false}) {
     final label = s.jerseyNumber != null ? "#${s.jerseyNumber}" : "id ${s.trackId}";
     final frac = maxDist > 0 ? (s.distanceM / maxDist).clamp(0.0, 1.0) : 0.0;
     return Padding(
@@ -163,19 +176,28 @@ class _StatsPanelState extends State<StatsPanel> {
         children: [
           SizedBox(
               width: 44,
-              child: Text(label,
-                  style: AppText.label.copyWith(color: AppColors.textPrimary))),
-          // Vizuális táv-csík: ránézésre látszik, ki dolgozott a legtöbbet.
+              child: Row(children: [
+                if (leader) ...[
+                  const Icon(Icons.arrow_drop_up,
+                      size: 14, color: AppColors.gold),
+                ] else
+                  const SizedBox(width: 14),
+                Expanded(
+                  child: Text(label,
+                      style: AppText.label.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight:
+                              leader ? FontWeight.w700 : FontWeight.w400)),
+                ),
+              ])),
+          // Vizuális táv-csík: ránézésre látszik, ki dolgozott a legtöbbet;
+          // a szín a csapaté, mint a pályán.
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
+            child: AnimatedBar(
                 value: frac,
                 minHeight: 5,
-                backgroundColor: AppColors.surfaceAlt,
-                valueColor: const AlwaysStoppedAnimation(AppColors.accent),
-              ),
-            ),
+                color: color,
+                borderRadius: BorderRadius.circular(3)),
           ),
           SizedBox(
               width: 64,

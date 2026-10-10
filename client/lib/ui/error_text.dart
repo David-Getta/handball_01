@@ -30,10 +30,10 @@ const List<String> kForbiddenKeys = [
 /// általános felé.
 const List<(List<String>, String)> kErrorPatterns = [
   (
-    ["connection refused", "socketexception", "failed host lookup",
-     "connection closed", "os error: connection"],
-    "Nem érem el a háttérmotort. Fut a Sport Machine motor? "
-        "A program újraindítása magától elindítja.",
+    kConnectionKeys,
+    "Nem érem el a háttérmotort. A nyitóképernyőn a "
+        "\"Motor újraindítása\" gomb megpróbálja újraindítani; ha az sem "
+        "segít, zárd be és nyisd meg újra a programot.",
   ),
   (
     ["timeout", "timed out"],
@@ -71,7 +71,10 @@ const List<(List<String>, String)> kErrorPatterns = [
 /// nyers üzenet — magabiztosan mondana valótlant. A kliens kivételei
 /// mind "HTTP 404" alakúak, a külső könyvtáraké "404 Not Found".
 String humanError(Object e) {
-  final raw = "$e";
+  // A Dart alap-kivételei "Exception: " előtaggal írják ki magukat — ez a
+  // felhasználónak semmit nem mond, a mögötte lévő (nálunk magyar) mondat
+  // viszont igen. Az előtagot ezért levágjuk.
+  final raw = "$e".replaceFirst(RegExp(r"^Exception:\s*"), "");
   final low = raw.toLowerCase();
   for (final (keys, message) in kErrorPatterns) {
     for (final k in keys) {
@@ -79,6 +82,25 @@ String humanError(Object e) {
     }
   }
   return raw;
+}
+
+/// Kapcsolódási hibára utal-e a kivétel (nem érjük el a motort)?
+///
+/// A hívó ilyenkor tud okosat tenni: megkeresni a motort újra (másik
+/// porton is indulhatott), és egyszer újrapróbálni. A minták ugyanabból
+/// a nevesített listából jönnek, mint a hibafordító első szabálya — a
+/// két hely nem tud széttartani.
+const List<String> kConnectionKeys = [
+  "connection refused", "socketexception", "failed host lookup",
+  "connection closed", "os error: connection", "connection reset",
+];
+
+bool looksLikeConnectionIssue(Object e) {
+  final low = "$e".toLowerCase();
+  for (final k in kConnectionKeys) {
+    if (low.contains(k)) return true;
+  }
+  return false;
 }
 
 /// Hozzáférési hibára utal-e a kivétel (nem megtalált VAGY nem

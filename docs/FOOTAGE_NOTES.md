@@ -71,10 +71,14 @@
    --stride 1 --max 20 --start 180 --calib calib.json`
 
 ## Pásztázás-követés (pan tracking) — használat
-- Kalibrációval (`--calib`) a feldolgozó mostantól **kompenzálja a kamera
-  pásztázását**: képkockánként megbecsüli a kamera mozgását (Shi–Tomasi +
-  Lucas–Kanade + RANSAC), és a detektált pontokat előbb visszaforgatja az
-  alap-képkockába, csak utána vetíti a pályára.
+- Kalibrációval (`--calib`) a feldolgozó **kompenzálja a kamera
+  pásztázását**: a detektált pontokat előbb visszaforgatja az
+  alap-képkockába, csak utána vetíti a pályára. Két becslő dolgozik
+  együtt (részletek: `docs/PASZTAZAS.md`): a **horgony** a futó kockát
+  közvetlenül a KALIBRÁLT kocka jellemzőpontjaihoz illeszti (ORB +
+  RANSAC — abszolút mérés, nem halmozódik), a **lánc** (Shi–Tomasi +
+  Lucas–Kanade) a köztes kockákat hidalja át. A mozgó embereket mindkettő
+  kimaszkolja. Minden bekalibrált kocka kötelező horgony.
 - **FONTOS**: a 4 sarkot ahhoz a képkockához kell felvenni, AMELYIKTŐL a
   feldolgozás indul (`--start N`) — a kalibráló képernyő alapból a 180-as
   képkockát tölti be, a teszt-recept is `--start 180`-nal fut. Így a kettő

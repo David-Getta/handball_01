@@ -13,6 +13,25 @@ felvételeken finomhangolt modell. Ez a leírás a teljes munkafolyamat.
 3. TANÍTÁS    python -m scripts.finetune --data dataset/dataset.yaml --install
 ```
 
+## Az appból (ajánlott — terminál nélkül)
+
+Ugyanez a három lépés az alkalmazásból, gombokkal:
+
+1. **Kezdőlap → Továbbiak → Tanítóadat gyűjtése**: pipáld ki a
+   meccseket (összefűzöttnél a darabokat), add meg a mintaszámot. A
+   minták FELE onnan jön, ahol a mostani felismerés elvesztette a labdát
+   (aktív tanulás) — ott tanít a legtöbbet a kézi címke.
+2. **Kezdőlap → Továbbiak → Címkéző**: a képek átnézése az appban —
+   húzással új doboz (alapból labda), koppintással kijelölés, osztály-
+   váltás, törlés. A 0 dobozos képek kiemelve.
+3. **Címkéző → Tanítás indítása**: kör-szám csúszkával; órákig tarthat
+   (videokártya nélkül különösen). A végén a mérőszám ("mAP50 — a labdára
+   …%") mondja, megérte-e, és a **védőháló** csak akkor állítja élesbe az
+   új modellt, ha a mostaninál nem rosszabb a validációs halmazon —
+   különben a régi marad, indokkal.
+
+A lenti CLI-út ugyanezt csinálja, több beállítással.
+
 ## 1. Tanítóadat gyűjtése (előcímkézés)
 
 A gyűjtő a meglévő modellel ELŐCÍMKÉZI a mintavételezett képkockákat —

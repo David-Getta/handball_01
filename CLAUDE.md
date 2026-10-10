@@ -14,21 +14,75 @@ pipeline-rétegek a `Tracking`/`Match` adatmodellen) + Flutter kliens
 ## Parancsok
 
 ```bash
-# Teljes backend teszt (kb. 5 perc, 1200+ teszt) — commit előtt kötelező:
-cd backend && python3 -m pytest -q
+# Friss (üres) környezetben előbb a függőségek — a tesztek egy része
+# cv2-t importál, enélkül a GYŰJTÉS hibázik, és a csomag NEM fut le:
+pip install fastapi uvicorn pytest httpx numpy opencv-python-headless
+
+# Teljes backend teszt (kb. 15 perc, 2400+ teszt) — commit előtt kötelező.
+# FIGYELEM: a `| tail` elnyeli a pytest kilépési kódját — a "zöld"
+# ítélethez a PIPESTATUS-t (vagy a "N passed" sort) nézd, ne a pipe-ét:
+cd backend && python3 -m pytest -q 2>&1 | tail -3; echo "exit ${PIPESTATUS[0]}"
 
 # Gyors kör fejlesztés közben (csak az érintett fájlok):
 cd backend && python3 -m pytest tests/test_xg.py -q
 
-# Dart-ellenőrzés (nincs Flutter a gépen — zárójel-egyensúly):
+# Dart-ellenőrzés — gyors: zárójel-egyensúly (Flutter nélkül is megy):
 awk 'BEGIN{b=0} {n=gsub(/\{/,"x"); m=gsub(/\}/,"x"); b+=n-m} \
   END{print "braces: "b}' client/lib/ui/scouting_screen.dart   # 0 a jó
+
+# Dart-ellenőrzés — VALÓDI: a Flutter SDK letölthető (storage.googleapis.com
+# és pub.dev elérhető), és a fordító-szintű hibákat is elkapja. A gépen
+# nincs előre telepítve; a scratchpadba bontva (kb. 1 GB):
+#   curl -o flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_<VERZIÓ>-stable.tar.xz
+#   tar -xJf flutter.tar.xz            # → ./flutter/bin/flutter
+cd client && flutter pub get && flutter analyze --no-pub   # hiba (error) ne legyen
+cd client && flutter test                                 # test/*_test.dart
 ```
+
+A tiszta Dart-logika (geometria, számolás) egységtesztje a
+`client/test/` alatt él (minta: `court_geometry_test.dart` — a várt
+értékek a backend függvényéből számolva, hogy a két oldal ne térjen el).
 
 ## Új réteg receptje: "egy réteg, sok felület"
 
 Egy réteg = egy commit. A commit-üzenet mintája a git-történetben.
 Sorrendben (kb. 200–280 sor összesen):
+
+0. **Van-e már ilyen?** — MIELŐTT bármit írnál, keresd meg a kérdést a
+   katalógusban (közel ÖTSZÁZ réteg van — a pontos szám a
+   `docs/SZAMOK.md`-ben; fejből egyik sem tudható):
+
+   ```bash
+   grep -i "<a kérdés kulcsszava>" docs/RETEG_KATALOGUS.md
+   ```
+
+   EGY kulcsszó KEVÉS. A katalógus magyar címekkel dolgozik, és
+   ugyanarra a dologra több szó is jár: a "futómennyiség" nem találja
+   meg a `running_load_balance` réteget, mert a címében "futómunka"
+   áll. Keress a fogalom 3-4 rokon szavára ÉS az angol
+   függvénynév-töredékre is:
+
+   ```bash
+   grep -rn "def .*<angol töredék>" handball/pipeline/*.py
+   grep -rn "_<rövidítés>_" client/lib/ui/scouting_screen.dart
+   ```
+
+   SZÓTŐVEL keress, ne teljes szóval: a katalógus-címek ragozottak, és
+   a "utolsó labda" nem találja meg az "UTOLSÓ LABDÁVAL" címet (á ≠ a,
+   és a rag is más). Tehát: `grep -i "labdá"` a "labda" helyett,
+   "zárás\|záró" a "félidő-zárás" helyett — a tő plusz egy-két
+   alternatíva.
+
+   Ez nem formalitás: a `substitutions.phase_specialists` réteg egyszer
+   végig is készült (motor, API, összefoglaló, felderítés, edzés-szabály,
+   kliens-csempe, három teszt), mire kiderült, hogy a `roles.py`-ban már
+   ott volt UGYANAZ a réteg ugyanazon a néven. A `closing_attacks` pedig
+   majdnem duplán készült el "félidő-záró támadás" néven: a "utolsó
+   támadás" és "utolsó labda" keresés a ragozott cím ("MIT KEZDENEK AZ
+   UTOLSÓ LABDÁVAL") mellett ment el — a motor már kész volt, mire a
+   felderítés-mezőknél kiderült, hogy a kérdés le van fedve. A duplán regisztrált
+   nevet az őr (`test_package_reteg_nevek_egyediek`) elkapja, de csak a
+   teljes futásnál — a katalógus-keresés harminc másodperc.
 
 1. **Motor** — új függvény a témába vágó pipeline-modulban
    (`xg.py`, `attack_types.py`, `defense.py`, `goalkeeper.py`, …).
@@ -48,10 +102,15 @@ Sorrendben (kb. 200–280 sor összesen):
    - `_coach_keys`: edzői kulcs (mit tegyen ellene a saját csapat),
    - `scout_team`: mezők kitöltése a motorból,
    - `matchup_plan`: új sorszámozott páros szabály (az ő gyengéjük ×
-     a ti erősségetek) — a KÖVETKEZŐ szám: 266,
+     a ti erősségetek) — a KÖVETKEZŐ szám: 468,
    - `combine_reports`: a mezők összegzése.
 5. **Edzés-fókusz** (`pipeline/training.py`, `training_focus`) — új
-   sorszámozott szabály, az újak felülre — a KÖVETKEZŐ szám: 287.
+   sorszámozott szabály, az újak felülre — a KÖVETKEZŐ szám: 487.
+   A blokk alakja: `# N) …` komment, alatta `_szabaly = N`, aztán a
+   `try:`. A sorszám a rangsor kulcsa (`rank_focus`: területek között
+   forog, területen belül a kisebb sorszám — az alap-szabály — előre);
+   a sorszám-sor nélkül a tétel némán az ELŐZŐ szabály számát örökli
+   (őr-teszt: `test_minden_edzes_szabaly_beallitja_a_sorszamat`).
 6. **Kliens** (`client/lib/ui/scouting_screen.dart`) — `_xxx(r)`
    helper (a backenddel azonos küszöbök, kommentben jelezve) + csempe
    a listában.
@@ -63,6 +122,69 @@ Sorrendben (kb. 200–280 sor összesen):
 A helyi importok (`from .xg import ...` a függvényen belül) és a
 `try/except`-tel izolált felületek szándékosak: egy réteg hibája nem
 viheti el a többit. Tartsd ezt a stílust.
+
+### Kocka vagy másodperc? (a leggyakoribb csendes hiba)
+
+A feldolgozás RITKÍT: a termék alapja minden 3. kocka, tehát a
+`match.meta.fps` a forrás fps-ének a harmada. Egy kockában megadott
+küszöb ezért a minőségi profiltól függően HÁROMSZOROS valós időt
+jelenthet. Két külön eset, két külön szabály:
+
+- **MINTASZÁM** ("legalább 100 mért kocka kell az átlaghoz") — maradhat
+  kockában: 100 minta tényleg 100 minta, akárhogy ritkítunk.
+- **IDŐTARTAM** ("ennél rövidebb birtoklás csak érintés", "a sebesség
+  eddig hat", "ekkora hézagot pótolunk", "ennyit nézünk vissza a
+  lövőért") — KÖTELEZŐEN másodpercben, `X_S` néven, és a kockaszámot a
+  `match.meta.fps`-ből számold. A kocka-alak maradhat visszafelé
+  kompatibilis alapértéknek.
+
+Ebből a hibafajtából egy nap alatt hetet találtunk (hossz-korlát,
+labda-hézagpótlás, becslés sebesség-elhalása és felezési ideje,
+őrzési párok, blokkolt-poszt visszanézés, labdatartás,
+beálló-villanás). Az őr-teszt
+(`test_az_ido_kuszobok_nem_esnek_vissza_kockara`) elkapja, ha egy
+átállított küszöb kocka-alakja újra futó kódba kerül.
+
+Két rokon hibafajta, amit a stride-jelentés (`docs/STRIDE_ERZEKENYSEG.md`)
+hozott elő:
+
+- **"±2 kocka" sebesség-ablak** (`frames[i0 - 2]`, `frames[i0 + 2]`,
+  `* fps / 4`): ritkítva háromszor hosszabb ablak. Helyette a
+  `tactics.displacement_at(frames, i0, fps, pick)` (SPEED_WINDOW_S)
+  — a sebesség `hypot(Δx, Δy) / dt`, az oldalsebesség `Δy / dt`.
+- **Kockánkénti összeg** (távolság, "pozitív lépések"): a detektálási
+  remegést is összeadja, sűrű felvételen felfújja (egy ÁLLÓ csapat
+  25 fps-en "mozgásos" lett). Helyette időablakos elmozdulás
+  (`attack_motion`: ATTACK_MOTION_WINDOW_S) vagy a futam nettó
+  elmozdulása (`ball_carrier_roles`); az ugrás-szűrő lépésenkénti
+  MÉTER-korlát legyen, nem m/s (a m/s-korlát a sűrű remegést is
+  kidobja).
+
+### A try/except és a néma mezőnév
+
+A recept szerint minden felület `try/except`-ben ül, hogy egy réteg
+hibája ne vigye el a többit. Ez helyes — de van egy ára: az elgépelt
+vagy elavult MEZŐNEVET is elnyeli. A szabály ilyenkor némán semmit sem
+csinál, a teszt pedig zöld marad, mert a monkeypatch-es tesztek a SAJÁT
+kitalált alakjukat adják be, nem a valódit.
+
+Ezért: ha az új réteg MÁSIK réteg mezőit olvassa (szintézis-réteg,
+edzés-szabály, összefoglaló-mondat), írj MELLÉ egy tesztet, ami a
+VALÓDI forrás-rétegeket futtatja egy kis fixture-ön, és megnézi, hogy
+a szabály tényleg megszólal. A `tests/test_player_training.py`
+`test_a_kondicio_szabaly_valodi_retegbol_is_megszolal` a minta — ez
+menet közben el is kapott egy ilyet (a `match_xg` lövő-sorai nem
+tartalmaznak `jersey` mezőt, a `player_fatigue` sorai sem).
+
+Az elnyelt KIVÉTEL ellen külön őr van: a `tests/test_nema_kivetelek.py`
+nyomkövetővel lefuttatja az összefoglalót, a felderítést, a meccstervet
+és az edzés-fókuszt, és minden kivételt összegyűjt, ami a handball-kódban
+születik — elnyelve is. Ez fogta meg, hogy a felderítés a `match_xg`-t
+a saját, a függvényben KÉSŐBB álló helyi importja előtt használta: a
+függvényben BÁRHOL importált név az EGÉSZ függvényben lokális, a korai
+sor UnboundLocalError-t dob (a szélső- és poszt-gólok így minden
+jelentésben üresek voltak). Tehát: a helyi import a HASZNÁLAT ELŐTT
+álljon, ugyanabban a blokkban.
 
 ## Számláló-frissítés (recept végén)
 
@@ -81,7 +203,8 @@ a README) — őr-teszt ellenőrzi, hogy egyeznek a tény-lappal. A README
 "Hol tartunk" számát tehát nem kell külön kézzel frissíteni.
 
 A sorrend-függés jelentése (`docs/SORREND_FUGGES.md`) lassú (percek),
-ezért NINCS őr-tesztje — kiadás előtt futtasd:
+ezért NINCS őr-tesztje — kiadás előtt futtasd (a tükrözés-őrrel
+együtt, lásd lejjebb):
 
 ```bash
 cd backend && python3 -m scripts.order_sensitivity
@@ -94,6 +217,65 @@ felismerés pedig holtversenynél a kaputól mért távolság alapján dönt
 (korábban a beolvasás sorrendje szerint, ami a fal védőjét jelölte
 kapusnak). Ha a jelentésben mégis megjelenik egy réteg, az REGRESSZIÓ
 — ne a listát fogadd el, hanem keresd meg, mi írja felül a szerepeket.
+
+A tükrözés-őr (`docs/TUKROZES.md`) ugyanígy jelentés-szintű (fél perc):
+
+```bash
+cd backend && python3 -m scripts.mirror_sides
+```
+
+Amit néz: a pálya hossztengelyére tükrözött meccsen minden
+oldal-megnevezésnek ("bal szél" → "jobb szél") meg kell fordulnia. Aki
+a nyers y-ból nevez oldalt, az a VÉDEKEZŐ csapatról fordítva állít —
+a két csapat szemben áll. Ha új réteged oldal-címkét ad, a védekező
+oldal nézőpontjából nevezd (minta: defensive_gaps, conceded_side_bias),
+és futtasd le ezt kiadás előtt. A hibás-lista ÜRES, maradjon is az.
+
+A hash-függés jelentése (`docs/HASH_FUGGES.md`) szintén jelentés-szintű
+(~8 perc, három párhuzamos folyamat):
+
+```bash
+cd backend && python3 -m scripts.hash_sensitivity
+cd backend && python3 -m scripts.hash_sensitivity --only reteg_nev   # egy réteg, gyorsan
+```
+
+Amit néz: minden réteg három KÜLÖN folyamatban, különböző
+PYTHONHASHSEED-del — ugyanaz a meccs ugyanazt kell adja. A Python a
+szöveg-halmazok bejárását folyamatonként keveri: aki halmazon iterálva
+választ (holtversenyben az elsőt) vagy halmaz-sorrendben épít listát,
+annál a jelentés indításonként "magától" változik. Így viselkedett a
+felderítés "fekete ötperc" kulcsa (0–5. vagy 5–10. perc, ugyanazzal a
+mérleggel). A lista ÜRES, maradjon is az: halmazt `sorted(...)`
+determinisztikus kulccsal (időrend, szám, név) járj be. A felderítés és
+a meccsterv saját őr-tesztje: `tests/test_hash_determinism.py`.
+
+A stride-érzékenység jelentése (`docs/STRIDE_ERZEKENYSEG.md`) szintén
+jelentés-szintű (~1,5 perc):
+
+```bash
+cd backend && python3 -m scripts.stride_sensitivity
+```
+
+Amit néz: ugyanaz a meccs a termék alap-ritkításával (stride=3,
+effektív fps = fps/3) másképp ítél-e. Az eltérés nem feltétlenül hiba
+(kevesebb minta → óvatosabb ítélet), de kocka-küszöbű új rétegnél
+tudd: a küszöböd valós időben HÁROMSZOROSÁT követeli a termékben.
+
+Az elnyelt-kivétel jelentése (`docs/ELNYELT_KIVETELEK.md`) szintén
+jelentés-szintű (~10 perc):
+
+```bash
+cd backend && python3 -m scripts.swallowed_exceptions
+```
+
+Amit néz: minden regisztrált réteg, a négy nagy felület (összefoglaló,
+felderítés + meccsterv, edzés-fókusz), az API meccs-szintű
+GET-végpontjai és a több meccses felületek (összevont felderítés,
+szezon- és egymás-elleni riport, könyvtár, játékos-trend) nyomkövetővel
+— minden kivétel, ami a handball-kódban születik, akkor is, ha egy
+try/except elnyelte (a szándékos HTTP-hibaválasz és a gyorsítótár
+fájl-hiánya nem hiba). A lista ÜRES, maradjon is az: a beírt jelentést
+teszt őrzi, a gyors, egy meccses párja a `tests/test_nema_kivetelek.py`.
 
 ## Commit-stílus
 
