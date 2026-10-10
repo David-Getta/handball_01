@@ -235,6 +235,27 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
                             else k["e"]])
     except Exception:
         kontrak = []
+    # Kapott gólok: [mp, a VÉDEKEZŐ hazai? (a lapozók közös szűrőjéhez —
+    # a lövő a másik), lövő mez | null, lövő x, y, sáv (0 kapuelőtér / 1
+    # 6–9 m / 2 9 m-en túl), kapu-szög, távolság, védő x, y | null,
+    # védő-távolság | null, szabadon (1/0) | null, kapus x, y | null,
+    # kapus-mélység | null, kint (1/0) | null, xG, kapu x, y, az elengedés
+    # kockája] időrendben (court3d.conceded_goal_moments).
+    try:
+        from .court3d import conceded_goal_moments
+        _sav = {"kapuelőtér": 0, "6–9 m": 1, "9 m-en túl": 2}
+        kapottak = [
+            [g["s"], 1 if g["defending"] == "home" else 0,
+             g["shooter_jersey"], *g["shooter"], _sav.get(g["zone"]),
+             g["angle_deg"], g["dist_m"], *(g["defender"] or [None, None]),
+             g["def_dist"],
+             None if g["free"] is None else (1 if g["free"] else 0),
+             *(g["keeper"] or [None, None]), g["keeper_depth"],
+             None if g["keeper_out"] is None else (1 if g["keeper_out"] else 0),
+             g["xg"], *g["goal"], g["t"]]
+            for g in conceded_goal_moments(match)["moments"]]
+    except Exception:
+        kapottak = []
     # Feltörés: hol és mivel törhető fel a két csapat védekezése (a
     # felderítés rangsorának teteje) — a védekezés-panel a fal mellé írja.
     try:
@@ -271,6 +292,7 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         "goal_build_ups": golakciok,
         "powerplays": emberek,
         "fast_breaks": kontrak,
+        "conceded_goals": kapottak,
         "turnover_pressure": eladas_sugar,
     }
 
@@ -461,15 +483,37 @@ function kontraFelirat(d, nevH, nevV){
 """
 
 
+# A kapott gól felirata — tiszta függvény (a teszt node-dal futtatja):
+# "Kapott gól (Veszprém): Szeged #10 · 9 m-en túl, kapu-szög 13,8° · védő
+# 6,2 m-re — szabadon · kapus 0,9 m-re a vonalon · xG 0,09". A sor 2.
+# eleme a VÉDEKEZŐ csapat — a lövő a másik.
+KAPOTT_JS = """
+function kapottFelirat(d, nevH, nevV){
+  const [s, defHazai, mez, lx, ly, sav, szog, tav, dx, dy, dtav, szabad, kx, ky, mely, kint, xg] = d;
+  const sz1 = (v) => v.toFixed(1).replace(".", ",");
+  const SAV = ["kapuelőtér", "6–9 m", "9 m-en túl"];
+  const reszek = [
+    (defHazai ? nevV : nevH) + (mez !== null && mez !== undefined ? " #" + mez : ""),
+    SAV[sav] + ", kapu-szög " + sz1(szog) + "°",
+    dtav === null ? "védő nem mérhető" : "védő " + sz1(dtav) + " m-re" + (szabad === 1 ? " — szabadon" : ""),
+    mely === null ? "kapus nem mérhető" : "kapus " + sz1(mely) + " m-re " + (kint === 1 ? "kint" : "a vonalon"),
+    "xG " + xg.toFixed(2).replace(".", ",")];
+  return "Kapott gól (" + (defHazai ? nevH : nevV) + "): " + reszek.join(" · ");
+}
+"""
+
+
 # A jelenet-lista sorai: a jelenet-lapozók (Döntések, Szabad lövők,
-# Labdavesztések, Lerohanások) jelenetei EGY időrendi listában, rövid
-# magyar felirattal — tiszta függvény, hogy a teszt node-dal futtathassa.
+# Labdavesztések, Lerohanások, Kapott gólok) jelenetei EGY időrendi
+# listában, rövid magyar felirattal — tiszta függvény, hogy a teszt
+# node-dal futtathassa.
 JELENETLISTA_JS = """
-function jelenetSorok(dontesek, szabadok, eladasok, nevH, nevV, lerohanasok){
-  // A tömör adat soraiból: [{s, ido ("p:mm"), tipus ("d"/"sz"/"e"/"k"),
+function jelenetSorok(dontesek, szabadok, eladasok, nevH, nevV, lerohanasok, kapottak){
+  // A tömör adat soraiból: [{s, ido ("p:mm"), tipus ("d"/"sz"/"e"/"k"/"kg"),
   // szoveg, gol}] időrendben; holtversenyben döntés, szabad lövés,
-  // labdavesztés, kapott lerohanás sorrendben. A lerohanás a VÉDEKEZŐ
-  // csapat sora ("kinek a hibája").
+  // labdavesztés, kapott lerohanás, kapott gól sorrendben. A lerohanás és
+  // a kapott gól a VÉDEKEZŐ csapat sora ("kinek a hibája"); a kapott gól
+  // sora elmarad, ha ugyanarra a pillanatra szabad lövő GÓL-sor van.
   const sz1 = (v) => v.toFixed(1).replace(".", ",");
   const csapat = (h) => h ? nevH : nevV;
   const ido = (s) => { const t = Math.max(0, Math.floor(s));
@@ -499,7 +543,17 @@ function jelenetSorok(dontesek, szabadok, eladasok, nevH, nevV, lerohanasok){
         (d[2] !== null ? " #" + d[2] : "") +
         (gol ? " · GÓL" : d[6] === "l" ? " · lövés" : " · lövés nélkül")});
   }
-  const REND = {d: 0, sz: 1, e: 2, k: 3};
+  const szabadGolIdok = szabadok.filter(d => d[7]).map(d => d[0]);
+  const SAV = ["kapuelőtér", "6–9 m", "9 m-en túl"];
+  for (const d of (kapottak || [])){
+    if (szabadGolIdok.some(s0 => Math.abs(d[0] - s0) < 0.05)) continue;
+    sorok.push({s: d[0], tipus: "kg", gol: true,
+      szoveg: csapat(d[1]) + " védekezése — kapott gól: " + csapat(!d[1]) +
+        (d[2] !== null ? " #" + d[2] : "") + " (" + SAV[d[5]] + ")" +
+        (d[10] !== null ? " · védő " + sz1(d[10]) + " m" : "") +
+        (d[14] === null ? "" : d[15] === 1 ? " · kapus kint" : " · kapus a vonalon")});
+  }
+  const REND = {d: 0, sz: 1, e: 2, k: 3, kg: 4};
   sorok.sort((a, b) => (a.s - b.s) || (REND[a.tipus] - REND[b.tipus]));
   for (const r of sorok) r.ido = ido(r.s);
   return sorok;
@@ -559,6 +613,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #jelenetLista .jpont{width:9px;height:9px;border-radius:50%;flex:none}
  #emberJelzo{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);padding:6px 12px;border:1px solid #ffc857;border-radius:8px;background:rgba(16,24,32,.88);color:#ffc857;font-size:13px;display:none}
  #golFelirat{position:fixed;left:50%;top:190px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2fd9c4;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #kapottFelirat{position:fixed;left:50%;top:282px;transform:translateX(-50%);padding:6px 14px;border:1px solid #c084fc;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #kontraFelirat{position:fixed;left:50%;top:236px;transform:translateX(-50%);padding:6px 14px;border:1px solid #59d98c;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #eladasFelirat{position:fixed;left:50%;top:144px;transform:translateX(-50%);padding:6px 14px;border:1px solid #ff9f43;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jatekosHud{position:fixed;left:50%;top:12px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.85);font-size:14px;font-variant-numeric:tabular-nums;display:none}
@@ -627,7 +682,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <button class="nezet" data-n="madar">Madártávlat</button>
  </div>
  <div class="sor">
-  <label title="A jelenet-lapozók (Döntések, Szabad lövők, Labdavesztések, Lerohanások) csak ennek a csapatnak a hibáit mutatják: a rossz döntést, a szabadon hagyott lövőt, az elvesztett labdát, a kapott lerohanást">Kinek a hibái: <select id="jelenetCsapat"><option value="mind">mindkét csapat</option><option value="hazai">hazai</option><option value="vendeg">vendég</option></select></label>
+  <label title="A jelenet-lapozók (Döntések, Szabad lövők, Labdavesztések, Lerohanások, Kapott gólok) csak ennek a csapatnak a hibáit mutatják: a rossz döntést, a szabadon hagyott lövőt, az elvesztett labdát, a kapott lerohanást, a kapott gólt">Kinek a hibái: <select id="jelenetCsapat"><option value="mind">mindkét csapat</option><option value="hazai">hazai</option><option value="vendeg">vendég</option></select></label>
   <button id="jelenetGomb" title="A jelenet-lapozók összes jelenete egy időrendi listában — katt egy sorra: odaugrik">Jelenet-lista</button>
  </div>
  <div class="sor">
@@ -667,6 +722,12 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="kontraInfo"></span>
  </div>
  <div class="sor">
+  <span title="Kapott gólok: ki lőtte, honnan (sáv, kapu-szög), a legközelebbi védő, a kapus mélysége, xG — minden kapott gól egy helyen">Kapott gólok:</span>
+  <button id="kapottElozo" title="Előző kapott gól">◀</button>
+  <button id="kapottKov" title="Következő kapott gól">▶</button>
+  <span id="kapottInfo"></span>
+ </div>
+ <div class="sor">
   <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
   <span id="linkInfo"></span>
  </div>
@@ -690,6 +751,7 @@ Labdavesztések ◀ ▶ — narancs kör a vesztő körül (a nyomás-sugár), v
 Gól-akciók ◀ ▶ — a gólt megelőző passz-lánc (a régebbi passz halványabb), arany vonal a lövéstől a kapuig<br>
 Emberelőny ◀ ▶ — a kiállítások szakaszai; közben lent középen élő jelző: ki van előnyben, mennyi van hátra, mi az állás az előny alatt<br>
 Lerohanások ◀ ▶ — a befejező útja az indulástól a lövésig (a csapat színével, pont fél mp-enként), fehér az indítópassz, arany vonal a kapura<br>
+Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
@@ -702,6 +764,7 @@ VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; ko
 <div id="eladasFelirat"></div>
 <div id="golFelirat"></div>
 <div id="kontraFelirat"></div>
+<div id="kapottFelirat"></div>
 <div id="emberJelzo"></div>
 <div id="jelenetLista"></div>
 <div id="felirat"></div>
@@ -1777,11 +1840,12 @@ function jelenetInfok(){
   document.getElementById("szabadInfo").textContent = n(SZABADOK) ? n(SZABADOK) + " lövés" : "nincs ilyen";
   document.getElementById("eladasInfo").textContent = n(ELADASOK) ? n(ELADASOK) + " eladás" : "nincs ilyen";
   document.getElementById("kontraInfo").textContent = n(KONTRAK) ? n(KONTRAK) + " lerohanás" : "nincs ilyen";
+  document.getElementById("kapottInfo").textContent = n(KAPOTTAK) ? n(KAPOTTAK) + " gól" : "nincs ilyen";
   if (jelenetLista.style.display === "block") jelenetListaEpit();
 }
 jelenetCsapat.onchange = () => {
   jelenetInfok();
-  dontesUtolso = null; szabadUtolso = null; eladasUtolso = null; kontraUtolso = null;
+  dontesUtolso = null; szabadUtolso = null; eladasUtolso = null; kontraUtolso = null; kapottUtolso = null;
 };
 
 // ---- Döntés-pillanatok: ahol jobb opció is volt -----------------------
@@ -1827,6 +1891,10 @@ function dontesFrissit(t){
   const kontraDoboz = document.getElementById("kontraFelirat");
   if (kontraSzoveg){ kontraDoboz.textContent = kontraSzoveg; kontraDoboz.style.display = "block"; }
   else kontraDoboz.style.display = "none";
+  const kapottSzoveg = kapottFrissit(t);
+  const kapottDoboz = document.getElementById("kapottFelirat");
+  if (kapottSzoveg){ kapottDoboz.textContent = kapottSzoveg; kapottDoboz.style.display = "block"; }
+  else kapottDoboz.style.display = "none";
   if (!d){ dontesFelirat.style.display = "none"; return; }
   const [mp, hazai, px, py, cx, cy, cval, fajta, bx, by, bval, gap] = d;
   const vonalD = (x2, y2, szin) => {
@@ -1998,6 +2066,60 @@ function kontraFrissit(t){
   return kontraFelirat(d, ADAT.home, ADAT.away);
 }
 
+// ---- Kapott gólok: minden kapott gól a védekezés olvasatával -----------
+// ◀ ▶ a kapott gólok közt ugrik (1,5 mp-cel az elengedés előtt, lejátszva);
+// a pillanat körül gyűrű a lövő körül (a lövő csapat színével), szaggatott
+// vonal a legközelebbi védőhöz (piros, ha a lövő szabadon lőtt — a 2 m-es
+// fedezés-sugáron kívül —, különben szürke), a kapus helye lila gyűrűvel
+// és vonal a kapu közepéig (a mélysége), arany vonal a lövéstől a kapuig;
+// a felirat a védekezés olvasatával (court3d.conceded_goal_moments — a
+// védekezés-elemzés gól-sorai, a lövés-mérés sávja, a kapus-kimozdulás
+// mélysége). A sor 2. eleme a VÉDEKEZŐ csapat — a "Kinek a hibái" szűrő
+// erre szűr; a lövő a másik csapat.
+const KAPOTTAK = ADAT.conceded_goals || [];
+const kapottCsoport = new THREE.Group();
+szinpad.add(kapottCsoport);
+let kapottUtolso = null;
+function kapottUgras(irany){
+  if (!szurt(KAPOTTAK).length) return;
+  const cel = lapozCel(szurt(KAPOTTAK).map(d => d[0]), ido, kapottUtolso, irany);
+  if (cel === null) return;
+  kapottUtolso = cel;
+  ido = Math.max(0, cel - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
+  csuszka.value = ido;
+}
+document.getElementById("kapottElozo").onclick = () => kapottUgras(-1);
+document.getElementById("kapottKov").onclick = () => kapottUgras(1);
+function kapottGyuru(x, y, r, szin){
+  const g = new THREE.Mesh(new THREE.RingGeometry(r - 0.06, r + 0.04, 36),
+    new THREE.MeshBasicMaterial({color: szin, side: THREE.DoubleSide, transparent: true, opacity: 0.9}));
+  g.rotation.x = -Math.PI/2; g.position.set(x, 0.04, W - y);
+  return g;
+}
+function kapottFrissit(t){
+  while (kapottCsoport.children.length) kapottCsoport.remove(kapottCsoport.children[0]);
+  const d = szurt(KAPOTTAK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  if (!d) return null;
+  const [s, defHazai, mez, lx, ly, sav, szog, tav, dx, dy, dtav, szabad, kx, ky, mely, kint, xg, gx, gy] = d;
+  const szin = defHazai ? 0xff6b6b : 0x4c9aff;  // a LÖVŐ csapat színe
+  const vonal = (x1, y1, h1, x2, y2, h2, anyag) => {
+    const g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(x1, h1, W - y1), new THREE.Vector3(x2, h2, W - y2)]);
+    const l = new THREE.Line(g, anyag);
+    if (anyag.isLineDashedMaterial) l.computeLineDistances();
+    kapottCsoport.add(l);
+  };
+  kapottCsoport.add(kapottGyuru(lx, ly, 0.7, szin));
+  if (dx !== null) vonal(lx, ly, 0.05, dx, dy, 0.05,
+    new THREE.LineDashedMaterial({color: szabad === 1 ? 0xff6b6b : 0x9aa7b4, dashSize: 0.3, gapSize: 0.2}));
+  if (kx !== null){
+    kapottCsoport.add(kapottGyuru(kx, ky, 0.5, 0xc084fc));
+    vonal(kx, ky, 0.05, gx, gy, 0.05, new THREE.LineBasicMaterial({color: 0xc084fc}));
+  }
+  vonal(lx, ly, 1.2, gx, gy, 1.0, new THREE.LineBasicMaterial({color: 0xd9b544}));
+  return kapottFelirat(d, ADAT.home, ADAT.away);
+}
+
 // ---- Jelenet-lista: a jelenet-lapozók jelenetei egy listában -----------
 // A szűrt döntés-, szabad-lövés- és labdavesztés-pillanatok időrendben;
 // katt egy sorra: odaugrik (1,5 mp-cel előtte, lejátszva), és a sor
@@ -2017,20 +2139,21 @@ function sugoAllit(){
 }
 sugoGomb.onclick = () => { sugoNyitva = !sugoNyitva; sugoAllit(); };
 sugoAllit();
-const JL_SZIN = {d: "#d9b544", sz: "#ff6b6b", e: "#ff9f43", k: "#59d98c"};
+const JL_SZIN = {d: "#d9b544", sz: "#ff6b6b", e: "#ff9f43", k: "#59d98c", kg: "#c084fc"};
 let jelenetSorokAkt = [], jelenetAktiv = -2;
 const jelenetSorokElem = document.createElement("div");  // a sorok (a fejléc alatt)
 function jelenetUgras(r){
   if (r.tipus === "d") dontesUtolso = r.s;
   else if (r.tipus === "sz") szabadUtolso = r.s;
   else if (r.tipus === "k") kontraUtolso = r.s;
+  else if (r.tipus === "kg") kapottUtolso = r.s;
   else eladasUtolso = r.s;
   ido = Math.max(0, r.s - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
   csuszka.value = ido;
 }
 function jelenetListaEpit(){
   jelenetSorokAkt = jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK),
-    ADAT.home, ADAT.away, szurt(KONTRAK));
+    ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK));
   jelenetAktiv = -2;
   jelenetLista.textContent = "";
   jelenetSorokElem.textContent = "";
@@ -2365,7 +2488,7 @@ function vrGombEl(kulcs, index, lenyomva){
 // A jelenet-lépés KÖZÖS a kontroller-gombokkal és az N/P billentyűkkel.
 let vrJelenetUtolso = null;
 function jelenetLep(irany){
-  const sorok = jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK), ADAT.home, ADAT.away, szurt(KONTRAK));
+  const sorok = jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK), ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK));
   if (!sorok.length) return null;
   const cel = lapozCel(sorok.map(r => r.s), ido, vrJelenetUtolso, irany);
   if (cel === null) return null;
@@ -2397,7 +2520,7 @@ window.vrJelenetLep = jelenetLep;  // a próbához: a kontroller-gomb párja
 // fejhez rögzített táblára rajzoljuk (a kamera gyermeke — mindig szem
 // előtt, a padló-vonalak nem takarják). A ?vrfelirat=1 headset nélkül
 // is bekapcsolja (próbához).
-const VR_FELIRAT_FORRASOK = ["felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "kontraFelirat", "emberJelzo"];
+const VR_FELIRAT_FORRASOK = ["felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "kontraFelirat", "kapottFelirat", "emberJelzo"];
 const vrVaszon = document.createElement("canvas"); vrVaszon.width = 1024; vrVaszon.height = 320;
 const vrTextura = new THREE.CanvasTexture(vrVaszon);
 const vrTabla = new THREE.Sprite(new THREE.SpriteMaterial({map: vrTextura, transparent: true, depthTest: false}));
@@ -2469,6 +2592,6 @@ fest.setAnimationLoop(() => {
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
                           + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
-                          + KLIPALLAPOT_JS + KONTRA_JS)
+                          + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS)
                  .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))

@@ -346,16 +346,19 @@ class SceneRow {
 
 /// A jelenet-lista sorai (a böngészős nézet `jelenetSorok`-jának tükre,
 /// UGYANAZOKKAL a feliratokkal): a döntés-, szabad-lövés-,
-/// labdavesztés- és lerohanás-pillanatok (az API sorai) időrendben;
-/// holtversenyben döntés, szabad lövés, labdavesztés, lerohanás. A
-/// kapott lerohanás a VÉDEKEZŐ csapat sora ("kinek a hibája").
+/// labdavesztés-, lerohanás- és kapott-gól-pillanatok (az API sorai)
+/// időrendben; holtversenyben döntés, szabad lövés, labdavesztés,
+/// lerohanás, kapott gól. A kapott lerohanás és a kapott gól a VÉDEKEZŐ
+/// csapat sora ("kinek a hibája"); a kapott gól sora elmarad, ha ugyanarra
+/// a pillanatra szabad lövő GÓL-sor van (az már megnevezi).
 List<SceneRow> sceneRows(
     List<Map<String, dynamic>> dontesek,
     List<Map<String, dynamic>> szabadok,
     List<Map<String, dynamic>> eladasok,
     String nevH,
     String nevV,
-    [List<Map<String, dynamic>> lerohanasok = const []]) {
+    [List<Map<String, dynamic>> lerohanasok = const [],
+    List<Map<String, dynamic>> kapottGolok = const []]) {
   String sz1(num v) => v.toDouble().toStringAsFixed(1).replaceAll(".", ",");
   String csapat(dynamic side) => side == "home" ? nevH : nevV;
   String ido(double s) {
@@ -402,7 +405,27 @@ List<SceneRow> sceneRows(
             "${csapat(d["team"])}${mez != null ? " #$mez" : ""}$vege",
         gol));
   }
-  const rend = {"d": 0, "sz": 1, "e": 2, "k": 3};
+  final szabadGolIdok = [
+    for (final d in szabadok) if (d["goal"] == true) sOf(d)
+  ];
+  for (final d in kapottGolok) {
+    final s = sOf(d);
+    if (szabadGolIdok.any((s0) => (s - s0).abs() < 0.05)) continue;
+    final mez = d["shooter_jersey"];
+    final tav = d["def_dist"] as num?;
+    final mely = d["keeper_depth"] as num?;
+    final kapus = mely == null
+        ? ""
+        : d["keeper_out"] == true
+            ? " · kapus kint"
+            : " · kapus a vonalon";
+    sorok.add(SceneRow(s, "", "kg",
+        "${csapat(d["defending"])} védekezése — kapott gól: "
+            "${csapat(d["team"])}${mez != null ? " #$mez" : ""} (${d["zone"]})"
+            "${tav != null ? " · védő ${sz1(tav)} m" : ""}$kapus",
+        true));
+  }
+  const rend = {"d": 0, "sz": 1, "e": 2, "k": 3, "kg": 4};
   sorok.sort((a, b) {
     final c = a.s.compareTo(b.s);
     return c != 0 ? c : rend[a.tipus]!.compareTo(rend[b.tipus]!);
@@ -433,6 +456,33 @@ String fastBreakCaption(Map<String, dynamic> k, String nevH, String nevV) {
             : "lövés nélkül",
   ];
   return "Lerohanás ($csapat): ${reszek.join(" · ")}";
+}
+
+/// A kapott gól felirata (a böngészős nézet `kapottFelirat`-jának tükre,
+/// UGYANAZZAL a szöveggel): "Kapott gól (Veszprém): Szeged #10 · 9 m-en
+/// túl, kapu-szög 13,8° · védő 6,2 m-re — szabadon · kapus 0,9 m-re a
+/// vonalon · xG 0,09". `g`: a /conceded-goals egy sora.
+String concededGoalCaption(
+    Map<String, dynamic> g, String nevH, String nevV) {
+  String sz1(num v) => v.toDouble().toStringAsFixed(1).replaceAll(".", ",");
+  final ved = g["defending"] == "home" ? nevH : nevV;
+  final tam = g["team"] == "home" ? nevH : nevV;
+  final mez = g["shooter_jersey"];
+  final tav = g["def_dist"] as num?;
+  final mely = g["keeper_depth"] as num?;
+  final xg = ((g["xg"] as num?) ?? 0).toDouble();
+  final reszek = <String>[
+    "$tam${mez != null ? " #$mez" : ""}",
+    "${g["zone"]}, kapu-szög ${sz1((g["angle_deg"] as num?) ?? 0)}°",
+    tav == null
+        ? "védő nem mérhető"
+        : "védő ${sz1(tav)} m-re${g["free"] == true ? " — szabadon" : ""}",
+    mely == null
+        ? "kapus nem mérhető"
+        : "kapus ${sz1(mely)} m-re ${g["keeper_out"] == true ? "kint" : "a vonalon"}",
+    "xG ${xg.toStringAsFixed(2).replaceAll(".", ",")}",
+  ];
+  return "Kapott gól ($ved): ${reszek.join(" · ")}";
 }
 
 /// A gól-akció felirata (a böngészős nézet `golAkcioFelirat`-jának

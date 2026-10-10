@@ -249,6 +249,37 @@ List<Map<String, dynamic>> buildDemoFastBreaks(Match m) {
   ];
 }
 
+/// Demó kapott gól a 3D "Kapott gólok" lapozójához (backend nélkül): a
+/// /conceded-goals "moments" alakjában — a hazai lő a jobb kapura 9 m-en
+/// túlról, a legközelebbi vendég védő 1,7 m-re, a vendég kapus 2,2 m-re
+/// kint (a sáv és a kapu-szög a backend shot_geometry-jéből számolva).
+/// SZINTETIKUS, csak a felület bemutatására.
+List<Map<String, dynamic>> buildDemoConcededGoals(Match m) {
+  final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+  final t = math.min(150, math.max(0, m.frames.length - 1));
+  return [
+    {
+      "s": t / fps,
+      "t": t,
+      "team": "home",
+      "defending": "away",
+      "shooter": [30.5, 9.0],
+      "shooter_jersey": null,
+      "zone": "9 m-en túl",
+      "angle_deg": 17.8,
+      "dist_m": 9.55,
+      "defender": [29.0, 9.8],
+      "def_dist": 1.7,
+      "free": false,
+      "keeper": [37.8, 10.4],
+      "keeper_depth": 2.24,
+      "keeper_out": true,
+      "xg": 0.31,
+      "goal": [courtLength, courtWidth / 2],
+    }
+  ];
+}
+
 /// Demó védekezés-idővonal a 3D védekezés-paneljéhez és a fal-résekhez
 /// (backend nélkül): a /defence-timeline "rows" alakjában — a demóban a
 /// vendég végig a jobb kapu előtt védekezik (hat mezőnyvédő ~5 m-re a

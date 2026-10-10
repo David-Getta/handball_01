@@ -640,7 +640,8 @@ def test_a_jelenet_lista_a_python_forrast_tukrozi():
     a végpontok soraiból — idő, fajta, felirat, gól."""
     from test_court3d import _eladasos_meccs
 
-    from handball.pipeline.court3d import (decision_moments,
+    from handball.pipeline.court3d import (conceded_goal_moments,
+                                           decision_moments,
                                            fast_break_moments,
                                            free_shot_moments, scene_rows,
                                            turnover_moments)
@@ -650,7 +651,7 @@ def test_a_jelenet_lista_a_python_forrast_tukrozi():
     kod = _modul_szkript(view3d_html(_meccs()))
     i0 = kod.index("function jelenetSorok")
     i1 = kod.index("\n}\n", i0) + 2
-    volt = {"d": 0, "sz": 0, "e": 0, "k": 0}
+    volt = {"d": 0, "sz": 0, "e": 0, "k": 0, "kg": 0}
     for m in (simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
                                     shots_per_min=8), _eladasos_meccs()):
         adat = _compact_data(m, None, {"home": [], "away": []},
@@ -661,7 +662,8 @@ def test_a_jelenet_lista_a_python_forrast_tukrozi():
               json.dumps(adat["turnovers"]) + ", " +
               json.dumps(m.meta.home_team) + ", " +
               json.dumps(m.meta.away_team) + ", " +
-              json.dumps(adat["fast_breaks"]) + ")));\n")
+              json.dumps(adat["fast_breaks"]) + ", " +
+              json.dumps(adat["conceded_goals"]) + ")));\n")
         r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
                            timeout=60)
         assert r.returncode == 0, r.stderr
@@ -669,7 +671,8 @@ def test_a_jelenet_lista_a_python_forrast_tukrozi():
                         free_shot_moments(m)["moments"],
                         turnover_moments(m)["moments"],
                         m.meta.home_team, m.meta.away_team,
-                        fast_break_moments(m)["moments"])
+                        fast_break_moments(m)["moments"],
+                        conceded_goal_moments(m)["moments"])
         jsk = json.loads(r.stdout)
         assert [(x["ido"], x["tipus"], x["szoveg"], x["gol"]) for x in jsk] \
             == [(x["ido"], x["tipus"], x["szoveg"], x["gol"]) for x in py]
@@ -1189,7 +1192,7 @@ def test_a_lerohanas_lapozo_az_oldalon_es_az_appban():
                  '<div id="kontraFelirat"></div>', "function kontraFelirat",
                  "function kontraFrissit", "function kontraUgras",
                  "const KONTRAK = ADAT.fast_breaks || [];",
-                 "kontraFrissit(t)", '"kontraFelirat", "emberJelzo"',
+                 "kontraFrissit(t)", '"kontraFelirat", "kapottFelirat", "emberJelzo"',
                  "Lerohanások ◀ ▶", "ADAT.home, ADAT.away, szurt(KONTRAK)",
                  'k: "#59d98c"'):
         assert kell in oldal, kell
@@ -1198,5 +1201,112 @@ def test_a_lerohanas_lapozo_az_oldalon_es_az_appban():
     for kell in ('tooltip: "Következő lerohanás"', "_kontrakSz",
                  '_szurt(_kontrak, "defending")', "fastBreakCaption(k,",
                  "kontra: _aktivKontra(m),", "fetchFastBreakMoments(id)",
-                 "buildDemoFastBreaks(_match!)", "m.meta.awayTeam, _kontrakSz)"):
+                 "buildDemoFastBreaks(_match!)", "m.meta.awayTeam, _kontrakSz,"):
+        assert kell in dart, kell
+
+
+def test_a_tomor_adat_es_a_vegpont_viszi_a_kapott_golokat(tmp_path,
+                                                          monkeypatch):
+    """A tömör adat "conceded_goals" sorai a conceded_goal_moments kapott
+    góljai (20 mezős alak: a 2. elem a VÉDEKEZŐ csapat — a szűrőhöz —, a
+    lövő, a sáv kódja, a védő, a kapus, az xG, a kapu, a kocka); a
+    /conceded-goals végpont ugyanazt adja, ismeretlen meccsre 404."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import conceded_goal_moments
+    from handball.pipeline.view3d_html import _compact_data
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    adat = _compact_data(m, None, {"home": [], "away": []},
+                         {"home": [], "away": []})
+    cg = conceded_goal_moments(m)
+    assert len(adat["conceded_goals"]) == len(cg["moments"]) > 0
+    sav = {"kapuelőtér": 0, "6–9 m": 1, "9 m-en túl": 2}
+    for r, x in zip(adat["conceded_goals"], cg["moments"]):
+        assert len(r) == 20 and r[0] == x["s"]
+        assert r[1] == (1 if x["defending"] == "home" else 0)
+        assert r[2] == x["shooter_jersey"] and r[3:5] == x["shooter"]
+        assert r[5] == sav[x["zone"]] and r[6] == x["angle_deg"]
+        assert r[8:10] == (x["defender"] or [None, None])
+        assert r[10] == x["def_dist"]
+        assert r[12:14] == (x["keeper"] or [None, None])
+        assert r[14] == x["keeper_depth"] and r[16] == x["xg"]
+        assert r[17:19] == x["goal"] and r[19] == x["t"]
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    v = c.get(f"/matches/{m.meta.match_id}/conceded-goals").json()
+    assert len(v["moments"]) == len(cg["moments"])
+    assert v["conceded"] == cg["conceded"]
+    assert c.get("/matches/nincs/conceded-goals").status_code == 404
+
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_kapott_gol_felirata():
+    """A kapott gól felirata: a védekező és a lövő csapat, a lövő
+    mezszáma, a sáv és a kapu-szög, a védő távolsága (szabadon), a kapus
+    mélysége (kint / a vonalon), az xG; a nem mérhető részek szöveggel. Az
+    app tükre (court_geometry.concededGoalCaption) ugyanezt a három esetet
+    futtatja ugyanezekkel a feliratokkal."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("function kapottFelirat")
+    i1 = kod.index("\n}\n", i0) + 2
+    # [s, a védekező hazai?, mez, lövő x, y, sáv, szög, táv, védő x, y,
+    #  védő-táv, szabad, kapus x, y, mélység, kint, xG, kapu x, y, kocka]
+    esetek = [
+        [7.08, 0, 10, 27.72, 10.95, 2, 13.8, 12.32, 33.93, 10.55, 6.22, 1,
+         39.26, 10.57, 0.93, 0, 0.09, 40, 10, 177],
+        [20.0, 1, 7, 5.0, 10.0, 0, 64.25, 5.0, 5.5, 10.2, 0.7, 0,
+         1.6, 10.8, 1.8, 1, 0.55, 0, 10, 500],
+        [30.0, 0, None, 32.0, 8.0, 1, 30.0, 8.2, None, None, None, None,
+         None, None, None, None, 0.3, 40, 10, 750],
+    ]
+    js = (kod[i0:i1] + "\nconsole.log(JSON.stringify(" + json.dumps(esetek)
+          + '.map(d => kapottFelirat(d, "Szeged", "Veszprém"))));\n')
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [
+        "Kapott gól (Veszprém): Szeged #10 · 9 m-en túl, kapu-szög 13,8° · "
+        "védő 6,2 m-re — szabadon · kapus 0,9 m-re a vonalon · xG 0,09",
+        "Kapott gól (Szeged): Veszprém #7 · kapuelőtér, kapu-szög 64,3° · "
+        "védő 0,7 m-re · kapus 1,8 m-re kint · xG 0,55",
+        "Kapott gól (Veszprém): Szeged · 6–9 m, kapu-szög 30,0° · védő nem "
+        "mérhető · kapus nem mérhető · xG 0,30"]
+    from pathlib import Path
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" /
+            "test" / "court_geometry_test.dart").read_text(encoding="utf-8")
+    for felirat in json.loads(r.stdout):
+        assert f'"{felirat}"' in dart, felirat
+
+
+def test_a_kapott_golok_lapozo_az_oldalon_es_az_appban():
+    """A Kapott gólok lapozó a böngészős oldalon (sor, felirat-doboz, a
+    rajzoló és a felirat-függvény, a VR-tábla forrása, a súgó, a lista
+    hetedik listája) és az appban (lapozó, szűrt lista, felirat, festő)."""
+    from pathlib import Path
+
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="kapottElozo"', 'id="kapottKov"', 'id="kapottInfo"',
+                 '<div id="kapottFelirat"></div>', "function kapottFelirat",
+                 "function kapottFrissit", "function kapottUgras",
+                 "const KAPOTTAK = ADAT.conceded_goals || [];",
+                 "kapottFrissit(t)", '"kapottFelirat", "emberJelzo"',
+                 "Kapott gólok ◀ ▶", "szurt(KONTRAK), szurt(KAPOTTAK)",
+                 'kg: "#c084fc"', "szabadGolIdok"):
+        assert kell in oldal, kell
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ('tooltip: "Következő kapott gól"', "_kapottakSz",
+                 '_szurt(_kapottak, "defending")', "concededGoalCaption(g,",
+                 "kapott: _aktivKapott(m),", "fetchConcededGoals(id)",
+                 "buildDemoConcededGoals(_match!)", "_kontrakSz, _kapottakSz)"):
         assert kell in dart, kell

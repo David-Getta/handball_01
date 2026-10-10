@@ -155,6 +155,61 @@ void main() {
         "Veszprém védekezése — kapott lerohanás: Szeged #4 · lövés nélkül");
   });
 
+  // A kapott gól a jelenet-listában a VÉDEKEZŐ csapat sora, és elmarad,
+  // ha ugyanarra a pillanatra szabad lövő GÓL-sor van; a backend
+  // scene_rows tesztje ugyanezt a helyzetet futtatja.
+  test("sceneRows: a kapott gól sora, a szabad lövő GÓL-sora mellett nem",
+      () {
+    final r = sceneRows([], [
+      {"s": 7.08, "defending": "away", "dist": 6.22, "goal": true},
+    ], [], "Szeged", "Veszprém", [], [
+      {"s": 7.08, "team": "home", "defending": "away", "shooter_jersey": 10,
+       "zone": "9 m-en túl", "def_dist": 6.22, "keeper_depth": 0.93,
+       "keeper_out": false},
+      {"s": 40.2, "team": "home", "defending": "away", "shooter_jersey": 13,
+       "zone": "kapuelőtér", "def_dist": 0.7, "keeper_depth": 1.8,
+       "keeper_out": true},
+      {"s": 55.0, "team": "away", "defending": "home", "shooter_jersey": null,
+       "zone": "6–9 m", "def_dist": null, "keeper_depth": null,
+       "keeper_out": null},
+    ]);
+    expect([for (final x in r) "${x.ido} ${x.tipus} ${x.gol}"],
+        ["0:07 sz true", "0:40 kg true", "0:55 kg true"]);
+    expect(r[1].szoveg,
+        "Veszprém védekezése — kapott gól: Szeged #13 (kapuelőtér) · védő 0,7 m · kapus kint");
+    expect(r[2].szoveg,
+        "Szeged védekezése — kapott gól: Veszprém (6–9 m)");
+  });
+
+  // A kapott gól felirata a böngésző kapottFelirat-jával AZONOS (a backend
+  // node-os tesztje ugyanezt a három esetet futtatja).
+  test("concededGoalCaption = a böngésző kapottFelirat-ja", () {
+    expect(
+        concededGoalCaption({
+          "team": "home", "defending": "away", "shooter_jersey": 10,
+          "zone": "9 m-en túl", "angle_deg": 13.8, "def_dist": 6.22,
+          "free": true, "keeper_depth": 0.93, "keeper_out": false,
+          "xg": 0.09,
+        }, "Szeged", "Veszprém"),
+        "Kapott gól (Veszprém): Szeged #10 · 9 m-en túl, kapu-szög 13,8° · védő 6,2 m-re — szabadon · kapus 0,9 m-re a vonalon · xG 0,09");
+    expect(
+        concededGoalCaption({
+          "team": "away", "defending": "home", "shooter_jersey": 7,
+          "zone": "kapuelőtér", "angle_deg": 64.25, "def_dist": 0.7,
+          "free": false, "keeper_depth": 1.8, "keeper_out": true,
+          "xg": 0.55,
+        }, "Szeged", "Veszprém"),
+        "Kapott gól (Szeged): Veszprém #7 · kapuelőtér, kapu-szög 64,3° · védő 0,7 m-re · kapus 1,8 m-re kint · xG 0,55");
+    expect(
+        concededGoalCaption({
+          "team": "home", "defending": "away", "shooter_jersey": null,
+          "zone": "6–9 m", "angle_deg": 30.0, "def_dist": null,
+          "free": null, "keeper_depth": null, "keeper_out": null,
+          "xg": 0.3,
+        }, "Szeged", "Veszprém"),
+        "Kapott gól (Veszprém): Szeged · 6–9 m, kapu-szög 30,0° · védő nem mérhető · kapus nem mérhető · xG 0,30");
+  });
+
   // A lerohanás felirata a böngésző kontraFelirat-jával AZONOS (a backend
   // node-os tesztje ugyanezt a három esetet futtatja).
   test("fastBreakCaption = a böngésző kontraFelirat-ja", () {

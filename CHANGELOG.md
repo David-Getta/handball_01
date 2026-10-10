@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.161 óta)
 
+- **3D pálya: Kapott gólok lapozó** (új, böngészős/VR és appbeli nézet):
+  minden kapott gól egy helyen, a védekezés olvasatával — ◀ ▶ a kapott
+  gólok közt, gyűrű a lövő körül, szaggatott vonal a legközelebbi
+  védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával,
+  arany vonal a kapura; a felirat: "Kapott gól (Veszprém): Szeged #10 ·
+  9 m-en túl, kapu-szög 13,8° · védő 6,2 m-re — szabadon · kapus 0,9
+  m-re a vonalon · xG 0,09". A forrás a védekezés-elemzés gól-sorai
+  (ugyanaz az elengedési kocka, lövő-hely, védő-távolság, szabad-ítélet
+  és xG), a sáv és a kapu-szög a lövés-mérésé, a kapus mélysége a
+  kapus-kimozdulás rétegé. A jelenet-listában a kapott gól a VÉDEKEZŐ
+  csapat sora (a "Kinek a hibái" szűrő, az N/P és a VR-kontrolleres
+  lépés is ezt követi) — a szabad lövő GÓL-sora mellett nem ismétlődik.
+  Új végpont: /matches/{id}/conceded-goals; az app demója egy
+  szintetikus kapott góllal.
+
 - **Klipek: "Lerohanások" és "Kapott lerohanások" csomag** (új): a 3D
   Lerohanások lapozójának jelenetei videóként — a saját kontrák a
   befejező mezszámához írva ("a #13 lerohanásai"), a kapott lerohanások

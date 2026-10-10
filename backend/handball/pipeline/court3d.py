@@ -565,16 +565,20 @@ def _szam1_js(v: float) -> str:
 
 def scene_rows(decisions: list, free_shots: list, turnovers: list,
                home: str, away: str,
-               fast_breaks: Optional[list] = None) -> list[dict]:
+               fast_breaks: Optional[list] = None,
+               conceded_goals: Optional[list] = None) -> list[dict]:
     """A 3D jelenet-lista sorai — a böngésző (jelenetSorok) és az app
     (sceneRows) KANONIKUS forrása, a nyomtatható jelentés is ebből ír.
 
     Bemenet: a decision_moments / free_shot_moments / turnover_moments /
-    fast_break_moments "moments" listái. Visszatérés: [{"s", "ido"
-    ("p:mm"), "tipus" ("d" döntés, "sz" szabad lövés, "e" labdavesztés,
-    "k" kapott lerohanás), "szoveg", "gol"}] időrendben; holtversenyben
-    döntés, szabad lövés, labdavesztés, lerohanás. A lerohanás sora a
-    VÉDEKEZŐ csapaté ("kinek a hibája": aki nem futott vissza)."""
+    fast_break_moments / conceded_goal_moments "moments" listái.
+    Visszatérés: [{"s", "ido" ("p:mm"), "tipus" ("d" döntés, "sz" szabad
+    lövés, "e" labdavesztés, "k" kapott lerohanás, "kg" kapott gól),
+    "szoveg", "gol"}] időrendben; holtversenyben döntés, szabad lövés,
+    labdavesztés, lerohanás, kapott gól. A lerohanás és a kapott gól sora
+    a VÉDEKEZŐ csapaté ("kinek a hibája"). A kapott gól sora ELMARAD, ha
+    ugyanarra a pillanatra szabad lövő GÓL-sor van (az már megnevezi) —
+    a lapozóban minden kapott gól ott van, a listában egyszer."""
     def csapat(side):
         return home if side == "home" else away
 
@@ -613,7 +617,25 @@ def scene_rows(decisions: list, free_shots: list, turnovers: list,
                                 + (" · GÓL" if gol
                                    else " · lövés" if d.get("outcome") == "shot"
                                    else " · lövés nélkül")})
-    rend = {"d": 0, "sz": 1, "e": 2, "k": 3}
+    szabad_gol_idok = [d["s"] for d in free_shots if d["goal"]]
+    for d in conceded_goals or []:
+        if any(abs(d["s"] - s0) < 0.05 for s0 in szabad_gol_idok):
+            continue
+        tav = d.get("def_dist")
+        mely = d.get("keeper_depth")
+        sorok.append({"s": d["s"], "tipus": "kg", "gol": True,
+                      "szoveg": f"{csapat(d['defending'])} védekezése — "
+                                f"kapott gól: {csapat(d['team'])}"
+                                + (f" #{d['shooter_jersey']}"
+                                   if d.get("shooter_jersey") is not None
+                                   else "")
+                                + f" ({d['zone']})"
+                                + (f" · védő {_szam1_js(tav)} m" if tav is not None
+                                   else "")
+                                + ("" if mely is None
+                                   else " · kapus kint" if d.get("keeper_out")
+                                   else " · kapus a vonalon")})
+    rend = {"d": 0, "sz": 1, "e": 2, "k": 3, "kg": 4}
     sorok.sort(key=lambda r: (r["s"], rend[r["tipus"]]))
     for r in sorok:
         t = max(0, math.floor(r["s"]))
@@ -855,3 +877,92 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
                      if fr0 is not None and fr0.ball is not None else None),
             "goal": [goal_x, COURT_WIDTH_M / 2.0]})
     return {"moments": moments, "breaks": breaks, "goals": goals}
+
+
+def conceded_goal_moments(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """A kapott gólok a 3D pályán — a VÉDEKEZŐ csapat szerint: ki lőtte,
+    honnan (sáv, kapu-szög), ki volt a legközelebbi védő és milyen
+    messze, hol állt a kapus (mélység a saját kaputól), és mennyit ért a
+    helyzet (xG). A "minden kapott gól egy listában" videóelemzés.
+
+    Forrás: a defense_analysis gól-sorai (ugyanaz az elengedési kocka,
+    lövő-hely, legközelebbi védő, szabad-ítélet és xG — a 3D nem mondhat
+    mást, mint a védekezés-elemzés); a sáv és a kapu-szög a shot_geometry
+    mérése; a kapus mélysége a gk_positioning szabálya (a kapus-jelölésű
+    játékos távolsága a saját kapu közepétől, GK_DEPTH_OUT_M felett "kint
+    állt"). Saját küszöb nincs.
+
+    Visszatérés: {"moments": [{"s", "t" (az elengedés kockája), "team"
+    (a lövő csapat), "defending", "shooter": [x, y], "shooter_jersey",
+    "zone" ("kapuelőtér" / "6–9 m" / "9 m-en túl"), "angle_deg",
+    "dist_m", "defender": [x, y] | None, "def_dist", "free" (bool |
+    None), "keeper": [x, y] | None, "keeper_depth", "keeper_out" (bool |
+    None — kapus nélkül None), "xg", "goal": [x, y] (a támadott kapu
+    közepe)}] időrendben, "conceded": {"home"/"away": db} (a védekező
+    szerint — a védekezés-elemzés goals_against-ja), "free": {...},
+    "keeper_out": {...}, "depth_out_m": GK_DEPTH_OUT_M, "radius_m":
+    FREE_DEF_RADIUS_M}."""
+    from .defense import FREE_DEF_RADIUS_M, defense_analysis
+    from .goalkeeper import GK_DEPTH_OUT_M
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    by_t = {f.t: f for f in match.frames}
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+    d = defense_analysis(match, config)
+    cy = COURT_WIDTH_M / 2.0
+    moments = []
+    conceded = {"home": 0, "away": 0}
+    free = {"home": 0, "away": 0}
+    keeper_out = {"home": 0, "away": 0}
+    for side in ("home", "away"):
+        vedo = Team(side)
+        tamado = Team.AWAY if vedo == Team.HOME else Team.HOME
+        own_x = float(config.own_goal_x(vedo))
+        for sh in d[side]["shots"]:
+            if not sh["goal"]:
+                continue
+            conceded[side] += 1
+            f = by_t.get(sh["release_t"])
+            lovo = kapus = None
+            for p in (f.players if f is not None else []):
+                # A lövő: a támadó játékos a védekezés-elemzés lövés-helyén
+                # (ha a lövőt azonosította; labda-helynél senki).
+                if (p.team == tamado and round(p.x, 2) == sh["x"]
+                        and round(p.y, 2) == sh["y"]):
+                    lovo = p
+                if p.team == vedo and p.role == "kapus":
+                    kapus = p
+            geo = shot_geometry(sh["x"], sh["y"],
+                                "bal" if own_x == 0.0 else "jobb")
+            mely = (round(math.hypot(kapus.x - own_x, kapus.y - cy), 2)
+                    if kapus is not None else None)
+            kint = (mely >= GK_DEPTH_OUT_M) if mely is not None else None
+            if kint:
+                keeper_out[side] += 1
+            if sh["free"]:
+                free[side] += 1
+            moments.append({
+                "s": round(sh["release_t"] / fps, 2), "t": sh["release_t"],
+                "team": tamado.value, "defending": side,
+                "shooter": [sh["x"], sh["y"]],
+                "shooter_jersey": (jersey.get(lovo.track_id)
+                                   if lovo is not None else None),
+                "zone": geo["zone"], "angle_deg": geo["angle_deg"],
+                "dist_m": geo["distance_m"],
+                "defender": sh["defender"], "def_dist": sh["def_dist"],
+                "free": sh["free"],
+                "keeper": ([round(kapus.x, 2), round(kapus.y, 2)]
+                           if kapus is not None else None),
+                "keeper_depth": mely, "keeper_out": kint,
+                "xg": round(float(sh["xg"]), 2),
+                "goal": [own_x, cy]})
+    moments.sort(key=lambda m_: (m_["s"], m_["defending"]))
+    return {"moments": moments, "conceded": conceded, "free": free,
+            "keeper_out": keeper_out, "depth_out_m": GK_DEPTH_OUT_M,
+            "radius_m": FREE_DEF_RADIUS_M}

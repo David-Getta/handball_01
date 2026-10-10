@@ -1509,6 +1509,18 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A kapott gólok (court3d.conceded_goal_moments) — a 3D pálya
+  /// "Kapott gólok" lapozója: lövő, sáv, védő, kapus-mélység, xG.
+  Future<Map<String, dynamic>> fetchConcededGoals(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/conceded-goals"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a kapott gólokat", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A lerohanások (court3d.fast_break_moments) — a 3D pálya
   /// "Lerohanások" lapozója: a befejező útja, hullám, elszökés, kimenet.
   Future<Map<String, dynamic>> fetchFastBreakMoments(String matchId) async {

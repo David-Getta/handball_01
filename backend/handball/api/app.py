@@ -2930,6 +2930,18 @@ def create_app():
         return _cached_result(match_id, "fast-break-moments",
                               lambda: fast_break_moments(match))
 
+    @app.get("/matches/{match_id}/conceded-goals")
+    def match_conceded_goals(match_id: str):
+        """A kapott gólok (court3d.conceded_goal_moments): ki lőtte,
+        honnan, a legközelebbi védő, a kapus mélysége, xG — a 3D pálya
+        "Kapott gólok" lapozója ebből dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import conceded_goal_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "conceded-goals",
+                              lambda: conceded_goal_moments(match))
+
     @app.get("/matches/{match_id}/turnover-moments")
     def match_turnover_moments(match_id: str):
         """A labdavesztések pillanatai (court3d.turnover_moments) — a 3D

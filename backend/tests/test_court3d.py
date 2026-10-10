@@ -584,3 +584,76 @@ def test_a_jelenet_lista_lerohanas_sora_a_vedekezo_csapate():
     # Lerohanások nélkül a lista a régi (háromlistás) hívással azonos.
     assert scene_rows([], [], eladas, "Szeged", "Veszprém") == \
         scene_rows([], [], eladas, "Szeged", "Veszprém", [])
+
+
+def test_kapott_golok_a_vedekezes_elemzes_es_a_kapus_kimozdulas_szabalyaval():
+    """A kapott gólok a védekezés-elemzés gól-sorai (ugyanannyi, ugyanaz a
+    hely, védő-távolság, szabad-ítélet, xG), a sáv és a kapu-szög a
+    lövés-mérésé, a kapus mélysége a kapus-kimozdulás szabálya (a kapus
+    távolsága a saját kapu közepétől az elengedés kockáján)."""
+    from handball.pipeline.court3d import conceded_goal_moments, shot_geometry
+    from handball.pipeline.defense import FREE_DEF_RADIUS_M, defense_analysis
+    from handball.pipeline.goalkeeper import GK_DEPTH_OUT_M
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    r = conceded_goal_moments(m)
+    d = defense_analysis(m)
+    assert r["moments"], "a szimuláción van kapott gól"
+    assert r["depth_out_m"] == GK_DEPTH_OUT_M and r["radius_m"] == FREE_DEF_RADIUS_M
+    by_t = {f.t: f for f in m.frames}
+    for side in ("home", "away"):
+        sajat = [x for x in r["moments"] if x["defending"] == side]
+        golok = [sh for sh in d[side]["shots"] if sh["goal"]]
+        assert r["conceded"][side] == len(sajat) == len(golok) == \
+            d[side]["goals_against"]
+        assert r["free"][side] == sum(1 for sh in golok if sh["free"]) == \
+            sum(1 for x in sajat if x["free"])
+        assert r["keeper_out"][side] == sum(1 for x in sajat if x["keeper_out"])
+        for x, sh in zip(sajat, sorted(golok, key=lambda q: q["release_t"])):
+            assert x["t"] == sh["release_t"] and x["shooter"] == [sh["x"], sh["y"]]
+            assert x["defender"] == sh["defender"] and x["def_dist"] == sh["def_dist"]
+            assert x["xg"] == round(float(sh["xg"]), 2)
+            geo = shot_geometry(sh["x"], sh["y"], "bal" if x["goal"][0] == 0.0
+                                else "jobb")
+            assert x["zone"] == geo["zone"] and x["angle_deg"] == geo["angle_deg"]
+            kapus = next((p for p in by_t[sh["release_t"]].players
+                          if p.team.value == side and p.role == "kapus"), None)
+            if kapus is None:
+                assert x["keeper"] is None and x["keeper_out"] is None
+            else:
+                mely = math.hypot(kapus.x - x["goal"][0], kapus.y - 10.0)
+                assert abs(x["keeper_depth"] - mely) < 0.01
+                assert x["keeper_out"] == (mely >= GK_DEPTH_OUT_M)
+            assert x["team"] != side and x["shooter_jersey"] is not None
+    assert [x["s"] for x in r["moments"]] == sorted(x["s"] for x in r["moments"])
+
+
+def test_a_jelenet_lista_kapott_gol_sora_es_a_szabad_lovo_mellett_elmarad():
+    """A kapott gól a jelenet-listában a VÉDEKEZŐ csapat sora (sáv, védő
+    távolsága, kapus kint / a vonalon); ha ugyanarra a pillanatra szabad
+    lövő GÓL-sor van, a kapott gól sora elmarad (egyszer elég)."""
+    from handball.pipeline.court3d import scene_rows
+
+    szabadok = [{"s": 7.08, "defending": "away", "dist": 6.22, "goal": True}]
+    kapottak = [
+        {"s": 7.08, "team": "home", "defending": "away", "shooter_jersey": 10,
+         "zone": "9 m-en túl", "def_dist": 6.22, "keeper_depth": 0.93,
+         "keeper_out": False},
+        {"s": 40.2, "team": "home", "defending": "away", "shooter_jersey": 13,
+         "zone": "kapuelőtér", "def_dist": 0.7, "keeper_depth": 1.8,
+         "keeper_out": True},
+        {"s": 55.0, "team": "away", "defending": "home", "shooter_jersey": None,
+         "zone": "6–9 m", "def_dist": None, "keeper_depth": None,
+         "keeper_out": None},
+    ]
+    sorok = scene_rows([], szabadok, [], "Szeged", "Veszprém", [], kapottak)
+    assert [(r["tipus"], r["ido"], r["gol"]) for r in sorok] == [
+        ("sz", "0:07", True), ("kg", "0:40", True), ("kg", "0:55", True)]
+    assert sorok[1]["szoveg"] == ("Veszprém védekezése — kapott gól: Szeged #13 "
+                                  "(kapuelőtér) · védő 0,7 m · kapus kint")
+    assert sorok[2]["szoveg"] == "Szeged védekezése — kapott gól: Veszprém (6–9 m)"
+    # A hatodik paraméter nélkül a hívás a régi alakkal azonos.
+    assert scene_rows([], szabadok, [], "Szeged", "Veszprém") == \
+        scene_rows([], szabadok, [], "Szeged", "Veszprém", [], [])

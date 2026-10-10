@@ -123,6 +123,17 @@ feliratok egymás alatt):
   hatékonyság és a kontra-hullámok szabálya (első ember = az induláskor
   a kapuhoz legközelebbi mezőnyjátékos), az elszökés a kontra-elszökésé
   (a labdánál 6 m-rel előrébb váró ember).
+- **Kapott gólok ◀ ▶** — minden kapott gól egy helyen, a védekezés
+  olvasatával: gyűrű a lövő körül (a lövő csapat színével), szaggatott
+  vonal a legközelebbi védőhöz (**piros**, ha a lövő szabadon lőtt — a
+  2 m-es fedezés-sugáron kívül —, különben szürke), a kapus helye
+  **lila** gyűrűvel és vonal a kapu közepéig (a mélysége), **arany**
+  vonal a lövéstől a kapuig; a felirat: "Kapott gól (Veszprém): Szeged
+  #10 · 9 m-en túl, kapu-szög 13,8° · védő 6,2 m-re — szabadon · kapus
+  0,9 m-re a vonalon · xG 0,09". A forrás a védekezés-elemzés gól-sorai
+  (ugyanaz az elengedési kocka, lövő-hely, védő-távolság és xG), a sáv
+  és a kapu-szög a lövés-mérésé, a kapus mélysége a kapus-kimozdulás
+  rétegé (1,5 m felett "kint").
 
 A ▶ az utoljára nézett jelenettől lép tovább (nem ragad le, és a meccs
 legelső pillanatai is elérhetők).
@@ -138,16 +149,20 @@ ugyanez a gomb a motortól kéri a vágást, mutatja az állapotát, és a
 kész zipre letöltő linket ad.
 
 A **Jelenet-lista** a hiba-lapozók (Döntések, Szabad lövők,
-Labdavesztések, Lerohanások) összes jelenetét egy időrendi listában
+Labdavesztések, Lerohanások, Kapott gólok) összes jelenetét egy időrendi listában
 mutatja ("12:40 · Szeged — labdavesztés #7 (támadó harmad) · gól lett
 belőle"); koppintás egy sorra: odaugrik, az épp futó jelenet sora
 kiemelve. Meccs-elemzéshez gyorsabb, mint a ◀ ▶ lapozás. A kapott
 lerohanás a VÉDEKEZŐ csapat sora ("Veszprém védekezése — kapott
-lerohanás: Szeged #13 · GÓL"): aki nem futott vissza, azé a hiba.
+lerohanás: Szeged #13 · GÓL"): aki nem futott vissza, azé a hiba. A
+kapott gól is a védekező csapat sora ("Veszprém védekezése — kapott
+gól: Szeged #13 (kapuelőtér) · védő 0,7 m · kapus kint") — de ha
+ugyanarra a pillanatra szabad lövő GÓL-sor van, a kapott gól sora
+elmarad (az már megnevezi; a lapozóban minden kapott gól ott van).
 
 A **Kinek a hibái** választó a hiba-lapozókat egy csapatra szűri: mind
 egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott lövőt,
-az elvesztett labdát, a kapott lerohanást) — a saját csapatra szűrve
+az elvesztett labdát, a kapott lerohanást, a kapott gólt) — a saját csapatra szűrve
 videóelemzés a játékosoknak, az ellenfélre szűrve felkészülés ellenük.
 
 ## Jelenet megosztása
@@ -183,12 +198,13 @@ USB-kábellel és `adb reverse`-szel érhető el az app gépe.
   döntés-pillanatok, `free_shot_moments` — szabadon hagyott lövők,
   `turnover_moments` — labdavesztések, `wall_gap_segments` — fal-rések,
   `goal_build_ups` — gól-akciók, `powerplay_moments` — emberelőny,
-  `fast_break_moments` — lerohanások, `scene_rows` — a jelenet-lista
-  sorai), `view3d_html.py` (a böngészős oldal és a tömör adat),
-  végpontok: `/matches/{id}/view3d`, `/matches/{id}/defence-timeline`,
-  `/matches/{id}/decision-moments`, `/matches/{id}/free-shots`,
-  `/matches/{id}/turnover-moments`, `/matches/{id}/goal-build-ups`,
-  `/matches/{id}/powerplay-moments`, `/matches/{id}/fast-break-moments`.
+  `fast_break_moments` — lerohanások, `conceded_goal_moments` — kapott
+  gólok, `scene_rows` — a jelenet-lista sorai), `view3d_html.py` (a
+  böngészős oldal és a tömör adat), végpontok: `/matches/{id}/view3d`,
+  `/matches/{id}/defence-timeline`, `/matches/{id}/decision-moments`,
+  `/matches/{id}/free-shots`, `/matches/{id}/turnover-moments`,
+  `/matches/{id}/goal-build-ups`, `/matches/{id}/powerplay-moments`,
+  `/matches/{id}/fast-break-moments`, `/matches/{id}/conceded-goals`.
 - App: `client/lib/ui/court3d_screen.dart` (szoftveres vetítés,
   gesztusok, rétegek), `court_geometry.dart` (a backend tükre).
 - Tesztek: `backend/tests/test_view3d_eszkozok.py`,

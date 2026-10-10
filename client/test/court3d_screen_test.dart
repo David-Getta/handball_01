@@ -266,7 +266,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     // A fejléc: a jelenetek száma és a Klipek gomb (a demó-meccs nincs a
     // könyvtárban: tiltott).
-    expect(find.text("Jelenetek · 7"), findsOneWidget);
+    expect(find.text("Jelenetek · 8"), findsOneWidget);
     final klipek = find.widgetWithText(OutlinedButton, "Klipek");
     expect(klipek, findsOneWidget);
     expect(tester.widget<OutlinedButton>(klipek).onPressed, isNull);
@@ -356,6 +356,28 @@ void main() {
             .onPressed,
         isNull,
         reason: "a hazai nem kapott lerohanást");
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
+  testWidgets("kapott gól: ▶ odaugrik, felirat a védővel és a kapussal",
+      (tester) async {
+    await _nyit(tester);
+    final kov = find.byTooltip("Következő kapott gól");
+    await tester.ensureVisible(kov);
+    await tester.pump();
+    await tester.tap(kov);
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("Kapott gól (").evaluate().isNotEmpty) break;
+    }
+    // A demó kapott gólja: a vendég védekezése, a hazai lő 9 m-en túlról,
+    // a védő 1,7 m-re, a kapus 2,2 m-re kint.
+    expect(find.textContaining("Kapott gól (Demó Vendég): Demó Hazai"),
+        findsOneWidget);
+    expect(find.textContaining("9 m-en túl, kapu-szög 17,8°"), findsOneWidget);
+    expect(find.textContaining("védő 1,7 m-re · kapus 2,2 m-re kint · xG 0,31"),
+        findsOneWidget);
     expect(tester.takeException(), isNull);
     await _zar(tester);
   });
