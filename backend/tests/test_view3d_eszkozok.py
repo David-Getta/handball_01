@@ -641,6 +641,7 @@ def test_a_jelenet_lista_a_python_forrast_tukrozi():
     from test_court3d import _eladasos_meccs
 
     from handball.pipeline.court3d import (decision_moments,
+                                           fast_break_moments,
                                            free_shot_moments, scene_rows,
                                            turnover_moments)
     from handball.pipeline.view3d_html import _compact_data, view3d_html
@@ -649,7 +650,7 @@ def test_a_jelenet_lista_a_python_forrast_tukrozi():
     kod = _modul_szkript(view3d_html(_meccs()))
     i0 = kod.index("function jelenetSorok")
     i1 = kod.index("\n}\n", i0) + 2
-    volt = {"d": 0, "sz": 0, "e": 0}
+    volt = {"d": 0, "sz": 0, "e": 0, "k": 0}
     for m in (simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
                                     shots_per_min=8), _eladasos_meccs()):
         adat = _compact_data(m, None, {"home": [], "away": []},
@@ -659,14 +660,16 @@ def test_a_jelenet_lista_a_python_forrast_tukrozi():
               json.dumps(adat["free_shots"]) + ", " +
               json.dumps(adat["turnovers"]) + ", " +
               json.dumps(m.meta.home_team) + ", " +
-              json.dumps(m.meta.away_team) + ")));\n")
+              json.dumps(m.meta.away_team) + ", " +
+              json.dumps(adat["fast_breaks"]) + ")));\n")
         r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
                            timeout=60)
         assert r.returncode == 0, r.stderr
         py = scene_rows(decision_moments(m)["moments"],
                         free_shot_moments(m)["moments"],
                         turnover_moments(m)["moments"],
-                        m.meta.home_team, m.meta.away_team)
+                        m.meta.home_team, m.meta.away_team,
+                        fast_break_moments(m)["moments"])
         jsk = json.loads(r.stdout)
         assert [(x["ido"], x["tipus"], x["szoveg"], x["gol"]) for x in jsk] \
             == [(x["ido"], x["tipus"], x["szoveg"], x["gol"]) for x in py]
@@ -1097,3 +1100,103 @@ def test_az_appbeli_3d_a_backend_sablonjait_es_mereset_tukrozi():
     assert "0.22 + 0.5 *" in kepernyo and "0.22 + 0.5 * Math.min" in \
         __import__("handball.pipeline.view3d_html",
                    fromlist=["view3d_html"]).view3d_html(_meccs())
+
+
+def test_a_tomor_adat_es_a_vegpont_viszi_a_lerohanasokat(tmp_path,
+                                                          monkeypatch):
+    """A tömör adat "fast_breaks" sorai a fast_break_moments lerohanásai
+    (15 mezős alak: a 2. elem a VÉDEKEZŐ csapat — a szűrőhöz —, az út, a
+    lövés, a kapu, a labda és a jelenet vége); a /fast-break-moments
+    végpont ugyanazt adja, ismeretlen meccsre 404."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import fast_break_moments
+    from handball.pipeline.view3d_html import _compact_data
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=7,
+                              shots_per_min=8)
+    adat = _compact_data(m, None, {"home": [], "away": []},
+                         {"home": [], "away": []})
+    fb = fast_break_moments(m)
+    assert len(adat["fast_breaks"]) == len(fb["moments"]) > 0
+    for r, x in zip(adat["fast_breaks"], fb["moments"]):
+        assert len(r) == 15 and r[0] == x["s"]
+        assert r[1] == (1 if x["defending"] == "home" else 0)
+        assert r[2] == x["shooter_jersey"]
+        assert r[3] == {"first": "e", "second": "m", None: None}[x["wave"]]
+        assert r[6] == {"goal": "g", "shot": "l", None: None}[x["outcome"]]
+        assert r[7] == x["path"] and r[10:12] == x["goal"]
+        assert r[8:10] == (x["shot"] or [None, None])
+        assert r[14] == (x["shot_s"] if x["shot_s"] is not None else x["e"])
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    v = c.get(f"/matches/{m.meta.match_id}/fast-break-moments").json()
+    assert len(v["moments"]) == len(fb["moments"])
+    assert v["breaks"] == fb["breaks"] and v["goals"] == fb["goals"]
+    assert c.get("/matches/nincs/fast-break-moments").status_code == 404
+
+
+@pytest.mark.skipif(NODE is None, reason="nincs node a gépen")
+def test_a_lerohanas_felirata():
+    """A lerohanás felirata: a támadó csapat, a befejező mezszáma, az első
+    ember / második hullám, az elszökés, az időtartam és a kimenet; a
+    hiányzó részek kimaradnak. Az app tükre (court_geometry.fastBreakCaption)
+    ugyanezt a három esetet futtatja ugyanezekkel a feliratokkal."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    kod = _modul_szkript(view3d_html(_meccs()))
+    i0 = kod.index("function kontraFelirat")
+    i1 = kod.index("\n}\n", i0) + 2
+    # [s, a védekező hazai?, mez, hullám, elszökött, hossz, kimenet, …]
+    esetek = [
+        [10.0, 0, 7, "m", 1, 4.2, "g", [], None, None, 40, 10, 20, 10, 14.0],
+        [20.0, 1, 13, "e", 0, 2.25, "l", [], None, None, 0, 10, 20, 10, 22.0],
+        [30.0, 0, None, None, None, 3.0, None, [], None, None, 40, 10, None,
+         None, 33.0],
+    ]
+    js = (kod[i0:i1] + "\nconsole.log(JSON.stringify(" + json.dumps(esetek)
+          + '.map(d => kontraFelirat(d, "Szeged", "Veszprém"))));\n')
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [
+        "Lerohanás (Szeged): #7 fejezi be · második hullám · elszökött "
+        "emberrel · 4,2 mp · GÓL",
+        "Lerohanás (Veszprém): #13 fejezi be · első ember · együtt felfutva "
+        "· 2,3 mp · lövés",
+        "Lerohanás (Szeged): 3,0 mp · lövés nélkül"]
+    from pathlib import Path
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" /
+            "test" / "court_geometry_test.dart").read_text(encoding="utf-8")
+    for felirat in json.loads(r.stdout):
+        assert f'"{felirat}"' in dart, felirat
+
+
+def test_a_lerohanas_lapozo_az_oldalon_es_az_appban():
+    """A Lerohanások lapozó a böngészős oldalon (sor, felirat-doboz, a
+    rajzoló és a felirat-függvény, a VR-tábla forrása, a súgó) és az
+    appban (lapozó, szűrt lista, felirat, festő)."""
+    from pathlib import Path
+
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="kontraElozo"', 'id="kontraKov"', 'id="kontraInfo"',
+                 '<div id="kontraFelirat"></div>', "function kontraFelirat",
+                 "function kontraFrissit", "function kontraUgras",
+                 "const KONTRAK = ADAT.fast_breaks || [];",
+                 "kontraFrissit(t)", '"kontraFelirat", "emberJelzo"',
+                 "Lerohanások ◀ ▶", "ADAT.home, ADAT.away, szurt(KONTRAK)",
+                 'k: "#59d98c"'):
+        assert kell in oldal, kell
+    dart = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+            / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ('tooltip: "Következő lerohanás"', "_kontrakSz",
+                 '_szurt(_kontrak, "defending")', "fastBreakCaption(k,",
+                 "kontra: _aktivKontra(m),", "fetchFastBreakMoments(id)",
+                 "buildDemoFastBreaks(_match!)", "m.meta.awayTeam, _kontrakSz)"):
+        assert kell in dart, kell

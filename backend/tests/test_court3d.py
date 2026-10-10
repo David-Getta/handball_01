@@ -504,3 +504,83 @@ def test_emberelony_nelkul_ures():
     pm = powerplay_moments(simulate_ground_truth(duration_s=120, fps=25.0,
                                                  seed=5, shots_per_min=8))
     assert pm == {"moments": [], "windows": 0}
+
+
+def test_lerohanasok_a_kontra_retegek_szabalyaival():
+    """A lerohanás-jelenetek a három kontra-réteg szabályával: a
+    lerohanások és a góljaik száma a lerohanás-hatékonyságé, a második
+    hullámos befejezések a kontra-hullámoké, az elszökött emberrel indult
+    kontrák a kontra-elszökésé; a befutó útja az indulástól a lövésig."""
+    from handball.pipeline.attack_types import (FAST_BREAK_ADV_MS,
+                                                FAST_BREAK_MAX_S,
+                                                fast_break_conversion,
+                                                fast_break_headstart,
+                                                fast_break_waves)
+    from handball.pipeline.court3d import FB_PATH_STEP_S, fast_break_moments
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=7,
+                              shots_per_min=8)
+    r = fast_break_moments(m)
+    fc, fw, fh = (fast_break_conversion(m), fast_break_waves(m),
+                  fast_break_headstart(m))
+    assert r["moments"], "a szimuláción van lerohanás"
+    assert any(x["wave"] == "second" for x in r["moments"]), \
+        "van második hullámos befejezés is"
+    for side in ("home", "away"):
+        sajat = [x for x in r["moments"] if x["team"] == side]
+        assert r["breaks"][side] == len(sajat) == fc[side]["breaks"]
+        assert r["goals"][side] == fc[side]["goals"] == \
+            sum(1 for x in sajat if x["outcome"] == "goal")
+        assert sum(1 for x in sajat if x["wave"] is not None) == fw[side]["breaks"]
+        assert sum(1 for x in sajat if x["wave"] == "second") == fw[side]["second"]
+        assert sum(1 for x in sajat if x["ahead"] is not None) == fh[side]["breaks"]
+        assert sum(1 for x in sajat if x["ahead"]) == fh[side]["ahead"]
+    for x in r["moments"]:
+        assert x["defending"] != x["team"]
+        assert x["s"] <= x["e"] and 0 < x["duration_s"] <= FAST_BREAK_MAX_S
+        assert x["advance_ms"] >= FAST_BREAK_ADV_MS
+        assert x["goal"][1] == 10.0 and x["goal"][0] in (0.0, 40.0)
+        assert x["ball"] is not None and len(x["ball"]) == 2
+        if x["outcome"] is not None:
+            assert x["shot_s"] is not None and x["shot"] is not None
+            assert x["shooter_jersey"] is not None
+            # Az út az indulástól a lövésig, fél másodpercenként (+ a
+            # lövés kockája): a hossz a lövés idejéből következik.
+            lepesek = math.floor((x["shot_s"] - x["s"]) / FB_PATH_STEP_S) + 1
+            assert lepesek <= len(x["path"]) <= lepesek + 1
+            assert x["path"][-1] == x["shot"]
+        else:
+            assert x["shot_s"] is None and x["shot"] is None
+    assert [x["s"] for x in r["moments"]] == sorted(x["s"] for x in r["moments"])
+
+
+def test_a_jelenet_lista_lerohanas_sora_a_vedekezo_csapate():
+    """A kapott lerohanás a jelenet-listában a VÉDEKEZŐ csapat sora
+    ("kinek a hibája"), a támadó és a befejező mezszámával, a
+    kimenetellel; holtversenyben a lerohanás a labdavesztés után áll."""
+    from handball.pipeline.court3d import scene_rows
+
+    lerohanasok = [
+        {"s": 19.88, "team": "home", "defending": "away", "outcome": "goal",
+         "shooter_jersey": 13},
+        {"s": 61.0, "team": "away", "defending": "home", "outcome": "shot",
+         "shooter_jersey": None},
+        {"s": 90.5, "team": "home", "defending": "away", "outcome": None,
+         "shooter_jersey": 4},
+    ]
+    eladas = [{"s": 61.0, "team": "home", "jersey": 7, "zone": "saját",
+               "goal_after_s": None}]
+    sorok = scene_rows([], [], eladas, "Szeged", "Veszprém", lerohanasok)
+    assert [(r["tipus"], r["ido"], r["gol"]) for r in sorok] == [
+        ("k", "0:19", True), ("e", "1:01", False), ("k", "1:01", False),
+        ("k", "1:30", False)]
+    assert sorok[0]["szoveg"] == \
+        "Veszprém védekezése — kapott lerohanás: Szeged #13 · GÓL"
+    assert sorok[2]["szoveg"] == \
+        "Szeged védekezése — kapott lerohanás: Veszprém · lövés"
+    assert sorok[3]["szoveg"] == \
+        "Veszprém védekezése — kapott lerohanás: Szeged #4 · lövés nélkül"
+    # Lerohanások nélkül a lista a régi (háromlistás) hívással azonos.
+    assert scene_rows([], [], eladas, "Szeged", "Veszprém") == \
+        scene_rows([], [], eladas, "Szeged", "Veszprém", [])

@@ -564,14 +564,17 @@ def _szam1_js(v: float) -> str:
 
 
 def scene_rows(decisions: list, free_shots: list, turnovers: list,
-               home: str, away: str) -> list[dict]:
+               home: str, away: str,
+               fast_breaks: Optional[list] = None) -> list[dict]:
     """A 3D jelenet-lista sorai — a böngésző (jelenetSorok) és az app
     (sceneRows) KANONIKUS forrása, a nyomtatható jelentés is ebből ír.
 
-    Bemenet: a decision_moments / free_shot_moments / turnover_moments
-    "moments" listái. Visszatérés: [{"s", "ido" ("p:mm"), "tipus" ("d"
-    döntés, "sz" szabad lövés, "e" labdavesztés), "szoveg", "gol"}]
-    időrendben; holtversenyben döntés, szabad lövés, labdavesztés."""
+    Bemenet: a decision_moments / free_shot_moments / turnover_moments /
+    fast_break_moments "moments" listái. Visszatérés: [{"s", "ido"
+    ("p:mm"), "tipus" ("d" döntés, "sz" szabad lövés, "e" labdavesztés,
+    "k" kapott lerohanás), "szoveg", "gol"}] időrendben; holtversenyben
+    döntés, szabad lövés, labdavesztés, lerohanás. A lerohanás sora a
+    VÉDEKEZŐ csapaté ("kinek a hibája": aki nem futott vissza)."""
     def csapat(side):
         return home if side == "home" else away
 
@@ -599,7 +602,18 @@ def scene_rows(decisions: list, free_shots: list, turnovers: list,
                                    else "")
                                 + (f" ({h} harmad)" if h else "")
                                 + (" · gól lett belőle" if gol else "")})
-    rend = {"d": 0, "sz": 1, "e": 2}
+    for d in fast_breaks or []:
+        gol = d.get("outcome") == "goal"
+        sorok.append({"s": d["s"], "tipus": "k", "gol": gol,
+                      "szoveg": f"{csapat(d['defending'])} védekezése — "
+                                f"kapott lerohanás: {csapat(d['team'])}"
+                                + (f" #{d['shooter_jersey']}"
+                                   if d.get("shooter_jersey") is not None
+                                   else "")
+                                + (" · GÓL" if gol
+                                   else " · lövés" if d.get("outcome") == "shot"
+                                   else " · lövés nélkül")})
+    rend = {"d": 0, "sz": 1, "e": 2, "k": 3}
     sorok.sort(key=lambda r: (r["s"], rend[r["tipus"]]))
     for r in sorok:
         t = max(0, math.floor(r["s"]))
@@ -722,3 +736,118 @@ def powerplay_moments(match: Match, config: Optional[TacticsConfig] = None) -> d
             "goals": [[round(t / fps, 2), tm] for (t, tm, g) in bent if g]})
     moments.sort(key=lambda m_: (m_["s"], m_["team_down"]))
     return {"moments": moments, "windows": len(moments)}
+
+
+# Lerohanás-jelenetek: a befutó útját ekkora lépésközzel mintázzuk a
+# pályára rajzoláshoz (másodperc — a ritkítás nem változtatja).
+FB_PATH_STEP_S = 0.5
+
+
+def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """A lerohanások a 3D pályán: ki fut, honnan, és mi lett belőle.
+
+    A kontra-rétegek számokban mondják (lerohanás-hatékonyság: mennyi
+    lesz gól; kontra-hullámok: az első ember vagy a második hullám fejezi
+    be; kontra-elszökés: előre szökött emberrel futnak-e) — a 3D a
+    jelenetet mutatja: a befejező útját az indulástól a lövésig.
+    UGYANAZOK a szabályok: a lerohanás a classify_attacks címkéje
+    (FAST_BREAK_MAX_S, FAST_BREAK_ADV_MS); a gól és a lövő a szakaszban
+    vagy ATTACK_TAIL_S-en belül utána (a lerohanás-hatékonyság gól-, a
+    kontra-hullámok lövő-szabálya); az első ember az induláskor a kapuhoz
+    legközelebbi mezőnyjátékos; az elszökés a labdánál FBH_GAP_M-rel
+    előrébb váró ember.
+
+    Visszatérés: {"moments": [{"s", "e" (a szakasz kezdete/vége mp),
+    "shot_s" (a lövés mp | None), "team" (a támadó), "defending",
+    "duration_s", "advance_ms", "outcome" ("goal" / "shot" / None),
+    "shooter_jersey", "first_jersey", "wave" ("first" / "second" / None —
+    kettőnél kevesebb futóval vagy lövő nélkül None), "ahead" (bool |
+    None — labda nélkül None), "path" [[x, y], …] (a befejező — lövő
+    nélkül az első ember — útja FB_PATH_STEP_S lépésközzel az indulástól
+    a lövésig / a szakasz végéig), "shot" [x, y] | None, "ball" [x, y] |
+    None (a labda az induláskor), "goal" [x, y] (a támadott kapu
+    közepe)}] időrendben, "breaks": {"home"/"away": db}, "goals":
+    {"home"/"away": db}} — a számok a lerohanás-hatékonyság rétegével
+    egyeznek."""
+    from .attack_types import (ATTACK_TAIL_S, FBH_GAP_M, AttackType,
+                               _advance_speed, classify_attacks)
+    from .event_detection import EventType, detect_shots
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    lepes = max(1, round(FB_PATH_STEP_S * fps))
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+    seqs = {s.start_t: s for s in segment_attacks(match, config)}
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+
+    def hely(i, tid):
+        if i is None or tid is None:
+            return None
+        p = next((q for q in match.frames[i].players if q.track_id == tid), None)
+        return [round(p.x, 2), round(p.y, 2)] if p is not None else None
+
+    moments = []
+    breaks = {"home": 0, "away": 0}
+    goals = {"home": 0, "away": 0}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        side = a["team"]
+        team = Team(side)
+        goal_x = float(config.attacks_toward_x(team))
+        breaks[side] += 1
+        veg = a["end_frame"] + tail
+        bent = [e for e in shots if e.team == team
+                and a["start_frame"] <= e.t <= veg]
+        gol = any(e.type == EventType.GOAL for e in bent)
+        if gol:
+            goals[side] += 1
+        shot = next((e for e in bent if e.player_id is not None), None)
+        i0 = idx_of.get(a["start_frame"])
+        fr0 = match.frames[i0] if i0 is not None else None
+        runners = [p for p in fr0.players
+                   if p.team == team and p.role != "kapus"] if fr0 else []
+        first_id = (min(runners, key=lambda p: abs(p.x - goal_x)).track_id
+                    if runners else None)
+        wave = None
+        if shot is not None and len(runners) >= 2:
+            wave = "second" if shot.player_id != first_id else "first"
+        ahead = None
+        if fr0 is not None and fr0.ball is not None and runners:
+            front = min(abs(p.x - goal_x) for p in runners)
+            ahead = abs(fr0.ball.x - goal_x) - front >= FBH_GAP_M
+        futo = shot.player_id if shot is not None else first_id
+        i1 = idx_of.get(shot.t if shot is not None else a["end_frame"],
+                        idx_of.get(a["end_frame"]))
+        path = []
+        if i0 is not None and i1 is not None and futo is not None:
+            indexek = list(range(i0, i1 + 1, lepes))
+            if indexek[-1] != i1:
+                indexek.append(i1)
+            path = [h for h in (hely(i, futo) for i in indexek) if h is not None]
+        seq = seqs.get(a["start_frame"])
+        moments.append({
+            "s": round(a["start_frame"] / fps, 2),
+            "e": round(a["end_frame"] / fps, 2),
+            "shot_s": round(shot.t / fps, 2) if shot is not None else None,
+            "team": side, "defending": "away" if side == "home" else "home",
+            "duration_s": a["duration_s"],
+            "advance_ms": (round(_advance_speed(seq, goal_x, fps), 2)
+                           if seq is not None else None),
+            "outcome": "goal" if gol else ("shot" if bent else None),
+            "shooter_jersey": jersey.get(shot.player_id) if shot else None,
+            "first_jersey": jersey.get(first_id),
+            "wave": wave, "ahead": ahead, "path": path,
+            "shot": hely(idx_of.get(shot.t), shot.player_id) if shot else None,
+            "ball": ([round(fr0.ball.x, 2), round(fr0.ball.y, 2)]
+                     if fr0 is not None and fr0.ball is not None else None),
+            "goal": [goal_x, COURT_WIDTH_M / 2.0]})
+    return {"moments": moments, "breaks": breaks, "goals": goals}

@@ -345,15 +345,17 @@ class SceneRow {
 }
 
 /// A jelenet-lista sorai (a böngészős nézet `jelenetSorok`-jának tükre,
-/// UGYANAZOKKAL a feliratokkal): a döntés-, szabad-lövés- és
-/// labdavesztés-pillanatok (az API sorai) időrendben; holtversenyben
-/// döntés, szabad lövés, labdavesztés.
+/// UGYANAZOKKAL a feliratokkal): a döntés-, szabad-lövés-,
+/// labdavesztés- és lerohanás-pillanatok (az API sorai) időrendben;
+/// holtversenyben döntés, szabad lövés, labdavesztés, lerohanás. A
+/// kapott lerohanás a VÉDEKEZŐ csapat sora ("kinek a hibája").
 List<SceneRow> sceneRows(
     List<Map<String, dynamic>> dontesek,
     List<Map<String, dynamic>> szabadok,
     List<Map<String, dynamic>> eladasok,
     String nevH,
-    String nevV) {
+    String nevV,
+    [List<Map<String, dynamic>> lerohanasok = const []]) {
   String sz1(num v) => v.toDouble().toStringAsFixed(1).replaceAll(".", ",");
   String csapat(dynamic side) => side == "home" ? nevH : nevV;
   String ido(double s) {
@@ -387,7 +389,20 @@ List<SceneRow> sceneRows(
             "${h != null ? " ($h harmad)" : ""}${gol ? " · gól lett belőle" : ""}",
         gol));
   }
-  const rend = {"d": 0, "sz": 1, "e": 2};
+  for (final d in lerohanasok) {
+    final gol = d["outcome"] == "goal";
+    final mez = d["shooter_jersey"];
+    final vege = gol
+        ? " · GÓL"
+        : d["outcome"] == "shot"
+            ? " · lövés"
+            : " · lövés nélkül";
+    sorok.add(SceneRow(sOf(d), "", "k",
+        "${csapat(d["defending"])} védekezése — kapott lerohanás: "
+            "${csapat(d["team"])}${mez != null ? " #$mez" : ""}$vege",
+        gol));
+  }
+  const rend = {"d": 0, "sz": 1, "e": 2, "k": 3};
   sorok.sort((a, b) {
     final c = a.s.compareTo(b.s);
     return c != 0 ? c : rend[a.tipus]!.compareTo(rend[b.tipus]!);
@@ -395,6 +410,29 @@ List<SceneRow> sceneRows(
   return [
     for (final r in sorok) SceneRow(r.s, ido(r.s), r.tipus, r.szoveg, r.gol)
   ];
+}
+
+/// A lerohanás felirata (a böngészős nézet `kontraFelirat`-jának tükre,
+/// UGYANAZZAL a szöveggel): "Lerohanás (Szeged): #7 fejezi be · második
+/// hullám · elszökött emberrel · 4,2 mp · GÓL" — a hiányzó részek (lövő,
+/// hullám, elszökés) kimaradnak. `k`: a /fast-break-moments egy sora.
+String fastBreakCaption(Map<String, dynamic> k, String nevH, String nevV) {
+  final csapat = k["team"] == "home" ? nevH : nevV;
+  final hossz = ((k["duration_s"] as num?) ?? 0).toDouble();
+  final reszek = <String>[
+    if (k["shooter_jersey"] != null) "#${k["shooter_jersey"]} fejezi be",
+    if (k["wave"] == "first") "első ember",
+    if (k["wave"] == "second") "második hullám",
+    if (k["ahead"] == true) "elszökött emberrel",
+    if (k["ahead"] == false) "együtt felfutva",
+    "${hossz.toStringAsFixed(1).replaceAll(".", ",")} mp",
+    k["outcome"] == "goal"
+        ? "GÓL"
+        : k["outcome"] == "shot"
+            ? "lövés"
+            : "lövés nélkül",
+  ];
+  return "Lerohanás ($csapat): ${reszek.join(" · ")}";
 }
 
 /// A gól-akció felirata (a böngészős nézet `golAkcioFelirat`-jának

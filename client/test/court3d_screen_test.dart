@@ -266,7 +266,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     // A fejléc: a jelenetek száma és a Klipek gomb (a demó-meccs nincs a
     // könyvtárban: tiltott).
-    expect(find.text("Jelenetek · 6"), findsOneWidget);
+    expect(find.text("Jelenetek · 7"), findsOneWidget);
     final klipek = find.widgetWithText(OutlinedButton, "Klipek");
     expect(klipek, findsOneWidget);
     expect(tester.widget<OutlinedButton>(klipek).onPressed, isNull);
@@ -320,6 +320,42 @@ void main() {
         find.textContaining(
             "Emberelőny: Demó Hazai (Demó Vendég kiállítás miatt hiányos)"),
         findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
+  testWidgets("lerohanás: ▶ odaugrik, felirat a hullámmal és a kimenettel",
+      (tester) async {
+    await _nyit(tester);
+    final kov = find.byTooltip("Következő lerohanás");
+    await tester.ensureVisible(kov);
+    await tester.pump();
+    await tester.tap(kov);
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("Lerohanás (").evaluate().isNotEmpty) break;
+    }
+    // A demó lerohanása: a hazai első embere, elszökött emberrel, gól.
+    expect(find.textContaining("Lerohanás (Demó Hazai):"), findsOneWidget);
+    expect(find.textContaining("első ember · elszökött emberrel"),
+        findsOneWidget);
+    expect(find.textContaining("· GÓL"), findsOneWidget);
+    // Hazaira szűrve (a hazai kontrázott, a vendég kapta) a lapozó tiltott.
+    final szuro = find.text("Hibák: mindkét csapat");
+    await tester.ensureVisible(szuro);
+    await tester.pump();
+    await tester.tap(szuro);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text("Hibák: Demó Hazai").last);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+        tester
+            .widget<IconButton>(find.ancestor(
+                of: find.byTooltip("Következő lerohanás"),
+                matching: find.byType(IconButton)))
+            .onPressed,
+        isNull,
+        reason: "a hazai nem kapott lerohanást");
     expect(tester.takeException(), isNull);
     await _zar(tester);
   });

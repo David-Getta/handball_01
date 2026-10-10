@@ -213,6 +213,42 @@ List<Map<String, dynamic>> buildDemoGoalBuildUps(Match m) {
   ];
 }
 
+/// Demó lerohanás a 3D "Lerohanások" lapozójához (backend nélkül): a
+/// /fast-break-moments "moments" alakjában — a hazai első embere a
+/// félpályáról fut a jobb kapura (a demóban a hazai arra támad), az
+/// indítópassz a saját térfélről, a végén gól. SZINTETIKUS, csak a
+/// felület bemutatására.
+List<Map<String, dynamic>> buildDemoFastBreaks(Match m) {
+  final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+  final passzok = buildDemoPasses(m).take(1).toList();
+  if (passzok.isEmpty) return const [];
+  final t0 = passzok.first["t"] as int;
+  final s = t0 / fps;
+  const hossz = 2.5;
+  return [
+    {
+      "s": s,
+      "e": ((s + hossz) * 100).round() / 100,
+      "shot_s": ((s + hossz + 0.1) * 100).round() / 100,
+      "team": "home",
+      "defending": "away",
+      "duration_s": hossz,
+      "advance_ms": 3.0,
+      "outcome": "goal",
+      "shooter_jersey": null,
+      "first_jersey": null,
+      "wave": "first",
+      "ahead": true,
+      "path": [
+        for (var i = 0; i <= 5; i++) [21.0 + 2.6 * i, 10.0 - 0.3 * i]
+      ],
+      "shot": [34.0, 8.5],
+      "ball": [14.0, 11.0],
+      "goal": [courtLength, courtWidth / 2],
+    }
+  ];
+}
+
 /// Demó védekezés-idővonal a 3D védekezés-paneljéhez és a fal-résekhez
 /// (backend nélkül): a /defence-timeline "rows" alakjában — a demóban a
 /// vendég végig a jobb kapu előtt védekezik (hat mezőnyvédő ~5 m-re a

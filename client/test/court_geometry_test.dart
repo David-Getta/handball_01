@@ -131,6 +131,53 @@ void main() {
     expect([for (final x in r) x.gol], [true, false, true, false, false, false]);
   });
 
+  // A kapott lerohanás a jelenet-listában a VÉDEKEZŐ csapat sora; a
+  // backend scene_rows tesztje ugyanezt a helyzetet futtatja.
+  test("sceneRows: a kapott lerohanás a védekező csapat sora", () {
+    final r = sceneRows([], [], [
+      {"s": 61.0, "team": "home", "jersey": 7, "zone": "saját",
+       "goal_after_s": null},
+    ], "Szeged", "Veszprém", [
+      {"s": 19.88, "team": "home", "defending": "away", "outcome": "goal",
+       "shooter_jersey": 13},
+      {"s": 61.0, "team": "away", "defending": "home", "outcome": "shot",
+       "shooter_jersey": null},
+      {"s": 90.5, "team": "home", "defending": "away", "outcome": null,
+       "shooter_jersey": 4},
+    ]);
+    expect([for (final x in r) "${x.ido} ${x.tipus} ${x.gol}"],
+        ["0:19 k true", "1:01 e false", "1:01 k false", "1:30 k false"]);
+    expect(r[0].szoveg,
+        "Veszprém védekezése — kapott lerohanás: Szeged #13 · GÓL");
+    expect(r[2].szoveg,
+        "Szeged védekezése — kapott lerohanás: Veszprém · lövés");
+    expect(r[3].szoveg,
+        "Veszprém védekezése — kapott lerohanás: Szeged #4 · lövés nélkül");
+  });
+
+  // A lerohanás felirata a böngésző kontraFelirat-jával AZONOS (a backend
+  // node-os tesztje ugyanezt a három esetet futtatja).
+  test("fastBreakCaption = a böngésző kontraFelirat-ja", () {
+    expect(
+        fastBreakCaption({
+          "team": "home", "shooter_jersey": 7, "wave": "second",
+          "ahead": true, "duration_s": 4.2, "outcome": "goal",
+        }, "Szeged", "Veszprém"),
+        "Lerohanás (Szeged): #7 fejezi be · második hullám · elszökött emberrel · 4,2 mp · GÓL");
+    expect(
+        fastBreakCaption({
+          "team": "away", "shooter_jersey": 13, "wave": "first",
+          "ahead": false, "duration_s": 2.25, "outcome": "shot",
+        }, "Szeged", "Veszprém"),
+        "Lerohanás (Veszprém): #13 fejezi be · első ember · együtt felfutva · 2,3 mp · lövés");
+    expect(
+        fastBreakCaption({
+          "team": "home", "shooter_jersey": null, "wave": null,
+          "ahead": null, "duration_s": 3.0, "outcome": null,
+        }, "Szeged", "Veszprém"),
+        "Lerohanás (Szeged): 3,0 mp · lövés nélkül");
+  });
+
   // A gól-akció felirata a böngésző golAkcioFelirat-jával AZONOS (a
   // backend node-os tesztje ugyanezt a három esetet futtatja).
   test("goalBuildUpCaption = a böngésző golAkcioFelirat-ja", () {

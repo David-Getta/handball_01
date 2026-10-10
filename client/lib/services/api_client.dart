@@ -1509,6 +1509,18 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A lerohanások (court3d.fast_break_moments) — a 3D pálya
+  /// "Lerohanások" lapozója: a befejező útja, hullám, elszökés, kimenet.
+  Future<Map<String, dynamic>> fetchFastBreakMoments(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/fast-break-moments"))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a lerohanásokat", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> fetchTurnoverMoments(String matchId) async {
     final resp = await http
         .get(Uri.parse("$baseUrl/matches/$matchId/turnover-moments"))

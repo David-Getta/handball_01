@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.160 óta)
 
+- **3D pálya: Lerohanások lapozó** (új, böngészős/VR és appbeli nézet):
+  a kontra-rétegek számokban mondják (lerohanás-hatékonyság,
+  kontra-hullámok, kontra-elszökés) — a 3D a jelenetet mutatja: ◀ ▶ a
+  lerohanások közt, a befejező útja az indulástól a lövésig a csapat
+  színével (pont fél mp-enként), fehér szaggatott vonal az indítópassz,
+  arany vonal a lövéstől a kapuig; a felirat az edzői olvasattal
+  ("Lerohanás (Szeged): #7 fejezi be · második hullám · elszökött
+  emberrel · 4,2 mp · GÓL"). Ugyanazok a szabályok, mint a rétegekben
+  (a lerohanás-címke, a gól- és lövő-szabály, az első ember, a 6 m-es
+  elszökés) — a számok a rétegekkel egyeznek. A jelenet-listában a
+  kapott lerohanás a VÉDEKEZŐ csapat sora ("kinek a hibája": aki nem
+  futott vissza — "Veszprém védekezése — kapott lerohanás: Szeged #13 ·
+  GÓL"); a "Kinek a hibái" szűrő, az N/P és a VR-kontrolleres lépés is
+  ezt követi. Új végpont: /matches/{id}/fast-break-moments; az app
+  demója egy szintetikus lerohanással.
+
 - **3D pálya (VR): jelenet-lapozás a kontrollerrel** (új): a
   headsetben a weboldal gombjai nem érhetők el — mostantól a
   kontroller A/X gombja a következő, B/Y gombja az előző jelenetre

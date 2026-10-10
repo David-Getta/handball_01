@@ -2917,6 +2917,19 @@ def create_app():
         return _cached_result(match_id, "goal-build-ups",
                               lambda: goal_build_ups(match))
 
+    @app.get("/matches/{match_id}/fast-break-moments")
+    def match_fast_break_moments(match_id: str):
+        """A lerohanások (court3d.fast_break_moments): a befejező útja az
+        indulástól a lövésig, az első ember / második hullám és az
+        elszökés a kontra-rétegek szabályával — a 3D pálya "Lerohanások"
+        lapozója ebből dolgozik. Gyorsítótárazva."""
+        from ..pipeline.court3d import fast_break_moments
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return _cached_result(match_id, "fast-break-moments",
+                              lambda: fast_break_moments(match))
+
     @app.get("/matches/{match_id}/turnover-moments")
     def match_turnover_moments(match_id: str):
         """A labdavesztések pillanatai (court3d.turnover_moments) — a 3D
