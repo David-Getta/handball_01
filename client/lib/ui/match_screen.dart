@@ -3115,33 +3115,60 @@ class _MatchScreenState extends State<MatchScreen> {
       );
 
   Widget _leftColumn(Match match) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _toolbar(match),
-        const SizedBox(height: AppSpacing.md),
-        Expanded(
-          child: Container(
+    final kartya = Container(
             decoration: AppTheme.card(),
             padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 6),
-                  child: Text("40 × 20 M · FELÜLNÉZET", style: AppText.sectionLabel.copyWith(fontSize: 10)),
-                ),
-                Expanded(child: _courtArea(match)),
-              ],
-            ),
+            // Alacsony ablakban (600 px) a tördelt eszköz-sáv és a vezérlők
+            // a kártyának pár pixelt hagynak: a felirat ilyenkor elmarad, a
+            // pálya kapja a helyet (korábban a felirat túlcsordult).
+            child: LayoutBuilder(builder: (context, c) {
+              if (c.maxHeight < 60) return _courtArea(match);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 6),
+                    child: Text("40 × 20 M · FELÜLNÉZET", style: AppText.sectionLabel.copyWith(fontSize: 10)),
+                  ),
+                  Expanded(child: _courtArea(match)),
+                ],
+              );
+            }),
+          );
+    // Alacsony ablakban (600 px) a tördelt eszköz-sáv, a felirat és a
+    // kétsoros vezérlők együtt magasabbak a helynél — korábban az oszlop
+    // túlcsordult: ilyenkor az oszlop görgethető, a pálya rögzített
+    // magasságú; magasabb ablakban a pálya kapja a maradék helyet.
+    return LayoutBuilder(builder: (context, c) {
+      if (c.maxHeight < 520) {
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _toolbar(match),
+              const SizedBox(height: AppSpacing.md),
+              SizedBox(height: 260, child: kartya),
+              const SizedBox(height: AppSpacing.md),
+              _tacticalCaption(match),
+              const SizedBox(height: AppSpacing.sm),
+              _controls(match),
+            ],
           ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _tacticalCaption(match),
-        const SizedBox(height: AppSpacing.sm),
-        _controls(match),
-      ],
-    );
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _toolbar(match),
+          const SizedBox(height: AppSpacing.md),
+          Expanded(child: kartya),
+          const SizedBox(height: AppSpacing.md),
+          _tacticalCaption(match),
+          const SizedBox(height: AppSpacing.sm),
+          _controls(match),
+        ],
+      );
+    });
   }
 
   Widget _toolbar(Match match) {
@@ -3289,10 +3316,19 @@ class _MatchScreenState extends State<MatchScreen> {
 
   Widget _legend() {
     Widget dot(Color c) => Container(width: 9, height: 9, decoration: BoxDecoration(color: c, shape: BoxShape.circle));
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      dot(AppColors.home), const SizedBox(width: 4), Text(_match!.meta.homeTeam, style: AppText.label.copyWith(fontSize: 11)),
-      const SizedBox(width: 12),
-      dot(AppColors.away), const SizedBox(width: 4), Text(_match!.meta.awayTeam, style: AppText.label.copyWith(fontSize: 11)),
+    // Tördelhető és a név vége elhalványul: keskeny ablakban (700 px) a
+    // két csapatnév egy sorban túlcsordult az eszköz-sávon.
+    Widget csapat(Color c, String nev) => Row(mainAxisSize: MainAxisSize.min, children: [
+      dot(c), const SizedBox(width: 4),
+      ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 200),
+        child: Text(nev, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis,
+            style: AppText.label.copyWith(fontSize: 11)),
+      ),
+    ]);
+    return Wrap(spacing: 12, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      csapat(AppColors.home, _match!.meta.homeTeam),
+      csapat(AppColors.away, _match!.meta.awayTeam),
     ]);
   }
 
@@ -3975,14 +4011,21 @@ class _MatchScreenState extends State<MatchScreen> {
 
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(color: AppColors.accentSoft, borderRadius: BorderRadius.circular(20)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.sports_handball, size: 16, color: AppColors.accent),
-            const SizedBox(width: 6),
-            Text(text, style: AppText.value.copyWith(color: AppColors.accent)),
-          ]),
+        // A fázis-címke is rugalmas: keskeny oszlopban (700 px-es ablak) a
+        // címke egyedül kitöltötte a sort, és a "véd:" szöveg "…"-je
+        // túlcsordult.
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(color: AppColors.accentSoft, borderRadius: BorderRadius.circular(20)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.sports_handball, size: 16, color: AppColors.accent),
+              const SizedBox(width: 6),
+              Flexible(
+                  child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: AppText.value.copyWith(color: AppColors.accent))),
+            ]),
+          ),
         ),
         if (formation != null) ...[
           const SizedBox(width: AppSpacing.sm),
@@ -4010,8 +4053,12 @@ class _MatchScreenState extends State<MatchScreen> {
 
   Widget _controls(Match match) {
     final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
-    return Row(
-      children: [
+    // Keskeny oszlopban (700 px-es ablak) a gombok, az idő és a sebesség
+    // egy sorban nem fértek el az idővonal mellett (túlcsordulás): ilyenkor
+    // az idővonal külön sorba kerül, alatta a gombok tördelve.
+    return LayoutBuilder(builder: (context, c) {
+    final szuk = c.maxWidth < 460;
+    final gombok = <Widget>[
         IconButton(
           iconSize: 38,
           color: AppColors.accent,
@@ -4034,8 +4081,8 @@ class _MatchScreenState extends State<MatchScreen> {
           onPressed: _navPoints().isEmpty ? null : () => _jumpToEvent(match, 1),
           icon: const Icon(Icons.skip_next),
         ),
-        Expanded(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
+    ];
+    final idovonal = Column(mainAxisSize: MainAxisSize.min, children: [
             // Meccs-sztori sáv: gólok, sorozatok, emberelőnyök, 7 a 6 és
             // hétméteresek egy idővonalon — koppintásra odaugrik a lejátszó.
             Padding(
@@ -4078,19 +4125,18 @@ class _MatchScreenState extends State<MatchScreen> {
                   ),
                 ),
               ),
-          ]),
-        ),
-        const SizedBox(width: AppSpacing.sm),
+          ]);
+    final ido = <Widget>[
         // Videó-idő (a kocka t címkéjéből): egyezik az Események lista, a
         // jegyzetek és a jelenet-lejátszó időskálájával vágott meccsen is.
         Text("${(_tOf(match) / fps).toStringAsFixed(1)} s", style: AppText.value),
         Text(
             "  /  ${((match.frames.isEmpty ? 0 : match.frames.last.t) / fps).toStringAsFixed(0)} s",
             style: AppText.label),
-        const SizedBox(width: AppSpacing.sm),
+    ];
         // Lejátszási sebesség — billentyűzetről is: szóköz/nyilak/E/Q
         // (a gomb tooltipje sorolja a gyorsbillentyűket).
-        PopupMenuButton<double>(
+    final sebesseg = PopupMenuButton<double>(
           tooltip: "Sebesség: ${_speedLabel(_speed)}\n"
               "Gyorsbillentyűk: szóköz = lejátszás/szünet · ←/→ = 1 kocka · "
               "Shift+←/→ = 5 mp · Q/E = előző/következő esemény",
@@ -4122,9 +4168,26 @@ class _MatchScreenState extends State<MatchScreen> {
                 style: AppText.value.copyWith(
                     fontSize: 12, color: AppColors.accent)),
           ),
-        ),
+        );
+    if (szuk) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        idovonal,
+        Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 4, children: [
+          ...gombok, ...ido, const SizedBox(width: AppSpacing.sm), sebesseg,
+        ]),
+      ]);
+    }
+    return Row(
+      children: [
+        ...gombok,
+        Expanded(child: idovonal),
+        const SizedBox(width: AppSpacing.sm),
+        ...ido,
+        const SizedBox(width: AppSpacing.sm),
+        sebesseg,
       ],
     );
+    });
   }
 
   static String _speedLabel(double v) =>

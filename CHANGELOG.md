@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.161 óta)
 
+- **App: elrendezési hibák keskeny ablakban (700×600) — nyolc
+  képernyő** (javítás): a füstteszt harmadik ablakmérete (700×600 —
+  fél képernyőnyi ablak) nyolc képernyőn talált túlcsordulást: a közös
+  felső sáv morzsája ("SZEKCIÓ › KÉPERNYŐ › AL-CÍM") a jobb oldali
+  gombokra csúszott (Kalibráció, Irányítópult, Feladatok, Élő, Meccs,
+  Felderítés, Feltöltés), a meccs-elemző jelmagyarázata, fázis-címkéje,
+  vezérlő-sora és a bal oszlop egésze, az élő nézet "MOST" kártyája és
+  az edzésterv fülei. Mostantól a morzsa vége halványul el, a
+  jelmagyarázat és a fülek tördelődnek, a vezérlők keskeny oszlopban két
+  sorba kerülnek (idővonal külön), a bal oszlop alacsony ablakban
+  görgethető, a "MOST" kártya felső része görgethető. A 700×600-as
+  méret a füstteszt állandó része.
+
 - **3D pálya: Kapott gólok lapozó** (új, böngészős/VR és appbeli nézet):
   minden kapott gól egy helyen, a védekezés olvasatával — ◀ ▶ a kapott
   gólok közt, gyűrű a lövő körül, szaggatott vonal a legközelebbi

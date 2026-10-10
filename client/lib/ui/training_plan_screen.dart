@@ -227,20 +227,27 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       );
     }
 
-    return Row(children: [
-      tab("Szezon (visszatérő)", true, Icons.repeat),
-      const SizedBox(width: AppSpacing.sm),
-      tab("Egy meccs", false, Icons.play_circle_outline),
-      const Spacer(),
-      // A lapot le lehet vinni az edzésre, ki lehet tenni az öltözőben
-      // — a csapat gyakorlandói ÉS az egyéni feladatok egy oldalon.
-      if (_seasonView && _team != null)
-        OutlinedButton.icon(
-          onPressed: _exportPlan,
-          icon: const Icon(Icons.print_outlined, size: 16),
-          label: const Text("Nyomtatható edzésterv"),
-        ),
-    ]);
+    // Tördelhető: keskeny ablakban (700 px) a két fül és a nyomtatás-gomb
+    // egy sorban túlcsordult — a gomb ilyenkor a fülek alá kerül.
+    return Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: [
+          Wrap(spacing: AppSpacing.sm, runSpacing: AppSpacing.sm, children: [
+            tab("Szezon (visszatérő)", true, Icons.repeat),
+            tab("Egy meccs", false, Icons.play_circle_outline),
+          ]),
+          // A lapot le lehet vinni az edzésre, ki lehet tenni az öltözőben
+          // — a csapat gyakorlandói ÉS az egyéni feladatok egy oldalon.
+          if (_seasonView && _team != null)
+            OutlinedButton.icon(
+              onPressed: _exportPlan,
+              icon: const Icon(Icons.print_outlined, size: 16),
+              label: const Text("Nyomtatható edzésterv"),
+            ),
+        ]);
   }
 
   // ---- Szezon-nézet --------------------------------------------------

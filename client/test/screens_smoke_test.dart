@@ -57,7 +57,7 @@ Future<void> _zar(WidgetTester tester) async {
 }
 
 void main() {
-  for (final meret in const [Size(1400, 900), Size(900, 700)]) {
+  for (final meret in const [Size(1400, 900), Size(900, 700), Size(700, 600)]) {
     for (final e in _kepernyok.entries) {
       testWidgets(
           "${e.key} megnyílik backend nélkül "

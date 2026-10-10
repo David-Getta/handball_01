@@ -425,27 +425,46 @@ class _TopBar extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.xl, AppSpacing.lg, AppSpacing.xl, AppSpacing.md),
+      // A morzsa-szövegek rugalmasak: keskeny ablakban (700 px) a hosszú
+      // "SZEKCIÓ › KÉPERNYŐ › AL-CÍM" a jobb oldali gombokra csúszott
+      // (túlcsordulás) — most a vége halványul el, a gombok maradnak.
       child: Row(
         children: [
-          Text(section,
-              style: AppText.label.copyWith(
-                  fontSize: 10.5, letterSpacing: 1.2,
-                  color: AppColors.textFaint)),
+          Flexible(
+            child: Text(section,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.label.copyWith(
+                    fontSize: 10.5, letterSpacing: 1.2,
+                    color: AppColors.textFaint)),
+          ),
           if (section.isNotEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
               child: Icon(Icons.chevron_right, size: 14,
                   color: AppColors.textFaint),
             ),
-          Text(label.toUpperCase(), style: AppText.crumb),
+          Flexible(
+            flex: 2,
+            child: Text(label.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.crumb),
+          ),
           if (sub.isNotEmpty && sub.toUpperCase() != label.toUpperCase()) ...[
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
               child: Icon(Icons.chevron_right, size: 14,
                   color: AppColors.textFaint),
             ),
-            Text(sub, style: AppText.crumb.copyWith(
-                color: AppColors.textSecondary)),
+            Flexible(
+              flex: 2,
+              child: Text(sub,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.crumb.copyWith(
+                      color: AppColors.textSecondary)),
+            ),
           ],
           const Spacer(),
           // Eddig ez csak egy tooltipes ikon volt — kattintani lehetett

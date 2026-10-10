@@ -760,6 +760,14 @@ class _LiveScreenState extends State<LiveScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // A "most" rész alacsony ablakban (600 px) görgethető, nem
+          // csordul túl: a korábbi jelzések listája megtartja a helyét.
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
           Row(children: [
             const Icon(Icons.tips_and_updates_outlined, size: 18, color: AppColors.accent),
             const SizedBox(width: 8),
@@ -784,6 +792,10 @@ class _LiveScreenState extends State<LiveScreen> {
           const Divider(height: AppSpacing.xl, color: AppColors.border),
           Text("KORÁBBI JELZÉSEK", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
+                ],
+              ),
+            ),
+          ),
           Expanded(
             child: _feed.isEmpty
                 ? Text("Indítsd el a lejátszást — a jelzések itt gyűlnek, "
