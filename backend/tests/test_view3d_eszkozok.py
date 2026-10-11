@@ -2164,6 +2164,24 @@ def test_a_rovid_csapat_link(tmp_path, monkeypatch):
     assert 'final link = "${_api.baseUrl}/kovet";' in palya
 
 
+def test_a_megbeszeles_gomb():
+    """A kezdőlap "Megbeszélés" gombja a 3D-t a jegyzetek (ha nincs, a
+    videózandó jelenetek) vetítésével és a közös nézés vezetésével nyitja;
+    a 3D fül betöltés után indítja a vezetést (a demóban nem)."""
+    from pathlib import Path
+
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+    kezdo = (gyoker / "dashboard_screen.dart").read_text(encoding="utf-8")
+    palya = (gyoker / "court3d_screen.dart").read_text(encoding="utf-8")
+    i = kezdo.index('label: const Text("Megbeszélés"')
+    blokk = kezdo[i - 700:i]
+    for kell in ("csakVideozando: true,", "csakJegyzet: true,",
+                 "vetites: true,", "vezet: true))),"):
+        assert kell in blokk, kell
+    assert "_kezdoVetites();\n      _kezdoVezetes();" in palya
+    assert "if (!widget.vezet || _demo || _matchId == null || _vezet) return;" in palya
+
+
 def test_a_3d_oldal_kozos_nezese():
     """Az oldalon a "📡 Vezetem" / "👥 Követem": a vezető küld, a követő
     kérdez és követ (idő a korral, szünet, sebesség, rajz), a link viszi

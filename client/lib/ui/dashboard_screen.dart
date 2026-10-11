@@ -883,6 +883,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
           label: const Text("Vetítés", style: TextStyle(fontSize: 11.5)),
         ),
       ),
+      // Csapat-megbeszélés egy kattintással: a jegyzetek (ha nincs, a
+      // videózandó jelenetek) vetítése, és a közös nézés vezetése — a
+      // headsetek a rövid csapat-linken (…/kovet) csatlakoznak.
+      Tooltip(
+        message: "Csapat-megbeszélés: a 3D pálya a jegyzeteid (ha nincs, a "
+            "videózandó jelenetek) vetítésével, a közös nézést vezetve — a "
+            "játékosok headsetjei a localhost:8000/kovet címen csatlakoznak",
+        child: TextButton.icon(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => Court3DScreen(
+                  matchId: id,
+                  csakVideozando: true,
+                  csakJegyzet: true,
+                  vetites: true,
+                  vezet: true))),
+          style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              visualDensity: VisualDensity.compact),
+          icon: const Icon(Icons.groups_outlined, size: 14),
+          label: const Text("Megbeszélés", style: TextStyle(fontSize: 11.5)),
+        ),
+      ),
     ]);
   }
 

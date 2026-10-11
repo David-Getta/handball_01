@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.165 óta)
 
+- **"👥 Megbeszélés" a kezdőlapon** (új, app): egy kattintással a
+  csapat-megbeszélés — a 3D pálya az edző jegyzeteinek (ha nincs, a
+  videózandó jelenetek) vetítésével nyílik, és a közös nézés vezetése
+  elindul (a rövid csapat-link a vágólapon): a játékosok headsetjei a
+  `localhost:8000/kovet` címen csatlakoznak, és az edző a laptopról viszi
+  a megbeszélést.
+
 - **Közös nézés: rövid csapat-link** (új, motor, böngésző, app): a
   headseten elég a `localhost:8000/kovet` címet begépelni — a motor a
   MOST élő közös nézésre irányít (a legutóbb küldő vezetőhöz); vezető
