@@ -916,7 +916,8 @@ class ApiClient {
       required bool playing,
       required double speed,
       String rajz = "",
-      Map<String, num>? mutato}) async {
+      Map<String, num>? mutato,
+      Map<String, num>? nezopont}) async {
     final resp = await http.put(
         Uri.parse("$baseUrl/matches/$matchId/shared3d"),
         headers: {"Content-Type": "application/json"},
@@ -927,6 +928,8 @@ class ApiClient {
           "rajz": rajz,
           // A vezető mutatója ({x, y, n}) — a követőknél lüktető gyűrű.
           if (mutato != null) "mutato": mutato,
+          // "📍 Ide mindenki": a vezető nézőpontja a böngésző three-terében.
+          if (nezopont != null) "nezopont": nezopont,
         }));
     if (resp.statusCode != 200) {
       throw Exception(

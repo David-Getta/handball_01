@@ -2052,7 +2052,7 @@ def test_a_kozos_nezes_mutatoja(tmp_path, monkeypatch):
     ertek = re.search(r"static const double _mutatoS = ([0-9.]+);", palya)
     assert ertek and float(ertek.group(1)) == court3d.SHARED3D_POINTER_S
     for kell in ("if (_vezet && HardwareKeyboard.instance.isShiftPressed) {",
-                 "mutato: _mutato)", "mutato: _mutatoAllapot(),"):
+                 "mutato: _mutato,", "mutato: _mutatoAllapot(),"):
         assert kell in palya, kell
     assert 'if (mutato != null) "mutato": mutato,' in api
     # Új vezetés: a régi mutató nem megy újra (böngésző és app).
@@ -2095,6 +2095,15 @@ def test_a_kozos_nezes_nezopontja(tmp_path, monkeypatch):
                  'modValt("szabad");\n  rig.position.set(v.x, v.y, v.z);',
                  "kozosInfo.textContent === KZ_IDE && performance.now() - kzInfoValtas < KZ_VR_MS"):
         assert kell in oldal, kell
+    # Az app vezetője is küldhet nézőpontot (a böngésző three-terébe
+    # átszámolva — court_geometry.browserViewpoint, egységteszttel).
+    from pathlib import Path
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "...browserViewpoint(_cx, _cy, _cz, _yaw, _pitch)," in palya
+    assert "nezopont: _nezopont)" in palya
+    assert 'if (nezopont != null) "nezopont": nezopont,' in api
 
 
 def test_a_3d_oldal_kozos_nezese():

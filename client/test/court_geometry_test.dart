@@ -1,11 +1,38 @@
 // A 3D pálya közös geometriája — a Dart-tükör ugyanazt adja, mint a
 // backend `court3d` (a várt értékek a Python-függvényből számolva).
+import "dart:math" as math;
 import "dart:ui";
 
 import "package:flutter_test/flutter_test.dart";
 import "package:handball_client/ui/court_geometry.dart";
 
 void main() {
+  test("közös nézés: az app nézőpontja a böngésző three-terében", () {
+    // A két kamera előre-iránya a pályán (x, y, fel) egybeesik.
+    for (final (yaw, pitch) in [(0.0, 0.0), (0.7, -0.3), (-2.4, 0.5), (3.0, 1.2)]) {
+      final v = browserViewpoint(12.0, 5.0, 1.7, yaw, pitch);
+      expect(v["x"], 12.0);
+      expect(v["y"], 1.7);
+      expect(v["z"], courtWidth - 5.0);
+      final cp = math.cos(pitch);
+      final app = [math.sin(yaw) * cp, math.cos(yaw) * cp, math.sin(pitch)];
+      final yb = v["yaw"]!, pb = v["pitch"]!;
+      // A böngésző (three): (−sin yb·cos pb, sin pb, −cos yb·cos pb); a
+      // pálya y-ja = szélesség − three z, tehát a pályán dy = −dz.
+      final bongeszo = [
+        -math.sin(yb) * math.cos(pb),
+        math.cos(yb) * math.cos(pb),
+        math.sin(pb),
+      ];
+      for (var i = 0; i < 3; i++) {
+        expect(bongeszo[i], closeTo(app[i], 1e-9));
+      }
+    }
+    // A padló alá nem visz, a túl meredek pitch szorítva.
+    expect(browserViewpoint(0, 0, -3, 0, 2.0)["y"], 0.2);
+    expect(browserViewpoint(0, 0, 2, 0, 2.0)["pitch"], 1.6);
+  });
+
   test("rajz: dekódolás = a böngésző rajzDekodol-ja", () {
     // Ugyanaz az eset, mint a backend node-tesztjében
     // (test_a_rajz_dekodolasa_a_dart_tukorrel_egyezik).

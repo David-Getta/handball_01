@@ -250,6 +250,9 @@ class _Court3DScreenState extends State<Court3DScreen>
   // _mutatoS másodpercig itt is lüktet.
   static const double _mutatoS = 4.0; // court3d.SHARED3D_POINTER_S (őr-teszt)
   Map<String, num>? _mutato; // a legutóbbi (küldésre): {x, y, n}
+  // "📍 Ide mindenki": a legutóbbi nézőpont (küldésre, a böngésző
+  // three-terében) — a követők kamerája oda ugrik.
+  Map<String, num>? _nezopont;
   DateTime? _mutatoKezd;
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
@@ -2163,9 +2166,10 @@ class _Court3DScreenState extends State<Court3DScreen>
       _vezetHiba = false;
       _vezetUtolso = 0;
       _kovetok = null;
-      // Új vezetés: a régi mutató nem megy újra a csapatnak.
+      // Új vezetés: a régi mutató (és nézőpont) nem megy újra a csapatnak.
       _mutato = null;
       _mutatoKezd = null;
+      _nezopont = null;
     });
     if (be) {
       final link = "${_api.baseUrl}/matches/$id/view3d?kovet=1";
@@ -2197,7 +2201,8 @@ class _Court3DScreenState extends State<Court3DScreen>
             playing: _playing,
             speed: _speed,
             rajz: encodeDrawing(_rajzok),
-            mutato: _mutato)
+            mutato: _mutato,
+            nezopont: _nezopont)
         .then((n) {
       if ((_vezetHiba || n != _kovetok) && mounted && _vezet) {
         setState(() {
@@ -2974,6 +2979,36 @@ class _Court3DScreenState extends State<Court3DScreen>
           ),
         ),
       ),
+      // "📍 Ide mindenki": a követők a mostani nézőpontba ugranak.
+      if (_vezet)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Tooltip(
+            message: "Ide mindenki: a követők kamerája a te mostani "
+                "nézőpontodba ugrik (hely és irány) — pl. mindenki a kapus "
+                "helyére",
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  visualDensity: VisualDensity.compact),
+              onPressed: () {
+                setState(() {
+                  _nezopont = {
+                    ...browserViewpoint(_cx, _cy, _cz, _yaw, _pitch),
+                    "n": DateTime.now().millisecondsSinceEpoch,
+                  };
+                  _vezetUtolso = 0; // azonnal megy
+                });
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text("📍 A csapat a nézőpontodba ugrik.")));
+                _focus.requestFocus();
+              },
+              child: const Text("📍 Ide mindenki",
+                  style: TextStyle(fontSize: 11.5)),
+            ),
+          ),
+        ),
       // VIDEÓ (K): a valódi felvétel a 3D mellett.
       Padding(
         padding: const EdgeInsets.only(bottom: 6),

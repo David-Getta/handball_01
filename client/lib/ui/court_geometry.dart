@@ -398,6 +398,24 @@ List<(Offset, Offset, int)> decodeDrawing(String? s) {
 /// A nyilak a böngészős nézet "rajz" link-paraméterének alakjában
 /// ("x1,y1,x2,y2,szín;…", 0,1 m-re kerekítve, a JS Math.round-jával
 /// azonosan) — a "Böngészőben" gomb így viszi át a rajzot.
+/// Az app 3D kamerája (pálya-méter: x a hossz, y a szélesség, z a
+/// magasság; yaw: az előre-irány (sin yaw, cos yaw) a padlón; pitch: fel
+/// pozitív) a böngészős 3D three-terébe (x a hossz, y a magasság, z = a
+/// szélesség tükörképe; a rig yaw-ja és a kamera pitch-e) — a közös nézés
+/// "📍 Ide mindenki" nézőpontja. A böngésző előre-iránya
+/// (−sin yaw, sin pitch, −cos yaw) a pályán (−sin yaw, cos yaw), tehát a
+/// yaw előjelet vált, a pitch marad.
+Map<String, double> browserViewpoint(
+    double cx, double cy, double cz, double yaw, double pitch) {
+  return {
+    "x": cx,
+    "y": math.max(0.2, cz),
+    "z": courtWidth - cy,
+    "yaw": -yaw,
+    "pitch": pitch.clamp(-1.6, 1.6).toDouble(),
+  };
+}
+
 String encodeDrawing(List<(Offset, Offset, int)> nyilak) {
   String szam(double v) {
     final r = (v * 10 + 0.5).floor() / 10;

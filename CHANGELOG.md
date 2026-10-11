@@ -3,6 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.165 óta)
+
+- **Közös nézés: "📍 Ide mindenki" az appból is** (új, app): a 3D fül
+  vezetője (vezetés közben a panel gombjával) a saját nézőpontjába hozza
+  a csapat headsetjeit — az app kamerája a böngészős 3D terébe
+  átszámolva (a két nézet előre-iránya egybeesik, egységteszttel).
+
 ## v0.1.165 — kiadva (2026-10-11)
 
 > Kiadás-jegyzet: a közös nézés edzői eszközei. Az edző a pályán mutat —
