@@ -915,12 +915,19 @@ class ApiClient {
       {required double t,
       required bool playing,
       required double speed,
-      String rajz = ""}) async {
+      String rajz = "",
+      Map<String, num>? mutato}) async {
     final resp = await http.put(
         Uri.parse("$baseUrl/matches/$matchId/shared3d"),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode(
-            {"t": t, "playing": playing, "speed": speed, "rajz": rajz}));
+        body: jsonEncode({
+          "t": t,
+          "playing": playing,
+          "speed": speed,
+          "rajz": rajz,
+          // A vezető mutatója ({x, y, n}) — a követőknél lüktető gyűrű.
+          if (mutato != null) "mutato": mutato,
+        }));
     if (resp.statusCode != 200) {
       throw Exception(
           _hiba("Nem sikerült a közös nézés állapotát küldeni", resp));

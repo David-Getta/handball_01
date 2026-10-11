@@ -2635,7 +2635,8 @@ function kozosAllit(m){
     fetch(kzCim(), {method: "DELETE"}).catch(() => {});
   vezetGomb.classList.toggle("be", kozosMod === "vezet");
   kovetGomb.classList.toggle("be", kozosMod === "kovet");
-  kzRajz = null; kzUtolso = 0;
+  // Új vezetés: a régi mutató nem megy újra a csapatnak.
+  kzRajz = null; kzUtolso = 0; kzMutato = null;
   if (kozosMod === "vezet"){
     kzLink = location.origin + location.pathname + "?kovet=1";
     kzVagolap = false; kzKovetok = null; kzVezetoInfo();

@@ -9,7 +9,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Shift+kattintása a padlóra a csapat headsetjein (és nála) 4 mp-ig
   lüktető gyűrűt tesz oda — "nézzétek ide": a játékos a pálya bármely
   pontjáról látja, mire mutat az edző. A később csatlakozónál a régi
-  mutató nem villan fel.
+  mutató nem villan fel. Az app vezetője ugyanígy: Shift+koppintás a
+  3D fül padlójára (vezetés közben).
 
 - **Közös nézés több headsettel: útmutató** (dokumentáció, súgó): hogyan
   éri el a követő headset a vezető gépén futó motort — USB-n (`adb

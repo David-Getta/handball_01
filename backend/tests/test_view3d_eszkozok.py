@@ -2043,6 +2043,21 @@ def test_a_kozos_nezes_mutatoja(tmp_path, monkeypatch):
                  "mutatoFrissit();", "Shift+katt a padlóra: mutató a csapatnak"):
         assert kell in oldal, kell
     assert f"const KZ_MUTATO = {float(court3d.SHARED3D_POINTER_S)!r};" in oldal
+    # Az app vezetője is mutathat: ugyanaz az idő, a mutató a küldésben.
+    import re
+    from pathlib import Path
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
+    ertek = re.search(r"static const double _mutatoS = ([0-9.]+);", palya)
+    assert ertek and float(ertek.group(1)) == court3d.SHARED3D_POINTER_S
+    for kell in ("if (_vezet && HardwareKeyboard.instance.isShiftPressed) {",
+                 "mutato: _mutato)", "mutato: _mutatoAllapot(),"):
+        assert kell in palya, kell
+    assert 'if (mutato != null) "mutato": mutato,' in api
+    # Új vezetés: a régi mutató nem megy újra (böngésző és app).
+    assert "kzRajz = null; kzUtolso = 0; kzMutato = null;" in oldal
+    assert "_kovetok = null;\n      // Új vezetés" in palya
 
 
 def test_a_3d_oldal_kozos_nezese():
@@ -2090,7 +2105,7 @@ def test_a_3d_oldal_kozos_nezese():
     ertek = re.search(r"static const double _vezetKuldS = ([0-9.]+);", palya)
     assert ertek and float(ertek.group(1)) == court3d.SHARED3D_SEND_S
     assert 'json["followers"]' in api
-    for kell in ("_vezetKuld(now);", "rajz: encodeDrawing(_rajzok))",
+    for kell in ("_vezetKuld(now);", "rajz: encodeDrawing(_rajzok),",
                  '"📡 Vezetsz · $_kovetok követő"',
                  '"${_api.baseUrl}/matches/$id/view3d?kovet=1"',
                  "_api.deleteShared3d(id)"):

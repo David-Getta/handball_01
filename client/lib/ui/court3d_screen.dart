@@ -246,6 +246,11 @@ class _Court3DScreenState extends State<Court3DScreen>
   bool _vezetHiba = false;
   double _vezetUtolso = 0;
   int? _kovetok; // hányan követik (a motor válasza)
+  // MUTATÓ: a vezető Shift+koppintása a padlóra — a csapatnak megy, és
+  // _mutatoS másodpercig itt is lüktet.
+  static const double _mutatoS = 4.0; // court3d.SHARED3D_POINTER_S (őr-teszt)
+  Map<String, num>? _mutato; // a legutóbbi (küldésre): {x, y, n}
+  DateTime? _mutatoKezd;
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
@@ -706,6 +711,13 @@ class _Court3DScreenState extends State<Court3DScreen>
       _pitch = _szemPitch;
       valtozott = true;
     }
+    // A lüktető mutató állás közben is mozog.
+    if (_mutatoKezd != null) {
+      if (_mutatoAllapot() == null) {
+        _mutatoKezd = null;
+      }
+      valtozott = true;
+    }
     if (valtozott && mounted) setState(() {});
   }
 
@@ -804,6 +816,40 @@ class _Court3DScreenState extends State<Court3DScreen>
       _kovMez = null;
     });
     _focus.requestFocus();
+  }
+
+  /// Mutató a csapatnak (vezetés közben Shift+koppintás): a pont a
+  /// következő küldéssel megy, itt is lüktet.
+  void _mutatoKoppintas(Offset p) {
+    if (_nezetMeret == Size.zero) return;
+    final pont = _vetites().padlo(p);
+    if (pont == null ||
+        pont.dx < -3 ||
+        pont.dx > courtLength + 3 ||
+        pont.dy < -3 ||
+        pont.dy > courtWidth + 3) {
+      return;
+    }
+    setState(() {
+      _mutato = {
+        "x": (pont.dx * 10).round() / 10,
+        "y": (pont.dy * 10).round() / 10,
+        "n": DateTime.now().millisecondsSinceEpoch,
+      };
+      _mutatoKezd = DateTime.now();
+      _vezetUtolso = 0; // azonnal megy
+    });
+  }
+
+  /// A mutató lüktetése (0…1) és átlátszósága, vagy null, ha lejárt.
+  (Offset, double, double)? _mutatoAllapot() {
+    final k = _mutatoKezd, m = _mutato;
+    if (k == null || m == null) return null;
+    final el = DateTime.now().difference(k).inMicroseconds / 1e6;
+    if (el > _mutatoS) return null;
+    final f = (el * 1.5) % 1;
+    return (Offset(m["x"]!.toDouble(), m["y"]!.toDouble()), f,
+        0.9 * (1 - f) * (1 - 0.5 * el / _mutatoS));
   }
 
   /// Koppintás a padlóra: lövés-mérés a pontból — vagy, ha egy
@@ -2117,6 +2163,9 @@ class _Court3DScreenState extends State<Court3DScreen>
       _vezetHiba = false;
       _vezetUtolso = 0;
       _kovetok = null;
+      // Új vezetés: a régi mutató nem megy újra a csapatnak.
+      _mutato = null;
+      _mutatoKezd = null;
     });
     if (be) {
       final link = "${_api.baseUrl}/matches/$id/view3d?kovet=1";
@@ -2147,7 +2196,8 @@ class _Court3DScreenState extends State<Court3DScreen>
             t: _mostT(m) / fps,
             playing: _playing,
             speed: _speed,
-            rajz: encodeDrawing(_rajzok))
+            rajz: encodeDrawing(_rajzok),
+            mutato: _mutato)
         .then((n) {
       if ((_vezetHiba || n != _kovetok) && mounted && _vezet) {
         setState(() {
@@ -2313,6 +2363,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                   yaw: _yaw,
                   pitch: _pitch,
                   meres: _meres,
+                  mutato: _mutatoAllapot(),
                   meresBalKapu: _lovesValasztott == null
                       ? null
                       : _lovesValasztott!["team"] == "away",
@@ -2517,6 +2568,11 @@ class _Court3DScreenState extends State<Court3DScreen>
       behavior: HitTestBehavior.opaque,
       onTapDown: (_) => _focus.requestFocus(),
       onTapUp: (d) {
+        // Vezetés közben a Shift+koppintás mutató a csapatnak (nem mérés).
+        if (_vezet && HardwareKeyboard.instance.isShiftPressed) {
+          _mutatoKoppintas(d.localPosition);
+          return;
+        }
         if (!_rajzMod) _meresKoppintas(d.localPosition);
       },
       onDoubleTapDown: (d) => _dupla = d.localPosition,
@@ -2891,7 +2947,8 @@ class _Court3DScreenState extends State<Court3DScreen>
         child: Tooltip(
           message: "Közös nézés — te vezetsz: a lejátszásod (idő, szünet, "
               "sebesség, rajz) a csapat headsetjein is fut (a böngészős 3D "
-              "Követem-je; a csapat linkje a vágólapra kerül)",
+              "Követem-je; a csapat linkje a vágólapra kerül). Vezetés "
+              "közben Shift+koppintás a padlóra: mutató a csapatnak",
           child: FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: _vezet
@@ -3802,6 +3859,9 @@ class _Court3DPainter extends CustomPainter {
   // Lövés-mérés pontja (pálya-méter), a védekezés-sablon pontjai, és a
   // szemével-nézet játékosa (a saját testét nem rajzoljuk: a fejében ülünk).
   final Offset? meres;
+  // A közös nézés mutatója: a pont, a lüktetés fázisa (0…1) és az
+  // átlátszóság — lüktető gyűrű a padlón.
+  final (Offset, double, double)? mutato;
   // A mérés kapuja (null: a közelebbi); a lövéstérkép körei.
   final bool? meresBalKapu;
   final List<Offset> falPontok;
@@ -3845,6 +3905,7 @@ class _Court3DPainter extends CustomPainter {
       required this.yaw,
       required this.pitch,
       this.meres,
+      this.mutato,
       this.meresBalKapu,
       this.falPontok = const [],
       this.feltoresSav,
@@ -4644,6 +4705,20 @@ class _Court3DPainter extends CustomPainter {
           szaggatott: true);
       _kor(canvas, Paint()..color = Colors.white..strokeWidth = 2.0,
           mp.dx, mp.dy, 0.3);
+    }
+
+    final mu = mutato;
+    if (mu != null) {
+      final (p, f, a) = mu;
+      _kor(
+          canvas,
+          Paint()
+            ..color = const Color(0xFFFF4FD8)
+                .withValues(alpha: a.clamp(0.0, 1.0))
+            ..strokeWidth = 3.0,
+          p.dx,
+          p.dy,
+          0.55 * (1 + f * 1.6));
     }
 
     // A feltörés sávja: piros, áttetsző téglalap a védett kapu előtt.
