@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **Harmadik kód-átnézés javításai** (javítás): a vetítés két, ugyanarra a
+  kockára írt jegyzetnél körbe járt (a sort most a felirata és az
+  azonosítója is azonosítja); a kapott lerohanás a vetítésben és a
+  videózandó klip-csomagban a befejezésig tart (eddig a gól lemaradt); a
+  böngészős 3D a döntés-, szabad-lövés-, eladás-, passz- és passzsáv-
+  réteg anyagait nem dobja el kockánként (a shader-programot is
+  újrafordította — akadozás, főleg VR-ben); az appban a padló-nyíl a
+  játékos alatt (eddig rajta); a klip-csomagban két különböző jegyzet egy
+  pillanatban két klip; a gzip a "q=0" elutasítást is tiszteli; a
+  rajz-dekódolás mindhárom helyen ugyanazt az alakot fogadja el. A
+  meccs-tár a tárba lépéskor jelöli a kapusokat (a hatókörön kívüli
+  végpontokhoz is), a 3D oldal teljes építése egy hatókörben fut, egy
+  csapat felderítés-hibája nem viszi el a másik 3D kulcsait, a
+  jelenet-rétegek és a mezszám-térkép meccsenként egyszer számolódnak.
+
 - **3D lista Klipek: a jegyzetek is** (javítás, böngésző és app): a
   jelenet-lista Klipek gombja a lista sorai közt álló edzői jegyzeteket
   is kéri (a "Jegyzetelt pillanatok" csomag — rajzos jegyzetnél a nyilak

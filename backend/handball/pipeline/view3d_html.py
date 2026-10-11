@@ -438,8 +438,11 @@ function csoportUrit(cs){
     cs.remove(o);
     o.traverse(x => {
       if (x.geometry) x.geometry.dispose();
+      // A közös ("tartós") anyagot nem: azt több réteg minden kockán
+      // újra használja — felszabadítva a three.js a shader-programot is
+      // eldobná, és a következő kockán újrafordítaná.
       const m = x.material;
-      if (m) (Array.isArray(m) ? m : [m]).forEach(q => q.dispose());
+      if (m) (Array.isArray(m) ? m : [m]).forEach(q => { if (!q.userData.tartos) q.dispose(); });
     });
   }
 }
@@ -595,9 +598,11 @@ function rajzDekodol(s){
   const ki = [];
   for (const tag of String(s || "").split(";")){
     const p = tag.split(",");
-    // Üres mező: hibás tag (a Number("") 0 lenne — a Dart és a Python
-    // tükör is elveti).
-    if (p.length !== 5 || p.some(x => x.trim() === "")) continue;
+    // Csak a kódoló számalakja (-12.3; szín: egész) — a Number() a "",
+    // "1e1", "0x10", "1.0" alakot is elfogadná, a Dart és a Python tükör
+    // nem (ugyanez a szabály mindhárom helyen).
+    if (p.length !== 5 || !p.slice(0, 4).every(x => /^-?[0-9]+(\\.[0-9]+)?$/.test(x.trim()))
+        || !/^[0-9]+$/.test(p[4].trim())) continue;
     const v = p.slice(0, 4).map(Number);
     const k = Number(p[4]);
     if (v.some(x => !isFinite(x) || x < -10 || x > 50)) continue;
@@ -1726,6 +1731,19 @@ const passzElo = new THREE.Group(), passzHalo = new THREE.Group();
 szinpad.add(passzElo); szinpad.add(passzHalo);
 let passzHaloNev = null;
 function passzSzin(hazai){ return hazai ? 0x4c9aff : 0xff6b6b; }
+// Az élő passz-vonalak anyagai: csapatonként tíz átlátszóság-fok, egyszer
+// létrehozva és megosztva ("tartós" — a csoportUrit nem szabadítja fel).
+const PASSZ_ANYAGOK = new Map();
+function passzAnyag(hazai, atlatszo){
+  const fok = Math.max(1, Math.min(10, Math.round(atlatszo * 10)));
+  const kulcs = (hazai ? "h" : "v") + fok;
+  let a = PASSZ_ANYAGOK.get(kulcs);
+  if (!a){
+    a = new THREE.LineBasicMaterial({color: passzSzin(hazai), transparent: true, opacity: fok / 10});
+    a.userData.tartos = true; PASSZ_ANYAGOK.set(kulcs, a);
+  }
+  return a;
+}
 function passzFrissit(t){
   const v = passzValaszto.value;
   csoportUrit(passzElo);
@@ -1737,8 +1755,7 @@ function passzFrissit(t){
       if (mp > t || t - mp > PASSZ_S) continue;
       const g = new THREE.BufferGeometry().setFromPoints(
         [new THREE.Vector3(x1, 1.0, W - y1), new THREE.Vector3(x2, 1.0, W - y2)]);
-      passzElo.add(new THREE.Line(g, new THREE.LineBasicMaterial(
-        {color: passzSzin(hazai), transparent: true, opacity: 1 - (t - mp) / PASSZ_S})));
+      passzElo.add(new THREE.Line(g, passzAnyag(hazai, 1 - (t - mp) / PASSZ_S)));
       db++;
     }
     passzInfo.textContent = db ? "passz úton" : "";
@@ -1919,6 +1936,12 @@ const passzsavKapcsolo = document.getElementById("passzsav");
 const passzsavCsoport = new THREE.Group();
 szinpad.add(passzsavCsoport);
 const PS_SZIN = {"nyitott": 0x3fbf6f, "kockázatos": 0xd9b544, "zárt": 0xff6b6b};
+// A sávok közös anyagai (kockánként újrarajzolt réteg — "tartós").
+const PS_ANYAG = {};
+for (const [fok, szin] of Object.entries(PS_SZIN)){
+  PS_ANYAG[fok] = new THREE.LineBasicMaterial({color: szin, transparent: true, opacity: 0.85});
+  PS_ANYAG[fok].userData.tartos = true;
+}
 const passzsavInfo = document.createElement("div");
 passzsavInfo.style.cssText = "position:fixed;right:12px;bottom:56px;padding:6px 12px;border:1px solid #2b4a5e;border-radius:8px;background:rgba(16,24,32,.85);font-size:13px;display:none";
 document.body.appendChild(passzsavInfo);
@@ -1935,8 +1958,7 @@ function passzsavFrissit(){
     const g = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(r.holder[0], 1.1, W - r.holder[1]),
       new THREE.Vector3(l.x, 1.1, W - l.y)]);
-    passzsavCsoport.add(new THREE.Line(g, new THREE.LineBasicMaterial(
-      {color: PS_SZIN[l.grade], transparent: true, opacity: 0.85})));
+    passzsavCsoport.add(new THREE.Line(g, PS_ANYAG[l.grade]));
   }
   passzsavInfo.textContent = "Labdás (" + (r.holder[2] ? ADAT.home : ADAT.away) + "): " +
     db["nyitott"] + " nyitott, " + db["kockázatos"] + " kockázatos, " + db["zárt"] + " zárt sáv";
@@ -2101,7 +2123,6 @@ document.getElementById("dontesElozo").onclick = () => dontesUgras(-1);
 document.getElementById("dontesKov").onclick = () => dontesUgras(1);
 function szam2(v){ return v.toFixed(2).replace(".", ","); }
 function dontesFrissit(t){
-  csoportUrit(dontesCsoport);
   const d = szurt(DONTESEK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
   // A szabad lövés felirata KÜLÖN dobozban (a döntés-felirat alatt): két
   // egyszerre aktív pillanat nem takarhatja el egymást.
@@ -2130,6 +2151,9 @@ function dontesFrissit(t){
   const hetesDoboz = document.getElementById("hetesFelirat");
   if (hetesSzoveg){ hetesDoboz.textContent = hetesSzoveg; hetesDoboz.style.display = "block"; }
   else hetesDoboz.style.display = "none";
+  // Csak pillanat-váltáskor rajzolunk újra (a hurok minden kockán hív).
+  if (dontesCsoport.userData.kesz && dontesCsoport.userData.d === d) return;
+  csoportUrit(dontesCsoport); dontesCsoport.userData.kesz = true; dontesCsoport.userData.d = d;
   if (!d){ dontesFelirat.style.display = "none"; return; }
   const [mp, hazai, px, py, cx, cy, cval, fajta, bx, by, bval, gap] = d;
   const vonalD = (x2, y2, szin) => {
@@ -2171,8 +2195,10 @@ function szabadUgras(irany){
 document.getElementById("szabadElozo").onclick = () => szabadUgras(-1);
 document.getElementById("szabadKov").onclick = () => szabadUgras(1);
 function szabadFrissit(t){
-  csoportUrit(szabadCsoport);
   const d = szurt(SZABADOK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  if (szabadCsoport.userData.kesz && szabadCsoport.userData.d === d) return szabadCsoport.userData.szoveg;
+  csoportUrit(szabadCsoport); szabadCsoport.userData.kesz = true; szabadCsoport.userData.d = d;
+  szabadCsoport.userData.szoveg = null;
   if (!d){ szabadKor.visible = false; return null; }
   const [mp, vedHazai, sx, sy, dx, dy, tav, gol, xg] = d;
   szabadKor.position.set(sx, 0.03, W - sy); szabadKor.visible = true;
@@ -2182,9 +2208,10 @@ function szabadFrissit(t){
     const l = new THREE.Line(g, new THREE.LineDashedMaterial({color: 0xff6b6b, dashSize: 0.3, gapSize: 0.2}));
     l.computeLineDistances(); szabadCsoport.add(l);
   }
-  return (vedHazai ? ADAT.home : ADAT.away) + " védekezése: szabadon hagyott lövő — a legközelebbi védő " +
+  return (szabadCsoport.userData.szoveg = (vedHazai ? ADAT.home : ADAT.away) +
+    " védekezése: szabadon hagyott lövő — a legközelebbi védő " +
     (tav !== null ? szam1(tav) + " m-re" : "nem mérhető") + " (" + (gol ? "GÓL" : "nem gól") +
-    ", xG " + szam2(xg) + ")";
+    ", xG " + szam2(xg) + ")");
 }
 
 // ---- Labdavesztések: ki, hol, kipréselve vagy magától ------------------
@@ -2215,8 +2242,10 @@ function eladasUgras(irany){
 document.getElementById("eladasElozo").onclick = () => eladasUgras(-1);
 document.getElementById("eladasKov").onclick = () => eladasUgras(1);
 function eladasFrissit(t){
-  csoportUrit(eladasCsoport);
   const d = szurt(ELADASOK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  if (eladasCsoport.userData.kesz && eladasCsoport.userData.d === d) return eladasCsoport.userData.szoveg;
+  csoportUrit(eladasCsoport); eladasCsoport.userData.kesz = true; eladasCsoport.userData.d = d;
+  eladasCsoport.userData.szoveg = null;
   if (!d){ eladasKor.visible = false; return null; }
   const [mp, hazai, mez, lx, ly, bx, by, harmad, ox, oy, tav, kipres, golMp] = d;
   const szin = 0xff9f43;
@@ -2244,8 +2273,8 @@ function eladasFrissit(t){
               : "magától (a legközelebbi ellenfél " + szam1(tav) + " m-re)");
   const gol = golMp !== null
     ? " · <span style='color:#ff6b6b'>" + szam1(golMp) + " mp múlva kapott gól</span>" : "";
-  return "<b>" + (hazai ? ADAT.home : ADAT.away) + "</b> labdavesztés — " + ki + " · " + hol +
-    " · " + nyomas + gol;
+  return (eladasCsoport.userData.szoveg = "<b>" + (hazai ? ADAT.home : ADAT.away) +
+    "</b> labdavesztés — " + ki + " · " + hol + " · " + nyomas + gol);
 }
 
 // ---- Lerohanások: ki fut, honnan, és mi lett belőle ---------------------
@@ -2532,9 +2561,23 @@ window.jegyzetProba = () => jegyzetek.map(j => ({s: j.s, text: j.text, nyilak: j
 const JL_VETITES_S = __JL_VETITES_S__;
 let vetites = false, vetitesSor = null;
 const vetitesJelzo = document.getElementById("vetitesJelzo");
+function azonosSor(a, b){
+  // Ugyanaz a sor (az újraépített listában is): a fajta, az idő, a
+  // felirat és a jegyzet-azonosító — két jegyzet ugyanarra a kockára két sor.
+  return a.tipus === b.tipus && a.s === b.s && a.szoveg === b.szoveg && (a.id || null) === (b.id || null);
+}
 function vetitesIndex(sorok, r){
   // A sor helye a (szűrt) listában; -1, ha a szűrő kivette.
-  return r ? sorok.findIndex(x => x.tipus === r.tipus && x.s === r.s) : -1;
+  return r ? sorok.findIndex(x => azonosSor(x, r)) : -1;
+}
+function vetitesVeg(r){
+  // A jelenet vége a vetítésben: a pillanata után JL_VETITES_S — a kapott
+  // lerohanás sora az INDULÁS ideje, ott a befejezés (lövés) után.
+  if (r.tipus === "k"){
+    const k = KONTRAK.find(x => Math.abs(x[0] - r.s) < 0.01);
+    if (k && k[14] !== null && k[14] !== undefined) return Math.max(r.s, k[14]) + JL_VETITES_S;
+  }
+  return r.s + JL_VETITES_S;
 }
 function vetitesJelzoFrissit(){
   const gomb = document.getElementById("vetitesGomb");
@@ -2550,7 +2593,9 @@ function vetitesKov(){
   // az első későbbi); null: a lista vége.
   const sorok = jelenetSorokSzurt();
   const i = vetitesIndex(sorok, vetitesSor);
-  if (i >= 0) return sorok[i + 1] || null;
+  // A szó szerint azonos (kettőzött) sort átlépjük — különben a vetítés
+  // a kettő közt körbe járna.
+  if (i >= 0) return sorok.slice(i + 1).find(x => !azonosSor(x, vetitesSor)) || null;
   return sorok.find(x => x.s > vetitesSor.s) || null;
 }
 function vetitesAllit(be){
@@ -2561,7 +2606,7 @@ function vetitesAllit(be){
     // Az épp futó jelenettől (a legkésőbb indult), különben az első még
     // előttünk álló sortól; a lista végén az elejéről.
     let r = null;
-    for (const x of sorok) if (ido >= x.s - 1.6 && ido < x.s + JL_VETITES_S) r = x;
+    for (const x of sorok) if (ido >= x.s - 1.6 && ido < vetitesVeg(x)) r = x;
     r = r || sorok.find(x => x.s >= ido) || sorok[0];
     if (jelenetLista.style.display !== "block") jelenetListaNyit(true);
     vrJelenetUtolso = r.s;
@@ -2573,7 +2618,7 @@ function vetitesFrissit(t0, t1){
   // A lejátszás most haladt át a futó jelenet végén (vagy a meccs végére
   // ért) → a következő sor; a lista végén megáll.
   if (!vetites || !vetitesSor) return;
-  const hatar = vetitesSor.s + JL_VETITES_S;
+  const hatar = vetitesVeg(vetitesSor);
   if (!(t0 < hatar && (t1 >= hatar || t1 >= veg))) return;
   const kov = vetitesKov();
   if (kov){ vrJelenetUtolso = kov.s; jelenetUgras(kov); return; }

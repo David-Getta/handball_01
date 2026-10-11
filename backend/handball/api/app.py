@@ -358,6 +358,16 @@ class _MatchStore(dict):
             m = loader(key)
         except Exception:
             m = None
+        if m is not None:
+            # A kapusok jelölése a tárba lépéskor (zár nélkül): a
+            # lemezről visszatöltött meccsen a hatókörön KÍVÜL futó
+            # végpontok is kapusként látják a kapust (a hatókör nyitása
+            # idempotensen ugyanezt teszi).
+            try:
+                from ..pipeline.primitive_cache import mark_goalkeepers
+                mark_goalkeepers(m)
+            except Exception:
+                pass
         with self._lock:
             if dict.__contains__(self, key):
                 # Közben más szál is betöltötte: az övé marad (egy példány).
@@ -2420,11 +2430,19 @@ def create_app():
         (_scout_cached): a felderítés így meccsenként egyszer fut, nem a
         3D oldal első megnyitásakor újra (egy teljes meccsen perceket)."""
         from ..pipeline.court3d import tactical_keys_by_team
-        return _cached_result(
-            match_id, "tactical-keys",
-            lambda: tactical_keys_by_team(
-                match, reports={"home": _scout_cached(match, Team.HOME),
-                                "away": _scout_cached(match, Team.AWAY)}))
+
+        def szamol():
+            # Csapatonként külön: egy csapat felderítés-hibája nem viszi el
+            # a másik kulcsait (a hiányzót a tactical_keys_by_team maga
+            # próbálja, és csapatonként üresen hagyja, ha hibázik).
+            kesz = {}
+            for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+                try:
+                    kesz[side] = _scout_cached(match, team)
+                except Exception:
+                    pass
+            return tactical_keys_by_team(match, reports=kesz)
+        return _cached_result(match_id, "tactical-keys", szamol)
 
     def _warm_results(match_id: str) -> None:
         """A nehéz végpontok ELŐSZÁMOLÁSA a háttérben, egy feldolgozás
@@ -2832,6 +2850,24 @@ def create_app():
                          encoding="utf-8")
         return {"saved": len(sorok)}
 
+    def _gzip_elfogadva(fejlec: str) -> bool:
+        """Az Accept-Encoding fejléc kifejezetten elfogadja-e a gzip-et (a
+        "gzip;q=0" elutasítás — a puszta "gzip" részszöveg-keresés azt is
+        elfogadásnak vette)."""
+        for resz in fejlec.split(","):
+            nev, *param = [x.strip() for x in resz.split(";")]
+            if nev.lower() != "gzip":
+                continue
+            q = 1.0
+            for p_ in param:
+                if p_.lower().startswith("q="):
+                    try:
+                        q = float(p_[2:])
+                    except ValueError:
+                        q = 0.0
+            return q > 0
+        return False
+
     def _html_gzip(oldal: str, request):
         """HTML-válasz gzip-pel, ha a kliens kéri (Accept-Encoding): a 3D
         oldal az egész meccs mozgását beágyazva viszi (10 perc ~1,3 MB, egy
@@ -2842,8 +2878,8 @@ def create_app():
 
         from fastapi import Response
         from fastapi.responses import HTMLResponse
-        kodolas = (request.headers.get("accept-encoding") or "").lower()
-        if "gzip" in kodolas and len(oldal) > 1024:
+        if _gzip_elfogadva(request.headers.get("accept-encoding") or "") \
+                and len(oldal) > 1024:
             return Response(
                 content=gzip.compress(oldal.encode("utf-8"), compresslevel=6),
                 media_type="text/html; charset=utf-8",
@@ -2858,10 +2894,19 @@ def create_app():
         jövőben VR-headseten: a WebXR biztonságos környezetet kér, a
         localhost az (headsetről USB + adb reverse teszi elérhetővé).
         A three.js CDN-ről jön, tehát internet kell hozzá."""
-        from ..pipeline.view3d_html import view3d_html
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
+        # Az oldal TELJES építése egy hatókörben (kapus-jelölés, egyszeri
+        # rétegek) — a visszatérő figura is ugyanazt a meccs-állapotot
+        # látja, mint a beágyazott 3D adat.
+        from ..pipeline.primitive_cache import primitive_cache
+        with primitive_cache(match):
+            return _html_gzip(_view3d_oldal(match_id, match), request)
+
+    def _view3d_oldal(match_id: str, match) -> str:
+        """A /view3d oldal építése (a hívó hatókörében)."""
+        from ..pipeline.view3d_html import view3d_html
         # A visszatérő figura a 3D-ben is ugorható/feliratos — hibatűrően.
         try:
             riasztasok = _figure_alerts_for(match)
@@ -2875,11 +2920,7 @@ def create_app():
             feltores, megallitas = kulcsok["breakpoints"], kulcsok["stoppers"]
         except Exception:
             feltores = megallitas = None
-        # A tömör adat egy hatókörben (kapus-jelölés, egyszeri rétegek).
-        from ..pipeline.primitive_cache import primitive_cache
-        with primitive_cache(match):
-            oldal = view3d_html(match, riasztasok, feltores, megallitas)
-        return _html_gzip(oldal, request)
+        return view3d_html(match, riasztasok, feltores, megallitas)
 
     # A `request` típusa kézzel (a modul `from __future__ import
     # annotations` miatt), majd a regisztráció.
@@ -4753,13 +4794,26 @@ def create_app():
             # levetíthető. A csapat a HIBÁZÓ csapat (a sor "side"-ja), a
             # címke a jelenet fajtája.
             try:
-                from ..pipeline.court3d import key_scene_rows
+                from ..pipeline.court3d import (fast_break_moments,
+                                                key_scene_rows)
                 fps_ks = match.meta.fps if match.meta.fps > 0 else 25.0
+                # A kapott lerohanás sora az INDULÁS ideje — a klip a
+                # befejezés kockája köré kerül (mint a kapott-lerohanás
+                # csomagban), különben a gól lemarad.
+                _befejezes = [(k_["s"], k_["t"]) for k_ in
+                              fast_break_moments(match)["moments"]]
+
+                def _horgony(r_):
+                    if r_["tipus"] == "k":
+                        for s_, t_ in _befejezes:
+                            if abs(float(s_) - float(r_["s"])) < 0.01:
+                                return int(t_)
+                    return int(round(float(r_["s"]) * fps_ks))
                 _fajta = {"d": "dontes-hiba", "sz": "szabad-lovo",
                           "e": "draga-eladas", "k": "kapott-lerohanas",
                           "kg": "kapott-gol"}
                 for r_ in key_scene_rows(match)["rows"]:
-                    ev.append({"t": int(round(float(r_["s"]) * fps_ks)),
+                    ev.append({"t": _horgony(r_),
                                "type": "key_scene",
                                "team": r_.get("side") or "home",
                                "label": _fajta.get(r_["tipus"],
@@ -11800,6 +11854,13 @@ def create_app():
         minőség-pont) a RÉGI eredményt adták volna — a lemezes tár
         ujjlenyomata ezt csak a lemezen vette észre, a memóriában nem."""
         _drop_derived_caches(match.meta.match_id)
+        # A kapusok jelölése a tárba lépéskor (mint a lemezről
+        # visszatöltésnél) — a hatókörön kívüli végpontokhoz is.
+        try:
+            from ..pipeline.primitive_cache import mark_goalkeepers
+            mark_goalkeepers(match)
+        except Exception:
+            pass
         _store[match.meta.match_id] = match
         try:
             p = _match_path(match.meta.match_id)

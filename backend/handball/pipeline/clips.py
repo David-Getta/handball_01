@@ -199,12 +199,8 @@ def _jersey_of_track(match: Match) -> dict:
     felismerés során ingadozhat, de egy trackhez egy embert rendelünk,
     tehát az első biztos leolvasás dönt.
     """
-    out: dict = {}
-    for f in match.frames:
-        for p in f.players:
-            if p.jersey_number is not None and p.track_id not in out:
-                out[p.track_id] = p.jersey_number
-    return out
+    from .court3d import _jersey_map
+    return _jersey_map(match)
 
 
 def _fair_cap(picked: list, field, csoport=None) -> list:
@@ -343,7 +339,10 @@ def export_event_clips(match: Match, events: list, types: set[str],
     last_t: dict = {}
     for e in picked:
         t_e = int(_field(e, "t") or 0)
-        tip_e = str(_field(e, "type"))
+        # A kulcs a típus ÉS a címke: két különböző jegyzet (vagy két
+        # különböző videózandó jelenet) ugyanabban a fél másodpercben két
+        # klip; a címke nélküli ismétlés (két "gól" egy kockán) egy.
+        tip_e = (str(_field(e, "type")), str(_field(e, "label") or ""))
         if tip_e in last_t and abs(t_e - last_t[tip_e]) / fps < CLIP_SAME_MOMENT_S:
             continue
         dedup.append(e)

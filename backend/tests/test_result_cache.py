@@ -272,7 +272,34 @@ def test_a_3d_kulcsok_a_felderites_tarbol_es_az_elomelegites_viszi():
               / "app.py").read_text(encoding="utf-8")
     assert forras.count("def _tactical_keys(") == 1
     assert forras.count("_tactical_keys(match_id, match)") == 2
-    assert 'reports={"home": _scout_cached(match, Team.HOME),' in forras
+    assert "kesz[side] = _scout_cached(match, team)" in forras
     assert "lambda: _tactical_keys(match_id, m)," in forras
     assert 'match_id, "key-scenes",' in forras
     assert "lambda: tactical_keys_by_team(match))" not in forras
+
+
+
+def test_a_tarba_lepo_meccs_kapusai_jelolve(tmp_path, monkeypatch):
+    """A meccs-tár a mentéskor (és a lemezről töltéskor) jelöli a
+    kapusokat — a hatókörön kívül futó végpontok is a jelölt meccset
+    látják; egy csapat felderítés-hibája nem viszi el a másik 3D kulcsait."""
+    from pathlib import Path
+
+    from handball.api.app import create_app
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=60, fps=25.0, seed=5,
+                              shots_per_min=8)
+    for f in m.frames:
+        for p in f.players:
+            p.role = None
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    assert any(p.role == "kapus" for f in m.frames for p in f.players)
+    forras = (Path(__file__).resolve().parents[1] / "handball" / "api"
+              / "app.py").read_text(encoding="utf-8")
+    assert forras.count("mark_goalkeepers(") >= 2
+    i = forras.index("    def _tactical_keys(match_id: str, match):")
+    blokk = forras[i:i + 1500]
+    assert "kesz[side] = _scout_cached(match, team)" in blokk

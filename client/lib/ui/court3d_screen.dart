@@ -1025,7 +1025,29 @@ class _Court3DScreenState extends State<Court3DScreen>
   int _vetitesIndex(List<SceneRow> sorok) {
     final r = _vetitesSor;
     if (r == null) return -1;
-    return sorok.indexWhere((x) => x.tipus == r.tipus && x.s == r.s);
+    return sorok.indexWhere((x) => _azonosSor(x, r));
+  }
+
+  /// Ugyanaz a sor (az újraépített listában is): a fajta, az idő és a
+  /// felirat — két jegyzet ugyanarra a kockára két sor (a böngésző
+  /// azonosSor-ának párja).
+  static bool _azonosSor(SceneRow a, SceneRow b) =>
+      a.tipus == b.tipus && a.s == b.s && a.szoveg == b.szoveg;
+
+  /// A jelenet vége a vetítésben: a pillanata után sceneReelTailS — a
+  /// kapott lerohanás sora az INDULÁS ideje, ott a befejezés (lövés) után
+  /// (a böngésző vetitesVeg-jének párja).
+  double _vetitesVeg(SceneRow r) {
+    if (r.tipus == "k") {
+      for (final k in _kontrak) {
+        if ((((k["s"] as num?) ?? -1).toDouble() - r.s).abs() < 0.01) {
+          final veg = (k["shot_s"] ?? k["e"]) as num?;
+          if (veg != null) return math.max(r.s, veg.toDouble()) + sceneReelTailS;
+          break;
+        }
+      }
+    }
+    return r.s + sceneReelTailS;
   }
 
   /// Vetítés ki/be (V, a lista fejlécének gombja — a böngésző párja):
@@ -1041,7 +1063,7 @@ class _Court3DScreenState extends State<Court3DScreen>
     final most = _mostT(m) / fps;
     SceneRow? r;
     for (final x in sorok) {
-      if (most >= x.s - 1.6 && most < x.s + sceneReelTailS) r = x;
+      if (most >= x.s - 1.6 && most < _vetitesVeg(x)) r = x;
     }
     r ??= sorok.firstWhere((x) => x.s >= most, orElse: () => sorok.first);
     setState(() {
@@ -1059,13 +1081,20 @@ class _Court3DScreenState extends State<Court3DScreen>
   void _vetitesFrissit(Match m, double t0, double t1, bool vege) {
     final r = _vetitesSor;
     if (!_vetitesBe || r == null) return;
-    final hatar = r.s + sceneReelTailS;
+    final hatar = _vetitesVeg(r);
     if (!(t0 < hatar && (t1 >= hatar || vege))) return;
     final sorok = _jelenetSorok(m);
     final i = _vetitesIndex(sorok);
     SceneRow? kov;
     if (i >= 0) {
-      if (i + 1 < sorok.length) kov = sorok[i + 1];
+      // A szó szerint azonos (kettőzött) sort átlépjük — különben a
+      // vetítés a kettő közt körbe járna.
+      for (var j = i + 1; j < sorok.length; j++) {
+        if (!_azonosSor(sorok[j], r)) {
+          kov = sorok[j];
+          break;
+        }
+      }
     } else {
       for (final x in sorok) {
         if (x.s > r.s) {
@@ -4328,6 +4357,12 @@ class _Court3DPainter extends CustomPainter {
       _vonal(canvas, halvany, x + hatra, y1, 0, x + hatra, y2, 0);
     }
 
+    // Rajz: a nyilak a padlón — a figurák ELŐTT rajzolva, hogy a játékos
+    // takarja a nyilat (mint a böngészőben), ne a nyíl a játékost.
+    for (final (a, b, k) in nyilak) {
+      _nyil(canvas, a, b, k);
+    }
+
     // Játékosok hátulról előre (festő-algoritmus), hogy a közeli takarjon.
     final sorrend = [...frame.jatekosok];
     double melyseg(_Jatekos j) => _kamera(j.x, j.y, 1.0).$3;
@@ -4335,11 +4370,6 @@ class _Court3DPainter extends CustomPainter {
     for (final j in sorrend) {
       if (identical(j, rejtett)) continue; // a szemével-nézet saját teste
       _figura(canvas, j, frame.tSec);
-    }
-
-    // Rajz: a nyilak a padlón (a figurák alatt).
-    for (final (a, b, k) in nyilak) {
-      _nyil(canvas, a, b, k);
     }
 
     // Labda. Ha VAN birtokosa (a legközelebbi játékos karnyújtásnyira

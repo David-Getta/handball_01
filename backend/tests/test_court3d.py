@@ -967,7 +967,8 @@ def test_a_rajz_dekodolasa_es_a_nyilhegy_harom_tukorben():
     from handball.pipeline.view3d_html import RAJZ_JS
 
     eset = ("1,2,3,4;1,2,3,4,9;1,2,99,4,0;1,1,1.2,1,0;x,1,2,3,0;"
-            "5,5,8,9,0;-3,-2.5,4,4,1;1,2,3,4,;1,,3,4,0")
+            "5,5,8,9,0;-3,-2.5,4,4,1;1,2,3,4,;1,,3,4,0;"
+            "10,10,30,10,1.0;1e1,2,30,4,0;0x10,2,30,4,0")
     vart = [(5, 5, 8, 9, 0), (-3, -2.5, 4, 4, 1)]
     assert decode_drawing(eset) == vart
     assert decode_drawing(None) == [] and decode_drawing("") == []

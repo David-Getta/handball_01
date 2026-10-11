@@ -165,6 +165,14 @@ def _mark_goalkeepers(match: Match) -> None:
         pass
 
 
+def mark_goalkeepers(match: Match) -> None:
+    """A kapusok jelölése (a hatókör nyitásának lépése) önállóan — a
+    meccs-tár a betöltéskor és a mentéskor hívja, hogy a hatókörön KÍVÜL
+    futó végpontok is a jelölt meccsel dolgozzanak (lásd
+    _mark_goalkeepers)."""
+    _mark_goalkeepers(match)
+
+
 @contextmanager
 def primitive_cache(match: Match):
     """Hatókör, amelyen belül az alap-mérések egyszer futnak le.

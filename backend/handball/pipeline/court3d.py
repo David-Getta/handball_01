@@ -24,10 +24,12 @@ y a rövid (0..20), a kapu közepe y = 10.
 from __future__ import annotations
 
 import math
+import re
 from typing import Optional
 
 from ..models.tracking import Match, Team
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M, GOAL_WIDTH_M
+from .primitive_cache import copy_deep, memoize_primitive
 from .tactics import TacticsConfig
 
 # A szabálykönyvi vonalak a kapufák közti szakasztól mérve (méter).
@@ -40,14 +42,19 @@ DEFENCE_TIMELINE_STEP_S = 1.0
 
 
 def _jersey_map(match: Match) -> dict:
-    """track_id → mezszám (az első mért mezszám) — a jelenet-rétegek
-    feliratai ebből írnak."""
-    jersey: dict = {}
-    for f in match.frames:
-        for p in f.players:
-            if p.jersey_number is not None and p.track_id not in jersey:
-                jersey[p.track_id] = p.jersey_number
-    return jersey
+    """track_id → mezszám (trackenként az ELSŐ ismert érték) — a jelenet-
+    rétegek, a jegyzet-ábra és a klip-motor (clips._jersey_of_track)
+    közös szabálya; a hatókörön belül meccsenként egyszer számolva."""
+    from .primitive_cache import cached
+
+    def szamol():
+        jersey: dict = {}
+        for f in match.frames:
+            for p in f.players:
+                if p.jersey_number is not None and p.track_id not in jersey:
+                    jersey[p.track_id] = p.jersey_number
+        return jersey
+    return cached("court3d.jersey_map", match, None, szamol, copy=dict)
 
 
 def _nearest_keeper(frame, team: Team, goal_x: float):
@@ -338,6 +345,7 @@ def pass_lanes(players, ball, possession_radius_m: Optional[float] = None) -> Op
 DECISION_GAP_MIN = 0.10   # ennyi érték-különbség felett "jobb opció is volt"
 
 
+@memoize_primitive("court3d.decision_moments", copy=copy_deep)
 def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     """A passz-döntések, ahol a modell szerint ÉRDEMBEN jobb opció is volt.
 
@@ -416,6 +424,7 @@ def decision_moments(match: Match, config: Optional[TacticsConfig] = None) -> di
 # lövőt, a 2 m-es fedezés-kört és a legközelebbi védőt.
 
 
+@memoize_primitive("court3d.free_shot_moments", copy=copy_deep)
 def free_shot_moments(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     """A szabadon hagyott lövők pillanatai (a VÉDEKEZŐ csapat szerint).
 
@@ -455,6 +464,7 @@ def _third(ball_x: float, goal_x: float) -> str:
     return "saját" if frac < 1 / 3 else ("közép" if frac < 2 / 3 else "támadó")
 
 
+@memoize_primitive("court3d.turnover_moments", copy=copy_deep)
 def turnover_moments(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     """A labdavesztések pillanatai (a labdát ELVESZTŐ csapat szerint).
 
@@ -613,6 +623,8 @@ SCENE_REEL_TAIL_S = 3.5
 DRAWING_COLORS = ("ffd23f", "4c9aff", "ff6b6b")
 DRAWING_MAX = 30
 DRAWING_MIN_M = 0.6
+_RAJZ_SZAM = re.compile(r"-?[0-9]+(\.[0-9]+)?")
+_RAJZ_EGESZ = re.compile(r"[0-9]+")
 
 
 def decode_drawing(s) -> list:
@@ -624,14 +636,14 @@ def decode_drawing(s) -> list:
     DRAWING_MAX nyíl."""
     ki = []
     for tag in str(s or "").split(";"):
-        p = tag.split(",")
-        if len(p) != 5 or any(not x.strip() for x in p):
+        p = [x.strip() for x in tag.split(",")]
+        # Csak a kódoló számalakja (-12.3; szín: egész) — a böngésző és az
+        # app tükre ugyanígy (a float() az "1e1"-et is elfogadná).
+        if (len(p) != 5 or not all(_RAJZ_SZAM.fullmatch(x) for x in p[:4])
+                or not _RAJZ_EGESZ.fullmatch(p[4])):
             continue
-        try:
-            v = [float(x) for x in p[:4]]
-            k = int(p[4])
-        except ValueError:
-            continue
+        v = [float(x) for x in p[:4]]
+        k = int(p[4])
         if any(not math.isfinite(x) or x < -10 or x > 50 for x in v):
             continue
         if not 0 <= k < len(DRAWING_COLORS):
@@ -796,11 +808,7 @@ def goal_build_ups(match: Match, config: Optional[TacticsConfig] = None) -> dict
     win = round(BUILDUP_WINDOW_S * fps)
     events = sorted(detect_events(match, config), key=lambda e: e.t)
     by_t = {f.t: f for f in match.frames}
-    jersey: dict = {}
-    for f in match.frames:
-        for p in f.players:
-            if p.jersey_number is not None and p.track_id not in jersey:
-                jersey[p.track_id] = p.jersey_number
+    jersey = _jersey_map(match)
 
     def hely(t, tid):
         f = by_t.get(t)
@@ -895,6 +903,7 @@ def powerplay_moments(match: Match, config: Optional[TacticsConfig] = None) -> d
 FB_PATH_STEP_S = 0.5
 
 
+@memoize_primitive("court3d.fast_break_moments", copy=copy_deep)
 def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     """A lerohanások a 3D pályán: ki fut, honnan, és mi lett belőle.
 
@@ -940,11 +949,7 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
     shots = [e for e in detect_shots(match, config)
              if e.type in (EventType.SHOT, EventType.GOAL)]
     seqs = {s.start_t: s for s in segment_attacks(match, config)}
-    jersey: dict = {}
-    for f in match.frames:
-        for p in f.players:
-            if p.jersey_number is not None and p.track_id not in jersey:
-                jersey[p.track_id] = p.jersey_number
+    jersey = _jersey_map(match)
 
     def hely(i, tid):
         if i is None or tid is None:

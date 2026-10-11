@@ -373,11 +373,18 @@ const double drawingMinM = 0.6;
 /// [drawingMax] nyíl.
 List<(Offset, Offset, int)> decodeDrawing(String? s) {
   final ki = <(Offset, Offset, int)>[];
+  // Csak a kódoló számalakja (-12.3; szín: egész) — a böngésző és a
+  // Python tükör ugyanígy (a tryParse az "1e1"-et is elfogadná).
+  final szam = RegExp(r"^-?[0-9]+(\.[0-9]+)?$"), egesz = RegExp(r"^[0-9]+$");
   for (final tag in (s ?? "").split(";")) {
     final p = tag.split(",");
-    if (p.length != 5) continue;
-    final v = [for (final x in p.take(4)) double.tryParse(x)];
-    final k = int.tryParse(p[4]);
+    if (p.length != 5 ||
+        !p.take(4).every((x) => szam.hasMatch(x.trim())) ||
+        !egesz.hasMatch(p[4].trim())) {
+      continue;
+    }
+    final v = [for (final x in p.take(4)) double.tryParse(x.trim())];
+    final k = int.tryParse(p[4].trim());
     if (v.any((x) => x == null || !x.isFinite || x < -10 || x > 50)) continue;
     if (k == null || k < 0 || k >= drawingColors.length) continue;
     final a = Offset(v[0]!, v[1]!), b = Offset(v[2]!, v[3]!);

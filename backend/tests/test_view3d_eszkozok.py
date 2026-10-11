@@ -1538,7 +1538,7 @@ def test_a_jelenet_vetites_a_lista_sorain_lep():
                  "vetitesFrissit(t0, ido);", '<div id="vetitesJelzo"></div>',
                  '["vetitesJelzo", ', "vrGombEl(kulcs, 3, nyom(3))",
                  "vetitesSor = r; vetitesJelzoFrissit();",
-                 "const hatar = vetitesSor.s + JL_VETITES_S;"):
+                 "const hatar = vetitesVeg(vetitesSor);"):
         assert kell in oldal, kell
     # A lista, az N/P és a vetítés ugyanazokon a sorokon.
     assert oldal.count("= jelenetSorokSzurt();") >= 4
@@ -1549,7 +1549,7 @@ def test_a_jelenet_vetites_a_lista_sorain_lep():
     palya = (ui / "court3d_screen.dart").read_text(encoding="utf-8")
     for kell in ("_vetitesFrissit(m, t0, _mostT(m) / fps, vege);",
                  "LogicalKeyboardKey.keyV", "_vetitesSor = r;",
-                 "final hatar = r.s + sceneReelTailS;",
+                 "final hatar = _vetitesVeg(r);",
                  "() => _vetitesAllit(m, !_vetitesBe)"):
         assert kell in palya, kell
     assert palya.count("final sorok = _jelenetSorok(m);") >= 3
@@ -1829,3 +1829,53 @@ def test_a_3d_oldal_gzip_pel_megy_at_ha_a_kliens_keri(tmp_path, monkeypatch):
     assert sima.headers["content-type"].startswith("text/html")
     # A hálózaton tényleg kisebb.
     assert len(gzip.compress(sima.text.encode("utf-8"))) < len(sima.text) / 3
+
+
+
+def test_a_harmadik_atnezes_javitasai_a_3d_oldalon():
+    """A vetítés a sort a fajta, az idő, a felirat és a jegyzet-azonosító
+    szerint ismeri fel (két jegyzet egy kockán nem ragad körbe), a kettőzött
+    sort átlépi, a kapott lerohanás vége a lövés; a döntés-, szabad-lövés-
+    és eladás-réteg csak pillanat-váltáskor rajzol; az élő passzok és a
+    passzsávok közös ("tartós") anyagokkal, amit a csoportUrit nem
+    szabadít fel; az app ugyanígy (a nyilak a figurák előtt rajzolva)."""
+    from pathlib import Path
+
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ("function azonosSor(a, b)", "function vetitesVeg(r)",
+                 "sorok.slice(i + 1).find(x => !azonosSor(x, vetitesSor))",
+                 "const hatar = vetitesVeg(vetitesSor);",
+                 "if (!q.userData.tartos) q.dispose();",
+                 "dontesCsoport.userData.d === d", "szabadCsoport.userData.d === d",
+                 "eladasCsoport.userData.d === d", "passzAnyag(hazai, ",
+                 "new THREE.Line(g, PS_ANYAG[l.grade])"):
+        assert kell in oldal, kell
+    i = oldal.index("function dontesFrissit(t){")
+    assert "csoportUrit(dontesCsoport);\n  const d" not in oldal[i:i + 200]
+    ui = Path(__file__).resolve().parent.parent.parent / "client" / "lib" / "ui"
+    palya = (ui / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ("static bool _azonosSor(SceneRow a, SceneRow b)",
+                 "double _vetitesVeg(SceneRow r)",
+                 "final hatar = _vetitesVeg(r);"):
+        assert kell in palya, kell
+    # A nyilak a figurák ELŐTT (a festő-algoritmusban alattuk).
+    assert palya.index("_nyil(canvas, a, b, k);") < palya.index(
+        "_figura(canvas, j, frame.tSec);")
+
+
+def test_a_3d_oldal_gzip_q0_eseten_tomoritetlen(tmp_path, monkeypatch):
+    """A "gzip;q=0" elutasítás: tömörítetlen válasz."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    r = c.get(f"/matches/{m.meta.match_id}/view3d",
+              headers={"Accept-Encoding": "gzip;q=0, identity"})
+    assert r.status_code == 200 and "content-encoding" not in r.headers

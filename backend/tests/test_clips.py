@@ -777,8 +777,13 @@ def test_a_videozando_csomag_a_kulcs_jelenetekbol(tmp_path, monkeypatch):
     assert "key_scene" in clips_mod.CLIP_TEAM_IN_NAME_TYPES
     m = simulate_ground_truth(duration_s=180, fps=25.0, seed=5,
                               shots_per_min=8)
+    from handball.pipeline.court3d import fast_break_moments
+
     with primitive_cache(m):
         vart = key_scene_rows(m)["rows"]
+        # A kapott lerohanás sora a befejezés kockája köré kerül.
+        befejezes = {round(k["s"], 2): k["t"]
+                     for k in fast_break_moments(m)["moments"]}
     assert vart
     for f in m.frames:             # a visszatöltött meccs: nincs szerep
         for p in f.players:
@@ -802,7 +807,9 @@ def test_a_videozando_csomag_a_kulcs_jelenetekbol(tmp_path, monkeypatch):
         time.sleep(0.2)
     ev = [e for e in elkapott["ev"] if e["type"] == "key_scene"]
     fps = m.meta.fps
-    assert [e["t"] for e in ev] == [int(round(r["s"] * fps)) for r in vart]
+    assert [e["t"] for e in ev] == [
+        befejezes[round(r["s"], 2)] if r["tipus"] == "k"
+        else int(round(r["s"] * fps)) for r in vart]
     assert [e["team"] for e in ev] == [r["side"] for r in vart]
     fajta = {"d": "dontes-hiba", "sz": "szabad-lovo", "e": "draga-eladas",
              "k": "kapott-lerohanas"}
@@ -894,3 +901,60 @@ def test_a_jegyzet_klip_esemenye_viszi_a_rajzot():
               / "app.py").read_text(encoding="utf-8")
     assert '"rajz": n.get("rajz")}' in forras
     assert "from ..pipeline.calib_overlay import calib_pairs" in forras
+
+
+
+def test_ket_kulonbozo_jegyzet_egy_pillanatban_ket_klip(tmp_path):
+    """Az ismétlés-szűrő a típus ÉS a címke szerint: két különböző jegyzet
+    ugyanabban a fél másodpercben két klip; a címke nélküli ismétlés egy."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "note", "team": "home", "label": "zaras"},
+              {"t": 61, "type": "note", "team": "home", "label": "beallo"},
+              {"t": 90, "type": "goal", "team": "home"},
+              {"t": 91, "type": "goal", "team": "home"}]
+    res = export_event_clips(m, events, {"note", "goal"}, tmp_path / "ki")
+    assert res.count == 3 and res.skipped == 1
+
+
+def test_a_videozando_csomag_kapott_lerohanasa_a_befejezes_kore(tmp_path,
+                                                               monkeypatch):
+    """A videózandó csomag kapott-lerohanás sora a befejezés kockája köré
+    kerül (mint a kapott-lerohanás csomagé), nem az indulás köré."""
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline import clips as clips_mod
+    from handball.pipeline.court3d import fast_break_moments, key_scene_rows
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=7,
+                              shots_per_min=8)
+    sorok = [r for r in key_scene_rows(m)["rows"] if r["tipus"] == "k"]
+    if not sorok:
+        import pytest
+        pytest.skip("a szimuláción nincs videózandó kapott lerohanás")
+    vart = {round(k["s"], 2): k["t"] for k in fast_break_moments(m)["moments"]}
+    elkapott = {}
+
+    def kamu(match, ev, types, out_dir, **kw):
+        elkapott["ev"] = ev
+        raise RuntimeError("csak a próba")
+
+    monkeypatch.setattr(clips_mod, "export_event_clips", kamu)
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    j = c.post(f"/matches/{m.meta.match_id}/clips/export",
+               json={"types": ["key_scene"]}).json()
+    for _ in range(600):
+        if c.get(f"/jobs/{j['job_id']}").json()["status"] != "running":
+            break
+        time.sleep(0.2)
+    kontra = [e for e in elkapott["ev"] if e["type"] == "key_scene"
+              and e.get("label") == "kapott-lerohanas"]
+    assert [e["t"] for e in kontra] == [vart[round(r["s"], 2)] for r in sorok]
