@@ -1220,13 +1220,17 @@ class _Court3DScreenState extends State<Court3DScreen>
                   builder: (_) => ClipsScreen(
                       initialMatchId: _matchId,
                       // A Videózandó szűrővel a lista sorai egy
-                      // csomagban, sorszámozva.
-                      initialTypes: _csakKulcs
-                          ? const ["key_scene"]
-                          : const [
-                              "bad_decision", "free_shot", "costly_turnover",
-                              "conceded_fast_break",
-                            ]))),
+                      // csomagban, sorszámozva; az edző jegyzetei (a lista
+                      // sorai közt) a jegyzet-csomagban.
+                      initialTypes: [
+                        ...(_csakKulcs
+                            ? const ["key_scene"]
+                            : const [
+                                "bad_decision", "free_shot", "costly_turnover",
+                                "conceded_fast_break",
+                              ]),
+                        if (_jegyzetek.isNotEmpty) "note",
+                      ]))),
           style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               visualDensity: VisualDensity.compact),

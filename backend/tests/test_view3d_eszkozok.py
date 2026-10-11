@@ -1567,8 +1567,11 @@ def test_a_jelenet_vetites_a_lista_sorain_lep():
     kezdolap = (ui / "dashboard_screen.dart").read_text(encoding="utf-8")
     assert "matchId: id, csakVideozando: true, vetites: true" in kezdolap
     # A Klipek gomb a Videózandó szűrővel a videózandó csomagot kéri.
-    assert 'types: csakKulcs ? ["key_scene"] : KLIP_TIPUSOK' in oldal
-    assert '_csakKulcs\n                          ? const ["key_scene"]' in palya
+    assert 'types: (csakKulcs ? ["key_scene"] : KLIP_TIPUSOK)' in oldal
+    # A jegyzetek (a lista sorai közt) a jegyzet-csomagban.
+    assert '.concat(jegyzetek.length ? ["note"] : [])' in oldal
+    assert 'if (_jegyzetek.isNotEmpty) "note",' in palya
+    assert '...(_csakKulcs\n                            ? const ["key_scene"]' in palya
     klip = (ui / "clips_screen.dart").read_text(encoding="utf-8")
     assert '("key_scene", "Videózandó jelenetek",' in klip
     assert '("Videózandó jelenetek", ["key_scene"])' in klip

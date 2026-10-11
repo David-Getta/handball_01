@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **3D lista Klipek: a jegyzetek is** (javítás, böngésző és app): a
+  jelenet-lista Klipek gombja a lista sorai közt álló edzői jegyzeteket
+  is kéri (a "Jegyzetelt pillanatok" csomag — rajzos jegyzetnél a nyilak
+  a videón), ha a meccsen van jegyzet; eddig a lista egy része videóban
+  kimaradt.
+
 - **A 3D oldal tömörítve megy át** (javítás, motor): a böngészős 3D
   pálya az egész meccs mozgását beágyazva viszi (egy teljes meccs ~8 MB)
   — most gzip-pel, ha a böngésző kéri, ötödére-hatodára tömörítve: a

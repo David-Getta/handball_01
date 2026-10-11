@@ -2672,8 +2672,10 @@ async function klipKer(){
   try {
     const v = await fetch("/matches/" + encodeURIComponent(ADAT.match_id) + "/clips/export",
       {method: "POST", headers: {"Content-Type": "application/json"},
-       // A Videózandó szűrővel a lista sorai egy csomagban, sorszámozva.
-       body: JSON.stringify({types: csakKulcs ? ["key_scene"] : KLIP_TIPUSOK})});
+       // A Videózandó szűrővel a lista sorai egy csomagban, sorszámozva;
+       // az edző jegyzetei (a lista sorai közt) a jegyzet-csomagban.
+       body: JSON.stringify({types: (csakKulcs ? ["key_scene"] : KLIP_TIPUSOK)
+                                      .concat(jegyzetek.length ? ["note"] : [])})});
     if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
     const {job_id} = await v.json();
     const kovet = async () => {
