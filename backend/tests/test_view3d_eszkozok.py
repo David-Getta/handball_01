@@ -1798,3 +1798,31 @@ def test_a_konyvtar_jegyzet_listaja_jelzi_a_rajzot(tmp_path, monkeypatch):
     kep = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
            / "ui" / "notes_screen.dart").read_text(encoding="utf-8")
     assert '(n["rajz"] as String? ?? "").isNotEmpty' in kep
+
+
+
+def test_a_3d_oldal_gzip_pel_megy_at_ha_a_kliens_keri(tmp_path, monkeypatch):
+    """A /view3d gzip-pel válaszol, ha a kliens kéri (a tartalom
+    ugyanaz), különben tömörítetlenül."""
+    import gzip
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    url = f"/matches/{m.meta.match_id}/view3d"
+    tomor = c.get(url, headers={"Accept-Encoding": "gzip"})
+    assert tomor.status_code == 200
+    assert tomor.headers.get("content-encoding") == "gzip"
+    assert "accept-encoding" in tomor.headers.get("vary", "").lower()
+    sima = c.get(url, headers={"Accept-Encoding": "identity"})
+    assert "content-encoding" not in sima.headers
+    assert tomor.text == sima.text and "<html" in sima.text.lower()
+    assert sima.headers["content-type"].startswith("text/html")
+    # A hálózaton tényleg kisebb.
+    assert len(gzip.compress(sima.text.encode("utf-8"))) < len(sima.text) / 3

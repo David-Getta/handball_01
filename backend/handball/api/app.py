@@ -2832,15 +2832,32 @@ def create_app():
                          encoding="utf-8")
         return {"saved": len(sorok)}
 
-    @app.get("/matches/{match_id}/view3d")
-    def match_view3d(match_id: str):
+    def _html_gzip(oldal: str, request):
+        """HTML-válasz gzip-pel, ha a kliens kéri (Accept-Encoding): a 3D
+        oldal az egész meccs mozgását beágyazva viszi (10 perc ~1,3 MB, egy
+        teljes meccs ~8 MB) — tömörítve ötödére-hatodára megy át, a
+        VR-headset Wi-Fi-n tölti. Globális tömörítő helyett célzottan: a
+        videó- és zip-letöltések (Range-kérések) érintetlenek maradnak."""
+        import gzip
+
+        from fastapi import Response
+        from fastapi.responses import HTMLResponse
+        kodolas = (request.headers.get("accept-encoding") or "").lower()
+        if "gzip" in kodolas and len(oldal) > 1024:
+            return Response(
+                content=gzip.compress(oldal.encode("utf-8"), compresslevel=6),
+                media_type="text/html; charset=utf-8",
+                headers={"Content-Encoding": "gzip",
+                         "Vary": "Accept-Encoding"})
+        return HTMLResponse(content=oldal)
+
+    def match_view3d(match_id: str, request: Request):
         """Böngészős 3D / VR nézet: a meccs WebXR-képes HTML-oldalként.
 
         A kliens 3D füle a képernyős út; ez ugyanaz böngészőben — és a
         jövőben VR-headseten: a WebXR biztonságos környezetet kér, a
         localhost az (headsetről USB + adb reverse teszi elérhetővé).
         A three.js CDN-ről jön, tehát internet kell hozzá."""
-        from fastapi.responses import HTMLResponse
         from ..pipeline.view3d_html import view3d_html
         match = _store.get(match_id)
         if match is None:
@@ -2862,7 +2879,12 @@ def create_app():
         from ..pipeline.primitive_cache import primitive_cache
         with primitive_cache(match):
             oldal = view3d_html(match, riasztasok, feltores, megallitas)
-        return HTMLResponse(content=oldal)
+        return _html_gzip(oldal, request)
+
+    # A `request` típusa kézzel (a modul `from __future__ import
+    # annotations` miatt), majd a regisztráció.
+    match_view3d.__annotations__["request"] = Request
+    app.get("/matches/{match_id}/view3d")(match_view3d)
 
     @app.get("/matches/{match_id}/defence-timeline")
     def match_defence_timeline(match_id: str):

@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **A 3D oldal tömörítve megy át** (javítás, motor): a böngészős 3D
+  pálya az egész meccs mozgását beágyazva viszi (egy teljes meccs ~8 MB)
+  — most gzip-pel, ha a böngésző kéri, ötödére-hatodára tömörítve: a
+  VR-headset Wi-Fi-n gyorsan tölti. A videó- és zip-letöltések
+  érintetlenek (célzott tömörítés, nem globális).
+
 - **Egy kattintásos vetítés TV-kamerával** (javítás, jelentés, app): a
   jelentés "▶ Mind egymás után" linkje és a kezdőlap "Vetítés" gombja a
   videózandó jelenetek vetítését TV-kamerával indítja (a labdát követi az
