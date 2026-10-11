@@ -3,7 +3,21 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.163 óta)
+## v0.1.164 — kiadva (2026-10-11)
+
+> Kiadás-jegyzet: a 3D pálya közös edzés-eszköz lett, és mellé került a
+> valódi felvétel. KÖZÖS NÉZÉS: az edző "📡 Vezetem" gombja (a böngészőben
+> vagy az appban) a lejátszását — idő, szünet, sebesség, a padlóra
+> rajzolt nyilak — a csapat headsetjeire viszi; a játékosok a "👥
+> Követem"-mel ugyanazt a pillanatot nézik, mindenki a saját helyéről, és
+> az edző látja, hányan csatlakoztak. VIDEÓ: a "📺 Videó" (K) a meccs
+> felvételét a lejátszással szinkronban mutatja — a böngészőben kép a
+> képben és nagy kivetítő (VR-ben is), az appban a 3D kép mellett —, így
+> amit a rekonstrukció állít, a videón ugyanabban a pillanatban
+> ellenőrizhető. A nyomtatott jelentésben a videózandó jelenetek és az
+> edzői jegyzetek alatt ott a pillanat kockája (rajzos jegyzetnél a
+> taktika-ábra mellett). Benne van a harmadik kód-átnézés tizennégy
+> javítása is.
 
 - **Közös nézés: a vezető látja, hányan követik** (új, böngésző/app,
   motor): "📡 vezetsz · 12 követő" — az edző látja, hogy a csapat minden
