@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **Videó-kocka a jelentés videózandó jeleneteinél** (új, jelentés): ha
+  a forrás-videó ezen a gépen elérhető, a "Videózandó jelenetek" minden
+  sora alatt a jelenet kockája a felvételből (beágyazva — a jelentés
+  önálló fájl, nyomtatva is látszik, melyik pillanatról van szó). A
+  kocka-olvasás közös a 3D pálya Videó-ablakával: a kettő ugyanazt a
+  kockát mutatja.
+
 - **Videó a 3D mellett az appban is** (új, app): a 3D fül "📺 Videó"
   (K) gombja a valódi felvételt a 3D kép mellett mutatja, a lejátszással
   szinkronban (a motor kocka-végpontjából, egyszerre egy kéréssel — lassú

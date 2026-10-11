@@ -12,6 +12,7 @@ Tiszta stdlib (html.escape), függőség nélkül → egyszerűen tesztelhető.
 
 from __future__ import annotations
 
+import base64
 import re
 from html import escape
 
@@ -1175,6 +1176,25 @@ def _scenes_section(match, base_url: str | None = None) -> str:
                            max_rows=REPORT_SCENES_MAX)["rows"]
     if not sorok:
         return ""
+    # A jelenet kockája a forrás-videóból, ha ezen a gépen elérhető
+    # (beágyazva: a jelentés önálló fájl, nyomtatva is látszik, melyik
+    # pillanatról van szó). Videó nélkül a sor változatlan.
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    try:
+        from .video_frames import frames_jpeg
+        kepek = frames_jpeg(match, [round(float(r["s"]) * fps) for r in sorok])
+    except Exception:
+        kepek = {}
+
+    def kep(r):
+        b = kepek.get(round(float(r["s"]) * fps))
+        if not b:
+            return ""
+        return ('<br><img alt="" src="data:image/jpeg;base64,'
+                + base64.b64encode(b).decode("ascii")
+                + '" style="width:240px;max-width:100%;border-radius:4px;'
+                'margin:4px 0 8px">')
+
     def link(r):
         if not base_url:
             return ""
@@ -1186,8 +1206,14 @@ def _scenes_section(match, base_url: str | None = None) -> str:
         return (f' <a href="{cim}" style="font-size:11px;'
                 'text-decoration:none">3D ↗</a>')
 
-    lis = "".join(f"<li><b>{r['ido']}</b> — {escape(r['szoveg'])}{link(r)}</li>"
-                  for r in sorok)
+    def sor(r):
+        # Képes sornál a felirat és a kép egy lapon marad nyomtatva.
+        k = kep(r)
+        nyit = '<li style="break-inside:avoid">' if k else "<li>"
+        return (f"{nyit}<b>{r['ido']}</b> — {escape(r['szoveg'])}{link(r)}"
+                f"{k}</li>")
+
+    lis = "".join(sor(r) for r in sorok)
     # Mind egymás után: a 3D pálya a videózandó jelenetek vetítésével nyit
     # (mindkét csapat jelenetei, az elsőtől — a 3D lista "Vetítés"-e).
     vetit = ""
@@ -1203,7 +1229,9 @@ def _scenes_section(match, base_url: str | None = None) -> str:
             "érő szabadon hagyott lövések és a legnagyobb döntés-hibák (ahol "
             "jobb opció is volt) — a 3D pálya Jelenet-listájában és a Klipek "
             "\"Videózandó jelenetek\" csomagjában (sorszámozva, időrendben) "
-            "ugyanezek.</p>"
+            "ugyanezek."
+            + (" A képek a felvétel kockái a jelenet pillanatában."
+               if kepek else "") + "</p>"
             + vetit + "<ul>" + lis + "</ul>")
 
 

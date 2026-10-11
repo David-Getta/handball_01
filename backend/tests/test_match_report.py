@@ -1914,6 +1914,92 @@ def test_a_videozando_jelenetek_a_3d_jelenet_listabol():
     assert "&amp;lt;" not in szakasz  # nincs kettős escape
 
 
+def test_a_videozando_jelenetek_alatt_a_felvetel_kockaja(tmp_path):
+    """Ha a forrás-videó elérhető, minden videózandó sor alatt a jelenet
+    kockája (beágyazott JPEG, a sor idejének kockája); videó nélkül a sor
+    változatlan (kép nélkül)."""
+    import base64
+    import os
+    import sys
+
+    import cv2
+    import numpy as np
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_court3d import _eladasos_meccs
+
+    from handball.pipeline import report_html as rh
+    from handball.pipeline.court3d import key_scene_rows
+
+    m = _eladasos_meccs()
+    ures = rh._scenes_section(m)
+    assert "data:image/jpeg" not in ures
+    assert "A képek a felvétel kockái" not in ures
+    ut = tmp_path / "v.mp4"
+    w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                        (640, 360))
+    for i in range(len(m.frames) + 5):
+        w.write(np.full((360, 640, 3), (i * 3) % 250, np.uint8))
+    w.release()
+    m.meta.video_path = str(ut)
+    html = rh._scenes_section(m)
+    sorok = key_scene_rows(m, decision_top=rh.REPORT_DECISION_TOP,
+                           max_rows=rh.REPORT_SCENES_MAX)["rows"]
+    assert html.count("data:image/jpeg;base64,") == len(sorok) > 0
+    assert html.count('<li style="break-inside:avoid">') == len(sorok)
+    assert "A képek a felvétel kockái" in html
+    # Az első kép a sor idejének kockája (szürkeség = 3 × sorszám).
+    b64 = html.split("data:image/jpeg;base64,", 1)[1].split('"', 1)[0]
+    img = cv2.imdecode(np.frombuffer(base64.b64decode(b64), np.uint8),
+                       cv2.IMREAD_COLOR)
+    t = round(float(sorok[0]["s"]) * m.meta.fps)
+    assert img.shape[1] == 320
+    assert abs(float(img.mean()) - (t * 3) % 250) < 6
+
+
+def test_a_kocka_olvaso_szakaszt_es_ritkitast_kovet(tmp_path):
+    """video_frames: a feldolgozott t. kocka a forrás start_frame + (t −
+    a szakasz eleje) × stride. kockája — összefűzött meccsnél a szakasz
+    saját videójából; elérhetetlen videónál (és a videó vége után) a kocka
+    kimarad, nem hiba."""
+    import cv2
+    import numpy as np
+
+    from handball.models.tracking import Frame, Match, MatchMeta
+    from handball.pipeline.video_frames import frames_jpeg, source_frame
+
+    def video(nev, alap):
+        ut = tmp_path / nev
+        w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                            (320, 160))
+        for i in range(60):
+            w.write(np.full((160, 320, 3), alap + i * 2, np.uint8))
+        w.release()
+        return str(ut)
+
+    a, b = video("a.mp4", 0), video("b.mp4", 120)
+    m = Match(MatchMeta(match_id="sz", home_team="A", away_team="B",
+                        fps=25.0),
+              [Frame(t=i, players=[], ball=None) for i in range(40)])
+    m.meta.source_segments = [
+        {"t_from": 0, "t_to": 20, "video_path": a, "start_frame": 4,
+         "stride": 2},
+        {"t_from": 20, "t_to": None, "video_path": b, "start_frame": 0,
+         "stride": 1},
+        ]
+    assert source_frame(m, 5) == (a, 14)
+    assert source_frame(m, 25) == (b, 5)
+    kepek = frames_jpeg(m, [25, 5, 5, 200])
+    assert sorted(kepek) == [5, 25]  # a 200. a b videó vége után
+    def szurke(bajt):
+        return float(cv2.imdecode(np.frombuffer(bajt, np.uint8),
+                                  cv2.IMREAD_COLOR).mean())
+    assert abs(szurke(kepek[5]) - 28) < 6     # a: 14. kocka → 28
+    assert abs(szurke(kepek[25]) - 130) < 6   # b: 5. kocka → 120 + 10
+    m.meta.source_segments[1]["video_path"] = str(tmp_path / "nincs.mp4")
+    assert source_frame(m, 25) is None
+    assert sorted(frames_jpeg(m, [5, 25])) == [5]
+
+
 def test_jelenet_nelkul_nincs_videozando_szakasz():
     """Jelenet nélküli (játékos- és labda-mentes) meccsen a szakasz
     elmarad — nem üres címsor."""
