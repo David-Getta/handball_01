@@ -53,9 +53,14 @@ class Court3DScreen extends StatefulWidget {
   /// A kezdőlap "Videózandó: N jelenet · 3D-ben" gombjától jövünk: a
   /// jelenet-lista "Videózandó" szűrője bekapcsolva nyílik.
   final bool csakVideozando;
+
+  /// A kezdőlap "Vetítés" gombjától jövünk: betöltés után a jelenet-lista
+  /// vetítése indul (a böngésző vetit=1 paraméterének párja).
+  final bool vetites;
   const Court3DScreen(
       {super.key, this.matchId, this.startS, this.lovesTerkep,
-      this.initialScene, this.initialTeam, this.csakVideozando = false});
+      this.initialScene, this.initialTeam, this.csakVideozando = false,
+      this.vetites = false});
 
   @override
   State<Court3DScreen> createState() => _Court3DScreenState();
@@ -269,6 +274,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _kezdoSzuro();
       });
       _kezdoJelenet();
+      _kezdoVetites();
       return;
     }
     await _open(kert);
@@ -461,6 +467,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _kezdoSzuro();
       });
       _kezdoJelenet();
+      _kezdoVetites();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -870,6 +877,13 @@ class _Court3DScreenState extends State<Court3DScreen>
     }
     if (widget.initialScene != null) _jelenetListaNyitva = true;
     if (widget.csakVideozando && _kulcsJelenetek.isNotEmpty) _csakKulcs = true;
+  }
+
+  /// A kezdőlap "Vetítés" gombjától érkezve: a vetítés indul (a szűrők
+  /// a _kezdoSzuro szerint már beálltak).
+  void _kezdoVetites() {
+    final m = _match;
+    if (widget.vetites && m != null) _vetitesAllit(m, true);
   }
 
   /// A jelenet-lista sorai a "Videózandó" szűrővel (ha be van kapcsolva).

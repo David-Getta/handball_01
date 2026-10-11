@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.162 óta)
 
+- **Videózandó jelenetek egy kattintásra, egymás után** (új, jelentés,
+  kezdőlap, böngésző): a nyomtatott jelentés "Videózandó jelenetek"
+  szakaszának "▶ Mind egymás után a 3D pályán" linkje és a kezdőlap
+  kártyájának "Vetítés" gombja a 3D pályát a videózandó jelenetek
+  vetítésével nyitja — a meccs kulcs-jelenetei bő egy perc alatt,
+  kattintás nélkül. A böngészős 3D link-paramétere: vetit=1 (a "Link
+  másolása" is viszi).
+
 - **3D pálya: Vetítés — a jelenet-lista sorai egymás után** (új,
   böngésző/VR és app): a lista fejlécének "▶ Vetítés" gombja (V; VR-ben
   a kontroller hüvelykujj-karjának lenyomása) végigjátssza a sorokat:

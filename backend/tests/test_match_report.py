@@ -2026,6 +2026,11 @@ def test_a_videozando_jelenetek_3d_linkje_a_motor_cimevel():
     assert (f'<a href="http://127.0.0.1:8000/matches/{m.meta.match_id}/view3d'
             '?t=0.0&lista=1&kulcs=1&jelenet=hazai"') in van
     assert van.count("3D ↗") == van.count("<li>")
+    # A szakasz elején: mind egymás után (vetítés), csapat-szűrő nélkül.
+    assert (f'<a href="http://127.0.0.1:8000/matches/{m.meta.match_id}/view3d'
+            '?t=0&lista=1&kulcs=1&vetit=1"') in van
+    assert van.index("vetit=1") < van.index("<ul>")
+    assert "vetit=1" not in nincs
     html = match_report_html(m, {}, [], None, base_url="http://127.0.0.1:8000")
     assert "/view3d?t=0.0&lista=1&kulcs=1&jelenet=hazai" in html
 

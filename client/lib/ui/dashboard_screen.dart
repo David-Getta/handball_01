@@ -844,7 +844,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           style: AppText.label.copyWith(fontSize: 11.5));
     }
     final elso = rows.first;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
+    return Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
       const Icon(Icons.movie_outlined, size: 14, color: AppColors.gold),
       const SizedBox(width: 6),
       Text("Videózandó: $total jelenet",
@@ -866,6 +866,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             visualDensity: VisualDensity.compact),
         icon: const Icon(Icons.view_in_ar, size: 14),
         label: const Text("3D-ben", style: TextStyle(fontSize: 11.5)),
+      ),
+      // Mind egymás után: a 3D pálya a videózandó jelenetek vetítésével
+      // (mindkét csapat jelenetei, az elsőtől) — a jelentés "▶ Mind
+      // egymás után" linkjének párja.
+      Tooltip(
+        message: "A videózandó jelenetek egymás után a 3D pályán",
+        child: TextButton.icon(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => Court3DScreen(
+                  matchId: id, csakVideozando: true, vetites: true))),
+          style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              visualDensity: VisualDensity.compact),
+          icon: const Icon(Icons.slideshow_outlined, size: 14),
+          label: const Text("Vetítés", style: TextStyle(fontSize: 11.5)),
+        ),
       ),
     ]);
   }

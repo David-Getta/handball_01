@@ -1708,6 +1708,7 @@ function linkEpit(){
   if (jelenetCsapat.value !== "mind") q.set("jelenet", jelenetCsapat.value);
   if (jelenetLista.style.display === "block") q.set("lista", "1");
   if (csakKulcs) q.set("kulcs", "1");
+  if (vetites) q.set("vetit", "1");
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -1734,6 +1735,9 @@ function linkAlkalmaz(){
   if (v("kulcs") === "1" && KULCS.size) csakKulcs = true;
   if (v("lista") === "1") jelenetListaNyit(true);
   if (v("seb")){ sebessegValaszto.value = v("seb"); sebessegValaszto.onchange(); }
+  // A vetítés a szűrők és a sebesség után indul (a t-ből: az ott futó
+  // jelenettől, különben a következőtől).
+  if (v("vetit") === "1") vetitesAllit(true);
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
   if (v("tv") === "1") modValt("tv");
   if (v("kamera") && [...jatekosKameraValaszto.options].some(o => o.value === v("kamera"))){

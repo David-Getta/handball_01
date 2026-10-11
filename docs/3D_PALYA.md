@@ -197,7 +197,10 @@ jelenet 1,5 mp-cel előtte indul, a pillanata után 3,5 mp-ig fut
 Videózandó szűrővel bő egy perces összefoglaló a meccs kulcs-jeleneteiből.
 A felirat-oszlop tetején (VR-ben a táblán) a "Vetítés · 3/15 · 12:34"
 jelző mutatja, hol tart; a lista végén megáll. Kézi tekerés után nem ugrik
-el, egy sorra kattintva onnan folytatja.
+el, egy sorra kattintva onnan folytatja. Egy kattintásra: a nyomtatott
+jelentés "Videózandó jelenetek" szakaszának "▶ Mind egymás után" linkje és
+a kezdőlap kártyájának "Vetítés" gombja a 3D pályát a videózandó
+jelenetek vetítésével nyitja (link-paraméter: `vetit=1`).
 
 A **Kinek a hibái** választó a hiba-lapozókat egy csapatra szűri: mind
 egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott lövőt,

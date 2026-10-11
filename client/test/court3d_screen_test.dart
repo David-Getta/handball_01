@@ -486,6 +486,23 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("vetites: true — betöltés után a vetítés indul",
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const MaterialApp(
+        home: Court3DScreen(csakVideozando: true, vetites: true)));
+    for (var i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining("Vetítés · ").evaluate().isNotEmpty) break;
+    }
+    // A lista nyitva, a vetítés az első videózandó jeleneten.
+    expect(find.textContaining("Vetítés · 1/"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("N / P billentyű: jelenet-lépés a lista sorain", (tester) async {
     await _nyit(tester);
     // N: az első jelenet (a demó első döntése) — a felirat megjelenik.

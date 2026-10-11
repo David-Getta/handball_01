@@ -1553,3 +1553,12 @@ def test_a_jelenet_vetites_a_lista_sorain_lep():
                  "() => _vetitesAllit(m, !_vetitesBe)"):
         assert kell in palya, kell
     assert palya.count("final sorok = _jelenetSorok(m);") >= 3
+    # Egy kattintásra: a vetit=1 link-paraméter (olvasva és írva), az app
+    # vetites paramétere, a kezdőlap "Vetítés" gombja.
+    assert 'if (v("vetit") === "1") vetitesAllit(true);' in oldal
+    assert 'if (vetites) q.set("vetit", "1");' in oldal
+    assert oldal.index('v("vetit")') > oldal.index('v("kulcs")')
+    assert "final bool vetites;" in palya
+    assert palya.count("_kezdoVetites();") == 2
+    kezdolap = (ui / "dashboard_screen.dart").read_text(encoding="utf-8")
+    assert "matchId: id, csakVideozando: true, vetites: true" in kezdolap

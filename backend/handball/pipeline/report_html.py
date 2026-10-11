@@ -1074,7 +1074,9 @@ def _scenes_section(match, base_url: str | None = None) -> str:
     `base_url`: a motor címe (pl. "http://127.0.0.1:8000/"), ha ismert —
     ekkor minden sor végén "3D ↗" link nyitja a böngészős 3D pályát a
     jelenet előtt REPORT_SCENE_LEAD_S mp-cel, a hibázó csapatra szűrve,
-    nyitott, a videózandó jelenetekre szűkített jelenet-listával. A jelentés önálló fájl (nem a motor
+    nyitott, a videózandó jelenetekre szűkített jelenet-listával; a szakasz
+    elején a "▶ Mind egymás után" link a 3D pályát a videózandó jelenetek
+    vetítésével nyitja (vetit=1). A jelentés önálló fájl (nem a motor
     szolgálja ki), ezért a link csak abszolút címmel él; cím nélkül a
     szakasz link nélkül, papírra ugyanúgy készül.
 
@@ -1106,13 +1108,23 @@ def _scenes_section(match, base_url: str | None = None) -> str:
 
     lis = "".join(f"<li><b>{r['ido']}</b> — {escape(r['szoveg'])}{link(r)}</li>"
                   for r in sorok)
+    # Mind egymás után: a 3D pálya a videózandó jelenetek vetítésével nyit
+    # (mindkét csapat jelenetei, az elsőtől — a 3D lista "Vetítés"-e).
+    vetit = ""
+    if base_url:
+        cim = (f"{base_url.rstrip('/')}/matches/"
+               f"{escape(match.meta.match_id)}/view3d?t=0&lista=1&kulcs=1"
+               "&vetit=1")
+        vetit = (f'<p><a href="{cim}" style="text-decoration:none">▶ Mind '
+                 "egymás után a 3D pályán</a> — minden jelenet 1,5 mp-cel "
+                 "előtte indul, és magától lép tovább.</p>")
     return ("<h2>Videózandó jelenetek</h2>"
             "<p>A gólba került labdavesztések és kapott lerohanások, a gólt "
             "érő szabadon hagyott lövések és a legnagyobb döntés-hibák (ahol "
             "jobb opció is volt) — a 3D pálya Jelenet-listájában és a Klipek "
             "\"Drága eladások\" / \"Kapott lerohanások\" / \"Döntés-hibák\" "
             "csomagjában ugyanezek.</p>"
-            "<ul>" + lis + "</ul>")
+            + vetit + "<ul>" + lis + "</ul>")
 
 
 def match_report_html(match, tactics: dict, events: list, quality: dict | None,
