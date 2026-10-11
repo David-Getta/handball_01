@@ -869,6 +869,11 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="rajzInfo"></span>
  </div>
  <div class="sor">
+  <button id="vezetGomb" title="Közös nézés — te vezetsz: a lejátszásod (idő, szünet, sebesség, rajz) a csapat headsetjein is fut; a csapat linkje a vágólapra kerül">📡 Vezetem</button>
+  <button id="kovetGomb" title="Közös nézés — az edzőt követed: az ő lejátszása fut nálad, te a saját helyedről nézed (a pálya bejárható)">👥 Követem</button>
+  <span id="kozosInfo" style="font-size:11px;word-break:break-all"></span>
+ </div>
+ <div class="sor">
   <button id="videoGomb" title="Videó (K): a valódi felvétel a 3D mellett, szinkronban — kép a képben, és kivetítő a túlsó oldalvonal fölött (VR-ben is)">📺 Videó</button>
  </div>
  <div class="sor">
@@ -903,6 +908,7 @@ Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmad
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
+Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi (a csapat linkje: kovet=1)<br>
 Videó (K) — a valódi felvétel a 3D mellett, a lejátszással szinkronban: kép a képben és kivetítő a túlsó oldalvonal fölött (VR-ben is)<br>
 Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér pötty, ✕ törli), a vetítésben, a jelentésben és a Klipek jegyzet-csomagjában<br>
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
@@ -1880,6 +1886,7 @@ function linkEpit(){
   if (vetites) q.set("vetit", "1");
   if (rajzok.length) q.set("rajz", rajzKodol(rajzok));
   if (videoBe) q.set("video", "1");
+  if (kozosMod === "kovet") q.set("kovet", "1");
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -1911,6 +1918,8 @@ function linkAlkalmaz(){
   if (v("vetit") === "1") vetitesAllit(true);
   if (v("rajz")){ rajzok.push(...rajzDekodol(v("rajz"))); rajzFrissit(); }
   if (v("video") === "1") videoAllit(true);
+  if (v("kovet") === "1") kozosAllit("kovet");
+  else if (v("vezet") === "1") kozosAllit("vezet");
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
   if (v("tv") === "1") modValt("tv");
   if (v("kamera") && [...jatekosKameraValaszto.options].some(o => o.value === v("kamera"))){
@@ -2547,6 +2556,72 @@ videoKep.onerror = () => {
 videoGomb.onclick = () => videoAllit(!videoBe);
 window.videoProba = () => ({be: videoBe, kert: videoKert, kivetito: kivetito.visible, info: videoInfo.textContent});
 
+// ---- Közös nézés: az edző vezet, a csapat headsetjei követik ----------
+// A "📡 Vezetem" a lejátszás állapotát (idő, megy-e, sebesség, rajz) a
+// motorra küldi; a "👥 Követem" (a csapat linkje: kovet=1) ezt kérdezi és
+// követi — mindenki a saját helyéről, a saját kamerájával nézi ugyanazt a
+// pillanatot: a pálya bejárható, az edző mutatja a szituációt. A követő a
+// vezető mostani idejét a válasz KORÁBÓL becsli (az órák eltérése nélkül),
+// és csak KZ_TURES mp-nél nagyobb eltérésnél ugrik (court3d.SHARED3D_*).
+const KZ_KULD = __KZ_KULD__, KZ_KERD = __KZ_KERD__, KZ_TURES = __KZ_TURES__;
+const vezetGomb = document.getElementById("vezetGomb");
+const kovetGomb = document.getElementById("kovetGomb");
+const kozosInfo = document.getElementById("kozosInfo");
+let kozosMod = null;  // null | "vezet" | "kovet"
+let kzUton = false, kzUtolso = 0, kzRajz = null;
+const kzCim = () => "/matches/" + encodeURIComponent(ADAT.match_id) + "/shared3d";
+function kozosAllit(m){
+  if (!ADAT.match_id){ kozosInfo.textContent = "a közös nézéshez a motor kell"; return; }
+  const elozo = kozosMod;
+  kozosMod = (m === kozosMod) ? null : m;
+  // A leálló vezető szól: a követők nem a régi állapotot követik tovább.
+  if (elozo === "vezet" && kozosMod !== "vezet")
+    fetch(kzCim(), {method: "DELETE"}).catch(() => {});
+  vezetGomb.classList.toggle("be", kozosMod === "vezet");
+  kovetGomb.classList.toggle("be", kozosMod === "kovet");
+  kzRajz = null; kzUtolso = 0;
+  if (kozosMod === "vezet"){
+    const u = location.origin + location.pathname + "?kovet=1";
+    kozosInfo.textContent = "📡 vezetsz — a csapat linkje: " + u;
+    if (navigator.clipboard) navigator.clipboard.writeText(u).then(
+      () => { kozosInfo.textContent += " (vágólapon)"; }, () => {});
+  } else if (kozosMod === "kovet"){
+    // A követő saját vetítése a vezetővel versenyezne.
+    if (vetites) vetitesAllit(false);
+    kozosInfo.textContent = "👥 várakozás az edzőre…";
+  } else kozosInfo.textContent = "";
+}
+function kozosFrissit(){
+  if (!kozosMod || kzUton) return;
+  const most = performance.now() / 1000;
+  if (most - kzUtolso < (kozosMod === "vezet" ? KZ_KULD : KZ_KERD)) return;
+  kzUtolso = most; kzUton = true;
+  if (kozosMod === "vezet"){
+    fetch(kzCim(), {method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok)})})
+      .then(r => { if (!r.ok) throw new Error(String(r.status)); })
+      .catch(() => { if (kozosMod === "vezet") kozosInfo.textContent = "📡 a vezetés nem jut el a motorhoz"; })
+      .finally(() => { kzUton = false; });
+    return;
+  }
+  fetch(kzCim(), {cache: "no-store"}).then(r => r.json()).then(a => {
+    if (kozosMod !== "kovet") return;
+    if (!a.active){ kozosInfo.textContent = "👥 nincs vezető — az edző nem vezet (vagy bezárta)"; return; }
+    kozosInfo.textContent = "👥 az edzőt követed";
+    const cel = Math.max(0, Math.min(veg, a.t + (a.playing ? a.kor * a.speed : 0)));
+    if (Math.abs(ido - cel) > KZ_TURES){ ido = cel; csuszka.value = ido; }
+    megy = !!a.playing; lejatszasGomb.textContent = megy ? "⏸" : "▶";
+    if (a.speed !== sebesseg){ sebesseg = a.speed; sebessegValaszto.value = String(a.speed); }
+    if (a.rajz !== kzRajz){
+      kzRajz = a.rajz; rajzok.length = 0; rajzok.push(...rajzDekodol(a.rajz)); rajzFrissit();
+    }
+  }).catch(() => { if (kozosMod === "kovet") kozosInfo.textContent = "👥 a motor nem válaszol"; })
+    .finally(() => { kzUton = false; });
+}
+vezetGomb.onclick = () => kozosAllit("vezet");
+kovetGomb.onclick = () => kozosAllit("kovet");
+window.kozosProba = () => ({mod: kozosMod, ido, megy, sebesseg, rajz: rajzKodol(rajzok), info: kozosInfo.textContent});
+
 // ---- Jegyzetek: az edző megjegyzései a pillanatokhoz ------------------
 // A "📝 Jegyzet" (J) a mostani pillanathoz ír megjegyzést a motor /notes
 // végpontjára — ugyanaz a jegyzet-tár, amit a meccs-elemző használ: a
@@ -3163,7 +3238,7 @@ fest.setAnimationLoop(() => {
     vetitesFrissit(t0, ido);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); felirat(ido); vrFeliratFrissit();
+  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); kozosFrissit(); felirat(ido); vrFeliratFrissit();
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);
@@ -3171,7 +3246,9 @@ fest.setAnimationLoop(() => {
 </script></body></html>
 """
     from .court3d import (PASS_LANE_GOOD, PASS_LANE_RISKY,
-                          PASS_LANE_WIDTH_M, SCENE_REEL_TAIL_S)
+                          PASS_LANE_WIDTH_M, SCENE_REEL_TAIL_S,
+                          SHARED3D_POLL_S, SHARED3D_SEND_S,
+                          SHARED3D_TOLERANCE_S)
     from .defense import WALL_GAP_DEPTH_M, WALL_GAP_M, WALL_GAP_MIN_DEFENDERS
     from .tactics import TacticsConfig
     ps_kod = (f"const PS_SUGAR = {TacticsConfig().possession_radius_m}, "
@@ -3181,6 +3258,9 @@ fest.setAnimationLoop(() => {
               f"FR_MIN = {WALL_GAP_MIN_DEFENDERS};" + FALRES_JS)
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
                  .replace("__JL_VETITES_S__", repr(float(SCENE_REEL_TAIL_S)))
+                 .replace("__KZ_KULD__", repr(float(SHARED3D_SEND_S)))
+                 .replace("__KZ_KERD__", repr(float(SHARED3D_POLL_S)))
+                 .replace("__KZ_TURES__", repr(float(SHARED3D_TOLERANCE_S)))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
                           + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
                           + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS

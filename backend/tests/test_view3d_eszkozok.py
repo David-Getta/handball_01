@@ -1919,6 +1919,68 @@ def test_a_kocka_vegpont_a_forras_video_kockajat_adja(tmp_path, monkeypatch):
     assert c.get("/matches/videotlan/frame", params={"t": 5}).status_code == 404
 
 
+def test_a_kozos_nezes_vegpontjai(tmp_path, monkeypatch):
+    """/matches/{id}/shared3d: a vezető állapota (PUT) a követőnek (GET) a
+    korával — sorszámmal, csendben "nincs vezető", DELETE után sincs; a
+    rossz alakú érték 400, az ismeretlen meccs 404."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline import court3d
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    url = f"/matches/{m.meta.match_id}/shared3d"
+    assert c.get(url).json() == {"active": False}
+    r = c.put(url, json={"t": 61.5, "playing": True, "speed": 2,
+                         "rajz": "20,13.1,28.4,16.8,0"})
+    assert r.status_code == 200 and r.json() == {"rev": 1}
+    a = c.get(url).json()
+    assert a["active"] and a["t"] == 61.5 and a["playing"] is True
+    assert a["speed"] == 2.0 and a["rajz"] == "20,13.1,28.4,16.8,0"
+    assert a["rev"] == 1 and 0 <= a["kor"] < 5
+    assert c.put(url, json={"t": 3, "playing": False}).json() == {"rev": 2}
+    assert c.get(url).json()["speed"] == 1.0
+    for rossz in ({"t": "x"}, {"t": 1, "speed": 20}, {"t": 1, "rajz": "<b>"}):
+        assert c.put(url, json=rossz).status_code == 400, rossz
+    # A végtelen idő (a JSON 1e999-e) sem fér be.
+    assert c.put(url, content=b'{"t": 1e999}',
+                 headers={"Content-Type": "application/json"}).status_code == 400
+    assert c.put("/matches/nincs/shared3d", json={"t": 1}).status_code == 404
+    # A hallgató vezető: megszakadt vezetés.
+    monkeypatch.setattr(court3d, "SHARED3D_STALE_S", -1.0)
+    assert c.get(url).json()["active"] is False
+    monkeypatch.setattr(court3d, "SHARED3D_STALE_S", 15.0)
+    assert c.delete(url).json() == {"ok": True}
+    assert c.get(url).json() == {"active": False}
+
+
+def test_a_3d_oldal_kozos_nezese():
+    """Az oldalon a "📡 Vezetem" / "👥 Követem": a vezető küld, a követő
+    kérdez és követ (idő a korral, szünet, sebesség, rajz), a link viszi
+    (kovet=1); a küszöbök a motor számai."""
+    from handball.pipeline import court3d
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="vezetGomb"', 'id="kovetGomb"', 'id="kozosInfo"',
+                 "function kozosFrissit()", "kozosFrissit();",
+                 '"/shared3d"', 'method: "PUT"', 'method: "DELETE"',
+                 "a.t + (a.playing ? a.kor * a.speed : 0)",
+                 "Math.abs(ido - cel) > KZ_TURES",
+                 "rajzok.push(...rajzDekodol(a.rajz))",
+                 'q.set("kovet", "1")', 'v("kovet") === "1"',
+                 'v("vezet") === "1"', "if (vetites) vetitesAllit(false);"):
+        assert kell in oldal, kell
+    assert "__KZ_" not in oldal
+    assert (f"const KZ_KULD = {float(court3d.SHARED3D_SEND_S)!r}, KZ_KERD = "
+            f"{float(court3d.SHARED3D_POLL_S)!r}, KZ_TURES = "
+            f"{float(court3d.SHARED3D_TOLERANCE_S)!r};") in oldal
+
+
 def test_a_3d_oldal_videoja():
     """Az oldalon a "📺 Videó" (K): kép a képben és kivetítő (VR-ben is), a
     kocka-szám a lejátszási idő × képráta, a link viszi (video=1)."""

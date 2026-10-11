@@ -3213,6 +3213,68 @@ def create_app():
         return Response(content=kep, media_type="image/jpeg",
                         headers={"Cache-Control": "private, max-age=3600"})
 
+    # KÖZÖS NÉZÉS (3D): az edző (a vezető) a lejátszás állapotát küldi, a
+    # csapat headsetjei (a követők) ezt kérdezik — mindenki a saját helyéről
+    # nézi ugyanazt a pillanatot. Memóriában: élő edzés-eszköz, a motor
+    # újraindulásával elvész (a követők "nincs vezető"-t látnak).
+    _kozos: dict = {}
+    _kozos_zar = _threading.Lock()
+
+    @app.put("/matches/{match_id}/shared3d")
+    def shared3d_put(match_id: str, body: dict):
+        """A vezető állapota: {"t": játékidő-mp, "playing": bool, "speed":
+        0,25…8, "rajz": a 3D rajz kódja ("x1,y1,x2,y2,szín;…")}. Válasz:
+        {"rev": sorszám}. 400: rossz alakú érték; 404: nincs ilyen meccs."""
+        import math as _math
+        import re as _re
+        import time as _time
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            t = float(body.get("t") or 0.0)
+            speed = float(body.get("speed") or 1.0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400,
+                                detail="t és speed szám legyen")
+        if not (_math.isfinite(t) and 0.25 <= speed <= 8.0):
+            raise HTTPException(status_code=400,
+                                detail="t véges, speed 0,25…8 legyen")
+        rajz = str(body.get("rajz") or "").strip()
+        if rajz and (len(rajz) > 1200
+                     or not _re.fullmatch(r"[0-9.,;\-]+", rajz)):
+            raise HTTPException(status_code=400, detail="rossz rajz-kód")
+        with _kozos_zar:
+            rev = (_kozos.get(match_id) or {}).get("rev", 0) + 1
+            _kozos[match_id] = {"t": max(0.0, t),
+                                "playing": bool(body.get("playing")),
+                                "speed": speed, "rajz": rajz, "rev": rev,
+                                "ido": _time.monotonic()}
+        return {"rev": rev}
+
+    @app.get("/matches/{match_id}/shared3d")
+    def shared3d_get(match_id: str):
+        """A követő kérdése: a vezető utolsó állapota és a KORA (mp) — a
+        követő ebből becsli a vezető mostani idejét, az órák eltérése
+        nélkül. "active": false, ha nincs vezető, vagy SHARED3D_STALE_S óta
+        hallgat."""
+        import time as _time
+
+        from ..pipeline import court3d as _c3
+        with _kozos_zar:
+            a = dict(_kozos.get(match_id) or {})
+        if not a:
+            return {"active": False}
+        kor = max(0.0, _time.monotonic() - a.pop("ido"))
+        return {**a, "kor": round(kor, 3),
+                "active": kor <= _c3.SHARED3D_STALE_S}
+
+    @app.delete("/matches/{match_id}/shared3d")
+    def shared3d_delete(match_id: str):
+        """A vezető leállt: a követők "nincs vezető"-t látnak."""
+        with _kozos_zar:
+            _kozos.pop(match_id, None)
+        return {"ok": True}
+
     @app.get("/matches/{match_id}/calib-overlay")
     def calib_overlay(match_id: str, t: int = 0):
         """KALIBRÁCIÓ-ELLENŐRZÉS: a videó t kockája a visszarajzolt

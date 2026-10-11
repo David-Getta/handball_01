@@ -206,6 +206,17 @@ Klipek gombja a Videózandó szűrővel a videózandó jeleneteket egy
 klip-csomagban kéri (`key_scene`: időrendben sorszámozott fájlok — az
 edzésen bármilyen lejátszóval sorban levetíthetők).
 
+A **📡 Vezetem / 👥 Követem** a közös nézés: az edző "Vezetem"-mel a
+lejátszása állapotát (idő, szünet, sebesség, rajz) a motorra küldi, a
+csapat headsetjei a "Követem"-mel (vagy a csapat linkjével: `kovet=1`)
+ezt követik — mindenki a saját helyéről, a saját kamerájával nézi
+ugyanazt a pillanatot: a pálya bejárható, az edző mutatja a szituációt.
+A követő a vezető idejét a válasz korából becsli, és csak 0,4 mp-nél
+nagyobb eltérésnél ugrik (nincs rángatás); ha az edző leáll vagy 15 mp-ig
+hallgat, a követő "nincs vezető"-t lát. A motor
+`/matches/{id}/shared3d` végpontja (PUT/GET/DELETE) memóriában tartja az
+állapotot.
+
 A **📺 Videó** (billentyű: K) a valódi felvételt mutatja a 3D mellett, a
 lejátszással szinkronban: kép a képben a jobb alsó sarokban, és egy
 kivetítőn a túlsó oldalvonal fölött — VR-ben ez látszik. A motor

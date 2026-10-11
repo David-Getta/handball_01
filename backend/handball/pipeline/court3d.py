@@ -616,6 +616,17 @@ SCENE_SAME_MOMENT_S = 0.05
 # sablonba írva) és az app (sceneReelTailS, őr-teszt) ugyanezt viszi.
 SCENE_REEL_TAIL_S = 3.5
 
+# KÖZÖS NÉZÉS (az edző vezet, a csapat headsetjei követik — a böngészős 3D
+# sablonjába írva): a vezető ennyi másodpercenként küldi a lejátszás
+# állapotát, a követő ennyi másodpercenként kérdez; ennél nagyobb
+# idő-eltérésnél a követő ugrik (a kisebbet a saját lejátszása tartja —
+# nincs rángatás); ennyi csend után a vezetés megszakadtnak számít (az
+# edző bezárta az oldalt, elment a hálózat).
+SHARED3D_SEND_S = 0.3
+SHARED3D_POLL_S = 0.3
+SHARED3D_TOLERANCE_S = 0.4
+SHARED3D_STALE_S = 15.0
+
 # A rajz-eszköz (nyilak a padlón) közös számai — a böngésző RAJZ_JS és az
 # app court_geometry.dart tükre (őr-teszt): a színek (sárga labda/passz,
 # kék futás, piros védő), legfeljebb ennyi nyíl, és ennél rövidebb húzás

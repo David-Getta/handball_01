@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **Közös nézés a 3D pályán** (új, böngésző/VR, motor): az edző "📡
+  Vezetem" gombja a lejátszás állapotát (idő, szünet, sebesség, rajz) a
+  csapat headsetjeire viszi — a játékosok a "👥 Követem"-mel (a csapat
+  linkjével) ugyanazt a pillanatot nézik, mindenki a saját helyéről, a
+  saját kamerájával: a pálya bejárható, az edző mutatja a szituációt (az
+  útiterv VR-fázisának második lépcsője). Új motor-végpont:
+  /matches/{id}/shared3d.
+
 - **A böngészős Videó-ablak videó nélkül nem kérdez folyton** (javítás):
   videó nélküli meccsen az első kocka hibája után nem kér újra minden
   kockán (lejátszás közben másodpercenként több fölösleges kérés volt), a
