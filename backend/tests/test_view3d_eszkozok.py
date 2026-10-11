@@ -2123,6 +2123,47 @@ def test_a_kozos_nezes_nezopontja(tmp_path, monkeypatch):
     assert 'if (nezopont != null) "nezopont": nezopont,' in api
 
 
+def test_a_rovid_csapat_link(tmp_path, monkeypatch):
+    """/kovet: vezető nélkül frissülő várakozó lap; vezetéskor a legutóbb
+    küldő vezető meccsének követő-oldalára irányít; a hallgató vezetőhöz
+    nem; az oldal és az app a rövid linket adja."""
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline import court3d
+    from handball.pipeline.view3d_html import view3d_html
+
+    ora = [10.0]
+    monkeypatch.setattr(court3d, "shared3d_ora", lambda: ora[0])
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    for mid in ("egy", "ket to"):
+        m = _meccs()
+        m.meta.match_id = mid
+        app.state.put_match(m)
+    c = TestClient(app)
+    r = c.get("/kovet", follow_redirects=False)
+    assert r.status_code == 200 and 'http-equiv="refresh"' in r.text
+    c.put("/matches/egy/shared3d", json={"t": 1})
+    ora[0] += 1
+    c.put("/matches/ket to/shared3d", json={"t": 1})
+    r = c.get("/kovet", follow_redirects=False)
+    assert r.status_code == 307
+    assert r.headers["location"] == "/matches/ket%20to/view3d?kovet=1"
+    ora[0] += 0.5
+    c.put("/matches/egy/shared3d", json={"t": 2})
+    assert c.get("/kovet", follow_redirects=False).headers["location"] == (
+        "/matches/egy/view3d?kovet=1")
+    ora[0] += court3d.SHARED3D_STALE_S + 1
+    assert c.get("/kovet", follow_redirects=False).status_code == 200
+    assert 'kzLink = location.origin + "/kovet";' in view3d_html(_meccs())
+    palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+             / "court3d_screen.dart").read_text(encoding="utf-8")
+    assert 'final link = "${_api.baseUrl}/kovet";' in palya
+
+
 def test_a_3d_oldal_kozos_nezese():
     """Az oldalon a "📡 Vezetem" / "👥 Követem": a vezető küld, a követő
     kérdez és követ (idő a korral, szünet, sebesség, rajz), a link viszi
@@ -2170,7 +2211,7 @@ def test_a_3d_oldal_kozos_nezese():
     assert 'json["followers"]' in api
     for kell in ("_vezetKuld(now);", "rajz: encodeDrawing(_rajzok),",
                  '"📡 Vezetsz · $_kovetok követő"',
-                 '"${_api.baseUrl}/matches/$id/view3d?kovet=1"',
+                 '"${_api.baseUrl}/kovet"',
                  "_api.deleteShared3d(id)"):
         assert kell in palya, kell
     assert (f"const KZ_KULD = {float(court3d.SHARED3D_SEND_S)!r}, KZ_KERD = "

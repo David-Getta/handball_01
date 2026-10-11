@@ -2666,7 +2666,9 @@ function kozosAllit(m){
   kzRajz = null; kzUtolso = 0; kzMutato = null; kzNezopont = null;
   ideGomb.disabled = kozosMod !== "vezet";
   if (kozosMod === "vezet"){
-    kzLink = location.origin + location.pathname + "?kovet=1";
+    // A rövid csapat-link (a motor /kovet címe az élő közös nézésre
+    // irányít) — a headset billentyűzetén begépelhető.
+    kzLink = location.origin + "/kovet";
     kzVagolap = false; kzKovetok = null; kzVezetoInfo();
     if (navigator.clipboard) navigator.clipboard.writeText(kzLink).then(
       () => { kzVagolap = true; if (kozosMod === "vezet") kzVezetoInfo(); }, () => {});

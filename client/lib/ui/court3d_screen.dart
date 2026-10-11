@@ -2172,7 +2172,9 @@ class _Court3DScreenState extends State<Court3DScreen>
       _nezopont = null;
     });
     if (be) {
-      final link = "${_api.baseUrl}/matches/$id/view3d?kovet=1";
+      // A rövid csapat-link (a motor /kovet címe az élő közös nézésre
+      // irányít) — a headset billentyűzetén begépelhető.
+      final link = "${_api.baseUrl}/kovet";
       Clipboard.setData(ClipboardData(text: link)).catchError((_) {});
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("Vezetsz — a csapat linkje a vágólapon: $link "

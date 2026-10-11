@@ -3398,6 +3398,40 @@ def create_app():
             _kozos.pop(match_id, None)
         return {"ok": True}
 
+    @app.get("/kovet")
+    def shared3d_rovid():
+        """A rövid csapat-link: a MOST élő közös nézés követő-oldalára
+        irányít (a legutóbb küldő vezetőhöz — SHARED3D_STALE_S-en belül).
+        A headset billentyűzetén a "localhost:8000/kovet" begépelhető, a
+        hosszú meccs-azonosítós cím nem. Vezető nélkül egy 3 mp-enként
+        frissülő "várunk az edzőre" lap: amint az edző vezet, magától
+        továbblép."""
+        from urllib.parse import quote
+
+        from fastapi.responses import HTMLResponse, RedirectResponse
+
+        from ..pipeline import court3d as _c3
+        most = _c3.shared3d_ora()
+        with _kozos_zar:
+            elok = [(a["ido"], mid) for mid, a in _kozos.items()
+                    if most - a["ido"] <= _c3.SHARED3D_STALE_S]
+        if elok:
+            mid = max(elok)[1]
+            return RedirectResponse(
+                url=f"/matches/{quote(mid, safe='')}/view3d?kovet=1",
+                status_code=307)
+        return HTMLResponse(
+            content=('<!DOCTYPE html><html lang="hu"><head>'
+                     '<meta charset="utf-8"><meta http-equiv="refresh" '
+                     'content="3"><title>Közös nézés</title></head>'
+                     '<body style="background:#0a0e14;color:#e6edf3;'
+                     'font-family:sans-serif;text-align:center;'
+                     'padding-top:20vh"><h1>👥 Várunk az edzőre…</h1>'
+                     '<p>Amint az edző a 3D pályán a "📡 Vezetem" gombot '
+                     'megnyomja, ez a lap magától továbblép.</p>'
+                     '</body></html>'),
+            headers={"Cache-Control": "no-store"})
+
     @app.get("/matches/{match_id}/calib-overlay")
     def calib_overlay(match_id: str, t: int = 0):
         """KALIBRÁCIÓ-ELLENŐRZÉS: a videó t kockája a visszarajzolt

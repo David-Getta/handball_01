@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.165 óta)
 
+- **Közös nézés: rövid csapat-link** (új, motor, böngésző, app): a
+  headseten elég a `localhost:8000/kovet` címet begépelni — a motor a
+  MOST élő közös nézésre irányít (a legutóbb küldő vezetőhöz); vezető
+  nélkül egy "várunk az edzőre" lap 3 mp-enként frissül, és magától
+  továbblép, amint az edző vezet. A vezető vágólapjára ez a rövid link
+  kerül (eddig a hosszú, meccs-azonosítós cím, ami headseten
+  begépelhetetlen).
+
 - **Negyedik kód-átnézés javításai** (javítás): a közös nézésben a
   csarnokon túlnyúló nézőpont vagy mutató (messzire húzott keringés) nem
   állítja meg a vezetést (a motor és a kliens a dobozba szorítja); a

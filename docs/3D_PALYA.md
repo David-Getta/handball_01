@@ -270,7 +270,10 @@ böngészős nézet linkje is viszi.
 A **📡 Vezetem / 👥 Követem** a közös nézés: az edző "Vezetem"-mel a
 lejátszása állapotát (idő, szünet, sebesség, rajz) a motorra küldi, a
 csapat headsetjei a "Követem"-mel (vagy a csapat linkjével: `kovet=1`)
-ezt követik — mindenki a saját helyéről, a saját kamerájával nézi
+ezt követik — a csapat linkje rövid: `localhost:8000/kovet` (a motor a
+MOST élő közös nézésre irányít, a headset billentyűzetén begépelhető;
+vezető nélkül egy "várunk az edzőre" lap magától továbblép, amint az
+edző vezet) — mindenki a saját helyéről, a saját kamerájával nézi
 ugyanazt a pillanatot: a pálya bejárható, az edző mutatja a szituációt.
 A követő a vezető idejét a válasz korából becsli, és csak 0,4 mp-nél
 nagyobb eltérésnél ugrik (nincs rángatás); ha az edző leáll vagy 15 mp-ig
@@ -294,7 +297,7 @@ VR-mód (WebXR) csak biztonságos címen indul — a `localhost` ilyen. Két
 1. **USB-n (néhány headsetre, ajánlott):** minden headset USB-kábellel
    a laptopra, és `adb reverse tcp:8000 tcp:8000` (ha a motor tartalék
    porton fut, azzal a számmal). A headset böngészőjében a csapat
-   linkje (`http://localhost:8000/matches/…/view3d?kovet=1`) így a
+   linkje (`http://localhost:8000/kovet`) így a
    laptop motorját éri el, és a VR-mód indul. USB-elosztóval több
    headset is mehet egyszerre.
 2. **A klub hálózatán (sok headsetre):** a motort kifejezetten a
