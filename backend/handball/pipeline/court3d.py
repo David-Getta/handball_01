@@ -599,6 +599,13 @@ def _szam1_js(v: float) -> str:
 # böngésző (JL_AZONOS_S) és az app (sceneSameMomentS) ugyanezt viszi.
 SCENE_SAME_MOMENT_S = 0.05
 
+# A jelenet-vetítés (a 3D jelenet-lista sorai egymás után): a jelenet a
+# pillanata után ennyi másodpercig fut, mielőtt a lista következő sora jön
+# (előtte 1,5 mp-cel indul, mint minden jelenet-ugrás) — egy jelenet így
+# 5 mp, a 15 videózandó jelenet bő egy perc. A böngésző (JL_VETITES_S, a
+# sablonba írva) és az app (sceneReelTailS, őr-teszt) ugyanezt viszi.
+SCENE_REEL_TAIL_S = 3.5
+
 
 def scene_rows(decisions: list, free_shots: list, turnovers: list,
                home: str, away: str,

@@ -201,6 +201,9 @@ class _Court3DScreenState extends State<Court3DScreen>
   // csak ezeken.
   Set<String> _kulcsJelenetek = const {};
   bool _csakKulcs = false;
+  // VETÍTÉS (V): a lista sorai egymás után — ki/be és a futó sor.
+  bool _vetitesBe = false;
+  SceneRow? _vetitesSor;
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
@@ -448,6 +451,8 @@ class _Court3DScreenState extends State<Court3DScreen>
         _kontrak = kontrak;
         _kapottak = kapottak;
         _kulcsJelenetek = kulcsok;
+        _vetitesBe = false;
+        _vetitesSor = null;
         _lovesValasztott = null;
         if (widget.lovesTerkep != null) _lovesTerkep = widget.lovesTerkep!;
         _meres = null;
@@ -517,11 +522,16 @@ class _Court3DScreenState extends State<Court3DScreen>
     final m = _match;
     if (_playing && m != null && m.frames.isNotEmpty) {
       final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+      final t0 = _mostT(m) / fps;
       _playhead += dt * fps * _speed;
+      var vege = false;
       if (_playhead >= m.frames.length - 1) {
         _playhead = (m.frames.length - 1).toDouble();
         _playing = false;
+        vege = true;
       }
+      // Vetítés: a futó jelenet végén a lista következő sora.
+      _vetitesFrissit(m, t0, _mostT(m) / fps, vege);
       valtozott = true;
     }
     // TV-kamera: sima követés — a kamera az oldalvonal felől tartja
@@ -867,6 +877,74 @@ class _Court3DScreenState extends State<Court3DScreen>
       ? [for (final r in sorok) if (_kulcsJelenetek.contains("${r.tipus}@${r.s}")) r]
       : sorok;
 
+  /// A jelenet-lista sorai a két szűrővel ("Kinek a hibái", "Videózandó")
+  /// — a lista, az N / P és a vetítés közös forrása.
+  List<SceneRow> _jelenetSorok(Match m) => _kulcsSzur(sceneRows(_dontesekSz,
+      _szabadokSz, _eladasokSz, m.meta.homeTeam, m.meta.awayTeam, _kontrakSz,
+      _kapottakSz));
+
+  /// A futó vetítés-sor helye a (szűrt) listában; -1, ha nincs benne.
+  int _vetitesIndex(List<SceneRow> sorok) {
+    final r = _vetitesSor;
+    if (r == null) return -1;
+    return sorok.indexWhere((x) => x.tipus == r.tipus && x.s == r.s);
+  }
+
+  /// Vetítés ki/be (V, a lista fejlécének gombja — a böngésző párja):
+  /// az épp futó jelenettől (a legkésőbb indult), különben az első még
+  /// előttünk álló sortól, a lista végén az elejéről; a lista kinyílik.
+  void _vetitesAllit(Match m, bool be) {
+    final sorok = _jelenetSorok(m);
+    if (!be || sorok.isEmpty || m.frames.isEmpty) {
+      setState(() => _vetitesBe = false);
+      return;
+    }
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m) / fps;
+    SceneRow? r;
+    for (final x in sorok) {
+      if (most >= x.s - 1.6 && most < x.s + sceneReelTailS) r = x;
+    }
+    r ??= sorok.firstWhere((x) => x.s >= most, orElse: () => sorok.first);
+    setState(() {
+      _vetitesBe = true;
+      _jelenetListaNyitva = true;
+    });
+    _jelenetUtolso = r.s;
+    _jelenetUgras(m, r);
+  }
+
+  /// A tick hívja a lejátszás léptetése után (t0 → t1, mp): ha most haladt
+  /// át a futó jelenet végén (vagy a meccs végére ért), a lista KÖVETKEZŐ
+  /// sora jön (az átfedő jelenetek sem maradnak ki); a lista végén megáll.
+  /// Kézi tekerés után nem ugrik el (csak az áthaladás léptet).
+  void _vetitesFrissit(Match m, double t0, double t1, bool vege) {
+    final r = _vetitesSor;
+    if (!_vetitesBe || r == null) return;
+    final hatar = r.s + sceneReelTailS;
+    if (!(t0 < hatar && (t1 >= hatar || vege))) return;
+    final sorok = _jelenetSorok(m);
+    final i = _vetitesIndex(sorok);
+    SceneRow? kov;
+    if (i >= 0) {
+      if (i + 1 < sorok.length) kov = sorok[i + 1];
+    } else {
+      for (final x in sorok) {
+        if (x.s > r.s) {
+          kov = x;
+          break;
+        }
+      }
+    }
+    if (kov == null) {
+      _vetitesBe = false;
+      _playing = false;
+      return;
+    }
+    _jelenetUtolso = kov.s;
+    _jelenetUgras(m, kov);
+  }
+
   /// Az Edzésterv felől érkezve: ugrás a kért típus ELSŐ jelenetére (a
   /// szűrt lista sorain); ha nincs ilyen, a lejátszó az elején marad.
   void _kezdoJelenet() {
@@ -896,8 +974,7 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// Jelenet-lépés (N / P): a jelenet-lista sorain, a "Kinek a hibái"
   /// szűrő szerint, a közös lapozCel-lel — az utoljára lépett jelenettől.
   void _jelenetLep(Match m, int irany) {
-    final sorok = _kulcsSzur(sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
-        m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz));
+    final sorok = _jelenetSorok(m);
     if (sorok.isEmpty || m.frames.isEmpty) return;
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
     final cel = lapozCel([for (final r in sorok) r.s], _mostT(m) / fps,
@@ -925,6 +1002,7 @@ class _Court3DScreenState extends State<Court3DScreen>
       }
       _playhead = _tIndex(m, (r.s - 1.5) * fps).toDouble();
       _playing = true;
+      _vetitesSor = r; // a vetítés innen folytatja
     });
     _focus.requestFocus();
   }
@@ -932,14 +1010,15 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// A jelenet-lista panel: a szűrt jelenetek időrendben, a lapozók
   /// színével; az épp aktív (a legkésőbb indult) sor kiemelve.
   Widget _jelenetListaPanel(Match m) {
-    final sorok = _kulcsSzur(sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
-        m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz));
+    final sorok = _jelenetSorok(m);
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
     final most = m.frames.isEmpty ? 0.0 : _mostT(m) / fps;
     var aktiv = -1;
     for (var k = 0; k < sorok.length; k++) {
       if (most >= sorok[k].s - 0.3 && most <= sorok[k].s + 2.5) aktiv = k;
     }
+    // Vetítés közben a futó sor végig (az előfutás alatt is) kiemelve.
+    if (_vetitesBe && _vetitesIndex(sorok) >= 0) aktiv = _vetitesIndex(sorok);
     const szin = {
       "d": AppColors.gold, "sz": AppColors.away, "e": eladasSzin,
       "k": kontraSzin, "kg": kapottSzin,
@@ -953,7 +1032,10 @@ class _Court3DScreenState extends State<Court3DScreen>
       padding: const EdgeInsets.fromLTRB(10, 8, 6, 4),
       child: Row(children: [
         Expanded(
-            child: Text("Jelenetek · ${sorok.length}",
+            child: Text(
+                _vetitesBe
+                    ? "Vetítés · ${_vetitesIndex(sorok) + 1}/${sorok.length}"
+                    : "Jelenetek · ${sorok.length}",
                 style: AppText.label.copyWith(fontSize: 11.5))),
         // "Videózandó": a kulcs-jelenetekre szűkít (a jelentés és a
         // kezdőlap válogatása); a lista mellett az N / P is ezeken lép.
@@ -965,6 +1047,7 @@ class _Court3DScreenState extends State<Court3DScreen>
             label: Text("Videózandó (${_kulcsJelenetek.length})",
                 style: const TextStyle(fontSize: 11)),
             selected: _csakKulcs,
+            showCheckmark: false, // keskeny fejléc: a szín jelzi
             visualDensity: VisualDensity.compact,
             onSelected: _kulcsJelenetek.isEmpty
                 ? null
@@ -976,6 +1059,20 @@ class _Court3DScreenState extends State<Court3DScreen>
                     _focus.requestFocus();
                   },
           ),
+        ),
+        // Vetítés: a lista sorai egymás után (V).
+        IconButton(
+          tooltip: _vetitesBe
+              ? "Vetítés leállítása (V)"
+              : "Vetítés (V): a lista jelenetei egymás után",
+          visualDensity: VisualDensity.compact,
+          iconSize: 20,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+          onPressed: sorok.isEmpty ? null : () => _vetitesAllit(m, !_vetitesBe),
+          icon: Icon(_vetitesBe
+              ? Icons.stop_circle_outlined
+              : Icons.slideshow_outlined),
         ),
         const SizedBox(width: 4),
         OutlinedButton.icon(
@@ -1484,6 +1581,13 @@ class _Court3DScreenState extends State<Court3DScreen>
         if (m != null) _jelenetLep(m, k == LogicalKeyboardKey.keyN ? 1 : -1);
         return KeyEventResult.handled;
       }
+      // V — vetítés be/ki: a jelenet-lista sorai egymás után (a böngésző
+      // V-jének párja).
+      if (k == LogicalKeyboardKey.keyV) {
+        final m = _match;
+        if (m != null) _vetitesAllit(m, !_vetitesBe);
+        return KeyEventResult.handled;
+      }
       // T — TV-kamera be/ki (a böngészős nézet T gombjának párja).
       if (k == LogicalKeyboardKey.keyT) {
         setState(() {
@@ -1656,7 +1760,8 @@ class _Court3DScreenState extends State<Court3DScreen>
               "Shift — gyors · Szóköz — lejátszás · O — keringés · "
               "dupla katt egy játékosra — az ő szemével (Esc) · "
               "katt a padlóra — lövés-mérés · lövéstérkép: katt egy körre — "
-              "odaugrik · N / P — következő / előző jelenet",
+              "odaugrik · N / P — következő / előző jelenet · "
+              "V — vetítés (a lista sorai egymás után)",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),

@@ -1504,12 +1504,52 @@ def test_a_jelenet_lista_videozando_szuroje():
                  'kc.id = "jelenetKulcs"', "kulcsSzur(jelenetSorok(",
                  'q.set("kulcs", "1")', 'v("kulcs") === "1"'):
         assert kell in oldal, kell
-    assert oldal.count("kulcsSzur(jelenetSorok(") == 2  # a lista és az N/P
+    # A lista, az N/P és a vetítés közös forrása (jelenetSorokSzurt).
+    assert oldal.count("kulcsSzur(jelenetSorok(") == 1
     gyoker = Path(__file__).resolve().parent.parent.parent / "client" / "lib" / "ui"
     palya = (gyoker / "court3d_screen.dart").read_text(encoding="utf-8")
     for kell in ("final bool csakVideozando;", "fetchKeyScenes(id)",
                  "_kulcsSzur(sceneRows(", '"Videózandó (${_kulcsJelenetek.length})"'):
         assert kell in palya, kell
-    assert palya.count("_kulcsSzur(sceneRows(") == 2  # a lista és az N/P
+    assert palya.count("_kulcsSzur(sceneRows(") == 1  # a közös _jelenetSorok
     assert "csakVideozando: true" in (gyoker / "dashboard_screen.dart").read_text(
         encoding="utf-8")
+
+
+
+def test_a_jelenet_vetites_a_lista_sorain_lep():
+    """Vetítés: a jelenet a pillanata után court3d.SCENE_REEL_TAIL_S mp-ig
+    fut (a böngésző a sablonba írva, az app tükrében ugyanaz a szám), aztán
+    a lista következő sora jön. Az oldal a szűrt sorok közös forrásából
+    lép, a hurok a léptetés után hívja; a gomb, a V billentyű, a
+    VR-kontroller és a felirat-oszlop (VR-tábla) jelzője megvan; az app a
+    tickből lép, és a V és a fejléc-gomb kapcsolja."""
+    import re
+    from pathlib import Path
+
+    from handball.pipeline.court3d import SCENE_REEL_TAIL_S
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    assert "__JL_VETITES_S__" not in oldal
+    js = re.search(r"const JL_VETITES_S = ([0-9.]+);", oldal)
+    assert js and float(js.group(1)) == SCENE_REEL_TAIL_S
+    for kell in ('vb.id = "vetitesGomb"', 'e.code === "KeyV"',
+                 "vetitesFrissit(t0, ido);", '<div id="vetitesJelzo"></div>',
+                 '["vetitesJelzo", ', "vrGombEl(kulcs, 3, nyom(3))",
+                 "vetitesSor = r; vetitesJelzoFrissit();",
+                 "const hatar = vetitesSor.s + JL_VETITES_S;"):
+        assert kell in oldal, kell
+    # A lista, az N/P és a vetítés ugyanazokon a sorokon.
+    assert oldal.count("= jelenetSorokSzurt();") >= 4
+    ui = Path(__file__).resolve().parent.parent.parent / "client" / "lib" / "ui"
+    d = re.search(r"const double sceneReelTailS = ([0-9.]+);",
+                  (ui / "court_geometry.dart").read_text(encoding="utf-8"))
+    assert d and float(d.group(1)) == SCENE_REEL_TAIL_S
+    palya = (ui / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ("_vetitesFrissit(m, t0, _mostT(m) / fps, vege);",
+                 "LogicalKeyboardKey.keyV", "_vetitesSor = r;",
+                 "final hatar = r.s + sceneReelTailS;",
+                 "() => _vetitesAllit(m, !_vetitesBe)"):
+        assert kell in palya, kell
+    assert palya.count("final sorok = _jelenetSorok(m);") >= 3

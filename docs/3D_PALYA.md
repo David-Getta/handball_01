@@ -190,6 +190,15 @@ kezdőlap kártyájának válogatása); bekapcsolva az N / P és a
 VR-kontroller is ezeken lép. A kezdőlap "3D-ben" gombja és a jelentés
 "3D ↗" linkje bekapcsolva nyit (link-paraméter: `kulcs=1`).
 
+A fejléc **▶ Vetítés** gombja (billentyű: V; VR-ben a kontroller
+hüvelykujj-karjának lenyomása) a lista sorain végigjátszik: minden
+jelenet 1,5 mp-cel előtte indul, a pillanata után 3,5 mp-ig fut
+(`court3d.SCENE_REEL_TAIL_S`), aztán a lista következő sora jön — a
+Videózandó szűrővel bő egy perces összefoglaló a meccs kulcs-jeleneteiből.
+A felirat-oszlop tetején (VR-ben a táblán) a "Vetítés · 3/15 · 12:34"
+jelző mutatja, hol tart; a lista végén megáll. Kézi tekerés után nem ugrik
+el, egy sorra kattintva onnan folytatja.
+
 A **Kinek a hibái** választó a hiba-lapozókat egy csapatra szűri: mind
 egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott lövőt,
 az elvesztett labdát, a kapott lerohanást, a kapott gólt) — a saját csapatra szűrve
@@ -222,7 +231,8 @@ visz. A jelenet-feliratok (esemény, döntés, szabad lövő,
 labdavesztés, gól-akció, lerohanás, kapott gól, hetes, emberelőny) a headsetben
 egy fejhez rögzített
 táblán látszanak, és a jelenetek a kontrollerrel lapozhatók: A/X — a
-következő, B/Y — az előző jelenet, ravasz — lejátszás/szünet. A WebXR
+következő, B/Y — az előző jelenet, ravasz — lejátszás/szünet, a
+hüvelykujj-kar lenyomása — vetítés (a lista sorai egymás után). A WebXR
 biztonságos környezetet kér — a localhost az; Quest-féle headsetről
 USB-kábellel és `adb reverse`-szel érhető el az app gépe.
 

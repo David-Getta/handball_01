@@ -340,6 +340,11 @@ WallGaps? wallGapSegments(List<(bool, double, double, bool, bool)> players,
 /// elmarad, ha ennyin belül szabad lövő GÓL-sor van.
 const double sceneSameMomentS = 0.05;
 
+/// A jelenet-vetítés (a lista sorai egymás után): a jelenet a pillanata
+/// után ennyi mp-ig fut, mielőtt a következő sor jön — a backend
+/// court3d.SCENE_REEL_TAIL_S tükre (őr-teszt).
+const double sceneReelTailS = 3.5;
+
 /// A jelenet-lista egy sora: idő (mp és "p:mm"), fajta ("d" döntés, "sz"
 /// szabad lövés, "e" labdavesztés), felirat, és hogy gól lett-e.
 class SceneRow {

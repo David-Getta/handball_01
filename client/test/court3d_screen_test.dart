@@ -449,6 +449,43 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("vetítés (V): a lista sorai egymás után, a végén megáll",
+      (tester) async {
+    await _nyit(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.pump(const Duration(milliseconds: 100));
+    // A lista kinyílt, a fejléc a vetítés helyét mutatja.
+    final hely = find.textContaining("Vetítés · ");
+    expect(hely, findsOneWidget);
+    final m0 = RegExp(r"(\d+)/(\d+)")
+        .firstMatch(tester.widget<Text>(hely).data ?? "")!;
+    final i0 = int.parse(m0.group(1)!), n = int.parse(m0.group(2)!);
+    expect(n, greaterThan(1));
+    // A jelenet végén (1,5 + 3,5 mp) magától a következő sor jön.
+    var tovabb = false;
+    for (var i = 0; i < 120 && !tovabb; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      tovabb = find.text("Vetítés · ${i0 + 1}/$n").evaluate().isNotEmpty;
+    }
+    expect(tovabb, isTrue);
+    // V: leáll — a fejléc újra a jelenetek számát mutatja.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text("Jelenetek · $n"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // A Videózandó szűrővel együtt is elfér a fejléc (a kijelölt chip és
+    // a vetítés-gomb egyszer 16 px-szel túlcsordult).
+    await tester.tap(find.ancestor(
+        of: find.textContaining("Videózandó ("),
+        matching: find.byType(FilterChip)));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining("Vetítés · "), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("N / P billentyű: jelenet-lépés a lista sorain", (tester) async {
     await _nyit(tester);
     // N: az első jelenet (a demó első döntése) — a felirat megjelenik.

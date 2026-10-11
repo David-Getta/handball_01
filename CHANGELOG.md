@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.162 óta)
 
+- **3D pálya: Vetítés — a jelenet-lista sorai egymás után** (új,
+  böngésző/VR és app): a lista fejlécének "▶ Vetítés" gombja (V; VR-ben
+  a kontroller hüvelykujj-karjának lenyomása) végigjátssza a sorokat:
+  minden jelenet 1,5 mp-cel előtte indul, a pillanata után 3,5 mp-ig fut,
+  aztán a következő sor jön, a lista végén megáll. A "Videózandó"
+  szűrővel a meccs kulcs-jelenetei bő egy perces összefoglalóként
+  futnak le; a felirat-oszlop (VR-ben a tábla) mutatja, hol tart.
+
 - **3D pálya: "Videózandó" szűrő a jelenet-listán** (új, böngésző/VR és
   app): egy hosszú meccs jelenet-listája száznál több sor — a fejléc
   "Videózandó (N)" szűrője a kulcs-jelenetekre szűkít (a gólba került

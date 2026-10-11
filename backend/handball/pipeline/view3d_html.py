@@ -664,7 +664,8 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #dontesFelirat{padding:6px 14px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #szabadFelirat{padding:6px 14px;border:1px solid #ff6b6b;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jelenetLista{position:fixed;right:12px;top:40px;width:380px;max-height:calc(100vh - 170px);overflow-y:auto;padding:6px;border:1px solid #2b4a5e;border-radius:8px;background:rgba(16,24,32,.94);font-size:12.5px;display:none}
- #jelenetLista .jfej{display:flex;gap:8px;align-items:center;padding:2px 6px 8px;border-bottom:1px solid #2b4a5e;margin-bottom:4px}
+ #jelenetLista .jfej{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:2px 6px 8px;border-bottom:1px solid #2b4a5e;margin-bottom:4px}
+ #vetitesJelzo{padding:4px 12px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.88);color:#9fd0ff;font-size:12.5px;display:none}
  #jelenetLista .jfej .n{flex:1;opacity:.85}
  #jelenetLista .jfej button{padding:3px 9px;font-size:11.5px}
  #jelenetLista .jfej .kulcs{font-size:11.5px;white-space:nowrap;opacity:.9}
@@ -827,11 +828,12 @@ Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
-[ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai)<br>
-VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet</div>
+[ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai) · V — vetítés: a lista sorai egymás után<br>
+VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
 <div id="feliratOszlop">
+ <div id="vetitesJelzo"></div>
  <div id="dontesFelirat"></div>
  <div id="szabadFelirat"></div>
  <div id="eladasFelirat"></div>
@@ -1334,6 +1336,7 @@ addEventListener("keydown", e => {
   if (e.code === "BracketRight"){ esemenyUgras(1); return; }
   if (e.code === "KeyN"){ jelenetLep(1); return; }   // következő jelenet
   if (e.code === "KeyP"){ jelenetLep(-1); return; }  // előző jelenet
+  if (e.code === "KeyV"){ vetitesAllit(!vetites); return; }  // vetítés
   if (e.code === "KeyO"){ keringGomb.onclick(); return; }
   if (e.code === "KeyT"){ tvGomb.onclick(); return; }
   if (e.code === "Escape"){ if (mod === "jatekos") modValt("szabad"); else meresTorles(); return; }
@@ -2279,6 +2282,73 @@ sugoAllit();
 const JL_SZIN = {d: "#d9b544", sz: "#ff6b6b", e: "#ff9f43", k: "#59d98c", kg: "#c084fc"};
 let jelenetSorokAkt = [], jelenetAktiv = -2;
 const jelenetSorokElem = document.createElement("div");  // a sorok (a fejléc alatt)
+// A jelenet-lista sorai a két szűrővel ("Kinek a hibái", "Videózandó") —
+// a lista, az N/P (VR-kontroller) és a vetítés közös forrása.
+function jelenetSorokSzurt(){
+  return kulcsSzur(jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK),
+    ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK)));
+}
+
+// ---- Vetítés: a jelenet-lista sorai egymás után ------------------------
+// A "▶ Vetítés" (V; VR-ben a hüvelykujj-kar lenyomása) a lista sorain (a
+// két szűrő szerint) végigjátszik: minden jelenet 1,5 mp-cel előtte indul,
+// és a pillanata után JL_VETITES_S mp-ig fut (court3d.SCENE_REEL_TAIL_S),
+// aztán a lista KÖVETKEZŐ sora jön — az átfedő jelenetek sem maradnak ki
+// (az N az időből lép, a vetítés a sorrendből). Az utolsó után megáll. A
+// léptetés csak akkor jön, ha a lejátszás a futó jelenet végén halad át:
+// kézi tekerés után nem ugrik el; egy sorra kattintva onnan folytatja.
+const JL_VETITES_S = __JL_VETITES_S__;
+let vetites = false, vetitesSor = null;
+const vetitesJelzo = document.getElementById("vetitesJelzo");
+function vetitesIndex(sorok, r){
+  // A sor helye a (szűrt) listában; -1, ha a szűrő kivette.
+  return r ? sorok.findIndex(x => x.tipus === r.tipus && x.s === r.s) : -1;
+}
+function vetitesJelzoFrissit(){
+  const gomb = document.getElementById("vetitesGomb");
+  if (gomb){ gomb.textContent = vetites ? "■ Vetítés" : "▶ Vetítés"; gomb.classList.toggle("be", vetites); }
+  if (!vetites || !vetitesSor){ vetitesJelzo.style.display = "none"; return; }
+  const sorok = jelenetSorokSzurt();
+  const i = vetitesIndex(sorok, vetitesSor);
+  vetitesJelzo.textContent = "Vetítés · " + (i >= 0 ? i + 1 : "–") + "/" + sorok.length + " · " + vetitesSor.ido;
+  vetitesJelzo.style.display = "block";
+}
+function vetitesKov(){
+  // A futó sor UTÁNI sor a lista sorrendjében (ha a szűrő közben kivette,
+  // az első későbbi); null: a lista vége.
+  const sorok = jelenetSorokSzurt();
+  const i = vetitesIndex(sorok, vetitesSor);
+  if (i >= 0) return sorok[i + 1] || null;
+  return sorok.find(x => x.s > vetitesSor.s) || null;
+}
+function vetitesAllit(be){
+  vetites = !!be;
+  const sorok = vetites ? jelenetSorokSzurt() : [];
+  if (vetites && !sorok.length) vetites = false;
+  if (vetites){
+    // Az épp futó jelenettől (a legkésőbb indult), különben az első még
+    // előttünk álló sortól; a lista végén az elejéről.
+    let r = null;
+    for (const x of sorok) if (ido >= x.s - 1.6 && ido < x.s + JL_VETITES_S) r = x;
+    r = r || sorok.find(x => x.s >= ido) || sorok[0];
+    if (jelenetLista.style.display !== "block") jelenetListaNyit(true);
+    vrJelenetUtolso = r.s;
+    jelenetUgras(r);
+  }
+  vetitesJelzoFrissit();
+}
+function vetitesFrissit(t0, t1){
+  // A lejátszás most haladt át a futó jelenet végén (vagy a meccs végére
+  // ért) → a következő sor; a lista végén megáll.
+  if (!vetites || !vetitesSor) return;
+  const hatar = vetitesSor.s + JL_VETITES_S;
+  if (!(t0 < hatar && (t1 >= hatar || t1 >= veg))) return;
+  const kov = vetitesKov();
+  if (kov){ vrJelenetUtolso = kov.s; jelenetUgras(kov); return; }
+  vetites = false; megy = false; lejatszasGomb.textContent = "▶";
+  vetitesJelzoFrissit();
+}
+window.vetitesProba = () => ({be: vetites, sor: vetitesSor && {s: vetitesSor.s, tipus: vetitesSor.tipus}});
 function jelenetUgras(r){
   if (r.tipus === "d") dontesUtolso = r.s;
   else if (r.tipus === "sz") szabadUtolso = r.s;
@@ -2287,6 +2357,7 @@ function jelenetUgras(r){
   else eladasUtolso = r.s;
   ido = Math.max(0, r.s - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
   csuszka.value = ido;
+  vetitesSor = r; vetitesJelzoFrissit();  // a vetítés innen folytatja
 }
 // "Videózandó" szűrő: a lista (és az N/P, a VR-kontroller lépése) csak a
 // kulcs-jeleneteken — a jelentés "Videózandó jelenetek" és a kezdőlap
@@ -2298,8 +2369,7 @@ function kulcsSzur(sorok){
   return csakKulcs ? sorok.filter(r => KULCS.has(r.tipus + "@" + r.s)) : sorok;
 }
 function jelenetListaEpit(){
-  jelenetSorokAkt = kulcsSzur(jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK),
-    ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK)));
+  jelenetSorokAkt = jelenetSorokSzurt();
   jelenetAktiv = -2;
   jelenetLista.textContent = "";
   jelenetSorokElem.textContent = "";
@@ -2320,9 +2390,14 @@ function jelenetListaEpit(){
   kc.checked = csakKulcs; kc.disabled = !KULCS.size;
   kc.onchange = () => { csakKulcs = kc.checked; vrJelenetUtolso = null; jelenetListaEpit(); };
   kl.append(kc, document.createTextNode(" Videózandó (" + KULCS.size + ")"));
-  fej.append(n, kl, g, info, link);
+  const vb = document.createElement("button"); vb.id = "vetitesGomb";
+  vb.title = "Vetítés (V): a lista jelenetei egymás után — mindegyik 1,5 mp-cel előtte indul, és a pillanata után " + JL_VETITES_S + " mp-ig fut";
+  vb.onclick = () => vetitesAllit(!vetites);
+  vb.disabled = !jelenetSorokAkt.length;
+  fej.append(n, kl, vb, g, info, link);
   jelenetLista.append(fej, jelenetSorokElem);
   klipFrissit();
+  vetitesJelzoFrissit();
   if (!jelenetSorokAkt.length){ jelenetSorokElem.textContent = "Nincs ilyen jelenet."; return; }
   jelenetSorokAkt.forEach((r) => {
     const sor = document.createElement("div");
@@ -2387,6 +2462,8 @@ function jelenetListaJelol(t){
   // kiválasztott, nem a még le nem járt előző).
   let i = -1;
   jelenetSorokAkt.forEach((r, k) => { if (t >= r.s - 0.3 && t <= r.s + 2.5) i = k; });
+  // Vetítés közben a futó sor végig (az előfutás alatt is) kiemelve.
+  if (vetites){ const v = vetitesIndex(jelenetSorokAkt, vetitesSor); if (v >= 0) i = v; }
   if (i === jelenetAktiv) return;
   const sorok = jelenetSorokElem.children;
   if (jelenetAktiv >= 0 && sorok[jelenetAktiv]) sorok[jelenetAktiv].classList.remove("aktiv");
@@ -2627,7 +2704,8 @@ function vrMozgas(dt){
 // ---- VR-kontroller: jelenet-lapozás a headsetben -------------------------
 // A DOM-gombok VR-ben nem érhetők el: a kontroller A/X gombja (4) a
 // következő, B/Y gombja (5) az előző jelenetre ugrik (a jelenet-lista
-// sorai, a "Kinek a hibái" szűrő szerint), a ravasz (0) lejátszás/szünet.
+// sorai, a "Kinek a hibái" szűrő szerint), a ravasz (0) lejátszás/szünet,
+// a hüvelykujj-kar lenyomása (3) a vetítés ki/be.
 // Él-érzékelés: egy lenyomás egy lépés, a nyomva tartás nem pörget.
 const vrGombElozo = new Map();
 function vrGombEl(kulcs, index, lenyomva){
@@ -2640,7 +2718,7 @@ function vrGombEl(kulcs, index, lenyomva){
 // A jelenet-lépés KÖZÖS a kontroller-gombokkal és az N/P billentyűkkel.
 let vrJelenetUtolso = null;
 function jelenetLep(irany){
-  const sorok = kulcsSzur(jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK), ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK)));
+  const sorok = jelenetSorokSzurt();
   if (!sorok.length) return null;
   const cel = lapozCel(sorok.map(r => r.s), ido, vrJelenetUtolso, irany);
   if (cel === null) return null;
@@ -2662,6 +2740,7 @@ function vrGombok(){
     if (vrGombEl(kulcs, 4, nyom(4))) jelenetLep(1);
     if (vrGombEl(kulcs, 5, nyom(5))) jelenetLep(-1);
     if (vrGombEl(kulcs, 0, nyom(0))){ megy = !megy; lejatszasGomb.textContent = megy ? "⏸" : "▶"; }
+    if (vrGombEl(kulcs, 3, nyom(3))) vetitesAllit(!vetites);
   }
 }
 window.vrJelenetLep = jelenetLep;  // a próbához: a kontroller-gomb párja
@@ -2672,7 +2751,7 @@ window.vrJelenetLep = jelenetLep;  // a próbához: a kontroller-gomb párja
 // fejhez rögzített táblára rajzoljuk (a kamera gyermeke — mindig szem
 // előtt, a padló-vonalak nem takarják). A ?vrfelirat=1 headset nélkül
 // is bekapcsolja (próbához).
-const VR_FELIRAT_FORRASOK = ["felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "kontraFelirat", "kapottFelirat", "hetesFelirat", "emberJelzo"];
+const VR_FELIRAT_FORRASOK = ["vetitesJelzo", "felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "kontraFelirat", "kapottFelirat", "hetesFelirat", "emberJelzo"];
 const vrVaszon = document.createElement("canvas"); vrVaszon.width = 1024; vrVaszon.height = 320;
 const vrTextura = new THREE.CanvasTexture(vrVaszon);
 const vrTabla = new THREE.Sprite(new THREE.SpriteMaterial({map: vrTextura, transparent: true, depthTest: false}));
@@ -2722,7 +2801,8 @@ linkAlkalmaz();
 fest.setAnimationLoop(() => {
   const most = performance.now();
   const dt = Math.min(0.1, (most - utolso)/1000); utolso = most;
-  if (megy){ ido = Math.min(veg, ido + dt * sebesseg);
+  if (megy){ const t0 = ido; ido = Math.min(veg, ido + dt * sebesseg);
+    vetitesFrissit(t0, ido);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
   mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); felirat(ido); vrFeliratFrissit();
@@ -2733,7 +2813,7 @@ fest.setAnimationLoop(() => {
 </script></body></html>
 """
     from .court3d import (PASS_LANE_GOOD, PASS_LANE_RISKY,
-                          PASS_LANE_WIDTH_M)
+                          PASS_LANE_WIDTH_M, SCENE_REEL_TAIL_S)
     from .defense import WALL_GAP_DEPTH_M, WALL_GAP_M, WALL_GAP_MIN_DEFENDERS
     from .tactics import TacticsConfig
     ps_kod = (f"const PS_SUGAR = {TacticsConfig().possession_radius_m}, "
@@ -2742,6 +2822,7 @@ fest.setAnimationLoop(() => {
               + f"const FR_RES = {WALL_GAP_M}, FR_MELY = {WALL_GAP_DEPTH_M}, "
               f"FR_MIN = {WALL_GAP_MIN_DEFENDERS};" + FALRES_JS)
     return (oldal.replace("__CIM__", cim.replace("<", "&lt;"))
+                 .replace("__JL_VETITES_S__", repr(float(SCENE_REEL_TAIL_S)))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
                           + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
                           + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS
