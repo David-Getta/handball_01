@@ -333,6 +333,26 @@ class _NotesScreenState extends State<NotesScreen> {
                 ));
               },
             ),
+            // A meccs jegyzetei egymás után a 3D-ben ("Jegyzeteim" +
+            // vetítés): a csapat-megbeszélés a jegyzet-listából indul.
+            IconButton(
+              tooltip: "A meccs jegyzetei egymás után (3D vetítés)",
+              iconSize: 16,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(),
+              padding: const EdgeInsets.only(left: 8),
+              icon: const Icon(Icons.slideshow_outlined,
+                  color: AppColors.textSecondary),
+              onPressed: () {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => Court3DScreen(
+                    matchId: n["match_id"] as String,
+                    vetites: true,
+                    csakJegyzet: true,
+                  ),
+                ));
+              },
+            ),
             IconButton(
               tooltip: "Jegyzet törlése",
               iconSize: 15,

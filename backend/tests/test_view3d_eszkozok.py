@@ -1943,8 +1943,13 @@ def test_a_jegyzeteim_szuro():
     for kell in ("final sorok = _csakJegyzet", '"Jegyzeteim (${_jegyzetek.length})"',
                  "if (v) _csakKulcs = false;", "if (v) _csakJegyzet = false;",
                  'initialTypes: _csakJegyzet\n                          ? const ["note"]',
-                 'if (_csakJegyzet) q["jegyzetek"] = "1";'):
+                 'if (_csakJegyzet) q["jegyzetek"] = "1";',
+                 # A könyvtár Jegyzetek képernyőjéről: szűrő + vetítés.
+                 "if (widget.csakJegyzet && _jegyzetek.isNotEmpty) {"):
         assert kell in palya, kell
+    jegyzetek_kep = (Path(__file__).resolve().parents[2] / "client" / "lib"
+                     / "ui" / "notes_screen.dart").read_text(encoding="utf-8")
+    assert "vetites: true,\n                    csakJegyzet: true," in jegyzetek_kep
 
 
 def test_a_kozos_nezes_vegpontjai(tmp_path, monkeypatch):

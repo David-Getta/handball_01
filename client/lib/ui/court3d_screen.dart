@@ -57,10 +57,15 @@ class Court3DScreen extends StatefulWidget {
   /// A kezdőlap "Vetítés" gombjától jövünk: betöltés után a jelenet-lista
   /// vetítése indul (a böngésző vetit=1 paraméterének párja).
   final bool vetites;
+
+  /// A könyvtár Jegyzetek képernyőjéről jövünk: a jelenet-lista
+  /// "Jegyzeteim" szűrője bekapcsolva nyílik (a böngésző jegyzetek=1
+  /// paraméterének párja) — a vetítéssel a meccs jegyzetei egymás után.
+  final bool csakJegyzet;
   const Court3DScreen(
       {super.key, this.matchId, this.startS, this.lovesTerkep,
       this.initialScene, this.initialTeam, this.csakVideozando = false,
-      this.vetites = false});
+      this.vetites = false, this.csakJegyzet = false});
 
   @override
   State<Court3DScreen> createState() => _Court3DScreenState();
@@ -926,6 +931,11 @@ class _Court3DScreenState extends State<Court3DScreen>
     }
     if (widget.initialScene != null) _jelenetListaNyitva = true;
     if (widget.csakVideozando && _kulcsJelenetek.isNotEmpty) _csakKulcs = true;
+    if (widget.csakJegyzet && _jegyzetek.isNotEmpty) {
+      _csakJegyzet = true;
+      _csakKulcs = false;
+      _jelenetListaNyitva = true;
+    }
   }
 
   /// A kezdőlap "Vetítés" gombjától érkezve: a vetítés indul (a szűrők

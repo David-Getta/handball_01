@@ -10,7 +10,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   megjelölt pillanatokat játssza a rajzokkal: a csapat-megbeszélés
   válogatása, a közös nézéssel a headseteken is. A Klipek ilyenkor a
   jegyzet-csomagot kéri; a jelentés jegyzet-szakaszából "▶ A jegyzetek
-  egymás után" link nyitja.
+  egymás után" link, a könyvtár Jegyzetek képernyőjéről egy gomb nyitja
+  (a meccs jegyzetei a 3D-ben, vetítve).
 
 - **Klipek: a csomag-csempén a darabszám és három kocka** (új, app,
   motor): minden csomag mutatja, hány jelenet van benne ezen a meccsen;
