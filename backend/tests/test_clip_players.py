@@ -73,6 +73,21 @@ def test_a_vegpont_megmondja_kihez_van_jelenet():
         (s["total"] for s in sorok), reverse=True)
 
 
+def test_a_csomagok_minta_kockai_a_valaszban():
+    """A válasz csomagonként minta-pillanatokat is ad (a Klipek csempéjének
+    kockái): minden darabszámos csomaghoz legfeljebb három, időrendben, a
+    csomag saját jeleneteiből."""
+    from handball.pipeline.clips import CLIP_PREVIEW_SAMPLES
+
+    client, mid = _client()
+    r = client.get(f"/matches/{mid}/clip-players").json()
+    assert r["totals"], "a szimuláción van jelenet"
+    assert set(r["samples"]) == set(r["totals"])
+    for tip, idok in r["samples"].items():
+        assert 1 <= len(idok) <= min(CLIP_PREVIEW_SAMPLES, r["totals"][tip])
+        assert idok == sorted(idok) and all(isinstance(t, int) for t in idok)
+
+
 def test_ismeretlen_meccs_404():
     client, _mid = _client()
     assert client.get("/matches/nincs-ilyen/clip-players").status_code == 404

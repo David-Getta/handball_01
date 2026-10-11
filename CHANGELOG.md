@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.164 óta)
+
+- **Klipek: a csomag-csempén a darabszám és három kocka** (új, app,
+  motor): minden csomag mutatja, hány jelenet van benne ezen a meccsen;
+  a nullás csomag szürke, nem kijelölhető (eddig csak a vágás végén
+  derült ki, hogy üres mappát ad). A kijelölt csomag csempéjén három
+  kocka a felvételből (az első, a középső és az utolsó jelenet) — a
+  vágás előtt látszik, mi kerül a zip-be.
+
 ## v0.1.164 — kiadva (2026-10-11)
 
 > Kiadás-jegyzet: a 3D pálya közös edzés-eszköz lett, és mellé került a

@@ -154,6 +154,9 @@ class _ClipsScreenState extends State<ClipsScreen> {
   // enélkül csak a végén derülne ki.
   Map<String, int> _totals = {};
   int _maxClips = 60;
+  // Csomagonként a minta-pillanatok (kocka-t): a kijelölt csempén három
+  // kocka a felvételből — a vágás előtt látszik, mi kerül a zip-be.
+  Map<String, List<int>> _samples = {};
 
   // Vágás közben: a job üzenete és haladása — a néma várakozás
   // megakadásnak látszik.
@@ -222,6 +225,13 @@ class _ClipsScreenState extends State<ClipsScreen> {
             "${e.key}": (e.value as num).toInt()
         };
         _maxClips = (r["max_clips"] as num?)?.toInt() ?? _maxClips;
+        _samples = {
+          for (final e in ((r["samples"] as Map?) ?? const {}).entries)
+            "${e.key}": [
+              for (final t in (e.value as List? ?? const []))
+                (t as num).toInt()
+            ]
+        };
         _jerseys.clear(); // másik meccs = másik keret
         // Az előre kért mezszám CSAK akkor marad kijelölve, ha ezen a
         // meccsen tényleg van jelenete — különben néma üres zip lenne.
@@ -236,6 +246,7 @@ class _ClipsScreenState extends State<ClipsScreen> {
         setState(() {
           _clipPlayers = [];
           _totals = {};
+          _samples = {};
           _jerseys.clear();
         });
       }
@@ -533,10 +544,20 @@ class _ClipsScreenState extends State<ClipsScreen> {
     // A jegyzet-csomag csak akkor működik, ha VAN jegyzet ehhez a
     // meccshez: felajánlani egy működésképtelen kapcsolót rosszabb,
     // mint elmondani, miért nem elérhető.
-    final tiltva = key == "note" && _noteCount == 0;
-    final magyarazat = tiltva
+    // A darabszám a csempén: a nullás csomag (ha a becslés megjött)
+    // szürke és nem kijelölhető — üres mappát adna. A már kijelölt
+    // nullás csomag kivehető marad.
+    final db = _totals.isEmpty ? null : (_totals[key] ?? 0);
+    final ures = db == 0 && key != "note";
+    final tiltva = (key == "note" && _noteCount == 0) || (ures && !on);
+    final magyarazat = key == "note" && _noteCount == 0
         ? "ehhez a meccshez nincs jegyzet — a meccs-elemzőben írhatsz"
-        : (key == "note" ? "$why ($_noteCount db)" : why);
+        : ures
+            ? "ezen a meccsen nincs ilyen jelenet"
+            : (key == "note" ? "$why ($_noteCount db)" : why);
+    final mintak = on && _matchId != null
+        ? (_samples[key] ?? const <int>[])
+        : const <int>[];
     return SizedBox(
       width: 280,
       child: InkWell(
@@ -564,15 +585,45 @@ class _ClipsScreenState extends State<ClipsScreen> {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name,
-                        style: AppText.value.copyWith(
-                            fontSize: 13,
-                            color: tiltva
-                                ? AppColors.textFaint
-                                : AppColors.textPrimary)),
+                    Row(children: [
+                      Expanded(
+                        child: Text(name,
+                            style: AppText.value.copyWith(
+                                fontSize: 13,
+                                color: tiltva
+                                    ? AppColors.textFaint
+                                    : AppColors.textPrimary)),
+                      ),
+                      if (db != null && db > 0)
+                        Text("$db jelenet",
+                            style: AppText.label.copyWith(fontSize: 11)),
+                    ]),
                     const SizedBox(height: 2),
                     Text(magyarazat,
                         style: AppText.label.copyWith(fontSize: 11.5)),
+                    // A kijelölt csomag minta-kockái a felvételből (ha a
+                    // videó ezen a gépen elérhető; különben elmaradnak).
+                    if (mintak.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(children: [
+                          for (final t in mintak)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: Image.network(
+                                  _api.frameUrl(_matchId!, t, w: 160),
+                                  width: 72,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const SizedBox.shrink(),
+                                ),
+                              ),
+                            ),
+                        ]),
+                      ),
                   ]),
             ),
           ]),

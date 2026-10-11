@@ -140,6 +140,35 @@ def _draw_arrows_on_frame(img, nyilak: list, parok: list,
     return rajzolt
 
 
+# A Klipek csomag-csempéjének minta-kockái: ennyi pillanat csomagonként
+# (az első, a középső és az utolsó jelenet) — a vágás előtt látszik, mi
+# kerül a zip-be.
+CLIP_PREVIEW_SAMPLES = 3
+
+
+def preview_samples(events: list, n: int = CLIP_PREVIEW_SAMPLES) -> dict:
+    """Típusonként legfeljebb `n` minta-pillanat (kocka-t) a klip-
+    eseményekből: időrendben egyenletesen (az első, … , az utolsó),
+    ismétlés nélkül. {típus: [t, …]}."""
+    tipusonkent: dict = {}
+    for e in events:
+        t = e.get("t") if isinstance(e, dict) else getattr(e, "t", None)
+        tip = e.get("type") if isinstance(e, dict) else getattr(e, "type", None)
+        tip = getattr(tip, "value", tip)
+        if t is None or tip is None:
+            continue
+        tipusonkent.setdefault(str(tip), set()).add(int(t))
+    ki = {}
+    for tip, halmaz in sorted(tipusonkent.items()):
+        idok = sorted(halmaz)
+        if len(idok) <= n:
+            ki[tip] = idok
+        else:
+            ki[tip] = sorted({idok[round(i * (len(idok) - 1) / (n - 1))]
+                              for i in range(n)}) if n > 1 else idok[:1]
+    return ki
+
+
 def _clock(seconds: float) -> str:
     m, s = int(seconds // 60), int(seconds % 60)
     return f"{m:02d}-{s:02d}"

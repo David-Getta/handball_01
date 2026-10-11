@@ -5319,7 +5319,9 @@ def create_app():
         felület csak a MŰKÖDŐ választásokat kínálja fel.
 
         Válasz: {"players": [{"jersey", "team", "team_name", "name",
-        "counts": {típus: db}, "total"}]} — csökkenő darabszám szerint.
+        "counts": {típus: db}, "total"}]} — csökkenő darabszám szerint;
+        "totals": {típus: db}, "samples": {típus: [kocka-t, …]} (a
+        csomag-csempe minta-kockái, clips.preview_samples), "max_clips".
         """
         match = _store.get(match_id)
         if match is None:
@@ -5337,8 +5339,9 @@ def create_app():
 
         soronkent: dict = {}
         osszesen: dict = {}
+        mintak: dict = {}
         try:
-            from ..pipeline.clips import _TYPE_HU
+            from ..pipeline.clips import _TYPE_HU, preview_samples
             from ..pipeline.primitive_cache import primitive_cache
 
             # EREDMÉNY-gyorsítótár: a teljes esemény-készlet felépítése
@@ -5369,6 +5372,7 @@ def create_app():
             # hatókörrel a rétegek meccsenként egyszer számolódnak.
             with primitive_cache(match):
                 esemenyek = _clip_events(match, match_id, set(_TYPE_HU))
+            mintak = preview_samples(esemenyek)
             for e in esemenyek:
                 tip_ = e.get("type")
                 # A TELJES darabszám a mezszám-nélküli jeleneteket is
@@ -5386,7 +5390,8 @@ def create_app():
                 rec["counts"][tip_] = rec["counts"].get(tip_, 0) + 1
                 rec["total"] += 1
         except Exception:
-            return {"players": [], "totals": {}, "max_clips": MAX_CLIPS}
+            return {"players": [], "totals": {}, "samples": {},
+                    "max_clips": MAX_CLIPS}
 
         out = []
         for rec in soronkent.values():
@@ -5399,7 +5404,7 @@ def create_app():
         # A `totals` és a plafon a BECSLÉSHEZ kell: a vágás percekbe
         # telik, és a rossz kijelölés csak a végén derülne ki.
         valasz = {"players": out, "totals": osszesen,
-                  "max_clips": MAX_CLIPS}
+                  "samples": mintak, "max_clips": MAX_CLIPS}
         _clip_players_cache[match_id] = (kulcs_cp, valasz)
         return valasz
 

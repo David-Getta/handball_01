@@ -41,6 +41,18 @@ def _match(video_path, fps=25.0, stride=1, start=0):
         frames=[])
 
 
+def test_a_csomag_minta_kockai_egyenletesek():
+    """preview_samples: típusonként legfeljebb három pillanat, időrendben
+    egyenletesen (az első, a középső, az utolsó), ismétlés nélkül."""
+    from handball.pipeline.clips import preview_samples
+
+    ev = ([{"t": t, "type": "goal"} for t in (50, 10, 30, 90, 70)]
+          + [{"t": 5, "type": "note"}, {"t": 5, "type": "note"}]
+          + [{"t": None, "type": "goal"}])
+    assert preview_samples(ev) == {"goal": [10, 50, 90], "note": [5]}
+    assert preview_samples(ev, n=1) == {"goal": [10], "note": [5]}
+
+
 def test_exports_selected_types_only(tmp_path):
     video = tmp_path / "meccs.mp4"
     _make_video(video)
