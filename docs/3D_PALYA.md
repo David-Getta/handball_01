@@ -212,6 +212,11 @@ fehér pöttyel jelenik meg (minden szűrővel — az edző saját válogatása;
 böngészőben a sor végi ✕ törli), a vetítés is megáll rajta, a pillanata
 körül a felirat-oszlopban (VR-ben a táblán) látszik, és a nyomtatott
 jelentésbe és a Klipek "Jegyzetelt pillanatok" csomagjába is bekerül.
+Ha a jegyzet írásakor nyilak vannak a padlón (✎ Rajz), a jegyzettel
+mentődnek: a jegyzet pillanatában — a vetítésben is — maguktól
+visszarajzolódnak (a sor és a felirat végén ✎ jelzi), a szerkeszthető
+padló-rajz pedig kiürül. A nyomtatott jelentés jegyzet-sorai a motor
+címével "3D ↗" linket kapnak.
 
 A **✎ Rajz** (billentyű: E) a taktika-tábla a valódi jeleneten: rajz-módban
 a húzás nyilat rajzol a padlóra — sárga a labda/passz, kék a futás,

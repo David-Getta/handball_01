@@ -926,12 +926,18 @@ class ApiClient {
   }
 
   /// Új edzői jegyzet az adott képkockához (POST /matches/{id}/notes).
-  Future<Map<String, dynamic>> addNote(
-      String matchId, int frame, String text) async {
+  /// A `rajz`: a 3D pálya nyilai a jegyzettel (a böngésző "rajz"
+  /// link-paraméterének alakja) — a jegyzet pillanatában visszarajzolódnak.
+  Future<Map<String, dynamic>> addNote(String matchId, int frame, String text,
+      {String? rajz}) async {
     final resp = await http.post(
       Uri.parse("$baseUrl/matches/$matchId/notes"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"frame": frame, "text": text}),
+      body: jsonEncode({
+        "frame": frame,
+        "text": text,
+        if (rajz != null && rajz.isNotEmpty) "rajz": rajz,
+      }),
     );
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült menteni a jegyzetet", resp));

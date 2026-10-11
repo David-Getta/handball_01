@@ -4036,6 +4036,14 @@ def create_app():
             "frame": max(0, int(body.get("frame") or 0)),
             "text": text[:500],  # ésszerű hossz-korlát
         }
+        # A 3D pálya rajza (nyilak a padlón) a jegyzettel — a böngésző
+        # "rajz" link-paraméterének alakja ("x1,y1,x2,y2,szín;…", legfeljebb
+        # 30 nyíl). Csak számot, pontot, vesszőt, pontosvesszőt és mínuszt
+        # fogadunk (a tár szöveg-mezője a jelentésbe és linkbe is kerül).
+        import re as _re
+        rajz = str(body.get("rajz") or "").strip()
+        if rajz and len(rajz) <= 1200 and _re.fullmatch(r"[0-9.,;\-]+", rajz):
+            note["rajz"] = rajz
         notes = _load_notes(match_id)
         notes.append(note)
         _notes_path(match_id).write_text(

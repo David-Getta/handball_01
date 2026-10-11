@@ -367,6 +367,27 @@ const double drawingMinM = 0.6;
       Offset(bx + uy * szel / 2, by - ux * szel / 2));
 }
 
+/// A "rajz" szöveg (a link-paraméter és a jegyzet-tár alakja) → nyilak —
+/// a böngésző rajzDekodol-jának tükre: a hibás, pályán kívüli (−10…50 m-en
+/// túli), túl rövid és ismeretlen színű tag kimarad, legfeljebb
+/// [drawingMax] nyíl.
+List<(Offset, Offset, int)> decodeDrawing(String? s) {
+  final ki = <(Offset, Offset, int)>[];
+  for (final tag in (s ?? "").split(";")) {
+    final p = tag.split(",");
+    if (p.length != 5) continue;
+    final v = [for (final x in p.take(4)) double.tryParse(x)];
+    final k = int.tryParse(p[4]);
+    if (v.any((x) => x == null || !x.isFinite || x < -10 || x > 50)) continue;
+    if (k == null || k < 0 || k >= drawingColors.length) continue;
+    final a = Offset(v[0]!, v[1]!), b = Offset(v[2]!, v[3]!);
+    if ((b - a).distance < drawingMinM) continue;
+    ki.add((a, b, k));
+    if (ki.length >= drawingMax) break;
+  }
+  return ki;
+}
+
 /// A nyilak a böngészős nézet "rajz" link-paraméterének alakjában
 /// ("x1,y1,x2,y2,szín;…", 0,1 m-re kerekítve, a JS Math.round-jával
 /// azonosan) — a "Böngészőben" gomb így viszi át a rajzot.

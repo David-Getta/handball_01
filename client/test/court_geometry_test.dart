@@ -6,6 +6,21 @@ import "package:flutter_test/flutter_test.dart";
 import "package:handball_client/ui/court_geometry.dart";
 
 void main() {
+  test("rajz: dekódolás = a böngésző rajzDekodol-ja", () {
+    // Ugyanaz az eset, mint a backend node-tesztjében
+    // (test_a_rajz_dekodolasa_a_dart_tukorrel_egyezik).
+    final ki = decodeDrawing(
+        "1,2,3,4;1,2,3,4,9;1,2,99,4,0;1,1,1.2,1,0;x,1,2,3,0;5,5,8,9,0;-3,-2.5,4,4,1");
+    expect(ki, [
+      (const Offset(5, 5), const Offset(8, 9), 0),
+      (const Offset(-3, -2.5), const Offset(4, 4), 1),
+    ]);
+    // Oda-vissza: a kódolás és a dekódolás egymás tükre.
+    final nyilak = [(const Offset(1.2, 2.3), const Offset(9.9, 4), 1)];
+    expect(decodeDrawing(encodeDrawing(nyilak)), nyilak);
+    expect(decodeDrawing(null), isEmpty);
+  });
+
   test("rajz: nyílhegy és link-kódolás = a böngésző RAJZ_JS-e", () {
     // Ugyanazok az esetek, mint a backend node-tesztjében
     // (test_a_rajz_nyilhegye_es_link_kodolasa).

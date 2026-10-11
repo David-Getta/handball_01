@@ -1491,9 +1491,23 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     notes_html = ""
     if notes:
         items = sorted(notes, key=lambda n: n.get("frame", 0))
+
+        def _jegyzet_link(n):
+            # Ismert motor-címmel a 3D pálya a jegyzet előtt 1,5 mp-cel, a
+            # nyitott listával — a jegyzet (és a vele mentett rajz) ott
+            # magától megjelenik.
+            if not base_url:
+                return ""
+            t = max(0.0, n.get("frame", 0) / fps - REPORT_SCENE_LEAD_S)
+            return (f' <a href="{base_url.rstrip("/")}/matches/'
+                    f'{escape(match.meta.match_id)}/view3d?t={t:.1f}&lista=1"'
+                    ' style="font-size:11px;text-decoration:none">3D ↗</a>')
+
         lis = "".join(
             f"<li><b>{_fmt_clock(n.get('frame', 0) / fps)}</b> — "
-            f"{escape(str(n.get('text', '')))}</li>" for n in items)
+            f"{escape(str(n.get('text', '')))}"
+            f"{' ✎' if n.get('rajz') else ''}{_jegyzet_link(n)}</li>"
+            for n in items)
         notes_html = "<h2>Edzői jegyzetek</h2><ul>" + lis + "</ul>"
 
     # Automatikus edzői összefoglaló: mondatokban, a jelentés elejére.

@@ -925,8 +925,9 @@ class _Court3DScreenState extends State<Court3DScreen>
         (() {
           final s = (((j["frame"] as num?) ?? 0) / fps * 100).round() / 100;
           final t = s.floor();
+          final rajz = decodeDrawing(j["rajz"] as String?).isNotEmpty;
           return SceneRow(s, "${t ~/ 60}:${(t % 60).toString().padLeft(2, "0")}",
-              "n", "Jegyzet: ${j["text"] ?? ""}", false);
+              "n", "Jegyzet: ${j["text"] ?? ""}${rajz ? " ✎" : ""}", false);
         })()
     ]..sort((a, b) => a.s.compareTo(b.s));
     final ki = [...sorok];
@@ -938,6 +939,21 @@ class _Court3DScreenState extends State<Court3DScreen>
       ki.insert(i, j);
     }
     return ki;
+  }
+
+  /// A jegyzettel mentett rajz: a jegyzet pillanata körül (−0,3…+3 mp,
+  /// mint a böngészőben) a nyilai a padlón.
+  List<(Offset, Offset, int)> _jegyzetRajz(Match m) {
+    if (_jegyzetek.isEmpty || m.frames.isEmpty) return const [];
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final most = _mostT(m) / fps;
+    for (final j in _jegyzetek) {
+      final s = ((j["frame"] as num?) ?? 0) / fps;
+      if (most >= s - 0.3 && most <= s + 3) {
+        return decodeDrawing(j["rajz"] as String?);
+      }
+    }
+    return const [];
   }
 
   /// Jegyzet a mostani pillanathoz (J, a panel gombja): a motor /notes
@@ -974,13 +990,21 @@ class _Court3DScreenState extends State<Court3DScreen>
     _focus.requestFocus();
     if (szoveg == null || szoveg.trim().isEmpty || !mounted) return;
     try {
-      await _api.addNote(id, frame, szoveg.trim());
+      // A padlón lévő nyilak a jegyzettel mentődnek (a jegyzet
+      // pillanatában maguktól visszarajzolódnak), és lekerülnek a padlóról.
+      final rajzzal = _rajzok.isNotEmpty;
+      await _api.addNote(id, frame, szoveg.trim(),
+          rajz: rajzzal ? encodeDrawing(_rajzok) : null);
       final friss = await _api.fetchNotes(id);
       if (!mounted) return;
-      setState(() => _jegyzetek = friss);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Jegyzet mentve — a jelenet-listában, a "
-              "jelentésben és a Klipek jegyzet-csomagjában is.")));
+      setState(() {
+        _jegyzetek = friss;
+        if (rajzzal) _rajzok.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Jegyzet mentve${rajzzal ? " a rajzzal" : ""} — a "
+              "jelenet-listában, a jelentésben és a Klipek "
+              "jegyzet-csomagjában is.")));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -1994,7 +2018,11 @@ class _Court3DScreenState extends State<Court3DScreen>
                           l["outcome"] == "goal")
                   ],
                   rejtett: rejtett,
-                  nyilak: [..._rajzok, if (_rajzFolyo != null) _rajzFolyo!],
+                  nyilak: [
+                    ..._rajzok,
+                    if (_rajzFolyo != null) _rajzFolyo!,
+                    ..._jegyzetRajz(m),
+                  ],
                 ),
               ))),
               // Az eszköz-panel a kép jobb szélén: magasság-korláttal

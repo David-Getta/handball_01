@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.162 óta)
 
+- **A jegyzet a rajzot is megőrzi** (új, böngésző/VR, app, jelentés): ha
+  a jegyzet írásakor nyilak vannak a padlón, a jegyzettel mentődnek, és a
+  jegyzet pillanatában — a vetítésben is — maguktól visszarajzolódnak: a
+  videó-elemzés előre előkészíthető (jelenet, megjegyzés, nyilak), és az
+  edzésen csak le kell vetíteni. A nyomtatott jelentés jegyzet-sorai
+  "3D ↗" linket kapnak (a rajzos jegyzetet ✎ jelzi).
+
 - **3D pálya: Jegyzet a pillanathoz** (új, böngésző/VR és app): a
   "📝 Jegyzet" (J) a mostani pillanathoz ír megjegyzést a meccs közös
   jegyzet-tárába. A jegyzet a jelenet-lista sorai közt jelenik meg (minden

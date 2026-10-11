@@ -1645,7 +1645,7 @@ def test_a_rajz_az_appban_a_bongeszo_tukre():
                  'q["kulcs"] = "1";', 'q["lista"] = "1";',
                  'q["jelenet"] = "hazai";', 'q["jelenet"] = "vendeg";',
                  "LogicalKeyboardKey.keyE", "_rajzModAllit(false);",
-                 "nyilak: [..._rajzok, if (_rajzFolyo != null) _rajzFolyo!],",
+                 "if (_rajzFolyo != null) _rajzFolyo!,",
                  "_nyil(canvas, a, b, k);", "if (!_rajzMod) _meresKoppintas("):
         assert kell in palya, kell
 
@@ -1677,8 +1677,8 @@ def test_a_3d_jegyzet_a_kozos_jegyzet_tarba_ir():
         assert kell in oldal, kell
     ui = Path(__file__).resolve().parent.parent.parent / "client" / "lib" / "ui"
     palya = (ui / "court3d_screen.dart").read_text(encoding="utf-8")
-    for kell in ("_api.fetchNotes(id)", "_api.addNote(id, frame, szoveg.trim())",
-                 "LogicalKeyboardKey.keyJ", '"n", "Jegyzet: ${j["text"] ?? ""}"',
+    for kell in ("_api.fetchNotes(id)", "_api.addNote(id, frame, szoveg.trim(),",
+                 "LogicalKeyboardKey.keyJ", '"n", "Jegyzet: ${j["text"] ?? ""}',
                  '} else if (r.tipus == "e") {'):
         assert kell in palya, kell
 
@@ -1703,3 +1703,67 @@ def test_a_3d_jegyzet_vegpontjai_es_a_jelentes(tmp_path, monkeypatch):
         f"/matches/{mid}/report/export").text
     assert c.delete(f"/matches/{mid}/notes/{j['id']}").status_code == 200
     assert c.get(f"/matches/{mid}/notes").json()["notes"] == []
+
+
+
+def test_a_jegyzet_a_rajzot_is_megorzi(tmp_path, monkeypatch):
+    """A jegyzet "rajz" mezője: a böngésző link-kódolása megmarad, a
+    szemét (betű, túl hosszú) kimarad; a jelentés jegyzet-sora jelzi (✎),
+    és a motor címével "3D ↗" linket kap. Az oldal a jegyzettel küldi a
+    rajzot, a jegyzet pillanatában visszarajzolja; az app ugyanígy."""
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline.view3d_html import view3d_html
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app, base_url="http://motor:8123")
+    mid = m.meta.match_id
+    jo = c.post(f"/matches/{mid}/notes",
+                json={"frame": 50, "text": "Zárás", "rajz": "20,13.1,28.4,16.8,0"}).json()
+    assert jo["rajz"] == "20,13.1,28.4,16.8,0"
+    rossz = c.post(f"/matches/{mid}/notes",
+                   json={"frame": 60, "text": "x", "rajz": "<script>"}).json()
+    assert "rajz" not in rossz
+    hosszu = c.post(f"/matches/{mid}/notes",
+                    json={"frame": 70, "text": "y", "rajz": "1," * 700}).json()
+    assert "rajz" not in hosszu
+    tar = c.get(f"/matches/{mid}/notes").json()["notes"]
+    assert [n.get("rajz") for n in tar] == ["20,13.1,28.4,16.8,0", None, None]
+    html = c.get(f"/matches/{mid}/report/export").text
+    assert "Zárás ✎" in html
+    assert f'href="http://motor:8123/matches/{mid}/view3d?t=0.5&lista=1"' in html
+    oldal = view3d_html(m)
+    for kell in ('rajz: rajzzal ? rajzKodol(rajzok) : ""',
+                 'rajz: rajzDekodol(n.rajz || "")',
+                 "for (const r of j.rajz) jegyzetRajzCsoport.add(nyilMesh(...r));",
+                 "if (rajzzal){ rajzok.length = 0; rajzFrissit(); }"):
+        assert kell in oldal, kell
+    ui = Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+    palya = (ui / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ("rajz: rajzzal ? encodeDrawing(_rajzok) : null",
+                 "..._jegyzetRajz(m),", 'decodeDrawing(j["rajz"] as String?)'):
+        assert kell in palya, kell
+    api = (ui / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert 'if (rajz != null && rajz.isNotEmpty) "rajz": rajz,' in api
+
+
+@pytest.mark.skipif(NODE is None, reason="node nincs telepítve")
+def test_a_rajz_dekodolasa_a_dart_tukorrel_egyezik():
+    """A böngésző rajzDekodol-ja és az app decodeDrawing-ja ugyanazokat a
+    tagokat ejti el — a Dart-teszt ugyanezt az esetet ellenőrzi
+    (court_geometry_test.dart)."""
+    from handball.pipeline.view3d_html import RAJZ_JS
+
+    js = RAJZ_JS + """
+console.log(JSON.stringify(rajzDekodol("1,2,3,4;1,2,3,4,9;1,2,99,4,0;1,1,1.2,1,0;x,1,2,3,0;5,5,8,9,0;-3,-2.5,4,4,1")));
+"""
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [[5, 5, 8, 9, 0], [-3, -2.5, 4, 4, 1]]

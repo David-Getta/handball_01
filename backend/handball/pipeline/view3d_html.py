@@ -2440,7 +2440,7 @@ function jelenetSorokSzurt(){
     let i = sorok.length;
     while (i > 0 && sorok[i - 1].s > j.s) i--;
     sorok.splice(i, 0, {s: j.s, ido: jegyzetIdo(j.s), tipus: "n",
-                        szoveg: "Jegyzet: " + j.text, gol: false, id: j.id});
+                        szoveg: "Jegyzet: " + j.text + (j.rajz.length ? " ✎" : ""), gol: false, id: j.id});
   }
   return sorok;
 }
@@ -2466,7 +2466,8 @@ async function jegyzetBetolt(){
     if (!v.ok) return;
     const d = await v.json();
     jegyzetek = (d.notes || [])
-      .map(n => ({id: n.id, s: Math.round((Number(n.frame) || 0) / FPS * 100) / 100, text: String(n.text || "")}))
+      .map(n => ({id: n.id, s: Math.round((Number(n.frame) || 0) / FPS * 100) / 100, text: String(n.text || ""),
+                  rajz: rajzDekodol(n.rajz || "")}))
       .sort((a, b) => a.s - b.s);
     jegyzetInfo.textContent = jegyzetek.length ? jegyzetek.length + " jegyzet" : "";
     if (jelenetLista.style.display === "block") jelenetListaEpit();
@@ -2477,11 +2478,16 @@ async function jegyzetIr(){
   const szoveg = prompt("Jegyzet ehhez a pillanathoz (" + jegyzetIdo(ido) + "):");
   if (!szoveg || !szoveg.trim()) return;
   try {
+    // A padlón lévő nyilak a jegyzettel mentődnek (a jegyzet pillanatában
+    // maguktól visszarajzolódnak), és a mentés után lekerülnek a padlóról.
+    const rajzzal = rajzok.length > 0;
     const v = await fetch(jegyzetCim(), {method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({frame: Math.round(ido * FPS), text: szoveg.trim()})});
+      body: JSON.stringify({frame: Math.round(ido * FPS), text: szoveg.trim(),
+                            rajz: rajzzal ? rajzKodol(rajzok) : ""})});
     if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
+    if (rajzzal){ rajzok.length = 0; rajzFrissit(); }
     await jegyzetBetolt();
-    jegyzetInfo.textContent = "mentve · " + jegyzetek.length + " jegyzet";
+    jegyzetInfo.textContent = "mentve" + (rajzzal ? " a rajzzal" : "") + " · " + jegyzetek.length + " jegyzet";
   } catch (e) { jegyzetInfo.textContent = "hiba: " + e.message; }
 }
 async function jegyzetTorol(id){
@@ -2491,15 +2497,27 @@ async function jegyzetTorol(id){
     await jegyzetBetolt();
   } catch (e) { jegyzetInfo.textContent = "hiba: " + e.message; }
 }
+// A jegyzettel mentett rajz: a jegyzet pillanata körül a padlón (külön
+// csoport — a padló saját, szerkeszthető rajzát nem érinti).
+const jegyzetRajzCsoport = new THREE.Group();
+szinpad.add(jegyzetRajzCsoport);
+let jegyzetRajzAkt = null;
 function jegyzetFrissit(t){
-  // A jegyzet a pillanata körül a felirat-oszlopban (VR-ben a táblán).
-  const j = jegyzetek.find(x => t >= x.s - 0.3 && t <= x.s + 3);
+  // A jegyzet a pillanata körül a felirat-oszlopban (VR-ben a táblán), a
+  // rajza a padlón — csak jegyzet-váltáskor rajzolunk újra.
+  const j = jegyzetek.find(x => t >= x.s - 0.3 && t <= x.s + 3) || null;
+  if (j !== jegyzetRajzAkt){
+    jegyzetRajzAkt = j;
+    csoportUrit(jegyzetRajzCsoport);
+    if (j) for (const r of j.rajz) jegyzetRajzCsoport.add(nyilMesh(...r));
+  }
   if (!j){ jegyzetFeliratElem.style.display = "none"; return; }
-  jegyzetFeliratElem.textContent = "📝 " + j.text;
+  jegyzetFeliratElem.textContent = "📝 " + j.text + (j.rajz.length ? " ✎" : "");
   jegyzetFeliratElem.style.display = "block";
 }
 document.getElementById("jegyzetGomb").onclick = jegyzetIr;
-window.jegyzetProba = () => jegyzetek.map(j => ({s: j.s, text: j.text}));
+window.jegyzetProba = () => jegyzetek.map(j => ({s: j.s, text: j.text, nyilak: j.rajz.length,
+                                                  latszik: jegyzetRajzAkt === j ? jegyzetRajzCsoport.children.length : 0}));
 
 // ---- Vetítés: a jelenet-lista sorai egymás után ------------------------
 // A "▶ Vetítés" (V; VR-ben a hüvelykujj-kar lenyomása) a lista sorain (a
