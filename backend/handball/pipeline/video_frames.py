@@ -17,6 +17,12 @@ FRAME_MAX_W = 1280
 # is felismerhető a jelenet, a jelentés mégse hízzon meg (~15–25 kB/kép).
 REPORT_FRAME_W = 320
 REPORT_FRAME_Q = 70
+# Ennyi másodpercen belül ELŐRE kért kockához nem tekerünk, hanem
+# továbbolvasunk: a tekerés a megelőző kulcskockától dekódol (hosszú
+# GOP-nál kockánként több száz dekódolás), a 3D Videó-ablaka pedig
+# lejátszás közben egymás utáni kockákat kér. Ennél messzebb a tekerés
+# olcsóbb, mint a sok kocka végigdekódolása.
+SEQ_READ_MAX_S = 2.0
 
 
 def source_frame(match, t: int) -> tuple[str, int] | None:
@@ -38,10 +44,23 @@ def read_jpeg(cap, frame_index: int, width: int,
     """A megnyitott videó adott kockája JPEG-ben, `width` szélesre
     kicsinyítve (arányosan; nagyítás nincs, a szélesség a FRAME_MIN_W …
     FRAME_MAX_W sávba szorítva). None: a kocka nem olvasható (pl. a
-    videó vége után)."""
+    videó vége után). Ha a kért kocka SEQ_READ_MAX_S-en belül a mostani
+    olvasási hely ELŐTT van, továbbolvas (grab), különben teker."""
     import cv2
 
-    cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_index))
+    frame_index = int(frame_index)
+    try:
+        hol = int(cap.get(cv2.CAP_PROP_POS_FRAMES))  # a következő kocka
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+    except (TypeError, ValueError):
+        hol, fps = -1, 0.0
+    elore = frame_index - hol
+    if hol >= 0 and fps > 0 and 0 <= elore <= SEQ_READ_MAX_S * fps:
+        for _ in range(elore):
+            if not cap.grab():
+                return None
+    else:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
     ok, img = cap.read()
     if not ok or img is None:
         return None

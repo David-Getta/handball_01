@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **A 3D Videó-ablaka lejátszás közben nem teker** (javítás, motor): a
+  kocka-végpont az egymás utáni kockákhoz továbbolvas a videóban (2 mp-en
+  belül előre), és csak ugrásnál teker — a tekerés a megelőző
+  kulcskockától dekódol, hosszú kulcskocka-közű felvételen kockánként
+  akár több száz dekódolással; a Videó-ablak így lejátszás közben is
+  folyamatos.
+
 - **Videó-kocka a jelentés videózandó jeleneteinél** (új, jelentés): ha
   a forrás-videó ezen a gépen elérhető, a "Videózandó jelenetek" minden
   sora alatt a jelenet kockája a felvételből (beágyazva — a jelentés

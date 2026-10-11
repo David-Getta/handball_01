@@ -2000,6 +2000,51 @@ def test_a_kocka_olvaso_szakaszt_es_ritkitast_kovet(tmp_path):
     assert sorted(frames_jpeg(m, [5, 25])) == [5]
 
 
+def test_a_kocka_olvaso_kozeli_kockara_nem_teker(tmp_path):
+    """A lejátszás egymás utáni kockáihoz a kocka-olvasó továbbolvas (nem
+    teker — a tekerés a kulcskockától dekódol); ugrásnál és visszafelé
+    teker. A kép mindkét úton a kért kocka."""
+    import cv2
+    import numpy as np
+
+    from handball.pipeline.video_frames import SEQ_READ_MAX_S, read_jpeg
+
+    ut = tmp_path / "s.mp4"
+    w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                        (320, 160))
+    for i in range(120):
+        w.write(np.full((160, 320, 3), i * 2, np.uint8))
+    w.release()
+
+    class Szamlalo:
+        def __init__(self, cap):
+            self.cap, self.tekeres = cap, 0
+
+        def set(self, *a):
+            self.tekeres += 1
+            return self.cap.set(*a)
+
+        def __getattr__(self, nev):
+            return getattr(self.cap, nev)
+
+    cap = Szamlalo(cv2.VideoCapture(str(ut)))
+
+    def szurke(k):
+        b = read_jpeg(cap, k, 320)
+        return float(cv2.imdecode(np.frombuffer(b, np.uint8),
+                                  cv2.IMREAD_COLOR).mean())
+
+    # A friss olvasó a 0. kockán áll: a 10. is továbbolvasással jön.
+    assert abs(szurke(10) - 20) < 6 and cap.tekeres == 0
+    assert abs(szurke(11) - 22) < 6 and cap.tekeres == 0   # a következő
+    assert abs(szurke(14) - 28) < 6 and cap.tekeres == 0   # pár kockával előre
+    tavol = 15 + int(SEQ_READ_MAX_S * 25) + 5
+    assert abs(szurke(tavol) - tavol * 2) < 6 and cap.tekeres == 1  # ugrás
+    assert abs(szurke(5) - 10) < 6 and cap.tekeres == 2     # visszafelé
+    assert read_jpeg(cap, 500, 320) is None                  # a vége után
+    cap.release()
+
+
 def test_jelenet_nelkul_nincs_videozando_szakasz():
     """Jelenet nélküli (játékos- és labda-mentes) meccsen a szakasz
     elmarad — nem üres címsor."""
