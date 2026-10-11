@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **Videó a 3D mellett az appban is** (új, app): a 3D fül "📺 Videó"
+  (K) gombja a valódi felvételt a 3D kép mellett mutatja, a lejátszással
+  szinkronban (a motor kocka-végpontjából, egyszerre egy kéréssel — lassú
+  gépen sem torlódik); a böngészős nézet linkje is viszi. Demóban és
+  videó nélküli meccsen az ablak megmondja, miért nincs kép.
+
 - **3D pálya: Videó a 3D mellett** (új, böngésző/VR, motor): a "📺 Videó"
   (K) a valódi felvételt mutatja a lejátszással szinkronban — kép a
   képben a sarokban, és egy nagy kivetítőn a túlsó oldalvonal fölött

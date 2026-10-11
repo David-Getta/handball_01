@@ -907,6 +907,12 @@ class ApiClient {
     return (json["notes"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// A forrás-videó egy kockája JPEG-ben (GET /matches/{id}/frame) — a
+  /// 3D pálya "Videó" ablaka ebből mutatja a valódi felvételt. `t`: a
+  /// feldolgozott kocka t címkéje; `w`: a kép szélessége (px).
+  String frameUrl(String matchId, int t, {int w = 480}) =>
+      "$baseUrl/matches/$matchId/frame?t=$t&w=$w";
+
   /// MINDEN edzői jegyzet a könyvtárból (GET /library/notes), meccs-
   /// környezettel: {"match_id", "home_team", "away_team", "date", "id",
   /// "frame", "t_s", "text"}. A jegyzetek az edző fejében egyetlen

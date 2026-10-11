@@ -3,6 +3,7 @@
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:flutter_test/flutter_test.dart";
+import "package:handball_client/services/api_client.dart";
 import "package:handball_client/services/jobs_monitor.dart";
 import "package:handball_client/ui/court3d_screen.dart";
 
@@ -566,6 +567,35 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(tester.takeException(), isNull);
     await _zar(tester);
+  });
+
+  testWidgets("videó (K): a felvétel a 3D mellett, demóban magyaráz",
+      (tester) async {
+    await _nyit(tester);
+    final kep0 = tester.getSize(_kep()).width;
+    expect(find.textContaining("A demóhoz nincs felvétel"), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.pump();
+    expect(find.text("📺 Videó: BE"), findsOneWidget);
+    expect(find.textContaining("A demóhoz nincs felvétel"), findsOneWidget);
+    // A felvétel a kép MELLETT: a 3D kép keskenyebb lett, nem takarja.
+    expect(tester.getSize(_kep()).width, lessThan(kep0 - 200));
+    // A panel bezáró gombja és a K is kikapcsol.
+    await tester.tap(find.byTooltip("Videó bezárása (K)"));
+    await tester.pump();
+    expect(find.textContaining("A demóhoz nincs felvétel"), findsNothing);
+    expect(tester.getSize(_kep()).width, kep0);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.pump();
+    expect(find.text("📺 Videó (K)"), findsOneWidget);
+    await _zar(tester);
+  });
+
+  test("a kocka-végpont címe", () {
+    expect(ApiClient(baseUrl: "http://h:1").frameUrl("m1", 42, w: 640),
+        "http://h:1/matches/m1/frame?t=42&w=640");
   });
 
   testWidgets("labda-nyom gomb: be/ki", (tester) async {

@@ -1932,3 +1932,14 @@ def test_a_3d_oldal_videoja():
                  "new THREE.CanvasTexture(videoVaszon)",
                  'q.set("video", "1")', 'v("video") === "1"'):
         assert kell in oldal, kell
+    # Az app párja: a 3D kép MELLETT, ugyanabból a végpontból, a K-ra; a
+    # böngészős link viszi.
+    from pathlib import Path
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert '"$baseUrl/matches/$matchId/frame?t=$t&w=$w"' in api
+    for kell in ("LogicalKeyboardKey.keyK", "_api.frameUrl(id, t, w: 480)",
+                 'if (_videoBe) q["video"] = "1";',
+                 "Expanded(child: _nezetEsVideo(m))"):
+        assert kell in palya, kell

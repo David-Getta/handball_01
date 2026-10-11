@@ -212,6 +212,9 @@ kivetítőn a túlsó oldalvonal fölött — VR-ben ez látszik. A motor
 `/matches/{id}/frame?t=…&w=…` végpontja adja a forrás-videó kockáját JPEG-ben
 (összefűzött meccsnél a megfelelő szakaszból); a link viszi (`video=1`).
 Ha a videó nem érhető el ezen a gépen, az ablak megmondja.
+Az appbeli 3D fülön ugyanez a K (és a panel 📺 Videó gombja): a felvétel
+a 3D kép MELLETT nyílik (a kép keskenyebb lesz, nem takarja), és a
+böngészős nézet linkje is viszi.
 
 A **📝 Jegyzet** (billentyű: J) a mostani pillanathoz ír megjegyzést —
 ugyanabba a jegyzet-tárba, amit a meccs-elemző használ (a motor

@@ -221,6 +221,15 @@ class _Court3DScreenState extends State<Court3DScreen>
   // VETÍTÉS (V): a lista sorai egymás után — ki/be és a futó sor.
   bool _vetitesBe = false;
   SceneRow? _vetitesSor;
+  // VIDEÓ (K): a valódi felvétel kockája a 3D mellett, a lejátszással
+  // szinkronban (a motor /frame végpontjából) — egyszerre egy kérés: amíg
+  // az előző kocka nem jött meg, nem kérünk újat (lassú hálózaton sem
+  // torlódik).
+  bool _videoBe = false;
+  ImageProvider? _videoKep; // a megjelenített (betöltött) kocka
+  int? _videoKepT; // a megjelenített kocka t címkéje
+  bool _videoToltes = false;
+  bool _videoNincs = false; // nincs felvétel ezen a gépen — nem kérünk újra
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
@@ -450,6 +459,9 @@ class _Court3DScreenState extends State<Court3DScreen>
         _match = m;
         _matchId = id;
         _demo = false;
+        _videoKep = null;
+        _videoKepT = null;
+        _videoNincs = false;
         _esemenyek = esemenyek;
         _playhead = ugras;
         _playing = widget.startS != null;
@@ -1763,6 +1775,11 @@ class _Court3DScreenState extends State<Court3DScreen>
         if (m != null) _vetitesAllit(m, !_vetitesBe);
         return KeyEventResult.handled;
       }
+      // K — a felvétel a 3D mellett be/ki (a böngésző K-jának párja).
+      if (k == LogicalKeyboardKey.keyK) {
+        _videoAllit(!_videoBe);
+        return KeyEventResult.handled;
+      }
       // T — TV-kamera be/ki (a böngészős nézet T gombjának párja).
       if (k == LogicalKeyboardKey.keyT) {
         setState(() {
@@ -1867,7 +1884,7 @@ class _Court3DScreenState extends State<Court3DScreen>
               children: [
                 _fejlec(m),
                 const SizedBox(height: AppSpacing.sm),
-                Expanded(child: _nezetTer(m)),
+                Expanded(child: _nezetEsVideo(m)),
                 const SizedBox(height: AppSpacing.sm),
                 _lejatszoSav(m),
               ],
@@ -1905,6 +1922,7 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (_jelenetListaNyitva) q["lista"] = "1";
     if (_csakKulcs) q["kulcs"] = "1";
     if (_vetitesBe) q["vetit"] = "1";
+    if (_videoBe) q["video"] = "1";
     if (_rajzok.isNotEmpty) q["rajz"] = encodeDrawing(_rajzok);
     if (_speed != 1.0) q["seb"] = _speed.toString();
     final url = Uri.parse("${_api.baseUrl}/matches/$_matchId/view3d")
@@ -1960,7 +1978,8 @@ class _Court3DScreenState extends State<Court3DScreen>
               "odaugrik · N / P — következő / előző jelenet · "
               "V — vetítés (a lista sorai egymás után) · "
               "E — rajz: húzással nyíl a padlóra · "
-              "J — jegyzet a mostani pillanathoz",
+              "J — jegyzet a mostani pillanathoz · "
+              "K — a felvétel a 3D mellett",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -1998,6 +2017,150 @@ class _Court3DScreenState extends State<Court3DScreen>
           },
         ),
     ]);
+  }
+
+  /// A 3D kép és — ha a Videó be van kapcsolva — mellette a felvétel.
+  Widget _nezetEsVideo(Match m) {
+    if (!_videoBe) return _nezetTer(m);
+    // A kocka-kérés a képkocka UTÁN (a build mellékhatása nem lehet).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final mm = _match;
+      if (mm != null) _videoFrissit(mm);
+    });
+    return LayoutBuilder(builder: (context, korlat) {
+      final szeles = (korlat.maxWidth * 0.32).clamp(220.0, 480.0);
+      return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(child: _nezetTer(m)),
+        const SizedBox(width: AppSpacing.sm),
+        SizedBox(
+            width: szeles,
+            child: Align(
+                alignment: Alignment.topCenter,
+                child: SingleChildScrollView(child: _videoPanel(m)))),
+      ]);
+    });
+  }
+
+  /// Videó ki/be (K, a panel gombja). Bekapcsoláskor újra próbál (a
+  /// "nincs felvétel" ítélet azóta elavulhatott — pl. a videó-fájl
+  /// visszakerült a helyére).
+  void _videoAllit(bool be) {
+    setState(() {
+      _videoBe = be;
+      _videoNincs = false;
+    });
+    _focus.requestFocus();
+  }
+
+  /// A videó-ablak frissítése a lejátszófej kockájára. Egyszerre egy
+  /// kérés; a kép csak a BETÖLTÖTT kockára vált (nincs villogás).
+  void _videoFrissit(Match m) {
+    final id = _matchId;
+    if (!mounted || !_videoBe || _videoToltes || _videoNincs || _demo ||
+        id == null || m.frames.isEmpty) {
+      return;
+    }
+    final t = _mostT(m);
+    if (t == _videoKepT) return;
+    _videoToltes = true;
+    final kep = NetworkImage(_api.frameUrl(id, t, w: 480));
+    final folyam = kep.resolve(ImageConfiguration.empty);
+    late final ImageStreamListener figyelo;
+    figyelo = ImageStreamListener((_, __) {
+      folyam.removeListener(figyelo);
+      if (!mounted) return;
+      setState(() {
+        _videoToltes = false;
+        // Közben másik meccsre váltottunk: ez a kocka már nem ide tartozik.
+        if (_matchId != id) return;
+        _videoKep = kep;
+        _videoKepT = t;
+      });
+    }, onError: (_, __) {
+      folyam.removeListener(figyelo);
+      if (!mounted) return;
+      setState(() {
+        _videoToltes = false;
+        if (_matchId != id) return;
+        // Az első kocka sem jött: nincs felvétel ezen a gépen (404) —
+        // nem kérünk újra minden kockán. Ha már volt kép, csak ez az egy
+        // kocka hiányzik (pl. a videó vége): továbblépünk.
+        if (_videoKep == null) {
+          _videoNincs = true;
+        } else {
+          _videoKepT = t;
+        }
+      });
+    });
+    folyam.addListener(figyelo);
+  }
+
+  /// A videó-ablak: a felvétel kockája, az ideje, és ha nincs kép, a
+  /// magyarázat (demó, nincs felvétel, betöltés).
+  Widget _videoPanel(Match m) {
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final String? uzenet = _demo || _matchId == null
+        ? "A demóhoz nincs felvétel — elemezz egy meccset, és a videója "
+            "itt fut a 3D mellett."
+        : _videoNincs
+            ? "Ehhez a meccshez nincs felvétel ezen a gépen (a videó-fájl "
+                "nem érhető el). K: újrapróbálás."
+            : _videoKep == null
+                ? "Felvétel betöltése…"
+                : null;
+    final mp = _videoKepT == null ? null : (_videoKepT! / fps).floor();
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0E14),
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+              child: Text("📺 Felvétel",
+                  style: AppText.value.copyWith(fontSize: 13))),
+          if (uzenet == null && mp != null)
+            Text("${mp ~/ 60}:${(mp % 60).toString().padLeft(2, "0")}",
+                style: AppText.label.copyWith(fontSize: 11.5)),
+          IconButton(
+            tooltip: "Videó bezárása (K)",
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            onPressed: () => _videoAllit(false),
+            icon: const Icon(Icons.close),
+          ),
+        ]),
+        const SizedBox(height: 4),
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              color: Colors.black,
+              alignment: Alignment.center,
+              child: uzenet == null
+                  ? Image(
+                      image: _videoKep!,
+                      gaplessPlayback: true,
+                      fit: BoxFit.contain)
+                  : Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Text(uzenet,
+                          textAlign: TextAlign.center,
+                          style: AppText.label.copyWith(fontSize: 11.5))),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+            "A 3D és a felvétel ugyanazt a pillanatot mutatja: amit a "
+            "rekonstrukció állít (a fal rése, a szabad lövő), itt "
+            "ellenőrizhető.",
+            style: AppText.label.copyWith(fontSize: 11)),
+      ]),
+    );
   }
 
   Widget _nezetTer(Match m) {
@@ -2601,6 +2764,27 @@ class _Court3DScreenState extends State<Court3DScreen>
           },
           child: Text(_nyom ? "Labda-nyom: BE" : "Labda-nyom (3 mp)",
               style: const TextStyle(fontSize: 11.5)),
+        ),
+      ),
+      // VIDEÓ (K): a valódi felvétel a 3D mellett.
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Tooltip(
+          message: "A valódi felvétel a 3D mellett, a lejátszással "
+              "szinkronban (K) — amit a 3D állít, a videón ellenőrizhető",
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor:
+                  _videoBe ? AppColors.accent : AppColors.surfaceAlt,
+              foregroundColor:
+                  _videoBe ? AppColors.onAccent : AppColors.textSecondary,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            ),
+            onPressed: () => _videoAllit(!_videoBe),
+            child: Text(_videoBe ? "📺 Videó: BE" : "📺 Videó (K)",
+                style: const TextStyle(fontSize: 11.5)),
+          ),
         ),
       ),
       // JEGYZET (J): megjegyzés a mostani pillanathoz.
