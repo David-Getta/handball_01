@@ -858,7 +858,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 // (a típus első sora a teljes listán más jelenet lehet).
                 startS: (elso["s"] as num?)?.toDouble(),
                 initialScene: elso["tipus"] as String?,
-                initialTeam: elso["side"] as String?))),
+                initialTeam: elso["side"] as String?,
+                // A lista a videózandó jelenetekre szűkítve nyílik.
+                csakVideozando: true))),
         style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             visualDensity: VisualDensity.compact),

@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.162 óta)
 
+- **3D pálya: "Videózandó" szűrő a jelenet-listán** (új, böngésző/VR és
+  app): egy hosszú meccs jelenet-listája száznál több sor — a fejléc
+  "Videózandó (N)" szűrője a kulcs-jelenetekre szűkít (a gólba került
+  eladások, a kapott lerohanás-gólok, a gólt érő szabad lövők, a
+  legnagyobb döntés-hibák: a nyomtatott jelentés és a kezdőlap
+  válogatása). Bekapcsolva az N / P billentyű és a VR-kontroller is ezeken
+  lép; a kezdőlap "3D-ben" gombja és a jelentés "3D ↗" linkje bekapcsolva
+  nyit (link-paraméter: kulcs=1).
+
 - **3D pálya: gyors első megnyitás** (javítás): a böngészős 3D oldal és
   a védekezés-panel feltörés/megállítás kulcsai eddig MINDKÉT csapat
   teljes felderítését újra lefuttatták az első megnyitáskor — egy teljes

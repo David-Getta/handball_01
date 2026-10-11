@@ -1074,7 +1074,7 @@ def _scenes_section(match, base_url: str | None = None) -> str:
     `base_url`: a motor címe (pl. "http://127.0.0.1:8000/"), ha ismert —
     ekkor minden sor végén "3D ↗" link nyitja a böngészős 3D pályát a
     jelenet előtt REPORT_SCENE_LEAD_S mp-cel, a hibázó csapatra szűrve,
-    nyitott jelenet-listával. A jelentés önálló fájl (nem a motor
+    nyitott, a videózandó jelenetekre szűkített jelenet-listával. A jelentés önálló fájl (nem a motor
     szolgálja ki), ezért a link csak abszolút címmel él; cím nélkül a
     szakasz link nélkül, papírra ugyanúgy készül.
 
@@ -1100,7 +1100,7 @@ def _scenes_section(match, base_url: str | None = None) -> str:
         oldal = "hazai" if r.get("side") == "home" else "vendeg"
         cim = (f"{base_url.rstrip('/')}/matches/"
                f"{escape(match.meta.match_id)}/view3d?t={t:.1f}"
-               f"&lista=1&jelenet={oldal}")
+               f"&lista=1&kulcs=1&jelenet={oldal}")
         return (f' <a href="{cim}" style="font-size:11px;'
                 'text-decoration:none">3D ↗</a>')
 

@@ -1469,3 +1469,47 @@ def test_a_3d_oldal_rajz_csoportjai_felszabaditjak_a_geometriat():
     assert not re.search(r"while \(\w+\.children\.length\) \w+\.remove", oldal)
     for cs in ("golCsoport", "kontraCsoport", "kapottCsoport", "hetesCsoport"):
         assert f"if ({cs}.userData.kesz && {cs}.userData.d === d) return {cs}.userData.szoveg;" in oldal, cs
+
+
+
+def test_a_jelenet_lista_videozando_szuroje():
+    """A tömör adat "key_scenes" párjai a kulcs-jelenetek (court3d.
+    key_scene_rows) — és mind megvan a jelenet-lista sorai közt (ugyanaz a
+    típus és idő); az oldalon a "Videózandó" szűrő a listára, az N/P-re és
+    a linkre is hat; az appban a szűrő-chip, a /key-scenes és a kezdőlap
+    bekapcsolt nyitása."""
+    from pathlib import Path
+
+    from handball.pipeline.court3d import (conceded_goal_moments,
+                                           decision_moments,
+                                           fast_break_moments,
+                                           free_shot_moments, key_scene_rows,
+                                           scene_rows, turnover_moments)
+    from handball.pipeline.view3d_html import _compact_data, view3d_html
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=180, fps=25.0, seed=5,
+                              shots_per_min=8)
+    adat = _compact_data(m, None, {"home": [], "away": []},
+                         {"home": [], "away": []})
+    ks = key_scene_rows(m)["rows"]
+    assert adat["key_scenes"] == [[r["s"], r["tipus"]] for r in ks] and ks
+    osszes = {(r["tipus"], r["s"]) for r in scene_rows(
+        decision_moments(m)["moments"], free_shot_moments(m)["moments"],
+        turnover_moments(m)["moments"], m.meta.home_team, m.meta.away_team,
+        fast_break_moments(m)["moments"], conceded_goal_moments(m)["moments"])}
+    assert {(t, s) for s, t in adat["key_scenes"]} <= osszes
+    oldal = view3d_html(_meccs())
+    for kell in ("const KULCS = new Set(", "function kulcsSzur(sorok)",
+                 'kc.id = "jelenetKulcs"', "kulcsSzur(jelenetSorok(",
+                 'q.set("kulcs", "1")', 'v("kulcs") === "1"'):
+        assert kell in oldal, kell
+    assert oldal.count("kulcsSzur(jelenetSorok(") == 2  # a lista és az N/P
+    gyoker = Path(__file__).resolve().parent.parent.parent / "client" / "lib" / "ui"
+    palya = (gyoker / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ("final bool csakVideozando;", "fetchKeyScenes(id)",
+                 "_kulcsSzur(sceneRows(", '"Videózandó (${_kulcsJelenetek.length})"'):
+        assert kell in palya, kell
+    assert palya.count("_kulcsSzur(sceneRows(") == 2  # a lista és az N/P
+    assert "csakVideozando: true" in (gyoker / "dashboard_screen.dart").read_text(
+        encoding="utf-8")

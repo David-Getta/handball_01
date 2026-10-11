@@ -2024,10 +2024,10 @@ def test_a_videozando_jelenetek_3d_linkje_a_motor_cimevel():
     # A gólba került labdavesztés a hazaié, a 0. másodpercben: a lejátszó
     # 0,0-nál indul (nem negatív), a hazai hibáira szűrve.
     assert (f'<a href="http://127.0.0.1:8000/matches/{m.meta.match_id}/view3d'
-            '?t=0.0&lista=1&jelenet=hazai"') in van
+            '?t=0.0&lista=1&kulcs=1&jelenet=hazai"') in van
     assert van.count("3D ↗") == van.count("<li>")
     html = match_report_html(m, {}, [], None, base_url="http://127.0.0.1:8000")
-    assert "/view3d?t=0.0&lista=1&jelenet=hazai" in html
+    assert "/view3d?t=0.0&lista=1&kulcs=1&jelenet=hazai" in html
 
 
 def test_a_jelentes_export_a_keres_cimevel_linkel(tmp_path, monkeypatch):
@@ -2048,4 +2048,4 @@ def test_a_jelentes_export_a_keres_cimevel_linkel(tmp_path, monkeypatch):
         f"/matches/{m.meta.match_id}/report/export")
     assert r.status_code == 200
     assert (f'href="http://motor:8123/matches/{m.meta.match_id}/view3d?t=0.0'
-            '&lista=1&jelenet=hazai"') in r.text
+            '&lista=1&kulcs=1&jelenet=hazai"') in r.text

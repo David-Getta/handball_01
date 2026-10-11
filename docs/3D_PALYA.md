@@ -183,6 +183,13 @@ gomb a pályát az első jeleneten nyitja, a hibázó csapatra szűrve. Ugyanez
 a válogatás a nyomtatott jelentés "Videózandó jelenetek" szakasza
 (`court3d.key_scene_rows`, végpont: `/matches/{id}/key-scenes`).
 
+A lista fejlécének **Videózandó** szűrője a sorokat a kulcs-jelenetekre
+szűkíti (a gólba került eladások, a kapott lerohanás-gólok, a gólt érő
+szabad lövők, a legnagyobb döntés-hibák — a nyomtatott jelentés és a
+kezdőlap kártyájának válogatása); bekapcsolva az N / P és a
+VR-kontroller is ezeken lép. A kezdőlap "3D-ben" gombja és a jelentés
+"3D ↗" linkje bekapcsolva nyit (link-paraméter: `kulcs=1`).
+
 A **Kinek a hibái** választó a hiba-lapozókat egy csapatra szűri: mind
 egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott lövőt,
 az elvesztett labdát, a kapott lerohanást, a kapott gólt) — a saját csapatra szűrve
@@ -204,7 +211,7 @@ küldesz a stábnak, nem egy meccset. A paraméterek:
 /matches/<meccs>/view3d?t=349&nezet=madar
    &kamera=h7 | &tv=1
    &hoter=mind&loves=hazai&passz=vendeg&fal=6-0&falOldal=jobb
-   &nyom=1&passzsav=1&falres=1&jelenet=vendeg&lista=1&seb=2
+   &nyom=1&passzsav=1&falres=1&jelenet=vendeg&lista=1&kulcs=1&seb=2
 ```
 
 ## VR-headset

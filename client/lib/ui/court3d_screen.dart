@@ -49,9 +49,13 @@ class Court3DScreen extends StatefulWidget {
   /// lejátszó a típus ELSŐ jelenetén.
   final String? initialScene;
   final String? initialTeam;
+
+  /// A kezdőlap "Videózandó: N jelenet · 3D-ben" gombjától jövünk: a
+  /// jelenet-lista "Videózandó" szűrője bekapcsolva nyílik.
+  final bool csakVideozando;
   const Court3DScreen(
       {super.key, this.matchId, this.startS, this.lovesTerkep,
-      this.initialScene, this.initialTeam});
+      this.initialScene, this.initialTeam, this.csakVideozando = false});
 
   @override
   State<Court3DScreen> createState() => _Court3DScreenState();
@@ -192,6 +196,11 @@ class _Court3DScreenState extends State<Court3DScreen>
   // JELENET-LISTA: a három lapozó jelenetei egy időrendi listában (a bal
   // oldalon) — koppintás egy sorra: odaugrik.
   bool _jelenetListaNyitva = false;
+  // VIDEÓZANDÓ: a kulcs-jelenetek ("típus@mp" — a /key-scenes sorai: a
+  // jelentés és a kezdőlap válogatása); bekapcsolva a lista és az N / P
+  // csak ezeken.
+  Set<String> _kulcsJelenetek = const {};
+  bool _csakKulcs = false;
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
@@ -245,6 +254,12 @@ class _Court3DScreenState extends State<Court3DScreen>
         _hetesek = buildDemoSevens(_match!);
         _kontrak = buildDemoFastBreaks(_match!);
         _kapottak = buildDemoConcededGoals(_match!);
+        // A demó videózandó jelenetei: a gólos sorok (a válogatás magja).
+        _kulcsJelenetek = {
+          for (final r in sceneRows(_dontesek, _szabadok, _eladasok,
+              _match!.meta.homeTeam, _match!.meta.awayTeam, _kontrak, _kapottak))
+            if (r.gol && r.tipus != "kg") "${r.tipus}@${r.s}"
+        };
         _falSorok = buildDemoDefenceTimeline(_match!);
         _demo = true;
         _loading = false;
@@ -343,6 +358,16 @@ class _Court3DScreenState extends State<Court3DScreen>
                 const [])
             .cast<Map<String, dynamic>>();
       } catch (_) {}
+      // A videózandó jelenetek — hibája nem viheti el a nézetet.
+      Set<String> kulcsok = const {};
+      try {
+        kulcsok = {
+          for (final r in (((await _api.fetchKeyScenes(id))["rows"] as List?) ??
+                  const [])
+              .cast<Map>())
+            "${r["tipus"]}@${((r["s"] as num?) ?? 0).toDouble()}"
+        };
+      } catch (_) {}
       // A kapott gólok — hibája nem viheti el a nézetet.
       List<Map<String, dynamic>> kapottak = const [];
       try {
@@ -422,6 +447,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _hetesek = hetesek;
         _kontrak = kontrak;
         _kapottak = kapottak;
+        _kulcsJelenetek = kulcsok;
         _lovesValasztott = null;
         if (widget.lovesTerkep != null) _lovesTerkep = widget.lovesTerkep!;
         _meres = null;
@@ -833,7 +859,13 @@ class _Court3DScreenState extends State<Court3DScreen>
       _jelenetCsapat = widget.initialTeam!;
     }
     if (widget.initialScene != null) _jelenetListaNyitva = true;
+    if (widget.csakVideozando && _kulcsJelenetek.isNotEmpty) _csakKulcs = true;
   }
+
+  /// A jelenet-lista sorai a "Videózandó" szűrővel (ha be van kapcsolva).
+  List<SceneRow> _kulcsSzur(List<SceneRow> sorok) => _csakKulcs
+      ? [for (final r in sorok) if (_kulcsJelenetek.contains("${r.tipus}@${r.s}")) r]
+      : sorok;
 
   /// Az Edzésterv felől érkezve: ugrás a kért típus ELSŐ jelenetére (a
   /// szűrt lista sorain); ha nincs ilyen, a lejátszó az elején marad.
@@ -864,8 +896,8 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// Jelenet-lépés (N / P): a jelenet-lista sorain, a "Kinek a hibái"
   /// szűrő szerint, a közös lapozCel-lel — az utoljára lépett jelenettől.
   void _jelenetLep(Match m, int irany) {
-    final sorok = sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
-        m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz);
+    final sorok = _kulcsSzur(sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
+        m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz));
     if (sorok.isEmpty || m.frames.isEmpty) return;
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
     final cel = lapozCel([for (final r in sorok) r.s], _mostT(m) / fps,
@@ -900,8 +932,8 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// A jelenet-lista panel: a szűrt jelenetek időrendben, a lapozók
   /// színével; az épp aktív (a legkésőbb indult) sor kiemelve.
   Widget _jelenetListaPanel(Match m) {
-    final sorok = sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
-        m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz);
+    final sorok = _kulcsSzur(sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
+        m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz));
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
     final most = m.frames.isEmpty ? 0.0 : _mostT(m) / fps;
     var aktiv = -1;
@@ -923,6 +955,29 @@ class _Court3DScreenState extends State<Court3DScreen>
         Expanded(
             child: Text("Jelenetek · ${sorok.length}",
                 style: AppText.label.copyWith(fontSize: 11.5))),
+        // "Videózandó": a kulcs-jelenetekre szűkít (a jelentés és a
+        // kezdőlap válogatása); a lista mellett az N / P is ezeken lép.
+        Tooltip(
+          message: "Csak a videózandó jelenetek (gólba került eladások, "
+              "kapott lerohanás-gólok, gólt érő szabad lövők, a legnagyobb "
+              "döntés-hibák)",
+          child: FilterChip(
+            label: Text("Videózandó (${_kulcsJelenetek.length})",
+                style: const TextStyle(fontSize: 11)),
+            selected: _csakKulcs,
+            visualDensity: VisualDensity.compact,
+            onSelected: _kulcsJelenetek.isEmpty
+                ? null
+                : (v) {
+                    setState(() {
+                      _csakKulcs = v;
+                      _jelenetUtolso = null;
+                    });
+                    _focus.requestFocus();
+                  },
+          ),
+        ),
+        const SizedBox(width: 4),
         OutlinedButton.icon(
           onPressed: _demo || _matchId == null
               ? null

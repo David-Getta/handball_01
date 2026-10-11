@@ -422,6 +422,33 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("videózandó szűrő: a lista a gólos jelenetekre szűkül",
+      (tester) async {
+    await _nyit(tester);
+    final gomb = find.text("Jelenet-lista");
+    await tester.ensureVisible(gomb);
+    await tester.pump();
+    await tester.tap(gomb);
+    await tester.pump(const Duration(milliseconds: 200));
+    final teljes = find.textContaining("Jelenetek · ");
+    final elotte = (tester.widget<Text>(teljes).data ?? "");
+    // A chip a videózandó jelenetek számát mutatja (a demóban a gólos
+    // sorok: kapott gól nélkül).
+    final chipSzoveg = find.textContaining("Videózandó (");
+    expect(chipSzoveg, findsOneWidget);
+    final felirat = tester.widget<Text>(chipSzoveg).data ?? "";
+    final n = int.parse(RegExp(r"\((\d+)\)").firstMatch(felirat)!.group(1)!);
+    expect(n, greaterThan(0));
+    await tester.tap(find.ancestor(of: chipSzoveg, matching: find.byType(FilterChip)));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text("Jelenetek · $n"), findsOneWidget);
+    expect(elotte, isNot("Jelenetek · $n"));
+    // A döntés-hibák (nem gólos sorok) kimaradnak.
+    expect(find.textContaining("jobb opció is volt"), findsNothing);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("N / P billentyű: jelenet-lépés a lista sorain", (tester) async {
     await _nyit(tester);
     // N: az első jelenet (a demó első döntése) — a felirat megjelenik.

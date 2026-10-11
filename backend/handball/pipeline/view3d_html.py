@@ -274,6 +274,15 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
             for h in seven_meter_moments(match)["moments"]]
     except Exception:
         hetesek = []
+    # Videózandó jelenetek: [mp, típus] párok (court3d.key_scene_rows — a
+    # jelentés és a kezdőlap válogatása) — a jelenet-lista "Videózandó"
+    # szűrője ezekre szűkít.
+    try:
+        from .court3d import key_scene_rows
+        kulcs_jelenetek = [[r["s"], r["tipus"]]
+                           for r in key_scene_rows(match)["rows"]]
+    except Exception:
+        kulcs_jelenetek = []
     # Feltörés: hol és mivel törhető fel a két csapat védekezése (a
     # felderítés rangsorának teteje) — a védekezés-panel a fal mellé írja.
     try:
@@ -312,6 +321,7 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         "fast_breaks": kontrak,
         "conceded_goals": kapottak,
         "sevens": hetesek,
+        "key_scenes": kulcs_jelenetek,
         "turnover_pressure": eladas_sugar,
     }
 
@@ -657,6 +667,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #jelenetLista .jfej{display:flex;gap:8px;align-items:center;padding:2px 6px 8px;border-bottom:1px solid #2b4a5e;margin-bottom:4px}
  #jelenetLista .jfej .n{flex:1;opacity:.85}
  #jelenetLista .jfej button{padding:3px 9px;font-size:11.5px}
+ #jelenetLista .jfej .kulcs{font-size:11.5px;white-space:nowrap;opacity:.9}
  #klipInfo{font-size:11px;opacity:.9;max-width:170px;text-align:right}
  #klipLetolt{color:#2fd9c4;font-size:11.5px}
  #jelenetLista .jsor{padding:4px 6px;border-radius:6px;cursor:pointer;display:flex;gap:7px;align-items:center}
@@ -1693,6 +1704,7 @@ function linkEpit(){
   if (falresKapcsolo.checked) q.set("falres", "1");
   if (jelenetCsapat.value !== "mind") q.set("jelenet", jelenetCsapat.value);
   if (jelenetLista.style.display === "block") q.set("lista", "1");
+  if (csakKulcs) q.set("kulcs", "1");
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -1716,6 +1728,7 @@ function linkAlkalmaz(){
   if (v("jelenet") === "hazai" || v("jelenet") === "vendeg"){
     jelenetCsapat.value = v("jelenet"); jelenetInfok();
   }
+  if (v("kulcs") === "1" && KULCS.size) csakKulcs = true;
   if (v("lista") === "1") jelenetListaNyit(true);
   if (v("seb")){ sebessegValaszto.value = v("seb"); sebessegValaszto.onchange(); }
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
@@ -2275,9 +2288,18 @@ function jelenetUgras(r){
   ido = Math.max(0, r.s - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
   csuszka.value = ido;
 }
+// "Videózandó" szűrő: a lista (és az N/P, a VR-kontroller lépése) csak a
+// kulcs-jeleneteken — a jelentés "Videózandó jelenetek" és a kezdőlap
+// kártyájának válogatásán (court3d.key_scene_rows). A sorok a típus és az
+// idő szerint egyeznek (ugyanazok a kerekített számok).
+const KULCS = new Set((ADAT.key_scenes || []).map(k => k[1] + "@" + k[0]));
+let csakKulcs = false;
+function kulcsSzur(sorok){
+  return csakKulcs ? sorok.filter(r => KULCS.has(r.tipus + "@" + r.s)) : sorok;
+}
 function jelenetListaEpit(){
-  jelenetSorokAkt = jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK),
-    ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK));
+  jelenetSorokAkt = kulcsSzur(jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK),
+    ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK)));
   jelenetAktiv = -2;
   jelenetLista.textContent = "";
   jelenetSorokElem.textContent = "";
@@ -2292,7 +2314,13 @@ function jelenetListaEpit(){
   const link = document.createElement("a"); link.id = "klipLetolt"; link.textContent = "Letöltés";
   link.href = "/matches/" + encodeURIComponent(ADAT.match_id || "") + "/clips/download";
   link.style.display = "none";
-  fej.append(n, g, info, link);
+  const kl = document.createElement("label"); kl.className = "kulcs";
+  kl.title = "Csak a videózandó jelenetek (a jelentés és a kezdőlap válogatása: gólba került eladások, kapott lerohanás-gólok, gólt érő szabad lövők, a legnagyobb döntés-hibák)";
+  const kc = document.createElement("input"); kc.type = "checkbox"; kc.id = "jelenetKulcs";
+  kc.checked = csakKulcs; kc.disabled = !KULCS.size;
+  kc.onchange = () => { csakKulcs = kc.checked; vrJelenetUtolso = null; jelenetListaEpit(); };
+  kl.append(kc, document.createTextNode(" Videózandó (" + KULCS.size + ")"));
+  fej.append(n, kl, g, info, link);
   jelenetLista.append(fej, jelenetSorokElem);
   klipFrissit();
   if (!jelenetSorokAkt.length){ jelenetSorokElem.textContent = "Nincs ilyen jelenet."; return; }
@@ -2612,7 +2640,7 @@ function vrGombEl(kulcs, index, lenyomva){
 // A jelenet-lépés KÖZÖS a kontroller-gombokkal és az N/P billentyűkkel.
 let vrJelenetUtolso = null;
 function jelenetLep(irany){
-  const sorok = jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK), ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK));
+  const sorok = kulcsSzur(jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK), ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK)));
   if (!sorok.length) return null;
   const cel = lapozCel(sorok.map(r => r.s), ido, vrJelenetUtolso, irany);
   if (cel === null) return null;
