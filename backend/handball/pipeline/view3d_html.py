@@ -908,7 +908,7 @@ Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmad
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
-Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi (a csapat linkje: kovet=1)<br>
+Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
 Videó (K) — a valódi felvétel a 3D mellett, a lejátszással szinkronban: kép a képben és kivetítő a túlsó oldalvonal fölött (VR-ben is)<br>
 Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér pötty, ✕ törli), a vetítésben, a jelentésben és a Klipek jegyzet-csomagjában<br>
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>

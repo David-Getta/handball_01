@@ -305,6 +305,30 @@ hüvelykujj-kar lenyomása — vetítés (a lista sorai egymás után). A WebXR
 biztonságos környezetet kér — a localhost az; Quest-féle headsetről
 USB-kábellel és `adb reverse`-szel érhető el az app gépe.
 
+### Közös nézés több headsettel
+
+A követő headsetnek el kell érnie a vezető gépén futó motort, és a
+VR-mód (WebXR) csak biztonságos címen indul — a `localhost` ilyen. Két
+út van:
+
+1. **USB-n (néhány headsetre, ajánlott):** minden headset USB-kábellel
+   a laptopra, és `adb reverse tcp:8000 tcp:8000` (ha a motor tartalék
+   porton fut, azzal a számmal). A headset böngészőjében a csapat
+   linkje (`http://localhost:8000/matches/…/view3d?kovet=1`) így a
+   laptop motorját éri el, és a VR-mód indul. USB-elosztóval több
+   headset is mehet egyszerre.
+2. **A klub hálózatán (sok headsetre):** a motort kifejezetten a
+   hálózat felé is meg kell nyitni — `HANDBALL_HOST=0.0.0.0` a
+   `scripts/serve.py` indításakor (az app motor-indítója szándékosan
+   csak a saját gépet szolgálja ki) —, a csapat linkjében a `localhost`
+   helyére a laptop hálózati címe kerül, és a headset böngészőjében
+   ezt a címet biztonságosnak kell jelölni (Chromium-alapú böngészőben:
+   `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, a
+   laptop `http://<cím>:8000` címével), különben a VR-mód nem indul.
+   **Figyelem:** a motor végpontjai így a hálózatról belépés nélkül
+   elérhetők (meccsek, jegyzetek, törlés is) — csak megbízható, zárt
+   hálózaton nyisd meg, és az edzés után indítsd újra a szokásos módon.
+
 ## Hol él a kód
 
 - Backend: `backend/handball/pipeline/court3d.py` (lövés-geometria,

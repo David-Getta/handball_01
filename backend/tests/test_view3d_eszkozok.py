@@ -2026,6 +2026,16 @@ def test_a_3d_oldal_kozos_nezese():
                  'kzCim() + "?kid=" + KZ_KID', "kzKovetok = a.followers;"):
         assert kell in oldal, kell
     assert "__KZ_" not in oldal
+    # Több headsethez: a súgó az útmutatóra mutat, az útmutató a két utat
+    # (USB, hálózat) és a hálózati megnyitás kockázatát is megmondja.
+    assert "adb reverse — vagy a klub hálózatán" in oldal
+    from pathlib import Path as _P
+    utmutato = (_P(__file__).resolve().parents[2] / "docs"
+                / "3D_PALYA.md").read_text(encoding="utf-8")
+    for kell in ("### Közös nézés több headsettel", "adb reverse tcp:8000 tcp:8000",
+                 "HANDBALL_HOST=0.0.0.0", "unsafely-treat-insecure-origin-as-secure",
+                 "belépés nélkül"):
+        assert kell in utmutato, kell
     # Az app is vezethet: ugyanaz a végpont, ugyanaz a küldési ütem.
     import re
     gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"

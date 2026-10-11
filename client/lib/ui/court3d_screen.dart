@@ -2123,7 +2123,9 @@ class _Court3DScreenState extends State<Court3DScreen>
       Clipboard.setData(ClipboardData(text: link)).catchError((_) {});
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("Vezetsz — a csapat linkje a vágólapon: $link "
-              "(a headsetek böngészőjében ez nyílik, Követem-mel)")));
+              "(a headsetek böngészőjében ez nyílik, Követem-mel; a headset "
+              "USB-n — adb reverse — vagy a klub hálózatán éri el a "
+              "motort, lásd a 3D útmutatót)")));
     } else {
       _api.deleteShared3d(id).catchError((_) {});
     }

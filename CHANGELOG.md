@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.164 óta)
 
+- **Közös nézés több headsettel: útmutató** (dokumentáció, súgó): hogyan
+  éri el a követő headset a vezető gépén futó motort — USB-n (`adb
+  reverse`, néhány headsetre), vagy a klub hálózatán (kifejezett
+  megnyitással, a VR-módhoz a cím biztonságosnak jelölésével, és a
+  kockázat kimondásával: a végpontok a hálózatról belépés nélkül
+  elérhetők). A motor alap-kötése nem változik.
+
 - **3D jelenet-lista: "Jegyzeteim" szűrő** (új, böngésző/VR, app,
   jelentés): csak az edző jegyzetei a listában — a Vetítés pontosan a
   megjelölt pillanatokat játssza a rajzokkal: a csapat-megbeszélés
