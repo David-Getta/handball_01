@@ -2045,6 +2045,46 @@ def test_a_kocka_olvaso_kozeli_kockara_nem_teker(tmp_path):
     cap.release()
 
 
+def test_a_jegyzetek_alatt_a_felvetel_kockaja(tmp_path, monkeypatch):
+    """Ha a forrás-videó elérhető, a jegyzet alatt a pillanatának kockája
+    (rajzos jegyzetnél az ábra mellett, egy sorban); a plafon fölötti
+    jegyzetek kép nélkül; videó nélkül nincs kép."""
+    import cv2
+    import numpy as np
+
+    from handball.pipeline import report_html as rh
+
+    m = simulate_ground_truth(duration_s=30, fps=25.0, seed=5,
+                              shots_per_min=8)
+    jegyzetek = [
+        {"id": "a", "frame": m.frames[10].t, "text": "Zárás",
+         "rajz": "20,13.1,28.4,16.8,0"},
+        {"id": "b", "frame": m.frames[20].t, "text": "Csak szöveg"},
+    ]
+    ures = match_report_html(m, {}, [], None, notes=jegyzetek)
+    jsz = ures.split(">Edzői jegyzetek</h2>", 1)[1].split("</ul>", 1)[0]
+    assert "data:image/jpeg" not in jsz
+    ut = tmp_path / "j.mp4"
+    w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                        (640, 360))
+    for i in range(m.frames[-1].t + 5):
+        w.write(np.full((360, 640, 3), (i * 3) % 250, np.uint8))
+    w.release()
+    m.meta.video_path = str(ut)
+    html = match_report_html(m, {}, [], None, notes=jegyzetek)
+    jsz = html.split(">Edzői jegyzetek</h2>", 1)[1].split("</ul>", 1)[0]
+    assert jsz.count("data:image/jpeg;base64,") == 2
+    assert jsz.count('<li style="break-inside:avoid">') == 2
+    # A rajzos jegyzet kockája és ábrája egy sorban.
+    zaras = jsz[jsz.index("Zárás"):jsz.index("Csak szöveg")]
+    assert "display:flex" in zaras and 'class="jegyzet-abra"' in zaras
+    assert zaras.index("data:image/jpeg") < zaras.index('class="jegyzet-abra"')
+    monkeypatch.setattr(rh, "REPORT_NOTE_FRAMES_MAX", 1)
+    html = match_report_html(m, {}, [], None, notes=jegyzetek)
+    jsz = html.split(">Edzői jegyzetek</h2>", 1)[1].split("</ul>", 1)[0]
+    assert jsz.count("data:image/jpeg;base64,") == 1
+
+
 def test_jelenet_nelkul_nincs_videozando_szakasz():
     """Jelenet nélküli (játékos- és labda-mentes) meccsen a szakasz
     elmarad — nem üres címsor."""

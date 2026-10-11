@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **Videó-kocka az edzői jegyzeteknél is** (új, jelentés): ha a
+  forrás-videó elérhető, a jelentés "Edzői jegyzetek" sorai alatt a
+  jegyzet pillanatának kockája — rajzos jegyzetnél a felülnézeti ábra
+  mellett, egy sorban: amit a videón láttál, és amit rárajzoltál (az
+  első 20 jegyzetnél).
+
 - **A 3D Videó-ablaka lejátszás közben nem teker** (javítás, motor): a
   kocka-végpont az egymás utáni kockákhoz továbbolvas a videóban (2 mp-en
   belül előre), és csak ugrásnál teker — a tekerés a megelőző

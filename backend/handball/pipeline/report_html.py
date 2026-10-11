@@ -957,6 +957,9 @@ def _shot_positions(match, events) -> list[tuple[float, float, str, bool]]:
 # A jelentés jegyzet-ábráinak plafonja: ennél több rajzos jegyzetnél a
 # többi szövegesen marad (a jelentés kiosztható, nem album).
 REPORT_NOTE_DIAGRAMS_MAX = 12
+# A jegyzetek videó-kockáinak plafonja (időrendben az elsők): a jelentés
+# kiosztható, nem album — és kockánként ~15–25 kB.
+REPORT_NOTE_FRAMES_MAX = 20
 # A nyíl-színek nyomtatásra: a 3D sárgája a világos lapon nem látszana —
 # ugyanaz a három szerep (labda/passz, futás, védő), sötétebb árnyalatban.
 _NOTE_ARROW_PRINT = ("#c99a06", "#2f6fb2", "#c0392b")
@@ -1624,16 +1627,48 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         except Exception:
             abrak = {}
 
+        # A jegyzet pillanatának kockája a forrás-videóból (ha ezen a gépen
+        # elérhető; a videózandó jelenetek képeivel közös olvasó) — a
+        # plafonig, időrendben.
+        jkepek: dict = {}
+        kepesek = {id(n) for n in items[:REPORT_NOTE_FRAMES_MAX]}
+        try:
+            from .video_frames import frames_jpeg
+            jkepek = frames_jpeg(
+                match, [int(n.get("frame", 0))
+                        for n in items[:REPORT_NOTE_FRAMES_MAX]])
+        except Exception:
+            jkepek = {}
+
         def _abra(n):
             svg = abrak.get(id(n))
             return (f'<div class="jegyzet-abra" style="margin:4px 0 8px">'
                     f"{svg}</div>") if svg else ""
 
-        lis = "".join(
-            f"<li><b>{_fmt_clock(n.get('frame', 0) / fps)}</b> — "
-            f"{escape(str(n.get('text', '')))}"
-            f"{' ✎' if n.get('rajz') else ''}{_jegyzet_link(n)}{_abra(n)}</li>"
-            for n in items)
+        def _kep(n):
+            b = (jkepek.get(int(n.get("frame", 0)))
+                 if id(n) in kepesek else None)
+            if not b:
+                return ""
+            return ('<img alt="" src="data:image/jpeg;base64,'
+                    + base64.b64encode(b).decode("ascii")
+                    + '" style="width:240px;max-width:100%;border-radius:4px;'
+                    'margin:4px 0 8px">')
+
+        def _jegyzet_sor(n):
+            # Rajzos jegyzetnél a kocka az ábra MELLETT (a videó és a rajz
+            # együtt); képes sornál a felirat és a kép egy lapon marad.
+            k, a = _kep(n), _abra(n)
+            alja = (('<div style="display:flex;flex-wrap:wrap;gap:10px;'
+                     f'align-items:flex-start">{k}{a}</div>') if k and a
+                    else (f"<br>{k}" if k else a))
+            nyit = '<li style="break-inside:avoid">' if k else "<li>"
+            return (f"{nyit}<b>{_fmt_clock(n.get('frame', 0) / fps)}</b> — "
+                    f"{escape(str(n.get('text', '')))}"
+                    f"{' ✎' if n.get('rajz') else ''}{_jegyzet_link(n)}"
+                    f"{alja}</li>")
+
+        lis = "".join(_jegyzet_sor(n) for n in items)
         notes_html = "<h2>Edzői jegyzetek</h2><ul>" + lis + "</ul>"
 
     # Automatikus edzői összefoglaló: mondatokban, a jelentés elejére.
