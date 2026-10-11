@@ -46,6 +46,11 @@ CLIP_TEAM_IN_NAME_TYPES = frozenset({
     "breakthrough", "steal", "costly_turnover", "bad_decision",
     "fast_break", "conceded_fast_break", "key_scene"})
 
+# A rajzolt jegyzet-klip: a nyilak a jegyzet pillanata ELŐTT ennyi
+# másodperccel jelennek meg (mint a 3D jelenet-ugrás előfutása), és a klip
+# végéig maradnak.
+NOTE_DRAWING_LEAD_S = 1.5
+
 _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
             "seven_meter": "hetmeteres", "timeout": "idokeres",
             "substitution": "csere", "note": "jegyzet",
@@ -82,6 +87,57 @@ class ClipResult:
     empty: list = field(default_factory=list)
     # Mely mezszámokra szűkítettünk (üres lista = az egész csapatra).
     jerseys: list = field(default_factory=list)
+
+
+def _draw_arrows_on_frame(img, nyilak: list, parok: list,
+                          pan_keyframes, t_proc: float) -> int:
+    """A jegyzet nyilai a videó kockájára (helyben): a pálya-méterből a
+    kalibrációval (H0 + a kamera-mozgás kulcs-kockája) pixelre vetítve —
+    szár sötét kontúrral és hegy, a 3D nyíl arányaival és színeivel. A
+    nyíl közepének térfelére szóló kalibráció rajzol (két térfél-
+    kalibrációnál a másik térfélen a homográfia erősen extrapolál); a
+    horizont mögé vagy a képen kívül eső nyíl kimarad.
+    Visszaadja, hány nyíl került a képre."""
+    import math
+
+    import cv2
+    import numpy as np
+
+    from .calib_overlay import court_to_pixels, keyframe_at
+    from .court3d import DRAWING_COLORS, arrow_head
+
+    magas, szeles = img.shape[:2]
+    g = keyframe_at(pan_keyframes, int(round(t_proc)))
+    rajzolt = 0
+    for (x1, y1, x2, y2, k) in nyilak:
+        kozep = (x1 + x2) / 2
+        par = next((p for p in parok
+                    if p[1] == "full"
+                    or (p[1] == "left" and kozep <= 22)
+                    or (p[1] == "right" and kozep >= 18)), None)
+        if par is None:
+            continue
+        hossz = math.hypot(x2 - x1, y2 - y1)
+        fej = min(0.9, hossz * 0.45)
+        ux, uy = (x2 - x1) / hossz, (y2 - y1) / hossz
+        bx, by = x2 - ux * fej, y2 - uy * fej
+        (ax, ay), (cx, cy) = arrow_head(x1, y1, x2, y2, fej, fej * 0.9)
+        pts = court_to_pixels(par[0], g, [(x1, y1), (bx, by), (ax, ay),
+                                          (cx, cy), (x2, y2)],
+                              szeles, magas, par[1])
+        if any(p is None for p in pts):
+            continue
+        p = [(int(round(px)), int(round(py))) for px, py in pts]
+        h = DRAWING_COLORS[k]
+        szin = (int(h[4:6], 16), int(h[2:4], 16), int(h[0:2], 16))  # BGR
+        vastag = max(3, szeles // 240)
+        cv2.line(img, p[0], p[1], (20, 20, 20), vastag + 3, cv2.LINE_AA)
+        cv2.line(img, p[0], p[1], szin, vastag, cv2.LINE_AA)
+        hegy = np.array([p[2], p[3], p[4]], dtype=np.int32)
+        cv2.polylines(img, [hegy], True, (20, 20, 20), 2, cv2.LINE_AA)
+        cv2.fillPoly(img, [hegy], szin, cv2.LINE_AA)
+        rajzolt += 1
+    return rajzolt
 
 
 def _clock(seconds: float) -> str:
@@ -367,13 +423,32 @@ def export_event_clips(match: Match, events: list, types: set[str],
         if progress_cb:
             progress_cb(i, len(picked), f"klipvágás: {name}")
 
+        # A rajzos jegyzet nyilai (a 3D pályán a jegyzettel mentve): a
+        # kalibrációval a videóra — a jegyzet pillanata előtt
+        # NOTE_DRAWING_LEAD_S-tól a klip végéig. Kalibráció nélkül nincs.
+        nyilak, parok = [], []
+        if _field(e, "rajz"):
+            from .calib_overlay import calib_pairs
+            from .court3d import decode_drawing
+            nyilak = decode_drawing(_field(e, "rajz"))
+            parok = calib_pairs(match) if nyilak else []
+        rajz_tol = center_idx - int(NOTE_DRAWING_LEAD_S * native_fps)
+
         writer = cv2.VideoWriter(str(dest), fourcc, native_fps, (W, H))
         cap.set(cv2.CAP_PROP_POS_FRAMES, clip_from)
         ok_frames = 0
-        for _ in range(clip_from, clip_to + 1):
+        for idx in range(clip_from, clip_to + 1):
             ok, img = cap.read()
             if not ok:
                 break
+            if nyilak and parok and idx >= rajz_tol:
+                try:
+                    t_proc = sz["t_from"] + (idx - sz["start_frame"]) / sz["stride"]
+                    _draw_arrows_on_frame(
+                        img, nyilak, parok,
+                        getattr(match.meta, "pan_keyframes", None), t_proc)
+                except Exception:
+                    pass  # a rajz hibája nem viheti el a klipet
             writer.write(img)
             ok_frames += 1
         writer.release()

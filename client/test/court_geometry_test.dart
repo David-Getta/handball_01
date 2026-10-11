@@ -9,8 +9,10 @@ void main() {
   test("rajz: dekódolás = a böngésző rajzDekodol-ja", () {
     // Ugyanaz az eset, mint a backend node-tesztjében
     // (test_a_rajz_dekodolasa_a_dart_tukorrel_egyezik).
+    // (Az üres mezős tagok is kimaradnak — a Python-teszt
+    // test_a_rajz_dekodolasa_es_a_nyilhegy_harom_tukorben ugyanez.)
     final ki = decodeDrawing(
-        "1,2,3,4;1,2,3,4,9;1,2,99,4,0;1,1,1.2,1,0;x,1,2,3,0;5,5,8,9,0;-3,-2.5,4,4,1");
+        "1,2,3,4;1,2,3,4,9;1,2,99,4,0;1,1,1.2,1,0;x,1,2,3,0;5,5,8,9,0;-3,-2.5,4,4,1;1,2,3,4,;1,,3,4,0");
     expect(ki, [
       (const Offset(5, 5), const Offset(8, 9), 0),
       (const Offset(-3, -2.5), const Offset(4, 4), 1),

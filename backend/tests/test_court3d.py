@@ -946,3 +946,69 @@ def test_a_3d_kulcsok_kesz_felderitesbol_ugyanazok():
     kesz = tactical_keys_by_team(m, reports={"home": scout_team(m, Team.HOME),
                                              "away": scout_team(m, Team.AWAY)})
     assert kesz == sajat
+
+
+
+def test_a_rajz_dekodolasa_es_a_nyilhegy_harom_tukorben():
+    """A rajz-dekódolás és a nyílhegy Pythonban (court3d) ugyanaz, mint a
+    böngészőben (RAJZ_JS — node) és az appban (court_geometry.dart — a
+    Dart-teszt ugyanezeket az eseteket ellenőrzi); a számok (színek,
+    plafon, legrövidebb nyíl) a JS-ével azonosak."""
+    import json
+    import re
+    import shutil
+    import subprocess
+
+    import pytest
+
+    from handball.pipeline.court3d import (DRAWING_COLORS, DRAWING_MAX,
+                                           DRAWING_MIN_M, arrow_head,
+                                           decode_drawing)
+    from handball.pipeline.view3d_html import RAJZ_JS
+
+    eset = ("1,2,3,4;1,2,3,4,9;1,2,99,4,0;1,1,1.2,1,0;x,1,2,3,0;"
+            "5,5,8,9,0;-3,-2.5,4,4,1;1,2,3,4,;1,,3,4,0")
+    vart = [(5, 5, 8, 9, 0), (-3, -2.5, 4, 4, 1)]
+    assert decode_drawing(eset) == vart
+    assert decode_drawing(None) == [] and decode_drawing("") == []
+    assert len(decode_drawing(";".join(f"0,0,5,{i},0" for i in range(40)))) \
+        == DRAWING_MAX
+    (a, b) = arrow_head(0, 0, 10, 0, 1, 0.8)
+    assert a == pytest.approx((9, 0.4)) and b == pytest.approx((9, -0.4))
+    js_szinek = re.search(r"const RAJZ_SZINEK = \[([^\]]*)\]", RAJZ_JS).group(1)
+    assert tuple(x.strip().strip('"') for x in js_szinek.split(",")) == \
+        DRAWING_COLORS
+    assert int(re.search(r"const RAJZ_MAX = (\d+);", RAJZ_JS).group(1)) == \
+        DRAWING_MAX
+    assert float(re.search(r"const RAJZ_MIN_M = ([0-9.]+);", RAJZ_JS).group(1)) \
+        == DRAWING_MIN_M
+    node = shutil.which("node")
+    if node:
+        r = subprocess.run(
+            [node, "-e", RAJZ_JS + "console.log(JSON.stringify(rajzDekodol("
+             + json.dumps(eset) + ")));"],
+            capture_output=True, text=True, timeout=60)
+        assert r.returncode == 0, r.stderr
+        assert [tuple(x) for x in json.loads(r.stdout)] == vart
+
+
+def test_a_jegyzet_abra_a_legkozelebbi_kocka_jatekosaival():
+    """A jegyzet-ábra a jegyzet kockájához legközelebbi kocka játékosait
+    (hely, csapat, mezszám) és labdáját adja, a nyilakkal; kocka nélkül
+    None."""
+    from handball.models.tracking import Match, MatchMeta
+    from handball.pipeline.court3d import note_diagram
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=5,
+                              shots_per_min=8)
+    f = m.frames[40]
+    d = note_diagram(m, f.t + 1, "20,13.1,28.4,16.8,0;bad")
+    assert d["t"] in (f.t, m.frames[41].t)
+    kocka = next(x for x in m.frames if x.t == d["t"])
+    assert len(d["players"]) == len(kocka.players)
+    assert {p["team"] for p in d["players"]} <= {"home", "away"}
+    assert d["arrows"] == [(20.0, 13.1, 28.4, 16.8, 0)]
+    assert note_diagram(Match(MatchMeta(match_id="ures", home_team="A",
+                                        away_team="B", fps=25.0), []),
+                        0) is None

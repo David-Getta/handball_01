@@ -199,6 +199,53 @@ def overlay_pixels(court_homography: list, g_at_t: Optional[list] = None,
     return ki
 
 
+def court_to_pixels(court_homography: list, g_at_t: Optional[list],
+                    pontok: list, width: Optional[int] = None,
+                    height: Optional[int] = None,
+                    region: str = "full") -> list:
+    """Pálya-pontok (méter) PIXELBEN az adott kockán — ugyanaz a vetítés,
+    mint az overlay_pixels-é a pályavonalakra (G⁻¹ · H0⁻¹, előjel-
+    normálással). A horizont mögötti, illetve a képtől messze eső pont
+    helyén None (a hívó ilyenkor nem rajzol).
+    Visszatérés: [(px, py) | None, …] a bemenet sorrendjében."""
+    h_inv = _sign_normalized(invert_3x3(court_homography),
+                             *_region_center(region))
+    g_inv = invert_3x3(g_at_t) if g_at_t is not None else None
+    if g_inv is not None:
+        g_inv = _sign_normalized(
+            g_inv, (width or 1920) / 2.0, (height or 1080) / 2.0)
+    ki = []
+    for (x, y) in pontok:
+        w = h_inv[2][0] * x + h_inv[2][1] * y + h_inv[2][2]
+        if w <= 1e-9:
+            ki.append(None)
+            continue
+        bx, by = apply_homography(h_inv, x, y)
+        if g_inv is not None:
+            bx, by = apply_homography(g_inv, bx, by)
+        if width and height and (bx < -width or bx > 2 * width
+                                 or by < -height or by > 2 * height):
+            ki.append(None)
+            continue
+        ki.append((bx, by))
+    return ki
+
+
+def calib_pairs(match) -> list:
+    """A meccs kalibráció-párjai [(H0, régió), …] — két térfél-
+    kalibrációnál mindkettő; régi mentésen (a calib_pairs mező előttről)
+    az egyetlen court_homography + calib_region páros. Üres lista, ha
+    nincs geometria (a hívó ebből tudja, hogy nem tud rajzolni)."""
+    parok = getattr(match.meta, "calib_pairs", None)
+    if parok:
+        return [(p[0], str(p[1]) if len(p) > 1 else "full")
+                for p in parok if p and p[0]]
+    h0 = getattr(match.meta, "court_homography", None)
+    if not h0:
+        return []
+    return [(h0, getattr(match.meta, "calib_region", None) or "full")]
+
+
 def draw_overlay(img, polylines: list, color=(60, 220, 255),
                  thickness: int = 2):
     """A pixel-polyline-ok rárajzolása a képre (helyben) — cv2."""

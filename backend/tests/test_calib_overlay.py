@@ -426,7 +426,10 @@ def test_mindket_vegpont_a_kalibralt_terfelet_hasznalja():
     # régi mentésen az egyetlen homográfiát) — MINDKÉT végpont ezt hívja.
     assert "def calib_pairs_of(match)" in forras
     assert forras.count("calib_pairs_of(match)") >= 2
-    assert 'getattr(match.meta, "calib_region", None) or "full"' in forras
+    assert "return calib_pairs(match)" in forras
+    overlay = (_Path(__file__).resolve().parent.parent / "handball"
+               / "pipeline" / "calib_overlay.py").read_text(encoding="utf-8")
+    assert 'getattr(match.meta, "calib_region", None) or "full"' in overlay
 
 
 def test_ket_kalibraciobol_a_jobban_illeszkedo_szamit():

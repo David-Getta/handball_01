@@ -83,14 +83,9 @@ def calib_pairs_of(match) -> list:
     Üres lista, ha nincs geometria — a hívó ebből tudja, hogy nem tud
     rajzolni/mérni.
     """
-    parok = getattr(match.meta, "calib_pairs", None)
-    if parok:
-        return [(p[0], str(p[1]) if len(p) > 1 else "full")
-                for p in parok if p and p[0]]
-    h0 = getattr(match.meta, "court_homography", None)
-    if not h0:
-        return []
-    return [(h0, getattr(match.meta, "calib_region", None) or "full")]
+    # A közös kalibráció-pár olvasó (a klip-rajz is ezt használja).
+    from ..pipeline.calib_overlay import calib_pairs
+    return calib_pairs(match)
 
 
 def train_metrics(eredmeny) -> dict:
@@ -4018,6 +4013,8 @@ def create_app():
                     "frame": frame,
                     "t_s": round(frame / fps, 1),
                     "text": n.get("text") or "",
+                    # A 3D pályán a jegyzettel mentett nyilak ("" = nincs).
+                    "rajz": n.get("rajz") or "",
                 })
         return {"notes": out}
 
@@ -4818,7 +4815,10 @@ def create_app():
             try:
                 ev += [{"t": int(n.get("frame", 0)), "type": "note",
                         "team": "home",
-                        "label": str(n.get("text", ""))[:40]}
+                        "label": str(n.get("text", ""))[:40],
+                        # A 3D pályán a jegyzettel mentett nyilak: a klip
+                        # a videóra rajzolja őket (kalibrációval).
+                        "rajz": n.get("rajz")}
                        for n in _load_notes(match_id)]
             except Exception:
                 pass

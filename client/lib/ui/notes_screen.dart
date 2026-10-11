@@ -284,7 +284,26 @@ class _NotesScreenState extends State<NotesScreen> {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("${n["text"]}",
+                    Text.rich(TextSpan(children: [
+                      TextSpan(text: "${n["text"]}"),
+                      // A 3D-ben rajzolt nyilakkal mentett jegyzet: a
+                      // "Megnézem 3D-ben" a pillanatára visz, ott a nyilak
+                      // maguktól megjelennek (a klipen a videóra rajzolva).
+                      if ((n["rajz"] as String? ?? "").isNotEmpty)
+                        const WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Tooltip(
+                            message: "A 3D-ben rajzolt nyilakkal — a 3D "
+                                "pályán és a jegyzet-klipen is látszanak",
+                            child: Padding(
+                              padding: EdgeInsets.only(left: 6),
+                              child: Text("✎",
+                                  style: TextStyle(
+                                      fontSize: 13, color: AppColors.gold)),
+                            ),
+                          ),
+                        ),
+                    ]),
                         style: AppText.label.copyWith(
                             fontSize: 13, color: AppColors.textPrimary)),
                     const SizedBox(height: 3),

@@ -606,6 +606,85 @@ SCENE_SAME_MOMENT_S = 0.05
 # sablonba írva) és az app (sceneReelTailS, őr-teszt) ugyanezt viszi.
 SCENE_REEL_TAIL_S = 3.5
 
+# A rajz-eszköz (nyilak a padlón) közös számai — a böngésző RAJZ_JS és az
+# app court_geometry.dart tükre (őr-teszt): a színek (sárga labda/passz,
+# kék futás, piros védő), legfeljebb ennyi nyíl, és ennél rövidebb húzás
+# nem nyíl (méter).
+DRAWING_COLORS = ("ffd23f", "4c9aff", "ff6b6b")
+DRAWING_MAX = 30
+DRAWING_MIN_M = 0.6
+
+
+def decode_drawing(s) -> list:
+    """A "rajz" szöveg (a 3D link-paraméter és a jegyzet-tár alakja:
+    "x1,y1,x2,y2,szín;…") → nyilak [(x1, y1, x2, y2, színkód)], pálya-
+    méterben. A böngésző rajzDekodol-jának és az app decodeDrawing-jának
+    tükre: a hibás (üres vagy nem szám mezős), a pályán kívüli (−10…50 m-en
+    túli), a túl rövid és az ismeretlen színű tag kimarad, legfeljebb
+    DRAWING_MAX nyíl."""
+    ki = []
+    for tag in str(s or "").split(";"):
+        p = tag.split(",")
+        if len(p) != 5 or any(not x.strip() for x in p):
+            continue
+        try:
+            v = [float(x) for x in p[:4]]
+            k = int(p[4])
+        except ValueError:
+            continue
+        if any(not math.isfinite(x) or x < -10 or x > 50 for x in v):
+            continue
+        if not 0 <= k < len(DRAWING_COLORS):
+            continue
+        if math.hypot(v[2] - v[0], v[3] - v[1]) < DRAWING_MIN_M:
+            continue
+        ki.append((v[0], v[1], v[2], v[3], k))
+        if len(ki) >= DRAWING_MAX:
+            break
+    return ki
+
+
+def arrow_head(x1: float, y1: float, x2: float, y2: float, hossz: float,
+               szel: float) -> tuple:
+    """A nyílhegy két szárnypontja: a csúcs (x2, y2), a szárak hossz-nyival
+    vissza a nyíl tengelyén, onnan ±szel/2 oldalra — a böngésző
+    nyilFej-ének és az app arrowHead-jének tükre."""
+    d = math.hypot(x2 - x1, y2 - y1) or 1.0
+    ux, uy = (x2 - x1) / d, (y2 - y1) / d
+    bx, by = x2 - ux * hossz, y2 - uy * hossz
+    return ((bx - uy * szel / 2, by + ux * szel / 2),
+            (bx + uy * szel / 2, by - ux * szel / 2))
+
+
+def note_diagram(match: Match, frame_t: int, rajz=None) -> Optional[dict]:
+    """Egy jegyzet felülnézeti ábrájának adata: a jegyzet kockájához
+    LEGKÖZELEBBI kocka játékosai (hely, csapat, mezszám) és a labda, plusz a
+    jegyzettel mentett nyilak (decode_drawing). Edzőileg: a 3D pályán
+    előkészített jelenet papíron is kiosztható — a játékos látja, hol
+    állt, és a nyíl mutatja, hova kellett volna mennie. Kocka nélküli
+    meccsen None.
+
+    Visszaad: {"t", "players": [{"x", "y", "team", "jersey"}], "ball":
+    (x, y) | None, "arrows": [(x1, y1, x2, y2, színkód)]}."""
+    if not match.frames:
+        return None
+    import bisect
+    idok = [f.t for f in match.frames]
+    i = bisect.bisect_left(idok, int(frame_t))
+    jeloltek = [j for j in (i - 1, i) if 0 <= j < len(idok)]
+    f = match.frames[min(jeloltek, key=lambda j: abs(idok[j] - frame_t))]
+    mez = _jersey_map(match)
+    return {
+        "t": f.t,
+        "players": [{"x": p.x, "y": p.y,
+                     "team": getattr(p.team, "value", p.team),
+                     "jersey": p.jersey_number if p.jersey_number is not None
+                     else mez.get(p.track_id)}
+                    for p in f.players],
+        "ball": (f.ball.x, f.ball.y) if f.ball is not None else None,
+        "arrows": decode_drawing(rajz),
+    }
+
 
 def scene_rows(decisions: list, free_shots: list, turnovers: list,
                home: str, away: str,

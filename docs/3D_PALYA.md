@@ -216,7 +216,14 @@ Ha a jegyzet írásakor nyilak vannak a padlón (✎ Rajz), a jegyzettel
 mentődnek: a jegyzet pillanatában — a vetítésben is — maguktól
 visszarajzolódnak (a sor és a felirat végén ✎ jelzi), a szerkeszthető
 padló-rajz pedig kiürül. A nyomtatott jelentés jegyzet-sorai a motor
-címével "3D ↗" linket kapnak.
+címével "3D ↗" linket kapnak, a rajzos jegyzetek pedig felülnézeti ábrát
+(`court3d.note_diagram`): a pálya, a pillanat játékosai csapatszínnel és
+mezszámmal, a labda és a nyilak — kiosztható taktika-lap a
+videó-elemzés után (legfeljebb 12 ábra). A Klipek "Jegyzetelt
+pillanatok" csomagjában a rajzos jegyzet klipjére a nyilak a VIDEÓRA
+rajzolódnak — a kalibrációval (a pálya-méterből pixelre, a svenkelő
+kamera kulcs-kockáival) vetítve, a jegyzet pillanata előtt 1,5 mp-től a
+klip végéig; kalibráció nélkül a klip rajz nélkül készül.
 
 A **✎ Rajz** (billentyű: E) a taktika-tábla a valódi jeleneten: rajz-módban
 a húzás nyilat rajzol a padlóra — sárga a labda/passz, kék a futás,

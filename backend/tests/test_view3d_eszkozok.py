@@ -1767,3 +1767,30 @@ console.log(JSON.stringify(rajzDekodol("1,2,3,4;1,2,3,4,9;1,2,99,4,0;1,1,1.2,1,0
                        timeout=60)
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout) == [[5, 5, 8, 9, 0], [-3, -2.5, 4, 4, 1]]
+
+
+
+def test_a_konyvtar_jegyzet_listaja_jelzi_a_rajzot(tmp_path, monkeypatch):
+    """A /library/notes viszi a jegyzet rajzát ("" ha nincs), a
+    Jegyzetek képernyő a rajzos sort ✎-gel jelzi."""
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    mid = m.meta.match_id
+    c.post(f"/matches/{mid}/notes",
+           json={"frame": 50, "text": "Zárás", "rajz": "20,13.1,28.4,16.8,0"})
+    c.post(f"/matches/{mid}/notes", json={"frame": 60, "text": "Szöveg"})
+    sajat = [n for n in c.get("/library/notes").json()["notes"]
+             if n["match_id"] == mid]
+    assert [n["rajz"] for n in sajat] == ["20,13.1,28.4,16.8,0", ""]
+    kep = (Path(__file__).resolve().parent.parent.parent / "client" / "lib"
+           / "ui" / "notes_screen.dart").read_text(encoding="utf-8")
+    assert '(n["rajz"] as String? ?? "").isNotEmpty' in kep

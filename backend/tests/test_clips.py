@@ -821,3 +821,76 @@ def test_a_klip_esemenyek_a_retegek_hatokoreben_epulnek():
     blokk = forras[i:forras.index("    def _clip_events_hatokorben(", i)]
     assert "with primitive_cache(match):" in blokk
     assert "return _clip_events_hatokorben(match, match_id, types)" in blokk
+
+
+
+def _kalibralt_meccs_videoval(tmp_path, rajz):
+    """Szintetikus videó (320×160, 25 fps, sötétszürke) egyszerű kalibrációval:
+    a pixel a pálya-méter nyolcszorosa (H0: pixel → méter = /8), álló
+    kamera; egy rajzos jegyzet-esemény a 100. kockán."""
+    from handball.models.tracking import Frame, Match, MatchMeta
+
+    ut = tmp_path / "fekete.mp4"
+    _make_video(ut, n_frames=200, fps=25.0, size=(320, 160))
+    meta = MatchMeta(match_id="rajzklip", home_team="A", away_team="B",
+                     fps=25.0)
+    meta.video_path = str(ut)
+    meta.court_homography = [[0.125, 0.0, 0.0], [0.0, 0.125, 0.0],
+                             [0.0, 0.0, 1.0]]
+    m = Match(meta, [Frame(t=i) for i in range(200)])
+    ev = [{"t": 100, "type": "note", "team": "home", "label": "zaras",
+           "rajz": rajz}]
+    return m, ev
+
+
+def _kocka(ut, index):
+    import cv2
+    cap = cv2.VideoCapture(str(ut))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, index)
+    ok, img = cap.read()
+    cap.release()
+    assert ok
+    return img
+
+
+def test_a_rajzos_jegyzet_klipjen_a_nyil_a_videon(tmp_path):
+    """A rajzos jegyzet klipjén a nyíl a videóra kerül (kalibrációval
+    vetítve): a kék nyíl (y = 10 m, x 10 → 30 m) a 80. pixel-sorban, a
+    80–240. oszlop közt kék; a jegyzet pillanata előtti 1,5 mp-nél
+    korábbi kockán még nincs rajz. Kalibráció nélkül a klip rajz nélkül
+    készül (hiba nélkül)."""
+    import zipfile
+
+    from handball.pipeline.clips import export_event_clips
+
+    m, ev = _kalibralt_meccs_videoval(tmp_path, "10,10,30,10,1")
+    res = export_event_clips(m, ev, {"note"}, tmp_path / "ki")
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        nev = [n for n in z.namelist() if n.endswith(".mp4")][0]
+        z.extract(nev, tmp_path / "zip")
+    klip = tmp_path / "zip" / nev
+    # A jegyzet a 4. mp-nél: a klip a videó elejétől indul (a klip k.
+    # kockája a videó k. kockája); a rajz a 63. kockától (100 − 1,5 mp).
+    kesoi = _kocka(klip, 135)
+    b, g, r = (int(v) for v in kesoi[80, 160])
+    assert b > 150 and b > r + 60, (b, g, r)
+    korai = _kocka(klip, 10)
+    assert int(korai[80, 160].max()) < 40
+    # Kalibráció nélkül: rajz nélkül, hiba nélkül.
+    (tmp_path / "x").mkdir()
+    m2, ev2 = _kalibralt_meccs_videoval(tmp_path / "x", "10,10,30,10,1")
+    m2.meta.court_homography = None
+    res2 = export_event_clips(m2, ev2, {"note"}, tmp_path / "ki2")
+    assert res2.count == 1
+
+
+def test_a_jegyzet_klip_esemenye_viszi_a_rajzot():
+    """Az API jegyzet-klip eseménye a jegyzet rajzát is viszi, és a
+    kalibráció-pár olvasó közös (calib_overlay.calib_pairs)."""
+    from pathlib import Path
+
+    forras = (Path(__file__).resolve().parents[1] / "handball" / "api"
+              / "app.py").read_text(encoding="utf-8")
+    assert '"rajz": n.get("rajz")}' in forras
+    assert "from ..pipeline.calib_overlay import calib_pairs" in forras

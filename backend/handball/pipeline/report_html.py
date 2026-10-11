@@ -953,6 +953,85 @@ def _shot_positions(match, events) -> list[tuple[float, float, str, bool]]:
     return out
 
 
+# A jelentés jegyzet-ábráinak plafonja: ennél több rajzos jegyzetnél a
+# többi szövegesen marad (a jelentés kiosztható, nem album).
+REPORT_NOTE_DIAGRAMS_MAX = 12
+# A nyíl-színek nyomtatásra: a 3D sárgája a világos lapon nem látszana —
+# ugyanaz a három szerep (labda/passz, futás, védő), sötétebb árnyalatban.
+_NOTE_ARROW_PRINT = ("#c99a06", "#2f6fb2", "#c0392b")
+
+
+def _note_diagram_svg(d: dict, width: int = 360) -> str:
+    """Egy jegyzet felülnézeti ábrája (court3d.note_diagram): a pálya (a
+    6 m-es vonal és a szaggatott 9 m), a játékosok csapatszínnel és
+    mezszámmal, a labda és a jegyzettel mentett nyilak (szár + hegy, a 3D
+    nyíl arányaival)."""
+    import math
+
+    from .court3d import arrow_head
+
+    h = width // 2
+    s = width / 40.0  # px / méter (a pálya 40 × 20 m, az ábra 2:1)
+
+    def ter(r, dash=""):
+        # A két kapu-elődobó vonal (r = 6: tömör, 9: szaggatott): a
+        # kapufák körüli negyedkörök és köztük az egyenes.
+        y1, y2 = (10 - 1.5) * s, (10 + 1.5) * s
+        rr = r * s
+        bal = (f"M 0 {y1 - rr:.1f} A {rr:.1f} {rr:.1f} 0 0 1 {rr:.1f} {y1:.1f} "
+               f"L {rr:.1f} {y2:.1f} A {rr:.1f} {rr:.1f} 0 0 1 0 {y2 + rr:.1f}")
+        jobb = (f"M {width} {y1 - rr:.1f} A {rr:.1f} {rr:.1f} 0 0 0 "
+                f"{width - rr:.1f} {y1:.1f} L {width - rr:.1f} {y2:.1f} "
+                f"A {rr:.1f} {rr:.1f} 0 0 0 {width} {y2 + rr:.1f}")
+        return "".join(
+            f'<path d="{p}" fill="none" stroke="#8492A6" stroke-width="1"'
+            f'{dash}/>' for p in (bal, jobb))
+
+    reszek = [
+        f'<rect x="0" y="0" width="{width}" height="{h}" rx="6" '
+        'fill="#f4f7fa" stroke="#c9d3de"/>',
+        f'<line x1="{width / 2}" y1="0" x2="{width / 2}" y2="{h}" '
+        'stroke="#8492A6" stroke-width="1"/>',
+        ter(6), ter(9, ' stroke-dasharray="4 3"'),
+        # A kapuk: vastag vonal a gólvonalon.
+        f'<line x1="1" y1="{8.5 * s:.1f}" x2="1" y2="{11.5 * s:.1f}" '
+        'stroke="#1c2733" stroke-width="3"/>',
+        f'<line x1="{width - 1}" y1="{8.5 * s:.1f}" x2="{width - 1}" '
+        f'y2="{11.5 * s:.1f}" stroke="#1c2733" stroke-width="3"/>',
+    ]
+    szin = {"home": "#2f6fb2", "away": "#b2453a"}
+    for (x1, y1, x2, y2, k) in d.get("arrows") or []:
+        hossz = math.hypot(x2 - x1, y2 - y1)
+        fej = min(0.9, hossz * 0.45)
+        ux, uy = (x2 - x1) / hossz, (y2 - y1) / hossz
+        bx, by = x2 - ux * fej, y2 - uy * fej
+        (ax, ay), (cx, cy) = arrow_head(x1, y1, x2, y2, fej, fej * 0.9)
+        c = _NOTE_ARROW_PRINT[k]
+        reszek.append(
+            f'<line x1="{x1 * s:.1f}" y1="{y1 * s:.1f}" x2="{bx * s:.1f}" '
+            f'y2="{by * s:.1f}" stroke="{c}" stroke-width="3"/>')
+        reszek.append(
+            f'<polygon class="nyil" points="{ax * s:.1f},{ay * s:.1f} '
+            f'{cx * s:.1f},{cy * s:.1f} {x2 * s:.1f},{y2 * s:.1f}" '
+            f'fill="{c}"/>')
+    for p in d.get("players") or []:
+        c = szin.get(p.get("team"), "#8492A6")
+        reszek.append(f'<circle cx="{p["x"] * s:.1f}" cy="{p["y"] * s:.1f}" '
+                      f'r="6" fill="{c}"/>')
+        if p.get("jersey") is not None:
+            reszek.append(
+                f'<text x="{p["x"] * s:.1f}" y="{p["y"] * s + 2.5:.1f}" '
+                'font-size="7" text-anchor="middle" fill="#fff">'
+                f'{escape(str(p["jersey"]))}</text>')
+    if d.get("ball"):
+        bx_, by_ = d["ball"]
+        reszek.append(f'<circle cx="{bx_ * s:.1f}" cy="{by_ * s:.1f}" r="3" '
+                      'fill="#e8a33d" stroke="#1c2733" stroke-width="0.6"/>')
+    return (f'<svg viewBox="0 0 {width} {h}" width="{width}" height="{h}" '
+            'xmlns="http://www.w3.org/2000/svg">' + "".join(reszek)
+            + "</svg>")
+
+
 def _shot_map_svg(shots, width: int = 480) -> str:
     """Lövéstérkép-SVG a jelentésbe: pálya + lövés-pontok (gól = arany
     körvonal, kimaradt = halványabb), a csapatok a jelentés színeivel."""
@@ -1503,10 +1582,28 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     f'{escape(match.meta.match_id)}/view3d?t={t:.1f}&lista=1"'
                     ' style="font-size:11px;text-decoration:none">3D ↗</a>')
 
+        # A rajzos jegyzetek felülnézeti ábrát kapnak (a pillanat
+        # játékosai és a nyilak) — a plafonig, időrendben.
+        abrak: dict = {}
+        try:
+            from .court3d import decode_drawing, note_diagram
+            rajzosak = [n for n in items if decode_drawing(n.get("rajz"))]
+            for n in rajzosak[:REPORT_NOTE_DIAGRAMS_MAX]:
+                d = note_diagram(match, int(n.get("frame", 0)), n.get("rajz"))
+                if d is not None:
+                    abrak[id(n)] = _note_diagram_svg(d)
+        except Exception:
+            abrak = {}
+
+        def _abra(n):
+            svg = abrak.get(id(n))
+            return (f'<div class="jegyzet-abra" style="margin:4px 0 8px">'
+                    f"{svg}</div>") if svg else ""
+
         lis = "".join(
             f"<li><b>{_fmt_clock(n.get('frame', 0) / fps)}</b> — "
             f"{escape(str(n.get('text', '')))}"
-            f"{' ✎' if n.get('rajz') else ''}{_jegyzet_link(n)}</li>"
+            f"{' ✎' if n.get('rajz') else ''}{_jegyzet_link(n)}{_abra(n)}</li>"
             for n in items)
         notes_html = "<h2>Edzői jegyzetek</h2><ul>" + lis + "</ul>"
 

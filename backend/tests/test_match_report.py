@@ -2056,3 +2056,33 @@ def test_a_jelentes_export_a_keres_cimevel_linkel(tmp_path, monkeypatch):
     assert r.status_code == 200
     assert (f'href="http://motor:8123/matches/{m.meta.match_id}/view3d?t=0.0'
             '&lista=1&kulcs=1&jelenet=hazai"') in r.text
+
+
+
+def test_a_rajzos_jegyzet_abrat_kap_a_jelentesben():
+    """A rajzos jegyzet (a 3D pályán a nyilakkal mentett) felülnézeti
+    ábrát kap a jelentésben — a nyilak hegyével és a pillanat
+    játékosaival; a rajz nélküli jegyzet szöveges marad; a plafon fölötti
+    rajzos jegyzetek ábra nélkül."""
+    from handball.pipeline import report_html as rh
+
+    m = simulate_ground_truth(duration_s=30, fps=25.0, seed=5,
+                              shots_per_min=8)
+    jegyzetek = [
+        {"id": "a", "frame": m.frames[10].t, "text": "Zárás",
+         "rajz": "20,13.1,28.4,16.8,0;15.9,9.5,17.9,16.8,2"},
+        {"id": "b", "frame": m.frames[20].t, "text": "Csak szöveg"},
+    ]
+    html = match_report_html(m, {}, [], None, notes=jegyzetek)
+    assert html.count('class="jegyzet-abra"') == 1
+    assert html.count('class="nyil"') == 2
+    assert "Zárás ✎" in html and "Csak szöveg" in html
+    # A pillanat játékosai a körök (a nyilak, a labda mellett).
+    abra = html[html.index('class="jegyzet-abra"'):]
+    abra = abra[:abra.index("</svg>")]
+    assert abra.count('r="6"') == len(m.frames[10].players)
+    sok = [{"id": str(i), "frame": m.frames[i].t, "text": f"j{i}",
+            "rajz": "20,13.1,28.4,16.8,1"}
+           for i in range(rh.REPORT_NOTE_DIAGRAMS_MAX + 3)]
+    html2 = match_report_html(m, {}, [], None, notes=sok)
+    assert html2.count('class="jegyzet-abra"') == rh.REPORT_NOTE_DIAGRAMS_MAX

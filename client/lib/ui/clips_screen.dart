@@ -81,7 +81,7 @@ const List<(String, List<ClipKind>)> kClipGroups = [
   ]),
   ("EGYÉB", [
     ("note", "Jegyzetelt pillanatok",
-        "amit a meccs közben magad jelöltél meg"),
+        "amit magad jelöltél meg — a 3D-ben rajzolt nyilak a videón is"),
   ]),
 ];
 

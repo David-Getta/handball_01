@@ -595,7 +595,9 @@ function rajzDekodol(s){
   const ki = [];
   for (const tag of String(s || "").split(";")){
     const p = tag.split(",");
-    if (p.length !== 5) continue;
+    // Üres mező: hibás tag (a Number("") 0 lenne — a Dart és a Python
+    // tükör is elveti).
+    if (p.length !== 5 || p.some(x => x.trim() === "")) continue;
     const v = p.slice(0, 4).map(Number);
     const k = Number(p[4]);
     if (v.some(x => !isFinite(x) || x < -10 || x > 50)) continue;

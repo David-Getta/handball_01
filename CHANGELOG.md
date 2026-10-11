@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.162 óta)
 
+- **Jegyzetek: a rajzos jegyzet jelölve** (új, app): a könyvtár
+  Jegyzetek képernyője ✎-gel jelzi a 3D-ben rajzolt nyilakkal mentett
+  jegyzetet; a "Megnézem 3D-ben" a pillanatára visz, ahol a nyilak
+  maguktól megjelennek.
+
+- **Rajzolt jegyzet-klip** (új, klip-motor): a Klipek "Jegyzetelt
+  pillanatok" csomagjában a rajzos jegyzet (a 3D pályán a nyilakkal
+  mentett jegyzet) klipjére a nyilak a VIDEÓRA rajzolódnak — a
+  kalibrációval vetítve (a svenkelő kamera mozgását is követve), a jegyzet
+  pillanata előtt 1,5 mp-től a klip végéig. A videó-elemzés kész
+  anyaga: a játékos a saját felvételén látja, hova kellett volna mennie.
+
+- **Jegyzet-ábrák a nyomtatott jelentésben** (új, jelentés): a rajzos
+  jegyzetek (a 3D pályán a nyilakkal mentett jegyzetek) felülnézeti ábrát
+  kapnak — a pálya, a jegyzet pillanatának játékosai csapatszínnel és
+  mezszámmal, a labda és a nyilak (nyomtatásra sötétebb árnyalatban). A
+  videó-elemzés után kiosztható taktika-lap: a játékos látja, hol állt, és
+  a nyíl mutatja, hova kellett volna mennie.
+
 - **A jegyzet a rajzot is megőrzi** (új, böngésző/VR, app, jelentés): ha
   a jegyzet írásakor nyilak vannak a padlón, a jegyzettel mentődnek, és a
   jegyzet pillanatában — a vetítésben is — maguktól visszarajzolódnak: a
