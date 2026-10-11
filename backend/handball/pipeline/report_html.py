@@ -1151,7 +1151,40 @@ from .court3d import KEY_SCENES_MAX as REPORT_SCENES_MAX  # noqa: E402
 REPORT_SCENE_LEAD_S = 1.5
 
 
-def _scenes_section(match, base_url: str | None = None) -> str:
+def _kep_img(b: bytes) -> str:
+    """Beágyazott JPEG (a jelentés videó-kockája) — a jelenet- és a
+    jegyzet-szakasz közös alakja."""
+    return ('<img alt="" src="data:image/jpeg;base64,'
+            + base64.b64encode(b).decode("ascii")
+            + '" style="width:240px;max-width:100%;border-radius:4px;'
+            'margin:4px 0 8px">')
+
+
+def _report_frame_times(match, notes) -> list:
+    """A jelentés videó-kockáinak ideje (kocka-t): a videózandó jelenetek
+    horgonyai (court3d.scene_anchor_t — a kapott lerohanásnál a gól) és
+    az időrendben első REPORT_NOTE_FRAMES_MAX jegyzet — EGY videó-
+    olvasáshoz (a videónként egy megnyitás, időrendben)."""
+    from .court3d import key_scene_rows, scene_anchor_t
+
+    ts = []
+    try:
+        for r in key_scene_rows(match, decision_top=REPORT_DECISION_TOP,
+                                max_rows=REPORT_SCENES_MAX)["rows"]:
+            ts.append(scene_anchor_t(match, r))
+    except Exception:
+        pass
+    for n in sorted(notes or [], key=lambda n: n.get("frame", 0))[
+            :REPORT_NOTE_FRAMES_MAX]:
+        try:
+            ts.append(int(n.get("frame", 0)))
+        except (TypeError, ValueError):
+            continue
+    return ts
+
+
+def _scenes_section(match, base_url: str | None = None,
+                    kepek: dict | None = None) -> str:
     """A "Videózandó jelenetek" szakasz HTML-je (üres, ha nincs ilyen).
 
     `base_url`: a motor címe (pl. "http://127.0.0.1:8000/"), ha ismert —
@@ -1182,21 +1215,21 @@ def _scenes_section(match, base_url: str | None = None) -> str:
     # A jelenet kockája a forrás-videóból, ha ezen a gépen elérhető
     # (beágyazva: a jelentés önálló fájl, nyomtatva is látszik, melyik
     # pillanatról van szó). Videó nélkül a sor változatlan.
-    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
-    try:
-        from .video_frames import frames_jpeg
-        kepek = frames_jpeg(match, [round(float(r["s"]) * fps) for r in sorok])
-    except Exception:
-        kepek = {}
+    # (`kepek`: a jelentés egyszer olvasott kockái — nélküle magunk
+    # olvassuk.) A kapott lerohanás kockája a gól (scene_anchor_t), mint a
+    # klipé és a vetítésé.
+    from .court3d import scene_anchor_t
+    if kepek is None:
+        try:
+            from .video_frames import frames_jpeg
+            kepek = frames_jpeg(match, [scene_anchor_t(match, r)
+                                        for r in sorok])
+        except Exception:
+            kepek = {}
 
     def kep(r):
-        b = kepek.get(round(float(r["s"]) * fps))
-        if not b:
-            return ""
-        return ('<br><img alt="" src="data:image/jpeg;base64,'
-                + base64.b64encode(b).decode("ascii")
-                + '" style="width:240px;max-width:100%;border-radius:4px;'
-                'margin:4px 0 8px">')
+        b = kepek.get(scene_anchor_t(match, r))
+        return "<br>" + _kep_img(b) if b else ""
 
     def link(r):
         if not base_url:
@@ -1599,6 +1632,13 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         pass
 
     # Edzői jegyzetek (ha vannak): időbélyeggel, idő szerint rendezve.
+    # A jelentés videó-kockái EGY olvasással (a jelenetek és a jegyzetek
+    # együtt — videónként egy megnyitás, időrendben); videó nélkül üres.
+    try:
+        from .video_frames import frames_jpeg
+        kepek_mind = frames_jpeg(match, _report_frame_times(match, notes))
+    except Exception:
+        kepek_mind = {}
     notes_html = ""
     if notes:
         items = sorted(notes, key=lambda n: n.get("frame", 0))
@@ -1630,15 +1670,9 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         # A jegyzet pillanatának kockája a forrás-videóból (ha ezen a gépen
         # elérhető; a videózandó jelenetek képeivel közös olvasó) — a
         # plafonig, időrendben.
-        jkepek: dict = {}
+        # (a jelentés egyszer olvasott kockáiból — _report_frame_times)
+        jkepek: dict = kepek_mind
         kepesek = {id(n) for n in items[:REPORT_NOTE_FRAMES_MAX]}
-        try:
-            from .video_frames import frames_jpeg
-            jkepek = frames_jpeg(
-                match, [int(n.get("frame", 0))
-                        for n in items[:REPORT_NOTE_FRAMES_MAX]])
-        except Exception:
-            jkepek = {}
 
         def _abra(n):
             svg = abrak.get(id(n))
@@ -1648,12 +1682,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         def _kep(n):
             b = (jkepek.get(int(n.get("frame", 0)))
                  if id(n) in kepesek else None)
-            if not b:
-                return ""
-            return ('<img alt="" src="data:image/jpeg;base64,'
-                    + base64.b64encode(b).decode("ascii")
-                    + '" style="width:240px;max-width:100%;border-radius:4px;'
-                    'margin:4px 0 8px">')
+            return _kep_img(b) if b else ""
 
         def _jegyzet_sor(n):
             # Rajzos jegyzetnél a kocka az ábra MELLETT (a videó és a rajz
@@ -2001,7 +2030,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         # Videózandó jelenetek: a 3D jelenet-lista legfontosabb sorai
         # időbélyeggel — a papírral a kézben is visszakereshető a videón.
         try:
-            jel_html = _scenes_section(match, base_url)
+            jel_html = _scenes_section(match, base_url, kepek=kepek_mind)
             if jel_html:
                 parts_html.append(jel_html)
         except Exception:

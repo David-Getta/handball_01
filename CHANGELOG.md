@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.165 óta)
 
+- **Negyedik kód-átnézés javításai** (javítás): a közös nézésben a
+  csarnokon túlnyúló nézőpont vagy mutató (messzire húzott keringés) nem
+  állítja meg a vezetést (a motor és a kliens a dobozba szorítja); a
+  videó-ablak két néző két meccsén sem olvas lezárt videóból, a tétlen
+  videót bezárja (Windows-on mozgatható marad), a hibás képrátájú videón
+  sem olvas végig ezreket; a Klipek "A visszatérő figura" csempéje újra
+  kijelölhető, meccs-váltáskor a régi meccs darabszáma és kockái nem
+  maradnak a csempéken; a jelentésben a kapott lerohanás kockája a gól
+  (mint a klipen és a vetítésben), a videót egyszer nyitja meg; a
+  jegyzetekre váró linkes vetítés a sikertelen betöltéssel elmarad; a
+  háttérben betöltött meccsek kapusai is jelölve, és egy másik meccs
+  jelölése nem érvényteleníti a nyitott hatókör méréseit; egy csapat
+  átmeneti felderítés-hibája után a 3D kulcsok nem tárolódnak részlegesen.
+
 - **Közös nézés: "📍 Ide mindenki" az appból is** (új, app): a 3D fül
   vezetője (vezetés közben a panel gombjával) a saját nézőpontjába hozza
   a csapat headsetjeit — az app kamerája a böngészős 3D terébe

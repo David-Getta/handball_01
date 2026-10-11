@@ -634,6 +634,31 @@ SHARED3D_FOLLOWER_S = 3.0
 # követőknél — a régebbi mutató a később csatlakozónál már nem villan fel.
 SHARED3D_POINTER_S = 4.0
 
+
+def scene_anchor_t(match, row: dict) -> int:
+    """A jelenet-lista sorának HORGONY-kockája (kocka-t). A kapott
+    lerohanás ("k") sora az INDULÁS ideje, a horgonya a BEFEJEZÉS kockája
+    (a gól) — a videózandó klip és a jelentés kockája ide néz; a többi sor
+    a pillanata (s × fps). (A böngésző és az app vetítése ugyanezt a
+    befejezést a saját lerohanás-adatából keresi.)"""
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    if row.get("tipus") == "k":
+        for k in fast_break_moments(match)["moments"]:
+            if (abs(float(k["s"]) - float(row["s"])) < 0.01
+                    and k.get("t") is not None):
+                return int(k["t"])
+    return int(round(float(row["s"]) * fps))
+
+
+def shared3d_ora() -> float:
+    """A közös nézés órája (monoton másodperc) — a motor ebből számolja a
+    vezető állapotának, a követőknek, a mutatónak és a nézőpontnak a
+    korát; a tesztek ezt cserélik (nem a process-szintű time.monotonic-ot,
+    amit az eseményhurok is használ)."""
+    import time
+
+    return time.monotonic()
+
 # A rajz-eszköz (nyilak a padlón) közös számai — a böngésző RAJZ_JS és az
 # app court_geometry.dart tükre (őr-teszt): a színek (sárga labda/passz,
 # kék futás, piros védő), legfeljebb ennyi nyíl, és ennél rövidebb húzás

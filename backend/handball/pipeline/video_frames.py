@@ -23,6 +23,15 @@ REPORT_FRAME_Q = 70
 # lejátszás közben egymás utáni kockákat kér. Ennél messzebb a tekerés
 # olcsóbb, mint a sok kocka végigdekódolása.
 SEQ_READ_MAX_S = 2.0
+# ...de legfeljebb ennyi kockát olvasunk tovább (költség-korlát, minta-
+# szám): egy hibás konténer-képráta (pl. 90 000 fps) különben egy kérést
+# tízezres grab()-sorozattá tenne, a videó zárját fogva.
+SEQ_READ_MAX_FRAMES = 150
+# A kocka-végpont egyszerre ennyi videót tart nyitva (két néző két
+# meccsen + összefűzött szakaszok), és a tétlen videót ennyi idő után
+# bezárja (Windows-on a nyitott fájl nem mozgatható, nem törölhető).
+FRAME_CAPS_MAX = 4
+FRAME_CAP_IDLE_S = 60.0
 
 
 def source_frame(match, t: int) -> tuple[str, int] | None:
@@ -55,7 +64,8 @@ def read_jpeg(cap, frame_index: int, width: int,
     except (TypeError, ValueError):
         hol, fps = -1, 0.0
     elore = frame_index - hol
-    if hol >= 0 and fps > 0 and 0 <= elore <= SEQ_READ_MAX_S * fps:
+    if (hol >= 0 and fps > 0
+            and 0 <= elore <= min(SEQ_READ_MAX_S * fps, SEQ_READ_MAX_FRAMES)):
         for _ in range(elore):
             if not cap.grab():
                 return None

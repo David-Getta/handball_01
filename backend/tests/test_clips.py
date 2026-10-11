@@ -797,9 +797,6 @@ def test_a_videozando_csomag_a_kulcs_jelenetekbol(tmp_path, monkeypatch):
         befejezes = {round(k["s"], 2): k["t"]
                      for k in fast_break_moments(m)["moments"]}
     assert vart
-    for f in m.frames:             # a visszatöltött meccs: nincs szerep
-        for p in f.players:
-            p.role = None
     elkapott = {}
 
     def kamu(match, ev, types, out_dir, **kw):
@@ -810,6 +807,11 @@ def test_a_videozando_csomag_a_kulcs_jelenetekbol(tmp_path, monkeypatch):
     monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
     app = create_app()
     app.state.put_match(m)
+    # A szerep-mentes meccs a tárba lépés UTÁN (a tár a mentéskor jelöl):
+    # így a próba azt méri, hogy a klip-export maga nyit-e hatókört.
+    for f in m.frames:
+        for p in f.players:
+            p.role = None
     c = TestClient(app)
     j = c.post(f"/matches/{m.meta.match_id}/clips/export",
                json={"types": ["key_scene"]}).json()

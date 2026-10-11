@@ -2000,6 +2000,56 @@ def test_a_kocka_olvaso_szakaszt_es_ritkitast_kovet(tmp_path):
     assert sorted(frames_jpeg(m, [5, 25])) == [5]
 
 
+def test_a_kapott_lerohanas_kockaja_a_gol(tmp_path, monkeypatch):
+    """A videózandó sorok közt a kapott lerohanás ("k") kockája a
+    BEFEJEZÉS (a gól) kockája — mint a klipé és a vetítésé —, nem az
+    indulásé; a jelentés a videót egyszer nyitja meg."""
+    import cv2
+    import numpy as np
+
+    from handball.pipeline import report_html as rh
+    from handball.pipeline import video_frames
+    from handball.pipeline.court3d import (fast_break_moments,
+                                           key_scene_rows, scene_anchor_t)
+
+    monkeypatch.setattr(rh, "REPORT_SCENES_MAX", 500)
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=7,
+                              shots_per_min=8)
+    sorok = key_scene_rows(m, decision_top=rh.REPORT_DECISION_TOP,
+                           max_rows=500)["rows"]
+    k = next(r for r in sorok if r["tipus"] == "k")
+    fb = next(x for x in fast_break_moments(m)["moments"]
+              if abs(x["s"] - k["s"]) < 0.01)
+    assert scene_anchor_t(m, k) == fb["t"] != round(k["s"] * 25.0)
+    ut = tmp_path / "k.mp4"
+    w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                        (320, 160))
+    for i in range(m.frames[-1].t + 5):
+        w.write(np.full((160, 320, 3), (i // 25) * 4 % 250, np.uint8))
+    w.release()
+    m.meta.video_path = str(ut)
+    megnyitas = []
+    eredeti = video_frames.frames_jpeg
+
+    def szamolo(match, ts, *a, **kw):
+        megnyitas.append(len(list(ts)))
+        return eredeti(match, ts, *a, **kw)
+
+    monkeypatch.setattr(video_frames, "frames_jpeg", szamolo)
+    jegyzetek = [{"id": "a", "frame": m.frames[30].t, "text": "Zárás"}]
+    html = match_report_html(m, {}, [], None, notes=jegyzetek)
+    assert len(megnyitas) == 1  # egy olvasás a jelenetekhez ÉS a jegyzetekhez
+    szakasz = html.split(">Videózandó jelenetek</h2>", 1)[1].split("<h2", 1)[0]
+    import base64
+    import re
+    li = [x for x in re.findall(r"<li[^>]*>(.*?)</li>", szakasz)
+          if "kapott lerohanás" in x][0]
+    b64 = li.split("data:image/jpeg;base64,", 1)[1].split('"', 1)[0]
+    img = cv2.imdecode(np.frombuffer(base64.b64decode(b64), np.uint8),
+                       cv2.IMREAD_COLOR)
+    assert abs(float(img.mean()) - (fb["t"] // 25) * 4 % 250) < 6
+
+
 def test_a_kocka_olvaso_kozeli_kockara_nem_teker(tmp_path):
     """A lejátszás egymás utáni kockáihoz a kocka-olvasó továbbolvas (nem
     teker — a tekerés a kulcskockától dekódol); ugrásnál és visszafelé

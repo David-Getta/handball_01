@@ -358,16 +358,8 @@ class _MatchStore(dict):
             m = loader(key)
         except Exception:
             m = None
-        if m is not None:
-            # A kapusok jelölése a tárba lépéskor (zár nélkül): a
-            # lemezről visszatöltött meccsen a hatókörön KÍVÜL futó
-            # végpontok is kapusként látják a kapust (a hatókör nyitása
-            # idempotensen ugyanezt teszi).
-            try:
-                from ..pipeline.primitive_cache import mark_goalkeepers
-                mark_goalkeepers(m)
-            except Exception:
-                pass
+        # (A kapusok jelölése a fájl beolvasásakor történik —
+        # _read_match_file —, így a háttér-betöltő útja is jelöl.)
         with self._lock:
             if dict.__contains__(self, key):
                 # Közben más szál is betöltötte: az övé marad (egy példány).
@@ -615,9 +607,18 @@ def create_app():
             # fájlban élnek — a felismerés a meta-ból olvassa őket,
             # tehát betöltéskor ide kell tenni.
             m.meta.event_overrides = _load_overrides(m.meta.match_id)
-            return m
         except Exception:
             return None
+        # A kapusok jelölése a tárba lépés ELŐTT (zár nélkül), MINDEN
+        # lemezes úton — igény szerinti betöltés és a háttér-betöltő
+        # (put_raw) is: a hatókörön KÍVÜL futó végpontok is kapusként
+        # látják a kapust (a hatókör nyitása idempotensen ugyanezt teszi).
+        try:
+            from ..pipeline.primitive_cache import mark_goalkeepers
+            mark_goalkeepers(m)
+        except Exception:
+            pass
+        return m
 
     def _load_one_from_disk(match_id: str) -> Optional[Match]:
         """Egy meccs betöltése IGÉNY SZERINT a betöltés közben: a kliens
@@ -2431,18 +2432,29 @@ def create_app():
         3D oldal első megnyitásakor újra (egy teljes meccsen perceket)."""
         from ..pipeline.court3d import tactical_keys_by_team
 
+        class _Reszleges(Exception):
+            """A részleges eredmény (egy csapat felderítése hibázott) —
+            visszaadjuk, de NEM tároljuk: a következő kérés újrapróbál."""
+
         def szamol():
             # Csapatonként külön: egy csapat felderítés-hibája nem viszi el
             # a másik kulcsait (a hiányzót a tactical_keys_by_team maga
             # próbálja, és csapatonként üresen hagyja, ha hibázik).
             kesz = {}
+            hibas = False
             for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
                 try:
                     kesz[side] = _scout_cached(match, team)
                 except Exception:
-                    pass
-            return tactical_keys_by_team(match, reports=kesz)
-        return _cached_result(match_id, "tactical-keys", szamol)
+                    hibas = True
+            res = tactical_keys_by_team(match, reports=kesz)
+            if hibas:
+                raise _Reszleges(res)
+            return res
+        try:
+            return _cached_result(match_id, "tactical-keys", szamol)
+        except _Reszleges as e:
+            return e.args[0]
 
     def _warm_results(match_id: str) -> None:
         """A nehéz végpontok ELŐSZÁMOLÁSA a háttérben, egy feldolgozás
@@ -3160,10 +3172,38 @@ def create_app():
         return {"match_id": match_id, "found": gw is not None,
                 **(gw or {})}
 
-    # A kocka-végpont nyitott videói (útvonal → (capture, zár)): a 3D
-    # oldal másodpercenként több kockát kér — a fájl újranyitása lassú.
+    # A kocka-végpont nyitott videói (útvonal → [capture, zár, él-e,
+    # utolsó használat]): a 3D oldal másodpercenként több kockát kér — a
+    # fájl újranyitása lassú. A kidobott vagy tétlen bejegyzést a SAJÁT
+    # zárja alatt zárjuk be és jelöljük halottnak: aki közben megkapta,
+    # de még nem olvasott, újra kéri (nem a lezárt olvasóból olvas).
     _kocka_capok: dict = {}
     _kocka_capok_zar = _threading.Lock()
+    _kocka_takarito = []
+
+    def _kocka_zar(b) -> None:
+        """Egy bejegyzés lezárása a saját zárja alatt (a hívó a
+        globális zárat tartja; az olvasó csak a sajátot — nincs
+        holtpont)."""
+        with b[1]:
+            b[2] = False
+            try:
+                b[0].release()
+            except Exception:
+                pass
+
+    def _kocka_takaritas() -> None:
+        """Háttér-szál: a FRAME_CAP_IDLE_S óta tétlen videókat bezárja."""
+        import time as _time
+
+        from ..pipeline import video_frames as _vf
+        while True:
+            _time.sleep(max(1.0, _vf.FRAME_CAP_IDLE_S / 2))
+            with _kocka_capok_zar:
+                most = _time.monotonic()
+                for ut_ in [k for k, b in _kocka_capok.items()
+                            if most - b[3] > _vf.FRAME_CAP_IDLE_S]:
+                    _kocka_zar(_kocka_capok.pop(ut_))
 
     @app.get("/matches/{match_id}/frame")
     def match_frame(match_id: str, t: int, w: int = 480):
@@ -3174,8 +3214,11 @@ def create_app():
         (160…1280 px, arányosan). 404: nincs ilyen meccs/kocka, vagy a
         videó nem érhető el ezen a gépen. A kocka-leképezés és az olvasás a
         jelentés jelenet-képeivel közös (pipeline/video_frames)."""
+        import time as _time
+
         from fastapi import Response
 
+        from ..pipeline import video_frames as _vf
         from ..pipeline.video_frames import read_jpeg, source_frame
         from ..video_io import VideoOpenError, open_capture
         match = _store.get(match_id)
@@ -3186,26 +3229,33 @@ def create_app():
             raise HTTPException(status_code=404,
                                 detail="a videó nem érhető el ezen a gépen")
         ut, kocka = hol
-        with _kocka_capok_zar:
-            bejegyzes = _kocka_capok.get(ut)
-            if bejegyzes is None:
-                try:
-                    cap = open_capture(ut)
-                except VideoOpenError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
-                # Legfeljebb két nyitott videó (összefűzött meccs két
-                # szakasza); a régebbit zárjuk.
-                while len(_kocka_capok) >= 2:
-                    # (a dict beszúrási sorrendű: az első a legrégebbi;
-                    # a popitem a LEGÚJABBAT vinné)
-                    regi, rzar = _kocka_capok.pop(next(iter(_kocka_capok)))
-                    with rzar:
-                        regi.release()
-                bejegyzes = (cap, _threading.Lock())
-                _kocka_capok[ut] = bejegyzes
-        cap, zar = bejegyzes
-        with zar:
-            kep = read_jpeg(cap, kocka, w)
+        kep = None
+        for _proba in range(3):
+            with _kocka_capok_zar:
+                if not _kocka_takarito:
+                    _kocka_takarito.append(_threading.Thread(
+                        target=_kocka_takaritas, name="frame-cap-idle",
+                        daemon=True))
+                    _kocka_takarito[0].start()
+                b = _kocka_capok.get(ut)
+                if b is None:
+                    try:
+                        cap = open_capture(ut)
+                    except VideoOpenError as e:
+                        raise HTTPException(status_code=404, detail=str(e))
+                    # A plafon fölött a legrégebben HASZNÁLT megy.
+                    while len(_kocka_capok) >= max(1, _vf.FRAME_CAPS_MAX):
+                        regi = min(_kocka_capok,
+                                   key=lambda k: _kocka_capok[k][3])
+                        _kocka_zar(_kocka_capok.pop(regi))
+                    b = [cap, _threading.Lock(), True, 0.0]
+                    _kocka_capok[ut] = b
+                b[3] = _time.monotonic()
+            with b[1]:
+                if not b[2]:
+                    continue  # közben bezárták: újra kérjük
+                kep = read_jpeg(b[0], kocka, w)
+            break
         if kep is None:
             raise HTTPException(status_code=404, detail="frame not read")
         # A kocka nem változik: a böngésző gyorsítótárazhatja (a visszatekerés
@@ -3256,10 +3306,13 @@ def create_app():
                 mx, my, mn = float(m_["x"]), float(m_["y"]), float(m_["n"])
             except (TypeError, ValueError, KeyError):
                 raise HTTPException(status_code=400, detail="rossz mutató")
-            if not (all(_math.isfinite(v) for v in (mx, my, mn))
-                    and -5.0 <= mx <= 45.0 and -5.0 <= my <= 25.0):
+            if not all(_math.isfinite(v) for v in (mx, my, mn)):
                 raise HTTPException(status_code=400, detail="rossz mutató")
-            mut = {"x": round(mx, 2), "y": round(my, 2), "n": mn}
+            # A pályán túlnyúló pont a pálya ±5 m-es sávjába szorítva — a
+            # vezető minden küldéskor a legutóbbit küldi, egy elutasított
+            # mutató az egész közös nézést megállítaná.
+            mut = {"x": round(min(45.0, max(-5.0, mx)), 2),
+                   "y": round(min(25.0, max(-5.0, my)), 2), "n": mn}
         # A nézőpont ("📍 Ide mindenki"): a vezető kamerájának helye
         # (three-tér: x a pálya hossza, y a magasság, z a szélesség
         # tükörképe; a csarnok ésszerű dobozában) és iránya (yaw, pitch),
@@ -3272,16 +3325,23 @@ def create_app():
             except (TypeError, ValueError, KeyError):
                 raise HTTPException(status_code=400, detail="rossz nézőpont")
             nx_, ny_, nz_, nyaw, npitch, nn = nv
-            if not (all(_math.isfinite(v) for v in nv)
-                    and -60.0 <= nx_ <= 100.0 and 0.2 <= ny_ <= 60.0
-                    and -60.0 <= nz_ <= 80.0 and -1.6 <= npitch <= 1.6):
+            if not all(_math.isfinite(v) for v in nv):
                 raise HTTPException(status_code=400, detail="rossz nézőpont")
-            nez = {"x": round(nx_, 2), "y": round(ny_, 2), "z": round(nz_, 2),
-                   "yaw": round(nyaw, 4), "pitch": round(npitch, 4), "n": nn}
+
+            def _sz(v, a, f):
+                return min(f, max(a, v))
+            # A csarnokon túlnyúló nézőpont (messzire húzott keringés,
+            # magasra repült kamera) a csarnok dobozába szorítva — mint a
+            # mutatónál.
+            nez = {"x": round(_sz(nx_, -60.0, 100.0), 2),
+                   "y": round(_sz(ny_, 0.2, 60.0), 2),
+                   "z": round(_sz(nz_, -60.0, 80.0), 2),
+                   "yaw": round(nyaw, 4),
+                   "pitch": round(_sz(npitch, -1.6, 1.6), 4), "n": nn}
         with _kozos_zar:
             regi = _kozos.get(match_id) or {}
             rev = regi.get("rev", 0) + 1
-            most = _time.monotonic()
+            most = _c3.shared3d_ora()
             # A mutató ideje csak ÚJ mutatásnál indul (a vezető minden
             # küldéskor a legutóbbit küldi).
             mut_ido = regi.get("mutato_ido")
@@ -3317,7 +3377,7 @@ def create_app():
             a = _kozos.get(match_id)
             if (a is not None and kid and len(kid) <= 32 and kid.isalnum()
                     and len(a.setdefault("kovetok", {})) < 500):
-                a["kovetok"][kid] = _time.monotonic()
+                a["kovetok"][kid] = _c3.shared3d_ora()
             a = dict(a or {})
         if not a:
             return {"active": False}
@@ -3326,8 +3386,8 @@ def create_app():
             ido_ = a.pop(kulcs_ + "_ido", None)
             if a.get(kulcs_) and ido_ is not None:
                 a[kulcs_] = {**a[kulcs_], "kor": round(
-                    max(0.0, _time.monotonic() - ido_), 3)}
-        kor = max(0.0, _time.monotonic() - a.pop("ido"))
+                    max(0.0, _c3.shared3d_ora() - ido_), 3)}
+        kor = max(0.0, _c3.shared3d_ora() - a.pop("ido"))
         return {**a, "kor": round(kor, 3),
                 "active": kor <= _c3.SHARED3D_STALE_S}
 
@@ -4977,16 +5037,12 @@ def create_app():
                 fps_ks = match.meta.fps if match.meta.fps > 0 else 25.0
                 # A kapott lerohanás sora az INDULÁS ideje — a klip a
                 # befejezés kockája köré kerül (mint a kapott-lerohanás
-                # csomagban), különben a gól lemarad.
-                _befejezes = [(k_["s"], k_["t"]) for k_ in
-                              fast_break_moments(match)["moments"]]
+                # csomagban), különben a gól lemarad (court3d.
+                # scene_anchor_t — a jelentés kockája is ide néz).
+                from ..pipeline.court3d import scene_anchor_t
 
                 def _horgony(r_):
-                    if r_["tipus"] == "k":
-                        for s_, t_ in _befejezes:
-                            if abs(float(s_) - float(r_["s"])) < 0.01:
-                                return int(t_)
-                    return int(round(float(r_["s"]) * fps_ks))
+                    return scene_anchor_t(match, r_)
                 _fajta = {"d": "dontes-hiba", "sz": "szabad-lovo",
                           "e": "draga-eladas", "k": "kapott-lerohanas",
                           "kg": "kapott-gol"}
@@ -5421,6 +5477,11 @@ def create_app():
             with primitive_cache(match):
                 esemenyek = _clip_events(match, match_id, set(_TYPE_HU))
             mintak = preview_samples(esemenyek)
+            # A számolt típusok mind a válaszban (a nullások is): a
+            # felület így a TÉNYLEG üres csomagot szürkíti, a nem számoltat
+            # (pl. a több meccses visszatérő figurát) nem.
+            for tip_ in _TYPE_HU:
+                osszesen.setdefault(tip_, 0)
             for e in esemenyek:
                 tip_ = e.get("type")
                 # A TELJES darabszám a mezszám-nélküli jeleneteket is

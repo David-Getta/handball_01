@@ -63,6 +63,27 @@ def _szamlalo(monkeypatch):
     return n
 
 
+def test_a_masik_meccs_kapus_jelolese_nem_lepteti_a_hatokort():
+    """A meccs-tár egy MÁSIK meccs kapusait jelöli, mialatt egy meccs
+    hatóköre nyitva van (pl. egy réteg a könyvtárból tölt vissza): a
+    nyitott hatókör nemzedéke nem lép (a kész mérései érvényesek
+    maradnak)."""
+    from handball.pipeline import primitive_cache as pc
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    a = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    b = simulate_ground_truth(duration_s=20, fps=25.0, seed=2)
+    for f in b.frames:
+        for p in f.players:
+            p.role = None
+    with pc.primitive_cache(a):
+        elotte = pc._SCOPE.get()["roles"]
+        pc.mark_goalkeepers(b)
+        assert pc._SCOPE.get()["roles"] == elotte
+        assert pc.active_match() is a
+    assert any(getattr(p, "role", None) for f in b.frames for p in f.players)
+
+
 def test_masodszorra_a_tarbol_jon_es_az_ujrainditast_is_tuleli(konyvtar,
                                                                monkeypatch):
     from handball.api.app import create_app

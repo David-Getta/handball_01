@@ -2211,6 +2211,10 @@ class _Court3DScreenState extends State<Court3DScreen>
         });
       }
     }).catchError((_) {
+      // Hibánál a mutató és a nézőpont nem megy újra (ha az okozta, a
+      // következő küldés már átmegy).
+      _mutato = null;
+      _nezopont = null;
       if (!_vezetHiba && mounted) setState(() => _vezetHiba = true);
     }).whenComplete(() => _vezetUton = false);
   }

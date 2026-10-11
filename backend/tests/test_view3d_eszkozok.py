@@ -1936,7 +1936,9 @@ def test_a_jegyzeteim_szuro():
                  'types: csakJegyzet ? ["note"]', 'q.set("jegyzetek", "1")',
                  'v("jegyzetek") === "1"',
                  'if (csakJegyzet) vetitesVar = true; else vetitesAllit(true);',
-                 "if (vetitesVar){ vetitesVar = false; vetitesAllit(true); }"):
+                 "if (vetitesVar){ vetitesVar = false; vetitesAllit(true); }",
+                 "if (!v.ok){ vetitesVar = false; return; }",
+                 "} catch (e) { vetitesVar = false;"):
         assert kell in oldal, kell
     palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
              / "court3d_screen.dart").read_text(encoding="utf-8")
@@ -2013,7 +2015,7 @@ def test_a_kozos_nezes_mutatoja(tmp_path, monkeypatch):
     from handball.pipeline.view3d_html import view3d_html
 
     ora = [100.0]
-    monkeypatch.setattr(time, "monotonic", lambda: ora[0])
+    monkeypatch.setattr(court3d, "shared3d_ora", lambda: ora[0])
     monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
     m = _meccs()
     app = create_app()
@@ -2033,9 +2035,13 @@ def test_a_kozos_nezes_mutatoja(tmp_path, monkeypatch):
     # Mutató nélkül nincs mutató.
     c.put(url, json={"t": 4})
     assert c.get(url).json()["mutato"] is None
-    for rossz in ({"x": 100, "y": 1, "n": 1}, {"x": "a", "y": 1, "n": 1},
-                  [1, 2, 3], {"x": 1, "y": 1}):
+    for rossz in ({"x": "a", "y": 1, "n": 1}, [1, 2, 3], {"x": 1, "y": 1}):
         assert c.put(url, json={"t": 1, "mutato": rossz}).status_code == 400, rossz
+    # A pályán túlnyúló pont a sávba szorítva (nem állítja meg a vezetést).
+    assert c.put(url, json={"t": 1, "mutato": {"x": 100, "y": -9, "n": 11}}
+                 ).status_code == 200
+    a = c.get(url).json()["mutato"]
+    assert (a["x"], a["y"]) == (45.0, -5.0)
 
     oldal = view3d_html(_meccs())
     for kell in ('if (e.shiftKey && kozosMod === "vezet"){ mutatoKattintas(',
@@ -2069,10 +2075,11 @@ def test_a_kozos_nezes_nezopontja(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     from handball.api.app import create_app
+    from handball.pipeline import court3d
     from handball.pipeline.view3d_html import view3d_html
 
     ora = [50.0]
-    monkeypatch.setattr(time, "monotonic", lambda: ora[0])
+    monkeypatch.setattr(court3d, "shared3d_ora", lambda: ora[0])
     monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
     m = _meccs()
     app = create_app()
@@ -2085,9 +2092,19 @@ def test_a_kozos_nezes_nezopontja(tmp_path, monkeypatch):
     c.put(url, json={"t": 2, "nezopont": nz})
     a = c.get(url).json()["nezopont"]
     assert a == {**nz, "n": 7.0, "kor": 1.25}
-    for rossz in ({**nz, "y": 500}, {**nz, "pitch": 3}, {"x": 1, "y": 1},
-                  {**nz, "yaw": "x"}):
+    for rossz in ({"x": 1, "y": 1}, {**nz, "yaw": "x"}):
         assert c.put(url, json={"t": 1, "nezopont": rossz}).status_code == 400, rossz
+    # A csarnokon túlnyúló nézőpont a dobozba szorítva (a messzire húzott
+    # keringés nem állítja meg a vezetést).
+    assert c.put(url, json={"t": 1, "nezopont": {**nz, "y": 500, "z": -99,
+                                                  "pitch": 3, "n": 8}}
+                 ).status_code == 200
+    a = c.get(url).json()["nezopont"]
+    assert (a["y"], a["z"], a["pitch"]) == (60.0, -60.0, 1.6)
+    # A böngésző is a dobozba szorít, és hibára eldobja a mutatót.
+    oldal0 = view3d_html(_meccs())
+    assert "kzMutato = null; kzNezopont = null;" in oldal0
+    assert "y: clamp(rig.position.y, 0.2, 60)" in oldal0
 
     oldal = view3d_html(_meccs())
     for kell in ('id="ideGomb"', 'ideGomb.disabled = kozosMod !== "vezet";',
@@ -2159,6 +2176,113 @@ def test_a_3d_oldal_kozos_nezese():
     assert (f"const KZ_KULD = {float(court3d.SHARED3D_SEND_S)!r}, KZ_KERD = "
             f"{float(court3d.SHARED3D_POLL_S)!r}, KZ_TURES = "
             f"{float(court3d.SHARED3D_TOLERANCE_S)!r};") in oldal
+
+
+def test_a_kocka_vegpont_videoi_kidobva_is_jok(tmp_path, monkeypatch):
+    """A kocka-végpont videó-gyorsítótára a plafonnál (itt 1) a régit
+    zárja be: két meccs váltakozó kéréseire is mindig a jó kocka jön (a
+    bezárt olvasóból nem olvas), a hibás képrátájú videónál sem olvas
+    végig ezreket (SEQ_READ_MAX_FRAMES)."""
+    import cv2
+    import numpy as np
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline import video_frames
+
+    monkeypatch.setattr(video_frames, "FRAME_CAPS_MAX", 1)
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path / "adat"))
+    app = create_app()
+    c = TestClient(app)
+    for nev, alap in (("a", 0), ("b", 120)):
+        ut = tmp_path / f"{nev}.mp4"
+        w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                            (320, 160))
+        for i in range(60):
+            w.write(np.full((160, 320, 3), alap + i * 2, np.uint8))
+        w.release()
+        m = _meccs()
+        m.meta.match_id = f"kocka-{nev}"
+        m.meta.video_path = str(ut)
+        m.meta.start_frame = 0
+        m.meta.stride = 1
+        app.state.put_match(m)
+    for nev, alap in (("a", 0), ("b", 120), ("a", 0), ("b", 120)):
+        r = c.get(f"/matches/kocka-{nev}/frame", params={"t": 10, "w": 160})
+        assert r.status_code == 200, nev
+        img = cv2.imdecode(np.frombuffer(r.content, np.uint8), cv2.IMREAD_COLOR)
+        assert abs(float(img.mean()) - (alap + 20)) < 6, nev
+
+    class Hamis:
+        """Olvasó, amely 90 000 fps-t mond (hibás konténer)."""
+        def __init__(self, cap):
+            self.cap, self.tekeres, self.olvasas = cap, 0, 0
+
+        def get(self, prop):
+            if prop == cv2.CAP_PROP_FPS:
+                return 90000.0
+            return self.cap.get(prop)
+
+        def set(self, *a):
+            self.tekeres += 1
+            return self.cap.set(*a)
+
+        def grab(self):
+            self.olvasas += 1
+            return self.cap.grab()
+
+        def read(self):
+            return self.cap.read()
+
+    # (a 60 kockás próbavideón a korlát 20: a 90 000 fps-es "2 mp" ennél
+    # sokkal több lenne — a korlát dönt, tekerünk)
+    monkeypatch.setattr(video_frames, "SEQ_READ_MAX_FRAMES", 20)
+    h = Hamis(cv2.VideoCapture(str(tmp_path / "a.mp4")))
+    assert video_frames.read_jpeg(h, 50, 160) is not None
+    assert h.tekeres == 1 and h.olvasas == 0  # tekert, nem olvasott végig
+    h.cap.release()
+
+
+def test_a_reszleges_taktikai_kulcs_nem_kerul_tarba(tmp_path, monkeypatch):
+    """Ha egy csapat felderítése hibázik, a 3D kulcsok részleges eredménye
+    NEM kerül az eredmény-tárba: a következő kérés újrapróbál (és a javult
+    felderítéssel teljes eredményt ad)."""
+    from fastapi.testclient import TestClient
+
+    import handball.api.app as app_mod
+    from handball.api.app import create_app
+    from handball.pipeline import court3d
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("HANDBALL_WARM_RESULTS", "0")
+    hivasok = []
+
+    def kamu_kulcsok(match, reports=None):
+        hivasok.append(sorted(reports or {}))
+        return {"breakpoints": {"home": [], "away": []},
+                "stoppers": {"home": [], "away": []}}
+
+    monkeypatch.setattr(court3d, "tactical_keys_by_team", kamu_kulcsok)
+    eredeti = app_mod.scout_team
+    hibazik = [True]
+
+    def kamu_felderites(match, team, *a, **kw):
+        if hibazik[0] and getattr(team, "value", team) == "away":
+            raise RuntimeError("átmeneti hiba")
+        return eredeti(match, team, *a, **kw)
+
+    monkeypatch.setattr(app_mod, "scout_team", kamu_felderites)
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    url = f"/matches/{m.meta.match_id}/defence-timeline"
+    assert c.get(url).status_code == 200
+    hibazik[0] = False
+    assert c.get(url).status_code == 200
+    # A második kérés újraszámolt (a részleges nem került tárba), és most
+    # mindkét csapat felderítése megvolt.
+    assert len(hivasok) >= 2 and hivasok[-1] == ["away", "home"]
 
 
 def test_a_3d_oldal_videoja():

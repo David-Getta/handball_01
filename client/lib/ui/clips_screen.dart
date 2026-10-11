@@ -213,11 +213,20 @@ class _ClipsScreenState extends State<ClipsScreen> {
   Future<void> _loadClipPlayers() async {
     final id = _matchId;
     if (id == null) return;
+    // Meccs-váltáskor a régi meccs darabszámai és kockái nem maradnak a
+    // csempéken, amíg az új becslés megjön.
+    if (_totals.isNotEmpty || _samples.isNotEmpty) {
+      setState(() {
+        _totals = {};
+        _samples = {};
+      });
+    }
     try {
       final r = await _api.fetchClipPlayers(id);
       final ps = ((r["players"] as List?) ?? const [])
           .cast<Map<String, dynamic>>();
-      if (!mounted) return;
+      // A késve érkező válasz (közben másik meccsre váltottunk) eldobva.
+      if (!mounted || id != _matchId) return;
       setState(() {
         _clipPlayers = ps;
         _totals = {
@@ -242,7 +251,7 @@ class _ClipsScreenState extends State<ClipsScreen> {
         }
       });
     } catch (_) {
-      if (mounted) {
+      if (mounted && id == _matchId) {
         setState(() {
           _clipPlayers = [];
           _totals = {};
@@ -547,7 +556,10 @@ class _ClipsScreenState extends State<ClipsScreen> {
     // A darabszám a csempén: a nullás csomag (ha a becslés megjött)
     // szürke és nem kijelölhető — üres mappát adna. A már kijelölt
     // nullás csomag kivehető marad.
-    final db = _totals.isEmpty ? null : (_totals[key] ?? 0);
+    // (A motor a számolt csomagokat mind visszaadja, a nullásokat is; a
+    // nem számolt — pl. a több meccses visszatérő figura — darabszám
+    // nélkül marad, de kijelölhető.)
+    final db = _totals.isEmpty ? null : _totals[key];
     final ures = db == 0 && key != "note";
     final tiltva = (key == "note" && _noteCount == 0) || (ures && !on);
     final magyarazat = key == "note" && _noteCount == 0

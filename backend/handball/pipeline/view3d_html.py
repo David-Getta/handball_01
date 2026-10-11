@@ -2637,8 +2637,10 @@ const KZ_IDE = "📍 az edző ide hívott";
 const ideGomb = document.getElementById("ideGomb");
 ideGomb.onclick = () => {
   if (kozosMod !== "vezet") return;
-  kzNezopont = {x: rig.position.x, y: Math.max(0.2, rig.position.y), z: rig.position.z,
-                yaw: rig.rotation.y, pitch: clamp(kamera.rotation.x, -1.6, 1.6), n: Date.now()};
+  // (a csarnok dobozában — a motor is oda szorítja)
+  kzNezopont = {x: clamp(rig.position.x, -60, 100), y: clamp(rig.position.y, 0.2, 60),
+                z: clamp(rig.position.z, -60, 80), yaw: rig.rotation.y,
+                pitch: clamp(kamera.rotation.x, -1.6, 1.6), n: Date.now()};
   kzUtolso = 0;
   kozosInfo.textContent = "📍 a csapat ide ugrik";
 };
@@ -2684,7 +2686,10 @@ function kozosFrissit(){
       body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok), mutato: kzMutato, nezopont: kzNezopont})})
       .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(a => { if (kozosMod === "vezet"){ kzKovetok = a.followers; kzVezetoInfo(); } })
-      .catch(() => { if (kozosMod === "vezet") kozosInfo.textContent = "📡 a vezetés nem jut el a motorhoz"; })
+      // Hibánál a mutató és a nézőpont nem megy újra (ha az okozta, a
+      // következő küldés már átmegy).
+      .catch(() => { kzMutato = null; kzNezopont = null;
+                     if (kozosMod === "vezet") kozosInfo.textContent = "📡 a vezetés nem jut el a motorhoz"; })
       .finally(() => { kzUton = false; });
     return;
   }
@@ -2733,7 +2738,9 @@ async function jegyzetBetolt(){
   if (!ADAT.match_id) return;
   try {
     const v = await fetch(jegyzetCim());
-    if (!v.ok) return;
+    // A sikertelen betöltéssel a jegyzetekre váró vetítés elmarad (egy
+    // későbbi jegyzet-írás különben elindítaná).
+    if (!v.ok){ vetitesVar = false; return; }
     const d = await v.json();
     jegyzetek = (d.notes || [])
       .map(n => ({id: n.id, s: Math.round((Number(n.frame) || 0) / FPS * 100) / 100, text: String(n.text || ""),
@@ -2742,7 +2749,7 @@ async function jegyzetBetolt(){
     jegyzetInfo.textContent = jegyzetek.length ? jegyzetek.length + " jegyzet" : "";
     if (jelenetLista.style.display === "block") jelenetListaEpit();
     if (vetitesVar){ vetitesVar = false; vetitesAllit(true); }
-  } catch (e) { /* a motor nélkül (mentett oldal) nincs jegyzet */ }
+  } catch (e) { vetitesVar = false; /* a motor nélkül (mentett oldal) nincs jegyzet */ }
 }
 async function jegyzetIr(){
   if (!ADAT.match_id){ jegyzetInfo.textContent = "a jegyzethez a motor kell"; return; }

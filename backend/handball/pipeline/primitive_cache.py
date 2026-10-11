@@ -169,7 +169,21 @@ def mark_goalkeepers(match: Match) -> None:
     """A kapusok jelölése (a hatókör nyitásának lépése) önállóan — a
     meccs-tár a betöltéskor és a mentéskor hívja, hogy a hatókörön KÍVÜL
     futó végpontok is a jelölt meccsel dolgozzanak (lásd
-    _mark_goalkeepers)."""
+    _mark_goalkeepers).
+
+    Ha a szálon egy MÁSIK meccs hatóköre van nyitva (pl. egy réteg a
+    könyvtár egy másik meccsét tölti vissza), a jelölés hatókör nélkül
+    fut: a szerep-változás jelzése (mark_roles_changed) különben a nyitott
+    hatókör nemzedékét léptetné, és annak minden kész mérése érvénytelen
+    lenne."""
+    scope = _SCOPE.get()
+    if scope is not None and scope["match"] is not match:
+        token = _SCOPE.set(None)
+        try:
+            _mark_goalkeepers(match)
+        finally:
+            _SCOPE.reset(token)
+        return
     _mark_goalkeepers(match)
 
 

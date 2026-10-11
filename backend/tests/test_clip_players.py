@@ -82,7 +82,11 @@ def test_a_csomagok_minta_kockai_a_valaszban():
     client, mid = _client()
     r = client.get(f"/matches/{mid}/clip-players").json()
     assert r["totals"], "a szimuláción van jelenet"
-    assert set(r["samples"]) == set(r["totals"])
+    # A számolt csomagok mind a darabszámban (a nullások is); minta a
+    # nem üresekhez.
+    assert set(r["samples"]) == {t for t, n in r["totals"].items() if n}
+    from handball.pipeline.clips import _TYPE_HU
+    assert set(_TYPE_HU) <= set(r["totals"])
     for tip, idok in r["samples"].items():
         assert 1 <= len(idok) <= min(CLIP_PREVIEW_SAMPLES, r["totals"][tip])
         assert idok == sorted(idok) and all(isinstance(t, int) for t in idok)
@@ -187,7 +191,8 @@ def test_a_becsleshez_a_teljes_darabszam_is_megvan():
     r = client.get(f"/matches/{mid}/clip-players").json()
     assert r["max_clips"] == MAX_CLIPS
     assert r["totals"], "nincs csapat-szintű darabszám"
-    assert all(isinstance(v, int) and v > 0 for v in r["totals"].values())
+    assert all(isinstance(v, int) and v >= 0 for v in r["totals"].values())
+    assert any(v > 0 for v in r["totals"].values())
 
 
 def test_a_teljes_darabszam_a_mezszam_nelkulieket_is_viszi():
