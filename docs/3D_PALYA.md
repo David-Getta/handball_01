@@ -200,7 +200,8 @@ jelző mutatja, hol tart; a lista végén megáll. Kézi tekerés után nem ugri
 el, egy sorra kattintva onnan folytatja. Egy kattintásra: a nyomtatott
 jelentés "Videózandó jelenetek" szakaszának "▶ Mind egymás után" linkje és
 a kezdőlap kártyájának "Vetítés" gombja a 3D pályát a videózandó
-jelenetek vetítésével nyitja (link-paraméter: `vetit=1`). A lista
+jelenetek vetítésével nyitja (link-paraméter: `vetit=1`), TV-kamerával
+(`tv=1` — a labdát követi az oldalvonal felől, mint egy közvetítés). A lista
 Klipek gombja a Videózandó szűrővel a videózandó jeleneteket egy
 klip-csomagban kéri (`key_scene`: időrendben sorszámozott fájlok — az
 edzésen bármilyen lejátszóval sorban levetíthetők).

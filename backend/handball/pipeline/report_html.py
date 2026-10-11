@@ -1155,7 +1155,8 @@ def _scenes_section(match, base_url: str | None = None) -> str:
     jelenet előtt REPORT_SCENE_LEAD_S mp-cel, a hibázó csapatra szűrve,
     nyitott, a videózandó jelenetekre szűkített jelenet-listával; a szakasz
     elején a "▶ Mind egymás után" link a 3D pályát a videózandó jelenetek
-    vetítésével nyitja (vetit=1). A jelentés önálló fájl (nem a motor
+    vetítésével nyitja (vetit=1), TV-kamerával (tv=1 — a labdát követi
+    az oldalvonal felől, mint egy közvetítés). A jelentés önálló fájl (nem a motor
     szolgálja ki), ezért a link csak abszolút címmel él; cím nélkül a
     szakasz link nélkül, papírra ugyanúgy készül.
 
@@ -1193,7 +1194,7 @@ def _scenes_section(match, base_url: str | None = None) -> str:
     if base_url:
         cim = (f"{base_url.rstrip('/')}/matches/"
                f"{escape(match.meta.match_id)}/view3d?t=0&lista=1&kulcs=1"
-               "&vetit=1")
+               "&vetit=1&tv=1")
         vetit = (f'<p><a href="{cim}" style="text-decoration:none">▶ Mind '
                  "egymás után a 3D pályán</a> — minden jelenet 1,5 mp-cel "
                  "előtte indul, és magától lép tovább.</p>")

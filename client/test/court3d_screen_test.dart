@@ -497,8 +497,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       if (find.textContaining("Vetítés · ").evaluate().isNotEmpty) break;
     }
-    // A lista nyitva, a vetítés az első videózandó jeleneten.
+    // A lista nyitva, a vetítés az első videózandó jeleneten, TV-kamerával.
     expect(find.textContaining("Vetítés · 1/"), findsOneWidget);
+    expect(find.text("TV-kamera: BE"), findsOneWidget);
     expect(tester.takeException(), isNull);
     await _zar(tester);
   });

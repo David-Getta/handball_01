@@ -1560,6 +1560,10 @@ def test_a_jelenet_vetites_a_lista_sorain_lep():
     assert oldal.index('v("vetit")') > oldal.index('v("kulcs")')
     assert "final bool vetites;" in palya
     assert palya.count("_kezdoVetites();") == 2
+    # Az egy kattintásos vetítés TV-kamerával nyit (a jelentés linkje
+    # tv=1-et visz, az app a _kezdoVetites-ben kapcsolja).
+    i = palya.index("void _kezdoVetites()")
+    assert "_tvKamera = true;" in palya[i:i + 600]
     kezdolap = (ui / "dashboard_screen.dart").read_text(encoding="utf-8")
     assert "matchId: id, csakVideozando: true, vetites: true" in kezdolap
     # A Klipek gomb a Videózandó szűrővel a videózandó csomagot kéri.

@@ -3,6 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.163 óta)
+
+- **Egy kattintásos vetítés TV-kamerával** (javítás, jelentés, app): a
+  jelentés "▶ Mind egymás után" linkje és a kezdőlap "Vetítés" gombja a
+  videózandó jelenetek vetítését TV-kamerával indítja (a labdát követi az
+  oldalvonal felől, mint egy közvetítés) — eddig az utolsó kamera-állással
+  nyílt, és a jelenet gyakran a kép szélére esett.
+
 ## v0.1.163 — kiadva (2026-10-11)
 
 > Kiadás-jegyzet: a 3D pálya videó-elemző asztal lett. A Vetítés gomb (V;

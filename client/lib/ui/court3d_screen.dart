@@ -902,7 +902,16 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// a _kezdoSzuro szerint már beálltak).
   void _kezdoVetites() {
     final m = _match;
-    if (widget.vetites && m != null) _vetitesAllit(m, true);
+    if (!widget.vetites || m == null) return;
+    // Az egy kattintásos vetítés TV-kamerával nyit (a jelentés tv=1
+    // linkjének párja): a labdát követi az oldalvonal felől.
+    setState(() {
+      _tvKamera = true;
+      _kovMez = null;
+      _kering = false;
+      _szemevel = false;
+    });
+    _vetitesAllit(m, true);
   }
 
   /// A jelenet-lista sorai a "Videózandó" szűrővel (ha be van kapcsolva).
