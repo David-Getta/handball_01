@@ -1122,8 +1122,8 @@ def _scenes_section(match, base_url: str | None = None) -> str:
             "<p>A gólba került labdavesztések és kapott lerohanások, a gólt "
             "érő szabadon hagyott lövések és a legnagyobb döntés-hibák (ahol "
             "jobb opció is volt) — a 3D pálya Jelenet-listájában és a Klipek "
-            "\"Drága eladások\" / \"Kapott lerohanások\" / \"Döntés-hibák\" "
-            "csomagjában ugyanezek.</p>"
+            "\"Videózandó jelenetek\" csomagjában (sorszámozva, időrendben) "
+            "ugyanezek.</p>"
             + vetit + "<ul>" + lis + "</ul>")
 
 

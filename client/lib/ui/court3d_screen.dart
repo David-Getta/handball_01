@@ -1095,10 +1095,14 @@ class _Court3DScreenState extends State<Court3DScreen>
               : () => Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => ClipsScreen(
                       initialMatchId: _matchId,
-                      initialTypes: const [
-                        "bad_decision", "free_shot", "costly_turnover",
-                        "conceded_fast_break",
-                      ]))),
+                      // A Videózandó szűrővel a lista sorai egy
+                      // csomagban, sorszámozva.
+                      initialTypes: _csakKulcs
+                          ? const ["key_scene"]
+                          : const [
+                              "bad_decision", "free_shot", "costly_turnover",
+                              "conceded_fast_break",
+                            ]))),
           style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               visualDensity: VisualDensity.compact),

@@ -4462,6 +4462,19 @@ def create_app():
         return lib
 
     def _clip_events(match, match_id: str, types: set) -> list:
+        """A klip-események a rétegek közös hatókörében (primitive_cache):
+        csak a hatókör nyitása jelöli a kapusokat, és a rétegek így
+        meccsenként egyszer számolnak. A vágás háttérszálon fut (üres
+        hatókörrel indul) — enélkül a lemezről visszatöltött meccsen a
+        kapus-függő csomagok (nagy védés, kihagyott ziccer, videózandó
+        jelenetek) MÁST adhattak, mint a becslés (/clips/players), a
+        jelentés és a 3D pálya, és minden csomag újraszámolta az
+        alap-méréseket. Újra-belépő: a becslés külső hatóköre marad."""
+        from ..pipeline.primitive_cache import primitive_cache
+        with primitive_cache(match):
+            return _clip_events_hatokorben(match, match_id, types)
+
+    def _clip_events_hatokorben(match, match_id: str, types: set) -> list:
         """A klipvágás esemény-listája a kért típusokra — EGY helyen.
 
         Két hívója van: a klipvágó munkás és a /clip-players számláló
@@ -4704,6 +4717,26 @@ def create_app():
                                    "type": "conceded_fast_break",
                                    "team": k_["defending"],
                                    "label": _kimenet[k_["outcome"]]})
+            except Exception:
+                pass
+        if "key_scene" in types:
+            # Videózandó jelenetek (court3d.key_scene_rows — a nyomtatott
+            # jelentés, a kezdőlap kártyája és a 3D vetítés válogatása):
+            # egy csomag, időrendben sorszámozva — az edzés előtt sorban
+            # levetíthető. A csapat a HIBÁZÓ csapat (a sor "side"-ja), a
+            # címke a jelenet fajtája.
+            try:
+                from ..pipeline.court3d import key_scene_rows
+                fps_ks = match.meta.fps if match.meta.fps > 0 else 25.0
+                _fajta = {"d": "dontes-hiba", "sz": "szabad-lovo",
+                          "e": "draga-eladas", "k": "kapott-lerohanas",
+                          "kg": "kapott-gol"}
+                for r_ in key_scene_rows(match)["rows"]:
+                    ev.append({"t": int(round(float(r_["s"]) * fps_ks)),
+                               "type": "key_scene",
+                               "team": r_.get("side") or "home",
+                               "label": _fajta.get(r_["tipus"],
+                                                   r_["tipus"])})
             except Exception:
                 pass
         if "key_moment" in types:

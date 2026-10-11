@@ -1562,3 +1562,9 @@ def test_a_jelenet_vetites_a_lista_sorain_lep():
     assert palya.count("_kezdoVetites();") == 2
     kezdolap = (ui / "dashboard_screen.dart").read_text(encoding="utf-8")
     assert "matchId: id, csakVideozando: true, vetites: true" in kezdolap
+    # A Klipek gomb a Videózandó szűrővel a videózandó csomagot kéri.
+    assert 'types: csakKulcs ? ["key_scene"] : KLIP_TIPUSOK' in oldal
+    assert '_csakKulcs\n                          ? const ["key_scene"]' in palya
+    klip = (ui / "clips_screen.dart").read_text(encoding="utf-8")
+    assert '("key_scene", "Videózandó jelenetek",' in klip
+    assert '("Videózandó jelenetek", ["key_scene"])' in klip

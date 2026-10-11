@@ -72,6 +72,8 @@ const List<(String, List<ClipKind>)> kClipGroups = [
     ("empty_net", "7 a 6 szakaszok", "a lehozott kapus jelenetei"),
   ]),
   ("A MECCS GERINCE", [
+    ("key_scene", "Videózandó jelenetek",
+        "a jelentés és a 3D vetítés válogatása — sorszámozva, időrendben"),
     ("key_moment", "Kulcs-pillanatok", "a meccs története képben"),
     ("turning_point", "Fordulópont", "ahol elbillent a meccs"),
     ("timeout", "Időkérések", "ami a leállás ELŐTT történt"),
@@ -100,6 +102,7 @@ const List<(String, List<String>)> kClipPresets = [
     "conceded_fast_break",
   ]),
   ("Csak gólok", ["goal"]),
+  ("Videózandó jelenetek", ["key_scene"]),
 ];
 
 class ClipsScreen extends StatefulWidget {

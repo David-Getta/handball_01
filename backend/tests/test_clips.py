@@ -754,3 +754,70 @@ def test_a_csapathoz_kotott_cimkes_klip_neve_a_csapatot_is_viszi(tmp_path):
             "steal"} <= CLIP_TEAM_IN_NAME_TYPES
     assert "key_moment" not in CLIP_TEAM_IN_NAME_TYPES
     assert "note" not in CLIP_TEAM_IN_NAME_TYPES
+
+
+
+def test_a_videozando_csomag_a_kulcs_jelenetekbol(tmp_path, monkeypatch):
+    """A "key_scene" csomag a court3d.key_scene_rows sorai (a jelentés, a
+    kezdőlap és a 3D vetítés válogatása): soronként egy esemény a jelenet
+    kockáján, a hibázó csapattal és a fajta címkéjével — és a vágás a
+    rétegek hatókörében építi (a lemezről visszatöltött, szerep nélküli
+    meccsen is ugyanazok a sorok, mint a hatókörben)."""
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline import clips as clips_mod
+    from handball.pipeline.court3d import key_scene_rows
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    assert clips_mod._TYPE_HU["key_scene"] == "videozando"
+    assert "key_scene" in clips_mod.CLIP_TEAM_IN_NAME_TYPES
+    m = simulate_ground_truth(duration_s=180, fps=25.0, seed=5,
+                              shots_per_min=8)
+    with primitive_cache(m):
+        vart = key_scene_rows(m)["rows"]
+    assert vart
+    for f in m.frames:             # a visszatöltött meccs: nincs szerep
+        for p in f.players:
+            p.role = None
+    elkapott = {}
+
+    def kamu(match, ev, types, out_dir, **kw):
+        elkapott["ev"] = ev
+        raise RuntimeError("csak a próba")
+
+    monkeypatch.setattr(clips_mod, "export_event_clips", kamu)
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    j = c.post(f"/matches/{m.meta.match_id}/clips/export",
+               json={"types": ["key_scene"]}).json()
+    for _ in range(600):
+        if c.get(f"/jobs/{j['job_id']}").json()["status"] != "running":
+            break
+        time.sleep(0.2)
+    ev = [e for e in elkapott["ev"] if e["type"] == "key_scene"]
+    fps = m.meta.fps
+    assert [e["t"] for e in ev] == [int(round(r["s"] * fps)) for r in vart]
+    assert [e["team"] for e in ev] == [r["side"] for r in vart]
+    fajta = {"d": "dontes-hiba", "sz": "szabad-lovo", "e": "draga-eladas",
+             "k": "kapott-lerohanas"}
+    assert [e["label"] for e in ev] == [fajta[r["tipus"]] for r in vart]
+
+
+def test_a_klip_esemenyek_a_retegek_hatokoreben_epulnek():
+    """A klip-események építője (a vágás, a becslés és a több meccses
+    válogatás közös útja) maga nyitja a rétegek hatókörét — a vágás
+    háttérszála üres hatókörrel indul."""
+    from pathlib import Path
+
+    forras = (Path(__file__).resolve().parents[1] / "handball" / "api"
+              / "app.py").read_text(encoding="utf-8")
+    i = forras.index("    def _clip_events(match, match_id: str, types: set)")
+    blokk = forras[i:forras.index("    def _clip_events_hatokorben(", i)]
+    assert "with primitive_cache(match):" in blokk
+    assert "return _clip_events_hatokorben(match, match_id, types)" in blokk

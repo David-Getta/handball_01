@@ -44,7 +44,7 @@ CLIP_SAME_MOMENT_S = 0.5
 CLIP_TEAM_IN_NAME_TYPES = frozenset({
     "free_shot", "best_figure", "recurring_figure", "pivot_goal",
     "breakthrough", "steal", "costly_turnover", "bad_decision",
-    "fast_break", "conceded_fast_break"})
+    "fast_break", "conceded_fast_break", "key_scene"})
 
 _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
             "seven_meter": "hetmeteres", "timeout": "idokeres",
@@ -57,7 +57,8 @@ _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
             "breakthrough": "betores", "steal": "labdaszerzes",
             "costly_turnover": "draga-eladas", "bad_decision": "dontes-hiba",
             "fast_break": "lerohanas",
-            "conceded_fast_break": "kapott-lerohanas"}
+            "conceded_fast_break": "kapott-lerohanas",
+            "key_scene": "videozando"}
 
 
 @dataclass

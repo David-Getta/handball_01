@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.162 óta)
 
+- **Klipek: "Videózandó jelenetek" csomag** (új, motor, app, böngésző):
+  a meccs kulcs-jelenetei (a jelentés, a kezdőlap és a 3D vetítés
+  válogatása: gólba került eladások, kapott lerohanás-gólok, gólt érő
+  szabad lövők, a legnagyobb döntés-hibák) egy zip-ben, időrendben
+  sorszámozva ("01_videozando_00-19_Szeged_kapott-lerohanas.mp4") — az
+  edzésen bármilyen lejátszóval sorban levetíthetők. A Klipek
+  képernyőn a "Meccs gerince" csoportban és gyors-összeállításként; a 3D
+  lista Klipek gombja a Videózandó szűrővel ezt kéri. Javítás: a vágás
+  háttérszála a klip-eseményeket a rétegek közös hatókörében építi (mint a
+  becslés) — a kapus-függő csomagok a lemezről visszatöltött meccsen sem
+  térnek el, és az alap-mérések csomagonként egyszer futnak.
+
 - **Videózandó jelenetek egy kattintásra, egymás után** (új, jelentés,
   kezdőlap, böngésző): a nyomtatott jelentés "Videózandó jelenetek"
   szakaszának "▶ Mind egymás után a 3D pályán" linkje és a kezdőlap

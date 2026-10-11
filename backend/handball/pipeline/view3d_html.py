@@ -2382,7 +2382,7 @@ function jelenetListaEpit(){
   const n = document.createElement("span"); n.className = "n";
   n.textContent = "Jelenetek · " + jelenetSorokAkt.length;
   const g = document.createElement("button"); g.id = "klipGomb"; g.textContent = "Klipek";
-  g.title = "A lapozók jelenetei videóként (döntés-hibák, szabad lövők, drága eladások, kapott lerohanások) — a motor vágja, kész zipre letöltő link";
+  g.title = "A lapozók jelenetei videóként (döntés-hibák, szabad lövők, drága eladások, kapott lerohanások; a Videózandó szűrővel a videózandó jelenetek egy csomagban, sorszámozva) — a motor vágja, kész zipre letöltő link";
   g.onclick = klipKer;
   const info = document.createElement("span"); info.id = "klipInfo";
   const link = document.createElement("a"); link.id = "klipLetolt"; link.textContent = "Letöltés";
@@ -2438,7 +2438,8 @@ async function klipKer(){
   try {
     const v = await fetch("/matches/" + encodeURIComponent(ADAT.match_id) + "/clips/export",
       {method: "POST", headers: {"Content-Type": "application/json"},
-       body: JSON.stringify({types: KLIP_TIPUSOK})});
+       // A Videózandó szűrővel a lista sorai egy csomagban, sorszámozva.
+       body: JSON.stringify({types: csakKulcs ? ["key_scene"] : KLIP_TIPUSOK})});
     if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
     const {job_id} = await v.json();
     const kovet = async () => {
