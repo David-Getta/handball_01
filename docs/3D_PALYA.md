@@ -206,33 +206,10 @@ Klipek gombja a Videózandó szűrővel a videózandó jeleneteket egy
 klip-csomagban kéri (`key_scene`: időrendben sorszámozott fájlok — az
 edzésen bármilyen lejátszóval sorban levetíthetők).
 
-A **📡 Vezetem / 👥 Követem** a közös nézés: az edző "Vezetem"-mel a
-lejátszása állapotát (idő, szünet, sebesség, rajz) a motorra küldi, a
-csapat headsetjei a "Követem"-mel (vagy a csapat linkjével: `kovet=1`)
-ezt követik — mindenki a saját helyéről, a saját kamerájával nézi
-ugyanazt a pillanatot: a pálya bejárható, az edző mutatja a szituációt.
-A követő a vezető idejét a válasz korából becsli, és csak 0,4 mp-nél
-nagyobb eltérésnél ugrik (nincs rángatás); ha az edző leáll vagy 15 mp-ig
-hallgat, a követő "nincs vezető"-t lát. Vezetőként a Shift+kattintás a
-padlóra MUTATÓ a csapatnak: a követőknél (és a vezetőnél) 4 mp-ig lüktető
-gyűrű jelzi a pontot — "nézzétek ide"; a később csatlakozónál a régi
-mutató nem villan fel (a motor a mutató korát is adja). A **📍 Ide mindenki** a
-vezető mostani nézőpontját (hely és irány) küldi: a követők kamerája oda
-ugrik (VR-ben a rig — a fej iránya a sajátja marad) — "álljatok mind a
-kapus helyére". A motor
-`/matches/{id}/shared3d` végpontja (PUT/GET/DELETE) memóriában tartja az
-állapotot. Az app 3D füle is vezethet ("📡 Vezetem" a panelen): az edző
-a laptopon teker, megállít, rajzol, a headsetek követik.
-
-A **📺 Videó** (billentyű: K) a valódi felvételt mutatja a 3D mellett, a
-lejátszással szinkronban: kép a képben a jobb alsó sarokban, és egy
-kivetítőn a túlsó oldalvonal fölött — VR-ben ez látszik. A motor
-`/matches/{id}/frame?t=…&w=…` végpontja adja a forrás-videó kockáját JPEG-ben
-(összefűzött meccsnél a megfelelő szakaszból); a link viszi (`video=1`).
-Ha a videó nem érhető el ezen a gépen, az ablak megmondja.
-Az appbeli 3D fülön ugyanez a K (és a panel 📺 Videó gombja): a felvétel
-a 3D kép MELLETT nyílik (a kép keskenyebb lesz, nem takarja), és a
-böngészős nézet linkje is viszi.
+A **Kinek a hibái** választó a hiba-lapozókat egy csapatra szűri: mind
+egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott lövőt,
+az elvesztett labdát, a kapott lerohanást, a kapott gólt) — a saját csapatra szűrve
+videóelemzés a játékosoknak, az ellenfélre szűrve felkészülés ellenük.
 
 A jelenet-lista **Jegyzeteim** szűrője csak az edző jegyzeteit hagyja a
 listában: a Vetítés pontosan a megjelölt pillanatokat játssza (a
@@ -240,6 +217,21 @@ rajzokkal) — ez a csapat-megbeszélés válogatása, a közös nézéssel a
 headseteken is. A Klipek ilyenkor a jegyzet-csomagot kéri; a link viszi
 (`jegyzetek=1`), a jelentés jegyzet-szakaszának "▶ A jegyzetek egymás
 után" linkje így nyitja a 3D pályát.
+
+## Rajz és jegyzet — elemzés a jeleneten
+
+A **✎ Rajz** (billentyű: E) a taktika-tábla a valódi jeleneten: rajz-módban
+a húzás nyilat rajzol a padlóra — sárga a labda/passz, kék a futás,
+piros a védő mozgása. A megállított jeleneten az edző megmutatja, hova
+kellett volna futni, passzolni, lépni; a nyilak a padlón élnek, ezért
+minden nézetből és VR-ben is látszanak. ↶ az utolsót veszi vissza, a
+Törlés mindet; a "Link másolása" viszi őket (`rajz=x1,y1,x2,y2,szín;…`,
+0,1 m-re kerekítve, legfeljebb 30 nyíl), így a videó-elemzés egy címmel
+megosztható. Az appban ugyanez a "✎ Rajz (E)" gomb a panelen (a színek
+mellette, ↶ és törlés); a "Böngészőben" gomb a nyilakat — és a
+jelenet-lista állapotát: a csapat-szűrőt, a nyitott listát, a Videózandó
+szűrőt és a vetítést — is átviszi, így az appban rajzolt jelenet a
+VR-headsetben ugyanúgy nyílik.
 
 A **📝 Jegyzet** (billentyű: J) a mostani pillanathoz ír megjegyzést —
 ugyanabba a jegyzet-tárba, amit a meccs-elemző használ (a motor
@@ -261,55 +253,37 @@ rajzolódnak — a kalibrációval (a pálya-méterből pixelre, a svenkelő
 kamera kulcs-kockáival) vetítve, a jegyzet pillanata előtt 1,5 mp-től a
 klip végéig; kalibráció nélkül a klip rajz nélkül készül.
 
-A **✎ Rajz** (billentyű: E) a taktika-tábla a valódi jeleneten: rajz-módban
-a húzás nyilat rajzol a padlóra — sárga a labda/passz, kék a futás,
-piros a védő mozgása. A megállított jeleneten az edző megmutatja, hova
-kellett volna futni, passzolni, lépni; a nyilak a padlón élnek, ezért
-minden nézetből és VR-ben is látszanak. ↶ az utolsót veszi vissza, a
-Törlés mindet; a "Link másolása" viszi őket (`rajz=x1,y1,x2,y2,szín;…`,
-0,1 m-re kerekítve, legfeljebb 30 nyíl), így a videó-elemzés egy címmel
-megosztható. Az appban ugyanez a "✎ Rajz (E)" gomb a panelen (a színek
-mellette, ↶ és törlés); a "Böngészőben" gomb a nyilakat — és a
-jelenet-lista állapotát: a csapat-szűrőt, a nyitott listát, a Videózandó
-szűrőt és a vetítést — is átviszi, így az appban rajzolt jelenet a
-VR-headsetben ugyanúgy nyílik.
+## Videó a 3D mellett
 
-A **Kinek a hibái** választó a hiba-lapozókat egy csapatra szűri: mind
-egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott lövőt,
-az elvesztett labdát, a kapott lerohanást, a kapott gólt) — a saját csapatra szűrve
-videóelemzés a játékosoknak, az ellenfélre szűrve felkészülés ellenük.
+A **📺 Videó** (billentyű: K) a valódi felvételt mutatja a 3D mellett, a
+lejátszással szinkronban: kép a képben a jobb alsó sarokban, és egy
+kivetítőn a túlsó oldalvonal fölött — VR-ben ez látszik. A motor
+`/matches/{id}/frame?t=…&w=…` végpontja adja a forrás-videó kockáját JPEG-ben
+(összefűzött meccsnél a megfelelő szakaszból); a link viszi (`video=1`).
+Ha a videó nem érhető el ezen a gépen, az ablak megmondja.
+Az appbeli 3D fülön ugyanez a K (és a panel 📺 Videó gombja): a felvétel
+a 3D kép MELLETT nyílik (a kép keskenyebb lesz, nem takarja), és a
+böngészős nézet linkje is viszi.
 
-## Jelenet megosztása
+## Közös nézés — az edző vezet, a csapat követi
 
-A nyomtatható meccs-jelentés "Videózandó jelenetek" sorai végén "3D ↗"
-link ugyanerre a címre mutat (a jelenet előtt 1,5 mp-cel, a hibázó
-csapatra szűrve, nyitott listával) — a jelentés-export a motor címével
-készíti, a meccs-csomag jelentése link nélkül.
-
-A böngészős nézet **Link másolása** gombja a MOSTANI jelenetet adja
-címként: idő, kamera-állás vagy Játékos-/TV-kamera és a bekapcsolt
-rétegek. A címet megnyitva mindez visszaáll — így egy JELENETET
-küldesz a stábnak, nem egy meccset. A paraméterek:
-
-```
-/matches/<meccs>/view3d?t=349&nezet=madar
-   &kamera=h7 | &tv=1
-   &hoter=mind&loves=hazai&passz=vendeg&fal=6-0&falOldal=jobb
-   &nyom=1&passzsav=1&falres=1&jelenet=vendeg&lista=1&kulcs=1&seb=2
-```
-
-## VR-headset
-
-A böngészős oldal WebXR-képes: a lenti "ENTER VR" gombbal a csarnok
-headsetben nyílik, a bal kar hüvelykujj-karja a nézés iránya szerint
-visz. A jelenet-feliratok (esemény, döntés, szabad lövő,
-labdavesztés, gól-akció, lerohanás, kapott gól, hetes, emberelőny) a headsetben
-egy fejhez rögzített
-táblán látszanak, és a jelenetek a kontrollerrel lapozhatók: A/X — a
-következő, B/Y — az előző jelenet, ravasz — lejátszás/szünet, a
-hüvelykujj-kar lenyomása — vetítés (a lista sorai egymás után). A WebXR
-biztonságos környezetet kér — a localhost az; Quest-féle headsetről
-USB-kábellel és `adb reverse`-szel érhető el az app gépe.
+A **📡 Vezetem / 👥 Követem** a közös nézés: az edző "Vezetem"-mel a
+lejátszása állapotát (idő, szünet, sebesség, rajz) a motorra küldi, a
+csapat headsetjei a "Követem"-mel (vagy a csapat linkjével: `kovet=1`)
+ezt követik — mindenki a saját helyéről, a saját kamerájával nézi
+ugyanazt a pillanatot: a pálya bejárható, az edző mutatja a szituációt.
+A követő a vezető idejét a válasz korából becsli, és csak 0,4 mp-nél
+nagyobb eltérésnél ugrik (nincs rángatás); ha az edző leáll vagy 15 mp-ig
+hallgat, a követő "nincs vezető"-t lát. Vezetőként a Shift+kattintás a
+padlóra MUTATÓ a csapatnak: a követőknél (és a vezetőnél) 4 mp-ig lüktető
+gyűrű jelzi a pontot — "nézzétek ide"; a később csatlakozónál a régi
+mutató nem villan fel (a motor a mutató korát is adja). A **📍 Ide mindenki** a
+vezető mostani nézőpontját (hely és irány) küldi: a követők kamerája oda
+ugrik (VR-ben a rig — a fej iránya a sajátja marad) — "álljatok mind a
+kapus helyére". A motor
+`/matches/{id}/shared3d` végpontja (PUT/GET/DELETE) memóriában tartja az
+állapotot. Az app 3D füle is vezethet ("📡 Vezetem" a panelen): az edző
+a laptopon teker, megállít, rajzol, a headsetek követik.
 
 ### Közös nézés több headsettel
 
@@ -334,6 +308,45 @@ VR-mód (WebXR) csak biztonságos címen indul — a `localhost` ilyen. Két
    **Figyelem:** a motor végpontjai így a hálózatról belépés nélkül
    elérhetők (meccsek, jegyzetek, törlés is) — csak megbízható, zárt
    hálózaton nyisd meg, és az edzés után indítsd újra a szokásos módon.
+
+## Jelenet megosztása
+
+A nyomtatható meccs-jelentés "Videózandó jelenetek" sorai végén "3D ↗"
+link ugyanerre a címre mutat (a jelenet előtt 1,5 mp-cel, a hibázó
+csapatra szűrve, nyitott listával) — a jelentés-export a motor címével
+készíti, a meccs-csomag jelentése link nélkül.
+
+A böngészős nézet **Link másolása** gombja a MOSTANI jelenetet adja
+címként: idő, kamera-állás vagy Játékos-/TV-kamera és a bekapcsolt
+rétegek. A címet megnyitva mindez visszaáll — így egy JELENETET
+küldesz a stábnak, nem egy meccset. A paraméterek:
+
+```
+/matches/<meccs>/view3d?t=349&nezet=madar
+   &kamera=h7 | &tv=1
+   &hoter=mind&loves=hazai&passz=vendeg&fal=6-0&falOldal=jobb
+   &nyom=1&passzsav=1&falres=1&jelenet=vendeg&lista=1&kulcs=1&seb=2
+   &jegyzetek=1&vetit=1&rajz=20,13.1,28.4,16.8,0&video=1
+   &kovet=1 | &vezet=1
+```
+
+Az újabbak: `jegyzetek=1` — a Jegyzeteim szűrő; `vetit=1` — a vetítés
+indul (a Jegyzeteim szűrővel a jegyzetek megjöttét megvárja); `rajz=…` —
+a padló nyilai; `video=1` — a felvétel a 3D mellett; `kovet=1` /
+`vezet=1` — közös nézés követőként / vezetőként.
+
+## VR-headset
+
+A böngészős oldal WebXR-képes: a lenti "ENTER VR" gombbal a csarnok
+headsetben nyílik, a bal kar hüvelykujj-karja a nézés iránya szerint
+visz. A jelenet-feliratok (esemény, döntés, szabad lövő,
+labdavesztés, gól-akció, lerohanás, kapott gól, hetes, emberelőny) a headsetben
+egy fejhez rögzített
+táblán látszanak, és a jelenetek a kontrollerrel lapozhatók: A/X — a
+következő, B/Y — az előző jelenet, ravasz — lejátszás/szünet, a
+hüvelykujj-kar lenyomása — vetítés (a lista sorai egymás után). A WebXR
+biztonságos környezetet kér — a localhost az; Quest-féle headsetről
+USB-kábellel és `adb reverse`-szel érhető el az app gépe.
 
 ## Hol él a kód
 
