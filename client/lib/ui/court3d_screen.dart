@@ -230,6 +230,13 @@ class _Court3DScreenState extends State<Court3DScreen>
   int? _videoKepT; // a megjelenített kocka t címkéje
   bool _videoToltes = false;
   bool _videoNincs = false; // nincs felvétel ezen a gépen — nem kérünk újra
+  // KÖZÖS NÉZÉS — az app vezet: a lejátszás állapota _vezetKuldS-enként a
+  // motorra; a csapat headsetjei a böngészős 3D "Követem"-jével követik.
+  static const double _vezetKuldS = 0.3; // court3d.SHARED3D_SEND_S (őr-teszt)
+  bool _vezet = false;
+  bool _vezetUton = false;
+  bool _vezetHiba = false;
+  double _vezetUtolso = 0;
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
@@ -256,6 +263,10 @@ class _Court3DScreenState extends State<Court3DScreen>
 
   @override
   void dispose() {
+    // A követők ne a régi állapotot kövessék tovább.
+    if (_vezet && _matchId != null) {
+      _api.deleteShared3d(_matchId!).catchError((_) {});
+    }
     _ticker.dispose();
     _focus.dispose();
     super.dispose();
@@ -302,6 +313,8 @@ class _Court3DScreenState extends State<Court3DScreen>
   }
 
   Future<void> _open(String id) async {
+    // Meccs-váltáskor a vezetés leáll (a követők a régi meccsen állnának).
+    if (_vezet) _vezetAllit(false);
     setState(() {
       _loading = true;
       _err = null;
@@ -515,6 +528,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         ? 0.0
         : (now - _last).inMicroseconds / 1e6;
     _last = now;
+    _vezetKuld(now);
     if (dt <= 0 || dt > 0.5) return;
     var valtozott = false;
 
@@ -2041,6 +2055,51 @@ class _Court3DScreenState extends State<Court3DScreen>
     });
   }
 
+  /// Vezetés ki/be: bekapcsoláskor a csapat linkje (kovet=1) a
+  /// vágólapra; kikapcsoláskor a motor a követőknek "nincs vezető"-t mond.
+  void _vezetAllit(bool be) {
+    final id = _matchId;
+    if (id == null || _demo) return;
+    setState(() {
+      _vezet = be;
+      _vezetHiba = false;
+      _vezetUtolso = 0;
+    });
+    if (be) {
+      final link = "${_api.baseUrl}/matches/$id/view3d?kovet=1";
+      Clipboard.setData(ClipboardData(text: link)).catchError((_) {});
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Vezetsz — a csapat linkje a vágólapon: $link "
+              "(a headsetek böngészőjében ez nyílik, Követem-mel)")));
+    } else {
+      _api.deleteShared3d(id).catchError((_) {});
+    }
+    _focus.requestFocus();
+  }
+
+  /// A vezető állapotának küldése (a tickerből): idő, megy-e, sebesség,
+  /// rajz — egyszerre egy kérés, _vezetKuldS-enként.
+  void _vezetKuld(Duration now) {
+    final m = _match, id = _matchId;
+    if (!_vezet || _vezetUton || m == null || id == null) return;
+    final mp = now.inMicroseconds / 1e6;
+    if (mp - _vezetUtolso < _vezetKuldS) return;
+    _vezetUtolso = mp;
+    _vezetUton = true;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    _api
+        .putShared3d(id,
+            t: _mostT(m) / fps,
+            playing: _playing,
+            speed: _speed,
+            rajz: encodeDrawing(_rajzok))
+        .then((_) {
+      if (_vezetHiba && mounted) setState(() => _vezetHiba = false);
+    }).catchError((_) {
+      if (!_vezetHiba && mounted) setState(() => _vezetHiba = true);
+    }).whenComplete(() => _vezetUton = false);
+  }
+
   /// Videó ki/be (K, a panel gombja). Bekapcsoláskor újra próbál (a
   /// "nincs felvétel" ítélet azóta elavulhatott — pl. a videó-fájl
   /// visszakerült a helyére).
@@ -2764,6 +2823,36 @@ class _Court3DScreenState extends State<Court3DScreen>
           },
           child: Text(_nyom ? "Labda-nyom: BE" : "Labda-nyom (3 mp)",
               style: const TextStyle(fontSize: 11.5)),
+        ),
+      ),
+      // KÖZÖS NÉZÉS: az app vezet, a csapat headsetjei követik.
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Tooltip(
+          message: "Közös nézés — te vezetsz: a lejátszásod (idő, szünet, "
+              "sebesség, rajz) a csapat headsetjein is fut (a böngészős 3D "
+              "Követem-je; a csapat linkje a vágólapra kerül)",
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: _vezet
+                  ? (_vezetHiba ? AppColors.away : AppColors.accent)
+                  : AppColors.surfaceAlt,
+              foregroundColor:
+                  _vezet ? AppColors.onAccent : AppColors.textSecondary,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            ),
+            onPressed: _demo || _matchId == null
+                ? null
+                : () => _vezetAllit(!_vezet),
+            child: Text(
+                !_vezet
+                    ? "📡 Vezetem"
+                    : _vezetHiba
+                        ? "📡 Vezetés: a motor nem válaszol"
+                        : "📡 Vezetsz",
+                style: const TextStyle(fontSize: 11.5)),
+          ),
         ),
       ),
       // VIDEÓ (K): a valódi felvétel a 3D mellett.

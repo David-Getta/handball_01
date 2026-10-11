@@ -593,6 +593,15 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("közös nézés: a demóban a Vezetem tiltott", (tester) async {
+    await _nyit(tester);
+    final gomb = find.ancestor(
+        of: find.text("📡 Vezetem"), matching: find.byType(FilledButton));
+    expect(gomb, findsOneWidget);
+    expect(tester.widget<FilledButton>(gomb).onPressed, isNull);
+    await _zar(tester);
+  });
+
   test("a kocka-végpont címe", () {
     expect(ApiClient(baseUrl: "http://h:1").frameUrl("m1", 42, w: 640),
         "http://h:1/matches/m1/frame?t=42&w=640");

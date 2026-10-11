@@ -907,6 +907,31 @@ class ApiClient {
     return (json["notes"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// KÖZÖS NÉZÉS — a vezető állapota (PUT /matches/{id}/shared3d): a
+  /// csapat headsetjei (a böngészős 3D "Követem"-je) ezt követik. `t`:
+  /// játékidő-másodperc; `rajz`: a 3D rajz kódja (encodeDrawing).
+  Future<void> putShared3d(String matchId,
+      {required double t,
+      required bool playing,
+      required double speed,
+      String rajz = ""}) async {
+    final resp = await http.put(
+        Uri.parse("$baseUrl/matches/$matchId/shared3d"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(
+            {"t": t, "playing": playing, "speed": speed, "rajz": rajz}));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          _hiba("Nem sikerült a közös nézés állapotát küldeni", resp));
+    }
+  }
+
+  /// A vezetés vége (DELETE /matches/{id}/shared3d): a követők "nincs
+  /// vezető"-t látnak.
+  Future<void> deleteShared3d(String matchId) async {
+    await http.delete(Uri.parse("$baseUrl/matches/$matchId/shared3d"));
+  }
+
   /// A forrás-videó egy kockája JPEG-ben (GET /matches/{id}/frame) — a
   /// 3D pálya "Videó" ablaka ebből mutatja a valódi felvételt. `t`: a
   /// feldolgozott kocka t címkéje; `w`: a kép szélessége (px).

@@ -1961,7 +1961,10 @@ def test_a_kozos_nezes_vegpontjai(tmp_path, monkeypatch):
 def test_a_3d_oldal_kozos_nezese():
     """Az oldalon a "📡 Vezetem" / "👥 Követem": a vezető küld, a követő
     kérdez és követ (idő a korral, szünet, sebesség, rajz), a link viszi
-    (kovet=1); a küszöbök a motor számai."""
+    (kovet=1); a küszöbök a motor számai. Az app is vezethet (ugyanaz a
+    végpont és ütem)."""
+    from pathlib import Path
+
     from handball.pipeline import court3d
     from handball.pipeline.view3d_html import view3d_html
 
@@ -1976,6 +1979,18 @@ def test_a_3d_oldal_kozos_nezese():
                  'v("vezet") === "1"', "if (vetites) vetitesAllit(false);"):
         assert kell in oldal, kell
     assert "__KZ_" not in oldal
+    # Az app is vezethet: ugyanaz a végpont, ugyanaz a küldési ütem.
+    import re
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert '"$baseUrl/matches/$matchId/shared3d"' in api
+    ertek = re.search(r"static const double _vezetKuldS = ([0-9.]+);", palya)
+    assert ertek and float(ertek.group(1)) == court3d.SHARED3D_SEND_S
+    for kell in ("_vezetKuld(now);", "rajz: encodeDrawing(_rajzok))",
+                 '"${_api.baseUrl}/matches/$id/view3d?kovet=1"',
+                 "_api.deleteShared3d(id)"):
+        assert kell in palya, kell
     assert (f"const KZ_KULD = {float(court3d.SHARED3D_SEND_S)!r}, KZ_KERD = "
             f"{float(court3d.SHARED3D_POLL_S)!r}, KZ_TURES = "
             f"{float(court3d.SHARED3D_TOLERANCE_S)!r};") in oldal

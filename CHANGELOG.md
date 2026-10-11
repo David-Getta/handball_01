@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **Közös nézés: az app is vezethet** (új, app): a 3D fül "📡 Vezetem"
+  gombja a lejátszás állapotát (idő, szünet, sebesség, rajz) a motorra
+  küldi — az edző a laptopon teker, megállít, rajzol, a csapat headsetjei
+  a böngészős 3D "Követem"-jével követik; a csapat linkje a vágólapra
+  kerül. Meccs-váltáskor és a fül bezárásakor a vezetés leáll.
+
 - **Közös nézés a 3D pályán** (új, böngésző/VR, motor): az edző "📡
   Vezetem" gombja a lejátszás állapotát (idő, szünet, sebesség, rajz) a
   csapat headsetjeire viszi — a játékosok a "👥 Követem"-mel (a csapat
