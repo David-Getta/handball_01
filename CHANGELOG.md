@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.162 óta)
 
+- **3D pálya: Rajz az appban is; a "Böngészőben" gomb mindent átvisz**
+  (új, app): az app 3D képernyőjén is "✎ Rajz (E)" — húzással nyíl a
+  padlóra, három színnel, vissza és törlés. A "Böngészőben" gomb mostantól
+  a nyilakat és a jelenet-lista állapotát (a csapat-szűrőt, a nyitott
+  listát, a Videózandó szűrőt, a vetítést) is átviszi: az appban
+  előkészített jelenet a böngészőben és a VR-headsetben ugyanúgy nyílik.
+
 - **3D pálya: Rajz — nyilak a padlón** (új, böngésző/VR): a "✎ Rajz"
   (E) módban a húzás nyilat rajzol a padlóra — sárga a labda/passz, kék a
   futás, piros a védő. A taktika-tábla a valódi jeleneten: a megállított

@@ -345,6 +345,43 @@ const double sceneSameMomentS = 0.05;
 /// court3d.SCENE_REEL_TAIL_S tükre (őr-teszt).
 const double sceneReelTailS = 3.5;
 
+/// A rajz-eszköz (nyilak a padlón) közös számai — a böngésző RAJZ_JS
+/// tükre (őr-teszt): a színek (sárga labda/passz, kék futás, piros védő),
+/// legfeljebb ennyi nyíl, és ennél rövidebb húzás nem nyíl (méter).
+const List<int> drawingColors = [0xFFFFD23F, 0xFF4C9AFF, 0xFFFF6B6B];
+const List<String> drawingColorNames = [
+  "sárga — labda, passz", "kék — futás", "piros — védő"];
+const int drawingMax = 30;
+const double drawingMinM = 0.6;
+
+/// A nyílhegy két szárnypontja (pálya-méter): a csúcs (x2, y2), a szárak
+/// [hossz] méterrel vissza a nyíl tengelyén, onnan ±[szel]/2 oldalra — a
+/// böngésző nyilFej-ének tükre.
+(Offset, Offset) arrowHead(
+    double x1, double y1, double x2, double y2, double hossz, double szel) {
+  var d = math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+  if (d == 0) d = 1;
+  final ux = (x2 - x1) / d, uy = (y2 - y1) / d;
+  final bx = x2 - ux * hossz, by = y2 - uy * hossz;
+  return (Offset(bx - uy * szel / 2, by + ux * szel / 2),
+      Offset(bx + uy * szel / 2, by - ux * szel / 2));
+}
+
+/// A nyilak a böngészős nézet "rajz" link-paraméterének alakjában
+/// ("x1,y1,x2,y2,szín;…", 0,1 m-re kerekítve, a JS Math.round-jával
+/// azonosan) — a "Böngészőben" gomb így viszi át a rajzot.
+String encodeDrawing(List<(Offset, Offset, int)> nyilak) {
+  String szam(double v) {
+    final r = (v * 10 + 0.5).floor() / 10;
+    return r == r.roundToDouble() ? r.toInt().toString() : r.toString();
+  }
+
+  return [
+    for (final (a, b, k) in nyilak.take(drawingMax))
+      "${szam(a.dx)},${szam(a.dy)},${szam(b.dx)},${szam(b.dy)},$k"
+  ].join(";");
+}
+
 /// A jelenet-lista egy sora: idő (mp és "p:mm"), fajta ("d" döntés, "sz"
 /// szabad lövés, "e" labdavesztés), felirat, és hogy gól lett-e.
 class SceneRow {

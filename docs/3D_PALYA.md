@@ -212,7 +212,11 @@ kellett volna futni, passzolni, lépni; a nyilak a padlón élnek, ezért
 minden nézetből és VR-ben is látszanak. ↶ az utolsót veszi vissza, a
 Törlés mindet; a "Link másolása" viszi őket (`rajz=x1,y1,x2,y2,szín;…`,
 0,1 m-re kerekítve, legfeljebb 30 nyíl), így a videó-elemzés egy címmel
-megosztható.
+megosztható. Az appban ugyanez a "✎ Rajz (E)" gomb a panelen (a színek
+mellette, ↶ és törlés); a "Böngészőben" gomb a nyilakat — és a
+jelenet-lista állapotát: a csapat-szűrőt, a nyitott listát, a Videózandó
+szűrőt és a vetítést — is átviszi, így az appban rajzolt jelenet a
+VR-headsetben ugyanúgy nyílik.
 
 A **Kinek a hibái** választó a hiba-lapozókat egy csapatra szűri: mind
 egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott lövőt,

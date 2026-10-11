@@ -1616,3 +1616,35 @@ def test_a_rajz_az_oldalon_es_a_linkben():
                  "const RAJZ_SZINEK = ", "function rajzDekodol(s)",
                  "szinpad.add(rajzCsoport);", "csoportUrit(rajzCsoport);"):
         assert kell in oldal, kell
+
+
+
+def test_a_rajz_az_appban_a_bongeszo_tukre():
+    """Az app rajz-eszköze a böngésző RAJZ_JS tükre (a színek, a plafon, a
+    legrövidebb nyíl), a festő a padlóra rajzol, az E és az Esc kezeli; a
+    "Böngészőben" gomb a rajzot és a jelenet-lista állapotát (csapat,
+    nyitott lista, Videózandó, vetítés) is átviszi."""
+    import re
+    from pathlib import Path
+
+    from handball.pipeline.view3d_html import RAJZ_JS
+
+    ui = Path(__file__).resolve().parent.parent.parent / "client" / "lib" / "ui"
+    geo = (ui / "court_geometry.dart").read_text(encoding="utf-8")
+    js_szinek = re.search(r"const RAJZ_SZINEK = \[([^\]]*)\]", RAJZ_JS).group(1)
+    dart_szinek = re.search(r"const List<int> drawingColors = \[([^\]]*)\]",
+                            geo).group(1)
+    assert [s.strip().strip('"').lower() for s in js_szinek.split(",")] == \
+        [s.strip()[4:].lower() for s in dart_szinek.split(",")]
+    assert int(re.search(r"const RAJZ_MAX = (\d+);", RAJZ_JS).group(1)) == \
+        int(re.search(r"const int drawingMax = (\d+);", geo).group(1))
+    assert float(re.search(r"const RAJZ_MIN_M = ([0-9.]+);", RAJZ_JS).group(1)) == \
+        float(re.search(r"const double drawingMinM = ([0-9.]+);", geo).group(1))
+    palya = (ui / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ('q["rajz"] = encodeDrawing(_rajzok);', 'q["vetit"] = "1";',
+                 'q["kulcs"] = "1";', 'q["lista"] = "1";',
+                 'q["jelenet"] = "hazai";', 'q["jelenet"] = "vendeg";',
+                 "LogicalKeyboardKey.keyE", "_rajzModAllit(false);",
+                 "nyilak: [..._rajzok, if (_rajzFolyo != null) _rajzFolyo!],",
+                 "_nyil(canvas, a, b, k);", "if (!_rajzMod) _meresKoppintas("):
+        assert kell in palya, kell

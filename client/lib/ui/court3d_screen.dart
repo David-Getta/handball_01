@@ -206,6 +206,14 @@ class _Court3DScreenState extends State<Court3DScreen>
   // csak ezeken.
   Set<String> _kulcsJelenetek = const {};
   bool _csakKulcs = false;
+  // RAJZ (E): nyilak a padlón — a taktika-tábla a valódi jeleneten (a
+  // böngésző "✎ Rajz"-ának párja; a "Böngészőben" gomb átviszi). A
+  // nyilak pálya-méterben, a színkóddal; a húzás alattié külön.
+  bool _rajzMod = false;
+  int _rajzSzin = 0;
+  final List<(Offset, Offset, int)> _rajzok = [];
+  (Offset, Offset, int)? _rajzFolyo;
+  Offset? _rajzLe; // a lenyomás helye (a skála-gesztus csak a csúszás után indul)
   // VETÍTÉS (V): a lista sorai egymás után — ki/be és a futó sor.
   bool _vetitesBe = false;
   SceneRow? _vetitesSor;
@@ -1617,7 +1625,16 @@ class _Court3DScreenState extends State<Court3DScreen>
         });
         return KeyEventResult.handled;
       }
+      // E — rajz be/ki (a böngésző E-jének párja).
+      if (k == LogicalKeyboardKey.keyE) {
+        _rajzModAllit(!_rajzMod);
+        return KeyEventResult.handled;
+      }
       if (k == LogicalKeyboardKey.escape) {
+        if (_rajzMod && !_szemevel) {
+          _rajzModAllit(false);
+          return KeyEventResult.handled;
+        }
         setState(() {
           if (_szemevel) {
             _szemevel = false;
@@ -1727,6 +1744,14 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (_nyom) q["nyom"] = "1";
     if (_passzsav) q["passzsav"] = "1";
     if (_falres) q["falres"] = "1";
+    // A jelenet-lista állapota és a rajz: a böngésző (VR) ugyanott
+    // folytatja — a szűrt listával, a vetítéssel, a nyilakkal.
+    if (_jelenetCsapat == "home") q["jelenet"] = "hazai";
+    if (_jelenetCsapat == "away") q["jelenet"] = "vendeg";
+    if (_jelenetListaNyitva) q["lista"] = "1";
+    if (_csakKulcs) q["kulcs"] = "1";
+    if (_vetitesBe) q["vetit"] = "1";
+    if (_rajzok.isNotEmpty) q["rajz"] = encodeDrawing(_rajzok);
     if (_speed != 1.0) q["seb"] = _speed.toString();
     final url = Uri.parse("${_api.baseUrl}/matches/$_matchId/view3d")
         .replace(queryParameters: q)
@@ -1779,7 +1804,8 @@ class _Court3DScreenState extends State<Court3DScreen>
               "dupla katt egy játékosra — az ő szemével (Esc) · "
               "katt a padlóra — lövés-mérés · lövéstérkép: katt egy körre — "
               "odaugrik · N / P — következő / előző jelenet · "
-              "V — vetítés (a lista sorai egymás után)",
+              "V — vetítés (a lista sorai egymás után) · "
+              "E — rajz: húzással nyíl a padlóra",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -1879,6 +1905,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                           l["outcome"] == "goal")
                   ],
                   rejtett: rejtett,
+                  nyilak: [..._rajzok, if (_rajzFolyo != null) _rajzFolyo!],
                 ),
               ))),
               // Az eszköz-panel a kép jobb szélén: magasság-korláttal
@@ -2022,6 +2049,24 @@ class _Court3DScreenState extends State<Court3DScreen>
     );
   }
 
+  /// Rajz-mód ki/be (E, a panel gombja).
+  void _rajzModAllit(bool be) {
+    setState(() {
+      _rajzMod = be;
+      _rajzFolyo = null;
+    });
+    _focus.requestFocus();
+  }
+
+  /// Képernyő-pont → padló-pont (pálya-méter, a pálya ±3 m-es sávjában).
+  Offset? _rajzPont(Offset s) {
+    final p = _vetites().padlo(s);
+    if (p == null || p.dx < -3 || p.dx > 43 || p.dy < -3 || p.dy > 23) {
+      return null;
+    }
+    return p;
+  }
+
   /// A 3D kép gesztusai. A húzás a skála-gesztusban (onScaleUpdate): egy
   /// ujj/egér nézelődik vagy keringtet, két ujj vagy a trackpad csípése
   /// közelít. Koppintás a padlóra: lövés-mérés; dupla koppintás egy
@@ -2030,14 +2075,46 @@ class _Court3DScreenState extends State<Court3DScreen>
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: (_) => _focus.requestFocus(),
-      onTapUp: (d) => _meresKoppintas(d.localPosition),
+      onTapUp: (d) {
+        if (!_rajzMod) _meresKoppintas(d.localPosition);
+      },
       onDoubleTapDown: (d) => _dupla = d.localPosition,
       onDoubleTap: () {
         final p = _dupla;
         if (p != null) _szemValasztas(m, p);
       },
-      onScaleStart: (_) => _csipesR0 = _kR,
+      onScaleStart: (d) {
+        _csipesR0 = _kR;
+        // Rajz-módban egy ujj/egér: nyíl a lenyomás helyétől.
+        if (_rajzMod && d.pointerCount == 1) {
+          final p = _rajzPont(_rajzLe ?? d.localFocalPoint);
+          if (p != null) setState(() => _rajzFolyo = (p, p, _rajzSzin));
+        }
+      },
+      onScaleEnd: (_) {
+        final r = _rajzFolyo;
+        if (r == null) return;
+        setState(() {
+          _rajzFolyo = null;
+          if ((r.$2 - r.$1).distance >= drawingMinM &&
+              _rajzok.length < drawingMax) {
+            _rajzok.add(r);
+          }
+        });
+      },
       onScaleUpdate: (d) {
+        final folyo = _rajzFolyo;
+        if (folyo != null) {
+          setState(() {
+            if (d.pointerCount >= 2) {
+              _rajzFolyo = null; // két ujj: csípés, nem rajz
+              return;
+            }
+            final p = _rajzPont(d.localFocalPoint);
+            if (p != null) _rajzFolyo = (folyo.$1, p, folyo.$3);
+          });
+          return;
+        }
         setState(() {
           if (d.scale != 1.0 && d.pointerCount >= 2) {
             if (_kering) {
@@ -2061,6 +2138,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         });
       },
       child: Listener(
+        onPointerDown: (e) => _rajzLe = e.localPosition,
         onPointerSignal: (s) {
           if (s is PointerScrollEvent) {
             setState(() {
@@ -2365,6 +2443,61 @@ class _Court3DScreenState extends State<Court3DScreen>
           child: Text(_nyom ? "Labda-nyom: BE" : "Labda-nyom (3 mp)",
               style: const TextStyle(fontSize: 11.5)),
         ),
+      ),
+      // RAJZ (E): nyilak a padlón — a szín, vissza, törlés.
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor:
+                  _rajzMod ? AppColors.accent : AppColors.surfaceAlt,
+              foregroundColor:
+                  _rajzMod ? AppColors.onAccent : AppColors.textSecondary,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            ),
+            onPressed: () => _rajzModAllit(!_rajzMod),
+            child: Text(_rajzMod ? "✎ Rajz: BE" : "✎ Rajz (E)",
+                style: const TextStyle(fontSize: 11.5)),
+          ),
+          for (var k = 0; k < drawingColors.length; k++)
+            Tooltip(
+              message: drawingColorNames[k],
+              child: InkWell(
+                onTap: () => setState(() => _rajzSzin = k),
+                child: Container(
+                  margin: const EdgeInsets.only(left: 5),
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                      color: Color(drawingColors[k]),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: _rajzSzin == k
+                              ? Colors.white
+                              : Colors.transparent,
+                          width: 2)),
+                ),
+              ),
+            ),
+          IconButton(
+            tooltip: "Az utolsó nyíl vissza",
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            onPressed: _rajzok.isEmpty
+                ? null
+                : () => setState(() => _rajzok.removeLast()),
+            icon: const Icon(Icons.undo),
+          ),
+          IconButton(
+            tooltip: "Minden nyíl törlése",
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            onPressed: _rajzok.isEmpty ? null : () => setState(_rajzok.clear),
+            icon: const Icon(Icons.delete_outline),
+          ),
+        ]),
       ),
       // Lövéstérkép: a meccs lövései a padlón (kör = xG, arany gyűrű = gól).
       Padding(
@@ -3187,6 +3320,8 @@ class _Court3DPainter extends CustomPainter {
   // Az aktív kapott gól (a /conceded-goals egy sora) vagy null.
   final Map<String, dynamic>? kapott;
   final _Jatekos? rejtett;
+  // Rajz: nyilak a padlón (kezdő, vég, színkód — pálya-méter).
+  final List<(Offset, Offset, int)> nyilak;
   _Court3DPainter(
       {required this.frame,
       required this.cx,
@@ -3213,7 +3348,8 @@ class _Court3DPainter extends CustomPainter {
       this.eladasSugar = 2.5,
       this.kontra,
       this.kapott,
-      this.rejtett});
+      this.rejtett,
+      this.nyilak = const []});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
 
@@ -3303,6 +3439,43 @@ class _Court3DPainter extends CustomPainter {
       pontok.add(_kepernyo(jb, fe, me));
     }
     c.drawPath(Path()..addPolygon(pontok, true), p);
+  }
+
+  /// Kitöltött sokszög a padlón (pálya-méter); ha bármely csúcs a közeli
+  /// sík mögé esik, nem rajzolja (hamissal tér vissza).
+  bool _padloSokszog(Canvas c, Paint p, List<Offset> pontok) {
+    final kep = <Offset>[];
+    for (final q in pontok) {
+      final (jb, fe, me) = _kamera(q.dx, q.dy, 0.03);
+      if (me < _kozel) return false;
+      kep.add(_kepernyo(jb, fe, me));
+    }
+    c.drawPath(Path()..addPolygon(kep, true), p);
+    return true;
+  }
+
+  /// Rajz-nyíl a padlón: lapos szár (0,18 m) és hegy — a böngésző
+  /// nyilMesh-ének párja; a közeli sík mögé lógó nyílnál a középvonal.
+  void _nyil(Canvas c, Offset a, Offset b, int k) {
+    final dx = b.dx - a.dx, dy = b.dy - a.dy;
+    final d = math.sqrt(dx * dx + dy * dy);
+    if (d < 1e-6) return;
+    final fej = math.min(0.9, d * 0.45);
+    const szel = 0.18;
+    final ux = dx / d, uy = dy / d;
+    final nx = -uy * szel / 2, ny = ux * szel / 2;
+    final bx = b.dx - ux * fej, by = b.dy - uy * fej;
+    final (h1, h2) = arrowHead(a.dx, a.dy, b.dx, b.dy, fej, fej * 0.9);
+    final p = Paint()
+      ..color = Color(drawingColors[k.clamp(0, drawingColors.length - 1)])
+          .withOpacity(0.92);
+    final szar = _padloSokszog(c, p, [
+      Offset(a.dx + nx, a.dy + ny), Offset(a.dx - nx, a.dy - ny),
+      Offset(bx - nx, by - ny), Offset(bx + nx, by + ny)]);
+    final hegy = _padloSokszog(c, p, [h1, h2, b]);
+    if (!szar || !hegy) {
+      _vonal(c, p..strokeWidth = 3, a.dx, a.dy, 0.03, b.dx, b.dy, 0.03);
+    }
   }
 
   /// Kör a padlón (sugár méterben), szakaszokból — a vágás így a
@@ -4011,6 +4184,11 @@ class _Court3DPainter extends CustomPainter {
     for (final j in sorrend) {
       if (identical(j, rejtett)) continue; // a szemével-nézet saját teste
       _figura(canvas, j, frame.tSec);
+    }
+
+    // Rajz: a nyilak a padlón (a figurák alatt).
+    for (final (a, b, k) in nyilak) {
+      _nyil(canvas, a, b, k);
     }
 
     // Labda. Ha VAN birtokosa (a legközelebbi játékos karnyújtásnyira

@@ -503,6 +503,36 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("rajz (E): húzással nyíl a padlóra, vissza, Esc", (tester) async {
+    await _nyit(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyE);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text("✎ Rajz: BE"), findsOneWidget);
+    IconButton vissza() => tester.widget<IconButton>(find.ancestor(
+        of: find.byIcon(Icons.undo), matching: find.byType(IconButton)));
+    expect(vissza().onPressed, isNull);
+    // Felülnézetből a kép közepe a padló: húzás → nyíl.
+    await tester.ensureVisible(find.text("Madártávlat"));
+    await tester.pump();
+    await tester.tap(find.text("Madártávlat"));
+    await tester.pump(const Duration(milliseconds: 100));
+    final kozep = tester.getRect(_kep()).center;
+    await tester.dragFrom(kozep, const Offset(160, -60));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(vissza().onPressed, isNotNull);
+    // Vissza: elfogy a nyíl (a gomb kezelője — a súgó-buborék a tesztben
+    // a kicsi ikon fölé nyílhat).
+    vissza().onPressed!();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(vissza().onPressed, isNull);
+    // Esc: kilép a rajz-módból.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text("✎ Rajz (E)"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("N / P billentyű: jelenet-lépés a lista sorain", (tester) async {
     await _nyit(tester);
     // N: az első jelenet (a demó első döntése) — a felirat megjelenik.

@@ -6,6 +6,28 @@ import "package:flutter_test/flutter_test.dart";
 import "package:handball_client/ui/court_geometry.dart";
 
 void main() {
+  test("rajz: nyílhegy és link-kódolás = a böngésző RAJZ_JS-e", () {
+    // Ugyanazok az esetek, mint a backend node-tesztjében
+    // (test_a_rajz_nyilhegye_es_link_kodolasa).
+    final (h1, h2) = arrowHead(0, 0, 10, 0, 1, 0.8);
+    expect(h1.dx, closeTo(9, 1e-9));
+    expect(h1.dy, closeTo(0.4, 1e-9));
+    expect(h2.dx, closeTo(9, 1e-9));
+    expect(h2.dy, closeTo(-0.4, 1e-9));
+    expect(
+        encodeDrawing([
+          (const Offset(1.234, 2.25), const Offset(9.87, 4), 1),
+          (const Offset(3, 3), const Offset(6, 7), 2),
+        ]),
+        "1.2,2.3,9.9,4,1;3,3,6,7,2");
+    expect(
+        encodeDrawing([
+          for (var i = 0; i < 40; i++)
+            (const Offset(0, 0), Offset(5, i.toDouble()), 0)
+        ]).split(";").length,
+        drawingMax);
+  });
+
   test("lövés-mérés = backend court3d.shot_geometry", () {
     // (pont, bal kapu?, távolság, kapufa-távolság, kapu-szög, sáv)
     const esetek = [
