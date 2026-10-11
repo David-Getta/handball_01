@@ -2569,6 +2569,15 @@ const kovetGomb = document.getElementById("kovetGomb");
 const kozosInfo = document.getElementById("kozosInfo");
 let kozosMod = null;  // null | "vezet" | "kovet"
 let kzUton = false, kzUtolso = 0, kzRajz = null;
+// A követő állapot-szövege és a váltás ideje: a VR-tábla a váltás után
+// KZ_VR_MS-ig mutatja (a "követed" nem ül végig a szem előtt), a
+// hiba-állapotot ("nincs vezető", "nem válaszol") végig.
+const KZ_KOVETED = "👥 az edzőt követed", KZ_VR_MS = 3000;
+let kzInfoValtas = 0;
+function kzInfo(s){
+  if (kozosInfo.textContent === s) return;
+  kozosInfo.textContent = s; kzInfoValtas = performance.now();
+}
 const kzCim = () => "/matches/" + encodeURIComponent(ADAT.match_id) + "/shared3d";
 function kozosAllit(m){
   if (!ADAT.match_id){ kozosInfo.textContent = "a közös nézéshez a motor kell"; return; }
@@ -2588,7 +2597,7 @@ function kozosAllit(m){
   } else if (kozosMod === "kovet"){
     // A követő saját vetítése a vezetővel versenyezne.
     if (vetites) vetitesAllit(false);
-    kozosInfo.textContent = "👥 várakozás az edzőre…";
+    kzInfo("👥 várakozás az edzőre…");
   } else kozosInfo.textContent = "";
 }
 function kozosFrissit(){
@@ -2606,8 +2615,8 @@ function kozosFrissit(){
   }
   fetch(kzCim(), {cache: "no-store"}).then(r => r.json()).then(a => {
     if (kozosMod !== "kovet") return;
-    if (!a.active){ kozosInfo.textContent = "👥 nincs vezető — az edző nem vezet (vagy bezárta)"; return; }
-    kozosInfo.textContent = "👥 az edzőt követed";
+    if (!a.active){ kzInfo("👥 nincs vezető — az edző nem vezet (vagy bezárta)"); return; }
+    kzInfo(KZ_KOVETED);
     const cel = Math.max(0, Math.min(veg, a.t + (a.playing ? a.kor * a.speed : 0)));
     if (Math.abs(ido - cel) > KZ_TURES){ ido = cel; csuszka.value = ido; }
     megy = !!a.playing; lejatszasGomb.textContent = megy ? "⏸" : "▶";
@@ -2615,7 +2624,7 @@ function kozosFrissit(){
     if (a.rajz !== kzRajz){
       kzRajz = a.rajz; rajzok.length = 0; rajzok.push(...rajzDekodol(a.rajz)); rajzFrissit();
     }
-  }).catch(() => { if (kozosMod === "kovet") kozosInfo.textContent = "👥 a motor nem válaszol"; })
+  }).catch(() => { if (kozosMod === "kovet") kzInfo("👥 a motor nem válaszol"); })
     .finally(() => { kzUton = false; });
 }
 vezetGomb.onclick = () => kozosAllit("vezet");
@@ -3192,9 +3201,15 @@ kamera.add(vrTabla);
 const VR_FELIRAT_KENYSZER = new URLSearchParams(location.search).get("vrfelirat") === "1";
 let vrFeliratUtolso = null;
 function vrFeliratSzoveg(){
-  return VR_FELIRAT_FORRASOK.map(id => document.getElementById(id))
+  const sorok = VR_FELIRAT_FORRASOK.map(id => document.getElementById(id))
     .filter(e => e && e.style.display === "block")
     .map(e => e.textContent.replace(/\\s+/g, " ").trim()).filter(Boolean);
+  // A követő a headsetben is lássa a közös nézés állapotát (a HTML panel
+  // VR-ben nem látszik): váltáskor rövid ideig, hibánál végig.
+  const kz = kozosMod === "kovet" ? kozosInfo.textContent : "";
+  if (kz && (kz !== KZ_KOVETED || performance.now() - kzInfoValtas < KZ_VR_MS))
+    sorok.unshift(kz);
+  return sorok;
 }
 function vrSorok(szoveg, max){
   const ki = []; let sor = "";

@@ -1976,7 +1976,10 @@ def test_a_3d_oldal_kozos_nezese():
                  "Math.abs(ido - cel) > KZ_TURES",
                  "rajzok.push(...rajzDekodol(a.rajz))",
                  'q.set("kovet", "1")', 'v("kovet") === "1"',
-                 'v("vezet") === "1"', "if (vetites) vetitesAllit(false);"):
+                 'v("vezet") === "1"', "if (vetites) vetitesAllit(false);",
+                 # A követő állapota a VR-táblán (váltáskor, hibánál végig).
+                 'const kz = kozosMod === "kovet" ? kozosInfo.textContent : "";',
+                 "kz !== KZ_KOVETED || performance.now() - kzInfoValtas < KZ_VR_MS"):
         assert kell in oldal, kell
     assert "__KZ_" not in oldal
     # Az app is vezethet: ugyanaz a végpont, ugyanaz a küldési ütem.

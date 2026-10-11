@@ -16,7 +16,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   csapat headsetjeire viszi — a játékosok a "👥 Követem"-mel (a csapat
   linkjével) ugyanazt a pillanatot nézik, mindenki a saját helyéről, a
   saját kamerájával: a pálya bejárható, az edző mutatja a szituációt (az
-  útiterv VR-fázisának második lépcsője). Új motor-végpont:
+  útiterv VR-fázisának második lépcsője). A headsetben a felirat-tábla
+  mondja, hogy az edzőt követed (és ha nincs vezető). Új motor-végpont:
   /matches/{id}/shared3d.
 
 - **A böngészős Videó-ablak videó nélkül nem kérdez folyton** (javítás):
