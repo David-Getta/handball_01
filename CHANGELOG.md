@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.162 óta)
 
+- **3D pálya: Rajz — nyilak a padlón** (új, böngésző/VR): a "✎ Rajz"
+  (E) módban a húzás nyilat rajzol a padlóra — sárga a labda/passz, kék a
+  futás, piros a védő. A taktika-tábla a valódi jeleneten: a megállított
+  képen az edző megmutatja, hova kellett volna futni, passzolni, lépni. A
+  nyilak minden nézetből és VR-ben is látszanak, a "Link másolása" viszi
+  őket — a videó-elemzés egy címmel megosztható.
+
 - **Klipek: "Videózandó jelenetek" csomag** (új, motor, app, böngésző):
   a meccs kulcs-jelenetei (a jelentés, a kezdőlap és a 3D vetítés
   válogatása: gólba került eladások, kapott lerohanás-gólok, gólt érő

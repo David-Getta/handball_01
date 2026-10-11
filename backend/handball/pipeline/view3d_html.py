@@ -564,6 +564,48 @@ function hetesFelirat(d, nevH, nevV){
 """
 
 
+# A rajz-eszköz tiszta függvényei (a teszt node-dal futtatja): a nyílhegy
+# szárnypontjai és a link "rajz" paraméterének kódolása. A nyilak
+# pálya-méterben ([x1, y1, x2, y2, színkód]); a link 0,1 m-re kerekít, és
+# legfeljebb RAJZ_MAX nyilat visz (a cím hossza miatt).
+RAJZ_JS = """
+const RAJZ_SZINEK = ["ffd23f", "4c9aff", "ff6b6b"];  // labda/passz, futás, védő
+const RAJZ_MAX = 30;
+const RAJZ_MIN_M = 0.6;  // ennél rövidebb húzás nem nyíl (elcsúszott katt)
+function nyilFej(x1, y1, x2, y2, hossz, szel){
+  // A nyílhegy két szárnypontja: a csúcs (x2, y2), a szárak hossz méterrel
+  // vissza a nyíl tengelyén, onnan ±szel/2 oldalra.
+  const d = Math.hypot(x2 - x1, y2 - y1) || 1;
+  const ux = (x2 - x1) / d, uy = (y2 - y1) / d;
+  const bx = x2 - ux * hossz, by = y2 - uy * hossz;
+  return [[bx - uy * szel / 2, by + ux * szel / 2],
+          [bx + uy * szel / 2, by - ux * szel / 2]];
+}
+function rajzKodol(rajzok){
+  // [[x1, y1, x2, y2, k]] → "x1,y1,x2,y2,k;…" (0,1 m-re kerekítve).
+  return rajzok.slice(0, RAJZ_MAX).map(r =>
+    r.slice(0, 4).map(v => String(Math.round(v * 10) / 10)).join(",") + "," + r[4]).join(";");
+}
+function rajzDekodol(s){
+  // A link "rajz" paramétere → nyilak; a hibás vagy pályán kívüli tag
+  // kimarad, legfeljebb RAJZ_MAX nyíl.
+  const ki = [];
+  for (const tag of String(s || "").split(";")){
+    const p = tag.split(",");
+    if (p.length !== 5) continue;
+    const v = p.slice(0, 4).map(Number);
+    const k = Number(p[4]);
+    if (v.some(x => !isFinite(x) || x < -10 || x > 50)) continue;
+    if (!Number.isInteger(k) || k < 0 || k >= RAJZ_SZINEK.length) continue;
+    if (Math.hypot(v[2] - v[0], v[3] - v[1]) < RAJZ_MIN_M) continue;
+    ki.push([...v, k]);
+    if (ki.length >= RAJZ_MAX) break;
+  }
+  return ki;
+}
+"""
+
+
 # A jelenet-lista sorai: a jelenet-lapozók (Döntések, Szabad lövők,
 # Labdavesztések, Lerohanások, Kapott gólok) jelenetei EGY időrendi
 # listában, rövid magyar felirattal — tiszta függvény, hogy a teszt
@@ -800,6 +842,17 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="hetesInfo"></span>
  </div>
  <div class="sor">
+  <button id="rajzGomb" title="Rajz (E): húzással nyíl a padlóra — a link viszi, VR-ben is látszik">✎ Rajz</button>
+  <select id="rajzSzin" title="A nyíl színe">
+   <option value="0">sárga — labda, passz</option>
+   <option value="1">kék — futás</option>
+   <option value="2">piros — védő</option>
+  </select>
+  <button id="rajzVissza" title="Az utolsó nyíl vissza">↶</button>
+  <button id="rajzTorles" title="Minden nyíl törlése">Törlés</button>
+  <span id="rajzInfo"></span>
+ </div>
+ <div class="sor">
   <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
   <span id="linkInfo"></span>
  </div>
@@ -827,7 +880,8 @@ Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmad
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
-Link másolása — a mostani jelenet (idő, kamera, rétegek) megosztható címként<br>
+Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
+Link másolása — a mostani jelenet (idő, kamera, rétegek, rajz) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai) · V — vetítés: a lista sorai egymás után<br>
 VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés</div>
 <div id="meres"></div>
@@ -1339,7 +1393,8 @@ addEventListener("keydown", e => {
   if (e.code === "KeyV"){ vetitesAllit(!vetites); return; }  // vetítés
   if (e.code === "KeyO"){ keringGomb.onclick(); return; }
   if (e.code === "KeyT"){ tvGomb.onclick(); return; }
-  if (e.code === "Escape"){ if (mod === "jatekos") modValt("szabad"); else meresTorles(); return; }
+  if (e.code === "KeyE"){ rajzModAllit(!rajzMod); return; }  // rajz
+  if (e.code === "Escape"){ if (mod === "jatekos") modValt("szabad"); else if (rajzMod) rajzModAllit(false); else meresTorles(); return; }
   if (["KeyW","KeyA","KeyS","KeyD","KeyR","KeyF","KeyC"].includes(e.code)
       && mod !== "szabad") modValt("szabad");
   gombok.add(e.code);
@@ -1355,7 +1410,12 @@ vaszon.style.touchAction = "none";
 vaszon.addEventListener("pointerdown", e => {
   ujjak.set(e.pointerId, {x: e.clientX, y: e.clientY});
   vaszon.setPointerCapture(e.pointerId);
+  if (rajzMod && ujjak.size === 1 && !fest.xr.isPresenting){
+    const p = padloPont(e.clientX, e.clientY);
+    if (p){ rajzFolyo = [p[0], p[1], p[0], p[1], Number(rajzSzin.value) || 0]; huzas = null; return; }
+  }
   if (ujjak.size === 2){
+    rajzFolyo = null; rajzFrissit();  // két ujj: csípés, nem rajz
     const [p1, p2] = [...ujjak.values()];
     csipes = Math.hypot(p1.x - p2.x, p1.y - p2.y); huzas = null; return;
   }
@@ -1364,6 +1424,11 @@ vaszon.addEventListener("pointerdown", e => {
 vaszon.addEventListener("pointermove", e => {
   if (!ujjak.has(e.pointerId)) return;
   ujjak.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (rajzFolyo && ujjak.size === 1){
+    const p = padloPont(e.clientX, e.clientY);
+    if (p){ rajzFolyo[2] = p[0]; rajzFolyo[3] = p[1]; rajzFrissit(); }
+    return;
+  }
   if (ujjak.size === 2 && csipes){
     const [p1, p2] = [...ujjak.values()];
     const d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
@@ -1388,6 +1453,7 @@ vaszon.addEventListener("pointermove", e => {
 });
 function ujjFel(e){
   ujjak.delete(e.pointerId);
+  if (rajzFolyo){ rajzKesz(); return; }
   if (ujjak.size < 2) csipes = null;
   const katt = huzas && !huzas.mozdult;
   huzas = null;
@@ -1398,7 +1464,7 @@ function ujjFel(e){
   kattIdozito = setTimeout(() => meresKattintas(cx, cy), 260);
 }
 vaszon.addEventListener("pointerup", ujjFel);
-vaszon.addEventListener("pointercancel", e => { ujjak.delete(e.pointerId); huzas = null; csipes = null; });
+vaszon.addEventListener("pointercancel", e => { ujjak.delete(e.pointerId); huzas = null; csipes = null; rajzFolyo = null; rajzFrissit(); });
 vaszon.addEventListener("dblclick", e => {
   clearTimeout(kattIdozito);
   jatekosValasztas(e.clientX, e.clientY);
@@ -1521,6 +1587,68 @@ function kovetFrissit(dt){
     kamera.rotation.set(jatekosNez.pitch, 0, 0);
   }
 }
+
+// ---- Rajz: nyilak a padlón (a taktika-tábla a valódi jeleneten) -----
+// Rajz-módban (E) a húzás nyilat rajzol a padlóra a választott színnel
+// (sárga labda/passz, kék futás, piros védő) — az edző a megállított
+// jeleneten megmutatja, hova kellett volna futni, passzolni, lépni. A
+// nyilak a padlón élnek, tehát minden nézetből és VR-ben is látszanak; a
+// link viszi őket (rajz=…), így a videó-elemzés egy címmel megosztható.
+// A nyíl lapos test (a WebGL-vonal egy pixel vastag, messziről eltűnne).
+const rajzCsoport = new THREE.Group();
+szinpad.add(rajzCsoport);
+const rajzok = [];          // [x1, y1, x2, y2, színkód] — pálya-méter
+let rajzMod = false, rajzFolyo = null;  // a húzás alatti nyíl
+const rajzGomb = document.getElementById("rajzGomb");
+const rajzSzin = document.getElementById("rajzSzin");
+const rajzInfo = document.getElementById("rajzInfo");
+function padloPont(cx, cy){
+  // Képernyő-pont → padló-pont pálya-méterben (a pálya ±3 m-es sávjában).
+  sugarBeallit(cx, cy);
+  const pont = new THREE.Vector3();
+  if (!sugar.ray.intersectPlane(padloSik, pont)) return null;
+  const x = pont.x, y = W - pont.z;
+  if (x < -3 || x > H + 3 || y < -3 || y > W + 3) return null;
+  return [x, y];
+}
+function nyilMesh(x1, y1, x2, y2, k){
+  const d = Math.hypot(x2 - x1, y2 - y1) || 1;
+  const fej = Math.min(0.9, d * 0.45), szel = 0.18;
+  const ux = (x2 - x1) / d, uy = (y2 - y1) / d, nx = -uy * szel / 2, ny = ux * szel / 2;
+  const bx = x2 - ux * fej, by = y2 - uy * fej;
+  const [[ax, ay], [cx, cy]] = nyilFej(x1, y1, x2, y2, fej, fej * 0.9);
+  const P = (x, y) => [x, 0.06, W - y];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute([
+    ...P(x1 + nx, y1 + ny), ...P(x1 - nx, y1 - ny), ...P(bx - nx, by - ny),
+    ...P(bx + nx, by + ny), ...P(ax, ay), ...P(cx, cy), ...P(x2, y2)], 3));
+  g.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6]);
+  return new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    color: parseInt(RAJZ_SZINEK[k] || RAJZ_SZINEK[0], 16), side: THREE.DoubleSide,
+    transparent: true, opacity: 0.92, depthWrite: false}));
+}
+function rajzFrissit(){
+  csoportUrit(rajzCsoport);
+  for (const r of rajzok) rajzCsoport.add(nyilMesh(...r));
+  if (rajzFolyo) rajzCsoport.add(nyilMesh(...rajzFolyo));
+  rajzInfo.textContent = rajzok.length ? rajzok.length + " nyíl" : "";
+}
+function rajzKesz(){
+  // A húzás vége: elég hosszú húzás nyíl lesz (a plafonig).
+  const r = rajzFolyo; rajzFolyo = null; huzas = null;
+  if (r && Math.hypot(r[2] - r[0], r[3] - r[1]) >= RAJZ_MIN_M && rajzok.length < RAJZ_MAX) rajzok.push(r);
+  rajzFrissit();
+}
+function rajzModAllit(be){
+  rajzMod = !!be; rajzFolyo = null;
+  rajzGomb.classList.toggle("be", rajzMod);
+  vaszon.style.cursor = rajzMod ? "crosshair" : "";
+  rajzFrissit();
+}
+rajzGomb.onclick = () => rajzModAllit(!rajzMod);
+document.getElementById("rajzVissza").onclick = () => { rajzok.pop(); rajzFrissit(); };
+document.getElementById("rajzTorles").onclick = () => { rajzok.length = 0; rajzFrissit(); };
+window.rajzProba = () => ({mod: rajzMod, nyilak: rajzok.map(r => r.slice()), kod: rajzKodol(rajzok)});
 
 // ---- Lövés-mérés: katt a padlóra ----------------------------------
 const meresElem = document.getElementById("meres");
@@ -1709,6 +1837,7 @@ function linkEpit(){
   if (jelenetLista.style.display === "block") q.set("lista", "1");
   if (csakKulcs) q.set("kulcs", "1");
   if (vetites) q.set("vetit", "1");
+  if (rajzok.length) q.set("rajz", rajzKodol(rajzok));
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -1738,6 +1867,7 @@ function linkAlkalmaz(){
   // A vetítés a szűrők és a sebesség után indul (a t-ből: az ott futó
   // jelenettől, különben a következőtől).
   if (v("vetit") === "1") vetitesAllit(true);
+  if (v("rajz")){ rajzok.push(...rajzDekodol(v("rajz"))); rajzFrissit(); }
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
   if (v("tv") === "1") modValt("tv");
   if (v("kamera") && [...jatekosKameraValaszto.options].some(o => o.value === v("kamera"))){
@@ -2831,6 +2961,6 @@ fest.setAnimationLoop(() => {
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
                           + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
                           + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS
-                          + HETES_JS)
+                          + HETES_JS + RAJZ_JS)
                  .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))

@@ -205,6 +205,15 @@ Klipek gombja a Videózandó szűrővel a videózandó jeleneteket egy
 klip-csomagban kéri (`key_scene`: időrendben sorszámozott fájlok — az
 edzésen bármilyen lejátszóval sorban levetíthetők).
 
+A **✎ Rajz** (billentyű: E) a taktika-tábla a valódi jeleneten: rajz-módban
+a húzás nyilat rajzol a padlóra — sárga a labda/passz, kék a futás,
+piros a védő mozgása. A megállított jeleneten az edző megmutatja, hova
+kellett volna futni, passzolni, lépni; a nyilak a padlón élnek, ezért
+minden nézetből és VR-ben is látszanak. ↶ az utolsót veszi vissza, a
+Törlés mindet; a "Link másolása" viszi őket (`rajz=x1,y1,x2,y2,szín;…`,
+0,1 m-re kerekítve, legfeljebb 30 nyíl), így a videó-elemzés egy címmel
+megosztható.
+
 A **Kinek a hibái** választó a hiba-lapozókat egy csapatra szűri: mind
 egy csapat hibáját mutatja (a rossz döntést, a szabadon hagyott lövőt,
 az elvesztett labdát, a kapott lerohanást, a kapott gólt) — a saját csapatra szűrve

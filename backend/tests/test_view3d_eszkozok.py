@@ -1568,3 +1568,51 @@ def test_a_jelenet_vetites_a_lista_sorain_lep():
     klip = (ui / "clips_screen.dart").read_text(encoding="utf-8")
     assert '("key_scene", "Videózandó jelenetek",' in klip
     assert '("Videózandó jelenetek", ["key_scene"])' in klip
+
+
+
+@pytest.mark.skipif(NODE is None, reason="node nincs telepítve")
+def test_a_rajz_nyilhegye_es_link_kodolasa():
+    """A rajz-eszköz tiszta függvényei: a nyílhegy szárnypontjai a tengely
+    két oldalán, a csúcstól a megadott hosszal vissza; a link-kódolás
+    0,1 m-re kerekít, és a dekódolás a hibás, pályán kívüli, túl rövid és
+    ismeretlen színű tagokat elhagyja (legfeljebb RAJZ_MAX nyíl)."""
+    from handball.pipeline.view3d_html import RAJZ_JS
+
+    js = RAJZ_JS + """
+const fej = nyilFej(0, 0, 10, 0, 1, 0.8);
+const kod = rajzKodol([[1.234, 2.25, 9.87, 4, 1], [3, 3, 6, 7, 2]]);
+const vissza = rajzDekodol(kod);
+const hibas = rajzDekodol("1,2,3,4;1,2,3,4,9;1,2,99,4,0;1,1,1.2,1,0;x,1,2,3,0;5,5,8,9,0");
+const sok = rajzDekodol(Array.from({length: 40}, (_, i) => "0,0,5," + i + ",0").join(";"));
+console.log(JSON.stringify({fej, kod, vissza, hibas, sok: sok.length, max: RAJZ_MAX}));
+"""
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    ki = json.loads(r.stdout)
+    assert ki["fej"] == [[9, 0.4], [9, -0.4]]
+    assert ki["kod"] == "1.2,2.3,9.9,4,1;3,3,6,7,2"
+    assert ki["vissza"] == [[1.2, 2.3, 9.9, 4, 1], [3, 3, 6, 7, 2]]
+    assert ki["hibas"] == [[5, 5, 8, 9, 0]]
+    assert ki["sok"] == ki["max"] == 30
+
+
+def test_a_rajz_az_oldalon_es_a_linkben():
+    """Az oldalon a rajz-eszköz: a gomb, a színválasztó, a vissza és a
+    törlés, az E billentyű, a mutató-kezelés (rajz-módban a húzás nyíl,
+    két ujj csípés), a link írja és olvassa a "rajz" paramétert, a nyíl a
+    padlón lapos test (VR-ben is látszik)."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="rajzGomb"', 'id="rajzSzin"', 'id="rajzVissza"',
+                 'id="rajzTorles"', 'e.code === "KeyE"',
+                 "else if (rajzMod) rajzModAllit(false);",
+                 "if (rajzFolyo){ rajzKesz(); return; }",
+                 "function padloPont(cx, cy)", "function nyilMesh(",
+                 'q.set("rajz", rajzKodol(rajzok))',
+                 'rajzok.push(...rajzDekodol(v("rajz")))',
+                 "const RAJZ_SZINEK = ", "function rajzDekodol(s)",
+                 "szinpad.add(rajzCsoport);", "csoportUrit(rajzCsoport);"):
+        assert kell in oldal, kell
