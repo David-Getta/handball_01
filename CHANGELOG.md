@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.164 óta)
+## v0.1.165 — kiadva (2026-10-11)
+
+> Kiadás-jegyzet: a közös nézés edzői eszközei. Az edző a pályán mutat —
+> Shift+kattintással lüktető gyűrű a csapat minden headsetjén ("nézzétek
+> ide") —, és egy gombbal ("📍 Ide mindenki") az egész csapatot a saját
+> nézőpontjába hozza, például a kapus helyére. A 3D jelenet-lista
+> "Jegyzeteim" szűrője csak az edző jegyzeteit hagyja meg: a vetítés így
+> a megbeszélés saját válogatása, a rajzokkal — a jelentésből és a
+> Jegyzetek képernyőről egy kattintással indul. A Klipek csomag-csempéi
+> megmutatják, hány jelenet van bennük, és három kockát a felvételből, a
+> vágás előtt. Új útmutató arról, hogyan csatlakozik több headset a
+> közös nézéshez (USB-n vagy a klub hálózatán).
 
 - **Közös nézés: "📍 Ide mindenki"** (új, böngésző/VR, motor): a vezető
   egy gombbal a csapat minden headsetjét a saját nézőpontjába hozza (hely
