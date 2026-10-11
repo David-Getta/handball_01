@@ -129,7 +129,7 @@ class AppTheme {
       // Súgóbuborék: sötét, lekerekített, olvasható — sok van belőle.
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
-          color: AppColors.bgSidebar.withOpacity(0.97),
+          color: AppColors.bgSidebar.withValues(alpha: 0.97),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppColors.borderStrong),
         ),
@@ -150,7 +150,7 @@ class AppTheme {
         thickness: const WidgetStatePropertyAll(6),
         radius: const Radius.circular(3),
         thumbColor: WidgetStatePropertyAll(
-            AppColors.textFaint.withOpacity(0.35)),
+            AppColors.textFaint.withValues(alpha: 0.35)),
       ),
       // Beviteli mezők: kitöltött, lekerekített doboz, akcentus-fókusszal
       // — eddig csak a fiók-képernyő csinálta ezt kézzel, minden más a
@@ -212,11 +212,11 @@ class AppTheme {
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: Colors.transparent,
         overlayColor: WidgetStatePropertyAll(
-            AppColors.accent.withOpacity(0.06)),
+            AppColors.accent.withValues(alpha: 0.06)),
         indicator: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          color: AppColors.accent.withOpacity(0.14),
-          border: Border.all(color: AppColors.accent.withOpacity(0.45)),
+          color: AppColors.accent.withValues(alpha: 0.14),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.45)),
         ),
         labelStyle: const TextStyle(
             fontWeight: FontWeight.w600, fontSize: 12),

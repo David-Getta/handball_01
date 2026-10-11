@@ -359,7 +359,7 @@ class _LabelScreenState extends State<LabelScreen> {
     Widget cimke(String t, Color c) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-              color: c.withOpacity(0.15),
+              color: c.withValues(alpha: 0.15),
               border: Border.all(color: c),
               borderRadius: BorderRadius.circular(6)),
           child: Text(t, style: AppText.label.copyWith(fontSize: 11, color: c)),

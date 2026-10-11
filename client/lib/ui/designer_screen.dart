@@ -592,7 +592,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
       decoration: BoxDecoration(
         color: AppColors.accentSoft,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.accent.withOpacity(0.4)),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -627,12 +627,12 @@ class _DesignerPainter extends CustomPainter {
     final defs = model.respond(ballY, courtLength);
     for (final d in defs) {
       final c = tr.toScreen(d.dx, d.dy);
-      canvas.drawCircle(c, 0.6 * tr.scale, Paint()..color = AppColors.away.withOpacity(0.45));
+      canvas.drawCircle(c, 0.6 * tr.scale, Paint()..color = AppColors.away.withValues(alpha: 0.45));
     }
 
     // Útvonal-előnézet: halvány vonal a kulcs-pozíciókon át (látszik az ív).
     final routePaint = Paint()
-      ..color = AppColors.home.withOpacity(0.35)
+      ..color = AppColors.home.withValues(alpha: 0.35)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6;
     for (final a in attackers) {
@@ -649,7 +649,7 @@ class _DesignerPainter extends CustomPainter {
     for (int i = 0; i < attackers.length; i++) {
       final p = attackers[i][step];
       final c = tr.toScreen(p.dx, p.dy);
-      canvas.drawCircle(c, 0.85 * tr.scale, Paint()..color = AppColors.home.withOpacity(0.18));
+      canvas.drawCircle(c, 0.85 * tr.scale, Paint()..color = AppColors.home.withValues(alpha: 0.18));
       canvas.drawCircle(c, 0.65 * tr.scale, Paint()..color = AppColors.home);
       _label(canvas, c, "${i + 1}", 0.65 * tr.scale);
     }
@@ -677,14 +677,14 @@ class _DesignerPainter extends CustomPainter {
         path.lineTo(pt.dx, pt.dy);
       }
       path.close();
-      canvas.drawPath(path, Paint()..color = AppColors.accent.withOpacity(0.07));
+      canvas.drawPath(path, Paint()..color = AppColors.accent.withValues(alpha: 0.07));
       canvas.drawPath(path, line);
     }
     // 9 m-es szaggatott szabaddobási vonal — a figura-tervezőben ez a
     // vonatkoztatás: a fal és az indulási helyek ehhez képest olvashatók
     // (a felülnézeti meccs-kép ugyanezt rajzolja).
     final dash = Paint()
-      ..color = AppColors.courtLine.withOpacity(0.75)
+      ..color = AppColors.courtLine.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
       ..strokeCap = StrokeCap.round;

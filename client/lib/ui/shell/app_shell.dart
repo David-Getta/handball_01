@@ -337,9 +337,9 @@ class _FinishedBanner extends StatelessWidget {
               AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.md),
           child: Container(
             decoration: BoxDecoration(
-              color: szin.withOpacity(0.10),
+              color: szin.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: szin.withOpacity(0.45)),
+              border: Border.all(color: szin.withValues(alpha: 0.45)),
             ),
             padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.lg, vertical: AppSpacing.md),
@@ -801,7 +801,7 @@ class _SideNavState extends State<_SideNav> {
         // Puha márka-ragyogás — összhangban a belépő képernyő logójával.
         boxShadow: [
           BoxShadow(
-              color: AppColors.accent.withOpacity(0.30),
+              color: AppColors.accent.withValues(alpha: 0.30),
               blurRadius: 18,
               offset: const Offset(0, 4)),
         ],
@@ -913,7 +913,7 @@ class _NavItemState extends State<_NavItem> {
                 style: TextStyle(
                     fontSize: 10.5,
                     color: w.selected
-                        ? AppColors.onAccent.withOpacity(0.7)
+                        ? AppColors.onAccent.withValues(alpha: 0.7)
                         : AppColors.textFaint)),
         ] else if (w.live)
           const Padding(
@@ -948,7 +948,7 @@ class _NavItemState extends State<_NavItem> {
             boxShadow: w.selected
                 ? [
                     BoxShadow(
-                        color: AppColors.accent.withOpacity(0.28),
+                        color: AppColors.accent.withValues(alpha: 0.28),
                         blurRadius: 14,
                         offset: const Offset(0, 3)),
                   ]

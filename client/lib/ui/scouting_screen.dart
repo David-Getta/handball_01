@@ -504,9 +504,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   Widget _caveatCard(String szoveg) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.away.withOpacity(0.10),
+        color: AppColors.away.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.away.withOpacity(0.45)),
+        border: Border.all(color: AppColors.away.withValues(alpha: 0.45)),
       ),
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md, vertical: AppSpacing.md),
@@ -606,7 +606,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.gold.withOpacity(0.5)),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
       ),
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
@@ -655,7 +655,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: szin.withOpacity(0.55)),
+        border: Border.all(color: szin.withValues(alpha: 0.55)),
       ),
       padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
@@ -680,7 +680,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                   margin: const EdgeInsets.only(right: 10, top: 1),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: szin.withOpacity(0.18),
+                    color: szin.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(11),
                   ),
                   child: Text("${i + 1}",

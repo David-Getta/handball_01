@@ -146,7 +146,7 @@ class _IntensityPainter extends CustomPainter {
     }
 
     // Visszafogott rács: 3 vízszintes vonal kerek m/s értékeknél.
-    final grid = Paint()..color = AppColors.border.withOpacity(0.5)..strokeWidth = 1;
+    final grid = Paint()..color = AppColors.border.withValues(alpha: 0.5)..strokeWidth = 1;
     final labelStyle = TextStyle(fontSize: 9, color: AppColors.textFaint);
     final step = geom.maxMs <= 2 ? 0.5 : 1.0;
     for (var v = 0.0; v <= geom.maxMs; v += step) {
@@ -202,7 +202,7 @@ class _IntensityPainter extends CustomPainter {
             ..shader = LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [color.withOpacity(0.14), color.withOpacity(0.0)],
+              colors: [color.withValues(alpha: 0.14), color.withValues(alpha: 0.0)],
             ).createShader(
                 Rect.fromLTRB(0, _IntensityGeom.padT, size.width, base)));
       canvas.drawPath(path, line);

@@ -592,7 +592,7 @@ class _LiveScreenState extends State<LiveScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: _playing ? AppColors.away.withOpacity(0.15) : AppColors.surfaceAlt,
+            color: _playing ? AppColors.away.withValues(alpha: 0.15) : AppColors.surfaceAlt,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: _playing ? AppColors.away : AppColors.border),
           ),
@@ -867,7 +867,7 @@ class _LiveScreenState extends State<LiveScreen> {
             padding: const EdgeInsets.only(top: 12),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(color: color.withOpacity(0.16), borderRadius: BorderRadius.circular(6)),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(6)),
               child: Text(s.category.toUpperCase(),
                   style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.5)),
             ),

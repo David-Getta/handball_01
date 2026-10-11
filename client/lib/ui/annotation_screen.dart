@@ -1749,7 +1749,7 @@ class _AnnotationScreenState extends State<AnnotationScreen>
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.6)),
+        border: Border.all(color: color.withValues(alpha: 0.6)),
       ),
       child: Text(text, style: AppText.label.copyWith(color: color, fontSize: 12)),
     );
@@ -2005,7 +2005,7 @@ class _AnnotationScreenState extends State<AnnotationScreen>
           top: 4,
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.surface.withOpacity(0.82),
+              color: AppColors.surface.withValues(alpha: 0.82),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: AppColors.border),
             ),
@@ -2415,7 +2415,7 @@ class _AnnotationScreenState extends State<AnnotationScreen>
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
-        color: editing ? AppColors.gold.withOpacity(0.10) : null,
+        color: editing ? AppColors.gold.withValues(alpha: 0.10) : null,
         borderRadius: BorderRadius.circular(8),
       ),
       child: InkWell(
@@ -2742,7 +2742,7 @@ class _BoardPainter extends CustomPainter {
           width = 3.2;
           break;
         default:
-          color = Colors.white.withOpacity(0.9);
+          color = Colors.white.withValues(alpha: 0.9);
           width = 2.2;
       }
       _arrow(canvas, s0, e0, color, width, dashed: a.kind == "run");
@@ -2765,7 +2765,7 @@ class _BoardPainter extends CustomPainter {
       final c = tr.toScreen(t.x, t.y);
       final color = t.team == "home" ? AppColors.home : AppColors.away;
       if (t.id == pending) {
-        canvas.drawCircle(c, r + 5, Paint()..color = AppColors.gold.withOpacity(0.35));
+        canvas.drawCircle(c, r + 5, Paint()..color = AppColors.gold.withValues(alpha: 0.35));
       }
       canvas.drawCircle(c, r, Paint()..color = color);
       if (t.id == selected || t.id == pending) {
@@ -2790,7 +2790,7 @@ class _BoardPainter extends CustomPainter {
           c,
           r * 0.45,
           Paint()
-            ..color = Colors.black.withOpacity(0.5)
+            ..color = Colors.black.withValues(alpha: 0.5)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1);
     }
@@ -2862,11 +2862,11 @@ class _BoardPainter extends CustomPainter {
         path.lineTo(pt.dx, pt.dy);
       }
       path.close();
-      canvas.drawPath(path, Paint()..color = AppColors.accent.withOpacity(0.07));
+      canvas.drawPath(path, Paint()..color = AppColors.accent.withValues(alpha: 0.07));
       canvas.drawPath(path, line);
       // 9 m-es szaggatott vonal.
       final dash = Paint()
-        ..color = AppColors.courtLine.withOpacity(0.75)
+        ..color = AppColors.courtLine.withValues(alpha: 0.75)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2
         ..strokeCap = StrokeCap.round;
@@ -2889,7 +2889,7 @@ class _BoardPainter extends CustomPainter {
       canvas.drawRect(
           goal,
           Paint()
-            ..color = Colors.white.withOpacity(0.55)
+            ..color = Colors.white.withValues(alpha: 0.55)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.6);
     }

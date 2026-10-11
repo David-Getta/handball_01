@@ -1420,7 +1420,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                 return InkWell(
                   onTap: () => _jelenetUgras(m, r),
                   child: Container(
-                    color: k == aktiv ? AppColors.home.withOpacity(0.45) : null,
+                    color: k == aktiv ? AppColors.home.withValues(alpha: 0.45) : null,
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                     child: Row(children: [
@@ -1446,7 +1446,7 @@ class _Court3DScreenState extends State<Court3DScreen>
     return Container(
       width: 360,
       decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.94),
+        color: AppColors.surface.withValues(alpha: 0.94),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.borderStrong),
       ),
@@ -2088,9 +2088,9 @@ class _Court3DScreenState extends State<Court3DScreen>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.gold.withOpacity(0.15),
+                  color: AppColors.gold.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.gold.withOpacity(0.5)),
+                  border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
                 ),
                 child: Text("DEMÓ — elemezz egy meccset, és az jön ide",
                     style: AppText.label
@@ -2549,7 +2549,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppColors.surface.withOpacity(0.85),
+                      color: AppColors.surface.withValues(alpha: 0.85),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: AppColors.gold),
                     ),
@@ -2728,7 +2728,7 @@ class _Court3DScreenState extends State<Court3DScreen>
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
               color: _kovMez != null
-                  ? AppColors.accent.withOpacity(0.18)
+                  ? AppColors.accent.withValues(alpha: 0.18)
                   : AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: AppColors.borderStrong),
@@ -2804,7 +2804,7 @@ class _Court3DScreenState extends State<Court3DScreen>
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: _fal.isNotEmpty
-                ? AppColors.gold.withOpacity(0.15)
+                ? AppColors.gold.withValues(alpha: 0.15)
                 : AppColors.surfaceAlt,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppColors.borderStrong),
@@ -2856,7 +2856,7 @@ class _Court3DScreenState extends State<Court3DScreen>
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: _passz.isNotEmpty
-                ? AppColors.accent.withOpacity(0.15)
+                ? AppColors.accent.withValues(alpha: 0.15)
                 : AppColors.surfaceAlt,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppColors.borderStrong),
@@ -2888,7 +2888,7 @@ class _Court3DScreenState extends State<Court3DScreen>
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: _hoter.isNotEmpty
-                ? AppColors.accent.withOpacity(0.15)
+                ? AppColors.accent.withValues(alpha: 0.15)
                 : AppColors.surfaceAlt,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppColors.borderStrong),
@@ -3132,7 +3132,7 @@ class _Court3DScreenState extends State<Court3DScreen>
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: _lovesTerkep.isNotEmpty
-                ? AppColors.accent.withOpacity(0.15)
+                ? AppColors.accent.withValues(alpha: 0.15)
                 : AppColors.surfaceAlt,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppColors.borderStrong),
@@ -3165,7 +3165,7 @@ class _Court3DScreenState extends State<Court3DScreen>
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: _jelenetCsapat.isNotEmpty
-                ? AppColors.accent.withOpacity(0.15)
+                ? AppColors.accent.withValues(alpha: 0.15)
                 : AppColors.surfaceAlt,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppColors.borderStrong),
@@ -3544,7 +3544,7 @@ class _Court3DScreenState extends State<Court3DScreen>
       constraints: const BoxConstraints(maxWidth: 340),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.88),
+        color: AppColors.surface.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: szin),
       ),
@@ -4098,7 +4098,7 @@ class _Court3DPainter extends CustomPainter {
     final (h1, h2) = arrowHead(a.dx, a.dy, b.dx, b.dy, fej, fej * 0.9);
     final p = Paint()
       ..color = Color(drawingColors[k.clamp(0, drawingColors.length - 1)])
-          .withOpacity(0.92);
+          .withValues(alpha: 0.92);
     final szar = _padloSokszog(c, p, [
       Offset(a.dx + nx, a.dy + ny), Offset(a.dx - nx, a.dy - ny),
       Offset(bx - nx, by - ny), Offset(bx + nx, by + ny)]);
@@ -4160,11 +4160,11 @@ class _Court3DPainter extends CustomPainter {
         ? Color.lerp(j.home ? AppColors.home : AppColors.away,
             const Color(0xFF7BE3A0), 0.55)!
         : (j.home ? AppColors.home : AppColors.away);
-    final mez = csapat.withOpacity(alpha);
-    final nadrag = Color.lerp(csapat, Colors.black, 0.5)!.withOpacity(alpha);
-    final bor = const Color(0xFFE3B98F).withOpacity(alpha);
-    final haj = const Color(0xFF3A2A1E).withOpacity(alpha);
-    final zokni = Colors.white.withOpacity(0.85 * alpha);
+    final mez = csapat.withValues(alpha: alpha);
+    final nadrag = Color.lerp(csapat, Colors.black, 0.5)!.withValues(alpha: alpha);
+    final bor = const Color(0xFFE3B98F).withValues(alpha: alpha);
+    final haj = const Color(0xFF3A2A1E).withValues(alpha: alpha);
+    final zokni = Colors.white.withValues(alpha: 0.85 * alpha);
 
     // Lokális (előre, jobbra, magasság) → képernyő; null, ha mögöttünk.
     Offset? pont(double e, double o, double z) {
@@ -4194,7 +4194,7 @@ class _Court3DPainter extends CustomPainter {
     }
     if (arny.length >= 3) {
       canvas.drawPath(Path()..addPolygon(arny, true),
-          Paint()..color = Colors.black.withOpacity(0.35 * alpha));
+          Paint()..color = Colors.black.withValues(alpha: 0.35 * alpha));
     }
 
     // Láb: csípő → térd → boka (ellenütemben a két oldal).
@@ -4210,7 +4210,7 @@ class _Court3DPainter extends CustomPainter {
       final orr = pont(lend * 0.38 + 0.12, oldal * 0.13, 0.04);
       if (orr != null) {
         canvas.drawLine(boka, orr,
-            vonalFestek(const Color(0xFF22262E).withOpacity(alpha), 0.11));
+            vonalFestek(const Color(0xFF22262E).withValues(alpha: alpha), 0.11));
       }
     }
 
@@ -4269,7 +4269,7 @@ class _Court3DPainter extends CustomPainter {
           text: TextSpan(
               text: "${j.mez}",
               style: TextStyle(
-                  color: Colors.white.withOpacity(0.95 * alpha),
+                  color: Colors.white.withValues(alpha: 0.95 * alpha),
                   fontSize: (11.0 * 6 / melyKozep).clamp(7.0, 16.0),
                   fontWeight: FontWeight.bold)),
           textDirection: TextDirection.ltr,
@@ -4284,11 +4284,11 @@ class _Court3DPainter extends CustomPainter {
     _keszit(size);
 
     final vonal = Paint()
-      ..color = AppColors.courtLine.withOpacity(0.9)
+      ..color = AppColors.courtLine.withValues(alpha: 0.9)
       ..strokeWidth = 1.4
       ..style = PaintingStyle.stroke;
     final halvany = Paint()
-      ..color = AppColors.courtLine.withOpacity(0.22)
+      ..color = AppColors.courtLine.withValues(alpha: 0.22)
       ..strokeWidth = 1.0;
 
     // Talaj-rács a mélység-érzethez (5 m-enként, a pályán kívül is egy sáv).
@@ -4320,7 +4320,7 @@ class _Court3DPainter extends CustomPainter {
             Path()..addPolygon(sarkok, true),
             Paint()
               ..color = (sotet ? const Color(0xFF6E4728) : const Color(0xFF7A5030))
-                  .withOpacity(0.55));
+                  .withValues(alpha: 0.55));
       }
     }
 
@@ -4344,7 +4344,7 @@ class _Court3DPainter extends CustomPainter {
           Path()..addPolygon(sarkok, true),
           Paint()
             ..color = (c.home ? AppColors.home : AppColors.away)
-                .withOpacity(0.1 + 0.65 * c.erosseg));
+                .withValues(alpha: 0.1 + 0.65 * c.erosseg));
     }
 
     // Pálya-vonalak (méretek: court_geometry — a szabálykönyvből).
@@ -4387,7 +4387,7 @@ class _Court3DPainter extends CustomPainter {
     // növő sugár; gól telt + arany gyűrű, védés/mellé halvány).
     for (final l in lovesek) {
       final szin = l.home ? AppColors.home : AppColors.away;
-      _korong(canvas, Paint()..color = szin.withOpacity(l.gol ? 0.9 : 0.45),
+      _korong(canvas, Paint()..color = szin.withValues(alpha: l.gol ? 0.9 : 0.45),
           l.x, l.y, l.r);
       if (l.gol) {
         _kor(
@@ -4412,7 +4412,7 @@ class _Court3DPainter extends CustomPainter {
             canvas,
             Paint()
               ..color = (fr.wide[i] ? AppColors.away : AppColors.accent)
-                  .withOpacity(0.9)
+                  .withValues(alpha: 0.9)
               ..strokeWidth = fr.wide[i] ? 5.0 : 3.0
               ..strokeCap = StrokeCap.round,
             a.dx,
@@ -4433,7 +4433,7 @@ class _Court3DPainter extends CustomPainter {
         _vonal(
             canvas,
             Paint()
-              ..color = szin.withOpacity(0.9)
+              ..color = szin.withValues(alpha: 0.9)
               ..strokeWidth = 2.6,
             ps.$1.$2,
             ps.$1.$3,
@@ -4521,7 +4521,7 @@ class _Court3DPainter extends CustomPainter {
         _vonal(
             canvas,
             Paint()
-              ..color = szin.withOpacity(0.35 + 0.65 * (i + 1) / lanc.length)
+              ..color = szin.withValues(alpha: 0.35 + 0.65 * (i + 1) / lanc.length)
               ..strokeWidth = 2.4,
             (a[0] as num).toDouble(), (a[1] as num).toDouble(), 1.0,
             (b[0] as num).toDouble(), (b[1] as num).toDouble(), 1.0);
@@ -4700,7 +4700,7 @@ class _Court3DPainter extends CustomPainter {
           canvas,
           Paint()
             ..color = (p.home ? AppColors.home : AppColors.away)
-                .withOpacity(p.alpha)
+                .withValues(alpha: p.alpha)
             ..strokeWidth = p.z > 0.5 ? 2.4 : 1.2,
           p.x1,
           p.y1,
@@ -4717,7 +4717,7 @@ class _Court3DPainter extends CustomPainter {
       _vonal(
           canvas,
           Paint()
-            ..color = AppColors.ball.withOpacity(a)
+            ..color = AppColors.ball.withValues(alpha: a)
             ..strokeWidth = 2.2,
           nyom[i].dx,
           nyom[i].dy,
@@ -4742,14 +4742,14 @@ class _Court3DPainter extends CustomPainter {
       }
       if (csucsok.length == 3) {
         canvas.drawPath(Path()..addPolygon(csucsok, true),
-            Paint()..color = AppColors.accent.withOpacity(0.28));
+            Paint()..color = AppColors.accent.withValues(alpha: 0.28));
       }
       _vonal(canvas, kek, mp.dx, mp.dy, 0.02, g.goalX, y1, 0.02);
       _vonal(canvas, kek, mp.dx, mp.dy, 0.02, g.goalX, y2, 0.02);
       _talajUtvonal(
           canvas,
           Paint()
-            ..color = Colors.white.withOpacity(0.85)
+            ..color = Colors.white.withValues(alpha: 0.85)
             ..strokeWidth = 1.2,
           [
             for (var i = 0; i <= 20; i++)
@@ -4793,13 +4793,13 @@ class _Court3DPainter extends CustomPainter {
       }
       if (jo) {
         canvas.drawPath(Path()..addPolygon(sarkok, true),
-            Paint()..color = AppColors.away.withOpacity(0.22));
+            Paint()..color = AppColors.away.withValues(alpha: 0.22));
       }
     }
 
     // Védekezés-sablon: sárga körök a tankönyvi védő-helyeken.
     final sarga = Paint()
-      ..color = AppColors.gold.withOpacity(0.9)
+      ..color = AppColors.gold.withValues(alpha: 0.9)
       ..strokeWidth = 2.2;
     for (final p in falPontok) {
       _kor(canvas, sarga, p.dx, p.dy, 0.42);
@@ -4807,7 +4807,7 @@ class _Court3DPainter extends CustomPainter {
 
     // Kapuk: 3 m széles, 2 m magas keret + jelzés-háló.
     final kapu = Paint()
-      ..color = AppColors.gold.withOpacity(0.85)
+      ..color = AppColors.gold.withValues(alpha: 0.85)
       ..strokeWidth = 2.0;
     for (final x in [0.0, courtLength]) {
       final y1 = courtWidth / 2 - goalWidth / 2;

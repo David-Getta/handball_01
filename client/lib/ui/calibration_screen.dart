@@ -1016,9 +1016,9 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color: szin.withOpacity(0.10),
+        color: szin.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: szin.withOpacity(0.5)),
+        border: Border.all(color: szin.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1548,7 +1548,7 @@ class _CalibPainter extends CustomPainter {
   void _drawHandles(Canvas canvas) {
     for (int i = 0; i < corners.length; i++) {
       final c = corners[i];
-      canvas.drawCircle(c, 11, Paint()..color = AppColors.accent.withOpacity(0.25));
+      canvas.drawCircle(c, 11, Paint()..color = AppColors.accent.withValues(alpha: 0.25));
       canvas.drawCircle(c, 7, Paint()..color = AppColors.accent);
       canvas.drawCircle(c, 7, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.5);
       if (i == active) {
@@ -1610,7 +1610,7 @@ class _CalibPainter extends CustomPainter {
       // ha a 6 m-es ráül a valódi vonalra, de a 9 m-es elcsúszik, a
       // sarokpontok rosszul állnak (a hiba a képen azonnal látszik).
       final dash = Paint()
-        ..color = AppColors.gold.withOpacity(0.5)
+        ..color = AppColors.gold.withValues(alpha: 0.5)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2
         ..strokeCap = StrokeCap.round;

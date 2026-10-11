@@ -129,11 +129,11 @@ class _JobsScreenState extends State<JobsScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.accent.withOpacity(0.10), AppColors.surface],
+          colors: [AppColors.accent.withValues(alpha: 0.10), AppColors.surface],
           stops: const [0.0, 0.6],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.accent.withOpacity(0.35)),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.35)),
       ),
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(

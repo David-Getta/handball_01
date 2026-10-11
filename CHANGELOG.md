@@ -3,6 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.166 óta)
+
+- **Kliens: elavult színkezelés lecserélve** (karbantartás): a
+  Color.withOpacity helyett withValues(alpha:) — a Flutter-elemző 196
+  megjegyzéséből 188 ez volt, így az új figyelmeztetések nem vesznek el a
+  zajban. A véletlenül verziókövetésbe került próba-összeomlásnapló
+  törölve, és a .gitignore-ba került.
+
 ## v0.1.166 — kiadva (2026-10-11)
 
 > Kiadás-jegyzet: a csapat-megbeszélés egy kattintás. A kezdőlap "👥

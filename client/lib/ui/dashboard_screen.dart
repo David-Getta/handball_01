@@ -440,7 +440,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.away.withOpacity(0.08),
+        color: AppColors.away.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.away),
       ),
@@ -541,7 +541,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.gold.withOpacity(0.10),
+        color: AppColors.gold.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.gold),
       ),
@@ -743,7 +743,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.accent.withOpacity(0.08),
+        color: AppColors.accent.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.accent),
       ),
@@ -2659,7 +2659,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     height: 26,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.15),
+                      color: AppColors.accent.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                       border: Border.all(color: AppColors.accent),
                     ),
@@ -2694,7 +2694,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Container(
                     width: 1,
                     height: AppSpacing.md + 4,
-                    color: AppColors.accent.withOpacity(0.35)),
+                    color: AppColors.accent.withValues(alpha: 0.35)),
               ),
           ],
           const SizedBox(height: AppSpacing.lg),
@@ -3220,10 +3220,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.gold.withOpacity(0.12),
+                      color: AppColors.gold.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                       border:
-                          Border.all(color: AppColors.gold.withOpacity(0.4)),
+                          Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
                     ),
                     child: Text(
                         "${it["title"]} · ${it["count"]} meccsen",
@@ -3270,7 +3270,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           end: Alignment.bottomRight,
           colors: [
             accent
-                ? AppColors.accent.withOpacity(0.10)
+                ? AppColors.accent.withValues(alpha: 0.10)
                 : AppColors.surface,
             AppColors.surface,
           ],
@@ -3279,7 +3279,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
             color: accent
-                ? AppColors.accent.withOpacity(0.35)
+                ? AppColors.accent.withValues(alpha: 0.35)
                 : AppColors.border),
       ),
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -3295,7 +3295,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 height: 24,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: tint.withOpacity(0.13),
+                  color: tint.withValues(alpha: 0.13),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, size: 13, color: tint),
@@ -3541,9 +3541,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.14),
+          color: color.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.6)),
+          border: Border.all(color: color.withValues(alpha: 0.6)),
         ),
         child: Text(label,
             style: AppText.label.copyWith(fontSize: 10.5, color: color)),
@@ -3648,10 +3648,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppColors.gold.withOpacity(0.15),
+                          color: AppColors.gold.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                              color: AppColors.gold.withOpacity(0.5)),
+                              color: AppColors.gold.withValues(alpha: 0.5)),
                         ),
                         child: Text("részleges",
                             style: AppText.label.copyWith(
@@ -3664,10 +3664,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppColors.accent.withOpacity(0.12),
+                          color: AppColors.accent.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                              color: AppColors.accent.withOpacity(0.45)),
+                              color: AppColors.accent.withValues(alpha: 0.45)),
                         ),
                         child: Text("teljes meccs · $mergedParts darabból",
                             style: AppText.label.copyWith(
@@ -3688,10 +3688,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppColors.gold.withOpacity(0.15),
+                              color: AppColors.gold.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(
-                                  color: AppColors.gold.withOpacity(0.5)),
+                                  color: AppColors.gold.withValues(alpha: 0.5)),
                             ),
                             child: Text("térfél?",
                                 style: AppText.label.copyWith(

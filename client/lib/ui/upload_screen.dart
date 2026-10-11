@@ -394,9 +394,9 @@ class _UploadScreenState extends State<UploadScreen> {
       padding: const EdgeInsets.only(top: AppSpacing.md),
       child: Container(
         decoration: BoxDecoration(
-          color: szin.withOpacity(0.08),
+          color: szin.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: szin.withOpacity(0.35)),
+          border: Border.all(color: szin.withValues(alpha: 0.35)),
         ),
         padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md, vertical: AppSpacing.sm),
@@ -2098,12 +2098,12 @@ class _UploadScreenState extends State<UploadScreen> {
       // szem azonnal megtalálja, hol tart a feldolgozás.
       decoration: BoxDecoration(
         color: active
-            ? AppColors.gold.withOpacity(0.07)
+            ? AppColors.gold.withValues(alpha: 0.07)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
             color: active
-                ? AppColors.gold.withOpacity(0.35)
+                ? AppColors.gold.withValues(alpha: 0.35)
                 : Colors.transparent),
       ),
       child: Row(
@@ -2194,7 +2194,7 @@ class _RingProgress extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                      color: AppColors.accent.withOpacity(0.16 + 0.12 * v),
+                      color: AppColors.accent.withValues(alpha: 0.16 + 0.12 * v),
                       blurRadius: 22,
                       spreadRadius: 1),
                 ],

@@ -195,7 +195,7 @@ class SummaryPanel extends StatelessWidget {
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.8),
+            color: color.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -204,7 +204,7 @@ class SummaryPanel extends StatelessWidget {
   Widget _bar(double frac, Color color) => Container(
         height: (2 + 22 * frac.clamp(0.0, 1.0)),
         decoration: BoxDecoration(
-          color: color.withOpacity(frac > 0 ? 0.9 : 0.15),
+          color: color.withValues(alpha: frac > 0 ? 0.9 : 0.15),
           borderRadius: BorderRadius.circular(2),
         ),
       );
@@ -814,9 +814,9 @@ class SummaryPanel extends StatelessWidget {
         if (caveat != null && caveat.isNotEmpty) ...[
           Container(
             decoration: BoxDecoration(
-              color: AppColors.away.withOpacity(0.10),
+              color: AppColors.away.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.away.withOpacity(0.45)),
+              border: Border.all(color: AppColors.away.withValues(alpha: 0.45)),
             ),
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start,
@@ -862,13 +862,13 @@ class SummaryPanel extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    AppColors.gold.withOpacity(0.09),
+                    AppColors.gold.withValues(alpha: 0.09),
                     AppColors.surfaceAlt,
                   ],
                   stops: const [0.0, 0.6],
                 ),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.gold.withOpacity(0.35)),
+                border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

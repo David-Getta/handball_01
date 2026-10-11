@@ -118,7 +118,7 @@ class _ZoomPanViewState extends State<ZoomPanView> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
           decoration: BoxDecoration(
-            color: AppColors.surface.withOpacity(0.80),
+            color: AppColors.surface.withValues(alpha: 0.80),
             borderRadius: BorderRadius.circular(7),
             border: Border.all(color: AppColors.border),
           ),
@@ -146,7 +146,7 @@ class _ZoomPanViewState extends State<ZoomPanView> {
           child: Icon(icon,
               size: 16,
               color: onTap == null
-                  ? AppColors.textFaint.withOpacity(0.4)
+                  ? AppColors.textFaint.withValues(alpha: 0.4)
                   : AppColors.textSecondary),
         ),
       ),
@@ -159,7 +159,7 @@ class _ZoomPanViewState extends State<ZoomPanView> {
     final zoomed = _scale > 1.01;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.82),
+        color: AppColors.surface.withValues(alpha: 0.82),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border),
       ),

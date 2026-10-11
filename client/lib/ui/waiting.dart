@@ -110,7 +110,7 @@ class _WaitingViewState extends State<WaitingView>
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                        color: AppColors.accent.withOpacity(0.8),
+                        color: AppColors.accent.withValues(alpha: 0.8),
                         blurRadius: 26,
                         spreadRadius: 2),
                   ],

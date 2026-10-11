@@ -80,14 +80,14 @@ class CourtPainter extends CustomPainter {
           pts[i],
           pts[i + 1],
           Paint()
-            ..color = AppColors.gold.withOpacity(0.10 + 0.70 * t)
+            ..color = AppColors.gold.withValues(alpha: 0.10 + 0.70 * t)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.0 + 1.6 * t
             ..strokeCap = StrokeCap.round);
     }
     // A nyomvonal kezdőpontja: kis pötty, hogy látszódjon, honnan indult.
     canvas.drawCircle(pts.first, 3,
-        Paint()..color = AppColors.gold.withOpacity(0.35));
+        Paint()..color = AppColors.gold.withValues(alpha: 0.35));
   }
 
   void _drawCourt(Canvas canvas, Offset Function(double, double) p, double scale) {
@@ -103,7 +103,7 @@ class CourtPainter extends CustomPainter {
     final court = Rect.fromPoints(p(0, 0), p(courtLength, courtWidth));
     final rrect = RRect.fromRectAndRadius(court, const Radius.circular(12));
     canvas.drawShadow(
-        Path()..addRRect(rrect), Colors.black.withOpacity(0.6), 10, false);
+        Path()..addRRect(rrect), Colors.black.withValues(alpha: 0.6), 10, false);
     fill.shader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
@@ -128,7 +128,7 @@ class CourtPainter extends CustomPainter {
         path.lineTo(pt.dx, pt.dy);
       }
       path.close();
-      canvas.drawPath(path, Paint()..color = AppColors.accent.withOpacity(0.07));
+      canvas.drawPath(path, Paint()..color = AppColors.accent.withValues(alpha: 0.07));
       canvas.drawPath(path, line);
     }
 
@@ -136,7 +136,7 @@ class CourtPainter extends CustomPainter {
     // olvasható a kép igazi kézilabda-pályaként (és a fal helyzete is
     // ehhez viszonyítva értelmezhető).
     final dashLine = Paint()
-      ..color = AppColors.courtLine.withOpacity(0.75)
+      ..color = AppColors.courtLine.withValues(alpha: 0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
       ..strokeCap = StrokeCap.round;
@@ -174,7 +174,7 @@ class CourtPainter extends CustomPainter {
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
     final netPaint = Paint()
-      ..color = AppColors.textFaint.withOpacity(0.45)
+      ..color = AppColors.textFaint.withValues(alpha: 0.45)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.7;
     for (final gx in [0.0, courtLength]) {
@@ -221,7 +221,7 @@ class CourtPainter extends CustomPainter {
       final isSelected = pl.trackId == selectedId;
       if (isSelected) {
         canvas.drawCircle(center, radius + 5,
-            Paint()..color = AppColors.gold.withOpacity(0.18));
+            Paint()..color = AppColors.gold.withValues(alpha: 0.18));
         canvas.drawCircle(
             center, radius + 4,
             Paint()
@@ -231,23 +231,23 @@ class CourtPainter extends CustomPainter {
       }
 
       if (pl.isEstimated) {
-        canvas.drawCircle(center, radius, Paint()..color = base.withOpacity(0.22));
-        _drawDashedRing(canvas, center, radius + 2, base.withOpacity(0.55));
+        canvas.drawCircle(center, radius, Paint()..color = base.withValues(alpha: 0.22));
+        _drawDashedRing(canvas, center, radius + 2, base.withValues(alpha: 0.55));
       } else {
         final isCarrier = pl.trackId == carrierId;
         // Vetett árnyék: a token "a pálya fölött" ül, nem rá van festve.
         _softGlow(canvas, center + const Offset(0, 2), radius + 3,
-            Colors.black.withOpacity(0.45));
+            Colors.black.withValues(alpha: 0.45));
         if (isCarrier) {
           // A labdás ember arany ragyogása a token ALÁ kerül: a korong
           // így megtartja a csapatszínét, és csak a HOLDUDVARA arany.
           // (Fölé rajzolva a ragyogás rámosódna a tokenre, és a két
           // csapat labdás embere egyforma sárgás foltnak látszana.)
           _softGlow(canvas, center, radius + 9,
-              AppColors.gold.withOpacity(0.40));
+              AppColors.gold.withValues(alpha: 0.40));
         }
         // Finom külső "halo" + gömbölyű (sugaras átmenetű) token.
-        canvas.drawCircle(center, radius + 3, Paint()..color = base.withOpacity(0.16));
+        canvas.drawCircle(center, radius + 3, Paint()..color = base.withValues(alpha: 0.16));
         canvas.drawCircle(
             center,
             radius,
@@ -264,7 +264,7 @@ class CourtPainter extends CustomPainter {
         canvas.drawCircle(
             center, radius + (isCarrier ? 2 : 0),
             Paint()
-              ..color = isCarrier ? AppColors.gold : Colors.white.withOpacity(0.85)
+              ..color = isCarrier ? AppColors.gold : Colors.white.withValues(alpha: 0.85)
               ..style = PaintingStyle.stroke
               ..strokeWidth = isCarrier ? 2.4 : 1.2);
       }
@@ -272,7 +272,7 @@ class CourtPainter extends CustomPainter {
       // Kapus: szaggatott fehér gyűrű — ránézésre elkülönül a mezőnytől.
       if (pl.role == "kapus") {
         _drawDashedRing(
-            canvas, center, radius + 4, Colors.white.withOpacity(0.9));
+            canvas, center, radius + 4, Colors.white.withValues(alpha: 0.9));
       }
 
       if (pl.jerseyNumber != null) {
@@ -285,9 +285,9 @@ class CourtPainter extends CustomPainter {
     // Labda — meleg szín, finom izzással. (A `ball` fentebb már deklarálva.)
     if (ball != null) {
       final c = p(ball.x, ball.y);
-      _softGlow(canvas, c, 1.0 * scale, AppColors.ball.withOpacity(0.38));
+      _softGlow(canvas, c, 1.0 * scale, AppColors.ball.withValues(alpha: 0.38));
       canvas.drawCircle(c, 0.6 * scale,
-          Paint()..color = AppColors.ball.withOpacity(0.22));
+          Paint()..color = AppColors.ball.withValues(alpha: 0.22));
       canvas.drawCircle(
           c,
           0.34 * scale,
@@ -331,7 +331,7 @@ class CourtPainter extends CustomPainter {
         radius,
         Paint()
           ..shader = RadialGradient(
-            colors: [color, color.withOpacity(0)],
+            colors: [color, color.withValues(alpha: 0)],
             stops: const [0.42, 1.0],
           ).createShader(Rect.fromCircle(center: center, radius: radius)));
   }

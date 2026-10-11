@@ -45,7 +45,7 @@ class PassNetworkPainter extends CustomPainter {
         ..moveTo(a.dx, a.dy)
         ..quadraticBezierTo(ctrl.dx, ctrl.dy, b.dx, b.dy);
       canvas.drawPath(path, Paint()
-        ..color = color.withOpacity(0.25 + 0.55 * frac)
+        ..color = color.withValues(alpha: 0.25 + 0.55 * frac)
         ..strokeWidth = 1.5 + 4.5 * frac
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round);
@@ -71,7 +71,7 @@ class PassNetworkPainter extends CustomPainter {
             p,
             r + 8,
             Paint()
-              ..color = color.withOpacity(0.30)
+              ..color = color.withValues(alpha: 0.30)
               ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8));
       }
       canvas.drawCircle(p, r + 2, Paint()..color = AppColors.surface);

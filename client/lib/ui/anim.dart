@@ -139,18 +139,18 @@ class _HoverLiftState extends State<HoverLift> {
             borderRadius: widget.borderRadius,
             border: Border.all(
               color: _hover
-                  ? AppColors.accent.withOpacity(0.55)
+                  ? AppColors.accent.withValues(alpha: 0.55)
                   : Colors.transparent,
             ),
             boxShadow: _hover
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.35),
+                      color: Colors.black.withValues(alpha: 0.35),
                       blurRadius: 18,
                       offset: const Offset(0, 8),
                     ),
                     BoxShadow(
-                      color: AppColors.accent.withOpacity(0.10),
+                      color: AppColors.accent.withValues(alpha: 0.10),
                       blurRadius: 24,
                     ),
                   ]

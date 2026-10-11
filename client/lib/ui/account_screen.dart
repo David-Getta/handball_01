@@ -201,7 +201,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                            color: AppColors.accent.withOpacity(0.35),
+                            color: AppColors.accent.withValues(alpha: 0.35),
                             blurRadius: 28,
                             offset: const Offset(0, 6)),
                       ],

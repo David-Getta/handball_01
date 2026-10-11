@@ -41,3 +41,6 @@ client/build/
 .idea/
 *.iml
 .DS_Store
+# A motor összeomlás-naplója (a felhasználói adatmappában; fejlesztés
+# közben a munkakönyvtárban is keletkezhet)
+engine-crash.log

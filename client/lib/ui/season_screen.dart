@@ -173,7 +173,7 @@ class _SeasonScreenState extends State<SeasonScreen> {
         decoration: BoxDecoration(
           color: AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: szin.withOpacity(0.6)),
+          border: Border.all(color: szin.withValues(alpha: 0.6)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           SizedBox(

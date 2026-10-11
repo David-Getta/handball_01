@@ -208,7 +208,7 @@ class _LogoPainter extends CustomPainter {
           path,
           Paint()
             ..color = (duo && i >= 2 ? gold : teal)
-                .withOpacity(0.15 + 0.85 * p));
+                .withValues(alpha: 0.15 + 0.85 * p));
     }
 
     // Fénysáv: az összeállás után egyszer végigfut a jelen (a "gép
@@ -221,7 +221,7 @@ class _LogoPainter extends CustomPainter {
       canvas.drawRect(
         Rect.fromLTWH(x, -s, s * 0.22, s * 3),
         Paint()
-          ..color = paper.withOpacity(0.35 * (1.0 - (t - 0.5).abs() * 2))
+          ..color = paper.withValues(alpha: 0.35 * (1.0 - (t - 0.5).abs() * 2))
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
       );
       canvas.restore();

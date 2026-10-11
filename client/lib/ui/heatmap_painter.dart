@@ -63,9 +63,9 @@ class HeatmapPainter extends CustomPainter {
             Paint()
               ..shader = RadialGradient(
                 colors: [
-                  core.withOpacity(0.18 + 0.45 * intensity),
-                  color.withOpacity(0.10 + 0.30 * intensity),
-                  color.withOpacity(0.0),
+                  core.withValues(alpha: 0.18 + 0.45 * intensity),
+                  color.withValues(alpha: 0.10 + 0.30 * intensity),
+                  color.withValues(alpha: 0.0),
                 ],
                 stops: const [0.0, 0.45, 1.0],
               ).createShader(rect));

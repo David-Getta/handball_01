@@ -181,7 +181,7 @@ class _ScoreChartPainter extends CustomPainter {
       final xa = geom.x(s0.clamp(0, totalFrames - 1));
       final xb = geom.x(s1.clamp(0, totalFrames - 1));
       final rect = Rect.fromLTRB(xa, topY, xb <= xa ? xa + 2 : xb, botY);
-      canvas.drawRect(rect, Paint()..color = color.withOpacity(0.13));
+      canvas.drawRect(rect, Paint()..color = color.withValues(alpha: 0.13));
       // A sorozat hossza a sáv tetején (pl. "4-0"), mellette a felismert
       // LEHETSÉGES OK (pl. "emberelőnyben") — ha a backend adott ilyet.
       final len = (r["length"] as num?)?.toInt() ?? 0;
@@ -211,7 +211,7 @@ class _ScoreChartPainter extends CustomPainter {
                 geom.y(hh > aa ? aa : hh)),
             Paint()
               ..color = leader
-                  .withOpacity((0.09 + 0.04 * gap).clamp(0.09, 0.32)));
+                  .withValues(alpha: (0.09 + 0.04 * gap).clamp(0.09, 0.32)));
       }
 
       for (final g in goals) {
@@ -225,7 +225,7 @@ class _ScoreChartPainter extends CustomPainter {
     }
 
     // Visszafogott rács: legfeljebb 4 vízszintes vonal, egész gól-értékeknél.
-    final grid = Paint()..color = AppColors.border.withOpacity(0.5)..strokeWidth = 1;
+    final grid = Paint()..color = AppColors.border.withValues(alpha: 0.5)..strokeWidth = 1;
     final step = (geom.maxGoals / 4).ceil().clamp(1, 1 << 30);
     final labelStyle = TextStyle(fontSize: 9, color: AppColors.textFaint);
     for (var v = 0; v <= geom.maxGoals; v += step) {
@@ -273,14 +273,14 @@ class _ScoreChartPainter extends CustomPainter {
             ..shader = LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [color.withOpacity(0.07), color.withOpacity(0.0)],
+              colors: [color.withValues(alpha: 0.07), color.withValues(alpha: 0.0)],
             ).createShader(Rect.fromLTRB(0, _ChartGeom.padT, size.width,
                 size.height - _ChartGeom.padB)));
       canvas.drawPath(path, line);
       // Gól-pontok: puha ragyogással és felület-színű gyűrűvel, hogy
       // metszésnél is elváljanak. (A végállást a jelmagyarázat mutatja.)
       for (final m in markers) {
-        _softGlow(canvas, m, 9.5, color.withOpacity(0.32));
+        _softGlow(canvas, m, 9.5, color.withValues(alpha: 0.32));
         canvas.drawCircle(m, 5.5, Paint()..color = AppColors.surface);
         canvas.drawCircle(m, 3.5, Paint()..color = color);
       }
@@ -297,7 +297,7 @@ class _ScoreChartPainter extends CustomPainter {
         radius,
         Paint()
           ..shader = RadialGradient(
-            colors: [color, color.withOpacity(0)],
+            colors: [color, color.withValues(alpha: 0)],
             stops: const [0.40, 1.0],
           ).createShader(Rect.fromCircle(center: center, radius: radius)));
   }

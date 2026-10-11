@@ -31,7 +31,7 @@ class FigureShapePainter extends CustomPainter {
           if (v <= 0) continue;
           canvas.drawRect(
               Rect.fromLTWH((i % binsX) * cw, (i ~/ binsX) * ch, cw, ch),
-              Paint()..color = AppColors.accent.withOpacity(0.08 + 0.82 * v / mx));
+              Paint()..color = AppColors.accent.withValues(alpha: 0.08 + 0.82 * v / mx));
         }
       }
     }

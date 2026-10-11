@@ -2078,7 +2078,7 @@ class _MatchScreenState extends State<MatchScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: AppColors.away.withOpacity(0.15),
+              color: AppColors.away.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text("FÉLBEHAGYOTT",
@@ -2720,10 +2720,10 @@ class _MatchScreenState extends State<MatchScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
-                  color: AppColors.gold.withOpacity(0.18),
+                  color: AppColors.gold.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(8),
                   border:
-                      Border.all(color: AppColors.gold.withOpacity(0.6)),
+                      Border.all(color: AppColors.gold.withValues(alpha: 0.6)),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   const Icon(Icons.warning_amber_rounded,
@@ -2883,9 +2883,9 @@ class _MatchScreenState extends State<MatchScreen> {
               const SizedBox(height: AppSpacing.md),
               Container(
                 decoration: BoxDecoration(
-                  color: AppColors.gold.withOpacity(0.10),
+                  color: AppColors.gold.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.gold.withOpacity(0.4)),
+                  border: Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
                 ),
                 padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.md, vertical: AppSpacing.sm),
@@ -3440,7 +3440,7 @@ class _MatchScreenState extends State<MatchScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.92),
+        color: AppColors.surface.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
@@ -3461,8 +3461,8 @@ class _MatchScreenState extends State<MatchScreen> {
               // magja 0,18-tól 0,63-ig sötétedik, és a legforróbb
               // cellák magja világosodik is. A skála ne ígérjen többet.
               gradient: LinearGradient(colors: [
-                color.withOpacity(0.18),
-                Color.lerp(color, Colors.white, 0.35)!.withOpacity(0.63),
+                color.withValues(alpha: 0.18),
+                Color.lerp(color, Colors.white, 0.35)!.withValues(alpha: 0.63),
               ]),
             ),
           ),
@@ -3486,7 +3486,7 @@ class _MatchScreenState extends State<MatchScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.92),
+        color: AppColors.surface.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
@@ -3643,7 +3643,7 @@ class _MatchScreenState extends State<MatchScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.92),
+        color: AppColors.surface.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
@@ -3751,7 +3751,7 @@ class _MatchScreenState extends State<MatchScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.92),
+        color: AppColors.surface.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.gold),
       ),

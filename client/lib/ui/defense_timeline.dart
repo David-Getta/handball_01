@@ -146,7 +146,7 @@ class _StripCellState extends State<_StripCell> {
           boxShadow: _hover
               ? [
                   BoxShadow(
-                      color: widget.color.withOpacity(0.5), blurRadius: 8),
+                      color: widget.color.withValues(alpha: 0.5), blurRadius: 8),
                 ]
               : const [],
         ),

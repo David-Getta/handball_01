@@ -173,13 +173,13 @@ class _TrendScreenState extends State<TrendScreen> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  AppColors.gold.withOpacity(0.10),
+                  AppColors.gold.withValues(alpha: 0.10),
                   AppColors.surface,
                 ],
                 stops: const [0.0, 0.55],
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.gold.withOpacity(0.5)),
+              border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
             ),
             padding: const EdgeInsets.all(AppSpacing.xl),
             child: Column(
@@ -302,7 +302,7 @@ class _TrendScreenState extends State<TrendScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
-        color: (dim ? AppColors.textFaint : color).withOpacity(0.14),
+        color: (dim ? AppColors.textFaint : color).withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(7),
       ),
       child: Text(text,
@@ -380,14 +380,14 @@ class _DeltaBarPainter extends CustomPainter {
         RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, hiW, size.height), r),
         Paint()
           ..shader = LinearGradient(colors: [
-            color.withOpacity(0.55),
+            color.withValues(alpha: 0.55),
             color,
           ]).createShader(Rect.fromLTWH(0, 0, hiW, size.height)));
 
     // A közös alap halványan — a különbség így "kilóg" belőle.
     canvas.drawRRect(
         RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, loW, size.height), r),
-        Paint()..color = AppColors.textFaint.withOpacity(0.45));
+        Paint()..color = AppColors.textFaint.withValues(alpha: 0.45));
   }
 
   @override

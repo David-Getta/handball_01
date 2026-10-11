@@ -165,7 +165,7 @@ class _ScoutingPickerScreenState extends State<ScoutingPickerScreen> {
                   color: selected ? AppColors.gold : AppColors.border,
                   width: selected ? 2 : 1),
               backgroundColor:
-                  selected ? AppColors.gold.withOpacity(0.12) : null,
+                  selected ? AppColors.gold.withValues(alpha: 0.12) : null,
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               Container(width: 8, height: 8, decoration: BoxDecoration(
