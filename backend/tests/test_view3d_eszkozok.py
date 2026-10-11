@@ -1555,7 +1555,9 @@ def test_a_jelenet_vetites_a_lista_sorain_lep():
     assert palya.count("final sorok = _jelenetSorok(m);") >= 3
     # Egy kattintásra: a vetit=1 link-paraméter (olvasva és írva), az app
     # vetites paramétere, a kezdőlap "Vetítés" gombja.
-    assert 'if (v("vetit") === "1") vetitesAllit(true);' in oldal
+    # (a Jegyzeteim szűrővel a vetítés a jegyzetek megjöttét várja)
+    assert ('if (v("vetit") === "1"){ if (csakJegyzet) vetitesVar = true; '
+            'else vetitesAllit(true); }') in oldal
     assert 'if (vetites) q.set("vetit", "1");' in oldal
     assert oldal.index('v("vetit")') > oldal.index('v("kulcs")')
     assert "final bool vetites;" in palya
@@ -1567,7 +1569,7 @@ def test_a_jelenet_vetites_a_lista_sorain_lep():
     kezdolap = (ui / "dashboard_screen.dart").read_text(encoding="utf-8")
     assert "matchId: id, csakVideozando: true, vetites: true" in kezdolap
     # A Klipek gomb a Videózandó szűrővel a videózandó csomagot kéri.
-    assert 'types: (csakKulcs ? ["key_scene"] : KLIP_TIPUSOK)' in oldal
+    assert ': (csakKulcs ? ["key_scene"] : KLIP_TIPUSOK)' in oldal
     # A jegyzetek (a lista sorai közt) a jegyzet-csomagban.
     assert '.concat(jegyzetek.length ? ["note"] : [])' in oldal
     assert 'if (_jegyzetek.isNotEmpty) "note",' in palya
@@ -1917,6 +1919,32 @@ def test_a_kocka_vegpont_a_forras_video_kockajat_adja(tmp_path, monkeypatch):
     m2.meta.match_id = "videotlan"
     app.state.put_match(m2)
     assert c.get("/matches/videotlan/frame", params={"t": 5}).status_code == 404
+
+
+def test_a_jegyzeteim_szuro():
+    """"Jegyzeteim": a lista csak a jegyzetek (a vetítés a megjelölt
+    pillanatokat játssza), a Videózandó párja (egy él a kettő közül), a
+    Klipek a jegyzet-csomagot kéri, a link viszi (jegyzetek=1), és a
+    linkes vetítés a jegyzetek megjöttét várja. Az app ugyanígy."""
+    from pathlib import Path
+
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ('jc.id = "jelenetJegyzet"', "const sorok = csakJegyzet ? [] : kulcsSzur(",
+                 "if (csakKulcs) csakJegyzet = false;", "if (csakJegyzet) csakKulcs = false;",
+                 'types: csakJegyzet ? ["note"]', 'q.set("jegyzetek", "1")',
+                 'v("jegyzetek") === "1"',
+                 'if (csakJegyzet) vetitesVar = true; else vetitesAllit(true);',
+                 "if (vetitesVar){ vetitesVar = false; vetitesAllit(true); }"):
+        assert kell in oldal, kell
+    palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+             / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ("final sorok = _csakJegyzet", '"Jegyzeteim (${_jegyzetek.length})"',
+                 "if (v) _csakKulcs = false;", "if (v) _csakJegyzet = false;",
+                 'initialTypes: _csakJegyzet\n                          ? const ["note"]',
+                 'if (_csakJegyzet) q["jegyzetek"] = "1";'):
+        assert kell in palya, kell
 
 
 def test_a_kozos_nezes_vegpontjai(tmp_path, monkeypatch):

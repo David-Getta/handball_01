@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.164 óta)
 
+- **3D jelenet-lista: "Jegyzeteim" szűrő** (új, böngésző/VR, app,
+  jelentés): csak az edző jegyzetei a listában — a Vetítés pontosan a
+  megjelölt pillanatokat játssza a rajzokkal: a csapat-megbeszélés
+  válogatása, a közös nézéssel a headseteken is. A Klipek ilyenkor a
+  jegyzet-csomagot kéri; a jelentés jegyzet-szakaszából "▶ A jegyzetek
+  egymás után" link nyitja.
+
 - **Klipek: a csomag-csempén a darabszám és három kocka** (új, app,
   motor): minden csomag mutatja, hány jelenet van benne ezen a meccsen;
   a nullás csomag szürke, nem kijelölhető (eddig csak a vágás végén

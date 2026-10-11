@@ -1669,7 +1669,17 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     f"{alja}</li>")
 
         lis = "".join(_jegyzet_sor(n) for n in items)
-        notes_html = "<h2>Edzői jegyzetek</h2><ul>" + lis + "</ul>"
+        # A jegyzetek egymás után a 3D pályán ("Jegyzeteim" szűrő +
+        # vetítés, TV-kamerával) — a csapat-megbeszélés egy kattintással.
+        jvetit = ""
+        if base_url:
+            jvetit = (f'<p><a href="{base_url.rstrip("/")}/matches/'
+                      f'{escape(match.meta.match_id)}/view3d?t=0&lista=1'
+                      '&jegyzetek=1&vetit=1&tv=1" style="text-decoration:none">'
+                      "▶ A jegyzetek egymás után a 3D pályán</a> — a "
+                      "megjelölt pillanatok, a rajzokkal.</p>")
+        notes_html = ("<h2>Edzői jegyzetek</h2>" + jvetit + "<ul>" + lis
+                      + "</ul>")
 
     # Automatikus edzői összefoglaló: mondatokban, a jelentés elejére.
     summary_html = ""

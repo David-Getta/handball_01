@@ -1883,6 +1883,7 @@ function linkEpit(){
   if (jelenetCsapat.value !== "mind") q.set("jelenet", jelenetCsapat.value);
   if (jelenetLista.style.display === "block") q.set("lista", "1");
   if (csakKulcs) q.set("kulcs", "1");
+  if (csakJegyzet) q.set("jegyzetek", "1");
   if (vetites) q.set("vetit", "1");
   if (rajzok.length) q.set("rajz", rajzKodol(rajzok));
   if (videoBe) q.set("video", "1");
@@ -1911,11 +1912,13 @@ function linkAlkalmaz(){
     jelenetCsapat.value = v("jelenet"); jelenetInfok();
   }
   if (v("kulcs") === "1" && KULCS.size) csakKulcs = true;
+  if (v("jegyzetek") === "1"){ csakJegyzet = true; csakKulcs = false; }
   if (v("lista") === "1") jelenetListaNyit(true);
   if (v("seb")){ sebessegValaszto.value = v("seb"); sebessegValaszto.onchange(); }
   // A vetítés a szűrők és a sebesség után indul (a t-ből: az ott futó
   // jelenettől, különben a következőtől).
-  if (v("vetit") === "1") vetitesAllit(true);
+  // A jegyzet-vetítés a jegyzetek megjöttét várja (jegyzetBetolt indítja).
+  if (v("vetit") === "1"){ if (csakJegyzet) vetitesVar = true; else vetitesAllit(true); }
   if (v("rajz")){ rajzok.push(...rajzDekodol(v("rajz"))); rajzFrissit(); }
   if (v("video") === "1") videoAllit(true);
   if (v("kovet") === "1") kozosAllit("kovet");
@@ -2483,7 +2486,9 @@ const jelenetSorokElem = document.createElement("div");  // a sorok (a fejléc a
 // A jelenet-lista sorai a két szűrővel ("Kinek a hibái", "Videózandó") —
 // a lista, az N/P (VR-kontroller) és a vetítés közös forrása.
 function jelenetSorokSzurt(){
-  const sorok = kulcsSzur(jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK),
+  // "Jegyzeteim": csak az edző jegyzetei — a vetítés a megjelölt
+  // pillanatokat játssza, a csapat-megbeszélés válogatását.
+  const sorok = csakJegyzet ? [] : kulcsSzur(jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK),
     ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK)));
   // Az edző jegyzetei minden szűrővel a listában (a saját válogatása):
   // időrendben, az azonos pillanatú jelenet-sor UTÁN.
@@ -2666,6 +2671,7 @@ async function jegyzetBetolt(){
       .sort((a, b) => a.s - b.s);
     jegyzetInfo.textContent = jegyzetek.length ? jegyzetek.length + " jegyzet" : "";
     if (jelenetLista.style.display === "block") jelenetListaEpit();
+    if (vetitesVar){ vetitesVar = false; vetitesAllit(true); }
   } catch (e) { /* a motor nélkül (mentett oldal) nincs jegyzet */ }
 }
 async function jegyzetIr(){
@@ -2806,6 +2812,10 @@ function jelenetUgras(r){
 // idő szerint egyeznek (ugyanazok a kerekített számok).
 const KULCS = new Set((ADAT.key_scenes || []).map(k => k[1] + "@" + k[0]));
 let csakKulcs = false;
+// "Jegyzeteim" szűrő (a Videózandó párja; a kettő közül egy él), és a
+// jegyzetekre váró vetítés (a link vetit=1-e: a jegyzetek a motorról
+// később jönnek, mint a lista első építése).
+let csakJegyzet = false, vetitesVar = false;
 function kulcsSzur(sorok){
   return csakKulcs ? sorok.filter(r => KULCS.has(r.tipus + "@" + r.s)) : sorok;
 }
@@ -2829,13 +2839,19 @@ function jelenetListaEpit(){
   kl.title = "Csak a videózandó jelenetek (a jelentés és a kezdőlap válogatása: gólba került eladások, kapott lerohanás-gólok, gólt érő szabad lövők, a legnagyobb döntés-hibák)";
   const kc = document.createElement("input"); kc.type = "checkbox"; kc.id = "jelenetKulcs";
   kc.checked = csakKulcs; kc.disabled = !KULCS.size;
-  kc.onchange = () => { csakKulcs = kc.checked; vrJelenetUtolso = null; jelenetListaEpit(); };
+  kc.onchange = () => { csakKulcs = kc.checked; if (csakKulcs) csakJegyzet = false; vrJelenetUtolso = null; jelenetListaEpit(); };
   kl.append(kc, document.createTextNode(" Videózandó (" + KULCS.size + ")"));
+  const jl = document.createElement("label"); jl.className = "kulcs";
+  jl.title = "Csak a jegyzeteid — a vetítés a megjelölt pillanatokat játssza (a rajzzal): a csapat-megbeszélés válogatása";
+  const jc = document.createElement("input"); jc.type = "checkbox"; jc.id = "jelenetJegyzet";
+  jc.checked = csakJegyzet; jc.disabled = !jegyzetek.length && !csakJegyzet;
+  jc.onchange = () => { csakJegyzet = jc.checked; if (csakJegyzet) csakKulcs = false; vrJelenetUtolso = null; jelenetListaEpit(); };
+  jl.append(jc, document.createTextNode(" Jegyzeteim (" + jegyzetek.length + ")"));
   const vb = document.createElement("button"); vb.id = "vetitesGomb";
   vb.title = "Vetítés (V): a lista jelenetei egymás után — mindegyik 1,5 mp-cel előtte indul, és a pillanata után " + JL_VETITES_S + " mp-ig fut";
   vb.onclick = () => vetitesAllit(!vetites);
   vb.disabled = !jelenetSorokAkt.length;
-  fej.append(n, kl, vb, g, info, link);
+  fej.append(n, kl, jl, vb, g, info, link);
   jelenetLista.append(fej, jelenetSorokElem);
   klipFrissit();
   vetitesJelzoFrissit();
@@ -2883,7 +2899,8 @@ async function klipKer(){
       {method: "POST", headers: {"Content-Type": "application/json"},
        // A Videózandó szűrővel a lista sorai egy csomagban, sorszámozva;
        // az edző jegyzetei (a lista sorai közt) a jegyzet-csomagban.
-       body: JSON.stringify({types: (csakKulcs ? ["key_scene"] : KLIP_TIPUSOK)
+       body: JSON.stringify({types: csakJegyzet ? ["note"]
+                                    : (csakKulcs ? ["key_scene"] : KLIP_TIPUSOK)
                                       .concat(jegyzetek.length ? ["note"] : [])})});
     if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
     const {job_id} = await v.json();

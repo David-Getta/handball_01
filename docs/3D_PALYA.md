@@ -228,6 +228,13 @@ Az appbeli 3D fülön ugyanez a K (és a panel 📺 Videó gombja): a felvétel
 a 3D kép MELLETT nyílik (a kép keskenyebb lesz, nem takarja), és a
 böngészős nézet linkje is viszi.
 
+A jelenet-lista **Jegyzeteim** szűrője csak az edző jegyzeteit hagyja a
+listában: a Vetítés pontosan a megjelölt pillanatokat játssza (a
+rajzokkal) — ez a csapat-megbeszélés válogatása, a közös nézéssel a
+headseteken is. A Klipek ilyenkor a jegyzet-csomagot kéri; a link viszi
+(`jegyzetek=1`), a jelentés jegyzet-szakaszának "▶ A jegyzetek egymás
+után" linkje így nyitja a 3D pályát.
+
 A **📝 Jegyzet** (billentyű: J) a mostani pillanathoz ír megjegyzést —
 ugyanabba a jegyzet-tárba, amit a meccs-elemző használ (a motor
 `/matches/{id}/notes` végpontja). A jegyzet a jelenet-lista sorai közt

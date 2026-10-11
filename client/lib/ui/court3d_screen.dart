@@ -206,6 +206,9 @@ class _Court3DScreenState extends State<Court3DScreen>
   // csak ezeken.
   Set<String> _kulcsJelenetek = const {};
   bool _csakKulcs = false;
+  // "Jegyzeteim": csak az edző jegyzetei a listában (a Videózandó párja; a
+  // kettő közül egy él) — a vetítés a megjelölt pillanatokat játssza.
+  bool _csakJegyzet = false;
   // JEGYZETEK (J): az edző megjegyzései a pillanatokhoz (a motor
   // /notes tára — a meccs-elemzővel, a jelentéssel és a Klipek
   // jegyzet-csomagjával közös); a jelenet-lista sorai közt is.
@@ -949,8 +952,10 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// A jelenet-lista sorai a két szűrővel ("Kinek a hibái", "Videózandó")
   /// — a lista, az N / P és a vetítés közös forrása.
   List<SceneRow> _jelenetSorok(Match m) {
-    final sorok = _kulcsSzur(sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
-        m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz));
+    final sorok = _csakJegyzet
+        ? <SceneRow>[]
+        : _kulcsSzur(sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
+            m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz));
     if (_jegyzetek.isEmpty) return sorok;
     // Az edző jegyzetei minden szűrővel a listában (a saját válogatása):
     // időrendben, az azonos pillanatú jelenet-sor UTÁN (a böngésző
@@ -1222,7 +1227,7 @@ class _Court3DScreenState extends State<Court3DScreen>
     // (döntés-hibák, szabad lövők, drága eladások, kapott lerohanások), a
     // NÉZETT meccsről.
     // A demó-meccs nincs a könyvtárban: ott a gomb tiltott.
-    final fejlec = Padding(
+    final fejlecSor = Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 6, 4),
       child: Row(children: [
         Expanded(
@@ -1248,6 +1253,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                 : (v) {
                     setState(() {
                       _csakKulcs = v;
+                      if (v) _csakJegyzet = false;
                       _jelenetUtolso = null;
                     });
                     _focus.requestFocus();
@@ -1278,7 +1284,10 @@ class _Court3DScreenState extends State<Court3DScreen>
                       // A Videózandó szűrővel a lista sorai egy
                       // csomagban, sorszámozva; az edző jegyzetei (a lista
                       // sorai közt) a jegyzet-csomagban.
-                      initialTypes: [
+                      // A Jegyzeteim szűrővel csak a jegyzet-csomag.
+                      initialTypes: _csakJegyzet
+                          ? const ["note"]
+                          : [
                         ...(_csakKulcs
                             ? const ["key_scene"]
                             : const [
@@ -1295,6 +1304,37 @@ class _Court3DScreenState extends State<Court3DScreen>
         ),
       ]),
     );
+    // "Jegyzeteim": csak a jegyzetek — a csapat-megbeszélés válogatása.
+    final fejlec = Column(mainAxisSize: MainAxisSize.min, children: [
+      fejlecSor,
+      Padding(
+        padding: const EdgeInsets.fromLTRB(10, 0, 6, 4),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Tooltip(
+            message: "Csak a jegyzeteid — a vetítés a megjelölt "
+                "pillanatokat játssza (a rajzzal)",
+            child: FilterChip(
+              label: Text("Jegyzeteim (${_jegyzetek.length})",
+                  style: const TextStyle(fontSize: 11)),
+              selected: _csakJegyzet,
+              showCheckmark: false,
+              visualDensity: VisualDensity.compact,
+              onSelected: _jegyzetek.isEmpty && !_csakJegyzet
+                  ? null
+                  : (v) {
+                      setState(() {
+                        _csakJegyzet = v;
+                        if (v) _csakKulcs = false;
+                        _jelenetUtolso = null;
+                      });
+                      _focus.requestFocus();
+                    },
+            ),
+          ),
+        ),
+      ),
+    ]);
     final lista = sorok.isEmpty
           ? Padding(
               padding: const EdgeInsets.all(10),
@@ -1936,6 +1976,7 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (_jelenetCsapat == "away") q["jelenet"] = "vendeg";
     if (_jelenetListaNyitva) q["lista"] = "1";
     if (_csakKulcs) q["kulcs"] = "1";
+    if (_csakJegyzet) q["jegyzetek"] = "1";
     if (_vetitesBe) q["vetit"] = "1";
     if (_videoBe) q["video"] = "1";
     if (_rajzok.isNotEmpty) q["rajz"] = encodeDrawing(_rajzok);

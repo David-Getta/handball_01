@@ -2045,6 +2045,21 @@ def test_a_kocka_olvaso_kozeli_kockara_nem_teker(tmp_path):
     cap.release()
 
 
+def test_a_jegyzetek_egymas_utan_link():
+    """Ismert motor-címmel a jegyzet-szakasz elején "▶ A jegyzetek egymás
+    után" link: a 3D pálya a Jegyzeteim szűrővel, vetítéssel, TV-kamerával;
+    cím nélkül nincs link."""
+    m = simulate_ground_truth(duration_s=10, fps=25.0, seed=5)
+    jegyzetek = [{"id": "a", "frame": m.frames[10].t, "text": "Zárás"}]
+    html = match_report_html(m, {}, [], None, notes=jegyzetek,
+                             base_url="http://motor:8123/")
+    assert (f'href="http://motor:8123/matches/{m.meta.match_id}/view3d?t=0'
+            '&lista=1&jegyzetek=1&vetit=1&tv=1"') in html
+    assert "▶ A jegyzetek egymás után a 3D pályán" in html
+    assert "jegyzetek=1" not in match_report_html(m, {}, [], None,
+                                                  notes=jegyzetek)
+
+
 def test_a_jegyzetek_alatt_a_felvetel_kockaja(tmp_path, monkeypatch):
     """Ha a forrás-videó elérhető, a jegyzet alatt a pillanatának kockája
     (rajzos jegyzetnél az ábra mellett, egy sorban); a plafon fölötti

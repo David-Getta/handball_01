@@ -423,6 +423,23 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("jegyzeteim szűrő: jegyzet nélkül (demó) tiltott",
+      (tester) async {
+    await _nyit(tester);
+    final gomb = find.text("Jelenet-lista");
+    await tester.ensureVisible(gomb);
+    await tester.pump();
+    await tester.tap(gomb);
+    await tester.pump(const Duration(milliseconds: 200));
+    final chip = find.ancestor(
+        of: find.text("Jegyzeteim (0)"), matching: find.byType(FilterChip));
+    expect(chip, findsOneWidget);
+    expect(tester.widget<FilterChip>(chip).onSelected, isNull);
+    // A fejléc két szűrővel sem csordul túl.
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("videózandó szűrő: a lista a gólos jelenetekre szűkül",
       (tester) async {
     await _nyit(tester);
