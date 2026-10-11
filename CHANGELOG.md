@@ -3,7 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.162 óta)
+## v0.1.163 — kiadva (2026-10-11)
+
+> Kiadás-jegyzet: a 3D pálya videó-elemző asztal lett. A Vetítés gomb (V;
+> VR-ben a kontrollerről) a jeleneteket egymás után játssza le — a
+> "Videózandó" szűrővel a meccs fontos tizenöt jelenete bő egy perc alatt,
+> a jelentésből és a kezdőlapról egy kattintással. A Rajz (E) nyilakat
+> húz a padlóra (labda, futás, védő), a Jegyzet (J) megjegyzést ír a
+> pillanathoz, a nyilakkal együtt — a jegyzet pillanatában a rajz magától
+> visszajön, így a videó-elemzés előre előkészíthető. A rajzos jegyzet a
+> nyomtatott jelentésben felülnézeti taktika-ábrát kap, a jegyzet-klipen
+> pedig a nyilak a videóra rajzolódnak (a kalibrációval vetítve); a rajz
+> a linkkel és az app "Böngészőben" gombjával a VR-headsetbe is átmegy. A
+> Klipek új "Videózandó jelenetek" csomagja a kulcs-jeleneteket
+> sorszámozott videóként adja. A 3D oldal első megnyitása percekről
+> másodpercekre gyorsult, és benne van a második kód-átnézés nyolc
+> javítása is.
 
 - **Jegyzetek: a rajzos jegyzet jelölve** (új, app): a könyvtár
   Jegyzetek képernyője ✎-gel jelzi a 3D-ben rajzolt nyilakkal mentett
