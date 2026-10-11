@@ -206,6 +206,10 @@ class _Court3DScreenState extends State<Court3DScreen>
   // csak ezeken.
   Set<String> _kulcsJelenetek = const {};
   bool _csakKulcs = false;
+  // JEGYZETEK (J): az edző megjegyzései a pillanatokhoz (a motor
+  // /notes tára — a meccs-elemzővel, a jelentéssel és a Klipek
+  // jegyzet-csomagjával közös); a jelenet-lista sorai közt is.
+  List<Map<String, dynamic>> _jegyzetek = const [];
   // RAJZ (E): nyilak a padlón — a taktika-tábla a valódi jeleneten (a
   // böngésző "✎ Rajz"-ának párja; a "Böngészőben" gomb átviszi). A
   // nyilak pálya-méterben, a színkóddal; a húzás alattié külön.
@@ -376,6 +380,12 @@ class _Court3DScreenState extends State<Court3DScreen>
             .cast<Map<String, dynamic>>();
       } catch (_) {}
       // A videózandó jelenetek — hibája nem viheti el a nézetet.
+      // Az edző jegyzetei (a jelenet-listába) — hibája nem viheti el a
+      // nézetet.
+      List<Map<String, dynamic>> jegyzetek = const [];
+      try {
+        jegyzetek = await _api.fetchNotes(id);
+      } catch (_) {}
       Set<String> kulcsok = const {};
       try {
         kulcsok = {
@@ -465,6 +475,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _kontrak = kontrak;
         _kapottak = kapottak;
         _kulcsJelenetek = kulcsok;
+        _jegyzetek = jegyzetek;
         _vetitesBe = false;
         _vetitesSor = null;
         _lovesValasztott = null;
@@ -901,9 +912,81 @@ class _Court3DScreenState extends State<Court3DScreen>
 
   /// A jelenet-lista sorai a két szűrővel ("Kinek a hibái", "Videózandó")
   /// — a lista, az N / P és a vetítés közös forrása.
-  List<SceneRow> _jelenetSorok(Match m) => _kulcsSzur(sceneRows(_dontesekSz,
-      _szabadokSz, _eladasokSz, m.meta.homeTeam, m.meta.awayTeam, _kontrakSz,
-      _kapottakSz));
+  List<SceneRow> _jelenetSorok(Match m) {
+    final sorok = _kulcsSzur(sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
+        m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz));
+    if (_jegyzetek.isEmpty) return sorok;
+    // Az edző jegyzetei minden szűrővel a listában (a saját válogatása):
+    // időrendben, az azonos pillanatú jelenet-sor UTÁN (a böngésző
+    // jelenetSorokSzurt-jének párja).
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final jegyzetSorok = [
+      for (final j in _jegyzetek)
+        (() {
+          final s = (((j["frame"] as num?) ?? 0) / fps * 100).round() / 100;
+          final t = s.floor();
+          return SceneRow(s, "${t ~/ 60}:${(t % 60).toString().padLeft(2, "0")}",
+              "n", "Jegyzet: ${j["text"] ?? ""}", false);
+        })()
+    ]..sort((a, b) => a.s.compareTo(b.s));
+    final ki = [...sorok];
+    for (final j in jegyzetSorok) {
+      var i = ki.length;
+      while (i > 0 && ki[i - 1].s > j.s) {
+        i--;
+      }
+      ki.insert(i, j);
+    }
+    return ki;
+  }
+
+  /// Jegyzet a mostani pillanathoz (J, a panel gombja): a motor /notes
+  /// tárába (a meccs-elemzővel közös), majd a lista frissül.
+  Future<void> _jegyzetIr() async {
+    final m = _match, id = _matchId;
+    if (m == null || id == null || _demo || m.frames.isEmpty) return;
+    final frame = _mostT(m);
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final t = (frame / fps).floor();
+    final ctl = TextEditingController();
+    final szoveg = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Jegyzet · ${t ~/ 60}:${(t % 60).toString().padLeft(2, "0")}"),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          maxLength: 500,
+          decoration: const InputDecoration(
+              hintText: "Mit kell megmutatni ezen a jeleneten?"),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text("Mégse")),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(ctl.text),
+              child: const Text("Mentés")),
+        ],
+      ),
+    );
+    _focus.requestFocus();
+    if (szoveg == null || szoveg.trim().isEmpty || !mounted) return;
+    try {
+      await _api.addNote(id, frame, szoveg.trim());
+      final friss = await _api.fetchNotes(id);
+      if (!mounted) return;
+      setState(() => _jegyzetek = friss);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Jegyzet mentve — a jelenet-listában, a "
+              "jelentésben és a Klipek jegyzet-csomagjában is.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
+  }
 
   /// A futó vetítés-sor helye a (szűrt) listában; -1, ha nincs benne.
   int _vetitesIndex(List<SceneRow> sorok) {
@@ -1019,7 +1102,7 @@ class _Court3DScreenState extends State<Court3DScreen>
         _kontraUtolso = r.s;
       } else if (r.tipus == "kg") {
         _kapottUtolso = r.s;
-      } else {
+      } else if (r.tipus == "e") {
         _eladasUtolso = r.s;
       }
       _playhead = _tIndex(m, (r.s - 1.5) * fps).toDouble();
@@ -1043,7 +1126,7 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (_vetitesBe && _vetitesIndex(sorok) >= 0) aktiv = _vetitesIndex(sorok);
     const szin = {
       "d": AppColors.gold, "sz": AppColors.away, "e": eladasSzin,
-      "k": kontraSzin, "kg": kapottSzin,
+      "k": kontraSzin, "kg": kapottSzin, "n": AppColors.textPrimary,
     };
     // A lista fejléce: a jelenetek száma és a "Klipek" gomb — a három
     // lapozó jelenetei a Klipek képernyőn videóként is kivághatók
@@ -1626,6 +1709,11 @@ class _Court3DScreenState extends State<Court3DScreen>
         return KeyEventResult.handled;
       }
       // E — rajz be/ki (a böngésző E-jének párja).
+      // J — jegyzet a mostani pillanathoz (a böngésző J-jének párja).
+      if (k == LogicalKeyboardKey.keyJ) {
+        _jegyzetIr();
+        return KeyEventResult.handled;
+      }
       if (k == LogicalKeyboardKey.keyE) {
         _rajzModAllit(!_rajzMod);
         return KeyEventResult.handled;
@@ -1805,7 +1893,8 @@ class _Court3DScreenState extends State<Court3DScreen>
               "katt a padlóra — lövés-mérés · lövéstérkép: katt egy körre — "
               "odaugrik · N / P — következő / előző jelenet · "
               "V — vetítés (a lista sorai egymás után) · "
-              "E — rajz: húzással nyíl a padlóra",
+              "E — rajz: húzással nyíl a padlóra · "
+              "J — jegyzet a mostani pillanathoz",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -2442,6 +2531,27 @@ class _Court3DScreenState extends State<Court3DScreen>
           },
           child: Text(_nyom ? "Labda-nyom: BE" : "Labda-nyom (3 mp)",
               style: const TextStyle(fontSize: 11.5)),
+        ),
+      ),
+      // JEGYZET (J): megjegyzés a mostani pillanathoz.
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Tooltip(
+          message: "Jegyzet a mostani pillanathoz (J) — a jelenet-listába, "
+              "a vetítésbe, a jelentésbe és a Klipek jegyzet-csomagjába",
+          child: OutlinedButton.icon(
+            onPressed: _demo || _matchId == null ? null : _jegyzetIr,
+            style: OutlinedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                visualDensity: VisualDensity.compact),
+            icon: const Icon(Icons.edit_note, size: 16),
+            label: Text(
+                _jegyzetek.isEmpty
+                    ? "Jegyzet (J)"
+                    : "Jegyzet (J) · ${_jegyzetek.length}",
+                style: const TextStyle(fontSize: 11.5)),
+          ),
         ),
       ),
       // RAJZ (E): nyilak a padlón — a szín, vissza, törlés.

@@ -533,6 +533,20 @@ void main() {
     await _zar(tester);
   });
 
+  testWidgets("jegyzet: a demóban a gomb tiltott, a J nem nyit párbeszédet",
+      (tester) async {
+    await _nyit(tester);
+    final gomb = find.ancestor(
+        of: find.text("Jegyzet (J)"), matching: find.byType(OutlinedButton));
+    expect(gomb, findsOneWidget);
+    expect(tester.widget<OutlinedButton>(gomb).onPressed, isNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(tester.takeException(), isNull);
+    await _zar(tester);
+  });
+
   testWidgets("N / P billentyű: jelenet-lépés a lista sorain", (tester) async {
     await _nyit(tester);
     // N: az első jelenet (a demó első döntése) — a felirat megjelenik.
@@ -567,6 +581,8 @@ void main() {
   testWidgets("lövéstérkép: összegző, koppintás egy körre — odaugrik",
       (tester) async {
     await _nyit(tester);
+    await tester.ensureVisible(find.text("Lövéstérkép: ki"));
+    await tester.pump();
     await tester.tap(find.text("Lövéstérkép: ki"));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text("Minden lövés").last);

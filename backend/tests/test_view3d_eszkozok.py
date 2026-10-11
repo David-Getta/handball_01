@@ -1648,3 +1648,58 @@ def test_a_rajz_az_appban_a_bongeszo_tukre():
                  "nyilak: [..._rajzok, if (_rajzFolyo != null) _rajzFolyo!],",
                  "_nyil(canvas, a, b, k);", "if (!_rajzMod) _meresKoppintas("):
         assert kell in palya, kell
+
+
+
+def test_a_3d_jegyzet_a_kozos_jegyzet_tarba_ir():
+    """A 3D pálya jegyzete a motor /notes tárába ír (kockában — a tömör
+    adat viszi a képrátát), a jelenet-lista sorai közt "n" sorként
+    jelenik meg (az azonos pillanatú jelenet-sor után, ✕ törli), a
+    felirat-oszlopban és a VR-táblán is; az app ugyanezt a tárat olvassa
+    és írja, a sorait a listába fűzi. A végpontok útja: amit a 3D ír, a
+    jelentés és a klip-csomag olvassa."""
+    from pathlib import Path
+
+    from handball.pipeline.view3d_html import _compact_data, view3d_html
+
+    m = _meccs()
+    adat = _compact_data(m, None, {"home": [], "away": []},
+                         {"home": [], "away": []})
+    assert adat["fps"] == m.meta.fps
+    oldal = view3d_html(m)
+    for kell in ('id="jegyzetGomb"', 'e.code === "KeyJ"', "function jegyzetIr()",
+                 "function jegyzetBetolt()", "function jegyzetTorol(id)",
+                 'tipus: "n"', 'szoveg: "Jegyzet: " + j.text',
+                 'frame: Math.round(ido * FPS)', '["vetitesJelzo", "jegyzetFelirat", ',
+                 "jegyzetFrissit(ido);", "jegyzetBetolt();",
+                 'else if (r.tipus === "e") eladasUtolso = r.s;',
+                 'n: "#e8eef5"', 'x.className = "jtorol"'):
+        assert kell in oldal, kell
+    ui = Path(__file__).resolve().parent.parent.parent / "client" / "lib" / "ui"
+    palya = (ui / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ("_api.fetchNotes(id)", "_api.addNote(id, frame, szoveg.trim())",
+                 "LogicalKeyboardKey.keyJ", '"n", "Jegyzet: ${j["text"] ?? ""}"',
+                 '} else if (r.tipus == "e") {'):
+        assert kell in palya, kell
+
+
+def test_a_3d_jegyzet_vegpontjai_es_a_jelentes(tmp_path, monkeypatch):
+    """A 3D oldal hívásai (POST/GET/DELETE /matches/{id}/notes) a közös
+    tárat írják: a jegyzet kockája a GET-ben, a jelentésben a szöveg."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    mid = m.meta.match_id
+    j = c.post(f"/matches/{mid}/notes",
+               json={"frame": 50, "text": "Itt zárni kellett volna"}).json()
+    assert c.get(f"/matches/{mid}/notes").json()["notes"][0]["frame"] == 50
+    assert "Itt zárni kellett volna" in c.get(
+        f"/matches/{mid}/report/export").text
+    assert c.delete(f"/matches/{mid}/notes/{j['id']}").status_code == 200
+    assert c.get(f"/matches/{mid}/notes").json()["notes"] == []

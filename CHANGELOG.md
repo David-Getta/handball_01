@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.162 óta)
 
+- **3D pálya: Jegyzet a pillanathoz** (új, böngésző/VR és app): a
+  "📝 Jegyzet" (J) a mostani pillanathoz ír megjegyzést a meccs közös
+  jegyzet-tárába. A jegyzet a jelenet-lista sorai közt jelenik meg (minden
+  szűrővel — az edző saját válogatása), a vetítés is megáll rajta, a
+  pillanata körül feliratként (VR-ben a táblán) látszik, és a nyomtatott
+  jelentésbe és a Klipek "Jegyzetelt pillanatok" csomagjába is bekerül —
+  a 3D-ben nézett meccs megjegyzései videóként is kivághatók.
+
 - **3D pálya: Rajz az appban is; a "Böngészőben" gomb mindent átvisz**
   (új, app): az app 3D képernyőjén is "✎ Rajz (E)" — húzással nyíl a
   padlóra, három színnel, vissza és törlés. A "Böngészőben" gomb mostantól

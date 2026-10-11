@@ -302,6 +302,9 @@ def _compact_data(match: Match, figure_alerts: list | None = None,
         megallitas = {"home": [], "away": []}
     return {
         "match_id": match.meta.match_id,
+        # A képráta: a jegyzetek kockában tárolódnak (a meccs-elemzővel
+        # közös tár), az oldal másodpercben jár.
+        "fps": match.meta.fps if match.meta.fps > 0 else 25.0,
         "home": match.meta.home_team,
         "away": match.meta.away_team,
         "frames": frames,
@@ -707,6 +710,9 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #szabadFelirat{padding:6px 14px;border:1px solid #ff6b6b;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jelenetLista{position:fixed;right:12px;top:40px;width:380px;max-height:calc(100vh - 170px);overflow-y:auto;padding:6px;border:1px solid #2b4a5e;border-radius:8px;background:rgba(16,24,32,.94);font-size:12.5px;display:none}
  #jelenetLista .jfej{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:2px 6px 8px;border-bottom:1px solid #2b4a5e;margin-bottom:4px}
+ #jegyzetFelirat{padding:6px 14px;border:1px solid #e8eef5;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
+ #jelenetLista .jtorol{margin-left:auto;opacity:.6;padding:0 4px;cursor:pointer}
+ #jelenetLista .jtorol:hover{opacity:1;color:#ff6b6b}
  #vetitesJelzo{padding:4px 12px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.88);color:#9fd0ff;font-size:12.5px;display:none}
  #jelenetLista .jfej .n{flex:1;opacity:.85}
  #jelenetLista .jfej button{padding:3px 9px;font-size:11.5px}
@@ -853,6 +859,10 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="rajzInfo"></span>
  </div>
  <div class="sor">
+  <button id="jegyzetGomb" title="Jegyzet a mostani pillanathoz (J) — a jelenet-listába, a vetítésbe, a nyomtatott jelentésbe és a Klipek jegyzet-csomagjába kerül">📝 Jegyzet</button>
+  <span id="jegyzetInfo"></span>
+ </div>
+ <div class="sor">
   <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
   <span id="linkInfo"></span>
  </div>
@@ -880,6 +890,7 @@ Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmad
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
+Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér pötty, ✕ törli), a vetítésben, a jelentésben és a Klipek jegyzet-csomagjában<br>
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek, rajz) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai) · V — vetítés: a lista sorai egymás után<br>
@@ -888,6 +899,7 @@ VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; ko
 <div id="jatekosHud"></div>
 <div id="feliratOszlop">
  <div id="vetitesJelzo"></div>
+ <div id="jegyzetFelirat"></div>
  <div id="dontesFelirat"></div>
  <div id="szabadFelirat"></div>
  <div id="eladasFelirat"></div>
@@ -1394,6 +1406,7 @@ addEventListener("keydown", e => {
   if (e.code === "KeyO"){ keringGomb.onclick(); return; }
   if (e.code === "KeyT"){ tvGomb.onclick(); return; }
   if (e.code === "KeyE"){ rajzModAllit(!rajzMod); return; }  // rajz
+  if (e.code === "KeyJ"){ jegyzetIr(); return; }  // jegyzet
   if (e.code === "Escape"){ if (mod === "jatekos") modValt("szabad"); else if (rajzMod) rajzModAllit(false); else meresTorles(); return; }
   if (["KeyW","KeyA","KeyS","KeyD","KeyR","KeyF","KeyC"].includes(e.code)
       && mod !== "szabad") modValt("szabad");
@@ -2413,15 +2426,80 @@ function sugoAllit(){
 }
 sugoGomb.onclick = () => { sugoNyitva = !sugoNyitva; sugoAllit(); };
 sugoAllit();
-const JL_SZIN = {d: "#d9b544", sz: "#ff6b6b", e: "#ff9f43", k: "#59d98c", kg: "#c084fc"};
+const JL_SZIN = {d: "#d9b544", sz: "#ff6b6b", e: "#ff9f43", k: "#59d98c", kg: "#c084fc", n: "#e8eef5"};
 let jelenetSorokAkt = [], jelenetAktiv = -2;
 const jelenetSorokElem = document.createElement("div");  // a sorok (a fejléc alatt)
 // A jelenet-lista sorai a két szűrővel ("Kinek a hibái", "Videózandó") —
 // a lista, az N/P (VR-kontroller) és a vetítés közös forrása.
 function jelenetSorokSzurt(){
-  return kulcsSzur(jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK),
+  const sorok = kulcsSzur(jelenetSorok(szurt(DONTESEK), szurt(SZABADOK), szurt(ELADASOK),
     ADAT.home, ADAT.away, szurt(KONTRAK), szurt(KAPOTTAK)));
+  // Az edző jegyzetei minden szűrővel a listában (a saját válogatása):
+  // időrendben, az azonos pillanatú jelenet-sor UTÁN.
+  for (const j of jegyzetek){
+    let i = sorok.length;
+    while (i > 0 && sorok[i - 1].s > j.s) i--;
+    sorok.splice(i, 0, {s: j.s, ido: jegyzetIdo(j.s), tipus: "n",
+                        szoveg: "Jegyzet: " + j.text, gol: false, id: j.id});
+  }
+  return sorok;
 }
+
+// ---- Jegyzetek: az edző megjegyzései a pillanatokhoz ------------------
+// A "📝 Jegyzet" (J) a mostani pillanathoz ír megjegyzést a motor /notes
+// végpontjára — ugyanaz a jegyzet-tár, amit a meccs-elemző használ: a
+// jelenet-lista sorai közt (fehér pötty, ✕ törli), a vetítésben, a
+// felirat-oszlopban (VR-ben a táblán), a nyomtatott jelentésben és a
+// Klipek "Jegyzetelt pillanatok" csomagjában is megjelenik. A tár
+// kockában tárol (a jegyzet "frame" mezője), az oldal másodpercben jár.
+const FPS = ADAT.fps || 25;
+let jegyzetek = [];  // [{id, s, text}] — időrendben
+const jegyzetInfo = document.getElementById("jegyzetInfo");
+const jegyzetFeliratElem = document.getElementById("jegyzetFelirat");
+const jegyzetIdo = (s) => { const t = Math.max(0, Math.floor(s));
+  return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
+const jegyzetCim = () => "/matches/" + encodeURIComponent(ADAT.match_id || "") + "/notes";
+async function jegyzetBetolt(){
+  if (!ADAT.match_id) return;
+  try {
+    const v = await fetch(jegyzetCim());
+    if (!v.ok) return;
+    const d = await v.json();
+    jegyzetek = (d.notes || [])
+      .map(n => ({id: n.id, s: Math.round((Number(n.frame) || 0) / FPS * 100) / 100, text: String(n.text || "")}))
+      .sort((a, b) => a.s - b.s);
+    jegyzetInfo.textContent = jegyzetek.length ? jegyzetek.length + " jegyzet" : "";
+    if (jelenetLista.style.display === "block") jelenetListaEpit();
+  } catch (e) { /* a motor nélkül (mentett oldal) nincs jegyzet */ }
+}
+async function jegyzetIr(){
+  if (!ADAT.match_id){ jegyzetInfo.textContent = "a jegyzethez a motor kell"; return; }
+  const szoveg = prompt("Jegyzet ehhez a pillanathoz (" + jegyzetIdo(ido) + "):");
+  if (!szoveg || !szoveg.trim()) return;
+  try {
+    const v = await fetch(jegyzetCim(), {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({frame: Math.round(ido * FPS), text: szoveg.trim()})});
+    if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
+    await jegyzetBetolt();
+    jegyzetInfo.textContent = "mentve · " + jegyzetek.length + " jegyzet";
+  } catch (e) { jegyzetInfo.textContent = "hiba: " + e.message; }
+}
+async function jegyzetTorol(id){
+  try {
+    const v = await fetch(jegyzetCim() + "/" + encodeURIComponent(id), {method: "DELETE"});
+    if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
+    await jegyzetBetolt();
+  } catch (e) { jegyzetInfo.textContent = "hiba: " + e.message; }
+}
+function jegyzetFrissit(t){
+  // A jegyzet a pillanata körül a felirat-oszlopban (VR-ben a táblán).
+  const j = jegyzetek.find(x => t >= x.s - 0.3 && t <= x.s + 3);
+  if (!j){ jegyzetFeliratElem.style.display = "none"; return; }
+  jegyzetFeliratElem.textContent = "📝 " + j.text;
+  jegyzetFeliratElem.style.display = "block";
+}
+document.getElementById("jegyzetGomb").onclick = jegyzetIr;
+window.jegyzetProba = () => jegyzetek.map(j => ({s: j.s, text: j.text}));
 
 // ---- Vetítés: a jelenet-lista sorai egymás után ------------------------
 // A "▶ Vetítés" (V; VR-ben a hüvelykujj-kar lenyomása) a lista sorain (a
@@ -2488,7 +2566,7 @@ function jelenetUgras(r){
   else if (r.tipus === "sz") szabadUtolso = r.s;
   else if (r.tipus === "k") kontraUtolso = r.s;
   else if (r.tipus === "kg") kapottUtolso = r.s;
-  else eladasUtolso = r.s;
+  else if (r.tipus === "e") eladasUtolso = r.s;
   ido = Math.max(0, r.s - 1.5); megy = true; lejatszasGomb.textContent = "⏸";
   csuszka.value = ido;
   vetitesSor = r; vetitesJelzoFrissit();  // a vetítés innen folytatja
@@ -2540,6 +2618,12 @@ function jelenetListaEpit(){
     const p = document.createElement("span"); p.className = "jpont"; p.style.background = JL_SZIN[r.tipus];
     const t = document.createElement("span"); t.textContent = r.szoveg;
     sor.append(i, p, t);
+    if (r.tipus === "n"){
+      const x = document.createElement("span"); x.className = "jtorol"; x.textContent = "✕";
+      x.title = "A jegyzet törlése";
+      x.onclick = (e) => { e.stopPropagation(); jegyzetTorol(r.id); };
+      sor.append(x);
+    }
     sor.onclick = () => jelenetUgras(r);
     jelenetSorokElem.appendChild(sor);
   });
@@ -2886,7 +2970,7 @@ window.vrJelenetLep = jelenetLep;  // a próbához: a kontroller-gomb párja
 // fejhez rögzített táblára rajzoljuk (a kamera gyermeke — mindig szem
 // előtt, a padló-vonalak nem takarják). A ?vrfelirat=1 headset nélkül
 // is bekapcsolja (próbához).
-const VR_FELIRAT_FORRASOK = ["vetitesJelzo", "felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "kontraFelirat", "kapottFelirat", "hetesFelirat", "emberJelzo"];
+const VR_FELIRAT_FORRASOK = ["vetitesJelzo", "jegyzetFelirat", "felirat", "dontesFelirat", "szabadFelirat", "eladasFelirat", "golFelirat", "kontraFelirat", "kapottFelirat", "hetesFelirat", "emberJelzo"];
 const vrVaszon = document.createElement("canvas"); vrVaszon.width = 1024; vrVaszon.height = 320;
 const vrTextura = new THREE.CanvasTexture(vrVaszon);
 const vrTabla = new THREE.Sprite(new THREE.SpriteMaterial({map: vrTextura, transparent: true, depthTest: false}));
@@ -2933,6 +3017,7 @@ window.vrFeliratProba = () => ({latszik: vrTabla.visible, sorok: vrFeliratSzoveg
 
 const idoCimke = document.getElementById("ido");
 linkAlkalmaz();
+jegyzetBetolt();
 fest.setAnimationLoop(() => {
   const most = performance.now();
   const dt = Math.min(0.1, (most - utolso)/1000); utolso = most;
@@ -2940,7 +3025,7 @@ fest.setAnimationLoop(() => {
     vetitesFrissit(t0, ido);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); felirat(ido); vrFeliratFrissit();
+  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); felirat(ido); vrFeliratFrissit();
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);

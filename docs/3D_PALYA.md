@@ -205,6 +205,14 @@ Klipek gombja a Videózandó szűrővel a videózandó jeleneteket egy
 klip-csomagban kéri (`key_scene`: időrendben sorszámozott fájlok — az
 edzésen bármilyen lejátszóval sorban levetíthetők).
 
+A **📝 Jegyzet** (billentyű: J) a mostani pillanathoz ír megjegyzést —
+ugyanabba a jegyzet-tárba, amit a meccs-elemző használ (a motor
+`/matches/{id}/notes` végpontja). A jegyzet a jelenet-lista sorai közt
+fehér pöttyel jelenik meg (minden szűrővel — az edző saját válogatása; a
+böngészőben a sor végi ✕ törli), a vetítés is megáll rajta, a pillanata
+körül a felirat-oszlopban (VR-ben a táblán) látszik, és a nyomtatott
+jelentésbe és a Klipek "Jegyzetelt pillanatok" csomagjába is bekerül.
+
 A **✎ Rajz** (billentyű: E) a taktika-tábla a valódi jeleneten: rajz-módban
 a húzás nyilat rajzol a padlóra — sárga a labda/passz, kék a futás,
 piros a védő mozgása. A megállított jeleneten az edző megmutatja, hova
