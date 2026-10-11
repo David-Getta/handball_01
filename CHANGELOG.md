@@ -3,7 +3,23 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.161 óta)
+## v0.1.162 — kiadva (2026-10-11)
+
+> Kiadás-jegyzet: a videózandó jelenetek egy kattintásra kerültek — a
+> kezdőlap meccs-kártyája mondja, hány jelenet vár, és a 3D pályát az
+> elsőn nyitja; az Edzésterv fókusz-tételei mellett "… 3D-ben" gomb
+> (a tétel hibái a pályán, a csapatra szűrve); a nyomtatott jelentés
+> videózandó sorai "3D ↗" linkkel. A 3D pálya új lapozói a kapott gólok
+> (ki lőtte, honnan, a legközelebbi védő, a kapus mélysége, xG) és a
+> hétméteresek (a dobó, a célzott kapu-harmad, a kimenet, a kapus); a
+> Klipek képernyő a lerohanás-csomagokkal (saját és kapott). Javítva:
+> nyolc app-képernyő elrendezése fél képernyőnyi (700×600) ablakban; a
+> böngészős 3D jelenet-feliratai egy oszlopban, hézag nélkül (és nem
+> fogják el a kattintást); a klip-fájlnevekben a csapat is szerepel a
+> címkés csomagoknál; és a kód-átnézés hat észrevétele (a klip-csomagok
+> ismétlés-szűrője típusonként, a kapott gól lövője, a lerohanás
+> klip-horgonya, a kapus "kint" küszöbe, a jelenet-lista tűrése, a
+> védekezés-elemzés memoizálása).
 
 - **Klipek: a csapat a fájlnévben a címkés csomagoknál is** (javítás):
   a szabad lövők, a figurák, a beállós gólok, a betörések, a
