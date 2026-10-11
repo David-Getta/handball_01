@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.164 óta)
 
+- **Közös nézés: "📍 Ide mindenki"** (új, böngésző/VR, motor): a vezető
+  egy gombbal a csapat minden headsetjét a saját nézőpontjába hozza (hely
+  és irány) — "álljatok mind a kapus helyére", és mindenki onnan nézi a
+  jelenetet. VR-ben a rig ugrik, a fej a sajátja marad; a később
+  csatlakozót a régi nézőpont nem rántja el.
+
 - **Közös nézés: mutató a csapatnak** (új, böngésző/VR, motor): a vezető
   Shift+kattintása a padlóra a csapat headsetjein (és nála) 4 mp-ig
   lüktető gyűrűt tesz oda — "nézzétek ide": a játékos a pálya bármely

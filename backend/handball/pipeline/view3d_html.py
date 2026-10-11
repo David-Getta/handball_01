@@ -870,6 +870,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  </div>
  <div class="sor">
   <button id="vezetGomb" title="Közös nézés — te vezetsz: a lejátszásod (idő, szünet, sebesség, rajz) a csapat headsetjein is fut; a csapat linkje a vágólapra kerül">📡 Vezetem</button>
+  <button id="ideGomb" title="Ide mindenki: a követők kamerája a te mostani nézőpontodba ugrik (hely és irány) — pl. mindenki a kapus helyére. Csak vezetés közben" disabled>📍 Ide mindenki</button>
   <button id="kovetGomb" title="Közös nézés — az edzőt követed: az ő lejátszása fut nálad, te a saját helyedről nézed (a pálya bejárható)">👥 Követem</button>
   <span id="kozosInfo" style="font-size:11px;word-break:break-all"></span>
  </div>
@@ -908,7 +909,7 @@ Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmad
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
-Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi; vezetőként Shift+katt a padlóra: mutató a csapatnak (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
+Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi; vezetőként Shift+katt a padlóra: mutató a csapatnak, 📍 Ide mindenki: a követők a te nézőpontodba ugranak (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
 Videó (K) — a valódi felvétel a 3D mellett, a lejátszással szinkronban: kép a képben és kivetítő a túlsó oldalvonal fölött (VR-ben is)<br>
 Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér pötty, ✕ törli), a vetítésben, a jelentésben és a Klipek jegyzet-csomagjában<br>
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
@@ -2625,6 +2626,30 @@ function mutatoFrissit(){
 }
 window.mutatoProba = () => ({latszik: mutatoGyuru.visible, x: mutatoGyuru.position.x,
                              y: W - mutatoGyuru.position.z, kuld: kzMutato});
+// "📍 Ide mindenki": a vezető mostani nézőpontja (a rig helye, az irány)
+// a csapatnak — a követő kamerája szabad módba vált, és oda ugrik (VR-ben
+// a rig: a fej iránya a sajátja marad). Frissnek a mutatóval azonos
+// ideig számít (a később csatlakozót nem rántja el).
+let kzNezopont = null, kzNezopontN = null;
+// Az ugrás híre a VR-táblán is KZ_VR_MS-ig áll (a következő kérdés nem
+// írja felül rögtön a "követed"-del).
+const KZ_IDE = "📍 az edző ide hívott";
+const ideGomb = document.getElementById("ideGomb");
+ideGomb.onclick = () => {
+  if (kozosMod !== "vezet") return;
+  kzNezopont = {x: rig.position.x, y: Math.max(0.2, rig.position.y), z: rig.position.z,
+                yaw: rig.rotation.y, pitch: clamp(kamera.rotation.x, -1.6, 1.6), n: Date.now()};
+  kzUtolso = 0;
+  kozosInfo.textContent = "📍 a csapat ide ugrik";
+};
+function nezopontAlkalmaz(v){
+  modValt("szabad");
+  rig.position.set(v.x, v.y, v.z);
+  yaw = v.yaw; pitch = v.pitch; rig.rotation.y = yaw;
+  if (!fest.xr.isPresenting) kamera.rotation.set(pitch, 0, 0);
+  kzInfo(KZ_IDE);
+}
+window.nezopontProba = () => ({x: rig.position.x, y: rig.position.y, z: rig.position.z, yaw: rig.rotation.y, mod, kuld: kzNezopont});
 const kzCim = () => "/matches/" + encodeURIComponent(ADAT.match_id) + "/shared3d";
 function kozosAllit(m){
   if (!ADAT.match_id){ kozosInfo.textContent = "a közös nézéshez a motor kell"; return; }
@@ -2636,7 +2661,8 @@ function kozosAllit(m){
   vezetGomb.classList.toggle("be", kozosMod === "vezet");
   kovetGomb.classList.toggle("be", kozosMod === "kovet");
   // Új vezetés: a régi mutató nem megy újra a csapatnak.
-  kzRajz = null; kzUtolso = 0; kzMutato = null;
+  kzRajz = null; kzUtolso = 0; kzMutato = null; kzNezopont = null;
+  ideGomb.disabled = kozosMod !== "vezet";
   if (kozosMod === "vezet"){
     kzLink = location.origin + location.pathname + "?kovet=1";
     kzVagolap = false; kzKovetok = null; kzVezetoInfo();
@@ -2655,7 +2681,7 @@ function kozosFrissit(){
   kzUtolso = most; kzUton = true;
   if (kozosMod === "vezet"){
     fetch(kzCim(), {method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok), mutato: kzMutato})})
+      body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok), mutato: kzMutato, nezopont: kzNezopont})})
       .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(a => { if (kozosMod === "vezet"){ kzKovetok = a.followers; kzVezetoInfo(); } })
       .catch(() => { if (kozosMod === "vezet") kozosInfo.textContent = "📡 a vezetés nem jut el a motorhoz"; })
@@ -2665,7 +2691,8 @@ function kozosFrissit(){
   fetch(kzCim() + "?kid=" + KZ_KID, {cache: "no-store"}).then(r => r.json()).then(a => {
     if (kozosMod !== "kovet") return;
     if (!a.active){ kzInfo("👥 nincs vezető — az edző nem vezet (vagy bezárta)"); return; }
-    kzInfo(KZ_KOVETED);
+    if (!(kozosInfo.textContent === KZ_IDE && performance.now() - kzInfoValtas < KZ_VR_MS))
+      kzInfo(KZ_KOVETED);
     const cel = Math.max(0, Math.min(veg, a.t + (a.playing ? a.kor * a.speed : 0)));
     if (Math.abs(ido - cel) > KZ_TURES){ ido = cel; csuszka.value = ido; }
     megy = !!a.playing; lejatszasGomb.textContent = megy ? "⏸" : "▶";
@@ -2676,6 +2703,10 @@ function kozosFrissit(){
     if (a.mutato && a.mutato.n !== kzMutatoN){
       kzMutatoN = a.mutato.n;
       if (a.mutato.kor < KZ_MUTATO) mutatoMutat(a.mutato.x, a.mutato.y);
+    }
+    if (a.nezopont && a.nezopont.n !== kzNezopontN){
+      kzNezopontN = a.nezopont.n;
+      if (a.nezopont.kor < KZ_MUTATO) nezopontAlkalmaz(a.nezopont);
     }
   }).catch(() => { if (kozosMod === "kovet") kzInfo("👥 a motor nem válaszol"); })
     .finally(() => { kzUton = false; });

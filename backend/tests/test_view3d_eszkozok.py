@@ -2039,7 +2039,7 @@ def test_a_kozos_nezes_mutatoja(tmp_path, monkeypatch):
 
     oldal = view3d_html(_meccs())
     for kell in ('if (e.shiftKey && kozosMod === "vezet"){ mutatoKattintas(',
-                 "mutato: kzMutato})", "if (a.mutato.kor < KZ_MUTATO) mutatoMutat(",
+                 "mutato: kzMutato,", "if (a.mutato.kor < KZ_MUTATO) mutatoMutat(",
                  "mutatoFrissit();", "Shift+katt a padlóra: mutató a csapatnak"):
         assert kell in oldal, kell
     assert f"const KZ_MUTATO = {float(court3d.SHARED3D_POINTER_S)!r};" in oldal
@@ -2058,6 +2058,43 @@ def test_a_kozos_nezes_mutatoja(tmp_path, monkeypatch):
     # Új vezetés: a régi mutató nem megy újra (böngésző és app).
     assert "kzRajz = null; kzUtolso = 0; kzMutato = null;" in oldal
     assert "_kovetok = null;\n      // Új vezetés" in palya
+
+
+def test_a_kozos_nezes_nezopontja(tmp_path, monkeypatch):
+    """"📍 Ide mindenki": a nézőpont a korával megy (új n = új idő), a
+    csarnokon kívüli vagy hiányos 400; az oldal a gombot csak vezetés
+    közben engedi, a követő a friss új nézőpontba ugrik (szabad mód)."""
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline.view3d_html import view3d_html
+
+    ora = [50.0]
+    monkeypatch.setattr(time, "monotonic", lambda: ora[0])
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    url = f"/matches/{m.meta.match_id}/shared3d"
+    nz = {"x": 1.5, "y": 1.7, "z": 10.0, "yaw": -1.5708, "pitch": -0.1, "n": 7}
+    assert c.put(url, json={"t": 1, "nezopont": nz}).status_code == 200
+    ora[0] += 1.25
+    c.put(url, json={"t": 2, "nezopont": nz})
+    a = c.get(url).json()["nezopont"]
+    assert a == {**nz, "n": 7.0, "kor": 1.25}
+    for rossz in ({**nz, "y": 500}, {**nz, "pitch": 3}, {"x": 1, "y": 1},
+                  {**nz, "yaw": "x"}):
+        assert c.put(url, json={"t": 1, "nezopont": rossz}).status_code == 400, rossz
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="ideGomb"', 'ideGomb.disabled = kozosMod !== "vezet";',
+                 "nezopont: kzNezopont})", "if (a.nezopont.kor < KZ_MUTATO) nezopontAlkalmaz(",
+                 'modValt("szabad");\n  rig.position.set(v.x, v.y, v.z);',
+                 "kozosInfo.textContent === KZ_IDE && performance.now() - kzInfoValtas < KZ_VR_MS"):
+        assert kell in oldal, kell
 
 
 def test_a_3d_oldal_kozos_nezese():

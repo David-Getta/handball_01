@@ -3260,6 +3260,24 @@ def create_app():
                     and -5.0 <= mx <= 45.0 and -5.0 <= my <= 25.0):
                 raise HTTPException(status_code=400, detail="rossz mutató")
             mut = {"x": round(mx, 2), "y": round(my, 2), "n": mn}
+        # A nézőpont ("📍 Ide mindenki"): a vezető kamerájának helye
+        # (three-tér: x a pálya hossza, y a magasság, z a szélesség
+        # tükörképe; a csarnok ésszerű dobozában) és iránya (yaw, pitch),
+        # "n" a küldés azonosítója — mint a mutatónál.
+        nez = None
+        if body.get("nezopont") is not None:
+            try:
+                v_ = body["nezopont"]
+                nv = [float(v_[k]) for k in ("x", "y", "z", "yaw", "pitch", "n")]
+            except (TypeError, ValueError, KeyError):
+                raise HTTPException(status_code=400, detail="rossz nézőpont")
+            nx_, ny_, nz_, nyaw, npitch, nn = nv
+            if not (all(_math.isfinite(v) for v in nv)
+                    and -60.0 <= nx_ <= 100.0 and 0.2 <= ny_ <= 60.0
+                    and -60.0 <= nz_ <= 80.0 and -1.6 <= npitch <= 1.6):
+                raise HTTPException(status_code=400, detail="rossz nézőpont")
+            nez = {"x": round(nx_, 2), "y": round(ny_, 2), "z": round(nz_, 2),
+                   "yaw": round(nyaw, 4), "pitch": round(npitch, 4), "n": nn}
         with _kozos_zar:
             regi = _kozos.get(match_id) or {}
             rev = regi.get("rev", 0) + 1
@@ -3269,6 +3287,9 @@ def create_app():
             mut_ido = regi.get("mutato_ido")
             if mut is not None and (regi.get("mutato") or {}).get("n") != mut["n"]:
                 mut_ido = most
+            nez_ido = regi.get("nezopont_ido")
+            if nez is not None and (regi.get("nezopont") or {}).get("n") != nez["n"]:
+                nez_ido = most
             # A jelenlévő követők (a régiek kiesnek) — átvisszük.
             kovetok = {k: v for k, v in (regi.get("kovetok") or {}).items()
                        if most - v <= _c3.SHARED3D_FOLLOWER_S}
@@ -3277,7 +3298,9 @@ def create_app():
                                 "speed": speed, "rajz": rajz, "rev": rev,
                                 "ido": most, "kovetok": kovetok,
                                 "mutato": mut,
-                                "mutato_ido": mut_ido if mut else None}
+                                "mutato_ido": mut_ido if mut else None,
+                                "nezopont": nez,
+                                "nezopont_ido": nez_ido if nez else None}
         return {"rev": rev, "followers": len(kovetok)}
 
     @app.get("/matches/{match_id}/shared3d")
@@ -3299,10 +3322,11 @@ def create_app():
         if not a:
             return {"active": False}
         a.pop("kovetok", None)
-        mut_ido = a.pop("mutato_ido", None)
-        if a.get("mutato") and mut_ido is not None:
-            a["mutato"] = {**a["mutato"], "kor": round(
-                max(0.0, _time.monotonic() - mut_ido), 3)}
+        for kulcs_ in ("mutato", "nezopont"):
+            ido_ = a.pop(kulcs_ + "_ido", None)
+            if a.get(kulcs_) and ido_ is not None:
+                a[kulcs_] = {**a[kulcs_], "kor": round(
+                    max(0.0, _time.monotonic() - ido_), 3)}
         kor = max(0.0, _time.monotonic() - a.pop("ido"))
         return {**a, "kor": round(kor, 3),
                 "active": kor <= _c3.SHARED3D_STALE_S}
