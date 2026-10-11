@@ -30,6 +30,17 @@ PRE_SECONDS = 5.0
 POST_SECONDS = 3.0
 MAX_CLIPS = 60  # ésszerű plafon — ennél több klip zip-je már kezelhetetlen
 
+# Azok a klip-típusok, amelyek csapata VALÓDI (az elemzés mondja meg, kié
+# a jelenet) ÉS címkét is visznek: a fájlnévben a címke ELÉ a csapatnév is
+# kerül ("…_Szeged_támadó.mp4"). Enélkül a címke kiszorította a nevet, és
+# a két csapat klipjei egy mappában megkülönböztethetetlenek voltak. A
+# kulcs-pillanat, a jegyzet és a fordulópont csapata csak helykitöltő —
+# azoknál a név a címke marad.
+CLIP_TEAM_IN_NAME_TYPES = frozenset({
+    "free_shot", "best_figure", "recurring_figure", "pivot_goal",
+    "breakthrough", "steal", "costly_turnover", "bad_decision",
+    "fast_break", "conceded_fast_break"})
+
 _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
             "seven_meter": "hetmeteres", "timeout": "idokeres",
             "substitution": "csere", "note": "jegyzet",
@@ -336,10 +347,13 @@ def export_event_clips(match: Match, events: list, types: set[str],
 
         game_s = t / fps  # játékidő a feldolgozott szakaszon belül
         # A fájlnév vége: az esemény opcionális címkéje (pl. a jegyzet
-        # szövege), különben a csapatnév.
+        # szövege), különben a csapatnév; a csapathoz kötött, címkés
+        # csomagoknál a kettő együtt (CLIP_TEAM_IN_NAME_TYPES).
         label = _field(e, "label") or team_name
+        if typ in CLIP_TEAM_IN_NAME_TYPES and _field(e, "label"):
+            label = f"{team_name}_{_field(e, 'label')}"
         safe_label = re.sub(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+", "_",
-                            str(label))[:32].strip("_") or "klip"
+                            str(label))[:48].strip("_") or "klip"
         name = (f"{i + 1:02d}_{_TYPE_HU.get(typ, typ)}_{_clock(game_s)}"
                 f"_{safe_label}.mp4")
         dest = out_dir / name

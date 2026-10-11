@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.161 óta)
 
+- **Klipek: a csapat a fájlnévben a címkés csomagoknál is** (javítás):
+  a szabad lövők, a figurák, a beállós gólok, a betörések, a
+  labdaszerzések, a drága eladások, a döntés-hibák és a lerohanások
+  klipjeinél a fájlnév a címkét (zóna, sáv, kimenet) vitte a csapatnév
+  HELYETT — a két csapat klipjei egy mappában megkülönböztethetetlenek
+  voltak ("03_draga-eladas_12-40_támadó.mp4"). Most a csapatnév is ott
+  van ("03_draga-eladas_12-40_Szeged_támadó.mp4"); a kulcs-pillanat és
+  a jegyzet neve (ahol a csapat csak helykitöltő) változatlan.
+
 - **3D pálya (böngésző): a jelenet-feliratok egy oszlopban** (javítás):
   a hét jelenet-felirat (döntés, szabad lövő, labdavesztés, gól-akció,
   lerohanás, kapott gól, hetes) eddig rögzített függőleges helyen állt —

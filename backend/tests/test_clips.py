@@ -700,3 +700,38 @@ def test_a_lerohanas_csomagok_magyar_nevet_kapnak(tmp_path):
     with zipfile.ZipFile(res.zip_path) as z:
         names = " ".join(z.namelist())
     assert "lerohanas/" in names and "kapott-lerohanas/" in names
+
+
+
+def test_a_csapathoz_kotott_cimkes_klip_neve_a_csapatot_is_viszi(tmp_path):
+    """A csapathoz kötött, címkés csomagoknál (pl. drága eladás, kapott
+    lerohanás) a fájlnév a csapatnevet ÉS a címkét is viszi — a két csapat
+    klipjei egy mappában is megkülönböztethetők; a kulcs-pillanatnál (a
+    csapat csak helykitöltő) a név a címke marad."""
+    from handball.pipeline.clips import CLIP_TEAM_IN_NAME_TYPES
+
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 40, "type": "costly_turnover", "team": "home",
+               "label": "támadó"},
+              {"t": 80, "type": "conceded_fast_break", "team": "away",
+               "label": "gol"},
+              {"t": 120, "type": "key_moment", "team": "home",
+               "label": "Vezetés-váltás"}]
+    res = export_event_clips(
+        m, events, {"costly_turnover", "conceded_fast_break", "key_moment"},
+        tmp_path / "ki")
+    assert res.count == 3
+    with zipfile.ZipFile(res.zip_path) as z:
+        nevek = z.namelist()
+    elad = next(n for n in nevek if "draga-eladas" in n.split("/")[-1])
+    kapott = next(n for n in nevek if "kapott-lerohanas" in n.split("/")[-1])
+    kulcs = next(n for n in nevek if "kulcs-pillanat" in n.split("/")[-1])
+    assert elad.endswith(f"_{m.meta.home_team}_támadó.mp4"), elad
+    assert kapott.endswith(f"_{m.meta.away_team}_gol.mp4"), kapott
+    assert kulcs.endswith("_Vezetés-váltás.mp4") and m.meta.home_team not in kulcs
+    assert {"costly_turnover", "conceded_fast_break", "free_shot",
+            "steal"} <= CLIP_TEAM_IN_NAME_TYPES
+    assert "key_moment" not in CLIP_TEAM_IN_NAME_TYPES
+    assert "note" not in CLIP_TEAM_IN_NAME_TYPES
