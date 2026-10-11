@@ -562,8 +562,11 @@ def seven_meter_outcomes(match: Match,
     lefújták, vagy a labda nem látszott).
 
     Visszatérés: [{"t", "team", "goal_x", "outcome", "shooter_id",
-    "irany"}] — az irany a kapun belüli sáv (bal/közép/jobb) a dobó
-    szemszögéből, None, ha nem mérhető."""
+    "irany", "shot_t", "release_t"}] — az irany a kapun belüli sáv
+    (bal/közép/jobb) a dobó szemszögéből, None, ha nem mérhető; a shot_t
+    a párosított lövés kockája, a release_t az elengedésé (None, ha nincs
+    lövés vagy nem mért) — a 3D hetes-lapozó ezekből rajzol, a párosítást
+    nem számolja újra."""
     from .event_detection import EventType, detect_shots
 
     config = config or TacticsConfig()
@@ -578,6 +581,8 @@ def seven_meter_outcomes(match: Match,
         rec["outcome"] = "ismeretlen"
         rec["shooter_id"] = None
         rec["irany"] = None
+        rec["shot_t"] = None
+        rec["release_t"] = None
         for e in shots:
             if not (sm["t"] <= e.t <= sm["t"] + win):
                 continue
@@ -587,6 +592,8 @@ def seven_meter_outcomes(match: Match,
                               "védés" if (e.detail or {}).get("outcome") == "save"
                               else "kihagyva")
             rec["shooter_id"] = e.player_id
+            rec["shot_t"] = e.t
+            rec["release_t"] = (e.detail or {}).get("release_t")
             rec["irany"] = _seven_direction(match, e.t, sm["goal_x"],
                                             fps)
             break

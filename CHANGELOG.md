@@ -3,6 +3,25 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.162 óta)
+
+- **Második kód-átnézés javításai** (javítás): a gyorsítótárazott
+  végpontok (a 3D pálya összes rétege, a kulcs-jelenetek) és a böngészős
+  3D oldal mostantól a rétegek közös hatókörében számolnak — enélkül a
+  lemezről visszatöltött meccsen a kapus nem volt kapusként jelölve
+  (védőnek, birtokosnak számított), és a rossz eredmény a gyorsítótárba
+  került. A "Videózandó jelenetek" (jelentés, kezdőlap) válogatásából
+  kikerültek a kapott gólok (minden kapott gól nem hiba), és a 15-ös
+  plafon fontossági sorrendben tölt — eddig hosszú meccsen csak az első
+  percek gólos sorai maradtak meg. A kezdőlap "3D-ben" gombja a kártya
+  első jelenetére visz (eddig a típus első sorára), a kártya sora
+  frissül a meccs változása után. A lerohanás befejezője egy esemény (a
+  felirat, a rajz és a klip ugyanarról a lövőről szól kipattanós gólnál
+  is). A böngészős 3D a levett rajzokat felszabadítja (eddig képkockánként
+  szivárogtatta a GPU-memóriát — hosszú nézésnél, VR-ben lassult). A
+  klip-ismétlés ablaka másodpercben (0,5 mp), nem kockában; a hetes a
+  hetes-réteg lövés-párosítását olvassa, nem számolja újra.
+
 ## v0.1.162 — kiadva (2026-10-11)
 
 > Kiadás-jegyzet: a videózandó jelenetek egy kattintásra kerültek — a

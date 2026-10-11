@@ -2374,10 +2374,23 @@ def create_app():
         with zar:
             return _cached_result_locked(match_id, name, compute)
 
+    def _scoped(match_id: str, compute):
+        """A `compute()` a meccs primitive_cache hatókörében: a hatókör
+        nyitása jelöli a kapusokat (enélkül a lemezről visszatöltött
+        meccsen a kapus védőnek, birtokosnak számít — és a rossz eredmény
+        a gyorsítótárba kerülne), és a rétegek meccsenként egyszer
+        futnak."""
+        from ..pipeline.primitive_cache import primitive_cache
+        match = _store.get(match_id)
+        if match is None:
+            return compute()
+        with primitive_cache(match):
+            return compute()
+
     def _cached_result_locked(match_id: str, name: str, compute):
         fp = _result_fingerprint(match_id)
         if fp is None:
-            return compute()
+            return _scoped(match_id, compute)
         mem = _result_mem.setdefault(match_id, {})
         hit = mem.get(name)
         if hit is not None and hit[0] == fp:
@@ -2390,7 +2403,7 @@ def create_app():
                 return d["result"]
         except Exception:
             pass
-        res = compute()
+        res = _scoped(match_id, compute)
         try:
             szoveg = json.dumps({"fp": fp, "result": res}, ensure_ascii=False)
         except (TypeError, ValueError):
@@ -2832,8 +2845,11 @@ def create_app():
             feltores, megallitas = kulcsok["breakpoints"], kulcsok["stoppers"]
         except Exception:
             feltores = megallitas = None
-        return HTMLResponse(content=view3d_html(match, riasztasok, feltores,
-                                                megallitas))
+        # A tömör adat egy hatókörben (kapus-jelölés, egyszeri rétegek).
+        from ..pipeline.primitive_cache import primitive_cache
+        with primitive_cache(match):
+            oldal = view3d_html(match, riasztasok, feltores, megallitas)
+        return HTMLResponse(content=oldal)
 
     @app.get("/matches/{match_id}/defence-timeline")
     def match_defence_timeline(match_id: str):

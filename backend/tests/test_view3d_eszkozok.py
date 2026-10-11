@@ -1451,3 +1451,21 @@ def test_a_jelenet_feliratok_egy_oszlopban_rendezodnek():
         assert "position:fixed" not in css and "top:" not in css, fid
     css = re.search(r" #feliratOszlop\{([^}]*)\}", oldal).group(1)
     assert "flex-direction:column" in css and "pointer-events:none" in css
+
+
+
+def test_a_3d_oldal_rajz_csoportjai_felszabaditjak_a_geometriat():
+    """A képkockánként újrarajzolt rétegek a levett geometriát és anyagot
+    felszabadítják (csoportUrit — dispose), és a gól-akció, a lerohanás, a
+    kapott gól és a hetes csak jelenet-váltáskor rajzol újra; régi,
+    felszabadítás nélküli ürítés nem maradt."""
+    import re
+
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    assert "function csoportUrit(cs)" in oldal
+    assert "x.geometry.dispose()" in oldal and "q.dispose()" in oldal
+    assert not re.search(r"while \(\w+\.children\.length\) \w+\.remove", oldal)
+    for cs in ("golCsoport", "kontraCsoport", "kapottCsoport", "hetesCsoport"):
+        assert f"if ({cs}.userData.kesz && {cs}.userData.d === d) return {cs}.userData.szoveg;" in oldal, cs

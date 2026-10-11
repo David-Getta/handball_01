@@ -38,6 +38,29 @@ FREE_THROW_LINE_M = 9.0
 # sűrűbben nem változik érdemben, és egy 60 perces meccs így 3600 sor.
 DEFENCE_TIMELINE_STEP_S = 1.0
 
+
+def _jersey_map(match: Match) -> dict:
+    """track_id → mezszám (az első mért mezszám) — a jelenet-rétegek
+    feliratai ebből írnak."""
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+    return jersey
+
+
+def _nearest_keeper(frame, team: Team, goal_x: float):
+    """A csapat kapus-jelölésű játékosa a kockán — több ilyennél (cserés
+    átfedés, hibás jelölés) a saját kapu közepéhez legközelebbi; None, ha
+    nincs."""
+    if frame is None:
+        return None
+    cy = COURT_WIDTH_M / 2.0
+    kapusok = [p for p in frame.players if p.team == team and p.role == "kapus"]
+    return (min(kapusok, key=lambda p: math.hypot(p.x - goal_x, p.y - cy))
+            if kapusok else None)
+
 # Tankönyvi falak a BAL kapu (x = 0) előtt: (mélység a gólvonaltól, y).
 # Hat mezőnyvédő; a jobb kapura tükrözve (x → 40 − x). A mélységek a
 # `tactics.detect_formation` sávjaihoz igazodnak (hátsó ≤ 7 m, közép
@@ -794,10 +817,13 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
     előrébb váró ember.
 
     Visszatérés: {"moments": [{"s", "e" (a szakasz kezdete/vége mp),
-    "shot_s" (a lövés mp | None), "t" (a befejezés kockája: a gólé, ha
-    gól lett, különben az első azonosított lövésé, lövés nélkül a szakasz
-    végéé — a klipvágás e köré vág), "shooter_id" (a befejező track-je
-    ugyanígy | None), "team" (a támadó), "defending",
+    "shot_s" (a befejező lövés mp | None), "t" (a befejezés kockája: a
+    gólé, ha gól lett, különben az első azonosított lövésé, lövés nélkül a
+    szakasz végéé — a klipvágás e köré vág), "shooter_id" (a befejező:
+    gólnál a gól azonosított lövője, különben az első azonosított lövés
+    lövője | None — a mezszám, a lövés-hely, az út és a hullám is ebből;
+    kipattanós gólnál ezért a hullám a kontra-hullámok rétegétől, amely az
+    első lövőt nézi, eltérhet), "team" (a támadó), "defending",
     "duration_s", "advance_ms", "outcome" ("goal" / "shot" / None),
     "shooter_jersey", "first_jersey", "wave" ("first" / "second" / None —
     kettőnél kevesebb futóval vagy lövő nélkül None), "ahead" (bool |
@@ -854,7 +880,14 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
         # eseményé (kipattanóból a második lövő is lehet), különben az
         # első azonosított lövésé; lövés nélkül a szakasz vége.
         gol_ev = next((e for e in bent if e.type == EventType.GOAL), None)
-        horgony = gol_ev if gol_ev is not None else shot
+        # A befejező EGY esemény: gólnál a gól lövője, ha azonosított
+        # (kipattanóból a második lövő), különben az első azonosított
+        # lövés — a horgony, az út, a mezszám, a lövés-hely és a hullám is
+        # ebből, hogy a felirat, a rajz és a klip ugyanarról szóljon.
+        befejezo = (gol_ev if gol_ev is not None and gol_ev.player_id is not None
+                    else shot)
+        horgony_t = (gol_ev.t if gol_ev is not None
+                     else shot.t if shot is not None else a["end_frame"])
         i0 = idx_of.get(a["start_frame"])
         fr0 = match.frames[i0] if i0 is not None else None
         runners = [p for p in fr0.players
@@ -862,14 +895,14 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
         first_id = (min(runners, key=lambda p: abs(p.x - goal_x)).track_id
                     if runners else None)
         wave = None
-        if shot is not None and len(runners) >= 2:
-            wave = "second" if shot.player_id != first_id else "first"
+        if befejezo is not None and len(runners) >= 2:
+            wave = "second" if befejezo.player_id != first_id else "first"
         ahead = None
         if fr0 is not None and fr0.ball is not None and runners:
             front = min(abs(p.x - goal_x) for p in runners)
             ahead = abs(fr0.ball.x - goal_x) - front >= FBH_GAP_M
-        futo = shot.player_id if shot is not None else first_id
-        i1 = idx_of.get(shot.t if shot is not None else a["end_frame"],
+        futo = befejezo.player_id if befejezo is not None else first_id
+        i1 = idx_of.get(befejezo.t if befejezo is not None else a["end_frame"],
                         idx_of.get(a["end_frame"]))
         path = []
         if i0 is not None and i1 is not None and futo is not None:
@@ -881,19 +914,22 @@ def fast_break_moments(match: Match, config: Optional[TacticsConfig] = None) -> 
         moments.append({
             "s": round(a["start_frame"] / fps, 2),
             "e": round(a["end_frame"] / fps, 2),
-            "shot_s": round(shot.t / fps, 2) if shot is not None else None,
+            "shot_s": (round(befejezo.t / fps, 2) if befejezo is not None
+                       else None),
             "team": side, "defending": "away" if side == "home" else "home",
             "duration_s": a["duration_s"],
             "advance_ms": (round(_advance_speed(seq, goal_x, fps), 2)
                            if seq is not None else None),
             "outcome": "goal" if gol else ("shot" if bent else None),
-            "t": horgony.t if horgony is not None else a["end_frame"],
-            "shooter_id": (horgony.player_id if horgony is not None
+            "t": horgony_t,
+            "shooter_id": (befejezo.player_id if befejezo is not None
                            else None),
-            "shooter_jersey": jersey.get(shot.player_id) if shot else None,
+            "shooter_jersey": (jersey.get(befejezo.player_id)
+                               if befejezo is not None else None),
             "first_jersey": jersey.get(first_id),
             "wave": wave, "ahead": ahead, "path": path,
-            "shot": hely(idx_of.get(shot.t), shot.player_id) if shot else None,
+            "shot": (hely(idx_of.get(befejezo.t), befejezo.player_id)
+                     if befejezo is not None else None),
             "ball": ([round(fr0.ball.x, 2), round(fr0.ball.y, 2)]
                      if fr0 is not None and fr0.ball is not None else None),
             "goal": [goal_x, COURT_WIDTH_M / 2.0]})
@@ -930,20 +966,12 @@ def seven_meter_moments(match: Match,
     None, "keeper_depth", "goal": [x, y] (a támadott kapu közepe)}]
     időrendben, "attempts": {"home"/"away": db}, "goals": {...}} — a
     számok a seven_meter_summary kísérlet- és gól-számaival egyeznek."""
-    from .event_detection import EventType, detect_shots
-    from .rules import SEVEN_OUTCOME_WINDOW_S, seven_meter_outcomes
+    from .rules import seven_meter_outcomes
 
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
-    win = round(SEVEN_OUTCOME_WINDOW_S * fps)
     by_t = {f.t: f for f in match.frames}
-    shots = [e for e in detect_shots(match, config)
-             if e.type in (EventType.SHOT, EventType.GOAL)]
-    jersey: dict = {}
-    for f in match.frames:
-        for p in f.players:
-            if p.jersey_number is not None and p.track_id not in jersey:
-                jersey[p.track_id] = p.jersey_number
+    jersey = _jersey_map(match)
     cy = COURT_WIDTH_M / 2.0
 
     moments = []
@@ -956,14 +984,11 @@ def seven_meter_moments(match: Match,
         attempts[side] += 1
         if sm["outcome"] == "gól":
             goals[side] += 1
-        # A lövés: ugyanaz a párosítás, mint a seven_meter_outcomes-ban.
-        shot = next((e for e in shots if sm["t"] <= e.t <= sm["t"] + win
-                     and e.team.value == side), None)
-        rel_t = None
-        if shot is not None:
-            rel_t = (shot.detail or {}).get("release_t")
-            if rel_t not in by_t:
-                rel_t = shot.t
+        # A lövés: a seven_meter_outcomes párosítása (a rekord viszi a
+        # párosított lövés és az elengedés kockáját) — nem számoljuk újra.
+        rel_t = sm.get("release_t")
+        if rel_t not in by_t:
+            rel_t = sm.get("shot_t")
         f0 = by_t.get(sm["t"])
         fl = by_t.get(rel_t) if rel_t is not None else f0
         spot = ([round(f0.ball.x, 2), round(f0.ball.y, 2)]
@@ -972,11 +997,7 @@ def seven_meter_moments(match: Match,
         if fl is not None and sm["shooter_id"] is not None:
             lovo = next((p for p in fl.players
                          if p.track_id == sm["shooter_id"]), None)
-        kapusok = [p for p in (fl.players if fl is not None else [])
-                   if p.team == vedo and p.role == "kapus"]
-        kapus = (min(kapusok, key=lambda p: math.hypot(p.x - goal_x,
-                                                        p.y - cy))
-                 if kapusok else None)
+        kapus = _nearest_keeper(fl, vedo, goal_x)
         aim = None
         if sm["irany"] is not None:
             # A dobó szemszögéből: a +x kapura a bal az alacsony y (a
@@ -1004,9 +1025,10 @@ def seven_meter_moments(match: Match,
 
 
 # Kulcs-jelenetek: a legnagyobb döntés-hibákból ennyi, és összesen
-# legfeljebb ennyi sor (a gólba került eladások és kapott lerohanások, a
-# gólt érő szabad lövők és a kapott gólok mind bekerülnek, amíg a plafon
-# engedi; a plafon a gólos jeleneteket tartja meg előbb).
+# legfeljebb ennyi sor. A plafon a fontossági sorrendben tölt (a gólba
+# került eladások, a kapott lerohanás-gólok, a gólt érő szabad lövők a
+# legszabadabbtól, végül a döntés-hibák a legnagyobb réstől) — nem az
+# időrendben elsőket tartja meg, így a lista az egész meccsről szól.
 KEY_SCENES_DECISION_TOP = 5
 KEY_SCENES_MAX = 15
 
@@ -1018,11 +1040,15 @@ def key_scene_rows(match: Match, config: Optional[TacticsConfig] = None,
 
     A 3D jelenet-lista minden hibát mutat; ez a válogatás az edző
     "mit nézzünk vissza" listája: a gólba került labdavesztések és kapott
-    lerohanások, a gólt érő szabadon hagyott lövők, a kapott gólok és a
-    `decision_top` legnagyobb döntés-hiba, időrendben, legfeljebb
-    `max_rows` sor — a plafon a gólos jeleneteket tartja meg előbb. A
-    nyomtatott jelentés "Videózandó jelenetek" szakasza és a kezdőlap
-    meccs-kártyája UGYANEZT adja.
+    lerohanások, a gólt érő szabadon hagyott lövők és a `decision_top`
+    legnagyobb döntés-hiba, időrendben, legfeljebb `max_rows` sor. A
+    kapott gólok NINCSENEK benne (minden kapott gól nem hiba — azoknak a 3D
+    "Kapott gólok" lapozója való). A plafon fontossági sorrendben tölt: a
+    gólba került eladások (a leggyorsabban büntetett elöl), a kapott
+    lerohanás-gólok, a gólt érő szabad lövők (a legszabadabb elöl), a
+    döntés-hibák (a legnagyobb rés elöl) — nem az időrendben elsőket
+    tartja meg. A nyomtatott jelentés "Videózandó jelenetek" szakasza és a
+    kezdőlap meccs-kártyája UGYANEZT adja.
 
     Visszatérés: {"rows": [scene_rows-sor: "s", "ido", "tipus", "side",
     "szoveg", "gol"], "total": a válogatás előtti sorok száma}."""
@@ -1038,15 +1064,24 @@ def key_scene_rows(match: Match, config: Optional[TacticsConfig] = None,
                 if d["punished"]]
     kontrak = [d for d in fast_break_moments(match, **kw)["moments"]
                if d["outcome"] == "goal"]
-    kapottak = conceded_goal_moments(match, **kw)["moments"]
+    total = len(dontesek) + len(szabadok) + len(eladasok) + len(kontrak)
+    # Fontossági sorrendben töltünk a plafonig (rétegenként a legfontosabb
+    # elöl), aztán a kiválasztott sorok időrendben.
+    maradt = max(0, max_rows)
+
+    def vesz(lista):
+        nonlocal maradt
+        ki = lista[:maradt]
+        maradt -= len(ki)
+        return ki
+
+    eladasok = vesz(sorted(eladasok, key=lambda d: (d["goal_after_s"], d["s"])))
+    kontrak = vesz(sorted(kontrak, key=lambda d: d["s"]))
+    szabadok = vesz(sorted(szabadok, key=lambda d: (-(d.get("dist") or 0.0),
+                                                     d["s"])))
+    dontesek = vesz(dontesek)
     sorok = scene_rows(dontesek, szabadok, eladasok,
-                       match.meta.home_team, match.meta.away_team,
-                       kontrak, kapottak)
-    total = len(sorok)
-    if len(sorok) > max_rows:
-        tart = sorted(range(len(sorok)),
-                      key=lambda i: (not sorok[i]["gol"], i))[:max_rows]
-        sorok = [sorok[i] for i in sorted(tart)]
+                       match.meta.home_team, match.meta.away_team, kontrak)
     return {"rows": sorok, "total": total}
 
 
@@ -1088,11 +1123,7 @@ def conceded_goal_moments(match: Match,
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
     by_t = {f.t: f for f in match.frames}
-    jersey: dict = {}
-    for f in match.frames:
-        for p in f.players:
-            if p.jersey_number is not None and p.track_id not in jersey:
-                jersey[p.track_id] = p.jersey_number
+    jersey = _jersey_map(match)
     d = defense_analysis(match, config)
     cy = COURT_WIDTH_M / 2.0
     moments = []
@@ -1109,13 +1140,8 @@ def conceded_goal_moments(match: Match,
             conceded[side] += 1
             f = by_t.get(sh["release_t"])
             # A kapus: a védekező csapat kapus-jelölésű játékosa az
-            # elengedés kockáján — több ilyennél (cserés átfedés, hibás
-            # jelölés) a saját kapuhoz legközelebbi.
-            kapusok = [p for p in (f.players if f is not None else [])
-                       if p.team == vedo and p.role == "kapus"]
-            kapus = (min(kapusok, key=lambda p: math.hypot(p.x - own_x,
-                                                            p.y - cy))
-                     if kapusok else None)
+            # elengedés kockáján (több ilyennél a kapuhoz legközelebbi).
+            kapus = _nearest_keeper(f, vedo, own_x)
             geo = shot_geometry(sh["x"], sh["y"],
                                 "bal" if own_x == 0.0 else "jobb")
             mely = (round(math.hypot(kapus.x - own_x, kapus.y - cy), 2)

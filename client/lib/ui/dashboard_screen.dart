@@ -800,18 +800,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// A videózandó jelenetek meccsenként, egymás után, nem blokkolóan — a
   /// kártya a válasz után mutatja a sort; hiba esetén a kártya sor nélkül
-  /// marad (a többi adat nem függ tőle).
+  /// marad (a többi adat nem függ tőle). Minden összkép-frissítéskor ÚJRA
+  /// kérjük (gól-javítás, újrafeldolgozás után a régi szám maradt volna; a
+  /// motor gyorsítótáraz, tehát olcsó); ha egy betöltés már fut, az a
+  /// végén még egyszer végigmegy — két hurok nem fut egyszerre.
+  bool _keyScenesBusy = false, _keyScenesAgain = false;
   Future<void> _loadKeyScenes() async {
-    for (final m in List<Map<String, dynamic>>.from(_matches)) {
-      final id = m["match_id"] as String;
-      if (_keyScenes.containsKey(id)) continue;
-      try {
-        final r = await _api.fetchKeyScenes(id);
-        if (!mounted) return;
-        setState(() => _keyScenes[id] = r);
-      } catch (_) {
-        // sor nélkül
-      }
+    if (_keyScenesBusy) {
+      _keyScenesAgain = true;
+      return;
+    }
+    _keyScenesBusy = true;
+    try {
+      do {
+        _keyScenesAgain = false;
+        for (final m in List<Map<String, dynamic>>.from(_matches)) {
+          final id = m["match_id"] as String;
+          try {
+            final r = await _api.fetchKeyScenes(id);
+            if (!mounted) return;
+            setState(() => _keyScenes[id] = r);
+          } catch (_) {
+            // sor nélkül
+          }
+        }
+      } while (_keyScenesAgain && mounted);
+    } finally {
+      _keyScenesBusy = false;
     }
   }
 
@@ -839,6 +854,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => Court3DScreen(
                 matchId: id,
+                // A kártya ELSŐ jelenete: a típus, a csapat ÉS az ideje
+                // (a típus első sora a teljes listán más jelenet lehet).
+                startS: (elso["s"] as num?)?.toDouble(),
                 initialScene: elso["tipus"] as String?,
                 initialTeam: elso["side"] as String?))),
         style: TextButton.styleFrom(

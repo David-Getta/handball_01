@@ -30,6 +30,11 @@ PRE_SECONDS = 5.0
 POST_SECONDS = 3.0
 MAX_CLIPS = 60  # ésszerű plafon — ennél több klip zip-je már kezelhetetlen
 
+# Ugyanaz a jelenet egy csomagon belül: ennyi MÁSODPERCEN belül két azonos
+# típusú esemény egy klip (a klip 8 mp-es, a két vágás ugyanaz lenne).
+# Másodpercben, nem kockában: a termék ritkításánál egy kocka 0,12 mp.
+CLIP_SAME_MOMENT_S = 0.5
+
 # Azok a klip-típusok, amelyek csapata VALÓDI (az elemzés mondja meg, kié
 # a jelenet) ÉS címkét is visznek: a fájlnévben a címke ELÉ a csapatnév is
 # kerül ("…_Szeged_támadó.mp4"). Enélkül a címke kiszorította a nevet, és
@@ -282,7 +287,7 @@ def export_event_clips(match: Match, events: list, types: set[str],
     for e in picked:
         t_e = int(_field(e, "t") or 0)
         tip_e = str(_field(e, "type"))
-        if tip_e in last_t and abs(t_e - last_t[tip_e]) < 2:
+        if tip_e in last_t and abs(t_e - last_t[tip_e]) / fps < CLIP_SAME_MOMENT_S:
             continue
         dedup.append(e)
         last_t[tip_e] = t_e

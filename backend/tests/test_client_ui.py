@@ -3446,7 +3446,7 @@ def test_az_edzesterv_fokusz_tetele_a_3d_jelenetekre_visz():
     for kell in ("final String? initialScene;", "final String? initialTeam;",
                  "void _kezdoSzuro()", "void _kezdoJelenet()",
                  "_jelenetCsapat = widget.initialTeam!;",
-                 "if (r.tipus == tipus) {"):
+                 "if (r.tipus != tipus) continue;"):
         assert kell in palya, kell
 
 
@@ -3461,7 +3461,9 @@ def test_a_kezdolap_meccs_kartyaja_a_videozando_jelenetekre_visz():
     kezdolap = (gyoker / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
     for kell in ("_loadKeyScenes()", "fetchKeyScenes(id)", "_keyScenesRow(id)",
                  '"Videózandó: $total jelenet"', 'initialScene: elso["tipus"]',
-                 'initialTeam: elso["side"]', 'import "court3d_screen.dart";'):
+                 'initialTeam: elso["side"]', 'import "court3d_screen.dart";',
+                 'startS: (elso["s"] as num?)?.toDouble()', "_keyScenesBusy",
+                 "while (_keyScenesAgain && mounted)"):
         assert kell in kezdolap, kell
     api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
     assert "/matches/$matchId/key-scenes" in api

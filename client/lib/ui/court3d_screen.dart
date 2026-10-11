@@ -843,12 +843,21 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (m == null || tipus == null) return;
     final sorok = sceneRows(_dontesekSz, _szabadokSz, _eladasokSz,
         m.meta.homeTeam, m.meta.awayTeam, _kontrakSz, _kapottakSz);
+    // Ha a hívó a jelenet idejét is megadta (a kezdőlap kártyája), az a
+    // sor; különben a típus első sora (az Edzésterv).
+    final s0 = widget.startS;
+    SceneRow? cel;
     for (final r in sorok) {
-      if (r.tipus == tipus) {
-        _jelenetUtolso = r.s;
-        _jelenetUgras(m, r);
-        return;
+      if (r.tipus != tipus) continue;
+      if (s0 == null || (r.s - s0).abs() < sceneSameMomentS) {
+        cel = r;
+        break;
       }
+      cel ??= r;
+    }
+    if (cel != null) {
+      _jelenetUtolso = cel.s;
+      _jelenetUgras(m, cel);
     }
   }
 

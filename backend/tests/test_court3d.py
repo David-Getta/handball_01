@@ -708,6 +708,8 @@ def test_a_kulcs_jelenetek_a_jelentes_valogatasa(monkeypatch):
     szuk = court3d.key_scene_rows(m, max_rows=3)
     assert len(szuk["rows"]) == 3 and all(x["gol"] for x in szuk["rows"])
     assert szuk["total"] == r["total"]
+    # Kapott gól nincs a válogatásban (a "Kapott gólok" lapozó való rá).
+    assert all(x["tipus"] != "kg" for x in r["rows"])
     # A döntés-hibák száma a plafonjukig: decision_top=0 → nincs "d" sor.
     nincs_d = court3d.key_scene_rows(m, decision_top=0, max_rows=500)
     assert all(x["tipus"] != "d" for x in nincs_d["rows"])
@@ -820,3 +822,110 @@ def test_hetes_nelkul_ures():
                                                   seed=5, shots_per_min=8))
     assert r == {"moments": [], "attempts": {"home": 0, "away": 0},
                  "goals": {"home": 0, "away": 0}}
+
+
+
+def test_a_kulcs_jelenetek_plafonja_fontossagi_sorrendben_tolt():
+    """Hosszú meccsen a plafon NEM az első percek gólos sorait tartja meg:
+    a gólt érő szabad lövők közül a legszabadabbak maradnak (a fontossági
+    sorrendben a döntés-hibák előtt), és a kiválasztott sorok időrendben
+    jönnek; a total a teljes (kapott gól nélküli) jelölt-szám."""
+    from handball.pipeline import court3d
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=600, fps=25.0, seed=5,
+                              shots_per_min=8)
+    szabad = [d for d in court3d.free_shot_moments(m)["moments"] if d["goal"]]
+    elad = [d for d in court3d.turnover_moments(m)["moments"] if d["punished"]]
+    kontra = [d for d in court3d.fast_break_moments(m)["moments"]
+              if d["outcome"] == "goal"]
+    dont = court3d.decision_moments(m)["moments"]
+    assert len(szabad) > court3d.KEY_SCENES_MAX, "sok gólos szabad lövés kell"
+    r = court3d.key_scene_rows(m)
+    assert r["total"] == (len(szabad) + len(elad) + len(kontra)
+                          + min(len(dont), court3d.KEY_SCENES_DECISION_TOP))
+    assert len(r["rows"]) == court3d.KEY_SCENES_MAX
+    assert [x["s"] for x in r["rows"]] == sorted(x["s"] for x in r["rows"])
+    hely = court3d.KEY_SCENES_MAX - min(len(elad) + len(kontra),
+                                        court3d.KEY_SCENES_MAX)
+    vart = sorted(szabad, key=lambda d: (-(d.get("dist") or 0.0), d["s"]))[:hely]
+    kapott_sz = [x["s"] for x in r["rows"] if x["tipus"] == "sz"]
+    assert sorted(kapott_sz) == sorted(d["s"] for d in vart)
+    # A meccs második fele is szóhoz jut (nem csak az első percek).
+    assert max(x["s"] for x in r["rows"]) > 300
+
+
+def test_a_lerohanas_befejezoje_egy_esemeny():
+    """A lerohanás befejezője EGY esemény: a horgony, a mezszám, a lövés
+    ideje, a lövés-hely, az út vége és a hullám is ugyanarról szól (gólnál
+    a gól azonosított lövője)."""
+    from handball.pipeline.court3d import fast_break_moments
+    from handball.pipeline.event_detection import EventType, detect_shots
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=300, fps=25.0, seed=7,
+                              shots_per_min=8)
+    golok = {e.t: e for e in detect_shots(m) if e.type == EventType.GOAL}
+    mez = {}
+    for f in m.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                mez.setdefault(p.track_id, p.jersey_number)
+    r = fast_break_moments(m)
+    assert r["moments"]
+    for x in r["moments"]:
+        if x["outcome"] != "goal" or golok[x["t"]].player_id is None:
+            continue
+        assert x["shooter_id"] == golok[x["t"]].player_id
+        assert x["shooter_jersey"] == mez.get(x["shooter_id"])
+        assert x["shot_s"] == round(x["t"] / 25.0, 2)
+        assert x["path"] and x["path"][-1] == x["shot"]
+
+
+def test_a_hetes_a_seven_meter_outcomes_parositasat_olvassa():
+    """A hetes-rekord viszi a párosított lövés és az elengedés kockáját; a
+    3D hetes ezekből rajzol (nem számolja újra a párosítást)."""
+    from handball.pipeline.court3d import seven_meter_moments
+    from handball.pipeline.rules import seven_meter_outcomes
+
+    m = _hetes_meccs()
+    ki = seven_meter_outcomes(m)
+    assert ki and all("shot_t" in k and "release_t" in k for k in ki)
+    gol = next(k for k in ki if k["outcome"] == "gól")
+    assert gol["shot_t"] is not None and gol["shot_t"] >= gol["t"]
+    h = seven_meter_moments(m)["moments"][0]
+    rel = gol["release_t"] if gol["release_t"] is not None else gol["shot_t"]
+    assert h["shot_s"] == round(rel / m.meta.fps, 2)
+
+
+def test_a_3d_vegpontok_kapus_jelolessel_szamolnak(tmp_path, monkeypatch):
+    """A gyorsítótárazott végpontok a primitive_cache hatókörében
+    számolnak: a lemezről visszatöltött (kapus-jelölés nélküli) meccsen is
+    a kapus a kapus — a kapott gólok kapusa megvan, a jelenet-válogatás
+    ugyanaz, mint a hatókörben (a jelentés útja)."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import conceded_goal_moments, key_scene_rows
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=180, fps=25.0, seed=5,
+                              shots_per_min=8)
+    with primitive_cache(m):
+        vart_kg = conceded_goal_moments(m)
+        vart_ks = key_scene_rows(m)
+    for f in m.frames:             # a visszatöltött meccs: nincs szerep
+        for p in f.players:
+            p.role = None
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    kg = c.get(f"/matches/{m.meta.match_id}/conceded-goals").json()
+    assert kg["moments"] and all(x["keeper"] is not None for x in kg["moments"])
+    assert [x["keeper"] for x in kg["moments"]] == \
+        [x["keeper"] for x in vart_kg["moments"]]
+    ks = c.get(f"/matches/{m.meta.match_id}/key-scenes").json()
+    assert [x["szoveg"] for x in ks["rows"]] == \
+        [x["szoveg"] for x in vart_ks["rows"]]

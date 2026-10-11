@@ -416,6 +416,20 @@ function falResek(jat, hazai, goalX){
 # lejátszófejtől): így az első 1,6 mp pillanatai is elérhetők, és a
 # lapozó nem ragad le az épp nézett pillanaton.
 LAPOZO_JS = """
+function csoportUrit(cs){
+  // A csoport elemeinek eltávolítása ÉS felszabadítása: a three.js a
+  // levett geometriát és anyagot magától nem adja vissza — a képkockánként
+  // újrarajzolt rétegek különben percenként ezreket szivárogtattak.
+  while (cs.children.length){
+    const o = cs.children[0];
+    cs.remove(o);
+    o.traverse(x => {
+      if (x.geometry) x.geometry.dispose();
+      const m = x.material;
+      if (m) (Array.isArray(m) ? m : [m]).forEach(q => q.dispose());
+    });
+  }
+}
 function lapozCel(idok, most, utolso, irany){
   // idok: a pillanatok ideje (mp), növekvő; utolso: az utoljára ugrott
   // pillanat ideje vagy null. Visszaad: a cél ideje vagy null.
@@ -1501,7 +1515,7 @@ szinpad.add(meresCsoport);
 const padloSik = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 function szam1(v){ return v.toFixed(1).replace(".", ","); }
 function meresTorles(){
-  while (meresCsoport.children.length) meresCsoport.remove(meresCsoport.children[0]);
+  csoportUrit(meresCsoport);
   meresElem.style.display = "none";
 }
 function meresKattintas(cx, cy){
@@ -1557,7 +1571,7 @@ let passzHaloNev = null;
 function passzSzin(hazai){ return hazai ? 0x4c9aff : 0xff6b6b; }
 function passzFrissit(t){
   const v = passzValaszto.value;
-  while (passzElo.children.length) passzElo.remove(passzElo.children[0]);
+  csoportUrit(passzElo);
   passzHalo.visible = v === "hazai" || v === "vendeg";
   if (!v){ passzInfo.textContent = ""; return; }
   if (v === "elo"){
@@ -1575,7 +1589,7 @@ function passzFrissit(t){
   }
   const hazai = v === "hazai" ? 1 : 0;
   if (passzHaloNev !== v){
-    while (passzHalo.children.length) passzHalo.remove(passzHalo.children[0]);
+    csoportUrit(passzHalo);
     const pontok = [];
     for (const [mp, h, x1, y1, x2, y2] of PASSZOK){
       if (h !== hazai) continue;
@@ -1744,7 +1758,7 @@ const passzsavInfo = document.createElement("div");
 passzsavInfo.style.cssText = "position:fixed;right:12px;bottom:56px;padding:6px 12px;border:1px solid #2b4a5e;border-radius:8px;background:rgba(16,24,32,.85);font-size:13px;display:none";
 document.body.appendChild(passzsavInfo);
 function passzsavFrissit(){
-  while (passzsavCsoport.children.length) passzsavCsoport.remove(passzsavCsoport.children[0]);
+  csoportUrit(passzsavCsoport);
   if (!passzsavKapcsolo.checked){ passzsavInfo.style.display = "none"; return; }
   const jat = allas.map(s => [s.hazai ? 1 : 0, s.x, s.y]);
   const lb = labda.visible ? [labda.position.x, W - labda.position.z] : null;
@@ -1852,8 +1866,10 @@ function golUgras(irany){
 document.getElementById("golElozo").onclick = () => golUgras(-1);
 document.getElementById("golKov").onclick = () => golUgras(1);
 function golFrissit(t){
-  while (golCsoport.children.length) golCsoport.remove(golCsoport.children[0]);
   const d = GOLAKCIOK.find(x => t >= x[0] - 0.3 && t <= x[1] + 2.5);
+  // Csak jelenet-váltáskor rajzolunk újra (a hurok minden kockán hív).
+  if (golCsoport.userData.kesz && golCsoport.userData.d === d) return golCsoport.userData.szoveg;
+  csoportUrit(golCsoport); golCsoport.userData.kesz = true; golCsoport.userData.d = d; golCsoport.userData.szoveg = null;
   if (!d) return null;
   const [s0, sg, hazai, lanc, lx, ly, lmez, gx, gy, n, hossz] = d;
   const szin = hazai ? 0x4c9aff : 0xff6b6b;
@@ -1869,7 +1885,7 @@ function golFrissit(t){
       new THREE.Vector3(lx, 1.2, W - ly), new THREE.Vector3(gx, 1.0, W - gy)]);
     golCsoport.add(new THREE.Line(g, new THREE.LineBasicMaterial({color: 0xd9b544})));
   }
-  return golAkcioFelirat(d, ADAT.home, ADAT.away);
+  return (golCsoport.userData.szoveg = golAkcioFelirat(d, ADAT.home, ADAT.away));
 }
 
 // ---- Jelenet-szűrő: kinek a hibái ---------------------------------------
@@ -1920,7 +1936,7 @@ document.getElementById("dontesElozo").onclick = () => dontesUgras(-1);
 document.getElementById("dontesKov").onclick = () => dontesUgras(1);
 function szam2(v){ return v.toFixed(2).replace(".", ","); }
 function dontesFrissit(t){
-  while (dontesCsoport.children.length) dontesCsoport.remove(dontesCsoport.children[0]);
+  csoportUrit(dontesCsoport);
   const d = szurt(DONTESEK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
   // A szabad lövés felirata KÜLÖN dobozban (a döntés-felirat alatt): két
   // egyszerre aktív pillanat nem takarhatja el egymást.
@@ -1990,7 +2006,7 @@ function szabadUgras(irany){
 document.getElementById("szabadElozo").onclick = () => szabadUgras(-1);
 document.getElementById("szabadKov").onclick = () => szabadUgras(1);
 function szabadFrissit(t){
-  while (szabadCsoport.children.length) szabadCsoport.remove(szabadCsoport.children[0]);
+  csoportUrit(szabadCsoport);
   const d = szurt(SZABADOK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
   if (!d){ szabadKor.visible = false; return null; }
   const [mp, vedHazai, sx, sy, dx, dy, tav, gol, xg] = d;
@@ -2034,7 +2050,7 @@ function eladasUgras(irany){
 document.getElementById("eladasElozo").onclick = () => eladasUgras(-1);
 document.getElementById("eladasKov").onclick = () => eladasUgras(1);
 function eladasFrissit(t){
-  while (eladasCsoport.children.length) eladasCsoport.remove(eladasCsoport.children[0]);
+  csoportUrit(eladasCsoport);
   const d = szurt(ELADASOK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
   if (!d){ eladasKor.visible = false; return null; }
   const [mp, hazai, mez, lx, ly, bx, by, harmad, ox, oy, tav, kipres, golMp] = d;
@@ -2091,8 +2107,10 @@ function kontraUgras(irany){
 document.getElementById("kontraElozo").onclick = () => kontraUgras(-1);
 document.getElementById("kontraKov").onclick = () => kontraUgras(1);
 function kontraFrissit(t){
-  while (kontraCsoport.children.length) kontraCsoport.remove(kontraCsoport.children[0]);
   const d = szurt(KONTRAK).find(x => t >= x[0] - 0.3 && t <= x[14] + 2.5);
+  // Csak jelenet-váltáskor rajzolunk újra (a hurok minden kockán hív).
+  if (kontraCsoport.userData.kesz && kontraCsoport.userData.d === d) return kontraCsoport.userData.szoveg;
+  csoportUrit(kontraCsoport); kontraCsoport.userData.kesz = true; kontraCsoport.userData.d = d; kontraCsoport.userData.szoveg = null;
   if (!d) return null;
   const [s, defHazai, mez, hullam, elszokott, hossz, kimenet, ut, lx, ly, gx, gy, bx, by] = d;
   const szin = defHazai ? 0xff6b6b : 0x4c9aff;  // a TÁMADÓ csapat színe
@@ -2117,7 +2135,7 @@ function kontraFrissit(t){
       new THREE.Vector3(lx, 1.2, W - ly), new THREE.Vector3(gx, 1.0, W - gy)]);
     kontraCsoport.add(new THREE.Line(g, new THREE.LineBasicMaterial({color: 0xd9b544})));
   }
-  return kontraFelirat(d, ADAT.home, ADAT.away);
+  return (kontraCsoport.userData.szoveg = kontraFelirat(d, ADAT.home, ADAT.away));
 }
 
 // ---- Kapott gólok: minden kapott gól a védekezés olvasatával -----------
@@ -2151,8 +2169,10 @@ function kapottGyuru(x, y, r, szin){
   return g;
 }
 function kapottFrissit(t){
-  while (kapottCsoport.children.length) kapottCsoport.remove(kapottCsoport.children[0]);
   const d = szurt(KAPOTTAK).find(x => t >= x[0] - 0.3 && t <= x[0] + 2.5);
+  // Csak jelenet-váltáskor rajzolunk újra (a hurok minden kockán hív).
+  if (kapottCsoport.userData.kesz && kapottCsoport.userData.d === d) return kapottCsoport.userData.szoveg;
+  csoportUrit(kapottCsoport); kapottCsoport.userData.kesz = true; kapottCsoport.userData.d = d; kapottCsoport.userData.szoveg = null;
   if (!d) return null;
   const [s, defHazai, mez, lx, ly, sav, szog, tav, dx, dy, dtav, szabad, kx, ky, mely, kint, xg, gx, gy] = d;
   const szin = defHazai ? 0xff6b6b : 0x4c9aff;  // a LÖVŐ csapat színe
@@ -2171,7 +2191,7 @@ function kapottFrissit(t){
     vonal(kx, ky, 0.05, gx, gy, 0.05, new THREE.LineBasicMaterial({color: 0xc084fc}));
   }
   vonal(lx, ly, 1.2, gx, gy, 1.0, new THREE.LineBasicMaterial({color: 0xd9b544}));
-  return kapottFelirat(d, ADAT.home, ADAT.away);
+  return (kapottCsoport.userData.szoveg = kapottFelirat(d, ADAT.home, ADAT.away));
 }
 
 // ---- Hétméteresek: a dobó, az irány, a kimenet és a kapus ---------------
@@ -2197,8 +2217,10 @@ function hetesUgras(irany){
 document.getElementById("hetesElozo").onclick = () => hetesUgras(-1);
 document.getElementById("hetesKov").onclick = () => hetesUgras(1);
 function hetesFrissit(t){
-  while (hetesCsoport.children.length) hetesCsoport.remove(hetesCsoport.children[0]);
   const d = HETESEK.find(x => t >= x[0] - 0.3 && t <= (x[16] !== null ? x[16] : x[0]) + 2.5);
+  // Csak jelenet-váltáskor rajzolunk újra (a hurok minden kockán hív).
+  if (hetesCsoport.userData.kesz && hetesCsoport.userData.d === d) return hetesCsoport.userData.szoveg;
+  csoportUrit(hetesCsoport); hetesCsoport.userData.kesz = true; hetesCsoport.userData.d = d; hetesCsoport.userData.szoveg = null;
   if (!d) return null;
   const [s, hazai, mez, px, py, lx, ly, kim, ir, cx, cy, kx, ky, mely, gx, gy] = d;
   const vonal = (x1, y1, h1, x2, y2, h2, szin) => {
@@ -2219,7 +2241,7 @@ function hetesFrissit(t){
     hetesCsoport.add(gy0);
     vonal(kx, ky, 0.05, gx, gy, 0.05, 0xc084fc);
   }
-  return hetesFelirat(d, ADAT.home, ADAT.away);
+  return (hetesCsoport.userData.szoveg = hetesFelirat(d, ADAT.home, ADAT.away));
 }
 
 // ---- Jelenet-lista: a jelenet-lapozók jelenetei egy listában -----------

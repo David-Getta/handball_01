@@ -212,6 +212,25 @@ def test_block_clip_gets_hungarian_name(tmp_path):
     assert "blokk" in names
 
 
+def test_a_klip_ismetles_ablaka_masodpercben(tmp_path):
+    """Az azonos pillanat ablaka MÁSODPERCBEN él (CLIP_SAME_MOMENT_S): a
+    ritkított (8,33 kép/mp-es) meccsen is ugyanaz a valós idő számít
+    ugyanannak a jelenetnek, nem a kocka-szám."""
+    from handball.pipeline.clips import CLIP_SAME_MOMENT_S
+
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    fps = m.meta.fps
+    kozel = max(1, int(CLIP_SAME_MOMENT_S * fps) - 1)   # az ablakon belül
+    tavol = int(CLIP_SAME_MOMENT_S * fps) + 2           # az ablakon kívül
+    events = [{"t": 30, "type": "goal", "team": "home"},
+              {"t": 30 + kozel, "type": "goal", "team": "home"},
+              {"t": 30 + kozel + tavol, "type": "goal", "team": "home"}]
+    res = export_event_clips(m, events, {"goal"}, tmp_path / "ki")
+    assert res.count == 2 and res.skipped == 1
+
+
 def test_duplicate_moments_deduplicated_and_reported(tmp_path):
     """Az azonos pillanatra eső ismétlés egy csomagon BELÜL csak egyszer
     kerül a zip-be (a skipped számolja); két csomagban ugyanaz a pillanat
