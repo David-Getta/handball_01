@@ -720,6 +720,9 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #jegyzetFelirat{padding:6px 14px;border:1px solid #e8eef5;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jelenetLista .jtorol{margin-left:auto;opacity:.6;padding:0 4px;cursor:pointer}
  #jelenetLista .jtorol:hover{opacity:1;color:#ff6b6b}
+ #videoAblak{position:fixed;right:12px;bottom:150px;width:320px;border:1px solid #2b4a5e;border-radius:8px;background:#000;display:none;overflow:hidden;z-index:5}
+ #videoAblak img{display:block;width:100%}
+ #videoInfo{position:absolute;left:6px;bottom:4px;font-size:11px;color:#dfe7ef;text-shadow:0 0 3px #000}
  #vetitesJelzo{padding:4px 12px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.88);color:#9fd0ff;font-size:12.5px;display:none}
  #jelenetLista .jfej .n{flex:1;opacity:.85}
  #jelenetLista .jfej button{padding:3px 9px;font-size:11.5px}
@@ -866,6 +869,9 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <span id="rajzInfo"></span>
  </div>
  <div class="sor">
+  <button id="videoGomb" title="Videó (K): a valódi felvétel a 3D mellett, szinkronban — kép a képben, és kivetítő a túlsó oldalvonal fölött (VR-ben is)">📺 Videó</button>
+ </div>
+ <div class="sor">
   <button id="jegyzetGomb" title="Jegyzet a mostani pillanathoz (J) — a jelenet-listába, a vetítésbe, a nyomtatott jelentésbe és a Klipek jegyzet-csomagjába kerül">📝 Jegyzet</button>
   <span id="jegyzetInfo"></span>
  </div>
@@ -897,6 +903,7 @@ Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmad
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
+Videó (K) — a valódi felvétel a 3D mellett, a lejátszással szinkronban: kép a képben és kivetítő a túlsó oldalvonal fölött (VR-ben is)<br>
 Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér pötty, ✕ törli), a vetítésben, a jelentésben és a Klipek jegyzet-csomagjában<br>
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek, rajz) megosztható címként<br>
@@ -916,6 +923,7 @@ VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; ko
  <div id="hetesFelirat"></div>
 </div>
 <div id="emberJelzo"></div>
+<div id="videoAblak"><img id="videoKep" alt=""><span id="videoInfo"></span></div>
 <div id="jelenetLista"></div>
 <div id="felirat"></div>
 <div id="vez">
@@ -1414,6 +1422,7 @@ addEventListener("keydown", e => {
   if (e.code === "KeyT"){ tvGomb.onclick(); return; }
   if (e.code === "KeyE"){ rajzModAllit(!rajzMod); return; }  // rajz
   if (e.code === "KeyJ"){ jegyzetIr(); return; }  // jegyzet
+  if (e.code === "KeyK"){ videoAllit(!videoBe); return; }  // videó
   if (e.code === "Escape"){ if (mod === "jatekos") modValt("szabad"); else if (rajzMod) rajzModAllit(false); else meresTorles(); return; }
   if (["KeyW","KeyA","KeyS","KeyD","KeyR","KeyF","KeyC"].includes(e.code)
       && mod !== "szabad") modValt("szabad");
@@ -1870,6 +1879,7 @@ function linkEpit(){
   if (csakKulcs) q.set("kulcs", "1");
   if (vetites) q.set("vetit", "1");
   if (rajzok.length) q.set("rajz", rajzKodol(rajzok));
+  if (videoBe) q.set("video", "1");
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -1900,6 +1910,7 @@ function linkAlkalmaz(){
   // jelenettől, különben a következőtől).
   if (v("vetit") === "1") vetitesAllit(true);
   if (v("rajz")){ rajzok.push(...rajzDekodol(v("rajz"))); rajzFrissit(); }
+  if (v("video") === "1") videoAllit(true);
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
   if (v("tv") === "1") modValt("tv");
   if (v("kamera") && [...jatekosKameraValaszto.options].some(o => o.value === v("kamera"))){
@@ -2475,6 +2486,59 @@ function jelenetSorokSzurt(){
   }
   return sorok;
 }
+
+// ---- Videó: a valódi felvétel a 3D mellett ------------------------------
+// A "📺 Videó" (K) a forrás-videó épp nézett kockáját mutatja (a motor
+// /frame végpontja, JPEG): kép a képben a sarokban, és egy kivetítőn a
+// túlsó oldalvonal fölött — VR-ben ez látszik. Szinkronban a lejátszással:
+// új kockát akkor kér, ha az előző megjött és az idő azóta lépett (a motor
+// tempójában — nem torlódik). A kocka-szám a lejátszási idő × képráta (a
+// tömör adat "fps"-e, mint a jegyzeteknél).
+const videoGomb = document.getElementById("videoGomb");
+const videoAblak = document.getElementById("videoAblak");
+const videoKep = document.getElementById("videoKep");
+const videoInfo = document.getElementById("videoInfo");
+// A kivetítő textúrája egy ÁLLANDÓ méretű vászon (a megjött kocka ide
+// másolódik): a textúra nem a képhez kötött, mert a kép új kockát tölt,
+// mialatt a renderelő feltöltene — eltérő mérettel a WebGL elutasítja.
+const videoVaszon = document.createElement("canvas");
+videoVaszon.width = 640; videoVaszon.height = 360;
+const videoKtx = videoVaszon.getContext("2d");
+const videoTextura = new THREE.CanvasTexture(videoVaszon);
+videoTextura.colorSpace = THREE.SRGBColorSpace;
+// A kivetítő: 10 × 5,6 m-es vászon a túlsó oldalvonal mögött, 7 m magasan,
+// a pálya felé fordulva.
+const kivetito = new THREE.Mesh(new THREE.PlaneGeometry(10, 5.6),
+  new THREE.MeshBasicMaterial({map: videoTextura, side: THREE.DoubleSide}));
+kivetito.position.set(H / 2, 7, -6); kivetito.visible = false;
+szinpad.add(kivetito);
+let videoBe = false, videoToltes = false, videoKert = null, videoVolt = false;
+function videoAllit(be){
+  videoBe = !!be && !!ADAT.match_id;
+  videoGomb.classList.toggle("be", videoBe);
+  videoAblak.style.display = videoBe ? "block" : "none";
+  kivetito.visible = videoBe && videoVolt;
+  if (videoBe) videoKert = null;  // azonnal kér
+  if (!!be && !ADAT.match_id){ videoAblak.style.display = "block"; videoInfo.textContent = "a videóhoz a motor kell"; }
+}
+function videoFrissit(t){
+  if (!videoBe || videoToltes) return;
+  const kocka = Math.max(0, Math.round(t * FPS));
+  if (kocka === videoKert) return;
+  videoKert = kocka; videoToltes = true;
+  videoKep.src = "/matches/" + encodeURIComponent(ADAT.match_id) + "/frame?t=" + kocka + "&w=640";
+}
+videoKep.onload = () => {
+  videoToltes = false; videoVolt = true; videoInfo.textContent = "";
+  videoKtx.drawImage(videoKep, 0, 0, videoVaszon.width, videoVaszon.height);
+  videoTextura.needsUpdate = true; kivetito.visible = videoBe;
+};
+videoKep.onerror = () => {
+  videoToltes = false;
+  videoInfo.textContent = "a videó nem érhető el ezen a gépen";
+};
+videoGomb.onclick = () => videoAllit(!videoBe);
+window.videoProba = () => ({be: videoBe, kert: videoKert, kivetito: kivetito.visible, info: videoInfo.textContent});
 
 // ---- Jegyzetek: az edző megjegyzései a pillanatokhoz ------------------
 // A "📝 Jegyzet" (J) a mostani pillanathoz ír megjegyzést a motor /notes
@@ -3092,7 +3156,7 @@ fest.setAnimationLoop(() => {
     vetitesFrissit(t0, ido);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); felirat(ido); vrFeliratFrissit();
+  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); felirat(ido); vrFeliratFrissit();
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);

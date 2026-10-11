@@ -206,6 +206,13 @@ Klipek gombja a Videózandó szűrővel a videózandó jeleneteket egy
 klip-csomagban kéri (`key_scene`: időrendben sorszámozott fájlok — az
 edzésen bármilyen lejátszóval sorban levetíthetők).
 
+A **📺 Videó** (billentyű: K) a valódi felvételt mutatja a 3D mellett, a
+lejátszással szinkronban: kép a képben a jobb alsó sarokban, és egy
+kivetítőn a túlsó oldalvonal fölött — VR-ben ez látszik. A motor
+`/matches/{id}/frame?t=…&w=…` végpontja adja a forrás-videó kockáját JPEG-ben
+(összefűzött meccsnél a megfelelő szakaszból); a link viszi (`video=1`).
+Ha a videó nem érhető el ezen a gépen, az ablak megmondja.
+
 A **📝 Jegyzet** (billentyű: J) a mostani pillanathoz ír megjegyzést —
 ugyanabba a jegyzet-tárba, amit a meccs-elemző használ (a motor
 `/matches/{id}/notes` végpontja). A jegyzet a jelenet-lista sorai közt

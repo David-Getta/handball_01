@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **3D pálya: Videó a 3D mellett** (új, böngésző/VR, motor): a "📺 Videó"
+  (K) a valódi felvételt mutatja a lejátszással szinkronban — kép a
+  képben a sarokban, és egy nagy kivetítőn a túlsó oldalvonal fölött
+  (VR-ben is). A 3D rekonstrukció és a felvétel egyszerre: amit a
+  rekonstrukció állít (a fal rése, a szabad lövő), a videón ellenőrizhető.
+  Új motor-végpont: /matches/{id}/frame (a forrás-videó kockája JPEG-ben).
+
 - **Harmadik kód-átnézés javításai** (javítás): a vetítés két, ugyanarra a
   kockára írt jegyzetnél körbe járt (a sort most a felirata és az
   azonosítója is azonosítja); a kapott lerohanás a vetítésben és a

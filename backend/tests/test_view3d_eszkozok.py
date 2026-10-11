@@ -1879,3 +1879,56 @@ def test_a_3d_oldal_gzip_q0_eseten_tomoritetlen(tmp_path, monkeypatch):
     r = c.get(f"/matches/{m.meta.match_id}/view3d",
               headers={"Accept-Encoding": "gzip;q=0, identity"})
     assert r.status_code == 200 and "content-encoding" not in r.headers
+
+
+
+def test_a_kocka_vegpont_a_forras_video_kockajat_adja(tmp_path, monkeypatch):
+    """/matches/{id}/frame: a feldolgozott t. kockához a forrás-videó
+    start_frame + t × stride. kockája JPEG-ben (a kért szélességgel); a
+    videó nélküli meccsen 404. A szintetikus videó kockáinak szürkesége a
+    kocka sorszáma — a visszakapott kép ebből azonosítható."""
+    import cv2
+    import numpy as np
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+
+    ut = tmp_path / "v.mp4"
+    w = cv2.VideoWriter(str(ut), cv2.VideoWriter_fourcc(*"mp4v"), 25.0,
+                        (320, 160))
+    for i in range(120):
+        w.write(np.full((160, 320, 3), (i * 2) % 250, np.uint8))
+    w.release()
+    m = _meccs()
+    m.meta.video_path = str(ut)
+    m.meta.start_frame = 10
+    m.meta.stride = 2
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path / "adat"))
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    r = c.get(f"/matches/{m.meta.match_id}/frame", params={"t": 20, "w": 160})
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
+    img = cv2.imdecode(np.frombuffer(r.content, np.uint8), cv2.IMREAD_COLOR)
+    assert img.shape[1] == 160
+    # A 10 + 20 × 2 = 50. kocka: szürkeség 100 (±a tömörítés).
+    assert abs(float(img.mean()) - 100) < 6
+    m2 = _meccs()
+    m2.meta.match_id = "videotlan"
+    app.state.put_match(m2)
+    assert c.get("/matches/videotlan/frame", params={"t": 5}).status_code == 404
+
+
+def test_a_3d_oldal_videoja():
+    """Az oldalon a "📺 Videó" (K): kép a képben és kivetítő (VR-ben is), a
+    kocka-szám a lejátszási idő × képráta, a link viszi (video=1)."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="videoGomb"', 'id="videoAblak"', 'id="videoKep"',
+                 'e.code === "KeyK"', "function videoFrissit(t)",
+                 '"/frame?t=" + kocka', "Math.round(t * FPS)",
+                 "szinpad.add(kivetito);", "videoFrissit(ido);",
+                 "new THREE.CanvasTexture(videoVaszon)",
+                 'q.set("video", "1")', 'v("video") === "1"'):
+        assert kell in oldal, kell

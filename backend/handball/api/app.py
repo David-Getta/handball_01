@@ -3160,6 +3160,67 @@ def create_app():
         return {"match_id": match_id, "found": gw is not None,
                 **(gw or {})}
 
+    # A kocka-végpont nyitott videói (útvonal → (capture, zár)): a 3D
+    # oldal másodpercenként több kockát kér — a fájl újranyitása lassú.
+    _kocka_capok: dict = {}
+    _kocka_capok_zar = _threading.Lock()
+    VIDEO_FRAME_MAX_W = 1280  # a kért szélesség felső korlátja (pixel)
+
+    @app.get("/matches/{match_id}/frame")
+    def match_frame(match_id: str, t: int, w: int = 480):
+        """A forrás-videó EGY kockája JPEG-ben a feldolgozott t. kockához
+        (összefűzött meccsnél a megfelelő szakasz videójából) — a böngészős
+        3D pálya "Videó" ablaka és kivetítője ebből mutatja a valódi
+        felvételt a lejátszással szinkronban. `w`: a kép szélessége
+        (160…1280 px, arányosan). 404: nincs ilyen meccs/kocka, vagy a
+        videó nem érhető el ezen a gépen."""
+        import cv2
+        from fastapi import Response
+
+        from ..pipeline.clips import _segment_of, _source_segments
+        from ..video_io import VideoOpenError, open_capture
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        sz = _segment_of(_source_segments(match), max(0, int(t)))
+        if sz is None or not Path(sz["video_path"]).exists():
+            raise HTTPException(status_code=404,
+                                detail="a videó nem érhető el ezen a gépen")
+        kocka = sz["start_frame"] + (max(0, int(t)) - sz["t_from"]) * sz["stride"]
+        with _kocka_capok_zar:
+            bejegyzes = _kocka_capok.get(sz["video_path"])
+            if bejegyzes is None:
+                try:
+                    cap = open_capture(sz["video_path"])
+                except VideoOpenError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
+                # Legfeljebb két nyitott videó (összefűzött meccs két
+                # szakasza); a régebbit zárjuk.
+                while len(_kocka_capok) >= 2:
+                    # (a dict beszúrási sorrendű: az első a legrégebbi;
+                    # a popitem a LEGÚJABBAT vinné)
+                    regi, rzar = _kocka_capok.pop(next(iter(_kocka_capok)))
+                    with rzar:
+                        regi.release()
+                bejegyzes = (cap, _threading.Lock())
+                _kocka_capok[sz["video_path"]] = bejegyzes
+        cap, zar = bejegyzes
+        with zar:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, kocka)
+            ok, img = cap.read()
+        if not ok:
+            raise HTTPException(status_code=404, detail="frame not read")
+        szeles = max(160, min(VIDEO_FRAME_MAX_W, int(w)))
+        h_, w_ = img.shape[:2]
+        if w_ > szeles:
+            img = cv2.resize(img, (szeles, max(1, round(h_ * szeles / w_))),
+                             interpolation=cv2.INTER_AREA)
+        ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        # A kocka nem változik: a böngésző gyorsítótárazhatja (a visszatekerés
+        # így azonnali).
+        return Response(content=buf.tobytes(), media_type="image/jpeg",
+                        headers={"Cache-Control": "private, max-age=3600"})
+
     @app.get("/matches/{match_id}/calib-overlay")
     def calib_overlay(match_id: str, t: int = 0):
         """KALIBRÁCIÓ-ELLENŐRZÉS: a videó t kockája a visszarajzolt
