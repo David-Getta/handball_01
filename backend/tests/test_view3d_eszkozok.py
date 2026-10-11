@@ -1930,7 +1930,11 @@ def test_a_3d_oldal_videoja():
                  '"/frame?t=" + kocka', "Math.round(t * FPS)",
                  "szinpad.add(kivetito);", "videoFrissit(ido);",
                  "new THREE.CanvasTexture(videoVaszon)",
-                 'q.set("video", "1")', 'v("video") === "1"'):
+                 'q.set("video", "1")', 'v("video") === "1"',
+                 # Videó nélküli meccsen az első 404 után nem kér újra
+                 # minden kockán (a K próbálja újra).
+                 "if (!videoBe || videoToltes || videoNincs) return;",
+                 "if (videoVolt) return;\n  videoNincs = true;"):
         assert kell in oldal, kell
     # Az app párja: a 3D kép MELLETT, ugyanabból a végpontból, a K-ra; a
     # böngészős link viszi.

@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **A böngészős Videó-ablak videó nélkül nem kérdez folyton** (javítás):
+  videó nélküli meccsen az első kocka hibája után nem kér újra minden
+  kockán (lejátszás közben másodpercenként több fölösleges kérés volt), a
+  K újrapróbálja — mint az appban; ha már volt kép, a videó végén hiányzó
+  kockát átlépi.
+
 - **Videó-kocka az edzői jegyzeteknél is** (új, jelentés): ha a
   forrás-videó elérhető, a jelentés "Edzői jegyzetek" sorai alatt a
   jegyzet pillanatának kockája — rajzos jegyzetnél a felülnézeti ábra

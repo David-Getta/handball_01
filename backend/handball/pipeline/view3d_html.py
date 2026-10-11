@@ -2513,16 +2513,19 @@ const kivetito = new THREE.Mesh(new THREE.PlaneGeometry(10, 5.6),
 kivetito.position.set(H / 2, 7, -6); kivetito.visible = false;
 szinpad.add(kivetito);
 let videoBe = false, videoToltes = false, videoKert = null, videoVolt = false;
+// Nincs felvétel ezen a gépen (az első kocka sem jött): nem kérünk újra
+// minden kockán — a K (újra bekapcsolás) próbálja újra.
+let videoNincs = false;
 function videoAllit(be){
   videoBe = !!be && !!ADAT.match_id;
   videoGomb.classList.toggle("be", videoBe);
   videoAblak.style.display = videoBe ? "block" : "none";
   kivetito.visible = videoBe && videoVolt;
-  if (videoBe) videoKert = null;  // azonnal kér
+  if (videoBe){ videoKert = null; videoNincs = false; }  // azonnal kér
   if (!!be && !ADAT.match_id){ videoAblak.style.display = "block"; videoInfo.textContent = "a videóhoz a motor kell"; }
 }
 function videoFrissit(t){
-  if (!videoBe || videoToltes) return;
+  if (!videoBe || videoToltes || videoNincs) return;
   const kocka = Math.max(0, Math.round(t * FPS));
   if (kocka === videoKert) return;
   videoKert = kocka; videoToltes = true;
@@ -2535,7 +2538,11 @@ videoKep.onload = () => {
 };
 videoKep.onerror = () => {
   videoToltes = false;
-  videoInfo.textContent = "a videó nem érhető el ezen a gépen";
+  // Ha már volt kép, csak ez az egy kocka hiányzik (pl. a videó vége):
+  // a következő kockánál továbblép. Ha az első sem jött, megállunk.
+  if (videoVolt) return;
+  videoNincs = true;
+  videoInfo.textContent = "a videó nem érhető el ezen a gépen (K: újra)";
 };
 videoGomb.onclick = () => videoAllit(!videoBe);
 window.videoProba = () => ({be: videoBe, kert: videoKert, kivetito: kivetito.visible, info: videoInfo.textContent});
