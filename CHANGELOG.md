@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.165 óta)
+## v0.1.166 — kiadva (2026-10-11)
+
+> Kiadás-jegyzet: a csapat-megbeszélés egy kattintás. A kezdőlap "👥
+> Megbeszélés" gombja a 3D pályát az edző jegyzeteinek vetítésével nyitja,
+> és elindítja a közös nézést; a játékosok headsetjén elég a rövid
+> `localhost:8000/kovet` címet begépelni (vezető nélkül egy várakozó lap
+> magától továbblép). Az app vezetője is a saját nézőpontjába hozhatja a
+> csapatot ("📍 Ide mindenki"). Benne van a negyedik kód-átnézés tizenöt
+> javítása — köztük: a messzire húzott nézőpont nem állítja meg a közös
+> nézést, a videó-ablak két néző mellett sem áll le, a háttérben betöltött
+> meccsek kapusai is jelölve, a Klipek "visszatérő figura" csempéje újra
+> kijelölhető, és a jelentésben a kapott lerohanás kockája a gól. A 3D
+> útmutató új szerkezetet kapott (rajz és jegyzet, videó, közös nézés
+> külön szakaszban).
 
 - **"👥 Megbeszélés" a kezdőlapon** (új, app): egy kattintással a
   csapat-megbeszélés — a 3D pálya az edző jegyzeteinek (ha nincs, a
