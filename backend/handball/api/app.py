@@ -3224,10 +3224,14 @@ def create_app():
     def shared3d_put(match_id: str, body: dict):
         """A vezető állapota: {"t": játékidő-mp, "playing": bool, "speed":
         0,25…8, "rajz": a 3D rajz kódja ("x1,y1,x2,y2,szín;…")}. Válasz:
-        {"rev": sorszám}. 400: rossz alakú érték; 404: nincs ilyen meccs."""
+        {"rev": sorszám, "followers": a SHARED3D_FOLLOWER_S-en belül
+        kérdező követők száma}. 400: rossz alakú érték; 404: nincs ilyen
+        meccs."""
         import math as _math
         import re as _re
         import time as _time
+
+        from ..pipeline import court3d as _c3
         if match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
         try:
@@ -3244,26 +3248,37 @@ def create_app():
                      or not _re.fullmatch(r"[0-9.,;\-]+", rajz)):
             raise HTTPException(status_code=400, detail="rossz rajz-kód")
         with _kozos_zar:
-            rev = (_kozos.get(match_id) or {}).get("rev", 0) + 1
+            regi = _kozos.get(match_id) or {}
+            rev = regi.get("rev", 0) + 1
+            most = _time.monotonic()
+            # A jelenlévő követők (a régiek kiesnek) — átvisszük.
+            kovetok = {k: v for k, v in (regi.get("kovetok") or {}).items()
+                       if most - v <= _c3.SHARED3D_FOLLOWER_S}
             _kozos[match_id] = {"t": max(0.0, t),
                                 "playing": bool(body.get("playing")),
                                 "speed": speed, "rajz": rajz, "rev": rev,
-                                "ido": _time.monotonic()}
-        return {"rev": rev}
+                                "ido": most, "kovetok": kovetok}
+        return {"rev": rev, "followers": len(kovetok)}
 
     @app.get("/matches/{match_id}/shared3d")
-    def shared3d_get(match_id: str):
+    def shared3d_get(match_id: str, kid: str = ""):
         """A követő kérdése: a vezető utolsó állapota és a KORA (mp) — a
         követő ebből becsli a vezető mostani idejét, az órák eltérése
         nélkül. "active": false, ha nincs vezető, vagy SHARED3D_STALE_S óta
-        hallgat."""
+        hallgat. `kid`: a követő véletlen azonosítója (betű/szám, legfeljebb
+        32 jel) — a vezető ebből tudja, hányan követik."""
         import time as _time
 
         from ..pipeline import court3d as _c3
         with _kozos_zar:
-            a = dict(_kozos.get(match_id) or {})
+            a = _kozos.get(match_id)
+            if (a is not None and kid and len(kid) <= 32 and kid.isalnum()
+                    and len(a.setdefault("kovetok", {})) < 500):
+                a["kovetok"][kid] = _time.monotonic()
+            a = dict(a or {})
         if not a:
             return {"active": False}
+        a.pop("kovetok", None)
         kor = max(0.0, _time.monotonic() - a.pop("ido"))
         return {**a, "kor": round(kor, 3),
                 "active": kor <= _c3.SHARED3D_STALE_S}

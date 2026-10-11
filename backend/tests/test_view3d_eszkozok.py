@@ -1937,12 +1937,17 @@ def test_a_kozos_nezes_vegpontjai(tmp_path, monkeypatch):
     assert c.get(url).json() == {"active": False}
     r = c.put(url, json={"t": 61.5, "playing": True, "speed": 2,
                          "rajz": "20,13.1,28.4,16.8,0"})
-    assert r.status_code == 200 and r.json() == {"rev": 1}
+    assert r.status_code == 200 and r.json() == {"rev": 1, "followers": 0}
     a = c.get(url).json()
     assert a["active"] and a["t"] == 61.5 and a["playing"] is True
     assert a["speed"] == 2.0 and a["rajz"] == "20,13.1,28.4,16.8,0"
     assert a["rev"] == 1 and 0 <= a["kor"] < 5
-    assert c.put(url, json={"t": 3, "playing": False}).json() == {"rev": 2}
+    # A követők: a véletlen azonosítójuk szerint, egyszer számolva; a
+    # rossz alakú azonosító nem számít, a válaszban nincs követő-lista.
+    for kid in ("a1", "b2", "a1", "<x>"):
+        assert "kovetok" not in c.get(url, params={"kid": kid}).json()
+    assert c.put(url, json={"t": 3, "playing": False}).json() == {
+        "rev": 2, "followers": 2}
     assert c.get(url).json()["speed"] == 1.0
     for rossz in ({"t": "x"}, {"t": 1, "speed": 20}, {"t": 1, "rajz": "<b>"}):
         assert c.put(url, json=rossz).status_code == 400, rossz
@@ -1950,6 +1955,10 @@ def test_a_kozos_nezes_vegpontjai(tmp_path, monkeypatch):
     assert c.put(url, content=b'{"t": 1e999}',
                  headers={"Content-Type": "application/json"}).status_code == 400
     assert c.put("/matches/nincs/shared3d", json={"t": 1}).status_code == 404
+    # A régóta nem kérdező követő kiesik.
+    monkeypatch.setattr(court3d, "SHARED3D_FOLLOWER_S", -1.0)
+    assert c.put(url, json={"t": 3}).json()["followers"] == 0
+    monkeypatch.setattr(court3d, "SHARED3D_FOLLOWER_S", 3.0)
     # A hallgató vezető: megszakadt vezetés.
     monkeypatch.setattr(court3d, "SHARED3D_STALE_S", -1.0)
     assert c.get(url).json()["active"] is False
@@ -1979,7 +1988,9 @@ def test_a_3d_oldal_kozos_nezese():
                  'v("vezet") === "1"', "if (vetites) vetitesAllit(false);",
                  # A követő állapota a VR-táblán (váltáskor, hibánál végig).
                  'const kz = kozosMod === "kovet" ? kozosInfo.textContent : "";',
-                 "kz !== KZ_KOVETED || performance.now() - kzInfoValtas < KZ_VR_MS"):
+                 "kz !== KZ_KOVETED || performance.now() - kzInfoValtas < KZ_VR_MS",
+                 # A vezető látja, hányan követik (a követő azonosítója).
+                 'kzCim() + "?kid=" + KZ_KID', "kzKovetok = a.followers;"):
         assert kell in oldal, kell
     assert "__KZ_" not in oldal
     # Az app is vezethet: ugyanaz a végpont, ugyanaz a küldési ütem.
@@ -1990,7 +2001,9 @@ def test_a_3d_oldal_kozos_nezese():
     assert '"$baseUrl/matches/$matchId/shared3d"' in api
     ertek = re.search(r"static const double _vezetKuldS = ([0-9.]+);", palya)
     assert ertek and float(ertek.group(1)) == court3d.SHARED3D_SEND_S
+    assert 'json["followers"]' in api
     for kell in ("_vezetKuld(now);", "rajz: encodeDrawing(_rajzok))",
+                 '"📡 Vezetsz · $_kovetok követő"',
                  '"${_api.baseUrl}/matches/$id/view3d?kovet=1"',
                  "_api.deleteShared3d(id)"):
         assert kell in palya, kell

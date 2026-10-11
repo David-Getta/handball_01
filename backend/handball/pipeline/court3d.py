@@ -626,6 +626,10 @@ SHARED3D_SEND_S = 0.3
 SHARED3D_POLL_S = 0.3
 SHARED3D_TOLERANCE_S = 0.4
 SHARED3D_STALE_S = 15.0
+# A követő az utolsó kérdése után ennyi ideig számít jelenlévőnek (a
+# vezető ennyi másodpercen belül látott követőket látja — a kérdezés
+# SHARED3D_POLL_S-enként jön, egy-két elveszett kérés nem ejti ki).
+SHARED3D_FOLLOWER_S = 3.0
 
 # A rajz-eszköz (nyilak a padlón) közös számai — a böngésző RAJZ_JS és az
 # app court_geometry.dart tükre (őr-teszt): a színek (sárga labda/passz,

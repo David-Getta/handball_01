@@ -237,6 +237,7 @@ class _Court3DScreenState extends State<Court3DScreen>
   bool _vezetUton = false;
   bool _vezetHiba = false;
   double _vezetUtolso = 0;
+  int? _kovetok; // hányan követik (a motor válasza)
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
@@ -2064,6 +2065,7 @@ class _Court3DScreenState extends State<Court3DScreen>
       _vezet = be;
       _vezetHiba = false;
       _vezetUtolso = 0;
+      _kovetok = null;
     });
     if (be) {
       final link = "${_api.baseUrl}/matches/$id/view3d?kovet=1";
@@ -2093,8 +2095,13 @@ class _Court3DScreenState extends State<Court3DScreen>
             playing: _playing,
             speed: _speed,
             rajz: encodeDrawing(_rajzok))
-        .then((_) {
-      if (_vezetHiba && mounted) setState(() => _vezetHiba = false);
+        .then((n) {
+      if ((_vezetHiba || n != _kovetok) && mounted && _vezet) {
+        setState(() {
+          _vezetHiba = false;
+          _kovetok = n;
+        });
+      }
     }).catchError((_) {
       if (!_vezetHiba && mounted) setState(() => _vezetHiba = true);
     }).whenComplete(() => _vezetUton = false);
@@ -2850,7 +2857,9 @@ class _Court3DScreenState extends State<Court3DScreen>
                     ? "📡 Vezetem"
                     : _vezetHiba
                         ? "📡 Vezetés: a motor nem válaszol"
-                        : "📡 Vezetsz",
+                        : _kovetok == null
+                            ? "📡 Vezetsz"
+                            : "📡 Vezetsz · $_kovetok követő",
                 style: const TextStyle(fontSize: 11.5)),
           ),
         ),

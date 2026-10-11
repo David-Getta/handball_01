@@ -2569,6 +2569,14 @@ const kovetGomb = document.getElementById("kovetGomb");
 const kozosInfo = document.getElementById("kozosInfo");
 let kozosMod = null;  // null | "vezet" | "kovet"
 let kzUton = false, kzUtolso = 0, kzRajz = null;
+// A követő véletlen azonosítója (a vezető ebből látja, hányan követik), a
+// vezető oldalán a csapat linkje és a követők száma.
+const KZ_KID = Math.random().toString(36).slice(2, 12) || "k";
+let kzLink = "", kzVagolap = false, kzKovetok = null;
+function kzVezetoInfo(){
+  kozosInfo.textContent = "📡 vezetsz" + (kzKovetok == null ? "" : " · " + kzKovetok + " követő")
+    + " — a csapat linkje: " + kzLink + (kzVagolap ? " (vágólapon)" : "");
+}
 // A követő állapot-szövege és a váltás ideje: a VR-tábla a váltás után
 // KZ_VR_MS-ig mutatja (a "követed" nem ül végig a szem előtt), a
 // hiba-állapotot ("nincs vezető", "nem válaszol") végig.
@@ -2590,10 +2598,10 @@ function kozosAllit(m){
   kovetGomb.classList.toggle("be", kozosMod === "kovet");
   kzRajz = null; kzUtolso = 0;
   if (kozosMod === "vezet"){
-    const u = location.origin + location.pathname + "?kovet=1";
-    kozosInfo.textContent = "📡 vezetsz — a csapat linkje: " + u;
-    if (navigator.clipboard) navigator.clipboard.writeText(u).then(
-      () => { kozosInfo.textContent += " (vágólapon)"; }, () => {});
+    kzLink = location.origin + location.pathname + "?kovet=1";
+    kzVagolap = false; kzKovetok = null; kzVezetoInfo();
+    if (navigator.clipboard) navigator.clipboard.writeText(kzLink).then(
+      () => { kzVagolap = true; if (kozosMod === "vezet") kzVezetoInfo(); }, () => {});
   } else if (kozosMod === "kovet"){
     // A követő saját vetítése a vezetővel versenyezne.
     if (vetites) vetitesAllit(false);
@@ -2608,12 +2616,13 @@ function kozosFrissit(){
   if (kozosMod === "vezet"){
     fetch(kzCim(), {method: "PUT", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok)})})
-      .then(r => { if (!r.ok) throw new Error(String(r.status)); })
+      .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then(a => { if (kozosMod === "vezet"){ kzKovetok = a.followers; kzVezetoInfo(); } })
       .catch(() => { if (kozosMod === "vezet") kozosInfo.textContent = "📡 a vezetés nem jut el a motorhoz"; })
       .finally(() => { kzUton = false; });
     return;
   }
-  fetch(kzCim(), {cache: "no-store"}).then(r => r.json()).then(a => {
+  fetch(kzCim() + "?kid=" + KZ_KID, {cache: "no-store"}).then(r => r.json()).then(a => {
     if (kozosMod !== "kovet") return;
     if (!a.active){ kzInfo("👥 nincs vezető — az edző nem vezet (vagy bezárta)"); return; }
     kzInfo(KZ_KOVETED);

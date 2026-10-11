@@ -910,7 +910,8 @@ class ApiClient {
   /// KÖZÖS NÉZÉS — a vezető állapota (PUT /matches/{id}/shared3d): a
   /// csapat headsetjei (a böngészős 3D "Követem"-je) ezt követik. `t`:
   /// játékidő-másodperc; `rajz`: a 3D rajz kódja (encodeDrawing).
-  Future<void> putShared3d(String matchId,
+  /// Visszaadja, hányan követik most (a motor szerint).
+  Future<int?> putShared3d(String matchId,
       {required double t,
       required bool playing,
       required double speed,
@@ -924,6 +925,8 @@ class ApiClient {
       throw Exception(
           _hiba("Nem sikerült a közös nézés állapotát küldeni", resp));
     }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes));
+    return json is Map ? (json["followers"] as num?)?.toInt() : null;
   }
 
   /// A vezetés vége (DELETE /matches/{id}/shared3d): a követők "nincs

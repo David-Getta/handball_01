@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.163 óta)
 
+- **Közös nézés: a vezető látja, hányan követik** (új, böngésző/app,
+  motor): "📡 vezetsz · 12 követő" — az edző látja, hogy a csapat minden
+  headsetje rácsatlakozott-e, mielőtt elindítja a jelenetet. A követő az
+  utolsó kérdése után 3 mp-ig számít jelenlévőnek.
+
 - **Közös nézés: az app is vezethet** (új, app): a 3D fül "📡 Vezetem"
   gombja a lejátszás állapotát (idő, szünet, sebesség, rajz) a motorra
   küldi — az edző a laptopon teker, megállít, rajzol, a csapat headsetjei
