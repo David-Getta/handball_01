@@ -258,3 +258,21 @@ def test_torleskor_a_kiserofajlok_is_mennek_es_a_mentesbe_sem_kerulnek(konyvtar)
         assert not (d / nev).exists(), nev
     z = zipfile.ZipFile(io.BytesIO(client.get("/library/export").content))
     assert not [n for n in z.namelist() if "rc1" in n], z.namelist()
+
+
+
+def test_a_3d_kulcsok_a_felderites_tarbol_es_az_elomelegites_viszi():
+    """A /view3d és a /defence-timeline kulcsai a lemezes felderítés-tárból
+    jönnek (egy közös segéd), és a háttér-előszámolás a 3D kulcsokat és a
+    kezdőlap videózandó jeleneteit is elkészíti — az első megnyitás nem
+    futtat két új felderítést."""
+    from pathlib import Path
+
+    forras = (Path(__file__).resolve().parents[1] / "handball" / "api"
+              / "app.py").read_text(encoding="utf-8")
+    assert forras.count("def _tactical_keys(") == 1
+    assert forras.count("_tactical_keys(match_id, match)") == 2
+    assert 'reports={"home": _scout_cached(match, Team.HOME),' in forras
+    assert "lambda: _tactical_keys(match_id, m)," in forras
+    assert 'match_id, "key-scenes",' in forras
+    assert "lambda: tactical_keys_by_team(match))" not in forras

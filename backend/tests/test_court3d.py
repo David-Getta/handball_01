@@ -929,3 +929,20 @@ def test_a_3d_vegpontok_kapus_jelolessel_szamolnak(tmp_path, monkeypatch):
     ks = c.get(f"/matches/{m.meta.match_id}/key-scenes").json()
     assert [x["szoveg"] for x in ks["rows"]] == \
         [x["szoveg"] for x in vart_ks["rows"]]
+
+
+
+def test_a_3d_kulcsok_kesz_felderitesbol_ugyanazok():
+    """A feltörés/megállítás kulcsai a KÉSZ felderítésből (reports=)
+    ugyanazok, mint a saját felderítésből — az API a lemezes tárból adja
+    át, hogy a 3D oldal első megnyitása ne futtasson két új felderítést."""
+    from handball.pipeline.court3d import tactical_keys_by_team
+    from handball.pipeline.scouting import scout_team
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    m = simulate_ground_truth(duration_s=120, fps=25.0, seed=5,
+                              shots_per_min=8)
+    sajat = tactical_keys_by_team(m)
+    kesz = tactical_keys_by_team(m, reports={"home": scout_team(m, Team.HOME),
+                                             "away": scout_team(m, Team.AWAY)})
+    assert kesz == sajat

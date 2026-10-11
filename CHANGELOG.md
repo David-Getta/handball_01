@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.162 óta)
 
+- **3D pálya: gyors első megnyitás** (javítás): a böngészős 3D oldal és
+  a védekezés-panel feltörés/megállítás kulcsai eddig MINDKÉT csapat
+  teljes felderítését újra lefuttatták az első megnyitáskor — egy teljes
+  meccsen ez percekig tartott (60 perces szimulált meccsen az oldal
+  ~5 percig épült). Most a kulcsok a már elkészült, lemezen tárolt
+  felderítésből jönnek, és a feldolgozás utáni háttér-előszámolás a 3D
+  kulcsokat és a kezdőlap videózandó jeleneteit is elkészíti.
+
 - **Második kód-átnézés javításai** (javítás): a gyorsítótárazott
   végpontok (a 3D pálya összes rétege, a kulcs-jelenetek) és a böngészős
   3D oldal mostantól a rétegek közös hatókörében számolnak — enélkül a

@@ -2419,6 +2419,18 @@ def create_app():
         mem[name] = (fp, kesz)
         return kesz
 
+    def _tactical_keys(match_id: str, match):
+        """A 3D védekezés-panel feltörés/megállítás kulcsai (a /view3d és a
+        /defence-timeline közös kulcsa) — a lemezes felderítés-tárból
+        (_scout_cached): a felderítés így meccsenként egyszer fut, nem a
+        3D oldal első megnyitásakor újra (egy teljes meccsen perceket)."""
+        from ..pipeline.court3d import tactical_keys_by_team
+        return _cached_result(
+            match_id, "tactical-keys",
+            lambda: tactical_keys_by_team(
+                match, reports={"home": _scout_cached(match, Team.HOME),
+                                "away": _scout_cached(match, Team.AWAY)}))
+
     def _warm_results(match_id: str) -> None:
         """A nehéz végpontok ELŐSZÁMOLÁSA a háttérben, egy feldolgozás
         végén: az edző jellemzően azonnal megnyitja a kész meccset — így az
@@ -2459,7 +2471,15 @@ def create_app():
                        # A felderítés a legdrágább (csapatonként ~50 mp),
                        # ezért a sor végén.
                        lambda: _scout_cached(m, Team.AWAY),
-                       lambda: _scout_cached(m, Team.HOME)):
+                       lambda: _scout_cached(m, Team.HOME),
+                       # A 3D oldal kulcsai a kész felderítésből (azonnal),
+                       # és a kezdőlap kártyájának videózandó jelenetei.
+                       lambda: _tactical_keys(match_id, m),
+                       lambda: _cached_result(
+                           match_id, "key-scenes",
+                           lambda: __import__(
+                               "handball.pipeline.court3d",
+                               fromlist=["key_scene_rows"]).key_scene_rows(m))):
                 try:
                     fn()
                 except Exception:
@@ -2839,9 +2859,7 @@ def create_app():
         # timeline-nal közös kulcs): két teljes felderítés nem futhat le
         # minden nyitásnál.
         try:
-            from ..pipeline.court3d import tactical_keys_by_team
-            kulcsok = _cached_result(match_id, "tactical-keys",
-                                     lambda: tactical_keys_by_team(match))
+            kulcsok = _tactical_keys(match_id, match)
             feltores, megallitas = kulcsok["breakpoints"], kulcsok["stoppers"]
         except Exception:
             feltores = megallitas = None
@@ -2874,8 +2892,7 @@ def create_app():
         # teteje, EGY felderítésből) — a panel a fal mellé írja; hibája
         # nem viheti el a végpontot.
         try:
-            kulcsok = _cached_result(match_id, "tactical-keys",
-                                     lambda: tactical_keys_by_team(match))
+            kulcsok = _tactical_keys(match_id, match)
         except Exception:
             kulcsok = {"breakpoints": {"home": [], "away": []},
                        "stoppers": {"home": [], "away": []}}
