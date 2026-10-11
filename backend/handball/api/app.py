@@ -3247,17 +3247,37 @@ def create_app():
         if rajz and (len(rajz) > 1200
                      or not _re.fullmatch(r"[0-9.,;\-]+", rajz)):
             raise HTTPException(status_code=400, detail="rossz rajz-kód")
+        # A mutató: {"x", "y" (pálya-méter, a pálya ±5 m-es sávjában),
+        # "n" (a vezető azonosítója a mutatóhoz — új n = új mutatás)}.
+        mut = None
+        if body.get("mutato") is not None:
+            try:
+                m_ = body["mutato"]
+                mx, my, mn = float(m_["x"]), float(m_["y"]), float(m_["n"])
+            except (TypeError, ValueError, KeyError):
+                raise HTTPException(status_code=400, detail="rossz mutató")
+            if not (all(_math.isfinite(v) for v in (mx, my, mn))
+                    and -5.0 <= mx <= 45.0 and -5.0 <= my <= 25.0):
+                raise HTTPException(status_code=400, detail="rossz mutató")
+            mut = {"x": round(mx, 2), "y": round(my, 2), "n": mn}
         with _kozos_zar:
             regi = _kozos.get(match_id) or {}
             rev = regi.get("rev", 0) + 1
             most = _time.monotonic()
+            # A mutató ideje csak ÚJ mutatásnál indul (a vezető minden
+            # küldéskor a legutóbbit küldi).
+            mut_ido = regi.get("mutato_ido")
+            if mut is not None and (regi.get("mutato") or {}).get("n") != mut["n"]:
+                mut_ido = most
             # A jelenlévő követők (a régiek kiesnek) — átvisszük.
             kovetok = {k: v for k, v in (regi.get("kovetok") or {}).items()
                        if most - v <= _c3.SHARED3D_FOLLOWER_S}
             _kozos[match_id] = {"t": max(0.0, t),
                                 "playing": bool(body.get("playing")),
                                 "speed": speed, "rajz": rajz, "rev": rev,
-                                "ido": most, "kovetok": kovetok}
+                                "ido": most, "kovetok": kovetok,
+                                "mutato": mut,
+                                "mutato_ido": mut_ido if mut else None}
         return {"rev": rev, "followers": len(kovetok)}
 
     @app.get("/matches/{match_id}/shared3d")
@@ -3279,6 +3299,10 @@ def create_app():
         if not a:
             return {"active": False}
         a.pop("kovetok", None)
+        mut_ido = a.pop("mutato_ido", None)
+        if a.get("mutato") and mut_ido is not None:
+            a["mutato"] = {**a["mutato"], "kor": round(
+                max(0.0, _time.monotonic() - mut_ido), 3)}
         kor = max(0.0, _time.monotonic() - a.pop("ido"))
         return {**a, "kor": round(kor, 3),
                 "active": kor <= _c3.SHARED3D_STALE_S}

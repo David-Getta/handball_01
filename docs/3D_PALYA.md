@@ -213,7 +213,10 @@ ezt követik — mindenki a saját helyéről, a saját kamerájával nézi
 ugyanazt a pillanatot: a pálya bejárható, az edző mutatja a szituációt.
 A követő a vezető idejét a válasz korából becsli, és csak 0,4 mp-nél
 nagyobb eltérésnél ugrik (nincs rángatás); ha az edző leáll vagy 15 mp-ig
-hallgat, a követő "nincs vezető"-t lát. A motor
+hallgat, a követő "nincs vezető"-t lát. Vezetőként a Shift+kattintás a
+padlóra MUTATÓ a csapatnak: a követőknél (és a vezetőnél) 4 mp-ig lüktető
+gyűrű jelzi a pontot — "nézzétek ide"; a később csatlakozónál a régi
+mutató nem villan fel (a motor a mutató korát is adja). A motor
 `/matches/{id}/shared3d` végpontja (PUT/GET/DELETE) memóriában tartja az
 állapotot. Az app 3D füle is vezethet ("📡 Vezetem" a panelen): az edző
 a laptopon teker, megállít, rajzol, a headsetek követik.

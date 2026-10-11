@@ -908,7 +908,7 @@ Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmad
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
-Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
+Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi; vezetőként Shift+katt a padlóra: mutató a csapatnak (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
 Videó (K) — a valódi felvétel a 3D mellett, a lejátszással szinkronban: kép a képben és kivetítő a túlsó oldalvonal fölött (VR-ben is)<br>
 Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér pötty, ✕ törli), a vetítésben, a jelentésben és a Klipek jegyzet-csomagjában<br>
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
@@ -1493,6 +1493,9 @@ function ujjFel(e){
   const katt = huzas && !huzas.mozdult;
   huzas = null;
   if (!katt || fest.xr.isPresenting) return;
+  // Közös nézés: a vezető Shift+kattintása a padlóra MUTATÓ a csapatnak
+  // (nem lövés-mérés) — a követőknél lüktető gyűrű ott.
+  if (e.shiftKey && kozosMod === "vezet"){ mutatoKattintas(e.clientX, e.clientY); return; }
   // A dupla kattintás első fele ne mérjen: kicsit várunk.
   clearTimeout(kattIdozito);
   const cx = e.clientX, cy = e.clientY;
@@ -2591,6 +2594,37 @@ function kzInfo(s){
   if (kozosInfo.textContent === s) return;
   kozosInfo.textContent = s; kzInfoValtas = performance.now();
 }
+// MUTATÓ: a vezető Shift+kattintása a padlóra — nála és a követőknél
+// KZ_MUTATO mp-ig lüktető gyűrű ott ("nézzétek ide"). A vezető minden
+// küldéskor a legutóbbit küldi; a követő az új azonosítóra (n) mutat, és
+// csak ha a motor szerint friss (a később csatlakozónál nem villan fel).
+const KZ_MUTATO = __KZ_MUTATO__;
+let kzMutato = null, kzMutatoN = null, mutatoKezd = 0;
+const mutatoGyuru = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.62, 40),
+  new THREE.MeshBasicMaterial({color: 0xff4fd8, transparent: true, side: THREE.DoubleSide, depthWrite: false}));
+mutatoGyuru.rotation.x = -Math.PI / 2; mutatoGyuru.visible = false;
+szinpad.add(mutatoGyuru);
+function mutatoMutat(x, y){
+  mutatoGyuru.position.set(x, 0.05, W - y);
+  mutatoKezd = performance.now(); mutatoGyuru.visible = true;
+}
+function mutatoKattintas(cx, cy){
+  const p = padloPont(cx, cy);
+  if (!p) return;
+  kzMutato = {x: Math.round(p[0] * 10) / 10, y: Math.round(p[1] * 10) / 10, n: Date.now()};
+  mutatoMutat(p[0], p[1]);
+  kzUtolso = 0;  // azonnal megy a csapatnak
+}
+function mutatoFrissit(){
+  if (!mutatoGyuru.visible) return;
+  const el = (performance.now() - mutatoKezd) / 1000;
+  if (el > KZ_MUTATO){ mutatoGyuru.visible = false; return; }
+  const f = (el * 1.5) % 1;  // másodpercenként másfél lüktetés
+  mutatoGyuru.scale.setScalar(1 + f * 1.6);
+  mutatoGyuru.material.opacity = 0.9 * (1 - f) * (1 - 0.5 * el / KZ_MUTATO);
+}
+window.mutatoProba = () => ({latszik: mutatoGyuru.visible, x: mutatoGyuru.position.x,
+                             y: W - mutatoGyuru.position.z, kuld: kzMutato});
 const kzCim = () => "/matches/" + encodeURIComponent(ADAT.match_id) + "/shared3d";
 function kozosAllit(m){
   if (!ADAT.match_id){ kozosInfo.textContent = "a közös nézéshez a motor kell"; return; }
@@ -2620,7 +2654,7 @@ function kozosFrissit(){
   kzUtolso = most; kzUton = true;
   if (kozosMod === "vezet"){
     fetch(kzCim(), {method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok)})})
+      body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok), mutato: kzMutato})})
       .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(a => { if (kozosMod === "vezet"){ kzKovetok = a.followers; kzVezetoInfo(); } })
       .catch(() => { if (kozosMod === "vezet") kozosInfo.textContent = "📡 a vezetés nem jut el a motorhoz"; })
@@ -2637,6 +2671,10 @@ function kozosFrissit(){
     if (a.speed !== sebesseg){ sebesseg = a.speed; sebessegValaszto.value = String(a.speed); }
     if (a.rajz !== kzRajz){
       kzRajz = a.rajz; rajzok.length = 0; rajzok.push(...rajzDekodol(a.rajz)); rajzFrissit();
+    }
+    if (a.mutato && a.mutato.n !== kzMutatoN){
+      kzMutatoN = a.mutato.n;
+      if (a.mutato.kor < KZ_MUTATO) mutatoMutat(a.mutato.x, a.mutato.y);
     }
   }).catch(() => { if (kozosMod === "kovet") kzInfo("👥 a motor nem válaszol"); })
     .finally(() => { kzUton = false; });
@@ -3279,7 +3317,7 @@ fest.setAnimationLoop(() => {
     vetitesFrissit(t0, ido);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); kozosFrissit(); felirat(ido); vrFeliratFrissit();
+  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); kozosFrissit(); mutatoFrissit(); felirat(ido); vrFeliratFrissit();
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);
@@ -3288,8 +3326,8 @@ fest.setAnimationLoop(() => {
 """
     from .court3d import (PASS_LANE_GOOD, PASS_LANE_RISKY,
                           PASS_LANE_WIDTH_M, SCENE_REEL_TAIL_S,
-                          SHARED3D_POLL_S, SHARED3D_SEND_S,
-                          SHARED3D_TOLERANCE_S)
+                          SHARED3D_POINTER_S, SHARED3D_POLL_S,
+                          SHARED3D_SEND_S, SHARED3D_TOLERANCE_S)
     from .defense import WALL_GAP_DEPTH_M, WALL_GAP_M, WALL_GAP_MIN_DEFENDERS
     from .tactics import TacticsConfig
     ps_kod = (f"const PS_SUGAR = {TacticsConfig().possession_radius_m}, "
@@ -3302,6 +3340,7 @@ fest.setAnimationLoop(() => {
                  .replace("__KZ_KULD__", repr(float(SHARED3D_SEND_S)))
                  .replace("__KZ_KERD__", repr(float(SHARED3D_POLL_S)))
                  .replace("__KZ_TURES__", repr(float(SHARED3D_TOLERANCE_S)))
+                 .replace("__KZ_MUTATO__", repr(float(SHARED3D_POINTER_S)))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
                           + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
                           + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS

@@ -2000,6 +2000,51 @@ def test_a_kozos_nezes_vegpontjai(tmp_path, monkeypatch):
     assert c.get(url).json() == {"active": False}
 
 
+def test_a_kozos_nezes_mutatoja(tmp_path, monkeypatch):
+    """A vezető mutatója a korával megy a követőnek: az ideje csak ÚJ
+    mutatásnál (új n) indul; a rossz alakú mutató 400. Az oldal: Shift+
+    kattintás a vezetőnél, a követő a friss új mutatót mutatja."""
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline import court3d
+    from handball.pipeline.view3d_html import view3d_html
+
+    ora = [100.0]
+    monkeypatch.setattr(time, "monotonic", lambda: ora[0])
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    url = f"/matches/{m.meta.match_id}/shared3d"
+    mut = {"x": 12.34, "y": 7.0, "n": 1791700000123}
+    assert c.put(url, json={"t": 1, "mutato": mut}).status_code == 200
+    ora[0] += 2.5
+    # Ugyanaz a mutató újra küldve: a kora nem indul újra.
+    assert c.put(url, json={"t": 2, "mutato": mut}).status_code == 200
+    a = c.get(url).json()["mutato"]
+    assert (a["x"], a["y"], a["n"], a["kor"]) == (12.34, 7.0, 1791700000123, 2.5)
+    # Új mutatás: új idő.
+    assert c.put(url, json={"t": 3, "mutato": {**mut, "n": 5}}).status_code == 200
+    assert c.get(url).json()["mutato"]["kor"] == 0.0
+    # Mutató nélkül nincs mutató.
+    c.put(url, json={"t": 4})
+    assert c.get(url).json()["mutato"] is None
+    for rossz in ({"x": 100, "y": 1, "n": 1}, {"x": "a", "y": 1, "n": 1},
+                  [1, 2, 3], {"x": 1, "y": 1}):
+        assert c.put(url, json={"t": 1, "mutato": rossz}).status_code == 400, rossz
+
+    oldal = view3d_html(_meccs())
+    for kell in ('if (e.shiftKey && kozosMod === "vezet"){ mutatoKattintas(',
+                 "mutato: kzMutato})", "if (a.mutato.kor < KZ_MUTATO) mutatoMutat(",
+                 "mutatoFrissit();", "Shift+katt a padlóra: mutató a csapatnak"):
+        assert kell in oldal, kell
+    assert f"const KZ_MUTATO = {float(court3d.SHARED3D_POINTER_S)!r};" in oldal
+
+
 def test_a_3d_oldal_kozos_nezese():
     """Az oldalon a "📡 Vezetem" / "👥 Követem": a vezető küld, a követő
     kérdez és követ (idő a korral, szünet, sebesség, rajz), a link viszi

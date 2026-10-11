@@ -630,6 +630,9 @@ SHARED3D_STALE_S = 15.0
 # vezető ennyi másodpercen belül látott követőket látja — a kérdezés
 # SHARED3D_POLL_S-enként jön, egy-két elveszett kérés nem ejti ki).
 SHARED3D_FOLLOWER_S = 3.0
+# A vezető mutatója (Shift+kattintás a padlóra) ennyi másodpercig lüktet a
+# követőknél — a régebbi mutató a később csatlakozónál már nem villan fel.
+SHARED3D_POINTER_S = 4.0
 
 # A rajz-eszköz (nyilak a padlón) közös számai — a böngésző RAJZ_JS és az
 # app court_geometry.dart tükre (őr-teszt): a színek (sárga labda/passz,
