@@ -901,6 +901,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <button id="vezetGomb" title="Közös nézés — te vezetsz: a lejátszásod (idő, szünet, sebesség, rajz) a csapat headsetjein is fut; a csapat linkje a vágólapra kerül">📡 Vezetem</button>
   <button id="ideGomb" title="Ide mindenki: a követők kamerája a te mostani nézőpontodba ugrik (hely és irány) — pl. mindenki a kapus helyére. Csak vezetés közben" disabled>📍 Ide mindenki</button>
   <button id="kvizGomb" title="Kvíz a csapatnak: a jelenet megáll, a játékosok a padlóra mutatnak (hova passzolnál? hol a helyed?) — te névvel látod a válaszokat; másodszorra a csapatnak is megmutatod, harmadszorra vége — az eredmény a jegyzetek közé kerül. Csak vezetés közben" disabled>❓ Kvíz</button>
+  <select id="kzNevValaszto" style="display:none" title="Ki vagy? A neved a többiek headsetjén és a kvíz-mérlegben — a keretben felvitt nevek közül"></select>
   <button id="kovetGomb" title="Közös nézés — az edzőt követed: az ő lejátszása fut nálad, te a saját helyedről nézed (a pálya bejárható)">👥 Követem</button>
   <span id="kozosInfo" style="font-size:11px;word-break:break-all"></span>
  </div>
@@ -2628,7 +2629,7 @@ let kzUton = false, kzUtolso = 0, kzRajz = null;
 const KZ_KID = Math.random().toString(36).slice(2, 12) || "k";
 // A követő neve (a csapat linkjén: /kovet?nev=Peti) — a többiek a feje
 // fölött látják; név nélkül a csatlakozás sorszáma (#3).
-const KZ_NEV = (URL_PARAM.get("nev") || "").trim().slice(0, __KZ_NEV_MAX__);
+let KZ_NEV = (URL_PARAM.get("nev") || "").trim().slice(0, __KZ_NEV_MAX__);
 let kzLink = "", kzVagolap = false, kzKovetok = null;
 // JELENLÉT: a saját kamera helye és iránya a csapatnak (three-tér; a yaw
 // a rig-forgatás szöge — a nézés iránya (−sin yaw, −cos yaw)). VR-ben a
@@ -2997,6 +2998,40 @@ window.kvizProba = () => ({kviz: kzKviz, kor: kzKvizKor, valasz: kzValasz, gomb:
   jelek: [...valaszJelek.entries()].map(([k, cs]) => ({kulcs: k, cimke: cs.userData.cimke,
     x: Math.round(cs.position.x * 10) / 10, y: Math.round((W - cs.position.z) * 10) / 10}))});
 window.valaszProba = (x, y) => valaszBeallit(x, y);
+// "Ki vagy?" — a követő a keretben felvitt nevek közül választ (a headset
+// billentyűzetén gépelni nehéz); a pontos név köti a kvíz-mérleget a
+// kerethez. A választás a címbe is kerül (újratöltés után is megmarad).
+const kzNevValaszto = document.getElementById("kzNevValaszto");
+let kzNevekBetoltve = false;
+async function nevValasztoMutat(be){
+  kzNevValaszto.style.display = be ? "" : "none";
+  if (!be || kzNevekBetoltve || !ADAT.match_id) return;
+  kzNevekBetoltve = true;
+  try {
+    const v = await fetch("/library/players");
+    const d = v.ok ? await v.json() : {};
+    const opciok = [["", "— ki vagy? (név a kvízhez) —"]];
+    for (const csapat of [ADAT.home, ADAT.away]){
+      const nevek = (d.players || {})[csapat] || {};
+      for (const [mez, nev] of Object.entries(nevek).sort((a, b) => Number(a[0]) - Number(b[0])))
+        if (nev) opciok.push([String(nev).trim().slice(0, __KZ_NEV_MAX__), csapat + " " + mez + " — " + nev]);
+    }
+    if (KZ_NEV && !opciok.some(o => o[0] === KZ_NEV)) opciok.push([KZ_NEV, KZ_NEV]);
+    kzNevValaszto.textContent = "";
+    for (const [ertek, felirat] of opciok){
+      const o = document.createElement("option"); o.value = ertek; o.textContent = felirat;
+      kzNevValaszto.appendChild(o);
+    }
+    kzNevValaszto.value = KZ_NEV;
+  } catch (e) { kzNevekBetoltve = false; }
+}
+kzNevValaszto.onchange = () => {
+  KZ_NEV = kzNevValaszto.value;
+  const q = new URLSearchParams(location.search);
+  if (KZ_NEV) q.set("nev", KZ_NEV); else q.delete("nev");
+  history.replaceState(null, "", location.pathname + "?" + q.toString());
+  kzUtolso = 0;  // a név azonnal megy
+};
 const kzCim = () => "/matches/" + encodeURIComponent(ADAT.match_id) + "/shared3d";
 function kozosAllit(m){
   if (!ADAT.match_id){ kozosInfo.textContent = "a közös nézéshez a motor kell"; return; }
@@ -3014,6 +3049,7 @@ function kozosAllit(m){
   valaszokAllit([]); kvizGombFelirat();
   ideGomb.disabled = kozosMod !== "vezet";
   kvizGomb.disabled = kozosMod !== "vezet";
+  nevValasztoMutat(kozosMod === "kovet");
   if (kozosMod === "vezet"){
     // A rövid csapat-link (a motor /kovet címe az élő közös nézésre
     // irányít) — a headset billentyűzetén begépelhető.

@@ -718,6 +718,13 @@ def quiz_verdict(answer, best, chosen, shot: bool = False) -> bool:
 QUIZ_STATS_MIN_ANSWERS = 3
 
 
+def quiz_name_key(nev) -> str:
+    """A kvíz-név kulcsa (a kvíz-mérleg és a keret ugyanígy párosít): a
+    szóközök összevonva, két szélén nélkülük, kisbetűsen."""
+    import re
+    return re.sub(r"\s+", " ", str(nev or "")).strip().casefold()
+
+
 def quiz_stats(notes) -> list:
     """A kvíz-mérleg: a kvíz-jegyzetek (a 3D közös nézés kvízének
     eredménye — a jegyzet "kviz" sorai: [{"nev", "itelet": true/false/
@@ -748,7 +755,7 @@ def quiz_stats(notes) -> list:
             nev = re.sub(r"\s+", " ", str(e.get("nev") or "")).strip()
             if not nev or re.fullmatch(r"#\d+", nev):
                 continue
-            kulcs = nev.casefold()
+            kulcs = quiz_name_key(nev)
             r = tabla.setdefault(kulcs, {"nev": nev, "kvizek": 0, "itelt": 0,
                                          "jo": 0, "rossz": 0})
             r["nev"] = nev

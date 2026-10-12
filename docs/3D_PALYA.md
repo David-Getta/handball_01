@@ -318,7 +318,11 @@ meccsről meccsre visszanézhető, ki látta a jobb megoldást. A
 játékosonként, meccseken át, hányszor mutatott a jobb opcióra ("Anna ·
 7/9 ✓ (78%)" — 3-nál kevesebb ítélt válasznál arány nélkül); a név a
 kulcs, ezért érdemes a csapat linkjén mindig ugyanazt a nevet megadni
-(`/kovet?nev=Anna`), a név nélküli követő (#3) nem számít bele. Az app 3D
+(`/kovet?nev=Anna`), a név nélküli követő (#3) nem számít bele. A
+követő oldalán a **"Ki vagy?"** lista a keretben felvitt nevek közül
+választ (a headset billentyűzetén nem kell gépelni) — és a keret nevével
+a mérleg a Keret képernyőn is megjelenik, a játékos neve mellett ("❓
+7/9"). Az app 3D
 füléről vezetve ugyanez (a panel "❓
 Kvíz" gombja, a gombon hányan válaszoltak — döntés-kvízben hányan
 találták el, a válaszok felirata ✓/✗). A motor

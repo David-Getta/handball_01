@@ -2534,6 +2534,62 @@ def test_a_kviz_vr_bol_is_vezetheto():
         assert kell in oldal, kell
 
 
+def test_a_kviz_merleg_a_kereten_es_a_nevvalaszto(tmp_path, monkeypatch):
+    """A keret-lap sorai a játékos kvíz-mérlegét viszik (a név szerint —
+    kis- és nagybetű, szóköz nem számít); a 3D oldal követője a keret
+    nevei közül választhat; a Keret képernyő mutatja."""
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline.court3d import quiz_name_key
+    from handball.pipeline.view3d_html import view3d_html
+
+    assert quiz_name_key("  Kiss   Péter ") == quiz_name_key("kiss péter")
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    m = _meccs()
+    app.state.put_match(m)
+    c = TestClient(app)
+    mid, csapat = m.meta.match_id, m.meta.home_team
+    mezek = [r["jersey"] for r in c.get("/library/roster",
+                                         params={"team": csapat}).json()["players"]]
+    assert mezek
+    c.post("/library/players", json={"team": csapat, "jersey": mezek[0],
+                                     "name": "Kiss Péter"})
+    c.post(f"/matches/{mid}/notes", json={"frame": 5, "text": "❓", "kviz": [
+        {"nev": "kiss  péter", "itelet": True}, {"nev": "Más", "itelet": False}]})
+    sorok = {r["jersey"]: r for r in
+             c.get("/library/roster", params={"team": csapat}).json()["players"]}
+    assert sorok[mezek[0]]["kviz"] == {"kvizek": 1, "itelt": 1, "jo": 1,
+                                       "arany": None}
+    assert all(r["kviz"] is None for j, r in sorok.items() if j != mezek[0])
+    # A hosszú keret-név a követő oldalán SHARED3D_NAME_MAX jelre vágva megy
+    # — így is párosul (a vendég csapat egyik mezén).
+    from handball.pipeline.court3d import SHARED3D_NAME_MAX
+    hosszu = "Kovácsné Szabó Erzsébet"
+    assert len(hosszu) > SHARED3D_NAME_MAX
+    vendeg = m.meta.away_team
+    vmez = c.get("/library/roster", params={"team": vendeg}).json()["players"][0]["jersey"]
+    c.post("/library/players", json={"team": vendeg, "jersey": vmez, "name": hosszu})
+    c.post(f"/matches/{mid}/notes", json={"frame": 6, "text": "❓", "kviz": [
+        {"nev": hosszu[:SHARED3D_NAME_MAX], "itelet": False}]})
+    vsor = {r["jersey"]: r for r in
+            c.get("/library/roster", params={"team": vendeg}).json()["players"]}
+    assert vsor[vmez]["kviz"]["itelt"] == 1 and vsor[vmez]["kviz"]["jo"] == 0
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="kzNevValaszto"', 'nevValasztoMutat(kozosMod === "kovet");',
+                 'fetch("/library/players")', "let KZ_NEV = ",
+                 'history.replaceState(null, "", location.pathname + "?" + q.toString());'):
+        assert kell in oldal, kell
+    assert "__KZ_NEV_MAX__" not in oldal
+    keret = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+             / "roster_screen.dart").read_text(encoding="utf-8")
+    assert '(p["kviz"] as Map?)?["itelt"]' in keret
+
+
 def test_a_jelenlet_helye_es_neve():
     """court3d.shared3d_hely: szöveg vagy lista, dobozba szorítva, a szög
     a (−π, π]-be; rossz alaknál None. shared3d_nev: vezérlőjel nélkül,

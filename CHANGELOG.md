@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.168 óta)
 
+- **"Ki vagy?" — névválasztó a közös nézés követőjének; a kvíz-mérleg a
+  kereten** (böngésző/VR + motor + app): a követő a keretben felvitt
+  nevek közül választ (a headset billentyűzetén nem kell gépelni; a
+  választás a címbe is kerül), és a keret nevével a kvíz-mérleg a Keret
+  képernyőn is ott van a játékos neve mellett ("❓ 7/9"). A keret-lap
+  (/library/roster) sorai a kvíz-mérleget is viszik.
+
 - **A kvíz VR-ből is vezethető** (böngésző/VR): közös nézés vezetőjeként a
   bal hüvelykujj-kar lenyomása a kvíz következő lépése (indítás → mutasd a
   csapatnak → vége; a jobb kézben marad a vetítés), és a vezető VR-tábláján

@@ -4453,6 +4453,12 @@ def create_app():
         QUIZ_STATS_MIN_ANSWERS} — a jegyzetek időrendben (a meccsek
         dátuma, azon belül a kocka) mennek a számolásba."""
         from ..pipeline.court3d import QUIZ_STATS_MIN_ANSWERS, quiz_stats
+        return {"players": quiz_stats(_jegyzetek_idorendben()),
+                "min_answers": QUIZ_STATS_MIN_ANSWERS}
+
+    def _jegyzetek_idorendben() -> list:
+        """A könyvtár összes jegyzete időrendben (a meccsek dátuma, azon
+        belül a kocka) — a kvíz-mérleg bemenete."""
         meccsek = sorted(_season_matches(),
                          key=lambda m: ((m.meta.date or ""),
                                         m.meta.match_id))
@@ -4462,8 +4468,7 @@ def create_app():
                   if isinstance(n, dict)]
             ns.sort(key=lambda n: n.get("frame", 0))
             jegyzetek.extend(ns)
-        return {"players": quiz_stats(jegyzetek),
-                "min_answers": QUIZ_STATS_MIN_ANSWERS}
+        return jegyzetek
 
     @app.post("/matches/{match_id}/notes")
     def add_note(match_id: str, body: dict):
@@ -6933,18 +6938,35 @@ def create_app():
         """
         t = _library_player_tallies()
         mezek = sorted({k[1] for k in t["matches"] if k[0] == team})
+        # A kvíz-mérleg a NÉV szerint (a 3D közös nézés követője a keret
+        # nevei közül választ) — hibatűrően: a hibája a keretet nem viszi el.
+        try:
+            from ..pipeline.court3d import (quiz_name_key, quiz_stats,
+                                            shared3d_nev)
+            kvizek = {quiz_name_key(r["nev"]): r
+                      for r in quiz_stats(_jegyzetek_idorendben())}
+        except Exception:
+            kvizek = {}
         sorok = []
         for j in mezek:
             k = (team, j)
+            nev = _player_name(team, j)
+            # (a követő neve legfeljebb SHARED3D_NAME_MAX jel — a hosszú
+            # keret-nevet ugyanúgy vágjuk, hogy párosuljon)
+            kv = kvizek.get(quiz_name_key(shared3d_nev(nev))) if nev else None
             sorok.append({
                 "jersey": j,
-                "name": _player_name(team, j),
+                "name": nev,
                 "matches": t["matches"].get(k, 0),
                 "goals": t["goals"].get(k, 0),
                 "assists": t["assists"].get(k, 0),
                 "blocks": t["blocks"].get(k, 0),
                 "steals": t["steals"].get(k, 0),
                 "saves": t["saves"].get(k, 0),
+                # A döntés-kvízek mérlege (null: nem volt kvízben).
+                "kviz": ({"kvizek": kv["kvizek"], "itelt": kv["itelt"],
+                          "jo": kv["jo"], "arany": kv["arany"]}
+                         if kv else None),
             })
         return {
             "team": team,

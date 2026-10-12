@@ -577,6 +577,20 @@ class _RosterScreenState extends State<RosterScreen> {
                               ? AppColors.textPrimary
                               : AppColors.textFaint)),
                 ),
+                // A döntés-kvízek mérlege (a 3D közös nézésből, a név
+                // szerint — a motor /library/roster "kviz"-e).
+                if (((p["kviz"] as Map?)?["itelt"] as num? ?? 0) > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Tooltip(
+                      message: "Döntés-kvíz: ennyiszer mutatott a modell "
+                          "jobb opciójára (✓ / ítélt válasz)",
+                      child: Text(
+                          "❓ ${(p["kviz"] as Map)["jo"]}/"
+                          "${(p["kviz"] as Map)["itelt"]}",
+                          style: AppText.label.copyWith(fontSize: 11.5)),
+                    ),
+                  ),
                 IconButton(
                   tooltip: "Név megadása",
                   iconSize: 15,
