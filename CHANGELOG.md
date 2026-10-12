@@ -3,7 +3,19 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.167 óta)
+## v0.1.168 — kiadva (2026-10-12)
+
+> Kiadás-jegyzet: a közös nézés csapat-eszköz lett. A headsetekben
+> látjátok egymást — mindenki fejként ott, ahonnan néz, fölötte a neve
+> (a csapat linkje: `localhost:8000/kovet?nev=Peti`; az edzőé arany). Az
+> edző kvízt indíthat: a jelenet megáll, a játékosok a padlóra mutatnak
+> ("hova passzolnál?", "hol a helyed?"), az edző névvel látja a
+> válaszokat, aztán a csapatnak is megmutatja. Döntés-pillanatnál a kvíz
+> a modell jobb opciójához méri a válaszokat (✓/✗), és a kvíz végén az
+> eredmény a jegyzetek közé kerül — a nyomtatott jelentésben ábrával.
+> Mindez az app 3D füléről vezetve is. (Valódi headseten még nem
+> próbáltuk — headless böngészővel és szimulált VR-munkamenettel
+> teszteltük.)
 
 - **A kvíz eredménye a jegyzetek közé** (új, böngésző + app): a kvíz
   végén (ha volt válasz) a vezető jegyzetet ír a pillanathoz — döntés-
