@@ -3279,7 +3279,9 @@ def create_app():
         belül kérdező követők száma, "csapat": a helyüket adó jelenlévő
         követők [{"sz": a csatlakozás sorszáma, "nev", "hely"}]}. KVÍZ:
         "kviz": {"n": a kör azonosítója, "mutat": a válaszok a csapatnak
-        is látszanak} (null: nincs kvíz) — a válasz "csapat" soraiban az
+        is látszanak, "d": a döntés-pillanat ideje (mp), ha a kvíz annál
+        indult — ehhez mérik a válaszokat} (null: nincs kvíz) — a válasz
+        "csapat" soraiban az
         aktuális körre adott válasz ("valasz": [x, y]). 400: rossz alakú
         érték; 404: nincs ilyen meccs."""
         import math as _math
@@ -3350,11 +3352,16 @@ def create_app():
             try:
                 kn = float(body["kviz"]["n"])
                 kmutat = bool(body["kviz"].get("mutat"))
+                kd = body["kviz"].get("d")
+                kd = None if kd is None else float(kd)
             except (TypeError, ValueError, KeyError, AttributeError):
                 raise HTTPException(status_code=400, detail="rossz kvíz")
-            if not _math.isfinite(kn):
+            if not (_math.isfinite(kn)
+                    and (kd is None or _math.isfinite(kd))):
                 raise HTTPException(status_code=400, detail="rossz kvíz")
             kviz = {"n": kn, "mutat": kmutat}
+            if kd is not None:
+                kviz["d"] = round(kd, 2)
         # A vezető jelenléte (a követők arany fejként látják).
         vhely = None
         if body.get("hely") is not None:

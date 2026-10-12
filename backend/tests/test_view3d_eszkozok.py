@@ -2314,6 +2314,78 @@ def test_a_kozos_nezes_kvize(tmp_path, monkeypatch):
     assert 'final va = e["valasz"];' in geo
 
 
+def test_a_dontes_kviz_itelete_harom_tukorben():
+    """court3d.quiz_verdict és a böngésző kvizItelet-je (node) ugyanazokon
+    az eseteken ugyanazt mondja; a küszöbök a motor számai (az app
+    quizVerdict-je a Dart-tesztben ugyanezeket az eseteket nézi)."""
+    import random
+
+    from handball.pipeline import court3d
+    from handball.pipeline.court3d import quiz_verdict
+    from handball.pipeline.view3d_html import KVIZ_JS
+
+    # A kézi esetek (a Dart-teszt is ezeket nézi).
+    passz = [None, 1, 20, 10, 25, 4, 0.3, "p", 30, 12, 0.6, 0.3]
+    loves = [None, 1, 30, 10, 25, 4, 0.3, "s", 40, 10, 0.6, 0.3]
+    kezi = [((30, 12), passz, True), ((32.9, 12), passz, True),
+            ((33.1, 12), passz, False), ((25, 4), passz, False),
+            ((27.4, 8), passz, False), ((35, 10), loves, True),
+            ((33.9, 10), loves, False), ((28, 7), loves, False)]
+    for (v, d, vart) in kezi:
+        assert quiz_verdict(v, d[8:10], d[4:6], d[7] == "s") is vart, (v, d[7])
+    rnd = random.Random(3)
+    esetek = [((round(rnd.uniform(15, 40), 1), round(rnd.uniform(0, 20), 1)),
+               rnd.choice([passz, loves])) for _ in range(300)]
+    esetek += [(v, d) for v, d, _ in kezi]
+    js = (KVIZ_JS.replace("__KV_TALALAT__", repr(court3d.SHARED3D_QUIZ_HIT_M))
+          .replace("__KV_LOVES__", repr(court3d.SHARED3D_QUIZ_SHOT_M))
+          + "const E = " + json.dumps(esetek) + ";\n"
+          + "console.log(JSON.stringify(E.map(([v, d]) => kvizItelet(v[0], v[1], d))));")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    vart = [quiz_verdict(v, d[8:10], d[4:6], d[7] == "s") for v, d in esetek]
+    assert json.loads(r.stdout) == vart
+    assert any(vart) and not all(vart)
+
+
+def test_a_dontes_kviz_a_motorban_es_az_oldalon(tmp_path, monkeypatch):
+    """A kvíz köre a döntés-pillanat idejét (d) is viszi; a rossz d 400. Az
+    oldal: indításkor a látszó Döntések-sor ideje a körbe, a feliratok
+    ✓/✗-gel (a vezetőnél azonnal, a csapatnál a felfedés után), a vezető
+    állapot-sorában a találatok száma; a küszöbök a motor számai."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline import court3d
+    from handball.pipeline.view3d_html import view3d_html
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    url = f"/matches/{m.meta.match_id}/shared3d"
+    assert c.put(url, json={"t": 1, "kviz": {"n": 3, "d": 61.234}}).status_code == 200
+    assert c.get(url).json()["kviz"] == {"n": 3.0, "mutat": False, "d": 61.23}
+    for rossz in ({"n": 3, "d": "x"}, {"n": 3, "d": [1]}):
+        assert c.put(url, json={"t": 1, "kviz": rossz}).status_code == 400, rossz
+    assert c.put(url, content=b'{"t": 1, "kviz": {"n": 3, "d": 1e999}}',
+                 headers={"Content-Type": "application/json"}).status_code == 400
+
+    oldal = view3d_html(_meccs())
+    for kell in ("kzKviz = d ? {n: Date.now(), mutat: false, d: d[0]}",
+                 "kzKviz = {...kzKviz, mutat: true};",
+                 'const d = (kozosMod === "vezet" || (kor && kor.mutat)) ? kvizDontes(kor) : null;',
+                 'kvizCimke = (nev, x, y, d) => d ? nev + (kvizItelet(x, y, d) ? " ✓" : " ✗") : nev;',
+                 '" · ✓ " + kzJoDb + " a jobb opció"',
+                 "function kvizItelet(vx, vy, d){", "KZ_KVIZ_JOBB"):
+        assert kell in oldal, kell
+    assert (f"const KV_TALALAT = {float(court3d.SHARED3D_QUIZ_HIT_M)!r}, "
+            f"KV_LOVES = {float(court3d.SHARED3D_QUIZ_SHOT_M)!r};") in oldal
+    assert "__KV_" not in oldal
+
+
 def test_a_jelenlet_helye_es_neve():
     """court3d.shared3d_hely: szöveg vagy lista, dobozba szorítva, a szög
     a (−π, π]-be; rossz alaknál None. shared3d_nev: vezérlőjel nélkül,

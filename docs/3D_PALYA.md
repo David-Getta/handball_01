@@ -302,7 +302,13 @@ válaszokat azonnal látja, névvel (kék jel a padlón, rajta a név), és az
 állapot-sorban, hányan válaszoltak. A második gombnyomás ("👁 Mutasd a
 csapatnak") mindenkinek megmutatja a válaszokat — itt jön a
 megbeszélés, mellé a Döntések réteg jobb opciója —, a harmadik ("✖ Kvíz
-vége") leveszi őket. Az app 3D füléről vezetve ugyanez (a panel "❓
+vége") leveszi őket. **Döntés-kvíz:** ha a kvíz döntés-pillanatnál
+indul (a Döntések ◀ ▶ felirata látszik — "jobb opció is volt"), a
+válaszokat a modell jobb opciójához méri: ✓, ha a válasz a jobb célhoz
+közelebb van, mint a választott passz céljához, és attól legfeljebb 3
+m-re (lövésnél a kapu előtt, a kapuelőtérben); az edző azonnal látja a
+neveken és az állapot-sorban ("✓ 2 a jobb opció"), a csapat a
+felfedéskor. Az app 3D füléről vezetve ugyanez (a panel "❓
 Kvíz" gombja, a gombon hányan válaszoltak). A motor
 a csapatnak csak a felfedés után adja a többiek válaszát (nem lehet
 puskázni), és csak az aktuális kört (a régi kör válasza nem látszik). A

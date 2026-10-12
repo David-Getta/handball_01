@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.167 óta)
 
+- **Döntés-kvíz** (új, böngésző/VR + motor): ha a kvíz döntés-
+  pillanatnál indul (a Döntések felirata látszik), a válaszokat a modell
+  jobb opciójához méri — ✓, ha a játékos a jobb célra mutatott (a jobb
+  társ 3 m-es körzetébe, lövésnél a kapuelőtérbe, és közelebb, mint a
+  választott passz céljához), ✗, ha nem. Az edző azonnal látja a neveken
+  és az állapot-sorban ("✓ 2 a jobb opció"), a csapat a felfedéskor, az
+  arany vonallal (a modell jobb opciója) együtt. Edzői olvasat: kiderül,
+  a csapatból kik látják a jobb megoldást.
+
 - **Közös nézés: kvíz a csapatnak** (új, böngésző/VR + motor): a vezető
   "❓ Kvíz" gombja megállítja a jelenetet, és kérdez ("hova passzolnál?",
   "hol a helyed?"); a játékosok a padlóra mutatnak (kattintás, VR-ben a

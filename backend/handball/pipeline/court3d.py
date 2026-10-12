@@ -688,6 +688,30 @@ def shared3d_valasz(s):
             round(min(25.0, max(-5.0, y)), 2), n]
 
 
+# DÖNTÉS-KVÍZ: a kvíz döntés-pillanatnál (decision_moments) a válaszokat a
+# modell jobb opciójához méri — a jobb cél (passznál a jobb társ helye)
+# ennyi méteren belül; lövésnél a cél a kapu közepe, a "találat" a
+# kapuelőtér (6 m) — a játékos a kapu elé mutat, nem a kapufák közé. A
+# böngésző (KVIZ_JS, a sablonba írva) és az app (quizVerdict, őr-teszt)
+# ugyanezt viszi.
+SHARED3D_QUIZ_HIT_M = 3.0
+SHARED3D_QUIZ_SHOT_M = 6.0
+
+
+def quiz_verdict(answer, best, chosen, shot: bool = False) -> bool:
+    """A kvíz-válasz ítélete egy döntés-pillanatnál: a válasz (a padló
+    pontja, pálya-méter) a modell JOBB opcióját mutatja-e — közelebb van a
+    jobb célhoz (`best`), mint a választott passz céljához (`chosen`), és
+    a jobb céltól legfeljebb SHARED3D_QUIZ_HIT_M-re (lövésnél — `shot` —
+    a kapu közepétől SHARED3D_QUIZ_SHOT_M-re). Edzőileg: "látta-e a
+    játékos, amit a jobb döntés kívánt"."""
+    import math
+    db = math.hypot(answer[0] - best[0], answer[1] - best[1])
+    dc = math.hypot(answer[0] - chosen[0], answer[1] - chosen[1])
+    return db < dc and db <= (SHARED3D_QUIZ_SHOT_M if shot
+                              else SHARED3D_QUIZ_HIT_M)
+
+
 def shared3d_nev(s) -> str:
     """A követő neve a többiek headsetjén: a látható jelek (vezérlőjel
     nélkül), két szélén szóköz nélkül, legfeljebb SHARED3D_NAME_MAX; üres,

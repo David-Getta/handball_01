@@ -574,6 +574,19 @@ function hetesFelirat(d, nevH, nevV){
 # szárnypontjai és a link "rajz" paraméterének kódolása. A nyilak
 # pálya-méterben ([x1, y1, x2, y2, színkód]); a link 0,1 m-re kerekít, és
 # legfeljebb RAJZ_MAX nyilat visz (a cím hossza miatt).
+# DÖNTÉS-KVÍZ: a kvíz-válasz ítélete egy döntés-pillanatnál —
+# court3d.quiz_verdict tükre (őr-teszt: node-dal ugyanazokon az eseteken).
+# A döntés-sor a DONTESEK alakja: [mp, hazai?, passzoló x, y, választott
+# x, y, érték, "s"/"p", a jobb cél x, y, érték, különbség].
+KVIZ_JS = """
+const KV_TALALAT = __KV_TALALAT__, KV_LOVES = __KV_LOVES__;
+function kvizItelet(vx, vy, d){
+  const cx = d[4], cy = d[5], fajta = d[7], bx = d[8], by = d[9];
+  const db = Math.hypot(vx - bx, vy - by), dc = Math.hypot(vx - cx, vy - cy);
+  return db < dc && db <= (fajta === "s" ? KV_LOVES : KV_TALALAT);
+}
+"""
+
 RAJZ_JS = """
 const RAJZ_SZINEK = ["ffd23f", "4c9aff", "ff6b6b"];  // labda/passz, futás, védő
 const RAJZ_MAX = 30;
@@ -910,7 +923,7 @@ Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmad
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
-Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi; vezetőként Shift+katt a padlóra: mutató a csapatnak, 📍 Ide mindenki: a követők a te nézőpontodba ugranak; a csarnokban látjátok egymást (fej és orr a nézés irányába, az edzőé arany; név a /kovet?nev=Peti linkkel); ❓ Kvíz: a jelenet megáll, a játékosok a padlóra mutatnak (kattintás, VR-ben ravasz), te névvel látod, másodszorra a csapat is (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
+Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi; vezetőként Shift+katt a padlóra: mutató a csapatnak, 📍 Ide mindenki: a követők a te nézőpontodba ugranak; a csarnokban látjátok egymást (fej és orr a nézés irányába, az edzőé arany; név a /kovet?nev=Peti linkkel); ❓ Kvíz: a jelenet megáll, a játékosok a padlóra mutatnak (kattintás, VR-ben ravasz), te névvel látod, másodszorra a csapat is; döntés-pillanatnál (Döntések ◀ ▶) a válasz ✓/✗ a modell jobb opciójához mérve (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
 Videó (K) — a valódi felvétel a 3D mellett, a lejátszással szinkronban: kép a képben és kivetítő a túlsó oldalvonal fölött (VR-ben is)<br>
 Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér pötty, ✕ törli), a vetítésben, a jelentésben és a Klipek jegyzet-csomagjában<br>
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
@@ -2712,9 +2725,11 @@ window.jelenletProba = () => [...avatarok.entries()].map(([k, cs]) => ({
   yaw: cs.userData.fejCs.rotation.y}));
 window.sajatHelyProba = () => sajatHely();
 let kzValaszDb = 0;  // a kvíz aktuális körére válaszolók (a motor szerint)
+let kzJoDb = 0;      // közülük a jobb opciót mutatók (döntés-kvízben)
 function kzVezetoInfo(){
   kozosInfo.textContent = "📡 vezetsz" + (kzKovetok == null ? "" : " · " + kzKovetok + " követő")
     + (kzKviz ? " · ❓ " + kzValaszDb + "/" + (kzKovetok || 0) + " válasz" : "")
+    + (kzKviz && kvizDontes(kzKviz) ? " · ✓ " + kzJoDb + " a jobb opció" : "")
     + " — a csapat linkje: " + kzLink + (kzVagolap ? " (vágólapon)" : "");
 }
 // A követő állapot-szövege és a váltás ideje: a VR-tábla a váltás után
@@ -2873,11 +2888,25 @@ function valaszJelFrissit(){
     sp.scale.set(s, 0.25 * s, 1); sp.position.y = 1.4 + 0.12 * s;
   }
 }
+// DÖNTÉS-KVÍZ: a kör döntés-pillanata (a kvíz indításakor látszó
+// Döntések-sor; null: nem döntés-pillanatnál indult) — ehhez mérjük a
+// válaszokat (kvizItelet = court3d.quiz_verdict): ✓ a jobb opció.
+function kvizDontes(kor){
+  if (!kor || kor.d == null) return null;
+  return DONTESEK.find(x => Math.abs(x[0] - kor.d) < 0.01) || null;
+}
+const kvizCimke = (nev, x, y, d) => d ? nev + (kvizItelet(x, y, d) ? " ✓" : " ✗") : nev;
+window.kvizDontesProba = () => kvizDontes(kozosMod === "vezet" ? kzKviz : kzKvizKor);
 function kzValaszLista(csapat){
+  const kor = kozosMod === "vezet" ? kzKviz : kzKvizKor;
+  // Az ítélet a vezetőnél azonnal, a csapatnál a felfedés után.
+  const d = (kozosMod === "vezet" || (kor && kor.mutat)) ? kvizDontes(kor) : null;
   const l = (csapat || []).filter(e => e.valasz).map(e => ({kulcs: "v" + e.sz,
-    cimke: e.nev || ("#" + e.sz), sajat: false, x: e.valasz[0], y: e.valasz[1]}));
+    cimke: kvizCimke(e.nev || ("#" + e.sz), e.valasz[0], e.valasz[1], d), sajat: false,
+    x: e.valasz[0], y: e.valasz[1]}));
   if (kzValasz && kzKvizKor && kzValasz.n === kzKvizKor.n)
-    l.push({kulcs: "sajat", cimke: "Te", sajat: true, x: kzValasz.x, y: kzValasz.y});
+    l.push({kulcs: "sajat", cimke: kvizCimke("Te", kzValasz.x, kzValasz.y, d), sajat: true,
+            x: kzValasz.x, y: kzValasz.y});
   return l;
 }
 function kvizGombFelirat(){
@@ -2886,11 +2915,14 @@ function kvizGombFelirat(){
 kvizGomb.onclick = () => {
   if (kozosMod !== "vezet") return;
   if (!kzKviz){
-    kzKviz = {n: Date.now(), mutat: false};
-    kzValaszDb = 0;
+    // Döntés-pillanatnál (a Döntések felirata látszik) a válaszokat a
+    // modell jobb opciójához mérjük.
+    const d = szurt(DONTESEK).find(x => ido >= x[0] - 0.3 && ido <= x[0] + 2.5);
+    kzKviz = d ? {n: Date.now(), mutat: false, d: d[0]} : {n: Date.now(), mutat: false};
+    kzValaszDb = 0; kzJoDb = 0;
     // A kérdés a megállított jeleneten.
     megy = false; lejatszasGomb.textContent = "▶";
-  } else if (!kzKviz.mutat) kzKviz = {n: kzKviz.n, mutat: true};
+  } else if (!kzKviz.mutat) kzKviz = {...kzKviz, mutat: true};
   else { kzKviz = null; valaszokAllit([]); }
   kvizGombFelirat(); kzVezetoInfo();
   kzUtolso = 0;  // azonnal megy a csapatnak
@@ -2898,9 +2930,10 @@ kvizGomb.onclick = () => {
 const KZ_KVIZ_KERDES = "❓ Kvíz: mutasd meg a padlón — kattintás (VR: ravasz a kontrollerrel)";
 const KZ_KVIZ_KESZ = "❓ a válaszod a padlón — várjuk a többieket (még módosíthatod)";
 const KZ_KVIZ_MUTAT = "👁 a csapat válaszai a padlón";
+const KZ_KVIZ_JOBB = " — arany vonal: a modell jobb opciója (✓ eltalálta, ✗ nem)";
 function kvizSzoveg(){
   if (!kzKvizKor) return KZ_KOVETED;
-  if (kzKvizKor.mutat) return KZ_KVIZ_MUTAT;
+  if (kzKvizKor.mutat) return KZ_KVIZ_MUTAT + (kvizDontes(kzKvizKor) ? KZ_KVIZ_JOBB : "");
   return (kzValasz && kzValasz.n === kzKvizKor.n) ? KZ_KVIZ_KESZ : KZ_KVIZ_KERDES;
 }
 // A követő válasza (a felfedésig módosítható) — azonnal megy a motornak.
@@ -2966,6 +2999,9 @@ function kozosFrissit(){
       .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(a => { if (kozosMod === "vezet"){ kzKovetok = a.followers;
                                             kzValaszDb = (a.csapat || []).filter(e => e.valasz).length;
+                                            const kd = kvizDontes(kzKviz);
+                                            kzJoDb = kd ? (a.csapat || []).filter(
+                                              e => e.valasz && kvizItelet(e.valasz[0], e.valasz[1], kd)).length : 0;
                                             kzVezetoInfo();
                                             jelenletAllit(kzLista(a.csapat, null));
                                             valaszokAllit(kzKviz ? kzValaszLista(a.csapat) : []); } })
@@ -3673,6 +3709,7 @@ fest.setAnimationLoop(() => {
                           PASS_LANE_WIDTH_M, SCENE_REEL_TAIL_S,
                           SHARED3D_NAME_MAX, SHARED3D_NEAR_M,
                           SHARED3D_POINTER_S, SHARED3D_POLL_S,
+                          SHARED3D_QUIZ_HIT_M, SHARED3D_QUIZ_SHOT_M,
                           SHARED3D_SEND_S, SHARED3D_TOLERANCE_S)
     from .defense import WALL_GAP_DEPTH_M, WALL_GAP_M, WALL_GAP_MIN_DEFENDERS
     from .tactics import TacticsConfig
@@ -3692,6 +3729,11 @@ fest.setAnimationLoop(() => {
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
                           + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
                           + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS
-                          + HETES_JS + RAJZ_JS)
+                          + HETES_JS + RAJZ_JS
+                          + KVIZ_JS.replace(
+                              "__KV_TALALAT__",
+                              repr(float(SHARED3D_QUIZ_HIT_M))).replace(
+                              "__KV_LOVES__",
+                              repr(float(SHARED3D_QUIZ_SHOT_M))))
                  .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))
