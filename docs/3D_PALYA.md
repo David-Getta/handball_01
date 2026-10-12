@@ -390,7 +390,9 @@ táblán látszanak, és a jelenetek a kontrollerrel lapozhatók: A/X — a
 következő, B/Y — az előző jelenet, ravasz — lejátszás/szünet, a
 hüvelykujj-kar lenyomása — vetítés (a lista sorai egymás után); a közös
 nézés vezetőjeként a markolat a jobb kézben MUTATÓ (ahova a kontroller
-mutat a padlón), a bal kézben "📍 Ide mindenki". A WebXR
+mutat a padlón), a bal kézben "📍 Ide mindenki"; a bal hüvelykujj-kar
+lenyomása a kvíz következő lépése (indítás → mutasd a csapatnak → vége
+— a táblán a kvíz állása: hányan válaszoltak, hányan találták el). A WebXR
 biztonságos környezetet kér — a localhost az; Quest-féle headsetről
 USB-kábellel és `adb reverse`-szel érhető el az app gépe.
 

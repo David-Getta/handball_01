@@ -2519,6 +2519,21 @@ def test_a_kviz_merleg_a_motorban(tmp_path, monkeypatch):
         assert kell in jegyz, kell
 
 
+def test_a_kviz_vr_bol_is_vezetheto():
+    """VR-ben a vezető bal hüvelykujj-kar lenyomása a kvíz következő
+    lépése (a jobb kézben és követőként a vetítés marad), és a vezető
+    VR-tábláján a kvíz állása."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ("if (vrGombEl(kulcs, 3, nyom(3))) vrKarNyomas(forras.handedness);",
+                 'if (kozosMod === "vezet" && kez === "left") kvizGomb.onclick();',
+                 "else vetitesAllit(!vetites);",
+                 'if (kozosMod === "vezet" && kzKviz)',
+                 "bal hüvelykujj-kar lenyomása — kvíz"):
+        assert kell in oldal, kell
+
+
 def test_a_jelenlet_helye_es_neve():
     """court3d.shared3d_hely: szöveg vagy lista, dobozba szorítva, a szög
     a (−π, π]-be; rossz alaknál None. shared3d_nev: vezérlőjel nélkül,

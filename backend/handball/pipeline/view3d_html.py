@@ -945,7 +945,7 @@ Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér p
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek, rajz) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai) · V — vetítés: a lista sorai egymás után<br>
-VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés; kvíz közben a ravasz a válaszod (ahova a kontroller mutat); közös nézés vezetőként: markolat — jobb kéz mutató (ahova a kontroller mutat), bal kéz Ide mindenki</div>
+VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés; kvíz közben a ravasz a válaszod (ahova a kontroller mutat); közös nézés vezetőként: markolat — jobb kéz mutató (ahova a kontroller mutat), bal kéz Ide mindenki; bal hüvelykujj-kar lenyomása — kvíz (indítás, mutasd a csapatnak, vége)</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
 <div id="feliratOszlop">
@@ -3642,6 +3642,14 @@ function jelenetLep(irany){
   jelenetUgras(r);
   return r;
 }
+// A hüvelykujj-kar lenyomása: a vetítés ki/be — a közös nézés
+// vezetőjeként a BAL kézben a kvíz következő lépése (indítás → felfedés →
+// vége), hogy a kvíz a headsetből is vezethető legyen.
+function vrKarNyomas(kez){
+  if (kozosMod === "vezet" && kez === "left") kvizGomb.onclick();
+  else vetitesAllit(!vetites);
+}
+window.vrKarProba = (kez) => vrKarNyomas(kez);
 function vrGombok(){
   const munkamenet = fest.xr.getSession && fest.xr.getSession();
   if (!munkamenet) return;
@@ -3659,7 +3667,7 @@ function vrGombok(){
       if (kvizValaszolhat()) vrValasz(k - 1);
       else { megy = !megy; lejatszasGomb.textContent = megy ? "⏸" : "▶"; }
     }
-    if (vrGombEl(kulcs, 3, nyom(3))) vetitesAllit(!vetites);
+    if (vrGombEl(kulcs, 3, nyom(3))) vrKarNyomas(forras.handedness);
     // Közös nézés vezetőként VR-ből: a markolat (1) a bal kézben "📍 Ide
     // mindenki", a jobb (vagy kéz nélküli) kontrolleren MUTATÓ a sugár
     // padló-metszetén.
@@ -3694,6 +3702,12 @@ function vrFeliratSzoveg(){
   const kz = kozosMod === "kovet" ? kozosInfo.textContent : "";
   if (kz && (kz !== KZ_KOVETED || performance.now() - kzInfoValtas < KZ_VR_MS))
     sorok.unshift(kz);
+  // A vezető a kvíz állását látja (a HTML panel VR-ben nem látszik).
+  if (kozosMod === "vezet" && kzKviz)
+    sorok.unshift("❓ Kvíz" + (kzKviz.mutat ? " (a csapat is látja)" : "") + ": "
+      + kzValaszDb + "/" + (kzKovetok || 0) + " válasz"
+      + (kvizDontes(kzKviz) ? " · ✓ " + kzJoDb : "")
+      + " — bal hüvelykujj-kar: " + (kzKviz.mutat ? "vége" : "mutasd a csapatnak"));
   return sorok;
 }
 function vrSorok(szoveg, max){

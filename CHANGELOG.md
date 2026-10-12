@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.168 óta)
 
+- **A kvíz VR-ből is vezethető** (böngésző/VR): közös nézés vezetőjeként a
+  bal hüvelykujj-kar lenyomása a kvíz következő lépése (indítás → mutasd a
+  csapatnak → vége; a jobb kézben marad a vetítés), és a vezető VR-tábláján
+  a kvíz állása ("❓ Kvíz: 2/3 válasz · ✓ 1").
+
 - **Kvíz-mérleg** (új, motor + app): a kvíz-jegyzet a kvíz eredményét
   szerkezetben is viszi, a motor /library/quiz-stats végpontja
   játékosonként, meccseken át összegzi, a Jegyzetek képernyő fölül
