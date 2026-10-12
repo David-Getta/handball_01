@@ -4,6 +4,9 @@ __pycache__/
 *.egg-info/
 .eggs/
 build/
+# A 3D oldal three.js-e (handball/vendor/three/build/three.module.js) nem
+# építési termék, hanem a csomag része — a fenti build/ szabály alól kivétel.
+!backend/handball/vendor/three/build/
 dist/
 .venv/
 venv/
