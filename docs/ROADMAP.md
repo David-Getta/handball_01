@@ -104,7 +104,16 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   ELSŐ LÉPCSŐ KÉSZ ✅: a motor `/matches/{id}/view3d` végpontja a
   meccset WebXR-képes oldalként adja ki (three.js, VR-gomb, bal karos
   közlekedés); a kliens "Böngészős 3D / VR" gombja nyitja.
-- A csapat bejár a pályára, az edző mutatja a szituációt.
+- A csapat bejár a pályára, az edző mutatja a szituációt. MÁSODIK LÉPCSŐ
+  KÉSZ ✅ (közös nézés, `docs/3D_PALYA.md`): az edző vezet (az appból vagy
+  a böngészőből), a csapat headsetjei követik (rövid link: `/kovet`);
+  mutató a padlón, "📍 Ide mindenki", jelenlét (a játékosok névvel látják
+  egymást és az edzőt), kvíz (a játékosok a padlóra mutatnak; döntés-
+  pillanatnál a modell jobb opciójához mérve, az eredmény a jegyzetek
+  közé). Nyitott: próba valódi headsetekkel (eddig headless böngészővel
+  és szimulált VR-munkamenettel tesztelve), és a több headsetes hálózati
+  telepítés egyszerűsítése (most USB + `adb reverse`, vagy kézi hálózati
+  megnyitás).
 
 ## 8. fázis — Élő meccskövetés
 - Valós idejű pipeline (streaming inferencia).
