@@ -70,6 +70,15 @@ else:
     print("[backend.spec] FIGYELEM: digit_net.npz hiányzik — a mezszám-OCR "
           "sablon-illesztéssel (gyengébben) megy.")
 
+# A three.js (a 3D/VR oldal a motorból tölti — internet nélkül is): a
+# handball csomag adata, a .py-kon kívül kifejezetten.
+_three = os.path.join(BACKEND, "handball", "vendor", "three")
+if os.path.isdir(_three):
+    datas += [(_three, "handball/vendor/three")]
+else:
+    print("[backend.spec] FIGYELEM: handball/vendor/three hiányzik — a 3D "
+          "oldal nem tölt be.")
+
 # A YOLO súlyfájl becsomagolása (a build-szkript teszi ide).
 _weights = os.path.join(SPECPATH, "weights", "yolov8n.pt")
 if os.path.exists(_weights):

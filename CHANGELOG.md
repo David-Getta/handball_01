@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.168 óta)
 
+- **A 3D/VR oldal internet nélkül is megy** (javítás, motor + csomagolás):
+  a three.js eddig CDN-ről jött — internet nélkül (edzőterem, klub
+  saját hálózata) a 3D oldal és a közös nézés el sem indult. Most a motor
+  a csomagba tett three.js-t szolgálja ki (ugyanaz a 0.160.0 verzió, a
+  npm-csomag hash-ével ellenőrizve, tömörítve), a telepítő is viszi, a
+  hálózati őr a headseteknek is engedi.
+
 - **Hálózati őr a klub-hálózati közös nézéshez** (biztonság, motor): ha a
   motor a hálózat felé is nyitva van (HANDBALL_HOST=0.0.0.0 — a több
   headsetes közös nézés útja), a más gépekről CSAK a közös nézés

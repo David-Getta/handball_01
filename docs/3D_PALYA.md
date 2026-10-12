@@ -335,6 +335,10 @@ a laptopon teker, megállít, rajzol, a headsetek követik.
 
 ### Közös nézés több headsettel
 
+Internet nem kell: a 3D oldal a three.js-t is a motorból tölti (a
+csomagolt kiadás viszi), így az edzőteremben, a klub saját hálózatán is
+megy.
+
 A követő headsetnek el kell érnie a vezető gépén futó motort, és a
 VR-mód (WebXR) csak biztonságos címen indul — a `localhost` ilyen. Két
 út van:

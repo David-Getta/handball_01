@@ -981,8 +981,8 @@ VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; ko
  <label title="A védőfal rései szervezett védekezésben: zöld zárt, piros a 3,5 m-es vagy nagyobb rés — ott nyílik a fal"><input type="checkbox" id="falres"> Fal-rések</label>
 </div>
 <script type="importmap">{"imports":{
- "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
- "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+ "three":"/vendor/three@0.160.0/build/three.module.js",
+ "three/addons/":"/vendor/three@0.160.0/examples/jsm/"
 }}</script>
 <script type="module">
 import * as THREE from "three";

@@ -40,6 +40,8 @@ def test_a_halozatrol_csak_a_kozos_nezes_erheto_el(tmp_path, monkeypatch):
     assert tavoli.get("/library/players").status_code == 200
     assert tavoli.get("/kovet", follow_redirects=False).status_code in (200, 307)
     assert tavoli.get("/matches/halo/frame", params={"t": 0}).status_code != 403
+    # A three.js is (a 3D oldal a motorból tölti).
+    assert tavoli.get("/vendor/three@0.160.0/build/three.module.js").status_code == 200
     # A többi zárva — a nem létező út is (az őr az útválasztás előtt áll).
     for ut in ("/library/notes", "/library/quiz-stats", "/matches/halo/report",
                "/nincs-ilyen"):
@@ -69,4 +71,4 @@ def test_az_engedett_utak_a_kovetohoz_kellenek():
     """Az engedett utak listája szűk: csak olvasás (a közös nézés állapota
     kivétel — a vezető VR-ből is vezethet)."""
     assert all(m == "GET" for m, r in HALOZATI_ENGEDETT if "shared3d" not in r)
-    assert len(HALOZATI_ENGEDETT) == 6
+    assert len(HALOZATI_ENGEDETT) == 7

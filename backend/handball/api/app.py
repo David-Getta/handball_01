@@ -515,13 +515,15 @@ class _MatchStore(dict):
 # el, ha a motor a hálózat felé is nyitva van — a közös nézés követő-útja:
 # a rövid link, a 3D oldal, a közös nézés állapota (minden metódus: a
 # vezető VR-ből is vezethet), a videó-kockák, a jegyzetek olvasása (a 3D
-# oldal mutatja őket) és a névlista (a követő "Ki vagy?"-a).
+# oldal mutatja őket), a névlista (a követő "Ki vagy?"-a) és a three.js
+# (a 3D oldal a motorból tölti).
 HALOZATI_ENGEDETT = (
     ("GET", r"^/kovet$"),
     ("GET", r"^/matches/[^/]+/view3d$"),
     ("GET", r"^/matches/[^/]+/frame$"),
     ("GET", r"^/matches/[^/]+/notes$"),
     ("GET", r"^/library/players$"),
+    ("GET", r"^/vendor/three@[0-9.]+/[A-Za-z0-9_./-]+$"),
     (None, r"^/matches/[^/]+/shared3d$"),
 )
 
@@ -2953,13 +2955,48 @@ def create_app():
                          "Vary": "Accept-Encoding"})
         return HTMLResponse(content=oldal)
 
+    # A three.js (0.160.0, MIT — handball/vendor/three) a motorból: a 3D/VR
+    # oldal így internet nélkül is betölt (edzőterem, klub-hálózat), és a
+    # csomagolt kiadás is viszi. Csak a két használt fájl; tömörítve (a
+    # three.module.js 1,3 MB — a headset Wi-Fi-n tölti), egyszer számolva.
+    _THREE_FAJLOK = ("build/three.module.js", "examples/jsm/webxr/VRButton.js")
+    _three_tar: dict = {}
+
+    def vendor_three(ut: str, request: Request):
+        """A three.js fájljai a 3D/VR oldalnak (a többi út 404)."""
+        import gzip
+
+        from fastapi import Response
+        if ut not in _THREE_FAJLOK:
+            raise HTTPException(status_code=404, detail="nincs ilyen fájl")
+        if ut not in _three_tar:
+            p = Path(__file__).resolve().parent.parent / "vendor" / "three" / ut
+            if not p.exists():
+                raise HTTPException(status_code=404,
+                                    detail="a three.js hiányzik a csomagból")
+            nyers = p.read_bytes()
+            _three_tar[ut] = (nyers, gzip.compress(nyers, compresslevel=6))
+        nyers, tomor = _three_tar[ut]
+        fej = {"Cache-Control": "public, max-age=31536000, immutable",
+               "Vary": "Accept-Encoding"}
+        if _gzip_elfogadva(request.headers.get("accept-encoding") or ""):
+            return Response(content=tomor, media_type="text/javascript",
+                            headers={**fej, "Content-Encoding": "gzip"})
+        return Response(content=nyers, media_type="text/javascript",
+                        headers=fej)
+
+    # (a modul halasztott annotációi miatt a Request-et kézzel adjuk meg —
+    # mint a /view3d-nél)
+    vendor_three.__annotations__["request"] = Request
+    app.get("/vendor/three@0.160.0/{ut:path}")(vendor_three)
+
     def match_view3d(match_id: str, request: Request):
         """Böngészős 3D / VR nézet: a meccs WebXR-képes HTML-oldalként.
 
         A kliens 3D füle a képernyős út; ez ugyanaz böngészőben — és a
         jövőben VR-headseten: a WebXR biztonságos környezetet kér, a
         localhost az (headsetről USB + adb reverse teszi elérhetővé).
-        A three.js CDN-ről jön, tehát internet kell hozzá."""
+        A three.js a motorból jön (/vendor/three@…) — internet nem kell."""
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
