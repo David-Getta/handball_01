@@ -3,7 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.166 óta)
+## v0.1.167 — kiadva (2026-10-12)
+
+> Kiadás-jegyzet: VR-javítás. A headsetben a néző eddig ~1,6 m-rel a
+> padló fölött lebegett (a headset a padlótól méri a fej magasságát, a 3D
+> pálya pedig még egyszer hozzáadta a szemmagasságot) — most a padlón áll,
+> a játékos-kamerában és az "Ide mindenki" nézőpontjában is a helyes
+> magasságban. A közös nézés vezetője VR-ből is mutathat: a kontroller
+> markolata a jobb kézben mutató, a bal kézben "📍 Ide mindenki". Mellé
+> kliens-karbantartás (elavult színkezelés lecserélve).
 
 - **VR: a néző a padlón áll; a közös nézés VR-ből is vezethető** (javítás
   és új, böngésző/VR): a headset a padlótól méri a fej magasságát, a 3D
