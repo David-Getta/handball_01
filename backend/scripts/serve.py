@@ -9,6 +9,11 @@ Fejlesztéskor is futtatható közvetlenül:
 
 Környezeti változók (opcionális):
     HANDBALL_HOST (alap: 127.0.0.1), HANDBALL_PORT (alap: 8000)
+
+A HANDBALL_HOST=0.0.0.0 a motort a hálózat felé is megnyitja (a több
+headsetes közös nézés klub-hálózati útja); ilyenkor a más gépről jövő
+kérés csak a közös nézés követő-útját éri el (handball.api.app.
+HALOZATI_ENGEDETT) — a többi 403, a saját gépről minden megy.
 """
 
 from __future__ import annotations

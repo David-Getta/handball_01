@@ -511,6 +511,59 @@ class _MatchStore(dict):
             raise KeyError(key)
 
 
+# HÁLÓZATI ŐR: a más gépről (nem a saját gépről) jövő kérés ezeket érheti
+# el, ha a motor a hálózat felé is nyitva van — a közös nézés követő-útja:
+# a rövid link, a 3D oldal, a közös nézés állapota (minden metódus: a
+# vezető VR-ből is vezethet), a videó-kockák, a jegyzetek olvasása (a 3D
+# oldal mutatja őket) és a névlista (a követő "Ki vagy?"-a).
+HALOZATI_ENGEDETT = (
+    ("GET", r"^/kovet$"),
+    ("GET", r"^/matches/[^/]+/view3d$"),
+    ("GET", r"^/matches/[^/]+/frame$"),
+    ("GET", r"^/matches/[^/]+/notes$"),
+    ("GET", r"^/library/players$"),
+    (None, r"^/matches/[^/]+/shared3d$"),
+)
+
+
+def _halozati_or_telepit(app) -> None:
+    """A hálózati őr: ha a HANDBALL_HOST nem a saját gép (a több headsetes
+    közös nézés klub-hálózati útja — docs/3D_PALYA.md), a más gépről jövő
+    kérés csak a HALOZATI_ENGEDETT utakat érheti el, a többi 403 (a
+    meccsek, az elemzések, az írás és a törlés a hálózatról zárva). A
+    saját gépről (loopback) minden megy, mint eddig; alapból (127.0.0.1)
+    az őr nincs is telepítve."""
+    import ipaddress
+    import os
+    import re
+
+    host = os.environ.get("HANDBALL_HOST", "127.0.0.1").strip()
+    if host in ("", "127.0.0.1", "localhost", "::1"):
+        return
+    engedett = [(m, re.compile(r)) for m, r in HALOZATI_ENGEDETT]
+
+    def _sajat_gep(cim: str) -> bool:
+        try:
+            return ipaddress.ip_address(cim).is_loopback
+        except ValueError:
+            return cim == "localhost"
+
+    from fastapi.responses import JSONResponse
+
+    @app.middleware("http")
+    async def _halozati_or(request, call_next):
+        cim = request.client.host if request.client else ""
+        if not _sajat_gep(cim):
+            ut = request.url.path
+            if not any((m is None or request.method == m) and r.match(ut)
+                       for m, r in engedett):
+                return JSONResponse(status_code=403, content={
+                    "detail": "a hálózatról csak a közös nézés érhető el "
+                              "(a 3D oldal és a /kovet) — a többi a motor "
+                              "gépéről"})
+        return await call_next(request)
+
+
 def create_app():
     """Létrehozza és visszaadja a FastAPI alkalmazást.
 
@@ -524,6 +577,7 @@ def create_app():
     from fastapi import FastAPI, HTTPException, Request
 
     app = FastAPI(title="Handball Analysis API", version="0.1.0")
+    _halozati_or_telepit(app)
 
     # Meccs-tár: memóriában (match_id -> Match), lemezre TÜKRÖZVE, hogy a szerver
     # újraindítása ne veszítse el a feldolgozott meccseket (data/matches/{id}.json).

@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.168 óta)
 
+- **Hálózati őr a klub-hálózati közös nézéshez** (biztonság, motor): ha a
+  motor a hálózat felé is nyitva van (HANDBALL_HOST=0.0.0.0 — a több
+  headsetes közös nézés útja), a más gépekről CSAK a közös nézés
+  követő-útja érhető el (a /kovet, a 3D oldal, a közös nézés állapota, a
+  videó-kockák, a jegyzetek olvasása, a névlista); a meccsek listája, az
+  elemzések, az írás, a feltöltés és a törlés 403. Eddig a hálózatról
+  minden végpont belépés nélkül elérhető volt. A motor gépéről minden
+  megy, mint eddig; alapból (csak a saját gép) az őr nincs is bekapcsolva.
+
 - **"Ki vagy?" — névválasztó a közös nézés követőjének; a kvíz-mérleg a
   kereten** (böngésző/VR + motor + app): a követő a keretben felvitt
   nevek közül választ (a headset billentyűzetén nem kell gépelni; a

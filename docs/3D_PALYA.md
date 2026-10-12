@@ -353,9 +353,15 @@ VR-mód (WebXR) csak biztonságos címen indul — a `localhost` ilyen. Két
    ezt a címet biztonságosnak kell jelölni (Chromium-alapú böngészőben:
    `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, a
    laptop `http://<cím>:8000` címével), különben a VR-mód nem indul.
-   **Figyelem:** a motor végpontjai így a hálózatról belépés nélkül
-   elérhetők (meccsek, jegyzetek, törlés is) — csak megbízható, zárt
-   hálózaton nyisd meg, és az edzés után indítsd újra a szokásos módon.
+   **Hálózati őr:** ilyenkor a más gépekről (a headsetekről) CSAK a
+   közös nézés követő-útja érhető el — a `/kovet`, a meccs 3D oldala, a
+   közös nézés állapota, a videó-kockák, a jegyzetek olvasása és a
+   névlista; a meccsek listája, az elemzések, az írás, a feltöltés és a
+   törlés 403-at kap (a motor gépéről minden megy, mint eddig).
+   **Figyelem:** ami nyitva marad, az belépés nélkül elérhető — a hálózat
+   bármely gépe megnyithatja a meccs 3D oldalát és videó-kockáit, ha
+   tudja a meccs azonosítóját. Csak megbízható, zárt hálózaton nyisd meg,
+   és az edzés után indítsd újra a szokásos módon.
 
 ## Jelenet megosztása
 
