@@ -3277,8 +3277,11 @@ def create_app():
         vezető kamerája [x, y, z, yaw] (jelenlét — court3d.shared3d_hely)}.
         Válasz: {"rev": sorszám, "followers": a SHARED3D_FOLLOWER_S-en
         belül kérdező követők száma, "csapat": a helyüket adó jelenlévő
-        követők [{"sz": a csatlakozás sorszáma, "nev", "hely"}]}. 400:
-        rossz alakú érték; 404: nincs ilyen meccs."""
+        követők [{"sz": a csatlakozás sorszáma, "nev", "hely"}]}. KVÍZ:
+        "kviz": {"n": a kör azonosítója, "mutat": a válaszok a csapatnak
+        is látszanak} (null: nincs kvíz) — a válasz "csapat" soraiban az
+        aktuális körre adott válasz ("valasz": [x, y]). 400: rossz alakú
+        érték; 404: nincs ilyen meccs."""
         import math as _math
         import re as _re
         import time as _time
@@ -3341,6 +3344,17 @@ def create_app():
                    "z": round(_sz(nz_, za, zf), 2),
                    "yaw": round(nyaw, 4),
                    "pitch": round(_sz(npitch, -1.6, 1.6), 4), "n": nn}
+        # A kvíz köre (a régi kör válaszai nem látszanak).
+        kviz = None
+        if body.get("kviz") is not None:
+            try:
+                kn = float(body["kviz"]["n"])
+                kmutat = bool(body["kviz"].get("mutat"))
+            except (TypeError, ValueError, KeyError, AttributeError):
+                raise HTTPException(status_code=400, detail="rossz kvíz")
+            if not _math.isfinite(kn):
+                raise HTTPException(status_code=400, detail="rossz kvíz")
+            kviz = {"n": kn, "mutat": kmutat}
         # A vezető jelenléte (a követők arany fejként látják).
         vhely = None
         if body.get("hely") is not None:
@@ -3375,26 +3389,37 @@ def create_app():
                   "nezopont": nez,
                   "nezopont_ido": nez_ido if nez else None,
                   "vezeto_hely": vhely, "jelen": jelen,
-                  "jelen_sz": regi.get("jelen_sz", 0)}
+                  "jelen_sz": regi.get("jelen_sz", 0), "kviz": kviz}
             _kozos[match_id] = uj
-            csapat = _kz_csapat(uj, most)
+            csapat = _kz_csapat(uj, most, valaszok=True)
         return {"rev": rev, "followers": len(kovetok), "csapat": csapat}
 
-    def _kz_csapat(a: dict, most: float, kihagy: str = "") -> list:
+    def _kz_csapat(a: dict, most: float, kihagy: str = "",
+                   valaszok: bool = False) -> list:
         """A közös nézés jelenlévő (SHARED3D_FOLLOWER_S-en belül kérdező),
         helyét adó követői a csatlakozás sorrendjében (a `kihagy` követő —
-        a kérdező maga — nélkül). A _kozos_zar alatt hívandó."""
+        a kérdező maga — nélkül). `valaszok`: a sorokban az aktuális
+        kvíz-körre adott válasz is ("valasz": [x, y]). A _kozos_zar alatt
+        hívandó."""
         from ..pipeline import court3d as _c3
         kov = a.get("kovetok") or {}
-        return [{"sz": b["sz"], "nev": b.get("nev") or "", "hely": b["hely"]}
-                for k, b in sorted((a.get("jelen") or {}).items(),
-                                   key=lambda kb: kb[1]["sz"])
-                if k != kihagy and b.get("hely") is not None and k in kov
-                and most - kov[k] <= _c3.SHARED3D_FOLLOWER_S]
+        kviz = a.get("kviz") if valaszok else None
+        ki = []
+        for k, b in sorted((a.get("jelen") or {}).items(),
+                           key=lambda kb: kb[1]["sz"]):
+            if (k == kihagy or b.get("hely") is None or k not in kov
+                    or most - kov[k] > _c3.SHARED3D_FOLLOWER_S):
+                continue
+            sor = {"sz": b["sz"], "nev": b.get("nev") or "", "hely": b["hely"]}
+            v = b.get("valasz")
+            if kviz and v and v[2] == kviz["n"]:
+                sor["valasz"] = v[:2]
+            ki.append(sor)
+        return ki
 
     @app.get("/matches/{match_id}/shared3d")
     def shared3d_get(match_id: str, kid: str = "", hely: str = "",
-                     nev: str = ""):
+                     nev: str = "", valasz: str = ""):
         """A követő kérdése: a vezető utolsó állapota és a KORA (mp) — a
         követő ebből becsli a vezető mostani idejét, az órák eltérése
         nélkül. "active": false, ha nincs vezető, vagy SHARED3D_STALE_S óta
@@ -3402,7 +3427,9 @@ def create_app():
         32 jel) — a vezető ebből tudja, hányan követik. JELENLÉT: `hely` a
         követő kamerája ("x,y,z,yaw" — a rossz alakú nem számít), `nev` a
         neve (court3d.shared3d_nev); a válasz "csapat"-a a TÖBBI jelenlévő
-        követő, "vezeto_hely"-e a vezetőé."""
+        követő, "vezeto_hely"-e a vezetőé. KVÍZ: `valasz` a követő válasza
+        ("x,y,n" — court3d.shared3d_valasz); a többiek válasza csak a
+        vezető felfedése ("kviz": {"mutat": true}) után van a sorokban."""
         import time as _time
 
         from ..pipeline import court3d as _c3
@@ -3421,8 +3448,13 @@ def create_app():
                         a["jelen_sz"] = a.get("jelen_sz", 0) + 1
                         b = jelen[kid] = {"sz": a["jelen_sz"]}
                     b["hely"] = _c3.shared3d_hely(hely) if hely else None
-                    b["nev"] = _c3.shared3d_nev(nev)
-                csapat = _kz_csapat(a, most, kihagy=kid)
+                    # (név nélküli kérdés a nevet nem törli)
+                    if nev or "nev" not in b:
+                        b["nev"] = _c3.shared3d_nev(nev)
+                    b["valasz"] = _c3.shared3d_valasz(valasz) if valasz else None
+                csapat = _kz_csapat(
+                    a, most, kihagy=kid,
+                    valaszok=bool((a.get("kviz") or {}).get("mutat")))
             a = dict(a or {})
         if not a:
             return {"active": False}

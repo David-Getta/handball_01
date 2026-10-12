@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.167 óta)
 
+- **Közös nézés: kvíz a csapatnak** (új, böngésző/VR + motor): a vezető
+  "❓ Kvíz" gombja megállítja a jelenetet, és kérdez ("hova passzolnál?",
+  "hol a helyed?"); a játékosok a padlóra mutatnak (kattintás, VR-ben a
+  ravasz a kontroller sugarával). Az edző névvel látja a válaszokat és
+  hogy hányan válaszoltak; a második gombnyomásra a csapat is látja (a
+  megbeszéléshez), a harmadikra vége. A motor a csapatnak csak a
+  felfedés után adja a többiek válaszát, és csak az aktuális körét.
+
 - **Közös nézés: látjátok egymást** (új, böngésző/VR + motor): a közös
   nézésben mindenki fejként jelenik meg a csarnokban, ott, ahonnan néz —
   orral a nézés irányába, gyűrűvel a padlón, fölötte a név (az edzőé

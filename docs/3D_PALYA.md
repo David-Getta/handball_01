@@ -291,7 +291,21 @@ csatlakozás sorszáma látszik, pl. #3). Az edző így látja, ki áll rossz
 helyen, ki néz másfelé; a saját fejedhez 1,2 m-nél közelebbi nem látszik
 (az "Ide mindenki" után mindenki egy helyen áll). Az app 3D füléről
 vezetve ugyanez: a csapat a 3D képen, a követők pedig az edzőt az app
-kamerájának helyén látják. A motor
+kamerájának helyén látják.
+
+A **❓ Kvíz** a megbeszélés kérdése a valódi jeleneten: a vezető
+megnyomja, a jelenet megáll, és kérdez — "hova passzolnál?", "hol a
+helyed, amikor a beálló kilép?". A játékosok a padlóra mutatnak
+(kattintás; VR-ben a ravasz, a kontroller sugarával — a felfedésig
+módosítható); a válaszuk náluk rózsaszín jel "Te" felirattal. Az edző a
+válaszokat azonnal látja, névvel (kék jel a padlón, rajta a név), és az
+állapot-sorban, hányan válaszoltak. A második gombnyomás ("👁 Mutasd a
+csapatnak") mindenkinek megmutatja a válaszokat — itt jön a
+megbeszélés, mellé a Döntések réteg jobb opciója —, a harmadik ("✖ Kvíz
+vége") leveszi őket. A motor
+a csapatnak csak a felfedés után adja a többiek válaszát (nem lehet
+puskázni), és csak az aktuális kört (a régi kör válasza nem látszik). A
+motor
 `/matches/{id}/shared3d` végpontja (PUT/GET/DELETE) memóriában tartja az
 állapotot. Az app 3D füle is vezethet ("📡 Vezetem" a panelen): az edző
 a laptopon teker, megállít, rajzol, a headsetek követik.

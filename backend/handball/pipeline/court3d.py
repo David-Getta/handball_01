@@ -669,6 +669,25 @@ def shared3d_hely(ertek):
     return hely + [round(math.atan2(math.sin(v[3]), math.cos(v[3])), 3)]
 
 
+def shared3d_valasz(s):
+    """A közös nézés KVÍZ-válasza: [x, y, n] — a padló pontja pálya-
+    méterben (a pálya ±5 m-es sávjába szorítva, cm-re kerekítve) és a
+    kvíz-kör azonosítója — egy "x,y,n" szövegből. None, ha rossz alakú
+    (nem három elem, nem szám, nem véges)."""
+    import math
+    elemek = str(s or "").split(",")
+    if len(elemek) != 3:
+        return None
+    try:
+        x, y, n = (float(e) for e in elemek)
+    except ValueError:
+        return None
+    if not all(math.isfinite(v) for v in (x, y, n)):
+        return None
+    return [round(min(45.0, max(-5.0, x)), 2),
+            round(min(25.0, max(-5.0, y)), 2), n]
+
+
 def shared3d_nev(s) -> str:
     """A követő neve a többiek headsetjén: a látható jelek (vezérlőjel
     nélkül), két szélén szóköz nélkül, legfeljebb SHARED3D_NAME_MAX; üres,

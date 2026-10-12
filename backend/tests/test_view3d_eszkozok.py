@@ -2230,6 +2230,77 @@ def test_a_kozos_nezes_jelenlete(tmp_path, monkeypatch):
     assert 'json["csapat"]' in api
 
 
+def test_a_kozos_nezes_kvize(tmp_path, monkeypatch):
+    """Kvíz: a vezető köre (n) mellett a követők válasza a vezetőnek
+    mindig, a csapatnak csak a felfedés után látszik; a régi kör válasza
+    nem; a rossz alakú válasz nem számít, a rossz kör 400; a kvíz vége
+    után nincs válasz. Az oldal: gomb, kattintás, VR-ravasz, küldés."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline import court3d
+    from handball.pipeline.view3d_html import view3d_html
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    m = _meccs()
+    app = create_app()
+    app.state.put_match(m)
+    c = TestClient(app)
+    url = f"/matches/{m.meta.match_id}/shared3d"
+    c.put(url, json={"t": 1})
+    for kid, nev, h in (("peti", "Peti", "1,1.6,1,0"), ("anna", "Anna", "2,1.6,2,0")):
+        c.get(url, params={"kid": kid, "hely": h, "nev": nev})
+    # Kvíz nélkül a válasz sehol.
+    c.get(url, params={"kid": "peti", "hely": "1,1.6,1,0", "valasz": "30,12,7"})
+    assert all("valasz" not in e for e in c.put(url, json={"t": 1}).json()["csapat"])
+    kor = {"n": 7, "mutat": False}
+    c.put(url, json={"t": 1, "kviz": kor})
+    c.get(url, params={"kid": "peti", "hely": "1,1.6,1,0", "valasz": "30,12,7"})
+    # A régi kör (5) válasza és a rossz alakú nem számít.
+    c.get(url, params={"kid": "anna", "hely": "2,1.6,2,0", "valasz": "31,9,5"})
+    a = c.get(url, params={"kid": "anna", "hely": "2,1.6,2,0",
+                           "valasz": "x,9,7"}).json()
+    assert a["kviz"] == {"n": 7.0, "mutat": False}
+    # A csapat a felfedés előtt nem látja a többiek válaszát.
+    assert all("valasz" not in e for e in a["csapat"])
+    r = c.put(url, json={"t": 1, "kviz": kor}).json()
+    assert [(e["nev"], e.get("valasz")) for e in r["csapat"]] == [
+        ("Peti", [30.0, 12.0]), ("Anna", None)]
+    # Anna válaszol (a pályán túli a sávba szorul); felfedés: a csapat is.
+    c.get(url, params={"kid": "anna", "hely": "2,1.6,2,0", "valasz": "60,-9,7"})
+    c.put(url, json={"t": 1, "kviz": {"n": 7, "mutat": True}})
+    a = c.get(url, params={"kid": "anna", "hely": "2,1.6,2,0",
+                           "valasz": "45,-5,7"}).json()
+    assert [(e["nev"], e.get("valasz")) for e in a["csapat"]] == [
+        ("Peti", [30.0, 12.0])]
+    r = c.put(url, json={"t": 1, "kviz": {"n": 7, "mutat": True}}).json()
+    assert [e.get("valasz") for e in r["csapat"]] == [[30.0, 12.0], [45.0, -5.0]]
+    # Új kör: a régi válaszok nem látszanak; vége: semmi.
+    r = c.put(url, json={"t": 1, "kviz": {"n": 8}}).json()
+    assert all("valasz" not in e for e in r["csapat"])
+    r = c.put(url, json={"t": 1}).json()
+    assert all("valasz" not in e for e in r["csapat"])
+    assert c.get(url, params={"kid": "peti"}).json()["kviz"] is None
+    for rossz in ({"n": "x"}, {"mutat": True}, [1], "x"):
+        assert c.put(url, json={"t": 1, "kviz": rossz}).status_code == 400, rossz
+    assert c.put(url, content=b'{"t": 1, "kviz": {"n": 1e999}}',
+                 headers={"Content-Type": "application/json"}).status_code == 400
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="kvizGomb"', 'kvizGomb.disabled = kozosMod !== "vezet";',
+                 "kviz: kzKviz, hely: sajatHely(),",
+                 '"&valasz=" + [kzValasz.x, kzValasz.y, kzValasz.n].join(",")',
+                 "if (kvizValaszolhat()){ valaszKattintas(e.clientX, e.clientY); return; }",
+                 "if (kvizValaszolhat()) vrValasz(k - 1);",
+                 "valaszokAllit(kzKviz ? kzValaszLista(a.csapat) : []);",
+                 "kzInfo(kvizSzoveg());",
+                 "if (kozosMod !== \"kovet\" || !kzKvizKor || kzKvizKor.mutat) return;",
+                 "megy = false; lejatszasGomb.textContent",
+                 "kvíz közben a ravasz a válaszod",
+                 "valaszJelFrissit(); felirat(ido);"):
+        assert kell in oldal, kell
+
+
 def test_a_jelenlet_helye_es_neve():
     """court3d.shared3d_hely: szöveg vagy lista, dobozba szorítva, a szög
     a (−π, π]-be; rossz alaknál None. shared3d_nev: vezérlőjel nélkül,
@@ -2247,6 +2318,11 @@ def test_a_jelenlet_helye_es_neve():
                   "1,2,3,nan", [1, 2, 3, float("inf")], {"x": 1}):
         assert shared3d_hely(rossz) is None, rossz
     assert shared3d_nev(" Kiss\nPéter ") == "KissPéter"
+    from handball.pipeline.court3d import shared3d_valasz
+    assert shared3d_valasz("12.345,7,99") == [12.35, 7.0, 99.0]
+    assert shared3d_valasz("99,-99,1") == [45.0, -5.0, 1.0]
+    for rossz in (None, "", "1,2", "1,2,3,4", "a,2,3", "1,2,nan", "1,inf,3"):
+        assert shared3d_valasz(rossz) is None, rossz
     assert shared3d_nev(None) == ""
     assert len(shared3d_nev("é" * 40)) == SHARED3D_NAME_MAX
 
