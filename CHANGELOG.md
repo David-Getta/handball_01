@@ -3,6 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.167 óta)
+
+- **Közös nézés: látjátok egymást** (új, böngésző/VR + motor): a közös
+  nézésben mindenki fejként jelenik meg a csarnokban, ott, ahonnan néz —
+  orral a nézés irányába, gyűrűvel a padlón, fölötte a név (az edzőé
+  arany). A név a csapat linkjén adható meg (`/kovet?nev=Peti`), név
+  nélkül a csatlakozás sorszáma látszik. Az edző így látja, ki áll rossz
+  helyen és ki néz másfelé. A motor a követő kérdésével a helyét és a
+  nevét is fogadja (a csarnok dobozába szorítva), a vezetőnek a csapatot,
+  a követőnek a többieket és az edzőt adja.
+
 ## v0.1.167 — kiadva (2026-10-12)
 
 > Kiadás-jegyzet: VR-javítás. A headsetben a néző eddig ~1,6 m-rel a

@@ -3273,10 +3273,12 @@ def create_app():
     @app.put("/matches/{match_id}/shared3d")
     def shared3d_put(match_id: str, body: dict):
         """A vezető állapota: {"t": játékidő-mp, "playing": bool, "speed":
-        0,25…8, "rajz": a 3D rajz kódja ("x1,y1,x2,y2,szín;…")}. Válasz:
-        {"rev": sorszám, "followers": a SHARED3D_FOLLOWER_S-en belül
-        kérdező követők száma}. 400: rossz alakú érték; 404: nincs ilyen
-        meccs."""
+        0,25…8, "rajz": a 3D rajz kódja ("x1,y1,x2,y2,szín;…"), "hely": a
+        vezető kamerája [x, y, z, yaw] (jelenlét — court3d.shared3d_hely)}.
+        Válasz: {"rev": sorszám, "followers": a SHARED3D_FOLLOWER_S-en
+        belül kérdező követők száma, "csapat": a helyüket adó jelenlévő
+        követők [{"sz": a csatlakozás sorszáma, "nev", "hely"}]}. 400:
+        rossz alakú érték; 404: nincs ilyen meccs."""
         import math as _math
         import re as _re
         import time as _time
@@ -3333,11 +3335,18 @@ def create_app():
             # A csarnokon túlnyúló nézőpont (messzire húzott keringés,
             # magasra repült kamera) a csarnok dobozába szorítva — mint a
             # mutatónál.
-            nez = {"x": round(_sz(nx_, -60.0, 100.0), 2),
-                   "y": round(_sz(ny_, 0.2, 60.0), 2),
-                   "z": round(_sz(nz_, -60.0, 80.0), 2),
+            (xa, xf), (ya, yf), (za, zf) = _c3.SHARED3D_HALL_BOX
+            nez = {"x": round(_sz(nx_, xa, xf), 2),
+                   "y": round(_sz(ny_, ya, yf), 2),
+                   "z": round(_sz(nz_, za, zf), 2),
                    "yaw": round(nyaw, 4),
                    "pitch": round(_sz(npitch, -1.6, 1.6), 4), "n": nn}
+        # A vezető jelenléte (a követők arany fejként látják).
+        vhely = None
+        if body.get("hely") is not None:
+            vhely = _c3.shared3d_hely(body["hely"])
+            if vhely is None:
+                raise HTTPException(status_code=400, detail="rossz hely")
         with _kozos_zar:
             regi = _kozos.get(match_id) or {}
             rev = regi.get("rev", 0) + 1
@@ -3353,35 +3362,74 @@ def create_app():
             # A jelenlévő követők (a régiek kiesnek) — átvisszük.
             kovetok = {k: v for k, v in (regi.get("kovetok") or {}).items()
                        if most - v <= _c3.SHARED3D_FOLLOWER_S}
-            _kozos[match_id] = {"t": max(0.0, t),
-                                "playing": bool(body.get("playing")),
-                                "speed": speed, "rajz": rajz, "rev": rev,
-                                "ido": most, "kovetok": kovetok,
-                                "mutato": mut,
-                                "mutato_ido": mut_ido if mut else None,
-                                "nezopont": nez,
-                                "nezopont_ido": nez_ido if nez else None}
-        return {"rev": rev, "followers": len(kovetok)}
+            # A jelenlét: csak a jelenlévő követőké marad, a sorszámláló
+            # megy tovább (a visszatérő új sorszámot kap).
+            jelen = {k: v for k, v in (regi.get("jelen") or {}).items()
+                     if k in kovetok}
+            uj = {"t": max(0.0, t),
+                  "playing": bool(body.get("playing")),
+                  "speed": speed, "rajz": rajz, "rev": rev,
+                  "ido": most, "kovetok": kovetok,
+                  "mutato": mut,
+                  "mutato_ido": mut_ido if mut else None,
+                  "nezopont": nez,
+                  "nezopont_ido": nez_ido if nez else None,
+                  "vezeto_hely": vhely, "jelen": jelen,
+                  "jelen_sz": regi.get("jelen_sz", 0)}
+            _kozos[match_id] = uj
+            csapat = _kz_csapat(uj, most)
+        return {"rev": rev, "followers": len(kovetok), "csapat": csapat}
+
+    def _kz_csapat(a: dict, most: float, kihagy: str = "") -> list:
+        """A közös nézés jelenlévő (SHARED3D_FOLLOWER_S-en belül kérdező),
+        helyét adó követői a csatlakozás sorrendjében (a `kihagy` követő —
+        a kérdező maga — nélkül). A _kozos_zar alatt hívandó."""
+        from ..pipeline import court3d as _c3
+        kov = a.get("kovetok") or {}
+        return [{"sz": b["sz"], "nev": b.get("nev") or "", "hely": b["hely"]}
+                for k, b in sorted((a.get("jelen") or {}).items(),
+                                   key=lambda kb: kb[1]["sz"])
+                if k != kihagy and b.get("hely") is not None and k in kov
+                and most - kov[k] <= _c3.SHARED3D_FOLLOWER_S]
 
     @app.get("/matches/{match_id}/shared3d")
-    def shared3d_get(match_id: str, kid: str = ""):
+    def shared3d_get(match_id: str, kid: str = "", hely: str = "",
+                     nev: str = ""):
         """A követő kérdése: a vezető utolsó állapota és a KORA (mp) — a
         követő ebből becsli a vezető mostani idejét, az órák eltérése
         nélkül. "active": false, ha nincs vezető, vagy SHARED3D_STALE_S óta
         hallgat. `kid`: a követő véletlen azonosítója (betű/szám, legfeljebb
-        32 jel) — a vezető ebből tudja, hányan követik."""
+        32 jel) — a vezető ebből tudja, hányan követik. JELENLÉT: `hely` a
+        követő kamerája ("x,y,z,yaw" — a rossz alakú nem számít), `nev` a
+        neve (court3d.shared3d_nev); a válasz "csapat"-a a TÖBBI jelenlévő
+        követő, "vezeto_hely"-e a vezetőé."""
         import time as _time
 
         from ..pipeline import court3d as _c3
         with _kozos_zar:
             a = _kozos.get(match_id)
-            if (a is not None and kid and len(kid) <= 32 and kid.isalnum()
-                    and len(a.setdefault("kovetok", {})) < 500):
-                a["kovetok"][kid] = _c3.shared3d_ora()
+            csapat = []
+            if a is not None:
+                most = _c3.shared3d_ora()
+                if (kid and len(kid) <= 32 and kid.isalnum()
+                        and (kid in a.setdefault("kovetok", {})
+                             or len(a["kovetok"]) < 500)):
+                    a["kovetok"][kid] = most
+                    jelen = a.setdefault("jelen", {})
+                    b = jelen.get(kid)
+                    if b is None:
+                        a["jelen_sz"] = a.get("jelen_sz", 0) + 1
+                        b = jelen[kid] = {"sz": a["jelen_sz"]}
+                    b["hely"] = _c3.shared3d_hely(hely) if hely else None
+                    b["nev"] = _c3.shared3d_nev(nev)
+                csapat = _kz_csapat(a, most, kihagy=kid)
             a = dict(a or {})
         if not a:
             return {"active": False}
         a.pop("kovetok", None)
+        a.pop("jelen", None)
+        a.pop("jelen_sz", None)
+        a["csapat"] = csapat
         for kulcs_ in ("mutato", "nezopont"):
             ido_ = a.pop(kulcs_ + "_ido", None)
             if a.get(kulcs_) and ido_ is not None:
@@ -3399,13 +3447,14 @@ def create_app():
         return {"ok": True}
 
     @app.get("/kovet")
-    def shared3d_rovid():
+    def shared3d_rovid(nev: str = ""):
         """A rövid csapat-link: a MOST élő közös nézés követő-oldalára
         irányít (a legutóbb küldő vezetőhöz — SHARED3D_STALE_S-en belül).
         A headset billentyűzetén a "localhost:8000/kovet" begépelhető, a
         hosszú meccs-azonosítós cím nem. Vezető nélkül egy 3 mp-enként
         frissülő "várunk az edzőre" lap: amint az edző vezet, magától
-        továbblép."""
+        továbblép. `nev` (/kovet?nev=Peti): a követő neve — a többiek a
+        feje fölött látják."""
         from urllib.parse import quote
 
         from fastapi.responses import HTMLResponse, RedirectResponse
@@ -3417,8 +3466,10 @@ def create_app():
                     if most - a["ido"] <= _c3.SHARED3D_STALE_S]
         if elok:
             mid = max(elok)[1]
+            nev_ = _c3.shared3d_nev(nev)
             return RedirectResponse(
-                url=f"/matches/{quote(mid, safe='')}/view3d?kovet=1",
+                url=(f"/matches/{quote(mid, safe='')}/view3d?kovet=1"
+                     + (f"&nev={quote(nev_, safe='')}" if nev_ else "")),
                 status_code=307)
         return HTMLResponse(
             content=('<!DOCTYPE html><html lang="hu"><head>'

@@ -283,7 +283,13 @@ gyűrű jelzi a pontot — "nézzétek ide"; a később csatlakozónál a régi
 mutató nem villan fel (a motor a mutató korát is adja). A **📍 Ide mindenki** a
 vezető mostani nézőpontját (hely és irány) küldi: a követők kamerája oda
 ugrik (VR-ben a rig — a fej iránya a sajátja marad) — "álljatok mind a
-kapus helyére". A motor
+kapus helyére". A közös nézésben **látjátok egymást**: mindenki
+egy fejként jelenik meg a csarnokban, ott, ahonnan néz — orral a nézés
+irányába, gyűrűvel a padlón, fölötte a név (az edzőé arany). A név a
+csapat linkjén adható meg: `localhost:8000/kovet?nev=Peti` (név nélkül a
+csatlakozás sorszáma látszik, pl. #3). Az edző így látja, ki áll rossz
+helyen, ki néz másfelé; a saját fejedhez 1,2 m-nél közelebbi nem látszik
+(az "Ide mindenki" után mindenki egy helyen áll). A motor
 `/matches/{id}/shared3d` végpontja (PUT/GET/DELETE) memóriában tartja az
 állapotot. Az app 3D füle is vezethet ("📡 Vezetem" a panelen): az edző
 a laptopon teker, megállít, rajzol, a headsetek követik.

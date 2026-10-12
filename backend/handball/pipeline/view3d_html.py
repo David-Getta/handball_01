@@ -909,7 +909,7 @@ Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmad
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
-Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi; vezetőként Shift+katt a padlóra: mutató a csapatnak, 📍 Ide mindenki: a követők a te nézőpontodba ugranak (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
+Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi; vezetőként Shift+katt a padlóra: mutató a csapatnak, 📍 Ide mindenki: a követők a te nézőpontodba ugranak; a csarnokban látjátok egymást (fej és orr a nézés irányába, az edzőé arany; név a /kovet?nev=Peti linkkel) (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
 Videó (K) — a valódi felvétel a 3D mellett, a lejátszással szinkronban: kép a képben és kivetítő a túlsó oldalvonal fölött (VR-ben is)<br>
 Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér pötty, ✕ törli), a vetítésben, a jelentésben és a Klipek jegyzet-csomagjában<br>
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
@@ -1904,7 +1904,7 @@ function linkEpit(){
   if (vetites) q.set("vetit", "1");
   if (rajzok.length) q.set("rajz", rajzKodol(rajzok));
   if (videoBe) q.set("video", "1");
-  if (kozosMod === "kovet") q.set("kovet", "1");
+  if (kozosMod === "kovet"){ q.set("kovet", "1"); if (KZ_NEV) q.set("nev", KZ_NEV); }
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -2594,7 +2594,120 @@ let kzUton = false, kzUtolso = 0, kzRajz = null;
 // A követő véletlen azonosítója (a vezető ebből látja, hányan követik), a
 // vezető oldalán a csapat linkje és a követők száma.
 const KZ_KID = Math.random().toString(36).slice(2, 12) || "k";
+// A követő neve (a csapat linkjén: /kovet?nev=Peti) — a többiek a feje
+// fölött látják; név nélkül a csatlakozás sorszáma (#3).
+const KZ_NEV = (URL_PARAM.get("nev") || "").trim().slice(0, __KZ_NEV_MAX__);
 let kzLink = "", kzVagolap = false, kzKovetok = null;
+// JELENLÉT: a saját kamera helye és iránya a csapatnak (three-tér; a yaw
+// a rig-forgatás szöge — a nézés iránya (−sin yaw, −cos yaw)). VR-ben a
+// fej valódi helye (a kamera világ-helye).
+const kzHelyV = new THREE.Vector3(), kzIranyV = new THREE.Vector3();
+function sajatHely(){
+  kamera.getWorldPosition(kzHelyV); kamera.getWorldDirection(kzIranyV);
+  const k = (v) => Math.round(v * 100) / 100;
+  return [k(kzHelyV.x), k(kzHelyV.y), k(kzHelyV.z),
+          Math.round(Math.atan2(-kzIranyV.x, -kzIranyV.z) * 1000) / 1000];
+}
+// A többiek a csarnokban: fej (az edzőé arany, a csapaté fehér), orr a
+// nézés irányába, gyűrű a padlón, fölötte a név (vagy a csatlakozás
+// sorszáma). A saját kamerához KZ_KOZEL m-nél közelebbi nem látszik ("Ide
+// mindenki" után mindenki egy helyen áll — nem a fejünkben ül). A hely a
+// kérdések közt simítva mozog.
+const KZ_KOZEL = __KZ_KOZEL__;
+const avatarok = new Map();  // kulcs ("e" a vezető, "k<sorszám>") → csoport
+const AV_FEJ = new THREE.SphereGeometry(0.16, 16, 12);
+const AV_ORR = new THREE.ConeGeometry(0.06, 0.2, 10);
+const AV_GYURU = new THREE.RingGeometry(0.22, 0.3, 24);
+const avAnyag = (szin, fenyl) => new THREE.MeshStandardMaterial({color: szin, emissive: fenyl});
+const AV_ANYAG = {e: avAnyag(0xffc83d, 0x4a3500), k: avAnyag(0xf2f5f8, 0x202830)};
+const avGyuruAnyag = (szin) => new THREE.MeshBasicMaterial({color: szin, transparent: true,
+  opacity: 0.6, side: THREE.DoubleSide, depthWrite: false});
+const AV_GYURU_ANYAG = {e: avGyuruAnyag(0xffc83d), k: avGyuruAnyag(0xf2f5f8)};
+function avatarCimke(szoveg, edzo){
+  const c = document.createElement("canvas"); c.width = 256; c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = edzo ? "rgba(120,90,0,0.85)" : "rgba(10,14,20,0.8)";
+  g.beginPath(); g.roundRect(2, 2, 252, 60, 16); g.fill();
+  g.fillStyle = "#ffffff"; g.font = "bold 32px sans-serif";
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(szoveg, 128, 34, 240);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), transparent: true}));
+  sp.scale.set(1.0, 0.25, 1);
+  return sp;
+}
+function avatarUj(cimke, edzo){
+  const f = edzo ? "e" : "k";
+  const cs = new THREE.Group();     // a padlón (x, 0, z)
+  const fejCs = new THREE.Group();  // a fej magasságában, a nézés irányába
+  fejCs.add(new THREE.Mesh(AV_FEJ, AV_ANYAG[f]));
+  // A kúp csúcsa a +y; −90°-kal a −z (a nézés iránya) felé fordul.
+  const orr = new THREE.Mesh(AV_ORR, AV_ANYAG[f]);
+  orr.rotation.x = -Math.PI / 2; orr.position.z = -0.2; fejCs.add(orr);
+  cs.add(fejCs);
+  const gyuru = new THREE.Mesh(AV_GYURU, AV_GYURU_ANYAG[f]);
+  gyuru.rotation.x = -Math.PI / 2; gyuru.position.y = 0.03; cs.add(gyuru);
+  const cimkeSp = avatarCimke(cimke, edzo); cs.add(cimkeSp);
+  cs.userData = {fejCs, cimkeSp, cimke, cel: null, uj: true};
+  szinpad.add(cs);
+  return cs;
+}
+function avatarTorol(kulcs){
+  const cs = avatarok.get(kulcs);
+  if (!cs) return;
+  szinpad.remove(cs);
+  cs.userData.cimkeSp.material.map.dispose(); cs.userData.cimkeSp.material.dispose();
+  avatarok.delete(kulcs);
+}
+// lista: [{kulcs, cimke, edzo, hely: [x, y, z, yaw]}] — az eltűntek törlődnek.
+function jelenletAllit(lista){
+  const latott = new Set();
+  for (const e of lista){
+    latott.add(e.kulcs);
+    let cs = avatarok.get(e.kulcs);
+    if (cs && cs.userData.cimke !== e.cimke){ avatarTorol(e.kulcs); cs = null; }
+    if (!cs){ cs = avatarUj(e.cimke, e.edzo); avatarok.set(e.kulcs, cs); }
+    cs.userData.cel = e.hely;
+  }
+  for (const k of [...avatarok.keys()]) if (!latott.has(k)) avatarTorol(k);
+}
+function kzLista(csapat, vezeto){
+  const l = (csapat || []).map(e => ({kulcs: "k" + e.sz, cimke: e.nev || ("#" + e.sz),
+                                     edzo: false, hely: e.hely}));
+  if (vezeto) l.push({kulcs: "e", cimke: "Edző", edzo: true, hely: vezeto});
+  return l;
+}
+function jelenletFrissit(dt){
+  if (!avatarok.size) return;
+  kamera.getWorldPosition(kzHelyV);
+  const a = Math.min(1, dt * 8);
+  for (const cs of avatarok.values()){
+    const u = cs.userData, c = u.cel;
+    if (!c) continue;
+    if (u.uj){
+      cs.position.set(c[0], 0, c[2]); u.fejCs.position.y = c[1]; u.fejCs.rotation.y = c[3];
+      u.uj = false;
+    } else {
+      cs.position.x += (c[0] - cs.position.x) * a;
+      cs.position.z += (c[2] - cs.position.z) * a;
+      u.fejCs.position.y += (c[1] - u.fejCs.position.y) * a;
+      const d = c[3] - u.fejCs.rotation.y;  // a rövidebb úton fordul
+      u.fejCs.rotation.y += Math.atan2(Math.sin(d), Math.cos(d)) * a;
+    }
+    const dx = cs.position.x - kzHelyV.x, dy = u.fejCs.position.y - kzHelyV.y,
+          dz = cs.position.z - kzHelyV.z;
+    const tav = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    cs.visible = tav > KZ_KOZEL;
+    // A név messziről is olvasható: 10 m-en túl a távolsággal nő.
+    const s = Math.max(1, tav / 10);
+    u.cimkeSp.scale.set(s, 0.25 * s, 1);
+    u.cimkeSp.position.y = u.fejCs.position.y + 0.3 + 0.12 * s;
+  }
+}
+window.jelenletProba = () => [...avatarok.entries()].map(([k, cs]) => ({
+  kulcs: k, cimke: cs.userData.cimke, latszik: cs.visible,
+  x: cs.position.x, y: cs.userData.fejCs.position.y, z: cs.position.z,
+  yaw: cs.userData.fejCs.rotation.y}));
+window.sajatHelyProba = () => sajatHely();
 function kzVezetoInfo(){
   kozosInfo.textContent = "📡 vezetsz" + (kzKovetok == null ? "" : " · " + kzKovetok + " követő")
     + " — a csapat linkje: " + kzLink + (kzVagolap ? " (vágólapon)" : "");
@@ -2703,6 +2816,7 @@ function kozosAllit(m){
   kovetGomb.classList.toggle("be", kozosMod === "kovet");
   // Új vezetés: a régi mutató nem megy újra a csapatnak.
   kzRajz = null; kzUtolso = 0; kzMutato = null; kzNezopont = null;
+  jelenletAllit([]);
   ideGomb.disabled = kozosMod !== "vezet";
   if (kozosMod === "vezet"){
     // A rövid csapat-link (a motor /kovet címe az élő közös nézésre
@@ -2724,9 +2838,10 @@ function kozosFrissit(){
   kzUtolso = most; kzUton = true;
   if (kozosMod === "vezet"){
     fetch(kzCim(), {method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok), mutato: kzMutato, nezopont: kzNezopont})})
+      body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok), hely: sajatHely(), mutato: kzMutato, nezopont: kzNezopont})})
       .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
-      .then(a => { if (kozosMod === "vezet"){ kzKovetok = a.followers; kzVezetoInfo(); } })
+      .then(a => { if (kozosMod === "vezet"){ kzKovetok = a.followers; kzVezetoInfo();
+                                            jelenletAllit(kzLista(a.csapat, null)); } })
       // Hibánál a mutató és a nézőpont nem megy újra (ha az okozta, a
       // következő küldés már átmegy).
       .catch(() => { kzMutato = null; kzNezopont = null;
@@ -2734,9 +2849,11 @@ function kozosFrissit(){
       .finally(() => { kzUton = false; });
     return;
   }
-  fetch(kzCim() + "?kid=" + KZ_KID, {cache: "no-store"}).then(r => r.json()).then(a => {
+  fetch(kzCim() + "?kid=" + KZ_KID + "&hely=" + sajatHely().join(",")
+        + (KZ_NEV ? "&nev=" + encodeURIComponent(KZ_NEV) : ""), {cache: "no-store"}).then(r => r.json()).then(a => {
     if (kozosMod !== "kovet") return;
-    if (!a.active){ kzInfo("👥 nincs vezető — az edző nem vezet (vagy bezárta)"); return; }
+    if (!a.active){ jelenletAllit([]); kzInfo("👥 nincs vezető — az edző nem vezet (vagy bezárta)"); return; }
+    jelenletAllit(kzLista(a.csapat, a.vezeto_hely));
     if (!(kozosInfo.textContent === KZ_IDE && performance.now() - kzInfoValtas < KZ_VR_MS))
       kzInfo(KZ_KOVETED);
     const cel = Math.max(0, Math.min(veg, a.t + (a.playing ? a.kor * a.speed : 0)));
@@ -3404,7 +3521,7 @@ fest.setAnimationLoop(() => {
     vetitesFrissit(t0, ido);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); kozosFrissit(); mutatoFrissit(); felirat(ido); vrFeliratFrissit();
+  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); kozosFrissit(); mutatoFrissit(); jelenletFrissit(dt); felirat(ido); vrFeliratFrissit();
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);
@@ -3413,6 +3530,7 @@ fest.setAnimationLoop(() => {
 """
     from .court3d import (PASS_LANE_GOOD, PASS_LANE_RISKY,
                           PASS_LANE_WIDTH_M, SCENE_REEL_TAIL_S,
+                          SHARED3D_NAME_MAX, SHARED3D_NEAR_M,
                           SHARED3D_POINTER_S, SHARED3D_POLL_S,
                           SHARED3D_SEND_S, SHARED3D_TOLERANCE_S)
     from .defense import WALL_GAP_DEPTH_M, WALL_GAP_M, WALL_GAP_MIN_DEFENDERS
@@ -3428,6 +3546,8 @@ fest.setAnimationLoop(() => {
                  .replace("__KZ_KERD__", repr(float(SHARED3D_POLL_S)))
                  .replace("__KZ_TURES__", repr(float(SHARED3D_TOLERANCE_S)))
                  .replace("__KZ_MUTATO__", repr(float(SHARED3D_POINTER_S)))
+                 .replace("__KZ_NEV_MAX__", str(int(SHARED3D_NAME_MAX)))
+                 .replace("__KZ_KOZEL__", repr(float(SHARED3D_NEAR_M)))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
                           + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
                           + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS

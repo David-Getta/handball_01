@@ -633,6 +633,48 @@ SHARED3D_FOLLOWER_S = 3.0
 # A vezető mutatója (Shift+kattintás a padlóra) ennyi másodpercig lüktet a
 # követőknél — a régebbi mutató a később csatlakozónál már nem villan fel.
 SHARED3D_POINTER_S = 4.0
+# A közös nézés JELENLÉTE: a követő a kérdéssel, a vezető a küldéssel a
+# kamerája helyét és irányát is adja — mindenki látja a többieket a
+# csarnokban. A hely a csarnok ésszerű dobozába szorítva (three-tér: x a
+# pálya hossza, y a magasság, z a szélesség tükörképe — az "Ide mindenki"
+# nézőpontja is ide szorul), a követő neve (a csapat linkjén: /kovet?nev=…)
+# legfeljebb ennyi jel.
+SHARED3D_HALL_BOX = ((-60.0, 100.0), (0.2, 60.0), (-60.0, 80.0))
+SHARED3D_NAME_MAX = 16
+# A saját kamerához ennél közelebbi társ nem látszik ("Ide mindenki" után
+# mindenki egy helyen áll — nem a fejünkben ül). A böngésző (KZ_KOZEL, a
+# sablonba írva) és az app (presenceNearM, őr-teszt) ugyanezt viszi.
+SHARED3D_NEAR_M = 1.2
+
+
+def shared3d_hely(ertek):
+    """A jelenlét helye: [x, y, z, yaw] (three-tér, a csarnok dobozába
+    szorítva, cm-re kerekítve; a yaw — a nézés iránya (−sin yaw, −cos yaw)
+    — a (−π, π] tartományba hozva, ezred radiánra) egy "x,y,z,yaw"
+    szövegből vagy négyelemű listából. None, ha rossz alakú (nem négy
+    elem, nem szám, nem véges)."""
+    import math
+    if isinstance(ertek, str):
+        ertek = ertek.split(",")
+    if not isinstance(ertek, (list, tuple)) or len(ertek) != 4:
+        return None
+    try:
+        v = [float(e) for e in ertek]
+    except (TypeError, ValueError):
+        return None
+    if not all(math.isfinite(e) for e in v):
+        return None
+    hely = [round(min(f, max(a, e)), 2)
+            for e, (a, f) in zip(v[:3], SHARED3D_HALL_BOX)]
+    return hely + [round(math.atan2(math.sin(v[3]), math.cos(v[3])), 3)]
+
+
+def shared3d_nev(s) -> str:
+    """A követő neve a többiek headsetjén: a látható jelek (vezérlőjel
+    nélkül), két szélén szóköz nélkül, legfeljebb SHARED3D_NAME_MAX; üres,
+    ha nincs."""
+    s = "".join(ch for ch in str(s or "") if ch.isprintable()).strip()
+    return s[:SHARED3D_NAME_MAX].strip()
 
 
 def scene_anchor_t(match, row: dict) -> int:
