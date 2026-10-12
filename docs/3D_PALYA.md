@@ -309,7 +309,8 @@ közelebb van, mint a választott passz céljához, és attól legfeljebb 3
 m-re (lövésnél a kapu előtt, a kapuelőtérben); az edző azonnal látja a
 neveken és az állapot-sorban ("✓ 2 a jobb opció"), a csapat a
 felfedéskor. Az app 3D füléről vezetve ugyanez (a panel "❓
-Kvíz" gombja, a gombon hányan válaszoltak). A motor
+Kvíz" gombja, a gombon hányan válaszoltak — döntés-kvízben hányan
+találták el, a válaszok felirata ✓/✗). A motor
 a csapatnak csak a felfedés után adja a többiek válaszát (nem lehet
 puskázni), és csak az aktuális kört (a régi kör válasza nem látszik). A
 motor

@@ -464,6 +464,23 @@ List<TeamMember> parseTeamPresence(Object? csapat) {
   return ki;
 }
 
+/// DÖNTÉS-KVÍZ: a jobb cél (passznál a jobb társ helye) ennyi méteren
+/// belül számít találatnak; lövésnél a cél a kapu közepe, a találat a
+/// kapuelőtér — a motor court3d.SHARED3D_QUIZ_HIT_M / _SHOT_M-je
+/// (őr-teszt).
+const double quizHitM = 3.0;
+const double quizShotM = 6.0;
+
+/// A kvíz-válasz ítélete egy döntés-pillanatnál (court3d.quiz_verdict
+/// tükre): a válasz a JOBB opciót mutatja-e — közelebb a jobb célhoz, mint
+/// a választott passz céljához, és a jobb céltól legfeljebb quizHitM-re
+/// (lövésnél quizShotM-re).
+bool quizVerdict(Offset valasz, Offset jobb, Offset valasztott,
+    {bool loves = false}) {
+  final db = (valasz - jobb).distance, dc = (valasz - valasztott).distance;
+  return db < dc && db <= (loves ? quizShotM : quizHitM);
+}
+
 /// Az app kamerájának jelenléte a motornak: [x, y, z, yaw] a böngésző
 /// three-terében (mint a browserViewpoint — a csarnok dobozába szorítva).
 List<double> browserPresence(double cx, double cy, double cz, double yaw) {

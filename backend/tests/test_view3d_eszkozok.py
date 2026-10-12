@@ -2305,8 +2305,9 @@ def test_a_kozos_nezes_kvize(tmp_path, monkeypatch):
     palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
     geo = (gyoker / "ui" / "court_geometry.dart").read_text(encoding="utf-8")
     api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
-    for kell in ('kviz: _kviz == null ? null : {"n": _kviz!.$1, "mutat": _kviz!.$2},',
-                 "onPressed: _kvizLep,", "kvizValaszok: _vezet && _kviz != null,",
+    for kell in ("kviz: _kvizAllapot(),",
+                 "onPressed: _kvizLep,",
+                 "kvizJelek: _vezet && _kviz != null ? _kvizJelek() : const [],",
                  "_playing = false; // a kérdés a megállított jeleneten",
                  "_kviz = null;\n      _csapat = const [];"):
         assert kell in palya, kell
@@ -2384,6 +2385,21 @@ def test_a_dontes_kviz_a_motorban_es_az_oldalon(tmp_path, monkeypatch):
     assert (f"const KV_TALALAT = {float(court3d.SHARED3D_QUIZ_HIT_M)!r}, "
             f"KV_LOVES = {float(court3d.SHARED3D_QUIZ_SHOT_M)!r};") in oldal
     assert "__KV_" not in oldal
+    # Az app is: a pillanat a körbe, az ítélet a felirathoz, ugyanazok a
+    # küszöbök (court_geometry.quizVerdict, Dart-teszttel).
+    import re
+    from pathlib import Path
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    geo = (gyoker / "ui" / "court_geometry.dart").read_text(encoding="utf-8")
+    for nev, ertek in (("quizHitM", court3d.SHARED3D_QUIZ_HIT_M),
+                       ("quizShotM", court3d.SHARED3D_QUIZ_SHOT_M)):
+        t = re.search(rf"const double {nev} = ([0-9.]+);", geo)
+        assert t and float(t.group(1)) == ertek, nev
+    for kell in ("_kvizDontes = m == null ? null : _aktivDontes(m);",
+                 'return {"n": k.$1, "mutat": k.$2, if (s != null) "d": s};',
+                 'loves: d["best_kind"] == "shoot");'):
+        assert kell in palya, kell
 
 
 def test_a_jelenlet_helye_es_neve():

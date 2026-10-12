@@ -256,6 +256,9 @@ class _Court3DScreenState extends State<Court3DScreen>
   // ❓ KVÍZ (vezetőként): a kör azonosítója, és hogy a csapat is látja-e
   // a válaszokat — a követők a padlóra mutatnak (a böngészős 3D-ben).
   (int, bool)? _kviz;
+  // DÖNTÉS-KVÍZ: a kvíz indításakor látszó döntés-pillanat (a
+  // /decision-moments sora) — ehhez mérjük a válaszokat; null: nem az.
+  Map<String, dynamic>? _kvizDontes;
   // MUTATÓ: a vezető Shift+koppintása a padlóra — a csapatnak megy, és
   // _mutatoS másodpercig itt is lüktet.
   static const double _mutatoS = 4.0; // court3d.SHARED3D_POINTER_S (őr-teszt)
@@ -2224,7 +2227,7 @@ class _Court3DScreenState extends State<Court3DScreen>
             speed: _speed,
             rajz: encodeDrawing(_rajzok),
             hely: browserPresence(_cx, _cy, _cz, _yaw),
-            kviz: _kviz == null ? null : {"n": _kviz!.$1, "mutat": _kviz!.$2},
+            kviz: _kvizAllapot(),
             mutato: _mutato,
             nezopont: _nezopont)
         .then((v) {
@@ -2253,6 +2256,10 @@ class _Court3DScreenState extends State<Court3DScreen>
       final k = _kviz;
       if (k == null) {
         _kviz = (DateTime.now().millisecondsSinceEpoch, false);
+        // Döntés-pillanatnál (a Döntések felirata látszik) a válaszokat
+        // a modell jobb opciójához mérjük.
+        final m = _match;
+        _kvizDontes = m == null ? null : _aktivDontes(m);
         _playing = false; // a kérdés a megállított jeleneten
       } else if (!k.$2) {
         _kviz = (k.$1, true);
@@ -2268,10 +2275,48 @@ class _Court3DScreenState extends State<Court3DScreen>
     final k = _kviz;
     if (k == null) return "❓ Kvíz";
     final db = _csapat.where((t) => t.valasz != null).length;
+    final jo = _kvizDontes == null
+        ? ""
+        : " · ✓ ${_csapat.where((t) => t.valasz != null && _kvizItelet(t.valasz!) == true).length}";
     return k.$2
-        ? "✖ Kvíz vége · $db válasz"
-        : "👁 Mutasd a csapatnak · $db/${_kovetok ?? 0} válasz";
+        ? "✖ Kvíz vége · $db válasz$jo"
+        : "👁 Mutasd a csapatnak · $db/${_kovetok ?? 0} válasz$jo";
   }
+
+  /// A kvíz köre a motornak: {n, mutat} — döntés-kvízben a pillanat
+  /// ideje is ("d"), a csapat ehhez méri a válaszokat.
+  Map<String, Object>? _kvizAllapot() {
+    final k = _kviz;
+    if (k == null) return null;
+    final s = (_kvizDontes?["s"] as num?)?.toDouble();
+    return {"n": k.$1, "mutat": k.$2, if (s != null) "d": s};
+  }
+
+  /// A válasz ítélete a kör döntés-pillanatánál (null: nem döntés-kvíz).
+  bool? _kvizItelet(Offset v) {
+    final d = _kvizDontes;
+    if (d == null) return null;
+    Offset? pont(Object? p) => p is List && p.length == 2
+        ? Offset((p[0] as num).toDouble(), (p[1] as num).toDouble())
+        : null;
+    final jobb = pont(d["best"]), valasztott = pont(d["chosen"]);
+    if (jobb == null || valasztott == null) return null;
+    return quizVerdict(v, jobb, valasztott, loves: d["best_kind"] == "shoot");
+  }
+
+  /// A kvíz jelei a 3D képre: a válasz pontja és felirata (✓/✗-gel).
+  List<(Offset, String)> _kvizJelek() => [
+        for (final t in _csapat)
+          if (t.valasz != null)
+            (
+              t.valasz!,
+              switch (_kvizItelet(t.valasz!)) {
+                true => "${t.cimke} ✓",
+                false => "${t.cimke} ✗",
+                null => t.cimke,
+              }
+            )
+      ];
 
   /// Videó ki/be (K, a panel gombja). Bekapcsoláskor újra próbál (a
   /// "nincs felvétel" ítélet azóta elavulhatott — pl. a videó-fájl
@@ -2457,7 +2502,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                   ],
                   rejtett: rejtett,
                   csapat: _vezet ? _csapat : const [],
-                  kvizValaszok: _vezet && _kviz != null,
+                  kvizJelek: _vezet && _kviz != null ? _kvizJelek() : const [],
                   nyilak: [
                     ..._rajzok,
                     if (_rajzFolyo != null) _rajzFolyo!,
@@ -4012,10 +4057,10 @@ class _Court3DPainter extends CustomPainter {
   final _Jatekos? rejtett;
   // Rajz: nyilak a padlón (kezdő, vég, színkód — pálya-méter).
   final List<(Offset, Offset, int)> nyilak;
-  // A közös nézés jelenléte (vezetőként): a csapat tagjai — kvíz
-  // közben (kvizValaszok) a válaszaik is.
+  // A közös nézés jelenléte (vezetőként): a csapat tagjai, és kvíz
+  // közben a válaszaik (pont, felirat — döntés-kvízben ✓/✗-gel).
   final List<TeamMember> csapat;
-  final bool kvizValaszok;
+  final List<(Offset, String)> kvizJelek;
   _Court3DPainter(
       {required this.frame,
       required this.cx,
@@ -4046,7 +4091,7 @@ class _Court3DPainter extends CustomPainter {
       this.rejtett,
       this.nyilak = const [],
       this.csapat = const [],
-      this.kvizValaszok = false});
+      this.kvizJelek = const []});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
 
@@ -4948,10 +4993,8 @@ class _Court3DPainter extends CustomPainter {
     }
 
     // A kvíz válaszai: kék jel a padlón (kör, rúd), rajta a név.
-    if (kvizValaszok) {
-      for (final t in csapat) {
-        final v = t.valasz;
-        if (v == null) continue;
+    {
+      for (final (v, cimke) in kvizJelek) {
         final kek = Paint()
           ..color = const Color(0xFF3DDCFF)
           ..strokeWidth = 3.0;
@@ -4963,7 +5006,7 @@ class _Court3DPainter extends CustomPainter {
         final csucs = _kepernyo(jb, fe, me);
         final tp = TextPainter(
           text: TextSpan(
-              text: t.cimke,
+              text: cimke,
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,

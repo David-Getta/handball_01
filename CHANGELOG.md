@@ -12,7 +12,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   választott passz céljához), ✗, ha nem. Az edző azonnal látja a neveken
   és az állapot-sorban ("✓ 2 a jobb opció"), a csapat a felfedéskor, az
   arany vonallal (a modell jobb opciója) együtt. Edzői olvasat: kiderül,
-  a csapatból kik látják a jobb megoldást.
+  a csapatból kik látják a jobb megoldást. Az app 3D füléről vezetve is
+  (a gombon a találatok száma, a válaszokon ✓/✗).
 
 - **Közös nézés: kvíz a csapatnak** (új, böngésző/VR + motor): a vezető
   "❓ Kvíz" gombja megállítja a jelenetet, és kérdez ("hova passzolnál?",

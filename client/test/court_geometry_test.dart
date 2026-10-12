@@ -71,6 +71,29 @@ void main() {
     expect(browserPresence(0, 0, -3, 0)[1], 0.2);
   });
 
+  test("döntés-kvíz: az ítélet = court3d.quiz_verdict", () {
+    // Ugyanazok a kézi esetek, mint a backend tesztjében
+    // (test_a_dontes_kviz_itelete_harom_tukorben): a választott passz
+    // célja (25; 4), a jobb cél passznál (30; 12), lövésnél a kapu (40; 10).
+    const valasztott = Offset(25, 4), passz = Offset(30, 12),
+        kapu = Offset(40, 10);
+    final esetek = [
+      (const Offset(30, 12), false, true),
+      (const Offset(32.9, 12), false, true),
+      (const Offset(33.1, 12), false, false),
+      (const Offset(25, 4), false, false),
+      (const Offset(27.4, 8), false, false),
+      (const Offset(35, 10), true, true),
+      (const Offset(33.9, 10), true, false),
+      (const Offset(28, 7), true, false),
+    ];
+    for (final (v, loves, vart) in esetek) {
+      expect(quizVerdict(v, loves ? kapu : passz, valasztott, loves: loves),
+          vart,
+          reason: "$v ${loves ? "lövés" : "passz"}");
+    }
+  });
+
   test("rajz: dekódolás = a böngésző rajzDekodol-ja", () {
     // Ugyanaz az eset, mint a backend node-tesztjében
     // (test_a_rajz_dekodolasa_a_dart_tukorrel_egyezik).
