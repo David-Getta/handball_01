@@ -2182,6 +2182,26 @@ def test_a_megbeszeles_gomb():
     assert "if (!widget.vezet || _demo || _matchId == null || _vezet) return;" in palya
 
 
+def test_vr_magassag_es_vr_vezeto():
+    """VR-ben a kamera csoportja VR_SZEM-mel lejjebb (a headset a padlótól
+    méri a fejet — a rig y-ja a szemmagasság marad); a kontrollerek
+    ugyanabban a csoportban; vezetőként a markolat: bal kéz Ide mindenki,
+    jobb kéz mutató a sugár padló-metszetén."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ("rig.add(vrAllo);\nvrAllo.add(kamera);",
+                 'fest.xr.addEventListener("sessionstart", () => { vrAllo.position.y = -VR_SZEM; });',
+                 'fest.xr.addEventListener("sessionend", () => { vrAllo.position.y = 0; });',
+                 "const c = fest.xr.getController(i); vrAllo.add(c);",
+                 'if (kozosMod === "vezet" && vrGombEl(kulcs, 1, nyom(1))){',
+                 'if (forras.handedness === "left") ideGomb.onclick();',
+                 "else vrMutat(k - 1);", "function vrMutatoPont(origo, irany){",
+                 "jobb kéz mutató"):
+        assert kell in oldal, kell
+    assert "rig.add(kamera);" not in oldal
+
+
 def test_a_3d_oldal_kozos_nezese():
     """Az oldalon a "📡 Vezetem" / "👥 Követem": a vezető küld, a követő
     kérdez és követ (idő a korral, szünet, sebesség, rajz), a link viszi

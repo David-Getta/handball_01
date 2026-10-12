@@ -347,7 +347,9 @@ labdavesztés, gól-akció, lerohanás, kapott gól, hetes, emberelőny) a heads
 egy fejhez rögzített
 táblán látszanak, és a jelenetek a kontrollerrel lapozhatók: A/X — a
 következő, B/Y — az előző jelenet, ravasz — lejátszás/szünet, a
-hüvelykujj-kar lenyomása — vetítés (a lista sorai egymás után). A WebXR
+hüvelykujj-kar lenyomása — vetítés (a lista sorai egymás után); a közös
+nézés vezetőjeként a markolat a jobb kézben MUTATÓ (ahova a kontroller
+mutat a padlón), a bal kézben "📍 Ide mindenki". A WebXR
 biztonságos környezetet kér — a localhost az; Quest-féle headsetről
 USB-kábellel és `adb reverse`-szel érhető el az app gépe.
 

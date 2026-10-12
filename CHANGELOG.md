@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.166 óta)
 
+- **VR: a néző a padlón áll; a közös nézés VR-ből is vezethető** (javítás
+  és új, böngésző/VR): a headset a padlótól méri a fej magasságát, a 3D
+  oldal viszont asztali szemmagasságba tette a nézőt — VR-ben mindenki
+  ~1,6 m-rel a padló fölött lebegett (a játékos-kamerában és az "Ide
+  mindenki" nézőpontjában is). Most VR-ben a szem kerül a megadott
+  magasságba. A vezető VR-ből is mutathat: a kontroller markolata a jobb
+  kézben mutató (ahova a kontroller a padlón mutat), a bal kézben "📍 Ide
+  mindenki".
+
 - **Kliens: elavult színkezelés lecserélve** (karbantartás): a
   Color.withOpacity helyett withValues(alpha:) — a Flutter-elemző 196
   megjegyzéséből 188 ez volt, így az új figyelmeztetések nem vesznek el a

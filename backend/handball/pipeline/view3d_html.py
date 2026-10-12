@@ -915,7 +915,7 @@ Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér p
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek, rajz) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai) · V — vetítés: a lista sorai egymás után<br>
-VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés</div>
+VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés; közös nézés vezetőként: markolat — jobb kéz mutató (ahova a kontroller mutat), bal kéz Ide mindenki</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
 <div id="feliratOszlop">
@@ -968,12 +968,25 @@ const kamera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, .1, 300);
 // A VR-ben a kamera a "rig"-en ül: a rig mozog, a fejmozgás a headseté.
 const rig = new THREE.Group();
 rig.position.set(20, 1.6, 27); // pályaközép előtt, szemmagasságban
-rig.add(kamera);
+// VR-ben a headset a PADLÓTÓL méri a fej magasságát (local-floor): a
+// kamera (és a kontrollerek) egy belső csoportban ülnek, ami VR-ben
+// VR_SZEM-mel lejjebb kerül — így a rig y-ja asztalon és VR-ben is a SZEM
+// magassága (a nézet-gombok, a játékos-kamera, az "Ide mindenki" ezzel
+// számol); enélkül VR-ben a néző ~1,6 m-rel a padló fölött lebegett.
+const VR_SZEM = 1.6;
+const vrAllo = new THREE.Group();
+rig.add(vrAllo);
+vrAllo.add(kamera);
 szinpad.add(rig);
 
 const fest = new THREE.WebGLRenderer({antialias:true});
 fest.setSize(innerWidth, innerHeight);
 fest.xr.enabled = true;
+fest.xr.addEventListener("sessionstart", () => { vrAllo.position.y = -VR_SZEM; });
+fest.xr.addEventListener("sessionend", () => { vrAllo.position.y = 0; });
+// A kontrollerek (a sugarukhoz — a közös nézés VR-mutatója) a kamerával
+// azonos csoportban: a rig mozgása és a VR-magasság őket is viszi.
+const vrKontrollerek = [0, 1].map(i => { const c = fest.xr.getController(i); vrAllo.add(c); return c; });
 document.body.appendChild(fest.domElement);
 document.body.appendChild(VRButton.createButton(fest));
 addEventListener("resize", () => {
@@ -2612,10 +2625,36 @@ function mutatoMutat(x, y){
 function mutatoKattintas(cx, cy){
   const p = padloPont(cx, cy);
   if (!p) return;
-  kzMutato = {x: Math.round(p[0] * 10) / 10, y: Math.round(p[1] * 10) / 10, n: Date.now()};
-  mutatoMutat(p[0], p[1]);
+  mutatoBeallit(p[0], p[1]);
+}
+function mutatoBeallit(x, y){
+  kzMutato = {x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, n: Date.now()};
+  mutatoMutat(x, y);
   kzUtolso = 0;  // azonnal megy a csapatnak
 }
+// VR-mutató: a kontroller sugarának (−z irány) padló-metszete pálya-
+// méterben (a pálya ±3 m-es sávjában); null, ha nem a padlóra mutat.
+function vrMutatoPont(origo, irany){
+  if (irany.y >= -1e-6) return null;
+  const k = -origo.y / irany.y;
+  const x = origo.x + irany.x * k, y = W - (origo.z + irany.z * k);
+  if (x < -3 || x > H + 3 || y < -3 || y > W + 3) return null;
+  return [x, y];
+}
+function vrMutat(i){
+  const c = vrKontrollerek[i];
+  if (!c) return;
+  const o = new THREE.Vector3(), q = new THREE.Quaternion();
+  c.getWorldPosition(o); c.getWorldQuaternion(q);
+  // A kontroller sugara a helyi −z (a +z elforgatva, megfordítva — a
+  // figurák eleje a +z, azt őr-teszt védi).
+  const p = vrMutatoPont(o, new THREE.Vector3(0, 0, 1).applyQuaternion(q).negate());
+  if (p) mutatoBeallit(p[0], p[1]);
+}
+window.vrMutatoProba = (o, d) => vrMutatoPont(new THREE.Vector3(...o), new THREE.Vector3(...d));
+window.vrAlloProba = () => vrAllo.position.y;
+// (próbához: a VR-munkamenet kezdete/vége headset nélkül)
+window.vrMunkamenetProba = (be) => fest.xr.dispatchEvent({type: be ? "sessionstart" : "sessionend"});
 function mutatoFrissit(){
   if (!mutatoGyuru.visible) return;
   const el = (performance.now() - mutatoKezd) / 1000;
@@ -3287,6 +3326,13 @@ function vrGombok(){
     if (vrGombEl(kulcs, 5, nyom(5))) jelenetLep(-1);
     if (vrGombEl(kulcs, 0, nyom(0))){ megy = !megy; lejatszasGomb.textContent = megy ? "⏸" : "▶"; }
     if (vrGombEl(kulcs, 3, nyom(3))) vetitesAllit(!vetites);
+    // Közös nézés vezetőként VR-ből: a markolat (1) a bal kézben "📍 Ide
+    // mindenki", a jobb (vagy kéz nélküli) kontrolleren MUTATÓ a sugár
+    // padló-metszetén.
+    if (kozosMod === "vezet" && vrGombEl(kulcs, 1, nyom(1))){
+      if (forras.handedness === "left") ideGomb.onclick();
+      else vrMutat(k - 1);
+    }
   }
 }
 window.vrJelenetLep = jelenetLep;  // a próbához: a kontroller-gomb párja
