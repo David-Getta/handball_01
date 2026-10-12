@@ -2210,6 +2210,24 @@ def test_a_kozos_nezes_jelenlete(tmp_path, monkeypatch):
     assert (f'.slice(0, {court3d.SHARED3D_NAME_MAX});') in oldal
     assert "__KZ_NEV_MAX__" not in oldal
     assert f"const KZ_KOZEL = {float(court3d.SHARED3D_NEAR_M)!r};" in oldal
+    # Az app vezetője is: a helyét küldi, a csapatot rajzolja (ugyanaz a
+    # közelségi küszöb).
+    import re
+    from pathlib import Path
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    geo = (gyoker / "ui" / "court_geometry.dart").read_text(encoding="utf-8")
+    api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
+    ertek = re.search(r"const double presenceNearM = ([0-9.]+);", geo)
+    assert ertek and float(ertek.group(1)) == court3d.SHARED3D_NEAR_M
+    for kell in ("hely: browserPresence(_cx, _cy, _cz, _yaw),",
+                 "_csapat = parseTeamPresence(cs);",
+                 "csapat: _vezet ? _csapat : const [],",
+                 "for (final t in csapat) {",
+                 "_csapat = const [];\n      _kovetok = null;"):
+        assert kell in palya, kell
+    assert 'if (hely != null) "hely": hely,' in api
+    assert 'json["csapat"]' in api
 
 
 def test_a_jelenlet_helye_es_neve():

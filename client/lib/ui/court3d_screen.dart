@@ -251,6 +251,8 @@ class _Court3DScreenState extends State<Court3DScreen>
   bool _vezetHiba = false;
   double _vezetUtolso = 0;
   int? _kovetok; // hányan követik (a motor válasza)
+  // A csapat jelenléte (a motor válasza): ott rajzolva, ahonnan néznek.
+  List<TeamMember> _csapat = const [];
   // MUTATÓ: a vezető Shift+koppintása a padlóra — a csapatnak megy, és
   // _mutatoS másodpercig itt is lüktet.
   static const double _mutatoS = 4.0; // court3d.SHARED3D_POINTER_S (őr-teszt)
@@ -2178,6 +2180,7 @@ class _Court3DScreenState extends State<Court3DScreen>
       _vezet = be;
       _vezetHiba = false;
       _vezetUtolso = 0;
+      _csapat = const [];
       _kovetok = null;
       // Új vezetés: a régi mutató (és nézőpont) nem megy újra a csapatnak.
       _mutato = null;
@@ -2216,15 +2219,18 @@ class _Court3DScreenState extends State<Court3DScreen>
             playing: _playing,
             speed: _speed,
             rajz: encodeDrawing(_rajzok),
+            hely: browserPresence(_cx, _cy, _cz, _yaw),
             mutato: _mutato,
             nezopont: _nezopont)
-        .then((n) {
-      if ((_vezetHiba || n != _kovetok) && mounted && _vezet) {
-        setState(() {
-          _vezetHiba = false;
-          _kovetok = n;
-        });
-      }
+        .then((v) {
+      final (n, cs) = v;
+      if (!mounted || !_vezet) return;
+      // (a csapat helye minden válasszal mozog — mindig újrarajzol)
+      setState(() {
+        _vezetHiba = false;
+        _kovetok = n;
+        _csapat = parseTeamPresence(cs);
+      });
     }).catchError((_) {
       // Hibánál a mutató és a nézőpont nem megy újra (ha az okozta, a
       // következő küldés már átmegy).
@@ -2417,6 +2423,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                           l["outcome"] == "goal")
                   ],
                   rejtett: rejtett,
+                  csapat: _vezet ? _csapat : const [],
                   nyilak: [
                     ..._rajzok,
                     if (_rajzFolyo != null) _rajzFolyo!,
@@ -3951,6 +3958,8 @@ class _Court3DPainter extends CustomPainter {
   final _Jatekos? rejtett;
   // Rajz: nyilak a padlón (kezdő, vég, színkód — pálya-méter).
   final List<(Offset, Offset, int)> nyilak;
+  // A közös nézés jelenléte (vezetőként): a csapat tagjai.
+  final List<TeamMember> csapat;
   _Court3DPainter(
       {required this.frame,
       required this.cx,
@@ -3979,7 +3988,8 @@ class _Court3DPainter extends CustomPainter {
       this.kontra,
       this.kapott,
       this.rejtett,
-      this.nyilak = const []});
+      this.nyilak = const [],
+      this.csapat = const []});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
 
@@ -4878,6 +4888,58 @@ class _Court3DPainter extends CustomPainter {
             (0.12 * _f / mely).clamp(1.5, 14.0),
             Paint()..color = AppColors.ball);
       }
+    }
+
+    // A közös nézés jelenléte: a csapat tagjai ott, ahonnan néznek — fej,
+    // orr a nézés irányába, gyűrű a padlón, fölötte a név (a böngésző
+    // avatarjai); a kamerához presenceNearM-nél közelebbi nem látszik.
+    for (final t in csapat) {
+      final dx = t.x - cx, dy = t.y - cy, dh = t.h - cz;
+      if (dx * dx + dy * dy + dh * dh <= presenceNearM * presenceNearM) {
+        continue;
+      }
+      _kor(
+          canvas,
+          Paint()
+            ..color = const Color(0xFFF2F5F8).withValues(alpha: 0.6)
+            ..strokeWidth = 2.0,
+          t.x,
+          t.y,
+          0.3);
+      final (jb, fe, me) = _kamera(t.x, t.y, t.h);
+      if (me < _kozel) continue;
+      final fej = _kepernyo(jb, fe, me);
+      final r = (0.16 * _f / me).clamp(2.0, 20.0);
+      _vonal(
+          canvas,
+          Paint()
+            ..color = const Color(0xFFF2F5F8)
+            ..strokeWidth = math.max(1.5, r * 0.6)
+            ..strokeCap = StrokeCap.round,
+          t.x,
+          t.y,
+          t.h,
+          t.x + t.fx * 0.32,
+          t.y + t.fy * 0.32,
+          t.h);
+      canvas.drawCircle(fej, r, Paint()..color = const Color(0xFFF2F5F8));
+      final tp = TextPainter(
+        text: TextSpan(
+            text: t.cimke,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final bal = fej - Offset(tp.width / 2, r + tp.height + 5);
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromLTWH(bal.dx - 5, bal.dy - 1, tp.width + 10,
+                  tp.height + 2),
+              const Radius.circular(6)),
+          Paint()..color = const Color(0xCC0A0E14));
+      tp.paint(canvas, bal);
     }
   }
 

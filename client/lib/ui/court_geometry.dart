@@ -415,6 +415,53 @@ Map<String, double> browserViewpoint(
   };
 }
 
+/// A közös nézés JELENLÉTE: a saját kamerához ennél közelebbi társ nem
+/// látszik ("Ide mindenki" után mindenki egy helyen áll) — a motor
+/// court3d.SHARED3D_NEAR_M-je (őr-teszt).
+const double presenceNearM = 1.2;
+
+/// A közös nézés egy társa az app pálya-terében: x a hossz, y a szélesség,
+/// h a szem magassága, (fx, fy) a nézés iránya a padlón (egységvektor).
+class TeamMember {
+  final int sz; // a csatlakozás sorszáma
+  final String nev;
+  final double x, y, h, fx, fy;
+  const TeamMember(this.sz, this.nev, this.x, this.y, this.h, this.fx, this.fy);
+
+  /// A feje fölötti felirat: a név, név nélkül a csatlakozás sorszáma
+  /// (#3) — mint a böngészőben.
+  String get cimke => nev.isNotEmpty ? nev : "#$sz";
+}
+
+/// A motor "csapat" listája ([{"sz", "nev", "hely": [x, y, z, yaw]}] — a
+/// böngésző three-terében, court3d.shared3d_hely) az app pálya-terében: a
+/// pálya y-ja a szélesség − three z, a magasság a three y; a three
+/// (−sin yaw, −cos yaw) nézés-iránya a pályán (−sin yaw, cos yaw). A rossz
+/// alakú sor kimarad.
+List<TeamMember> parseTeamPresence(Object? csapat) {
+  if (csapat is! List) return const [];
+  final ki = <TeamMember>[];
+  for (final e in csapat) {
+    if (e is! Map) continue;
+    final hely = e["hely"], sz = e["sz"];
+    if (sz is! num || hely is! List || hely.length != 4 ||
+        hely.any((v) => v is! num)) {
+      continue;
+    }
+    final v = [for (final x in hely) (x as num).toDouble()];
+    ki.add(TeamMember(sz.toInt(), (e["nev"] ?? "").toString(), v[0],
+        courtWidth - v[2], v[1], -math.sin(v[3]), math.cos(v[3])));
+  }
+  return ki;
+}
+
+/// Az app kamerájának jelenléte a motornak: [x, y, z, yaw] a böngésző
+/// three-terében (mint a browserViewpoint — a csarnok dobozába szorítva).
+List<double> browserPresence(double cx, double cy, double cz, double yaw) {
+  final v = browserViewpoint(cx, cy, cz, yaw, 0);
+  return [v["x"]!, v["y"]!, v["z"]!, v["yaw"]!];
+}
+
 /// A nyilak a böngészős nézet "rajz" link-paraméterének alakjában
 /// ("x1,y1,x2,y2,szín;…", 0,1 m-re kerekítve, a JS Math.round-jával
 /// azonosan) — a "Böngészőben" gomb így viszi át a rajzot.

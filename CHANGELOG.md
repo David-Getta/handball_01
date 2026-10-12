@@ -12,7 +12,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   nélkül a csatlakozás sorszáma látszik. Az edző így látja, ki áll rossz
   helyen és ki néz másfelé. A motor a követő kérdésével a helyét és a
   nevét is fogadja (a csarnok dobozába szorítva), a vezetőnek a csapatot,
-  a követőnek a többieket és az edzőt adja.
+  a követőnek a többieket és az edzőt adja. Az app 3D füléről vezetve is:
+  a csapat a 3D képen látszik, a követők az edzőt az app kamerájának
+  helyén látják.
 
 ## v0.1.167 — kiadva (2026-10-12)
 

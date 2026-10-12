@@ -289,7 +289,9 @@ irányába, gyűrűvel a padlón, fölötte a név (az edzőé arany). A név a
 csapat linkjén adható meg: `localhost:8000/kovet?nev=Peti` (név nélkül a
 csatlakozás sorszáma látszik, pl. #3). Az edző így látja, ki áll rossz
 helyen, ki néz másfelé; a saját fejedhez 1,2 m-nél közelebbi nem látszik
-(az "Ide mindenki" után mindenki egy helyen áll). A motor
+(az "Ide mindenki" után mindenki egy helyen áll). Az app 3D füléről
+vezetve ugyanez: a csapat a 3D képen, a követők pedig az edzőt az app
+kamerájának helyén látják. A motor
 `/matches/{id}/shared3d` végpontja (PUT/GET/DELETE) memóriában tartja az
 állapotot. Az app 3D füle is vezethet ("📡 Vezetem" a panelen): az edző
 a laptopon teker, megállít, rajzol, a headsetek követik.

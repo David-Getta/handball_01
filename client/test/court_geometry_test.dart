@@ -33,6 +33,36 @@ void main() {
     expect(browserViewpoint(0, 0, 2, 0, 2.0)["pitch"], 1.6);
   });
 
+  test("közös nézés: a jelenlét oda-vissza a böngésző three-terével", () {
+    // Az app kamerája a motornak, és a motor sora vissza: ugyanaz a hely,
+    // a nézés iránya az app előre-iránya (sin yaw, cos yaw).
+    for (final yaw in [0.0, 0.7, -2.4, 3.0]) {
+      final h = browserPresence(12.0, 5.0, 1.7, yaw);
+      expect(h.sublist(0, 3), [12.0, 1.7, courtWidth - 5.0]);
+      final t = parseTeamPresence([
+        {"sz": 3, "nev": "", "hely": h}
+      ]).single;
+      expect(t.x, 12.0);
+      expect(t.y, closeTo(5.0, 1e-9));
+      expect(t.h, 1.7);
+      expect(t.fx, closeTo(math.sin(yaw), 1e-9));
+      expect(t.fy, closeTo(math.cos(yaw), 1e-9));
+      expect(t.cimke, "#3");
+    }
+    // A név a felirat; a rossz alakú sor kimarad.
+    final l = parseTeamPresence([
+      {"sz": 1, "nev": "Peti", "hely": [1, 1.6, 2, 0]},
+      {"sz": 2, "hely": [1, 2, 3]},
+      {"sz": 4, "hely": [1, 2, 3, "x"]},
+      {"nev": "x", "hely": [1, 2, 3, 4]},
+      "rossz",
+    ]);
+    expect(l.map((t) => t.cimke).toList(), ["Peti"]);
+    expect(parseTeamPresence(null), isEmpty);
+    // A csarnok dobozába szorítva (mint a motor).
+    expect(browserPresence(0, 0, -3, 0)[1], 0.2);
+  });
+
   test("rajz: dekódolás = a böngésző rajzDekodol-ja", () {
     // Ugyanaz az eset, mint a backend node-tesztjében
     // (test_a_rajz_dekodolasa_a_dart_tukorrel_egyezik).

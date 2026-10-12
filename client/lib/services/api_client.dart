@@ -909,13 +909,17 @@ class ApiClient {
 
   /// KÖZÖS NÉZÉS — a vezető állapota (PUT /matches/{id}/shared3d): a
   /// csapat headsetjei (a böngészős 3D "Követem"-je) ezt követik. `t`:
-  /// játékidő-másodperc; `rajz`: a 3D rajz kódja (encodeDrawing).
-  /// Visszaadja, hányan követik most (a motor szerint).
-  Future<int?> putShared3d(String matchId,
+  /// játékidő-másodperc; `rajz`: a 3D rajz kódja (encodeDrawing); `hely`:
+  /// a vezető kamerája ([x, y, z, yaw] a böngésző three-terében — a
+  /// követők arany fejként látják). Visszaadja, hányan követik most (a
+  /// motor szerint), és a csapat jelenlétét (a motor "csapat" listája —
+  /// court_geometry.parseTeamPresence).
+  Future<(int?, Object?)> putShared3d(String matchId,
       {required double t,
       required bool playing,
       required double speed,
       String rajz = "",
+      List<double>? hely,
       Map<String, num>? mutato,
       Map<String, num>? nezopont}) async {
     final resp = await http.put(
@@ -926,6 +930,7 @@ class ApiClient {
           "playing": playing,
           "speed": speed,
           "rajz": rajz,
+          if (hely != null) "hely": hely,
           // A vezető mutatója ({x, y, n}) — a követőknél lüktető gyűrű.
           if (mutato != null) "mutato": mutato,
           // "📍 Ide mindenki": a vezető nézőpontja a böngésző three-terében.
@@ -936,7 +941,9 @@ class ApiClient {
           _hiba("Nem sikerült a közös nézés állapotát küldeni", resp));
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes));
-    return json is Map ? (json["followers"] as num?)?.toInt() : null;
+    return json is Map
+        ? ((json["followers"] as num?)?.toInt(), json["csapat"])
+        : (null, null);
   }
 
   /// A vezetés vége (DELETE /matches/{id}/shared3d): a követők "nincs
