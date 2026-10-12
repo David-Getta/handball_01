@@ -313,7 +313,12 @@ felfedéskor. A kvíz végén az eredmény a **jegyzetek közé** kerül
 nem válaszolt: 1" a döntés kockáján, a passzolótól a válaszokig húzott
 nyilakkal (sárga ✓, piros ✗) — így a jegyzet-listában, a nyomtatott
 jelentésben (ábrával) és a Klipek jegyzet-csomagjában is ott van, és
-meccsről meccsre visszanézhető, ki látta a jobb megoldást. Az app 3D
+meccsről meccsre visszanézhető, ki látta a jobb megoldást. A
+**Kvíz-mérleg** (az app Jegyzetek képernyőjén fölül) ezt össze is számolja:
+játékosonként, meccseken át, hányszor mutatott a jobb opcióra ("Anna ·
+7/9 ✓ (78%)" — 3-nál kevesebb ítélt válasznál arány nélkül); a név a
+kulcs, ezért érdemes a csapat linkjén mindig ugyanazt a nevet megadni
+(`/kovet?nev=Anna`), a név nélküli követő (#3) nem számít bele. Az app 3D
 füléről vezetve ugyanez (a panel "❓
 Kvíz" gombja, a gombon hányan válaszoltak — döntés-kvízben hányan
 találták el, a válaszok felirata ✓/✗). A motor

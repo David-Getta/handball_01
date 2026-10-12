@@ -42,6 +42,9 @@ class _NotesScreenState extends State<NotesScreen> {
   String _query = "";
   // Épp törlés alatt álló jegyzet azonosítója — kétszer ne induljon.
   String? _deleting;
+  // KVÍZ-MÉRLEG: a 3D közös nézés kvízei játékosonként (a motor
+  // /library/quiz-stats-a) — üres, ha még nem volt kvíz.
+  List<Map<String, dynamic>> _kvizMerleg = const [];
 
   @override
   void initState() {
@@ -56,6 +59,10 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Future<void> _load() async {
+    // A kvíz-mérleg külön: a hibája a jegyzet-listát nem viszi el.
+    _api.fetchQuizStats().then((k) {
+      if (mounted) setState(() => _kvizMerleg = k);
+    }).catchError((_) {});
     try {
       final n = await _api.fetchLibraryNotes();
       if (!mounted) return;
@@ -156,6 +163,10 @@ class _NotesScreenState extends State<NotesScreen> {
                   "meccsektől függetlenül; koppints a visszanézéshez",
                   style: AppText.subtitle),
               const SizedBox(height: AppSpacing.lg),
+              if (_kvizMerleg.isNotEmpty) ...[
+                _kvizSor(),
+                const SizedBox(height: AppSpacing.md),
+              ],
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -185,6 +196,63 @@ class _NotesScreenState extends State<NotesScreen> {
                 Expanded(child: _list()),
               ],
             ]),
+    );
+  }
+
+  /// KVÍZ-MÉRLEG: a 3D közös nézés döntés-kvízei játékosonként, meccseken
+  /// át — ki látja a jobb megoldást (✓ / ítélt válasz). A szín: zöldeskék
+  /// 60% fölött, sárga 40–60%, piros alatta; szürke, ha kevés az ítélt
+  /// válasz (a motor court3d.QUIZ_STATS_MIN_ANSWERS-e alatt nincs arány).
+  Widget _kvizSor() {
+    const max = 16;
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Tooltip(
+          message: "A 3D közös nézés döntés-kvízei meccseken át: hányszor "
+              "mutatott a játékos a modell jobb opciójára (✓ / ítélt "
+              "válasz). Kevés ítélt válasznál nincs arány.",
+          child: Text("❓ Kvíz-mérleg",
+              style: AppText.label.copyWith(fontWeight: FontWeight.bold)),
+        ),
+        for (final r in _kvizMerleg.take(max)) _kvizChip(r),
+        if (_kvizMerleg.length > max)
+          Text("+${_kvizMerleg.length - max}", style: AppText.label),
+      ],
+    );
+  }
+
+  Widget _kvizChip(Map<String, dynamic> r) {
+    final arany = (r["arany"] as num?)?.toDouble();
+    final itelt = (r["itelt"] as num?)?.toInt() ?? 0;
+    final jo = (r["jo"] as num?)?.toInt() ?? 0;
+    final rossz = (r["rossz"] as num?)?.toInt() ?? 0;
+    final kvizek = (r["kvizek"] as num?)?.toInt() ?? 0;
+    final szin = arany == null
+        ? AppColors.textFaint
+        : arany >= 0.6
+            ? AppColors.accent
+            : arany >= 0.4
+                ? AppColors.ball
+                : AppColors.away;
+    return Tooltip(
+      message: "${r["nev"]}: $kvizek kvíz, $itelt ítélt válasz — "
+          "✓ $jo, ✗ $rossz",
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: szin.withValues(alpha: 0.14),
+          border: Border.all(color: szin.withValues(alpha: 0.6)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+            "${r["nev"]} · ${itelt > 0 ? "$jo/$itelt ✓" : "$kvizek kvíz"}"
+            "${arany != null ? " (${(arany * 100).round()}%)" : ""}",
+            style: AppText.label
+                .copyWith(fontSize: 12, color: AppColors.textPrimary)),
+      ),
     );
   }
 

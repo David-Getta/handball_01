@@ -712,6 +712,63 @@ def quiz_verdict(answer, best, chosen, shot: bool = False) -> bool:
                               else SHARED3D_QUIZ_HIT_M)
 
 
+# KVÍZ-MÉRLEG: a döntés-kvízek ítéletei játékosonként, meccseken át (a
+# kvíz-jegyzetek "kviz" sorai) — ennyi ítélt válasz alatt az arány nem
+# mond semmit (None, nem 0).
+QUIZ_STATS_MIN_ANSWERS = 3
+
+
+def quiz_stats(notes) -> list:
+    """A kvíz-mérleg: a kvíz-jegyzetek (a 3D közös nézés kvízének
+    eredménye — a jegyzet "kviz" sorai: [{"nev", "itelet": true/false/
+    null}]) játékosonként összegezve, meccseken át. A kulcs a név
+    (kisbetűsen, a szóközök összevonva — a headseten begépelt "peti " és
+    "Peti" ugyanaz); a név nélküli és a "#3"-féle sorszámos válaszoló
+    kimarad: meccsről meccsre nem azonosítható.
+
+    Edzőileg: ki olvassa jól a játékot — a döntés-kvízekben (a mérce a
+    modell jobb opciója) hányszor mutatott a jobb megoldásra.
+
+    `notes`: a jegyzetek időrendben (a megjelenített név a legutóbbi
+    írásmód). Visszatérés: [{"nev", "kvizek" (hány kvízben válaszolt),
+    "itelt" (döntés-kvíz válaszok), "jo", "rossz", "arany" (jo / itelt;
+    None, ha itelt < QUIZ_STATS_MIN_ANSWERS)}] — az arány szerint
+    csökkenően (a kevés mintás a végén), azon belül az ítélt válaszok
+    száma, majd a név szerint."""
+    import re
+    tabla: dict = {}
+    for n in notes:
+        sorok = n.get("kviz") if isinstance(n, dict) else None
+        if not isinstance(sorok, list):
+            continue
+        latott = set()
+        for e in sorok:
+            if not isinstance(e, dict):
+                continue
+            nev = re.sub(r"\s+", " ", str(e.get("nev") or "")).strip()
+            if not nev or re.fullmatch(r"#\d+", nev):
+                continue
+            kulcs = nev.casefold()
+            r = tabla.setdefault(kulcs, {"nev": nev, "kvizek": 0, "itelt": 0,
+                                         "jo": 0, "rossz": 0})
+            r["nev"] = nev
+            if kulcs not in latott:
+                latott.add(kulcs)
+                r["kvizek"] += 1
+            it = e.get("itelet")
+            if it is True or it is False:
+                r["itelt"] += 1
+                r["jo" if it else "rossz"] += 1
+    ki = []
+    for r in tabla.values():
+        r["arany"] = (round(r["jo"] / r["itelt"], 3)
+                      if r["itelt"] >= QUIZ_STATS_MIN_ANSWERS else None)
+        ki.append(r)
+    ki.sort(key=lambda r: (r["arany"] is None, -(r["arany"] or 0.0),
+                           -r["itelt"], r["nev"].casefold()))
+    return ki
+
+
 def shared3d_nev(s) -> str:
     """A követő neve a többiek headsetjén: a látható jelek (vezérlőjel
     nélkül), két szélén szóköz nélkül, legfeljebb SHARED3D_NAME_MAX; üres,

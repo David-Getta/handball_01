@@ -2958,7 +2958,9 @@ async function kvizMent(kor, csapat){
   const rajz = d ? rajzKodol(valaszolok.map(e => [d[2], d[3], e.valasz[0], e.valasz[1], itelet(e) ? 0 : 2])) : "";
   try {
     const v = await fetch(jegyzetCim(), {method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({frame: Math.round((d ? d[0] : ido) * FPS), text: szoveg, rajz})});
+      body: JSON.stringify({frame: Math.round((d ? d[0] : ido) * FPS), text: szoveg, rajz,
+                            // szerkezetben is — a kvíz-mérleg (Jegyzetek) ebből számol
+                            kviz: valaszolok.map(e => ({nev: e.nev || "", itelet: itelet(e)}))})});
     if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
     await jegyzetBetolt();
     jegyzetInfo.textContent = "📝 a kvíz eredménye jegyzetként mentve";

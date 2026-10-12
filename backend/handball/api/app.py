@@ -4443,6 +4443,28 @@ def create_app():
                 })
         return {"notes": out}
 
+    @app.get("/library/quiz-stats")
+    def library_quiz_stats():
+        """KVÍZ-MÉRLEG a könyvtárból: a 3D közös nézés kvízeinek eredménye
+        (a kvíz-jegyzetek "kviz" sorai) játékosonként, meccseken át —
+        court3d.quiz_stats. Edzőileg: ki látja a jobb megoldást a
+        döntés-kvízekben. Visszatérés: {"players": [{"nev", "kvizek",
+        "itelt", "jo", "rossz", "arany"}], "min_answers":
+        QUIZ_STATS_MIN_ANSWERS} — a jegyzetek időrendben (a meccsek
+        dátuma, azon belül a kocka) mennek a számolásba."""
+        from ..pipeline.court3d import QUIZ_STATS_MIN_ANSWERS, quiz_stats
+        meccsek = sorted(_season_matches(),
+                         key=lambda m: ((m.meta.date or ""),
+                                        m.meta.match_id))
+        jegyzetek = []
+        for m in meccsek:
+            ns = [n for n in _load_notes(m.meta.match_id)
+                  if isinstance(n, dict)]
+            ns.sort(key=lambda n: n.get("frame", 0))
+            jegyzetek.extend(ns)
+        return {"players": quiz_stats(jegyzetek),
+                "min_answers": QUIZ_STATS_MIN_ANSWERS}
+
     @app.post("/matches/{match_id}/notes")
     def add_note(match_id: str, body: dict):
         """Új edzői jegyzet. Törzs: {"frame": képkocka-index, "text": "..."}.
@@ -4466,6 +4488,23 @@ def create_app():
         rajz = str(body.get("rajz") or "").strip()
         if rajz and len(rajz) <= 1200 and _re.fullmatch(r"[0-9.,;\-]+", rajz):
             note["rajz"] = rajz
+        # A kvíz eredménye szerkezetben (a 3D közös nézés kvíz-jegyzete —
+        # court3d.quiz_stats ebből számolja a kvíz-mérleget): [{"nev",
+        # "itelet": true/false/null}], legfeljebb 60 sor; a rossz alakú sor
+        # kimarad, a név megtisztítva.
+        kv = body.get("kviz")
+        if isinstance(kv, list):
+            from ..pipeline.court3d import shared3d_nev
+            sorok = []
+            for e in kv[:60]:
+                if not isinstance(e, dict):
+                    continue
+                it = e.get("itelet")
+                if it is not None and not isinstance(it, bool):
+                    continue
+                sorok.append({"nev": shared3d_nev(e.get("nev")), "itelet": it})
+            if sorok:
+                note["kviz"] = sorok
         notes = _load_notes(match_id)
         notes.append(note)
         _notes_path(match_id).write_text(

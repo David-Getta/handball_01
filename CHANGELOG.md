@@ -3,6 +3,16 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.168 óta)
+
+- **Kvíz-mérleg** (új, motor + app): a kvíz-jegyzet a kvíz eredményét
+  szerkezetben is viszi, a motor /library/quiz-stats végpontja
+  játékosonként, meccseken át összegzi, a Jegyzetek képernyő fölül
+  chipekben mutatja: "Anna · 7/9 ✓ (78%)" — ki látja a jobb megoldást a
+  döntés-kvízekben (3-nál kevesebb ítélt válasznál arány nélkül). A név a
+  kulcs (kis- és nagybetű, szóköz nem számít); a név nélküli követő nem
+  számít bele.
+
 ## v0.1.168 — kiadva (2026-10-12)
 
 > Kiadás-jegyzet: a közös nézés csapat-eszköz lett. A headsetekben

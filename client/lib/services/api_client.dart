@@ -979,11 +979,28 @@ class ApiClient {
         .toList();
   }
 
+  /// KVÍZ-MÉRLEG (GET /library/quiz-stats): a 3D közös nézés kvízei
+  /// játékosonként, meccseken át — [{nev, kvizek, itelt, jo, rossz,
+  /// arany}], a legjobb aránnyal elöl.
+  Future<List<Map<String, dynamic>>> fetchQuizStats() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/quiz-stats"))
+        .timeout(const Duration(seconds: 20));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a kvíz-mérleget", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["players"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   /// Új edzői jegyzet az adott képkockához (POST /matches/{id}/notes).
   /// A `rajz`: a 3D pálya nyilai a jegyzettel (a böngésző "rajz"
   /// link-paraméterének alakja) — a jegyzet pillanatában visszarajzolódnak.
   Future<Map<String, dynamic>> addNote(String matchId, int frame, String text,
-      {String? rajz}) async {
+      {String? rajz, List<Map<String, Object?>>? kviz}) async {
     final resp = await http.post(
       Uri.parse("$baseUrl/matches/$matchId/notes"),
       headers: {"Content-Type": "application/json"},
@@ -991,6 +1008,9 @@ class ApiClient {
         "frame": frame,
         "text": text,
         if (rajz != null && rajz.isNotEmpty) "rajz": rajz,
+        // A kvíz eredménye szerkezetben ([{nev, itelet}]) — a kvíz-mérleg
+        // (/library/quiz-stats) ebből számol.
+        if (kviz != null) "kviz": kviz,
       }),
     );
     if (resp.statusCode != 200) {

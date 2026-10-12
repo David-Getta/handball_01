@@ -2438,6 +2438,87 @@ def test_a_kviz_eredmenye_jegyzetbe_kerul():
         assert kell in palya, kell
 
 
+def test_a_kviz_merleg():
+    """court3d.quiz_stats: a név a kulcs (kis- és nagybetű, szóköz nem
+    számít), a név nélküli és a sorszámos válaszoló kimarad, kevés ítélt
+    válasznál nincs arány; a sorrend az arány, az ítélt válaszok, a név.
+    (A motor végpontja: test_a_kviz_merleg_a_motorban.)"""
+    from handball.pipeline.court3d import QUIZ_STATS_MIN_ANSWERS, quiz_stats
+
+    assert QUIZ_STATS_MIN_ANSWERS == 3
+    jegyzet = lambda *s: {"kviz": [{"nev": n, "itelet": i} for n, i in s]}
+    k = quiz_stats([
+        jegyzet(("Anna", True), ("Peti", False), ("#3", True), ("", True)),
+        jegyzet(("anna ", True), ("Peti", True), ("Bence", None)),
+        jegyzet(("Anna", False), ("PETI", False), ("Bence", None)),
+        {"text": "sima jegyzet"}, jegyzet(("Peti", True)),
+        jegyzet(("Zoli", True), ("Zoli", True), ("Zoli", True)),
+    ])
+    assert [(r["nev"], r["kvizek"], r["itelt"], r["jo"], r["rossz"], r["arany"])
+            for r in k] == [
+        ("Zoli", 1, 3, 3, 0, 1.0), ("Anna", 3, 3, 2, 1, 0.667),
+        ("Peti", 4, 4, 2, 2, 0.5), ("Bence", 2, 0, 0, 0, None)]
+    assert quiz_stats([]) == [] and quiz_stats([{"kviz": "x"}, None]) == []
+
+
+def test_a_kviz_merleg_a_motorban(tmp_path, monkeypatch):
+    """A jegyzet a kvíz-sorokat megtisztítva tárolja (rossz sor kimarad,
+    legfeljebb 60), a /library/quiz-stats meccseken át összegez; az oldal
+    és az app a kvíz-jegyzettel küldi a sorokat; a Jegyzetek képernyő
+    mutatja."""
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    for mid, datum in (("m1", "2026-09-01"), ("m2", "2026-09-08")):
+        m = _meccs()
+        m.meta.match_id = mid
+        m.meta.date = datum
+        app.state.put_match(m)
+    c = TestClient(app)
+    r = c.post("/matches/m1/notes", json={
+        "frame": 50, "text": "❓ Döntés-kvíz", "kviz": [
+            {"nev": "Anna\x07", "itelet": True}, {"nev": "Peti", "itelet": False},
+            {"nev": "x", "itelet": "igen"}, "rossz", {"nev": "Bence", "itelet": None}]})
+    assert r.json()["kviz"] == [{"nev": "Anna", "itelet": True},
+                                {"nev": "Peti", "itelet": False},
+                                {"nev": "Bence", "itelet": None}]
+    assert "kviz" not in c.post("/matches/m1/notes",
+                                json={"frame": 9, "text": "sima"}).json()
+    assert len(c.post("/matches/m2/notes", json={
+        "frame": 5, "text": "sok", "kviz": [{"nev": f"J{i}", "itelet": True}
+                                           for i in range(80)]}).json()["kviz"]) == 60
+    for _ in range(2):
+        c.post("/matches/m2/notes", json={"frame": 7, "text": "❓", "kviz": [
+            {"nev": "anna", "itelet": True}, {"nev": "Peti", "itelet": True}]})
+    a = c.get("/library/quiz-stats").json()
+    assert a["min_answers"] == 3
+    sorok = {r["nev"].casefold(): r for r in a["players"]}
+    assert (sorok["anna"]["itelt"], sorok["anna"]["jo"], sorok["anna"]["arany"]) == (3, 3, 1.0)
+    assert (sorok["peti"]["itelt"], sorok["peti"]["arany"]) == (3, 0.667)
+    # A legutóbbi írásmód (a későbbi meccs) a megjelenített név.
+    assert sorok["anna"]["nev"] == "anna"
+    assert sorok["bence"]["arany"] is None
+
+    from handball.pipeline.view3d_html import view3d_html
+    assert ('kviz: valaszolok.map(e => ({nev: e.nev || "", itelet: itelet(e)}))'
+            in view3d_html(_meccs()))
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
+    jegyz = (gyoker / "ui" / "notes_screen.dart").read_text(encoding="utf-8")
+    assert '{"nev": t.nev, "itelet": itelet[t.sz]}' in palya
+    assert 'if (kviz != null) "kviz": kviz,' in api
+    assert '"$baseUrl/library/quiz-stats"' in api
+    for kell in ("_api.fetchQuizStats().then((k) {", "_kvizSor(),",
+                 '"❓ Kvíz-mérleg"'):
+        assert kell in jegyz, kell
+
+
 def test_a_jelenlet_helye_es_neve():
     """court3d.shared3d_hely: szöveg vagy lista, dobozba szorítva, a szög
     a (−π, π]-be; rossz alaknál None. shared3d_nev: vezérlőjel nélkül,

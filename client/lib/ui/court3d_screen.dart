@@ -2315,7 +2315,11 @@ class _Court3DScreenState extends State<Court3DScreen>
     final s = (d?["s"] as num?)?.toDouble();
     try {
       await _api.addNote(id, s != null ? (s * fps).round() : _mostT(m), szoveg,
-          rajz: rajz);
+          rajz: rajz,
+          // szerkezetben is — a kvíz-mérleg (Jegyzetek) ebből számol
+          kviz: [
+            for (final t in valaszolok) {"nev": t.nev, "itelet": itelet[t.sz]}
+          ]);
       final friss = await _api.fetchNotes(id);
       if (!mounted) return;
       setState(() => _jegyzetek = friss);
