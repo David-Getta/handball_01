@@ -426,7 +426,11 @@ class TeamMember {
   final int sz; // a csatlakozás sorszáma
   final String nev;
   final double x, y, h, fx, fy;
-  const TeamMember(this.sz, this.nev, this.x, this.y, this.h, this.fx, this.fy);
+  // A kvíz aktuális körére adott válasz (a padló pontja, pálya-méter) —
+  // null: nincs kvíz, vagy nem válaszolt.
+  final Offset? valasz;
+  const TeamMember(this.sz, this.nev, this.x, this.y, this.h, this.fx, this.fy,
+      {this.valasz});
 
   /// A feje fölötti felirat: a név, név nélkül a csatlakozás sorszáma
   /// (#3) — mint a böngészőben.
@@ -437,7 +441,7 @@ class TeamMember {
 /// böngésző three-terében, court3d.shared3d_hely) az app pálya-terében: a
 /// pálya y-ja a szélesség − three z, a magasság a three y; a three
 /// (−sin yaw, −cos yaw) nézés-iránya a pályán (−sin yaw, cos yaw). A rossz
-/// alakú sor kimarad.
+/// alakú sor kimarad. A kvíz-válasz ("valasz": [x, y]) már pálya-méter.
 List<TeamMember> parseTeamPresence(Object? csapat) {
   if (csapat is! List) return const [];
   final ki = <TeamMember>[];
@@ -449,8 +453,13 @@ List<TeamMember> parseTeamPresence(Object? csapat) {
       continue;
     }
     final v = [for (final x in hely) (x as num).toDouble()];
+    final va = e["valasz"];
+    final valasz = va is List && va.length == 2 && va.every((v) => v is num)
+        ? Offset((va[0] as num).toDouble(), (va[1] as num).toDouble())
+        : null;
     ki.add(TeamMember(sz.toInt(), (e["nev"] ?? "").toString(), v[0],
-        courtWidth - v[2], v[1], -math.sin(v[3]), math.cos(v[3])));
+        courtWidth - v[2], v[1], -math.sin(v[3]), math.cos(v[3]),
+        valasz: valasz));
   }
   return ki;
 }

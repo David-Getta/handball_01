@@ -253,6 +253,9 @@ class _Court3DScreenState extends State<Court3DScreen>
   int? _kovetok; // hányan követik (a motor válasza)
   // A csapat jelenléte (a motor válasza): ott rajzolva, ahonnan néznek.
   List<TeamMember> _csapat = const [];
+  // ❓ KVÍZ (vezetőként): a kör azonosítója, és hogy a csapat is látja-e
+  // a válaszokat — a követők a padlóra mutatnak (a böngészős 3D-ben).
+  (int, bool)? _kviz;
   // MUTATÓ: a vezető Shift+koppintása a padlóra — a csapatnak megy, és
   // _mutatoS másodpercig itt is lüktet.
   static const double _mutatoS = 4.0; // court3d.SHARED3D_POINTER_S (őr-teszt)
@@ -2180,6 +2183,7 @@ class _Court3DScreenState extends State<Court3DScreen>
       _vezet = be;
       _vezetHiba = false;
       _vezetUtolso = 0;
+      _kviz = null;
       _csapat = const [];
       _kovetok = null;
       // Új vezetés: a régi mutató (és nézőpont) nem megy újra a csapatnak.
@@ -2220,6 +2224,7 @@ class _Court3DScreenState extends State<Court3DScreen>
             speed: _speed,
             rajz: encodeDrawing(_rajzok),
             hely: browserPresence(_cx, _cy, _cz, _yaw),
+            kviz: _kviz == null ? null : {"n": _kviz!.$1, "mutat": _kviz!.$2},
             mutato: _mutato,
             nezopont: _nezopont)
         .then((v) {
@@ -2238,6 +2243,34 @@ class _Court3DScreenState extends State<Court3DScreen>
       _nezopont = null;
       if (!_vezetHiba && mounted) setState(() => _vezetHiba = true);
     }).whenComplete(() => _vezetUton = false);
+  }
+
+  /// Kvíz (vezetőként): indítás (a jelenet megáll) → a válaszok a
+  /// csapatnak is → vége. A válaszok a motor válaszával jönnek (a "csapat"
+  /// sorai), a 3D képen névvel.
+  void _kvizLep() {
+    setState(() {
+      final k = _kviz;
+      if (k == null) {
+        _kviz = (DateTime.now().millisecondsSinceEpoch, false);
+        _playing = false; // a kérdés a megállított jeleneten
+      } else if (!k.$2) {
+        _kviz = (k.$1, true);
+      } else {
+        _kviz = null;
+      }
+      _vezetUtolso = 0; // azonnal megy a csapatnak
+    });
+    _focus.requestFocus();
+  }
+
+  String _kvizFelirat() {
+    final k = _kviz;
+    if (k == null) return "❓ Kvíz";
+    final db = _csapat.where((t) => t.valasz != null).length;
+    return k.$2
+        ? "✖ Kvíz vége · $db válasz"
+        : "👁 Mutasd a csapatnak · $db/${_kovetok ?? 0} válasz";
   }
 
   /// Videó ki/be (K, a panel gombja). Bekapcsoláskor újra próbál (a
@@ -2424,6 +2457,7 @@ class _Court3DScreenState extends State<Court3DScreen>
                   ],
                   rejtett: rejtett,
                   csapat: _vezet ? _csapat : const [],
+                  kvizValaszok: _vezet && _kviz != null,
                   nyilak: [
                     ..._rajzok,
                     if (_rajzFolyo != null) _rajzFolyo!,
@@ -3032,6 +3066,26 @@ class _Court3DScreenState extends State<Court3DScreen>
               },
               child: const Text("📍 Ide mindenki",
                   style: TextStyle(fontSize: 11.5)),
+            ),
+          ),
+        ),
+      // ❓ Kvíz: a csapat a padlóra mutat, a válaszok névvel a 3D képen.
+      if (_vezet)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Tooltip(
+            message: "Kvíz a csapatnak: a jelenet megáll, a játékosok a "
+                "padlóra mutatnak (hova passzolnál? hol a helyed?) — te "
+                "névvel látod a válaszokat; másodszorra a csapatnak is "
+                "megmutatod, harmadszorra vége",
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  visualDensity: VisualDensity.compact),
+              onPressed: _kvizLep,
+              child: Text(_kvizFelirat(),
+                  style: const TextStyle(fontSize: 11.5)),
             ),
           ),
         ),
@@ -3958,8 +4012,10 @@ class _Court3DPainter extends CustomPainter {
   final _Jatekos? rejtett;
   // Rajz: nyilak a padlón (kezdő, vég, színkód — pálya-méter).
   final List<(Offset, Offset, int)> nyilak;
-  // A közös nézés jelenléte (vezetőként): a csapat tagjai.
+  // A közös nézés jelenléte (vezetőként): a csapat tagjai — kvíz
+  // közben (kvizValaszok) a válaszaik is.
   final List<TeamMember> csapat;
+  final bool kvizValaszok;
   _Court3DPainter(
       {required this.frame,
       required this.cx,
@@ -3989,7 +4045,8 @@ class _Court3DPainter extends CustomPainter {
       this.kapott,
       this.rejtett,
       this.nyilak = const [],
-      this.csapat = const []});
+      this.csapat = const [],
+      this.kvizValaszok = false});
 
   static const double _kozel = 0.15; // közeli vágósík (méter)
 
@@ -4887,6 +4944,40 @@ class _Court3DPainter extends CustomPainter {
         canvas.drawCircle(_kepernyo(jobb, fel, mely),
             (0.12 * _f / mely).clamp(1.5, 14.0),
             Paint()..color = AppColors.ball);
+      }
+    }
+
+    // A kvíz válaszai: kék jel a padlón (kör, rúd), rajta a név.
+    if (kvizValaszok) {
+      for (final t in csapat) {
+        final v = t.valasz;
+        if (v == null) continue;
+        final kek = Paint()
+          ..color = const Color(0xFF3DDCFF)
+          ..strokeWidth = 3.0;
+        _kor(canvas, kek, v.dx, v.dy, 0.32);
+        _vonal(canvas, kek..strokeWidth = 2.0, v.dx, v.dy, 0.02, v.dx, v.dy,
+            1.3);
+        final (jb, fe, me) = _kamera(v.dx, v.dy, 1.45);
+        if (me < _kozel) continue;
+        final csucs = _kepernyo(jb, fe, me);
+        final tp = TextPainter(
+          text: TextSpan(
+              text: t.cimke,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final bal = csucs - Offset(tp.width / 2, tp.height + 2);
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromLTWH(bal.dx - 5, bal.dy - 1, tp.width + 10,
+                    tp.height + 2),
+                const Radius.circular(6)),
+            Paint()..color = const Color(0xCC0A3A4A));
+        tp.paint(canvas, bal);
       }
     }
 

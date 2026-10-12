@@ -302,7 +302,8 @@ válaszokat azonnal látja, névvel (kék jel a padlón, rajta a név), és az
 állapot-sorban, hányan válaszoltak. A második gombnyomás ("👁 Mutasd a
 csapatnak") mindenkinek megmutatja a válaszokat — itt jön a
 megbeszélés, mellé a Döntések réteg jobb opciója —, a harmadik ("✖ Kvíz
-vége") leveszi őket. A motor
+vége") leveszi őket. Az app 3D füléről vezetve ugyanez (a panel "❓
+Kvíz" gombja, a gombon hányan válaszoltak). A motor
 a csapatnak csak a felfedés után adja a többiek válaszát (nem lehet
 puskázni), és csak az aktuális kört (a régi kör válasza nem látszik). A
 motor

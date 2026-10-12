@@ -58,6 +58,14 @@ void main() {
       "rossz",
     ]);
     expect(l.map((t) => t.cimke).toList(), ["Peti"]);
+    // A kvíz-válasz (pálya-méter) a sorban; rossz alakú: nincs.
+    final kv = parseTeamPresence([
+      {"sz": 1, "nev": "Anna", "hely": [1, 1.6, 2, 0], "valasz": [30, 12.5]},
+      {"sz": 2, "nev": "Peti", "hely": [1, 1.6, 2, 0], "valasz": [30]},
+    ]);
+    expect(kv[0].valasz, const Offset(30, 12.5));
+    expect(kv[1].valasz, isNull);
+    expect(l.single.valasz, isNull);
     expect(parseTeamPresence(null), isEmpty);
     // A csarnok dobozába szorítva (mint a motor).
     expect(browserPresence(0, 0, -3, 0)[1], 0.2);

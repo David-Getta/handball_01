@@ -920,6 +920,7 @@ class ApiClient {
       required double speed,
       String rajz = "",
       List<double>? hely,
+      Map<String, Object>? kviz,
       Map<String, num>? mutato,
       Map<String, num>? nezopont}) async {
     final resp = await http.put(
@@ -931,6 +932,8 @@ class ApiClient {
           "speed": speed,
           "rajz": rajz,
           if (hely != null) "hely": hely,
+          // A kvíz köre ({n, mutat}) — a követők a padlóra mutatnak.
+          if (kviz != null) "kviz": kviz,
           // A vezető mutatója ({x, y, n}) — a követőknél lüktető gyűrű.
           if (mutato != null) "mutato": mutato,
           // "📍 Ide mindenki": a vezető nézőpontja a böngésző three-terében.

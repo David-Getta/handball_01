@@ -2299,6 +2299,19 @@ def test_a_kozos_nezes_kvize(tmp_path, monkeypatch):
                  "kvíz közben a ravasz a válaszod",
                  "valaszJelFrissit(); felirat(ido);"):
         assert kell in oldal, kell
+    # Az app vezetője is: a kör a küldésben, a válaszok a képen.
+    from pathlib import Path
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    geo = (gyoker / "ui" / "court_geometry.dart").read_text(encoding="utf-8")
+    api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
+    for kell in ('kviz: _kviz == null ? null : {"n": _kviz!.$1, "mutat": _kviz!.$2},',
+                 "onPressed: _kvizLep,", "kvizValaszok: _vezet && _kviz != null,",
+                 "_playing = false; // a kérdés a megállított jeleneten",
+                 "_kviz = null;\n      _csapat = const [];"):
+        assert kell in palya, kell
+    assert 'if (kviz != null) "kviz": kviz,' in api
+    assert 'final va = e["valasz"];' in geo
 
 
 def test_a_jelenlet_helye_es_neve():

@@ -11,7 +11,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   ravasz a kontroller sugarával). Az edző névvel látja a válaszokat és
   hogy hányan válaszoltak; a második gombnyomásra a csapat is látja (a
   megbeszéléshez), a harmadikra vége. A motor a csapatnak csak a
-  felfedés után adja a többiek válaszát, és csak az aktuális körét.
+  felfedés után adja a többiek válaszát, és csak az aktuális körét. Az
+  app 3D füléről vezetve is: a panel "❓ Kvíz" gombja, a válaszok névvel a
+  3D képen.
 
 - **Közös nézés: látjátok egymást** (új, böngésző/VR + motor): a közös
   nézésben mindenki fejként jelenik meg a csarnokban, ott, ahonnan néz —
