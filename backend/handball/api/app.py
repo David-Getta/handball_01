@@ -6048,7 +6048,15 @@ def create_app():
         mutatói minden tárolt meccsből, időrendben. Ha egy meccsen több
         track viseli ugyanazt a számot (megszakadt követés), összegzünk —
         pont ezért éri meg mezszámot rendelni a játékosokhoz.
+
+        A döntés-kvíz (a 3D közös nézés kvíz-jegyzetei a meccsen, a
+        keret-név szerint — mint a keret-lapon): "quiz_answers" (ítélt
+        válaszok) és "quiz_correct" (a jobb opcióra mutatott); None, ha a
+        meccsen nem volt kvízben.
         """
+        from ..pipeline.court3d import quiz_name_key, quiz_stats, shared3d_nev
+        _kv_nev = _player_name(team, jersey)
+        _kv_kulcs = quiz_name_key(shared3d_nev(_kv_nev)) if _kv_nev else None
         points = []
         for match in _season_matches():
             side = None
@@ -6171,6 +6179,15 @@ def create_app():
                                         if percre[m_] > percre[jersey])
             sajat_percre = (round(distance / max(1e-9, frames / fps / 60.0), 1)
                             if frames else None)
+            # A döntés-kvíz ezen a meccsen (hibatűrően).
+            kv_itelt = kv_jo = None
+            if _kv_kulcs:
+                try:
+                    for r_ in quiz_stats(_load_notes(match.meta.match_id)):
+                        if quiz_name_key(r_["nev"]) == _kv_kulcs and r_["itelt"]:
+                            kv_itelt, kv_jo = r_["itelt"], r_["jo"]
+                except Exception:
+                    pass
 
             points.append({
                 "match_id": match.meta.match_id,
@@ -6198,6 +6215,8 @@ def create_app():
                 "shot_pct": round(100.0 * goals / shots, 1) if shots else None,
                 "xg": xg,
                 "xg_diff": round(goals - xg, 2) if xg is not None else None,
+                "quiz_answers": kv_itelt,
+                "quiz_correct": kv_jo,
             })
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
         return {"team": team, "jersey": jersey,

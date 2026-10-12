@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.168 óta)
 
+- **A döntés-kvíz a Játékos-fejlődésben** (új, motor + app): a
+  /players/trend pontjai a meccs döntés-kvízét is viszik (a 3D közös
+  nézés kvíz-jegyzetei, a keret-név szerint), a képernyő összképe
+  ("döntés-kvíz: 7/9 ✓ (78%)") és a meccs-sorok "kvíz" oszlopa mutatja.
+  Edzői olvasat: meccsről meccsre látszik, olvassa-e jobban a játékot.
+
 - **A 3D/VR oldal internet nélkül is megy** (javítás, motor + csomagolás):
   a three.js eddig CDN-ről jött — internet nélkül (edzőterem, klub
   saját hálózata) a 3D oldal és a közös nézés el sem indult. Most a motor

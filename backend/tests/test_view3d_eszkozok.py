@@ -2590,6 +2590,44 @@ def test_a_kviz_merleg_a_kereten_es_a_nevvalaszto(tmp_path, monkeypatch):
     assert '(p["kviz"] as Map?)?["itelt"]' in keret
 
 
+def test_a_dontes_kviz_a_jatekos_fejlodesben(tmp_path, monkeypatch):
+    """A /players/trend pontjai a meccs döntés-kvízét is viszik (a
+    keret-név szerint); név nélkül vagy kvíz nélkül None. A képernyő
+    összképe és oszlopa mutatja."""
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    m = _meccs()
+    app.state.put_match(m)
+    c = TestClient(app)
+    mid, csapat = m.meta.match_id, m.meta.home_team
+    pont = lambda: c.get("/players/trend", params={"team": csapat, "jersey": 7}
+                         ).json()["points"][0]
+    # Név nélkül nincs kvíz.
+    c.post(f"/matches/{mid}/notes", json={"frame": 5, "text": "❓", "kviz": [
+        {"nev": "Kiss Péter", "itelet": True}]})
+    assert pont()["quiz_answers"] is None
+    c.post("/library/players", json={"team": csapat, "jersey": 7,
+                                     "name": "Kiss Péter"})
+    c.post(f"/matches/{mid}/notes", json={"frame": 9, "text": "❓", "kviz": [
+        {"nev": "kiss péter", "itelet": False}, {"nev": "Más", "itelet": True},
+        {"nev": "Kiss Péter", "itelet": None}]})
+    p = pont()
+    assert (p["quiz_answers"], p["quiz_correct"]) == (2, 1)
+
+    kep = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+           / "player_trend_screen.dart").read_text(encoding="utf-8")
+    for kell in ('_chip("döntés-kvíz: $kvJo/$kvItelt ✓ "',
+                 'if (hasQuiz) _cell("kvíz", 48),',
+                 '"${p["quiz_correct"] ?? 0}/${p["quiz_answers"]}"'):
+        assert kell in kep, kell
+
+
 def test_a_jelenlet_helye_es_neve():
     """court3d.shared3d_hely: szöveg vagy lista, dobozba szorítva, a szög
     a (−π, π]-be; rossz alaknál None. shared3d_nev: vezérlőjel nélkül,

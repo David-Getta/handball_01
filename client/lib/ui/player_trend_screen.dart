@@ -477,6 +477,13 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
         0, (s, p) => s + ((p["gk_saves"] as num?)?.toInt() ?? 0));
     final gkPrev = _points.fold(
         0.0, (s, p) => s + ((p["gk_prevented"] as num?)?.toDouble() ?? 0.0));
+    // Döntés-kvíz (a 3D közös nézésből, a keret-név szerint): ha bármely
+    // meccsen volt, a kvíz-oszlop és az összkép-chip is megjelenik.
+    final kvItelt = _points.fold(
+        0, (s, p) => s + ((p["quiz_answers"] as num?)?.toInt() ?? 0));
+    final kvJo = _points.fold(
+        0, (s, p) => s + ((p["quiz_correct"] as num?)?.toInt() ?? 0));
+    final hasQuiz = kvItelt > 0;
     return [
       // Szezon-összkép.
       Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.sm, children: [
@@ -496,6 +503,9 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
         if (hasMark && markS > 0)
           _chip("őrzés: ${markS.toStringAsFixed(0)} mp · átl. "
               "${(markWeighted / markS).toStringAsFixed(1)} m"),
+        if (hasQuiz)
+          _chip("döntés-kvíz: $kvJo/$kvItelt ✓ "
+              "(${(100.0 * kvJo / kvItelt).toStringAsFixed(0)}%)"),
       ]),
       // HOL TARTOK A KERETEN BELÜL — a nyers "4,2 km" magában semmit
       // nem mond, a keret-átlaghoz mérve viszont döntés lesz belőle.
@@ -518,10 +528,11 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           if (isGk) _cell("védés", 52),
           if (isGk) _cell("GSAx", 50),
           if (hasMark) _cell("őrzés", 66),
+          if (hasQuiz) _cell("kvíz", 48),
           _cell("perc", 44),
         ]),
       ),
-      ..._points.map((p) => _row(p, maxDist, isGk, hasMark)),
+      ..._points.map((p) => _row(p, maxDist, isGk, hasMark, hasQuiz)),
     ];
   }
 
@@ -666,7 +677,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           style: AppText.label.copyWith(fontSize: 10, color: AppColors.textFaint)));
 
   Widget _row(Map<String, dynamic> p, double maxDist, bool isGk,
-      bool hasMark) {
+      bool hasMark, bool hasQuiz) {
     final dist = (p["distance_m"] as num?)?.toDouble() ?? 0.0;
     final frac = maxDist > 0 ? (dist / maxDist).clamp(0.0, 1.0) : 0.0;
     final date = (p["date"] as String?) ?? "";
@@ -782,6 +793,17 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                             ? AppColors.gold
                             : AppColors.textPrimary));
               })),
+        // Döntés-kvíz ezen a meccsen: találat / ítélt válasz.
+        if (hasQuiz)
+          SizedBox(
+              width: 48,
+              child: Text(
+                  ((p["quiz_answers"] as num?)?.toInt() ?? 0) > 0
+                      ? "${p["quiz_correct"] ?? 0}/${p["quiz_answers"]}"
+                      : "—",
+                  textAlign: TextAlign.right,
+                  style: AppText.label.copyWith(
+                      fontSize: 13, color: AppColors.textPrimary))),
         SizedBox(
             width: 44,
             child: Text("${p["minutes"] ?? "-"}",

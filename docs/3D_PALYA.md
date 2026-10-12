@@ -322,7 +322,8 @@ kulcs, ezért érdemes a csapat linkjén mindig ugyanazt a nevet megadni
 követő oldalán a **"Ki vagy?"** lista a keretben felvitt nevek közül
 választ (a headset billentyűzetén nem kell gépelni) — és a keret nevével
 a mérleg a Keret képernyőn is megjelenik, a játékos neve mellett ("❓
-7/9"). Az app 3D
+7/9"), a Játékos-fejlődésben pedig meccsenként (a "kvíz" oszlop és az
+összkép "döntés-kvíz" chipje) — látszik, olvassa-e jobban a játékot. Az app 3D
 füléről vezetve ugyanez (a panel "❓
 Kvíz" gombja, a gombon hányan válaszoltak — döntés-kvízben hányan
 találták el, a válaszok felirata ✓/✗). A motor
