@@ -585,6 +585,22 @@ function kvizItelet(vx, vy, d){
   const db = Math.hypot(vx - bx, vy - by), dc = Math.hypot(vx - cx, vy - cy);
   return db < dc && db <= (fajta === "s" ? KV_LOVES : KV_TALALAT);
 }
+// A kvíz eredménye jegyzet-szövegként: valaszok = [[név, ítélet (true/
+// false/null)], …] a csatlakozás sorrendjében; fajta: a jobb opció ("s"
+// lövés, "p" passz; null: nem döntés-kvíz); hianyzik: a nem válaszolók
+// száma. Az app (court_geometry.quizNoteText) ugyanezt írja.
+function kvizJegyzetSzoveg(valaszok, fajta, hianyzik){
+  const nevek = (f) => valaszok.filter(v => f(v[1])).map(v => v[0]).join(", ");
+  const r = [];
+  if (fajta){
+    const jo = nevek(i => i === true), rossz = nevek(i => i === false);
+    if (jo) r.push("✓ " + jo);
+    if (rossz) r.push("✗ " + rossz);
+  } else if (valaszok.length) r.push("válaszolt: " + nevek(() => true));
+  if (hianyzik > 0) r.push("nem válaszolt: " + hianyzik);
+  return (fajta ? "❓ Döntés-kvíz (jobb opció: " + (fajta === "s" ? "lövés" : "passz") + ")" : "❓ Kvíz")
+    + (r.length ? " — " + r.join(" · ") : "");
+}
 """
 
 RAJZ_JS = """
@@ -884,7 +900,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  <div class="sor">
   <button id="vezetGomb" title="Közös nézés — te vezetsz: a lejátszásod (idő, szünet, sebesség, rajz) a csapat headsetjein is fut; a csapat linkje a vágólapra kerül">📡 Vezetem</button>
   <button id="ideGomb" title="Ide mindenki: a követők kamerája a te mostani nézőpontodba ugrik (hely és irány) — pl. mindenki a kapus helyére. Csak vezetés közben" disabled>📍 Ide mindenki</button>
-  <button id="kvizGomb" title="Kvíz a csapatnak: a jelenet megáll, a játékosok a padlóra mutatnak (hova passzolnál? hol a helyed?) — te névvel látod a válaszokat; másodszorra a csapatnak is megmutatod, harmadszorra vége. Csak vezetés közben" disabled>❓ Kvíz</button>
+  <button id="kvizGomb" title="Kvíz a csapatnak: a jelenet megáll, a játékosok a padlóra mutatnak (hova passzolnál? hol a helyed?) — te névvel látod a válaszokat; másodszorra a csapatnak is megmutatod, harmadszorra vége — az eredmény a jegyzetek közé kerül. Csak vezetés közben" disabled>❓ Kvíz</button>
   <button id="kovetGomb" title="Közös nézés — az edzőt követed: az ő lejátszása fut nálad, te a saját helyedről nézed (a pálya bejárható)">👥 Követem</button>
   <span id="kozosInfo" style="font-size:11px;word-break:break-all"></span>
  </div>
@@ -2726,6 +2742,7 @@ window.jelenletProba = () => [...avatarok.entries()].map(([k, cs]) => ({
 window.sajatHelyProba = () => sajatHely();
 let kzValaszDb = 0;  // a kvíz aktuális körére válaszolók (a motor szerint)
 let kzJoDb = 0;      // közülük a jobb opciót mutatók (döntés-kvízben)
+let kzVezetoCsapat = [];  // a motor legutóbbi csapat-listája (a vezetőnek)
 function kzVezetoInfo(){
   kozosInfo.textContent = "📡 vezetsz" + (kzKovetok == null ? "" : " · " + kzKovetok + " követő")
     + (kzKviz ? " · ❓ " + kzValaszDb + "/" + (kzKovetok || 0) + " válasz" : "")
@@ -2923,10 +2940,30 @@ kvizGomb.onclick = () => {
     // A kérdés a megállított jeleneten.
     megy = false; lejatszasGomb.textContent = "▶";
   } else if (!kzKviz.mutat) kzKviz = {...kzKviz, mutat: true};
-  else { kzKviz = null; valaszokAllit([]); }
+  else { kvizMent(kzKviz, kzVezetoCsapat); kzKviz = null; valaszokAllit([]); }
   kvizGombFelirat(); kzVezetoInfo();
   kzUtolso = 0;  // azonnal megy a csapatnak
 };
+// A kvíz eredménye a jegyzetek közé (a kvíz végén, ha volt válasz): a
+// jegyzet-listában, a nyomtatott jelentésben (ábrával) és a Klipek
+// "Jegyzetelt pillanatok" csomagjában is ott van — döntés-kvízben a döntés
+// kockáján, a passzolótól a válaszokig húzott nyilakkal (sárga ✓, piros ✗).
+async function kvizMent(kor, csapat){
+  const valaszolok = (csapat || []).filter(e => e.valasz);
+  if (!kor || !valaszolok.length || !ADAT.match_id) return;
+  const d = kvizDontes(kor);
+  const itelet = (e) => d ? kvizItelet(e.valasz[0], e.valasz[1], d) : null;
+  const szoveg = kvizJegyzetSzoveg(valaszolok.map(e => [e.nev || ("#" + e.sz), itelet(e)]),
+    d ? d[7] : null, Math.max(0, (kzKovetok || 0) - valaszolok.length));
+  const rajz = d ? rajzKodol(valaszolok.map(e => [d[2], d[3], e.valasz[0], e.valasz[1], itelet(e) ? 0 : 2])) : "";
+  try {
+    const v = await fetch(jegyzetCim(), {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({frame: Math.round((d ? d[0] : ido) * FPS), text: szoveg, rajz})});
+    if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
+    await jegyzetBetolt();
+    jegyzetInfo.textContent = "📝 a kvíz eredménye jegyzetként mentve";
+  } catch (e) { jegyzetInfo.textContent = "a kvíz eredménye nem mentődött: " + e.message; }
+}
 const KZ_KVIZ_KERDES = "❓ Kvíz: mutasd meg a padlón — kattintás (VR: ravasz a kontrollerrel)";
 const KZ_KVIZ_KESZ = "❓ a válaszod a padlón — várjuk a többieket (még módosíthatod)";
 const KZ_KVIZ_MUTAT = "👁 a csapat válaszai a padlón";
@@ -2998,7 +3035,8 @@ function kozosFrissit(){
       body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok), kviz: kzKviz, hely: sajatHely(), mutato: kzMutato, nezopont: kzNezopont})})
       .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(a => { if (kozosMod === "vezet"){ kzKovetok = a.followers;
-                                            kzValaszDb = (a.csapat || []).filter(e => e.valasz).length;
+                                            kzVezetoCsapat = a.csapat || [];
+                                            kzValaszDb = kzVezetoCsapat.filter(e => e.valasz).length;
                                             const kd = kvizDontes(kzKviz);
                                             kzJoDb = kd ? (a.csapat || []).filter(
                                               e => e.valasz && kvizItelet(e.valasz[0], e.valasz[1], kd)).length : 0;

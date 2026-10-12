@@ -481,6 +481,29 @@ bool quizVerdict(Offset valasz, Offset jobb, Offset valasztott,
   return db < dc && db <= (loves ? quizShotM : quizHitM);
 }
 
+/// A kvíz eredménye jegyzet-szövegként (a böngésző kvizJegyzetSzoveg-
+/// jének tükre): valaszok = (név, ítélet — null: nem döntés-kvíz) a
+/// csatlakozás sorrendjében; fajta: a jobb opció ("s" lövés, "p" passz;
+/// null: nem döntés-kvíz); hianyzik: a nem válaszolók száma.
+String quizNoteText(List<(String, bool?)> valaszok, String? fajta,
+    int hianyzik) {
+  String nevek(bool Function(bool?) f) =>
+      [for (final (n, i) in valaszok) if (f(i)) n].join(", ");
+  final r = <String>[];
+  if (fajta != null) {
+    final jo = nevek((i) => i == true), rossz = nevek((i) => i == false);
+    if (jo.isNotEmpty) r.add("✓ $jo");
+    if (rossz.isNotEmpty) r.add("✗ $rossz");
+  } else if (valaszok.isNotEmpty) {
+    r.add("válaszolt: ${nevek((_) => true)}");
+  }
+  if (hianyzik > 0) r.add("nem válaszolt: $hianyzik");
+  final fej = fajta != null
+      ? "❓ Döntés-kvíz (jobb opció: ${fajta == "s" ? "lövés" : "passz"})"
+      : "❓ Kvíz";
+  return r.isEmpty ? fej : "$fej — ${r.join(" · ")}";
+}
+
 /// Az app kamerájának jelenléte a motornak: [x, y, z, yaw] a böngésző
 /// three-terében (mint a browserViewpoint — a csarnok dobozába szorítva).
 List<double> browserPresence(double cx, double cy, double cz, double yaw) {

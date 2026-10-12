@@ -2402,6 +2402,42 @@ def test_a_dontes_kviz_a_motorban_es_az_oldalon(tmp_path, monkeypatch):
         assert kell in palya, kell
 
 
+def test_a_kviz_eredmenye_jegyzetbe_kerul():
+    """A kvíz végén az eredmény jegyzet: a szöveg a böngészőben (node) és az
+    appban (Dart-teszt) ugyanaz; döntés-kvízben a döntés kockáján, a
+    passzolótól a válaszokig húzott nyilakkal."""
+    from handball.pipeline.view3d_html import KVIZ_JS, view3d_html
+
+    esetek = [([["Anna", True], ["Peti", False], ["#3", True]], "s", 1),
+              ([["Anna", None], ["Peti", None]], None, 0),
+              ([["Anna", False]], "p", 0), ([], None, 2)]
+    js = (KVIZ_JS.replace("__KV_TALALAT__", "3.0").replace("__KV_LOVES__", "6.0")
+          + "const E = " + json.dumps(esetek) + ";\n"
+          + "console.log(JSON.stringify(E.map(([v, f, h]) => kvizJegyzetSzoveg(v, f, h))));")
+    r = subprocess.run([NODE, "-e", js], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [
+        "❓ Döntés-kvíz (jobb opció: lövés) — ✓ Anna, #3 · ✗ Peti · nem válaszolt: 1",
+        "❓ Kvíz — válaszolt: Anna, Peti",
+        "❓ Döntés-kvíz (jobb opció: passz) — ✗ Anna",
+        "❓ Kvíz — nem válaszolt: 2"]
+
+    oldal = view3d_html(_meccs())
+    for kell in ("else { kvizMent(kzKviz, kzVezetoCsapat); kzKviz = null;",
+                 "frame: Math.round((d ? d[0] : ido) * FPS), text: szoveg, rajz",
+                 "[d[2], d[3], e.valasz[0], e.valasz[1], itelet(e) ? 0 : 2]",
+                 "kzVezetoCsapat = a.csapat || [];"):
+        assert kell in oldal, kell
+    from pathlib import Path
+    palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+             / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ("if (_kviz?.$2 == true) _kvizMent(_csapat, _kvizDontes);",
+                 "final szoveg = quizNoteText(",
+                 "itelet[t.sz] == true ? 0 : 2"):
+        assert kell in palya, kell
+
+
 def test_a_jelenlet_helye_es_neve():
     """court3d.shared3d_hely: szöveg vagy lista, dobozba szorítva, a szög
     a (−π, π]-be; rossz alaknál None. shared3d_nev: vezérlőjel nélkül,

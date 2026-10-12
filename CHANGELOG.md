@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.167 óta)
 
+- **A kvíz eredménye a jegyzetek közé** (új, böngésző + app): a kvíz
+  végén (ha volt válasz) a vezető jegyzetet ír a pillanathoz — döntés-
+  kvízben a döntés kockájára, "❓ Döntés-kvíz (jobb opció: lövés) — ✓
+  Anna · ✗ Peti · nem válaszolt: 1", a passzolótól a válaszokig húzott
+  nyilakkal (sárga ✓, piros ✗). Így a kvíz a jegyzet-listában, a
+  nyomtatott jelentésben (taktika-ábrával) és a Klipek "Jegyzetelt
+  pillanatok" csomagjában is ott van.
+
 - **Döntés-kvíz** (új, böngésző/VR + motor): ha a kvíz döntés-
   pillanatnál indul (a Döntések felirata látszik), a válaszokat a modell
   jobb opciójához méri — ✓, ha a játékos a jobb célra mutatott (a jobb

@@ -2252,6 +2252,8 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// csapatnak is → vége. A válaszok a motor válaszával jönnek (a "csapat"
   /// sorai), a 3D képen névvel.
   void _kvizLep() {
+    // A kvíz vége: az eredmény a jegyzetek közé (ha volt válasz).
+    if (_kviz?.$2 == true) _kvizMent(_csapat, _kvizDontes);
     setState(() {
       final k = _kviz;
       if (k == null) {
@@ -2281,6 +2283,51 @@ class _Court3DScreenState extends State<Court3DScreen>
     return k.$2
         ? "✖ Kvíz vége · $db válasz$jo"
         : "👁 Mutasd a csapatnak · $db/${_kovetok ?? 0} válasz$jo";
+  }
+
+  /// A kvíz eredménye a jegyzetek közé (a kvíz végén, ha volt válasz) —
+  /// mint a böngészőben: a szöveg court_geometry.quizNoteText; döntés-
+  /// kvízben a döntés kockáján, a passzolótól a válaszokig húzott
+  /// nyilakkal (sárga ✓, piros ✗). A jegyzet-listában, a jelentésben és a
+  /// Klipek jegyzet-csomagjában is ott van.
+  Future<void> _kvizMent(
+      List<TeamMember> csapat, Map<String, dynamic>? d) async {
+    final m = _match, id = _matchId;
+    final valaszolok = [for (final t in csapat) if (t.valasz != null) t];
+    if (m == null || id == null || _demo || valaszolok.isEmpty) return;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final itelet = {for (final t in valaszolok) t.sz: _kvizItelet(t.valasz!)};
+    final szoveg = quizNoteText(
+        [for (final t in valaszolok) (t.cimke, itelet[t.sz])],
+        d == null ? null : (d["best_kind"] == "shoot" ? "s" : "p"),
+        math.max(0, (_kovetok ?? 0) - valaszolok.length));
+    final p = d?["passer"];
+    final rajz = p is List && p.length == 2
+        ? encodeDrawing([
+            for (final t in valaszolok)
+              (
+                Offset((p[0] as num).toDouble(), (p[1] as num).toDouble()),
+                t.valasz!,
+                itelet[t.sz] == true ? 0 : 2
+              )
+          ])
+        : null;
+    final s = (d?["s"] as num?)?.toDouble();
+    try {
+      await _api.addNote(id, s != null ? (s * fps).round() : _mostT(m), szoveg,
+          rajz: rajz);
+      final friss = await _api.fetchNotes(id);
+      if (!mounted) return;
+      setState(() => _jegyzetek = friss);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("📝 A kvíz eredménye jegyzetként mentve — a "
+              "jelenet-listában, a jelentésben és a Klipek "
+              "jegyzet-csomagjában is.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(humanError(e))));
+    }
   }
 
   /// A kvíz köre a motornak: {n, mutat} — döntés-kvízben a pillanat
@@ -3122,7 +3169,8 @@ class _Court3DScreenState extends State<Court3DScreen>
             message: "Kvíz a csapatnak: a jelenet megáll, a játékosok a "
                 "padlóra mutatnak (hova passzolnál? hol a helyed?) — te "
                 "névvel látod a válaszokat; másodszorra a csapatnak is "
-                "megmutatod, harmadszorra vége",
+                "megmutatod, harmadszorra vége — az eredmény a jegyzetek "
+                "közé kerül",
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
                   padding:

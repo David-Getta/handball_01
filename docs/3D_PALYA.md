@@ -308,7 +308,13 @@ válaszokat a modell jobb opciójához méri: ✓, ha a válasz a jobb célhoz
 közelebb van, mint a választott passz céljához, és attól legfeljebb 3
 m-re (lövésnél a kapu előtt, a kapuelőtérben); az edző azonnal látja a
 neveken és az állapot-sorban ("✓ 2 a jobb opció"), a csapat a
-felfedéskor. Az app 3D füléről vezetve ugyanez (a panel "❓
+felfedéskor. A kvíz végén az eredmény a **jegyzetek közé** kerül
+(ha volt válasz): "❓ Döntés-kvíz (jobb opció: lövés) — ✓ Anna · ✗ Peti ·
+nem válaszolt: 1" a döntés kockáján, a passzolótól a válaszokig húzott
+nyilakkal (sárga ✓, piros ✗) — így a jegyzet-listában, a nyomtatott
+jelentésben (ábrával) és a Klipek jegyzet-csomagjában is ott van, és
+meccsről meccsre visszanézhető, ki látta a jobb megoldást. Az app 3D
+füléről vezetve ugyanez (a panel "❓
 Kvíz" gombja, a gombon hányan válaszoltak — döntés-kvízben hányan
 találták el, a válaszok felirata ✓/✗). A motor
 a csapatnak csak a felfedés után adja a többiek válaszát (nem lehet

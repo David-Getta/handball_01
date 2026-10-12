@@ -94,6 +94,18 @@ void main() {
     }
   });
 
+  test("kvíz: a jegyzet-szöveg = a böngésző kvizJegyzetSzoveg-je", () {
+    // Ugyanazok az esetek, mint a backend node-tesztjében
+    // (test_a_kviz_eredmenye_jegyzetbe_kerul).
+    expect(quizNoteText([("Anna", true), ("Peti", false), ("#3", true)], "s", 1),
+        "❓ Döntés-kvíz (jobb opció: lövés) — ✓ Anna, #3 · ✗ Peti · nem válaszolt: 1");
+    expect(quizNoteText([("Anna", null), ("Peti", null)], null, 0),
+        "❓ Kvíz — válaszolt: Anna, Peti");
+    expect(quizNoteText([("Anna", false)], "p", 0),
+        "❓ Döntés-kvíz (jobb opció: passz) — ✗ Anna");
+    expect(quizNoteText([], null, 2), "❓ Kvíz — nem válaszolt: 2");
+  });
+
   test("rajz: dekódolás = a böngésző rajzDekodol-ja", () {
     // Ugyanaz az eset, mint a backend node-tesztjében
     // (test_a_rajz_dekodolasa_a_dart_tukorrel_egyezik).
