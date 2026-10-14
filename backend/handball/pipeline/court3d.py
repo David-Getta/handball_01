@@ -678,6 +678,9 @@ SHARED3D_REC_NAME_MAX = 80
 # órája bőven belefér), és csak a böngészők MediaRecorder-ének típusai.
 SHARED3D_REC_AUDIO_MAX = 64 * 1024 * 1024
 SHARED3D_REC_AUDIO_TYPES = ("audio/webm", "audio/mp4", "audio/ogg")
+# A /kovet "Várunk az edzőre" lapja a legutóbbi ennyi felvételt kínálja
+# visszanézésre (meccsektől függetlenül, a legújabb elöl).
+SHARED3D_WAIT_RECS = 8
 
 
 def shared3d_felvetel_nev(x) -> str:

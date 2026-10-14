@@ -3643,6 +3643,33 @@ def create_app():
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
         return _data_dir / f"{safe}.felvetelek"
 
+    _felvetel_fejek: dict = {}
+
+    def _felvetel_fej(p: Path):
+        """Egy felvétel fejléce ({"id", "nev", "letrehozva", "hossz_s",
+        "hang"}) — a fájl módosítási ideje és mérete szerint
+        gyorsítótárazva: a teljes fájl (akár több MB állapot) csak
+        változáskor olvasódik újra (a /kovet várólapja 3 mp-enként
+        listáz). None: nincs vagy olvashatatlan."""
+        try:
+            st = p.stat()
+        except OSError:
+            return None
+        kulcs = (st.st_mtime_ns, st.st_size)
+        tar = _felvetel_fejek.get(str(p))
+        if tar is not None and tar[0] == kulcs:
+            return tar[1]
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+            fej = {"id": d["id"], "nev": d.get("nev") or "",
+                   "letrehozva": d.get("letrehozva") or "",
+                   "hossz_s": d.get("hossz_s") or 0,
+                   "hang": bool(d.get("hang"))}
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+        _felvetel_fejek[str(p)] = (kulcs, fej)
+        return fej
+
     @app.post("/matches/{match_id}/felvetelek")
     def felvetel_ment(match_id: str, body: dict):
         """A megbeszélés felvételének mentése. Törzs: {"nev", "allapotok":
@@ -3705,14 +3732,9 @@ def create_app():
         mappa = _felvetel_mappa(match_id)
         if mappa.is_dir():
             for p in sorted(mappa.glob("*.json")):
-                try:
-                    d = json.loads(p.read_text(encoding="utf-8"))
-                    ki.append({"id": d["id"], "nev": d.get("nev") or "",
-                               "letrehozva": d.get("letrehozva") or "",
-                               "hossz_s": d.get("hossz_s") or 0,
-                               "hang": bool(d.get("hang"))})
-                except Exception:
-                    continue
+                fej = _felvetel_fej(p)
+                if fej is not None:
+                    ki.append(dict(fej))
         ki.sort(key=lambda f: (f["letrehozva"], f["id"]), reverse=True)
         return {"felvetelek": ki}
 
@@ -3830,8 +3852,11 @@ def create_app():
         A headset billentyűzetén a "localhost:8000/kovet" begépelhető, a
         hosszú meccs-azonosítós cím nem. Vezető nélkül egy 3 mp-enként
         frissülő "várunk az edzőre" lap: amint az edző vezet, magától
-        továbblép. `nev` (/kovet?nev=Peti): a követő neve — a többiek a
-        feje fölött látják."""
+        továbblép — addig a legutóbbi felvételeket kínálja visszanézésre
+        (SHARED3D_WAIT_RECS, meccsektől függetlenül; aki kimaradt, innen
+        egy kattintással nézheti). `nev` (/kovet?nev=Peti): a követő neve
+        — a többiek a feje fölött látják."""
+        import html as _html
         from urllib.parse import quote
 
         from fastapi.responses import HTMLResponse, RedirectResponse
@@ -3848,16 +3873,46 @@ def create_app():
                 url=(f"/matches/{quote(mid, safe='')}/view3d?kovet=1"
                      + (f"&nev={quote(nev_, safe='')}" if nev_ else "")),
                 status_code=307)
+        # Addig: a legutóbbi felvételek (a meccsek fejlécéből — a tár
+        # nem vár a betöltésre, és a hideg meccseket nem tölti vissza).
+        felvetelek = []
+        for meta, _n in _store.summaries():
+            mappa = _felvetel_mappa(meta.match_id)
+            if not mappa.is_dir():
+                continue
+            for p in mappa.glob("*.json"):
+                fej = _felvetel_fej(p)
+                if fej is not None:
+                    felvetelek.append((fej, meta))
+        felvetelek.sort(key=lambda s: (s[0]["letrehozva"], s[0]["id"]),
+                        reverse=True)
+        sorok = []
+        for fej, meta in felvetelek[:_c3.SHARED3D_WAIT_RECS]:
+            mp = max(0, int(float(fej["hossz_s"] or 0)))
+            sorok.append(
+                '<li style="margin:.6em 0"><a style="color:#7ee0d2;'
+                'font-size:1.3em" href="/matches/'
+                + _html.escape(quote(meta.match_id, safe=""))
+                + "/view3d?felvetel=" + _html.escape(quote(fej["id"], safe=""))
+                + '">▶ ' + _html.escape(fej["nev"]) + "</a><br>"
+                + '<span style="color:#93a0b4">'
+                + _html.escape(f"{meta.home_team} – {meta.away_team}")
+                + f" · {mp // 60}:{mp % 60:02d}"
+                + (" · 🎙" if fej["hang"] else "") + "</span></li>")
+        lista = ("" if not sorok else
+                 '<h2 style="margin-top:2.5em">Addig: a legutóbbi '
+                 'megbeszélések</h2><ul style="list-style:none;padding:0">'
+                 + "".join(sorok) + "</ul>")
         return HTMLResponse(
             content=('<!DOCTYPE html><html lang="hu"><head>'
                      '<meta charset="utf-8"><meta http-equiv="refresh" '
                      'content="3"><title>Közös nézés</title></head>'
                      '<body style="background:#0a0e14;color:#e6edf3;'
                      'font-family:sans-serif;text-align:center;'
-                     'padding-top:20vh"><h1>👥 Várunk az edzőre…</h1>'
+                     'padding-top:12vh"><h1>👥 Várunk az edzőre…</h1>'
                      '<p>Amint az edző a 3D pályán a "📡 Vezetem" gombot '
                      'megnyomja, ez a lap magától továbblép.</p>'
-                     '</body></html>'),
+                     + lista + '</body></html>'),
             headers={"Cache-Control": "no-store"})
 
     @app.get("/matches/{match_id}/calib-overlay")

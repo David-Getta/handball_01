@@ -353,6 +353,10 @@ szól. A headset böngészője kattintás nélkül nem mindig enged hangot:
 ilyenkor a felirat szól ("kattints az oldalra a hanghoz"). Az app
 vezetése hangot nem rögzít.
 
+A csapat linkje (`/kovet`) is kínálja őket: amíg nincs élő vezetés, a
+"Várunk az edzőre" lap a legutóbbi megbeszéléseket listázza (meccsektől
+függetlenül) — a headsetben egy kattintással indul a visszanézés.
+
 Az appban ugyanígy: vezetés közben a **⏺ Felvétel** gomb rögzít. A 3D fül
 **▶ Felvételek** listája a meccs felvételeit mutatja: a sorra kattintva
 a böngészős 3D nyílik, és a felvétel magától indul (link-paraméter:

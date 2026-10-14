@@ -110,10 +110,12 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   mutató a padlón, "📍 Ide mindenki", jelenlét (a játékosok névvel látják
   egymást és az edzőt), kvíz (a játékosok a padlóra mutatnak; döntés-
   pillanatnál a modell jobb opciójához mérve, az eredmény a jegyzetek
-  közé). Nyitott: próba valódi headsetekkel (eddig headless böngészővel
-  és szimulált VR-munkamenettel tesztelve), és a több headsetes hálózati
-  telepítés egyszerűsítése (most USB + `adb reverse`, vagy kézi hálózati
-  megnyitás).
+  közé). A több headsetes hálózati út az appból egy kapcsoló (🏟
+  Klub-hálózat — a hálózatról csak a közös nézés érhető el), és internet
+  nem kell (a three.js a motorból). A megbeszélés visszanézhető (⏺
+  Felvétel — az edző hangjával; a csapat linkjéről is indítható).
+  Nyitott: próba valódi headsetekkel (eddig headless böngészővel,
+  szimulált VR-munkamenettel és ál-mikrofonnal tesztelve).
 
 ## 8. fázis — Élő meccskövetés
 - Valós idejű pipeline (streaming inferencia).

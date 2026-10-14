@@ -2689,6 +2689,26 @@ def test_a_rovid_csapat_link(tmp_path, monkeypatch):
         "/matches/egy/view3d?kovet=1")
     ora[0] += court3d.SHARED3D_STALE_S + 1
     assert c.get("/kovet", follow_redirects=False).status_code == 200
+    # Vezető nélkül a várólap a legutóbbi felvételeket kínálja (meccsektől
+    # függetlenül, a legújabb elöl, legfeljebb SHARED3D_WAIT_RECS).
+    assert "legutóbbi" not in c.get("/kovet").text
+    allapotok = [[0, {"t": 1}], [65.4, {"t": 2}]]
+    regi = c.post("/matches/egy/felvetelek",
+                  json={"nev": "Régi <b>", "allapotok": allapotok}).json()
+    uj = c.post("/matches/ket to/felvetelek",
+                json={"nev": "Új", "allapotok": allapotok}).json()
+    fajl = next(tmp_path.rglob(f"egy.felvetelek/{regi['id']}.json"))
+    d = json.loads(fajl.read_text(encoding="utf-8"))
+    d["letrehozva"] = "2000-01-01T00:00:00"
+    fajl.write_text(json.dumps(d), encoding="utf-8")
+    lap = c.get("/kovet").text
+    assert lap.index(f"/matches/ket%20to/view3d?felvetel={uj['id']}") < lap.index(
+        f"/matches/egy/view3d?felvetel={regi['id']}")
+    assert "Régi &lt;b&gt;" in lap and "Régi <b>" not in lap
+    assert "1:05" in lap
+    for i in range(court3d.SHARED3D_WAIT_RECS):
+        c.post("/matches/egy/felvetelek", json={"allapotok": allapotok})
+    assert c.get("/kovet").text.count("view3d?felvetel=") == court3d.SHARED3D_WAIT_RECS
     assert 'kzLink = location.origin + "/kovet";' in view3d_html(_meccs())
     palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
              / "court3d_screen.dart").read_text(encoding="utf-8")

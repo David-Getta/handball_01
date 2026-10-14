@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **A csapat linkjén a legutóbbi felvételek** (motor): amíg nincs élő
+  vezetés, a /kovet "Várunk az edzőre" lapja a legutóbbi megbeszéléseket
+  listázza (meccsektől függetlenül, a legújabb elöl, 🎙 jellel) — aki
+  kimaradt, a headsetben egy kattintással visszanézheti, a meccs hosszú
+  címe nélkül.
+
 - **🎙 A felvételben az edző hangja is** (böngésző + motor): a böngészős
   vezetés "⏺ Felvétel"-e a mikrofont is rögzíti (ha engeded), a motor a
   felvétel mellé menti, és a visszajátszás az időhöz igazítva szól —
