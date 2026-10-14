@@ -669,6 +669,59 @@ def shared3d_hely(ertek):
     return hely + [round(math.atan2(math.sin(v[3]), math.cos(v[3])), 3)]
 
 
+# FELVÉTEL: a megbeszélés felvétele legfeljebb ennyi állapot (a vezető
+# SHARED3D_SEND_S-enként rögzít: ~1,7 óra), a neve legfeljebb ennyi jel.
+SHARED3D_REC_MAX = 20000
+SHARED3D_REC_NAME_MAX = 80
+
+
+def shared3d_felvetel_allapot(d):
+    """A felvétel egy állapota megtisztítva: {"t" (játékidő-mp), "playing",
+    "speed" (0,25…8), "rajz" (a rajz-kód; rossz alaknál üres), "mutato"
+    ({x, y, n} — a pálya ±5 m-es sávjába szorítva), "nezopont" ({x, y, z,
+    yaw, pitch, n} — a csarnok dobozába szorítva)}; None, ha az idő vagy
+    a sebesség rossz. A rossz mutató és nézőpont egyszerűen kimarad."""
+    import math
+    import re
+    if not isinstance(d, dict):
+        return None
+    try:
+        t = float(d.get("t") or 0.0)
+        speed = float(d.get("speed") or 1.0)
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(t) and math.isfinite(speed)
+            and 0.25 <= speed <= 8.0):
+        return None
+    rajz = str(d.get("rajz") or "").strip()
+    if rajz and (len(rajz) > 1200 or not re.fullmatch(r"[0-9.,;\-]+", rajz)):
+        rajz = ""
+    ki = {"t": round(max(0.0, t), 2), "playing": bool(d.get("playing")),
+          "speed": speed, "rajz": rajz}
+
+    def _szamok(o, kulcsok):
+        try:
+            v = [float(o[k]) for k in kulcsok]
+        except (TypeError, ValueError, KeyError):
+            return None
+        return v if all(math.isfinite(x) for x in v) else None
+
+    m = _szamok(d.get("mutato"), ("x", "y", "n"))
+    if m:
+        ki["mutato"] = {"x": round(min(45.0, max(-5.0, m[0])), 2),
+                        "y": round(min(25.0, max(-5.0, m[1])), 2), "n": m[2]}
+    v = _szamok(d.get("nezopont"), ("x", "y", "z", "yaw", "pitch", "n"))
+    if v:
+        (xa, xf), (ya, yf), (za, zf) = SHARED3D_HALL_BOX
+        ki["nezopont"] = {"x": round(min(xf, max(xa, v[0])), 2),
+                          "y": round(min(yf, max(ya, v[1])), 2),
+                          "z": round(min(zf, max(za, v[2])), 2),
+                          "yaw": round(v[3], 4),
+                          "pitch": round(min(1.6, max(-1.6, v[4])), 4),
+                          "n": v[5]}
+    return ki
+
+
 def shared3d_valasz(s):
     """A közös nézés KVÍZ-válasza: [x, y, n] — a padló pontja pálya-
     méterben (a pálya ±5 m-es sávjába szorítva, cm-re kerekítve) és a

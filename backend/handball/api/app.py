@@ -515,8 +515,8 @@ class _MatchStore(dict):
 # el, ha a motor a hálózat felé is nyitva van — a közös nézés követő-útja:
 # a rövid link, a 3D oldal, a közös nézés állapota (minden metódus: a
 # vezető VR-ből is vezethet), a videó-kockák, a jegyzetek olvasása (a 3D
-# oldal mutatja őket), a névlista (a követő "Ki vagy?"-a) és a three.js
-# (a 3D oldal a motorból tölti).
+# oldal mutatja őket), a névlista (a követő "Ki vagy?"-a), a three.js
+# (a 3D oldal a motorból tölti) és a megbeszélés-felvételek visszajátszása.
 HALOZATI_ENGEDETT = (
     ("GET", r"^/kovet$"),
     ("GET", r"^/matches/[^/]+/view3d$"),
@@ -525,6 +525,7 @@ HALOZATI_ENGEDETT = (
     ("GET", r"^/library/players$"),
     ("GET", r"^/vendor/three@[0-9.]+/[A-Za-z0-9_./-]+$"),
     (None, r"^/matches/[^/]+/shared3d$"),
+    ("GET", r"^/matches/[^/]+/felvetelek(/[A-Za-z0-9]+)?$"),
 )
 
 
@@ -3632,6 +3633,107 @@ def create_app():
         """A vezető leállt: a követők "nincs vezető"-t látnak."""
         with _kozos_zar:
             _kozos.pop(match_id, None)
+        return {"ok": True}
+
+    # ⏺ FELVÉTEL: a megbeszélés (a közös nézés vezetőjének állapotai) a
+    # meccs mellett, lemezen — a 3D oldalról visszajátszható (VR-ben is).
+    def _felvetel_mappa(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.felvetelek"
+
+    @app.post("/matches/{match_id}/felvetelek")
+    def felvetel_ment(match_id: str, body: dict):
+        """A megbeszélés felvételének mentése. Törzs: {"nev", "allapotok":
+        [[eltelt-mp, állapot], …]} (az állapot court3d.
+        shared3d_felvetel_allapot szerint megtisztítva; a rossz sor kimarad,
+        az eltelt idő szerint rendezve). Válasz: {"id", "nev", "hossz_s",
+        "db"}. 400: kevesebb mint két jó állapot, vagy több mint
+        SHARED3D_REC_MAX; 404: nincs ilyen meccs."""
+        import datetime
+        import math
+        import uuid
+
+        from ..pipeline.court3d import (SHARED3D_REC_MAX, SHARED3D_REC_NAME_MAX,
+                                        shared3d_felvetel_allapot)
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        nyers = body.get("allapotok")
+        if not isinstance(nyers, list) or len(nyers) > SHARED3D_REC_MAX:
+            raise HTTPException(status_code=400,
+                                detail="az állapotok listája hiányzik vagy túl hosszú")
+        sorok = []
+        for e in nyers:
+            if not isinstance(e, (list, tuple)) or len(e) != 2:
+                continue
+            try:
+                eltelt = float(e[0])
+            except (TypeError, ValueError):
+                continue
+            a = shared3d_felvetel_allapot(e[1])
+            if a is None or not math.isfinite(eltelt) or eltelt < 0:
+                continue
+            sorok.append([round(eltelt, 2), a])
+        if len(sorok) < 2:
+            raise HTTPException(status_code=400,
+                                detail="a felvételben kevés a jó állapot")
+        sorok.sort(key=lambda s: s[0])
+        nev = "".join(ch for ch in str(body.get("nev") or "")
+                      if ch.isprintable()).strip()[:SHARED3D_REC_NAME_MAX]
+        rid = uuid.uuid4().hex[:10]
+        adat = {"id": rid, "nev": nev or "Megbeszélés",
+                "letrehozva": datetime.datetime.now().isoformat(
+                    timespec="seconds"),
+                "hossz_s": sorok[-1][0], "allapotok": sorok}
+        mappa = _felvetel_mappa(match_id)
+        mappa.mkdir(parents=True, exist_ok=True)
+        (mappa / f"{rid}.json").write_text(
+            json.dumps(adat, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8")
+        return {"id": rid, "nev": adat["nev"], "hossz_s": adat["hossz_s"],
+                "db": len(sorok)}
+
+    @app.get("/matches/{match_id}/felvetelek")
+    def felvetel_lista(match_id: str):
+        """A meccs megbeszélés-felvételei: {"felvetelek": [{"id", "nev",
+        "letrehozva", "hossz_s"}]} — a legújabb elöl."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        ki = []
+        mappa = _felvetel_mappa(match_id)
+        if mappa.is_dir():
+            for p in sorted(mappa.glob("*.json")):
+                try:
+                    d = json.loads(p.read_text(encoding="utf-8"))
+                    ki.append({"id": d["id"], "nev": d.get("nev") or "",
+                               "letrehozva": d.get("letrehozva") or "",
+                               "hossz_s": d.get("hossz_s") or 0})
+                except Exception:
+                    continue
+        ki.sort(key=lambda f: (f["letrehozva"], f["id"]), reverse=True)
+        return {"felvetelek": ki}
+
+    @app.get("/matches/{match_id}/felvetelek/{rid}")
+    def felvetel_egy(match_id: str, rid: str):
+        """Egy felvétel teljes adata (a visszajátszáshoz)."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        if not rid.isalnum():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        return json.loads(p.read_text(encoding="utf-8"))
+
+    @app.delete("/matches/{match_id}/felvetelek/{rid}")
+    def felvetel_torol(match_id: str, rid: str):
+        """Egy felvétel törlése."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not rid.isalnum() or not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        p.unlink()
         return {"ok": True}
 
     @app.get("/kovet")

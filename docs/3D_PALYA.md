@@ -334,6 +334,18 @@ motor
 állapotot. Az app 3D füle is vezethet ("📡 Vezetem" a panelen): az edző
 a laptopon teker, megállít, rajzol, a headsetek követik.
 
+### Felvétel — a megbeszélés visszanézhető
+
+A **⏺ Felvétel** gomb vezetés közben a megbeszélést rögzíti: a
+lejátszásodat (idő, szünet, sebesség), a padló nyilait, a mutatót és az
+"Ide mindenki" nézőpontjait. A felvétel végén (vagy ha leállsz a
+vezetéssel) a motor a meccs mellé menti. A **▶ Felvételek** listából
+bárki visszajátszhatja — a böngészőben és VR-ben is —, a követés útján:
+mintha az edző épp most vezetne, a néző a saját helyéről nézi. A gomb
+visszajátszáskor szünet/tovább (VR-ben a ravasz). Aki kimaradt a
+megbeszélésről, utólag végignézheti; a hang (az edző magyarázata) nincs
+a felvételben.
+
 ### Közös nézés több headsettel
 
 Internet nem kell: a 3D oldal a three.js-t is a motorból tölti (a

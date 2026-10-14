@@ -901,6 +901,8 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <button id="vezetGomb" title="Közös nézés — te vezetsz: a lejátszásod (idő, szünet, sebesség, rajz) a csapat headsetjein is fut; a csapat linkje a vágólapra kerül">📡 Vezetem</button>
   <button id="ideGomb" title="Ide mindenki: a követők kamerája a te mostani nézőpontodba ugrik (hely és irány) — pl. mindenki a kapus helyére. Csak vezetés közben" disabled>📍 Ide mindenki</button>
   <button id="kvizGomb" title="Kvíz a csapatnak: a jelenet megáll, a játékosok a padlóra mutatnak (hova passzolnál? hol a helyed?) — te névvel látod a válaszokat; másodszorra a csapatnak is megmutatod, harmadszorra vége — az eredmény a jegyzetek közé kerül. Csak vezetés közben" disabled>❓ Kvíz</button>
+  <button id="felvetelGomb" title="Felvétel: a megbeszélés (a lejátszásod, a rajz, a mutató, a nézőpontok) visszanézhető — vezetés közben indítod, a végén a motor menti; a ▶ Felvételek listából bárki visszajátszhatja (VR-ben is)" disabled>⏺ Felvétel</button>
+  <select id="felvetelValaszto" style="display:none" title="A mentett megbeszélések visszajátszása — mintha az edző most vezetne (VR-ben is)"></select>
   <select id="kzNevValaszto" style="display:none" title="Ki vagy? A neved a többiek headsetjén és a kvíz-mérlegben — a keretben felvitt nevek közül"></select>
   <button id="kovetGomb" title="Közös nézés — az edzőt követed: az ő lejátszása fut nálad, te a saját helyedről nézed (a pálya bejárható)">👥 Követem</button>
   <span id="kozosInfo" style="font-size:11px;word-break:break-all"></span>
@@ -940,13 +942,13 @@ Hétméteresek ◀ ▶ — X a 7 m-es ponton, arany vonal a célzott kapu-harmad
 Kapott gólok ◀ ▶ — minden kapott gól a védekezés olvasatával: gyűrű a lövő körül, vonal a legközelebbi védőhöz (piros, ha szabadon lőtt), a kapus helye és mélysége lilával, arany vonal a kapura<br>
 Kinek a hibái — a jelenet-lapozók csak az egyik csapat hibáit mutatják (a saját vagy az ellenfélé)<br>
 Jelenet-lista — a lapozók jelenetei egy időrendi listában; katt egy sorra: odaugrik · Klipek: a jelenetek videóként (zip)<br>
-Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi; vezetőként Shift+katt a padlóra: mutató a csapatnak, 📍 Ide mindenki: a követők a te nézőpontodba ugranak; a csarnokban látjátok egymást (fej és orr a nézés irányába, az edzőé arany; név a /kovet?nev=Peti linkkel); ❓ Kvíz: a jelenet megáll, a játékosok a padlóra mutatnak (kattintás, VR-ben ravasz), te névvel látod, másodszorra a csapat is; döntés-pillanatnál (Döntések ◀ ▶) a válasz ✓/✗ a modell jobb opciójához mérve (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
+Vezetem / Követem — közös nézés: az edző lejátszása (idő, szünet, sebesség, rajz) a csapat headsetjein is fut, mindenki a saját helyéről nézi; vezetőként Shift+katt a padlóra: mutató a csapatnak, 📍 Ide mindenki: a követők a te nézőpontodba ugranak; a csarnokban látjátok egymást (fej és orr a nézés irányába, az edzőé arany; név a /kovet?nev=Peti linkkel); ⏺ Felvétel: a megbeszélés visszanézhető (▶ Felvételek — VR-ben is); ❓ Kvíz: a jelenet megáll, a játékosok a padlóra mutatnak (kattintás, VR-ben ravasz), te névvel látod, másodszorra a csapat is; döntés-pillanatnál (Döntések ◀ ▶) a válasz ✓/✗ a modell jobb opciójához mérve (a csapat linkje: kovet=1; a headset USB-n — adb reverse — vagy a klub hálózatán éri el a motort, lásd docs/3D_PALYA.md)<br>
 Videó (K) — a valódi felvétel a 3D mellett, a lejátszással szinkronban: kép a képben és kivetítő a túlsó oldalvonal fölött (VR-ben is)<br>
 Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér pötty, ✕ törli), a vetítésben, a jelentésben és a Klipek jegyzet-csomagjában<br>
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek, rajz) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai) · V — vetítés: a lista sorai egymás után<br>
-VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés; kvíz közben a ravasz a válaszod (ahova a kontroller mutat); közös nézés vezetőként: markolat — jobb kéz mutató (ahova a kontroller mutat), bal kéz Ide mindenki; bal hüvelykujj-kar lenyomása — kvíz (indítás, mutasd a csapatnak, vége)</div>
+VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés; felvétel visszajátszásakor a ravasz szünet/tovább; kvíz közben a ravasz a válaszod (ahova a kontroller mutat); közös nézés vezetőként: markolat — jobb kéz mutató (ahova a kontroller mutat), bal kéz Ide mindenki; bal hüvelykujj-kar lenyomása — kvíz (indítás, mutasd a csapatnak, vége)</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
 <div id="feliratOszlop">
@@ -2748,6 +2750,7 @@ function kzVezetoInfo(){
   kozosInfo.textContent = "📡 vezetsz" + (kzKovetok == null ? "" : " · " + kzKovetok + " követő")
     + (kzKviz ? " · ❓ " + kzValaszDb + "/" + (kzKovetok || 0) + " válasz" : "")
     + (kzKviz && kvizDontes(kzKviz) ? " · ✓ " + kzJoDb + " a jobb opció" : "")
+    + (kzFelvetel ? " · ⏺ " + fvOra((performance.now() - kzFelvetel.kezd) / 1000) : "")
     + " — a csapat linkje: " + kzLink + (kzVagolap ? " (vágólapon)" : "");
 }
 // A követő állapot-szövege és a váltás ideje: a VR-tábla a váltás után
@@ -3037,6 +3040,8 @@ function kozosAllit(m){
   if (!ADAT.match_id){ kozosInfo.textContent = "a közös nézéshez a motor kell"; return; }
   const elozo = kozosMod;
   kozosMod = (m === kozosMod) ? null : m;
+  felvetelAll();
+  if (elozo === "vezet" && kozosMod !== "vezet" && kzFelvetel) felvetelMent();
   // A leálló vezető szól: a követők nem a régi állapotot követik tovább.
   if (elozo === "vezet" && kozosMod !== "vezet")
     fetch(kzCim(), {method: "DELETE"}).catch(() => {});
@@ -3049,6 +3054,7 @@ function kozosAllit(m){
   valaszokAllit([]); kvizGombFelirat();
   ideGomb.disabled = kozosMod !== "vezet";
   kvizGomb.disabled = kozosMod !== "vezet";
+  felvetelGombFelirat();
   nevValasztoMutat(kozosMod === "kovet");
   if (kozosMod === "vezet"){
     // A rövid csapat-link (a motor /kovet címe az élő közös nézésre
@@ -3077,6 +3083,7 @@ function kozosFrissit(){
   if (most - kzUtolso < (kozosMod === "vezet" ? KZ_KULD : KZ_KERD)) return;
   kzUtolso = most; kzUton = true;
   if (kozosMod === "vezet"){
+    felvetelRogzit();
     fetch(kzCim(), {method: "PUT", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok), kviz: kzKviz, hely: sajatHely(), mutato: kzMutato, nezopont: kzNezopont})})
       .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
@@ -3113,24 +3120,158 @@ function kozosFrissit(){
     valaszokAllit(kzKvizKor ? kzValaszLista(kzUtolsoCsapat) : []);
     if (!(kozosInfo.textContent === KZ_IDE && performance.now() - kzInfoValtas < KZ_VR_MS))
       kzInfo(kvizSzoveg());
-    const cel = Math.max(0, Math.min(veg, a.t + (a.playing ? a.kor * a.speed : 0)));
-    if (Math.abs(ido - cel) > KZ_TURES){ ido = cel; csuszka.value = ido; }
-    megy = !!a.playing; lejatszasGomb.textContent = megy ? "⏸" : "▶";
-    if (a.speed !== sebesseg){ sebesseg = a.speed; sebessegValaszto.value = String(a.speed); }
-    if (a.rajz !== kzRajz){
-      kzRajz = a.rajz; rajzok.length = 0; rajzok.push(...rajzDekodol(a.rajz)); rajzFrissit();
-    }
-    if (a.mutato && a.mutato.n !== kzMutatoN){
-      kzMutatoN = a.mutato.n;
-      if (a.mutato.kor < KZ_MUTATO) mutatoMutat(a.mutato.x, a.mutato.y);
-    }
-    if (a.nezopont && a.nezopont.n !== kzNezopontN){
-      kzNezopontN = a.nezopont.n;
-      if (a.nezopont.kor < KZ_MUTATO) nezopontAlkalmaz(a.nezopont);
-    }
+    kzAllapotAlkalmaz(a);
   }).catch(() => { if (kozosMod === "kovet") kzInfo("👥 a motor nem válaszol"); })
     .finally(() => { kzUton = false; });
 }
+// A vezető állapotának alkalmazása (a követő és a felvétel-visszajátszás
+// közös útja): az idő a korral (csak KZ_TURES-nél nagyobb eltérésnél
+// ugrik), szünet, sebesség, rajz, a friss mutató és nézőpont.
+function kzAllapotAlkalmaz(a){
+  const cel = Math.max(0, Math.min(veg, a.t + (a.playing ? a.kor * a.speed : 0)));
+  if (Math.abs(ido - cel) > KZ_TURES){ ido = cel; csuszka.value = ido; }
+  megy = !!a.playing; lejatszasGomb.textContent = megy ? "⏸" : "▶";
+  if (a.speed !== sebesseg){ sebesseg = a.speed; sebessegValaszto.value = String(a.speed); }
+  if (a.rajz !== kzRajz){
+    kzRajz = a.rajz; rajzok.length = 0; rajzok.push(...rajzDekodol(a.rajz)); rajzFrissit();
+  }
+  if (a.mutato && a.mutato.n !== kzMutatoN){
+    kzMutatoN = a.mutato.n;
+    if (a.mutato.kor < KZ_MUTATO) mutatoMutat(a.mutato.x, a.mutato.y);
+  }
+  if (a.nezopont && a.nezopont.n !== kzNezopontN){
+    kzNezopontN = a.nezopont.n;
+    if (a.nezopont.kor < KZ_MUTATO) nezopontAlkalmaz(a.nezopont);
+  }
+}
+
+// ⏺ FELVÉTEL — a megbeszélés visszanézhető: vezetés közben a vezető oldala
+// a saját állapotát (idő, szünet, sebesség, rajz, mutató, nézőpont)
+// gyűjti, a felvétel végén a motorba menti; a "▶ Felvételek" listából
+// bárki visszajátszhatja (VR-ben is) — a követés útján, mintha az edző
+// épp most vezetne. Legfeljebb FV_MAX állapot (court3d.SHARED3D_REC_MAX).
+const FV_MAX = __FV_MAX__;
+const felvetelGomb = document.getElementById("felvetelGomb");
+const felvetelValaszto = document.getElementById("felvetelValaszto");
+let kzFelvetel = null;   // a vezető futó felvétele: {kezd, allapotok}
+let fvLejatszas = null;  // a visszajátszás: {adat, kezd, szunet, i}
+const fvCim = () => "/matches/" + encodeURIComponent(ADAT.match_id || "") + "/felvetelek";
+const fvOra = (s) => { const t = Math.max(0, Math.floor(s));
+  return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
+function felvetelGombFelirat(){
+  felvetelGomb.textContent = kzFelvetel ? "⏹ Felvétel vége"
+    : fvLejatszas ? (fvLejatszas.szunet !== null ? "▶ Felvétel tovább" : "⏸ Felvétel szünet")
+    : "⏺ Felvétel";
+  felvetelGomb.disabled = !(kozosMod === "vezet" || fvLejatszas);
+}
+// (a vezető küldésével együtt, KZ_KULD-onként)
+function felvetelRogzit(){
+  if (!kzFelvetel) return;
+  kzFelvetel.allapotok.push([Math.round((performance.now() - kzFelvetel.kezd) / 10) / 100,
+    {t: Math.round(ido * 100) / 100, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok),
+     mutato: kzMutato, nezopont: kzNezopont}]);
+  if (kzFelvetel.allapotok.length >= FV_MAX) felvetelMent();
+}
+async function felvetelMent(){
+  const f = kzFelvetel;
+  kzFelvetel = null; felvetelGombFelirat();
+  if (!f || f.allapotok.length < 2 || !ADAT.match_id) return;
+  const nev = "Megbeszélés " + new Date().toLocaleString("hu-HU", {dateStyle: "short", timeStyle: "short"});
+  try {
+    const v = await fetch(fvCim(), {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({nev, allapotok: f.allapotok})});
+    if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
+    const d = await v.json();
+    kozosInfo.textContent = "⏺ felvétel mentve: " + d.nev + " (" + fvOra(d.hossz_s)
+      + ") — a ▶ Felvételek listából visszanézhető";
+    felvetelListaBetolt();
+  } catch (e) { kozosInfo.textContent = "⏺ a felvétel nem mentődött: " + e.message; }
+}
+async function felvetelListaBetolt(){
+  if (!ADAT.match_id) return;
+  try {
+    const v = await fetch(fvCim());
+    if (!v.ok) return;
+    const lista = (await v.json()).felvetelek || [];
+    felvetelValaszto.textContent = "";
+    const fej = document.createElement("option"); fej.value = "";
+    fej.textContent = "▶ Felvételek (" + lista.length + ")";
+    felvetelValaszto.appendChild(fej);
+    for (const f of lista){
+      const o = document.createElement("option"); o.value = f.id;
+      o.textContent = f.nev + " · " + fvOra(f.hossz_s);
+      felvetelValaszto.appendChild(o);
+    }
+    felvetelValaszto.style.display = lista.length ? "" : "none";
+  } catch (e) { /* a motor nélkül (mentett oldal) nincs felvétel */ }
+}
+felvetelGomb.onclick = () => {
+  if (kozosMod === "vezet"){
+    if (kzFelvetel) felvetelMent();
+    else { kzFelvetel = {kezd: performance.now(), allapotok: []}; kzUtolso = 0; }
+    felvetelGombFelirat(); kzVezetoInfo();
+    return;
+  }
+  if (fvLejatszas){
+    if (fvLejatszas.szunet === null) fvLejatszas.szunet = performance.now();
+    else { fvLejatszas.kezd += performance.now() - fvLejatszas.szunet; fvLejatszas.szunet = null; }
+    felvetelGombFelirat();
+  }
+};
+async function felvetelIndit(id){
+  felvetelAll();
+  if (!id) return;
+  if (kozosMod){
+    kozosInfo.textContent = "a visszajátszáshoz előbb állítsd le a közös nézést";
+    felvetelValaszto.value = ""; return;
+  }
+  try {
+    const v = await fetch(fvCim() + "/" + encodeURIComponent(id));
+    if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
+    const adat = await v.json();
+    kzRajz = null; kzMutatoN = null; kzNezopontN = null;
+    if (vetites) vetitesAllit(false);
+    fvLejatszas = {adat, kezd: performance.now(), szunet: null, i: 0};
+    felvetelGombFelirat();
+  } catch (e) { kozosInfo.textContent = "▶ a felvétel nem tölthető: " + e.message; }
+}
+function felvetelAll(){
+  if (!fvLejatszas) return;
+  fvLejatszas = null; megy = false; lejatszasGomb.textContent = "▶";
+  kozosInfo.textContent = ""; felvetelGombFelirat();
+}
+felvetelValaszto.onchange = () => felvetelIndit(felvetelValaszto.value);
+// A visszajátszás a képkocka-ciklusból: az eltelt időig utolsó állapot a
+// követés útján (kzAllapotAlkalmaz); a mutató és a nézőpont az új
+// azonosítónál (n) azonnal.
+function felvetelFrissit(){
+  const f = fvLejatszas;
+  if (!f) return;
+  const all = f.adat.allapotok;
+  const e = ((f.szunet !== null ? f.szunet : performance.now()) - f.kezd) / 1000;
+  while (f.i + 1 < all.length && all[f.i + 1][0] <= e) f.i++;
+  const [e0, a] = all[f.i];
+  if (f.szunet !== null){ megy = false; lejatszasGomb.textContent = "▶"; }
+  else kzAllapotAlkalmaz({...a, kor: Math.max(0, e - e0),
+                          mutato: a.mutato ? {...a.mutato, kor: 0} : null,
+                          nezopont: a.nezopont ? {...a.nezopont, kor: 0} : null});
+  const hossz = f.adat.hossz_s || all[all.length - 1][0];
+  if (e > hossz + 1){
+    felvetelAll(); kozosInfo.textContent = "▶ a felvétel véget ért"; felvetelValaszto.value = "";
+    return;
+  }
+  const info = "▶ " + f.adat.nev + " · " + fvOra(Math.min(e, hossz)) + " / " + fvOra(hossz)
+    + (f.szunet !== null ? " · szünet" : "");
+  if (kozosInfo.textContent !== info) kozosInfo.textContent = info;
+}
+window.felvetelProba = () => ({felvesz: !!kzFelvetel, db: kzFelvetel ? kzFelvetel.allapotok.length : 0,
+  lejatszas: fvLejatszas ? {i: fvLejatszas.i, n: fvLejatszas.adat.allapotok.length,
+                            szunet: fvLejatszas.szunet !== null} : null,
+  gomb: felvetelGomb.textContent, tiltva: felvetelGomb.disabled,
+  lista: [...felvetelValaszto.options].map(o => o.value), info: kozosInfo.textContent,
+  ido, megy, rajz: rajzKodol(rajzok)});
+felvetelListaBetolt();
+
 vezetGomb.onclick = () => kozosAllit("vezet");
 kovetGomb.onclick = () => kozosAllit("kovet");
 window.kozosProba = () => ({mod: kozosMod, ido, megy, sebesseg, rajz: rajzKodol(rajzok), info: kozosInfo.textContent});
@@ -3709,6 +3850,7 @@ function vrGombok(){
     if (vrGombEl(kulcs, 0, nyom(0))){
       // Kvíz közben a követő ravasza a VÁLASZ (a kontroller sugarával).
       if (kvizValaszolhat()) vrValasz(k - 1);
+      else if (fvLejatszas) felvetelGomb.onclick();
       else { megy = !megy; lejatszasGomb.textContent = megy ? "⏸" : "▶"; }
     }
     if (vrGombEl(kulcs, 3, nyom(3))) vrKarNyomas(forras.handedness);
@@ -3746,6 +3888,9 @@ function vrFeliratSzoveg(){
   const kz = kozosMod === "kovet" ? kozosInfo.textContent : "";
   if (kz && (kz !== KZ_KOVETED || performance.now() - kzInfoValtas < KZ_VR_MS))
     sorok.unshift(kz);
+  // A felvétel visszajátszása (a ravasz: szünet/tovább).
+  if (!kozosMod && fvLejatszas && kozosInfo.textContent)
+    sorok.unshift(kozosInfo.textContent + " — ravasz: szünet/tovább");
   // A vezető a kvíz állását látja (a HTML panel VR-ben nem látszik).
   if (kozosMod === "vezet" && kzKviz)
     sorok.unshift("❓ Kvíz" + (kzKviz.mutat ? " (a csapat is látja)" : "") + ": "
@@ -3796,7 +3941,7 @@ fest.setAnimationLoop(() => {
     vetitesFrissit(t0, ido);
     if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
     csuszka.value = ido; }
-  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); kozosFrissit(); mutatoFrissit(); jelenletFrissit(dt); valaszJelFrissit(); felirat(ido); vrFeliratFrissit();
+  mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); kozosFrissit(); mutatoFrissit(); jelenletFrissit(dt); felvetelFrissit(); valaszJelFrissit(); felirat(ido); vrFeliratFrissit();
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);
   idoCimke.textContent = o + ":" + String(mp).padStart(2,"0");
   fest.render(szinpad, kamera);
@@ -3808,6 +3953,7 @@ fest.setAnimationLoop(() => {
                           SHARED3D_NAME_MAX, SHARED3D_NEAR_M,
                           SHARED3D_POINTER_S, SHARED3D_POLL_S,
                           SHARED3D_QUIZ_HIT_M, SHARED3D_QUIZ_SHOT_M,
+                          SHARED3D_REC_MAX,
                           SHARED3D_SEND_S, SHARED3D_TOLERANCE_S)
     from .defense import WALL_GAP_DEPTH_M, WALL_GAP_M, WALL_GAP_MIN_DEFENDERS
     from .tactics import TacticsConfig
@@ -3824,6 +3970,7 @@ fest.setAnimationLoop(() => {
                  .replace("__KZ_MUTATO__", repr(float(SHARED3D_POINTER_S)))
                  .replace("__KZ_NEV_MAX__", str(int(SHARED3D_NAME_MAX)))
                  .replace("__KZ_KOZEL__", repr(float(SHARED3D_NEAR_M)))
+                 .replace("__FV_MAX__", str(int(SHARED3D_REC_MAX)))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
                           + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
                           + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS
