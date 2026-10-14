@@ -3885,6 +3885,49 @@ def create_app():
             raise HTTPException(status_code=404, detail="nincs hang")
         return FileResponse(str(h), media_type=tipus)
 
+    @app.get("/matches/{match_id}/felvetelek/{rid}/csomag")
+    def felvetel_csomag(match_id: str, rid: str):
+        """📦 A felvétel-csomag letöltésre: egyetlen HTML-fájl — a 3D oldal
+        a felvétellel (fejezetekkel) és a hangjával, a three.js-szel
+        beágyazva (view3d_html.view3d_csomag); motor és internet nélkül
+        is fut, a visszajátszás megnyitáskor indul. A játékos otthon is
+        megnézheti. A hálózati őr nem engedi (az edző a saját gépéről
+        tölti le)."""
+        import re
+        import unicodedata
+
+        from fastapi.responses import Response
+
+        from ..pipeline.court3d import (SHARED3D_REC_AUDIO_TYPES,
+                                        shared3d_felvetel_fejezetek)
+        from ..pipeline.primitive_cache import primitive_cache
+        from ..pipeline.view3d_html import view3d_csomag
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not rid.isalnum() or not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        adat = json.loads(p.read_text(encoding="utf-8"))
+        adat["fejezetek"] = shared3d_felvetel_fejezetek(
+            adat.get("allapotok") or [])
+        hang = None
+        tipus = (adat.get("hang") or {}).get("tipus")
+        h = p.with_suffix(".hang")
+        if tipus in SHARED3D_REC_AUDIO_TYPES and h.exists():
+            hang = (h.read_bytes(), tipus)
+        with primitive_cache(match):
+            oldal = _view3d_oldal(match_id, match)
+        html = view3d_csomag(oldal, adat, hang)
+        alap = unicodedata.normalize("NFKD", str(adat.get("nev") or ""))
+        alap = re.sub(r"[^A-Za-z0-9]+", "_",
+                      alap.encode("ascii", "ignore").decode("ascii")).strip("_")
+        fajlnev = f"megbeszeles_{alap[:40] or rid}.html"
+        return Response(content=html.encode("utf-8"),
+                        media_type="text/html; charset=utf-8",
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="{fajlnev}"'})
+
     @app.post("/matches/{match_id}/felvetelek/{rid}/megnezte")
     def felvetel_megnezte(match_id: str, rid: str, body: dict):
         """"Ki nézte meg?" — a néző jelzi, hogy a felvételt végignézte (a

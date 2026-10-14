@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **📦 A megbeszélés otthonra: egyetlen HTML-fájl** (új, motor + app +
+  böngésző): a "▶ Felvételek" listában a letöltés-gomb a felvételt
+  egyetlen fájlként menti — a 3D oldal a felvétellel (fejezetekkel), a
+  hangjával és a three.js-szel beágyazva. Elküldhető; a játékos bármely
+  böngészőben, a headsetben is megnyitja, és motor, internet nélkül
+  lejátszódik.
+
 - **Legutóbbi megbeszélések a kezdőlapon** (új, app + motor): a 3D közös
   nézés mentett felvételei meccsektől függetlenül, a legújabb elöl — a
   meccs, a hossz, a fejezetek, a hang és hogy ki nézte meg; a "3D / VR"

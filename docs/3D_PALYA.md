@@ -364,6 +364,13 @@ nélkül a választó előjön) a felvétel 80%-át ténylegesen végignézte (a
 szünet és az átugrott fejezetek nem számítanak), a motor rögzíti; az app
 "▶ Felvételek" listája mutatja ("megnézte: Anna, Peti").
 
+📦 **Otthonra**: a "▶ Felvételek" listában a letöltés-gomb a felvételt
+egyetlen HTML-fájlként menti (a 3D oldal a felvétellel, a hangjával és a
+three.js-szel együtt). Elküldhető; a játékos bármely böngészőben — a
+headsetben is — megnyitja, és motor, internet nélkül lejátszódik. (A
+csomagban a motoros funkciók — közös nézés, jegyzet, videó, "Ki nézte
+meg?" — nem működnek.)
+
 A kezdőlap **Legutóbbi megbeszélések** kártyája is mutatja őket
 (meccsektől függetlenül, ki nézte meg), a "3D / VR" gomb a böngészőben
 indítja.

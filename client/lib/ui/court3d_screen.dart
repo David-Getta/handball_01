@@ -12,8 +12,10 @@
 /// terében mozog (méter; z felfelé).
 library;
 
+import "dart:io";
 import "dart:math" as math;
 
+import "package:file_picker/file_picker.dart";
 import "package:flutter/gestures.dart";
 import "package:flutter/material.dart";
 import "package:flutter/scheduler.dart";
@@ -4343,6 +4345,31 @@ class _FelvetelekPanelState extends State<_FelvetelekPanel> {
     }
   }
 
+  /// 📦 A felvétel letöltése egyetlen HTML-fájlként (elküldhető: a
+  /// játékos otthon, motor és internet nélkül is megnézheti).
+  Future<void> _csomag(Map<String, dynamic> f) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes =
+          await widget.api.fetchRecordingPackage(widget.matchId, "${f["id"]}");
+      final nev = "${f["nev"]}"
+          .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Felvétel mentése (egyetlen HTML-fájl)",
+        fileName: "megbeszeles_$nev.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      messenger.showSnackBar(SnackBar(
+          content: Text("Felvétel mentve: $path — elküldhető; bármely "
+              "böngészőben (headsetben is) internet és motor nélkül fut.")));
+    } catch (e) {
+      if (mounted) setState(() => _hiba = humanError(e));
+    }
+  }
+
   Future<void> _torol(Map<String, dynamic> f) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -4428,6 +4455,12 @@ class _FelvetelekPanelState extends State<_FelvetelekPanel> {
                               tooltip: "Megnyitás a böngészős 3D-ben",
                               icon: const Icon(Icons.play_arrow, size: 20),
                               onPressed: () => widget.megnyit("${f["id"]}"),
+                            ),
+                            IconButton(
+                              tooltip: "Letöltés egyetlen HTML-fájlként — "
+                                  "elküldhető, otthon is megnézhető",
+                              icon: const Icon(Icons.download, size: 18),
+                              onPressed: () => _csomag(f),
                             ),
                             IconButton(
                               tooltip: "Átnevezés",

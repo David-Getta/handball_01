@@ -17,6 +17,7 @@ Videó nélkül tesztelhető: a kimenet szöveg.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from ..models.tracking import Match, PositionSource, Team
 
@@ -992,6 +993,11 @@ import * as THREE from "three";
 import {VRButton} from "three/addons/webxr/VRButton.js";
 
 const ADAT = __ADAT__;
+// 📦 FELVÉTEL-CSOMAG (egyetlen HTML-fájl, motor nélkül — view3d_csomag):
+// a beágyazott felvétel ({adat, hang}); a motoros funkciók kikapcsolnak
+// (mint a mentett oldalnál), a felvétel magától indul. Élő oldalon null.
+const FV_CSOMAG = null;
+if (FV_CSOMAG) ADAT.match_id = "";
 const H = 40, W = 20, KAPU_SZ = 3;
 __LOVES_JS__
 __PASSZSAV_JS__
@@ -3296,6 +3302,19 @@ async function felvetelMent(){
   } catch (e) { kozosInfo.textContent = "⏺ a felvétel nem mentődött: " + e.message; }
 }
 async function felvetelListaBetolt(){
+  if (FV_CSOMAG){
+    felvetelValaszto.textContent = "";
+    const fej = document.createElement("option"); fej.value = "";
+    fej.textContent = "▶ Felvétel (újra)";
+    const o = document.createElement("option"); o.value = FV_CSOMAG.adat.id;
+    o.textContent = FV_CSOMAG.adat.nev + " · " + fvOra(FV_CSOMAG.adat.hossz_s);
+    felvetelValaszto.append(fej, o); felvetelValaszto.style.display = "";
+    felvetelValaszto.value = FV_CSOMAG.adat.id;
+    // A modul végigfutása után: a később deklarált állapotok (pl. a
+    // vetítés) addig nem érhetők el — a motoros út a fetch miatt eleve vár.
+    setTimeout(() => felvetelIndit(FV_CSOMAG.adat.id), 0);
+    return;
+  }
   if (!ADAT.match_id) return;
   try {
     const v = await fetch(fvCim());
@@ -3341,16 +3360,22 @@ async function felvetelIndit(id){
     felvetelValaszto.value = ""; return;
   }
   try {
-    const v = await fetch(fvCim() + "/" + encodeURIComponent(id));
-    if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
-    const adat = await v.json();
-    fvHangForras(adat.hang ? fvCim() + "/" + encodeURIComponent(id) + "/hang" : "");
+    let adat;
+    if (FV_CSOMAG) adat = FV_CSOMAG.adat;
+    else {
+      const v = await fetch(fvCim() + "/" + encodeURIComponent(id));
+      if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
+      adat = await v.json();
+    }
+    fvHangForras(FV_CSOMAG ? (FV_CSOMAG.hang || "")
+      : adat.hang ? fvCim() + "/" + encodeURIComponent(id) + "/hang" : "");
     kzRajz = null; kzMutatoN = null; kzNezopontN = null;
     if (vetites) vetitesAllit(false);
     fvLejatszas = {adat, kezd: performance.now(), szunet: null, i: 0};
     fejezetListaToltes(adat);
-    // Név nélkül a "Ki vagy?" előjön: a megnézés a névvel számít.
-    if (!KZ_NEV) nevValasztoMutat(true);
+    // Név nélkül a "Ki vagy?" előjön: a megnézés a névvel számít (a
+    // csomagban nincs motor — nincs kinek jelezni).
+    if (!KZ_NEV && ADAT.match_id) nevValasztoMutat(true);
     felvetelGombFelirat();
   } catch (e) { kozosInfo.textContent = "▶ a felvétel nem tölthető: " + e.message; }
 }
@@ -3444,7 +3469,7 @@ function felvetelFrissit(){
   if (f.szunet === null && f.utolso !== undefined)
     f.nezett = (f.nezett || 0) + Math.min(1, (most - f.utolso) / 1000);
   f.utolso = most;
-  if (!f.jelentve && KZ_NEV && f.adat.id && (f.nezett || 0) >= hossz * FV_MEGNEZTE){
+  if (!f.jelentve && KZ_NEV && ADAT.match_id && f.adat.id && (f.nezett || 0) >= hossz * FV_MEGNEZTE){
     f.jelentve = true;
     fetch(fvCim() + "/" + encodeURIComponent(f.adat.id) + "/megnezte", {method: "POST",
       headers: {"Content-Type": "application/json"}, body: JSON.stringify({nev: KZ_NEV})})
@@ -4190,3 +4215,47 @@ fest.setAnimationLoop(() => {
                               repr(float(SHARED3D_QUIZ_SHOT_M))))
                  .replace("__LOVES_JS__", LOVES_MERES_JS)
                  .replace("__ADAT__", adat))
+
+
+# A three.js (0.160.0, MIT) a csomagban — a motor /vendor/three útjának
+# forrása.
+_THREE_VENDOR = Path(__file__).resolve().parent.parent / "vendor" / "three"
+
+
+def view3d_csomag(oldal: str, felvetel: dict, hang: tuple | None = None) -> str:
+    """📦 A FELVÉTEL-CSOMAG: a kész 3D oldalból (view3d_html) egyetlen,
+    motor és internet nélkül is futó HTML-fájl. A three.js és a VRButton
+    beágyazva (data: URL az import-térképben — a motor /vendor útja
+    helyett), a felvétel (fejezetekkel) és a hang (`hang`: (bájtok,
+    típus) — data: URL) a FV_CSOMAG állandóban; az oldal ilyenkor a
+    meccs-azonosítót üresre állítja (a motoros funkciók — közös nézés,
+    jegyzet, videó — kikapcsolnak, mint a mentett oldalnál), és a
+    felvétel magától indul. A játékos otthon, a klub hálózata nélkül is
+    megnézheti — böngészőben vagy headsetben."""
+    import base64
+
+    def data_url(tipus: str, bajtok: bytes) -> str:
+        return f"data:{tipus};base64," + base64.b64encode(bajtok).decode("ascii")
+
+    regi = ('''<script type="importmap">{"imports":{
+ "three":"/vendor/three@0.160.0/build/three.module.js",
+ "three/addons/":"/vendor/three@0.160.0/examples/jsm/"
+}}</script>''')
+    if oldal.count(regi) != 1:
+        raise ValueError("a 3D oldal import-térképe nem a várt alakú")
+    three = (_THREE_VENDOR / "build" / "three.module.js").read_bytes()
+    vr = (_THREE_VENDOR / "examples" / "jsm" / "webxr" / "VRButton.js").read_bytes()
+    uj = ('<script type="importmap">{"imports":{\n "three":"'
+          + data_url("text/javascript", three)
+          + '",\n "three/addons/webxr/VRButton.js":"'
+          + data_url("text/javascript", vr) + '"\n}}</script>')
+    csomag = {"adat": felvetel,
+              "hang": data_url(hang[1], hang[0]) if hang else None}
+    # (a beágyazott JSON-ban a "</" nem zárhatja le a szkriptet)
+    kod = json.dumps(csomag, ensure_ascii=False,
+                     separators=(",", ":")).replace("</", "<\\/")
+    jel = "const FV_CSOMAG = null;"
+    if oldal.count(jel) != 1:
+        raise ValueError("a 3D oldalban nincs csomag-hely")
+    return (oldal.replace(regi, uj)
+                 .replace(jel, "const FV_CSOMAG = " + kod + ";"))

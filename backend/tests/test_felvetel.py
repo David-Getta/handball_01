@@ -203,7 +203,7 @@ def test_a_felvetel_hangja(tmp_path, monkeypatch):
     for kell in ("felvetelHangIndit(kzFelvetel);",
                  "const hang = f ? await felvetelHangLeallit(f.hang) : null;",
                  '"/hang?eltolas="', "felvetelHangFrissit(f, e);",
-                 'fvHangForras(adat.hang ? fvCim() + "/" + encodeURIComponent(id) + "/hang" : "");',
+                 ': adat.hang ? fvCim() + "/" + encodeURIComponent(id) + "/hang" : "");',
                  "🎙 a hangoddal is"):
         assert kell in oldal, kell
 
@@ -322,7 +322,7 @@ def test_ki_nezte_meg(tmp_path, monkeypatch):
     assert f"const FV_MEGNEZTE = {SHARED3D_REC_WATCHED_FRAC!r};" in oldal
     for kell in ('"/megnezte", {method: "POST",',
                  "(f.nezett || 0) >= hossz * FV_MEGNEZTE",
-                 "if (!KZ_NEV) nevValasztoMutat(true);", "✓ megnézted",
+                 "if (!KZ_NEV && ADAT.match_id) nevValasztoMutat(true);", "✓ megnézted",
                  "✓ megnézted (az edző látja)"):
         assert kell in oldal, kell
 
@@ -377,3 +377,60 @@ def test_a_legutobbi_megbeszelesek(tmp_path, monkeypatch):
     dash = (gyoker / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
     assert "..._recordingsCard()," in dash
     assert "_api.fetchLibraryRecordings().then((r) {" in dash
+
+
+def test_a_felvetel_csomag(tmp_path, monkeypatch):
+    """📦 Egyetlen HTML-fájl: a three.js és a VRButton data: URL-ként (a
+    motor /vendor útja nélkül), a felvétel a fejezetekkel és a hang
+    beágyazva, a "</" kódolva; letöltésre (Content-Disposition, ASCII
+    fájlnév); rossz kérések. Az élő oldalon a csomag-hely null."""
+    import base64
+    import json
+    import re
+    from pathlib import Path
+
+    from handball.pipeline.view3d_html import view3d_csomag, view3d_html
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_meccs())
+    c = TestClient(app)
+    url = "/matches/fv/felvetelek"
+    d = c.post(url, json={"nev": "Védekezés </script> 6-0", "allapotok": [
+        [0, {"t": 1, "playing": False}], [4.3, {"t": 8, "playing": False}]]}).json()
+    c.put(f"{url}/{d['id']}/hang", content=b"OPUSHANG",
+          headers={"Content-Type": "audio/webm"})
+    r = c.get(f"{url}/{d['id']}/csomag")
+    assert r.status_code == 200
+    assert r.headers["content-disposition"] == (
+        'attachment; filename="megbeszeles_Vedekezes_script_6_0.html"')
+    oldal = r.text
+    assert "/vendor/three@" not in oldal
+    gyoker = Path(__file__).resolve().parents[1] / "handball" / "vendor" / "three"
+    three = re.search(r'"three":"data:text/javascript;base64,([^"]+)"', oldal)
+    assert base64.b64decode(three.group(1)) == (
+        gyoker / "build" / "three.module.js").read_bytes()
+    assert '"three/addons/webxr/VRButton.js":"data:text/javascript;base64,' in oldal
+    m = re.search(r"const FV_CSOMAG = (.*?);\nif \(FV_CSOMAG\)", oldal, re.S)
+    beagyazott = json.loads(m.group(1).replace("<\\/", "</"))
+    assert beagyazott["adat"]["nev"] == "Védekezés </script> 6-0"
+    assert "</script> 6-0" not in m.group(1)
+    assert beagyazott["adat"]["fejezetek"] == [[0.0, 1.0], [4.3, 8.0]]
+    assert beagyazott["hang"] == "data:audio/webm;base64," + base64.b64encode(
+        b"OPUSHANG").decode()
+    # Hang nélkül null; rossz kérések.
+    d2 = c.post(url, json={"allapotok": [[0, {"t": 1}], [1, {"t": 2}]]}).json()
+    assert '"hang":null' in c.get(f"{url}/{d2['id']}/csomag").text
+    assert c.get(f"{url}/nincs/csomag").status_code == 404
+    assert c.get("/matches/x/felvetelek/a/csomag").status_code == 404
+    # Az élő oldal: a csomag-hely null, a motor útja megvan.
+    elo = view3d_html(_meccs())
+    assert "const FV_CSOMAG = null;" in elo and "/vendor/three@0.160.0/" in elo
+    try:
+        view3d_csomag("<html></html>", {})
+        raise AssertionError("nem várt alak — hibát kell dobnia")
+    except ValueError:
+        pass
+    palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+             / "court3d_screen.dart").read_text(encoding="utf-8")
+    assert "onPressed: () => _csomag(f)," in palya

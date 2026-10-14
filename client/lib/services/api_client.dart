@@ -1000,6 +1000,21 @@ class ApiClient {
         .toList();
   }
 
+  /// 📦 A felvétel-csomag (GET /matches/{id}/felvetelek/{rid}/csomag):
+  /// egyetlen HTML-fájl — a 3D oldal a felvétellel és a hangjával, motor és
+  /// internet nélkül is fut (a játékos otthon is megnézheti).
+  Future<Uint8List> fetchRecordingPackage(
+      String matchId, String recordingId) async {
+    final resp = await http
+        .get(Uri.parse(
+            "$baseUrl/matches/$matchId/felvetelek/$recordingId/csomag"))
+        .timeout(const Duration(minutes: 2));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a felvétel-csomag", resp));
+    }
+    return resp.bodyBytes;
+  }
+
   /// Felvétel átnevezése (PATCH /matches/{id}/felvetelek/{rid}).
   Future<void> renameRecording(
       String matchId, String recordingId, String nev) async {
