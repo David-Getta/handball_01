@@ -4461,6 +4461,9 @@ def create_app():
                 utvonal(match_id).unlink(missing_ok=True)
             except Exception:
                 pass
+        # A megbeszélés-felvételek (és hangjuk) is — eddig árván maradtak.
+        import shutil
+        shutil.rmtree(_felvetel_mappa(match_id), ignore_errors=True)
         _write_index()
         return {"deleted": match_id}
 

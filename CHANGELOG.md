@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **A felvételek javításai** (motor + böngésző): a meccs törlése a
+  megbeszélés-felvételeit és hangjukat is törli (eddig árván maradtak a
+  lemezen); ha a felvétel hangja nem tölthető, a felirat ezt mondja (nem
+  "kattints a hanghoz"-t); a hang leállítása időkorláttal megy (a kép
+  felvétele nem akadhat el rajta); felvétel közben a lap bezárása előtt a
+  böngésző rákérdez.
+
 - **Felvétel-fejezetek** (motor + böngésző + app): a motor a felvételt
   ott bontja fejezetekre, ahol az edző egy másik jelenetre ugrott (a
   csúszka húzása egy fejezet, a landolással); a visszajátszásban

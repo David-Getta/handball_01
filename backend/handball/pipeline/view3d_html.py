@@ -3193,16 +3193,28 @@ async function felvetelHangIndit(f){
   }
 }
 // A hang-felvétel vége: {blob, eltolas} (vagy null), a mikrofon elengedve.
+// (Időkorláttal: ha a "stop" esemény FV_HANG_STOP_MS alatt nem jön meg,
+// a meglévő darabokkal megyünk tovább — a kép felvétele nem akadhat el a
+// hangon.)
+const FV_HANG_STOP_MS = 3000;
 function felvetelHangLeallit(h){
   if (!h) return Promise.resolve(null);
   return new Promise(res => {
-    const vege = () => { h.stream.getTracks().forEach(t => t.stop());
+    let kesz = false;
+    const vege = () => { if (kesz) return; kesz = true;
+      h.stream.getTracks().forEach(t => t.stop());
       res({blob: new Blob(h.darabok, {type: h.tipus}), eltolas: h.eltolas}); };
     if (h.rec.state === "inactive"){ vege(); return; }
     h.rec.onstop = vege;
+    setTimeout(vege, FV_HANG_STOP_MS);
     try { h.rec.stop(); } catch (e) { vege(); }
   });
 }
+// Felvétel közben a lap bezárása előtt a böngésző rákérdez (a félbehagyott
+// felvétel nem mentődhet el: előbb "⏹ Felvétel vége").
+addEventListener("beforeunload", (e) => {
+  if (kzFelvetel && kzFelvetel.allapotok.length >= 2){ e.preventDefault(); e.returnValue = ""; }
+});
 function fvHangForras(url){
   fvAudio.pause();
   if (url){ fvAudio.src = url; fvAudio.load(); }
@@ -3225,13 +3237,17 @@ function felvetelHangFrissit(f, e){
   if (!h || !fvAudio.getAttribute("src")) return;
   const cel = e - (h.eltolas || 0);
   if (f.szunet !== null || cel < 0){ if (!fvAudio.paused) fvAudio.pause(); return; }
-  if (fvAudio.ended) return;
+  if (fvAudio.ended || f.hangHiba) return;
   if (!fvAudio.paused) fvHangUgrik(f, cel);
   if (fvAudio.paused && !f.hangKer && performance.now() >= (f.hangKov || 0)){
     f.hangKer = true;
     fvHangUgrik(f, cel);
+    // NotAllowedError: a böngésző kattintást vár (újrapróbál); minden más
+    // (a hang nem tölthető): nem próbál újra, a felirat megmondja.
     fvAudio.play().then(() => { f.hangKer = false; f.hangTiltva = false; },
-      () => { f.hangKer = false; f.hangTiltva = true; f.hangKov = performance.now() + 1000; });
+      (err) => { f.hangKer = false;
+        if (err && err.name === "NotAllowedError"){ f.hangTiltva = true; f.hangKov = performance.now() + 1000; }
+        else { f.hangTiltva = false; f.hangHiba = true; } });
   }
 }
 const fvCim = () => "/matches/" + encodeURIComponent(ADAT.match_id || "") + "/felvetelek";
@@ -3423,7 +3439,8 @@ function felvetelFrissit(){
   }
   const info = "▶ " + f.adat.nev + " · " + fvOra(Math.min(e, hossz)) + " / " + fvOra(hossz)
     + (f.szunet !== null ? " · szünet" : "")
-    + (f.adat.hang ? (f.hangTiltva ? " · 🔊 kattints az oldalra a hanghoz" : " · 🎙") : "")
+    + (f.adat.hang ? (f.hangHiba ? " · 🎙 a hang nem tölthető"
+                      : f.hangTiltva ? " · 🔊 kattints az oldalra a hanghoz" : " · 🎙") : "")
     + (fz.length > 1 ? " · " + (fi + 1) + "/" + fz.length + ". fejezet (N / P)" : "");
   if (kozosInfo.textContent !== info) kozosInfo.textContent = info;
 }
@@ -3434,7 +3451,8 @@ window.felvetelProba = () => ({felvesz: !!kzFelvetel, db: kzFelvetel ? kzFelvete
   lista: [...felvetelValaszto.options].map(o => o.value), info: kozosInfo.textContent,
   ido, megy, rajz: rajzKodol(rajzok), hangFelvesz: !!(kzFelvetel && kzFelvetel.hang),
   hang: {src: !!fvAudio.getAttribute("src"), szol: !fvAudio.paused,
-         ido: fvAudio.currentTime, tiltva: !!(fvLejatszas && fvLejatszas.hangTiltva)},
+         ido: fvAudio.currentTime, tiltva: !!(fvLejatszas && fvLejatszas.hangTiltva),
+         hiba: !!(fvLejatszas && fvLejatszas.hangHiba)},
   fejezet: fejezetValaszto.value, fejezetLatszik: fejezetValaszto.style.display !== "none",
   fejezetek: [...fejezetValaszto.options].map(o => o.textContent)});
 felvetelListaBetolt();

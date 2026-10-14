@@ -260,3 +260,30 @@ def test_a_fejezetek_a_vegpontokon_es_az_oldalon(tmp_path, monkeypatch):
         assert kell in oldal, kell
     # A billentyű és a VR-gomb is (két-két hely).
     assert oldal.count("if (fvLejatszas) felvetelFejezet(1); else jelenetLep(1);") == 2
+
+
+def test_a_meccs_torlese_a_felveteleit_is_torli(tmp_path, monkeypatch):
+    """A meccs törlése a felvételeit és hangjukat is viszi (eddig árván
+    maradtak); az oldal a hang leállítását időkorláttal végzi, a nem
+    tölthető hangot megnevezi, és felvétel közben a bezárás előtt kérdez."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_meccs())
+    c = TestClient(app)
+    url = "/matches/fv/felvetelek"
+    d = c.post(url, json={"allapotok": [[0, {"t": 1}], [1, {"t": 2}]]}).json()
+    assert c.put(f"{url}/{d['id']}/hang", content=b"ab",
+                 headers={"Content-Type": "audio/webm"}).status_code == 200
+    assert list(tmp_path.rglob("fv.felvetelek/*"))
+    assert c.delete("/matches/fv").status_code == 200
+    assert not list(tmp_path.rglob("fv.felvetelek"))
+    assert not list(tmp_path.rglob("*.hang"))
+
+    oldal = view3d_html(_meccs())
+    for kell in ("setTimeout(vege, FV_HANG_STOP_MS);",
+                 'addEventListener("beforeunload", (e) => {',
+                 'if (err && err.name === "NotAllowedError")',
+                 "a hang nem tölthető"):
+        assert kell in oldal, kell
