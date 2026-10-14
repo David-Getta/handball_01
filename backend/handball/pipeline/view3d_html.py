@@ -3057,6 +3057,14 @@ function kozosAllit(m){
     kzVagolap = false; kzKovetok = null; kzVezetoInfo();
     if (navigator.clipboard) navigator.clipboard.writeText(kzLink).then(
       () => { kzVagolap = true; if (kozosMod === "vezet") kzVezetoInfo(); }, () => {});
+    // Hálózati módban (a motor a klub-hálózat felé nyitva) a headsetek a
+    // gép HÁLÓZATI címét érik el, nem a localhost-ot — a motor megmondja.
+    fetch("/halozat").then(r => r.ok ? r.json() : null).then(h => {
+      if (!h || !h.halozati || !(h.linkek || []).length || kozosMod !== "vezet") return;
+      kzLink = h.linkek[0]; kzVagolap = false; kzVezetoInfo();
+      if (navigator.clipboard) navigator.clipboard.writeText(kzLink).then(
+        () => { kzVagolap = true; if (kozosMod === "vezet") kzVezetoInfo(); }, () => {});
+    }).catch(() => {});
   } else if (kozosMod === "kovet"){
     // A követő saját vetítése a vezetővel versenyezne.
     if (vetites) vetitesAllit(false);

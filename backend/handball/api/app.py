@@ -528,6 +528,50 @@ HALOZATI_ENGEDETT = (
 )
 
 
+def halozati_nyitott() -> bool:
+    """A motor a hálózat felé is nyitva van-e (HANDBALL_HOST nem a saját
+    gép — a több headsetes közös nézés klub-hálózati útja)."""
+    import os
+    host = os.environ.get("HANDBALL_HOST", "127.0.0.1").strip()
+    return host not in ("", "127.0.0.1", "localhost", "::1")
+
+
+def halozati_cimek() -> list:
+    """A gép hálózati (nem loopback, nem link-local) IPv4-címei — a
+    klub-hálózati csapat-linkhez. Elöl az, amelyiken a gép kifelé
+    forgalmazna (UDP-"kapcsolódás" egy dokumentációs címre: csomag nem
+    megy ki), utána a gépnév címei; ismétlés nélkül. Üres, ha nincs."""
+    import ipaddress
+    import socket
+    jeloltek = []
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("192.0.2.1", 9))
+            jeloltek.append(s.getsockname()[0])
+        finally:
+            s.close()
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None,
+                                       socket.AF_INET):
+            jeloltek.append(info[4][0])
+    except OSError:
+        pass
+    ki = []
+    for c in jeloltek:
+        try:
+            ip = ipaddress.ip_address(c)
+        except ValueError:
+            continue
+        if ip.is_loopback or ip.is_link_local or ip.is_unspecified:
+            continue
+        if c not in ki:
+            ki.append(c)
+    return ki
+
+
 def _halozati_or_telepit(app) -> None:
     """A hálózati őr: ha a HANDBALL_HOST nem a saját gép (a több headsetes
     közös nézés klub-hálózati útja — docs/3D_PALYA.md), a más gépről jövő
@@ -536,11 +580,9 @@ def _halozati_or_telepit(app) -> None:
     saját gépről (loopback) minden megy, mint eddig; alapból (127.0.0.1)
     az őr nincs is telepítve."""
     import ipaddress
-    import os
     import re
 
-    host = os.environ.get("HANDBALL_HOST", "127.0.0.1").strip()
-    if host in ("", "127.0.0.1", "localhost", "::1"):
+    if not halozati_nyitott():
         return
     engedett = [(m, re.compile(r)) for m, r in HALOZATI_ENGEDETT]
 
@@ -2989,6 +3031,22 @@ def create_app():
     # mint a /view3d-nél)
     vendor_three.__annotations__["request"] = Request
     app.get("/vendor/three@0.160.0/{ut:path}")(vendor_three)
+
+    def halozat(request: Request):
+        """A közös nézés hálózati csapat-linkjei: {"halozati": a motor a
+        hálózat felé is nyitva van-e, "linkek": a /kovet a gép hálózati
+        címeivel (azon a porton, amelyen ez a kérés jött — a motor
+        tartalék porton is futhat)}. Saját gépes módban a lista üres (a
+        headset USB-n, adb reverse-szel a localhost-ot éri el)."""
+        nyitott = halozati_nyitott()
+        port = request.url.port
+        utotag = "" if port in (None, 80) else f":{port}"
+        return {"halozati": nyitott,
+                "linkek": ([f"http://{c}{utotag}/kovet"
+                            for c in halozati_cimek()] if nyitott else [])}
+
+    halozat.__annotations__["request"] = Request
+    app.get("/halozat")(halozat)
 
     def match_view3d(match_id: str, request: Request):
         """Böngészős 3D / VR nézet: a meccs WebXR-képes HTML-oldalként.

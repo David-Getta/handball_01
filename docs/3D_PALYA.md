@@ -354,7 +354,8 @@ VR-mód (WebXR) csak biztonságos címen indul — a `localhost` ilyen. Két
    hálózat felé is meg kell nyitni — `HANDBALL_HOST=0.0.0.0` a
    `scripts/serve.py` indításakor (az app motor-indítója szándékosan
    csak a saját gépet szolgálja ki) —, a csapat linkjében a `localhost`
-   helyére a laptop hálózati címe kerül, és a headset böngészőjében
+   helyére a laptop hálózati címe kerül (a vezető ilyenkor már ezt kapja
+   a vágólapra — a motor `/halozat` végpontja megmondja a címet), és a headset böngészőjében
    ezt a címet biztonságosnak kell jelölni (Chromium-alapú böngészőben:
    `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, a
    laptop `http://<cím>:8000` címével), különben a VR-mód nem indul.

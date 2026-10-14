@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.169 óta)
+
+- **Hálózati módban a csapat linkje a gép hálózati címével** (motor +
+  böngésző + app): a vezető eddig "http://127.0.0.1:8000/kovet"-et
+  kapott a vágólapra, amit a klub hálózatán a headsetek nem érnek el.
+  Most a motor /halozat végpontja megmondja, nyitva van-e a hálózat
+  felé, és a gép hálózati címeivel adja a linket (azon a porton, amelyen
+  a motor fut) — a böngésző és az app vezetője ezt adja a csapatnak.
+
 ## v0.1.169 — kiadva (2026-10-14)
 
 > Kiadás-jegyzet: a közös nézés a klub hálózatán is biztonságos és

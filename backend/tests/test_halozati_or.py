@@ -72,3 +72,53 @@ def test_az_engedett_utak_a_kovetohoz_kellenek():
     kivétel — a vezető VR-ből is vezethet)."""
     assert all(m == "GET" for m, r in HALOZATI_ENGEDETT if "shared3d" not in r)
     assert len(HALOZATI_ENGEDETT) == 7
+
+
+def test_a_halozati_csapat_link(tmp_path, monkeypatch):
+    """GET /halozat: saját gépes módban nem hálózati, üres lista; hálózati
+    módban a /kovet a gép hálózati címeivel, azon a porton, amelyen a kérés
+    jött (a motor tartalék porton is futhat). Az oldal és az app ezt adja a
+    csapatnak."""
+    from pathlib import Path
+
+    import handball.api.app as appmod
+
+    monkeypatch.setattr(appmod, "halozati_cimek",
+                        lambda: ["192.168.1.23", "10.0.0.5"])
+    app = _app(tmp_path, monkeypatch, None)
+    helyi = TestClient(app, base_url="http://testserver:8000",
+                       client=("127.0.0.1", 1))
+    assert helyi.get("/halozat").json() == {"halozati": False, "linkek": []}
+    app = _app(tmp_path, monkeypatch, "0.0.0.0")
+    helyi = TestClient(app, base_url="http://testserver:8017",
+                       client=("127.0.0.1", 1))
+    assert helyi.get("/halozat").json() == {
+        "halozati": True,
+        "linkek": ["http://192.168.1.23:8017/kovet",
+                   "http://10.0.0.5:8017/kovet"]}
+    # A headsetnek nem kell (a hálózati őr zárja).
+    assert TestClient(app, client=("192.168.1.50", 1)).get(
+        "/halozat").status_code == 403
+
+    from handball.pipeline.view3d_html import view3d_html
+    oldal = view3d_html(_meccs())
+    assert 'fetch("/halozat").then(r => r.ok ? r.json() : null).then(h => {' in oldal
+    assert "kzLink = h.linkek[0];" in oldal
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
+    assert "_api.fetchNetworkLinks().then((linkek) {" in palya
+    assert '"$baseUrl/halozat"' in api
+
+
+def test_a_gep_halozati_cimei():
+    """A felderítés nem dob, és nem ad saját gépes (loopback) címet."""
+    import ipaddress
+
+    from handball.api.app import halozati_cimek
+
+    cimek = halozati_cimek()
+    assert isinstance(cimek, list)
+    for c in cimek:
+        ip = ipaddress.ip_address(c)
+        assert ip.version == 4 and not ip.is_loopback, c

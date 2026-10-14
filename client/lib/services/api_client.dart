@@ -949,6 +949,19 @@ class ApiClient {
         : (null, null);
   }
 
+  /// A közös nézés hálózati csapat-linkjei (GET /halozat): a /kovet a gép
+  /// hálózati címeivel, ha a motor a klub-hálózat felé is nyitva van —
+  /// különben üres (saját gépes mód: a headset USB-n a localhost-ot éri el).
+  Future<List<String>> fetchNetworkLinks() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/halozat"))
+        .timeout(const Duration(seconds: 5));
+    if (resp.statusCode != 200) return const [];
+    final json = jsonDecode(utf8.decode(resp.bodyBytes));
+    if (json is! Map || json["halozati"] != true) return const [];
+    return [for (final l in (json["linkek"] as List? ?? const [])) "$l"];
+  }
+
   /// A vezetés vége (DELETE /matches/{id}/shared3d): a követők "nincs
   /// vezető"-t látnak.
   Future<void> deleteShared3d(String matchId) async {

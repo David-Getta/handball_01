@@ -2204,6 +2204,17 @@ class _Court3DScreenState extends State<Court3DScreen>
               "(a headsetek böngészőjében ez nyílik, Követem-mel; a headset "
               "USB-n — adb reverse — vagy a klub hálózatán éri el a "
               "motort, lásd a 3D útmutatót)")));
+      // Hálózati módban a headsetek a gép HÁLÓZATI címét érik el — a motor
+      // megmondja; ilyenkor az a link megy a vágólapra.
+      _api.fetchNetworkLinks().then((linkek) {
+        if (linkek.isEmpty || !mounted || !_vezet) return;
+        Clipboard.setData(ClipboardData(text: linkek.first))
+            .catchError((_) {});
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Hálózati mód — a csapat linkje a vágólapon: "
+                "${linkek.first}${linkek.length > 1 ? " (vagy: "
+                    "${linkek.skip(1).join(", ")})" : ""}")));
+      }).catchError((_) {});
     } else {
       _api.deleteShared3d(id).catchError((_) {});
     }
