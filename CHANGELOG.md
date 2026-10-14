@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **Legutóbbi megbeszélések a kezdőlapon** (új, app + motor): a 3D közös
+  nézés mentett felvételei meccsektől függetlenül, a legújabb elöl — a
+  meccs, a hossz, a fejezetek, a hang és hogy ki nézte meg; a "3D / VR"
+  gomb a böngészős 3D-ben (VR-ben is) indítja. (/library/recordings)
+
+- **Windows: a böngészős 3D link nem csonkul** (javítás, app): az app a
+  böngészőt `cmd /c start`-tal nyitotta, ami a címet az első `&`-nél
+  elvágta — a "Böngészős 3D / VR" gomb így elvesztette az időt, a
+  kamerát és a rétegeket. Most a közös böngésző-nyitó a címet egyben adja
+  át.
+
 - **"Ki nézte meg?"** (új, böngésző/VR + motor + app): a felvétel azért
   van, hogy aki kimaradt, utólag megnézze — most az edző látja is, hogy
   megtörtént. Ha a néző a "Ki vagy?" nevével a felvétel 80%-át

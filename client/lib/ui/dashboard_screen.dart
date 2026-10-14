@@ -13,6 +13,7 @@ import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
 import "../services/backend_launcher.dart";
+import "../services/browser_open.dart";
 import "../services/jobs_monitor.dart";
 import "diagnostics_button.dart";
 import "../services/session_store.dart";
@@ -21,6 +22,7 @@ import "anim.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
 import "court3d_screen.dart";
+import "court_geometry.dart";
 import "label_screen.dart";
 import "match_screen.dart";
 import "player_trend_screen.dart";
@@ -55,6 +57,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // "total") — a kártya "Videózandó: N jelenet · 3D-ben" sora; külön,
   // nem blokkolóan töltődik (a motor gyorsítótárazza).
   final Map<String, Map<String, dynamic>> _keyScenes = {};
+  // LEGUTÓBBI MEGBESZÉLÉSEK: a 3D közös nézés mentett felvételei.
+  List<Map<String, dynamic>> _recordings = const [];
   // Visszatérő edzés-fókuszok csapatonként (a könyvtár-összesítésből).
   Map<String, dynamic> _seasonFocus = {};
 
@@ -697,6 +701,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) setState(() => _jobHistory = h);
       });
       _refreshSummary();
+      // A legutóbbi megbeszélés-felvételek — külön, nem blokkolóan.
+      _api.fetchLibraryRecordings().then((r) {
+        if (mounted) setState(() => _recordings = r);
+      }).catchError((_) {});
       // A motor a mentett meccseket HÁTTÉRBEN olvassa be (meccsenként
       // több másodperc): amíg töltődik, a lista részleges — pár
       // másodpercenként újrakérdezünk, hogy a sorok maguktól
@@ -2405,6 +2413,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // merre tart a csapat (legalább 2 xG-s meccsből rajzolódik ki).
             ..._seasonTrend(),
             ..._leadersCard(),
+            // A legutóbbi 3D megbeszélések: ki nézte meg, egy kattintással.
+            ..._recordingsCard(),
             // Visszatérő gyengeségek: ami több meccsen is előjött.
             ..._seasonFocusCard(),
             // Folyamatban lévő feldolgozások (sor): élő állapot + megszakítás.
@@ -3047,6 +3057,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ],
     ));
+  }
+
+  /// LEGUTÓBBI MEGBESZÉLÉSEK kártya: a 3D közös nézés mentett felvételei
+  /// (meccsektől függetlenül, a legújabb elöl) — a sorban a meccs, a
+  /// hossz, a fejezetek, a hang és hogy ki nézte meg; a gomb a böngészős
+  /// 3D-ben (VR-ben is) indítja. Felvétel nélkül nincs kártya.
+  List<Widget> _recordingsCard() {
+    if (_recordings.isEmpty) return const [];
+    return [
+      const SizedBox(height: AppSpacing.xl),
+      Container(
+        decoration: AppTheme.card(),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("LEGUTÓBBI MEGBESZÉLÉSEK · 3D-FELVÉTEL",
+                style: AppText.label
+                    .copyWith(fontSize: 11, letterSpacing: 0.6)),
+            const SizedBox(height: AppSpacing.sm),
+            for (final f in _recordings)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("${f["nev"]}",
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.value.copyWith(fontSize: 13)),
+                        Text(
+                            "${f["home_team"]} – ${f["away_team"]} · "
+                            "${recordingSubtitle(f)}",
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.label.copyWith(fontSize: 11.5)),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _felvetelNyit(f),
+                    icon: const Icon(Icons.play_arrow, size: 16),
+                    label: const Text("3D / VR",
+                        style: TextStyle(fontSize: 12)),
+                  ),
+                ]),
+              ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  /// Egy felvétel a böngészős 3D-ben (a ?felvetel= linkkel magától indul).
+  Future<void> _felvetelNyit(Map<String, dynamic> f) async {
+    final url = Uri.parse("${_api.baseUrl}/matches/"
+            "${Uri.encodeComponent("${f["match_id"]}")}/view3d")
+        .replace(queryParameters: {"felvetel": "${f["id"]}"}).toString();
+    final ok = await openInBrowser(url);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? "Megnyitva a böngészőben: $url"
+            : "Nyisd meg kézzel a böngészőben: $url")));
   }
 
   /// Szezon-toplisták kártya: gól/blokk/szerzés/védés vezérei a teljes

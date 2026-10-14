@@ -1045,6 +1045,25 @@ class ApiClient {
         .toList();
   }
 
+  /// LEGUTÓBBI MEGBESZÉLÉSEK (GET /library/recordings): a 3D közös nézés
+  /// felvételei meccsektől függetlenül, a legújabb elöl — [{match_id,
+  /// home_team, away_team, id, nev, letrehozva, hossz_s, hang, fejezetek,
+  /// nezok}].
+  Future<List<Map<String, dynamic>>> fetchLibraryRecordings(
+      {int limit = 5}) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/recordings?limit=$limit"))
+        .timeout(const Duration(seconds: 20));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a felvételeket", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["felvetelek"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   /// KVÍZ-MÉRLEG (GET /library/quiz-stats): a 3D közös nézés kvízei
   /// játékosonként, meccseken át — [{nev, kvizek, itelt, jo, rossz,
   /// arany}], a legjobb aránnyal elöl.

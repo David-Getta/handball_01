@@ -3681,9 +3681,28 @@ def create_app():
             d = json.loads(p.with_suffix(".nezok").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return []
+        if not isinstance(d, dict):
+            return []
         sorok = [v for v in d.values() if isinstance(v, dict) and v.get("nev")]
         return [v["nev"] for v in sorted(sorok, key=lambda v: (
             str(v.get("ido") or ""), str(v["nev"])))]
+
+    def _legutobbi_felvetelek() -> list:
+        """A könyvtár MINDEN megbeszélés-felvétele [(fejléc, meta, út)]
+        alakban, a legújabb elöl (a /kovet várólapja és a
+        /library/recordings közös gyűjtése). A meccsek fejlécéből: a tár
+        nem vár a betöltésre, és a hideg meccseket nem tölti vissza."""
+        ki = []
+        for meta, _n in _store.summaries():
+            mappa = _felvetel_mappa(meta.match_id)
+            if not mappa.is_dir():
+                continue
+            for p in mappa.glob("*.json"):
+                fej = _felvetel_fej(p)
+                if fej is not None:
+                    ki.append((fej, meta, p))
+        ki.sort(key=lambda s: (s[0]["letrehozva"], s[0]["id"]), reverse=True)
+        return ki
 
     @app.post("/matches/{match_id}/felvetelek")
     def felvetel_ment(match_id: str, body: dict):
@@ -3926,21 +3945,9 @@ def create_app():
                 url=(f"/matches/{quote(mid, safe='')}/view3d?kovet=1"
                      + (f"&nev={quote(nev_, safe='')}" if nev_ else "")),
                 status_code=307)
-        # Addig: a legutóbbi felvételek (a meccsek fejlécéből — a tár
-        # nem vár a betöltésre, és a hideg meccseket nem tölti vissza).
-        felvetelek = []
-        for meta, _n in _store.summaries():
-            mappa = _felvetel_mappa(meta.match_id)
-            if not mappa.is_dir():
-                continue
-            for p in mappa.glob("*.json"):
-                fej = _felvetel_fej(p)
-                if fej is not None:
-                    felvetelek.append((fej, meta))
-        felvetelek.sort(key=lambda s: (s[0]["letrehozva"], s[0]["id"]),
-                        reverse=True)
+        # Addig: a legutóbbi felvételek.
         sorok = []
-        for fej, meta in felvetelek[:_c3.SHARED3D_WAIT_RECS]:
+        for fej, meta, _p in _legutobbi_felvetelek()[:_c3.SHARED3D_WAIT_RECS]:
             mp = max(0, int(float(fej["hossz_s"] or 0)))
             sorok.append(
                 '<li style="margin:.6em 0"><a style="color:#7ee0d2;'
@@ -4891,6 +4898,20 @@ def create_app():
                     "rajz": n.get("rajz") or "",
                 })
         return {"notes": out}
+
+    @app.get("/library/recordings")
+    def library_recordings(limit: int = 5):
+        """A LEGUTÓBBI MEGBESZÉLÉSEK (a kezdőlap kártyája): a 3D közös
+        nézés felvételei meccsektől függetlenül, a legújabb elöl —
+        {"felvetelek": [{"match_id", "home_team", "away_team", "id",
+        "nev", "letrehozva", "hossz_s", "hang", "fejezetek", "nezok"}],
+        "osszes": a felvételek száma}. `limit`: 1…50."""
+        limit = max(1, min(50, int(limit)))
+        mind = _legutobbi_felvetelek()
+        return {"felvetelek": [
+            {"match_id": meta.match_id, "home_team": meta.home_team,
+             "away_team": meta.away_team, **fej, "nezok": _felvetel_nezok(p)}
+            for fej, meta, p in mind[:limit]], "osszes": len(mind)}
 
     @app.get("/library/quiz-stats")
     def library_quiz_stats():

@@ -364,6 +364,10 @@ nélkül a választó előjön) a felvétel 80%-át ténylegesen végignézte (a
 szünet és az átugrott fejezetek nem számítanak), a motor rögzíti; az app
 "▶ Felvételek" listája mutatja ("megnézte: Anna, Peti").
 
+A kezdőlap **Legutóbbi megbeszélések** kártyája is mutatja őket
+(meccsektől függetlenül, ki nézte meg), a "3D / VR" gomb a böngészőben
+indítja.
+
 A csapat linkje (`/kovet`) is kínálja őket: amíg nincs élő vezetés, a
 "Várunk az edzőre" lap a legutóbbi megbeszéléseket listázza (meccsektől
 függetlenül) — a headsetben egy kattintással indul a visszanézés.

@@ -12,7 +12,6 @@
 /// terében mozog (méter; z felfelé).
 library;
 
-import "dart:io";
 import "dart:math" as math;
 
 import "package:flutter/gestures.dart";
@@ -23,6 +22,7 @@ import "package:flutter/services.dart";
 import "../analytics/court_analytics.dart";
 import "../models/tracking.dart";
 import "../services/api_client.dart";
+import "../services/browser_open.dart";
 import "../services/session_store.dart";
 import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
@@ -2078,24 +2078,14 @@ class _Court3DScreenState extends State<Court3DScreen>
     final url = Uri.parse("${_api.baseUrl}/matches/$_matchId/view3d")
         .replace(queryParameters: q)
         .toString();
-    try {
-      if (Platform.isMacOS) {
-        await Process.run("open", [url]);
-      } else if (Platform.isWindows) {
-        await Process.run("cmd", ["/c", "start", "", url]);
-      } else {
-        await Process.run("xdg-open", [url]);
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Megnyitva a böngészőben: $url — internet nem "
-              "kell; a VR-headset a motort USB-n (adb reverse) vagy a "
-              "🏟 Klub-hálózaton éri el, lásd a 3D útmutatót.")));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Nyisd meg kézzel a böngészőben: $url")));
-    }
+    final ok = await openInBrowser(url);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? "Megnyitva a böngészőben: $url — internet nem kell; a "
+                "VR-headset a motort USB-n (adb reverse) vagy a 🏟 "
+                "Klub-hálózaton éri el, lásd a 3D útmutatót."
+            : "Nyisd meg kézzel a böngészőben: $url")));
   }
 
   Widget _fejlec(Match m) {

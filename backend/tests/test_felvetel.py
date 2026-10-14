@@ -325,3 +325,55 @@ def test_ki_nezte_meg(tmp_path, monkeypatch):
                  "if (!KZ_NEV) nevValasztoMutat(true);", "✓ megnézted",
                  "✓ megnézted (az edző látja)"):
         assert kell in oldal, kell
+
+
+def test_a_legutobbi_megbeszelesek(tmp_path, monkeypatch):
+    """GET /library/recordings: meccsektől függetlenül, a legújabb elöl, a
+    meccs csapataival és a megnézőkkel; limit; a kezdőlap kártyája és a
+    közös böngésző-nyitó (Windowson nem a cmd — az a címet az első &-nél
+    elvágta)."""
+    import json
+    from pathlib import Path
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    for mid in ("egy", "ket"):
+        m = _meccs()
+        m.meta.match_id = mid
+        m.meta.home_team = mid.upper()
+        app.state.put_match(m)
+    c = TestClient(app)
+    assert c.get("/library/recordings").json() == {"felvetelek": [], "osszes": 0}
+    all_ = [[0, {"t": 1}], [1, {"t": 2}]]
+    regi = c.post("/matches/egy/felvetelek", json={"nev": "Régi", "allapotok": all_}).json()
+    uj = c.post("/matches/ket/felvetelek", json={"nev": "Új", "allapotok": all_}).json()
+    fajl = next(tmp_path.rglob(f"egy.felvetelek/{regi['id']}.json"))
+    d = json.loads(fajl.read_text(encoding="utf-8"))
+    d["letrehozva"] = "2000-01-01T00:00:00"
+    fajl.write_text(json.dumps(d), encoding="utf-8")
+    c.post(f"/matches/ket/felvetelek/{uj['id']}/megnezte", json={"nev": "Anna"})
+    r = c.get("/library/recordings").json()
+    assert r["osszes"] == 2
+    assert [(f["match_id"], f["home_team"], f["nev"], f["nezok"])
+            for f in r["felvetelek"]] == [("ket", "KET", "Új", ["Anna"]),
+                                          ("egy", "EGY", "Régi", [])]
+    assert len(c.get("/library/recordings", params={"limit": 1}).json()[
+        "felvetelek"]) == 1
+    assert len(c.get("/library/recordings", params={"limit": 0}).json()[
+        "felvetelek"]) == 1
+    # A sérült megnéző-fájl nem dönti el a listát.
+    next(tmp_path.rglob(f"{uj['id']}.json")).with_suffix(".nezok").write_text(
+        "[1, 2]", encoding="utf-8")
+    assert c.get("/library/recordings").json()["felvetelek"][0]["nezok"] == []
+
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    nyito = (gyoker / "services" / "browser_open.dart").read_text(encoding="utf-8")
+    assert '"rundll32", ["url.dll,FileProtocolHandler", url]' in nyito
+    assert '"/c", "start"' not in nyito
+    for nev in ("ui/court3d_screen.dart", "ui/dashboard_screen.dart"):
+        src = (gyoker / nev).read_text(encoding="utf-8")
+        assert "await openInBrowser(url);" in src, nev
+        assert '"/c", "start"' not in src, nev
+    dash = (gyoker / "ui" / "dashboard_screen.dart").read_text(encoding="utf-8")
+    assert "..._recordingsCard()," in dash
+    assert "_api.fetchLibraryRecordings().then((r) {" in dash
