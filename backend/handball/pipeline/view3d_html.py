@@ -2775,6 +2775,7 @@ function kzVezetoInfo(){
     + (kzKviz && kvizDontes(kzKviz) ? " · ✓ " + kzJoDb + " a jobb opció" : "")
     + (kzFelvetel ? " · ⏺" + (kzFelvetel.hang ? "🎙 " : " ")
                       + fvOra((performance.now() - kzFelvetel.kezd) / 1000) : "")
+    + (fvUzenet && performance.now() - fvUzenet.ido < FV_UZENET_MS ? " · " + fvUzenet.szoveg : "")
     + " — a csapat linkje: " + kzLink + (kzVagolap ? " (vágólapon)" : "");
 }
 // A követő állapot-szövege és a váltás ideje: a VR-tábla a váltás után
@@ -3200,6 +3201,15 @@ const felvetelValaszto = document.getElementById("felvetelValaszto");
 const fejezetValaszto = document.getElementById("fejezetValaszto");
 let kzFelvetel = null;   // a vezető futó felvétele: {kezd, allapotok}
 let fvLejatszas = null;  // a visszajátszás: {adat, kezd, szunet, i}
+// A felvétel üzenete (mentve / nem mentődött / hang nélkül): vezetés
+// közben a vezető állapot-sorában FV_UZENET_MS-ig marad (a következő
+// motor-válasz különben 0,3 mp alatt felülírná); vezetés nélkül a sorba.
+const FV_UZENET_MS = 8000;
+let fvUzenet = null;  // {szoveg, ido}
+function felvetelUzen(szoveg){
+  fvUzenet = {szoveg, ido: performance.now()};
+  if (kozosMod === "vezet") kzVezetoInfo(); else kozosInfo.textContent = szoveg;
+}
 // ?felvetel=<id> (az app "▶ Felvételek" listája): a lista első betöltése
 // után magától indul.
 let fvUrlIndit = URL_PARAM.get("felvetel") || "";
@@ -3233,7 +3243,7 @@ async function felvetelHangIndit(f){
     f.hang = h; kzVezetoInfo();
   } catch (e) {
     if (stream) stream.getTracks().forEach(t => t.stop());
-    if (kzFelvetel === f) kozosInfo.textContent = "⏺ felvétel hang nélkül (a mikrofon nem engedélyezett)";
+    if (kzFelvetel === f) felvetelUzen("⏺ felvétel hang nélkül (a mikrofon nem engedélyezett)");
   }
 }
 // A hang-felvétel vége: {blob, eltolas} (vagy null), a mikrofon elengedve.
@@ -3331,10 +3341,10 @@ async function felvetelMent(){
         hangInfo = hv.ok ? " 🎙 hanggal" : " (a hang nem mentődött: a motor " + hv.status + "-at válaszolt)";
       } catch (e) { hangInfo = " (a hang nem mentődött: " + e.message + ")"; }
     }
-    kozosInfo.textContent = "⏺ felvétel mentve" + hangInfo + ": " + d.nev + " (" + fvOra(d.hossz_s)
-      + ") — a ▶ Felvételek listából visszanézhető";
+    felvetelUzen("⏺ felvétel mentve" + hangInfo + ": " + d.nev + " (" + fvOra(d.hossz_s)
+      + ") — a ▶ Felvételek listából visszanézhető");
     felvetelListaBetolt();
-  } catch (e) { kozosInfo.textContent = "⏺ a felvétel nem mentődött: " + e.message; }
+  } catch (e) { felvetelUzen("⏺ a felvétel nem mentődött: " + e.message); }
 }
 async function felvetelListaBetolt(){
   if (FV_CSOMAG){

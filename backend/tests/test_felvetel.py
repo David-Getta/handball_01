@@ -523,3 +523,16 @@ def test_a_jelenlet_a_felvetelben(tmp_path, monkeypatch):
     oldal = view3d_html(_meccs())
     assert "jelen: [...(f.jelen || [])]" in oldal
     assert "for (const e of kzVezetoCsapat) if (e.nev) kzFelvetel.jelen.add(e.nev);" in oldal
+
+
+def test_a_felvetel_uzenete_megmarad():
+    """A felvétel üzenetei a vezető állapot-sorában FV_UZENET_MS-ig
+    maradnak (a motor-válasz nem írja felül azonnal)."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    assert "const FV_UZENET_MS = 8000;" in oldal
+    assert ('+ (fvUzenet && performance.now() - fvUzenet.ido < FV_UZENET_MS'
+            ' ? " · " + fvUzenet.szoveg : "")') in oldal
+    assert oldal.count("felvetelUzen(") == 4  # definíció + 3 üzenet
+    assert 'kozosInfo.textContent = "⏺' not in oldal
