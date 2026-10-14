@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **"🏟 Klub-hálózat" az appban** (új, app): a több headsetes közös nézés
+  klub-hálózati útja parancssor nélkül — a 3D fül kapcsolója (figyelmeztető
+  párbeszéddel: mi nyílik meg, és hogy csak zárt hálózaton) elmenti a
+  beállítást, és a motor az app következő indításától a hálózat felé is
+  nyit; a motor hálózati őre ilyenkor csak a közös nézést engedi más
+  gépekről. Alapból ki.
+
 - **Hálózati módban a csapat linkje a gép hálózati címével** (motor +
   böngésző + app): a vezető eddig "http://127.0.0.1:8000/kovet"-et
   kapott a vágólapra, amit a klub hálózatán a headsetek nem érnek el.

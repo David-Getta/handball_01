@@ -53,6 +53,31 @@ class SessionStore {
   /// "Meccs-elemző" pontja ezt nyitja meg a demó helyett, ha még megvan.
   static String lastMatchId = "";
 
+  /// KLUB-HÁLÓZAT: a motor a következő indítástól a hálózat felé is nyit
+  /// (a több headsetes közös nézés — a headsetek Wi-Fi-n érik el; a
+  /// hálózatról csak a közös nézés érhető el). Alapból KI.
+  static bool clubNetwork = false;
+
+  /// A klub-hálózat beállítása KÖZVETLENÜL a lemezről — a motor-indító
+  /// ezt hívja: a munkamenet-adatok (load) csak a motor indítása után
+  /// töltődnek be. Hiányzó vagy sérült fájlnál KI.
+  static Future<bool> clubNetworkFromDisk() async {
+    try {
+      final f = _file();
+      if (!await f.exists()) return false;
+      final data = jsonDecode(await f.readAsString());
+      return data is Map && data["club_network"] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Klub-hálózat kapcsolása (a következő motor-indítástól érvényes).
+  static Future<void> setClubNetwork(bool value) async {
+    clubNetwork = value;
+    await save();
+  }
+
   static File _file() {
     Directory base;
     if (Platform.isWindows) {
@@ -95,6 +120,7 @@ class SessionStore {
           : <String>[];
       final lm = data["last_match_id"];
       lastMatchId = lm is String ? lm : "";
+      clubNetwork = data["club_network"] == true;
     } catch (_) {
       token = null;
       offlineTermsVersion = 0;
@@ -104,6 +130,7 @@ class SessionStore {
       lastSeenVersion = "";
       guestBaseline = [];
       lastMatchId = "";
+      clubNetwork = false;
     }
   }
 
@@ -122,6 +149,7 @@ class SessionStore {
         "last_seen_version": lastSeenVersion,
         "guest_baseline": guestBaseline,
         "last_match_id": lastMatchId,
+        "club_network": clubNetwork,
       }));
     } catch (_) {}
   }

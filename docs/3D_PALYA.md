@@ -350,7 +350,9 @@ VR-mód (WebXR) csak biztonságos címen indul — a `localhost` ilyen. Két
    linkje (`http://localhost:8000/kovet`) így a
    laptop motorját éri el, és a VR-mód indul. USB-elosztóval több
    headset is mehet egyszerre.
-2. **A klub hálózatán (sok headsetre):** a motort kifejezetten a
+2. **A klub hálózatán (sok headsetre):** az appban a 3D fül "🏟
+   Klub-hálózat" kapcsolója (az app következő indításától; parancssor
+   nélkül) — vagy kézzel: a motort kifejezetten a
    hálózat felé is meg kell nyitni — `HANDBALL_HOST=0.0.0.0` a
    `scripts/serve.py` indításakor (az app motor-indítója szándékosan
    csak a saját gépet szolgálja ki) —, a csapat linkjében a `localhost`

@@ -4,6 +4,7 @@ import "dart:math" as math;
 import "dart:ui";
 
 import "package:flutter_test/flutter_test.dart";
+import "package:handball_client/services/backend_launcher.dart";
 import "package:handball_client/ui/court_geometry.dart";
 
 void main() {
@@ -104,6 +105,15 @@ void main() {
     expect(quizNoteText([("Anna", false)], "p", 0),
         "❓ Döntés-kvíz (jobb opció: passz) — ✗ Anna");
     expect(quizNoteText([], null, 2), "❓ Kvíz — nem válaszolt: 2");
+  });
+
+  test("klub-hálózat: a motor környezete", () {
+    // Alapból csak a saját gép; klub-hálózatban a hálózat felé is (a
+    // motor hálózati őre — handball.api.app — ilyenkor kapcsol be).
+    expect(engineEnvironment(clubNetwork: false, port: 8001),
+        {"HANDBALL_HOST": "127.0.0.1", "HANDBALL_PORT": "8001"});
+    expect(engineEnvironment(clubNetwork: true, port: 8000),
+        {"HANDBALL_HOST": "0.0.0.0", "HANDBALL_PORT": "8000"});
   });
 
   test("rajz: dekódolás = a böngésző rajzDekodol-ja", () {

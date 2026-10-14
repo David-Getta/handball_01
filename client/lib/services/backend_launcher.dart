@@ -20,6 +20,7 @@ import "package:http/http.dart" as http;
 
 import "../version.dart";
 import "api_client.dart";
+import "session_store.dart";
 
 /// A motor-indítás eredménye — ezt mutatja a kezdőképernyő.
 enum BackendPhase {
@@ -34,6 +35,16 @@ class BackendStatus {
   final String message;
   const BackendStatus(this.phase, this.message);
 }
+
+/// A motor-folyamat környezete: alapból csak a saját gép (127.0.0.1);
+/// klub-hálózatban a hálózat felé is (0.0.0.0 — a motor hálózati őre
+/// ilyenkor csak a közös nézés követő-útját engedi más gépekről).
+Map<String, String> engineEnvironment(
+        {required bool clubNetwork, required int port}) =>
+    {
+      "HANDBALL_HOST": clubNetwork ? "0.0.0.0" : "127.0.0.1",
+      "HANDBALL_PORT": "$port",
+    };
 
 class BackendLauncher {
   final int port;
@@ -299,11 +310,18 @@ class BackendLauncher {
     _logLine("Motor indítása: ${exe.path}", onLog);
     var exited = false; // idő előtti leállás jelzése a várakozónak
     try {
+      // Klub-hálózat (a 3D fül kapcsolója): a motor a hálózat felé is
+      // nyit — a hálózati őr miatt onnan csak a közös nézés érhető el.
+      final klub = await SessionStore.clubNetworkFromDisk();
+      if (klub) {
+        _logLine("Klub-hálózat: a motor a hálózat felé is nyit "
+            "(onnan csak a közös nézés érhető el).", onLog);
+      }
       _process = await Process.start(
         exe.path,
         const [],
         workingDirectory: exe.parent.path,
-        environment: {"HANDBALL_HOST": "127.0.0.1", "HANDBALL_PORT": "$port"},
+        environment: engineEnvironment(clubNetwork: klub, port: port),
       );
       // A motor UTF-8-ban ír, és a sorai MAGYARUL szólnak. A
       // String.fromCharCodes bájtonként képez karaktert, tehát az

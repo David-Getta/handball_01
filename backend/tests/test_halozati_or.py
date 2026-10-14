@@ -122,3 +122,41 @@ def test_a_gep_halozati_cimei():
     for c in cimek:
         ip = ipaddress.ip_address(c)
         assert ip.version == 4 and not ip.is_loopback, c
+
+
+def test_a_klub_halozat_az_appbol():
+    """Az app 3D fülének kapcsolója elmenti a beállítást, a motor-indító a
+    lemezről olvassa, és klub-hálózatban 0.0.0.0-ra köt — ilyenkor a motor
+    hálózati őre kapcsol be (a host-ellenőrzés ugyanazokat az értékeket
+    ismeri)."""
+    from pathlib import Path
+
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    inditas = (gyoker / "services" / "backend_launcher.dart").read_text(
+        encoding="utf-8")
+    tar = (gyoker / "services" / "session_store.dart").read_text(encoding="utf-8")
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    assert '"HANDBALL_HOST": clubNetwork ? "0.0.0.0" : "127.0.0.1",' in inditas
+    assert "final klub = await SessionStore.clubNetworkFromDisk();" in inditas
+    assert "environment: engineEnvironment(clubNetwork: klub, port: port)," in inditas
+    assert '"club_network": clubNetwork,' in tar
+    assert 'data["club_network"] == true' in tar
+    for kell in ("onPressed: _klubHalozatValt,",
+                 "await SessionStore.setClubNetwork(be);",
+                 "Csak megbízható, zárt hálózaton kapcsold be."):
+        assert kell in palya, kell
+    # A motor oldalon ugyanaz a két érték: 0.0.0.0 nyitott, 127.0.0.1 nem.
+    import os
+
+    from handball.api.app import halozati_nyitott
+    regi = os.environ.get("HANDBALL_HOST")
+    try:
+        os.environ["HANDBALL_HOST"] = "0.0.0.0"
+        assert halozati_nyitott()
+        os.environ["HANDBALL_HOST"] = "127.0.0.1"
+        assert not halozati_nyitott()
+    finally:
+        if regi is None:
+            os.environ.pop("HANDBALL_HOST", None)
+        else:
+            os.environ["HANDBALL_HOST"] = regi

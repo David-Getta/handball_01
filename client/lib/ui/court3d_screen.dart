@@ -23,6 +23,7 @@ import "package:flutter/services.dart";
 import "../analytics/court_analytics.dart";
 import "../models/tracking.dart";
 import "../services/api_client.dart";
+import "../services/session_store.dart";
 import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
 import "clips_screen.dart";
@@ -2221,6 +2222,54 @@ class _Court3DScreenState extends State<Court3DScreen>
     _focus.requestFocus();
   }
 
+  /// Klub-hálózat ki/be — figyelmeztető párbeszéddel; a következő
+  /// motor-indítástól érvényes (a motor-indító olvassa a lemezről).
+  Future<void> _klubHalozatValt() async {
+    final be = !SessionStore.clubNetwork;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(be
+            ? "Közös nézés a klub hálózatán"
+            : "Klub-hálózat kikapcsolása"),
+        content: SizedBox(
+          width: 420,
+          child: Text(be
+              ? "Bekapcsolva a motor az app KÖVETKEZŐ indításától a hálózat "
+                  "felé is nyit: a headsetek Wi-Fi-n, a gép hálózati címén "
+                  "érik el (a csapat linkjét vezetéskor a vágólapon kapod).\n\n"
+                  "A hálózatról CSAK a közös nézés érhető el — a meccsek "
+                  "listája, az elemzések, a törlés zárva —, de ami nyitva "
+                  "van (a meccsek 3D oldala és videó-kockái), az belépés "
+                  "nélküli. Csak megbízható, zárt hálózaton kapcsold be.\n\n"
+                  "A VR-módhoz a headset böngészőjében a gép címét "
+                  "biztonságosnak kell jelölni (lásd a 3D útmutatót); a "
+                  "Windows tűzfal rákérdezhet."
+              : "A motor az app következő indításától ismét csak a saját "
+                  "gépet szolgálja ki (a headset USB-n, adb reverse-szel "
+                  "éri el)."),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text("Mégse")),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(be ? "Bekapcsolás" : "Kikapcsolás")),
+        ],
+      ),
+    );
+    _focus.requestFocus();
+    if (ok != true || !mounted) return;
+    await SessionStore.setClubNetwork(be);
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(be
+            ? "🏟 Klub-hálózat bekapcsolva — az app következő indításától."
+            : "Klub-hálózat kikapcsolva — az app következő indításától.")));
+  }
+
   /// A vezető állapotának küldése (a tickerből): idő, megy-e, sebesség,
   /// rajz — egyszerre egy kérés, _vezetKuldS-enként.
   void _vezetKuld(Duration now) {
@@ -3143,6 +3192,28 @@ class _Court3DScreenState extends State<Court3DScreen>
                             ? "📡 Vezetsz"
                             : "📡 Vezetsz · $_kovetok követő",
                 style: const TextStyle(fontSize: 11.5)),
+          ),
+        ),
+      ),
+      // 🏟 Klub-hálózat: a headsetek Wi-Fi-n (a következő indítástól).
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Tooltip(
+          message: "Közös nézés a klub hálózatán: a headsetek Wi-Fi-n érik "
+              "el a motort (a következő indítástól; a hálózatról csak a "
+              "közös nézés érhető el)",
+          child: TextButton(
+            style: TextButton.styleFrom(
+                foregroundColor: SessionStore.clubNetwork
+                    ? AppColors.accent
+                    : AppColors.textFaint,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: const Size(0, 26),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            onPressed: _klubHalozatValt,
+            child: Text(
+                "🏟 Klub-hálózat: ${SessionStore.clubNetwork ? "be" : "ki"}",
+                style: const TextStyle(fontSize: 11)),
           ),
         ),
       ),
