@@ -287,3 +287,41 @@ def test_a_meccs_torlese_a_felveteleit_is_torli(tmp_path, monkeypatch):
                  'if (err && err.name === "NotAllowedError")',
                  "a hang nem tölthető"):
         assert kell in oldal, kell
+
+
+def test_ki_nezte_meg(tmp_path, monkeypatch):
+    """A néző jelzése a névvel (kis- és nagybetű, szóköz nem számít — az
+    újabb felülírja), a listában a megnézés sorrendjében; rossz kérések; a
+    felvétel törlése a megnézőket is viszi. Az oldal a ténylegesen
+    lejátszott idő után, névvel küldi."""
+    from handball.pipeline.court3d import SHARED3D_REC_WATCHED_FRAC
+    from handball.pipeline.view3d_html import view3d_html
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_meccs())
+    c = TestClient(app)
+    url = "/matches/fv/felvetelek"
+    d = c.post(url, json={"allapotok": [[0, {"t": 1}], [1, {"t": 2}]]}).json()
+    assert c.get(url).json()["felvetelek"][0]["nezok"] == []
+    meg = f"{url}/{d['id']}/megnezte"
+    assert c.post(meg, json={"nev": "Anna"}).json() == {"nezok": ["Anna"]}
+    assert c.post(meg, json={"nev": " Peti\x07 "}).json()["nezok"] == ["Anna", "Peti"]
+    assert c.post(meg, json={"nev": "anna "}).json()["nezok"] in (
+        ["Peti", "anna"], ["anna", "Peti"])
+    assert len(c.get(url).json()["felvetelek"][0]["nezok"]) == 2
+    assert c.post(meg, json={"nev": "  "}).status_code == 400
+    assert c.post(meg, json={}).status_code == 400
+    assert c.post(f"{url}/nincs/megnezte", json={"nev": "A"}).status_code == 404
+    assert c.post("/matches/x/felvetelek/a/megnezte",
+                  json={"nev": "A"}).status_code == 404
+    assert c.delete(f"{url}/{d['id']}").json() == {"ok": True}
+    assert not list(tmp_path.rglob("*.nezok"))
+
+    oldal = view3d_html(_meccs())
+    assert f"const FV_MEGNEZTE = {SHARED3D_REC_WATCHED_FRAC!r};" in oldal
+    for kell in ('"/megnezte", {method: "POST",',
+                 "(f.nezett || 0) >= hossz * FV_MEGNEZTE",
+                 "if (!KZ_NEV) nevValasztoMutat(true);", "✓ megnézted",
+                 "✓ megnézted (az edző látja)"):
+        assert kell in oldal, kell

@@ -121,6 +121,15 @@ void main() {
         recordingSubtitle({"hossz_s": 3, "hang": true, "fejezetek": 4}),
         "0:03 · 4 fejezet · 🎙");
     expect(recordingSubtitle({"hossz_s": 3, "fejezetek": 1}), "0:03");
+    expect(recordingSubtitle({"hossz_s": 3, "nezok": ["Anna", "Peti"]}),
+        "0:03 · megnézte: Anna, Peti");
+    expect(
+        recordingSubtitle({
+          "letrehozva": "2026-10-14T21:06:33",
+          "hossz_s": 3,
+          "nezok": ["A", "B", "C", "D"]
+        }),
+        "2026-10-14 21:06 · 0:03 · megnézte: 4 játékos");
     expect(recordingDefaultName(DateTime(2026, 3, 4, 9, 5)),
         "Megbeszélés 2026. 03. 04. 09:05");
   });

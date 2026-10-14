@@ -48,6 +48,9 @@ def test_a_halozatrol_csak_a_kozos_nezes_erheto_el(tmp_path, monkeypatch):
     assert tavoli.get("/matches/halo/felvetelek/abc/hang").status_code == 404
     assert tavoli.put("/matches/halo/felvetelek/abc/hang",
                       content=b"x").status_code == 403
+    # A "megnéztem" jelzés is (404: nincs ilyen felvétel — nem az őr).
+    assert tavoli.post("/matches/halo/felvetelek/abc/megnezte",
+                       json={"nev": "Anna"}).status_code == 404
     # A three.js is (a 3D oldal a motorból tölti).
     assert tavoli.get("/vendor/three@0.160.0/build/three.module.js").status_code == 200
     # A többi zárva — a nem létező út is (az őr az útválasztás előtt áll).
@@ -77,9 +80,12 @@ def test_alapbol_nincs_halozati_or(tmp_path, monkeypatch):
 
 def test_az_engedett_utak_a_kovetohoz_kellenek():
     """Az engedett utak listája szűk: csak olvasás (a közös nézés állapota
-    kivétel — a vezető VR-ből is vezethet)."""
-    assert all(m == "GET" for m, r in HALOZATI_ENGEDETT if "shared3d" not in r)
-    assert len(HALOZATI_ENGEDETT) == 8
+    kivétel — a vezető VR-ből is vezethet —, és a felvétel "megnéztem"
+    jelzése, ami a headsetről jön)."""
+    assert all(m == "GET" for m, r in HALOZATI_ENGEDETT
+               if "shared3d" not in r and "megnezte" not in r)
+    assert [m for m, r in HALOZATI_ENGEDETT if "megnezte" in r] == ["POST"]
+    assert len(HALOZATI_ENGEDETT) == 9
 
 
 def test_a_halozati_csapat_link(tmp_path, monkeypatch):

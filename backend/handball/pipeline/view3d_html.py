@@ -3016,7 +3016,7 @@ async function nevValasztoMutat(be){
   try {
     const v = await fetch("/library/players");
     const d = v.ok ? await v.json() : {};
-    const opciok = [["", "— ki vagy? (név a kvízhez) —"]];
+    const opciok = [["", "— ki vagy? (a neved a kvízhez és a felvételekhez) —"]];
     for (const csapat of [ADAT.home, ADAT.away]){
       const nevek = (d.players || {})[csapat] || {};
       for (const [mez, nev] of Object.entries(nevek).sort((a, b) => Number(a[0]) - Number(b[0])))
@@ -3166,6 +3166,9 @@ let fvUrlIndit = URL_PARAM.get("felvetel") || "";
 // engedi) — a mentés után a motorba; a visszajátszás az időhöz igazítva
 // szól (FV_HANG_CSUSZAS mp-nél nagyobb elcsúszásnál odaugrik).
 const FV_HANG_CSUSZAS = 0.6;
+// "Ki nézte meg?": a felvétel ennyi részének TÉNYLEGES végignézése után
+// (court3d.SHARED3D_REC_WATCHED_FRAC) a néző neve a motorba megy.
+const FV_MEGNEZTE = __FV_MEGNEZTE__;
 const fvAudio = new Audio();
 fvAudio.preload = "auto";
 function fvHangTipus(){
@@ -3346,6 +3349,8 @@ async function felvetelIndit(id){
     if (vetites) vetitesAllit(false);
     fvLejatszas = {adat, kezd: performance.now(), szunet: null, i: 0};
     fejezetListaToltes(adat);
+    // Név nélkül a "Ki vagy?" előjön: a megnézés a névvel számít.
+    if (!KZ_NEV) nevValasztoMutat(true);
     felvetelGombFelirat();
   } catch (e) { kozosInfo.textContent = "▶ a felvétel nem tölthető: " + e.message; }
 }
@@ -3353,6 +3358,7 @@ function felvetelAll(){
   if (!fvLejatszas) return;
   fvLejatszas = null; megy = false; lejatszasGomb.textContent = "▶";
   fvHangForras(""); fejezetValaszto.style.display = "none";
+  if (kozosMod !== "kovet") nevValasztoMutat(false);
   kozosInfo.textContent = ""; felvetelGombFelirat();
 }
 felvetelValaszto.onchange = () => felvetelIndit(felvetelValaszto.value);
@@ -3433,15 +3439,28 @@ function felvetelFrissit(){
                           nezopont: a.nezopont ? {...a.nezopont, kor: 0} : null});
   felvetelHangFrissit(f, e);
   const hossz = f.adat.hossz_s || all[all.length - 1][0];
+  // A ténylegesen lejátszott idő (a szünet és az ugrás nem számít).
+  const most = performance.now();
+  if (f.szunet === null && f.utolso !== undefined)
+    f.nezett = (f.nezett || 0) + Math.min(1, (most - f.utolso) / 1000);
+  f.utolso = most;
+  if (!f.jelentve && KZ_NEV && f.adat.id && (f.nezett || 0) >= hossz * FV_MEGNEZTE){
+    f.jelentve = true;
+    fetch(fvCim() + "/" + encodeURIComponent(f.adat.id) + "/megnezte", {method: "POST",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify({nev: KZ_NEV})})
+      .then(v => { f.megnezve = v.ok; }).catch(() => {});
+  }
   if (e > hossz + 1){
-    felvetelAll(); kozosInfo.textContent = "▶ a felvétel véget ért"; felvetelValaszto.value = "";
+    felvetelAll(); felvetelValaszto.value = "";
+    kozosInfo.textContent = "▶ a felvétel véget ért" + (f.megnezve ? " · ✓ megnézted (az edző látja)" : "");
     return;
   }
   const info = "▶ " + f.adat.nev + " · " + fvOra(Math.min(e, hossz)) + " / " + fvOra(hossz)
     + (f.szunet !== null ? " · szünet" : "")
     + (f.adat.hang ? (f.hangHiba ? " · 🎙 a hang nem tölthető"
                       : f.hangTiltva ? " · 🔊 kattints az oldalra a hanghoz" : " · 🎙") : "")
-    + (fz.length > 1 ? " · " + (fi + 1) + "/" + fz.length + ". fejezet (N / P)" : "");
+    + (fz.length > 1 ? " · " + (fi + 1) + "/" + fz.length + ". fejezet (N / P)" : "")
+    + (f.megnezve ? " · ✓ megnézted" : "");
   if (kozosInfo.textContent !== info) kozosInfo.textContent = info;
 }
 window.felvetelProba = () => ({felvesz: !!kzFelvetel, db: kzFelvetel ? kzFelvetel.allapotok.length : 0,
@@ -3453,6 +3472,8 @@ window.felvetelProba = () => ({felvesz: !!kzFelvetel, db: kzFelvetel ? kzFelvete
   hang: {src: !!fvAudio.getAttribute("src"), szol: !fvAudio.paused,
          ido: fvAudio.currentTime, tiltva: !!(fvLejatszas && fvLejatszas.hangTiltva),
          hiba: !!(fvLejatszas && fvLejatszas.hangHiba)},
+  nezett: fvLejatszas ? (fvLejatszas.nezett || 0) : 0, megnezve: !!(fvLejatszas && fvLejatszas.megnezve),
+  nevValaszto: kzNevValaszto.style.display !== "none",
   fejezet: fejezetValaszto.value, fejezetLatszik: fejezetValaszto.style.display !== "none",
   fejezetek: [...fejezetValaszto.options].map(o => o.textContent)});
 felvetelListaBetolt();
@@ -4139,7 +4160,7 @@ fest.setAnimationLoop(() => {
                           SHARED3D_NAME_MAX, SHARED3D_NEAR_M,
                           SHARED3D_POINTER_S, SHARED3D_POLL_S,
                           SHARED3D_QUIZ_HIT_M, SHARED3D_QUIZ_SHOT_M,
-                          SHARED3D_REC_MAX,
+                          SHARED3D_REC_MAX, SHARED3D_REC_WATCHED_FRAC,
                           SHARED3D_SEND_S, SHARED3D_TOLERANCE_S)
     from .defense import WALL_GAP_DEPTH_M, WALL_GAP_M, WALL_GAP_MIN_DEFENDERS
     from .tactics import TacticsConfig
@@ -4157,6 +4178,7 @@ fest.setAnimationLoop(() => {
                  .replace("__KZ_NEV_MAX__", str(int(SHARED3D_NAME_MAX)))
                  .replace("__KZ_KOZEL__", repr(float(SHARED3D_NEAR_M)))
                  .replace("__FV_MAX__", str(int(SHARED3D_REC_MAX)))
+                 .replace("__FV_MEGNEZTE__", repr(float(SHARED3D_REC_WATCHED_FRAC)))
                  .replace("__PASSZSAV_JS__", ps_kod + LAPOZO_JS
                           + JELENETLISTA_JS + GOLAKCIO_JS + EMBERELONY_JS
                           + KLIPALLAPOT_JS + KONTRA_JS + KAPOTT_JS

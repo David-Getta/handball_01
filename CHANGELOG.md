@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **"Ki nézte meg?"** (új, böngésző/VR + motor + app): a felvétel azért
+  van, hogy aki kimaradt, utólag megnézze — most az edző látja is, hogy
+  megtörtént. Ha a néző a "Ki vagy?" nevével a felvétel 80%-át
+  ténylegesen végignézte (a szünet és az átugrott fejezetek nem
+  számítanak), a motor rögzíti, és az app "▶ Felvételek" listája mutatja
+  ("megnézte: Anna, Peti"). Visszajátszáskor név nélkül a névválasztó
+  előjön.
+
 - **A felvételek javításai** (motor + böngésző): a meccs törlése a
   megbeszélés-felvételeit és hangjukat is törli (eddig árván maradtak a
   lemezen); ha a felvétel hangja nem tölthető, a felirat ezt mondja (nem

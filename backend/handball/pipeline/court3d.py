@@ -681,6 +681,10 @@ SHARED3D_REC_AUDIO_TYPES = ("audio/webm", "audio/mp4", "audio/ogg")
 # A /kovet "Várunk az edzőre" lapja a legutóbbi ennyi felvételt kínálja
 # visszanézésre (meccsektől függetlenül, a legújabb elöl).
 SHARED3D_WAIT_RECS = 8
+# "Ki nézte meg?": a néző akkor számít megnézőnek, ha a felvétel ennyi
+# részét TÉNYLEGESEN végignézte (lejátszás közben eltelt idő — a szünet
+# és az átugrott fejezetek nem számítanak).
+SHARED3D_REC_WATCHED_FRAC = 0.8
 
 
 # A felvétel FEJEZETEI: ahol a játékidő a vártnál ennél többet ugrott (az

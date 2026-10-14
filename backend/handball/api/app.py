@@ -517,7 +517,7 @@ class _MatchStore(dict):
 # vezető VR-ből is vezethet), a videó-kockák, a jegyzetek olvasása (a 3D
 # oldal mutatja őket), a névlista (a követő "Ki vagy?"-a), a three.js
 # (a 3D oldal a motorból tölti) és a megbeszélés-felvételek visszajátszása
-# (a hangjukkal).
+# (a hangjukkal; a néző jelezheti, hogy megnézte — "Ki nézte meg?").
 HALOZATI_ENGEDETT = (
     ("GET", r"^/kovet$"),
     ("GET", r"^/matches/[^/]+/view3d$"),
@@ -527,6 +527,7 @@ HALOZATI_ENGEDETT = (
     ("GET", r"^/vendor/three@[0-9.]+/[A-Za-z0-9_./-]+$"),
     (None, r"^/matches/[^/]+/shared3d$"),
     ("GET", r"^/matches/[^/]+/felvetelek(/[A-Za-z0-9]+(/hang)?)?$"),
+    ("POST", r"^/matches/[^/]+/felvetelek/[A-Za-z0-9]+/megnezte$"),
 )
 
 
@@ -3673,6 +3674,17 @@ def create_app():
         _felvetel_fejek[str(p)] = (kulcs, fej)
         return fej
 
+    def _felvetel_nezok(p: Path) -> list:
+        """"Ki nézte meg?" — a felvétel megnézőinek neve (a `{rid}.nezok`
+        kísérőfájlból, a megnézés ideje szerint). Üres, ha nincs."""
+        try:
+            d = json.loads(p.with_suffix(".nezok").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+        sorok = [v for v in d.values() if isinstance(v, dict) and v.get("nev")]
+        return [v["nev"] for v in sorted(sorok, key=lambda v: (
+            str(v.get("ido") or ""), str(v["nev"])))]
+
     @app.post("/matches/{match_id}/felvetelek")
     def felvetel_ment(match_id: str, body: dict):
         """A megbeszélés felvételének mentése. Törzs: {"nev", "allapotok":
@@ -3728,7 +3740,7 @@ def create_app():
     def felvetel_lista(match_id: str):
         """A meccs megbeszélés-felvételei: {"felvetelek": [{"id", "nev",
         "letrehozva", "hossz_s", "hang" (van-e hangja), "fejezetek" (a
-        fejezetek száma)}]} — a legújabb elöl."""
+        fejezetek száma), "nezok" (ki nézte meg)}]} — a legújabb elöl."""
         if match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
         ki = []
@@ -3737,7 +3749,7 @@ def create_app():
             for p in sorted(mappa.glob("*.json")):
                 fej = _felvetel_fej(p)
                 if fej is not None:
-                    ki.append(dict(fej))
+                    ki.append({**fej, "nezok": _felvetel_nezok(p)})
         ki.sort(key=lambda f: (f["letrehozva"], f["id"]), reverse=True)
         return {"felvetelek": ki}
 
@@ -3768,6 +3780,7 @@ def create_app():
             raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
         p.unlink()
         p.with_suffix(".hang").unlink(missing_ok=True)
+        p.with_suffix(".nezok").unlink(missing_ok=True)
         return {"ok": True}
 
     @app.patch("/matches/{match_id}/felvetelek/{rid}")
@@ -3852,6 +3865,38 @@ def create_app():
         if tipus not in SHARED3D_REC_AUDIO_TYPES:
             raise HTTPException(status_code=404, detail="nincs hang")
         return FileResponse(str(h), media_type=tipus)
+
+    @app.post("/matches/{match_id}/felvetelek/{rid}/megnezte")
+    def felvetel_megnezte(match_id: str, rid: str, body: dict):
+        """"Ki nézte meg?" — a néző jelzi, hogy a felvételt végignézte (a
+        böngésző a SHARED3D_REC_WATCHED_FRAC rész ténylegesen lejátszott
+        ideje után küldi). Törzs: {"nev"} (a "Ki vagy?" neve — court3d.
+        shared3d_nev szerint; a kulcs quiz_name_key: kis- és nagybetű,
+        szóköz nem számít, az újabb megnézés felülírja). Válasz:
+        {"nezok": [nevek]}. 400: név nélkül; 404: nincs ilyen felvétel. A
+        hálózati őr engedi (a headsetről jön)."""
+        import datetime
+
+        from ..pipeline.court3d import quiz_name_key, shared3d_nev
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not rid.isalnum() or not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        nev = shared3d_nev(body.get("nev"))
+        if not nev:
+            raise HTTPException(status_code=400, detail="név nélkül nem számít")
+        n = p.with_suffix(".nezok")
+        try:
+            d = json.loads(n.read_text(encoding="utf-8"))
+            if not isinstance(d, dict):
+                d = {}
+        except (OSError, ValueError):
+            d = {}
+        d[quiz_name_key(nev)] = {"nev": nev, "ido": datetime.datetime.now()
+                                 .isoformat(timespec="seconds")}
+        n.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+        return {"nezok": _felvetel_nezok(p)}
 
     @app.get("/kovet")
     def shared3d_rovid(nev: str = ""):
