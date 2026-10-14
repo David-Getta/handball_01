@@ -245,6 +245,7 @@ def annotations_csv(doc: dict, home: str = "hazai",
     import csv
     import io
 
+    from .csv_cella import keplet_vedett as kv
     names = {"home": home, "away": away, "": ""}
     tablak = {s["id"]: s.get("name", "") for s in (doc.get("scenes") or [])}
     buf = io.StringIO()
@@ -254,10 +255,11 @@ def annotations_csv(doc: dict, home: str = "hazai",
     for e in doc.get("events") or []:
         w.writerow([_mmss(e.get("t_s", 0.0)),
                     f"{float(e.get('t_s', 0.0)):.1f}".replace(".", ","),
-                    names.get(e.get("team", ""), ""),
-                    e.get("type", ""), e.get("jersey", ""),
-                    e.get("to_jersey", ""), e.get("outcome", ""),
-                    e.get("note", ""), tablak.get(e.get("scene_id", ""), "")])
+                    kv(names.get(e.get("team", ""), "")),
+                    kv(e.get("type", "")), e.get("jersey", ""),
+                    e.get("to_jersey", ""), kv(e.get("outcome", "")),
+                    kv(e.get("note", "")),
+                    kv(tablak.get(e.get("scene_id", ""), ""))])
     return buf.getvalue()
 
 

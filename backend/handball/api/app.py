@@ -5202,6 +5202,7 @@ def create_app():
         except Exception:
             pass
 
+        from ..csv_cella import csv_cella
         lines = ["Játékos;Név;Csapat;Track-ek;Táv (m);Átl. sebesség (m/s);"
                  "Max sebesség (km/h);Sprintek;Sprint táv (m);"
                  "Séta (mp);Kocogás (mp);Futás (mp);Sprint (mp);"
@@ -5217,7 +5218,7 @@ def create_app():
             nev = (_player_name(team, g["jersey"])
                    if g.get("jersey") is not None else None) or ""
             lines.append(";".join([
-                g["label"], nev, team,
+                csv_cella(g["label"]), csv_cella(nev), csv_cella(team),
                 "+".join(str(t) for t in g["track_ids"]),
                 num(g["distance_m"]), num(g["avg_speed_ms"]),
                 num(g["top_speed_ms"] * 3.6), str(g["sprint_count"]),
@@ -5232,8 +5233,8 @@ def create_app():
                 num(sum(shooter_of.get(t, {}).get("xg", 0.0)
                         for t in g["track_ids"])),
                 str(sum(blocks_of.get(t, 0) for t in g["track_ids"])),
-                next((poszt_of[t] for t in g["track_ids"]
-                      if t in poszt_of), ""),
+                csv_cella(next((poszt_of[t] for t in g["track_ids"]
+                                if t in poszt_of), "")),
                 # Emberfogás: a track-csoport összes őrzés-kockája
                 # másodpercben + a súlyozott átlagtáv.
                 (lambda fr_, ds_: num(fr_ / fps) if fr_ else "")(
@@ -7532,12 +7533,13 @@ def create_app():
 
         from fastapi.responses import Response
 
+        from ..csv_cella import csv_cella
         adat = library_roster(team)
         sorok_csv = ["mezszam;nev;meccsek;golok;golpasszok;blokkok;"
                      "labdaszerzesek;vedesek"]
         for r in adat["players"]:
             sorok_csv.append(
-                f"{r['jersey']};{r['name'] or ''};{r['matches']};"
+                f"{r['jersey']};{csv_cella(r['name'] or '')};{r['matches']};"
                 f"{r['goals']};{r['assists']};{r['blocks']};"
                 f"{r['steals']};{r['saves']}")
         tartalom = "\ufeff" + "\r\n".join(sorok_csv) + "\r\n"

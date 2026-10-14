@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **CSV-exportok: a nevek nem csúsztatják szét az oszlopokat, és nem
+  futnak képletként** (javítás, motor): a játékos-statisztika és a keret
+  CSV-je a pontosvesszőt tartalmazó nevet ("Kiss; ifj.") idézés nélkül
+  írta — szétcsúsztak az oszlopok —, a "="-vel kezdődő név vagy
+  megjegyzés pedig Excelben képletként futott. Most idézve és
+  képlet-védve (aposztróffal) mennek ki — a kézi napló CSV-je is.
+
 - **Biztonság: a csapatnév nem futtathat kódot a 3D oldalon** (javítás,
   motor + böngésző): egy "</script>"-et vagy HTML-t tartalmazó csapatnév
   (a könyvtár-import más gépről is hozhat ilyet, és a felvétel-csomag
