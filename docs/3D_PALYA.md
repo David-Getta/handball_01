@@ -370,7 +370,9 @@ vezetése hangot nem rögzít.
 **Ki nézte meg?** Ha a néző (a "Ki vagy?" nevével — visszajátszáskor név
 nélkül a választó előjön) a felvétel 80%-át ténylegesen végignézte (a
 szünet és az átugrott fejezetek nem számítanak), a motor rögzíti; az app
-"▶ Felvételek" listája mutatja ("megnézte: Anna, Peti").
+"▶ Felvételek" listája mutatja ("megnézte: Anna, Peti"), a Keret-lap
+pedig játékosonként, meccseken át: a csapat felvételei közül hányat
+nézett végig ("👁 3/5").
 
 📦 **Otthonra**: a "▶ Felvételek" listában a letöltés-gomb a felvételt
 egyetlen HTML-fájlként menti (a 3D oldal a felvétellel, a hangjával és a

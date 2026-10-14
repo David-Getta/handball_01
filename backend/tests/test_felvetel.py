@@ -434,3 +434,45 @@ def test_a_felvetel_csomag(tmp_path, monkeypatch):
     palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
              / "court3d_screen.dart").read_text(encoding="utf-8")
     assert "onPressed: () => _csomag(f)," in palya
+
+
+def test_a_megnezes_merleg_a_kereten(tmp_path, monkeypatch):
+    """A keret-lap sorai a megnézés-mérleget viszik: a csapat meccseinek
+    felvételei közül hányat nézett végig a játékos (a név szerint — kis-
+    és nagybetű nem számít); a felvétel nélküli csapatnál és a névtelen
+    játékosnál null. A Keret képernyő mutatja."""
+    from pathlib import Path
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    for mid in ("m1", "m2"):
+        frames = [Frame(t=t, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           jersey_number=7),
+            PlayerPosition(track_id=2, team=Team.AWAY, x=25.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           jersey_number=9)],
+            ball=Ball(x=20.0, y=10.0, confidence=1.0)) for t in range(10)]
+        app.state.put_match(Match(MatchMeta(match_id=mid, home_team="A",
+                                            away_team="B", fps=25.0), frames))
+    c = TestClient(app)
+    csapat, vendeg = "A", "B"
+    mez = c.get("/library/roster", params={"team": csapat}).json()["players"][0]["jersey"]
+    c.post("/library/players", json={"team": csapat, "jersey": mez, "name": "Kiss Anna"})
+    sor = c.get("/library/roster", params={"team": csapat}).json()["players"][0]
+    assert sor["megnezes"] is None  # még nincs felvétel
+    all_ = [[0, {"t": 1}], [1, {"t": 2}]]
+    f1 = c.post("/matches/m1/felvetelek", json={"allapotok": all_}).json()
+    c.post("/matches/m2/felvetelek", json={"allapotok": all_})
+    c.post(f"/matches/m1/felvetelek/{f1['id']}/megnezte", json={"nev": "kiss anna"})
+    c.post(f"/matches/m1/felvetelek/{f1['id']}/megnezte", json={"nev": "Peti"})
+    sor = c.get("/library/roster", params={"team": csapat}).json()["players"][0]
+    assert sor["megnezes"] == {"megnezett": 1, "osszes": 2}
+    # A vendég csapat is ott volt a meccseken (B) — névtelen: null.
+    vsor = c.get("/library/roster", params={"team": vendeg}).json()["players"]
+    assert all(r["megnezes"] is None for r in vsor)
+
+    keret = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+             / "roster_screen.dart").read_text(encoding="utf-8")
+    assert 'if (p["megnezes"] case {"megnezett": final num k, "osszes": final num n})' in keret

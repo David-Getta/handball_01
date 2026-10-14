@@ -7485,13 +7485,26 @@ def create_app():
                       for r in quiz_stats(_jegyzetek_idorendben())}
         except Exception:
             kvizek = {}
+        # A megnézés-mérleg: a csapat meccseinek megbeszélés-felvételei
+        # közül hányat nézett végig ("Ki nézte meg?") — a név szerint;
+        # hibatűrően, mint a kvíz-mérleg.
+        try:
+            fv_csapat = [p for _fej, meta, p in _legutobbi_felvetelek()
+                         if team in (meta.home_team, meta.away_team)]
+            megnezett: dict = {}
+            for p in fv_csapat:
+                for kulcs in {quiz_name_key(x) for x in _felvetel_nezok(p)}:
+                    megnezett[kulcs] = megnezett.get(kulcs, 0) + 1
+        except Exception:
+            fv_csapat, megnezett = [], {}
         sorok = []
         for j in mezek:
             k = (team, j)
             nev = _player_name(team, j)
             # (a követő neve legfeljebb SHARED3D_NAME_MAX jel — a hosszú
             # keret-nevet ugyanúgy vágjuk, hogy párosuljon)
-            kv = kvizek.get(quiz_name_key(shared3d_nev(nev))) if nev else None
+            nkulcs = quiz_name_key(shared3d_nev(nev)) if nev else None
+            kv = kvizek.get(nkulcs) if nkulcs else None
             sorok.append({
                 "jersey": j,
                 "name": nev,
@@ -7505,6 +7518,11 @@ def create_app():
                 "kviz": ({"kvizek": kv["kvizek"], "itelt": kv["itelt"],
                           "jo": kv["jo"], "arany": kv["arany"]}
                          if kv else None),
+                # A megnézés-mérleg (null: a csapatnak nincs felvétele,
+                # vagy a játékosnak nincs neve).
+                "megnezes": ({"megnezett": megnezett.get(nkulcs, 0),
+                              "osszes": len(fv_csapat)}
+                             if fv_csapat and nkulcs else None),
             })
         return {
             "team": team,

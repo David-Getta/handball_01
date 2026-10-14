@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **Megnézés-mérleg a Keret-lapon** (új, motor + app): a "Ki nézte
+  meg?" játékosonként, meccseken át — a csapat meccseinek
+  megbeszélés-felvételei közül hányat nézett végig ("👁 3/5"), a
+  kvíz-mérleg mellett. (/library/roster "megnezes")
+
 - **CSV-exportok: a nevek nem csúsztatják szét az oszlopokat, és nem
   futnak képletként** (javítás, motor): a játékos-statisztika és a keret
   CSV-je a pontosvesszőt tartalmazó nevet ("Kiss; ifj.") idézés nélkül
