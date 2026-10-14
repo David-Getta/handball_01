@@ -538,9 +538,11 @@ String recordingSubtitle(Map<String, dynamic> f) {
       l.length >= 16 ? l.substring(0, 16).replaceFirst("T", " ") : l;
   final fejezetek = (f["fejezetek"] as num?)?.toInt() ?? 0;
   final nezok = [for (final n in (f["nezok"] as List? ?? const [])) "$n"];
+  final jelen = (f["jelen"] as List?)?.length ?? 0;
   final hossz = recordingClock(f["hossz_s"] as num?) +
       (fejezetek > 1 ? " · $fejezetek fejezet" : "") +
       (f["hang"] == true ? " · 🎙" : "") +
+      (jelen > 0 ? " · élőben $jelen" : "") +
       (nezok.isEmpty
           ? ""
           : nezok.length <= 3

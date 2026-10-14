@@ -468,11 +468,58 @@ def test_a_megnezes_merleg_a_kereten(tmp_path, monkeypatch):
     c.post(f"/matches/m1/felvetelek/{f1['id']}/megnezte", json={"nev": "kiss anna"})
     c.post(f"/matches/m1/felvetelek/{f1['id']}/megnezte", json={"nev": "Peti"})
     sor = c.get("/library/roster", params={"team": csapat}).json()["players"][0]
-    assert sor["megnezes"] == {"megnezett": 1, "osszes": 2}
+    assert sor["megnezes"] == {"megnezett": 1, "elo": 0, "kovette": 1, "osszes": 2}
     # A vendég csapat is ott volt a meccseken (B) — névtelen: null.
     vsor = c.get("/library/roster", params={"team": vendeg}).json()["players"]
     assert all(r["megnezes"] is None for r in vsor)
 
     keret = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
              / "roster_screen.dart").read_text(encoding="utf-8")
-    assert 'if (p["megnezes"] case {"megnezett": final num k, "osszes": final num n})' in keret
+    assert '"kovette": final num k,' in keret
+
+
+def test_a_jelenlet_a_felvetelben(tmp_path, monkeypatch):
+    """A felvétel a jelenlét-listát (kik követték élőben) megtisztítva
+    tárolja; a fejléc viszi; a megnézés-mérleg "kovette"-je élőben VAGY
+    felvételről (egy felvétel egyszer számít). Az oldal és az app gyűjti."""
+    from pathlib import Path
+
+    from handball.pipeline.court3d import (SHARED3D_REC_PRESENT_MAX,
+                                           shared3d_felvetel_jelen)
+
+    assert shared3d_felvetel_jelen(["Anna", "anna ", "Peti\x07", "", 5, "Peti"]) == [
+        "Anna", "Peti"]
+    assert shared3d_felvetel_jelen("x") == []
+    assert len(shared3d_felvetel_jelen([f"n{i}" for i in range(500)])) == \
+        SHARED3D_REC_PRESENT_MAX
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    frames = [Frame(t=t, players=[PlayerPosition(
+        track_id=1, team=Team.HOME, x=20.0, y=10.0,
+        source=PositionSource.MEASURED, confidence=1.0, jersey_number=7)],
+        ball=Ball(x=20.0, y=10.0, confidence=1.0)) for t in range(10)]
+    app.state.put_match(Match(MatchMeta(match_id="j", home_team="A",
+                                        away_team="B", fps=25.0), frames))
+    c = TestClient(app)
+    c.post("/library/players", json={"team": "A", "jersey": 7, "name": "Kiss Anna"})
+    all_ = [[0, {"t": 1}], [1, {"t": 2}]]
+    f1 = c.post("/matches/j/felvetelek", json={"allapotok": all_,
+                                                "jelen": ["Kiss Anna", "Peti"]}).json()
+    f2 = c.post("/matches/j/felvetelek", json={"allapotok": all_}).json()
+    lista = {f["id"]: f for f in c.get("/matches/j/felvetelek").json()["felvetelek"]}
+    assert lista[f1["id"]]["jelen"] == ["Kiss Anna", "Peti"]
+    assert lista[f2["id"]]["jelen"] == []
+    # Élőben az elsőn, felvételről a másodikon — és az elsőt is megnézte.
+    for f in (f1, f2):
+        c.post(f"/matches/j/felvetelek/{f['id']}/megnezte", json={"nev": "Kiss Anna"})
+    sor = c.get("/library/roster", params={"team": "A"}).json()["players"][0]
+    assert sor["megnezes"] == {"megnezett": 2, "elo": 1, "kovette": 2, "osszes": 2}
+
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    assert "jelen: [..._felvetelJelen])" in palya
+    from handball.pipeline.view3d_html import view3d_html
+    oldal = view3d_html(_meccs())
+    assert "jelen: [...(f.jelen || [])]" in oldal
+    assert "for (const e of kzVezetoCsapat) if (e.nev) kzFelvetel.jelen.add(e.nev);" in oldal

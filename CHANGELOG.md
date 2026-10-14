@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **Jelenlét a felvételben** (motor + böngésző + app): a felvétel rögzíti,
+  kik követték a megbeszélést élőben (a közös nézés névvel jelenlévő
+  követői), így a Keret-lap mérlege a "követte"-t mutatja — élőben VAGY
+  felvételről ("👁 5/5"; a tooltip: élőben 3, felvételről 2) —, és aki ott
+  volt, annál sem áll "0". A felvétel-lista sora: "élőben 5".
+
 - **Megnézés-mérleg a Keret-lapon** (új, motor + app): a "Ki nézte
   meg?" játékosonként, meccseken át — a csapat meccseinek
   megbeszélés-felvételei közül hányat nézett végig ("👁 3/5"), a

@@ -132,6 +132,13 @@ void main() {
         "0:03 · megnézte: Anna, Peti");
     expect(
         recordingSubtitle({
+          "hossz_s": 3,
+          "jelen": ["A", "B", "C"],
+          "nezok": ["Anna"]
+        }),
+        "0:03 · élőben 3 · megnézte: Anna");
+    expect(
+        recordingSubtitle({
           "letrehozva": "2026-10-14T21:06:33",
           "hossz_s": 3,
           "nezok": ["A", "B", "C", "D"]

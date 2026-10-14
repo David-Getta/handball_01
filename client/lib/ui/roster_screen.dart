@@ -594,13 +594,18 @@ class _RosterScreenState extends State<RosterScreen> {
                 // A megnézés-mérleg: a csapat megbeszélés-felvételei
                 // közül hányat nézett végig (a motor /library/roster
                 // "megnezes"-e — a 3D "Ki nézte meg?"-je, a név szerint).
-                if (p["megnezes"] case {"megnezett": final num k, "osszes": final num n})
+                if (p["megnezes"] case {
+                  "kovette": final num k,
+                  "elo": final num e,
+                  "megnezett": final num m,
+                  "osszes": final num n
+                })
                   Padding(
                     padding: const EdgeInsets.only(left: 6),
                     child: Tooltip(
-                      message: "Megbeszélés-felvételek: a csapat $n "
-                          "felvételéből ennyit nézett végig (aki élőben ott "
-                          "volt, annak nem kell)",
+                      message: "Megbeszélések: a csapat $n felvett "
+                          "megbeszéléséből ennyit követett — élőben "
+                          "${e.toInt()}, felvételről ${m.toInt()}",
                       child: Text("👁 ${k.toInt()}/${n.toInt()}",
                           style: AppText.label.copyWith(fontSize: 11.5)),
                     ),

@@ -3673,7 +3673,8 @@ def create_app():
                    "hossz_s": d.get("hossz_s") or 0,
                    "hang": bool(d.get("hang")),
                    "fejezetek": len(shared3d_felvetel_fejezetek(
-                       d.get("allapotok") or []))}
+                       d.get("allapotok") or [])),
+                   "jelen": [str(x) for x in (d.get("jelen") or [])]}
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return None
         _felvetel_fejek[str(p)] = (kulcs, fej)
@@ -3723,6 +3724,7 @@ def create_app():
 
         from ..pipeline.court3d import (SHARED3D_REC_MAX,
                                         shared3d_felvetel_allapot,
+                                        shared3d_felvetel_jelen,
                                         shared3d_felvetel_nev)
         if match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
@@ -3751,7 +3753,10 @@ def create_app():
         adat = {"id": rid, "nev": nev or "Megbeszélés",
                 "letrehozva": datetime.datetime.now().isoformat(
                     timespec="seconds"),
-                "hossz_s": sorok[-1][0], "allapotok": sorok}
+                "hossz_s": sorok[-1][0], "allapotok": sorok,
+                # Kik követték élőben (a vezető a felvétel alatt a
+                # jelenlévő, névvel követők neveit gyűjti).
+                "jelen": shared3d_felvetel_jelen(body.get("jelen"))}
         mappa = _felvetel_mappa(match_id)
         mappa.mkdir(parents=True, exist_ok=True)
         (mappa / f"{rid}.json").write_text(
@@ -7489,14 +7494,20 @@ def create_app():
         # közül hányat nézett végig ("Ki nézte meg?") — a név szerint;
         # hibatűrően, mint a kvíz-mérleg.
         try:
-            fv_csapat = [p for _fej, meta, p in _legutobbi_felvetelek()
+            fv_csapat = [(fej, p) for fej, meta, p in _legutobbi_felvetelek()
                          if team in (meta.home_team, meta.away_team)]
             megnezett: dict = {}
-            for p in fv_csapat:
-                for kulcs in {quiz_name_key(x) for x in _felvetel_nezok(p)}:
-                    megnezett[kulcs] = megnezett.get(kulcs, 0) + 1
+            elo: dict = {}
+            kovette: dict = {}
+            for fej, p in fv_csapat:
+                nez = {quiz_name_key(x) for x in _felvetel_nezok(p)}
+                jel = {quiz_name_key(x) for x in fej.get("jelen") or []}
+                for d_, kulcsok in ((megnezett, nez), (elo, jel),
+                                    (kovette, nez | jel)):
+                    for kulcs in kulcsok:
+                        d_[kulcs] = d_.get(kulcs, 0) + 1
         except Exception:
-            fv_csapat, megnezett = [], {}
+            fv_csapat, megnezett, elo, kovette = [], {}, {}, {}
         sorok = []
         for j in mezek:
             k = (team, j)
@@ -7520,7 +7531,10 @@ def create_app():
                          if kv else None),
                 # A megnézés-mérleg (null: a csapatnak nincs felvétele,
                 # vagy a játékosnak nincs neve).
+                # (kovette: élőben ott volt VAGY végignézte a felvételt)
                 "megnezes": ({"megnezett": megnezett.get(nkulcs, 0),
+                              "elo": elo.get(nkulcs, 0),
+                              "kovette": kovette.get(nkulcs, 0),
                               "osszes": len(fv_csapat)}
                              if fv_csapat and nkulcs else None),
             })

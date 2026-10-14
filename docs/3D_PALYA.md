@@ -371,8 +371,9 @@ vezetése hangot nem rögzít.
 nélkül a választó előjön) a felvétel 80%-át ténylegesen végignézte (a
 szünet és az átugrott fejezetek nem számítanak), a motor rögzíti; az app
 "▶ Felvételek" listája mutatja ("megnézte: Anna, Peti"), a Keret-lap
-pedig játékosonként, meccseken át: a csapat felvételei közül hányat
-nézett végig ("👁 3/5").
+pedig játékosonként, meccseken át: a csapat felvett megbeszélései közül
+hányat követett — élőben (a felvétel a közös nézés névvel jelenlévő
+követőit is rögzíti) vagy felvételről ("👁 5/5", a tooltip bontja).
 
 📦 **Otthonra**: a "▶ Felvételek" listában a letöltés-gomb a felvételt
 egyetlen HTML-fájlként menti (a 3D oldal a felvétellel, a hangjával és a

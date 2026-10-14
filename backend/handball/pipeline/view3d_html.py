@@ -3115,6 +3115,8 @@ function kozosFrissit(){
       .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(a => { if (kozosMod === "vezet"){ kzKovetok = a.followers;
                                             kzVezetoCsapat = a.csapat || [];
+                                            if (kzFelvetel && kzFelvetel.jelen)
+                                              for (const e of kzVezetoCsapat) if (e.nev) kzFelvetel.jelen.add(e.nev);
                                             kzValaszDb = kzVezetoCsapat.filter(e => e.valasz).length;
                                             const kd = kvizDontes(kzKviz);
                                             kzJoDb = kd ? (a.csapat || []).filter(
@@ -3317,7 +3319,7 @@ async function felvetelMent(){
   const nev = "Megbeszélés " + new Date().toLocaleString("hu-HU", {dateStyle: "short", timeStyle: "short"});
   try {
     const v = await fetch(fvCim(), {method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({nev, allapotok: f.allapotok})});
+      body: JSON.stringify({nev, allapotok: f.allapotok, jelen: [...(f.jelen || [])]})});
     if (!v.ok) throw new Error("a motor " + v.status + "-at válaszolt");
     const d = await v.json();
     let hangInfo = "";
@@ -3373,7 +3375,8 @@ felvetelGomb.onclick = () => {
   if (kozosMod === "vezet"){
     if (kzFelvetel) felvetelMent();
     else {
-      kzFelvetel = {kezd: performance.now(), allapotok: [], hang: null}; kzUtolso = 0;
+      // (jelen: a felvétel alatt névvel jelenlévő követők — élőben követték)
+      kzFelvetel = {kezd: performance.now(), allapotok: [], hang: null, jelen: new Set()}; kzUtolso = 0;
       felvetelHangIndit(kzFelvetel);
     }
     felvetelGombFelirat(); kzVezetoInfo();

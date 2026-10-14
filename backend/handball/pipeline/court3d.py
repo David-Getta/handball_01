@@ -726,6 +726,29 @@ def shared3d_felvetel_fejezetek(allapotok) -> list:
     return ki
 
 
+# A felvétel jelenlét-listája (kik követték élőben) legfeljebb ennyi név.
+SHARED3D_REC_PRESENT_MAX = 100
+
+
+def shared3d_felvetel_jelen(lista) -> list:
+    """A felvétel jelenlét-listája megtisztítva: a nevek shared3d_nev
+    szerint, ismétlés nélkül (a kulcs quiz_name_key — kis- és nagybetű,
+    szóköz nem számít; az első alak marad), legfeljebb
+    SHARED3D_REC_PRESENT_MAX. Nem lista: üres."""
+    if not isinstance(lista, list):
+        return []
+    ki, latott = [], set()
+    for x in lista:
+        nev = shared3d_nev(x) if isinstance(x, str) else ""
+        kulcs = quiz_name_key(nev)
+        if nev and kulcs not in latott:
+            latott.add(kulcs)
+            ki.append(nev)
+            if len(ki) >= SHARED3D_REC_PRESENT_MAX:
+                break
+    return ki
+
+
 def shared3d_felvetel_nev(x) -> str:
     """A felvétel neve megtisztítva: csak kiírható jelek, a szélein szóköz
     nélkül, legfeljebb SHARED3D_REC_NAME_MAX jel ("" — a hívó tesz

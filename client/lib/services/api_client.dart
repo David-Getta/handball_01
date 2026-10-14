@@ -971,12 +971,15 @@ class ApiClient {
   /// ⏺ FELVÉTEL mentése (POST /matches/{id}/felvetelek): a vezetés
   /// állapotai [[eltelt-mp, {t, playing, speed, rajz, mutato?,
   /// nezopont?}], …] — a motor megtisztítja. Válasz: {id, nev, hossz_s, db}.
+  /// `jelen`: a felvétel alatt névvel jelenlévő követők (élőben követték).
   Future<Map<String, dynamic>> saveRecording(
-      String matchId, String nev, List<List<Object>> allapotok) async {
+      String matchId, String nev, List<List<Object>> allapotok,
+      {List<String> jelen = const []}) async {
     final resp = await http
         .post(Uri.parse("$baseUrl/matches/$matchId/felvetelek"),
             headers: {"Content-Type": "application/json"},
-            body: jsonEncode({"nev": nev, "allapotok": allapotok}))
+            body: jsonEncode(
+                {"nev": nev, "allapotok": allapotok, "jelen": jelen}))
         .timeout(const Duration(seconds: 30));
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült menteni a felvételt", resp));

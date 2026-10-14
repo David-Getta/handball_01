@@ -275,6 +275,8 @@ class _Court3DScreenState extends State<Court3DScreen>
   // "▶ Felvételek" listából visszajátszható (a böngészőben, VR-ben is).
   List<List<Object>>? _felvetel;
   final Stopwatch _felvetelOra = Stopwatch();
+  // A felvétel alatt névvel jelenlévő követők (élőben követték).
+  final Set<String> _felvetelJelen = {};
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
@@ -2237,6 +2239,7 @@ class _Court3DScreenState extends State<Court3DScreen>
     } else {
       setState(() {
         _felvetel = [];
+        _felvetelJelen.clear();
         _felvetelOra
           ..reset()
           ..start();
@@ -2256,7 +2259,8 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (!csendes && mounted) setState(() {});
     if (f == null || f.length < 2 || id == null) return;
     _api
-        .saveRecording(id, recordingDefaultName(DateTime.now()), f)
+        .saveRecording(id, recordingDefaultName(DateTime.now()), f,
+            jelen: [..._felvetelJelen])
         .then((d) {
       if (csendes || !mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -2380,6 +2384,10 @@ class _Court3DScreenState extends State<Court3DScreen>
         _kovetok = n;
         _csapat = parseTeamPresence(cs);
       });
+      if (_felvetel != null) {
+        _felvetelJelen
+            .addAll(_csapat.map((t) => t.nev).where((n) => n.isNotEmpty));
+      }
     }).catchError((_) {
       // Hibánál a mutató és a nézőpont nem megy újra (ha az okozta, a
       // következő küldés már átmegy).
