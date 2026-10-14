@@ -3,7 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.168 óta)
+## v0.1.169 — kiadva (2026-10-14)
+
+> Kiadás-jegyzet: a közös nézés a klub hálózatán is biztonságos és
+> internet nélkül is megy. A 3D/VR oldal a three.js-t a motorból tölti
+> (edzőteremben, net nélkül is elindul), és ha a motort a hálózat felé
+> megnyitod, a headsetek CSAK a közös nézést érik el — a meccsek, az
+> elemzések, a törlés a hálózatról zárva. A kvízből mérleg lett: a
+> Jegyzetek képernyőn játékosonként ("Anna · 7/9 ✓"), a Keret-lapon a név
+> mellett, a Játékos-fejlődésben meccsenként. A játékos a headseten a
+> keret nevei közül választja ki magát ("Ki vagy?"), és az edző a kvízt
+> a headsetből is vezetheti (bal hüvelykujj-kar). (Valódi headseten még
+> nem próbáltuk.)
 
 - **A döntés-kvíz a Játékos-fejlődésben** (új, motor + app): a
   /players/trend pontjai a meccs döntés-kvízét is viszik (a 3D közös
