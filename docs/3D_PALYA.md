@@ -346,6 +346,12 @@ visszajátszáskor szünet/tovább (VR-ben a ravasz). Aki kimaradt a
 megbeszélésről, utólag végignézheti; a hang (az edző magyarázata) nincs
 a felvételben.
 
+Az appban ugyanígy: vezetés közben a **⏺ Felvétel** gomb rögzít. A 3D fül
+**▶ Felvételek** listája a meccs felvételeit mutatja: a sorra kattintva
+a böngészős 3D nyílik, és a felvétel magától indul (link-paraméter:
+`felvetel=<azonosító>`); itt nevezheted át ("Védekezés 6-0 — hétfő") és
+törölheted is.
+
 ### Közös nézés több headsettel
 
 Internet nem kell: a 3D oldal a three.js-t is a motorból tölti (a
@@ -407,7 +413,8 @@ küldesz a stábnak, nem egy meccset. A paraméterek:
 Az újabbak: `jegyzetek=1` — a Jegyzeteim szűrő; `vetit=1` — a vetítés
 indul (a Jegyzeteim szűrővel a jegyzetek megjöttét megvárja); `rajz=…` —
 a padló nyilai; `video=1` — a felvétel a 3D mellett; `kovet=1` /
-`vezet=1` — közös nézés követőként / vezetőként.
+`vezet=1` — közös nézés követőként / vezetőként; `felvetel=<azonosító>` —
+egy mentett megbeszélés visszajátszása indul.
 
 ## VR-headset
 

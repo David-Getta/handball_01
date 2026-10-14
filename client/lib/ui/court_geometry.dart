@@ -504,6 +504,35 @@ String quizNoteText(List<(String, bool?)> valaszok, String? fajta,
   return r.isEmpty ? fej : "$fej — ${r.join(" · ")}";
 }
 
+/// ⏺ FELVÉTEL: legfeljebb ennyi állapot (court3d.SHARED3D_REC_MAX —
+/// őr-teszt), a név legfeljebb ennyi jel (SHARED3D_REC_NAME_MAX).
+const int recordingMax = 20000;
+const int recordingNameMax = 80;
+
+/// A felvétel hossza "p:mm" alakban (a böngésző fvOra-jának tükre).
+String recordingClock(num? s) {
+  final t = math.max(0, (s ?? 0).floor());
+  return "${t ~/ 60}:${(t % 60).toString().padLeft(2, "0")}";
+}
+
+/// A felvétel alapneve (a böngésző "Megbeszélés " + hu-HU rövid dátum-
+/// idejének alakja): "Megbeszélés 2026. 10. 14. 21:06".
+String recordingDefaultName(DateTime d) {
+  String k(int v) => v.toString().padLeft(2, "0");
+  return "Megbeszélés ${d.year}. ${k(d.month)}. ${k(d.day)}. "
+      "${k(d.hour)}:${k(d.minute)}";
+}
+
+/// Egy felvétel alsó sora a "▶ Felvételek" listában: a mentés ideje
+/// ("2026-10-14 21:06") és a hossz ("0:05").
+String recordingSubtitle(Map<String, dynamic> f) {
+  final l = "${f["letrehozva"] ?? ""}";
+  final mikor =
+      l.length >= 16 ? l.substring(0, 16).replaceFirst("T", " ") : l;
+  final hossz = recordingClock(f["hossz_s"] as num?);
+  return mikor.isEmpty ? hossz : "$mikor · $hossz";
+}
+
 /// Az app kamerájának jelenléte a motornak: [x, y, z, yaw] a böngésző
 /// three-terében (mint a browserViewpoint — a csarnok dobozába szorítva).
 List<double> browserPresence(double cx, double cy, double cz, double yaw) {

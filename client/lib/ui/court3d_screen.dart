@@ -268,6 +268,11 @@ class _Court3DScreenState extends State<Court3DScreen>
   // three-terében) — a követők kamerája oda ugrik.
   Map<String, num>? _nezopont;
   DateTime? _mutatoKezd;
+  // ⏺ FELVÉTEL (vezetőként): a küldött állapotok [eltelt-mp, állapot]
+  // sorai; a végén (vagy a vezetés végén) a motor a meccs mellé menti, a
+  // "▶ Felvételek" listából visszajátszható (a böngészőben, VR-ben is).
+  List<List<Object>>? _felvetel;
+  final Stopwatch _felvetelOra = Stopwatch();
   // Az utoljára ugrott pillanat ideje listánként (a lapozó ettől számít,
   // amíg annak ablakában vagyunk — lásd lapozCel).
   double? _dontesUtolso, _szabadUtolso, _eladasUtolso;
@@ -298,6 +303,7 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (_vezet && _matchId != null) {
       _api.deleteShared3d(_matchId!).catchError((_) {});
     }
+    _felvetelMent(csendes: true);
     _ticker.dispose();
     _focus.dispose();
     super.dispose();
@@ -2032,7 +2038,7 @@ class _Court3DScreenState extends State<Court3DScreen>
   /// böngészőben. VR-headsethez ugyanez az oldal kell: a WebXR
   /// biztonságos környezetet kér, a localhost az — Quest-féle headsetről
   /// USB-kábellel és "adb reverse"-szel érhető el.
-  Future<void> _bongeszos3d() async {
+  Future<void> _bongeszos3d({String? felvetel}) async {
     // A 3D fül AKTUÁLIS pillanatát és beállításait visszük át: a
     // böngészős nézet ugyanott, ugyanazzal a kamerával és rétegekkel
     // folytatja, ahol az appban tartasz. Az idő a kocka t címkéjéből
@@ -2062,6 +2068,13 @@ class _Court3DScreenState extends State<Court3DScreen>
     if (_videoBe) q["video"] = "1";
     if (_rajzok.isNotEmpty) q["rajz"] = encodeDrawing(_rajzok);
     if (_speed != 1.0) q["seb"] = _speed.toString();
+    // A "▶ Felvételek" listából: a felvétel magától indul — az idő, a
+    // rajz és a nézőpont a felvételé, a mostani állapot nem kell.
+    if (felvetel != null) {
+      q
+        ..clear()
+        ..["felvetel"] = felvetel;
+    }
     final url = Uri.parse("${_api.baseUrl}/matches/$_matchId/view3d")
         .replace(queryParameters: q)
         .toString();
@@ -2075,8 +2088,9 @@ class _Court3DScreenState extends State<Court3DScreen>
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Megnyitva a böngészőben: $url — VR-headsetben "
-              "ugyanez a cím megy (internet kell hozzá).")));
+          content: Text("Megnyitva a böngészőben: $url — internet nem "
+              "kell; a VR-headset a motort USB-n (adb reverse) vagy a "
+              "🏟 Klub-hálózaton éri el, lásd a 3D útmutatót.")));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -2183,6 +2197,7 @@ class _Court3DScreenState extends State<Court3DScreen>
   void _vezetAllit(bool be) {
     final id = _matchId;
     if (id == null || _demo) return;
+    if (!be) _felvetelMent();
     setState(() {
       _vezet = be;
       _vezetHiba = false;
@@ -2219,6 +2234,65 @@ class _Court3DScreenState extends State<Court3DScreen>
     } else {
       _api.deleteShared3d(id).catchError((_) {});
     }
+    _focus.requestFocus();
+  }
+
+  /// ⏺ Felvétel ki/be (vezetőként).
+  void _felvetelValt() {
+    if (!_vezet) return;
+    if (_felvetel != null) {
+      _felvetelMent();
+    } else {
+      setState(() {
+        _felvetel = [];
+        _felvetelOra
+          ..reset()
+          ..start();
+        _vezetUtolso = 0; // az első állapot azonnal
+      });
+    }
+    _focus.requestFocus();
+  }
+
+  /// A futó felvétel mentése a motorba (a gomb, a vezetés vége, a
+  /// hossz-korlát vagy a képernyő bezárása). `csendes`: értesítő és
+  /// setState nélkül (dispose-ból).
+  void _felvetelMent({bool csendes = false}) {
+    final f = _felvetel, id = _matchId;
+    _felvetel = null;
+    _felvetelOra.stop();
+    if (!csendes && mounted) setState(() {});
+    if (f == null || f.length < 2 || id == null) return;
+    _api
+        .saveRecording(id, recordingDefaultName(DateTime.now()), f)
+        .then((d) {
+      if (csendes || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("⏺ Felvétel mentve: ${d["nev"]} "
+              "(${recordingClock(d["hossz_s"] as num?)}) — a ▶ Felvételek "
+              "listából visszanézhető, a böngészőben és VR-ben is.")));
+    }).catchError((Object e) {
+      if (csendes || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A felvétel nem mentődött: ${humanError(e)}")));
+    });
+  }
+
+  /// ▶ Felvételek: a meccs mentett megbeszélései — megnyitás a böngészős
+  /// 3D-ben (ott magától indul), átnevezés, törlés.
+  Future<void> _felvetelekNyit() async {
+    final id = _matchId;
+    if (id == null || _demo) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => _FelvetelekPanel(
+          api: _api,
+          matchId: id,
+          megnyit: (rid) {
+            Navigator.of(ctx).pop();
+            _bongeszos3d(felvetel: rid);
+          }),
+    );
     _focus.requestFocus();
   }
 
@@ -2280,6 +2354,21 @@ class _Court3DScreenState extends State<Court3DScreen>
     _vezetUtolso = mp;
     _vezetUton = true;
     final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    final f = _felvetel;
+    if (f != null) {
+      f.add([
+        (_felvetelOra.elapsedMilliseconds / 10).round() / 100,
+        {
+          "t": (_mostT(m) / fps * 100).round() / 100,
+          "playing": _playing,
+          "speed": _speed,
+          "rajz": encodeDrawing(_rajzok),
+          if (_mutato != null) "mutato": _mutato!,
+          if (_nezopont != null) "nezopont": _nezopont!,
+        }
+      ]);
+      if (f.length >= recordingMax) _felvetelMent();
+    }
     _api
         .putShared3d(id,
             t: _mostT(m) / fps,
@@ -3217,6 +3306,52 @@ class _Court3DScreenState extends State<Court3DScreen>
           ),
         ),
       ),
+      // ▶ Felvételek: a meccs mentett 3D megbeszélései.
+      if (_matchId != null && !_demo)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Tooltip(
+            message: "A meccs mentett 3D megbeszélései (⏺ Felvétel "
+                "vezetés közben): megnyitás a böngészős 3D-ben — ott "
+                "magától indul, VR-ben is —, átnevezés, törlés",
+            child: TextButton(
+              style: TextButton.styleFrom(
+                  foregroundColor: AppColors.textFaint,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 26),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              onPressed: _felvetelekNyit,
+              child: const Text("▶ Felvételek", style: TextStyle(fontSize: 11)),
+            ),
+          ),
+        ),
+      // ⏺ Felvétel: a megbeszélés visszanézhető (vezetés közben).
+      if (_vezet)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Tooltip(
+            message: "Felvétel: a megbeszélés (a lejátszásod, a rajz, a "
+                "mutató, az Ide mindenki nézőpontjai) visszanézhető — a "
+                "végén a motor menti, a ▶ Felvételek listából bárki "
+                "visszajátszhatja (a böngészőben, VR-ben is). A hang nincs "
+                "benne.",
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                  foregroundColor:
+                      _felvetel != null ? AppColors.away : null,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  visualDensity: VisualDensity.compact),
+              onPressed: _felvetelValt,
+              child: Text(
+                  _felvetel == null
+                      ? "⏺ Felvétel"
+                      : "⏹ Felvétel vége · "
+                          "${recordingClock(_felvetelOra.elapsedMilliseconds / 1000)}",
+                  style: const TextStyle(fontSize: 11.5)),
+            ),
+          ),
+        ),
       // "📍 Ide mindenki": a követők a mostani nézőpontba ugranak.
       if (_vezet)
         Padding(
@@ -4146,6 +4281,183 @@ const Color hetesSzin = Color(0xFF7DD3FC);
 /// A kapott-gól-réteg színe (lila: a kapus helye és mélysége) — a
 /// böngészős nézet 0xc084fc-je; a lövő gyűrűje a lövő csapat színével.
 const Color kapottSzin = Color(0xFFC084FC);
+
+/// ▶ FELVÉTELEK: a meccs mentett 3D megbeszélései — megnyitás a
+/// böngészős 3D-ben (ott magától indul, VR-ben is), átnevezés, törlés.
+class _FelvetelekPanel extends StatefulWidget {
+  const _FelvetelekPanel(
+      {required this.api, required this.matchId, required this.megnyit});
+
+  final ApiClient api;
+  final String matchId;
+  final void Function(String id) megnyit;
+
+  @override
+  State<_FelvetelekPanel> createState() => _FelvetelekPanelState();
+}
+
+class _FelvetelekPanelState extends State<_FelvetelekPanel> {
+  List<Map<String, dynamic>>? _lista;
+  String? _hiba;
+
+  @override
+  void initState() {
+    super.initState();
+    _betolt();
+  }
+
+  Future<void> _betolt() async {
+    try {
+      final l = await widget.api.fetchRecordings(widget.matchId);
+      if (!mounted) return;
+      setState(() {
+        _lista = l;
+        _hiba = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _hiba = humanError(e));
+    }
+  }
+
+  Future<void> _atnevez(Map<String, dynamic> f) async {
+    final ctl = TextEditingController(text: "${f["nev"] ?? ""}");
+    final nev = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Felvétel átnevezése"),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          maxLength: recordingNameMax,
+          decoration: const InputDecoration(
+              hintText: "pl. Védekezés 6-0 — hétfői megbeszélés"),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text("Mégse")),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(ctl.text),
+              child: const Text("Mentés")),
+        ],
+      ),
+    );
+    if (nev == null || !mounted) return;
+    try {
+      await widget.api.renameRecording(widget.matchId, "${f["id"]}", nev);
+      await _betolt();
+    } catch (e) {
+      if (mounted) setState(() => _hiba = humanError(e));
+    }
+  }
+
+  Future<void> _torol(Map<String, dynamic> f) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Felvétel törlése"),
+        content: Text("Törlöd a(z) „${f["nev"]}” felvételt? Nem vonható "
+            "vissza."),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text("Mégse")),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text("Törlés")),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await widget.api.deleteRecording(widget.matchId, "${f["id"]}");
+      await _betolt();
+    } catch (e) {
+      if (mounted) setState(() => _hiba = humanError(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = _lista;
+    return AlertDialog(
+      title: const Text("▶ Felvételek"),
+      content: SizedBox(
+        width: 480,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+                "A közös nézés mentett megbeszélései. A megnyitott felvétel a "
+                "böngészős 3D-ben magától indul — mintha az edző most "
+                "vezetne; a headsetek a saját böngészőjükben a ▶ Felvételek "
+                "listából indítják.",
+                style: AppText.label.copyWith(fontSize: 11.5)),
+            const SizedBox(height: 10),
+            if (_hiba != null)
+              Text(_hiba!,
+                  style: AppText.label.copyWith(color: AppColors.away)),
+            if (l == null && _hiba == null)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            if (l != null && l.isEmpty)
+              Text(
+                  "Még nincs felvétel ehhez a meccshez — vezetés közben a "
+                  "⏺ Felvétel gombbal (az appban vagy a böngészős 3D-ben) "
+                  "készül.",
+                  style: AppText.label),
+            if (l != null && l.isNotEmpty)
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final f in l)
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text("${f["nev"]}",
+                            overflow: TextOverflow.ellipsis),
+                        subtitle: Text(recordingSubtitle(f)),
+                        onTap: () => widget.megnyit("${f["id"]}"),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: "Megnyitás a böngészős 3D-ben",
+                              icon: const Icon(Icons.play_arrow, size: 20),
+                              onPressed: () => widget.megnyit("${f["id"]}"),
+                            ),
+                            IconButton(
+                              tooltip: "Átnevezés",
+                              icon: const Icon(Icons.edit, size: 18),
+                              onPressed: () => _atnevez(f),
+                            ),
+                            IconButton(
+                              tooltip: "Törlés",
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              onPressed: () => _torol(f),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("Bezárás")),
+      ],
+    );
+  }
+}
 
 class _Court3DPainter extends CustomPainter {
   final _Allapot frame;

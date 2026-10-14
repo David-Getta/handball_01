@@ -3654,8 +3654,9 @@ def create_app():
         import math
         import uuid
 
-        from ..pipeline.court3d import (SHARED3D_REC_MAX, SHARED3D_REC_NAME_MAX,
-                                        shared3d_felvetel_allapot)
+        from ..pipeline.court3d import (SHARED3D_REC_MAX,
+                                        shared3d_felvetel_allapot,
+                                        shared3d_felvetel_nev)
         if match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
         nyers = body.get("allapotok")
@@ -3678,8 +3679,7 @@ def create_app():
             raise HTTPException(status_code=400,
                                 detail="a felvételben kevés a jó állapot")
         sorok.sort(key=lambda s: s[0])
-        nev = "".join(ch for ch in str(body.get("nev") or "")
-                      if ch.isprintable()).strip()[:SHARED3D_REC_NAME_MAX]
+        nev = shared3d_felvetel_nev(body.get("nev"))
         rid = uuid.uuid4().hex[:10]
         adat = {"id": rid, "nev": nev or "Megbeszélés",
                 "letrehozva": datetime.datetime.now().isoformat(
@@ -3735,6 +3735,22 @@ def create_app():
             raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
         p.unlink()
         return {"ok": True}
+
+    @app.patch("/matches/{match_id}/felvetelek/{rid}")
+    def felvetel_atnevez(match_id: str, rid: str, body: dict):
+        """Egy felvétel átnevezése: {"nev"} (üresen "Megbeszélés"). Válasz:
+        {"id", "nev"}. A hálózati őr nem engedi (csak a saját gépről)."""
+        from ..pipeline.court3d import shared3d_felvetel_nev
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not rid.isalnum() or not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        adat = json.loads(p.read_text(encoding="utf-8"))
+        adat["nev"] = shared3d_felvetel_nev(body.get("nev")) or "Megbeszélés"
+        p.write_text(json.dumps(adat, ensure_ascii=False, separators=(",", ":")),
+                     encoding="utf-8")
+        return {"id": rid, "nev": adat["nev"]}
 
     @app.get("/kovet")
     def shared3d_rovid(nev: str = ""):

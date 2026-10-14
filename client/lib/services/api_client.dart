@@ -968,6 +968,59 @@ class ApiClient {
     await http.delete(Uri.parse("$baseUrl/matches/$matchId/shared3d"));
   }
 
+  /// ⏺ FELVÉTEL mentése (POST /matches/{id}/felvetelek): a vezetés
+  /// állapotai [[eltelt-mp, {t, playing, speed, rajz, mutato?,
+  /// nezopont?}], …] — a motor megtisztítja. Válasz: {id, nev, hossz_s, db}.
+  Future<Map<String, dynamic>> saveRecording(
+      String matchId, String nev, List<List<Object>> allapotok) async {
+    final resp = await http
+        .post(Uri.parse("$baseUrl/matches/$matchId/felvetelek"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"nev": nev, "allapotok": allapotok}))
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült menteni a felvételt", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A meccs megbeszélés-felvételei (GET /matches/{id}/felvetelek):
+  /// [{id, nev, letrehozva, hossz_s}], a legújabb elöl.
+  Future<List<Map<String, dynamic>>> fetchRecordings(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/felvetelek"))
+        .timeout(const Duration(seconds: 10));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült lekérni a felvételeket", resp));
+    }
+    final data =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["felvetelek"] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  /// Felvétel átnevezése (PATCH /matches/{id}/felvetelek/{rid}).
+  Future<void> renameRecording(
+      String matchId, String recordingId, String nev) async {
+    final resp = await http.patch(
+        Uri.parse("$baseUrl/matches/$matchId/felvetelek/$recordingId"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"nev": nev}));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült átnevezni a felvételt", resp));
+    }
+  }
+
+  /// Felvétel törlése (DELETE /matches/{id}/felvetelek/{rid}).
+  Future<void> deleteRecording(String matchId, String recordingId) async {
+    final resp = await http.delete(
+        Uri.parse("$baseUrl/matches/$matchId/felvetelek/$recordingId"));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült törölni a felvételt", resp));
+    }
+  }
+
   /// A forrás-videó egy kockája JPEG-ben (GET /matches/{id}/frame) — a
   /// 3D pálya "Videó" ablaka ebből mutatja a valódi felvételt. `t`: a
   /// feldolgozott kocka t címkéje; `w`: a kép szélessége (px).

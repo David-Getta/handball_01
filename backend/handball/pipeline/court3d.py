@@ -675,6 +675,14 @@ SHARED3D_REC_MAX = 20000
 SHARED3D_REC_NAME_MAX = 80
 
 
+def shared3d_felvetel_nev(x) -> str:
+    """A felvétel neve megtisztítva: csak kiírható jelek, a szélein szóköz
+    nélkül, legfeljebb SHARED3D_REC_NAME_MAX jel ("" — a hívó tesz
+    alapnevet)."""
+    return "".join(ch for ch in str(x or "")
+                   if ch.isprintable()).strip()[:SHARED3D_REC_NAME_MAX]
+
+
 def shared3d_felvetel_allapot(d):
     """A felvétel egy állapota megtisztítva: {"t" (játékidő-mp), "playing",
     "speed" (0,25…8), "rajz" (a rajz-kód; rossz alaknál üres), "mutato"

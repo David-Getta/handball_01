@@ -3155,6 +3155,9 @@ const felvetelGomb = document.getElementById("felvetelGomb");
 const felvetelValaszto = document.getElementById("felvetelValaszto");
 let kzFelvetel = null;   // a vezető futó felvétele: {kezd, allapotok}
 let fvLejatszas = null;  // a visszajátszás: {adat, kezd, szunet, i}
+// ?felvetel=<id> (az app "▶ Felvételek" listája): a lista első betöltése
+// után magától indul.
+let fvUrlIndit = URL_PARAM.get("felvetel") || "";
 const fvCim = () => "/matches/" + encodeURIComponent(ADAT.match_id || "") + "/felvetelek";
 const fvOra = (s) => { const t = Math.max(0, Math.floor(s));
   return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
@@ -3203,6 +3206,10 @@ async function felvetelListaBetolt(){
       felvetelValaszto.appendChild(o);
     }
     felvetelValaszto.style.display = lista.length ? "" : "none";
+    const kert = fvUrlIndit; fvUrlIndit = "";
+    if (kert && lista.some(f => f.id === kert)){
+      felvetelValaszto.value = kert; felvetelIndit(kert);
+    }
   } catch (e) { /* a motor nélkül (mentett oldal) nincs felvétel */ }
 }
 felvetelGomb.onclick = () => {

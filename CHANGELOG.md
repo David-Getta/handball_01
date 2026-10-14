@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **▶ Felvételek az appban** (app + motor + böngésző): az app vezetője is
+  rögzít ("⏺ Felvétel" vezetés közben), a 3D fül "▶ Felvételek" listája
+  a meccs mentett megbeszéléseit mutatja — a sorra kattintva a böngészős
+  3D nyílik, és a felvétel magától indul (VR-ben is); átnevezés
+  ("Védekezés 6-0 — hétfő") és törlés. A "Böngészős 3D / VR" értesítője
+  már nem állítja, hogy internet kell.
+
 - **⏺ Felvétel — a megbeszélés visszanézhető** (új, böngésző/VR + motor):
   vezetés közben a "⏺ Felvétel" a megbeszélést rögzíti (a lejátszás, a
   nyilak, a mutató, az "Ide mindenki" nézőpontjai), a végén a motor a

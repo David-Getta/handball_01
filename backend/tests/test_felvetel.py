@@ -90,3 +90,60 @@ def test_az_oldal_rogzit_es_visszajatszik():
         assert kell in oldal, kell
     assert f"const FV_MAX = {SHARED3D_REC_MAX};" in oldal
     assert "__FV_MAX__" not in oldal
+
+
+def test_a_felvetelek_az_appban(tmp_path, monkeypatch):
+    """Az app vezetője is rögzít, a 3D fül "▶ Felvételek" listája
+    megnyit (?felvetel=<id> — a böngésző magától indítja), átnevez
+    (PATCH) és töröl; a Dart-állandók a motoréi."""
+    import re
+    from pathlib import Path
+
+    from handball.pipeline.court3d import SHARED3D_REC_NAME_MAX
+    from handball.pipeline.view3d_html import view3d_html
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_meccs())
+    c = TestClient(app)
+    url = "/matches/fv/felvetelek"
+    d = c.post(url, json={"nev": "x", "allapotok": [
+        [0, {"t": 1}], [0.3, {"t": 1.3}]]}).json()
+    r = c.patch(f"{url}/{d['id']}", json={"nev": "  Védekezés\x07 6-0  "})
+    assert r.json() == {"id": d["id"], "nev": "Védekezés 6-0"}
+    assert c.get(url).json()["felvetelek"][0]["nev"] == "Védekezés 6-0"
+    assert c.get(f"{url}/{d['id']}").json()["nev"] == "Védekezés 6-0"
+    assert c.patch(f"{url}/{d['id']}", json={}).json()["nev"] == "Megbeszélés"
+    hosszu = c.patch(f"{url}/{d['id']}", json={"nev": "a" * 200}).json()
+    assert len(hosszu["nev"]) == SHARED3D_REC_NAME_MAX
+    for rossz in ("nincs", "a.b"):
+        assert c.patch(f"{url}/{rossz}", json={"nev": "y"}).status_code == 404
+    assert c.patch("/matches/nincs/felvetelek/abc",
+                   json={"nev": "y"}).status_code == 404
+
+    oldal = view3d_html(_meccs())
+    assert 'let fvUrlIndit = URL_PARAM.get("felvetel") || "";' in oldal
+    assert "felvetelValaszto.value = kert; felvetelIndit(kert);" in oldal
+
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib"
+    geo = (gyoker / "ui" / "court_geometry.dart").read_text(encoding="utf-8")
+    assert f"const int recordingMax = {SHARED3D_REC_MAX};" in geo
+    assert f"const int recordingNameMax = {SHARED3D_REC_NAME_MAX};" in geo
+    palya = (gyoker / "ui" / "court3d_screen.dart").read_text(encoding="utf-8")
+    for kell in ("onPressed: _felvetelValt,", "onPressed: _felvetelekNyit,",
+                 'q\n        ..clear()\n        ..["felvetel"] = felvetel;',
+                 "if (!be) _felvetelMent();",
+                 "_felvetelMent(csendes: true);",
+                 "if (f.length >= recordingMax) _felvetelMent();"):
+        assert kell in palya, kell
+    # Az app ugyanazokat a mezőket rögzíti, amiket a motor megtisztít.
+    rogzit = palya.split("final f = _felvetel;", 1)[1].split("_api", 1)[0]
+    assert set(re.findall(r'"(\w+)":', rogzit)) == {
+        "t", "playing", "speed", "rajz", "mutato", "nezopont"}
+    api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
+    for kell in ("Future<Map<String, dynamic>> saveRecording(",
+                 "Future<List<Map<String, dynamic>>> fetchRecordings(",
+                 "Future<void> renameRecording(",
+                 "Future<void> deleteRecording("):
+        assert kell in api, kell
+    assert "internet kell" not in palya
