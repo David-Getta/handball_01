@@ -4402,7 +4402,14 @@ class _FelvetelekPanelState extends State<_FelvetelekPanel> {
             if (l == null && _hiba == null)
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(width: 10),
+                  Text("A felvételek betöltése…"),
+                ]),
               ),
             if (l != null && l.isEmpty)
               Text(
