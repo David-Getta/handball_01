@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **✋ Kérdésem van** (új, böngésző/VR + motor + app): a közös nézésben
+  a headsetes játékos jelezheti, hogy kérdezne (gomb, H billentyű, VR-ben
+  a markolat) — VR-ben az edző nem látja a kezét. Az edző a játékos feje
+  fölött ("✋ Peti"), a felirat-sorban és VR-ben a tábláján látja; az
+  appban a csapat-fejeken és a "📡 Vezetsz" gombon.
+
 - **📦 A megbeszélés otthonra: egyetlen HTML-fájl** (új, motor + app +
   böngésző): a "▶ Felvételek" listában a letöltés-gomb a felvételt
   egyetlen fájlként menti — a 3D oldal a felvétellel (fejezetekkel), a

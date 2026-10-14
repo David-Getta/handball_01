@@ -59,6 +59,13 @@ void main() {
       "rossz",
     ]);
     expect(l.map((t) => t.cimke).toList(), ["Peti"]);
+    // ✋ Kérdése van: a felirat jelzi, a név (a kvíz is ezzel nevez) nem.
+    final k = parseTeamPresence([
+      {"sz": 4, "nev": "Anna", "hely": [1, 1.7, 2, 0], "kez": true},
+      {"sz": 5, "hely": [1, 1.7, 2, 0]},
+    ]);
+    expect(k.map((t) => t.felirat).toList(), ["✋ Anna", "#5"]);
+    expect(k.map((t) => t.cimke).toList(), ["Anna", "#5"]);
     // A kvíz-válasz (pálya-méter) a sorban; rossz alakú: nincs.
     final kv = parseTeamPresence([
       {"sz": 1, "nev": "Anna", "hely": [1, 1.6, 2, 0], "valasz": [30, 12.5]},

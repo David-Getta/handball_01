@@ -429,12 +429,17 @@ class TeamMember {
   // A kvíz aktuális körére adott válasz (a padló pontja, pálya-méter) —
   // null: nincs kvíz, vagy nem válaszolt.
   final Offset? valasz;
+  // ✋ Kérdése van (a böngészős követő "Kérdésem van"-ja).
+  final bool kez;
   const TeamMember(this.sz, this.nev, this.x, this.y, this.h, this.fx, this.fy,
-      {this.valasz});
+      {this.valasz, this.kez = false});
 
-  /// A feje fölötti felirat: a név, név nélkül a csatlakozás sorszáma
-  /// (#3) — mint a böngészőben.
+  /// A név, név nélkül a csatlakozás sorszáma (#3) — mint a böngészőben
+  /// (a kvíz-eredmény is ezzel nevez).
   String get cimke => nev.isNotEmpty ? nev : "#$sz";
+
+  /// A feje fölötti felirat: a név, kérdésnél ✋-val (mint a böngészőben).
+  String get felirat => kez ? "✋ $cimke" : cimke;
 }
 
 /// A motor "csapat" listája ([{"sz", "nev", "hely": [x, y, z, yaw]}] — a
@@ -459,7 +464,7 @@ List<TeamMember> parseTeamPresence(Object? csapat) {
         : null;
     ki.add(TeamMember(sz.toInt(), (e["nev"] ?? "").toString(), v[0],
         courtWidth - v[2], v[1], -math.sin(v[3]), math.cos(v[3]),
-        valasz: valasz));
+        valasz: valasz, kez: e["kez"] == true));
   }
   return ki;
 }

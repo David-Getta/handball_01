@@ -2943,3 +2943,53 @@ def test_a_3d_oldal_videoja():
                  'if (_videoBe) q["video"] = "1";',
                  "Expanded(child: _nezetEsVideo(m))"):
         assert kell in palya, kell
+
+
+
+def test_kerdesem_van(tmp_path, monkeypatch):
+    """✋ A követő jelzése a jelenlét-sorban: a vezető (PUT válasz) és a
+    többi követő is látja; kéz le — eltűnik; a régi jelzés nem marad a
+    visszatérőn. Az oldal (gomb, H, VR-markolat, felirat, tábla) és az app
+    (fej-felirat, Vezetsz-gomb)."""
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    from handball.pipeline import court3d
+    from handball.pipeline.view3d_html import view3d_html
+
+    ora = [10.0]
+    monkeypatch.setattr(court3d, "shared3d_ora", lambda: ora[0])
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    m = _meccs()
+    m.meta.match_id = "kez"
+    app.state.put_match(m)
+    c = TestClient(app)
+    url = "/matches/kez/shared3d"
+    c.put(url, json={"t": 1})
+    c.get(url, params={"kid": "a1", "hely": "1,1.7,2,0", "nev": "Anna", "kez": "1"})
+    b = c.get(url, params={"kid": "b2", "hely": "3,1.7,2,0", "nev": "Peti"}).json()
+    assert [(e["nev"], e.get("kez", False)) for e in b["csapat"]] == [("Anna", True)]
+    v = c.put(url, json={"t": 1}).json()
+    assert [(e["nev"], e.get("kez", False)) for e in v["csapat"]] == [
+        ("Anna", True), ("Peti", False)]
+    c.get(url, params={"kid": "a1", "hely": "1,1.7,2,0", "nev": "Anna"})
+    v = c.put(url, json={"t": 1}).json()
+    assert not any(e.get("kez") for e in v["csapat"])
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="kezGomb"', '+ (kzKez ? "&kez=1" : "")',
+                 'cimke: (e.kez ? "✋ " : "") + (e.nev || ("#" + e.sz)),',
+                 'if (e.code === "KeyH" && kozosMod === "kovet"){ kezAllit(!kzKez); return; }',
+                 'if (kozosMod === "kovet" && vrGombEl(kulcs, 1, nyom(1))) kezAllit(!kzKez);',
+                 'sorok.unshift("✋ Kérdése van: " + kzKezek().join(", "));',
+                 '+ (kezek.length ? " · ✋ " + kezek.join(", ") : "")'):
+        assert kell in oldal, kell
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+    palya = (gyoker / "court3d_screen.dart").read_text(encoding="utf-8")
+    assert "text: t.felirat," in palya
+    assert "_csapat.any((t) => t.kez)" in palya
+    geo = (gyoker / "court_geometry.dart").read_text(encoding="utf-8")
+    assert 'valasz: valasz, kez: e["kez"] == true));' in geo

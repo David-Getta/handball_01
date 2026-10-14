@@ -907,6 +907,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
   <select id="fejezetValaszto" style="display:none" title="A felvétel fejezetei — ahol az edző egy másik jelenetre ugrott (N / P: következő / előző; VR-ben A/X — B/Y)"></select>
   <select id="kzNevValaszto" style="display:none" title="Ki vagy? A neved a többiek headsetjén és a kvíz-mérlegben — a keretben felvitt nevek közül"></select>
   <button id="kovetGomb" title="Közös nézés — az edzőt követed: az ő lejátszása fut nálad, te a saját helyedről nézed (a pálya bejárható)">👥 Követem</button>
+  <button id="kezGomb" style="display:none" title="Kérdésem van: az edző a fejed fölött, a felirat-sorban és VR-ben a tábláján látja (✋) — még egyszer: kéz le. Billentyű: H; VR-ben a markolat">✋ Kérdésem van</button>
   <span id="kozosInfo" style="font-size:11px;word-break:break-all"></span>
  </div>
  <div class="sor">
@@ -1483,6 +1484,7 @@ addEventListener("keydown", e => {
   if (e.code === "KeyT"){ tvGomb.onclick(); return; }
   if (e.code === "KeyE"){ rajzModAllit(!rajzMod); return; }  // rajz
   if (e.code === "KeyJ"){ jegyzetIr(); return; }  // jegyzet
+  if (e.code === "KeyH" && kozosMod === "kovet"){ kezAllit(!kzKez); return; }  // ✋
   if (e.code === "KeyK"){ videoAllit(!videoBe); return; }  // videó
   if (e.code === "Escape"){ if (mod === "jatekos") modValt("szabad"); else if (rajzMod) rajzModAllit(false); else meresTorles(); return; }
   if (["KeyW","KeyA","KeyS","KeyD","KeyR","KeyF","KeyC"].includes(e.code)
@@ -2714,7 +2716,8 @@ function jelenletAllit(lista){
   for (const k of [...avatarok.keys()]) if (!latott.has(k)) avatarTorol(k);
 }
 function kzLista(csapat, vezeto){
-  const l = (csapat || []).map(e => ({kulcs: "k" + e.sz, cimke: e.nev || ("#" + e.sz),
+  const l = (csapat || []).map(e => ({kulcs: "k" + e.sz,
+                                     cimke: (e.kez ? "✋ " : "") + (e.nev || ("#" + e.sz)),
                                      edzo: false, hely: e.hely}));
   if (vezeto) l.push({kulcs: "e", cimke: "Edző", edzo: true, hely: vezeto});
   return l;
@@ -2754,8 +2757,12 @@ window.sajatHelyProba = () => sajatHely();
 let kzValaszDb = 0;  // a kvíz aktuális körére válaszolók (a motor szerint)
 let kzJoDb = 0;      // közülük a jobb opciót mutatók (döntés-kvízben)
 let kzVezetoCsapat = [];  // a motor legutóbbi csapat-listája (a vezetőnek)
+// ✋ A kérdezni akarók (a vezetőnek): a motor legutóbbi csapat-listájából.
+const kzKezek = () => kzVezetoCsapat.filter(e => e.kez).map(e => e.nev || ("#" + e.sz));
 function kzVezetoInfo(){
+  const kezek = kzKezek();
   kozosInfo.textContent = "📡 vezetsz" + (kzKovetok == null ? "" : " · " + kzKovetok + " követő")
+    + (kezek.length ? " · ✋ " + kezek.join(", ") : "")
     + (kzKviz ? " · ❓ " + kzValaszDb + "/" + (kzKovetok || 0) + " válasz" : "")
     + (kzKviz && kvizDontes(kzKviz) ? " · ✓ " + kzJoDb + " a jobb opció" : "")
     + (kzFelvetel ? " · ⏺" + (kzFelvetel.hang ? "🎙 " : " ")
@@ -3063,6 +3070,8 @@ function kozosAllit(m){
   valaszokAllit([]); kvizGombFelirat();
   ideGomb.disabled = kozosMod !== "vezet";
   kvizGomb.disabled = kozosMod !== "vezet";
+  kezGomb.style.display = kozosMod === "kovet" ? "" : "none";
+  kezAllit(false);
   felvetelGombFelirat();
   nevValasztoMutat(kozosMod === "kovet");
   if (kozosMod === "vezet"){
@@ -3114,6 +3123,7 @@ function kozosFrissit(){
   }
   fetch(kzCim() + "?kid=" + KZ_KID + "&hely=" + sajatHely().join(",")
         + (KZ_NEV ? "&nev=" + encodeURIComponent(KZ_NEV) : "")
+        + (kzKez ? "&kez=1" : "")
         + (kzValasz ? "&valasz=" + [kzValasz.x, kzValasz.y, kzValasz.n].join(",") : ""),
         {cache: "no-store"}).then(r => r.json()).then(a => {
     if (kozosMod !== "kovet") return;
@@ -3128,11 +3138,26 @@ function kozosFrissit(){
     if (kzValasz && (!kzKvizKor || kzValasz.n !== kzKvizKor.n)) kzValasz = null;
     valaszokAllit(kzKvizKor ? kzValaszLista(kzUtolsoCsapat) : []);
     if (!(kozosInfo.textContent === KZ_IDE && performance.now() - kzInfoValtas < KZ_VR_MS))
-      kzInfo(kvizSzoveg());
+      kzInfo(kvizSzoveg() + (kzKez ? KZ_KEZ_JEL : ""));
     kzAllapotAlkalmaz(a);
   }).catch(() => { if (kozosMod === "kovet") kzInfo("👥 a motor nem válaszol"); })
     .finally(() => { kzUton = false; });
 }
+// ✋ KÉRDÉSEM VAN (követőként): a motor a jelenlét-sorban viszi — a vezető
+// a fejünk fölött, a felirat-sorban és VR-ben a tábláján látja.
+const kezGomb = document.getElementById("kezGomb");
+const KZ_KEZ_JEL = " · ✋ jelezted — az edző látja";
+let kzKez = false;
+function kezAllit(be){
+  kzKez = !!be && kozosMod === "kovet";
+  kezGomb.textContent = kzKez ? "✋ Kéz le" : "✋ Kérdésem van";
+  kezGomb.classList.toggle("be", kzKez);
+  kzUtolso = 0;  // azonnal megy
+  if (kozosMod === "kovet") kzInfo(kvizSzoveg() + (kzKez ? KZ_KEZ_JEL : ""));
+}
+kezGomb.onclick = () => kezAllit(!kzKez);
+window.kezProba = () => ({kez: kzKez, gomb: kezGomb.textContent,
+  latszik: kezGomb.style.display !== "none", info: kozosInfo.textContent});
 // A vezető állapotának alkalmazása (a követő és a felvétel-visszajátszás
 // közös útja): az idő a korral (csak KZ_TURES-nél nagyobb eltérésnél
 // ugrik), szünet, sebesség, rajz, a friss mutató és nézőpont.
@@ -4093,6 +4118,8 @@ function vrGombok(){
       if (forras.handedness === "left") ideGomb.onclick();
       else vrMutat(k - 1);
     }
+    // Követőként a markolat: ✋ kérdésem van / kéz le.
+    if (kozosMod === "kovet" && vrGombEl(kulcs, 1, nyom(1))) kezAllit(!kzKez);
   }
 }
 window.vrJelenetLep = jelenetLep;  // a próbához: a kontroller-gomb párja
@@ -4123,6 +4150,9 @@ function vrFeliratSzoveg(){
   // A felvétel visszajátszása (a ravasz: szünet/tovább).
   if (!kozosMod && fvLejatszas && kozosInfo.textContent)
     sorok.unshift(kozosInfo.textContent + " — ravasz: szünet/tovább");
+  // A vezető a kérdezni akarókat látja (VR-ben a felirat-sor nem látszik).
+  if (kozosMod === "vezet" && kzKezek().length)
+    sorok.unshift("✋ Kérdése van: " + kzKezek().join(", "));
   // A vezető a kvíz állását látja (a HTML panel VR-ben nem látszik).
   if (kozosMod === "vezet" && kzKviz)
     sorok.unshift("❓ Kvíz" + (kzKviz.mutat ? " (a csapat is látja)" : "") + ": "

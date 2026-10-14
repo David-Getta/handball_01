@@ -334,6 +334,14 @@ motor
 állapotot. Az app 3D füle is vezethet ("📡 Vezetem" a panelen): az edző
 a laptopon teker, megállít, rajzol, a headsetek követik.
 
+### ✋ Kérdésem van
+
+A követő **✋ Kérdésem van** gombja (billentyű: H, VR-ben a markolat)
+jelzi, hogy kérdezne — a headsetben az edző nem látja a kezét. Az edző a
+játékos feje fölött ("✋ Peti"), a felirat-sorban és VR-ben a tábláján
+látja; az appban a csapat-fejeken és a "📡 Vezetsz" gombon. Még egyszer
+megnyomva: kéz le.
+
 ### Felvétel — a megbeszélés visszanézhető
 
 A **⏺ Felvétel** gomb vezetés közben a megbeszélést rögzíti: a

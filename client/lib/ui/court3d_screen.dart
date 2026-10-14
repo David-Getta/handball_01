@@ -3271,7 +3271,9 @@ class _Court3DScreenState extends State<Court3DScreen>
                         ? "📡 Vezetés: a motor nem válaszol"
                         : _kovetok == null
                             ? "📡 Vezetsz"
-                            : "📡 Vezetsz · $_kovetok követő",
+                            : "📡 Vezetsz · $_kovetok követő"
+                                "${_csapat.any((t) => t.kez) ? " · ✋ "
+                                    "${_csapat.where((t) => t.kez).map((t) => t.cimke).join(", ")}" : ""}",
                 style: const TextStyle(fontSize: 11.5)),
           ),
         ),
@@ -5536,7 +5538,7 @@ class _Court3DPainter extends CustomPainter {
       canvas.drawCircle(fej, r, Paint()..color = const Color(0xFFF2F5F8));
       final tp = TextPainter(
         text: TextSpan(
-            text: t.cimke,
+            text: t.felirat,
             style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,

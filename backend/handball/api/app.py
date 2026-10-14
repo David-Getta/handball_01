@@ -3570,6 +3570,8 @@ def create_app():
                     or most - kov[k] > _c3.SHARED3D_FOLLOWER_S):
                 continue
             sor = {"sz": b["sz"], "nev": b.get("nev") or "", "hely": b["hely"]}
+            if b.get("kez"):
+                sor["kez"] = True
             v = b.get("valasz")
             if kviz and v and v[2] == kviz["n"]:
                 sor["valasz"] = v[:2]
@@ -3578,7 +3580,7 @@ def create_app():
 
     @app.get("/matches/{match_id}/shared3d")
     def shared3d_get(match_id: str, kid: str = "", hely: str = "",
-                     nev: str = "", valasz: str = ""):
+                     nev: str = "", valasz: str = "", kez: str = ""):
         """A követő kérdése: a vezető utolsó állapota és a KORA (mp) — a
         követő ebből becsli a vezető mostani idejét, az órák eltérése
         nélkül. "active": false, ha nincs vezető, vagy SHARED3D_STALE_S óta
@@ -3588,7 +3590,9 @@ def create_app():
         neve (court3d.shared3d_nev); a válasz "csapat"-a a TÖBBI jelenlévő
         követő, "vezeto_hely"-e a vezetőé. KVÍZ: `valasz` a követő válasza
         ("x,y,n" — court3d.shared3d_valasz); a többiek válasza csak a
-        vezető felfedése ("kviz": {"mutat": true}) után van a sorokban."""
+        vezető felfedése ("kviz": {"mutat": true}) után van a sorokban.
+        ✋ KÉRDÉSEM VAN: `kez` = "1" — a követő kérdezne; a jelenlét-sorában
+        ("csapat") "kez": true — a vezető és a többiek látják."""
         import time as _time
 
         from ..pipeline import court3d as _c3
@@ -3611,6 +3615,7 @@ def create_app():
                     if nev or "nev" not in b:
                         b["nev"] = _c3.shared3d_nev(nev)
                     b["valasz"] = _c3.shared3d_valasz(valasz) if valasz else None
+                    b["kez"] = kez == "1"
                 csapat = _kz_csapat(
                     a, most, kihagy=kid,
                     valaszok=bool((a.get("kviz") or {}).get("mutat")))
