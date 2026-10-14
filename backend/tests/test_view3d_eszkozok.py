@@ -2993,3 +2993,31 @@ def test_kerdesem_van(tmp_path, monkeypatch):
     assert "_csapat.any((t) => t.kez)" in palya
     geo = (gyoker / "court_geometry.dart").read_text(encoding="utf-8")
     assert 'valasz: valasz, kez: e["kez"] == true));' in geo
+
+
+
+def test_a_csapatnev_nem_tor_ki_a_szkriptbol():
+    """BIZTONSÁG: "</script>"-et tartalmazó csapatnév (a könyvtár-import
+    más gépről is hozhat ilyet) nem tör ki a beágyazott adatból, és az
+    innerHTML-es feliratok a nevet escape-elve írják."""
+    import re
+
+    from handball.pipeline.view3d_html import view3d_html
+
+    m = _meccs()
+    m.meta.home_team = "Rossz</script><script>window.__xss=1</script>"
+    m.meta.away_team = "<img src=x onerror=window.__xss=2>"
+    oldal = view3d_html(m)
+    # A beágyazott adat a modul-szkripten belül marad: a "</script>" csak
+    # a valódi szkript-végeken áll.
+    adat = oldal[oldal.index("const ADAT = "):]
+    adat = adat[:adat.index("\n")]
+    assert "</script>" not in adat and "<\\/script>" in adat
+    assert "window.__xss=1</script>" not in oldal
+    # Az innerHTML-es feliratok escape-elnek (nincs nyers csapatnév).
+    for sor in re.findall(r".*innerHTML\s*=.*", oldal):
+        assert "ADAT.home" not in sor.replace("hx(hazai ? ADAT.home", ""), sor
+    for kell in ('"<b>" + hx(hazai ? ADAT.home : ADAT.away)',
+                 '"Fal (" + hx(csapat) + ", "',
+                 '"Most: " + hx(csapat) + " védekezik — <b>" + hx(elo.cimke)'):
+        assert kell in oldal, kell

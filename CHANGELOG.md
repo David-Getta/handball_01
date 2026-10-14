@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **Biztonság: a csapatnév nem futtathat kódot a 3D oldalon** (javítás,
+  motor + böngésző): egy "</script>"-et vagy HTML-t tartalmazó csapatnév
+  (a könyvtár-import más gépről is hozhat ilyet, és a felvétel-csomag
+  másokhoz is eljut) kitört a beágyazott adatból, illetve a feliratokban
+  HTML-ként futott. Most a beágyazott adat a "</"-t kódolja, a feliratok
+  a nevet escape-elve írják.
+
 - **✋ Kérdésem van** (új, böngésző/VR + motor + app): a közös nézésben
   a headsetes játékos jelezheti, hogy kérdezne (gomb, H billentyű, VR-ben
   a markolat) — VR-ben az edző nem látja a kezét. Az edző a játékos feje

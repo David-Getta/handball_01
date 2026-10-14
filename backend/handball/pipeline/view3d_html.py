@@ -709,9 +709,14 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
                 breakpoints: dict | None = None,
                 stoppers: dict | None = None) -> str:
     """A teljes, önálló HTML-oldal (three.js a motorból, adat beágyazva)."""
+    # A "</" a <script>-ben nem maradhat nyersen: egy "</script>"-et
+    # tartalmazó csapatnév (a könyvtár-import más gépről is hozhat ilyet)
+    # kitörne a szkriptből. JSON-ban "</" csak szövegben állhat, ott a
+    # "<\/" ugyanazt jelenti.
     adat = json.dumps(_compact_data(match, figure_alerts, breakpoints,
                                     stoppers),
-                      ensure_ascii=False, separators=(",", ":"))
+                      ensure_ascii=False, separators=(",", ":")).replace(
+                          "</", "<\\/")
     cim = f"{match.meta.home_team} vs {match.meta.away_team} — 3D"
     # Nem f-string: a JS tele van kapcsos zárójellel; a beszúrás
     # helyőrző-cserével megy.
@@ -994,6 +999,9 @@ import * as THREE from "three";
 import {VRButton} from "three/addons/webxr/VRButton.js";
 
 const ADAT = __ADAT__;
+// A csapatnév (felhasználói adat) innerHTML-be csak escape-elve kerülhet.
+const hx = (s) => String(s).replace(/[&<>"']/g,
+  (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
 // 📦 FELVÉTEL-CSOMAG (egyetlen HTML-fájl, motor nélkül — view3d_csomag):
 // a beágyazott felvétel ({adat, hang}); a motoros funkciók kikapcsolnak
 // (mint a mentett oldalnál), a felvétel magától indul. Élő oldalon null.
@@ -2086,7 +2094,7 @@ function falresFrissit(t){
     falresCsoport.add(sav);
   }
   const nyilt = r.szeles.filter(Boolean).length;
-  falresInfo.innerHTML = "Fal (" + csapat + ", " + r.fal.length + " védő): " + (nyilt
+  falresInfo.innerHTML = "Fal (" + hx(csapat) + ", " + r.fal.length + " védő): " + (nyilt
     ? "<span style='color:#ff6b6b'>" + nyilt + " nyitott rés</span> — a legnagyobb " + szam1(r.max) + " m"
     : "zárt — a legnagyobb rés " + szam1(r.max) + " m");
 }
@@ -2249,7 +2257,7 @@ function dontesFrissit(t){
   vonalD(cx, cy, 0xffffff);
   vonalD(bx, by, 0xd9b544);
   const jobb = fajta === "s" ? "LÖVÉS (" + szam2(bval) + ")" : "passz a másik társhoz (" + szam2(bval) + ")";
-  dontesFelirat.innerHTML = "<b>" + (hazai ? ADAT.home : ADAT.away) + "</b> — jobb opció is volt: " +
+  dontesFelirat.innerHTML = "<b>" + hx(hazai ? ADAT.home : ADAT.away) + "</b> — jobb opció is volt: " +
     "<span style='color:#d9b544'>" + jobb + "</span> a választott passz (" + szam2(cval) +
     ") helyett · különbség " + szam2(gap);
   dontesFelirat.style.display = "block";
@@ -2358,7 +2366,7 @@ function eladasFrissit(t){
               : "magától (a legközelebbi ellenfél " + szam1(tav) + " m-re)");
   const gol = golMp !== null
     ? " · <span style='color:#ff6b6b'>" + szam1(golMp) + " mp múlva kapott gól</span>" : "";
-  return (eladasCsoport.userData.szoveg = "<b>" + (hazai ? ADAT.home : ADAT.away) +
+  return (eladasCsoport.userData.szoveg = "<b>" + hx(hazai ? ADAT.home : ADAT.away) +
     "</b> labdavesztés — " + ki + " · " + hol + " · " + nyomas + gol);
 }
 
@@ -3970,7 +3978,7 @@ function falFrissit(t){
   else if (elo) goalX = elo.goalX;
   const csapat = elo ? (elo.hazai ? ADAT.home : ADAT.away) : null;
   const sorok = [];
-  if (elo) sorok.push("Most: " + csapat + " védekezik — <b>" + elo.cimke + "</b>");
+  if (elo) sorok.push("Most: " + hx(csapat) + " védekezik — <b>" + hx(elo.cimke) + "</b>");
   else sorok.push("Most nincs szervezett támadás — a fal nem áll.");
   // Feltörés: a védekező csapat falának leggyengébb pontja (a felderítés
   // rangsorának teteje) — hol és mivel kell támadni ellene.
