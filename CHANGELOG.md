@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **Felvétel-fejezetek** (motor + böngésző + app): a motor a felvételt
+  ott bontja fejezetekre, ahol az edző egy másik jelenetre ugrott (a
+  csúszka húzása egy fejezet, a landolással); a visszajátszásban
+  fejezet-választó a közeli jelenet feliratával, N / P (VR-ben A/X —
+  B/Y) a következő / előző fejezet, a lista a fejezetek számát mutatja.
+  Egy egyórás megbeszélésben a játékos így a saját részét keresi meg.
+
 - **A csapat linkjén a legutóbbi felvételek** (motor): amíg nincs élő
   vezetés, a /kovet "Várunk az edzőre" lapja a legutóbbi megbeszéléseket
   listázza (meccsektől függetlenül, a legújabb elöl, 🎙 jellel) — aki

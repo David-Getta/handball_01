@@ -524,12 +524,15 @@ String recordingDefaultName(DateTime d) {
 }
 
 /// Egy felvétel alsó sora a "▶ Felvételek" listában: a mentés ideje
-/// ("2026-10-14 21:06"), a hossz ("0:05"), és 🎙, ha hangja is van.
+/// ("2026-10-14 21:06"), a hossz ("0:05"), a fejezetek száma (ha több
+/// van — ahol az edző másik jelenetre ugrott), és 🎙, ha hangja is van.
 String recordingSubtitle(Map<String, dynamic> f) {
   final l = "${f["letrehozva"] ?? ""}";
   final mikor =
       l.length >= 16 ? l.substring(0, 16).replaceFirst("T", " ") : l;
+  final fejezetek = (f["fejezetek"] as num?)?.toInt() ?? 0;
   final hossz = recordingClock(f["hossz_s"] as num?) +
+      (fejezetek > 1 ? " · $fejezetek fejezet" : "") +
       (f["hang"] == true ? " · 🎙" : "");
   return mikor.isEmpty ? hossz : "$mikor · $hossz";
 }

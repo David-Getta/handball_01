@@ -117,6 +117,10 @@ void main() {
         "2026-10-14 21:06 · 1:05");
     expect(recordingSubtitle({"hossz_s": 3}), "0:03");
     expect(recordingSubtitle({"hossz_s": 3, "hang": true}), "0:03 · 🎙");
+    expect(
+        recordingSubtitle({"hossz_s": 3, "hang": true, "fejezetek": 4}),
+        "0:03 · 4 fejezet · 🎙");
+    expect(recordingSubtitle({"hossz_s": 3, "fejezetek": 1}), "0:03");
     expect(recordingDefaultName(DateTime(2026, 3, 4, 9, 5)),
         "Megbeszélés 2026. 03. 04. 09:05");
   });

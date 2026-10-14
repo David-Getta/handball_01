@@ -206,3 +206,57 @@ def test_a_felvetel_hangja(tmp_path, monkeypatch):
                  'fvHangForras(adat.hang ? fvCim() + "/" + encodeURIComponent(id) + "/hang" : "");',
                  "🎙 a hangoddal is"):
         assert kell in oldal, kell
+
+
+def test_a_felvetel_fejezetei():
+    """Fejezet ott kezdődik, ahol az edző a meccsben ugrott — a lejátszás
+    (bármilyen sebességgel) és a szünet nem ugrás; a csúszka-húzás sok
+    gyors ugrása egy fejezet, az utolsó landolással."""
+    from handball.pipeline.court3d import (SHARED3D_REC_CHAPTER_JUMP_S,
+                                           SHARED3D_REC_CHAPTER_MIN_S,
+                                           shared3d_felvetel_fejezetek)
+
+    def a(t, megy=True, seb=1.0):
+        return {"t": t, "playing": megy, "speed": seb}
+
+    allapotok = [[0.0, a(100)], [0.3, a(100.3)], [0.6, a(100.6)],
+                 [0.9, a(100.6, seb=2)], [1.2, a(101.2, seb=2)],
+                 [1.5, a(101.8, False)], [6.0, a(101.8, False)],
+                 [6.3, a(300, False)],
+                 [20.0, a(500)], [20.3, a(520)], [20.6, a(540)],
+                 [20.9, a(540.3)], [30.0, a(549.4)]]
+    assert shared3d_felvetel_fejezetek(allapotok) == [
+        [0.0, 100.0], [6.3, 300.0], [20.6, 540.0]]
+    # A felvétel eleje utáni gyors ugrás új fejezet (az eleje marad).
+    assert shared3d_felvetel_fejezetek([[0, a(100)], [1.0, a(400)]]) == [
+        [0.0, 100.0], [1.0, 400.0]]
+    # A küszöb alatti eltérés (kerekítés, egy kicsi tekerés) nem fejezet.
+    kis = SHARED3D_REC_CHAPTER_JUMP_S - 0.5
+    assert len(shared3d_felvetel_fejezetek(
+        [[0, a(100, False)], [5, a(100 + kis, False)]])) == 1
+    assert SHARED3D_REC_CHAPTER_MIN_S < SHARED3D_REC_CHAPTER_JUMP_S
+    assert shared3d_felvetel_fejezetek([]) == []
+
+
+def test_a_fejezetek_a_vegpontokon_es_az_oldalon(tmp_path, monkeypatch):
+    from handball.pipeline.view3d_html import view3d_html
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_meccs())
+    c = TestClient(app)
+    url = "/matches/fv/felvetelek"
+    d = c.post(url, json={"allapotok": [
+        [0, {"t": 1, "playing": False}], [4, {"t": 1, "playing": False}],
+        [4.3, {"t": 8, "playing": False}], [9, {"t": 8, "playing": False}]]}).json()
+    assert c.get(f"{url}/{d['id']}").json()["fejezetek"] == [[0.0, 1.0], [4.3, 8.0]]
+    assert c.get(url).json()["felvetelek"][0]["fejezetek"] == 2
+
+    oldal = view3d_html(_meccs())
+    for kell in ('id="fejezetValaszto"', "fejezetListaToltes(adat);",
+                 "if (fvLejatszas) felvetelFejezet(1); else jelenetLep(1);",
+                 "if (fvLejatszas) felvetelFejezet(-1); else jelenetLep(-1);",
+                 ". fejezet (N / P)"):
+        assert kell in oldal, kell
+    # A billentyű és a VR-gomb is (két-két hely).
+    assert oldal.count("if (fvLejatszas) felvetelFejezet(1); else jelenetLep(1);") == 2

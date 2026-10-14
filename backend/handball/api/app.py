@@ -3659,13 +3659,16 @@ def create_app():
         tar = _felvetel_fejek.get(str(p))
         if tar is not None and tar[0] == kulcs:
             return tar[1]
+        from ..pipeline.court3d import shared3d_felvetel_fejezetek
         try:
             d = json.loads(p.read_text(encoding="utf-8"))
             fej = {"id": d["id"], "nev": d.get("nev") or "",
                    "letrehozva": d.get("letrehozva") or "",
                    "hossz_s": d.get("hossz_s") or 0,
-                   "hang": bool(d.get("hang"))}
-        except (OSError, ValueError, KeyError, TypeError):
+                   "hang": bool(d.get("hang")),
+                   "fejezetek": len(shared3d_felvetel_fejezetek(
+                       d.get("allapotok") or []))}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return None
         _felvetel_fejek[str(p)] = (kulcs, fej)
         return fej
@@ -3724,8 +3727,8 @@ def create_app():
     @app.get("/matches/{match_id}/felvetelek")
     def felvetel_lista(match_id: str):
         """A meccs megbeszélés-felvételei: {"felvetelek": [{"id", "nev",
-        "letrehozva", "hossz_s", "hang" (van-e hangja)}]} — a legújabb
-        elöl."""
+        "letrehozva", "hossz_s", "hang" (van-e hangja), "fejezetek" (a
+        fejezetek száma)}]} — a legújabb elöl."""
         if match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
         ki = []
@@ -3740,7 +3743,9 @@ def create_app():
 
     @app.get("/matches/{match_id}/felvetelek/{rid}")
     def felvetel_egy(match_id: str, rid: str):
-        """Egy felvétel teljes adata (a visszajátszáshoz)."""
+        """Egy felvétel teljes adata (a visszajátszáshoz), a fejezeteivel
+        ("fejezetek": court3d.shared3d_felvetel_fejezetek)."""
+        from ..pipeline.court3d import shared3d_felvetel_fejezetek
         if match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
         if not rid.isalnum():
@@ -3748,7 +3753,10 @@ def create_app():
         p = _felvetel_mappa(match_id) / f"{rid}.json"
         if not p.exists():
             raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
-        return json.loads(p.read_text(encoding="utf-8"))
+        adat = json.loads(p.read_text(encoding="utf-8"))
+        adat["fejezetek"] = shared3d_felvetel_fejezetek(
+            adat.get("allapotok") or [])
+        return adat
 
     @app.delete("/matches/{match_id}/felvetelek/{rid}")
     def felvetel_torol(match_id: str, rid: str):

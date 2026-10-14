@@ -683,6 +683,45 @@ SHARED3D_REC_AUDIO_TYPES = ("audio/webm", "audio/mp4", "audio/ogg")
 SHARED3D_WAIT_RECS = 8
 
 
+# A felvétel FEJEZETEI: ahol a játékidő a vártnál ennél többet ugrott (az
+# edző egy másik jelenetre ugrott), új fejezet kezdődik; az előző fejezet
+# kezdete után ennél hamarabb jövő ugrás (a csúszka húzása) nem új
+# fejezet, hanem az előző landolása.
+SHARED3D_REC_CHAPTER_JUMP_S = 5.0
+SHARED3D_REC_CHAPTER_MIN_S = 3.0
+
+
+def shared3d_felvetel_fejezetek(allapotok) -> list:
+    """A felvétel fejezetei: [[eltelt-mp, játékidő-mp], …]. Az első állapot
+    mindig fejezet-kezdet; utána ott kezdődik új, ahol a játékidő a
+    várthoz (az előző idő, lejátszásnál + az eltelt idő × az előző
+    sebesség) képest több mint SHARED3D_REC_CHAPTER_JUMP_S-t ugrott. Az
+    előző fejezet kezdete után SHARED3D_REC_CHAPTER_MIN_S-on belüli ugrás
+    (a csúszka húzása — sok gyors ugrás) az előző fejezetet a landolásra
+    viszi, nem nyit újat (az első fejezet, a felvétel eleje, marad).
+    `allapotok`: a mentett alak ([[eltelt, {"t", "playing", "speed",
+    …}], …], időrendben)."""
+    ki = []
+    elozo = None
+    for eltelt, a in allapotok:
+        eltelt = float(eltelt)
+        t = float(a.get("t", 0.0))
+        if elozo is None:
+            ki.append([eltelt, t])
+        else:
+            e0, a0 = elozo
+            vart = float(a0.get("t", 0.0))
+            if a0.get("playing"):
+                vart += (eltelt - e0) * float(a0.get("speed", 1.0))
+            if abs(t - vart) > SHARED3D_REC_CHAPTER_JUMP_S:
+                if len(ki) > 1 and eltelt - ki[-1][0] < SHARED3D_REC_CHAPTER_MIN_S:
+                    ki[-1] = [eltelt, t]
+                else:
+                    ki.append([eltelt, t])
+        elozo = (eltelt, a)
+    return ki
+
+
 def shared3d_felvetel_nev(x) -> str:
     """A felvétel neve megtisztítva: csak kiírható jelek, a szélein szóköz
     nélkül, legfeljebb SHARED3D_REC_NAME_MAX jel ("" — a hívó tesz

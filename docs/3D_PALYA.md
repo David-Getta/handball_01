@@ -345,6 +345,12 @@ mintha az edző épp most vezetne, a néző a saját helyéről nézi. A gomb
 visszajátszáskor szünet/tovább (VR-ben a ravasz). Aki kimaradt a
 megbeszélésről, utólag végignézheti.
 
+**Fejezetek**: a motor a felvételt ott bontja, ahol az edző egy másik
+jelenetre ugrott (a csúszka húzása egy fejezet, a landolással). A
+visszajátszás fejezet-választója a közeli jelenet feliratával mutatja
+őket; N / P (VR-ben A/X — B/Y) a következő / előző fejezet — egy
+egyórás megbeszélésben a játékos így a saját részét keresi meg.
+
 🎙 **A hangod is**: a böngészős vezetés felvétele a mikrofont is rögzíti
 (az első felvételnél a böngésző engedélyt kér; ha nem engeded, a
 felvétel hang nélkül készül). A visszajátszás az edző magyarázatát az
