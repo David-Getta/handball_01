@@ -44,6 +44,10 @@ def test_a_halozatrol_csak_a_kozos_nezes_erheto_el(tmp_path, monkeypatch):
     assert tavoli.get("/matches/halo/felvetelek").status_code == 200
     assert tavoli.post("/matches/halo/felvetelek", json={}).status_code == 403
     assert tavoli.delete("/matches/halo/felvetelek/abc").status_code == 403
+    # A hang is letölthető (404: nincs ilyen) — a feltöltése nem.
+    assert tavoli.get("/matches/halo/felvetelek/abc/hang").status_code == 404
+    assert tavoli.put("/matches/halo/felvetelek/abc/hang",
+                      content=b"x").status_code == 403
     # A three.js is (a 3D oldal a motorból tölti).
     assert tavoli.get("/vendor/three@0.160.0/build/three.module.js").status_code == 200
     # A többi zárva — a nem létező út is (az őr az útválasztás előtt áll).

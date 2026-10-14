@@ -516,7 +516,8 @@ class _MatchStore(dict):
 # a rövid link, a 3D oldal, a közös nézés állapota (minden metódus: a
 # vezető VR-ből is vezethet), a videó-kockák, a jegyzetek olvasása (a 3D
 # oldal mutatja őket), a névlista (a követő "Ki vagy?"-a), a three.js
-# (a 3D oldal a motorból tölti) és a megbeszélés-felvételek visszajátszása.
+# (a 3D oldal a motorból tölti) és a megbeszélés-felvételek visszajátszása
+# (a hangjukkal).
 HALOZATI_ENGEDETT = (
     ("GET", r"^/kovet$"),
     ("GET", r"^/matches/[^/]+/view3d$"),
@@ -525,7 +526,7 @@ HALOZATI_ENGEDETT = (
     ("GET", r"^/library/players$"),
     ("GET", r"^/vendor/three@[0-9.]+/[A-Za-z0-9_./-]+$"),
     (None, r"^/matches/[^/]+/shared3d$"),
-    ("GET", r"^/matches/[^/]+/felvetelek(/[A-Za-z0-9]+)?$"),
+    ("GET", r"^/matches/[^/]+/felvetelek(/[A-Za-z0-9]+(/hang)?)?$"),
 )
 
 
@@ -3696,7 +3697,8 @@ def create_app():
     @app.get("/matches/{match_id}/felvetelek")
     def felvetel_lista(match_id: str):
         """A meccs megbeszélés-felvételei: {"felvetelek": [{"id", "nev",
-        "letrehozva", "hossz_s"}]} — a legújabb elöl."""
+        "letrehozva", "hossz_s", "hang" (van-e hangja)}]} — a legújabb
+        elöl."""
         if match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
         ki = []
@@ -3707,7 +3709,8 @@ def create_app():
                     d = json.loads(p.read_text(encoding="utf-8"))
                     ki.append({"id": d["id"], "nev": d.get("nev") or "",
                                "letrehozva": d.get("letrehozva") or "",
-                               "hossz_s": d.get("hossz_s") or 0})
+                               "hossz_s": d.get("hossz_s") or 0,
+                               "hang": bool(d.get("hang"))})
                 except Exception:
                     continue
         ki.sort(key=lambda f: (f["letrehozva"], f["id"]), reverse=True)
@@ -3734,6 +3737,7 @@ def create_app():
         if not rid.isalnum() or not p.exists():
             raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
         p.unlink()
+        p.with_suffix(".hang").unlink(missing_ok=True)
         return {"ok": True}
 
     @app.patch("/matches/{match_id}/felvetelek/{rid}")
@@ -3751,6 +3755,73 @@ def create_app():
         p.write_text(json.dumps(adat, ensure_ascii=False, separators=(",", ":")),
                      encoding="utf-8")
         return {"id": rid, "nev": adat["nev"]}
+
+    async def felvetel_hang_ment(match_id: str, rid: str, request: Request,
+                                 eltolas: float = 0.0):
+        """🎙 A felvétel hangja (a vezető mikrofonja — a böngésző
+        MediaRecorder-e): a törzs maga a hang (court3d.
+        SHARED3D_REC_AUDIO_TYPES), `eltolas`: a hang kezdete a felvétel
+        elejétől (mp — a mikrofon-engedély ideje; a felvétel hosszába
+        szorítva). A felvétel mellé, `{rid}.hang` néven. Válasz: {"id",
+        "hang": {"tipus", "eltolas", "meret"}}. 404: nincs ilyen felvétel;
+        415: nem hang; 413: SHARED3D_REC_AUDIO_MAX bájtnál nagyobb; 400:
+        üres."""
+        import math
+
+        from ..pipeline.court3d import (SHARED3D_REC_AUDIO_MAX,
+                                        SHARED3D_REC_AUDIO_TYPES)
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        if not rid.isalnum() or not p.exists():
+            raise HTTPException(status_code=404, detail="nincs ilyen felvétel")
+        tipus = (request.headers.get("content-type") or "").split(";")[0]
+        tipus = tipus.strip().lower()
+        if tipus not in SHARED3D_REC_AUDIO_TYPES:
+            raise HTTPException(status_code=415,
+                                detail="a hang típusa nem ismert")
+        try:
+            jelzett = int(request.headers.get("content-length") or 0)
+        except ValueError:
+            jelzett = 0
+        if jelzett > SHARED3D_REC_AUDIO_MAX:
+            raise HTTPException(status_code=413, detail="a hang túl hosszú")
+        nyers = await request.body()
+        if len(nyers) > SHARED3D_REC_AUDIO_MAX:
+            raise HTTPException(status_code=413, detail="a hang túl hosszú")
+        if not nyers:
+            raise HTTPException(status_code=400, detail="üres hang")
+        adat = json.loads(p.read_text(encoding="utf-8"))
+        hossz = float(adat.get("hossz_s") or 0)
+        e = eltolas if math.isfinite(eltolas) else 0.0
+        e = min(max(e, 0.0), hossz)
+        p.with_suffix(".hang").write_bytes(nyers)
+        adat["hang"] = {"tipus": tipus, "eltolas": round(e, 2),
+                        "meret": len(nyers)}
+        p.write_text(json.dumps(adat, ensure_ascii=False, separators=(",", ":")),
+                     encoding="utf-8")
+        return {"id": rid, "hang": adat["hang"]}
+
+    felvetel_hang_ment.__annotations__["request"] = Request
+    app.put("/matches/{match_id}/felvetelek/{rid}/hang")(felvetel_hang_ment)
+
+    @app.get("/matches/{match_id}/felvetelek/{rid}/hang")
+    def felvetel_hang(match_id: str, rid: str):
+        """A felvétel hangja (a visszajátszáshoz; tekerhető — Range)."""
+        from fastapi.responses import FileResponse
+
+        from ..pipeline.court3d import SHARED3D_REC_AUDIO_TYPES
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _felvetel_mappa(match_id) / f"{rid}.json"
+        h = p.with_suffix(".hang")
+        if not rid.isalnum() or not p.exists() or not h.exists():
+            raise HTTPException(status_code=404, detail="nincs hang")
+        tipus = ((json.loads(p.read_text(encoding="utf-8")).get("hang") or {})
+                 .get("tipus"))
+        if tipus not in SHARED3D_REC_AUDIO_TYPES:
+            raise HTTPException(status_code=404, detail="nincs hang")
+        return FileResponse(str(h), media_type=tipus)
 
     @app.get("/kovet")
     def shared3d_rovid(nev: str = ""):

@@ -673,6 +673,11 @@ def shared3d_hely(ertek):
 # SHARED3D_SEND_S-enként rögzít: ~1,7 óra), a neve legfeljebb ennyi jel.
 SHARED3D_REC_MAX = 20000
 SHARED3D_REC_NAME_MAX = 80
+# 🎙 A felvétel hangja (a vezető mikrofonja): legfeljebb ennyi bájt (a
+# böngésző 32 kbit/s-os Opus-ával ~4,5 óra — a SHARED3D_REC_MAX ~1,7
+# órája bőven belefér), és csak a böngészők MediaRecorder-ének típusai.
+SHARED3D_REC_AUDIO_MAX = 64 * 1024 * 1024
+SHARED3D_REC_AUDIO_TYPES = ("audio/webm", "audio/mp4", "audio/ogg")
 
 
 def shared3d_felvetel_nev(x) -> str:

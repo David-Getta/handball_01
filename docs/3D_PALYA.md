@@ -343,8 +343,15 @@ vezetéssel) a motor a meccs mellé menti. A **▶ Felvételek** listából
 bárki visszajátszhatja — a böngészőben és VR-ben is —, a követés útján:
 mintha az edző épp most vezetne, a néző a saját helyéről nézi. A gomb
 visszajátszáskor szünet/tovább (VR-ben a ravasz). Aki kimaradt a
-megbeszélésről, utólag végignézheti; a hang (az edző magyarázata) nincs
-a felvételben.
+megbeszélésről, utólag végignézheti.
+
+🎙 **A hangod is**: a böngészős vezetés felvétele a mikrofont is rögzíti
+(az első felvételnél a böngésző engedélyt kér; ha nem engeded, a
+felvétel hang nélkül készül). A visszajátszás az edző magyarázatát az
+időhöz igazítva játssza — szünetnél elhallgat, folytatásnál onnan
+szól. A headset böngészője kattintás nélkül nem mindig enged hangot:
+ilyenkor a felirat szól ("kattints az oldalra a hanghoz"). Az app
+vezetése hangot nem rögzít.
 
 Az appban ugyanígy: vezetés közben a **⏺ Felvétel** gomb rögzít. A 3D fül
 **▶ Felvételek** listája a meccs felvételeit mutatja: a sorra kattintva

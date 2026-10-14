@@ -147,3 +147,62 @@ def test_a_felvetelek_az_appban(tmp_path, monkeypatch):
                  "Future<void> deleteRecording("):
         assert kell in api, kell
     assert "internet kell" not in palya
+
+
+def test_a_felvetel_hangja(tmp_path, monkeypatch):
+    """🎙 A hang feltöltése, letöltése (tekerhető), a listában jelölve, a
+    törléssel együtt megy; rossz kérések. Az oldal rögzít és szinkronban
+    játszik vissza."""
+    from handball.pipeline.court3d import (SHARED3D_REC_AUDIO_MAX,
+                                           SHARED3D_REC_AUDIO_TYPES)
+    from handball.pipeline.view3d_html import view3d_html
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_meccs())
+    c = TestClient(app)
+    url = "/matches/fv/felvetelek"
+    d = c.post(url, json={"allapotok": [[0, {"t": 1}], [4.5, {"t": 5.5}]]}).json()
+    assert c.get(url).json()["felvetelek"][0]["hang"] is False
+    assert c.get(f"{url}/{d['id']}/hang").status_code == 404
+    hang = bytes(range(256)) * 40
+    r = c.put(f"{url}/{d['id']}/hang", params={"eltolas": 1.234}, content=hang,
+              headers={"Content-Type": "audio/webm;codecs=opus"})
+    assert r.status_code == 200
+    assert r.json()["hang"] == {"tipus": "audio/webm", "eltolas": 1.23,
+                                "meret": len(hang)}
+    assert c.get(url).json()["felvetelek"][0]["hang"] is True
+    assert c.get(f"{url}/{d['id']}").json()["hang"]["eltolas"] == 1.23
+    le = c.get(f"{url}/{d['id']}/hang")
+    assert le.status_code == 200 and le.content == hang
+    assert le.headers["content-type"].startswith("audio/webm")
+    resz = c.get(f"{url}/{d['id']}/hang", headers={"Range": "bytes=10-19"})
+    assert resz.status_code == 206 and resz.content == hang[10:20]
+    # Az eltolás a felvétel hosszába szorul; a NaN 0.
+    for e, vart in ((99, 4.5), (-3, 0.0), ("nan", 0.0)):
+        r = c.put(f"{url}/{d['id']}/hang", params={"eltolas": e}, content=b"ab",
+                  headers={"Content-Type": "audio/ogg"})
+        assert r.json()["hang"]["eltolas"] == vart, e
+    # Rossz kérések.
+    assert c.put(f"{url}/{d['id']}/hang", content=b"ab",
+                 headers={"Content-Type": "text/html"}).status_code == 415
+    assert c.put(f"{url}/{d['id']}/hang", content=b"",
+                 headers={"Content-Type": "audio/mp4"}).status_code == 400
+    assert c.put(f"{url}/nincs/hang", content=b"ab",
+                 headers={"Content-Type": "audio/mp4"}).status_code == 404
+    assert c.put(f"{url}/{d['id']}/hang", content=b"ab",
+                 headers={"Content-Type": "audio/mp4",
+                          "Content-Length": str(SHARED3D_REC_AUDIO_MAX + 1)}
+                 ).status_code == 413
+    assert "audio/webm" in SHARED3D_REC_AUDIO_TYPES
+    # A törlés a hangot is viszi.
+    assert c.delete(f"{url}/{d['id']}").json() == {"ok": True}
+    assert not list((tmp_path).rglob("*.hang"))
+
+    oldal = view3d_html(_meccs())
+    for kell in ("felvetelHangIndit(kzFelvetel);",
+                 "const hang = f ? await felvetelHangLeallit(f.hang) : null;",
+                 '"/hang?eltolas="', "felvetelHangFrissit(f, e);",
+                 'fvHangForras(adat.hang ? fvCim() + "/" + encodeURIComponent(id) + "/hang" : "");',
+                 "🎙 a hangoddal is"):
+        assert kell in oldal, kell

@@ -3333,8 +3333,9 @@ class _Court3DScreenState extends State<Court3DScreen>
             message: "Felvétel: a megbeszélés (a lejátszásod, a rajz, a "
                 "mutató, az Ide mindenki nézőpontjai) visszanézhető — a "
                 "végén a motor menti, a ▶ Felvételek listából bárki "
-                "visszajátszhatja (a böngészőben, VR-ben is). A hang nincs "
-                "benne.",
+                "visszajátszhatja (a böngészőben, VR-ben is). Hangot az "
+                "app nem rögzít — a 🎙 hangos felvétel a böngészős 3D "
+                "vezetéséből készül.",
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
                   foregroundColor:

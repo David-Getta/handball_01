@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.169 óta)
 
+- **🎙 A felvételben az edző hangja is** (böngésző + motor): a böngészős
+  vezetés "⏺ Felvétel"-e a mikrofont is rögzíti (ha engeded), a motor a
+  felvétel mellé menti, és a visszajátszás az időhöz igazítva szól —
+  szünetnél elhallgat, folytatásnál onnan szól, VR-ben is. A megbeszélés
+  legértékesebb része, a magyarázat, így már nem vész el. A "▶
+  Felvételek" lista 🎙-val jelöli a hangos felvételt.
+
 - **▶ Felvételek az appban** (app + motor + böngésző): az app vezetője is
   rögzít ("⏺ Felvétel" vezetés közben), a 3D fül "▶ Felvételek" listája
   a meccs mentett megbeszéléseit mutatja — a sorra kattintva a böngészős
@@ -17,7 +24,7 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   nyilak, a mutató, az "Ide mindenki" nézőpontjai), a végén a motor a
   meccs mellé menti; a "▶ Felvételek" listából bárki visszajátszhatja —
   VR-ben is —, mintha az edző épp most vezetne. Aki kimaradt a
-  megbeszélésről, utólag végignézheti. (A hang nincs benne.)
+  megbeszélésről, utólag végignézheti.
 
 - **"🏟 Klub-hálózat" az appban** (új, app): a több headsetes közös nézés
   klub-hálózati útja parancssor nélkül — a 3D fül kapcsolója (figyelmeztető
