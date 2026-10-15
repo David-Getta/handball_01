@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.169 óta)
+## v0.1.170 — kiadva (2026-10-15)
+
+> Kiadás-jegyzet: a 3D megbeszélés visszanézhető. Vezetés közben a "⏺
+> Felvétel" rögzíti a megbeszélést — a lejátszást, a nyilakat, a
+> mutatót, a nézőpontokat és (a böngészős vezetésnél) az edző HANGJÁT —,
+> aki kimaradt, utólag végignézheti, VR-ben is: fejezetekre bontva (N /
+> P), a csapat linkjéről egy kattintással, otthonra egyetlen
+> HTML-fájlként (motor és internet nélkül). Az edző látja, ki követte:
+> élőben vagy felvételről (a Keret-lapon "👁 5/5"). A kezdőlapon a
+> legutóbbi megbeszélések; a headsetes játékos "✋ Kérdésem van"-nal
+> jelezhet; a klub-hálózat az appból egy kapcsoló. Biztonság: a
+> csapatnév már nem futtathat kódot a 3D oldalon, a CSV-exportok nevei
+> nem futnak képletként; Windowson a böngészős 3D link nem csonkul.
+> (Valódi headseten és valódi mikrofonnal még nem próbáltuk.)
 
 - **Jelenlét a felvételben** (motor + böngésző + app): a felvétel rögzíti,
   kik követték a megbeszélést élőben (a közös nézés névvel jelenlévő
