@@ -1183,7 +1183,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return d > 0 ? "−${d.toStringAsFixed(0)}%" : "+${(-d).toStringAsFixed(0)}%";
     }
     List<List<String>> rows(Map<String, dynamic> m) => [
-          ["Eredmény", "${m["goals_home"]} : ${m["goals_away"]}"],
+          [
+            "Eredmény",
+            "${m["goals_home"]} : ${m["goals_away"]}"
+                "${m["real_goals_home"] != null && m["real_goals_away"] != null ? " (valódi ${m["real_goals_home"]} : ${m["real_goals_away"]})" : ""}"
+          ],
           ["További lövések", fmt(m["shots"])],
           ["Védések", fmt(m["saves"])],
           [
@@ -3226,8 +3230,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 for (final m in pts) ...[
                   Tooltip(
-                    message: "${m["home_team"]} ${m["goals_home"]} : "
-                        "${m["goals_away"]} ${m["away_team"]}"
+                    message: "${m["home_team"]} ${trendScore(m)} "
+                        "${m["away_team"]}"
+                        "${m["real_goals_home"] != null && m["real_goals_away"] != null ? " (felismert ${m["goals_home"]}:${m["goals_away"]})" : ""}"
                         "${(m["date"] as String?)?.isNotEmpty == true ? " · ${m["date"]}" : ""}\n"
                         "xG: ${huNum(m["xg_home"] as num)} – "
                         "${huNum(m["xg_away"] as num)}"
@@ -3253,7 +3258,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 borderRadius: BorderRadius.circular(2))),
                       ]),
                       const SizedBox(height: 3),
-                      Text("${m["goals_home"]}:${m["goals_away"]}",
+                      Text(trendScore(m),
                           style: AppText.label.copyWith(fontSize: 10)),
                     ]),
                   ),
@@ -3334,6 +3339,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       note += " · ${(100.0 * goals / attempts).toStringAsFixed(0)}% gólarány";
     }
     if (saves > 0) note += " · $saves védés";
+    // A valódi (jegyzőkönyvi) eredmény, ha az edző megadta (✎) — a
+    // felismerés valódi felvételen gyakran kevesebb gólt talál.
+    final realN = (s["real_matches"] as num?)?.toInt() ?? 0;
+    if (realN > 0) {
+      note += " · jegyzőkönyv: ${s["real_goals"]} gól ($realN meccs)";
+    } else if (goals == 0 && attempts > 0) {
+      note += " · gólt a felvétel nem mutat — a valódi eredmény a meccs "
+          "✎ gombjával megadható";
+    }
     return note;
   }
 

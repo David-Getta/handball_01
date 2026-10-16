@@ -503,3 +503,20 @@ def test_a_view3d_a_birtokos_kezebe_teszi_a_labdat():
     assert "let birtokos = null, legkozelebb = 1.2;" in oldal
     assert "labda.position.set(birtokos.position.x" in oldal
     assert "1.28," in oldal
+
+
+def test_a_szezon_osszkep_viszi_a_valodi_eredmenyt():
+    """A /library/summary meccsenként a valódi eredményt (a meta-ból — az
+    utólagos megadás a gyorsítótárazott kivonatot nem várja meg), és az
+    összegét a megadott meccsekre."""
+    c, _tmp = _client([_meccs("s1"), _meccs("s2")])
+    s = c.get("/library/summary").json()
+    assert s["real_matches"] == 0 and s["real_goals"] == 0
+    assert c.patch("/matches/s1", json={"real_goals_home": 28,
+                                        "real_goals_away": 25}).status_code == 200
+    s = c.get("/library/summary").json()
+    assert s["real_matches"] == 1 and s["real_goals"] == 53
+    sor = {d["match_id"]: d for d in s["per_match"]}
+    assert (sor["s1"]["real_goals_home"], sor["s1"]["real_goals_away"]) == (28, 25)
+    assert "goals_home" in sor["s1"]   # a felismert mellette marad
+    assert sor["s2"]["real_goals_home"] is None

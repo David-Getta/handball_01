@@ -7445,8 +7445,18 @@ def create_app():
         A meccsenkénti számítás gyorsítótárazott (frame-szám az érvényesség),
         így a kezdőlap újranyitása nagy könyvtárnál is azonnali.
         """
-        per = [_match_summary(m) for m in _season_matches()]
+        # A valódi (jegyzőkönyvi) eredmény a meta-ból, NEM a
+        # gyorsítótárazott kivonatból: az edző utólag adja meg (✎), a
+        # kockák közben nem változnak.
+        per = []
+        for m in _season_matches():
+            d = dict(_match_summary(m))
+            d["real_goals_home"] = getattr(m.meta, "real_goals_home", None)
+            d["real_goals_away"] = getattr(m.meta, "real_goals_away", None)
+            per.append(d)
         per.sort(key=lambda d: (d.get("date") or "", d["match_id"]))
+        valodi = [d for d in per if d["real_goals_home"] is not None
+                  and d["real_goals_away"] is not None]
         teams = sorted({t for d in per
                         for t in (d["home_team"], d["away_team"]) if t})
         return {
@@ -7454,6 +7464,10 @@ def create_app():
             "total_duration_s": round(sum(d["duration_s"] for d in per), 1),
             "teams": teams,
             "goals": sum(d["goals_home"] + d["goals_away"] for d in per),
+            # a megadott valódi eredmények összege és a meccsek száma
+            "real_goals": sum(d["real_goals_home"] + d["real_goals_away"]
+                              for d in valodi),
+            "real_matches": len(valodi),
             "shots": sum(d["shots"] for d in per),
             "saves": sum(d.get("saves", 0) for d in per),
             "sprints": sum(d["sprints"] for d in per),

@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A valódi eredmény a kezdőlapon** (app + motor): valódi felvételen a
+  gól-felismerés gyakran semmit sem talál — a kezdőlap ilyenkor "0 gól ·
+  0% gólarány"-t és csupa "0:0" trend-címkét mutatott. Most a meccs ✎
+  gombjával megadott jegyzőkönyvi eredmény a szezon-trend címkéje (a
+  tooltip a felismertet is mutatja), a GÓL-ESEMÉNY kártya "jegyzőkönyv:
+  112 gól (4 meccs)"-et ír (megadás nélkül, ha nincs felismert gól,
+  megmondja, hol adható meg), a meccs-összevetés pedig "(valódi …)"-t.
+  (/library/summary: real_goals, real_matches, meccsenként real_goals_*)
+
 - **A felső sáv ikonjai a jobb szélen** (app): a gyorsbillentyű- és a
   fiók-ikon széles ablakban a képernyő közepén ült (a morzsa rugalmas
   szövegei mellett a térkitöltő csak a hatodát kapta a helynek); most a
