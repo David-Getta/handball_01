@@ -3693,6 +3693,28 @@ def create_app():
         return [v["nev"] for v in sorted(sorok, key=lambda v: (
             str(v.get("ido") or ""), str(v["nev"])))]
 
+    def _meccs_felvetelei(match_id: str) -> list:
+        """A meccs megbeszélés-felvételei a jelentéshez: a fejléc a
+        fejezetekkel ([[eltelt, t], …]) és a megnézőkkel — a legújabb
+        elöl. Hibatűrő (a sérült fájl kimarad)."""
+        from ..pipeline.court3d import shared3d_felvetel_fejezetek
+        ki = []
+        mappa = _felvetel_mappa(match_id)
+        if not mappa.is_dir():
+            return ki
+        for p in sorted(mappa.glob("*.json")):
+            fej = _felvetel_fej(p)
+            if fej is None:
+                continue
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                fz = shared3d_felvetel_fejezetek(d.get("allapotok") or [])
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                fz = []
+            ki.append({**fej, "fejezetek": fz, "nezok": _felvetel_nezok(p)})
+        ki.sort(key=lambda f: (f["letrehozva"], f["id"]), reverse=True)
+        return ki
+
     def _legutobbi_felvetelek() -> list:
         """A könyvtár MINDEN megbeszélés-felvétele [(fejléc, meta, út)]
         alakban, a legújabb elöl (a /kovet várólapja és a
@@ -10488,7 +10510,8 @@ def create_app():
                 html = match_report_html(
                     match, team_style_profile(match), events, quality,
                     heatmaps=heatmaps, player_stats=player_stats,
-                    notes=_load_notes(match_id))
+                    notes=_load_notes(match_id),
+                    felvetelek=_meccs_felvetelei(match_id))
                 # 2) CSV.
                 job["progress"] = 0.2
                 job["message"] = "statisztika (CSV)"
@@ -12225,6 +12248,7 @@ def create_app():
         html = match_report_html(match, tactics, events, quality,
                                  heatmaps=heatmaps, player_stats=player_stats,
                                  notes=_load_notes(match_id),
+                                 felvetelek=_meccs_felvetelei(match_id),
                                  figure_namer=_figure_name_for,
                                  # A kérés címe: ezen éri el a kliens a
                                  # motort — a jelentés "3D ↗" linkjei ide

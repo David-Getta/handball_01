@@ -1271,12 +1271,63 @@ def _scenes_section(match, base_url: str | None = None,
             + vetit + "<ul>" + lis + "</ul>")
 
 
+def _felvetelek_html(match, felvetelek: list | None,
+                     base_url: str | None) -> str:
+    """A "Megbeszélések (3D-felvétel)" szakasz: felvételenként a név, az
+    idő, a hossz, a hang, a fejezetek (a felvétel- és a meccs-idővel), ki
+    követte élőben és ki nézte meg, és a "▶ 3D ↗" link (ismert
+    motor-címmel; a felvétel magától indul). `felvetelek`: [{"id", "nev",
+    "letrehozva", "hossz_s", "hang", "fejezetek": [[eltelt, t], …],
+    "jelen", "nezok"}] — a legújabb elöl. Felvétel nélkül üres."""
+    if not felvetelek:
+        return ""
+
+    def nevek(lista):
+        return ", ".join(escape(str(x)) for x in lista or [])
+
+    sorok = []
+    for f in felvetelek:
+        mikor = str(f.get("letrehozva") or "")[:16].replace("T", " ")
+        fz = f.get("fejezetek") or []
+        link = ""
+        if base_url and f.get("id"):
+            link = (f' <a href="{base_url.rstrip("/")}/matches/'
+                    f'{escape(match.meta.match_id)}/view3d?felvetel='
+                    f'{escape(str(f["id"]))}" style="font-size:11px;'
+                    'text-decoration:none">▶ 3D ↗</a>')
+        reszek = [p for p in (
+            escape(mikor), _fmt_clock(float(f.get("hossz_s") or 0)),
+            "🎙 hanggal" if f.get("hang") else "",
+            f"{len(fz)} fejezet" if len(fz) > 1 else "") if p]
+        kik = []
+        if f.get("jelen"):
+            kik.append("élőben: " + nevek(f["jelen"]))
+        if f.get("nezok"):
+            kik.append("megnézte: " + nevek(f["nezok"]))
+        fejezetek = ""
+        if len(fz) > 1:
+            fejezetek = ('<br><span style="font-size:12px;color:#555">'
+                         "Fejezetek: " + " · ".join(
+                             f"{_fmt_clock(float(e))} (a meccs "
+                             f"{_fmt_clock(float(t))}-nál)" for e, t in fz)
+                         + "</span>")
+        sorok.append(f"<li><b>{escape(str(f.get('nev') or 'Megbeszélés'))}"
+                     f"</b> — {' · '.join(reszek)}{link}"
+                     + (f"<br>{' · '.join(kik)}" if kik else "")
+                     + fejezetek + "</li>")
+    return ("<h2>Megbeszélések (3D-felvétel)</h2>"
+            "<p style=\"font-size:12px;color:#555\">A 3D közös nézés mentett "
+            "megbeszélései: mit beszéltünk át (fejezetenként), ki követte "
+            "élőben, ki nézte meg utólag.</p><ul>" + "".join(sorok) + "</ul>")
+
+
 def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                       heatmaps: dict | None = None,
                       player_stats: dict | None = None,
                       notes: list | None = None,
                       figure_namer=None,
-                      base_url: str | None = None) -> str:
+                      base_url: str | None = None,
+                      felvetelek: list | None = None) -> str:
     """A meccs egyoldalas edzői jelentése (önálló HTML; böngészőből PDF).
 
     Bemenetek: a Match objektum + a taktikai profil (team_style_profile),
@@ -1286,7 +1337,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     (compute_player_stats — terhelés-tábla), az edzői jegyzetek és a
     `figure_namer(csapatnév, alak) -> név|None` — az elnevezett figurák
     neve a "Figuráik (alakkal)" szakaszban; a `base_url` a motor címe (a
-    videózandó jelenetek "3D ↗" linkjéhez — None: link nélkül).
+    videózandó jelenetek "3D ↗" linkjéhez — None: link nélkül); a
+    `felvetelek` a 3D megbeszélés-felvételek (_felvetelek_html).
     Minden szakasz hiányzó adatnál is értelmes szöveget ad — a jelentés
     sosem "törik el".
 
@@ -1299,7 +1351,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         return _match_report_html_cached(
             match, tactics, events, quality, heatmaps=heatmaps,
             player_stats=player_stats, notes=notes,
-            figure_namer=figure_namer, base_url=base_url)
+            figure_namer=figure_namer, base_url=base_url,
+            felvetelek=felvetelek)
 
 
 def _match_report_html_cached(match, tactics: dict, events: list,
@@ -1308,7 +1361,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                               player_stats: dict | None = None,
                               notes: list | None = None,
                               figure_namer=None,
-                              base_url: str | None = None) -> str:
+                              base_url: str | None = None,
+                              felvetelek: list | None = None) -> str:
     """A jelentés tényleges felépítése (lásd `match_report_html`)."""
 
     meta = match.meta
@@ -1709,6 +1763,11 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                       "megjelölt pillanatok, a rajzokkal.</p>")
         notes_html = ("<h2>Edzői jegyzetek</h2>" + jvetit + "<ul>" + lis
                       + "</ul>")
+    # A 3D megbeszélés-felvételek (hibatűrően: a jelentés nem törhet el).
+    try:
+        felvetel_html = _felvetelek_html(match, felvetelek, base_url)
+    except Exception:
+        felvetel_html = ""
 
     # Automatikus edzői összefoglaló: mondatokban, a jelentés elejére.
     summary_html = ""
@@ -3949,6 +4008,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   {passes_html}
 
   {notes_html}
+
+  {felvetel_html}
 
   {figures_html}
 

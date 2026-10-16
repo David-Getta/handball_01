@@ -536,3 +536,33 @@ def test_a_felvetel_uzenete_megmarad():
             ' ? " · " + fvUzenet.szoveg : "")') in oldal
     assert oldal.count("felvetelUzen(") == 4  # definíció + 3 üzenet
     assert 'kozosInfo.textContent = "⏺' not in oldal
+
+
+def test_a_megbeszelesek_a_jelentesben(tmp_path, monkeypatch):
+    """A meccs-jelentés "Megbeszélések (3D-felvétel)" szakasza: a név
+    (escape-elve), a hang, a fejezetek a meccs-idővel, ki követte élőben,
+    ki nézte meg, és a "▶ 3D ↗" link; felvétel nélkül nincs szakasz."""
+    from handball.pipeline.report_html import _felvetelek_html
+
+    assert _felvetelek_html(_meccs(), [], "http://x") == ""
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_meccs())
+    c = TestClient(app)
+    assert "Megbeszélések (3D-felvétel)" not in c.get("/matches/fv/report/export").text
+    d = c.post("/matches/fv/felvetelek", json={
+        "nev": "Hétfő <b>6-0</b>", "jelen": ["Anna"], "allapotok": [
+            [0, {"t": 1, "playing": False}], [4, {"t": 1, "playing": False}],
+            [4.3, {"t": 80, "playing": False}], [9, {"t": 80, "playing": False}]]}).json()
+    c.put(f"/matches/fv/felvetelek/{d['id']}/hang", content=b"ab",
+          headers={"Content-Type": "audio/webm"})
+    c.post(f"/matches/fv/felvetelek/{d['id']}/megnezte", json={"nev": "Peti"})
+    lap = c.get("/matches/fv/report/export").text
+    # (a tartalomjegyzék is hozza a címet — a szakasz az utolsó)
+    i = lap.rindex("Megbeszélések (3D-felvétel)")
+    resz = lap[i:i + 2000]
+    assert "Hétfő &lt;b&gt;6-0&lt;/b&gt;" in resz and "<b>6-0</b>" not in resz
+    assert "🎙 hanggal" in resz and "2 fejezet" in resz
+    assert "0:04 (a meccs 1:20-nál)" in resz
+    assert "élőben: Anna" in resz and "megnézte: Peti" in resz
+    assert f"/matches/fv/view3d?felvetel={d['id']}" in resz

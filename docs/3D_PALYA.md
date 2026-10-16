@@ -382,6 +382,10 @@ headsetben is — megnyitja, és motor, internet nélkül lejátszódik. (A
 csomagban a motoros funkciók — közös nézés, jegyzet, videó, "Ki nézte
 meg?" — nem működnek.)
 
+A meccs-jelentés **Megbeszélések (3D-felvétel)** szakasza is felsorolja
+őket — fejezetenként (a meccs-idővel), ki követte élőben, ki nézte meg —:
+a megbeszélés papírnyoma.
+
 A kezdőlap **Legutóbbi megbeszélések** kártyája is mutatja őket
 (meccsektől függetlenül, ki nézte meg), a "3D / VR" gomb a böngészőben
 indítja.

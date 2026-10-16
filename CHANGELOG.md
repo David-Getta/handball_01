@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **Megbeszélések a meccs-jelentésben** (új, motor): a jelentés
+  "Megbeszélések (3D-felvétel)" szakasza felsorolja a meccs 3D
+  megbeszélés-felvételeit — név, idő, hossz, hang, fejezetek a
+  meccs-idővel, ki követte élőben, ki nézte meg, "▶ 3D ↗" link. A
+  megbeszélés papírnyoma: mit beszéltünk át, ki volt ott.
+
 - **VR: snap-fordulás a jobb karral** (új, böngésző/VR): a jobb
   hüvelykujj-kar oldalra billentése 30°-kal fordít (a fej körül, ugrásszerűen
   — a folyamatos forgatás émelyít), a bal kar mozgat. Ülve, forgószék
