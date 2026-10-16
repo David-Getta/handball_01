@@ -532,6 +532,20 @@ String recordingDefaultName(DateTime d) {
 /// ("2026-10-14 21:06"), a hossz ("0:05"), a fejezetek száma (ha több
 /// van — ahol az edző másik jelenetre ugrott), 🎙, ha hangja is van, és
 /// hogy ki nézte meg (háromig névvel, fölötte a számuk).
+/// A felvétel követőinek névsora (a felvétel-sor tooltipje): ki követte
+/// élőben, ki nézte meg utólag.
+String recordingPeople(Map<String, dynamic> f) {
+  final jelen = [for (final n in (f["jelen"] as List? ?? const [])) "$n"];
+  final nezok = [for (final n in (f["nezok"] as List? ?? const [])) "$n"];
+  if (jelen.isEmpty && nezok.isEmpty) {
+    return "Még senki nem követte névvel (élőben vagy felvételről).";
+  }
+  return [
+    if (jelen.isNotEmpty) "Élőben: ${jelen.join(", ")}",
+    if (nezok.isNotEmpty) "Megnézte: ${nezok.join(", ")}",
+  ].join("\n");
+}
+
 String recordingSubtitle(Map<String, dynamic> f) {
   final l = "${f["letrehozva"] ?? ""}";
   final mikor =

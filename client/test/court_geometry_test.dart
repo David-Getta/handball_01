@@ -137,6 +137,10 @@ void main() {
           "nezok": ["Anna"]
         }),
         "0:03 · élőben 3 · megnézte: Anna");
+    expect(recordingPeople({"jelen": ["A", "B"], "nezok": ["Anna"]}),
+        "Élőben: A, B\nMegnézte: Anna");
+    expect(recordingPeople({}),
+        "Még senki nem követte névvel (élőben vagy felvételről).");
     expect(
         recordingSubtitle({
           "letrehozva": "2026-10-14T21:06:33",

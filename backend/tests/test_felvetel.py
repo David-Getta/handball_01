@@ -566,3 +566,14 @@ def test_a_megbeszelesek_a_jelentesben(tmp_path, monkeypatch):
     assert "0:04 (a meccs 1:20-nál)" in resz
     assert "élőben: Anna" in resz and "megnézte: Peti" in resz
     assert f"/matches/fv/view3d?felvetel={d['id']}" in resz
+
+
+def test_a_felvetel_sor_tooltipje_a_nevekkel():
+    """Az app felvétel-sorai (a "▶ Felvételek" lista és a kezdőlap) a
+    névsort tooltipben mutatják."""
+    from pathlib import Path
+
+    gyoker = Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+    for nev in ("court3d_screen.dart", "dashboard_screen.dart"):
+        assert "message: recordingPeople(f)," in (gyoker / nev).read_text(
+            encoding="utf-8"), nev

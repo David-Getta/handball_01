@@ -3088,11 +3088,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Text("${f["nev"]}",
                             overflow: TextOverflow.ellipsis,
                             style: AppText.value.copyWith(fontSize: 13)),
-                        Text(
-                            "${f["home_team"]} – ${f["away_team"]} · "
-                            "${recordingSubtitle(f)}",
-                            overflow: TextOverflow.ellipsis,
-                            style: AppText.label.copyWith(fontSize: 11.5)),
+                        Tooltip(
+                          message: recordingPeople(f),
+                          child: Text(
+                              "${f["home_team"]} – ${f["away_team"]} · "
+                              "${recordingSubtitle(f)}",
+                              overflow: TextOverflow.ellipsis,
+                              style: AppText.label.copyWith(fontSize: 11.5)),
+                        ),
                       ],
                     ),
                   ),

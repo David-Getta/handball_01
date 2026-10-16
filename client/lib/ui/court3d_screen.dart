@@ -4456,7 +4456,10 @@ class _FelvetelekPanelState extends State<_FelvetelekPanel> {
                         contentPadding: EdgeInsets.zero,
                         title: Text("${f["nev"]}",
                             overflow: TextOverflow.ellipsis),
-                        subtitle: Text(recordingSubtitle(f)),
+                        subtitle: Tooltip(
+                          message: recordingPeople(f),
+                          child: Text(recordingSubtitle(f)),
+                        ),
                         onTap: () => widget.megnyit("${f["id"]}"),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
