@@ -1680,6 +1680,15 @@ function jatekosValasztas(cx, cy){
     (a.mez ? " #" + a.mez : "") + " szemével ✕";
   if (!megy){ megy = true; lejatszasGomb.textContent = "⏸"; }
 }
+// A szemével-nézet mezszámra (a link szem=h3 paramétere): VR-ben nincs
+// dupla kattintás — a játékos linkje viszi a saját figurájába.
+function szemevelIndit(hazai, mez){
+  jatekosNez.yaw = 0; jatekosNez.pitch = -0.05;
+  modValt("jatekos");
+  kovet = {hazai, mez, x: 0, y: 0, irany: 0, k: -1};
+  jatekosKiGomb.textContent = (hazai ? ADAT.home : ADAT.away) + " #" + mez + " szemével ✕";
+}
+window.szemProba = () => ({mod, kovet: kovet && {hazai: kovet.hazai, mez: kovet.mez}});
 // A játékos megtett útja kockánként összegezve (méter): a mezszám a
 // fogódzó (azonosító nélkül nincs út); a lépésenkénti ugrás-szűrő
 // MÉTER-korlát (TAV_UGRAS_M), hogy a követés-ugrás ne számítson, a
@@ -2004,6 +2013,7 @@ function linkEpit(){
   if (mod === "kovetes" && kovetKam) q.set("kamera", (kovetKam.hazai ? "h" : "v") + kovetKam.mez);
   else if (mod === "tv") q.set("tv", "1");
   else if (utolsoNezet && mod === "szabad") q.set("nezet", utolsoNezet);
+  else if (mod === "jatekos" && kovet && kovet.mez) q.set("szem", (kovet.hazai ? "h" : "v") + kovet.mez);
   for (const [nev, el] of [["hoter", hoValaszto], ["loves", lovesValaszto],
                            ["passz", passzValaszto], ["fal", falValaszto]]){
     if (el.value) q.set(nev, el.value);
@@ -2088,11 +2098,13 @@ function linkAlkalmaz(){
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
   // A figura madártávlatból indul (az alakja és a padló nyilai látszanak),
   // ha a link nem kér nézetet, kamerát vagy követést.
-  else if (FIGURA && !v("kamera") && !v("tv") && v("kovet") !== "1") nezet("madar");
+  else if (FIGURA && !v("kamera") && !v("tv") && !v("szem") && v("kovet") !== "1") nezet("madar");
   if (v("tv") === "1") modValt("tv");
   if (v("kamera") && [...jatekosKameraValaszto.options].some(o => o.value === v("kamera"))){
     jatekosKameraValaszto.value = v("kamera"); jatekosKameraValaszto.onchange();
   }
+  // szem=h3: a hazai 3-as szemével (VR-ben is — ott nincs dupla katt).
+  if (/^[hv][0-9]{1,2}$/.test(v("szem"))) szemevelIndit(v("szem")[0] === "h", parseInt(v("szem").slice(1), 10));
 }
 
 // ---- Labda-nyom: a labda útja az utolsó NYOM_S másodpercben ----------

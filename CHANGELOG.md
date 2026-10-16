@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.171 óta)
 
+- **A szemével-nézet linkről — VR-ben is** (böngésző/VR + motor): a
+  `szem=h3` paraméter a hazai 3-as szemével nyitja a lapot (eddig csak
+  dupla kattintással, ami VR-ben nem megy), a csapat linkje is átadja
+  (`/kovet?nev=Anna&szem=h3`), a Link másolása viszi. A figuránál minden
+  játékos a saját futójában áll, amikor az edző vezet.
+
 - **Figura-lap: a figura papíron** (app + motor): a Figura-tervező
   "Figura-lap ↗" gombja nyomtatható lapot nyit (PDF-be is) —
   kulcs-pozíciónként felülnézeti ábra a támadó térfélre vágva (a

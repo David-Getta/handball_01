@@ -345,7 +345,7 @@ def test_a_figura_madartavlatbol_indul():
     from handball.pipeline.view3d_html import view3d_html
 
     m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
-    assert ('else if (FIGURA && !v("kamera") && !v("tv") && v("kovet") !== "1") '
+    assert ('else if (FIGURA && !v("kamera") && !v("tv") && !v("szem") && v("kovet") !== "1") '
             'nezet("madar");') in view3d_html(m, figura=e)
 
 
@@ -387,3 +387,25 @@ def test_a_tervezo_figura_lap_gombja():
                / "designer_screen.dart").read_text(encoding="utf-8")
     assert 'ut: "figura-lap"' in tervezo and '"Figura-lap ↗"' in tervezo
     assert 'Uri.parse("${_api.baseUrl}/$ut")' in tervezo
+
+
+def test_a_szemevel_nezet_linkrol(tmp_path, monkeypatch):
+    """szem=h3: a lap a hazai 3-as szemével nyílik (VR-ben nincs dupla
+    katt); a /kovet a csapat linkjén átadja (a rossz alakút nem)."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
+    oldal = view3d_html(m, figura=e)
+    for kell in ("function szemevelIndit(hazai, mez){",
+                 'if (/^[hv][0-9]{1,2}$/.test(v("szem"))) szemevelIndit(',
+                 'q.set("szem", (kovet.hazai ? "h" : "v") + kovet.mez);',
+                 '!v("szem") && v("kovet") !== "1") nezet("madar");'):
+        assert kell in oldal, kell
+    c = TestClient(_app(tmp_path, monkeypatch))
+    fig = "u=20%2C10%3B24%2C5"
+    c.put("/matches/figura/shared3d", json={"t": 1, "figura": fig})
+    r = c.get("/kovet", params={"nev": "Anna", "szem": "h3"},
+              follow_redirects=False)
+    assert r.headers["location"] == f"/figura3d?{fig}&kovet=1&nev=Anna&szem=h3"
+    r = c.get("/kovet", params={"szem": "x\"><"}, follow_redirects=False)
+    assert "szem" not in r.headers["location"]

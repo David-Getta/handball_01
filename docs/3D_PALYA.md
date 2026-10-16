@@ -545,6 +545,13 @@ A csapat a várólapon éri el: amit az edző a saját gépéről nyitott meg, a
 a `/kovet` lap három órán át "▶ Figura: …" sorként linkeli — a headseten a
 hosszú cím nem gépelhető.
 
+**A saját futójában.** A `szem=h3` link-paraméter a lapot a hazai 3-as
+SZEMÉVEL nyitja (VR-ben is — ott nincs dupla kattintás); a csapat
+linkje is átadja: `/kovet?nev=Anna&szem=h3`. A figuránál az edző minden
+játékosnak a saját futója linkjét adja (a figura támadói a hazai 1, 2, 3
+…), és amikor vezet, mindenki a saját futójában áll — a saját útját a
+saját szemével futja végig.
+
 **A figura közös nézése.** A figurát is lehet vezetni ("📡 Vezetem" —
 ugyanúgy, mint a meccset): a csapat a `/kovet` linkkel ugyanarra a
 figurára áll (a vezető a figura paramétereit is küldi), a lejátszás, a

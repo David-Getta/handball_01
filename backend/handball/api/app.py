@@ -4145,7 +4145,7 @@ def create_app():
         return {"nezok": _felvetel_nezok(p)}
 
     @app.get("/kovet")
-    def shared3d_rovid(nev: str = ""):
+    def shared3d_rovid(nev: str = "", szem: str = ""):
         """A rövid csapat-link: a MOST élő közös nézés követő-oldalára
         irányít (a legutóbb küldő vezetőhöz — SHARED3D_STALE_S-en belül).
         A headset billentyűzetén a "localhost:8000/kovet" begépelhető, a
@@ -4154,7 +4154,8 @@ def create_app():
         továbblép — addig a legutóbbi felvételeket kínálja visszanézésre
         (SHARED3D_WAIT_RECS, meccsektől függetlenül; aki kimaradt, innen
         egy kattintással nézheti). `nev` (/kovet?nev=Peti): a követő neve
-        — a többiek a feje fölött látják."""
+        — a többiek a feje fölött látják; `szem` (szem=h3): a követő a
+        hazai 3-as SZEMÉVEL nézi (a figuránál: a saját futójában áll)."""
         import html as _html
         from urllib.parse import quote
 
@@ -4169,6 +4170,9 @@ def create_app():
             mid = max(elok)[1]
             nev_ = _c3.shared3d_nev(nev)
             nev_q = f"&nev={quote(nev_, safe='')}" if nev_ else ""
+            import re as _re_sz
+            if _re_sz.fullmatch(r"[hv][0-9]{1,2}", szem or ""):
+                nev_q += f"&szem={szem}"
             # A figura közös nézése: ugyanarra a figurára (a vezető
             # paramétereivel).
             from ..pipeline.play_simulation import FIGURA_KOZOS_ID
