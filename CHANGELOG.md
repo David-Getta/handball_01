@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.171 óta)
 
+- **A figura madártávlatból nyílik** (böngésző): az alakja és a padló
+  nyilai egyből látszanak (eddig a meccs oldalsó, távoli kamerájával
+  indult); a link nézete, kamerája és a követés felülírja.
+
 - **"✎ Figurává ↗" a böngészős 3D-ben is** (böngésző/VR): a mostani
   pillanat támadása a figura-oldalon nyílik — a meccs másik csapatának
   tanult fala ellen, ismétlődve, a padlón az utakkal és a passzokkal;

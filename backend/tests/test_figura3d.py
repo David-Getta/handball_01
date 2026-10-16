@@ -339,3 +339,11 @@ def test_a_bongeszos_3d_figurava_gombja():
                  'q.set("vedo", f.csapat_oldal === "home" ? "away" : "home");',
                  'location.href = "/figura3d?" + q.toString();'):
         assert kell in oldal, kell
+
+
+def test_a_figura_madartavlatbol_indul():
+    from handball.pipeline.view3d_html import view3d_html
+
+    m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
+    assert ('else if (FIGURA && !v("kamera") && !v("tv") && v("kovet") !== "1") '
+            'nezet("madar");') in view3d_html(m, figura=e)

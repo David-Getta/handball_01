@@ -2086,6 +2086,9 @@ function linkAlkalmaz(){
   if (v("kovet") === "1") kozosAllit("kovet");
   else if (v("vezet") === "1") kozosAllit("vezet");
   if (v("nezet") && NEZETEK[v("nezet")]) nezet(v("nezet"));
+  // A figura madártávlatból indul (az alakja és a padló nyilai látszanak),
+  // ha a link nem kér nézetet, kamerát vagy követést.
+  else if (FIGURA && !v("kamera") && !v("tv") && v("kovet") !== "1") nezet("madar");
   if (v("tv") === "1") modValt("tv");
   if (v("kamera") && [...jatekosKameraValaszto.options].some(o => o.value === v("kamera"))){
     jatekosKameraValaszto.value = v("kamera"); jatekosKameraValaszto.onchange();
