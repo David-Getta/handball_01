@@ -4347,6 +4347,18 @@ function vrFeliratFrissit(){
 window.vrFeliratProba = () => ({latszik: vrTabla.visible, sorok: vrFeliratSzoveg()});
 
 const idoCimke = document.getElementById("ido");
+// A figura útjai a padlón (ha a link nem hoz saját rajzot): a labdás (1.)
+// sárga, a többiek kék futás-nyila — a játékos a saját útját is látja.
+if (FIGURA && Array.isArray(FIGURA.utak) && !URL_PARAM.get("rajz")){
+  FIGURA.utak.forEach((ut, i) => {
+    for (let j = 1; j < ut.length; j++){
+      const a = ut[j - 1], b = ut[j];
+      if (Math.hypot(b[0] - a[0], b[1] - a[1]) >= RAJZ_MIN_M && rajzok.length < RAJZ_MAX)
+        rajzok.push([a[0], a[1], b[0], b[1], i === 0 ? 0 : 1]);
+    }
+  });
+  rajzFrissit();
+}
 linkAlkalmaz();
 jegyzetBetolt();
 fest.setAnimationLoop(() => {

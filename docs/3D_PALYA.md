@@ -500,6 +500,8 @@ modellje szerint reagál, a kaput kapus védi, és a figura ismétlődik. A
 védelem a legutóbbi "Egy CSAPAT tanult védelme ellen" meccse és oldala,
 különben a tervező fala (védőszám, mélység). A bal felső sarokban a
 kiértékelés: a mozgás hossza és a legjobb lövőhelyzet (ki, hány %, mikor).
+A támadók útjai nyílként a padlón (a labdás sárga, a többiek kék — a
+Rajz-réteg nyilai: a "Törlés" leveszi, a link viszi).
 
 Edzőileg: a játékos a saját útját a saját szemével látja — a
 Játékos-kamerával (a mezszám a figura sorszáma) vagy dupla kattintással —,

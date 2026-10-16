@@ -140,3 +140,16 @@ def test_az_oldal_figura_modja():
         assert kell in oldal, kell
     assert '"figura":{' in oldal
     assert '"figura":{' not in view3d_html(m)
+
+
+def test_a_figura_utjai_a_padlon():
+    """A kiértékelés a pályára szorított kulcs-pozíciókat is viszi; az
+    oldal ezekből a padlóra nyilat rajzol (ha a link nem hoz rajzot)."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    m, e = setplay_3d_match([[(20, 10), (27, 10), (34, 10)], [(-3, 4)]],
+                            DefenseModel())
+    assert e["utak"] == [[[20, 10], [27, 10], [34, 10]], [[0.0, 4]]]
+    oldal = view3d_html(m, figura=e)
+    assert 'if (FIGURA && Array.isArray(FIGURA.utak) && !URL_PARAM.get("rajz")){' in oldal
+    assert "rajzok.push([a[0], a[1], b[0], b[1], i === 0 ? 0 : 1]);" in oldal

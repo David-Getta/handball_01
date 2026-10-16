@@ -204,7 +204,9 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
 
     Visszaad: (Match — a hazai a támadó, a vendég a védő; kiértékelés:
     {"best_shot_value", "t_s" (a legjobb helyzet ideje), "attacker_id",
-    "hossz_s" (a mozgás)}). ValueError, ha nincs érvényes támadó."""
+    "hossz_s" (a mozgás), "utak" (támadónként a pályára szorított
+    kulcs-pozíciók — a padló nyilaihoz)}). ValueError, ha nincs érvényes
+    támadó."""
     config = config or TacticsConfig()
     utak = []
     for ut in list(keypoints or [])[:FIGURA_3D_MAX_JATEKOS]:
@@ -265,6 +267,7 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
                 if ertekeles["step"] >= 0 else None),
         "attacker_id": ertekeles["attacker_id"],
         "hossz_s": round(mozgas_s, 1),
+        "utak": [[[round(x, 1), round(y, 1)] for x, y in u] for u in utak],
     }
 
 

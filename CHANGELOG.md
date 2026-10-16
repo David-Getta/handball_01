@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A figura útjai a padlón** (böngésző/VR): a 3D figura-módban a
+  támadók útjai nyílként a padlón (a labdás sárga, a többiek kék) — a
+  játékos a headsetben a saját útját is látja, nem csak a mozgó figurát.
+
 - **Tizedesvessző az egész appban** (app): a felderítés, a meccs-elemző,
   a játékos-fejlődés, az élő követés és a többi képernyő is "4,2 m",
   "1,3 xG", "12,5 s" alakban írja a számokat (eddig ponttal, a kezdőlap
