@@ -16,6 +16,29 @@ A két felület ugyanazokból a számokból dolgozik (a mérés, a falsablonok
 és a hőtérkép rácsa a backend `court3d` és `analytics` moduljainak
 tükre — őr-tesztek ellenőrzik, hogy nem térhetnek el).
 
+## Heti menet — a csapat-megbeszélés egy oldalon
+
+1. **Előkészítés (az appban):** a meccs "Videózandó jelenetei" és a
+   saját jegyzeteid (J — a pillanathoz, a padló nyilaival) adják a
+   megbeszélés sorrendjét; a "Jegyzeteim" szűrő + "▶ Vetítés" egymás
+   után játssza őket.
+2. **A megbeszélés:** "📡 Vezetem" (az appban vagy a böngészőben) — a
+   csapat linkje (`…/kovet`) a vágólapra kerül; a headsetek ezt nyitják
+   (névvel: `…/kovet?nev=Anna`). Klub-hálózaton a "🏟 Klub-hálózat"
+   kapcsoló (az app következő indításától). Vezetés közben: Shift+katt —
+   mutató, "📍 Ide mindenki", "❓ Kvíz" (a játékosok a padlóra mutatnak),
+   és a játékosok "✋ Kérdésem van"-nal jeleznek.
+3. **Felvétel:** a "⏺ Felvétel" a megbeszélést rögzíti (a böngészős
+   vezetésnél a hangoddal) — fejezetekre bomlik, és rögzíti, ki követte
+   élőben.
+4. **Pótlás:** aki kimaradt, a csapat linkjén látja, mit nem látott még
+   ("• még nem láttad"), és egy kattintással visszanézi (VR-ben is);
+   otthonra a "▶ Felvételek" listából egyetlen HTML-fájlként küldhető.
+5. **Követés:** a Keret-lapon játékosonként a kvíz-mérleg ("❓ 7/9") és a
+   megbeszélés-követés ("👁 5/5" — élőben vagy felvételről); a
+   kezdőlapon a legutóbbi megbeszélések; a meccs-jelentésben a
+   "Megbeszélések (3D-felvétel)" szakasz.
+
 ## Mozgás a térben
 
 | Mit akarsz | App | Böngésző |
