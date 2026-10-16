@@ -503,6 +503,11 @@ kiértékelés: a mozgás hossza és a legjobb lövőhelyzet (ki, hány %, mikor
 A támadók útjai kék nyílként a padlón, a passzok sárgán (a Rajz-réteg
 nyilai: a "Törlés" leveszi, a link viszi).
 
+**Több kulcs-pozíció.** A tervező alapból három ponttal dolgozik (Kezdő /
+Közép / Vég); a "+" a mostani után új pontot tesz (kereszt, visszaadás —
+legfeljebb hatot), a "−" a mostanit törli. A 3D, a passzok és a mentés a
+pontokat mind viszi.
+
 **Passz a figurában.** A tervezőben kulcs-pozíciónként kiválasztható,
 kinél van a labda ("LABDA ENNÉL A PONTNÁL"); ahol a következő pontnál
 másnál, az passz. A 3D-ben a labda átrepül (12 m/s-mal, a következő

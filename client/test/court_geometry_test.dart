@@ -145,6 +145,15 @@ void main() {
           [const Offset(30, 2)]
         ]),
         "22.0,10.0,24.3,9.5;30.0,2.0");
+    expect(resamplePath([const Offset(0, 0), const Offset(10, 0)], 3),
+        [const Offset(0, 0), const Offset(5, 0), const Offset(10, 0)]);
+    expect(
+        resamplePath([const Offset(0, 0), const Offset(6, 0), const Offset(6, 6)], 5),
+        [const Offset(0, 0), const Offset(3, 0), const Offset(6, 0),
+         const Offset(6, 3), const Offset(6, 6)]);
+    expect(resamplePath([const Offset(1, 2)], 3).length, 3);
+    expect([for (int i = 0; i < 3; i++) keypointLabel(i, 3)], ["Kezdő", "Közép", "Vég"]);
+    expect([for (int i = 0; i < 4; i++) keypointLabel(i, 4)], ["1", "2", "3", "4"]);
     expect(setplayBallSteps([0, 0, 0], 5), [0, 0, 0, 0, 0]);
     // passz a Közép pontra (1.→2.) és a Végre (2.→3.): a szakaszok felénél
     expect(setplayBallSteps([0, 1, 2], 9), [0, 0, 1, 1, 1, 1, 2, 2, 2]);

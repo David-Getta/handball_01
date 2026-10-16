@@ -51,6 +51,36 @@ class _DesignerScreenState extends State<DesignerScreen> {
   // más, ott PASSZ — a figura így nem csak futás, a labda is jár.
   List<int> _labda = [0, 0, 0];
   bool get _vanPassz => _labda.any((v) => v != 0);
+  int get _pontok => _attackers.isEmpty ? 3 : _attackers.first.length;
+
+  /// Új kulcs-pozíció a mostani UTÁN (a következő pont felé félúton — a
+  /// végén a mostani másolata); a labdás a mostanié. Kereszt, visszaadás:
+  /// három ponttal nem rajzolható.
+  void _pontBe() {
+    if (_playing || _pontok >= designerMaxPoints) return;
+    final i = _editStep;
+    setState(() {
+      for (final a in _attackers) {
+        final uj = i + 1 < a.length ? Offset.lerp(a[i], a[i + 1], 0.5)! : a[i];
+        a.insert(i + 1, uj);
+      }
+      _labda.insert(i + 1, _labda[i]);
+      _editStep = i + 1;
+    });
+  }
+
+  /// A mostani kulcs-pozíció törlése (legalább kettő marad).
+  void _pontKi() {
+    if (_playing || _pontok <= 2) return;
+    final i = _editStep;
+    setState(() {
+      for (final a in _attackers) {
+        a.removeAt(i);
+      }
+      _labda.removeAt(i);
+      _editStep = i.clamp(0, _pontok - 1);
+    });
+  }
 
   late int _numDefenders;
   double _lineDepth = 6.0;
@@ -438,27 +468,31 @@ class _DesignerScreenState extends State<DesignerScreen> {
           .toList();
       if (!mounted) return;
       setState(() {
-        // A tervező 3 kulcs-pozícióval dolgozik: első / középső / utolsó pont.
+        // A mentett kulcs-pozíciók (legfeljebb designerMaxPoints, és
+        // minimum 3 — a régi kétpontos mentés közép-pontot kap); minden
+        // játékos ugyanannyi ponton.
+        final k = attackers
+            .map((a) => a.length)
+            .fold<int>(3, (m, n) => n > m ? n : m)
+            .clamp(3, designerMaxPoints);
         _attackers = [
           for (final a in attackers)
-            if (a.isNotEmpty)
-              a.length >= 3
-                  ? [a.first, a[a.length ~/ 2], a.last]
-                  : _path3(a.first, a.last),
+            if (a.isNotEmpty) resamplePath(a, k),
         ];
         _editStep = 0;
         _nev = "${play["name"] ?? ""}";
-        // A mentett labdás-sor (a passzok) — a 3 kulcs-pozícióra vetítve,
-        // a létező játékosokra szorítva; régi mentésnél végig az 1.
+        // A mentett labdás-sor (a passzok) a pontokra vetítve, a létező
+        // játékosokra szorítva; régi mentésnél végig az 1.
         final l = [
           for (final v in (play["labda"] as List?) ?? const [])
             (v as num).toInt().clamp(0, _attackers.length - 1)
         ];
-        _labda = l.isEmpty
-            ? [0, 0, 0]
-            : l.length >= 3
-                ? [l.first, l[l.length ~/ 2], l.last]
-                : [l.first, l.last, l.last];
+        _labda = [
+          for (int i = 0; i < k; i++)
+            l.isEmpty
+                ? 0
+                : l[(l.length == 1 ? 0 : (i * (l.length - 1) / (k - 1)).round())]
+        ];
       });
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Betöltve: ${play["name"]}")));
@@ -560,14 +594,34 @@ class _DesignerScreenState extends State<DesignerScreen> {
            child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-          Text("KULCS-POZÍCIÓ", style: AppText.sectionLabel),
+          Row(children: [
+            Expanded(
+                child: Text("KULCS-POZÍCIÓ", style: AppText.sectionLabel)),
+            // Több pont: kereszt, visszaadás (a 3D is viszi).
+            IconButton(
+              tooltip: "Új kulcs-pozíció a mostani után (legfeljebb "
+                  "$designerMaxPoints) — kereszt, visszaadás",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _pontok >= designerMaxPoints
+                  ? null
+                  : _pontBe,
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+            IconButton(
+              tooltip: "A mostani kulcs-pozíció törlése",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _pontok <= 2 ? null : _pontKi,
+              icon: const Icon(Icons.remove_circle_outline),
+            ),
+          ]),
           const SizedBox(height: AppSpacing.sm),
           SegmentedButton<int>(
             showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 0, label: Text("Kezdő")),
-              ButtonSegment(value: 1, label: Text("Közép")),
-              ButtonSegment(value: 2, label: Text("Vég")),
+            segments: [
+              for (int i = 0; i < _pontok; i++)
+                ButtonSegment(value: i, label: Text(keypointLabel(i, _pontok))),
             ],
             selected: {_editStep},
             onSelectionChanged: _playing ? null : (s) => setState(() => _editStep = s.first),

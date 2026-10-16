@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **Több kulcs-pozíció a Figura-tervezőben** (app): a három fix pont
+  (Kezdő / Közép / Vég) helyett "+"-szal új pont a mostani után, "−"-szal
+  törlés (2–6 pont) — kereszt, visszaadás is megrajzolható; a 3D, a
+  passzok és a mentés mind viszi, a több pontos mentett figura pontjai
+  megmaradnak (eddig háromra vágta).
+
 - **A figura közös nézése** (böngésző/VR + motor): a 3D figurát is lehet
   vezetni — a csapat a `/kovet` linkkel ugyanarra a figurára áll, és a
   lejátszás, a szünet, a mutató, az "📍 Ide mindenki" és a kvíz is megy

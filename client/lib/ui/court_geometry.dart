@@ -575,6 +575,35 @@ List<int> setplayBallSteps(List<int> labda, int steps) {
   ];
 }
 
+/// A figura-tervező kulcs-pozícióinak felső határa (a motor 3D-je tízet
+/// is visz; a tervező oldalsávjában hat fér el).
+const int designerMaxPoints = 6;
+
+/// Egy út `k` kulcs-pozícióra vetítve: egyenletes "idő"-lépésekkel a
+/// szakaszonként lineáris úton (a mentett, más pontszámú figura és a
+/// rövidebb utak a tervező közös pontszámára).
+List<Offset> resamplePath(List<Offset> ut, int k) {
+  if (ut.isEmpty) return const [];
+  if (ut.length == k) return List<Offset>.of(ut);
+  return [
+    for (int i = 0; i < k; i++)
+      () {
+        if (ut.length == 1 || k == 1) return ut.first;
+        final pos = i / (k - 1) * (ut.length - 1);
+        final j = pos.floor().clamp(0, ut.length - 2);
+        return Offset.lerp(ut[j], ut[j + 1], pos - j)!;
+      }()
+  ];
+}
+
+/// A kulcs-pozíció felirata a tervezőben: 3 pontnál "Kezdő / Közép / Vég",
+/// több pontnál sorszám (a sávban így fér el).
+String keypointLabel(int i, int k) {
+  if (k == 3) return const ["Kezdő", "Közép", "Vég"][i];
+  if (k == 2) return i == 0 ? "Kezdő" : "Vég";
+  return "${i + 1}";
+}
+
 /// Bájt → olvasható méret ("0,4 MB", "12 MB", "1,3 GB") — a felvételek
 /// takarításához.
 String recordingSize(num? bajt) {
