@@ -3,6 +3,12 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.172 óta)
+
+- **"🖨 Figura-lap ↗" a figura-oldalon** (böngésző): a böngészős 3D
+  figurájából (a tervezőből vagy a "✎ Figurává ↗"-ból) a nyomtatható lap
+  egy kattintással — app nélkül is.
+
 ## v0.1.172 — kiadva (2026-10-16)
 
 > Kiadás-jegyzet: a meccsből figura, a figurából papír és VR-edzés. A

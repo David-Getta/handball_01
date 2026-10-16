@@ -409,3 +409,12 @@ def test_a_szemevel_nezet_linkrol(tmp_path, monkeypatch):
     assert r.headers["location"] == f"/figura3d?{fig}&kovet=1&nev=Anna&szem=h3"
     r = c.get("/kovet", params={"szem": "x\"><"}, follow_redirects=False)
     assert "szem" not in r.headers["location"]
+
+
+def test_a_figura_oldal_figura_lap_gombja():
+    from handball.pipeline.view3d_html import view3d_html
+
+    m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
+    oldal = view3d_html(m, figura=e)
+    assert 'window.open("/figura-lap?" + FIGURA_KOD, "_blank");' in oldal
+    assert 'lapGomb.id = "figuraLapGomb";' in oldal

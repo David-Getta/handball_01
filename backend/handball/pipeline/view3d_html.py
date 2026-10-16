@@ -3200,6 +3200,15 @@ const FIGURA_KOD = FIGURA ? (() => {
   return q.toString();
 })() : "";
 const kzCim = () => "/matches/" + encodeURIComponent(KZ_ID) + "/shared3d";
+// A figura nyomtatható lapja (a figura paramétereivel) — app nélkül is.
+if (FIGURA){
+  const lapGomb = document.createElement("button");
+  lapGomb.id = "figuraLapGomb";
+  lapGomb.textContent = "🖨 Figura-lap ↗";
+  lapGomb.title = "A figura nyomtatható lapja (PDF-be is): lépésenként ábra a futásokkal, a passzokkal és a fallal";
+  lapGomb.onclick = () => window.open("/figura-lap?" + FIGURA_KOD, "_blank");
+  document.getElementById("linkGomb").after(lapGomb);
+}
 function kozosAllit(m){
   if (!KZ_ID){ kozosInfo.textContent = "a közös nézéshez a motor kell"; return; }
   const elozo = kozosMod;
