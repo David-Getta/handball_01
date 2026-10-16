@@ -3,7 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.170 óta)
+## v0.1.171 — kiadva (2026-10-16)
+
+> Kiadás-jegyzet: a megrajzolt figura bejárható. A Figura-tervező "3D /
+> VR ↗" gombja a figurát a böngészős 3D-ben (VR-ben is) nyitja — valós
+> tempóban, a tanult fal reakciójával, kapussal, ismétlődve; a padlón a
+> futások és a passzok nyilai; a tervezőben kulcs-pozíciónként
+> megadható, kinél van a labda (passz), és 2–6 kulcs-pozíció rajzolható.
+> A csapat a /kovet várólapon éri el, az edző a figurát is vezetheti
+> (közös nézés, mutató, kvíz: hova futnál?). A megbeszélés: a
+> "Megbeszélés" gomb a felvételt is indítja, a
+> jelentésben a megbeszélések szakasza, a játékos a csapat linkjén a
+> saját mérlegét és a "még nem láttad" jeleket látja, a felvételben a
+> kvíz is, VR-ben 30°-os fordulás. Az app: a kezdőlap a jegyzőkönyvi
+> eredményt mutatja (ha megadtad), a számok tizedesvesszővel, az
+> oldalsáv fejléce és a felső sáv ikonjai a helyükön. (Valódi
+> headseten még nem próbáltuk.)
 
 - **A figura neve nem csonkul** (javítás, motor): a 3D figura neve a
   fejlécben és a /kovet várólapján 16 jelre rövidült ("Beúszós kereszt
