@@ -579,6 +579,19 @@ List<int> setplayBallSteps(List<int> labda, int steps) {
 /// is visz; a tervező oldalsávjában hat fér el).
 const int designerMaxPoints = 6;
 
+/// A figura támadóinak száma a tervezőben (a motor is legfeljebb hetet
+/// visz — FIGURA_3D_MAX_JATEKOS).
+const int designerMinAttackers = 2;
+const int designerMaxAttackers = 7;
+
+/// Az új támadó kezdő helye a tervezőben: az alap öt után a jobb szélső,
+/// majd a második beálló, aztán a pálya közepe felé (az edző elhúzza).
+Offset newAttackerSpot(int index) {
+  const helyek = [Offset(28, 18), Offset(31, 7), Offset(26, 10)];
+  final i = index - 5;
+  return i >= 0 && i < helyek.length ? helyek[i] : const Offset(26, 10);
+}
+
 /// Egy út `k` kulcs-pozícióra vetítve: egyenletes "idő"-lépésekkel a
 /// szakaszonként lineáris úton (a mentett, más pontszámú figura és a
 /// rövidebb utak a tervező közös pontszámára).

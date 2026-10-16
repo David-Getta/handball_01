@@ -87,6 +87,23 @@ class _DesignerScreenState extends State<DesignerScreen> {
     });
   }
 
+  /// Új támadó (a következő szabad alap-posztra, minden kulcs-pozíción
+  /// ugyanott — az edző elhúzza).
+  void _jatekosBe() {
+    if (_playing || _attackers.length >= designerMaxAttackers) return;
+    final hely = newAttackerSpot(_attackers.length);
+    setState(() => _attackers.add(List<Offset>.filled(_pontok, hely, growable: true)));
+  }
+
+  /// Az utolsó támadó kiesik; a labdás-sor a megmaradókra szorul.
+  void _jatekosKi() {
+    if (_playing || _attackers.length <= designerMinAttackers) return;
+    setState(() {
+      _attackers.removeLast();
+      _labda = [for (final v in _labda) v.clamp(0, _attackers.length - 1)];
+    });
+  }
+
   late int _numDefenders;
   double _lineDepth = 6.0;
 
@@ -827,7 +844,33 @@ class _DesignerScreenState extends State<DesignerScreen> {
               ),
             ),
           ]),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.md),
+          // A támadók száma (2–7): a hatfős támadás is megrajzolható.
+          Row(children: [
+            Expanded(
+                child: Text("TÁMADÓK: ${_attackers.length}",
+                    style: AppText.sectionLabel)),
+            IconButton(
+              tooltip: "Új támadó (legfeljebb $designerMaxAttackers) — a "
+                  "következő szabad posztra, elhúzható",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _attackers.length >= designerMaxAttackers
+                  ? null
+                  : _jatekosBe,
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+            ),
+            IconButton(
+              tooltip: "Az utolsó támadó ki",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _attackers.length <= designerMinAttackers
+                  ? null
+                  : _jatekosKi,
+              icon: const Icon(Icons.person_remove_alt_1_outlined),
+            ),
+          ]),
+          const SizedBox(height: AppSpacing.md),
           Text("VÉDŐFAL (ALAP: 6-0, A HATOSON KÍVÜL)",
               style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),

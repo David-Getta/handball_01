@@ -158,6 +158,9 @@ void main() {
       "http://10.0.0.5:8000/kovet?szem=h1",
       "http://10.0.0.5:8000/kovet?szem=h2"
     ]);
+    expect(newAttackerSpot(5), const Offset(28, 18));
+    expect(newAttackerSpot(6), const Offset(31, 7));
+    expect(newAttackerSpot(9), const Offset(26, 10));
     expect(setplayBallSteps([0, 0, 0], 5), [0, 0, 0, 0, 0]);
     // passz a Közép pontra (1.→2.) és a Végre (2.→3.): a szakaszok felénél
     expect(setplayBallSteps([0, 1, 2], 9), [0, 0, 1, 1, 1, 1, 2, 2, 2]);

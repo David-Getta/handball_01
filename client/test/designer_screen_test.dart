@@ -109,4 +109,49 @@ void main() {
     expect(kivalasztott.length, 1);
     expect((kivalasztott.first.label as Text).data, "2");
   });
+
+  testWidgets("támadó be és ki (2–7)", (tester) async {
+    tester.view.physicalSize = const Size(900, 700);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final m = Match(
+        meta: MatchMeta(
+            matchId: "t",
+            homeTeam: "A",
+            awayTeam: "B",
+            fps: 25,
+            frameWidth: 1920,
+            frameHeight: 1080),
+        frames: const []);
+    await tester.pumpWidget(MaterialApp(home: DesignerScreen(match: m)));
+    await tester.pump();
+    Finder chip(String t) => find.descendant(
+        of: find.byType(ChoiceChip), matching: find.text(t));
+    expect(find.text("TÁMADÓK: 5"), findsOneWidget);
+    Future<void> nyom(IconData ikon) async {
+      await tester.ensureVisible(find.byIcon(ikon));
+      await tester.pump();
+      await tester.tap(find.byIcon(ikon));
+      await tester.pump();
+    }
+    for (var i = 0; i < 3; i++) {
+      await nyom(Icons.person_add_alt_1_outlined);
+    }
+    expect(find.text("TÁMADÓK: 7"), findsOneWidget);
+    expect(chip("7"), findsOneWidget);
+    // a labdás a 7.-nél, majd kiesik — a labdás-sor a megmaradóra szorul
+    await tester.ensureVisible(chip("7"));
+    await tester.tap(chip("7"));
+    await tester.pump();
+    for (var i = 0; i < 6; i++) {
+      await nyom(Icons.person_remove_alt_1_outlined);
+    }
+    expect(find.text("TÁMADÓK: 2"), findsOneWidget);
+    final kivalasztott = tester
+        .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+        .where((c) => c.selected)
+        .toList();
+    expect((kivalasztott.single.label as Text).data, "2");
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.172 óta)
 
+- **Támadó be és ki a Figura-tervezőben** (app): az alap figura öt
+  támadóval indult, újat nem lehetett hozzáadni — a hatfős támadás nem
+  volt megrajzolható. Most "+": új támadó a következő szabad posztra (jobb
+  szélső, második beálló), "−": az utolsó ki (2–7 fő).
+
 - **"🖨 Figura-lap ↗" a figura-oldalon** (böngésző): a böngészős 3D
   figurájából (a tervezőből vagy a "✎ Figurává ↗"-ból) a nyomtatható lap
   egy kattintással — app nélkül is.
