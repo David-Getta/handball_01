@@ -660,3 +660,18 @@ def test_a_varolap_a_jatekos_merlegevel(tmp_path, monkeypatch):
     assert "megbeszélések 1/2" not in c.get("/kovet").text
     # Ismeretlen név: nincs kerete, nincs kvíze — nincs sor.
     assert "Senki:" not in c.get("/kovet", params={"nev": "Senki"}).text
+
+
+def test_a_megbeszeles_gomb_a_felvetelt_is_inditja():
+    """A kezdőlap "Megbeszélés" gombjától érkezve a vezetéssel együtt a ⏺
+    Felvétel is indul; a gomb tooltipje ezt meg is mondja."""
+    from pathlib import Path
+
+    ui = Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+    palya = (ui / "court3d_screen.dart").read_text(encoding="utf-8")
+    eleje = palya.index("void _kezdoVezetes() {")
+    torzs = palya[eleje:palya.index("\n  }", eleje)]
+    assert "_vezetAllit(true);" in torzs
+    assert "if (_vezet && _felvetel == null) _felvetelValt();" in torzs
+    kezdo = (ui / "dashboard_screen.dart").read_text(encoding="utf-8")
+    assert "A ⏺ felvétel magától indul" in kezdo

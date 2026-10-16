@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A "Megbeszélés" gomb a felvételt is indítja** (app): a kezdőlap
+  egy kattintásos csapat-megbeszélése a közös nézés vezetésével együtt a
+  ⏺ Felvételt is elindítja — a vezetés elején rendre elfelejtődött, és
+  csak utólag hiányzott. A vezetés végén, a ⏹ gombra vagy a képernyő
+  bezárásakor mentődik; a ▶ Felvételek listából visszanézhető.
+
 - **A böngészős 3D: összecsukható panel, megjegyzett súgó** (böngésző):
   a bal oldali vezérlőpanel a "☰" gombbal vagy az M billentyűvel
   elrejthető — kivetítőn, kis ablakban a pálya nagyját takarta; a súgó

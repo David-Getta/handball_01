@@ -1013,10 +1013,14 @@ class _Court3DScreenState extends State<Court3DScreen>
   }
 
   /// A kezdőlap "Megbeszélés" gombjától érkezve: a közös nézés vezetése
-  /// indul (a demóban nem — ott nincs motor-oldali meccs).
+  /// indul (a demóban nem — ott nincs motor-oldali meccs), és vele a ⏺
+  /// Felvétel is — a vezetés elején rendre elfelejtődik, és csak utólag
+  /// hiányzik. A vezetés végén, a ⏹ gombra vagy a képernyő bezárásakor
+  /// mentődik.
   void _kezdoVezetes() {
     if (!widget.vezet || _demo || _matchId == null || _vezet) return;
     _vezetAllit(true);
+    if (_vezet && _felvetel == null) _felvetelValt();
   }
 
   /// A kezdőlap "Vetítés" gombjától érkezve: a vetítés indul (a szűrők

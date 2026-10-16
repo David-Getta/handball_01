@@ -897,7 +897,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       Tooltip(
         message: "Csapat-megbeszélés: a 3D pálya a jegyzeteid (ha nincs, a "
             "videózandó jelenetek) vetítésével, a közös nézést vezetve — a "
-            "játékosok headsetjei a localhost:8000/kovet címen csatlakoznak",
+            "játékosok headsetjei a localhost:8000/kovet címen csatlakoznak. "
+            "A ⏺ felvétel magától indul: a megbeszélés a ▶ Felvételek "
+            "listából visszanézhető (aki nem volt ott, otthon is)",
         child: TextButton.icon(
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => Court3DScreen(
