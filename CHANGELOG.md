@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.171 óta)
 
+- **Rövidebb tipp a GÓL-ESEMÉNY kártyán** (app): "nincs felismert gól —
+  ✎: valódi eredmény" (a hosszú tipp a négy egy-magasságú kártyát
+  megnyújtotta); a részlet a kártya tooltipjében.
+
 - **Támadásból figura** (app + motor): az app 3D fülén a "✎ Figurává" a
   mostani pillanat szervezett támadását a Figura-tervezőbe viszi — a
   támadók kulcs-pozíciói és a labdás, a jobb kapura forgatva, a védelem a

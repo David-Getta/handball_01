@@ -3041,8 +3041,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     : "${_matches.length} meccs feldolgozva",
           icon: Icons.schedule),
       if (s != null)
-        _statCard("GÓL-ESEMÉNY", "${s["goals"]}", _goalNote(s),
-            icon: Icons.gps_fixed),
+        Tooltip(
+          message: "A felvételen felismert gólok. Valódi felvételen a "
+              "felismerés gyakran kevesebbet talál (kapu-kalibráció, "
+              "labdakövetés) — a jegyzőkönyvi végeredmény a meccs ✎ "
+              "gombjával megadható, és a kezdőlap azt is mutatja.",
+          child: _statCard("GÓL-ESEMÉNY", "${s["goals"]}", _goalNote(s),
+              icon: Icons.gps_fixed),
+        ),
       if (s != null)
         _statCard("FUTOTT TÁV", "${huNum((s["distance_km"] as num?) ?? 0)} km",
             "${s["sprints"]} sprint összesen",
@@ -3345,8 +3351,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (realN > 0) {
       note += " · jegyzőkönyv: ${s["real_goals"]} gól ($realN meccs)";
     } else if (goals == 0 && attempts > 0) {
-      note += " · gólt a felvétel nem mutat — a valódi eredmény a meccs "
-          "✎ gombjával megadható";
+      // Rövid: a négy kártya egy magasságú — a hosszú tipp mind a négyet
+      // megnyújtaná; a részlet a kártya tooltipjében.
+      note += " · nincs felismert gól — ✎: valódi eredmény";
     }
     return note;
   }
