@@ -47,4 +47,22 @@ void main() {
     await tester.pump(const Duration(minutes: 3));
     JobsMonitor.instance.stop();
   });
+
+  testWidgets("a felső sáv ikonjai a jobb szélen", (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const MaterialApp(home: DashboardScreen()));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    final billentyu = tester.getRect(find.byIcon(Icons.keyboard_outlined));
+    // A sáv jobb szélén (a fiók-ikon és a margó előtt) — nem középen.
+    expect(billentyu.left, greaterThan(1600 - 200));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    JobsMonitor.instance.stop();
+    await tester.pump(const Duration(minutes: 3));
+    JobsMonitor.instance.stop();
+  });
 }

@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A felső sáv ikonjai a jobb szélen** (app): a gyorsbillentyű- és a
+  fiók-ikon széles ablakban a képernyő közepén ült (a morzsa rugalmas
+  szövegei mellett a térkitöltő csak a hatodát kapta a helynek); most a
+  sáv végén.
+
 - **A kezdőlap számai tizedesvesszővel** (app): "97,4 perc", "176,4
   km", "xG 1,2 – 0,8" — eddig ponttal (és a futott táv két tizedessel)
   írta, miközben az app többi része vesszővel.

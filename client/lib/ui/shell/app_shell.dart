@@ -428,8 +428,13 @@ class _TopBar extends StatelessWidget {
       // A morzsa-szövegek rugalmasak: keskeny ablakban (700 px) a hosszú
       // "SZEKCIÓ › KÉPERNYŐ › AL-CÍM" a jobb oldali gombokra csúszott
       // (túlcsordulás) — most a vége halványul el, a gombok maradnak.
+      // A morzsák EGY Expanded csoportban: a laza Flexible-ök ki nem
+      // használt helye nem jut egy mellettük álló Spacernek (az csak a
+      // flex-részét kapta) — az ikonok így a képernyő közepén ültek.
       child: Row(
         children: [
+          Expanded(
+           child: Row(children: [
           Flexible(
             child: Text(section,
                 maxLines: 1,
@@ -466,7 +471,8 @@ class _TopBar extends StatelessWidget {
                       color: AppColors.textSecondary)),
             ),
           ],
-          const Spacer(),
+           ]),
+          ),
           // Eddig ez csak egy tooltipes ikon volt — kattintani lehetett
           // rajta, csak nem történt semmi. Most megnyitja a súgót.
           IconButton(
