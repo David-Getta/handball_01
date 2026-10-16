@@ -4421,7 +4421,9 @@ class _FelvetelekPanelState extends State<_FelvetelekPanel> {
                 "A közös nézés mentett megbeszélései. A megnyitott felvétel a "
                 "böngészős 3D-ben magától indul — mintha az edző most "
                 "vezetne; a headsetek a saját böngészőjükben a ▶ Felvételek "
-                "listából indítják.",
+                "listából indítják."
+                "${l != null && l.isNotEmpty ? " (${l.length} felvétel, "
+                    "összesen ${recordingSize(l.fold<num>(0, (s, f) => s + ((f["meret"] as num?) ?? 0)))})" : ""}",
                 style: AppText.label.copyWith(fontSize: 11.5)),
             const SizedBox(height: 10),
             if (_hiba != null)

@@ -546,6 +546,15 @@ String recordingPeople(Map<String, dynamic> f) {
   ].join("\n");
 }
 
+/// Bájt → olvasható méret ("0,4 MB", "12 MB", "1,3 GB") — a felvételek
+/// takarításához.
+String recordingSize(num? bajt) {
+  final b = (bajt ?? 0).toDouble();
+  if (b >= 1e9) return "${(b / 1e9).toStringAsFixed(1).replaceAll(".", ",")} GB";
+  if (b >= 1e7) return "${(b / 1e6).round()} MB";
+  return "${(b / 1e6).toStringAsFixed(1).replaceAll(".", ",")} MB";
+}
+
 String recordingSubtitle(Map<String, dynamic> f) {
   final l = "${f["letrehozva"] ?? ""}";
   final mikor =
@@ -557,6 +566,9 @@ String recordingSubtitle(Map<String, dynamic> f) {
       (fejezetek > 1 ? " · $fejezetek fejezet" : "") +
       (f["hang"] == true ? " · 🎙" : "") +
       (jelen > 0 ? " · élőben $jelen" : "") +
+      (((f["meret"] as num?) ?? 0) >= 1e6
+          ? " · ${recordingSize(f["meret"] as num?)}"
+          : "") +
       (nezok.isEmpty
           ? ""
           : nezok.length <= 3

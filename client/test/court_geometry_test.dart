@@ -139,6 +139,11 @@ void main() {
         "0:03 · élőben 3 · megnézte: Anna");
     expect(recordingPeople({"jelen": ["A", "B"], "nezok": ["Anna"]}),
         "Élőben: A, B\nMegnézte: Anna");
+    expect(recordingSize(400000), "0,4 MB");
+    expect(recordingSize(12400000), "12 MB");
+    expect(recordingSize(1300000000), "1,3 GB");
+    expect(recordingSubtitle({"hossz_s": 3, "meret": 2500000}), "0:03 · 2,5 MB");
+    expect(recordingSubtitle({"hossz_s": 3, "meret": 900}), "0:03");
     expect(recordingPeople({}),
         "Még senki nem követte névvel (élőben vagy felvételről).");
     expect(

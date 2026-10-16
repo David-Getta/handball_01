@@ -577,3 +577,26 @@ def test_a_felvetel_sor_tooltipje_a_nevekkel():
     for nev in ("court3d_screen.dart", "dashboard_screen.dart"):
         assert "message: recordingPeople(f)," in (gyoker / nev).read_text(
             encoding="utf-8"), nev
+
+
+def test_a_felvetel_merete(tmp_path, monkeypatch):
+    """A lista sora a felvétel lemezen foglalt méretét viszi (az
+    állapotok + a hang); a párbeszéd az összméretet mutatja."""
+    from pathlib import Path
+
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_meccs())
+    c = TestClient(app)
+    url = "/matches/fv/felvetelek"
+    d = c.post(url, json={"allapotok": [[0, {"t": 1}], [1, {"t": 2}]]}).json()
+    m0 = c.get(url).json()["felvetelek"][0]["meret"]
+    fajl = next(tmp_path.rglob(f"{d['id']}.json"))
+    assert m0 == fajl.stat().st_size
+    c.put(f"{url}/{d['id']}/hang", content=b"x" * 5000,
+          headers={"Content-Type": "audio/webm"})
+    m1 = c.get(url).json()["felvetelek"][0]["meret"]
+    assert m1 == next(tmp_path.rglob(f"{d['id']}.json")).stat().st_size + 5000
+    palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+             / "court3d_screen.dart").read_text(encoding="utf-8")
+    assert "összesen ${recordingSize(" in palya

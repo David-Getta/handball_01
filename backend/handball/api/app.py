@@ -3674,7 +3674,10 @@ def create_app():
                    "hang": bool(d.get("hang")),
                    "fejezetek": len(shared3d_felvetel_fejezetek(
                        d.get("allapotok") or [])),
-                   "jelen": [str(x) for x in (d.get("jelen") or [])]}
+                   "jelen": [str(x) for x in (d.get("jelen") or [])],
+                   # a lemezen (az állapotok + a hang) — a takarításhoz
+                   "meret": st.st_size + int((d.get("hang") or {}).get(
+                       "meret") or 0)}
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return None
         _felvetel_fejek[str(p)] = (kulcs, fej)

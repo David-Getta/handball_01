@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A felvételek mérete és követői a listában** (app + motor): a "▶
+  Felvételek" párbeszéd a meccs felvételeinek összméretét mutatja (egy
+  hangos megbeszélés órája ~15 MB — látszik, mit érdemes törölni), a sor
+  1 MB fölött a sajátját; a sor tooltipje a névsort adja: ki követte
+  élőben, ki nézte meg (a kezdőlap kártyáján is).
+
 - **"• Még nem láttad" a csapat linkjén** (motor): a /kovet várólapja a
   játékos nevével (`/kovet?nev=Anna`) jelöli, melyik megbeszélést látta
   már (élőben vagy felvételről) és melyiket nem, és a link a nevet is
