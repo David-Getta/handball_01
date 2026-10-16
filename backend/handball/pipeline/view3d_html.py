@@ -956,7 +956,7 @@ Jegyzet (J) — megjegyzés a mostani pillanathoz: a jelenet-listában (fehér p
 Rajz (E) — húzással nyíl a padlóra: sárga a labda/passz, kék a futás, piros a védő; ↶ vissza, Törlés; a link és a VR is viszi<br>
 Link másolása — a mostani jelenet (idő, kamera, rétegek, rajz) megosztható címként<br>
 [ / ] — előző / következő esemény (gól, lövés, eladás) · N / P — következő / előző jelenet (a jelenet-lista sorai) · V — vetítés: a lista sorai egymás után<br>
-VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: A/X — következő jelenet, B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés; felvétel visszajátszásakor a ravasz szünet/tovább; kvíz közben a ravasz a válaszod (ahova a kontroller mutat); közös nézés vezetőként: markolat — jobb kéz mutató (ahova a kontroller mutat), bal kéz Ide mindenki; bal hüvelykujj-kar lenyomása — kvíz (indítás, mutasd a csapatnak, vége)</div>
+VR-headsetben: a lenti "ENTER VR" gomb — a jelenet-feliratok a szem előtt; kontroller: bal kar — mozgás, jobb kar oldalra — 30°-os fordulás; A/X — következő jelenet (felvétel visszajátszásakor: fejezet), B/Y — előző, ravasz — lejátszás/szünet, hüvelykujj-kar lenyomása — vetítés; felvétel visszajátszásakor a ravasz szünet/tovább; kvíz közben a ravasz a válaszod (ahova a kontroller mutat); közös nézés követőként: markolat — ✋ kérdésem van; vezetőként: markolat — jobb kéz mutató (ahova a kontroller mutat), bal kéz Ide mindenki; bal hüvelykujj-kar lenyomása — kvíz (indítás, mutasd a csapatnak, vége)</div>
 <div id="meres"></div>
 <div id="jatekosHud"></div>
 <div id="feliratOszlop">
@@ -4061,22 +4061,55 @@ function mozgas(dt){
   if (!fest.xr.isPresenting){ kamera.rotation.set(pitch, 0, 0); rig.rotation.y = yaw; }
 }
 // VR-locomotion: a bal kar hüvelykujj-karja a nézés iránya szerint visz.
+// A JOBB kar oldalra billentése: SNAP-FORDULÁS VR_FORDUL_FOK fokkal (ülve,
+// forgószék nélkül is körbe lehet nézni; a folyamatos forgatás sokaknál
+// émelygést okoz). Él-érzékelés: egy kitérés (VR_FORDUL_KUSZOB fölött) egy
+// fordulás; a kar visszaengedése után jöhet a következő. A forgatás a FEJ
+// körül megy (a fej helye marad).
+const VR_FORDUL_FOK = 30, VR_FORDUL_KUSZOB = 0.7;
+let vrFordulKi = false;
+const vrFejA = new THREE.Vector3(), vrFejB = new THREE.Vector3();
+function vrFordul(irany){
+  kamera.getWorldPosition(vrFejA);
+  rig.rotation.y += irany * VR_FORDUL_FOK * Math.PI / 180;
+  rig.updateMatrixWorld(true);
+  kamera.getWorldPosition(vrFejB);
+  rig.position.x += vrFejA.x - vrFejB.x; rig.position.z += vrFejA.z - vrFejB.z;
+}
+// Egy kontroller karja (kez: "left" / "right" / ""): a jobb kéz fordít,
+// a többi mozgat a nézés iránya szerint.
+function vrKar(kez, ax, ay, dt){
+  if (kez === "right"){
+    const ki = Math.abs(ax) > VR_FORDUL_KUSZOB;
+    if (ki && !vrFordulKi) vrFordul(ax > 0 ? -1 : 1);
+    vrFordulKi = ki;
+    return;
+  }
+  if (Math.abs(ax) < 0.15 && Math.abs(ay) < 0.15) return;
+  const irany = new THREE.Vector3();
+  kamera.getWorldDirection(irany); irany.y = 0; irany.normalize();
+  const oldal = new THREE.Vector3().crossVectors(
+    irany, new THREE.Vector3(0,1,0));
+  rig.position.addScaledVector(irany, -ay * 3 * dt);
+  rig.position.addScaledVector(oldal, ax * 3 * dt);
+}
 function vrMozgas(dt){
   const munkamenet = fest.xr.getSession && fest.xr.getSession();
   if (!munkamenet) return;
   for (const forras of munkamenet.inputSources){
     const gp = forras.gamepad;
     if (!gp || gp.axes.length < 4) continue;
-    const ax = gp.axes[2], ay = gp.axes[3];
-    if (Math.abs(ax) < 0.15 && Math.abs(ay) < 0.15) continue;
-    const irany = new THREE.Vector3();
-    kamera.getWorldDirection(irany); irany.y = 0; irany.normalize();
-    const oldal = new THREE.Vector3().crossVectors(
-      irany, new THREE.Vector3(0,1,0));
-    rig.position.addScaledVector(irany, -ay * 3 * dt);
-    rig.position.addScaledVector(oldal, ax * 3 * dt);
+    vrKar(forras.handedness || "", gp.axes[2], gp.axes[3], dt);
   }
 }
+// (próbához: a kar egy kitérése headset nélkül)
+window.vrKarMozgasProba = (kez, ax, ay) => {
+  vrKar(kez, ax, ay, 0.1);
+  kamera.getWorldPosition(vrFejA);
+  return {fok: Math.round(rig.rotation.y * 180 / Math.PI * 10) / 10,
+          fej: [Math.round(vrFejA.x * 100) / 100, Math.round(vrFejA.z * 100) / 100],
+          rig: [Math.round(rig.position.x * 100) / 100, Math.round(rig.position.z * 100) / 100]};
+};
 
 // ---- VR-kontroller: jelenet-lapozás a headsetben -------------------------
 // A DOM-gombok VR-ben nem érhetők el: a kontroller A/X gombja (4) a

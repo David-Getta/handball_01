@@ -464,7 +464,8 @@ egy mentett megbeszélés visszajátszása indul.
 
 A böngészős oldal WebXR-képes: a lenti "ENTER VR" gombbal a csarnok
 headsetben nyílik, a bal kar hüvelykujj-karja a nézés iránya szerint
-visz. A jelenet-feliratok (esemény, döntés, szabad lövő,
+visz, a jobb kar oldalra billentése 30°-kal fordít (ülve, forgószék
+nélkül is körbe lehet nézni). A jelenet-feliratok (esemény, döntés, szabad lövő,
 labdavesztés, gól-akció, lerohanás, kapott gól, hetes, emberelőny) a headsetben
 egy fejhez rögzített
 táblán látszanak, és a jelenetek a kontrollerrel lapozhatók: A/X — a

@@ -3,6 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.170 óta)
+
+- **VR: snap-fordulás a jobb karral** (új, böngésző/VR): a jobb
+  hüvelykujj-kar oldalra billentése 30°-kal fordít (a fej körül, ugrásszerűen
+  — a folyamatos forgatás émelyít), a bal kar mozgat. Ülve, forgószék
+  nélkül is körbe lehet nézni — a megbeszélésen a játékosok ülnek.
+
 ## v0.1.170 — kiadva (2026-10-15)
 
 > Kiadás-jegyzet: a 3D megbeszélés visszanézhető. Vezetés közben a "⏺

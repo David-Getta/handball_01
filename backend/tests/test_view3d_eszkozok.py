@@ -3021,3 +3021,17 @@ def test_a_csapatnev_nem_tor_ki_a_szkriptbol():
                  '"Fal (" + hx(csapat) + ", "',
                  '"Most: " + hx(csapat) + " védekezik — <b>" + hx(elo.cimke)'):
         assert kell in oldal, kell
+
+
+
+def test_vr_snap_fordulas():
+    """VR: a jobb kar oldalra billentése 30°-os ugrással fordít (él-
+    érzékeléssel, a fej körül), a bal kar mozgat."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ("const VR_FORDUL_FOK = 30, VR_FORDUL_KUSZOB = 0.7;",
+                 'if (kez === "right"){',
+                 "if (ki && !vrFordulKi) vrFordul(ax > 0 ? -1 : 1);",
+                 'vrKar(forras.handedness || "", gp.axes[2], gp.axes[3], dt);'):
+        assert kell in oldal, kell
