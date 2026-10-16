@@ -673,6 +673,8 @@ def shared3d_hely(ertek):
 # SHARED3D_SEND_S-enként rögzít: ~1,7 óra), a neve legfeljebb ennyi jel.
 SHARED3D_REC_MAX = 20000
 SHARED3D_REC_NAME_MAX = 80
+# A felvétel egy állapotában legfeljebb ennyi kvíz-válasz (a csapat).
+SHARED3D_REC_QUIZ_MAX = 60
 # 🎙 A felvétel hangja (a vezető mikrofonja): legfeljebb ennyi bájt (a
 # böngésző 32 kbit/s-os Opus-ával ~4,5 óra — a SHARED3D_REC_MAX ~1,7
 # órája bőven belefér), és csak a böngészők MediaRecorder-ének típusai.
@@ -761,8 +763,11 @@ def shared3d_felvetel_allapot(d):
     """A felvétel egy állapota megtisztítva: {"t" (játékidő-mp), "playing",
     "speed" (0,25…8), "rajz" (a rajz-kód; rossz alaknál üres), "mutato"
     ({x, y, n} — a pálya ±5 m-es sávjába szorítva), "nezopont" ({x, y, z,
-    yaw, pitch, n} — a csarnok dobozába szorítva)}; None, ha az idő vagy
-    a sebesség rossz. A rossz mutató és nézőpont egyszerűen kimarad."""
+    yaw, pitch, n} — a csarnok dobozába szorítva), "kviz" ({n, mutat,
+    d?} — a vezető köre), "valaszok" ([{nev, x, y}] — a csapat válaszai,
+    a pálya ±5 m-es sávjában, legfeljebb SHARED3D_REC_QUIZ_MAX)}; None, ha
+    az idő vagy a sebesség rossz. A rossz mutató, nézőpont, kvíz és
+    válasz egyszerűen kimarad."""
     import math
     import re
     if not isinstance(d, dict):
@@ -801,6 +806,23 @@ def shared3d_felvetel_allapot(d):
                           "yaw": round(v[3], 4),
                           "pitch": round(min(1.6, max(-1.6, v[4])), 4),
                           "n": v[5]}
+    kv = d.get("kviz")
+    k = _szamok(kv, ("n",))
+    if k:
+        ki["kviz"] = {"n": k[0], "mutat": bool(kv.get("mutat"))}
+        dd = _szamok(kv, ("d",)) if kv.get("d") is not None else None
+        if dd:
+            ki["kviz"]["d"] = round(dd[0], 2)
+        valaszok = []
+        nyers = d.get("valaszok")
+        for e in (nyers[:SHARED3D_REC_QUIZ_MAX] if isinstance(nyers, list) else []):
+            xy = _szamok(e, ("x", "y"))
+            if xy:
+                valaszok.append({"nev": shared3d_nev(e.get("nev")),
+                                 "x": round(min(45.0, max(-5.0, xy[0])), 2),
+                                 "y": round(min(25.0, max(-5.0, xy[1])), 2)})
+        if valaszok:
+            ki["valaszok"] = valaszok
     return ki
 
 

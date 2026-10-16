@@ -3318,7 +3318,11 @@ function felvetelRogzit(){
   if (!kzFelvetel) return;
   kzFelvetel.allapotok.push([Math.round((performance.now() - kzFelvetel.kezd) / 10) / 100,
     {t: Math.round(ido * 100) / 100, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok),
-     mutato: kzMutato, nezopont: kzNezopont}]);
+     mutato: kzMutato, nezopont: kzNezopont,
+     // a kvíz köre és a csapat válaszai (a visszajátszás a felfedés után
+     // névvel mutatja őket)
+     ...(kzKviz ? {kviz: kzKviz, valaszok: kzVezetoCsapat.filter(e => e.valasz)
+        .map(e => ({nev: e.nev || ("#" + e.sz), x: e.valasz[0], y: e.valasz[1]}))} : {})}]);
   if (kzFelvetel.allapotok.length >= FV_MAX) felvetelMent();
 }
 async function felvetelMent(){
@@ -3429,10 +3433,24 @@ function felvetelAll(){
   if (!fvLejatszas) return;
   fvLejatszas = null; megy = false; lejatszasGomb.textContent = "▶";
   fvHangForras(""); fejezetValaszto.style.display = "none";
+  fvKvizKulcs = null; valaszokAllit([]);
   if (kozosMod !== "kovet") nevValasztoMutat(false);
   kozosInfo.textContent = ""; felvetelGombFelirat();
 }
 felvetelValaszto.onchange = () => felvetelIndit(felvetelValaszto.value);
+// A felvétel kvíze: a felfedett kör válaszai névvel (döntés-kvíznél ✓/✗)
+// — mint a követőnél a felfedés után. Csak változáskor rajzol újra.
+let fvKvizKulcs = null;
+function felvetelKvizAllit(a){
+  const k = a && a.kviz && a.kviz.mutat ? a.kviz : null;
+  const kulcs = k ? k.n + "|" + JSON.stringify(a.valaszok || []) : null;
+  if (kulcs === fvKvizKulcs) return;
+  fvKvizKulcs = kulcs;
+  if (!k){ valaszokAllit([]); return; }
+  const d = kvizDontes(k);
+  valaszokAllit((a.valaszok || []).map((v, i) => ({kulcs: "f" + i,
+    cimke: kvizCimke(v.nev, v.x, v.y, d), sajat: false, x: v.x, y: v.y})));
+}
 // FEJEZETEK: ahol az edző egy másik jelenetre ugrott (a motor számolja —
 // court3d.shared3d_felvetel_fejezetek). A felirat a közeli jelenet-sor
 // (FV_FEJEZET_KOZEL mp-en belül), különben a meccs pillanata; visszafelé
@@ -3509,6 +3527,7 @@ function felvetelFrissit(){
                           mutato: a.mutato ? {...a.mutato, kor: 0} : null,
                           nezopont: a.nezopont ? {...a.nezopont, kor: 0} : null});
   felvetelHangFrissit(f, e);
+  felvetelKvizAllit(a);
   const hossz = f.adat.hossz_s || all[all.length - 1][0];
   // A ténylegesen lejátszott idő (a szünet és az ugrás nem számít).
   const most = performance.now();
@@ -3531,7 +3550,8 @@ function felvetelFrissit(){
     + (f.adat.hang ? (f.hangHiba ? " · 🎙 a hang nem tölthető"
                       : f.hangTiltva ? " · 🔊 kattints az oldalra a hanghoz" : " · 🎙") : "")
     + (fz.length > 1 ? " · " + (fi + 1) + "/" + fz.length + ". fejezet (N / P)" : "")
-    + (f.megnezve ? " · ✓ megnézted" : "");
+    + (f.megnezve ? " · ✓ megnézted" : "")
+    + (a.kviz ? " · ❓ kvíz" + (a.kviz.mutat ? " — a csapat válaszai" : "") : "");
   if (kozosInfo.textContent !== info) kozosInfo.textContent = info;
 }
 window.felvetelProba = () => ({felvesz: !!kzFelvetel, db: kzFelvetel ? kzFelvetel.allapotok.length : 0,

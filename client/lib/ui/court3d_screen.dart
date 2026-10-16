@@ -2361,6 +2361,16 @@ class _Court3DScreenState extends State<Court3DScreen>
           "rajz": encodeDrawing(_rajzok),
           if (_mutato != null) "mutato": _mutato!,
           if (_nezopont != null) "nezopont": _nezopont!,
+          // a kvíz köre és a csapat válaszai (a visszajátszás a felfedés
+          // után névvel mutatja őket)
+          if (_kvizAllapot() case final k?) ...{
+            "kviz": k,
+            "valaszok": [
+              for (final t in _csapat)
+                if (t.valasz case final v?)
+                  {"nev": t.cimke, "x": v.dx, "y": v.dy}
+            ],
+          },
         }
       ]);
       if (f.length >= recordingMax) _felvetelMent();

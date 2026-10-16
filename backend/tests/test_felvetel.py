@@ -139,7 +139,8 @@ def test_a_felvetelek_az_appban(tmp_path, monkeypatch):
     # Az app ugyanazokat a mezőket rögzíti, amiket a motor megtisztít.
     rogzit = palya.split("final f = _felvetel;", 1)[1].split("_api", 1)[0]
     assert set(re.findall(r'"(\w+)":', rogzit)) == {
-        "t", "playing", "speed", "rajz", "mutato", "nezopont"}
+        "t", "playing", "speed", "rajz", "mutato", "nezopont",
+        "kviz", "valaszok", "nev", "x", "y"}
     api = (gyoker / "services" / "api_client.dart").read_text(encoding="utf-8")
     for kell in ("Future<Map<String, dynamic>> saveRecording(",
                  "Future<List<Map<String, dynamic>>> fetchRecordings(",
@@ -600,3 +601,37 @@ def test_a_felvetel_merete(tmp_path, monkeypatch):
     palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
              / "court3d_screen.dart").read_text(encoding="utf-8")
     assert "összesen ${recordingSize(" in palya
+
+
+def test_a_kviz_a_felvetelben():
+    """A felvétel állapota a kvíz körét és a válaszokat is viszi
+    (megtisztítva); a visszajátszás a felfedés után névvel mutatja; az app
+    vezetője is rögzíti."""
+    from pathlib import Path
+
+    from handball.pipeline.court3d import SHARED3D_REC_QUIZ_MAX
+    from handball.pipeline.view3d_html import view3d_html
+
+    a = shared3d_felvetel_allapot({
+        "t": 10, "kviz": {"n": 7, "mutat": 1, "d": 12.345},
+        "valaszok": [{"nev": " Anna\x07", "x": 99, "y": 3},
+                     {"nev": "Peti", "x": "rossz", "y": 1}, "rossz",
+                     {"x": 5, "y": -50}]})
+    assert a["kviz"] == {"n": 7.0, "mutat": True, "d": 12.35}
+    assert a["valaszok"] == [{"nev": "Anna", "x": 45.0, "y": 3.0},
+                             {"nev": "", "x": 5.0, "y": -5.0}]
+    b = shared3d_felvetel_allapot({"t": 1, "kviz": {"n": "x"},
+                                   "valaszok": [{"x": 1, "y": 1}]})
+    assert "kviz" not in b and "valaszok" not in b
+    sok = shared3d_felvetel_allapot({"t": 1, "kviz": {"n": 1},
+                                     "valaszok": [{"x": 1, "y": 1}] * 200})
+    assert len(sok["valaszok"]) == SHARED3D_REC_QUIZ_MAX
+
+    oldal = view3d_html(_meccs())
+    for kell in ("...(kzKviz ? {kviz: kzKviz, valaszok: kzVezetoCsapat.filter(e => e.valasz)",
+                 "felvetelKvizAllit(a);", "cimke: kvizCimke(v.nev, v.x, v.y, d)",
+                 '" · ❓ kvíz"'):
+        assert kell in oldal, kell
+    palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+             / "court3d_screen.dart").read_text(encoding="utf-8")
+    assert 'if (_kvizAllapot() case final k?) ...{' in palya

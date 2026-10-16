@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **Kvíz a felvételben** (böngésző/VR + motor + app): a felvétel a kvíz
+  körét és a csapat válaszait is rögzíti, a visszajátszás a felfedés után
+  névvel (döntés-kvíznél ✓/✗-tel) mutatja őket — a visszanéző látja, ki
+  hova mutatott, és mit magyarázott hozzá az edző.
+
 - **A felvételek mérete és követői a listában** (app + motor): a "▶
   Felvételek" párbeszéd a meccs felvételeinek összméretét mutatja (egy
   hangos megbeszélés órája ~15 MB — látszik, mit érdemes törölni), a sor
