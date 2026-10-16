@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A kezdőlap számai tizedesvesszővel** (app): "97,4 perc", "176,4
+  km", "xG 1,2 – 0,8" — eddig ponttal (és a futott táv két tizedessel)
+  írta, miközben az app többi része vesszővel.
+
 - **Az oldalsáv fejléce: a SPORT MACHINE szókép a sávon belül** (app):
   a jel melletti szókép fix méreten 9 px-szel kilógott a 224 px-es
   sávból, és a kártya széle vágta a MACHINE végét ("mintha majdnem

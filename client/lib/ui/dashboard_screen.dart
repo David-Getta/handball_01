@@ -23,6 +23,7 @@ import "../theme/app_theme.dart";
 import "../version.dart";
 import "court3d_screen.dart";
 import "court_geometry.dart";
+import "num_format.dart";
 import "label_screen.dart";
 import "match_screen.dart";
 import "player_trend_screen.dart";
@@ -1189,8 +1190,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             "Várható gól (xG, H–V)",
             m["xg_home"] == null
                 ? "—"
-                : "${(m["xg_home"] as num).toStringAsFixed(1)} – "
-                    "${(m["xg_away"] as num).toStringAsFixed(1)}"
+                : "${huNum(m["xg_home"] as num)} – "
+                    "${huNum(m["xg_away"] as num)}"
           ],
           [
             "Szabad lövőt enged (H–V)",
@@ -1219,8 +1220,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             "Hárított xG (H–V)",
             m["xg_saved_home"] == null
                 ? "—"
-                : "${(m["xg_saved_home"] as num).toStringAsFixed(1)} – "
-                    "${((m["xg_saved_away"] as num?) ?? 0).toStringAsFixed(1)}"
+                : "${huNum(m["xg_saved_home"] as num)} – "
+                    "${huNum((m["xg_saved_away"] as num?) ?? 0)}"
           ],
           // Hetes-mérleg: gól/kísérlet a két oldalon.
           [
@@ -1242,8 +1243,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             "Passz / támadás (H–V)",
             m["pass_avg_home"] == null && m["pass_avg_away"] == null
                 ? "—"
-                : "${m["pass_avg_home"] == null ? "—" : (m["pass_avg_home"] as num).toStringAsFixed(1)} – "
-                    "${m["pass_avg_away"] == null ? "—" : (m["pass_avg_away"] as num).toStringAsFixed(1)}"
+                : "${m["pass_avg_home"] == null ? "—" : huNum(m["pass_avg_home"] as num)} – "
+                    "${m["pass_avg_away"] == null ? "—" : huNum(m["pass_avg_away"] as num)}"
           ],
           // Beálló-terhelés: a támadások hányada megy a beállón át.
           [
@@ -1270,12 +1271,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ["Kiállítás", fmt(m["suspensions"])],
           [
             "Futott táv",
-            "${(((m["distance_m"] as num?) ?? 0) / 1000).toStringAsFixed(1)} km"
+            "${huNum(((m["distance_m"] as num?) ?? 0) / 1000)} km"
           ],
           ["Sprintek", fmt(m["sprints"])],
           [
             "Játékidő",
-            "${(((m["duration_s"] as num?) ?? 0) / 60).toStringAsFixed(1)} perc"
+            "${huNum(((m["duration_s"] as num?) ?? 0) / 60)} perc"
           ],
         ];
     final ra = rows(a);
@@ -3031,7 +3032,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _statCard("ELEMZETT MECCS", "${s?["matches"] ?? _matches.length}",
           _offline ? "a motor nem válaszol" : "a tárolt könyvtárból",
           accent: true, icon: Icons.sports_handball),
-      _statCard("ÖSSZ. JÁTÉKIDŐ", "${durMin.toStringAsFixed(1)} perc",
+      _statCard("ÖSSZ. JÁTÉKIDŐ", "${huNum(durMin)} perc",
           s != null ? "${(s["teams"] as List).length} csapat a könyvtárban"
                     : "${_matches.length} meccs feldolgozva",
           icon: Icons.schedule),
@@ -3039,7 +3040,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _statCard("GÓL-ESEMÉNY", "${s["goals"]}", _goalNote(s),
             icon: Icons.gps_fixed),
       if (s != null)
-        _statCard("FUTOTT TÁV", "${s["distance_km"]} km",
+        _statCard("FUTOTT TÁV", "${huNum((s["distance_km"] as num?) ?? 0)} km",
             "${s["sprints"]} sprint összesen",
             icon: Icons.directions_run),
     ];
@@ -3228,8 +3229,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     message: "${m["home_team"]} ${m["goals_home"]} : "
                         "${m["goals_away"]} ${m["away_team"]}"
                         "${(m["date"] as String?)?.isNotEmpty == true ? " · ${m["date"]}" : ""}\n"
-                        "xG: ${(m["xg_home"] as num).toStringAsFixed(1)} – "
-                        "${(m["xg_away"] as num).toStringAsFixed(1)}"
+                        "xG: ${huNum(m["xg_home"] as num)} – "
+                        "${huNum(m["xg_away"] as num)}"
                         "${m["free_pct_home"] != null ? "\nszabad lövőt enged: "
                             "H ${(m["free_pct_home"] as num).toStringAsFixed(0)}% · "
                             "V ${((m["free_pct_away"] as num?) ?? 0).toStringAsFixed(0)}%" : ""}",
