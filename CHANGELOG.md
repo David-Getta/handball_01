@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.171 óta)
 
+- **Csapat-linkek futónként** (app): a Figura-tervező "Csapat-linkek
+  (VR)" gombja futónként kiírja a csapat linkjét (…/kovet?szem=h1, …) —
+  másolható, a headsetbe begépelhető; amikor az edző a figurát vezeti,
+  mindenki a saját futójában áll. A cím a klub-hálózati, ha az be van
+  kapcsolva.
+
 - **A szemével-nézet linkről — VR-ben is** (böngésző/VR + motor): a
   `szem=h3` paraméter a hazai 3-as szemével nyitja a lapot (eddig csak
   dupla kattintással, ami VR-ben nem megy), a csapat linkje is átadja

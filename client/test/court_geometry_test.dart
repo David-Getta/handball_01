@@ -154,6 +154,10 @@ void main() {
     expect(resamplePath([const Offset(1, 2)], 3).length, 3);
     expect([for (int i = 0; i < 3; i++) keypointLabel(i, 3)], ["Kezdő", "Közép", "Vég"]);
     expect([for (int i = 0; i < 4; i++) keypointLabel(i, 4)], ["1", "2", "3", "4"]);
+    expect(runnerLinks("http://10.0.0.5:8000/kovet", 2), [
+      "http://10.0.0.5:8000/kovet?szem=h1",
+      "http://10.0.0.5:8000/kovet?szem=h2"
+    ]);
     expect(setplayBallSteps([0, 0, 0], 5), [0, 0, 0, 0, 0]);
     // passz a Közép pontra (1.→2.) és a Végre (2.→3.): a szakaszok felénél
     expect(setplayBallSteps([0, 1, 2], 9), [0, 0, 1, 1, 1, 1, 2, 2, 2]);

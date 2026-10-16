@@ -604,6 +604,11 @@ String keypointLabel(int i, int k) {
   return "${i + 1}";
 }
 
+/// A csapat linkje futónként (a figura támadói a hazai 1, 2, 3 …): a
+/// /kovet a vezetett figurára irányít, a `szem` a futó szemével nyitja.
+List<String> runnerLinks(String kovetUrl, int n) =>
+    [for (int i = 1; i <= n; i++) "$kovetUrl?szem=h$i"];
+
 /// Bájt → olvasható méret ("0,4 MB", "12 MB", "1,3 GB") — a felvételek
 /// takarításához.
 String recordingSize(num? bajt) {

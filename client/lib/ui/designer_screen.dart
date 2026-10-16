@@ -9,6 +9,7 @@ library;
 
 import "dart:async";
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 
 import "../analytics/play_simulation.dart";
 import "../models/tracking.dart";
@@ -395,6 +396,67 @@ class _DesignerScreenState extends State<DesignerScreen> {
                     "fallal."
                 : "A figura a böngészőben, 3D-ben — VR-ben bejárható; a "
                     "csapat a /kovet várólapon is eléri (▶ Figura).")));
+  }
+
+  /// Csapat-linkek futónként: a játékos a saját futójában áll, amikor a
+  /// figurát vezeted. A klub-hálózati cím, ha az be van kapcsolva,
+  /// különben a gép saját címe (USB + adb reverse).
+  Future<void> _csapatLinkek() async {
+    var kovet = "${_api.baseUrl}/kovet";
+    try {
+      final h = await _api.fetchNetworkLinks();
+      if (h.isNotEmpty) kovet = h.first;
+    } catch (_) {}
+    if (!mounted) return;
+    final linkek = runnerLinks(kovet, _attackers.length);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Csapat-linkek futónként (VR)"),
+        content: SizedBox(
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    "Nyisd meg a figurát (3D / VR ↗) és vezesd (📡 Vezetem): a "
+                    "játékos a saját linkjével a saját futójában áll — a saját "
+                    "útját a saját szemével futja végig. A név: &nev=Anna.",
+                    style: AppText.label.copyWith(fontSize: 12)),
+                const SizedBox(height: AppSpacing.md),
+                for (int i = 0; i < linkek.length; i++)
+                  Row(children: [
+                    SizedBox(
+                        width: 64,
+                        child: Text("${i + 1}. futó",
+                            style: AppText.value.copyWith(fontSize: 12.5))),
+                    Expanded(
+                        child: SelectableText(linkek[i],
+                            style: AppText.label.copyWith(fontSize: 12))),
+                    IconButton(
+                      tooltip: "Másolás",
+                      iconSize: 16,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.copy),
+                      onPressed: () => Clipboard.setData(
+                              ClipboardData(text: linkek[i]))
+                          .catchError((_) {}),
+                    ),
+                  ]),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Bezárás")),
+        ],
+      ),
+    );
   }
 
   void _backToEdit() {
@@ -835,6 +897,13 @@ class _DesignerScreenState extends State<DesignerScreen> {
                       icon: const Icon(Icons.print_outlined, size: 18),
                       label: const Text("Figura-lap ↗"),
                     ),
+                  ),
+                  // Futónként a csapat linkje (VR: a saját futójában).
+                  TextButton.icon(
+                    onPressed: _csapatLinkek,
+                    icon: const Icon(Icons.groups_outlined, size: 16),
+                    label: const Text("Csapat-linkek (VR)",
+                        style: TextStyle(fontSize: 12)),
                   ),
                 ]),
         ],
