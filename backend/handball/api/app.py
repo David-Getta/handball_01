@@ -4052,6 +4052,37 @@ def create_app():
                  '<h2 style="margin-top:2.5em">Addig: a legutóbbi '
                  'megbeszélések</h2><ul style="list-style:none;padding:0">'
                  + "".join(sorok) + "</ul>")
+        # Névvel a játékos saját mérlege (mint a Keret-lapon): a
+        # döntés-kvízek és a csapata felvett megbeszéléseiből a követettek.
+        sajat = ""
+        if kulcs_:
+            reszek = []
+            try:
+                # (a kvíz-mérleg a teljes könyvtárat kéri — a motor
+                # indulásakor a háttér-betöltésre várna: addig kimarad)
+                if not _store.loading:
+                    from ..pipeline.court3d import quiz_stats
+                    kv = next((r for r in quiz_stats(_jegyzetek_idorendben())
+                               if _c3.quiz_name_key(r["nev"]) == kulcs_), None)
+                    if kv and kv.get("itelt"):
+                        reszek.append(f"❓ kvíz {kv['jo']}/{kv['itelt']}")
+                csapatok = {cs_ for cs_, mezek_ in _load_players().items()
+                            for nv_ in (mezek_ or {}).values()
+                            if nv_ and _c3.quiz_name_key(
+                                _c3.shared3d_nev(nv_)) == kulcs_}
+                fv_ = [(fej, p_) for fej, meta, p_ in _legutobbi_felvetelek()
+                       if csapatok & {meta.home_team, meta.away_team}]
+                if fv_:
+                    kov_ = sum(1 for fej, p_ in fv_ if kulcs_ in {
+                        _c3.quiz_name_key(x) for x in
+                        list(fej.get("jelen") or []) + _felvetel_nezok(p_)})
+                    reszek.append(f"👁 megbeszélések {kov_}/{len(fv_)}")
+            except (OSError, ValueError, KeyError, TypeError):
+                reszek = []
+            if reszek:
+                sajat = ('<p style="font-size:1.25em;margin-top:1.5em">'
+                         + _html.escape(nev_) + ": " + " · ".join(reszek)
+                         + "</p>")
         return HTMLResponse(
             content=('<!DOCTYPE html><html lang="hu"><head>'
                      '<meta charset="utf-8"><meta http-equiv="refresh" '
@@ -4061,7 +4092,7 @@ def create_app():
                      'padding-top:12vh"><h1>👥 Várunk az edzőre…</h1>'
                      '<p>Amint az edző a 3D pályán a "📡 Vezetem" gombot '
                      'megnyomja, ez a lap magától továbblép.</p>'
-                     + lista + '</body></html>'),
+                     + sajat + lista + '</body></html>'),
             headers={"Cache-Control": "no-store"})
 
     @app.get("/matches/{match_id}/calib-overlay")

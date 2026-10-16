@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A játékos saját mérlege a csapat linkjén** (motor): a /kovet
+  várólapja névvel (`/kovet?nev=Anna`) a játékos kvíz-mérlegét és a
+  csapata megbeszéléseinek követését is mutatja ("Anna: ❓ kvíz 7/9 · 👁
+  megbeszélések 4/5") — a headsetben, a megbeszélés előtt látja, hol
+  tart.
+
 - **Kvíz a felvételben** (böngésző/VR + motor + app): a felvétel a kvíz
   körét és a csapat válaszait is rögzíti, a visszajátszás a felfedés után
   névvel (döntés-kvíznél ✓/✗-tel) mutatja őket — a visszanéző látja, ki

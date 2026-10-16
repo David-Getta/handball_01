@@ -635,3 +635,28 @@ def test_a_kviz_a_felvetelben():
     palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
              / "court3d_screen.dart").read_text(encoding="utf-8")
     assert 'if (_kvizAllapot() case final k?) ...{' in palya
+
+
+def test_a_varolap_a_jatekos_merlegevel(tmp_path, monkeypatch):
+    """A /kovet várólapja névvel a játékos kvíz-mérlegét és a csapata
+    megbeszéléseinek követését mutatja (név nélkül nincs ilyen sor)."""
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    frames = [Frame(t=t, players=[PlayerPosition(
+        track_id=1, team=Team.HOME, x=20.0, y=10.0,
+        source=PositionSource.MEASURED, confidence=1.0, jersey_number=7)],
+        ball=Ball(x=20.0, y=10.0, confidence=1.0)) for t in range(10)]
+    app.state.put_match(Match(MatchMeta(match_id="v", home_team="A",
+                                        away_team="B", fps=25.0), frames))
+    c = TestClient(app)
+    c.post("/library/players", json={"team": "A", "jersey": 7, "name": "Kiss Anna"})
+    all_ = [[0, {"t": 1}], [1, {"t": 2}]]
+    c.post("/matches/v/felvetelek", json={"allapotok": all_, "jelen": ["kiss anna"]})
+    c.post("/matches/v/felvetelek", json={"allapotok": all_})
+    c.post("/matches/v/notes", json={"frame": 5, "text": "❓", "kviz": [
+        {"nev": "Kiss Anna", "itelet": True}, {"nev": "Más", "itelet": False}]})
+    lap = c.get("/kovet", params={"nev": "Kiss Anna"}).text
+    assert "Kiss Anna: ❓ kvíz 1/1 · 👁 megbeszélések 1/2" in lap
+    assert "megbeszélések 1/2" not in c.get("/kovet").text
+    # Ismeretlen név: nincs kerete, nincs kvíze — nincs sor.
+    assert "Senki:" not in c.get("/kovet", params={"nev": "Senki"}).text
