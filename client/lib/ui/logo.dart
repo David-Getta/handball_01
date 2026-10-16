@@ -281,6 +281,18 @@ class SportMachineWordmark extends StatelessWidget {
   }
 }
 
+/// A szókép magassága egy adott szélességű helyre: legfeljebb
+/// [maxHeight], és jobbra legalább [margin] képpont levegő marad — a
+/// fejlécben a szókép a sáv szélén ne "lógjon" (a 14 px-es szókép 163 px
+/// széles, a sávban a jel mellett csak 154 px jutott neki).
+double wordmarkHeightFor(double width,
+    {double maxHeight = 14, double margin = 4}) {
+  final h = (width - margin) *
+      SportMachineWordmark.boxH /
+      SportMachineWordmark.boxW;
+  return h.clamp(0.0, maxHeight).toDouble();
+}
+
 class _WordmarkPainter extends CustomPainter {
   final bool dark;
   final bool singleWeight;

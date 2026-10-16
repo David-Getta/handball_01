@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **Az oldalsáv fejléce: a SPORT MACHINE szókép a sávon belül** (app):
+  a jel melletti szókép fix méreten 9 px-szel kilógott a 224 px-es
+  sávból, és a kártya széle vágta a MACHINE végét ("mintha majdnem
+  lelógna"); most a helyhez igazodik, jobbra levegővel.
+
 - **A figura 3D-ben és VR-ben** (app + motor + böngésző): a
   Figura-tervező "3D / VR ↗" gombja a megrajzolt figurát a böngészős
   3D-ben nyitja — valós tempóban (a leghosszabb szakasz is ≤ 3,5 m/s),

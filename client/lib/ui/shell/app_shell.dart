@@ -814,11 +814,15 @@ class _SideNavState extends State<_SideNav> {
       const SizedBox(width: AppSpacing.md),
       // A márka RAJZOLT szóképe a gépelt név helyett — a fejlécben a
       // kis magasság miatt EGY SÚLLYAL (a vékony MACHINE-szár ekkora
-      // méretben eltűnne).
-      const Expanded(
-          child: Align(
-              alignment: Alignment.centerLeft,
-              child: SportMachineWordmark(height: 14, singleWeight: true))),
+      // méretben eltűnne). A sávba ILLESZTVE, jobbra levegővel: fix 14
+      // px-en 9 px-szel kilógott, és a kártya széle vágta a MACHINE végét.
+      Expanded(
+          child: LayoutBuilder(
+              builder: (context, c) => Align(
+                  alignment: Alignment.centerLeft,
+                  child: SportMachineWordmark(
+                      height: wordmarkHeightFor(c.maxWidth),
+                      singleWeight: true)))),
     ]);
   }
 
