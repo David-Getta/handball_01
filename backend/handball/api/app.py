@@ -528,6 +528,8 @@ HALOZATI_ENGEDETT = (
     (None, r"^/matches/[^/]+/shared3d$"),
     ("GET", r"^/matches/[^/]+/felvetelek(/[A-Za-z0-9]+(/hang)?)?$"),
     ("POST", r"^/matches/[^/]+/felvetelek/[A-Za-z0-9]+/megnezte$"),
+    # A tervező figurája 3D-ben (a /kovet várólapja linkeli).
+    ("GET", r"^/figura3d$"),
 )
 
 
@@ -3091,6 +3093,76 @@ def create_app():
     match_view3d.__annotations__["request"] = Request
     app.get("/matches/{match_id}/view3d")(match_view3d)
 
+    # Az edző legutóbbi figurája (a saját gépről nyitva): a /kovet
+    # várólapja linkeli — a headseten a hosszú cím nem gépelhető.
+    _utolso_figura: dict = {}
+
+    def figura3d(request: Request, u: str = "", cim: str = "",
+                 meccs: str = "", vedo: str = "away", vedok: int = 6,
+                 melyseg: float = 6.0):
+        """A figura-tervező figurája böngészős 3D-ben / VR-ben.
+
+        `u`: a támadók kulcs-pozíciói — támadónként "x,y,x,y,…" (méter),
+        a támadók ";"-vel elválasztva (az 1. támadónál a labda); `cim` a
+        figura neve (a `nev` az oldalon a követő neve). A védelem
+        a `meccs` `vedo` csapatából TANULT (mint a /simulate-setplay),
+        meccs nélkül a tervező kézi modellje (`vedok` védő, `melyseg` m-es
+        vonal). Valós tempóban, kapussal, ismétlődve játszik
+        (play_simulation.setplay_3d_match); a fejléc a kiértékelést mutatja."""
+        from ..pipeline import court3d as _c3
+        from ..pipeline.play_simulation import (
+            FIGURA_3D_MAX_JATEKOS, FIGURA_3D_MAX_PONT, DefenseModel,
+            setplay_3d_match)
+        from ..pipeline.view3d_html import view3d_html
+        try:
+            utak = []
+            for resz in u.split(";")[:FIGURA_3D_MAX_JATEKOS]:
+                sz = [float(x) for x in resz.split(",") if x.strip()]
+                if len(sz) < 2 or len(sz) % 2:
+                    raise ValueError(resz)
+                utak.append(list(zip(sz[0::2], sz[1::2]))[:FIGURA_3D_MAX_PONT])
+        except ValueError:
+            raise HTTPException(status_code=400,
+                                detail="hibás figura (u=x,y,…;x,y,…)")
+        if meccs:
+            match = _store.get(meccs)
+            if match is None:
+                raise HTTPException(status_code=404, detail="match not found")
+            try:
+                csapat = Team(vedo)
+            except ValueError:
+                raise HTTPException(status_code=400,
+                                    detail="vedo: 'home' vagy 'away'")
+            modell = DefenseModel.learn(match, csapat)
+            vedo_nev = "Tanult védelem — " + (
+                match.meta.home_team if csapat == Team.HOME
+                else match.meta.away_team)
+        else:
+            modell = DefenseModel(num_defenders=max(1, min(7, int(vedok))),
+                                  line_depth_m=max(6.0, min(12.0, float(melyseg))))
+            vedo_nev = (f"Védelem ({modell.num_defenders} védő, "
+                        f"{modell.line_depth_m:.1f} m)".replace(".", ","))
+        try:
+            sim, ertekeles = setplay_3d_match(
+                utak, modell, name=_c3.shared3d_nev(cim) or None,
+                defense_name=vedo_nev)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="a figurában nincs támadó")
+        # A saját gépről (az edző) nyitott figura a csapat várólapjára.
+        try:
+            import ipaddress
+            if ipaddress.ip_address(request.client.host).is_loopback:
+                _utolso_figura.update(
+                    url="/figura3d?" + request.url.query,
+                    nev=sim.meta.home_team, vedo=vedo_nev,
+                    ido=_c3.shared3d_ora())
+        except (AttributeError, ValueError):
+            pass
+        return _html_gzip(view3d_html(sim, figura=ertekeles), request)
+
+    figura3d.__annotations__["request"] = Request
+    app.get("/figura3d")(figura3d)
+
     @app.get("/matches/{match_id}/defence-timeline")
     def match_defence_timeline(match_id: str):
         """A 3D pálya védekezés-panelje: ki védekezik, milyen falban.
@@ -4027,6 +4099,19 @@ def create_app():
         # jelöli, melyiket látta már (élőben vagy felvételről), és a link
         # a nevet is viszi (a visszanézés a nevére számít).
         nev_ = _c3.shared3d_nev(nev)
+        # Az edző legutóbbi figurája (a tervezőből, 3D-ben nyitva) — a
+        # headset a saját útját járhatja be.
+        figura_ = ""
+        from ..pipeline.play_simulation import FIGURA_3D_KOVET_S
+        if (_utolso_figura.get("url")
+                and most - _utolso_figura["ido"] <= FIGURA_3D_KOVET_S):
+            figura_ = ('<p style="margin-top:2em"><a style="color:#ffc83d;'
+                       'font-size:1.3em" href="'
+                       + _html.escape(_utolso_figura["url"]) + '">▶ Figura: '
+                       + _html.escape(_utolso_figura["nev"]) + "</a><br>"
+                       '<span style="color:#93a0b4">'
+                       + _html.escape(_utolso_figura["vedo"])
+                       + " · járd be a saját utadat</span></p>")
         kulcs_ = _c3.quiz_name_key(nev_) if nev_ else None
         sorok = []
         for fej, meta, p_ in _legutobbi_felvetelek()[:_c3.SHARED3D_WAIT_RECS]:
@@ -4092,7 +4177,7 @@ def create_app():
                      'padding-top:12vh"><h1>👥 Várunk az edzőre…</h1>'
                      '<p>Amint az edző a 3D pályán a "📡 Vezetem" gombot '
                      'megnyomja, ez a lap magától továbblép.</p>'
-                     + sajat + lista + '</body></html>'),
+                     + sajat + figura_ + lista + '</body></html>'),
             headers={"Cache-Control": "no-store"})
 
     @app.get("/matches/{match_id}/calib-overlay")

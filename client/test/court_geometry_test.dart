@@ -139,6 +139,12 @@ void main() {
         "0:03 · élőben 3 · megnézte: Anna");
     expect(recordingPeople({"jelen": ["A", "B"], "nezok": ["Anna"]}),
         "Élőben: A, B\nMegnézte: Anna");
+    expect(
+        setplay3dPoints([
+          [const Offset(22, 10), const Offset(24.25, 9.5)],
+          [const Offset(30, 2)]
+        ]),
+        "22.0,10.0,24.3,9.5;30.0,2.0");
     expect(recordingSize(400000), "0,4 MB");
     expect(recordingSize(12400000), "12 MB");
     expect(recordingSize(1300000000), "1,3 GB");

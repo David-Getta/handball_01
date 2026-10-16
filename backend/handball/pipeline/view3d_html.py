@@ -707,16 +707,25 @@ function jelenetSorok(dontesek, szabadok, eladasok, nevH, nevV, lerohanasok, kap
 
 def view3d_html(match: Match, figure_alerts: list | None = None,
                 breakpoints: dict | None = None,
-                stoppers: dict | None = None) -> str:
-    """A teljes, önálló HTML-oldal (three.js a motorból, adat beágyazva)."""
+                stoppers: dict | None = None,
+                figura: dict | None = None) -> str:
+    """A teljes, önálló HTML-oldal (three.js a motorból, adat beágyazva).
+
+    `figura` (opcionális): a tervező figurája (/figura3d — a
+    play_simulation.setplay_3d_match kiértékelése, {"best_shot_value",
+    "t_s", "attacker_id", "hossz_s"}): az oldal ilyenkor figura-módban
+    nyílik — nincs mögötte könyvtári meccs, ezért a közös nézés, a
+    jegyzet, a videó és a meccs-jelenetek sorai rejtve; a lejátszás
+    magától indul és ismétel, a fejléc a kiértékelést mutatja."""
     # A "</" a <script>-ben nem maradhat nyersen: egy "</script>"-et
     # tartalmazó csapatnév (a könyvtár-import más gépről is hozhat ilyet)
     # kitörne a szkriptből. JSON-ban "</" csak szövegben állhat, ott a
     # "<\/" ugyanazt jelenti.
-    adat = json.dumps(_compact_data(match, figure_alerts, breakpoints,
-                                    stoppers),
-                      ensure_ascii=False, separators=(",", ":")).replace(
-                          "</", "<\\/")
+    nyers = _compact_data(match, figure_alerts, breakpoints, stoppers)
+    if figura:
+        nyers["figura"] = figura
+    adat = json.dumps(nyers, ensure_ascii=False,
+                      separators=(",", ":")).replace("</", "<\\/")
     cim = f"{match.meta.home_team} vs {match.meta.away_team} — 3D"
     # Nem f-string: a JS tele van kapcsos zárójellel; a beszúrás
     # helyőrző-cserével megy.
@@ -1011,6 +1020,10 @@ const hx = (s) => String(s).replace(/[&<>"']/g,
 // (mint a mentett oldalnál), a felvétel magától indul. Élő oldalon null.
 const FV_CSOMAG = null;
 if (FV_CSOMAG) ADAT.match_id = "";
+// A FIGURA (a tervezőből, /figura3d): nincs mögötte könyvtári meccs — a
+// motoros, meccshez kötött funkciók kikapcsolnak (mint a csomagban).
+const FIGURA = ADAT.figura || null;
+if (FIGURA) ADAT.match_id = "";
 const H = 40, W = 20, KAPU_SZ = 3;
 __LOVES_JS__
 __PASSZSAV_JS__
@@ -1250,6 +1263,32 @@ const csuszka = document.getElementById("csuszka");
 csuszka.max = veg;
 const lejatszasGomb = document.getElementById("lejatszas");
 lejatszasGomb.onclick = () => { megy = !megy; lejatszasGomb.textContent = megy ? "⏸" : "▶"; };
+// Figura-módban: a meccshez kötött sorok (közös nézés, videó, jegyzet, a
+// meccs-jelenetek lapozói) rejtve; a fejléc a kiértékelést mutatja; a
+// lejátszás magától indul (és a végén ismétel — lásd a rajzoló hurkot).
+if (FIGURA){
+  for (const id of ["vezetGomb", "videoGomb", "jegyzetGomb", "jelenetGomb",
+                    "dontesElozo", "szabadElozo", "eladasElozo", "golElozo",
+                    "emberElozo", "kontraElozo", "kapottElozo", "hetesElozo"]){
+    const el = document.getElementById(id);
+    const sor = el && el.closest(".sor");
+    if (sor) sor.style.display = "none";
+  }
+  const reszek = ["a mozgás " + String(FIGURA.hossz_s).replace(".", ",") + " mp"];
+  if (FIGURA.attacker_id && FIGURA.best_shot_value > 0)
+    reszek.push("legjobb lövőhelyzet: " + FIGURA.attacker_id + ". játékos ("
+                + Math.round(FIGURA.best_shot_value * 100) + "%"
+                + (FIGURA.t_s !== null ? ", " + String(FIGURA.t_s).replace(".", ",") + " mp" : "") + ")");
+  const fs = document.createElement("div");
+  fs.id = "figuraInfo";
+  fs.style.cssText = "font-size:12px;opacity:.9;line-height:1.35;color:#ffc83d";
+  fs.textContent = "Figura · " + reszek.join(" · ") + " · ismétlődik";
+  document.getElementById("eszkoz").prepend(fs);
+  megy = true; lejatszasGomb.textContent = "⏸";
+}
+window.figuraProba = () => ({figura: !!FIGURA, megy, ido, veg,
+  rejtett: ["vezetGomb", "videoGomb", "jegyzetGomb"].filter(id =>
+    document.getElementById(id).closest(".sor").style.display === "none").length});
 if (megy) lejatszasGomb.textContent = "⏸";
 csuszka.value = ido;
 csuszka.oninput = () => { ido = parseFloat(csuszka.value); };
@@ -1466,6 +1505,15 @@ function kovetesFrissit(dt){
     }
   }
   k.ex = cel.x; k.ey = cel.y;
+  // Még nincs irány (a játékos áll — a kapus, a figura irányítója): a
+  // labda felé, a labdásnál a közelebbi kapu felé. Irány nélkül a kamera
+  // a játékosba, a mezszám-táblájába ült, amíg az el nem indult.
+  if (k.ix === 0 && k.iy === 0){
+    let dx = labda.position.x - cel.x, dy = (W - labda.position.z) - cel.y;
+    if (!labda.visible || Math.hypot(dx, dy) < 1){ dx = (cel.x < H / 2 ? 0 : H) - cel.x; dy = W / 2 - cel.y; }
+    const h = Math.hypot(dx, dy) || 1;
+    k.ix = dx / h; k.iy = dy / h;
+  }
   // Cél-hely pálya-térben (a játékos mögött 4 m, 2,2 m magasan) → three.
   const cx = cel.x - k.ix * 4.0, cy = cel.y - k.iy * 4.0;
   const ka = clamp(dt * 3.0, 0, 1);
@@ -1963,6 +2011,9 @@ function linkEpit(){
   if (rajzok.length) q.set("rajz", rajzKodol(rajzok));
   if (videoBe) q.set("video", "1");
   if (kozosMod === "kovet"){ q.set("kovet", "1"); if (KZ_NEV) q.set("nev", KZ_NEV); }
+  // A figura linkje a figurát is viszi (a pályán kívül nincs mögötte meccs).
+  if (FIGURA) for (const k of ["u", "cim", "meccs", "vedo", "vedok", "melyseg"])
+    if (URL_PARAM.get(k)) q.set(k, URL_PARAM.get(k));
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
 }
@@ -4303,7 +4354,8 @@ fest.setAnimationLoop(() => {
   const dt = Math.min(0.1, (most - utolso)/1000); utolso = most;
   if (megy){ const t0 = ido; ido = Math.min(veg, ido + dt * sebesseg);
     vetitesFrissit(t0, ido);
-    if (ido >= veg){ megy = false; lejatszasGomb.textContent = "▶"; }
+    // (a figura ismétel: a végén — az állókép után — elölről)
+    if (ido >= veg){ if (FIGURA && veg > 0) ido = 0; else { megy = false; lejatszasGomb.textContent = "▶"; } }
     csuszka.value = ido; }
   mozgas(dt); vrMozgas(dt); vrGombok(); rajzol(ido); kovetFrissit(dt); kovetesFrissit(dt); tvFrissit(dt); falFrissit(ido); lovesFrissit(ido); nyomFrissit(ido); passzFrissit(ido); passzsavFrissit(); falresFrissit(ido); dontesFrissit(ido); jelenetListaJelol(ido); jegyzetFrissit(ido); videoFrissit(ido); kozosFrissit(); mutatoFrissit(); jelenletFrissit(dt); felvetelFrissit(); valaszJelFrissit(); felirat(ido); vrFeliratFrissit();
   const o = Math.floor(ido/60), mp = Math.floor(ido%60);

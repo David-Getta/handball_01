@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A figura 3D-ben és VR-ben** (app + motor + böngésző): a
+  Figura-tervező "3D / VR ↗" gombja a megrajzolt figurát a böngészős
+  3D-ben nyitja — valós tempóban (a leghosszabb szakasz is ≤ 3,5 m/s),
+  állóképpel az elején és a végén, a tanult (vagy a tervezőben beállított)
+  fal reakciójával, kapussal, ismétlődve; a kiértékelés (legjobb
+  lövőhelyzet) a panel tetején. A játékos a saját útját a saját szemével
+  járja be (Játékos-kamera, VR); a csapat a `/kovet` várólapon "▶
+  Figura" sorként éri el. Javítás mellé: a Játékos-kamera álló játékosnál
+  (kapus, a figura irányítója) a játékosba ült — most a labda (a labdásnál
+  a kapu) felé néz; a tervező oldalsávja alacsony ablakban görgethető.
+
 - **A "Megbeszélés" gomb a felvételt is indítja** (app): a kezdőlap
   egy kattintásos csapat-megbeszélése a közös nézés vezetésével együtt a
   ⏺ Felvételt is elindítja — a vezetés elején rendre elfelejtődött, és

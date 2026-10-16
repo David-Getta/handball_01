@@ -490,6 +490,28 @@ a padló nyilai; `video=1` — a felvétel a 3D mellett; `kovet=1` /
 `vezet=1` — közös nézés követőként / vezetőként; `felvetel=<azonosító>` —
 egy mentett megbeszélés visszajátszása indul.
 
+## Figura 3D-ben — a megrajzolt figura bejárása
+
+A **Figura-tervező** "3D / VR ↗" gombja a megrajzolt figurát a böngészős
+3D-ben nyitja (VR-ben is): a támadók a Kezdő → Közép → Vég kulcs-pozíciók
+közt VALÓS tempóban futnak (a leghosszabb szakasz is legfeljebb 3,5 m/s;
+a mozgás 3–12 mp), az elején és a végén 1,5 mp állókép, a fal a védelem
+modellje szerint reagál, a kaput kapus védi, és a figura ismétlődik. A
+védelem a legutóbbi "Egy CSAPAT tanult védelme ellen" meccse és oldala,
+különben a tervező fala (védőszám, mélység). A bal felső sarokban a
+kiértékelés: a mozgás hossza és a legjobb lövőhelyzet (ki, hány %, mikor).
+
+Edzőileg: a játékos a saját útját a saját szemével látja — a
+Játékos-kamerával (a mezszám a figura sorszáma) vagy dupla kattintással —,
+a tempóval és a fal reakciójával; a rajz és a Link másolása működik (a
+link a figurát viszi). A meccshez kötött funkciók (közös nézés, jegyzet,
+videó, a meccs-jelenetek) a figurában nincsenek.
+
+A csapat a várólapon éri el: amit az edző a saját gépéről nyitott meg, azt
+a `/kovet` lap három órán át "▶ Figura: …" sorként linkeli — a headseten a
+hosszú cím nem gépelhető. A cím (`/figura3d?u=…&cim=…&meccs=…&vedo=…`)
+a klub-hálózatról is elérhető (olvasás).
+
 ## VR-headset
 
 A böngészős oldal WebXR-képes: a lenti "ENTER VR" gombbal a csarnok

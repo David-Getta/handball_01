@@ -546,6 +546,16 @@ String recordingPeople(Map<String, dynamic> f) {
   ].join("\n");
 }
 
+/// A figura-tervező kulcs-pozíciói a böngészős 3D figura-linkjéhez
+/// (a motor /figura3d `u` paramétere): támadónként "x,y,x,y,…" méterben,
+/// tizedre kerekítve, a támadók ";"-vel elválasztva.
+String setplay3dPoints(List<List<Offset>> utak) => utak
+    .map((u) => u
+        .map((p) =>
+            "${p.dx.toStringAsFixed(1)},${p.dy.toStringAsFixed(1)}")
+        .join(","))
+    .join(";");
+
 /// Bájt → olvasható méret ("0,4 MB", "12 MB", "1,3 GB") — a felvételek
 /// takarításához.
 String recordingSize(num? bajt) {

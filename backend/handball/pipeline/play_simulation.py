@@ -163,6 +163,111 @@ def simulate_setplay(setplay: SetPlay, defense: DefenseModel,
     return Match(meta=meta, frames=frames)
 
 
+# ---- A figura 3D-ben (böngésző / VR) ----------------------------------------
+# A tervező 40 lépéses animációja 1,6 mp — a képernyőn áttekintésnek jó,
+# a headsetben villanás. 3D-ben valós tempóban megy: a kulcs-pozíciók
+# közti szakaszok egyforma ideig tartanak (mint a tervezőben — a
+# játékosok EGYSZERRE érnek a "Közép" pontra), és a leggyorsabb szakasz
+# is legfeljebb ekkora futótempó.
+FIGURA_3D_TEMPO_MPS = 3.5
+# A mozgás hossza ebbe a sávba szorítva (mp): a rövid figura se legyen
+# villanás, a hosszú se vánszorogjon.
+FIGURA_3D_MIN_S = 3.0
+FIGURA_3D_MAX_S = 12.0
+# Az elején és a végén ennyi mp állókép: a felállás és a végső helyzet
+# látszik, mielőtt a mozgás indul / miután megállt.
+FIGURA_3D_ALLAS_S = 1.5
+# A beágyazott adat képrátája (a böngésző interpolál — mint a meccsnél).
+FIGURA_3D_FPS = 6.0
+# Bemeneti korlátok (a link a böngészőből jön).
+FIGURA_3D_MAX_JATEKOS = 7
+FIGURA_3D_MAX_PONT = 10
+# A csapat várólapja (/kovet) az edző legutóbbi 3D-figuráját ennyi mp-ig
+# linkeli (egy edzés hossza — utána már nem "a mostani").
+FIGURA_3D_KOVET_S = 3 * 3600
+
+
+def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
+                     name: str | None = None,
+                     defense_name: str | None = None,
+                     config: TacticsConfig | None = None) -> tuple[Match, dict]:
+    """A tervező figurája 3D-re (böngésző / VR): valós tempóban, kapussal.
+
+    `keypoints`: támadónként a kulcs-pozíciók ([(x, y), …] — a tervező
+    Kezdő / Közép / Vég pontjai, méterben); az 1. támadónál a labda (mint
+    a tervezőben). A védők a `defense` modell szerint reagálnak (lásd
+    `simulate_setplay`), és a kaput kapus védi (a labda felé lép, a
+    vonalon). A mozgás előtt és után FIGURA_3D_ALLAS_S állókép.
+
+    Edzőileg: a megrajzolt figura bejárható — a headsetben a játékos a
+    saját útját a saját szemével látja, a tempóval és a fal reakciójával.
+
+    Visszaad: (Match — a hazai a támadó, a vendég a védő; kiértékelés:
+    {"best_shot_value", "t_s" (a legjobb helyzet ideje), "attacker_id",
+    "hossz_s" (a mozgás)}). ValueError, ha nincs érvényes támadó."""
+    config = config or TacticsConfig()
+    utak = []
+    for ut in list(keypoints or [])[:FIGURA_3D_MAX_JATEKOS]:
+        pontok = [(min(COURT_LENGTH_M, max(0.0, float(x))),
+                   min(COURT_WIDTH_M, max(0.0, float(y))))
+                  for x, y in list(ut)[:FIGURA_3D_MAX_PONT]
+                  if math.isfinite(float(x)) and math.isfinite(float(y))]
+        if pontok:
+            utak.append(pontok)
+    if not utak:
+        raise ValueError("a figurában nincs támadó")
+    szakaszok = max(len(u) for u in utak) - 1
+    # A leghosszabb szakasz (bármelyik támadóé) szabja a szakasz-időt.
+    leghosszabb = 0.0
+    for u in utak:
+        for a, b in zip(u, u[1:]):
+            leghosszabb = max(leghosszabb, math.hypot(b[0] - a[0], b[1] - a[1]))
+    mozgas_s = (leghosszabb / FIGURA_3D_TEMPO_MPS) * max(1, szakaszok)
+    mozgas_s = min(FIGURA_3D_MAX_S, max(FIGURA_3D_MIN_S, mozgas_s))
+    fps = FIGURA_3D_FPS
+    lepesek = max(2, int(round(mozgas_s * fps)) + 1)
+    allas = int(round(FIGURA_3D_ALLAS_S * fps))
+
+    def minta(u, t):
+        """A kulcs-pozíciók útja t (0..1) helyen, szakaszonként lineárisan."""
+        if len(u) == 1:
+            return u[0]
+        s = min(len(u) - 1.0, max(0.0, t * (len(u) - 1)))
+        i = min(len(u) - 2, int(s))
+        f = s - i
+        return (u[i][0] + (u[i + 1][0] - u[i][0]) * f,
+                u[i][1] + (u[i + 1][1] - u[i][1]) * f)
+
+    tamadok = [[minta(u, s / (lepesek - 1)) for s in range(lepesek)]
+               for u in utak]
+    # Állókép az elején és a végén (az első / utolsó helyzet ismétlése).
+    tamadok = [[u[0]] * allas + u + [u[-1]] * allas for u in tamadok]
+    sim = simulate_setplay(SetPlay(attackers=tamadok,
+                                   ball_carrier=[0] * len(tamadok[0])),
+                           defense, config=config, fps=fps)
+    ertekeles = evaluate_setplay(sim, config=config)
+    # A kapus: a vonal előtt, a labda felé lépve (a kapufák közt).
+    kapu_x = config.own_goal_x(Team.AWAY)
+    elore = -1.0 if kapu_x == COURT_LENGTH_M else 1.0
+    for f in sim.frames:
+        ky = COURT_WIDTH_M / 2.0
+        if f.ball is not None:
+            ky += max(-1.2, min(1.2, 0.2 * (f.ball.y - COURT_WIDTH_M / 2.0)))
+        f.players.append(PlayerPosition(
+            track_id=99, team=Team.AWAY, x=kapu_x + elore * 0.6, y=ky,
+            source=PositionSource.MEASURED, confidence=1.0, role="kapus"))
+    sim.meta.match_id = "figura-3d"
+    sim.meta.home_team = (name or "").strip()[:60] or "Figura"
+    sim.meta.away_team = (defense_name or "").strip()[:60] or "Védelem"
+    return sim, {
+        "best_shot_value": round(float(ertekeles["best_shot_value"]), 3),
+        "t_s": (round(ertekeles["step"] / fps, 1)
+                if ertekeles["step"] >= 0 else None),
+        "attacker_id": ertekeles["attacker_id"],
+        "hossz_s": round(mozgas_s, 1),
+    }
+
+
 def evaluate_setplay(match: Match, config: TacticsConfig | None = None) -> dict:
     """Pontozza a szimulált figurát: a teremtett legjobb lövőhelyzet.
 

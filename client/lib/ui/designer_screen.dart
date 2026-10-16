@@ -16,6 +16,7 @@ import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "court_geometry.dart";
 import "shell/app_shell.dart";
+import "../services/browser_open.dart";
 import "court_painter.dart";
 import "error_text.dart";
 
@@ -50,6 +51,11 @@ class _DesignerScreenState extends State<DesignerScreen> {
   double _lineDepth = 6.0;
 
   bool _playing = false;
+  // A legutóbbi "tanult védelem" (meccs + védekező oldal) és a figura
+  // neve (mentve / betöltve) — a böngészős 3D ugyanazt mutatja.
+  String? _tanultMeccs;
+  String _tanultOldal = "away";
+  String? _nev;
   Match? _sim;
   SetPlayEvaluation? _eval;
   int _playIndex = 0;
@@ -250,6 +256,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
       final sim = Match.fromJson(resp["tracking"] as Map<String, dynamic>);
       final eval = evaluateSetPlay(sim);
       if (!mounted) return;
+      _tanultMeccs = matchId;
+      _tanultOldal = side;
       setState(() {
         _sim = sim;
         _eval = eval;
@@ -272,6 +280,34 @@ class _DesignerScreenState extends State<DesignerScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Szimulációs hiba: ${humanError(e)}")));
     }
+  }
+
+  /// A figura böngészős 3D-ben / VR-ben (a motor /figura3d oldala):
+  /// valós tempóban, kapussal, ismétlődve — a játékos a saját útját a
+  /// saját szemével járja be. A védelem a legutóbbi "tanult védelem"
+  /// (meccs + oldal), különben a kézi fal (védőszám, mélység). A csapat
+  /// várólapja (/kovet) is linkeli.
+  Future<void> _bongeszos3d() async {
+    final q = <String, String>{"u": setplay3dPoints(_attackers)};
+    if ((_nev ?? "").isNotEmpty) q["cim"] = _nev!;
+    final m = _tanultMeccs;
+    if (m != null) {
+      q["meccs"] = m;
+      q["vedo"] = _tanultOldal;
+    } else {
+      q["vedok"] = "$_numDefenders";
+      q["melyseg"] = _lineDepth.toStringAsFixed(1);
+    }
+    final url = Uri.parse("${_api.baseUrl}/figura3d")
+        .replace(queryParameters: q)
+        .toString();
+    final ok = await openInBrowser(url);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? "A figura a böngészőben, 3D-ben — VR-ben bejárható; a csapat "
+                "a /kovet várólapon is eléri (▶ Figura)."
+            : "Nyisd meg kézzel a böngészőben: $url")));
   }
 
   void _backToEdit() {
@@ -322,6 +358,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
           [for (final p in a) [p.dx, p.dy]],
       ];
       await _api.savePlay(name, attackers);
+      _nev = name;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Figura mentve: $name")));
@@ -404,6 +441,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
                   : _path3(a.first, a.last),
         ];
         _editStep = 0;
+        _nev = "${play["name"] ?? ""}";
       });
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Betöltve: ${play["name"]}")));
@@ -493,9 +531,16 @@ class _DesignerScreenState extends State<DesignerScreen> {
     return Container(
       decoration: AppTheme.card(),
       padding: const EdgeInsets.all(AppSpacing.lg),
+      // A felső rész görgethető: alacsony ablakban (700×600) a lenti
+      // gombok (a "3D / VR ↗"-val együtt) így is a helyükön maradnak.
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+         Expanded(
+          child: SingleChildScrollView(
+           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
           Text("KULCS-POZÍCIÓ", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
           SegmentedButton<int>(
@@ -553,7 +598,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
             value: _lineDepth, min: 6, max: 12,
             onChanged: _playing ? null : (v) => setState(() => _lineDepth = v),
           ),
-          const Spacer(),
+            ]),
+          ),
+         ),
           if (_eval != null) _evalCard(_eval!),
           const SizedBox(height: AppSpacing.md),
           _playing
@@ -577,6 +624,20 @@ class _DesignerScreenState extends State<DesignerScreen> {
                         backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
                     icon: const Icon(Icons.psychology_outlined),
                     label: const Text("Egy CSAPAT tanult védelme ellen"),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  // A figura 3D-ben / VR-ben (a böngészőben, bejárható).
+                  Tooltip(
+                    message: "A figura a böngészős 3D-ben (VR-ben is): valós "
+                        "tempóban, kapussal, ismétlődve — a játékos a saját "
+                        "útját a saját szemével járja be. A védelem a "
+                        "legutóbbi tanult védelem, különben a fenti fal; a "
+                        "csapat a /kovet várólapon is eléri.",
+                    child: OutlinedButton.icon(
+                      onPressed: _bongeszos3d,
+                      icon: const Icon(Icons.view_in_ar_outlined, size: 18),
+                      label: const Text("3D / VR ↗"),
+                    ),
                   ),
                 ]),
         ],
