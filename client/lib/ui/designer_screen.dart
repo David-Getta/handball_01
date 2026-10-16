@@ -322,10 +322,16 @@ class _DesignerScreenState extends State<DesignerScreen> {
   /// saját szemével járja be. A védelem a legutóbbi "tanult védelem"
   /// (meccs + oldal), különben a kézi fal (védőszám, mélység). A csapat
   /// várólapja (/kovet) is linkeli.
-  Future<void> _bongeszos3d() async {
-    final q = <String, String>{"u": setplay3dPoints(_attackers)};
-    if (_vanPassz) q["l"] = _labda.join(",");
-    if ((_nev ?? "").isNotEmpty) q["cim"] = _nev!;
+  Future<void> _bongeszos3d() =>
+      _figura3dNyit(_attackers, _labda, _nev);
+
+  /// A /figura3d megnyitása adott utakkal, labdás-sorral és névvel (a
+  /// tervező mostani figurája, vagy egy mentett a listából).
+  Future<void> _figura3dNyit(
+      List<List<Offset>> utak, List<int> labda, String? nev) async {
+    final q = <String, String>{"u": setplay3dPoints(utak)};
+    if (labda.any((v) => v != 0)) q["l"] = labda.join(",");
+    if ((nev ?? "").isNotEmpty) q["cim"] = nev!;
     final m = _tanultMeccs;
     if (m != null) {
       q["meccs"] = m;
@@ -438,16 +444,53 @@ class _DesignerScreenState extends State<DesignerScreen> {
                           subtitle: Text("${p["players"]} játékos",
                               style: AppText.label.copyWith(fontSize: 11)),
                           onTap: () => Navigator.pop(ctx, p["id"] as String),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline,
-                                size: 18, color: AppColors.textFaint),
-                            onPressed: () async {
-                              try {
-                                await _api.deletePlay(p["id"] as String);
-                                setDlg(() => plays.remove(p));
-                              } catch (_) {}
-                            },
-                          ),
+                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                            // Egy kattintással 3D-ben (a passzaival) —
+                            // betöltés nélkül.
+                            IconButton(
+                              tooltip: "3D / VR — a böngészőben",
+                              icon: const Icon(Icons.view_in_ar_outlined,
+                                  size: 18, color: AppColors.accent),
+                              onPressed: () async {
+                                try {
+                                  final play = await _api
+                                      .fetchPlay(p["id"] as String);
+                                  final utak = [
+                                    for (final a in play["attackers"] as List)
+                                      [
+                                        for (final pt in a as List)
+                                          Offset(
+                                              ((pt as List)[0] as num).toDouble(),
+                                              (pt[1] as num).toDouble())
+                                      ]
+                                  ];
+                                  final labda = [
+                                    for (final v
+                                        in (play["labda"] as List?) ?? const [])
+                                      (v as num).toInt()
+                                  ];
+                                  await _figura3dNyit(
+                                      utak, labda, "${play["name"] ?? ""}");
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(
+                                              "A figura nem nyílt meg: ${humanError(e)}")));
+                                }
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline,
+                                  size: 18, color: AppColors.textFaint),
+                              onPressed: () async {
+                                try {
+                                  await _api.deletePlay(p["id"] as String);
+                                  setDlg(() => plays.remove(p));
+                                } catch (_) {}
+                              },
+                            ),
+                          ]),
                         ),
                     ],
                   ),

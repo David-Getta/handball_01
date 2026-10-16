@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.171 óta)
 
+- **A mentett figura egy kattintással 3D-ben** (app): a Figura-tervező
+  "Figura betöltése" listájában soronként "3D / VR" gomb — a figura (a
+  passzaival) betöltés nélkül a böngészős 3D-ben nyílik; a gyakorlás
+  előtt sorra megmutathatók.
+
 - **Tizedesvessző: a maradék** (app): a felderítés (hárított/meccs, xG,
   befejezés, lövőtáv), a játékos-fejlődés és a statisztika max
   sebessége, a trend-különbség, a meccs-elemző lövés-xG-je és a kezdőlap
