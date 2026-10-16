@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A böngészős 3D: összecsukható panel, megjegyzett súgó** (böngésző):
+  a bal oldali vezérlőpanel a "☰" gombbal vagy az M billentyűvel
+  elrejthető — kivetítőn, kis ablakban a pálya nagyját takarta; a súgó
+  csak 1600 px fölött nyílik magától (mára akkora, hogy kisebben a kép
+  felét takarná), és mindkettőt megjegyzi a böngésző.
+
 - **A játékos saját mérlege a csapat linkjén** (motor): a /kovet
   várólapja névvel (`/kovet?nev=Anna`) a játékos kvíz-mérlegét és a
   csapata megbeszéléseinek követését is mutatja ("Anna: ❓ kvíz 7/9 · 👁

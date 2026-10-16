@@ -736,6 +736,10 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  /* A súgó gombbal csukható: keskeny ablakban (1200 px alatt) alapból
     csukva — nyitva a pálya jobb harmadát takarta. */
  #sugoGomb{position:fixed;right:12px;top:8px;padding:3px 10px;font-size:11.5px;opacity:.85}
+ /* A vezérlőpanel összecsukható (☰ / M): kivetítőn, kis ablakban a pálya
+    nagyját takarta. */
+ #panelGomb{padding:1px 8px;font-size:12px;margin-right:6px}
+ #eszkoz.csukva{display:none}
  #felirat{position:fixed;left:12px;bottom:56px;padding:6px 12px;border:1px solid #d9b544;border-radius:8px;background:rgba(16,24,32,.85);color:#d9b544;font-weight:600;font-size:15px;display:none}
  /* A panel a lejátszó-sáv fölött véget ér és görgethető: a rétegek
     szaporodtával alacsony ablakban (1024×600) a sáv alá lógott, és az
@@ -777,7 +781,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  #eladasFelirat{padding:6px 14px;border:1px solid #ff9f43;border-radius:8px;background:rgba(16,24,32,.88);font-size:13.5px;display:none;max-width:70vw;text-align:center}
  #jatekosHud{position:fixed;left:50%;top:12px;transform:translateX(-50%);padding:6px 14px;border:1px solid #2f86d6;border-radius:8px;background:rgba(16,24,32,.85);font-size:14px;font-variant-numeric:tabular-nums;display:none}
 </style></head><body>
-<div id="hud"><b>__CIM__</b></div>
+<div id="hud"><button id="panelGomb" title="A vezérlőpanel elrejtése / visszahozása (M) — a pálya teljes képe">☰</button><b>__CIM__</b></div>
 <div id="eszkoz">
  <div class="sor">
   <button id="keringGomb" title="Keringés a pálya körül (O)">Keringés</button>
@@ -1492,6 +1496,7 @@ addEventListener("keydown", e => {
   if (e.code === "KeyT"){ tvGomb.onclick(); return; }
   if (e.code === "KeyE"){ rajzModAllit(!rajzMod); return; }  // rajz
   if (e.code === "KeyJ"){ jegyzetIr(); return; }  // jegyzet
+  if (e.code === "KeyM"){ panelAllit(!panelCsukva); return; }  // a vezérlőpanel
   if (e.code === "KeyH" && kozosMod === "kovet"){ kezAllit(!kzKez); return; }  // ✋
   if (e.code === "KeyK"){ videoAllit(!videoBe); return; }  // videó
   if (e.code === "Escape"){ if (mod === "jatekos") modValt("szabad"); else if (rajzMod) rajzModAllit(false); else meresTorles(); return; }
@@ -2542,13 +2547,36 @@ const sugoElem = document.getElementById("sugo");
 // takarta); a jelenet-lista a helyén nyílik, addig a súgó rejtve marad,
 // de a lista bezárása után a felhasználó állapota tér vissza.
 const sugoGomb = document.getElementById("sugoGomb");
-let sugoNyitva = innerWidth >= 1200;
+// A súgó: a böngésző megjegyzi a választást; először csak széles (1600 px
+// fölötti) ablakban nyílik magától — mára akkora, hogy kisebben a kép felét
+// takarná.
+let sugoNyitva = (() => {
+  try { const v = localStorage.getItem("sm3d.sugo"); if (v !== null) return v === "1"; }
+  catch (e) { /* tárhely nélkül az alapérték */ }
+  return innerWidth >= 1600;
+})();
+function sugoMent(){ try { localStorage.setItem("sm3d.sugo", sugoNyitva ? "1" : "0"); } catch (e) {} }
+// A vezérlőpanel (☰ / M): elrejthető, a böngésző megjegyzi.
+const panelElem = document.getElementById("eszkoz");
+const panelGomb = document.getElementById("panelGomb");
+let panelCsukva = (() => { try { return localStorage.getItem("sm3d.panel") === "0"; } catch (e) { return false; } })();
+function panelAllit(csukva){
+  panelCsukva = !!csukva;
+  panelElem.classList.toggle("csukva", panelCsukva);
+  panelGomb.classList.toggle("be", panelCsukva);
+  panelGomb.textContent = panelCsukva ? "☰ Panel" : "☰";
+  try { localStorage.setItem("sm3d.panel", panelCsukva ? "0" : "1"); } catch (e) {}
+}
+panelGomb.onclick = () => panelAllit(!panelCsukva);
+panelAllit(panelCsukva);
+window.panelProba = () => ({csukva: panelCsukva, latszik: getComputedStyle(panelElem).display !== "none",
+                           sugo: sugoNyitva});
 function sugoAllit(){
   const lathato = sugoNyitva && jelenetLista.style.display !== "block";
   sugoElem.style.display = lathato ? "" : "none";
   sugoGomb.textContent = sugoNyitva ? "Súgó ▴" : "Súgó ▾";
 }
-sugoGomb.onclick = () => { sugoNyitva = !sugoNyitva; sugoAllit(); };
+sugoGomb.onclick = () => { sugoNyitva = !sugoNyitva; sugoMent(); sugoAllit(); };
 sugoAllit();
 const JL_SZIN = {d: "#d9b544", sz: "#ff6b6b", e: "#ff9f43", k: "#59d98c", kg: "#c084fc", n: "#e8eef5"};
 let jelenetSorokAkt = [], jelenetAktiv = -2;

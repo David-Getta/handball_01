@@ -78,7 +78,7 @@ def test_az_oldal_viszi_az_uj_eszkozoket():
                 'id="emberKov"', 'id="emberElozo"', 'id="emberJelzo"',
                 # a panel alacsony ablakban görgethető (nem lóg a sáv alá)
                 "max-height:calc(100vh - 110px);overflow-y:auto",
-                'id="sugoGomb"', "function sugoAllit", "innerWidth >= 1200",
+                'id="sugoGomb"', "function sugoAllit", "innerWidth >= 1600",
                 "function vrFeliratFrissit", "kamera.add(vrTabla)",
                 'g.id = "klipGomb"', "function klipKer", "function klipAllapotSzoveg",
                 "function vrGombEl", "function jelenetLep", "function vrGombok",
@@ -3045,3 +3045,18 @@ def test_vr_snap_fordulas():
                  "if (ki && !vrFordulKi) vrFordul(ax > 0 ? -1 : 1);",
                  'vrKar(forras.handedness || "", gp.axes[2], gp.axes[3], dt);'):
         assert kell in oldal, kell
+
+
+
+def test_a_panel_osszecsukhato_es_a_sugo_megjegyzett():
+    """A vezérlőpanel ☰ / M-mel összecsukható (megjegyezve); a súgó csak
+    1600 px fölött nyílik magától, és a választás megjegyzett."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_meccs())
+    for kell in ('<button id="panelGomb"', "#eszkoz.csukva{display:none}",
+                 'if (e.code === "KeyM"){ panelAllit(!panelCsukva); return; }',
+                 'localStorage.getItem("sm3d.sugo")', "return innerWidth >= 1600;",
+                 "sugoNyitva = !sugoNyitva; sugoMent(); sugoAllit();"):
+        assert kell in oldal, kell
+    assert "let sugoNyitva = innerWidth >= 1200;" not in oldal
