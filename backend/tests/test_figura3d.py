@@ -347,3 +347,43 @@ def test_a_figura_madartavlatbol_indul():
     m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
     assert ('else if (FIGURA && !v("kamera") && !v("tv") && v("kovet") !== "1") '
             'nezet("madar");') in view3d_html(m, figura=e)
+
+
+def test_a_figura_lap():
+    """A kiosztható lap: kulcs-pozíciónként egy ábra (a támadók, a fal, a
+    kapus, a labda), a futás- és passz-nyilakkal, a lépések leírásával és
+    a kiértékeléssel."""
+    from handball.pipeline.figura_lap import figura_lap_html
+
+    kp = [[(22, 10), (22, 10), (22, 10)], [(24, 5), (26, 5), (28, 5)],
+          [(24, 15), (26, 15), (28, 15)]]
+    lap = figura_lap_html(kp, [0, 1, 2], DefenseModel(), nev="Kereszt <b>",
+                          vedo_nev="Védelem (6 védő, 6,0 m)")
+    assert lap.count("<svg") == 3
+    assert "Kereszt &lt;b&gt;" in lap and "<title>Kereszt &lt;b&gt;" in lap
+    assert "1. Kezdő → Közép" in lap and "3. Vég" in lap
+    assert "2. fut 2,0 m · 3. fut 2,0 m · passz: 1 → 2" in lap
+    assert "passz: 2 → 3" in lap and "labda: 3. — befejezés" in lap
+    assert "labda 1 → 2 → 3" in lap
+    # 3 támadó + 6 védő + kapus kockánként
+    assert lap.count('<circle') >= 3 * (3 + 6 + 1)
+    # futás-nyíl (kék) és passz-nyíl (sárga) is
+    assert "#2f6fb2" in lap and "#c99a06" in lap
+
+
+def test_a_figura_lap_vegpont(tmp_path, monkeypatch):
+    c = TestClient(_app(tmp_path, monkeypatch))
+    r = c.get("/figura-lap", params={"u": U, "l": "0,1", "cim": "Kereszt"})
+    assert r.status_code == 200 and "<h1>Kereszt</h1>" in r.text
+    assert c.get("/figura-lap", params={"u": "1,2,3"}).status_code == 400
+    r = c.get("/figura-lap", params={"u": U, "meccs": "fm"})
+    assert "Tanult védelem — B" in r.text
+
+
+def test_a_tervezo_figura_lap_gombja():
+    from pathlib import Path
+
+    tervezo = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+               / "designer_screen.dart").read_text(encoding="utf-8")
+    assert 'ut: "figura-lap"' in tervezo and '"Figura-lap ↗"' in tervezo
+    assert 'Uri.parse("${_api.baseUrl}/$ut")' in tervezo

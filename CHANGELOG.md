@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.171 óta)
 
+- **Figura-lap: a figura papíron** (app + motor): a Figura-tervező
+  "Figura-lap ↗" gombja nyomtatható lapot nyit (PDF-be is) —
+  kulcs-pozíciónként felülnézeti ábra a támadó térfélre vágva (a
+  támadók, a modell szerinti fal és kapus, a labda, a futás- és
+  passz-nyilak), alatta a lépés leírása, felül a kiértékelés. Az
+  öltözőbe, a táblához. (/figura-lap)
+
 - **A figura madártávlatból nyílik** (böngésző): az alakja és a padló
   nyilai egyből látszanak (eddig a meccs oldalsó, távoli kamerájával
   indult); a link nézete, kamerája és a követés felülírja.

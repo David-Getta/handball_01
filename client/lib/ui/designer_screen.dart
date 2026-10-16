@@ -364,10 +364,12 @@ class _DesignerScreenState extends State<DesignerScreen> {
   Future<void> _bongeszos3d() =>
       _figura3dNyit(_attackers, _labda, _nev);
 
-  /// A /figura3d megnyitása adott utakkal, labdás-sorral és névvel (a
-  /// tervező mostani figurája, vagy egy mentett a listából).
+  /// A /figura3d (vagy `ut`: a /figura-lap) megnyitása adott utakkal,
+  /// labdás-sorral és névvel (a tervező mostani figurája, vagy egy mentett
+  /// a listából).
   Future<void> _figura3dNyit(
-      List<List<Offset>> utak, List<int> labda, String? nev) async {
+      List<List<Offset>> utak, List<int> labda, String? nev,
+      {String ut = "figura3d"}) async {
     final q = <String, String>{"u": setplay3dPoints(utak)};
     if (labda.any((v) => v != 0)) q["l"] = labda.join(",");
     if ((nev ?? "").isNotEmpty) q["cim"] = nev!;
@@ -379,16 +381,20 @@ class _DesignerScreenState extends State<DesignerScreen> {
       q["vedok"] = "$_numDefenders";
       q["melyseg"] = _lineDepth.toStringAsFixed(1);
     }
-    final url = Uri.parse("${_api.baseUrl}/figura3d")
+    final url = Uri.parse("${_api.baseUrl}/$ut")
         .replace(queryParameters: q)
         .toString();
     final ok = await openInBrowser(url);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ok
-            ? "A figura a böngészőben, 3D-ben — VR-ben bejárható; a csapat "
-                "a /kovet várólapon is eléri (▶ Figura)."
-            : "Nyisd meg kézzel a böngészőben: $url")));
+        content: Text(!ok
+            ? "Nyisd meg kézzel a böngészőben: $url"
+            : ut == "figura-lap"
+                ? "A figura-lap a böngészőben — nyomtatható (Ctrl+P, PDF-be "
+                    "is): lépésenként ábra a futásokkal, a passzokkal és a "
+                    "fallal."
+                : "A figura a böngészőben, 3D-ben — VR-ben bejárható; a "
+                    "csapat a /kovet várólapon is eléri (▶ Figura).")));
   }
 
   void _backToEdit() {
@@ -814,6 +820,20 @@ class _DesignerScreenState extends State<DesignerScreen> {
                       onPressed: _bongeszos3d,
                       icon: const Icon(Icons.view_in_ar_outlined, size: 18),
                       label: const Text("3D / VR ↗"),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  // Kiosztható lap: lépésenként ábra (nyomtatható, PDF).
+                  Tooltip(
+                    message: "Figura-lap: nyomtatható (PDF-be is menthető) "
+                        "lap — kulcs-pozíciónként felülnézeti ábra a "
+                        "futásokkal, a passzokkal és a fallal, a lépések "
+                        "leírásával. Az öltözőbe, a táblához.",
+                    child: OutlinedButton.icon(
+                      onPressed: () => _figura3dNyit(_attackers, _labda, _nev,
+                          ut: "figura-lap"),
+                      icon: const Icon(Icons.print_outlined, size: 18),
+                      label: const Text("Figura-lap ↗"),
                     ),
                   ),
                 ]),

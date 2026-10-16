@@ -3097,25 +3097,14 @@ def create_app():
     # várólapja linkeli — a headseten a hosszú cím nem gépelhető.
     _utolso_figura: dict = {}
 
-    def figura3d(request: Request, u: str = "", cim: str = "",
-                 meccs: str = "", vedo: str = "away", vedok: int = 6,
-                 melyseg: float = 6.0, l: str = ""):
-        """A figura-tervező figurája böngészős 3D-ben / VR-ben.
-
-        `u`: a támadók kulcs-pozíciói — támadónként "x,y,x,y,…" (méter),
-        a támadók ";"-vel elválasztva; `l`: kulcs-pozíciónként a labdás
-        támadó sorszáma ("0,1,2" — ahol változik, ott passz; alapból végig
-        az 1.); `cim` a figura neve (a `nev` az oldalon a követő neve). A
-        védelem
-        a `meccs` `vedo` csapatából TANULT (mint a /simulate-setplay),
-        meccs nélkül a tervező kézi modellje (`vedok` védő, `melyseg` m-es
-        vonal). Valós tempóban, kapussal, ismétlődve játszik
-        (play_simulation.setplay_3d_match); a fejléc a kiértékelést mutatja."""
-        from ..pipeline import court3d as _c3
+    def _figura_bemenet(u: str, l: str, meccs: str, vedo: str, vedok: int,
+                        melyseg: float):
+        """A figura-linkek közös bemenete (/figura3d, /figura-lap): az utak
+        ("x,y,…;x,y,…"), a labdás-sor ("0,1,…") és a védelem — a `meccs`
+        `vedo` csapatából TANULT, különben a kézi fal (`vedok`, `melyseg`).
+        Visszaad: (utak, labda, modell, a védelem neve); 400 / 404 hibánál."""
         from ..pipeline.play_simulation import (
-            FIGURA_3D_MAX_JATEKOS, FIGURA_3D_MAX_PONT, DefenseModel,
-            figura_nev, setplay_3d_match)
-        from ..pipeline.view3d_html import view3d_html
+            FIGURA_3D_MAX_JATEKOS, FIGURA_3D_MAX_PONT, DefenseModel)
         try:
             utak = []
             for resz in u.split(";")[:FIGURA_3D_MAX_JATEKOS]:
@@ -3149,6 +3138,27 @@ def create_app():
                                   line_depth_m=max(6.0, min(12.0, float(melyseg))))
             vedo_nev = (f"Védelem ({modell.num_defenders} védő, "
                         f"{modell.line_depth_m:.1f} m)".replace(".", ","))
+        return utak, labda, modell, vedo_nev
+
+    def figura3d(request: Request, u: str = "", cim: str = "",
+                 meccs: str = "", vedo: str = "away", vedok: int = 6,
+                 melyseg: float = 6.0, l: str = ""):
+        """A figura-tervező figurája böngészős 3D-ben / VR-ben.
+
+        `u`: a támadók kulcs-pozíciói — támadónként "x,y,x,y,…" (méter),
+        a támadók ";"-vel elválasztva; `l`: kulcs-pozíciónként a labdás
+        támadó sorszáma ("0,1,2" — ahol változik, ott passz; alapból végig
+        az 1.); `cim` a figura neve (a `nev` az oldalon a követő neve). A
+        védelem
+        a `meccs` `vedo` csapatából TANULT (mint a /simulate-setplay),
+        meccs nélkül a tervező kézi modellje (`vedok` védő, `melyseg` m-es
+        vonal). Valós tempóban, kapussal, ismétlődve játszik
+        (play_simulation.setplay_3d_match); a fejléc a kiértékelést mutatja."""
+        from ..pipeline import court3d as _c3
+        from ..pipeline.play_simulation import figura_nev, setplay_3d_match
+        from ..pipeline.view3d_html import view3d_html
+        utak, labda, modell, vedo_nev = _figura_bemenet(
+            u, l, meccs, vedo, vedok, melyseg)
         try:
             sim, ertekeles = setplay_3d_match(
                 utak, modell, ball=labda, name=figura_nev(cim) or None,
@@ -3169,6 +3179,28 @@ def create_app():
 
     figura3d.__annotations__["request"] = Request
     app.get("/figura3d")(figura3d)
+
+    @app.get("/figura-lap")
+    def figura_lap(u: str = "", cim: str = "", meccs: str = "",
+                   vedo: str = "away", vedok: int = 6, melyseg: float = 6.0,
+                   l: str = ""):
+        """A figura KIOSZTHATÓ lapja (nyomtatható HTML — böngészőből PDF):
+        kulcs-pozíciónként felülnézeti ábra (a támadók, a fal, a labda, a
+        futás- és passz-nyilak) a lépések leírásával és a kiértékeléssel
+        (pipeline.figura_lap). A bemenet a /figura3d-é."""
+        from fastapi.responses import HTMLResponse
+
+        from ..pipeline.figura_lap import figura_lap_html
+        from ..pipeline.play_simulation import figura_nev
+        utak, labda, modell, vedo_nev = _figura_bemenet(
+            u, l, meccs, vedo, vedok, melyseg)
+        try:
+            oldal = figura_lap_html(utak, labda, modell,
+                                    nev=figura_nev(cim) or "Figura",
+                                    vedo_nev=vedo_nev)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="a figurában nincs támadó")
+        return HTMLResponse(content=oldal)
 
     @app.get("/matches/{match_id}/attack-figure")
     def attack_figure_api(match_id: str, t: float = 0.0, pontok: int = 3):

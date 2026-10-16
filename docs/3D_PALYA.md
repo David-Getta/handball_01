@@ -503,6 +503,14 @@ kiértékelés: a mozgás hossza és a legjobb lövőhelyzet (ki, hány %, mikor
 A támadók útjai kék nyílként a padlón, a passzok sárgán (a Rajz-réteg
 nyilai: a "Törlés" leveszi, a link viszi).
 
+**Figura-lap.** A tervező "Figura-lap ↗" gombja a figurát nyomtatható
+lapként nyitja (böngészőből PDF-be is): kulcs-pozíciónként egy
+felülnézeti ábra a támadó térfélre vágva — a támadók a sorszámukkal, a
+fal a védelem modellje szerint (a labdára reagálva), a kapus, a labda, a
+következő pontig futás (kék) és a passz (sárga) nyila —, alatta a lépés
+leírása ("3. fut 3,2 m · passz: 2 → 3"), a lap tetején a kiértékelés. Az
+öltözőbe, a táblához. (/figura-lap — a bemenete a /figura3d-é.)
+
 **Támadásból figura.** Az app 3D fülén a "✎ Figurává" a MOSTANI
 pillanat szervezett támadását a Figura-tervezőbe viszi: a támadó csapat
 mezőnyjátékosainak helye három kulcs-pozíción (a támadás elejétől a
