@@ -188,6 +188,16 @@ FIGURA_3D_FPS = 6.0
 # Bemeneti korlátok (a link a böngészőből jön).
 FIGURA_3D_MAX_JATEKOS = 7
 FIGURA_3D_MAX_PONT = 10
+# A figura neve (a 3D fejléce, a /kovet sora) legfeljebb ennyi jel.
+FIGURA_3D_NEV_MAX = 60
+
+
+def figura_nev(s) -> str:
+    """A figura neve megtisztítva: a látható jelek (vezérlőjel nélkül),
+    két szélén szóköz nélkül, legfeljebb FIGURA_3D_NEV_MAX; üres, ha nincs.
+    (A követő nevének tisztítója rövidebbre vág — az egy fej fölé fér.)"""
+    s = "".join(ch for ch in str(s or "") if ch.isprintable()).strip()
+    return s[:FIGURA_3D_NEV_MAX].strip()
 # A figura passza ennyi m/s-mal száll (a valódinál lassabb — a
 # headsetben követhető), és legalább ennyi mp; a következő kulcs-pozícióra
 # érkezik (ott már az átvevőnél van).
@@ -328,8 +338,8 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
             track_id=99, team=Team.AWAY, x=kapu_x + elore * 0.6, y=ky,
             source=PositionSource.MEASURED, confidence=1.0, role="kapus"))
     sim.meta.match_id = "figura-3d"
-    sim.meta.home_team = (name or "").strip()[:60] or "Figura"
-    sim.meta.away_team = (defense_name or "").strip()[:60] or "Védelem"
+    sim.meta.home_team = figura_nev(name) or "Figura"
+    sim.meta.away_team = figura_nev(defense_name) or "Védelem"
     return sim, {
         "best_shot_value": round(float(ertekeles["best_shot_value"]), 3),
         "t_s": (round(ertekeles["step"] / fps, 1)

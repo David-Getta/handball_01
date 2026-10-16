@@ -3114,7 +3114,7 @@ def create_app():
         from ..pipeline import court3d as _c3
         from ..pipeline.play_simulation import (
             FIGURA_3D_MAX_JATEKOS, FIGURA_3D_MAX_PONT, DefenseModel,
-            setplay_3d_match)
+            figura_nev, setplay_3d_match)
         from ..pipeline.view3d_html import view3d_html
         try:
             utak = []
@@ -3151,7 +3151,7 @@ def create_app():
                         f"{modell.line_depth_m:.1f} m)".replace(".", ","))
         try:
             sim, ertekeles = setplay_3d_match(
-                utak, modell, ball=labda, name=_c3.shared3d_nev(cim) or None,
+                utak, modell, ball=labda, name=figura_nev(cim) or None,
                 defense_name=vedo_nev)
         except (ValueError, TypeError):
             raise HTTPException(status_code=400, detail="a figurában nincs támadó")

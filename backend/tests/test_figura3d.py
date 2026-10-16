@@ -237,3 +237,16 @@ def test_a_figura_kozos_nezese(tmp_path, monkeypatch):
     assert 'const KZ_ID = FIGURA ? "figura" : ADAT.match_id;' in oldal
     assert "...(FIGURA ? {figura: FIGURA_KOD} : {})" in oldal
     assert 'for (const id of ["felvetelGomb", "felvetelValaszto", "fejezetValaszto"])' in oldal
+
+
+def test_a_figura_neve_nem_csonkul(tmp_path, monkeypatch):
+    """A figura neve 60 jelig megmarad (a követő-név tisztítója 16-ra
+    vágta); a vezérlőjel kimarad."""
+    app = _app(tmp_path, monkeypatch)
+    helyi = TestClient(app, client=("127.0.0.1", 1))
+    nev = "Beúszós kereszt visszaadással"
+    r = helyi.get("/figura3d", params={"u": U, "cim": nev + "\x07"})
+    assert f"<title>{nev} vs " in r.text
+    assert f"▶ Figura: {nev}<" in helyi.get("/kovet").text
+    r = helyi.get("/figura3d", params={"u": U, "cim": "x" * 100})
+    assert "<title>" + "x" * 60 + " vs " in r.text

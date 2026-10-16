@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A figura neve nem csonkul** (javítás, motor): a 3D figura neve a
+  fejlécben és a /kovet várólapján 16 jelre rövidült ("Beúszós kereszt
+  visszaadással" → "Beúszós kereszt") — most 60 jelig megmarad.
+
 - **Több kulcs-pozíció a Figura-tervezőben** (app): a három fix pont
   (Kezdő / Közép / Vég) helyett "+"-szal új pont a mostani után, "−"-szal
   törlés (2–6 pont) — kereszt, visszaadás is megrajzolható; a 3D, a
