@@ -28,6 +28,7 @@ import "package:flutter/services.dart";
 
 import "../theme/app_theme.dart";
 import "anim.dart";
+import "num_format.dart";
 
 class ZoomPanView extends StatefulWidget {
   final Widget child;
@@ -105,7 +106,7 @@ class _ZoomPanViewState extends State<ZoomPanView> {
   Widget _hint(BuildContext context) {
     final zoomed = _scale > 1.01;
     final text = zoomed
-        ? "×${_scale.toStringAsFixed(1)} · dupla kattintás: vissza"
+        ? "×${huNum(_scale)} · dupla kattintás: vissza"
         : "csippentés vagy Ctrl/⌘+görgő: nagyítás";
     return IgnorePointer(
       child: AnimatedOpacity(

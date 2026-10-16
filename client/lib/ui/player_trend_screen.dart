@@ -17,6 +17,7 @@ import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
 import "error_text.dart";
+import "num_format.dart";
 
 class PlayerTrendScreen extends StatefulWidget {
   /// A csapatnevek a meccs-könyvtárból (a választóhoz). Üresen hagyva a
@@ -488,21 +489,21 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
       // Szezon-összkép.
       Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.sm, children: [
         _chip("${_points.length} meccs"),
-        _chip("legjobb max sebesség: ${(bestTop * 3.6).toStringAsFixed(1)} km/h"),
+        _chip("legjobb max sebesség: ${huNum(bestTop * 3.6)} km/h"),
         _chip("összes sprint: $totalSprints"),
         if (totalShots > 0)
           _chip("gól/lövés: $totalGoals/$totalShots "
               "(${(100.0 * totalGoals / totalShots).toStringAsFixed(0)}%)"),
         if (totalXg > 0)
-          _chip("várható gól: ${totalXg.toStringAsFixed(1)} · befejezés: "
-              "${totalXgDiff >= 0 ? "+" : ""}${totalXgDiff.toStringAsFixed(1)}"),
+          _chip("várható gól: ${huNum(totalXg)} · befejezés: "
+              "${totalXgDiff >= 0 ? "+" : ""}${huNum(totalXgDiff)}"),
         if (isGk && gkOn > 0)
           _chip("védés: $gkSaves/$gkOn "
               "(${(100.0 * gkSaves / gkOn).toStringAsFixed(0)}%) · GSAx: "
-              "${gkPrev >= 0 ? "+" : ""}${gkPrev.toStringAsFixed(1)}"),
+              "${gkPrev >= 0 ? "+" : ""}${huNum(gkPrev)}"),
         if (hasMark && markS > 0)
           _chip("őrzés: ${markS.toStringAsFixed(0)} mp · átl. "
-              "${(markWeighted / markS).toStringAsFixed(1)} m"),
+              "${huNum(markWeighted / markS)} m"),
         if (hasQuiz)
           _chip("döntés-kvíz: $kvJo/$kvItelt ✓ "
               "(${(100.0 * kvJo / kvItelt).toStringAsFixed(0)}%)"),
@@ -738,7 +739,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
               return Text(
                   d == null
                       ? "—"
-                      : "${d >= 0 ? "+" : ""}${d.toStringAsFixed(1)}",
+                      : "${d >= 0 ? "+" : ""}${huNum(d)}",
                   textAlign: TextAlign.right,
                   style: AppText.label.copyWith(fontSize: 13, color: color));
             })),
@@ -763,7 +764,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                 return Text(
                     g == null
                         ? "—"
-                        : "${g >= 0 ? "+" : ""}${g.toStringAsFixed(1)}",
+                        : "${g >= 0 ? "+" : ""}${huNum(g)}",
                     textAlign: TextAlign.right,
                     style: AppText.label.copyWith(
                         fontSize: 13, color: color));

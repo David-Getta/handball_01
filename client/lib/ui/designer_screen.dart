@@ -19,6 +19,7 @@ import "shell/app_shell.dart";
 import "../services/browser_open.dart";
 import "court_painter.dart";
 import "error_text.dart";
+import "num_format.dart";
 
 class DesignerScreen extends StatefulWidget {
   final Match match; // ebből tanuljuk a védelmet
@@ -592,7 +593,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
           ]),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text("Vonalmélység", style: AppText.label),
-            Text("${_lineDepth.toStringAsFixed(1)} m", style: AppText.value),
+            Text("${huNum(_lineDepth)} m", style: AppText.value),
           ]),
           Slider(
             value: _lineDepth, min: 6, max: 12,

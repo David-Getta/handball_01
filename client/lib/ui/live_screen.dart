@@ -23,6 +23,7 @@ import "court_painter.dart";
 import "shell/app_shell.dart";
 import "waiting.dart";
 import "zoomable.dart";
+import "num_format.dart";
 
 class LiveScreen extends StatefulWidget {
   final String matchId;
@@ -221,7 +222,7 @@ class _LiveScreenState extends State<LiveScreen> {
               atFrame,
               Suggestion(4, "taktika",
                   "Félidei kép ($team): a(z) $who átlag "
-                  "${dist.toStringAsFixed(1)} m-ről őrizte az emberét — "
+                  "${huNum(dist)} m-ről őrizte az emberét — "
                   "a második félidőre szorosabb tapadást kérj.")));
         }
         // Félidei labdaeladók: ki szórja a labdát — présre őt a másodikra.
@@ -634,7 +635,7 @@ class _LiveScreenState extends State<LiveScreen> {
         const SizedBox(width: AppSpacing.md),
         _chip(_sourceLabel),
         const Spacer(),
-        Text("${(_frameIndex / fps).toStringAsFixed(1)} s", style: AppText.value),
+        Text("${huNum(_frameIndex / fps)} s", style: AppText.value),
         Text("  /  ${(match.frames.length / fps).toStringAsFixed(0)} s", style: AppText.label),
       ],
     );

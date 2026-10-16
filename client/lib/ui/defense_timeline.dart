@@ -8,6 +8,7 @@ import "package:flutter/material.dart";
 
 import "../analytics/tactics.dart";
 import "../theme/app_theme.dart";
+import "num_format.dart";
 
 /// Rögzített forma→szín kiosztás (a szín az entitást követi, nem a
 /// sorrendet): a gyakori formák kapják a megkülönböztethető színeket,
@@ -94,7 +95,7 @@ class DefenseTimeline extends StatelessWidget {
                   child: Tooltip(
                     message: sel(w) == null
                         ? "nem védekezett"
-                        : "${sel(w)} · ${(w.startFrame / fps / 60).toStringAsFixed(1)}. perc",
+                        : "${sel(w)} · ${huNum(w.startFrame / fps / 60)}. perc",
                     // A szakasz "megfogható": rámutatásra kicsit
                     // felfénylik, és a hozzá tartozó forma neve a
                     // súgóbuborékban azonnal olvasható.

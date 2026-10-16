@@ -41,6 +41,7 @@ import "video_panel.dart";
 import "error_text.dart";
 import "waiting.dart";
 import "empty_state.dart";
+import "num_format.dart";
 
 enum ViewMode { players, heatmap, shots, passes }
 
@@ -1136,8 +1137,8 @@ class _MatchScreenState extends State<MatchScreen> {
               overflow: TextOverflow.ellipsis)),
           Text(
               durS == null
-                  ? "${(frame / fps).toStringAsFixed(1)} s"
-                  : "${(frame / fps).toStringAsFixed(1)} s · ${durS.toStringAsFixed(1)} s",
+                  ? "${huNum(frame / fps)} s"
+                  : "${huNum(frame / fps)} s · ${huNum(durS)} s",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -1211,7 +1212,7 @@ class _MatchScreenState extends State<MatchScreen> {
           Expanded(child: Text(team,
               style: AppText.label.copyWith(fontSize: 11.5),
               overflow: TextOverflow.ellipsis)),
-          Text("${(start / fps).toStringAsFixed(1)} s · ${durS.toStringAsFixed(1)} s",
+          Text("${huNum(start / fps)} s · ${huNum(durS)} s",
               style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
@@ -1435,7 +1436,7 @@ class _MatchScreenState extends State<MatchScreen> {
                     size: 13, color: AppColors.gold),
               ),
             ),
-          Text("${(t / fps).toStringAsFixed(1)} s", style: AppText.label.copyWith(fontSize: 11.5)),
+          Text("${huNum(t / fps)} s", style: AppText.label.copyWith(fontSize: 11.5)),
           // Javítás + 3D: a felismerés téved, és az edző egy rossz
           // eredményű jelentésnek egyetlen számát sem hiszi el — a
           // javítás gól/lövés sorokon él. A "Megnézem 3D-ben" minden
@@ -1589,7 +1590,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 isDense: true,
                 hintText: demo
                     ? "Demó módban nem menthető jegyzet"
-                    : "Jegyzet ${(_tOf(match) / fps).toStringAsFixed(1)} s-hez…",
+                    : "Jegyzet ${huNum(_tOf(match) / fps)} s-hez…",
                 hintStyle: AppText.label.copyWith(fontSize: 12),
               ),
               onSubmitted: (_) => _addNote(match),
@@ -1656,7 +1657,7 @@ class _MatchScreenState extends State<MatchScreen> {
         child: Row(children: [
           const Icon(Icons.sticky_note_2_outlined, size: 16, color: AppColors.gold),
           const SizedBox(width: 8),
-          Text("${(frame / fps).toStringAsFixed(1)} s",
+          Text("${huNum(frame / fps)} s",
               style: AppText.value.copyWith(fontSize: 12, color: AppColors.accent)),
           const SizedBox(width: 8),
           Expanded(
@@ -3556,8 +3557,8 @@ class _MatchScreenState extends State<MatchScreen> {
               return Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                    "várható gól (xG): ${sumXg.toStringAsFixed(1)}"
-                    " · átl. ${avgXg.toStringAsFixed(2)} xG/lövés"
+                    "várható gól (xG): ${huNum(sumXg)}"
+                    " · átl. ${huNum(avgXg, 2)} xG/lövés"
                     " · a jelölő mérete = a helyzet értéke",
                     style: AppText.label.copyWith(fontSize: 11)),
               );
@@ -3731,7 +3732,7 @@ class _MatchScreenState extends State<MatchScreen> {
     var label = st == null
         ? "Játékos #$id"
         : "Játékos #$id · $teamName · ${st.distanceM.toStringAsFixed(0)} m · "
-            "max ${(st.topSpeedMs * 3.6).toStringAsFixed(1)} km/h · "
+            "max ${huNum(st.topSpeedMs * 3.6)} km/h · "
             "${st.sprintCount} sprint";
     // Lövő-adatok (ha lőtt): gól/lövés + várható gól — a diff előjele
     // mutatja, hogy a helyzetei felett (+) vagy alatt (−) teljesít.
@@ -3746,7 +3747,7 @@ class _MatchScreenState extends State<MatchScreen> {
       final diff = (sh["diff"] as num?)?.toDouble() ?? 0.0;
       label += " · ${sh["goals"]}/${sh["shots"]} lövés · "
           "xG ${((sh["xg"] as num?) ?? 0).toStringAsFixed(1)}"
-          "${diff.abs() >= 0.5 ? " (${diff > 0 ? "+" : ""}${diff.toStringAsFixed(1)})" : ""}";
+          "${diff.abs() >= 0.5 ? " (${diff > 0 ? "+" : ""}${huNum(diff)})" : ""}";
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -3913,7 +3914,7 @@ class _MatchScreenState extends State<MatchScreen> {
                         child: Text(
                             "${hazai ? match.meta.homeTeam : match.meta.awayTeam}"
                             " · ${st.trackId}. track · "
-                            "${perc.toStringAsFixed(1)} perc",
+                            "${huNum(perc)} perc",
                             overflow: TextOverflow.ellipsis,
                             style: AppText.label.copyWith(fontSize: 12)),
                       ),
@@ -4129,7 +4130,7 @@ class _MatchScreenState extends State<MatchScreen> {
     final ido = <Widget>[
         // Videó-idő (a kocka t címkéjéből): egyezik az Események lista, a
         // jegyzetek és a jelenet-lejátszó időskálájával vágott meccsen is.
-        Text("${(_tOf(match) / fps).toStringAsFixed(1)} s", style: AppText.value),
+        Text("${huNum(_tOf(match) / fps)} s", style: AppText.value),
         Text(
             "  /  ${((match.frames.isEmpty ? 0 : match.frames.last.t) / fps).toStringAsFixed(0)} s",
             style: AppText.label),

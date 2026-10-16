@@ -41,6 +41,7 @@ import "court_geometry.dart";
 import "error_text.dart";
 import "video_panel.dart";
 import "waiting.dart";
+import "num_format.dart";
 
 /// A napló esemény-típusai (a backend ANN_EVENT_TYPES-ával azonos).
 const List<String> kAnnEventTypes = [
@@ -2034,7 +2035,7 @@ class _AnnotationScreenState extends State<AnnotationScreen>
               if (zoomed)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: Text("×${_boardZoom.toStringAsFixed(1)}",
+                  child: Text("×${huNum(_boardZoom)}",
                       style: AppText.label.copyWith(fontSize: 11)),
                 ),
             ]),

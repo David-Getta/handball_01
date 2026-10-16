@@ -23,6 +23,7 @@ import "calibration_screen.dart";
 import "match_screen.dart";
 import "shell/app_shell.dart";
 import "error_text.dart";
+import "num_format.dart";
 
 /// A pipeline-lépések sorrendje (a backend ezeket a kódokat adja a job stage-ében).
 const List<List<String>> _pipelineSteps = [
@@ -411,7 +412,7 @@ class _UploadScreenState extends State<UploadScreen> {
                     : "A gépeden eddig mért ütem alapján ez kb. $becsles "
                         "lesz$_feldolgozandoSzoveg."
                         "${szabad != null ? " (Szabad hely: "
-                            "${szabad.toStringAsFixed(1)} GB.)" : ""}",
+                            "${huNum(szabad)} GB.)" : ""}",
                 style: AppText.label.copyWith(fontSize: 12, color: szin)),
           ),
         ]),

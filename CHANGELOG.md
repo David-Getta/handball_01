@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **Tizedesvessző az egész appban** (app): a felderítés, a meccs-elemző,
+  a játékos-fejlődés, az élő követés és a többi képernyő is "4,2 m",
+  "1,3 xG", "12,5 s" alakban írja a számokat (eddig ponttal, a kezdőlap
+  javítása után már csak ott nem).
+
 - **A valódi eredmény a kezdőlapon** (app + motor): valódi felvételen a
   gól-felismerés gyakran semmit sem talál — a kezdőlap ilyenkor "0 gól ·
   0% gólarány"-t és csupa "0:0" trend-címkét mutatott. Most a meccs ✎

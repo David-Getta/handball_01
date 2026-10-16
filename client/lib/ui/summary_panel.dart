@@ -12,6 +12,7 @@ import "defense_timeline.dart";
 import "figure_shape_painter.dart";
 import "intensity_chart.dart";
 import "score_chart.dart";
+import "num_format.dart";
 
 class SummaryPanel extends StatelessWidget {
   final MatchSummary summary;
@@ -562,7 +563,7 @@ class SummaryPanel extends StatelessWidget {
                           "${label(p, "defender")} fogta a(z) "
                           "${label(p, "attacker")} támadót — "
                           "${((p["share_pct"] as num?) ?? 0).toStringAsFixed(0)}% idő, "
-                          "átl. ${dist.toStringAsFixed(1)} m"
+                          "átl. ${huNum(dist)} m"
                           "${loose ? " · LAZA" : ""}",
                           style: AppText.label.copyWith(
                               fontSize: 12,
@@ -969,9 +970,9 @@ class SummaryPanel extends StatelessWidget {
         Text("TEMPÓ", style: AppText.sectionLabel),
         const SizedBox(height: AppSpacing.sm),
         _kv("Birtoklások", "${summary.possessions}"),
-        _kv("Átlagos támadás", "${summary.avgAttackDurationS.toStringAsFixed(1)} s"),
+        _kv("Átlagos támadás", "${huNum(summary.avgAttackDurationS)} s"),
         _kv("Átmenet aránya", "${summary.transitionPct.toStringAsFixed(0)} %"),
-        _kv("Labda átlagseb.", "${summary.avgBallSpeedMs.toStringAsFixed(1)} m/s"),
+        _kv("Labda átlagseb.", "${huNum(summary.avgBallSpeedMs)} m/s"),
 
         const SizedBox(height: AppSpacing.xl),
         Text("FIGURÁK", style: AppText.sectionLabel),

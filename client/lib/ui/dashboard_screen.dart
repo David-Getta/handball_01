@@ -3661,7 +3661,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         : "$totalS másodperc";
     final meta = "$durLabel · ${fps.toStringAsFixed(0)} kép/mp";
     final metaTip = "Azonosító: $id\n"
-        "$frames képkocka · ${durS.toStringAsFixed(1)} s · "
+        "$frames képkocka · ${huNum(durS)} s · "
         "${fps.toStringAsFixed(0)} kép/mp";
     // Az összkép-kivonat kiegészítése, ha már megjött: eredmény + dátum.
     final sum = _perMatch[id];

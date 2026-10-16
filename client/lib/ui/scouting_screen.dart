@@ -19,6 +19,7 @@ import "shell/app_shell.dart";
 import "error_text.dart";
 import "figure_shape_painter.dart";
 import "waiting.dart";
+import "num_format.dart";
 
 class ScoutingScreen extends StatefulWidget {
   final String matchId;
@@ -824,7 +825,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         : avg <= 3.0
             ? "villámgyors"
             : "átlagos";
-    return "${avg.toStringAsFixed(1)} mp · $label";
+    return "${huNum(avg)} mp · $label";
   }
 
   // Gól-forrás: a fő támadás-eredet (50%+ aránynál, 5+ gólnál) —
@@ -859,7 +860,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (saved == 0 && prevented == 0) return null;
     final s = (saved / matches).toStringAsFixed(1);
     final p = (prevented / matches);
-    final ps = "${p >= 0 ? "+" : ""}${p.toStringAsFixed(1)}";
+    final ps = "${p >= 0 ? "+" : ""}${huNum(p)}";
     return "$s hárított · $ps GSAx";
   }
 
@@ -875,7 +876,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         : perMin <= 0.7
             ? "lassú"
             : "közepes";
-    return "${perMin.toStringAsFixed(1)}/perc · $label";
+    return "${huNum(perMin)}/perc · $label";
   }
 
   // A fal kulcsa: a legtöbb blokkot jegyző védő (3+ blokk, mint a
@@ -934,7 +935,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
             ? "szűk"
             : null;
     if (verdict == null) return null;
-    return "${avg.toStringAsFixed(1)} m · $verdict";
+    return "${huNum(avg)} m · $verdict";
   }
 
   // Fő figura: a leggólerősebb visszatérő minta (3+ támadás, 2+ gól
@@ -1018,7 +1019,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       }
     }
     if (loose == null || looseAvg < 2.5) return null;
-    return "${loose["player_id"]}-es · átl. ${looseAvg.toStringAsFixed(1)} m";
+    return "${loose["player_id"]}-es · átl. ${huNum(looseAvg)} m";
   }
 
   // Tapadó emberfogó: a legkisebb átlagtávú védő (50+ kocka, <=1,5 m)
@@ -1038,7 +1039,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       }
     }
     if (tight == null || tightAvg > 1.5) return null;
-    return "${tight["player_id"]}-es · átl. ${tightAvg.toStringAsFixed(1)} m";
+    return "${tight["player_id"]}-es · átl. ${huNum(tightAvg)} m";
   }
 
   // Beálló-terhelés: a támadások hányada megy a beállón át (6+
@@ -1076,7 +1077,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final attacks = ((r["pass_attacks"] as num?) ?? 0).toInt();
     final total = ((r["pass_total"] as num?) ?? 0).toInt();
     if (attacks < 6) return null;
-    var txt = "átl. ${(total / attacks).toStringAsFixed(1)} passz";
+    var txt = "átl. ${huNum(total / attacks)} passz";
     final buckets = (r["pass_buckets"] as Map?)?.cast<String, dynamic>();
     String? bestLab;
     double bestPct = 0;
@@ -1213,10 +1214,10 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (frames < 100) return null;
     final avg = ((r["defline_sum_m"] as num?) ?? 0).toDouble() / frames;
     if (avg >= 8.5) {
-      return "felfutó (agresszív) · ${avg.toStringAsFixed(1)} m";
+      return "felfutó (agresszív) · ${huNum(avg)} m";
     }
     if (avg <= 6.5) {
-      return "mély (passzív) · ${avg.toStringAsFixed(1)} m";
+      return "mély (passzív) · ${huNum(avg)} m";
     }
     return null; // kiegyensúlyozott — nem kirívó
   }
@@ -1335,7 +1336,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final fh = ((r["tpf_fh_attacks"] as num?) ?? 0).toInt() / fhMin;
     final sh = ((r["tpf_sh_attacks"] as num?) ?? 0).toInt() / shMin;
     if (fh - sh >= 0.2) {
-      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} "
+      return "${huNum(fh)} → ${huNum(sh)} "
           "támadás/perc a 2. félidőre · elfogy a lábuk";
     }
     return null;
@@ -1384,11 +1385,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = goals / suffered;
     if (avg >= 4.5) {
       return "$suffered sorozat fut el ellenük (átlag "
-          "${avg.toStringAsFixed(1)} gól) · a 2-0-t nyomd meg";
+          "${huNum(avg)} gól) · a 2-0-t nyomd meg";
     }
     if (avg <= 3.4) {
       return "a sorozatot 3-nál törik (átlag "
-          "${avg.toStringAsFixed(1)} gól) · sorozattal nem ölöd meg";
+          "${huNum(avg)} gól) · sorozattal nem ölöd meg";
     }
     return null;
   }
@@ -1563,13 +1564,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = before / n;
     final latePct = 100.0 * late / n;
     if (avg <= 1.5) {
-      return "korán fékeznek: átlag ${avg.toStringAsFixed(1)} kapott "
+      return "korán fékeznek: átlag ${huNum(avg)} kapott "
           "gól után kérnek időt ($n időkérés) · gyors gólváltásra "
           "kell játszani, nem egy nagy hullámra";
     }
     if (avg >= 2.5) {
       return "hagyják elszaladni a sorozatot: átlag "
-          "${avg.toStringAsFixed(1)} kapott gól után kérnek időt "
+          "${huNum(avg)} kapott gól után kérnek időt "
           "($n időkérés)${latePct >= 50.0 ? ", és a hajrára "
               "tartogatják" : ""} · ha megindul a hullám, van "
           "két-három támadásnyi ablak";
@@ -1618,11 +1619,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = players / waves;
     if (pct >= 40.0) {
       return "egységekben cserélnek: $waves hullámból $block volt 2+ "
-          "fős (átlag ${avg.toStringAsFixed(1)} ember) · gyors "
+          "fős (átlag ${huNum(avg)} ember) · gyors "
           "újraindítással kell büntetni a csere ütemét";
     }
     return "egyesével cserélnek: $waves hullám, átlag "
-        "${avg.toStringAsFixed(1)} ember · nincs külön támadó és "
+        "${huNum(avg)} ember · nincs külön támadó és "
         "védekező egységük, a célzott fárasztás működik";
   }
 
@@ -1681,11 +1682,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final per = crosses / attacks;
     if (per >= 1.0) {
       return "sokat kereszteznek (támadásonként "
-          "${per.toStringAsFixed(1)} oldalcsere) · a váltás-fegyelem "
+          "${huNum(per)} oldalcsere) · a váltás-fegyelem "
           "dönt, hangos átadásokkal";
     }
     if (per <= 0.3) {
-      return "statikus a hátsó soruk (${per.toStringAsFixed(1)} "
+      return "statikus a hátsó soruk (${huNum(per)} "
           "keresztezés támadásonként) · ember-ember tartás is "
           "vállalható ellenük";
     }
@@ -1910,12 +1911,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = sum / shots;
     if (avg <= 6.5) {
       return "mélyre befutó szélsők (átlag "
-          "${avg.toStringAsFixed(1)} m-ről lőnek) · a kapus várjon, "
+          "${huNum(avg)} m-ről lőnek) · a kapus várjon, "
           "a szöget a kifutó védő zárja a befutás előtt";
     }
     if (avg >= 8.5) {
       return "messziről lövő szélsők (átlag "
-          "${avg.toStringAsFixed(1)} m) · a szög ráengedhető, a "
+          "${huNum(avg)} m) · a szög ráengedhető, a "
           "kapus bátran jöhet ki";
     }
     return null;
@@ -1978,13 +1979,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final rest = rx / rs;
     if (lead - rest >= 0.05) {
       return "előnyben leül a faluk (kapott átlag-xG "
-          "${rest.toStringAsFixed(2)} → ${lead.toStringAsFixed(2)} "
+          "${huNum(rest, 2)} → ${huNum(lead, 2)} "
           "vezetve) · hátrányban sincs pánik: türelmes, bevitt "
           "támadásokkal visszajön a meccs";
     }
     if (lead - rest <= -0.02) {
       return "előnyben is feszes a faluk (kapott átlag-xG "
-          "${lead.toStringAsFixed(2)} vezetve) · az elejét kell "
+          "${huNum(lead, 2)} vezetve) · az elejét kell "
           "megnyerni, vezetve sem nyílik ki";
     }
     return null;
@@ -2027,13 +2028,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final rest = rs / ro;
     if (lead - rest >= 2.0) {
       return "vezetve lassítják az indítást "
-          "(${lead.toStringAsFixed(1)} mp kihozatal előnyben, "
-          "${rest.toStringAsFixed(1)} egyébként) · hátrányban "
+          "(${huNum(lead)} mp kihozatal előnyben, "
+          "${huNum(rest)} egyébként) · hátrányban "
           "azonnali középkezdés, ne hagyd lassítani";
     }
     if (lead - rest <= -1.0) {
       return "előnyben is pörgetik az indítást "
-          "(${lead.toStringAsFixed(1)} mp) · a védésük utáni "
+          "(${huNum(lead)} mp) · a védésük utáni "
           "pillanatban azonnali visszarendeződés kell";
     }
     return null;
@@ -2122,12 +2123,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = sum / goals;
     if (avg >= 3.0) {
       return "a járatás szedi szét őket (átlag "
-          "${avg.toStringAsFixed(1)} passz a kapott góljaik előtt) · "
+          "${huNum(avg)} passz a kapott góljaik előtt) · "
           "tempót emelj: oldalváltásoknál nyílik a faluk";
     }
     if (avg <= 1.5) {
       return "egyéni akciókból kapják a gólokat (átlag "
-          "${avg.toStringAsFixed(1)} passz) · az 1v1-ben erős "
+          "${huNum(avg)} passz) · az 1v1-ben erős "
           "embereidet engedd rájuk";
     }
     return null;
@@ -2461,12 +2462,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (windows < 3) return null;
     final per = conceded / windows;
     if (per >= 1.2) {
-      return "egy kiállításuk átlag ${per.toStringAsFixed(1)} gólba "
+      return "egy kiállításuk átlag ${huNum(per)} gólba "
           "kerül ($conceded gól $windows kétperc alatt) · a "
           "kiharcolás náluk pont-termelés";
     }
     if (per <= 0.5) {
-      return "egy kiállításuk csak ${per.toStringAsFixed(1)} gólba "
+      return "egy kiállításuk csak ${huNum(per)} gólba "
           "kerül ($conceded gól $windows kétperc alatt) · ne a "
           "kiállításra játsszatok";
     }
@@ -2482,14 +2483,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (fh <= 0.0 || sh <= 0.0) return null;
     if (sh <= 2.0 && sh <= 0.7 * fh) {
       return "a szünet után emberfogásra váltanak (a legszorosabb "
-          "páros ${sh.toStringAsFixed(1)} m az első félidei "
-          "${fh.toStringAsFixed(1)} m helyett) · a fogott emberetek "
+          "páros ${huNum(sh)} m az első félidei "
+          "${huNum(fh)} m helyett) · a fogott emberetek "
           "húzza el a védőjét";
     }
     if (fh <= 2.0 && fh <= 0.7 * sh) {
       return "a szünet után elengedik az emberfogást (a legszorosabb "
-          "páros ${sh.toStringAsFixed(1)} m az első félidei "
-          "${fh.toStringAsFixed(1)} m helyett) · a fogott emberetek "
+          "páros ${huNum(sh)} m az első félidei "
+          "${huNum(fh)} m helyett) · a fogott emberetek "
           "visszakapja a labdát";
     }
     return null;
@@ -3020,7 +3021,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (n < 2) return null;
     final avg = ds / 10.0 / n;
     if (avg < 4.0) return null;
-    return "a kapusuk ${avg.toStringAsFixed(1)} mp alatt ér haza a 7 a 6 "
+    return "a kapusuk ${huNum(avg)} mp alatt ér haza a 7 a 6 "
         "után ($n szakasz, $conceded gól ez alatt) · szerzés után "
         "azonnal az üres kapura";
   }
@@ -3794,7 +3795,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final sh = ((r["gfd_sh_sum_m"] ?? 0) as num).toDouble() / shN;
     if (sh - fh < 0.8) return null;
     return "a 2. félidőre szétnyílnak a közök a falukban "
-        "(${fh.toStringAsFixed(1)} m → ${sh.toStringAsFixed(1)} m a "
+        "(${huNum(fh)} m → ${huNum(sh)} m a "
         "legnagyobb rés átlaga) · a betörős figurákat a második "
         "félidőre tartogassátok";
   }
@@ -3872,11 +3873,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         : ", jellemzően a $zone sávban (${share.toStringAsFixed(0)}%)";
     if (avg >= 3.5) {
       return "nagy közök a falukban (átlag "
-          "${avg.toStringAsFixed(1)} m a legnagyobb rés$hol) · oda "
+          "${huNum(avg)} m a legnagyobb rés$hol) · oda "
           "lendületből betörni, elzárás a rés mellé";
     }
     if (zone != null) {
-      return "zárt fal (átlag ${avg.toStringAsFixed(1)} m a legnagyobb "
+      return "zárt fal (átlag ${huNum(avg)} m a legnagyobb "
           "köz), de a rés a(z) $zone sávban nyílik "
           "(${share.toStringAsFixed(0)}%) · a figurát arra az oldalra";
     }
@@ -3956,14 +3957,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final diff = goals - xg;
     if (diff >= 2.5) {
       return "a gólszámuk szebb a játékuknál ($goals gól "
-          "${xg.toStringAsFixed(1)} várható gólra, "
-          "+${diff.toStringAsFixed(1)}) · ne szabjátok át a falat, "
+          "${huNum(xg)} várható gólra, "
+          "+${huNum(diff)}) · ne szabjátok át a falat, "
           "ugyanezeket a lövéseket kényszerítsétek rájuk";
     }
     if (diff <= -2.5) {
       return "a játékuknál kevesebbet szereztek ($goals gól "
-          "${xg.toStringAsFixed(1)} várható gólra, "
-          "${diff.toStringAsFixed(1)}) · veszélyesebbek az eredménynél: "
+          "${huNum(xg)} várható gólra, "
+          "${huNum(diff)}) · veszélyesebbek az eredménynél: "
           "a helyzet-teremtésüket kell megfogni";
     }
     return null;
@@ -4084,11 +4085,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (secs < 90) return null;
     final per2 = 120.0 * conceded / secs;
     if (per2 >= 1.5) {
-      return "hátrányban beszakadnak (${per2.toStringAsFixed(1)} "
+      return "hátrányban beszakadnak (${huNum(per2)} "
           "kapott gól/2 perc) · a kiállításukat végig büntessétek";
     }
     if (per2 <= 0.5) {
-      return "hátrányban is állnak (${per2.toStringAsFixed(1)} "
+      return "hátrányban is állnak (${huNum(per2)} "
           "kapott gól/2 perc) · emberelőnyben is az 1v1 dolgozik";
     }
     return null;
@@ -4334,13 +4335,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final ratio = s / f;
     if (ratio <= 0.7) {
       return "a második félidőre megfogy a lábuk "
-          "(${s.toStringAsFixed(1)} sprint/perc az "
-          "${f.toStringAsFixed(1)} helyett) · a szünet után "
+          "(${huNum(s)} sprint/perc az "
+          "${huNum(f)} helyett) · a szünet után "
           "emeljetek tempót";
     }
     if (ratio >= 1.43) {
-      return "a második félidőre kapcsolnak (${s.toStringAsFixed(1)} "
-          "sprint/perc az ${f.toStringAsFixed(1)} helyett) · "
+      return "a második félidőre kapcsolnak (${huNum(s)} "
+          "sprint/perc az ${huNum(f)} helyett) · "
           "tartsátok a saját ritmusotokat";
     }
     return null;
@@ -4361,14 +4362,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final d = l - b;
     if (d.abs() < 3.0) return null;
     if (d > 0) {
-      return "vezetve ${d.toStringAsFixed(1)} mp-cel hosszabb a "
-          "támadásuk a hajrában (${l.toStringAsFixed(1)} mp a "
-          "${b.toStringAsFixed(1)} mp helyett) · lopják az órát, "
+      return "vezetve ${huNum(d)} mp-cel hosszabb a "
+          "támadásuk a hajrában (${huNum(l)} mp a "
+          "${huNum(b)} mp helyett) · lopják az órát, "
           "játsszatok a passzív jelre";
     }
-    return "vezetve ${d.abs().toStringAsFixed(1)} mp-cel rövidebb a "
-        "támadásuk a hajrában (${l.toStringAsFixed(1)} mp a "
-        "${b.toStringAsFixed(1)} mp helyett) · sietnek, elég zárt "
+    return "vezetve ${huNum(d.abs())} mp-cel rövidebb a "
+        "támadásuk a hajrában (${huNum(l)} mp a "
+        "${huNum(b)} mp helyett) · sietnek, elég zárt "
         "fallal kivárni";
   }
 
@@ -4515,14 +4516,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final d = a - b;
     if (d.abs() < 3.0) return null;
     if (d < 0) {
-      return "kapott gól után ${d.abs().toStringAsFixed(1)} mp-cel "
-          "rövidebb a támadásuk (${a.toStringAsFixed(1)} mp a "
-          "${b.toStringAsFixed(1)} mp helyett) · kapkodnak, a "
+      return "kapott gól után ${huNum(d.abs())} mp-cel "
+          "rövidebb a támadásuk (${huNum(a)} mp a "
+          "${huNum(b)} mp helyett) · kapkodnak, a "
           "gólotok után álljatok vissza";
     }
-    return "kapott gól után ${d.toStringAsFixed(1)} mp-cel hosszabb "
-        "a támadásuk (${a.toStringAsFixed(1)} mp a "
-        "${b.toStringAsFixed(1)} mp helyett) · befagynak, toljátok "
+    return "kapott gól után ${huNum(d)} mp-cel hosszabb "
+        "a támadásuk (${huNum(a)} mp a "
+        "${huNum(b)} mp helyett) · befagynak, toljátok "
         "előre a védekezést";
   }
 
@@ -4536,7 +4537,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (shots < 4) return null;
     final avg = sum / shots;
     if (avg <= 8.0) return null;
-    return "a lövésük után átlag ${avg.toStringAsFixed(1)} mp, míg "
+    return "a lövésük után átlag ${huNum(avg)} mp, míg "
         "négy emberük hazaér ($shots lövésből $slow volt 8 mp "
         "fölött) · a kapusotok azonnal indítson";
   }
@@ -5138,8 +5139,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     });
     if (post == null) return null;
     return "a(z) $post posztjuk áll labda nélkül "
-        "(${postA.toStringAsFixed(1)} m/s a "
-        "${teamAvg.toStringAsFixed(1)} m/s átlag mellett) · a "
+        "(${huNum(postA)} m/s a "
+        "${huNum(teamAvg)} m/s átlag mellett) · a "
         "védője otthagyhatja, és befelé segíthet";
   }
 
@@ -5638,7 +5639,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final gap = topAvg - restD / restN;
     if (gap < 2.5) return null;
     return "a faluk a(z) $top posztnál lép ki (a társaknál "
-        "${gap.toStringAsFixed(1)} m-rel előrébb) · elzárást rá, "
+        "${huNum(gap)} m-rel előrébb) · elzárást rá, "
         "mögötte nyílik a tér";
   }
 
@@ -7001,14 +7002,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     });
     if (early != null && teamAvg - earlyAvg >= 4.0) {
       return "a(z) $early posztjuk fejez be a leghamarabb: átlag "
-          "${earlyAvg.toStringAsFixed(1)} mp ($earlyN lövés, csapat-átlag "
-          "${teamAvg.toStringAsFixed(1)} mp) · a visszarendeződésnél kell "
+          "${huNum(earlyAvg)} mp ($earlyN lövés, csapat-átlag "
+          "${huNum(teamAvg)} mp) · a visszarendeződésnél kell "
           "rá ember";
     }
     if (late != null && lateAvg - teamAvg >= 4.0) {
       return "a(z) $late posztjuk a támadás végén lő: átlag "
-          "${lateAvg.toStringAsFixed(1)} mp ($lateN lövés, csapat-átlag "
-          "${teamAvg.toStringAsFixed(1)} mp) · a kivárt labdára kell "
+          "${huNum(lateAvg)} mp ($lateN lövés, csapat-átlag "
+          "${huNum(teamAvg)} mp) · a kivárt labdára kell "
           "koncentrálni";
     }
     return null;
@@ -7047,13 +7048,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     });
     if (near != null && teamAvg - nearAvg >= 2.0) {
       return "a(z) $near posztjuk jön be a legközelebb: átlag "
-          "${nearAvg.toStringAsFixed(1)} m ($nearN lövés, csapat-átlag "
-          "${teamAvg.toStringAsFixed(1)} m) · őt ki kell zárni";
+          "${huNum(nearAvg)} m ($nearN lövés, csapat-átlag "
+          "${huNum(teamAvg)} m) · őt ki kell zárni";
     }
     if (far != null && farAvg - teamAvg >= 2.0) {
       return "a(z) $far posztjuk távolról fejez be: átlag "
-          "${farAvg.toStringAsFixed(1)} m ($farN lövés, csapat-átlag "
-          "${teamAvg.toStringAsFixed(1)} m) · rá lehet engedni";
+          "${huNum(farAvg)} m ($farN lövés, csapat-átlag "
+          "${huNum(teamAvg)} m) · rá lehet engedni";
     }
     return null;
   }
@@ -7120,8 +7121,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     });
     if (slow == null || slowAvg - teamAvg < 0.7) return null;
     return "a(z) $slow posztjuknál áll meg a labda "
-        "(${slowAvg.toStringAsFixed(1)} mp/érintés, csapat-átlag "
-        "${teamAvg.toStringAsFixed(1)} mp, $slowN szakasz) · ő a "
+        "(${huNum(slowAvg)} mp/érintés, csapat-átlag "
+        "${huNum(teamAvg)} mp, $slowN szakasz) · ő a "
         "kettőzés célpontja";
   }
 
@@ -7152,8 +7153,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       }
     });
     if (best == null || teamAvg - bestAvg < 1.5) return null;
-    return "a(z) $best posztjuk ${bestAvg.toStringAsFixed(1)} m-en veszi "
-        "át a labdát (csapat-átlag ${teamAvg.toStringAsFixed(1)} m, "
+    return "a(z) $best posztjuk ${huNum(bestAvg)} m-en veszi "
+        "át a labdát (csapat-átlag ${huNum(teamAvg)} m, "
         "$bestN átvétel) · az elé állás késő, a bejátszás vonalát zárd";
   }
 
@@ -7529,8 +7530,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final restRate = 60.0 * restN / restS;
     if (trRate < 1.5 * (restRate > 0 ? restRate : 1e-9)) return null;
     return "hátrányban sprintbe menekülnek "
-        "(${trRate.toStringAsFixed(1)} sprint/perc a szokásos "
-        "${restRate.toStringAsFixed(1)} helyett) · ha vezetsz, "
+        "(${huNum(trRate)} sprint/perc a szokásos "
+        "${huNum(restRate)} helyett) · ha vezetsz, "
         "járasd: minden perc az ő lábukat fogyasztja";
   }
 
@@ -7926,12 +7927,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (frames < 100) return null;
     final avg = sum / frames;
     if (avg >= 5.5) {
-      return "mindenkit felküldenek (átlag ${avg.toStringAsFixed(1)} "
+      return "mindenkit felküldenek (átlag ${huNum(avg)} "
           "mezőnyjátékos fent) · a hátuk mögött üres a pálya, minden "
           "szerzés kontrát ér";
     }
     if (avg <= 4.5) {
-      return "biztosítva támadnak (átlag ${avg.toStringAsFixed(1)} "
+      return "biztosítva támadnak (átlag ${huNum(avg)} "
           "fent) · kontra nehéz, de a fal bátran kettőzhet ellenük";
     }
     return null;
@@ -8054,11 +8055,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = sum / shots;
     if (avg >= 2.5) {
       return "későn érnek ki a szélre (átlag "
-          "${avg.toStringAsFixed(1)} m-re a védő a lövő szélsőtől) · "
+          "${huNum(avg)} m-re a védő a lövő szélsőtől) · "
           "gyors oldalváltásokkal a szélsőitekre hordjatok labdát";
     }
     if (avg <= 1.2) {
-      return "zárják a szélsőt (átlag ${avg.toStringAsFixed(1)} m) · "
+      return "zárják a szélsőt (átlag ${huNum(avg)} m) · "
           "a szélső-bejátszás zsákutca, a beállót keressétek";
     }
     return null;
@@ -8334,13 +8335,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final o = ((r["sqs_other_sum_xg"] as num?) ?? 0).toDouble() / oN;
     if (o - t >= 0.08) {
       return "hátrányban elkapkodják a lövéseket "
-          "(${o.toStringAsFixed(2)} → ${t.toStringAsFixed(2)} "
+          "(${huNum(o, 2)} → ${huNum(t, 2)} "
           "helyzet-átlag) · vezetésnél a rossz lövéseik nektek "
           "dolgoznak";
     }
     if (t - o >= 0.08) {
       return "hátrányban is türelmesek "
-          "(${t.toStringAsFixed(2)} helyzet-átlag hátrányban is) · a "
+          "(${huNum(t, 2)} helyzet-átlag hátrányban is) · a "
           "vezetés ellenük sosem biztonságos";
     }
     return null;
@@ -8549,7 +8550,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         oSum / oFrames;
     if (gap < 2.5) return null;
     return "kilépő védővel játszanak (a(z) ${top["player_id"]} "
-        "azonosítójú ${gap.toStringAsFixed(1)} m-rel a sor előtt) · "
+        "azonosítójú ${huNum(gap)} m-rel a sor előtt) · "
         "elzárást rá, és a háta mögé befutó emberrel 2 az 1-et";
   }
 
@@ -8672,13 +8673,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final sh = ((r["wf_sh_sum_xga"] as num?) ?? 0).toDouble() / shN;
     if (sh - fh >= 0.08) {
       return "a második félidőre kinyílik a faluk "
-          "(${fh.toStringAsFixed(2)} → ${sh.toStringAsFixed(2)} "
+          "(${huNum(fh, 2)} → ${huNum(sh, 2)} "
           "kapott helyzet-átlag) · a belső játékot a második félidőre "
           "tartogassátok";
     }
     if (fh - sh >= 0.08) {
       return "a második félidőre áll össze a faluk "
-          "(${fh.toStringAsFixed(2)} → ${sh.toStringAsFixed(2)}) · az "
+          "(${huNum(fh, 2)} → ${huNum(sh, 2)}) · az "
           "első félidőben kell megszerezni az előnyt";
     }
     return null;
@@ -8736,12 +8737,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = sum / shots;
     if (avg >= 0.35) {
       return "nagy helyzeteket engednek (a rájuk jövő $shots lövés "
-          "átlaga ${avg.toStringAsFixed(2)}) · befelé kell játszani: "
+          "átlaga ${huNum(avg, 2)}) · befelé kell játszani: "
           "beállós, áttörés, elzárás után kapott labda";
     }
     if (avg <= 0.22) {
       return "csak nehéz helyzeteket engednek (a rájuk jövő $shots "
-          "lövés átlaga ${avg.toStringAsFixed(2)}) · a 9 méteres "
+          "lövés átlaga ${huNum(avg, 2)}) · a 9 méteres "
           "lövés ajándék nekik, embert kell kihúzni";
     }
     return null;
@@ -8839,14 +8840,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final a = ((r["pag_after_sum_m"] as num?) ?? 0).toDouble() / aN;
     final b = ((r["pag_base_sum_m"] as num?) ?? 0).toDouble() / bN;
     if (a - b >= 1.5) {
-      return "saját góljuk után letámadnak (${a.toStringAsFixed(1)} m "
-          "a szokásos ${b.toStringAsFixed(1)} m helyett) · a kapott "
+      return "saját góljuk után letámadnak (${huNum(a)} m "
+          "a szokásos ${huNum(b)} m helyett) · a kapott "
           "gól utáni kihozatalt előre meg kell tervezni";
     }
     if (b - a >= 1.5) {
       return "saját góljuk után visszahúzódnak "
-          "(${a.toStringAsFixed(1)} m a szokásos "
-          "${b.toStringAsFixed(1)} m helyett) · ilyenkor nyugodtan "
+          "(${huNum(a)} m a szokásos "
+          "${huNum(b)} m helyett) · ilyenkor nyugodtan "
           "fel lehet hozni a labdát";
     }
     return null;
@@ -8862,12 +8863,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = sumS / cases;
     if (avg >= 7.0) {
       return "lassan hozzák fel a labdát (átlag "
-          "${avg.toStringAsFixed(1)} mp) · van idő rendezetten "
+          "${huNum(avg)} mp) · van idő rendezetten "
           "felállni: a fal szervezése dönt, nem a visszafutás";
     }
     if (avg <= 4.0) {
       return "gyorsan hozzák fel a labdát (átlag "
-          "${avg.toStringAsFixed(1)} mp) · a lövés pillanatában "
+          "${huNum(avg)} mp) · a lövés pillanatában "
           "indulni kell hátra, kell egy kijelölt fékező ember";
     }
     return null;
@@ -9158,12 +9159,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = sum / cases;
     if (avg >= 8.0) {
       return "lassan áll fel a faluk (átlag "
-          "${avg.toStringAsFixed(1)} mp a rendezett falig, $cases mért "
+          "${huNum(avg)} mp a rendezett falig, $cases mért "
           "birtokváltás) · a gyors indítás termel ellenük";
     }
     if (avg <= 5.0) {
       return "gyorsan rendeződik a faluk (átlag "
-          "${avg.toStringAsFixed(1)} mp) · a kontra kockázat, a "
+          "${huNum(avg)} mp) · a kontra kockázat, a "
           "felállt támadásra kell építeni";
     }
     return null;
@@ -9224,7 +9225,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final sh = shSum / shN;
     if (sh - fh < 1.0) return null;
     return "a hajrára kifelé szorulnak: a lövéseik átlagos távolsága "
-        "${fh.toStringAsFixed(1)} m-ről ${sh.toStringAsFixed(1)} m-re "
+        "${huNum(fh)} m-ről ${huNum(sh)} m-re "
         "nő · a második félidőben elég a lövő-vonalba lépni";
   }
 
@@ -9318,13 +9319,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = sum / breaks;
     if (avg >= 3.0) {
       return "tömegesen kontráznak: átlag "
-          "${avg.toStringAsFixed(1)} emberük van elöl a "
+          "${huNum(avg)} emberük van elöl a "
           "lerohanásoknál ($breaks lerohanás) · mindenkinek azonnal "
           "vissza kell rendeződnie";
     }
     if (avg <= 1.6) {
       return "magányos kontrát futnak (átlag "
-          "${avg.toStringAsFixed(1)} felfutó ember) · elég egy fékező "
+          "${huNum(avg)} felfutó ember) · elég egy fékező "
           "játékos, a többiek felállhatnak";
     }
     return null;
@@ -9429,7 +9430,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ? "${far["jersey"]}-es"
         : "${far["player_id"]} azonosítójú";
     return "a(z) $who játékosuk távolról lő (átlag "
-        "${farAvg.toStringAsFixed(1)} m, ${far["shots"]} lövés) · rá "
+        "${huNum(farAvg)} m, ${far["shots"]} lövés) · rá "
         "ki kell lépni a lövő-vonalba, mögötte segítővel";
   }
 
@@ -9609,8 +9610,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ? "${slow["jersey"]}-es"
         : "${slow["player_id"]} azonosítójú";
     return "a(z) $who játékosuk alig mozog a támadásban "
-        "(${slowV.toStringAsFixed(2)} m/s a csapatátlag "
-        "${avg.toStringAsFixed(2)} m/s helyett) · az ő védője "
+        "(${huNum(slowV, 2)} m/s a csapatátlag "
+        "${huNum(avg, 2)} m/s helyett) · az ő védője "
         "otthagyhatja, befelé segíthet";
   }
 
@@ -9670,12 +9671,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (frames < 200 || sum <= 0) return null;
     final lag = sum / frames;
     if (lag >= 0.6) {
-      return "lassan csúszik a faluk: ${lag.toStringAsFixed(1)} mp "
+      return "lassan csúszik a faluk: ${huNum(lag)} mp "
           "késéssel követik az oldalváltást · két-három gyors "
           "átjátszás után a túloldalon nyílik a rés";
     }
     if (lag <= 0.2) {
-      return "gyorsan igazodik a faluk (${lag.toStringAsFixed(1)} mp "
+      return "gyorsan igazodik a faluk (${huNum(lag)} mp "
           "késés) · az átjátszás nem fizet ki, betörés és beállós "
           "játék a válasz";
     }
@@ -9695,13 +9696,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (pct >= 50.0) {
       return "éles a labdajáratásuk: a passzaik "
           "${pct.toStringAsFixed(0)}%-a feszes (átlag "
-          "${avg.toStringAsFixed(1)} m/s) · testtel zárni, a fogadót "
+          "${huNum(avg)} m/s) · testtel zárni, a fogadót "
           "megfogni";
     }
     if (pct <= 20.0) {
       return "lágy a labdajáratásuk: a passzaiknak csak "
           "${pct.toStringAsFixed(0)}%-a feszes (átlag "
-          "${avg.toStringAsFixed(1)} m/s) · bele lehet érni, beleérő "
+          "${huNum(avg)} m/s) · bele lehet érni, beleérő "
           "védekezés";
     }
     return null;
@@ -9761,12 +9762,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = sum / frames;
     if (avg <= 9.5) {
       return "vonalra tapadnak: a támadóik átlagosan "
-          "${avg.toStringAsFixed(1)} m-re állnak a kaputól · a falatok "
+          "${huNum(avg)} m-re állnak a kaputól · a falatok "
           "NE lépjen ki, segítő-csúszás és testes fogadás";
     }
     if (avg >= 12.0) {
       return "mélyen, hátrahúzódva támadnak (átlagosan "
-          "${avg.toStringAsFixed(1)} m-re a kaputól) · ki kell lépni "
+          "${huNum(avg)} m-re a kaputól) · ki kell lépni "
           "a lövő-vonalba";
     }
     return null;
@@ -9807,14 +9808,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final gap = trail - lead;
     if (gap >= 0.8) {
       return "hátrányban feljebb lépnek: hátrányban "
-          "${trail.toStringAsFixed(1)} m-en, vezetve "
-          "${lead.toStringAsFixed(1)} m-en áll a faluk · kapott gól "
+          "${huNum(trail)} m-en, vezetve "
+          "${huNum(lead)} m-en áll a faluk · kapott gól "
           "után jön a letámadásuk, arra kell kész kihozatal";
     }
     if (gap <= -0.8) {
       return "vezetve is fent maradnak: előnyben "
-          "${lead.toStringAsFixed(1)} m-en, hátrányban "
-          "${trail.toStringAsFixed(1)} m-en áll a faluk · "
+          "${huNum(lead)} m-en, hátrányban "
+          "${huNum(trail)} m-en áll a faluk · "
           "letámadás-álló kihozatal kell ellenük";
     }
     return null;
@@ -10050,8 +10051,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ? "${slow["jersey"]}-es"
         : "${slow["player_id"]} azonosítójú";
     return "a(z) $who játékosuknál áll meg a labda: átlag "
-        "${slowS.toStringAsFixed(1)} mp tartás (csapatátlag "
-        "${avg.toStringAsFixed(1)} mp) · rá a kettőzés és a letámadás";
+        "${huNum(slowS)} mp tartás (csapatátlag "
+        "${huNum(avg)} mp) · rá a kettőzés és a letámadás";
   }
 
   // Labdavezetés-táv: ki cipeli náluk a labdát (a backenddel azonos
@@ -10086,8 +10087,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ? "${top["jersey"]}-es"
         : "${top["player_id"]} azonosítójú";
     return "a(z) $who játékosuk viszi a labdát: átlag "
-        "${topM.toStringAsFixed(1)} m labdás szakaszonként (csapatátlag "
-        "${avg.toStringAsFixed(1)} m) · futó labdásnál rá a leszúrás";
+        "${huNum(topM)} m labdás szakaszonként (csapatátlag "
+        "${huNum(avg)} m) · futó labdásnál rá a leszúrás";
   }
 
   // Figura-könyvtár: melyik figurájuk tér vissza MECCSRŐL MECCSRE. A
@@ -10372,13 +10373,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final pp = 60.0 * ppC / ppS;
     final eq = 60.0 * eqC / eqS;
     if (pp - eq >= 0.2) {
-      return "emberelőnyben is szivárognak: ${pp.toStringAsFixed(2)} "
+      return "emberelőnyben is szivárognak: ${huNum(pp, 2)} "
           "kapott gól/perc (egyenlő létszámnál "
-          "${eq.toStringAsFixed(2)}) · hátrányban is vállald a kontrát";
+          "${huNum(eq, 2)}) · hátrányban is vállald a kontrát";
     }
     if (eq - pp >= 0.2) {
       return "emberelőnyben fegyelmezettek "
-          "(${pp.toStringAsFixed(2)} kapott gól/perc) · "
+          "(${huNum(pp, 2)} kapott gól/perc) · "
           "hátrányban a labdatartás a reális cél";
     }
     return null;
@@ -10459,13 +10460,13 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final e = 60.0 * eTo / eS;
     final c = 60.0 * cTo / cS;
     if (c - e >= 0.3) {
-      return "a hajrában szétesnek: ${e.toStringAsFixed(2)} → "
-          "${c.toStringAsFixed(2)} eladás/perc · "
+      return "a hajrában szétesnek: ${huNum(e, 2)} → "
+          "${huNum(c, 2)} eladás/perc · "
           "a végén présbe kell tenni a labdavivőt";
     }
     if (e - c >= 0.3) {
-      return "a hajrában hidegvérűek: ${e.toStringAsFixed(2)} → "
-          "${c.toStringAsFixed(2)} eladás/perc · "
+      return "a hajrában hidegvérűek: ${huNum(e, 2)} → "
+          "${huNum(c, 2)} eladás/perc · "
           "a hibájukra várni hiba";
     }
     return null;
@@ -10483,11 +10484,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final sh = 60.0 * shG / shS;
     final eq = 60.0 * eqG / eqS;
     if (eq - sh >= 0.15) {
-      return "hátrányban megbénulnak: ${sh.toStringAsFixed(2)} gól/perc "
-          "(egyenlő létszámnál ${eq.toStringAsFixed(2)}) · "
+      return "hátrányban megbénulnak: ${huNum(sh, 2)} gól/perc "
+          "(egyenlő létszámnál ${huNum(eq, 2)}) · "
           "a kiállítás gólkülönbség";
     }
-    return "hátrányban is támadnak: ${sh.toStringAsFixed(2)} gól/perc · "
+    return "hátrányban is támadnak: ${huNum(sh, 2)} gól/perc · "
         "az emberelőnyt labdatartással kell végigjátszani";
   }
 
@@ -10549,12 +10550,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final ca = cxg / cs;
     if (ea - ca >= 0.05) {
       return "a hajrában elkapkodják: helyzetérték "
-          "${ea.toStringAsFixed(2)} → ${ca.toStringAsFixed(2)} · "
+          "${huNum(ea, 2)} → ${huNum(ca, 2)} · "
           "a végén elég tartani a falat";
     }
     if (ca - ea >= 0.05) {
       return "a hajrában kidolgozzák: helyzetérték "
-          "${ea.toStringAsFixed(2)} → ${ca.toStringAsFixed(2)} · "
+          "${huNum(ea, 2)} → ${huNum(ca, 2)} · "
           "a végén se lazuljon a fal";
     }
     return null;
@@ -10798,11 +10799,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (time < 120.0) return null;
     final avg = dist / time;
     if (avg <= 0.9) {
-      return "álló támadás: átlag ${avg.toStringAsFixed(1)} m/s · "
+      return "álló támadás: átlag ${huNum(avg)} m/s · "
           "lépj ki bátran, segítség nem jön";
     }
     if (avg >= 1.6) {
-      return "mozgásos támadás (${avg.toStringAsFixed(1)} m/s): "
+      return "mozgásos támadás (${huNum(avg)} m/s): "
           "keresztek, elfutások · átadás-átvétel, ne kövess embert";
     }
     return null;
@@ -10837,7 +10838,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     }
     if (perMin >= 0.8) {
       return "kihagyós gólcsend: a csendben is "
-          "${perMin.toStringAsFixed(1)} lövés/perc · a kapusod tartja";
+          "${huNum(perMin)} lövés/perc · a kapusod tartja";
     }
     return null;
   }
@@ -11096,7 +11097,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final fh = 60.0 * fhTo / fhPoss;
     final sh = 60.0 * shTo / shPoss;
     if (sh - fh < 0.2) return null;
-    return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} "
+    return "${huNum(fh)} → ${huNum(sh)} "
         "eladás/perc · a 2. félidőben kienged";
   }
 
@@ -11129,11 +11130,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final sh = shSum / shN;
     final d = sh - fh;
     if (d >= 0.5) {
-      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+      return "${huNum(fh)} → ${huNum(sh)} m "
           "· a 2. félidőre fellazul";
     }
     if (d <= -0.5) {
-      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+      return "${huNum(fh)} → ${huNum(sh)} m "
           "· a hajrára szorosodik";
     }
     return null;
@@ -11154,11 +11155,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final sh = shSum / shN;
     final d = fh - sh; // pozitív = visszahúzódott
     if (d >= 0.5) {
-      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+      return "${huNum(fh)} → ${huNum(sh)} m "
           "· visszahúzódik · a 9 méteres nyílik";
     }
     if (d <= -0.5) {
-      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+      return "${huNum(fh)} → ${huNum(sh)} m "
           "· feljebb jön · a kilépő mögé kell játszani";
     }
     return null;
@@ -11178,11 +11179,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final sh = shSum / shN;
     final d = sh - fh; // pozitív = lassult
     if (d >= 1.0) {
-      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} mp "
+      return "${huNum(fh)} → ${huNum(sh)} mp "
           "· lassul · a hajrában kontrázhatók";
     }
     if (d <= -1.0) {
-      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} mp "
+      return "${huNum(fh)} → ${huNum(sh)} mp "
           "· gyorsul · a hajrában nem kontrázhatók";
     }
     return null;
@@ -11202,11 +11203,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final sh = shSum / shN;
     final d = sh - fh; // pozitív = hátrébb álltak
     if (d >= 0.5) {
-      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+      return "${huNum(fh)} → ${huNum(sh)} m "
           "· hátrébb kerülnek · a fal tömörülhet beljebb";
     }
     if (d <= -0.5) {
-      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+      return "${huNum(fh)} → ${huNum(sh)} m "
           "· közelebb nyomulnak · hatos elleni munka a téma";
     }
     return null;
@@ -11241,7 +11242,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (n < 1) return null;
     final jel = ((r["fpr_signals"] as num?) ?? 0).toInt() / n;
     if (jel >= 3.0) {
-      return "${jel.toStringAsFixed(1)} jel/meccs "
+      return "${huNum(jel)} jel/meccs "
           "· a hajrá az ő gyenge pontjuk";
     }
     if (jel <= 0.0 && n >= 2) {
@@ -11365,10 +11366,10 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     if (sum <= 0) return null;
     final avg = sum / n;
     if (avg >= 0.38) {
-      return "${avg.toStringAsFixed(2)} xG/lövés · ziccereket engednek";
+      return "${huNum(avg, 2)} xG/lövés · ziccereket engednek";
     }
     if (avg <= 0.22) {
-      return "${avg.toStringAsFixed(2)} xG/lövés · kiszorító fal";
+      return "${huNum(avg, 2)} xG/lövés · kiszorító fal";
     }
     return null;
   }
@@ -11416,11 +11417,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg = sum / n;
     final isoPct = 100.0 * iso / n;
     if (avg >= 7.0 || isoPct >= 35.0) {
-      return "átl. ${avg.toStringAsFixed(1)} m · ${isoPct.round()}% izolált "
+      return "átl. ${huNum(avg)} m · ${isoPct.round()}% izolált "
           "· présre érzékeny";
     }
     if (avg <= 4.0) {
-      return "átl. ${avg.toStringAsFixed(1)} m · szoros támogatás";
+      return "átl. ${huNum(avg)} m · szoros támogatás";
     }
     return null;
   }
@@ -11490,10 +11491,10 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final avg =
         (((r["gk_depth_sum_m"] as num?) ?? 0).toDouble()) / frames;
     if (avg >= 1.5) {
-      return "kint álló · átl. ${avg.toStringAsFixed(1)} m";
+      return "kint álló · átl. ${huNum(avg)} m";
     }
     if (avg <= 0.8) {
-      return "vonalon maradó · átl. ${avg.toStringAsFixed(1)} m";
+      return "vonalon maradó · átl. ${huNum(avg)} m";
     }
     return null;
   }
@@ -11717,7 +11718,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gólpassz-vezér", "${r["top_assist_count"]} gólpassz"],
       if (_passAxis(r) != null) ["Passz-tengely", _passAxis(r)!],
       if (((r["defensive_pressure_m"] as num?) ?? 0) > 0)
-        ["Véd. nyomás", "${(r["defensive_pressure_m"] as num).toStringAsFixed(1)} m"],
+        ["Véd. nyomás", "${huNum(r["defensive_pressure_m"] as num)} m"],
       if (((r["blocks"] as num?) ?? 0) >= 3)
         ["Blokkolt lövés", "${r["blocks"]}"],
       // Kapusuk fogott ziccerei — ugyanaz a küszöb (2+), mint a kulcsokban.
