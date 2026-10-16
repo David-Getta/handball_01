@@ -325,3 +325,17 @@ def test_a_3d_figurava_gombja():
     assert "DesignerScreen(match: m, initial: f)" in palya
     tervezo = (ui / "designer_screen.dart").read_text(encoding="utf-8")
     assert '_tanultOldal = f["csapat_oldal"] == "home" ? "away" : "home";' in tervezo
+
+
+def test_a_bongeszos_3d_figurava_gombja():
+    """A böngészős 3D-ben is "✎ Figurává ↗": a támadást a figura-oldalon
+    nyitja, a meccs másik csapatának fala ellen; motor nélkül rejtve."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    oldal = view3d_html(_tamado_meccs())
+    for kell in ('<button id="figuravaGomb"',
+                 'if (!ADAT.match_id) figuravaGomb.style.display = "none";',
+                 '"/attack-figure?t=" + ido.toFixed(2)',
+                 'q.set("vedo", f.csapat_oldal === "home" ? "away" : "home");',
+                 'location.href = "/figura3d?" + q.toString();'):
+        assert kell in oldal, kell

@@ -508,7 +508,9 @@ pillanat szervezett támadását a Figura-tervezőbe viszi: a támadó csapat
 mezőnyjátékosainak helye három kulcs-pozíción (a támadás elejétől a
 végéig), és kinél volt a labda — mindig a jobb oldali kapura támadva (a
 másik irányú támadást a pálya közepére forgatja, a bal oldal bal marad).
-A védelem alapból a meccs másik csapatáé. Így a saját jó támadásból
+A védelem alapból a meccs másik csapatáé. A böngészős 3D "✎ Figurává ↗"
+gombja ugyanezt a figura-oldalon nyitja (a másik csapat tanult fala
+ellen, ismétlődve, a padlón az utakkal — onnan vezethető is). Így a saját jó támadásból
 gyakorló-figura, az ellenfél veszélyes támadásából pedig "hogyan fut a
 mi falunk ellen" lesz — szerkeszthető, menthető, 3D-ben/VR-ben
 bejárható.

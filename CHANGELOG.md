@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.171 óta)
 
+- **"✎ Figurává ↗" a böngészős 3D-ben is** (böngésző/VR): a mostani
+  pillanat támadása a figura-oldalon nyílik — a meccs másik csapatának
+  tanult fala ellen, ismétlődve, a padlón az utakkal és a passzokkal;
+  onnan a csapatnak vezethető is (app nélkül, headsetből).
+
 - **Rövidebb tipp a GÓL-ESEMÉNY kártyán** (app): "nincs felismert gól —
   ✎: valódi eredmény" (a hosszú tipp a négy egy-magasságú kártyát
   megnyújtotta); a részlet a kártya tooltipjében.

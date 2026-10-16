@@ -937,6 +937,7 @@ def view3d_html(match: Match, figure_alerts: list | None = None,
  </div>
  <div class="sor">
   <button id="linkGomb" title="Link a mostani jelenetre: idő, kamera-állás, bekapcsolt rétegek — megosztható">Link másolása</button>
+  <button id="figuravaGomb" title="Figurává: a mostani támadás figuraként — a meccs másik csapatának tanult fala ellen, ismétlődve, a padlón az utakkal és a passzokkal (onnan vezethető is)">✎ Figurává ↗</button>
   <span id="linkInfo"></span>
  </div>
 </div>
@@ -2026,6 +2027,33 @@ function linkEpit(){
   return location.origin + location.pathname + "?" + q.toString();
 }
 const linkInfo = document.getElementById("linkInfo");
+// ✎ Figurává: a mostani támadás a figura-oldalon (csak motorral).
+const figuravaGomb = document.getElementById("figuravaGomb");
+if (!ADAT.match_id) figuravaGomb.style.display = "none";
+figuravaGomb.onclick = async () => {
+  try {
+    const v = await fetch("/matches/" + encodeURIComponent(ADAT.match_id)
+                          + "/attack-figure?t=" + ido.toFixed(2));
+    if (!v.ok){
+      const h = await v.json().catch(() => ({}));
+      linkInfo.textContent = h.detail || "ennél a pillanatnál nincs támadás";
+      setTimeout(() => { linkInfo.textContent = ""; }, 5000);
+      return;
+    }
+    const f = await v.json();
+    const q = new URLSearchParams();
+    q.set("u", f.attackers.map(ut => ut.map(p => p.join(",")).join(",")).join(";"));
+    if (f.labda.some(x => x !== 0)) q.set("l", f.labda.join(","));
+    const t0 = Math.round(f.t0_s || 0);
+    q.set("cim", f.csapat + " támadása " + Math.floor(t0 / 60) + ":" + String(t0 % 60).padStart(2, "0"));
+    q.set("meccs", ADAT.match_id);
+    q.set("vedo", f.csapat_oldal === "home" ? "away" : "home");
+    location.href = "/figura3d?" + q.toString();
+  } catch (e) {
+    linkInfo.textContent = "a figurához a motor kell";
+    setTimeout(() => { linkInfo.textContent = ""; }, 5000);
+  }
+};
 document.getElementById("linkGomb").onclick = async () => {
   const url = linkEpit();
   try { await navigator.clipboard.writeText(url); linkInfo.textContent = "másolva"; }
