@@ -210,3 +210,30 @@ def test_a_figura_mentese_a_passzokkal(tmp_path, monkeypatch):
     for rossz in ([0, 2], [0, "x"], [0, 0, 0, 0]):
         assert c.post("/playbook", json={"name": "R", "attackers": ut,
                                          "labda": rossz}).status_code == 400
+
+
+def test_a_figura_kozos_nezese(tmp_path, monkeypatch):
+    """A figurát is lehet vezetni: a vezető a /matches/figura/shared3d-re
+    a figura paramétereit is küldi, a /kovet a csapatot ugyanarra a
+    figurára irányítja (a nevükkel); paraméter nélkül / rossz alakkal 400.
+    Az oldal figura-módban a közös nézést megtartja, a felvételt nem."""
+    from handball.pipeline.view3d_html import view3d_html
+
+    c = TestClient(_app(tmp_path, monkeypatch))
+    url = "/matches/figura/shared3d"
+    assert c.put(url, json={"t": 1}).status_code == 400
+    assert c.put(url, json={"t": 1, "figura": "u=1\"><b>"}).status_code == 400
+    fig = "u=20%2C10%3B24%2C5&l=0%2C1&cim=Kereszt"
+    assert c.put(url, json={"t": 1, "playing": True,
+                            "figura": fig}).status_code == 200
+    r = c.get("/kovet", params={"nev": "Anna"}, follow_redirects=False)
+    assert r.status_code == 307
+    assert r.headers["location"] == f"/figura3d?{fig}&kovet=1&nev=Anna"
+    assert c.get(url).json()["t"] == 1
+    # a meccs közös nézése a régi úton marad
+    assert c.put("/matches/nincs/shared3d", json={"t": 1}).status_code == 404
+    m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
+    oldal = view3d_html(m, figura=e)
+    assert 'const KZ_ID = FIGURA ? "figura" : ADAT.match_id;' in oldal
+    assert "...(FIGURA ? {figura: FIGURA_KOD} : {})" in oldal
+    assert 'for (const id of ["felvetelGomb", "felvetelValaszto", "fejezetValaszto"])' in oldal

@@ -518,7 +518,15 @@ videó, a meccs-jelenetek) a figurában nincsenek.
 
 A csapat a várólapon éri el: amit az edző a saját gépéről nyitott meg, azt
 a `/kovet` lap három órán át "▶ Figura: …" sorként linkeli — a headseten a
-hosszú cím nem gépelhető. A cím (`/figura3d?u=…&cim=…&meccs=…&vedo=…`)
+hosszú cím nem gépelhető.
+
+**A figura közös nézése.** A figurát is lehet vezetni ("📡 Vezetem" —
+ugyanúgy, mint a meccset): a csapat a `/kovet` linkkel ugyanarra a
+figurára áll (a vezető a figura paramétereit is küldi), a lejátszás, a
+szünet, a nyilak, a mutató, az "📍 Ide mindenki" és a kvíz is megy — pl.
+megállítod a passz előtt, és a játékosok a padlóra mutatnak: hova
+futnál? A kvíz eredménye figuránál nem kerül a jegyzetek közé (nincs
+mögötte meccs), és felvétel sem készül. A cím (`/figura3d?u=…&cim=…&meccs=…&vedo=…`)
 a klub-hálózatról is elérhető (olvasás).
 
 ## VR-headset

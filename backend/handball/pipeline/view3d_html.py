@@ -1267,13 +1267,17 @@ lejatszasGomb.onclick = () => { megy = !megy; lejatszasGomb.textContent = megy ?
 // meccs-jelenetek lapozói) rejtve; a fejléc a kiértékelést mutatja; a
 // lejátszás magától indul (és a végén ismétel — lásd a rajzoló hurkot).
 if (FIGURA){
-  for (const id of ["vezetGomb", "videoGomb", "jegyzetGomb", "jelenetGomb",
+  for (const id of ["videoGomb", "jegyzetGomb", "jelenetGomb",
                     "dontesElozo", "szabadElozo", "eladasElozo", "golElozo",
                     "emberElozo", "kontraElozo", "kapottElozo", "hetesElozo"]){
     const el = document.getElementById(id);
     const sor = el && el.closest(".sor");
     if (sor) sor.style.display = "none";
   }
+  // A közös nézés marad (a figurát is lehet vezetni), a felvétel nem (a
+  // meccs mellé mentődne).
+  for (const id of ["felvetelGomb", "felvetelValaszto", "fejezetValaszto"])
+    document.getElementById(id).style.display = "none";
   const reszek = ["a mozgás " + String(FIGURA.hossz_s).replace(".", ",") + " mp"];
   // A labda útja (passzoknál): "labda 1 → 2 → 3".
   const lu = (FIGURA.labda || []).filter((v, i, a) => i === 0 || v !== a[i - 1]);
@@ -1291,7 +1295,8 @@ if (FIGURA){
 }
 window.figuraProba = () => ({figura: !!FIGURA, megy, ido, veg,
   rejtett: ["vezetGomb", "videoGomb", "jegyzetGomb"].filter(id =>
-    document.getElementById(id).closest(".sor").style.display === "none").length});
+    document.getElementById(id).closest(".sor").style.display === "none").length,
+  felvetel: document.getElementById("felvetelGomb").style.display !== "none"});
 if (megy) lejatszasGomb.textContent = "⏸";
 csuszka.value = ido;
 csuszka.oninput = () => { ido = parseFloat(csuszka.value); };
@@ -3115,7 +3120,7 @@ const kzNevValaszto = document.getElementById("kzNevValaszto");
 let kzNevekBetoltve = false;
 async function nevValasztoMutat(be){
   kzNevValaszto.style.display = be ? "" : "none";
-  if (!be || kzNevekBetoltve || !ADAT.match_id) return;
+  if (!be || kzNevekBetoltve || !KZ_ID) return;
   kzNevekBetoltve = true;
   try {
     const v = await fetch("/library/players");
@@ -3142,9 +3147,18 @@ kzNevValaszto.onchange = () => {
   history.replaceState(null, "", location.pathname + "?" + q.toString());
   kzUtolso = 0;  // a név azonnal megy
 };
-const kzCim = () => "/matches/" + encodeURIComponent(ADAT.match_id) + "/shared3d";
+// A közös nézés azonosítója: a meccs — figura-módban a "figura" munkamenet
+// (a vezető a figura paramétereit is küldi, a /kovet arra irányít).
+const KZ_ID = FIGURA ? "figura" : ADAT.match_id;
+const FIGURA_KOD = FIGURA ? (() => {
+  const q = new URLSearchParams();
+  for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg"])
+    if (URL_PARAM.get(k)) q.set(k, URL_PARAM.get(k));
+  return q.toString();
+})() : "";
+const kzCim = () => "/matches/" + encodeURIComponent(KZ_ID) + "/shared3d";
 function kozosAllit(m){
-  if (!ADAT.match_id){ kozosInfo.textContent = "a közös nézéshez a motor kell"; return; }
+  if (!KZ_ID){ kozosInfo.textContent = "a közös nézéshez a motor kell"; return; }
   const elozo = kozosMod;
   kozosMod = (m === kozosMod) ? null : m;
   felvetelAll();
@@ -3194,7 +3208,8 @@ function kozosFrissit(){
   if (kozosMod === "vezet"){
     felvetelRogzit();
     fetch(kzCim(), {method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok), kviz: kzKviz, hely: sajatHely(), mutato: kzMutato, nezopont: kzNezopont})})
+      body: JSON.stringify({t: ido, playing: megy, speed: sebesseg, rajz: rajzKodol(rajzok), kviz: kzKviz, hely: sajatHely(), mutato: kzMutato, nezopont: kzNezopont,
+                            ...(FIGURA ? {figura: FIGURA_KOD} : {})})})
       .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(a => { if (kozosMod === "vezet"){ kzKovetok = a.followers;
                                             kzVezetoCsapat = a.csapat || [];

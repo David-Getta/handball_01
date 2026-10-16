@@ -2109,7 +2109,7 @@ def test_a_kozos_nezes_nezopontja(tmp_path, monkeypatch):
 
     oldal = view3d_html(_meccs())
     for kell in ('id="ideGomb"', 'ideGomb.disabled = kozosMod !== "vezet";',
-                 "nezopont: kzNezopont})", "if (a.nezopont.kor < KZ_MUTATO) nezopontAlkalmaz(",
+                 "nezopont: kzNezopont,", "if (a.nezopont.kor < KZ_MUTATO) nezopontAlkalmaz(",
                  'modValt("szabad");\n  rig.position.set(v.x, v.y, v.z);',
                  "kozosInfo.textContent === KZ_IDE && performance.now() - kzInfoValtas < KZ_VR_MS"):
         assert kell in oldal, kell

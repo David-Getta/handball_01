@@ -3520,7 +3520,18 @@ def create_app():
         import time as _time
 
         from ..pipeline import court3d as _c3
-        if match_id not in _store:
+        from ..pipeline.play_simulation import (FIGURA_KOZOS_ID,
+                                                FIGURA_KOZOS_MAX)
+        # A figura közös nézése (/matches/figura/shared3d) nem könyvtári
+        # meccs: a vezető a figura paramétereit küldi ("figura" — a
+        # /figura3d lekérdezése), a /kovet erre irányít.
+        figura = None
+        if match_id == FIGURA_KOZOS_ID:
+            figura = str(body.get("figura") or "")
+            if (not figura or len(figura) > FIGURA_KOZOS_MAX
+                    or not _re.fullmatch(r"[A-Za-z0-9%=&.,;_+\-]+", figura)):
+                raise HTTPException(status_code=400, detail="rossz figura")
+        elif match_id not in _store:
             raise HTTPException(status_code=404, detail="match not found")
         try:
             t = float(body.get("t") or 0.0)
@@ -3627,7 +3638,8 @@ def create_app():
                   "nezopont": nez,
                   "nezopont_ido": nez_ido if nez else None,
                   "vezeto_hely": vhely, "jelen": jelen,
-                  "jelen_sz": regi.get("jelen_sz", 0), "kviz": kviz}
+                  "jelen_sz": regi.get("jelen_sz", 0), "kviz": kviz,
+                  "figura": figura}
             _kozos[match_id] = uj
             csapat = _kz_csapat(uj, most, valaszok=True)
         return {"rev": rev, "followers": len(kovetok), "csapat": csapat}
@@ -4098,10 +4110,22 @@ def create_app():
         if elok:
             mid = max(elok)[1]
             nev_ = _c3.shared3d_nev(nev)
-            return RedirectResponse(
-                url=(f"/matches/{quote(mid, safe='')}/view3d?kovet=1"
-                     + (f"&nev={quote(nev_, safe='')}" if nev_ else "")),
-                status_code=307)
+            nev_q = f"&nev={quote(nev_, safe='')}" if nev_ else ""
+            # A figura közös nézése: ugyanarra a figurára (a vezető
+            # paramétereivel).
+            from ..pipeline.play_simulation import FIGURA_KOZOS_ID
+            if mid == FIGURA_KOZOS_ID:
+                with _kozos_zar:
+                    fig = (_kozos.get(mid) or {}).get("figura")
+                if fig:
+                    return RedirectResponse(
+                        url=f"/figura3d?{fig}&kovet=1{nev_q}",
+                        status_code=307)
+            else:
+                return RedirectResponse(
+                    url=(f"/matches/{quote(mid, safe='')}/view3d?kovet=1"
+                         + nev_q),
+                    status_code=307)
         # Addig: a legutóbbi felvételek. Névvel (/kovet?nev=Anna) a lap
         # jelöli, melyiket látta már (élőben vagy felvételről), és a link
         # a nevet is viszi (a visszanézés a nevére számít).

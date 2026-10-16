@@ -193,6 +193,13 @@ FIGURA_3D_MAX_PONT = 10
 # érkezik (ott már az átvevőnél van).
 FIGURA_3D_PASSZ_MPS = 12.0
 FIGURA_3D_PASSZ_MIN_S = 0.3
+# A figura KÖZÖS NÉZÉSÉNEK azonosítója a meccsek helyén
+# (/matches/figura/shared3d): az edző a figurát is vezetheti, a csapat a
+# /kovet linkkel ugyanarra a figurára áll.
+FIGURA_KOZOS_ID = "figura"
+# A vezető által küldött figura-paraméterek (a /figura3d lekérdezése)
+# legfeljebb ennyi jel.
+FIGURA_KOZOS_MAX = 2000
 # A csapat várólapja (/kovet) az edző legutóbbi 3D-figuráját ennyi mp-ig
 # linkeli (egy edzés hossza — utána már nem "a mostani").
 FIGURA_3D_KOVET_S = 3 * 3600

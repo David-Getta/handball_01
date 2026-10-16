@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **A figura közös nézése** (böngésző/VR + motor): a 3D figurát is lehet
+  vezetni — a csapat a `/kovet` linkkel ugyanarra a figurára áll, és a
+  lejátszás, a szünet, a mutató, az "📍 Ide mindenki" és a kvíz is megy
+  (megállítod a passz előtt: hova futnál?). A figura kvíze nem kerül a
+  jegyzetek közé, felvétel nem készül. (/matches/figura/shared3d —
+  "figura": a /figura3d paraméterei)
+
 - **Passz a figurában** (app + motor + böngésző/VR): a Figura-tervezőben
   kulcs-pozíciónként kiválasztható, kinél van a labda — ahol a következő
   pontnál másnál, az passz. A tervező a labdát és az érkező passzt
