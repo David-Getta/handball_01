@@ -30,6 +30,7 @@ import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
 import "clips_screen.dart";
 import "court_geometry.dart";
+import "designer_screen.dart";
 import "error_text.dart";
 import "shell/app_shell.dart";
 
@@ -2278,6 +2279,25 @@ class _Court3DScreenState extends State<Court3DScreen>
     });
   }
 
+  /// ✎ Figurává: a mostani pillanat támadása (a motor kulcs-pozíciókká
+  /// bontja) a Figura-tervezőben nyílik.
+  Future<void> _figuravaNyit() async {
+    final id = _matchId, m = _match;
+    if (id == null || m == null || _demo) return;
+    final fps = m.meta.fps > 0 ? m.meta.fps : 25.0;
+    try {
+      final f = await _api.fetchAttackFigure(id, _mostT(m) / fps);
+      if (!mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => DesignerScreen(match: m, initial: f)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Figurává: ${humanError(e)}")));
+    }
+    _focus.requestFocus();
+  }
+
   /// ▶ Felvételek: a meccs mentett megbeszélései — megnyitás a böngészős
   /// 3D-ben (ott magától indul), átnevezés, törlés.
   Future<void> _felvetelekNyit() async {
@@ -3322,6 +3342,25 @@ class _Court3DScreenState extends State<Court3DScreen>
           ),
         ),
       ),
+      // ✎ Figurává: a mostani támadás a Figura-tervezőbe.
+      if (_matchId != null && !_demo)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Tooltip(
+            message: "Figurává: a mostani támadás a Figura-tervezőbe — "
+                "szerkeszthető, menthető, 3D-ben/VR-ben bejárható, és a "
+                "meccs másik csapatának (vagy bármely csapat) tanult "
+                "védelme ellen kipróbálható",
+            child: TextButton(
+              style: TextButton.styleFrom(
+                  foregroundColor: AppColors.textFaint,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  visualDensity: VisualDensity.compact),
+              onPressed: _figuravaNyit,
+              child: const Text("✎ Figurává", style: TextStyle(fontSize: 11)),
+            ),
+          ),
+        ),
       // ▶ Felvételek: a meccs mentett 3D megbeszélései.
       if (_matchId != null && !_demo)
         Padding(

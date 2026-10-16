@@ -352,6 +352,129 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
     }
 
 
+# ---- A meccs támadásából figura ---------------------------------------------
+# A valódi támadás a tervezőbe: ennél rövidebb (mp) szakasz nem figura, a
+# kért pillanat körül ennyi mp-en belül keressük a legközelebbi támadást,
+# és legfeljebb ennyi mezőnyjátékos (kapus nélkül) kerül bele. A játékos
+# akkor számít, ha a szakasz kockáinak legalább ekkora részén látszik.
+FIGURA_MECCSBOL_MIN_S = 2.0
+FIGURA_MECCSBOL_KERES_S = 3.0
+FIGURA_MECCSBOL_MAX_JATEKOS = 6
+FIGURA_MECCSBOL_JELEN_ARANY = 0.3
+# A saját térfelén (a felezőtől ennyi m-nél mélyebben) álló játékos — a
+# kapus, a hátul maradó — nem része a figurának.
+FIGURA_MECCSBOL_SAJAT_TERFEL_M = 2.0
+
+
+def attack_figure(match: Match, t: int, *, pontok: int = 3,
+                  config: TacticsConfig | None = None) -> dict | None:
+    """A `t` kockát tartalmazó (vagy hozzá FIGURA_MECCSBOL_KERES_S-en belül
+    legközelebbi) szervezett támadás FIGURAKÉNT: a támadó csapat
+    mezőnyjátékosainak helye `pontok` kulcs-pozíción (a támadás elejétől a
+    végéig egyenletesen), és kinél volt a labda (a labdához legközelebbi).
+
+    Edzőileg: a jó (vagy az ellenfél veszélyes) támadása a Figura-
+    tervezőbe kerül — szerkeszthető, menthető, más védelem ellen
+    kipróbálható, 3D-ben/VR-ben bejárható.
+
+    A figura mindig a +x kapura támad (a tervezőé): a -x felé támadást a
+    pálya közepére FORGATJUK (x → 40-x, y → 20-y — a bal oldal bal marad).
+    A hiányzó (takarásban lévő) játékos helye a hozzá legközelebbi kocka,
+    ahol látszik; a saját térfelén álló (a kapus, ha a jelölés nem ismerte
+    fel) kimarad. A játékosok a kezdő y szerint (balról jobbra) rendezve.
+
+    Visszaad: {"attackers": [[[x, y], …], …], "labda": [sorszám, …],
+    "csapat", "csapat_oldal" ("home"/"away"), "t0_s", "t1_s", "mez":
+    [mezszám | None, …]} — None, ha nincs a közelben elég hosszú támadás,
+    vagy kettőnél kevesebb játékos látszik."""
+    from collections import Counter
+    from bisect import bisect_left
+    from .setplays import segment_attacks
+
+    fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+    legjobb, legjobb_d = None, None
+    for sz in segment_attacks(match, config):
+        d = (0 if sz.start_t <= t <= sz.end_t
+             else min(abs(t - sz.start_t), abs(t - sz.end_t)))
+        if legjobb_d is None or d < legjobb_d:
+            legjobb, legjobb_d = sz, d
+    if legjobb is None or legjobb_d > FIGURA_MECCSBOL_KERES_S * fps:
+        return None
+    if (legjobb.end_t - legjobb.start_t) / fps < FIGURA_MECCSBOL_MIN_S:
+        return None
+    kockak = legjobb.frames
+    csapat = legjobb.team
+    db = Counter(p.track_id for f in kockak for p in f.players
+                 if p.team == csapat and getattr(p, "role", None) != "kapus")
+    tracks = [tid for tid, n in db.most_common()
+              if n >= len(kockak) * FIGURA_MECCSBOL_JELEN_ARANY]
+    pontok = max(2, min(FIGURA_3D_MAX_PONT, int(pontok)))
+    idxs = [round(k * (len(kockak) - 1) / (pontok - 1)) for k in range(pontok)]
+    helyek: dict = {tid: [] for tid in tracks}   # tid -> [(i, x, y)]
+    mezek: dict = {}
+    for i, f in enumerate(kockak):
+        for p in f.players:
+            if p.track_id in helyek and p.team == csapat:
+                helyek[p.track_id].append((i, p.x, p.y))
+                if p.jersey_number is not None:
+                    mezek.setdefault(p.track_id, p.jersey_number)
+
+    def hely(tid, i):
+        sor = helyek[tid]
+        j = bisect_left([e[0] for e in sor], i)
+        jelolt = [sor[k] for k in (j - 1, j) if 0 <= k < len(sor)]
+        e = min(jelolt, key=lambda e: abs(e[0] - i))
+        return e[1], e[2]
+
+    # Az irány a labdából (a kapus a saját kapujában elhúzná az átlagot);
+    # labda nélkül a játékosok mediánjából.
+    lx = sorted(f.ball.x for f in kockak if f.ball is not None)
+    if not lx:
+        lx = sorted(e[1] for tid in tracks for e in helyek[tid])
+    if not lx:
+        return None
+    forgat = lx[len(lx) // 2] < COURT_LENGTH_M / 2.0
+
+    def tamado_x(x):
+        return COURT_LENGTH_M - x if forgat else x
+    # A saját térfelén álló (kapus, hátul maradó) kimarad; a legtöbbet
+    # látszók közül legfeljebb FIGURA_MECCSBOL_MAX_JATEKOS.
+    tracks = [tid for tid in tracks
+              if sum(tamado_x(e[1]) for e in helyek[tid]) / len(helyek[tid])
+              >= COURT_LENGTH_M / 2.0 - FIGURA_MECCSBOL_SAJAT_TERFEL_M]
+    tracks = tracks[:FIGURA_MECCSBOL_MAX_JATEKOS]
+    if len(tracks) < 2:
+        return None
+    nyers = [[hely(tid, i) for i in idxs] for tid in tracks]
+
+    def tr(x, y):
+        return ((COURT_LENGTH_M - x, COURT_WIDTH_M - y) if forgat else (x, y))
+
+    utak = [[tr(x, y) for x, y in u] for u in nyers]
+    labda: list = []
+    for k, i in enumerate(idxs):
+        b = kockak[i].ball
+        if b is None:
+            labda.append(labda[-1] if labda else 0)
+            continue
+        bx, by = tr(b.x, b.y)
+        tav = [math.hypot(u[k][0] - bx, u[k][1] - by) for u in utak]
+        labda.append(tav.index(min(tav)))
+    sorrend = sorted(range(len(utak)), key=lambda j: (utak[j][0][1], j))
+    uj_index = {j: n for n, j in enumerate(sorrend)}
+    return {
+        "attackers": [[[round(x, 1), round(y, 1)] for x, y in utak[j]]
+                      for j in sorrend],
+        "labda": [uj_index[v] for v in labda],
+        "csapat": (match.meta.home_team if csapat == Team.HOME
+                   else match.meta.away_team),
+        "csapat_oldal": "home" if csapat == Team.HOME else "away",
+        "t0_s": round(legjobb.start_t / fps, 1),
+        "t1_s": round(legjobb.end_t / fps, 1),
+        "mez": [mezek.get(tracks[j]) for j in sorrend],
+    }
+
+
 def evaluate_setplay(match: Match, config: TacticsConfig | None = None) -> dict:
     """Pontozza a szimulált figurát: a teremtett legjobb lövőhelyzet.
 

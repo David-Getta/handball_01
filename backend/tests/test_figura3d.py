@@ -250,3 +250,78 @@ def test_a_figura_neve_nem_csonkul(tmp_path, monkeypatch):
     assert f"▶ Figura: {nev}<" in helyi.get("/kovet").text
     r = helyi.get("/figura3d", params={"u": U, "cim": "x" * 100})
     assert "<title>" + "x" * 60 + " vs " in r.text
+
+
+def _tamado_meccs(irany=1):
+    """Egy 4 mp-es hazai támadás: 3 mezőnyjátékos + kapus, a labda a 2.-tól
+    a 3.-hoz kerül; `irany` -1: a -x kapura támadnak (forgatandó)."""
+    fps = 10.0
+    frames = []
+    for i in range(41):
+        f = i / 40.0
+        def x(v):
+            return v if irany == 1 else 40.0 - v
+        def y(v):
+            return v if irany == 1 else 20.0 - v
+        pl = [PlayerPosition(track_id=1, team=Team.HOME, x=x(28.0), y=y(4.0 + 2 * f),
+                             jersey_number=5),
+              PlayerPosition(track_id=2, team=Team.HOME, x=x(27.0 + 3 * f), y=y(10.0),
+                             jersey_number=7),
+              PlayerPosition(track_id=3, team=Team.HOME, x=x(29.0), y=y(16.0 - 2 * f)),
+              PlayerPosition(track_id=9, team=Team.HOME, x=x(1.0), y=y(10.0)),
+              PlayerPosition(track_id=20, team=Team.AWAY, x=x(34.0), y=y(10.0))]
+        bx, by = (27.0 + 3 * f, 10.0) if f < 0.5 else (29.0, 16.0 - 2 * f)
+        frames.append(Frame(t=i, players=pl, ball=Ball(x=x(bx), y=y(by), confidence=1.0)))
+    return Match(MatchMeta(match_id="tf", home_team="Kiel", away_team="Berlin",
+                           fps=fps), frames)
+
+
+@pytest.mark.parametrize("irany", [1, -1])
+def test_tamadasbol_figura(irany):
+    """A valódi támadás figuraként: a mezőnyjátékosok kulcs-pozíciói (a
+    kapus nélkül), a labdás, és a -x felé támadás a +x kapura forgatva."""
+    from handball.pipeline.play_simulation import attack_figure
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.pipeline.tactics import TacticsConfig
+
+    m = _tamado_meccs(irany)
+    cfg = TacticsConfig(home_attacks_positive=(irany == 1))
+    with primitive_cache(m):
+        f = attack_figure(m, 20, config=cfg)
+    assert f is not None and f["csapat"] == "Kiel" and f["csapat_oldal"] == "home"
+    assert len(f["attackers"]) == 3          # a kapus (x=1 / 39) nem
+    # balról jobbra: y=4 (5-ös), y=10 (7-es), y=16 (mez nélkül)
+    assert f["mez"] == [5, 7, None]
+    assert f["attackers"][0] == [[28.0, 4.0], [28.0, 5.0], [28.0, 6.0]]
+    assert f["attackers"][1][2] == [30.0, 10.0]
+    # a labda: a 7-esnél, majd a 3.-nál
+    assert f["labda"] == [1, 2, 2]
+    assert f["t0_s"] == 0.0 and f["t1_s"] == 4.0
+
+
+def test_tamadasbol_figura_vegpont(tmp_path, monkeypatch):
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(_tamado_meccs())
+    c = TestClient(app)
+    r = c.get("/matches/tf/attack-figure", params={"t": 2.0})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["match_id"] == "tf" and len(d["attackers"][0]) == 3
+    assert len(c.get("/matches/tf/attack-figure",
+                     params={"t": 2.0, "pontok": 5}).json()["attackers"][0]) == 5
+    assert c.get("/matches/nincs/attack-figure", params={"t": 1}).status_code == 404
+
+
+def test_a_3d_figurava_gombja():
+    """Az app 3D fülén a "✎ Figurává" a mostani pillanat támadását kéri
+    le, és a Figura-tervezőt ezzel a kezdő figurával nyitja."""
+    from pathlib import Path
+
+    ui = Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
+    palya = (ui / "court3d_screen.dart").read_text(encoding="utf-8")
+    assert '"✎ Figurává"' in palya
+    assert "_api.fetchAttackFigure(id, _mostT(m) / fps)" in palya
+    assert "DesignerScreen(match: m, initial: f)" in palya
+    tervezo = (ui / "designer_screen.dart").read_text(encoding="utf-8")
+    assert '_tanultOldal = f["csapat_oldal"] == "home" ? "away" : "home";' in tervezo

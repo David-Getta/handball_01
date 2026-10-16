@@ -23,7 +23,11 @@ import "num_format.dart";
 
 class DesignerScreen extends StatefulWidget {
   final Match match; // ebből tanuljuk a védelmet
-  const DesignerScreen({super.key, required this.match});
+  /// Kezdő figura egy meccs támadásából (GET …/attack-figure — a 3D
+  /// "✎ Figurává" gombja): az utak, a labdás-sor, a csapat; a védelem a
+  /// meccs másik csapatáé (a 3D/VR is ellene nyit).
+  final Map<String, dynamic>? initial;
+  const DesignerScreen({super.key, required this.match, this.initial});
 
   @override
   State<DesignerScreen> createState() => _DesignerScreenState();
@@ -106,6 +110,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
     _numDefenders = 6;
     _lineDepth = 6.0;
 
+    final kezdo = widget.initial;
+    if (kezdo != null && _kezdoFiguraBetolt(kezdo)) return;
     // Alap figura: irányító, két átlövő, szélső, beálló — az edző átrendezi.
     _attackers = [
       _path3(const Offset(22, 10), const Offset(22, 10)), // irányító (labdás)
@@ -114,6 +120,39 @@ class _DesignerScreenState extends State<DesignerScreen> {
       _path3(const Offset(28, 2), const Offset(31, 2)),   // szélső
       _path3(const Offset(30, 10), const Offset(34, 10)), // beálló (a kapu felé)
     ];
+  }
+
+  /// A meccs támadásából kapott kezdő figura (a 3D "✎ Figurává"): igaz,
+  /// ha használható volt.
+  bool _kezdoFiguraBetolt(Map<String, dynamic> f) {
+    try {
+      final utak = [
+        for (final a in (f["attackers"] as List))
+          [
+            for (final p in a as List)
+              Offset(((p as List)[0] as num).toDouble(), (p[1] as num).toDouble())
+          ]
+      ];
+      if (utak.length < 2 || utak.any((u) => u.isEmpty)) return false;
+      final k = utak.first.length.clamp(2, designerMaxPoints);
+      _attackers = [for (final u in utak) resamplePath(u, k)];
+      final l = [
+        for (final v in (f["labda"] as List?) ?? const [])
+          (v as num).toInt().clamp(0, _attackers.length - 1)
+      ];
+      _labda = [for (int i = 0; i < k; i++) i < l.length ? l[i] : (l.isEmpty ? 0 : l.last)];
+      final t0 = ((f["t0_s"] as num?) ?? 0).toInt();
+      _nev = "${f["csapat"] ?? "Támadás"} támadása "
+          "${t0 ~/ 60}:${(t0 % 60).toString().padLeft(2, "0")}";
+      // A védelem: a meccs MÁSIK csapatáé (a 3D is ellene nyit).
+      if (f["match_id"] is String) {
+        _tanultMeccs = f["match_id"] as String;
+        _tanultOldal = f["csapat_oldal"] == "home" ? "away" : "home";
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override

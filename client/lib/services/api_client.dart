@@ -398,6 +398,22 @@ class ApiClient {
     }
   }
 
+  /// A meccs `t` (mp) pillanatánál zajló szervezett támadás FIGURAKÉNT
+  /// (GET /matches/{id}/attack-figure): {"attackers": [[[x, y], …], …],
+  /// "labda", "csapat", "csapat_oldal", "t0_s", "t1_s", "mez"} — a
+  /// Figura-tervezőbe.
+  Future<Map<String, dynamic>> fetchAttackFigure(String matchId, double t,
+      {int pontok = 3}) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/attack-figure").replace(
+            queryParameters: {"t": t.toStringAsFixed(2), "pontok": "$pontok"}))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception(_hiba("Nem sikerült a támadásból figura", resp));
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Az edző figurájának szimulációja egy meccsből TANULT védelem ellen
   /// (POST /matches/{id}/simulate-setplay). A szerver a `defending` csapat
   /// védekezését tanulja meg a meccsből, és az ellen játssza le a figurát.

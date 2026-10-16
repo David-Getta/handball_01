@@ -503,6 +503,16 @@ kiértékelés: a mozgás hossza és a legjobb lövőhelyzet (ki, hány %, mikor
 A támadók útjai kék nyílként a padlón, a passzok sárgán (a Rajz-réteg
 nyilai: a "Törlés" leveszi, a link viszi).
 
+**Támadásból figura.** Az app 3D fülén a "✎ Figurává" a MOSTANI
+pillanat szervezett támadását a Figura-tervezőbe viszi: a támadó csapat
+mezőnyjátékosainak helye három kulcs-pozíción (a támadás elejétől a
+végéig), és kinél volt a labda — mindig a jobb oldali kapura támadva (a
+másik irányú támadást a pálya közepére forgatja, a bal oldal bal marad).
+A védelem alapból a meccs másik csapatáé. Így a saját jó támadásból
+gyakorló-figura, az ellenfél veszélyes támadásából pedig "hogyan fut a
+mi falunk ellen" lesz — szerkeszthető, menthető, 3D-ben/VR-ben
+bejárható.
+
 **Több kulcs-pozíció.** A tervező alapból három ponttal dolgozik (Kezdő /
 Közép / Vég); a "+" a mostani után új pontot tesz (kereszt, visszaadás —
 legfeljebb hatot), a "−" a mostanit törli. A 3D, a passzok és a mentés a

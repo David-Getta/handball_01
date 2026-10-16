@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.171 óta)
 
+- **Támadásból figura** (app + motor): az app 3D fülén a "✎ Figurává" a
+  mostani pillanat szervezett támadását a Figura-tervezőbe viszi — a
+  támadók kulcs-pozíciói és a labdás, a jobb kapura forgatva, a védelem a
+  meccs másik csapatáé. A saját jó támadásból gyakorló-figura, az
+  ellenfél veszélyeséből "hogyan fut a mi falunk ellen" — szerkeszthető,
+  menthető, 3D-ben/VR-ben bejárható. (/matches/{id}/attack-figure?t=)
+
 - **A mentett figura egy kattintással 3D-ben** (app): a Figura-tervező
   "Figura betöltése" listájában soronként "3D / VR" gomb — a figura (a
   passzaival) betöltés nélkül a böngészős 3D-ben nyílik; a gyakorlás

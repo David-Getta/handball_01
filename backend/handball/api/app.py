@@ -3170,6 +3170,32 @@ def create_app():
     figura3d.__annotations__["request"] = Request
     app.get("/figura3d")(figura3d)
 
+    @app.get("/matches/{match_id}/attack-figure")
+    def attack_figure_api(match_id: str, t: float = 0.0, pontok: int = 3):
+        """A `t` (mp) pillanatnál zajló szervezett támadás FIGURAKÉNT — a
+        Figura-tervezőbe (play_simulation.attack_figure: a támadó
+        mezőnyjátékosok kulcs-pozíciói, a labdás, +x irányba forgatva).
+        404: nincs ilyen meccs, vagy ennél a pillanatnál nincs elég hosszú
+        szervezett támadás."""
+        import math as _math
+
+        from ..pipeline.play_simulation import attack_figure
+        from ..pipeline.primitive_cache import primitive_cache
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        if not _math.isfinite(t):
+            raise HTTPException(status_code=400, detail="t: véges mp")
+        fps = match.meta.fps if match.meta.fps and match.meta.fps > 0 else 25.0
+        with primitive_cache(match):
+            fig = attack_figure(match, int(round(t * fps)), pontok=pontok)
+        if fig is None:
+            raise HTTPException(
+                status_code=404,
+                detail="ennél a pillanatnál nincs elég hosszú szervezett "
+                       "támadás — lapozz egy támadás közepére")
+        return {**fig, "match_id": match_id}
+
     @app.get("/matches/{match_id}/defence-timeline")
     def match_defence_timeline(match_id: str):
         """A 3D pálya védekezés-panelje: ki védekezik, milyen falban.
