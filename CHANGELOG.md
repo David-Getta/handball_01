@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.171 óta)
+## v0.1.172 — kiadva (2026-10-16)
+
+> Kiadás-jegyzet: a meccsből figura, a figurából papír és VR-edzés. A
+> 3D-ben (az appban és a böngészőben is) a "✎ Figurává" a mostani
+> támadást a Figura-tervezőbe viszi — a saját jó támadásból
+> gyakorló-figura, az ellenfél veszélyeséből "hogyan fut a mi falunk
+> ellen". A tervező "Figura-lap ↗" gombja nyomtatható lapot ad
+> (lépésenként ábra a futásokkal, a passzokkal és a fallal), a
+> "Csapat-linkek (VR)" futónként adja a linket: amikor az edző vezeti a
+> figurát, mindenki a saját futójában, a saját szemével fut (szem=h3 —
+> VR-ben is). A mentett figura egy kattintással 3D-ben; a figura
+> madártávlatból nyílik. Az app: tizedesvessző a maradék helyeken is,
+> rövidebb tipp a GÓL-ESEMÉNY kártyán. (Valódi headseten még nem
+> próbáltuk.)
 
 - **Csapat-linkek futónként** (app): a Figura-tervező "Csapat-linkek
   (VR)" gombja futónként kiírja a csapat linkjét (…/kovet?szem=h1, …) —
