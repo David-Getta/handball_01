@@ -2709,6 +2709,16 @@ def test_a_rovid_csapat_link(tmp_path, monkeypatch):
     for i in range(court3d.SHARED3D_WAIT_RECS):
         c.post("/matches/egy/felvetelek", json={"allapotok": allapotok})
     assert c.get("/kovet").text.count("view3d?felvetel=") == court3d.SHARED3D_WAIT_RECS
+    # Névvel: melyiket látta (élőben vagy felvételről) — és a link viszi a nevet.
+    c.post(f"/matches/ket to/felvetelek/{uj['id']}/megnezte", json={"nev": "Anna"})
+    lap = c.get("/kovet", params={"nev": "anna"}).text
+    # (az azonos másodperces felvételek sorrendje az azonosítón múlik)
+    lathato = f"view3d?felvetel={uj['id']}" in lap
+    assert lap.count("✓ láttad") == (1 if lathato else 0)
+    assert (lap.count("✓ láttad") + lap.count("• még nem láttad")
+            == court3d.SHARED3D_WAIT_RECS)
+    assert "&amp;nev=anna" in lap
+    assert "láttad" not in c.get("/kovet").text
     assert 'kzLink = location.origin + "/kovet";' in view3d_html(_meccs())
     palya = (Path(__file__).resolve().parents[2] / "client" / "lib" / "ui"
              / "court3d_screen.dart").read_text(encoding="utf-8")

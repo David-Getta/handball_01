@@ -392,7 +392,10 @@ indítja.
 
 A csapat linkje (`/kovet`) is kínálja őket: amíg nincs élő vezetés, a
 "Várunk az edzőre" lap a legutóbbi megbeszéléseket listázza (meccsektől
-függetlenül) — a headsetben egy kattintással indul a visszanézés.
+függetlenül) — a headsetben egy kattintással indul a visszanézés. A
+névvel nyitott link (`/kovet?nev=Anna`) jelöli, melyiket látta már a
+játékos és melyiket nem ("• még nem láttad"), és a visszanézés a nevére
+számít.
 
 Az appban ugyanígy: vezetés közben a **⏺ Felvétel** gomb rögzít. A 3D fül
 **▶ Felvételek** listája a meccs felvételeit mutatja: a sorra kattintva

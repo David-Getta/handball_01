@@ -4020,20 +4020,31 @@ def create_app():
                 url=(f"/matches/{quote(mid, safe='')}/view3d?kovet=1"
                      + (f"&nev={quote(nev_, safe='')}" if nev_ else "")),
                 status_code=307)
-        # Addig: a legutóbbi felvételek.
+        # Addig: a legutóbbi felvételek. Névvel (/kovet?nev=Anna) a lap
+        # jelöli, melyiket látta már (élőben vagy felvételről), és a link
+        # a nevet is viszi (a visszanézés a nevére számít).
+        nev_ = _c3.shared3d_nev(nev)
+        kulcs_ = _c3.quiz_name_key(nev_) if nev_ else None
         sorok = []
-        for fej, meta, _p in _legutobbi_felvetelek()[:_c3.SHARED3D_WAIT_RECS]:
+        for fej, meta, p_ in _legutobbi_felvetelek()[:_c3.SHARED3D_WAIT_RECS]:
             mp = max(0, int(float(fej["hossz_s"] or 0)))
+            jel = ""
+            if kulcs_:
+                latta = kulcs_ in {_c3.quiz_name_key(x) for x in (
+                    list(fej.get("jelen") or []) + _felvetel_nezok(p_))}
+                jel = (' · <span style="color:#6e7b8f">✓ láttad</span>' if latta
+                       else ' · <b style="color:#ffc83d">• még nem láttad</b>')
             sorok.append(
                 '<li style="margin:.6em 0"><a style="color:#7ee0d2;'
                 'font-size:1.3em" href="/matches/'
                 + _html.escape(quote(meta.match_id, safe=""))
                 + "/view3d?felvetel=" + _html.escape(quote(fej["id"], safe=""))
+                + (_html.escape("&nev=" + quote(nev_, safe="")) if nev_ else "")
                 + '">▶ ' + _html.escape(fej["nev"]) + "</a><br>"
                 + '<span style="color:#93a0b4">'
                 + _html.escape(f"{meta.home_team} – {meta.away_team}")
                 + f" · {mp // 60}:{mp % 60:02d}"
-                + (" · 🎙" if fej["hang"] else "") + "</span></li>")
+                + (" · 🎙" if fej["hang"] else "") + "</span>" + jel + "</li>")
         lista = ("" if not sorok else
                  '<h2 style="margin-top:2.5em">Addig: a legutóbbi '
                  'megbeszélések</h2><ul style="list-style:none;padding:0">'

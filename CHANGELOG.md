@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **"• Még nem láttad" a csapat linkjén** (motor): a /kovet várólapja a
+  játékos nevével (`/kovet?nev=Anna`) jelöli, melyik megbeszélést látta
+  már (élőben vagy felvételről) és melyiket nem, és a link a nevet is
+  viszi — a visszanézés a "Ki vagy?" nélkül is a nevére számít.
+
 - **Megbeszélések a meccs-jelentésben** (új, motor): a jelentés
   "Megbeszélések (3D-felvétel)" szakasza felsorolja a meccs 3D
   megbeszélés-felvételeit — név, idő, hossz, hang, fejezetek a
