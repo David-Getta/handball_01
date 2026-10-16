@@ -17,6 +17,7 @@ import "shell/app_shell.dart";
 import "anim.dart";
 import "error_text.dart";
 import "waiting.dart";
+import "num_format.dart";
 
 class TrendScreen extends StatefulWidget {
   final List<Map<String, String>> older; // a korábbi időszak meccsei
@@ -240,7 +241,7 @@ class _TrendScreenState extends State<TrendScreen> {
     final newer = (m["newer"] as num?)?.toDouble() ?? 0.0;
     // A segédfüggvény neve nem lehet "num" (kitakarná a beépített típust).
     String fmt(double d) =>
-        d % 1 == 0 ? d.toInt().toString() : d.toStringAsFixed(1);
+        d % 1 == 0 ? d.toInt().toString() : huNum(d);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
@@ -293,7 +294,7 @@ class _TrendScreenState extends State<TrendScreen> {
     if (diff == 0) {
       text = "változatlan";
     } else if (older == 0) {
-      text = "${diff > 0 ? "+" : ""}${diff % 1 == 0 ? diff.toInt() : diff.toStringAsFixed(1)}";
+      text = "${diff > 0 ? "+" : ""}${diff % 1 == 0 ? diff.toInt() : huNum(diff)}";
     } else {
       final pct = diff / older.abs() * 100;
       text = "${pct > 0 ? "+" : ""}${pct.toStringAsFixed(0)}%";

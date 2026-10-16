@@ -707,8 +707,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
         SizedBox(
             width: 66,
             child: Text(
-                (((p["top_speed_ms"] as num?)?.toDouble() ?? 0) * 3.6)
-                    .toStringAsFixed(1),
+                huNum(((p["top_speed_ms"] as num?)?.toDouble() ?? 0) * 3.6),
                 textAlign: TextAlign.right,
                 style: AppText.label.copyWith(
                     fontSize: 13, color: AppColors.accent))),
@@ -786,7 +785,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                 final loose = md != null && md >= 2.5;
                 return Text(
                     "${ms.toStringAsFixed(0)}s·"
-                    "${md == null ? "?" : md.toStringAsFixed(1)}m",
+                    "${md == null ? "?" : huNum(md)}m",
                     textAlign: TextAlign.right,
                     style: AppText.label.copyWith(
                         fontSize: 13,

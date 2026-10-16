@@ -3,6 +3,13 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.171 óta)
+
+- **Tizedesvessző: a maradék** (app): a felderítés (hárított/meccs, xG,
+  befejezés, lövőtáv), a játékos-fejlődés és a statisztika max
+  sebessége, a trend-különbség, a meccs-elemző lövés-xG-je és a kezdőlap
+  futás-kilométere is vesszővel (a gépi csere ezeket kihagyta).
+
 ## v0.1.171 — kiadva (2026-10-16)
 
 > Kiadás-jegyzet: a megrajzolt figura bejárható. A Figura-tervező "3D /

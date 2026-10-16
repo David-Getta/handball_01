@@ -3746,7 +3746,7 @@ class _MatchScreenState extends State<MatchScreen> {
     if (sh != null) {
       final diff = (sh["diff"] as num?)?.toDouble() ?? 0.0;
       label += " · ${sh["goals"]}/${sh["shots"]} lövés · "
-          "xG ${((sh["xg"] as num?) ?? 0).toStringAsFixed(1)}"
+          "xG ${huNum((sh["xg"] as num?) ?? 0)}"
           "${diff.abs() >= 0.5 ? " (${diff > 0 ? "+" : ""}${huNum(diff)})" : ""}";
     }
     return Container(

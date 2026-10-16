@@ -12,6 +12,7 @@ import "../analytics/court_analytics.dart";
 import "../models/tracking.dart";
 import "../theme/app_theme.dart";
 import "empty_state.dart";
+import "num_format.dart";
 
 class StatsPanel extends StatefulWidget {
   final Map<int, PlayerStat> stats;
@@ -205,7 +206,7 @@ class _StatsPanelState extends State<StatsPanel> {
                   textAlign: TextAlign.right, style: AppText.value.copyWith(fontSize: 13))),
           SizedBox(
               width: 66,
-              child: Text((s.topSpeedMs * 3.6).toStringAsFixed(1),
+              child: Text(huNum(s.topSpeedMs * 3.6),
                   textAlign: TextAlign.right,
                   style: AppText.label.copyWith(fontSize: 13, color: AppColors.accent))),
           SizedBox(

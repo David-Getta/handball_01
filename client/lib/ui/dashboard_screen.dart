@@ -3837,7 +3837,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         "${sum["shots"]} lövés"
                         "${((sum["saves"] as num?) ?? 0) != 0 ? " (${sum["saves"]} védés)" : ""}"
                         " · ${sum["sprints"]} sprint · "
-                        "${(((sum["distance_m"] as num?) ?? 0) / 1000).toStringAsFixed(1)} km futás"
+                        "${huNum(((sum["distance_m"] as num?) ?? 0) / 1000)} km futás"
                         "${((sum["seven_meters"] as num?) ?? 0) != 0 ? " · ${sum["seven_meters"]} hétméteres" : ""}"
                         "${((sum["suspensions"] as num?) ?? 0) != 0 ? " · ${sum["suspensions"]} kiállítás" : ""}",
                         style: AppText.label.copyWith(

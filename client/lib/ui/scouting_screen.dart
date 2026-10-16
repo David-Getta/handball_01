@@ -858,7 +858,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final prevented = ((r["gk_xg_prevented"] as num?) ?? 0).toDouble();
     final matches = ((r["matches"] as num?) ?? 1).toInt().clamp(1, 999);
     if (saved == 0 && prevented == 0) return null;
-    final s = (saved / matches).toStringAsFixed(1);
+    final s = huNum(saved / matches);
     final p = (prevented / matches);
     final ps = "${p >= 0 ? "+" : ""}${huNum(p)}";
     return "$s hárított · $ps GSAx";
@@ -11697,11 +11697,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ],
       // Helyzetminőség: várható gól + befejezés-eltérés (ha számolható).
       if (((r["xg"] as num?) ?? 0) > 0) ...[
-        ["Várható gól (xG)", (r["xg"] as num).toStringAsFixed(1)],
+        ["Várható gól (xG)", huNum(r["xg"] as num)],
         [
           "Befejezés (gól−xG)",
           "${((r["xg_diff"] as num?) ?? 0) >= 0 ? "+" : ""}"
-              "${((r["xg_diff"] as num?) ?? 0).toStringAsFixed(1)}"
+              "${huNum((r["xg_diff"] as num?) ?? 0)}"
         ],
       ],
       [
@@ -13339,7 +13339,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     for (final post in posts) {
       final nd = ((shots?[post] as num?) ?? 0).toInt();
       final dist = nd >= 4
-          ? "${(((dists?[post] as num?) ?? 0).toDouble() / nd).toStringAsFixed(1)} m"
+          ? "${huNum(((dists?[post] as num?) ?? 0).toDouble() / nd)} m"
           : "—";
       final np = ((pShots?[post] as num?) ?? 0).toInt();
       final power = np >= 4
