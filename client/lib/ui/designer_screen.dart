@@ -47,6 +47,10 @@ class _DesignerScreenState extends State<DesignerScreen> {
   }
   int _editStep = 0;
   int? _dragIndex;
+  // Kulcs-pozíciónként a labdás támadó (0-tól): ahol a következő pontnál
+  // más, ott PASSZ — a figura így nem csak futás, a labda is jár.
+  List<int> _labda = [0, 0, 0];
+  bool get _vanPassz => _labda.any((v) => v != 0);
 
   late int _numDefenders;
   double _lineDepth = 6.0;
@@ -129,7 +133,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
       }
       interp.add(path);
     }
-    final setplay = SetPlay(interp, List<int>.filled(_animSteps, 0));
+    final setplay = SetPlay(interp, setplayBallSteps(_labda, _animSteps));
     final sim = simulateSetPlay(setplay, _model);
     final eval = evaluateSetPlay(sim);
 
@@ -251,7 +255,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
       final resp = await _api.simulateSetplayVsMatch(
         matchId!,
         attackers: attackers,
-        ballCarrier: List<int>.filled(_animSteps, 0),
+        ballCarrier: setplayBallSteps(_labda, _animSteps),
         defending: side,
       );
       final sim = Match.fromJson(resp["tracking"] as Map<String, dynamic>);
@@ -290,6 +294,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
   /// várólapja (/kovet) is linkeli.
   Future<void> _bongeszos3d() async {
     final q = <String, String>{"u": setplay3dPoints(_attackers)};
+    if (_vanPassz) q["l"] = _labda.join(",");
     if ((_nev ?? "").isNotEmpty) q["cim"] = _nev!;
     final m = _tanultMeccs;
     if (m != null) {
@@ -358,7 +363,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
         for (final a in _attackers)
           [for (final p in a) [p.dx, p.dy]],
       ];
-      await _api.savePlay(name, attackers);
+      await _api.savePlay(name, attackers, labda: _vanPassz ? _labda : null);
       _nev = name;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -443,6 +448,17 @@ class _DesignerScreenState extends State<DesignerScreen> {
         ];
         _editStep = 0;
         _nev = "${play["name"] ?? ""}";
+        // A mentett labdás-sor (a passzok) — a 3 kulcs-pozícióra vetítve,
+        // a létező játékosokra szorítva; régi mentésnél végig az 1.
+        final l = [
+          for (final v in (play["labda"] as List?) ?? const [])
+            (v as num).toInt().clamp(0, _attackers.length - 1)
+        ];
+        _labda = l.isEmpty
+            ? [0, 0, 0]
+            : l.length >= 3
+                ? [l.first, l[l.length ~/ 2], l.last]
+                : [l.first, l.last, l.last];
       });
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Betöltve: ${play["name"]}")));
@@ -519,7 +535,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
             onPanUpdate: (d) => _onPan(d.localPosition, size),
             onPanEnd: (_) => _dragIndex = null,
             child: CustomPaint(
-              painter: _DesignerPainter(attackers: _attackers, step: _editStep, model: _model),
+              painter: _DesignerPainter(
+                  attackers: _attackers, step: _editStep, model: _model,
+                  labda: _labda),
               size: size,
             ),
           );
@@ -554,6 +572,28 @@ class _DesignerScreenState extends State<DesignerScreen> {
             selected: {_editStep},
             onSelectionChanged: _playing ? null : (s) => setState(() => _editStep = s.first),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          // A labdás ennél a kulcs-pozíciónál: ha a következő pontnál más,
+          // ott passz (a 3D-ben a labda repül).
+          Tooltip(
+            message: "Kinél van a labda ennél a kulcs-pozíciónál? Ha a "
+                "következő pontnál másnál, az passz — a 3D-ben a labda "
+                "átrepül, és a padlón sárga nyíl mutatja.",
+            child: Text("LABDA ENNÉL A PONTNÁL",
+                style: AppText.label.copyWith(fontSize: 10.5)),
+          ),
+          const SizedBox(height: 4),
+          Wrap(spacing: 4, runSpacing: 4, children: [
+            for (int i = 0; i < _attackers.length; i++)
+              ChoiceChip(
+                label: Text("${i + 1}"),
+                visualDensity: VisualDensity.compact,
+                selected: _labda[_editStep] == i,
+                onSelected: _playing
+                    ? null
+                    : (_) => setState(() => _labda[_editStep] = i),
+              ),
+          ]),
           const SizedBox(height: AppSpacing.lg),
           // Figura-könyvtár: a megrajzolt figura mentése / visszatöltése.
           Row(children: [
@@ -676,16 +716,23 @@ class _DesignerPainter extends CustomPainter {
   final List<List<Offset>> attackers;
   final int step;
   final DefenseModel model;
+  final List<int> labda; // kulcs-pozíciónként a labdás
 
-  _DesignerPainter({required this.attackers, required this.step, required this.model});
+  _DesignerPainter(
+      {required this.attackers,
+      required this.step,
+      required this.model,
+      required this.labda});
+
+  int get _labdas => labda[step].clamp(0, attackers.length - 1);
 
   @override
   void paint(Canvas canvas, Size size) {
     final tr = CourtTransform.fit(size);
     _drawCourt(canvas, tr);
 
-    // Védelem-előnézet (a labda az 1. támadónál).
-    final ballY = attackers[0][step].dy;
+    // Védelem-előnézet (a labdára reagál).
+    final ballY = attackers[_labdas][step].dy;
     final defs = model.respond(ballY, courtLength);
     for (final d in defs) {
       final c = tr.toScreen(d.dx, d.dy);
@@ -716,8 +763,21 @@ class _DesignerPainter extends CustomPainter {
       _label(canvas, c, "${i + 1}", 0.65 * tr.scale);
     }
 
-    // Labda (az 1. támadónál).
-    final b = tr.toScreen(attackers[0][step].dx, attackers[0][step].dy);
+    // A passz, ami ERRE a pontra érkezik (az előző pont labdásától).
+    if (step > 0) {
+      final elozo = labda[step - 1].clamp(0, attackers.length - 1);
+      if (elozo != _labdas) {
+        canvas.drawLine(
+            tr.toScreen(attackers[elozo][step].dx, attackers[elozo][step].dy),
+            tr.toScreen(attackers[_labdas][step].dx, attackers[_labdas][step].dy),
+            Paint()
+              ..color = AppColors.ball.withValues(alpha: 0.8)
+              ..strokeWidth = 2.2);
+      }
+    }
+    // Labda (a labdásnál).
+    final b = tr.toScreen(
+        attackers[_labdas][step].dx, attackers[_labdas][step].dy);
     canvas.drawCircle(b, 0.32 * tr.scale, Paint()..color = AppColors.ball);
   }
 

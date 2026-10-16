@@ -1275,6 +1275,9 @@ if (FIGURA){
     if (sor) sor.style.display = "none";
   }
   const reszek = ["a mozgás " + String(FIGURA.hossz_s).replace(".", ",") + " mp"];
+  // A labda útja (passzoknál): "labda 1 → 2 → 3".
+  const lu = (FIGURA.labda || []).filter((v, i, a) => i === 0 || v !== a[i - 1]);
+  if (lu.length > 1) reszek.push("labda " + lu.map(v => v + 1).join(" → "));
   if (FIGURA.attacker_id && FIGURA.best_shot_value > 0)
     reszek.push("legjobb lövőhelyzet: " + FIGURA.attacker_id + ". játékos ("
                 + Math.round(FIGURA.best_shot_value * 100) + "%"
@@ -2012,7 +2015,7 @@ function linkEpit(){
   if (videoBe) q.set("video", "1");
   if (kozosMod === "kovet"){ q.set("kovet", "1"); if (KZ_NEV) q.set("nev", KZ_NEV); }
   // A figura linkje a figurát is viszi (a pályán kívül nincs mögötte meccs).
-  if (FIGURA) for (const k of ["u", "cim", "meccs", "vedo", "vedok", "melyseg"])
+  if (FIGURA) for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg"])
     if (URL_PARAM.get(k)) q.set(k, URL_PARAM.get(k));
   if (sebesseg !== 1) q.set("seb", String(sebesseg));
   return location.origin + location.pathname + "?" + q.toString();
@@ -4347,16 +4350,19 @@ function vrFeliratFrissit(){
 window.vrFeliratProba = () => ({latszik: vrTabla.visible, sorok: vrFeliratSzoveg()});
 
 const idoCimke = document.getElementById("ido");
-// A figura útjai a padlón (ha a link nem hoz saját rajzot): a labdás (1.)
-// sárga, a többiek kék futás-nyila — a játékos a saját útját is látja.
+// A figura útjai a padlón (ha a link nem hoz saját rajzot): a futások kék,
+// a passzok sárga nyila — a játékos a saját útját is látja.
 if (FIGURA && Array.isArray(FIGURA.utak) && !URL_PARAM.get("rajz")){
-  FIGURA.utak.forEach((ut, i) => {
+  FIGURA.utak.forEach((ut) => {
     for (let j = 1; j < ut.length; j++){
       const a = ut[j - 1], b = ut[j];
       if (Math.hypot(b[0] - a[0], b[1] - a[1]) >= RAJZ_MIN_M && rajzok.length < RAJZ_MAX)
-        rajzok.push([a[0], a[1], b[0], b[1], i === 0 ? 0 : 1]);
+        rajzok.push([a[0], a[1], b[0], b[1], 1]);
     }
   });
+  for (const p of (FIGURA.passzok || []))
+    if (Math.hypot(p[2] - p[0], p[3] - p[1]) >= RAJZ_MIN_M && rajzok.length < RAJZ_MAX)
+      rajzok.push([p[0], p[1], p[2], p[3], 0]);
   rajzFrissit();
 }
 linkAlkalmaz();

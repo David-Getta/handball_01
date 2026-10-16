@@ -135,7 +135,7 @@ def test_az_oldal_figura_modja():
                  'if (FIGURA) ADAT.match_id = "";',
                  "if (FIGURA && veg > 0) ido = 0;",
                  'document.getElementById("eszkoz").prepend(fs);',
-                 'for (const k of ["u", "cim", "meccs", "vedo", "vedok", "melyseg"])',
+                 'for (const k of ["u", "l", "cim", "meccs", "vedo", "vedok", "melyseg"])',
                  "if (k.ix === 0 && k.iy === 0){"):
         assert kell in oldal, kell
     assert '"figura":{' in oldal
@@ -152,4 +152,61 @@ def test_a_figura_utjai_a_padlon():
     assert e["utak"] == [[[20, 10], [27, 10], [34, 10]], [[0.0, 4]]]
     oldal = view3d_html(m, figura=e)
     assert 'if (FIGURA && Array.isArray(FIGURA.utak) && !URL_PARAM.get("rajz")){' in oldal
-    assert "rajzok.push([a[0], a[1], b[0], b[1], i === 0 ? 0 : 1]);" in oldal
+    assert "rajzok.push([a[0], a[1], b[0], b[1], 1]);" in oldal
+    assert "rajzok.push([p[0], p[1], p[2], p[3], 0]);" in oldal
+
+
+def test_passz_a_figuraban():
+    """A labdás kulcs-pozíciónként: ahol változik, ott passz — a labda a
+    kulcs-pozícióra érkezik az átvevőhöz, előtte a passzolónál; a védelem
+    a labdára reagál. A hibás / pályán kívüli sorszám az előzőé."""
+    kp = [[(22, 10), (22, 10), (22, 10)], [(24, 5), (26, 5), (28, 5)],
+          [(24, 15), (26, 15), (28, 15)]]
+    m, e = setplay_3d_match(kp, DefenseModel(), ball=[0, 1, 2])
+    assert e["labda"] == [0, 1, 2]
+    # (a nyíl a két játékos helye az érkezés kulcs-pozícióján)
+    assert e["passzok"] == [[22.0, 10.0, 26.0, 5.0], [28.0, 5.0, 28.0, 15.0]]
+    allas = int(round(FIGURA_3D_ALLAS_S * FIGURA_3D_FPS))
+    lep = int(round(e["hossz_s"] * FIGURA_3D_FPS)) + 1
+    kozep = allas + (lep - 1) // 2
+    # az elején a passzolónál, a Közép ponton az átvevőnél, a végén a 3.-nál
+    assert (m.frames[0].ball.x, m.frames[0].ball.y) == (22, 10)
+    assert math.isclose(m.frames[kozep].ball.x, 26.0)
+    assert math.isclose(m.frames[kozep].ball.y, 5.0)
+    assert (m.frames[-1].ball.x, m.frames[-1].ball.y) == (28, 15)
+    # repülés közben se nem a passzolónál, se nem az átvevőnél
+    reptiben = m.frames[kozep - 1].ball
+    assert (reptiben.x, reptiben.y) not in ((22, 10), (26, 5))
+    # a fal a labda felé tolódik: a 3. támadónál (y=15) lejjebb áll
+    def fal_y(f):
+        return sum(p.y for p in f.players
+                   if p.team == Team.AWAY and p.role != "kapus")
+    assert fal_y(m.frames[-1]) > fal_y(m.frames[0])
+    # hibás és pályán kívüli sorszám → az előzőé; alapból végig az 1.
+    _, e2 = setplay_3d_match(kp, DefenseModel(), ball=[0, "x", 9])
+    assert e2["labda"] == [0, 0, 0] and e2["passzok"] == []
+    _, e3 = setplay_3d_match(kp, DefenseModel())
+    assert e3["labda"] == [0, 0, 0]
+
+
+def test_a_figura3d_vegpont_passzal(tmp_path, monkeypatch):
+    c = TestClient(_app(tmp_path, monkeypatch))
+    r = c.get("/figura3d", params={"u": U, "l": "0,1"})
+    assert r.status_code == 200 and '"labda":[0,1,1]' in r.text
+    assert c.get("/figura3d", params={"u": U, "l": "a,b"}).status_code == 400
+
+
+def test_a_figura_mentese_a_passzokkal(tmp_path, monkeypatch):
+    """A figura-könyvtár a labdás-sort is menti (a tervező visszatölti);
+    a nem létező játékos 400."""
+    c = TestClient(_app(tmp_path, monkeypatch))
+    ut = [[[22, 10], [22, 10], [22, 10]], [[24, 5], [26, 5], [28, 5]]]
+    r = c.post("/playbook", json={"name": "Kereszt", "attackers": ut,
+                                  "labda": [0, 1, 1]})
+    assert r.status_code == 200
+    assert c.get(f"/playbook/{r.json()['id']}").json()["labda"] == [0, 1, 1]
+    r = c.post("/playbook", json={"name": "Régi", "attackers": ut})
+    assert "labda" not in c.get(f"/playbook/{r.json()['id']}").json()
+    for rossz in ([0, 2], [0, "x"], [0, 0, 0, 0]):
+        assert c.post("/playbook", json={"name": "R", "attackers": ut,
+                                         "labda": rossz}).status_code == 400

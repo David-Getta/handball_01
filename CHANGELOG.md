@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.170 óta)
 
+- **Passz a figurában** (app + motor + böngésző/VR): a Figura-tervezőben
+  kulcs-pozíciónként kiválasztható, kinél van a labda — ahol a következő
+  pontnál másnál, az passz. A tervező a labdát és az érkező passzt
+  rajzolja, a fal a labdára reagál; a 3D-ben a labda átrepül a következő
+  kulcs-pozícióra, a padlón sárga passz-nyíl, a panelen "labda 1 → 2 →
+  3", és a döntés-réteg jelzi, ha a passznál jobb opció is volt. A
+  figura-könyvtár a passzokat is menti. (/figura3d `l=`, /playbook
+  "labda")
+
 - **A figura útjai a padlón** (böngésző/VR): a 3D figura-módban a
   támadók útjai nyílként a padlón (a labdás sárga, a többiek kék) — a
   játékos a headsetben a saját útját is látja, nem csak a mozgó figurát.

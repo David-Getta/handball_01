@@ -3099,12 +3099,14 @@ def create_app():
 
     def figura3d(request: Request, u: str = "", cim: str = "",
                  meccs: str = "", vedo: str = "away", vedok: int = 6,
-                 melyseg: float = 6.0):
+                 melyseg: float = 6.0, l: str = ""):
         """A figura-tervező figurája böngészős 3D-ben / VR-ben.
 
         `u`: a támadók kulcs-pozíciói — támadónként "x,y,x,y,…" (méter),
-        a támadók ";"-vel elválasztva (az 1. támadónál a labda); `cim` a
-        figura neve (a `nev` az oldalon a követő neve). A védelem
+        a támadók ";"-vel elválasztva; `l`: kulcs-pozíciónként a labdás
+        támadó sorszáma ("0,1,2" — ahol változik, ott passz; alapból végig
+        az 1.); `cim` a figura neve (a `nev` az oldalon a követő neve). A
+        védelem
         a `meccs` `vedo` csapatából TANULT (mint a /simulate-setplay),
         meccs nélkül a tervező kézi modellje (`vedok` védő, `melyseg` m-es
         vonal). Valós tempóban, kapussal, ismétlődve játszik
@@ -3124,6 +3126,11 @@ def create_app():
         except ValueError:
             raise HTTPException(status_code=400,
                                 detail="hibás figura (u=x,y,…;x,y,…)")
+        try:
+            labda = [int(x) for x in l.split(",") if x.strip()][:FIGURA_3D_MAX_PONT]
+        except ValueError:
+            raise HTTPException(status_code=400,
+                                detail="hibás labdás-sor (l=0,1,…)")
         if meccs:
             match = _store.get(meccs)
             if match is None:
@@ -3144,7 +3151,7 @@ def create_app():
                         f"{modell.line_depth_m:.1f} m)".replace(".", ","))
         try:
             sim, ertekeles = setplay_3d_match(
-                utak, modell, name=_c3.shared3d_nev(cim) or None,
+                utak, modell, ball=labda, name=_c3.shared3d_nev(cim) or None,
                 defense_name=vedo_nev)
         except (ValueError, TypeError):
             raise HTTPException(status_code=400, detail="a figurában nincs támadó")
@@ -12896,10 +12903,13 @@ def create_app():
 
     @app.post("/playbook")
     def save_play(body: dict):
-        """Figura mentése. Törzs: {"name": ..., "attackers": [[[x,y],[x,y]],...]}.
+        """Figura mentése. Törzs: {"name": ..., "attackers": [[[x,y],[x,y]],...],
+        "labda": [0, 1, …] (opcionális — kulcs-pozíciónként a labdás
+        sorszáma; ahol változik, ott passz)}.
 
         Validáció: 1..7 játékos, játékosonként legalább 2 kulcs-pozíció, minden
-        koordináta szám. Visszaadja a generált azonosítót."""
+        koordináta szám; a labdás sorszám létező játékos. Visszaadja a
+        generált azonosítót."""
         import uuid
         name = str(body.get("name") or "").strip()
         attackers = body.get("attackers")
@@ -12913,9 +12923,22 @@ def create_app():
             raise HTTPException(status_code=400, detail="invalid coordinates")
         if any(len(path) < 2 for path in attackers):
             raise HTTPException(status_code=400, detail="each player needs >=2 keyframes")
+        labda = body.get("labda")
+        if labda is not None:
+            try:
+                labda = [int(v) for v in labda]
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400,
+                                    detail="labda: a labdás sorszámai (egész)")
+            if (len(labda) > max(len(path) for path in attackers)
+                    or any(not 0 <= v < len(attackers) for v in labda)):
+                raise HTTPException(status_code=400,
+                                    detail="labda: nem létező játékos vagy pont")
 
         play_id = uuid.uuid4().hex[:10]
         data = {"id": play_id, "name": name, "attackers": attackers}
+        if labda:
+            data["labda"] = labda
         _play_path(play_id).write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"id": play_id, "name": name}

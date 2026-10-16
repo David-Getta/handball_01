@@ -259,11 +259,17 @@ class ApiClient {
   }
 
   /// Figura mentése a könyvtárba; visszaadja az azonosítót.
-  Future<String> savePlay(String name, List<List<List<double>>> attackers) async {
+  Future<String> savePlay(String name, List<List<List<double>>> attackers,
+      {List<int>? labda}) async {
     final resp = await http.post(
       Uri.parse("$baseUrl/playbook"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"name": name, "attackers": attackers}),
+      // `labda`: kulcs-pozíciónként a labdás sorszáma (a passzok).
+      body: jsonEncode({
+        "name": name,
+        "attackers": attackers,
+        if (labda != null) "labda": labda,
+      }),
     );
     if (resp.statusCode != 200) {
       throw Exception(_hiba("Nem sikerült menteni a figurát", resp));

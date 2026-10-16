@@ -133,11 +133,14 @@ class SetPlay:
 
 def simulate_setplay(setplay: SetPlay, defense: DefenseModel,
                      config: TacticsConfig | None = None,
-                     fps: float = 25.0) -> Match:
+                     fps: float = 25.0,
+                     ball_positions: list | None = None) -> Match:
     """Lejátssza a figurát a tanult védelem ellen, és Match-et (Tracking) ad.
 
     A HAZAI a támadó (a +x kapu felé), a VENDÉG véd (saját kapuja x=40). A
     kimenet ugyanolyan Tracking, mint egy valódi meccs — a kliens kirajzolhatja.
+    `ball_positions` (opcionális): lépésenként a labda helye (x, y) — a
+    passz repülése; nélküle a labda a `ball_carrier` támadónál.
     """
     config = config or TacticsConfig()
     away_goal_x = config.own_goal_x(Team.AWAY)
@@ -152,8 +155,11 @@ def simulate_setplay(setplay: SetPlay, defense: DefenseModel,
             players.append(PlayerPosition(track_id=ai + 1, team=Team.HOME, x=x, y=y,
                                           source=PositionSource.MEASURED, confidence=1.0,
                                           jersey_number=ai + 1))
-        carrier = setplay.ball_carrier[step]
-        bx, by = setplay.attackers[carrier][step]
+        if ball_positions is not None:
+            bx, by = ball_positions[step]
+        else:
+            carrier = setplay.ball_carrier[step]
+            bx, by = setplay.attackers[carrier][step]
         ball = Ball(x=bx, y=by, confidence=1.0)
         for di, (dx, dy) in enumerate(defense.respond(ball, away_goal_x)):
             players.append(PlayerPosition(track_id=100 + di, team=Team.AWAY, x=dx, y=dy,
@@ -182,20 +188,29 @@ FIGURA_3D_FPS = 6.0
 # Bemeneti korlátok (a link a böngészőből jön).
 FIGURA_3D_MAX_JATEKOS = 7
 FIGURA_3D_MAX_PONT = 10
+# A figura passza ennyi m/s-mal száll (a valódinál lassabb — a
+# headsetben követhető), és legalább ennyi mp; a következő kulcs-pozícióra
+# érkezik (ott már az átvevőnél van).
+FIGURA_3D_PASSZ_MPS = 12.0
+FIGURA_3D_PASSZ_MIN_S = 0.3
 # A csapat várólapja (/kovet) az edző legutóbbi 3D-figuráját ennyi mp-ig
 # linkeli (egy edzés hossza — utána már nem "a mostani").
 FIGURA_3D_KOVET_S = 3 * 3600
 
 
 def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
+                     ball: list | None = None,
                      name: str | None = None,
                      defense_name: str | None = None,
                      config: TacticsConfig | None = None) -> tuple[Match, dict]:
     """A tervező figurája 3D-re (böngésző / VR): valós tempóban, kapussal.
 
     `keypoints`: támadónként a kulcs-pozíciók ([(x, y), …] — a tervező
-    Kezdő / Közép / Vég pontjai, méterben); az 1. támadónál a labda (mint
-    a tervezőben). A védők a `defense` modell szerint reagálnak (lásd
+    Kezdő / Közép / Vég pontjai, méterben). `ball`: kulcs-pozíciónként a
+    labdás támadó sorszáma (0-tól; alapból végig az 1. támadó) — ahol
+    változik, ott PASSZ: a labda a következő kulcs-pozícióra érkezik az
+    átvevőhöz, FIGURA_3D_PASSZ_MPS-mal repülve. A védők a `defense`
+    modell szerint, a labdára reagálnak (lásd
     `simulate_setplay`), és a kaput kapus védi (a labda felé lép, a
     vonalon). A mozgás előtt és után FIGURA_3D_ALLAS_S állókép.
 
@@ -205,8 +220,9 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
     Visszaad: (Match — a hazai a támadó, a vendég a védő; kiértékelés:
     {"best_shot_value", "t_s" (a legjobb helyzet ideje), "attacker_id",
     "hossz_s" (a mozgás), "utak" (támadónként a pályára szorított
-    kulcs-pozíciók — a padló nyilaihoz)}). ValueError, ha nincs érvényes
-    támadó."""
+    kulcs-pozíciók — a padló nyilaihoz), "labda" (kulcs-pozíciónként a
+    labdás sorszáma), "passzok" ([[x1, y1, x2, y2], …] — a passzok a
+    kulcs-pozíciókon)}). ValueError, ha nincs érvényes támadó."""
     config = config or TacticsConfig()
     utak = []
     for ut in list(keypoints or [])[:FIGURA_3D_MAX_JATEKOS]:
@@ -242,11 +258,57 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
 
     tamadok = [[minta(u, s / (lepesek - 1)) for s in range(lepesek)]
                for u in utak]
+    # A labdás kulcs-pozíciónként (a hibás / hiányzó sorszám az előzőé).
+    pontszam = szakaszok + 1
+    labda = []
+    for k in range(pontszam):
+        v = (list(ball or [])[k:k + 1] or [None])[0]
+        try:
+            v = int(v)
+        except (TypeError, ValueError):
+            v = None
+        labda.append(v if v is not None and 0 <= v < len(utak)
+                     else (labda[-1] if labda else 0))
+    # A labda helye lépésenként: a labdásnál, passznál a kulcs-pozíció
+    # előtt elindul, és a kulcs-pozícióra érkezik az átvevőhöz.
+    szakasz_s = mozgas_s / max(1, szakaszok)
+    labda_hely = []
+    passzok = []
+    for k in range(szakaszok):
+        a, b = labda[k], labda[k + 1]
+        if a != b:
+            t_cel = (k + 1) / max(1, szakaszok)
+            p1, p2 = minta(utak[a], t_cel), minta(utak[b], t_cel)
+            passzok.append([round(p1[0], 1), round(p1[1], 1),
+                            round(p2[0], 1), round(p2[1], 1)])
+    for s in range(lepesek):
+        ido = mozgas_s * s / (lepesek - 1)
+        k = min(max(0, szakaszok - 1), int(ido / szakasz_s)) if szakaszok else 0
+        a = labda[k]
+        b = labda[k + 1] if szakaszok else a
+        hely = tamadok[a][s]
+        if a != b:
+            erkezik = szakasz_s * (k + 1)
+            cel = minta(utak[b], erkezik / mozgas_s)
+            indul_hely = minta(utak[a], (erkezik - szakasz_s) / mozgas_s)
+            tav = math.hypot(cel[0] - indul_hely[0], cel[1] - indul_hely[1])
+            repul = min(szakasz_s, max(FIGURA_3D_PASSZ_MIN_S,
+                                       tav / FIGURA_3D_PASSZ_MPS))
+            indul = erkezik - repul
+            if ido >= indul:
+                honnan = minta(utak[a], indul / mozgas_s)
+                f = min(1.0, (ido - indul) / repul)
+                hely = (honnan[0] + (cel[0] - honnan[0]) * f,
+                        honnan[1] + (cel[1] - honnan[1]) * f)
+        labda_hely.append(hely)
     # Állókép az elején és a végén (az első / utolsó helyzet ismétlése).
     tamadok = [[u[0]] * allas + u + [u[-1]] * allas for u in tamadok]
+    labda_hely = ([tamadok[labda[0]][0]] * allas + labda_hely
+                  + [tamadok[labda[-1]][-1]] * allas)
     sim = simulate_setplay(SetPlay(attackers=tamadok,
                                    ball_carrier=[0] * len(tamadok[0])),
-                           defense, config=config, fps=fps)
+                           defense, config=config, fps=fps,
+                           ball_positions=labda_hely)
     ertekeles = evaluate_setplay(sim, config=config)
     # A kapus: a vonal előtt, a labda felé lépve (a kapufák közt).
     kapu_x = config.own_goal_x(Team.AWAY)
@@ -268,6 +330,8 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
         "attacker_id": ertekeles["attacker_id"],
         "hossz_s": round(mozgas_s, 1),
         "utak": [[[round(x, 1), round(y, 1)] for x, y in u] for u in utak],
+        "labda": labda,
+        "passzok": passzok,
     }
 
 

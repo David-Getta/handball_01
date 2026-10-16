@@ -556,6 +556,25 @@ String setplay3dPoints(List<List<Offset>> utak) => utak
         .join(","))
     .join(";");
 
+/// A figura labdása az animáció lépésenként: `labda` kulcs-pozíciónként a
+/// labdás sorszáma; ahol a következő pontnál más, ott a szakasz felénél
+/// "passzol" (a tervező vázlat-animációja — a böngészős 3D a passzt
+/// repülve, a következő pontra érkezve mutatja).
+List<int> setplayBallSteps(List<int> labda, int steps) {
+  if (labda.isEmpty) return List<int>.filled(steps, 0);
+  final k = labda.length;
+  return [
+    for (int s = 0; s < steps; s++)
+      () {
+        if (k == 1 || steps < 2) return labda.first;
+        final pos = s / (steps - 1) * (k - 1);
+        final i = pos.floor().clamp(0, k - 1);
+        if (i >= k - 1) return labda.last;
+        return pos - i >= 0.5 ? labda[i + 1] : labda[i];
+      }()
+  ];
+}
+
 /// Bájt → olvasható méret ("0,4 MB", "12 MB", "1,3 GB") — a felvételek
 /// takarításához.
 String recordingSize(num? bajt) {

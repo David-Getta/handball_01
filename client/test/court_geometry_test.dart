@@ -145,6 +145,10 @@ void main() {
           [const Offset(30, 2)]
         ]),
         "22.0,10.0,24.3,9.5;30.0,2.0");
+    expect(setplayBallSteps([0, 0, 0], 5), [0, 0, 0, 0, 0]);
+    // passz a Közép pontra (1.→2.) és a Végre (2.→3.): a szakaszok felénél
+    expect(setplayBallSteps([0, 1, 2], 9), [0, 0, 1, 1, 1, 1, 2, 2, 2]);
+    expect(setplayBallSteps([], 3), [0, 0, 0]);
     expect(recordingSize(400000), "0,4 MB");
     expect(recordingSize(12400000), "12 MB");
     expect(recordingSize(1300000000), "1,3 GB");
