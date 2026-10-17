@@ -3,7 +3,17 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.172 óta)
+## v0.1.173 — kiadva (2026-10-17)
+
+> Kiadás-jegyzet: a figura edzés-eszköz lett. Lépésenként: a 3D figura
+> minden kulcs-pozíción megáll, az edző magyaráz (VR-ben a ravasz
+> engedi tovább, a csapat is megáll). A fal rendszere választható (6-0,
+> 5-1, 4-2, 3-2-1, 3-3 — a tanult fal a csapat leggyakoribb
+> rendszerében), a védők legfeljebb 16 km/h-val lépnek (a gyors passz
+> előtt a fal nem ér át), és a figura a védő és a kapus szemével is
+> nézhető (szem=v3). A csapat várólapja a mentett figurákat is kínálja;
+> a felderítés "Ismert figuráik" kártyája azt is mutatja, mivel zárultak.
+> (Valódi headseten még nem próbáltuk.)
 
 - **A fal tempója a 3D figurában** (böngésző/VR + motor): a modell-fal
   eddig azonnal a labdára állt — passz közben a védők akár 70 km/h-val
