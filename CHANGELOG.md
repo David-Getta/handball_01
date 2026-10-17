@@ -3,7 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.173 óta)
+## v0.1.174 — kiadva (2026-10-17)
+
+> Kiadás-jegyzet: a figura a csapathoz megy. Figura-videó (MP4): a
+> figura felülnézeti animációja letöltésre — elküldhető a csapatnak (a
+> várólapról telefonra is), magyarázós változatban kulcs-pozíciónként
+> megáll; a gép a H.264-et próbálja előbb (telefonon ez megy).
+> Figurafüzet: a mentett figurák egy nyomtatható dokumentumban; a
+> betöltő listából soronként lap és videó. Emberelőny-figura: a kézi fal
+> 4–6 védővel. Az ellenfél visszatérő figurája a felderítésből egy
+> kattintással a tervezőbe kerül — a mi falunk ellen gyakorolható 3D-ben
+> / VR-ben. És két kód-áttekintés javításai (az előnézet és a linkek
+> követik a kézi falat, a figura-lap a 3D falát rajzolja, a passz a
+> kiesett támadó után is a jó játékoshoz megy, NaN-védelem). (Valódi
+> headseten és telefonon még nem próbáltuk.)
 
 - **Javítások (kód-áttekintés)**: a tervező kézi falának állítása
   (védőszám, rendszer, mélység) a tanult fal után a linkekre (3D, lap,
