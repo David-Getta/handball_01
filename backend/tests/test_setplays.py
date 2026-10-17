@@ -196,6 +196,46 @@ def test_unknown_attack_stays_unmatched():
     assert not r["matched"]
 
 
+def test_a_felismert_figura_kimenete(monkeypatch):
+    """Figuránként a befejezés: a szakasz alatti / utáni (ATTACK_TAIL_S)
+    gól "gól"; a túl későn jövő gól nem a figuráé ("egyéb"). A valódi
+    felismerés is lefut (a hetes- és eladás-mezők a valódi alakból)."""
+    from handball.pipeline import event_detection as ed
+    frames = _play_frames(_PLAY_A["attackers"], steps=12)
+    match = Match(_meta(), frames)
+    r = match_attacks_to_playbook(match, [_PLAY_A, _PLAY_B])
+    assert list(r["outcomes"]) == ["Beúszós kereszt"]
+    assert sum(r["outcomes"]["Beúszós kereszt"].values()) == 1
+
+    def gol(t):
+        return lambda m, c=None: [ed.MatchEvent(t=t, type=ed.EventType.GOAL,
+                                                team=Team.HOME)]
+    monkeypatch.setattr(ed, "detect_shots", gol(20))   # 11 + 2 mp-en belül
+    r = match_attacks_to_playbook(match, [_PLAY_A, _PLAY_B])
+    assert r["outcomes"] == {"Beúszós kereszt": {"gól": 1}}
+    monkeypatch.setattr(ed, "detect_shots", gol(11 + 51))   # túl késő
+    r = match_attacks_to_playbook(match, [_PLAY_A, _PLAY_B])
+    assert r["outcomes"]["Beúszós kereszt"].get("gól") is None
+    # Nincs felismert figura: üres kimenet-lista.
+    assert match_attacks_to_playbook(match, [])["outcomes"] == {}
+
+
+def test_a_figura_kimenet_a_vegponton(tmp_path, monkeypatch):
+    """GET /matches/{id}/playbook-match: a kimenetek is megjönnek."""
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
+    app = create_app()
+    app.state.put_match(Match(_meta(), _play_frames(_PLAY_A["attackers"],
+                                                    steps=12)))
+    c = TestClient(app)
+    c.post("/playbook", json=_PLAY_A)
+    r = c.get("/matches/pb/playbook-match").json()
+    assert r["matched"] == {"Beúszós kereszt": 1}
+    assert sum(r["outcomes"]["Beúszós kereszt"].values()) == 1
+
+
 def test_empty_playbook_all_unmatched():
     """Üres könyvtárnál minden támadás ismeretlen (nem hibázik)."""
     frames = _play_frames(_PLAY_A["attackers"], steps=8)

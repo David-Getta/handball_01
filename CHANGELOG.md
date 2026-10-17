@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.172 óta)
 
+- **Ismert figuráik — mivel zárulnak** (felderítés + motor): az "ISMERT
+  FIGURÁIK (a könyvtárunkból)" kártya eddig csak azt mondta, melyik
+  mentett figuránkat hányszor játsszák — most azt is, mivel zárult
+  ("Beúszós kereszt 4× — 2 gól · 1 lövés · 1 eladás"; a támadás vége
+  után 2 mp-en belül). Edzőileg: a gólt hozó figura ellen kell
+  felkészülni, az eladással végződő kevésbé veszélyes.
+
 - **Mentett figurák a várólapon** (böngésző/VR + motor): a csapat
   `/kovet` lapja eddig csak az edző legutóbb nyitott figuráját linkelte
   — most a figura-könyvtárat is: a legutóbb mentett nyolc figura

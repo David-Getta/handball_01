@@ -11,6 +11,18 @@ String trendScore(Map<String, dynamic> m) {
   return "${m["goals_home"]}:${m["goals_away"]}";
 }
 
+/// A felismert figura befejezései (a motor playbook-match "outcomes"
+/// sora): "2 gól · 1 lövés · 1 eladás" — a motor sorrendjében (gól,
+/// hetes, lövés, eladás, egyéb); üres, ha nincs adat.
+String playbookOutcomeText(Map<String, dynamic>? o) {
+  if (o == null) return "";
+  const sorrend = ["gól", "hetes", "lövés", "eladás", "egyéb"];
+  return [
+    for (final k in sorrend)
+      if (((o[k] as num?) ?? 0) > 0) "${(o[k] as num).toInt()} $k"
+  ].join(" · ");
+}
+
 /// [v] [digits] tizedesre kerekítve, tizedesvesszővel.
 String huNum(num v, [int digits = 1]) =>
     v.toStringAsFixed(digits).replaceAll(".", ",");

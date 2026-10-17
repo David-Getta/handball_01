@@ -250,7 +250,9 @@ meccseken" az, amire a régi felderítés nem készít fel.
   két csapat.
 - Az alak egy 6×3-as eloszlás, nem mozgáspálya: a "hol tömörülnek"
   kérdésre válaszol, a "ki hova fut" kérdésre a figura-tervező könyvtára
-  (mentett figurák, `match_attacks_to_playbook`).
+  (mentett figurák, `match_attacks_to_playbook` — a felderítés "ISMERT
+  FIGURÁIK" kártyája figuránként azt is mutatja, mivel zárult: gól,
+  hetes, lövés, eladás, egyéb).
 
 ## Tesztek
 

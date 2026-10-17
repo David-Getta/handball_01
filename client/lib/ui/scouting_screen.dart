@@ -13230,6 +13230,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   Widget _playbookCard(Map<String, dynamic> pm) {
     final matched = (pm["matched"] as Map?)?.cast<String, dynamic>() ?? {};
+    // Figuránként mivel zárul (gól, hetes, lövés, eladás, egyéb).
+    final kimenetek = (pm["outcomes"] as Map?)?.cast<String, dynamic>() ?? {};
     final total = (pm["total_attacks"] as num?)?.toInt() ?? 0;
     final unmatched = (pm["unmatched"] as num?)?.toInt() ?? 0;
     return Container(
@@ -13257,12 +13259,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                 child: Row(children: [
                   const Icon(Icons.check_circle_outline, size: 15, color: AppColors.accent),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(e.key, style: AppText.value.copyWith(fontSize: 13))),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(e.key, style: AppText.value.copyWith(fontSize: 13)),
+                        if (playbookOutcomeText((kimenetek[e.key] as Map?)
+                                ?.cast<String, dynamic>())
+                            .isNotEmpty)
+                          Text(
+                              playbookOutcomeText((kimenetek[e.key] as Map?)
+                                  ?.cast<String, dynamic>()),
+                              style: AppText.label.copyWith(fontSize: 11)),
+                      ])),
                   Text("${e.value}×", style: AppText.value.copyWith(color: AppColors.accent)),
                 ]),
               ),
             const SizedBox(height: 6),
-            Text("$total támadásból $unmatched ismeretlen mintájú.",
+            Text("$total támadásból $unmatched ismeretlen mintájú. A "
+                "figura alatt: mivel zárult (a támadás vége után 2 mp-en "
+                "belül).",
                 style: AppText.label.copyWith(fontSize: 11)),
           ],
         ],

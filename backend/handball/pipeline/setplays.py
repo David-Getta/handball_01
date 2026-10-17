@@ -188,8 +188,11 @@ def match_attacks_to_playbook(match: Match, plays: list[dict],
     tükrözött aláírással — a támadási irány ne számítson); ha a távolság a
     küszöb alatt van, a figurához soroljuk, különben "ismeretlen".
 
-    Visszaad: {"total_attacks", "matched": {figura-név: darab}, "unmatched"}.
-    Ez a "melyik ismert figurát játsszák és hányszor" — a felderítés kiegészítése.
+    Visszaad: {"total_attacks", "matched": {figura-név: darab}, "unmatched",
+    "outcomes": {figura-név: {kimenet: darab}}} — a kimenet "gól", "hetes",
+    "lövés" (gól nélkül), "eladás" vagy "egyéb" (lásd _figura_kimenetek).
+    Ez a "melyik ismert figurát játsszák, hányszor és mivel zárul" — a
+    felderítés kiegészítése.
     """
     config = config or TacticsConfig()
     seqs = segment_attacks(match, config, min_length=min_length)
@@ -206,6 +209,7 @@ def match_attacks_to_playbook(match: Match, plays: list[dict],
                           play_signature(attackers, mirror_x=True)))
 
     matched: dict[str, int] = {}
+    talalt: list[tuple[str, AttackSequence]] = []
     unmatched = 0
     for s in seqs:
         sig = attack_signature(s)
@@ -218,11 +222,56 @@ def match_attacks_to_playbook(match: Match, plays: list[dict],
                 best_name = name
         if best_name is not None and best_d <= threshold:
             matched[best_name] = matched.get(best_name, 0) + 1
+            talalt.append((best_name, s))
         else:
             unmatched += 1
+    matched = dict(sorted(matched.items(), key=lambda kv: -kv[1]))
+    kimenetek = _figura_kimenetek(match, config, talalt) if talalt else {}
     return {"total_attacks": len(seqs),
-            "matched": dict(sorted(matched.items(), key=lambda kv: -kv[1])),
-            "unmatched": unmatched}
+            "matched": matched,
+            "unmatched": unmatched,
+            "outcomes": {nev: kimenetek.get(nev, {}) for nev in matched}}
+
+
+# A felismert figura kimenetelei, ebben a sorrendben (a gól az első: a
+# gólt hozó figura a veszélyes; a lövés itt a gól NÉLKÜLI lövés).
+FIGURA_KIMENETEK = ("gól", "hetes", "lövés", "eladás", "egyéb")
+
+
+def _figura_kimenetek(match: Match, config: TacticsConfig,
+                      talalt: list) -> dict:
+    """Figuránként a befejezés: a támadás-szakasz alatt vagy a vége után
+    ATTACK_TAIL_S-en belül (mint az attack_outcomes-nál) a támadó csapat
+    gólja → "gól", különben hetese → "hetes", lövése → "lövés", eladása →
+    "eladás", különben "egyéb" (lefújás, követés-vesztés).
+
+    Visszaad: {figura-név: {kimenet: darab}} — a kimenetek
+    FIGURA_KIMENETEK sorrendjében."""
+    from .attack_types import ATTACK_TAIL_S
+    from .event_detection import EventType, detect_events, detect_shots
+    from .rules import detect_seven_meters
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    loves = detect_shots(match, config)
+    esemenyek = {
+        "gól": [(e.t, e.team) for e in loves if e.type == EventType.GOAL],
+        "hetes": [(sm["t"], Team(sm["team"]))
+                  for sm in detect_seven_meters(match, config)],
+        "lövés": [(e.t, e.team) for e in loves if e.type == EventType.SHOT],
+        "eladás": [(e.t, e.team) for e in detect_events(match, config)
+                   if e.type == EventType.TURNOVER],
+    }
+    szamlalo: dict[str, dict[str, int]] = {}
+    for nev, s in talalt:
+        lo, hi = s.start_t, s.end_t + tail
+        kimenet = next((k for k in FIGURA_KIMENETEK[:-1]
+                        if any(tm == s.team and lo <= t <= hi
+                               for t, tm in esemenyek[k])), "egyéb")
+        rec = szamlalo.setdefault(nev, {})
+        rec[kimenet] = rec.get(kimenet, 0) + 1
+    return {nev: {k: rec[k] for k in FIGURA_KIMENETEK if k in rec}
+            for nev, rec in szamlalo.items()}
 
 
 def cluster_signatures(signatures: list[list[float]], threshold: float = 0.15) -> list[int]:
