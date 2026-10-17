@@ -60,6 +60,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Map<String, Map<String, dynamic>> _keyScenes = {};
   // LEGUTÓBBI MEGBESZÉLÉSEK: a 3D közös nézés mentett felvételei.
   List<Map<String, dynamic>> _recordings = const [];
+  // A mentett figurák (a "FIGURÁK" kártyához).
+  List<Map<String, dynamic>> _plays = const [];
   // Visszatérő edzés-fókuszok csapatonként (a könyvtár-összesítésből).
   Map<String, dynamic> _seasonFocus = {};
 
@@ -705,6 +707,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // A legutóbbi megbeszélés-felvételek — külön, nem blokkolóan.
       _api.fetchLibraryRecordings().then((r) {
         if (mounted) setState(() => _recordings = r);
+      }).catchError((_) {});
+      // A mentett figurák — külön, nem blokkolóan.
+      _api.listPlays().then((p) {
+        if (mounted) setState(() => _plays = p);
       }).catchError((_) {});
       // A motor a mentett meccseket HÁTTÉRBEN olvassa be (meccsenként
       // több másodperc): amíg töltődik, a lista részleges — pár
@@ -2422,6 +2428,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ..._leadersCard(),
             // A legutóbbi 3D megbeszélések: ki nézte meg, egy kattintással.
             ..._recordingsCard(),
+            // A mentett figurák: 3D / lap / videó, a füzet — a tervező nélkül.
+            ..._playsCard(),
             // Visszatérő gyengeségek: ami több meccsen is előjött.
             ..._seasonFocusCard(),
             // Folyamatban lévő feldolgozások (sor): élő állapot + megszakítás.
@@ -3124,6 +3132,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     ];
+  }
+
+  /// A mentett figurák kártyája: soronként 3D / VR, lap és videó, alul a
+  /// figurafüzet (üres könyvtárnál nincs kártya).
+  List<Widget> _playsCard() {
+    if (_plays.isEmpty) return const [];
+    Widget gomb(String tipp, IconData ikon, VoidCallback f) => IconButton(
+          tooltip: tipp,
+          visualDensity: VisualDensity.compact,
+          iconSize: 18,
+          icon: Icon(ikon, color: AppColors.accent),
+          onPressed: f,
+        );
+    return [
+      const SizedBox(height: AppSpacing.xl),
+      Container(
+        decoration: AppTheme.card(),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text("FIGURÁK · 3D / LAP / VIDEÓ",
+                    style: AppText.label
+                        .copyWith(fontSize: 11, letterSpacing: 0.6)),
+              ),
+              TextButton.icon(
+                onPressed: () => _figuraOldalNyit("figura-fuzet", const {}),
+                icon: const Icon(Icons.menu_book_outlined, size: 16),
+                label: const Text("Figurafüzet ↗",
+                    style: TextStyle(fontSize: 12)),
+              ),
+            ]),
+            for (final p in _plays.take(dashboardPlays))
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(children: [
+                  Expanded(
+                    child: Text(
+                        "${p["name"] ?? "névtelen"} · ${p["players"] ?? "?"} támadó",
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.value.copyWith(fontSize: 13)),
+                  ),
+                  gomb("3D / VR — a böngészőben", Icons.view_in_ar_outlined,
+                      () => _mentettFiguraNyit(p, "figura3d")),
+                  gomb("Figura-lap (nyomtatható)", Icons.print_outlined,
+                      () => _mentettFiguraNyit(p, "figura-lap")),
+                  gomb("Videó (MP4) — a csapatnak", Icons.movie_outlined,
+                      () => _mentettFiguraNyit(p, "figura-video")),
+                ]),
+              ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  /// Egy mentett figura a böngészőben (3D, lap vagy videó).
+  Future<void> _mentettFiguraNyit(Map<String, dynamic> p, String ut) async {
+    try {
+      final play = await _api.fetchPlay("${p["id"]}");
+      await _figuraOldalNyit(ut, savedPlayQuery(play));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A figura nem nyílt meg: ${humanError(e)}")));
+    }
+  }
+
+  Future<void> _figuraOldalNyit(String ut, Map<String, String> q) async {
+    final url = Uri.parse("${_api.baseUrl}/$ut")
+        .replace(queryParameters: q.isEmpty ? null : q)
+        .toString();
+    final ok = await openInBrowser(url);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? (ut == "figura-video"
+                ? "A figura videója letöltődik (MP4)."
+                : "Megnyitva a böngészőben: $url")
+            : "Nyisd meg kézzel a böngészőben: $url")));
   }
 
   /// Egy felvétel a böngészős 3D-ben (a ?felvetel= linkkel magától indul).

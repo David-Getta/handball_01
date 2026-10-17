@@ -542,6 +542,12 @@ Lépésenkénti módban a figura-oldal gombja a MAGYARÁZÓS videót kéri
 (`lepes=1`): minden kulcs-pozíción 1,2 mp-ig megáll, a felirattal.
 (/figura-video — a bemenete a /figura3d-é.)
 
+**Figurák a kezdőlapon.** A kezdőlap "FIGURÁK" kártyája (ha van mentett
+figura) a legutóbbi hat figurát soronként 3D / VR, 🖨 lap és 🎬 videó
+gombbal adja, fent "Figurafüzet ↗" — a meccs előtti átnézéshez, a
+csapatnak küldéshez a tervező megnyitása nélkül (a fal itt a figura-oldal
+alap kézi fala).
+
 **Figurafüzet.** A tervező "Figura betöltése" ablakának "Figurafüzet ↗"
 gombja a mentett figurákat EGY nyomtatható dokumentumban nyitja (PDF-be
 is): elöl tartalomjegyzék, utána figuránként egy oldal (a figura-lap

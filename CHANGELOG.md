@@ -3,6 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.174 óta)
+
+- **Figurák a kezdőlapon** (app): a mentett figurák eddig csak a
+  Figura-tervező betöltő ablakából voltak elérhetők. Most a kezdőlap
+  "FIGURÁK" kártyája a legutóbbi hat figurát soronként 3D / VR, 🖨 lap és
+  🎬 videó gombbal adja, fent "Figurafüzet ↗" — egy kattintással, a
+  tervező nélkül.
+
 ## v0.1.174 — kiadva (2026-10-17)
 
 > Kiadás-jegyzet: a figura a csapathoz megy. Figura-videó (MP4): a

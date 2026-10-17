@@ -556,6 +556,31 @@ String setplay3dPoints(List<List<Offset>> utak) => utak
         .join(","))
     .join(";");
 
+/// Egy mentett figura (a motor /playbook/{id} alakja) a figura-oldalak
+/// link-paramétereire: u (az utak), l (a labdás-sor, ha nem végig az 1.),
+/// cim (a név). A fal a figura-oldal alap kézi fala (6 védő, 6 m).
+Map<String, String> savedPlayQuery(Map<String, dynamic> play) {
+  final utak = [
+    for (final a in (play["attackers"] as List?) ?? const [])
+      [
+        for (final pt in a as List)
+          Offset(((pt as List)[0] as num).toDouble(), (pt[1] as num).toDouble())
+      ]
+  ];
+  final labda = [
+    for (final v in (play["labda"] as List?) ?? const []) (v as num).toInt()
+  ];
+  final nev = "${play["name"] ?? ""}".trim();
+  return {
+    "u": setplay3dPoints(utak),
+    if (labda.any((v) => v != 0)) "l": labda.join(","),
+    if (nev.isNotEmpty) "cim": nev,
+  };
+}
+
+/// A kezdőlap "FIGURÁK" kártyája ennyi (a legutóbb listázott) figurát mutat.
+const int dashboardPlays = 6;
+
 /// A figura labdása az animáció lépésenként: `labda` kulcs-pozíciónként a
 /// labdás sorszáma; ahol a következő pontnál más, ott a szakasz felénél
 /// "passzol" (a tervező vázlat-animációja — a böngészős 3D a passzt

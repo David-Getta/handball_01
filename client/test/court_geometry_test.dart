@@ -158,6 +158,19 @@ void main() {
       "http://10.0.0.5:8000/kovet?szem=h1",
       "http://10.0.0.5:8000/kovet?szem=h2"
     ]);
+    // A mentett figura linkje (a motor figura_link_kod-jának alakja; a
+    // tizedre kerekítés a Dart-é — a fél esetén felfelé).
+    expect(
+        savedPlayQuery({
+          "name": " Kereszt ",
+          "attackers": [
+            [[20, 10], [25.04, 10]],
+            [[24, 4], [26.25, 4]]
+          ],
+          "labda": [0, 1]
+        }),
+        {"u": "20.0,10.0,25.0,10.0;24.0,4.0,26.3,4.0", "l": "0,1", "cim": "Kereszt"});
+    expect(savedPlayQuery({"attackers": [[[1, 2]]], "labda": [0]}), {"u": "1.0,2.0"});
     // A fal: a kapus az 1-es, a védők 2, 3, … (a motor FIGURA_KAPUS_MEZ-e).
     expect(defenderLinks("http://x/kovet", 2), [
       "http://x/kovet?szem=v1",
