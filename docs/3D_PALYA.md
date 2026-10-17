@@ -569,7 +569,11 @@ SZEMÉVEL nyitja (VR-ben is — ott nincs dupla kattintás); a csapat
 linkje is átadja: `/kovet?nev=Anna&szem=h3`. A figuránál az edző minden
 játékosnak a saját futója linkjét adja (a figura támadói a hazai 1, 2, 3
 …), és amikor vezet, mindenki a saját futójában áll — a saját útját a
-saját szemével futja végig.
+saját szemével futja végig. A fal is: a figura kapusa az 1-es, a védők a
+2, 3, … (a fal balról jobbra, utána az előretoltak) — a `szem=v3` a 3-as
+védő szemével nyit (a feje oldalazva is a labdát követi), a `szem=v1` a
+kapuséval; a tervező "Csapat-linkek (VR)" ablaka ezeket is adja. Így a
+védekezést gyakorló játékos a falban állva látja a figurát.
 
 **A figura közös nézése.** A figurát is lehet vezetni ("📡 Vezetem" —
 ugyanúgy, mint a meccset): a csapat a `/kovet` linkkel ugyanarra a

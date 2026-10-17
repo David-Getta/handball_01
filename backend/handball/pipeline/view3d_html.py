@@ -1749,8 +1749,11 @@ function kovetFrissit(dt){
   if (cel){
     kovet.x = cel.x; kovet.y = cel.y; kovet.k = cel.k;
     // Az irány simítva követi a figura haladását (a zajos követés ne
-    // rángassa a fejet); a rövidebb íven fordul.
-    const celIrany = babuk[cel.k].rotation.y;
+    // rángassa a fejet); a rövidebb íven fordul. A figura védője és
+    // kapusa a LABDÁT nézi (oldalazva sem fordul el a támadóktól).
+    const celIrany = (FIGURA && !kovet.hazai && labda.visible)
+      ? Math.atan2(labda.position.x - cel.x, -((W - labda.position.z) - cel.y))
+      : babuk[cel.k].rotation.y;
     let d = celIrany - kovet.irany;
     while (d > Math.PI) d -= 2*Math.PI;
     while (d < -Math.PI) d += 2*Math.PI;

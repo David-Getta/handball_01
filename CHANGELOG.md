@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.172 óta)
 
+- **A figura a védő és a kapus szemével** (böngésző/VR + app + motor): a
+  figura védőinek eddig nem volt mezszáma — a védekezést gyakorló
+  játékos nem állhatott a falba. Most a kapus az 1-es, a védők a 2, 3, …:
+  a `szem=v3` link (és a játékos-kamera) a 3-as védő szemével nyit, a
+  feje oldalazva is a labdát követi. A tervező "Csapat-linkek (VR)"
+  ablaka a fal linkjeit is adja — a támadók a futójukban, a védők a
+  falban, a kapus a kapuban.
+
 - **A fal rendszere a figurában** (app + böngésző/VR + motor): a
   Figura-tervező fala eddig mindig 6-0 volt — most választható ("Rendszer":
   6-0, 5-1, 4-2, 3-2-1, 3-3): az előretolt védők a 9 m körül (a 3-2-1

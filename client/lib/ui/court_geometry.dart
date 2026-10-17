@@ -622,6 +622,12 @@ String keypointLabel(int i, int k) {
 List<String> runnerLinks(String kovetUrl, int n) =>
     [for (int i = 1; i <= n; i++) "$kovetUrl?szem=h$i"];
 
+/// A figura falának linkjei: a kapus (a motor FIGURA_KAPUS_MEZ-e, 1-es) és
+/// [n] védő (2, 3, …) — a játékos a figurát a fal tagjaként, a saját
+/// szemével nézi (a feje a labdát követi).
+List<String> defenderLinks(String kovetUrl, int n) =>
+    [for (int i = 1; i <= n + 1; i++) "$kovetUrl?szem=v$i"];
+
 /// Bájt → olvasható méret ("0,4 MB", "12 MB", "1,3 GB") — a felvételek
 /// takarításához.
 String recordingSize(num? bajt) {

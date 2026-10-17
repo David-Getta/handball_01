@@ -537,6 +537,34 @@ def test_a_rendszerek_a_kliensben_is():
     assert f"const double advancedMinLeadM = {ELORETOLT_MIN_ELONY_M};" in dart
 
 
+def test_a_figura_vedoi_mezszammal():
+    """A figura kapusa az 1-es, a védők 2, 3, … — a játékos-kamera és a
+    szem=v3 link a védő szemével nyit; a védő feje a labdát nézi."""
+    from handball.pipeline.play_simulation import FIGURA_KAPUS_MEZ
+    from handball.pipeline.view3d_html import view3d_html
+
+    m, e = setplay_3d_match([[(20, 10), (27, 10)]],
+                            DefenseModel(rendszer="5-1"))
+    for f in (m.frames[0], m.frames[-1]):
+        vedok = sorted((p.jersey_number, p.role == "kapus")
+                       for p in f.players if p.team == Team.AWAY)
+        assert vedok == [(FIGURA_KAPUS_MEZ, True)] + [
+            (n, False) for n in range(2, 8)]
+    oldal = view3d_html(m, figura=e)
+    assert "const celIrany = (FIGURA && !kovet.hazai && labda.visible)" in oldal
+
+
+def test_a_vedo_linkje_a_varolaprol(tmp_path, monkeypatch):
+    """A vezetett figurára a /kovet?szem=v3 a 3-as védő szemével irányít."""
+    app = _app(tmp_path, monkeypatch)
+    c = TestClient(app)
+    vezeto = c.put("/matches/figura/shared3d",
+                   json={"t": 0, "playing": False, "figura": "u=20%2C10%2C27%2C10"})
+    assert vezeto.status_code == 200
+    r = c.get("/kovet", params={"szem": "v3"}, follow_redirects=False)
+    assert r.status_code == 307 and r.headers["location"].endswith("&szem=v3")
+
+
 def test_a_kulcs_poziciok_ideje():
     """A kulcs-pozíciók ideje (kulcs_t): az állókép után, a szakaszok
     végén — azon a kockán a támadó pontosan a kulcs-pozíción áll."""

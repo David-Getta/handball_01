@@ -158,6 +158,12 @@ void main() {
       "http://10.0.0.5:8000/kovet?szem=h1",
       "http://10.0.0.5:8000/kovet?szem=h2"
     ]);
+    // A fal: a kapus az 1-es, a védők 2, 3, … (a motor FIGURA_KAPUS_MEZ-e).
+    expect(defenderLinks("http://x/kovet", 2), [
+      "http://x/kovet?szem=v1",
+      "http://x/kovet?szem=v2",
+      "http://x/kovet?szem=v3"
+    ]);
     expect(newAttackerSpot(5), const Offset(28, 18));
     expect(newAttackerSpot(6), const Offset(31, 7));
     expect(newAttackerSpot(9), const Offset(26, 10));

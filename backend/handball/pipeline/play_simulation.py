@@ -267,6 +267,10 @@ FIGURA_KOZOS_MAX = 2000
 FIGURA_3D_KOVET_S = 3 * 3600
 # A várólap ennyi mentett figurát kínál (a legutóbb mentetteket).
 FIGURA_TAR_KOVET = 8
+# A figura kapusának mezszáma; a védők ezután sorban (a fal balról
+# jobbra, utána az előretoltak) — a szem=v1 a kapus, a szem=v2 … a védők
+# szemével nyit.
+FIGURA_KAPUS_MEZ = 1
 
 
 def figura_link_kod(attackers, labda=None, nev=None) -> str:
@@ -402,16 +406,22 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
                            defense, config=config, fps=fps,
                            ball_positions=labda_hely)
     ertekeles = evaluate_setplay(sim, config=config)
-    # A kapus: a vonal előtt, a labda felé lépve (a kapufák közt).
+    # A kapus: a vonal előtt, a labda felé lépve (a kapufák közt). A
+    # védők mezszámot kapnak (a kapus után sorban) — a szemükkel is
+    # nézhető a figura.
     kapu_x = config.own_goal_x(Team.AWAY)
     elore = -1.0 if kapu_x == COURT_LENGTH_M else 1.0
     for f in sim.frames:
+        for p in f.players:
+            if p.team == Team.AWAY and p.track_id >= 100:
+                p.jersey_number = FIGURA_KAPUS_MEZ + 1 + (p.track_id - 100)
         ky = COURT_WIDTH_M / 2.0
         if f.ball is not None:
             ky += max(-1.2, min(1.2, 0.2 * (f.ball.y - COURT_WIDTH_M / 2.0)))
         f.players.append(PlayerPosition(
             track_id=99, team=Team.AWAY, x=kapu_x + elore * 0.6, y=ky,
-            source=PositionSource.MEASURED, confidence=1.0, role="kapus"))
+            source=PositionSource.MEASURED, confidence=1.0, role="kapus",
+            jersey_number=FIGURA_KAPUS_MEZ))
     sim.meta.match_id = "figura-3d"
     sim.meta.home_team = figura_nev(name) or "Figura"
     sim.meta.away_team = figura_nev(defense_name) or "Védelem"

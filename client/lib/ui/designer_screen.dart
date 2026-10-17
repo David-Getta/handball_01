@@ -430,6 +430,25 @@ class _DesignerScreenState extends State<DesignerScreen> {
     } catch (_) {}
     if (!mounted) return;
     final linkek = runnerLinks(kovet, _attackers.length);
+    // A fal: a kapus és a védők (a tanult falnál hat védővel számolunk).
+    final falLinkek =
+        defenderLinks(kovet, _tanultMeccs != null ? 6 : _numDefenders);
+    Widget linkSor(String cimke, String link) => Row(children: [
+          SizedBox(
+              width: 64,
+              child: Text(cimke, style: AppText.value.copyWith(fontSize: 12.5))),
+          Expanded(
+              child: SelectableText(link,
+                  style: AppText.label.copyWith(fontSize: 12))),
+          IconButton(
+            tooltip: "Másolás",
+            iconSize: 16,
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.copy),
+            onPressed: () =>
+                Clipboard.setData(ClipboardData(text: link)).catchError((_) {}),
+          ),
+        ]);
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -449,24 +468,15 @@ class _DesignerScreenState extends State<DesignerScreen> {
                     style: AppText.label.copyWith(fontSize: 12)),
                 const SizedBox(height: AppSpacing.md),
                 for (int i = 0; i < linkek.length; i++)
-                  Row(children: [
-                    SizedBox(
-                        width: 64,
-                        child: Text("${i + 1}. futó",
-                            style: AppText.value.copyWith(fontSize: 12.5))),
-                    Expanded(
-                        child: SelectableText(linkek[i],
-                            style: AppText.label.copyWith(fontSize: 12))),
-                    IconButton(
-                      tooltip: "Másolás",
-                      iconSize: 16,
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.copy),
-                      onPressed: () => Clipboard.setData(
-                              ClipboardData(text: linkek[i]))
-                          .catchError((_) {}),
-                    ),
-                  ]),
+                  linkSor("${i + 1}. futó", linkek[i]),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                    "A fal szemével (védekezés-gyakorláshoz): a védő a falban "
+                    "áll, a feje a labdát követi; a kapus a kapuban.",
+                    style: AppText.label.copyWith(fontSize: 12)),
+                const SizedBox(height: AppSpacing.sm),
+                for (int i = 0; i < falLinkek.length; i++)
+                  linkSor(i == 0 ? "Kapus" : "${i + 1}. védő", falLinkek[i]),
               ],
             ),
           ),
