@@ -987,7 +987,8 @@ def setplay_shapes(match: Match, config: TacticsConfig | None = None,
 
     Visszatérés: {"home": [{"shape", "zone", "attacks", "shots",
     "goals", "matches": 1, "starts" (a támadások kezdő-kockái,
-    klip-exporthoz)}], "away": [...]} — támadás szerint csökkenő.
+    klip-exporthoz), "starts_s" (ugyanezek mp-ben — a figura-példához)}],
+    "away": [...]} — támadás szerint csökkenő.
     """
     from .event_detection import EventType, detect_shots
 
@@ -1025,7 +1026,9 @@ def setplay_shapes(match: Match, config: TacticsConfig | None = None,
             rows.append({"shape": shape, "zone": shape_zone(shape),
                          "attacks": rec["attacks"], "shots": rec["shots"],
                          "goals": rec["goals"], "matches": 1,
-                         "starts": rec["starts"]})
+                         "starts": rec["starts"],
+                         "starts_s": [round(s_ / fps, 2)
+                                      for s_ in rec["starts"]]})
         rows.sort(key=lambda r: (-r["attacks"], -r["goals"]))
         out[team.value] = rows
     return out
@@ -1049,8 +1052,11 @@ def setplay_library(shapes: list, threshold: float = SPL_MERGE_THRESHOLD,
     legértékesebb lapja, mert ezt biztosan hozzák.
 
     Visszatérés: {"figures": [{"zone", "attacks", "shots", "goals",
-    "goal_pct", "matches", "shape"}] (meccsek, majd támadások szerint
-    csökkenő), "recurring": ugyanez a min_matches fölöttiekre,
+    "goal_pct", "matches", "shape", "pelda" (ha a sorok hozzák: {"match_id",
+    "t_s"} — a figura egy előfordulása, a legtöbb támadást adó sor első
+    támadása; a "✎ Figurává" ebből készít tervező-figurát)}] (meccsek, majd
+    támadások szerint csökkenő), "recurring": ugyanez a min_matches
+    fölöttiekre,
     "verdict": mondat | None (nincs visszatérő figura, vagy egyetlen
     meccs adata)}.
     """
@@ -1066,13 +1072,19 @@ def setplay_library(shapes: list, threshold: float = SPL_MERGE_THRESHOLD,
                 legjobb, legjobb_d = k, d
         n = int(row.get("attacks", 0))
         mid = row.get("match_id")
+        kezdet = list(row.get("starts_s") or [])
+        pelda = ({"match_id": mid, "t_s": float(kezdet[0])}
+                 if mid is not None and kezdet else None)
         if legjobb is None:
             konyv.append({"shape": shape, "attacks": n,
                           "shots": int(row.get("shots", 0)),
                           "goals": int(row.get("goals", 0)),
                           "match_ids": {mid} if mid is not None else set(),
-                          "matches_sum": int(row.get("matches", 1))})
+                          "matches_sum": int(row.get("matches", 1)),
+                          "pelda": pelda})
             continue
+        if legjobb.get("pelda") is None:
+            legjobb["pelda"] = pelda
         m = legjobb["attacks"]
         legjobb["shape"] = [(a * m + b * n) / max(1, m + n)
                             for a, b in zip(legjobb["shape"], shape)]
@@ -1092,7 +1104,8 @@ def setplay_library(shapes: list, threshold: float = SPL_MERGE_THRESHOLD,
             "goal_pct": round(100.0 * k["goals"] / max(1, k["attacks"]),
                               1),
             "matches": meccsek,
-            "shape": [round(v, 4) for v in k["shape"]]})
+            "shape": [round(v, 4) for v in k["shape"]],
+            **({"pelda": k["pelda"]} if k.get("pelda") else {})})
     figures.sort(key=lambda r: (-r["matches"], -r["attacks"], -r["goals"]))
     recurring = [f for f in figures if f["matches"] >= min_matches]
     verdict = None

@@ -258,6 +258,31 @@ def test_a_figura_kimenet_a_vegponton(tmp_path, monkeypatch):
     assert sum(r["outcomes"]["Beúszós kereszt"].values()) == 1
 
 
+def test_a_visszatero_figura_peldaja():
+    """A könyvtár figurája egy példát is ad (a legtöbb támadást adó sor
+    első támadása, mp-ben) — a "✎ Figurává" ebből készít figurát; a
+    példa nélküli (régi) sorokból nincs példa."""
+    from handball.pipeline.setplays import setplay_library, setplay_shapes
+    alak = [0.0] * 18
+    alak[4] = 1.0
+    sorok = [{"shape": alak, "attacks": 2, "match_id": "a",
+              "starts_s": [12.5, 40.0]},
+             {"shape": alak, "attacks": 5, "match_id": "b",
+              "starts_s": [61.0]},
+             {"shape": alak, "attacks": 1, "match_id": "c"}]
+    lib = setplay_library(sorok, min_matches=2)
+    assert lib["recurring"][0]["pelda"] == {"match_id": "b", "t_s": 61.0}
+    regi = setplay_library([{k: v for k, v in r.items() if k != "starts_s"}
+                            for r in sorok], min_matches=2)
+    assert "pelda" not in regi["recurring"][0]
+    # a meccs alak-sorai a kezdeteket mp-ben is adják
+    frames = _play_frames(_PLAY_A["attackers"], steps=12, start=50)
+    frames += _play_frames(_PLAY_A["attackers"], steps=12, start=150)
+    sorok = setplay_shapes(Match(_meta(), frames), min_attacks=1)["home"]
+    assert sorok and all(len(r["starts_s"]) == len(r["starts"]) for r in sorok)
+    assert sorok[0]["starts_s"][0] == round(sorok[0]["starts"][0] / 25.0, 2)
+
+
 def test_empty_playbook_all_unmatched():
     """Üres könyvtárnál minden támadás ismeretlen (nem hibázik)."""
     frames = _play_frames(_PLAY_A["attackers"], steps=8)

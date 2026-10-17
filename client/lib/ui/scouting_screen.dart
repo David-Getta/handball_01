@@ -14,6 +14,8 @@ import "package:flutter/material.dart";
 
 import "anim.dart";
 import "../services/api_client.dart";
+import "../sim/demo_data.dart";
+import "designer_screen.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
 import "error_text.dart";
@@ -13191,6 +13193,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           ),
           // Elnevezés: a könyvtár zóna-neve helyett az edző szava — az
           // alakhoz kötve, minden felületen (riasztás, klip, jelentés).
+          // A figura egy előfordulása a tervezőben: gyakorolható a mi
+          // falunk ellen (3D / VR, a védő szemével, lépésenként).
+          if (f["pelda"] is Map)
+            IconButton(
+              tooltip: "✎ Figurává — egy előfordulása a Figura-tervezőben: "
+                  "a falunk ellen 3D-ben / VR-ben (a védő szemével is), "
+                  "lépésenként, figura-lappal, videóval",
+              icon: const Icon(Icons.draw_outlined, size: 18),
+              onPressed: () =>
+                  _visszateroFiguravaNyit((f["pelda"] as Map).cast()),
+            ),
           IconButton(
             tooltip: nev != null && nev.isNotEmpty
                 ? "Átnevezés (üres név törli)"
@@ -13226,6 +13239,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ],
       ),
     );
+  }
+
+  /// Az ellenfél visszatérő figurájának egy előfordulása a tervezőben
+  /// (a meccs támadásából figura). A védelem a tervező kézi fala — a
+  /// mi falunk —, nem annak a meccsnek a másik csapatáé.
+  Future<void> _visszateroFiguravaNyit(Map<String, dynamic> pelda) async {
+    try {
+      final f = await _api.fetchAttackFigure(
+          "${pelda["match_id"]}", ((pelda["t_s"] as num?) ?? 0).toDouble());
+      f.remove("match_id");
+      if (!mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) =>
+              DesignerScreen(match: buildDemoMatch(), initial: f)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A figura nem nyílt meg: ${humanError(e)}")));
+    }
   }
 
   Widget _playbookCard(Map<String, dynamic> pm) {

@@ -253,6 +253,11 @@ meccseken" az, amire a régi felderítés nem készít fel.
   (mentett figurák, `match_attacks_to_playbook` — a felderítés "ISMERT
   FIGURÁIK" kártyája figuránként azt is mutatja, mivel zárult: gól,
   hetes, lövés, eladás, egyéb).
+- A visszatérő figura gyakorolható: a könyvtár figuránként egy PÉLDÁT is
+  ad ("pelda": a legtöbb támadást adó meccs első előfordulása), és a
+  felderítés kártyájának "✎ Figurává" gombja ezt a támadást a
+  Figura-tervezőbe viszi (`/matches/{id}/attack-figure`) — a mi kézi
+  falunk ellen, onnan 3D / VR (a védő szemével is), figura-lap, videó.
 
 ## Tesztek
 

@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.173 óta)
 
+- **Az ellenfél visszatérő figurája a tervezőben** (felderítés + app +
+  motor): a "VISSZATÉRŐ FIGURÁIK" kártya eddig csak az alakot és a
+  számokat mutatta. Most soronként "✎ Figurává": a figura egy valódi
+  előfordulása a Figura-tervezőbe kerül — a mi falunk ellen gyakorolható
+  3D-ben / VR-ben (a védő szemével is), lépésenként, figura-lappal,
+  videóval.
+
 - **Figura-videó (MP4)** (app + böngésző + motor): a figura felülnézeti
   videója letöltésre — a 3D kockáiból (valós tempó, a késő fal, a
   passzok), mezszámokkal, a kulcs-pozíciók feliratával. Elküldhető a
