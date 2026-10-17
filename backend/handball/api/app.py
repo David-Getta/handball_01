@@ -3105,13 +3105,8 @@ def create_app():
         kézi fal (`vedok`, `melyseg`, `rendszer`: 6-0, 5-1, 4-2, 3-2-1,
         3-3). Visszaad: (utak, labda, modell, a védelem neve); 400 / 404
         hibánál."""
-        from ..pipeline.play_simulation import (
-            FIGURA_3D_MAX_JATEKOS, FIGURA_3D_MAX_PONT, VEDEKEZESI_RENDSZEREK,
-            DefenseModel)
-        if rendszer not in VEDEKEZESI_RENDSZEREK:
-            raise HTTPException(
-                status_code=400,
-                detail="rendszer: " + ", ".join(VEDEKEZESI_RENDSZEREK))
+        from ..pipeline.play_simulation import (FIGURA_3D_MAX_JATEKOS,
+                                                FIGURA_3D_MAX_PONT)
         try:
             utak = []
             for resz in u.split(";")[:FIGURA_3D_MAX_JATEKOS]:
@@ -3127,6 +3122,22 @@ def create_app():
         except ValueError:
             raise HTTPException(status_code=400,
                                 detail="hibás labdás-sor (l=0,1,…)")
+        modell, vedo_nev = _figura_vedelem(meccs, vedo, vedok, melyseg,
+                                           rendszer)
+        return utak, labda, modell, vedo_nev
+
+    def _figura_vedelem(meccs: str, vedo: str, vedok: int, melyseg: float,
+                        rendszer: str = "6-0"):
+        """A figura-oldalak (/figura3d, /figura-lap, /figura-fuzet) fala: a
+        `meccs` `vedo` csapatából TANULT (a leggyakoribb rendszerében),
+        különben a kézi fal (`vedok`, `melyseg`, `rendszer`). Visszaad:
+        (modell, a védelem neve); 400 / 404 hibánál."""
+        from ..pipeline.play_simulation import (VEDEKEZESI_RENDSZEREK,
+                                                DefenseModel)
+        if rendszer not in VEDEKEZESI_RENDSZEREK:
+            raise HTTPException(
+                status_code=400,
+                detail="rendszer: " + ", ".join(VEDEKEZESI_RENDSZEREK))
         if meccs:
             match = _store.get(meccs)
             if match is None:
@@ -3148,7 +3159,7 @@ def create_app():
             vedo_nev = ("Védelem (" + (f"{rendszer}, " if rendszer != "6-0" else "")
                         + f"{modell.num_defenders} védő, "
                         + f"{modell.line_depth_m:.1f} m)".replace(".", ","))
-        return utak, labda, modell, vedo_nev
+        return modell, vedo_nev
 
     def figura3d(request: Request, u: str = "", cim: str = "",
                  meccs: str = "", vedo: str = "away", vedok: int = 6,
@@ -3189,6 +3200,37 @@ def create_app():
 
     figura3d.__annotations__["request"] = Request
     app.get("/figura3d")(figura3d)
+
+    @app.get("/figura-fuzet")
+    def figura_fuzet(ids: str = "", meccs: str = "", vedo: str = "away",
+                     vedok: int = 6, melyseg: float = 6.0,
+                     rendszer: str = "6-0"):
+        """A csapat FIGURAFÜZETE: a mentett figurák egy nyomtatható
+        dokumentumban (böngészőből PDF) — tartalomjegyzék, utána
+        figuránként egy oldal (pipeline.figura_lap.figura_fuzet_html).
+        `ids` ("a,b,…"): csak ezek, ebben a sorrendben; alapból mind, név
+        szerint. A fal a /figura-lap-é (tanult vagy kézi)."""
+        from fastapi.responses import HTMLResponse
+
+        from ..pipeline.figura_lap import FIGURA_FUZET_MAX, figura_fuzet_html
+        modell, vedo_nev = _figura_vedelem(meccs, vedo, vedok, melyseg,
+                                           rendszer)
+        if ids.strip():
+            fajlok = [_play_path(x.strip()) for x in ids.split(",")
+                      if x.strip()][:FIGURA_FUZET_MAX]
+        else:
+            fajlok = sorted(_playbook_dir.glob("*.json"))
+        figurak = []
+        for f in fajlok:
+            try:
+                figurak.append(json.loads(f.read_text(encoding="utf-8")))
+            except (OSError, ValueError):
+                continue  # hiányzó / sérült figura-fájl kimarad
+        if not ids.strip():
+            figurak.sort(key=lambda d: (str(d.get("name") or "").lower(),
+                                        str(d.get("id") or "")))
+        return HTMLResponse(figura_fuzet_html(figurak, modell,
+                                              vedo_nev=vedo_nev))
 
     @app.get("/figura-lap")
     def figura_lap(u: str = "", cim: str = "", meccs: str = "",

@@ -77,6 +77,34 @@ def _szam(v: float) -> str:
     return f"{v:.1f}".replace(".", ",")
 
 
+# A lap stílusa és jelmagyarázata (a figura-lap és a figurafüzet közös).
+_STILUS = (
+    "body{font-family:system-ui,sans-serif;color:#1c2733;margin:24px;"
+    "background:#fff}"
+    "h1{font-size:20px;margin:0 0 4px}"
+    ".al{color:#56657a;font-size:13px;margin-bottom:14px}"
+    ".lapok{display:flex;flex-wrap:wrap;gap:16px}"
+    ".lepes{border:1px solid #d6dde6;border-radius:8px;padding:8px;"
+    "break-inside:avoid}"
+    ".lc{font-weight:600;font-size:13px;margin-bottom:6px}"
+    ".ll{font-size:12px;color:#33445a;margin-top:6px;max-width:340px}"
+    ".jel{font-size:11px;color:#56657a;margin-top:16px}"
+    "@media print{body{margin:10mm}}")
+_JELMAGYARAZAT = (
+    '<div class="jel">Kék nyíl: futás a következő pontig · sárga: passz · '
+    "piros: a fal a védelem modellje szerint (a labdára reagál) · "
+    "Sport Machine — Figura-tervező</div>")
+# A figurafüzet legfeljebb ennyi figurát nyomtat (figuránként egy oldal).
+FIGURA_FUZET_MAX = 40
+
+
+def _dokumentum(cim: str, torzs: str, extra_stilus: str = "") -> str:
+    return ('<!DOCTYPE html><html lang="hu"><head><meta charset="utf-8">'
+            f"<title>{escape(cim)}</title><style>" + _STILUS + extra_stilus
+            + "</style></head><body>" + torzs + _JELMAGYARAZAT
+            + "</body></html>")
+
+
 def figura_lap_html(utak: list, labda: list, defense, *, nev: str,
                     vedo_nev: str) -> str:
     """A figura nyomtatható lapja (önálló HTML).
@@ -85,6 +113,55 @@ def figura_lap_html(utak: list, labda: list, defense, *, nev: str,
     kulcs-pozíciónként a labdás sorszáma; `defense`: a védelem modellje
     (play_simulation.DefenseModel). A kiértékelés a 3D-vel azonos
     (setplay_3d_match). ValueError, ha nincs érvényes támadó."""
+    return _dokumentum(f"{nev} — figura-lap",
+                       _figura_resz(utak, labda, defense, nev=nev,
+                                    vedo_nev=vedo_nev))
+
+
+def figura_fuzet_html(figurak: list, defense, *, vedo_nev: str,
+                      cim: str = "Figurafüzet") -> str:
+    """A csapat FIGURAFÜZETE (önálló, nyomtatható HTML): a mentett
+    figurák ({"name", "attackers", "labda"} — a /playbook alakja) egy
+    dokumentumban — elöl tartalomjegyzék, utána figuránként egy oldal (a
+    figura-lap tartalma), a `defense` fallal. A hibás figura kimarad (a
+    tartalomjegyzék alatt jelezve); legfeljebb FIGURA_FUZET_MAX figura.
+
+    Edzőileg: a szezon figurái egy füzetben — az öltözőbe, az új
+    játékosnak, a meccs előtti átnézéshez."""
+    from .play_simulation import figura_nev
+
+    reszek, nevek, kimaradt = [], [], []
+    for d in list(figurak)[:FIGURA_FUZET_MAX]:
+        nev = figura_nev(d.get("name")) or "névtelen"
+        try:
+            utak = [[(float(x), float(y)) for x, y in a] for a in d["attackers"]]
+            reszek.append(_figura_resz(utak, list(d.get("labda") or []),
+                                       defense, nev=nev, vedo_nev=vedo_nev))
+            nevek.append(nev)
+        except (KeyError, TypeError, ValueError):
+            kimaradt.append(nev)
+    if nevek:
+        tartalom = ('<ol class="tj">' + "".join(
+            f"<li>{escape(n)}</li>" for n in nevek) + "</ol>")
+    else:
+        tartalom = ('<div class="al">Még nincs mentett figura — a '
+                    "Figura-tervezőben ments egyet.</div>")
+    if kimaradt:
+        tartalom += ('<div class="al">Kimaradt (hibás figura): '
+                     + escape(", ".join(kimaradt)) + "</div>")
+    torzs = (f"<h1>{escape(cim)}</h1>"
+             f'<div class="al">{len(nevek)} figura · {escape(vedo_nev)}</div>'
+             + tartalom
+             + "".join(f'<section class="figura">{r}</section>' for r in reszek))
+    return _dokumentum(cim, torzs,
+                       ".tj{font-size:14px;line-height:1.7}"
+                       ".figura{break-before:page;margin-top:24px}")
+
+
+def _figura_resz(utak: list, labda: list, defense, *, nev: str,
+                 vedo_nev: str) -> str:
+    """Egy figura lapjának törzse (cím, kiértékelés, a lépések ábrái) —
+    a figura-lap és a figurafüzet közös része."""
     from .play_simulation import setplay_3d_match
 
     _sim, e = setplay_3d_match(utak, defense, ball=labda, name=nev,
@@ -146,26 +223,7 @@ def figura_lap_html(utak: list, labda: list, defense, *, nev: str,
         osszegzes.append(
             f"legjobb lövőhelyzet: {e['attacker_id']}. játékos "
             f"({round(e['best_shot_value'] * 100)}%)")
-    return (
-        '<!DOCTYPE html><html lang="hu"><head><meta charset="utf-8">'
-        f"<title>{escape(nev)} — figura-lap</title><style>"
-        "body{font-family:system-ui,sans-serif;color:#1c2733;margin:24px;"
-        "background:#fff}"
-        "h1{font-size:20px;margin:0 0 4px}"
-        ".al{color:#56657a;font-size:13px;margin-bottom:14px}"
-        ".lapok{display:flex;flex-wrap:wrap;gap:16px}"
-        ".lepes{border:1px solid #d6dde6;border-radius:8px;padding:8px;"
-        "break-inside:avoid}"
-        ".lc{font-weight:600;font-size:13px;margin-bottom:6px}"
-        ".ll{font-size:12px;color:#33445a;margin-top:6px;max-width:340px}"
-        ".jel{font-size:11px;color:#56657a;margin-top:16px}"
-        "@media print{body{margin:10mm}}"
-        "</style></head><body>"
-        f"<h1>{escape(nev)}</h1>"
-        f'<div class="al">{escape(vedo_nev)} · '
-        f"{escape(' · '.join(osszegzes))}</div>"
-        f'<div class="lapok">{"".join(lepesek)}</div>'
-        '<div class="jel">Kék nyíl: futás a következő pontig · sárga: passz · '
-        "piros: a fal a védelem modellje szerint (a labdára reagál) · "
-        "Sport Machine — Figura-tervező</div>"
-        "</body></html>")
+    return (f"<h1>{escape(nev)}</h1>"
+            f'<div class="al">{escape(vedo_nev)} · '
+            f"{escape(' · '.join(osszegzes))}</div>"
+            f'<div class="lapok">{"".join(lepesek)}</div>')

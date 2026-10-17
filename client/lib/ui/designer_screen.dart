@@ -394,15 +394,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
     final q = <String, String>{"u": setplay3dPoints(utak)};
     if (labda.any((v) => v != 0)) q["l"] = labda.join(",");
     if ((nev ?? "").isNotEmpty) q["cim"] = nev!;
-    final m = _tanultMeccs;
-    if (m != null) {
-      q["meccs"] = m;
-      q["vedo"] = _tanultOldal;
-    } else {
-      q["vedok"] = "$_numDefenders";
-      q["melyseg"] = _lineDepth.toStringAsFixed(1);
-      if (_rendszer != "6-0") q["rendszer"] = _rendszer;
-    }
+    q.addAll(_vedelemParams());
     final url = Uri.parse("${_api.baseUrl}/$ut")
         .replace(queryParameters: q)
         .toString();
@@ -417,6 +409,34 @@ class _DesignerScreenState extends State<DesignerScreen> {
                     "fallal."
                 : "A figura a böngészőben, 3D-ben — VR-ben bejárható; a "
                     "csapat a /kovet várólapon is eléri (▶ Figura).")));
+  }
+
+  /// A fal link-paraméterei (a figura-oldalaknak): a legutóbbi tanult
+  /// védelem (meccs + oldal), különben a kézi fal (védőszám, mélység,
+  /// rendszer).
+  Map<String, String> _vedelemParams() {
+    final m = _tanultMeccs;
+    if (m != null) return {"meccs": m, "vedo": _tanultOldal};
+    return {
+      "vedok": "$_numDefenders",
+      "melyseg": _lineDepth.toStringAsFixed(1),
+      if (_rendszer != "6-0") "rendszer": _rendszer,
+    };
+  }
+
+  /// A csapat figurafüzete (/figura-fuzet): a mentett figurák egy
+  /// nyomtatható dokumentumban, figuránként egy oldal — a mostani fallal.
+  Future<void> _figuraFuzetNyit() async {
+    final url = Uri.parse("${_api.baseUrl}/figura-fuzet")
+        .replace(queryParameters: _vedelemParams())
+        .toString();
+    final ok = await openInBrowser(url);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? "A figurafüzet a böngészőben — nyomtatható (Ctrl+P, PDF-be "
+                "is): tartalomjegyzék, figuránként egy oldal."
+            : "Nyisd meg kézzel a böngészőben: $url")));
   }
 
   /// Csapat-linkek futónként: a játékos a saját futójában áll, amikor a
@@ -634,6 +654,13 @@ class _DesignerScreenState extends State<DesignerScreen> {
                   ),
           ),
           actions: [
+            // A mentett figurák egy nyomtatható füzetben (a mostani fallal).
+            if (plays.isNotEmpty)
+              TextButton.icon(
+                onPressed: _figuraFuzetNyit,
+                icon: const Icon(Icons.print_outlined, size: 18),
+                label: const Text("Figurafüzet ↗"),
+              ),
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Bezárás")),
           ],
         ),

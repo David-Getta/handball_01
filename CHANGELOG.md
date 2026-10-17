@@ -3,6 +3,15 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.173 óta)
+
+- **Figurafüzet** (app + motor): a mentett figurák egy nyomtatható
+  dokumentumban — tartalomjegyzék, figuránként egy oldal (a figura-lap
+  lépésenkénti ábrái), a mostani fallal (tanult vagy kézi, a
+  rendszerével); böngészőből PDF-be is. A csapat "playbookja" az
+  öltözőbe, az új játékosnak. A tervező "Figura betöltése" ablakában:
+  "Figurafüzet ↗". (/figura-fuzet)
+
 ## v0.1.173 — kiadva (2026-10-17)
 
 > Kiadás-jegyzet: a figura edzés-eszköz lett. Lépésenként: a 3D figura

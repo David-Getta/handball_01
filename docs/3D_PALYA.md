@@ -526,6 +526,13 @@ következő pontig futás (kék) és a passz (sárga) nyila —, alatta a lépé
 leírása ("3. fut 3,2 m · passz: 2 → 3"), a lap tetején a kiértékelés. Az
 öltözőbe, a táblához. (/figura-lap — a bemenete a /figura3d-é.)
 
+**Figurafüzet.** A tervező "Figura betöltése" ablakának "Figurafüzet ↗"
+gombja a mentett figurákat EGY nyomtatható dokumentumban nyitja (PDF-be
+is): elöl tartalomjegyzék, utána figuránként egy oldal (a figura-lap
+tartalma), a mostani fallal (tanult vagy kézi, a rendszerével). A csapat
+"playbookja" — az öltözőbe, az új játékosnak. (/figura-fuzet; `ids=a,b`
+— csak ezek, ebben a sorrendben.)
+
 **Lépésenként.** A figura-oldal "⏯ Lépésenként" gombja (vagy a `lepes=1`
 link-paraméter) bekapcsolva a lejátszás minden kulcs-pozíción MEGÁLL: a
 jelző mutatja, hol tart ("⏸ 2/3 · Közép · labda: 2.") — az edző

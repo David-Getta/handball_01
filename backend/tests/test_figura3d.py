@@ -601,6 +601,51 @@ def test_a_fal_lepes_tempoja():
         assert math.isclose(x, cx, abs_tol=1e-6) and math.isclose(y, cy, abs_tol=1e-6)
 
 
+def test_a_figurafuzet():
+    """A figurafüzet: tartalomjegyzék, figuránként egy oldal (a figura-lap
+    tartalma, a választott fallal); a hibás figura kimarad, jelezve."""
+    from handball.pipeline.figura_lap import figura_fuzet_html, figura_lap_html
+
+    fal = DefenseModel(rendszer="5-1")
+    vn = "Védelem (5-1, 6 védő, 6,0 m)"
+    fuzet = figura_fuzet_html(
+        [{"name": "Kereszt", "labda": [0, 1],
+          "attackers": [[[20, 10], [27, 10]], [[24, 4], [26, 4]]]},
+         {"name": "Rossz", "attackers": [["x", 1]]},
+         {"name": "Beúszás <b>", "attackers": [[[22, 3], [30, 5]]]}],
+        fal, vedo_nev=vn)
+    assert fuzet.count('<section class="figura">') == 2
+    assert "<li>Kereszt</li><li>Beúszás &lt;b&gt;</li>" in fuzet
+    assert "Kimaradt (hibás figura): Rossz" in fuzet
+    assert f"2 figura · {vn}" in fuzet
+    assert ".figura{break-before:page" in fuzet
+    egy = figura_lap_html([[(20, 10), (27, 10)], [(24, 4), (26, 4)]], [0, 1],
+                          fal, nev="Kereszt", vedo_nev=vn)
+    assert egy[egy.index("<h1>"):egy.index('<div class="jel">')] in fuzet
+    ures = figura_fuzet_html([], fal, vedo_nev=vn)
+    assert "Még nincs mentett figura" in ures and "<section" not in ures
+
+
+def test_a_figurafuzet_vegpont(tmp_path, monkeypatch):
+    """GET /figura-fuzet: alapból mind (név szerint), `ids`-szel a kért
+    sorrendben; a fal a /figura-lap paramétereivel."""
+    c = TestClient(_app(tmp_path, monkeypatch))
+    assert "Még nincs mentett figura" in c.get("/figura-fuzet").text
+    a = c.post("/playbook", json={"name": "Zóna", "attackers": [
+        [[20, 10], [25, 10]]]}).json()["id"]
+    b = c.post("/playbook", json={"name": "Alfa", "attackers": [
+        [[22, 3], [30, 5]]]}).json()["id"]
+    lap = c.get("/figura-fuzet").text
+    assert lap.index("<li>Alfa</li>") < lap.index("<li>Zóna</li>")
+    lap = c.get("/figura-fuzet", params={"ids": f"{a},nincs,{b}",
+                                         "rendszer": "3-2-1"}).text
+    assert lap.index("<li>Zóna</li>") < lap.index("<li>Alfa</li>")
+    assert "2 figura · Védelem (3-2-1, 6 védő, 6,0 m)" in lap
+    assert c.get("/figura-fuzet", params={"rendszer": "9-9"}).status_code == 400
+    r = c.get("/figura-fuzet", params={"meccs": "fm", "vedo": "away"})
+    assert r.status_code == 200 and "Tanult védelem — B" in r.text
+
+
 def test_a_kulcs_poziciok_ideje():
     """A kulcs-pozíciók ideje (kulcs_t): az állókép után, a szakaszok
     végén — azon a kockán a támadó pontosan a kulcs-pozíción áll."""
