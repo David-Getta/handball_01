@@ -420,6 +420,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
                 ? "A figura-lap a böngészőben — nyomtatható (Ctrl+P, PDF-be "
                     "is): lépésenként ábra a futásokkal, a passzokkal és a "
                     "fallal."
+                : ut == "figura-video"
+                ? "A figura videója letöltődik (MP4) — elküldhető a "
+                    "csapatnak."
                 : "A figura a böngészőben, 3D-ben — VR-ben bejárható; a "
                     "csapat a /kovet várólapon is eléri (▶ Figura).")));
   }
@@ -1034,13 +1037,28 @@ class _DesignerScreenState extends State<DesignerScreen> {
                       label: const Text("Figura-lap ↗"),
                     ),
                   ),
-                  // Futónként a csapat linkje (VR: a saját futójában).
-                  TextButton.icon(
-                    onPressed: _csapatLinkek,
-                    icon: const Icon(Icons.groups_outlined, size: 16),
-                    label: const Text("Csapat-linkek (VR)",
-                        style: TextStyle(fontSize: 12)),
-                  ),
+                  // Futónként a csapat linkje (VR: a saját futójában) és
+                  // a figura videója (MP4 — a csapatnak elküldhető).
+                  Wrap(alignment: WrapAlignment.center, children: [
+                    TextButton.icon(
+                      onPressed: _csapatLinkek,
+                      icon: const Icon(Icons.groups_outlined, size: 16),
+                      label: const Text("Csapat-linkek (VR)",
+                          style: TextStyle(fontSize: 12)),
+                    ),
+                    Tooltip(
+                      message: "A figura felülnézeti videója (MP4) — "
+                          "letöltődik, elküldhető a csapatnak (a 3D link "
+                          "csak a klub-hálózaton él).",
+                      child: TextButton.icon(
+                        onPressed: () => _figura3dNyit(_attackers, _labda,
+                            _nev, ut: "figura-video"),
+                        icon: const Icon(Icons.movie_outlined, size: 16),
+                        label: const Text("Videó ↗",
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  ]),
                 ]),
         ],
       ),

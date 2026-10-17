@@ -530,6 +530,8 @@ HALOZATI_ENGEDETT = (
     ("POST", r"^/matches/[^/]+/felvetelek/[A-Za-z0-9]+/megnezte$"),
     # A tervező figurája 3D-ben (a /kovet várólapja linkeli).
     ("GET", r"^/figura3d$"),
+    # A figura videója (a várólapról a telefonra tölthető).
+    ("GET", r"^/figura-video$"),
 )
 
 
@@ -3232,6 +3234,44 @@ def create_app():
         return HTMLResponse(figura_fuzet_html(figurak, modell,
                                               vedo_nev=vedo_nev))
 
+    @app.get("/figura-video")
+    def figura_video_vegpont(u: str = "", cim: str = "", meccs: str = "",
+                             vedo: str = "away", vedok: int = 6,
+                             melyseg: float = 6.0, l: str = "",
+                             rendszer: str = "6-0"):
+        """A figura felülnézeti VIDEÓJA (MP4, letöltésre — elküldhető a
+        csapatnak; a 3D link csak a klub-hálózaton él): a 3D figura
+        kockáiból (valós tempó, a késő fal, a passzok), a támadó térfélre
+        vágva, mezszámokkal, a kulcs-pozíciók feliratával
+        (pipeline.figura_video). A bemenet a /figura3d-é."""
+        import tempfile
+        from pathlib import Path as _Path
+        from urllib.parse import quote
+
+        from fastapi import Response
+
+        from ..pipeline.figura_video import figura_video
+        from ..pipeline.play_simulation import figura_nev
+        utak, labda, modell, vedo_nev = _figura_bemenet(
+            u, l, meccs, vedo, vedok, melyseg, rendszer)
+        nev = figura_nev(cim) or "Figura"
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                ut = figura_video(utak, labda, modell, nev=nev,
+                                  vedo_nev=vedo_nev,
+                                  cel=_Path(td) / "figura.mp4")
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400,
+                                    detail="a figurában nincs támadó")
+            except RuntimeError as e:
+                raise HTTPException(status_code=500, detail=str(e))
+            adat = ut.read_bytes()
+        return Response(
+            content=adat, media_type="video/mp4",
+            headers={"Content-Disposition":
+                     "attachment; filename=\"figura.mp4\"; "
+                     f"filename*=UTF-8''{quote(nev + '.mp4', safe='')}"})
+
     @app.get("/figura-lap")
     def figura_lap(u: str = "", cim: str = "", meccs: str = "",
                    vedo: str = "away", vedok: int = 6, melyseg: float = 6.0,
@@ -4283,7 +4323,10 @@ def create_app():
                     + _html.escape(str(d.get("name") or "névtelen"))
                     + '</a> <span style="color:#93a0b4">· '
                     + f"{len(d['attackers'])} támadó"
-                    + (" · passzokkal" if passz else "") + "</span></li>")
+                    + (" · passzokkal" if passz else "") + "</span>"
+                    # (a telefonra: a figura videója, letöltésre)
+                    + ' · <a style="color:#93a0b4" href="/figura-video?'
+                    + _html.escape(kod) + '">⬇ videó</a></li>')
             except (OSError, ValueError, KeyError, TypeError, IndexError):
                 continue  # sérült figura-fájlt kihagyunk
         if tar_sorok:

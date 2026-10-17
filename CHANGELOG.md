@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.173 óta)
 
+- **Figura-videó (MP4)** (app + böngésző + motor): a figura felülnézeti
+  videója letöltésre — a 3D kockáiból (valós tempó, a késő fal, a
+  passzok), mezszámokkal, a kulcs-pozíciók feliratával. Elküldhető a
+  csapatnak (a 3D link csak a klub-hálózaton él). A tervezőben "Videó
+  ↗", a böngészős figura-oldalon "🎬 Videó ↗", a csapat várólapján a
+  mentett figurák mellett "⬇ videó" (telefonra is).
+
 - **Javítások a figura-körben** (kód-áttekintés): a tervező előnézete
   most újrarajzol a fal rendszerének, védőszámának és a labdásnak a
   váltásakor; a figura-lap a 3D falát rajzolja (a késő falat is, a

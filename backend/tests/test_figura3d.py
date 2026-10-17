@@ -696,6 +696,56 @@ def test_a_mentett_figura_nan_nelkul(tmp_path, monkeypatch):
         figura_link_kod([[(float("inf"), 1)]])
 
 
+def test_a_figura_videoja(tmp_path):
+    """A figura felülnézeti videója: olvasható MP4 (a 3D hosszával, 24
+    kocka/mp), a támadók kékek, a fal piros; az ékezet a feliratból le."""
+    import cv2
+    import numpy as np
+
+    from handball.pipeline.figura_video import (FIGURA_VIDEO_FPS,
+                                                ascii_felirat, figura_video)
+    m, _ = setplay_3d_match([[(22, 10), (27, 10)], [(24, 4), (26, 4)]],
+                            DefenseModel())
+    ut = figura_video([[(22, 10), (27, 10)], [(24, 4), (26, 4)]], [0, 1],
+                      DefenseModel(), nev="Kereszt", vedo_nev="V",
+                      cel=tmp_path / "f.mp4")
+    c = cv2.VideoCapture(str(ut))
+    n = int(c.get(cv2.CAP_PROP_FRAME_COUNT))
+    hossz = (len(m.frames) - 1) / m.meta.fps
+    assert abs(n - (hossz * FIGURA_VIDEO_FPS + 1)) <= 2
+    assert int(c.get(3)) % 2 == 0 and int(c.get(4)) % 2 == 0
+    ok, kep = c.read()
+    assert ok
+    kek = np.sum((kep[:, :, 0] > 150) & (kep[:, :, 2] < 100))
+    piros = np.sum((kep[:, :, 2] > 150) & (kep[:, :, 0] < 100))
+    assert kek > 200 and piros > 500
+    assert ascii_felirat("Védő — ő, ű →") == "Vedo - o, u ->"
+    with pytest.raises(ValueError):
+        figura_video([], [], DefenseModel(), nev="x", vedo_nev="V",
+                     cel=tmp_path / "g.mp4")
+
+
+def test_a_figura_video_vegpont(tmp_path, monkeypatch):
+    """GET /figura-video: MP4 letöltésre (ékezetes fájlnévvel); a hibás
+    figura 400; a várólap a mentett figura videóját is linkeli; a
+    klub-hálózatról is elérhető."""
+    app = _app(tmp_path, monkeypatch)
+    c = TestClient(app)
+    r = c.get("/figura-video", params={"u": U, "cim": "Beúszás",
+                                       "rendszer": "5-1"})
+    assert r.status_code == 200 and r.headers["content-type"] == "video/mp4"
+    assert "filename*=UTF-8''Be%C3%BAsz%C3%A1s.mp4" in r.headers["content-disposition"]
+    assert len(r.content) > 1000
+    assert c.get("/figura-video", params={"u": "1,2,3"}).status_code == 400
+    c.post("/playbook", json={"name": "Kereszt", "attackers": [
+        [[20, 10], [25, 10]]]})
+    assert ('href="/figura-video?u=20.0,10.0,25.0,10.0&amp;cim=Kereszt">⬇ videó'
+            in c.get("/kovet").text)
+    from handball.pipeline.view3d_html import view3d_html
+    m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
+    assert 'window.open("/figura-video?" + FIGURA_KOD, "_blank");' in view3d_html(m, figura=e)
+
+
 def test_a_kulcs_poziciok_ideje():
     """A kulcs-pozíciók ideje (kulcs_t): az állókép után, a szakaszok
     végén — azon a kockán a támadó pontosan a kulcs-pozíción áll."""

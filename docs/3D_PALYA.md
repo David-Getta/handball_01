@@ -531,6 +531,15 @@ következő pontig futás (kék) és a passz (sárga) nyila —, alatta a lépé
 leírása ("3. fut 3,2 m · passz: 2 → 3"), a lap tetején a kiértékelés. Az
 öltözőbe, a táblához. (/figura-lap — a bemenete a /figura3d-é.)
 
+**Figura-videó.** A tervező "Videó ↗" gombja (és a böngészős figura-oldal
+"🎬 Videó ↗"-ja) a figura felülnézeti videóját tölti le (MP4): a 3D
+figura kockáiból (valós tempó, a késő fal, a passzok repülése), a támadó
+térfélre vágva, mezszámokkal, a kulcs-pozíciók feliratával — elküldhető
+a csapatnak (a 3D link csak a klub-hálózaton él). A csapat várólapján a
+mentett figurák mellett "⬇ videó" (a klub-hálózatról telefonra is). A
+felirat ékezet nélküli (a videó betűkészlete), a fájlnév ékezetes.
+(/figura-video — a bemenete a /figura3d-é.)
+
 **Figurafüzet.** A tervező "Figura betöltése" ablakának "Figurafüzet ↗"
 gombja a mentett figurákat EGY nyomtatható dokumentumban nyitja (PDF-be
 is): elöl tartalomjegyzék, utána figuránként egy oldal (a figura-lap

@@ -3215,12 +3215,19 @@ if (FIGURA){
   lapGomb.title = "A figura nyomtatható lapja (PDF-be is): lépésenként ábra a futásokkal, a passzokkal és a fallal";
   lapGomb.onclick = () => window.open("/figura-lap?" + FIGURA_KOD, "_blank");
   document.getElementById("linkGomb").after(lapGomb);
+  // A figura videója (MP4 — a csapatnak elküldhető).
+  const videoLe = document.createElement("button");
+  videoLe.id = "figuraVideoGomb";
+  videoLe.textContent = "🎬 Videó ↗";
+  videoLe.title = "A figura felülnézeti videója (MP4, letöltésre) — elküldhető a csapatnak";
+  videoLe.onclick = () => window.open("/figura-video?" + FIGURA_KOD, "_blank");
+  lapGomb.after(videoLe);
   const lepesGomb = document.createElement("button");
   lepesGomb.id = "lepesGomb";
   lepesGomb.textContent = "⏯ Lépésenként";
   lepesGomb.title = "Megáll minden kulcs-pozíción (magyarázathoz) — ▶ / szóköz (VR: ravasz): tovább; N / P (VR: A / B): következő / előző kulcs-pozíció";
   lepesGomb.onclick = () => lepesAllit(!lepesMod);
-  lapGomb.after(lepesGomb);
+  videoLe.after(lepesGomb);
 }
 // ---- Lépésenként (figura): megállás minden kulcs-pozíción ------------
 // A motor adja a kulcs-pozíciók idejét (kulcs_t). Bekapcsolva a lejátszás

@@ -87,7 +87,7 @@ def test_az_engedett_utak_a_kovetohoz_kellenek():
     assert all(m == "GET" for m, r in HALOZATI_ENGEDETT
                if "shared3d" not in r and "megnezte" not in r)
     assert [m for m, r in HALOZATI_ENGEDETT if "megnezte" in r] == ["POST"]
-    assert len(HALOZATI_ENGEDETT) == 10
+    assert len(HALOZATI_ENGEDETT) == 11
 
 
 def test_a_halozati_csapat_link(tmp_path, monkeypatch):
