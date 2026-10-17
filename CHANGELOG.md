@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.172 óta)
 
+- **A fal tempója a 3D figurában** (böngésző/VR + motor): a modell-fal
+  eddig azonnal a labdára állt — passz közben a védők akár 70 km/h-val
+  "ugrottak". Most a védő legfeljebb 4,5 m/s-mal (16 km/h) lép: a gyors
+  passz előtt a fal nem ér át, passz közben méterekkel lemarad (a rés a
+  padlón látszik), a mozgás végére beáll; a kiértékelés a késő falat
+  látja.
+
 - **A figura a védő és a kapus szemével** (böngésző/VR + app + motor): a
   figura védőinek eddig nem volt mezszáma — a védekezést gyakorló
   játékos nem állhatott a falba. Most a kapus az 1-es, a védők a 2, 3, …:

@@ -565,6 +565,42 @@ def test_a_vedo_linkje_a_varolaprol(tmp_path, monkeypatch):
     assert r.status_code == 307 and r.headers["location"].endswith("&szem=v3")
 
 
+def test_a_fal_lepes_tempoja():
+    """A 3D figura védője kockánként legfeljebb FIGURA_VEDO_MAX_MPS / fps
+    métert lép (a hatos ívére kitolva pár mm-rel többet), a hatoson belülre
+    nem vág; a hosszú passz alatt a fal
+    lemarad a modell-helyétől, a végére (az állóképben) beáll."""
+    from handball.pipeline.play_simulation import FIGURA_VEDO_MAX_MPS
+
+    kp = [[(22, 3), (22, 3)], [(24, 17), (24, 17)]]
+    modell = DefenseModel(rendszer="5-1")
+    m, _ = setplay_3d_match(kp, modell, ball=[0, 1])
+    lepes_max = FIGURA_VEDO_MAX_MPS / m.meta.fps
+    lemaradt = False
+    for a, b in zip(m.frames, m.frames[1:]):
+        va = {p.track_id: p for p in a.players if p.team == Team.AWAY}
+        for p in b.players:
+            if p.team != Team.AWAY or p.role == "kapus":
+                continue
+            # (a hatos íve mentén a kitolás a lépést pár mm-rel megnövelheti)
+            assert math.hypot(p.x - va[p.track_id].x,
+                              p.y - va[p.track_id].y) <= lepes_max * 1.02
+            kapufa = min(11.5, max(8.5, p.y))
+            assert math.hypot(p.x - 40.0, p.y - kapufa) >= 6.0 - 1e-9
+        cel = modell.respond(b.ball, goal_x=40.0)
+        vedok = sorted((p.track_id, p.x, p.y) for p in b.players
+                       if p.team == Team.AWAY and p.role != "kapus")
+        if any(math.hypot(x - cx, y - cy) > 1.0
+               for (_, x, y), (cx, cy) in zip(vedok, cel)):
+            lemaradt = True
+    assert lemaradt
+    utolso = sorted((p.track_id, p.x, p.y) for p in m.frames[-1].players
+                    if p.team == Team.AWAY and p.role != "kapus")
+    for (_, x, y), (cx, cy) in zip(utolso, modell.respond(
+            m.frames[-1].ball, goal_x=40.0)):
+        assert math.isclose(x, cx, abs_tol=1e-6) and math.isclose(y, cy, abs_tol=1e-6)
+
+
 def test_a_kulcs_poziciok_ideje():
     """A kulcs-pozíciók ideje (kulcs_t): az állókép után, a szakaszok
     végén — azon a kockán a támadó pontosan a kulcs-pozíción áll."""

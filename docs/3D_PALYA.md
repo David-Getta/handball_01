@@ -503,6 +503,13 @@ kiértékelés: a mozgás hossza és a legjobb lövőhelyzet (ki, hány %, mikor
 A támadók útjai kék nyílként a padlón, a passzok sárgán (a Rajz-réteg
 nyilai: a "Törlés" leveszi, a link viszi).
 
+**A fal tempója.** A 3D figura védője legfeljebb 4,5 m/s-mal lép a
+modell-helye felé (oldalazó csúsztatás), a passz 12 m/s-mal száll — a
+gyors labdajáratás előtt a fal nem ér át: passz közben méterekkel
+lemarad, a rés a padlón ("Fal-rések") látszik, a mozgás végére a fal
+beáll; a kiértékelés a késő falat látja. (A tervező app-beli vázlata a
+modell-falat mutatja.)
+
 **A fal rendszere.** A tervező kézi fala választható rendszerben áll
 ("Rendszer": 6-0, 5-1, 4-2, 3-2-1, 3-3): az előretolt védők a 9 m körül
 (a 3-2-1 csúcsa 11 m-en), a labdát követve, a többiek a hatos előtti

@@ -267,6 +267,27 @@ FIGURA_KOZOS_MAX = 2000
 FIGURA_3D_KOVET_S = 3 * 3600
 # A várólap ennyi mentett figurát kínál (a legutóbb mentetteket).
 FIGURA_TAR_KOVET = 8
+# A 3D figura védője legfeljebb ennyi m/s-mal lép a modell-helye felé
+# (oldalazó csúsztatás — a passz 12 m/s-a ennél gyorsabb: a gyors
+# labdajáratás rést nyit, mint a valóságban). A mozgás végére, az
+# állóképben a fal beáll.
+FIGURA_VEDO_MAX_MPS = 4.5
+
+
+def _hatoson_kivulre(x: float, y: float, goal_x: float) -> tuple[float, float]:
+    """A pont a 6 m-es kapuelőtéren KÍVÜLRE tolva (a közelebbi kapufától
+    — a kapufák közt a gólvonaltól — sugárirányban); kívül maradó pont
+    változatlan."""
+    kozep = COURT_WIDTH_M / 2.0
+    fa_y = min(kozep + _GOAL_HALF_W, max(kozep - _GOAL_HALF_W, y))
+    dx, dy = x - goal_x, y - fa_y
+    d = math.hypot(dx, dy)
+    if d >= GOAL_AREA_RADIUS_M or d < 1e-9:
+        return x, y
+    k = GOAL_AREA_RADIUS_M / d
+    return goal_x + dx * k, fa_y + dy * k
+
+
 # A figura kapusának mezszáma; a védők ezután sorban (a fal balról
 # jobbra, utána az előretoltak) — a szem=v1 a kapus, a szem=v2 … a védők
 # szemével nyit.
@@ -305,8 +326,9 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
     változik, ott PASSZ: a labda a következő kulcs-pozícióra érkezik az
     átvevőhöz, FIGURA_3D_PASSZ_MPS-mal repülve. A védők a `defense`
     modell szerint, a labdára reagálnak (lásd
-    `simulate_setplay`), és a kaput kapus védi (a labda felé lép, a
-    vonalon). A mozgás előtt és után FIGURA_3D_ALLAS_S állókép.
+    `simulate_setplay`) — legfeljebb FIGURA_VEDO_MAX_MPS-mal lépve (a
+    gyors passz előtt a fal nem ér át) —, és a kaput kapus védi (a labda
+    felé lép, a vonalon). A mozgás előtt és után FIGURA_3D_ALLAS_S állókép.
 
     Edzőileg: a megrajzolt figura bejárható — a headsetben a játékos a
     saját útját a saját szemével látja, a tempóval és a fal reakciójával.
@@ -405,6 +427,25 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
                                    ball_carrier=[0] * len(tamadok[0])),
                            defense, config=config, fps=fps,
                            ball_positions=labda_hely)
+    # A fal lépés-tempója: a védő kockánként legfeljebb
+    # FIGURA_VEDO_MAX_MPS / fps métert tesz a modell-helye felé (a hatoson
+    # belülre nem vág) — a kiértékelés már a késő falat látja.
+    vedo_kapu_x = config.own_goal_x(Team.AWAY)
+    lepes_max = FIGURA_VEDO_MAX_MPS / fps
+    elozo: dict[int, tuple[float, float]] = {}
+    for f in sim.frames:
+        for p in f.players:
+            if p.team != Team.AWAY:
+                continue
+            h = elozo.get(p.track_id)
+            if h is not None:
+                dx, dy = p.x - h[0], p.y - h[1]
+                d = math.hypot(dx, dy)
+                if d > lepes_max:
+                    p.x, p.y = _hatoson_kivulre(h[0] + dx * lepes_max / d,
+                                                h[1] + dy * lepes_max / d,
+                                                vedo_kapu_x)
+            elozo[p.track_id] = (p.x, p.y)
     ertekeles = evaluate_setplay(sim, config=config)
     # A kapus: a vonal előtt, a labda felé lépve (a kapufák közt). A
     # védők mezszámot kapnak (a kapus után sorban) — a szemükkel is
