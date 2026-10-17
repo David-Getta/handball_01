@@ -440,6 +440,32 @@ class _DesignerScreenState extends State<DesignerScreen> {
     };
   }
 
+  /// Egy mentett figura (betöltés nélkül) a böngészőben: `ut` a
+  /// figura-oldal ("figura3d"), a lap ("figura-lap") vagy a videó
+  /// ("figura-video") — a passzaival, a mostani fallal.
+  Future<void> _mentettNyit(String id, String ut) async {
+    try {
+      final play = await _api.fetchPlay(id);
+      final utak = [
+        for (final a in play["attackers"] as List)
+          [
+            for (final pt in a as List)
+              Offset(((pt as List)[0] as num).toDouble(),
+                  (pt[1] as num).toDouble())
+          ]
+      ];
+      final labda = [
+        for (final v in (play["labda"] as List?) ?? const [])
+          (v as num).toInt()
+      ];
+      await _figura3dNyit(utak, labda, "${play["name"] ?? ""}", ut: ut);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("A figura nem nyílt meg: ${humanError(e)}")));
+    }
+  }
+
   /// A csapat figurafüzete (/figura-fuzet): a mentett figurák egy
   /// nyomtatható dokumentumban, figuránként egy oldal — a mostani fallal.
   Future<void> _figuraFuzetNyit() async {
@@ -619,40 +645,28 @@ class _DesignerScreenState extends State<DesignerScreen> {
                               style: AppText.label.copyWith(fontSize: 11)),
                           onTap: () => Navigator.pop(ctx, p["id"] as String),
                           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                            // Egy kattintással 3D-ben (a passzaival) —
-                            // betöltés nélkül.
+                            // Egy kattintással 3D-ben (a passzaival), a
+                            // lapja és a videója — betöltés nélkül.
                             IconButton(
                               tooltip: "3D / VR — a böngészőben",
                               icon: const Icon(Icons.view_in_ar_outlined,
                                   size: 18, color: AppColors.accent),
-                              onPressed: () async {
-                                try {
-                                  final play = await _api
-                                      .fetchPlay(p["id"] as String);
-                                  final utak = [
-                                    for (final a in play["attackers"] as List)
-                                      [
-                                        for (final pt in a as List)
-                                          Offset(
-                                              ((pt as List)[0] as num).toDouble(),
-                                              (pt[1] as num).toDouble())
-                                      ]
-                                  ];
-                                  final labda = [
-                                    for (final v
-                                        in (play["labda"] as List?) ?? const [])
-                                      (v as num).toInt()
-                                  ];
-                                  await _figura3dNyit(
-                                      utak, labda, "${play["name"] ?? ""}");
-                                } catch (e) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                          content: Text(
-                                              "A figura nem nyílt meg: ${humanError(e)}")));
-                                }
-                              },
+                              onPressed: () =>
+                                  _mentettNyit(p["id"] as String, "figura3d"),
+                            ),
+                            IconButton(
+                              tooltip: "Figura-lap (nyomtatható)",
+                              icon: const Icon(Icons.print_outlined,
+                                  size: 18, color: AppColors.textSecondary),
+                              onPressed: () =>
+                                  _mentettNyit(p["id"] as String, "figura-lap"),
+                            ),
+                            IconButton(
+                              tooltip: "Videó (MP4) — a csapatnak",
+                              icon: const Icon(Icons.movie_outlined,
+                                  size: 18, color: AppColors.textSecondary),
+                              onPressed: () => _mentettNyit(
+                                  p["id"] as String, "figura-video"),
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline,

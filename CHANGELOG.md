@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.173 óta)
 
+- **A mentett figura lapja és videója a betöltő listából** (app): a
+  "Figura betöltése" ablakban soronként eddig csak a "3D / VR" volt —
+  most a 🖨 figura-lap és a 🎬 videó is, betöltés nélkül.
+
 - **Magyarázós figura-videó** (böngésző + motor): a `lepes=1` videó
   minden kulcs-pozíción 1,2 mp-ig megáll (a felirattal) — mint a 3D
   lépésenkénti módja; a játékos telefonon is látja, hol áll mindenki a
