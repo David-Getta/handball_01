@@ -28,6 +28,8 @@ FIGURA_VIDEO_PX_M = 36
 FIGURA_VIDEO_HATRA_M = 3.0
 # A kulcs-pozíció felirata ennyi mp-ig látszik a kulcs-pozíció körül.
 FIGURA_VIDEO_FELIRAT_S = 0.6
+# A magyarázós (lepes=1) videó ennyi mp-ig áll meg minden kulcs-pozíción.
+FIGURA_VIDEO_LEPES_S = 1.2
 # Biztonsági korlát: ennél hosszabb videót nem írunk (a figura 3–12 mp a
 # két állóképpel és a fal beállásával együtt is bőven belefér).
 FIGURA_VIDEO_MAX_S = 30.0
@@ -63,12 +65,14 @@ def _pont_felirat(i: int, k: int) -> str:
 
 
 def figura_video(utak: list, labda: list, defense, *, nev: str,
-                 vedo_nev: str, cel: Path) -> Path:
+                 vedo_nev: str, cel: Path, lepes: bool = False) -> Path:
     """A figura felülnézeti videója a `cel` fájlba (MP4, mp4v).
 
     `utak`, `labda`, `defense`: mint a figura-lapnál (a 3D-vel azonos
-    szimuláció). Visszaadja a `cel`-t; ValueError, ha nincs érvényes
-    támadó, RuntimeError, ha a videó-írás nem sikerült."""
+    szimuláció). `lepes`: magyarázós videó — minden kulcs-pozíción
+    FIGURA_VIDEO_LEPES_S-ig megáll (a felirattal). Visszaadja a `cel`-t;
+    ValueError, ha nincs érvényes támadó, RuntimeError, ha a videó-írás
+    nem sikerült."""
     import cv2
     import numpy as np
 
@@ -97,12 +101,12 @@ def figura_video(utak: list, labda: list, defense, *, nev: str,
     for sugar, szaggatott in ((6.0, False), (9.0, True)):
         r = int(round(sugar * px))
         for fa_y, a0, a1 in ((kozep - 1.5, 180, 270), (kozep + 1.5, 90, 180)):
-            lepes = 8 if szaggatott else (a1 - a0)
-            for a in range(a0, a1, lepes):
-                if szaggatott and ((a - a0) // lepes) % 2:
+            ivlepes = 8 if szaggatott else (a1 - a0)
+            for a in range(a0, a1, ivlepes):
+                if szaggatott and ((a - a0) // ivlepes) % 2:
                     continue
                 cv2.ellipse(alap, p(COURT_LENGTH_M, fa_y), (r, r), 0, a,
-                            min(a1, a + lepes), _VONAL, 2)
+                            min(a1, a + ivlepes), _VONAL, 2)
         x = COURT_LENGTH_M - sugar
         if szaggatott:
             for y in (kozep - 1.5, kozep):
@@ -142,6 +146,17 @@ def figura_video(utak: list, labda: list, defense, *, nev: str,
     hossz_s = min(FIGURA_VIDEO_MAX_S, (len(kockak) - 1) / fps_sim)
     n = max(1, int(round(hossz_s * FIGURA_VIDEO_FPS)) + 1)
     kulcs = list(e.get("kulcs_t") or [])
+    # A kockák ideje; magyarázós módban a kulcs-pozíciókon megállunk (a
+    # kulcs-pozíció ideje ismétlődik).
+    idok = []
+    allj = int(round(FIGURA_VIDEO_LEPES_S * FIGURA_VIDEO_FPS)) if lepes else 0
+    for k in range(n):
+        t = k / FIGURA_VIDEO_FPS
+        t0 = (k - 1) / FIGURA_VIDEO_FPS
+        for kt in kulcs:
+            if allj and t0 < kt <= t:
+                idok.extend([kt] * allj)
+        idok.append(t)
     sugar = max(6, int(round(0.42 * px)))
 
     cel = Path(cel)
@@ -149,8 +164,7 @@ def figura_video(utak: list, labda: list, defense, *, nev: str,
     iro = cv2.VideoWriter(str(cel), cv2.VideoWriter_fourcc(*"mp4v"),
                           FIGURA_VIDEO_FPS, (w, h))
     try:
-        for k in range(n):
-            t = k / FIGURA_VIDEO_FPS
+        for t in idok:
             s = min(len(kockak) - 1.0, t * fps_sim)
             i = int(s)
             f = s - i

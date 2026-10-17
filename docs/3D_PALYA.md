@@ -538,6 +538,8 @@ térfélre vágva, mezszámokkal, a kulcs-pozíciók feliratával — elküldhet
 a csapatnak (a 3D link csak a klub-hálózaton él). A csapat várólapján a
 mentett figurák mellett "⬇ videó" (a klub-hálózatról telefonra is). A
 felirat ékezet nélküli (a videó betűkészlete), a fájlnév ékezetes.
+Lépésenkénti módban a figura-oldal gombja a MAGYARÁZÓS videót kéri
+(`lepes=1`): minden kulcs-pozíción 1,2 mp-ig megáll, a felirattal.
 (/figura-video — a bemenete a /figura3d-é.)
 
 **Figurafüzet.** A tervező "Figura betöltése" ablakának "Figurafüzet ↗"

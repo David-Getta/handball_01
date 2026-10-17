@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.173 óta)
 
+- **Magyarázós figura-videó** (böngésző + motor): a `lepes=1` videó
+  minden kulcs-pozíción 1,2 mp-ig megáll (a felirattal) — mint a 3D
+  lépésenkénti módja; a játékos telefonon is látja, hol áll mindenki a
+  kulcs-pozíción. A figura-oldal "🎬 Videó ↗"-ja lépésenkénti módban ezt
+  kéri.
+
 - **Az ellenfél visszatérő figurája a tervezőben** (felderítés + app +
   motor): a "VISSZATÉRŐ FIGURÁIK" kártya eddig csak az alakot és a
   számokat mutatta. Most soronként "✎ Figurává": a figura egy valódi

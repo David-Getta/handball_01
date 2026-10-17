@@ -3220,7 +3220,9 @@ if (FIGURA){
   videoLe.id = "figuraVideoGomb";
   videoLe.textContent = "🎬 Videó ↗";
   videoLe.title = "A figura felülnézeti videója (MP4, letöltésre) — elküldhető a csapatnak";
-  videoLe.onclick = () => window.open("/figura-video?" + FIGURA_KOD, "_blank");
+  // (lépésenkénti módban a magyarázós videó: minden kulcs-pozíción megáll)
+  videoLe.onclick = () => window.open("/figura-video?" + FIGURA_KOD
+    + (lepesMod ? "&lepes=1" : ""), "_blank");
   lapGomb.after(videoLe);
   const lepesGomb = document.createElement("button");
   lepesGomb.id = "lepesGomb";

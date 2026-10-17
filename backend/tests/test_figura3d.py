@@ -723,6 +723,14 @@ def test_a_figura_videoja(tmp_path):
     with pytest.raises(ValueError):
         figura_video([], [], DefenseModel(), nev="x", vedo_nev="V",
                      cel=tmp_path / "g.mp4")
+    # A magyarázós videó kulcs-pozíciónként FIGURA_VIDEO_LEPES_S-ig áll.
+    from handball.pipeline.figura_video import FIGURA_VIDEO_LEPES_S
+    ut2 = figura_video([[(22, 10), (27, 10)], [(24, 4), (26, 4)]], [0, 1],
+                       DefenseModel(), nev="Kereszt", vedo_nev="V",
+                       cel=tmp_path / "l.mp4", lepes=True)
+    n2 = int(cv2.VideoCapture(str(ut2)).get(cv2.CAP_PROP_FRAME_COUNT))
+    allj = int(round(FIGURA_VIDEO_LEPES_S * FIGURA_VIDEO_FPS))
+    assert abs(n2 - (n + 2 * allj)) <= 2   # két kulcs-pozíció
 
 
 def test_a_figura_video_vegpont(tmp_path, monkeypatch):
@@ -743,7 +751,9 @@ def test_a_figura_video_vegpont(tmp_path, monkeypatch):
             in c.get("/kovet").text)
     from handball.pipeline.view3d_html import view3d_html
     m, e = setplay_3d_match([[(20, 10), (27, 10)]], DefenseModel())
-    assert 'window.open("/figura-video?" + FIGURA_KOD, "_blank");' in view3d_html(m, figura=e)
+    assert '+ (lepesMod ? "&lepes=1" : ""), "_blank");' in view3d_html(m, figura=e)
+    r = c.get("/figura-video", params={"u": U, "lepes": 1})
+    assert r.status_code == 200 and r.headers["content-type"] == "video/mp4"
 
 
 def test_a_kulcs_poziciok_ideje():

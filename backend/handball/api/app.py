@@ -3238,12 +3238,13 @@ def create_app():
     def figura_video_vegpont(u: str = "", cim: str = "", meccs: str = "",
                              vedo: str = "away", vedok: int = 6,
                              melyseg: float = 6.0, l: str = "",
-                             rendszer: str = "6-0"):
+                             rendszer: str = "6-0", lepes: int = 0):
         """A figura felülnézeti VIDEÓJA (MP4, letöltésre — elküldhető a
         csapatnak; a 3D link csak a klub-hálózaton él): a 3D figura
         kockáiból (valós tempó, a késő fal, a passzok), a támadó térfélre
         vágva, mezszámokkal, a kulcs-pozíciók feliratával
-        (pipeline.figura_video). A bemenet a /figura3d-é."""
+        (pipeline.figura_video). A bemenet a /figura3d-é; `lepes=1`: a
+        magyarázós videó (minden kulcs-pozíción megáll)."""
         import tempfile
         from pathlib import Path as _Path
         from urllib.parse import quote
@@ -3259,7 +3260,8 @@ def create_app():
             try:
                 ut = figura_video(utak, labda, modell, nev=nev,
                                   vedo_nev=vedo_nev,
-                                  cel=_Path(td) / "figura.mp4")
+                                  cel=_Path(td) / "figura.mp4",
+                                  lepes=bool(lepes))
             except (ValueError, TypeError):
                 raise HTTPException(status_code=400,
                                     detail="a figurában nincs támadó")
