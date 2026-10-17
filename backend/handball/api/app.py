@@ -4205,6 +4205,39 @@ def create_app():
                        '<span style="color:#93a0b4">'
                        + _html.escape(_utolso_figura["vedo"])
                        + " · járd be a saját utadat</span></p>")
+        # A figura-könyvtár (a tervezőben mentett figurák): a legutóbb
+        # mentettek — a játékos bármelyiket bejárhatja 3D-ben / VR-ben.
+        tar_ = ""
+        from ..pipeline.play_simulation import (FIGURA_TAR_KOVET,
+                                                figura_link_kod)
+        try:
+            fajlok = sorted(_playbook_dir.glob("*.json"),
+                            key=lambda f: (-f.stat().st_mtime, f.name))
+        except OSError:
+            fajlok = []
+        tar_sorok = []
+        for f in fajlok:
+            if len(tar_sorok) >= FIGURA_TAR_KOVET:
+                break
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                kod = figura_link_kod(d["attackers"], d.get("labda"),
+                                      d.get("name"))
+                passz = len({v for v in (d.get("labda") or [0])}) > 1
+                tar_sorok.append(
+                    '<li style="margin:.5em 0"><a style="color:#ffc83d;'
+                    'font-size:1.2em" href="/figura3d?'
+                    + _html.escape(kod) + '">▶ '
+                    + _html.escape(str(d.get("name") or "névtelen"))
+                    + '</a> <span style="color:#93a0b4">· '
+                    + f"{len(d['attackers'])} támadó"
+                    + (" · passzokkal" if passz else "") + "</span></li>")
+            except (OSError, ValueError, KeyError, TypeError, IndexError):
+                continue  # sérült figura-fájlt kihagyunk
+        if tar_sorok:
+            tar_ = ('<h2 style="margin-top:2.5em">Mentett figurák — járd be '
+                    'bármelyiket</h2><ul style="list-style:none;padding:0">'
+                    + "".join(tar_sorok) + "</ul>")
         kulcs_ = _c3.quiz_name_key(nev_) if nev_ else None
         sorok = []
         for fej, meta, p_ in _legutobbi_felvetelek()[:_c3.SHARED3D_WAIT_RECS]:
@@ -4270,7 +4303,7 @@ def create_app():
                      'padding-top:12vh"><h1>👥 Várunk az edzőre…</h1>'
                      '<p>Amint az edző a 3D pályán a "📡 Vezetem" gombot '
                      'megnyomja, ez a lap magától továbblép.</p>'
-                     + sajat + figura_ + lista + '</body></html>'),
+                     + sajat + figura_ + tar_ + lista + '</body></html>'),
             headers={"Cache-Control": "no-store"})
 
     @app.get("/matches/{match_id}/calib-overlay")

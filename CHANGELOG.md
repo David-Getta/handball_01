@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.172 óta)
 
+- **Mentett figurák a várólapon** (böngésző/VR + motor): a csapat
+  `/kovet` lapja eddig csak az edző legutóbb nyitott figuráját linkelte
+  — most a figura-könyvtárat is: a legutóbb mentett nyolc figura
+  ("Mentett figurák — járd be bármelyiket"), egy kattintással 3D-ben /
+  VR-ben. A játékos várakozás közben maga is bejárhatja a csapat
+  figuráit.
+
 - **Lépésenként a figurában** (böngésző/VR + motor): a figura-oldal "⏯
   Lépésenként" gombja (vagy a `lepes=1` link) minden kulcs-pozíción
   megállítja a lejátszást — az edző magyaráz (hol a fal, kinél a labda,

@@ -123,6 +123,50 @@ def test_a_varolap_az_edzo_figurajat_linkeli(tmp_path, monkeypatch):
     assert "▶ Figura" not in tavoli.get("/kovet").text
 
 
+def test_a_varolap_a_mentett_figurakat_kinalja(tmp_path, monkeypatch):
+    """A /kovet a legutóbb mentett figurákat linkeli (legfeljebb
+    FIGURA_TAR_KOVET, a legújabb elöl): a link a /figura3d-t nyitja az
+    utakkal, a passzokkal és a névvel; a sérült fájl kimarad."""
+    import os
+
+    from handball.pipeline import play_simulation as ps
+    app = _app(tmp_path, monkeypatch)
+    c = TestClient(app)
+    assert "Mentett figurák" not in c.get("/kovet").text
+    regi = c.post("/playbook", json={"name": "Régi <b>", "attackers": [
+        [[20, 10], [25, 10]]]}).json()["id"]
+    uj = c.post("/playbook", json={"name": "Kereszt", "labda": [0, 1],
+                                   "attackers": [[[20, 10], [25, 10]],
+                                                 [[24, 4], [26.25, 4]]]}).json()["id"]
+    konyvtar = tmp_path / "data" / "playbook"
+    os.utime(konyvtar / f"{regi}.json", (1000, 1000))
+    os.utime(konyvtar / f"{uj}.json", (2000, 2000))
+    (konyvtar / "rossz.json").write_text("{", encoding="utf-8")
+    lap = c.get("/kovet").text
+    assert "Mentett figurák — járd be bármelyiket" in lap
+    assert lap.index("▶ Kereszt") < lap.index("▶ Régi &lt;b&gt;")
+    assert ('href="/figura3d?u=20.0,10.0,25.0,10.0;24.0,4.0,26.2,4.0'
+            '&amp;l=0,1&amp;cim=Kereszt"') in lap
+    assert "2 támadó · passzokkal" in lap and "1 támadó</span>" in lap
+    # A link valóban a figurát nyitja.
+    r = c.get("/figura3d?u=20.0,10.0,25.0,10.0;24.0,4.0,26.2,4.0&l=0,1&cim=Kereszt")
+    assert r.status_code == 200 and '"labda":[0,1]' in r.text
+    # Legfeljebb FIGURA_TAR_KOVET (a legújabb marad).
+    monkeypatch.setattr(ps, "FIGURA_TAR_KOVET", 1)
+    lap = c.get("/kovet").text
+    assert "▶ Kereszt" in lap and "Régi" not in lap
+
+
+def test_a_figura_link_kodja():
+    from handball.pipeline.play_simulation import figura_link_kod
+    assert figura_link_kod([[(20, 10), (25.04, 10)]]) == "u=20.0,10.0,25.0,10.0"
+    assert (figura_link_kod([[(1, 2)], [(3, 4)]], [0, 1], " Kereszt bal ")
+            == "u=1.0,2.0;3.0,4.0&l=0,1&cim=Kereszt+bal")
+    assert figura_link_kod([[(1, 2)]], [0, 0], "") == "u=1.0,2.0"
+    with pytest.raises(ValueError):
+        figura_link_kod([[("x", 2)]])
+
+
 def test_az_oldal_figura_modja():
     """Figura-módban a meccshez kötött funkciók ki (match_id üres), a
     meccs-sorok rejtve, a lejátszás magától indul és ismétel; a

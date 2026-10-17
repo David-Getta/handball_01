@@ -551,7 +551,10 @@ videó, a meccs-jelenetek) a figurában nincsenek.
 
 A csapat a várólapon éri el: amit az edző a saját gépéről nyitott meg, azt
 a `/kovet` lap három órán át "▶ Figura: …" sorként linkeli — a headseten a
-hosszú cím nem gépelhető.
+hosszú cím nem gépelhető. Alatta a figura-könyvtár: a legutóbb mentett
+nyolc figura ("Mentett figurák — járd be bármelyiket"), mindegyik egy
+kattintással 3D-ben / VR-ben (a kézi alap-fal ellen, a passzokkal) — a
+játékos a várakozás alatt maga is bejárhatja a csapat figuráit.
 
 **A saját futójában.** A `szem=h3` link-paraméter a lapot a hazai 3-as
 SZEMÉVEL nyitja (VR-ben is — ott nincs dupla kattintás); a csapat

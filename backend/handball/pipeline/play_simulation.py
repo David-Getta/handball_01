@@ -213,6 +213,27 @@ FIGURA_KOZOS_MAX = 2000
 # A csapat várólapja (/kovet) az edző legutóbbi 3D-figuráját ennyi mp-ig
 # linkeli (egy edzés hossza — utána már nem "a mostani").
 FIGURA_3D_KOVET_S = 3 * 3600
+# A várólap ennyi mentett figurát kínál (a legutóbb mentetteket).
+FIGURA_TAR_KOVET = 8
+
+
+def figura_link_kod(attackers, labda=None, nev=None) -> str:
+    """Egy (mentett) figura a /figura3d link-paramétereire — mint a
+    tervező "3D / VR ↗" gombja: `u` (támadónként "x,y,x,y,…" méterben,
+    tizedre; a támadók ";"-vel), `l` (a labdás-sor, ha nem végig az 1.
+    támadónál van), `cim` (a név, megtisztítva). A védelem a /figura3d
+    kézi alap-fala (a mentett figura nem viszi). ValueError a hibás
+    koordinátánál."""
+    from urllib.parse import urlencode
+    q = {"u": ";".join(",".join(f"{float(x):.1f},{float(y):.1f}"
+                                for x, y in ut) for ut in attackers)}
+    sor = [int(v) for v in (labda or [])]
+    if any(v != 0 for v in sor):
+        q["l"] = ",".join(str(v) for v in sor)
+    cim = figura_nev(nev)
+    if cim:
+        q["cim"] = cim
+    return urlencode(q, safe=",;")
 
 
 def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
