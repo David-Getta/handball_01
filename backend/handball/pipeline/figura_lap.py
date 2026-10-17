@@ -17,9 +17,8 @@ from __future__ import annotations
 import math
 from html import escape
 
-from ..models.tracking import Ball, Team
-from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
-from .tactics import TacticsConfig
+from ..models.tracking import Team
+from .calibration import COURT_LENGTH_M
 
 # Egy ábra szélessége a lapon (px — A4-en kettő fér egy sorba).
 FIGURA_LAP_ABRA_PX = 340
@@ -92,7 +91,8 @@ _STILUS = (
     "@media print{body{margin:10mm}}")
 _JELMAGYARAZAT = (
     '<div class="jel">Kék nyíl: futás a következő pontig · sárga: passz · '
-    "piros: a fal a védelem modellje szerint (a labdára reagál) · "
+    "piros: a fal, mint a 3D-ben (a labdára reagál, a gyors passz után "
+    "késhet; a szám a szem=v… linké) · "
     "Sport Machine — Figura-tervező</div>")
 # A figurafüzet legfeljebb ennyi figurát nyomtat (figuránként egy oldal).
 FIGURA_FUZET_MAX = 40
@@ -164,8 +164,8 @@ def _figura_resz(utak: list, labda: list, defense, *, nev: str,
     a figura-lap és a figurafüzet közös része."""
     from .play_simulation import setplay_3d_match
 
-    _sim, e = setplay_3d_match(utak, defense, ball=labda, name=nev,
-                               defense_name=vedo_nev)
+    sim, e = setplay_3d_match(utak, defense, ball=labda, name=nev,
+                              defense_name=vedo_nev)
     ut = e["utak"]
     lab = e["labda"]
     k = max(len(u) for u in ut)
@@ -173,22 +173,20 @@ def _figura_resz(utak: list, labda: list, defense, *, nev: str,
     # felezőnél nem hátrább — a figura a +x kapura támad).
     x0 = min(COURT_LENGTH_M / 2.0,
              max(0.0, min(x for u in ut for x, _ in u) - FIGURA_LAP_HATRA_M))
-    cfg = TacticsConfig()
-    kapu_x = cfg.own_goal_x(Team.AWAY)
-    elore = -1.0 if kapu_x == COURT_LENGTH_M else 1.0
     lepesek = []
     for i in range(k):
         helyek = [_hely(u, i, k) for u in ut]
         labdas = lab[min(i, len(lab) - 1)]
         bx, by = helyek[labdas]
-        fal = defense.respond(Ball(x=bx, y=by, confidence=1.0), kapu_x)
+        # A fal és a kapus a 3D kockájából, a kulcs-pozíció idején (a
+        # késő fal is — mint a 3D-ben és a kiértékelésben), mezszámmal.
+        kocka = sim.frames[min(len(sim.frames) - 1,
+                               int(round(e["kulcs_t"][i] * sim.meta.fps)))]
         jatekosok = ([{"x": x, "y": y, "team": "home", "jersey": n + 1}
                       for n, (x, y) in enumerate(helyek)]
-                     + [{"x": x, "y": y, "team": "away", "jersey": None}
-                        for x, y in fal]
-                     + [{"x": kapu_x + elore * 0.6,
-                         "y": COURT_WIDTH_M / 2.0 + max(-1.2, min(1.2, 0.2 * (by - COURT_WIDTH_M / 2.0))),
-                         "team": "away", "jersey": None}])
+                     + [{"x": p.x, "y": p.y, "team": "away",
+                         "jersey": p.jersey_number}
+                        for p in kocka.players if p.team == Team.AWAY])
         nyilak, sorok = [], []
         if i < k - 1:
             kovetkezo = [_hely(u, i + 1, k) for u in ut]

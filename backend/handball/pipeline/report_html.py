@@ -372,10 +372,15 @@ def _playbook_rows(pm: dict) -> str:
     if not matched:
         return (f'<p class="empty">Egyik támadásuk sem egyezik mentett figurával '
                 f'({total} támadás).</p>')
+    from .setplays import figura_kimenet_szoveg
+    kimenetek = pm.get("outcomes") or {}
     rows = "".join(
         f'<div class="bar-row"><span class="bar-label" style="width:220px">'
         f'{escape(str(name))}</span><span class="bar-pct" style="width:auto">'
-        f'{int(n)}×</span></div>'
+        f'{int(n)}×'
+        + (f" — {escape(figura_kimenet_szoveg(kimenetek.get(name)))}"
+           if figura_kimenet_szoveg(kimenetek.get(name)) else "")
+        + '</span></div>'
         for name, n in matched.items())
     return rows + (f'<p class="note">{total} támadásból {unmatched} ismeretlen '
                    f'mintájú.</p>')

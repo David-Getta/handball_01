@@ -646,6 +646,56 @@ def test_a_figurafuzet_vegpont(tmp_path, monkeypatch):
     assert r.status_code == 200 and "Tanult védelem — B" in r.text
 
 
+def test_a_kesz_fal_a_vegen_beall():
+    """Széles keresztpassz a végén (3-2-1, a csúcs 14 m-t lép): az állókép
+    addig nyúlik, amíg a fal be nem áll — az utolsó kocka a modell-hely."""
+    modell = DefenseModel(rendszer="3-2-1")
+    m, _ = setplay_3d_match([[(22, 1), (22, 1)], [(24, 19), (24, 19)]],
+                            modell, ball=[0, 1])
+    utolso = sorted((p.track_id, p.x, p.y) for p in m.frames[-1].players
+                    if p.team == Team.AWAY and p.role != "kapus")
+    for (_, x, y), (cx, cy) in zip(utolso, modell.respond(
+            m.frames[-1].ball, goal_x=40.0)):
+        assert math.isclose(x, cx, abs_tol=1e-6) and math.isclose(y, cy, abs_tol=1e-6)
+    # minden kockán kapus, és a mezszámok megvannak
+    assert all(sum(1 for p in f.players if p.role == "kapus") == 1
+               for f in m.frames)
+
+
+def test_a_figura_lap_a_3d_falat_rajzolja():
+    """A figura-lap fala a 3D kockájából jön (a késő fal is), a védők a
+    mezszámukkal (a szem=v… linkekhez)."""
+    from handball.pipeline.figura_lap import figura_lap_html
+
+    lap = figura_lap_html([[(22, 1), (22, 1)], [(24, 19), (24, 19)]], [0, 1],
+                          DefenseModel(rendszer="5-1"), nev="Kereszt",
+                          vedo_nev="V")
+    assert lap.count("<svg") == 2
+    for mez in range(1, 8):
+        assert f">{mez}</text>" in lap
+
+
+def test_a_mentett_figura_nan_nelkul(tmp_path, monkeypatch):
+    """A NaN / végtelen koordináta mentése 400; a link-kód a nem véges
+    pontot kihagyja, a határokon belül marad."""
+    from handball.pipeline.play_simulation import (FIGURA_3D_MAX_JATEKOS,
+                                                   FIGURA_3D_MAX_PONT,
+                                                   figura_link_kod)
+    c = TestClient(_app(tmp_path, monkeypatch))
+    for rossz in ("NaN", "Infinity"):
+        r = c.post("/playbook", content=(
+            '{"name": "x", "attackers": [[[20, 10], [%s, 10]]]}' % rossz),
+            headers={"content-type": "application/json"})
+        assert r.status_code == 400
+    assert figura_link_kod([[(1, 2), (float("nan"), 3)]]) == "u=1.0,2.0"
+    sok = [[(i, 1)] * 20 for i in range(12)]
+    u = figura_link_kod(sok).split("=", 1)[1]
+    assert len(u.split(";")) == FIGURA_3D_MAX_JATEKOS
+    assert all(len(r.split(",")) == 2 * FIGURA_3D_MAX_PONT for r in u.split(";"))
+    with pytest.raises(ValueError):
+        figura_link_kod([[(float("inf"), 1)]])
+
+
 def test_a_kulcs_poziciok_ideje():
     """A kulcs-pozíciók ideje (kulcs_t): az állókép után, a szakaszok
     végén — azon a kockán a támadó pontosan a kulcs-pozíción áll."""

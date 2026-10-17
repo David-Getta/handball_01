@@ -3,6 +3,7 @@
 // számolva: labda y = 13, kapu x = 40).
 import "package:flutter_test/flutter_test.dart";
 import "package:handball_client/analytics/play_simulation.dart";
+import "package:handball_client/models/tracking.dart";
 
 void main() {
   void egyezik(DefenseModel m, List<List<double>> vart) {
@@ -33,6 +34,43 @@ void main() {
       [32.0279, 4.5], [30.5, 9.1667], [30.9723, 13.8333], [36.5, 18.5],
       [29.0, 8.3], [29.0, 15.3],
     ]);
+  });
+
+  test("a tanult fal rendszere (mint a backend learn-je)", () {
+    // 5 védő a 6 m-en (x = 34), egy előretolt 9,5 m-en; a hazai támad.
+    PlayerPosition pl(int id, Team t, double x, double y) => PlayerPosition(
+        trackId: id,
+        team: t,
+        x: x,
+        y: y,
+        source: PositionSource.measured,
+        confidence: 1.0);
+    final frames = [
+      for (int t = 0; t < 10; t++)
+        Frame(t: t, players: [
+          for (int i = 0; i < 3; i++) pl(i + 1, Team.home, 28.0, 10.0),
+          pl(100, Team.away, 34, 3),
+          pl(101, Team.away, 34, 6.5),
+          pl(102, Team.away, 34, 10),
+          pl(103, Team.away, 34, 13.5),
+          pl(104, Team.away, 34, 17),
+          pl(105, Team.away, 30.5, 10),
+        ], ball: Ball(x: 28.0, y: 10.0, confidence: 1.0)),
+    ];
+    final m = learnDefense(
+        Match(
+            meta: MatchMeta(
+                matchId: "t",
+                homeTeam: "A",
+                awayTeam: "B",
+                fps: 25,
+                frameWidth: 1920,
+                frameHeight: 1080),
+            frames: frames),
+        Team.away);
+    expect(m.rendszer, "5-1");
+    expect(m.numDefenders, 6);
+    expect(m.lineDepthM, closeTo(6.0, 1e-9));
   });
 
   test("ismeretlen rendszer: 6-0", () {

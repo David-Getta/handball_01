@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.173 óta)
 
+- **Javítások a figura-körben** (kód-áttekintés): a tervező előnézete
+  most újrarajzol a fal rendszerének, védőszámának és a labdásnak a
+  váltásakor; a figura-lap a 3D falát rajzolja (a késő falat is, a
+  védők mezszámával); a széles keresztpassz után a fal az állóképben
+  beáll; a mentett figura NaN-koordinátája 400; a tanult fal
+  csapat-linkjei a tanult védőszámmal; az "Ismert figuráik" kimenet-hibája
+  nem viszi el az egyezést, és a felderítés-jelentés is mutatja, mivel
+  zárult.
+
 - **Emberelőny-figura a tervezőben** (app): a kézi fal védőszáma eddig
   fix 6 volt — most a "Védők" sorban "−" / "+" (4–6): az egy és a két
   kiállításos helyzet figurája is megrajzolható és kipróbálható (6 a 5,

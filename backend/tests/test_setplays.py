@@ -210,14 +210,36 @@ def test_a_felismert_figura_kimenete(monkeypatch):
     def gol(t):
         return lambda m, c=None: [ed.MatchEvent(t=t, type=ed.EventType.GOAL,
                                                 team=Team.HOME)]
-    monkeypatch.setattr(ed, "detect_shots", gol(20))   # 11 + 2 mp-en belül
+    monkeypatch.setattr(ed, "detect_events", gol(20))   # 11 + 2 mp-en belül
     r = match_attacks_to_playbook(match, [_PLAY_A, _PLAY_B])
     assert r["outcomes"] == {"Beúszós kereszt": {"gól": 1}}
-    monkeypatch.setattr(ed, "detect_shots", gol(11 + 51))   # túl késő
+    monkeypatch.setattr(ed, "detect_events", gol(11 + 51))   # túl késő
     r = match_attacks_to_playbook(match, [_PLAY_A, _PLAY_B])
     assert r["outcomes"]["Beúszós kereszt"].get("gól") is None
     # Nincs felismert figura: üres kimenet-lista.
     assert match_attacks_to_playbook(match, [])["outcomes"] == {}
+
+
+def test_a_kimenet_hibaja_nem_viszi_el_az_egyezest(monkeypatch):
+    """Ha a kimenet-felismerés elszáll, az egyezés megmarad (kimenet
+    nélkül); a jelentés sora a kimenetet is mutatja, ha van."""
+    from handball.pipeline import event_detection as ed
+    from handball.pipeline.report_html import _playbook_rows
+    from handball.pipeline.setplays import figura_kimenet_szoveg
+    match = Match(_meta(), _play_frames(_PLAY_A["attackers"], steps=12))
+
+    def hibas(m, c=None):
+        raise ValueError("rossz követés")
+    monkeypatch.setattr(ed, "detect_events", hibas)
+    r = match_attacks_to_playbook(match, [_PLAY_A])
+    assert r["matched"] == {"Beúszós kereszt": 1} and r["outcomes"] == {
+        "Beúszós kereszt": {}}
+    assert figura_kimenet_szoveg({"eladás": 1, "gól": 2}) == "2 gól · 1 eladás"
+    assert figura_kimenet_szoveg(None) == ""
+    sor = _playbook_rows({"total_attacks": 3, "unmatched": 1,
+                          "matched": {"Kereszt": 2},
+                          "outcomes": {"Kereszt": {"gól": 1, "eladás": 1}}})
+    assert "2× — 1 gól · 1 eladás" in sor
 
 
 def test_a_figura_kimenet_a_vegponton(tmp_path, monkeypatch):

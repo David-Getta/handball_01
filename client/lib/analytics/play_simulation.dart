@@ -94,8 +94,14 @@ class DefenseModel {
 /// Védekezési stílus tanulása egy meccsből (a defending csapat védőfázisaiból).
 DefenseModel learnDefense(Match match, Team team,
     {TacticsConfig config = const TacticsConfig()}) {
+  // (a backend DefenseModel.learn tükre: a leggyakoribb ismert rendszer —
+  // holtversenyben a nagyobb címke —, nem 6-0-nál a vonal mélysége a
+  // hátsó sorból, a 7 m-es sávhatárig)
+  const hatsoMax = 7.0;
   final goalX = config.ownGoalX(team);
   final depths = <double>[];
+  final hatso = <double>[];
+  final formak = <String, int>{};
   final counts = <int>[];
   for (final f in match.frames) {
     final ph = classifyPhase(f, config);
@@ -106,12 +112,30 @@ DefenseModel learnDefense(Match match, Team team,
     if (outfield.isNotEmpty) {
       counts.add(outfield.length);
       depths.addAll(outfield.map((p) => (p.x - goalX).abs()));
+      hatso.addAll(outfield
+          .map((p) => (p.x - goalX).abs())
+          .where((d) => d <= hatsoMax));
+      final cimke = detectFormation(f, team, config);
+      if (defenseSystems.containsKey(cimke)) {
+        formak[cimke] = (formak[cimke] ?? 0) + 1;
+      }
     }
   }
   double mean(List<double> v) => v.isEmpty ? 0 : v.reduce((a, b) => a + b) / v.length;
+  var rendszer = "6-0";
+  var legtobb = -1;
+  for (final e in formak.entries) {
+    if (e.value > legtobb || (e.value == legtobb && e.key.compareTo(rendszer) > 0)) {
+      rendszer = e.key;
+      legtobb = e.value;
+    }
+  }
   return DefenseModel(
     numDefenders: counts.isEmpty ? 6 : (counts.reduce((a, b) => a + b) / counts.length).round(),
-    lineDepthM: depths.isEmpty ? 6.0 : mean(depths),
+    lineDepthM: rendszer != "6-0" && hatso.isNotEmpty
+        ? mean(hatso)
+        : (depths.isEmpty ? 6.0 : mean(depths)),
+    rendszer: rendszer,
   );
 }
 

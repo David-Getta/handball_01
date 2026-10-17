@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 import statistics
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from ..models.tracking import (
     Match, MatchMeta, Frame, PlayerPosition, Ball, Team, PositionSource,
@@ -272,6 +272,9 @@ FIGURA_TAR_KOVET = 8
 # labdajáratás rést nyit, mint a valóságban). A mozgás végére, az
 # állóképben a fal beáll.
 FIGURA_VEDO_MAX_MPS = 4.5
+# Ha a késő fal a mozgás végére az állóképben sem áll be (széles
+# keresztpassz a végén), az állókép legfeljebb ennyi mp-cel nyúlik.
+FIGURA_3D_BEALL_MAX_S = 3.0
 
 
 def _hatoson_kivulre(x: float, y: float, goal_x: float) -> tuple[float, float]:
@@ -302,8 +305,18 @@ def figura_link_kod(attackers, labda=None, nev=None) -> str:
     kézi alap-fala (a mentett figura nem viszi). ValueError a hibás
     koordinátánál."""
     from urllib.parse import urlencode
-    q = {"u": ";".join(",".join(f"{float(x):.1f},{float(y):.1f}"
-                                for x, y in ut) for ut in attackers)}
+    # (a 3D határain belül; a nem véges pontot kihagyjuk — a /figura3d is)
+    utak = []
+    for ut in list(attackers)[:FIGURA_3D_MAX_JATEKOS]:
+        pontok = [(float(x), float(y)) for x, y in list(ut)[:FIGURA_3D_MAX_PONT]]
+        pontok = [(x, y) for x, y in pontok
+                  if math.isfinite(x) and math.isfinite(y)]
+        if pontok:
+            utak.append(pontok)
+    if not utak:
+        raise ValueError("a figurában nincs érvényes pont")
+    q = {"u": ";".join(",".join(f"{x:.1f},{y:.1f}" for x, y in ut)
+                       for ut in utak)}
     sor = [int(v) for v in (labda or [])]
     if any(v != 0 for v in sor):
         q["l"] = ",".join(str(v) for v in sor)
@@ -446,6 +459,30 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
                                                 h[1] + dy * lepes_max / d,
                                                 vedo_kapu_x)
             elozo[p.track_id] = (p.x, p.y)
+    # A beállás: amíg a fal nem ér a modell-helyére, az állókép nyúlik
+    # (a támadók és a labda állnak, a védők lépnek).
+    utolso = sim.frames[-1]
+    cel = defense.respond(utolso.ball, vedo_kapu_x)
+    for _ in range(int(round(FIGURA_3D_BEALL_MAX_S * fps))):
+        vedok = [p for p in utolso.players if p.team == Team.AWAY]
+        if all(math.hypot(p.x - cel[p.track_id - 100][0],
+                          p.y - cel[p.track_id - 100][1]) < 1e-6
+               for p in vedok):
+            break
+        uj = []
+        for p in utolso.players:
+            if p.team == Team.AWAY:
+                cx, cy = cel[p.track_id - 100]
+                dx, dy = cx - p.x, cy - p.y
+                d = math.hypot(dx, dy)
+                x, y = ((cx, cy) if d <= lepes_max else _hatoson_kivulre(
+                    p.x + dx * lepes_max / d, p.y + dy * lepes_max / d,
+                    vedo_kapu_x))
+                uj.append(replace(p, x=x, y=y))
+            else:
+                uj.append(replace(p))
+        utolso = Frame(t=utolso.t + 1, players=uj, ball=utolso.ball)
+        sim.frames.append(utolso)
     ertekeles = evaluate_setplay(sim, config=config)
     # A kapus: a vonal előtt, a labda felé lépve (a kapufák közt). A
     # védők mezszámot kapnak (a kapus után sorban) — a szemükkel is

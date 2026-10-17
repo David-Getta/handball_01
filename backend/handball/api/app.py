@@ -13092,6 +13092,10 @@ def create_app():
             attackers = [[[float(p[0]), float(p[1])] for p in path] for path in attackers]
         except (TypeError, IndexError, ValueError):
             raise HTTPException(status_code=400, detail="invalid coordinates")
+        # NaN / végtelen: a JSON átengedi, a figura-linkek nem (400).
+        import math as _m
+        if not all(_m.isfinite(v) for path in attackers for p in path for v in p):
+            raise HTTPException(status_code=400, detail="invalid coordinates")
         if any(len(path) < 2 for path in attackers):
             raise HTTPException(status_code=400, detail="each player needs >=2 keyframes")
         labda = body.get("labda")

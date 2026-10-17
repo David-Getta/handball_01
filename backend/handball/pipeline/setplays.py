@@ -226,7 +226,13 @@ def match_attacks_to_playbook(match: Match, plays: list[dict],
         else:
             unmatched += 1
     matched = dict(sorted(matched.items(), key=lambda kv: -kv[1]))
-    kimenetek = _figura_kimenetek(match, config, talalt) if talalt else {}
+    # A kimenet kiegészítés: a hibája ne vigye el az egyezést (a
+    # felderítés kártyája és a jelentés a darabszámmal is él).
+    try:
+        kimenetek = _figura_kimenetek(match, config, talalt) if talalt else {}
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError,
+            ZeroDivisionError):
+        kimenetek = {}
     return {"total_attacks": len(seqs),
             "matched": matched,
             "unmatched": unmatched,
@@ -248,19 +254,19 @@ def _figura_kimenetek(match: Match, config: TacticsConfig,
     Visszaad: {figura-név: {kimenet: darab}} — a kimenetek
     FIGURA_KIMENETEK sorrendjében."""
     from .attack_types import ATTACK_TAIL_S
-    from .event_detection import EventType, detect_events, detect_shots
+    from .event_detection import EventType, detect_events
     from .rules import detect_seven_meters
 
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     tail = round(ATTACK_TAIL_S * fps)
-    loves = detect_shots(match, config)
+    # (a detect_events a lövéseket is adja — egy felismerés elég)
+    ev = detect_events(match, config)
     esemenyek = {
-        "gól": [(e.t, e.team) for e in loves if e.type == EventType.GOAL],
+        "gól": [(e.t, e.team) for e in ev if e.type == EventType.GOAL],
         "hetes": [(sm["t"], Team(sm["team"]))
                   for sm in detect_seven_meters(match, config)],
-        "lövés": [(e.t, e.team) for e in loves if e.type == EventType.SHOT],
-        "eladás": [(e.t, e.team) for e in detect_events(match, config)
-                   if e.type == EventType.TURNOVER],
+        "lövés": [(e.t, e.team) for e in ev if e.type == EventType.SHOT],
+        "eladás": [(e.t, e.team) for e in ev if e.type == EventType.TURNOVER],
     }
     szamlalo: dict[str, dict[str, int]] = {}
     for nev, s in talalt:
@@ -272,6 +278,14 @@ def _figura_kimenetek(match: Match, config: TacticsConfig,
         rec[kimenet] = rec.get(kimenet, 0) + 1
     return {nev: {k: rec[k] for k in FIGURA_KIMENETEK if k in rec}
             for nev, rec in szamlalo.items()}
+
+
+def figura_kimenet_szoveg(kimenet: dict | None) -> str:
+    """A figura kimenetei olvashatóan, FIGURA_KIMENETEK sorrendjében: "2
+    gól · 1 eladás" (üres, ha nincs) — a kliens playbookOutcomeText-je."""
+    k = kimenet or {}
+    return " · ".join(f"{int(k[n])} {n}" for n in FIGURA_KIMENETEK
+                      if int(k.get(n) or 0) > 0)
 
 
 def cluster_signatures(signatures: list[list[float]], threshold: float = 0.15) -> list[int]:

@@ -121,6 +121,9 @@ class _DesignerScreenState extends State<DesignerScreen> {
   // neve (mentve / betöltve) — a böngészős 3D ugyanazt mutatja.
   String? _tanultMeccs;
   String _tanultOldal = "away";
+  // A tanult fal védőszáma (a szimuláció defense_model-jéből; a 3D-ből
+  // hozott figuránál még ismeretlen).
+  int? _tanultVedok;
   String? _nev;
   Match? _sim;
   SetPlayEvaluation? _eval;
@@ -174,6 +177,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
       // A védelem: a meccs MÁSIK csapatáé (a 3D is ellene nyit).
       if (f["match_id"] is String) {
         _tanultMeccs = f["match_id"] as String;
+        _tanultVedok = null;
         _tanultOldal = f["csapat_oldal"] == "home" ? "away" : "home";
       }
       return true;
@@ -360,6 +364,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
       if (!mounted) return;
       _tanultMeccs = matchId;
       _tanultOldal = side;
+      _tanultVedok =
+          ((resp["defense_model"] as Map?)?["num_defenders"] as num?)?.toInt();
       setState(() {
         _sim = sim;
         _eval = eval;
@@ -458,8 +464,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
     if (!mounted) return;
     final linkek = runnerLinks(kovet, _attackers.length);
     // A fal: a kapus és a védők (a tanult falnál hat védővel számolunk).
-    final falLinkek =
-        defenderLinks(kovet, _tanultMeccs != null ? 6 : _numDefenders);
+    final falLinkek = defenderLinks(
+        kovet, _tanultMeccs != null ? (_tanultVedok ?? 6) : _numDefenders);
     Widget linkSor(String cimke, String link) => Row(children: [
           SizedBox(
               width: 64,
@@ -1183,7 +1189,9 @@ class _DesignerPainter extends CustomPainter {
     tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
   }
 
+  // Mindig: a támadók és a labdás-sor listája HELYBEN változik (az
+  // azonosság-összevetés a húzást, a labdást, a fal rendszerét és
+  // védőszámát elnézte), a rajz pedig olcsó.
   @override
-  bool shouldRepaint(covariant _DesignerPainter old) =>
-      old.attackers != attackers || old.step != step || old.model.lineDepthM != model.lineDepthM;
+  bool shouldRepaint(covariant _DesignerPainter old) => true;
 }
