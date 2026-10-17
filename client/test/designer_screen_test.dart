@@ -110,6 +110,36 @@ void main() {
     expect((kivalasztott.first.label as Text).data, "2");
   });
 
+  testWidgets("a védőszám 4–6 (emberelőny-figura)", (tester) async {
+    tester.view.physicalSize = const Size(700, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final m = Match(
+        meta: MatchMeta(
+            matchId: "t",
+            homeTeam: "A",
+            awayTeam: "B",
+            fps: 25,
+            frameWidth: 1920,
+            frameHeight: 1080),
+        frames: const []);
+    await tester.pumpWidget(MaterialApp(home: DesignerScreen(match: m)));
+    await tester.pump();
+    String szam() => tester.widget<Text>(find.byKey(const Key("vedoSzam"))).data!;
+    expect(szam(), "6");
+    final minusz = find.byIcon(Icons.exposure_neg_1);
+    await tester.ensureVisible(minusz);
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(minusz);
+      await tester.pump();
+    }
+    expect(szam(), "4");   // 4-nél megáll
+    await tester.tap(find.byIcon(Icons.exposure_plus_1));
+    await tester.pump();
+    expect(szam(), "5");
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets("a fal rendszere választható", (tester) async {
     tester.view.physicalSize = const Size(700, 600);
     tester.view.devicePixelRatio = 1.0;

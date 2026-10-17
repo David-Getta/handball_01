@@ -95,6 +95,13 @@ class _DesignerScreenState extends State<DesignerScreen> {
     setState(() => _attackers.add(List<Offset>.filled(_pontok, hely, growable: true)));
   }
 
+  /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
+  void _vedoValt(int d) {
+    final n = _numDefenders + d;
+    if (_playing || n < designerMinDefenders || n > designerMaxDefenders) return;
+    setState(() => _numDefenders = n);
+  }
+
   /// Az utolsó támadó kiesik; a labdás-sor a megmaradókra szorul.
   void _jatekosKi() {
     if (_playing || _attackers.length <= designerMinAttackers) return;
@@ -914,9 +921,30 @@ class _DesignerScreenState extends State<DesignerScreen> {
           const SizedBox(height: AppSpacing.md),
           Text("VÉDŐFAL (A HATOSON KÍVÜL)", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          // Emberelőny-figura: 5 vagy 4 védő (kiállítás után).
+          Row(children: [
             Text("Védők", style: AppText.label),
-            Text("$_numDefenders", style: AppText.value),
+            const Spacer(),
+            IconButton(
+              tooltip: "Egy védővel kevesebb (kiállítás — emberelőny)",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _numDefenders <= designerMinDefenders
+                  ? null
+                  : () => _vedoValt(-1),
+              icon: const Icon(Icons.exposure_neg_1),
+            ),
+            Text("$_numDefenders",
+                key: const Key("vedoSzam"), style: AppText.value),
+            IconButton(
+              tooltip: "Egy védővel több (legfeljebb 6)",
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: _playing || _numDefenders >= designerMaxDefenders
+                  ? null
+                  : () => _vedoValt(1),
+              icon: const Icon(Icons.exposure_plus_1),
+            ),
           ]),
           // A rendszer: az előretolt védők a 9 m körül (a 3-2-1 csúcsa
           // 11 m-en), a labdát követve — a 3D és a figura-lap is viszi.

@@ -510,6 +510,11 @@ lemarad, a rés a padlón ("Fal-rések") látszik, a mozgás végére a fal
 beáll; a kiértékelés a késő falat látja. (A tervező app-beli vázlata a
 modell-falat mutatja.)
 
+**Emberelőny-figura.** A tervező "Védők" sorában a "−" / "+" a kézi fal
+védőszámát állítja (4–6): 5 védővel az egy kiállításos, 4-gyel a két
+kiállításos helyzet — a fal a rendszerével együtt szűkül (az 5-1-ből
+4+1). A kiértékelés, a 3D, a figura-lap és a füzet is viszi.
+
 **A fal rendszere.** A tervező kézi fala választható rendszerben áll
 ("Rendszer": 6-0, 5-1, 4-2, 3-2-1, 3-3): az előretolt védők a 9 m körül
 (a 3-2-1 csúcsa 11 m-en), a labdát követve, a többiek a hatos előtti

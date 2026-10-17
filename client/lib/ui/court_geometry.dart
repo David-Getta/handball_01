@@ -584,6 +584,11 @@ const int designerMaxPoints = 6;
 const int designerMinAttackers = 2;
 const int designerMaxAttackers = 7;
 
+/// A kézi fal védőinek száma a tervezőben: 6 a teljes fal, 5 egy, 4 két
+/// kiállítás után (emberelőny-figura).
+const int designerMinDefenders = 4;
+const int designerMaxDefenders = 6;
+
 /// Az új támadó kezdő helye a tervezőben: az alap öt után a jobb szélső,
 /// majd a második beálló, aztán a pálya közepe felé (az edző elhúzza).
 Offset newAttackerSpot(int index) {

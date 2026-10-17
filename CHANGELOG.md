@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.173 óta)
 
+- **Emberelőny-figura a tervezőben** (app): a kézi fal védőszáma eddig
+  fix 6 volt — most a "Védők" sorban "−" / "+" (4–6): az egy és a két
+  kiállításos helyzet figurája is megrajzolható és kipróbálható (6 a 5,
+  6 a 4 ellen). A fal a rendszerével együtt szűkül; a kiértékelés, a 3D,
+  a figura-lap és a füzet is viszi.
+
 - **Figurafüzet** (app + motor): a mentett figurák egy nyomtatható
   dokumentumban — tartalomjegyzék, figuránként egy oldal (a figura-lap
   lépésenkénti ábrái), a mostani fallal (tanult vagy kézi, a
