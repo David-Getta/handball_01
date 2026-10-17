@@ -756,6 +756,45 @@ def test_a_figura_video_vegpont(tmp_path, monkeypatch):
     assert r.status_code == 200 and r.headers["content-type"] == "video/mp4"
 
 
+def test_a_kieso_tamado_utan_a_labdas_sor_atszamozva():
+    """A pont nélküli támadó kiesik: a labdás-sor a megmaradókhoz igazodik
+    (a 3D-ben és a link-kódban is) — a passz a jó támadóhoz megy."""
+    from handball.pipeline.play_simulation import figura_link_kod
+    nan = float("nan")
+    _, e = setplay_3d_match([[(nan, 1)], [(20, 10), (25, 10)],
+                             [(24, 4), (26, 4)]], DefenseModel(), ball=[1, 2])
+    assert e["labda"] == [0, 1]
+    assert (figura_link_kod([[(nan, 1)], [(1, 2)], [(3, 4)]], [1, 2])
+            == "u=1.0,2.0;3.0,4.0&l=0,1")
+    assert figura_link_kod([[(1, 2)], [(nan, 1)], [(3, 4)]], [0, 1, 2]) == (
+        "u=1.0,2.0;3.0,4.0&l=0,0,1")
+
+
+def test_a_figura_video_gyorsitotar(tmp_path, monkeypatch):
+    """Ugyanaz a videó másodszor a gyorsítótárból (a rajzoló egyszer fut);
+    más figura újra rajzol; a hibás figura 400; a füzet a nem-objektum
+    JSON-t kihagyja."""
+    from handball.pipeline import figura_video as fv
+    hivas = []
+    eredeti = fv.figura_video
+
+    def szamlalo(*a, **k):
+        hivas.append(1)
+        return eredeti(*a, **k)
+    monkeypatch.setattr(fv, "figura_video", szamlalo)
+    c = TestClient(_app(tmp_path, monkeypatch))
+    r1 = c.get("/figura-video", params={"u": U})
+    r2 = c.get("/figura-video", params={"u": U})
+    assert r1.status_code == r2.status_code == 200 and r1.content == r2.content
+    assert len(hivas) == 1
+    assert c.get("/figura-video", params={"u": U, "lepes": 1}).status_code == 200
+    assert len(hivas) == 2
+    konyvtar = tmp_path / "data" / "playbook"
+    konyvtar.mkdir(parents=True, exist_ok=True)
+    (konyvtar / "lista.json").write_text("[1, 2]", encoding="utf-8")
+    assert c.get("/figura-fuzet").status_code == 200
+
+
 def test_a_kulcs_poziciok_ideje():
     """A kulcs-pozíciók ideje (kulcs_t): az állókép után, a szakaszok
     végén — azon a kockán a támadó pontosan a kulcs-pozíción áll."""

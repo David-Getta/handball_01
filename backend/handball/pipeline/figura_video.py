@@ -8,7 +8,9 @@ a támadók kékkel, a fal és a kapus pirossal (mezszámmal — mint a
 szem=… linkek), a labda sárgán, a futások és a passzok halvány nyila a
 padlón, fent a figura neve és a mostani kulcs-pozíció.
 
-A kodek az mp4v (mint a klipeké — a gép OpenCV-je ezt írja). A szöveg
+A kodek: a H.264, ha a gép tudja (a telefonok ezt játsszák le —
+Windowson a Media Foundation, macOS-en az AVFoundation, aztán az
+FFmpeg), különben az mp4v (mint a klipeké). A szöveg
 Hershey-betűs: az ékezet lekerül ("Védő" → "Vedo"); a fájl neve
 ékezetes marad.
 """
@@ -30,6 +32,13 @@ FIGURA_VIDEO_HATRA_M = 3.0
 FIGURA_VIDEO_FELIRAT_S = 0.6
 # A magyarázós (lepes=1) videó ennyi mp-ig áll meg minden kulcs-pozíción.
 FIGURA_VIDEO_LEPES_S = 1.2
+# A kodek-jelöltek sorrendben (OpenCV-háttér, fourcc): az első, amivel a
+# gép tényleg ír. A H.264 a telefonon lejátszható; az mp4v mindig megy.
+FIGURA_VIDEO_KODEKEK = (("MSMF", "H264"), ("AVFOUNDATION", "avc1"),
+                        ("FFMPEG", "avc1"), ("FFMPEG", "mp4v"))
+# A szerver ennyi elkészült videót tart meg (a várólapról többen is
+# letöltik ugyanazt).
+FIGURA_VIDEO_TAR_DB = 8
 # Biztonsági korlát: ennél hosszabb videót nem írunk (a figura 3–12 mp a
 # két állóképpel és a fal beállásával együtt is bőven belefér).
 FIGURA_VIDEO_MAX_S = 30.0
@@ -54,6 +63,43 @@ def ascii_felirat(s: str) -> str:
     s = str(s or "").replace("—", "-").replace("–", "-").replace("→", "->")
     s = unicodedata.normalize("NFKD", s)
     return "".join(ch for ch in s if ord(ch) < 128 and ch.isprintable())
+
+
+_kodek_valasztva: tuple | None = None
+
+
+def _kodek(w: int, h: int, cel: Path) -> tuple:
+    """Az első (háttér, fourcc), amivel a gép egy próba-kockát ténylegesen
+    ír (a választás folyamatonként egyszer); végső esetben az mp4v."""
+    global _kodek_valasztva
+    if _kodek_valasztva is not None:
+        return _kodek_valasztva
+    import cv2
+    import numpy as np
+    proba = cel.with_name(cel.stem + ".proba.mp4")
+    for hatter, fourcc in FIGURA_VIDEO_KODEKEK:
+        api = getattr(cv2, "CAP_" + hatter, None)
+        if api is None:
+            continue
+        ok = False
+        try:
+            iro = cv2.VideoWriter(str(proba), api,
+                                  cv2.VideoWriter_fourcc(*fourcc),
+                                  FIGURA_VIDEO_FPS, (w, h))
+            ok = iro.isOpened()
+            if ok:
+                iro.write(np.zeros((h, w, 3), np.uint8))
+            iro.release()
+            ok = ok and proba.exists() and proba.stat().st_size > 0
+        except cv2.error:
+            ok = False
+        finally:
+            proba.unlink(missing_ok=True)
+        if ok:
+            _kodek_valasztva = (api, fourcc)
+            return _kodek_valasztva
+    _kodek_valasztva = (cv2.CAP_FFMPEG, "mp4v")
+    return _kodek_valasztva
 
 
 def _pont_felirat(i: int, k: int) -> str:
@@ -161,7 +207,8 @@ def figura_video(utak: list, labda: list, defense, *, nev: str,
 
     cel = Path(cel)
     cel.parent.mkdir(parents=True, exist_ok=True)
-    iro = cv2.VideoWriter(str(cel), cv2.VideoWriter_fourcc(*"mp4v"),
+    api, fourcc = _kodek(w, h, cel)
+    iro = cv2.VideoWriter(str(cel), api, cv2.VideoWriter_fourcc(*fourcc),
                           FIGURA_VIDEO_FPS, (w, h))
     try:
         for t in idok:
@@ -207,5 +254,5 @@ def figura_video(utak: list, labda: list, defense, *, nev: str,
     finally:
         iro.release()
     if not cel.exists() or cel.stat().st_size == 0:
-        raise RuntimeError("a figura-videó írása nem sikerült (mp4v)")
+        raise RuntimeError(f"a figura-videó írása nem sikerült ({fourcc})")
     return cel

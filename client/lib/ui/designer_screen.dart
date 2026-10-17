@@ -95,11 +95,22 @@ class _DesignerScreenState extends State<DesignerScreen> {
     setState(() => _attackers.add(List<Offset>.filled(_pontok, hely, growable: true)));
   }
 
+  /// A kézi fal állítása (védőszám, rendszer, mélység) a KÉZI falra vált:
+  /// a 3D, a lap, a videó és a füzet is ezt viszi (eddig a legutóbbi
+  /// tanult fal maradt, és a kézi beállítás a linkekre nem hatott).
+  void _kezifal() {
+    _tanultMeccs = null;
+    _tanultVedok = null;
+  }
+
   /// A kézi fal védőszáma (emberelőny: 5 vagy 4 védő a kiállítás után).
   void _vedoValt(int d) {
     final n = _numDefenders + d;
     if (_playing || n < designerMinDefenders || n > designerMaxDefenders) return;
-    setState(() => _numDefenders = n);
+    setState(() {
+      _numDefenders = n;
+      _kezifal();
+    });
   }
 
   /// Az utolsó támadó kiesik; a labdás-sor a megmaradókra szorul.
@@ -985,7 +996,10 @@ class _DesignerScreenState extends State<DesignerScreen> {
               ],
               onChanged: _playing
                   ? null
-                  : (v) => setState(() => _rendszer = v ?? "6-0"),
+                  : (v) => setState(() {
+                        _rendszer = v ?? "6-0";
+                        _kezifal();
+                      }),
             ),
           ]),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -994,7 +1008,12 @@ class _DesignerScreenState extends State<DesignerScreen> {
           ]),
           Slider(
             value: _lineDepth, min: 6, max: 12,
-            onChanged: _playing ? null : (v) => setState(() => _lineDepth = v),
+            onChanged: _playing
+                ? null
+                : (v) => setState(() {
+                      _lineDepth = v;
+                      _kezifal();
+                    }),
           ),
             ]),
           ),

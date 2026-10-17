@@ -374,13 +374,14 @@ def _playbook_rows(pm: dict) -> str:
                 f'({total} támadás).</p>')
     from .setplays import figura_kimenet_szoveg
     kimenetek = pm.get("outcomes") or {}
+
+    def kimenet(name) -> str:
+        sz = figura_kimenet_szoveg(kimenetek.get(name))
+        return f" — {escape(sz)}" if sz else ""
     rows = "".join(
         f'<div class="bar-row"><span class="bar-label" style="width:220px">'
         f'{escape(str(name))}</span><span class="bar-pct" style="width:auto">'
-        f'{int(n)}×'
-        + (f" — {escape(figura_kimenet_szoveg(kimenetek.get(name)))}"
-           if figura_kimenet_szoveg(kimenetek.get(name)) else "")
-        + '</span></div>'
+        f'{int(n)}×' + kimenet(name) + '</span></div>'
         for name, n in matched.items())
     return rows + (f'<p class="note">{total} támadásból {unmatched} ismeretlen '
                    f'mintájú.</p>')

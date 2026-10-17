@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.173 óta)
 
+- **Javítások (kód-áttekintés)**: a tervező kézi falának állítása
+  (védőszám, rendszer, mélység) a tanult fal után a linkekre (3D, lap,
+  videó, füzet) is hat; a füzet egy sérült figura-fájltól nem száll el;
+  a kiesett (pont nélküli) támadó után a passz a jó játékoshoz megy; a
+  figura-videó gyorsítótárban (a várólapról többen is letöltik), és a
+  H.264-et próbálja előbb (a telefonok ezt játsszák le), különben mp4v.
+
 - **A mentett figura lapja és videója a betöltő listából** (app): a
   "Figura betöltése" ablakban soronként eddig csak a "3D / VR" volt —
   most a 🖨 figura-lap és a 🎬 videó is, betöltés nélkül.

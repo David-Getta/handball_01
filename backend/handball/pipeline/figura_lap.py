@@ -132,6 +132,9 @@ def figura_fuzet_html(figurak: list, defense, *, vedo_nev: str,
 
     reszek, nevek, kimaradt = [], [], []
     for d in list(figurak)[:FIGURA_FUZET_MAX]:
+        if not isinstance(d, dict):
+            kimaradt.append("?")
+            continue
         nev = figura_nev(d.get("name")) or "névtelen"
         try:
             utak = [[(float(x), float(y)) for x, y in a] for a in d["attackers"]]

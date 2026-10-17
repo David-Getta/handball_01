@@ -3225,14 +3225,23 @@ def create_app():
         figurak = []
         for f in fajlok:
             try:
-                figurak.append(json.loads(f.read_text(encoding="utf-8")))
+                d = json.loads(f.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue  # hiányzó / sérült figura-fájl kimarad
+            if isinstance(d, dict):
+                figurak.append(d)
         if not ids.strip():
             figurak.sort(key=lambda d: (str(d.get("name") or "").lower(),
                                         str(d.get("id") or "")))
         return HTMLResponse(figura_fuzet_html(figurak, modell,
                                               vedo_nev=vedo_nev))
+
+    # A figura-videók gyorsítótára (a várólapról többen is letöltik) és a
+    # rajzolás zárja (egyszerre egy — a többi kérés vár).
+    from collections import OrderedDict as _OD
+    import threading as _thr
+    _figura_video_tar: "_OD[tuple, bytes]" = _OD()
+    _figura_video_zar = _thr.Lock()
 
     @app.get("/figura-video")
     def figura_video_vegpont(u: str = "", cim: str = "", meccs: str = "",
@@ -3255,19 +3264,30 @@ def create_app():
         from ..pipeline.play_simulation import figura_nev
         utak, labda, modell, vedo_nev = _figura_bemenet(
             u, l, meccs, vedo, vedok, melyseg, rendszer)
+        from ..pipeline.figura_video import FIGURA_VIDEO_TAR_DB
         nev = figura_nev(cim) or "Figura"
-        with tempfile.TemporaryDirectory() as td:
-            try:
-                ut = figura_video(utak, labda, modell, nev=nev,
-                                  vedo_nev=vedo_nev,
-                                  cel=_Path(td) / "figura.mp4",
-                                  lepes=bool(lepes))
-            except (ValueError, TypeError):
-                raise HTTPException(status_code=400,
-                                    detail="a figurában nincs támadó")
-            except RuntimeError as e:
-                raise HTTPException(status_code=500, detail=str(e))
-            adat = ut.read_bytes()
+        kulcs = (u, l, nev, meccs, vedo, int(vedok), float(melyseg),
+                 rendszer, bool(lepes))
+        with _figura_video_zar:
+            adat = _figura_video_tar.get(kulcs)
+            if adat is None:
+                with tempfile.TemporaryDirectory() as td:
+                    try:
+                        ut = figura_video(utak, labda, modell, nev=nev,
+                                          vedo_nev=vedo_nev,
+                                          cel=_Path(td) / "figura.mp4",
+                                          lepes=bool(lepes))
+                    except ValueError:
+                        raise HTTPException(status_code=400,
+                                            detail="a figurában nincs támadó")
+                    except RuntimeError as e:
+                        raise HTTPException(status_code=500, detail=str(e))
+                    adat = ut.read_bytes()
+                _figura_video_tar[kulcs] = adat
+                while len(_figura_video_tar) > FIGURA_VIDEO_TAR_DB:
+                    _figura_video_tar.popitem(last=False)
+            else:
+                _figura_video_tar.move_to_end(kulcs)
         return Response(
             content=adat, media_type="video/mp4",
             headers={"Content-Disposition":

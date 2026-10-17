@@ -307,17 +307,24 @@ def figura_link_kod(attackers, labda=None, nev=None) -> str:
     from urllib.parse import urlencode
     # (a 3D határain belül; a nem véges pontot kihagyjuk — a /figura3d is)
     utak = []
-    for ut in list(attackers)[:FIGURA_3D_MAX_JATEKOS]:
+    regi_uj: dict[int, int] = {}
+    for i, ut in enumerate(list(attackers)[:FIGURA_3D_MAX_JATEKOS]):
         pontok = [(float(x), float(y)) for x, y in list(ut)[:FIGURA_3D_MAX_PONT]]
         pontok = [(x, y) for x, y in pontok
                   if math.isfinite(x) and math.isfinite(y)]
         if pontok:
+            regi_uj[i] = len(utak)
             utak.append(pontok)
     if not utak:
         raise ValueError("a figurában nincs érvényes pont")
     q = {"u": ";".join(",".join(f"{x:.1f},{y:.1f}" for x, y in ut)
                        for ut in utak)}
-    sor = [int(v) for v in (labda or [])]
+    # (a kiesett támadó után a labdás-sor átszámozva; a kiesettre mutató
+    # elem az előzőé)
+    sor: list[int] = []
+    for v in (labda or []):
+        uj = regi_uj.get(int(v))
+        sor.append(uj if uj is not None else (sor[-1] if sor else 0))
     if any(v != 0 for v in sor):
         q["l"] = ",".join(str(v) for v in sor)
     cim = figura_nev(nev)
@@ -356,12 +363,16 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
     ha nincs érvényes támadó."""
     config = config or TacticsConfig()
     utak = []
-    for ut in list(keypoints or [])[:FIGURA_3D_MAX_JATEKOS]:
+    # (régi sorszám → új: a pont nélküli támadó kiesik, a labdás-sor ehhez
+    # igazodik — különben a passz a következő támadóhoz menne)
+    regi_uj: dict[int, int] = {}
+    for i, ut in enumerate(list(keypoints or [])[:FIGURA_3D_MAX_JATEKOS]):
         pontok = [(min(COURT_LENGTH_M, max(0.0, float(x))),
                    min(COURT_WIDTH_M, max(0.0, float(y))))
                   for x, y in list(ut)[:FIGURA_3D_MAX_PONT]
                   if math.isfinite(float(x)) and math.isfinite(float(y))]
         if pontok:
+            regi_uj[i] = len(utak)
             utak.append(pontok)
     if not utak:
         raise ValueError("a figurában nincs támadó")
@@ -395,7 +406,7 @@ def setplay_3d_match(keypoints: list, defense: DefenseModel, *,
     for k in range(pontszam):
         v = (list(ball or [])[k:k + 1] or [None])[0]
         try:
-            v = int(v)
+            v = regi_uj.get(int(v))
         except (TypeError, ValueError):
             v = None
         labda.append(v if v is not None and 0 <= v < len(utak)

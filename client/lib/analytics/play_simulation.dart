@@ -97,7 +97,7 @@ DefenseModel learnDefense(Match match, Team team,
   // (a backend DefenseModel.learn tükre: a leggyakoribb ismert rendszer —
   // holtversenyben a nagyobb címke —, nem 6-0-nál a vonal mélysége a
   // hátsó sorból, a 7 m-es sávhatárig)
-  const hatsoMax = 7.0;
+  const hatsoMax = formationBackMaxM;
   final goalX = config.ownGoalX(team);
   final depths = <double>[];
   final hatso = <double>[];
